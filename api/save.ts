@@ -1,6 +1,8 @@
-// 세이브 쓰기 API — 클라이언트 직접 upsert를 대체 (Vercel Function, Node 런타임)
+// 세이브 쓰기 API — 클라이언트 직접 쓰기를 대체 (Vercel Function, Node 런타임)
 // 검증 규칙은 src/validate.ts (클라이언트와 공유). service role 키는 서버 전용 환경변수.
 // 프로덕션 Supabase에는 supabase/migrations/0002 적용(클라이언트 쓰기 정책 회수)이 전제.
+// saves는 append-only(0003) — 절대 update/upsert로 이전 행을 덮지 않는다. 검증 통과분만
+// insert만 하므로, 배포 중 migrate()/validateSave 버그가 있어도 직전 정상 행은 그대로 남는다.
 import { createClient } from '@supabase/supabase-js';
 import { migrate } from '../src/logic';
 import { validateSave } from '../src/validate';
@@ -27,11 +29,13 @@ export default async function handler(req: Request): Promise<Response> {
   if (!body) return json({ error: 'bad-json' }, 400);
   const next = migrate(body); // 형태 정규화 (버전 체인 + 필드 위생)
 
-  // 직전 저장본과 대조 (단조성·속도 상한)
+  // 직전 저장본과 대조 (단조성·속도 상한) — append-only라 "가장 최근 행"을 찾는다
   const { data: prevRow, error: readError } = await admin
     .from('saves')
     .select('data, updated_at')
     .eq('user_id', uid)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (readError) return json({ error: 'db-read' }, 500);
   const prev = prevRow ? migrate(prevRow.data) : null;
@@ -40,7 +44,8 @@ export default async function handler(req: Request): Promise<Response> {
   const verdict = validateSave(next, prev, elapsedMs);
   if (!verdict.ok) return json({ error: `invalid:${verdict.reason}` }, 409);
 
-  const { error: writeError } = await admin.from('saves').upsert({
+  // insert만 — 이전 행을 덮지 않는다 (0003, 배포 안전망)
+  const { error: writeError } = await admin.from('saves').insert({
     user_id: uid,
     data: next,
     updated_at: new Date().toISOString(),
