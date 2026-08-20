@@ -239,3 +239,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   margin: var(--sp-2) 0;
 }
 .panel-note.warn { color: var(--c-danger); }
+
+/* ---------- 클라우드 동기화 상태 ---------- */
+
+.sync {
+  font-size: 11px;
+  color: var(--c-text-dim);
+}
+.sync[data-sync='error'] { color: var(--c-danger); }

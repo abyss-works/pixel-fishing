@@ -1,31 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY, SPOTS,
   migrate, newState, rodStats, upgradeCost,
 } from './logic';
 import type { GameState } from './logic';
+import { supabase, ensureSession, fetchCloudSave, pushCloudSave } from './cloud';
 import Base from './Home';
 import Field from './Field';
 
-const SAVE_KEY = 'pixel-fishing-save';
+// 레거시 localStorage 세이브 — 읽기 전용 1회 브리지 (클라우드 업로드 성공 후 제거)
+const LEGACY_KEY = 'pixel-fishing-save';
+
+// 저장은 클라우드 단일 소스: 상태는 메모리에만 두고 주기 동기화한다
+const SYNC_INTERVAL_MS = 20_000;
+
+type SyncState = 'off' | 'connecting' | 'on' | 'error';
+
+const SYNC_LABEL: Record<SyncState, string | null> = {
+  off: '⚠️ 클라우드 미설정 — 새로고침하면 사라진다 (개발 모드)',
+  connecting: '☁️ 클라우드 연결 중...',
+  on: '☁️ 클라우드 저장 켜짐',
+  error: '⚠️ 클라우드 연결 실패 — 진행 상황이 저장되지 않는 중',
+};
 
 // 장면: 집 ⟷ 마을 필드 ⟷ (포구, 배 필요) ⟷ 대양 필드 ⟷ 항구
 type Scene = 'home' | 'village' | 'harbor' | 'ocean';
 
-// 구버전 세이브 자동 이관. 명성이 없던 세이브는 도감 소급 인정 → 환영 문구
-function load(): { game: GameState; notice: string | null } {
+// 레거시 localStorage 세이브를 메모리로 1회 이관 (쓰기는 하지 않음)
+function loadLegacy(): { game: GameState; notice: string | null; legacy: boolean } {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(LEGACY_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       const game = migrate(parsed);
       const notice = parsed?.v !== 4 && game.fame > 0
         ? `업데이트! 그동안 잡은 물고기가 명성으로 소급 인정되었다. ⭐${game.fame}`
         : null;
-      return { game, notice };
+      return { game, notice, legacy: true };
     }
   } catch { /* 손상된 저장 데이터는 무시하고 새로 시작 */ }
-  return { game: newState(), notice: null };
+  return { game: newState(), notice: null, legacy: false };
 }
 
 // 관리자 게이트 — 지금은 URL ?admin (친구용 서비스라 충분).
@@ -33,19 +47,66 @@ function load(): { game: GameState; notice: string | null } {
 const isAdmin = () => new URLSearchParams(window.location.search).has('admin');
 
 export default function App() {
-  const [init] = useState(load);
+  const [init] = useState(loadLegacy);
   const [game, setGame] = useState<GameState>(init.game);
   const [scene, setScene] = useState<Scene>('home');
   const [toast, setToast] = useState(
     init.notice ?? '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.');
   const [adminOpen, setAdminOpen] = useState(false);
+  const [sync, setSync] = useState<SyncState>(supabase ? 'connecting' : 'off');
+  const userIdRef = useRef<string | null>(null);
+  const gameRef = useRef(game);
+  const dirtyRef = useRef(false); // 마지막 동기화 이후 변경 여부
+  useEffect(() => {
+    gameRef.current = game;
+    dirtyRef.current = true;
+  }, [game]);
 
   const go = (s: Scene, msg: string) => { setScene(s); setToast(msg); };
 
-  // R18: 자동 저장
+  // P1: 접속 시 익명 로그인 → 클라우드 세이브 채택 (클라우드 = 단일 저장소)
+  // 클라우드가 비어 있으면 현재 메모리(레거시 이관분 포함)를 최초 업로드
   useEffect(() => {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(game));
-  }, [game]);
+    if (!supabase) return;
+    (async () => {
+      const uid = await ensureSession();
+      if (!uid) { setSync('error'); return; }
+      userIdRef.current = uid;
+      const cloud = await fetchCloudSave();
+      if (cloud) {
+        setGame(migrate(cloud.data));
+        setToast('☁️ 클라우드 세이브를 불러왔다.');
+      } else {
+        await pushCloudSave(uid, gameRef.current);
+      }
+      if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
+      dirtyRef.current = false;
+      setSync('on');
+    })().catch(() => setSync('error'));
+  }, [init.legacy]);
+
+  // R18: 주기 동기화(20s, 변경 있을 때만) + 탭 숨김/종료 시 즉시 flush
+  useEffect(() => {
+    if (!supabase) return;
+    const push = () => {
+      const uid = userIdRef.current;
+      if (!uid || !dirtyRef.current) return;
+      dirtyRef.current = false;
+      pushCloudSave(uid, gameRef.current).then(ok => {
+        if (ok) setSync('on');
+        else { dirtyRef.current = true; setSync('error'); } // 실패분은 다음 주기에 재시도
+      });
+    };
+    const id = setInterval(push, SYNC_INTERVAL_MS);
+    const onHidden = () => { if (document.visibilityState === 'hidden') push(); };
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('beforeunload', push);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('beforeunload', push);
+    };
+  }, []);
 
   return (
     <div className="app">
@@ -77,6 +138,7 @@ export default function App() {
       )}
 
       <div className="toast" role="status">{toast}</div>
+      {SYNC_LABEL[sync] && <div className="sync" data-sync={sync}>{SYNC_LABEL[sync]}</div>}
 
       {isAdmin() && (
         <button onClick={() => setAdminOpen(true)}>📊 관리자 대시보드</button>

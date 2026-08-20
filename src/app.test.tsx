@@ -342,18 +342,17 @@ describe('R7b: 방치형 루프 (첫 캐스팅 후 무한 반복)', () => {
 
 // ---------- 저장/관리자 ----------
 
-describe('R18: 저장/복원 + 마이그레이션', () => {
-  it('상태 변경이 저장되고 재시작 시 복원된다', () => {
-    seed({ bag: ['carp'] });
+describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => {
+  it('레거시 localStorage 세이브는 최초 로드 때 메모리로 이관된다 (읽기 전용 브리지)', () => {
+    seed({ bag: ['carp'], gold: 10 });
     render(<App />);
-    clickFurniture('sell');
-    fireEvent.click(screen.getByText(/전부 판매하기/));
-    expect(hud()).toContain('💰 30G');
-    cleanup();
+    expect(hud()).toContain('💰 10G');
+    expect(hud()).toContain('1마리');
+  });
 
+  it('클라우드 미설정(개발 모드)이면 경고 표시 — 상태는 메모리에만 있음', () => {
     render(<App />);
-    expect(hud()).toContain('💰 30G');
-    expect(hud()).toContain('0마리');
+    expect(screen.getByText(/클라우드 미설정/)).toBeInTheDocument();
   });
 
   it('구버전 세이브는 조각배 증정 + 도감 소급 명성 + 환영 안내', () => {
