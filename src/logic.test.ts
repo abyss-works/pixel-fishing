@@ -2,8 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
-  rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, worstFish, redeemCoupon,
+  rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
+  sellableValue, sellSelected, toggleLock,
 } from './logic';
 
 describe('데이터 무결성', () => {
@@ -56,17 +57,18 @@ describe('R14: 판정 배수 (수동 어드밴티지)', () => {
     expect(rareRate(JUDGMENT_MULT.perfect)).toBeGreaterThan(rareRate(JUDGMENT_MULT.normal) + 0.02);
   });
 
-  it('방치(auto)는 해당 수역 최하 어종 고정', () => {
-    expect(worstFish('pond').id).toBe('minnow');      // 피라미 4G
-    expect(worstFish('river').id).toBe('sweetfish');  // 은어 10G
-    expect(worstFish('sea').id).toBe('mackerel');     // 고등어 15G
-    expect(worstFish('deep').id).toBe('anglerfish');  // 아귀 25G
-    for (const s of SPOTS) {
-      const w = worstFish(s.id);
-      for (const f of FISH.filter(x => x.spot === s.id)) {
-        expect(w.price).toBeLessThanOrEqual(f.price);
+  it('commonMult(방치 페널티): 일반 가중치를 키우면 희귀 이상 확률이 크게 줄어든다', () => {
+    const rate = (commonMult: number, n = 20000) => {
+      let rare = 0;
+      for (let i = 0; i < n; i++) {
+        if (rollFish('pond', 1, Math.random, commonMult).rarity !== 'common') rare++;
       }
-    }
+      return rare / n;
+    };
+    const normal = rate(1);   // ≈ 26%
+    const idle = rate(10);    // ≈ 3.4% — 수동의 1/10 수준
+    expect(idle).toBeLessThan(normal / 5);
+    expect(idle).toBeGreaterThan(0.005); // 그래도 0은 아님 — 방치로도 희귀가 뜬다
   });
 });
 
@@ -171,6 +173,34 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(sold.bag).toHaveLength(0);
   });
 
+  it('선택 판매: ids에 든 어종만 팔리고, 잠근 어종은 ids에 있어도 안 팔린다', () => {
+    const crucian = FISH.find(f => f.id === 'crucian')!;
+    const st = addCatch(addCatch(newState(), carp), crucian);
+    const partial = sellSelected(st, ['crucian']);
+    expect(partial.gold).toBe(crucian.price);
+    expect(partial.bag).toEqual(['carp']);
+    // 잠근 어종은 이중 방어 — ids에 넣어도 무시
+    const locked = toggleLock(st, 'carp');
+    const defended = sellSelected(locked, ['carp', 'crucian']);
+    expect(defended.gold).toBe(crucian.price);
+    expect(defended.bag).toEqual(['carp']);
+  });
+
+  it('잠근 어종은 전부 판매에서 제외되고 가방에 남는다 (R1b)', () => {
+    const crucian = FISH.find(f => f.id === 'crucian')!;
+    const st = addCatch(addCatch(addCatch(newState(), carp), carp), crucian);
+    const locked = toggleLock(st, 'carp');
+    expect(locked.locked).toEqual(['carp']);
+    expect(sellableValue(locked)).toBe(crucian.price); // 잉어 2마리 제외
+    const sold = sellAll(locked);
+    expect(sold.gold).toBe(crucian.price);
+    expect(sold.bag).toEqual(['carp', 'carp']); // 잠긴 어종은 남는다
+    // 토글 해제 → 다시 판매 대상
+    const unlocked = toggleLock(sold, 'carp');
+    expect(unlocked.locked).toEqual([]);
+    expect(sellableValue(unlocked)).toBe(carp.price * 2);
+  });
+
   it('낚싯대 강화: 골드 부족이면 null, 성공 시 차감+레벨업', () => {
     const poor = { ...newState(), gold: upgradeCost(1) - 1 };
     expect(tryUpgrade(poor)).toBeNull();
@@ -185,7 +215,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };
     const st = migrate(legacy);
-    expect(st.v).toBe(4);
+    expect(st.v).toBe(5);
     expect(st.gold).toBe(777);
     expect(st.rod).toBe(5);
     expect(st.boat).toBe(1);
@@ -204,6 +234,13 @@ describe('R18b: 세이브 마이그레이션', () => {
   it('명성이 이미 있는 v4 세이브는 소급 계산하지 않고 그대로', () => {
     const st = migrate({ v: 4, fame: 42, caught: { kraken: 3 } });
     expect(st.fame).toBe(42);
+  });
+
+  it('v4 → v5: 잠금 목록이 빈 배열로 추가된다', () => {
+    const st = migrate({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
+    expect(st.v).toBe(5);
+    expect(st.locked).toEqual([]);
+    expect(st.gold).toBe(10);
   });
 
   it('손상된 값은 새 게임으로', () => {

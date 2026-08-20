@@ -4,9 +4,9 @@ import { RARITY, SPOTS } from './logic';
 import type { Fish } from './logic';
 import {
   VIEW_W, VIEW_H,
-  VILLAGE_W, VILLAGE_H, V_POND, V_RIVER, V_SEA, V_HOUSE, V_BRIDGE, V_PIER, V_SCHOOLS,
+  VILLAGE_W, VILLAGE_H, V_POND, V_RIVER, V_SEA, V_HOUSE, V_BRIDGE, V_PIER, V_BOATSHOP, V_SCHOOLS,
   OCEAN_W, OCEAN_H, LANDS, TRENCH, HARBOR, O_DOCK, O_SCHOOLS,
-  HOME_FURNITURE, HARBOR_FURNITURE, REGIONS,
+  HOME_FURNITURE, HARBOR_FURNITURE,
 } from './world';
 import type { Point, Rect, School } from './world';
 
@@ -27,7 +27,8 @@ export const UI = {
 
 type Ctx = CanvasRenderingContext2D;
 
-export type FishingPhase = 'idle' | 'cast' | 'wait' | 'bite' | 'catch';
+export type { FishingPhase } from './fishing';
+import type { FishingPhase } from './fishing';
 
 export interface FieldView {
   player: Point;
@@ -36,6 +37,7 @@ export interface FieldView {
   school: School | null;
   boat: number;
   biteT: number | null;
+  catchT: number | null; // 획득 후 경과초 — 버스트 이펙트 타이밍 기준(null = catch 아님)
   zone: number;
   t: number;
 }
@@ -54,11 +56,13 @@ function label(ctx: Ctx, str: string, x: number, y: number, c = UI.text, size = 
   ctx.fillText(str, x, y);
 }
 
-export function drawFishSprite(ctx: Ctx, cx: number, cy: number, color: string, s: number) {
+// detail=false면 실루엣(도감 미획득 표시용) — 눈/배 하이라이트 생략
+export function drawFishSprite(ctx: Ctx, cx: number, cy: number, color: string, s: number, detail = true) {
   R(ctx, cx - 5 * s, cy - 2 * s, 10 * s, 4 * s, color);
   R(ctx, cx - 4 * s, cy - 3 * s, 8 * s, 6 * s, color);
   R(ctx, cx + 5 * s, cy - 3 * s, 3 * s, 2 * s, color);
   R(ctx, cx + 5 * s, cy + 1 * s, 3 * s, 2 * s, color);
+  if (!detail) return;
   R(ctx, cx - 3 * s, cy - 1 * s, s, s, '#000');
   R(ctx, cx - 1 * s, cy + 3 * s, 3 * s, s, 'rgba(255,255,255,0.35)');
 }
@@ -79,6 +83,30 @@ function drawBoat(ctx: Ctx, x: number, y: number, t: number) {
   drawPerson(ctx, x, y - 1 + rock);
 }
 
+function hexAlpha(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+// 획득 순간 한 번 터지는 파티클 버스트 — t(경과초)가 life를 넘기면 그린다(스스로 멈춘다).
+// 등급별 도파민 이펙트의 공통 부품: count/speed/life만 바꿔 강도를 조절한다.
+// 거리는 ease-out(초반에 확 뻗었다가 감속)이라 "팍 터지는" 느낌이 나게 한다.
+function drawBurst(
+  ctx: Ctx, cx: number, cy: number, t: number, color: string, count: number, speed: number, life: number,
+) {
+  if (t > life) return;
+  const p = t / life; // 0 → 1
+  const alpha = 1 - p;
+  const dist = (1 - (1 - p) * (1 - p)) * speed; // ease-out quad
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    const x = cx + Math.cos(a) * dist;
+    const y = cy + Math.sin(a) * dist * 0.6; // 살짝 타원형으로 퍼짐
+    const s = 5 - p * 2; // 퍼질수록 살짝 작아짐 (기존보다 굵게 시작)
+    R(ctx, x - s / 2, y - s / 2, s, s, hexAlpha(color, alpha));
+  }
+}
+
 function drawLand(ctx: Ctx, r: Rect) {
   R(ctx, r.x - 3, r.y - 2, r.w + 6, r.h + 5, '#e9c46a');
   R(ctx, r.x, r.y, r.w, r.h, '#74c69d');
@@ -95,7 +123,7 @@ function drawLand(ctx: Ctx, r: Rect) {
 
 // ---------- 공통: 군집/낚시 연출 ----------
 
-function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number) {
+function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number, lockLabel = true) {
   for (const s of schools) {
     const req = SPOTS.find(sp => sp.id === s.spot)!;
     const locked = boat < req.boatTier;
@@ -107,7 +135,7 @@ function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number) {
       R(ctx, fx - 3, fy - 1, 6, 2, c);
       R(ctx, fx + 3, fy - 2, 2, 4, c);
     }
-    if (locked) label(ctx, `배 ${req.boatTier}단계`, s.x, s.y - 11, UI.danger, 8);
+    if (locked && lockLabel) label(ctx, `배 ${req.boatTier}단계`, s.x, s.y - 11, UI.danger, 8);
   }
 }
 
@@ -150,16 +178,19 @@ function drawCatchCard(ctx: Ctx, v: FieldView) {
   drawFishSprite(ctx, 160, 68, f.color, scale);
   label(ctx, f.name, 160, 96, UI.text, 12);
   label(ctx, r.name, 160, 54, r.color, 10);
+  // 등급별 획득 이펙트 — 낮은 등급일수록 조용히, 전설은 도파민 최대치로.
   if (f.rarity === 'legendary') {
+    // 계속 도는 골드 링(기존 연출, 카드가 떠 있는 내내 회전)
     for (let i = 0; i < 10; i++) {
       const a = v.t * 3 + i;
       R(ctx, 160 + Math.cos(a) * (40 + i * 3), 70 + Math.sin(a) * 25, 2, 2, UI.gold);
     }
+    // + 획득 순간 한 번 터지는 버스트 — 링의 골드(#ffd54f)와 다른 톤(주황빛 노랑), 멀리·굵게
+    if (v.catchT !== null) drawBurst(ctx, 160, 68, v.catchT, '#ffb300', 22, 130, 0.7);
+  } else if (f.rarity === 'epic') {
+    // 영웅: 간단히 한 번 퍼지는 효과만 (등급색 그대로)
+    if (v.catchT !== null) drawBurst(ctx, 160, 68, v.catchT, r.color, 12, 75, 0.45);
   }
-}
-
-function drawHud(ctx: Ctx, regionName: string) {
-  label(ctx, regionName, 46, 12, UI.dim, 8);
 }
 
 export function cameraFor(p: Point, worldW: number, worldH: number): Point {
@@ -200,6 +231,15 @@ export function renderVillageField(ctx: Ctx, v: FieldView) {
   for (let y = V_PIER.y; y < V_PIER.y + V_PIER.h; y += 6) R(ctx, V_PIER.x, y, V_PIER.w, 1, '#795548');
   label(ctx, '⚓ 포구 — 대양으로', V_PIER.x + 8, V_PIER.y - 4, UI.gold, 8);
 
+  // 목공소 — 포구 오른쪽, 배를 사는 곳 (서쪽 문 앞이 트리거)
+  R(ctx, V_BOATSHOP.x, V_BOATSHOP.y + 8, V_BOATSHOP.w, V_BOATSHOP.h - 8, '#8d6e63');
+  R(ctx, V_BOATSHOP.x - 3, V_BOATSHOP.y, V_BOATSHOP.w + 6, 12, '#546e7a');        // 지붕
+  R(ctx, V_BOATSHOP.x + 2, V_BOATSHOP.y + 16, 10, 16, '#4e342e');                 // 서쪽 문(포구 쪽)
+  R(ctx, V_BOATSHOP.x + V_BOATSHOP.w - 18, V_BOATSHOP.y + 16, 12, 8, '#a5d8ff');  // 창
+  // 작업 중인 배 골격
+  R(ctx, V_BOATSHOP.x + 8, V_BOATSHOP.y + V_BOATSHOP.h - 8, V_BOATSHOP.w - 24, 4, '#a1887f');
+  label(ctx, '🔨 목공소 — 배 만드는 곳', V_BOATSHOP.x + V_BOATSHOP.w / 2, V_BOATSHOP.y - 4, UI.gold, 8);
+
   // 집 외관
   R(ctx, V_HOUSE.x, V_HOUSE.y + 14, V_HOUSE.w, V_HOUSE.h - 14, '#a1887f');
   R(ctx, V_HOUSE.x - 4, V_HOUSE.y, V_HOUSE.w + 8, 16, '#b71c1c');
@@ -219,7 +259,6 @@ export function renderVillageField(ctx: Ctx, v: FieldView) {
   drawTimingBar(ctx, v);
   ctx.restore();
 
-  drawHud(ctx, REGIONS.village.name);
   drawCatchCard(ctx, v);
 }
 
@@ -268,13 +307,67 @@ export function renderOceanField(ctx: Ctx, v: FieldView) {
   drawTimingBar(ctx, v);
   ctx.restore();
 
-  drawHud(ctx, REGIONS.ocean.name);
   drawCatchCard(ctx, v);
+}
+
+// ---------- 월드맵 (M 키 모달, 월드 1:1 해상도) ----------
+
+const VILLAGE_LABELS: { name: string; x: number; y: number }[] = [
+  { name: '마을 연못', x: 155, y: 85 },
+  { name: '마을 강', x: 480, y: 195 },
+  { name: '남쪽 바다 — 포구에서 대양으로', x: 320, y: 305 },
+];
+
+// labels=false + t 전달 시 사이드바 미니맵 모드 (지명·범례 생략, 내 위치 점멸)
+export function renderWorldMap(
+  ctx: Ctx, region: 'village' | 'ocean', player: Point, boat: number,
+  opts: { labels?: boolean; t?: number } = {},
+) {
+  const labels = opts.labels ?? true;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (region === 'village') {
+    R(ctx, 0, 0, VILLAGE_W, VILLAGE_H, '#4c7c5e');
+    R(ctx, V_POND.x, V_POND.y, V_POND.w, V_POND.h, '#3f8cb5');
+    R(ctx, V_RIVER.x, V_RIVER.y, V_RIVER.w, V_RIVER.h, '#3a7fc1');
+    R(ctx, V_SEA.x, V_SEA.y, V_SEA.w, V_SEA.h, '#1d6396');
+    R(ctx, V_BRIDGE.x, V_BRIDGE.y, V_BRIDGE.w, V_BRIDGE.h, '#8d6e63');
+    R(ctx, V_PIER.x, V_PIER.y, V_PIER.w, V_PIER.h, '#8d6e63');
+    R(ctx, V_HOUSE.x, V_HOUSE.y, V_HOUSE.w, V_HOUSE.h, '#a1887f');
+    R(ctx, V_BOATSHOP.x, V_BOATSHOP.y, V_BOATSHOP.w, V_BOATSHOP.h, '#546e7a');
+    if (labels) {
+      label(ctx, '⌂ 집', V_HOUSE.x + V_HOUSE.w / 2, V_HOUSE.y - 6, UI.gold, 12);
+      for (const z of VILLAGE_LABELS) label(ctx, z.name, z.x, z.y, 'rgba(242,247,251,0.6)', 12);
+    }
+    drawSchools(ctx, V_SCHOOLS, boat, opts.t ?? 0, labels);
+  } else {
+    R(ctx, 0, 0, OCEAN_W, OCEAN_H, '#1d6396');
+    R(ctx, TRENCH.x, TRENCH.y, TRENCH.w, TRENCH.h, '#0b2545');
+    for (const l of LANDS) drawLand(ctx, l);
+    if (labels) {
+      for (const z of OCEAN_LABELS) label(ctx, z.name, z.x, z.y, 'rgba(242,247,251,0.6)', 13);
+      label(ctx, '⚓ 항구', HARBOR.x + HARBOR.w / 2, HARBOR.y - 6, UI.gold, 12);
+    }
+    drawSchools(ctx, O_SCHOOLS, boat, opts.t ?? 0, labels);
+  }
+  if (labels) {
+    // 내 위치 — 십자 마커
+    R(ctx, player.x - 3, player.y - 3, 6, 6, '#ffffff');
+    R(ctx, player.x - 6, player.y - 6, 12, 1, 'rgba(255,255,255,0.6)');
+    R(ctx, player.x - 6, player.y + 5, 12, 1, 'rgba(255,255,255,0.6)');
+    R(ctx, player.x - 6, player.y - 6, 1, 12, 'rgba(255,255,255,0.6)');
+    R(ctx, player.x + 5, player.y - 6, 1, 12, 'rgba(255,255,255,0.6)');
+    label(ctx, '내 위치', player.x, player.y - 10, UI.text, 11);
+  } else {
+    // 미니맵 모드 — 점멸 점
+    const blink = (Math.sin((opts.t ?? 0) * 6) + 1) / 2 > 0.35;
+    if (blink) R(ctx, player.x - 6, player.y - 6, 12, 12, '#ffffff');
+  }
 }
 
 // ---------- 거점: 집 실내 (마을) ----------
 
-export function renderHome(ctx: Ctx, rod: number, boatName: string, dexCount: number, dexTotal: number) {
+// _boatName: renderHarbor와 시그니처 공유(호출부가 삼항으로 고름) — 집엔 목공소가 없어 안 쓴다
+export function renderHome(ctx: Ctx, rod: number, _boatName: string, dexCount: number, dexTotal: number) {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   R(ctx, 0, 0, W, H, '#6d4c41');                 // 벽
   R(ctx, 0, 124, W, 56, '#8d6e63');              // 바닥
@@ -310,13 +403,6 @@ export function renderHome(ctx: Ctx, rod: number, boatName: string, dexCount: nu
         R(ctx, f.x + f.w / 2 - 3, f.y + 8, 6, 8, '#ffd54f');
         label(ctx, '판매 궤짝', f.x + f.w / 2, f.y - 4, UI.gold, 8);
         break;
-      case 'boat':
-        R(ctx, f.x, f.y + f.h - 6, f.w, 6, '#4e342e');
-        R(ctx, f.x + 8, f.y + 12, f.w - 16, 7, '#8d6e63');
-        R(ctx, f.x + f.w / 2 - 1, f.y + 2, 2, 10, '#6d4c41');
-        R(ctx, f.x + f.w / 2 + 1, f.y + 3, 9, 7, '#e0e0e0');
-        label(ctx, `목공소 · ${boatName}`, f.x + f.w / 2, f.y - 3, UI.gold, 8);
-        break;
       case 'exit':
         R(ctx, f.x, f.y, f.w, f.h, '#4e342e');
         R(ctx, f.x + 3, f.y + 3, f.w - 6, f.h - 6, '#5d4037');
@@ -326,7 +412,7 @@ export function renderHome(ctx: Ctx, rod: number, boatName: string, dexCount: nu
     }
   }
 
-  drawPerson(ctx, 170, 160);
+  // 사람은 그리지 않는다 — 거점은 "들어와서 둘러보는 중" 1인칭 시점
   label(ctx, '🏠 나의 집 — 가구를 클릭해 정비하자', W / 2, 14, UI.text, 10);
 }
 
@@ -398,6 +484,6 @@ export function renderHarbor(ctx: Ctx, rod: number, boatName: string, dexCount: 
     }
   }
 
-  drawPerson(ctx, 170, 160);
+  // 사람은 그리지 않는다 — 거점은 "들어와서 둘러보는 중" 1인칭 시점
   label(ctx, '⚓ 항구 — 시설을 클릭해 정비하자', W / 2, 14, UI.text, 10);
 }

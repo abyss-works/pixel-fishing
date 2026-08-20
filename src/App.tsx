@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY, SPOTS,
-  migrate, newState, rodStats, upgradeCost,
-} from './logic';
+import { migrate, newState } from './logic';
 import type { GameState } from './logic';
+import type { FurnitureId, RegionId } from './world';
 import { supabase, ensureSession, fetchCloudSave, pushCloudSave } from './cloud';
+import { SYNC_INTERVAL_MS } from './balance';
 import Base from './Home';
 import Field from './Field';
+import Sidebar from './Sidebar';
+import FacilityModal from './FacilityModal';
+import { DEFAULT_TAB } from './tabs';
+import type { ActionPanel, TabKey } from './tabs';
 
 // 레거시 localStorage 세이브 — 읽기 전용 1회 브리지 (클라우드 업로드 성공 후 제거)
 const LEGACY_KEY = 'pixel-fishing-save';
-
-// 저장은 클라우드 단일 소스: 상태는 메모리에만 두고 주기 동기화한다
-const SYNC_INTERVAL_MS = 20_000;
 
 type SyncState = 'off' | 'connecting' | 'on' | 'error';
 
@@ -25,6 +25,23 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
 
 // 장면: 집 ⟷ 마을 필드 ⟷ (포구, 배 필요) ⟷ 대양 필드 ⟷ 항구
 type Scene = 'home' | 'village' | 'harbor' | 'ocean';
+// 씬 → 소속 지역 (지역 탭·도감이 거점에서도 현재 지역 정보를 알 수 있게)
+const sceneRegion = (s: Scene): RegionId => (s === 'home' || s === 'village') ? 'village' : 'ocean';
+
+// 시스템 메시지 — 내용 휴리스틱으로 색조 분류 (보상=gold, 경고=warn)
+interface Msg { id: number; ts: string; text: string; tone: 'info' | 'gold' | 'warn' }
+
+const LOG_KEEP = 30; // 보관 상한 (표시는 최근 8개)
+let msgSeq = 0;
+
+function mkMsg(text: string): Msg {
+  const tone: Msg['tone'] = /⚠️|부족하다|올바르지|없는 쿠폰/.test(text) ? 'warn'
+    : /✨|🎟️|⭐|획득|구매|벌었다|해금|열렸다/.test(text) ? 'gold'
+    : 'info';
+  const d = new Date();
+  const ts = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return { id: msgSeq++, ts, text, tone };
+}
 
 // 레거시 localStorage 세이브를 메모리로 1회 이관 (쓰기는 하지 않음)
 function loadLegacy(): { game: GameState; notice: string | null; legacy: boolean } {
@@ -42,17 +59,18 @@ function loadLegacy(): { game: GameState; notice: string | null; legacy: boolean
   return { game: newState(), notice: null, legacy: false };
 }
 
-// 관리자 게이트 — 지금은 URL ?admin (친구용 서비스라 충분).
-// P1 계정 도입 시 서버 권한 검증으로 승격 .
-const isAdmin = () => new URLSearchParams(window.location.search).has('admin');
-
 export default function App() {
   const [init] = useState(loadLegacy);
   const [game, setGame] = useState<GameState>(init.game);
   const [scene, setScene] = useState<Scene>('home');
-  const [toast, setToast] = useState(
-    init.notice ?? '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.');
-  const [adminOpen, setAdminOpen] = useState(false);
+  // 시스템 메시지 로그 — MMO 채팅창처럼 흘러가는 기록 (좌하단 오버레이)
+  const [log, setLog] = useState<Msg[]>(() => {
+    const first = [mkMsg('집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.')];
+    if (init.notice) first.push(mkMsg(init.notice));
+    return first;
+  });
+  const setToast = (text: string) =>
+    setLog(l => [...l.slice(-(LOG_KEEP - 1)), mkMsg(text)]);
   const [sync, setSync] = useState<SyncState>(supabase ? 'connecting' : 'off');
   const userIdRef = useRef<string | null>(null);
   const gameRef = useRef(game);
@@ -62,7 +80,35 @@ export default function App() {
     dirtyRef.current = true;
   }, [game]);
 
-  const go = (s: Scene, msg: string) => { setScene(s); setToast(msg); };
+  // 우측 사이드바 상태 — 탭은 씬 무관 5개 고정, 씬이 바뀌면 열린 시설 패널만 닫는다
+  const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
+  const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
+
+  const go = (s: Scene, msg: string) => { setScene(s); setToast(msg); setActionPanel(null); };
+
+  // 미니맵 클릭 → 지역 탭 열기 (M 키 트리거는 폐지)
+  // TODO: 월드맵 화면(지역 간 이동/전체 지구 조망)이 생기면 미니맵 클릭은 그쪽으로 연결한다.
+  const onOpenMap = () => setActiveTab('region');
+
+  // 거점 시설 클릭(캔버스) — 정비 시설은 사이드바 패널, 도감은 탭 전환, 문/여객선은 장면 이동
+  const facilityHandler = (goFieldFn: () => void, goTravelFn?: () => void) =>
+    (id: FurnitureId) => {
+      switch (id) {
+        case 'sell': case 'rod': case 'boat':
+          setActionPanel(p => (p === id ? null : id));
+          return;
+        case 'dex':
+          setActionPanel(null);
+          setActiveTab('dex');
+          return;
+        case 'exit':
+          goFieldFn();
+          return;
+        case 'travel':
+          goTravelFn?.();
+          return;
+      }
+    };
 
   // P1: 접속 시 익명 로그인 → 클라우드 세이브 채택 (클라우드 = 단일 저장소)
   // 클라우드가 비어 있으면 현재 메모리(레거시 이관분 포함)를 최초 업로드
@@ -77,7 +123,7 @@ export default function App() {
         setGame(migrate(cloud.data));
         setToast('☁️ 클라우드 세이브를 불러왔다.');
       } else {
-        await pushCloudSave(uid, gameRef.current);
+        await pushCloudSave(gameRef.current);
       }
       if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       dirtyRef.current = false;
@@ -85,16 +131,24 @@ export default function App() {
     })().catch(() => setSync('error'));
   }, [init.legacy]);
 
+  // 서버가 저장을 거부(변조 방어/기기 충돌 단조성 위반)하면 클라우드 본을 채택
+  const adoptCloud = async () => {
+    const cloud = await fetchCloudSave();
+    if (!cloud) return;
+    setGame(migrate(cloud.data));
+    setToast('⚠️ 저장이 서버 검증에서 거부되어 클라우드 세이브로 맞췄다.');
+  };
+
   // R18: 주기 동기화(20s, 변경 있을 때만) + 탭 숨김/종료 시 즉시 flush
   useEffect(() => {
     if (!supabase) return;
     const push = () => {
-      const uid = userIdRef.current;
-      if (!uid || !dirtyRef.current) return;
+      if (!userIdRef.current || !dirtyRef.current) return;
       dirtyRef.current = false;
-      pushCloudSave(uid, gameRef.current).then(ok => {
-        if (ok) setSync('on');
-        else { dirtyRef.current = true; setSync('error'); } // 실패분은 다음 주기에 재시도
+      pushCloudSave(gameRef.current).then(result => {
+        if (result === 'ok') { setSync('on'); return; }
+        if (result === 'conflict') { setSync('on'); adoptCloud(); return; }
+        dirtyRef.current = true; setSync('error'); // 실패분은 다음 주기에 재시도
       });
     };
     const id = setInterval(push, SYNC_INTERVAL_MS);
@@ -108,122 +162,59 @@ export default function App() {
     };
   }, []);
 
+  const currentFacility =
+    scene === 'home' ? facilityHandler(() => go('village', '마을이다. 물가 군집에서 낚시하자.')) :
+    scene === 'harbor' ? facilityHandler(
+      () => go('ocean', '출항! 군집 위에서 스페이스로 캐스팅.'),
+      () => go('village', '여객선을 타고 마을로 돌아왔다.')) :
+    undefined;
+
   return (
     <div className="app">
-      <div className="hud">
-        <span>💰 <b>{game.gold}</b>G</span>
-        <span>⭐ 명성 <b>{game.fame}</b></span>
-        <span>⛵ <b>{game.boat === 0 ? '배 없음' : BOATS[game.boat - 1].name}</b></span>
-        <span>🎣 낚싯대 Lv.<b>{game.rod}</b></span>
-        <span>🐟 <b>{game.bag.length}</b>마리</span>
-      </div>
+      <div className="layout">
+        {/* 좌: 게임 스테이지 — 크기는 .game-frame이 결정, 캔버스·오버레이·모달은 프레임 기준 */}
+        <div className="stage">
+          <div className="game-frame">
+            {scene === 'home' && <Base base="home" game={game} onFacility={currentFacility} />}
+            {scene === 'village' && (
+              <Field region="village" game={game} setGame={setGame} setToast={setToast}
+                     goBase={() => go('home', '집이다. 시설을 눌러 정비하자.')}
+                     goTravel={() => go('ocean', '대양으로 출항! 태평양 군집을 찾아 항해하자.')}
+                     onOpenMap={onOpenMap}
+                     onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))} />
+            )}
+            {scene === 'harbor' && <Base base="harbor" game={game} onFacility={currentFacility} />}
+            {scene === 'ocean' && (
+              <Field region="ocean" game={game} setGame={setGame} setToast={setToast}
+                     goBase={() => go('harbor', '항구에 접안했다. 시설을 눌러 정비하자.')}
+                     onOpenMap={onOpenMap} />
+            )}
 
-      {scene === 'home' && (
-        <Base base="home" game={game} setGame={setGame} setToast={setToast}
-              goField={() => go('village', '마을이다. 물가 군집에서 낚시하자. [F]=자동 낚시')} />
-      )}
-      {scene === 'village' && (
-        <Field region="village" game={game} setGame={setGame} setToast={setToast}
-               goBase={() => go('home', '집이다. 가구를 클릭해 정비하자.')}
-               goTravel={() => go('ocean', '대양으로 출항! 태평양 군집을 찾아 항해하자.')} />
-      )}
-      {scene === 'harbor' && (
-        <Base base="harbor" game={game} setGame={setGame} setToast={setToast}
-              goField={() => go('ocean', '출항! 군집 위에서 스페이스로 캐스팅.')}
-              goTravel={() => go('village', '여객선을 타고 마을로 돌아왔다.')} />
-      )}
-      {scene === 'ocean' && (
-        <Field region="ocean" game={game} setGame={setGame} setToast={setToast}
-               goBase={() => go('harbor', '항구에 접안했다. 시설을 클릭해 정비하자.')} />
-      )}
+            {/* 시스템 메시지 로그 — 게임 영역 좌하단 (미래 v0.7 실시간 채팅 자리) */}
+            <div className="msglog" role="status" aria-live="polite">
+              {log.slice(-8).map((m, i, arr) => (
+                <div key={m.id} className={`msg msg-${m.tone}`}
+                     style={{ opacity: 0.4 + 0.6 * ((i + 1) / arr.length) }}>
+                  <span className="msg-ts">{m.ts}</span> {m.text}
+                </div>
+              ))}
+            </div>
 
-      <div className="toast" role="status">{toast}</div>
-      {SYNC_LABEL[sync] && <div className="sync" data-sync={sync}>{SYNC_LABEL[sync]}</div>}
-
-      {isAdmin() && (
-        <button onClick={() => setAdminOpen(true)}>📊 관리자 대시보드</button>
-      )}
-      {adminOpen && (
-        <div className="modal-backdrop" onClick={() => setAdminOpen(false)}>
-          <div className="modal modal-wide" onClick={e => e.stopPropagation()}>
-            <h3>관리자 대시보드 — 게임 데이터</h3>
-
-            <h4>어종 전체 ({FISH.length})</h4>
-            <table className="data-table">
-              <thead><tr><th>이름</th><th>해역</th><th>등급</th><th>가격</th><th>가중치</th></tr></thead>
-              <tbody>
-                {FISH.map(f => {
-                  const r = RARITY[f.rarity];
-                  return (
-                    <tr key={f.id}>
-                      <td>{f.name}</td>
-                      <td>{SPOTS.find(s => s.id === f.spot)!.name}</td>
-                      <td style={{ color: r.color }}>{r.name}</td>
-                      <td>{f.price}G</td>
-                      <td>{r.weight}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <h4>배 ({BOATS.length})</h4>
-            <table className="data-table">
-              <thead><tr><th>단계</th><th>이름</th><th>가격</th><th>명성 요구</th><th>속도</th><th>해금 해역</th></tr></thead>
-              <tbody>
-                {BOATS.map(b => (
-                  <tr key={b.tier}>
-                    <td>{b.tier}</td><td>{b.name}</td><td>{b.price}G</td><td>⭐{b.fameReq}</td><td>{b.speed}</td>
-                    <td>{SPOTS.find(s => s.boatTier === b.tier)?.name ?? '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <h4>낚싯대 스탯 곡선 (무한 강화 — 점근 수렴)</h4>
-            <table className="data-table">
-              <thead><tr><th>Lv</th><th>다음 강화 비용</th><th>입질(초)</th><th>바 sweep</th><th>PERFECT 존</th></tr></thead>
-              <tbody>
-                {[1, 2, 3, 5, 7, 10, 15, 20, 30, 50].map(lv => {
-                  const st = rodStats(lv);
-                  return (
-                    <tr key={lv}>
-                      <td>{lv}</td>
-                      <td>{upgradeCost(lv).toLocaleString()}G</td>
-                      <td>{st.biteMin.toFixed(1)}~{st.biteMax.toFixed(1)}</td>
-                      <td>{st.sweep.toFixed(2)}s</td>
-                      <td>{Math.round(st.zone * 100)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <h4>판정 배수</h4>
-            <table className="data-table">
-              <thead><tr><th>판정</th><th>희귀 이상 가중치 배수</th></tr></thead>
-              <tbody>
-                {Object.entries(JUDGMENT_MULT).map(([j, m]) => (
-                  <tr key={j}><td>{j}</td><td>×{m}</td></tr>
-                ))}
-                <tr><td>auto (방치)</td><td>추첨 없음 — 해당 수역 최하 어종 고정</td></tr>
-              </tbody>
-            </table>
-
-            <h4>쿠폰 (공유용 — 클라이언트 검증, P1에서 서버 이관)</h4>
-            <table className="data-table">
-              <thead><tr><th>코드</th><th>보상</th><th>설명</th></tr></thead>
-              <tbody>
-                {Object.entries(COUPONS).map(([code, c]) => (
-                  <tr key={code}><td><b>{code}</b></td><td>+{c.gold}G</td><td>{c.desc}</td></tr>
-                ))}
-              </tbody>
-            </table>
-
-            <button onClick={() => setAdminOpen(false)}>닫기</button>
+            {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
+            {actionPanel && (
+              <FacilityModal panel={actionPanel} game={game} setGame={setGame}
+                             setToast={setToast} onClose={() => setActionPanel(null)} />
+            )}
           </div>
         </div>
-      )}
+
+        <Sidebar
+          region={sceneRegion(scene)}
+          activeTab={activeTab} setActiveTab={setActiveTab}
+          game={game} setGame={setGame} setToast={setToast}
+          syncLabel={SYNC_LABEL[sync]} syncState={sync}
+        />
+      </div>
     </div>
   );
 }

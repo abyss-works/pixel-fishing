@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  RARITY, SPOTS, JUDGMENT_MULT,
-  addCatch, boatSpeed, canFishSpot, judgeTiming, rodStats, rollFish, worstFish,
-} from './logic';
+import { RARITY, SPOTS, addCatch, boatSpeed, canFishSpot, rodStats } from './logic';
 import type { Fish, GameState, Judgment } from './logic';
-import {
-  REGION_DEFS, CAST_RANGE,
-  inTrigger, movePlayer, nearestSchoolInRange,
-} from './world';
+import { REGION_DEFS, inTrigger, movePlayer, nearestSchoolInRange } from './world';
 import type { Point, RegionId, School } from './world';
-import { renderVillageField, renderOceanField, CANVAS_W, CANVAS_H } from './pixel';
-import type { FishingPhase } from './pixel';
+import { nextPhase, phaseDurationMs, judgePress, resolveCatch } from './fishing';
+import type { FishingPhase } from './fishing';
+import { CAST_RANGE, WALK_SPEED } from './balance';
+import { renderVillageField, renderOceanField, renderWorldMap, CANVAS_W, CANVAS_H } from './pixel';
+import ResourceBar from './ResourceBar';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1],
@@ -19,16 +16,8 @@ const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowRight: [1, 0], KeyD: [1, 0],
 };
 
-const WALK_SPEED = 75;
-
-const IDLE_STATUS: Record<RegionId, string> = {
-  village: '이동: 방향키/WASD · 물가 군집 옆에서 스페이스=캐스팅 · 집 문=정비 · 포구=대양(배 필요)',
-  ocean: '항해: 방향키/WASD · 군집 위에서 스페이스=캐스팅 · 항구=정비',
-};
-
 const STATUS: Record<Exclude<FishingPhase, 'idle'>, string> = {
-  cast: '찌를 던지는 중... (그냥 두면 방치 낚시로 잡어가 잡힌다)',
-  wait: '기다리는 중... "!"가 뜨면 스페이스! 노란 존=PERFECT',
+  wait: '기다리는 중... "!"가 뜨면 스페이스! 노란 존=PERFECT (그냥 둬도 잡힌다)',
   bite: '지금! 노란 존을 노려라! (놓아두면 잡어)',
   catch: '월척이다!',
 };
@@ -40,13 +29,19 @@ interface Props {
   setToast: (msg: string) => void;
   goBase: () => void;              // 집 문 / 항구 접안
   goTravel?: () => void;           // 마을 포구 → 대양
+  onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
+  onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
   /** 테스트용 시작 위치 */
   initialPos?: Point;
 }
 
-export default function Field({ region, game, setGame, setToast, goBase, goTravel, initialPos }: Props) {
+export default function Field({
+  region, game, setGame, setToast, goBase, goTravel,
+  onOpenMap, onShop, initialPos,
+}: Props) {
   const def = REGION_DEFS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const minimapRef = useRef<HTMLCanvasElement>(null);
   // 상태머신 (idle = 이동 중) — R6
   const [phase, setPhase] = useState<FishingPhase>('idle');
   const [fish, setFish] = useState<Fish | null>(null);
@@ -55,16 +50,23 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
   const posRef = useRef<Point>(initialPos ?? def.spawn);
   const keysRef = useRef(new Set<string>());
   const biteStartRef = useRef(0);
+  const catchStartRef = useRef(0); // 획득 이펙트(버스트) 타이밍 기준
   const phaseRef = useRef(phase);
   const fishRef = useRef(fish);
   const schoolRef = useRef(school);
   const gameRef = useRef(game);
+  const openMapRef = useRef(onOpenMap);
+  const shopRef = useRef(onShop);
+  const toastRef = useRef(setToast);
   useEffect(() => {
     phaseRef.current = phase;
     fishRef.current = fish;
     schoolRef.current = school;
     gameRef.current = game;
-  }, [phase, fish, school, game]);
+    openMapRef.current = onOpenMap;
+    shopRef.current = onShop;
+    toastRef.current = setToast;
+  }, [phase, fish, school, game, onOpenMap, onShop, setToast]);
 
   // 핸들러 최신본 참조
   const actionRef = useRef<() => void>(() => {});
@@ -72,44 +74,28 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
   const tryCastRef = useRef<(silent: boolean) => void>(() => {});
   const hookRef = useRef<(j: Judgment) => void>(() => {});
 
-  // 단계별 자동 전환 타이머 (R6, R9) + 자동 모드 챔질
+  // 단계별 자동 전환 타이머 — 규칙은 fishing.ts (R6, R9)
+  // fish를 deps에 넣는 이유: catch 진입 시각(버스트 기준)과 지속시간(등급별 분기)이
+  // "이번에 잡은 물고기"에 달려 있다 — phase만 보면 어떤 물고기인지 알 수 없다.
   useEffect(() => {
     if (phase === 'idle') return;
-    const st = rodStats(gameRef.current.rod);
-    let ms: number, next: FishingPhase;
-    switch (phase) {
-      case 'cast':
-        ms = 600; next = 'wait';
-        break;
-      case 'wait':
-        ms = (st.biteMin + Math.random() * (st.biteMax - st.biteMin)) * 1000;
-        next = 'bite';
-        break;
-      case 'bite': // 게이지 종료까지 안 잡으면 방치(자동) 낚시 — 최하 어종 (R9)
-        biteStartRef.current = Date.now();
-        ms = st.sweep * 1000;
-        next = 'catch';
-        break;
-      default: // catch → 같은 군집에 자동 재캐스트 (방치 루프)
-        ms = 2000; next = 'cast';
-        break;
-    }
+    if (phase === 'bite') biteStartRef.current = Date.now();
+    if (phase === 'catch') catchStartRef.current = Date.now();
+    const ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
     const id = setTimeout(() => {
-      if (phase === 'bite') { hookRef.current('auto'); return; }
+      if (phase === 'bite') { hookRef.current('auto'); return; } // 방치 획득
       if (phase === 'catch') setFish(null);
-      setPhase(next);
+      setPhase(nextPhase(phase));
     }, ms);
     return () => clearTimeout(id);
-  }, [phase, setToast]);
+  }, [phase, fish]);
 
   // R7: 행동 버튼 하나 — idle이면 캐스팅, bite면 챔질(판정), 그 외 무시 (R10)
   const action = () => {
     const p = phaseRef.current;
     if (p === 'bite') {
-      const st = rodStats(gameRef.current.rod);
       // oxlint-disable-next-line react/purity -- 이벤트 핸들러에서만 호출됨(렌더 아님)
-      const pos = (Date.now() - biteStartRef.current) / 1000 / st.sweep;
-      hookRef.current(judgeTiming(pos, st.zone));
+      hookRef.current(judgePress(Date.now() - biteStartRef.current, gameRef.current.rod));
       return;
     }
     if (p !== 'idle') return;
@@ -127,17 +113,15 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
       return;
     }
     setSchool(s);
-    setPhase('cast');
+    setPhase('wait'); // 캐스팅 연출 없이 바로 대기
     if (!silent) setToast(`${spot.name} 군집에 찌를 던졌다.`);
   };
 
-  // R8: 획득 — perfect/normal은 판정 배수 추첨, auto(방치)는 최하 어종 고정
+  // R8: 획득 — 결정 규칙은 fishing.resolveCatch (R9, R11)
   const hookFish = (judgment: Judgment) => {
     const s = schoolRef.current;
     if (!s || phaseRef.current !== 'bite') return;
-    const caught = judgment === 'auto'
-      ? worstFish(s.spot)
-      : rollFish(s.spot, JUDGMENT_MULT[judgment]); // R11
+    const caught = resolveCatch(s.spot, judgment, gameRef.current.rod);
     const nextGame = addCatch(gameRef.current, caught);
     setGame(nextGame);
     setFish(caught);
@@ -161,6 +145,7 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
   });
 
   // 키보드: 이동 + 행동 (R4, R5c)
+  // 콜백은 전부 ref로 읽는다 → 리스너를 마운트 시 한 번만 등록(리렌더 중 입력 유실 방지)
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return; }
@@ -168,7 +153,7 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
         e.preventDefault();
         if (phaseRef.current !== 'idle') { // 이동 = 낚시 취소 (R5c)
           cancelRef.current();
-          setToast('낚시를 접고 이동한다.');
+          toastRef.current('낚시를 접고 이동한다.');
         }
         keysRef.current.add(e.code);
       }
@@ -180,7 +165,7 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
       document.removeEventListener('keydown', onDown);
       document.removeEventListener('keyup', onUp);
     };
-  }, [setToast]);
+  }, []);
 
   // 이동 + 트리거 + 렌더 루프 (jsdom에는 canvas/rAF 없음 → 건너뜀; 이동은 world.ts에서 단위 테스트)
   useEffect(() => {
@@ -199,12 +184,17 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
       }
       if ((dx || dy) && phaseRef.current === 'idle') {
         const speed = region === 'village' ? WALK_SPEED : boatSpeed(gameRef.current);
-        posRef.current = movePlayer(def, posRef.current, Math.sign(dx), Math.sign(dy), dt, speed);
+        const prev = posRef.current;
+        posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
         if (inTrigger(posRef.current, def.baseTrigger)) { goBase(); return; } // R5c
         if (inTrigger(posRef.current, def.travelTrigger)) { // 마을 포구 → 대양
           if (gameRef.current.boat >= 1 && goTravel) { goTravel(); return; }
           posRef.current = { ...posRef.current, y: posRef.current.y - 8 }; // 되밀기
-          setToast('대양에 나가려면 배가 필요하다. 집 목공소에서 조각배를 사자.');
+          toastRef.current('대양에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.');
+        }
+        if (inTrigger(posRef.current, def.shopTrigger)) { // 목공소 — 패널 열고 되밀기
+          posRef.current = prev;
+          shopRef.current?.();
         }
       }
       const st = rodStats(gameRef.current.rod);
@@ -216,25 +206,45 @@ export default function Field({ region, game, setGame, setToast, goBase, goTrave
         boat: gameRef.current.boat,
         biteT: phaseRef.current === 'bite'
           ? (Date.now() - biteStartRef.current) / 1000 / st.sweep : null,
+        catchT: phaseRef.current === 'catch'
+          ? (Date.now() - catchStartRef.current) / 1000 : null,
         zone: st.zone,
         t: now / 1000,
       });
+      // 필드 위 미니맵 오버레이 (라벨 없는 월드맵 축소)
+      const mmCtx = minimapRef.current?.getContext('2d');
+      if (mmCtx) {
+        renderWorldMap(mmCtx, region, posRef.current, gameRef.current.boat,
+          { labels: false, t: now / 1000 });
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [region, def, goBase, goTravel, setToast]);
+  }, [region, def, goBase, goTravel]);
+
+  const title = region === 'village' ? `🌳 ${def.name}` : `🌊 ${def.name}`;
 
   return (
     <>
       <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} className="game"
               aria-label={region === 'village' ? '마을' : '바다'}
               onClick={() => actionRef.current()} />
-      <div className="status" data-phase={phase}>
-        {phase === 'catch' && fish
-          ? `${RARITY[fish.rarity].name} [${fish.name}] 획득!`
-          : phase === 'idle' ? IDLE_STATUS[region] : STATUS[phase]}
-      </div>
+
+      <ResourceBar title={title} game={game} />
+
+      {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지) */}
+      {phase !== 'idle' && (
+        <div className="status-overlay" data-phase={phase}>
+          {phase === 'catch' && fish
+            ? `${RARITY[fish.rarity].name} [${fish.name}] 획득!`
+            : STATUS[phase]}
+        </div>
+      )}
+
+      <canvas ref={minimapRef} width={def.w} height={def.h}
+              className="minimap-overlay" aria-label="미니맵"
+              onClick={() => onOpenMap?.()} />
     </>
   );
 }

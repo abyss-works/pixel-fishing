@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CAST_RANGE, REGION_DEFS,
   V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
+  V_BOATSHOP, V_BOATSHOP_TRIGGER,
   LANDS, TRENCH, O_DOCK, O_SPAWN, O_SCHOOLS,
   canWalkVillage, villageZoneAt, canSailOcean, oceanZoneAt,
   movePlayer, inTrigger, nearestSchoolInRange, furnitureAt,
@@ -98,6 +99,16 @@ describe('마을 트리거', () => {
     expect(inTrigger({ x: V_PORT.x + 8, y: V_PORT.y + 6 }, V_PORT)).toBe(true);
     expect(inTrigger(V_SPAWN, V_DOOR)).toBe(false);
     expect(inTrigger(V_SPAWN, V_PORT)).toBe(false);
+  });
+
+  it('목공소: 건물은 충돌체, 문 앞 트리거는 걸을 수 있는 땅 위', () => {
+    expect(canWalkVillage(V_BOATSHOP.x + 10, V_BOATSHOP.y + 10)).toBe(false); // 건물 통과 불가
+    const tc = { x: V_BOATSHOP_TRIGGER.x + 4, y: V_BOATSHOP_TRIGGER.y + 10 };
+    expect(canWalkVillage(tc.x, tc.y)).toBe(true);            // 트리거 지점은 접근 가능
+    expect(inTrigger(tc, V_BOATSHOP_TRIGGER)).toBe(true);
+    expect(inTrigger(V_SPAWN, V_BOATSHOP_TRIGGER)).toBe(false);
+    expect(REGION_DEFS.village.shopTrigger).toBe(V_BOATSHOP_TRIGGER); // 필드 트리거로 연결됨
+    expect(REGION_DEFS.ocean.shopTrigger).toBeUndefined();            // 대양은 조선소(항구 내)
   });
 });
 

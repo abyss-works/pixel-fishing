@@ -8,6 +8,6 @@ describe('클라우드 저장', () => {
     expect(supabase).toBeNull(); // 테스트 환경엔 VITE_SUPABASE_* 없음
     expect(await ensureSession()).toBeNull();
     expect(await fetchCloudSave()).toBeNull();
-    expect(await pushCloudSave('any-user', newState())).toBe(false);
+    expect(await pushCloudSave(newState())).toBe('error');
   });
 });

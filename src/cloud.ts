@@ -34,12 +34,36 @@ export async function fetchCloudSave(): Promise<CloudSave | null> {
   return { data: data.data };
 }
 
-export async function pushCloudSave(userId: string, state: GameState): Promise<boolean> {
-  if (!supabase) return false;
+export type PushResult = 'ok' | 'conflict' | 'error';
+
+// 저장은 /api/save 경유(서버가 불변식 검증) — 프로덕션 DB는 클라이언트 직접 쓰기 금지(0002).
+// 로컬 vite dev에는 함수가 없으므로 직접 upsert 폴백(개발용 Supabase 프로젝트는 쓰기 정책 유지).
+export async function pushCloudSave(state: GameState): Promise<PushResult> {
+  if (!supabase) return 'error';
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return 'error';
+
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(state),
+    });
+    if ((res.headers.get('content-type') ?? '').includes('application/json')) {
+      if (res.ok) return 'ok';
+      if (res.status === 409) return 'conflict'; // 검증 거부(변조/기기 충돌) — 클라우드 채택
+      return 'error';
+    }
+    // JSON이 아니면 API 미존재(로컬 dev SPA 폴백 등) → 직접 upsert로
+  } catch { /* 네트워크 오류 → 직접 upsert 시도 */ }
+
   const { error } = await supabase.from('saves').upsert({
-    user_id: userId,
+    user_id: session.user.id,
     data: state,
     updated_at: new Date().toISOString(),
   });
-  return !error;
+  return error ? 'error' : 'ok';
 }

@@ -7,8 +7,8 @@ import type { SpotId } from './logic';
 export type RegionId = 'village' | 'ocean';
 
 export const REGIONS: Record<RegionId, { name: string }> = {
-  village: { name: '마을 — 고향' },
-  ocean: { name: '지구 — 태평양' },
+  village: { name: '고향 마을' },
+  ocean: { name: '태평양 연안' },
 };
 
 export const VIEW_W = 320, VIEW_H = 180;
@@ -21,7 +21,8 @@ const inRect = (x: number, y: number, r: Rect) =>
 
 export interface School { id: string; spot: SpotId; x: number; y: number }
 
-export const CAST_RANGE = 28; // 군집 근처(도보)/위(배)에서만 캐스팅
+export { CAST_RANGE } from './balance'; // 군집 근처(도보)/위(배) 판정 반경 — 기존 경로 호환
+import { CAST_RANGE } from './balance';
 
 // ============ 지역 1: 마을 (640×360, 육지 기반) ============
 
@@ -37,6 +38,10 @@ export const V_BRIDGE: Rect = { x: 300, y: 196, w: 24, h: 52 }; // 강 다리
 export const V_PIER: Rect = { x: 308, y: 304, w: 16, h: 40 };   // 포구 부두(바다 위 보행)
 export const V_PORT: Rect = { x: 308, y: 332, w: 16, h: 12 };   // 대양 출항 트리거(배 필요)
 export const V_PORT_FRONT: Point = { x: 316, y: 296 };          // 여객선 귀향 도착 지점
+// 목공소 — 포구 오른쪽 해안 건물(포구 라벨을 가리지 않게 동쪽 배치).
+// 배 구매는 집이 아니라 여기서 (필드 충돌 트리거 → 패널)
+export const V_BOATSHOP: Rect = { x: 374, y: 264, w: 44, h: 34 };
+export const V_BOATSHOP_TRIGGER: Rect = { x: 366, y: 270, w: 8, h: 22 }; // 건물 서쪽 문 앞(포구 쪽)
 
 export const V_SCHOOLS: School[] = [
   { id: 'v-pond-1',  spot: 'pond',  x: 150, y: 118 },
@@ -47,7 +52,7 @@ export const V_SCHOOLS: School[] = [
 
 export function canWalkVillage(x: number, y: number): boolean {
   if (x < 4 || y < 4 || x >= VILLAGE_W - 4 || y >= VILLAGE_H - 4) return false;
-  if (inRect(x, y, V_HOUSE)) return false;
+  if (inRect(x, y, V_HOUSE) || inRect(x, y, V_BOATSHOP)) return false;
   if (inRect(x, y, V_BRIDGE) || inRect(x, y, V_PIER)) return true; // 다리/부두
   return !inRect(x, y, V_POND) && !inRect(x, y, V_RIVER) && !inRect(x, y, V_SEA);
 }
@@ -116,6 +121,7 @@ export interface RegionDef {
   spawn: Point;
   baseTrigger: Rect;   // 집 문 / 항구 접안
   travelTrigger?: Rect; // 다른 지역으로 (마을 포구)
+  shopTrigger?: Rect;   // 필드 시설(목공소) — 진입 시 패널 열고 되밀기
 }
 
 export const REGION_DEFS: Record<RegionId, RegionDef> = {
@@ -127,6 +133,7 @@ export const REGION_DEFS: Record<RegionId, RegionDef> = {
     spawn: V_SPAWN,
     baseTrigger: V_DOOR,
     travelTrigger: V_PORT,
+    shopTrigger: V_BOATSHOP_TRIGGER,
   },
   ocean: {
     id: 'ocean', name: REGIONS.ocean.name,
@@ -172,12 +179,11 @@ export type FurnitureId = 'sell' | 'rod' | 'boat' | 'dex' | 'exit' | 'travel';
 
 export interface Furniture extends Rect { id: FurnitureId; label: string }
 
-// 집 (마을): 궤짝/작업대/목공소/책장/문
+// 집 (마을): 궤짝/작업대/책장/문 — 목공소는 필드(포구 옆)로 이전
 export const HOME_FURNITURE: Furniture[] = [
   { id: 'dex',  label: '책장',      x: 36,  y: 58,  w: 40, h: 60 },
   { id: 'rod',  label: '작업대',    x: 130, y: 90,  w: 50, h: 34 },
   { id: 'sell', label: '판매 궤짝', x: 200, y: 94,  w: 44, h: 32 },
-  { id: 'boat', label: '목공소',    x: 88,  y: 132, w: 48, h: 30 },
   { id: 'exit', label: '문',        x: 272, y: 104, w: 34, h: 56 },
 ];
 
