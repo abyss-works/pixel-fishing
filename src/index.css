@@ -1,0 +1,194 @@
+/* ============================================================
+   픽셀 낚시 — 디자인 시스템 
+   모든 컴포넌트는 아래 토큰만 사용한다. 하드코딩 금지.
+   ============================================================ */
+
+:root {
+  /* 색 — 심해 남색 기반 다크 팔레트 */
+  --c-bg: #0a1526;
+  --c-surface: #14243d;
+  --c-surface-2: #1d3252;
+  --c-line: #2b4568;
+  --c-text: #f2f7fb;
+  --c-text-dim: #93a8c4;
+  --c-gold: #ffd54f;
+  --c-accent: #4fc3f7;
+  --c-danger: #ff8a80;
+
+  /* 등급색 — src/logic.ts RARITY와 동일 값 */
+  --c-common: #b8c2cc;
+  --c-rare: #4fc3f7;
+  --c-epic: #ba68c8;
+  --c-legend: #ffd54f;
+
+  /* 간격 / 모서리 / 글자 / 그림자 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --font: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #12294a 0%, var(--c-bg) 60%);
+  color: var(--c-text);
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  user-select: none;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: var(--sp-3);
+  gap: var(--sp-2);
+}
+
+/* ---------- HUD: 상단 칩 ---------- */
+
+.hud {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.hud span {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  white-space: nowrap;
+}
+
+.hud b {
+  color: var(--c-gold);
+  font-size: var(--fs-md);
+}
+
+.hud small { color: var(--c-text-dim); }
+
+/* ---------- 게임 화면 ---------- */
+
+.game {
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 16 / 9;
+  image-rendering: pixelated;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  background: var(--c-bg);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- 상태줄 / 토스트: 알약 ---------- */
+
+.status, .toast {
+  max-width: 640px;
+  padding: var(--sp-1) var(--sp-4);
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  text-align: center;
+  min-height: 24px;
+  animation: fade-in 0.25s ease-out;
+}
+
+.status {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
+}
+
+.toast { color: var(--c-text-dim); }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- 버튼 ---------- */
+
+button {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-md);
+  font-family: inherit;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--c-accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---------- 모달(도감) ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 18, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  animation: fade-in 0.15s ease-out;
+}
+
+.modal {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+  padding: var(--sp-4);
+  max-width: 90vw;
+  width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal h3 {
+  font-size: var(--fs-lg);
+  color: var(--c-gold);
+  margin-bottom: var(--sp-2);
+}
+
+.modal > button { margin-top: var(--sp-3); }
+
+.dex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--sp-2);
+}
+
+.dex-item {
+  background: var(--c-bg);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  font-size: var(--fs-sm);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.dex-item .cnt {
+  color: var(--c-text-dim);
+  font-size: 11px;
+}
