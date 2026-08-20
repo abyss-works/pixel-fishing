@@ -192,3 +192,50 @@ button:disabled { opacity: 0.4; cursor: default; }
   color: var(--c-text-dim);
   font-size: 11px;
 }
+
+/* ---------- 데이터 테이블 (관리자 대시보드) ---------- */
+
+.modal-wide { width: 560px; }
+
+.modal h4 {
+  font-size: var(--fs-md);
+  color: var(--c-accent);
+  margin: var(--sp-3) 0 var(--sp-1);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.data-table th, .data-table td {
+  padding: var(--sp-1) var(--sp-2);
+  text-align: left;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.data-table th {
+  color: var(--c-text-dim);
+  font-weight: normal;
+}
+
+/* ---------- 오버레이 패널 ---------- */
+
+.modal .primary {
+  display: block;
+  width: 100%;
+  margin-top: var(--sp-3);
+  background: var(--c-accent);
+  border: none;
+  color: #08111f;
+  font-weight: bold;
+}
+.modal .primary:hover:not(:disabled) { filter: brightness(1.1); }
+
+.panel-note {
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  margin: var(--sp-2) 0;
+}
+.panel-note.warn { color: var(--c-danger); }
