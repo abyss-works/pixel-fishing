@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { RARITY } from './logic';
 import type { CatchInfo, Fish } from './logic';
 import { drawFishSprite } from './pixel';
@@ -33,8 +34,25 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   const r = RARITY[fish.rarity];
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
   const mutatedLine = MUTATED_LINES[info ? Math.floor(info.size * 997) % MUTATED_LINES.length : 0];
+  const sparks = fish.rarity === 'legendary' ? 20 : fish.rarity === 'epic' ? 12 : 0;
   return (
     <div className="catch-card" data-rarity={fish.rarity} data-mutated={info?.mutated ?? false}>
+      {/* 이펙트 레이어 — 캔버스가 아니라 카드 위에 그린다 (카드가 캔버스 중앙을 덮어 캔버스 파티클은 안 보였음) */}
+      <div className="catch-fx" aria-hidden="true">
+        {/* 획득 순간 방사형 스파크 — 영웅 12개, 전설 20개·더 멀리·더 오래 (지속시간은 CSS가 등급으로 분기) */}
+        {sparks > 0 && Array.from({ length: sparks }, (_, i) => (
+          <span key={`s${i}`} className="fx-spark" style={{
+            '--a': `${(i * 360) / sparks}deg`,
+            '--d': `${(fish.rarity === 'legendary' ? 110 : 70) + (i % 3) * 18}px`,
+          } as CSSProperties} />
+        ))}
+        {fish.rarity === 'legendary' && Array.from({ length: 10 }, (_, i) => (
+          <span key={i} className="fx-orbit" style={{ '--i': i } as CSSProperties} />
+        ))}
+        {info?.mutated && Array.from({ length: 8 }, (_, i) => (
+          <span key={i} className={`fx-wisp${i % 2 ? ' alt' : ''}`} style={{ '--i': i } as CSSProperties} />
+        ))}
+      </div>
       {info?.isNew && <span className="catch-new">NEW!</span>}
       <span className="catch-rarity"><RarityText rarity={fish.rarity} /></span>
       <CatchSprite fish={fish} mutated={info?.mutated ?? false} />

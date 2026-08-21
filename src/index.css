@@ -271,6 +271,76 @@ body {
   50%      { text-shadow: 0 0 14px rgba(160, 231, 252, 0.9); opacity: 0.8; }
 }
 
+/* ---------- 획득 이펙트 — 카드 위 CSS 파티클 (캔버스에 그리면 카드에 가려진다) ---------- */
+
+.catch-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 전설 — 카드를 도는 골드 궤도 점 (도트 감성: border-radius 없음) */
+.fx-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  background: var(--c-legend);
+  box-shadow: 0 0 6px var(--c-legend);
+  animation: fx-orbit 2.4s linear infinite;
+  animation-delay: calc(var(--i) * -0.24s);
+}
+@keyframes fx-orbit {
+  from { transform: rotate(0turn) translateX(150px); }
+  to   { transform: rotate(1turn) translateX(150px); }
+}
+
+/* 영웅/전설 — 획득 순간 방사형으로 터지는 스파크 파티클 (--a 각도, --d 거리는 JSX가 지정) */
+.fx-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  background: var(--rarity-color);
+  box-shadow: 0 0 6px var(--rarity-color);
+  animation: fx-spark 0.5s ease-out forwards;
+  opacity: 0;
+}
+/* 전설은 같은 스파크를 더 오래 보여준다 (개수·거리는 JSX에서 확대) */
+.catch-card[data-rarity='legendary'] .fx-spark { animation-duration: 0.85s; }
+@keyframes fx-spark {
+  0%   { transform: rotate(var(--a)) translateX(8px) scale(1.4); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateX(var(--d)) scale(0.5); opacity: 0; }
+}
+
+/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 보랏빛/물빛 (시머와 같은 계열) */
+.fx-wisp {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: 5px;
+  height: 5px;
+  background: #e0c3fc;
+  box-shadow: 0 0 8px 2px rgba(224, 195, 252, 0.8);
+  transform: translateX(calc((var(--i) - 3.5) * 38px));
+  animation: fx-wisp 3s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.4s);
+  opacity: 0;
+}
+.fx-wisp.alt {
+  background: #a0e7fc;
+  box-shadow: 0 0 8px 2px rgba(160, 231, 252, 0.8);
+}
+@keyframes fx-wisp {
+  0%   { translate: 0 26px; opacity: 0; }
+  35%  { opacity: 0.95; }
+  100% { translate: 0 -60px; opacity: 0; }
+}
+
 /* 신규 발견 — 왼쪽 위 모서리에 기울어진 리본 */
 .catch-new {
   position: absolute;

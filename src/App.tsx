@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { migrate, newState } from './logic';
 import type { GameState } from './logic';
 import type { FurnitureId, RegionId } from './world';
-import { supabase, ensureSession, fetchCloudSave, pushCloudSave } from './cloud';
+import { supabase, ensureSession, fetchCloudSave, pushCloudSave, saveCode } from './cloud';
 import { SYNC_INTERVAL_MS } from './balance';
 import Base from './Home';
 import Field from './Field';
@@ -110,6 +110,24 @@ export default function App() {
       }
     };
 
+  // 동기화 실패/거부 시 구조 안내 — 배포가 바뀌어도 낡은 탭으로 계속 플레이하는 유저 대비.
+  // 진행 상황을 이사 코드로 만들어 복사해 주고, 새로고침 + 설정 탭 불러오기를 안내한다.
+  // 실패 에피소드당 1회만 (20초 주기라 방치하면 alert 폭탄이 된다) — 복구되면 리셋.
+  const alertedRef = useRef(false);
+  const rescueAlert = async (headline: string) => {
+    if (alertedRef.current) return;
+    alertedRef.current = true;
+    const code = saveCode(gameRef.current);
+    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 이사 코드로 만들어 뒀어요.\n\n복구 방법: 게임을 새로고침해 최신 버전으로 접속한 뒤,\n설정 탭 → 📥 이사 코드 불러오기에 붙여넣으세요.`;
+    try {
+      await navigator.clipboard.writeText(code);
+      window.alert(`${guide}\n\n(이사 코드는 클립보드에 복사되어 있어요)`);
+    } catch {
+      window.alert(guide);
+      window.prompt('이사 코드 — 복사해서 보관하세요:', code);
+    }
+  };
+
   // P1: 접속 시 익명 로그인 → 클라우드 세이브 채택 (클라우드 = 단일 저장소)
   // 클라우드가 비어 있으면 현재 메모리(레거시 이관분 포함)를 최초 업로드
   useEffect(() => {
@@ -128,7 +146,10 @@ export default function App() {
       if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       dirtyRef.current = false;
       setSync('on');
-    })().catch(() => setSync('error'));
+    })().catch(() => {
+      setSync('error');
+      rescueAlert('⚠️ 클라우드에 연결하지 못했어요 — 진행 상황이 저장되지 않아요.');
+    });
   }, [init.legacy]);
 
   // 서버가 저장을 거부(변조 방어/기기 충돌 단조성 위반)하면 클라우드 본을 채택
@@ -146,9 +167,16 @@ export default function App() {
       if (!userIdRef.current || !dirtyRef.current) return;
       dirtyRef.current = false;
       pushCloudSave(gameRef.current).then(result => {
-        if (result === 'ok') { setSync('on'); return; }
-        if (result === 'conflict') { setSync('on'); adoptCloud(); return; }
+        if (result === 'ok') { setSync('on'); alertedRef.current = false; return; }
+        if (result === 'conflict') {
+          setSync('on');
+          // 클라우드 본으로 되돌리기 전에 현재(거부된) 상태를 구조 코드로 건네준다
+          rescueAlert('⚠️ 저장이 서버 검증에서 거부되었어요 — 낡은 버전으로 플레이 중일 수 있어요.\n게임은 클라우드 세이브 기준으로 되돌립니다.');
+          adoptCloud();
+          return;
+        }
         dirtyRef.current = true; setSync('error'); // 실패분은 다음 주기에 재시도
+        rescueAlert('⚠️ 클라우드 연결이 끊겨 저장이 되지 않고 있어요.');
       });
     };
     const id = setInterval(push, SYNC_INTERVAL_MS);

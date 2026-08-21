@@ -4,7 +4,7 @@ import {
   canFishSpot, migrate, redeemCoupon, sellableValue, sizeParams, sizePercentile, toggleLock,
 } from './logic';
 import type { Fish, GameState, RarityId } from './logic';
-import { fetchCoupon } from './cloud';
+import { fetchCoupon, saveCode } from './cloud';
 import { REGION_INFO } from './data/regions';
 import type { RegionId } from './world';
 import { drawFishSprite } from './pixel';
@@ -376,7 +376,7 @@ function DexTab({ game, region, view }: { game: GameState; region: RegionId; vie
 
 function SettingsTab({ game, setGame, setToast, syncLabel, syncState }: SidebarProps) {
   const exportSave = async () => {
-    const code = btoa(encodeURIComponent(JSON.stringify(game)));
+    const code = saveCode(game);
     try {
       await navigator.clipboard.writeText(code);
       setToast('이사 코드를 클립보드에 복사했다. 다른 브라우저에서 불러오기.');

@@ -51,6 +51,10 @@ export async function fetchCoupon(code: string): Promise<{ gold: number; desc: s
   return data ? { gold: data.gold, desc: data.description } : null;
 }
 
+// 이사 코드 — 세이브를 사람이 옮길 수 있는 문자열로 (설정 탭 내보내기 + 동기화 실패 구조용 공용)
+export const saveCode = (state: GameState): string =>
+  btoa(encodeURIComponent(JSON.stringify(state)));
+
 export type PushResult = 'ok' | 'conflict' | 'error';
 
 // 저장은 /api/save 경유(서버가 불변식 검증) — 프로덕션 DB는 클라이언트 직접 쓰기 금지(0002).

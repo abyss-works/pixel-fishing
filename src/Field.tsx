@@ -52,10 +52,7 @@ export default function Field({
   const posRef = useRef<Point>(initialPos ?? def.spawn);
   const keysRef = useRef(new Set<string>());
   const biteStartRef = useRef(0);
-  const catchStartRef = useRef(0); // 획득 이펙트(버스트) 타이밍 기준
   const phaseRef = useRef(phase);
-  const fishRef = useRef(fish);
-  const catchInfoRef = useRef(catchInfo);
   const schoolRef = useRef(school);
   const gameRef = useRef(game);
   const openMapRef = useRef(onOpenMap);
@@ -63,14 +60,12 @@ export default function Field({
   const toastRef = useRef(setToast);
   useEffect(() => {
     phaseRef.current = phase;
-    fishRef.current = fish;
-    catchInfoRef.current = catchInfo;
     schoolRef.current = school;
     gameRef.current = game;
     openMapRef.current = onOpenMap;
     shopRef.current = onShop;
     toastRef.current = setToast;
-  }, [phase, fish, catchInfo, school, game, onOpenMap, onShop, setToast]);
+  }, [phase, school, game, onOpenMap, onShop, setToast]);
 
   // 핸들러 최신본 참조
   const actionRef = useRef<() => void>(() => {});
@@ -84,7 +79,6 @@ export default function Field({
   useEffect(() => {
     if (phase === 'idle') return;
     if (phase === 'bite') biteStartRef.current = Date.now();
-    if (phase === 'catch') catchStartRef.current = Date.now();
     const ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
     const id = setTimeout(() => {
       if (phase === 'bite') { hookRef.current('auto'); return; } // 방치 획득
@@ -212,14 +206,10 @@ export default function Field({
       render(ctx, {
         player: posRef.current,
         phase: phaseRef.current,
-        fish: fishRef.current,
-        catchInfo: catchInfoRef.current,
         school: schoolRef.current,
         boat: gameRef.current.boat,
         biteT: phaseRef.current === 'bite'
           ? (Date.now() - biteStartRef.current) / 1000 / st.sweep : null,
-        catchT: phaseRef.current === 'catch'
-          ? (Date.now() - catchStartRef.current) / 1000 : null,
         zone: st.zone,
         t: now / 1000,
       });
