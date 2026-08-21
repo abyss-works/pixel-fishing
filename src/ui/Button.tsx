@@ -1,15 +1,20 @@
 import type { ButtonHTMLAttributes } from 'react';
+import { cx } from './cx';
 
-type Variant = 'default' | 'primary' | 'ghost' | 'facility';
+type Variant = 'default' | 'primary' | 'ghost';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
-  active?: boolean;
+  /** sm = 목록형 보조 버튼(설정 탭 등) — 패딩·글자만 줄인다 */
+  size?: 'md' | 'sm';
 }
 
-// 픽셀 베벨 버튼 — variant로 위계 구분(정비 확정=primary, 시설 그리드=facility, 보조=ghost)
-export default function Button({ variant = 'default', active, className = '', ...props }: ButtonProps) {
-  const cls = ['pf-btn', variant !== 'default' ? variant : '', active ? 'active' : '', className]
-    .filter(Boolean).join(' ');
-  return <button className={cls} {...props} />;
+// 픽셀 베벨 버튼 — variant로 위계 구분 (확정=primary는 항상 전폭 블록, 보조=ghost)
+export default function Button({ variant = 'default', size = 'md', className, ...props }: ButtonProps) {
+  return (
+    <button
+      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-xs', className)}
+      {...props}
+    />
+  );
 }

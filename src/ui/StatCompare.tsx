@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import DataTable from './DataTable';
 
 interface Row { label: string; value: ReactNode; next?: ReactNode }
 
@@ -6,17 +7,17 @@ interface Row { label: string; value: ReactNode; next?: ReactNode }
 export default function StatCompare({ rows }: { rows: Row[] }) {
   const hasNext = rows.some(r => r.next !== undefined);
   return (
-    <table className="pf-compare">
+    <DataTable>
       {hasNext && <thead><tr><th>스탯</th><th>현재</th><th>변경 후</th></tr></thead>}
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
             <td>{r.label}</td>
             <td>{r.value}</td>
-            {hasNext && <td className="next pf-accent">{r.next}</td>}
+            {hasNext && <td className="text-accent pf-accent">{r.next}</td>}
           </tr>
         ))}
       </tbody>
-    </table>
+    </DataTable>
   );
 }

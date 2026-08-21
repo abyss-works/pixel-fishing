@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cx } from './cx';
 
 interface PanelProps {
   title?: string;
@@ -6,11 +7,11 @@ interface PanelProps {
   className?: string;
 }
 
-// 노치+베벨 프레임 박스 — 정비 패널/사이드카드/월드맵 등 박스형 콘텐츠 공통 컨테이너
-export default function Panel({ title, children, className = '' }: PanelProps) {
+// 노치+베벨 프레임 박스 — 정비 패널/사이드 카드 등 박스형 콘텐츠 공통 컨테이너
+export default function Panel({ title, children, className }: PanelProps) {
   return (
-    <div className={`pf-frame pf-panel-pad ${className}`.trim()}>
-      {title && <h3 className="pf-accent" style={{ fontSize: 'var(--fs-md)', color: 'var(--c-gold)' }}>{title}</h3>}
+    <div className={cx('pf-frame p-2 flex flex-col gap-2', className)}>
+      {title && <h3 className="pf-accent text-sm text-gold">{title}</h3>}
       {children}
     </div>
   );

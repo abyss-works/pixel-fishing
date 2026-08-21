@@ -1,5 +1,12 @@
-// 픽셀 렌더링 공통 헬퍼 — 씬(index.ts)과 어종 스프라이트(sprites.ts)가 공유
+// 픽셀 렌더링 공통 헬퍼 — 인터프리터(region/base/worldmap)와 어종 스프라이트(sprites.ts)가 공유
+import { VIEW_W, VIEW_H } from '../world/types';
+
 export type Ctx = CanvasRenderingContext2D;
+
+// 뷰포트/캔버스 해상도 — 도트(사각형)는 정수 스케일 유지, 텍스트만 선명해진다
+export const W = VIEW_W, H = VIEW_H;
+export const SCALE = 2;
+export const CANVAS_W = W * SCALE, CANVAS_H = H * SCALE;
 
 // 캔버스 UI 팔레트 — index.css 토큰과 같은 값 
 export const UI = {

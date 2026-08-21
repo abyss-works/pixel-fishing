@@ -3,11 +3,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 import App from './App';
-import Field from './Field';
-import Base from './Home';
-import FacilityModal from './FacilityModal';
-import { BOATS, RARITY, newState, upgradeCost } from './logic';
-import type { GameState } from './logic';
+import Field from './stage/Field';
+import Base from './stage/Base';
+import FacilityModal from './stage/FacilityModal';
+import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
+import type { GameState } from './game/logic';
 import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN } from './world';
 import type { Point, RegionId } from './world';
 
@@ -55,7 +55,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
     fireEvent.click(screen.getByText('판매하기 (+60G)')); // 기본 전부 체크
-    expect(hud()).toContain('💰 60G');
+    expect(hud()).toContain('골드 60G');
     expect(hud()).toContain('0마리');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
   });
@@ -67,7 +67,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
     expect(screen.getByText('판매하기 (+6G)')).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매하기/));
-    expect(hud()).toContain('💰 6G');
+    expect(hud()).toContain('골드 6G');
     expect(hud()).toContain('1마리'); // 잉어는 남는다
   });
 
@@ -96,7 +96,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화하기/));
     expect(hud()).toContain('낚싯대 Lv.2');
-    expect(hud()).toContain('💰 0G');
+    expect(hud()).toContain('골드 0G');
   });
 
   it('골드 부족이면 강화 버튼 비활성', () => {
@@ -191,18 +191,18 @@ describe('쿠폰 입력 (설정 탭)', () => {
     render(<App />);
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('출항준비');
-    fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
-    await waitFor(() => expect(hud()).toContain('💰 300G'));
-    fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
+    fireEvent.click(screen.getByText('쿠폰 입력'));
+    await waitFor(() => expect(hud()).toContain('골드 300G'));
+    fireEvent.click(screen.getByText('쿠폰 입력'));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
-    expect(hud()).toContain('💰 300G'); // 중복 지급 없음
+    expect(hud()).toContain('골드 300G'); // 중복 지급 없음
   });
 
   it('없는 코드는 안내만', async () => {
     render(<App />);
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('없는코드');
-    fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
+    fireEvent.click(screen.getByText('쿠폰 입력'));
     expect(await screen.findByText(/없는 쿠폰 코드/)).toBeInTheDocument();
   });
 });
@@ -299,6 +299,25 @@ describe('R5: 캐스팅 판정(군집 근처)', () => {
   });
 });
 
+describe('폼 타이핑 보호 (전역 키 리스너)', () => {
+  it('입력 요소에 포커스가 있으면 게임 키를 가로채지 않는다 — 계정 모달 타이핑', () => {
+    renderField('village', POND_SHORE);
+    space();
+    expect(phase()).toBe('wait'); // 낚시 중
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    // 인풋에서 친 키는 게임 입력이 아니다 — preventDefault 없음(반환 true) + 낚시 유지
+    expect(fireEvent.keyDown(input, { code: 'Space' })).toBe(true);
+    expect(fireEvent.keyDown(input, { code: 'KeyA' })).toBe(true);
+    expect(phase()).toBe('wait');
+    expect(toastFn).not.toHaveBeenCalledWith(expect.stringContaining('낚시를 접고'));
+    input.remove();
+    // 인풋 밖(문서)의 이동 키는 여전히 게임 입력 — 낚시 취소
+    fireEvent.keyDown(document, { code: 'KeyA' });
+    expect(lastToast()).toContain('낚시를 접고 이동한다');
+  });
+});
+
 describe('R5b: 배 게이트', () => {
   it('마을 연못은 배 없이 낚시 가능', () => {
     renderField('village', POND_SHORE); // boat 0
@@ -371,7 +390,7 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     expect(phase()).toBe('bite');
     act(() => vi.advanceTimersByTime(1000)); // rod1 sweep 1s 경과 = 방치
     expect(phase()).toBe('catch');
-    expect(lastToast()).toContain('⚙ 방치');
+    expect(lastToast()).toContain('방치');
     expect(lastGame.bag).toEqual(['crucian*']); // rng=0 고정 → 풀 첫 어종(붕어), 변이 확정
   });
 
@@ -413,7 +432,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   it('레거시 localStorage 세이브는 최초 로드 때 메모리로 이관된다 (읽기 전용 브리지)', () => {
     seed({ bag: ['carp'], gold: 10 });
     render(<App />);
-    expect(hud()).toContain('💰 10G');
+    expect(hud()).toContain('골드 10G');
     expect(hud()).toContain('1마리');
   });
 
@@ -427,7 +446,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     localStorage.setItem(SAVE_KEY,
       JSON.stringify({ gold: 500, xp: 200, rod: 4, bag: [], caught: { tuna: 2 }, spot: 'sea' }));
     render(<App />);
-    expect(hud()).toContain('💰 500G');
+    expect(hud()).toContain('골드 500G');
     expect(hud()).toContain('낚싯대 Lv.4');
     expect(hud()).toContain('조각배'); // v1 증정
     expect(hud()).toContain(`명성 ${RARITY.epic.fame * 2}`); // 참치 2마리 소급
@@ -504,7 +523,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText(/판매하기 \(\+6G\)/)).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
     fireEvent.click(screen.getByText(/^판매하기/));
-    expect(hud()).toContain('💰 6G');
+    expect(hud()).toContain('골드 6G');
     expect(hud()).toContain('2마리'); // 잠긴 잉어 2마리는 가방에 남는다
   });
 
@@ -515,7 +534,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('잉어 잠금 해제')); // 🔓
     clickFurniture('sell');
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/));
-    expect(hud()).toContain('💰 30G');
+    expect(hud()).toContain('골드 30G');
     expect(hud()).toContain('0마리');
   });
 });

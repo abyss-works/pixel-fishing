@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Vercel Node 함수는 Vite 같은 번들러 없이 Node의 순수 ESM 로더로
 // 이 파일을 실행한다. Node ESM은 상대경로 import에 확장자가 없으면 해석하지 못한다
 // (ERR_MODULE_NOT_FOUND). 소스는 .ts지만 컴파일 결과물(.js) 기준으로 적어야 한다.
-import { migrate } from '../src/logic.js';
+import { migrate } from '../src/game/logic.js';
 
 // @vercel/node 헬퍼가 붙은 req/res — 패키지 타입 의존 없이 필요한 것만 선언
 type Req = IncomingMessage & { body?: unknown };

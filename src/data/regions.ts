@@ -5,7 +5,6 @@ import type { SpotRegionId } from './spots.js';
 
 export interface RegionInfo {
   id: SpotRegionId;
-  icon: string;
   name: string;       // 풀어 쓴 지역명 (예: 고향 마을) — world.REGIONS와 동일 값
   shortName: string;  // 도감 서브탭 등 좁은 UI용 (예: 마을)
   tagline: string;    // 한 줄 분위기
@@ -17,7 +16,6 @@ export interface RegionInfo {
 export const REGION_INFO: Record<SpotRegionId, RegionInfo> = {
   village: {
     id: 'village',
-    icon: '🌳',
     name: '고향 마을',
     shortName: '마을',
     tagline: '모든 낚시꾼의 이야기가 시작되는 곳',
@@ -35,7 +33,6 @@ export const REGION_INFO: Record<SpotRegionId, RegionInfo> = {
   },
   ocean: {
     id: 'ocean',
-    icon: '🌊',
     name: '태평양 연안',
     shortName: '태평양',
     tagline: '익숙한 바다, 그러나 그 아래는 아직 아무도 모른다',
