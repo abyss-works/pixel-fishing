@@ -1,23 +1,26 @@
 // 순수 게임 규칙 — DOM 의존 없음.
 // 수치 튜닝은 balance.ts, 콘텐츠는 data/ (이 파일은 기존 import 경로 호환을 위해 re-export).
-import { JUDGMENT_MULT, ROD } from './balance';
-import { RARITY } from './data/rarity';
-import { SPOTS } from './data/spots';
-import type { SpotId } from './data/spots';
-import { FISH } from './data/fish';
-import type { Fish } from './data/fish';
-import { BOATS, MAX_BOAT } from './data/boats';
+// 상대경로에 .js 확장자 필수 — 이 파일은 api/save.ts(Vercel Node 함수, 순수 ESM 로더)가
+// 그대로 import한다. Vite(브라우저 빌드)는 확장자 없어도 되지만 Node ESM은 필수라
+// 둘 다 만족시키려면 .js로 적어야 한다(소스는 .ts, 컴파일 결과가 .js).
+import { JUDGMENT_MULT, ROD } from './balance.js';
+import { RARITY } from './data/rarity.js';
+import { SPOTS } from './data/spots.js';
+import type { SpotId } from './data/spots.js';
+import { FISH } from './data/fish.js';
+import type { Fish } from './data/fish.js';
+import { BOATS, MAX_BOAT } from './data/boats.js';
 
 export { JUDGMENT_MULT };
-export { RARITY } from './data/rarity';
-export type { Rarity, RarityId } from './data/rarity';
-export { SPOTS } from './data/spots';
-export type { Spot, SpotId } from './data/spots';
-export { FISH } from './data/fish';
-export type { Fish } from './data/fish';
-export { BOATS, MAX_BOAT } from './data/boats';
-export type { Boat } from './data/boats';
-export { COUPONS } from './data/coupons';
+export { RARITY } from './data/rarity.js';
+export type { Rarity, RarityId } from './data/rarity.js';
+export { SPOTS } from './data/spots.js';
+export type { Spot, SpotId } from './data/spots.js';
+export { FISH } from './data/fish.js';
+export type { Fish } from './data/fish.js';
+export { BOATS, MAX_BOAT } from './data/boats.js';
+export type { Boat } from './data/boats.js';
+export { COUPONS } from './data/coupons.js';
 
 export type Judgment = 'perfect' | 'normal' | 'auto';
 
@@ -87,7 +90,7 @@ export function newState(): GameState {
 }
 
 // 쿠폰 — 데이터는 data/coupons.ts, 검증/지급 규칙은 여기
-import { COUPONS } from './data/coupons';
+import { COUPONS } from './data/coupons.js';
 
 export type CouponResult =
   | { ok: true; state: GameState; reward: { gold: number; desc: string } }

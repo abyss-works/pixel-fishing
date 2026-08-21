@@ -1,6 +1,6 @@
 // 어종 데이터 (23종) — 어종 추가 = 여기 행 추가 (무결성은 logic.test가 자동 검증)
-import type { SpotId } from './spots';
-import type { RarityId } from './rarity';
+import type { SpotId } from './spots.js';
+import type { RarityId } from './rarity.js';
 
 export interface Fish {
   id: string;

@@ -64,6 +64,10 @@ export async function pushCloudSave(state: GameState): Promise<PushResult> {
     // JSON이 아니면 API 미존재(로컬 dev SPA 폴백 등) → 직접 insert로
   } catch { /* 네트워크 오류 → 직접 insert 시도 */ }
 
+  // 직접 insert 폴백은 dev 전용 — 프로덕션 DB는 0002로 클라이언트 쓰기 정책이 회수돼
+  // 항상 RLS 위반(403)만 난다. v0.2.1 사고 때 API 장애 시 이 폴백이 403 폭주 원인.
+  if (!import.meta.env.DEV) return 'error';
+
   const { error } = await supabase.from('saves').insert({
     user_id: session.user.id,
     data: state,

@@ -1,9 +1,10 @@
 // 세이브 불변식 검증 — 순수 모듈, 클라이언트/서버(api/save.ts) 공유
 // 클라이언트는 신뢰하지 않는다: 요청 변조로 어떤 GameState든 올 수 있다는 전제로,
 // "게임 규칙상 도달 가능한 상태인가"를 검사한다. (추첨 자체의 정당성은 P2 서버 권위에서)
-import { BOATS, COUPONS, FISH, MAX_BOAT, computeFame, upgradeCost } from './logic';
-import type { GameState } from './logic';
-import { CATCH_RATE_SLACK, ECONOMY_GIFT_SLACK, MIN_CATCH_INTERVAL_MS } from './balance';
+// .js 확장자 필수 — api/save.ts(Vercel Node 함수)가 이 파일을 그대로 import한다 (logic.ts 상단 설명 참조)
+import { BOATS, COUPONS, FISH, MAX_BOAT, computeFame, upgradeCost } from './logic.js';
+import type { GameState } from './logic.js';
+import { CATCH_RATE_SLACK, ECONOMY_GIFT_SLACK, MIN_CATCH_INTERVAL_MS } from './balance.js';
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 

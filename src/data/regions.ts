@@ -1,7 +1,7 @@
 // 지역 소개 데이터 — 사이드바 '지역' 탭에서 렌더 (로어·분위기·지역 팁)
 // 문체 규칙: 스토리 텍스트가 아니라 "장소의 소개문" — 세계관 흐름 원칙의
 // 미지의 기울기(친숙함 → 미지)를 소개문 톤으로 표현한다. 새 지역 추가 시 행 추가.
-import type { SpotRegionId } from './spots';
+import type { SpotRegionId } from './spots.js';
 
 export interface RegionInfo {
   id: SpotRegionId;
