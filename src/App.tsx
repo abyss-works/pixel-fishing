@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { migrate, newState } from './logic';
 import type { GameState } from './logic';
 import type { FurnitureId, RegionId } from './world';
-import { supabase, ensureSession, fetchCloudSave, pushCloudSave, saveCode } from './cloud';
+import {
+  supabase, ensureSession, fetchCloudSave, pushCloudSave, saveCode,
+  applyNewPassword, currentAccount,
+} from './cloud';
 import { SYNC_INTERVAL_MS } from './balance';
 import Base from './Home';
 import Field from './Field';
@@ -128,6 +131,9 @@ export default function App() {
     }
   };
 
+  // ---------- 계정 (v0.4.0) ----------
+  const [account, setAccount] = useState<string | null>(null);
+
   // P1: 접속 시 익명 로그인 → 클라우드 세이브 채택 (클라우드 = 단일 저장소)
   // 클라우드가 비어 있으면 현재 메모리(레거시 이관분 포함)를 최초 업로드
   useEffect(() => {
@@ -146,11 +152,48 @@ export default function App() {
       if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       dirtyRef.current = false;
       setSync('on');
+      setAccount(await currentAccount()); // 영구 계정이면 이메일 표시 (게스트면 null)
     })().catch(() => {
       setSync('error');
       rescueAlert('⚠️ 클라우드에 연결하지 못했어요 — 진행 상황이 저장되지 않아요.');
     });
   }, [init.legacy]);
+
+  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 클라우드 세이브 채택
+  const onAuthChanged = async () => {
+    setAccount(await currentAccount());
+    const { data: { session } } = await supabase!.auth.getSession();
+    const uid = session?.user.id ?? null;
+    if (uid && uid !== userIdRef.current) { // 승격(uid 불변)이면 스킵, 로그인(교체)이면 로드
+      userIdRef.current = uid;
+      const cloud = await fetchCloudSave();
+      setGame(cloud ? migrate(cloud.data) : newState());
+      dirtyRef.current = false;
+      setToast('☁️ 계정의 클라우드 세이브를 불러왔다.');
+    }
+  };
+
+  // 비밀번호 재설정 착지 — 메일 링크로 들어오면 Supabase가 PASSWORD_RECOVERY를 쏜다
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+      if (event !== 'PASSWORD_RECOVERY') return;
+      const pw = window.prompt('새 비밀번호를 입력하세요 (6자 이상):');
+      if (!pw) return;
+      applyNewPassword(pw).then(r =>
+        setToast(r.ok ? '🔑 비밀번호가 변경되었다.' : `⚠️ 비밀번호 변경 실패: ${r.msg}`));
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 로그인 유도 넛지 — 명성 ⭐500 도달 시 1회 (게스트만). 세이브 필드 대신 localStorage 1키.
+  useEffect(() => {
+    if (!supabase || account || game.fame < 500) return;
+    if (localStorage.getItem('pf-account-nudged')) return;
+    localStorage.setItem('pf-account-nudged', '1');
+    // oxlint-disable-next-line react/set-state-in-effect -- 명성이 문턱을 넘는 "순간"에 1회만 쏘는 알림이라 이벤트 지점이 따로 없다
+    setToast('⭐ 명성 500 달성! 진행을 지키려면 설정 탭에서 계정을 만들어 두세요.');
+  }, [game.fame, account]);
 
   // R18: 주기 동기화(20s, 변경 있을 때만) + 탭 숨김/종료 시 즉시 flush
   useEffect(() => {
@@ -234,6 +277,7 @@ export default function App() {
           activeTab={activeTab} setActiveTab={setActiveTab}
           game={game} setGame={setGame} setToast={setToast}
           syncLabel={SYNC_LABEL[sync]} syncState={sync}
+          account={account} onAuthChanged={onAuthChanged}
         />
       </div>
     </div>

@@ -640,6 +640,28 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
 }
 .dex-detail-info .k { color: var(--c-text-dim); }
 
+/* ---------- 계정 폼 (설정 탭, v0.4.0) — 기존 .modal/.dex-subtabs/.settings-actions만 재사용 ---------- */
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0;
+}
+.account-form input {
+  background: var(--c-bg);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  color: var(--c-text);
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  padding: var(--sp-2) var(--sp-3);
+}
+.account-form input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+}
+
 /* ---------- 데이터 테이블 ---------- */
 
 .data-table {

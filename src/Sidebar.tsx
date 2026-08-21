@@ -5,7 +5,10 @@ import {
   sellableValue, sizeParams, sizePercentile, toggleLock, variantDiscovered,
 } from './logic';
 import type { Fish, GameState, RarityId } from './logic';
-import { fetchCoupon, saveCode } from './cloud';
+import {
+  fetchCoupon, saveCode, supabase,
+  requestPasswordReset, signInWithEmail, signOutAccount, signUpWithEmail,
+} from './cloud';
 import { REGION_INFO } from './data/regions';
 import type { RegionId } from './world';
 import { drawFishSprite } from './pixel';
@@ -44,6 +47,10 @@ interface SidebarProps {
   setToast: (msg: string) => void;
   syncLabel: string | null;
   syncState: string;
+  /** 로그인된 영구 계정 이메일 (게스트면 null) — v0.4.0 */
+  account: string | null;
+  /** 가입/로그인/로그아웃 직후 App이 계정 표시·세이브를 갱신하는 콜백 */
+  onAuthChanged: () => Promise<void>;
 }
 
 // 우측 사이드바 — 상단 탭바 + 남은 공간을 채우는 탭 콘텐츠 
@@ -404,7 +411,130 @@ function DexTab({ game, region, view }: { game: GameState; region: RegionId; vie
 
 // ---------- 설정 탭 — 동기화 상태 / 데이터 관리 / 패치노트 / 관리자 / 버전 ----------
 
-function SettingsTab({ game, setGame, setToast, syncLabel, syncState }: SidebarProps) {
+// ---------- 계정 (v0.4.0) — 설정 탭엔 상태+버튼만, 폼은 오버레이 모달 ----------
+// 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(현재 게스트 진행 소멸 — 경고+백업)
+
+type AccountTab = 'signup' | 'login';
+
+// 가입/로그인은 의도가 다른 행위라 탭으로 분리 — 진입 버튼 자체가 초기 탭을 정한다
+// (모달을 열고서 또 고르게 하면 한 단계 더 묻는 셈이라, 어느 버튼을 눌렀는지로 이미 답이 나와 있다)
+function AccountModal({ game, setToast, onAuthChanged, onClose }: {
+  game: GameState; setToast: (m: string) => void;
+  onAuthChanged: () => Promise<void>; onClose: () => void;
+}) {
+  const [tab, setTab] = useState<AccountTab>('signup');
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try { await fn(); } finally { setBusy(false); }
+  };
+
+  const signUp = () => run(async () => {
+    if (!email.trim() || pw.length < 6) { setToast('이메일과 6자 이상 비밀번호를 입력하세요.'); return; }
+    const r = await signUpWithEmail(email.trim(), pw);
+    if (!r.ok) { setToast(`⚠️ 가입 실패: ${r.msg}`); return; }
+    await onAuthChanged();
+    setToast('✅ 계정이 만들어졌다! 이제 어느 기기에서든 이 진행을 이어갈 수 있다.');
+    onClose();
+  });
+
+  const signIn = () => run(async () => {
+    if (!email.trim() || !pw) { setToast('이메일과 비밀번호를 입력하세요.'); return; }
+    // 다른 계정으로 교체 — 현재 게스트 진행은 사라진다: 확인 + 이사 코드 자동 백업
+    if (!window.confirm('로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)\n계속할까요?')) return;
+    try { await navigator.clipboard.writeText(saveCode(game)); } catch { /* 백업 실패해도 진행 */ }
+    const r = await signInWithEmail(email.trim(), pw);
+    if (!r.ok) { setToast(`⚠️ 로그인 실패: ${r.msg}`); return; }
+    await onAuthChanged();
+    onClose();
+  });
+
+  const reset = () => run(async () => {
+    if (!email.trim()) { setToast('비밀번호를 재설정할 이메일을 입력하세요.'); return; }
+    const r = await requestPasswordReset(email.trim());
+    setToast(r.ok ? '📧 재설정 메일을 보냈다. 받은편지함을 확인하세요.' : `⚠️ 실패: ${r.msg}`);
+  });
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>👤 계정 연동</h3>
+        {/* 기존 도감 서브탭과 동일한 컴포넌트/클래스 재사용 — 새 스타일 만들지 않는다 */}
+        <div className="dex-subtabs">
+          <button className={tab === 'signup' ? 'active' : ''} onClick={() => setTab('signup')}>가입</button>
+          <button className={tab === 'login' ? 'active' : ''} onClick={() => setTab('login')}>로그인</button>
+        </div>
+
+        {tab === 'signup' ? (
+          <p className="panel-note">계정을 만들면 지금 진행 그대로, 어느 기기에서든 이어져요.</p>
+        ) : (
+          <p className="panel-note">로그인하면 그 계정의 진행을 불러와요 — 지금 기기의 게스트 진행은 사라져요.</p>
+        )}
+
+        <div className="account-form">
+          <input type="email" placeholder="이메일" value={email} autoComplete="email"
+                 onChange={e => setEmail(e.target.value)} />
+          <input type="password" placeholder={tab === 'signup' ? '비밀번호 (6자 이상)' : '비밀번호'}
+                 value={pw} autoComplete={tab === 'signup' ? 'new-password' : 'current-password'}
+                 onChange={e => setPw(e.target.value)} />
+        </div>
+
+        <div className="settings-actions">
+          {tab === 'signup' ? (
+            <Button variant="primary" onClick={signUp} disabled={busy}>✨ 계정 만들기 (진행 유지)</Button>
+          ) : (
+            <>
+              <Button variant="primary" onClick={signIn} disabled={busy}>로그인</Button>
+              <Button variant="ghost" onClick={reset} disabled={busy}>비밀번호를 잊었어요</Button>
+            </>
+          )}
+        </div>
+        <Button variant="ghost" onClick={onClose}>닫기</Button>
+      </div>
+    </div>
+  );
+}
+
+function AccountSection({ game, setToast, account, onAuthChanged }: {
+  game: GameState; setToast: (m: string) => void;
+  account: string | null; onAuthChanged: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!supabase) return null; // 오프라인(dev) 모드 — 계정 기능 없음
+
+  const signOut = async () => {
+    if (!window.confirm('로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.')) return;
+    await signOutAccount();
+    window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
+  };
+
+  return (
+    <>
+      <h4>계정</h4>
+      {account ? (
+        <>
+          <p className="panel-note">✅ <b>{account}</b>로 로그인됨 — 진행이 이 계정에 저장돼요.</p>
+          <div className="settings-actions">
+            <Button onClick={signOut}>로그아웃</Button>
+          </div>
+        </>
+      ) : (
+        <div className="settings-actions">
+          <Button variant="primary" onClick={() => setOpen(true)}>👤 계정 연동</Button>
+        </div>
+      )}
+      {open && (
+        <AccountModal game={game} setToast={setToast}
+                      onAuthChanged={onAuthChanged} onClose={() => setOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function SettingsTab({ game, setGame, setToast, syncLabel, syncState, ...props }: SidebarProps) {
   const exportSave = async () => {
     const code = saveCode(game);
     try {
@@ -444,6 +574,9 @@ function SettingsTab({ game, setGame, setToast, syncLabel, syncState }: SidebarP
   return (
     <div className="settings-tab">
       {syncLabel && <div className="sync" data-sync={syncState}>{syncLabel}</div>}
+
+      <AccountSection game={game} setToast={setToast}
+                      account={props.account} onAuthChanged={props.onAuthChanged} />
 
       <h4>데이터 관리</h4>
       <div className="settings-actions">
