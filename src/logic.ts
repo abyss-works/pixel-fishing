@@ -96,9 +96,13 @@ export type CouponResult =
   | { ok: true; state: GameState; reward: { gold: number; desc: string } }
   | { ok: false; reason: 'invalid' | 'used' };
 
-export function redeemCoupon(state: GameState, codeRaw: string): CouponResult {
+// extra — DB(coupons 테이블)에서 조회한 동적 쿠폰. 정적 COUPONS와 병합해 판정한다.
+export function redeemCoupon(
+  state: GameState, codeRaw: string,
+  extra: Record<string, { gold: number; desc: string }> = {},
+): CouponResult {
   const code = codeRaw.trim();
-  const c = COUPONS[code];
+  const c = COUPONS[code] ?? extra[code];
   if (!c) return { ok: false, reason: 'invalid' };
   if (state.coupons.includes(code)) return { ok: false, reason: 'used' };
   return {

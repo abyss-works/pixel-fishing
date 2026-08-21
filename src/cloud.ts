@@ -37,6 +37,20 @@ export async function fetchCloudSave(): Promise<CloudSave | null> {
   return { data: data.data };
 }
 
+// 동적 쿠폰(coupons 테이블, 0004) 조회 — 코드 배포 없이 추가한 쿠폰을 클라이언트가 찾는다.
+// active=false는 조회 안 됨(신규 사용 차단) — 이미 쓴 코드의 서버 검증은 api/save.ts가 별도로,
+// active 여부와 무관하게 통과시킨다(과거 기록은 영원히 유효, validate.ts 주석 참조).
+export async function fetchCoupon(code: string): Promise<{ gold: number; desc: string } | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('coupons')
+    .select('gold, description')
+    .eq('code', code)
+    .eq('active', true)
+    .maybeSingle();
+  return data ? { gold: data.gold, desc: data.description } : null;
+}
+
 export type PushResult = 'ok' | 'conflict' | 'error';
 
 // 저장은 /api/save 경유(서버가 불변식 검증) — 프로덕션 DB는 클라이언트 직접 쓰기 금지(0002).

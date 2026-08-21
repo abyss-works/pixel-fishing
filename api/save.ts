@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Vercel Node 함수는 Vite 같은 번들러 없이 Node의 순수 ESM 로더로
 // 이 파일을 실행한다. Node ESM은 상대경로 import에 확장자가 없으면 해석하지 못한다
 // (ERR_MODULE_NOT_FOUND). 소스는 .ts지만 컴파일 결과물(.js) 기준으로 적어야 한다.
-import { migrate } from '../src/logic.js';
+import { COUPONS, migrate } from '../src/logic.js';
 import { validateSave } from '../src/validate.js';
 
 // @vercel/node 헬퍼가 붙은 req/res — 패키지 타입 의존 없이 필요한 것만 선언
@@ -54,7 +54,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   const prev = prevRow ? migrate(prevRow.data) : null;
   const elapsedMs = prevRow ? Date.now() - new Date(prevRow.updated_at).getTime() : null;
 
-  const verdict = validateSave(next, prev, elapsedMs);
+  // 동적 쿠폰(coupons 테이블, 0004) — 정적 COUPONS에 없는 코드만 DB에서 조회.
+  // active 필터 없음: 이미 세이브에 기록된 코드는 비활성화돼도 계속 유효해야 한다.
+  const unknownCodes = next.coupons.filter(code => !(code in COUPONS));
+  let dynamicCoupons: Record<string, { gold: number }> = {};
+  if (unknownCodes.length) {
+    const { data: couponRows } = await admin.from('coupons').select('code, gold').in('code', unknownCodes);
+    dynamicCoupons = Object.fromEntries((couponRows ?? []).map(r => [r.code, { gold: r.gold }]));
+  }
+
+  const verdict = validateSave(next, prev, elapsedMs, dynamicCoupons);
   if (!verdict.ok) { res.status(409).json({ error: `invalid:${verdict.reason}` }); return; }
 
   // insert만 — 이전 행을 덮지 않는다 (0003, 배포 안전망)

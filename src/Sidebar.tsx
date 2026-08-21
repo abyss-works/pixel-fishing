@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BOATS, FISH, RARITY, SPOTS,
+  BOATS, COUPONS, FISH, RARITY, SPOTS,
   canFishSpot, migrate, redeemCoupon, sellableValue, toggleLock,
 } from './logic';
 import type { Fish, GameState, RarityId } from './logic';
+import { fetchCoupon } from './cloud';
 import { REGION_INFO } from './data/regions';
 import type { RegionId } from './world';
 import { drawFishSprite } from './pixel';
@@ -302,10 +303,12 @@ function SettingsTab({ game, setGame, setToast, syncLabel, syncState }: SidebarP
     }
   };
 
-  const enterCoupon = () => {
+  const enterCoupon = async () => {
     const code = window.prompt('쿠폰 코드를 입력하세요:');
     if (!code) return;
-    const res = redeemCoupon(game, code);
+    const trimmed = code.trim();
+    const dynamic = COUPONS[trimmed] ? undefined : await fetchCoupon(trimmed);
+    const res = redeemCoupon(game, code, dynamic ? { [trimmed]: dynamic } : {});
     if (!res.ok) {
       setToast(res.reason === 'used' ? '이미 사용한 쿠폰이다.' : '없는 쿠폰 코드다.');
       return;

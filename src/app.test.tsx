@@ -1,7 +1,7 @@
 // R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 import App from './App';
 import Field from './Field';
 import Base from './Home';
@@ -186,23 +186,24 @@ describe('시설 재클릭 시 패널 토글', () => {
 });
 
 describe('쿠폰 입력 (설정 탭)', () => {
-  it('유효 코드 입력 시 골드 지급, 재사용 불가', () => {
+  // 정적 COUPONS에 없는 코드는 DB(coupons 테이블) 조회를 거치므로 비동기 — findBy로 대기.
+  it('유효 코드 입력 시 골드 지급, 재사용 불가', async () => {
     render(<App />);
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('출항준비');
     fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
-    expect(hud()).toContain('💰 300G');
+    await waitFor(() => expect(hud()).toContain('💰 300G'));
     fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
-    expect(screen.getByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
+    expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
     expect(hud()).toContain('💰 300G'); // 중복 지급 없음
   });
 
-  it('없는 코드는 안내만', () => {
+  it('없는 코드는 안내만', async () => {
     render(<App />);
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('없는코드');
     fireEvent.click(screen.getByText('🎟️ 쿠폰 입력'));
-    expect(screen.getByText(/없는 쿠폰 코드/)).toBeInTheDocument();
+    expect(await screen.findByText(/없는 쿠폰 코드/)).toBeInTheDocument();
   });
 });
 

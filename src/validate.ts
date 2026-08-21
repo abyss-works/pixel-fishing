@@ -34,8 +34,12 @@ export function maxSellable(state: GameState): number {
   return total;
 }
 
-export function couponGold(state: GameState): number {
-  return state.coupons.reduce((s, code) => s + (COUPONS[code]?.gold ?? 0), 0);
+// dynamic — DB(coupons 테이블)에서 조회한 동적 쿠폰. active 여부는 여기서 안 본다:
+// 이미 세이브에 기록된 코드는 나중에 비활성화돼도 계속 유효해야 한다(가산 원칙).
+export function couponGold(
+  state: GameState, dynamic: Record<string, { gold: number }> = {},
+): number {
+  return state.coupons.reduce((s, code) => s + (COUPONS[code]?.gold ?? dynamic[code]?.gold ?? 0), 0);
 }
 
 const totalCaught = (s: GameState) => Object.values(s.caught).reduce((a, b) => a + b, 0);
@@ -49,6 +53,7 @@ export function validateSave(
   next: GameState,
   prev: GameState | null,
   elapsedMs: number | null,
+  dynamicCoupons: Record<string, { gold: number }> = {},
 ): ValidationResult {
   // ---- 단독 불변식 ----
   if (!isCount(next.gold)) return bad('gold');
@@ -69,7 +74,7 @@ export function validateSave(
     if (n > (next.caught[id] ?? 0)) return bad('bag>caught'); // 가방 ⊆ 도감
   }
   for (const code of next.coupons) {
-    if (!(code in COUPONS)) return bad('coupon:unknown');
+    if (!(code in COUPONS) && !(code in dynamicCoupons)) return bad('coupon:unknown');
   }
   for (const id of next.locked) {
     if (!FISH.some(f => f.id === id)) return bad('locked:unknown-fish');
@@ -82,7 +87,7 @@ export function validateSave(
   if (next.boat > 0 && next.fame < BOATS[next.boat - 1].fameReq) return bad('boat:fame');
 
   // 경제 보존: 보유 골드 + 누적 지출 ≤ 판매 가능했던 총액 + 쿠폰 (+v1 증정 오차)
-  if (next.gold + totalSpent(next) > maxSellable(next) + couponGold(next) + ECONOMY_GIFT_SLACK) {
+  if (next.gold + totalSpent(next) > maxSellable(next) + couponGold(next, dynamicCoupons) + ECONOMY_GIFT_SLACK) {
     return bad('economy');
   }
 
