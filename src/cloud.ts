@@ -55,15 +55,18 @@ export async function fetchCoupon(code: string): Promise<{ gold: number; desc: s
 export const saveCode = (state: GameState): string =>
   btoa(encodeURIComponent(JSON.stringify(state)));
 
-export type PushResult = 'ok' | 'conflict' | 'error';
+// conflict의 reason = 서버 validateSave 거부 사유 (예: 'invalid:caught:decrease') — 진단용
+export type PushResult =
+  | { status: 'ok' | 'error' }
+  | { status: 'conflict'; reason: string };
 
 // 저장은 /api/save 경유(서버가 불변식 검증) — 프로덕션 DB는 클라이언트 직접 쓰기 금지(0002).
 // 로컬 vite dev에는 함수가 없으므로 직접 insert 폴백(개발용 Supabase 프로젝트는 쓰기 정책 유지).
 // insert만 하는 이유(0003): saves는 append-only라 update/upsert로 이전 행을 덮으면 안 된다.
 export async function pushCloudSave(state: GameState): Promise<PushResult> {
-  if (!supabase) return 'error';
+  if (!supabase) return { status: 'error' };
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return 'error';
+  if (!session) return { status: 'error' };
 
   try {
     const res = await fetch('/api/save', {
@@ -75,21 +78,24 @@ export async function pushCloudSave(state: GameState): Promise<PushResult> {
       body: JSON.stringify(state),
     });
     if ((res.headers.get('content-type') ?? '').includes('application/json')) {
-      if (res.ok) return 'ok';
-      if (res.status === 409) return 'conflict'; // 검증 거부(변조/기기 충돌) — 클라우드 채택
-      return 'error';
+      if (res.ok) return { status: 'ok' };
+      if (res.status === 409) { // 검증 거부(변조/기기 충돌/이사) — 사유를 위로 올린다
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        return { status: 'conflict', reason: body?.error ?? 'invalid:unknown' };
+      }
+      return { status: 'error' };
     }
     // JSON이 아니면 API 미존재(로컬 dev SPA 폴백 등) → 직접 insert로
   } catch { /* 네트워크 오류 → 직접 insert 시도 */ }
 
   // 직접 insert 폴백은 dev 전용 — 프로덕션 DB는 0002로 클라이언트 쓰기 정책이 회수돼
   // 항상 RLS 위반(403)만 난다. v0.2.1 사고 때 API 장애 시 이 폴백이 403 폭주 원인.
-  if (!import.meta.env.DEV) return 'error';
+  if (!import.meta.env.DEV) return { status: 'error' };
 
   const { error } = await supabase.from('saves').insert({
     user_id: session.user.id,
     data: state,
     updated_at: new Date().toISOString(),
   });
-  return error ? 'error' : 'ok';
+  return { status: error ? 'error' : 'ok' };
 }

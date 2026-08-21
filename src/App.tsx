@@ -152,14 +152,6 @@ export default function App() {
     });
   }, [init.legacy]);
 
-  // 서버가 저장을 거부(변조 방어/기기 충돌 단조성 위반)하면 클라우드 본을 채택
-  const adoptCloud = async () => {
-    const cloud = await fetchCloudSave();
-    if (!cloud) return;
-    setGame(migrate(cloud.data));
-    setToast('⚠️ 저장이 서버 검증에서 거부되어 클라우드 세이브로 맞췄다.');
-  };
-
   // R18: 주기 동기화(20s, 변경 있을 때만) + 탭 숨김/종료 시 즉시 flush
   useEffect(() => {
     if (!supabase) return;
@@ -167,12 +159,13 @@ export default function App() {
       if (!userIdRef.current || !dirtyRef.current) return;
       dirtyRef.current = false;
       pushCloudSave(gameRef.current).then(result => {
-        if (result === 'ok') { setSync('on'); alertedRef.current = false; return; }
-        if (result === 'conflict') {
-          setSync('on');
-          // 클라우드 본으로 되돌리기 전에 현재(거부된) 상태를 구조 코드로 건네준다
-          rescueAlert('⚠️ 저장이 서버 검증에서 거부되었어요 — 낡은 버전으로 플레이 중일 수 있어요.\n게임은 클라우드 세이브 기준으로 되돌립니다.');
-          adoptCloud();
+        if (result.status === 'ok') { setSync('on'); alertedRef.current = false; return; }
+        // conflict = 서버가 409를 주는 극히 예외적인 경우(구버전 함수 잔존 등) — 사유만 알리고
+        // 로컬 진행을 유지한다 (v0.3.1: 서버 검증 제거로 정상 경로에선 발생하지 않는다)
+        if (result.status === 'conflict') {
+          setSync('error');
+          rescueAlert(`⚠️ 저장이 서버에서 거부되었어요 (사유: ${result.reason}).`);
+          dirtyRef.current = true;
           return;
         }
         dirtyRef.current = true; setSync('error'); // 실패분은 다음 주기에 재시도

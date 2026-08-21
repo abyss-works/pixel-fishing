@@ -12,6 +12,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.3.2',
+    date: '2026-08-21',
+    summary: '이사 코드 저장 거부 문제 수정',
+    notes: [
+      { tag: '기타', text: '이사 코드로 옮겨온 진행 상황이 저장에서 거부되던 문제를 고쳤어요 — 이제 어떤 기기에서 와도 그대로 이어져요.' },
+      { tag: '기타', text: '혹시 저장이 거부되는 일이 또 생기면 안내 창에 이유가 함께 표시돼요. 알려주시면 바로 도와드릴게요.' },
+    ],
+  },
+  {
     version: '0.3.1',
     date: '2026-08-21',
     summary: '획득 연출 개선, 도감 상세 정리, 저장 안전망',
