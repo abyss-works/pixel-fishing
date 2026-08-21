@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
-import { RARITY } from './logic';
+import { RARITY, priceOf } from './logic';
 import type { CatchInfo, Fish } from './logic';
 import { drawFishSprite } from './pixel';
 import { RarityText } from './ui/RarityTag';
@@ -62,7 +62,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         {info?.isBig && <b className="catch-big"> ★ 월척! 상위 {info.percentile}%</b>}
       </span>
       {info?.mutated && <span className="catch-mutated">{mutatedLine}</span>}
-      <span className="catch-price">{r.name} 등급 · {fish.price}G</span>
+      <span className="catch-price">{r.name} 등급 · {priceOf(fish, info?.mutated ?? false)}G</span>
     </div>
   );
 }

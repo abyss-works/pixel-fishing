@@ -48,4 +48,5 @@ export const SIZE_MEAN_BASE = 10;      // cm — 가격 0일 때 평균 크기
 export const SIZE_MEAN_PER_PRICE = 0.15; // cm/G — 비쌀수록(대체로 큰 어종일수록) 평균 크기도 커짐
 export const SIZE_STD_RATIO = 0.18;    // 표준편차 = 평균 × 이 비율
 export const MUTATION_RATE = 1 / 5;    // 캐치마다 변이(색상 변이) 확률 — 어종당 변이 1종 고정 (1/3→1/5, 체감 하향)
+export const VARIANT_PRICE_MULT = 2;   // 변이 개체 판매가 배수
 export const BIG_CATCH_PERCENTILE = 20; // 크기가 상위 이 %(이하) 안에 들면 "월척" 표시

@@ -121,7 +121,10 @@ export default function Field({
     if (!s || phaseRef.current !== 'bite') return;
     const caught = resolveCatch(s.spot, judgment, gameRef.current.rod);
     const extras = rollCatchExtras(caught);
-    const isNew = (gameRef.current.caught[caught.id] ?? 0) === 0;
+    // NEW 판정도 폼별 — 변이는 별개 개체라 변이 첫 캐치도 신규 발견이다 (v0.3.3)
+    const g = gameRef.current;
+    const varN = g.variantCaught[caught.id] ?? 0;
+    const isNew = extras.mutated ? varN === 0 : (g.caught[caught.id] ?? 0) - varN === 0;
     const info = buildCatchInfo(caught, extras, isNew);
     const nextGame = addCatch(gameRef.current, caught, extras);
     setGame(nextGame);

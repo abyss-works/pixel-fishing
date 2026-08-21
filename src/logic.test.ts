@@ -6,6 +6,7 @@ import {
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, toggleLock,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
+  parseBagEntry, entryFish, entryPrice, entryName,
 } from './logic';
 
 describe('데이터 무결성', () => {
@@ -240,23 +241,56 @@ describe('월척(크기)·변이 ', () => {
     expect(mutated / n).toBeLessThan(0.23);
   });
 
-  it('addCatch: extras를 주면 최대 크기·변이 발견을 병렬 필드에 기록, 생략하면 무변경', () => {
-    const withExtras = addCatch(newState(), carp, { size: 40, mutated: true });
-    expect(withExtras.maxSize.carp).toBe(40);
-    expect(withExtras.mutated.carp).toBe(true);
-    const shrunk = addCatch(withExtras, carp, { size: 30, mutated: false });
-    expect(shrunk.maxSize.carp).toBe(40); // 최댓값만 갱신
-    expect(shrunk.mutated.carp).toBe(true); // 한 번 발견하면 유지
-    const noExtras = addCatch(withExtras, carp);
-    expect(noExtras.maxSize).toBe(withExtras.maxSize); // 생략 시 기존 참조 그대로
+  it('addCatch: 변이는 별개 개체 — 마릿수/크기 기록이 폼별로 갈리고, caught는 종 합계 (v7)', () => {
+    const variant = addCatch(newState(), carp, { size: 40, mutated: true });
+    expect(variant.caught.carp).toBe(1);           // 종 합계 (fame 기반)
+    expect(variant.variantCaught.carp).toBe(1);    // 변이 폼 마릿수
+    expect(variant.variantMaxSize.carp).toBe(40);  // 변이 폼 크기 기록
+    expect(variant.maxSize.carp).toBeUndefined();  // 일반 폼 기록은 무변경
+    const both = addCatch(variant, carp, { size: 30, mutated: false });
+    expect(both.caught.carp).toBe(2);
+    expect(both.variantCaught.carp).toBe(1);
+    expect(both.maxSize.carp).toBe(30);            // 일반 폼 기록 시작
+    expect(both.variantMaxSize.carp).toBe(40);     // 변이 기록과 독립
+    const noExtras = addCatch(both, carp);
+    expect(noExtras.maxSize).toBe(both.maxSize); // 생략 시 기존 참조 그대로
   });
 
-  it('addCatch: 처음 만난 날은 최초 1회만 기록되고 이후 캐치로 안 바뀐다', () => {
-    const first = addCatch(newState(), carp, undefined, '2026-08-21');
+  it('가방 엔트리: 변이는 id*로 분리 저장되고 판매가 ×2, 잠금은 어종 단위로 둘 다 덮는다 (v0.3.3)', () => {
+    const st1 = addCatch(newState(), carp, { size: 30, mutated: false });
+    const st2 = addCatch(st1, carp, { size: 30, mutated: true });
+    expect(st2.bag).toEqual(['carp', 'carp*']); // 별개 엔트리
+    expect(entryPrice('carp')).toBe(carp.price);
+    expect(entryPrice('carp*')).toBe(carp.price * 2);
+    expect(entryName('carp*')).toBe(carp.variant.name);
+    expect(bagValue(st2)).toBe(carp.price * 3); // 1배 + 2배
+
+    // 변이만 골라 팔기 — 일반은 가방에 남는다
+    const soldVariant = sellSelected(st2, ['carp*']);
+    expect(soldVariant.gold).toBe(carp.price * 2);
+    expect(soldVariant.bag).toEqual(['carp']);
+
+    // 어종 잠금은 일반/변이 둘 다 잠근다
+    const locked = toggleLock(st2, 'carp');
+    expect(sellableValue(locked)).toBe(0);
+    expect(sellAll(locked).bag).toEqual(['carp', 'carp*']);
+  });
+
+  it('구세이브 가방(접미사 없는 엔트리)은 전부 일반으로 해석된다', () => {
+    expect(parseBagEntry('carp')).toEqual({ id: 'carp', mutated: false });
+    expect(parseBagEntry('carp*')).toEqual({ id: 'carp', mutated: true });
+    expect(entryFish('carp*')?.id).toBe('carp');
+  });
+
+  it('addCatch: 처음 만난 날은 폼별·최초 1회만 기록되고 이후 캐치로 안 바뀐다', () => {
+    const first = addCatch(newState(), carp, { size: 30, mutated: false }, '2026-08-21');
     expect(first.firstCaught.carp).toBe('2026-08-21');
-    const again = addCatch(first, carp, undefined, '2026-09-01');
+    expect(first.variantFirstCaught.carp).toBeUndefined(); // 변이 폼은 아직
+    const again = addCatch(first, carp, { size: 30, mutated: false }, '2026-09-01');
     expect(again.firstCaught.carp).toBe('2026-08-21'); // 불변
-    expect(addCatch(newState(), carp).firstCaught.carp).toMatch(/^\d{4}-\d{2}-\d{2}$/); // 기본값 = 오늘
+    const withVariant = addCatch(again, carp, { size: 30, mutated: true }, '2026-09-02');
+    expect(withVariant.variantFirstCaught.carp).toBe('2026-09-02'); // 변이 폼 독립 기록
+    expect(withVariant.firstCaught.carp).toBe('2026-08-21');
   });
 });
 
@@ -264,7 +298,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };
     const st = migrate(legacy);
-    expect(st.v).toBe(6);
+    expect(st.v).toBe(7);
     expect(st.gold).toBe(777);
     expect(st.rod).toBe(5);
     expect(st.boat).toBe(1);
@@ -285,17 +319,29 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect(st.fame).toBe(42);
   });
 
-  it('v5 → v6: 월척(크기)·변이·첫 조우일 필드가 빈 객체로 추가된다', () => {
+  it('v5 → v7: 기록 필드가 빈 객체로 추가된다', () => {
     const st = migrate({ v: 5, fame: 0, gold: 10, caught: {}, bag: [], coupons: [], locked: [] });
-    expect(st.v).toBe(6);
+    expect(st.v).toBe(7);
     expect(st.maxSize).toEqual({});
-    expect(st.mutated).toEqual({});
     expect(st.firstCaught).toEqual({});
+    expect(st.variantCaught).toEqual({});
+    expect('mutated' in st).toBe(false); // v7에서 흡수·제거
+  });
+
+  it('v6 → v7: mutated(발견 여부)가 variantCaught(최소 1마리)로 승격된다', () => {
+    const st = migrate({
+      v: 6, fame: 5, gold: 0, caught: { crucian: 3 }, bag: [], coupons: [], locked: [],
+      maxSize: { crucian: 20 }, mutated: { crucian: true, minnow: false }, firstCaught: {},
+    });
+    expect(st.v).toBe(7);
+    expect(st.variantCaught).toEqual({ crucian: 1 }); // true만, 최소 추정 1마리
+    expect(st.maxSize.crucian).toBe(20);              // 기존 크기 기록은 일반 폼으로 간주
+    expect('mutated' in st).toBe(false);
   });
 
   it('v4 → v5: 잠금 목록이 빈 배열로 추가된다', () => {
     const st = migrate({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
-    expect(st.v).toBe(6);
+    expect(st.v).toBe(7);
     expect(st.locked).toEqual([]);
     expect(st.gold).toBe(10);
   });

@@ -6,6 +6,7 @@
 import {
   JUDGMENT_MULT, ROD,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
+  VARIANT_PRICE_MULT,
 } from './balance.js';
 import { RARITY } from './data/rarity.js';
 import { SPOTS } from './data/spots.js';
@@ -28,20 +29,25 @@ export { COUPONS } from './data/coupons.js';
 export type Judgment = 'perfect' | 'normal' | 'auto';
 
 export interface GameState {
-  v: 6;
+  v: 7;
   gold: number;
   fame: number; // 명성 — 무한 누적, 직접 상태 변화 없음, 구매 시 하한 검증용
   boat: number; // 0(없음, 마을 낚시만)~4
   rod: number;  // 1~∞ (무한 강화, 스탯은 점근 수렴)
-  bag: string[];                  // 잡은 물고기 id 목록 (미판매)
-  caught: Record<string, number>; // 도감: id → 누적 마릿수
-  maxSize: Record<string, number>;  // 도감: id → 역대 최대 크기(cm). caught와 병렬 필드 (v0.3.0)
-  mutated: Record<string, boolean>; // 도감: id → 변이(색상 변이) 발견 여부. fame과 무관 (v0.3.0)
-  firstCaught: Record<string, string>; // 도감: id → 처음 잡은 날(YYYY-MM-DD). 업적 밑작업 (v0.3.0)
-  // ↑ 세 필드 공통 패턴: caught 병렬 Record, 가산 전용. 구세이브는 빈 객체로 시작하고
-  //   값이 없으면 UI가 폴백(크기=분포 평균, 날짜='알 수 없음')을 그린다 — breaking change 아님.
+  bag: string[];                  // 잡은 물고기 엔트리 목록 (미판매) — 'id' 일반, 'id*' 변이 (v0.3.3)
+  // ---- 도감 기록: caught 병렬 Record 패턴, 가산 전용 ----
+  // 변이는 "종만 같고 다른 개체" (v0.3.3, 세이브 v7): 마릿수/크기/첫 조우일을 폼별로 나눠 기록.
+  // caught만 예외로 종 합계(일반+변이) — fame = computeFame(caught) 불변식의 기반이라 안 쪼갠다.
+  // 일반 폼 마릿수는 caught - variantCaught로 파생. 구세이브는 빈 객체로 시작하고 값이 없으면
+  // UI가 폴백(크기=분포 평균, 날짜='알 수 없음')을 그린다 — breaking change 아님.
+  caught: Record<string, number>;        // id → 종 누적 마릿수 (일반+변이 합계)
+  maxSize: Record<string, number>;       // id → 일반 폼 역대 최대 크기(cm)
+  firstCaught: Record<string, string>;   // id → 일반 폼 처음 잡은 날(YYYY-MM-DD)
+  variantCaught: Record<string, number>;      // id → 변이 폼 누적 마릿수 (>0 = 변이 발견)
+  variantMaxSize: Record<string, number>;     // id → 변이 폼 역대 최대 크기(cm)
+  variantFirstCaught: Record<string, string>; // id → 변이 폼 처음 잡은 날
   coupons: string[];              // 사용한 쿠폰 코드
-  locked: string[];               // 잠근 어종 id — 전부 판매에서 제외 (실수 방지)
+  locked: string[];               // 잠근 어종 id — 일반/변이 모두 판매에서 제외 (실수 방지)
 }
 
 export interface RodStats {
@@ -95,10 +101,16 @@ export function rollFish(
 
 export function newState(): GameState {
   return {
-    v: 6, gold: 0, fame: 0, boat: 0, rod: 1, bag: [],
-    caught: {}, maxSize: {}, mutated: {}, firstCaught: {}, coupons: [], locked: [],
+    v: 7, gold: 0, fame: 0, boat: 0, rod: 1, bag: [],
+    caught: {}, maxSize: {}, firstCaught: {},
+    variantCaught: {}, variantMaxSize: {}, variantFirstCaught: {},
+    coupons: [], locked: [],
   };
 }
+
+// 변이 발견 여부 — variantCaught에서 파생 (구 mutated 필드는 v7에서 흡수·제거)
+export const variantDiscovered = (state: GameState, fishId: string): boolean =>
+  (state.variantCaught[fishId] ?? 0) > 0;
 
 // ---------- 월척(크기)·변이  ----------
 // 신규 어종/등급 로직 없이 기존 어종 데이터(price)에서 크기 분포를 유도하는 저비용 콘텐츠.
@@ -142,6 +154,43 @@ export interface CatchExtras {
 // 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종, 확률 고정
 export function rollCatchExtras(fish: Fish, rng: () => number = Math.random): CatchExtras {
   return { size: rollSize(fish, rng), mutated: rng() < MUTATION_RATE };
+}
+
+// ---------- 가방 엔트리 (v0.3.3) ----------
+// 가방은 string[] 그대로 두고 변이만 접미사로 구분한다: 'carp' = 일반, 'carp*' = 변이.
+// 구세이브의 기존 엔트리는 접미사가 없으므로 전부 일반으로 해석 — 스키마/마이그레이션 무변경.
+
+const VARIANT_SUFFIX = '*';
+
+export const bagEntryOf = (id: string, mutated: boolean): string =>
+  mutated ? id + VARIANT_SUFFIX : id;
+
+export function parseBagEntry(entry: string): { id: string; mutated: boolean } {
+  return entry.endsWith(VARIANT_SUFFIX)
+    ? { id: entry.slice(0, -VARIANT_SUFFIX.length), mutated: true }
+    : { id: entry, mutated: false };
+}
+
+export const entryFish = (entry: string): Fish | undefined =>
+  FISH.find(f => f.id === parseBagEntry(entry).id);
+
+// 판매가 — 변이는 ×VARIANT_PRICE_MULT. 가격을 표시하는 모든 UI는 이 함수를 거친다
+// (기본가 fish.price를 직접 찍으면 변이 문맥에서 틀린다 — v0.3.3 도감 가격 버그의 원인)
+export function priceOf(fish: Fish, mutated: boolean): number {
+  return fish.price * (mutated ? VARIANT_PRICE_MULT : 1);
+}
+
+export function entryPrice(entry: string): number {
+  const { id, mutated } = parseBagEntry(entry);
+  const fish = FISH.find(f => f.id === id);
+  return fish ? priceOf(fish, mutated) : 0;
+}
+
+// 표시 이름 — 변이는 변이 이름이 곧 이름
+export function entryName(entry: string): string {
+  const { mutated } = parseBagEntry(entry);
+  const fish = entryFish(entry);
+  return fish ? (mutated ? fish.variant.name : fish.name) : entry;
 }
 
 // 캐치 오버레이(획득 카드)용 종합 정보 — 순수 계산이라 로직에 두고 UI는 이 값만 그린다
@@ -217,6 +266,18 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
   4: s => ({ ...s, v: 5, locked: [] }),
   // v5 → v6: 월척(크기)·변이·첫 조우일 도입 — 병렬 신규 필드, caught 무변경 
   5: s => ({ ...s, v: 6, maxSize: {}, mutated: {}, firstCaught: {} }),
+  // v6 → v7: 변이를 "종만 같고 다른 개체"로 분리 (v0.3.3) — mutated(boolean)를 흡수해
+  // variantCaught(마릿수)로 승격. 발견만 기록됐던 구세이브는 최소 추정치 1마리로 시딩.
+  // 크기/첫 조우일 기록은 폼 구분 없이 쌓였던 것이라 일반 폼 기록으로 간주(근사), 변이 기록은 빈 시작.
+  6: s => ({
+    ...s,
+    v: 7,
+    variantCaught: Object.fromEntries(
+      Object.entries(safeRecord<boolean>(s.mutated)).filter(([, v]) => v).map(([id]) => [id, 1])),
+    variantMaxSize: {},
+    variantFirstCaught: {},
+    mutated: undefined,
+  }),
 };
 
 export function migrate(raw: unknown): GameState {
@@ -240,8 +301,10 @@ export function migrate(raw: unknown): GameState {
     bag: Array.isArray(s.bag) ? s.bag.filter((id): id is string => typeof id === 'string') : [],
     caught: safeCaught(s),
     maxSize: safeRecord<number>(s.maxSize),
-    mutated: safeRecord<boolean>(s.mutated),
     firstCaught: safeRecord<string>(s.firstCaught),
+    variantCaught: safeRecord<number>(s.variantCaught),
+    variantMaxSize: safeRecord<number>(s.variantMaxSize),
+    variantFirstCaught: safeRecord<string>(s.variantFirstCaught),
     coupons: Array.isArray(s.coupons)
       ? s.coupons.filter((c): c is string => typeof c === 'string') : [],
     locked: Array.isArray(s.locked)
@@ -257,48 +320,63 @@ function localDate(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// extras 생략 시 maxSize/mutated는 그대로 둔다 — 기존 호출부(테스트 등)와 하위호환.
+// 변이는 "종만 같고 다른 개체" — 마릿수/크기/첫 조우일 기록이 폼별로 갈린다.
+// caught(종 합계)와 fame만 공통 증가. extras 생략 시 기록 필드는 그대로(기존 호출부 하위호환).
 // today 파라미터: 순수성 유지용 주입 지점 (기본값만 시계를 읽는다) — 첫 조우일은 최초 1회만 기록
 export function addCatch(
   state: GameState, fish: Fish, extras?: CatchExtras,
   today: string = localDate(),
 ): GameState {
-  return {
+  const id = fish.id;
+  const mutated = extras?.mutated ?? false;
+  const next: GameState = {
     ...state,
-    bag: [...state.bag, fish.id],
-    caught: { ...state.caught, [fish.id]: (state.caught[fish.id] ?? 0) + 1 },
-    maxSize: extras
-      ? { ...state.maxSize, [fish.id]: Math.max(state.maxSize[fish.id] ?? 0, extras.size) }
-      : state.maxSize,
-    mutated: extras?.mutated ? { ...state.mutated, [fish.id]: true } : state.mutated,
-    firstCaught: state.firstCaught[fish.id]
-      ? state.firstCaught
-      : { ...state.firstCaught, [fish.id]: today },
+    bag: [...state.bag, bagEntryOf(id, mutated)],
+    caught: { ...state.caught, [id]: (state.caught[id] ?? 0) + 1 },
     fame: state.fame + RARITY[fish.rarity].fame,
   };
+  if (!extras) return next;
+  if (mutated) {
+    next.variantCaught = { ...state.variantCaught, [id]: (state.variantCaught[id] ?? 0) + 1 };
+    next.variantMaxSize = {
+      ...state.variantMaxSize, [id]: Math.max(state.variantMaxSize[id] ?? 0, extras.size),
+    };
+    if (!state.variantFirstCaught[id]) {
+      next.variantFirstCaught = { ...state.variantFirstCaught, [id]: today };
+    }
+  } else {
+    next.maxSize = { ...state.maxSize, [id]: Math.max(state.maxSize[id] ?? 0, extras.size) };
+    if (!state.firstCaught[id]) next.firstCaught = { ...state.firstCaught, [id]: today };
+  }
+  return next;
 }
 
 export function bagValue(state: GameState): number {
-  return state.bag.reduce((s, id) => s + (FISH.find(f => f.id === id)?.price ?? 0), 0);
+  return state.bag.reduce((s, e) => s + entryPrice(e), 0);
 }
+
+// 잠금은 어종 단위(base id) — 어종을 잠그면 변이 개체도 함께 잠긴다
+const isLocked = (state: GameState, entry: string): boolean =>
+  state.locked.includes(parseBagEntry(entry).id);
 
 // 판매 가능액 = 가방 중 잠기지 않은 어종만 (잠금 = 실수 판매 방지, R1b)
 export function sellableValue(state: GameState): number {
   return state.bag
-    .filter(id => !state.locked.includes(id))
-    .reduce((s, id) => s + (FISH.find(f => f.id === id)?.price ?? 0), 0);
+    .filter(e => !isLocked(state, e))
+    .reduce((s, e) => s + entryPrice(e), 0);
 }
 
-// 선택 판매 — ids에 포함된 어종만 판매. 잠근 어종은 ids에 있어도 팔리지 않는다(이중 방어)
-export function sellSelected(state: GameState, ids: readonly string[]): GameState {
-  const sell = new Set(ids.filter(id => !state.locked.includes(id)));
+// 선택 판매 — entries에 포함된 것만 판매 ('carp'와 'carp*'는 별개 행).
+// 잠근 어종은 entries에 있어도 팔리지 않는다(이중 방어)
+export function sellSelected(state: GameState, entries: readonly string[]): GameState {
+  const sell = new Set(entries.filter(e => !isLocked(state, e)));
   const gold = state.bag
-    .filter(id => sell.has(id))
-    .reduce((s, id) => s + (FISH.find(f => f.id === id)?.price ?? 0), 0);
+    .filter(e => sell.has(e))
+    .reduce((s, e) => s + entryPrice(e), 0);
   return {
     ...state,
     gold: state.gold + gold,
-    bag: state.bag.filter(id => !sell.has(id)),
+    bag: state.bag.filter(e => !sell.has(e)),
   };
 }
 

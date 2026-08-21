@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BOATS, COUPONS, FISH, RARITY, SPOTS,
-  canFishSpot, migrate, redeemCoupon, sellableValue, sizeParams, sizePercentile, toggleLock,
+  canFishSpot, entryFish, entryPrice, migrate, parseBagEntry, priceOf, redeemCoupon,
+  sellableValue, sizeParams, sizePercentile, toggleLock, variantDiscovered,
 } from './logic';
 import type { Fish, GameState, RarityId } from './logic';
 import { fetchCoupon, saveCode } from './cloud';
@@ -145,25 +146,30 @@ function RegionTab({ region, game }: SidebarProps) {
 
 // ---------- 가방 탭 — 조회 + 어종 잠금 (판매는 거점 정비에서) ----------
 
-// 가방 행 왼쪽의 작은 어종 썸네일 (잡은 어종이므로 항상 실색)
-function FishThumb({ fish }: { fish: Fish }) {
+// 가방 행 왼쪽의 작은 어종 썸네일 (잡은 어종이므로 항상 실색, 변이는 변이 색)
+function FishThumb({ fish, mutated = false }: { fish: Fish; mutated?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
     ctx.clearRect(0, 0, 30, 16);
-    drawFishSprite(ctx, 15, 8, fish.shape, fish.color, 1, true);
-  }, [fish]);
+    drawFishSprite(ctx, 15, 8, fish.shape, mutated ? fish.variant.color : fish.color, 1, true);
+  }, [fish, mutated]);
   return <canvas ref={ref} width={30} height={16} className="bag-thumb" aria-hidden="true" />;
 }
 
 function BagTab({ game, setGame, setToast }: SidebarProps) {
+  // 엔트리 단위 그룹 — 'carp'(일반)와 'carp*'(변이)는 별개 행 (v0.3.3)
   const rows = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const id of game.bag) counts.set(id, (counts.get(id) ?? 0) + 1);
+    for (const e of game.bag) counts.set(e, (counts.get(e) ?? 0) + 1);
     return [...counts.entries()]
-      .map(([id, n]) => ({ fish: FISH.find(f => f.id === id)!, n }))
-      .sort((a, b) => rarityRank(a.fish.rarity) - rarityRank(b.fish.rarity));
+      .map(([entry, n]) => {
+        const { mutated } = parseBagEntry(entry);
+        return { entry, mutated, fish: entryFish(entry)!, n };
+      })
+      .sort((a, b) => rarityRank(a.fish.rarity) - rarityRank(b.fish.rarity)
+        || Number(a.mutated) - Number(b.mutated));
   }, [game.bag]);
   const total = sellableValue(game);
 
@@ -177,16 +183,16 @@ function BagTab({ game, setGame, setToast }: SidebarProps) {
           <table className="pf-compare">
             <thead><tr><th>어종</th><th>수량</th><th>값어치</th><th>잠금</th></tr></thead>
             <tbody>
-              {rows.map(({ fish, n }) => {
+              {rows.map(({ entry, mutated, fish, n }) => {
                 const locked = game.locked.includes(fish.id);
                 return (
-                  <tr key={fish.id} className={locked ? 'row-locked' : ''}>
+                  <tr key={entry} className={locked ? 'row-locked' : ''}>
                     <td className="bag-name">
-                      <FishThumb fish={fish} />
-                      <span><RarityDot rarity={fish.rarity} />{fish.name}</span>
+                      <FishThumb fish={fish} mutated={mutated} />
+                      <span><RarityDot rarity={fish.rarity} />{mutated ? fish.variant.name : fish.name}</span>
                     </td>
                     <td>×{n}</td>
-                    <td className="pf-accent">{fish.price * n}G</td>
+                    <td className="pf-accent">{entryPrice(entry) * n}G</td>
                     <td>
                       <button className="lock-toggle" data-locked={locked}
                         aria-label={`${fish.name} ${locked ? '잠금 해제' : '잠금'}`}
@@ -245,19 +251,31 @@ function DexPortrait({ fish, discovered, color }: { fish: Fish; discovered: bool
                  aria-label={discovered ? fish.name : '미확인 변종'} />;
 }
 
-// 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성 
+// 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
+// 변이는 "종만 같고 다른 개체" (v0.3.3): 폼을 전환하면 이름/로어/가격/마릿수/크기/첫 조우일이
+// 전부 그 폼의 것으로 바뀐다. 등급·형태·크기 분포만 종에 종속.
 function DexDetail({ fish, game, initialForm = 0, onClose }: {
   fish: Fish; game: GameState; initialForm?: number; onClose: () => void;
 }) {
-  const n = game.caught[fish.id] ?? 0;
-  // 업데이트 전(세이브 v5 이하)에 잡은 어종은 크기 기록이 없다 — 분포 평균(상위 50%)을 기본값으로
-  const maxSize = game.maxSize[fish.id] ?? sizeParams(fish).mean;
-  const mutated = game.mutated[fish.id] ?? false;
-  // forms[0] = 기본형(항상 발견 상태, 여기까지 온 이상 이미 잡음) · forms[1+] = 변이(발견해야 보임)
-  // 배열로 짜 둔 이유: 지금은 변이 1종이지만, 나중에 늘어도 화살표 로직은 그대로 재사용된다.
+  const id = fish.id;
+  const varN = game.variantCaught[id] ?? 0;
+  // forms[0] = 기본형 · forms[1+] = 변이(발견해야 정보 공개). 배열인 이유: 변이가 늘어도
+  // 화살표 로직 그대로. 크기 폴백 = 분포 평균(상위 50%) — 구세이브(기록 없음) 대응.
   const forms = [
-    { name: fish.name, color: fish.color, discovered: true },
-    { name: fish.variant.name, color: fish.variant.color, discovered: mutated },
+    {
+      name: fish.name, color: fish.color, lore: fish.lore, mutated: false,
+      discovered: (game.caught[id] ?? 0) - varN > 0, // 일반 폼을 잡아야 공개 (변이만 잡았으면 ???)
+      count: (game.caught[id] ?? 0) - varN,
+      maxSize: game.maxSize[id] ?? sizeParams(fish).mean,
+      firstCaught: game.firstCaught[id],
+    },
+    {
+      name: fish.variant.name, color: fish.variant.color, lore: fish.variant.lore, mutated: true,
+      discovered: varN > 0,
+      count: varN,
+      maxSize: game.variantMaxSize[id] ?? sizeParams(fish).mean,
+      firstCaught: game.variantFirstCaught[id],
+    },
   ];
   const [i, setI] = useState(initialForm);
   const form = forms[i];
@@ -277,17 +295,23 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
         </div>
 
         <div className="dex-detail-bottom">
-          <h3>{fish.name} <RarityDot rarity={fish.rarity} /><RarityText rarity={fish.rarity} /></h3>
-          <p className="dex-detail-lore">{fish.lore}</p>
+          {/* 미발견 폼도 같은 구조로 렌더 (값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지 */}
+          <h3>{form.discovered ? form.name : '???'}{' '}
+            <RarityDot rarity={fish.rarity} /><RarityText rarity={fish.rarity} /></h3>
+          <p className="dex-detail-lore">
+            {form.discovered ? form.lore : '…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.'}
+          </p>
           <div className="dex-detail-info">
             <span className="k">가격</span>
-            <span className="pf-accent">{fish.price}G</span>
+            <span className="pf-accent">{form.discovered ? `${priceOf(fish, form.mutated)}G` : '???'}</span>
             <span className="k">잡은 수</span>
-            <span>{n}마리</span>
+            <span>{form.discovered ? `${form.count}마리` : '???'}</span>
             <span className="k">최대 크기</span>
-            <span>{maxSize.toFixed(1)}cm <span className="cnt">(상위 {sizePercentile(fish, maxSize)}%)</span></span>
+            <span>{form.discovered
+              ? <>{form.maxSize.toFixed(1)}cm <span className="cnt">(상위 {sizePercentile(fish, form.maxSize)}%)</span></>
+              : '???'}</span>
             <span className="k">처음 만난 날</span>
-            <span>{game.firstCaught[fish.id] ?? '알 수 없음'}</span>
+            <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
           </div>
           <Button onClick={onClose}>닫기</Button>
         </div>
@@ -299,14 +323,16 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
 // 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
 // 보기 전환(일반↔돌연변이)은 활성 도감 탭 재클릭 — view는 Sidebar가 들고 온다.
 function DexTab({ game, region, view }: { game: GameState; region: RegionId; view: DexView }) {
-  const baseCount = FISH.filter(f => (game.caught[f.id] ?? 0) > 0).length;
-  const varCount = FISH.filter(f => game.mutated[f.id]).length;
+  // 폼별 발견 기준 — 변이는 별개 개체라 변이만 잡은 종은 기본 도감에서 여전히 ??? (v0.3.3)
+  const baseCaught = (f: Fish) => (game.caught[f.id] ?? 0) - (game.variantCaught[f.id] ?? 0);
+  const baseCount = FISH.filter(f => baseCaught(f) > 0).length;
+  const varCount = FISH.filter(f => variantDiscovered(game, f.id)).length;
   const [sub, setSub] = useState<RegionId>(region); // 기본 = 지금 있는 지역
   const [detail, setDetail] = useState<Fish | null>(null);
   const regions = Object.values(REGION_INFO);
   const spots = SPOTS.filter(s => s.region === sub);
   const found = (f: Fish) => // 현재 보기에서 이 카드가 "발견됨"인가
-    view === 'base' ? (game.caught[f.id] ?? 0) > 0 : (game.mutated[f.id] ?? false);
+    view === 'base' ? baseCaught(f) > 0 : variantDiscovered(game, f.id);
 
   return (
     <div className="dex-tab">
@@ -348,8 +374,12 @@ function DexTab({ game, region, view }: { game: GameState; region: RegionId; vie
                     {ok ? (
                       <>
                         <b>{view === 'variant' ? f.variant.name : f.name}</b><br />
-                        <RarityText rarity={f.rarity} /> · <span className="pf-accent">{f.price}G</span><br />
-                        <span className="cnt">{view === 'variant' ? '발견함' : `${n}마리 잡음`}</span>
+                        <RarityText rarity={f.rarity} /> · <span className="pf-accent">{priceOf(f, view === 'variant')}G</span><br />
+                        <span className="cnt">
+                          {view === 'variant'
+                            ? `${game.variantCaught[f.id] ?? 0}마리 잡음`
+                            : `${n - (game.variantCaught[f.id] ?? 0)}마리 잡음`}
+                        </span>
                       </>
                     ) : (
                       <>

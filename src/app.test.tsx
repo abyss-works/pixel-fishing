@@ -228,13 +228,13 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   });
 
   it('활성 도감 탭 재클릭 = 일반↔돌연변이 보기 전환 (v0.3.0)', () => {
-    seed({ caught: { crucian: 3 }, maxSize: {}, mutated: { crucian: true } });
+    seed({ caught: { crucian: 3 }, maxSize: {}, variantCaught: { crucian: 1 } });
     render(<App />);
     clickFurniture('dex');
     clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
     expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
-    expect(screen.getByText('발견함')).toBeInTheDocument();
+    expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
     clickTab(/도감\s*\(돌연변이\)/); // 다시 일반으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
@@ -338,7 +338,7 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     // rng=0 고정이라 변이 롤(0 < 1/3)도 확정 — 표시 이름은 변이 이름이다 (v0.3.0)
     expect(screen.getByText('일반 [황금 붕어] 획득!')).toBeInTheDocument();
     expect(lastToast()).not.toContain('PERFECT');
-    expect(lastGame.bag).toEqual(['crucian']); // R8
+    expect(lastGame.bag).toEqual(['crucian*']); // R8 — rng=0 → 변이 확정, 변이는 'id*' 엔트리 (v0.3.3)
     expect(lastGame.caught.crucian).toBe(1);
     act(() => vi.advanceTimersByTime(2000)); // 자동 재캐스트
     expect(phase()).toBe('wait');
@@ -372,7 +372,7 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     act(() => vi.advanceTimersByTime(1000)); // rod1 sweep 1s 경과 = 방치
     expect(phase()).toBe('catch');
     expect(lastToast()).toContain('⚙ 방치');
-    expect(lastGame.bag).toEqual(['crucian']); // rng=0 고정 → 풀 첫 어종(붕어)
+    expect(lastGame.bag).toEqual(['crucian*']); // rng=0 고정 → 풀 첫 어종(붕어), 변이 확정
   });
 
   it('R10: bite가 아닐 때 행동 입력은 무시', () => {
@@ -398,12 +398,12 @@ describe('R7b: 방치형 루프 (첫 캐스팅 후 무한 반복)', () => {
     space(); // 최초 1회만 조작 — 던지면 바로 wait
     act(() => vi.advanceTimersByTime(4000)); // wait → bite
     act(() => vi.advanceTimersByTime(1000)); // 방치 → catch
-    expect(lastGame.bag).toEqual(['crucian']);
+    expect(lastGame.bag).toEqual(['crucian*']);
     act(() => vi.advanceTimersByTime(2000)); // catch → wait (자동 재캐스트)
     expect(phase()).toBe('wait');
     act(() => vi.advanceTimersByTime(4000));
     act(() => vi.advanceTimersByTime(1000)); // 두 번째 방치 획득
-    expect(lastGame.bag).toEqual(['crucian', 'crucian']);
+    expect(lastGame.bag).toEqual(['crucian*', 'crucian*']);
   });
 });
 

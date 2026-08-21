@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  BOATS, FISH, MAX_BOAT, SPOTS,
+  BOATS, MAX_BOAT, SPOTS,
+  entryFish, entryName, entryPrice, parseBagEntry,
   rodStats, sellSelected, tryBuyBoat, tryUpgrade, upgradeCost,
 } from './logic';
 import type { GameState } from './logic';
@@ -74,28 +75,33 @@ function ModalCard({ title, onClose, children }: {
   );
 }
 
-// R1: 판매 확인 패널 — 어종별 체크로 판매 여부 선택 (기본 전부 체크).
-// 잠근 어종(가방 탭 🔒)은 체크 불가 — 자물쇠 고정 표시.
+// R1: 판매 확인 패널 — 행별 체크로 판매 여부 선택 (기본 전부 체크).
+// 일반/변이는 별개 행 (v0.3.3, 'id' vs 'id*'). 잠근 어종(가방 탭 🔒)은 두 행 다 체크 불가.
 function SellPanel({ game, onSell, onClose }: {
-  game: GameState; onSell: (ids: string[]) => void; onClose: () => void;
+  game: GameState; onSell: (entries: string[]) => void; onClose: () => void;
 }) {
   const rows = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const id of game.bag) counts.set(id, (counts.get(id) ?? 0) + 1);
-    return [...counts.entries()].map(([id, n]) =>
-      ({ fish: FISH.find(f => f.id === id)!, n, locked: game.locked.includes(id) }));
+    for (const e of game.bag) counts.set(e, (counts.get(e) ?? 0) + 1);
+    return [...counts.entries()].map(([entry, n]) => ({
+      entry, n,
+      fish: entryFish(entry)!,
+      name: entryName(entry),
+      price: entryPrice(entry),
+      locked: game.locked.includes(parseBagEntry(entry).id),
+    }));
   }, [game.bag, game.locked]);
 
-  // 패널을 열 때마다 기본 전부 체크 — 해제한 어종만 기록
+  // 패널을 열 때마다 기본 전부 체크 — 해제한 행만 기록
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
-  const toggle = (id: string) => setExcluded(prev => {
+  const toggle = (entry: string) => setExcluded(prev => {
     const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(entry)) next.delete(entry); else next.add(entry);
     return next;
   });
 
-  const included = rows.filter(r => !r.locked && !excluded.has(r.fish.id));
-  const total = included.reduce((s, r) => s + r.fish.price * r.n, 0);
+  const included = rows.filter(r => !r.locked && !excluded.has(r.entry));
+  const total = included.reduce((s, r) => s + r.price * r.n, 0);
   const lockedCount = rows.filter(r => r.locked).length;
 
   return (
@@ -107,25 +113,25 @@ function SellPanel({ game, onSell, onClose }: {
           <table className="pf-compare">
             <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
             <tbody>
-              {rows.map(({ fish, n, locked }) => {
-                const checked = !locked && !excluded.has(fish.id);
+              {rows.map(({ entry, fish, name, price, n, locked }) => {
+                const checked = !locked && !excluded.has(entry);
                 return (
-                  <tr key={fish.id} className={locked ? 'row-locked' : checked ? '' : 'row-excluded'}>
+                  <tr key={entry} className={locked ? 'row-locked' : checked ? '' : 'row-excluded'}>
                     <td>
                       {locked ? (
                         <span className="sell-check" data-state="locked" title="가방 탭에서 잠금 해제">🔒</span>
                       ) : (
                         <button className="sell-check" data-state={checked ? 'on' : 'off'}
-                                aria-label={`${fish.name} 판매 ${checked ? '해제' : '선택'}`}
-                                onClick={() => toggle(fish.id)}>
+                                aria-label={`${name} 판매 ${checked ? '해제' : '선택'}`}
+                                onClick={() => toggle(entry)}>
                           {checked ? '☑' : '☐'}
                         </button>
                       )}
                     </td>
-                    <td>{fish.name}</td>
+                    <td>{name}</td>
                     <td><RarityText rarity={fish.rarity} /></td>
                     <td>×{n}</td>
-                    <td className="pf-accent">{checked ? `${fish.price * n}G` : '—'}</td>
+                    <td className="pf-accent">{checked ? `${price * n}G` : '—'}</td>
                   </tr>
                 );
               })}
@@ -135,7 +141,7 @@ function SellPanel({ game, onSell, onClose }: {
             <p className="panel-note">🔒 잠근 어종은 팔리지 않는다 (가방 탭에서 잠금 해제)</p>
           )}
           <Button variant="primary" disabled={total === 0}
-                  onClick={() => onSell(included.map(r => r.fish.id))}>
+                  onClick={() => onSell(included.map(r => r.entry))}>
             판매하기 (+{total}G)
           </Button>
         </>
