@@ -32,7 +32,7 @@ function clickFurniture(id: string, canvasLabel = '집') {
   });
 }
 
-const clickTab = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
+const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('button', { name: label }));
 
 beforeEach(() => {
   localStorage.clear();
@@ -212,7 +212,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     seed({ caught: { crucian: 3 } });
     render(<App />);
     clickFurniture('dex');
-    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
     expect(screen.getByText('붕어')).toBeInTheDocument();
     expect(screen.getByText('3마리 잡음')).toBeInTheDocument();
     // 집 = 마을 지역 → 마을 어종 12종 중 붕어 1종만 공개
@@ -225,6 +225,19 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
 
     clickTab('도움말');
     expect(screen.queryByText('???')).not.toBeInTheDocument();
+  });
+
+  it('활성 도감 탭 재클릭 = 일반↔돌연변이 보기 전환 (v0.3.0)', () => {
+    seed({ caught: { crucian: 3 }, maxSize: {}, mutated: { crucian: true } });
+    render(<App />);
+    clickFurniture('dex');
+    clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
+    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
+    expect(screen.getByText('발견함')).toBeInTheDocument();
+    expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
+    clickTab(/도감\s*\(돌연변이\)/); // 다시 일반으로
+    expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 });
 
@@ -322,7 +335,8 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     expect(phase()).toBe('bite');
     space(); // 즉시 챔질 = 커서 0 위치 → 존 밖 = 일반 판정
     expect(phase()).toBe('catch');
-    expect(screen.getByText('일반 [붕어] 획득!')).toBeInTheDocument();
+    // rng=0 고정이라 변이 롤(0 < 1/3)도 확정 — 표시 이름은 변이 이름이다 (v0.3.0)
+    expect(screen.getByText('일반 [황금 붕어] 획득!')).toBeInTheDocument();
     expect(lastToast()).not.toContain('PERFECT');
     expect(lastGame.bag).toEqual(['crucian']); // R8
     expect(lastGame.caught.crucian).toBe(1);
@@ -457,7 +471,7 @@ describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
     expect(screen.getAllByText(/배.*필요|낚시 가능/).length).toBeGreaterThan(0); // 진입 가능 여부
 
-    clickTab('도감'); // 다른 탭으로
+    clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
 

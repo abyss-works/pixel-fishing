@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BOATS, COUPONS, FISH, RARITY, SPOTS,
-  canFishSpot, migrate, redeemCoupon, sellableValue, toggleLock,
+  canFishSpot, migrate, redeemCoupon, sellableValue, sizeParams, sizePercentile, toggleLock,
 } from './logic';
 import type { Fish, GameState, RarityId } from './logic';
 import { fetchCoupon } from './cloud';
@@ -18,13 +18,16 @@ import { RarityText, RarityDot } from './ui/RarityTag';
 import type { TabKey } from './tabs';
 
 // 탭은 씬과 무관하게 항상 동일한 5개 (일관성 우선)
-const TABS: { key: TabKey; label: string }[] = [
+// 도감 탭만 라벨이 동적 — 활성 상태에서 한 번 더 누르면 일반↔돌연변이 보기 전환
+const tabsFor = (dexView: DexView): { key: TabKey; label: string }[] => [
   { key: 'region', label: '지역' },
   { key: 'bag', label: '가방' },
-  { key: 'dex', label: '도감' },
+  { key: 'dex', label: dexView === 'base' ? '도감\n(일반)' : '도감\n(돌연변이)' },
   { key: 'help', label: '도움말' },
   { key: 'settings', label: '설정' },
 ];
+
+type DexView = 'base' | 'variant';
 
 // 등급 오름차순(일반 → 전설) 정렬용
 const RARITY_ORDER: RarityId[] = ['common', 'rare', 'epic', 'legendary'];
@@ -46,14 +49,21 @@ interface SidebarProps {
 // 시설 패널(판매/강화/배)은 여기 소관이 아니다 — 게임 스테이지 모달(FacilityModal)로 뜬다.
 export default function Sidebar(props: SidebarProps) {
   const { activeTab, setActiveTab, game } = props;
+  const [dexView, setDexView] = useState<DexView>('base');
+
+  // 활성 도감 탭을 한 번 더 누르면 일반↔돌연변이 전환
+  const onSelect = (t: TabKey) => {
+    if (t === 'dex' && activeTab === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
+    setActiveTab(t);
+  };
 
   return (
     <aside className="sidebar">
-      <TabBar tabs={TABS} activeKey={activeTab} onSelect={setActiveTab} />
+      <TabBar tabs={tabsFor(dexView)} activeKey={activeTab} onSelect={onSelect} />
       <div className="side-panel">
         {activeTab === 'region' && <RegionTab {...props} />}
         {activeTab === 'bag' && <BagTab {...props} />}
-        {activeTab === 'dex' && <DexTab game={game} region={props.region} />}
+        {activeTab === 'dex' && <DexTab game={game} region={props.region} view={dexView} />}
         {activeTab === 'help' && <HelpPanel />}
         {activeTab === 'settings' && <SettingsTab {...props} />}
       </div>
@@ -142,7 +152,7 @@ function FishThumb({ fish }: { fish: Fish }) {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
     ctx.clearRect(0, 0, 30, 16);
-    drawFishSprite(ctx, 15, 8, fish.color, 1, true);
+    drawFishSprite(ctx, 15, 8, fish.shape, fish.color, 1, true);
   }, [fish]);
   return <canvas ref={ref} width={30} height={16} className="bag-thumb" aria-hidden="true" />;
 }
@@ -208,31 +218,108 @@ function BagTab({ game, setGame, setToast }: SidebarProps) {
 // 계층(도감>지역>수역>어종)이 깊어서 지역을 "서브탭"으로 눌러 평평하게 편다.
 // 지역이 늘면 REGION_INFO 행 추가 = 서브탭 자동 추가.
 
-function FishIcon({ fish, caught }: { fish: Fish; caught: boolean }) {
+// variant=true면 변이 색으로 그린다 (도감 변이 보기)
+function FishIcon({ fish, caught, variant = false }: { fish: Fish; caught: boolean; variant?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
+    const color = variant ? fish.variant.color : fish.color;
     ctx.clearRect(0, 0, 84, 44);
-    drawFishSprite(ctx, 42, 22, caught ? fish.color : '#22314a', 3, caught);
-  }, [fish, caught]);
+    drawFishSprite(ctx, 42, 22, fish.shape, caught ? color : '#22314a', 3, caught);
+  }, [fish, caught, variant]);
   return <canvas ref={ref} width={84} height={44} className="dex-fish"
-                 aria-label={caught ? fish.name : '미확인 어종'} />;
+                 aria-label={caught ? (variant ? fish.variant.name : fish.name) : '미확인 어종'} />;
 }
 
-function DexTab({ game, region }: { game: GameState; region: RegionId }) {
-  const dexCount = FISH.filter(f => (game.caught[f.id] ?? 0) > 0).length;
+// 도감 상세보기 상단 — 큰 스프라이트, 화살표로 기본형↔변이 전환 (미발견 변이는 ???)
+function DexPortrait({ fish, discovered, color }: { fish: Fish; discovered: boolean; color: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const ctx = ref.current?.getContext('2d');
+    if (!ctx) return; // jsdom
+    ctx.clearRect(0, 0, 240, 140);
+    drawFishSprite(ctx, 120, 70, fish.shape, discovered ? color : '#22314a', 6, discovered);
+  }, [fish, discovered, color]);
+  return <canvas ref={ref} width={240} height={140} className="dex-detail-portrait"
+                 aria-label={discovered ? fish.name : '미확인 변종'} />;
+}
+
+// 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성 
+function DexDetail({ fish, game, initialForm = 0, onClose }: {
+  fish: Fish; game: GameState; initialForm?: number; onClose: () => void;
+}) {
+  const n = game.caught[fish.id] ?? 0;
+  // 업데이트 전(세이브 v5 이하)에 잡은 어종은 크기 기록이 없다 — 분포 평균(상위 50%)을 기본값으로
+  const maxSize = game.maxSize[fish.id] ?? sizeParams(fish).mean;
+  const mutated = game.mutated[fish.id] ?? false;
+  // forms[0] = 기본형(항상 발견 상태, 여기까지 온 이상 이미 잡음) · forms[1+] = 변이(발견해야 보임)
+  // 배열로 짜 둔 이유: 지금은 변이 1종이지만, 나중에 늘어도 화살표 로직은 그대로 재사용된다.
+  const forms = [
+    { name: fish.name, color: fish.color, discovered: true },
+    { name: fish.variant.name, color: fish.variant.color, discovered: mutated },
+  ];
+  const [i, setI] = useState(initialForm);
+  const form = forms[i];
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal dex-detail" onClick={e => e.stopPropagation()}>
+        <div className="dex-detail-top">
+          <button className="dex-detail-arrow" aria-label="이전 형태"
+                  onClick={() => setI((i - 1 + forms.length) % forms.length)}>◀</button>
+          <div>
+            <DexPortrait fish={fish} discovered={form.discovered} color={form.color} />
+            <p className="dex-detail-caption">{form.discovered ? form.name : '???'}</p>
+          </div>
+          <button className="dex-detail-arrow" aria-label="다음 형태"
+                  onClick={() => setI((i + 1) % forms.length)}>▶</button>
+        </div>
+
+        <div className="dex-detail-bottom">
+          <h3>{fish.name} <RarityDot rarity={fish.rarity} /><RarityText rarity={fish.rarity} /></h3>
+          <p className="dex-detail-lore">{fish.lore}</p>
+          <div className="dex-detail-info">
+            <span className="k">가격</span>
+            <span className="pf-accent">{fish.price}G</span>
+            <span className="k">잡은 수</span>
+            <span>{n}마리</span>
+            <span className="k">최대 크기</span>
+            <span>{maxSize.toFixed(1)}cm <span className="cnt">(상위 {sizePercentile(fish, maxSize)}%)</span></span>
+            <span className="k">처음 만난 날</span>
+            <span>{game.firstCaught[fish.id] ?? '알 수 없음'}</span>
+          </div>
+          <Button onClick={onClose}>닫기</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
+// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재클릭 — view는 Sidebar가 들고 온다.
+function DexTab({ game, region, view }: { game: GameState; region: RegionId; view: DexView }) {
+  const baseCount = FISH.filter(f => (game.caught[f.id] ?? 0) > 0).length;
+  const varCount = FISH.filter(f => game.mutated[f.id]).length;
   const [sub, setSub] = useState<RegionId>(region); // 기본 = 지금 있는 지역
+  const [detail, setDetail] = useState<Fish | null>(null);
   const regions = Object.values(REGION_INFO);
   const spots = SPOTS.filter(s => s.region === sub);
+  const found = (f: Fish) => // 현재 보기에서 이 카드가 "발견됨"인가
+    view === 'base' ? (game.caught[f.id] ?? 0) > 0 : (game.mutated[f.id] ?? false);
 
   return (
     <div className="dex-tab">
-      <h3>도감 (<span className="pf-accent">{dexCount}/{FISH.length}</span>)</h3>
+      <h3>
+        {view === 'base' ? '🐟 일반' : '🌈 돌연변이'}
+        {' ('}<span className="pf-accent">
+          {view === 'base' ? baseCount : varCount}/{FISH.length}
+        </span>{')'}
+      </h3>
       <div className="dex-subtabs">
         {regions.map(info => {
           const regionFish = FISH.filter(f => SPOTS.some(s => s.region === info.id && s.id === f.spot));
-          const caught = regionFish.filter(f => (game.caught[f.id] ?? 0) > 0).length;
+          const caught = regionFish.filter(found).length;
           return (
             <button key={info.id} className={sub === info.id ? 'active' : ''}
                     onClick={() => setSub(info.id)}>
@@ -250,16 +337,19 @@ function DexTab({ game, region }: { game: GameState; region: RegionId }) {
             <h4>{s.name}</h4>
             <div className="dex-grid">
               {fishes.map(f => {
+                const ok = found(f);
                 const n = game.caught[f.id] ?? 0;
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게
                 return (
-                  <div key={f.id} className="dex-item" data-caught={n > 0} data-rarity={f.rarity}>
-                    <FishIcon fish={f} caught={n > 0} />
-                    {n > 0 ? (
+                  <div key={f.id} className="dex-item" data-caught={ok} data-rarity={f.rarity}
+                       role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
+                       onClick={ok ? () => setDetail(f) : undefined}>
+                    <FishIcon fish={f} caught={ok} variant={view === 'variant'} />
+                    {ok ? (
                       <>
-                        <b>{f.name}</b><br />
+                        <b>{view === 'variant' ? f.variant.name : f.name}</b><br />
                         <RarityText rarity={f.rarity} /> · <span className="pf-accent">{f.price}G</span><br />
-                        <span className="cnt">{n}마리 잡음</span>
+                        <span className="cnt">{view === 'variant' ? '발견함' : `${n}마리 잡음`}</span>
                       </>
                     ) : (
                       <>
@@ -274,6 +364,10 @@ function DexTab({ game, region }: { game: GameState; region: RegionId }) {
           </div>
         );
       })}
+      {detail && (
+        <DexDetail key={`${detail.id}-${view}`} fish={detail} game={game}
+                   initialForm={view === 'variant' ? 1 : 0} onClose={() => setDetail(null)} />
+      )}
     </div>
   );
 }

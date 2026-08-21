@@ -1,7 +1,7 @@
 // 세이브 불변식 검증 — 변조 방어 (api/save.ts와 공유)
 import { describe, it, expect } from 'vitest';
 import { validateSave, totalSpent, maxSellable, couponGold } from './validate';
-import { BOATS, COUPONS, FISH, RARITY, addCatch, newState, sellAll, tryBuyBoat, tryUpgrade, upgradeCost, computeFame } from './logic';
+import { BOATS, COUPONS, FISH, RARITY, addCatch, migrate, newState, sellAll, tryBuyBoat, tryUpgrade, upgradeCost, computeFame } from './logic';
 import type { GameState } from './logic';
 import { CATCH_RATE_SLACK, MIN_CATCH_INTERVAL_MS } from './balance';
 
@@ -66,6 +66,44 @@ describe('변조 거부', () => {
   });
 });
 
+describe('월척(크기)·변이 (v0.3.0) — fame과 무관한 병렬 필드', () => {
+  it('알려지지 않은 어종/타입이 틀린 값은 거부', () => {
+    expect(validateSave({ ...newState(), maxSize: { ghost: 10 } }, null, null))
+      .toEqual({ ok: false, reason: 'maxSize:unknown-fish' });
+    expect(validateSave({ ...newState(), maxSize: { carp: -1 } }, null, null))
+      .toEqual({ ok: false, reason: 'maxSize:value' });
+    expect(validateSave({ ...newState(), mutated: { ghost: true } }, null, null))
+      .toEqual({ ok: false, reason: 'mutated:unknown-fish' });
+    expect(validateSave({ ...newState(), firstCaught: { ghost: '2026-08-21' } }, null, null))
+      .toEqual({ ok: false, reason: 'firstCaught:unknown-fish' });
+    expect(validateSave({ ...newState(), firstCaught: { carp: 'yesterday' } }, null, null))
+      .toEqual({ ok: false, reason: 'firstCaught:value' });
+  });
+
+  it('정상 값은 통과하고, fame 불변식(fame!=caught)에는 영향 없다', () => {
+    const s = { ...legit(5), maxSize: { carp: 42.3 }, mutated: { carp: true } };
+    expect(validateSave(s, null, null).ok).toBe(true);
+  });
+
+  it('직전 상태 대비 최대 크기는 줄 수 없고, 변이 발견은 되돌릴 수 없다', () => {
+    const prev = { ...newState(), maxSize: { carp: 50 }, mutated: { carp: true } };
+    expect(validateSave({ ...newState(), maxSize: { carp: 49 } }, prev, null))
+      .toEqual({ ok: false, reason: 'maxSize:decrease' });
+    expect(validateSave({ ...newState(), maxSize: { carp: 50 }, mutated: {} }, prev, null))
+      .toEqual({ ok: false, reason: 'mutated:decrease' });
+  });
+
+  it('처음 만난 날은 한 번 기록되면 변경·삭제 불가', () => {
+    const prev = { ...newState(), firstCaught: { carp: '2026-08-21' } };
+    const keep = { ...newState(), firstCaught: { carp: '2026-08-21' } };
+    expect(validateSave(keep, prev, null).ok).toBe(true);
+    expect(validateSave({ ...newState(), firstCaught: { carp: '2026-08-22' } }, prev, null))
+      .toEqual({ ok: false, reason: 'firstCaught:changed' });
+    expect(validateSave({ ...newState(), firstCaught: {} }, prev, null))
+      .toEqual({ ok: false, reason: 'firstCaught:changed' });
+  });
+});
+
 describe('직전 상태 대비 (단조성·속도)', () => {
   it('도감/장비/쿠폰은 되돌아갈 수 없다 (기기 충돌 롤백 방지 겸용)', () => {
     const prev = legit(10);
@@ -80,6 +118,47 @@ describe('직전 상태 대비 (단조성·속도)', () => {
     expect(validateSave(fast, prev, 1000)).toEqual({ ok: false, reason: 'catch-rate' });
     const okDelta = legit(3);
     expect(validateSave(okDelta, prev, MIN_CATCH_INTERVAL_MS * 3).ok).toBe(true);
+  });
+});
+
+describe('세이브 하위호환 종합 (v0.3.0 스키마 확장) — 구세이브가 migrate → 서버 검증까지 통과하는가', () => {
+  // 실유저형 세이브: fame=computeFame, 경제식 성립하는 값으로 구성 (프로덕션 = v0.1.0 시절 유저)
+  const legacyV4 = {
+    v: 4, gold: 50, fame: 50, rod: 1, boat: 0,
+    bag: [], caught: { crucian: 10 }, coupons: [],
+  };
+  const legacyV5 = { ...legacyV4, v: 5, locked: [] };
+
+  it('v4/v5 구세이브: migrate 후 신규 필드가 빈 객체로 채워지고 validateSave 통과', () => {
+    for (const legacy of [legacyV4, legacyV5]) {
+      const st = migrate(legacy);
+      expect(st.v).toBe(6);
+      expect(st.maxSize).toEqual({});
+      expect(st.mutated).toEqual({});
+      expect(st.firstCaught).toEqual({});
+      expect(st.gold).toBe(50);
+      expect(st.caught.crucian).toBe(10);
+      expect(validateSave(st, null, null)).toEqual({ ok: true });
+    }
+  });
+
+  it('구세이브(prev=null 첫 저장)뿐 아니라 직전 구세이브 대비 저장도 통과', () => {
+    const prev = migrate(legacyV5);
+    const next = addCatch(prev, carp, { size: 40, mutated: true });
+    expect(validateSave(next, prev, 60_000)).toEqual({ ok: true });
+  });
+
+  it('낡은 탭(v0.2.x 클라이언트)이 신규 필드 없는 세이브를 보내면 거부 — 신기록 롤백 방지 (의도)', () => {
+    // 새 클라로 v6 데이터를 쌓은 뒤, 배포 전 코드가 남은 탭이 v5 모양 세이브를 보내는 시나리오
+    const prev = { ...migrate(legacyV5), maxSize: { crucian: 40 }, mutated: { crucian: true } };
+    const stale = migrate(legacyV5); // 신규 필드 전부 {} — 낡은 클라가 만든 상태
+    expect(validateSave(stale, prev, 60_000)).toEqual({ ok: false, reason: 'maxSize:decrease' });
+  });
+
+  it('이사 코드 왕복: v6 상태 → JSON 직렬화 → migrate 재통과 시 무손실', () => {
+    const st = addCatch(migrate(legacyV5), carp, { size: 40, mutated: true }, '2026-08-21');
+    const roundTrip = migrate(JSON.parse(JSON.stringify(st)));
+    expect(roundTrip).toEqual(st);
   });
 });
 

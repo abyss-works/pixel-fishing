@@ -1,14 +1,21 @@
 // R17, R19: 캔버스 픽셀 렌더링 — 외부 에셋 없이 코드로 그림
 // 캔버스 내 텍스트/강조색은 UI 팔레트만 사용 (디자인 시스템)
-import { RARITY, SPOTS } from './logic';
-import type { Fish } from './logic';
+// 어종별 스프라이트 모양은 sprites.ts로 분리 — 이 파일은 씬(마을/대양/거점/월드맵) 담당.
+import { RARITY, SPOTS } from '../logic';
+import type { CatchInfo, Fish } from '../logic';
 import {
   VIEW_W, VIEW_H,
   VILLAGE_W, VILLAGE_H, V_POND, V_RIVER, V_SEA, V_HOUSE, V_BRIDGE, V_PIER, V_BOATSHOP, V_SCHOOLS,
   OCEAN_W, OCEAN_H, LANDS, TRENCH, HARBOR, O_DOCK, O_SCHOOLS,
   HOME_FURNITURE, HARBOR_FURNITURE,
-} from './world';
-import type { Point, Rect, School } from './world';
+} from '../world';
+import type { Point, Rect, School } from '../world';
+import { R, label, hexAlpha, UI } from './common.js';
+import type { Ctx } from './common.js';
+import { drawFishSprite } from './sprites.js';
+export { UI } from './common.js';
+export { drawFishSprite } from './sprites.js';
+export type { FishShape } from './sprites.js';
 
 export const W = VIEW_W, H = VIEW_H;
 
@@ -16,55 +23,20 @@ export const W = VIEW_W, H = VIEW_H;
 export const SCALE = 2;
 export const CANVAS_W = W * SCALE, CANVAS_H = H * SCALE;
 
-// 캔버스 UI 팔레트 — index.css 토큰과 같은 값 
-export const UI = {
-  text: '#f2f7fb',
-  dim: 'rgba(242,247,251,0.7)',
-  gold: '#ffd54f',
-  danger: '#ff8a80',
-  shadow: 'rgba(6,12,24,0.65)',
-};
-
-type Ctx = CanvasRenderingContext2D;
-
-export type { FishingPhase } from './fishing';
-import type { FishingPhase } from './fishing';
+export type { FishingPhase } from '../fishing';
+import type { FishingPhase } from '../fishing';
 
 export interface FieldView {
   player: Point;
   phase: FishingPhase;
   fish: Fish | null;
+  catchInfo: CatchInfo | null; // 크기/월척/변이/신규 여부 — 획득 카드 부가 표시용
   school: School | null;
   boat: number;
   biteT: number | null;
   catchT: number | null; // 획득 후 경과초 — 버스트 이펙트 타이밍 기준(null = catch 아님)
   zone: number;
   t: number;
-}
-
-function R(ctx: Ctx, x: number, y: number, w: number, h: number, c: string) {
-  ctx.fillStyle = c;
-  ctx.fillRect(x | 0, y | 0, w, h);
-}
-
-function label(ctx: Ctx, str: string, x: number, y: number, c = UI.text, size = 9) {
-  ctx.font = `bold ${size}px 'Malgun Gothic', sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = UI.shadow;
-  ctx.fillText(str, x + 1, y + 1);
-  ctx.fillStyle = c;
-  ctx.fillText(str, x, y);
-}
-
-// detail=false면 실루엣(도감 미획득 표시용) — 눈/배 하이라이트 생략
-export function drawFishSprite(ctx: Ctx, cx: number, cy: number, color: string, s: number, detail = true) {
-  R(ctx, cx - 5 * s, cy - 2 * s, 10 * s, 4 * s, color);
-  R(ctx, cx - 4 * s, cy - 3 * s, 8 * s, 6 * s, color);
-  R(ctx, cx + 5 * s, cy - 3 * s, 3 * s, 2 * s, color);
-  R(ctx, cx + 5 * s, cy + 1 * s, 3 * s, 2 * s, color);
-  if (!detail) return;
-  R(ctx, cx - 3 * s, cy - 1 * s, s, s, '#000');
-  R(ctx, cx - 1 * s, cy + 3 * s, 3 * s, s, 'rgba(255,255,255,0.35)');
 }
 
 function drawPerson(ctx: Ctx, x: number, y: number) {
@@ -81,11 +53,6 @@ function drawBoat(ctx: Ctx, x: number, y: number, t: number) {
   R(ctx, x - 7, y + 3 + rock, 14, 2, '#6d4c41');
   R(ctx, x - 9, y - 3 + rock, 18, 1, '#a1887f');
   drawPerson(ctx, x, y - 1 + rock);
-}
-
-function hexAlpha(hex: string, a: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 // 획득 순간 한 번 터지는 파티클 버스트 — t(경과초)가 life를 넘기면 그린다(스스로 멈춘다).
@@ -167,29 +134,37 @@ function drawTimingBar(ctx: Ctx, v: FieldView) {
   R(ctx, cx - 1, by - 2, 2, bh + 4, '#fff');
 }
 
-// R17: 획득 카드 (뷰포트 고정 좌표)
-function drawCatchCard(ctx: Ctx, v: FieldView) {
+// R17: 획득 순간 배경 파티클 이펙트 (뷰포트 고정 좌표, 뷰포트 정중앙 160,90)
+// 어종 이름/스프라이트/크기·월척·변이·NEW 표시는 DOM 오버레이(CatchCard.tsx)로 옮겼다 —
+// 캔버스 fillRect로는 폰트·그림자·애니메이션을 자연스럽게 못 내서 CSS로 다시 짰다.
+// 여기 남는 건 카드 뒤로 은은히 퍼지는 배경 파티클뿐 — 순수 장식이라 캔버스가 더 간단하다.
+function drawCatchEffects(ctx: Ctx, v: FieldView) {
   if (v.phase !== 'catch' || !v.fish) return;
   const f = v.fish;
   const r = RARITY[f.rarity];
-  R(ctx, 60, 40, 200, 70, UI.shadow);
-  R(ctx, 60, 40, 200, 3, r.color); R(ctx, 60, 107, 200, 3, r.color);
-  const scale = { common: 2, rare: 2, epic: 3, legendary: 3 }[f.rarity];
-  drawFishSprite(ctx, 160, 68, f.color, scale);
-  label(ctx, f.name, 160, 96, UI.text, 12);
-  label(ctx, r.name, 160, 54, r.color, 10);
+  // 변이 — 신비로운 오라: 카드 주위를 느리게 감도는 보랏빛/물빛 잔광이 위로 흩어진다.
+  // 등급 이펙트(아래)와 합성 가능 — 전설 변이면 골드 링 + 오라가 같이 돈다.
+  if (v.catchInfo?.mutated) {
+    for (let i = 0; i < 9; i++) {
+      const ph = v.t * 0.8 + i * 0.7;                              // 느린 공전
+      const x = 160 + Math.cos(ph) * (48 + Math.sin(v.t * 1.7 + i * 2.1) * 8);
+      const y = 90 + Math.sin(ph) * 30 - ((v.t * 5 + i * 5) % 14); // 위로 스르륵 드리프트
+      const tw = (Math.sin(v.t * 3 + i * 1.3) + 1) / 2;            // 명멸
+      const c = i % 2
+        ? `rgba(186, 104, 200, ${0.15 + tw * 0.4})`   // 변이 시머와 같은 보랏빛 계열
+        : `rgba(160, 231, 252, ${0.1 + tw * 0.35})`;  // 물빛
+      R(ctx, x, y, 2, 2, c);
+    }
+  }
   // 등급별 획득 이펙트 — 낮은 등급일수록 조용히, 전설은 도파민 최대치로.
   if (f.rarity === 'legendary') {
-    // 계속 도는 골드 링(기존 연출, 카드가 떠 있는 내내 회전)
     for (let i = 0; i < 10; i++) {
       const a = v.t * 3 + i;
-      R(ctx, 160 + Math.cos(a) * (40 + i * 3), 70 + Math.sin(a) * 25, 2, 2, UI.gold);
+      R(ctx, 160 + Math.cos(a) * (40 + i * 3), 90 + Math.sin(a) * 25, 2, 2, UI.gold);
     }
-    // + 획득 순간 한 번 터지는 버스트 — 링의 골드(#ffd54f)와 다른 톤(주황빛 노랑), 멀리·굵게
-    if (v.catchT !== null) drawBurst(ctx, 160, 68, v.catchT, '#ffb300', 22, 130, 0.7);
+    if (v.catchT !== null) drawBurst(ctx, 160, 90, v.catchT, '#ffb300', 22, 130, 0.7);
   } else if (f.rarity === 'epic') {
-    // 영웅: 간단히 한 번 퍼지는 효과만 (등급색 그대로)
-    if (v.catchT !== null) drawBurst(ctx, 160, 68, v.catchT, r.color, 12, 75, 0.45);
+    if (v.catchT !== null) drawBurst(ctx, 160, 90, v.catchT, r.color, 12, 75, 0.45);
   }
 }
 
@@ -259,7 +234,7 @@ export function renderVillageField(ctx: Ctx, v: FieldView) {
   drawTimingBar(ctx, v);
   ctx.restore();
 
-  drawCatchCard(ctx, v);
+  drawCatchEffects(ctx, v);
 }
 
 // ---------- 지역 2: 대양 필드 (단순화한 지구) ----------
@@ -307,7 +282,7 @@ export function renderOceanField(ctx: Ctx, v: FieldView) {
   drawTimingBar(ctx, v);
   ctx.restore();
 
-  drawCatchCard(ctx, v);
+  drawCatchEffects(ctx, v);
 }
 
 // ---------- 월드맵 (M 키 모달, 월드 1:1 해상도) ----------
@@ -455,8 +430,8 @@ export function renderHarbor(ctx: Ctx, rod: number, boatName: string, dexCount: 
         R(ctx, f.x, f.y + 8, f.w, f.h - 8, '#8d6e63');
         R(ctx, f.x, f.y - 2, f.w, 6, '#1d6396');
         R(ctx, f.x + 3, f.y + 10, f.w - 6, 10, '#e3f2fd');
-        drawFishSprite(ctx, f.x + 12, f.y + 15, '#42a5f5', 1);
-        drawFishSprite(ctx, f.x + 30, f.y + 15, '#e57373', 1);
+        drawFishSprite(ctx, f.x + 12, f.y + 15, 'slim', '#42a5f5', 1);
+        drawFishSprite(ctx, f.x + 30, f.y + 15, 'round', '#e57373', 1);
         label(ctx, '어시장', f.x + f.w / 2, f.y - 8, UI.gold, 8);
         break;
       case 'boat':

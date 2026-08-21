@@ -5,6 +5,7 @@ import {
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, toggleLock,
+  sizeParams, rollSize, sizePercentile, rollCatchExtras,
 } from './logic';
 
 describe('데이터 무결성', () => {
@@ -211,11 +212,59 @@ describe('상태 변경 (잡기/판매/강화)', () => {
   });
 });
 
+describe('월척(크기)·변이 ', () => {
+  const carp = FISH.find(f => f.id === 'carp')!;
+  const kraken = FISH.find(f => f.id === 'kraken')!;
+
+  it('sizeParams: 가격이 비쌀수록 평균 크기가 커진다', () => {
+    expect(sizeParams(kraken).mean).toBeGreaterThan(sizeParams(carp).mean);
+    expect(sizeParams(carp).std).toBeCloseTo(sizeParams(carp).mean * 0.18);
+  });
+
+  it('rollSize: u1=1이면 Box-Muller z=0 → 평균 크기를 그대로 반환', () => {
+    expect(rollSize(carp, () => 1)).toBeCloseTo(sizeParams(carp).mean, 5);
+  });
+
+  it('sizePercentile: 평균 크기는 상위 50%, 훨씬 크면 0%에 가깝다', () => {
+    const { mean, std } = sizeParams(carp);
+    expect(sizePercentile(carp, mean)).toBeCloseTo(50, 0);
+    expect(sizePercentile(carp, mean + std * 3)).toBeLessThan(1);
+    expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
+  });
+
+  it('rollCatchExtras: 변이 확률은 대략 1/5 (통계적)', () => {
+    let mutated = 0;
+    const n = 20000;
+    for (let i = 0; i < n; i++) if (rollCatchExtras(carp).mutated) mutated++;
+    expect(mutated / n).toBeGreaterThan(0.17);
+    expect(mutated / n).toBeLessThan(0.23);
+  });
+
+  it('addCatch: extras를 주면 최대 크기·변이 발견을 병렬 필드에 기록, 생략하면 무변경', () => {
+    const withExtras = addCatch(newState(), carp, { size: 40, mutated: true });
+    expect(withExtras.maxSize.carp).toBe(40);
+    expect(withExtras.mutated.carp).toBe(true);
+    const shrunk = addCatch(withExtras, carp, { size: 30, mutated: false });
+    expect(shrunk.maxSize.carp).toBe(40); // 최댓값만 갱신
+    expect(shrunk.mutated.carp).toBe(true); // 한 번 발견하면 유지
+    const noExtras = addCatch(withExtras, carp);
+    expect(noExtras.maxSize).toBe(withExtras.maxSize); // 생략 시 기존 참조 그대로
+  });
+
+  it('addCatch: 처음 만난 날은 최초 1회만 기록되고 이후 캐치로 안 바뀐다', () => {
+    const first = addCatch(newState(), carp, undefined, '2026-08-21');
+    expect(first.firstCaught.carp).toBe('2026-08-21');
+    const again = addCatch(first, carp, undefined, '2026-09-01');
+    expect(again.firstCaught.carp).toBe('2026-08-21'); // 불변
+    expect(addCatch(newState(), carp).firstCaught.carp).toMatch(/^\d{4}-\d{2}-\d{2}$/); // 기본값 = 오늘
+  });
+});
+
 describe('R18b: 세이브 마이그레이션', () => {
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };
     const st = migrate(legacy);
-    expect(st.v).toBe(5);
+    expect(st.v).toBe(6);
     expect(st.gold).toBe(777);
     expect(st.rod).toBe(5);
     expect(st.boat).toBe(1);
@@ -236,9 +285,17 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect(st.fame).toBe(42);
   });
 
+  it('v5 → v6: 월척(크기)·변이·첫 조우일 필드가 빈 객체로 추가된다', () => {
+    const st = migrate({ v: 5, fame: 0, gold: 10, caught: {}, bag: [], coupons: [], locked: [] });
+    expect(st.v).toBe(6);
+    expect(st.maxSize).toEqual({});
+    expect(st.mutated).toEqual({});
+    expect(st.firstCaught).toEqual({});
+  });
+
   it('v4 → v5: 잠금 목록이 빈 배열로 추가된다', () => {
     const st = migrate({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
-    expect(st.v).toBe(5);
+    expect(st.v).toBe(6);
     expect(st.locked).toEqual([]);
     expect(st.gold).toBe(10);
   });

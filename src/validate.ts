@@ -13,6 +13,9 @@ const bad = (reason: string): ValidationResult => ({ ok: false, reason });
 const isCount = (n: unknown): n is number =>
   typeof n === 'number' && Number.isInteger(n) && n >= 0;
 
+const isPositiveNumber = (n: unknown): n is number =>
+  typeof n === 'number' && Number.isFinite(n) && n > 0;
+
 // 누적 지출: 낚싯대 1→rod 강화 비용 합 + 배 1→boat 구매 비용 합
 export function totalSpent(state: GameState): number {
   let spent = 0;
@@ -70,6 +73,19 @@ export function validateSave(
     if (!FISH.some(f => f.id === id)) return bad('caught:unknown-fish');
     if (!isCount(n)) return bad('caught:count');
   }
+  // 월척(크기)·변이 (v0.3.0) — fame과 무관한 병렬 필드, computeFame 불변식은 안 건드림
+  for (const [id, size] of Object.entries(next.maxSize)) {
+    if (!FISH.some(f => f.id === id)) return bad('maxSize:unknown-fish');
+    if (!isPositiveNumber(size)) return bad('maxSize:value');
+  }
+  for (const [id, v] of Object.entries(next.mutated)) {
+    if (!FISH.some(f => f.id === id)) return bad('mutated:unknown-fish');
+    if (typeof v !== 'boolean') return bad('mutated:value');
+  }
+  for (const [id, d] of Object.entries(next.firstCaught)) {
+    if (!FISH.some(f => f.id === id)) return bad('firstCaught:unknown-fish');
+    if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad('firstCaught:value');
+  }
   for (const [id, n] of bagCount) {
     if (n > (next.caught[id] ?? 0)) return bad('bag>caught'); // 가방 ⊆ 도감
   }
@@ -97,6 +113,15 @@ export function validateSave(
     if (next.boat < prev.boat) return bad('boat:decrease');
     for (const [id, n] of Object.entries(prev.caught)) {
       if ((next.caught[id] ?? 0) < n) return bad('caught:decrease'); // 도감은 줄지 않는다
+    }
+    for (const [id, size] of Object.entries(prev.maxSize)) {
+      if ((next.maxSize[id] ?? 0) < size) return bad('maxSize:decrease');
+    }
+    for (const [id, v] of Object.entries(prev.mutated)) {
+      if (v && !next.mutated[id]) return bad('mutated:decrease');
+    }
+    for (const [id, d] of Object.entries(prev.firstCaught)) {
+      if (next.firstCaught[id] !== d) return bad('firstCaught:changed'); // 최초 기록은 불변
     }
     for (const code of prev.coupons) {
       if (!next.coupons.includes(code)) return bad('coupon:removed');

@@ -41,3 +41,11 @@ export const SYNC_INTERVAL_MS = 20_000;
 export const MIN_CATCH_INTERVAL_MS = 3_000; // 어획 속도 상한 판정용
 export const CATCH_RATE_SLACK = 10;         // 동기화 지연·flush 몰림 허용 마릿수
 export const ECONOMY_GIFT_SLACK = 300;      // v1 이관 조각배 증정분 — 경제 보존식 허용 오차
+
+// 월척(크기)·변이 — 신규 로직 없이 기존 어종 데이터를 재사용하는 저비용 콘텐츠 
+// 크기 분포는 어종마다 수동 지정하지 않고 가격에서 공식으로 유도한다.
+export const SIZE_MEAN_BASE = 10;      // cm — 가격 0일 때 평균 크기
+export const SIZE_MEAN_PER_PRICE = 0.15; // cm/G — 비쌀수록(대체로 큰 어종일수록) 평균 크기도 커짐
+export const SIZE_STD_RATIO = 0.18;    // 표준편차 = 평균 × 이 비율
+export const MUTATION_RATE = 1 / 5;    // 캐치마다 변이(색상 변이) 확률 — 어종당 변이 1종 고정 (1/3→1/5, 체감 하향)
+export const BIG_CATCH_PERCENTILE = 20; // 크기가 상위 이 %(이하) 안에 들면 "월척" 표시

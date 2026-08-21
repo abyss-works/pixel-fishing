@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { RARITY, SPOTS, addCatch, boatSpeed, canFishSpot, rodStats } from './logic';
-import type { Fish, GameState, Judgment } from './logic';
+import { RARITY, SPOTS, addCatch, boatSpeed, buildCatchInfo, canFishSpot, rodStats, rollCatchExtras } from './logic';
+import type { CatchInfo, Fish, GameState, Judgment } from './logic';
 import { REGION_DEFS, inTrigger, movePlayer, nearestSchoolInRange } from './world';
 import type { Point, RegionId, School } from './world';
 import { nextPhase, phaseDurationMs, judgePress, resolveCatch } from './fishing';
@@ -8,6 +8,7 @@ import type { FishingPhase } from './fishing';
 import { CAST_RANGE, WALK_SPEED } from './balance';
 import { renderVillageField, renderOceanField, renderWorldMap, CANVAS_W, CANVAS_H } from './pixel';
 import ResourceBar from './ResourceBar';
+import CatchCard from './CatchCard';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1],
@@ -45,6 +46,7 @@ export default function Field({
   // 상태머신 (idle = 이동 중) — R6
   const [phase, setPhase] = useState<FishingPhase>('idle');
   const [fish, setFish] = useState<Fish | null>(null);
+  const [catchInfo, setCatchInfo] = useState<CatchInfo | null>(null); // 획득 카드 부가 정보 (크기/월척/변이/NEW)
   const [school, setSchool] = useState<School | null>(null);
 
   const posRef = useRef<Point>(initialPos ?? def.spawn);
@@ -53,6 +55,7 @@ export default function Field({
   const catchStartRef = useRef(0); // 획득 이펙트(버스트) 타이밍 기준
   const phaseRef = useRef(phase);
   const fishRef = useRef(fish);
+  const catchInfoRef = useRef(catchInfo);
   const schoolRef = useRef(school);
   const gameRef = useRef(game);
   const openMapRef = useRef(onOpenMap);
@@ -61,12 +64,13 @@ export default function Field({
   useEffect(() => {
     phaseRef.current = phase;
     fishRef.current = fish;
+    catchInfoRef.current = catchInfo;
     schoolRef.current = school;
     gameRef.current = game;
     openMapRef.current = onOpenMap;
     shopRef.current = onShop;
     toastRef.current = setToast;
-  }, [phase, fish, school, game, onOpenMap, onShop, setToast]);
+  }, [phase, fish, catchInfo, school, game, onOpenMap, onShop, setToast]);
 
   // 핸들러 최신본 참조
   const actionRef = useRef<() => void>(() => {});
@@ -84,7 +88,7 @@ export default function Field({
     const ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
     const id = setTimeout(() => {
       if (phase === 'bite') { hookRef.current('auto'); return; } // 방치 획득
-      if (phase === 'catch') setFish(null);
+      if (phase === 'catch') { setFish(null); setCatchInfo(null); }
       setPhase(nextPhase(phase));
     }, ms);
     return () => clearTimeout(id);
@@ -122,19 +126,26 @@ export default function Field({
     const s = schoolRef.current;
     if (!s || phaseRef.current !== 'bite') return;
     const caught = resolveCatch(s.spot, judgment, gameRef.current.rod);
-    const nextGame = addCatch(gameRef.current, caught);
+    const extras = rollCatchExtras(caught);
+    const isNew = (gameRef.current.caught[caught.id] ?? 0) === 0;
+    const info = buildCatchInfo(caught, extras, isNew);
+    const nextGame = addCatch(gameRef.current, caught, extras);
     setGame(nextGame);
     setFish(caught);
+    setCatchInfo(info);
     setPhase('catch');
     const r = RARITY[caught.rarity];
     const prefix = judgment === 'perfect' ? '✨ PERFECT! ' : judgment === 'auto' ? '⚙ 방치: ' : '';
-    setToast(`${prefix}${r.name} 등급 [${caught.name}] 획득!`);
+    // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
+    const name = info.mutated ? caught.variant.name : caught.name;
+    setToast(`${prefix}${r.name} 등급 [${name}] 획득!`);
   };
 
   const cancelFishing = () => {
     setPhase('idle');
     setSchool(null);
     setFish(null);
+    setCatchInfo(null);
   };
 
   useEffect(() => {
@@ -202,6 +213,7 @@ export default function Field({
         player: posRef.current,
         phase: phaseRef.current,
         fish: fishRef.current,
+        catchInfo: catchInfoRef.current,
         school: schoolRef.current,
         boat: gameRef.current.boat,
         biteT: phaseRef.current === 'bite'
@@ -237,10 +249,13 @@ export default function Field({
       {phase !== 'idle' && (
         <div className="status-overlay" data-phase={phase}>
           {phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} [${fish.name}] 획득!`
+            ? `${RARITY[fish.rarity].name} [${catchInfo?.mutated ? fish.variant.name : fish.name}] 획득!`
             : STATUS[phase]}
         </div>
       )}
+
+      {/* 획득 카드 — 게임 프레임 중앙 DOM 오버레이 (스프라이트/크기/월척/변이/NEW) */}
+      {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
 
       <canvas ref={minimapRef} width={def.w} height={def.h}
               className="minimap-overlay" aria-label="미니맵"
