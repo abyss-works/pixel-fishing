@@ -16,6 +16,7 @@ import type { ActionResult, GameAction } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 import { reportServerIssue } from './observability.js';
+import { ApiError, toApiError } from './errors.js';
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
@@ -67,23 +68,34 @@ export function recordsFor(
   return [];
 }
 
+// 유일한 실패 처리 지점 — 던져진 ApiError를 응답으로 변환하고, 5xx만 Sentry에 보고한다
+// (4xx는 정상적인 프로토콜 응답이라 노이즈가 된다).
 export default async function handler(req: Req, res: Res): Promise<void> {
+  try {
+    await route(req, res);
+  } catch (e) {
+    const err = toApiError(e);
+    if (err.status >= 500) await reportServerIssue(err.code, err.cause ?? err, err.context);
+    res.status(err.status).json({ error: err.code, ...err.context.body as object });
+  }
+}
+
+async function route(req: Req, res: Res): Promise<void> {
   // GET = 워밍/헬스 핑 (클라 캐스팅 워밍 + 업타임 모니터 대상) — 204는 브라우저 콘솔에
   // 에러로 찍히지 않는다 (405를 주면 캐스팅마다 콘솔 노이즈).
   if (req.method === 'GET') { res.status(204).end(); return; }
-  if (req.method !== 'POST') { res.status(405).json({ error: 'method-not-allowed' }); return; }
+  if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
 
   // 낡은 탭 차단 — 클라 번들 버전이 이 함수(같은 커밋 배포)와 다르면 426 Upgrade Required.
   // 인증/리듀서보다 먼저: 새 서버의 결과를 낡은 번들이 해석 못 해 깨지는 것을 원천 차단하고,
   // 클라이언트는 업데이트 모달(새로고침 안내)을 띄운다. 헤더 부재 = 기능 도입 전 구버전 → 동일 처리.
   if (req.headers['x-client-version'] !== APP_VERSION) {
-    res.status(426).json({ error: 'version-mismatch', server: APP_VERSION });
-    return;
+    throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 
   const url = process.env.VITE_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) { res.status(500).json({ error: 'server-config' }); return; }
+  if (!url || !serviceKey) throw new ApiError(500, 'server-config');
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
@@ -94,11 +106,11 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   const jwtSecret = process.env.SUPABASE_JWT_SECRET;
   if (jwtSecret) {
     const sub = verifyJwtLocal(token, jwtSecret);
-    if (!sub) { res.status(401).json({ error: 'unauthorized' }); return; }
+    if (!sub) throw new ApiError(401, 'unauthorized');
     uid = sub;
   } else {
     const { data: userData, error: authError } = await admin.auth.getUser(token);
-    if (authError || !userData.user) { res.status(401).json({ error: 'unauthorized' }); return; }
+    if (authError || !userData.user) throw new ApiError(401, 'unauthorized');
     uid = userData.user.id;
   }
 
@@ -107,8 +119,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
   const action = body as GameAction | null;
   if (!action || typeof action !== 'object' || !ACTION_TYPE_SET.has(action.type)) {
-    res.status(400).json({ error: 'bad-action' });
-    return;
+    throw new ApiError(400, 'bad-action');
   }
 
   // 현재 상태 로드 — 없으면 구 saves(아카이브) 최신 행에서 1회 시딩(서버 권위 전환 이관),
@@ -121,10 +132,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const { error: seedErr } = await admin.from('saves_current').insert(seeded);
     if (seedErr) { // 동시 첫 액션 경합 — 상대가 시딩했으니 다시 읽는다
       row = (await admin.from('saves_current').select('data, version').eq('user_id', uid).maybeSingle()).data;
-      if (!row) {
-        await reportServerIssue('db-seed 실패 — 상태를 만들 수 없음', seedErr, { uid });
-        res.status(500).json({ error: 'db-seed' }); return;
-      }
+      if (!row) throw new ApiError(500, 'db-seed', { uid }, { cause: seedErr });
     } else {
       row = { data: seeded.data, version: 1 };
     }
@@ -145,7 +153,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
     dynamicCoupon,
   });
-  if (!out.ok) { res.status(422).json({ error: out.error }); return; }
+  if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
   // 클라이언트(HttpBackend)가 최신 상태 위에 1회 재시도한다.
@@ -154,12 +162,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     .update({ data: out.state, version: nextVersion, updated_at: new Date().toISOString() })
     .eq('user_id', uid).eq('version', row.version)
     .select('user_id');
-  if (updErr) {
-    // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패라 반드시 보고한다
-    await reportServerIssue('db-write 실패 — 액션 미저장', updErr, { uid, action: action.type });
-    res.status(500).json({ error: 'db-write' }); return;
-  }
-  if (!updated || updated.length === 0) { res.status(409).json({ error: 'version-conflict' }); return; }
+  // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
+  if (updErr) throw new ApiError(500, 'db-write', { uid, action: action.type }, { cause: updErr });
+  if (!updated || updated.length === 0) throw new ApiError(409, 'version-conflict');
 
   // 이벤트 append + 주기 스냅샷 — 락 획득 후, 서로 독립이라 병렬 (왕복 1회 절약).
   // 실패해도 상태는 확정 — 이벤트/스냅샷만 유실, 수용.

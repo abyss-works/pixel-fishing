@@ -3,6 +3,7 @@ import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from 
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
+import { subscribeFailure } from '../errors';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { REGION_PACKS, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
@@ -141,12 +142,14 @@ export default function Field({
     // 물고기 공개는 응답 도착 시(카드) — HTTP 왕복은 획득 연출 시간에 흡수된다.
     setPhase('catch');
     when(dispatchRef.current({ type: 'catch', spot: s.spot, judgment }), r => {
-      const result = r.status === 'ok' ? r.result : null;
-      if (!result || result.type !== 'catch') {
+      // 인프라 실패는 여기 오지 않는다 — 던져져서 정책으로 가고, 낚시 취소는 아래 구독이 한다
+      if (r.status === 'rejected') {
         cancelRef.current();
-        if (r.status === 'rejected') toastRef.current(`낚시가 거부되었다 (${r.error}).`);
+        toastRef.current(`낚시가 거부되었다 (${r.error}).`);
         return;
       }
+      const result = r.result;
+      if (result.type !== 'catch') return; // 타입 좁히기 (catch 액션의 결과는 항상 catch)
       const caught = FISH.find(f => f.id === result.fishId)!;
       const info = result.info;
       setFish(caught);
@@ -164,6 +167,10 @@ export default function Field({
     setFish(null);
     setCatchInfo(null);
   };
+
+  // 실패하면 낚시를 취소한다 — 한 줄 규칙. 어떤 실패인지·무엇을 보여줄지는 정책이 안다.
+  // (이게 없으면 catch 페이즈가 결과를 기다리며 영구 정지한다 — 홀드 설계의 짝)
+  useEffect(() => subscribeFailure(() => cancelRef.current()), []);
 
   useEffect(() => {
     actionRef.current = action;

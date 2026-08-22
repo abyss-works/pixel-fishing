@@ -6,6 +6,7 @@ import { APP_VERSION } from '../version';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { Backend, DispatchResult } from './types';
+import { AppError } from '../errors';
 
 export class HttpBackend implements Backend {
   async load(): Promise<GameState | null> {
@@ -20,38 +21,53 @@ export class HttpBackend implements Backend {
     return old ? migrate(old.data) : null;
   }
 
+  // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (src/errors.ts 정책 소관)
   async dispatch(action: GameAction, retried = false): Promise<DispatchResult> {
-    if (!supabase) return { status: 'error' };
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { status: 'error' };
+    const session = await this.session();
+    const res = await this.post(action, session);
 
+    if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
+      // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
+      throw new AppError('server', 'non-json response', { status: res.status });
+    }
+    const body = await res.json().catch(() => null) as
+      { state?: unknown; result?: unknown; error?: string } | null;
+
+    if (res.ok && body?.state) {
+      return { status: 'ok', state: migrate(body.state), result: body.result as never };
+    }
+    // 409 = 낙관 락 충돌(다른 탭과 경합) — 서버가 최신 상태 위에 재적용하도록 1회 재시도
+    if (res.status === 409 && !retried) return this.dispatch(action, true);
+    if (res.status === 422) return { status: 'rejected', error: body?.error ?? 'rejected' };
+    if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
+      { server: (body as { server?: string } | null)?.server });
+    if (res.status === 401) throw new AppError('unauthorized', 'session rejected');
+    throw new AppError('server', `action failed (${res.status})`,
+      { status: res.status, error: body?.error, action: action.type });
+  }
+
+  private async session(): Promise<string> {
+    if (!supabase) throw new AppError('network', 'supabase not configured');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new AppError('unauthorized', 'no session');
+    return session.access_token;
+  }
+
+  private async post(action: GameAction, token: string): Promise<Response> {
     try {
-      const res = await fetch('/api/action', {
+      return await fetch('/api/action', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${session.access_token}`,
+          authorization: `Bearer ${token}`,
           'x-client-version': APP_VERSION, // 낡은 탭 차단 — 서버가 자기 버전과 대조 (426)
         },
         body: JSON.stringify(action),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
         signal: AbortSignal.timeout(10_000),
       });
-      if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
-        return { status: 'error' }; // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
-      }
-      const body = await res.json().catch(() => null) as
-        { state?: unknown; result?: unknown; error?: string } | null;
-      if (res.ok && body?.state) {
-        return { status: 'ok', state: migrate(body.state), result: body.result as never };
-      }
-      // 409 = 낙관 락 충돌(다른 탭의 액션과 경합) — 서버가 최신 상태 위에 재적용하도록 1회 재시도
-      if (res.status === 409 && !retried) return this.dispatch(action, true);
-      if (res.status === 422) return { status: 'rejected', error: body?.error ?? 'rejected' };
-      if (res.status === 426) return { status: 'outdated' }; // 배포 후 새로고침 안 한 낡은 탭
-      return { status: 'error' };
-    } catch {
-      return { status: 'error' }; // 네트워크 순단/타임아웃 — 진행 불가, 호출자가 rescue 안내
+    } catch (cause) {
+      throw new AppError('network', 'action request failed', { action: action.type }, { cause });
     }
   }
 
