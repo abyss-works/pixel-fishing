@@ -23,7 +23,7 @@ const MOVE_KEYS: Record<string, [number, number]> = {
 const STATUS: Record<Exclude<FishingPhase, 'idle'>, string> = {
   wait: '기다리는 중... "!"가 뜨면 스페이스! 노란 존=PERFECT (그냥 둬도 잡힌다)',
   bite: '지금! 노란 존을 노려라! (놓아두면 잡어)',
-  catch: '월척이다!',
+  catch: '끌어올리는 중...', // 서버 응답 대기 문구 — 결과 도착 후엔 획득 문구로 교체된다
 };
 
 interface Props {
@@ -36,13 +36,14 @@ interface Props {
   onScene: (target: SceneRef, msg: string) => void;
   onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
   onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
+  onWarmup?: () => void;           // 캐스팅 순간 서버 함수 워밍 (콜드 스타트 흡수)
   /** 테스트용 시작 위치 */
   initialPos?: Point;
 }
 
 export default function Field({
   region, game, dispatch, setToast, onScene,
-  onOpenMap, onShop, initialPos,
+  onOpenMap, onShop, onWarmup, initialPos,
 }: Props) {
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,6 +65,7 @@ export default function Field({
   const toastRef = useRef(setToast);
   const dispatchRef = useRef(dispatch);
   const sceneRef = useRef(onScene);
+  const warmupRef = useRef(onWarmup);
   useEffect(() => {
     phaseRef.current = phase;
     schoolRef.current = school;
@@ -73,7 +75,8 @@ export default function Field({
     toastRef.current = setToast;
     dispatchRef.current = dispatch;
     sceneRef.current = onScene;
-  }, [phase, school, game, onOpenMap, onShop, setToast, dispatch, onScene]);
+    warmupRef.current = onWarmup;
+  }, [phase, school, game, onOpenMap, onShop, setToast, dispatch, onScene, onWarmup]);
 
   // 핸들러 최신본 참조
   const actionRef = useRef<() => void>(() => {});
@@ -86,6 +89,9 @@ export default function Field({
   // "이번에 잡은 물고기"에 달려 있다 — phase만 보면 어떤 물고기인지 알 수 없다.
   useEffect(() => {
     if (phase === 'idle') return;
+    // catch는 서버 결과(fish)가 도착해야 카운트다운 시작 — 응답이 늦으면 타이머가 먼저 끝나
+    // 카드 없이 재캐스트되던 버그 방지. 응답 실패/타임아웃은 dispatch 쪽에서 cancel로 수렴.
+    if (phase === 'catch' && !fish) return;
     if (phase === 'bite') biteStartRef.current = Date.now();
     const ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
     const id = setTimeout(() => {
@@ -120,6 +126,9 @@ export default function Field({
     }
     setSchool(s);
     setPhase('wait'); // 캐스팅 연출 없이 바로 대기
+    // 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간(수 초)에 흡수해 챔질 응답을 빠르게.
+    // 추첨과 무관한 빈 핑이라 보안 영향 없음.
+    warmupRef.current?.();
     if (!silent) setToast(`${spot.name} 군집에 찌를 던졌다.`);
   };
 

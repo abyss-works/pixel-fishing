@@ -34,6 +34,8 @@ export class HttpBackend implements Backend {
           'x-client-version': APP_VERSION, // 낡은 탭 차단 — 서버가 자기 버전과 대조 (426)
         },
         body: JSON.stringify(action),
+        // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
+        signal: AbortSignal.timeout(10_000),
       });
       if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
         return { status: 'error' }; // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
@@ -49,7 +51,13 @@ export class HttpBackend implements Backend {
       if (res.status === 426) return { status: 'outdated' }; // 배포 후 새로고침 안 한 낡은 탭
       return { status: 'error' };
     } catch {
-      return { status: 'error' }; // 네트워크 순단 — 진행 불가, 호출자가 rescue 안내
+      return { status: 'error' }; // 네트워크 순단/타임아웃 — 진행 불가, 호출자가 rescue 안내
     }
+  }
+
+  // 콜드 스타트 흡수 — 캐스팅 순간의 빈 핑(GET → 204 즉답)이 람다를 깨워, 몇 초 뒤의
+  // 실제 챔질 POST가 웜 상태를 탄다. 추첨/상태와 무관해 보안 영향 없음.
+  warmup(): void {
+    fetch('/api/action', { method: 'GET' }).catch(() => { /* 워밍 실패는 무해 */ });
   }
 }

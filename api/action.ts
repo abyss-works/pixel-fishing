@@ -6,6 +6,7 @@
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500 났던
 // 사고(2026-08-21) 재발 방지. default export = Node 시그니처.
 import { createClient } from '@supabase/supabase-js';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
@@ -23,7 +24,29 @@ const ACTION_TYPE_SET = new Set<string>(ACTION_TYPES);
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
+// 세션 토큰 로컬 검증 (HS256, 레거시 JWT secret) — Auth 서버 왕복(~수백 ms, 리전 원거리면 그 이상)을
+// 제거하는 레이턴시 최적화. SUPABASE_JWT_SECRET 미설정이면 기존 auth.getUser 경로로 폴백(무해 배포).
+function verifyJwtLocal(token: string, secret: string): string | null {
+  const [h, p, sig] = token.split('.');
+  if (!h || !p || !sig) return null;
+  try {
+    const header = JSON.parse(Buffer.from(h, 'base64url').toString());
+    if (header.alg !== 'HS256') return null; // 알고리즘 고정 — alg 혼동 공격 차단
+    const expected = createHmac('sha256', secret).update(`${h}.${p}`).digest('base64url');
+    const a = Buffer.from(sig), b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
+  // GET = 워밍/헬스 핑 (클라 캐스팅 워밍 + 업타임 모니터 대상) — 204는 브라우저 콘솔에
+  // 에러로 찍히지 않는다 (405를 주면 캐스팅마다 콘솔 노이즈).
+  if (req.method === 'GET') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'method-not-allowed' }); return; }
 
   // 낡은 탭 차단 — 클라 번들 버전이 이 함수(같은 커밋 배포)와 다르면 426 Upgrade Required.
@@ -40,12 +63,20 @@ export default async function handler(req: Req, res: Res): Promise<void> {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-  // 유저 확인 — 클라이언트 세션 토큰 검증 (Node 스타일 headers는 소문자 키 플레인 객체)
+  // 유저 확인 — JWT secret이 있으면 로컬 검증(왕복 0), 없으면 Auth 서버 조회 폴백
   const auth = req.headers.authorization ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  const { data: userData, error: authError } = await admin.auth.getUser(token);
-  if (authError || !userData.user) { res.status(401).json({ error: 'unauthorized' }); return; }
-  const uid = userData.user.id;
+  let uid: string;
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+  if (jwtSecret) {
+    const sub = verifyJwtLocal(token, jwtSecret);
+    if (!sub) { res.status(401).json({ error: 'unauthorized' }); return; }
+    uid = sub;
+  } else {
+    const { data: userData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !userData.user) { res.status(401).json({ error: 'unauthorized' }); return; }
+    uid = userData.user.id;
+  }
 
   // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다)
   let body: unknown = req.body ?? null;
@@ -95,15 +126,18 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   if (updErr) { res.status(500).json({ error: 'db-write' }); return; }
   if (!updated || updated.length === 0) { res.status(409).json({ error: 'version-conflict' }); return; }
 
-  // 이벤트 스트림 append — 락 획득 후에만 (실패해도 상태는 확정, 이벤트만 유실 — 수용)
+  // 이벤트 append + 주기 스냅샷 — 락 획득 후, 서로 독립이라 병렬 (왕복 1회 절약).
+  // 실패해도 상태는 확정 — 이벤트/스냅샷만 유실, 수용.
+  const followUps: Promise<unknown>[] = [];
   if (out.events.length > 0) {
-    await admin.from('events').insert(out.events.map(e => ({ user_id: uid, type: e.type, payload: e.payload })));
+    followUps.push(Promise.resolve(admin.from('events').insert(
+      out.events.map(e => ({ user_id: uid, type: e.type, payload: e.payload })))));
   }
-
-  // 주기 스냅샷 — saves는 append-only 아카이브로 존속 (0003의 안전망 역할 유지)
-  if (nextVersion % SNAPSHOT_EVERY === 0) {
-    await admin.from('saves').insert({ user_id: uid, data: out.state, updated_at: new Date().toISOString() });
+  if (nextVersion % SNAPSHOT_EVERY === 0) { // saves는 append-only 아카이브로 존속 (0003 안전망)
+    followUps.push(Promise.resolve(admin.from('saves').insert(
+      { user_id: uid, data: out.state, updated_at: new Date().toISOString() })));
   }
+  if (followUps.length > 0) await Promise.all(followUps);
 
   res.status(200).json({ state: out.state, result: out.result });
 }

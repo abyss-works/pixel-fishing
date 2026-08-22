@@ -18,6 +18,8 @@ export interface Backend {
   /** 초기 로드 — 저장된 상태(마이그레이션 완료본) 또는 null. GET은 로드 전용 원칙. */
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  /** 서버 함수 콜드 스타트 흡수용 빈 핑 (캐스팅 순간 호출) — 로컬 백엔드는 no-op */
+  warmup?(): void;
 }
 
 /** 동기/비동기 공용 후처리 헬퍼 — 값이면 즉시, Promise면 then */

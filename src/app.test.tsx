@@ -312,6 +312,25 @@ describe('R5: 캐스팅 판정(군집 근처)', () => {
   });
 });
 
+describe('서버 응답 지연 내성 (catch 홀드)', () => {
+  it('응답이 늦어도 catch 페이즈가 만료되지 않는다 — 카드 미표시 버그 방지', () => {
+    // 영원히 안 끝나는 dispatch — HTTP 지연의 극단 모형 (타임아웃은 HttpBackend 소관)
+    const pending = () => new Promise<never>(() => {});
+    toastFn.mockClear();
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(<Field region="village" game={newState()} dispatch={pending as never}
+                  setToast={toastFn} onScene={goBaseFn} initialPos={POND_SHORE} />);
+    space();                                       // 캐스팅
+    act(() => vi.advanceTimersByTime(4000));       // wait(rng=0 → biteMin 4s) 경과 → bite
+    expect(phase()).toBe('bite');
+    space();                                       // 챔질 → dispatch 대기
+    expect(phase()).toBe('catch');
+    act(() => vi.advanceTimersByTime(10000));      // 응답이 안 와도
+    expect(phase()).toBe('catch');                 // 재캐스트로 넘어가지 않는다 (결과 도착 후 카운트다운)
+  });
+});
+
 describe('폼 타이핑 보호 (전역 키 리스너)', () => {
   it('입력 요소에 포커스가 있으면 게임 키를 가로채지 않는다 — 계정 모달 타이핑', () => {
     renderField('village', POND_SHORE);

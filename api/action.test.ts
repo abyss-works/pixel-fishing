@@ -12,14 +12,21 @@ function mkRes() {
     body: null as unknown,
     status(code: number) { r.statusCode = code; return r; },
     json(b: unknown) { r.body = b; },
+    end() { /* 204 무본문 */ },
   };
   return r;
 }
 
 describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
-  it('POST 외 메서드는 405', async () => {
+  it('GET은 워밍/헬스 핑 — 204 무본문 (콘솔 노이즈 없는 응답)', async () => {
     const res = mkRes();
     await handler({ method: 'GET', headers: {} } as never, res as never);
+    expect(res.statusCode).toBe(204);
+  });
+
+  it('GET/POST 외 메서드는 405', async () => {
+    const res = mkRes();
+    await handler({ method: 'PUT', headers: {} } as never, res as never);
     expect(res.statusCode).toBe(405);
     expect(res.body).toEqual({ error: 'method-not-allowed' });
   });

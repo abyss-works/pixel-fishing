@@ -122,5 +122,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     game, setGame, dispatch, sync, syncLabel: SYNC_LABEL[sync], outdated,
     /** 계정 교체(useAccount) 시 그 계정의 상태를 다시 읽는 용도 */
     load: () => backendRef.current.load(),
+    /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
+    warmup: () => backendRef.current.warmup?.(),
   };
 }

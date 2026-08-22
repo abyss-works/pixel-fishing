@@ -23,7 +23,7 @@ export default function App() {
   const { log, setToast } = useMessageLog([
     '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
   ]);
-  const { game, setGame, dispatch, sync, syncLabel, outdated, load } = useGame({ setToast });
+  const { game, setGame, dispatch, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
   const { account, onAuthChanged } = useAccount({ game, setGame, setToast, sync, load });
 
   const [scene, setScene] = useState<SceneRef>({ kind: 'base', id: 'home' });
@@ -79,7 +79,7 @@ export default function App() {
             <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
           ) : (
             <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
-                   onScene={go} onOpenMap={onOpenMap}
+                   onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
                    onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))} />
           )}
 
