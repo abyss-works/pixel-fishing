@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FISH, SPOTS, priceOf, sizeParams, sizePercentile, variantDiscovered } from '../game/logic';
 import type { Fish, GameState } from '../game/logic';
-import { REGION_INFO } from '../data/regions';
+import { REGION_PACKS } from '../world';
 import type { RegionId } from '../world';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
@@ -90,7 +90,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
   const varCount = FISH.filter(f => variantDiscovered(game, f.id)).length;
   const [sub, setSub] = useState<RegionId>(region); // 기본 = 지금 있는 지역
   const [detail, setDetail] = useState<Fish | null>(null);
-  const regions = Object.values(REGION_INFO);
+  const regions = Object.values(REGION_PACKS);
   const spots = SPOTS.filter(s => s.region === sub);
   const found = (f: Fish) => // 현재 보기에서 이 카드가 "발견됨"인가
     view === 'base' ? baseCaught(f) > 0 : variantDiscovered(game, f.id);
@@ -104,12 +104,12 @@ export default function DexTab({ game, region, view }: { game: GameState; region
         </span>{')'}
       </h3>
       <SubTabs
-        items={regions.map(info => {
-          const regionFish = FISH.filter(f => SPOTS.some(s => s.region === info.id && s.id === f.spot));
+        items={regions.map(pack => {
+          const regionFish = FISH.filter(f => SPOTS.some(s => s.region === pack.id && s.id === f.spot));
           const caught = regionFish.filter(found).length;
           return {
-            key: info.id as RegionId,
-            label: <>{info.shortName}<span className="text-[10px]"> {caught}/{regionFish.length}</span></>,
+            key: pack.id, // RegionId 단일 근원(data/spots 파생)이라 캐스트 불필요
+            label: <>{pack.info.shortName}<span className="text-[10px]"> {caught}/{regionFish.length}</span></>,
           };
         })}
         activeKey={sub}

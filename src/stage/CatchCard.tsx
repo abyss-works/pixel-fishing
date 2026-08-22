@@ -21,8 +21,8 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   const r = RARITY[fish.rarity];
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
   const mutatedLine = MUTATED_LINES[info ? Math.floor(info.size * 997) % MUTATED_LINES.length : 0];
-  const legendary = fish.rarity === 'legendary';
-  const sparks = legendary ? 20 : fish.rarity === 'epic' ? 12 : 0;
+  // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지 (6등급 개편 대비)
+  const { sparks, sparkDist, halo } = r;
   return (
     <div data-rarity={fish.rarity}
          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-(--z-card)
@@ -38,15 +38,15 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                 className={cx(
                   'absolute left-1/2 top-1/2 size-1 -m-0.5 bg-(--rarity-color) shadow-[0_0_6px_var(--rarity-color)]',
                   'animate-fx-spark opacity-0',
-                  legendary && '[animation-duration:0.85s]',
+                  halo && '[animation-duration:0.85s]',
                 )}
                 style={{
                   '--a': `${(i * 360) / sparks}deg`,
-                  '--d': `${(legendary ? 110 : 70) + (i % 3) * 18}px`,
+                  '--d': `${sparkDist + (i % 3) * 18}px`,
                 } as CSSProperties} />
         ))}
-        {/* 전설 — 카드를 도는 골드 궤도 점 (도트 감성: 원형 없음) */}
-        {legendary && Array.from({ length: 10 }, (_, i) => (
+        {/* 최고급(halo) — 카드를 도는 골드 궤도 점 (도트 감성: 원형 없음) */}
+        {halo && Array.from({ length: 10 }, (_, i) => (
           <span key={i}
                 className="absolute left-1/2 top-1/2 size-1 -m-0.5 bg-legend shadow-[0_0_6px_var(--c-legend)]
                            animate-fx-orbit [animation-delay:calc(var(--i)*-0.24s)]"

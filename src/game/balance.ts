@@ -1,9 +1,15 @@
 // 밸런스 상수 — 튜닝 가능한 모든 수치는 이 파일에만 둔다 
 // 여기 값을 바꾸는 것만으로 게임 감각이 조정되어야 하고, 로직 파일에 수치를 흘리지 않는다.
 
+import type { RarityId } from '../data/rarity.js';
+
 // 낚시 상태머신 타이밍 (캐스팅 연출 단계는 없음 — 던지면 바로 대기)
 export const CATCH_MS = 2000;            // 획득 카드 표시 후 자동 재캐스트
 export const CATCH_MS_LEGENDARY = 2700;  // 전설 등급은 이펙트를 더 보여주려고 아주 약간 더 길게
+// 등급별 획득 표시 시간 오버라이드 — 새 등급의 연출 연장 = 여기 행 추가 (fishing.ts가 참조)
+export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
+  legendary: CATCH_MS_LEGENDARY,
+};
 
 // 군집 캐스팅 판정 반경(px) — "군집 위/옆"의 정의
 export const CAST_RANGE = 28;
@@ -33,8 +39,9 @@ export const ROD = {
   costGrowth: 1.8,
 } as const;
 
-// 클라우드 동기화 주기(ms)
-export const SYNC_INTERVAL_MS = 20_000;
+// 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (api/action.ts).
+// 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
+export const SNAPSHOT_EVERY = 50;
 
 // 서버 저장 검증 (validate.ts / api/save.ts)
 // 이론상 최소 어획 사이클(만렙 기준 wait ≥1 + catch 2 ≈ 3s) 기준, slack으로 여유 흡수

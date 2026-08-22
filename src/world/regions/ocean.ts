@@ -38,6 +38,21 @@ export const O_SCHOOLS: School[] = [
 export const OCEAN: RegionPack = {
   id: 'ocean',
   name: '태평양 연안',
+  base: 'harbor',
+  info: {
+    shortName: '태평양',
+    tagline: '익숙한 바다, 그러나 그 아래는 아직 아무도 모른다',
+    lore: '한반도 남단 항구에서 출항한 넓은 태평양. 낮에는 고등어 떼가 수면을 스치지만, 해도에는 "마리아나 해구"라 적힌 검은 물이 있다. 그 깊이의 바닥까지 내려가 본 낚시꾼은 아직 없다.',
+    tips: [
+      '항해 속도는 배가 좋을수록 빨라져요.',
+      '어두운 물(마리아나 해구)은 더 튼튼한 배가 있어야 낚시할 수 있어요.',
+      '항구에 접안하면 정비(판매·강화·조선소)를 할 수 있고, 여객선으로 마을에 돌아갈 수 있어요.',
+    ],
+    controls: [
+      '항해: 방향키 또는 WASD',
+      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+    ],
+  },
   w: OCEAN_W,
   h: OCEAN_H,
   movement: 'sail',
@@ -57,7 +72,7 @@ export const OCEAN: RegionPack = {
   schools: O_SCHOOLS,
   spawn: O_SPAWN,
   triggers: [
-    { rect: O_DOCK, action: 'base' },
+    { rect: O_DOCK, action: 'base', msg: '항구에 접안했다. 시설을 눌러 정비하자.' },
   ],
   labels: [
     { text: '태평양', x: 700, y: 120, color: 'faint', size: 9 },

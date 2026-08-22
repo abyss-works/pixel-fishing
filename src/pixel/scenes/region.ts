@@ -9,18 +9,13 @@ import { drawBoat, drawPerson } from '../sprites/actors.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../sprites/scenery.js';
 import { drawFishingGear, drawSchools, drawTimingBar } from '../sprites/overlays.js';
 import { cameraFor } from './camera.js';
-import type { Point, RegionPack, School } from '../../world/types';
-import type { FishingPhase } from '../../game/fishing';
+import type { RegionPack } from '../../world/types';
+import type { GearView } from '../sprites/overlays.js';
 
-/** React 상태 → 캔버스 경계 뷰모델 — Field.tsx가 프레임마다 채워 보낸다 */
-export interface FieldView {
-  player: Point;
-  phase: FishingPhase;
-  school: School | null;
+/** React 상태 → 캔버스 경계 뷰모델 — Field.tsx가 프레임마다 채워 보낸다.
+    phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단). */
+export interface FieldView extends GearView {
   boat: number;
-  biteT: number | null;
-  zone: number;
-  t: number;
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {

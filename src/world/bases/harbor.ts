@@ -3,7 +3,10 @@ import type { BasePack } from '../types';
 
 export const HARBOR_BASE: BasePack = {
   id: 'harbor',
+  region: 'ocean',
   headline: '항구 — 시설을 클릭해 정비하자',
+  exitMsg: '출항! 군집 위에서 스페이스로 캐스팅.',
+  travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
   furniture: [
     { id: 'dex',    x: 36,  y: 58,  w: 40, h: 60, sprite: 'office',
       label: i => `사무소 · 도감 ${i.dexCount}/${i.dexTotal}`, labelDy: -4 },

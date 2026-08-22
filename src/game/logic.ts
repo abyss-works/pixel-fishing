@@ -315,7 +315,7 @@ export function migrate(raw: unknown): GameState {
 // ---------- 상태 변경 ----------
 
 // 로컬 기준 오늘 날짜 — toISOString은 UTC라 KST 오전 9시 전 캐치가 전날로 찍힌다
-function localDate(): string {
+export function localDate(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

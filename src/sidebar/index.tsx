@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
+import type { GameAction } from '../game/actions';
+import type { DispatchResult, MaybePromise } from '../backend/types';
 import type { RegionId } from '../world';
 import type { TabKey } from './tabs';
 import TabBar from '../ui/TabBar';
@@ -27,7 +29,8 @@ interface SidebarProps {
   activeTab: TabKey;
   setActiveTab: (t: TabKey) => void;
   game: GameState;
-  setGame: (g: GameState) => void;
+  /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) */
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
   syncLabel: string | null;
   syncState: string;
@@ -55,11 +58,11 @@ export default function Sidebar(props: SidebarProps) {
       <TabBar<TabKey> tabs={tabsFor(dexView)} activeKey={activeTab} onSelect={onSelect} />
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
-        {activeTab === 'bag' && <BagTab game={game} setGame={props.setGame} setToast={props.setToast} />}
+        {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
         {activeTab === 'dex' && <DexTab game={game} region={props.region} view={dexView} />}
         {activeTab === 'help' && <HelpPanel />}
         {activeTab === 'settings' && (
-          <SettingsTab game={game} setGame={props.setGame} setToast={props.setToast}
+          <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
                        syncLabel={props.syncLabel} syncState={props.syncState}
                        account={props.account} onAuthChanged={props.onAuthChanged} />
         )}

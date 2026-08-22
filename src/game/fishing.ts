@@ -1,9 +1,9 @@
 // 낚시 상태머신 — 순수 모듈 
 // React/타이머 의존 없음: Field.tsx는 여기 함수들을 타이머·입력에 연결하는 어댑터다.
 // P2 서버 권위 전환 시 서버가 이 모듈을 그대로 import해 같은 규칙으로 판정한다.
-import { rodStats, rodCurveT, judgeTiming, rollFish } from './logic';
-import type { Fish, Judgment, RarityId, SpotId } from './logic';
-import { AUTO_COMMON_BOOST, CATCH_MS, CATCH_MS_LEGENDARY, JUDGMENT_MULT } from './balance';
+import { rodStats, rodCurveT, judgeTiming, rollFish } from './logic.js';
+import type { Fish, Judgment, RarityId, SpotId } from './logic.js';
+import { AUTO_COMMON_BOOST, CATCH_MS, CATCH_MS_BY_RARITY, JUDGMENT_MULT } from './balance.js';
 
 // 캐스팅 연출 단계는 없다 — 던지면 바로 대기(wait). 순식간에 지나가는 상태 표시가
 // 소음이라 v0.2.0에서 제거했다.
@@ -28,7 +28,7 @@ export function phaseDurationMs(
   switch (p) {
     case 'wait': return (st.biteMin + rng() * (st.biteMax - st.biteMin)) * 1000;
     case 'bite': return st.sweep * 1000;
-    case 'catch': return rarity === 'legendary' ? CATCH_MS_LEGENDARY : CATCH_MS;
+    case 'catch': return (rarity && CATCH_MS_BY_RARITY[rarity]) ?? CATCH_MS; // 등급 리터럴 비의존
   }
 }
 

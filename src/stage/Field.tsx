@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { RARITY, SPOTS, addCatch, boatSpeed, buildCatchInfo, canFishSpot, rodStats, rollCatchExtras } from '../game/logic';
+import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, rodStats } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
+import type { GameAction } from '../game/actions';
+import { when } from '../backend/types';
+import type { DispatchResult, MaybePromise } from '../backend/types';
 import { REGION_PACKS, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
-import type { Point, RegionId, School } from '../world';
-import { nextPhase, phaseDurationMs, judgePress, resolveCatch } from '../game/fishing';
+import type { Point, RegionId, SceneRef, School } from '../world';
+import { nextPhase, phaseDurationMs, judgePress } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { CAST_RANGE, WALK_SPEED } from '../game/balance';
 import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
@@ -26,10 +29,11 @@ const STATUS: Record<Exclude<FishingPhase, 'idle'>, string> = {
 interface Props {
   region: RegionId;
   game: GameState;
-  setGame: (g: GameState) => void;
+  /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 캐치도 서버(또는 로컬 리듀서)가 계산 */
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
-  goBase: () => void;              // 집 문 / 항구 접안
-  goTravel?: () => void;           // 마을 포구 → 대양
+  /** 씬 전환 — 목적지·안내문은 트리거 데이터(팩)가 결정하고 Field는 전달만 한다 */
+  onScene: (target: SceneRef, msg: string) => void;
   onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
   onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
   /** 테스트용 시작 위치 */
@@ -37,7 +41,7 @@ interface Props {
 }
 
 export default function Field({
-  region, game, setGame, setToast, goBase, goTravel,
+  region, game, dispatch, setToast, onScene,
   onOpenMap, onShop, initialPos,
 }: Props) {
   const def = REGION_PACKS[region];
@@ -58,6 +62,8 @@ export default function Field({
   const openMapRef = useRef(onOpenMap);
   const shopRef = useRef(onShop);
   const toastRef = useRef(setToast);
+  const dispatchRef = useRef(dispatch);
+  const sceneRef = useRef(onScene);
   useEffect(() => {
     phaseRef.current = phase;
     schoolRef.current = school;
@@ -65,7 +71,9 @@ export default function Field({
     openMapRef.current = onOpenMap;
     shopRef.current = onShop;
     toastRef.current = setToast;
-  }, [phase, school, game, onOpenMap, onShop, setToast]);
+    dispatchRef.current = dispatch;
+    sceneRef.current = onScene;
+  }, [phase, school, game, onOpenMap, onShop, setToast, dispatch, onScene]);
 
   // 핸들러 최신본 참조
   const actionRef = useRef<() => void>(() => {});
@@ -115,27 +123,30 @@ export default function Field({
     if (!silent) setToast(`${spot.name} 군집에 찌를 던졌다.`);
   };
 
-  // R8: 획득 — 결정 규칙은 fishing.resolveCatch (R9, R11)
+  // R8: 획득 — 추첨·기록은 서버(리듀서)가 실행하고, 여기는 결과를 연출만 한다 (v0.5.0).
+  // 판정(judgment)은 클라 주장 유지 — 타이밍 바 서버 동기화는 레이턴시 민감(확정 결정).
   const hookFish = (judgment: Judgment) => {
     const s = schoolRef.current;
     if (!s || phaseRef.current !== 'bite') return;
-    const caught = resolveCatch(s.spot, judgment, gameRef.current.rod);
-    const extras = rollCatchExtras(caught);
-    // NEW 판정도 폼별 — 변이는 별개 개체라 변이 첫 캐치도 신규 발견이다 (v0.3.3)
-    const g = gameRef.current;
-    const varN = g.variantCaught[caught.id] ?? 0;
-    const isNew = extras.mutated ? varN === 0 : (g.caught[caught.id] ?? 0) - varN === 0;
-    const info = buildCatchInfo(caught, extras, isNew);
-    const nextGame = addCatch(gameRef.current, caught, extras);
-    setGame(nextGame);
-    setFish(caught);
-    setCatchInfo(info);
+    // 즉시 catch 페이즈 진입 — 응답 대기 중 bite 타이머가 방치 획득을 중복 발사하지 못하게.
+    // 물고기 공개는 응답 도착 시(카드) — HTTP 왕복은 획득 연출 시간에 흡수된다.
     setPhase('catch');
-    const r = RARITY[caught.rarity];
-    const prefix = judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
-    // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
-    const name = info.mutated ? caught.variant.name : caught.name;
-    setToast(`${prefix}${r.name} 등급 [${name}] 획득!`);
+    when(dispatchRef.current({ type: 'catch', spot: s.spot, judgment }), r => {
+      const result = r.status === 'ok' ? r.result : null;
+      if (!result || result.type !== 'catch') {
+        cancelRef.current();
+        if (r.status === 'rejected') toastRef.current(`낚시가 거부되었다 (${r.error}).`);
+        return;
+      }
+      const caught = FISH.find(f => f.id === result.fishId)!;
+      const info = result.info;
+      setFish(caught);
+      setCatchInfo(info);
+      const prefix = judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
+      // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
+      const name = info.mutated ? caught.variant.name : caught.name;
+      toastRef.current(`${prefix}${RARITY[caught.rarity].name} 등급 [${name}] 획득!`);
+    });
   };
 
   const cancelFishing = () => {
@@ -201,15 +212,21 @@ export default function Field({
         const speed = def.movement === 'walk' ? WALK_SPEED : boatSpeed(gameRef.current);
         const prev = posRef.current;
         posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
-        // 트리거 — 데이터 순서대로 검사 (R5c)
+        // 트리거 — 목적지·게이트·안내문 전부 팩 데이터 (R5c). 새 지역/항로 = 데이터 행 추가.
         for (const trig of def.triggers) {
           if (!inTrigger(posRef.current, trig.rect)) continue;
-          if (trig.action === 'base') { goBase(); return; }               // 집 문 / 항구 접안
-          if (trig.action === 'travel') {                                  // 마을 포구 → 대양
-            if (gameRef.current.boat >= 1 && goTravel) { goTravel(); return; }
-            posRef.current = { ...posRef.current, y: posRef.current.y - 8 }; // 되밀기
-            toastRef.current('대양에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.');
-          } else if (trig.action === 'shop') {                             // 목공소 — 패널 열고 되밀기
+          if (trig.action === 'base') {                                    // 거점 진입
+            sceneRef.current({ kind: 'base', id: def.base }, trig.msg);
+            return;
+          }
+          if (trig.action === 'travel') {                                  // 지역 간 이동 (배 게이트)
+            if (gameRef.current.boat >= trig.requiredBoat) {
+              sceneRef.current({ kind: 'region', id: trig.to }, trig.msg);
+              return;
+            }
+            posRef.current = prev;                                         // 되밀기 + 게이트 안내
+            toastRef.current(trig.blockedMsg);
+          } else if (trig.action === 'shop') {                             // 필드 시설 — 패널 열고 되밀기
             posRef.current = prev;
             shopRef.current?.();
           }
@@ -236,7 +253,7 @@ export default function Field({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [region, def, goBase, goTravel]);
+  }, [region, def]);
 
   const title = def.name;
 

@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
-import { entryFish, entryPrice, parseBagEntry, sellableValue, toggleLock } from '../game/logic';
+import { entryFish, entryPrice, parseBagEntry, sellableValue } from '../game/logic';
 import type { GameState } from '../game/logic';
+import type { GameAction } from '../game/actions';
+import { when } from '../backend/types';
+import type { DispatchResult, MaybePromise } from '../backend/types';
 import { cx } from '../ui/cx';
 import DataTable from '../ui/DataTable';
 import Note from '../ui/Note';
@@ -10,8 +13,10 @@ import { RarityDot } from '../ui/RarityTag';
 import { rarityRank } from './shared';
 
 // 가방 탭 — 조회 + 어종 잠금 (판매는 거점 정비에서)
-export default function BagTab({ game, setGame, setToast }: {
-  game: GameState; setGame: (g: GameState) => void; setToast: (m: string) => void;
+export default function BagTab({ game, dispatch, setToast }: {
+  game: GameState;
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
+  setToast: (m: string) => void;
 }) {
   // 엔트리 단위 그룹 — 'carp'(일반)와 'carp*'(변이)는 별개 행 (v0.3.3)
   const rows = useMemo(() => {
@@ -52,12 +57,12 @@ export default function BagTab({ game, setGame, setToast }: {
                         className={cx('bg-transparent border-0 px-1 cursor-pointer',
                           locked ? 'text-gold' : 'text-text-dim hover:text-text')}
                         aria-label={`${fish.name} ${locked ? '잠금 해제' : '잠금'}`}
-                        onClick={() => {
-                          setGame(toggleLock(game, fish.id));
+                        onClick={() => when(dispatch({ type: 'toggleLock', fishId: fish.id }), r => {
+                          if (r.status !== 'ok') return;
                           setToast(locked
                             ? `${fish.name} 잠금 해제 — 다시 판매 대상이 된다.`
                             : `${fish.name} 잠금 — 전부 판매에서 제외된다.`);
-                        }}>
+                        })}>
                         <PixelIcon glyph={locked ? 'lock' : 'lockOpen'} size={14} />
                       </button>
                     </td>

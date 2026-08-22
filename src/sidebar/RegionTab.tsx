@@ -1,6 +1,6 @@
 import { BOATS, FISH, RARITY, SPOTS, canFishSpot } from '../game/logic';
 import type { GameState } from '../game/logic';
-import { REGION_INFO } from '../data/regions';
+import { REGION_PACKS } from '../world';
 import type { RegionId } from '../world';
 import { cx } from '../ui/cx';
 import Panel from '../ui/Panel';
@@ -14,12 +14,13 @@ import { RARITY_ORDER, rarityRank } from './shared';
 
 // 지역 탭 — 현재 지역의 로어·수역 정보·서식 어종·등급 확률 (몰입 요소)
 export default function RegionTab({ region, game }: { region: RegionId; game: GameState }) {
-  const info = REGION_INFO[region];
+  const pack = REGION_PACKS[region];
+  const info = pack.info;
   const spots = SPOTS.filter(s => s.region === region);
 
   return (
     <div>
-      <Panel title={info.name}>
+      <Panel title={pack.name}>
         <p className="text-accent text-xs">{info.tagline}</p>
         <p className="text-xs leading-[1.7]">{info.lore}</p>
       </Panel>

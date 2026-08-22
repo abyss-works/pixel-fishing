@@ -1,38 +1,43 @@
-import { useEffect, useState } from 'react';
-import type { RefObject } from 'react';
-import { supabase, fetchCloudSave, currentAccount, applyNewPassword } from '../backend/cloud';
-import { migrate, newState } from '../game/logic';
+import { useEffect, useRef, useState } from 'react';
+import { supabase, currentAccount, applyNewPassword } from '../backend/auth';
+import { newState } from '../game/logic';
 import type { GameState } from '../game/logic';
-import type { SyncState } from './useCloudSync';
+import type { MaybePromise } from '../backend/types';
+import type { SyncState } from './useGame';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
-// 비밀번호 재설정 착지 · 가입 넛지. 동기화 자체는 useCloudSync 소관 (계층: service&state).
-export function useAccount({ game, setGame, setToast, sync, userIdRef, dirtyRef }: {
+// 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
+export function useAccount({ game, setGame, setToast, sync, load }: {
   game: GameState;
   setGame: (g: GameState) => void;
   setToast: (m: string) => void;
   sync: SyncState;
-  userIdRef: RefObject<string | null>;
-  dirtyRef: RefObject<boolean>;
+  /** useGame의 backend.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
+  load: () => MaybePromise<GameState | null>;
 }) {
   const [account, setAccount] = useState<string | null>(null);
+  const uidRef = useRef<string | null>(null); // 부트스트랩 시점 uid — 승격/교체 판별 기준
 
-  // 동기화 부트스트랩이 끝나면(on) 영구 계정 이메일 표시 — 게스트면 null 유지
+  // 부트스트랩이 끝나면(on) 영구 계정 이메일 표시 — 게스트면 null 유지
   useEffect(() => {
-    if (sync !== 'on') return;
+    if (sync !== 'on' || !supabase) return;
     currentAccount().then(setAccount);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!uidRef.current) uidRef.current = session?.user.id ?? null;
+    });
   }, [sync]);
 
-  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 클라우드 세이브 채택
+  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택.
+  // 승격(가입)은 uid 불변이라 스킵 — 갓 승격한 게스트는 서버가 아직 비어 있을 수 있어서
+  // load()를 타면 로컬 진행이 newState로 덮인다 (v0.4.0 구조 원칙: 가입 = 승격이지 이전이 아니다).
   const onAuthChanged = async () => {
     setAccount(await currentAccount());
     const { data: { session } } = await supabase!.auth.getSession();
     const uid = session?.user.id ?? null;
-    if (uid && uid !== userIdRef.current) { // 승격(uid 불변)이면 스킵, 로그인(교체)이면 로드
-      userIdRef.current = uid;
-      const cloud = await fetchCloudSave();
-      setGame(cloud ? migrate(cloud.data) : newState());
-      dirtyRef.current = false;
+    if (uid && uid !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
+      uidRef.current = uid;
+      const cloud = await load();
+      setGame(cloud ?? newState());
       setToast('계정의 클라우드 세이브를 불러왔다.');
     }
   };

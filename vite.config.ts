@@ -6,10 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  define: {
-    // 게임 내 버전 표시 (npm 스크립트로 실행 시 package.json 버전이 주입됨)
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),
-  },
+  // 버전은 src/version.ts(클라+서버 공유 리터럴)가 단일 근원 — define 주입 폐지 (version.test가 package.json과 동기화 강제)
   server: { port: 5199 },
   test: {
     environment: 'jsdom',

@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { COUPONS, migrate, redeemCoupon } from '../game/logic';
 import type { GameState } from '../game/logic';
-import { fetchCoupon, saveCode, supabase, signOutAccount } from '../backend/cloud';
+import type { GameAction } from '../game/actions';
+import { when } from '../backend/types';
+import type { DispatchResult, MaybePromise } from '../backend/types';
+import { saveCode, supabase, signOutAccount } from '../backend/auth';
+import { APP_VERSION } from '../version';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
 import Note from '../ui/Note';
@@ -49,8 +52,10 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
   );
 }
 
-export default function SettingsTab({ game, setGame, setToast, syncLabel, syncState, account, onAuthChanged }: {
-  game: GameState; setGame: (g: GameState) => void; setToast: (m: string) => void;
+export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, onAuthChanged }: {
+  game: GameState;
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
+  setToast: (m: string) => void;
   syncLabel: string | null; syncState: string;
   account: string | null; onAuthChanged: () => Promise<void>;
 }) {
@@ -64,30 +69,33 @@ export default function SettingsTab({ game, setGame, setToast, syncLabel, syncSt
     }
   };
 
+  // 불러오기 = import 액션 — 서버가 migrate 후 수입하고 events에 흔적을 남긴다 (v0.5.0)
   const importSave = () => {
     const code = window.prompt('이사 코드를 붙여넣으세요:');
     if (!code) return;
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(decodeURIComponent(atob(code.trim())));
-      setGame(migrate(parsed));
-      setToast('세이브를 불러왔다!');
+      parsed = JSON.parse(decodeURIComponent(atob(code.trim())));
     } catch {
       setToast('이사 코드가 올바르지 않다.');
-    }
-  };
-
-  const enterCoupon = async () => {
-    const code = window.prompt('쿠폰 코드를 입력하세요:');
-    if (!code) return;
-    const trimmed = code.trim();
-    const dynamic = COUPONS[trimmed] ? undefined : await fetchCoupon(trimmed);
-    const res = redeemCoupon(game, code, dynamic ? { [trimmed]: dynamic } : {});
-    if (!res.ok) {
-      setToast(res.reason === 'used' ? '이미 사용한 쿠폰이다.' : '없는 쿠폰 코드다.');
       return;
     }
-    setGame(res.state);
-    setToast(`쿠폰 사용! +${res.reward.gold}G — ${res.reward.desc}`);
+    when(dispatch({ type: 'import', save: parsed }), r => {
+      if (r.status === 'ok') setToast('세이브를 불러왔다!');
+    });
+  };
+
+  // 쿠폰 판정·동적 쿠폰 조회는 서버 소관 (v0.5.0) — 클라는 코드만 보낸다
+  const enterCoupon = () => {
+    const code = window.prompt('쿠폰 코드를 입력하세요:');
+    if (!code) return;
+    when(dispatch({ type: 'redeemCoupon', code }), r => {
+      if (r.status === 'ok' && r.result.type === 'coupon') {
+        setToast(`쿠폰 사용! +${r.result.gold}G — ${r.result.desc}`);
+      } else if (r.status === 'rejected') {
+        setToast(r.error === 'coupon:used' ? '이미 사용한 쿠폰이다.' : '없는 쿠폰 코드다.');
+      }
+    });
   };
 
   return (
@@ -111,7 +119,7 @@ export default function SettingsTab({ game, setGame, setToast, syncLabel, syncSt
       <AdminPanel />
       <PatchNotesPanel />
 
-      <div className="text-[10px] text-text-dim opacity-70 mt-auto pt-2">v{__APP_VERSION__}</div>
+      <div className="text-[10px] text-text-dim opacity-70 mt-auto pt-2">v{APP_VERSION}</div>
     </div>
   );
 }

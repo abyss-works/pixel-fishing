@@ -28,6 +28,22 @@ export const V_SCHOOLS: School[] = [
 export const VILLAGE: RegionPack = {
   id: 'village',
   name: '고향 마을',
+  base: 'home',
+  info: {
+    shortName: '마을',
+    tagline: '모든 낚시꾼의 이야기가 시작되는 곳',
+    lore: '당신이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다 — 배 한 척만 있다면.',
+    tips: [
+      '연못과 강은 배 없이 낚시할 수 있어요.',
+      '강 다리를 건너 남쪽 포구로 가면 대양으로 출항할 수 있어요 (배 필요).',
+      '포구 옆 목공소에서 배를 살 수 있어요.',
+      '집 문 앞에 서면 자동으로 집에 들어가요.',
+    ],
+    controls: [
+      '이동: 방향키 또는 WASD',
+      '낚시: 물고기 군집 옆에서 스페이스(또는 화면 클릭)',
+    ],
+  },
   w: VILLAGE_W,
   h: VILLAGE_H,
   movement: 'walk',
@@ -50,8 +66,10 @@ export const VILLAGE: RegionPack = {
   schools: V_SCHOOLS,
   spawn: V_SPAWN,
   triggers: [
-    { rect: V_DOOR, action: 'base' },
-    { rect: V_PORT, action: 'travel' },
+    { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
+    { rect: V_PORT, action: 'travel', to: 'ocean', requiredBoat: 1,
+      msg: '대양으로 출항! 태평양 군집을 찾아 항해하자.',
+      blockedMsg: '대양에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.' },
     { rect: V_BOATSHOP_TRIGGER, action: 'shop' },
   ],
   labels: [

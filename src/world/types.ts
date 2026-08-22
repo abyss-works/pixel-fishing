@@ -1,11 +1,16 @@
 // 레벨 데이터 스키마 (리팩토링 축 2)
 // 지역/거점은 전부 이 타입의 "데이터"다 — 새 지역 = regions/<id>.ts 파일 1개(+신규 스프라이트).
 // 충돌·수역 판정은 engine.ts가 데이터에서 파생하고, 그리기는 pixel/region.ts 인터프리터가 맡는다.
-import type { SpotId } from '../data/spots';
+import type { SpotId, SpotRegionId } from '../data/spots';
 
-export type RegionId = 'village' | 'ocean';
+// 지역 id의 단일 근원 = data/spots의 region 열 — 수역·지역 소개·팩이 전부 같은 타입을 쓴다
+// (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
+export type RegionId = SpotRegionId;
 export type BaseId = 'home' | 'harbor';
 export type FurnitureId = 'sell' | 'rod' | 'boat' | 'dex' | 'exit' | 'travel';
+
+/** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생) */
+export type SceneRef = { kind: 'region'; id: RegionId } | { kind: 'base'; id: BaseId };
 
 export const VIEW_W = 320, VIEW_H = 180;
 
@@ -28,8 +33,12 @@ export type TerrainPiece =
 export type BuildingSpriteId = 'house' | 'boatshop' | 'harbor';
 export interface Building { rect: Rect; sprite: BuildingSpriteId }
 
-export type TriggerAction = 'base' | 'travel' | 'shop';
-export interface TriggerDef { rect: Rect; action: TriggerAction }
+// 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (App/Field 무수정)
+export type TriggerDef =
+  | { rect: Rect; action: 'base'; msg: string }                      // pack.base 거점 진입
+  | { rect: Rect; action: 'travel'; to: RegionId; msg: string;       // 다른 지역으로
+      requiredBoat: number; blockedMsg: string }                     // 게이트 미달 시 되밀기+안내
+  | { rect: Rect; action: 'shop' };                                  // 필드 시설 패널
 
 export interface MapLabel {
   text: string; x: number; y: number;
@@ -39,9 +48,21 @@ export interface MapLabel {
 
 export type Decoration = { kind: 'tree'; x: number; y: number };
 
+/** 지역 소개 — 사이드바 지역 탭·도감 서브탭용 로어/팁 (구 data/regions.ts REGION_INFO 흡수) */
+export interface RegionLore {
+  shortName: string;  // 도감 서브탭 등 좁은 UI용
+  tagline: string;    // 한 줄 분위기
+  lore: string;       // 2~3문장 소개
+  tips: string[];     // 지역 한정 도움말
+  controls: string[]; // 조작 안내 (지역 탭 맨 아래)
+}
+
 export interface RegionPack {
   id: RegionId;
   name: string;
+  /** 이 지역의 거점 (base 트리거가 진입시키는 곳) */
+  base: BaseId;
+  info: RegionLore;
   w: number;
   h: number;
   movement: 'walk' | 'sail';
@@ -84,6 +105,11 @@ export interface Furniture extends Rect {
 
 export interface BasePack {
   id: BaseId;
-  headline: string; // 상단 안내 문구
+  /** 소속 지역 — exit 시설이 내보내는 곳이자 사이드바 지역 탭의 문맥 */
+  region: RegionId;
+  headline: string;  // 상단 안내 문구
+  exitMsg: string;   // exit 시설로 필드에 나갈 때 안내
+  /** 여객선 등 지역 간 이동 시설 (travel 가구가 있을 때만) */
+  travel?: { to: RegionId; msg: string };
   furniture: Furniture[];
 }

@@ -4,7 +4,9 @@ import type { BasePack } from '../types';
 
 export const HOME: BasePack = {
   id: 'home',
+  region: 'village',
   headline: '나의 집 — 가구를 클릭해 정비하자',
+  exitMsg: '마을이다. 물가 군집에서 낚시하자.',
   furniture: [
     { id: 'dex',  x: 36,  y: 58,  w: 40, h: 60, sprite: 'bookshelf',
       label: i => `책장 · 도감 ${i.dexCount}/${i.dexTotal}`, labelDy: -4 },

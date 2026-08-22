@@ -8,6 +8,9 @@ import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
 import type { GameState } from './game/logic';
+import type { GameAction } from './game/actions';
+import { LocalBackend } from './backend/local';
+import { when } from './backend/types';
 import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN } from './world';
 import type { Point, RegionId } from './world';
 
@@ -121,8 +124,13 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
   function BoatHarness({ initial }: { initial: GameState }) {
     const [g, setG] = useState(initial);
     const [open, setOpen] = useState(true);
+    const backend = useState(() => new LocalBackend(initial))[0];
+    const dispatch = (a: GameAction) => when(backend.dispatch(a), r => {
+      if (r.status === 'ok') { lastGame = r.state; setG(r.state); }
+      return r;
+    });
     return open
-      ? <FacilityModal panel="boat" game={g} setGame={ng => { lastGame = ng; setG(ng); }}
+      ? <FacilityModal panel="boat" game={g} dispatch={dispatch}
                        setToast={toastFn} onClose={() => setOpen(false)} />
       : <p>모달 닫힘</p>;
   }
@@ -274,8 +282,13 @@ const goBaseFn = vi.fn();
 
 function Harness({ region, initial, pos }: { region: RegionId; initial: GameState; pos: Point }) {
   const [g, setG] = useState(initial);
-  return <Field region={region} game={g} setGame={ng => { lastGame = ng; setG(ng); }}
-                setToast={toastFn} goBase={goBaseFn} initialPos={pos} />;
+  const backend = useState(() => new LocalBackend(initial))[0];
+  const dispatch = (a: GameAction) => when(backend.dispatch(a), r => {
+    if (r.status === 'ok') { lastGame = r.state; setG(r.state); }
+    return r;
+  });
+  return <Field region={region} game={g} dispatch={dispatch}
+                setToast={toastFn} onScene={goBaseFn} initialPos={pos} />;
 }
 
 function renderField(region: RegionId, pos: Point, initial: Partial<GameState> = {}) {

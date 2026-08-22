@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
-import { saveCode, requestPasswordReset, signInWithEmail, signUpWithEmail } from '../backend/cloud';
+import { saveCode, requestPasswordReset, signInWithEmail, signUpWithEmail } from '../backend/auth';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Note from '../ui/Note';

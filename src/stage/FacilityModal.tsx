@@ -3,9 +3,12 @@ import type { ReactNode } from 'react';
 import {
   BOATS, MAX_BOAT, SPOTS,
   entryFish, entryName, entryPrice, parseBagEntry,
-  rodStats, sellSelected, tryBuyBoat, tryUpgrade, upgradeCost,
+  rodStats, upgradeCost,
 } from '../game/logic';
 import type { GameState } from '../game/logic';
+import type { GameAction } from '../game/actions';
+import { when } from '../backend/types';
+import type { DispatchResult, MaybePromise } from '../backend/types';
 import { cx } from '../ui/cx';
 import Panel from '../ui/Panel';
 import Button from '../ui/Button';
@@ -21,48 +24,52 @@ export type ActionPanel = 'sell' | 'rod' | 'boat' | null;
 interface Props {
   panel: Exclude<ActionPanel, null>;
   game: GameState;
-  setGame: (g: GameState) => void;
+  /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
   onClose: () => void;
 }
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
-export default function FacilityModal({ panel, game, setGame, setToast, onClose }: Props) {
+// busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose }: Props) {
+  const [busy, setBusy] = useState(false);
+  const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
+    if (busy) return;
+    setBusy(true);
+    when(dispatch(action), r => {
+      setBusy(false);
+      if (r.status === 'ok') onOk(r);
+      else if (r.status === 'rejected') setToast(`처리할 수 없다 (${r.error}).`);
+    });
+  };
+
   return (
     <Modal layer="stage" onClose={onClose}>
       {panel === 'sell' && (
-        <SellPanel game={game} onClose={onClose}
-          onSell={ids => {
-            const next = sellSelected(game, ids);
-            const value = next.gold - game.gold;
-            setGame(next);
+        <SellPanel game={game} onClose={onClose} busy={busy}
+          onSell={ids => run({ type: 'sell', entries: ids }, r => {
             onClose();
-            setToast(`물고기를 팔아 ${value}G를 벌었다!`);
-          }} />
+            setToast(`물고기를 팔아 ${r.result.type === 'sell' ? r.result.gold : 0}G를 벌었다!`);
+          })} />
       )}
       {panel === 'rod' && (
-        <RodPanel game={game} onClose={onClose}
-          onUpgrade={() => {
-            const next = tryUpgrade(game);
-            if (!next) return;
-            setGame(next);
-            setToast(`낚싯대가 Lv.${next.rod}이 되었다! 입질이 빨라지고 PERFECT 존이 넓어진다.`);
-          }} />
+        <RodPanel game={game} onClose={onClose} busy={busy}
+          onUpgrade={() => run({ type: 'upgradeRod' }, r => {
+            setToast(`낚싯대가 Lv.${r.state.rod}이 되었다! 입질이 빨라지고 PERFECT 존이 넓어진다.`);
+          })} />
       )}
       {panel === 'boat' && (
-        <BoatPanel game={game} onClose={onClose}
-          onBuy={() => {
-            const bought = tryBuyBoat(game);
-            if (!bought) return;
-            const b = BOATS[bought.boat - 1];
-            const opened = SPOTS.find(s => s.boatTier === bought.boat);
-            setGame(bought);
+        <BoatPanel game={game} onClose={onClose} busy={busy}
+          onBuy={() => run({ type: 'buyBoat' }, r => {
+            const b = BOATS[r.state.boat - 1];
+            const opened = SPOTS.find(s => s.boatTier === r.state.boat);
             onClose();
-            setToast(bought.boat === 1
+            setToast(r.state.boat === 1
               ? `${b.name} 구매! 이제 포구에서 대양으로 나갈 수 있다.`
               : `${b.name} 구매! 더 빠르고${opened ? `, [${opened.name}] 해역이 열렸다!` : ' 튼튼하다.'}`);
-          }} />
+          })} />
       )}
     </Modal>
   );
@@ -81,8 +88,8 @@ function ModalCard({ title, onClose, children }: {
 
 // R1: 판매 확인 패널 — 행별 체크로 판매 여부 선택 (기본 전부 체크).
 // 일반/변이는 별개 행 (v0.3.3, 'id' vs 'id*'). 잠근 어종(가방 탭 🔒)은 두 행 다 체크 불가.
-function SellPanel({ game, onSell, onClose }: {
-  game: GameState; onSell: (entries: string[]) => void; onClose: () => void;
+function SellPanel({ game, onSell, onClose, busy }: {
+  game: GameState; onSell: (entries: string[]) => void; onClose: () => void; busy: boolean;
 }) {
   const rows = useMemo(() => {
     const counts = new Map<string, number>();
@@ -147,7 +154,7 @@ function SellPanel({ game, onSell, onClose }: {
           {lockedCount > 0 && (
             <Note>잠근 어종은 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
           )}
-          <Button variant="primary" disabled={total === 0}
+          <Button variant="primary" disabled={total === 0 || busy}
                   onClick={() => onSell(included.map(r => r.entry))}>
             판매하기 (+{total}G)
           </Button>
@@ -158,8 +165,8 @@ function SellPanel({ game, onSell, onClose }: {
 }
 
 // R2: 낚싯대 강화 패널 (상한 없음)
-function RodPanel({ game, onUpgrade, onClose }: {
-  game: GameState; onUpgrade: () => void; onClose: () => void;
+function RodPanel({ game, onUpgrade, onClose, busy }: {
+  game: GameState; onUpgrade: () => void; onClose: () => void; busy: boolean;
 }) {
   const cost = upgradeCost(game.rod);
   const cur = rodStats(game.rod);
@@ -176,7 +183,7 @@ function RodPanel({ game, onUpgrade, onClose }: {
         { label: 'PERFECT 존', value: c.zone, next: n.zone },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
-      <Button variant="primary" disabled={game.gold < cost} onClick={onUpgrade}>
+      <Button variant="primary" disabled={game.gold < cost || busy} onClick={onUpgrade}>
         강화하기 (-{cost.toLocaleString()}G)
       </Button>
     </ModalCard>
@@ -184,8 +191,8 @@ function RodPanel({ game, onUpgrade, onClose }: {
 }
 
 // R2b: 배 구매 패널 (골드 차감 + 명성 하한 검증)
-function BoatPanel({ game, onBuy, onClose }: {
-  game: GameState; onBuy: () => void; onClose: () => void;
+function BoatPanel({ game, onBuy, onClose, busy }: {
+  game: GameState; onBuy: () => void; onClose: () => void; busy: boolean;
 }) {
   if (game.boat >= MAX_BOAT) {
     return (
@@ -209,7 +216,7 @@ function BoatPanel({ game, onBuy, onClose }: {
       ]} />
       {lackFame && <Note tone="warn">명성이 부족하다 — 물고기를 더 잡아 명성을 쌓자.</Note>}
       {!lackFame && lackGold && <Note tone="warn">골드가 부족하다 — 물고기를 팔자.</Note>}
-      <Button variant="primary" disabled={lackFame || lackGold} onClick={onBuy}>
+      <Button variant="primary" disabled={lackFame || lackGold || busy} onClick={onBuy}>
         구매하기 (-{next.price.toLocaleString()}G)
       </Button>
     </ModalCard>

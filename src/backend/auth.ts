@@ -90,82 +90,9 @@ export async function applyNewPassword(password: string): Promise<AuthResult> {
   return error ? authErr(error) : { ok: true };
 }
 
-export interface CloudSave {
-  data: unknown;
-}
-
-// saves는 append-only(0003) — 유저당 여러 행이 있을 수 있어 "가장 최근 행"만 가져온다.
-export async function fetchCloudSave(): Promise<CloudSave | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('saves')
-    .select('data')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return { data: data.data };
-}
-
-// 동적 쿠폰(coupons 테이블, 0004) 조회 — 코드 배포 없이 추가한 쿠폰을 클라이언트가 찾는다.
-// active=false는 조회 안 됨(신규 사용 차단) — 이미 쓴 코드의 서버 검증은 api/save.ts가 별도로,
-// active 여부와 무관하게 통과시킨다(과거 기록은 영원히 유효, validate.ts 주석 참조).
-export async function fetchCoupon(code: string): Promise<{ gold: number; desc: string } | null> {
-  if (!supabase) return null;
-  const { data } = await supabase
-    .from('coupons')
-    .select('gold, description')
-    .eq('code', code)
-    .eq('active', true)
-    .maybeSingle();
-  return data ? { gold: data.gold, desc: data.description } : null;
-}
-
 // 이사 코드 — 세이브를 사람이 옮길 수 있는 문자열로 (설정 탭 내보내기 + 동기화 실패 구조용 공용)
 export const saveCode = (state: GameState): string =>
   btoa(encodeURIComponent(JSON.stringify(state)));
 
-// conflict의 reason = 서버 validateSave 거부 사유 (예: 'invalid:caught:decrease') — 진단용
-export type PushResult =
-  | { status: 'ok' | 'error' }
-  | { status: 'conflict'; reason: string };
-
-// 저장은 /api/save 경유(서버가 불변식 검증) — 프로덕션 DB는 클라이언트 직접 쓰기 금지(0002).
-// 로컬 vite dev에는 함수가 없으므로 직접 insert 폴백(개발용 Supabase 프로젝트는 쓰기 정책 유지).
-// insert만 하는 이유(0003): saves는 append-only라 update/upsert로 이전 행을 덮으면 안 된다.
-export async function pushCloudSave(state: GameState): Promise<PushResult> {
-  if (!supabase) return { status: 'error' };
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return { status: 'error' };
-
-  try {
-    const res = await fetch('/api/save', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(state),
-    });
-    if ((res.headers.get('content-type') ?? '').includes('application/json')) {
-      if (res.ok) return { status: 'ok' };
-      if (res.status === 409) { // 검증 거부(변조/기기 충돌/이사) — 사유를 위로 올린다
-        const body = await res.json().catch(() => null) as { error?: string } | null;
-        return { status: 'conflict', reason: body?.error ?? 'invalid:unknown' };
-      }
-      return { status: 'error' };
-    }
-    // JSON이 아니면 API 미존재(로컬 dev SPA 폴백 등) → 직접 insert로
-  } catch { /* 네트워크 오류 → 직접 insert 시도 */ }
-
-  // 직접 insert 폴백은 dev 전용 — 프로덕션 DB는 0002로 클라이언트 쓰기 정책이 회수돼
-  // 항상 RLS 위반(403)만 난다. v0.2.1 사고 때 API 장애 시 이 폴백이 403 폭주 원인.
-  if (!import.meta.env.DEV) return { status: 'error' };
-
-  const { error } = await supabase.from('saves').insert({
-    user_id: session.user.id,
-    data: state,
-    updated_at: new Date().toISOString(),
-  });
-  return { status: error ? 'error' : 'ok' };
-}
+// (v0.5.0) 세이브 읽기/쓰기는 backend/http.ts(HttpBackend)로 이관 — 이 파일은 인증·이사코드만.
+// 구 pushCloudSave/fetchCloudSave/fetchCoupon 삭제: 쓰기는 /api/action, 동적 쿠폰 조회는 서버 소관.
