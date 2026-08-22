@@ -12,7 +12,7 @@ import { RARITY } from '../data/rarity.js';
 import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import { FISH } from '../data/fish.js';
-import type { Fish } from '../data/fish.js';
+import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT } from '../data/boats.js';
 
 export { JUDGMENT_MULT };
@@ -21,33 +21,44 @@ export type { Rarity, RarityId } from '../data/rarity.js';
 export { SPOTS } from '../data/spots.js';
 export type { Spot, SpotId } from '../data/spots.js';
 export { FISH } from '../data/fish.js';
-export type { Fish } from '../data/fish.js';
+export type { Fish, FormId } from '../data/fish.js';
 export { BOATS, MAX_BOAT } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
 
 export type Judgment = 'perfect' | 'normal' | 'auto';
 
+/** 가방/전시대의 물고기 개체 — 잡는 순간의 문맥을 통째로 새긴다 (세이브 v8).
+    팔면 개체는 소멸하고 종×폼별 집계(dex)와 서버 records에 기록만 남는다. */
+export interface FishInstance {
+  uid: string;                // 개체 식별자 — 판매/전시/이벤트가 이 값으로 개체를 가리킨다
+  fishId: string;
+  form: FormId;
+  size: number | null;        // cm. null = v7 이관 개체 "크기 미상"
+  caughtAt: string | null;    // ISO datetime — 명패·부패도·통계 대비
+  spot: SpotId | null;        // 포획 수역
+  judgment: Judgment | null;  // perfect/normal/auto — 명패 플레이버·통계
+}
+
+/** 종×폼별 도감 기록 — 개체가 사라져도 남는 집계 */
+export interface FormRecord {
+  count: number;
+  maxSize: number | null;   // 역대 최대(cm). null = 크기 미상 기록뿐
+  first: string | null;     // 처음 잡은 날 YYYY-MM-DD
+}
+
 export interface GameState {
-  v: 7;
+  v: 8;
   gold: number;
   fame: number; // 명성 — 무한 누적, 직접 상태 변화 없음, 구매 시 하한 검증용
   boat: number; // 0(없음, 마을 낚시만)~4
   rod: number;  // 1~∞ (무한 강화, 스탯은 점근 수렴)
-  bag: string[];                  // 잡은 물고기 엔트리 목록 (미판매) — 'id' 일반, 'id*' 변이 (v0.3.3)
-  // ---- 도감 기록: caught 병렬 Record 패턴, 가산 전용 ----
-  // 변이는 "종만 같고 다른 개체" (v0.3.3, 세이브 v7): 마릿수/크기/첫 조우일을 폼별로 나눠 기록.
-  // caught만 예외로 종 합계(일반+변이) — fame = computeFame(caught) 불변식의 기반이라 안 쪼갠다.
-  // 일반 폼 마릿수는 caught - variantCaught로 파생. 구세이브는 빈 객체로 시작하고 값이 없으면
-  // UI가 폴백(크기=분포 평균, 날짜='알 수 없음')을 그린다 — breaking change 아님.
-  caught: Record<string, number>;        // id → 종 누적 마릿수 (일반+변이 합계)
-  maxSize: Record<string, number>;       // id → 일반 폼 역대 최대 크기(cm)
-  firstCaught: Record<string, string>;   // id → 일반 폼 처음 잡은 날(YYYY-MM-DD)
-  variantCaught: Record<string, number>;      // id → 변이 폼 누적 마릿수 (>0 = 변이 발견)
-  variantMaxSize: Record<string, number>;     // id → 변이 폼 역대 최대 크기(cm)
-  variantFirstCaught: Record<string, string>; // id → 변이 폼 처음 잡은 날
+  bag: FishInstance[];      // 잡은 개체 목록 (미판매)
+  exhibit: FishInstance[];  // 전시대 — v8은 필드만 신설(항상 빈 배열), 액션·UI는 전시 릴리즈에서
+  /** 도감 = 종 → 폼 → 기록. 폼이 늘어도 키 하나만 늘어난다 (구 병렬 Record 6개를 흡수) */
+  dex: Record<string, Partial<Record<FormId, FormRecord>>>;
   coupons: string[];              // 사용한 쿠폰 코드
-  locked: string[];               // 잠근 어종 id — 일반/변이 모두 판매에서 제외 (실수 방지)
+  locked: string[];               // 잠근 어종 id — 전 폼 판매 제외 (실수 방지)
 }
 
 export interface RodStats {
@@ -101,16 +112,36 @@ export function rollFish(
 
 export function newState(): GameState {
   return {
-    v: 7, gold: 0, fame: 0, boat: 0, rod: 1, bag: [],
-    caught: {}, maxSize: {}, firstCaught: {},
-    variantCaught: {}, variantMaxSize: {}, variantFirstCaught: {},
+    v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
+    bag: [], exhibit: [], dex: {},
     coupons: [], locked: [],
   };
 }
 
-// 변이 발견 여부 — variantCaught에서 파생 (구 mutated 필드는 v7에서 흡수·제거)
+// ---------- 도감 파생 (UI는 dex를 직접 파헤치지 않고 이 헬퍼만 읽는다) ----------
+
+export const dexRecord = (
+  state: GameState, fishId: string, form: FormId,
+): FormRecord | undefined => state.dex[fishId]?.[form];
+
+/** 종 누적 마릿수 = 전 폼 합산 (구 state.caught[id]) */
+export const speciesCount = (state: GameState, fishId: string): number =>
+  Object.values(state.dex[fishId] ?? {}).reduce((n, r) => n + (r?.count ?? 0), 0);
+
+/** 종 발견 여부 — 폼 무관 (지역 탭 등 "이 종을 아는가") */
+export const speciesDiscovered = (state: GameState, fishId: string): boolean =>
+  speciesCount(state, fishId) > 0;
+
+/** 폼 발견 여부 — 도감 카드의 ??? 판정 (변이만 잡았으면 일반 폼은 여전히 미발견) */
+export const formDiscovered = (state: GameState, fishId: string, form: FormId): boolean =>
+  (dexRecord(state, fishId, form)?.count ?? 0) > 0;
+
 export const variantDiscovered = (state: GameState, fishId: string): boolean =>
-  (state.variantCaught[fishId] ?? 0) > 0;
+  formDiscovered(state, fishId, 'variant');
+
+/** 도감에 오른 종 수 (거점 라벨) */
+export const dexSpeciesCount = (state: GameState): number =>
+  Object.keys(state.dex).filter(id => speciesCount(state, id) > 0).length;
 
 // ---------- 월척(크기)·변이  ----------
 // 신규 어종/등급 로직 없이 기존 어종 데이터(price)에서 크기 분포를 유도하는 저비용 콘텐츠.
@@ -148,49 +179,58 @@ export function sizePercentile(fish: Fish, size: number): number {
 
 export interface CatchExtras {
   size: number;
-  mutated: boolean;
+  form: FormId;
 }
 
-// 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종, 확률 고정
+// 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종, 확률 고정.
+// rng 소비 순서 고정(크기 2회 → 폼 1회) — 바꾸면 시드 기반 테스트가 전부 깨진다
 export function rollCatchExtras(fish: Fish, rng: () => number = Math.random): CatchExtras {
-  return { size: rollSize(fish, rng), mutated: rng() < MUTATION_RATE };
+  return { size: rollSize(fish, rng), form: rng() < MUTATION_RATE ? 'variant' : 'normal' };
 }
 
-// ---------- 가방 엔트리 (v0.3.3) ----------
-// 가방은 string[] 그대로 두고 변이만 접미사로 구분한다: 'carp' = 일반, 'carp*' = 변이.
-// 구세이브의 기존 엔트리는 접미사가 없으므로 전부 일반으로 해석 — 스키마/마이그레이션 무변경.
+// ---------- 개체 (세이브 v8) ----------
+// 가방은 FishInstance[] — 구 'id'/'id*' 문자열 엔트리 체계를 대체한다.
 
-const VARIANT_SUFFIX = '*';
+/** 폼별 판매가 배수 — 폼 추가 = 행 추가 (없으면 1배) */
+const FORM_PRICE_MULT: Partial<Record<FormId, number>> = { variant: VARIANT_PRICE_MULT };
 
-export const bagEntryOf = (id: string, mutated: boolean): string =>
-  mutated ? id + VARIANT_SUFFIX : id;
-
-export function parseBagEntry(entry: string): { id: string; mutated: boolean } {
-  return entry.endsWith(VARIANT_SUFFIX)
-    ? { id: entry.slice(0, -VARIANT_SUFFIX.length), mutated: true }
-    : { id: entry, mutated: false };
-}
-
-export const entryFish = (entry: string): Fish | undefined =>
-  FISH.find(f => f.id === parseBagEntry(entry).id);
-
-// 판매가 — 변이는 ×VARIANT_PRICE_MULT. 가격을 표시하는 모든 UI는 이 함수를 거친다
+// 판매가 — 가격을 표시하는 모든 UI는 이 함수를 거친다
 // (기본가 fish.price를 직접 찍으면 변이 문맥에서 틀린다 — v0.3.3 도감 가격 버그의 원인)
-export function priceOf(fish: Fish, mutated: boolean): number {
-  return fish.price * (mutated ? VARIANT_PRICE_MULT : 1);
+export function priceOf(fish: Fish, form: FormId): number {
+  return fish.price * (FORM_PRICE_MULT[form] ?? 1);
 }
 
-export function entryPrice(entry: string): number {
-  const { id, mutated } = parseBagEntry(entry);
-  const fish = FISH.find(f => f.id === id);
-  return fish ? priceOf(fish, mutated) : 0;
+/** 폼별 표시 이름 — 변이는 변이 이름이 곧 이름 */
+export function formName(fish: Fish, form: FormId): string {
+  return form === 'variant' ? fish.variant.name : fish.name;
 }
 
-// 표시 이름 — 변이는 변이 이름이 곧 이름
-export function entryName(entry: string): string {
-  const { mutated } = parseBagEntry(entry);
-  const fish = entryFish(entry);
-  return fish ? (mutated ? fish.variant.name : fish.name) : entry;
+export const instanceFish = (inst: FishInstance): Fish | undefined =>
+  FISH.find(f => f.id === inst.fishId);
+
+export function priceOfInstance(inst: FishInstance): number {
+  const fish = instanceFish(inst);
+  return fish ? priceOf(fish, inst.form) : 0;
+}
+
+export function instanceName(inst: FishInstance): string {
+  const fish = instanceFish(inst);
+  return fish ? formName(fish, inst.form) : inst.fishId;
+}
+
+/** 캐치 문맥 — 개체에 새겨질 "언제/어디서/어떻게" (호출자가 주입) */
+export interface CatchContext {
+  uid: string;
+  now: string;        // ISO datetime
+  spot: SpotId;
+  judgment: Judgment;
+}
+
+export function makeInstance(fish: Fish, extras: CatchExtras, ctx: CatchContext): FishInstance {
+  return {
+    uid: ctx.uid, fishId: fish.id, form: extras.form, size: extras.size,
+    caughtAt: ctx.now, spot: ctx.spot, judgment: ctx.judgment,
+  };
 }
 
 // 캐치 오버레이(획득 카드)용 종합 정보 — 순수 계산이라 로직에 두고 UI는 이 값만 그린다
@@ -228,7 +268,10 @@ export function redeemCoupon(
   };
 }
 
-// 도감 기록에서 명성 소급 계산 — 마이그레이션 보상: 잡은 만큼 전부 인정, 데이터 손실 없음
+// 도감 기록에서 명성 소급 계산 — **마이그레이션 전용**(v3→v4 보상: 명성 도입 전 유저에게
+// 잡은 만큼 전부 인정). 구 "fame = computeFame(caught) 불변식"은 폐기됐다: 서버 권위에서
+// 상태를 만드는 쪽이 서버라 클라 변조 검증이 성립하지 않고, v8 도감은 폼별로 쪼개져 있다.
+// 인자는 v3 시점 스키마(종→마릿수)라 그대로 둔다 — 마이그레이션 체인 내부에서만 호출된다.
 export function computeFame(caught: Record<string, number>): number {
   let fame = 0;
   for (const [id, n] of Object.entries(caught)) {
@@ -250,7 +293,8 @@ const safeCaught = (s: AnySave): Record<string, number> =>
 const safeRecord = <T>(v: unknown): Record<string, T> =>
   typeof v === 'object' && v !== null ? (v as Record<string, T>) : {};
 
-const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
+// uid: 개체 식별자 생성기 — v7→v8이 구 가방 엔트리를 개체로 합성할 때만 쓴다
+const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
   // v1(xp 시절, v 필드 없음) → v2: 배 시스템 도입 — 기존 유저에게 조각배 증정
   1: s => ({ ...s, v: 2, boat: typeof s.boat === 'number' ? s.boat : 1 }),
   // v2 → v3: 배 0단계(없음) 허용 — 필드 변화 없음
@@ -278,9 +322,101 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
     variantFirstCaught: {},
     mutated: undefined,
   }),
+  // v7 → v8: 물고기를 개체화(FishInstance)하고 병렬 Record 6개를 dex(종→폼→기록)로 접는다.
+  // 구 가방 엔트리('carp'/'carp*')는 종·폼만 알 수 있으므로 나머지는 null = "크기 미상" 개체로
+  // 합성한다(UI가 폴백을 그린다). 도감 집계는 무손실 — 일반 폼 마릿수 = caught − variantCaught.
+  7: (s, uid) => {
+    const caught = safeCaught(s);
+    const vCaught = safeRecord<number>(s.variantCaught);
+    const maxSize = safeRecord<number>(s.maxSize);
+    const vMaxSize = safeRecord<number>(s.variantMaxSize);
+    const firstCaught = safeRecord<string>(s.firstCaught);
+    const vFirstCaught = safeRecord<string>(s.variantFirstCaught);
+
+    const dex: GameState['dex'] = {};
+    // 종 목록 = caught ∪ variantCaught (변이만 기록된 손상 세이브도 흡수)
+    for (const id of new Set([...Object.keys(caught), ...Object.keys(vCaught)])) {
+      const total = typeof caught[id] === 'number' ? caught[id] : 0;
+      const vn = Math.max(vCaught[id] ?? 0, 0);
+      const normal = Math.max(total - vn, 0); // 음수 클램프 — 손상 세이브 위생
+      const forms: Partial<Record<FormId, FormRecord>> = {};
+      if (normal > 0) {
+        forms.normal = {
+          count: normal, maxSize: maxSize[id] ?? null, first: firstCaught[id] ?? null,
+        };
+      }
+      if (vn > 0) {
+        forms.variant = {
+          count: vn, maxSize: vMaxSize[id] ?? null, first: vFirstCaught[id] ?? null,
+        };
+      }
+      if (forms.normal || forms.variant) dex[id] = forms;
+    }
+
+    const bag = (Array.isArray(s.bag) ? s.bag : [])
+      .filter((e): e is string => typeof e === 'string')
+      .map((e): FishInstance => ({
+        uid: uid(),
+        fishId: e.endsWith('*') ? e.slice(0, -1) : e,
+        form: e.endsWith('*') ? 'variant' : 'normal',
+        size: null, caughtAt: null, spot: null, judgment: null, // 이관 개체 = 크기 미상
+      }));
+
+    return {
+      ...s, v: 8, bag, exhibit: [], dex,
+      caught: undefined, maxSize: undefined, firstCaught: undefined,
+      variantCaught: undefined, variantMaxSize: undefined, variantFirstCaught: undefined,
+    };
+  },
 };
 
-export function migrate(raw: unknown): GameState {
+// 개체 위생 — uid/fishId/form이 성립하지 않는 항목은 버린다 (손상 세이브·수입 방어)
+function safeInstances(v: unknown, uid: () => string): FishInstance[] {
+  if (!Array.isArray(v)) return [];
+  const out: FishInstance[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const i = raw as Partial<FishInstance>;
+    if (typeof i.fishId !== 'string') continue;
+    out.push({
+      uid: typeof i.uid === 'string' && i.uid ? i.uid : uid(),
+      fishId: i.fishId,
+      form: i.form === 'variant' ? 'variant' : 'normal',
+      size: typeof i.size === 'number' ? i.size : null,
+      caughtAt: typeof i.caughtAt === 'string' ? i.caughtAt : null,
+      spot: typeof i.spot === 'string' ? i.spot : null,
+      judgment: i.judgment === 'perfect' || i.judgment === 'normal' || i.judgment === 'auto'
+        ? i.judgment : null,
+    });
+  }
+  return out;
+}
+
+// 도감 위생 — 종→폼→기록 3중 구조 검사. 모르는 폼 키는 버리지 않고 통과시킨다
+// (미래 폼이 붙은 세이브를 구 코드가 열었다가 되돌아와도 기록이 날아가지 않게)
+function safeDex(v: unknown): GameState['dex'] {
+  const out: GameState['dex'] = {};
+  for (const [id, forms] of Object.entries(safeRecord<unknown>(v))) {
+    if (typeof forms !== 'object' || forms === null) continue;
+    const kept: Partial<Record<FormId, FormRecord>> = {};
+    for (const [form, rec] of Object.entries(forms as Record<string, unknown>)) {
+      if (typeof rec !== 'object' || rec === null) continue;
+      const r = rec as Partial<FormRecord>;
+      if (typeof r.count !== 'number' || r.count <= 0) continue;
+      kept[form as FormId] = {
+        count: r.count,
+        maxSize: typeof r.maxSize === 'number' ? r.maxSize : null,
+        first: typeof r.first === 'string' ? r.first : null,
+      };
+    }
+    if (Object.keys(kept).length > 0) out[id] = kept;
+  }
+  return out;
+}
+
+/** uidGen: 이관 개체에 붙일 식별자 생성기 — 순수성 유지를 위한 주입 지점
+    (기본값만 전역 crypto를 읽는다. Node 19+/모든 근래 브라우저에 존재) */
+export function migrate(raw: unknown, uidGen: () => string = () => crypto.randomUUID()): GameState {
   const base = newState();
   if (typeof raw !== 'object' || raw === null) return base;
   let s: AnySave = { ...(raw as AnySave) };
@@ -288,7 +424,7 @@ export function migrate(raw: unknown): GameState {
   while (v < base.v) {
     const step = MIGRATIONS[v];
     if (!step) break;
-    s = step(s);
+    s = step(s, uidGen);
     v++;
   }
   // 최종 위생 처리 — 손상된 필드는 기본값으로
@@ -298,13 +434,9 @@ export function migrate(raw: unknown): GameState {
     fame: typeof s.fame === 'number' ? s.fame : 0,
     boat: typeof s.boat === 'number' ? s.boat : 0,
     rod: typeof s.rod === 'number' ? s.rod : 1,
-    bag: Array.isArray(s.bag) ? s.bag.filter((id): id is string => typeof id === 'string') : [],
-    caught: safeCaught(s),
-    maxSize: safeRecord<number>(s.maxSize),
-    firstCaught: safeRecord<string>(s.firstCaught),
-    variantCaught: safeRecord<number>(s.variantCaught),
-    variantMaxSize: safeRecord<number>(s.variantMaxSize),
-    variantFirstCaught: safeRecord<string>(s.variantFirstCaught),
+    bag: safeInstances(s.bag, uidGen),
+    exhibit: safeInstances(s.exhibit, uidGen),
+    dex: safeDex(s.dex),
     coupons: Array.isArray(s.coupons)
       ? s.coupons.filter((c): c is string => typeof c === 'string') : [],
     locked: Array.isArray(s.locked)
@@ -320,69 +452,59 @@ export function localDate(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 변이는 "종만 같고 다른 개체" — 마릿수/크기/첫 조우일 기록이 폼별로 갈린다.
-// caught(종 합계)와 fame만 공통 증가. extras 생략 시 기록 필드는 그대로(기존 호출부 하위호환).
-// today 파라미터: 순수성 유지용 주입 지점 (기본값만 시계를 읽는다) — 첫 조우일은 최초 1회만 기록
+// 개체를 가방에 넣고 도감(dex)을 갱신한다 — 폼 분기 없이 dex[id][form] 키 접근 하나.
+// today는 주입(순수성): caughtAt(ISO/UTC)에서 날짜를 잘라 쓰면 KST 오전 9시 전 캐치가
+// 전날로 찍힌다 (v0.3.1 firstCaught UTC 버그 재발 금지).
 export function addCatch(
-  state: GameState, fish: Fish, extras?: CatchExtras,
-  today: string = localDate(),
+  state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(),
 ): GameState {
-  const id = fish.id;
-  const mutated = extras?.mutated ?? false;
-  const next: GameState = {
+  const prev = state.dex[inst.fishId]?.[inst.form];
+  const rec: FormRecord = {
+    count: (prev?.count ?? 0) + 1,
+    maxSize: inst.size === null
+      ? (prev?.maxSize ?? null)
+      : Math.max(prev?.maxSize ?? 0, inst.size),
+    first: prev?.first ?? today, // 최초 1회만
+  };
+  return {
     ...state,
-    bag: [...state.bag, bagEntryOf(id, mutated)],
-    caught: { ...state.caught, [id]: (state.caught[id] ?? 0) + 1 },
+    bag: [...state.bag, inst],
+    dex: { ...state.dex, [inst.fishId]: { ...state.dex[inst.fishId], [inst.form]: rec } },
     fame: state.fame + RARITY[fish.rarity].fame,
   };
-  if (!extras) return next;
-  if (mutated) {
-    next.variantCaught = { ...state.variantCaught, [id]: (state.variantCaught[id] ?? 0) + 1 };
-    next.variantMaxSize = {
-      ...state.variantMaxSize, [id]: Math.max(state.variantMaxSize[id] ?? 0, extras.size),
-    };
-    if (!state.variantFirstCaught[id]) {
-      next.variantFirstCaught = { ...state.variantFirstCaught, [id]: today };
-    }
-  } else {
-    next.maxSize = { ...state.maxSize, [id]: Math.max(state.maxSize[id] ?? 0, extras.size) };
-    if (!state.firstCaught[id]) next.firstCaught = { ...state.firstCaught, [id]: today };
-  }
-  return next;
 }
 
 export function bagValue(state: GameState): number {
-  return state.bag.reduce((s, e) => s + entryPrice(e), 0);
+  return state.bag.reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
-// 잠금은 어종 단위(base id) — 어종을 잠그면 변이 개체도 함께 잠긴다
-const isLocked = (state: GameState, entry: string): boolean =>
-  state.locked.includes(parseBagEntry(entry).id);
+// 잠금은 어종 단위 — 어종을 잠그면 그 종의 모든 폼 개체가 함께 잠긴다
+const isLocked = (state: GameState, inst: FishInstance): boolean =>
+  state.locked.includes(inst.fishId);
 
 // 판매 가능액 = 가방 중 잠기지 않은 어종만 (잠금 = 실수 판매 방지, R1b)
 export function sellableValue(state: GameState): number {
   return state.bag
-    .filter(e => !isLocked(state, e))
-    .reduce((s, e) => s + entryPrice(e), 0);
+    .filter(i => !isLocked(state, i))
+    .reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
-// 선택 판매 — entries에 포함된 것만 판매 ('carp'와 'carp*'는 별개 행).
-// 잠근 어종은 entries에 있어도 팔리지 않는다(이중 방어)
-export function sellSelected(state: GameState, entries: readonly string[]): GameState {
-  const sell = new Set(entries.filter(e => !isLocked(state, e)));
-  const gold = state.bag
-    .filter(e => sell.has(e))
-    .reduce((s, e) => s + entryPrice(e), 0);
+// 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
+// 잠근 어종은 uid가 와도 팔리지 않는다(이중 방어)
+export function sellSelected(state: GameState, uids: readonly string[]): GameState {
+  const want = new Set(uids);
+  const sold = state.bag.filter(i => want.has(i.uid) && !isLocked(state, i));
+  const soldUids = new Set(sold.map(i => i.uid));
   return {
     ...state,
-    gold: state.gold + gold,
-    bag: state.bag.filter(e => !sell.has(e)),
+    gold: state.gold + sold.reduce((s, i) => s + priceOfInstance(i), 0),
+    bag: state.bag.filter(i => !soldUids.has(i.uid)),
   };
 }
 
 // 전부 판매 — 잠근 어종은 가방에 남는다
 export function sellAll(state: GameState): GameState {
-  return sellSelected(state, state.bag);
+  return sellSelected(state, state.bag.map(i => i.uid));
 }
 
 // 어종 잠금 토글 (가방 탭) — 잠긴 어종은 전부 판매에서 제외

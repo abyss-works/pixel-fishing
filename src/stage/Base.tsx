@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
-import { BOATS, FISH } from '../game/logic';
+import { BOATS, FISH, dexSpeciesCount } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { furnitureAt, BASE_PACKS } from '../world';
 import type { BaseId, FurnitureId } from '../world';
@@ -19,7 +19,7 @@ interface Props {
 export default function Base({ base, game, onFacility }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const dexCount = FISH.filter(f => (game.caught[f.id] ?? 0) > 0).length;
+  const dexCount = dexSpeciesCount(game);
   const boatName = game.boat === 0 ? '배 없음' : BOATS[game.boat - 1].name;
 
   useEffect(() => {

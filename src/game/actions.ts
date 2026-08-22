@@ -3,7 +3,7 @@
 // 기존 logic/fishing 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
 // 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
 import {
-  addCatch, buildCatchInfo, canFishSpot, migrate,
+  addCatch, buildCatchInfo, canFishSpot, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, toggleLock, tryBuyBoat, tryUpgrade,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo } from './logic.js';
@@ -12,7 +12,7 @@ import type { SpotId } from '../data/spots.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
-  | { type: 'sell'; entries: string[] }
+  | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
   | { type: 'toggleLock'; fishId: string }
@@ -30,13 +30,15 @@ export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][]
 /** 주입 의존성 — 서버는 실난수/서버시각, 테스트는 목킹, 동적 쿠폰은 호출자가 DB에서 조회해 공급 */
 export interface ActionDeps {
   rng: () => number;
-  today: string; // YYYY-MM-DD (첫 조우일 기록)
+  today: string;         // YYYY-MM-DD, 유저 체감 날짜(KST) — 도감 첫 조우일
+  now: string;           // ISO datetime — 개체의 caughtAt
+  newUid: () => string;  // 개체 uid 생성기 (서버/로컬 = crypto.randomUUID, 테스트는 결정적 목)
   dynamicCoupon?: { gold: number; desc: string } | null;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
 export type ActionResult =
-  | { type: 'catch'; fishId: string; info: CatchInfo }
+  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'none' };
@@ -57,27 +59,36 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
       const fish = resolveCatch(action.spot, action.judgment, state.rod, deps.rng);
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
-      const varN = state.variantCaught[fish.id] ?? 0;
-      const isNew = extras.mutated ? varN === 0 : (state.caught[fish.id] ?? 0) - varN === 0;
+      const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
+      const inst = makeInstance(fish, extras, {
+        uid: deps.newUid(), now: deps.now, spot: action.spot, judgment: action.judgment,
+      });
       return {
         ok: true,
-        state: addCatch(state, fish, extras, deps.today),
-        result: { type: 'catch', fishId: fish.id, info },
+        state: addCatch(state, inst, fish, deps.today),
+        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info },
+        // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         events: [{ type: 'catch', payload: {
-          fishId: fish.id, judgment: action.judgment, spot: action.spot,
-          size: info.size, mutated: info.mutated, isNew: info.isNew,
+          uid: inst.uid, fishId: fish.id, judgment: action.judgment, spot: action.spot,
+          size: info.size, form: info.form, isNew: info.isNew,
         } }],
       };
     }
     case 'sell': {
-      if (!Array.isArray(action.entries)) return { ok: false, error: 'bad-entries' };
-      const next = sellSelected(state, action.entries.filter(e => typeof e === 'string'));
+      if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-uids' };
+      const uids = action.uids.filter(u => typeof u === 'string');
+      const next = sellSelected(state, uids);
       const gold = next.gold - state.gold;
+      // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
+      const remaining = new Set(next.bag.map(i => i.uid));
+      const soldUids = state.bag.filter(i => !remaining.has(i.uid)).map(i => i.uid);
       return {
         ok: true, state: next,
         result: { type: 'sell', gold },
-        events: [{ type: 'sell', payload: { gold, count: state.bag.length - next.bag.length } }],
+        events: [{ type: 'sell', payload: {
+          gold, count: state.bag.length - next.bag.length, uids: soldUids,
+        } }],
       };
     }
     case 'upgradeRod': {
@@ -115,7 +126,7 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
     }
     case 'import': {
       // v0.3.2 교훈: 검증하지 않고 수입한다 — 대신 events에 흔적을 남겨 v0.6 랭킹 정책의 근거로
-      const next = migrate(action.save);
+      const next = migrate(action.save, deps.newUid);
       return {
         ok: true, state: next, result: { type: 'none' },
         events: [{ type: 'import', payload: { gold: next.gold, fame: next.fame } }],

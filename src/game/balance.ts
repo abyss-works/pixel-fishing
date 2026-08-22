@@ -43,11 +43,8 @@ export const ROD = {
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;
 
-// 서버 저장 검증 (validate.ts / api/save.ts)
-// 이론상 최소 어획 사이클(만렙 기준 wait ≥1 + catch 2 ≈ 3s) 기준, slack으로 여유 흡수
-export const MIN_CATCH_INTERVAL_MS = 3_000; // 어획 속도 상한 판정용
-export const CATCH_RATE_SLACK = 10;         // 동기화 지연·flush 몰림 허용 마릿수
-export const ECONOMY_GIFT_SLACK = 300;      // v1 이관 조각배 증정분 — 경제 보존식 허용 오차
+// (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — validate.ts는 v0.3.3, api/save.ts는 v0.5.0에
+//  사라졌고, 서버 권위에서 클라 변조 검증은 성립하지 않는다. 상태를 만드는 쪽이 서버다)
 
 // 월척(크기)·변이 — 신규 로직 없이 기존 어종 데이터를 재사용하는 저비용 콘텐츠 
 // 크기 분포는 어종마다 수동 지정하지 않고 가격에서 공식으로 유도한다.

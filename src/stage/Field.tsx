@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, rodStats } from '../game/logic';
+import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
@@ -153,8 +153,8 @@ export default function Field({
       setCatchInfo(info);
       const prefix = judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
       // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
-      const name = info.mutated ? caught.variant.name : caught.name;
-      toastRef.current(`${prefix}${RARITY[caught.rarity].name} 등급 [${name}] 획득!`);
+      toastRef.current(
+        `${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, info.form)}] 획득!`);
     });
   };
 
@@ -287,7 +287,7 @@ export default function Field({
                         text-xs text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
                         [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] pointer-events-none animate-overlay-in">
           {phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} [${catchInfo?.mutated ? fish.variant.name : fish.name}] 획득!`
+            ? `${RARITY[fish.rarity].name} [${formName(fish, catchInfo?.form ?? 'normal')}] 획득!`
             : STATUS[phase]}
         </div>
       )}

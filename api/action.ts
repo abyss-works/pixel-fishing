@@ -10,8 +10,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
+import type { FormRecord, GameState } from '../src/game/logic.js';
 import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
-import type { GameAction } from '../src/game/actions.js';
+import type { ActionResult, GameAction } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
@@ -41,6 +42,28 @@ function verifyJwtLocal(token: string, secret: string): string | null {
   } catch {
     return null;
   }
+}
+
+// records(0006) 행 생성 — catch는 갱신된 종×폼 1행, import는 도감 전체 재시딩
+// (이사 코드로 도감이 통째로 바뀌므로 기록도 맞춰야 한다).
+// export는 테스트용 — 이 순수 부분만 떼어 검증하면 supabase 목킹 없이 계약을 지킬 수 있다.
+export function recordsFor(
+  uid: string, state: GameState, action: GameAction, result: ActionResult,
+  now = new Date().toISOString(),
+) {
+  const row = (fishId: string, form: string, rec: FormRecord) => ({
+    user_id: uid, fish_id: fishId, form,
+    count: rec.count, max_size: rec.maxSize, first_caught: rec.first, updated_at: now,
+  });
+  if (action.type === 'catch' && result.type === 'catch') {
+    const rec = state.dex[result.fishId]?.[result.info.form];
+    return rec ? [row(result.fishId, result.info.form, rec)] : [];
+  }
+  if (action.type === 'import') {
+    return Object.entries(state.dex).flatMap(([fishId, forms]) =>
+      Object.entries(forms).map(([form, rec]) => row(fishId, form, rec)));
+  }
+  return [];
 }
 
 export default async function handler(req: Req, res: Res): Promise<void> {
@@ -113,7 +136,11 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     if (c) dynamicCoupon = { gold: c.gold, desc: c.description };
   }
 
-  const out = applyAction(state, action, { rng: Math.random, today: todayKST(), dynamicCoupon });
+  const out = applyAction(state, action, {
+    rng: Math.random, today: todayKST(),
+    now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+    dynamicCoupon,
+  });
   if (!out.ok) { res.status(422).json({ error: out.error }); return; }
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
@@ -136,6 +163,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   if (nextVersion % SNAPSHOT_EVERY === 0) { // saves는 append-only 아카이브로 존속 (0003 안전망)
     followUps.push(Promise.resolve(admin.from('saves').insert(
       { user_id: uid, data: out.state, updated_at: new Date().toISOString() })));
+  }
+  // 종×폼 기록(0006) — events 보관주기와 무관하게 살아남는 통계 정본 (랭킹·최초발견의 근거).
+  // 값은 리듀서가 방금 계산한 dex를 그대로 쓴다(재계산 금지). 증분이 아니라 절대값 upsert라
+  // 한 번 실패해도 다음 캐치가 자가 치유한다.
+  const recordRows = recordsFor(uid, out.state, action, out.result);
+  if (recordRows.length > 0) {
+    followUps.push(Promise.resolve(admin.from('records').upsert(recordRows)));
   }
   if (followUps.length > 0) await Promise.all(followUps);
 

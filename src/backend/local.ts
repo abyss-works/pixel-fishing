@@ -19,7 +19,10 @@ export class LocalBackend implements Backend {
   }
 
   dispatch(action: GameAction): DispatchResult {
-    const out = applyAction(this.current, action, { rng: Math.random, today: localDate() });
+    const out = applyAction(this.current, action, {
+      rng: Math.random, today: localDate(),
+      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+    });
     if (!out.ok) return { status: 'rejected', error: out.error };
     this.current = out.state;
     return { status: 'ok', state: out.state, result: out.result };

@@ -3,22 +3,40 @@ import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
-import type { GameState } from './logic';
+import type { FishInstance, FormId, GameState } from './logic';
 
-const deps = (over: Partial<ActionDeps> = {}): ActionDeps =>
-  ({ rng: () => 0, today: '2026-08-22', ...over });
+// newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
+const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
+  let n = 0;
+  return {
+    rng: () => 0, today: '2026-08-22', now: '2026-08-22T03:00:00.000Z',
+    newUid: () => `uid-${++n}`, ...over,
+  };
+};
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
+
+const mkInst = (uid: string, fishId: string, form: FormId = 'normal'): FishInstance =>
+  ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null });
 
 describe('catch', () => {
   it('추첨·기록·이벤트 — rng=0이면 풀 첫 어종 + 변이 확정 (기존 목킹 계약)', () => {
     const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.bag).toEqual(['crucian*']); // rng=0 → 붕어 + 변이 롤 성공
-    expect(out.state.caught.crucian).toBe(1);
-    expect(out.result).toMatchObject({ type: 'catch', fishId: 'crucian' });
+    // rng=0 → 붕어 + 변이 롤 성공. 개체에 문맥이 통째로 새겨진다 (세이브 v8)
+    expect(out.state.bag).toEqual([{
+      uid: 'uid-1', fishId: 'crucian', form: 'variant',
+      size: expect.any(Number), caughtAt: '2026-08-22T03:00:00.000Z',
+      spot: 'pond', judgment: 'normal',
+    }]);
+    expect(out.state.dex.crucian.variant).toMatchObject({ count: 1, first: '2026-08-22' });
+    expect(out.state.dex.crucian.normal).toBeUndefined(); // 폼별 기록 — 일반은 아직
+    expect(out.result).toMatchObject({ type: 'catch', fishId: 'crucian', uid: 'uid-1' });
     if (out.result.type === 'catch') expect(out.result.info.isNew).toBe(true);
-    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { fishId: 'crucian', judgment: 'normal' } });
+    // uid를 남긴다 — 이벤트와 가방 개체를 잇는 연결고리
+    expect(out.events[0]).toMatchObject({
+      type: 'catch', payload: { uid: 'uid-1', fishId: 'crucian', judgment: 'normal', form: 'variant' },
+    });
   });
 
   it('배 게이트를 서버가 재검증한다 (R5b)', () => {
@@ -27,21 +45,32 @@ describe('catch', () => {
   });
 
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {
-    const s = seed({ caught: { crucian: 3 } }); // 일반만 3마리
+    const s = seed({ dex: { crucian: { normal: { count: 3, maxSize: null, first: null } } } });
     const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok || out.result.type !== 'catch') throw new Error('unexpected');
-    expect(out.result.info.mutated).toBe(true); // rng=0 → 변이
-    expect(out.result.info.isNew).toBe(true);   // 변이 폼은 처음
+    expect(out.result.info.form).toBe('variant'); // rng=0 → 변이
+    expect(out.result.info.isNew).toBe(true);     // 변이 폼은 처음
   });
 });
 
 describe('sell / upgradeRod / buyBoat / toggleLock', () => {
-  it('sell — 골드 지급 + 이벤트, 결과에 판매액', () => {
-    const out = applyAction(seed({ bag: ['carp', 'carp'] }), { type: 'sell', entries: ['carp'] }, deps());
+  it('sell — uid로 개체를 지목한다, 지목 안 된 개체는 가방에 남는다 (v8)', () => {
+    const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
+    const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a'] }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(60);
-    expect(out.state.bag).toEqual([]);
-    expect(out.result).toEqual({ type: 'sell', gold: 60 });
+    expect(out.state.gold).toBe(30);              // 한 마리만
+    expect(out.state.bag.map(i => i.uid)).toEqual(['b']);
+    expect(out.result).toEqual({ type: 'sell', gold: 30 });
+    expect(out.events[0]).toMatchObject({ type: 'sell', payload: { gold: 30, uids: ['a'] } });
+  });
+
+  it('sell — 잠근 어종은 uid가 와도 팔리지 않고 이벤트에도 안 남는다 (이중 방어)', () => {
+    const bag = [mkInst('a', 'carp'), mkInst('b', 'crucian')];
+    const out = applyAction(seed({ bag, locked: ['carp'] }), { type: 'sell', uids: ['a', 'b'] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(6);               // 붕어만
+    expect(out.state.bag.map(i => i.uid)).toEqual(['a']);
+    expect(out.events[0]).toMatchObject({ payload: { uids: ['b'] } });
   });
 
   it('upgradeRod — 골드 부족이면 거부', () => {
@@ -97,7 +126,7 @@ describe('import', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(500);          // 기존 상태를 덮는다
     expect(out.state.rod).toBe(4);
-    expect(out.state.v).toBe(7);               // 마이그레이션 체인 통과
+    expect(out.state.v).toBe(8);               // 마이그레이션 체인 통과
     expect(out.state.fame).toBeGreaterThan(0); // v3→v4 명성 소급
     expect(out.events[0].type).toBe('import');
   });
@@ -110,8 +139,10 @@ describe('무결성', () => {
     const a = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps({ rng: mkRng() }));
     const b = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps({ rng: mkRng() }));
     if (!a.ok || !b.ok) throw new Error('unexpected');
-    expect(a.state.bag).toEqual(b.state.bag);
-    expect(FISH.some(f => f.id === a.state.bag[0].replace('*', ''))).toBe(true);
+    // uid만 다르고 추첨 결과(종·폼·크기)는 동일해야 한다
+    const strip = (s: typeof a) => s.ok ? s.state.bag.map(({ uid: _uid, ...rest }) => rest) : null;
+    expect(strip(a)).toEqual(strip(b));
+    expect(FISH.some(f => f.id === a.state.bag[0].fishId)).toBe(true);
   });
 
   it('알 수 없는 액션은 거부', () => {

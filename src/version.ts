@@ -1,5 +1,6 @@
 // 앱 버전 단일 근원 — 클라이언트 번들과 서버 함수(api/action.ts)가 같은 커밋에서 이 값을
-// 컴파일해 갖는다. 릴리즈 시 package.json과 함께 bump — 동기화는 version.test.ts가 강제.
+// 컴파일해 갖는다. **bump는 릴리즈(main 머지) 때만** — dev 빌드에서는 건드리지 않는다
+// . package.json과 함께 올린다 — 동기화는 version.test.ts가 강제.
 // (서버에서 package.json 런타임 읽기는 파일 트레이싱 리스크가 있어 리터럴 상수를 쓴다)
 //
 // 낡은 탭 차단(426 Upgrade Required)의 기준값: 배포 후에도 새로고침하지 않은 클라이언트는

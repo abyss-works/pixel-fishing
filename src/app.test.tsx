@@ -7,7 +7,7 @@ import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
-import type { GameState } from './game/logic';
+import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
 import { when } from './backend/types';
@@ -19,6 +19,15 @@ const SAVE_KEY = 'pixel-fishing-save';
 function seed(over: Partial<GameState> = {}) {
   localStorage.setItem(SAVE_KEY, JSON.stringify({ ...newState(), ...over }));
 }
+
+// 세이브 v8 픽스처 헬퍼 — 개체(가방)와 도감 기록을 짧게 쓴다
+let uidSeq = 0;
+const inst = (fishId: string, form: FormId = 'normal', size: number | null = null): FishInstance =>
+  ({ uid: `u${++uidSeq}`, fishId, form, size, caughtAt: null, spot: null, judgment: null });
+const rec = (count: number, maxSize: number | null = null, first: string | null = null): FormRecord =>
+  ({ count, maxSize, first });
+/** 가방 개체의 종·폼만 뽑아 비교 (uid는 매번 달라 직접 비교 불가) */
+const bagOf = (g: GameState) => g.bag.map(i => `${i.fishId}:${i.form}`);
 
 const hud = () => document.querySelector('.hud')!.textContent!;
 // idle에는 상태 바 자체를 렌더하지 않는다 → 요소 없음 = idle
@@ -52,7 +61,7 @@ afterEach(() => {
 
 describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 선택)', () => {
   it('궤짝 클릭 → 기본 전부 체크 → 판매 확정 시 골드 증가', () => {
-    seed({ bag: ['carp', 'carp'] }); // 잉어 30G × 2
+    seed({ bag: [inst('carp'), inst('carp')] }); // 잉어 30G × 2
     render(<App />);
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
@@ -64,7 +73,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
   });
 
   it('체크 해제한 어종은 팔리지 않고 가방에 남는다', () => {
-    seed({ bag: ['carp', 'crucian'] }); // 잉어 30G + 붕어 6G
+    seed({ bag: [inst('carp'), inst('crucian')] }); // 잉어 30G + 붕어 6G
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
@@ -75,7 +84,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
   });
 
   it('전부 체크 해제하면 판매 버튼 비활성', () => {
-    seed({ bag: ['carp'] });
+    seed({ bag: [inst('carp')] });
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제'));
@@ -184,7 +193,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
 
 describe('시설 재클릭 시 패널 토글', () => {
   it('같은 시설 재클릭 → 패널 닫힘', () => {
-    seed({ bag: ['carp'] });
+    seed({ bag: [inst('carp')] });
     render(<App />);
     clickFurniture('sell');
     expect(screen.getByText(/^판매하기/)).toBeInTheDocument();
@@ -217,7 +226,7 @@ describe('쿠폰 입력 (설정 탭)', () => {
 
 describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   it('현재 지역 서브탭 기본 — 잡은 물고기는 상세, 안 잡은 물고기는 ???', () => {
-    seed({ caught: { crucian: 3 } });
+    seed({ dex: { crucian: { normal: rec(3) } } });
     render(<App />);
     clickFurniture('dex');
     expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
@@ -236,7 +245,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   });
 
   it('활성 도감 탭 재클릭 = 일반↔돌연변이 보기 전환 (v0.3.0)', () => {
-    seed({ caught: { crucian: 3 }, maxSize: {}, variantCaught: { crucian: 1 } });
+    seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
     clickFurniture('dex');
     clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
@@ -389,8 +398,8 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     // rng=0 고정이라 변이 롤(0 < 1/3)도 확정 — 표시 이름은 변이 이름이다 (v0.3.0)
     expect(screen.getByText('일반 [황금 붕어] 획득!')).toBeInTheDocument();
     expect(lastToast()).not.toContain('PERFECT');
-    expect(lastGame.bag).toEqual(['crucian*']); // R8 — rng=0 → 변이 확정, 변이는 'id*' 엔트리 (v0.3.3)
-    expect(lastGame.caught.crucian).toBe(1);
+    expect(bagOf(lastGame)).toEqual(['crucian:variant']); // R8 — rng=0 → 변이 확정 (개체, v8)
+    expect(lastGame.dex.crucian.variant?.count).toBe(1);
     act(() => vi.advanceTimersByTime(2000)); // 자동 재캐스트
     expect(phase()).toBe('wait');
   });
@@ -423,7 +432,7 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     act(() => vi.advanceTimersByTime(1000)); // rod1 sweep 1s 경과 = 방치
     expect(phase()).toBe('catch');
     expect(lastToast()).toContain('방치');
-    expect(lastGame.bag).toEqual(['crucian*']); // rng=0 고정 → 풀 첫 어종(붕어), 변이 확정
+    expect(bagOf(lastGame)).toEqual(['crucian:variant']); // rng=0 고정 → 풀 첫 어종(붕어), 변이 확정
   });
 
   it('R10: bite가 아닐 때 행동 입력은 무시', () => {
@@ -449,12 +458,12 @@ describe('R7b: 방치형 루프 (첫 캐스팅 후 무한 반복)', () => {
     space(); // 최초 1회만 조작 — 던지면 바로 wait
     act(() => vi.advanceTimersByTime(4000)); // wait → bite
     act(() => vi.advanceTimersByTime(1000)); // 방치 → catch
-    expect(lastGame.bag).toEqual(['crucian*']);
+    expect(bagOf(lastGame)).toEqual(['crucian:variant']);
     act(() => vi.advanceTimersByTime(2000)); // catch → wait (자동 재캐스트)
     expect(phase()).toBe('wait');
     act(() => vi.advanceTimersByTime(4000));
     act(() => vi.advanceTimersByTime(1000)); // 두 번째 방치 획득
-    expect(lastGame.bag).toEqual(['crucian*', 'crucian*']);
+    expect(bagOf(lastGame)).toEqual(['crucian:variant', 'crucian:variant']);
   });
 });
 
@@ -462,7 +471,7 @@ describe('R7b: 방치형 루프 (첫 캐스팅 후 무한 반복)', () => {
 
 describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => {
   it('레거시 localStorage 세이브는 최초 로드 때 메모리로 이관된다 (읽기 전용 브리지)', () => {
-    seed({ bag: ['carp'], gold: 10 });
+    seed({ bag: [inst('carp')], gold: 10 });
     render(<App />);
     expect(hud()).toContain('골드 10G');
     expect(hud()).toContain('1마리');
@@ -502,7 +511,7 @@ describe('R22: 도움말 탭', () => {
 
 describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
   it('집(마을)에서는 마을 수역만, 미획득 어종은 ??? 표시', () => {
-    seed({ caught: { crucian: 1 } });
+    seed({ dex: { crucian: { normal: rec(1) } } });
     render(<App />);
     clickTab('지역');
     expect(screen.getByText(/고향 마을/)).toBeInTheDocument();
@@ -544,7 +553,7 @@ describe('탭은 씬과 무관하게 5개 고정', () => {
 
 describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
   it('가방 내역 표시, 잠금 토글 → 전부 판매에서 잠긴 어종 제외', () => {
-    seed({ bag: ['carp', 'carp', 'crucian'] }); // 잉어 30G×2 + 붕어 6G
+    seed({ bag: [inst('carp'), inst('carp'), inst('crucian')] }); // 잉어 30G×2 + 붕어 6G
     render(<App />);
     clickTab('가방');
     expect(screen.getByText('잉어')).toBeInTheDocument();
@@ -560,7 +569,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
   });
 
   it('잠금 해제하면 다시 판매 대상', () => {
-    seed({ bag: ['carp'], locked: ['carp'] });
+    seed({ bag: [inst('carp')], locked: ['carp'] });
     render(<App />);
     clickTab('가방');
     fireEvent.click(screen.getByLabelText('잉어 잠금 해제')); // 🔓

@@ -1,4 +1,4 @@
-import { BOATS, FISH, RARITY, SPOTS, canFishSpot } from '../game/logic';
+import { BOATS, FISH, RARITY, SPOTS, canFishSpot, speciesDiscovered } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { REGION_PACKS } from '../world';
 import type { RegionId } from '../world';
@@ -41,7 +41,7 @@ export default function RegionTab({ region, game }: { region: RegionId; game: Ga
             </div>
             <div className="flex flex-wrap gap-1">
               {fishes.map(f => {
-                const caught = (game.caught[f.id] ?? 0) > 0;
+                const caught = speciesDiscovered(game, f.id); // 폼 무관 — 종을 아는가
                 // 미획득은 ??? + 등급 점만 — 정보는 주되 신비로움 유지 (도감 스포일러 규칙과 일관)
                 return (
                   <span key={f.id}

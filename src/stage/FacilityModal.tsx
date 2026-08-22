@@ -1,11 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  BOATS, MAX_BOAT, SPOTS,
-  entryFish, entryName, entryPrice, parseBagEntry,
-  rodStats, upgradeCost,
-} from '../game/logic';
+import { BOATS, MAX_BOAT, SPOTS, rodStats, upgradeCost } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { groupInstances } from '../sidebar/bagRows';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
@@ -49,7 +46,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     <Modal layer="stage" onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
-          onSell={ids => run({ type: 'sell', entries: ids }, r => {
+          onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
             setToast(`물고기를 팔아 ${r.result.type === 'sell' ? r.result.gold : 0}G를 벌었다!`);
           })} />
@@ -87,32 +84,25 @@ function ModalCard({ title, onClose, children }: {
 }
 
 // R1: 판매 확인 패널 — 행별 체크로 판매 여부 선택 (기본 전부 체크).
-// 일반/변이는 별개 행 (v0.3.3, 'id' vs 'id*'). 잠근 어종(가방 탭 🔒)은 두 행 다 체크 불가.
+// 행 = 종+폼 그룹(가방 탭과 같은 그룹핑), 판매는 그 행에 속한 개체 uid 전부를 보낸다 (v8).
+// 잠근 어종(가방 탭 🔒)은 두 폼 행 다 체크 불가.
 function SellPanel({ game, onSell, onClose, busy }: {
-  game: GameState; onSell: (entries: string[]) => void; onClose: () => void; busy: boolean;
+  game: GameState; onSell: (uids: string[]) => void; onClose: () => void; busy: boolean;
 }) {
-  const rows = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const e of game.bag) counts.set(e, (counts.get(e) ?? 0) + 1);
-    return [...counts.entries()].map(([entry, n]) => ({
-      entry, n,
-      fish: entryFish(entry)!,
-      name: entryName(entry),
-      price: entryPrice(entry),
-      locked: game.locked.includes(parseBagEntry(entry).id),
-    }));
-  }, [game.bag, game.locked]);
+  const rows = useMemo(() => groupInstances(game.bag).map(r => ({
+    ...r, locked: game.locked.includes(r.fish.id),
+  })), [game.bag, game.locked]);
 
   // 패널을 열 때마다 기본 전부 체크 — 해제한 행만 기록
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
-  const toggle = (entry: string) => setExcluded(prev => {
+  const toggle = (key: string) => setExcluded(prev => {
     const next = new Set(prev);
-    if (next.has(entry)) next.delete(entry); else next.add(entry);
+    if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
 
-  const included = rows.filter(r => !r.locked && !excluded.has(r.entry));
-  const total = included.reduce((s, r) => s + r.price * r.n, 0);
+  const included = rows.filter(r => !r.locked && !excluded.has(r.key));
+  const total = included.reduce((s, r) => s + r.price * r.items.length, 0);
   const lockedCount = rows.filter(r => r.locked).length;
 
   return (
@@ -124,10 +114,10 @@ function SellPanel({ game, onSell, onClose, busy }: {
           <DataTable>
             <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
             <tbody>
-              {rows.map(({ entry, fish, name, price, n, locked }) => {
-                const checked = !locked && !excluded.has(entry);
+              {rows.map(({ key, fish, name, price, items, locked }) => {
+                const checked = !locked && !excluded.has(key);
                 return (
-                  <tr key={entry} className={locked || !checked ? 'text-text-dim' : ''}>
+                  <tr key={key} className={locked || !checked ? 'text-text-dim' : ''}>
                     <td>
                       {locked ? (
                         <span className="text-text-dim cursor-default" title="가방 탭에서 잠금 해제">
@@ -137,15 +127,15 @@ function SellPanel({ game, onSell, onClose, busy }: {
                         <button className={cx('bg-transparent border-0 p-0 leading-none cursor-pointer',
                                   checked ? 'text-gold' : 'text-text-dim')}
                                 aria-label={`${name} 판매 ${checked ? '해제' : '선택'}`}
-                                onClick={() => toggle(entry)}>
+                                onClick={() => toggle(key)}>
                           <PixelIcon glyph={checked ? 'checkOn' : 'checkOff'} size={13} />
                         </button>
                       )}
                     </td>
                     <td>{name}</td>
                     <td><RarityText rarity={fish.rarity} /></td>
-                    <td>×{n}</td>
-                    <td className="pf-accent">{checked ? `${price * n}G` : '—'}</td>
+                    <td>×{items.length}</td>
+                    <td className="pf-accent">{checked ? `${price * items.length}G` : '—'}</td>
                   </tr>
                 );
               })}
@@ -155,7 +145,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
             <Note>잠근 어종은 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
           )}
           <Button variant="primary" disabled={total === 0 || busy}
-                  onClick={() => onSell(included.map(r => r.entry))}>
+                  onClick={() => onSell(included.flatMap(r => r.items.map(i => i.uid)))}>
             판매하기 (+{total}G)
           </Button>
         </>
