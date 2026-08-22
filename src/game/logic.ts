@@ -9,11 +9,11 @@ import {
   VARIANT_PRICE_MULT,
 } from './balance.js';
 import { RARITY } from '../data/rarity.js';
-import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
-import { BOATS, MAX_BOAT } from '../data/boats.js';
+import { BOATS } from '../data/boats.js';
+import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
 export { RARITY } from '../data/rarity.js';
@@ -25,6 +25,8 @@ export type { Fish, FormId } from '../data/fish.js';
 export { BOATS, MAX_BOAT } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
+export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
+export type { RejectReason, RuleCheck } from './rules.js';
 
 export type Judgment = 'perfect' | 'normal' | 'auto';
 
@@ -517,25 +519,25 @@ export function toggleLock(state: GameState, fishId: string): GameState {
   };
 }
 
+// 아래 셋은 **판정을 rules.ts에 위임**한다  — 규칙의 단일 근원은 거기 하나다.
+// 여기 남는 것은 "허용됐을 때 상태를 어떻게 바꾸는가"뿐. 반환 형태(null)는 기존 계약 유지.
+
 // 낚싯대 강화: 골드 박치기, 상한 없음 (무한 골드 싱크)
 export function tryUpgrade(state: GameState): GameState | null {
-  const cost = upgradeCost(state.rod);
-  if (state.gold < cost) return null;
-  return { ...state, gold: state.gold - cost, rod: state.rod + 1 };
+  if (!canUpgradeRod(state).ok) return null;
+  return { ...state, gold: state.gold - upgradeCost(state.rod), rod: state.rod + 1 };
 }
 
 // 배 구매: 골드 차감 + 명성 하한 검증(명성은 소모하지 않음). boat 0 → 조각배부터.
 export function tryBuyBoat(state: GameState): GameState | null {
-  if (state.boat >= MAX_BOAT) return null;
+  if (!canBuyBoat(state).ok) return null;
   const next = BOATS[state.boat]; // tier = boat+1
-  if (state.fame < next.fameReq) return null;
-  if (state.gold < next.price) return null;
   return { ...state, gold: state.gold - next.price, boat: next.tier };
 }
 
 // 해역 낚시 자격: 배 단계 (마을 연못/강은 0 = 항상 가능)
 export function canFishSpot(state: GameState, spotId: SpotId): boolean {
-  return state.boat >= SPOTS.find(s => s.id === spotId)!.boatTier;
+  return canFish(state, spotId).ok;
 }
 
 // 항해 속도 — 배가 있어야 대양에 나갈 수 있으므로 boat>=1 전제

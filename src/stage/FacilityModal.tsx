@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BOATS, MAX_BOAT, SPOTS, rodStats, upgradeCost } from '../game/logic';
+import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats, upgradeCost } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { groupInstances } from '../sidebar/bagRows';
 import type { GameAction } from '../game/actions';
@@ -38,7 +38,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') onOk(r);
-      else if (r.status === 'rejected') setToast(`처리할 수 없다 (${r.error}).`);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
     });
   };
 
@@ -173,7 +173,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
         { label: 'PERFECT 존', value: c.zone, next: n.zone },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
-      <Button variant="primary" disabled={game.gold < cost || busy} onClick={onUpgrade}>
+      <Button variant="primary" disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
         강화하기 (-{cost.toLocaleString()}G)
       </Button>
     </ModalCard>
@@ -193,8 +193,8 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   }
   const next = BOATS[game.boat];
   const opened = SPOTS.find(s => s.boatTier === next.tier);
-  const lackFame = game.fame < next.fameReq;
-  const lackGold = game.gold < next.price;
+  // 규칙 판정은 rules.ts 하나뿐  — 여기서 조건을 다시 쓰면 밸런스 변경 시 드리프트한다
+  const check = canBuyBoat(game);
 
   return (
     <ModalCard title={`배 구매 — ${next.name} (${next.tier}단계)`} onClose={onClose}>
@@ -204,9 +204,8 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
         { label: '항해 속도', value: `${next.speed} (현재 ${game.boat === 0 ? '-' : BOATS[game.boat - 1].speed})` },
         { label: '효과', value: next.tier === 1 ? '대양 진입 + 태평양 낚시' : opened ? `[${opened.name}] 해역 해금` : '항해 속도 상승' },
       ]} />
-      {lackFame && <Note tone="warn">명성이 부족하다 — 물고기를 더 잡아 명성을 쌓자.</Note>}
-      {!lackFame && lackGold && <Note tone="warn">골드가 부족하다 — 물고기를 팔자.</Note>}
-      <Button variant="primary" disabled={lackFame || lackGold || busy} onClick={onBuy}>
+      {!check.ok && <Note tone="warn">{REJECT_TEXT[check.reason]}</Note>}
+      <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
         구매하기 (-{next.price.toLocaleString()}G)
       </Button>
     </ModalCard>

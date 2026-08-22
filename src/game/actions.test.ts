@@ -83,7 +83,10 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
 
   it('buyBoat — 명성 하한 검증 포함', () => {
     expect(applyAction(seed({ boat: 1, gold: BOATS[1].price, fame: BOATS[1].fameReq - 1 }),
-      { type: 'buyBoat' }, deps())).toEqual({ ok: false, error: 'boat-requirements' });
+      { type: 'buyBoat' }, deps())).toEqual({ ok: false, error: 'not-enough-fame' });
+    // dev4: 사유가 뭉개지지 않는다 — 골드 부족과 명성 부족이 구분된다
+    expect(applyAction(seed({ boat: 1, gold: 0, fame: BOATS[1].fameReq }),
+      { type: 'buyBoat' }, deps())).toEqual({ ok: false, error: 'not-enough-gold' });
     const out = applyAction(seed({ gold: BOATS[0].price }), { type: 'buyBoat' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.boat).toBe(1);
@@ -105,7 +108,7 @@ describe('redeemCoupon', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(COUPONS[staticCode].gold);
     const again = applyAction(out.state, { type: 'redeemCoupon', code: staticCode }, deps());
-    expect(again).toEqual({ ok: false, error: 'coupon:used' });
+    expect(again).toEqual({ ok: false, error: 'coupon-used' });
   });
 
   it('동적 쿠폰 — 주입되면 지급, 없으면 invalid', () => {
@@ -115,7 +118,7 @@ describe('redeemCoupon', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(77);
     expect(applyAction(seed(), { type: 'redeemCoupon', code: '이벤트코드' }, deps()))
-      .toEqual({ ok: false, error: 'coupon:invalid' });
+      .toEqual({ ok: false, error: 'coupon-invalid' });
   });
 });
 
@@ -147,6 +150,6 @@ describe('무결성', () => {
 
   it('알 수 없는 액션은 거부', () => {
     const out = applyAction(seed(), { type: 'hack' } as never, deps());
-    expect(out).toEqual({ ok: false, error: 'unknown-action' });
+    expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 });

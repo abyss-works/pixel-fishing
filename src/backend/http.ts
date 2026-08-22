@@ -7,6 +7,8 @@ import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { Backend, DispatchResult } from './types';
 import { AppError } from '../errors';
+import { REJECT_TEXT } from '../game/rules';
+import type { RejectReason } from '../game/rules';
 
 export class HttpBackend implements Backend {
   async load(): Promise<GameState | null> {
@@ -38,12 +40,17 @@ export class HttpBackend implements Backend {
     }
     // 409 = 낙관 락 충돌(다른 탭과 경합) — 서버가 최신 상태 위에 재적용하도록 1회 재시도
     if (res.status === 409 && !retried) return this.dispatch(action, true);
-    if (res.status === 422) return { status: 'rejected', error: body?.error ?? 'rejected' };
+    if (res.status === 422) return { status: 'rejected', error: HttpBackend.reason(body?.error) };
     if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
       { server: (body as { server?: string } | null)?.server });
     if (res.status === 401) throw new AppError('unauthorized', 'session rejected');
     throw new AppError('server', `action failed (${res.status})`,
       { status: res.status, error: body?.error, action: action.type });
+  }
+
+  /** 서버가 준 사유 문자열을 신뢰하지 않는다 — 아는 코드만 통과, 나머지는 일반 거부로 */
+  private static reason(v: unknown): RejectReason {
+    return typeof v === 'string' && v in REJECT_TEXT ? v as RejectReason : 'bad-request';
   }
 
   private async session(): Promise<string> {

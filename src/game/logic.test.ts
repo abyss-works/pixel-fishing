@@ -8,6 +8,7 @@ import {
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
+  canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 
@@ -450,5 +451,37 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
 
   it('첫 쿠폰은 조각배 값을 지급한다 (레벨디자인 개편 보상)', () => {
     expect(COUPONS[CODE].gold).toBeGreaterThanOrEqual(BOATS[0].price);
+  });
+});
+
+// dev4 — 규칙 판정을 값으로 
+describe('규칙 판정 (rules.ts)', () => {
+  it('canBuyBoat: 거부 사유 3종을 구분한다 (구 null 반환은 이걸 뭉갰다)', () => {
+    expect(canBuyBoat({ ...newState(), boat: MAX_BOAT, gold: 9e9, fame: 9e9 }))
+      .toEqual({ ok: false, reason: 'max-boat' });
+    expect(canBuyBoat({ ...newState(), boat: 1, gold: BOATS[1].price, fame: 0 }))
+      .toEqual({ ok: false, reason: 'not-enough-fame' });
+    expect(canBuyBoat({ ...newState(), boat: 1, gold: 0, fame: BOATS[1].fameReq }))
+      .toEqual({ ok: false, reason: 'not-enough-gold' });
+    expect(canBuyBoat({ ...newState(), gold: BOATS[0].price })).toEqual({ ok: true });
+  });
+
+  it('판정과 적용이 일치한다 — tryBuyBoat/tryUpgrade는 can*에 위임한다', () => {
+    for (const st of [
+      newState(),
+      { ...newState(), gold: BOATS[0].price },
+      { ...newState(), boat: 1, gold: BOATS[1].price, fame: BOATS[1].fameReq },
+    ]) {
+      expect(tryBuyBoat(st) !== null).toBe(canBuyBoat(st).ok);
+      expect(tryUpgrade(st) !== null).toBe(canUpgradeRod(st).ok);
+    }
+  });
+
+  it('canFish: 게이트 사유 + 모든 사유에 유저 문구가 있다', () => {
+    expect(canFish(newState(), 'pond')).toEqual({ ok: true });
+    expect(canFish(newState(), 'deep')).toEqual({ ok: false, reason: 'spot-locked' });
+    for (const [reason, text] of Object.entries(REJECT_TEXT)) {
+      expect(text, reason).toBeTruthy();
+    }
   });
 });

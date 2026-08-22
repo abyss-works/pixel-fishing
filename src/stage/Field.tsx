@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from '../game/logic';
+import { FISH, RARITY, REJECT_TEXT, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
@@ -145,7 +145,7 @@ export default function Field({
       // 인프라 실패는 여기 오지 않는다 — 던져져서 정책으로 가고, 낚시 취소는 아래 구독이 한다
       if (r.status === 'rejected') {
         cancelRef.current();
-        toastRef.current(`낚시가 거부되었다 (${r.error}).`);
+        toastRef.current(REJECT_TEXT[r.error]);
         return;
       }
       const result = r.result;

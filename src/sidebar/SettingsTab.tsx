@@ -4,6 +4,7 @@ import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { saveCode, supabase, signOutAccount } from '../backend/auth';
+import { REJECT_TEXT } from '../game/logic';
 import { APP_VERSION } from '../version';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
@@ -93,7 +94,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       if (r.status === 'ok' && r.result.type === 'coupon') {
         setToast(`쿠폰 사용! +${r.result.gold}G — ${r.result.desc}`);
       } else if (r.status === 'rejected') {
-        setToast(r.error === 'coupon:used' ? '이미 사용한 쿠폰이다.' : '없는 쿠폰 코드다.');
+        setToast(REJECT_TEXT[r.error]);
       }
     });
   };

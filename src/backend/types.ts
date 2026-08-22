@@ -2,6 +2,7 @@
 // 구현 2개: HttpBackend(/api/action — 스테이징·운영의 유일한 경로) · LocalBackend(supabase
 // 미설정 dev — 같은 리듀서를 로컬 실행). 표시용 순수 계산은 클라에 남고, 상태 전이는 여기로만.
 import type { GameAction, ActionResult } from '../game/actions';
+import type { RejectReason } from '../game/rules';
 import type { GameState } from '../game/logic';
 
 // 결과는 두 갈래뿐이다 :
@@ -9,7 +10,7 @@ import type { GameState } from '../game/logic';
 // 여기 남는 것은 "규칙상 정상적인 답" 둘뿐이라 호출자에 방어 분기가 필요 없다.
 export type DispatchResult =
   | { status: 'ok'; state: GameState; result: ActionResult }
-  | { status: 'rejected'; error: string }; // 규칙 거부(골드 부족·잠긴 수역 등) — 재시도 무의미
+  | { status: 'rejected'; error: RejectReason }; // 규칙 거부 — 사유는 타입이 있다
 
 /** LocalBackend는 동기, HttpBackend는 비동기 — 동기 경로를 Promise로 감싸지 않는 이유는
     오프라인(dev·테스트)에서 상태 반영이 같은 틱에 끝나야 하기 때문(테스트 타이밍 계약 유지) */

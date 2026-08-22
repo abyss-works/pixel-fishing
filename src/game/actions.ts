@@ -3,12 +3,14 @@
 // 기존 logic/fishing 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
 // 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
 import {
-  addCatch, buildCatchInfo, canFishSpot, makeInstance, migrate,
+  addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, toggleLock, tryBuyBoat, tryUpgrade,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo } from './logic.js';
 import { resolveCatch } from './fishing.js';
 import type { SpotId } from '../data/spots.js';
+import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
+import type { RejectReason } from './rules.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
@@ -48,13 +50,15 @@ export interface GameEvent { type: string; payload: Record<string, unknown> }
 
 export type ApplyOutcome =
   | { ok: true; state: GameState; result: ActionResult; events: GameEvent[] }
-  | { ok: false; error: string };
+  // 거부 사유는 타입이 있다  — 유저 문구는 REJECT_TEXT가 단일 근원
+  | { ok: false; error: RejectReason };
 
 export function applyAction(state: GameState, action: GameAction, deps: ActionDeps): ApplyOutcome {
   switch (action.type) {
     case 'catch': {
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
-      if (!canFishSpot(state, action.spot)) return { ok: false, error: 'spot-locked' };
+      const gate = canFish(state, action.spot);
+      if (!gate.ok) return { ok: false, error: gate.reason };
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
       const fish = resolveCatch(action.spot, action.judgment, state.rod, deps.rng);
       const extras = rollCatchExtras(fish, deps.rng);
@@ -76,7 +80,7 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
       };
     }
     case 'sell': {
-      if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-uids' };
+      if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-request' };
       const uids = action.uids.filter(u => typeof u === 'string');
       const next = sellSelected(state, uids);
       const gold = next.gold - state.gold;
@@ -92,32 +96,34 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
       };
     }
     case 'upgradeRod': {
-      const next = tryUpgrade(state);
-      if (!next) return { ok: false, error: 'not-enough-gold' };
+      const check = canUpgradeRod(state);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const next = tryUpgrade(state)!;
       return {
         ok: true, state: next, result: { type: 'none' },
         events: [{ type: 'upgradeRod', payload: { toLevel: next.rod, cost: state.gold - next.gold } }],
       };
     }
     case 'buyBoat': {
-      const next = tryBuyBoat(state);
-      if (!next) return { ok: false, error: 'boat-requirements' };
+      const check = canBuyBoat(state);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const next = tryBuyBoat(state)!;
       return {
         ok: true, state: next, result: { type: 'none' },
         events: [{ type: 'buyBoat', payload: { tier: next.boat, cost: state.gold - next.gold } }],
       };
     }
     case 'toggleLock': {
-      if (typeof action.fishId !== 'string') return { ok: false, error: 'bad-fish-id' };
+      if (typeof action.fishId !== 'string') return { ok: false, error: 'bad-request' };
       // 잠금은 감사 가치가 없어 이벤트를 남기지 않는다
       return { ok: true, state: toggleLock(state, action.fishId), result: { type: 'none' }, events: [] };
     }
     case 'redeemCoupon': {
-      if (typeof action.code !== 'string') return { ok: false, error: 'bad-code' };
+      if (typeof action.code !== 'string') return { ok: false, error: 'bad-request' };
       const code = action.code.trim();
       const extra = deps.dynamicCoupon ? { [code]: deps.dynamicCoupon } : {};
       const res = redeemCoupon(state, code, extra);
-      if (!res.ok) return { ok: false, error: `coupon:${res.reason}` };
+      if (!res.ok) return { ok: false, error: res.reason === 'used' ? 'coupon-used' : 'coupon-invalid' };
       return {
         ok: true, state: res.state,
         result: { type: 'coupon', gold: res.reward.gold, desc: res.reward.desc },
@@ -133,6 +139,6 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
       };
     }
     default:
-      return { ok: false, error: 'unknown-action' };
+      return { ok: false, error: 'bad-request' };
   }
 }
