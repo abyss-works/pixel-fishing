@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase, currentAccount, applyNewPassword } from '../backend/auth';
+import { identifyUser } from '../observability';
 import { newState } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { MaybePromise } from '../backend/types';
@@ -24,6 +25,7 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
     currentAccount().then(setAccount);
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!uidRef.current) uidRef.current = session?.user.id ?? null;
+      identifyUser(session?.user.id ?? null); // uid만 — PII 미전송
     });
   }, [sync]);
 

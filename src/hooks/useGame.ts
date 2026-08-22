@@ -7,6 +7,7 @@ import type { Backend, DispatchResult, MaybePromise } from '../backend/types';
 import type { GameAction } from '../game/actions';
 import { migrate, newState } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { reportIssue } from '../observability';
 
 // 게임 상태 소유 + 백엔드 디스패치 (계층: service&state — 서버 권위 v0.5.0)
 // 모든 상태 변경은 dispatch(action) 하나로 흐른다: 온라인 = /api/action(서버가 규칙 실행),
@@ -87,8 +88,12 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       } else if (r.status === 'outdated') {
         // 진행은 서버에 안전 — rescue 불필요, 업데이트 모달만 (이번 액션 하나는 저장 안 됨)
         setOutdated(true);
+        // 배포 후 낡은 탭이 얼마나 오래 남아 있는지 = 다음 배포 공지 타이밍의 근거
+        reportIssue('client outdated (426)', 'warning', { action: action.type });
       } else if (r.status === 'error') {
         setSync(supabase ? 'error' : 'off');
+        // 저장 실패는 예외를 던지지 않는다 — 명시적으로 보고하지 않으면 영원히 안 보인다
+        reportIssue('dispatch failed — 진행 미저장', 'error', { action: action.type });
         rescueAlert('서버에 연결하지 못해 이번 행동이 저장되지 않았어요.');
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
@@ -111,8 +116,9 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       }
       if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       setSync('on');
-    })().catch(() => {
+    })().catch((e: unknown) => {
       setSync('error');
+      reportIssue('bootstrap failed — 클라우드 연결 실패', 'error', { cause: String(e) });
       rescueAlert('클라우드에 연결하지 못했어요 — 진행 상황이 저장되지 않아요.');
     });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩

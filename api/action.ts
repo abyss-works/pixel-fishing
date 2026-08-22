@@ -15,6 +15,7 @@ import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
 import type { ActionResult, GameAction } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
+import { reportServerIssue } from './observability.js';
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
@@ -120,7 +121,10 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const { error: seedErr } = await admin.from('saves_current').insert(seeded);
     if (seedErr) { // 동시 첫 액션 경합 — 상대가 시딩했으니 다시 읽는다
       row = (await admin.from('saves_current').select('data, version').eq('user_id', uid).maybeSingle()).data;
-      if (!row) { res.status(500).json({ error: 'db-seed' }); return; }
+      if (!row) {
+        await reportServerIssue('db-seed 실패 — 상태를 만들 수 없음', seedErr, { uid });
+        res.status(500).json({ error: 'db-seed' }); return;
+      }
     } else {
       row = { data: seeded.data, version: 1 };
     }
@@ -150,7 +154,11 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     .update({ data: out.state, version: nextVersion, updated_at: new Date().toISOString() })
     .eq('user_id', uid).eq('version', row.version)
     .select('user_id');
-  if (updErr) { res.status(500).json({ error: 'db-write' }); return; }
+  if (updErr) {
+    // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패라 반드시 보고한다
+    await reportServerIssue('db-write 실패 — 액션 미저장', updErr, { uid, action: action.type });
+    res.status(500).json({ error: 'db-write' }); return;
+  }
   if (!updated || updated.length === 0) { res.status(409).json({ error: 'version-conflict' }); return; }
 
   // 이벤트 append + 주기 스냅샷 — 락 획득 후, 서로 독립이라 병렬 (왕복 1회 절약).
@@ -171,7 +179,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   if (recordRows.length > 0) {
     followUps.push(Promise.resolve(admin.from('records').upsert(recordRows)));
   }
-  if (followUps.length > 0) await Promise.all(followUps);
+  // 후속 쓰기 실패는 상태를 되돌리지 않는다(이벤트·기록만 유실, 수용) — 다만 **조용히**
+  // 잃으면 안 된다. supabase 클라이언트는 거부하지 않고 { error }를 돌려주므로 직접 검사한다.
+  if (followUps.length > 0) {
+    const settled = await Promise.all(followUps) as { error?: unknown }[];
+    const failures = settled.filter(r => r && r.error);
+    if (failures.length > 0) {
+      await reportServerIssue('후속 쓰기 실패 — events/records/스냅샷 유실',
+        failures.map(f => f.error), { uid, action: action.type, version: nextVersion });
+    }
+  }
 
   res.status(200).json({ state: out.state, result: out.result });
 }
