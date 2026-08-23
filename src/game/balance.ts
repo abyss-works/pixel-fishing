@@ -43,11 +43,8 @@ export const ROD = {
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;
 
-// 서버 저장 검증 (validate.ts / api/save.ts)
-// 이론상 최소 어획 사이클(만렙 기준 wait ≥1 + catch 2 ≈ 3s) 기준, slack으로 여유 흡수
-export const MIN_CATCH_INTERVAL_MS = 3_000; // 어획 속도 상한 판정용
-export const CATCH_RATE_SLACK = 10;         // 동기화 지연·flush 몰림 허용 마릿수
-export const ECONOMY_GIFT_SLACK = 300;      // v1 이관 조각배 증정분 — 경제 보존식 허용 오차
+// (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — validate.ts는 v0.3.3, api/save.ts는 v0.5.0에
+//  사라졌고, 서버 권위에서 클라 변조 검증은 성립하지 않는다. 상태를 만드는 쪽이 서버다)
 
 // 월척(크기)·변이 — 신규 로직 없이 기존 어종 데이터를 재사용하는 저비용 콘텐츠 
 // 크기 분포는 어종마다 수동 지정하지 않고 가격에서 공식으로 유도한다.
@@ -57,3 +54,10 @@ export const SIZE_STD_RATIO = 0.18;    // 표준편차 = 평균 × 이 비율
 export const MUTATION_RATE = 1 / 5;    // 캐치마다 변이(색상 변이) 확률 — 어종당 변이 1종 고정 (1/3→1/5, 체감 하향)
 export const VARIANT_PRICE_MULT = 2;   // 변이 개체 판매가 배수
 export const BIG_CATCH_PERCENTILE = 20; // 크기가 상위 이 %(이하) 안에 들면 "월척" 표시
+
+// 가방 용량 — 정규화(0006) 이후 개체는 DB 행이라 상한 없이 두면 유저당 무한히 는다.
+// spec 1절이 위험요소 배제의 **유일한 예외**로 인벤토리 제한을 허용한 근거도 같다:
+// "물리적이고 자연스러운 한계"는 도전 요소고, 시간 기반 인위적 상한(쿨다운·오프라인 캡)과
+// 다른 범주다. 넘치면 거부하지 않고 **가장 안 특별한 개체를 놓아준다** — 실패를 만들지 않는다.
+// ⚠️ 가안 — 방치 낚시 속도를 보고 튜닝한다(변이 확률·크기 상수와 같은 취급).
+export const BAG_CAPACITY = 60;

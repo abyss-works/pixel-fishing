@@ -1,27 +1,47 @@
+import type { ReactNode } from 'react';
 import { BOATS } from '../game/logic';
 import type { GameState } from '../game/logic';
 import PixelIcon from '../ui/PixelIcon';
+import type { GlyphId } from '../ui/PixelIcon';
 
-interface Props { title: string; game: GameState }
-
-// 캔버스 위 반투명 자원 오버레이 — 골드/명성/배/낚싯대/가방 (Home·Field 공용, 좌상단 고정)
-// 자원 기호는 이모지 대신 픽셀 아이콘(PixelIcon). 골드만 텍스트 라벨이 없어 sr-only로 보충
-// (스크린리더 + 테스트가 '골드 60G'로 읽는다).
-export default function ResourceBar({ title, game }: Props) {
+// 캔버스 위 반투명 자원 오버레이 (Base·Field 공용, 좌상단).
+//
+// **칸마다 2행 — 위가 이름, 아래가 값.** 바 전체로는 한 줄이고, 칸마다 가운데 정렬이다
+// (이름과 값의 길이가 서로 달라 왼쪽 정렬하면 두 줄이 어긋나 보인다).
+// 한 줄에 `이름 값`을 나란히 두면 값 길이가 바뀔 때마다 뒤쪽 항목이 통째로 밀려서, 눈이
+// 같은 자리를 다시 찾아야 했다. 이름을 위로 올리면 **이름 줄이 자리표**가 되고 값만 아래에서
+// 바뀐다. 값은 픽셀 폰트(고정폭)라 자릿수가 늘어도 흔들림이 작다.
+//
+// **지역 이름은 뺐다** — 지역 탭 상단이 이미 그 지역을 제목으로 달고 있다. 같은 정보를 두
+// 곳에 두면 한쪽만 고쳐질 때 갈라진다.
+//
+// 자원 기호는 이모지 대신 픽셀 아이콘(PixelIcon) — v0.4.1 이모지 폐지.
+function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; children: ReactNode }) {
   return (
-    <div className="absolute top-3 left-3 z-(--z-overlay) flex items-center gap-2 max-w-[calc(100%-24px)]
+    <span className="flex flex-col items-center justify-center gap-1 whitespace-nowrap">
+      {/* 끝의 공백은 의도적이다 — 두 행이 붙어 textContent가 "골드60G"가 되면 HUD를
+          문자열로 읽는 테스트(app.test의 hud())가 값을 못 찾는다. 지우지 말 것. */}
+      <span className="flex items-center gap-1 text-xs leading-none text-text-dim">
+        <PixelIcon glyph={glyph} size={11} />{label}{' '}
+      </span>
+      <span className="text-base leading-none text-gold font-pixel tracking-[0.5px]">{children}</span>
+    </span>
+  );
+}
+
+export default function ResourceBar({ game }: { game: GameState }) {
+  return (
+    <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
                     bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px] border-2 border-line pf-notch pf-bevel
-                    px-3 py-1 pointer-events-none [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-      <span className="text-gold font-bold text-xs whitespace-nowrap">{title}</span>
+                    px-4 py-2 pointer-events-none [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
       {/* .hud 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
-      <div className="hud flex items-center gap-3 flex-wrap
-                      [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-xs [&>span]:text-text-dim [&>span]:whitespace-nowrap
-                      [&_b]:text-gold [&_b]:font-pixel [&_b]:tracking-[0.5px]">
-        <span><PixelIcon glyph="coin" /><span className="sr-only">골드 </span><b>{game.gold}</b>G</span>
-        <span><PixelIcon glyph="star" />명성 <b>{game.fame}</b></span>
-        <span><PixelIcon glyph="boat" /><b>{game.boat === 0 ? '배 없음' : BOATS[game.boat - 1].name}</b></span>
-        <span><PixelIcon glyph="rod" />낚싯대 Lv.<b>{game.rod}</b></span>
-        <span><PixelIcon glyph="fish" /><b>{game.bag.length}</b>마리</span>
+      <div className="hud flex items-stretch gap-4
+                      [&>span+span]:border-l [&>span+span]:border-line [&>span+span]:pl-4">
+        <Stat glyph="coin" label="골드"><b className="font-bold">{game.gold}</b>G</Stat>
+        <Stat glyph="star" label="명성"><b className="font-bold">{game.fame}</b></Stat>
+        <Stat glyph="fish" label="가방"><b className="font-bold">{game.bag.length}</b>마리</Stat>
+        <Stat glyph="boat" label="배">{game.boat === 0 ? '없음' : BOATS[game.boat - 1].name}</Stat>
+        <Stat glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { FISH, RARITY, SPOTS, boatSpeed, canFishSpot, rodStats } from '../game/logic';
+import { FISH, RARITY, REJECT_TEXT, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
+import { subscribeFailure } from '../errors';
+import { useKeyScope } from '../hotkeys';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { REGION_PACKS, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
@@ -10,6 +12,7 @@ import { nextPhase, phaseDurationMs, judgePress } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { CAST_RANGE, WALK_SPEED } from '../game/balance';
 import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
+import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
 import CatchCard from './CatchCard';
 
@@ -141,20 +144,28 @@ export default function Field({
     // 물고기 공개는 응답 도착 시(카드) — HTTP 왕복은 획득 연출 시간에 흡수된다.
     setPhase('catch');
     when(dispatchRef.current({ type: 'catch', spot: s.spot, judgment }), r => {
-      const result = r.status === 'ok' ? r.result : null;
-      if (!result || result.type !== 'catch') {
+      // 인프라 실패는 여기 오지 않는다 — 던져져서 정책으로 가고, 낚시 취소는 아래 구독이 한다
+      if (r.status === 'rejected') {
         cancelRef.current();
-        if (r.status === 'rejected') toastRef.current(`낚시가 거부되었다 (${r.error}).`);
+        toastRef.current(REJECT_TEXT[r.error]);
         return;
       }
+      const result = r.result;
+      if (result.type !== 'catch') return; // 타입 좁히기 (catch 액션의 결과는 항상 catch)
       const caught = FISH.find(f => f.id === result.fishId)!;
       const info = result.info;
       setFish(caught);
       setCatchInfo(info);
       const prefix = judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
       // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
-      const name = info.mutated ? caught.variant.name : caught.name;
-      toastRef.current(`${prefix}${RARITY[caught.rarity].name} 등급 [${name}] 획득!`);
+      toastRef.current(
+        `${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, info.form)}] 획득!`);
+      // 방생은 반드시 알린다 — 조용히 사라지면 유저는 개체를 잃은 걸로만 읽는다.
+      // 명성이 남는다는 점을 같이 적어야 손실이 아니라 교환으로 읽힌다.
+      if (result.released.length > 0) {
+        const names = result.released.map(r => r.name).join(', ');
+        toastRef.current(`가방이 가득 차 [${names}]을(를) 놓아줬다 — 명성은 남는다.`);
+      }
     });
   };
 
@@ -165,6 +176,10 @@ export default function Field({
     setCatchInfo(null);
   };
 
+  // 실패하면 낚시를 취소한다 — 한 줄 규칙. 어떤 실패인지·무엇을 보여줄지는 정책이 안다.
+  // (이게 없으면 catch 페이즈가 결과를 기다리며 영구 정지한다 — 홀드 설계의 짝)
+  useEffect(() => subscribeFailure(() => cancelRef.current()), []);
+
   useEffect(() => {
     actionRef.current = action;
     cancelRef.current = cancelFishing;
@@ -172,35 +187,27 @@ export default function Field({
     hookRef.current = hookFish;
   });
 
-  // 키보드: 이동 + 행동 (R4, R5c)
-  // 콜백은 전부 ref로 읽는다 → 리스너를 마운트 시 한 번만 등록(리렌더 중 입력 유실 방지)
-  useEffect(() => {
-    // 텍스트 입력 요소에 포커스가 있으면 게임이 키를 가로채지 않는다 — 계정 모달 등 폼 타이핑 보호.
-    // (document 전역 리스너라 preventDefault가 인풋의 문자 입력까지 죽이던 잠복 버그, v0.4.1 QA)
-    const isTyping = (e: KeyboardEvent): boolean => {
-      const el = e.target as HTMLElement | null;
-      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
-        || el.tagName === 'SELECT' || el.isContentEditable);
-    };
-    const onDown = (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
-      if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return; }
-      if (MOVE_KEYS[e.code]) {
-        e.preventDefault();
-        if (phaseRef.current !== 'idle') { // 이동 = 낚시 취소 (R5c)
-          cancelRef.current();
-          toastRef.current('낚시를 접고 이동한다.');
-        }
-        keysRef.current.add(e.code);
+  // 키보드: 이동 + 행동 (R4, R5c) — 누른 키는 **스코프**를 통해 받는다.
+  // 모달이 뜨면 스코프가 막아 주므로 여기서 모달 여부를 알 필요가 없다 (hotkeys.ts).
+  useKeyScope(e => {
+    if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return true; }
+    if (MOVE_KEYS[e.code]) {
+      e.preventDefault();
+      if (phaseRef.current !== 'idle') { // 이동 = 낚시 취소 (R5c)
+        cancelRef.current();
+        toastRef.current('낚시를 접고 이동한다.');
       }
-    };
+      keysRef.current.add(e.code);
+      return true;
+    }
+  });
+
+  // keyup은 스코프를 태우지 않는다 — 키를 누른 채로 모달이 열리면 뗀 신호가 막혀
+  // 캐릭터가 영원히 달린다. 떼는 신호는 언제나 통과시키는 게 안전한 쪽이다.
+  useEffect(() => {
     const onUp = (e: KeyboardEvent) => keysRef.current.delete(e.code);
-    document.addEventListener('keydown', onDown);
     document.addEventListener('keyup', onUp);
-    return () => {
-      document.removeEventListener('keydown', onDown);
-      document.removeEventListener('keyup', onUp);
-    };
+    return () => document.removeEventListener('keyup', onUp);
   }, []);
 
   // 이동 + 트리거 + 렌더 루프 (jsdom에는 canvas/rAF 없음 → 건너뜀; 이동은 world 엔진에서 단위 테스트)
@@ -264,38 +271,39 @@ export default function Field({
     return () => cancelAnimationFrame(raf);
   }, [region, def]);
 
-  const title = def.name;
-
   return (
     <>
-      <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-              className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
-              aria-label={region === 'village' ? '마을' : '바다'}
-              onClick={() => actionRef.current()} />
+      <GameFrame>
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
+                aria-label={region === 'village' ? '마을' : '바다'}
+                onClick={() => actionRef.current()} />
 
-      <ResourceBar title={title} game={game} />
-
-      {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
-          게임 프레임 하단 중앙 — 프레임이 non-positioned라 --frame-h 공식으로 위치를 계산한다.
-          animate-overlay-in은 transform을 건드리지 않아 translate 중앙정렬과 충돌하지 않는다.
-          .status-overlay 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
-      {phase !== 'idle' && (
-        <div data-phase={phase}
+        {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
+            프레임 하단 중앙. 프레임이 positioned라 bottom-3이 그대로 프레임 기준이다.
+            animate-overlay-in은 transform을 건드리지 않아 translate 중앙정렬과 충돌하지 않는다.
+            .status-overlay 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
+        {phase !== 'idle' && (
+          <div data-phase={phase}
              className="status-overlay absolute left-1/2 -translate-x-1/2
-                        bottom-[calc((100cqh-var(--frame-h))/2+12px)] z-(--z-overlay)
+                        bottom-3 z-(--z-overlay)
                         max-w-[min(560px,calc(100%-24px))] px-3 py-1 rounded-full
-                        text-xs text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
+                        text-sm text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
                         [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] pointer-events-none animate-overlay-in">
-          {phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} [${catchInfo?.mutated ? fish.variant.name : fish.name}] 획득!`
-            : STATUS[phase]}
-        </div>
-      )}
+            {phase === 'catch' && fish
+              ? `${RARITY[fish.rarity].name} [${formName(fish, catchInfo?.form ?? 'normal')}] 획득!`
+              : STATUS[phase]}
+          </div>
+        )}
 
-      {/* 획득 카드 — 게임 프레임 중앙 DOM 오버레이 (스프라이트/크기/월척/변이/NEW) */}
-      {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
+        {/* 획득 카드 — 프레임 중앙 DOM 오버레이 (스프라이트/크기/월척/변이/NEW) */}
+        {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
+      </GameFrame>
 
-      {/* 필드 위 미니맵 (우하단) — % 폭은 게임 프레임 기준 */}
+      {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
+      <ResourceBar game={game} />
+
+      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
       <canvas ref={minimapRef} width={def.w} height={def.h}
               className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
                          [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"

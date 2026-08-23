@@ -13,7 +13,11 @@ describe('클라우드 저장', () => {
     expect(await ensureSession()).toBeNull();
     const http = new HttpBackend();
     expect(await http.load()).toBeNull();
-    expect(await http.dispatch({ type: 'upgradeRod' })).toEqual({ status: 'error' });
+    // dev3: 인프라 실패는 값이 아니라 AppError로 던진다 — 정책 한 곳이 처리한다
+    // . 호출자에 방어 분기를 두지 않기 위한 계약.
+    await expect(http.dispatch({ type: 'upgradeRod' })).rejects.toMatchObject({
+      name: 'AppError', kind: 'network',
+    });
   });
 
   it('계정 함수도 오프라인 모드에서 무해 (v0.4.0)', async () => {

@@ -1,7 +1,7 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sentry/node": "^10.70.0",
+    "@sentry/react": "^10.70.0",
     "@supabase/supabase-js": "^2.112.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

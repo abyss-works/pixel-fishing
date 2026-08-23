@@ -7,6 +7,7 @@ import type { Backend, DispatchResult, MaybePromise } from '../backend/types';
 import type { GameAction } from '../game/actions';
 import { migrate, newState } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { fail, subscribeFailure, POLICY, AppError } from '../errors';
 
 // 게임 상태 소유 + 백엔드 디스패치 (계층: service&state — 서버 권위 v0.5.0)
 // 모든 상태 변경은 dispatch(action) 하나로 흐른다: 온라인 = /api/action(서버가 규칙 실행),
@@ -61,12 +62,22 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회
   }, []);
 
-  // 액션 실패 시 구조 안내 — 진행 상황을 이사 코드로 만들어 복사해 주고 복구를 안내한다.
-  // 실패 에피소드당 1회만 — 복구(액션 성공)되면 리셋.
+  // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 errors.ts의 정책 표가 내리고,
+  // 이 훅은 그 결정을 화면에 반영만 한다. 실패 에피소드당 1회만 알린다(복구되면 리셋).
   const alertedRef = useRef(false);
-  const rescueAlert = async (headline: string) => {
+  const rescueRef = useRef<(headline: string) => void>(() => {});
+  useEffect(() => subscribeFailure((err: AppError) => {
+    const policy = POLICY[err.kind];
+    if (policy.modal === 'update') setOutdated(true);
+    if (!policy.rescue) return;
+    setSync(supabase ? 'error' : 'off');
     if (alertedRef.current) return;
     alertedRef.current = true;
+    rescueRef.current(policy.message);
+  }), []);
+
+  // 진행 상황을 이사 코드로 만들어 복사해 주고 복구를 안내한다 (저장되지 않은 실패에서만)
+  const rescueAlert = async (headline: string) => {
     const code = saveCode(gameRef.current);
     const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 이사 코드로 만들어 뒀어요.\n\n복구 방법: 게임을 새로고침해 다시 접속한 뒤,\n설정 탭 → 이사 코드 불러오기에 붙여넣으세요.`;
     try {
@@ -78,18 +89,15 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     }
   };
 
-  /** 모든 상태 변경의 단일 진입점 — ok면 서버(또는 로컬 리듀서)가 계산한 상태를 채택 */
+  useEffect(() => { rescueRef.current = h => void rescueAlert(h); });
+
+  /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
+      인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
     when(backendRef.current.dispatch(action), r => {
       if (r.status === 'ok') {
         setGame(r.state);
         if (supabase) { setSync('on'); alertedRef.current = false; }
-      } else if (r.status === 'outdated') {
-        // 진행은 서버에 안전 — rescue 불필요, 업데이트 모달만 (이번 액션 하나는 저장 안 됨)
-        setOutdated(true);
-      } else if (r.status === 'error') {
-        setSync(supabase ? 'error' : 'off');
-        rescueAlert('서버에 연결하지 못해 이번 행동이 저장되지 않았어요.');
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
       return r;
@@ -101,7 +109,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     if (!supabase) return;
     (async () => {
       const uid = await ensureSession();
-      if (!uid) { setSync('error'); return; }
+      if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
       const cloud = await backendRef.current.load();
       if (cloud) {
         setGame(cloud);
@@ -111,10 +119,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       }
       if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       setSync('on');
-    })().catch(() => {
-      setSync('error');
-      rescueAlert('클라우드에 연결하지 못했어요 — 진행 상황이 저장되지 않아요.');
-    });
+    })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 

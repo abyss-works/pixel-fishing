@@ -11,7 +11,7 @@ interface PanelProps {
 export default function Panel({ title, children, className }: PanelProps) {
   return (
     <div className={cx('pf-frame p-2 flex flex-col gap-2', className)}>
-      {title && <h3 className="pf-accent text-sm text-gold">{title}</h3>}
+      {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}
       {children}
     </div>
   );

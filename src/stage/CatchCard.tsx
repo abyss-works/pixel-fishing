@@ -1,12 +1,12 @@
 import type { CSSProperties } from 'react';
-import { RARITY, priceOf } from '../game/logic';
+import { RARITY, formName, priceOf } from '../game/logic';
 import type { CatchInfo, Fish } from '../game/logic';
 import { cx } from '../ui/cx';
 import FishSprite from '../ui/FishSprite';
 import { RarityText } from '../ui/RarityTag';
 
 // 변이 문구 풀 — 대놓고 "변이"라 하지 않고 낮춰 말하는 의미심장한 한 줄 (매번 랜덤)
-const MUTATED_LINES = [
+const VARIANT_LINES = [
   '…조금 다르게 생겼다.',
   '…흔치 않은 빛깔을 띠고 있다.',
   '…어딘가 낯선 기운이 감돈다.',
@@ -20,7 +20,8 @@ const MUTATED_LINES = [
 export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo | null }) {
   const r = RARITY[fish.rarity];
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
-  const mutatedLine = MUTATED_LINES[info ? Math.floor(info.size * 997) % MUTATED_LINES.length : 0];
+  const isVariant = info?.form === 'variant';
+  const variantLine = VARIANT_LINES[info ? Math.floor(info.size * 997) % VARIANT_LINES.length : 0];
   // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지 (6등급 개편 대비)
   const { sparks, sparkDist, halo } = r;
   return (
@@ -54,7 +55,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         ))}
         {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 보랏빛/물빛.
             정적 X 오프셋은 transform, 상승은 keyframe의 translate 속성 — 서로 충돌하지 않는다 */}
-        {info?.mutated && Array.from({ length: 8 }, (_, i) => (
+        {isVariant && Array.from({ length: 8 }, (_, i) => (
           <span key={i}
                 className={cx(
                   'absolute left-1/2 top-[60%] size-[5px] opacity-0',
@@ -70,22 +71,22 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
       {/* 신규 발견 — 왼쪽 위 모서리에 기울어진 리본 */}
       {info?.isNew && (
         <span className="absolute -top-2.5 -left-3.5 [transform:rotate(-12deg)] bg-[#ff4081] text-white
-                         font-bold text-xs px-2 py-0.5 rounded-sm shadow-panel animate-new-bounce">
+                         font-bold text-sm px-2 py-0.5 rounded-sm shadow-panel animate-new-bounce">
           NEW!
         </span>
       )}
-      <span className="text-xs"><RarityText rarity={fish.rarity} /></span>
-      <FishSprite fish={fish} preset="card" mutated={info?.mutated ?? false} />
+      <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
+      <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} />
       {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 (의미심장한 한 줄) */}
-      <b className={cx('text-base', info?.mutated && 'animate-mutated-shimmer')}>
-        {info?.mutated ? fish.variant.name : fish.name}
+      <b className={cx('text-lg', isVariant && 'animate-mutated-shimmer')}>
+        {formName(fish, info?.form ?? 'normal')}
       </b>
-      <span className="text-xs text-text-dim">
+      <span className="text-sm text-text-dim">
         {info && `${info.size.toFixed(1)}cm`}
         {info?.isBig && <b className="text-gold"> ★ 월척! 상위 {info.percentile}%</b>}
       </span>
-      {info?.mutated && <span className="text-xs italic text-text-dim">{mutatedLine}</span>}
-      <span className="text-xs text-text-dim">{r.name} 등급 · {priceOf(fish, info?.mutated ?? false)}G</span>
+      {isVariant && <span className="text-sm italic text-text-dim">{variantLine}</span>}
+      <span className="text-sm text-text-dim">{r.name} 등급 · {priceOf(fish, info?.form ?? 'normal')}G</span>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
-import { BOATS, FISH } from '../game/logic';
+import { BOATS, FISH, dexSpeciesCount } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { furnitureAt, BASE_PACKS } from '../world';
 import type { BaseId, FurnitureId } from '../world';
 import { renderBase, W, H, CANVAS_W, CANVAS_H } from '../pixel';
+import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
 export default function Base({ base, game, onFacility }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const dexCount = FISH.filter(f => (game.caught[f.id] ?? 0) > 0).length;
+  const dexCount = dexSpeciesCount(game);
   const boatName = game.boat === 0 ? '배 없음' : BOATS[game.boat - 1].name;
 
   useEffect(() => {
@@ -42,10 +43,13 @@ export default function Base({ base, game, onFacility }: Props) {
 
   return (
     <>
-      <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-              className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
-              aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
-      <ResourceBar title={base === 'home' ? '집' : '항구'} game={game} />
+      <GameFrame>
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
+                aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
+      </GameFrame>
+      {/* 스테이지 기준 — 프레임의 형제 */}
+      <ResourceBar game={game} />
     </>
   );
 }

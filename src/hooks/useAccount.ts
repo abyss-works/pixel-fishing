@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase, currentAccount, applyNewPassword } from '../backend/auth';
+import { identifyUser } from '../observability';
 import { newState } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { MaybePromise } from '../backend/types';
@@ -16,6 +17,9 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
   load: () => MaybePromise<GameState | null>;
 }) {
   const [account, setAccount] = useState<string | null>(null);
+  // 화면에 띄울 uid — 문의가 들어왔을 때 그 사람 세이브를 DB에서 찾는 유일한 열쇠다.
+  // 게스트는 이메일이 없어서 uid 말고는 식별할 방법이 없다.
+  const [uid, setUid] = useState<string | null>(null);
   const uidRef = useRef<string | null>(null); // 부트스트랩 시점 uid — 승격/교체 판별 기준
 
   // 부트스트랩이 끝나면(on) 영구 계정 이메일 표시 — 게스트면 null 유지
@@ -24,6 +28,8 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
     currentAccount().then(setAccount);
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!uidRef.current) uidRef.current = session?.user.id ?? null;
+      setUid(session?.user.id ?? null);
+      identifyUser(session?.user.id ?? null); // uid만 — PII 미전송
     });
   }, [sync]);
 
@@ -33,9 +39,10 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
   const onAuthChanged = async () => {
     setAccount(await currentAccount());
     const { data: { session } } = await supabase!.auth.getSession();
-    const uid = session?.user.id ?? null;
-    if (uid && uid !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
-      uidRef.current = uid;
+    const next = session?.user.id ?? null;
+    setUid(next);
+    if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
+      uidRef.current = next;
       const cloud = await load();
       setGame(cloud ?? newState());
       setToast('계정의 클라우드 세이브를 불러왔다.');
@@ -66,5 +73,5 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account]);
 
-  return { account, onAuthChanged };
+  return { account, uid, onAuthChanged };
 }

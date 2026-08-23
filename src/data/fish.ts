@@ -9,6 +9,11 @@ export type FishShape =
   | 'tiny' | 'round' | 'slim' | 'predator' | 'flowing' | 'eel' | 'ribbon'
   | 'whiskered' | 'shark' | 'anglerfish' | 'cephalopod' | 'ancient' | 'serpent';
 
+// 폼 축 — "종은 같고 다른 개체"의 갈래 (세이브 v8). 폼 추가 = 이 유니온에 문자열 하나.
+// data 계층에 두는 이유: 폼은 콘텐츠 축이고(Fish.variant가 그 데이터), ui/가 스프라이트 색을
+// 고르려면 이 타입을 봐야 하는데 의존 규칙상 ui→game은 금지·ui→data는 허용이다.
+export type FormId = 'normal' | 'variant';
+
 // lore/variant는 v0.3.0 초안 — 나중에 다시 다듬어도 됨(직접 작성 확정)
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 이름/색/로어 독립, 등급/수역/형태/크기 분포는 종에 종속.
 export interface Fish {

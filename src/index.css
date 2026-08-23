@@ -3,13 +3,27 @@
    여기 남는 것: 토큰 · 리셋 · 픽셀 베벨 코어 · 공통 표 · 키프레임 · 등급색 매핑.
    그 외 모든 스타일은 컴포넌트의 Tailwind 유틸리티다 — 기능별 CSS를 다시 늘리지 말 것.
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+/* Silkscreen = 숫자·값(픽셀풍 강조) · Noto Sans KR = 한글 본문.
+   Silkscreen에 한글 글리프가 없어 --font-pixel 스택에도 Noto Sans KR을 끼워 둔다 —
+   "최대 40.0cm"처럼 섞인 칸에서 한글만 본문 폰트로 폴백해 두 폰트가 자연스럽게 붙는다.
+   Google Fonts는 unicode-range로 쪼개 보내므로 한글 전체를 받지 않는다. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* Tailwind 토큰 — 색 값의 근원은 아래 :root 변수 하나뿐, 여기선 참조/스케일 조정만.
-   간격·폰트 크기 토큰(구 --sp-N·--fs-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다
-   (p-1~4 = 4/8/12/16px · text-xs/sm/base = 12/14/16px). */
+   간격 토큰(구 --sp-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다 (p-1~4 = 4/8/12/16px). */
 @theme {
+  /* 글자 크기 사다리 — **여기가 전역 단일 근원이다.**
+     전에는 Tailwind 기본값(12/14/16) + 컴포넌트마다 박은 text-[9px]·[10px]·[11px] 17곳 +
+     index.css 안의 font-size 네 곳이 섞여 있어 "조금 키우자"를 한 곳에서 할 수 없었다.
+     임의 px는 전부 걷어내고 아래 다섯 단으로 수렴시켰다 — 값을 바꾸면 화면 전체가 따라온다.
+     픽셀 폰트(Silkscreen)가 섞여 있어 소수점 배율 대신 정수 px로 둔다(반픽셀은 흐려진다). */
+  --text-2xs: 11px;  /* 배지·보조 숫자 (구 9·10px) */
+  --text-xs: 12px;   /* 라벨·표 (구 11px) */
+  --text-sm: 13px;   /* 본문 (구 text-xs 12px) */
+  --text-base: 15px; /* 강조 본문·버튼 (구 text-sm 14px) */
+  --text-lg: 17px;   /* 제목 (구 text-base 16px) */
+
   --color-bg: var(--c-bg);
   --color-surface: var(--c-surface);
   --color-surface-2: var(--c-surface-2);
@@ -23,8 +37,8 @@
   --color-rare: var(--c-rare);
   --color-epic: var(--c-epic);
   --color-legend: var(--c-legend);
-  --font-sans: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
-  --font-pixel: 'Silkscreen', 'Courier New', monospace;
+  --font-sans: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --font-pixel: 'Silkscreen', 'Noto Sans KR', 'Courier New', monospace;
   --radius-sm: 6px;  /* 구 --r-sm — rounded-sm */
   --radius-md: 10px; /* 구 --r-md — rounded-md */
   --shadow-panel: 0 6px 24px rgba(0, 0, 0, 0.45); /* 구 --shadow */
@@ -123,7 +137,7 @@ body {
   background: var(--c-bg);
   color: var(--c-text);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-sm);
   user-select: none;
   overflow: hidden;
 }
@@ -163,7 +177,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-radius: 0;
     color: var(--c-text);
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--text-base);
     padding: 8px 16px;
     cursor: pointer;
     box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
@@ -207,6 +221,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-tabbar button {
     flex: 1;
+    min-width: 0;          /* 긴 라벨(가방(카드)·도감(돌연변이))이 탭바를 밀어내지 않게 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -217,7 +232,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-radius: 0;
     border-bottom: 2px solid transparent;
     padding: 8px 2px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--c-text-dim);
     cursor: pointer;
   }
@@ -236,11 +251,20 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .tab-icon { display: block; }
 
+  /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.
+     384px 폭에 OS 기본 스크롤바가 얹히면 픽셀 화면 옆에서 튀고, 탭을 옮길 때마다
+     막대가 생겼다 사라지며 콘텐츠 폭이 흔들린다(레이아웃 점프). 휠·드래그·키보드는 그대로. */
+  .pf-scroll {
+    scrollbar-width: none;      /* Firefox */
+    -ms-overflow-style: none;   /* 구 Edge */
+  }
+  .pf-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
   /* 공통 표 (구 .data-table/.pf-compare 통합) — 셀 후손 셀렉터가 유틸 반복보다 나은 유일한 곳 */
   .pf-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .pf-table th, .pf-table td {
     padding: 4px 8px;
