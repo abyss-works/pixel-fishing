@@ -6,30 +6,37 @@ import type { BaseId, BasePack, Furniture, RegionId, RegionPack } from './types'
 import { inRect } from './engine';
 import { VILLAGE } from './regions/village';
 import { OCEAN } from './regions/ocean';
+import { SEASIA } from './regions/seasia';
 import { HOME } from './bases/home';
 import { HARBOR_BASE } from './bases/harbor';
+import { MANILA_BASE } from './bases/manila';
 
 export * from './types';
 export {
-  CAST_RANGE, canMove, zoneAt, movePlayer, inTrigger, nearestSchoolInRange, inRect,
+  CAST_RANGE, canMove, zoneAt, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_BOATSHOP, V_BOATSHOP_TRIGGER, V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
-export { OCEAN, LANDS, TRENCH, HARBOR, O_DOCK, O_SPAWN, O_SCHOOLS, OCEAN_W, OCEAN_H } from './regions/ocean';
+export { OCEAN, LANDS, TRENCH, HARBOR, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H } from './regions/ocean';
+export { SEASIA, SEASIA_LANDS, CORAL_TRI, CORAL_SEA, MANILA, M_DOCK, M_SPAWN, LUZON_STRAIT,
+  SEASIA_SCHOOLS, SEASIA_W, SEASIA_H } from './regions/seasia';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
   village: VILLAGE,
   ocean: OCEAN,
+  seasia: SEASIA,
 };
 
 export const BASE_PACKS: Record<BaseId, BasePack> = {
   home: HOME,
   harbor: HARBOR_BASE,
+  manila: MANILA_BASE,
 };
 
 // 기존 경로 호환 (app.test 등)
 export const HOME_FURNITURE = HOME.furniture;
 export const HARBOR_FURNITURE = HARBOR_BASE.furniture;
+export const MANILA_FURNITURE = MANILA_BASE.furniture;
 
 export function furnitureAt(base: BaseId, x: number, y: number): Furniture | null {
   for (const f of BASE_PACKS[base].furniture) if (inRect(x, y, f)) return f;

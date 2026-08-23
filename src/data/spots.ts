@@ -5,6 +5,9 @@ const DATA = [
   { id: 'river', name: '마을 강',       boatTier: 0, region: 'village' },
   { id: 'sea',   name: '태평양',        boatTier: 1, region: 'ocean' },
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean' },
+  { id: 'southchina', name: '남중국해',      boatTier: 3, region: 'seasia' },
+  { id: 'coral',      name: '코럴 트라이앵글', boatTier: 3, region: 'seasia' },
+  { id: 'coralsea',   name: '산호해',        boatTier: 3, region: 'seasia' },
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

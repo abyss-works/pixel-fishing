@@ -1,6 +1,6 @@
 // 지역 엔진 — RegionPack 데이터에서 충돌·수역·이동을 파생하는 순수 함수들 (R4, R5)
 // 지역별 손코딩 충돌 함수(구 canWalkVillage/canSailOcean)를 대체한다. 규칙은 types.ts 주석 참조.
-import type { Point, Rect, RegionPack, School } from './types';
+import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import type { SpotId } from '../data/spots';
 import { CAST_RANGE } from '../game/balance';
 
@@ -46,6 +46,40 @@ export function movePlayer(
 
 export function inTrigger(pos: Point, r: Rect | undefined): boolean {
   return !!r && inRect(pos.x, pos.y, r);
+}
+
+// 경계 봉합 입장점 (R5c — 오픈월드 봉합): travel 트리거가 entry를 가지면, 목적지의 마주 보는
+// 가장자리에서 "벗어난 자리" 좌표를 보존해 돌려준다. 통행 불가 칸(육지)과 트리거(되돌아 나오는
+// 즉시 재발화 방지)는 정렬축을 ±로 벌려 피하고, 가장자리 깊이를 단계적으로 늘려가며 탐색한다.
+const ENTRY_INSETS = [0, 8, 16, 24, 40, 64]; // 가장자리에서 안쪽으로 파고드는 깊이
+
+export function entryPoint(pack: RegionPack, trig: TriggerDef, from: Point): Point {
+  if (trig.action !== 'travel' || !trig.entry) return { ...pack.spawn };
+  const edge = trig.entry.edge;
+  const horiz = edge === 'top' || edge === 'bottom';
+  const m = MARGIN + 2;
+  const max = horiz ? pack.w - m : pack.h - m;
+  const clamp = (v: number) => Math.min(Math.max(v, m), max);
+  const primary = clamp(horiz ? from.x : from.y);
+  // 가장자리에서 inset만큼 안쪽, 정렬축은 보존한 좌표
+  const at = (p: number, inset: number): Point => {
+    if (edge === 'top') return { x: p, y: m + inset };
+    if (edge === 'bottom') return { x: p, y: pack.h - m - inset };
+    if (edge === 'left') return { x: m + inset, y: p };
+    return { x: pack.w - m - inset, y: p };
+  };
+  for (const inset of ENTRY_INSETS) {
+    for (let off = 0; ; off += 2) {
+      if (primary + off > max && primary - off < m) break;
+      for (const o of off === 0 ? [0] : [off, -off]) {
+        const cand = at(primary + o, inset);
+        if (!canMove(pack, cand.x, cand.y)) continue;          // 육지 위 입장 금지
+        if (pack.triggers.some(t => inRect(cand.x, cand.y, t.rect))) continue; // 재발화 금지
+        return cand;
+      }
+    }
+  }
+  return { ...pack.spawn }; // 최후의 안전망 — 스폰 텔레포트로 강등
 }
 
 export function nearestSchoolInRange(

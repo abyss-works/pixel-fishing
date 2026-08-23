@@ -11,8 +11,8 @@ export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
   legendary: CATCH_MS_LEGENDARY,
 };
 
-// 군집 캐스팅 판정 반경(px) — "군집 위/옆"의 정의
-export const CAST_RANGE = 28;
+// 군집 캐스팅 판정 반경(px) — "군집 위/옆"의 정의 (28 → 40 완화: 던지기가 덜 빡빡하게)
+export const CAST_RANGE = 40;
 
 // 이동 속도(px/s)
 export const WALK_SPEED = 75; // 마을 도보 (배는 data의 배별 speed)

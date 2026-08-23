@@ -22,7 +22,7 @@ export interface Point { x: number; y: number }
 export interface School { id: string; spot: SpotId; x: number; y: number }
 
 /** 물 스타일 — 채움/가장자리/모래테는 pixel/region.ts의 WATER_STYLE 레지스트리가 정의 */
-export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep';
+export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep' | 'coral';
 export type DeckStyleId = 'bridge' | 'pier';
 
 // 지형 조각 — 배열 순서 = 그리기 순서. 충돌 규칙(engine.canMove):
@@ -37,10 +37,15 @@ export type BuildingSpriteId = 'house' | 'boatshop' | 'harbor';
 export interface Building { rect: Rect; sprite: BuildingSpriteId }
 
 // 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (App/Field 무수정)
+export type Edge = 'top' | 'bottom' | 'left' | 'right';
 export type TriggerDef =
   | { rect: Rect; action: 'base'; msg: string }                      // pack.base 거점 진입
   | { rect: Rect; action: 'travel'; to: RegionId; msg: string;       // 다른 지역으로
-      requiredBoat: number; blockedMsg: string }                     // 게이트 미달 시 되밀기+안내
+      requiredBoat: number; blockedMsg: string;                      // 게이트 미달 시 되밀기+안내
+      /** 경계 봉합(오픈월드) — 지정하면 스폰 텔레포트 대신 상대 지역의 마주 보는 가장자리에서
+       *  벗어난 자리 좌표를 보존해 입장한다(edge=top/bottom이면 x, left/right면 y 보존).
+       *  미지정이면 목적지 pack.spawn에서 시작(거점 항로 — 포구→항구 앞). */
+      entry?: { edge: Edge } }
   | { rect: Rect; action: 'shop' };                                  // 필드 시설 패널
 
 export interface MapLabel {
@@ -84,7 +89,6 @@ export interface RegionPack {
   spawn: Point;
   triggers: TriggerDef[]; // 배열 순서 = 검사 순서
   labels: MapLabel[];     // 필드 라벨
-  mapLabels: MapLabel[];  // 월드맵 전용 라벨 (필드와 크기·문구가 다르다)
   /** 지역 고유 연출 훅 (지역당 1개, 장식 전용 — 지형/건물을 여기서 그리지 말 것) */
   flavor?: (ctx: CanvasRenderingContext2D, t: number) => void;
 }

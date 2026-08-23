@@ -32,7 +32,7 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2]); // 마을(0)/태평양(1)/해구(2)
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3]); // 마을(0)/태평양(1)/해구(2)/동남아(3)
     expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4]);
   });
 

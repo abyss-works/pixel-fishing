@@ -1,17 +1,16 @@
-// 월드맵/미니맵 인터프리터 — RegionPack을 월드 1:1 해상도의 축소 표현으로 그린다.
-// labels=true(월드맵): 지명·범례·내 위치 십자 / labels=false(미니맵): 점멸 점만.
-import { R, label, UI } from '../common.js';
+// 미니맵 인터프리터 — RegionPack을 축소 표현으로 그리고 내 위치를 점멸 표시한다.
+// (구 월드맵 라벨 모드는 호출자 없는 죽은 경로라 철거 — 전체 지구 조망은 pixel/scenes/atlas.ts 소관)
+import { R } from '../common.js';
 import type { Ctx } from '../common.js';
 import { BUILDING_SPRITES } from '../sprites/buildings.js';
-import { drawLabel, drawLand, drawWaterFill } from '../sprites/scenery.js';
+import { drawLand, drawWaterFill } from '../sprites/scenery.js';
 import { drawSchools } from '../sprites/overlays.js';
 import type { Point, RegionPack } from '../../world/types';
 
 export function renderWorldMap(
   ctx: Ctx, pack: RegionPack, player: Point, boat: number,
-  opts: { labels?: boolean; t?: number } = {},
+  opts: { t?: number } = {},
 ) {
-  const labels = opts.labels ?? true;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   // 바탕 + 지형 (플랫 채움 — 필드의 테두리/모래테 장식은 생략)
@@ -26,21 +25,10 @@ export function renderWorldMap(
     const c = BUILDING_SPRITES[b.sprite].mapColor;
     if (c) R(ctx, b.rect.x, b.rect.y, b.rect.w, b.rect.h, c);
   }
+  // 미니맵은 축소판이라 잠금 라벨("배 N단계")을 생략한다 — 필드(drawSchools 기본값)와의 차이
+  drawSchools(ctx, pack.schools, boat, opts.t ?? 0, false);
 
-  if (labels) for (const l of pack.mapLabels) drawLabel(ctx, l, true);
-  drawSchools(ctx, pack.schools, boat, opts.t ?? 0, labels);
-
-  if (labels) {
-    // 내 위치 — 십자 마커
-    R(ctx, player.x - 3, player.y - 3, 6, 6, '#ffffff');
-    R(ctx, player.x - 6, player.y - 6, 12, 1, 'rgba(255,255,255,0.6)');
-    R(ctx, player.x - 6, player.y + 5, 12, 1, 'rgba(255,255,255,0.6)');
-    R(ctx, player.x - 6, player.y - 6, 1, 12, 'rgba(255,255,255,0.6)');
-    R(ctx, player.x + 5, player.y - 6, 1, 12, 'rgba(255,255,255,0.6)');
-    label(ctx, '내 위치', player.x, player.y - 10, UI.text, 11);
-  } else {
-    // 미니맵 모드 — 점멸 점
-    const blink = (Math.sin((opts.t ?? 0) * 6) + 1) / 2 > 0.35;
-    if (blink) R(ctx, player.x - 6, player.y - 6, 12, 12, '#ffffff');
-  }
+  // 미니맵 모드 — 점멸 점
+  const blink = (Math.sin((opts.t ?? 0) * 6) + 1) / 2 > 0.35;
+  if (blink) R(ctx, player.x - 6, player.y - 6, 12, 12, '#ffffff');
 }

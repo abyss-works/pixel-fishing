@@ -4,10 +4,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   CAST_RANGE, REGION_PACKS, canMove, zoneAt, movePlayer, inTrigger, nearestSchoolInRange,
-  furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE,
+  entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   V_BOATSHOP, V_BOATSHOP_TRIGGER,
-  OCEAN, LANDS, TRENCH, O_DOCK, O_SPAWN, O_SCHOOLS,
+  OCEAN, LANDS, TRENCH, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT,
+  SEASIA, SEASIA_LANDS, CORAL_TRI, CORAL_SEA, M_DOCK, M_SPAWN, LUZON_STRAIT,
 } from './index';
 import type { RegionPack, School } from './index';
 
@@ -160,6 +161,121 @@ describe('대양 트리거', () => {
     expect(inTrigger(dc, O_DOCK)).toBe(true);
     expect(canMove(OCEAN, dc.x, dc.y)).toBe(true);
   });
+
+  it('남쪽 출구(루손 해협)는 항해 가능한 물 위이고 동남아로 통한다', () => {
+    const ec = { x: O_EXIT.x + O_EXIT.w / 2, y: O_EXIT.y + 2 };
+    expect(canMove(OCEAN, ec.x, ec.y)).toBe(true);
+    const travel = OCEAN.triggers.find(t => t.action === 'travel');
+    assertTravel(travel);
+    expect(travel.to).toBe('seasia');
+    expect(travel.requiredBoat).toBe(3);
+  });
+});
+
+// ============ 지역 1-2: 동남아&오세아니아 — 고정 좌표 회귀 ============
+
+describe('동남아 R4: 충돌 (항해)', () => {
+  it('열린 바다는 항해 가능, 육지/경계는 불가', () => {
+    expect(canMove(SEASIA, M_SPAWN.x, M_SPAWN.y)).toBe(true);
+    expect(canMove(SEASIA, 300, 100)).toBe(true);
+    for (const l of SEASIA_LANDS) {
+      expect(canMove(SEASIA, l.x + l.w / 2, l.y + l.h / 2), l.name ?? `${l.x},${l.y}`).toBe(false);
+    }
+    expect(canMove(SEASIA, -5, 100)).toBe(false);
+    expect(canMove(SEASIA, 100, 545)).toBe(false);
+  });
+
+  it('해역 판정: 코럴 트라이앵글/산호해=coral·coralsea, 밖=southchina', () => {
+    expect(zoneAt(SEASIA, CORAL_TRI.x + 10, CORAL_TRI.y + 10)).toBe('coral');
+    expect(zoneAt(SEASIA, CORAL_SEA.x + 10, CORAL_SEA.y + 10)).toBe('coralsea');
+    expect(zoneAt(SEASIA, M_SPAWN.x, M_SPAWN.y)).toBe('southchina');
+    // 산호해 경계 바로 밖 군집은 남중국해여야 한다 (수역 rect 인접 회귀)
+    expect(zoneAt(SEASIA, 780, 300)).toBe('southchina');
+  });
+});
+
+describe('동남아 트리거', () => {
+  it('접안 트리거는 마닐라항 건물 아래 물 위', () => {
+    const dc = { x: M_DOCK.x + M_DOCK.w / 2, y: M_DOCK.y + M_DOCK.h / 2 };
+    expect(inTrigger(dc, M_DOCK)).toBe(true);
+    expect(canMove(SEASIA, dc.x, dc.y)).toBe(true);
+  });
+
+  it('출구는 루손 해협(태평양 복귀, 게이트 없음) 하나 — 말라카는 라벨 예고만', () => {
+    const travels = SEASIA.triggers.filter(t => t.action === 'travel');
+    expect(travels).toHaveLength(1);
+    assertTravel(travels[0]);
+    expect(travels[0].to).toBe('ocean');
+    expect(travels[0].requiredBoat).toBe(0);
+    expect(inTrigger({ x: LUZON_STRAIT.x + LUZON_STRAIT.w / 2, y: LUZON_STRAIT.y + LUZON_STRAIT.h / 2 },
+      LUZON_STRAIT)).toBe(true);
+    // 말라카 해협은 아직 지역이 없어 트리거가 아니라 라벨로만 예고한다 (decisions/region-1-2-cut)
+    expect(SEASIA.labels.some(l => l.text.includes('말라카'))).toBe(true);
+  });
+});
+
+function assertTravel(t: import('./index').TriggerDef | undefined): asserts t is
+  Extract<import('./index').TriggerDef, { action: 'travel' }> {
+  expect(t?.action).toBe('travel');
+}
+
+// ============ R5c: 경계 봉합 입장점 (오픈월드) ============
+
+describe('R5c: entryPoint — 경계 봉합 입장', () => {
+  const travel = (rect: { x: number; y: number; w: number; h: number }, edge: 'top' | 'bottom' | 'left' | 'right'): import('./index').TriggerDef =>
+    ({ rect, action: 'travel', to: 'ocean', requiredBoat: 0, msg: '', blockedMsg: '',
+       entry: { edge } });
+
+  it('실전 팩: 태평양 남쪽에서 건너면 동남아 북쪽에서 x를 보존해 등장한다', () => {
+    const trig = OCEAN.triggers.find(t => t.action === 'travel')!;
+    assertTravel(trig);
+    for (const fromX of [100, 800]) {              // 열린 물 위의 열
+      const p = entryPoint(SEASIA, trig, { x: fromX, y: 534 });
+      expect(p.x).toBe(fromX);                       // 벗어난 자리 그대로
+      expect(p.y).toBeLessThan(40);                  // 마주 보는(북쪽) 가장자리 안쪽
+      expect(canMove(SEASIA, p.x, p.y)).toBe(true);  // 바다 위
+    }
+  });
+
+  it('입장 열이 육지(루손)로 막혔으면 첫 통행 가능한 자리로 밀린다', () => {
+    const trig = OCEAN.triggers.find(t => t.action === 'travel')!;
+    assertTravel(trig);
+    const p = entryPoint(SEASIA, trig, { x: 480, y: 534 }); // 루손 바로 남쪽 열
+    expect(p.x).toBeGreaterThanOrEqual(510);         // 루손 북부 조각(x<510) 동쪽 첫 물
+    expect(p.y).toBeLessThan(40);
+    expect(canMove(SEASIA, p.x, p.y)).toBe(true);
+  });
+
+  it('육지 뒤에 서면 통행 가능한 첫 자리로 밀린다', () => {
+    // seasia 북단 물 띠는 전 폭이 물이라, 육지 회피는 인공 팩으로 검증
+    const mini: RegionPack = {
+      id: 'ocean', name: '', base: 'home',
+      info: { shortName: '', tagline: '', lore: '', tips: [], controls: [] },
+      w: 200, h: 200, movement: 'sail', ground: { kind: 'water', style: 'sea' },
+      waveCount: 0,
+      terrain: [{ kind: 'land', rect: { x: 0, y: 0, w: 120, h: 30 } }],
+      buildings: [], decorations: [], schools: [], spawn: { x: 100, y: 100 },
+      triggers: [travel({ x: 0, y: 192, w: 200, h: 8 }, 'top')],
+      labels: [],
+    };
+    const p = entryPoint(mini, mini.triggers[0], { x: 20, y: 196 });
+    expect(p.x).toBeGreaterThanOrEqual(120);         // 육지 rect(x<120) 밖 첫 칸
+    expect(canMove(mini, p.x, p.y)).toBe(true);
+  });
+
+  it('되돌아 나오는 출구 트리거 위에는 착지하지 않는다 (재발화 방지)', () => {
+    const p = entryPoint(SEASIA, SEASIA.triggers.find(t => t.action === 'travel')!,
+      { x: 700, y: 8 });
+    for (const t of SEASIA.triggers) {
+      expect(inTrigger(p, t.rect), `${t.action} 트리거 위 착지`).toBe(false);
+    }
+  });
+
+  it('entry 없는 트리거는 스폰을 돌려준다 (거점 항로 기존 계약)', () => {
+    const dock = OCEAN.triggers[0];
+    expect(dock.action).toBe('base');
+    expect(entryPoint(OCEAN, dock, { x: 300, y: 190 })).toEqual(O_SPAWN);
+  });
 });
 
 // ============ 공통 ============
@@ -180,6 +296,9 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     }
     for (const f of HARBOR_FURNITURE) {
       expect(furnitureAt('harbor', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
+    }
+    for (const f of MANILA_FURNITURE) {
+      expect(furnitureAt('manila', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
   });
   it('여객선은 항구에만 있다', () => {

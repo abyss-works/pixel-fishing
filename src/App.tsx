@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { BASE_PACKS } from './world';
-import type { FurnitureId, SceneRef } from './world';
+import type { FurnitureId, Point, SceneRef } from './world';
 import Base from './stage/Base';
 import Field from './stage/Field';
 import FacilityModal from './stage/FacilityModal';
+import WorldAtlas from './stage/WorldAtlas';
 import MessageLog from './stage/MessageLog';
 import Sidebar from './sidebar';
 import { DEFAULT_TAB } from './sidebar/tabs';
@@ -40,9 +41,14 @@ export default function App() {
   // 우측 사이드바 상태 — 탭은 씬 무관 5개 고정, 씬이 바뀌면 열린 시설 패널만 닫는다
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
+  // 세계지도 — 미니맵 클릭 (R23b). 지역 탭은 탭바로 접근.
+  const [showAtlas, setShowAtlas] = useState(false);
+  // 경계 봉합 입장점 — travel 시 Field가 계산한 "이어지는 자리". 씬 전환과 소비되면 해제된다.
+  const [entryPos, setEntryPos] = useState<Point | null>(null);
 
-  const go = (s: SceneRef, msg: string) => {
+  const go = (s: SceneRef, msg: string, ep?: Point) => {
     setScene(s);
+    setEntryPos(ep ?? null);
     setToast(msg);
     setActionPanel(null);
     // 서버에 위치를 남긴다 — 재개 지점이자 방문 기록(업적)의 근거.
@@ -52,9 +58,8 @@ export default function App() {
   // 씬 → 소속 지역 (지역 탭·도감이 거점에서도 현재 지역 정보를 알 수 있게) — 팩 데이터에서 파생
   const region = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
 
-  // 미니맵 클릭 → 지역 탭 열기 (M 키 트리거는 폐지)
-  // TODO: 월드맵 화면(지역 간 이동/전체 지구 조망)이 생기면 미니맵 클릭은 그쪽으로 연결한다.
-  const onOpenMap = () => setActiveTab('region');
+  // 미니맵 클릭 → 세계지도 모달 (전체 지구 조망 — 확정 노선의 예고편)
+  const onOpenMap = () => setShowAtlas(true);
 
   // 거점 시설 클릭(캔버스) — 정비 시설은 스테이지 모달, 도감은 탭 전환, 문/여객선은 장면 이동.
   // 목적지·안내문은 거점 팩 데이터(region/exitMsg/travel) — 거점별 분기 없음.
@@ -96,7 +101,8 @@ export default function App() {
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
                  onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
-                 onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))} />
+                 onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))}
+                 initialPos={entryPos ?? undefined} />
         )}
 
         {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
@@ -116,6 +122,9 @@ export default function App() {
         syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} onAuthChanged={onAuthChanged}
       />
+
+      {/* 세계지도 — 전체 지구 조망 (미니맵 클릭) */}
+      {showAtlas && <WorldAtlas onClose={() => setShowAtlas(false)} />}
 
       {/* 업데이트 안내 — 배포 후 새로고침 안 한 탭 (서버 426). 닫기 없음, 새로고침이 유일한 출구 */}
       {outdated && <UpdateModal />}

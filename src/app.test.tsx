@@ -652,20 +652,21 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   });
 });
 
-describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)', () => {
-  it('필드에서 미니맵을 클릭하면 지역 탭이 열린다', () => {
+describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐지)', () => {
+  it('필드에서 미니맵을 클릭하면 세계지도가 열리고, 닫으면 사라진다', () => {
     seed({ boat: 1 });
     render(<App />);
-    clickFurniture('exit'); // 집 → 마을 (필드 진입, 기본 탭=지역)
-    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
-    expect(screen.getAllByText(/배.*필요|낚시 가능/).length).toBeGreaterThan(0); // 진입 가능 여부
+    clickFurniture('exit'); // 집 → 마을 (필드 진입)
+    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
 
-    clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));
-    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
+    expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { code: 'KeyM' }); // M 키는 아무 일도 하지 않는다
-    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
+    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
   });
 });
 

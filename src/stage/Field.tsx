@@ -6,7 +6,7 @@ import { when } from '../backend/types';
 import { subscribeFailure } from '../errors';
 import { useKeyScope } from '../hotkeys';
 import type { DispatchResult, MaybePromise } from '../backend/types';
-import { REGION_PACKS, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
+import { REGION_PACKS, entryPoint, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import { nextPhase, phaseDurationMs, judgePress } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
@@ -35,8 +35,9 @@ interface Props {
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 캐치도 서버(또는 로컬 리듀서)가 계산 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
-  /** 씬 전환 — 목적지·안내문은 트리거 데이터(팩)가 결정하고 Field는 전달만 한다 */
-  onScene: (target: SceneRef, msg: string) => void;
+  /** 씬 전환 — 목적지·안내문은 트리거 데이터(팩)가 결정하고 Field는 전달만 한다.
+   *  경계 봉합 travel은 입장 좌표(entryPoint)를 함께 넘긴다 — 스폰 텔레포트 대신 이어지는 위치. */
+  onScene: (target: SceneRef, msg: string, entryPos?: Point) => void;
   onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
   onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
   onWarmup?: () => void;           // 캐스팅 순간 서버 함수 워밍 (콜드 스타트 흡수)
@@ -237,7 +238,9 @@ export default function Field({
           }
           if (trig.action === 'travel') {                                  // 지역 간 이동 (배 게이트)
             if (gameRef.current.boat >= trig.requiredBoat) {
-              sceneRef.current({ kind: 'region', id: trig.to }, trig.msg);
+              // 경계 봉합 — 목적지의 마주 보는 자리에서 이어서 등장한다 (오픈월드 R5c)
+              const entry = entryPoint(REGION_PACKS[trig.to], trig, posRef.current);
+              sceneRef.current({ kind: 'region', id: trig.to }, trig.msg, entry);
               return;
             }
             posRef.current = prev;                                         // 되밀기 + 게이트 안내
@@ -259,11 +262,10 @@ export default function Field({
         zone: st.zone,
         t: now / 1000,
       });
-      // 필드 위 미니맵 오버레이 (라벨 없는 월드맵 축소)
+      // 필드 위 미니맵 오버레이
       const mmCtx = minimapRef.current?.getContext('2d');
       if (mmCtx) {
-        renderWorldMap(mmCtx, def, posRef.current, gameRef.current.boat,
-          { labels: false, t: now / 1000 });
+        renderWorldMap(mmCtx, def, posRef.current, gameRef.current.boat, { t: now / 1000 });
       }
       raf = requestAnimationFrame(loop);
     };
