@@ -1,6 +1,6 @@
 // 액션 리듀서 — 서버(api/action)와 LocalBackend가 공유하는 상태 전이 규칙 (v0.5.0)
 import { describe, it, expect } from 'vitest';
-import { applyAction } from './actions';
+import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { BAG_CAPACITY, BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
@@ -139,6 +139,23 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const out = applyAction(seed({ gold: BOATS[0].price }), { type: 'buyBoat' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.boat).toBe(1);
+  });
+
+  it('sendLetter — 상태는 그대로, 이벤트만 남는다', () => {
+    const out = applyAction(seed({ gold: 7 }), { type: 'sendLetter', text: '  가방 늘려주세요  ' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(seed({ gold: 7 }));            // 게임 상태 무변경
+    expect(out.events).toEqual([{ type: 'letter', payload: { text: '가방 늘려주세요' } }]); // 앞뒤 공백 제거
+    expect(out.writes.instancesAdded).toEqual([]);
+  });
+
+  it('sendLetter — 빈 글과 상한 초과는 거부', () => {
+    const bad = (text: string) =>
+      applyAction(seed(), { type: 'sendLetter', text }, deps());
+    expect(bad('')).toEqual({ ok: false, error: 'bad-request' });
+    expect(bad('   ')).toEqual({ ok: false, error: 'bad-request' });
+    expect(bad('가'.repeat(LETTER_MAX + 1))).toEqual({ ok: false, error: 'bad-request' });
+    expect(bad('가'.repeat(LETTER_MAX)).ok).toBe(true);       // 경계는 통과
   });
 
   it('travel — 위치를 남기고, 첫 방문만 이벤트로 기록한다', () => {

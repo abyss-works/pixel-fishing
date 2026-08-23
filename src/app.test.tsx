@@ -612,13 +612,24 @@ describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
 });
 
 describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
+  it('편지 창구가 열린다 — 로컬(오프라인)은 로그인 상태로 가정한다', () => {
+    seed({});
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(screen.getByText('편지 쓰기'));
+    expect(screen.getByText('개발자에게 편지')).toBeInTheDocument();
+    // 빈 글은 못 보낸다
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+  });
+
   it('계정과 ID를 보여주고 복사 버튼을 단다', () => {
     seed({});
     render(<App />);
     clickTab('설정');
     expect(screen.getByText('내 정보')).toBeInTheDocument();
-    // 이메일이 없으면 게스트로 표기한다 — 게스트는 uid 말고 식별할 방법이 없다
-    expect(screen.getByText(/게스트/)).toBeInTheDocument();
+    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
+    // 계정 섹션과 내 정보 두 곳에 뜬다 (로컬은 로그인 상태로 가정 — 실물은 이메일 또는 '게스트')
+    expect(screen.getAllByText('dev@localhost')).toHaveLength(2);
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
