@@ -21,10 +21,10 @@ function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; child
     <span className="flex flex-col items-center justify-center gap-1 whitespace-nowrap">
       {/* 끝의 공백은 의도적이다 — 두 행이 붙어 textContent가 "골드60G"가 되면 HUD를
           문자열로 읽는 테스트(app.test의 hud())가 값을 못 찾는다. 지우지 말 것. */}
-      <span className="flex items-center gap-1 text-[11px] leading-none text-text-dim">
+      <span className="flex items-center gap-1 text-xs leading-none text-text-dim">
         <PixelIcon glyph={glyph} size={11} />{label}{' '}
       </span>
-      <span className="text-sm leading-none text-gold font-pixel tracking-[0.5px]">{children}</span>
+      <span className="text-base leading-none text-gold font-pixel tracking-[0.5px]">{children}</span>
     </span>
   );
 }

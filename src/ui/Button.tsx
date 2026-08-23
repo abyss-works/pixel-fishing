@@ -13,7 +13,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({ variant = 'default', size = 'md', className, ...props }: ButtonProps) {
   return (
     <button
-      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-xs', className)}
+      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-sm', className)}
       {...props}
     />
   );

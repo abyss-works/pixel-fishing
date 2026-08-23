@@ -11,10 +11,10 @@ export default function MessageLog({ log }: { log: Msg[] }) {
          role="status" aria-live="polite">
       {log.slice(-8).map((m, i, arr) => (
         <div key={m.id}
-             className={cx('text-xs leading-[1.45] bg-[rgba(6,12,24,0.45)] rounded-sm px-2 py-px w-fit max-w-full',
+             className={cx('text-sm leading-[1.45] bg-[rgba(6,12,24,0.45)] rounded-sm px-2 py-px w-fit max-w-full',
                'animate-fade-in [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]', TONE_CLS[m.tone])}
              style={{ opacity: 0.4 + 0.6 * ((i + 1) / arr.length) }}>
-          <span className="text-text-dim text-[10px] mr-0.5">{m.ts}</span> {m.text}
+          <span className="text-text-dim text-2xs mr-0.5">{m.ts}</span> {m.text}
         </div>
       ))}
     </div>

@@ -32,7 +32,7 @@ export default function InstanceLine({
   const pct = inst.size === null ? null : sizePercentile(fish, inst.size);
 
   return (
-    <div className={cx(CELL, 'text-[11px] py-0.5 pl-4 pr-1',
+    <div className={cx(CELL, 'text-xs py-0.5 pl-4 pr-1',
                        onToggle && 'cursor-pointer hover:bg-surface-2',
                        (checked === false || inst.locked) && 'text-text-dim')}
          onClick={onToggle}
@@ -79,7 +79,7 @@ export function UnsizedLine({
   children?: React.ReactNode;
 }) {
   return (
-    <div className={cx(CELL, 'text-[11px] py-0.5 pl-4 pr-1',
+    <div className={cx(CELL, 'text-xs py-0.5 pl-4 pr-1',
                        onToggle && 'cursor-pointer hover:bg-surface-2',
                        (checked === false || locked) && 'text-text-dim')}
          onClick={onToggle}

@@ -30,7 +30,7 @@ export default function Modal({ layer = 'app', title, wide, onClose, children, c
   return (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')} onClick={onClose}>
       <div className={cx(box, className)} onClick={e => e.stopPropagation()}>
-        {title && <h3 className="text-base text-gold mb-2">{title}</h3>}
+        {title && <h3 className="text-lg text-gold mb-2">{title}</h3>}
         {children}
       </div>
     </div>

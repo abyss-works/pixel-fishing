@@ -777,6 +777,18 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(shown).toEqual(['최대 40.0cm', '33.0cm', '12.0cm', '40.0cm', '8.0cm']);
   });
 
+  it('최대 배지는 폼별 — 변이 중 가장 큰 놈도 배지를 받는다', () => {
+    // 변이는 "종만 같고 다른 개체"(rarity-design 7절) — 도감도 최대 크기를 폼별로 센다.
+    // 종 단위로 재면 일반 42cm 때문에 변이 30cm가 배지를 못 받아, 남길 판단 기준과 어긋난다.
+    seed({ bag: [
+      inst('carp', 'normal', 42), inst('carp', 'normal', 8),
+      inst('carp', 'variant', 30), inst('carp', 'variant', 5),
+    ] });
+    render(<App />);
+    clickTab(/^가방/);
+    expect(screen.getAllByText('최대')).toHaveLength(2); // 일반 42 + 변이 30
+  });
+
   it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
     // 잉어 30G + 금빛 잉어 60G(변이 ×2) = 한 행, 소계 90G
     seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
@@ -787,7 +799,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getAllByText('90G')).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
     expect(screen.getByText('변이')).toBeInTheDocument();            // 개체 줄의 배지
-    expect(screen.getByText('최대')).toBeInTheDocument();            // 35cm 변이가 최대
+    expect(screen.getAllByText('최대')).toHaveLength(2);             // 최대는 폼별 — 일반·변이 각각
   });
 
   it('변이만 골라 파는 것도 개체 단위로 된다', () => {

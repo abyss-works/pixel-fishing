@@ -36,7 +36,7 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
   });
   const [i, setI] = useState(initialForm);
   const form = forms[i];
-  const arrowCls = 'bg-surface-2 border border-line rounded-sm text-text text-sm px-1 py-2 cursor-pointer hover:bg-line';
+  const arrowCls = 'bg-surface-2 border border-line rounded-sm text-text text-base px-1 py-2 cursor-pointer hover:bg-line';
 
   return (
     <Modal onClose={onClose}>
@@ -46,7 +46,7 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
         <div>
           <FishSprite fish={fish} preset="portrait" form={form.form} discovered={form.discovered}
                       ariaLabel={form.discovered ? fish.name : '미확인 변종'} className="block" />
-          <p className="text-center text-text-dim text-xs mt-1">{form.discovered ? form.name : '???'}</p>
+          <p className="text-center text-text-dim text-sm mt-1">{form.discovered ? form.name : '???'}</p>
         </div>
         <button className={arrowCls} aria-label="다음 형태"
                 onClick={() => setI((i + 1) % forms.length)}>▶</button>
@@ -54,19 +54,19 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
 
       <div className="mt-3">
         {/* 미발견 폼도 같은 구조로 렌더 (값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지 */}
-        <h3 className="text-base text-gold mb-2">{form.discovered ? form.name : '???'}{' '}
+        <h3 className="text-lg text-gold mb-2">{form.discovered ? form.name : '???'}{' '}
           <RarityDot rarity={fish.rarity} /><RarityText rarity={fish.rarity} /></h3>
-        <p className="text-text-dim italic text-xs mt-1 mb-3">
+        <p className="text-text-dim italic text-sm mt-1 mb-3">
           {form.discovered ? form.lore : '…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.'}
         </p>
-        <div className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs mb-2">
+        <div className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm mb-2">
           <span className="text-text-dim">가격</span>
           <span className="pf-accent">{form.discovered ? `${priceOf(fish, form.form)}G` : '???'}</span>
           <span className="text-text-dim">잡은 수</span>
           <span>{form.discovered ? `${form.count}마리` : '???'}</span>
           <span className="text-text-dim">최대 크기</span>
           <span>{form.discovered
-            ? <>{form.maxSize.toFixed(1)}cm <span className="text-text-dim text-[11px]">(상위 {sizePercentile(fish, form.maxSize)}%)</span></>
+            ? <>{form.maxSize.toFixed(1)}cm <span className="text-text-dim text-xs">(상위 {sizePercentile(fish, form.maxSize)}%)</span></>
             : '???'}</span>
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
@@ -92,7 +92,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
 
   return (
     <div>
-      <h3 className="text-base text-gold mb-1">
+      <h3 className="text-lg text-gold mb-1">
         {view === 'base' ? '일반 어종' : '돌연변이'}
         {' ('}<span className="pf-accent">
           {view === 'base' ? baseCount : varCount}/{FISH.length}
@@ -104,7 +104,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
           const caught = regionFish.filter(found).length;
           return {
             key: pack.id, // RegionId 단일 근원(data/spots 파생)이라 캐스트 불필요
-            label: <>{pack.info.shortName}<span className="text-[10px]"> {caught}/{regionFish.length}</span></>,
+            label: <>{pack.info.shortName}<span className="text-2xs"> {caught}/{regionFish.length}</span></>,
           };
         })}
         activeKey={sub}
@@ -115,14 +115,14 @@ export default function DexTab({ game, region, view }: { game: GameState; region
           .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity));
         return (
           <div key={s.id} className="mt-2">
-            <h4 className="text-xs text-text-dim font-normal border-b border-line pb-1 mb-1">{s.name}</h4>
+            <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{s.name}</h4>
             <div className="grid grid-cols-3 gap-2">
               {fishes.map(f => {
                 const ok = found(f);
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게 
                 return (
                   <div key={f.id} data-rarity={f.rarity}
-                       className={cx(RARITY_CARD, 'p-2 text-xs', !ok && 'opacity-[0.72]')}
+                       className={cx(RARITY_CARD, 'p-2 text-sm', !ok && 'opacity-[0.72]')}
                        role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
                        onClick={ok ? () => setDetail(f) : undefined}>
                     <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}
@@ -132,14 +132,14 @@ export default function DexTab({ game, region, view }: { game: GameState; region
                       <>
                         <b>{formName(f, viewForm)}</b><br />
                         <RarityText rarity={f.rarity} /> · <span className="pf-accent">{priceOf(f, viewForm)}G</span><br />
-                        <span className="text-text-dim text-[11px]">
+                        <span className="text-text-dim text-xs">
                           {dexRecord(game, f.id, viewForm)?.count ?? 0}마리 잡음
                         </span>
                       </>
                     ) : (
                       <>
                         <b>???</b><br />
-                        <span className="text-text-dim text-[11px]"><RarityDot rarity={f.rarity} />미확인</span>
+                        <span className="text-text-dim text-xs"><RarityDot rarity={f.rarity} />미확인</span>
                       </>
                     )}
                   </div>

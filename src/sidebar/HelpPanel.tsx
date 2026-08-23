@@ -22,7 +22,7 @@ function Topic({ title, hint, children }: { title: string; hint: string; childre
     <Accordion summary={
       <>
         <span className="text-gold">{title}</span>
-        <span className="flex-1 text-text-dim text-[11px] overflow-hidden text-ellipsis whitespace-nowrap">
+        <span className="flex-1 text-text-dim text-xs overflow-hidden text-ellipsis whitespace-nowrap">
           {hint}
         </span>
       </>

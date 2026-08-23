@@ -6,7 +6,7 @@ export default function Note({ tone = 'info', className, children }: {
   tone?: 'info' | 'warn'; className?: string; children: ReactNode;
 }) {
   return (
-    <p className={cx('text-xs my-2', tone === 'warn' ? 'text-danger' : 'text-text-dim', className)}>
+    <p className={cx('text-sm my-2', tone === 'warn' ? 'text-danger' : 'text-text-dim', className)}>
       {children}
     </p>
   );

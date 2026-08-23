@@ -15,7 +15,7 @@ export default function SubTabs<K extends string>({ items, activeKey, onSelect }
         <button
           key={it.key}
           className={cx(
-            'flex-1 border rounded-sm px-2 py-1 text-xs cursor-pointer',
+            'flex-1 border rounded-sm px-2 py-1 text-sm cursor-pointer',
             it.key === activeKey
               ? 'bg-surface-2 border-gold text-gold'
               : 'bg-bg border-line text-text-dim hover:text-text',

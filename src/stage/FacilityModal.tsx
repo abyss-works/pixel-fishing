@@ -124,7 +124,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
           <DataTable>
             <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
             <tbody>
-              {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxSize }) => {
+              {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm }) => {
                 const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
                 const on = sellable.filter(i => !excluded.has(i.uid)).length;
                 const allOn = !locked && on === sellable.length;
@@ -171,7 +171,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                       <td colSpan={5} className="p-0 bg-bg">
                         {sized.map(inst => (
                           <InstanceLine key={inst.uid} inst={inst} fish={fish}
-                                        best={inst.size !== null && inst.size === maxSize}
+                                        best={inst.size !== null && inst.size === maxByForm[inst.form]}
                                         checked={!inst.locked && !excluded.has(inst.uid)}
                                         onToggle={inst.locked ? undefined : () => toggleOne(inst.uid)}>
                             <PixelIcon size={11}

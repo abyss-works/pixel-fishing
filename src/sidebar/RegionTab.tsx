@@ -28,7 +28,7 @@ export default function RegionTab({ region, game }: { region: RegionId; game: Ga
   return (
     <div>
       <Panel title={pack.name}>
-        <p className="text-accent text-xs">{info.tagline}</p>
+        <p className="text-accent text-sm">{info.tagline}</p>
         <p className="text-xs leading-[1.7]">{info.lore}</p>
       </Panel>
 
@@ -41,7 +41,7 @@ export default function RegionTab({ region, game }: { region: RegionId; game: Ga
           <div key={s.id} className={cx('border border-line rounded-sm p-2 bg-bg', !open && 'opacity-75')}>
             <div className="flex justify-between items-baseline gap-2 mb-1">
               <b>{s.name}</b>
-              <span className={cx('text-[11px] whitespace-nowrap', open ? 'text-accent' : 'text-text-dim')}>
+              <span className={cx('text-xs whitespace-nowrap', open ? 'text-accent' : 'text-text-dim')}>
                 {open ? '낚시 가능'
                   : <><PixelIcon glyph="lock" size={10} className="mr-0.5" />{BOATS[s.boatTier - 1].name}({s.boatTier}단계) 필요</>}
               </span>
@@ -59,8 +59,8 @@ export default function RegionTab({ region, game }: { region: RegionId; game: Ga
                     <FishSprite fish={f} preset="thumb" form="normal" discovered={caught}
                                 ariaLabel={caught ? f.name : '미확인 어종'}
                                 className="block mx-auto" />
-                    <div className="text-[10px] leading-tight truncate">{caught ? f.name : '???'}</div>
-                    <div className="text-[9px] leading-tight"><RarityText rarity={f.rarity} /></div>
+                    <div className="text-2xs leading-tight truncate">{caught ? f.name : '???'}</div>
+                    <div className="text-2xs leading-tight"><RarityText rarity={f.rarity} /></div>
                   </div>
                 );
               })}

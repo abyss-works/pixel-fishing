@@ -11,9 +11,19 @@
 @import "tailwindcss";
 
 /* Tailwind 토큰 — 색 값의 근원은 아래 :root 변수 하나뿐, 여기선 참조/스케일 조정만.
-   간격·폰트 크기 토큰(구 --sp-N·--fs-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다
-   (p-1~4 = 4/8/12/16px · text-xs/sm/base = 12/14/16px). */
+   간격 토큰(구 --sp-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다 (p-1~4 = 4/8/12/16px). */
 @theme {
+  /* 글자 크기 사다리 — **여기가 전역 단일 근원이다.**
+     전에는 Tailwind 기본값(12/14/16) + 컴포넌트마다 박은 text-[9px]·[10px]·[11px] 17곳 +
+     index.css 안의 font-size 네 곳이 섞여 있어 "조금 키우자"를 한 곳에서 할 수 없었다.
+     임의 px는 전부 걷어내고 아래 다섯 단으로 수렴시켰다 — 값을 바꾸면 화면 전체가 따라온다.
+     픽셀 폰트(Silkscreen)가 섞여 있어 소수점 배율 대신 정수 px로 둔다(반픽셀은 흐려진다). */
+  --text-2xs: 11px;  /* 배지·보조 숫자 (구 9·10px) */
+  --text-xs: 12px;   /* 라벨·표 (구 11px) */
+  --text-sm: 13px;   /* 본문 (구 text-xs 12px) */
+  --text-base: 15px; /* 강조 본문·버튼 (구 text-sm 14px) */
+  --text-lg: 17px;   /* 제목 (구 text-base 16px) */
+
   --color-bg: var(--c-bg);
   --color-surface: var(--c-surface);
   --color-surface-2: var(--c-surface-2);
@@ -127,7 +137,7 @@ body {
   background: var(--c-bg);
   color: var(--c-text);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-sm);
   user-select: none;
   overflow: hidden;
 }
@@ -167,7 +177,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-radius: 0;
     color: var(--c-text);
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--text-base);
     padding: 8px 16px;
     cursor: pointer;
     box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
@@ -222,7 +232,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-radius: 0;
     border-bottom: 2px solid transparent;
     padding: 8px 2px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--c-text-dim);
     cursor: pointer;
   }
@@ -254,7 +264,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   .pf-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .pf-table th, .pf-table td {
     padding: 4px 8px;

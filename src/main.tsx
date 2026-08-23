@@ -17,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
     <Sentry.ErrorBoundary onError={fail} fallback={
       <div className="p-6 text-center text-text">
         <p className="text-gold">문제가 생겨 화면을 그리지 못했어요.</p>
-        <p className="text-text-dim text-xs mt-1">
+        <p className="text-text-dim text-sm mt-1">
           새로고침하면 대개 해결돼요. 진행 상황은 서버에 저장되어 있어요.
         </p>
         <button className="pf-btn mt-3" onClick={() => location.reload()}>새로고침</button>

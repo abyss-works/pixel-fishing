@@ -6,6 +6,7 @@ import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { Backend, DispatchResult } from './types';
 import { AppError } from '../errors';
+import { BUILD_ID } from '../buildId';
 import { REJECT_TEXT } from '../game/rules';
 import type { RejectReason } from '../game/rules';
 
@@ -100,7 +101,7 @@ export class HttpBackend implements Backend {
           authorization: `Bearer ${token}`,
           // 낡은 탭 차단 — 서버가 자기 배포 식별자와 대조 (426).
           // APP_VERSION이 아니라 배포 식별자다: 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가른다
-          'x-build-id': __BUILD_ID__,
+          'x-build-id': BUILD_ID,
         },
         body: JSON.stringify(action),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지

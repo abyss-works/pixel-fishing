@@ -9,9 +9,9 @@ export default function Accordion({ summary, className, children }: {
     <details className={cx('group border border-line rounded-sm bg-bg', className)}>
       <summary
         className={cx(
-          'flex items-baseline gap-2 p-2 cursor-pointer list-none text-xs hover:bg-surface-2',
+          'flex items-baseline gap-2 p-2 cursor-pointer list-none text-sm hover:bg-surface-2',
           '[&::-webkit-details-marker]:hidden',
-          "before:content-['▸'] before:text-text-dim before:text-[10px] group-open:before:content-['▾']",
+          "before:content-['▸'] before:text-text-dim before:text-2xs group-open:before:content-['▾']",
         )}
       >
         {summary}

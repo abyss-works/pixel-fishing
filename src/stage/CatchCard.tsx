@@ -71,22 +71,22 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
       {/* 신규 발견 — 왼쪽 위 모서리에 기울어진 리본 */}
       {info?.isNew && (
         <span className="absolute -top-2.5 -left-3.5 [transform:rotate(-12deg)] bg-[#ff4081] text-white
-                         font-bold text-xs px-2 py-0.5 rounded-sm shadow-panel animate-new-bounce">
+                         font-bold text-sm px-2 py-0.5 rounded-sm shadow-panel animate-new-bounce">
           NEW!
         </span>
       )}
-      <span className="text-xs"><RarityText rarity={fish.rarity} /></span>
+      <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
       <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} />
       {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 (의미심장한 한 줄) */}
-      <b className={cx('text-base', isVariant && 'animate-mutated-shimmer')}>
+      <b className={cx('text-lg', isVariant && 'animate-mutated-shimmer')}>
         {formName(fish, info?.form ?? 'normal')}
       </b>
-      <span className="text-xs text-text-dim">
+      <span className="text-sm text-text-dim">
         {info && `${info.size.toFixed(1)}cm`}
         {info?.isBig && <b className="text-gold"> ★ 월척! 상위 {info.percentile}%</b>}
       </span>
-      {isVariant && <span className="text-xs italic text-text-dim">{variantLine}</span>}
-      <span className="text-xs text-text-dim">{r.name} 등급 · {priceOf(fish, info?.form ?? 'normal')}G</span>
+      {isVariant && <span className="text-sm italic text-text-dim">{variantLine}</span>}
+      <span className="text-sm text-text-dim">{r.name} 등급 · {priceOf(fish, info?.form ?? 'normal')}G</span>
     </div>
   );
 }

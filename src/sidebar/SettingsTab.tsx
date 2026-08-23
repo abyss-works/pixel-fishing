@@ -6,6 +6,7 @@ import type { DispatchResult, MaybePromise } from '../backend/types';
 import { saveCode, supabase, signOutAccount } from '../backend/auth';
 import { REJECT_TEXT } from '../game/logic';
 import { APP_VERSION } from '../version';
+import { BUILD_LABEL } from '../buildId';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
 import Note from '../ui/Note';
@@ -37,12 +38,12 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
         <>
           <Note><b className="text-gold">{account}</b>로 로그인됨 — 진행이 이 계정에 저장돼요.</Note>
           <div className="flex flex-col gap-2 mb-2">
-            <Button className="text-left text-xs" onClick={signOut}>로그아웃</Button>
+            <Button className="text-left text-sm" onClick={signOut}>로그아웃</Button>
           </div>
         </>
       ) : (
         <div className="flex flex-col gap-2 mb-2">
-          <Button variant="primary" className="text-left text-xs" onClick={() => setOpen(true)}>계정 연동</Button>
+          <Button variant="primary" className="text-left text-sm" onClick={() => setOpen(true)}>계정 연동</Button>
         </div>
       )}
       {open && (
@@ -102,7 +103,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
   return (
     <div className="flex flex-col flex-1">
       {syncLabel && (
-        <div className={cx('text-[11px]', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
+        <div className={cx('text-xs', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
           {syncLabel}
         </div>
       )}
@@ -112,15 +113,20 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
       <SectionTitle>데이터 관리</SectionTitle>
       <div className="flex flex-col gap-2 mb-2">
-        <Button className="text-left text-xs" onClick={exportSave}>이사 코드 내보내기</Button>
-        <Button className="text-left text-xs" onClick={importSave}>이사 코드 불러오기</Button>
-        <Button className="text-left text-xs" onClick={enterCoupon}>쿠폰 입력</Button>
+        <Button className="text-left text-sm" onClick={exportSave}>이사 코드 내보내기</Button>
+        <Button className="text-left text-sm" onClick={importSave}>이사 코드 불러오기</Button>
+        <Button className="text-left text-sm" onClick={enterCoupon}>쿠폰 입력</Button>
       </div>
 
       <AdminPanel />
       <PatchNotesPanel />
 
-      <div className="text-[10px] text-text-dim opacity-70 mt-auto pt-2">v{APP_VERSION}</div>
+      {/* 버전(사람이 붙이는 이름)과 배포 식별자(커밋 SHA)를 같이 건다.
+          업데이트가 나갔는지 확인할 때 봐야 하는 건 **뒤쪽**이다 — 버전은 릴리즈 때만 올라가서
+          dev 배포 사이에서는 안 바뀐다. 두 탭의 이 값이 다르면 한쪽이 낡은 화면이다. */}
+      <div className="text-2xs text-text-dim opacity-70 mt-auto pt-2">
+        v{APP_VERSION} · <span className="pf-accent" title="배포 식별자 (커밋 SHA)">{BUILD_LABEL}</span>
+      </div>
     </div>
   );
 }

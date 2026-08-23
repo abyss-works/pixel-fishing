@@ -23,15 +23,15 @@ export default function PatchNotesPanel() {
               <>
                 <span className="pf-accent">v{p.version}</span>
                 <span className="flex-1 text-text-dim overflow-hidden text-ellipsis whitespace-nowrap">{p.summary}</span>
-                <span className="text-text-dim text-[10px]">{p.date}</span>
+                <span className="text-text-dim text-2xs">{p.date}</span>
               </>
             }
           >
-            <ul className="list-none px-2 pb-2 flex flex-col gap-1 text-xs leading-[1.6]">
+            <ul className="list-none px-2 pb-2 flex flex-col gap-1 text-sm leading-[1.6]">
               {p.notes.map((n, i) => (
                 <li key={i}>
                   <span className={cx(
-                    'inline-block text-[10px] px-1 mr-1 rounded-sm border align-[1px] whitespace-nowrap',
+                    'inline-block text-2xs px-1 mr-1 rounded-sm border align-[1px] whitespace-nowrap',
                     TAG_CLS[n.tag] ?? 'text-text-dim border-line',
                   )}>{n.tag}</span>
                   {n.text}

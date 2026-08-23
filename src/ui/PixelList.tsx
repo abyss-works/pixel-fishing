@@ -7,7 +7,7 @@ export default function PixelList({ className, children }: { className?: string;
   return (
     <ul
       className={cx(
-        'list-none mb-2 text-xs leading-[1.7] text-text flex flex-col gap-1 [&_b]:text-gold',
+        'list-none mb-2 text-sm leading-[1.7] text-text flex flex-col gap-1 [&_b]:text-gold',
         '[&>li]:relative [&>li]:pl-3',
         "[&>li]:before:content-[''] [&>li]:before:absolute [&>li]:before:left-0.5 [&>li]:before:top-[0.65em] [&>li]:before:size-1 [&>li]:before:bg-accent",
         className,

@@ -43,7 +43,7 @@ export default function BagTab({ game, dispatch, setToast }: {
 
   return (
     <div>
-      <h3 className="text-base text-gold mb-1">
+      <h3 className="text-lg text-gold mb-1">
         가방 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
           {game.bag.length}</span>
         <span className="pf-accent text-text-dim">/{cap}</span>마리)
@@ -55,14 +55,14 @@ export default function BagTab({ game, dispatch, setToast }: {
       ) : (
         <>
           <div className="pf-frame divide-y divide-line">
-            {rows.map(({ key, fish, name, items, sized, unsized, maxSize }) => {
+            {rows.map(({ key, fish, name, items, sized, unsized, maxSize, maxByForm }) => {
               const expanded = !collapsed.has(key);
               const uids = items.map(i => i.uid);
               // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
               const allLocked = items.every(i => i.locked);
               return (
                 <div key={key}>
-                  <div className={cx(ROW, 'px-1 py-1 text-xs cursor-pointer hover:bg-surface-2',
+                  <div className={cx(ROW, 'px-1 py-1 text-sm cursor-pointer hover:bg-surface-2',
                                      allLocked && 'text-text-dim')}
                        onClick={() => toggleBagRow(key)}
                        role="button"
@@ -94,7 +94,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                     <div className="bg-bg pb-1">
                       {sized.map(inst => (
                         <InstanceLine key={inst.uid} inst={inst} fish={fish}
-                                      best={inst.size !== null && inst.size === maxSize}
+                                      best={inst.size !== null && inst.size === maxByForm[inst.form]}
                                       onLock={() => lock([inst.uid], !inst.locked, name)} />
                       ))}
                       {unsized.map(g => {
