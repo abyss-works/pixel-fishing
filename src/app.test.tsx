@@ -611,6 +611,21 @@ describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
   });
 });
 
+describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
+  it('계정과 ID를 보여주고 복사 버튼을 단다', () => {
+    seed({});
+    render(<App />);
+    clickTab('설정');
+    expect(screen.getByText('내 정보')).toBeInTheDocument();
+    // 이메일이 없으면 게스트로 표기한다 — 게스트는 uid 말고 식별할 방법이 없다
+    expect(screen.getByText(/게스트/)).toBeInTheDocument();
+    // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
+    // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
+    expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('전체가 복사돼요');
+  });
+});
+
 describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   it('세이브에 대양이 적혀 있으면 대양에서 시작한다', () => {
     seed({ boat: 1, location: { kind: 'region', id: 'ocean' } });

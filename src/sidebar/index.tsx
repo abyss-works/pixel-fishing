@@ -40,6 +40,8 @@ interface SidebarProps {
   syncState: string;
   /** 로그인된 영구 계정 이메일 (게스트면 null) — v0.4.0 */
   account: string | null;
+  /** 내 uid — 설정 탭에 띄운다. 문의 대응 시 세이브를 찾는 열쇠 */
+  uid: string | null;
   /** 가입/로그인/로그아웃 직후 App이 계정 표시·세이브를 갱신하는 콜백 */
   onAuthChanged: () => Promise<void>;
 }
@@ -100,7 +102,8 @@ export default function Sidebar(props: SidebarProps) {
         {activeTab === 'settings' && (
           <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
                        syncLabel={props.syncLabel} syncState={props.syncState}
-                       account={props.account} onAuthChanged={props.onAuthChanged} />
+                       account={props.account} uid={props.uid}
+                       onAuthChanged={props.onAuthChanged} />
         )}
       </div>
     </aside>

@@ -14,6 +14,7 @@ import SectionTitle from '../ui/SectionTitle';
 import AdminPanel from './AdminPanel';
 import PatchNotesPanel from './PatchNotesPanel';
 import AccountModal from './AccountModal';
+import { maskUid } from './shared';
 
 // ---------- 계정 (v0.4.0) — 설정 탭엔 상태+버튼만, 폼은 오버레이 모달 ----------
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(현재 게스트 진행 소멸 — 경고+백업)
@@ -54,13 +55,25 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
   );
 }
 
-export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, onAuthChanged }: {
+export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
   syncLabel: string | null; syncState: string;
-  account: string | null; onAuthChanged: () => Promise<void>;
+  account: string | null; uid: string | null; onAuthChanged: () => Promise<void>;
 }) {
+  // 이사 코드 내보내기와 같은 처리 — 클립보드가 막히면 프롬프트로 폴백한다.
+  // **복사는 언제나 전체 값**이다 — 화면만 가린다(아래 maskUid).
+  const copyId = async (value: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setToast('내 ID를 복사했어요. 문의하실 때 함께 보내주세요.');
+    } catch {
+      window.prompt('복사가 막혀 있어요. 아래 값을 직접 복사하세요.', value);
+    }
+  };
+
   const exportSave = async () => {
     const code = saveCode(game);
     try {
@@ -110,6 +123,26 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
       <AccountSection game={game} setToast={setToast}
                       account={account} onAuthChanged={onAuthChanged} />
+
+      {/* 내 정보 — **문의 대응용이다.** 문제를 알려온 사람의 세이브를 DB에서 찾으려면 uid가
+          있어야 하는데, 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
+          "개발자 도구 → 애플리케이션 탭"을 안내하는 것보다 여기서 눌러 복사하는 게 빠르다.
+          body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 — 그래서 버튼이 필수다. */}
+      <SectionTitle>내 정보</SectionTitle>
+      <div className="pf-frame divide-y divide-line mb-2 text-xs">
+        <div className="flex items-center gap-2 px-2 py-1">
+          <span className="text-text-dim shrink-0">계정</span>
+          <span className="truncate">{account ?? '게스트 (이메일 없음)'}</span>
+        </div>
+        <div className="flex items-center gap-2 px-2 py-1">
+          <span className="text-text-dim shrink-0">ID</span>
+          <span className="pf-accent text-2xs truncate select-text">{uid ? maskUid(uid) : '연결 중…'}</span>
+          <Button size="sm" className="ml-auto shrink-0" disabled={!uid}
+                  onClick={() => copyId(uid)}>복사</Button>
+        </div>
+      </div>
+      <Note>문의하실 때 이 <b>ID</b>를 함께 알려주시면 빠르게 해결할 수 있어요.
+        가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 
       <SectionTitle>데이터 관리</SectionTitle>
       <div className="flex flex-col gap-2 mb-2">
