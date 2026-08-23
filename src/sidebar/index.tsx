@@ -3,7 +3,9 @@ import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import type { RegionId } from '../world';
+import { SUB_TABS, TAB_ORDER } from './tabs';
 import type { TabKey } from './tabs';
+import { hasModifier, useKeyScope } from '../hotkeys';
 import TabBar from '../ui/TabBar';
 import TabIcon from './TabIcon';
 import HelpPanel from './HelpPanel';
@@ -55,6 +57,36 @@ export default function Sidebar(props: SidebarProps) {
     if (t === 'bag' && activeTab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
     setActiveTab(t);
   };
+
+  // 키보드 단축키 — 축이 둘이다.
+  //   숫자 1~5 = **부모 탭** 직행(5개). 세부 보기는 건드리지 않는다 — 가방을 카드로 보던
+  //              사람은 2를 눌러도 카드로 돌아온다(마지막 상태 유지가 덜 놀랍다).
+  //   Tab      = 세부까지 펼친 **7칸 순환**. Shift+Tab은 역방향.
+  // 화면에 표기하지 않는다(사용자 결정) — 도움말 정리 때 함께 적는다.
+  useKeyScope(e => {
+    if (hasModifier(e)) return; // Ctrl+1은 브라우저 탭 전환이다
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      // 지금 몇 번째 칸인가 — 보기 축이 없는 탭은 탭 이름만으로 정해진다
+      const at = SUB_TABS.findIndex(s => s.tab === activeTab
+        && (s.bag === undefined || s.bag === layout)
+        && (s.dex === undefined || s.dex === dexView));
+      const next = SUB_TABS[((at < 0 ? 0 : at) + (e.shiftKey ? -1 : 1) + SUB_TABS.length)
+        % SUB_TABS.length];
+      setActiveTab(next.tab);
+      if (next.bag) setBagLayout(next.bag);
+      if (next.dex) setDexView(next.dex);
+      return true;
+    }
+
+    const i = Number(e.key) - 1; // '1'~'5' — 탭바에 보이는 순서 그대로
+    if (Number.isInteger(i) && i >= 0 && i < TAB_ORDER.length) {
+      e.preventDefault();
+      setActiveTab(TAB_ORDER[i]);
+      return true;
+    }
+  });
 
   return (
     <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line

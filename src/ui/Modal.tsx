@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cx } from './cx';
+import { useKeyBlocker } from '../hotkeys';
 
 interface ModalProps {
   /** app = 화면 전체(fixed) 박스형 모달(계정/도감 상세/관리자) ·
@@ -15,6 +16,10 @@ interface ModalProps {
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다
 export default function Modal({ layer = 'app', title, wide, onClose, children, className }: ModalProps) {
+  // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
+  // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
+  // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
+  useKeyBlocker();
   const backdrop = layer === 'app'
     ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
     : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';

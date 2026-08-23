@@ -7,6 +7,9 @@ import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { resetBagView } from './sidebar/bagView';
+import { resetKeyScopes } from './hotkeys';
+import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
+import { SUB_TABS, TAB_ORDER } from './sidebar/tabs';
 import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
@@ -52,7 +55,8 @@ const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('b
 
 beforeEach(() => {
   localStorage.clear();
-  resetBagView(); // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
+  resetBagView();   // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
+  resetKeyScopes(); // 키 스코프 스택도 모듈 전역
 });
 
 afterEach(() => {
@@ -549,6 +553,35 @@ describe('R22: 도움말 탭', () => {
     expect(screen.queryByText('크라켄')).not.toBeInTheDocument();  // 어종은 비공개
     expect(screen.queryByText('붕어')).not.toBeInTheDocument();
   });
+
+  it('첫 화면은 짧다 — 세부는 전부 접혀 있고 필요할 때 편다', () => {
+    render(<App />);
+    clickTab('도움말');
+    const topics = [...document.querySelectorAll('details')];
+    expect(topics.length).toBeGreaterThanOrEqual(5);
+    expect(topics.every(d => !d.open)).toBe(true); // 기본 닫힘 — 열려 있으면 예전처럼 길어진다
+    // 항상 보이는 건 시작 안내뿐
+    expect(screen.getByText('처음이라면')).toBeInTheDocument();
+    expect(screen.getByText(/여기까지만 알아도 충분해요/)).toBeInTheDocument();
+  });
+
+  it('수치는 balance에서 읽어 자동으로 맞는다 — 손으로 적으면 밸런스 바꿀 때 갈라진다', () => {
+    render(<App />);
+    clickTab('도움말');
+    const help = document.body.textContent ?? '';
+    expect(help).toContain(`${BAG_CAPACITY}마리`);            // 가방 용량
+    expect(help).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);  // 월척 기준
+    expect(help).toContain(`${VARIANT_PRICE_MULT}배 가격`);   // 변이 판매가
+  });
+
+  it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {
+    render(<App />);
+    clickTab('도움말');
+    const help = document.body.textContent ?? '';
+    for (const topic of ['키보드 단축키', 'Shift + Tab', '자물쇠', '목록 ↔ 카드', '계정 연동', '새로고침']) {
+      expect(help, topic).toContain(topic);
+    }
+  });
 });
 
 describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
@@ -562,6 +595,19 @@ describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
     expect(screen.getByText('붕어')).toBeInTheDocument();              // 잡은 어종은 이름 공개
     expect(screen.getAllByText('???').length).toBeGreaterThan(0);      // 미획득은 ???
     expect(screen.queryByText('황금잉어')).not.toBeInTheDocument();    // 스포일러 차단
+  });
+
+  it('서식 어종은 카드로 — 실루엣·이름·등급만, 미획득은 실루엣 유지', () => {
+    seed({ dex: { crucian: { normal: rec(1) } } });
+    render(<App />);
+    clickTab('지역');
+    // 잡은 종은 이름이, 안 잡은 종은 스프라이트가 미확인 라벨을 단다
+    expect(screen.getByLabelText('붕어')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('미확인 어종').length).toBeGreaterThan(0);
+    // 등급은 카드마다 붙는다 — 잡기 전에도 티어는 알 수 있다(도감 카드와 같은 규칙)
+    expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
+    // 마릿수·가격은 여기 소관이 아니다 (도감이 한다)
+    expect(screen.queryByText(/마리 잡음/)).toBeNull();
   });
 });
 
@@ -617,6 +663,82 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     const shown = screen.getAllByText(/cm|미상/).map(e => e.textContent);
     expect(shown).toEqual(['최대 42.0cm', '42.0cm', '12.0cm', '미상']);
+  });
+
+  it('TAB_ORDER가 실제 탭바 순서와 같다 — 어긋나면 숫자키가 엉뚱한 탭을 연다', () => {
+    seed({});
+    render(<App />);
+    const shown = [...document.querySelectorAll('.pf-tabbar button')]
+      .map(b => b.textContent ?? '');
+    expect(shown).toHaveLength(TAB_ORDER.length);
+    // 라벨은 동적(가방(목록)/도감(일반))이라 키가 아니라 대표 글자로 대조한다
+    const HEAD: Record<string, string> = {
+      region: '지역', bag: '가방', dex: '도감', help: '도움말', settings: '설정',
+    };
+    expect(shown.map((t, i) => t.startsWith(HEAD[TAB_ORDER[i]]))).toEqual(shown.map(() => true));
+  });
+
+  it('숫자 1~5로 탭 직행 — 탭바에 보이는 순서 그대로', () => {
+    seed({});
+    render(<App />);
+    const active = () => document.querySelector('.pf-tabbar button.active')?.textContent;
+    fireEvent.keyDown(document, { key: '2' });
+    expect(active()).toContain('가방');
+    fireEvent.keyDown(document, { key: '5' });
+    expect(active()).toContain('설정');
+    fireEvent.keyDown(document, { key: '1' });
+    expect(active()).toContain('지역');
+    fireEvent.keyDown(document, { key: '6' });      // 없는 번호
+    expect(active()).toContain('지역');
+  });
+
+  it('Tab은 세부까지 펼친 7칸을 순환한다', () => {
+    seed({});
+    render(<App />);
+    const active = () => document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
+    const seen: string[] = [active()];
+    for (let i = 0; i < SUB_TABS.length; i++) {
+      fireEvent.keyDown(document, { key: 'Tab' });
+      seen.push(active());
+    }
+    // 7번 누르면 제자리로 — 도중에 7칸을 모두 밟는다
+    expect(seen[0]).toBe(seen[SUB_TABS.length]);
+    expect(new Set(seen).size).toBe(SUB_TABS.length);
+    expect(seen.slice(0, 5).map(t => t.replace(/\s+/g, ''))).toEqual(
+      ['지역', '가방(목록)', '가방(카드)', '도감(일반)', '도감(돌연변이)']);
+  });
+
+  it('Shift+Tab은 역방향', () => {
+    seed({});
+    render(<App />);
+    const active = () => document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(active().replace(/\s+/g, '')).toBe('설정'); // 지역에서 뒤로 = 마지막 칸
+  });
+
+  it('모달이 떠 있으면 아래 레이어가 키를 못 받는다 — 로그인 모달 키 탈취 재발 방지', () => {
+    seed({});
+    render(<App />);
+    clickFurniture('sell'); // 정비 모달 (stage 레이어)
+    fireEvent.keyDown(document, { key: '3' });
+    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('지역');
+  });
+
+  it('입력 중에는 단축키가 안 먹는다 — 쿠폰/계정 폼 타이핑 보호', () => {
+    seed({});
+    render(<App />);
+    fireEvent.keyDown(document, { key: '5' });
+    const input = document.body.appendChild(document.createElement('input'));
+    fireEvent.keyDown(input, { key: '2' }); // 폼에 포커스가 있는 상태의 키 입력
+    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('설정');
+    input.remove();
+  });
+
+  it('Ctrl/Cmd 조합은 가로채지 않는다 — 브라우저 탭 전환', () => {
+    seed({});
+    render(<App />);
+    fireEvent.keyDown(document, { key: '2', ctrlKey: true });
+    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('지역');
   });
 
   it('v0.4.0 이관분(크기 미상)은 마릿수 한 줄로 접힌다 — 수천 마리여도 줄이 안 는다', () => {

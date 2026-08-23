@@ -2,7 +2,6 @@
 // 읽기(load)는 saves_current 본인 행(RLS select) → 없으면 구 saves 최신 행 폴백(이관 전 유저).
 import { supabase } from './auth';
 import { migrate } from '../game/logic';
-import { APP_VERSION } from '../version';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { Backend, DispatchResult } from './types';
@@ -99,7 +98,9 @@ export class HttpBackend implements Backend {
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${token}`,
-          'x-client-version': APP_VERSION, // 낡은 탭 차단 — 서버가 자기 버전과 대조 (426)
+          // 낡은 탭 차단 — 서버가 자기 배포 식별자와 대조 (426).
+          // APP_VERSION이 아니라 배포 식별자다: 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가른다
+          'x-build-id': __BUILD_ID__,
         },
         body: JSON.stringify(action),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지

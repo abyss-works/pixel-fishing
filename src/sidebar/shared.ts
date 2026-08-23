@@ -31,11 +31,13 @@ const DEX_ORDER: ReadonlyMap<string, number> = new Map(
 export const dexIndex = (fishId: string): number =>
   DEX_ORDER.get(fishId) ?? Number.MAX_SAFE_INTEGER;
 
-/** 등급 테두리 카드 — 도감 격자와 가방 카드뷰가 공유한다(같은 문자열을 복붙하면 갈라진다).
+/** 등급 테두리 카드 — 도감 격자·가방 카드뷰·지역 탭 수역 카드가 공유한다.
+    같은 문자열을 복붙하면 한쪽만 고쳐지며 갈라진다.
     테두리가 등급의 유일한 표시라 얇으면 안 보인다: 2px + 알파 70%.
+    **크기(패딩·글자)는 여기 없다** — 화면마다 카드가 커야 할 이유가 달라 쓰는 쪽이 정한다.
     쓰는 쪽이 `data-rarity`를 걸어야 --rarity-color가 잡힌다. */
 export const RARITY_CARD =
-  'bg-bg border-2 rounded-sm p-2 text-xs text-center leading-normal'
+  'bg-bg border-2 rounded-sm text-center leading-normal'
   + ' border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]'
   + ' transition-[translate,background-color] duration-[120ms] ease-out'
   + ' hover:-translate-y-0.5 hover:bg-surface-2';

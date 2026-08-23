@@ -4,6 +4,7 @@ import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import { subscribeFailure } from '../errors';
+import { useKeyScope } from '../hotkeys';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { REGION_PACKS, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
@@ -186,35 +187,27 @@ export default function Field({
     hookRef.current = hookFish;
   });
 
-  // 키보드: 이동 + 행동 (R4, R5c)
-  // 콜백은 전부 ref로 읽는다 → 리스너를 마운트 시 한 번만 등록(리렌더 중 입력 유실 방지)
-  useEffect(() => {
-    // 텍스트 입력 요소에 포커스가 있으면 게임이 키를 가로채지 않는다 — 계정 모달 등 폼 타이핑 보호.
-    // (document 전역 리스너라 preventDefault가 인풋의 문자 입력까지 죽이던 잠복 버그, v0.4.1 QA)
-    const isTyping = (e: KeyboardEvent): boolean => {
-      const el = e.target as HTMLElement | null;
-      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
-        || el.tagName === 'SELECT' || el.isContentEditable);
-    };
-    const onDown = (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
-      if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return; }
-      if (MOVE_KEYS[e.code]) {
-        e.preventDefault();
-        if (phaseRef.current !== 'idle') { // 이동 = 낚시 취소 (R5c)
-          cancelRef.current();
-          toastRef.current('낚시를 접고 이동한다.');
-        }
-        keysRef.current.add(e.code);
+  // 키보드: 이동 + 행동 (R4, R5c) — 누른 키는 **스코프**를 통해 받는다.
+  // 모달이 뜨면 스코프가 막아 주므로 여기서 모달 여부를 알 필요가 없다 (hotkeys.ts).
+  useKeyScope(e => {
+    if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return true; }
+    if (MOVE_KEYS[e.code]) {
+      e.preventDefault();
+      if (phaseRef.current !== 'idle') { // 이동 = 낚시 취소 (R5c)
+        cancelRef.current();
+        toastRef.current('낚시를 접고 이동한다.');
       }
-    };
+      keysRef.current.add(e.code);
+      return true;
+    }
+  });
+
+  // keyup은 스코프를 태우지 않는다 — 키를 누른 채로 모달이 열리면 뗀 신호가 막혀
+  // 캐릭터가 영원히 달린다. 떼는 신호는 언제나 통과시키는 게 안전한 쪽이다.
+  useEffect(() => {
     const onUp = (e: KeyboardEvent) => keysRef.current.delete(e.code);
-    document.addEventListener('keydown', onDown);
     document.addEventListener('keyup', onUp);
-    return () => {
-      document.removeEventListener('keydown', onDown);
-      document.removeEventListener('keyup', onUp);
-    };
+    return () => document.removeEventListener('keyup', onUp);
   }, []);
 
   // 이동 + 트리거 + 렌더 루프 (jsdom에는 canvas/rAF 없음 → 건너뜀; 이동은 world 엔진에서 단위 테스트)
@@ -278,8 +271,6 @@ export default function Field({
     return () => cancelAnimationFrame(raf);
   }, [region, def]);
 
-  const title = def.name;
-
   return (
     <>
       <GameFrame>
@@ -310,7 +301,7 @@ export default function Field({
       </GameFrame>
 
       {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
-      <ResourceBar title={title} game={game} />
+      <ResourceBar game={game} />
 
       {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
       <canvas ref={minimapRef} width={def.w} height={def.h}

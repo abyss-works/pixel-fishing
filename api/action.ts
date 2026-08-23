@@ -15,6 +15,10 @@ import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
 import type { GameAction, StateWrites } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
+
+// 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
+// 공식 문서 확인: VERCEL_GIT_COMMIT_SHA는 빌드·런타임 양쪽에 제공된다.
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev';
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
 
@@ -117,16 +121,27 @@ function seedWrites(seed: GameState): StateWrites {
   };
 }
 
+// 한 번에 보낼 행 수 상한. 평상시 캐치는 1행이라 무의미하지만, **v0.4.0 이관 시딩**은
+// 유저 한 명이 수천 행이 될 수 있다(구 가방은 어종 문자열 배열이라 상한이 없었다).
+// 통짜로 보내면 요청 크기·타임아웃 어디서 걸리는지 알 수 없어, 애초에 쪼개 보낸다.
+const INSERT_CHUNK = 500;
+
+const chunk = <T>(xs: readonly T[], n: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+  return out;
+};
+
 /** 변경분을 테이블에 적용 — 서로 독립이라 병렬. 반환값의 error를 호출자가 검사한다. */
 function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<{ error?: unknown }[]> {
   const jobs: Promise<{ error?: unknown }>[] = [];
-  if (w.instancesAdded.length > 0) {
+  for (const part of chunk(w.instancesAdded, INSERT_CHUNK)) {
     jobs.push(Promise.resolve(admin.from('fish_instances')
-      .insert(w.instancesAdded.map(({ inst, slot }) => instRow(uid, inst, slot)))));
+      .insert(part.map(({ inst, slot }) => instRow(uid, inst, slot)))));
   }
-  if (w.instancesRemoved.length > 0) {
+  for (const part of chunk(w.instancesRemoved, INSERT_CHUNK)) {
     jobs.push(Promise.resolve(admin.from('fish_instances')
-      .delete().eq('user_id', uid).in('uid', w.instancesRemoved)));
+      .delete().eq('user_id', uid).in('uid', part)));
   }
   for (const m of w.instancesMoved) {
     jobs.push(Promise.resolve(admin.from('fish_instances')
@@ -141,6 +156,7 @@ function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<
   }
   if (w.records.length > 0) {
     const now = new Date().toISOString();
+    // records는 종×폼이라 최대 어종수×폼수 — 쪼갤 규모가 아니다
     jobs.push(Promise.resolve(admin.from('records').upsert(w.records.map(r => ({
       user_id: uid, fish_id: r.fishId, form: r.form,
       count: r.rec.count, max_size: r.rec.maxSize, first_caught: r.rec.first, updated_at: now,
@@ -168,7 +184,10 @@ async function route(req: Req, res: Res): Promise<void> {
   // 낡은 탭 차단 — 클라 번들 버전이 이 함수(같은 커밋 배포)와 다르면 426 Upgrade Required.
   // 인증/리듀서보다 먼저: 새 서버의 결과를 낡은 번들이 해석 못 해 깨지는 것을 원천 차단하고,
   // 클라이언트는 업데이트 모달(새로고침 안내)을 띄운다. 헤더 부재 = 기능 도입 전 구버전 → 동일 처리.
-  if (req.headers['x-client-version'] !== APP_VERSION) {
+  // 낡은 탭 차단 — **배포 단위**로 판정한다. APP_VERSION은 릴리즈 라벨이라 dev 빌드에서
+  // 올라가지 않아(roadmap 0.0) 개발·스테이징 배포 사이에서는 영원히 일치했다.
+  // 클라는 빌드 시 번들에 박힌 값을, 서버는 런타임 env를 읽는다 — 같은 배포면 같은 값이다.
+  if (req.headers['x-build-id'] !== BUILD_ID) {
     throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 

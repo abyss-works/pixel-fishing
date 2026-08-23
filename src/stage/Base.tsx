@@ -49,7 +49,7 @@ export default function Base({ base, game, onFacility }: Props) {
                 aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
       </GameFrame>
       {/* 스테이지 기준 — 프레임의 형제 */}
-      <ResourceBar title={base === 'home' ? '집' : '항구'} game={game} />
+      <ResourceBar game={game} />
     </>
   );
 }

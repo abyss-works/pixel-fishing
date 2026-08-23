@@ -122,7 +122,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게 
                 return (
                   <div key={f.id} data-rarity={f.rarity}
-                       className={cx(RARITY_CARD, !ok && 'opacity-[0.72]')}
+                       className={cx(RARITY_CARD, 'p-2 text-xs', !ok && 'opacity-[0.72]')}
                        role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
                        onClick={ok ? () => setDetail(f) : undefined}>
                     <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}

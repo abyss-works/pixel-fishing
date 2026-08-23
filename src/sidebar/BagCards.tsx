@@ -39,7 +39,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
         const n = h.normal + h.variant;
         return (
           <div key={f.id} data-rarity={f.rarity}
-               className={cx(RARITY_CARD,
+               className={cx(RARITY_CARD, 'p-2 text-xs',
                  // 보유 0은 흐리게 — 미발견(???)보다는 진하게 둬서 셋이 구분된다
                  n === 0 && (known ? 'opacity-[0.72]' : 'opacity-[0.55]'))}
                aria-label={!known ? '미확인 어종'
