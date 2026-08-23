@@ -5,11 +5,12 @@
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
-  overflowUids, release, bagCapacity, instanceFish, formName,
+  overflowUids, release, bagCapacity, instanceFish, formName, travel,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId } from './logic.js';
 import { resolveCatch } from './fishing.js';
 import type { SpotId } from '../data/spots.js';
+import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
 
@@ -19,6 +20,7 @@ export type GameAction =
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
   | { type: 'setLocked'; uids: string[]; locked: boolean }
+  | { type: 'travel'; to: LocationRef }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
@@ -26,7 +28,7 @@ export type GameAction =
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  setLocked: true, redeemCoupon: true, import: true,
+  setLocked: true, travel: true, redeemCoupon: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -187,6 +189,19 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true, state: next, result: { type: 'none' },
         events: [{ type: 'buyBoat', payload: { tier: next.boat, cost: state.gold - next.gold } }],
+      };
+    }
+    case 'travel': {
+      const to = action.to;
+      if (!to || typeof to.id !== 'string'
+          || (to.kind !== 'region' && to.kind !== 'base')) return { ok: false, error: 'bad-request' };
+      const next = travel(state, to);
+      // 첫 방문만 이벤트로 남긴다 — 오갈 때마다 남기면 스트림이 이동 로그로 뒤덮인다.
+      // 업적 진행도는 state.visited가 들고 있으므로 이벤트는 "언제 처음 갔나"의 기록이다.
+      const first = to.kind === 'region' && !state.visited.includes(to.id);
+      return {
+        ok: true, state: next, result: { type: 'none' },
+        events: first ? [{ type: 'visit', payload: { region: to.id } }] : [],
       };
     }
     case 'setLocked': {

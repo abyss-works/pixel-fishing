@@ -611,6 +611,21 @@ describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
   });
 });
 
+describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
+  it('세이브에 대양이 적혀 있으면 대양에서 시작한다', () => {
+    seed({ boat: 1, location: { kind: 'region', id: 'ocean' } });
+    render(<App />);
+    expect(screen.getByLabelText('바다')).toBeInTheDocument();   // 필드 캔버스
+    expect(screen.queryByLabelText('집')).not.toBeInTheDocument();
+  });
+
+  it('기본은 집 — 위치가 없던 구세이브도 안전하다', () => {
+    seed({});
+    render(<App />);
+    expect(screen.getByLabelText('집')).toBeInTheDocument();
+  });
+});
+
 describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)', () => {
   it('필드에서 미니맵을 클릭하면 지역 탭이 열린다', () => {
     seed({ boat: 1 });

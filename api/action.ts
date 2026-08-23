@@ -132,8 +132,14 @@ const chunk = <T>(xs: readonly T[], n: number): T[][] => {
   return out;
 };
 
-/** 변경분을 테이블에 적용 — 서로 독립이라 병렬. 반환값의 error를 호출자가 검사한다. */
-function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<{ error?: unknown }[]> {
+// 쓰기를 **두 등급으로 가른다.**
+//   개체(fish_instances) = 상태 그 자체다. 실패하면 다음 로드에서 물고기가 사라진다 —
+//     자가 치유가 없다. 그래서 **실패를 500으로 올린다.**
+//   도감(records)        = 절대값 upsert라 다음 캐치가 스스로 메운다. 보고만 하고 넘어간다.
+// 사고(2026-08-23): `locked` 컬럼이 없는 DB에서 개체 INSERT가 전부 실패했는데 보고만 하고
+// 200을 돌려줘서, "가방이 마지막 물고기로 덮어써진다"는 증상으로만 드러났다. 관측이 꺼져
+// 있으면 완전히 무음이다. 상태 손실은 조용히 넘길 수 있는 부류가 아니다.
+function instanceWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<{ error?: unknown }>[] {
   const jobs: Promise<{ error?: unknown }>[] = [];
   for (const part of chunk(w.instancesAdded, INSERT_CHUNK)) {
     jobs.push(Promise.resolve(admin.from('fish_instances')
@@ -154,15 +160,30 @@ function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<
     jobs.push(Promise.resolve(admin.from('fish_instances')
       .update({ locked }).eq('user_id', uid).in('uid', uids)));
   }
-  if (w.records.length > 0) {
-    const now = new Date().toISOString();
-    // records는 종×폼이라 최대 어종수×폼수 — 쪼갤 규모가 아니다
-    jobs.push(Promise.resolve(admin.from('records').upsert(w.records.map(r => ({
-      user_id: uid, fish_id: r.fishId, form: r.form,
-      count: r.rec.count, max_size: r.rec.maxSize, first_caught: r.rec.first, updated_at: now,
-    })))));
+  return jobs;
+}
+
+/** 도감 쓰기 — 실패해도 다음 캐치의 절대값 upsert가 메운다(보고만) */
+function recordWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<{ error?: unknown }>[] {
+  if (w.records.length === 0) return [];
+  const now = new Date().toISOString();
+  // records는 종×폼이라 최대 어종수×폼수 — 쪼갤 규모가 아니다
+  return [Promise.resolve(admin.from('records').upsert(w.records.map(r => ({
+    user_id: uid, fish_id: r.fishId, form: r.form,
+    count: r.rec.count, max_size: r.rec.maxSize, first_caught: r.rec.first, updated_at: now,
+  }))))];
+}
+
+/** 개체 쓰기 실행 + 실패 시 500 — 호출자는 이 뒤로 진행하면 안 된다 */
+async function writeInstances(
+  admin: SupabaseLike, uid: string, w: StateWrites, action: string,
+): Promise<void> {
+  const results = await Promise.all(instanceWrites(admin, uid, w));
+  const failures = results.filter(r => r && r.error);
+  if (failures.length > 0) {
+    throw new ApiError(500, 'db-write', { uid, action, kind: 'fish_instances' },
+      { cause: failures[0].error });
   }
-  return Promise.all(jobs);
 }
 
 export default async function handler(req: Req, res: Res): Promise<void> {
@@ -252,7 +273,10 @@ async function route(req: Req, res: Res): Promise<void> {
     } else {
       // 시딩분의 개체·도감을 테이블로 흩어 넣는다 (blob → 정규화 이관). 실패해도 액션은 계속 —
       // saves_current는 이미 섰고, 유실분은 다음 액션의 절대값 upsert가 메운다.
-      await applyWrites(admin as unknown as SupabaseLike, uid, seedWrites(seed));
+      // 시딩 개체가 안 들어가면 그 유저의 가방·전시가 통째로 빈다 — 조용히 넘길 수 없다
+      const sw = seedWrites(seed);
+      await writeInstances(admin as unknown as SupabaseLike, uid, sw, 'seed');
+      await Promise.all(recordWrites(admin as unknown as SupabaseLike, uid, sw));
       // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다
       row = { data: stateRow(seed).data, version: 1,
               gold: seed.gold, fame: seed.fame, boat: seed.boat, rod: seed.rod };
@@ -302,8 +326,9 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   // 개체·도감 변경분 — 리듀서가 전후 비교로 뽑아준 것을 그대로 적용한다(재계산 금지).
   // records는 절대값 upsert라 한 번 실패해도 다음 캐치가 자가 치유한다.
-  const writeResults = await applyWrites(admin as unknown as SupabaseLike, uid, out.writes);
-  followUps.push(...writeResults.map(r => Promise.resolve(r)));
+  // 개체 먼저 — 실패하면 여기서 500으로 끊는다(뒤의 "유실 허용" 묶음과 등급이 다르다)
+  await writeInstances(admin as unknown as SupabaseLike, uid, out.writes, action.type);
+  followUps.push(...recordWrites(admin as unknown as SupabaseLike, uid, out.writes));
   // 후속 쓰기 실패는 상태를 되돌리지 않는다(이벤트·기록만 유실, 수용) — 다만 **조용히**
   // 잃으면 안 된다. supabase 클라이언트는 거부하지 않고 { error }를 돌려주므로 직접 검사한다.
   if (followUps.length > 0) {

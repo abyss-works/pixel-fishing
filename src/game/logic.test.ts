@@ -448,6 +448,25 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect('mutated' in st).toBe(false);
   });
 
+  it('구세이브에 없는 신규 필드는 기본값으로 채워진다 — v를 올리지 않는 근거', () => {
+    // migrate가 `{...newState(), …}`로 끝나므로 가산 필드는 마이그레이션 스텝 없이 자가 치유된다.
+    // 운영이 아직 v7이라 8→9 스텝을 만들면 아무도 안 거치는 링크가 된다.
+    const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
+    expect(st.location).toEqual({ kind: 'base', id: 'home' });
+    expect(st.visited).toEqual([]);
+    expect(st.artifacts).toEqual([]);
+    expect(st.gold).toBe(5); // 기존 값은 그대로
+  });
+
+  it('손상된 위치는 집으로 수렴한다', () => {
+    expect(mig({ v: 8, location: { kind: 'nowhere', id: 3 } }).location)
+      .toEqual({ kind: 'base', id: 'home' });
+    expect(mig({ v: 8, location: { kind: 'base', id: '?' } }).location)
+      .toEqual({ kind: 'base', id: 'home' });
+    expect(mig({ v: 8, location: { kind: 'region', id: 'ocean' } }).location)
+      .toEqual({ kind: 'region', id: 'ocean' });
+  });
+
   it('v4 → v8: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
     const st = mig({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
     expect(st.v).toBe(8);

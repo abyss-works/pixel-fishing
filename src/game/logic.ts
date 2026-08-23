@@ -9,7 +9,8 @@ import {
   VARIANT_PRICE_MULT, BAG_CAPACITY,
 } from './balance.js';
 import { RARITY } from '../data/rarity.js';
-import type { SpotId } from '../data/spots.js';
+import type { SpotId, SpotRegionId } from '../data/spots.js';
+import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS } from '../data/boats.js';
@@ -61,6 +62,16 @@ export interface GameState {
   /** 도감 = 종 → 폼 → 기록. 폼이 늘어도 키 하나만 늘어난다 (구 병렬 Record 6개를 흡수) */
   dex: Record<string, Partial<Record<FormId, FormRecord>>>;
   coupons: string[];              // 사용한 쿠폰 코드
+  /** 마지막으로 있던 곳 — 새로고침하면 여기서 재개한다(좌표 없이 지역 spawn에서).
+   *  전에는 클라 `useState`였어서 태평양에서 새로고침하면 집으로 돌아갔다. */
+  location: LocationRef;
+  /** 가 본 지역 — 업적("모든 지역 방문")의 근거. events가 아니라 상태에 두는 이유:
+   *  events는 보관주기 정책 대상이라 지워지면 진행도가 증발한다
+   *  (decisions/save-instancing.md — 통계 수명을 스트림 수명과 분리). */
+  visited: SpotRegionId[];
+  /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
+   *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
+  artifacts: string[];
 }
 
 export interface RodStats {
@@ -117,6 +128,9 @@ export function newState(): GameState {
     v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
     coupons: [],
+    location: { kind: 'base', id: 'home' },
+    visited: [],
+    artifacts: [],
   };
 }
 
@@ -308,6 +322,9 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
     v: 4,
     fame: typeof s.fame === 'number' ? s.fame : computeFame(safeCaught(s)),
     coupons: [],
+    location: { kind: 'base', id: 'home' },
+    visited: [],
+    artifacts: [],
   }),
   // v4 → v5: 어종 잠금 도입 (전부 판매 제외 목록)
   4: s => ({ ...s, v: 5, locked: [] }),
@@ -378,6 +395,21 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
   },
 };
 
+const safeStrings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+// 위치 위생 — 모르는 값이면 집으로. 지역 id 목록을 여기서 검사하지 않는 이유:
+// 어느 지역이 존재하는지는 world 소관이고 game은 그걸 보지 않는다(의존 단방향).
+// 없는 지역이 들어와도 부팅 시 App이 팩을 못 찾으면 집으로 떨어진다.
+function safeLocation(v: unknown): LocationRef {
+  const l = v as Partial<LocationRef> | undefined;
+  if (l && typeof l.id === 'string') {
+    if (l.kind === 'region') return { kind: 'region', id: l.id as SpotRegionId };
+    if (l.kind === 'base') return { kind: 'base', id: l.id === 'harbor' ? 'harbor' : 'home' };
+  }
+  return { kind: 'base', id: 'home' };
+}
+
 // 개체 위생 — uid/fishId/form이 성립하지 않는 항목은 버린다 (손상 세이브·수입 방어)
 function safeInstances(v: unknown, uid: () => string): FishInstance[] {
   if (!Array.isArray(v)) return [];
@@ -446,8 +478,10 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     bag: safeInstances(s.bag, uidGen),
     exhibit: safeInstances(s.exhibit, uidGen),
     dex: safeDex(s.dex),
-    coupons: Array.isArray(s.coupons)
-      ? s.coupons.filter((c): c is string => typeof c === 'string') : [],
+    coupons: safeStrings(s.coupons),
+    location: safeLocation(s.location),
+    visited: safeStrings(s.visited) as SpotRegionId[],
+    artifacts: safeStrings(s.artifacts),
   };
 }
 
@@ -557,6 +591,17 @@ export function sellSelected(state: GameState, uids: readonly string[]): GameSta
 // 전부 판매 — 잠근 개체는 가방에 남는다
 export function sellAll(state: GameState): GameState {
   return sellSelected(state, state.bag.map(i => i.uid));
+}
+
+// 장소 이동 — 위치를 기록하고, 지역이면 방문 목록에 넣는다.
+// **게이트를 여기서 검증하지 않는다.** 낚시는 `canFish`가 서버에서 배 단계를 재검증하므로
+// 클라가 못 갈 지역을 주장해도 얻는 게 없다. 이 액션의 목적은 보안이 아니라
+// **새로고침 후 재개 위치**와 **방문 기록**이다.
+export function travel(state: GameState, to: LocationRef): GameState {
+  const visited = to.kind === 'region' && !state.visited.includes(to.id)
+    ? [...state.visited, to.id]
+    : state.visited;
+  return { ...state, location: to, visited };
 }
 
 // 개체 잠금 토글 — uid 목록을 받아 **일괄 지정**한다.

@@ -141,6 +141,32 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.state.boat).toBe(1);
   });
 
+  it('travel — 위치를 남기고, 첫 방문만 이벤트로 기록한다', () => {
+    const first = applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'ocean' } }, deps());
+    if (!first.ok) throw new Error(first.error);
+    expect(first.state.location).toEqual({ kind: 'region', id: 'ocean' });
+    expect(first.state.visited).toEqual(['ocean']);
+    expect(first.events).toEqual([{ type: 'visit', payload: { region: 'ocean' } }]);
+
+    // 두 번째 방문은 이벤트를 안 남긴다 — 오갈 때마다 남기면 스트림이 이동 로그가 된다
+    const again = applyAction(first.state, { type: 'travel', to: { kind: 'region', id: 'ocean' } }, deps());
+    if (!again.ok) throw new Error(again.error);
+    expect(again.state.visited).toEqual(['ocean']);
+    expect(again.events).toEqual([]);
+  });
+
+  it('travel — 거점은 방문 목록에 넣지 않는다 (지역 단위 업적이라)', () => {
+    const out = applyAction(seed(), { type: 'travel', to: { kind: 'base', id: 'harbor' } }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.location).toEqual({ kind: 'base', id: 'harbor' });
+    expect(out.state.visited).toEqual([]);
+  });
+
+  it('travel — 형태가 깨진 목적지는 거부', () => {
+    expect(applyAction(seed(), { type: 'travel', to: { kind: 'nowhere', id: 'x' } } as never, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+  });
+
   it('setLocked — 이벤트 없이 개체 잠금, 델타에는 잡힌다', () => {
     const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
     const out = applyAction(seed({ bag }), { type: 'setLocked', uids: ['a'], locked: true }, deps());

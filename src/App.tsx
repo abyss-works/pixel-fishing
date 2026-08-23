@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BASE_PACKS } from './world';
 import type { FurnitureId, SceneRef } from './world';
 import Base from './stage/Base';
@@ -26,12 +26,29 @@ export default function App() {
   const { game, setGame, dispatch, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
   const { account, onAuthChanged } = useAccount({ game, setGame, setToast, sync, load });
 
-  const [scene, setScene] = useState<SceneRef>({ kind: 'base', id: 'home' });
+  // 씬은 **세이브의 location에서 온다.** 순수 로컬 상태였을 때는 태평양에서 새로고침하면
+  // 집으로 돌아갔다. 화면 상태는 여기서 즉시 바뀌고(연출은 기다리지 않는다) 저장은 액션이 한다.
+  const [scene, setScene] = useState<SceneRef>(game.location);
+  // 서버 로드는 비동기라 첫 렌더의 game은 기본 상태다 — 로드가 끝나면 저장된 위치로 **한 번**
+  // 맞춘다. 이후에는 맞추지 않는다: 그러면 유저가 이동한 직후 서버 응답이 되돌려 버린다.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || sync !== 'on') return;
+    restored.current = true;
+    setScene(game.location);
+  }, [sync, game.location]);
   // 우측 사이드바 상태 — 탭은 씬 무관 5개 고정, 씬이 바뀌면 열린 시설 패널만 닫는다
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
 
-  const go = (s: SceneRef, msg: string) => { setScene(s); setToast(msg); setActionPanel(null); };
+  const go = (s: SceneRef, msg: string) => {
+    setScene(s);
+    setToast(msg);
+    setActionPanel(null);
+    // 서버에 위치를 남긴다 — 재개 지점이자 방문 기록(업적)의 근거.
+    // 실패해도 화면은 이미 이동했다: 위치는 편의 정보라 이동을 막을 이유가 없다.
+    dispatch({ type: 'travel', to: s });
+  };
   // 씬 → 소속 지역 (지역 탭·도감이 거점에서도 현재 지역 정보를 알 수 있게) — 팩 데이터에서 파생
   const region = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
 

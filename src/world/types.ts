@@ -2,15 +2,18 @@
 // 지역/거점은 전부 이 타입의 "데이터"다 — 새 지역 = regions/<id>.ts 파일 1개(+신규 스프라이트).
 // 충돌·수역 판정은 engine.ts가 데이터에서 파생하고, 그리기는 pixel/region.ts 인터프리터가 맡는다.
 import type { SpotId, SpotRegionId } from '../data/spots';
+import type { BaseId, LocationRef } from '../data/places';
 
 // 지역 id의 단일 근원 = data/spots의 region 열 — 수역·지역 소개·팩이 전부 같은 타입을 쓴다
 // (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type RegionId = SpotRegionId;
-export type BaseId = 'home' | 'harbor';
+export type { BaseId } from '../data/places';
 export type FurnitureId = 'sell' | 'rod' | 'boat' | 'dex' | 'exit' | 'travel';
 
-/** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생) */
-export type SceneRef = { kind: 'region'; id: RegionId } | { kind: 'base'; id: BaseId };
+/** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
+ *  정의는 `data/places.ts`에 있다: 세이브(`game/`)도 같은 타입을 써야 하는데 의존 방향이
+ *  world → game 단방향이라 game이 여기를 볼 수 없다. 여기서는 재수출만 한다. */
+export type SceneRef = LocationRef;
 
 export const VIEW_W = 320, VIEW_H = 180;
 
