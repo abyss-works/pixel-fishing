@@ -10,14 +10,26 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
-import type { FormRecord, GameState } from '../src/game/logic.js';
+import type { FishInstance, GameState } from '../src/game/logic.js';
 import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
-import type { ActionResult, GameAction } from '../src/game/actions.js';
+import type { GameAction, StateWrites } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
 
+// 생성된 DB 타입을 쓰지 않아 supabase-js가 테이블 행을 never로 추론한다 —
+// 우리가 실제로 쓰는 연산만 최소 구조 타입으로 감싼다.
+interface Q {
+  insert(rows: unknown[]): PromiseLike<{ error?: unknown }>;
+  upsert(rows: unknown[]): PromiseLike<{ error?: unknown }>;
+  update(v: unknown): Q;
+  delete(): Q;
+  eq(col: string, v: unknown): Q;
+  in(col: string, v: unknown[]): Q;
+  then<R>(f: (r: { error?: unknown }) => R): PromiseLike<R>;
+}
+interface SupabaseLike { from(table: string): Q }
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
@@ -46,30 +58,87 @@ function verifyJwtLocal(token: string, secret: string): string | null {
   }
 }
 
-// records(0006) 행 생성 — catch는 갱신된 종×폼 1행, import는 도감 전체 재시딩
-// (이사 코드로 도감이 통째로 바뀌므로 기록도 맞춰야 한다).
-// export는 테스트용 — 이 순수 부분만 떼어 검증하면 supabase 목킹 없이 계약을 지킬 수 있다.
-export function recordsFor(
-  uid: string, state: GameState, action: GameAction, result: ActionResult,
-  now = new Date().toISOString(),
-) {
-  const row = (fishId: string, form: string, rec: FormRecord) => ({
-    user_id: uid, fish_id: fishId, form,
-    count: rec.count, max_size: rec.maxSize, first_caught: rec.first, updated_at: now,
-  });
-  if (action.type === 'catch' && result.type === 'catch') {
-    const rec = state.dex[result.fishId]?.[result.info.form];
-    return rec ? [row(result.fishId, result.info.form, rec)] : [];
-  }
-  if (action.type === 'import') {
-    return Object.entries(state.dex).flatMap(([fishId, forms]) =>
-      Object.entries(forms).map(([form, rec]) => row(fishId, form, rec)));
-  }
-  return [];
+// 저장소 3분할 (0006): saves_current(스칼라+blob) · fish_instances(개체) · records(도감).
+// 런타임 GameState는 통짜지만 저장은 접근 패턴별로 흩어진다.
+
+/** GameState → saves_current 한 행. 스칼라는 컬럼, 나머지만 blob */
+function stateRow(state: GameState) {
+  const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod, ...rest } = state;
+  return { gold, fame, boat, rod, data: rest };
 }
 
-// 유일한 실패 처리 지점 — 던져진 ApiError를 응답으로 변환하고, 5xx만 Sentry에 보고한다
-// (4xx는 정상적인 프로토콜 응답이라 노이즈가 된다).
+/** 3소스 → GameState 조립 */
+function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[]): GameState {
+  const bag: FishInstance[] = [];
+  const exhibit: FishInstance[] = [];
+  for (const r of instances) {
+    const inst: FishInstance = {
+      uid: r.uid, fishId: r.fish_id, form: r.form as FishInstance['form'],
+      size: r.size, caughtAt: r.caught_at, spot: r.spot as FishInstance['spot'],
+      judgment: r.judgment as FishInstance['judgment'],
+    };
+    if (r.slot === null || r.slot === undefined) bag.push(inst);
+    else exhibit[r.slot] = inst;
+  }
+  const dex: GameState['dex'] = {};
+  for (const r of records) {
+    (dex[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
+      { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
+  }
+  // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
+  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold), fame: Number(row.fame),
+    boat: row.boat, rod: row.rod, bag, exhibit, dex });
+}
+
+type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number };
+type InstanceRow = { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; judgment: string | null; slot: number | null };
+type RecordRow = { fish_id: string; form: string; count: number | string; max_size: number | null; first_caught: string | null };
+
+/** 개체 → DB 행 */
+function instRow(uid: string, i: FishInstance, slot: number | null) {
+  return {
+    uid: i.uid, user_id: uid, fish_id: i.fishId, form: i.form,
+    size: i.size, caught_at: i.caughtAt, spot: i.spot, judgment: i.judgment, slot,
+  };
+}
+
+/** 시딩된 상태 전체를 "전부 새로 추가"로 표현 */
+function seedWrites(seed: GameState): StateWrites {
+  return {
+    instancesAdded: seed.bag.map(inst => ({ inst, slot: null })),
+    instancesRemoved: [],
+    instancesMoved: [],
+    records: Object.entries(seed.dex).flatMap(([fishId, forms]) =>
+      Object.entries(forms).flatMap(([form, rec]) =>
+        rec ? [{ fishId, form: form as FishInstance['form'], rec }] : [])),
+  };
+}
+
+/** 변경분을 테이블에 적용 — 서로 독립이라 병렬. 반환값의 error를 호출자가 검사한다. */
+function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<{ error?: unknown }[]> {
+  const jobs: Promise<{ error?: unknown }>[] = [];
+  if (w.instancesAdded.length > 0) {
+    jobs.push(Promise.resolve(admin.from('fish_instances')
+      .insert(w.instancesAdded.map(({ inst, slot }) => instRow(uid, inst, slot)))));
+  }
+  if (w.instancesRemoved.length > 0) {
+    jobs.push(Promise.resolve(admin.from('fish_instances')
+      .delete().eq('user_id', uid).in('uid', w.instancesRemoved)));
+  }
+  for (const m of w.instancesMoved) {
+    jobs.push(Promise.resolve(admin.from('fish_instances')
+      .update({ slot: m.slot }).eq('user_id', uid).eq('uid', m.uid)));
+  }
+  if (w.records.length > 0) {
+    const now = new Date().toISOString();
+    jobs.push(Promise.resolve(admin.from('records').upsert(w.records.map(r => ({
+      user_id: uid, fish_id: r.fishId, form: r.form,
+      count: r.rec.count, max_size: r.rec.maxSize, first_caught: r.rec.first, updated_at: now,
+    })))));
+  }
+  return Promise.all(jobs);
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
     await route(req, res);
@@ -122,23 +191,48 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(400, 'bad-action');
   }
 
-  // 현재 상태 로드 — 없으면 구 saves(아카이브) 최신 행에서 1회 시딩(서버 권위 전환 이관),
-  // 그것도 없으면 새 시작. 시딩 경합은 PK 충돌 시 재조회로 해소.
-  let row = (await admin.from('saves_current').select('data, version').eq('user_id', uid).maybeSingle()).data;
+  // 현재 상태 로드 — 3소스를 병렬로 읽는다(서로 독립이라 왕복 1회분).
+  // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
+  const SEL = 'data, version, gold, fame, boat, rod';
+  const REC_SEL = 'fish_id, form, count, max_size, first_caught';
+  const [curRes, instRes, recRes] = await Promise.all([
+    admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
+    admin.from('fish_instances').select('*').eq('user_id', uid),
+    admin.from('records').select(REC_SEL).eq('user_id', uid),
+  ]);
+
+  let row = curRes.data as StateRow | null;
+  let instances = (instRes.data ?? []) as unknown as InstanceRow[];
+  let records = (recRes.data ?? []) as unknown as RecordRow[];
   if (!row) {
     const { data: old } = await admin.from('saves').select('data')
       .eq('user_id', uid).order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    const seeded = { user_id: uid, data: migrate(old?.data ?? newState()), version: 1 };
-    const { error: seedErr } = await admin.from('saves_current').insert(seeded);
+    const seed = migrate(old?.data ?? newState());
+    const { error: seedErr } = await admin.from('saves_current')
+      .insert({ user_id: uid, version: 1, ...stateRow(seed) });
     if (seedErr) { // 동시 첫 액션 경합 — 상대가 시딩했으니 다시 읽는다
-      row = (await admin.from('saves_current').select('data, version').eq('user_id', uid).maybeSingle()).data;
+      const [againCur, againInst, againRec] = await Promise.all([
+        admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
+        admin.from('fish_instances').select('*').eq('user_id', uid),
+        admin.from('records').select(REC_SEL).eq('user_id', uid),
+      ]);
+      row = againCur.data as StateRow | null;
       if (!row) throw new ApiError(500, 'db-seed', { uid }, { cause: seedErr });
+      instances = (againInst.data ?? []) as unknown as InstanceRow[];
+      records = (againRec.data ?? []) as unknown as RecordRow[];
     } else {
-      row = { data: seeded.data, version: 1 };
+      // 시딩분의 개체·도감을 테이블로 흩어 넣는다 (blob → 정규화 이관). 실패해도 액션은 계속 —
+      // saves_current는 이미 섰고, 유실분은 다음 액션의 절대값 upsert가 메운다.
+      await applyWrites(admin as unknown as SupabaseLike, uid, seedWrites(seed));
+      // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다
+      row = { data: stateRow(seed).data, version: 1,
+              gold: seed.gold, fame: seed.fame, boat: seed.boat, rod: seed.rod };
+      instances = seed.bag.map(i => instRow(uid, i, null));
+      records = [];
     }
   }
 
-  const state = migrate(row.data);
+  const state = assemble(row, instances, records);
 
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
   let dynamicCoupon: { gold: number; desc: string } | null = null;
@@ -159,7 +253,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 클라이언트(HttpBackend)가 최신 상태 위에 1회 재시도한다.
   const nextVersion = Number(row.version) + 1;
   const { data: updated, error: updErr } = await admin.from('saves_current')
-    .update({ data: out.state, version: nextVersion, updated_at: new Date().toISOString() })
+    .update({ ...stateRow(out.state), version: nextVersion, updated_at: new Date().toISOString() })
     .eq('user_id', uid).eq('version', row.version)
     .select('user_id');
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
@@ -177,13 +271,10 @@ async function route(req: Req, res: Res): Promise<void> {
     followUps.push(Promise.resolve(admin.from('saves').insert(
       { user_id: uid, data: out.state, updated_at: new Date().toISOString() })));
   }
-  // 종×폼 기록(0006) — events 보관주기와 무관하게 살아남는 통계 정본 (랭킹·최초발견의 근거).
-  // 값은 리듀서가 방금 계산한 dex를 그대로 쓴다(재계산 금지). 증분이 아니라 절대값 upsert라
-  // 한 번 실패해도 다음 캐치가 자가 치유한다.
-  const recordRows = recordsFor(uid, out.state, action, out.result);
-  if (recordRows.length > 0) {
-    followUps.push(Promise.resolve(admin.from('records').upsert(recordRows)));
-  }
+  // 개체·도감 변경분 — 리듀서가 전후 비교로 뽑아준 것을 그대로 적용한다(재계산 금지).
+  // records는 절대값 upsert라 한 번 실패해도 다음 캐치가 자가 치유한다.
+  const writeResults = await applyWrites(admin as unknown as SupabaseLike, uid, out.writes);
+  followUps.push(...writeResults.map(r => Promise.resolve(r)));
   // 후속 쓰기 실패는 상태를 되돌리지 않는다(이벤트·기록만 유실, 수용) — 다만 **조용히**
   // 잃으면 안 된다. supabase 클라이언트는 거부하지 않고 { error }를 돌려주므로 직접 검사한다.
   if (followUps.length > 0) {

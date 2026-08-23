@@ -101,6 +101,45 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
   });
 });
 
+describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', () => {
+  it('행을 펼쳐 개체 하나만 해제하면 그것만 남고 나머지가 팔린다', () => {
+    seed({ bag: [inst('carp', 'normal', 42), inst('carp', 'normal', 12)] });
+    render(<App />);
+    clickFurniture('sell');
+
+    // 기본은 전부 선택 — 두 마리분
+    expect(screen.getByText('판매하기 (+60G)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
+    // 큰 개체가 위에 온다 + 최대 표시
+    expect(screen.getByText('최대')).toBeInTheDocument();
+
+    // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
+    fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
+    expect(screen.getByText('판매하기 (+30G)')).toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
+
+    fireEvent.click(screen.getByText(/^판매하기/));
+    expect(hud()).toContain('골드 30G');
+    expect(hud()).toContain('1마리');
+    // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
+    clickTab('가방');
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
+    expect(screen.getByText('42.0cm')).toBeInTheDocument();
+    expect(screen.queryByText('12.0cm')).not.toBeInTheDocument();
+  });
+
+  it('잠근 어종은 개체를 펼쳐도 고를 수 없다', () => {
+    seed({ bag: [inst('carp', 'normal', 20)], locked: ['carp'] });
+    render(<App />);
+    clickFurniture('sell');
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
+    // 개체 줄이 클릭 대상이 아니다 (role=button 없음)
+    expect(screen.getByText('20.0cm').closest('[role="button"]')).toBeNull();
+    expect(screen.getByText(/^판매하기/)).toBeDisabled();
+  });
+});
+
 describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
   it('스탯 비교 패널에서 강화 확정: 골드 차감, 낚싯대 +1', () => {
     seed({ gold: upgradeCost(1) });

@@ -7,9 +7,17 @@ type Cell = [x: number, y: number, w: number, h: number];
 
 export type GlyphId =
   | 'coin' | 'star' | 'boat' | 'rod' | 'fish'
-  | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff';
+  | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
+  | 'caretRight' | 'caretDown' | 'checkPartial';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
+  // 접힘/펼침 — 계단식 삼각형 (안티에일리어싱 없이 도트로 각을 낸다)
+  caretRight: {
+    cells: [[4, 2, 2, 8], [6, 4, 2, 4], [8, 6, 2, 2]],
+  },
+  caretDown: {
+    cells: [[2, 4, 8, 2], [4, 6, 4, 2], [6, 8, 2, 2]],
+  },
   // 골드: 팔각 링 동전 + 세로 홈
   coin: {
     cells: [
@@ -52,6 +60,10 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   },
   checkOff: {
     cells: [[0, 0, 12, 1], [0, 11, 12, 1], [0, 1, 1, 10], [11, 1, 1, 10]],
+  },
+  // 일부만 선택 — 체크 대신 가로 막대 (전체/없음과 한눈에 구분된다)
+  checkPartial: {
+    cells: [[0, 0, 12, 1], [0, 11, 12, 1], [0, 1, 1, 10], [11, 1, 1, 10], [3, 5, 6, 2]],
   },
 };
 

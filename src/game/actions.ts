@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, toggleLock, tryBuyBoat, tryUpgrade,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo } from './logic.js';
+import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId } from './logic.js';
 import { resolveCatch } from './fishing.js';
 import type { SpotId } from '../data/spots.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
@@ -48,12 +48,64 @@ export type ActionResult =
 /** 감사/집계 스트림(events 테이블)에 남길 레코드 — 랭킹·업적의 정본 (v0.6+) */
 export interface GameEvent { type: string; payload: Record<string, unknown> }
 
+/** 정규화 저장을 위한 변경분 — 서버가 "무엇이 바뀌었나"를 알아야 테이블에 흩어 쓴다.
+    리듀서 본문은 이걸 만들지 않는다: 전후 상태를 비교해 파생한다(케이스마다 손으로 채우면
+    새 액션에서 빠뜨린다). saves_current는 어차피 낙관 락으로 통째 갱신하므로 델타가 없다. */
+export interface StateWrites {
+  instancesAdded: { inst: FishInstance; slot: number | null }[];
+  instancesRemoved: string[];                              // uid
+  instancesMoved: { uid: string; slot: number | null }[];  // 가방 ↔ 전시
+  records: { fishId: string; form: FormId; rec: FormRecord }[];
+}
+
 export type ApplyOutcome =
-  | { ok: true; state: GameState; result: ActionResult; events: GameEvent[] }
+  | { ok: true; state: GameState; result: ActionResult; events: GameEvent[]; writes: StateWrites }
   // 거부 사유는 타입이 있다  — 유저 문구는 REJECT_TEXT가 단일 근원
   | { ok: false; error: RejectReason };
 
+/** 개체 → 슬롯 색인. 가방은 slot null, 전시대는 배열 인덱스가 곧 슬롯 번호다. */
+function slotIndex(s: GameState): Map<string, { inst: FishInstance; slot: number | null }> {
+  const m = new Map<string, { inst: FishInstance; slot: number | null }>();
+  for (const inst of s.bag) m.set(inst.uid, { inst, slot: null });
+  s.exhibit.forEach((inst, i) => m.set(inst.uid, { inst, slot: i }));
+  return m;
+}
+
+/** 전후 비교로 변경분을 뽑는다 — 새 액션이 추가돼도 자동으로 잡힌다 */
+function diffWrites(prev: GameState, next: GameState): StateWrites {
+  const before = slotIndex(prev), after = slotIndex(next);
+  const w: StateWrites = { instancesAdded: [], instancesRemoved: [], instancesMoved: [], records: [] };
+
+  for (const [uid, cur] of after) {
+    const old = before.get(uid);
+    if (!old) w.instancesAdded.push(cur);
+    else if (old.slot !== cur.slot) w.instancesMoved.push({ uid, slot: cur.slot });
+  }
+  for (const uid of before.keys()) if (!after.has(uid)) w.instancesRemoved.push(uid);
+
+  // 도감은 종×폼 단위로 바뀐 행만 — 절대값이라 실패해도 다음 캐치가 자가 치유한다
+  for (const [fishId, forms] of Object.entries(next.dex)) {
+    for (const [form, rec] of Object.entries(forms)) {
+      if (!rec) continue;
+      const old = prev.dex[fishId]?.[form as FormId];
+      if (!old || old.count !== rec.count || old.maxSize !== rec.maxSize || old.first !== rec.first) {
+        w.records.push({ fishId, form: form as FormId, rec });
+      }
+    }
+  }
+  return w;
+}
+
 export function applyAction(state: GameState, action: GameAction, deps: ActionDeps): ApplyOutcome {
+  const out = reduce(state, action, deps);
+  return out.ok ? { ...out, writes: diffWrites(state, out.state) } : out;
+}
+
+type ReduceOutcome =
+  | { ok: true; state: GameState; result: ActionResult; events: GameEvent[] }
+  | { ok: false; error: RejectReason };
+
+function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
   switch (action.type) {
     case 'catch': {
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)

@@ -31,6 +31,10 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
     if (inst.size !== null) row.maxSize = Math.max(row.maxSize ?? 0, inst.size);
     rows.set(key, row);
   }
+  // 행 안에서는 큰 개체가 먼저 — 남길지 팔지 고를 때 위에서부터 보면 된다 (미상은 뒤로)
+  for (const row of rows.values()) {
+    row.items.sort((a, b) => (b.size ?? -1) - (a.size ?? -1) || a.uid.localeCompare(b.uid));
+  }
   return [...rows.values()].sort((a, b) =>
     rarityRank(a.fish.rarity) - rarityRank(b.fish.rarity)
     || a.fish.id.localeCompare(b.fish.id)

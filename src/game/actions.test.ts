@@ -153,3 +153,54 @@ describe('무결성', () => {
     expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 });
+
+// 정규화 저장(0006)의 정합성 — 리듀서가 전후 비교로 뽑는 변경분.
+// 케이스마다 손으로 채우지 않으므로, 새 액션이 생겨도 여기 계약이 유지돼야 한다.
+describe('writes (변경분)', () => {
+  it('catch — 개체 1건 추가 + 그 종×폼 도감 1행', () => {
+    const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.writes.instancesAdded).toHaveLength(1);
+    expect(out.writes.instancesAdded[0].slot).toBeNull();          // 가방행
+    expect(out.writes.instancesAdded[0].inst.uid).toBe('uid-1');
+    expect(out.writes.instancesRemoved).toEqual([]);
+    expect(out.writes.records).toHaveLength(1);
+    expect(out.writes.records[0]).toMatchObject({ fishId: 'crucian', form: 'variant' });
+  });
+
+  it('sell — 판매한 개체만 제거, 도감은 안 건드린다', () => {
+    const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
+    const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a'] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.writes.instancesRemoved).toEqual(['a']);
+    expect(out.writes.instancesAdded).toEqual([]);
+    expect(out.writes.records).toEqual([]);   // 판매는 기록을 바꾸지 않는다
+  });
+
+  it('잠긴 개체는 판매 요청이 와도 제거 목록에 안 들어간다', () => {
+    const bag = [mkInst('a', 'carp')];
+    const out = applyAction(seed({ bag, locked: ['carp'] }), { type: 'sell', uids: ['a'] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.writes.instancesRemoved).toEqual([]);
+  });
+
+  it('상태를 안 바꾸는 액션은 빈 변경분', () => {
+    const out = applyAction(seed(), { type: 'toggleLock', fishId: 'carp' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.writes).toEqual({
+      instancesAdded: [], instancesRemoved: [], instancesMoved: [], records: [],
+    });
+  });
+
+  it('가방 ↔ 전시 이동은 add/remove가 아니라 move다 (uid 보존)', () => {
+    const inst = mkInst('x', 'carp');
+    const before = seed({ bag: [inst] });
+    const after = { ...before, bag: [], exhibit: [inst] };
+    // 전시 액션은 아직 없으므로 diff 자체를 검증한다 — import 액션으로 상태를 갈아끼운다
+    const out = applyAction(before, { type: 'import', save: after }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.writes.instancesMoved).toEqual([{ uid: 'x', slot: 0 }]);
+    expect(out.writes.instancesAdded).toEqual([]);
+    expect(out.writes.instancesRemoved).toEqual([]);
+  });
+});

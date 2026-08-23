@@ -10,13 +10,45 @@ import { AppError } from '../errors';
 import { REJECT_TEXT } from '../game/rules';
 import type { RejectReason } from '../game/rules';
 
+type Row = Record<string, never> | Record<string, unknown>;
+
+/** 3소스 → GameState. 서버(api/action.ts)의 조립과 같은 규칙이다 */
+function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
+  const bag: unknown[] = [];
+  const exhibit: unknown[] = [];
+  for (const r of instances as Record<string, unknown>[]) {
+    const inst = {
+      uid: r.uid, fishId: r.fish_id, form: r.form, size: r.size,
+      caughtAt: r.caught_at, spot: r.spot, judgment: r.judgment,
+    };
+    if (r.slot === null || r.slot === undefined) bag.push(inst);
+    else exhibit[r.slot as number] = inst;
+  }
+  const dex: Record<string, Record<string, unknown>> = {};
+  for (const r of records as Record<string, unknown>[]) {
+    (dex[r.fish_id as string] ??= {})[r.form as string] = {
+      count: Number(r.count), maxSize: r.max_size,
+      first: typeof r.first_caught === 'string' ? r.first_caught.slice(0, 10) : null,
+    };
+  }
+  const c = cur as Record<string, unknown>;
+  return migrate({ ...(c.data as object), v: 8, gold: Number(c.gold), fame: Number(c.fame),
+    boat: c.boat, rod: c.rod, bag, exhibit, dex });
+}
+
 export class HttpBackend implements Backend {
+  // 저장소가 셋으로 갈려 있다(0006): saves_current(스칼라+blob) · fish_instances · records.
+  // 셋을 병렬로 읽어 GameState로 조립한다 — RLS가 본인 행만 통과시킨다.
   async load(): Promise<GameState | null> {
     if (!supabase) return null;
-    const { data: cur } = await supabase
-      .from('saves_current').select('data').maybeSingle(); // RLS: 본인 행만
-    if (cur) return migrate(cur.data);
-    // 이관 폴백 — 서버 권위 전환 전 유저는 saves(스냅샷 아카이브)의 최신 행이 최신 상태다
+    const [cur, inst, rec] = await Promise.all([
+      supabase.from('saves_current').select('data, gold, fame, boat, rod').maybeSingle(),
+      supabase.from('fish_instances').select('*'),
+      supabase.from('records').select('fish_id, form, count, max_size, first_caught'),
+    ]);
+    if (cur.data) return assemble(cur.data, inst.data ?? [], rec.data ?? []);
+
+    // 이관 폴백 — 아직 첫 액션을 하지 않은 유저는 구 saves(blob)의 최신 행이 유일한 정본이다
     const { data: old } = await supabase
       .from('saves').select('data')
       .order('updated_at', { ascending: false }).limit(1).maybeSingle();
