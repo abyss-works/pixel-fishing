@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
-import { BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
+import { BAG_CAPACITY, BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -16,8 +16,8 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
-const mkInst = (uid: string, fishId: string, form: FormId = 'normal'): FishInstance =>
-  ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null });
+const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = false): FishInstance =>
+  ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
 describe('catch', () => {
   it('추첨·기록·이벤트 — rng=0이면 풀 첫 어종 + 변이 확정 (기존 목킹 계약)', () => {
@@ -27,7 +27,7 @@ describe('catch', () => {
     expect(out.state.bag).toEqual([{
       uid: 'uid-1', fishId: 'crucian', form: 'variant',
       size: expect.any(Number), caughtAt: '2026-08-22T03:00:00.000Z',
-      spot: 'pond', judgment: 'normal',
+      spot: 'pond', judgment: 'normal', locked: false,
     }]);
     expect(out.state.dex.crucian.variant).toMatchObject({ count: 1, first: '2026-08-22' });
     expect(out.state.dex.crucian.normal).toBeUndefined(); // 폼별 기록 — 일반은 아직
@@ -64,9 +64,58 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.events[0]).toMatchObject({ type: 'sell', payload: { gold: 30, uids: ['a'] } });
   });
 
-  it('sell — 잠근 어종은 uid가 와도 팔리지 않고 이벤트에도 안 남는다 (이중 방어)', () => {
-    const bag = [mkInst('a', 'carp'), mkInst('b', 'crucian')];
-    const out = applyAction(seed({ bag, locked: ['carp'] }), { type: 'sell', uids: ['a', 'b'] }, deps());
+  it('catch — 가방이 가득 차면 가장 안 특별한 개체를 놓아주고 결과·이벤트·델타에 남긴다', () => {
+    // rng=0 → 붕어(일반) 변이가 잡힌다. 가방은 일반 붕어로 꽉 채워 둔다
+    const bag = Array.from({ length: BAG_CAPACITY }, (_, i) => mkInst(`old-${i}`, 'crucian'));
+    const out = applyAction(seed({ bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    if (out.result.type !== 'catch') throw new Error('catch 결과가 아님');
+
+    expect(out.state.bag).toHaveLength(BAG_CAPACITY);       // 상한을 넘지 않는다
+    expect(out.result.released).toHaveLength(1);
+    expect(out.state.bag.some(i => i.uid === 'uid-1')).toBe(true); // 변이는 더 특별해 남는다
+
+    const releasedUid = out.result.released[0].uid;
+    expect(releasedUid).toMatch(/^old-/);                   // 기존 일반 개체가 나간다
+    expect(out.writes.instancesRemoved).toEqual([releasedUid]);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
+    expect(out.events[1].payload).toMatchObject({ uids: [releasedUid], reason: 'bag-full' });
+
+    // 명성·도감은 방생해도 남는다 — 잡은 사실이 사라지는 게 아니다
+    expect(out.state.fame).toBeGreaterThan(0);
+    expect(out.state.dex.crucian?.variant?.count).toBe(1);
+  });
+
+  it('catch — 이미 상한을 넘겨 든 가방도 한 번에 한 마리만 나간다 (v0.4.0 이관 방어)', () => {
+    // 고정 상한을 그대로 들이대면 2941마리가 첫 캐치에 골드 0원으로 증발한다.
+    // 상한은 캐치 전 가방 크기로 재므로(래칫) 새로 담은 만큼만 빠진다.
+    const bag = Array.from({ length: 3000 }, (_, i) =>
+      ({ ...mkInst(`old-${i}`, 'crucian'), size: null }));
+    const out = applyAction(seed({ bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    if (out.result.type !== 'catch') throw new Error('catch 결과가 아님');
+    expect(out.result.released).toHaveLength(1);
+    expect(out.state.bag).toHaveLength(3000);
+    expect(out.writes.instancesRemoved).toHaveLength(1);
+  });
+
+  it('catch — 가방을 전부 잠갔으면 방금 잡은 개체가 그 자리에서 방생된다', () => {
+    // 잠금은 "이건 지키라"는 명시적 표시라 후보에서 빠진다. 그래서 유일한 후보는 새 개체다.
+    // 캐치를 거부하지 않는 게 요점 — 실패 페널티를 만들지 않고, 명성·도감은 그대로 남는다.
+    const bag = Array.from({ length: BAG_CAPACITY }, (_, i) =>
+      ({ ...mkInst(`old-${i}`, 'crucian'), locked: true }));
+    const out = applyAction(seed({ bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    if (out.result.type !== 'catch') throw new Error('catch 결과가 아님');
+    expect(out.result.released.map(r => r.uid)).toEqual(['uid-1']); // 방금 잡은 그것
+    expect(out.state.bag).toHaveLength(BAG_CAPACITY);
+    expect(out.state.bag.every(i => i.locked)).toBe(true);          // 잠근 것은 하나도 안 나갔다
+    expect(out.state.dex.crucian?.variant?.count).toBe(1);          // 도감에는 남는다
+  });
+
+  it('sell — 잠근 개체는 uid가 와도 팔리지 않고 이벤트에도 안 남는다 (이중 방어)', () => {
+    const bag = [mkInst('a', 'carp', 'normal', true), mkInst('b', 'crucian')];
+    const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a', 'b'] }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(6);               // 붕어만
     expect(out.state.bag.map(i => i.uid)).toEqual(['a']);
@@ -92,10 +141,12 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.state.boat).toBe(1);
   });
 
-  it('toggleLock — 이벤트 없이 잠금 토글', () => {
-    const out = applyAction(seed(), { type: 'toggleLock', fishId: 'carp' }, deps());
+  it('setLocked — 이벤트 없이 개체 잠금, 델타에는 잡힌다', () => {
+    const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
+    const out = applyAction(seed({ bag }), { type: 'setLocked', uids: ['a'], locked: true }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.locked).toEqual(['carp']);
+    expect(out.state.bag.map(i => i.locked)).toEqual([true, false]);
+    expect(out.writes.instancesLocked).toEqual([{ uid: 'a', locked: true }]);
     expect(out.events).toEqual([]);
   });
 });
@@ -178,17 +229,17 @@ describe('writes (변경분)', () => {
   });
 
   it('잠긴 개체는 판매 요청이 와도 제거 목록에 안 들어간다', () => {
-    const bag = [mkInst('a', 'carp')];
-    const out = applyAction(seed({ bag, locked: ['carp'] }), { type: 'sell', uids: ['a'] }, deps());
+    const bag = [mkInst('a', 'carp', 'normal', true)];
+    const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a'] }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.writes.instancesRemoved).toEqual([]);
   });
 
   it('상태를 안 바꾸는 액션은 빈 변경분', () => {
-    const out = applyAction(seed(), { type: 'toggleLock', fishId: 'carp' }, deps());
+    const out = applyAction(seed(), { type: 'setLocked', uids: [], locked: true }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.writes).toEqual({
-      instancesAdded: [], instancesRemoved: [], instancesMoved: [], records: [],
+      instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
     });
   });
 

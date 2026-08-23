@@ -6,7 +6,7 @@
 import {
   JUDGMENT_MULT, ROD,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT,
+  VARIANT_PRICE_MULT, BAG_CAPACITY,
 } from './balance.js';
 import { RARITY } from '../data/rarity.js';
 import type { SpotId } from '../data/spots.js';
@@ -40,6 +40,7 @@ export interface FishInstance {
   caughtAt: string | null;    // ISO datetime — 명패·부패도·통계 대비
   spot: SpotId | null;        // 포획 수역
   judgment: Judgment | null;  // perfect/normal/auto — 명패 플레이버·통계
+  locked: boolean;            // 실수 판매 방지 — 개체 단위 (구버전은 어종 단위였다)
 }
 
 /** 종×폼별 도감 기록 — 개체가 사라져도 남는 집계 */
@@ -60,7 +61,6 @@ export interface GameState {
   /** 도감 = 종 → 폼 → 기록. 폼이 늘어도 키 하나만 늘어난다 (구 병렬 Record 6개를 흡수) */
   dex: Record<string, Partial<Record<FormId, FormRecord>>>;
   coupons: string[];              // 사용한 쿠폰 코드
-  locked: string[];               // 잠근 어종 id — 전 폼 판매 제외 (실수 방지)
 }
 
 export interface RodStats {
@@ -116,7 +116,7 @@ export function newState(): GameState {
   return {
     v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
-    coupons: [], locked: [],
+    coupons: [],
   };
 }
 
@@ -232,6 +232,7 @@ export function makeInstance(fish: Fish, extras: CatchExtras, ctx: CatchContext)
   return {
     uid: ctx.uid, fishId: fish.id, form: extras.form, size: extras.size,
     caughtAt: ctx.now, spot: ctx.spot, judgment: ctx.judgment,
+    locked: false, // 새로 잡힌 개체는 잠기지 않는다 — 잠금은 유저가 명시적으로 건다
   };
 }
 
@@ -357,15 +358,20 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
 
     const bag = (Array.isArray(s.bag) ? s.bag : [])
       .filter((e): e is string => typeof e === 'string')
-      .map((e): FishInstance => ({
-        uid: uid(),
-        fishId: e.endsWith('*') ? e.slice(0, -1) : e,
-        form: e.endsWith('*') ? 'variant' : 'normal',
-        size: null, caughtAt: null, spot: null, judgment: null, // 이관 개체 = 크기 미상
-      }));
+      .map((e): FishInstance => {
+        const fishId = e.endsWith('*') ? e.slice(0, -1) : e;
+        return {
+          uid: uid(),
+          fishId,
+          form: e.endsWith('*') ? 'variant' : 'normal',
+          size: null, caughtAt: null, spot: null, judgment: null, // 이관 개체 = 크기 미상
+          // 어종 잠금(v5~v7) → 개체 잠금. 잠갔던 종의 개체는 전부 잠긴 채로 넘어온다
+          locked: Array.isArray(s.locked) && s.locked.includes(fishId),
+        };
+      });
 
     return {
-      ...s, v: 8, bag, exhibit: [], dex,
+      ...s, v: 8, bag, exhibit: [], dex, locked: undefined,
       caught: undefined, maxSize: undefined, firstCaught: undefined,
       variantCaught: undefined, variantMaxSize: undefined, variantFirstCaught: undefined,
     };
@@ -389,6 +395,7 @@ function safeInstances(v: unknown, uid: () => string): FishInstance[] {
       spot: typeof i.spot === 'string' ? i.spot : null,
       judgment: i.judgment === 'perfect' || i.judgment === 'normal' || i.judgment === 'auto'
         ? i.judgment : null,
+      locked: i.locked === true,
     });
   }
   return out;
@@ -441,8 +448,6 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     dex: safeDex(s.dex),
     coupons: Array.isArray(s.coupons)
       ? s.coupons.filter((c): c is string => typeof c === 'string') : [],
-    locked: Array.isArray(s.locked)
-      ? s.locked.filter((c): c is string => typeof c === 'string') : [],
   };
 }
 
@@ -476,26 +481,71 @@ export function addCatch(
   };
 }
 
+export { BAG_CAPACITY };
+
+// ---------- 가방 용량 ----------
+// "가장 안 특별한" 순서 — 놓아줄 후보를 고르는 단일 기준.
+// 등급 → 폼(변이가 더 특별) → 크기 → uid(결정성). 크기 미상(이관 개체)은 가장 작은 것 취급:
+// 정보가 없는 개체를 붙들고 있을 이유가 없고, 기록은 어차피 records에 남는다.
+const blandness = (i: FishInstance): [number, number, number, string] => {
+  const fish = instanceFish(i);
+  return [
+    fish ? RARITY[fish.rarity].order : -1, // 삭제된 어종은 맨 먼저 (표시도 안 되는 개체)
+    i.form === 'variant' ? 1 : 0,
+    i.size ?? -1,
+    i.uid,
+  ];
+};
+
+/** 이 가방에 실제로 적용되는 상한 — **래칫**이다. 이미 상한을 넘겨 들고 있으면 그 수가 상한이 된다.
+ *
+ * v0.4.0 가방은 어종 문자열 배열이라 수천 마리를 쌓아둔 유저가 있다. 고정 상한을 그대로 들이대면
+ * 이관 후 **첫 캐치 한 번에 수천 마리가 골드 0원에 방생된다** — 방생은 명성만 남기는데 명성은
+ * 이미 받은 뒤라 순수 손실이다. 상한의 뜻은 "더 담지 못한다"지 "몰수한다"가 아니다.
+ *
+ * 래칫이면 자산을 하나도 건드리지 않고 의미가 성립한다: 넘겨 든 유저는 **늘리지 못할 뿐**이고,
+ * 팔아서 기본 상한 아래로 내려오면 그때부터 평소 규칙이 적용된다. 골드를 지어내지도 않는다.
+ */
+export const bagCapacity = (bag: readonly FishInstance[]): number =>
+  Math.max(BAG_CAPACITY, bag.length);
+
+/** 넘친 만큼 놓아줄 개체를 고른다 — 잠근 개체는 절대 후보가 아니다 */
+export function overflowUids(bag: readonly FishInstance[], capacity = BAG_CAPACITY): string[] {
+  const over = bag.length - capacity;
+  if (over <= 0) return [];
+  const candidates = bag.filter(i => !i.locked)
+    .sort((a, b) => {
+      const x = blandness(a), y = blandness(b);
+      return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || x[3].localeCompare(y[3]);
+    });
+  // 전부 잠갔으면 놓아줄 게 없다 — 상한을 넘긴 채로 둔다.
+  // 잠금은 유저가 개체마다 명시적으로 건 것이고, 여기서 캐치를 거부하면 실패 페널티가 된다.
+  return candidates.slice(0, over).map(i => i.uid);
+}
+
+/** 방생 — 개체만 사라진다. 명성·도감은 잡는 순간 이미 확정됐으므로 건드리지 않는다 */
+export function release(state: GameState, uids: readonly string[]): GameState {
+  if (uids.length === 0) return state;
+  const gone = new Set(uids);
+  return { ...state, bag: state.bag.filter(i => !gone.has(i.uid)) };
+}
+
 export function bagValue(state: GameState): number {
   return state.bag.reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
-// 잠금은 어종 단위 — 어종을 잠그면 그 종의 모든 폼 개체가 함께 잠긴다
-const isLocked = (state: GameState, inst: FishInstance): boolean =>
-  state.locked.includes(inst.fishId);
-
-// 판매 가능액 = 가방 중 잠기지 않은 어종만 (잠금 = 실수 판매 방지, R1b)
+// 판매 가능액 = 가방 중 잠기지 않은 개체만 (잠금 = 실수 판매 방지, R1b)
 export function sellableValue(state: GameState): number {
   return state.bag
-    .filter(i => !isLocked(state, i))
+    .filter(i => !i.locked)
     .reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
-// 잠근 어종은 uid가 와도 팔리지 않는다(이중 방어)
+// 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 export function sellSelected(state: GameState, uids: readonly string[]): GameState {
   const want = new Set(uids);
-  const sold = state.bag.filter(i => want.has(i.uid) && !isLocked(state, i));
+  const sold = state.bag.filter(i => want.has(i.uid) && !i.locked);
   const soldUids = new Set(sold.map(i => i.uid));
   return {
     ...state,
@@ -504,18 +554,19 @@ export function sellSelected(state: GameState, uids: readonly string[]): GameSta
   };
 }
 
-// 전부 판매 — 잠근 어종은 가방에 남는다
+// 전부 판매 — 잠근 개체는 가방에 남는다
 export function sellAll(state: GameState): GameState {
   return sellSelected(state, state.bag.map(i => i.uid));
 }
 
-// 어종 잠금 토글 (가방 탭) — 잠긴 어종은 전부 판매에서 제외
-export function toggleLock(state: GameState, fishId: string): GameState {
+// 개체 잠금 토글 — uid 목록을 받아 **일괄 지정**한다.
+// 목록을 받는 이유: 가방 행 머리의 "이 종 전부 잠금"이 개체 N개를 한 액션으로 바꿔야 하고,
+// 토글이 아니라 지정이라야 부분 잠금 상태에서 눌러도 결과가 예측 가능하다.
+export function setLocked(state: GameState, uids: readonly string[], locked: boolean): GameState {
+  const want = new Set(uids);
   return {
     ...state,
-    locked: state.locked.includes(fishId)
-      ? state.locked.filter(id => id !== fishId)
-      : [...state.locked, fishId],
+    bag: state.bag.map(i => (want.has(i.uid) && i.locked !== locked ? { ...i, locked } : i)),
   };
 }
 

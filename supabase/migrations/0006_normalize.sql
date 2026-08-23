@@ -33,7 +33,8 @@ create table public.fish_instances (
   caught_at timestamptz,
   spot text,
   judgment text,
-  slot int                            -- null = 가방
+  slot int,                           -- null = 가방
+  locked boolean not null default false  -- 실수 판매 방지 (개체 단위)
 );
 alter table public.fish_instances enable row level security;
 

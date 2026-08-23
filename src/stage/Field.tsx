@@ -11,6 +11,7 @@ import { nextPhase, phaseDurationMs, judgePress } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { CAST_RANGE, WALK_SPEED } from '../game/balance';
 import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
+import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
 import CatchCard from './CatchCard';
 
@@ -158,6 +159,12 @@ export default function Field({
       // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
       toastRef.current(
         `${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, info.form)}] 획득!`);
+      // 방생은 반드시 알린다 — 조용히 사라지면 유저는 개체를 잃은 걸로만 읽는다.
+      // 명성이 남는다는 점을 같이 적어야 손실이 아니라 교환으로 읽힌다.
+      if (result.released.length > 0) {
+        const names = result.released.map(r => r.name).join(', ');
+        toastRef.current(`가방이 가득 차 [${names}]을(를) 놓아줬다 — 명성은 남는다.`);
+      }
     });
   };
 
@@ -275,34 +282,37 @@ export default function Field({
 
   return (
     <>
-      <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-              className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
-              aria-label={region === 'village' ? '마을' : '바다'}
-              onClick={() => actionRef.current()} />
+      <GameFrame>
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
+                aria-label={region === 'village' ? '마을' : '바다'}
+                onClick={() => actionRef.current()} />
 
-      <ResourceBar title={title} game={game} />
-
-      {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
-          게임 프레임 하단 중앙 — 프레임이 non-positioned라 --frame-h 공식으로 위치를 계산한다.
-          animate-overlay-in은 transform을 건드리지 않아 translate 중앙정렬과 충돌하지 않는다.
-          .status-overlay 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
-      {phase !== 'idle' && (
-        <div data-phase={phase}
+        {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
+            프레임 하단 중앙. 프레임이 positioned라 bottom-3이 그대로 프레임 기준이다.
+            animate-overlay-in은 transform을 건드리지 않아 translate 중앙정렬과 충돌하지 않는다.
+            .status-overlay 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
+        {phase !== 'idle' && (
+          <div data-phase={phase}
              className="status-overlay absolute left-1/2 -translate-x-1/2
-                        bottom-[calc((100cqh-var(--frame-h))/2+12px)] z-(--z-overlay)
+                        bottom-3 z-(--z-overlay)
                         max-w-[min(560px,calc(100%-24px))] px-3 py-1 rounded-full
                         text-xs text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
                         [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] pointer-events-none animate-overlay-in">
-          {phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} [${formName(fish, catchInfo?.form ?? 'normal')}] 획득!`
-            : STATUS[phase]}
-        </div>
-      )}
+            {phase === 'catch' && fish
+              ? `${RARITY[fish.rarity].name} [${formName(fish, catchInfo?.form ?? 'normal')}] 획득!`
+              : STATUS[phase]}
+          </div>
+        )}
 
-      {/* 획득 카드 — 게임 프레임 중앙 DOM 오버레이 (스프라이트/크기/월척/변이/NEW) */}
-      {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
+        {/* 획득 카드 — 프레임 중앙 DOM 오버레이 (스프라이트/크기/월척/변이/NEW) */}
+        {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
+      </GameFrame>
 
-      {/* 필드 위 미니맵 (우하단) — % 폭은 게임 프레임 기준 */}
+      {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
+      <ResourceBar title={title} game={game} />
+
+      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
       <canvas ref={minimapRef} width={def.w} height={def.h}
               className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
                          [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"

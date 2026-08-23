@@ -11,13 +11,15 @@ import RegionTab from './RegionTab';
 import BagTab from './BagTab';
 import DexTab from './DexTab';
 import SettingsTab from './SettingsTab';
+import { setBagLayout, useBagView } from './bagView';
 import type { DexView } from './shared';
 
 // 탭은 씬과 무관하게 항상 동일한 5개 (일관성 우선)
-// 도감 탭만 라벨이 동적 — 활성 상태에서 한 번 더 누르면 일반↔돌연변이 보기 전환
-const tabsFor = (dexView: DexView) => ([
+// 가방·도감은 라벨이 동적 — 활성 상태에서 한 번 더 누르면 보기가 전환된다.
+// 보기 전환을 탭 자리에서 하므로 콘텐츠 안에 별도 토글 줄을 두지 않는다(세로 공간 절약).
+const tabsFor = (dexView: DexView, bagCards: boolean) => ([
   { key: 'region', label: '지역' },
-  { key: 'bag', label: '가방' },
+  { key: 'bag', label: bagCards ? '가방\n(카드)' : '가방\n(목록)' },
   { key: 'dex', label: dexView === 'base' ? '도감\n(일반)' : '도감\n(돌연변이)' },
   { key: 'help', label: '도움말' },
   { key: 'settings', label: '설정' },
@@ -45,18 +47,20 @@ interface SidebarProps {
 export default function Sidebar(props: SidebarProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
+  const { layout } = useBagView();
 
-  // 활성 도감 탭을 한 번 더 누르면 일반↔돌연변이 전환
+  // 활성 탭을 한 번 더 누르면 그 탭의 보기가 전환된다 (가방: 목록↔카드 / 도감: 일반↔돌연변이)
   const onSelect = (t: TabKey) => {
     if (t === 'dex' && activeTab === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
+    if (t === 'bag' && activeTab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
     setActiveTab(t);
   };
 
   return (
     <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line
                       max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t">
-      <TabBar<TabKey> tabs={tabsFor(dexView)} activeKey={activeTab} onSelect={onSelect} />
-      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+      <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards')} activeKey={activeTab} onSelect={onSelect} />
+      <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
         {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
         {activeTab === 'dex' && <DexTab game={game} region={props.region} view={dexView} />}

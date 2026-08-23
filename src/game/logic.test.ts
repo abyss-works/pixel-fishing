@@ -4,7 +4,7 @@ import {
   RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
-  sellableValue, sellSelected, toggleLock,
+  sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity, BAG_CAPACITY,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
@@ -15,7 +15,8 @@ import type { CatchExtras, FishInstance, FormId } from './logic';
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
 const mk = (fishId: string, form: FormId = 'normal', size: number | null = 20): FishInstance =>
-  ({ uid: `u${++uidSeq}`, fishId, form, size, caughtAt: null, spot: null, judgment: null });
+  ({ uid: `u${++uidSeq}`, fishId, form, size, caughtAt: null, spot: null, judgment: null,
+     locked: false });
 
 describe('데이터 무결성', () => {
   it('모든 물고기가 유효한 해역/등급/가격을 가진다', () => {
@@ -186,14 +187,14 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(speciesCount(sold, 'carp')).toBe(2); // 팔아도 기록은 영구
   });
 
-  it('선택 판매: uid로 지목한 개체만 팔리고, 잠근 어종은 uid가 와도 안 팔린다', () => {
+  it('선택 판매: uid로 지목한 개체만 팔리고, 잠근 개체는 uid가 와도 안 팔린다', () => {
     const a = mk('carp'), b = mk('crucian');
     const st = addCatch(addCatch(newState(), a, carp), b, crucian);
     const partial = sellSelected(st, [b.uid]);
     expect(partial.gold).toBe(crucian.price);
     expect(partial.bag.map(i => i.uid)).toEqual([a.uid]);
-    // 잠근 어종은 이중 방어 — uid를 넣어도 무시
-    const locked = toggleLock(st, 'carp');
+    // 잠근 개체는 이중 방어 — uid를 넣어도 무시
+    const locked = setLocked(st, [a.uid], true);
     const defended = sellSelected(locked, [a.uid, b.uid]);
     expect(defended.gold).toBe(crucian.price);
     expect(defended.bag.map(i => i.uid)).toEqual([a.uid]);
@@ -206,19 +207,77 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(out.bag).toHaveLength(1);
   });
 
-  it('잠근 어종은 전부 판매에서 제외되고 가방에 남는다 (R1b)', () => {
-    const st = [mk('carp'), mk('carp'), mk('crucian')]
-      .reduce((acc, i) => addCatch(acc, i, i.fishId === 'carp' ? carp : crucian), newState());
-    const locked = toggleLock(st, 'carp');
-    expect(locked.locked).toEqual(['carp']);
+  it('잠근 개체는 전부 판매에서 제외되고 가방에 남는다 (R1b)', () => {
+    const insts = [mk('carp'), mk('carp'), mk('crucian')];
+    const st = insts.reduce((acc, i) => addCatch(acc, i, i.fishId === 'carp' ? carp : crucian), newState());
+    const carpUids = insts.filter(i => i.fishId === 'carp').map(i => i.uid);
+    const locked = setLocked(st, carpUids, true);
+    expect(locked.bag.filter(i => i.locked).map(i => i.uid)).toEqual(carpUids);
     expect(sellableValue(locked)).toBe(crucian.price); // 잉어 2마리 제외
     const sold = sellAll(locked);
     expect(sold.gold).toBe(crucian.price);
-    expect(sold.bag.map(i => i.fishId)).toEqual(['carp', 'carp']); // 잠긴 어종은 남는다
-    // 토글 해제 → 다시 판매 대상
-    const unlocked = toggleLock(sold, 'carp');
-    expect(unlocked.locked).toEqual([]);
+    expect(sold.bag.map(i => i.fishId)).toEqual(['carp', 'carp']); // 잠긴 개체는 남는다
+    // 해제 → 다시 판매 대상
+    const unlocked = setLocked(sold, carpUids, false);
+    expect(unlocked.bag.every(i => !i.locked)).toBe(true);
     expect(sellableValue(unlocked)).toBe(carp.price * 2);
+  });
+
+  it('가방 상한: 안 넘치면 아무것도 안 놓아준다', () => {
+    const bag = Array.from({ length: BAG_CAPACITY }, () => mk('crucian'));
+    expect(overflowUids(bag)).toEqual([]);
+  });
+
+  it('가방 상한: 넘친 만큼만, 가장 안 특별한 것부터 놓아준다', () => {
+    // 등급 → 폼 → 크기 순으로 "덜 특별". 일부러 뒤섞어 넣는다
+    const bigCommon = mk('crucian', 'normal', 30);   // 일반, 큼
+    const smallCommon = mk('crucian', 'normal', 5);  // 일반, 작음 ← 가장 안 특별
+    const variant = mk('crucian', 'variant', 5);     // 변이 (같은 등급·크기면 변이가 더 특별)
+    const rare = mk('carp', 'normal', 5);            // 희귀
+    const bag = [rare, variant, bigCommon, smallCommon];
+    expect(overflowUids(bag, 3)).toEqual([smallCommon.uid]);
+    expect(overflowUids(bag, 2)).toEqual([smallCommon.uid, bigCommon.uid]);
+    expect(overflowUids(bag, 1)).toEqual([smallCommon.uid, bigCommon.uid, variant.uid]);
+  });
+
+  it('가방 상한은 래칫 — 이미 넘겨 들었으면 그 수가 상한이다', () => {
+    const few = Array.from({ length: 10 }, () => mk('crucian'));
+    expect(bagCapacity(few)).toBe(BAG_CAPACITY);          // 평소엔 기본 상한
+    const many = Array.from({ length: 3000 }, () => mk('crucian'));
+    expect(bagCapacity(many)).toBe(3000);                 // 넘겨 들었으면 몰수하지 않는다
+    expect(overflowUids(many, bagCapacity(many))).toEqual([]); // 가만히 있으면 아무것도 안 나간다
+  });
+
+  it('가방 상한: 크기 미상(이관 개체)이 가장 먼저 나간다', () => {
+    const unknown = mk('crucian', 'normal', null), known = mk('crucian', 'normal', 1);
+    expect(overflowUids([known, unknown], 1)).toEqual([unknown.uid]);
+  });
+
+  it('가방 상한: 잠근 개체는 후보가 아니고, 전부 잠기면 상한을 넘긴 채 둔다', () => {
+    const locked = [mk('crucian', 'normal', 1), mk('crucian', 'normal', 2)]
+      .map(i => ({ ...i, locked: true }));
+    const free = mk('carp', 'normal', 99); // 더 특별하지만 유일한 후보
+    expect(overflowUids([...locked, free], 1)).toEqual([free.uid]);
+    // 놓아줄 게 없으면 빈 목록 — 캐치를 거부하지 않는다(실패 페널티 금지)
+    expect(overflowUids(locked, 1)).toEqual([]);
+  });
+
+  it('방생은 개체만 지운다 — 명성·도감은 잡는 순간 확정이라 안 건드린다', () => {
+    const a = mk('carp'), b = mk('crucian');
+    const st = addCatch(addCatch(newState(), a, carp), b, crucian);
+    const after = release(st, [a.uid]);
+    expect(after.bag.map(i => i.uid)).toEqual([b.uid]);
+    expect(after.fame).toBe(st.fame);                                  // 명성 유지
+    expect(dexRecord(after, 'carp', 'normal')).toEqual(dexRecord(st, 'carp', 'normal'));
+    expect(after.gold).toBe(st.gold);                                  // 골드는 안 준다
+  });
+
+  it('같은 종이라도 개체마다 따로 잠긴다 — 큰 놈만 남기기', () => {
+    const big = mk('carp', 'normal', 40), small = mk('carp', 'normal', 10);
+    const st = [big, small].reduce((acc, i) => addCatch(acc, i, carp), newState());
+    const kept = setLocked(st, [big.uid], true);
+    expect(sellableValue(kept)).toBe(carp.price);      // 작은 놈 하나만 판매 대상
+    expect(sellAll(kept).bag.map(i => i.uid)).toEqual([big.uid]);
   });
 
   it('낚싯대 강화: 골드 부족이면 null, 성공 시 차감+레벨업', () => {
@@ -300,7 +359,7 @@ describe('월척(크기)·개체·폼 기록', () => {
     });
     expect(inst).toEqual({
       uid: 'u-1', fishId: 'carp', form: 'variant', size: 33,
-      caughtAt: '2026-08-22T03:00:00.000Z', spot: 'pond', judgment: 'perfect',
+      caughtAt: '2026-08-22T03:00:00.000Z', spot: 'pond', judgment: 'perfect', locked: false,
     });
   });
 
@@ -332,7 +391,7 @@ describe('R18b: 세이브 마이그레이션', () => {
     // 구 문자열 엔트리 → 개체. 문맥은 남아 있지 않으므로 "크기 미상"으로 합성한다
     expect(st.bag).toEqual([{
       uid: 'm1', fishId: 'carp', form: 'normal',
-      size: null, caughtAt: null, spot: null, judgment: null,
+      size: null, caughtAt: null, spot: null, judgment: null, locked: false,
     }]);
     expect(dexRecord(st, 'carp', 'normal')).toEqual({ count: 9, maxSize: null, first: null });
     expect(st.fame).toBe(RARITY.rare.fame * 9); // 잡은 만큼 소급 인정 — 데이터 손실 없음
@@ -389,11 +448,17 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect('mutated' in st).toBe(false);
   });
 
-  it('v4 → v8: 잠금 목록이 빈 배열로 추가된다', () => {
+  it('v4 → v8: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
     const st = mig({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
     expect(st.v).toBe(8);
-    expect(st.locked).toEqual([]);
+    expect('locked' in st).toBe(false);
     expect(st.gold).toBe(10);
+  });
+
+  it('v7 → v8: 잠갔던 어종의 개체는 잠긴 채로 이관된다', () => {
+    const st = mig({ v: 7, caught: { carp: 1, crucian: 1 },
+      bag: ['carp', 'crucian'], coupons: [], locked: ['carp'] });
+    expect(st.bag.map(i => [i.fishId, i.locked])).toEqual([['carp', true], ['crucian', false]]);
   });
 
   it('v8 재적용은 무해 (멱등) — 개체 uid도 보존된다', () => {
@@ -410,7 +475,7 @@ describe('R18b: 세이브 마이그레이션', () => {
     });
     expect(st.bag).toEqual([{
       uid: 'keep', fishId: 'carp', form: 'normal', // 모르는 폼은 normal로 수렴
-      size: null, caughtAt: null, spot: null, judgment: null,
+      size: null, caughtAt: null, spot: null, judgment: null, locked: false,
     }]);
     expect(st.dex).toEqual({ crucian: { normal: { count: 2, maxSize: null, first: null } } });
   });

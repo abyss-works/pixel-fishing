@@ -76,6 +76,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
       uid: r.uid, fishId: r.fish_id, form: r.form as FishInstance['form'],
       size: r.size, caughtAt: r.caught_at, spot: r.spot as FishInstance['spot'],
       judgment: r.judgment as FishInstance['judgment'],
+      locked: r.locked === true,
     };
     if (r.slot === null || r.slot === undefined) bag.push(inst);
     else exhibit[r.slot] = inst;
@@ -91,7 +92,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
 }
 
 type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number };
-type InstanceRow = { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; judgment: string | null; slot: number | null };
+type InstanceRow = { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; judgment: string | null; slot: number | null; locked: boolean | null };
 type RecordRow = { fish_id: string; form: string; count: number | string; max_size: number | null; first_caught: string | null };
 
 /** 개체 → DB 행 */
@@ -99,6 +100,7 @@ function instRow(uid: string, i: FishInstance, slot: number | null) {
   return {
     uid: i.uid, user_id: uid, fish_id: i.fishId, form: i.form,
     size: i.size, caught_at: i.caughtAt, spot: i.spot, judgment: i.judgment, slot,
+    locked: i.locked,
   };
 }
 
@@ -108,6 +110,7 @@ function seedWrites(seed: GameState): StateWrites {
     instancesAdded: seed.bag.map(inst => ({ inst, slot: null })),
     instancesRemoved: [],
     instancesMoved: [],
+    instancesLocked: [],
     records: Object.entries(seed.dex).flatMap(([fishId, forms]) =>
       Object.entries(forms).flatMap(([form, rec]) =>
         rec ? [{ fishId, form: form as FishInstance['form'], rec }] : [])),
@@ -128,6 +131,13 @@ function applyWrites(admin: SupabaseLike, uid: string, w: StateWrites): Promise<
   for (const m of w.instancesMoved) {
     jobs.push(Promise.resolve(admin.from('fish_instances')
       .update({ slot: m.slot }).eq('user_id', uid).eq('uid', m.uid)));
+  }
+  // 잠금은 true/false 두 무리뿐이라 개체 수와 무관하게 최대 두 번의 쿼리로 끝난다
+  for (const locked of [true, false]) {
+    const uids = w.instancesLocked.filter(l => l.locked === locked).map(l => l.uid);
+    if (uids.length === 0) continue;
+    jobs.push(Promise.resolve(admin.from('fish_instances')
+      .update({ locked }).eq('user_id', uid).in('uid', uids)));
   }
   if (w.records.length > 0) {
     const now = new Date().toISOString();

@@ -4,7 +4,8 @@
 // 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, sellSelected, toggleLock, tryBuyBoat, tryUpgrade,
+  redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
+  overflowUids, release, bagCapacity, instanceFish, formName,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId } from './logic.js';
 import { resolveCatch } from './fishing.js';
@@ -17,7 +18,7 @@ export type GameAction =
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
-  | { type: 'toggleLock'; fishId: string }
+  | { type: 'setLocked'; uids: string[]; locked: boolean }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
@@ -25,7 +26,7 @@ export type GameAction =
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  toggleLock: true, redeemCoupon: true, import: true,
+  setLocked: true, redeemCoupon: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -40,10 +41,14 @@ export interface ActionDeps {
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
 export type ActionResult =
-  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo }
+  /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다 */
+  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[] }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'none' };
+
+/** 놓아준 개체의 표시용 요약 — HTTP 경계를 넘으므로 Fish 객체 대신 이름만 */
+export interface ReleasedFish { uid: string; name: string }
 
 /** 감사/집계 스트림(events 테이블)에 남길 레코드 — 랭킹·업적의 정본 (v0.6+) */
 export interface GameEvent { type: string; payload: Record<string, unknown> }
@@ -55,6 +60,7 @@ export interface StateWrites {
   instancesAdded: { inst: FishInstance; slot: number | null }[];
   instancesRemoved: string[];                              // uid
   instancesMoved: { uid: string; slot: number | null }[];  // 가방 ↔ 전시
+  instancesLocked: { uid: string; locked: boolean }[];      // 잠금 토글
   records: { fishId: string; form: FormId; rec: FormRecord }[];
 }
 
@@ -74,12 +80,15 @@ function slotIndex(s: GameState): Map<string, { inst: FishInstance; slot: number
 /** 전후 비교로 변경분을 뽑는다 — 새 액션이 추가돼도 자동으로 잡힌다 */
 function diffWrites(prev: GameState, next: GameState): StateWrites {
   const before = slotIndex(prev), after = slotIndex(next);
-  const w: StateWrites = { instancesAdded: [], instancesRemoved: [], instancesMoved: [], records: [] };
+  const w: StateWrites = {
+    instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
+  };
 
   for (const [uid, cur] of after) {
     const old = before.get(uid);
-    if (!old) w.instancesAdded.push(cur);
-    else if (old.slot !== cur.slot) w.instancesMoved.push({ uid, slot: cur.slot });
+    if (!old) { w.instancesAdded.push(cur); continue; }
+    if (old.slot !== cur.slot) w.instancesMoved.push({ uid, slot: cur.slot });
+    if (old.inst.locked !== cur.inst.locked) w.instancesLocked.push({ uid, locked: cur.inst.locked });
   }
   for (const uid of before.keys()) if (!after.has(uid)) w.instancesRemoved.push(uid);
 
@@ -120,15 +129,30 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const inst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment: action.judgment,
       });
+      const caught = addCatch(state, inst, fish, deps.today);
+      // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
+      // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
+      // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
+      const overflow = overflowUids(caught.bag, bagCapacity(state.bag));
+      const released: ReleasedFish[] = overflow.map(uid => {
+        const i = caught.bag.find(b => b.uid === uid)!;
+        const f = instanceFish(i);
+        return { uid, name: f ? formName(f, i.form) : i.fishId };
+      });
+      const events: GameEvent[] = [{ type: 'catch', payload: {
+        // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
+        uid: inst.uid, fishId: fish.id, judgment: action.judgment, spot: action.spot,
+        size: info.size, form: info.form, isNew: info.isNew,
+      } }];
+      // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
+      if (overflow.length > 0) {
+        events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
+      }
       return {
         ok: true,
-        state: addCatch(state, inst, fish, deps.today),
-        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info },
-        // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
-        events: [{ type: 'catch', payload: {
-          uid: inst.uid, fishId: fish.id, judgment: action.judgment, spot: action.spot,
-          size: info.size, form: info.form, isNew: info.isNew,
-        } }],
+        state: release(caught, overflow),
+        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
+        events,
       };
     }
     case 'sell': {
@@ -165,10 +189,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'buyBoat', payload: { tier: next.boat, cost: state.gold - next.gold } }],
       };
     }
-    case 'toggleLock': {
-      if (typeof action.fishId !== 'string') return { ok: false, error: 'bad-request' };
+    case 'setLocked': {
+      if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')
+          || typeof action.locked !== 'boolean') return { ok: false, error: 'bad-request' };
       // 잠금은 감사 가치가 없어 이벤트를 남기지 않는다
-      return { ok: true, state: toggleLock(state, action.fishId), result: { type: 'none' }, events: [] };
+      return {
+        ok: true, state: setLocked(state, action.uids, action.locked),
+        result: { type: 'none' }, events: [],
+      };
     }
     case 'redeemCoupon': {
       if (typeof action.code !== 'string') return { ok: false, error: 'bad-request' };

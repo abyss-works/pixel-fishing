@@ -64,34 +64,32 @@ export default function App() {
   return (
     // 전체 화면 2패널 앱 셸: 좌 게임 스테이지 / 우 사이드바  — 페이지 스크롤 없음
     <div className="flex h-screen w-screen max-[820px]:flex-col">
-      {/* 스테이지 — 정보 오버레이(자원바/로그/미니맵)와 모달의 배치 기준(relative).
-          [--frame-h]: 게임 프레임 높이 공식 — 프레임과 상태 오버레이가 공유하는 단일 정의.
+      {/* 스테이지 — 스테이지 기준 오버레이(자원바/로그/미니맵)와 모달의 배치 기준(relative).
+          프레임 기준 오버레이(낚시 안내·획득 카드)는 GameFrame 안에 있다.
+          [--frame-h]: 게임 프레임 높이 공식 — GameFrame이 여기서 폭을 파생한다.
           최대 65vh, 스테이지(container-type: size)보다 크지 않게, 폭 기준 16:9도 넘지 않게. */}
       <div className="relative flex-1 min-w-0 overflow-hidden bg-bg flex items-center justify-center
                       [container-type:size] [--frame-h:min(65vh,100cqh,calc(100cqw*9/16))]
                       max-[820px]:flex-[1_1_55%]">
-        {/* 게임 프레임 — 크기는 이 프레임이 결정, 캔버스는 100% 채우기만. 비율(16:9)에서 높이를
-            파생하므로 왜곡·레터박스가 원천적으로 없고 클릭 좌표 변환이 단순 비례로 성립한다.
-            정보 오버레이는 스테이지 코너 기준 — 프레임은 의도적으로 non-positioned. */}
-        <div className="aspect-video w-[calc(var(--frame-h)*16/9)]">
-          {/* key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게 */}
-          {scene.kind === 'base' ? (
-            <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
-          ) : (
-            <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
-                   onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
-                   onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))} />
-          )}
+        {/* 씬이 게임 프레임(GameFrame)을 직접 그리고, 스테이지 기준 오버레이를 그 형제로 낸다.
+            App은 씬과 무관한 스테이지 오버레이(로그·정비 모달)만 여기 얹는다.
+            key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게 */}
+        {scene.kind === 'base' ? (
+          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+        ) : (
+          <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
+                 onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
+                 onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))} />
+        )}
 
-          {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
-          <MessageLog log={log} />
+        {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
+        <MessageLog log={log} />
 
-          {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
-          {actionPanel && (
-            <FacilityModal panel={actionPanel} game={game} dispatch={dispatch}
-                           setToast={setToast} onClose={() => setActionPanel(null)} />
-          )}
-        </div>
+        {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
+        {actionPanel && (
+          <FacilityModal panel={actionPanel} game={game} dispatch={dispatch}
+                         setToast={setToast} onClose={() => setActionPanel(null)} />
+        )}
       </div>
 
       <Sidebar

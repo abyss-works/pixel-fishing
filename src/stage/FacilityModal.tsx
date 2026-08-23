@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats, upgradeCost } from '../game/logic';
 import type { GameState } from '../game/logic';
-import { groupInstances } from '../sidebar/bagRows';
-import InstanceLine from '../sidebar/InstanceLine';
+import { groupInstances, sumPrice } from '../sidebar/bagRows';
+import InstanceLine, { UnsizedLine } from '../sidebar/InstanceLine';
+import { toggleBagRow, useBagView } from '../sidebar/bagView';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
@@ -87,16 +88,17 @@ function ModalCard({ title, onClose, children }: {
 // R1: 판매 확인 패널 — 기본 전부 선택, 해제한 것만 기록한다.
 // 선택의 원자 단위는 **개체(uid)**다: 행 체크는 그 행 전부를 켜고 끄는 단축일 뿐이고,
 // 줄을 펼치면 개체 하나씩 고를 수 있다. 같은 종이라도 큰 놈만 남기는 게 이 화면의 목적.
-// 잠근 어종은 행 전체가 선택 불가(가방 탭에서 해제).
+// 잠근 **개체**는 개별로 선택 불가(가방 탭에서 해제) — 같은 종 안에서도 섞일 수 있다.
 function SellPanel({ game, onSell, onClose, busy }: {
   game: GameState; onSell: (uids: string[]) => void; onClose: () => void; busy: boolean;
 }) {
+  // 잠긴 개체는 애초에 후보에서 뺀다 — 행 잠금이 아니라 개체 잠금이라 같은 행에 섞인다
   const rows = useMemo(() => groupInstances(game.bag).map(r => ({
-    ...r, locked: game.locked.includes(r.fish.id),
-  })), [game.bag, game.locked]);
+    ...r, sellable: r.items.filter(i => !i.locked),
+  })), [game.bag]);
 
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // uid 단위
-  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const { collapsed } = useBagView(); // 가방 탭과 접힘 상태를 공유한다
 
   const flip = (set: Set<string>, keys: string[], on: boolean) => {
     const next = new Set(set);
@@ -107,17 +109,11 @@ function SellPanel({ game, onSell, onClose, busy }: {
     setExcluded(prev => flip(prev, uids, !allOn));
   const toggleOne = (uid: string) =>
     setExcluded(prev => flip(prev, [uid], prev.has(uid)));
-  const toggleOpen = (key: string) => setOpen(prev => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
 
-  const soldUids = rows.filter(r => !r.locked)
-    .flatMap(r => r.items.filter(i => !excluded.has(i.uid)).map(i => i.uid));
-  const total = rows.filter(r => !r.locked)
-    .reduce((s, r) => s + r.price * r.items.filter(i => !excluded.has(i.uid)).length, 0);
-  const lockedCount = rows.filter(r => r.locked).length;
+  const soldUids = rows.flatMap(r => r.sellable.filter(i => !excluded.has(i.uid)).map(i => i.uid));
+  const total = rows.reduce((s, r) =>
+    s + sumPrice(r.sellable.filter(i => !excluded.has(i.uid))), 0);
+  const lockedCount = game.bag.filter(i => i.locked).length;
 
   return (
     <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}>
@@ -128,11 +124,12 @@ function SellPanel({ game, onSell, onClose, busy }: {
           <DataTable>
             <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
             <tbody>
-              {rows.map(({ key, fish, name, price, items, locked, maxSize }) => {
-                const on = items.filter(i => !excluded.has(i.uid)).length;
-                const allOn = !locked && on === items.length;
-                const glyph = locked || on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
-                const expanded = open.has(key);
+              {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxSize }) => {
+                const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
+                const on = sellable.filter(i => !excluded.has(i.uid)).length;
+                const allOn = !locked && on === sellable.length;
+                const glyph = on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
+                const expanded = !collapsed.has(key);
                 return [
                   <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                     <td>
@@ -144,7 +141,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                         <button className={cx('bg-transparent border-0 p-0 leading-none cursor-pointer',
                                   on > 0 ? 'text-gold' : 'text-text-dim')}
                                 aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
-                                onClick={() => toggleRow(items.map(i => i.uid), allOn)}>
+                                onClick={() => toggleRow(sellable.map(i => i.uid), allOn)}>
                           <PixelIcon glyph={glyph} size={13} />
                         </button>
                       )}
@@ -153,29 +150,54 @@ function SellPanel({ game, onSell, onClose, busy }: {
                       <button className="bg-transparent border-0 p-0 cursor-pointer text-inherit flex items-center gap-1"
                               aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
                               aria-expanded={expanded}
-                              onClick={() => toggleOpen(key)}>
+                              onClick={() => toggleBagRow(key)}>
                         <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
                                    className="text-text-dim" />
                         {name}
                       </button>
                     </td>
                     <td><RarityText rarity={fish.rarity} /></td>
-                    <td>{on === items.length ? `×${items.length}` : `${on}/${items.length}`}</td>
-                    <td className="pf-accent">{on > 0 && !locked ? `${price * on}G` : '—'}</td>
+                    <td className="pf-accent">
+                      {on === items.length ? `×${items.length}` : `${on}/${items.length}`}
+                    </td>
+                    <td className="pf-accent">
+                      {on > 0 && !locked
+                        ? `${sumPrice(sellable.filter(i => !excluded.has(i.uid)))}G`
+                        : '—'}
+                    </td>
                   </tr>,
                   expanded ? (
                     <tr key={`${key}-items`}>
                       <td colSpan={5} className="p-0 bg-bg">
-                        {items.map(inst => (
+                        {sized.map(inst => (
                           <InstanceLine key={inst.uid} inst={inst} fish={fish}
                                         best={inst.size !== null && inst.size === maxSize}
-                                        checked={!locked && !excluded.has(inst.uid)}
-                                        onToggle={locked ? undefined : () => toggleOne(inst.uid)}>
+                                        checked={!inst.locked && !excluded.has(inst.uid)}
+                                        onToggle={inst.locked ? undefined : () => toggleOne(inst.uid)}>
                             <PixelIcon size={11}
-                                       className={!locked && !excluded.has(inst.uid) ? 'text-gold' : 'text-text-dim'}
-                                       glyph={locked || excluded.has(inst.uid) ? 'checkOff' : 'checkOn'} />
+                                       className={!inst.locked && !excluded.has(inst.uid) ? 'text-gold' : 'text-text-dim'}
+                                       glyph={inst.locked ? 'lock'
+                                         : excluded.has(inst.uid) ? 'checkOff' : 'checkOn'} />
                           </InstanceLine>
                         ))}
+                        {/* 크기 미상은 묶음 단위로 고른다 — 구별할 정보가 없으니 개별 선택이 무의미하다 */}
+                        {unsized.map(g => {
+                          const free = g.items.filter(i => !i.locked);
+                          const on = free.filter(i => !excluded.has(i.uid)).length;
+                          const glyph = free.length === 0 ? 'lock'
+                            : on === 0 ? 'checkOff' : on === free.length ? 'checkOn' : 'checkPartial';
+                          return (
+                            <UnsizedLine key={g.form} count={g.items.length} form={g.form}
+                                         locked={free.length === 0}
+                                         checked={on > 0}
+                                         onToggle={free.length === 0
+                                           ? undefined
+                                           : () => toggleRow(free.map(i => i.uid), on === free.length)}>
+                              <PixelIcon size={11} glyph={glyph}
+                                         className={on > 0 ? 'text-gold' : 'text-text-dim'} />
+                            </UnsizedLine>
+                          );
+                        })}
                       </td>
                     </tr>
                   ) : null,
@@ -184,7 +206,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
             </tbody>
           </DataTable>
           {lockedCount > 0 && (
-            <Note>잠근 어종은 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
+            <Note>잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
           )}
           <Button variant="primary" disabled={total === 0 || busy}
                   onClick={() => onSell(soldUids)}>

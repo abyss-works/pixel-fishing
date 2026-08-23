@@ -11,7 +11,7 @@ import Modal from '../ui/Modal';
 import SubTabs from '../ui/SubTabs';
 import FishSprite from '../ui/FishSprite';
 import { RarityText, RarityDot } from '../ui/RarityTag';
-import { rarityRank } from './shared';
+import { RARITY_CARD, rarityRank } from './shared';
 import type { DexView } from './shared';
 
 // 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
@@ -93,7 +93,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
   return (
     <div>
       <h3 className="text-base text-gold mb-1">
-        {view === 'base' ? '일반 도감' : '돌연변이 도감'}
+        {view === 'base' ? '일반 어종' : '돌연변이'}
         {' ('}<span className="pf-accent">
           {view === 'base' ? baseCount : varCount}/{FISH.length}
         </span>{')'}
@@ -122,12 +122,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게 
                 return (
                   <div key={f.id} data-rarity={f.rarity}
-                       className={cx(
-                         'bg-bg border rounded-sm p-2 text-xs text-center leading-normal',
-                         'border-[color-mix(in_srgb,var(--rarity-color)_25%,transparent)]',
-                         'transition-[translate,background-color] duration-[120ms] ease-out hover:-translate-y-0.5 hover:bg-surface-2',
-                         !ok && 'opacity-[0.72]',
-                       )}
+                       className={cx(RARITY_CARD, !ok && 'opacity-[0.72]')}
                        role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
                        onClick={ok ? () => setDetail(f) : undefined}>
                     <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}

@@ -3,7 +3,11 @@
    여기 남는 것: 토큰 · 리셋 · 픽셀 베벨 코어 · 공통 표 · 키프레임 · 등급색 매핑.
    그 외 모든 스타일은 컴포넌트의 Tailwind 유틸리티다 — 기능별 CSS를 다시 늘리지 말 것.
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+/* Silkscreen = 숫자·값(픽셀풍 강조) · Noto Sans KR = 한글 본문.
+   Silkscreen에 한글 글리프가 없어 --font-pixel 스택에도 Noto Sans KR을 끼워 둔다 —
+   "최대 40.0cm"처럼 섞인 칸에서 한글만 본문 폰트로 폴백해 두 폰트가 자연스럽게 붙는다.
+   Google Fonts는 unicode-range로 쪼개 보내므로 한글 전체를 받지 않는다. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* Tailwind 토큰 — 색 값의 근원은 아래 :root 변수 하나뿐, 여기선 참조/스케일 조정만.
@@ -23,8 +27,8 @@
   --color-rare: var(--c-rare);
   --color-epic: var(--c-epic);
   --color-legend: var(--c-legend);
-  --font-sans: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
-  --font-pixel: 'Silkscreen', 'Courier New', monospace;
+  --font-sans: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --font-pixel: 'Silkscreen', 'Noto Sans KR', 'Courier New', monospace;
   --radius-sm: 6px;  /* 구 --r-sm — rounded-sm */
   --radius-md: 10px; /* 구 --r-md — rounded-md */
   --shadow-panel: 0 6px 24px rgba(0, 0, 0, 0.45); /* 구 --shadow */
@@ -207,6 +211,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-tabbar button {
     flex: 1;
+    min-width: 0;          /* 긴 라벨(가방(카드)·도감(돌연변이))이 탭바를 밀어내지 않게 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -235,6 +240,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     background: linear-gradient(180deg, rgba(255, 213, 79, 0.1), transparent);
   }
   .tab-icon { display: block; }
+
+  /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.
+     384px 폭에 OS 기본 스크롤바가 얹히면 픽셀 화면 옆에서 튀고, 탭을 옮길 때마다
+     막대가 생겼다 사라지며 콘텐츠 폭이 흔들린다(레이아웃 점프). 휠·드래그·키보드는 그대로. */
+  .pf-scroll {
+    scrollbar-width: none;      /* Firefox */
+    -ms-overflow-style: none;   /* 구 Edge */
+  }
+  .pf-scroll::-webkit-scrollbar { width: 0; height: 0; }
 
   /* 공통 표 (구 .data-table/.pf-compare 통합) — 셀 후손 셀렉터가 유틸 반복보다 나은 유일한 곳 */
   .pf-table {

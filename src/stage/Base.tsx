@@ -5,6 +5,7 @@ import type { GameState } from '../game/logic';
 import { furnitureAt, BASE_PACKS } from '../world';
 import type { BaseId, FurnitureId } from '../world';
 import { renderBase, W, H, CANVAS_W, CANVAS_H } from '../pixel';
+import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
 
 interface Props {
@@ -42,9 +43,12 @@ export default function Base({ base, game, onFacility }: Props) {
 
   return (
     <>
-      <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-              className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
-              aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
+      <GameFrame>
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
+                aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
+      </GameFrame>
+      {/* 스테이지 기준 — 프레임의 형제 */}
       <ResourceBar title={base === 'home' ? '집' : '항구'} game={game} />
     </>
   );

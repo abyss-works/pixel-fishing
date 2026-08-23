@@ -19,7 +19,7 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
   for (const r of instances as Record<string, unknown>[]) {
     const inst = {
       uid: r.uid, fishId: r.fish_id, form: r.form, size: r.size,
-      caughtAt: r.caught_at, spot: r.spot, judgment: r.judgment,
+      caughtAt: r.caught_at, spot: r.spot, judgment: r.judgment, locked: r.locked === true,
     };
     if (r.slot === null || r.slot === undefined) bag.push(inst);
     else exhibit[r.slot as number] = inst;

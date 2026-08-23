@@ -6,6 +6,7 @@ import App from './App';
 import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
+import { resetBagView } from './sidebar/bagView';
 import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
@@ -22,8 +23,11 @@ function seed(over: Partial<GameState> = {}) {
 
 // 세이브 v8 픽스처 헬퍼 — 개체(가방)와 도감 기록을 짧게 쓴다
 let uidSeq = 0;
-const inst = (fishId: string, form: FormId = 'normal', size: number | null = null): FishInstance =>
-  ({ uid: `u${++uidSeq}`, fishId, form, size, caughtAt: null, spot: null, judgment: null });
+// 기본은 **크기 있는 개체** — 흔한 경우다. 크기 미상(v0.4.0 이관분)은 명시적으로 null을 준다
+const inst = (
+  fishId: string, form: FormId = 'normal', size: number | null = 20, locked = false,
+): FishInstance =>
+  ({ uid: `u${++uidSeq}`, fishId, form, size, caughtAt: null, spot: null, judgment: null, locked });
 const rec = (count: number, maxSize: number | null = null, first: string | null = null): FormRecord =>
   ({ count, maxSize, first });
 /** 가방 개체의 종·폼만 뽑아 비교 (uid는 매번 달라 직접 비교 불가) */
@@ -48,6 +52,7 @@ const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('b
 
 beforeEach(() => {
   localStorage.clear();
+  resetBagView(); // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
 });
 
 afterEach(() => {
@@ -102,7 +107,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
 });
 
 describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', () => {
-  it('행을 펼쳐 개체 하나만 해제하면 그것만 남고 나머지가 팔린다', () => {
+  it('개체 하나만 해제하면 그것만 남고 나머지가 팔린다', () => {
     seed({ bag: [inst('carp', 'normal', 42), inst('carp', 'normal', 12)] });
     render(<App />);
     clickFurniture('sell');
@@ -110,8 +115,8 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 기본은 전부 선택 — 두 마리분
     expect(screen.getByText('판매하기 (+60G)')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    // 큰 개체가 위에 온다 + 최대 표시
+    // 개체는 기본으로 펼쳐져 있다 — 개체화가 화면에 바로 보여야 한다
+    expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.getByText('최대')).toBeInTheDocument();
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
@@ -123,17 +128,15 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     expect(hud()).toContain('골드 30G');
     expect(hud()).toContain('1마리');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
-    clickTab('가방');
-    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
+    clickTab(/^가방/);
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.queryByText('12.0cm')).not.toBeInTheDocument();
   });
 
-  it('잠근 어종은 개체를 펼쳐도 고를 수 없다', () => {
-    seed({ bag: [inst('carp', 'normal', 20)], locked: ['carp'] });
+  it('잠근 개체는 보여도 고를 수 없다', () => {
+    seed({ bag: [inst('carp', 'normal', 20, true)] });
     render(<App />);
     clickFurniture('sell');
-    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     // 개체 줄이 클릭 대상이 아니다 (role=button 없음)
     expect(screen.getByText('20.0cm').closest('[role="button"]')).toBeNull();
     expect(screen.getByText(/^판매하기/)).toBeDisabled();
@@ -591,14 +594,14 @@ describe('탭은 씬과 무관하게 5개 고정', () => {
 });
 
 describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
-  it('가방 내역 표시, 잠금 토글 → 전부 판매에서 잠긴 어종 제외', () => {
+  it('가방 내역 표시, 행 머리 잠금 → 그 종 전 개체가 전부 판매에서 빠진다', () => {
     seed({ bag: [inst('carp'), inst('carp'), inst('crucian')] }); // 잉어 30G×2 + 붕어 6G
     render(<App />);
-    clickTab('가방');
+    clickTab(/^가방/);
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('잉어 잠금')); // 🔒
+    fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
     expect(screen.getByText(/판매하기 \(\+6G\)/)).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
@@ -607,11 +610,140 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(hud()).toContain('2마리'); // 잠긴 잉어 2마리는 가방에 남는다
   });
 
-  it('잠금 해제하면 다시 판매 대상', () => {
-    seed({ bag: [inst('carp')], locked: ['carp'] });
+  it('행 안 개체는 큰 놈부터 — 잡은 순서와 무관하고 크기 미상은 맨 뒤', () => {
+    // 입력을 일부러 뒤섞는다: 정렬이 실제로 일어나는지 봐야 한다
+    seed({ bag: [inst('carp', 'normal', 12), inst('carp', 'normal', null), inst('carp', 'normal', 42)] });
     render(<App />);
-    clickTab('가방');
-    fireEvent.click(screen.getByLabelText('잉어 잠금 해제')); // 🔓
+    clickTab(/^가방/);
+    const shown = screen.getAllByText(/cm|미상/).map(e => e.textContent);
+    expect(shown).toEqual(['최대 42.0cm', '42.0cm', '12.0cm', '미상']);
+  });
+
+  it('v0.4.0 이관분(크기 미상)은 마릿수 한 줄로 접힌다 — 수천 마리여도 줄이 안 는다', () => {
+    // v0.4.0 가방은 어종 문자열 배열이라 이관 개체는 전부 size: null이 된다.
+    // uid 말고 서로 다른 점이 없으므로 개별 줄로 그릴 근거가 없다.
+    const many = Array.from({ length: 2000 }, () => inst('crucian', 'normal', null));
+    seed({ bag: [...many, inst('crucian', 'variant', null), inst('crucian', 'normal', 30)] });
+    render(<App />);
+    clickTab(/^가방/);
+
+    expect(screen.getByText('×2000')).toBeInTheDocument();  // 일반 미상 묶음
+    expect(screen.getByText('×1')).toBeInTheDocument();     // 변이 미상 묶음 (폼은 가른다)
+    expect(screen.getByText('30.0cm')).toBeInTheDocument(); // 크기 있는 개체는 그대로 한 줄
+    // 개체 줄은 셋뿐 — 크기 1 + 미상 묶음 2
+    expect(screen.getAllByText(/^미상$/)).toHaveLength(2);
+  });
+
+  it('크기 미상 묶음은 통째로 잠긴다 — 하나씩 고를 근거가 없다', () => {
+    seed({ bag: Array.from({ length: 5 }, () => inst('crucian', 'normal', null)) });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('크기 미상 5마리 잠금'));
+    clickFurniture('sell');
+    expect(screen.getByText(/^판매하기/)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
+  });
+
+  it('행 안 정렬: 변이가 먼저, 각 무리에서 큰 개체부터', () => {
+    seed({ bag: [
+      inst('carp', 'normal', 40), inst('carp', 'variant', 12),
+      inst('carp', 'normal', 8), inst('carp', 'variant', 33),
+    ] });
+    render(<App />);
+    clickTab(/^가방/);
+    const shown = screen.getAllByText(/cm/).map(e => e.textContent?.replace(/ 상위 .*/, ''));
+    // 머리(최대 40.0cm) 다음 — 변이 33 → 변이 12 → 일반 40 → 일반 8
+    expect(shown).toEqual(['최대 40.0cm', '33.0cm', '12.0cm', '40.0cm', '8.0cm']);
+  });
+
+  it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
+    // 잉어 30G + 금빛 잉어 60G(변이 ×2) = 한 행, 소계 90G
+    seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
+    render(<App />);
+    clickTab(/^가방/);
+    expect(screen.getByText('잉어')).toBeInTheDocument();
+    expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
+    expect(screen.getByText('×2')).toBeInTheDocument();
+    expect(screen.getAllByText('90G')).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
+    expect(screen.getByText('변이')).toBeInTheDocument();            // 개체 줄의 배지
+    expect(screen.getByText('최대')).toBeInTheDocument();            // 35cm 변이가 최대
+  });
+
+  it('변이만 골라 파는 것도 개체 단위로 된다', () => {
+    seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
+    render(<App />);
+    clickFurniture('sell');
+    expect(screen.getByText(/판매하기 \(\+90G\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
+    fireEvent.click(screen.getByText(/판매하기 \(\+60G\)/));                // 변이만
+    expect(hud()).toContain('골드 60G');
+  });
+
+  it('카드뷰는 보유 마릿수만 보이고, 안 잡은 종은 도감처럼 ???', () => {
+    // 잉어 = 보유중 · 붕어 = 잡아봤지만 지금은 없음 · 나머지 = 미발견
+    seed({ bag: [inst('carp'), inst('carp'), inst('carp', 'variant')],
+           dex: { carp: { normal: rec(2), variant: rec(1) }, crucian: { normal: rec(5) } } });
+    render(<App />);
+    clickTab(/가방\s*\(목록\)/);
+    clickTab(/가방\s*\(목록\)/); // 활성 가방 탭 재클릭 → 카드뷰 (도감과 같은 규약)
+    expect(screen.getByLabelText('잉어 일반 2마리 변이 1마리 보유')).toBeInTheDocument();
+    expect(screen.getAllByText('???').length).toBeGreaterThan(0); // 미발견 종
+    expect(screen.queryByText('30G')).not.toBeInTheDocument();    // 카드엔 값을 안 건다
+
+    // 일반/변이가 한 행 — 흰 글씨 일반, 보라 변이 (행을 둘로 쓰면 카드 높이가 종마다 달라진다)
+    const card = screen.getByLabelText('잉어 일반 2마리 변이 1마리 보유');
+    const [normal, variant] = [...card.querySelectorAll('span > span')]
+      .filter(e => e.textContent?.trim());
+    expect(normal.textContent).toBe('2');
+    expect(normal.className).toContain('text-text');
+    expect(variant.textContent).toBe('1');
+    expect(variant.className).toContain('text-epic');
+
+    // 안 들고 있는 종은 마릿수 줄 자체가 없다 — 가방은 보유 현황만 본다
+    const empty = screen.getByLabelText('붕어 미보유');
+    expect(empty.textContent).toBe('붕어');
+  });
+
+  it('카드뷰 정렬: 보유중 → 발견함 → 미발견, 무리 안에서는 도감 순', () => {
+    // 잉어(pond/rare)만 보유, 붕어(pond/common)는 발견만, 나머지는 미발견.
+    // 도감 순이면 붕어가 잉어보다 앞이라, 보유 무리가 먼저 오는지로 두 규칙이 갈린다.
+    seed({
+      bag: [inst('carp')],
+      dex: { carp: { normal: rec(1) }, crucian: { normal: rec(3) } },
+    });
+    render(<App />);
+    clickTab(/가방\s*\(목록\)/);
+    clickTab(/가방\s*\(목록\)/);
+    const names = screen.getAllByText(/^(잉어|붕어|\?\?\?)$/).map(e => e.textContent);
+    expect(names.slice(0, 3)).toEqual(['잉어', '붕어', '???']); // 보유 → 발견 → 미발견
+  });
+
+  it('접은 행은 탭을 옮겼다 와도 접힌 채다', () => {
+    seed({ bag: [inst('carp', 'normal', 40)] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('잉어 개체 접기'));
+    expect(screen.queryByText('40.0cm')).not.toBeInTheDocument();
+    clickTab(/도감\s*\(일반\)/);
+    clickTab(/^가방/);
+    expect(screen.queryByText('40.0cm')).not.toBeInTheDocument(); // 전역 저장 — 안 잊는다
+  });
+
+  it('개체 하나만 잠그면 같은 종의 나머지는 팔린다', () => {
+    seed({ bag: [inst('carp', 'normal', 40), inst('carp', 'normal', 10)] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
+    clickFurniture('sell');
+    fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/)); // 작은 놈 1마리만
+    expect(hud()).toContain('골드 30G');
+    expect(hud()).toContain('1마리');
+  });
+
+  it('잠금 해제하면 다시 판매 대상', () => {
+    seed({ bag: [inst('carp', 'normal', null, true)] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/));
     expect(hud()).toContain('골드 30G');
