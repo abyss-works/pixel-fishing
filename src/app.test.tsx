@@ -10,7 +10,7 @@ import { resetBagView } from './sidebar/bagView';
 import { resetKeyScopes } from './hotkeys';
 import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
 import { SUB_TABS, TAB_ORDER } from './sidebar/tabs';
-import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
+import { BOATS, RARITY, COUPONS, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
@@ -255,10 +255,10 @@ describe('쿠폰 입력 (설정 탭)', () => {
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('출항준비');
     fireEvent.click(screen.getByText('쿠폰 입력'));
-    await waitFor(() => expect(hud()).toContain('골드 300G'));
+    await waitFor(() => expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`));
     fireEvent.click(screen.getByText('쿠폰 입력'));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
-    expect(hud()).toContain('골드 300G'); // 중복 지급 없음
+    expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`); // 중복 지급 없음
   });
 
   it('없는 코드는 안내만', async () => {
