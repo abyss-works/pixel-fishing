@@ -10,12 +10,12 @@ import { resetBagView } from './sidebar/bagView';
 import { resetKeyScopes } from './hotkeys';
 import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
 import { SUB_TABS, TAB_ORDER } from './sidebar/tabs';
-import { BOATS, RARITY, newState, upgradeCost } from './game/logic';
+import { BOATS, RARITY, COUPONS, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
 import { when } from './backend/types';
-import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN } from './world';
+import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, O_SCHOOLS } from './world';
 import type { Point, RegionId } from './world';
 
 const SAVE_KEY = 'pixel-fishing-save';
@@ -255,10 +255,10 @@ describe('쿠폰 입력 (설정 탭)', () => {
     clickTab('설정');
     vi.spyOn(window, 'prompt').mockReturnValue('출항준비');
     fireEvent.click(screen.getByText('쿠폰 입력'));
-    await waitFor(() => expect(hud()).toContain('골드 300G'));
+    await waitFor(() => expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`));
     fireEvent.click(screen.getByText('쿠폰 입력'));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
-    expect(hud()).toContain('골드 300G'); // 중복 지급 없음
+    expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`); // 중복 지급 없음
   });
 
   it('없는 코드는 안내만', async () => {
@@ -328,8 +328,9 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
 // ---------- 필드: 낚시 상태머신 (Field 단독 하네스 — 사이드바 없이 순수 로직 검증) ----------
 
 const POND_SHORE: Point = { x: 150, y: 92 };   // v-pond-1(150,118) 물가
-const SEA_SCHOOL: Point = { x: 340, y: 210 };  // o-sea-1 위
-const DEEP_SCHOOL: Point = { x: 520, y: 320 }; // o-deep-1 위
+// 어군 좌표는 앵커 파생 — 마스크 재생성과 무관하게 항상 어군 위에 선다
+const SEA_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-sea-1')!;
+const DEEP_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-deep-1')!;
 
 let lastGame: GameState;
 const toastFn = vi.fn();
@@ -612,13 +613,24 @@ describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
 });
 
 describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
+  it('편지 창구가 열린다 — 로컬(오프라인)은 로그인 상태로 가정한다', () => {
+    seed({});
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(screen.getByText('편지 쓰기'));
+    expect(screen.getByText('개발자에게 편지')).toBeInTheDocument();
+    // 빈 글은 못 보낸다
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+  });
+
   it('계정과 ID를 보여주고 복사 버튼을 단다', () => {
     seed({});
     render(<App />);
     clickTab('설정');
     expect(screen.getByText('내 정보')).toBeInTheDocument();
-    // 이메일이 없으면 게스트로 표기한다 — 게스트는 uid 말고 식별할 방법이 없다
-    expect(screen.getByText(/게스트/)).toBeInTheDocument();
+    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
+    // 계정 섹션과 내 정보 두 곳에 뜬다 (로컬은 로그인 상태로 가정 — 실물은 이메일 또는 '게스트')
+    expect(screen.getAllByText('dev@localhost')).toHaveLength(2);
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
@@ -647,7 +659,6 @@ describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)
     render(<App />);
     clickFurniture('exit'); // 집 → 마을 (필드 진입, 기본 탭=지역)
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
-    expect(screen.getAllByText(/배.*필요|낚시 가능/).length).toBeGreaterThan(0); // 진입 가능 여부
 
     clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));

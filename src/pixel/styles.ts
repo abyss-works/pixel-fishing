@@ -8,6 +8,8 @@ export const WATER_STYLE = {
   river: { fill: '#3a7fc1', edge: '#6ba3e5', edgeH: 2 },
   sea:   { fill: '#1d6396', edge: '#2a91c9', edgeH: 2 },
   deep:  { fill: '#0b2545', edge: 'rgba(255,255,255,0.08)', edgeH: 1 }, // 어두운 심해
+  coral: { fill: '#189a8f', rim: '#7fe0d4' },                          // 열대 산호수(터콰이즈)
+  wreck: { fill: '#2b554e', rim: '#a0642f' },                          // 녹슨 침선 해역(잿빛 청록+녹 테)
 } as const;
 
 export const DECK_STYLE = {
@@ -15,6 +17,5 @@ export const DECK_STYLE = {
   pier: { gap: 6 },
 } as const;
 
-// 라벨 색 토큰 — 필드/지도에서 워터마크(faint) 알파가 다르다
+// 라벨 색 토큰 — 필드 라벨용 (세계지도(atlas)는 자체 팔레트를 쓴다)
 export const FIELD_LABEL = { gold: UI.gold, text: UI.text, faint: 'rgba(242,247,251,0.45)' } as const;
-export const MAP_LABEL = { gold: UI.gold, text: UI.text, faint: 'rgba(242,247,251,0.6)' } as const;

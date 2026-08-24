@@ -21,6 +21,7 @@ export type GameAction =
   | { type: 'buyBoat' }
   | { type: 'setLocked'; uids: string[]; locked: boolean }
   | { type: 'travel'; to: LocationRef }
+  | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
@@ -28,7 +29,7 @@ export type GameAction =
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  setLocked: true, travel: true, redeemCoupon: true, import: true,
+  setLocked: true, travel: true, sendLetter: true, redeemCoupon: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -48,6 +49,10 @@ export type ActionResult =
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'none' };
+
+/** 편지 한 통의 길이 상한 — 상한이 없으면 깨진 클라이언트가 events를 채운다.
+ *  레이트 리밋은 두지 않았다(친구 규모). 남용이 보이면 그때 더한다. */
+export const LETTER_MAX = 1000;
 
 /** 놓아준 개체의 표시용 요약 — HTTP 경계를 넘으므로 Fish 객체 대신 이름만 */
 export interface ReleasedFish { uid: string; name: string }
@@ -202,6 +207,18 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true, state: next, result: { type: 'none' },
         events: first ? [{ type: 'visit', payload: { region: to.id } }] : [],
+      };
+    }
+    case 'sendLetter': {
+      // 편지는 **게임 상태가 아니다.** 상태를 안 바꾸고 이벤트만 남긴다.
+      // 별도 테이블·엔드포인트를 만들지 않은 이유: events가 이미 append-only + user_id +
+      // created_at이고, 친구 규모라 Supabase 대시보드에서 `type='letter'`로 읽으면 충분하다.
+      // ⚠️ events 보관주기 정책이 생기면 **`letter`는 제외**해야 한다 — 지워지면 안 되는 글이다.
+      const text = typeof action.text === 'string' ? action.text.trim() : '';
+      if (!text || text.length > LETTER_MAX) return { ok: false, error: 'bad-request' };
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'letter', payload: { text } }],
       };
     }
     case 'setLocked': {

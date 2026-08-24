@@ -1,11 +1,12 @@
-// 필드 컴포지터 — RegionPack 데이터를 해석해 "무엇을 어디에 어떤 순서로"만 결정한다.
+// 필드 컴포지터 — 지역 데이터를 해석해 "무엇을 어디에 어떤 순서로"만 결정한다.
 // 직접 그리지 않는다: 그리기는 전부 sprites/(단위)와 styles.ts(토큰)에 위임 (계층: layout).
+// 지형 소스는 둘 — 항해 지역은 마스크(sprites/mask 페인터), walk 지역은 rect 조각(scenery).
 // 지역 고유 연출은 pack.flavor 훅 하나만 허용 — 지형/건물을 훅에서 그리지 않는다.
-import { R, SCALE } from '../common.js';
+import { R, SCALE, CANVAS_W, CANVAS_H } from '../common.js';
 import type { Ctx } from '../common.js';
-import { WATER_STYLE } from '../styles.js';
 import { BUILDING_SPRITES } from '../sprites/buildings.js';
 import { drawBoat, drawPerson } from '../sprites/actors.js';
+import { drawMaskTerrain } from '../sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../sprites/scenery.js';
 import { drawFishingGear, drawSchools, drawTimingBar } from '../sprites/overlays.js';
 import { cameraFor } from './camera.js';
@@ -24,28 +25,29 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   ctx.save();
   ctx.translate(-(cam.x | 0), -(cam.y | 0));
 
-  // 바탕
-  if (pack.ground.kind === 'grass') {
-    R(ctx, 0, 0, pack.w, pack.h, pack.ground.color);
-    for (let i = 0; i < 80; i++) R(ctx, (i * 97) % pack.w, (i * 61) % pack.h, 2, 2, pack.ground.dot);
+  const openSea = !!pack.map; // mask 지역 = 전역이 바다 / village = 초지 내륙 수역
+
+  if (pack.map) {
+    // 마스크 지형 — 육지·특화 수역이 격자에 들어 있다 (t = 구름 그림자·글린트 연출)
+    drawMaskTerrain(ctx, pack.map, true, v.t);
   } else {
-    R(ctx, 0, 0, pack.w, pack.h, WATER_STYLE[pack.ground.style].fill);
+    // rect 지형 (village) — 초지 바탕 + 물 조각
+    const g = pack.ground!;
+    R(ctx, 0, 0, pack.w, pack.h, g.color);
+    for (let i = 0; i < 80; i++) R(ctx, (i * 97) % pack.w, (i * 61) % pack.h, 2, 2, g.dot);
+    for (const t of pack.terrain!) if (t.kind === 'water') drawWater(ctx, t);
   }
 
-  // 물 조각 → 물결 → 대륙/통행판 (물결이 통행판 아래 깔리도록 순서 고정)
-  const waters = pack.terrain.filter(t => t.kind === 'water');
-  for (const t of waters) drawWater(ctx, t);
-
-  if (pack.ground.kind === 'water') {
-    // 열린 바다 — 지도 전체에 물결
+  // 물결 — 열린 바다는 지도 전체, 내륙 수역은 조각 위를 순환
+  if (openSea) {
     for (let i = 0; i < pack.waveCount; i++) {
       const wx = (i * 89 + Math.sin(v.t * 0.8 + i) * 8 + pack.w) % pack.w;
       const wy = (i * 53) % pack.h;
       R(ctx, wx, wy, 7, 1, 'rgba(255,255,255,0.16)');
     }
-  } else if (waters.length) {
-    // 내륙 수역 — 물 조각들을 순환하며 물결
-    for (let i = 0; i < pack.waveCount; i++) {
+  } else {
+    const waters = pack.terrain!.filter(t => t.kind === 'water');
+    for (let i = 0; i < pack.waveCount && waters.length; i++) {
       const wx = (i * 83 + Math.sin(v.t + i) * 6 + pack.w) % pack.w;
       const body = waters[i % waters.length].rect;
       R(ctx, Math.max(body.x, Math.min(wx, body.x + body.w - 8)),
@@ -53,9 +55,14 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     }
   }
 
-  for (const t of pack.terrain) {
-    if (t.kind === 'land') drawLand(ctx, t.rect);
-    else if (t.kind === 'deck') drawDeck(ctx, t);
+  // 육지/통행판 (rect 지형) 또는 통행판만 (마스크 지형)
+  if (pack.map) {
+    for (const d of pack.decks ?? []) drawDeck(ctx, { kind: 'deck', rect: d.rect, style: d.style });
+  } else {
+    for (const t of pack.terrain!) {
+      if (t.kind === 'land') drawLand(ctx, t.rect);
+      else if (t.kind === 'deck') drawDeck(ctx, t);
+    }
   }
 
   // 건물 → 장식 → 라벨 → 지역 연출
@@ -70,6 +77,17 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
   else drawPerson(ctx, v.player.x, v.player.y);
   drawTimingBar(ctx, v);
+
+  // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const vg = ctx.createRadialGradient(
+    CANVAS_W / 2, CANVAS_H * 0.42, CANVAS_H * 0.38,
+    CANVAS_W / 2, CANVAS_H / 2, CANVAS_W * 0.62,
+  );
+  vg.addColorStop(0, 'rgba(4,9,18,0)');
+  vg.addColorStop(1, 'rgba(4,9,18,0.34)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
   ctx.restore();
 }

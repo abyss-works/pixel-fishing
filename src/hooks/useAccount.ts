@@ -8,6 +8,10 @@ import type { SyncState } from './useGame';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
+// 로컬 UI 확인용 가짜 신원 — supabase가 없을 때만 쓰인다(배포 빌드에는 supabase가 항상 있다)
+const DEV_ACCOUNT = 'dev@localhost';
+const DEV_UID = '00000000-0000-4000-8000-000000000000';
+
 export function useAccount({ game, setGame, setToast, sync, load }: {
   game: GameState;
   setGame: (g: GameState) => void;
@@ -16,10 +20,13 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
   /** useGame의 backend.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
 }) {
-  const [account, setAccount] = useState<string | null>(null);
+  // 로컬 개발(supabase 미설정)은 **UI 확인 용도**라 로그인된 것으로 가정한다.
+  // 그러지 않으면 계정·편지처럼 로그인 뒤에만 뜨는 화면을 로컬에서 아예 못 본다.
+  // 값은 명백히 가짜다 — 실물과 헷갈릴 여지를 남기지 않는다.
+  const [account, setAccount] = useState<string | null>(supabase ? null : DEV_ACCOUNT);
   // 화면에 띄울 uid — 문의가 들어왔을 때 그 사람 세이브를 DB에서 찾는 유일한 열쇠다.
   // 게스트는 이메일이 없어서 uid 말고는 식별할 방법이 없다.
-  const [uid, setUid] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(supabase ? null : DEV_UID);
   const uidRef = useRef<string | null>(null); // 부트스트랩 시점 uid — 승격/교체 판별 기준
 
   // 부트스트랩이 끝나면(on) 영구 계정 이메일 표시 — 게스트면 null 유지

@@ -77,10 +77,4 @@ export const VILLAGE: RegionPack = {
     { text: '목공소 — 배 만드는 곳', x: V_BOATSHOP.x + V_BOATSHOP.w / 2, y: V_BOATSHOP.y - 4, color: 'gold', size: 8 },
     { text: '집', x: V_HOUSE.x + V_HOUSE.w / 2, y: V_HOUSE.y - 4, color: 'text', size: 8 },
   ],
-  mapLabels: [
-    { text: '집', x: V_HOUSE.x + V_HOUSE.w / 2, y: V_HOUSE.y - 6, color: 'gold', size: 12 },
-    { text: '마을 연못', x: 155, y: 85, color: 'faint', size: 12 },
-    { text: '마을 강', x: 480, y: 195, color: 'faint', size: 12 },
-    { text: '남쪽 바다 — 포구에서 대양으로', x: 320, y: 305, color: 'faint', size: 12 },
-  ],
 };

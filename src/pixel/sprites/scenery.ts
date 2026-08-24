@@ -2,7 +2,7 @@
 // (계층: 단위 스프라이트 — 어디에 놓일지는 컴포지터(scenes/)가 결정)
 import { R, label } from '../common.js';
 import type { Ctx } from '../common.js';
-import { DECK_STYLE, FIELD_LABEL, MAP_LABEL, WATER_STYLE } from '../styles.js';
+import { DECK_STYLE, FIELD_LABEL, WATER_STYLE } from '../styles.js';
 import type { MapLabel, Rect, TerrainPiece } from '../../world/types';
 
 export function drawWater(ctx: Ctx, t: Extract<TerrainPiece, { kind: 'water' }>) {
@@ -44,8 +44,7 @@ export function drawTree(ctx: Ctx, tx: number, ty: number) {
   R(ctx, tx - 2, ty, 14, 12, '#2d6a4f');
 }
 
-// 지명/시설 라벨 — 필드/지도 팔레트 분기
-export function drawLabel(ctx: Ctx, l: MapLabel, map = false) {
-  const palette = map ? MAP_LABEL : FIELD_LABEL;
-  label(ctx, l.text, l.x, l.y, palette[l.color ?? 'text'], l.size ?? 9);
+// 지명/시설 라벨 — 필드 팔레트
+export function drawLabel(ctx: Ctx, l: MapLabel) {
+  label(ctx, l.text, l.x, l.y, FIELD_LABEL[l.color ?? 'text'], l.size ?? 9);
 }

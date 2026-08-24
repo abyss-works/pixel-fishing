@@ -163,9 +163,21 @@ const serpent: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 7 * s, cy + 1 * s, 2 * s, 1, shade(color, 0.5));
 };
 
+// 가오리 — 납작하고 넓적한 몸 + 물결치는 날개 + 길게 늘어진 꼬리
+const ray: Draw = (ctx, cx, cy, s, color, detail) => {
+  R(ctx, cx - 5 * s, cy - 2 * s, 9 * s, 4 * s, color);
+  R(ctx, cx - 7 * s, cy - 1 * s, 2 * s, 2 * s, color);
+  R(ctx, cx - 7 * s, cy - 3 * s, 4 * s, s, shade(color, 0.8));
+  R(ctx, cx - 7 * s, cy + 2 * s, 4 * s, s, shade(color, 0.8));
+  R(ctx, cx + 4 * s, cy - 1 * s, 6 * s, s, shade(color, 0.9));
+  if (!detail) return;
+  R(ctx, cx - 4 * s, cy - 1 * s, s, s, '#000');
+  R(ctx, cx - 2 * s, cy + 1 * s, 3 * s, s, 'rgba(255,255,255,0.3)');
+};
+
 const SHAPES: Record<FishShape, Draw> = {
   tiny, round, slim, predator, flowing, eel, ribbon,
-  whiskered, shark, anglerfish, cephalopod, ancient, serpent,
+  whiskered, shark, anglerfish, cephalopod, ancient, serpent, ray,
 };
 
 export function drawFishSprite(

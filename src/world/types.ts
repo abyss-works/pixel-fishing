@@ -22,7 +22,7 @@ export interface Point { x: number; y: number }
 export interface School { id: string; spot: SpotId; x: number; y: number }
 
 /** 물 스타일 — 채움/가장자리/모래테는 pixel/region.ts의 WATER_STYLE 레지스트리가 정의 */
-export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep';
+export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep' | 'coral' | 'wreck';
 export type DeckStyleId = 'bridge' | 'pier';
 
 // 지형 조각 — 배열 순서 = 그리기 순서. 충돌 규칙(engine.canMove):
@@ -37,10 +37,15 @@ export type BuildingSpriteId = 'house' | 'boatshop' | 'harbor';
 export interface Building { rect: Rect; sprite: BuildingSpriteId }
 
 // 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (App/Field 무수정)
+export type Edge = 'top' | 'bottom' | 'left' | 'right';
 export type TriggerDef =
   | { rect: Rect; action: 'base'; msg: string }                      // pack.base 거점 진입
   | { rect: Rect; action: 'travel'; to: RegionId; msg: string;       // 다른 지역으로
-      requiredBoat: number; blockedMsg: string }                     // 게이트 미달 시 되밀기+안내
+      requiredBoat: number; blockedMsg: string;                      // 게이트 미달 시 되밀기+안내
+      /** 경계 봉합(오픈월드) — 지정하면 스폰 텔레포트 대신 상대 지역의 마주 보는 가장자리에서
+       *  벗어난 자리 좌표를 보존해 입장한다(edge=top/bottom이면 x, left/right면 y 보존).
+       *  미지정이면 목적지 pack.spawn에서 시작(거점 항로 — 포구→항구 앞). */
+      entry?: { edge: Edge } }
   | { rect: Rect; action: 'shop' };                                  // 필드 시설 패널
 
 export interface MapLabel {
@@ -50,6 +55,27 @@ export interface MapLabel {
 }
 
 export type Decoration = { kind: 'tree'; x: number; y: number };
+
+/** 지형 마스크 셀 정의 — legend 문자 하나가 한 칸(cellW×cellH)의 성질 */
+export interface MapCellDef {
+  /** 육지 — sail 지역에서 통행 불가. 렌더러는 풀+모래테로 찍는다 */
+  land?: boolean;
+  /** 물 — walk 지역에서 통행 불가. spot과 함께 쓰이면 낚시 수역 */
+  water?: boolean;
+  style?: WaterStyleId;   // 물 색 토큰 (styles.ts WATER_STYLE)
+  spot?: SpotId;          // 낚시 수역 (water와 함께)
+  /** 수역 표기명 — 같은 def 셀 군집의 상단 중앙에 자동 라벨로 뜬다 (하드코딩 금지) */
+  label?: string;
+}
+
+/** 컴파일된 마스크 — codes[r*cols+c] = palette 인덱스(1부터, 0=미정의 기반).
+ *  셀은 비등방(cellW≠cellH) — 세로 스케일링으로 지형 비율을 조정한다. */
+export interface CompiledMap {
+  cellW: number; cellH: number;
+  cols: number; rows: number;
+  codes: Uint8Array;
+  palette: (MapCellDef | undefined)[];
+}
 
 /** 지역 소개 — 사이드바 지역 탭·도감 서브탭용 로어/팁 (구 data/regions.ts REGION_INFO 흡수) */
 export interface RegionLore {
@@ -69,22 +95,23 @@ export interface RegionPack {
   w: number;
   h: number;
   movement: 'walk' | 'sail';
-  /** 바탕 — walk 지역은 지반색, sail 지역은 전역이 물(스타일 참조). mapColor는 월드맵 축소판용 */
-  ground:
-    | { kind: 'grass'; color: string; dot: string; mapColor: string }
-    | { kind: 'water'; style: WaterStyleId };
-  /** sail 지역: 명시된 수역 조각 밖의 기본 해역 (예: 대양 전체 = sea) */
-  defaultSpot?: SpotId;
-  /** 물결 파티클 수 — grass 지역은 수역 조각 위를 순환, water 지역은 지도 전체 */
+  /** 바탕 (walk 지역/village) — 지반색. mask 지역은 생략(전체가 바다) */
+  ground?: { kind: 'grass'; color: string; dot: string; mapColor: string };
+  /** 지형 마스크 (항해 지역) — ASCII rows를 compileMap으로 컴파일한 격자.
+   *  육지·특화 수역 전부 여기로 기술한다. village 같은 walk 지역은 terrain rect를 쓴다. */
+  map?: CompiledMap;
+  /** 마스크 위 통행판(부두) — sail 지역 장식용 (충돌 영향 없음) */
+  decks?: { rect: Rect; style: DeckStyleId }[];
+  /** 물결 파티클 수 */
   waveCount: number;
-  terrain: TerrainPiece[];
+  /** walk 지역용 rect 지형 (village — 물/통행판). mask와 상호배타 */
+  terrain?: TerrainPiece[];
   buildings: Building[];
   decorations: Decoration[];
   schools: School[];
   spawn: Point;
   triggers: TriggerDef[]; // 배열 순서 = 검사 순서
   labels: MapLabel[];     // 필드 라벨
-  mapLabels: MapLabel[];  // 월드맵 전용 라벨 (필드와 크기·문구가 다르다)
   /** 지역 고유 연출 훅 (지역당 1개, 장식 전용 — 지형/건물을 여기서 그리지 말 것) */
   flavor?: (ctx: CanvasRenderingContext2D, t: number) => void;
 }
