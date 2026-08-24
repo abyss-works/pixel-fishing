@@ -9,6 +9,7 @@ export const WATER_STYLE = {
   sea:   { fill: '#1d6396', edge: '#2a91c9', edgeH: 2 },
   deep:  { fill: '#0b2545', edge: 'rgba(255,255,255,0.08)', edgeH: 1 }, // 어두운 심해
   coral: { fill: '#189a8f', rim: '#7fe0d4' },                          // 열대 산호수(터콰이즈)
+  wreck: { fill: '#2b554e', rim: '#a0642f' },                          // 녹슨 침선 해역(잿빛 청록+녹 테)
 } as const;
 
 export const DECK_STYLE = {

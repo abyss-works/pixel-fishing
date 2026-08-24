@@ -3,6 +3,7 @@
 import { R } from '../common.js';
 import type { Ctx } from '../common.js';
 import { BUILDING_SPRITES } from '../sprites/buildings.js';
+import { drawMaskTerrain } from '../sprites/mask.js';
 import { drawLand, drawWaterFill } from '../sprites/scenery.js';
 import { drawSchools } from '../sprites/overlays.js';
 import type { Point, RegionPack } from '../../world/types';
@@ -13,13 +14,17 @@ export function renderWorldMap(
 ) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // 바탕 + 지형 (플랫 채움 — 필드의 테두리/모래테 장식은 생략)
-  if (pack.ground.kind === 'grass') R(ctx, 0, 0, pack.w, pack.h, pack.ground.mapColor);
-  else drawWaterFill(ctx, pack.ground.style, { x: 0, y: 0, w: pack.w, h: pack.h });
-  for (const t of pack.terrain) {
-    if (t.kind === 'water') drawWaterFill(ctx, t.style, t.rect);
-    else if (t.kind === 'deck') R(ctx, t.rect.x, t.rect.y, t.rect.w, t.rect.h, '#8d6e63');
-    else drawLand(ctx, t.rect);
+  // 지형 (플랫 채움 — 필드의 테두리/모래테 장식은 생략)
+  if (pack.map) {
+    drawMaskTerrain(ctx, pack.map, false);
+  } else {
+    const g = pack.ground!;
+    R(ctx, 0, 0, pack.w, pack.h, g.mapColor);
+    for (const t of pack.terrain!) {
+      if (t.kind === 'water') drawWaterFill(ctx, t.style, t.rect);
+      else if (t.kind === 'deck') R(ctx, t.rect.x, t.rect.y, t.rect.w, t.rect.h, '#8d6e63');
+      else drawLand(ctx, t.rect);
+    }
   }
   for (const b of pack.buildings) {
     const c = BUILDING_SPRITES[b.sprite].mapColor;
@@ -28,7 +33,7 @@ export function renderWorldMap(
   // 미니맵은 축소판이라 잠금 라벨("배 N단계")을 생략한다 — 필드(drawSchools 기본값)와의 차이
   drawSchools(ctx, pack.schools, boat, opts.t ?? 0, false);
 
-  // 미니맵 모드 — 점멸 점
+  // 점멸 점
   const blink = (Math.sin((opts.t ?? 0) * 6) + 1) / 2 > 0.35;
   if (blink) R(ctx, player.x - 6, player.y - 6, 12, 12, '#ffffff');
 }

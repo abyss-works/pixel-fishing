@@ -1,0 +1,28 @@
+﻿{
+  "id": "ocean",
+  "geo": "src/world/geo/land-50m.geo.json",
+  "cell": { "w": 8, "h": 11 },
+  "grid": { "cols": 120, "rows": 64 },
+  "window": { "lonMin": 117, "latMax": 44, "lonMax": 157, "latMin": 19 },
+
+  "_note_window": "한반도 근해(북단 ~44N)에서 루손 북방(~19N)까지 — 아메리카·아프리카는 창 밖(HANDOFF A).",
+  "_note_trench": "마리아나 해구 실제 위치(11~18N)는 봉합선 남쪽이라 창 밖이다. 기존 지도 관례를 계승해 북쪽 물무리(이즈~오가사와라 해저지형)로 표현한다 — 게임상 '남쪽 끝의 검은 물' 역할 유지.",
+  "_note_seam": "latMin 19 = seasia latMax — 봉합 경계가 경위도로 연속된다.",
+
+  "zones": [
+    { "ch": "t", "name": "마리아나 해구", "lon": 145.5, "lat": 21.5, "rx": 2.6, "ry": 2.4 }
+  ],
+
+  "anchors": {
+    "harbor":        { "lon": 129.18, "lat": 35.02, "dx": -14, "dy": -12, "terrain": "land" },
+    "dock":          { "lon": 129.16, "lat": 34.2,  "terrain": "water" },
+    "spawn":         { "lon": 131.5,  "lat": 31.5,  "terrain": "water" },
+    "school_sea_1":  { "lon": 133.5, "lat": 31.5, "terrain": "water" },
+    "school_sea_2":  { "lon": 136.5, "lat": 27,   "terrain": "water" },
+    "school_sea_3":  { "lon": 152.5, "lat": 20.5, "terrain": "water" },
+    "school_deep_1": { "lon": 144.8, "lat": 21.8, "terrain": "water" },
+    "school_deep_2": { "lon": 146.4, "lat": 20.6, "terrain": "water" },
+    "label_pacific": { "lon": 151,   "lat": 32 },
+    "label_south":   { "lon": 130,   "lat": 20.5 }
+  }
+}

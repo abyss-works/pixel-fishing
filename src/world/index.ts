@@ -17,8 +17,8 @@ export {
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_BOATSHOP, V_BOATSHOP_TRIGGER, V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
-export { OCEAN, LANDS, TRENCH, HARBOR, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H } from './regions/ocean';
-export { SEASIA, SEASIA_LANDS, CORAL_TRI, CORAL_SEA, MANILA, M_DOCK, M_SPAWN, LUZON_STRAIT,
+export { OCEAN, HARBOR, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H } from './regions/ocean';
+export { SEASIA, MANILA, M_DOCK, M_SPAWN, LUZON_STRAIT,
   SEASIA_SCHOOLS, SEASIA_W, SEASIA_H } from './regions/seasia';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {

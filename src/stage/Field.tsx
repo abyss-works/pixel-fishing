@@ -277,7 +277,8 @@ export default function Field({
     <>
       <GameFrame>
         <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
+                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
+                           [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
                 aria-label={region === 'village' ? '마을' : '바다'}
                 onClick={() => actionRef.current()} />
 

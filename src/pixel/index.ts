@@ -13,4 +13,3 @@ export { renderRegion } from './scenes/region.js';
 export type { FieldView } from './scenes/region.js';
 export { renderBase } from './scenes/base.js';
 export { renderWorldMap } from './scenes/worldmap.js';
-export { renderAtlas, ATLAS_W, ATLAS_H } from './scenes/atlas.js';

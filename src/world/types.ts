@@ -22,7 +22,7 @@ export interface Point { x: number; y: number }
 export interface School { id: string; spot: SpotId; x: number; y: number }
 
 /** 물 스타일 — 채움/가장자리/모래테는 pixel/region.ts의 WATER_STYLE 레지스트리가 정의 */
-export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep' | 'coral';
+export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep' | 'coral' | 'wreck';
 export type DeckStyleId = 'bridge' | 'pier';
 
 // 지형 조각 — 배열 순서 = 그리기 순서. 충돌 규칙(engine.canMove):
@@ -56,6 +56,27 @@ export interface MapLabel {
 
 export type Decoration = { kind: 'tree'; x: number; y: number };
 
+/** 지형 마스크 셀 정의 — legend 문자 하나가 한 칸(cellW×cellH)의 성질 */
+export interface MapCellDef {
+  /** 육지 — sail 지역에서 통행 불가. 렌더러는 풀+모래테로 찍는다 */
+  land?: boolean;
+  /** 물 — walk 지역에서 통행 불가. spot과 함께 쓰이면 낚시 수역 */
+  water?: boolean;
+  style?: WaterStyleId;   // 물 색 토큰 (styles.ts WATER_STYLE)
+  spot?: SpotId;          // 낚시 수역 (water와 함께)
+  /** 수역 표기명 — 같은 def 셀 군집의 상단 중앙에 자동 라벨로 뜬다 (하드코딩 금지) */
+  label?: string;
+}
+
+/** 컴파일된 마스크 — codes[r*cols+c] = palette 인덱스(1부터, 0=미정의 기반).
+ *  셀은 비등방(cellW≠cellH) — 세로 스케일링으로 지형 비율을 조정한다. */
+export interface CompiledMap {
+  cellW: number; cellH: number;
+  cols: number; rows: number;
+  codes: Uint8Array;
+  palette: (MapCellDef | undefined)[];
+}
+
 /** 지역 소개 — 사이드바 지역 탭·도감 서브탭용 로어/팁 (구 data/regions.ts REGION_INFO 흡수) */
 export interface RegionLore {
   shortName: string;  // 도감 서브탭 등 좁은 UI용
@@ -74,15 +95,17 @@ export interface RegionPack {
   w: number;
   h: number;
   movement: 'walk' | 'sail';
-  /** 바탕 — walk 지역은 지반색, sail 지역은 전역이 물(스타일 참조). mapColor는 월드맵 축소판용 */
-  ground:
-    | { kind: 'grass'; color: string; dot: string; mapColor: string }
-    | { kind: 'water'; style: WaterStyleId };
-  /** sail 지역: 명시된 수역 조각 밖의 기본 해역 (예: 대양 전체 = sea) */
-  defaultSpot?: SpotId;
-  /** 물결 파티클 수 — grass 지역은 수역 조각 위를 순환, water 지역은 지도 전체 */
+  /** 바탕 (walk 지역/village) — 지반색. mask 지역은 생략(전체가 바다) */
+  ground?: { kind: 'grass'; color: string; dot: string; mapColor: string };
+  /** 지형 마스크 (항해 지역) — ASCII rows를 compileMap으로 컴파일한 격자.
+   *  육지·특화 수역 전부 여기로 기술한다. village 같은 walk 지역은 terrain rect를 쓴다. */
+  map?: CompiledMap;
+  /** 마스크 위 통행판(부두) — sail 지역 장식용 (충돌 영향 없음) */
+  decks?: { rect: Rect; style: DeckStyleId }[];
+  /** 물결 파티클 수 */
   waveCount: number;
-  terrain: TerrainPiece[];
+  /** walk 지역용 rect 지형 (village — 물/통행판). mask와 상호배타 */
+  terrain?: TerrainPiece[];
   buildings: Building[];
   decorations: Decoration[];
   schools: School[];

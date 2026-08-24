@@ -1,6 +1,8 @@
-// 지역 엔진 — RegionPack 데이터에서 충돌·수역·이동을 파생하는 순수 함수들 (R4, R5)
-// 지역별 손코딩 충돌 함수(구 canWalkVillage/canSailOcean)를 대체한다. 규칙은 types.ts 주석 참조.
+// 지역 엔진 — 지역 데이터에서 충돌·수역·이동을 파생하는 순수 함수들 (R4, R5)
+// 지형 소스는 둘: 항해 지역은 마스크 격자(pack.map), 마을 같은 walk 지역은 rect 조각(terrain).
+// 판정 규칙은 types.ts 주석 참조.
 import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
+import { cellDefAt } from './mask';
 import type { SpotId } from '../data/spots';
 import { CAST_RANGE } from '../game/balance';
 
@@ -14,22 +16,26 @@ const MARGIN = 4; // 지도 경계 여유
 export function canMove(pack: RegionPack, x: number, y: number): boolean {
   if (x < MARGIN || y < MARGIN || x >= pack.w - MARGIN || y >= pack.h - MARGIN) return false;
   for (const b of pack.buildings) if (inRect(x, y, b.rect)) return false;
+  if (pack.map) { // 마스크 지형(항해) — 육지만 장애물
+    return !cellDefAt(pack.map, x, y)?.land;
+  }
   if (pack.movement === 'walk') {
-    for (const t of pack.terrain) if (t.kind === 'deck' && inRect(x, y, t.rect)) return true;
-    for (const t of pack.terrain) if (t.kind === 'water' && inRect(x, y, t.rect)) return false;
+    for (const t of pack.terrain!) if (t.kind === 'deck' && inRect(x, y, t.rect)) return true;
+    for (const t of pack.terrain!) if (t.kind === 'water' && inRect(x, y, t.rect)) return false;
     return true; // 지반
   }
-  // sail: 대륙만 장애물, 그 외 전부 물
-  for (const t of pack.terrain) if (t.kind === 'land' && inRect(x, y, t.rect)) return false;
+  // sail rect 지형(레거시): 대륙만 장애물
+  for (const t of pack.terrain!) if (t.kind === 'land' && inRect(x, y, t.rect)) return false;
   return true;
 }
 
-// 수역 판정 — spot 있는 water 조각 위면 그 수역, 아니면 지역 기본 해역(sail) 또는 null(walk)
+// 수역 판정 — 마스크면 셀의 spot, rect 지형이면 spot 있는 water 조각. 없으면 null(낚시 불가)
 export function zoneAt(pack: RegionPack, x: number, y: number): SpotId | null {
-  for (const t of pack.terrain) {
+  if (pack.map) return cellDefAt(pack.map, x, y)?.spot ?? null;
+  for (const t of pack.terrain!) {
     if (t.kind === 'water' && t.spot && inRect(x, y, t.rect)) return t.spot;
   }
-  return pack.defaultSpot ?? null;
+  return null;
 }
 
 // 축별로 나눠 이동 → 벽/해안선을 따라 미끄러짐 (R4)
@@ -49,9 +55,9 @@ export function inTrigger(pos: Point, r: Rect | undefined): boolean {
 }
 
 // 경계 봉합 입장점 (R5c — 오픈월드 봉합): travel 트리거가 entry를 가지면, 목적지의 마주 보는
-// 가장자리에서 "벗어난 자리" 좌표를 보존해 돌려준다. 통행 불가 칸(육지)과 트리거(되돌아 나오는
-// 즉시 재발화 방지)는 정렬축을 ±로 벌려 피하고, 가장자리 깊이를 단계적으로 늘려가며 탐색한다.
-const ENTRY_INSETS = [0, 8, 16, 24, 40, 64]; // 가장자리에서 안쪽으로 파고드는 깊이
+// 가장자리에서 "벗어난 자리" 좌표를 보존해 돌려준다. 초기 inset을 크게 잡아 포탈 밖으로
+// 확실히 밀어내고, 통행 불가 칸(육지)과 트리거 위는 정렬축 ±스캔으로 회피한다.
+const ENTRY_INSETS = [28, 44, 64, 88, 120]; // 가장자리에서 안쪽으로 파고드는 깊이 (포탈 밖 보장)
 
 export function entryPoint(pack: RegionPack, trig: TriggerDef, from: Point): Point {
   if (trig.action !== 'travel' || !trig.entry) return { ...pack.spawn };

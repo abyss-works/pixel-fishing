@@ -15,7 +15,7 @@ import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
 import { when } from './backend/types';
-import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN } from './world';
+import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, O_SCHOOLS } from './world';
 import type { Point, RegionId } from './world';
 
 const SAVE_KEY = 'pixel-fishing-save';
@@ -328,8 +328,9 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
 // ---------- 필드: 낚시 상태머신 (Field 단독 하네스 — 사이드바 없이 순수 로직 검증) ----------
 
 const POND_SHORE: Point = { x: 150, y: 92 };   // v-pond-1(150,118) 물가
-const SEA_SCHOOL: Point = { x: 340, y: 210 };  // o-sea-1 위
-const DEEP_SCHOOL: Point = { x: 520, y: 320 }; // o-deep-1 위
+// 어군 좌표는 앵커 파생 — 마스크 재생성과 무관하게 항상 어군 위에 선다
+const SEA_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-sea-1')!;
+const DEEP_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-deep-1')!;
 
 let lastGame: GameState;
 const toastFn = vi.fn();
@@ -652,21 +653,19 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   });
 });
 
-describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐지)', () => {
-  it('필드에서 미니맵을 클릭하면 세계지도가 열리고, 닫으면 사라진다', () => {
+describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)', () => {
+  it('필드에서 미니맵을 클릭하면 지역 탭이 열린다', () => {
     seed({ boat: 1 });
     render(<App />);
-    clickFurniture('exit'); // 집 → 마을 (필드 진입)
-    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
+    clickFurniture('exit'); // 집 → 마을 (필드 진입, 기본 탭=지역)
+    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
 
+    clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));
-    expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
 
     fireEvent.keyDown(document, { code: 'KeyM' }); // M 키는 아무 일도 하지 않는다
-    expect(screen.queryByRole('heading', { name: '세계지도' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
   });
 });
 
