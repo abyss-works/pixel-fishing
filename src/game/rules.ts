@@ -24,6 +24,7 @@ export type RejectReason =
   | 'spot-locked'
   | 'coupon-invalid'
   | 'coupon-used'
+  | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -39,6 +40,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'spot-locked': '이 수역에서 낚시하려면 더 좋은 배가 필요하다.',
   'coupon-invalid': '없는 쿠폰 코드다.',
   'coupon-used': '이미 사용한 쿠폰이다.',
+  'relief-invalid': '지원 코드가 맞지 않다 — 이미 사용했거나 없는 코드다.',
   'bad-request': '처리할 수 없는 요청이다.',
 };
 

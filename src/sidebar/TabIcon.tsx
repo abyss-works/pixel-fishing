@@ -37,6 +37,12 @@ const ICONS: Record<TabKey, { cells: Cell[]; holes?: Cell[] }> = {
     ],
     holes: [[5, 5, 2, 2]],
   },
+  // 관리자: 방패 (상단 평탄 + 하단 뾰족)
+  admin: {
+    cells: [
+      [3, 1, 6, 1], [2, 2, 8, 1], [2, 3, 8, 5], [3, 8, 6, 1], [4, 9, 4, 1], [5, 10, 2, 1],
+    ],
+  },
 };
 
 export default function TabIcon({ tab }: { tab: TabKey }) {

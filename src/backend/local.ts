@@ -7,6 +7,16 @@ import { localDate } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { Backend, DispatchResult } from './types';
 
+const LS_KEY = 'pixel-fishing-save';
+
+function persistLocal(state: GameState) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch {
+    /* quota 등 저장 실패는 무시 — 메모리 상태는 유지된다 */
+  }
+}
+
 export class LocalBackend implements Backend {
   private current: GameState;
 
@@ -25,6 +35,7 @@ export class LocalBackend implements Backend {
     });
     if (!out.ok) return { status: 'rejected', error: out.error };
     this.current = out.state;
+    persistLocal(out.state);
     return { status: 'ok', state: out.state, result: out.result };
   }
 }

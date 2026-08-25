@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { migrate, newState } from '../src/game/logic.js';
 import type { FishInstance, GameState } from '../src/game/logic.js';
 import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
-import type { GameAction, StateWrites } from '../src/game/actions.js';
+import type { ActionDeps, GameAction, StateWrites } from '../src/game/actions.js';
 import { SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
@@ -39,6 +39,11 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 
 // 액션 화이트리스트는 리듀서(GameAction 유니온)에서 파생 — 이중 목록 드리프트 없음
 const ACTION_TYPE_SET = new Set<string>(ACTION_TYPES);
+
+// 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
+// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브). 친구 규모라
+// 하드코딩 — env로 옮길 가치가 생기면 그때 옮긴다.
+const IMPORT_OWNER_EMAIL = 'inley@naver.com';
 
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
@@ -95,7 +100,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
-type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number };
+type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number; restricted?: boolean | null };
 type InstanceRow = { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; judgment: string | null; slot: number | null; locked: boolean | null };
 type RecordRow = { fish_id: string; form: string; count: number | string; max_size: number | null; first_caught: string | null };
 
@@ -241,9 +246,24 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(400, 'bad-action');
   }
 
+  // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
+  // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
+  // 로컬 오리진(vite dev가 실제로 이 함수를 치는 프리뷰 대상 빌드)은 개발 편의상 연다.
+  // 오프라인 dev(LocalBackend)는 애초에 이 함수에 도달하지 않는다.
+  if (action.type === 'import' || action.type === 'adminSet') {
+    const origin = String(req.headers.origin ?? '');
+    const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (!local) {
+      // JWT 로컬 검증 경로는 email을 안 봤으니 관리자 액션일 때만 Auth 서버에 물어본다
+      const { data: ud } = await admin.auth.getUser(token);
+      const email = ud.user?.email?.toLowerCase() ?? '';
+      if (email !== IMPORT_OWNER_EMAIL) throw new ApiError(403, 'import-owner-only');
+    }
+  }
+
   // 현재 상태 로드 — 3소스를 병렬로 읽는다(서로 독립이라 왕복 1회분).
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
-  const SEL = 'data, version, gold, fame, boat, rod';
+  const SEL = 'data, version, gold, fame, boat, rod, restricted';
   const REC_SEL = 'fish_id, form, count, max_size, first_caught';
   const [curRes, instRes, recRes] = await Promise.all([
     admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
@@ -285,6 +305,10 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 제재 계정 — 0008 restricted 플래그. 자산·기록은 그대로 두고 활동만 막는다(삭제 아님).
+  // 시딩 직후의 새 행은 default false라 여기서 걸리는 건 운영자가 명시적으로 표시한 계정뿐.
+  if (row.restricted) throw new ApiError(403, 'restricted');
+
   const state = assemble(row, instances, records);
 
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
@@ -295,10 +319,32 @@ async function route(req: Req, res: Res): Promise<void> {
     if (c) dynamicCoupon = { gold: c.gold, desc: c.description };
   }
 
+  // 지원 코드(reliefs 테이블) — **선소비 후적용**. active=true 조건부 UPDATE가 성공한 요청만
+  // 자산을 받는다(동시 수령 경합 원천 차단 — 코드당 1행이라 UPDATE 승자가 1개). 적용 직후
+  // 실패할 규칙이 없으므로 코드가 탈 일은 사실상 없다.
+  let relief: ActionDeps['relief'] = null;
+  if (action.type === 'claimRelief' && typeof action.code === 'string') {
+    const code = action.code.trim();
+    if (code) {
+      const { data: taken, error: terr } = await admin.from('reliefs')
+        .update({ active: false, claimed_by: uid })
+        .eq('code', code).eq('active', true)
+        .select('gold, fame, rod, boat, dex');
+      if (!terr && taken && taken.length > 0) {
+        const g = taken[0] as { gold: number | string; fame: number | string; rod: number; boat: number; dex: unknown };
+        relief = {
+          gold: Number(g.gold), fame: Number(g.fame), rod: Number(g.rod), boat: Number(g.boat),
+          dex: g.dex as GameState['dex'],
+        };
+      }
+    }
+  }
+
   const out = applyAction(state, action, {
     rng: Math.random, today: todayKST(),
     now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
     dynamicCoupon,
+    relief,
   });
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 

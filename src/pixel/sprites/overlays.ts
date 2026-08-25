@@ -11,6 +11,8 @@ export interface GearView {
   phase: string;
   biteT: number | null;
   zone: number;
+  /** 빨간 존(PERFECT) 폭 — 파워 게이트 초과 보너스. 없으면 그리지 않는다 */
+  red?: number;
   t: number;
 }
 
@@ -45,15 +47,21 @@ export function drawFishingGear(ctx: Ctx, v: GearView) {
   if (v.phase === 'bite') label(ctx, '!', bx, by - 10, UI.gold, 22);
 }
 
-// 타이밍 바 — 중앙 존 명중 = PERFECT (R6b)
+// 타이밍 바 — 중앙 노란 존 = GOOD, 그 안의 빨간 존 = PERFECT (R6b + 파워 게이트 보너스)
 export function drawTimingBar(ctx: Ctx, v: GearView) {
   if (v.phase !== 'bite' || v.biteT === null) return;
   const bw = 44, bh = 5;
   const bx = v.player.x - bw / 2, by = v.player.y - 30;
   R(ctx, bx - 1, by - 1, bw + 2, bh + 2, UI.shadow);
   R(ctx, bx, by, bw, bh, '#26364f');
-  const zw = bw * v.zone;
-  R(ctx, bx + (bw - zw) / 2, by, zw, bh, 'rgba(255,213,79,0.85)');
+  if (v.zone > 0.02) {
+    const zw = bw * v.zone;
+    R(ctx, bx + (bw - zw) / 2, by, zw, bh, 'rgba(255,213,79,0.85)');
+  }
+  if (v.red && v.red > 0.02) {
+    const rw = bw * v.red;
+    R(ctx, bx + (bw - rw) / 2, by, rw, bh, 'rgba(239,83,80,0.9)');
+  }
   const cx = bx + Math.min(v.biteT, 1) * bw;
   R(ctx, cx - 1, by - 2, 2, bh + 4, '#fff');
 }

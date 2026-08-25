@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
-import { saveCode, requestPasswordReset, signInWithEmail, signUpWithEmail } from '../backend/auth';
+import { api } from '../api';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Note from '../ui/Note';
@@ -28,7 +28,7 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose }:
     if (!email.trim() || pw.length < 6) { setToast('이메일과 6자 이상 비밀번호를 입력하세요.'); return; }
 
     // ① 승격 시도 — 처음 보는 이메일이면 여기서 끝 (익명 uid 유지, 진행 그대로)
-    const r = await signUpWithEmail(email.trim(), pw);
+    const r = await api.auth.signUp(email.trim(), pw);
     if (r.ok) {
       await onAuthChanged();
       setToast('계정이 만들어졌다! 이제 어느 기기에서든 이 진행을 이어갈 수 있다.');
@@ -39,8 +39,8 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose }:
     // ② 이미 가입된 이메일 → 기존 계정 로그인으로 전환 (계정 교체 = 게스트 진행 소멸: 경고+백업)
     if (r.code === 'email_exists' || r.code === 'user_already_exists') {
       if (!window.confirm('이미 가입된 이메일이에요 — 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)')) return;
-      try { await navigator.clipboard.writeText(saveCode(game)); } catch { /* 백업 실패해도 진행 */ }
-      const r2 = await signInWithEmail(email.trim(), pw);
+      try { await navigator.clipboard.writeText(api.storage.saveCode(game)); } catch { /* 백업 실패해도 진행 */ }
+      const r2 = await api.auth.signIn(email.trim(), pw);
       if (!r2.ok) { setToast(`로그인 실패: ${r2.msg}`); return; }
       await onAuthChanged();
       onClose();
@@ -52,7 +52,7 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose }:
 
   const reset = () => run(async () => {
     if (!email.trim()) { setToast('비밀번호를 재설정할 이메일을 입력하세요.'); return; }
-    const r = await requestPasswordReset(email.trim());
+    const r = await api.auth.requestPasswordReset(email.trim());
     setToast(r.ok ? '재설정 메일을 보냈다. 받은편지함을 확인하세요.' : `실패: ${r.msg}`);
   });
 

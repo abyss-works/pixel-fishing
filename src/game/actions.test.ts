@@ -44,6 +44,37 @@ describe('catch', () => {
     expect(out).toEqual({ ok: false, error: 'spot-locked' });
   });
 
+  it('파워 게이트 — 미달 수역의 상위 판정 주장은 강등된다 (개체·이벤트 모두 확정값)', () => {
+    // deep 요구 파워 60 — Lv1(P1)은 미달. 배는 2단계(수역 자체는 열려 있다)
+    const out = applyAction(seed({ boat: 2 }), { type: 'catch', spot: 'deep', judgment: 'good' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag[0].judgment).toBe('normal');
+    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'normal' } });
+  });
+
+  it('파워 게이트 — 빨간 존 없는 수역의 PERFECT 주장은 GOOD으로 강등된다', () => {
+    // 마을 연못(요구 -10) Lv1: 초과 11 → 빨간 존 미개방, 노란 존은 있다
+    const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag[0].judgment).toBe('good');
+  });
+
+  it('파워 게이트 — 초과 30 이상이면 PERFECT가 살아남는다', () => {
+    // 연못 10 + Lv10(P55): 초과 45 → 빨강 15 → PERFECT 유지
+    const out = applyAction(seed({ rod: 10 }), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag[0].judgment).toBe('perfect');
+    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
+  });
+
+  it('파워 게이트 — 요구 이상 수역은 PERFECT가 그대로 살아남는다', () => {
+    // 연못 10 + Lv10(P55) => 초과 45 → 빨강 15 → PERFECT 유지
+    const out = applyAction(seed({ rod: 10 }), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag[0].judgment).toBe('perfect');
+    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
+  });
+
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {
     const s = seed({ dex: { crucian: { normal: { count: 3, maxSize: null, first: null } } } });
     const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
@@ -296,5 +327,62 @@ describe('writes (변경분)', () => {
     expect(out.writes.instancesMoved).toEqual([{ uid: 'x', slot: 0 }]);
     expect(out.writes.instancesAdded).toEqual([]);
     expect(out.writes.instancesRemoved).toEqual([]);
+  });
+});
+
+describe('claimRelief — 지원 코드 (제재 소프트 랜딩, incidents/2026-08-24)', () => {
+  const grant = {
+    gold: 83_662, fame: 6_535, rod: 14, boat: 3,
+    dex: {
+      shark: { normal: { count: 7, maxSize: 269.027, first: '2026-08-21' },
+               variant: { count: 1, maxSize: null, first: null } },
+    },
+  };
+
+  it('deps.relief 없으면 거부 — 로컬 dev(오프라인)에선 발급 자체가 없다', () => {
+    const out = applyAction(seed(), { type: 'claimRelief', code: 'X' }, deps());
+    expect(out).toEqual({ ok: false, error: 'relief-invalid' });
+  });
+
+  it('자산 병합 — 골드·명성 가산, 낚싯대·배는 둘 중 큰 값, 이벤트를 남긴다', () => {
+    const s = seed({ gold: 1_000, fame: 100, rod: 3, boat: 2 });
+    const out = applyAction(s, { type: 'claimRelief', code: 'RELIEF-1' }, deps({ relief: grant }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(84_662);
+    expect(out.state.fame).toBe(6_635);
+    expect(out.state.rod).toBe(14);
+    expect(out.state.boat).toBe(3);           // max(2, 3)
+    expect(out.events[0]).toMatchObject({
+      type: 'claimRelief', payload: { code: 'RELIEF-1' },
+    });
+    // 도감 기록이 그대로 얹힌다 — 개체(bag)는 아니므로 instances 변경분은 없다
+    expect(out.state.dex.shark?.normal).toMatchObject({ count: 7, maxSize: 269.027, first: '2026-08-21' });
+    expect(out.state.dex.shark?.variant).toMatchObject({ count: 1, maxSize: null, first: null });
+    expect(out.writes.instancesAdded).toEqual([]);
+    expect(out.writes.records.map(r => `${r.fishId}:${r.form}`).sort()).toEqual(['shark:normal', 'shark:variant']);
+  });
+
+  it('도감 병합 — 합산이 아니라 최대값·더 이른 첫조우일을 유지한다 (기록 정합)', () => {
+    const s = seed({
+      dex: {
+        crucian: { normal: { count: 5, maxSize: 30, first: '2026-08-01' } },
+        shark: { normal: { count: 9, maxSize: null, first: null },
+                 variant: { count: 2, maxSize: 280, first: '2026-08-20' } },
+      },
+    });
+    const out = applyAction(s, { type: 'claimRelief', code: 'R' }, deps({ relief: grant }));
+    if (!out.ok) throw new Error(out.error);
+    // 양쪽에 있던 폼 — 큰 count, 큰 maxSize, 이른 first
+    expect(out.state.dex.shark?.normal).toMatchObject({ count: 9, maxSize: 269.027, first: '2026-08-21' });
+    expect(out.state.dex.shark?.variant).toMatchObject({ count: 2, maxSize: 280, first: '2026-08-20' });
+    // 지원금에 없던 폼은 보존
+    expect(out.state.dex.crucian?.normal).toMatchObject({ count: 5, maxSize: 30, first: '2026-08-01' });
+  });
+
+  it('배 상한 클램프 — 지원 배가 MAX_BOAT를 넘지 않는다', () => {
+    const out = applyAction(seed(), { type: 'claimRelief', code: 'R' },
+      deps({ relief: { ...grant, boat: 99 } }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.boat).toBe(BOATS.length);
   });
 });

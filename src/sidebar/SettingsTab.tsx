@@ -3,7 +3,7 @@ import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
-import { saveCode, supabase, signOutAccount } from '../backend/auth';
+import { api } from '../api';
 import { REJECT_TEXT } from '../game/logic';
 import { APP_VERSION } from '../version';
 import { BUILD_LABEL } from '../buildId';
@@ -14,7 +14,7 @@ import SectionTitle from '../ui/SectionTitle';
 import AdminPanel from './AdminPanel';
 import PatchNotesPanel from './PatchNotesPanel';
 import AccountModal from './AccountModal';
-import { maskUid } from './shared';
+import { maskUid, isAdminUrl } from './shared';
 import LetterModal from './LetterModal';
 import PixelIcon from '../ui/PixelIcon';
 import type { GlyphId } from '../ui/PixelIcon';
@@ -42,11 +42,11 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
   const [open, setOpen] = useState(false);
   // 로컬(supabase 없음)에서도 화면은 보여준다 — UI 확인이 목적이라 숨기면 볼 수가 없다.
   // 대신 버튼은 막는다: 눌러도 되는 일이 없는데 눌리면 그게 더 헷갈린다.
-  const offline = !supabase;
+  const offline = !api.auth.isConfigured;
 
   const signOut = async () => {
     if (!window.confirm('로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.')) return;
-    await signOutAccount();
+    await api.auth.signOut();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
 
@@ -97,7 +97,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
   };
 
   const exportSave = async () => {
-    const code = saveCode(game);
+    const code = api.storage.saveCode(game);
     try {
       await navigator.clipboard.writeText(code);
       setToast('이사 코드를 클립보드에 복사했다. 다른 브라우저에서 불러오기.');
@@ -135,6 +135,17 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
     });
   };
 
+  // 지원 코드 — 제재 소프트 랜딩(incidents/2026-08-24). 운영자가 발급한 일회성 자산 패키지
+  // (골드·명성·낚싯대·배·도감)를 새 계정에 얹는다. 검증·소비는 서버(reliefs 선차감) 소관.
+  const enterRelief = () => {
+    const code = window.prompt('지원 코드를 붙여넣으세요:');
+    if (!code) return;
+    when(dispatch({ type: 'claimRelief', code }), r => {
+      if (r.status === 'ok') setToast('지원 코드를 적용했다!');
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+    });
+  };
+
   return (
     <div className="flex flex-col flex-1">
       {syncLabel && (
@@ -168,9 +179,17 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
       <SectionTitle>데이터 관리</SectionTitle>
       <div className="flex flex-col gap-2 mb-2">
-        <IconButton glyph="download" label="이사 코드 내보내기" onClick={exportSave} />
-        <IconButton glyph="upload" label="이사 코드 불러오기" onClick={importSave} />
         <IconButton glyph="ticket" label="쿠폰 입력" onClick={enterCoupon} />
+        <IconButton glyph="star" label="지원 코드 입력" onClick={enterRelief} />
+        {/* 이사 코드 — deprecate(incidents/2026-08-24): 무검증 import가 변조 반입 통로로 실제
+            악용됐다. 임시방편으로 ?admin에서만 노출하고, 서버도 소유자 계정/로컬만 받는다
+            (api/action.ts IMPORT_OWNER_EMAIL). 기기 이동은 계정 연동이 정답이다. */}
+        {isAdminUrl() && (
+          <>
+            <IconButton glyph="download" label="이사 코드 내보내기" onClick={exportSave} />
+            <IconButton glyph="upload" label="이사 코드 불러오기" onClick={importSave} />
+          </>
+        )}
       </div>
 
       {/* 개발자 창구 — **로그인한 계정만.** 게스트는 답장 받을 방법이 없다 */}
@@ -183,7 +202,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         </>
       )}
 
-      <AdminPanel />
+      <AdminPanel account={account} />
       <PatchNotesPanel />
 
       {letter && (

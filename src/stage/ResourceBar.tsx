@@ -29,20 +29,21 @@ function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; child
   );
 }
 
-export default function ResourceBar({ game }: { game: GameState }) {
+export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
   return (
     <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
                     bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px] border-2 border-line pf-notch pf-bevel
-                    px-4 py-2 pointer-events-none [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-      {/* .hud 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
-      <div className="hud flex items-stretch gap-4
-                      [&>span+span]:border-l [&>span+span]:border-line [&>span+span]:pl-4">
+                    px-4 py-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
+      {/* 자원 바 클릭 = 스탯창 (next.md 2). .hud 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
+      <button type="button" aria-label="스탯창 열기" onClick={onOpen}
+              className="hud flex items-stretch gap-4 cursor-pointer transition hover:brightness-125
+                         [&>span+span]:border-l [&>span+span]:border-line [&>span+span]:pl-4">
         <Stat glyph="coin" label="골드"><b className="font-bold">{game.gold}</b>G</Stat>
         <Stat glyph="star" label="명성"><b className="font-bold">{game.fame}</b></Stat>
         <Stat glyph="fish" label="가방"><b className="font-bold">{game.bag.length}</b>마리</Stat>
         <Stat glyph="boat" label="배">{game.boat === 0 ? '없음' : BOATS[game.boat - 1].name}</Stat>
         <Stat glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>
-      </div>
+      </button>
     </div>
   );
 }

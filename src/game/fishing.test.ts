@@ -1,7 +1,8 @@
-// 낚시 상태머신 순수 모듈 — 전이/판정/획득 규칙 
+// 낚시 상태머신 순수 모듈 — 전이/판정/획득 규칙
 import { describe, it, expect } from 'vitest';
-import { nextPhase, phaseDurationMs, judgePress, resolveCatch, autoCommonBoost } from './fishing';
-import { rodStats, RARITY } from './logic';
+import { nextPhase, phaseDurationMs, resolveCatch, autoCommonBoost } from './fishing';
+import { judgeTiming, rodStats, RARITY } from './logic';
+import type { Judgment } from './logic';
 import { AUTO_COMMON_BOOST, CATCH_MS, CATCH_MS_LEGENDARY } from './balance';
 
 describe('R6: 전이 표 (캐스팅 연출 단계 없음 — 던지면 바로 대기)', () => {
@@ -28,15 +29,25 @@ describe('단계 지속 시간', () => {
   });
 });
 
-describe('R6b: 챔질 판정 (경과 시간 → 존)', () => {
-  it('sweep 정중앙 = perfect, 시작/끝 = normal', () => {
-    const st = rodStats(1); // sweep 1s, zone 24%
-    expect(judgePress(st.sweep * 1000 * 0.5, 1)).toBe('perfect');
-    expect(judgePress(0, 1)).toBe('normal');
-    expect(judgePress(st.sweep * 1000 * 0.99, 1)).toBe('normal');
-    // 존 경계: 0.5 ± zone/2
-    expect(judgePress(st.sweep * 1000 * (0.5 + st.zone / 2 - 0.01), 1)).toBe('perfect');
-    expect(judgePress(st.sweep * 1000 * (0.5 + st.zone / 2 + 0.01), 1)).toBe('normal');
+describe('R6b: 챔질 판정 (커서 위치 → 이중 존)', () => {
+  const at = (pos: number, yellow: number, red = 0) => judgeTiming(pos, yellow, red);
+
+  it('노란 존 경계 — 안이면 good, 밖이면 normal', () => {
+    const z = 0.24;
+    expect(at(0.5, z)).toBe('good');
+    expect(at(0, z)).toBe('normal');
+    expect(at(0.99, z)).toBe('normal');
+    // 존 경계: 0.5 ± yellow/2
+    expect(at(0.5 + z / 2 - 0.01, z)).toBe('good');
+    expect(at(0.5 + z / 2 + 0.01, z)).toBe('normal');
+  });
+
+  it('빨간 존은 노란 존 안의 최내각 — perfect > good > normal', () => {
+    expect(at(0.5, 0.24, 0.20)).toBe('perfect');            // 정중앙
+    expect(at(0.5 + 0.105, 0.24, 0.20)).toBe('good');   // 빨간 밖(반폭 0.10) · 노란 안(반폭 0.12)
+    expect(at(0.5 - 0.09, 0.24, 0.20)).toBe('perfect');
+    expect(at(0.5 + 0.125, 0.24, 0.20)).toBe('normal');    // 둘 다 밖
+    expect(at(0.5, 0.24)).toBe('good');                 // 빨간 없으면 perfect 불가
   });
 });
 
@@ -47,7 +58,7 @@ describe('R8/R9/R11: 획득 결정', () => {
     expect(resolveCatch('deep', 'auto', 1, () => 0.5).spot).toBe('deep');
   });
 
-  const rareRate = (j: 'perfect' | 'normal' | 'auto', rod: number, n = 20000) => {
+  const rareRate = (j: Judgment, rod: number, n = 20000) => {
     let rare = 0;
     for (let i = 0; i < n; i++) {
       if (RARITY[resolveCatch('pond', j, rod).rarity].weight < RARITY.common.weight) rare++;
@@ -55,11 +66,13 @@ describe('R8/R9/R11: 획득 결정', () => {
     return rare / n;
   };
 
-  it('희귀 이상 확률: perfect > normal ≫ auto (통계적)', () => {
+  it('희귀 이상 확률: perfect > good > normal ≫ auto (통계적)', () => {
     const perfect = rareRate('perfect', 1);
+    const good = rareRate('good', 1);
     const normal = rareRate('normal', 1);
     const auto = rareRate('auto', 1);
-    expect(perfect).toBeGreaterThan(normal + 0.02);
+    expect(perfect).toBeGreaterThan(good + 0.02); // 일반 ÷2 vs ÷1.6
+    expect(good).toBeGreaterThan(normal + 0.02);
     expect(auto).toBeLessThan(normal / 5); // 방치 ≈ 수동의 1/10 수준
     expect(auto).toBeGreaterThan(0.005);   // 그래도 희귀가 뜨긴 한다
   });

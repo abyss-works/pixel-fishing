@@ -451,14 +451,14 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     expect(phase()).toBe('wait');
   });
 
-  it('R6b: 존 중앙 타이밍이면 PERFECT', () => {
+  it('R6b: 존 중앙 타이밍이면 GOOD (연못은 파워 초과 11 → 노란 존만)', () => {
     renderField('village', POND_SHORE);
     space();
     act(() => vi.advanceTimersByTime(4000));
-    act(() => vi.advanceTimersByTime(500)); // rod1 sweep 1s의 정중앙
+    act(() => vi.advanceTimersByTime(700)); // sweep 1.4s의 정중앙
     space();
     expect(phase()).toBe('catch');
-    expect(lastToast()).toContain('PERFECT');
+    expect(lastToast()).toContain('GOOD');
   });
 
   it('R7: 화면 클릭도 스페이스와 동일', () => {
@@ -476,7 +476,7 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     space();
     act(() => vi.advanceTimersByTime(4000));
     expect(phase()).toBe('bite');
-    act(() => vi.advanceTimersByTime(1000)); // rod1 sweep 1s 경과 = 방치
+    act(() => vi.advanceTimersByTime(3000)); // sweep 3s 경과 = 방치
     expect(phase()).toBe('catch');
     expect(lastToast()).toContain('방치');
     expect(bagOf(lastGame)).toEqual(['crucian:variant']); // rng=0 고정 → 풀 첫 어종(붕어), 변이 확정
@@ -504,12 +504,12 @@ describe('R7b: 방치형 루프 (첫 캐스팅 후 무한 반복)', () => {
     renderField('village', POND_SHORE);
     space(); // 최초 1회만 조작 — 던지면 바로 wait
     act(() => vi.advanceTimersByTime(4000)); // wait → bite
-    act(() => vi.advanceTimersByTime(1000)); // 방치 → catch
+    act(() => vi.advanceTimersByTime(3000)); // 방치 → catch (sweep 3s)
     expect(bagOf(lastGame)).toEqual(['crucian:variant']);
     act(() => vi.advanceTimersByTime(2000)); // catch → wait (자동 재캐스트)
     expect(phase()).toBe('wait');
     act(() => vi.advanceTimersByTime(4000));
-    act(() => vi.advanceTimersByTime(1000)); // 두 번째 방치 획득
+    act(() => vi.advanceTimersByTime(3000)); // 두 번째 방치 획득
     expect(bagOf(lastGame)).toEqual(['crucian:variant', 'crucian:variant']);
   });
 });
@@ -939,6 +939,7 @@ describe('패치노트 (설정 탭)', () => {
 describe('관리자 대시보드 (?admin, 설정 탭)', () => {
   it('파라미터 없으면 버튼 없음', () => {
     render(<App />);
+    expect(screen.queryByText('관리자')).not.toBeInTheDocument();
     clickTab('설정');
     expect(screen.queryByText(/관리자 대시보드/)).not.toBeInTheDocument();
   });
@@ -946,10 +947,45 @@ describe('관리자 대시보드 (?admin, 설정 탭)', () => {
   it('?admin이면 전체 게임 데이터 열람 가능(숨긴 어종 포함)', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    clickTab('설정');
-    fireEvent.click(screen.getByText(/관리자 대시보드/));
+    clickTab('관리자');
     expect(screen.getByText('크라켄')).toBeInTheDocument(); // 안 잡아도 보임
     expect(screen.getAllByText('2000G').length).toBeGreaterThan(0); // 크라켄 가격(+돛단배)
     expect(screen.getByText('perfect')).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
+  });
+});
+
+describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
+  it('클릭하면 열리고 파생 축·수역 캐루셀이 보인다, 닫기로 닫힌다', () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
+    expect(screen.getByText('이동 속도')).toBeInTheDocument();
+    // 낚싯대: 레벨/파워 + 수역 캐루셔(기본 = 현재 지역 대표 수역)의 상대 스탯 행들
+    expect(screen.getByText('현재 레벨')).toBeInTheDocument();
+    expect(screen.getByText('현재 파워')).toBeInTheDocument();
+    expect(screen.getAllByText(/마을 강/).length).toBeGreaterThan(0); // village 최고 요구 수역
+    expect(screen.getByText('입질 최소 대기')).toBeInTheDocument();
+    expect(screen.getByText('바 시간')).toBeInTheDocument();
+    expect(screen.getByText('방치 낚시 페널티')).toBeInTheDocument();
+    // 캐루셀 순환 — 다음 수역(마을 연못)으로 넘어간다
+    fireEvent.click(screen.getByLabelText('다음 수역'));
+    expect(screen.getAllByText(/마을 연못/).length).toBeGreaterThan(0);
+    // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님), 로어체 문장
+    fireEvent.mouseEnter(screen.getAllByLabelText('도움말')[0]);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
+    fireEvent.mouseLeave(screen.getAllByLabelText('도움말')[0]);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('닫기'));
+    expect(screen.queryByText('파워')).not.toBeInTheDocument();
+  });
+
+  it('씬이 바뀌면 스탯창도 닫힌다', () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    expect(screen.getByText('스탯')).toBeInTheDocument();
+    // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환
+    clickFurniture('exit');
+    expect(screen.queryByText('이동 속도')).not.toBeInTheDocument();
   });
 });

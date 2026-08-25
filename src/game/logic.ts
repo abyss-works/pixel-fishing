@@ -13,7 +13,7 @@ import type { SpotId, SpotRegionId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
-import { BOATS } from '../data/boats.js';
+import { BOATS, MAX_BOAT } from '../data/boats.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
@@ -29,7 +29,7 @@ export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export type { RejectReason, RuleCheck } from './rules.js';
 
-export type Judgment = 'perfect' | 'normal' | 'auto';
+export type Judgment = 'perfect' | 'good' | 'normal' | 'auto';
 
 /** 가방/전시대의 물고기 개체 — 잡는 순간의 문맥을 통째로 새긴다 (세이브 v8).
     팔면 개체는 소멸하고 종×폼별 집계(dex)와 서버 records에 기록만 남는다. */
@@ -78,10 +78,11 @@ export interface RodStats {
   biteMin: number; // 입질 최소 대기(초)
   biteMax: number; // 입질 최대 대기(초)
   sweep: number;   // 타이밍 바 커서가 끝까지 가는 시간(초) = 챔질 가능 시간
-  zone: number;    // PERFECT 존 크기 (바 전체 대비 비율, 중앙 배치)
 }
 
 // 낚싯대 성장 곡선 t: 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD)
+// ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
+// 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
 export function rodCurveT(level: number): number {
   return 1 - 1 / (1 + ROD.curveK * (level - 1));
 }
@@ -94,7 +95,6 @@ export function rodStats(level: number): RodStats {
     biteMin: lerp(ROD.biteMin),
     biteMax: lerp(ROD.biteMax),
     sweep: lerp(ROD.sweep),
-    zone: lerp(ROD.zone),
   };
 }
 
@@ -102,18 +102,24 @@ export function upgradeCost(level: number): number {
   return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
-// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 PERFECT
-export function judgeTiming(pos: number, zone: number): Judgment {
-  return Math.abs(pos - 0.5) <= zone / 2 ? 'perfect' : 'normal';
+// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 GOOD, 그 안의 빨간 존(red 개방 시)이면 PERFECT.
+// 존 폭은 바 길이 대비 비율(0~1).
+export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
+  const off = Math.abs(pos - 0.5);
+  if (red > 0 && off <= red / 2) return 'perfect';
+  return off <= yellow / 2 ? 'good' : 'normal';
 }
 
-// 추첨: 일반 외 등급 가중치 ×rareMult (판정 배수), 일반 가중치 ×commonMult (방치 페널티)
+// 추첨: 판정 배수(rareMult — GOOD/PERFECT)와 페널티(commonMult — 방치 부스트·해역 게이트)는
+// **둘 다 일반 가중치 한 축**을 돌린다 — 보너스는 나누고, 페널티는 곱한다. 희귀 이상 가중치
+// 데이터는 언제나 원본 유지. 일반 축 단일 다이얼이라 하위 등급(잡동사니 등)이 추가돼도
+// 보너스가 오작동할 여지가 없다. (단일 추첨에서 "희귀 ×m"과 수학적으로 동치)
 export function rollFish(
   spotId: SpotId, rareMult = 1, rng: () => number = Math.random, commonMult = 1,
 ): Fish {
   const pool = FISH.filter(f => f.spot === spotId);
   const weights = pool.map(f =>
-    RARITY[f.rarity].weight * (f.rarity === 'common' ? commonMult : rareMult));
+    RARITY[f.rarity].weight * (f.rarity === 'common' ? commonMult / rareMult : 1));
   const total = weights.reduce((a, b) => a + b, 0);
   let r = rng() * total;
   for (let i = 0; i < pool.length; i++) {
@@ -282,6 +288,57 @@ export function redeemCoupon(
     ok: true,
     reward: c,
     state: { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] },
+  };
+}
+
+// ---------- 지원 코드 자산 병합 (제재 소프트 랜딩 — incidents/2026-08-24-import-abuse.md) ----------
+// 운영자가 발급한 일회성 패키지(gold·fame·rod·boat·dex)를 새 계정 상태에 얹는다.
+// 도감은 "기록"이라 **합산하지 않는다** — count·maxSize는 큰 값을 유지하고 first는 더 이른 날을
+// 남긴다. 새 계정의 미래 캐치가 위에 더해져도 절대값 정합이 깨지지 않게 하는 게 요점이다.
+// 낚싯대·배는 둘 중 큰 값(배는 상한 클램프), 골드·명성은 음수 방어 가산.
+
+export interface ReliefGrant {
+  gold: number;
+  fame: number;
+  rod: number;
+  boat: number;
+  dex: GameState['dex'];
+}
+
+const pickMaxSize = (x: number | null | undefined, y: number | null | undefined): number | null =>
+  x == null ? y ?? null : y == null ? x : Math.max(x, y);
+const pickEarliest = (x: string | null | undefined, y: string | null | undefined): string | null =>
+  x == null ? y ?? null : y == null ? x : x <= y ? x : y;
+
+export function applyRelief(state: GameState, r: ReliefGrant): GameState {
+  const dex: GameState['dex'] = {};
+  const fishIds = new Set([...Object.keys(state.dex), ...Object.keys(r.dex)]);
+  for (const fishId of fishIds) {
+    const forms = new Set([
+      ...Object.keys(state.dex[fishId] ?? {}),
+      ...Object.keys(r.dex[fishId] ?? {}),
+    ]);
+    for (const form of forms) {
+      const a = state.dex[fishId]?.[form as FormId];
+      const b = r.dex[fishId]?.[form as FormId];
+      if (!a && !b) continue;
+      dex[fishId] = {
+        ...dex[fishId],
+        [form]: {
+          count: Math.max(a?.count ?? 0, b?.count ?? 0),
+          maxSize: pickMaxSize(a?.maxSize, b?.maxSize),
+          first: pickEarliest(a?.first, b?.first),
+        },
+      };
+    }
+  }
+  return {
+    ...state,
+    gold: state.gold + Math.max(0, r.gold),
+    fame: state.fame + Math.max(0, r.fame),
+    rod: Math.max(state.rod, r.rod),
+    boat: Math.min(Math.max(state.boat, r.boat), MAX_BOAT),
+    dex,
   };
 }
 

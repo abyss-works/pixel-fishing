@@ -11,6 +11,7 @@ export type FailureKind =
   | 'network'       // 순단·타임아웃·플랫폼 장애
   | 'unauthorized'  // 세션 없음/만료
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
+  | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
   | 'server'        // 5xx
   | 'bug';          // 예상 못 한 예외
 
@@ -57,6 +58,11 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     // 진행은 서버에 안전하다 — 구조 불필요, 새로고침만 안내
     rescue: false, modal: 'update', level: 'warning',
     message: '새 버전이 배포되었어요. 새로고침하면 이어서 플레이할 수 있어요.',
+  },
+  restricted: {
+    // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 구조 불필요, 문의 유도.
+    rescue: false, level: 'warning',
+    message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
   },
   server: {
     rescue: true, level: 'error',
