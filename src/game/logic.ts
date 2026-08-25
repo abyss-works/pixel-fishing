@@ -29,7 +29,7 @@ export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export type { RejectReason, RuleCheck } from './rules.js';
 
-export type Judgment = 'perfect' | 'normal' | 'auto';
+export type Judgment = 'superb' | 'perfect' | 'normal' | 'auto';
 
 /** 가방/전시대의 물고기 개체 — 잡는 순간의 문맥을 통째로 새긴다 (세이브 v8).
     팔면 개체는 소멸하고 종×폼별 집계(dex)와 서버 records에 기록만 남는다. */
@@ -78,10 +78,11 @@ export interface RodStats {
   biteMin: number; // 입질 최소 대기(초)
   biteMax: number; // 입질 최대 대기(초)
   sweep: number;   // 타이밍 바 커서가 끝까지 가는 시간(초) = 챔질 가능 시간
-  zone: number;    // PERFECT 존 크기 (바 전체 대비 비율, 중앙 배치)
 }
 
 // 낚싯대 성장 곡선 t: 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD)
+// ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
+// 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
 export function rodCurveT(level: number): number {
   return 1 - 1 / (1 + ROD.curveK * (level - 1));
 }
@@ -94,7 +95,6 @@ export function rodStats(level: number): RodStats {
     biteMin: lerp(ROD.biteMin),
     biteMax: lerp(ROD.biteMax),
     sweep: lerp(ROD.sweep),
-    zone: lerp(ROD.zone),
   };
 }
 
@@ -102,18 +102,24 @@ export function upgradeCost(level: number): number {
   return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
-// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 PERFECT
-export function judgeTiming(pos: number, zone: number): Judgment {
-  return Math.abs(pos - 0.5) <= zone / 2 ? 'perfect' : 'normal';
+// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 PERFECT, 그 안의 빨간 존(red 개방 시)이면 SUPERB.
+// 존 폭은 바 길이 대비 비율(0~1).
+export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
+  const off = Math.abs(pos - 0.5);
+  if (red > 0 && off <= red / 2) return 'superb';
+  return off <= yellow / 2 ? 'perfect' : 'normal';
 }
 
-// 추첨: 일반 외 등급 가중치 ×rareMult (판정 배수), 일반 가중치 ×commonMult (방치 페널티)
+// 추첨: 판정 배수(rareMult — PERFECT/SUPERB)와 페널티(commonMult — 방치 부스트·해역 게이트)는
+// **둘 다 일반 가중치 한 축**을 돌린다 — 보너스는 나누고, 페널티는 곱한다. 희귀 이상 가중치
+// 데이터는 언제나 원본 유지. 일반 축 단일 다이얼이라 하위 등급(잡동사니 등)이 추가돼도
+// 보너스가 오작동할 여지가 없다. (단일 추첨에서 "희귀 ×m"과 수학적으로 동치)
 export function rollFish(
   spotId: SpotId, rareMult = 1, rng: () => number = Math.random, commonMult = 1,
 ): Fish {
   const pool = FISH.filter(f => f.spot === spotId);
   const weights = pool.map(f =>
-    RARITY[f.rarity].weight * (f.rarity === 'common' ? commonMult : rareMult));
+    RARITY[f.rarity].weight * (f.rarity === 'common' ? commonMult / rareMult : 1));
   const total = weights.reduce((a, b) => a + b, 0);
   let r = rng() * total;
   for (let i = 0; i < pool.length; i++) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FISH, RARITY, REJECT_TEXT, SPOTS, boatSpeed, canFishSpot, formName, rodStats } from '../game/logic';
+import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
@@ -8,9 +8,10 @@ import { useKeyScope } from '../hotkeys';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { REGION_PACKS, entryPoint, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
-import { nextPhase, phaseDurationMs, judgePress } from '../game/fishing';
+import { nextPhase, phaseDurationMs } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
-import { CAST_RANGE, WALK_SPEED } from '../game/balance';
+import { moveSpeed, rodAxes, powerZones } from '../game/stats';
+import { CAST_RANGE } from '../game/balance';
 import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
 import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
@@ -24,8 +25,8 @@ const MOVE_KEYS: Record<string, [number, number]> = {
 };
 
 const STATUS: Record<Exclude<FishingPhase, 'idle'>, string> = {
-  wait: '기다리는 중... "!"가 뜨면 스페이스! 노란 존=PERFECT (그냥 둬도 잡힌다)',
-  bite: '지금! 노란 존을 노려라! (놓아두면 잡어)',
+  wait: '기다리는 중... "!"가 뜨면 스페이스! 빨간 존=SUPERB · 노란 존=PERFECT (그냥 둬도 잡힌다)',
+  bite: '지금! 빨간 존을 노리면 SUPERB, 노란 존이면 PERFECT! (놓아두면 잡어)',
   catch: '끌어올리는 중...', // 서버 응답 대기 문구 — 결과 도착 후엔 획득 문구로 교체된다
 };
 
@@ -41,13 +42,14 @@ interface Props {
   onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
   onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
   onWarmup?: () => void;           // 캐스팅 순간 서버 함수 워밍 (콜드 스타트 흡수)
+  onOpenStats?: () => void;        // 자원 바 클릭 — 스탯창 모달 (App이 소유)
   /** 테스트용 시작 위치 */
   initialPos?: Point;
 }
 
 export default function Field({
   region, game, dispatch, setToast, onScene,
-  onOpenMap, onShop, onWarmup, initialPos,
+  onOpenMap, onShop, onWarmup, onOpenStats, initialPos,
 }: Props) {
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,7 +99,11 @@ export default function Field({
     // 카드 없이 재캐스트되던 버그 방지. 응답 실패/타임아웃은 dispatch 쪽에서 cancel로 수렴.
     if (phase === 'catch' && !fish) return;
     if (phase === 'bite') biteStartRef.current = Date.now();
-    const ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
+    let ms = phaseDurationMs(phase, gameRef.current.rod, undefined, fish?.rarity);
+    // 파워 게이트 시간 트랙 — 미달 수역은 입질 대기가 부족 파워 5당 +1초 (stats.powerZones)
+    if (phase === 'wait' && schoolRef.current) {
+      ms += powerZones(gameRef.current, schoolRef.current.spot).biteExtra * 1000;
+    }
     const id = setTimeout(() => {
       if (phase === 'bite') { hookRef.current('auto'); return; } // 방치 획득
       if (phase === 'catch') { setFish(null); setCatchInfo(null); }
@@ -110,8 +116,16 @@ export default function Field({
   const action = () => {
     const p = phaseRef.current;
     if (p === 'bite') {
+      const s = schoolRef.current;
+      if (!s) return;
       // oxlint-disable-next-line react/purity -- 이벤트 핸들러에서만 호출됨(렌더 아님)
-      hookRef.current(judgePress(Date.now() - biteStartRef.current, gameRef.current.rod));
+      const pos = (Date.now() - biteStartRef.current) / 1000 / rodAxes(gameRef.current).sweep.value;
+      // 존은 수역 파워 게이트에서 온다 — 미달 수역은 존 자체가 없다(서버도 강등한다).
+      const z = powerZones(gameRef.current, s.spot);
+      if (z.yellow === 0) {
+        toastRef.current('바늘이 버틴다 — 이 바다는 더 강한 낚싯대를 원한다.');
+      }
+      hookRef.current(judgeTiming(pos, z.yellow / 100, z.red / 100));
       return;
     }
     if (p !== 'idle') return;
@@ -157,7 +171,8 @@ export default function Field({
       const info = result.info;
       setFish(caught);
       setCatchInfo(info);
-      const prefix = judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
+      const prefix = judgment === 'superb' ? 'SUPERB! '
+        : judgment === 'perfect' ? 'PERFECT! ' : judgment === 'auto' ? '방치: ' : '';
       // 로그는 최소 정보만 — 변이면 변이 이름이 곧 이름이다. 크기/월척/NEW는 획득 카드 소관.
       toastRef.current(
         `${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, info.form)}] 획득!`);
@@ -226,7 +241,7 @@ export default function Field({
         if (d) { dx += d[0]; dy += d[1]; }
       }
       if ((dx || dy) && phaseRef.current === 'idle') {
-        const speed = def.movement === 'walk' ? WALK_SPEED : boatSpeed(gameRef.current);
+        const speed = moveSpeed(gameRef.current, def.movement).value;
         const prev = posRef.current;
         posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
         // 트리거 — 목적지·게이트·안내문 전부 팩 데이터 (R5c). 새 지역/항로 = 데이터 행 추가.
@@ -251,15 +266,19 @@ export default function Field({
           }
         }
       }
-      const st = rodStats(gameRef.current.rod);
+      const axes = rodAxes(gameRef.current);
+      const cur = schoolRef.current;
+      const pz = cur ? powerZones(gameRef.current, cur.spot) : null;
       renderRegion(ctx, def, {
         player: posRef.current,
         phase: phaseRef.current,
-        school: schoolRef.current,
+        school: cur,
         boat: gameRef.current.boat,
         biteT: phaseRef.current === 'bite'
-          ? (Date.now() - biteStartRef.current) / 1000 / st.sweep : null,
-        zone: st.zone,
+          ? (Date.now() - biteStartRef.current) / 1000 / axes.sweep.value : null,
+        // 유효 존 — 파워 게이트에서 온다(초과 보너스 포함, 미달이면 0/0)
+        zone: pz ? pz.yellow / 100 : 0,
+        red: pz ? pz.red / 100 : 0,
         t: now / 1000,
       });
       // 필드 위 미니맵 오버레이
@@ -304,7 +323,7 @@ export default function Field({
       </GameFrame>
 
       {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
-      <ResourceBar game={game} />
+      <ResourceBar game={game} onOpen={onOpenStats} />
 
       {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
       <canvas ref={minimapRef} width={def.w} height={def.h}

@@ -57,3 +57,10 @@ export function maskUid(uid: string): string {
  *  친구 규모라 URL 파라미터로 충분하다 — 서버 권한 검증이 필요해지면 그때 승격한다. */
 export const isAdminUrl = (): boolean =>
   new URLSearchParams(window.location.search).has('admin');
+
+/** 로컬 개발 오리진 여부 — 관리자 기능의 접근 조건 중 하나(?admin과 함께 봄) */
+export const isLocalOrigin = (): boolean =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(window.location.origin);
+
+/** 운영자 계정 이메일 — 관리자 UI 노출·import 게이트(api/action.ts 서버측 상수와 쌍)가 본다 */
+export const OWNER_EMAIL = 'inley@naver.com';

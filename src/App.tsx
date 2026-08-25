@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { BASE_PACKS } from './world';
+import { BASE_PACKS, REGION_PACKS } from './world';
 import type { FurnitureId, Point, SceneRef } from './world';
 import Base from './stage/Base';
 import Field from './stage/Field';
 import FacilityModal from './stage/FacilityModal';
+import StatsModal from './stage/StatsModal';
 import MessageLog from './stage/MessageLog';
 import Sidebar from './sidebar';
 import { DEFAULT_TAB } from './sidebar/tabs';
@@ -40,6 +41,9 @@ export default function App() {
   // 우측 사이드바 상태 — 탭은 씬 무관 5개 고정, 씬이 바뀌면 열린 시설 패널만 닫는다
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
+  // 스탯창 — 자원 바 클릭 진입 (씬 무관, 현재 씬의 이동 방식만 전달한다)
+  const [statsOpen, setStatsOpen] = useState(false);
+  const openStats = () => setStatsOpen(o => !o);
   // 경계 봉합 입장점 — travel 시 Field가 계산한 "이어지는 자리". 씬 전환과 소비되면 해제된다.
   const [entryPos, setEntryPos] = useState<Point | null>(null);
 
@@ -48,6 +52,7 @@ export default function App() {
     setEntryPos(ep ?? null);
     setToast(msg);
     setActionPanel(null);
+    setStatsOpen(false);
     // 서버에 위치를 남긴다 — 재개 지점이자 방문 기록(업적)의 근거.
     // 실패해도 화면은 이미 이동했다: 위치는 편의 정보라 이동을 막을 이유가 없다.
     dispatch({ type: 'travel', to: s });
@@ -94,16 +99,24 @@ export default function App() {
             App은 씬과 무관한 스테이지 오버레이(로그·정비 모달)만 여기 얹는다.
             key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게 */}
         {scene.kind === 'base' ? (
-          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility}
+                onOpenStats={openStats} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
-                 onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
+                 onScene={go} onOpenMap={onOpenMap} onWarmup={warmup} onOpenStats={openStats}
                  onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))}
                  initialPos={entryPos ?? undefined} />
         )}
 
         {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
         <MessageLog log={log} />
+
+        {/* 스탯창 — 파생 내역은 전부 game/stats.ts 서비스가 계산한다 (next.md 1·2) */}
+        {statsOpen && (
+          <StatsModal game={game}
+                      movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
+                      onClose={() => setStatsOpen(false)} />
+        )}
 
         {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
         {actionPanel && (

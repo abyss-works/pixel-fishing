@@ -13,11 +13,13 @@ interface Props {
   game: GameState;
   /** 시설 클릭(캔버스) — 탭 전환/패널 선택/장면 이동은 전부 App이 결정한다 */
   onFacility?: (id: FurnitureId) => void;
+  /** 자원 바 클릭 — 스탯창 모달 (App이 소유) */
+  onOpenStats?: () => void;
 }
 
 // 거점 화면 — 캔버스와 그 위 자원 오버레이만 그린다.
 // 판매/강화/배 상호작용 UI는 FacilityModal(스테이지 모달) 소관.
-export default function Base({ base, game, onFacility }: Props) {
+export default function Base({ base, game, onFacility, onOpenStats }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const dexCount = dexSpeciesCount(game);
@@ -49,7 +51,7 @@ export default function Base({ base, game, onFacility }: Props) {
                 aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
       </GameFrame>
       {/* 스테이지 기준 — 프레임의 형제 */}
-      <ResourceBar game={game} />
+      <ResourceBar game={game} onOpen={onOpenStats} />
     </>
   );
 }

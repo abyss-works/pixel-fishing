@@ -9,6 +9,7 @@ import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { cx } from '../ui/cx';
+import CloseButton from '../ui/CloseButton';
 import Panel from '../ui/Panel';
 import Button from '../ui/Button';
 import DataTable from '../ui/DataTable';
@@ -56,7 +57,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
           onUpgrade={() => run({ type: 'upgradeRod' }, r => {
-            setToast(`낚싯대가 Lv.${r.state.rod}이 되었다! 입질이 빨라지고 PERFECT 존이 넓어진다.`);
+            setToast(`낚싯대가 Lv.${r.state.rod}이 되었다! 입질이 빨라지고 파워도 오른다.`);
           })} />
       )}
       {panel === 'boat' && (
@@ -80,7 +81,8 @@ function ModalCard({ title, onClose, children }: {
   return (
     <Panel title={title}>
       {children}
-      <Button variant="ghost" onClick={onClose}>닫기</Button>
+      {/* ghost가 아닌 CloseButton — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
+      <CloseButton onClick={onClose} />
     </Panel>
   );
 }
@@ -225,8 +227,9 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
   const cost = upgradeCost(game.rod);
   const cur = rodStats(game.rod);
   const next = rodStats(game.rod + 1);
-  const fmt = (s: { biteMin: number; biteMax: number; sweep: number; zone: number }) =>
-    ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s`, zone: `${Math.round(s.zone * 100)}%` });
+  // 존은 이제 수역 파워 게이트 소관(stats.powerZones) — 강화 프리뷰는 시간축만 보여준다
+  const fmt = (s: { biteMin: number; biteMax: number; sweep: number }) =>
+    ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s` });
   const c = fmt(cur), n = fmt(next);
 
   return (
@@ -234,7 +237,6 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
       <StatCompare rows={[
         { label: '입질 대기', value: c.bite, next: n.bite },
         { label: '바 시간', value: c.sweep, next: n.sweep },
-        { label: 'PERFECT 존', value: c.zone, next: n.zone },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
       <Button variant="primary" disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>

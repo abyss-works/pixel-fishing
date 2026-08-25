@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../game/balance';
+import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../game/balance';
 import Accordion from '../ui/Accordion';
 import Note from '../ui/Note';
 import PixelList from '../ui/PixelList';
@@ -65,7 +65,10 @@ export default function HelpPanel() {
           <PixelList>
             <li>찌를 던지고 기다리면 <b>"!"</b>와 함께 타이밍 바가 나타나요.</li>
             <li>커서가 <b>노란 존</b> 안에 있을 때 누르면 <b>PERFECT</b> —
-              희귀한 물고기를 만날 확률이 ×{JUDGMENT_MULT.perfect}로 올라가요.</li>
+              희귀한 물고기를 만날 확률이 올라가요.</li>
+            <li>요구 파워를 넘친 바다에서는 존이 넓어지고, 크게 넘치면 중앙에
+              <b>빨간 존</b>이 열려요 — 그곳은 <b>SUPERB</b>, PERFECT보다 희귀한 물고기를
+              만나요.</li>
             <li>존 밖에서 눌러도 괜찮아요. 평범하게 잡혀요.</li>
             <li><b>아무것도 누르지 않아도 돼요.</b> 바가 끝까지 가면 자동으로 잡히는 방치 낚시예요.
               흔한 물고기 위주지만 잡은 뒤 같은 자리에 다시 찌를 던지므로,
@@ -109,8 +112,8 @@ export default function HelpPanel() {
           <PixelList>
             <li><b>명성</b>은 물고기를 잡을 때마다 쌓여요. 소모되거나 사라지지 않고 계속 누적돼요.
               더 좋은 배를 살 때 자격 조건이 돼요.</li>
-            <li><b>낚싯대</b>: 골드로 계속 강화해요. 입질이 빨라지고 PERFECT 존이 넓어지며
-              방치 효율도 좋아져요. 끝은 없고, 오를수록 폭이 줄어들 뿐이에요.</li>
+            <li><b>낚싯대</b>: 골드로 계속 강화해요. 입질이 빨라지고 파워가 올라
+              깊은 바다일수록 유리해요. 끝은 없고, 오를수록 폭이 줄어들 뿐이에요.</li>
             <li><b>배</b>: 골드와 명성 조건을 채우면 살 수 있어요. 더 먼 수역이 열리고
               항해도 빨라져요.</li>
             <li>막혔다면 물고기를 팔아 골드를 모으고, 많이 잡아 명성을 쌓으면 돼요.</li>

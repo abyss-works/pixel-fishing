@@ -953,3 +953,35 @@ describe('관리자 대시보드 (?admin, 설정 탭)', () => {
     expect(screen.getByText('perfect')).toBeInTheDocument();
   });
 });
+
+describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
+  it('클릭하면 열리고 파생 축·도움말이 보인다, 닫기로 닫힌다', () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
+    expect(screen.getByText('이동 속도')).toBeInTheDocument();
+    // 낚싯대: 레벨과 파워는 각각, 시간축 + 방치 페널티. PERFECT 존은 수역별 설계 대상이라 없다
+    expect(screen.getByText('레벨')).toBeInTheDocument();
+    expect(screen.getByText('파워')).toBeInTheDocument();
+    expect(screen.getByText('입질 최소 대기')).toBeInTheDocument();
+    expect(screen.getByText('바 시간')).toBeInTheDocument();
+    expect(screen.queryByText('PERFECT 존')).not.toBeInTheDocument();
+    expect(screen.getByText('방치 낚시 페널티')).toBeInTheDocument();
+    // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님), 로어체 문장
+    fireEvent.mouseEnter(screen.getAllByLabelText('도움말')[0]);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
+    fireEvent.mouseLeave(screen.getAllByLabelText('도움말')[0]);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('닫기'));
+    expect(screen.queryByText('파워')).not.toBeInTheDocument();
+  });
+
+  it('씬이 바뀌면 스탯창도 닫힌다', () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    expect(screen.getByText('스탯')).toBeInTheDocument();
+    // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환
+    clickFurniture('exit');
+    expect(screen.queryByText('이동 속도')).not.toBeInTheDocument();
+  });
+});

@@ -13,6 +13,7 @@ import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
+import { powerZones } from './stats.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
@@ -131,14 +132,21 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
+      // 파워 게이트(서버 권위 백스톱) — 존은 수역 파워에서 온다(stats.powerZones).
+      // 클라 주장을 존이 허용하는 최고 등급으로 내린다: SUPERB→PERFECT→NORMAL. 미달이면
+      // 일반 가중치 지수 페널티(mult)가 적용되고, 초과면 mult=1로 기존 밸런스와 동일.
+      const pz = powerZones(state, action.spot);
+      let judgment: Judgment = action.judgment;
+      if (judgment === 'superb' && pz.red <= 0) judgment = pz.yellow > 0 ? 'perfect' : 'normal';
+      else if (judgment === 'perfect' && pz.yellow <= 0) judgment = 'normal';
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
-      const fish = resolveCatch(action.spot, action.judgment, state.rod, deps.rng);
+      const fish = resolveCatch(action.spot, judgment, state.rod, deps.rng, pz.mult);
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
       const inst = makeInstance(fish, extras, {
-        uid: deps.newUid(), now: deps.now, spot: action.spot, judgment: action.judgment,
+        uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });
       const caught = addCatch(state, inst, fish, deps.today);
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
@@ -152,7 +160,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       });
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
-        uid: inst.uid, fishId: fish.id, judgment: action.judgment, spot: action.spot,
+        // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
+        uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew,
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다

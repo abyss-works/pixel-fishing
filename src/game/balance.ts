@@ -17,8 +17,10 @@ export const CAST_RANGE = 40;
 // 이동 속도(px/s)
 export const WALK_SPEED = 75; // 마을 도보 (배는 data의 배별 speed)
 
-// 판정별 희귀(일반 외 등급) 가중치 배수 — 수동 어드밴티지의 핵심
+// 판정별 배수 — 수동 어드밴티지의 핵심. **일반 가중치를 이 값으로 나눈다**(희귀 데이터 불변,
+// 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). superb = 빨간 존, perfect = 노란 존.
 export const JUDGMENT_MULT = {
+  superb: 2,
   perfect: 1.6,
   normal: 1,
 } as const;
@@ -27,14 +29,14 @@ export const JUDGMENT_MULT = {
 // 낚싯대 곡선(t)에 따라 from → to로 완화 (강화할수록 방치 효율도 개선)
 export const AUTO_COMMON_BOOST = { from: 10, to: 4 } as const;
 
-// 낚싯대 곡선 — 무한 강화, 점근 수렴 
+// 낚싯대 곡선 — 무한 강화, 점근 수렴
 // t = 1 - 1/(1 + curveK*(lv-1)): 레벨 1 → 0, ∞ → 1
+// ⚠️ 구 zone(레벨당 PERFECT 존 확대)은 폐기 — 존은 수역 파워 게이트 초과 보너스로 이관(stats.powerZones)
 export const ROD = {
   curveK: 0.15,
   biteMin: { from: 4, to: 1 },     // 입질 최소 대기(초)
   biteMax: { from: 8, to: 2.5 },   // 입질 최대 대기(초)
   sweep: { from: 1.0, to: 2.2 },   // 타이밍 바 시간(초)
-  zone: { from: 0.24, to: 0.6 },   // PERFECT 존 비율
   costBase: 50,                     // 강화 비용 = round(costBase × costGrowth^(lv-1))
   costGrowth: 1.8,
 } as const;

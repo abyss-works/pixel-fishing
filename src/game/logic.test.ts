@@ -94,13 +94,13 @@ describe('R6b: 타이밍 판정', () => {
 });
 
 describe('R13: 낚싯대 스탯 (무한 강화, 점근 수렴)', () => {
-  it('레벨 1 기준값', () => {
-    expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1, zone: 0.24 });
+  it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관)', () => {
+    expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1 });
   });
-  it('강할수록 입질 빠르고 존이 넓다 (단조성, 상한 없음)', () => {
+  it('강할수록 입질이 빨라진다 (단조성, 상한 없음)', () => {
     for (let l = 2; l <= 100; l++) {
       expect(rodStats(l).biteMax).toBeLessThan(rodStats(l - 1).biteMax);
-      expect(rodStats(l).zone).toBeGreaterThan(rodStats(l - 1).zone);
+      expect(rodStats(l).sweep).toBeGreaterThan(rodStats(l - 1).sweep);
     }
   });
   it('아무리 강해도 한계에 수렴할 뿐 넘지 않는다 (무한 플레이 안전)', () => {
@@ -108,7 +108,6 @@ describe('R13: 낚싯대 스탯 (무한 강화, 점근 수렴)', () => {
     expect(s.biteMin).toBeGreaterThan(1);
     expect(s.biteMax).toBeGreaterThan(2.5);
     expect(s.sweep).toBeLessThan(2.2);
-    expect(s.zone).toBeLessThan(0.6);
   });
 });
 

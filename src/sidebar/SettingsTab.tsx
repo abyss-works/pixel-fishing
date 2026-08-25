@@ -202,7 +202,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         </>
       )}
 
-      <AdminPanel />
+      <AdminPanel account={account} />
       <PatchNotesPanel />
 
       {letter && (
