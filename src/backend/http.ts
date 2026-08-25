@@ -73,6 +73,10 @@ export class HttpBackend implements Backend {
     // 409 = 낙관 락 충돌(다른 탭과 경합) — 서버가 최신 상태 위에 재적용하도록 1회 재시도
     if (res.status === 409 && !retried) return this.dispatch(action, true);
     if (res.status === 422) return { status: 'rejected', error: HttpBackend.reason(body?.error) };
+    // 403 = 제재 계정(0008 restricted) 또는 권한 없는 요청(import 게이트) — 정책 표가 문구를 정한다
+    if (res.status === 403) {
+      throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
+    }
     if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
       { server: (body as { server?: string } | null)?.server });
     if (res.status === 401) throw new AppError('unauthorized', 'session rejected');

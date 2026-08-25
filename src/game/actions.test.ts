@@ -298,3 +298,60 @@ describe('writes (변경분)', () => {
     expect(out.writes.instancesRemoved).toEqual([]);
   });
 });
+
+describe('claimRelief — 지원 코드 (제재 소프트 랜딩, incidents/2026-08-24)', () => {
+  const grant = {
+    gold: 83_662, fame: 6_535, rod: 14, boat: 3,
+    dex: {
+      shark: { normal: { count: 7, maxSize: 269.027, first: '2026-08-21' },
+               variant: { count: 1, maxSize: null, first: null } },
+    },
+  };
+
+  it('deps.relief 없으면 거부 — 로컬 dev(오프라인)에선 발급 자체가 없다', () => {
+    const out = applyAction(seed(), { type: 'claimRelief', code: 'X' }, deps());
+    expect(out).toEqual({ ok: false, error: 'relief-invalid' });
+  });
+
+  it('자산 병합 — 골드·명성 가산, 낚싯대·배는 둘 중 큰 값, 이벤트를 남긴다', () => {
+    const s = seed({ gold: 1_000, fame: 100, rod: 3, boat: 2 });
+    const out = applyAction(s, { type: 'claimRelief', code: 'RELIEF-1' }, deps({ relief: grant }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(84_662);
+    expect(out.state.fame).toBe(6_635);
+    expect(out.state.rod).toBe(14);
+    expect(out.state.boat).toBe(3);           // max(2, 3)
+    expect(out.events[0]).toMatchObject({
+      type: 'claimRelief', payload: { code: 'RELIEF-1' },
+    });
+    // 도감 기록이 그대로 얹힌다 — 개체(bag)는 아니므로 instances 변경분은 없다
+    expect(out.state.dex.shark?.normal).toMatchObject({ count: 7, maxSize: 269.027, first: '2026-08-21' });
+    expect(out.state.dex.shark?.variant).toMatchObject({ count: 1, maxSize: null, first: null });
+    expect(out.writes.instancesAdded).toEqual([]);
+    expect(out.writes.records.map(r => `${r.fishId}:${r.form}`).sort()).toEqual(['shark:normal', 'shark:variant']);
+  });
+
+  it('도감 병합 — 합산이 아니라 최대값·더 이른 첫조우일을 유지한다 (기록 정합)', () => {
+    const s = seed({
+      dex: {
+        crucian: { normal: { count: 5, maxSize: 30, first: '2026-08-01' } },
+        shark: { normal: { count: 9, maxSize: null, first: null },
+                 variant: { count: 2, maxSize: 280, first: '2026-08-20' } },
+      },
+    });
+    const out = applyAction(s, { type: 'claimRelief', code: 'R' }, deps({ relief: grant }));
+    if (!out.ok) throw new Error(out.error);
+    // 양쪽에 있던 폼 — 큰 count, 큰 maxSize, 이른 first
+    expect(out.state.dex.shark?.normal).toMatchObject({ count: 9, maxSize: 269.027, first: '2026-08-21' });
+    expect(out.state.dex.shark?.variant).toMatchObject({ count: 2, maxSize: 280, first: '2026-08-20' });
+    // 지원금에 없던 폼은 보존
+    expect(out.state.dex.crucian?.normal).toMatchObject({ count: 5, maxSize: 30, first: '2026-08-01' });
+  });
+
+  it('배 상한 클램프 — 지원 배가 MAX_BOAT를 넘지 않는다', () => {
+    const out = applyAction(seed(), { type: 'claimRelief', code: 'R' },
+      deps({ relief: { ...grant, boat: 99 } }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.boat).toBe(BOATS.length);
+  });
+});

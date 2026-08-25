@@ -52,3 +52,8 @@ export function maskUid(uid: string): string {
   if (parts.length !== 5) return uid;
   return [parts[0], '****', '****', '****', parts[4]].join('-');
 }
+
+/** 관리자 게이트 — URL ?admin (관리 대시보드·이사 코드 등 운영 기능 공용).
+ *  친구 규모라 URL 파라미터로 충분하다 — 서버 권한 검증이 필요해지면 그때 승격한다. */
+export const isAdminUrl = (): boolean =>
+  new URLSearchParams(window.location.search).has('admin');

@@ -13,7 +13,7 @@ import type { SpotId, SpotRegionId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
-import { BOATS } from '../data/boats.js';
+import { BOATS, MAX_BOAT } from '../data/boats.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
@@ -282,6 +282,57 @@ export function redeemCoupon(
     ok: true,
     reward: c,
     state: { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] },
+  };
+}
+
+// ---------- 지원 코드 자산 병합 (제재 소프트 랜딩 — incidents/2026-08-24-import-abuse.md) ----------
+// 운영자가 발급한 일회성 패키지(gold·fame·rod·boat·dex)를 새 계정 상태에 얹는다.
+// 도감은 "기록"이라 **합산하지 않는다** — count·maxSize는 큰 값을 유지하고 first는 더 이른 날을
+// 남긴다. 새 계정의 미래 캐치가 위에 더해져도 절대값 정합이 깨지지 않게 하는 게 요점이다.
+// 낚싯대·배는 둘 중 큰 값(배는 상한 클램프), 골드·명성은 음수 방어 가산.
+
+export interface ReliefGrant {
+  gold: number;
+  fame: number;
+  rod: number;
+  boat: number;
+  dex: GameState['dex'];
+}
+
+const pickMaxSize = (x: number | null | undefined, y: number | null | undefined): number | null =>
+  x == null ? y ?? null : y == null ? x : Math.max(x, y);
+const pickEarliest = (x: string | null | undefined, y: string | null | undefined): string | null =>
+  x == null ? y ?? null : y == null ? x : x <= y ? x : y;
+
+export function applyRelief(state: GameState, r: ReliefGrant): GameState {
+  const dex: GameState['dex'] = {};
+  const fishIds = new Set([...Object.keys(state.dex), ...Object.keys(r.dex)]);
+  for (const fishId of fishIds) {
+    const forms = new Set([
+      ...Object.keys(state.dex[fishId] ?? {}),
+      ...Object.keys(r.dex[fishId] ?? {}),
+    ]);
+    for (const form of forms) {
+      const a = state.dex[fishId]?.[form as FormId];
+      const b = r.dex[fishId]?.[form as FormId];
+      if (!a && !b) continue;
+      dex[fishId] = {
+        ...dex[fishId],
+        [form]: {
+          count: Math.max(a?.count ?? 0, b?.count ?? 0),
+          maxSize: pickMaxSize(a?.maxSize, b?.maxSize),
+          first: pickEarliest(a?.first, b?.first),
+        },
+      };
+    }
+  }
+  return {
+    ...state,
+    gold: state.gold + Math.max(0, r.gold),
+    fame: state.fame + Math.max(0, r.fame),
+    rod: Math.max(state.rod, r.rod),
+    boat: Math.min(Math.max(state.boat, r.boat), MAX_BOAT),
+    dex,
   };
 }
 

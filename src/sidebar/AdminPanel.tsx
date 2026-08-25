@@ -8,15 +8,12 @@ import DataTable from '../ui/DataTable';
 import Modal from '../ui/Modal';
 import SectionTitle from '../ui/SectionTitle';
 import { RarityText } from '../ui/RarityTag';
-
-// 관리자 게이트 — 지금은 URL ?admin (친구용 서비스라 충분).
-// P1 계정 도입 시 서버 권한 검증으로 승격 .
-const isAdmin = () => new URLSearchParams(window.location.search).has('admin');
+import { isAdminUrl } from './shared';
 
 // R20: 관리자 대시보드 — 게임 데이터 전체 열람 (숨김 어종 포함)
 export default function AdminPanel() {
   const [open, setOpen] = useState(false);
-  if (!isAdmin()) return null;
+  if (!isAdminUrl()) return null;
 
   return (
     <>

@@ -77,9 +77,10 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }), []);
 
   // 진행 상황을 이사 코드로 만들어 복사해 주고 복구를 안내한다 (저장되지 않은 실패에서만)
+  // import는 이제 소유자 전용(incidents/2026-08-24) — 불러오기는 유저가 아니라 개발자가 한다.
   const rescueAlert = async (headline: string) => {
     const code = saveCode(gameRef.current);
-    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 이사 코드로 만들어 뒀어요.\n\n복구 방법: 게임을 새로고침해 다시 접속한 뒤,\n설정 탭 → 이사 코드 불러오기에 붙여넣으세요.`;
+    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 코드로 만들어 뒀어요.\n\n게임을 새로고침해 다시 접속하세요.\n같은 문제가 반복되면 아래 코드를 개발자에게 보내주세요.`;
     try {
       await navigator.clipboard.writeText(code);
       window.alert(`${guide}\n\n(이사 코드는 클립보드에 복사되어 있어요)`);
@@ -115,9 +116,15 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔다.');
       } else if (init.legacy) {
-        await dispatch({ type: 'import', save: init.game });
+        // 구세대(localStorage) 브리지도 import 액션이라 소유자 게이트에 걸린다(incidents/2026-08-24).
+        // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.
+        try {
+          await dispatch({ type: 'import', save: init.game });
+          localStorage.removeItem(LEGACY_KEY); // 브리지 성공 — 로컬 저장 사용 종료
+        } catch (e) {
+          if (!(e instanceof AppError && e.kind === 'restricted')) throw e;
+        }
       }
-      if (init.legacy) localStorage.removeItem(LEGACY_KEY); // 브리지 완료 — 로컬 저장 사용 종료
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
