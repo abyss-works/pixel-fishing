@@ -45,30 +45,31 @@ describe('catch', () => {
   });
 
   it('파워 게이트 — 미달 수역의 상위 판정 주장은 강등된다 (개체·이벤트 모두 확정값)', () => {
-    // deep 요구 파워 40 — Lv1(P1)은 미달. 배는 2단계(수역 자체는 열려 있다)
-    const out = applyAction(seed({ boat: 2 }), { type: 'catch', spot: 'deep', judgment: 'perfect' }, deps());
+    // deep 요구 파워 60 — Lv1(P1)은 미달. 배는 2단계(수역 자체는 열려 있다)
+    const out = applyAction(seed({ boat: 2 }), { type: 'catch', spot: 'deep', judgment: 'good' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('normal');
     expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'normal' } });
   });
 
-  it('파워 게이트 — 빨간 존 없는 수역의 SUPERB 주장은 PERFECT로 강등된다', () => {
-    // 마을 연못(요구 없음) Lv1: 초과 0 → 빨간 존 미개방, 노란 존은 있다
-    const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'superb' }, deps());
+  it('파워 게이트 — 빨간 존 없는 수역의 PERFECT 주장은 GOOD으로 강등된다', () => {
+    // 마을 연못(요구 -10) Lv1: 초과 11 → 빨간 존 미개방, 노란 존은 있다
+    const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.bag[0].judgment).toBe('perfect');
+    expect(out.state.bag[0].judgment).toBe('good');
   });
 
-  it('파워 게이트 — 초과 30 이상이면 SUPERB가 살아남는다', () => {
-    // 연못 + Lv4(P32): 초과 32 → 빨간 존 개방
-    const out = applyAction(seed({ rod: 4 }), { type: 'catch', spot: 'pond', judgment: 'superb' }, deps());
+  it('파워 게이트 — 초과 30 이상이면 PERFECT가 살아남는다', () => {
+    // 연못 10 + Lv10(P55): 초과 45 → 빨강 15 → PERFECT 유지
+    const out = applyAction(seed({ rod: 10 }), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.bag[0].judgment).toBe('superb');
-    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'superb' } });
+    expect(out.state.bag[0].judgment).toBe('perfect');
+    expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
   });
 
   it('파워 게이트 — 요구 이상 수역은 PERFECT가 그대로 살아남는다', () => {
-    const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
+    // 연못 10 + Lv10(P55) => 초과 45 → 빨강 15 → PERFECT 유지
+    const out = applyAction(seed({ rod: 10 }), { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('perfect');
     expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });

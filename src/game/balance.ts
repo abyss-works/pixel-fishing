@@ -18,10 +18,10 @@ export const CAST_RANGE = 40;
 export const WALK_SPEED = 75; // 마을 도보 (배는 data의 배별 speed)
 
 // 판정별 배수 — 수동 어드밴티지의 핵심. **일반 가중치를 이 값으로 나눈다**(희귀 데이터 불변,
-// 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). superb = 빨간 존, perfect = 노란 존.
+// 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). perfect = 빨간 존, good = 노란 존.
 export const JUDGMENT_MULT = {
-  superb: 2,
-  perfect: 1.6,
+  perfect: 2,
+  good: 1.6,
   normal: 1,
 } as const;
 
@@ -36,7 +36,7 @@ export const ROD = {
   curveK: 0.15,
   biteMin: { from: 4, to: 1 },     // 입질 최소 대기(초)
   biteMax: { from: 8, to: 2.5 },   // 입질 최대 대기(초)
-  sweep: { from: 1.0, to: 2.2 },   // 타이밍 바 시간(초)
+  sweep: { from: 1.4, to: 1.4 },     // 타이밍 바 시간(초) — 레벨 무관 1.4초 고정
   costBase: 50,                     // 강화 비용 = round(costBase × costGrowth^(lv-1))
   costGrowth: 1.8,
 } as const;

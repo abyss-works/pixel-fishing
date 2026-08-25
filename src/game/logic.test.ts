@@ -84,9 +84,10 @@ describe('R14: 판정 배수 (수동 어드밴티지)', () => {
 });
 
 describe('R6b: 타이밍 판정', () => {
-  it('중앙 존 안이면 perfect, 밖이면 normal', () => {
-    expect(judgeTiming(0.5, 0.24)).toBe('perfect');
-    expect(judgeTiming(0.5 + 0.11, 0.24)).toBe('perfect'); // 존 경계 안
+  it('중앙 존 안이면 good(노란), 더 안이면 perfect(빨간), 밖이면 normal', () => {
+    expect(judgeTiming(0.5, 0.24)).toBe('good');
+    expect(judgeTiming(0.5, 0.24, 0.10)).toBe('perfect'); // 빨간 안
+    expect(judgeTiming(0.5 + 0.11, 0.24)).toBe('good'); // 존 경계 안
     expect(judgeTiming(0.5 + 0.13, 0.24)).toBe('normal');  // 존 경계 밖
     expect(judgeTiming(0, 0.24)).toBe('normal');
     expect(judgeTiming(1, 0.24)).toBe('normal');
@@ -94,20 +95,20 @@ describe('R6b: 타이밍 판정', () => {
 });
 
 describe('R13: 낚싯대 스탯 (무한 강화, 점근 수렴)', () => {
-  it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관)', () => {
-    expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1 });
+  it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관), 바 시간은 1.4초 고정', () => {
+    expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1.4 });
   });
-  it('강할수록 입질이 빨라진다 (단조성, 상한 없음)', () => {
+  it('강할수록 입질이 빨라진다 (단조성, 상한 없음) — 바 시간은 고정', () => {
     for (let l = 2; l <= 100; l++) {
       expect(rodStats(l).biteMax).toBeLessThan(rodStats(l - 1).biteMax);
-      expect(rodStats(l).sweep).toBeGreaterThan(rodStats(l - 1).sweep);
+      expect(rodStats(l).sweep).toBe(1.4);
     }
   });
   it('아무리 강해도 한계에 수렴할 뿐 넘지 않는다 (무한 플레이 안전)', () => {
     const s = rodStats(100000);
     expect(s.biteMin).toBeGreaterThan(1);
     expect(s.biteMax).toBeGreaterThan(2.5);
-    expect(s.sweep).toBeLessThan(2.2);
+    expect(s.sweep).toBe(1.4);
   });
 });
 

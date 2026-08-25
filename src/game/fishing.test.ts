@@ -32,22 +32,22 @@ describe('단계 지속 시간', () => {
 describe('R6b: 챔질 판정 (커서 위치 → 이중 존)', () => {
   const at = (pos: number, yellow: number, red = 0) => judgeTiming(pos, yellow, red);
 
-  it('노란 존 경계 — 안이면 perfect, 밖이면 normal', () => {
+  it('노란 존 경계 — 안이면 good, 밖이면 normal', () => {
     const z = 0.24;
-    expect(at(0.5, z)).toBe('perfect');
+    expect(at(0.5, z)).toBe('good');
     expect(at(0, z)).toBe('normal');
     expect(at(0.99, z)).toBe('normal');
     // 존 경계: 0.5 ± yellow/2
-    expect(at(0.5 + z / 2 - 0.01, z)).toBe('perfect');
+    expect(at(0.5 + z / 2 - 0.01, z)).toBe('good');
     expect(at(0.5 + z / 2 + 0.01, z)).toBe('normal');
   });
 
-  it('빨간 존은 노란 존 안의 최내각 — superb > perfect > normal', () => {
-    expect(at(0.5, 0.24, 0.20)).toBe('superb');            // 정중앙
-    expect(at(0.5 + 0.105, 0.24, 0.20)).toBe('perfect');   // 빨간 밖(반폭 0.10) · 노란 안(반폭 0.12)
-    expect(at(0.5 - 0.09, 0.24, 0.20)).toBe('superb');
+  it('빨간 존은 노란 존 안의 최내각 — perfect > good > normal', () => {
+    expect(at(0.5, 0.24, 0.20)).toBe('perfect');            // 정중앙
+    expect(at(0.5 + 0.105, 0.24, 0.20)).toBe('good');   // 빨간 밖(반폭 0.10) · 노란 안(반폭 0.12)
+    expect(at(0.5 - 0.09, 0.24, 0.20)).toBe('perfect');
     expect(at(0.5 + 0.125, 0.24, 0.20)).toBe('normal');    // 둘 다 밖
-    expect(at(0.5, 0.24)).toBe('perfect');                 // 빨간 없으면 superb 불가
+    expect(at(0.5, 0.24)).toBe('good');                 // 빨간 없으면 perfect 불가
   });
 });
 
@@ -66,13 +66,13 @@ describe('R8/R9/R11: 획득 결정', () => {
     return rare / n;
   };
 
-  it('희귀 이상 확률: superb > perfect > normal ≫ auto (통계적)', () => {
-    const superb = rareRate('superb', 1);
+  it('희귀 이상 확률: perfect > good > normal ≫ auto (통계적)', () => {
     const perfect = rareRate('perfect', 1);
+    const good = rareRate('good', 1);
     const normal = rareRate('normal', 1);
     const auto = rareRate('auto', 1);
-    expect(superb).toBeGreaterThan(perfect + 0.02); // 일반 ÷2 vs ÷1.6
-    expect(perfect).toBeGreaterThan(normal + 0.02);
+    expect(perfect).toBeGreaterThan(good + 0.02); // 일반 ÷2 vs ÷1.6
+    expect(good).toBeGreaterThan(normal + 0.02);
     expect(auto).toBeLessThan(normal / 5); // 방치 ≈ 수동의 1/10 수준
     expect(auto).toBeGreaterThan(0.005);   // 그래도 희귀가 뜨긴 한다
   });

@@ -32,14 +32,23 @@ export function phaseDurationMs(
   }
 }
 
-// 방치 판정의 일반 등급 부스트 — 낚싯대가 좋을수록 완화 (10배 → 4배 수렴)
+// 방치 판정의 일반 등급 부스트 — 낚싯대가 좋을수록 완화 (10배 → 4배 수렴) — 절대치 버전
 export function autoCommonBoost(rodLevel: number): number {
   const t = rodCurveT(rodLevel);
   return AUTO_COMMON_BOOST.from + (AUTO_COMMON_BOOST.to - AUTO_COMMON_BOOST.from) * t;
 }
 
+/** 파워 기준 상대 방치 페널티 — 단순 계단식.
+ *  진입 파워에서 ×10, **파워 5 초과할 때마다 ×1씩 감소**, 하한 ×4(to) 클램프.
+ *  예: 초과 0=×10 · 5=×9 · 10=×8 … 25=×5 · 30+=×4
+ */
+export function relativeIdleBoost(power: number, entryReq: number): number {
+  const d = Math.max(0, power - entryReq);
+  return Math.max(AUTO_COMMON_BOOST.to, AUTO_COMMON_BOOST.from - Math.floor(d / 5));
+}
+
 // 획득 결정 (R8, R9, R11): 전부 해당 수역 풀에서 추첨.
-// 판정 배수(superb/perfect)와 페널티(gateMult — stats.powerZones, 미달 수역)는 둘 다
+// 판정 배수(perfect/good)와 페널티(gateMult — stats.powerZones, 미달 수역)는 둘 다
 // 일반 가중치 축을 건드린다(rollFish 주석). 요구 이상 수역은 gateMult=1이라 무영향.
 export function resolveCatch(
   spot: SpotId, judgment: Judgment, rodLevel: number,

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+﻿import type { ReactNode } from 'react';
 import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../game/balance';
 import Accordion from '../ui/Accordion';
 import Note from '../ui/Note';
@@ -64,11 +64,12 @@ export default function HelpPanel() {
         <Topic title="낚시와 타이밍" hint="PERFECT · 방치 낚시">
           <PixelList>
             <li>찌를 던지고 기다리면 <b>"!"</b>와 함께 타이밍 바가 나타나요.</li>
-            <li>커서가 <b>노란 존</b> 안에 있을 때 누르면 <b>PERFECT</b> —
+            <li>커서가 <b>노란 존</b> 안에 있을 때 누르면 <b>GOOD</b> —
               희귀한 물고기를 만날 확률이 올라가요.</li>
-            <li>요구 파워를 넘친 바다에서는 존이 넓어지고, 크게 넘치면 중앙에
-              <b>빨간 존</b>이 열려요 — 그곳은 <b>SUPERB</b>, PERFECT보다 희귀한 물고기를
-              만나요.</li>
+            <li>파워 요구량이 넘치는 바다에서는 존이 넓어지고, 크게 넘치면 중앙에
+              <b>빨간 존</b>이 열려요 — 그곳은 <b>PERFECT</b>.</li>
+            <li>요구 파워에 못 미치는 바다에서는 존이 사라져요. 물고기가 미끼만 훔쳐먹고
+              갈 거예요 — 낚싯대를 강화하고 다시 오세요.</li>
             <li>존 밖에서 눌러도 괜찮아요. 평범하게 잡혀요.</li>
             <li><b>아무것도 누르지 않아도 돼요.</b> 바가 끝까지 가면 자동으로 잡히는 방치 낚시예요.
               흔한 물고기 위주지만 잡은 뒤 같은 자리에 다시 찌를 던지므로,

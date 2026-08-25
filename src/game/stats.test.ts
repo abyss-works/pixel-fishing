@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance';
-import { autoBoost, autoPenaltyHelpText, moveSpeed, powerZones, powerHelpText, rodAxes, rodPower } from './stats';
+import { autoBoost, autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 
 type G = ReturnType<typeof newState>;
 const s = (over: Partial<G> = {}): G => ({ ...newState(), ...over });
@@ -23,7 +23,7 @@ describe('이동 속도 — 씬 movement로 분기', () => {
 describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {
   it('곡선 값을 그대로 담고 mods는 비어 있다(환경 기여 미도입)', () => {
     const axes = rodAxes(s());
-    expect(axes.sweep.value).toBe(1);      // Lv1 sweep 1s
+    expect(axes.sweep.value).toBe(1.4);      // 전 레벨 1.4초 고정
     expect(axes.biteMax.mods).toEqual([]);
   });
 
@@ -52,49 +52,62 @@ describe('방치 부스트 — 내역이 기여를 설명한다', () => {
   });
 });
 
-describe('파워 수치화 — 해역 게이트가 레벨 하드코딩 대신 보는 숫자', () => {
-  it('1~100 점근, 레벨에 단조 증가', () => {
-    expect(rodPower(s())).toBe(1);
+describe('파워 수치화 — 레벨당 5씩 단조 증가 (선형)', () => {
+  it('Lv1=10, 레벨당 +5', () => {
+    expect(rodPower(s())).toBe(10);
+    expect(rodPower(s({ rod: 2 }))).toBe(15);
+    expect(rodPower(s({ rod: 10 }))).toBe(55);
+    expect(rodPower(s({ rod: 50 }))).toBe(255);
+  });
+  it('단조 증가', () => {
     expect(rodPower(s({ rod: 50 }))).toBeGreaterThan(rodPower(s({ rod: 10 })));
-    expect(rodPower(s({ rod: 1000000 }))).toBeLessThanOrEqual(100);
-    expect(rodPower(s({ rod: 1000000 }))).toBeGreaterThan(90);
+    expect(rodPower(s({ rod: 100 }))).toBeGreaterThan(rodPower(s({ rod: 50 })));
   });
 });
 
 describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 페널티 (사용자 확정 2026-08-25)', () => {
-  // 파워표: L1=1 · L4=32 · L5=38 · L6=43 · L10=58 (deep 요구 40, seasia 요구 60)
-  it('초과 — 총 보너스 = 초과%p, 초과 30 미만은 빨간 없음, mult=1', () => {
-    const z = powerZones(s({ rod: 6 }), 'deep');          // P43, 초과 3
+  it('초과 — 총 보너스 = min(100, 초과+10)% (기본 10%), 초과 30 미만은 빨간 없음, mult=1', () => {
+    const z = zonesFor(43, 40); // 초과 3 → 총 13
     expect(z.mult).toBe(1);
-    expect(z.yellow).toBe(3);
+    expect(z.yellow).toBe(13);
     expect(z.red).toBe(0);
     expect(z.biteExtra).toBe(0);
   });
 
-  it('사용자 예시 — 초과 50: 빨간 20 + 노란 30 / 초과 100: 빨간 20 + 노란 80', () => {
-    const fifty = powerZones(s({ rod: 60 }), 'deep');       // P90 — 초과 50
+  it('사용자 예시 — 초과 0→노란 10 / 초과 50: 빨간 20 + 노란 60 / 초과 100: 빨간 20 + 노란 100', () => {
+    expect(zonesFor(40, 40).yellow).toBe(10); // 초과 0 → 기본 10
+    const fifty = zonesFor(90, 40);  // 초과 50 → 총 60
     expect(fifty.red).toBe(20);
-    expect(fifty.yellow).toBe(30);
-    const hundred = powerZones(s({ rod: 100000 }), 'sea');  // P100, 요구 없음 — 초과 100
+    expect(fifty.yellow).toBe(60);
+    const hundred = zonesFor(100, 0); // 초과 100 → 총 110 → 캡 100
     expect(hundred.red).toBe(20);
-    expect(hundred.yellow).toBe(80);
+    expect(hundred.yellow).toBe(100);
   });
 
-  it('빨간 존 — 초과 30부터 열리고 2배 책정·상한 20%', () => {
-    const g = powerZones(s({ rod: 100 }), 'dragonhole');  // P94, 초과 34
-    expect(g.red).toBe(20);
-    const below = powerZones(s({ rod: 6 }), 'deep');      // 초과 3 — 미개방
-    expect(below.red).toBe(0);
+  it('빨간 존 — 초과 30부터 1씩 증가·상한 20 (30→0, 31→1)', () => {
+    const g = zonesFor(70, 40); // 초과 30 → red 0 (경계)
+    expect(g.red).toBe(0);
+    const just = zonesFor(71, 40); // 초과 31 → red 1
+    expect(just.red).toBe(1);
+    const cap = zonesFor(94, 40); // 초과 54 → red 20 (상한)
+    expect(cap.red).toBe(20);
   });
 
-  it('미달 — 존 0, 일반 가중치 지수 페널티(2^(부족÷10+1)), 입질 +부족/5초', () => {
-    const near = powerZones(s({ rod: 5 }), 'deep');       // 부족 2
-    expect(near).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.4 });
-    const mid = powerZones(s({ rod: 4 }), 'dragonhole');  // 부족 28
-    expect(mid).toMatchObject({ mult: 8, biteExtra: 5.6 });
-    const far = powerZones(s({ rod: 1 }), 'dragonhole');  // 부족 59 — 캡 없음
-    expect(far.mult).toBe(64);
-    expect(far.biteExtra).toBe(11.8);
+  it('미달 — 존 0, 일반 가중치 지수 페널티(2^(부족÷10+1), 상한 ×16), 입질 +부족/4초', () => {
+    const near = zonesFor(38, 40); // 부족 2
+    expect(near).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.5 });
+    const mid = zonesFor(32, 60); // 부족 28
+    expect(mid).toMatchObject({ mult: 8, biteExtra: 7 });
+    const far = zonesFor(1, 60); // 부족 59 → 상한 ×16
+    expect(far.mult).toBe(16);
+    expect(far.biteExtra).toBe(14.75);
+  });
+
+  it('수역 연동 — powerZones가 요구량을 반영한다', () => {
+    // 연못은 10이라 Lv1(P10)과 동급 → 노란 10
+    expect(powerZones(s({ rod: 1 }), 'pond').yellow).toBe(10);
+    // 배리어리프는 65라 낮은 레벨에선 미달
+    expect(powerZones(s({ rod: 1 }), 'barrierreef').yellow).toBe(0);
   });
 });
 

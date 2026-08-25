@@ -29,7 +29,7 @@ export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export type { RejectReason, RuleCheck } from './rules.js';
 
-export type Judgment = 'superb' | 'perfect' | 'normal' | 'auto';
+export type Judgment = 'perfect' | 'good' | 'normal' | 'auto';
 
 /** 가방/전시대의 물고기 개체 — 잡는 순간의 문맥을 통째로 새긴다 (세이브 v8).
     팔면 개체는 소멸하고 종×폼별 집계(dex)와 서버 records에 기록만 남는다. */
@@ -102,15 +102,15 @@ export function upgradeCost(level: number): number {
   return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
-// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 PERFECT, 그 안의 빨간 존(red 개방 시)이면 SUPERB.
+// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 GOOD, 그 안의 빨간 존(red 개방 시)이면 PERFECT.
 // 존 폭은 바 길이 대비 비율(0~1).
 export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
   const off = Math.abs(pos - 0.5);
-  if (red > 0 && off <= red / 2) return 'superb';
-  return off <= yellow / 2 ? 'perfect' : 'normal';
+  if (red > 0 && off <= red / 2) return 'perfect';
+  return off <= yellow / 2 ? 'good' : 'normal';
 }
 
-// 추첨: 판정 배수(rareMult — PERFECT/SUPERB)와 페널티(commonMult — 방치 부스트·해역 게이트)는
+// 추첨: 판정 배수(rareMult — GOOD/PERFECT)와 페널티(commonMult — 방치 부스트·해역 게이트)는
 // **둘 다 일반 가중치 한 축**을 돌린다 — 보너스는 나누고, 페널티는 곱한다. 희귀 이상 가중치
 // 데이터는 언제나 원본 유지. 일반 축 단일 다이얼이라 하위 등급(잡동사니 등)이 추가돼도
 // 보너스가 오작동할 여지가 없다. (단일 추첨에서 "희귀 ×m"과 수학적으로 동치)

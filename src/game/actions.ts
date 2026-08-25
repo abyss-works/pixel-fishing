@@ -7,13 +7,16 @@ import {
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant } from './logic.js';
-import { resolveCatch } from './fishing.js';
+import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import { relativeIdleBoost } from './fishing.js';
+import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
-import { powerZones } from './stats.js';
+import { powerZones, rodPower } from './stats.js';
+import { rollFish } from './logic.js';
+import { JUDGMENT_MULT } from './balance.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
@@ -25,6 +28,7 @@ export type GameAction =
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩 (incidents/2026-08-24)
+  | { type: 'adminSet'; gold?: number; fame?: number; rod?: number; boat?: number } // 관리자 테스트용 스탯 직접 수정
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -32,7 +36,7 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, import: true,
+  claimRelief: true, adminSet: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -133,14 +137,22 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
       // 파워 게이트(서버 권위 백스톱) — 존은 수역 파워에서 온다(stats.powerZones).
-      // 클라 주장을 존이 허용하는 최고 등급으로 내린다: SUPERB→PERFECT→NORMAL. 미달이면
+      // 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL. 미달이면
       // 일반 가중치 지수 페널티(mult)가 적용되고, 초과면 mult=1로 기존 밸런스와 동일.
       const pz = powerZones(state, action.spot);
       let judgment: Judgment = action.judgment;
-      if (judgment === 'superb' && pz.red <= 0) judgment = pz.yellow > 0 ? 'perfect' : 'normal';
-      else if (judgment === 'perfect' && pz.yellow <= 0) judgment = 'normal';
+      if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
+      else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
-      const fish = resolveCatch(action.spot, judgment, state.rod, deps.rng, pz.mult);
+      // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
+      let fish: Fish;
+      if (judgment === 'auto') {
+        const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
+        const relBoost = relativeIdleBoost(rodPower(state), entry);
+        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult);
+      } else {
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment], deps.rng, pz.mult);
+      }
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
@@ -266,6 +278,25 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'claimRelief', payload: {
           code: typeof action.code === 'string' ? action.code.trim() : '',
         } }],
+      };
+    }
+    case 'adminSet': {
+      const g = action.gold, f = action.fame, r = action.rod, b = action.boat;
+      const bad = (v: unknown) => v !== undefined && (!Number.isFinite(v as number) || (v as number) < 0);
+      if (bad(g) || bad(f) || bad(r) || bad(b)) return { ok: false, error: 'bad-request' };
+      if (r !== undefined && (!Number.isInteger(r) || r < 1)) return { ok: false, error: 'bad-request' };
+      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > 4)) return { ok: false, error: 'bad-request' };
+      return {
+        ok: true,
+        state: {
+          ...state,
+          gold: g ?? state.gold,
+          fame: f ?? state.fame,
+          rod: r ?? state.rod,
+          boat: b ?? state.boat,
+        },
+        result: { type: 'none' },
+        events: [{ type: 'adminSet', payload: { gold: g, fame: f, rod: r, boat: b } }],
       };
     }
     case 'import': {

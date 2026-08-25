@@ -111,10 +111,12 @@ export default function App() {
         {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
         <MessageLog log={log} />
 
-        {/* 스탯창 — 파생 내역은 전부 game/stats.ts 서비스가 계산한다 (next.md 1·2) */}
+        {/* 스탯창 — 파생 내역은 전부 game/stats.ts 서비스가 계산한다 (next.md 1·2).
+            입질·방치 페널티는 현재 지역 대비 상대치라 region을 함께 건다 */}
         {statsOpen && (
           <StatsModal game={game}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
+                      region={region}
                       onClose={() => setStatsOpen(false)} />
         )}
 

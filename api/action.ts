@@ -246,15 +246,15 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(400, 'bad-action');
   }
 
-  // 이사 코드 import 게이트 — deprecate 임시방편(incidents/2026-08-24-import-abuse.md).
+  // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
   // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
   // 로컬 오리진(vite dev가 실제로 이 함수를 치는 프리뷰 대상 빌드)은 개발 편의상 연다.
   // 오프라인 dev(LocalBackend)는 애초에 이 함수에 도달하지 않는다.
-  if (action.type === 'import') {
+  if (action.type === 'import' || action.type === 'adminSet') {
     const origin = String(req.headers.origin ?? '');
     const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
     if (!local) {
-      // JWT 로컬 검증 경로는 email을 안 봤으니 import일 때만 Auth 서버에 물어본다
+      // JWT 로컬 검증 경로는 email을 안 봤으니 관리자 액션일 때만 Auth 서버에 물어본다
       const { data: ud } = await admin.auth.getUser(token);
       const email = ud.user?.email?.toLowerCase() ?? '';
       if (email !== IMPORT_OWNER_EMAIL) throw new ApiError(403, 'import-owner-only');

@@ -3,7 +3,7 @@ import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
-import { saveCode, supabase, signOutAccount } from '../backend/auth';
+import { api } from '../api';
 import { REJECT_TEXT } from '../game/logic';
 import { APP_VERSION } from '../version';
 import { BUILD_LABEL } from '../buildId';
@@ -42,11 +42,11 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
   const [open, setOpen] = useState(false);
   // 로컬(supabase 없음)에서도 화면은 보여준다 — UI 확인이 목적이라 숨기면 볼 수가 없다.
   // 대신 버튼은 막는다: 눌러도 되는 일이 없는데 눌리면 그게 더 헷갈린다.
-  const offline = !supabase;
+  const offline = !api.auth.isConfigured;
 
   const signOut = async () => {
     if (!window.confirm('로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.')) return;
-    await signOutAccount();
+    await api.auth.signOut();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
 
@@ -97,7 +97,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
   };
 
   const exportSave = async () => {
-    const code = saveCode(game);
+    const code = api.storage.saveCode(game);
     try {
       await navigator.clipboard.writeText(code);
       setToast('이사 코드를 클립보드에 복사했다. 다른 브라우저에서 불러오기.');
