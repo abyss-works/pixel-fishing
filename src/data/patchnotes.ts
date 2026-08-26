@@ -16,6 +16,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.6.7',
+    date: '2026-08-26',
+    summary: '깊은 바다의 확률 재조정 — 코론과 배리어 리프',
+    notes: [
+      { tag: '기타', text: '코론 침선 지대에서 희귀·영웅 어군이 더 자주 나타나도록 조정했어요.' },
+      { tag: '기타', text: '그레이트 배리어 리프의 밸런스를 다시 잡았어요 — 흔한 물고기는 줄고, 값진 손맛과 전설의 조우율이 커져요.' },
+      { tag: 'UI', text: '지역 탭의 확률표가 기본값임을 알려드려요 — 일부 수역은 고유한 확률을 가져요.' },
+    ],
+  },
+  {
     version: '0.6.6',
     date: '2026-08-26',
     summary: '확률이 설계대로 — 바다마다 공정한 배분',

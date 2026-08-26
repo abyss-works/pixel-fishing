@@ -13,9 +13,10 @@ const DATA = [
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 40 }, // Lv7
   // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(군집은 특화에만 둔다)
   { id: 'dragonhole',  name: '드래곤 홀',         boatTier: 3, region: 'seasia', powerReq: 55 }, // Lv10
-  { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 60 }, // Lv11
+  { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 60,
+    rarityWeight: { rare: 28, epic: 11 } },   // 사용자 지정 수역 밸런스 (2026-08-26)
   { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 65,
-    rarityWeight: { legendary: 2 } }, // 최종 콘텐츠 보상 — 전설 예산 2배(2종 반반)
+    rarityWeight: { common: 35, rare: 15, legendary: 2 } }, // 최종 콘텐츠 — 사용자 지정 수역 밸런스
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

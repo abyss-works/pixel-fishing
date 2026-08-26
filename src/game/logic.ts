@@ -119,24 +119,40 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
 //     그 값(spots.rarityWeight — 배리어 리프 전설 2), 없으면 글로벌 표를 쓴다(rarityWeightOf).
 //     일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·해역 게이트·수동 보정 전부)은
 //     일반 예산에만 곱한다. 희귀 이상 가중치 데이터는 언제나 원본 유지(단일 다이얼).
-//   ② 개체 축: 같은 등급 내선 **균등 배분** — 개체 가중치 기본 1(고도화 시 이 자리에 개체별 축).
-// 수학적으로 "개체별 유효가중치 = 등급예산 × 다이얼 ÷ 등급 내 개체수"의 단일 누적 추첨과
-// 동치라 rng 소비는 1회 유지된다(테스트 결정성 계약). 열람용 정규화 뷰는 drawRows.
-const individualWeight = (
-  spotId: SpotId, f: Fish, n: number, rareMult: number, commonMult: number,
-): number =>
-  rarityWeightOf(spotId, f.rarity)
-    * (f.rarity === 'common' ? commonMult / rareMult : 1) / n;
+//   ② 개체 축: 같은 등급 내선 균등 배분 — 개체 가중치 기본 1(fishWeights로 가중치 부여 가능,
+//     그러면 등급 내 배분이 w_i 비율이 된다. 기본값은 n과 동치라 구 균등과 동일).
+// 수학적으로 "개체별 유효가중치 = 등급예산 × 다이얼 × 개체가중치"의 단일 누적 추첨과 동치라
+// rng 소비는 1회 유지된다(테스트 결정성 계약). 열람용 정규화 뷰는 drawRows.
+
+/** 추첨 시뮬레이션 옵션 — 미지정 필드는 현행 규칙값. 관리자 샌드박스 전용 오버라이드 포함. */
+export interface DrawOptions {
+  rareMult?: number;                     // 일반 가중치 ÷rareMult (판정 배수)
+  commonMult?: number;                   // 일반 가중치 ×commonMult (방치 부스트·게이트 페널티)
+  /** 등급 예산 오버라이드 — 샌드박스용(저장 안 됨). 미지 등급은 수역 값 */
+  budgets?: Partial<Record<RarityId, number>>;
+  /** 개체 가중치 오버라이드 — fishId → 가중치(기본 1). 등급 내 배분 비율을 바꾼다 */
+  fishWeights?: Record<string, number>;
+}
+
+function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
+  // 개체 가중치 합을 등급별로 모은다 — 기본(전부 1)이면 합 = 개체 수라 구 균등 배분과 동치
+  const fwSum = new Map<RarityId, number>();
+  for (const f of pool) {
+    fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + (o.fishWeights?.[f.id] ?? 1));
+  }
+  return pool.map(f =>
+    (o.budgets?.[f.rarity] ?? rarityWeightOf(spotId, f.rarity))
+      * (f.rarity === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)
+      * ((o.fishWeights?.[f.id] ?? 1) / (fwSum.get(f.rarity) ?? 1)));
+}
 
 export function rollFish(
   spotId: SpotId, rareMult = 1, rng: () => number = Math.random, commonMult = 1,
+  o: DrawOptions = {},
 ): Fish {
   const pool = FISH.filter(f => f.spot === spotId);
-  const countByRarity = new Map<RarityId, number>();
-  for (const f of pool) countByRarity.set(f.rarity, (countByRarity.get(f.rarity) ?? 0) + 1);
 
-  const weights = pool.map(f =>
-    individualWeight(spotId, f, countByRarity.get(f.rarity)!, rareMult, commonMult));
+  const weights = drawWeights(pool, spotId, { ...o, rareMult, commonMult });
   const total = weights.reduce((a, b) => a + b, 0);
   let r = rng() * total;
   for (let i = 0; i < pool.length; i++) {
@@ -146,53 +162,51 @@ export function rollFish(
   return pool[pool.length - 1];
 }
 
-/** 수역 추첨 모델 열람 — 관리자 대시보드 단일 출처(rollFish와 같은 산식, 다이얼 중립 1.0).
+/** 수역 추첨 모델 열람 — 관리자 대시보드 단일 출처(rollFish와 같은 산식, 다이얼 기본 중립).
  *  등급 실질확률이 어종 수와 무관하게 설계 가중치 비율과 일치함을 보여주는 게 절반의 가치다. */
 export interface DrawRow {
   fish: Fish;
-  rarityWeight: number;     // 등급 예산 (수역 오버라이드 반영 — 글로벌 표 또는 수역값)
+  rarityWeight: number;     // 등급 예산 (수역 오버라이드/샌드박스 반영)
   gradePct: number;         // 등급 실질확률 % — 설계표와 일치 (부재 등급 제외 재균등)
-  individualWeight: number; // 개체 가중치 (기본 1 — 등급 내 균등)
-  fishPct: number;          // 개체 실질확률 % = gradePct ÷ 등급 내 개체 수
+  individualWeight: number; // 개체 가중치 (기본 1 — fishWeights로 비율 조정 가능)
+  fishPct: number;          // 개체 실질확률 %
 }
-export function drawRows(spotId: SpotId): DrawRow[] {
+export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
   const pool = FISH.filter(f => f.spot === spotId);
-  const counts = new Map<RarityId, number>();
-  for (const f of pool) counts.set(f.rarity, (counts.get(f.rarity) ?? 0) + 1);
+  const present = new Set<RarityId>();
+  for (const f of pool) present.add(f.rarity);
 
-  // 부재 등급은 예산에서 빠지고 나머지가 재균등한다 (배리어 리프: 영웅 0 · 전설 오버라이드 2 → 96)
+  // 부재 등급은 예산에서 빠지고 나머지가 재균등한다. 샌드박스 budgets도 같은 규칙.
   const budgetTotal = RARITY_ORDER.reduce(
-    (s, r) => s + (counts.get(r) ? rarityWeightOf(spotId, r) : 0), 0);
+    (s, r) => s + (present.has(r) ? (o.budgets?.[r] ?? rarityWeightOf(spotId, r)) : 0), 0);
+  const weights = drawWeights(pool, spotId, o);
 
-  return pool.map(f => {
-    const n = counts.get(f.rarity)!;
-    const rw = rarityWeightOf(spotId, f.rarity);
-    const gradePct = rw / budgetTotal * 100;
-    return {
-      fish: f,
-      rarityWeight: rw,
-      gradePct,
-      individualWeight: 1,
-      fishPct: gradePct / n,
-    };
-  });
+  const rows = pool.map((f, i) => ({
+    fish: f,
+    rarityWeight: o.budgets?.[f.rarity] ?? rarityWeightOf(spotId, f.rarity),
+    gradePct: 0, // 아래에서 등급 합계로 확정 — 표시·계산이 한 경로(등급 % ≡ Σ개체 %)
+    individualWeight: o.fishWeights?.[f.id] ?? 1,
+    fishPct: weights[i] / budgetTotal * 100,
+  }));
+  const gradeSum = new Map<RarityId, number>();
+  for (const row of rows) {
+    gradeSum.set(row.fish.rarity, (gradeSum.get(row.fish.rarity) ?? 0) + row.fishPct);
+  }
+  return rows.map(r => ({ ...r, gradePct: gradeSum.get(r.fish.rarity) ?? 0 }));
 }
 
 /** 수역 골드 기댓값 — rollFish와 같은 가중치 산식의 닫힌형(관리자·분석·도구 공용 모듈).
- *  다이얼 기본값 = 중립(판정 없음). 일반 폼 기준이며 변이는 공통 승수라 별도 인자 없음. */
+ *  다이얼 기본값 = 중립(판정 없음). 일반 폼 기준이며 변이는 공통 승수라 별도 인자 없음.
+ *  budgets/fishWeights를 넘기면 관리자 샌드박스 시나리오의 EV가 된다. */
 export function goldEV(
-  spotId: SpotId, o: { rareMult?: number; commonMult?: number } = {},
+  spotId: SpotId, o: DrawOptions = {},
 ): number {
   const pool = FISH.filter(f => f.spot === spotId);
-  const countByRarity = new Map<RarityId, number>();
-  for (const f of pool) countByRarity.set(f.rarity, (countByRarity.get(f.rarity) ?? 0) + 1);
-
+  const weights = drawWeights(pool, spotId, o);
   let total = 0, ev = 0;
-  for (const f of pool) {
-    const w = individualWeight(
-      spotId, f, countByRarity.get(f.rarity)!, o.rareMult ?? 1, o.commonMult ?? 1);
-    total += w;
-    ev += w * f.price;
+  for (let i = 0; i < pool.length; i++) {
+    total += weights[i];
+    ev += weights[i] * pool[i].price;
   }
   return total > 0 ? ev / total : 0;
 }
