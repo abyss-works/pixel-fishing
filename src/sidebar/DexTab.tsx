@@ -78,13 +78,19 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
 }
 
 // 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
-// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재클릭 — view는 Sidebar가 들고 온다.
-export default function DexTab({ game, region, view }: { game: GameState; region: RegionId; view: DexView }) {
+// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재선택(클릭·같은 숫자키), 지역 전환은
+// 하단 서브탭 또는 Tab 키 — 둘 다 Sidebar가 소유한 상태를 내려받는 제어 컴포넌트다.
+export default function DexTab({ game, view, sub, onSub }: {
+  game: GameState;
+  view: DexView;
+  /** 열람 중인 지역 — Sidebar 소유(Tab 키 지역 순환과 상태 공유) */
+  sub: RegionId;
+  onSub: (r: RegionId) => void;
+}) {
   // 폼별 발견 기준 — 변이는 별개 개체라 변이만 잡은 종은 기본 도감에서 여전히 ??? (v0.3.3)
   const viewForm: FormId = view === 'variant' ? 'variant' : 'normal';
   const baseCount = FISH.filter(f => formDiscovered(game, f.id, 'normal')).length;
   const varCount = FISH.filter(f => formDiscovered(game, f.id, 'variant')).length;
-  const [sub, setSub] = useState<RegionId>(region); // 기본 = 지금 있는 지역
   const [detail, setDetail] = useState<Fish | null>(null);
   const regions = Object.values(REGION_PACKS);
   const spots = SPOTS.filter(s => s.region === sub);
@@ -108,7 +114,7 @@ export default function DexTab({ game, region, view }: { game: GameState; region
           };
         })}
         activeKey={sub}
-        onSelect={setSub}
+        onSelect={onSub}
       />
       {spots.map(s => {
         const fishes = FISH.filter(f => f.spot === s.id)

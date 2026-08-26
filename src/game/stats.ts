@@ -9,7 +9,8 @@
 //
 // 순수 곡선(rodStats·boatSpeed)은 logic에 남긴다: AdminPanel 가상 레벨 표와
 // FacilityModal 미리보기(rod+1)가 여전히 레벨만으로 계산해야 하므로(next.md 주의).
-import { autoCommonBoost, relativeIdleBoost } from './fishing.js';
+import { autoCommonBoost } from './fishing.js';
+import { relativeIdleBoost, manualPowerBonus, MANUAL_POWER_BONUS } from './power.js';
 import { boatSpeed, rodStats } from './logic.js';
 import type { GameState } from './logic.js';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance.js';
@@ -108,6 +109,15 @@ export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
   return stat(base, [{ id: 'power', label, delta: value - base }]);
 }
 
+// 수동 파워 보정의 수역 조립 — 스탯창 표시용 내역(코어는 power.manualPowerBonus, 리듀서도 공유).
+export function manualBonusForSpot(state: GameState, spotId: SpotId): Stat {
+  const entry = SPOTS.find(s => s.id === spotId)?.powerReq ?? 0;
+  const value = manualPowerBonus(rodPower(state), entry);
+  return stat(MANUAL_POWER_BONUS.base, [
+    { id: 'power', label: '수역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
+  ]);
+}
+
 // 파워 수치화 — 해역 게이트가 레벨 단위 하드코딩이 아니라 이 숫자 하나를 보게 한다
 // (roadmap 2.1 "데이터 테이블 하나" 원칙). 레벨당 5씩 단조 증가(단순 선형).
 export function rodPower(state: GameState): number {
@@ -153,8 +163,10 @@ export function powerOfLevel(level: number): number {
 export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 'req'> {
   const d = power - req;
   if (d >= 0) {
+    // 빨간 존이 총 보너스 폭에서 **먼저** 20%p를 차지하고 나머지가 노란 초다(위 주석 예시).
+    // 초과 30~50 구간에선 노란이 늘지 않고 빨간이 채운다 — 미차감 시 이중 계산(v0.6.4 수정).
     const red = d > POWER_RULES.redMinExcess ? Math.min(POWER_RULES.redCap, d - POWER_RULES.redMinExcess) : 0;
-    return { yellow: Math.min(100, d + 10), red, mult: 1, biteExtra: 0 };
+    return { yellow: Math.min(100, d + 10) - red, red, mult: 1, biteExtra: 0 };
   }
   const short = req - power;
   return {

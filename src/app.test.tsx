@@ -8,8 +8,9 @@ import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { resetBagView } from './sidebar/bagView';
 import { resetKeyScopes } from './hotkeys';
-import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
-import { SUB_TABS, TAB_ORDER } from './sidebar/tabs';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
+import { WALK_BAG_CAP } from './data/boats';
+import { TAB_ORDER } from './sidebar/tabs';
 import { BOATS, RARITY, COUPONS, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
@@ -570,7 +571,8 @@ describe('R22: 도움말 탭', () => {
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
-    expect(help).toContain(`${BAG_CAPACITY}마리`);            // 가방 용량
+    expect(help).toContain(`맨발 ${WALK_BAG_CAP}마리`);   // 가방 용량 — 배 속성(bagCap)
+    expect(help).toContain(`${BOATS[BOATS.length - 1].bagCap}마리`);
     expect(help).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);  // 월척 기준
     expect(help).toContain(`${VARIANT_PRICE_MULT}배 가격`);   // 변이 판매가
   });
@@ -733,28 +735,60 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(active()).toContain('지역');
   });
 
-  it('Tab은 세부까지 펼친 7칸을 순환한다', () => {
+  it('Tab은 탭을 떠나지 않는다 — 보기 없는 탭에서는 아무것도 안 한다', () => {
     seed({});
     render(<App />);
-    const active = () => document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
-    const seen: string[] = [active()];
-    for (let i = 0; i < SUB_TABS.length; i++) {
-      fireEvent.keyDown(document, { key: 'Tab' });
-      seen.push(active());
-    }
-    // 7번 누르면 제자리로 — 도중에 7칸을 모두 밟는다
-    expect(seen[0]).toBe(seen[SUB_TABS.length]);
-    expect(new Set(seen).size).toBe(SUB_TABS.length);
-    expect(seen.slice(0, 5).map(t => t.replace(/\s+/g, ''))).toEqual(
-      ['지역', '가방(목록)', '가방(카드)', '도감(일반)', '도감(돌연변이)']);
+    const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
+      .replace(/\s+/g, '');
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(active()).toBe('지역');
+    fireEvent.keyDown(document, { key: '5' }); // 설정
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(active()).toBe('설정');
   });
 
-  it('Shift+Tab은 역방향', () => {
+  it('Tab은 가방 안에서 목록 ↔ 카드를 순환한다', () => {
     seed({});
     render(<App />);
-    const active = () => document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
+    fireEvent.keyDown(document, { key: '2' });
+    const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
+      .replace(/\s+/g, '');
+    expect(active()).toBe('가방(목록)');
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(active()).toBe('가방(카드)');
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(active().replace(/\s+/g, '')).toBe('설정'); // 지역에서 뒤로 = 마지막 칸
+    expect(active()).toBe('가방(목록)');
+  });
+
+  it('도감에서 Tab은 지역을 순회한다 — 메뉴 탭은 그대로고 서브탭이 움직인다', () => {
+    seed({}); // 시작 씬 = 마을 → 도감 초기 지역도 마을
+    render(<App />);
+    fireEvent.keyDown(document, { key: '3' });
+    expect(screen.getByRole('heading', { name: '마을 연못' })).toBeInTheDocument(); // 수역 헤딩 = 열람 지역
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByRole('heading', { name: '태평양' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '마리아나 해구' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByRole('heading', { name: '드래곤 홀' })).toBeInTheDocument();
+    // 역방향으로 되돌아간다
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('heading', { name: '마리아나 해구' })).toBeInTheDocument();
+    const active = document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
+    expect(active).toContain('도감'); // 끝까지 메뉴 탭은 안 바뀐다
+  });
+
+  it('같은 숫자를 한 번 더 누르면 그 탭의 보기가 순환된다', () => {
+    seed({});
+    render(<App />);
+    const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
+      .replace(/\s+/g, '');
+    fireEvent.keyDown(document, { key: '2' });
+    fireEvent.keyDown(document, { key: '2' });
+    expect(active()).toBe('가방(카드)');
+    fireEvent.keyDown(document, { key: '3' }); // 다른 탭 경유 — 보기 건드리지 않는다
+    expect(active()).toContain('도감(일반)');
+    fireEvent.keyDown(document, { key: '3' }); // 같은 숫자 재입력 = 보기 순환
+    expect(active()).toContain('돌연변이');
   });
 
   it('모달이 떠 있으면 아래 레이어가 키를 못 받는다 — 로그인 모달 키 탈취 재발 방지', () => {
@@ -923,6 +957,28 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/));
     expect(hud()).toContain('골드 30G');
     expect(hud()).toContain('0마리');
+  });
+
+  it('자동 잠금 — 어종×폼별 최대 개체를 한 번에 잠그고 나머지는 그대로 둔다', () => {
+    seed({ bag: [
+      inst('crucian', 'normal', 12), inst('crucian', 'normal', 40),
+      inst('crucian', 'variant', 55),
+      inst('carp', 'normal', 33),
+    ] });
+    render(<App />);
+    clickTab(/^가방/);
+    expect(screen.getByLabelText('자동 잠금')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('자동 잠금'));
+    // 각 그룹의 최대만 잠긴다 — 라벨에 크기가 있어 개체를 정확히 지목할 수 있다
+    expect(screen.getByLabelText('40.0cm 붕어 잠금 해제')).toBeInTheDocument();
+    expect(screen.getByLabelText('55.0cm 변이 붕어 잠금 해제')).toBeInTheDocument();
+    expect(screen.getByLabelText('33.0cm 잉어 잠금 해제')).toBeInTheDocument();
+    // 최대가 아닌 것은 건드리지 않는다
+    expect(screen.getByLabelText('12.0cm 붕어 잠금')).toBeInTheDocument();
+
+    // 다시 누르면 변할 게 없다 — 요청 없이 안내만 (멱등)
+    fireEvent.click(screen.getByLabelText('자동 잠금'));
+    expect(screen.getByText(/새로 잠글 최대 개체가 없다/)).toBeInTheDocument();
   });
 });
 

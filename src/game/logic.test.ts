@@ -4,7 +4,9 @@ import {
   RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
-  sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity, BAG_CAPACITY,
+  sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
+  autoLockUids,
+  WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
@@ -115,14 +117,16 @@ describe('R13: 낚싯대 스탯 (무한 강화, 점근 수렴)', () => {
 describe('R15: 강화/구매 비용', () => {
   it('낚싯대: 50 × 1.8^(레벨-1)', () => {
     expect(upgradeCost(1)).toBe(50);
-    expect(upgradeCost(2)).toBe(90);
-    expect(upgradeCost(3)).toBe(162);
+    expect(upgradeCost(2)).toBe(85);   // costGrowth 1.7
+    expect(upgradeCost(3)).toBe(144);
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
       expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);
       expect(BOATS[i].speed).toBeGreaterThan(BOATS[i - 1].speed);
+      expect(BOATS[i].bagCap).toBeGreaterThan(BOATS[i - 1].bagCap); // 가방도 함께
     }
+    expect(BOATS[0].bagCap).toBeGreaterThan(WALK_BAG_CAP);          // 첫 배 = 맨발보다 크다
   });
 });
 
@@ -223,9 +227,38 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(sellableValue(unlocked)).toBe(carp.price * 2);
   });
 
+  it('autoLockUids — 어종×폼별 최대 1마리, 그 최대가 이미 잠기면 그룹은 건너뛴다', () => {
+    const bag = [
+      mk('crucian', 'normal', 30), mk('crucian', 'normal', 10),
+      mk('crucian', 'variant', 99),
+      mk('carp', 'normal', 50), mk('carp', 'normal', 70),
+    ];
+    const uids = autoLockUids(bag);
+    expect(uids).toHaveLength(3); // 붕어일반(30) · 붕어변이(99) · 잉어(70)
+    const byUid = (uid: string) => bag.find(i => i.uid === uid)!.size;
+    expect(uids.map(byUid).sort((a, b) => (b ?? -1) - (a ?? -1))).toEqual([99, 70, 30]);
+
+    // 최대가 이미 잠긴 그룹(잉어)은 제외 — 눌러도 변하지 않는다 (멱등)
+    const carpTop = bag.find(i => i.fishId === 'carp' && i.size === 70)!;
+    const lockedTop = bag.map(i => (i.uid === carpTop.uid ? { ...i, locked: true } : i));
+    expect(autoLockUids(lockedTop)).toHaveLength(2);
+  });
+
+  it('autoLockUids — 크기 미상은 최소 취급, 동률이어도 그룹당 1마리', () => {
+    const bag = [mk('crucian'), mk('crucian', 'normal', null)];
+    const uids = autoLockUids(bag);
+    expect(uids).toHaveLength(1); // 미상보다 20cm가 이긴다
+    expect(bag.find(i => i.uid === uids[0])!.size).toBe(20);
+
+    const ties = Array.from({ length: 5 }, () => mk('crucian', 'normal', null));
+    expect(autoLockUids(ties)).toHaveLength(1);
+    expect(autoLockUids([])).toEqual([]);
+  });
+
   it('가방 상한: 안 넘치면 아무것도 안 놓아준다', () => {
-    const bag = Array.from({ length: BAG_CAPACITY }, () => mk('crucian'));
-    expect(overflowUids(bag)).toEqual([]);
+    const cap = WALK_BAG_CAP;
+    const bag = Array.from({ length: cap }, () => mk('crucian'));
+    expect(overflowUids(bag, cap)).toEqual([]);
   });
 
   it('가방 상한: 넘친 만큼만, 가장 안 특별한 것부터 놓아준다', () => {
@@ -240,12 +273,16 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(overflowUids(bag, 1)).toEqual([smallCommon.uid, bigCommon.uid, variant.uid]);
   });
 
-  it('가방 상한은 래칫 — 이미 넘겨 들었으면 그 수가 상한이다', () => {
+  it('가방 상한은 배 속성(bagCap)을 따른다', () => {
     const few = Array.from({ length: 10 }, () => mk('crucian'));
-    expect(bagCapacity(few)).toBe(BAG_CAPACITY);          // 평소엔 기본 상한
+    expect(bagCapacity(0, few)).toBe(WALK_BAG_CAP); // 맨발
+    BOATS.forEach(b => expect(bagCapacity(b.tier, few)).toBe(b.bagCap));
+  });
+
+  it('가방 상한은 래칫 — 이미 넘겨 들었으면 그 수가 상한이다', () => {
     const many = Array.from({ length: 3000 }, () => mk('crucian'));
-    expect(bagCapacity(many)).toBe(3000);                 // 넘겨 들었으면 몰수하지 않는다
-    expect(overflowUids(many, bagCapacity(many))).toEqual([]); // 가만히 있으면 아무것도 안 나간다
+    expect(bagCapacity(0, many)).toBe(3000);                 // 넘겨 들었으면 몰수하지 않는다
+    expect(overflowUids(many, bagCapacity(0, many))).toEqual([]); // 가만히 있으면 아무것도 안 나간다
   });
 
   it('가방 상한: 크기 미상(이관 개체)이 가장 먼저 나간다', () => {

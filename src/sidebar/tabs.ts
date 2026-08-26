@@ -8,23 +8,12 @@ export const DEFAULT_TAB: TabKey = 'region';
 
 /** 탭바에 놓이는 순서 — **숫자 단축키가 이 순서다**(1=지역 … 5=설정).
  *  실제 렌더 순서(sidebar/index.tsx의 tabsFor)와 어긋나면 단축키가 엉뚱한 탭을 연다.
- *  둘의 일치는 sidebar.test가 강제한다. */
+ *  둘의 일치는 app.test가 강제한다. */
 export const TAB_ORDER: readonly TabKey[] = ['region', 'bag', 'dex', 'help', 'settings'];
 
-/** 세부 보기까지 펼친 **평면 순서** — Tab 키가 이 순서를 한 칸씩 돈다.
- *  탭은 5개지만 가방·도감이 보기를 둘씩 가져 실제 칸은 7개다.
- *  `bag`/`dex`가 붙은 칸은 그 보기로 맞춘 뒤 이동한다(없는 칸 = 보기 축이 없는 탭).
- *  탭바에 보이는 순서와 같아야 한다 — 어긋나면 Tab이 화면과 다른 순서로 돈다(테스트로 강제). */
-export const SUB_TABS: readonly {
-  tab: TabKey;
-  bag?: 'list' | 'cards';
-  dex?: 'base' | 'variant';
-}[] = [
-  { tab: 'region' },
-  { tab: 'bag', bag: 'list' },
-  { tab: 'bag', bag: 'cards' },
-  { tab: 'dex', dex: 'base' },
-  { tab: 'dex', dex: 'variant' },
-  { tab: 'help' },
-  { tab: 'settings' },
-];
+// 키보드 축은 둘이다(sidebar/index.tsx 참조):
+//   숫자    = 탭 **선택**. 같은 탭을 한 번 더 누르면 그 탭의 보기가 순환된다
+//             (가방: 목록↔카드 · 도감: 일반↔돌연변이).
+//   Tab     = **탭 내부** 페이지 순환 — 메뉴 탭을 넘나들지 않는다
+//             (가방: 목록↔카드 · 도감: 지역 순환 · 나머지: 없음).
+// 구 SUB_TABS 평면 테이블(7칸 순환)은 이 재편에서 폐기됐다.

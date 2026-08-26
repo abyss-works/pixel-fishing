@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { bagCapacity, sellableValue } from '../game/logic';
+import { autoLockUids, bagCapacity, sellableValue } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
@@ -29,7 +29,7 @@ export default function BagTab({ game, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
-  const cap = bagCapacity(game.bag); // 이미 넘겨 든 유저는 그 수가 상한이다 (래칫)
+  const cap = bagCapacity(game.boat, game.bag); // 이미 넘겨 든 유저는 그 수가 상한이다 (래칫)
   const { layout, collapsed } = useBagView();
   const total = sellableValue(game);
 
@@ -41,13 +41,41 @@ export default function BagTab({ game, dispatch, setToast }: {
         : `${label} 잠금 해제 — 다시 판매 대상이 된다.`);
     });
 
+  // 자동 잠금 — 어종·돌연변이별 최대 개체를 한 번에 보호한다 (logic.autoLockUids가 선택,
+  // 적용은 기존 setLocked 액션). 눌러도 변할 게 없으면(전부 보호됨) 요청을 보내지 않는다.
+  const autoLock = () => {
+    const uids = autoLockUids(game.bag);
+    if (uids.length === 0) {
+      setToast('새로 잠글 최대 개체가 없다 — 가방이 비었거나 이미 다 잠겨 있다.');
+      return;
+    }
+    when(dispatch({ type: 'setLocked', uids, locked: true }), r => {
+      if (r.status !== 'ok') return;
+      setToast(`최대 개체 ${uids.length}종을 잠궜다 — 판매에서 제외된다.`);
+    });
+  };
+
   return (
     <div>
-      <h3 className="text-lg text-gold mb-1">
-        가방 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
-          {game.bag.length}</span>
-        <span className="pf-accent text-text-dim">/{cap}</span>마리)
-      </h3>
+      {/* 헤더 컨테이너 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h3 className="text-lg text-gold">
+          가방 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
+            {game.bag.length}</span>
+          <span className="pf-accent text-text-dim">/{cap}</span>마리)
+        </h3>
+        {game.bag.length > 0 && (
+          <button
+            className="flex items-center gap-1 border border-line rounded-sm px-2 py-1
+                       text-xs text-text-dim hover:text-gold hover:border-gold cursor-pointer"
+            aria-label="자동 잠금"
+            title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
+            onClick={autoLock}>
+            <PixelIcon glyph="lockOpen" size={12} />
+            자동 잠금
+          </button>
+        )}
+      </div>
       {layout === 'cards' ? (
         <BagCards bag={game.bag} game={game} />
       ) : rows.length === 0 ? (

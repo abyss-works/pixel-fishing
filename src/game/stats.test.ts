@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance';
 import { autoBoost, autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
+import { manualPowerBonus, relativeIdleBoost } from './power';
 
 type G = ReturnType<typeof newState>;
 const s = (over: Partial<G> = {}): G => ({ ...newState(), ...over });
@@ -74,14 +75,17 @@ describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 �
     expect(z.biteExtra).toBe(0);
   });
 
-  it('사용자 예시 — 초과 0→노란 10 / 초과 50: 빨간 20 + 노란 60 / 초과 100: 빨간 20 + 노란 100', () => {
+  it('사용자 예시 — 초과 0→노란 10 / 초과 50: 빨간 20 + 노란 40 / 초과 100: 빨간 20 + 노란 80', () => {
     expect(zonesFor(40, 40).yellow).toBe(10); // 초과 0 → 기본 10
-    const fifty = zonesFor(90, 40);  // 초과 50 → 총 60
+    const fifty = zonesFor(90, 40);  // 초과 50 → 총 60, 빨간이 20을 먼저 차지
     expect(fifty.red).toBe(20);
-    expect(fifty.yellow).toBe(60);
-    const hundred = zonesFor(100, 0); // 초과 100 → 총 110 → 캡 100
+    expect(fifty.yellow).toBe(40);
+    const hundred = zonesFor(100, 0); // 초과 100 → 총 100(캡) − 빨간 20
     expect(hundred.red).toBe(20);
-    expect(hundred.yellow).toBe(100);
+    expect(hundred.yellow).toBe(80);
+    // 초과 30~50 구간 — 빨간이 채우는 동안 노란은 40에서 동결된다 (red 우선 분배)
+    expect(zonesFor(80, 40).yellow).toBe(40); // 초과 40 → 총 50 − red 10
+    expect(zonesFor(80, 40).red).toBe(10);
   });
 
   it('빨간 존 — 초과 30부터 1씩 증가·상한 20 (30→0, 31→1)', () => {
@@ -120,5 +124,26 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writin
   it('파워는 해역별 요구 차이를, 페널티는 방치의 결과를 사실로 알린다', () => {
     expect(powerHelpText()).toContain('요구하는 파워가 달라서');
     expect(autoPenaltyHelpText()).toContain('희귀한 어종이 잘 걸리지 않는다');
+  });
+});
+
+describe('파워 계단 스케일링 (game/power.ts)', () => {
+  it('수동 보정 — 초과 5당 ×0.1, 최대 ×2.0, 미달은 무보정', () => {
+    expect(manualPowerBonus(10, 10)).toBe(1.0);   // 진입 = 무보정
+    expect(manualPowerBonus(14, 10)).toBe(1.0);   // 5 미만은 같은 칸
+    expect(manualPowerBonus(15, 10)).toBe(1.1);   // 첫 단계
+    expect(manualPowerBonus(40, 10)).toBe(1.6);
+    expect(manualPowerBonus(60, 10)).toBe(2.0);   // 10단계 = 상한
+    expect(manualPowerBonus(200, 10)).toBe(2.0);  // 넘쳐도 상한 유지
+    expect(manualPowerBonus(5, 20)).toBe(1.0);    // 미달 — 페널티 축(powerZones) 소관
+  });
+
+  it('방치 완화 — 기존 계약 그대로(진입 ×10, 초과 5당 −1, 하한 ×4)', () => {
+    expect(relativeIdleBoost(40, 40)).toBe(AUTO_COMMON_BOOST.from);
+    expect(relativeIdleBoost(43, 40)).toBe(AUTO_COMMON_BOOST.from);
+    expect(relativeIdleBoost(45, 40)).toBe(9);
+    expect(relativeIdleBoost(65, 40)).toBe(5);
+    expect(relativeIdleBoost(70, 40)).toBe(AUTO_COMMON_BOOST.to);
+    expect(relativeIdleBoost(10, 40)).toBe(AUTO_COMMON_BOOST.from); // 미달도 완화 아님
   });
 });

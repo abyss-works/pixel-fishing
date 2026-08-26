@@ -2,8 +2,9 @@ import { useState } from 'react';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { DispatchResult, MaybePromise } from '../backend/types';
+import { REGION_PACKS } from '../world';
 import type { RegionId } from '../world';
-import { SUB_TABS, TAB_ORDER } from './tabs';
+import { TAB_ORDER } from './tabs';
 import type { TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../hotkeys';
 import TabBar from '../ui/TabBar';
@@ -22,6 +23,9 @@ import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './shared';
 // 가방·도감은 라벨이 동적 — 활성 상태에서 한 번 더 누르면 보기가 전환된다.
 const isAdminVisible = (account: string | null) =>
   isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
+
+// 도감 지역 순환 순서 — 등록 순서(마을→대양→동남아)가 곧 Tab 키의 지역 순회 순서다.
+const REGION_IDS: RegionId[] = Object.values(REGION_PACKS).map(p => p.id);
 
 const tabsFor = (dexView: DexView, bagCards: boolean, account: string | null) => {
   const base = [
@@ -61,33 +65,36 @@ interface SidebarProps {
 export default function Sidebar(props: SidebarProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
+  // 도감의 열람 지역 — 서브탭 클릭과 Tab 키(지역 순환)가 같은 상태를 쓴다(Sidebar 소유).
+  const [dexRegion, setDexRegion] = useState<RegionId>(props.region);
   const { layout } = useBagView();
 
-  // 활성 탭을 한 번 더 누르면 그 탭의 보기가 전환된다 (가방: 목록↔카드 / 도감: 일반↔돌연변이)
-  const onSelect = (t: TabKey) => {
-    if (t === 'dex' && activeTab === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
-    if (t === 'bag' && activeTab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
+  // 탭 선택의 단일 관문 — 탭바 클릭과 숫자키가 같은 규칙을 쓴다.
+  // 같은 탭을 한 번 더 고르면 그 탭의 **보기**가 순환된다(가방: 목록↔카드 · 도감: 일반↔돌연변이).
+  const select = (t: TabKey) => {
+    if (t === activeTab && t === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
+    if (t === activeTab && t === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
+    // 다른 탭에서 도감으로 들어오면 현재 씬 지역부터 본다 — 탭 밖에서는 기억하지 않는다
+    if (t === 'dex' && activeTab !== 'dex') setDexRegion(props.region);
     setActiveTab(t);
   };
 
   // 키보드 단축키 — 축이 둘이다.
-  //   숫자 1~5 = **부모 탭** 직행(5개). 관리자 탭은 6번. 세부 보기는 건드리지 않는다.
-  //   Tab      = 세부까지 펼친 **7칸 순환**. Shift+Tab은 역방향.
-  // 화면에 표기하지 않는다(사용자 결정) — 도움말 정리 때 함께 적는다.
+  //   숫자 1~5 = 탭 **선택**(관리자는 6). 같은 탭 재입력이면 select()가 보기를 순환한다.
+  //   Tab      = **탭 내부** 페이지 순환 — 메뉴 탭을 넘나들지 않는다.
+  //              가방: 목록↔카드 · 도감: 지역 순환 · 나머지: 페이지가 없어 소비만 한다.
   useKeyScope(e => {
     if (hasModifier(e)) return; // Ctrl+1은 브라우저 탭 전환이다
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      // 지금 몇 번째 칸인가 — 보기 축이 없는 탭은 탭 이름만으로 정해진다
-      const at = SUB_TABS.findIndex(s => s.tab === activeTab
-        && (s.bag === undefined || s.bag === layout)
-        && (s.dex === undefined || s.dex === dexView));
-      const next = SUB_TABS[((at < 0 ? 0 : at) + (e.shiftKey ? -1 : 1) + SUB_TABS.length)
-        % SUB_TABS.length];
-      setActiveTab(next.tab);
-      if (next.bag) setBagLayout(next.bag);
-      if (next.dex) setDexView(next.dex);
+      const dir = e.shiftKey ? -1 : 1;
+      if (activeTab === 'bag') {
+        setBagLayout(layout === 'list' ? 'cards' : 'list');
+      } else if (activeTab === 'dex') {
+        const at = Math.max(0, REGION_IDS.indexOf(dexRegion));
+        setDexRegion(REGION_IDS[(at + dir + REGION_IDS.length) % REGION_IDS.length]);
+      }
       return true;
     }
 
@@ -100,7 +107,7 @@ export default function Sidebar(props: SidebarProps) {
     }
     if (Number.isInteger(i) && i >= 0 && i < TAB_ORDER.length) {
       e.preventDefault();
-      setActiveTab(TAB_ORDER[i]);
+      select(TAB_ORDER[i]);
       return true;
     }
   });
@@ -108,11 +115,11 @@ export default function Sidebar(props: SidebarProps) {
   return (
     <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line
                       max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t">
-      <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards', props.account)} activeKey={activeTab} onSelect={onSelect} />
+      <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards', props.account)} activeKey={activeTab} onSelect={select} />
       <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
         {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
-        {activeTab === 'dex' && <DexTab game={game} region={props.region} view={dexView} />}
+        {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexRegion} onSub={setDexRegion} />}
         {activeTab === 'help' && <HelpPanel />}
         {activeTab === 'settings' && (
           <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}

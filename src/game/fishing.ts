@@ -38,14 +38,8 @@ export function autoCommonBoost(rodLevel: number): number {
   return AUTO_COMMON_BOOST.from + (AUTO_COMMON_BOOST.to - AUTO_COMMON_BOOST.from) * t;
 }
 
-/** 파워 기준 상대 방치 페널티 — 단순 계단식.
- *  진입 파워에서 ×10, **파워 5 초과할 때마다 ×1씩 감소**, 하한 ×4(to) 클램프.
- *  예: 초과 0=×10 · 5=×9 · 10=×8 … 25=×5 · 30+=×4
- */
-export function relativeIdleBoost(power: number, entryReq: number): number {
-  const d = Math.max(0, power - entryReq);
-  return Math.max(AUTO_COMMON_BOOST.to, AUTO_COMMON_BOOST.from - Math.floor(d / 5));
-}
+// 파워 기준 **상대** 방치 페널티(relativeIdleBoost)와 수동 보정(manualPowerBonus)은
+// power.ts 단일 출처 — 초과 파워 계단 스케일링이 여기서 중복되지 않게 한다.
 
 // 획득 결정 (R8, R9, R11): 전부 해당 수역 풀에서 추첨.
 // 판정 배수(perfect/good)와 페널티(gateMult — stats.powerZones, 미달 수역)는 둘 다
