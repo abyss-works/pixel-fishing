@@ -1004,7 +1004,7 @@ describe('관리자 대시보드 (?admin, 설정 탭)', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     clickTab('관리자');
-    expect(screen.getByText('크라켄')).toBeInTheDocument(); // 안 잡아도 보임
+    expect(screen.getAllByText('크라켄').length).toBeGreaterThan(0); // 안 잡아도 보임 (도감+추첨 표)
     expect(screen.getAllByText('2000G').length).toBeGreaterThan(0); // 크라켄 가격(+돛단배)
     expect(screen.getByText('perfect')).toBeInTheDocument();
     window.history.replaceState({}, '', '/');

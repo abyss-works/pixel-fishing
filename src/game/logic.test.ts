@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest';
 import {
   RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
+  drawRows, goldEV,
+  type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
   autoLockUids,
@@ -55,6 +57,62 @@ describe('R11: 추첨', () => {
         expect(rollFish(s.id, 1, rng).spot).toBe(s.id);
       }
     }
+  });
+});
+
+describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics 왜곡 수정)', () => {
+  it('등급 실질확률은 개체 수와 무관하게 설계 가중치 비율이다', () => {
+    // 배리어 리프: 일반4 · 희귀2 · 영웅0 · 전설2(오버라이드) — 구조에서는 전설이 2배로 팽창했었다
+    const T = 74 + 20 + 2; // 영웅 부재 재균등 + 전설 수역 오버라이드 2 (96)
+    const rows = drawRows('barrierreef');
+    const sumFishPct = (r: RarityId) => rows.filter(x => x.fish.rarity === r)
+      .reduce((s, x) => s + x.fishPct, 0);
+    // 행의 gradePct는 "그 등급의 총 확률"이라 모든 개체 행에서 같은 값을 담는다
+    for (const x of rows.filter(x => x.fish.rarity === 'common')) {
+      expect(x.gradePct).toBeCloseTo(74 / T * 100, 5);
+    }
+    for (const x of rows.filter(x => x.fish.rarity === 'legendary')) {
+      expect(x.gradePct).toBeCloseTo(2 / T * 100, 5); // 오버라이드 2
+    }
+    expect(sumFishPct('common')).toBeCloseTo(74 / T * 100, 5);
+    expect(sumFishPct('rare')).toBeCloseTo(20 / T * 100, 5);
+    expect(sumFishPct('epic')).toBe(0);
+    expect(sumFishPct('legendary')).toBeCloseTo(2 / T * 100, 5);
+  });
+
+  it('goldEV — drawRows 확률 × 가격과 동치이고, 수역 오버라이드·다이얼을 반영한다', () => {
+    const manual = drawRows('barrierreef')
+      .reduce((s, x) => s + x.fishPct / 100 * x.fish.price, 0);
+    expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
+    // 회귀 앵커 — 중립/GOOD/방치 대표값(분석 문서 gold-ev-2stage-compare.md 참조)
+    expect(goldEV('pond')).toBeCloseTo(20.7, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(293.7, 0);
+    expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
+  });
+
+  it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 74/3%', () => {
+    const commons = drawRows('pond').filter(x => x.fish.rarity === 'common');
+    expect(commons).toHaveLength(3);
+    for (const x of commons) expect(x.fishPct).toBeCloseTo(74 / 3 / (74 + 20 + 5 + 1) * 100, 5);
+    // 개체 가중치는 기본 1 (고도화 예약 축)
+    for (const x of drawRows('pond')) expect(x.individualWeight).toBe(1);
+  });
+
+  it('통계(결정적 시드) — 배리어 리프 전설 2종 반반, 합계 ~1%대', () => {
+    let s = 42 >>> 0;
+    const rng = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    const N = 80000;
+    const byId = new Map<string, number>();
+    let nonCommon = 0;
+    for (let i = 0; i < N; i++) {
+      const f = rollFish('barrierreef', 1, rng);
+      if (f.rarity !== 'common') nonCommon++;
+      if (f.rarity === 'legendary') byId.set(f.id, (byId.get(f.id) ?? 0) + 1);
+    }
+    expect(nonCommon / N).toBeGreaterThan(0.205); // 설계 22.1% ± 여유
+    expect(nonCommon / N).toBeLessThan(0.24);
+    const [a = 0, b = 0] = [...byId.values()];
+    expect(Math.abs(a - b) / Math.max(a, b, 1)).toBeLessThan(0.25); // 두 종 균등
   });
 });
 
@@ -348,12 +406,12 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
   });
 
-  it('rollCatchExtras: 변이 폼 확률은 대략 1/5 (통계적)', () => {
+  it('rollCatchExtras: 변이 폼 확률은 대략 1/3 (통계적)', () => {
     let variant = 0;
     const n = 20000;
     for (let i = 0; i < n; i++) if (rollCatchExtras(carp).form === 'variant') variant++;
-    expect(variant / n).toBeGreaterThan(0.17);
-    expect(variant / n).toBeLessThan(0.23);
+    expect(variant / n).toBeGreaterThan(0.30);
+    expect(variant / n).toBeLessThan(0.36);
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {

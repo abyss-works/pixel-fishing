@@ -1,8 +1,8 @@
 ﻿import { useEffect, useState } from 'react';
 import type { SpotId } from '../data/spots';
 import {
-  BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY, SPOTS,
-  boatNameOf, rodCurveT, rodStats, upgradeCost,
+  BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY_ORDER, SPOTS,
+  boatNameOf, drawRows, rodCurveT, rodStats, upgradeCost,
 } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
@@ -80,32 +80,50 @@ export default function AdminTab({ game, dispatch, setToast }: {
       <Button size="sm" onClick={onApplyStats}>스탯 적용</Button>
       <Note>테스트용이다. 운영에선 소유자·로컬만 동작하며 서버에 즉시 저장된다.</Note>
 
-      <SectionTitle>어종 도감 — 수역별 묶음 ({FISH.length}종)</SectionTitle>
+      <SectionTitle>어종 도감 — 수역별 묶음 · 추첨 가중치 ({FISH.length}종)</SectionTitle>
+      <Note>2단 추첨 — 등급 가중치(74/20/5/1)는 수역별 고정 예산(부재 등급 재균등), 개체는 같은
+        등급 내 균등 배분. "확률 합"은 그 등급의 총 확률로 어종 수와 무관하다.</Note>
       {SPOTS.map(spot => {
         const list = FISH.filter(f => f.spot === spot.id);
         if (list.length === 0) return null;
+        const draws = new Map(drawRows(spot.id).map(r => [r.fish.id, r]));
+        const sorted = [...list].sort((a, b) =>
+          RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
         return (
           <div key={spot.id} className="flex flex-col gap-2">
             <h4 className="text-sm text-gold">{spot.name} <span className="text-text-dim text-xs">({list.length}종)</span></h4>
             <div className="overflow-x-auto">
               <DataTable>
-                <thead><tr><th>그림</th><th className="whitespace-nowrap">이름</th><th className="whitespace-nowrap">등급</th><th>가격</th><th>가중치</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th className="whitespace-nowrap">등급</th><th>그림</th><th className="whitespace-nowrap">이름</th>
+                    <th>가격</th><th>가중치</th><th>확률</th><th>확률 합</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {list.map(f => (
-                    <tr key={f.id}>
-                      <td><div className="flex items-center gap-1">
-                        <FishSprite fish={f} preset="thumb" />
-                        <FishSprite fish={f} preset="thumb" form="variant" />
-                      </div></td>
-                      <td className="whitespace-nowrap">
-                        <div>{f.name}</div>
-                        <div className="text-2xs text-text-dim">{f.variant.name}</div>
-                      </td>
-                      <td className="whitespace-nowrap"><RarityText rarity={f.rarity} /></td>
-                      <td className="whitespace-nowrap">{f.price}G</td>
-                      <td>{RARITY[f.rarity].weight}</td>
-                    </tr>
-                  ))}
+                  {sorted.map((f, i) => {
+                    const d = draws.get(f.id)!;
+                    const firstOfGrade = i === 0 || sorted[i - 1].rarity !== f.rarity;
+                    return (
+                      <tr key={f.id} className={firstOfGrade ? '' : 'text-text-dim'}>
+                        <td className="whitespace-nowrap">{firstOfGrade && <RarityText rarity={f.rarity} />}</td>
+                        <td><div className="flex items-center gap-1">
+                          <FishSprite fish={f} preset="thumb" />
+                          <FishSprite fish={f} preset="thumb" form="variant" />
+                        </div></td>
+                        <td className="whitespace-nowrap">
+                          <div>{f.name}</div>
+                          <div className="text-2xs text-text-dim">{f.variant.name}</div>
+                        </td>
+                        <td className="whitespace-nowrap">{f.price}G</td>
+                        <td className="pf-accent whitespace-nowrap">{d.individualWeight.toFixed(2)}</td>
+                        <td className="pf-accent whitespace-nowrap">{d.fishPct.toFixed(3)}%</td>
+                        <td className="whitespace-nowrap">
+                          {firstOfGrade ? `${d.gradePct.toFixed(2)}%` : '( ↑ )'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </DataTable>
             </div>
@@ -152,7 +170,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
           {Object.entries(JUDGMENT_MULT).map(([j, m]) => (
             <tr key={j}><td>{j}</td><td>{m === 1 ? '—' : `÷${m}`}</td></tr>
           ))}
-          <tr><td>auto (방치)</td><td>추첨 없음 — 해당 수역 최하 어종 고정</td></tr>
+          <tr><td>auto (방치)</td><td>일반 가중치 부스트(방치 배수 행) 후 같은 추첨</td></tr>
         </tbody>
       </DataTable>
 
