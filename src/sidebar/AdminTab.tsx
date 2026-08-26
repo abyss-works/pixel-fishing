@@ -1,9 +1,10 @@
 ﻿import { useEffect, useState } from 'react';
 import type { SpotId } from '../data/spots';
 import {
-  BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY, SPOTS,
-  rodCurveT, rodStats, upgradeCost,
+  BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY_ORDER, SPOTS,
+  boatNameOf, drawRows, goldEV, rarityWeightOf, rodCurveT, rodStats, upgradeCost,
 } from '../game/logic';
+import type { RarityId } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { DispatchResult, MaybePromise } from '../backend/types';
@@ -28,6 +29,10 @@ export default function AdminTab({ game, dispatch, setToast }: {
 }) {
   const [simPower, setSimPower] = useState(60);
   const [simSpot, setSimSpot] = useState<SpotId>('deep');
+  // 밸런스 시뮬레이션 — 컴포넌트 로컬(저장 안 됨). 키: 수역 id → 등급/어종별 값.
+  // 어종 도감 표 안에서 직접 편집된다(별도 섹션 없음 — 사용자 지시).
+  const [sbBudgets, setSbBudgets] = useState<Record<string, Partial<Record<RarityId, number>>>>({});
+  const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [editGold, setEditGold] = useState(String(game.gold));
   const [editFame, setEditFame] = useState(String(game.fame));
   const [editRod, setEditRod] = useState(String(game.rod));
@@ -72,7 +77,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
           <select value={editBoat} onChange={e => setEditBoat(e.target.value)}
                   className="bg-bg border border-line rounded-sm text-text text-sm px-3 py-2 outline-none focus:border-accent">
             {[0, 1, 2, 3, 4].map(n => (
-              <option key={n} value={n}>{n === 0 ? '없음' : BOATS[n - 1]?.name ?? n}</option>
+              <option key={n} value={n}>{boatNameOf(n)}</option>
             ))}
           </select>
         </label>
@@ -80,32 +85,98 @@ export default function AdminTab({ game, dispatch, setToast }: {
       <Button size="sm" onClick={onApplyStats}>스탯 적용</Button>
       <Note>테스트용이다. 운영에선 소유자·로컬만 동작하며 서버에 즉시 저장된다.</Note>
 
-      <SectionTitle>어종 도감 — 수역별 묶음 ({FISH.length}종)</SectionTitle>
+      <SectionTitle>어종 도감 — 수역별 묶음 · 추첨 가중치 ({FISH.length}종)</SectionTitle>
+      <Note>2단 추첨 — 등급 가중치(74/20/5/1)는 수역별 고정 예산(부재 등급 재균등), 개체는 같은
+        등급 내 균등 배분. 표에서 가중치를 고치면 확률·EV가 실시간 반영된다(시뮬레이션 전용 —
+        저장 안 됨, 새로고침 시 초기화). 확정은 spots.ts·fish.ts 수정.</Note>
       {SPOTS.map(spot => {
         const list = FISH.filter(f => f.spot === spot.id);
         if (list.length === 0) return null;
+        const bid = spot.id;
+        const budgets = sbBudgets[bid];
+        const fw = sbFish[bid];
+        const draws = new Map(drawRows(bid, { budgets, fishWeights: fw }).map(r => [r.fish.id, r]));
+        const sorted = [...list].sort((a, b) =>
+          RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
         return (
           <div key={spot.id} className="flex flex-col gap-2">
-            <h4 className="text-sm text-gold">{spot.name} <span className="text-text-dim text-xs">({list.length}종)</span></h4>
+            <h4 className="text-sm text-gold flex items-center gap-2">
+              {spot.name} <span className="text-text-dim text-xs">({list.length}종)</span>
+              <button type="button"
+                      onClick={() => setSbBudgets(p => ({ ...p, [bid]: {} }))}
+                      className="border border-line rounded-sm px-1.5 py-0.5 text-2xs text-text-dim hover:text-gold hover:border-gold cursor-pointer">
+                초기화
+              </button>
+            </h4>
             <div className="overflow-x-auto">
               <DataTable>
-                <thead><tr><th>그림</th><th className="whitespace-nowrap">이름</th><th className="whitespace-nowrap">등급</th><th>가격</th><th>가중치</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th className="whitespace-nowrap">등급</th><th>그림</th><th className="whitespace-nowrap">이름</th>
+                    <th>가격</th><th className="whitespace-nowrap">개체 가중치</th><th>확률</th><th>확률 합</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {list.map(f => (
-                    <tr key={f.id}>
-                      <td><div className="flex items-center gap-1">
-                        <FishSprite fish={f} preset="thumb" />
-                        <FishSprite fish={f} preset="thumb" form="variant" />
-                      </div></td>
-                      <td className="whitespace-nowrap">
-                        <div>{f.name}</div>
-                        <div className="text-2xs text-text-dim">{f.variant.name}</div>
-                      </td>
-                      <td className="whitespace-nowrap"><RarityText rarity={f.rarity} /></td>
-                      <td className="whitespace-nowrap">{f.price}G</td>
-                      <td>{RARITY[f.rarity].weight}</td>
-                    </tr>
-                  ))}
+                  {sorted.map((f, i) => {
+                    const d = draws.get(f.id)!;
+                    const firstOfGrade = i === 0 || sorted[i - 1].rarity !== f.rarity;
+                    return (
+                      <tr key={f.id} className={firstOfGrade ? '' : 'text-text-dim'}>
+                        <td className="whitespace-nowrap">
+                          {firstOfGrade && (
+                            <div className="flex items-center gap-1">
+                              <RarityText rarity={f.rarity} />
+                              <input type="number" min={0} placeholder={String(rarityWeightOf(bid, f.rarity))}
+                                     value={budgets?.[f.rarity] ?? ''}
+                                     aria-label={`${spot.name} ${f.rarity} 예산`}
+                                     onChange={e => setSbBudgets(p => {
+                                       const cur = p[bid] ?? {};
+                                       if (e.target.value === '') { const { [f.rarity]: _drop, ...rest } = cur; return { ...p, [bid]: rest }; }
+                                       const n = Number(e.target.value);
+                                       if (!Number.isFinite(n) || n < 0) return p;
+                                       return { ...p, [bid]: { ...cur, [f.rarity]: n } };
+                                     })}
+                                     className="w-14 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />
+                            </div>
+                          )}
+                        </td>
+                        <td><div className="flex items-center gap-1">
+                          <FishSprite fish={f} preset="thumb" />
+                          <FishSprite fish={f} preset="thumb" form="variant" />
+                        </div></td>
+                        <td className="whitespace-nowrap">
+                          <div>{f.name}</div>
+                          <div className="text-2xs text-text-dim">{f.variant.name}</div>
+                        </td>
+                        <td className="whitespace-nowrap">{f.price}G</td>
+                        <td>
+                          <input type="number" min={0} step="0.5" placeholder="1"
+                                 value={fw?.[f.id] ?? ''}
+                                 aria-label={`${f.name} 개체 가중치`}
+                                 onChange={e => setSbFish(p => {
+                                   const cur = p[bid] ?? {};
+                                   if (e.target.value === '') { const { [f.id]: _drop, ...rest } = cur; return { ...p, [bid]: rest }; }
+                                   const n = Number(e.target.value);
+                                   if (!Number.isFinite(n) || n < 0) return p;
+                                   return { ...p, [bid]: { ...cur, [f.id]: n } };
+                                 })}
+                                 className="w-14 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />
+                        </td>
+                        <td className="pf-accent whitespace-nowrap">{d.fishPct.toFixed(3)}%</td>
+                        <td className="pf-accent whitespace-nowrap">
+                          {firstOfGrade ? `${d.gradePct.toFixed(2)}%` : '( ↑ )'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="text-gold">
+                    <td colSpan={4}>완전 수동 EV (GOOD 상시 ÷1.6)</td>
+                    <td colSpan={3} className="pf-accent">{goldEV(bid, { rareMult: 1.6, budgets, fishWeights: fw }).toFixed(1)}G</td>
+                  </tr>
+                  <tr className="text-gold">
+                    <td colSpan={4}>완전 자동 EV (방치 ×10)</td>
+                    <td colSpan={3} className="pf-accent">{goldEV(bid, { commonMult: 10, budgets, fishWeights: fw }).toFixed(1)}G</td>
+                  </tr>
                 </tbody>
               </DataTable>
             </div>
@@ -152,7 +223,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
           {Object.entries(JUDGMENT_MULT).map(([j, m]) => (
             <tr key={j}><td>{j}</td><td>{m === 1 ? '—' : `÷${m}`}</td></tr>
           ))}
-          <tr><td>auto (방치)</td><td>추첨 없음 — 해당 수역 최하 어종 고정</td></tr>
+          <tr><td>auto (방치)</td><td>일반 가중치 부스트(방치 배수 행) 후 같은 추첨</td></tr>
         </tbody>
       </DataTable>
 
@@ -177,7 +248,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
             return (
               <>
                 <tr><th scope="row">요구 파워</th><td>{req || '제한 없음'}</td></tr>
-                <tr><th scope="row">노란 존 (PERFECT)</th><td>{z.yellow}%</td></tr>
+                <tr><th scope="row">노란 존 (GOOD)</th><td>{z.yellow}%</td></tr>
                 <tr><th scope="row">빨간 존 (PERFECT)</th><td>{z.red > 0 ? `${z.red}%` : '—'}</td></tr>
                 <tr><th scope="row">일반 가중치</th><td>{simPower >= req ? '그대로' : `×${z.mult}`}</td></tr>
                 <tr><th scope="row">입질 추가</th><td>{z.biteExtra > 0 ? `+${z.biteExtra}초` : '—'}</td></tr>

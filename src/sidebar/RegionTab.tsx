@@ -82,7 +82,8 @@ export default function RegionTab({ region, game }: { region: RegionId; game: Ga
           ))}
         </tbody>
       </DataTable>
-      <Note>PERFECT 판정은 희귀 이상 확률을 높여요. 방치는 흔한 물고기가 잘 나와요.</Note>
+      <Note>표는 기본 가중치예요 — 수역마다 다를 수 있어요. PERFECT 판정은 희귀 이상
+        확률을 높여요. 방치는 흔한 물고기가 잘 나와요.</Note>
 
       <SectionTitle>여기서 할 수 있는 것</SectionTitle>
       <PixelList>

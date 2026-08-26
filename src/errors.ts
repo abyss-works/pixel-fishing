@@ -12,6 +12,7 @@ export type FailureKind =
   | 'unauthorized'  // 세션 없음/만료
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
   | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
+  | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)
   | 'server'        // 5xx
   | 'bug';          // 예상 못 한 예외
 
@@ -63,6 +64,11 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 구조 불필요, 문의 유도.
     rescue: false, level: 'warning',
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
+  },
+  'rate-limited': {
+    // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
+    rescue: false, level: 'warning',
+    message: '너무 빠르게 연달아 시도하고 있어요. 잠시 후에 다시 해 주세요.',
   },
   server: {
     rescue: true, level: 'error',

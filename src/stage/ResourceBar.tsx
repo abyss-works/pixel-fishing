@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BOATS } from '../game/logic';
+import { boatNameOf } from '../game/logic';
 import type { GameState } from '../game/logic';
 import PixelIcon from '../ui/PixelIcon';
 import type { GlyphId } from '../ui/PixelIcon';
@@ -41,7 +41,7 @@ export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?
         <Stat glyph="coin" label="골드"><b className="font-bold">{game.gold}</b>G</Stat>
         <Stat glyph="star" label="명성"><b className="font-bold">{game.fame}</b></Stat>
         <Stat glyph="fish" label="가방"><b className="font-bold">{game.bag.length}</b>마리</Stat>
-        <Stat glyph="boat" label="배">{game.boat === 0 ? '없음' : BOATS[game.boat - 1].name}</Stat>
+        <Stat glyph="boat" label="배">{boatNameOf(game.boat)}</Stat>
         <Stat glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>
       </button>
     </div>

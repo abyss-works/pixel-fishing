@@ -15,7 +15,7 @@ import { boatSpeed, rodStats } from './logic.js';
 import type { GameState } from './logic.js';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance.js';
 import type { SpotId } from '../data/spots.js';
-import { SPOTS } from '../data/spots.js';
+import { spotById, powerReqOf } from '../data/spots.js';
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
@@ -63,7 +63,8 @@ export function rodAxes(state: GameState): RodAxes {
  */
 export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
-  const entry = SPOTS.find(s => s.id === spotId)?.powerReq ?? 0;
+  const spot = spotById(spotId);
+  const entry = powerReqOf(spotId);
   const power = rodPower(state);
   const baseMin = st.biteMin, baseMax = st.biteMax;
 
@@ -74,8 +75,8 @@ export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; ma
     const minVal = baseMin * factor;
     const maxVal = baseMax * factor;
     return {
-      min: stat(baseMin, [{ id: 'power', label: `${SPOTS.find(s => s.id === spotId)!.name} 파워 보정`, delta: minVal - baseMin }]),
-      max: stat(baseMax, [{ id: 'power', label: `${SPOTS.find(s => s.id === spotId)!.name} 파워 보정`, delta: maxVal - baseMax }]),
+      min: stat(baseMin, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: minVal - baseMin }]),
+      max: stat(baseMax, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: maxVal - baseMax }]),
     };
   }
   // 미달: 기존 biteExtra 그대로 가산
@@ -100,19 +101,18 @@ export function autoBoost(state: GameState): Stat {
 }
 
 export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
-  const entry = SPOTS.find(s => s.id === spotId)?.powerReq ?? 0;
+  const entry = powerReqOf(spotId);
   const base = AUTO_COMMON_BOOST.from;
   const value = entry > 0
     ? relativeIdleBoost(rodPower(state), entry)
     : autoCommonBoost(state.rod);
-  const label = entry > 0 ? `${SPOTS.find(s => s.id === spotId)!.name} 대비` : `낚싯대 Lv.${state.rod}`;
+  const label = entry > 0 ? `${spotById(spotId)!.name} 대비` : `낚싯대 Lv.${state.rod}`;
   return stat(base, [{ id: 'power', label, delta: value - base }]);
 }
 
 // 수동 파워 보정의 수역 조립 — 스탯창 표시용 내역(코어는 power.manualPowerBonus, 리듀서도 공유).
 export function manualBonusForSpot(state: GameState, spotId: SpotId): Stat {
-  const entry = SPOTS.find(s => s.id === spotId)?.powerReq ?? 0;
-  const value = manualPowerBonus(rodPower(state), entry);
+  const value = manualPowerBonus(rodPower(state), powerReqOf(spotId));
   return stat(MANUAL_POWER_BONUS.base, [
     { id: 'power', label: '수역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
   ]);
@@ -159,6 +159,11 @@ export function powerOfLevel(level: number): number {
   return 10 + (level - 1) * 5;
 }
 
+/** powerOfLevel의 역 — 해당 파워를 충족하는 최소 레벨 (스탯창 '요구 Lv' 표기 단일 출처) */
+export function minLevelOfPower(power: number): number {
+  return power <= powerOfLevel(1) ? 1 : Math.ceil((power - 10) / 5) + 1;
+}
+
 /** 파워·요구량만으로 존/페널티 계산 — powerZones의 순수 코어(시뮬레이터가 직접 쓴다) */
 export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 'req'> {
   const d = power - req;
@@ -178,7 +183,7 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
 
 export function powerZones(state: GameState, spotId: SpotId): PowerZone {
   const power = rodPower(state);
-  const req = SPOTS.find(s => s.id === spotId)?.powerReq ?? 0;
+  const req = powerReqOf(spotId);
   return { power, req, ...zonesFor(power, req) };
 }
 

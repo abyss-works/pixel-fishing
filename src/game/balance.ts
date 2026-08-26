@@ -50,6 +50,12 @@ export const ROD = {
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;
 
+// 매크로 페이싱 게이트 — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
+// saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교하는 데만 쓴다.
+// 인간 최소 낚시 사이클(입질 1s + 스윕 1.4s + 홀드 2s ≈ 4.4s)보다 한참 아래라 정상
+// 플레이는 무감각하고, RTT만 반복하는 봇은 이 값이 곧 초당 상한이 된다. 가안 — 관측 후 조정.
+export const MIN_ACTION_GAP_MS = 1000;
+
 // (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — validate.ts는 v0.3.3, api/save.ts는 v0.5.0에
 //  사라졌고, 서버 권위에서 클라 변조 검증은 성립하지 않는다. 상태를 만드는 쪽이 서버다)
 
@@ -58,7 +64,7 @@ export const SNAPSHOT_EVERY = 50;
 export const SIZE_MEAN_BASE = 10;      // cm — 가격 0일 때 평균 크기
 export const SIZE_MEAN_PER_PRICE = 0.15; // cm/G — 비쌀수록(대체로 큰 어종일수록) 평균 크기도 커짐
 export const SIZE_STD_RATIO = 0.18;    // 표준편차 = 평균 × 이 비율
-export const MUTATION_RATE = 1 / 5;    // 캐치마다 변이(색상 변이) 확률 — 어종당 변이 1종 고정 (1/3→1/5, 체감 하향)
+export const MUTATION_RATE = 1 / 3;    // 캐치마다 변이(색상 변이) 확률 — 어종당 변이 1종 고정 (1/5 → 1/3 복원, 사용자 지정)
 export const VARIANT_PRICE_MULT = 2;   // 변이 개체 판매가 배수
 export const BIG_CATCH_PERCENTILE = 20; // 크기가 상위 이 %(이하) 안에 들면 "월척" 표시
 

@@ -22,3 +22,11 @@ export const BOATS: readonly Boat[] = [
 export const WALK_BAG_CAP = 60;
 
 export const MAX_BOAT = BOATS.length;
+
+/** boat 인덱스의 행 — 방어적 클램프. 맨발(0)은 행이 없어 undefined */
+export const boatAt = (boat: number): Boat | undefined =>
+  BOATS[Math.min(Math.max(boat, 1), MAX_BOAT) - 1];
+
+/** 배 표시명 단일 출처 — '없음' 계열 라벨이 화면마다 달라서('배 없음' 등) 인자로 받는다 */
+export const boatNameOf = (boat: number, none = '없음'): string =>
+  boat < 1 ? none : boatAt(boat)?.name ?? none;

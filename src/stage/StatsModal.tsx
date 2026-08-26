@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { BOATS } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { boatNameOf } from '../game/logic';
 import type { Movement, Stat } from '../game/stats';
 import {
   autoBoostForSpot, autoPenaltyHelpText, effectiveBite, manualBonusForSpot,
-  moveSpeed, powerHelpText, powerZones, rodAxes, rodPower, powerOfLevel,
+  minLevelOfPower, moveSpeed, powerHelpText, powerZones, rodAxes, rodPower,
 } from '../game/stats';
 import { SPOTS } from '../data/spots';
 import type { SpotRegionId } from '../data/spots';
@@ -48,7 +48,7 @@ interface Props {
 export default function StatsModal({ game, movement, region, onClose }: Props) {
   const speed = moveSpeed(game, movement);
   const axes = rodAxes(game);
-  const boatName = game.boat === 0 ? '없음' : BOATS[game.boat - 1].name;
+  const boatName = boatNameOf(game.boat);
 
   // 캐루셀 후보 = 전체 수역(SPOTS 순서). 초기값 = 현재 지역의 대표(요구량 최대) 수역.
   const startIdx = (() => {
@@ -63,7 +63,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
 
   const spot = SPOTS[idx];
   const req = spot.powerReq ?? 0;
-  const reqLv = req <= powerOfLevel(1) ? 1 : Math.max(1, Math.ceil((req - 10) / 5) + 1);
+  const reqLv = minLevelOfPower(req);
   const effBite = effectiveBite(game, spot.id);
   const boost = autoBoostForSpot(game, spot.id);
   const bonus = manualBonusForSpot(game, spot.id);
