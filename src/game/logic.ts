@@ -6,14 +6,14 @@
 import {
   JUDGMENT_MULT, ROD,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT, BAG_CAPACITY,
+  VARIANT_PRICE_MULT,
 } from './balance.js';
 import { RARITY } from '../data/rarity.js';
 import type { SpotId, SpotRegionId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
-import { BOATS, MAX_BOAT } from '../data/boats.js';
+import { BOATS, MAX_BOAT, WALK_BAG_CAP } from '../data/boats.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
@@ -23,7 +23,7 @@ export { SPOTS } from '../data/spots.js';
 export type { Spot, SpotId } from '../data/spots.js';
 export { FISH } from '../data/fish.js';
 export type { Fish, FormId } from '../data/fish.js';
-export { BOATS, MAX_BOAT } from '../data/boats.js';
+export { BOATS, MAX_BOAT, WALK_BAG_CAP } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
@@ -572,8 +572,6 @@ export function addCatch(
   };
 }
 
-export { BAG_CAPACITY };
-
 // ---------- 가방 용량 ----------
 // "가장 안 특별한" 순서 — 놓아줄 후보를 고르는 단일 기준.
 // 등급 → 폼(변이가 더 특별) → 크기 → uid(결정성). 크기 미상(이관 개체)은 가장 작은 것 취급:
@@ -597,11 +595,16 @@ const blandness = (i: FishInstance): [number, number, number, string] => {
  * 래칫이면 자산을 하나도 건드리지 않고 의미가 성립한다: 넘겨 든 유저는 **늘리지 못할 뿐**이고,
  * 팔아서 기본 상한 아래로 내려오면 그때부터 평소 규칙이 적용된다. 골드를 지어내지도 않는다.
  */
-export const bagCapacity = (bag: readonly FishInstance[]): number =>
-  Math.max(BAG_CAPACITY, bag.length);
+export const bagCapacity = (boat: number, bag: readonly FishInstance[]): number =>
+  Math.max(capOfBoat(boat), bag.length);
+
+// boat는 상태에서 항상 0..MAX_BOAT로 정규화되지만, 방어적으로 범위 밖이면 클램프한다.
+// 맨발(0)은 BOATS 행이 없으므로 WALK_BAG_CAP, 이상은 행의 bagCap을 쓴다.
+const capOfBoat = (boat: number): number =>
+  boat < 1 ? WALK_BAG_CAP : BOATS[Math.min(boat, MAX_BOAT) - 1].bagCap;
 
 /** 넘친 만큼 놓아줄 개체를 고른다 — 잠근 개체는 절대 후보가 아니다 */
-export function overflowUids(bag: readonly FishInstance[], capacity = BAG_CAPACITY): string[] {
+export function overflowUids(bag: readonly FishInstance[], capacity: number): string[] {
   const over = bag.length - capacity;
   if (over <= 0) return [];
   const candidates = bag.filter(i => !i.locked)
@@ -670,6 +673,27 @@ export function setLocked(state: GameState, uids: readonly string[], locked: boo
     ...state,
     bag: state.bag.map(i => (want.has(i.uid) && i.locked !== locked ? { ...i, locked } : i)),
   };
+}
+
+/** 자동 잠금 후보 — 어종×폼별 **가장 큰 개체**의 uid (v0.6.4).
+ *  "잠그는 것도 일이다": 종별 최고 기록을 한 번에 판매 보호한다.
+ *  - 그룹 최대가 이미 잠겨 있으면 그 그룹은 건너뛴다 — 목표(최대 1마리 보호)가 이미 달성됐고,
+ *    눌렀을 때 결과가 변하지 않는 게 예측 가능성이다. 다른 개체의 기존 잠금은 절대 건드리지 않는다
+ *    (잠금 해제는 이 함수 책임이 아니다 — 적용도 setLocked(uids, true) 하나뿐).
+ *  - 크기 미상(null)은 최소 취급(blandness와 같은 규약), 동률은 uid 사전순으로 결정적.
+ *  선택은 이 순수 함수, 적용은 기존 액션 — 서버 권위 경로 재사용(v0.5.0). */
+export function autoLockUids(bag: readonly FishInstance[]): string[] {
+  const bigger = (a: FishInstance, b: FishInstance): boolean => {
+    const as = a.size ?? -1, bs = b.size ?? -1;
+    return as > bs || (as === bs && a.uid.localeCompare(b.uid) < 0);
+  };
+  const top = new Map<string, FishInstance>();
+  for (const i of bag) {
+    const k = `${i.fishId}|${i.form}`;
+    const cur = top.get(k);
+    if (!cur || bigger(i, cur)) top.set(k, i);
+  }
+  return [...top.values()].filter(i => !i.locked).map(i => i.uid).sort();
 }
 
 // 아래 셋은 **판정을 rules.ts에 위임**한다  — 규칙의 단일 근원은 거기 하나다.

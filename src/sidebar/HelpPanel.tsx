@@ -1,5 +1,6 @@
 ﻿import type { ReactNode } from 'react';
-import { BAG_CAPACITY, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../game/balance';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../game/balance';
+import { BOATS, WALK_BAG_CAP } from '../data/boats';
 import Accordion from '../ui/Accordion';
 import Note from '../ui/Note';
 import PixelList from '../ui/PixelList';
@@ -52,11 +53,14 @@ export default function HelpPanel() {
             <li><b>가방</b>: 들고 있는 물고기를 한 마리씩. <b>탭을 한 번 더</b> 누르면
               목록 ↔ 카드가 전환돼요 — 목록은 자세히, 카드는 한눈에.</li>
             <li><b>도감</b>: 만난 물고기의 기록. 잡은 물고기를 누르면 상세가 열려요.
-              <b>탭을 한 번 더</b> 누르면 일반 ↔ 돌연변이가 전환돼요.</li>
+              하단 서브탭이나 <b>Tab 키</b>로 지역을 넘겨 보고, <b>탭을 한 번 더</b> 누르면
+              일반 ↔ 돌연변이가 전환돼요.</li>
             <li><b>설정</b>: 계정 연동, 저장 상태, 쿠폰 입력, 패치노트.</li>
-            <li><b>1 ~ 5</b>: 메뉴 탭을 바로 열어요. 보이는 순서 그대로예요.</li>
-            <li><b>Tab</b>: 세부 화면까지 차례로 넘어가요 — 지역 → 가방(목록) → 가방(카드) →
-              도감(일반) → 도감(돌연변이) → 도움말 → 설정. <b>Shift + Tab</b>은 반대로.</li>
+            <li><b>1 ~ 5</b>: 메뉴 탭을 바로 열어요. 보이는 순서 그대로. <b>열려 있는 탭을
+              한 번 더</b> 누르면 그 탭의 보기가 바뀌어요(가방 목록 ↔ 카드 · 도감 일반 ↔ 돌연변이).</li>
+            <li><b>Tab</b>: 지금 탭 <b>안에서만</b> 보기를 넘겨요 — 가방은 목록 ↔ 카드,
+              도감은 지역 순환. 메뉴 탭 사이의 이동은 숫자키 몫이에요.
+              <b>Shift + Tab</b>은 반대 방향.</li>
             <li>글자를 입력하는 중이거나 창이 떠 있을 때는 단축키가 동작하지 않아요.</li>
           </PixelList>
         </Topic>
@@ -101,7 +105,9 @@ export default function HelpPanel() {
               <b>남길 것만 체크를 풀면</b> 돼요 — 같은 어종에서 큰 놈만 남길 수 있어요.</li>
             <li>간직할 물고기는 <b>자물쇠</b>를 누르세요. 잠근 물고기는 어떤 방법으로도 안 팔려요.
               어종 줄 맨 앞의 자물쇠는 그 어종 <b>전부</b>에 걸려요.</li>
-            <li>가방에는 <b>{BAG_CAPACITY}마리</b>까지 담겨요. 가득 찬 채로 낚으면 가장 평범한
+            <li>가방에는 배가 좋아질수록 많이 담겨요 — 맨발 <b>{WALK_BAG_CAP}마리</b>부터
+              최고 등급 <b>{BOATS[BOATS.length - 1].bagCap}마리</b>까지.
+              가득 찬 채로 낚으면 가장 평범한
               물고기를 놓아주고 자리를 만들어요(등급 낮고, 변이 아니고, 작은 순서).
               <b>놓아줘도 명성과 도감 기록은 남아요.</b> 잠근 물고기는 절대 놓아주지 않아요.</li>
             <li>아주 예전에 잡은 물고기는 크기 기록이 없어 <b>미상</b>으로 묶여 보여요.

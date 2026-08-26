@@ -3,8 +3,8 @@ import { BOATS } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { Movement, Stat } from '../game/stats';
 import {
-  autoBoostForSpot, autoPenaltyHelpText, effectiveBite, moveSpeed,
-  powerHelpText, rodAxes, rodPower, powerOfLevel,
+  autoBoostForSpot, autoPenaltyHelpText, effectiveBite, manualBonusForSpot,
+  moveSpeed, powerHelpText, powerZones, rodAxes, rodPower, powerOfLevel,
 } from '../game/stats';
 import { SPOTS } from '../data/spots';
 import type { SpotRegionId } from '../data/spots';
@@ -66,6 +66,9 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
   const reqLv = req <= powerOfLevel(1) ? 1 : Math.max(1, Math.ceil((req - 10) / 5) + 1);
   const effBite = effectiveBite(game, spot.id);
   const boost = autoBoostForSpot(game, spot.id);
+  const bonus = manualBonusForSpot(game, spot.id);
+  // 존 크기 — 바 폭 대비 %(powerZones가 단일 출처). 미달이면 존이 없다.
+  const pz = powerZones(game, spot.id);
 
   const pageBtn = (dir: 1 | -1) => (
     <button type="button" aria-label={dir < 0 ? '이전 수역' : '다음 수역'}
@@ -78,7 +81,10 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
   return (
     <Modal layer="stage" onClose={onClose}>
       <Panel title="스탯">
-        <DataTable>
+        {/* table-fixed — 값 폭('요구 미달'↔'45%' 등)에 따라 열이 흔들리는 것을 막는다.
+            충족/미달 경계에서 레이아웃이 점프하지 않게 열비를 고정한다(v0.6.4). */}
+        <DataTable className="table-fixed w-full">
+          <colgroup><col className="w-[42%]" /><col /></colgroup>
           <tbody>
             <tr>
               <th scope="row">이동 속도</th>
@@ -104,13 +110,35 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
           {pageBtn(1)}
         </div>
 
-        <DataTable>
+        <DataTable className="table-fixed w-full">
+          <colgroup><col className="w-[42%]" /><col /></colgroup>
           <tbody>
             <tr><th scope="row">현재 레벨</th><td>Lv.{game.rod}</td></tr>
             <tr><th scope="row">현재 파워</th><td>{rodPower(game)}</td></tr>
             <tr><th scope="row">바 시간</th><td>{axes.sweep.value.toFixed(2)}초 <span className="text-2xs text-text-dim"></span></td></tr>
             <tr><th scope="row">입질 최소 대기</th><td><StatCell stat={effBite.min} unit="초" /></td></tr>
             <tr><th scope="row">입질 최대 대기</th><td><StatCell stat={effBite.max} unit="초" /></td></tr>
+            <tr>
+              <th scope="row">
+                good 존
+                <HelpHint text="노란 존 — 바 폭에서 차지하는 크기다. 요구를 넘친 만큼 넓어진다." />
+              </th>
+              <td>{pz.yellow > 0 ? `${Math.round(pz.yellow)}%` : '요구 미달'}</td>
+            </tr>
+            <tr>
+              <th scope="row">
+                perfect 존
+                <HelpHint text="빨간 존 — 중앙에 열리는 특등 존. 파워가 30을 초과할 때부터 생긴다." />
+              </th>
+              <td>{pz.red > 0 ? `${Math.round(pz.red)}%` : pz.yellow > 0 ? '-' : '요구 미달'}</td>
+            </tr>
+            <tr>
+              <th scope="row">
+                수동 확률 보정
+                <HelpHint text="수동 낚시에서 희귀한 물고기가 더 잘 낚인다. 최대 ×2.0." />
+              </th>
+              <td>×{bonus.value.toFixed(1)}</td>
+            </tr>
             <tr>
               <th scope="row">
                 방치 낚시 페널티

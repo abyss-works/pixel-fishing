@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
-import { BAG_CAPACITY, BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
+import { BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -96,13 +96,14 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('catch — 가방이 가득 차면 가장 안 특별한 개체를 놓아주고 결과·이벤트·델타에 남긴다', () => {
-    // rng=0 → 붕어(일반) 변이가 잡힌다. 가방은 일반 붕어로 꽉 채워 둔다
-    const bag = Array.from({ length: BAG_CAPACITY }, (_, i) => mkInst(`old-${i}`, 'crucian'));
-    const out = applyAction(seed({ bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    // rng=0 → 붕어(일반) 변이가 잡힌다. 가방은 일반 붕어로 꽉 채워 둔다 (돛단배 = boat 2)
+    const cap = BOATS[1].bagCap;
+    const bag = Array.from({ length: cap }, (_, i) => mkInst(`old-${i}`, 'crucian'));
+    const out = applyAction(seed({ boat: 2, bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error(out.error);
     if (out.result.type !== 'catch') throw new Error('catch 결과가 아님');
 
-    expect(out.state.bag).toHaveLength(BAG_CAPACITY);       // 상한을 넘지 않는다
+    expect(out.state.bag).toHaveLength(cap);                // 상한을 넘지 않는다
     expect(out.result.released).toHaveLength(1);
     expect(out.state.bag.some(i => i.uid === 'uid-1')).toBe(true); // 변이는 더 특별해 남는다
 
@@ -133,13 +134,14 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   it('catch — 가방을 전부 잠갔으면 방금 잡은 개체가 그 자리에서 방생된다', () => {
     // 잠금은 "이건 지키라"는 명시적 표시라 후보에서 빠진다. 그래서 유일한 후보는 새 개체다.
     // 캐치를 거부하지 않는 게 요점 — 실패 페널티를 만들지 않고, 명성·도감은 그대로 남는다.
-    const bag = Array.from({ length: BAG_CAPACITY }, (_, i) =>
+    const cap = BOATS[1].bagCap;
+    const bag = Array.from({ length: cap }, (_, i) =>
       ({ ...mkInst(`old-${i}`, 'crucian'), locked: true }));
-    const out = applyAction(seed({ bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    const out = applyAction(seed({ boat: 2, bag }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error(out.error);
     if (out.result.type !== 'catch') throw new Error('catch 결과가 아님');
     expect(out.result.released.map(r => r.uid)).toEqual(['uid-1']); // 방금 잡은 그것
-    expect(out.state.bag).toHaveLength(BAG_CAPACITY);
+    expect(out.state.bag).toHaveLength(cap);
     expect(out.state.bag.every(i => i.locked)).toBe(true);          // 잠근 것은 하나도 안 나갔다
     expect(out.state.dex.crucian?.variant?.count).toBe(1);          // 도감에는 남는다
   });

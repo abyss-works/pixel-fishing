@@ -79,7 +79,7 @@ function ModalCard({ title, onClose, children }: {
   title: string; onClose: () => void; children: ReactNode;
 }) {
   return (
-    <Panel title={title}>
+    <Panel title={title} className="min-h-0">
       {children}
       {/* ghost가 아닌 CloseButton — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
       <CloseButton onClick={onClose} />
@@ -123,9 +123,14 @@ function SellPanel({ game, onSell, onClose, busy }: {
         <Note>가방이 비어 있다. 낚시하러 가자.</Note>
       ) : (
         <>
-          <DataTable>
-            <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
-            <tbody>
+          {/* ── 어종 목록 섹션 — 내부 스크롤. 높이 = min(≈30행, 모달 가용 높이) ──
+              개수가 늘어도 판매 버튼이 화면 밖으로 밀려나지 않게 목록만 굴린다(v0.6.4).
+              840px ≈ 행 30개(28px) — flex(min-h-0)가 먼저 작아지므로 작은 화면에선
+              가용 높이가 이긴다("둘 중 작은 값"). */}
+          <div className="pf-scroll overflow-y-auto flex-1 min-h-0 max-h-[840px] pr-1">
+            <DataTable>
+              <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
+              <tbody>
               {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm }) => {
                 const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
                 const on = sellable.filter(i => !excluded.has(i.uid)).length;
@@ -205,15 +210,19 @@ function SellPanel({ game, onSell, onClose, busy }: {
                   ) : null,
                 ];
               })}
-            </tbody>
-          </DataTable>
-          {lockedCount > 0 && (
-            <Note>잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
-          )}
-          <Button variant="primary" disabled={total === 0 || busy}
-                  onClick={() => onSell(soldUids)}>
-            판매하기 (+{total}G)
-          </Button>
+              </tbody>
+            </DataTable>
+          </div>
+          {/* ── 상호작용 섹션 — 목록 스크롤과 무관하게 항상 보인다 ── */}
+          <div className="border-t border-line pt-2">
+            {lockedCount > 0 && (
+              <Note>잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
+            )}
+            <Button variant="primary" disabled={total === 0 || busy}
+                    onClick={() => onSell(soldUids)}>
+              판매하기 (+{total}G)
+            </Button>
+          </div>
         </>
       )}
     </ModalCard>

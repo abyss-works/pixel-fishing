@@ -26,7 +26,7 @@ export default function Modal({ layer = 'app', title, wide, onClose, children, c
   const box = layer === 'app'
     ? cx('bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] overflow-y-auto',
         wide ? 'w-[560px]' : 'w-[480px]')
-    : 'w-[min(400px,calc(100%-32px))] max-h-[calc(100%-32px)] overflow-y-auto';
+    : 'w-[min(400px,calc(100%-32px))] max-h-[calc(100%-32px)] flex flex-col overflow-y-auto';
   return (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')} onClick={onClose}>
       <div className={cx(box, className)} onClick={e => e.stopPropagation()}>

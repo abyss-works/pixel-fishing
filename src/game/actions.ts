@@ -8,7 +8,7 @@ import {
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
-import { relativeIdleBoost } from './fishing.js';
+import { relativeIdleBoost, manualPowerBonus } from './power.js';
 import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
@@ -144,14 +144,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
       else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
-      // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
       let fish: Fish;
+      const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       if (judgment === 'auto') {
-        const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
+        // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
         const relBoost = relativeIdleBoost(rodPower(state), entry);
         fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult);
       } else {
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment], deps.rng, pz.mult);
+        // 수동 보정(v0.6.4) — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
+        // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
+        const bonus = manualPowerBonus(rodPower(state), entry);
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult);
       }
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
@@ -164,7 +167,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
-      const overflow = overflowUids(caught.bag, bagCapacity(state.bag));
+      const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag));
       const released: ReleasedFish[] = overflow.map(uid => {
         const i = caught.bag.find(b => b.uid === uid)!;
         const f = instanceFish(i);
