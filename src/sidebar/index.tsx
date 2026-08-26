@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import type { DispatchResult, MaybePromise } from '../backend/types';
-import { REGION_PACKS } from '../world';
+import { REGION_IDS } from '../world';
 import type { RegionId } from '../world';
 import { TAB_ORDER } from './tabs';
 import type { TabKey } from './tabs';
@@ -23,9 +23,6 @@ import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './shared';
 // 가방·도감은 라벨이 동적 — 활성 상태에서 한 번 더 누르면 보기가 전환된다.
 const isAdminVisible = (account: string | null) =>
   isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
-
-// 도감 지역 순환 순서 — 등록 순서(마을→대양→동남아)가 곧 Tab 키의 지역 순회 순서다.
-const REGION_IDS: RegionId[] = Object.values(REGION_PACKS).map(p => p.id);
 
 const tabsFor = (dexView: DexView, bagCards: boolean, account: string | null) => {
   const base = [

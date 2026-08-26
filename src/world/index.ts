@@ -27,6 +27,9 @@ export const REGION_PACKS: Record<RegionId, RegionPack> = {
   seasia: SEASIA,
 };
 
+/** 지역 id 순서(등록 순서 = 마을→대양→동남아)의 단일 출처 — 도감 서브탭·Tab 지역 순환 공유 */
+export const REGION_IDS: RegionId[] = Object.keys(REGION_PACKS) as RegionId[];
+
 export const BASE_PACKS: Record<BaseId, BasePack> = {
   home: HOME,
   harbor: HARBOR_BASE,

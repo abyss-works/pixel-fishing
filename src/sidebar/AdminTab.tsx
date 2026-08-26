@@ -2,7 +2,7 @@
 import type { SpotId } from '../data/spots';
 import {
   BOATS, COUPONS, FISH, JUDGMENT_MULT, RARITY, SPOTS,
-  rodCurveT, rodStats, upgradeCost,
+  boatNameOf, rodCurveT, rodStats, upgradeCost,
 } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
@@ -72,7 +72,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
           <select value={editBoat} onChange={e => setEditBoat(e.target.value)}
                   className="bg-bg border border-line rounded-sm text-text text-sm px-3 py-2 outline-none focus:border-accent">
             {[0, 1, 2, 3, 4].map(n => (
-              <option key={n} value={n}>{n === 0 ? '없음' : BOATS[n - 1]?.name ?? n}</option>
+              <option key={n} value={n}>{boatNameOf(n)}</option>
             ))}
           </select>
         </label>
@@ -177,7 +177,7 @@ export default function AdminTab({ game, dispatch, setToast }: {
             return (
               <>
                 <tr><th scope="row">요구 파워</th><td>{req || '제한 없음'}</td></tr>
-                <tr><th scope="row">노란 존 (PERFECT)</th><td>{z.yellow}%</td></tr>
+                <tr><th scope="row">노란 존 (GOOD)</th><td>{z.yellow}%</td></tr>
                 <tr><th scope="row">빨간 존 (PERFECT)</th><td>{z.red > 0 ? `${z.red}%` : '—'}</td></tr>
                 <tr><th scope="row">일반 가중치</th><td>{simPower >= req ? '그대로' : `×${z.mult}`}</td></tr>
                 <tr><th scope="row">입질 추가</th><td>{z.biteExtra > 0 ? `+${z.biteExtra}초` : '—'}</td></tr>

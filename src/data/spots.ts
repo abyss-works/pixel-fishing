@@ -26,3 +26,9 @@ export interface Spot {
 }
 
 export const SPOTS: readonly Spot[] = DATA;
+
+/** id → 수역 행. 없는 id는 undefined (호출부 계약상 정상 클라이언트에선 나오지 않는다) */
+export const spotById = (id: SpotId): Spot | undefined => SPOTS.find(s => s.id === id);
+
+/** 수역 요구 파워 — 미기재는 0(제한 없음). stats·actions의 게이트 판단이 이 단일 출처를 본다 */
+export const powerReqOf = (id: SpotId): number => spotById(id)?.powerReq ?? 0;

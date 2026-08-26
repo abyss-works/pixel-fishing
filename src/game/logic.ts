@@ -13,7 +13,7 @@ import type { SpotId, SpotRegionId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
-import { BOATS, MAX_BOAT, WALK_BAG_CAP } from '../data/boats.js';
+import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
@@ -23,7 +23,7 @@ export { SPOTS } from '../data/spots.js';
 export type { Spot, SpotId } from '../data/spots.js';
 export { FISH } from '../data/fish.js';
 export type { Fish, FormId } from '../data/fish.js';
-export { BOATS, MAX_BOAT, WALK_BAG_CAP } from '../data/boats.js';
+export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
@@ -601,7 +601,7 @@ export const bagCapacity = (boat: number, bag: readonly FishInstance[]): number 
 // boat는 상태에서 항상 0..MAX_BOAT로 정규화되지만, 방어적으로 범위 밖이면 클램프한다.
 // 맨발(0)은 BOATS 행이 없으므로 WALK_BAG_CAP, 이상은 행의 bagCap을 쓴다.
 const capOfBoat = (boat: number): number =>
-  boat < 1 ? WALK_BAG_CAP : BOATS[Math.min(boat, MAX_BOAT) - 1].bagCap;
+  boat < 1 ? WALK_BAG_CAP : boatAt(boat)!.bagCap;
 
 /** 넘친 만큼 놓아줄 개체를 고른다 — 잠근 개체는 절대 후보가 아니다 */
 export function overflowUids(bag: readonly FishInstance[], capacity: number): string[] {
