@@ -13,7 +13,7 @@ import { migrate, newState } from '../src/game/logic.js';
 import type { FishInstance, GameState } from '../src/game/logic.js';
 import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
 import type { ActionDeps, GameAction, StateWrites } from '../src/game/actions.js';
-import { SNAPSHOT_EVERY } from '../src/game/balance.js';
+import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -100,7 +100,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
-type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number; restricted?: boolean | null };
+type StateRow = { data: unknown; version: number | string; gold: number | string; fame: number | string; boat: number; rod: number; restricted?: boolean | null; updated_at?: string | null };
 type InstanceRow = { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; judgment: string | null; slot: number | null; locked: boolean | null };
 type RecordRow = { fish_id: string; form: string; count: number | string; max_size: number | null; first_caught: string | null };
 
@@ -263,7 +263,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 현재 상태 로드 — 3소스를 병렬로 읽는다(서로 독립이라 왕복 1회분).
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
-  const SEL = 'data, version, gold, fame, boat, rod, restricted';
+  const SEL = 'data, version, gold, fame, boat, rod, restricted, updated_at';
   const REC_SEL = 'fish_id, form, count, max_size, first_caught';
   const [curRes, instRes, recRes] = await Promise.all([
     admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
@@ -308,6 +308,15 @@ async function route(req: Req, res: Res): Promise<void> {
   // 제재 계정 — 0008 restricted 플래그. 자산·기록은 그대로 두고 활동만 막는다(삭제 아님).
   // 시딩 직후의 새 행은 default false라 여기서 걸리는 건 운영자가 명시적으로 표시한 계정뿐.
   if (row.restricted) throw new ApiError(403, 'restricted');
+
+  // 매크로 페이싱 게이트 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
+  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
+  // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
+  const lastActionMs = Date.parse(String(row.updated_at ?? ''));
+  if (Number.isFinite(lastActionMs) && Number(row.version) > 1
+      && Date.now() - lastActionMs < MIN_ACTION_GAP_MS) {
+    throw new ApiError(429, 'too-fast');
+  }
 
   const state = assemble(row, instances, records);
 

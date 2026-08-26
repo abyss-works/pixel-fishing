@@ -77,6 +77,10 @@ export class HttpBackend implements Backend {
     if (res.status === 403) {
       throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
     }
+    // 429 = 매크로 페이싱 게이트 — 액션은 적용되지 않았다. 정책 표가 문구를 정한다
+    if (res.status === 429) {
+      throw new AppError('rate-limited', 'action pacing rejected', { action: action.type });
+    }
     if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
       { server: (body as { server?: string } | null)?.server });
     if (res.status === 401) throw new AppError('unauthorized', 'session rejected');
