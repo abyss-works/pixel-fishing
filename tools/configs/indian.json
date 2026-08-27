@@ -1,0 +1,27 @@
+{
+  "id": "indian",
+  "geo": "src/world/geo/land-50m.geo.json",
+  "cell": { "w": 8, "h": 11 },
+  "grid": { "cols": 96, "rows": 100 },
+  "window": { "lonMin": 43, "latMax": 26, "lonMax": 103, "latMin": -36 },
+
+  "_note_window": "아라비아 반도 서단(43E)에서 순다 해협 동단(103E)까지, 히말라야 남방(북위 26)에서 남인도양(남위 36)까지. seasia와 lon 연속: 말라카 해협 98~99E가 양쪽 창에 걸친다(봉합선).",
+  "_note_ratio": "px/경도 = 768/60 = 12.8 · px/위도 = 1100/62 = 17.7 — ocean·seasia와 같은 비등방 셀(세로 보정) 관례. 생성기 종횡비 리포트는 위도 범위가 넓어 과대 경고를 낸다(기준 = 중간 위도).",
+  "_note_zones": "남인도양 2조각 — 마다가스카르 남쪽 수역과 호주 서쪽 수역을 잇는 아한대 띠. 테스트 하한(≥24셀) 통과 크기.",
+
+  "zones": [
+    { "ch": "s", "name": "남인도양", "lon": 63, "lat": -27, "rx": 5.0, "ry": 3.6 },
+    { "ch": "s", "name": "남인도양", "lon": 78, "lat": -30, "rx": 4.4, "ry": 3.2 }
+  ],
+
+  "anchors": {
+    "colombo":    { "lon": 79.95, "lat": 7.4,   "terrain": "land" },
+    "c_dock":     { "lon": 78.6,  "lat": 6.9,   "terrain": "water" },
+    "c_spawn":    { "lon": 77.2,  "lat": 5.4,   "terrain": "water" },
+    "school_i_1": { "lon": 62.0,  "lat": 12.0,  "terrain": "water" },
+    "school_i_2": { "lon": 67.0,  "lat": 6.5,   "terrain": "water" },
+    "school_s_1": { "lon": 62.5,  "lat": -26.0, "terrain": "water" },
+    "school_s_2": { "lon": 76.5,  "lat": -28.8, "terrain": "water" },
+    "label_malacca": { "lon": 98.6, "lat": 4.0 }
+  }
+}

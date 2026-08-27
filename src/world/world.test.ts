@@ -8,14 +8,16 @@ import { WATER_STYLE } from '../pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
   CAST_RANGE, REGION_PACKS, canMove, zoneAt, movePlayer, inTrigger, nearestSchoolInRange,
-  entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE,
+  entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   V_BOATSHOP, V_BOATSHOP_TRIGGER,
   OCEAN, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H,
-  SEASIA, M_DOCK, M_SPAWN, LUZON_STRAIT, SEASIA_W, SEASIA_H, SEASIA_SCHOOLS,
+  SEASIA, M_DOCK, M_SPAWN, LUZON_STRAIT, MALACCA_EXIT, SEASIA_W, SEASIA_H, SEASIA_SCHOOLS,
+  INDIAN, C_DOCK, C_SPAWN, SUNDA_EXIT, INDIAN_W, INDIAN_H, INDIAN_SCHOOLS,
 } from './index';
 import { WINDOW as OCEAN_WINDOW } from './regions/generated/ocean.mask';
 import { WINDOW as SEASIA_WINDOW } from './regions/generated/seasia.mask';
+import { WINDOW as INDIAN_WINDOW } from './regions/generated/indian.mask';
 
 type Window = { lonMin: number; lonMax: number; latMin: number; latMax: number };
 /** 경위도 → 지역 픽셀 [x, y](generated 창 기준). 지리 좌표는 마스크 재생성과 무관하므로
@@ -28,6 +30,7 @@ function geoPx(win: Window, w: number, h: number, lon: number, lat: number): [nu
 }
 const oceanAt = (lon: number, lat: number) => geoPx(OCEAN_WINDOW, OCEAN_W, OCEAN_H, lon, lat);
 const seasiaAt = (lon: number, lat: number) => geoPx(SEASIA_WINDOW, SEASIA_W, SEASIA_H, lon, lat);
+const indianAt = (lon: number, lat: number) => geoPx(INDIAN_WINDOW, INDIAN_W, INDIAN_H, lon, lat);
 
 
 // 시작점에서 BFS — 군집·트리거마다 도달 가능한 칸이 있는지 검증
@@ -273,15 +276,19 @@ describe('동남아 트리거', () => {
     expect(canMove(SEASIA, dc.x, dc.y)).toBe(true);
   });
 
-  it('출구는 루손 해협(태평양 복귀, 게이트 없음) 하나 — 말라카는 라벨 예고만', () => {
+  it('출구는 둘 — 루손 해협(태평양 복귀, 게이트 없음)과 말라카 해협(인도양, 배4)', () => {
     const travels = SEASIA.triggers.filter(t => t.action === 'travel');
-    expect(travels).toHaveLength(1);
-    assertTravel(travels[0]);
-    expect(travels[0].to).toBe('ocean');
-    expect(travels[0].requiredBoat).toBe(0);
+    expect(travels).toHaveLength(2);
+    const luzon = travels.find(t => t.to === 'ocean')!;
+    const malacca = travels.find(t => t.to === 'indian')!;
+    expect(luzon.requiredBoat).toBe(0);
+    expect(malacca.requiredBoat).toBe(4);
+    assertTravel(luzon); assertTravel(malacca);
     expect(inTrigger({ x: LUZON_STRAIT.x + LUZON_STRAIT.w / 2, y: LUZON_STRAIT.y + LUZON_STRAIT.h / 2 },
       LUZON_STRAIT)).toBe(true);
-    // 말라카 해협은 아직 지역이 없어 트리거가 아니라 라벨로만 예고한다 (decisions/region-1-2-cut)
+    expect(inTrigger({ x: MALACCA_EXIT.x + MALACCA_EXIT.w / 2, y: MALACCA_EXIT.y + MALACCA_EXIT.h / 2 },
+      MALACCA_EXIT)).toBe(true);
+    // 말라카 라벨은 예고가 아니라 방향 안내로 갱신됐다 (1-3 개항)
     expect(SEASIA.labels.some(l => l.text.includes('말라카'))).toBe(true);
   });
 });
@@ -347,6 +354,60 @@ describe('R5c: entryPoint — 경계 봉합 입장', () => {
     expect(dock.action).toBe('base');
     expect(entryPoint(OCEAN, dock, { x: 300, y: 190 })).toEqual(O_SPAWN);
   });
+
+  it('실전 팩(좌우 봉합): 인도양 동쪽에서 건너면 동남아 서쪽에서 y를 보존해 등장한다', () => {
+    const trig = INDIAN.triggers.find(t => t.action === 'travel')!;
+    assertTravel(trig);
+    for (const fromY of [200, 600, 760]) {   // 서단이 열린 물인 행들 (SEASIA_H=825 이내)
+      const p = entryPoint(SEASIA, trig, { x: INDIAN_W - 8, y: fromY });
+      expect(p.y).toBe(fromY);                       // 벗어난 자리 그대로 (y 보존 — left/right 축)
+      expect(p.x).toBeLessThan(40);                  // 마주 보는(서쪽) 가장자리 안쪽
+      expect(canMove(SEASIA, p.x, p.y)).toBe(true);  // 바다 위
+    }
+  });
+});
+
+// ============ 지역 1-3: 인도양 — 고정 좌표 회귀 ============
+
+describe('인도양 R4: 충돌 (항해)', () => {
+  it('열린 바다는 항해 가능, 육지/경계는 불가', () => {
+    expect(canMove(INDIAN, C_SPAWN.x, C_SPAWN.y)).toBe(true);
+    expect(canMove(INDIAN, ...indianAt(65, 12)), '아라비아해 열린 바다').toBe(true);
+    expect(canMove(INDIAN, ...indianAt(88, -15)), '동인도양').toBe(true);
+    // 육지 샘플 — 경위도 고정이라 마스크 재생성과 무관하게 육지여야 한다
+    expect(canMove(INDIAN, ...indianAt(47, 24)), '아라비아 반도').toBe(false);
+    expect(canMove(INDIAN, ...indianAt(77.5, 8.5)), '인도 남단').toBe(false);
+    expect(canMove(INDIAN, ...indianAt(46.5, -19.5)), '마다가스카르').toBe(false);
+    expect(canMove(INDIAN, ...indianAt(102, -2.2)), '수마트라').toBe(false);
+    expect(canMove(INDIAN, -5, 100)).toBe(false);
+    expect(canMove(INDIAN, 100, INDIAN_H - 3)).toBe(false);
+  });
+
+  it('해역 판정: 남인도양 안=특화, 밖=연안 일반', () => {
+    const s1 = INDIAN_SCHOOLS.find(s => s.id === 'ind-s-1')!;
+    const i1 = INDIAN_SCHOOLS.find(s => s.id === 'ind-i-1')!;
+    expect(zoneAt(INDIAN, s1.x, s1.y), '남인도양 군집').toBe('southindian');
+    expect(zoneAt(INDIAN, i1.x, i1.y), '연안 군집').toBe('indian');
+    expect(zoneAt(INDIAN, C_SPAWN.x, C_SPAWN.y), '스폰 앞 열린 바다').toBe('indian');
+  });
+});
+
+describe('인도양 트리거', () => {
+  it('접안 트리거는 콜롬보 항 건물 아래 물 위', () => {
+    const dc = { x: C_DOCK.x + C_DOCK.w / 2, y: C_DOCK.y + C_DOCK.h / 2 };
+    expect(inTrigger(dc, C_DOCK)).toBe(true);
+    expect(canMove(INDIAN, dc.x, dc.y)).toBe(true);
+  });
+
+  it('동쪽 출구(순다 방면)는 말라카 해협으로 통하고 배4 게이트다', () => {
+    const ec = { x: SUNDA_EXIT.x + SUNDA_EXIT.w / 2, y: SUNDA_EXIT.y + SUNDA_EXIT.h / 2 };
+    expect(canMove(INDIAN, ec.x, ec.y)).toBe(true);
+    const travel = INDIAN.triggers.find(t => t.action === 'travel');
+    assertTravel(travel);
+    expect(travel.to).toBe('seasia');
+    expect(travel.requiredBoat).toBe(0); // 후진 방향은 게이트 없음
+    expect(travel.entry?.edge).toBe('left');
+  });
 });
 
 // ============ 지역 이동 무한 루프 금지 (필수 게이트) ============
@@ -404,6 +465,9 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     }
     for (const f of MANILA_FURNITURE) {
       expect(furnitureAt('manila', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
+    }
+    for (const f of COLOMBO_FURNITURE) {
+      expect(furnitureAt('colombo', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
   });
   it('여객선은 항구에만 있다', () => {

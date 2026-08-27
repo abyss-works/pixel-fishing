@@ -1,13 +1,13 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
 import {
-  RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
+  RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   drawRows, goldEV,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockUids,
+  autoLockUids, addItem, takeItem, usableBait, rarityWeightOf,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
@@ -36,7 +36,7 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3]); // 마을(0)/태평양(1)/해구(2)/동남아(3)
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 4, 4]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(4)
     expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4]);
   });
 
@@ -661,6 +661,77 @@ describe('규칙 판정 (rules.ts)', () => {
     expect(canFish(newState(), 'deep')).toEqual({ ok: false, reason: 'spot-locked' });
     for (const [reason, text] of Object.entries(REJECT_TEXT)) {
       expect(text, reason).toBeTruthy();
+    }
+  });
+});
+
+describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치유)', () => {
+  const mig = (raw: unknown) => migrate(raw);
+  const usableOf = (items: Record<string, number>, active: string | null) =>
+    usableBait({ items, activeBait: active });
+
+  it('migrate: items/activeBait 부재 → 기본값으로 채워진다 (마이그레이션 스텝 없음)', () => {
+    const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
+    expect(st.items).toEqual({});
+    expect(st.activeBait).toBeNull();
+    expect(st.v).toBe(8); // 버전 접기 — 어느 링크도 새로 생기지 않는다
+  });
+
+  it('migrate: 깨진 items 행은 버리고, 모르는 키는 살린다, 0개 행은 접는다', () => {
+    const st = mig({
+      v: 8,
+      items: { 'bait-common': 2, junk: -1, broken: 1.5, huge: 1e7, 'future-item': 0 },
+    } as never);
+    expect(st.items).toEqual({ 'bait-common': 2 }); // future-item(모르는 id)은 살아야 하지만 0이라 접힘
+  });
+
+  it('migrate: activeBait는 레지스트리에 있는 id만 살린다 — 보유량 검증은 하지 않는다', () => {
+    expect(mig({ v: 8, activeBait: 'hax' }).activeBait).toBeNull();
+    expect(mig({ v: 8, activeBait: 'bait-epic', items: {} }).activeBait).toBe('bait-epic');
+    expect(mig({ v: 8, activeBait: 42 }).activeBait).toBeNull(); // 문자열만 유효
+  });
+
+  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어. 소진돼도 활성 유지', () => {
+    let st = newState();
+    st = addItem(st, 'bait-common', 3);
+    expect(st.items['bait-common']).toBe(3);
+    expect(addItem(st, 'bait-common', 0)).toBe(st); // 무효 수량은 무변환
+    st = takeItem(st, 'bait-common');
+    st = takeItem(st, 'bait-common');
+    st = takeItem(st, 'bait-common');
+    expect(st.items['bait-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
+    expect(takeItem(st, 'bait-common')).toBe(st);     // 더 떨어뜨리지 않는다
+    expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
+  });
+
+  it('usableBait — 보유량 > 0인 유효 미끼만 행을 돌려준다 (오버레이·리듀서 단일 출처)', () => {
+    expect(usableOf({}, null)).toBeUndefined();
+    expect(usableOf({}, 'bait-rare')).toBeUndefined();
+    expect(usableOf({ 'bait-legendary': 1 }, 'bait-legendary')?.targetRarity).toBe('legendary');
+  });
+
+  it('미끼 효과 = 등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {
+    // 대상: 잉어(rare). base 예산 합 T, baited 합 T+W → pct(W)=W/T vs pct'=2W/(T+W)
+    for (const spotId of ['pond', 'sea', 'barrierreef'] as const) { // 오버라이드 수역 포함
+      const pool = FISH.filter(f => f.spot === spotId);
+      const rareBaitTarget = pool.some(f => f.rarity === 'rare') ? 'rare' : 'common';
+      const W = rarityWeightOf(spotId, rareBaitTarget);
+      const present = new Set(pool.map(f => f.rarity));
+      const baseTotal = RARITY_ORDER.reduce(
+        (s, r) => s + (present.has(r) ? rarityWeightOf(spotId, r) : 0), 0);
+      const baseRows = drawRows(spotId);
+      const baitedRows = drawRows(spotId, { budgets: { [rareBaitTarget]: W * 2 } });
+
+      const basePct = baseRows.find(r => r.fish.rarity === rareBaitTarget)?.gradePct ?? 0;
+      const baitedPct = baitedRows.find(r => r.fish.rarity === rareBaitTarget)?.gradePct ?? 0;
+      expect(baitedPct).toBeCloseTo((W * 2) / (baseTotal + W) * 100, 6);   // 목표 등급 상승
+      expect(basePct).toBeCloseTo(W / baseTotal * 100, 6);
+
+      // 타 등급 개체는 같은 요소로 균등 축소 (상대 순위 불변)
+      for (const row of baitedRows.filter(r => r.fish.rarity !== rareBaitTarget)) {
+        const bRow = baseRows.find(b => b.fish.id === row.fish.id)!;
+        expect(row.fishPct / bRow.fishPct).toBeCloseTo(baseTotal / (baseTotal + W), 6);
+      }
     }
   });
 });

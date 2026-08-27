@@ -24,8 +24,12 @@ export const M_DOCK: Rect = { ...A.m_dock, w: 16, h: 15 };      // 접안 트리
 export const M_SPAWN: Point = A.m_spawn;
 
 // 북쪽 경계 전체가 태평양으로 통하는 봉합 출구 (오픈월드 R5c) — 건너면 x를 보존해
-// 태평양 남쪽 가장자리(봉합 위도 19N)에서 등장한다. 말라카 해협(서남쪽, 1-3)은 아직 지역이 없어 라벨 예고만.
+// 태평양 남쪽 가장자리(봉합 위도 19N)에서 등장한다.
 export const LUZON_STRAIT: Rect = { x: 4, y: 6, w: SEASIA_W - 8, h: 17 };
+
+// 서쪽 경계 전폭 = 인도양으로 통하는 봉합 출구 (1-3 릴리즈에 추가 — 지역 생기기 전엔 라벨 예고만).
+// 처음으로 **좌우(left/right) 봉합** — edge=left, y 좌표가 보존된다. 봉합 경도: seasia lonMin 93E.
+export const MALACCA_EXIT: Rect = { x: 4, y: 4, w: CELL_W, h: SEASIA_H - 8 };
 
 // 특화 수역마다 군집 2개 — 열린 바다는 낚시터가 아니다
 export const SEASIA_SCHOOLS: School[] = [
@@ -77,9 +81,13 @@ export const SEASIA: RegionPack = {
     { rect: LUZON_STRAIT, action: 'travel', to: 'ocean', requiredBoat: 0,
       msg: '루손 해협을 지나 태평양으로 나왔다.', blockedMsg: '', // requiredBoat 0 = 게이트 없음(이미 배 보유)
       entry: { edge: 'bottom' } },
+    { rect: MALACCA_EXIT, action: 'travel', to: 'indian', requiredBoat: 4,
+      msg: '말라카 해협을 지나 인도양으로 들어섰다.',
+      blockedMsg: '원양어선(4단계)이 있어야 서쪽 물길을 지날 수 있다.',
+      entry: { edge: 'right' } },
   ],
   labels: [
-    { text: '말라카 해협 —', x: A.label_malacca.x, y: A.label_malacca.y, color: 'faint', size: 9 },
+    { text: '말라카 해협 →', x: A.label_malacca.x, y: A.label_malacca.y, color: 'faint', size: 9 },
     { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
   ],
 };

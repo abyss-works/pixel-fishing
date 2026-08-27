@@ -16,6 +16,8 @@ import type { LocationRef } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
+import { baitById } from '../data/baits.js';
+import type { Bait } from '../data/baits.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 
 export { JUDGMENT_MULT };
@@ -74,6 +76,13 @@ export interface GameState {
   /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
    *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
   artifacts: string[];
+  /** 아이템 보유량(스택형) — id(data/baits.ts 등) → 개수. 물고기 개체성(uid)이 없는 소모품
+   *  축이다. 아이템 종류가 늘어도 키 하나(레지스트리 행)면 된다 — 세이브 v8에 접어서 도입
+   *  (없는 필드는 위생 처리에서 기본값으로 자가 치유 — migrate 주석 참조). */
+  items: Record<string, number>;
+  /** 활성화 중인 미끼 id — 4중 1(상호배척). null = 없음. 보유량이 0이 되면 효과만 무음
+   *  (자동 해제하지 않는다 — 보충하면 그대로 재개되는 게 유저 의도다) */
+  activeBait: string | null;
 }
 
 export interface RodStats {
@@ -219,6 +228,8 @@ export function newState(): GameState {
     location: { kind: 'base', id: 'home' },
     visited: [],
     artifacts: [],
+    items: {},
+    activeBait: null,
   };
 }
 
@@ -537,6 +548,25 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
 const safeStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
+// 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다. **모르는 키는 버리지 않는다**
+// (safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
+function safeItems(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(safeRecord<number>(v))) {
+    if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000) out[id] = n;
+  }
+  // 개수 0인 행은 저장하지 않는다 — 보유 부재와 동일한 의미라 세이브가 쓰레기로 쌓이지 않는다
+  for (const [id, n] of Object.entries(out)) if (n === 0) delete out[id];
+  return out;
+}
+
+/** activeBait 위생 — 레지스트리에 있는 id만 살린다 (모르는 문자열은 없음 처리).
+ *  보유량 검증은 여기서 하지 않는다 — "0개짜리 활성"은 합법 상태(효과 무음)다 */
+function safeActiveBait(v: unknown): string | null {
+  const b = baitById(v);
+  return typeof v === 'string' && b ? v : null;
+}
+
 // 위치 위생 — 모르는 값이면 집으로. 지역 id 목록을 여기서 검사하지 않는 이유:
 // 어느 지역이 존재하는지는 world 소관이고 game은 그걸 보지 않는다(의존 단방향).
 // 없는 지역이 들어와도 부팅 시 App이 팩을 못 찾으면 집으로 떨어진다.
@@ -621,7 +651,38 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     location: safeLocation(s.location),
     visited: safeStrings(s.visited) as SpotRegionId[],
     artifacts: safeStrings(s.artifacts),
+    items: safeItems(s.items),
+    activeBait: safeActiveBait(s.activeBait),
   };
+}
+
+// ---------- 아이템 (스택형 — 세이브 v8 접기) ----------
+
+/** 활성 미끼 해석 — 유효 id && 보유량 > 0일 때만 행을 돌려준다. catch 리듀서와
+ *  오버레이가 같은 함수를 쓴다(효과 무음 규칙의 단일 출처). */
+export function usableBait(state: Pick<GameState, 'activeBait' | 'items'>): Bait | undefined {
+  const b = baitById(state.activeBait);
+  return b ? ((state.items[b.id] ?? 0) > 0 ? b : undefined) : undefined;
+}
+
+/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나) */
+export function addItem(state: GameState, itemId: string, n: number): GameState {
+  if (!Number.isInteger(n) || n < 1) return state;
+  const cur = state.items[itemId] ?? 0;
+  return { ...state, items: { ...state.items, [itemId]: cur + n } };
+}
+
+/** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).
+ *  0에 도달하면 행을 접는다(보유 부재와 동의어라 세이브가 쓰레기로 쌓이지 않는다).
+ *  activeBait는 지우지 않는다 — 효과는 usableBait가 무음 처리한다 */
+export function takeItem(state: GameState, itemId: string): GameState {
+  const cur = state.items[itemId] ?? 0;
+  if (cur <= 0) return state;
+  if (cur - 1 <= 0) {
+    const { [itemId]: _gone, ...rest } = state.items;
+    return { ...state, items: rest };
+  }
+  return { ...state, items: { ...state.items, [itemId]: cur - 1 } };
 }
 
 // ---------- 상태 변경 ----------

@@ -1,27 +1,87 @@
 import { useMemo } from 'react';
-import { autoLockUids, bagCapacity, sellableValue } from '../game/logic';
+import { autoLockUids, bagCapacity, sellableValue, REJECT_TEXT } from '../game/logic';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
+import { BAITS } from '../data/baits';
+import type { Bait } from '../data/baits';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
 import { cx } from '../ui/cx';
 import Note from '../ui/Note';
 import FishSprite from '../ui/FishSprite';
 import PixelIcon from '../ui/PixelIcon';
+import SectionTitle from '../ui/SectionTitle';
 import { RarityDot } from '../ui/RarityTag';
 import { groupInstances, sumPrice } from './bagRows';
 import InstanceLine, { UnsizedLine } from './InstanceLine';
 import BagCards from './BagCards';
 import { toggleBagRow, useBagView } from './bagView';
 
-// 가방 탭 — 두 가지 보기. 전환은 **탭 재클릭**이다(도감과 같은 규약, 라벨이 현재 보기를 쓴다).
-//  목록: 종+폼 머리 아래에 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
-//  카드: 전 어종 격자에 보유 마릿수만. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
+// 가방 탭 — **물고기 / 아이템 2섹션**. 아이템 섹션 안에 소모품 종류별로 서브섹션이 늘어난다
+// (첫 축은 미끼 — 레지스트리 data/baits.ts).
+//  물고기 목록: 종+폼 머리 아래에 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
+//  물고기 카드: 전 어종 격자에 보유 마릿수만. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
 // 목록은 **기본 펼침**이다: 접어 두면 예전 어종 목록과 구분이 안 돼 개체화가 눈에 안 보인다.
 // 어종 행 머리 — **고정 그리드**. flex로 나열하면 이름·마릿수 자릿수에 따라 숫자 열이
 // 행마다 어긋나 소계·최대 크기를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
 //   [캐럿] [스프라이트] [이름] [×N] [최대 크기] [소계] [자물쇠]
 const ROW = 'grid grid-cols-[10px_30px_1fr_28px_76px_52px_22px] items-center gap-1';
+const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
+
+/** 아이템 섹션 — 미끼 서브섹션. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
+function ItemSection({ game, dispatch, setToast }: {
+  game: GameState;
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
+  setToast: (m: string) => void;
+}) {
+  // 보유량 순서는 레지스트리(BAITS) 순서다 — 세이브 items는 맵이라 삽입 순서가 유의미 없음
+  const rows = useMemo(
+    () => BAITS.map(bait => ({ bait, count: game.items[bait.id] ?? 0 })),
+    [game.items],
+  );
+  const activate = (bait: string | null) =>
+    when(dispatch({ type: 'setActiveBait', bait }), r => {
+      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+    });
+
+  return (
+    <div className="mt-4">
+      <SectionTitle>아이템</SectionTitle>
+      <h5 className="text-sm text-text-dim mb-1">미끼</h5>
+      <div className="pf-frame divide-y divide-line">
+        {rows.map(({ bait, count }: { bait: Bait; count: number }) => {
+          const active = game.activeBait === bait.id;
+          return (
+            <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
+              <span className="w-3 h-3 rounded-full border border-line justify-self-center"
+                    style={{ backgroundColor: bait.color }} />
+              <span className="truncate" title={bait.desc}>{bait.name}</span>
+              <span className="pf-accent text-text-dim text-right">×{count}</span>
+              <button
+                type="button"
+                disabled={!active && count <= 0}
+                aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
+                title={active ? '한 번 더 누르면 끈다' : count <= 0 ? '보유량이 없다' : '같은 등급 물고기 가중치 ×2'}
+                onClick={() => activate(active ? null : bait.id)}
+                className={cx('justify-self-end flex items-center gap-1 border rounded-sm px-1.5 py-0.5',
+                             'text-xs cursor-pointer transition',
+                             active ? 'border-gold text-gold bg-surface-2'
+                                    : count > 0 ? 'border-line text-text-dim hover:text-gold hover:border-gold'
+                                                : 'border-line text-text-dim opacity-40 cursor-not-allowed')}>
+                <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
+                {active ? '사용 중' : '활성'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <Note>
+        활성하면 같은 등급 물고기가 두 배 더 잘 낚인다. 수동으로 낚아올릴 때마다 한 개가 소모되고,
+        방치 획득에는 소모되지 않는다.
+      </Note>
+    </div>
+  );
+}
 
 export default function BagTab({ game, dispatch, setToast }: {
   game: GameState;
@@ -57,10 +117,10 @@ export default function BagTab({ game, dispatch, setToast }: {
 
   return (
     <div>
-      {/* 헤더 컨테이너 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
+      {/* ── 물고기 섹션 ── 헤더 컨테이너 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
       <div className="flex items-center justify-between gap-2 mb-1">
         <h3 className="text-lg text-gold">
-          가방 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
+          물고기 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
             {game.bag.length}</span>
           <span className="pf-accent text-text-dim">/{cap}</span>마리)
         </h3>
@@ -146,6 +206,9 @@ export default function BagTab({ game, dispatch, setToast }: {
           </Note>
         </>
       )}
+
+      {/* ── 아이템 섹션 (물고기와 별개 축 — 용량 래칫·판매 대상이 아니다) */}
+      <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
     </div>
   );
 }

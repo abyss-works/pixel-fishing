@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
+import { baitById } from '../data/baits';
+import { cx } from '../ui/cx';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import { subscribeFailure } from '../errors';
@@ -54,6 +56,10 @@ export default function Field({
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
+  // 활성 미끼 — 오버레이는 보유량 0에서도 유지된다(효과 무음, 횟수 소진 상태를 보여주기).
+  // 해석은 usableBait(logic)와 같은 규약: 레지스트리에 없는 id면 아예 숨긴다.
+  const activeBait = baitById(game.activeBait);
+  const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   // 상태머신 (idle = 이동 중) — R6
   const [phase, setPhase] = useState<FishingPhase>('idle');
   const [fish, setFish] = useState<Fish | null>(null);
@@ -335,8 +341,26 @@ export default function Field({
         {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
       </GameFrame>
 
-      {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
+      {/* 아래 셋은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
       <ResourceBar game={game} onOpen={onOpenStats} />
+
+      {/* 활성 미끼 — 우측, 미니맵 위 (pointer-events 없음: 오버레이 구역 규칙 R24).
+          소진(0)이면 어두워진다 — 효과가 무음 상태라는 걸 상시 알려주는 역할. */}
+      {activeBait && (
+        <div className={cx('absolute right-3 bottom-[152px] z-(--z-overlay) pointer-events-none',
+                           'flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line',
+                           'bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px]',
+                           '[text-shadow:0_1px_2px_rgba(0,0,0,0.6)]')}
+             aria-label="활성 미끼">
+          <span className="w-2.5 h-2.5 rounded-full border border-line shrink-0"
+                style={{ backgroundColor: activeBait.color }} />
+          <span className="sr-only">{activeBait.name}</span>
+          <span className={cx('pf-accent text-sm leading-none tracking-[0.5px]',
+                              baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
+            {baitLeft}
+          </span>
+        </div>
+      )}
 
       {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
       <canvas ref={minimapRef} width={def.w} height={def.h}

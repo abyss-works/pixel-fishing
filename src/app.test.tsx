@@ -1045,3 +1045,39 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     expect(screen.queryByText('이동 속도')).not.toBeInTheDocument();
   });
 });
+
+describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
+  const COMMON = 'bait-common';
+
+  it('가방 탭은 물고기/아이템 두 섹션이고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
+    seed({ items: { [COMMON]: 2, 'bait-rare': 1 } });
+    render(<App />);
+    clickTab(/^가방/);
+    expect(screen.getByText('아이템')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /물고기 \(0\/60마리/ })).toBeInTheDocument(); // 맨발 기본 상한
+
+    // 보유 없는 미끼는 애초에 누를 수 없다
+    expect(screen.getByLabelText('전설 미끼 활성화')).toBeDisabled();
+    // 일반 활성 → 사용 중 전환
+    fireEvent.click(screen.getByLabelText('일반 미끼 활성화'));
+    await waitFor(() => expect(screen.getByLabelText('일반 미끼 비활성화')).toBeInTheDocument());
+    // 다른 미끼로 교체하면 이전 것은 꺼진다 (4중 1)
+    fireEvent.click(screen.getByLabelText('희귀 미끼 활성화'));
+    await waitFor(() => expect(screen.getByLabelText('희귀 미끼 비활성화')).toBeInTheDocument());
+    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+  });
+
+  it('필드 오버레이 — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
+    renderField('village', V_SPAWN, { items: { [COMMON]: 7 }, activeBait: COMMON });
+    const overlay = screen.getByLabelText('활성 미끼');
+    expect(overlay).toHaveTextContent('7');
+    cleanup();
+
+    renderField('village', V_SPAWN, { items: {}, activeBait: COMMON });
+    expect(screen.getByLabelText('활성 미끼')).toHaveTextContent('0');
+    cleanup();
+
+    renderField('village', V_SPAWN, {});
+    expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
+  });
+});

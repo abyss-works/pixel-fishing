@@ -50,6 +50,15 @@ export const ROD = {
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;
 
+// 미끼 효과 배수 — 활성 중인 미끼의 targetRarity 어종 가중치에 곱한다(등급 예산 ×2와 동치,
+// drawWeights 주석). 전 수역 균일·방치 획득에는 무효.
+export const BAIT_WEIGHT_MULT = 2;
+
+// buyBait 액션 1회당 구매 개수 상한 — 소모품 대량 판매의 왕복 폭주 방지용 상한일 뿐, 밸런스가
+// 아니다. 스택형 items라 여러 번 사면 충분하다.
+export const BAIT_BUY_MAX = 50;
+
+
 // 매크로 페이싱 게이트 — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교하는 데만 쓴다.
 // 인간 최소 낚시 사이클(입질 1s + 스윕 1.4s + 홀드 2s ≈ 4.4s)보다 한참 아래라 정상

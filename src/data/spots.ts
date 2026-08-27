@@ -17,6 +17,9 @@ const DATA = [
     rarityWeight: { rare: 28, epic: 11 } },   // 사용자 지정 수역 밸런스 (2026-08-26)
   { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 65,
     rarityWeight: { common: 35, rare: 15, legendary: 2 } }, // 최종 콘텐츠 — 사용자 지정 수역 밸런스
+  // 1-3 인도양 — 지역당 수역 2개 원칙(일반 연안 + 특화) 복귀. powerReq는 +5 사다리(사용자 직전 튜닝 관례).
+  { id: 'indian',      name: '인도양',       boatTier: 4, region: 'indian', powerReq: 70 }, // Lv13
+  { id: 'southindian', name: '남인도양',     boatTier: 4, region: 'indian', powerReq: 75 }, // Lv14
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];
