@@ -8,7 +8,7 @@ import type { BaseId, LocationRef } from '../data/places';
 // (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type RegionId = SpotRegionId;
 export type { BaseId } from '../data/places';
-export type FurnitureId = 'sell' | 'rod' | 'boat' | 'dex' | 'exit' | 'travel';
+export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'dex' | 'exit' | 'travel';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
  *  정의는 `data/places.ts`에 있다: 세이브(`game/`)도 같은 타입을 써야 하는데 의존 방향이
@@ -120,7 +120,7 @@ export interface RegionPack {
 
 export type FurnitureSpriteId =
   | 'bookshelf' | 'workbench' | 'chest' | 'door'            // 집
-  | 'office' | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry'; // 항구
+  | 'office' | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop'; // 항구
 
 /** 라벨의 동적 데이터(도감 수·낚싯대 Lv·배 이름) 주입 */
 export interface BaseInfo { rod: number; boatName: string; dexCount: number; dexTotal: number }

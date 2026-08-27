@@ -402,7 +402,7 @@ describe('buyBait / setActiveBait', () => {
   it('구매 — 골드 차감 + 스택 적립 + 이벤트', () => {
     const price = baitById(COMMON)!.price;
     const out = applyAction(
-      seed({ gold: price * 3, items: { [COMMON]: 1 } }),
+      seed({ gold: price * 3, items: { [COMMON]: 1 }, location: { kind: 'base', id: 'colombo' } }),
       { type: 'buyBait', bait: COMMON, count: 3 }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(0);
@@ -413,8 +413,15 @@ describe('buyBait / setActiveBait', () => {
   });
 
   it('골드 부족은 거부된다 — 규칙 거부라 상태 불변', () => {
-    const out = applyAction(seed({ gold: 1 }), { type: 'buyBait', bait: RARE }, deps());
+    const out = applyAction(seed({ gold: 1, location: { kind: 'base', id: 'colombo' } }),
+      { type: 'buyBait', bait: RARE }, deps());
     expect(out).toEqual({ ok: false, error: 'not-enough-gold' });
+  });
+
+  it('구매처는 콜롬보 항구로 제한된다 — 다른 위치의 직접 액션은 거부', () => {
+    const out = applyAction(seed({ gold: baitById(COMMON)!.price }),
+      { type: 'buyBait', bait: COMMON }, deps());
+    expect(out).toEqual({ ok: false, error: 'shop-closed' });
   });
 
   it('모르는 미끼 id · 유효하지 않은 count는 bad-request', () => {
@@ -427,7 +434,7 @@ describe('buyBait / setActiveBait', () => {
   });
 
   it('count 클램프 — 초대수 요청은 BUY_MAX로 접는다 (요청 1회 폭주 상한일 뿐)', () => {
-    const out = applyAction(seed({ gold: 9e9 }),
+    const out = applyAction(seed({ gold: 9e9, location: { kind: 'base', id: 'colombo' } }),
       { type: 'buyBait', bait: COMMON, count: 999 }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.items[COMMON]).toBe(BAIT_BUY_MAX);

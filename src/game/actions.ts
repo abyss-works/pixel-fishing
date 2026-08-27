@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
-  addItem, takeItem, usableBait,
+  addItem, takeItem, usableBait, MAX_BOAT,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -309,6 +309,11 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
         return { ok: false, error: 'bad-request' };
       }
+      // 상점 UI가 없는 위치에서 직접 액션을 보내도 구매되지 않게 서버가 위치를 재검증한다.
+      // 콜롬보 항구는 세이브 location에 남아 있으므로 별도 세션 상태가 필요 없다.
+      if (state.location.kind !== 'base' || state.location.id !== 'colombo') {
+        return { ok: false, error: 'shop-closed' };
+      }
       const n = Math.min(raw, BAIT_BUY_MAX);
       const cost = bait.price * n;
       if (!Number.isFinite(cost)) return { ok: false, error: 'bad-request' };
@@ -346,7 +351,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const bad = (v: unknown) => v !== undefined && (!Number.isFinite(v as number) || (v as number) < 0);
       if (bad(g) || bad(f) || bad(r) || bad(b)) return { ok: false, error: 'bad-request' };
       if (r !== undefined && (!Number.isInteger(r) || r < 1)) return { ok: false, error: 'bad-request' };
-      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > 4)) return { ok: false, error: 'bad-request' };
+      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > MAX_BOAT)) return { ok: false, error: 'bad-request' };
       return {
         ok: true,
         state: {

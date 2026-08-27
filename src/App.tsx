@@ -69,7 +69,7 @@ export default function App() {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
     switch (id) {
-      case 'sell': case 'rod': case 'boat':
+      case 'sell': case 'rod': case 'boat': case 'shop':
         setActionPanel(p => (p === id ? null : id));
         return;
       case 'dex':

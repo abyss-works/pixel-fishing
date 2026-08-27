@@ -1,5 +1,5 @@
 // 거점: 콜롬보 항 (인도양) — harbor/manila 패턴 상속(manila 선례: 복제로 지역·문구만 조정).
-// 미끼 상점(shop 가구)은 **미끼 릴리즈에서 추가**한다 — 지역 릴리즈 스코프 밖(사용자 결정).
+// 미끼 상점(shop 가구)은 미끼 릴리즈 본체로 추가됐다. 구매처는 이 항구 하나다.
 import type { BasePack } from '../types';
 
 export const COLOMBO_BASE: BasePack = {
@@ -15,6 +15,9 @@ export const COLOMBO_BASE: BasePack = {
       label: i => `공방 · 낚싯대 Lv.${i.rod}`, labelDy: -8 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
       label: () => '어시장', labelDy: -8 },
+    // 출항 시설(x272~306,y104~160)과 겹치지 않도록 상단에 둔다.
+    { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
+      label: () => '미끼 상점', labelDy: -8 },
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => `조선소 · ${i.boatName}`, labelDy: -3 },
     { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',

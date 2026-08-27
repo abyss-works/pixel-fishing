@@ -117,6 +117,15 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x + f.w / 2 + 1, f.y + 15, 10, 9, '#e0e0e0');
     R(ctx, f.x - 4, f.y + f.h - 8, 14, 3, '#a1887f');
   },
+  // 항구: 미끼 상점 — 빨간 차양 + 선반 병 3개
+  shop: (ctx, f) => {
+    R(ctx, f.x, f.y + 8, f.w, f.h - 8, '#6d4c41');
+    R(ctx, f.x, f.y - 2, f.w, 6, '#c62828');
+    R(ctx, f.x + 4, f.y + 10, f.w - 8, 12, '#efebe9');
+    R(ctx, f.x + 7, f.y + 13, 3, 7, '#ba68c8');
+    R(ctx, f.x + 14, f.y + 13, 3, 7, '#42a5f5');
+    R(ctx, f.x + 21, f.y + 13, 3, 7, '#ffd54f');
+  },
   // 항구: 여객선(마을로) — 흰 선체 + 선실 + 굴뚝
   ferry: (ctx, f) => {
     R(ctx, f.x + 2, f.y + 14, f.w - 4, 12, '#e0e0e0');

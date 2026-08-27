@@ -13,12 +13,14 @@ export interface Bait {
   name: string;
   desc: string;             // 가방 아이템 섹션 한 줄 설명 (writing-voice 담백체)
   targetRarity: BaitTarget; // 가중치 ×2가 적용되는 등급
-  price: number;            // ⬜ 플레이스홀더 — 릴리즈 직전 goldEV 실측으로 확정
+  price: number;            // 구매 골드 — QA 기준값. 릴리즈 직전 이름·가격 재검토 대상
   color: string;            // UI 도트색 — 등급색과 독립(아이템 축)
 }
 
-// ⬜ 미확인 (릴리즈 직전 확정 대상): 이름 4종 · 가격 4종은 전부 플레이스홀더다.
-//    확정 근거로 관리자 샌드박스(goldEV + budgets) 실측을 쓰기로 했다(megalodon-arc 흡수선).
+// 이름·가격 — 현재는 로컬 QA용 기준값이다. 릴리즈 직전에 밸런스 검토 후 확정한다.
+//   효과는 "해당 등급 예산 ×2"라서 EV 증분 ≈ 그 등급 현재 기여비 × 2 배증. 소득 회수
+//   회수까지 판매 가치를 고려해 일반 50 · 희귀 400 · 영웅 2500 · 전설 10000 G로
+//   시작한다(방치엔 무효, 수동 캐스트 한정 소모). 관찰 후 조정 가능 — baits.ts 단일 출처.
 const DATA: readonly Bait[] = [
   { id: 'bait-common', name: '일반 미끼', desc: '흔한 밀웜. 같은 등급 물고기가 두 배 더 잘 낚인다.',
     targetRarity: 'common', price: 50, color: '#9e9e9e' },

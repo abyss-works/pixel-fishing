@@ -26,6 +26,7 @@ export type RejectReason =
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
   | 'bait-not-owned' // 활성화하려는 미끼를 보유하지 않았다 (구매 전 활성 시도)
+  | 'shop-closed' // 미끼 상점은 콜롬보 항구에서만 이용 가능
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -43,6 +44,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'coupon-used': '이미 사용한 쿠폰이다.',
   'relief-invalid': '지원 코드가 맞지 않다 — 이미 사용했거나 없는 코드다.',
   'bait-not-owned': '보유한 미끼가 없다.',
+  'shop-closed': '미끼 상점은 콜롬보 항구에서만 이용할 수 있다.',
   'bad-request': '처리할 수 없는 요청이다.',
 };
 

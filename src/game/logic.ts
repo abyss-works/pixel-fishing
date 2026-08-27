@@ -574,7 +574,10 @@ function safeLocation(v: unknown): LocationRef {
   const l = v as Partial<LocationRef> | undefined;
   if (l && typeof l.id === 'string') {
     if (l.kind === 'region') return { kind: 'region', id: l.id as SpotRegionId };
-    if (l.kind === 'base') return { kind: 'base', id: l.id === 'harbor' ? 'harbor' : 'home' };
+    if (l.kind === 'base'
+        && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo')) {
+      return { kind: 'base', id: l.id };
+    }
   }
   return { kind: 'base', id: 'home' };
 }
