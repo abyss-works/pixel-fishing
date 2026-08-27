@@ -14,14 +14,18 @@ import RegionTab from './RegionTab';
 import BagTab from './BagTab';
 import DexTab from './DexTab';
 import SettingsTab from './SettingsTab';
+import AdminTab from './AdminTab';
 import { setBagLayout, useBagView } from './bagView';
 import type { DexView } from './shared';
+import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './shared';
 
-// 탭은 씬과 무관하게 항상 5개로 고정(지역/가방/도감/도움말/설정).
-// 관리자 기능은 별도 대시보드 페이지(admin/AdminApp — ?admin#/admin)로 완전히 옮겨졌다:
-// 게임 셸에는 진입 링크·게이트 UI가 남지 않는다(링크는 브라우저 주소 입력만).
+// 탭은 씬과 무관하게 항상 5개 고정 + 조건부 관리자 탭(별도 — isAdminVisible).
+// 관리자 탭은 ?admin && (로컬 또는 소유자 계정)일 때만 6번 탭으로 노출된다.
+// 가방·도감의 라벨은 동적 — 같은 탭 재선택 시 보기가 순환한다.
+const isAdminVisible = (account: string | null) =>
+  isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
 
-const tabsFor = (dexView: DexView, bagCards: boolean) => {
+const tabsFor = (dexView: DexView, bagCards: boolean, account: string | null) => {
   const base = [
     { key: 'region' as const, label: '지역' },
     { key: 'bag' as const, label: bagCards ? '가방\n(카드)' : '가방\n(목록)' },
@@ -29,7 +33,10 @@ const tabsFor = (dexView: DexView, bagCards: boolean) => {
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
   ] as const;
-  return (base as readonly { key: TabKey; label: string }[]).map(
+  const all = isAdminVisible(account)
+    ? [...base, { key: 'admin' as const, label: '관리자' }] as const
+    : base;
+  return (all as readonly { key: TabKey; label: string }[]).map(
     t => ({ ...t, icon: <TabIcon tab={t.key} /> }));
 };
 
@@ -72,7 +79,7 @@ export default function Sidebar(props: SidebarProps) {
   };
 
   // 키보드 단축키 — 축이 둘이다.
-  //   숫자 1~5 = 탭 **선택**. 같은 탭 재입력이면 select()가 보기를 순환한다.
+  //   숫자 1~5 = 탭 **선택**(관리자 6). 같은 탭 재입력이면 select()가 보기를 순환한다.
   //   Tab      = **탭 내부** 페이지 순환 — 메뉴 탭을 넘나들지 않는다.
   //              가방: 목록↔카드 · 도감: 지역 순환 · 나머지: 페이지가 없어 소비만 한다.
   useKeyScope(e => {
@@ -91,6 +98,12 @@ export default function Sidebar(props: SidebarProps) {
     }
 
     const i = Number(e.key) - 1; // '1'~'5' — 탭바에 보이는 순서 그대로
+    // 관리자 탭은 조건부라 TAB_ORDER에 없다 — 6번은 별도 분기
+    if (e.key === '6' && isAdminVisible(props.account)) {
+      e.preventDefault();
+      setActiveTab('admin' as TabKey);
+      return true;
+    }
     if (Number.isInteger(i) && i >= 0 && i < TAB_ORDER.length) {
       e.preventDefault();
       select(TAB_ORDER[i]);
@@ -101,7 +114,7 @@ export default function Sidebar(props: SidebarProps) {
   return (
     <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line
                       max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t">
-      <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards')} activeKey={activeTab} onSelect={select} />
+      <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards', props.account)} activeKey={activeTab} onSelect={select} />
       <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
         {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
@@ -113,6 +126,7 @@ export default function Sidebar(props: SidebarProps) {
                        account={props.account} uid={props.uid}
                        onAuthChanged={props.onAuthChanged} />
         )}
+        {activeTab === 'admin' && <AdminTab game={game} dispatch={props.dispatch} />}
       </div>
     </aside>
   );

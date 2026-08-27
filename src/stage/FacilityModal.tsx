@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats, upgradeCost } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { BAITS } from '../data/baits';
+import { RARITY } from '../data/rarity';
 import { groupInstances, sumPrice } from '../sidebar/bagRows';
 import InstanceLine, { UnsizedLine } from '../sidebar/InstanceLine';
 import { toggleBagRow, useBagView } from '../sidebar/bagView';
@@ -15,11 +17,12 @@ import Button from '../ui/Button';
 import DataTable from '../ui/DataTable';
 import Modal from '../ui/Modal';
 import Note from '../ui/Note';
+import NumberStepper from '../ui/NumberStepper';
 import PixelIcon from '../ui/PixelIcon';
 import StatCompare from '../ui/StatCompare';
 import { RarityText } from '../ui/RarityTag';
 /** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
-export type ActionPanel = 'sell' | 'rod' | 'boat' | null;
+export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | null;
 
 interface Props {
   panel: Exclude<ActionPanel, null>;
@@ -71,6 +74,12 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
               : `${b.name} 구매! 더 빠르고${opened ? `, [${opened.name}] 해역이 열렸다!` : ' 튼튼하다.'}`);
           })} />
       )}
+       {panel === 'shop' && (
+        <ShopPanel game={game} onClose={onClose} busy={busy}
+          onBuy={(baitId, count) => run({ type: 'buyBait', bait: baitId, count }, () => {
+            setToast('미끼를 샀다 — 가방의 아이템 섹션에서 활성화한다.');
+          })} />
+       )}
     </Modal>
   );
 }
@@ -283,6 +292,88 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
       <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
         구매하기 (-{next.price.toLocaleString()}G)
       </Button>
+    </ModalCard>
+  );
+}
+
+// 미끼 상점 — 콜롬보 항 전용. 등급별 미끼를 골드로 사고, 보유 개수는 가방 아이템 섹션에서 본다.
+// 활성 토글은 가방 탭 소관 — 상점은 "파는 곳"만 담당한다. 담백체 유지.
+function ShopPanel({ game, onBuy, onClose, busy }: {
+  game: GameState;
+  onBuy: (baitId: string, count: number) => void;
+  onClose: () => void; busy: boolean;
+}) {
+  const [qty, setQty] = useState<Record<string, number>>(
+    () => Object.fromEntries(BAITS.map(b => [b.id, 1])) as Record<string, number>,
+  );
+  const clamp = (n: number) => Math.min(50, Math.max(1, Math.floor(n) || 1));
+  const afford = (price: number, count: number) => game.gold >= price * count && !busy;
+
+  return (
+    <ModalCard title="미끼 상점" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-xs leading-relaxed text-text-dim">
+          같은 등급이 조금 더 잘 낚인다. 수동으로 낚아올릴 때마다 하나씩 사라지고, 방치 낚시에는 쓰이지 않는다.
+        </p>
+
+        <div className="flex flex-col overflow-hidden rounded-sm border border-line bg-surface-2 divide-y divide-line">
+          {BAITS.map(b => {
+            const owned = game.items[b.id] ?? 0;
+            const count = qty[b.id] ?? 1;
+            const total = b.price * count;
+            const canAfford = afford(b.price, count);
+            return (
+              <div key={b.id} className="flex gap-3 px-3 py-3">
+                <span
+                  className="size-2.5 shrink-0 rounded-full border border-line mt-1.5"
+                  style={{ backgroundColor: b.color }}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="text-sm text-text leading-none">{b.name}</span>
+                    <span className="text-2xs text-text-dim">{RARITY[b.targetRarity].name}</span>
+                    {owned > 0 && <span className="text-2xs text-text-dim">· 보유 {owned}</span>}
+                  </div>
+                  <div className="text-xs leading-relaxed text-text-dim whitespace-normal break-words">
+                    {b.desc}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span className="text-xs pf-accent text-text whitespace-nowrap">
+                    {b.price.toLocaleString()}G
+                    {count > 1 && <span className="text-text-dim"> × {count} = {total.toLocaleString()}G</span>}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <NumberStepper
+                      value={count}
+                      onChange={v => setQty(prev => ({ ...prev, [b.id]: clamp(v) }))}
+                      min={1}
+                      max={50}
+                      disabled={busy}
+                      variant="inline"
+                      ariaLabel={b.name}
+                    />
+                    <Button
+                      size="sm"
+                      disabled={!canAfford}
+                      aria-label={`${b.name} 구입`}
+                      onClick={() => onBuy(b.id, count)}
+                      className="min-w-[56px]"
+                    >
+                      구입
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-2xs leading-relaxed text-text-dim">
+          산 미끼는 가방 탭의 아이템에서 켠다. 한 번에 하나만 켜진다.
+        </p>
+      </div>
     </ModalCard>
   );
 }

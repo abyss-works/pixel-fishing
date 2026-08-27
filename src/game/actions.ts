@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
-  addItem, takeItem, usableBait,
+  addItem, takeItem, usableBait, MAX_BOAT,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -33,6 +33,7 @@ export type GameAction =
   | { type: 'adminSet'; gold?: number; fame?: number; rod?: number; boat?: number } // 관리자 테스트용 스탯 직접 수정
   | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
+  | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -41,7 +42,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, adminSet: true,
-  buyBait: true, setActiveBait: true, import: true,
+  buyBait: true, setActiveBait: true, boot: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -309,6 +310,11 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
         return { ok: false, error: 'bad-request' };
       }
+      // 상점 UI가 없는 위치에서 직접 액션을 보내도 구매되지 않게 서버가 위치를 재검증한다.
+      // 콜롬보 항구는 세이브 location에 남아 있으므로 별도 세션 상태가 필요 없다.
+      if (state.location.kind !== 'base' || state.location.id !== 'colombo') {
+        return { ok: false, error: 'shop-closed' };
+      }
       const n = Math.min(raw, BAIT_BUY_MAX);
       const cost = bait.price * n;
       if (!Number.isFinite(cost)) return { ok: false, error: 'bad-request' };
@@ -341,12 +347,25 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'setActiveBait', payload: { bait: bait.id } }],
       };
     }
+    case 'boot': {
+      // 접속(부팅) 기록 — sendLetter와 같은 "상태가 아닌 이벤트" 계열. 편지(events)와 마찬가지로
+      // 상태를 안 바꾸고 흔적만 남긴다. 이벤트 스트림에 접속 행이 생기는 순간 DAU·리텐션이
+      // '행동한 유저'가 아니라 '들어온 유저'의 정본이 된다(새로고침 = 1부팅).
+      // buildId를 함께 남겨 어느 배포 시점의 접속인지도 쪼갤 수 있다. 식별자 상한 64자 —
+      // 깨진 클라이언트가 이벤트 payload를 무한히 부리지 않게 (LETTER_MAX와 같은 판단).
+      const buildId = typeof action.buildId === 'string'
+        ? action.buildId.trim().slice(0, 64) : '';
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
+      };
+    }
     case 'adminSet': {
       const g = action.gold, f = action.fame, r = action.rod, b = action.boat;
       const bad = (v: unknown) => v !== undefined && (!Number.isFinite(v as number) || (v as number) < 0);
       if (bad(g) || bad(f) || bad(r) || bad(b)) return { ok: false, error: 'bad-request' };
       if (r !== undefined && (!Number.isInteger(r) || r < 1)) return { ok: false, error: 'bad-request' };
-      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > 4)) return { ok: false, error: 'bad-request' };
+      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > MAX_BOAT)) return { ok: false, error: 'bad-request' };
       return {
         ok: true,
         state: {

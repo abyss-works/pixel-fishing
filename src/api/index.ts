@@ -1,6 +1,7 @@
 // API 계층 진입점 — 프론트는 backend/* 를 직접 import하지 않고 이 모듈만 본다
 // supabase 유무에 따라 http/local 구현을 갈아끼운다 (useGame.ts:50 한 줄 분기가 여기로 이동)
-// 게임 상태 변경은 backend/types.Backend 그대로, 인증·저장은 AuthApi/StorageApi로 통합
+// 게임 상태 변경은 backend/types.Backend 그대로, 인증·저장은 AuthApi/StorageApi,
+// 관리자 읽기는 AdminApi(0010 뷰/RPC — local 모드는 판정만 'local')로 통합
 import { supabase } from '../backend/auth';
 import type { GameState } from '../game/logic';
 import { newState, migrate } from '../game/logic';
@@ -33,6 +34,7 @@ export function createApi(): ApiClient & { initial: ReturnType<typeof loadLegacy
     game: impl.game,
     auth: impl.auth,
     storage: impl.storage,
+    admin: impl.admin,
     isLocal,
     initial,
   };
@@ -42,4 +44,9 @@ export function createApi(): ApiClient & { initial: ReturnType<typeof loadLegacy
 export const api = createApi();
 
 export { LEGACY_KEY };
-export type { ApiClient } from './types';
+export type {
+  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
+  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
+  AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
+  AdminDexMismatchRow, AdminEventRow,
+} from './types';

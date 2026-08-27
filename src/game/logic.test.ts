@@ -562,6 +562,13 @@ describe('R18b: 세이브 마이그레이션', () => {
       .toEqual({ kind: 'region', id: 'ocean' });
   });
 
+  it('모든 거점 위치는 보존된다 — 콜롬보 상점의 구매처 검증에 필요', () => {
+    for (const id of ['home', 'harbor', 'manila', 'colombo'] as const) {
+      expect(mig({ v: 8, location: { kind: 'base', id } }).location)
+        .toEqual({ kind: 'base', id });
+    }
+  });
+
   it('v4 → v8: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
     const st = mig({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
     expect(st.v).toBe(8);

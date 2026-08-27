@@ -85,7 +85,7 @@ describe('전체 리포트 조립', () => {
 // ---------- 페이지 렌더 스모크 (콘텐츠 조립 계약) ----------
 // 얇게 유지 — 탭 전환과 실제 데이터 채움만 본다. 프리미티브(MetricSwitch/DeltaCell/MiniBar)
 // 는 props-only라 여기서 함께 검증된다.
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import AdminApp from './AdminApp';
 
@@ -93,48 +93,43 @@ import AdminApp from './AdminApp';
 afterEach(cleanup);
 
 describe('관리자 대시보드 페이지', () => {
-  it('어종 탭이 기본이고, 수역별 표가 확정 데이터로 채워진다', () => {
-    render(<AdminApp game={newState()} dispatch={() => 'ok' as never} />);
+  // 기본 탭은 개요(운영 데이터 — 로컬 모드에선 권한 안내만)다. 어종 시뮬 검증은 그 탭으로
+  // 직접 건너간 뒤 본다.
+  const openFish = () => {
+    render(<AdminApp />);
     expect(screen.getByText('관리자 대시보드')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^스탯$/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '어종 시뮬' }));
+  };
+
+  it('어종 시뮬레이션 탭 — 수역별 표가 확정 데이터로 채워진다', () => {
+    openFish();
     expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
-    // 요구 파워 배지 — pf-accent span의 textContent로 확인(다중 수역과 정확 매칭)
     expect(screen.getAllByText(/요구 파워 40/).length).toBeGreaterThan(0);
   });
 
-  it('탭 전환 — 스탯 탭과 어종 탭이 서로 전환된다(밸런스는 어종 표에 통합됐다)', () => {
-    render(<AdminApp game={newState()} dispatch={() => 'ok' as never} />);
-    fireEvent.click(screen.getByRole('button', { name: /^스탯$/ }));
-    expect(screen.getByText(/내 스탯/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^어종$/ }));
-    expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
-  });
-
   it('기대값 띠가 어종 표 머리에 산다 — 축 5개와 Δ 열이 같은 프레임 안에', () => {
-    render(<AdminApp game={newState()} dispatch={() => 'ok' as never} />);
-    // 어종 탭 기본 렌더에서 바로 보인다(탭 전환 불필요 — 단일 화면 지시)
+    openFish();
     expect(document.body.textContent).toMatch(/무판정/);
     expect(document.body.textContent).toMatch(/PERFECT/);
-    // Δ 방향 표기(비율 본체)가 실제 셀로 렌더됐는지
     expect(document.querySelectorAll('.pf-table td .pf-accent').length).toBeGreaterThan(10);
   });
 
   it('Δ 열은 사다리 보기에서 첫 행만 — 이고 나머지는 값을 가진다', () => {
-    render(<AdminApp game={newState()} dispatch={() => 'ok' as never} />);
-    // 사다리는 어종 탭 안의 상시 섹션이다(MetricSwitch 보기 전환 폐지 — 단일 화면 지시)
+    openFish();
     const dashes = screen.getAllByText('—');
-    expect(dashes.length).toBeGreaterThanOrEqual(1); // 첫 행 Δ
-    expect(screen.getAllByText(/\+\d/).length).toBeGreaterThan(0); // 두 번째 행부터 증가분
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/\+\d/).length).toBeGreaterThan(0);
   });
 
   it('지역 내 변화량 — 수동 사다리는 연쇄 %, 방치는 폭 하나(두 행에 개별 Δ 없음)', () => {
-    render(<AdminApp game={newState()} dispatch={() => 'ok' as never} />);
-    // "+%" 형태의 지역 내 Δ — GOOD/PERFECT 행
+    openFish();
     expect(document.body.textContent).toMatch(/\+\d+%/);
-    // 방치 폭 — "폭 +N%" 라벨로 한 번만(방치 두 행에 개별 Δ를 붙이지 않는다)
     expect(document.body.textContent).toMatch(/폭 \+\d+%/);
   });
 
   it('신규 게임 상태와 무관한 확정 데이터 뷰다 — state 조회 안 함(newState 미사용 확인용 문장)', () => {
-    expect(newState().v).toBe(8); // smoke — 리포트 임포트가 세이브를 건드리지 않음을 암시
+    expect(newState().v).toBe(8);
   });
 });

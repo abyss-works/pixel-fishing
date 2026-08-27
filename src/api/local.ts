@@ -55,10 +55,45 @@ class LocalStorageApi implements StorageApi {
   }
 }
 
-export function createLocalApi(initial: GameState): { game: Backend; auth: AuthApi; storage: StorageApi } {
+// ---------- 관리자 읽기 (로컬 = 클라우드 미설정) ----------
+// events·saves_current 같은 운영 원장이 로컬에는 존재하지 않는다. 그래서 접근 판정은
+// 'local'을 주고 데이터 getter는 **reject**한다 — 조용한 빈 배열 반환은 "데이터가 없다"라는
+// 거짓말이 되고, 게이트를 우회한 오용을 숨긴다. 정상 경로에서는 RequireAdmin이 local을
+// 걸러주므로 여기가 불리는 일 자체가 없어야 한다.
+// reject는 Promise로 돌려야 한다 — 동기 throw면 호출부의 await/rejects 계약이 깨진다.
+
+import type { AdminApi } from './types';
+
+const noCloudAdminData = (): Error =>
+  new Error('관리자 데이터는 클라우드 연결(운영/스테이징 Supabase) 환경에서만 읽힌다');
+
+const rejected = <T>(): Promise<T> => Promise.reject(noCloudAdminData());
+
+class LocalAdmin implements AdminApi {
+  async access(): Promise<{ kind: 'local'; uid: null }> {
+    return { kind: 'local', uid: null };
+  }
+  users(): Promise<never[]> { return rejected(); }
+  dailyActive(_days: number): Promise<never[]> { return rejected(); }
+  retention(): Promise<never[]> { return rejected(); }
+  economy(_days: number): Promise<never[]> { return rejected(); }
+  catchQuality(_days: number): Promise<never[]> { return rejected(); }
+  spamFlags(): Promise<never[]> { return rejected(); }
+  imports(): Promise<never[]> { return rejected(); }
+  dexMismatch(): Promise<never[]> { return rejected(); }
+  recentEvents(): Promise<never[]> { return rejected(); }
+  userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
+  projectRef(): string | null {
+    return null;
+  }
+}
+
+export function createLocalApi(initial: GameState):
+{ game: Backend; auth: AuthApi; storage: StorageApi; admin: AdminApi } {
   return {
     game: new LocalBackend(initial),
     auth: new LocalAuth(),
     storage: new LocalStorageApi(),
+    admin: new LocalAdmin(),
   };
 }
