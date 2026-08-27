@@ -50,10 +50,10 @@ export const SEASIA: RegionPack = {
     tagline: '햇살이 내리쬐는 얕은 바다, 생명이 모이는 곳',
     lore: '루손 해협을 지나면 바다 빛이 달라진다. 바다 한가운데 탁 파인 검은 구멍 — "드래곤 홀"은 용이 잠든 우물이라 하고, 팔라완 섬 그늘의 코론 바다는 밤마다 철이 우는 소리가 난다고 한다. 그리고 그 너머, 세계에서 가장 화려한 산호 정원이 햇살을 머금고 있다.',
     tips: [
-      '세 낚시터(드래곤 홀 · 코론 침선 지대 · 그레이트 배리어 리프)는 모두 통통배로 갈 수 있어요.',
+      '세 낚시터(드래곤 홀 · 코론 침선 지대 · 그레이트 배리어 리프)는 모두 정크선으로 갈 수 있어요.',
       '코론의 침몰선 틈에는 커다란 것이 숨어 있고, 드래곤 홀에는 용이 잠들었다는 소문이 있어요.',
       '마닐라항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
-      '말라카 해협 너머 서쪽 바다는 아직 열리지 않았어요.',
+      '말라카 해협 너머 서쪽 바다는 대양선이 있어야 건널 수 있어요.',
     ],
     controls: [
       '항해: 방향키 또는 WASD',
@@ -81,9 +81,9 @@ export const SEASIA: RegionPack = {
     { rect: LUZON_STRAIT, action: 'travel', to: 'ocean', requiredBoat: 0,
       msg: '루손 해협을 지나 태평양으로 나왔다.', blockedMsg: '', // requiredBoat 0 = 게이트 없음(이미 배 보유)
       entry: { edge: 'bottom' } },
-    { rect: MALACCA_EXIT, action: 'travel', to: 'indian', requiredBoat: 4,
+    { rect: MALACCA_EXIT, action: 'travel', to: 'indian', requiredBoat: 5,
       msg: '말라카 해협을 지나 인도양으로 들어섰다.',
-      blockedMsg: '원양어선(4단계)이 있어야 서쪽 물길을 지날 수 있다.',
+      blockedMsg: '대양선(5단계)이 있어야 서쪽 물길을 지날 수 있다.',
       entry: { edge: 'right' } },
   ],
   labels: [

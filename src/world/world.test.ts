@@ -276,13 +276,13 @@ describe('동남아 트리거', () => {
     expect(canMove(SEASIA, dc.x, dc.y)).toBe(true);
   });
 
-  it('출구는 둘 — 루손 해협(태평양 복귀, 게이트 없음)과 말라카 해협(인도양, 배4)', () => {
+  it('출구는 둘 — 루손 해협(태평양 복귀, 게이트 없음)과 말라카 해협(인도양, 배5)', () => {
     const travels = SEASIA.triggers.filter(t => t.action === 'travel');
     expect(travels).toHaveLength(2);
     const luzon = travels.find(t => t.to === 'ocean')!;
     const malacca = travels.find(t => t.to === 'indian')!;
     expect(luzon.requiredBoat).toBe(0);
-    expect(malacca.requiredBoat).toBe(4);
+    expect(malacca.requiredBoat).toBe(5); // 1-2 동남아를 건너뛰려면 tier5(원양어선) — 사용자 확정
     assertTravel(luzon); assertTravel(malacca);
     expect(inTrigger({ x: LUZON_STRAIT.x + LUZON_STRAIT.w / 2, y: LUZON_STRAIT.y + LUZON_STRAIT.h / 2 },
       LUZON_STRAIT)).toBe(true);

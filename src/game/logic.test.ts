@@ -36,8 +36,8 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 4, 4]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(4)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4]);
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('R12: 등급 가중치와 명성', () => {
@@ -62,31 +62,31 @@ describe('R11: 추첨', () => {
 
 describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics 왜곡 수정)', () => {
   it('등급 실질확률은 개체 수와 무관하게 설계 가중치 비율이다', () => {
-    // 배리어 리프(사용자 지정 예산): 일반35 · 희귀15 · 영웅0 · 전설2 — 구조에서는 전설이 2배로 팽창했었다
-    const T = 35 + 15 + 2; // 영웅 부재 재균등 + 수역 오버라이드 (52)
+    // 배리어 리프(사용자 밸런스 일괄 2026-08-27): 일반74 · 희귀23 · 영웅0 · 전설3
+    const T = 74 + 23 + 3; // 영웅 부재 재균등 + 수역 오버라이드 (100)
     const rows = drawRows('barrierreef');
     const sumFishPct = (r: RarityId) => rows.filter(x => x.fish.rarity === r)
       .reduce((s, x) => s + x.fishPct, 0);
     // 행의 gradePct는 "그 등급의 총 확률"이라 모든 개체 행에서 같은 값을 담는다
     for (const x of rows.filter(x => x.fish.rarity === 'common')) {
-      expect(x.gradePct).toBeCloseTo(35 / T * 100, 5);
+      expect(x.gradePct).toBeCloseTo(74 / T * 100, 5);
     }
     for (const x of rows.filter(x => x.fish.rarity === 'legendary')) {
-      expect(x.gradePct).toBeCloseTo(2 / T * 100, 5); // 오버라이드 2
+      expect(x.gradePct).toBeCloseTo(3 / T * 100, 5); // 오버라이드 3
     }
-    expect(sumFishPct('common')).toBeCloseTo(35 / T * 100, 5);
-    expect(sumFishPct('rare')).toBeCloseTo(15 / T * 100, 5);
+    expect(sumFishPct('common')).toBeCloseTo(74 / T * 100, 5);
+    expect(sumFishPct('rare')).toBeCloseTo(23 / T * 100, 5);
     expect(sumFishPct('epic')).toBe(0);
-    expect(sumFishPct('legendary')).toBeCloseTo(2 / T * 100, 5);
+    expect(sumFishPct('legendary')).toBeCloseTo(3 / T * 100, 5);
   });
 
   it('goldEV — drawRows 확률 × 가격과 동치이고, 수역 오버라이드·다이얼을 반영한다', () => {
     const manual = drawRows('barrierreef')
       .reduce((s, x) => s + x.fishPct / 100 * x.fish.price, 0);
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
-    // 회귀 앵커 — 중립/GOOD/방치 대표값(분석 문서 gold-ev-2stage-compare.md 참조)
+    // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(417.7, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(393.5, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
@@ -109,8 +109,8 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
       if (f.rarity !== 'common') nonCommon++;
       if (f.rarity === 'legendary') byId.set(f.id, (byId.get(f.id) ?? 0) + 1);
     }
-    expect(nonCommon / N).toBeGreaterThan(0.30);   // 설계 32.7% ((15+2)/52) ± 여유
-    expect(nonCommon / N).toBeLessThan(0.36);
+    expect(nonCommon / N).toBeGreaterThan(0.22);   // 설계 26% ((23+3)/100) ± 여유
+    expect(nonCommon / N).toBeLessThan(0.30);
     const [a = 0, b = 0] = [...byId.values()];
     expect(Math.abs(a - b) / Math.max(a, b, 1)).toBeLessThan(0.25); // 두 종 균등
   });

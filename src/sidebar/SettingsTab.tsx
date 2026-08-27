@@ -11,7 +11,6 @@ import { cx } from '../ui/cx';
 import Button from '../ui/Button';
 import Note from '../ui/Note';
 import SectionTitle from '../ui/SectionTitle';
-import AdminPanel from './AdminPanel';
 import PatchNotesPanel from './PatchNotesPanel';
 import AccountModal from './AccountModal';
 import { maskUid, isAdminUrl } from './shared';
@@ -202,7 +201,9 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         </>
       )}
 
-      <AdminPanel account={account} />
+      {/* 관리자 대시보드는 별도 페이지(?admin#/admin)다 — 게임 셸에는 링크조차 두지 않는다
+          (주소 입력이 곧 진입이고, 유저에게 노출할 이유가 없다). */}
+
       <PatchNotesPanel />
 
       {letter && (

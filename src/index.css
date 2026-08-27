@@ -139,11 +139,21 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   user-select: none;
-  overflow: hidden;
 }
 
 /* 키보드 포커스 — pf-btn 아닌 커스텀 소형 버튼(잠금/체크/서브탭 등)에도 공통 적용 */
 button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+
+/* 모션 민감군 — 연출 애니메이션 전면 축소. 게임 상태와 무관한 장식이라 정지해도
+   정보 손실이 없다(catch-pop 카드 등은 즉시 최종 프레임으로 표시된다). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ============================================================
    픽셀 베벨 코어 (다크 판타지 RPG 톤 — 디자인 언어의 본체)
