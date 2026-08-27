@@ -7,11 +7,12 @@ import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { resetBagView } from './sidebar/bagView';
+import { resetCanvasCover } from './admin/canvasCover';
 import { resetKeyScopes } from './hotkeys';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
 import { WALK_BAG_CAP } from './data/boats';
 import { TAB_ORDER } from './sidebar/tabs';
-import { BOATS, RARITY, COUPONS, newState, upgradeCost } from './game/logic';
+import { BOATS, MAX_BOAT, RARITY, COUPONS, newState, upgradeCost } from './game/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
@@ -56,8 +57,9 @@ const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('b
 
 beforeEach(() => {
   localStorage.clear();
-  resetBagView();   // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
-  resetKeyScopes(); // 키 스코프 스택도 모듈 전역
+  resetBagView();     // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
+  resetCanvasCover(); // 캔버스 덮개도 모듈 전역
+  resetKeyScopes();   // 키 스코프 스택도 모듈 전역
 });
 
 afterEach(() => {
@@ -225,7 +227,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
   });
 
   it('최고 단계면 안내만', () => {
-    renderBoatPanel({ boat: 4, gold: 999999 });
+    renderBoatPanel({ boat: MAX_BOAT, gold: 999999 });
     expect(screen.getByText(/이미 최고의 배/)).toBeInTheDocument();
     expect(screen.queryByText(/^구매하기/)).not.toBeInTheDocument();
   });
@@ -992,21 +994,21 @@ describe('패치노트 (설정 탭)', () => {
   });
 });
 
-describe('관리자 대시보드 (?admin, 설정 탭)', () => {
-  it('파라미터 없으면 버튼 없음', () => {
+// 관리자 대시보드는 별도 페이지(admin/AdminApp — main.tsx 부팅 분기)로 완전히 옮겨졌다.
+// 게임 셸에는 관리자 탭·게이트 UI가 존재하지 않는다 — 아래는 소멸 검증만 남긴다.
+describe('관리자 대시보드 — 게임 셸에서 완전 분리 확인', () => {
+  it('사이드바에 관리자 탭이 없다 — ?admin 여부와 무관하게 5탭 고정', () => {
     render(<App />);
     expect(screen.queryByText('관리자')).not.toBeInTheDocument();
-    clickTab('설정');
-    expect(screen.queryByText(/관리자 대시보드/)).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
   });
 
-  it('?admin이면 전체 게임 데이터 열람 가능(숨긴 어종 포함)', () => {
+  it('설정 탭에도 관리자 UI가 없다 — 진입은 ?admin#/admin 해시뿐이다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    clickTab('관리자');
-    expect(screen.getAllByText('크라켄').length).toBeGreaterThan(0); // 안 잡아도 보임 (도감+추첨 표)
-    expect(screen.getAllByText('2000G').length).toBeGreaterThan(0); // 크라켄 가격(+돛단배)
-    expect(screen.getByText('perfect')).toBeInTheDocument();
+    clickTab('설정');
+    expect(screen.queryByText(/관리자 대시보드/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('대시보드 열기')).not.toBeInTheDocument();
     window.history.replaceState({}, '', '/');
   });
 });
@@ -1043,5 +1045,41 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환
     clickFurniture('exit');
     expect(screen.queryByText('이동 속도')).not.toBeInTheDocument();
+  });
+});
+
+describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
+  const COMMON = 'bait-common';
+
+  it('가방 탭은 물고기/아이템 두 섹션이고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
+    seed({ items: { [COMMON]: 2, 'bait-rare': 1 } });
+    render(<App />);
+    clickTab(/^가방/);
+    expect(screen.getByText('아이템')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /물고기 \(0\/60마리/ })).toBeInTheDocument(); // 맨발 기본 상한
+
+    // 보유 없는 미끼는 애초에 누를 수 없다
+    expect(screen.getByLabelText('전설 미끼 활성화')).toBeDisabled();
+    // 일반 활성 → 사용 중 전환
+    fireEvent.click(screen.getByLabelText('일반 미끼 활성화'));
+    await waitFor(() => expect(screen.getByLabelText('일반 미끼 비활성화')).toBeInTheDocument());
+    // 다른 미끼로 교체하면 이전 것은 꺼진다 (4중 1)
+    fireEvent.click(screen.getByLabelText('희귀 미끼 활성화'));
+    await waitFor(() => expect(screen.getByLabelText('희귀 미끼 비활성화')).toBeInTheDocument());
+    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+  });
+
+  it('필드 오버레이 — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
+    renderField('village', V_SPAWN, { items: { [COMMON]: 7 }, activeBait: COMMON });
+    const overlay = screen.getByLabelText('활성 미끼');
+    expect(overlay).toHaveTextContent('7');
+    cleanup();
+
+    renderField('village', V_SPAWN, { items: {}, activeBait: COMMON });
+    expect(screen.getByLabelText('활성 미끼')).toHaveTextContent('0');
+    cleanup();
+
+    renderField('village', V_SPAWN, {});
+    expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
   });
 });

@@ -7,9 +7,11 @@ import { inRect } from './engine';
 import { VILLAGE } from './regions/village';
 import { OCEAN } from './regions/ocean';
 import { SEASIA } from './regions/seasia';
+import { INDIAN } from './regions/indian';
 import { HOME } from './bases/home';
 import { HARBOR_BASE } from './bases/harbor';
 import { MANILA_BASE } from './bases/manila';
+import { COLOMBO_BASE } from './bases/colombo';
 
 export * from './types';
 export {
@@ -18,28 +20,33 @@ export {
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_BOATSHOP, V_BOATSHOP_TRIGGER, V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
 export { OCEAN, HARBOR, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H } from './regions/ocean';
-export { SEASIA, MANILA, M_DOCK, M_SPAWN, LUZON_STRAIT,
+export { SEASIA, MANILA, M_DOCK, M_SPAWN, LUZON_STRAIT, MALACCA_EXIT,
   SEASIA_SCHOOLS, SEASIA_W, SEASIA_H } from './regions/seasia';
+export { INDIAN, COLOMBO, C_DOCK, C_SPAWN, SUNDA_EXIT,
+  INDIAN_SCHOOLS, INDIAN_W, INDIAN_H } from './regions/indian';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
   village: VILLAGE,
   ocean: OCEAN,
   seasia: SEASIA,
+  indian: INDIAN,
 };
 
-/** 지역 id 순서(등록 순서 = 마을→대양→동남아)의 단일 출처 — 도감 서브탭·Tab 지역 순환 공유 */
+/** 지역 id 순서(등록 순서 = 마을→대양→동남아→인도양)의 단일 출처 — 도감 서브탭·Tab 지역 순환 공유 */
 export const REGION_IDS: RegionId[] = Object.keys(REGION_PACKS) as RegionId[];
 
 export const BASE_PACKS: Record<BaseId, BasePack> = {
   home: HOME,
   harbor: HARBOR_BASE,
   manila: MANILA_BASE,
+  colombo: COLOMBO_BASE,
 };
 
 // 기존 경로 호환 (app.test 등)
 export const HOME_FURNITURE = HOME.furniture;
 export const HARBOR_FURNITURE = HARBOR_BASE.furniture;
 export const MANILA_FURNITURE = MANILA_BASE.furniture;
+export const COLOMBO_FURNITURE = COLOMBO_BASE.furniture;
 
 export function furnitureAt(base: BaseId, x: number, y: number): Furniture | null {
   for (const f of BASE_PACKS[base].furniture) if (inRect(x, y, f)) return f;

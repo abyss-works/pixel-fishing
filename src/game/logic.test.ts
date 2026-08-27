@@ -1,13 +1,13 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
 import {
-  RARITY, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
+  RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   drawRows, goldEV,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockUids,
+  autoLockUids, addItem, takeItem, usableBait, rarityWeightOf,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
@@ -36,8 +36,8 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3]); // 마을(0)/태평양(1)/해구(2)/동남아(3)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4]);
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('R12: 등급 가중치와 명성', () => {
@@ -62,31 +62,31 @@ describe('R11: 추첨', () => {
 
 describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics 왜곡 수정)', () => {
   it('등급 실질확률은 개체 수와 무관하게 설계 가중치 비율이다', () => {
-    // 배리어 리프(사용자 지정 예산): 일반35 · 희귀15 · 영웅0 · 전설2 — 구조에서는 전설이 2배로 팽창했었다
-    const T = 35 + 15 + 2; // 영웅 부재 재균등 + 수역 오버라이드 (52)
+    // 배리어 리프(사용자 밸런스 일괄 2026-08-27): 일반74 · 희귀23 · 영웅0 · 전설3
+    const T = 74 + 23 + 3; // 영웅 부재 재균등 + 수역 오버라이드 (100)
     const rows = drawRows('barrierreef');
     const sumFishPct = (r: RarityId) => rows.filter(x => x.fish.rarity === r)
       .reduce((s, x) => s + x.fishPct, 0);
     // 행의 gradePct는 "그 등급의 총 확률"이라 모든 개체 행에서 같은 값을 담는다
     for (const x of rows.filter(x => x.fish.rarity === 'common')) {
-      expect(x.gradePct).toBeCloseTo(35 / T * 100, 5);
+      expect(x.gradePct).toBeCloseTo(74 / T * 100, 5);
     }
     for (const x of rows.filter(x => x.fish.rarity === 'legendary')) {
-      expect(x.gradePct).toBeCloseTo(2 / T * 100, 5); // 오버라이드 2
+      expect(x.gradePct).toBeCloseTo(3 / T * 100, 5); // 오버라이드 3
     }
-    expect(sumFishPct('common')).toBeCloseTo(35 / T * 100, 5);
-    expect(sumFishPct('rare')).toBeCloseTo(15 / T * 100, 5);
+    expect(sumFishPct('common')).toBeCloseTo(74 / T * 100, 5);
+    expect(sumFishPct('rare')).toBeCloseTo(23 / T * 100, 5);
     expect(sumFishPct('epic')).toBe(0);
-    expect(sumFishPct('legendary')).toBeCloseTo(2 / T * 100, 5);
+    expect(sumFishPct('legendary')).toBeCloseTo(3 / T * 100, 5);
   });
 
   it('goldEV — drawRows 확률 × 가격과 동치이고, 수역 오버라이드·다이얼을 반영한다', () => {
     const manual = drawRows('barrierreef')
       .reduce((s, x) => s + x.fishPct / 100 * x.fish.price, 0);
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
-    // 회귀 앵커 — 중립/GOOD/방치 대표값(분석 문서 gold-ev-2stage-compare.md 참조)
+    // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(417.7, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(393.5, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
@@ -109,8 +109,8 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
       if (f.rarity !== 'common') nonCommon++;
       if (f.rarity === 'legendary') byId.set(f.id, (byId.get(f.id) ?? 0) + 1);
     }
-    expect(nonCommon / N).toBeGreaterThan(0.30);   // 설계 32.7% ((15+2)/52) ± 여유
-    expect(nonCommon / N).toBeLessThan(0.36);
+    expect(nonCommon / N).toBeGreaterThan(0.22);   // 설계 26% ((23+3)/100) ± 여유
+    expect(nonCommon / N).toBeLessThan(0.30);
     const [a = 0, b = 0] = [...byId.values()];
     expect(Math.abs(a - b) / Math.max(a, b, 1)).toBeLessThan(0.25); // 두 종 균등
   });
@@ -661,6 +661,77 @@ describe('규칙 판정 (rules.ts)', () => {
     expect(canFish(newState(), 'deep')).toEqual({ ok: false, reason: 'spot-locked' });
     for (const [reason, text] of Object.entries(REJECT_TEXT)) {
       expect(text, reason).toBeTruthy();
+    }
+  });
+});
+
+describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치유)', () => {
+  const mig = (raw: unknown) => migrate(raw);
+  const usableOf = (items: Record<string, number>, active: string | null) =>
+    usableBait({ items, activeBait: active });
+
+  it('migrate: items/activeBait 부재 → 기본값으로 채워진다 (마이그레이션 스텝 없음)', () => {
+    const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
+    expect(st.items).toEqual({});
+    expect(st.activeBait).toBeNull();
+    expect(st.v).toBe(8); // 버전 접기 — 어느 링크도 새로 생기지 않는다
+  });
+
+  it('migrate: 깨진 items 행은 버리고, 모르는 키는 살린다, 0개 행은 접는다', () => {
+    const st = mig({
+      v: 8,
+      items: { 'bait-common': 2, junk: -1, broken: 1.5, huge: 1e7, 'future-item': 0 },
+    } as never);
+    expect(st.items).toEqual({ 'bait-common': 2 }); // future-item(모르는 id)은 살아야 하지만 0이라 접힘
+  });
+
+  it('migrate: activeBait는 레지스트리에 있는 id만 살린다 — 보유량 검증은 하지 않는다', () => {
+    expect(mig({ v: 8, activeBait: 'hax' }).activeBait).toBeNull();
+    expect(mig({ v: 8, activeBait: 'bait-epic', items: {} }).activeBait).toBe('bait-epic');
+    expect(mig({ v: 8, activeBait: 42 }).activeBait).toBeNull(); // 문자열만 유효
+  });
+
+  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어. 소진돼도 활성 유지', () => {
+    let st = newState();
+    st = addItem(st, 'bait-common', 3);
+    expect(st.items['bait-common']).toBe(3);
+    expect(addItem(st, 'bait-common', 0)).toBe(st); // 무효 수량은 무변환
+    st = takeItem(st, 'bait-common');
+    st = takeItem(st, 'bait-common');
+    st = takeItem(st, 'bait-common');
+    expect(st.items['bait-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
+    expect(takeItem(st, 'bait-common')).toBe(st);     // 더 떨어뜨리지 않는다
+    expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
+  });
+
+  it('usableBait — 보유량 > 0인 유효 미끼만 행을 돌려준다 (오버레이·리듀서 단일 출처)', () => {
+    expect(usableOf({}, null)).toBeUndefined();
+    expect(usableOf({}, 'bait-rare')).toBeUndefined();
+    expect(usableOf({ 'bait-legendary': 1 }, 'bait-legendary')?.targetRarity).toBe('legendary');
+  });
+
+  it('미끼 효과 = 등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {
+    // 대상: 잉어(rare). base 예산 합 T, baited 합 T+W → pct(W)=W/T vs pct'=2W/(T+W)
+    for (const spotId of ['pond', 'sea', 'barrierreef'] as const) { // 오버라이드 수역 포함
+      const pool = FISH.filter(f => f.spot === spotId);
+      const rareBaitTarget = pool.some(f => f.rarity === 'rare') ? 'rare' : 'common';
+      const W = rarityWeightOf(spotId, rareBaitTarget);
+      const present = new Set(pool.map(f => f.rarity));
+      const baseTotal = RARITY_ORDER.reduce(
+        (s, r) => s + (present.has(r) ? rarityWeightOf(spotId, r) : 0), 0);
+      const baseRows = drawRows(spotId);
+      const baitedRows = drawRows(spotId, { budgets: { [rareBaitTarget]: W * 2 } });
+
+      const basePct = baseRows.find(r => r.fish.rarity === rareBaitTarget)?.gradePct ?? 0;
+      const baitedPct = baitedRows.find(r => r.fish.rarity === rareBaitTarget)?.gradePct ?? 0;
+      expect(baitedPct).toBeCloseTo((W * 2) / (baseTotal + W) * 100, 6);   // 목표 등급 상승
+      expect(basePct).toBeCloseTo(W / baseTotal * 100, 6);
+
+      // 타 등급 개체는 같은 요소로 균등 축소 (상대 순위 불변)
+      for (const row of baitedRows.filter(r => r.fish.rarity !== rareBaitTarget)) {
+        const bRow = baseRows.find(b => b.fish.id === row.fish.id)!;
+        expect(row.fishPct / bRow.fishPct).toBeCloseTo(baseTotal / (baseTotal + W), 6);
+      }
     }
   });
 });

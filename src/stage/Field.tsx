@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
+import { baitById } from '../data/baits';
+import { cx } from '../ui/cx';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import { subscribeFailure } from '../errors';
@@ -12,6 +14,7 @@ import { nextPhase, phaseDurationMs } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../game/stats';
 import { CAST_RANGE } from '../game/balance';
+import { useCanvasCover } from '../admin/canvasCover';
 import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
 import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
@@ -54,6 +57,14 @@ export default function Field({
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
+  // 캔버스 덮개(?admin 토글) — **캔버스 요소만** 조건부 렌더. 컴포넌트·상태머신·타이머는
+  // 계속 돌고(렌더링은 한다) 표시만 내려간다 — 겉보기 "멈춘 게임". ctx가 없으면 렌더
+  // 루프가 자연히 스킵되고, 덮개를 여는 순간 effect가 재실행돼 다시 붙는다(deps에 covered).
+  const covered = useCanvasCover();
+  // 활성 미끼 — 오버레이는 보유량 0에서도 유지된다(효과 무음, 횟수 소진 상태를 보여주기).
+  // 해석은 usableBait(logic)와 같은 규약: 레지스트리에 없는 id면 아예 숨긴다.
+  const activeBait = baitById(game.activeBait);
+  const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   // 상태머신 (idle = 이동 중) — R6
   const [phase, setPhase] = useState<FishingPhase>('idle');
   const [fish, setFish] = useState<Fish | null>(null);
@@ -303,16 +314,21 @@ export default function Field({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [region, def]);
+  }, [region, def, covered]);
 
   return (
     <>
       <GameFrame>
-        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
-                className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
-                           [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
-                aria-label={region === 'village' ? '마을' : '바다'}
-                onClick={() => actionRef.current()} />
+        {/* 덮개 상태면 캔버스 대신 같은 크기의 빈 패널 — GameFrame 16:9 박스는 유지된다 */}
+        {covered ? (
+          <div className="block w-full h-full bg-bg" aria-label="게임 화면(덮개)" />
+        ) : (
+          <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+                  className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
+                             [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
+                  aria-label={region === 'village' ? '마을' : '바다'}
+                  onClick={() => actionRef.current()} />
+        )}
 
         {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
             프레임 하단 중앙. 프레임이 positioned라 bottom-3이 그대로 프레임 기준이다.
@@ -335,15 +351,39 @@ export default function Field({
         {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
       </GameFrame>
 
-      {/* 아래 둘은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
+      {/* 아래 셋은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
       <ResourceBar game={game} onOpen={onOpenStats} />
 
-      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준 */}
-      <canvas ref={minimapRef} width={def.w} height={def.h}
-              className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
-                         [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
-              aria-label="미니맵"
-              onClick={() => onOpenMap?.()} />
+      {/* 활성 미끼 — 우측, 미니맵 위 (pointer-events 없음: 오버레이 구역 규칙 R24).
+          소진(0)이면 어두워진다 — 효과가 무음 상태라는 걸 상시 알려주는 역할. */}
+      {activeBait && (
+        <div className={cx('absolute right-3 bottom-[152px] z-(--z-overlay) pointer-events-none',
+                           'flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line',
+                           'bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px]',
+                           '[text-shadow:0_1px_2px_rgba(0,0,0,0.6)]')}
+             aria-label="활성 미끼">
+          <span className="w-2.5 h-2.5 rounded-full border border-line shrink-0"
+                style={{ backgroundColor: activeBait.color }} />
+          <span className="sr-only">{activeBait.name}</span>
+          <span className={cx('pf-accent text-sm leading-none tracking-[0.5px]',
+                              baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
+            {baitLeft}
+          </span>
+        </div>
+      )}
+
+      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다 */}
+      {covered ? (
+        <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
+                        border border-line rounded-sm bg-bg"
+             aria-hidden="true" />
+      ) : (
+        <canvas ref={minimapRef} width={def.w} height={def.h}
+                className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
+                           [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
+                aria-label="미니맵"
+                onClick={() => onOpenMap?.()} />
+      )}
     </>
   );
 }

@@ -87,7 +87,9 @@ export default function App() {
 
   return (
     // 전체 화면 2패널 앱 셸: 좌 게임 스테이지 / 우 사이드바  — 페이지 스크롤 없음
-    <div className="flex h-screen w-screen max-[820px]:flex-col">
+    // 전체 화면 2패널 앱 셸: 좌 게임 스테이지 / 우 사이드바 — **이 셸만** 스크롤 없음(R24).
+    // overflow-hidden은 body가 아니라 여기 달린다 — 독립 페이지(대시보드 등)는 자연 스크롤을 살린다.
+    <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
       {/* 스테이지 — 스테이지 기준 오버레이(자원바/로그/미니맵)와 모달의 배치 기준(relative).
           프레임 기준 오버레이(낚시 안내·획득 카드)는 GameFrame 안에 있다.
           [--frame-h]: 게임 프레임 높이 공식 — GameFrame이 여기서 폭을 파생한다.
@@ -97,7 +99,7 @@ export default function App() {
                       max-[820px]:flex-[1_1_55%]">
         {/* 씬이 게임 프레임(GameFrame)을 직접 그리고, 스테이지 기준 오버레이를 그 형제로 낸다.
             App은 씬과 무관한 스테이지 오버레이(로그·정비 모달)만 여기 얹는다.
-            key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게 */}
+            key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게. */}
         {scene.kind === 'base' ? (
           <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility}
                 onOpenStats={openStats} />

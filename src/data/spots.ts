@@ -1,10 +1,12 @@
 // 수역 데이터 — 새 수역 추가 시 여기 행 추가만으로 SpotId까지 자동 확장
 // boatTier 0 = 배 없이 가능(마을), 1+ = 대양(배 필요). region = 소속 지역(도감 계층·지역 탭 분류)
-// powerReq = 낚싯대 파워 요구량(stats.rodPower, **10단위 스냅** — 사용자 지시). 미달이면 그
+// powerReq = 낚싯대 파워 요구량(stats.rodPower). 1-3부터는 **Lv 단위로 지정해 stats.powerOfLevel
+// 로 환산**하는 관례가 시작됐다(기존 행은 파워 리터럴 — 스케일 혼재는 status.md ⬜). 미달이면 그
 // 수역에서 존이 사라지고 일반 가중치·입질 시간 페널티를 받는다(stats.powerZones 참조).
 // rarityWeight = 등급 예산 수역 오버라이드 — 지역 간 등급 분포 차등용(미기재 등급은 글로벌 표).
 import type { RarityId } from './rarity.js';
 import { RARITY } from './rarity.js';
+import { powerOfLevel } from '../game/stats.js';
 
 const DATA = [
   { id: 'pond',  name: '마을 연못',     boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
@@ -14,9 +16,22 @@ const DATA = [
   // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(군집은 특화에만 둔다)
   { id: 'dragonhole',  name: '드래곤 홀',         boatTier: 3, region: 'seasia', powerReq: 55 }, // Lv10
   { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 60,
-    rarityWeight: { rare: 28, epic: 11 } },   // 사용자 지정 수역 밸런스 (2026-08-26)
+    rarityWeight: { rare: 20, epic: 9, common: 70 } },   // 사용자 밸런스 일괄 (2026-08-27 JSON)
   { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 65,
-    rarityWeight: { common: 35, rare: 15, legendary: 2 } }, // 최종 콘텐츠 — 사용자 지정 수역 밸런스
+    rarityWeight: { common: 74, rare: 23, legendary: 3 } }, // 최종 콘텐츠 — 사용자 밸런스 일괄 (2026-08-27 JSON)
+  // 1-3 인도양 — 지역당 수역 2개 원칙(일반 연안 + 특화) 복귀. powerReq는 사용자 확정
+  // (2026-08-27): **낚싯대 Lv 단위**로 지정 — Lv16/17 → powerOfLevel로 환산한 파워.
+  // 배 게이트: 사용자 확정(2026-08-27) — 1-2 동남아를 **건너뛰고** 인도양으로 넘어가려면
+  // tier5(대양선)가 필요하다. 즉 1-2의 말라카 트리거는 requiredBoat 4에서 5로 올라야 하고,
+  // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
+  // 여러 해역을 한 번에 탐험하는 느낌).
+  // 오버라이드: common 중심 파밍 유지, 인도양은 rare 비중 확대 / 남인도양은 rare·epic 특화.
+  { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
+    powerReq: powerOfLevel(16),   // = 85
+    rarityWeight: { common: 164, rare: 27, epic: 8 } },
+  { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
+    powerReq: powerOfLevel(17),   // = 90
+    rarityWeight: { common: 144, rare: 28, epic: 15 } }, // sbBudget 반영(40→28)
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

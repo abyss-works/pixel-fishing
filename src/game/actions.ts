@@ -6,17 +6,19 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
+  addItem, takeItem, usableBait,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
-import { SPOTS } from '../data/spots.js';
+import { SPOTS, rarityWeightOf } from '../data/spots.js';
+import { baitById } from '../data/baits.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import { rollFish } from './logic.js';
-import { JUDGMENT_MULT } from './balance.js';
+import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
@@ -29,6 +31,8 @@ export type GameAction =
   | { type: 'redeemCoupon'; code: string }
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩 (incidents/2026-08-24)
   | { type: 'adminSet'; gold?: number; fame?: number; rod?: number; boat?: number } // 관리자 테스트용 스탯 직접 수정
+  | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
+  | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -36,7 +40,8 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, adminSet: true, import: true,
+  claimRelief: true, adminSet: true,
+  buyBait: true, setActiveBait: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -143,18 +148,27 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       let judgment: Judgment = action.judgment;
       if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
       else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
+      // 미끼 — 방치(auto)에는 소모·효과 없다. 수동 판정은 낚아올리는 순간 확정되므로
+      // 소모도 이 지점(리듀서)에서 1회가 자연스럽다(던질 때 소모면 방치 복구 분기가 필요했다).
+      // 효과 = targetRarity 어종 가중치 ×2 → 등급 예산 ×2(budgets 오버라이드)와 동치
+      // (drawWeights 주석: 등급 내 균등 배분 하 개체 전부 ×2 ≡ 예산 ×2). rareMult/commonMult
+      // 다이얼(common 축 전용)을 건드리지 않는다 — 확률 표 해석이 어긋난다.
+      const bait = judgment === 'auto' ? undefined : usableBait(state);
+      const drawOpts = bait
+        ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
+        : {};
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
       let fish: Fish;
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       if (judgment === 'auto') {
         // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
         const relBoost = relativeIdleBoost(rodPower(state), entry);
-        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult);
+        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult, drawOpts);
       } else {
         // 수동 보정(v0.6.4) — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
         // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
         const bonus = manualPowerBonus(rodPower(state), entry);
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult);
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult, drawOpts);
       }
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
@@ -178,14 +192,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew,
+        // 미끼 사용은 감사 흔적로 catch에 합친다 — 별도 이벤트면 스트림이 낚시 로그로 두 배가 된다
+        ...(bait ? { bait: bait.id } : {}),
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
       if (overflow.length > 0) {
         events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
       }
+      const next = takeItem(release(caught, overflow), bait?.id ?? '');
       return {
         ok: true,
-        state: release(caught, overflow),
+        state: next,
         result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
         events,
       };
@@ -281,6 +298,47 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'claimRelief', payload: {
           code: typeof action.code === 'string' ? action.code.trim() : '',
         } }],
+      };
+    }
+    case 'buyBait': {
+      // 소모품 구매 — 규칙은 골드 검증 하나다. count는 1회 요청의 폭주 상한(BAIT_BUY_MAX)으로
+      // 클램프할 뿐, 스택 적립이라 여러 번 사면 충분하다. 가격은 data/baits.ts(단일 출처).
+      const bait = baitById(action.bait);
+      if (!bait) return { ok: false, error: 'bad-request' };
+      const raw = action.count ?? 1;
+      if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
+        return { ok: false, error: 'bad-request' };
+      }
+      const n = Math.min(raw, BAIT_BUY_MAX);
+      const cost = bait.price * n;
+      if (!Number.isFinite(cost)) return { ok: false, error: 'bad-request' };
+      if (state.gold < cost) return { ok: false, error: 'not-enough-gold' };
+      return {
+        ok: true,
+        state: addItem({ ...state, gold: state.gold - cost }, bait.id, n),
+        result: { type: 'none' },
+        events: [{ type: 'buyBait', payload: { bait: bait.id, count: n, cost } }],
+      };
+    }
+    case 'setActiveBait': {
+      // 활성화는 **보유량이 있는 미끼만** 허용한다 — 없는 것을 골라도 효과가 무음인데
+      // UI가 "활성 중"이라고 읽히면 거짓말이다. 비활성(null)은 언제나 허용.
+      if (action.bait === null || action.bait === undefined) {
+        return { ok: true, state: state.activeBait === null ? state
+            : { ...state, activeBait: null }, result: { type: 'none' }, events: [] };
+      }
+      const bait = baitById(action.bait);
+      if (!bait) return { ok: false, error: 'bad-request' };
+      const owned = state.items[bait.id] ?? 0;
+      if (owned <= 0) return { ok: false, error: 'bait-not-owned' };
+      if (state.activeBait === bait.id) {
+        return { ok: true, state, result: { type: 'none' }, events: [] }; // 멱등 재활성
+      }
+      return {
+        ok: true,
+        state: { ...state, activeBait: bait.id },
+        result: { type: 'none' },
+        events: [{ type: 'setActiveBait', payload: { bait: bait.id } }],
       };
     }
     case 'adminSet': {
