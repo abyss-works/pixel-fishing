@@ -5,12 +5,6 @@ import App from './App.tsx'
 import AdminApp from './admin/AdminApp.tsx'
 import { initObservability, Sentry } from './observability.ts'
 import { installGlobalFailureHandlers, fail } from './errors.ts'
-import { newState } from './game/logic.js'
-
-// 관리자 페이지에서 adminSet을 쓰기 위한 독립 상태 인스턴스 — 게임 셸과 세이브 키를 공유하지
-// 않는다(LocalBackend가 localStorage를 같은 키로 읽어 실질 동기). dispatch 게이트는 서버.
-const ADMIN_BOOT_STATE = newState();
-const ADMIN_DISPATCH = () => 'ok' as never;
 
 // 렌더보다 먼저 — 부팅 중 터지는 예외도 잡히도록 (DSN 없으면 no-op)
 initObservability()
@@ -36,7 +30,7 @@ createRoot(document.getElementById('root')!).render(
       </div>
     }>
       {isAdmin && onAdminPage
-        ? <AdminApp game={ADMIN_BOOT_STATE} dispatch={ADMIN_DISPATCH} />
+        ? <AdminApp />
         : <App />}
     </Sentry.ErrorBoundary>
   </StrictMode>,

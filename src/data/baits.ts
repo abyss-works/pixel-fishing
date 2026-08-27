@@ -18,18 +18,19 @@ export interface Bait {
 }
 
 // 이름·가격 — 현재는 로컬 QA용 기준값이다. 릴리즈 직전에 밸런스 검토 후 확정한다.
-//   효과는 "해당 등급 예산 ×2"라서 EV 증분 ≈ 그 등급 현재 기여비 × 2 배증. 소득 회수
-//   회수까지 판매 가치를 고려해 일반 50 · 희귀 400 · 영웅 2500 · 전설 10000 G로
-//   시작한다(방치엔 무효, 수동 캐스트 한정 소모). 관찰 후 조정 가능 — baits.ts 단일 출처.
+//   효과는 "해당 등급 예산 ×2"라서 EV 증분 ≈ 그 등급 현재 기여비 × 2 배증.
+//   2026-08-27 재조정: 일반 10 · 희귀 50 · 영웅 250 · 전설 500 G
+//   (낮은 등급일수록 보조금 성격, 높은 등급은 도감용으로 손해 보는 구조).
+//   관찰 후 조정 가능 — baits.ts 단일 출처.
 const DATA: readonly Bait[] = [
   { id: 'bait-common', name: '일반 미끼', desc: '흔한 밀웜. 같은 등급 물고기가 두 배 더 잘 낚인다.',
-    targetRarity: 'common', price: 50, color: '#9e9e9e' },
+    targetRarity: 'common', price: 10, color: '#9e9e9e' },
   { id: 'bait-rare', name: '희귀 미끼', desc: '향을 입힌 떡밥. 같은 등급 물고기가 두 배 더 잘 낚인다.',
-    targetRarity: 'rare', price: 400, color: '#42a5f5' },
+    targetRarity: 'rare', price: 50, color: '#42a5f5' },
   { id: 'bait-epic', name: '영웅 미끼', desc: '비싼 살토. 같은 등급 물고기가 두 배 더 잘 낚인다.',
-    targetRarity: 'epic', price: 2500, color: '#ba68c8' },
+    targetRarity: 'epic', price: 250, color: '#ba68c8' },
   { id: 'bait-legendary', name: '전설 미끼', desc: '특제 특수 미끼. 같은 등급 물고기가 두 배 더 잘 낚인다.',
-    targetRarity: 'legendary', price: 10000, color: '#ffd54f' },
+    targetRarity: 'legendary', price: 500, color: '#ffd54f' },
 ];
 
 export const BAITS: readonly Bait[] = DATA;
