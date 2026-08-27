@@ -14,6 +14,8 @@ export interface BagRow {
   fish: Fish;
   name: string;
   items: FishInstance[]; // 이 행 개체 전부 (폼 섞임) — 판매 시 uid 목록의 출처
+  /** 행 판매가 합계 — 정렬 기준(등급 다음 축)이자 행 머리 표시값 */
+  subtotal: number;
   /** 크기가 기록된 개체 — 한 줄씩 그린다 (변이 먼저, 큰 것부터) */
   sized: FishInstance[];
   /** 크기 미상(v0.4.0 이관) — **묶어서 한 줄**. 폼별로 값이 다르니 폼으로만 가른다 */
@@ -37,8 +39,8 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
     const fish = instanceFish(inst);
     if (!fish) continue; // 삭제된 어종 id — 표시에서 제외 (판매 대상에서도 빠진다)
     const row = rows.get(inst.fishId)
-      ?? { key: inst.fishId, fish, name: fish.name, items: [], sized: [], unsized: [],
-           maxSize: null, maxByForm: {} };
+      ?? { key: inst.fishId, fish, name: fish.name, items: [], subtotal: 0, sized: [],
+           unsized: [], maxSize: null, maxByForm: {} };
     row.items.push(inst);
     if (inst.size !== null) {
       row.maxSize = Math.max(row.maxSize ?? 0, inst.size);
@@ -68,9 +70,13 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
     row.unsized = [...groups.entries()]
       .map(([form, items]) => ({ form, items }))
       .sort((a, b) => (a.form === 'variant' ? 0 : 1) - (b.form === 'variant' ? 0 : 1));
+    row.subtotal = sumPrice(row.items);
   }
-  // 행 순서는 도감과 같은 기준 (등급 → id)
+  // 행 순서 — **등급 내림차순이 최상위 축**(사용자 지시 2026-08-27: 가격 말고 등급을 큰 축으로),
+  // 동률이면 소계(가치 합) 내림, 그다음 id로 안정화. 도감의 오름차순과 일부러 다르다 —
+  // 가방은 "지금 뭘 들고 있나" 화면이라 값진 짐이 맨 위에 있어야 스크롤 없이 눈에 닿는다.
   return [...rows.values()].sort((a, b) =>
-    rarityRank(a.fish.rarity) - rarityRank(b.fish.rarity)
+    rarityRank(b.fish.rarity) - rarityRank(a.fish.rarity)
+    || b.subtotal - a.subtotal
     || a.fish.id.localeCompare(b.fish.id));
 }

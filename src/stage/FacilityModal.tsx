@@ -6,7 +6,7 @@ import { BAITS } from '../data/baits';
 import { RARITY } from '../data/rarity';
 import { groupInstances, sumPrice } from '../sidebar/bagRows';
 import InstanceLine, { UnsizedLine } from '../sidebar/InstanceLine';
-import { toggleBagRow, useBagView } from '../sidebar/bagView';
+import { toggleSellRow, useSellView } from '../sidebar/bagView';
 import type { GameAction } from '../game/actions';
 import { when } from '../backend/types';
 import type { DispatchResult, MaybePromise } from '../backend/types';
@@ -109,7 +109,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   })), [game.bag]);
 
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // uid 단위
-  const { collapsed } = useBagView(); // 가방 탭과 접힘 상태를 공유한다
+  const { collapsed } = useSellView(); // 판매 패널 접힘 — 기본 펼침(R1b), 가방 탭과는 별개 저장소(요구가 정반대)
 
   const flip = (set: Set<string>, keys: string[], on: boolean) => {
     const next = new Set(set);
@@ -166,7 +166,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                       <button className="bg-transparent border-0 p-0 cursor-pointer text-inherit flex items-center gap-1"
                               aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
                               aria-expanded={expanded}
-                              onClick={() => toggleBagRow(key)}>
+                              onClick={() => toggleSellRow(key)}>
                         <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
                                    className="text-text-dim" />
                         {name}

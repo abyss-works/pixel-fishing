@@ -13,7 +13,7 @@ import { migrate, newState } from '../src/game/logic.js';
 import type { FishInstance, GameState } from '../src/game/logic.js';
 import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
 import type { ActionDeps, GameAction, StateWrites } from '../src/game/actions.js';
-import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/balance.js';
+import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -309,14 +309,21 @@ async function route(req: Req, res: Res): Promise<void> {
   // 시딩 직후의 새 행은 default false라 여기서 걸리는 건 운영자가 명시적으로 표시한 계정뿐.
   if (row.restricted) throw new ApiError(403, 'restricted');
 
-  // 매크로 페이싱 게이트 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
-  // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
-  const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-  if (Number.isFinite(lastActionMs) && Number(row.version) > 1
-      && Date.now() - lastActionMs < MIN_ACTION_GAP_MS) {
+// 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
+// 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
+// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 근거·목록 정의는 balance.ts가 단일 출처.
+const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
+
+// 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
+// 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
+// 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
+const lastActionMs = Date.parse(String(row.updated_at ?? ''));
+if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
+  const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
+  if (Date.now() - lastActionMs < gapMs) {
     throw new ApiError(429, 'too-fast');
   }
+}
 
   const state = assemble(row, instances, records);
 

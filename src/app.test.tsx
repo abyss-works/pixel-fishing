@@ -136,6 +136,8 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     expect(hud()).toContain('1마리');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
+    // 가방 목록은 **기본 전부 닫힘**(사용자 지시) — 행을 펼쳐야 개체가 보인다
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.queryByText('12.0cm')).not.toBeInTheDocument();
   });
@@ -685,6 +687,10 @@ describe('탭은 씬과 무관하게 5개 고정', () => {
 });
 
 describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
+  // 가방 목록은 기본 전부 닫힘(사용자 지시) — 개체 줄을 보려면 종 행을 펼쳐야 한다
+  const openRow = (name: string) =>
+    fireEvent.click(screen.getByLabelText(`${name} 개체 펼치기`));
+
   it('가방 내역 표시, 행 머리 잠금 → 그 종 전 개체가 전부 판매에서 빠진다', () => {
     seed({ bag: [inst('carp'), inst('carp'), inst('crucian')] }); // 잉어 30G×2 + 붕어 6G
     render(<App />);
@@ -706,6 +712,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp', 'normal', 12), inst('carp', 'normal', null), inst('carp', 'normal', 42)] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('잉어');
     const shown = screen.getAllByText(/cm|미상/).map(e => e.textContent);
     expect(shown).toEqual(['최대 42.0cm', '42.0cm', '12.0cm', '미상']);
   });
@@ -825,6 +832,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [...many, inst('crucian', 'variant', null), inst('crucian', 'normal', 30)] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('붕어');
 
     expect(screen.getByText('×2000')).toBeInTheDocument();  // 일반 미상 묶음
     expect(screen.getByText('×1')).toBeInTheDocument();     // 변이 미상 묶음 (폼은 가른다)
@@ -837,6 +845,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: Array.from({ length: 5 }, () => inst('crucian', 'normal', null)) });
     render(<App />);
     clickTab(/^가방/);
+    openRow('붕어');
     fireEvent.click(screen.getByLabelText('크기 미상 5마리 잠금'));
     clickFurniture('sell');
     expect(screen.getByText(/^판매하기/)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
@@ -849,6 +858,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     ] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('잉어');
     const shown = screen.getAllByText(/cm/).map(e => e.textContent?.replace(/ 상위 .*/, ''));
     // 머리(최대 40.0cm) 다음 — 변이 33 → 변이 12 → 일반 40 → 일반 8
     expect(shown).toEqual(['최대 40.0cm', '33.0cm', '12.0cm', '40.0cm', '8.0cm']);
@@ -863,6 +873,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     ] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('잉어');
     expect(screen.getAllByText('최대')).toHaveLength(2); // 일반 42 + 변이 30
   });
 
@@ -871,6 +882,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('잉어');
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
@@ -928,21 +940,24 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(names.slice(0, 3)).toEqual(['잉어', '붕어', '???']); // 보유 → 발견 → 미발견
   });
 
-  it('접은 행은 탭을 옮겼다 와도 접힌 채다', () => {
+  it('펼친 행은 탭을 옮겼다 와도 펼친 채다 — 기본은 전부 닫힘', () => {
     seed({ bag: [inst('carp', 'normal', 40)] });
     render(<App />);
     clickTab(/^가방/);
-    fireEvent.click(screen.getByLabelText('잉어 개체 접기'));
+    // 기본 닫힘 — 개체가 바로 보이지 않는다(사용자 지시: 대량 보유 스크롤 방지)
     expect(screen.queryByText('40.0cm')).not.toBeInTheDocument();
+    openRow('잉어');
+    expect(screen.getByText('40.0cm')).toBeInTheDocument();
     clickTab(/도감\s*\(일반\)/);
     clickTab(/^가방/);
-    expect(screen.queryByText('40.0cm')).not.toBeInTheDocument(); // 전역 저장 — 안 잊는다
+    expect(screen.getByText('40.0cm')).toBeInTheDocument(); // 전역 저장 — 안 잊는다
   });
 
   it('개체 하나만 잠그면 같은 종의 나머지는 팔린다', () => {
     seed({ bag: [inst('carp', 'normal', 40), inst('carp', 'normal', 10)] });
     render(<App />);
     clickTab(/^가방/);
+    openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/)); // 작은 놈 1마리만
@@ -971,7 +986,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     expect(screen.getByLabelText('자동 잠금')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('자동 잠금'));
-    // 각 그룹의 최대만 잠긴다 — 라벨에 크기가 있어 개체를 정확히 지목할 수 있다
+    // 잠금 적용은 개체 줄의 자물쇠로 확인한다 — 목록이 기본 닫힘이므로 두 종을 펼친다
+    openRow('붕어');
+    openRow('잉어');
     expect(screen.getByLabelText('40.0cm 붕어 잠금 해제')).toBeInTheDocument();
     expect(screen.getByLabelText('55.0cm 변이 붕어 잠금 해제')).toBeInTheDocument();
     expect(screen.getByLabelText('33.0cm 잉어 잠금 해제')).toBeInTheDocument();
@@ -1070,13 +1087,14 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
   const COMMON = 'bait-common';
 
-  it('가방 탭은 물고기/아이템 두 섹션이고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
+  it('가방 탭은 서브탭(물고기/아이템)으로 분리되고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
     seed({ items: { [COMMON]: 2, 'bait-rare': 1 } });
     render(<App />);
     clickTab(/^가방/);
-    expect(screen.getByText('아이템')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /물고기 \(0\/60마리/ })).toBeInTheDocument(); // 맨발 기본 상한
 
+    // 아이템 서브탭으로 전환해야 미끼가 보인다 (물고기와 한 스크롤을 쓰지 않는다)
+    fireEvent.click(screen.getByRole('button', { name: /^아이템/ }));
     // 보유 없는 미끼는 애초에 누를 수 없다
     expect(screen.getByLabelText('전설 미끼 활성화')).toBeDisabled();
     // 일반 활성 → 사용 중 전환

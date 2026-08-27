@@ -10,25 +10,32 @@ import { cx } from '../ui/cx';
 import Note from '../ui/Note';
 import FishSprite from '../ui/FishSprite';
 import PixelIcon from '../ui/PixelIcon';
-import SectionTitle from '../ui/SectionTitle';
+import SubTabs from '../ui/SubTabs';
 import { RarityDot } from '../ui/RarityTag';
-import { groupInstances, sumPrice } from './bagRows';
+import { groupInstances } from './bagRows';
 import InstanceLine, { UnsizedLine } from './InstanceLine';
 import BagCards from './BagCards';
-import { toggleBagRow, useBagView } from './bagView';
+import { setBagSection, toggleBagRow, useBagView } from './bagView';
 
-// 가방 탭 — **물고기 / 아이템 2섹션**. 아이템 섹션 안에 소모품 종류별로 서브섹션이 늘어난다
-// (첫 축은 미끼 — 레지스트리 data/baits.ts).
-//  물고기 목록: 종+폼 머리 아래에 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
-//  물고기 카드: 전 어종 격자에 보유 마릿수만. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
-// 목록은 **기본 펼침**이다: 접어 두면 예전 어종 목록과 구분이 안 돼 개체화가 눈에 안 보인다.
-// 어종 행 머리 — **고정 그리드**. flex로 나열하면 이름·마릿수 자릿수에 따라 숫자 열이
+// 가방 탭 — **서브탭 2장: 물고기 / 아이템**(사용자 지시 2026-08-27: 물고기 1,500마리를 아이템과
+// 한 스크롤에서 훑게 하지 않는다). 서브탭 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.
+//
+// 물고기 섹션 — 목록/카드 2레이아웃. 카드뷰는 **물고기 목록의 렌더링만** 바꾼다(아이템과 무관).
+//  목록: 종+폼 머리 아래 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
+//  카드: 전 어종 격자에 보유 마릿수. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
+//
+// 목록은 **기본 전부 닫힘**(사용자 지시 2026-08-27) — 1,500마리 세이브에서 펼침 기본은
+// 스크롤 지옥이다. 개체 선택 화면은 판매 패널이 담당하고(그쪽은 기본 펼침 유지), 가방은
+// 열람 화면이므로 종 머리(마릿수·최대 크기·소계)만으로 훑고 필요한 종만 펼친다.
+//
+// 종 행 머리 — **고정 그리드**. flex로 나열하면 이름·마릿수 자릿수에 따라 숫자 열이
 // 행마다 어긋나 소계·최대 크기를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
 //   [캐럿] [스프라이트] [이름] [×N] [최대 크기] [소계] [자물쇠]
+// 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
 const ROW = 'grid grid-cols-[10px_30px_1fr_28px_76px_52px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
-/** 아이템 섹션 — 미끼 서브섹션. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
+/** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
 function ItemSection({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -45,8 +52,7 @@ function ItemSection({ game, dispatch, setToast }: {
     });
 
   return (
-    <div className="mt-4">
-      <SectionTitle>아이템</SectionTitle>
+    <div className="flex flex-col gap-1">
       <h5 className="text-sm text-text-dim mb-1">미끼</h5>
       <div className="pf-frame divide-y divide-line">
         {rows.map(({ bait, count }: { bait: Bait; count: number }) => {
@@ -77,7 +83,7 @@ function ItemSection({ game, dispatch, setToast }: {
       </div>
       <Note>
         활성하면 같은 등급 물고기가 두 배 더 잘 낚인다. 수동으로 낚아올릴 때마다 한 개가 소모되고,
-        방치 획득에는 소모되지 않는다.
+        방치 획득에는 소모되지 않는다. 구매는 콜롬보 항구의 미끼 가게에서.
       </Note>
     </div>
   );
@@ -90,8 +96,12 @@ export default function BagTab({ game, dispatch, setToast }: {
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const cap = bagCapacity(game.boat, game.bag); // 이미 넘겨 든 유저는 그 수가 상한이다 (래칫)
-  const { layout, collapsed } = useBagView();
+  const { layout, section, opened } = useBagView();
   const total = sellableValue(game);
+  const itemCount = useMemo(
+    () => Object.values(game.items).reduce((s, n) => s + n, 0),
+    [game.items],
+  );
 
   const lock = (uids: string[], locked: boolean, label: string) =>
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
@@ -117,98 +127,112 @@ export default function BagTab({ game, dispatch, setToast }: {
 
   return (
     <div>
-      {/* ── 물고기 섹션 ── 헤더 컨테이너 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <h3 className="text-lg text-gold">
-          물고기 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
-            {game.bag.length}</span>
-          <span className="pf-accent text-text-dim">/{cap}</span>마리)
-        </h3>
-        {game.bag.length > 0 && (
-          <button
-            className="flex items-center gap-1 border border-line rounded-sm px-2 py-1
-                       text-xs text-text-dim hover:text-gold hover:border-gold cursor-pointer"
-            aria-label="자동 잠금"
-            title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
-            onClick={autoLock}>
-            <PixelIcon glyph="lockOpen" size={12} />
-            자동 잠금
-          </button>
-        )}
-      </div>
-      {layout === 'cards' ? (
-        <BagCards bag={game.bag} game={game} />
-      ) : rows.length === 0 ? (
-        <Note>가방이 비어 있다. 물고기 군집을 찾아 낚시하자.</Note>
+      {/* 내부 서브탭 — 물고기(개체 목록·카드) / 아이템(미끼) 완전 분리 */}
+      <SubTabs
+        items={[
+          { key: 'fish', label: `물고기 ${game.bag.length}` },
+          { key: 'items', label: `아이템 ${itemCount}` },
+        ]}
+        activeKey={section}
+        onSelect={setBagSection}
+      />
+
+      {section === 'items' ? (
+        <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
         <>
-          <div className="pf-frame divide-y divide-line">
-            {rows.map(({ key, fish, name, items, sized, unsized, maxSize, maxByForm }) => {
-              const expanded = !collapsed.has(key);
-              const uids = items.map(i => i.uid);
-              // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
-              const allLocked = items.every(i => i.locked);
-              return (
-                <div key={key}>
-                  <div className={cx(ROW, 'px-1 py-1 text-sm cursor-pointer hover:bg-surface-2',
-                                     allLocked && 'text-text-dim')}
-                       onClick={() => toggleBagRow(key)}
-                       role="button"
-                       aria-expanded={expanded}
-                       aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}>
-                    <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={10}
-                               className="text-text-dim" />
-                    <FishSprite fish={fish} preset="thumb" form="normal" />
-                    <span className="truncate">
-                      <RarityDot rarity={fish.rarity} />{name}
-                    </span>
-                    <span className="pf-accent text-text-dim text-right">×{items.length}</span>
-                    <span className="pf-accent text-text-dim text-right whitespace-nowrap">
-                      {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
-                    </span>
-                    <span className="pf-accent text-right">{sumPrice(items)}G</span>
-                    <button
-                      className={cx('justify-self-end bg-transparent border-0 px-1 cursor-pointer',
-                        allLocked ? 'text-gold' : 'text-text-dim hover:text-text')}
-                      aria-label={`${name} 전체 ${allLocked ? '잠금 해제' : '잠금'}`}
-                      onClick={e => {
-                        e.stopPropagation(); // 잠금 토글이 행 펼침을 겸하지 않게
-                        lock(uids, !allLocked, `${name} ${items.length}마리`);
-                      }}>
-                      <PixelIcon glyph={allLocked ? 'lock' : 'lockOpen'} size={14} />
-                    </button>
-                  </div>
-                  {expanded && (
-                    <div className="bg-bg pb-1">
-                      {sized.map(inst => (
-                        <InstanceLine key={inst.uid} inst={inst} fish={fish}
-                                      best={inst.size !== null && inst.size === maxByForm[inst.form]}
-                                      onLock={() => lock([inst.uid], !inst.locked, name)} />
-                      ))}
-                      {unsized.map(g => {
-                        const allLockedG = g.items.every(i => i.locked);
-                        return (
-                          <UnsizedLine key={g.form} count={g.items.length} form={g.form}
-                                       locked={allLockedG}
-                                       onLock={() => lock(g.items.map(i => i.uid), !allLockedG,
-                                                          `${name} 크기 미상 ${g.items.length}마리`)} />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-lg text-gold">
+              물고기 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
+                {game.bag.length}</span>
+              <span className="pf-accent text-text-dim">/{cap}</span>마리)
+            </h3>
+            {game.bag.length > 0 && (
+              <button
+                className="flex items-center gap-1 border border-line rounded-sm px-2 py-1
+                           text-xs text-text-dim hover:text-gold hover:border-gold cursor-pointer"
+                aria-label="자동 잠금"
+                title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
+                onClick={autoLock}>
+                <PixelIcon glyph="lockOpen" size={12} />
+                자동 잠금
+              </button>
+            )}
           </div>
-          <Note>
-            판매 가능 <span className="pf-accent">{total}G</span> · 판매는 집 궤짝/항구 어시장에서.
-            자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.
-          </Note>
+          {layout === 'cards' ? (
+            <BagCards bag={game.bag} game={game} />
+          ) : rows.length === 0 ? (
+            <Note>가방이 비어 있다. 물고기 군집을 찾아 낚시하자.</Note>
+          ) : (
+            <>
+              <div className="pf-frame divide-y divide-line">
+                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxSize, maxByForm }) => {
+                  const expanded = opened.has(key);
+                  const uids = items.map(i => i.uid);
+                  // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
+                  const allLocked = items.every(i => i.locked);
+                  return (
+                    <div key={key}>
+                      <div className={cx(ROW, 'px-1 py-1 text-sm cursor-pointer hover:bg-surface-2',
+                                         allLocked && 'text-text-dim')}
+                           onClick={() => toggleBagRow(key)}
+                           role="button"
+                           aria-expanded={expanded}
+                           aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}>
+                        <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={10}
+                                   className="text-text-dim" />
+                        <FishSprite fish={fish} preset="thumb" form="normal" />
+                        <span className="truncate">
+                          <RarityDot rarity={fish.rarity} />{name}
+                        </span>
+                        <span className="pf-accent text-text-dim text-right">×{items.length}</span>
+                        <span className="pf-accent text-text-dim text-right whitespace-nowrap">
+                          {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
+                        </span>
+                        <span className="pf-accent text-right">{subtotal}G</span>
+                        <button
+                          className={cx('justify-self-end bg-transparent border-0 px-1 cursor-pointer',
+                            allLocked ? 'text-gold' : 'text-text-dim hover:text-text')}
+                          aria-label={`${name} 전체 ${allLocked ? '잠금 해제' : '잠금'}`}
+                          onClick={e => {
+                            e.stopPropagation(); // 잠금 토글이 행 펼침을 겸하지 않게
+                            lock(uids, !allLocked, `${name} ${items.length}마리`);
+                          }}>
+                          <PixelIcon glyph={allLocked ? 'lock' : 'lockOpen'} size={14} />
+                        </button>
+                      </div>
+                      {expanded && (
+                        <div className="bg-bg pb-1">
+                          {sized.map(inst => (
+                            <InstanceLine key={inst.uid} inst={inst} fish={fish}
+                                          best={inst.size !== null && inst.size === maxByForm[inst.form]}
+                                          onLock={() => lock([inst.uid], !inst.locked, name)} />
+                          ))}
+                          {unsized.map(g => {
+                            const allLockedG = g.items.every(i => i.locked);
+                            return (
+                              <UnsizedLine key={g.form} count={g.items.length} form={g.form}
+                                           locked={allLockedG}
+                                           onLock={() => lock(g.items.map(i => i.uid), !allLockedG,
+                                                              `${name} 크기 미상 ${g.items.length}마리`)} />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <Note>
+                판매 가능 <span className="pf-accent">{total}G</span> · 판매는 집 궤짝/항구 어시장에서.
+                자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.
+                행 소계는 그 종 판매가 합계다 — 정렬은 등급이 높은 순.
+              </Note>
+            </>
+          )}
         </>
       )}
-
-      {/* ── 아이템 섹션 (물고기와 별개 축 — 용량 래칫·판매 대상이 아니다) */}
-      <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
     </div>
   );
 }

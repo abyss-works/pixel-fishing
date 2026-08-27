@@ -3,13 +3,14 @@ import { FISH, formName, speciesDiscovered } from '../game/logic';
 import type { FishInstance, GameState } from '../game/logic';
 import { cx } from '../ui/cx';
 import FishSprite from '../ui/FishSprite';
-import { RARITY_CARD, dexIndex } from './shared';
+import { RARITY_CARD, dexIndex, rarityRank } from './shared';
 
 // 가방 카드뷰 — 목록뷰가 정보 집약(개체 한 줄씩)이라면 이쪽은 **현황 한눈에**다.
 // 그래서 전 어종을 깔고 보유 마릿수만 얹는다: 뭘 들고 있고 뭐가 비었는지가 한 화면에 보인다.
 // 미발견은 도감과 같은 규칙으로 ??? — 카드뷰가 도감 스포일러 우회로가 되면 안 된다.
 //
-// 정렬은 **보유중 → 발견함 → 미발견**, 각 무리 안에서는 도감 순.
+// 정렬: **보유중 → 발견함 → 미발견**, 각 무리 안에서는 **등급 내림차순 → 가격 내림차순**
+// (사용자 지시 2026-08-27 — 목록뷰와 같은 축. 도감 순은 그다음 안정화 타이브레이커).
 // 지금 쓸 수 있는 것이 맨 위로 모이고, 미발견 ??? 카드가 중간에 끼어 보유분을 갈라놓지 않는다.
 // 무리가 바뀌는 건 잡거나 팔 때뿐이라 카드가 눈앞에서 튀지도 않는다.
 interface Held { normal: number; variant: number }
@@ -28,7 +29,10 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
   const fishes = useMemo(() => {
     const group = (id: string) => (held.has(id) ? 0 : speciesDiscovered(game, id) ? 1 : 2);
     return [...FISH].sort((a, b) =>
-      group(a.id) - group(b.id) || dexIndex(a.id) - dexIndex(b.id));
+      group(a.id) - group(b.id)
+      || rarityRank(b.rarity) - rarityRank(a.rarity)
+      || b.price - a.price
+      || dexIndex(a.id) - dexIndex(b.id));
   }, [held, game]);
 
   return (
