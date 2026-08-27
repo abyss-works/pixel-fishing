@@ -25,13 +25,14 @@ const DATA = [
   // tier5(대양선)가 필요하다. 즉 1-2의 말라카 트리거는 requiredBoat 4에서 5로 올라야 하고,
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
   // 여러 해역을 한 번에 탐험하는 느낌).
-  // 오버라이드: common 중심 파밍 유지, 인도양은 rare 비중 확대 / 남인도양은 rare·epic 특화.
+  // 오버라이드: 2026-08-27 관리자 시뮬 확정분 — **공통/희귀/영웅 예산 전 부 ×2 상향**
+  // (저등급 체감 개선: 흔한 물고기가 더 자주 나온다. legendary는 미기재 = 글로벌 1 유지).
   { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
     powerReq: powerOfLevel(16),   // = 85
-    rarityWeight: { common: 164, rare: 27, epic: 8 } },
+    rarityWeight: { common: 328, rare: 54, epic: 16 } },
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
     powerReq: powerOfLevel(17),   // = 90
-    rarityWeight: { common: 144, rare: 28, epic: 15 } }, // sbBudget 반영(40→28)
+    rarityWeight: { common: 288, rare: 56, epic: 30 } },
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

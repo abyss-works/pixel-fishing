@@ -75,7 +75,8 @@ describe('전체 리포트 조립', () => {
     }
     const reef = rows.find(r => r.id === 'barrierreef')!.gold.normal;
     const indian = rows.find(r => r.id === 'indian')!.gold.normal;
-    expect(indian / reef).toBeGreaterThan(1.3);   // 지역 간 사다리 존재
+    // 2026-08-27 관리자 시뮬 확정분(예산 ×2) 반영 — 인도양/리프 = 379.4/298.7 ≈ 1.27
+    expect(indian / reef).toBeGreaterThan(1.25);   // 지역 간 사다리 존재
     const dh = rows.find(r => r.id === 'dragonhole')!.gold.normal;
     const coron = rows.find(r => r.id === 'coron')!.gold.normal;
     expect(coron / dh).toBeLessThan(1.5);         // 지역 내부는 완만

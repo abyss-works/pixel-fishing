@@ -86,7 +86,7 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
     // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(393.5, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(392.6, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
@@ -740,5 +740,36 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
         expect(row.fishPct / bRow.fishPct).toBeCloseTo(baseTotal / (baseTotal + W), 6);
       }
     }
+  });
+});
+
+describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 앵커)', () => {
+  // 시뮬 JSON의 simEV를 그대로 앵커로 고정한다 — 등급 예산 ×2 + 만새기/꽁치 weight 2 +
+  // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
+  // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
+  const dials = {
+    normal: {},
+    perfect: { rareMult: 2 },
+    idleWorst: { commonMult: 10 },
+  } as const;
+
+  it('인도양 — normal 383.1 / perfect 630.5 / 방치×10 70.7', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(383.1, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(630.5, 1);
+    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(70.7, 1);
+  });
+
+  it('남인도양 — normal 503.3 / perfect 798.4 / 방치×10 89.8', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(503.3, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(798.4, 1);
+    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(89.8, 1);
+  });
+
+  it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
+    const rows = drawRows('indian', {}).filter(r => r.fish.rarity === 'common');
+    const share = Object.fromEntries(rows.map(r => [r.fish.id, r.fishPct]));
+    // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/399 = 41.1%)
+    expect(share.horsejack).toBeCloseTo(41.1028, 3);
+    expect(share.ribbonfish).toBeCloseTo(20.5514, 3);
   });
 });

@@ -144,15 +144,17 @@ export interface DrawOptions {
 }
 
 function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
-  // 개체 가중치 합을 등급별로 모은다 — 기본(전부 1)이면 합 = 개체 수라 구 균등 배분과 동치
+  // 개체 가중치 합을 등급별로 모은다 — 기본(전부 1)이면 합 = 개체 수라 구 균등 배분과 동치.
+  // 다이얼(fishWeights)이 없으면 Fish.weight(개체 고정 가중치, 기본 1 — data/fish)를 쓴다.
+  const base = (f: Fish) => o.fishWeights?.[f.id] ?? f.weight ?? 1;
   const fwSum = new Map<RarityId, number>();
   for (const f of pool) {
-    fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + (o.fishWeights?.[f.id] ?? 1));
+    fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + base(f));
   }
   return pool.map(f =>
     (o.budgets?.[f.rarity] ?? rarityWeightOf(spotId, f.rarity))
       * (f.rarity === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)
-      * ((o.fishWeights?.[f.id] ?? 1) / (fwSum.get(f.rarity) ?? 1)));
+      * (base(f) / (fwSum.get(f.rarity) ?? 1)));
 }
 
 export function rollFish(

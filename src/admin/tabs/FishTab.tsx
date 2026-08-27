@@ -98,7 +98,7 @@ export default function FishTab() {
           price: f.price, sbPrice: sim.price[f.id] ?? null,
           budgetBase: rarityWeightOf(spot.id, f.rarity),
           sbBudget: sim.budgets[spot.id]?.[f.rarity] ?? null,
-          individualWeight: 1, sbWeight: sim.fishWeights[spot.id]?.[f.id] ?? null,
+          individualWeight: f.weight ?? 1, sbWeight: sim.fishWeights[spot.id]?.[f.id] ?? null,
         })),
       })),
       notes: {
@@ -117,16 +117,91 @@ export default function FishTab() {
     }
   };
 
+  // 변화량(Δ)만 추출 — sb* ≠ null 인 항목만 모은다. 오버라이드 0건이면 빈 spots.
+  const deltaCount = (() => {
+    let n = 0;
+    for (const spot of SPOTS) {
+      n += Object.keys(sim.budgets[spot.id] ?? {}).length;
+      n += Object.keys(sim.fishWeights[spot.id] ?? {}).length;
+    }
+    n += Object.keys(sim.price).length;
+    return n;
+  })();
+
+  const exportDeltaJson = async () => {
+    if (deltaCount === 0) {
+      window.alert('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
+      return;
+    }
+    const deltaSpots = SPOTS.map(spot => {
+      const fishDeltas = FISH.filter(f => f.spot === spot.id)
+        .map(f => {
+          const sbPrice = sim.price[f.id] ?? null;
+          const sbWeight = sim.fishWeights[spot.id]?.[f.id] ?? null;
+          if (sbPrice === null && sbWeight === null) return null;
+          return {
+            id: f.id, name: f.name, rarity: f.rarity,
+            ...(sbPrice !== null ? { price: sbPrice } : {}),
+            ...(sbWeight !== null ? { weight: sbWeight } : {}),
+          };
+        })
+        .filter(Boolean);
+
+      const budgetDelta = sim.budgets[spot.id];
+      const hasBudgetDelta = budgetDelta && Object.keys(budgetDelta).length > 0;
+      const hasFishDelta = fishDeltas.length > 0;
+      if (!hasBudgetDelta && !hasFishDelta) return null;
+
+      return {
+        id: spot.id, name: spot.name,
+        ...(hasBudgetDelta ? { rarityWeightDelta: budgetDelta } : {}),
+        ...(hasFishDelta ? { fish: fishDeltas } : {}),
+        // 참고용 EV는 델타가 있는 수역만 포함 — 변화 체감 즉시 확인
+        simEV: AXES.reduce((acc, a) =>
+          ({ ...acc, [a.key]: +(evsBySpot.get(spot.id)?.[a.key] ?? 0).toFixed(1) }), {} as Record<string, number>),
+      };
+    }).filter(Boolean);
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      deltaOnly: true,
+      changedFields: deltaCount,
+      spots: deltaSpots,
+      notes: {
+        usage: 'Δ JSON — sb* ≠ null 인 항목만. 비어 있으면 spots=[]',
+        fields: 'rarityWeightDelta = 수역 등급 예산 오버라이드(변경된 등급만), fish[].price/weight = 어종 확정값(변경된 어종만)',
+      },
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      window.alert(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
+    } catch {
+      console.log('pf-export-delta', JSON.stringify(payload, null, 2));
+      window.alert('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-base text-gold">어종 · 수역 ({FISH.length}종 / {SPOTS.length}수역)</h2>
-        <button type="button" aria-label="어종 데이터 JSON 추출"
-                onClick={exportJson}
-                className="flex items-center gap-1 border border-line rounded-sm px-2 py-1 text-xs
-                           text-text-dim hover:text-gold hover:border-gold cursor-pointer transition">
-          <PixelIcon glyph="download" size={12} />현황 JSON
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" aria-label="변화량 Δ JSON 추출"
+                  onClick={exportDeltaJson}
+                  disabled={deltaCount === 0}
+                  className="flex items-center gap-1 border rounded-sm px-2 py-1 text-xs
+                             cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed
+                             border-line text-text-dim hover:text-gold hover:border-gold
+                             disabled:hover:text-text-dim disabled:hover:border-line">
+            <PixelIcon glyph="download" size={12} />Δ JSON{deltaCount > 0 ? ` (${deltaCount})` : ''}
+          </button>
+          <button type="button" aria-label="어종 데이터 JSON 추출"
+                  onClick={exportJson}
+                  className="flex items-center gap-1 border border-line rounded-sm px-2 py-1 text-xs
+                             text-text-dim hover:text-gold hover:border-gold cursor-pointer transition">
+            <PixelIcon glyph="download" size={12} />현황 JSON
+          </button>
+        </div>
       </div>
 
       {/* 수역별 통합 대시보드 — 머리에 통계, 몸통에 편집 가능한 어종 행 */}
