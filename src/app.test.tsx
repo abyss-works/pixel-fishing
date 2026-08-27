@@ -994,22 +994,41 @@ describe('패치노트 (설정 탭)', () => {
   });
 });
 
-// 관리자 대시보드는 별도 페이지(admin/AdminApp — main.tsx 부팅 분기)로 완전히 옮겨졌다.
-// 게임 셸에는 관리자 탭·게이트 UI가 존재하지 않는다 — 아래는 소멸 검증만 남긴다.
-describe('관리자 대시보드 — 게임 셸에서 완전 분리 확인', () => {
-  it('사이드바에 관리자 탭이 없다 — ?admin 여부와 무관하게 5탭 고정', () => {
+// 관리자 탭 — 게임 셸 5탭 뒤 조건부 6번 탭 복구 (?admin 게이트).
+// 상세 대시보드는 별도 페이지(admin/AdminApp — ?admin#/admin)지만, 스탯 설정과 진입 링크는
+// 게임 셸 관리자 탭에서도 제공한다 (사용자 요청: 5번 뒤 관리자 탭에 스탯+대시보드 이동).
+describe('관리자 탭 — 게임 셸 6번 탭 복구 (?admin 게이트)', () => {
+  it('기본은 5탭 — ?admin 없으면 관리자 탭 없음', () => {
     render(<App />);
     expect(screen.queryByText('관리자')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
   });
 
-  it('설정 탭에도 관리자 UI가 없다 — 진입은 ?admin#/admin 해시뿐이다', () => {
+  it('?admin이면 관리자 탭이 6번으로 노출 — 클릭 시 스탯 설정과 대시보드 이동', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    clickTab('설정');
-    expect(screen.queryByText(/관리자 대시보드/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('대시보드 열기')).not.toBeInTheDocument();
+    // 로컬(jsdom localhost)에서는 ?admin만으로 게이트 통과 — 6탭 노출
+    expect(screen.getByText('관리자')).toBeInTheDocument();
+    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length + 1);
+    clickTab('관리자');
+    expect(screen.getByText(/내 스탯 — 테스트용/)).toBeInTheDocument();
+    expect(screen.getByLabelText('대시보드 열기')).toBeInTheDocument();
+    expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toContain('#/admin/fish');
     window.history.replaceState({}, '', '/');
+  });
+
+  it('6키 단축키 — 게이트 열렸을 때만 관리자 탭으로 이동', () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    render(<App />);
+    fireEvent.keyDown(document, { key: '6' });
+    expect(screen.getByText(/내 스탯 — 테스트용/)).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('6키 단축키 — 게이트 닫히면 무시', () => {
+    render(<App />);
+    fireEvent.keyDown(document, { key: '6' });
+    expect(screen.queryByText(/내 스탯 — 테스트용/)).not.toBeInTheDocument();
   });
 });
 
