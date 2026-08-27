@@ -85,7 +85,7 @@ describe('전체 리포트 조립', () => {
 // ---------- 페이지 렌더 스모크 (콘텐츠 조립 계약) ----------
 // 얇게 유지 — 탭 전환과 실제 데이터 채움만 본다. 프리미티브(MetricSwitch/DeltaCell/MiniBar)
 // 는 props-only라 여기서 함께 검증된다.
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import AdminApp from './AdminApp';
 
@@ -93,32 +93,38 @@ import AdminApp from './AdminApp';
 afterEach(cleanup);
 
 describe('관리자 대시보드 페이지', () => {
-  it('어종 시뮬레이션 한 가지만 — 수역별 표가 확정 데이터로 채워진다', () => {
+  // 기본 탭은 개요(운영 데이터 — 로컬 모드에선 권한 안내만)다. 어종 시뮬 검증은 그 탭으로
+  // 직접 건너간 뒤 본다.
+  const openFish = () => {
     render(<AdminApp />);
     expect(screen.getByText('관리자 대시보드')).toBeInTheDocument();
-    expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/요구 파워 40/).length).toBeGreaterThan(0);
-    // 스탯·도구는 대시보드에서 제거 — 어종만 남김
     expect(screen.queryByRole('button', { name: /^스탯$/ })).not.toBeInTheDocument();
     expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '어종 시뮬' }));
+  };
+
+  it('어종 시뮬레이션 탭 — 수역별 표가 확정 데이터로 채워진다', () => {
+    openFish();
+    expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/요구 파워 40/).length).toBeGreaterThan(0);
   });
 
   it('기대값 띠가 어종 표 머리에 산다 — 축 5개와 Δ 열이 같은 프레임 안에', () => {
-    render(<AdminApp />);
+    openFish();
     expect(document.body.textContent).toMatch(/무판정/);
     expect(document.body.textContent).toMatch(/PERFECT/);
     expect(document.querySelectorAll('.pf-table td .pf-accent').length).toBeGreaterThan(10);
   });
 
   it('Δ 열은 사다리 보기에서 첫 행만 — 이고 나머지는 값을 가진다', () => {
-    render(<AdminApp />);
+    openFish();
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/\+\d/).length).toBeGreaterThan(0);
   });
 
   it('지역 내 변화량 — 수동 사다리는 연쇄 %, 방치는 폭 하나(두 행에 개별 Δ 없음)', () => {
-    render(<AdminApp />);
+    openFish();
     expect(document.body.textContent).toMatch(/\+\d+%/);
     expect(document.body.textContent).toMatch(/폭 \+\d+%/);
   });

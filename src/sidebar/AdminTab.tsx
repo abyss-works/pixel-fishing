@@ -37,14 +37,14 @@ export default function AdminTab({ game, dispatch }: {
 
       <SectionTitle>대시보드</SectionTitle>
       <Note>
-        어종 시뮬레이션은 별도 페이지다. 아래 버튼으로 이동한다.
+        운영 데이터(개요·유저·지표·이상탐지 등)는 별도 페이지다. 아래 버튼으로 이동한다.
       </Note>
-      <a href="?admin=1#/admin/fish" aria-label="대시보드 열기"
+      <a href="?admin=1#/admin/overview" aria-label="대시보드 열기"
          className="pf-btn ghost text-sm text-center !py-2">
         대시보드 열기 →
       </a>
       <p className="text-2xs text-text-dim">
-        주소: <code className="pf-accent">?admin=1#/admin/fish</code> — 같은 탭에서 열린다.
+        주소: <code className="pf-accent">?admin=1#/admin/overview</code> — 같은 탭에서 열린다.
       </p>
     </div>
   );

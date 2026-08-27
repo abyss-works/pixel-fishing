@@ -231,6 +231,31 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.writes.instancesLocked).toEqual([{ uid: 'a', locked: true }]);
     expect(out.events).toEqual([]);
   });
+
+  it('boot — 상태 무변경, 접속 흔적 한 행 (buildId는 잘라서 남긴다)', () => {
+    const s = seed({ gold: 42 });
+    const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(s);                                  // 게임 상태 무변경
+    expect(out.result).toEqual({ type: 'none' });
+    expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
+    // writes도 비어 있다 — 접속은 상태가 아니니 DB 쓰기 대상이 없다
+    expect(out.writes).toEqual({
+      instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
+    });
+  });
+
+  it('boot — buildId 없음/형식 깨짐은 빈 payload로 수용한다 (텔레메트리가 게임을 막지 않게)', () => {
+    for (const action of [
+      { type: 'boot' } as const,
+      { type: 'boot', buildId: 123 } as unknown as { type: 'boot'; buildId?: string },
+      { type: 'boot', buildId: '   ' } as const,
+    ]) {
+      const out = applyAction(seed(), action, deps());
+      if (!out.ok) throw new Error(out.error);
+      expect(out.events).toEqual([{ type: 'boot', payload: {} }]);
+    }
+  });
 });
 
 describe('redeemCoupon', () => {

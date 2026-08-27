@@ -8,6 +8,7 @@ import type { GameAction } from '../game/actions';
 import { migrate, newState } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../errors';
+import { BUILD_ID } from '../buildId';
 
 // 게임 상태 소유 + 백엔드 디스패치 (계층: service&state — 서버 권위 v0.5.0)
 // 모든 상태 변경은 api.game.dispatch 하나로 흐른다. api가 http/local을 갈아끼운다.
@@ -120,6 +121,10 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
           if (!(e instanceof AppError && e.kind === 'restricted')) throw e;
         }
       }
+      // 접속 기록 — DAU·리텐션의 정본(events). 세션 시작에 1회, 새로고침마다 다시 센다.
+      // 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
+      // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+      void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩

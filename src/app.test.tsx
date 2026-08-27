@@ -1013,7 +1013,7 @@ describe('관리자 탭 — 게임 셸 6번 탭 복구 (?admin 게이트)', () =
     clickTab('관리자');
     expect(screen.getByText(/내 스탯 — 테스트용/)).toBeInTheDocument();
     expect(screen.getByLabelText('대시보드 열기')).toBeInTheDocument();
-    expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toContain('#/admin/fish');
+    expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toContain('#/admin/overview');
     window.history.replaceState({}, '', '/');
   });
 
