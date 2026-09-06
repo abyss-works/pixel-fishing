@@ -1,4 +1,4 @@
-// R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
+﻿// R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
@@ -9,6 +9,7 @@ import FacilityModal from './stage/FacilityModal';
 import { resetBagView } from './sidebar/bagView';
 import { resetCanvasCover } from './admin/canvasCover';
 import { resetKeyScopes } from './hotkeys';
+import { resetSpotState, setCurrentSpot, setPlayerPos } from './world/currentSpot';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
 import { WALK_BAG_CAP } from './data/boats';
 import { TAB_ORDER } from './sidebar/tabs';
@@ -17,7 +18,7 @@ import type { FishInstance, FormId, FormRecord, GameState } from './game/logic';
 import type { GameAction } from './game/actions';
 import { LocalBackend } from './backend/local';
 import { when } from './backend/types';
-import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, O_SCHOOLS } from './world';
+import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, WORLD_SCHOOLS } from './world';
 import type { Point, RegionId } from './world';
 
 const SAVE_KEY = 'pixel-fishing-save';
@@ -60,6 +61,7 @@ beforeEach(() => {
   resetBagView();     // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
+  resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
 });
 
 afterEach(() => {
@@ -122,7 +124,8 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 기본은 전부 선택 — 두 마리분
     expect(screen.getByText('판매하기 (+60G)')).toBeInTheDocument();
 
-    // 개체는 기본으로 펼쳐져 있다 — 개체화가 화면에 바로 보여야 한다
+    // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.getByText('최대')).toBeInTheDocument();
 
@@ -146,6 +149,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     seed({ bag: [inst('carp', 'normal', 20, true)] });
     render(<App />);
     clickFurniture('sell');
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     // 개체 줄이 클릭 대상이 아니다 (role=button 없음)
     expect(screen.getByText('20.0cm').closest('[role="button"]')).toBeNull();
     expect(screen.getByText(/^판매하기/)).toBeDisabled();
@@ -334,8 +338,8 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
 
 const POND_SHORE: Point = { x: 150, y: 92 };   // v-pond-1(150,118) 물가
 // 어군 좌표는 앵커 파생 — 마스크 재생성과 무관하게 항상 어군 위에 선다
-const SEA_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-sea-1')!;
-const DEEP_SCHOOL: Point = O_SCHOOLS.find(s => s.id === 'o-deep-1')!;
+const SEA_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-sea-1')!;  
+const DEEP_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-deep-1')!;
 
 let lastGame: GameState;
 const toastFn = vi.fn();
@@ -419,19 +423,19 @@ describe('R5b: 배 게이트', () => {
   });
 
   it('태평양은 배 1단계 필요', () => {
-    renderField('ocean', SEA_SCHOOL, { boat: 0 });
+    renderField('world', SEA_SCHOOL, { boat: 0 });
     space();
     expect(phase()).toBe('idle');
     expect(lastToast()).toContain('배 1단계');
   });
 
   it('심해 해구는 배 2단계 필요, 충분하면 캐스팅', () => {
-    renderField('ocean', DEEP_SCHOOL, { boat: 1 });
+    renderField('world', DEEP_SCHOOL, { boat: 1 });
     space();
     expect(phase()).toBe('idle');
     expect(lastToast()).toContain('배 2단계');
     cleanup();
-    renderField('ocean', DEEP_SCHOOL, { boat: 2 });
+    renderField('world', DEEP_SCHOOL, { boat: 2 });
     space();
     expect(phase()).toBe('wait');
   });
@@ -591,30 +595,44 @@ describe('R22: 도움말 탭', () => {
   });
 });
 
-describe('지역 탭: 현재 지역의 로어·수역·서식 어종', () => {
-  it('집(마을)에서는 마을 수역만, 미획득 어종은 ??? 표시', () => {
+describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상세 배타 전환', () => {
+  it('진입 전엔 가까운 수역만(물고기 미노출) — 마을에서 연못·강 거리순으로 보인다', () => {
     seed({ dex: { crucian: { normal: rec(1) } } });
     render(<App />);
     clickTab('지역');
-    expect(screen.getByText(/고향 마을/)).toBeInTheDocument();
-    expect(screen.getByText('마을 연못')).toBeInTheDocument();
+    // 존 계층화 — 로어 슬롯은 항상 존 정보 ('고향 물')
+    expect(screen.getByRole('heading', { name: '고향 물' })).toBeInTheDocument();
+    expect(screen.getAllByText('마을 연못').length).toBeGreaterThan(0);
     expect(screen.queryByText('태평양')).not.toBeInTheDocument();      // 다른 지역 수역 미노출
-    expect(screen.getByText('붕어')).toBeInTheDocument();              // 잡은 어종은 이름 공개
-    expect(screen.getAllByText('???').length).toBeGreaterThan(0);      // 미획득은 ???
-    expect(screen.queryByText('황금잉어')).not.toBeInTheDocument();    // 스포일러 차단
+    // 사거리 내 어군이 없으면 어군 목록만 — 어종 카드는 사거리 진입 시
+    expect(screen.queryByText('붕어')).not.toBeInTheDocument();
+    // 등급 분포 테이블 — 마을 존 서브트리 (연못·강)
+    expect(screen.getByText(/등급 분포/)).toBeInTheDocument();
   });
 
-  it('서식 어종은 카드로 — 실루엣·이름·등급만, 미획득은 실루엣 유지', () => {
+  it('사거리 내 어군 진입 시 어종 카드 — 실루엣·이름·등급만, 미획득은 실루엣 유지', () => {
     seed({ dex: { crucian: { normal: rec(1) } } });
     render(<App />);
     clickTab('지역');
-    // 잡은 종은 이름이, 안 잡은 종은 스프라이트가 미확인 라벨을 단다
+    // 캐스팅 사거리 내 어군 지정 — Field의 근접 판정 대신 스토어에 직접 기록(동일 계약)
+    act(() => setCurrentSpot('pond'));
+    // 사거리 내 어군이 있으면 상세가 뜬다 — 잡은 종은 이름이, 안 잡은 종은 미확인
     expect(screen.getByLabelText('붕어')).toBeInTheDocument();
     expect(screen.getAllByLabelText('미확인 어종').length).toBeGreaterThan(0);
-    // 등급은 카드마다 붙는다 — 잡기 전에도 티어는 알 수 있다(도감 카드와 같은 규칙)
-    expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
-    // 마릿수·가격은 여기 소관이 아니다 (도감이 한다)
-    expect(screen.queryByText(/마리 잡음/)).toBeNull();
+    expect(screen.getAllByText('일반').length).toBeGreaterThan(0); // 등급 뱃지
+  });
+
+  it('가까운 수역은 거리순 정렬 — 플레이어 좌표 기반, 요구 배/낚시 가능만 가볍게', () => {
+    seed({ boat: 1 });
+    render(<App />);
+    clickTab('지역');
+    // 연못 학교(150,118)보다 강 학교(100,222) 쪽에 서 있으면 강이 먼저다
+    act(() => setPlayerPos({ x: 100, y: 200 }));
+    const list = screen.getByText('어군 정보').parentElement!;
+    const names = [...list.querySelectorAll('span')].map(s => s.textContent).filter(Boolean);
+    // 가벼운 UI만 — 물고기 카드·서사 없음
+    expect(screen.queryByText('붕어')).not.toBeInTheDocument();
+    expect(names.join(' ')).toMatch(/마을 강/);
   });
 });
 
@@ -646,7 +664,7 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
 
 describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   it('세이브에 대양이 적혀 있으면 대양에서 시작한다', () => {
-    seed({ boat: 1, location: { kind: 'region', id: 'ocean' } });
+    seed({ boat: 1, location: { kind: 'region', id: 'world' } });
     render(<App />);
     expect(screen.getByLabelText('바다')).toBeInTheDocument();   // 필드 캔버스
     expect(screen.queryByLabelText('집')).not.toBeInTheDocument();
@@ -659,8 +677,8 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   });
 });
 
-describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)', () => {
-  it('필드에서 미니맵을 클릭하면 지역 탭이 열린다', () => {
+describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐지)', () => {
+  it('필드에서 미니맵을 클릭하면 세계지도 모달이 열린다 — 지역 탭은 건드리지 않는다', () => {
     seed({ boat: 1 });
     render(<App />);
     clickFurniture('exit'); // 집 → 마을 (필드 진입, 기본 탭=지역)
@@ -668,10 +686,16 @@ describe('R23b: 미니맵 클릭 = 지역 탭 열기 (M 키 트리거는 폐지)
 
     clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));
-    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
+    // 세계지도 모달 — 전체 지구(흑백) + 구현 영역(컬러). 지역 탭은 그대로다.
+    expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
+    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /지역/ })).not.toHaveClass('active');
 
     fireEvent.keyDown(document, { code: 'KeyM' }); // M 키는 아무 일도 하지 않는다
-    expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
+    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByLabelText('세계지도')).not.toBeInTheDocument();
   });
 });
 
@@ -895,6 +919,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
     render(<App />);
     clickFurniture('sell');
+    fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText(/판매하기 \(\+90G\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
     fireEvent.click(screen.getByText(/판매하기 \(\+60G\)/));                // 변이만

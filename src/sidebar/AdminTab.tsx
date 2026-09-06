@@ -1,6 +1,6 @@
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
-import type { DispatchResult, MaybePromise } from '../backend/types';
+import type { DispatchResult, MaybePromise } from '../api';
 import StatsTab from '../admin/tabs/StatsTab';
 import { setCanvasCover, useCanvasCover } from '../admin/canvasCover';
 import { cx } from '../ui/cx';

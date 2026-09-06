@@ -3,7 +3,8 @@
 // 판정 규칙은 types.ts 주석 참조.
 import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import { cellDefAt } from './mask';
-import type { SpotId } from '../data/spots';
+import { zoneById, topZoneOf } from '../data/zones';
+import type { ZoneId } from '../data/zones';
 import { CAST_RANGE } from '../game/balance';
 
 export { CAST_RANGE }; // 군집 판정 반경 — 기존 import 경로 호환
@@ -29,13 +30,73 @@ export function canMove(pack: RegionPack, x: number, y: number): boolean {
   return true;
 }
 
-// 수역 판정 — 마스크면 셀의 spot, rect 지형이면 spot 있는 water 조각. 없으면 null(낚시 불가)
-export function zoneAt(pack: RegionPack, x: number, y: number): SpotId | null {
-  if (pack.map) return cellDefAt(pack.map, x, y)?.spot ?? null;
-  for (const t of pack.terrain!) {
-    if (t.kind === 'water' && t.spot && inRect(x, y, t.rect)) return t.spot;
+// 구역 판정 — 마스크면 셀의 zone, walk 지역(마을)은 단일 구역. 모르면 undefined(구역 밖 물).
+// **셀은 존만 안다**(spec/zone-tree.md) — 스팟은 존 안에 배치되는 어군 오브젝트라 캐스팅
+// 판정도 학교(가까운 어군) 기준이다. 하위 존(해구 등) 위에 서면 하위 존이 반환된다 —
+// 로어 표시 규칙("가장 구체적인 존 우선")의 근원.
+export function zoneOf(pack: RegionPack, x: number, y: number): ZoneId | undefined {
+  if (pack.map) return cellDefAt(pack.map, x, y)?.zone;
+  return pack.movement === 'walk' ? 'village' : undefined;
+}
+
+// ---------- 존 전이 추적기 (오픈월드 고도화 A-1·A-2 + 존 계층화) ----------
+
+export interface ZoneStep {
+  /** 게이트에 막혔다 — 호출부는 위치를 직전 프레임으로 되밀고 blocked 안내문을 띄운다 */
+  revert: boolean;
+  blocked: string | null;
+  /** 최상위 존 진입 확정(dwell 통과) — 진입 토스트용. 하위 존 전환은 토스트 없이
+   *  로어·어군 상세가 함께 바뀐다(표시 존은 Field가 어군 우선으로 파생) */
+  enteredTop: ZoneId | null;
+}
+
+/** 존 전이 상태 기계 — **게이트 전용**이다. 표시 존은 Field가 파생한다(사거리 내 어군이
+ *  있으면 그 어군의 존 — 어군 정보 트리거와 로어 트리거를 통일, 없으면 셀 구역의 최상위 존).
+ *  게이트 판정은 **즉시**(경계를 넘는 순간 되밀어야 자원 침범이 없다). 최상위 존 진입
+ *  토스트만 dwell 히스테리시스(400ms)로 확정한다 — 경계 왕복 시 토스트 낭비 방지. */
+export class ZoneTracker {
+  private dwellMs: number;
+  /** 게이트 판정 기준 — 셀 구역, 경계 통과 즉시 갱신(하위 존 포함) */
+  private zone: ZoneId | null = null;
+  /** 마지막 확정 최상위 존 — 진입 토스트 중복 방지 */
+  private shownTop: ZoneId | null = null;
+  private pending: { top: ZoneId; at: number } | null = null;
+
+  constructor(dwellMs = 400) {
+    this.dwellMs = dwellMs;
   }
-  return null;
+
+  /** 진입(마운트·씬 전환) — 토스트 없이 현재 구역부터 시작한다 */
+  init(z: ZoneId | null): void {
+    this.zone = z;
+    this.shownTop = z ? topZoneOf(z) : null;
+    this.pending = null;
+  }
+
+  /** 이동 루프마다 호출. z = 현재 셀 구역(zoneOf, 구역 밖 물은 null) */
+  step(z: ZoneId | null, now: number, boat: number): ZoneStep {
+    if (z && z !== this.zone) {
+      // 게이트 — 진입 요구 배 미달이면 즉시 되밀기 (기준 zone은 그대로다)
+      const gate = zoneById(z);
+      if (gate?.entryBoat && boat < gate.entryBoat) {
+        return { revert: true, blocked: gate.gateMsg ?? '더 튼튼한 배가 필요하다.', enteredTop: null };
+      }
+      this.zone = z;
+      const top = topZoneOf(z);
+      if (top !== this.shownTop) this.pending = { top, at: now };
+      else this.pending = null;
+    } else if (this.pending) {
+      if (!z || topZoneOf(z) !== this.pending.top) {
+        this.pending = null; // 경계에서 되돌아갔다 — "들어섰다" 취소 (떨림 방지)
+      } else if (now - this.pending.at >= this.dwellMs) {
+        this.shownTop = this.pending.top;
+        const enteredTop = this.pending.top;
+        this.pending = null;
+        return { revert: false, blocked: null, enteredTop };
+      }
+    }
+    return { revert: false, blocked: null, enteredTop: null };
+  }
 }
 
 // 축별로 나눠 이동 → 벽/해안선을 따라 미끄러짐 (R4)

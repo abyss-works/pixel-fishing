@@ -11,8 +11,8 @@ import {
 import { RARITY, RARITY_ORDER } from '../data/rarity.js';
 import type { RarityId } from '../data/rarity.js';
 import { rarityWeightOf } from '../data/spots.js';
-import type { SpotId, SpotRegionId } from '../data/spots.js';
-import type { LocationRef } from '../data/places.js';
+import type { SpotId } from '../data/spots.js';
+import type { LocationRef, RegionId } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
@@ -71,8 +71,9 @@ export interface GameState {
   location: LocationRef;
   /** 가 본 지역 — 업적("모든 지역 방문")의 근거. events가 아니라 상태에 두는 이유:
    *  events는 보관주기 정책 대상이라 지워지면 진행도가 증발한다
-   *  (decisions/save-instancing.md — 통계 수명을 스트림 수명과 분리). */
-  visited: SpotRegionId[];
+   *  (decisions/save-instancing.md — 통계 수명을 스트림 수명과 분리).
+   *  오픈월드화로 병합 바다 'world'도 방문 대상이다(구 지역 id는 구세이브 잔존분). */
+  visited: RegionId[];
   /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
    *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
   artifacts: string[];
@@ -571,11 +572,12 @@ function safeActiveBait(v: unknown): string | null {
 
 // 위치 위생 — 모르는 값이면 집으로. 지역 id 목록을 여기서 검사하지 않는 이유:
 // 어느 지역이 존재하는지는 world 소관이고 game은 그걸 보지 않는다(의존 단방향).
-// 없는 지역이 들어와도 부팅 시 App이 팩을 못 찾으면 집으로 떨어진다.
+// **런타임 문자열 통과** — 구세이브의 구 지역 id(ocean 등)도 형태만 맞으면 그대로 남긴다.
+// 없는 지역이 들어와도 부팅 시 App이 팩을 못 찾으면 고향 항구로 떨어진다(sceneOf).
 function safeLocation(v: unknown): LocationRef {
   const l = v as Partial<LocationRef> | undefined;
   if (l && typeof l.id === 'string') {
-    if (l.kind === 'region') return { kind: 'region', id: l.id as SpotRegionId };
+    if (l.kind === 'region') return { kind: 'region', id: l.id as RegionId };
     if (l.kind === 'base'
         && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo')) {
       return { kind: 'base', id: l.id };
@@ -654,7 +656,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     dex: safeDex(s.dex),
     coupons: safeStrings(s.coupons),
     location: safeLocation(s.location),
-    visited: safeStrings(s.visited) as SpotRegionId[],
+    visited: safeStrings(s.visited) as RegionId[],
     artifacts: safeStrings(s.artifacts),
     items: safeItems(s.items),
     activeBait: safeActiveBait(s.activeBait),

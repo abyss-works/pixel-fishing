@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, LEGACY_KEY } from '../api';
-import { HttpBackend } from '../backend/http';
-import { LocalBackend } from '../backend/local';
-import { when } from '../backend/types';
-import type { Backend, DispatchResult, MaybePromise } from '../backend/types';
+import { api, loadLegacy, LEGACY_KEY, when } from '../api';
+import type { Backend, DispatchResult, MaybePromise } from '../api';
 import type { GameAction } from '../game/actions';
-import { migrate, newState } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../errors';
 import { BUILD_ID } from '../buildId';
 
 // 게임 상태 소유 + 백엔드 디스패치 (계층: service&state — 서버 권위 v0.5.0)
-// 모든 상태 변경은 api.game.dispatch 하나로 흐른다. api가 http/local을 갈아끼운다.
+// 모든 상태 변경은 api.createGame이 준 백엔드의 dispatch 하나로 흐른다 — http/local 분기는
+// api 계층에 갇혀 있고, 이 훅은 backend/*를 모른다(경계는 api/boundary.test.ts가 강제).
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
 export type SyncState = 'off' | 'connecting' | 'on' | 'error';
@@ -23,27 +20,11 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
   error: '클라우드 연결 실패 — 진행이 저장되지 않는 중',
 };
 
-// 레거시 localStorage 세이브를 메모리로 1회 이관 (쓰기는 하지 않음)
-function loadLegacy(): { game: GameState; notice: string | null; legacy: boolean } {
-  try {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const game = migrate(parsed);
-      const notice = parsed?.v !== 4 && game.fame > 0
-        ? `업데이트! 그동안 잡은 물고기가 명성으로 소급 인정되었다. 명성 ${game.fame}`
-        : null;
-      return { game, notice, legacy: true };
-    }
-  } catch { /* 손상된 저장 데이터는 무시하고 새로 시작 */ }
-  return { game: newState(), notice: null, legacy: false };
-}
-
 export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [init] = useState(loadLegacy);
   const backendRef = useRef<Backend>(null!);
   if (!backendRef.current) {
-    backendRef.current = api.auth.isConfigured ? new HttpBackend(init.game) : new LocalBackend(init.game);
+    backendRef.current = api.createGame(init.game);
   }
   const [game, setGame] = useState<GameState>(init.game);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');

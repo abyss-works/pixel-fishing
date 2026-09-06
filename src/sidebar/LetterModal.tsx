@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { LETTER_MAX } from '../game/actions';
 import type { GameAction } from '../game/actions';
-import { when } from '../backend/types';
-import type { DispatchResult, MaybePromise } from '../backend/types';
+import { when } from '../api';
+import type { DispatchResult, MaybePromise } from '../api';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Note from '../ui/Note';

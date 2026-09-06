@@ -4,18 +4,22 @@ import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import { baitById } from '../data/baits';
 import { cx } from '../ui/cx';
 import type { GameAction } from '../game/actions';
-import { when } from '../backend/types';
+import { when } from '../api';
 import { subscribeFailure } from '../errors';
 import { useKeyScope } from '../hotkeys';
-import type { DispatchResult, MaybePromise } from '../backend/types';
-import { REGION_PACKS, entryPoint, inTrigger, movePlayer, nearestSchoolInRange } from '../world';
+import type { DispatchResult, MaybePromise } from '../api';
+import { REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer, nearestSchoolInRange, zoneOf } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
+import type { SpotId } from '../data/spots';
+import { zoneById, zoneOfSpot, topZoneOf } from '../data/zones';
+import type { ZoneId } from '../data/zones';
+import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot';
 import { nextPhase, phaseDurationMs } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../game/stats';
 import { CAST_RANGE } from '../game/balance';
 import { useCanvasCover } from '../admin/canvasCover';
-import { renderRegion, renderWorldMap, CANVAS_W, CANVAS_H } from '../pixel';
+import { renderRegion, renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H, CANVAS_W, CANVAS_H } from '../pixel';
 import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
 import CatchCard from './CatchCard';
@@ -72,6 +76,9 @@ export default function Field({
   const [school, setSchool] = useState<School | null>(null);
 
   const posRef = useRef<Point>(initialPos ?? def.spawn);
+  const lastSpotRef = useRef<SpotId | null>(null);
+  // 구역 전이 추적기 — 게이트는 즉시, 표시(스토어·토스트·미니맵 라벨)는 dwell 히스테리시스
+  const trackerRef = useRef(new ZoneTracker());
   const keysRef = useRef(new Set<string>());
   const biteStartRef = useRef(0);
   const phaseRef = useRef(phase);
@@ -254,6 +261,16 @@ export default function Field({
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx || typeof requestAnimationFrame === 'undefined') return;
+    // 입장 즉시 현재 어군·구역·좌표를 한 번 반영 — 이동 전에도 지역 탭이 문맥을 안다.
+    // spot = 캐스팅 사거리 내 어군(spec/zone-tree.md) — 스폰은 사거리 밖(R4b)이므로 null.
+    // 표시 존 = 어군 우선(그 어군의 존), 사거리 밖이면 셀 구역의 최상위 존 — 아래 루프와 같은 규칙.
+    const z0 = zoneOf(def, posRef.current.x, posRef.current.y) ?? null;
+    trackerRef.current.init(z0);
+    const near0 = nearestSchoolInRange(def.schools, posRef.current.x, posRef.current.y, CAST_RANGE);
+    lastSpotRef.current = near0?.spot ?? null;
+    setCurrentSpot(lastSpotRef.current);
+    setZone(lastSpotRef.current ? zoneOfSpot(lastSpotRef.current) ?? null : (z0 ? topZoneOf(z0) : null));
+    setPlayerPos({ x: posRef.current.x, y: posRef.current.y });
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
@@ -264,30 +281,64 @@ export default function Field({
         const d = MOVE_KEYS[k];
         if (d) { dx += d[0]; dy += d[1]; }
       }
+      let movedFrom: Point | null = null;
       if ((dx || dy) && phaseRef.current === 'idle') {
         const speed = moveSpeed(gameRef.current, def.movement).value;
         const prev = posRef.current;
+        movedFrom = prev;
         posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
-        // 트리거 — 목적지·게이트·안내문 전부 팩 데이터 (R5c). 새 지역/항로 = 데이터 행 추가.
-        for (const trig of def.triggers) {
-          if (!inTrigger(posRef.current, trig.rect)) continue;
-          if (trig.action === 'base') {                                    // 거점 진입
-            sceneRef.current({ kind: 'base', id: def.base }, trig.msg);
+        // 현재 어군(사거리 내)·좌표 전역 갱신 — spot은 조업 오브젝트라 "사거리 내 어군"으로
+        // 판정한다(spec/zone-tree.md). 캐스팅 판정(tryCast)과 같은 학교 근접 규칙.
+        const near = nearestSchoolInRange(def.schools, posRef.current.x, posRef.current.y, CAST_RANGE);
+        const spot = near?.spot ?? null;
+        if (spot !== lastSpotRef.current) {
+          lastSpotRef.current = spot;
+          setCurrentSpot(spot);
+        }
+        setPlayerPos({ x: posRef.current.x, y: posRef.current.y });
+      }
+      // 존 전이 추적 — **게이트 전용**(최상위 경계 되밀기, 즉시) + 최상위 진입 토스트(dwell).
+      // 표시 존은 아래에서 어군 우선으로 파생한다 — 어군 상세와 로어가 같은 트리거로 함께
+      // 바뀐다(사용자 확정). 게이트는 클라 연출일 뿐 실낚시 자격은 서버 하한(spots.boatTier).
+      let displayZone: ZoneId | null = null;
+      {
+        const z = zoneOf(def, posRef.current.x, posRef.current.y) ?? null;
+        const st = trackerRef.current.step(z, now, gameRef.current.boat);
+        if (st.revert) {
+          if (movedFrom) {
+            posRef.current = movedFrom;
+            setPlayerPos({ x: posRef.current.x, y: posRef.current.y });
+          }
+          if (st.blocked) toastRef.current(st.blocked);
+        } else if (st.enteredTop) {
+          toastRef.current(`${zoneById(st.enteredTop)!.name}에 들어섰다.`);
+        }
+        // 표시 존 — **사거리 내 어군이 있으면 그 어군의 존**(하위 존 포함, 즉시 전환 —
+        // 어군 정보가 바뀌는 트리거와 로어 트리거를 통일), 사거리 밖이면 셀 구역의
+        // 최상위 존(기본 = 최상위 존 정보 — 사용자 확정).
+        const focusZone = lastSpotRef.current ? zoneOfSpot(lastSpotRef.current) : null;
+        displayZone = focusZone ?? (z ? topZoneOf(z) : null);
+        setZone(displayZone);
+      }
+      // 트리거 — 목적지·게이트·안내문 전부 팩 데이터 (R5c). 새 지역/항로 = 데이터 행 추가.
+      for (const trig of def.triggers) {
+        if (!inTrigger(posRef.current, trig.rect)) continue;
+        if (trig.action === 'base') {                                    // 거점 진입
+          sceneRef.current({ kind: 'base', id: trig.base ?? def.base }, trig.msg);
+          return;
+        }
+        if (trig.action === 'travel') {                                  // 지역 간 이동 (배 게이트)
+          if (gameRef.current.boat >= trig.requiredBoat) {
+            // 경계 봉합 — 목적지의 마주 보는 자리에서 이어서 등장한다 (오픈월드 R5c)
+            const entry = entryPoint(REGION_PACKS[trig.to], trig, posRef.current);
+            sceneRef.current({ kind: 'region', id: trig.to }, trig.msg, entry);
             return;
           }
-          if (trig.action === 'travel') {                                  // 지역 간 이동 (배 게이트)
-            if (gameRef.current.boat >= trig.requiredBoat) {
-              // 경계 봉합 — 목적지의 마주 보는 자리에서 이어서 등장한다 (오픈월드 R5c)
-              const entry = entryPoint(REGION_PACKS[trig.to], trig, posRef.current);
-              sceneRef.current({ kind: 'region', id: trig.to }, trig.msg, entry);
-              return;
-            }
-            posRef.current = prev;                                         // 되밀기 + 게이트 안내
-            toastRef.current(trig.blockedMsg);
-          } else if (trig.action === 'shop') {                             // 필드 시설 — 패널 열고 되밀기
-            posRef.current = prev;
-            shopRef.current?.();
-          }
+          posRef.current = movedFrom ?? posRef.current;                  // 되밀기 + 게이트 안내
+          toastRef.current(trig.blockedMsg);
+        } else if (trig.action === 'shop') {                             // 필드 시설 — 패널 열고 되밀기
+          posRef.current = movedFrom ?? posRef.current;
+          shopRef.current?.();
         }
       }
       const axes = rodAxes(gameRef.current);
@@ -305,10 +356,13 @@ export default function Field({
         red: pz ? pz.red / 100 : 0,
         t: now / 1000,
       });
-      // 필드 위 미니맵 오버레이
+      // 필드 위 미니맵 오버레이 — 현재 위치 기준 crop(구 지역 한 장 시야, 세계지도는 모달).
+      // 상단에 표시 존 이름(어군 우선 규칙) — 통행 전용 물은 낚시 수역이 없어 위치 감각을 보완.
       const mmCtx = minimapRef.current?.getContext('2d');
       if (mmCtx) {
-        renderWorldMap(mmCtx, def, posRef.current, gameRef.current.boat, { t: now / 1000 });
+        renderWorldMap(mmCtx, def, posRef.current, gameRef.current.boat,
+          { t: now / 1000, view: minimapView(def, posRef.current),
+            zoneName: displayZone ? zoneById(displayZone)?.name ?? null : null });
       }
       raf = requestAnimationFrame(loop);
     };
@@ -372,13 +426,19 @@ export default function Field({
         </div>
       )}
 
-      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다 */}
+      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다.
+          현재 위치 기준 crop(1344×756 — 필드 시야의 3배, 구 지역 한 장 스케일)만 본다. 배면
+          크기는 시야 크기에 상한 912px — renderWorldMap이 pack 좌표를 스케일해 그린다.
+          전체 세계는 미니맵 클릭(월드맵). */}
       {covered ? (
         <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
                         border border-line rounded-sm bg-bg"
              aria-hidden="true" />
       ) : (
-        <canvas ref={minimapRef} width={def.w} height={def.h}
+        <canvas ref={minimapRef}
+                width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
+                height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
+                                   * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
                 className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
                            [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
                 aria-label="미니맵"

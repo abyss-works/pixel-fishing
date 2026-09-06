@@ -2,6 +2,7 @@
 // 여기 값을 바꾸는 것만으로 게임 감각이 조정되어야 하고, 로직 파일에 수치를 흘리지 않는다.
 
 import type { RarityId } from '../data/rarity.js';
+import type { GameAction } from './actions.js';
 
 // 낚시 상태머신 타이밍 (캐스팅 연출 단계는 없음 — 던지면 바로 대기)
 export const CATCH_MS = 2000;            // 획득 카드 표시 후 자동 재캐스트
@@ -61,7 +62,7 @@ export const BAIT_BUY_MAX = 50;
 
 // 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.
-//   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·letter).
+//   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·sendLetter).
 //     인간 최소 낚시 사이클(입질 1s + 스윕 1.4s + 홀드 2s ≈ 4.4s) 대비 한참 아래라 무감각.
 //   빠름      = 상점·정비 등 UI 체인(연속 클릭)이 정상인 계열. 더블클릭(≤300ms)도 통과하고,
 //     봇 flood에는 150ms≈최대 ~6.7 rps/uid의 완화 상한으로 남는다.
@@ -69,7 +70,9 @@ export const BAIT_BUY_MAX = 50;
 // 완화해도 경제가 흔들리지 않는다. 타입 목록은 actions.ts GameAction 유니온과 함께 손대는 문서다.
 export const MIN_ACTION_GAP_MS = 1000;
 export const MIN_ACTION_GAP_FAST_MS = 150;
-export const PACING_SLOW_TYPES = ['catch', 'letter'] as const;
+// satisfies가 액션 유니온과의 일치를 강제한다 — 'letter'(이벤트 타입) 오기로 sendLetter가
+// 빠른 창을 타던 버그의 재발 방지
+export const PACING_SLOW_TYPES = ['catch', 'sendLetter'] as const satisfies readonly GameAction['type'][];
 
 // (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — validate.ts는 v0.3.3, api/save.ts는 v0.5.0에
 //  사라졌고, 서버 권위에서 클라 변조 검증은 성립하지 않는다. 상태를 만드는 쪽이 서버다)

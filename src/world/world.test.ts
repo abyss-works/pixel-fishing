@@ -1,37 +1,25 @@
-// R4, R4b: 지역 충돌·군집 배치·경로 무결성 
+// R4, R4b: 지역 충돌·군집 배치·경로 무결성 + 존 계층(spec/zone-tree.md)
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
-// 고정 좌표 회귀 검증(마을/대양 세부)은 지역별 describe에 유지.
 import { describe, it, expect } from 'vitest';
-import { compileMap } from './mask';
 import { SPOTS } from '../data/spots';
+import { ZONES, zoneById, zoneOfSpot } from '../data/zones';
 import { WATER_STYLE } from '../pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  CAST_RANGE, REGION_PACKS, canMove, zoneAt, movePlayer, inTrigger, nearestSchoolInRange,
+  CAST_RANGE, REGION_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   V_BOATSHOP, V_BOATSHOP_TRIGGER,
-  OCEAN, O_DOCK, O_SPAWN, O_SCHOOLS, O_EXIT, OCEAN_W, OCEAN_H,
-  SEASIA, M_DOCK, M_SPAWN, LUZON_STRAIT, MALACCA_EXIT, SEASIA_W, SEASIA_H, SEASIA_SCHOOLS,
-  INDIAN, C_DOCK, C_SPAWN, SUNDA_EXIT, INDIAN_W, INDIAN_H, INDIAN_SCHOOLS,
+  WORLD, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
 } from './index';
-import { WINDOW as OCEAN_WINDOW } from './regions/generated/ocean.mask';
-import { WINDOW as SEASIA_WINDOW } from './regions/generated/seasia.mask';
-import { WINDOW as INDIAN_WINDOW } from './regions/generated/indian.mask';
+import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
+import { EARTH_MAP, worldToEarth, implementedRect } from '../pixel/scenes/atlas';
 
-type Window = { lonMin: number; lonMax: number; latMin: number; latMax: number };
-/** 경위도 → 지역 픽셀 [x, y](generated 창 기준). 지리 좌표는 마스크 재생성과 무관하므로
- *  육지/수역 회귀 샘플은 픽셀 리터럴 대신 이 변환으로 기술한다. */
-function geoPx(win: Window, w: number, h: number, lon: number, lat: number): [number, number] {
-  return [
-    Math.round(((lon - win.lonMin) / (win.lonMax - win.lonMin)) * w),
-    Math.round(((win.latMax - lat) / (win.latMax - win.latMin)) * h),
-  ];
-}
-const oceanAt = (lon: number, lat: number) => geoPx(OCEAN_WINDOW, OCEAN_W, OCEAN_H, lon, lat);
-const seasiaAt = (lon: number, lat: number) => geoPx(SEASIA_WINDOW, SEASIA_W, SEASIA_H, lon, lat);
-const indianAt = (lon: number, lat: number) => geoPx(INDIAN_WINDOW, INDIAN_W, INDIAN_H, lon, lat);
-
+// 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
+const worldAt = (lon: number, lat: number): [number, number] => [
+  Math.round((lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W),
+  Math.round((WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H),
+];
 
 // 시작점에서 BFS — 군집·트리거마다 도달 가능한 칸이 있는지 검증
 function reachabilityCheck(pack: RegionPack) {
@@ -78,9 +66,11 @@ function reachabilityCheck(pack: RegionPack) {
 // ============ 공통 무결성 — 모든 지역 팩 자동 검증 (R4b) ============
 
 describe.each(Object.values(REGION_PACKS))('$id R4b: 레벨디자인 무결성 (팩 공통)', pack => {
-  it('군집은 자기 수역 위에 있다', () => {
+  it('군집은 자기 존 위에 있다', () => {
     for (const s of pack.schools) {
-      expect(zoneAt(pack, s.x, s.y), s.id).toBe(s.spot);
+      const cellZone = zoneOf(pack, s.x, s.y);
+      const expected = zoneOfSpot(s.spot);
+      expect(cellZone, `${s.id} 셀 구역`).toBe(expected);
       if (pack.movement === 'sail') expect(canMove(pack, s.x, s.y), s.id).toBe(true);
     }
   });
@@ -119,7 +109,7 @@ describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
   it('수역 정의는 물이어야 한다 — 육지와 겹치는 수역 정의 금지', () => {
     if (!pack.map) return;
     for (const def of mapPalette(pack.map)) {
-      if (def.land) expect(def.spot ?? null, `육지 정의에 spot ${def.spot}`).toBeNull();
+      if (def.land) expect(def.zone ?? null, `육지 정의에 zone ${def.zone}`).toBeNull();
       if (def.style) expect(WATER_STYLE[def.style], `없는 물 스타일 ${def.style}`).toBeDefined();
     }
   });
@@ -127,14 +117,15 @@ describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
   it('낚시 수역은 충분한 면적을 유지한다 (육지가 덮어 삼켜지지 않았나)', () => {
     if (!pack.map) { // rect 지형 — 조각 존재만 확인
       for (const s of pack.schools) {
-        expect(pack.terrain!.some(t => t.kind === 'water' && t.spot === s.spot), s.spot).toBe(true);
+        expect(pack.terrain!.some(t => t.kind === 'water'), s.spot).toBe(true);
       }
       return;
     }
     for (const spot of new Set(pack.schools.map(s => s.spot))) {
       let cells = 0;
       for (const code of pack.map.codes) {
-        if (pack.map.palette[code]?.spot === spot) cells++;
+        const def = pack.map.palette[code];
+        if (def?.zone && zoneOfSpot(spot) === def.zone) cells++;
       }
       expect(cells, `${pack.id} ${spot}`).toBeGreaterThanOrEqual(24); // ≈ 24셀(1,536px²)
     }
@@ -145,7 +136,6 @@ describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
 function mapPalette(map: NonNullable<RegionPack['map']>): NonNullable<MapCellDef>[] {
   return map.palette.filter((d): d is MapCellDef => !!d);
 }
-
 
 // ============ 지역 1: 마을 — 고정 좌표 회귀 ============
 
@@ -163,11 +153,11 @@ describe('마을 R4: 충돌 (도보)', () => {
     expect(canMove(VILLAGE, V_PIER.x + 8, 330)).toBe(true);     // 바다 위 부두
   });
 
-  it('수역 판정: 연못/강만 낚시 수역, 남쪽 바다는 아님', () => {
-    expect(zoneAt(VILLAGE, 150, 120)).toBe('pond');
-    expect(zoneAt(VILLAGE, 400, 220)).toBe('river');
-    expect(zoneAt(VILLAGE, 100, 330)).toBeNull(); // 낚시 수역 아님(경계 바다)
-    expect(zoneAt(VILLAGE, V_SPAWN.x, V_SPAWN.y)).toBeNull();
+  it('존 판정: 마을 전체가 village 존', () => {
+    expect(zoneOf(VILLAGE, 150, 120)).toBe('village');
+    expect(zoneOf(VILLAGE, 400, 220)).toBe('village');
+    expect(zoneOf(VILLAGE, 100, 330)).toBe('village');
+    expect(zoneOf(VILLAGE, V_SPAWN.x, V_SPAWN.y)).toBe('village');
   });
 
   it('연못으로 걸으면 막히고, 물가를 따라 미끄러진다', () => {
@@ -196,225 +186,209 @@ describe('마을 트리거', () => {
     expect(inTrigger(tc, V_BOATSHOP_TRIGGER)).toBe(true);
     // 필드 트리거 연결: 마을엔 shop 트리거가 있고, 대양엔 없다(조선소는 항구 안)
     expect(VILLAGE.triggers.find(t => t.action === 'shop')?.rect).toBe(V_BOATSHOP_TRIGGER);
-    expect(OCEAN.triggers.some(t => t.action === 'shop')).toBe(false);
+    expect(WORLD.triggers.some(t => t.action === 'shop')).toBe(false);
   });
 });
 
-// ============ 지역 2: 대양 — 고정 좌표 회귀 ============
+// ============ 병합 바다(오픈월드) — 구역 경계·게이트 회귀 ============
 
-describe('대양 R4: 충돌 (항해)', () => {
-  it('열린 바다는 항해 가능, 대륙/경계는 불가', () => {
-    expect(canMove(OCEAN, O_SPAWN.x, O_SPAWN.y)).toBe(true);
-    expect(canMove(OCEAN, ...oceanAt(140, 22)), '열린 태평양').toBe(true);
-    expect(canMove(OCEAN, ...oceanAt(152, 30)), '북서 태평양').toBe(true);
-    // 육지 샘플 — 경위도 고정이라 마스크 재생성과 무관하게 육지여야 한다
-    expect(canMove(OCEAN, ...oceanAt(121.5, 31)), '중국 연해').toBe(false);
-    expect(canMove(OCEAN, ...oceanAt(127.5, 37)), '한반도').toBe(false);
-    expect(canMove(OCEAN, ...oceanAt(137, 36)), '혼슈').toBe(false);
-    expect(canMove(OCEAN, -5, 100)).toBe(false);
-    expect(canMove(OCEAN, 100, OCEAN_H - 3)).toBe(false);
+describe('대양(병합) R4: 충돌 (항해)', () => {
+  it('세 바다의 열린 물이 하나의 지도에서 항해 가능하다', () => {
+    expect(canMove(WORLD, WORLD_SPAWN.x, WORLD_SPAWN.y)).toBe(true);
+    expect(canMove(WORLD, ...worldAt(131.5, 31.5)), '태평양(고향 앞바다)').toBe(true);
+    expect(canMove(WORLD, ...worldAt(112, 13)), '남중국해(동남아)').toBe(true);
+    expect(canMove(WORLD, ...worldAt(65, 12)), '아라비아해(인도양)').toBe(true);
+    // 육지 샘플 — 구 3지역 테스트의 경위도를 그대로 승격
+    expect(canMove(WORLD, ...worldAt(127.5, 37)), '한반도').toBe(false);
+    expect(canMove(WORLD, ...worldAt(134, -25)), '호주').toBe(false);
+    expect(canMove(WORLD, ...worldAt(77.5, 8.5)), '인도 남단').toBe(false);
+    expect(canMove(WORLD, -5, 100)).toBe(false);
+    expect(canMove(WORLD, 100, WORLD_H - 3)).toBe(false);
   });
 
-  it('해역 판정: 해구 안=deep, 밖=sea', () => {
-    expect(zoneAt(OCEAN, ...oceanAt(145.5, 21.5)), '해구 중심').toBe('deep');
-    expect(zoneAt(OCEAN, ...oceanAt(140, 22)), '해구 밖 열린 바다').toBe('sea');
-  });
-});
-
-describe('대양 트리거', () => {
-  it('접안 트리거는 항해 가능한 물 위', () => {
-    const dc = { x: O_DOCK.x + O_DOCK.w / 2, y: O_DOCK.y + O_DOCK.h / 2 };
-    expect(inTrigger(dc, O_DOCK)).toBe(true);
-    expect(canMove(OCEAN, dc.x, dc.y)).toBe(true);
-  });
-
-  it('남쪽 출구(루손 해협)는 항해 가능한 물 위이고 동남아로 통한다', () => {
-    const ec = { x: O_EXIT.x + O_EXIT.w / 2, y: O_EXIT.y + 2 };
-    expect(canMove(OCEAN, ec.x, ec.y)).toBe(true);
-    const travel = OCEAN.triggers.find(t => t.action === 'travel');
-    assertTravel(travel);
-    expect(travel.to).toBe('seasia');
-    expect(travel.requiredBoat).toBe(3);
+  it('수역 판정 — 군집이 모여 있는 곳의 존이 곧 수역이다 (존 계층 모델)', () => {
+    // spot은 어군 오브젝트 — 좌표 → spot 매핑이 아니라 군집의 존 소속으로 확인한다 (R4b 공통)
+    for (const s of WORLD_SCHOOLS) {
+      expect(zoneOf(WORLD, s.x, s.y), `${s.id}(${s.spot}) 존`).toBe(zoneOfSpot(s.spot));
+    }
   });
 });
 
-// ============ 지역 1-2: 동남아&오세아니아 — 고정 좌표 회귀 ============
-
-describe('동남아 R4: 충돌 (항해)', () => {
-  it('열린 바다는 항해 가능, 육지/경계는 불가', () => {
-    expect(canMove(SEASIA, M_SPAWN.x, M_SPAWN.y)).toBe(true);
-    expect(canMove(SEASIA, ...seasiaAt(112, 13)), '남중국해 열린 바다').toBe(true);
-    // 육지 샘플 — 경위도 고정이라 마스크 재생성과 무관하게 육지여야 한다
-    expect(canMove(SEASIA, ...seasiaAt(104, 17)), '인도차이나 내륙').toBe(false);
-    expect(canMove(SEASIA, ...seasiaAt(121, 16.5)), '루손').toBe(false);
-    expect(canMove(SEASIA, ...seasiaAt(113.5, 0.5)), '보르네오').toBe(false);
-    expect(canMove(SEASIA, ...seasiaAt(134, -25)), '호주').toBe(false);
-    expect(canMove(SEASIA, -5, 100)).toBe(false);
-    expect(canMove(SEASIA, 100, SEASIA_H - 3)).toBe(false);
+describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
+  it('루손 해협(19N)을 사이에 두고 태평양/동남아 구역이 나뉜다', () => {
+    expect(zoneOf(WORLD, ...worldAt(130, 19.5)), '19N 북쪽').toBe('pacific');
+    expect(zoneOf(WORLD, ...worldAt(130, 18.5)), '19N 남쪽').toBe('seasia');
   });
 
-  it('해역 판정: 특화 수역 3개는 각자의 물, 열린 바다는 낚시 불가(null)', () => {
-    const dh = SEASIA_SCHOOLS.find(s => s.id === 'sea-dh-1')!;
-    const cw = SEASIA_SCHOOLS.find(s => s.id === 'sea-cw-1')!;
-    const br1 = SEASIA_SCHOOLS.find(s => s.id === 'sea-br-1')!;
-    const br2 = SEASIA_SCHOOLS.find(s => s.id === 'sea-br-2')!;
-    expect(zoneAt(SEASIA, dh.x, dh.y), '드래곤 홀').toBe('dragonhole');
-    expect(zoneAt(SEASIA, cw.x, cw.y), '코론 침선').toBe('coron');
-    expect(zoneAt(SEASIA, br1.x, br1.y), '리프 밴드 북단').toBe('barrierreef');
-    // 리프 밴드의 마지막 조각도 같은 수역이다 (다중 조각 spot 공유 회귀)
-    expect(zoneAt(SEASIA, br2.x, br2.y), '리프 밴드 남단').toBe('barrierreef');
-    // 일반 수역 폐지 — 열린 바다는 통행 전용이다.
-    expect(zoneAt(SEASIA, M_SPAWN.x, M_SPAWN.y)).toBeNull();
-    expect(zoneAt(SEASIA, ...seasiaAt(112, 13))).toBeNull();
-  });
-});
-
-describe('동남아 트리거', () => {
-  it('접안 트리거는 마닐라항 건물 아래 물 위', () => {
-    const dc = { x: M_DOCK.x + M_DOCK.w / 2, y: M_DOCK.y + M_DOCK.h / 2 };
-    expect(inTrigger(dc, M_DOCK)).toBe(true);
-    expect(canMove(SEASIA, dc.x, dc.y)).toBe(true);
+  it('말라카 해협(98.5E)을 사이에 두고 동남아/인도양 구역이 나뉜다', () => {
+    expect(zoneOf(WORLD, ...worldAt(97.5, 2)), '해협 서쪽').toBe('indian');
+    expect(zoneOf(WORLD, ...worldAt(99.5, 4)), '해협 동쪽').toBe('seasia');
   });
 
-  it('출구는 둘 — 루손 해협(태평양 복귀, 게이트 없음)과 말라카 해협(인도양, 배5)', () => {
-    const travels = SEASIA.triggers.filter(t => t.action === 'travel');
-    expect(travels).toHaveLength(2);
-    const luzon = travels.find(t => t.to === 'ocean')!;
-    const malacca = travels.find(t => t.to === 'indian')!;
-    expect(luzon.requiredBoat).toBe(0);
-    expect(malacca.requiredBoat).toBe(5); // 1-2 동남아를 건너뛰려면 tier5(원양어선) — 사용자 확정
-    assertTravel(luzon); assertTravel(malacca);
-    expect(inTrigger({ x: LUZON_STRAIT.x + LUZON_STRAIT.w / 2, y: LUZON_STRAIT.y + LUZON_STRAIT.h / 2 },
-      LUZON_STRAIT)).toBe(true);
-    expect(inTrigger({ x: MALACCA_EXIT.x + MALACCA_EXIT.w / 2, y: MALACCA_EXIT.y + MALACCA_EXIT.h / 2 },
-      MALACCA_EXIT)).toBe(true);
-    // 말라카 라벨은 예고가 아니라 방향 안내로 갱신됐다 (1-3 개항)
-    expect(SEASIA.labels.some(l => l.text.includes('말라카'))).toBe(true);
-  });
-});
-
-function assertTravel(t: import('./index').TriggerDef | undefined): asserts t is
-  Extract<import('./index').TriggerDef, { action: 'travel' }> {
-  expect(t?.action).toBe('travel');
-}
-
-// ============ R5c: 경계 봉합 입장점 (오픈월드) ============
-
-describe('R5c: entryPoint — 경계 봉합 입장', () => {
-  const travel = (rect: { x: number; y: number; w: number; h: number }, edge: 'top' | 'bottom' | 'left' | 'right'): import('./index').TriggerDef =>
-    ({ rect, action: 'travel', to: 'ocean', requiredBoat: 0, msg: '', blockedMsg: '',
-       entry: { edge } });
-
-  it('실전 팩: 태평양 남쪽에서 건너면 동남아 북쪽에서 x를 보존해 등장한다', () => {
-    const trig = OCEAN.triggers.find(t => t.action === 'travel')!;
-    assertTravel(trig);
-    for (const fromX of [480, 800]) {         // 북단이 열린 물인 열 (중국 대륙 동쪽)
-      const p = entryPoint(SEASIA, trig, { x: fromX, y: 729 });
-      expect(p.x).toBe(fromX);                       // 벗어난 자리 그대로
-      expect(p.y).toBeLessThan(40);                  // 마주 보는(북쪽) 가장자리 안쪽
-      expect(canMove(SEASIA, p.x, p.y)).toBe(true);  // 바다 위
+  it('구역 밖 물(내륙해 잉여)은 zone도 spot도 없다', () => {
+    // 카스피 해 남부(창 안에 걸치는 대표 내륙수) — 통행은 가능해도 구역·낚시 대상이 아니다
+    const at = worldAt(51, 39);
+    if (canMove(WORLD, at[0], at[1])) { // 마스크 재생성에 따라 잉여 물의 존재는 변할 수 있다
+      expect(zoneOf(WORLD, at[0], at[1])).toBeUndefined();
+      expect(nearestSchoolInRange(WORLD_SCHOOLS, at[0], at[1], CAST_RANGE * 5)).toBeNull();
     }
   });
 
+  it('모든 구역 소속 물 셀은 spots 데이터의 구역과 일치한다 (spot 불변 × zone 뷰 정합)', () => {
+    const map = WORLD.map!;
+    for (let r = 0; r < map.rows; r++) {
+      for (let c = 0; c < map.cols; c++) {
+        const def = map.palette[map.codes[r * map.cols + c]];
+        if (!def || def.land) continue;
+        if (def.zone) {
+          const z = zoneById(def.zone)!;
+          // 존 계층화 — 셀의 zone이 유효한 존 id인지만 확인 (spot은 셀에 없음)
+          expect(z, `(${c},${r}) 알 수 없는 zone ${def.zone}`).toBeDefined();
+        }
+        // spot은 셀에 없음 — 어군 오브젝트로 분리됨 (zone-tree 모델)
+      }
+    }
+  });
 
+  it('게이트는 zones 데이터의 entryBoat를 따른다 (진입 방향 일괄)', () => {
+    expect(zoneById('seasia')!.entryBoat).toBe(3);
+    expect(zoneById('indian')!.entryBoat).toBe(5);
+    for (const z of ZONES) {
+      for (const sid of z.spots) expect(zoneOfSpot(sid)).toBe(z.id);
+    }
+  });
+});
 
-  it('입장 열이 육지로 막혔으면 첫 통행 가능한 자리로 밀린다 (인공 팩)', () => {
-    // 인공 팩(마스크) — 북서쪽 120×30px 육지
-    const mini: RegionPack = {
-      id: 'ocean', name: '', base: 'home',
-      info: { shortName: '', tagline: '', lore: '', tips: [], controls: [] },
-      w: 200, h: 200, movement: 'sail',
-      map: compileMap(8, 11, { '.': {}, L: { land: true } }, [
-        'LLLLLLLLLLLLLLL..........',
-        'LLLLLLLLLLLLLLL..........',
-        'LLLLLLLLLLLLLLL..........',
-        'LLLLLLLLLLLLLLL..........',
-        ...Array.from({ length: 21 }, () => '.........................'),
-      ]),
-      waveCount: 0,
-      buildings: [], decorations: [], schools: [], spawn: { x: 100, y: 100 },
-      triggers: [travel({ x: 0, y: 192, w: 200, h: 8 }, 'top')],
-      labels: [],
+// ============ 구역 전이 추적기 — 즉시 게이트 × dwell 히스테리시스 (고도화 A-1·A-2) ============
+
+describe('ZoneTracker — 게이트는 즉시, 표시 전환은 히스테리시스', () => {
+  it('자격 미달 진입은 즉시 되밀기 + 구역 이름이 든 안내문', () => {
+    const t = new ZoneTracker();
+    t.init('pacific');
+    const s = t.step('seasia', 0, 2); // boat 2 < entryBoat 3
+    expect(s.revert).toBe(true);
+    expect(s.blocked).toContain('동남아&오세아니아');
+    // 같은 프레임에 다시 시도해도 같은 결과 (게이트는 상태를 소모하지 않는다)
+    expect(t.step('seasia', 0, 2).revert).toBe(true);
+  });
+
+  it('자격이 되면 dwell(400ms) 후에야 "들어섰다"가 커밋된다', () => {
+    const t = new ZoneTracker();
+    t.init('pacific');
+    expect(t.step('seasia', 0, 3).enteredTop).toBeNull();   // 통과 — 아직 커밋 아님
+    expect(t.step('seasia', 399, 3).enteredTop).toBeNull(); // dwell 미달
+    const s = t.step('seasia', 400, 3);
+    expect(s.enteredTop).toBe('seasia');
+  });
+
+  it('dwell 중 경계에서 되돌아가면 커밋이 취소된다 — 로어·토스트 떨림 방지', () => {
+    const t = new ZoneTracker();
+    t.init('pacific');
+    t.step('seasia', 0, 3);
+    t.step('pacific', 100, 3);   // 되돌아감 — pending 취소
+    expect(t.step('pacific', 5000, 3).enteredTop).toBeNull();
+    // 이후 정상 재진입은 처음부터 다시 dwell을 채운다
+    t.step('seasia', 5000, 3);
+    expect(t.step('seasia', 5399, 3).enteredTop).toBeNull();
+    expect(t.step('seasia', 5400, 3).enteredTop).toBe('seasia');
+  });
+
+  it('진입 후 게이트 검증은 커밋 전에도 새 구역 기준으로 쓴다 (인도양 5단계)', () => {
+    const t = new ZoneTracker();
+    t.init('seasia');
+    // 동남아에 들어온 지 얼마 안 돼(커밋 전) 바로 인도양 경계로 — 게이트는 즉시 판정이다
+    const s = t.step('indian', 10, 4); // boat 4 < 5
+    expect(s.revert).toBe(true);
+    expect(t.step('indian', 11, 5).revert).toBe(false); // 자격 되면 통과
+  });
+
+  it('구역 밖 물(null)은 전이로 치지 않는다 — 카스피 같은 잉여 물 통과가 상태를 흔들지 않는다', () => {
+    const t = new ZoneTracker();
+    t.init('indian');
+    expect(t.step(null, 0, 6).enteredTop).toBeNull();
+    expect(t.step(null, 5000, 6).enteredTop).toBeNull();
+    // 게이트도 흔들리지 않는다 — 잉여 물에서 곧바로 태평양(게이트 없음)으로는 갈 수 없지만
+    // 상태 기준은 여전히 indian이라 미달 배로 seasia 진입이 정상적으로 막힌다
+    expect(t.step('seasia', 5001, 2).revert).toBe(true);
+  });
+});
+
+// ============ 세계지도(earth) — 전지구 마스크·좌표 변환 ============
+
+const earthPx = (lon: number, lat: number): [number, number] => {
+  const w = EARTH_MAP.cols * EARTH_MAP.cellW, h = EARTH_MAP.rows * EARTH_MAP.cellH;
+  return [Math.floor((lon + 180) / 360 * w), Math.floor((85 - lat) / 170 * h)];
+};
+
+describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
+  const earthAt2 = (lon: number, lat: number) => {
+    const [x, y] = earthPx(lon, lat);
+    return EARTH_MAP.palette[
+      EARTH_MAP.codes[Math.floor(y / EARTH_MAP.cellH) * EARTH_MAP.cols + Math.floor(x / EARTH_MAP.cellW)]];
+  };
+
+  it('extends 상속 — 구현 영역의 존 문자가 earth 마스크에도 찍혀 있다', () => {
+    const countZone = (zone: string): number => {
+      let n = 0;
+      for (const code of EARTH_MAP.codes) {
+        const d = EARTH_MAP.palette[code];
+        if (d?.zone === zone) n++;
+      }
+      return n;
     };
-    const p = entryPoint(mini, mini.triggers[0], { x: 20, y: 196 });
-    expect(p.x).toBeGreaterThanOrEqual(120);         // 육지(c<15) 동쪽 첫 칸
-    expect(canMove(mini, p.x, p.y)).toBe(true);
+    expect(countZone('pacific'), '태평양 열린 바다').toBeGreaterThan(0);
+    expect(countZone('indian'), '인도양 연안').toBeGreaterThan(0);
+    expect(countZone('deep'), '마리아나 해구·드래곤 홀').toBeGreaterThan(0);
+    expect(countZone('coron'), '코론').toBeGreaterThan(0);
+    expect(countZone('barrierreef'), '그레이트 배리어 리프').toBeGreaterThan(0);
+    expect(countZone('southindian'), '남인도양').toBeGreaterThan(0);
   });
 
-  it('되돌아 나오는 출구 트리거 위에는 착지하지 않는다 (재발화 방지)', () => {
-    const p = entryPoint(SEASIA, SEASIA.triggers.find(t => t.action === 'travel')!,
-      { x: 700, y: 8 });
-    for (const t of SEASIA.triggers) {
-      expect(inTrigger(p, t.rect), `${t.action} 트리거 위 착지`).toBe(false);
+  it('구현 영역 밖은 지구의 나머지다 — 대서양은 물, 아메리카는 육지, 어디도 구역이 없다', () => {
+    const atl = earthAt2(-30, 30);       // 대서양 (미개척)
+    expect(atl?.water ?? false).toBe(true);
+    expect(atl?.zone).toBeUndefined();
+    expect(earthAt2(-100, 45)?.land, '북아메리카').toBe(true);
+    expect(earthAt2(20, 0)?.land ?? earthAt2(20, 0)?.water, '아프리카 해안은 정의돼 있다').toBeDefined();
+  });
+
+  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 114°×80°)', () => {
+    const win = implementedRect();
+    expect(win.w).toBeGreaterThanOrEqual(1820);
+    expect(win.w).toBeLessThanOrEqual(1828);
+    expect(win.h).toBeGreaterThanOrEqual(1274);
+    expect(win.h).toBeLessThanOrEqual(1282);
+  });
+
+  it('worldToEarth — 항구 앵커가 구현 영역 안에 뜬다', () => {
+    const win = implementedRect();
+    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo]) {
+      const e = worldToEarth(a.x, a.y);
+      expect(e.x, `lon anchor ${a.x}`).toBeGreaterThanOrEqual(win.x);
+      expect(e.x).toBeLessThanOrEqual(win.x + win.w);
+      expect(e.y).toBeGreaterThanOrEqual(win.y);
+      expect(e.y).toBeLessThanOrEqual(win.y + win.h);
     }
   });
 
-  it('entry 없는 트리거는 스폰을 돌려준다 (거점 항로 기존 계약)', () => {
-    const dock = OCEAN.triggers[0];
-    expect(dock.action).toBe('base');
-    expect(entryPoint(OCEAN, dock, { x: 300, y: 190 })).toEqual(O_SPAWN);
-  });
-
-  it('실전 팩(좌우 봉합): 인도양 동쪽에서 건너면 동남아 서쪽에서 y를 보존해 등장한다', () => {
-    const trig = INDIAN.triggers.find(t => t.action === 'travel')!;
-    assertTravel(trig);
-    for (const fromY of [200, 600, 760]) {   // 서단이 열린 물인 행들 (SEASIA_H=825 이내)
-      const p = entryPoint(SEASIA, trig, { x: INDIAN_W - 8, y: fromY });
-      expect(p.y).toBe(fromY);                       // 벗어난 자리 그대로 (y 보존 — left/right 축)
-      expect(p.x).toBeLessThan(40);                  // 마주 보는(서쪽) 가장자리 안쪽
-      expect(canMove(SEASIA, p.x, p.y)).toBe(true);  // 바다 위
-    }
-  });
-});
-
-// ============ 지역 1-3: 인도양 — 고정 좌표 회귀 ============
-
-describe('인도양 R4: 충돌 (항해)', () => {
-  it('열린 바다는 항해 가능, 육지/경계는 불가', () => {
-    expect(canMove(INDIAN, C_SPAWN.x, C_SPAWN.y)).toBe(true);
-    expect(canMove(INDIAN, ...indianAt(65, 12)), '아라비아해 열린 바다').toBe(true);
-    expect(canMove(INDIAN, ...indianAt(88, -15)), '동인도양').toBe(true);
-    // 육지 샘플 — 경위도 고정이라 마스크 재생성과 무관하게 육지여야 한다
-    expect(canMove(INDIAN, ...indianAt(47, 24)), '아라비아 반도').toBe(false);
-    expect(canMove(INDIAN, ...indianAt(77.5, 8.5)), '인도 남단').toBe(false);
-    expect(canMove(INDIAN, ...indianAt(46.5, -19.5)), '마다가스카르').toBe(false);
-    expect(canMove(INDIAN, ...indianAt(102, -2.2)), '수마트라').toBe(false);
-    expect(canMove(INDIAN, -5, 100)).toBe(false);
-    expect(canMove(INDIAN, 100, INDIAN_H - 3)).toBe(false);
-  });
-
-  it('해역 판정: 남인도양 안=특화, 밖=연안 일반', () => {
-    const s1 = INDIAN_SCHOOLS.find(s => s.id === 'ind-s-1')!;
-    const i1 = INDIAN_SCHOOLS.find(s => s.id === 'ind-i-1')!;
-    expect(zoneAt(INDIAN, s1.x, s1.y), '남인도양 군집').toBe('southindian');
-    expect(zoneAt(INDIAN, i1.x, i1.y), '연안 군집').toBe('indian');
-    expect(zoneAt(INDIAN, C_SPAWN.x, C_SPAWN.y), '스폰 앞 열린 바다').toBe('indian');
-  });
-});
-
-describe('인도양 트리거', () => {
-  it('접안 트리거는 콜롬보 항 건물 아래 물 위', () => {
-    const dc = { x: C_DOCK.x + C_DOCK.w / 2, y: C_DOCK.y + C_DOCK.h / 2 };
-    expect(inTrigger(dc, C_DOCK)).toBe(true);
-    expect(canMove(INDIAN, dc.x, dc.y)).toBe(true);
-  });
-
-  it('동쪽 출구(순다 방면)는 말라카 해협으로 통하고 배4 게이트다', () => {
-    const ec = { x: SUNDA_EXIT.x + SUNDA_EXIT.w / 2, y: SUNDA_EXIT.y + SUNDA_EXIT.h / 2 };
-    expect(canMove(INDIAN, ec.x, ec.y)).toBe(true);
-    const travel = INDIAN.triggers.find(t => t.action === 'travel');
-    assertTravel(travel);
-    expect(travel.to).toBe('seasia');
-    expect(travel.requiredBoat).toBe(0); // 후진 방향은 게이트 없음
-    expect(travel.entry?.edge).toBe('left');
+  it('worldToEarth 역변환이 닫힌다 — earth px → 경위도 → world px 원점 복원', () => {
+    const roundTrip = (x: number, y: number): [number, number] => {
+      const e = worldToEarth(x, y);
+      const lon = -180 + e.x / (EARTH_MAP.cols * EARTH_MAP.cellW) * 360;
+      const lat = 85 - e.y / (EARTH_MAP.rows * EARTH_MAP.cellH) * 170;
+      const wx = (lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W;
+      const wy = (WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H;
+      return [wx, wy];
+    };
+    const [rx, ry] = roundTrip(WORLD_SPAWN.x, WORLD_SPAWN.y);
+    expect(Math.abs(rx - WORLD_SPAWN.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(ry - WORLD_SPAWN.y)).toBeLessThanOrEqual(1);
   });
 });
 
 // ============ 지역 이동 무한 루프 금지 (필수 게이트) ============
 // 도착점(스폰·entryPoint 착지)이 시설 트리거(접안 등)의 최소 이격 거리 안이면,
 // 착지 후 첫 이동에 즉시 재발화해 포탈 사이에 갇힌다(고향↔태평양 무한 접안 사건).
-// travel 트리거는 봉합 회랑 특성상 스트립 쌍과 겹칠 수밖에 없어 제외한다 —
-// 대신 착지가 트리거 '위'가 아닌 것은 R5c가 보증한다.
 
 const TRIGGER_CLEARANCE = 8; // 일반 이동 속도(px/프레임)를 상회하는 최소 이격(px)
 
@@ -434,7 +408,7 @@ describe.each(Object.values(REGION_PACKS))('$id 지역 이동 게이트: 재발�
         if (trig.action !== 'travel' || trig.to !== pack.id || !trig.entry) continue;
         for (let fx = trig.rect.x + 8; fx <= trig.rect.x + trig.rect.w - 8; fx += 16) {
           const from = trig.entry.edge === 'top'
-            ? { x: fx, y: trig.rect.y + trig.rect.h - 1 }  // 남쪽 출구로 건너 북쪽에서 입장
+            ? { x: fx, y: trig.rect.y + trig.rect.h - 1 }
             : { x: fx, y: trig.rect.y + 1 };
           const p = entryPoint(pack, trig, from);
           expect(nearFacilityTrigger(p), `${src.id}→${pack.id} ${fx}px 입장 착지점`).toBe(false);
@@ -451,7 +425,7 @@ describe('R5: 군집 판정 반경', () => {
     const s = V_SCHOOLS[0];
     expect(nearestSchoolInRange(V_SCHOOLS, s.x + 10, s.y - 10)?.id).toBe(s.id);
     expect(nearestSchoolInRange(V_SCHOOLS, V_SPAWN.x, V_SPAWN.y)).toBeNull();
-    expect(nearestSchoolInRange(O_SCHOOLS, O_SPAWN.x, O_SPAWN.y)).toBeNull();
+    expect(nearestSchoolInRange(WORLD_SCHOOLS, WORLD_SPAWN.x, WORLD_SPAWN.y)).toBeNull();
   });
 });
 

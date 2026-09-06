@@ -24,7 +24,6 @@ export interface AuthApi {
 
 export interface StorageApi {
   saveCode(state: GameState): string;
-  decodeSave(code: string): unknown;
 }
 
 // ---------- 관리자 읽기 API (0010 뷰/RPC — 읽기 전용) ----------
@@ -106,9 +105,10 @@ export interface AdminApi {
 }
 
 export interface ApiClient {
-  game: Backend;
+  /** 게임 백엔드 생성 — http/local 분기는 여기 갇힌다. 마운트마다 새로 만든다
+      (LocalBackend가 상태를 들고 있어, 싱글톤이면 테스트 간 상태가 샌다) */
+  createGame(initial: GameState): Backend;
   auth: AuthApi;
   storage: StorageApi;
   admin: AdminApi;
-  isLocal: boolean;
 }

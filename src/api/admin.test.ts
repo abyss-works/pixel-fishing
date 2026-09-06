@@ -5,11 +5,10 @@ import { describe, it, expect } from 'vitest';
 // 규약 테스트라 구현 팩토리(local)를 직접 잡는다 — 싱글톤(api)은 조립 산출물 쪽
 import { api } from './index';
 import { createLocalApi } from './local';
-import { newState } from '../game/logic';
 
 describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
-    const local = createLocalApi(newState()).admin;
+    const local = createLocalApi().admin;
     for (const m of ['access', 'users', 'dailyActive', 'retention', 'economy',
       'catchQuality', 'spamFlags', 'imports', 'dexMismatch',
       'recentEvents', 'userEvents', 'projectRef'] as const) {
@@ -19,7 +18,7 @@ describe('admin 계층 규약', () => {
   });
 
   it('local 모드 — 접근 판정은 "local"(권한 실패 아님), 데이터 getter는 reject한다', async () => {
-    const { admin } = createLocalApi(newState());
+    const { admin } = createLocalApi();
     await expect(admin.access()).resolves.toEqual({ kind: 'local', uid: null });
     // 조용한 빈 배열은 "데이터 없음"이라는 거짓말 — 게이트 우회 오용은 시끄럽게 실패한다
     await expect(admin.users()).rejects.toThrow(/클라우드/);

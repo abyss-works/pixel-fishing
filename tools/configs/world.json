@@ -1,0 +1,72 @@
+{
+  "id": "world",
+  "geo": "src/world/geo/land-50m.geo.json",
+  "cell": { "w": 8, "h": 11 },
+  "grid": { "cols": 456, "rows": 232 },
+  "window": { "lonMin": 43, "latMax": 44, "lonMax": 157, "latMin": -36 },
+
+  "_note_window": "오픈월드 병합(spec/zones.md Phase 3) — 구 3지역 창의 합집합: 인도양 서단(43E)에서 태평양 동단(157E), 남인도양(남위 36)에서 한반도 북단(북위 44)까지. 구 창과의 관계: ocean(117..157E, 19..44N) · seasia(93..153E, -32..19N) · indian(43..103E, -36..26N). 새로 보이는 영역 = 남중국해 북부(98.5..117E, 19..44N)와 남서 태평양 남단(-36..-32N).",
+  "_note_scale": "32px/°(cell 8×11, 등방: dLon 0.25°/열 × dLat 0.3448°/행) — 2026-08-28 사용자 지시로 지도를 가로세로 2배(1824×1276 → 3648×2552) 키우며 해상도를 올렸다. 구 3지역 어느 곳보다도 촘촘(ocean 24 · seasia/indian 16). 해안선 정밀도가 올라가고 배 실속(px/s) 대비 세계가 2배로 커진다. 렌더러는 뷰포트 컬링이라 프레임 비용은 화면 크기에 비례(지도 크기와 무관).",
+  "_note_seam": "구 봉합선이 그대로 구역 경계가 된다: 태평양↔동남아 = 19N(루손 해협)·117E(남중국해 동단), 동남아↔인도양 = 98.5E(말라카 해협). travel 트리거는 소멸하고 경계 통과는 셀의 zone 문자로 판정한다(Field 구역 게이트).",
+  "_note_openzones": "openZones는 **맨물만** 칠한다 — 육지·특화 수역(t/d/w/r/s)은 보존. 구역 문자: 1=태평양(낚시 가능 sea) · 2=동남아 열린 바다(통행 전용, 낚시 불가 — 구 설계 유지) · 3=인도양(낚시 가능 indian). 경계 밖 잉여 물(카스피 해 등 내륙수)은 '.'(구역 없음·낚시 불가)으로 남는다 — 의도된 미연결 지형.",
+  "_note_label_markers": "구역 라벨은 자동 앵커(문자별 셀 군집 bbox 상단 중앙)가 열린 바다 전체 bbox 상단(육지/최북단)에 떨어지므로, **라벨 전용 문자(4/5/6)** 를 아주 작은 타원으로 한 점 찍어 라벨 자리를 확보한다. 라벨 문자 셀은 물(통행 가능)이지만 spot이 없어 낚시는 불가하다 — 열린 바다와 같은 스타일이라 눈에 보이지 않는다.",
+
+  "zones": [
+    { "ch": "t", "name": "마리아나 해구", "lon": 145.5, "lat": 21.5, "rx": 2.6, "ry": 2.4 },
+    { "ch": "d", "name": "드래곤 홀",            "lon": 111.7, "lat": 17.1,  "rx": 1.6, "ry": 2.2 },
+    { "ch": "w", "name": "코론 침선 지대",       "lon": 120.1, "lat": 11.9,  "rx": 1.7, "ry": 2.0 },
+    { "ch": "r", "name": "그레이트 배리어 리프", "lon": 145.2, "lat": -11.2, "rx": 1.4, "ry": 2.2 },
+    { "ch": "r", "name": "그레이트 배리어 리프", "lon": 146.8, "lat": -14.6, "rx": 1.3, "ry": 2.0 },
+    { "ch": "r", "name": "그레이트 배리어 리프", "lon": 148.4, "lat": -18.2, "rx": 1.3, "ry": 2.0 },
+    { "ch": "r", "name": "그레이트 배리어 리프", "lon": 150.2, "lat": -21.8, "rx": 1.4, "ry": 2.2 },
+    { "ch": "s", "name": "남인도양", "lon": 63, "lat": -27, "rx": 5.0, "ry": 3.6 },
+    { "ch": "s", "name": "남인도양", "lon": 78, "lat": -30, "rx": 4.4, "ry": 3.2 },
+
+    { "ch": "4", "name": "태평양 라벨", "lon": 152, "lat": 26,   "rx": 0.45, "ry": 0.5 },
+    { "ch": "5", "name": "동남아 라벨", "lon": 112, "lat": 9,   "rx": 0.45, "ry": 0.5 },
+    { "ch": "6", "name": "인도양 라벨", "lon": 66,  "lat": -10, "rx": 0.45, "ry": 0.5 }
+  ],
+
+  "openZones": [
+    { "ch": "2", "lonMin": 98.5, "lonMax": 157, "latMin": -36, "latMax": 19 },
+    { "ch": "1", "lonMin": 117,  "lonMax": 157, "latMin": 19,  "latMax": 44 },
+    { "ch": "2", "lonMin": 98.5, "lonMax": 117, "latMin": 19,  "latMax": 44 },
+    { "ch": "3", "lonMin": 43,   "lonMax": 98.5, "latMin": -36, "latMax": 26 }
+  ],
+
+  "anchors": {
+    "harbor":        { "lon": 129.18, "lat": 35.02, "dx": -18, "dy": -14, "terrain": "land" },
+    "dock":          { "lon": 129.16, "lat": 34.2,  "terrain": "water" },
+    "spawn":         { "lon": 131.5,  "lat": 31.5,  "terrain": "water" },
+    "school_sea_1":  { "lon": 133.5, "lat": 31.5, "terrain": "water" },
+    "school_sea_2":  { "lon": 136.5, "lat": 27,   "terrain": "water" },
+    "school_sea_3":  { "lon": 152.5, "lat": 20.5, "terrain": "water" },
+    "school_deep_1": { "lon": 144.8, "lat": 21.8, "terrain": "water" },
+    "school_deep_2": { "lon": 146.4, "lat": 20.6, "terrain": "water" },
+
+    "manila":        { "lon": 120.9,  "lat": 16.6,  "terrain": "land" },
+    "m_dock":        { "lon": 118.95, "lat": 15.5,  "terrain": "water" },
+    "m_spawn":       { "lon": 117.8,  "lat": 14.2,  "terrain": "water" },
+    "school_dh_1":   { "lon": 111.5,  "lat": 17.6,  "terrain": "water" },
+    "school_dh_2":   { "lon": 112.1,  "lat": 16.6,  "terrain": "water" },
+    "school_cw_1":   { "lon": 119.8,  "lat": 12.4,  "terrain": "water" },
+    "school_cw_2":   { "lon": 120.4,  "lat": 11.3,  "terrain": "water" },
+    "school_br_1":   { "lon": 145.0,  "lat": -12.4, "terrain": "water" },
+    "school_br_2":   { "lon": 148.6,  "lat": -19.0, "terrain": "water" },
+
+    "colombo":    { "lon": 79.95, "lat": 7.4, "dx": 20, "dy": 12, "terrain": "land" },
+    "c_dock":     { "lon": 78.6,  "lat": 6.9,   "terrain": "water" },
+    "c_spawn":    { "lon": 77.2,  "lat": 5.4,   "terrain": "water" },
+    "school_i_1": { "lon": 62.0,  "lat": 12.0,  "terrain": "water" },
+    "school_i_2": { "lon": 67.0,  "lat": 6.5,   "terrain": "water" },
+    "school_s_1": { "lon": 62.5,  "lat": -26.0, "terrain": "water" },
+    "school_s_2": { "lon": 76.5,  "lat": -28.8, "terrain": "water" },
+
+    "label_luzon":   { "lon": 121.8, "lat": 19.8, "terrain": "water" },
+    "label_formosa": { "lon": 118.6, "lat": 21.5, "terrain": "water" },
+    "label_philippine": { "lon": 135, "lat": 19.8, "terrain": "water" },
+    "label_malacca": { "lon": 99.6,  "lat": 3.8,  "terrain": "water" }
+  },
+
+  "_note_boundary_labels": "구역 경계 라벨 — 구 travel 트리거 안내문의 계승(오픈월드 고도화 A-1). 경계는 보이지 않는 선이라 통로 지점(루손 해협 · 대만 남방 · 필리핀 동쪽 해상 · 말라카)에 워터마크 라벨로 게이트 요구 배를 예고한다. terrain water 검증으로 통로가 물 위임을 강제한다. 루손 해협 동쪽 19N 경계는 157E까지 이어진다(필리핀 해 동쪽이 '또 다른 태평양'처럼 느껴진다는 사용자 피드백 — 경계 임을 알리는 라벨 추가)."
+}

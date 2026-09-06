@@ -3,7 +3,7 @@ import { api } from '../api';
 import { identifyUser } from '../observability';
 import { newState } from '../game/logic';
 import type { GameState } from '../game/logic';
-import type { MaybePromise } from '../backend/types';
+import type { MaybePromise } from '../api';
 import type { SyncState } from './useGame';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
-import type { DispatchResult, MaybePromise } from '../backend/types';
-import { REGION_IDS } from '../world';
-import type { RegionId } from '../world';
+import type { DispatchResult, MaybePromise } from '../api';
+import { ZONE_IDS, defaultZoneOfRegion } from '../data/zones';
+import type { ZoneId } from '../data/zones';
+import type { RegionId } from '../data/places';
 import { TAB_ORDER } from './tabs';
 import type { TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../hotkeys';
@@ -64,8 +65,9 @@ interface SidebarProps {
 export default function Sidebar(props: SidebarProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
-  // 도감의 열람 지역 — 서브탭 클릭과 Tab 키(지역 순환)가 같은 상태를 쓴다(Sidebar 소유).
-  const [dexRegion, setDexRegion] = useState<RegionId>(props.region);
+  // 도감의 열람 구역(zone) — 서브탭 클릭과 Tab 키(구역 순환)가 같은 상태를 쓴다(Sidebar 소유).
+  // 지역이 아니라 구역 단위다 — 병합 바다 씬에서 도감을 열면 서 있는 물의 구역부터 본다.
+  const [dexZone, setDexZone] = useState<ZoneId>(defaultZoneOfRegion(props.region));
   const { layout } = useBagView();
 
   // 탭 선택의 단일 관문 — 탭바 클릭과 숫자키가 같은 규칙을 쓴다.
@@ -73,8 +75,8 @@ export default function Sidebar(props: SidebarProps) {
   const select = (t: TabKey) => {
     if (t === activeTab && t === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
     if (t === activeTab && t === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
-    // 다른 탭에서 도감으로 들어오면 현재 씬 지역부터 본다 — 탭 밖에서는 기억하지 않는다
-    if (t === 'dex' && activeTab !== 'dex') setDexRegion(props.region);
+    // 다른 탭에서 도감으로 들어오면 현재 씬의 구역부터 본다 — 탭 밖에서는 기억하지 않는다
+    if (t === 'dex' && activeTab !== 'dex') setDexZone(defaultZoneOfRegion(props.region));
     setActiveTab(t);
   };
 
@@ -91,8 +93,8 @@ export default function Sidebar(props: SidebarProps) {
       if (activeTab === 'bag') {
         setBagLayout(layout === 'list' ? 'cards' : 'list');
       } else if (activeTab === 'dex') {
-        const at = Math.max(0, REGION_IDS.indexOf(dexRegion));
-        setDexRegion(REGION_IDS[(at + dir + REGION_IDS.length) % REGION_IDS.length]);
+        const at = Math.max(0, ZONE_IDS.indexOf(dexZone));
+        setDexZone(ZONE_IDS[(at + dir + ZONE_IDS.length) % ZONE_IDS.length]);
       }
       return true;
     }
@@ -118,7 +120,7 @@ export default function Sidebar(props: SidebarProps) {
       <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
         {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
-        {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexRegion} onSub={setDexRegion} />}
+        {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
         {activeTab === 'help' && <HelpPanel />}
         {activeTab === 'settings' && (
           <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}

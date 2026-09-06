@@ -1,9 +1,9 @@
 // HTTP API 구현 — 스테이징·운영 (supabase + /api/action)
 import { HttpBackend } from '../backend/http';
 import type { Backend } from '../backend/types';
-import type { AuthApi, StorageApi } from './types';
-import type { AuthResult } from '../backend/auth';
 import type { GameState } from '../game/logic';
+import type { AuthApi } from './types';
+import type { AuthResult } from '../backend/auth';
 import {
   supabase,
   ensureSession,
@@ -13,7 +13,6 @@ import {
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
-  saveCode as encodeSave,
 } from '../backend/auth';
 
 class HttpAuth implements AuthApi {
@@ -55,15 +54,6 @@ class HttpAuth implements AuthApi {
   }
   markAccountNudged(): void {
     localStorage.setItem('pf-account-nudged', '1');
-  }
-}
-
-class HttpStorage implements StorageApi {
-  saveCode(state: GameState): string {
-    return encodeSave(state);
-  }
-  decodeSave(code: string): unknown {
-    return JSON.parse(decodeURIComponent(atob(code.trim())));
   }
 }
 
@@ -148,12 +138,12 @@ class HttpAdmin implements AdminApi {
   }
 }
 
-export function createHttpApi(initial?: GameState):
-{ game: Backend; auth: AuthApi; storage: StorageApi; admin: AdminApi } {
+export function createHttpApi():
+{ createGame(initial?: GameState): Backend; auth: AuthApi; admin: AdminApi } {
   return {
-    game: new HttpBackend(initial ?? null),
+    // 시드 전달 — 델타 캐시의 출발점. 없으면 첫 델타가 풀재동기로 나간다 (무해, 1회).
+    createGame: (initial?: GameState) => new HttpBackend(initial ?? null),
     auth: new HttpAuth(),
-    storage: new HttpStorage(),
     admin: new HttpAdmin(),
   };
 }

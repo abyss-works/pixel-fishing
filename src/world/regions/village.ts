@@ -50,9 +50,9 @@ export const VILLAGE: RegionPack = {
   ground: { kind: 'grass', color: '#74c69d', dot: '#5fb389', mapColor: '#4c7c5e' },
   waveCount: 30,
   terrain: [
-    { kind: 'water', rect: V_POND, style: 'pond', spot: 'pond' },
-    { kind: 'water', rect: V_RIVER, style: 'river', spot: 'river' },
-    { kind: 'water', rect: V_SEA, style: 'sea' }, // 낚시 수역 아님 — 경계/출항용
+    { kind: 'water', rect: V_POND, style: 'pond' },   // 낚시 대상은 어군(학교) — 물은 지형일 뿐
+    { kind: 'water', rect: V_RIVER, style: 'river' },
+    { kind: 'water', rect: V_SEA, style: 'sea' },     // 남쪽 바다(대양 연결) — 낚시 수역 아님
     { kind: 'deck', rect: V_BRIDGE, style: 'bridge' },
     { kind: 'deck', rect: V_PIER, style: 'pier' },
   ],
@@ -67,9 +67,9 @@ export const VILLAGE: RegionPack = {
   spawn: V_SPAWN,
   triggers: [
     { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
-    { rect: V_PORT, action: 'travel', to: 'ocean', requiredBoat: 1,
-      msg: '대양으로 출항! 태평양 군집을 찾아 항해하자.',
-      blockedMsg: '대양에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.' },
+    { rect: V_PORT, action: 'travel', to: 'world', requiredBoat: 1,
+      msg: '대양으로 출항! 군집을 찾아 항해하자.',
+      blockedMsg: '바다에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.' },
     { rect: V_BOATSHOP_TRIGGER, action: 'shop' },
   ],
   labels: [

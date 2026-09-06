@@ -1,12 +1,15 @@
-// 거점: 콜롬보 항 (인도양) — harbor/manila 패턴 상속(manila 선례: 복제로 지역·문구만 조정).
+// 거점: 콜롬보 항 (병합 바다 인도양) — harbor/manila 패턴 상속(manila 선례: 복제로 지역·문구만 조정).
 // 미끼 상점(shop 가구)은 미끼 릴리즈 본체로 추가됐다. 구매처는 이 항구 하나다.
 import type { BasePack } from '../types';
+import { COLOMBO_SPAWN } from '../regions/world';
 
 export const COLOMBO_BASE: BasePack = {
   id: 'colombo',
-  region: 'indian',
+  region: 'world',
   headline: '콜롬보 항 — 시설을 클릭해 정비하자',
   exitMsg: '출항! 향신료의 바다에서 스페이스로 캐스팅.',
+  // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
+  exitAt: { ...COLOMBO_SPAWN },
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
   furniture: [
     { id: 'dex',    x: 36,  y: 58,  w: 40, h: 60, sprite: 'office',

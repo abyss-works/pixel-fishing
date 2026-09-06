@@ -2,10 +2,9 @@
 // 게임은 LocalBackend(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalBackend } from '../backend/local';
 import type { Backend } from '../backend/types';
-import type { AuthApi, StorageApi } from './types';
+import type { AuthApi } from './types';
 import type { AuthResult } from '../backend/auth';
 import type { GameState } from '../game/logic';
-import { saveCode as encodeSave } from '../backend/auth';
 
 const DEV_ACCOUNT = 'dev@localhost';
 const DEV_UID = '00000000-0000-4000-8000-000000000000';
@@ -46,15 +45,6 @@ class LocalAuth implements AuthApi {
   }
 }
 
-class LocalStorageApi implements StorageApi {
-  saveCode(state: GameState): string {
-    return encodeSave(state);
-  }
-  decodeSave(code: string): unknown {
-    return JSON.parse(decodeURIComponent(atob(code.trim())));
-  }
-}
-
 // ---------- 관리자 읽기 (로컬 = 클라우드 미설정) ----------
 // events·saves_current 같은 운영 원장이 로컬에는 존재하지 않는다. 그래서 접근 판정은
 // 'local'을 주고 데이터 getter는 **reject**한다 — 조용한 빈 배열 반환은 "데이터가 없다"라는
@@ -88,12 +78,11 @@ class LocalAdmin implements AdminApi {
   }
 }
 
-export function createLocalApi(initial: GameState):
-{ game: Backend; auth: AuthApi; storage: StorageApi; admin: AdminApi } {
+export function createLocalApi():
+{ createGame(initial: GameState): Backend; auth: AuthApi; admin: AdminApi } {
   return {
-    game: new LocalBackend(initial),
+    createGame: initial => new LocalBackend(initial),
     auth: new LocalAuth(),
-    storage: new LocalStorageApi(),
     admin: new LocalAdmin(),
   };
 }
