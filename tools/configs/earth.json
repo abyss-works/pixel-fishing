@@ -1,0 +1,13 @@
+{
+  "id": "earth",
+  "extends": "tools/configs/world.json",
+  "geo": "src/world/geo/land-50m.geo.json",
+  "cell": { "w": 8, "h": 11 },
+  "grid": { "cols": 720, "rows": 247 },
+  "window": { "lonMin": -180, "latMax": 85, "lonMax": 180, "latMin": -85 },
+
+  "_note": "전지구 마스크 — 세계지도 모달(stage/WorldMapModal)용. world.json을 extends해 구현 영역의 구역 문자(1/2/3, t/d/w/r/s, 라벨 4/5/6)를 그대로 물려받는다 — '어디까지 컬러인가'의 판정이 데이터 단일 출처. 모달은 이 마스크를 통째로 그리되 구현 영역(world.json의 window)만 컬러 톤, 나머지는 흑백 톤(atlas.ts의 toneRect). 해상도 16px/°(0.5°/열) — 지도 모달 축소 표시에 충분하고 필드용 world(32px/°)와 역할이 다르다. 남극 본토는 위도 창(-85)까지 채워진다(로드맵 1-7 남극 대비).",
+  "_note_poles": "퇴화 링(위도 -90 수평선)은 생성기가 폐기한다(2026-08-28 필터). 남극 대륙 링은 정상 도형이라 그대로 찍힌다.",
+
+  "anchors": {}
+}

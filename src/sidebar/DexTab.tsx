@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
-  FISH, SPOTS, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile,
+  FISH, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile,
 } from '../game/logic';
 import type { Fish, FormId, GameState } from '../game/logic';
-import { REGION_PACKS } from '../world';
-import type { RegionId } from '../world';
+import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../data/zones';
+import type { ZoneId } from '../data/zones';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
@@ -78,22 +78,23 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
 }
 
 // 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
-// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재선택(클릭·같은 숫자키), 지역 전환은
+// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재선택(클릭·같은 숫자키), **최상위 존** 전환은
 // 하단 서브탭 또는 Tab 키 — 둘 다 Sidebar가 소유한 상태를 내려받는 제어 컴포넌트다.
+// 서브탭 단위가 최상위 존인 이유: 하위 존(해구 등) 어종은 부모 존으로 합산된다(topZoneOfSpot) —
+// 서브탭 수가 존 트리 확장과 무관하게 안정된다(오픈월드 spec/zone-tree.md).
 export default function DexTab({ game, view, sub, onSub }: {
   game: GameState;
   view: DexView;
-  /** 열람 중인 지역 — Sidebar 소유(Tab 키 지역 순환과 상태 공유) */
-  sub: RegionId;
-  onSub: (r: RegionId) => void;
+  /** 열람 중인 최상위 존 — Sidebar 소유(Tab 키 존 순환과 상태 공유) */
+  sub: ZoneId;
+  onSub: (z: ZoneId) => void;
 }) {
   // 폼별 발견 기준 — 변이는 별개 개체라 변이만 잡은 종은 기본 도감에서 여전히 ??? (v0.3.3)
   const viewForm: FormId = view === 'variant' ? 'variant' : 'normal';
   const baseCount = FISH.filter(f => formDiscovered(game, f.id, 'normal')).length;
   const varCount = FISH.filter(f => formDiscovered(game, f.id, 'variant')).length;
   const [detail, setDetail] = useState<Fish | null>(null);
-  const regions = Object.values(REGION_PACKS);
-  const spots = SPOTS.filter(s => s.region === sub);
+  const spots = subtreeSpots(sub); // 최상위 존 서브트리의 어군 전부(하위 존 포함)
   const found = (f: Fish) => formDiscovered(game, f.id, viewForm); // 현재 보기 기준 발견 여부
 
   return (
@@ -105,12 +106,12 @@ export default function DexTab({ game, view, sub, onSub }: {
         </span>{')'}
       </h3>
       <SubTabs
-        items={regions.map(pack => {
-          const regionFish = FISH.filter(f => SPOTS.some(s => s.region === pack.id && s.id === f.spot));
-          const caught = regionFish.filter(found).length;
+        items={ZONE_IDS.map(id => {
+          const zoneFish = FISH.filter(f => topZoneOfSpot(f.spot) === id);
+          const caught = zoneFish.filter(found).length;
           return {
-            key: pack.id, // RegionId 단일 근원(data/spots 파생)이라 캐스트 불필요
-            label: <>{pack.info.shortName}<span className="text-2xs"> {caught}/{regionFish.length}</span></>,
+            key: id,
+            label: <>{zoneById(id)!.shortName}<span className="text-2xs"> {caught}/{zoneFish.length}</span></>,
           };
         })}
         activeKey={sub}

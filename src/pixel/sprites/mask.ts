@@ -5,11 +5,20 @@
 import { R, label } from '../common.js';
 import type { Ctx } from '../common.js';
 import { WATER_STYLE } from '../styles.js';
-import type { CompiledMap, MapCellDef } from '../../world/types';
+import type { CompiledMap, MapCellDef, Rect } from '../../world/types';
 import { zoneLabelAnchors } from '../../world/mask';
 
 const LAND = '#74c69d', LAND_HI = '#8fd6b0', SAND = '#e9c46a', SPECK = '#2d6a4f';
 const FAINT = 'rgba(242,247,251,0.5)';
+
+// 흑백 톤 — toneRect 밖(미개척 세계). 무채색이되 물/육지의 명도 차는 유지해 해안선이 읽히게.
+// 세계지도(atlas)가 구현 영역만 컬러로 비추는 "아직 가지 않은 바다" 연출용 (사용자 확정 2026-08-28).
+const MONO_WATER_TOP: RGB = [86, 94, 102], MONO_WATER_BOT: RGB = [36, 41, 48];
+const MONO_LAND = '#7e8882', MONO_LAND_HI = '#949e98', MONO_SAND = '#a8b0ac', MONO_SPECK = '#4c554f';
+
+// 라벨 앵커 캐시 — zoneLabelAnchors는 지도 전체 셀을 순회한다(병합 바다 105k셀). 지도 객체는
+// 모듈 상수라 같은 격자를 프레임마다 다시 훑을 이유가 없다(WeakMap — 지도 교체 시 자동 폐기).
+const LABEL_CACHE = new WeakMap<CompiledMap, { text: string; x: number; y: number }[]>();
 
 type RGB = readonly [number, number, number];
 const rgbOf = (h: string): RGB => {
@@ -39,62 +48,95 @@ function seaTones(style: keyof typeof WATER_STYLE) {
   return g;
 }
 
-export function drawMaskTerrain(ctx: Ctx, map: CompiledMap, detail: boolean, t?: number) {
+/** view = 카메라 뷰포트(월드 px) — 병합 바다처럼 격자가 큰 지형은 보이는 칸만 찍는다
+ *  (오픈월드 Phase 3: 전체 순회는 26k셀 × 프레임이라 컬링 필수). 미지정 = 전체(미니맵).
+ *  tone = 컬러 영역(월드 px) — 이 사각형 **밖**은 흑백 톤(세계지도의 미개척 연출). 미지정 = 전부 컬러. */
+export function drawMaskTerrain(
+  ctx: Ctx, map: CompiledMap, detail: boolean, t?: number, view?: Rect, tone?: Rect,
+) {
   const sw = map.cellW, sh = map.cellH;
+  const c0 = view ? Math.max(0, Math.floor(view.x / sw) - 1) : 0;
+  const c1 = view ? Math.min(map.cols - 1, Math.ceil((view.x + view.w) / sw) + 1) : map.cols - 1;
+  const r0 = view ? Math.max(0, Math.floor(view.y / sh) - 1) : 0;
+  const r1 = view ? Math.min(map.rows - 1, Math.ceil((view.y + view.h) / sh) + 1) : map.rows - 1;
+  // 흑백 판정 — 셀 중심 기준. 세로 경계는 행 단위, 가로 경계는 열 단위로 갈라진다.
+  const monoCol = (c: number): boolean => {
+    if (!tone) return false;
+    const x = c * sw + sw / 2;
+    return x < tone.x || x >= tone.x + tone.w;
+  };
+  const monoRow = (r: number): boolean => {
+    if (!tone) return false;
+    const y = r * sh + sh / 2;
+    return y < tone.y || y >= tone.y + tone.h;
+  };
   const at = (c: number, r: number): MapCellDef | undefined =>
     c >= 0 && r >= 0 && c < map.cols && r < map.rows ? map.palette[map.codes[r * map.cols + c]] : undefined;
   const isLand = (c: number, r: number): boolean => !!at(c, r)?.land;
 
   // 1패스 — 셀 채움 (가로 런 병합 + 행 비례 수심 그라데이션: 북=밝은 수면 → 남=깊은 바다)
-  for (let r = 0; r < map.rows; r++) {
+  // 그라데이션은 전체 행수 기준 — 병합 바다에서 3구역이 하나의 수직 톤으로 이어진다.
+  // 런 키에 흑백 플래그를 섞는다 — tone 경계에서 같은 문자라도 색이 갈라져야 하니까.
+  for (let r = r0; r <= r1; r++) {
     const depth = map.rows > 1 ? r / (map.rows - 1) : 0;
-    let start = 0;
-    for (let c = 1; c <= map.cols; c++) {
-      const a = map.codes[r * map.cols + c - 1];
-      const b = c < map.cols ? map.codes[r * map.cols + c] : -1;
-      if (b === a) continue;
-      const def = map.palette[a];
-      let color: string;
-      if (def?.land) color = LAND;
-      else {
-        const st = (def?.style ?? 'sea') as keyof typeof WATER_STYLE;
-        const tone = seaTones(st);
-        color = mix(tone.top, tone.bot, depth);
+    const rowMono = monoRow(r);
+    let start = c0;
+    let key = -1;
+    for (let c = c0; c <= c1 + 1; c++) {
+      const code = c <= c1 ? map.codes[r * map.cols + c] : -2;
+      const mono = rowMono || monoCol(c);
+      const k = code * 2 + (mono ? 1 : 0);
+      if (k === key) continue;
+      if (key >= 0) {
+        const def = map.palette[(key - (key % 2)) / 2];
+        const m = key % 2 === 1;
+        let color: string;
+        if (m) color = def?.land ? MONO_LAND : mix(MONO_WATER_TOP, MONO_WATER_BOT, depth);
+        else if (def?.land) color = LAND;
+        else {
+          const st = (def?.style ?? 'sea') as keyof typeof WATER_STYLE;
+          const tone2 = seaTones(st);
+          color = mix(tone2.top, tone2.bot, depth);
+        }
+        R(ctx, start * sw, r * sh, (c - start) * sw, sh, color);
       }
-      R(ctx, start * sw, r * sh, (c - start) * sw, sh, color);
+      key = k;
       start = c;
     }
   }
 
   if (!detail) return; // 미니맵 — 평면 채움만
 
-  // 2패스 — 해안·수역 장식
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
+  // 2패스 — 해안·수역 장식 (이웃 조회 at()은 창 밖도 읽는다 — 경계 셀의 모래테가 끊기지 않게)
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
       const def = at(c, r);
       const x = c * sw, y = r * sh;
+      const mono = monoRow(r) || monoCol(c);
+      const landFill = mono ? MONO_LAND_HI : LAND_HI;
+      const sandFill = mono ? MONO_SAND : SAND;
 
       if (def?.land) {
         // 육지: 물 접촉변 모래테 + 북변 하이라이트 + 스펙클
-        if (!isLand(c, r - 1)) { R(ctx, x, y, sw, 2, LAND_HI); R(ctx, x - 2, y - 2, sw + 4, 2, SAND); }
-        if (!isLand(c, r + 1)) R(ctx, x - 2, y + sh, sw + 4, 3, SAND);
-        if (!isLand(c - 1, r)) R(ctx, x - 2, y, 2, sh, SAND);
-        if (!isLand(c + 1, r)) R(ctx, x + sw, y, 2, sh, SAND);
-        if (((c * 7 + r * 13) % 11) === 0) R(ctx, x + 2, y + Math.round(sh / 3), 3, 2, SPECK);
+        if (!isLand(c, r - 1)) { R(ctx, x, y, sw, 2, landFill); R(ctx, x - 2, y - 2, sw + 4, 2, sandFill); }
+        if (!isLand(c, r + 1)) R(ctx, x - 2, y + sh, sw + 4, 3, sandFill);
+        if (!isLand(c - 1, r)) R(ctx, x - 2, y, 2, sh, sandFill);
+        if (!isLand(c + 1, r)) R(ctx, x + sw, y, 2, sh, sandFill);
+        if (((c * 7 + r * 13) % 11) === 0) R(ctx, x + 2, y + Math.round(sh / 3), 3, 2, mono ? MONO_SPECK : SPECK);
         continue;
       }
 
-      // 물: 연안 얕은 물 rim — 육지에 닿은 셀은 밝게 깔고 모래 점을 디더링
+      // 물: 연안 얕은 물 rim — 육지에 닿은 셀은 밝게 깔고 모래 점을 디더링 (흰 알파라 무채색 공용)
       const nearLand = isLand(c - 1, r) || isLand(c + 1, r) || isLand(c, r - 1) || isLand(c, r + 1);
       if (nearLand) {
         R(ctx, x, y, sw, sh, 'rgba(226,247,255,0.16)');
-        if (at(c, r - 1)?.land) for (let i = 0; i < sw; i += 4) R(ctx, x + i + ((c + r) % 2) * 2, y, 2, 1, SAND);
-        if (at(c, r + 1)?.land) for (let i = 0; i < sw; i += 4) R(ctx, x + i + ((c + r) % 2) * 2, y + sh - 1, 2, 1, SAND);
-        if (at(c - 1, r)?.land) for (let j = 0; j < sh; j += 4) R(ctx, x, y + j + ((c + r) % 2), 1, 2, SAND);
-        if (at(c + 1, r)?.land) for (let j = 0; j < sh; j += 4) R(ctx, x + sw - 1, y + j + ((c + r) % 2), 1, 2, SAND);
+        if (at(c, r - 1)?.land) for (let i = 0; i < sw; i += 4) R(ctx, x + i + ((c + r) % 2) * 2, y, 2, 1, sandFill);
+        if (at(c, r + 1)?.land) for (let i = 0; i < sw; i += 4) R(ctx, x + i + ((c + r) % 2) * 2, y + sh - 1, 2, 1, sandFill);
+        if (at(c - 1, r)?.land) for (let j = 0; j < sh; j += 4) R(ctx, x, y + j + ((c + r) % 2), 1, 2, sandFill);
+        if (at(c + 1, r)?.land) for (let j = 0; j < sh; j += 4) R(ctx, x + sw - 1, y + j + ((c + r) % 2), 1, 2, sandFill);
       }
 
-      // 특화 수역 텍스처
+      // 특화 수역 텍스처 — 구현 영역에만 존재하는 스타일이라 흑백 분기 불필요
       if (def?.style === 'deep') {
         // 홀 내벽 — 경계 안쪽 음영으로 수직 감을 강조 + 드문 발광점
         const edge = !at(c - 1, r)?.style || !at(c + 1, r)?.style || !at(c, r - 1)?.style || !at(c, r + 1)?.style;
@@ -131,8 +173,13 @@ export function drawMaskTerrain(ctx: Ctx, map: CompiledMap, detail: boolean, t?:
     }
   }
 
-  // 4패스 — 수역 라벨 자동 배치 (label 파생 — 위치는 격자가 결정)
-  for (const a of zoneLabelAnchors(map)) {
+  // 4패스 — 수역 라벨 자동 배치 (label 파생 — 위치는 격자가 결정. 전체 순회라 캐시 필수)
+  let anchors = LABEL_CACHE.get(map);
+  if (!anchors) {
+    anchors = zoneLabelAnchors(map);
+    LABEL_CACHE.set(map, anchors);
+  }
+  for (const a of anchors) {
     label(ctx, a.text, a.x, a.y - 6, FAINT, 9);
   }
 }

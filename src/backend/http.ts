@@ -55,10 +55,18 @@ export class HttpBackend implements Backend {
   // 셋을 병렬로 읽어 GameState로 조립한다 — RLS가 본인 행만 통과시킨다.
   async load(): Promise<GameState | null> {
     if (!supabase) return null;
+    // fish_instances만 명시 필터가 필수다 — RLS가 "본인 행 OR 전시 공개(slot not null)"
+    // 이중 정책(0006)이라, 필터 없이 읽으면 남의 전시 개체가 내 exhibit로 조립된다.
+    // (지금은 slot을 채우는 액션이 없어 무증상이지만 전시 기능이 켜지는 순간 발현)
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user.id;
+    if (!uid) return null;
     const [cur, inst, rec] = await Promise.all([
       supabase.from('saves_current').select('data, gold, fame, boat, rod, version').maybeSingle(),
-      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 뺀다 (서버 action.ts INST_SEL과 동일 계약)
-      supabase.from('fish_instances').select('uid, fish_id, form, size, caught_at, spot, judgment, slot, locked'),
+      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 뺀다 (서버 action.ts INST_SEL과 동일 계약).
+      // 명시 필터도 필수다 — 필터 없이 읽으면 RLS 이중 정책(0006) 탓에 남의 전시 개체가
+      // 내 exhibit로 조립된다 (지금은 무증상, 전시대 착수 전 선결).
+      supabase.from('fish_instances').select('uid, fish_id, form, size, caught_at, spot, judgment, slot, locked').eq('user_id', uid),
       supabase.from('records').select('fish_id, form, count, max_size, first_caught'),
     ]);
     if (cur.data) {

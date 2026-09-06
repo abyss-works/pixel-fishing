@@ -1,5 +1,6 @@
 // 수역 데이터 — 새 수역 추가 시 여기 행 추가만으로 SpotId까지 자동 확장
-// boatTier 0 = 배 없이 가능(마을), 1+ = 대양(배 필요). region = 소속 지역(도감 계층·지역 탭 분류)
+// boatTier 0 = 배 없이 가능(마을), 1+ = 대양(배 필요). region = **legacy 열**(admin 표기용) —
+// 게임 로직의 그룹핑은 존 트리(data/zones.ts, spec/zone-tree.md)가 정본이다. 불변 데이터.
 // powerReq = 낚싯대 파워 요구량(stats.rodPower). 1-3부터는 **Lv 단위로 지정해 stats.powerOfLevel
 // 로 환산**하는 관례가 시작됐다(기존 행은 파워 리터럴 — 스케일 혼재는 status.md ⬜). 미달이면 그
 // 수역에서 존이 사라지고 일반 가중치·입질 시간 페널티를 받는다(stats.powerZones 참조).
@@ -9,8 +10,10 @@ import { RARITY } from './rarity.js';
 import { powerOfLevel } from '../game/stats.js';
 
 const DATA = [
-  { id: 'pond',  name: '마을 연못',     boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
-  { id: 'river', name: '마을 강',       boatTier: 0, region: 'village', powerReq: 20 }, // Lv3
+  { id: 'pond',  name: '마을 연못',  boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
+  { id: 'river', name: '마을 강',    boatTier: 0, region: 'village', powerReq: 20 }, // Lv3
+  // 수역명 = 구역명 복귀(존 계층화 — spec/zone-tree.md): spot은 이제 "그 범위의 어군
+  // 오브젝트"라 구역 이름과 겹쳐도 한 엔티티다. 구 '태평양 연안' 개명 하필 제거.
   { id: 'sea',   name: '태평양',        boatTier: 1, region: 'ocean', powerReq: 35 }, // Lv6
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 40 }, // Lv7
   // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(군집은 특화에만 둔다)

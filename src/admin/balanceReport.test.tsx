@@ -84,7 +84,7 @@ describe('전체 리포트 조립', () => {
 });
 
 // ---------- 페이지 렌더 스모크 (콘텐츠 조립 계약) ----------
-// 얇게 유지 — 탭 전환과 실제 데이터 채움만 본다. 프리미티브(MetricSwitch/DeltaCell/MiniBar)
+// 얇게 유지 — 탭 전환과 실제 데이터 채움만 본다. 프리미티브(MetricSwitch/MiniBar)
 // 는 props-only라 여기서 함께 검증된다.
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach } from 'vitest';

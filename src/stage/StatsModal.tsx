@@ -7,7 +7,7 @@ import {
   minLevelOfPower, moveSpeed, powerHelpText, powerZones, rodAxes, rodPower,
 } from '../game/stats';
 import { SPOTS } from '../data/spots';
-import type { SpotRegionId } from '../data/spots';
+import type { RegionId } from '../data/places';
 import CloseButton from '../ui/CloseButton';
 import DataTable from '../ui/DataTable';
 import HelpHint from '../ui/HelpHint';
@@ -40,8 +40,8 @@ interface Props {
   game: GameState;
   /** 현재 씬의 이동 방식 — 지역 팩의 movement(거점은 walk) */
   movement: Movement;
-  /** 현재 위치 지역 — 캐루셀이 이 지역 수역부터 시작한다 */
-  region: SpotRegionId;
+  /** 현재 위치 지역 — 캐루셀이 이 지역 수역부터 시작한다. 병합 바다(world)는 마을을 뺀 전체 */
+  region: RegionId;
   onClose: () => void;
 }
 
@@ -54,7 +54,8 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
   const startIdx = (() => {
     let best = 0;
     SPOTS.forEach((s, i) => {
-      if (s.region === region && (s.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0)) best = i;
+      const mine = region === 'world' ? s.region !== 'village' : s.region === region;
+      if (mine && (s.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0)) best = i;
     });
     return best;
   })();

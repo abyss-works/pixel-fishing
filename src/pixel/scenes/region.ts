@@ -2,7 +2,7 @@
 // 직접 그리지 않는다: 그리기는 전부 sprites/(단위)와 styles.ts(토큰)에 위임 (계층: layout).
 // 지형 소스는 둘 — 항해 지역은 마스크(sprites/mask 페인터), walk 지역은 rect 조각(scenery).
 // 지역 고유 연출은 pack.flavor 훅 하나만 허용 — 지형/건물을 훅에서 그리지 않는다.
-import { R, SCALE, CANVAS_W, CANVAS_H } from '../common.js';
+import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../common.js';
 import type { Ctx } from '../common.js';
 import { BUILDING_SPRITES } from '../sprites/buildings.js';
 import { drawBoat, drawPerson } from '../sprites/actors.js';
@@ -29,7 +29,9 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 
   if (pack.map) {
     // 마스크 지형 — 육지·특화 수역이 격자에 들어 있다 (t = 구름 그림자·글린트 연출)
-    drawMaskTerrain(ctx, pack.map, true, v.t);
+    // 뷰포트 컬링 — 카메라에 보이는 칸만 찍는다(병합 바다 105k셀 대응, 오픈월드 Phase 3)
+    drawMaskTerrain(ctx, pack.map, true, v.t,
+      { x: cam.x, y: cam.y, w: FIELD_W, h: FIELD_H });
   } else {
     // rect 지형 (village) — 초지 바탕 + 물 조각
     const g = pack.ground!;

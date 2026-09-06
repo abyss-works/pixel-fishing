@@ -198,16 +198,16 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('travel — 위치를 남기고, 첫 방문만 이벤트로 기록한다', () => {
-    const first = applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'ocean' } }, deps());
+    const first = applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
     if (!first.ok) throw new Error(first.error);
-    expect(first.state.location).toEqual({ kind: 'region', id: 'ocean' });
-    expect(first.state.visited).toEqual(['ocean']);
-    expect(first.events).toEqual([{ type: 'visit', payload: { region: 'ocean' } }]);
+    expect(first.state.location).toEqual({ kind: 'region', id: 'world' });
+    expect(first.state.visited).toEqual(['world']);
+    expect(first.events).toEqual([{ type: 'visit', payload: { region: 'world' } }]);
 
     // 두 번째 방문은 이벤트를 안 남긴다 — 오갈 때마다 남기면 스트림이 이동 로그가 된다
-    const again = applyAction(first.state, { type: 'travel', to: { kind: 'region', id: 'ocean' } }, deps());
+    const again = applyAction(first.state, { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
     if (!again.ok) throw new Error(again.error);
-    expect(again.state.visited).toEqual(['ocean']);
+    expect(again.state.visited).toEqual(['world']);
     expect(again.events).toEqual([]);
   });
 

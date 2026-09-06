@@ -1,12 +1,17 @@
 // 픽셀 렌더링 공통 헬퍼 — 인터프리터(region/base/worldmap)와 어종 스프라이트(sprites.ts)가 공유
-import { VIEW_W, VIEW_H } from '../world/types';
+import { VIEW_W, VIEW_H, FIELD_VIEW_W, FIELD_VIEW_H } from '../world/types';
 
 export type Ctx = CanvasRenderingContext2D;
 
 // 뷰포트/캔버스 해상도 — 도트(사각형)는 정수 스케일 유지, 텍스트만 선명해진다
+// W/H = 거점 설계 좌표(320×180) · FIELD_W/H = 필드 카메라(448×252 — 오픈월드 체감 1.4× 확대).
+// 캔버스는 씬마다 배면이 다르다: 필드 = FIELD×SCALE, 거점 = W×SCALE — 같은 16:9 프레임에
+// w-full로 채워진다. camera·컬링은 FIELD 축, 거점 backdrop·가구는 W 축을 본다.
 export const W = VIEW_W, H = VIEW_H;
+export const FIELD_W = FIELD_VIEW_W, FIELD_H = FIELD_VIEW_H;
 export const SCALE = 2;
-export const CANVAS_W = W * SCALE, CANVAS_H = H * SCALE;
+export const CANVAS_W = FIELD_W * SCALE, CANVAS_H = FIELD_H * SCALE;
+export const BASE_CANVAS_W = W * SCALE, BASE_CANVAS_H = H * SCALE;
 
 // 캔버스 UI 팔레트 — index.css 토큰과 같은 값 
 export const UI = {

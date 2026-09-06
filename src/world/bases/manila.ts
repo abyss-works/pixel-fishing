@@ -1,11 +1,14 @@
-// 거점: 마닐라항 (동남아) — harbor.ts를 복제해 지역·문구만 조정했다 (가구 배치는 HARBOR_FURNITURE 패턴 상속)
+// 거점: 마닐라항 (병합 바다 동남아) — harbor.ts를 복제해 지역·문구만 조정했다 (가구 배치는 HARBOR_FURNITURE 패턴 상속)
 import type { BasePack } from '../types';
+import { MANILA_SPAWN } from '../regions/world';
 
 export const MANILA_BASE: BasePack = {
   id: 'manila',
-  region: 'seasia',
+  region: 'world',
   headline: '마닐라항 — 시설을 클릭해 정비하자',
   exitMsg: '출항! 군집 위에서 스페이스로 캐스팅.',
+  // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
+  exitAt: { ...MANILA_SPAWN },
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
   furniture: [
     { id: 'dex',    x: 36,  y: 58,  w: 40, h: 60, sprite: 'office',

@@ -4,8 +4,8 @@ import {
 } from '../../game/logic';
 import type { GameState } from '../../game/logic';
 import type { GameAction } from '../../game/actions';
-import type { DispatchResult, MaybePromise } from '../../backend/types';
-import { when } from '../../backend/types';
+import type { DispatchResult, MaybePromise } from '../../api';
+import { when } from '../../api';
 import TextInput from '../../ui/TextInput';
 import Button from '../../ui/Button';
 import Note from '../../ui/Note';

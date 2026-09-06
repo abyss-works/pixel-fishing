@@ -144,6 +144,10 @@ body {
 /* 키보드 포커스 — pf-btn 아닌 커스텀 소형 버튼(잠금/체크/서브탭 등)에도 공통 적용 */
 button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 
+/* 세계지도 모달 폭 — Modal 박스의 w-[560px](wide)을 이 화면만 넓힌다. 레이어 밖 선언이라
+   @layer utilities보다 우선한다(캐스케이드 레이어 규칙 — 위 리셋 사고 주석과 같은 근거). */
+.pf-modal-worldmap { width: min(1280px, 96vw); }
+
 /* 모션 민감군 — 연출 애니메이션 전면 축소. 게임 상태와 무관한 장식이라 정지해도
    정보 손실이 없다(catch-pop 카드 등은 즉시 최종 프레임으로 표시된다). */
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,7 @@ import { FISH, boatNameOf, dexSpeciesCount } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { furnitureAt, BASE_PACKS } from '../world';
 import type { BaseId, FurnitureId } from '../world';
-import { renderBase, W, H, CANVAS_W, CANVAS_H } from '../pixel';
+import { renderBase, W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../pixel';
 import { useCanvasCover } from '../admin/canvasCover';
 import GameFrame from './GameFrame';
 import ResourceBar from './ResourceBar';
@@ -55,7 +55,7 @@ export default function Base({ base, game, onFacility, onOpenStats }: Props) {
         {covered ? (
           <div className="block w-full h-full bg-bg" aria-label="게임 화면(덮개)" />
         ) : (
-          <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+          <canvas ref={canvasRef} width={BASE_CANVAS_W} height={BASE_CANVAS_H}
                   className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
                   aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
         )}

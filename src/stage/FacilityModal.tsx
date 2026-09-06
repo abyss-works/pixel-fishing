@@ -8,8 +8,8 @@ import { groupInstances, sumPrice } from '../sidebar/bagRows';
 import InstanceLine, { UnsizedLine } from '../sidebar/InstanceLine';
 import { toggleSellRow, useSellView } from '../sidebar/bagView';
 import type { GameAction } from '../game/actions';
-import { when } from '../backend/types';
-import type { DispatchResult, MaybePromise } from '../backend/types';
+import { when } from '../api';
+import type { DispatchResult, MaybePromise } from '../api';
 import { cx } from '../ui/cx';
 import CloseButton from '../ui/CloseButton';
 import Panel from '../ui/Panel';
@@ -109,7 +109,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   })), [game.bag]);
 
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // uid 단위
-  const { collapsed } = useSellView(); // 판매 패널 접힘 — 기본 펼침(R1b), 가방 탭과는 별개 저장소(요구가 정반대)
+  const { collapsed } = useSellView(); // 판매 패널 펼침 — 기본 닫힘(가방과 동일), 가방 탭과 별개 저장소
 
   const flip = (set: Set<string>, keys: string[], on: boolean) => {
     const next = new Set(set);
@@ -145,7 +145,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                 const on = sellable.filter(i => !excluded.has(i.uid)).length;
                 const allOn = !locked && on === sellable.length;
                 const glyph = on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
-                const expanded = !collapsed.has(key);
+                const expanded = collapsed.has(key);
                 return [
                   <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                     <td>

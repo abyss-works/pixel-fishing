@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
-import { when } from '../backend/types';
-import type { DispatchResult, MaybePromise } from '../backend/types';
+import { when } from '../api';
+import type { DispatchResult, MaybePromise } from '../api';
 import { api } from '../api';
 import { REJECT_TEXT } from '../game/logic';
 import { APP_VERSION } from '../version';

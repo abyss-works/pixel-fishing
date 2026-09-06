@@ -7,11 +7,17 @@
 //
 // 설정 스키마:
 //   id            산출 식별자(헤더/로그용)
+//   extends       (선택) 부모 설정 경로(app 기준 상대) — zones·openZones를 물려받는다
+//                 (부모 먼저 → 자식이 나중 = 자식 스탬프 우선). anchors는 상속하지 않는다 —
+//                 지형 검증은 각 설정의 해상도에서 성립하는 값이라 재사용하면 오탐난다.
 //   geo           벤더 링 배열 JSON 경로(app 기준 상대)
 //   cell          { w, h }  셀 픽셀(비등방 — 종횡비 보정용)
 //   grid          { cols, rows }
 //   window        { lonMin, lonMax, latMin, latMax }  경위도 창(단일 근원)
 //   zones[]       { ch, name, lon, lat, rx, ry }  타원 특화 수역(육지 우선, 나중 항목 우선)
+//   openZones[]   { ch, lonMin, lonMax, latMin, latMax }  열린 바다 구역 — **맨물('.'=기본 물)만**
+//                 지정 문자로 바꾼다(오픈월드 구역 경계 인코딩용). 배열 순서 = 나중 항목 우선,
+//                 특화 수역·육지는 절대 덮지 않는다.
 //   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water' }
 //                 경위도 → 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
@@ -31,8 +37,15 @@ if (!src) {
 
 const readJson = p => JSON.parse(readFileSync(resolve(p), 'utf8').replace(/^\uFEFF/, ''));
 const cfg = src.startsWith('{') ? JSON.parse(src) : readJson(src);
+if (cfg.extends) {
+  if (src.startsWith('{')) { console.error('[inline] extends는 파일 설정에서만 지원한다'); process.exit(2); }
+  const base = readJson(cfg.extends);
+  for (const key of ['zones', 'openZones']) {
+    cfg[key] = [...(base[key] ?? []), ...(cfg[key] ?? [])];
+  }
+}
 
-const { id = '(inline)', geo, zones = [], anchors = {} } = cfg;
+const { id = '(inline)', geo, zones = [], openZones = [], anchors = {} } = cfg;
 const cellW = cfg.cell?.w ?? 8;
 const cellH = cfg.cell?.h ?? 11;
 const cols = cfg.grid?.cols;
@@ -48,9 +61,27 @@ const LAND = 'L';
 const W = cols * cellW, H = rows * cellH;
 const dLon = (win.lonMax - win.lonMin) / cols; // °/열
 const dLat = (win.latMax - win.latMin) / rows; // °/행
+const warns = [];
 
 // --- 1. 육지 래스터 (짝수-홀수 레이캐스팅, 셀 중심 판정) ---
 const landData = readJson(geo);
+// 퇴화 링 필터 — 벤더 데이터(world-atlas land-50m)에는 전 경도를 가로지르는 수평 밴드 조각이
+// 섞여 있다(예: lon -180..180, lat -16.54..-16.49, 4점). 이런 링은 한 행 전체를 육지로
+// 오염시킨다 — 셀 중심이 밴드에 걸리면 바다가 통째로 막혀 지역이 분단된다. 실지형에
+// "경도 90° 이상 × 위도 0.1° 이하" 모양은 없다. (2026-08-28 병합 바다 2배 확대 때 발견)
+const rings = [];
+for (const ring of landData.rings) {
+  let lo0 = Infinity, lo1 = -Infinity, la0 = Infinity, la1 = -Infinity;
+  for (const [lo, la] of ring) {
+    if (lo < lo0) lo0 = lo; if (lo > lo1) lo1 = lo;
+    if (la < la0) la0 = la; if (la > la1) la1 = la;
+  }
+  if (lo1 - lo0 >= 90 && la1 - la0 <= 0.1) {
+    warns.push(`퇴화 링 폐기 — lon ${lo0}..${lo1}, lat ${la0}..${la1} (${ring.length}점)`);
+    continue;
+  }
+  rings.push(ring);
+}
 const ch = Array.from({ length: rows }, () => Array(cols).fill('.'));
 let landCells = 0;
 
@@ -63,7 +94,7 @@ const pointInRing = (lon, lat, ring) => {
   return hit;
 };
 
-for (const ring of landData.rings) {
+for (const ring of rings) {
   // 링 bbox → 후보 셀 범위 선계산 (±180 언랩은 벤더 단계에서 끝난 상태)
   let lo0 = Infinity, lo1 = -Infinity, la0 = Infinity, la1 = -Infinity;
   for (const [lo, la] of ring) {
@@ -86,7 +117,6 @@ for (const ring of landData.rings) {
 }
 
 // --- 2. 특화 수역 스탬프 (육지 우선, 나중 항목 우선) ---
-const warns = [];
 for (const z of zones) {
   if (!z.ch || z.ch === LAND || typeof z.lon !== 'number' || typeof z.lat !== 'number' ||
       !z.rx || !z.ry) {
@@ -108,6 +138,28 @@ for (const z of zones) {
     }
   }
   if (!n) warns.push(`zone '${z.ch}'(${z.name ?? ''}) 가 한 칸도 찍히지 않았다`);
+}
+
+// --- 2.5. 열린 바다 구역 스탬프 (맨물만 — 육지·특화 수역 보존, 나중 항목 우선) ---
+const OZ = '.'; // 스탬프 대상 = 아무 정의도 안 받은 기본 물
+for (const oz of openZones) {
+  if (!oz.ch || oz.ch === OZ || oz.ch === LAND ||
+      ![oz.lonMin, oz.lonMax, oz.latMin, oz.latMax].every(v => typeof v === 'number')) {
+    console.error(`[${id}] 잘못된 openZone: ${JSON.stringify(oz)}`);
+    process.exit(2);
+  }
+  let n = 0;
+  const c0 = Math.max(0, Math.ceil((oz.lonMin - win.lonMin) / dLon - 0.5));
+  const c1 = Math.min(cols - 1, Math.floor((oz.lonMax - win.lonMin) / dLon - 0.5));
+  const r0 = Math.max(0, Math.ceil((win.latMax - oz.latMax) / dLat - 0.5));
+  const r1 = Math.min(rows - 1, Math.floor((win.latMax - oz.latMin) / dLat - 0.5));
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (ch[r][c] !== OZ) continue; // 육지·특화 수역·선찍은 구역 보존
+      ch[r][c] = oz.ch; n++;
+    }
+  }
+  if (!n) warns.push(`openZone '${oz.ch}' (${oz.lonMin}..${oz.lonMax}E, ${oz.latMin}..${oz.latMax}N) 가 한 칸도 찍히지 않았다`);
 }
 
 // --- 3. 앵커 투영 + 지형 검증 (하드코딩 좌표의 대체재 — 경위도가 단일 근원) ---
