@@ -22,6 +22,8 @@ export interface Fish {
   spot: SpotId;
   rarity: RarityId;
   price: number;                         // 기본가 — 변이 판매가 = ×VARIANT_PRICE_MULT (priceOf)
+  /** 밤 전용 어종 — 낮 시간대 추첨 풀에서 빠진다(밤 시스템: game/time.ts). 미기재 = 상시 */
+  night?: boolean;
   /** 개체 가중치 — 기본 1. 그 등급 안에서 이 어종이 나올 상대 빈도(2 = 남들 절반 빈도의 2배).
    *  미기재는 1. drawWeights가 다이얼(fishWeights)보다 우선순위 낮은 기본값으로 소비한다. */
   weight?: number;
@@ -257,4 +259,64 @@ export const FISH: readonly Fish[] = [
     lore: '천 년 전 인도 영웅시에 배 장인들의 항로가 사실상 그 주위를 맴돌았던 이름.',
     variant: { name: '천년 바루나', color: '#4527a0',
       lore: '시간을 두 배로 사는 존재가 심연의 왕관을 두겁 쓴 모습이라 한다.' } },
+  // ── 밤 전용 (night: true — 낮 풀에서 빠진다. game/time.ts) ──
+  // 주기: 하루=1시간·낮 게임4~20시/밤 20시~다음4시. 가격 = 낮 동등급 앵커 대비 1.5~2배, 100 단위 올림.
+  // 변이 톤: 낮 변이(색칠공부)와 달리 이름이 한 단계 어두워진다(밤→칠흑/심연/영겁).
+  // 설계 정본: mgmt/draft/night-fish.md
+  { id: 'moonveil',    name: '달무리',       spot: 'sea',         rarity: 'legendary', price: 3000,  color: '#b9c7dc', shape: 'flowing', night: true,
+    lore: '달빛이 바다에 내리면 그 자리에만 잠시 나타난다. 낮의 포식자들이 물러난 시간의 정점.',
+    variant: { name: '그믐달 무리', color: '#3d4a5c',
+      lore: '달이 사라진 밤의 무리. 달무리보다 한 겹 더 오래 어둠에 남는다.' } },
+  { id: 'abyssveil',  name: '밤의 장막',    spot: 'deep',        rarity: 'legendary', price: 4000,  color: '#5a4a7a', shape: 'eel', night: true,
+    lore: '수면이 완전히 어두워진 뒤에야, 해구에서 무엇인가가 한 겹 천천히 올라온다.',
+    variant: { name: '심연의 장막', color: '#2f2440',
+      lore: '밤의 장막이 몇 겹 더 깊어졌다. 그 아래가 어디로 통하는지는 아무도 모른다.' } },
+  { id: 'moonglow',   name: '달빛 문어',    spot: 'dragonhole',  rarity: 'epic', price: 2500, color: '#e3ecf5', shape: 'cephalopod', night: true,
+    lore: '구멍 벽에 달빛처럼 붙어 있다. 낮에는 보이지 않던 무늬가 밤에만 새겨진다.',
+    variant: { name: '칠흑 문어', color: '#1e2630',
+      lore: '달빛조차 닿지 않는 문어. 빛을 싫어해 구멍 가장 깊은 벽에만 붙는다.' } },
+  { id: 'nightdragon', name: '야룡',        spot: 'dragonhole',  rarity: 'legendary', price: 7000,  color: '#1d2b4a', shape: 'serpent', night: true,
+    lore: '용이 잠드는 시각에 깨어나는 다른 용. 용동의 그림자가 뒤집힌 모습이다.',
+    variant: { name: '칠흑룡', color: '#141822',
+      lore: '빛을 쫓아내는 용. 야룡조차 그 앞에서는 그림자로만 보인다.' } },
+  { id: 'wraithfish', name: '망령 농어',    spot: 'coron',       rarity: 'epic', price: 2000, color: '#6a7f92', shape: 'slim', night: true,
+    lore: '침선의 갑판 아래, 낮에는 닫혀 있는 문 앞을 지키는 그림자.',
+    variant: { name: '저승 농어', color: '#dbe8f0',
+      lore: '침선 문 너머에서 온 농어. 망령이 통과하는 문을 지킨다.' } },
+  { id: 'nightking',  name: '밤의 철왕',    spot: 'coron',       rarity: 'legendary', price: 8000,  color: '#4a3a30', shape: 'ancient', night: true,
+    lore: '철산호의 왕이 잠든 뒤 그 왕좌를 잠시 빌리는 존재. 새벽이 오면 흔적도 없다.',
+    variant: { name: '영겁의 철왕', color: '#241a14',
+      lore: '왕좌를 영영 빌리려는 존재. 철산호의 왕이 깨어나면 사라진다.' } },
+  { id: 'mooncoral',  name: '월광 산호어',  spot: 'barrierreef', rarity: 'rare',  price: 1800, color: '#bfe0dc', shape: 'round', night: true,
+    lore: '산호가 색을 거둔 밤에만 무늬가 드러난다. 달빛에 비친 산호의 진짜 얼굴.',
+    variant: { name: '그믐 산호어', color: '#2f4a48',
+      lore: '산호가 완전히 잠든 밤, 무늬가 거꾸로 새겨진다.' } },
+  { id: 'dreamking',  name: '꿈의 왕',      spot: 'barrierreef', rarity: 'legendary', price: 7000,  color: '#9a8fd0', shape: 'flowing', night: true,
+    lore: '산호의 왕이 꾸는 꿈이 물고기의 몸을 빌려 나온 것이라는 소문.',
+    variant: { name: '악몽의 왕', color: '#3a2f5c',
+      lore: '왕이 꾸는 꿈 중에서도 가장 무거운 꿈. 깨면 남는 것이 없다.' } },
+  { id: 'nighttrevally', name: '야행 전갱이', spot: 'indian',    rarity: 'rare',  price: 2000, color: '#5f7d9e', shape: 'tiny', night: true,
+    lore: '낮의 무리를 따라다니던 그림자가 해가 지면 앞장선다. 은빛 비늘은 밤에 더 밝다.',
+    variant: { name: '심야 전갱이', color: '#37475a',
+      lore: '한밤의 가장 깊은 시각에만 무리를 바꾸는 전갱이.' } },
+  { id: 'starfin',    name: '별지느러미',   spot: 'indian',      rarity: 'epic', price: 7000, color: '#43527a', shape: 'slim', night: true,
+    lore: '등에 밤바다의 별자리를 새기고 다닌다. 낮에는 그 무늬를 찾을 수 없다.',
+    variant: { name: '잊힌 별지느러미', color: '#7e86a8',
+      lore: '별자리가 지워진 밤에 나타난다. 무늬는 남았으나 별은 사라졌다.' } },
+  { id: 'oceanmirror', name: '바다의 거울', spot: 'indian',      rarity: 'legendary', price: 30000, color: '#2e5a66', shape: 'serpent', night: true,
+    lore: '마카라가 수면 아래로 내려간 시각, 그가 보던 하늘을 그대로 비추는 존재.',
+    variant: { name: '심연의 거울', color: '#143038',
+      lore: '수면이 아니라 심연을 비추는 거울. 비친 것이 뒤집혀 있다.' } },
+  { id: 'frostnight', name: '서리밤 정어리', spot: 'southindian', rarity: 'rare',  price: 1800, color: '#cfe8f0', shape: 'tiny', night: true,
+    lore: '찬밤에만 떼가 수면 위로 올라온다. 아가미에 서리가 맺혀 있다.',
+    variant: { name: '칠흑 서리 정어리', color: '#8ab0c0',
+      lore: '서리가 검게 맺힌 정어리. 찬밤 중에도 가장 추운 시각에만.' } },
+  { id: 'aurorafish', name: '오로라 물고기', spot: 'southindian', rarity: 'epic', price: 6000, color: '#6fcaa0', shape: 'ribbon', night: true,
+    lore: '남쪽 밤하늘의 빛이 물고기의 등줄기를 타고 흐른다. 어둠 속에서도 그 흐름이 보인다.',
+    variant: { name: '극야의 오로라', color: '#3a8a72',
+      lore: '몇 달간 밤이 지속되는 곳의 오로라. 색이 밤을 닮아 간다.' } },
+  { id: 'deepsilence', name: '심연의 침묵', spot: 'southindian', rarity: 'legendary', price: 36000, color: '#1a2a3a', shape: 'eel', night: true,
+    lore: '바루나가 입을 다문 밤에만 들리는, 물속의 침묵. 소리가 아니라 소리가 사라진 자리.',
+    variant: { name: '영겁의 침묵', color: '#0e1520',
+      lore: '시간까지 멈춘 침묵. 소리가 돌아오지 않는 밤에만 목격된다.' } },
 ];

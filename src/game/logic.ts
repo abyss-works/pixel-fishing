@@ -19,6 +19,7 @@ import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
+import type { DayPhase } from './time.js';
 
 export { JUDGMENT_MULT };
 export { RARITY, RARITY_ORDER } from '../data/rarity.js';
@@ -142,6 +143,16 @@ export interface DrawOptions {
   budgets?: Partial<Record<RarityId, number>>;
   /** 개체 가중치 오버라이드 — fishId → 가중치(기본 1). 등급 내 배분 비율을 바꾼다 */
   fishWeights?: Record<string, number>;
+  /** 시간대 — 기본 'day'(밤 전용 어종 제외). 'night'면 낮+밤 전부(합류).
+   *  미지정 호출 전부가 day라 기존 낮 어종만 있는 지금은 분포 불변(night 어종 추가 후 안전망). */
+  phase?: DayPhase;
+}
+
+/** 수역 어종 풀 — 시간대 필터. 낮에는 night 어종이 아예 풀에서 빠진다(등급 분포 불변),
+ *  밤에는 합류(낮 어종 그대로 + 밤만 추가). */
+export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
+  const pool = FISH.filter(f => f.spot === spotId);
+  return phase === 'day' ? pool.filter(f => !f.night) : pool;
 }
 
 function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
@@ -162,7 +173,7 @@ export function rollFish(
   spotId: SpotId, rareMult = 1, rng: () => number = Math.random, commonMult = 1,
   o: DrawOptions = {},
 ): Fish {
-  const pool = FISH.filter(f => f.spot === spotId);
+  const pool = fishPool(spotId, o.phase);
 
   const weights = drawWeights(pool, spotId, { ...o, rareMult, commonMult });
   const total = weights.reduce((a, b) => a + b, 0);
@@ -184,7 +195,7 @@ export interface DrawRow {
   fishPct: number;          // 개체 실질확률 %
 }
 export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
-  const pool = FISH.filter(f => f.spot === spotId);
+  const pool = fishPool(spotId, o.phase);
   const present = new Set<RarityId>();
   for (const f of pool) present.add(f.rarity);
 
@@ -213,7 +224,7 @@ export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
 export function goldEV(
   spotId: SpotId, o: DrawOptions = {},
 ): number {
-  const pool = FISH.filter(f => f.spot === spotId);
+  const pool = fishPool(spotId, o.phase);
   const weights = drawWeights(pool, spotId, o);
   let total = 0, ev = 0;
   for (let i = 0; i < pool.length; i++) {

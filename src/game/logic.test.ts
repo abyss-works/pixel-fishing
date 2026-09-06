@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
-  drawRows, goldEV,
+  drawRows, goldEV, fishPool,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
@@ -56,6 +56,62 @@ describe('R11: 추첨', () => {
       for (const rng of [() => 0, () => 0.5, () => 0.999999]) {
         expect(rollFish(s.id, 1, rng).spot).toBe(s.id);
       }
+    }
+  });
+});
+
+describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
+  it('밤 어종 14종이 추가됐다 (night 플래그)', () => {
+    const nights = FISH.filter(f => f.night);
+    expect(nights.length).toBe(14);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설
+    const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
+    expect(bySpot('sea')).toEqual(['legendary']);
+    expect(bySpot('deep')).toEqual(['legendary']);
+    expect(bySpot('dragonhole')).toEqual(['epic', 'legendary']);
+    expect(bySpot('coron')).toEqual(['epic', 'legendary']);
+    expect(bySpot('barrierreef')).toEqual(['legendary', 'rare']); // 낮에 영웅 없음 → 희귀 대칭
+    expect(bySpot('indian')).toEqual(['epic', 'legendary', 'rare']);
+    expect(bySpot('southindian')).toEqual(['epic', 'legendary', 'rare']);
+  });
+
+  it('낮 풀 = night 어종 제외 — 밤 추가가 낮 분포를 안 흔든다', () => {
+    for (const s of SPOTS) {
+      const dayPool = fishPool(s.id, 'day');
+      expect(dayPool.every(f => !f.night)).toBe(true);
+      // 낮 EV = night 도입 전과 동일해야 함: 모든 낮 어종이 다 들어 있다
+      expect(dayPool.map(f => f.id).sort()).toEqual(
+        FISH.filter(f => f.spot === s.id && !f.night).map(f => f.id).sort());
+    }
+  });
+
+  it('밤 풀 = 합류 (낮 + 밤 전부)', () => {
+    for (const s of SPOTS) {
+      const nightPool = fishPool(s.id, 'night');
+      expect(nightPool.filter(f => !f.night).length).toBeGreaterThan(0); // 낮 어종 그대로
+      const nightCount = FISH.filter(f => f.spot === s.id && f.night).length;
+      expect(nightPool.filter(f => f.night).length).toBe(nightCount);
+    }
+  });
+
+  it('낮 rollFish는 절대 밤 어종을 안 준다 — 시드 전수', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      let r = seed / 50;
+      const rng = () => { r = (r + 0.7) % 1; return r; };
+      for (const s of SPOTS) {
+        const f = rollFish(s.id, 1, rng, 1, { phase: 'day' });
+        expect(f.night, `${s.id} 시드 ${seed}`).toBeFalsy();
+      }
+    }
+  });
+
+  it('밤 rollFish의 결과는 밤 풀에 속한다 — night 어종은 풀에 있다', () => {
+    // 전설 가중치(1/100)는 rng 시드로 강제하기 어렵다 — 풀 구성이 곧 계약.
+    const nightPool = fishPool('sea', 'night');
+    expect(nightPool.some(f => f.night)).toBe(true); // 달무리 존재
+    for (let seed = 0; seed < 100; seed++) {
+      const f = rollFish('sea', 1, () => (seed + 1) / 101, 1, { phase: 'night' });
+      expect(nightPool.some(p => p.id === f.id)).toBe(true);
     }
   });
 });

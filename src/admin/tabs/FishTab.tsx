@@ -234,8 +234,15 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
 }) {
   void idx; // 향후 "지역명 기반 Δ" 확장 여지 — 현재는 prevEvs가 정본
   const bid = spot.id as string;
+  // 낮 어종(확률 계산·예산 편집 대상)과 밤 전용 어종을 가른다 — drawRows(day 풀)는
+  // night를 안 담아 확률·등급 합계가 낮 시간대 기준으로 정직하게 나온다.
   const list = useMemo(
-    () => FISH.filter(f => f.spot === spot.id)
+    () => FISH.filter(f => f.spot === spot.id && !f.night)
+      .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity)),
+    [spot.id],
+  );
+  const nightList = useMemo(
+    () => FISH.filter(f => f.spot === spot.id && f.night)
       .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity)),
     [spot.id],
   );
@@ -448,6 +455,36 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                     </tr>
                   );
                 })}
+                {nightList.length > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={7} className="bg-bg/80 text-2xs text-accent py-0.5 px-1 border-y border-line">
+                      밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시)
+                    </td>
+                  </tr>
+                )}
+                {nightList.map(f => (
+                  <tr key={f.id} className="opacity-80">
+                    <td><span className="text-2xs text-accent">밤</span></td>
+                    <td><FishSpriteThumb fish={f} /></td>
+                    <td className="whitespace-nowrap">{f.name}
+                      <span className="text-2xs text-text-dim ml-1">({RARITY[f.rarity].name})</span></td>
+                    <td className="whitespace-nowrap">
+                      <input type="number" min={0} placeholder={String(f.price)}
+                             value={sim.price[f.id] ?? ''}
+                             aria-label={`${f.name} 가격`}
+                             onChange={e => setPrice(p => {
+                               if (e.target.value === '') return dropKey(p, f.id);
+                               const n = Number(e.target.value);
+                               if (!Number.isFinite(n) || n < 0) return p;
+                               return { ...p, [f.id]: n };
+                             })}
+                             className="w-16 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />G
+                    </td>
+                    <td className="text-2xs text-text-dim">—</td>
+                    <td className="text-2xs text-text-dim">—</td>
+                    <td className="text-2xs text-text-dim whitespace-nowrap">밤 전용</td>
+                  </tr>
+                ))}
               </tbody>
             </DataTable>
           </div>

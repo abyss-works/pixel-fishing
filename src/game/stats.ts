@@ -35,9 +35,19 @@ const stat = (base: number, mods: StatMod[] = []): Stat => ({
 
 export type Movement = 'walk' | 'sail';
 
+/** 밤 이동 감속 비율 — 밤이면 항해 속도가 이 비율만큼 줄어든다 (time-and-artifacts 확정:
+ *  "밤에는 항해 속도 약간 감소 — 페널티 허용"). 도보(마을)도 밤이면 같이 느리다.
+ *  값은 "약간" 수준 — 어두우면 조심히 걷는 느낌만, 진행을 막지 않는다. */
+export const NIGHT_SPEED_FACTOR = 0.85;
+
 // 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배와 무관한 고정값.
-export function moveSpeed(state: GameState, movement: Movement): Stat {
-  return stat(movement === 'walk' ? WALK_SPEED : boatSpeed(state));
+export function moveSpeed(state: GameState, movement: Movement, night = false): Stat {
+  const base = movement === 'walk' ? WALK_SPEED : boatSpeed(state);
+  if (!night) return stat(base);
+  return stat(base, [{
+    id: 'night', label: '밤 — 어두워 이동이 느리다',
+    delta: base * (NIGHT_SPEED_FACTOR - 1),
+  }]);
 }
 
 // 낚싯대 축 — 파워(레벨) 하나에서 파생되는 어드밴티지 (roadmap 2.1).

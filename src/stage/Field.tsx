@@ -7,6 +7,7 @@ import type { GameAction } from '../game/actions';
 import { when } from '../api';
 import { subscribeFailure } from '../errors';
 import { useKeyScope } from '../hotkeys';
+import { useGameTime } from '../hooks/useGameTime';
 import type { DispatchResult, MaybePromise } from '../api';
 import { REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer, nearestSchoolInRange, zoneOf } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
@@ -21,6 +22,8 @@ import { CAST_RANGE } from '../game/balance';
 import { useCanvasCover } from '../admin/canvasCover';
 import { renderRegion, renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H, CANVAS_W, CANVAS_H } from '../pixel';
 import GameFrame from './GameFrame';
+import NightOverlay from './NightOverlay';
+import TimeBadge from './TimeBadge';
 import ResourceBar from './ResourceBar';
 import CatchCard from './CatchCard';
 
@@ -65,6 +68,10 @@ export default function Field({
   // 계속 돌고(렌더링은 한다) 표시만 내려간다 — 겉보기 "멈춘 게임". ctx가 없으면 렌더
   // 루프가 자연히 스킵되고, 덮개를 여는 순간 effect가 재실행돼 다시 붙는다(deps에 covered).
   const covered = useCanvasCover();
+  // 낮/밤 — 이동 감속(ref는 rAF 루프가 읽는다). 표시는 TimeBadge/NightOverlay가 상태로 구독.
+  const { phase: dayPhaseNow } = useGameTime();
+  const nightRef = useRef(false);
+  useEffect(() => { nightRef.current = dayPhaseNow === 'night'; }, [dayPhaseNow]);
   // 활성 미끼 — 오버레이는 보유량 0에서도 유지된다(효과 무음, 횟수 소진 상태를 보여주기).
   // 해석은 usableBait(logic)와 같은 규약: 레지스트리에 없는 id면 아예 숨긴다.
   const activeBait = baitById(game.activeBait);
@@ -283,7 +290,7 @@ export default function Field({
       }
       let movedFrom: Point | null = null;
       if ((dx || dy) && phaseRef.current === 'idle') {
-        const speed = moveSpeed(gameRef.current, def.movement).value;
+        const speed = moveSpeed(gameRef.current, def.movement, nightRef.current).value;
         const prev = posRef.current;
         movedFrom = prev;
         posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
@@ -383,6 +390,8 @@ export default function Field({
                   aria-label={region === 'village' ? '마을' : '바다'}
                   onClick={() => actionRef.current()} />
         )}
+        {/* 밤 어둠 + 플레이어 주변 조명 — 게임 그림만 덮고 UI(상태바·카드)는 위에 남는다 */}
+        <NightOverlay />
 
         {/* 조작 안내는 지역 탭 하단으로 이동 — idle에는 상태 바를 띄우지 않는다 (자원 바 가림 방지).
             프레임 하단 중앙. 프레임이 positioned라 bottom-3이 그대로 프레임 기준이다.
@@ -429,21 +438,21 @@ export default function Field({
       {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다.
           현재 위치 기준 crop(1344×756 — 필드 시야의 3배, 구 지역 한 장 스케일)만 본다. 배면
           크기는 시야 크기에 상한 912px — renderWorldMap이 pack 좌표를 스케일해 그린다.
-          전체 세계는 미니맵 클릭(월드맵). */}
-      {covered ? (
-        <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
-                        border border-line rounded-sm bg-bg"
-             aria-hidden="true" />
-      ) : (
-        <canvas ref={minimapRef}
-                width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
-                height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
-                                   * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
-                className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video
-                           [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
-                aria-label="미니맵"
-                onClick={() => onOpenMap?.()} />
-      )}
+          전체 세계는 미니맵 클릭(월드맵). 위 좌상단에 시간 배지(해/달+시계). */}
+      <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video">
+        {covered ? (
+          <div className="w-full h-full border border-line rounded-sm bg-bg" aria-hidden="true" />
+        ) : (
+          <canvas ref={minimapRef}
+                  width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
+                  height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
+                                     * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
+                  className="w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
+                  aria-label="미니맵"
+                  onClick={() => onOpenMap?.()} />
+        )}
+        <TimeBadge className="top-1.5 left-1.5" />
+      </div>
     </>
   );
 }
