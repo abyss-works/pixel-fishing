@@ -266,8 +266,4 @@ export const ANCHORS: Record<string, { x: number; y: number }> = {
   school_i_2: { x: 768, y: 1196 },
   school_s_1: { x: 624, y: 2233 },
   school_s_2: { x: 1072, y: 2322 },
-  label_luzon: { x: 2522, y: 772 },
-  label_formosa: { x: 2419, y: 718 },
-  label_philippine: { x: 2944, y: 772 },
-  label_malacca: { x: 1811, y: 1282 },
 };

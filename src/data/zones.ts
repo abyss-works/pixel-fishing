@@ -11,6 +11,7 @@
 import { SPOTS } from './spots.js';
 import type { SpotId, Spot } from './spots.js';
 import type { RegionId } from './places.js';
+import { boatGateText } from './boats.js';
 
 export type ZoneId =
   | 'village' | 'pacific' | 'seasia' | 'indian'                          // 최상위 존
@@ -96,7 +97,7 @@ const DATA: Zone[] = [
       '세 낚시터(드래곤 홀 · 코론 침선 지대 · 그레이트 배리어 리프)는 모두 정크선으로 갈 수 있어요.',
       '코론의 침몰선 틈에는 커다란 것이 숨어 있고, 드래곤 홀에는 용이 잠들었다는 소문이 있어요.',
       '마닐라항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
-      '말라카 해협 너머 서쪽 바다(인도양)는 대양선이 있어야 건널 수 있어요.',
+      `말라카 해협 너머 서쪽 바다(인도양)는 ${boatGateText(5)}이 있어야 건널 수 있어요.`,
     ],
     controls: [
       '항해: 방향키 또는 WASD',
@@ -105,7 +106,9 @@ const DATA: Zone[] = [
     // 최상위 스팟 없음 — 열린 바다('2')는 통행 전용. 동남아 일반 어종은 미래 가산 여지.
     spots: [],
     entryBoat: 3,
-    gateMsg: '정크선(3단계)가 있어야 동남아&오세아니아 해역에 들어설 수 있다.',
+    get gateMsg(): string {
+      return `${boatGateText(3)}가 있어야 동남아&오세아니아 해역에 들어설 수 있다.`;
+    },
   },
   {
     id: 'dragonhole',
@@ -155,7 +158,9 @@ const DATA: Zone[] = [
     // 말라카 해협 게이트(구 travel requiredBoat 5)의 계승 — 1-2 동남아를 건너뛰고 인도양으로
     // 넘어가려면 tier5(증기선)가 필요하다(사용자 확정 2026-08-27).
     entryBoat: 5,
-    gateMsg: '증기선(5단계)이 있어야 인도양 해역에 들어설 수 있다.',
+    get gateMsg(): string {
+      return `${boatGateText(5)}이 있어야 인도양 해역에 들어설 수 있다.`;
+    },
   },
   {
     id: 'southindian',
