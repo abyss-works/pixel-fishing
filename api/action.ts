@@ -10,10 +10,19 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
-import type { FishInstance, GameState } from '../src/game/logic.js';
-import { applyAction, ACTION_TYPES } from '../src/game/actions.js';
-import type { ActionDeps, GameAction, StateWrites } from '../src/game/actions.js';
+import type { Fish, FishInstance, FormRecord, GameState, Judgment } from '../src/game/logic.js';
+import {
+  buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
+  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras, rollFish,
+  takeItem, usableBait,
+} from '../src/game/logic.js';
+import { applyAction, ACTION_TYPES, pickScalars } from '../src/game/actions.js';
+import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import { powerZones, rodPower } from '../src/game/stats.js';
+import { relativeIdleBoost, manualPowerBonus } from '../src/game/power.js';
+import { SPOTS, rarityWeightOf } from '../src/data/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
+import { BAIT_WEIGHT_MULT, JUDGMENT_MULT } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -112,6 +121,9 @@ function instRow(uid: string, i: FishInstance, slot: number | null) {
     locked: i.locked,
   };
 }
+
+/** 피해자 후보 1행 — 등급별 top-1 조회 결과 */
+interface VictimRow { uid: string; fish_id: string; form: string; size: number | null }
 
 /** 시딩된 상태 전체를 "전부 새로 추가"로 표현 */
 function seedWrites(seed: GameState): StateWrites {
@@ -261,19 +273,38 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 현재 상태 로드 — 3소스를 병렬로 읽는다(서로 독립이라 왕복 1회분).
+  // 현재 상태 로드 — saves_current는 항상, 개체·도감은 필요할 때만 읽는다.
+  // boot/sendLetter는 상태를 바꾸지 않는다(리듀서가 동일 참조 반환 — actions.ts boot/sendLetter).
+  // 그래서 개체·도감 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
+  // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
   const SEL = 'data, version, gold, fame, boat, rod, restricted, updated_at';
   const REC_SEL = 'fish_id, form, count, max_size, first_caught';
-  const [curRes, instRes, recRes] = await Promise.all([
-    admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
-    admin.from('fish_instances').select('*').eq('user_id', uid),
-    admin.from('records').select(REC_SEL).eq('user_id', uid),
-  ]);
+  // SELECT * 금지 — user_id(36B/행)는 필터 전용이라 전송에서 뺀다. 2000행이면 수십KB다.
+  const INST_SEL = 'uid, fish_id, form, size, caught_at, spot, judgment, slot, locked';
+  const curRes = await admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle();
 
   let row = curRes.data as StateRow | null;
-  let instances = (instRes.data ?? []) as unknown as InstanceRow[];
-  let records = (recRes.data ?? []) as unknown as RecordRow[];
+  const snapshotDue = row !== null && (Number(row.version) + 1) % SNAPSHOT_EVERY === 0;
+  // 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
+  // boot/sendLetter(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
+  // catch는 아래 fast path가 COUNT+피해자1행+도감1행만 읽는다.
+  // sell/setLocked/claimRelief/import는 가방·도감을 직접 다루어 풀 유지.
+  // 스냅샷 경계 버전은 전부 풀 조회로 복귀 (saves 아카이브는 풀 스냅샷이 계약).
+  const SKIP_DETAIL = new Set([
+    'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
+  ]);
+  const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
+  let instances: InstanceRow[] = [];
+  let records: RecordRow[] = [];
+  if (!skipDetail) {
+    const [instRes, recRes] = await Promise.all([
+      admin.from('fish_instances').select(INST_SEL).eq('user_id', uid),
+      admin.from('records').select(REC_SEL).eq('user_id', uid),
+    ]);
+    instances = (instRes.data ?? []) as unknown as InstanceRow[];
+    records = (recRes.data ?? []) as unknown as RecordRow[];
+  }
   if (!row) {
     const { data: old } = await admin.from('saves').select('data')
       .eq('user_id', uid).order('updated_at', { ascending: false }).limit(1).maybeSingle();
@@ -283,7 +314,7 @@ async function route(req: Req, res: Res): Promise<void> {
     if (seedErr) { // 동시 첫 액션 경합 — 상대가 시딩했으니 다시 읽는다
       const [againCur, againInst, againRec] = await Promise.all([
         admin.from('saves_current').select(SEL).eq('user_id', uid).maybeSingle(),
-        admin.from('fish_instances').select('*').eq('user_id', uid),
+        admin.from('fish_instances').select(INST_SEL).eq('user_id', uid),
         admin.from('records').select(REC_SEL).eq('user_id', uid),
       ]);
       row = againCur.data as StateRow | null;
@@ -325,9 +356,9 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
 }
 
-  const state = assemble(row, instances, records);
-
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
+  // 지원 코드(reliefs 테이블) 조회와 함께 리듀서보다 먼저 둔다 — 어느 경로(slow/fast)든
+  // 리듀서 주입 전에 준비되어야 하고, 둘 다 catch와 무관이라 fast path에 영향 없다.
   let dynamicCoupon: { gold: number; desc: string } | null = null;
   if (action.type === 'redeemCoupon' && typeof action.code === 'string') {
     const { data: c } = await admin.from('coupons').select('gold, description')
@@ -356,12 +387,127 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     }
   }
 
-  const out = applyAction(state, action, {
-    rng: Math.random, today: todayKST(),
-    now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
-    dynamicCoupon,
-    relief,
-  });
+  let out: ApplyOutcome;
+  if (action.type === 'catch' && skipDetail) {
+    // catch fast path — 풀가방 SELECT 없이 COUNT + 등급별 top-1 + 도감 1행.
+    // 게이트·판정강등·미끼·추첨순서·명성·이벤트는 actions.ts catch와 같은 헬퍼라
+    // 규칙이 여기 새로 생기지 않는다. 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
+    const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+      fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    const gate = canFish(base, action.spot);
+    if (!gate.ok) {
+      out = { ok: false, error: gate.reason };
+    } else {
+      const pz = powerZones(base, action.spot);
+      let judgment: Judgment = action.judgment;
+      if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
+      else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
+      const bait = judgment === 'auto' ? undefined : usableBait(base);
+      const drawOpts = bait
+        ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
+        : {};
+      const today = todayKST();
+      const now = new Date().toISOString();
+      const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
+      let fish: Fish;
+      if (judgment === 'auto') {
+        fish = rollFish(action.spot, 1, Math.random, relativeIdleBoost(rodPower(base), entry) * pz.mult, drawOpts);
+      } else {
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * manualPowerBonus(rodPower(base), entry), Math.random, pz.mult, drawOpts);
+      }
+      const extras = rollCatchExtras(fish, Math.random);
+      const [dexRes, countRes] = await Promise.all([
+        admin.from('records').select('count,max_size,first_caught')
+          .eq('user_id', uid).eq('fish_id', fish.id).eq('form', extras.form).maybeSingle(),
+        admin.from('fish_instances').select('uid', { count: 'exact', head: true })
+          .eq('user_id', uid).is('slot', null),
+      ]);
+      const d = dexRes.data as { count: number | string; max_size: number | null; first_caught: string | null } | null;
+      // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
+      if (dexRes.error) throw new ApiError(500, 'db-read', { uid, action: 'catch' }, { cause: dexRes.error });
+      const prev: FormRecord | undefined = d
+        ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
+        : undefined;
+      const bagCount = typeof countRes.count === 'number' ? countRes.count : null;
+      if (bagCount === null) throw new ApiError(500, 'db-read', { uid, action: 'catch' });
+      const isNew = (prev?.count ?? 0) === 0;
+      const info = buildCatchInfo(fish, extras, isNew);
+      const inst = makeInstance(fish, extras, {
+        uid: crypto.randomUUID(), now, spot: action.spot, judgment,
+      });
+      const rec = nextDexRec(prev, inst.size, today);
+      const over = bagCount + 1 - Math.max(capOfBoat(base.boat), bagCount);
+      let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
+      let removed: string[] = [];
+      let released: ReleasedFish[] = [];
+      if (over > 0) {
+        // 등급별 top-1 병렬 조회 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은
+        // 칸이 풀가방 정렬의 선두와 같다. 등급 목록은 FISH에서 뽑으니 신어종 자동 반영,
+        // 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이 비교자와 일치함은
+        // FormId 2종 전제 — victim.test.ts의 exhaustiveness 가드가 깨지면 여기부터 본다.
+        const baseQ = () => admin.from('fish_instances').select('uid,fish_id,form,size')
+          .eq('user_id', uid).is('slot', null).eq('locked', false);
+        const tierQ = [
+          baseQ().not('fish_id', 'in', `(${FISH.map(f => f.id).join(',')})`),
+          ...RARITY_ORDER.map(r => baseQ().in(
+            'fish_id', FISH.filter(f => f.rarity === r).map(f => f.id))),
+        ].map(q => q
+          .order('form', { ascending: true })
+          .order('size', { ascending: true, nullsFirst: true })
+          .order('uid', { ascending: true })
+          .limit(1));
+        const tierRows = await Promise.all(tierQ);
+        const tierErr = tierRows.find(r => (r as { error?: unknown }).error);
+        // 조회 실패를 빈 칸으로 취급하면 엉뚱한 놈을 방생한다 — 조용히 넘기지 않는다
+        if (tierErr) throw new ApiError(500, 'db-read', { uid, action: 'catch' }, { cause: (tierErr as { error: unknown }).error });
+        const tops: (FishInstance | null)[] = tierRows.map(res => {
+          const t = (res.data as VictimRow[] | null)?.[0];
+          return t ? { uid: t.uid, fishId: t.fish_id, form: t.form as FishInstance['form'],
+            size: t.size, caughtAt: null, spot: null, judgment: null, locked: false } : null;
+        });
+        const pick = pickEvict(tops, inst);
+        if (pick.evictUid) {
+          removed = [pick.evictUid];
+          const gone = tops.find(t => t?.uid === pick.evictUid)!;
+          const f = instanceFish(gone);
+          released = [{ uid: gone.uid, name: f ? formName(f, gone.form) : gone.fishId }];
+        } else if (pick.evictNew) {
+          added = []; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
+          released = [{ uid: inst.uid, name: formName(fish, inst.form) }];
+        }
+        // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
+      }
+      const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
+      const events: GameEvent[] = [{ type: 'catch', payload: {
+        uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
+        size: info.size, form: info.form, isNew: info.isNew,
+        ...(bait ? { bait: bait.id } : {}),
+      } }];
+      if (overflow.length > 0) {
+        events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
+      }
+      const scalars = takeItem(base, bait?.id ?? '');
+      out = {
+        ok: true,
+        state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame },
+        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
+        events,
+        writes: {
+          instancesAdded: added, instancesRemoved: removed,
+          instancesMoved: [], instancesLocked: [],
+          records: [{ fishId: fish.id, form: inst.form, rec }],
+        },
+      };
+    }
+  } else {
+    const state = assemble(row, instances, records);
+    out = applyAction(state, action, {
+      rng: Math.random, today: todayKST(),
+      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+      dynamicCoupon,
+      relief,
+    });
+  }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
@@ -402,5 +548,16 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     }
   }
 
-  res.status(200).json({ state: out.state, result: out.result });
+  // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
+  // 보낸다(ops/egress-delta.md). import는 통째 교체라 풀 유지 (빈도 극저, 예외).
+  // 클라(HttpBackend)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
+  if (action.type === 'import') {
+    res.status(200).json({ state: out.state, result: out.result, version: nextVersion });
+    return;
+  }
+  const patch: StatePatch = {
+    version: nextVersion, baseVersion: Number(row.version),
+    scalars: pickScalars(out.state), writes: out.writes,
+  };
+  res.status(200).json({ patch, result: out.result });
 }

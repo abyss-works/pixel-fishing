@@ -43,7 +43,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [init] = useState(loadLegacy);
   const backendRef = useRef<Backend>(null!);
   if (!backendRef.current) {
-    backendRef.current = api.auth.isConfigured ? new HttpBackend() : new LocalBackend(init.game);
+    backendRef.current = api.auth.isConfigured ? new HttpBackend(init.game) : new LocalBackend(init.game);
   }
   const [game, setGame] = useState<GameState>(init.game);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');

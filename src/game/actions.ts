@@ -65,8 +65,86 @@ export type ActionResult =
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'none' };
 
-/** 편지 한 통의 길이 상한 — 상한이 없으면 깨진 클라이언트가 events를 채운다.
- *  레이트 리밋은 두지 않았다(친구 규모). 남용이 보이면 그때 더한다. */
+/** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
+ *  규칙 판단은 포함하지 않는다: 클라는 이 값을 "적용"만 하고, 다음 액션의 판정은
+ *  서버가 DB 진실에서 다시 계산한다. devtools로 캐시를 뜯어고쳐도 다음 액션·새로고침에
+ *  정상화되므로 변조 통로가 새로 생기지 않는다 (서버는 클라 상태를 입력으로 받지 않는다).
+ *  HTTP 경계를 넘으므로 직렬화 가능해야 한다 (ActionResult와 같은 계약). */
+export interface StatePatch {
+  /** 커밋된 saves_current.nextVersion — 적용 후 캐시 버전이 된다 */
+  version: number;
+  /** 읽은 saves_current.version — 캐시 버전과 다르면 순서가 어긋난 것이므로 버린다.
+   *  연속 액션이 역순 도착해도 골드·가방이 과거값에 고착되지 않는 장치다. */
+  baseVersion: number;
+  /** bag/exhibit/dex를 뺀 나머지 — 통째 교체 (액션당 수백B) */
+  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex'>;
+  /** bag/exhibit/dex 변경분 — diffWrites가 뽑은 것과 동일한 형태 */
+  writes: StateWrites;
+}
+
+/** 풀 상태에서 스칼라 분리 — 서버 응답용. bag/exhibit/dex는 writes로 간다 */
+export function pickScalars(state: GameState): StatePatch['scalars'] {
+  const { v: _v, bag: _b, exhibit: _e, dex: _d, ...rest } = state;
+  return rest;
+}
+
+/** 델타 적용 — diffWrites의 역연산. 순서 보장:
+ *  bag = (prev 순서 − 제거 − 전시이동) + (추가분 writes 순서대로) + (전시→가방 이동분).
+ *  addCatch가 맨 뒤에 붙이고 release/sell이 걸러내기만 하므로 서버 순서와 일치한다.
+ *  전시대는 슬롯 인덱스로 재조립한다 (희소는 희소대로 — forEach는 빈 칸을 건너뛴다).
+ *  도감은 바뀐 종×폼만 절대값 교체한다. 대상 부재(제거·이동·잠금 uid가 캐시에 없음)는
+ *  무시한다 — 버전 어긋남이 있어도 크래시 대신 다음 풀재동기가 메운다. */
+export function applyPatch(prev: GameState, patch: StatePatch): GameState {
+  const removed = new Set(patch.writes.instancesRemoved);
+  const movedTo = new Map(patch.writes.instancesMoved.map(m => [m.uid, m.slot]));
+  const lockedTo = new Map(patch.writes.instancesLocked.map(l => [l.uid, l.locked]));
+  const withLock = (inst: FishInstance): FishInstance => {
+    const locked = lockedTo.get(inst.uid);
+    return locked === undefined || locked === inst.locked ? inst : { ...inst, locked };
+  };
+  const bag: FishInstance[] = [];
+  for (const inst of prev.bag) {
+    if (removed.has(inst.uid)) continue;
+    const slot = movedTo.get(inst.uid);
+    if (slot !== undefined && slot !== null) continue; // 가방 → 전시장 이동
+    bag.push(withLock(inst));
+  }
+  // 전시 → 가방 이동분 (현재 전시 액션은 없어 항상 빈 집합이나, 계약상 보장한다)
+  for (const inst of prev.exhibit) {
+    if (!inst) continue;
+    if (removed.has(inst.uid)) continue;
+    if (movedTo.get(inst.uid) === null) bag.push(withLock(inst));
+  }
+  for (const { inst, slot } of patch.writes.instancesAdded) {
+    if (slot === null || slot === undefined) bag.push(withLock(inst));
+  }
+  const exhibit: FishInstance[] = [];
+  const putExhibit = (inst: FishInstance, slot: number): void => {
+    exhibit[slot] = withLock(inst);
+  };
+  prev.exhibit.forEach((inst, i) => {
+    if (!inst || removed.has(inst.uid)) return;
+    const slot = movedTo.get(inst.uid);
+    if (slot === null) return; // 전시장 → 가방 이동 (위에서 처리)
+    if (slot === undefined && movedTo.has(inst.uid)) return; // 도달 불가 방어
+    putExhibit(inst, slot ?? i);
+  });
+  for (const { inst, slot } of patch.writes.instancesAdded) {
+    if (slot !== null && slot !== undefined) putExhibit(inst, slot);
+  }
+  for (const { uid, slot } of patch.writes.instancesMoved) {
+    if (slot === null || slot === undefined) continue;
+    const fromBag = prev.bag.find(i => i.uid === uid);
+    const fromExhibit = prev.exhibit.find(i => i?.uid === uid);
+    const src = fromBag ?? fromExhibit;
+    if (src) putExhibit(src, slot);
+  }
+  const dex: GameState['dex'] = { ...prev.dex };
+  for (const { fishId, form, rec } of patch.writes.records) {
+    dex[fishId] = { ...dex[fishId], [form]: { ...rec } };
+  }
+  return { ...prev, ...patch.scalars, v: prev.v, bag, exhibit, dex };
+}
 export const LETTER_MAX = 1000;
 
 /** 놓아준 개체의 표시용 요약 — HTTP 경계를 넘으므로 Fish 객체 대신 이름만 */

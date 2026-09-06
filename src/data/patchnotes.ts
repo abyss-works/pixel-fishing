@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.7.2',
+    date: '2026-09-06',
+    summary: '보이지 않는 정비 — 서버 통신 다이어트',
+    notes: [
+      { tag: '기타', text: '낚시 결과를 주고받는 방식을 가볍게 바꿨어요 — 플레이는 그대로이고 서버 부담이 줄었어요.' },
+    ],
+  },
+  {
     version: '0.7.1',
     date: '2026-08-27',
     summary: '콜롬보 항구에 미끼 가게가 생겼어요',

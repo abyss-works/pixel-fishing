@@ -3,7 +3,8 @@
 import { supabase } from './auth';
 import { migrate } from '../game/logic';
 import type { GameState } from '../game/logic';
-import type { GameAction } from '../game/actions';
+import type { GameAction, StatePatch } from '../game/actions';
+import { applyPatch } from '../game/actions';
 import type { Backend, DispatchResult } from './types';
 import { AppError } from '../errors';
 import { BUILD_ID } from '../buildId';
@@ -37,22 +38,45 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
 }
 
 export class HttpBackend implements Backend {
+  // 델타 캐시 — 서버는 초기 로드 이후 변경분(patch)만 보내므로, 직전 풀 상태를 들고
+  // 있어야 복원할 수 있다. 생성자·load()에서 시드되고, dispatch 성공마다 갱신된다.
+  // 캐시는 표시용 복사본일 뿐 진실이 아니다: 버전 어긋남·적용 실패가 있으면 버리고
+  // load() 풀재동기로 자가치유한다. 서버는 클라 상태를 입력으로 받지 않으므로
+  // 캐시 오염(devtools)은 다음 액션에 정상화된다.
+  private lastState: GameState | null;
+  /** lastState의 saves_current 버전. 델타의 baseVersion과 다르면 역순 도착이므로 버린다.
+   *  null = 모름 (레거시 이관 등) — 다음 델타는 무조건 풀재동기한다. */
+  private lastVersion: number | null;
+  constructor(initial: GameState | null = null) {
+    this.lastState = initial;
+    this.lastVersion = null;
+  }
   // 저장소가 셋으로 갈려 있다(0006): saves_current(스칼라+blob) · fish_instances · records.
   // 셋을 병렬로 읽어 GameState로 조립한다 — RLS가 본인 행만 통과시킨다.
   async load(): Promise<GameState | null> {
     if (!supabase) return null;
     const [cur, inst, rec] = await Promise.all([
-      supabase.from('saves_current').select('data, gold, fame, boat, rod').maybeSingle(),
-      supabase.from('fish_instances').select('*'),
+      supabase.from('saves_current').select('data, gold, fame, boat, rod, version').maybeSingle(),
+      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 뺀다 (서버 action.ts INST_SEL과 동일 계약)
+      supabase.from('fish_instances').select('uid, fish_id, form, size, caught_at, spot, judgment, slot, locked'),
       supabase.from('records').select('fish_id, form, count, max_size, first_caught'),
     ]);
-    if (cur.data) return assemble(cur.data, inst.data ?? [], rec.data ?? []);
+    if (cur.data) {
+      const s = assemble(cur.data, inst.data ?? [], rec.data ?? []);
+      this.lastState = s;
+      const v = Number((cur.data as { version?: unknown })?.version);
+      this.lastVersion = Number.isFinite(v) ? v : null;
+      return s;
+    }
 
     // 이관 폴백 — 아직 첫 액션을 하지 않은 유저는 구 saves(blob)의 최신 행이 유일한 정본이다
     const { data: old } = await supabase
       .from('saves').select('data')
       .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    return old ? migrate(old.data) : null;
+    const s = old ? migrate(old.data) : null;
+    this.lastState = s;
+    this.lastVersion = null; // 버전 모름 — 다음 델타는 풀재동기로 받는다
+    return s;
   }
 
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (src/errors.ts 정책 소관)
@@ -65,13 +89,41 @@ export class HttpBackend implements Backend {
       throw new AppError('server', 'non-json response', { status: res.status });
     }
     const body = await res.json().catch(() => null) as
-      { state?: unknown; result?: unknown; error?: string } | null;
+      { state?: unknown; patch?: StatePatch; result?: unknown; error?: string; version?: unknown } | null;
 
-    if (res.ok && body?.state) {
-      return { status: 'ok', state: migrate(body.state), result: body.result as never };
+    // 델타 경로 (기본) — baseVersion이 캐시와 정확히 이어질 때만 적용한다.
+    // 어긋나면(역순 도착·계정 교체·낡은 캐시) 버리고 풀재동기 — 골드·가방이 과거값에
+    // 고착되는 일을 원천 차단. 공개 계약(DispatchResult)은 불변이라 호출자는 풀을 받는다.
+    if (res.ok && body?.patch && this.lastState && this.lastVersion !== null
+        && body.patch.baseVersion === this.lastVersion) {
+      try {
+        const next = migrate(applyPatch(this.lastState, body.patch));
+        this.lastState = next;
+        this.lastVersion = body.patch.version;
+        return { status: 'ok', state: next, result: body.result as never };
+      } catch {
+        // 적용 실패 — 캐시를 버리고 풀재동기로 자가치유 (아래 폴백)
+        this.lastState = null;
+        this.lastVersion = null;
+      }
     }
-    // 409 = 낙관 락 충돌(다른 탭과 경합) — 서버가 최신 상태 위에 재적용하도록 1회 재시도
-    if (res.status === 409 && !retried) return this.dispatch(action, true);
+    if (res.ok && (body?.state || body?.patch)) {
+      // 풀 응답(import 등) — 그대로 채택. 캐시 없이 델타만 온 경우도 여기서 풀재동기한다
+      // (서버는 액션을 이미 적용했으므로 load()는 적용 후 상태다 + 서버 result를 함께 쓴다).
+      const s = body?.state ? migrate(body.state) : await this.load();
+      if (s) {
+        this.lastState = s;
+        const v = Number(body?.version);
+        if (Number.isFinite(v)) this.lastVersion = v;
+        return { status: 'ok', state: s, result: body?.result as never };
+      }
+    }
+    // 409 = 낙관 락 충돌(다른 탭과 경합) — 풀재동기로 캐시를 최신화한 뒤 1회 재시도.
+    // 재시도의 델타는 최신 캐시 위에 얹히므로 순서가 보장된다.
+    if (res.status === 409 && !retried) {
+      await this.load().catch(() => null);
+      return this.dispatch(action, true);
+    }
     if (res.status === 422) return { status: 'rejected', error: HttpBackend.reason(body?.error) };
     // 403 = 제재 계정(0008 restricted) 또는 권한 없는 요청(import 게이트) — 정책 표가 문구를 정한다
     if (res.status === 403) {
