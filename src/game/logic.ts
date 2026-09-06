@@ -701,17 +701,24 @@ export function localDate(): string {
 // 개체를 가방에 넣고 도감(dex)을 갱신한다 — 폼 분기 없이 dex[id][form] 키 접근 하나.
 // today는 주입(순수성): caughtAt(ISO/UTC)에서 날짜를 잘라 쓰면 KST 오전 9시 전 캐치가
 // 전날로 찍힌다 (v0.3.1 firstCaught UTC 버그 재발 금지).
+/** 도감 1행 전진 — addCatch와 서버 fast path의 단일 근원.
+ *  count+1 · maxSize 갱신(null 크기면 유지) · first 최초 1회. */
+export function nextDexRec(
+  prev: FormRecord | undefined, size: number | null, today: string,
+): FormRecord {
+  return {
+    count: (prev?.count ?? 0) + 1,
+    maxSize: size === null
+      ? (prev?.maxSize ?? null)
+      : Math.max(prev?.maxSize ?? 0, size),
+    first: prev?.first ?? today, // 최초 1회만
+  };
+}
+
 export function addCatch(
   state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(),
 ): GameState {
-  const prev = state.dex[inst.fishId]?.[inst.form];
-  const rec: FormRecord = {
-    count: (prev?.count ?? 0) + 1,
-    maxSize: inst.size === null
-      ? (prev?.maxSize ?? null)
-      : Math.max(prev?.maxSize ?? 0, inst.size),
-    first: prev?.first ?? today, // 최초 1회만
-  };
+  const rec = nextDexRec(state.dex[inst.fishId]?.[inst.form], inst.size, today);
   return {
     ...state,
     bag: [...state.bag, inst],
@@ -724,7 +731,7 @@ export function addCatch(
 // "가장 안 특별한" 순서 — 놓아줄 후보를 고르는 단일 기준.
 // 등급 → 폼(변이가 더 특별) → 크기 → uid(결정성). 크기 미상(이관 개체)은 가장 작은 것 취급:
 // 정보가 없는 개체를 붙들고 있을 이유가 없고, 기록은 어차피 records에 남는다.
-const blandness = (i: FishInstance): [number, number, number, string] => {
+const blandTuple = (i: FishInstance): [number, number, number, string] => {
   const fish = instanceFish(i);
   return [
     fish ? RARITY[fish.rarity].order : -1, // 삭제된 어종은 맨 먼저 (표시도 안 되는 개체)
@@ -733,6 +740,27 @@ const blandness = (i: FishInstance): [number, number, number, string] => {
     i.uid,
   ];
 };
+
+/** 개체 간 "안 특별함" 비교 — overflowUids 정렬과 서버 피해자 선정의 단일 근원.
+ *  0 미만 = a가 더 먼저 놓아줄 후보. */
+export function compareBlandness(a: FishInstance, b: FishInstance): number {
+  const x = blandTuple(a), y = blandTuple(b);
+  return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || x[3].localeCompare(y[3]);
+}
+
+/** 등급 우선순위 피해자 선정 — 서버가 등급별 top-1행(삭제·일반·희귀·영웅·전설 순)만
+ *  읽어와 이 함수에 넘긴다. 풀가방 정렬(overflowUids)과 같은 개체를 고른다:
+ *  등급이 먼저 갈리고, 동급 내에서는 compareBlandness다.
+ *  반환: evictUid(구 놈 방생) — 없으면 null. evictNew(새 놈 즉시 방생) 여부. */
+export function pickEvict(
+  tops: readonly (FishInstance | null)[], inst: FishInstance,
+): { evictUid: string | null; evictNew: boolean } {
+  const top = tops.find(t => t !== null) ?? null;
+  if (!top) return { evictUid: null, evictNew: false }; // 전부 잠김 — 상한 초과 유지
+  return compareBlandness(top, inst) <= 0
+    ? { evictUid: top.uid, evictNew: false }
+    : { evictUid: null, evictNew: true }; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
+}
 
 /** 이 가방에 실제로 적용되는 상한 — **래칫**이다. 이미 상한을 넘겨 들고 있으면 그 수가 상한이 된다.
  *
@@ -748,18 +776,14 @@ export const bagCapacity = (boat: number, bag: readonly FishInstance[]): number 
 
 // boat는 상태에서 항상 0..MAX_BOAT로 정규화되지만, 방어적으로 범위 밖이면 클램프한다.
 // 맨발(0)은 BOATS 행이 없으므로 WALK_BAG_CAP, 이상은 행의 bagCap을 쓴다.
-const capOfBoat = (boat: number): number =>
+export const capOfBoat = (boat: number): number =>
   boat < 1 ? WALK_BAG_CAP : boatAt(boat)!.bagCap;
 
 /** 넘친 만큼 놓아줄 개체를 고른다 — 잠근 개체는 절대 후보가 아니다 */
 export function overflowUids(bag: readonly FishInstance[], capacity: number): string[] {
   const over = bag.length - capacity;
   if (over <= 0) return [];
-  const candidates = bag.filter(i => !i.locked)
-    .sort((a, b) => {
-      const x = blandness(a), y = blandness(b);
-      return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || x[3].localeCompare(y[3]);
-    });
+  const candidates = bag.filter(i => !i.locked).sort(compareBlandness);
   // 전부 잠갔으면 놓아줄 게 없다 — 상한을 넘긴 채로 둔다.
   // 잠금은 유저가 개체마다 명시적으로 건 것이고, 여기서 캐치를 거부하면 실패 페널티가 된다.
   return candidates.slice(0, over).map(i => i.uid);

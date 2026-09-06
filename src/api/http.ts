@@ -148,10 +148,10 @@ class HttpAdmin implements AdminApi {
   }
 }
 
-export function createHttpApi():
+export function createHttpApi(initial?: GameState):
 { game: Backend; auth: AuthApi; storage: StorageApi; admin: AdminApi } {
   return {
-    game: new HttpBackend(),
+    game: new HttpBackend(initial ?? null),
     auth: new HttpAuth(),
     storage: new HttpStorage(),
     admin: new HttpAdmin(),

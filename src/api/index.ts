@@ -29,7 +29,7 @@ function loadLegacy(): { game: GameState; notice: string | null; legacy: boolean
 export function createApi(): ApiClient & { initial: ReturnType<typeof loadLegacy>; isLocal: boolean } {
   const initial = loadLegacy();
   const isLocal = !supabase;
-  const impl = isLocal ? createLocalApi(initial.game) : createHttpApi();
+  const impl = isLocal ? createLocalApi(initial.game) : createHttpApi(initial.game);
   return {
     game: impl.game,
     auth: impl.auth,
