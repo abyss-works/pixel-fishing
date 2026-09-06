@@ -8,6 +8,7 @@ import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
 import { resetBagView } from './sidebar/bagView';
 import { resetCanvasCover } from './admin/canvasCover';
+import { resetTimeOverride } from './admin/timeOverride';
 import { resetKeyScopes } from './hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './world/currentSpot';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from './game/balance';
@@ -60,6 +61,7 @@ beforeEach(() => {
   localStorage.clear();
   resetBagView();     // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
+  resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
   resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
 });
@@ -292,7 +294,8 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     expect(screen.queryByText('고등어')).not.toBeInTheDocument(); // 다른 지역은 서브탭 뒤에
 
     fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 지역 서브탭 전환
-    expect(screen.getAllByText('???').length).toBe(11); // 태평양 연안 11종 전부 미획득
+    // 태평양 존 = sea+deep 낮 11종 + 밤 2종(달무리·밤의 장막) = 13종 전부 미획득 (밤도 도감에 노출)
+    expect(screen.getAllByText('???').length).toBe(13);
     expect(screen.queryByText('붕어')).not.toBeInTheDocument();
 
     clickTab('도움말');

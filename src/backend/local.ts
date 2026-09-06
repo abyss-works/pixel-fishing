@@ -5,6 +5,7 @@ import { applyAction } from '../game/actions';
 import type { GameAction } from '../game/actions';
 import { localDate } from '../game/logic';
 import type { GameState } from '../game/logic';
+import { getTimeOverride } from '../admin/timeOverride';
 import type { Backend, DispatchResult } from './types';
 
 const LS_KEY = 'pixel-fishing-save';
@@ -31,7 +32,9 @@ export class LocalBackend implements Backend {
   dispatch(action: GameAction): DispatchResult {
     const out = applyAction(this.current, action, {
       rng: Math.random, today: localDate(),
-      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+      // 시간대 고정(admin/timeOverride — 관리자 콘솔)이 있으면 그 시각으로 캐치 판정.
+      // 없으면 실제 벽시계. 운영(HttpBackend)은 이 모듈을 안 타므로 서버 판정이 유지된다.
+      now: getTimeOverride() ?? new Date().toISOString(), newUid: () => crypto.randomUUID(),
     });
     if (!out.ok) return { status: 'rejected', error: out.error };
     this.current = out.state;

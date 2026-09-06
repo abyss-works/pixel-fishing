@@ -19,6 +19,8 @@ import type { RejectReason } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
+import { isNight } from './time.js';
+import type { DayPhase } from './time.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment }
@@ -236,18 +238,22 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const drawOpts = bait
         ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
         : {};
+      // 시간대 — 벽시계 주기 파생(day 40/20). 낮 풀 = night 어종 제외, 밤 풀 = 합류(낮+밤).
+      // 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (game/time.ts).
+      const phase: DayPhase = isNight(deps.now) ? 'night' : 'day';
+      const phaseOpts = { ...drawOpts, phase };
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
       let fish: Fish;
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       if (judgment === 'auto') {
         // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
         const relBoost = relativeIdleBoost(rodPower(state), entry);
-        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult, drawOpts);
+        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult, phaseOpts);
       } else {
         // 수동 보정(v0.6.4) — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
         // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
         const bonus = manualPowerBonus(rodPower(state), entry);
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult, drawOpts);
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult, phaseOpts);
       }
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)

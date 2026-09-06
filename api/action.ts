@@ -21,6 +21,8 @@ import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, Sta
 import { powerZones, rodPower } from '../src/game/stats.js';
 import { relativeIdleBoost, manualPowerBonus } from '../src/game/power.js';
 import { SPOTS, rarityWeightOf } from '../src/data/spots.js';
+import { isNight } from '../src/game/time.js';
+import type { DayPhase } from '../src/game/time.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
 import { BAIT_WEIGHT_MULT, JUDGMENT_MULT } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
@@ -408,12 +410,15 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
         : {};
       const today = todayKST();
       const now = new Date().toISOString();
+      // 시간대 — 낮 풀 = night 어종 제외, 밤 풀 = 합류 (리듀서 actions.ts catch와 같은 판정)
+      const phase: DayPhase = isNight(now) ? 'night' : 'day';
+      const phaseOpts = { ...drawOpts, phase };
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       let fish: Fish;
       if (judgment === 'auto') {
-        fish = rollFish(action.spot, 1, Math.random, relativeIdleBoost(rodPower(base), entry) * pz.mult, drawOpts);
+        fish = rollFish(action.spot, 1, Math.random, relativeIdleBoost(rodPower(base), entry) * pz.mult, phaseOpts);
       } else {
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * manualPowerBonus(rodPower(base), entry), Math.random, pz.mult, drawOpts);
+        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * manualPowerBonus(rodPower(base), entry), Math.random, pz.mult, phaseOpts);
       }
       const extras = rollCatchExtras(fish, Math.random);
       const [dexRes, countRes] = await Promise.all([
