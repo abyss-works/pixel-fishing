@@ -60,13 +60,6 @@
     "school_i_1": { "lon": 62.0,  "lat": 12.0,  "terrain": "water" },
     "school_i_2": { "lon": 67.0,  "lat": 6.5,   "terrain": "water" },
     "school_s_1": { "lon": 62.5,  "lat": -26.0, "terrain": "water" },
-    "school_s_2": { "lon": 76.5,  "lat": -28.8, "terrain": "water" },
-
-    "label_luzon":   { "lon": 121.8, "lat": 19.8, "terrain": "water" },
-    "label_formosa": { "lon": 118.6, "lat": 21.5, "terrain": "water" },
-    "label_philippine": { "lon": 135, "lat": 19.8, "terrain": "water" },
-    "label_malacca": { "lon": 99.6,  "lat": 3.8,  "terrain": "water" }
-  },
-
-  "_note_boundary_labels": "구역 경계 라벨 — 구 travel 트리거 안내문의 계승(오픈월드 고도화 A-1). 경계는 보이지 않는 선이라 통로 지점(루손 해협 · 대만 남방 · 필리핀 동쪽 해상 · 말라카)에 워터마크 라벨로 게이트 요구 배를 예고한다. terrain water 검증으로 통로가 물 위임을 강제한다. 루손 해협 동쪽 19N 경계는 157E까지 이어진다(필리핀 해 동쪽이 '또 다른 태평양'처럼 느껴진다는 사용자 피드백 — 경계 임을 알리는 라벨 추가)."
+    "school_s_2": { "lon": 76.5,  "lat": -28.8, "terrain": "water" }
+  }
 }

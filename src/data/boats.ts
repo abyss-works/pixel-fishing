@@ -51,3 +51,9 @@ export const boatAt = (boat: number): Boat | undefined =>
 /** 배 표시명 단일 출처 — '없음' 계열 라벨이 화면마다 달라서('배 없음' 등) 인자로 받는다 */
 export const boatNameOf = (boat: number, none = '없음'): string =>
   boat < 1 ? none : boatAt(boat)?.name ?? none;
+
+/** 게이트 요구 문구 단일 출처 — tier 숫자를 배 이름으로 풀어준다.
+ *  zones.gateMsg·world 경계 라벨·engine 폴백이 손으로 적던 자리에 이 함수를 쓴다.
+ *  ("정크선(3단계)" 같은 문자열을 손으로 적으면 배 개명·tier 재배치 때 따로 썩는다) */
+export const boatGateText = (tier: number): string =>
+  `${boatNameOf(tier)}(${tier}단계)`;

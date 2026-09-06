@@ -119,16 +119,5 @@ export const WORLD: RegionPack = {
     { text: '항구', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
     { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
     { text: '콜롬보 항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
-    // 구역 경계 라벨 — 구 travel 트리거 안내문의 계승(고도화 A-1). 경계는 보이지 않는 선이라
-    // 통로 지점에 게이트 요구 배를 예고한다(좌표는 config 앵커 — 하드코딩 금지).
-    // 필리핀 동쪽 19N은 광활한 열린 바다라 경계임이 안 보였다(사용자 피드백) — 라벨 추가.
-    { text: '루손 해협 → 동남아 (배 3)', x: A.label_luzon.x, y: A.label_luzon.y,
-      color: 'faint', size: 8 },
-    { text: '서쪽 물길 → 동남아 (배 3)', x: A.label_formosa.x, y: A.label_formosa.y,
-      color: 'faint', size: 8 },
-    { text: '남쪽 물길 → 동남아 (배 3)', x: A.label_philippine.x, y: A.label_philippine.y,
-      color: 'faint', size: 8 },
-    { text: '말라카 해협 → 인도양 (배 5)', x: A.label_malacca.x, y: A.label_malacca.y,
-      color: 'faint', size: 8 },
   ],
 };

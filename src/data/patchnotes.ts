@@ -16,6 +16,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.8.1',
+    date: '2026-09-06',
+    summary: '잔손질 — 게이트 안내 정리',
+    notes: [
+      { tag: 'UI', text: '바다 위 경계 안내 문구를 걷어냈어요 — 특수한 바닷가의 이름은 그대로 보여요.' },
+      { tag: '기타', text: '배가 달라져도 게이트 안내가 알아서 따라오도록 다듬었어요.' },
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-09-06',
     summary: '바다가 하나로 — 오픈월드 + 세계지도',
