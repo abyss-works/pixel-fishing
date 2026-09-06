@@ -260,7 +260,7 @@ export const FISH: readonly Fish[] = [
     variant: { name: '천년 바루나', color: '#4527a0',
       lore: '시간을 두 배로 사는 존재가 심연의 왕관을 두겁 쓴 모습이라 한다.' } },
   // ── 밤 전용 (night: true — 낮 풀에서 빠진다. game/time.ts) ──
-  // 주기: 하루=1시간·정각=자정·밤 20분. 가격 = 낮 동등급 앵커 대비 1.5~2배, 100 단위 올림.
+  // 주기: 하루=1시간·낮 게임4~20시/밤 20시~다음4시. 가격 = 낮 동등급 앵커 대비 1.5~2배, 100 단위 올림.
   // 변이 톤: 낮 변이(색칠공부)와 달리 이름이 한 단계 어두워진다(밤→칠흑/심연/영겁).
   // 설계 정본: mgmt/draft/night-fish.md
   { id: 'moonveil',    name: '달무리',       spot: 'sea',         rarity: 'legendary', price: 3000,  color: '#b9c7dc', shape: 'flowing', night: true,

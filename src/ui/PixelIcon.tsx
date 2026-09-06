@@ -7,6 +7,7 @@ type Cell = [x: number, y: number, w: number, h: number];
 
 export type GlyphId =
   | 'coin' | 'star' | 'boat' | 'rod' | 'fish'
+  | 'sun' | 'moon'
   | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
   | 'caretRight' | 'caretDown' | 'checkPartial'
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit';
@@ -69,6 +70,17 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 가방(어획): 물고기 실루엣
   fish: {
     cells: [[1, 5, 1, 2], [2, 4, 6, 4], [8, 3, 2, 2], [8, 7, 2, 2], [8, 5, 1, 2]],
+  },
+  // 해: 원 + 광선
+  sun: {
+    cells: [[4, 4, 4, 4], [5, 0, 2, 1], [5, 11, 2, 1], [0, 5, 1, 2], [11, 5, 1, 2],
+            [2, 2, 1, 1], [9, 2, 1, 1], [2, 9, 1, 1], [9, 9, 1, 1]],
+  },
+  // 달: 초승달(원에서 구멍을 뺀다)
+  moon: {
+    cells: [[2, 1, 8, 1], [1, 2, 1, 2], [1, 8, 1, 2], [2, 10, 3, 1], [7, 10, 3, 1],
+            [10, 3, 1, 5], [5, 9, 2, 1], [3, 1, 2, 1]],
+    holes: [[4, 3, 6, 6]],
   },
   // 잠김: 걸쇠 닫힘 + 몸통(열쇠구멍)
   lock: {

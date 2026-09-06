@@ -7,6 +7,8 @@ import type { BaseId, FurnitureId } from '../world';
 import { renderBase, W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../pixel';
 import { useCanvasCover } from '../admin/canvasCover';
 import GameFrame from './GameFrame';
+import NightOverlay from './NightOverlay';
+import TimeBadge from './TimeBadge';
 import ResourceBar from './ResourceBar';
 
 interface Props {
@@ -59,6 +61,8 @@ export default function Base({ base, game, onFacility, onOpenStats }: Props) {
                   className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg"
                   aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
         )}
+        <NightOverlay />
+        <TimeBadge className="top-2 right-2" />
       </GameFrame>
       {/* 스테이지 기준 — 프레임의 형제 */}
       <ResourceBar game={game} onOpen={onOpenStats} />

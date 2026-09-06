@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 // 로컬 시간대 고정 — 관리자 콘솔에서 밤/낮을 강제해 밤 어종을 테스트하는 도구.
 // 캔버스 덮개(canvasCover)와 같은 성격: 브라우저(로컬 dev) 사정이지 세이브/서버 상태가 아니다.
 // LocalBackend가 이 값을 읽어 catch의 now로 쓴다(운영 http는 이 모듈을 안 탐 — 서버 판정).
-// null = 실제 벽시계(게임 시간대는 매시 정각부터 20분 밤).
+// null = 실제 벽시계(게임 시간대: 낮 4~20시 · 밤 20시~다음 4시).
 // ⚠️ 이 스토어는 "시간대 설정"이지 별도 개념이 아니다 — 밤 시스템은 game/time.ts가 유일 근원.
 
 const KEY = 'pf-time-override';

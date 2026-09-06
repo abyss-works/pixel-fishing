@@ -152,20 +152,10 @@ export function drawMaskTerrain(
     }
   }
 
-  // 3패스 — 표류 구름 그림자 + 이동 글린트 (탑다운 패럴랙스, t 있을 때만)
+  // 3패스 — 이동 글린트 (탑다운 패럴랙스, t 있을 때만).
+  // 표류 구름 그림자(원 3겹)는 사용자 지시로 제거(2026-09-06) — 밤 연출과 겹쳐 지저분했다.
   if (t !== undefined) {
     const W = map.cols * sw, H = map.rows * sh;
-    for (let i = 0; i < 3; i++) {
-      const cx = ((t * (9 + i * 4) + i * 640) % (W + 240)) - 120;
-      const cy = H * (0.18 + i * 0.28) + Math.sin(t * 0.07 + i * 2) * 36;
-      const rad = 52 + i * 16;
-      for (let k = 3; k >= 1; k--) {
-        ctx.fillStyle = `rgba(6,12,24,${(0.05 * (4 - k)) / 3})`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, rad * (k / 3), 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
     for (let i = 0; i < 26; i++) {
       const gx = (i * 137 + t * 26) % W;
       const gy = (i * 89 + t * 7) % H;

@@ -458,7 +458,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                 {nightList.length > 0 && (
                   <tr aria-hidden="true">
                     <td colSpan={7} className="bg-bg/80 text-2xs text-accent py-0.5 px-1 border-y border-line">
-                      밤 전용 — 낮 시간대 풀에 없음 (밤 20분 주기만)
+                      밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시)
                     </td>
                   </tr>
                 )}
