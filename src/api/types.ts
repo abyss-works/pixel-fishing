@@ -80,6 +80,9 @@ export interface AdminEventRow {
   id: number; user_id: string; type: string;
   payload: Record<string, unknown>; created_at: string;
 }
+export interface AdminLetterRow {
+  id: number; user_id: string; text: string; created_at: string;
+}
 
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), denied는 DB admins 비등록 */
 export interface AdminAccessResult {
@@ -100,6 +103,7 @@ export interface AdminApi {
   dexMismatch(): Promise<AdminDexMismatchRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
+  letters(): Promise<AdminLetterRow[]>;
   /** 연결된 Supabase 프로젝트 식별자 — 운영/스테이징 착오 방지 표시값(Ops 탭) */
   projectRef(): string | null;
 }
