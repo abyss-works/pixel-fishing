@@ -34,6 +34,12 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
   });
 
+  it('setNickname은 스키마를 통과한다 — 형태 검증은 리듀서 몫', () => {
+    expect(parseAction({ type: 'setNickname', nickname: '날치' })?.type).toBe('setNickname');
+    expect(parseAction({ type: 'setNickname', nickname: '__' })?.type).toBe('setNickname');
+    expect(parseAction({ type: 'setNickname' })).toBeNull();
+  });
+
   it('스키마 키 집합이 리듀서 유니온과 일치한다 — 드리프트 방지', () => {
     expect([...ACTION_SCHEMA_TYPES].sort()).toEqual([...ACTION_TYPES].sort());
   });

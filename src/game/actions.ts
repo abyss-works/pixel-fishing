@@ -19,6 +19,7 @@ import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
+import { checkNickname } from './nickname.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 import { isNight } from './time.js';
@@ -38,6 +39,7 @@ export type GameAction =
   | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
+  | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -45,7 +47,7 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, adminSet: true,
+  claimRelief: true, adminSet: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
@@ -446,6 +448,16 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         state: { ...state, activeBait: bait.id },
         result: { type: 'none' },
         events: [{ type: 'setActiveBait', payload: { bait: bait.id } }],
+      };
+    }
+    case 'setNickname': {
+      // 형태 검증은 리듀서가 맡는다 (로컬 dev·서버 공통). 중복 검사는 DB가 있어야
+      // 하므로 서버가 리듀서 전에 끝낸다 — 여기 오면 이름은 쓸 수 있는 것으로 본다.
+      const check = checkNickname(action.nickname);
+      if (!check.ok) return { ok: false, error: check.reason };
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'setNickname', payload: { nickname: action.nickname } }],
       };
     }
     case 'boot': {

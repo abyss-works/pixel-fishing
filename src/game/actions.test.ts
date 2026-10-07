@@ -420,6 +420,23 @@ describe('claimRelief — 지원 코드 (제재 소프트 랜딩, incidents/2026
   });
 });
 
+describe('setNickname', () => {
+  it('형태가 맞으면 상태 그대로 + 이벤트만 남긴다', () => {
+    const s = seed();
+    const out = applyAction(s, { type: 'setNickname', nickname: '날치' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toBe(s);
+    expect(out.events).toEqual([{ type: 'setNickname', payload: { nickname: '날치' } }]);
+  });
+
+  it('형태가 틀리면 bad-request — 중복 검사는 서버(DB) 몫이라 리듀서는 모른다', () => {
+    expect(applyAction(seed(), { type: 'setNickname', nickname: '__' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'setNickname', nickname: 'a' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+  });
+});
+
 describe('buyBait / setActiveBait', () => {
   const COMMON = BAIT_ID.common;
   const RARE = BAIT_ID.rare;
