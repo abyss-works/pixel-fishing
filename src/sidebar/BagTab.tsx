@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { autoLockUids, bagCapacity, sellableValue, REJECT_TEXT } from '../game/logic';
+import { autoLockUids, sellableValue, REJECT_TEXT } from '../game/logic';
+import { selectBagStatus } from '../hooks/selectors';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
 import { BAITS } from '../data/baits';
@@ -95,7 +96,7 @@ export default function BagTab({ game, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
-  const cap = bagCapacity(game.boat, game.bag); // 이미 넘겨 든 유저는 그 수가 상한이다 (래칫)
+  const { count: bagCount, cap, full: bagFull } = selectBagStatus(game);
   const { layout, section, opened } = useBagView();
   const total = sellableValue(game);
   const itemCount = useMemo(
@@ -130,7 +131,7 @@ export default function BagTab({ game, dispatch, setToast }: {
       {/* 내부 서브탭 — 물고기(개체 목록·카드) / 아이템(미끼) 완전 분리 */}
       <SubTabs
         items={[
-          { key: 'fish', label: `물고기 ${game.bag.length}` },
+          { key: 'fish', label: `물고기 ${bagCount}` },
           { key: 'items', label: `아이템 ${itemCount}` },
         ]}
         activeKey={section}
@@ -144,11 +145,11 @@ export default function BagTab({ game, dispatch, setToast }: {
           {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <h3 className="text-lg text-gold">
-              물고기 (<span className={cx('pf-accent', game.bag.length >= cap && 'text-danger')}>
-                {game.bag.length}</span>
+              물고기 (<span className={cx('pf-accent', bagFull && 'text-danger')}>
+                {bagCount}</span>
               <span className="pf-accent text-text-dim">/{cap}</span>마리)
             </h3>
-            {game.bag.length > 0 && (
+            {bagCount > 0 && (
               <button
                 className="flex items-center gap-1 border border-line rounded-sm px-2 py-1
                            text-xs text-text-dim hover:text-gold hover:border-gold cursor-pointer"
