@@ -11,11 +11,12 @@ const TAG_CLS: Record<string, string> = {
 
 // 패치노트 콘텐츠 — Sidebar의 '설정' 탭에서 렌더. 데이터는 data/patchnotes.ts (배포와 함께 버전됨)
 // 버전별 아코디언: 기본은 전부 닫힘, 노트마다 범주(UI/기능/기타) 뱃지를 단다.
+// 목록이 길어져 스크롤 상자에 넣는다 — 약 8줄(38px × 8)까지만 보이고 나머지는 휠로.
 export default function PatchNotesPanel() {
   return (
     <div>
       <SectionTitle>업데이트 소식</SectionTitle>
-      <div className="flex flex-col gap-2">
+      <div className="pf-scroll overflow-y-auto max-h-[304px] pr-1 flex flex-col gap-2">
         {PATCH_NOTES.map(p => (
           <Accordion
             key={p.version}
