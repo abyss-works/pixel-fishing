@@ -340,10 +340,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'sendLetter': {
-      // 편지는 **게임 상태가 아니다.** 상태를 안 바꾸고 이벤트만 남긴다.
-      // 별도 테이블·엔드포인트를 만들지 않은 이유: events가 이미 append-only + user_id +
-      // created_at이고, 친구 규모라 Supabase 대시보드에서 `type='letter'`로 읽으면 충분하다.
-      // ⚠️ events 보관주기 정책이 생기면 **`letter`는 제외**해야 한다 — 지워지면 안 되는 글이다.
+      // 편지는 **게임 상태가 아니다.** 상태를 안 바꾸고 이벤트만 남긴다(감사 사본).
+      // 영구 보존은 letters 테이블이 맡는다 — 서버(api/action.ts)가 이 이벤트를 letters에도
+      // 기록하고, 실패 시 500이다. 그래서 콜드 아카이브(events 보관주기)가 날짜만으로 안전하다
+      // (mgmt/spec/cold-archive.md 2.3 · decisions/letters-table.md).
       const text = typeof action.text === 'string' ? action.text.trim() : '';
       if (!text || text.length > LETTER_MAX) return { ok: false, error: 'bad-request' };
       return {

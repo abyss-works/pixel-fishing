@@ -205,6 +205,22 @@ async function writeInstances(
   }
 }
 
+/** letter 이벤트 → letters insert. created_at은 events와 동일 시각을 명시한다(복사 dedupe 정합).
+ *  실패는 던진다 — 호출부(핸들러 최상단)가 500으로 변환한다. */
+export async function writeLetters(
+  admin: Pick<SupabaseLike, 'from'>, uid: string, events: GameEvent[], createdAt: string,
+): Promise<void> {
+  for (const e of events) {
+    if (e.type !== 'letter') continue;
+    const text = (e.payload as { text?: unknown }).text;
+    if (typeof text !== 'string') continue;
+    const { error } = await admin.from('letters').insert([{ user_id: uid, text, created_at: createdAt }]);
+    if (error) {
+      throw new ApiError(500, 'db-write', { uid, action: 'sendLetter', kind: 'letters' }, { cause: error });
+    }
+  }
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
     await route(req, res);
@@ -526,12 +542,19 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   if (updErr) throw new ApiError(500, 'db-write', { uid, action: action.type }, { cause: updErr });
   if (!updated || updated.length === 0) throw new ApiError(409, 'version-conflict');
 
+  // 편지 정규화 — letters(영구)에도 기록한다. 실패 시 500 (개체 쓰기와 같은 등급 — 본문 유실 방지).
+  // events 쪽은 종전대로 "유실 허용" 묶음이고, letters는 콜드 아카이브가 지우지 않는 정본이다
+  // (mgmt/spec/cold-archive.md 2.3 · decisions/letters-table.md).
+  // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다(Ruling 2026-10-07).
+  const eventNow = new Date().toISOString();
+  await writeLetters(admin as unknown as SupabaseLike, uid, out.events, eventNow);
+
   // 이벤트 append + 주기 스냅샷 — 락 획득 후, 서로 독립이라 병렬 (왕복 1회 절약).
   // 실패해도 상태는 확정 — 이벤트/스냅샷만 유실, 수용.
   const followUps: Promise<unknown>[] = [];
   if (out.events.length > 0) {
     followUps.push(Promise.resolve(admin.from('events').insert(
-      out.events.map(e => ({ user_id: uid, type: e.type, payload: e.payload })))));
+      out.events.map(e => ({ user_id: uid, type: e.type, payload: e.payload, created_at: eventNow })))));
   }
   if (nextVersion % SNAPSHOT_EVERY === 0) { // saves는 append-only 아카이브로 존속 (0003 안전망)
     followUps.push(Promise.resolve(admin.from('saves').insert(
