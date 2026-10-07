@@ -36,7 +36,7 @@ export default function App() {
   const { log, setToast } = useMessageLog([
     '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
   ]);
-  const { game, setGame, dispatch, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
+  const { game, setGame, dispatch, nickname, rename, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
   const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, sync, load });
 
   // 씬은 **세이브의 location에서 온다.** 순수 로컬 상태였을 때는 태평양에서 새로고침하면
@@ -151,9 +151,10 @@ export default function App() {
       <Sidebar
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
-        game={game} dispatch={dispatch} setToast={setToast}
-        syncLabel={syncLabel} syncState={sync}
-        account={account} uid={uid} onAuthChanged={onAuthChanged}
+          game={game} dispatch={dispatch} setToast={setToast}
+          syncLabel={syncLabel} syncState={sync}
+          account={account} uid={uid} onAuthChanged={onAuthChanged}
+          nickname={nickname} onRename={rename}
       />
 
       {/* 업데이트 안내 — 배포 후 새로고침 안 한 탭 (서버 426). 닫기 없음, 새로고침이 유일한 출구 */}

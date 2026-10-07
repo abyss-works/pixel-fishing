@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, loadLegacy, LEGACY_KEY, when } from '../api';
 import type { Backend, DispatchResult, MaybePromise } from '../api';
 import type { GameAction } from '../game/actions';
+import type { RejectReason } from '../game/rules';
 import type { GameState } from '../game/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../errors';
 import { BUILD_ID } from '../buildId';
@@ -27,6 +28,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     backendRef.current = api.createGame(init.game);
   }
   const [game, setGame] = useState<GameState>(init.game);
+  const [nickname, setNickname] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 배포 후 새로고침 안 한 낡은 탭 (서버 426) — true면 App이 업데이트 모달로 전체를 덮는다
   const [outdated, setOutdated] = useState(false);
@@ -84,7 +86,10 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   // 부트스트랩 — 익명 로그인 → 서버 상태 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
-    if (!api.auth.isConfigured) return;
+    if (!api.auth.isConfigured) {
+      void Promise.resolve(backendRef.current.getNickname()).then(setNickname);
+      return;
+    }
     (async () => {
       const uid = await api.auth.ensureSession();
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
@@ -106,15 +111,28 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       // 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
       // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
       void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
+      setNickname(await backendRef.current.getNickname());
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
   return {
-    game, setGame, dispatch, sync, syncLabel: SYNC_LABEL[sync], outdated,
+    game, setGame, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], outdated,
+    /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
+    rename: async (name: string): Promise<null | RejectReason> => {
+      const r = await backendRef.current.dispatch({ type: 'setNickname', nickname: name });
+      if (r.status === 'ok') {
+        setNickname(await backendRef.current.getNickname());
+        return null;
+      }
+      return r.error;
+    },
     /** 계정 교체(useAccount) 시 그 계정의 상태를 다시 읽는 용도 */
-    load: () => backendRef.current.load(),
+    load: () => when(backendRef.current.load(), s => {
+      void Promise.resolve(backendRef.current.getNickname()).then(setNickname);
+      return s;
+    }),
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => backendRef.current.warmup?.(),
   };
