@@ -88,6 +88,14 @@ export class HttpBackend implements Backend {
   }
 
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (src/errors.ts 정책 소관)
+  // 표시용 닉네임 읽기 — profiles RLS 본인 읽기. 공개 행은 두지 않는다 (전체 읽기는 랭킹 때 연다).
+  async getNickname(): Promise<string | null> {
+    if (!supabase) return null;
+    const { data } = await supabase.from('profiles').select('nickname').maybeSingle();
+    const nickname = (data as { nickname?: unknown } | null)?.nickname;
+    return typeof nickname === 'string' ? nickname : null;
+  }
+
   async dispatch(action: GameAction, retried = false): Promise<DispatchResult> {
     const session = await this.session();
     const res = await this.post(action, session);

@@ -1148,3 +1148,29 @@ describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
   });
 });
+
+describe('닉네임 (게스트명 표시·변경)', () => {
+  it('설정 탭에 현재 닉네임이 보이고, 새 이름으로 바꿀 수 있다', async () => {
+    seed({});
+    render(<App />);
+    clickTab(/설정/);
+    const current = screen.getByLabelText('현재 닉네임');
+    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
+    expect(current.textContent).toContain('_');
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    fireEvent.click(screen.getByRole('button', { name: '변경' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('날치'));
+  });
+
+  it('규칙에 어긋나는 이름은 보내지 않고 안내한다', async () => {
+    seed({});
+    render(<App />);
+    clickTab(/설정/);
+    const current = screen.getByLabelText('현재 닉네임');
+    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
+    const before = current.textContent;
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    fireEvent.click(screen.getByRole('button', { name: '변경' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+  });
+});

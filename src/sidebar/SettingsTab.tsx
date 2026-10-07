@@ -5,10 +5,13 @@ import { when } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import { api } from '../api';
 import { REJECT_TEXT } from '../game/logic';
+import { checkNickname } from '../game/nickname';
+import type { RejectReason } from '../game/rules';
 import { APP_VERSION } from '../version';
 import { BUILD_LABEL } from '../buildId';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
+import TextInput from '../ui/TextInput';
 import Note from '../ui/Note';
 import SectionTitle from '../ui/SectionTitle';
 import PatchNotesPanel from './PatchNotesPanel';
@@ -74,12 +77,56 @@ function AccountSection({ game, setToast, account, onAuthChanged }: {
   );
 }
 
-export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged }: {
+function NicknameSection({ nickname, onRename, setToast }: {
+  nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
+  setToast: (m: string) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!checkNickname(draft).ok) {
+      setToast('한글 1~8자·영문 2~16자(가중치) — 한글·영문·숫자·-_만 쓸 수 있어요.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const err = await onRename(draft);
+      if (err) setToast(REJECT_TEXT[err]);
+      else { setToast(`닉네임을 ${draft}(으)로 바꿨어요.`); setDraft(''); }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <SectionTitle>닉네임</SectionTitle>
+      <div className="pf-frame divide-y divide-line mb-2 text-xs">
+        <div className="flex items-center gap-2 px-2 py-1">
+          <span className="text-text-dim shrink-0">현재</span>
+          <span className="truncate" aria-label="현재 닉네임">{nickname ?? '불러오는 중…'}</span>
+        </div>
+        <div className="flex items-center gap-2 px-2 py-1">
+          <TextInput aria-label="새 닉네임" className="flex-1 min-w-0"
+                 value={draft} maxLength={16} disabled={busy}
+                 onChange={e => setDraft(e.target.value)}
+                 onKeyDown={e => { if (e.key === 'Enter') void submit(); }}
+                 placeholder="새 닉네임" />
+          <Button size="sm" className="shrink-0" disabled={busy || draft.length === 0}
+                  onClick={() => void submit()}>변경</Button>
+        </div>
+      </div>
+      <Note>한글 1~8자·영문 2~16자(가중치) — 나중에 랭킹에 표시될 이름이에요.</Note>
+    </>
+  );
+}
+
+export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged, nickname, onRename }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
   syncLabel: string | null; syncState: string;
   account: string | null; uid: string | null; onAuthChanged: () => Promise<void>;
+  nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
   }) {
   const [letter, setLetter] = useState(false);
 
@@ -155,6 +202,8 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
       <AccountSection game={game} setToast={setToast}
                       account={account} onAuthChanged={onAuthChanged} />
+
+      <NicknameSection nickname={nickname} onRename={onRename} setToast={setToast} />
 
       {/* 내 정보 — **문의 대응용이다.** 문제를 알려온 사람의 세이브를 DB에서 찾으려면 uid가
           있어야 하는데, 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
