@@ -8,15 +8,17 @@ import {
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
   addItem, takeItem, usableBait, MAX_BOAT,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
 import { SPOTS, rarityWeightOf } from '../data/spots.js';
 import { baitById } from '../data/baits.js';
+import type { Bait } from '../data/baits.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { RejectReason } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
+import type { PowerZone } from './stats.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 import { isNight } from './time.js';
@@ -216,45 +218,60 @@ type ReduceOutcome =
   | { ok: true; state: GameState; result: ActionResult; events: GameEvent[] }
   | { ok: false; error: RejectReason };
 
+/** 추첨 준비 — 판정 강등·미끼·시간대를 한 곳에서 계산한다.
+ *  리듀서 catch와 서버 fast path(api/action.ts)가 공유하는 단일 진실원.
+ *  pz는 호출자가 이미 계산한 값을 넘긴다 (재계산 없음). */
+export interface CatchDraw {
+  judgment: Judgment;
+  bait: Bait | undefined;
+  phaseOpts: DrawOptions & { phase: DayPhase };
+}
+export function prepareCatchDraw(
+  state: GameState, spot: SpotId, claimed: Judgment, now: string, pz: PowerZone,
+): CatchDraw {
+  // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
+  let judgment = claimed;
+  if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
+  else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
+  // 미끼 — 방치(auto)에는 소모·효과 없다. 수동 판정은 낚아올리는 순간 확정되므로
+  // 소모도 이 지점에서 1회가 자연스럽다. 효과 = targetRarity 어종 가중치 ×2.
+  const bait = judgment === 'auto' ? undefined : usableBait(state);
+  const drawOpts: DrawOptions = bait
+    ? { budgets: { [bait.targetRarity]: rarityWeightOf(spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
+    : {};
+  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (game/time.ts).
+  const phase: DayPhase = isNight(now) ? 'night' : 'day';
+  return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
+}
+
+/** 추첨 실행 — auto는 상대 페널티 스케일링, 수동은 판정 배수 × 파워 보정.
+ *  호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
+export function rollCatchFish(
+  spot: SpotId, judgment: Judgment, power: number, entry: number,
+  pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
+): Fish {
+  if (judgment === 'auto') {
+    // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링
+    return rollFish(spot, 1, rng, relativeIdleBoost(power, entry) * pzMult, phaseOpts);
+  }
+  // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
+  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
+  return rollFish(spot, JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), rng, pzMult, phaseOpts);
+}
+
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
   switch (action.type) {
     case 'catch': {
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
-      // 파워 게이트(서버 권위 백스톱) — 존은 수역 파워에서 온다(stats.powerZones).
-      // 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL. 미달이면
-      // 일반 가중치 지수 페널티(mult)가 적용되고, 초과면 mult=1로 기존 밸런스와 동일.
+      // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
-      let judgment: Judgment = action.judgment;
-      if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
-      else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-      // 미끼 — 방치(auto)에는 소모·효과 없다. 수동 판정은 낚아올리는 순간 확정되므로
-      // 소모도 이 지점(리듀서)에서 1회가 자연스럽다(던질 때 소모면 방치 복구 분기가 필요했다).
-      // 효과 = targetRarity 어종 가중치 ×2 → 등급 예산 ×2(budgets 오버라이드)와 동치
-      // (drawWeights 주석: 등급 내 균등 배분 하 개체 전부 ×2 ≡ 예산 ×2). rareMult/commonMult
-      // 다이얼(common 축 전용)을 건드리지 않는다 — 확률 표 해석이 어긋난다.
-      const bait = judgment === 'auto' ? undefined : usableBait(state);
-      const drawOpts = bait
-        ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
-        : {};
-      // 시간대 — 벽시계 주기 파생(day 40/20). 낮 풀 = night 어종 제외, 밤 풀 = 합류(낮+밤).
-      // 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (game/time.ts).
-      const phase: DayPhase = isNight(deps.now) ? 'night' : 'day';
-      const phaseOpts = { ...drawOpts, phase };
+      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
       let fish: Fish;
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      if (judgment === 'auto') {
-        // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링 — 절대치 autoCommonBoost 대신
-        const relBoost = relativeIdleBoost(rodPower(state), entry);
-        fish = rollFish(action.spot, 1, deps.rng, relBoost * pz.mult, phaseOpts);
-      } else {
-        // 수동 보정(v0.6.4) — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
-        // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
-        const bonus = manualPowerBonus(rodPower(state), entry);
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * bonus, deps.rng, pz.mult, phaseOpts);
-      }
+      fish = rollCatchFish(action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts);
       const extras = rollCatchExtras(fish, deps.rng);
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
