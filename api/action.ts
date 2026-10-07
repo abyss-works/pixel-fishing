@@ -16,8 +16,9 @@ import {
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras, rollFish,
   takeItem, usableBait,
 } from '../src/game/logic.js';
-import { applyAction, ACTION_TYPES, pickScalars } from '../src/game/actions.js';
-import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import { applyAction, pickScalars } from '../src/game/actions.js';
+import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import { parseAction } from '../src/game/actionSchema.js';
 import { powerZones, rodPower } from '../src/game/stats.js';
 import { relativeIdleBoost, manualPowerBonus } from '../src/game/power.js';
 import { SPOTS, rarityWeightOf } from '../src/data/spots.js';
@@ -47,9 +48,6 @@ interface Q {
 interface SupabaseLike { from(table: string): Q }
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
-
-// 액션 화이트리스트는 리듀서(GameAction 유니온)에서 파생 — 이중 목록 드리프트 없음
-const ACTION_TYPE_SET = new Set<string>(ACTION_TYPES);
 
 // 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브). 친구 규모라
@@ -268,11 +266,13 @@ async function route(req: Req, res: Res): Promise<void> {
     uid = userData.user.id;
   }
 
-  // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다)
+  // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다).
+  // 런타임 검증은 actionSchema가 맡는다 — type 화이트리스트와 judgment enum을 여기서
+  // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
-  const action = body as GameAction | null;
-  if (!action || typeof action !== 'object' || !ACTION_TYPE_SET.has(action.type)) {
+  const action = parseAction(body);
+  if (!action) {
     throw new ApiError(400, 'bad-action');
   }
 

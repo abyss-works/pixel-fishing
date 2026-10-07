@@ -612,7 +612,7 @@ function safeInstances(v: unknown, uid: () => string): FishInstance[] {
       size: typeof i.size === 'number' ? i.size : null,
       caughtAt: typeof i.caughtAt === 'string' ? i.caughtAt : null,
       spot: typeof i.spot === 'string' ? i.spot : null,
-      judgment: i.judgment === 'perfect' || i.judgment === 'normal' || i.judgment === 'auto'
+      judgment: i.judgment === 'perfect' || i.judgment === 'good' || i.judgment === 'normal' || i.judgment === 'auto'
         ? i.judgment : null,
       locked: i.locked === true,
     });
