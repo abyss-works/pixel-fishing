@@ -2,8 +2,8 @@
 // 여기로 들어오고, 게임 셸(App)에는 관리자 흔적이 남지 않는다.
 // 진입: ?admin=1#/admin/overview · 복귀: 헤더의 "게임으로" 링크.
 //
-// 좌측 내비는 **분류별 그룹**(사용자 지시): 상용 대시보드 IA를 따라 9항목 6그룹.
-//   홈(개요) · 실시간(라이브) · 플레이어(유저·이상탐지) · 분석(지표·경제·진행)
+// 좌측 내비는 **분류별 그룹**(사용자 지시): 상용 대시보드 IA를 따라 10항목 6그룹.
+//   홈(개요) · 실시간(라이브) · 플레이어(유저·편지·이상탐지) · 분석(지표·경제·진행)
 //   · 도구(어종 시뮬) · 시스템(운영)
 // 데이터 접근은 **api 계층**(api.admin — http/local 교체, 0010 관리자 뷰/RPC 경유) 하나로
 // 모이고, 쓰기 액션은 존재하지 않는다(읽기 전용). 접근 판정은 AdminAuthProvider가 1회 해석.
@@ -21,6 +21,7 @@ import FishTab from './tabs/FishTab';
 import OverviewTab from './tabs/OverviewTab';
 import LiveTab from './tabs/LiveTab';
 import UsersTab from './tabs/UsersTab';
+import LettersTab from './tabs/LettersTab';
 import MetricsTab from './tabs/MetricsTab';
 import EconomyTab from './tabs/EconomyTab';
 import ProgressionTab from './tabs/ProgressionTab';
@@ -28,7 +29,7 @@ import AntiAbuseTab from './tabs/AntiAbuseTab';
 import OpsTab from './tabs/OpsTab';
 
 type AdminTabKey =
-  | 'overview' | 'live' | 'users' | 'metrics' | 'economy'
+  | 'overview' | 'live' | 'users' | 'letters' | 'metrics' | 'economy'
   | 'progression' | 'antiabuse' | 'ops' | 'fish';
 
 /** 좌측 내비의 단일 근원 — 분류 그룹 순서 = 화면 우선순위다 */
@@ -36,6 +37,7 @@ const NAV_GROUPS: { group: string; items: { key: AdminTabKey; label: string }[] 
   { group: '홈',      items: [{ key: 'overview', label: '개요' }] },
   { group: '실시간',  items: [{ key: 'live', label: '라이브' }] },
   { group: '플레이어', items: [{ key: 'users', label: '유저' },
+                              { key: 'letters', label: '편지' },
                               { key: 'antiabuse', label: '이상탐지' }] },
   { group: '분석',    items: [{ key: 'metrics', label: '지표' },
                               { key: 'economy', label: '경제' },
@@ -50,6 +52,7 @@ const SUBTITLE: Record<AdminTabKey, string> = {
   overview: 'KPI·위험 신호·최근 이벤트 피드',
   live: '지금 누가 어디에 있는가 — 접속 추정·온라인 명부',
   users: '명부와 유저 단위 감사(도감↔이벤트·연타)',
+  letters: '유저가 보낸 편지 — events 7일 창 밖도 영구 열람',
   metrics: 'DAU/WAU · 리텐션 코호트',
   economy: '골드 유입·유출 원장과 잔고 분포',
   progression: '배·낚싯대 분포, 지역 도달, 게이트 정체',
@@ -126,6 +129,7 @@ export default function AdminApp() {
             {tab === 'overview' && <OverviewTab />}
             {tab === 'live' && <LiveTab />}
             {tab === 'users' && <UsersTab />}
+            {tab === 'letters' && <LettersTab />}
             {tab === 'metrics' && <MetricsTab />}
             {tab === 'economy' && <EconomyTab />}
             {tab === 'progression' && <ProgressionTab />}
