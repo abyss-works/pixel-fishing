@@ -46,9 +46,15 @@ type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
 // 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
-// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브). 친구 규모라
-// 하드코딩 — env로 옮길 가치가 생기면 그때 옮긴다.
-const IMPORT_OWNER_EMAIL = 'inley@naver.com';
+// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
+// 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
+// 클라(src/sidebar/shared.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
+// 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
+// 늘어나는 대가라 하지 않는다.
+export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
+export function importOwnerEmail(): string {
+  return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
+}
 
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
@@ -283,7 +289,7 @@ async function route(req: Req, res: Res): Promise<void> {
       // JWT 로컬 검증 경로는 email을 안 봤으니 관리자 액션일 때만 Auth 서버에 물어본다
       const { data: ud } = await admin.auth.getUser(token);
       const email = ud.user?.email?.toLowerCase() ?? '';
-      if (email !== IMPORT_OWNER_EMAIL) throw new ApiError(403, 'import-owner-only');
+      if (email !== importOwnerEmail().toLowerCase()) throw new ApiError(403, 'import-owner-only');
     }
   }
 
