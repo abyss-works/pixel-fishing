@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.8.3',
+    date: '2026-10-07',
+    summary: '겉은 그대로, 속은 단단하게',
+    notes: [
+      { tag: '기타', text: '보이는 변화는 없어요. 저장·낚시 규칙은 그대로 두고 내부 구조만 정리했습니다.' },
+    ],
+  },
+  {
     version: '0.8.2',
     date: '2026-09-06',
     summary: '밤이 찾아왔어요 — 낮과 밤이 달라지는 바다',
