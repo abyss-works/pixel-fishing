@@ -20,6 +20,8 @@ export interface Backend {
   /** 초기 로드 — 저장된 상태(마이그레이션 완료본) 또는 null. GET은 로드 전용 원칙. */
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  /** 표시용 닉네임 — 로컬은 메모리, 운영은 profiles RLS 본인 읽기. 없으면 게스트명을 지어낸다. */
+  getNickname(): MaybePromise<string | null>;
   /** 서버 함수 콜드 스타트 흡수용 빈 핑 (캐스팅 순간 호출) — 로컬 백엔드는 no-op */
   warmup?(): void;
 }

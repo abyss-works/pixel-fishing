@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../game/logic';
 import type { GameAction } from '../game/actions';
+import type { RejectReason } from '../game/rules';
 import type { DispatchResult, MaybePromise } from '../api';
 import { ZONE_IDS, defaultZoneOfRegion } from '../data/zones';
 import type { ZoneId } from '../data/zones';
@@ -54,6 +55,9 @@ interface SidebarProps {
   syncState: string;
   /** 로그인된 영구 계정 이메일 (게스트면 null) — v0.4.0 */
   account: string | null;
+  /** 표시용 닉네임 (서버 생성 게스트명 또는 변경값) + 변경 콜백 */
+  nickname: string | null;
+  onRename: (name: string) => Promise<null | RejectReason>;
   /** 내 uid — 설정 탭에 띄운다. 문의 대응 시 세이브를 찾는 열쇠 */
   uid: string | null;
   /** 가입/로그인/로그아웃 직후 App이 계정 표시·세이브를 갱신하는 콜백 */
@@ -126,6 +130,7 @@ export default function Sidebar(props: SidebarProps) {
           <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
                        syncLabel={props.syncLabel} syncState={props.syncState}
                        account={props.account} uid={props.uid}
+                       nickname={props.nickname} onRename={props.onRename}
                        onAuthChanged={props.onAuthChanged} />
         )}
         {activeTab === 'admin' && <AdminTab game={game} dispatch={props.dispatch} />}

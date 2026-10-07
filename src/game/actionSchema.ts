@@ -35,6 +35,7 @@ const schemas = {
   buyBait: z.object({ type: z.literal('buyBait'), bait: z.unknown(), count: z.unknown().optional() }),
   setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
   boot: z.object({ type: z.literal('boot'), buildId: z.unknown().optional() }),
+  setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -45,7 +46,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
   schemas.claimRelief, schemas.adminSet, schemas.buyBait, schemas.setActiveBait,
-  schemas.boot, schemas.import,
+  schemas.boot, schemas.setNickname, schemas.import,
 ]);
 
 /** 미검증 body → GameAction. 실패는 null (호출자가 400 bad-action으로). */

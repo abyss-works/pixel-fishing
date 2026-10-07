@@ -6,6 +6,7 @@ import type { GameAction } from '../game/actions';
 import { localDate } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { getTimeOverride } from '../admin/timeOverride';
+import { pickGuestName } from '../game/nickname';
 import type { Backend, DispatchResult } from './types';
 
 const LS_KEY = 'pixel-fishing-save';
@@ -20,6 +21,7 @@ function persistLocal(state: GameState) {
 
 export class LocalBackend implements Backend {
   private current: GameState;
+  private nickname: string | null = null;
 
   constructor(initial: GameState) {
     this.current = initial;
@@ -27,6 +29,11 @@ export class LocalBackend implements Backend {
 
   load(): GameState {
     return this.current;
+  }
+
+  getNickname(): string | null {
+    if (!this.nickname) this.nickname = pickGuestName(Math.random);
+    return this.nickname;
   }
 
   dispatch(action: GameAction): DispatchResult {
@@ -39,6 +46,9 @@ export class LocalBackend implements Backend {
     if (!out.ok) return { status: 'rejected', error: out.error };
     this.current = out.state;
     persistLocal(out.state);
+    if (action.type === 'setNickname' && typeof action.nickname === 'string') {
+      this.nickname = action.nickname;
+    }
     return { status: 'ok', state: out.state, result: out.result };
   }
 }
