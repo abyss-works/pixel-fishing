@@ -12,7 +12,7 @@
 import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import { BOATS, MAX_BOAT } from '../data/boats.js';
-import { upgradeCost } from './logic.js';
+import { upgradeCost } from './balance.js';
 import type { GameState } from './logic.js';
 
 /** 규칙이 거부하는 이유 — 인프라 실패(errors.ts의 FailureKind)와 다른 축이다.

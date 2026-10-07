@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
-  rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
+  rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   drawRows, goldEV, fishPool,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
@@ -15,6 +15,7 @@ import {
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
+import { upgradeCost } from './balance';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;

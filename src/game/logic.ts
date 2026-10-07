@@ -4,7 +4,7 @@
 // 그대로 import한다. Vite(브라우저 빌드)는 확장자 없어도 되지만 Node ESM은 필수라
 // 둘 다 만족시키려면 .js로 적어야 한다(소스는 .ts, 컴파일 결과가 .js).
 import {
-  JUDGMENT_MULT, ROD,
+  JUDGMENT_MULT, ROD, upgradeCost,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
   VARIANT_PRICE_MULT,
 } from './balance.js';
@@ -109,10 +109,6 @@ export function rodStats(level: number): RodStats {
     biteMax: lerp(ROD.biteMax),
     sweep: lerp(ROD.sweep),
   };
-}
-
-export function upgradeCost(level: number): number {
-  return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
 // 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 GOOD, 그 안의 빨간 존(red 개방 시)이면 PERFECT.
