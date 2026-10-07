@@ -103,12 +103,12 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       )}
 
       <SectionTitle>계정</SectionTitle>
-      <div className="pf-frame divide-y divide-line mb-2 text-xs">
-        <div className="flex items-center gap-2 px-2 py-1">
+      <div className="pf-frame divide-y divide-line mb-2 text-sm">
+        <div className="flex items-center gap-2 px-2 py-1.5">
           <span className="text-text-dim shrink-0">계정</span>
           <span className="truncate">{account ?? '게스트 (이메일 없음)'}</span>
         </div>
-        <div className="flex items-center gap-2 px-2 py-1">
+        <div className="flex items-center gap-2 px-2 py-1.5">
           <span className="text-text-dim shrink-0">닉네임</span>
           <span className="truncate">{nickname ?? '불러오는 중…'}</span>
         </div>
