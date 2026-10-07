@@ -48,5 +48,5 @@ export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
 } from './types';

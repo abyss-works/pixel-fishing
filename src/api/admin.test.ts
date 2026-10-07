@@ -11,7 +11,7 @@ describe('admin 계층 규약', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'users', 'dailyActive', 'retention', 'economy',
       'catchQuality', 'spamFlags', 'imports', 'dexMismatch',
-      'recentEvents', 'userEvents', 'projectRef'] as const) {
+      'recentEvents', 'userEvents', 'letters', 'projectRef'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }

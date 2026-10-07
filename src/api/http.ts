@@ -65,7 +65,7 @@ import type {
   AdminApi,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
 } from './types';
 
 /** day 문자열 비교 = ISO 사전순. KST 축이라 서버 todayKST 공식과 동일하게 자른다 */
@@ -123,6 +123,9 @@ class HttpAdmin implements AdminApi {
   recentEvents(): Promise<AdminEventRow[]> {
     // 뷰 LIMIT 유지를 위해 id 내림차순 재정렬만
     return selectView<AdminEventRow>('v_events_recent').then(rows => rows.sort((a, b) => b.id - a.id));
+  }
+  letters(): Promise<AdminLetterRow[]> {
+    return selectView<AdminLetterRow>('v_admin_letters'); // 뷰가 최신순 보장
   }
   async userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     if (!supabase) throw new Error('클라우드 미설정');
