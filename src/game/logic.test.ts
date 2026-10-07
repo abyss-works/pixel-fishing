@@ -581,6 +581,17 @@ describe('R18b: 세이브 마이그레이션', () => {
     }
   });
 
+  it('개체 위생이 good 판정을 버리지 않는다 — 서버 강등값 보존', () => {
+    const st = mig({
+      v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
+      bag: [{ uid: 'g1', fishId: 'carp', form: 'normal', size: 20,
+        caughtAt: null, spot: 'pond', judgment: 'good', locked: false }],
+      exhibit: [], dex: {}, coupons: [], location: { kind: 'base', id: 'home' },
+      visited: [], artifacts: [], items: {}, activeBait: null,
+    });
+    expect(st.bag[0]?.judgment).toBe('good');
+  });
+
   it('v7 → v8: 변이 마릿수가 종 합계를 넘는 손상 세이브도 음수 없이 흡수', () => {
     const st = mig({
       v: 7, caught: { carp: 1 }, variantCaught: { carp: 3 }, bag: [], coupons: [], locked: [],
