@@ -62,5 +62,7 @@ export const isAdminUrl = (): boolean =>
 export const isLocalOrigin = (): boolean =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(window.location.origin);
 
-/** 운영자 계정 이메일 — 관리자 UI 노출·import 게이트(api/action.ts 서버측 상수와 쌍)가 본다 */
+/** 운영자 계정 이메일 — 관리자 UI 표시용 힌트. 진짜 경계는 서버(api/action.ts
+ *  importOwnerEmail, env 정본)라 여기 값과 어긋나도 권한이 열리지 않는다. 소유자가
+ *  바뀌면 양쪽을 함께 고친다. */
 export const OWNER_EMAIL = 'inley@naver.com';
