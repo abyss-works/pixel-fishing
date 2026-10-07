@@ -10,22 +10,18 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
-import type { Fish, FishInstance, FormRecord, GameState, Judgment } from '../src/game/logic.js';
+import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras, rollFish,
-  takeItem, usableBait,
+  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
+  takeItem,
 } from '../src/game/logic.js';
-import { applyAction, pickScalars } from '../src/game/actions.js';
+import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
 import { parseAction } from '../src/game/actionSchema.js';
 import { powerZones, rodPower } from '../src/game/stats.js';
-import { relativeIdleBoost, manualPowerBonus } from '../src/game/power.js';
-import { SPOTS, rarityWeightOf } from '../src/data/spots.js';
-import { isNight } from '../src/game/time.js';
-import type { DayPhase } from '../src/game/time.js';
+import { SPOTS } from '../src/data/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
-import { BAIT_WEIGHT_MULT, JUDGMENT_MULT } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -408,7 +404,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   let out: ApplyOutcome;
   if (action.type === 'catch' && skipDetail) {
     // catch fast path — 풀가방 SELECT 없이 COUNT + 등급별 top-1 + 도감 1행.
-    // 게이트·판정강등·미끼·추첨순서·명성·이벤트는 actions.ts catch와 같은 헬퍼라
+    // 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 —
     // 규칙이 여기 새로 생기지 않는다. 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
     const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
       fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
@@ -417,25 +413,11 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       out = { ok: false, error: gate.reason };
     } else {
       const pz = powerZones(base, action.spot);
-      let judgment: Judgment = action.judgment;
-      if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
-      else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-      const bait = judgment === 'auto' ? undefined : usableBait(base);
-      const drawOpts = bait
-        ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
-        : {};
-      const today = todayKST();
       const now = new Date().toISOString();
-      // 시간대 — 낮 풀 = night 어종 제외, 밤 풀 = 합류 (리듀서 actions.ts catch와 같은 판정)
-      const phase: DayPhase = isNight(now) ? 'night' : 'day';
-      const phaseOpts = { ...drawOpts, phase };
+      const { judgment, bait, phaseOpts } = prepareCatchDraw(base, action.spot, action.judgment, now, pz);
+      const today = todayKST();
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      let fish: Fish;
-      if (judgment === 'auto') {
-        fish = rollFish(action.spot, 1, Math.random, relativeIdleBoost(rodPower(base), entry) * pz.mult, phaseOpts);
-      } else {
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * manualPowerBonus(rodPower(base), entry), Math.random, pz.mult, phaseOpts);
-      }
+      const fish = rollCatchFish(action.spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts);
       const extras = rollCatchExtras(fish, Math.random);
       const [dexRes, countRes] = await Promise.all([
         admin.from('records').select('count,max_size,first_caught')
