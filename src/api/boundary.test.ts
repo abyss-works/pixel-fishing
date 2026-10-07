@@ -11,7 +11,25 @@ const sources = import.meta.glob('../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>;
 
-describe('api 계층 경계', () => {
+// 탐지 패턴 — 정적 import(따옴표 무관·공백 허용)와 동적 import()를 함께 본다.
+// 구 패턴(from '...')은 큰따옴표·import() 우회를 놓쳤다.
+const BACKEND_IMPORT = [
+  /from\s+["'][^"']*backend\//,
+  /import\s*\(\s*["'][^"']*backend\//,
+];
+
+function isBackendImport(src: string): boolean {
+  return BACKEND_IMPORT.some(re => re.test(src));
+}
+
+describe('api 계층 경계', () => {  it('우회 패턴을 탐지한다 — 큰따옴표·동적 import·상위 경로', () => {
+    expect(isBackendImport(`import { x } from "../backend/http";`)).toBe(true);
+    expect(isBackendImport(`const m = await import('../backend/local');`)).toBe(true);
+    expect(isBackendImport(`import { x } from '../../src/backend/auth';`)).toBe(true);
+    expect(isBackendImport(`import { x } from '../game/logic';`)).toBe(false);
+    expect(isBackendImport(`// backend/*를 직접 잡으면 안 된다`)).toBe(false);
+  });
+
   it('backend/*를 import하는 곳은 api 계층뿐이다', () => {
     const offenders: string[] = [];
     for (const [path, src] of Object.entries(sources)) {
@@ -19,7 +37,7 @@ describe('api 계층 경계', () => {
       const rel = path.replace(/^\.\.\//, '');
       if (rel.startsWith('backend/')) continue;
       if (/\.test\.tsx?$/.test(rel)) continue;
-      if (/from '[^']*backend\//.test(src)) offenders.push(rel);
+      if (isBackendImport(src)) offenders.push(rel);
     }
     expect(offenders).toEqual([]);
   });
