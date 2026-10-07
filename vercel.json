@@ -1,4 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["icn1"]
+  "regions": ["icn1"],
+  "crons": [{ "path": "/api/cron/archive", "schedule": "0 18 * * *" }],
+  "functions": { "api/cron/archive.ts": { "maxDuration": 300 } }
 }
