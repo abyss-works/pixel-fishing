@@ -19,6 +19,7 @@ import {
 import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
 import { parseAction } from '../src/game/actionSchema.js';
+import { checkNickname, pickGuestName } from '../src/game/nickname.js';
 import { powerZones, rodPower } from '../src/game/stats.js';
 import { SPOTS } from '../src/data/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
@@ -268,6 +269,20 @@ async function route(req: Req, res: Res): Promise<void> {
     uid = userData.user.id;
   }
 
+  // 프로필 보장 — 행이 없으면 게스트명을 지어 넣는다 (첫 액션 1회).
+  // 이후 액션은 이 SELECT 1회가 전부다. 표시용 읽기는 클라가 RLS 본인 읽기로 가져간다.
+  const { data: profile } = await admin.from('profiles')
+    .select('nickname').eq('user_id', uid).maybeSingle();
+  let ensured = typeof (profile as { nickname?: unknown } | null)?.nickname === 'string';
+  for (let i = 0; !ensured && i < 20; i++) {
+    const base = pickGuestName(Math.random);
+    const candidate = i === 0 ? base : `${base}_${i + 1}`;
+    const { error: profErr } = await admin.from('profiles')
+      .insert({ user_id: uid, nickname: candidate });
+    if (!profErr) ensured = true;
+  }
+  if (!ensured) throw new ApiError(500, 'db-write', { uid, action: 'profile' });
+
   // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다).
   // 런타임 검증은 actionSchema가 맡는다 — type 화이트리스트와 judgment enum을 여기서
   // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
@@ -307,12 +322,13 @@ async function route(req: Req, res: Res): Promise<void> {
   let row = curRes.data as StateRow | null;
   const snapshotDue = row !== null && (Number(row.version) + 1) % SNAPSHOT_EVERY === 0;
   // 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
-  // boot/sendLetter(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
+  // boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
   // catch는 아래 fast path가 COUNT+피해자1행+도감1행만 읽는다.
   // sell/setLocked/claimRelief/import는 가방·도감을 직접 다루어 풀 유지.
   // 스냅샷 경계 버전은 전부 풀 조회로 복귀 (saves 아카이브는 풀 스냅샷이 계약).
   const SKIP_DETAIL = new Set([
     'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
+    'setNickname',
   ]);
   const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
   let instances: InstanceRow[] = [];
@@ -405,6 +421,20 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
         };
       }
     }
+  }
+
+  // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
+  // taken 검사는 소규모라 전행 lower() 비교로 한다 (랭킹 규모가 되면 인덱스 조회로 바꾼다).
+  if (action.type === 'setNickname' && typeof action.nickname === 'string'
+      && checkNickname(action.nickname).ok) {
+    const wanted = action.nickname;
+    const { data: names } = await admin.from('profiles').select('user_id, nickname');
+    const clash = ((names ?? []) as { user_id: string; nickname: string }[])
+      .some(r => r.user_id !== uid && r.nickname.toLowerCase() === wanted.toLowerCase());
+    if (clash) throw new ApiError(422, 'nickname-taken');
+    const { error: nickErr } = await admin.from('profiles')
+      .upsert({ user_id: uid, nickname: wanted, updated_at: new Date().toISOString() });
+    if (nickErr) throw new ApiError(500, 'db-write', { uid, action: 'setNickname' }, { cause: nickErr });
   }
 
   let out: ApplyOutcome;
