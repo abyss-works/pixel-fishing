@@ -47,6 +47,13 @@ export const ROD = {
   costGrowth: 1.7,
 } as const;
 
+// 낚싯대 강화 비용 — round(costBase × costGrowth^(lv-1)).
+// rules(구매 가능 판정)·logic(강화 실행)이 함께 쓰므로, 둘의 공통 하류인 여기에 둔다.
+// logic에 두면 rules → logic → rules 순환이 생긴다 (logic이 rules의 판정을 쓴다).
+export function upgradeCost(level: number): number {
+  return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
+}
+
 // 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (api/action.ts).
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;

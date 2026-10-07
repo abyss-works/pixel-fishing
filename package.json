@@ -1,7 +1,7 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.8.2b",
+  "version": "0.8.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "@sentry/react": "^10.70.0",
     "@supabase/supabase-js": "^2.112.3",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

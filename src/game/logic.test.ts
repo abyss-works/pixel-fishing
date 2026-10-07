@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
-  rodStats, upgradeCost, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
+  rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
   drawRows, goldEV, fishPool,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
@@ -15,6 +15,7 @@ import {
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
+import { upgradeCost } from './balance';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -579,6 +580,17 @@ describe('R18b: 세이브 마이그레이션', () => {
     for (const k of ['caught', 'maxSize', 'variantCaught', 'variantMaxSize', 'variantFirstCaught']) {
       expect(k in st).toBe(false); // 구 필드 전멸
     }
+  });
+
+  it('개체 위생이 good 판정을 버리지 않는다 — 서버 강등값 보존', () => {
+    const st = mig({
+      v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
+      bag: [{ uid: 'g1', fishId: 'carp', form: 'normal', size: 20,
+        caughtAt: null, spot: 'pond', judgment: 'good', locked: false }],
+      exhibit: [], dex: {}, coupons: [], location: { kind: 'base', id: 'home' },
+      visited: [], artifacts: [], items: {}, activeBait: null,
+    });
+    expect(st.bag[0]?.judgment).toBe('good');
   });
 
   it('v7 → v8: 변이 마릿수가 종 합계를 넘는 손상 세이브도 음수 없이 흡수', () => {

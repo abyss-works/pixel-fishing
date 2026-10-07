@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
-import { BAIT_BUY_MAX } from './balance';
-import { BOATS, COUPONS, FISH, newState, upgradeCost } from './logic';
+import { BAIT_BUY_MAX, upgradeCost } from './balance';
+import { BOATS, COUPONS, FISH, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 import { baitById } from '../data/baits';
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats, upgradeCost } from '../game/logic';
+import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats } from '../game/logic';
+import { upgradeCost } from '../game/balance';
 import type { GameState } from '../game/logic';
 import { BAITS } from '../data/baits';
 import { RARITY } from '../data/rarity';

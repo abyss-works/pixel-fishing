@@ -10,21 +10,18 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
 import { migrate, newState } from '../src/game/logic.js';
-import type { Fish, FishInstance, FormRecord, GameState, Judgment } from '../src/game/logic.js';
+import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras, rollFish,
-  takeItem, usableBait,
+  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
+  takeItem,
 } from '../src/game/logic.js';
-import { applyAction, ACTION_TYPES, pickScalars } from '../src/game/actions.js';
-import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
+import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import { parseAction } from '../src/game/actionSchema.js';
 import { powerZones, rodPower } from '../src/game/stats.js';
-import { relativeIdleBoost, manualPowerBonus } from '../src/game/power.js';
-import { SPOTS, rarityWeightOf } from '../src/data/spots.js';
-import { isNight } from '../src/game/time.js';
-import type { DayPhase } from '../src/game/time.js';
+import { SPOTS } from '../src/data/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
-import { BAIT_WEIGHT_MULT, JUDGMENT_MULT } from '../src/game/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -48,13 +45,16 @@ interface SupabaseLike { from(table: string): Q }
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-// 액션 화이트리스트는 리듀서(GameAction 유니온)에서 파생 — 이중 목록 드리프트 없음
-const ACTION_TYPE_SET = new Set<string>(ACTION_TYPES);
-
 // 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
-// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브). 친구 규모라
-// 하드코딩 — env로 옮길 가치가 생기면 그때 옮긴다.
-const IMPORT_OWNER_EMAIL = 'inley@naver.com';
+// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
+// 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
+// 클라(src/sidebar/shared.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
+// 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
+// 늘어나는 대가라 하지 않는다.
+export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
+export function importOwnerEmail(): string {
+  return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
+}
 
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
@@ -268,11 +268,13 @@ async function route(req: Req, res: Res): Promise<void> {
     uid = userData.user.id;
   }
 
-  // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다)
+  // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다).
+  // 런타임 검증은 actionSchema가 맡는다 — type 화이트리스트와 judgment enum을 여기서
+  // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
-  const action = body as GameAction | null;
-  if (!action || typeof action !== 'object' || !ACTION_TYPE_SET.has(action.type)) {
+  const action = parseAction(body);
+  if (!action) {
     throw new ApiError(400, 'bad-action');
   }
 
@@ -287,7 +289,7 @@ async function route(req: Req, res: Res): Promise<void> {
       // JWT 로컬 검증 경로는 email을 안 봤으니 관리자 액션일 때만 Auth 서버에 물어본다
       const { data: ud } = await admin.auth.getUser(token);
       const email = ud.user?.email?.toLowerCase() ?? '';
-      if (email !== IMPORT_OWNER_EMAIL) throw new ApiError(403, 'import-owner-only');
+      if (email !== importOwnerEmail().toLowerCase()) throw new ApiError(403, 'import-owner-only');
     }
   }
 
@@ -408,7 +410,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   let out: ApplyOutcome;
   if (action.type === 'catch' && skipDetail) {
     // catch fast path — 풀가방 SELECT 없이 COUNT + 등급별 top-1 + 도감 1행.
-    // 게이트·판정강등·미끼·추첨순서·명성·이벤트는 actions.ts catch와 같은 헬퍼라
+    // 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 —
     // 규칙이 여기 새로 생기지 않는다. 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
     const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
       fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
@@ -417,25 +419,11 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       out = { ok: false, error: gate.reason };
     } else {
       const pz = powerZones(base, action.spot);
-      let judgment: Judgment = action.judgment;
-      if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
-      else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-      const bait = judgment === 'auto' ? undefined : usableBait(base);
-      const drawOpts = bait
-        ? { budgets: { [bait.targetRarity]: rarityWeightOf(action.spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
-        : {};
-      const today = todayKST();
       const now = new Date().toISOString();
-      // 시간대 — 낮 풀 = night 어종 제외, 밤 풀 = 합류 (리듀서 actions.ts catch와 같은 판정)
-      const phase: DayPhase = isNight(now) ? 'night' : 'day';
-      const phaseOpts = { ...drawOpts, phase };
+      const { judgment, bait, phaseOpts } = prepareCatchDraw(base, action.spot, action.judgment, now, pz);
+      const today = todayKST();
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      let fish: Fish;
-      if (judgment === 'auto') {
-        fish = rollFish(action.spot, 1, Math.random, relativeIdleBoost(rodPower(base), entry) * pz.mult, phaseOpts);
-      } else {
-        fish = rollFish(action.spot, JUDGMENT_MULT[judgment] * manualPowerBonus(rodPower(base), entry), Math.random, pz.mult, phaseOpts);
-      }
+      const fish = rollCatchFish(action.spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts);
       const extras = rollCatchExtras(fish, Math.random);
       const [dexRes, countRes] = await Promise.all([
         admin.from('records').select('count,max_size,first_caught')
