@@ -19,26 +19,43 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
-// 서버 주입 — 라이선스 보유·오늘 0회·완료 없음이 기본값
-const ctx = (over = {}) => ({ licensed: ['pacific'], acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], active: [] as string[], ...over });
+const rec = (count: number) => ({ count, maxSize: null, first: null });
+// 태평양 일반 3종 완성 도감 (고등어·갈치·아귀)
+const pacificDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
+// 서버 주입 — 기본 라이선스 보유·오늘 0회·완료 없음이 기본값
+const ctx = (over = {}) => ({ licensed: [{ zone: 'pacific', tier: 'basic' }], acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], active: [] as string[], ...over });
 
 describe('acceptBountyLicense', () => {
   it('명성 미달이면 not-enough-fame — 소모 없이 검증만 한다', () => {
-    const out = applyAction(seed({ fame: 1499 }), { type: 'acceptBountyLicense', zone: 'pacific' }, deps());
+    const out = applyAction(seed({ fame: 1499, dex: pacificDex }),
+      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
     expect(out).toEqual({ ok: false, error: 'not-enough-fame' });
   });
 
-  it('통과하면 상태 불변 + 감사 이벤트만 남긴다 (행 기록은 서버가 DB에)', () => {
-    const st = seed({ fame: 1500 });
-    const out = applyAction(st, { type: 'acceptBountyLicense', zone: 'pacific' }, deps());
-    if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(st);
-    expect(out.events).toEqual([{ type: 'acceptBountyLicense', payload: { zone: 'pacific' } }]);
+  it('도감 미완이면 dex-incomplete', () => {
+    const out = applyAction(seed({ fame: 1500 }),
+      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
+    expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('없는 해역은 bad-request', () => {
-    const out = applyAction(seed({ fame: 999999 }), { type: 'acceptBountyLicense', zone: 'atlantis' }, deps());
-    expect(out).toEqual({ ok: false, error: 'bad-request' });
+  it('통과하면 상태 불변 + 감사 이벤트만 남긴다 (행 기록은 서버가 DB에)', () => {
+    const st = seed({ fame: 1500, dex: pacificDex });
+    const out = applyAction(st,
+      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(st);
+    expect(out.events).toEqual([{ type: 'acceptBountyLicense',
+      payload: { zone: 'pacific', tier: 'basic' } }]);
+  });
+
+  it('없는 해역·tier는 bad-request', () => {
+    const st = seed({ fame: 999999, dex: pacificDex });
+    expect(applyAction(st,
+      { type: 'acceptBountyLicense', zone: 'atlantis', tier: 'basic' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(st,
+      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'abyss' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
   });
 });
 
@@ -88,6 +105,25 @@ describe('acceptQuest', () => {
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx({ active: ['pacific-easy-common'] }) }));
     expect(out).toEqual({ ok: false, error: 'quest-active' });
+  });
+
+  it('네임드 의뢰는 네임드 라이선스가 있어야 한다', () => {
+    const base = seed({ ...harbor });
+    const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
+    expect(applyAction(base, act, deps({ bounty: ctx() })))
+      .toEqual({ ok: false, error: 'no-license' });
+    const out = applyAction(base, act,
+      deps({ bounty: ctx({ licensed: [{ zone: 'pacific', tier: 'named' }] }) }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events).toEqual([{ type: 'acceptQuest',
+      payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
+  });
+
+  it('네임드 라이선스는 기본 의뢰도 연다', () => {
+    const out = applyAction(seed({ ...harbor }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx({ licensed: [{ zone: 'pacific', tier: 'named' }] }) }));
+    expect(out.ok).toBe(true);
   });
 
   it('통과하면 상태 불변 + 감사 이벤트만 남긴다', () => {

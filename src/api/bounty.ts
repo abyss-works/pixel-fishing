@@ -6,7 +6,7 @@ import { supabase } from '../backend/auth';
 export interface BountyProgressRow { questId: string; progress: number }
 
 export interface BountySnapshot {
-  licensed: string[];
+  licensed: { zone: string; tier: string }[];
   acceptsToday: number;
   acceptsByPort: Record<string, number>;
   progress: BountyProgressRow[];
@@ -32,7 +32,7 @@ export async function readBounty(): Promise<BountySnapshot | null> {
     byPort[a.port] = (byPort[a.port] ?? 0) + 1;
   }
   return {
-    licensed: ((lic.data ?? []) as { zone: string }[]).map(l => l.zone),
+    licensed: ((lic.data ?? []) as { zone: string; tier: string }[]).map(l => ({ zone: l.zone, tier: l.tier })),
     acceptsToday: ((acc.data ?? []) as unknown[]).length,
     acceptsByPort: byPort,
     progress: ((prog.data ?? []) as { quest_id: string; progress: number }[])

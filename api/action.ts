@@ -233,7 +233,7 @@ export function kstDayStartISO(nowMs: number): string {
 
 /** 현상금 원시 행 — toBountyCtx의 입력 (supabase select 결과 그대로) */
 export interface BountyRows {
-  licenses: { zone: string }[];
+  licenses: { zone: string; tier: string }[];
   accepts: { accepted_at: string; port: string }[];
   progress: { quest_id: string; progress: number }[];
 }
@@ -243,7 +243,7 @@ export function toBountyCtx(rows: BountyRows, dayStartISO: string, port: string)
   const todays = rows.accepts.filter(a => a.accepted_at >= dayStartISO);
   const known = rows.progress.filter(p => bountyById(p.quest_id));
   return {
-    licensed: rows.licenses.map(l => l.zone),
+    licensed: rows.licenses.map(l => ({ zone: l.zone, tier: l.tier })),
     acceptsToday: todays.length,
     acceptsAtPortToday: todays.filter(a => a.port === port).length,
     complete: known
@@ -477,7 +477,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       && typeof action.questId === 'string') {
     const dayStart = kstDayStartISO(Date.now());
     const [licRes, accRes, progRes] = await Promise.all([
-      admin.from('bounty_licenses').select('zone').eq('user_id', uid),
+      admin.from('bounty_licenses').select('zone, tier').eq('user_id', uid),
       admin.from('bounty_accepts').select('accepted_at, port').eq('user_id', uid)
         .gte('accepted_at', dayStart),
       admin.from('bounty_progress').select('quest_id, progress').eq('user_id', uid),
@@ -663,9 +663,10 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   // 현상금 행 기록 — 리듀서 성공 후, 버전 락 전에 확정한다. 실패는 500
   // (락 전이라 상태 불일치가 남지 않는다). 수주 경합(멀티탭 동시 수주)으로
   // accepts가 1행 더 들어갈 수 있으나 상한+1 이내로 묶인다 — 수용.
-  if (action.type === 'acceptBountyLicense' && typeof action.zone === 'string') {
+  if (action.type === 'acceptBountyLicense' && typeof action.zone === 'string'
+      && typeof action.tier === 'string') {
     const { error } = await admin.from('bounty_licenses')
-      .upsert({ user_id: uid, zone: action.zone });
+      .upsert({ user_id: uid, zone: action.zone, tier: action.tier });
     if (error) throw new ApiError(500, 'db-write', { uid, action: action.type });
   }
   if (action.type === 'acceptQuest' && typeof action.questId === 'string'

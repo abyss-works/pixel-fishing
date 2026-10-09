@@ -42,7 +42,7 @@ export type GameAction =
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
-  | { type: 'acceptBountyLicense'; zone: string }  // 수배 라이선스 — 명성 검증만, 행 기록은 서버(DB)가
+  | { type: 'acceptBountyLicense'; zone: string; tier: string }  // 수배 라이선스 — 명성·도감 검증만, 행 기록은 서버(DB)가
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 상한·라이선스는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
@@ -530,14 +530,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'acceptBountyLicense': {
-      // 라이선스는 **게임 상태가 아니다.** 명성 검증만 리듀서가 하고, 소유 행 기록은
+      // 라이선스는 **게임 상태가 아니다.** 명성·도감 검증만 리듀서가 하고, 소유 행 기록은
       // 서버가 bounty_licenses에 쓴다 (setNickname의 닉네임 행과 같은 분리).
-      if (typeof action.zone !== 'string') return { ok: false, error: 'bad-request' };
-      const check = canAcceptBountyLicense(state, action.zone);
+      if (typeof action.zone !== 'string' || typeof action.tier !== 'string') {
+        return { ok: false, error: 'bad-request' };
+      }
+      const check = canAcceptBountyLicense(state, action.zone,
+        action.tier as 'basic' | 'named');
       if (!check.ok) return { ok: false, error: check.reason };
       return {
         ok: true, state, result: { type: 'none' },
-        events: [{ type: 'acceptBountyLicense', payload: { zone: action.zone } }],
+        events: [{ type: 'acceptBountyLicense', payload: { zone: action.zone, tier: action.tier } }],
       };
     }
     case 'acceptQuest': {

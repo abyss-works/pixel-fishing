@@ -18,6 +18,9 @@ vi.mock('../api', async (importOriginal) => {
 
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const okDispatch = (g: GameState) => () => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } });
+const rec = (count: number) => ({ count, maxSize: null, first: null });
+// 태평양 일반 3종 완성 (고등어·갈치·아귀)
+const fullDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
 
 function show(g: GameState) {
   const setToast = vi.fn();
@@ -34,15 +37,29 @@ describe('BountyPanel', () => {
   });
 
   it('명성 미달이면 라이선스 버튼이 잠긴다', async () => {
-    show(game({ fame: 100 }));
-    const btn = await screen.findByRole('button', { name: /라이선스 받기/ });
-    expect(btn).toBeDisabled();
+    show(game({ fame: 100, dex: fullDex }));
+    const btns = await screen.findAllByRole('button', { name: /라이선스 받기/ });
+    expect(btns[0]).toBeDisabled();
   });
 
-  it('명성이 되면 라이선스 버튼이 열린다', async () => {
+  it('도감 미완이면 라이선스 버튼이 잠긴다', async () => {
     show(game({ fame: 1500 }));
-    const btn = await screen.findByRole('button', { name: /라이선스 받기/ });
-    expect(btn).not.toBeDisabled();
+    const btns = await screen.findAllByRole('button', { name: /라이선스 받기/ });
+    expect(btns[0]).toBeDisabled();
+  });
+
+  it('조건을 모두 만족하면 라이선스 버튼이 열린다', async () => {
+    show(game({ fame: 1500, dex: fullDex }));
+    const btns = await screen.findAllByRole('button', { name: /라이선스 받기/ });
+    expect(btns[0]).not.toBeDisabled();
+  });
+
+  it('조건 체크리스트를 보인다 — 달성/미달 구분', async () => {
+    show(game({ fame: 1500 }));
+    expect(await screen.findByText('수배 라이선스')).toBeInTheDocument();
+    expect(screen.getByText('지명수배 라이선스')).toBeInTheDocument();
+    expect(screen.getAllByText('명성 1500')).toHaveLength(2); // 기본·지명수배 공통
+    expect(screen.getByText(/일반 도감 0\/3/)).toBeInTheDocument();
   });
 
   it('오프라인이면 조회 불가 안내를 띄운다', async () => {
@@ -51,7 +68,7 @@ describe('BountyPanel', () => {
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
-    mockSnap = { licensed: ['pacific'], acceptsToday: 0, acceptsByPort: {}, progress: [] };
+    mockSnap = { licensed: [{ zone: 'pacific', tier: 'basic' }], acceptsToday: 0, acceptsByPort: {}, progress: [] };
     const g = game({ fame: 1500 });
     const dispatch = vi.fn(okDispatch(g));
     const setToast = vi.fn();
