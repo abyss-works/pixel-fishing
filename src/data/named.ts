@@ -23,6 +23,9 @@ export const NAMED: readonly NamedFish[] = [
   { id: 'leviathan', name: '리바이어던', zones: ['seasia'],
     color: '#3f5a78', shape: 'serpent',
     lore: '동남아 바다의 긴 그림자. 침선 지대 뱃사람들이 입을 모은다.' },
+  { id: 'ananta', name: '아난타', zones: ['indian'],
+    color: '#2e4a5a', shape: 'serpent',
+    lore: '남인도양 차가운 물에 잠든 세계뱀. 바루나보다 오래된 질서.' },
 ];
 
 const NAMED_BY_ID = new Map(NAMED.map(n => [n.id, n]));

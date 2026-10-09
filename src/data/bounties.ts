@@ -62,6 +62,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('seasia', 'hard', 'rare', null, 40, 15000),
   Q('seasia', 'hard', 'epic', null, 10, 15000),
   Q('seasia', 'hard', 'legendary', null, 2, 15000),
+  Q('seasia', 'named', null, 'leviathan', 1, 30000),
   // 1-3 인도양 — 쉬움 8000 · 보통 25000 · 어려움 80000 · 네임드 160000
   Q('indian', 'easy', 'common', null, 250, 8000),
   Q('indian', 'easy', 'rare', null, 10, 8000),
@@ -74,6 +75,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'hard', 'rare', null, 40, 80000),
   Q('indian', 'hard', 'epic', null, 10, 80000),
   Q('indian', 'hard', 'legendary', null, 2, 80000),
+  Q('indian', 'named', null, 'ananta', 1, 160000),
 ];
 
 const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
