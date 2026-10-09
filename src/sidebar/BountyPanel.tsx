@@ -2,12 +2,15 @@
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 readBounty(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { BOUNTIES, LICENSE_TIER_OF, zoneOfPort } from '../data/bounties.js';
-import type { BountyPort, BountyQuest, BountyTier } from '../data/bounties.js';
+import type { BountyDifficulty, BountyPort, BountyQuest, BountyTier } from '../data/bounties.js';
+import type { NamedFish } from '../data/named.js';
 import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
 import { RARITY } from '../data/rarity.js';
 import { namedById } from '../data/named.js';
-import { FISH, REJECT_TEXT, licenseConditions } from '../game/logic.js';
+import { REJECT_TEXT, formDiscovered, licenseConditions } from '../game/logic.js';
+import type { Fish } from '../data/fish';
 import type { GameState } from '../game/logic.js';
 import type { GameAction } from '../game/actions.js';
 import { readBounty } from '../api';
@@ -15,18 +18,28 @@ import type { BountySnapshot } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import { when } from '../api';
 import Button from '../ui/Button';
+import FishSprite from '../ui/FishSprite';
 import Note from '../ui/Note';
 import PixelIcon from '../ui/PixelIcon';
+import SubTabs from '../ui/SubTabs';
 
-const DIFF_NAME = { easy: '쉬움', normal: '보통', hard: '어려움', named: '네임드' } as const;
+type BoardScreen = 'quests' | 'named';
 
-function questLabel(q: BountyQuest): string {
-  if (q.difficulty === 'named') {
-    const known = FISH.find(f => f.id === q.targetFish) ?? namedById(q.targetFish!);
-    return `지명 수배 · ${known ? known.name : q.targetFish}`;
-  }
-  return `${RARITY[q.grade!].name} ${q.count}마리`;
-}
+// 난이도 열 머리 색 — 쉬움 dim · 보통 accent · 어려움 gold
+const DIFF_HEAD: Record<Exclude<BountyDifficulty, 'named'>, string> = {
+  easy: 'text-text-dim', normal: 'text-accent', hard: 'text-gold',
+};
+const DIFF_NAME: Record<Exclude<BountyDifficulty, 'named'>, string> = {
+  easy: '쉬움', normal: '보통', hard: '어려움',
+};
+
+// 수배서 사진 — 레지스트리에서 Fish 껍데기를 만든다 (표시 전용, 저장 안 함).
+// 가격 0은 찍지 않는다 — 카드에 가격을 그리지 않으므로 상관없다.
+const namedFishOf = (n: NamedFish): Fish => ({
+  id: n.id, name: n.name, spot: 'deep', rarity: 'legendary', price: 0,
+  color: n.color, shape: n.shape, lore: n.lore,
+  variant: { name: n.name, color: n.color, lore: n.lore },
+});
 
 export default function BountyPanel({ game, port, dispatch, setToast }: {
   game: GameState;
@@ -38,6 +51,7 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
   const [snap, setSnap] = useState<BountySnapshot | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [screen, setScreen] = useState<BoardScreen>('quests');
   const refresh = () => {
     let live = true;
     readBounty().then(s => { if (live) { setSnap(s); setLoaded(true); } });
@@ -87,6 +101,39 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
     );
   };
 
+  const questButtons = (q: BountyQuest) => {
+    const prog = progressOf(q.id);
+    const done = prog >= q.count;
+    if (done) {
+      return (
+        <Button size="sm" disabled={busy}
+          onClick={() => run({ type: 'deliverBounty', questId: q.id },
+            `납품 완료! ${q.reward}G를 받았다.`)}>
+          납품하기
+        </Button>
+      );
+    }
+    return (
+      <Button size="sm" disabled={snap === null || !licensedFor(q) || (leftAll ?? 0) <= 0 || (leftPort ?? 0) <= 0 || busy}
+        onClick={() => run({ type: 'acceptQuest', questId: q.id, port },
+          `의뢰를 수주했다 — ${q.id}.`)}>
+        수주하기
+      </Button>
+    );
+  };
+
+  const gradeRow = (q: BountyQuest) => {
+    const prog = progressOf(q.id);
+    const active = prog > 0;
+    return (
+      <div key={q.id} className="flex flex-col gap-1 text-sm border-b border-line pb-1">
+        <span>{RARITY[q.grade!].name} {q.count}마리 <span className="pf-accent">{q.reward}G</span></span>
+        {active && <span className="text-text-dim text-xs">진행 {prog}/{q.count}</span>}
+        <span>{questButtons(q)}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-text-dim text-xs">
@@ -97,39 +144,60 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
       )}
       {licenseBlock('basic', '수배 라이선스')}
       {licenseBlock('named', '지명수배 라이선스')}
-      {(Object.keys(DIFF_NAME) as (keyof typeof DIFF_NAME)[]).map(d => (
-        <div key={d}>
-          <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{DIFF_NAME[d]}</h4>
-          <div className="flex flex-col gap-1">
-            {quests.filter(q => q.difficulty === d).map(q => {
-              const prog = progressOf(q.id);
-              const done = prog >= q.count;
-              const active = prog > 0;
-              return (
-                <div key={q.id} className="flex items-center gap-2 text-sm">
-                  <span className="flex-1">
-                    {questLabel(q)} <span className="pf-accent">{q.reward}G</span>
-                    {active && <span className="text-text-dim text-xs"> ({prog}/{q.count})</span>}
-                  </span>
-                  {done ? (
-                    <Button size="sm" disabled={busy}
-                      onClick={() => run({ type: 'deliverBounty', questId: q.id },
-                        `납품 완료! ${q.reward}G를 받았다.`)}>
-                      납품하기
-                    </Button>
-                  ) : (
-                    <Button size="sm" disabled={snap === null || !licensedFor(q) || (leftAll ?? 0) <= 0 || (leftPort ?? 0) <= 0 || busy}
-                      onClick={() => run({ type: 'acceptQuest', questId: q.id, port },
-                        `의뢰를 수주했다 — ${questLabel(q)}.`)}>
-                      수주 · {d === 'named' ? questLabel(q) : `${RARITY[q.grade!].name} ${q.count}마리`}
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      <SubTabs
+        items={[
+          { key: 'quests' as BoardScreen, label: '일반 의뢰' },
+          { key: 'named' as BoardScreen, label: '네임드 의뢰' },
+        ]}
+        activeKey={screen}
+        onSelect={setScreen}
+      />
+      {screen === 'quests' ? (
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.keys(DIFF_NAME) as (keyof typeof DIFF_NAME)[]).map(d => (
+            <div key={d}>
+              <h4 className={`text-sm font-normal border-b border-line pb-1 mb-1 ${DIFF_HEAD[d]}`}>{DIFF_NAME[d]}</h4>
+              <div className="flex flex-col gap-1">
+                {quests.filter(q => q.difficulty === d).map(gradeRow)}
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : (
+        <div className="flex flex-col gap-2">
+          {quests.filter(q => q.difficulty === 'named').map(q => (
+            <NamedCard key={q.id} game={game} quest={q} buttons={questButtons(q)}
+                       progress={progressOf(q.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NamedCard({ game, quest, buttons, progress }: {
+  game: GameState; quest: BountyQuest; buttons: ReactNode; progress: number;
+}) {
+  const n = quest.targetFish ? namedById(quest.targetFish) : undefined;
+  const fish = n ? namedFishOf(n) : null;
+  const found = quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false;
+  return (
+    <div className="border-2 border-gold rounded-sm bg-surface-2 p-2 grid grid-cols-2 gap-2">
+      <div>
+        {fish && (
+          <FishSprite fish={fish} preset="portrait" discovered={found}
+                      ariaLabel={found && n ? n.name : '미확인 지명수배'} className="block mx-auto" />
+        )}
+      </div>
+      <div className="flex flex-col gap-1 text-sm">
+        <b className="text-gold">{found && n ? n.name : '???'}</b>
+        <p className="text-text-dim italic text-xs flex-1">
+          {found && n ? n.lore : '수배서에만 이름이 돈다.'}
+        </p>
+        <span className="pf-accent">{quest.reward}G</span>
+        {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
+        <span>{buttons}</span>
+      </div>
     </div>
   );
 }
