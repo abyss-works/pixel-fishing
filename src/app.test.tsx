@@ -302,7 +302,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     expect(screen.queryByText('???')).not.toBeInTheDocument();
   });
 
-  it('활성 도감 탭 재클릭 = 일반↔돌연변이 보기 전환 (v0.3.0)', () => {
+  it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환 (v0.3.0)', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
     clickFurniture('dex');
@@ -311,7 +311,9 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
-    clickTab(/도감\s*\(돌연변이\)/); // 다시 일반으로
+    clickTab(/도감\s*\(돌연변이\)/); // → 네임드 보기
+    expect(screen.getByRole('button', { name: /도감\s*\(네임드\)/ })).toHaveClass('active');
+    clickTab(/도감\s*\(네임드\)/); // → 다시 일반으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 
@@ -325,6 +327,30 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     clickTab(/도감\s*\(일반\)/); // 재진입
     // 태평양 유지 — 마을로 리셋됐으면 12종(연못 6+강 6)이 뜬다
     expect(screen.getAllByText('???').length).toBe(13);
+  });
+
+  it('도감 3보기 순환 — 재클릭마다 일반→돌연변이→네임드', () => {
+    seed({});
+    render(<App />);
+    clickFurniture('dex');
+    clickTab(/도감\s*\(일반\)/); // → 돌연변이
+    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    clickTab(/도감\s*\(돌연변이\)/); // → 네임드
+    expect(screen.getByRole('button', { name: /도감\s*\(네임드\)/ })).toHaveClass('active');
+    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /태평양/ }));
+    expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
+    fireEvent.click(screen.getByRole('button', { name: /마을/ }));
+    expect(screen.getByText('이 해역의 지명 수배는 아직 없다.')).toBeInTheDocument();
+  });
+});
+
+describe('현상금 — 항구 수배판 진입', () => {
+  it('항구 수배판 가구 클릭 → 수배판 패널이 열린다', async () => {
+    seed({ location: { kind: 'base', id: 'harbor' } });
+    render(<App />);
+    clickFurniture('bounty', '항구');
+    expect(await screen.findByText('수배판 · 태평양')).toBeInTheDocument();
   });
 });
 

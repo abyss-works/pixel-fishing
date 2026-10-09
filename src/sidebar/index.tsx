@@ -31,7 +31,7 @@ const tabsFor = (dexView: DexView, bagCards: boolean, account: string | null) =>
   const base = [
     { key: 'region' as const, label: '지역' },
     { key: 'bag' as const, label: bagCards ? '가방\n(카드)' : '가방\n(목록)' },
-    { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : '도감\n(돌연변이)' },
+    { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : dexView === 'variant' ? '도감\n(돌연변이)' : '도감\n(네임드)' },
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
   ] as const;
@@ -77,7 +77,7 @@ export default function Sidebar(props: SidebarProps) {
   // 탭 선택의 단일 관문 — 탭바 클릭과 숫자키가 같은 규칙을 쓴다.
   // 같은 탭을 한 번 더 고르면 그 탭의 **보기**가 순환된다(가방: 목록↔카드 · 도감: 일반↔돌연변이).
   const select = (t: TabKey) => {
-    if (t === activeTab && t === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
+    if (t === activeTab && t === 'dex') setDexView(v => (v === 'base' ? 'variant' : v === 'variant' ? 'named' : 'base'));
     if (t === activeTab && t === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
     // 도감 서브탭은 마지막 위치를 기억한다 — 재진입 시 씬 기본값으로 리셋하지 않는다
     setActiveTab(t);

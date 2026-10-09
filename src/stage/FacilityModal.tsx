@@ -11,6 +11,8 @@ import { toggleSellRow, useSellView } from '../sidebar/bagView';
 import type { GameAction } from '../game/actions';
 import { when } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
+import type { BaseId } from '../data/places';
+import BountyPanel from '../sidebar/BountyPanel';
 import { cx } from '../ui/cx';
 import CloseButton from '../ui/CloseButton';
 import Panel from '../ui/Panel';
@@ -23,11 +25,13 @@ import PixelIcon from '../ui/PixelIcon';
 import StatCompare from '../ui/StatCompare';
 import { RarityText } from '../ui/RarityTag';
 /** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
-export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | null;
+export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | null;
 
 interface Props {
   panel: Exclude<ActionPanel, null>;
   game: GameState;
+  /** 수배판이 뜬 항구 — 수배 가구가 항구에만 있어 base가 항구일 때만 bounty가 열린다 */
+  base?: BaseId;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
@@ -37,7 +41,7 @@ interface Props {
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -80,6 +84,11 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           onBuy={(baitId, count) => run({ type: 'buyBait', bait: baitId, count }, () => {
             setToast('미끼를 샀다 — 가방의 아이템 섹션에서 활성화한다.');
           })} />
+       )}
+       {panel === 'bounty' && (base === 'harbor' || base === 'manila' || base === 'colombo') && (
+        <ModalCard title="수배판" onClose={onClose}>
+          <BountyPanel game={game} port={base} dispatch={dispatch} setToast={setToast} />
+        </ModalCard>
        )}
     </Modal>
   );

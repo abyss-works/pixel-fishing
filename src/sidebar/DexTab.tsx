@@ -4,6 +4,8 @@ import {
 } from '../game/logic';
 import type { Fish, FormId, GameState } from '../game/logic';
 import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../data/zones';
+import { BOUNTIES } from '../data/bounties';
+import type { BountyQuest } from '../data/bounties';
 import type { ZoneId } from '../data/zones';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
@@ -78,7 +80,7 @@ function DexDetail({ fish, game, initialForm = 0, onClose }: {
 }
 
 // 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
-// 보기 전환(일반↔돌연변이)은 활성 도감 탭 재선택(클릭·같은 숫자키), **최상위 존** 전환은
+// 보기 전환(일반→돌연변이→네임드)은 활성 도감 탭 재선택(클릭·같은 숫자키), **최상위 존** 전환은
 // 하단 서브탭 또는 Tab 키 — 둘 다 Sidebar가 소유한 상태를 내려받는 제어 컴포넌트다.
 // 서브탭 단위가 최상위 존인 이유: 하위 존(해구 등) 어종은 부모 존으로 합산된다(topZoneOfSpot) —
 // 서브탭 수가 존 트리 확장과 무관하게 안정된다(오픈월드 spec/zone-tree.md).
@@ -93,9 +95,64 @@ export default function DexTab({ game, view, sub, onSub }: {
   const viewForm: FormId = view === 'variant' ? 'variant' : 'normal';
   const baseCount = FISH.filter(f => formDiscovered(game, f.id, 'normal')).length;
   const varCount = FISH.filter(f => formDiscovered(game, f.id, 'variant')).length;
+  // 네임드는 해역별 1칸 — 수배 목록에서만 공개된 히든 어종이라 FISH 행이 없을 수 있다.
+  // 발견 여부는 도감 기록(records) 기준이라 어종 데이터가 나중에 와도 소급된다.
+  const namedOf = (zone: ZoneId): BountyQuest[] =>
+    BOUNTIES.filter(q => q.zone === zone && q.difficulty === 'named');
+  const namedFound = (q: BountyQuest): boolean =>
+    q.targetFish !== null && formDiscovered(game, q.targetFish, 'normal');
+  const namedCount = BOUNTIES.filter(q => q.difficulty === 'named' && namedFound(q)).length;
+  const namedTotal = BOUNTIES.filter(q => q.difficulty === 'named').length;
   const [detail, setDetail] = useState<Fish | null>(null);
   const spots = subtreeSpots(sub); // 최상위 존 서브트리의 어군 전부(하위 존 포함)
   const found = (f: Fish) => formDiscovered(game, f.id, viewForm); // 현재 보기 기준 발견 여부
+
+  if (view === 'named') {
+    return (
+      <div>
+        <h3 className="text-lg text-gold mb-1">
+          지명 수배
+          {' ('}<span className="pf-accent">{namedCount}/{namedTotal}</span>{')'}
+        </h3>
+        <SubTabs
+          items={ZONE_IDS.map(id => {
+            const quests = namedOf(id);
+            const caught = quests.filter(namedFound).length;
+            return {
+              key: id,
+              label: <>{zoneById(id)!.shortName}<span className="text-2xs"> {caught}/{quests.length}</span></>,
+            };
+          })}
+          activeKey={sub}
+          onSelect={onSub}
+        />
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          {namedOf(sub).map(q => {
+            const ok = namedFound(q);
+            const known = q.targetFish && FISH.find(f => f.id === q.targetFish);
+            return (
+              <div key={q.id} className={cx(RARITY_CARD, 'p-2 text-sm aspect-square opacity-[0.72]')}>
+                {ok ? (
+                  <>
+                    <b>{known ? known.name : q.targetFish}</b><br />
+                    <span className="text-text-dim text-xs">수배 달성</span>
+                  </>
+                ) : (
+                  <>
+                    <b>???</b><br />
+                    <span className="text-text-dim text-xs">미확인</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          {namedOf(sub).length === 0 && (
+            <p className="text-text-dim text-sm">이 해역의 지명 수배는 아직 없다.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

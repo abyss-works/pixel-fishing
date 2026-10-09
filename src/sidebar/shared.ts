@@ -2,8 +2,8 @@
 // 등급 정렬은 데이터(data/rarity의 order 필드)에서 파생 — 여기선 재수출만.
 export { RARITY_ORDER, rarityRank } from '../data/rarity';
 
-/** 도감 보기 — 활성 도감 탭 재클릭으로 전환 */
-export type DexView = 'base' | 'variant';
+/** 도감 보기 — 활성 도감 탭 재클릭으로 순환 (일반 → 돌연변이 → 네임드) */
+export type DexView = 'base' | 'variant' | 'named';
 
 // ---------- 도감 순서 ----------
 // 별도 '도감번호' 필드를 두지 않는다. 종을 중간에 끼워 넣을 때마다 손으로 번호를 다시 매겨야

@@ -80,3 +80,16 @@ const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 
 /** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
 export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);
+
+/** 수배 창구가 있는 항구 → 담당 해역. 고향(home)은 없다 (spec 4절) */
+export const BOUNTY_PORT_ZONE = {
+  harbor: 'pacific',
+  manila: 'seasia',
+  colombo: 'indian',
+} as const satisfies Record<string, BountyZone>;
+
+export type BountyPort = keyof typeof BOUNTY_PORT_ZONE;
+
+/** 담당 해역 — 수주 항구가 아니면 undefined (고향·필드) */
+export const zoneOfPort = (port: string): BountyZone | undefined =>
+  (BOUNTY_PORT_ZONE as Record<string, BountyZone>)[port];
