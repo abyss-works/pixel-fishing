@@ -49,7 +49,7 @@ function Gated({ open, conds, children }: {
         <div className="bg-surface border border-line rounded-sm p-2 text-sm">
           <ul>
             {conds.map(c => (
-              <li key={c.key} className={c.ok ? '' : 'line-through text-text-dim'}>
+              <li key={c.key} className={c.ok ? 'line-through text-text-dim' : ''}>
                 <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
               </li>
             ))}
@@ -137,10 +137,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       {screen === 'quests' ? (
         <div className="min-h-96">
         <Gated open={basicOpen} conds={basicConds}>
-          <div className="grid grid-cols-3 gap-2">
-            <div>{gradeCard('easy')}</div>
-            <div>{gradeCard('normal')}</div>
-            <div>{gradeCard('hard')}</div>
+          <div className="grid grid-cols-3 gap-2 items-stretch">
+            <div className="h-full">{gradeCard('easy')}</div>
+            <div className="h-full">{gradeCard('normal')}</div>
+            <div className="h-full">{gradeCard('hard')}</div>
           </div>
         </Gated>
         </div>
