@@ -7,12 +7,9 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { dailyQuestFor, zoneOfPort } from '../data/bounties.js';
 import type { BountyDifficulty, BountyPort, BountyQuest } from '../data/bounties.js';
-import type { NamedFish } from '../data/named.js';
-import { namedById } from '../data/named.js';
 import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
-import { REJECT_TEXT, formDiscovered, licenseConditions } from '../game/logic.js';
+import { REJECT_TEXT, licenseConditions } from '../game/logic.js';
 import type { LicenseCondition } from '../game/logic.js';
-import type { Fish } from '../data/fish';
 import type { GameState } from '../game/logic.js';
 import type { GameAction } from '../game/actions.js';
 import { readBounty, kstDay } from '../api';
@@ -20,21 +17,12 @@ import type { BountySnapshot } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import { when } from '../api';
 import BountyCard from './BountyCard';
-import Button from '../ui/Button';
-import FishSprite from '../ui/FishSprite';
+import NamedCard from './NamedCard';
 import Note from '../ui/Note';
 import PixelIcon from '../ui/PixelIcon';
 import SubTabs from '../ui/SubTabs';
 
 type BoardScreen = 'quests' | 'named';
-
-// 수배서 사진 — 레지스트리에서 Fish 껍데기를 만든다 (표시 전용, 저장 안 함).
-// 가격 0은 찍지 않는다 — 카드에 가격을 그리지 않으므로 상관없다.
-const namedFishOf = (n: NamedFish): Fish => ({
-  id: n.id, name: n.name, spot: 'deep', rarity: 'legendary', price: 0,
-  color: n.color, shape: n.shape, lore: n.lore,
-  variant: { name: n.name, color: n.color, lore: n.lore },
-});
 
 // 조건 게이트 — 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 버튼은 가려서 못 누른다 (우회는 서버 리듀서가 막는다).
@@ -161,46 +149,6 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </Gated>
         </div>
       )}
-    </div>
-  );
-}
-
-function NamedCard({ game, quest, canAccept, busy, progress, onAccept, onDeliver }: {
-  game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
-  progress: number; onAccept: () => void; onDeliver: () => void;
-}) {
-  const n = quest.targetFish ? namedById(quest.targetFish) : undefined;
-  const fish = n ? namedFishOf(n) : null;
-  const found = quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false;
-  const done = progress >= quest.count;
-  return (
-    <div className="border border-gold rounded-sm bg-surface p-4 flex flex-col gap-2 text-center min-h-96 text-sm">
-      <b className="pf-accent text-gold text-lg">지명수배</b>
-      <div className="border-b border-line" />
-      <div className="flex-1 content-center">
-        <div className="grid grid-cols-2 gap-2 items-center">
-          <div>
-            {fish && (
-              <FishSprite fish={fish} preset="portrait" discovered={found}
-                          ariaLabel={found && n ? n.name : '미확인 지명수배'} className="block mx-auto" />
-            )}
-          </div>
-          <div className="flex flex-col gap-1">
-            <b className="text-gold">{found && n ? n.name : '???'}</b>
-            <p className="text-text-dim italic text-xs">
-              {n ? n.lore : '수배서에만 이름이 돈다.'}
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="border-b border-line" />
-      <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
-      {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
-      <span className="flex justify-center mt-auto">
-        {done
-          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
-          : <Button variant="primary" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
-      </span>
     </div>
   );
 }
