@@ -18,6 +18,8 @@ export const COLOMBO_BASE: BasePack = {
       label: i => `공방 · 낚싯대 Lv.${i.rod}`, labelDy: -8 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
       label: () => '어시장', labelDy: -8 },
+    { id: 'bounty', x: 200, y: 54,  w: 40, h: 30, sprite: 'board',
+      label: () => '수배판', labelDy: -8 },
     // 출항 시설(x272~306,y104~160)과 겹치지 않도록 상단에 둔다.
     { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
       label: () => '미끼 상점', labelDy: -8 },

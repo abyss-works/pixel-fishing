@@ -87,7 +87,7 @@ export default function App() {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
     switch (id) {
-      case 'sell': case 'rod': case 'boat': case 'shop':
+      case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty':
         setActionPanel(p => (p === id ? null : id));
         return;
       case 'dex':
@@ -144,6 +144,7 @@ export default function App() {
         {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={dispatch}
+                         base={scene.kind === 'base' ? scene.id : undefined}
                          setToast={setToast} onClose={() => setActionPanel(null)} />
         )}
       </div>

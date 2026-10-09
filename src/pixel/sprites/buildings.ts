@@ -133,4 +133,14 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x + 8, f.y + 26, f.w - 12, 3, '#37474f');
     R(ctx, f.x + f.w - 14, f.y + 4, 4, 10, '#b71c1c');
   },
+  // 항구: 수배판 — 기둥 2개 + 게시판 + 붙은 의뢰서 3장
+  board: (ctx, f) => {
+    R(ctx, f.x + 3, f.y + 12, 3, f.h - 12, '#4e342e');
+    R(ctx, f.x + f.w - 6, f.y + 12, 3, f.h - 12, '#4e342e');
+    R(ctx, f.x, f.y, f.w, 20, '#6d4c41');
+    R(ctx, f.x + 2, f.y + 2, f.w - 4, 16, '#8d6e63');
+    R(ctx, f.x + 5, f.y + 5, 7, 9, '#e3f2fd');
+    R(ctx, f.x + 15, f.y + 7, 7, 9, '#ffe0b2');
+    R(ctx, f.x + 25, f.y + 5, 7, 9, '#e3f2fd');
+  },
 };

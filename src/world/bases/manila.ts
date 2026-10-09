@@ -17,6 +17,8 @@ export const MANILA_BASE: BasePack = {
       label: i => `공방 · 낚싯대 Lv.${i.rod}`, labelDy: -8 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
       label: () => '어시장', labelDy: -8 },
+    { id: 'bounty', x: 248, y: 54,  w: 40, h: 30, sprite: 'board',
+      label: () => '수배판', labelDy: -8 },
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => `조선소 · ${i.boatName}`, labelDy: -3 },
     { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
