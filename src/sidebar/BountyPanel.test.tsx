@@ -32,8 +32,26 @@ describe('BountyPanel', () => {
   it('해역 의뢰 목록을 보인다 — 등급·수량·보상', async () => {
     show(game({ fame: 1500 }));
     expect(await screen.findByText('수배 라이선스')).toBeInTheDocument();
+    expect(screen.getByText('쉬움')).toBeInTheDocument();
+    expect(screen.getByText('보통')).toBeInTheDocument();
+    expect(screen.getByText('어려움')).toBeInTheDocument();
     expect(screen.getAllByText(/일반 250마리/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/500G/).length).toBeGreaterThan(0);
+  });
+
+  it('네임드 화면 — 미발견이면 실루엣·로어 대신 안내, 보상 표시', async () => {
+    show(game({ fame: 1500 }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 의뢰' }));
+    expect(screen.getByText('???')).toBeInTheDocument();
+    expect(screen.getByText(/수배서에만 이름이 돈다/)).toBeInTheDocument();
+    expect(screen.getByText(/8000G/)).toBeInTheDocument();
+  });
+
+  it('네임드 화면 — 발견했으면 이름·로어 표시', async () => {
+    show(game({ fame: 1500, dex: { megalodon: { normal: rec(1) } } }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 의뢰' }));
+    expect(screen.getByText('메갈로돈')).toBeInTheDocument();
+    expect(screen.getByText(/깊은 곳의 그림자/)).toBeInTheDocument();
   });
 
   it('명성 미달이면 라이선스 버튼이 잠긴다', async () => {
@@ -73,7 +91,8 @@ describe('BountyPanel', () => {
     const dispatch = vi.fn(okDispatch(g));
     const setToast = vi.fn();
     render(<BountyPanel game={g} port="harbor" dispatch={dispatch} setToast={setToast} />);
-    fireEvent.click(await screen.findByRole('button', { name: /수주 · 일반 250마리/ }));
+    const btns = await screen.findAllByRole('button', { name: '수주하기' });
+    fireEvent.click(btns[0]); // pacific-easy-common (쉬움 첫행)
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' })));
   });
