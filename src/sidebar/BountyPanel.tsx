@@ -135,6 +135,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <Note>오프라인에서는 수주·납품이 안 된다. 서버 연결이 필요하다.</Note>
       )}
       {screen === 'quests' ? (
+        <div className="min-h-96">
         <Gated open={basicOpen} conds={basicConds}>
           <div className="grid grid-cols-3 gap-2">
             <div>{gradeCard('easy')}</div>
@@ -142,7 +143,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
             <div>{gradeCard('hard')}</div>
           </div>
         </Gated>
+        </div>
       ) : (
+        <div className="min-h-96">
         <Gated open={namedOpen} conds={namedConds}>
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
@@ -156,6 +159,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `납품 완료! ${namedQuest.reward}G를 받았다.`)} />
           )}
         </Gated>
+        </div>
       )}
     </div>
   );
