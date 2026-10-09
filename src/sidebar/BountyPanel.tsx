@@ -45,7 +45,7 @@ function Gated({ open, conds, children }: {
   return (
     <div className="relative">
       <div className="blur-sm pointer-events-none select-none" aria-hidden>{children}</div>
-      <div className="absolute inset-0 flex items-start justify-center p-2">
+      <div className="absolute inset-0 flex items-center justify-center p-2">
         <div className="bg-surface border border-line rounded-sm p-2 text-sm">
           <ul>
             {conds.map(c => (
