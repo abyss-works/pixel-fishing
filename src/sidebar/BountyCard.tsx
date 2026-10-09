@@ -24,7 +24,7 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
 }) {
   const done = progress >= quest.count;
   return (
-    <div className="border border-gold rounded-sm p-4 text-center flex flex-col gap-2 text-sm bg-surface min-h-96 h-full outline outline-1 outline-offset-[3px] outline-gold/60">
+    <div className="border border-gold rounded-sm p-4 text-center flex flex-col gap-2 text-sm bg-surface min-h-96 h-full">
       <b className={`pf-accent text-lg ${DIFF_HEAD[quest.difficulty]}`}>{DIFF_NAME[quest.difficulty]}</b>
       <div className="border-b border-line" />
       <span className="flex-1 content-center">
