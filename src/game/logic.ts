@@ -16,6 +16,8 @@ import type { LocationRef, RegionId } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
+import { topZoneOfSpot } from '../data/zones.js';
+import type { BountyQuest } from '../data/bounties.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
@@ -32,7 +34,8 @@ export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
-export type { RejectReason, RuleCheck } from './rules.js';
+export { canAcceptBountyLicense, canAcceptQuest, canDeliverBounty } from './rules.js';
+export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
 
 export type Judgment = 'perfect' | 'good' | 'normal' | 'auto';
 
@@ -149,6 +152,15 @@ export interface DrawOptions {
 export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
   const pool = FISH.filter(f => f.spot === spotId);
   return phase === 'day' ? pool.filter(f => !f.night) : pool;
+}
+
+// 현상금 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.
+// 서버(api/action.ts)가 catch 이벤트마다 DB 진행 행에 대해 이 함수로 검사해
+// 진행도를 올린다. 수주 시점 이전 어획은 서버가 started_at으로 걸러낸다.
+export function matchBountyCatch(quest: BountyQuest, spot: SpotId, fishId: string): boolean {
+  if (topZoneOfSpot(spot) !== quest.zone) return false;
+  if (quest.difficulty === 'named') return fishId === quest.targetFish;
+  return FISH.find(f => f.id === fishId)?.rarity === quest.grade;
 }
 
 function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
