@@ -79,8 +79,7 @@ export default function Sidebar(props: SidebarProps) {
   const select = (t: TabKey) => {
     if (t === activeTab && t === 'dex') setDexView(v => (v === 'base' ? 'variant' : 'base'));
     if (t === activeTab && t === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
-    // 다른 탭에서 도감으로 들어오면 현재 씬의 구역부터 본다 — 탭 밖에서는 기억하지 않는다
-    if (t === 'dex' && activeTab !== 'dex') setDexZone(defaultZoneOfRegion(props.region));
+    // 도감 서브탭은 마지막 위치를 기억한다 — 재진입 시 씬 기본값으로 리셋하지 않는다
     setActiveTab(t);
   };
 

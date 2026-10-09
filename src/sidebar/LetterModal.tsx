@@ -52,7 +52,7 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
         </span>
         <span className="ml-auto flex gap-2">
           <Button size="sm" onClick={onClose}>닫기</Button>
-          <Button size="sm" variant="primary" disabled={!body || over || busy} onClick={send}>
+          <Button size="sm" disabled={!body || over || busy} onClick={send}>
             보내기
           </Button>
         </span>

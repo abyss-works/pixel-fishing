@@ -314,6 +314,18 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     clickTab(/도감\s*\(돌연변이\)/); // 다시 일반으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
+
+  it('도감 재진입 시 마지막 서브탭 유지 — 씬 기본값으로 리셋하지 않는다', () => {
+    seed({});
+    render(<App />);
+    clickFurniture('dex');
+    fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 마을 → 태평양
+    expect(screen.getAllByText('???').length).toBe(13);
+    clickTab('도움말');
+    clickTab(/도감\s*\(일반\)/); // 재진입
+    // 태평양 유지 — 마을로 리셋됐으면 12종(연못 6+강 6)이 뜬다
+    expect(screen.getAllByText('???').length).toBe(13);
+  });
 });
 
 describe('R3b: 문(마을로) + 항구 여객선', () => {
@@ -648,6 +660,15 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     expect(screen.getByText('개발자에게 편지')).toBeInTheDocument();
     // 빈 글은 못 보낸다
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+  });
+
+  it('편지 모달 버튼행 — 보내기가 전폭이 아니라 닫기와 나란하다', () => {
+    seed({});
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(screen.getByText('편지 쓰기'));
+    // primary는 전폭 블록이라 버튼행 안에서 닫기를 밀고 글자를 줄바꿈시킨다
+    expect(screen.getByRole('button', { name: '보내기' })).not.toHaveClass('primary');
   });
 
   it('계정 관리 모달이 계정·닉네임·ID를 보여주고 복사 버튼을 단다', () => {
