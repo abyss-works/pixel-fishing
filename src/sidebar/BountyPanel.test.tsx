@@ -34,9 +34,9 @@ function show(g: GameState) {
 describe('BountyPanel', () => {
   it('일반 화면 — 난이도당 1행씩 3열을 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText(/수배 · 쉬움/)).toBeInTheDocument();
-    expect(screen.getByText(/수배 · 보통/)).toBeInTheDocument();
-    expect(screen.getByText(/수배 · 어려움/)).toBeInTheDocument();
+    expect(await screen.findByText('쉬움')).toBeInTheDocument();
+    expect(screen.getByText('보통')).toBeInTheDocument();
+    expect(screen.getByText('어려움')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(3);
   });
 
