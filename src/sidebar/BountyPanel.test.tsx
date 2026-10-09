@@ -45,7 +45,7 @@ describe('BountyPanel', () => {
     const day = kstDay();
     for (const d of ['easy', 'normal', 'hard'] as const) {
       const q = dailyQuestFor('pacific', d, 'test-uid', day)!;
-      expect(await screen.findByText(`×${q.count}`)).toBeInTheDocument();
+      expect(await screen.findByText(new RegExp(`×${q.count}$`))).toBeInTheDocument();
     }
   });
 
@@ -59,12 +59,12 @@ describe('BountyPanel', () => {
     expect(blurred?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('체크 방향 — 달성 조건은 체크, 미달은 취소선', async () => {
+  it('체크 방향 — 달성 조건은 체크+취소선, 미달은 빈박스', async () => {
     show(game({ fame: 1500 })); // 명성만 달성, 도감 비어 있음
     const fameLi = (await screen.findByText('명성 1500 달성')).closest('li')!;
     const dexLi = screen.getByText('태평양 모든 어종 수집(전설 제외)').closest('li')!;
-    expect(fameLi.className).not.toMatch(/line-through/);
-    expect(dexLi.className).toMatch(/line-through/);
+    expect(fameLi.className).toMatch(/line-through/);
+    expect(dexLi.className).not.toMatch(/line-through/);
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
