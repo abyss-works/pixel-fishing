@@ -2,7 +2,7 @@
 // 2절(라이선스 표)의 수치 계약을 강제한다. 표가 여기서 깨지면 수배 UI와
 // 서버 판정이 조용히 틀린 값을 쓴다.
 import { describe, it, expect } from 'vitest';
-import { BOUNTIES, BOUNTY_LICENSE_FAME } from './bounties';
+import { BOUNTIES, BOUNTY_LICENSE_FAME, dailyQuestFor } from './bounties';
 import { RARITY } from './rarity';
 
 // spec 3절 수량표 (EV 반올림)
@@ -57,5 +57,17 @@ describe('bounties 데이터 계약', () => {
     for (const q of BOUNTIES) {
       if (q.grade !== null) expect(RARITY[q.grade], `${q.id} 미등록 등급`).toBeDefined();
     }
+  });
+
+  it('일일 의뢰 — 같은 사람·날짜·해역·난이도는 항상 같은 의뢰다', () => {
+    const a = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-09');
+    const b = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-09');
+    expect(a?.id).toBe(b?.id);
+  });
+
+  it('일일 의뢰 — 날짜가 바뀌면 바뀔 수 있고 pool 안에 있다', () => {
+    const q = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-10');
+    expect(q?.zone).toBe('pacific');
+    expect(q?.difficulty).toBe('easy');
   });
 });

@@ -36,7 +36,7 @@ export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../data/boats.js';
 export type { Boat } from '../data/boats.js';
 export { COUPONS } from '../data/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
-export { canAcceptBountyLicense, canAcceptQuest, canDeliverBounty } from './rules.js';
+export { canAcceptQuest, canDeliverBounty } from './rules.js';
 export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
 
 export type Judgment = 'perfect' | 'good' | 'normal' | 'auto';

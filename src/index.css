@@ -31,6 +31,7 @@
   --color-text: var(--c-text);
   --color-text-dim: var(--c-text-dim);
   --color-gold: var(--c-gold);
+  --color-orange: var(--c-orange);
   --color-accent: var(--c-accent);
   --color-danger: var(--c-danger);
   --color-common: var(--c-common);
@@ -106,6 +107,7 @@
   --c-gold: #ffd54f;
   --c-accent: #4fc3f7;
   --c-danger: #ff8a80;
+  --c-orange: #fb923c; /* 어려움 머리색 — 보상 골드와 겹치지 않게 주황 계열로 분리 */
 
   /* 등급색 — src/logic.ts RARITY와 동일 값 */
   --c-common: #b8c2cc;

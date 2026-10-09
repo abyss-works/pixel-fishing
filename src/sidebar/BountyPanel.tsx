@@ -1,22 +1,25 @@
-// 수배판 — 현상금 라이선스·수주·납품 UI (항구 전용, 고향 제외).
+// 수배판 — 현상금 수주·납품 UI (항구 전용, 고향 제외).
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 readBounty(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
+// 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
+// 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BOUNTIES, LICENSE_TIER_OF, zoneOfPort } from '../data/bounties.js';
-import type { BountyDifficulty, BountyPort, BountyQuest, BountyTier } from '../data/bounties.js';
+import { dailyQuestFor, zoneOfPort } from '../data/bounties.js';
+import type { BountyDifficulty, BountyPort, BountyQuest } from '../data/bounties.js';
 import type { NamedFish } from '../data/named.js';
-import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
-import { RARITY } from '../data/rarity.js';
 import { namedById } from '../data/named.js';
+import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
 import { REJECT_TEXT, formDiscovered, licenseConditions } from '../game/logic.js';
+import type { LicenseCondition } from '../game/logic.js';
 import type { Fish } from '../data/fish';
 import type { GameState } from '../game/logic.js';
 import type { GameAction } from '../game/actions.js';
-import { readBounty } from '../api';
+import { readBounty, kstDay } from '../api';
 import type { BountySnapshot } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import { when } from '../api';
+import BountyCard from './BountyCard';
 import Button from '../ui/Button';
 import FishSprite from '../ui/FishSprite';
 import Note from '../ui/Note';
@@ -24,14 +27,6 @@ import PixelIcon from '../ui/PixelIcon';
 import SubTabs from '../ui/SubTabs';
 
 type BoardScreen = 'quests' | 'named';
-
-// 난이도 열 머리 색 — 쉬움 dim · 보통 accent · 어려움 gold
-const DIFF_HEAD: Record<Exclude<BountyDifficulty, 'named'>, string> = {
-  easy: 'text-text-dim', normal: 'text-accent', hard: 'text-gold',
-};
-const DIFF_NAME: Record<Exclude<BountyDifficulty, 'named'>, string> = {
-  easy: '쉬움', normal: '보통', hard: '어려움',
-};
 
 // 수배서 사진 — 레지스트리에서 Fish 껍데기를 만든다 (표시 전용, 저장 안 함).
 // 가격 0은 찍지 않는다 — 카드에 가격을 그리지 않으므로 상관없다.
@@ -41,9 +36,35 @@ const namedFishOf = (n: NamedFish): Fish => ({
   variant: { name: n.name, color: n.color, lore: n.lore },
 });
 
-export default function BountyPanel({ game, port, dispatch, setToast }: {
+// 조건 게이트 — 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
+// 버튼은 가려서 못 누른다 (우회는 서버 리듀서가 막는다).
+function Gated({ open, conds, children }: {
+  open: boolean; conds: LicenseCondition[]; children: ReactNode;
+}) {
+  if (open) return <>{children}</>;
+  return (
+    <div className="relative">
+      <div className="blur-sm pointer-events-none select-none" aria-hidden>{children}</div>
+      <div className="absolute inset-0 flex items-start justify-center p-2">
+        <div className="bg-surface border border-line rounded-sm p-2 text-sm">
+          <ul>
+            {conds.map(c => (
+              <li key={c.key} className={c.ok ? '' : 'line-through text-text-dim'}>
+                <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   game: GameState;
   port: BountyPort;
+  /** 표시 대상 — 일일 의뢰 해시에 쓴다. 없으면 로컬 고정값 (서버 검증은 uid 기준) */
+  uid: string | null;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
 }) {
@@ -68,82 +89,37 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
     });
   };
 
-  const covers = (tier: BountyTier): boolean => snap?.licensed.some(
-    l => l.zone === zone && (l.tier === tier || l.tier === 'named')) ?? false;
-  const licensedFor = (q: BountyQuest): boolean => covers(LICENSE_TIER_OF[q.difficulty]);
   const leftAll = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
   const leftPort = snap ? BOUNTY_PORT_DAILY_CAP - (snap.acceptsByPort[port] ?? 0) : null;
   const progressOf = (id: string) => snap?.progress.find(p => p.questId === id)?.progress ?? 0;
-  const quests = BOUNTIES.filter(q => q.zone === zone);
+  const day = kstDay();
+  const who = uid ?? 'local';
+  const offered = (d: BountyDifficulty): BountyQuest | undefined =>
+    dailyQuestFor(zone, d, who, day);
+  const basicConds = licenseConditions(game, zone, 'basic');
+  const namedConds = licenseConditions(game, zone, 'named');
+  const basicOpen = basicConds.every(c => c.ok);
+  const namedOpen = namedConds.every(c => c.ok);
+  const canTake = snap !== null && (leftAll ?? 0) > 0 && (leftPort ?? 0) > 0;
 
-  const licenseBlock = (tier: BountyTier, title: string) => {
-    const conds = licenseConditions(game, zone, tier);
-    const held = covers(tier);
-    const can = conds.every(c => c.ok);
-    return (
-      <div>
-        <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{title}</h4>
-        <ul className="text-sm mb-1">
-          {conds.map(c => (
-            <li key={c.key} className={c.ok ? '' : 'line-through text-text-dim'}>
-              <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
-            </li>
-          ))}
-        </ul>
-        {!held && (
-          <Button size="sm" disabled={!can || busy}
-            onClick={() => run({ type: 'acceptBountyLicense', zone, tier },
-              `${title}을 받았다!`)}>
-            라이선스 받기
-          </Button>
-        )}
-      </div>
-    );
-  };
-
-  const questButtons = (q: BountyQuest) => {
+  const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
+    const q = offered(d);
+    if (!q) return null;
     const prog = progressOf(q.id);
-    const done = prog >= q.count;
-    if (done) {
-      return (
-        <Button size="sm" disabled={busy}
-          onClick={() => run({ type: 'deliverBounty', questId: q.id },
-            `납품 완료! ${q.reward}G를 받았다.`)}>
-          납품하기
-        </Button>
-      );
-    }
     return (
-      <Button size="sm" disabled={snap === null || !licensedFor(q) || (leftAll ?? 0) <= 0 || (leftPort ?? 0) <= 0 || busy}
-        onClick={() => run({ type: 'acceptQuest', questId: q.id, port },
-          `의뢰를 수주했다 — ${q.id}.`)}>
-        수주하기
-      </Button>
+      <BountyCard key={q.id} quest={q} progress={prog}
+        canAccept={basicOpen && canTake} busy={busy}
+        onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
+          `의뢰를 수주했다 — ${q.id}.`)}
+        onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
+          `납품 완료! ${q.reward}G를 받았다.`)} />
     );
   };
 
-  const gradeRow = (q: BountyQuest) => {
-    const prog = progressOf(q.id);
-    const active = prog > 0;
-    return (
-      <div key={q.id} className="flex flex-col gap-1 text-sm border-b border-line pb-1">
-        <span>{RARITY[q.grade!].name} {q.count}마리 <span className="pf-accent">{q.reward}G</span></span>
-        {active && <span className="text-text-dim text-xs">진행 {prog}/{q.count}</span>}
-        <span>{questButtons(q)}</span>
-      </div>
-    );
-  };
+  const namedQuest = offered('named');
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-text-dim text-xs">
-        {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${BOUNTY_DAILY_CAP} · 이 항구 ${leftPort}/${BOUNTY_PORT_DAILY_CAP}`}
-      </p>
-      {loaded && snap === null && (
-        <Note>오프라인에서는 라이선스만 받을 수 있다. 수주·납품은 서버 연결이 필요하다.</Note>
-      )}
-      {licenseBlock('basic', '수배 라이선스')}
-      {licenseBlock('named', '지명수배 라이선스')}
       <SubTabs
         items={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },
@@ -152,35 +128,47 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
         activeKey={screen}
         onSelect={setScreen}
       />
+      <p className="text-text-dim text-xs">
+        {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${BOUNTY_DAILY_CAP} · 이 항구 ${leftPort}/${BOUNTY_PORT_DAILY_CAP}`}
+      </p>
+      {loaded && snap === null && (
+        <Note>오프라인에서는 수주·납품이 안 된다. 서버 연결이 필요하다.</Note>
+      )}
       {screen === 'quests' ? (
-        <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(DIFF_NAME) as (keyof typeof DIFF_NAME)[]).map(d => (
-            <div key={d}>
-              <h4 className={`text-sm font-normal border-b border-line pb-1 mb-1 ${DIFF_HEAD[d]}`}>{DIFF_NAME[d]}</h4>
-              <div className="flex flex-col gap-1">
-                {quests.filter(q => q.difficulty === d).map(gradeRow)}
-              </div>
-            </div>
-          ))}
-        </div>
+        <Gated open={basicOpen} conds={basicConds}>
+          <div className="grid grid-cols-3 gap-2">
+            <div>{gradeCard('easy')}</div>
+            <div>{gradeCard('normal')}</div>
+            <div>{gradeCard('hard')}</div>
+          </div>
+        </Gated>
       ) : (
-        <div className="flex flex-col gap-2">
-          {quests.filter(q => q.difficulty === 'named').map(q => (
-            <NamedCard key={q.id} game={game} quest={q} buttons={questButtons(q)}
-                       progress={progressOf(q.id)} />
-          ))}
-        </div>
+        <Gated open={namedOpen} conds={namedConds}>
+          {namedQuest && (
+            <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
+              canAccept={namedOpen && canTake} busy={busy}
+              progress={progressOf(namedQuest.id)}
+              onAccept={() => run(
+                { type: 'acceptQuest', questId: namedQuest.id, port },
+                `의뢰를 수주했다 — ${namedQuest.id}.`)}
+              onDeliver={() => run(
+                { type: 'deliverBounty', questId: namedQuest.id },
+                `납품 완료! ${namedQuest.reward}G를 받았다.`)} />
+          )}
+        </Gated>
       )}
     </div>
   );
 }
 
-function NamedCard({ game, quest, buttons, progress }: {
-  game: GameState; quest: BountyQuest; buttons: ReactNode; progress: number;
+function NamedCard({ game, quest, canAccept, busy, progress, onAccept, onDeliver }: {
+  game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
+  progress: number; onAccept: () => void; onDeliver: () => void;
 }) {
   const n = quest.targetFish ? namedById(quest.targetFish) : undefined;
   const fish = n ? namedFishOf(n) : null;
   const found = quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false;
+  const done = progress >= quest.count;
   return (
     <div className="border-2 border-gold rounded-sm bg-surface-2 p-2 grid grid-cols-2 gap-2">
       <div>
@@ -192,11 +180,13 @@ function NamedCard({ game, quest, buttons, progress }: {
       <div className="flex flex-col gap-1 text-sm">
         <b className="text-gold">{found && n ? n.name : '???'}</b>
         <p className="text-text-dim italic text-xs flex-1">
-          {found && n ? n.lore : '수배서에만 이름이 돈다.'}
+          {n ? n.lore : '수배서에만 이름이 돈다.'}
         </p>
-        <span className="pf-accent">{quest.reward}G</span>
+        <span className="pf-accent text-gold">{quest.reward}G</span>
         {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
-        <span>{buttons}</span>
+        {done
+          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
+          : <Button size="sm" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
       </div>
     </div>
   );

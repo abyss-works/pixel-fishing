@@ -34,6 +34,8 @@ interface Props {
   game: GameState;
   /** 수배판이 뜬 항구 — 수배 가구가 항구에만 있어 base가 항구일 때만 bounty가 열린다 */
   base?: BaseId;
+  /** 일일 의뢰 해시 대상 — 없으면 로컬 고정값 */
+  uid?: string | null;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (msg: string) => void;
@@ -43,7 +45,7 @@ interface Props {
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -56,7 +58,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
-    <Modal layer="stage" onClose={onClose}>
+    <Modal layer="stage" xl={panel === 'bounty'} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -89,7 +91,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
        )}
        {panel === 'bounty' && (base === 'harbor' || base === 'manila' || base === 'colombo') && (
         <ModalCard title={`수배판 · ${zoneById(zoneOfPort(base)!)!.shortName}`} onClose={onClose}>
-          <BountyPanel game={game} port={base} dispatch={dispatch} setToast={setToast} />
+          <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
        )}
     </Modal>

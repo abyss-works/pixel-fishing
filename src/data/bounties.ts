@@ -91,6 +91,19 @@ const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 /** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
 export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);
 
+/** 일일 의뢰 — 사람·날짜·해역·난이도당 1행. 해시 결정이라 DB 저장 없이
+ *  클라·서버가 같은 값을 뽑는다. 난이도 내에서는 동일 확률이다. */
+export function dailyQuestFor(
+  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+): BountyQuest | undefined {
+  const pool = BOUNTIES.filter(q => q.zone === zone && q.difficulty === difficulty);
+  if (pool.length === 0) return undefined;
+  const s = `${uid}|${day}|${zone}|${difficulty}`;
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
+
 /** 수배 창구가 있는 항구 → 담당 해역. 고향(home)은 없다 (spec 4절) */
 export const BOUNTY_PORT_ZONE = {
   harbor: 'pacific',
