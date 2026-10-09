@@ -18,7 +18,8 @@ import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
 import { topZoneOfSpot } from '../data/zones.js';
 import { bountyById } from '../data/bounties.js';
-import type { BountyQuest } from '../data/bounties.js';
+import { BOUNTY_LICENSE_FAME } from '../data/bounties.js';
+import type { BountyQuest, BountyTier, BountyZone } from '../data/bounties.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
@@ -170,6 +171,35 @@ export function rollNamedEncounter(
       q !== undefined && q.difficulty === 'named' && q.zone === zone);
   if (cands.length === 0 || rng() >= NAMED_ENCOUNTER_RATE) return null;
   return cands[Math.floor(rng() * cands.length)];
+}
+
+// 해역 도감 미완성 목록 — 일반 폼만 본다 (돌연변이 제외).
+// 밤어종도 포함된다 — 밤 시간대에 잡아야 채워지는 시간 게이트다.
+export function zoneDexMissing(
+  state: GameState, zone: BountyZone, grades: readonly RarityId[],
+): string[] {
+  return FISH
+    .filter(f => topZoneOfSpot(f.spot) === zone && grades.includes(f.rarity)
+      && (state.dex[f.id]?.normal?.count ?? 0) === 0)
+    .map(f => f.id);
+}
+
+/** 라이선스 조건 2종 — 명성 + 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
+export interface LicenseCondition { key: 'fame' | 'dex'; label: string; ok: boolean }
+const BASIC_GRADES = ['common'] as const;
+const NAMED_GRADES = ['common', 'rare', 'epic', 'legendary'] as const;
+export function licenseConditions(
+  state: GameState, zone: BountyZone, tier: BountyTier,
+): LicenseCondition[] {
+  const grades: readonly RarityId[] = tier === 'named' ? NAMED_GRADES : BASIC_GRADES;
+  const total = FISH.filter(f => topZoneOfSpot(f.spot) === zone && (grades as readonly RarityId[]).includes(f.rarity)).length;
+  const missing = zoneDexMissing(state, zone, grades).length;
+  return [
+    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone]}`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
+    { key: 'dex', label: tier === 'named'
+      ? `전설 포함 도감 ${total - missing}/${total}`
+      : `일반 도감 ${total - missing}/${total}`, ok: missing === 0 },
+  ];
 }
 
 // 현상금 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.

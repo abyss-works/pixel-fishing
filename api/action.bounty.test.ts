@@ -24,7 +24,7 @@ describe('kstDayStartISO', () => {
 
 describe('toBountyCtx', () => {
   const rows = {
-    licenses: [{ zone: 'pacific' }],
+    licenses: [{ zone: 'pacific', tier: 'basic' }],
     accepts: [
       { accepted_at: '2026-08-22T01:00:00.000Z', port: 'harbor' }, // 22일 KST — 집계
       { accepted_at: '2026-08-21T14:00:00.000Z', port: 'harbor' }, // 21일 KST — 제외
@@ -39,7 +39,7 @@ describe('toBountyCtx', () => {
 
   it('라이선스·통합 카운트·항구 카운트를 분리한다', () => {
     const ctx = toBountyCtx(rows, dayStart, 'harbor');
-    expect(ctx.licensed).toEqual(['pacific']);
+    expect(ctx.licensed).toEqual([{ zone: 'pacific', tier: 'basic' }]);
     expect(ctx.acceptsToday).toBe(2);
     expect(ctx.acceptsAtPortToday).toBe(1);
   });

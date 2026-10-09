@@ -8,6 +8,14 @@ import type { RarityId } from './rarity.js';
 export type BountyZone = 'pacific' | 'seasia' | 'indian';
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
+/** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
+export type BountyTier = 'basic' | 'named';
+
+/** 의뢰 → 요구 라이선스. 네임드만 별도, 나머지는 기본 */
+export const LICENSE_TIER_OF: Record<BountyDifficulty, BountyTier> = {
+  easy: 'basic', normal: 'basic', hard: 'basic', named: 'named',
+};
+
 export interface BountyQuest {
   id: string;
   zone: BountyZone;

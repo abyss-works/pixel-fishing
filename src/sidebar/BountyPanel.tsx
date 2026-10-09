@@ -2,15 +2,13 @@
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 readBounty(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
 import { useEffect, useState } from 'react';
-import {
-  BOUNTIES, BOUNTY_LICENSE_FAME, zoneOfPort,
-} from '../data/bounties.js';
-import type { BountyPort, BountyQuest } from '../data/bounties.js';
+import { BOUNTIES, LICENSE_TIER_OF, zoneOfPort } from '../data/bounties.js';
+import type { BountyPort, BountyQuest, BountyTier } from '../data/bounties.js';
 import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
 import { RARITY } from '../data/rarity.js';
 import { namedById } from '../data/named.js';
 import { zoneById } from '../data/zones.js';
-import { canAcceptBountyLicense, FISH, REJECT_TEXT } from '../game/logic.js';
+import { FISH, REJECT_TEXT, licenseConditions } from '../game/logic.js';
 import type { GameState } from '../game/logic.js';
 import type { GameAction } from '../game/actions.js';
 import { readBounty } from '../api';
@@ -19,6 +17,7 @@ import type { DispatchResult, MaybePromise } from '../api';
 import { when } from '../api';
 import Button from '../ui/Button';
 import Note from '../ui/Note';
+import PixelIcon from '../ui/PixelIcon';
 
 const DIFF_NAME = { easy: '쉬움', normal: '보통', hard: '어려움', named: '네임드' } as const;
 
@@ -55,12 +54,38 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
     });
   };
 
-  const licensed = snap?.licensed.includes(zone) ?? false;
+  const covers = (tier: BountyTier): boolean => snap?.licensed.some(
+    l => l.zone === zone && (l.tier === tier || l.tier === 'named')) ?? false;
+  const licensedFor = (q: BountyQuest): boolean => covers(LICENSE_TIER_OF[q.difficulty]);
   const leftAll = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
   const leftPort = snap ? BOUNTY_PORT_DAILY_CAP - (snap.acceptsByPort[port] ?? 0) : null;
   const progressOf = (id: string) => snap?.progress.find(p => p.questId === id)?.progress ?? 0;
   const quests = BOUNTIES.filter(q => q.zone === zone);
-  const licCheck = canAcceptBountyLicense(game, zone);
+
+  const licenseBlock = (tier: BountyTier, title: string) => {
+    const conds = licenseConditions(game, zone, tier);
+    const held = covers(tier);
+    const can = conds.every(c => c.ok);
+    return (
+      <div>
+        <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{title}</h4>
+        <ul className="text-sm mb-1">
+          {conds.map(c => (
+            <li key={c.key} className={c.ok ? '' : 'line-through text-text-dim'}>
+              <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
+            </li>
+          ))}
+        </ul>
+        {!held && (
+          <Button size="sm" disabled={!can || busy}
+            onClick={() => run({ type: 'acceptBountyLicense', zone, tier },
+              `${title}을 받았다!`)}>
+            라이선스 받기
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -71,13 +96,8 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
       {snap === null && (
         <Note>오프라인에서는 라이선스만 받을 수 있다. 수주·납품은 서버 연결이 필요하다.</Note>
       )}
-      {!licensed && (
-        <Button size="sm" disabled={!licCheck.ok || busy}
-          onClick={() => run({ type: 'acceptBountyLicense', zone }, '수배 라이선스를 받았다!')}>
-          라이선스 받기 · 명성 {BOUNTY_LICENSE_FAME[zone]}
-          {!licCheck.ok && licCheck.reason === 'not-enough-fame' ? ' (명성 부족)' : ''}
-        </Button>
-      )}
+      {licenseBlock('basic', '수배 라이선스')}
+      {licenseBlock('named', '지명수배 라이선스')}
       {(Object.keys(DIFF_NAME) as (keyof typeof DIFF_NAME)[]).map(d => (
         <div key={d}>
           <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{DIFF_NAME[d]}</h4>
@@ -99,7 +119,7 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
                       납품하기
                     </Button>
                   ) : (
-                    <Button size="sm" disabled={snap === null || !licensed || (leftAll ?? 0) <= 0 || (leftPort ?? 0) <= 0 || busy}
+                    <Button size="sm" disabled={snap === null || !licensedFor(q) || (leftAll ?? 0) <= 0 || (leftPort ?? 0) <= 0 || busy}
                       onClick={() => run({ type: 'acceptQuest', questId: q.id, port },
                         `의뢰를 수주했다 — ${questLabel(q)}.`)}>
                       수주 · {d === 'named' ? questLabel(q) : `${RARITY[q.grade!].name} ${q.count}마리`}

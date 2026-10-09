@@ -36,7 +36,7 @@ const schemas = {
   setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
   boot: z.object({ type: z.literal('boot'), buildId: z.unknown().optional() }),
   setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
-  acceptBountyLicense: z.object({ type: z.literal('acceptBountyLicense'), zone: z.string() }),
+  acceptBountyLicense: z.object({ type: z.literal('acceptBountyLicense'), zone: z.string(), tier: z.string() }),
   acceptQuest: z.object({ type: z.literal('acceptQuest'), questId: z.string(), port: z.string() }),
   deliverBounty: z.object({ type: z.literal('deliverBounty'), questId: z.string() }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),

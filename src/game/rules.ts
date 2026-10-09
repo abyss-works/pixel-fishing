@@ -12,8 +12,10 @@
 import { SPOTS } from '../data/spots.js';
 import type { SpotId } from '../data/spots.js';
 import { BOATS, MAX_BOAT } from '../data/boats.js';
-import { BOUNTY_LICENSE_FAME, bountyById } from '../data/bounties.js';
+import { BOUNTY_LICENSE_FAME, bountyById, LICENSE_TIER_OF } from '../data/bounties.js';
+import type { BountyTier } from '../data/bounties.js';
 import { upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from './balance.js';
+import { zoneDexMissing } from './logic.js';
 import type { GameState } from './logic.js';
 
 /** 규칙이 거부하는 이유 — 인프라 실패(errors.ts의 FailureKind)와 다른 축이다.
@@ -34,6 +36,7 @@ export type RejectReason =
   | 'port-limit' // 수주 항구의 일일 상한 소진
   | 'quest-incomplete' // 납품 조건 미달성
   | 'quest-active' // 이미 수주 중인 의뢰 — 중복 수주는 진행도를 리셋하므로 거부
+  | 'dex-incomplete' // 라이선스 도감 조건 미달성
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -58,6 +61,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'port-limit': '이 항구에서는 오늘 이미 수주했다 — 다른 항구로 가보자.',
   'quest-incomplete': '아직 납품 조건을 채우지 못했다.',
   'quest-active': '이미 수주 중인 의뢰다.',
+  'dex-incomplete': '도감이 아직 비었다 — 해당 해역 도감을 채우자.',
   'bad-request': '처리할 수 없는 요청이다.',
 };
 
@@ -82,17 +86,26 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
 }
 
-/** 수배 라이선스 — 명성 하한 검증만(소모 없음, canBuyBoat와 같은 축) */
-export function canAcceptBountyLicense(state: GameState, zone: string): RuleCheck {
+/** 수배 라이선스 — 명성 + 도감 완성 (소모 없음, 검증만) */
+export function canAcceptBountyLicense(
+  state: GameState, zone: string, tier: BountyTier = 'basic',
+): RuleCheck {
   const req = BOUNTY_LICENSE_FAME[zone as keyof typeof BOUNTY_LICENSE_FAME];
-  if (req === undefined) return no('bad-request');
-  return state.fame >= req ? OK : no('not-enough-fame');
+  if (req === undefined || (tier !== 'basic' && tier !== 'named')) return no('bad-request');
+  if (state.fame < req) return no('not-enough-fame');
+  const grades = tier === 'named'
+    ? ['common', 'rare', 'epic', 'legendary'] as const
+    : ['common'] as const;
+  if (zoneDexMissing(state, zone as keyof typeof BOUNTY_LICENSE_FAME, grades).length > 0) {
+    return no('dex-incomplete');
+  }
+  return OK;
 }
 
 /** 서버 주입 수배 진실 — 라이선스 소유·일일 카운트·완료 목록은 DB가 들고 있다.
  *  KST 날짜 경계 집계를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
-  licensed: string[];          // 보유 라이선스 해역
+  licensed: { zone: string; tier: string }[]; // 보유 라이선스 (해역+tier)
   acceptsToday: number;        // 통합 수주 횟수
   acceptsAtPortToday: number;  // 수주 항구의 오늘 횟수
   complete: string[];          // 납품 가능 의뢰 id
@@ -111,7 +124,10 @@ export function canAcceptQuest(
   if (!BOUNTY_PORTS.includes(port)) return no('bad-request');
   // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
-  if (!ctx || !ctx.licensed.includes(q.zone)) return no('no-license');
+  if (!ctx || !ctx.licensed.some(l => l.zone === q.zone
+      && (l.tier === LICENSE_TIER_OF[q.difficulty] || l.tier === 'named'))) {
+    return no('no-license');
+  }
   if (ctx.active.includes(questId)) return no('quest-active');
   if (ctx.acceptsToday >= BOUNTY_DAILY_CAP) return no('no-tickets');
   if (ctx.acceptsAtPortToday >= BOUNTY_PORT_DAILY_CAP) return no('port-limit');
