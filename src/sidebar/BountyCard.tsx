@@ -2,9 +2,10 @@
 // 수배판 3열과 동일한 구조다. 구조가 바뀌면 여기만 고친다.
 // 디자인: 이중 골드 프레임 + 가운데 정렬 + Silkscreen 마스트헤드/보상 숫자.
 // (DESIGN.md — 기억에 남는 건 프레임과 마스트헤드 하나뿐)
-import { RARITY } from '../data/rarity.js';
+import { zoneById } from '../data/zones.js';
 import type { BountyQuest } from '../data/bounties.js';
 import Button from '../ui/Button';
+import { RarityText } from '../ui/RarityTag';
 
 const DIFF_HEAD: Record<string, string> = {
   easy: 'text-text-dim', normal: 'text-accent', hard: 'text-orange',
@@ -26,7 +27,10 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
     <div className="border border-gold rounded-sm p-4 text-center flex flex-col gap-2 text-sm bg-surface min-h-96 h-full outline outline-1 outline-offset-[3px] outline-gold/60">
       <b className={`pf-accent text-lg ${DIFF_HEAD[quest.difficulty]}`}>{DIFF_NAME[quest.difficulty]}</b>
       <div className="border-b border-line" />
-      <span className="min-h-10 content-center">{RARITY[quest.grade!].name} 등급 어종 포획 &amp; 전달 ×{quest.count}</span>
+      <span className="flex-1 content-center">
+        {zoneById(quest.zone)?.shortName} <RarityText rarity={quest.grade!} /> 등급 어종 전달<br />
+        <span className="text-text-dim">x {quest.count}</span>
+      </span>
       <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
       {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
