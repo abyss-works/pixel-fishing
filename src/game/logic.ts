@@ -6,7 +6,7 @@
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT,
+  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_RATE,
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../data/rarity.js';
 import type { RarityId } from '../data/rarity.js';
@@ -17,6 +17,7 @@ import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
 import { topZoneOfSpot } from '../data/zones.js';
+import { bountyById } from '../data/bounties.js';
 import type { BountyQuest } from '../data/bounties.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
@@ -152,6 +153,23 @@ export interface DrawOptions {
 export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
   const pool = FISH.filter(f => f.spot === spotId);
   return phase === 'day' ? pool.filter(f => !f.night) : pool;
+}
+
+// 지명 수배 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 파이프라인보다 앞선다).
+// 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 명중하면 통상 추첨
+// (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
+// 개체는 만들지 않고 진행도만 올린다 (판매 불가 개념이라 파이프라인에 태우지 않는다).
+// rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
+export function rollNamedEncounter(
+  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random,
+): BountyQuest | null {
+  const zone = topZoneOfSpot(spot);
+  const cands = activeIds
+    .map(id => bountyById(id))
+    .filter((q): q is BountyQuest =>
+      q !== undefined && q.difficulty === 'named' && q.zone === zone);
+  if (cands.length === 0 || rng() >= NAMED_ENCOUNTER_RATE) return null;
+  return cands[Math.floor(rng() * cands.length)];
 }
 
 // 현상금 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.

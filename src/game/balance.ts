@@ -72,6 +72,10 @@ export const BAIT_BUY_MAX = 50;
 export const BOUNTY_DAILY_CAP = 3;
 export const BOUNTY_PORT_DAILY_CAP = 1;
 
+// 지명 수배 조우 확률 — 캐치마다 수주 중 네임드 의뢰가 있으면 맨 먼저 돈다.
+// 낮게 잡은 이유: 고레벨 입질(4~5초 사이클)과 예정 아티팩트 보너스가 분모를 키운다.
+export const NAMED_ENCOUNTER_RATE = 1 / 2000;
+
 // 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.
 //   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·sendLetter).
