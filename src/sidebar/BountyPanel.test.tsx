@@ -34,9 +34,9 @@ function show(g: GameState) {
 describe('BountyPanel', () => {
   it('일반 화면 — 난이도당 1행씩 3열을 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('쉬움')).toBeInTheDocument();
-    expect(screen.getByText('보통')).toBeInTheDocument();
-    expect(screen.getByText('어려움')).toBeInTheDocument();
+    expect(await screen.findByText(/수배 · 쉬움/)).toBeInTheDocument();
+    expect(screen.getByText(/수배 · 보통/)).toBeInTheDocument();
+    expect(screen.getByText(/수배 · 어려움/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(3);
   });
 
@@ -53,8 +53,10 @@ describe('BountyPanel', () => {
     show(game({ fame: 0 }));
     expect(await screen.findByText('명성 1500')).toBeInTheDocument();
     expect(screen.getByText(/일반 도감 0\/3/)).toBeInTheDocument();
-    // 가려진 본문은 그대로 있다 (aria-hidden)
-    expect(screen.getByText('쉬움')).toBeInTheDocument();
+    // 본문은 blur+pointer-events-none으로 가려진다
+    const blurred = document.querySelector('.blur-sm.pointer-events-none');
+    expect(blurred).not.toBeNull();
+    expect(blurred?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
