@@ -176,29 +176,26 @@ function NamedCard({ game, quest, canAccept, busy, progress, onAccept, onDeliver
   return (
     <div className="border border-gold rounded-sm bg-surface-2 p-4 flex flex-col gap-2 text-center min-h-96 text-sm">
       <b className="pf-accent text-gold text-lg">지명수배</b>
-      <div className="border-b border-line" />
-      <div className="grid grid-cols-2 gap-2 items-center">
-        <div>
+      <div className="flex-1 grid grid-cols-2 gap-2 items-stretch">
+        <div className="content-center">
           {fish && (
             <FishSprite fish={fish} preset="portrait" discovered={found}
                         ariaLabel={found && n ? n.name : '미확인 지명수배'} className="block mx-auto" />
           )}
-          <b className="text-gold">{found && n ? n.name : '???'}</b>
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-text-dim italic text-xs">
+          <b className="text-gold">{found && n ? n.name : '???'}</b>
+          <p className="text-text-dim italic text-xs flex-1 content-center">
             {n ? n.lore : '수배서에만 이름이 돈다.'}
           </p>
+          <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
+          <span className="flex justify-center">
+            {done
+              ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
+              : <Button variant="primary" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+          </span>
         </div>
       </div>
-      <div className="border-b border-line" />
-      <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
-      {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
-      <span className="flex justify-center mt-auto">
-        {done
-          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
-          : <Button variant="primary" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
-      </span>
     </div>
   );
 }
