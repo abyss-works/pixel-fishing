@@ -67,6 +67,11 @@ export const BAIT_WEIGHT_MULT = 2;
 export const BAIT_BUY_MAX = 50;
 
 
+// 현상금 일일 수주 상한 — 전 해역 통합 + 항구별 (spec/bounty-hunting.md 4절).
+// 리셋 경계는 KST 체감 날짜(ActionDeps.today)라 서버가 판단한다.
+export const BOUNTY_DAILY_CAP = 3;
+export const BOUNTY_PORT_DAILY_CAP = 1;
+
 // 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.
 //   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·sendLetter).

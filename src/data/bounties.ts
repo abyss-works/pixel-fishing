@@ -75,3 +75,8 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'hard', 'epic', null, 10, 80000),
   Q('indian', 'hard', 'legendary', null, 2, 80000),
 ];
+
+const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
+
+/** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
+export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);

@@ -13,10 +13,12 @@ import { relativeIdleBoost, manualPowerBonus } from './power.js';
 import { SPOTS, rarityWeightOf } from '../data/spots.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
+import { bountyById } from '../data/bounties.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
-import type { RejectReason } from './rules.js';
+import { canAcceptBountyLicense, canAcceptQuest, canDeliverBounty } from './rules.js';
+import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
@@ -40,6 +42,9 @@ export type GameAction =
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
+  | { type: 'acceptBountyLicense'; zone: string }  // 수배 라이선스 — 명성 검증만, 행 기록은 서버(DB)가
+  | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 상한·라이선스는 서버 주입 진실로
+  | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -49,6 +54,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, adminSet: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
+  acceptBountyLicense: true, acceptQuest: true, deliverBounty: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -61,6 +67,9 @@ export interface ActionDeps {
   dynamicCoupon?: { gold: number; desc: string } | null;
   /** 지원 코드 자산 — 서버가 reliefs 테이블을 선소비한 뒤 공급한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
+  /** 수배 DB 진실 — 서버가 라이선스·일일 카운트·완료 목록을 조회해 공급한다 (relief 선례).
+   *  로컬 dev(LocalBackend)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
+  bounty?: BountyCtx | null;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
@@ -498,6 +507,42 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true, state: next, result: { type: 'none' },
         events: [{ type: 'import', payload: { gold: next.gold, fame: next.fame } }],
+      };
+    }
+    case 'acceptBountyLicense': {
+      // 라이선스는 **게임 상태가 아니다.** 명성 검증만 리듀서가 하고, 소유 행 기록은
+      // 서버가 bounty_licenses에 쓴다 (setNickname의 닉네임 행과 같은 분리).
+      if (typeof action.zone !== 'string') return { ok: false, error: 'bad-request' };
+      const check = canAcceptBountyLicense(state, action.zone);
+      if (!check.ok) return { ok: false, error: check.reason };
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'acceptBountyLicense', payload: { zone: action.zone } }],
+      };
+    }
+    case 'acceptQuest': {
+      // 수주도 상태가 아니다 — 상한 소모·진행 행은 서버가 bounty_accepts·bounty_progress에
+      // 쓴다. 리듀서는 형태·위치·주입 진실을 검증하고 감사 흔적만 남긴다.
+      if (typeof action.questId !== 'string' || typeof action.port !== 'string') {
+        return { ok: false, error: 'bad-request' };
+      }
+      const check = canAcceptQuest(state, action.questId, action.port, deps.bounty ?? undefined);
+      if (!check.ok) return { ok: false, error: check.reason };
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'acceptQuest', payload: { questId: action.questId, port: action.port } }],
+      };
+    }
+    case 'deliverBounty': {
+      // 납품은 골드를 만든다 — 완료 여부는 서버 주입(DB 진행도)으로만 증명된다.
+      if (typeof action.questId !== 'string') return { ok: false, error: 'bad-request' };
+      const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const quest = bountyById(action.questId)!;
+      return {
+        ok: true, state: { ...state, gold: state.gold + quest.reward },
+        result: { type: 'none' },
+        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward: quest.reward } }],
       };
     }
     default:
