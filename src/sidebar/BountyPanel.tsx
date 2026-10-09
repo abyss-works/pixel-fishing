@@ -7,7 +7,6 @@ import type { BountyPort, BountyQuest, BountyTier } from '../data/bounties.js';
 import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
 import { RARITY } from '../data/rarity.js';
 import { namedById } from '../data/named.js';
-import { zoneById } from '../data/zones.js';
 import { FISH, REJECT_TEXT, licenseConditions } from '../game/logic.js';
 import type { GameState } from '../game/logic.js';
 import type { GameAction } from '../game/actions.js';
@@ -37,10 +36,11 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
 }) {
   const zone = zoneOfPort(port)!;
   const [snap, setSnap] = useState<BountySnapshot | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const refresh = () => {
     let live = true;
-    readBounty().then(s => { if (live) setSnap(s); });
+    readBounty().then(s => { if (live) { setSnap(s); setLoaded(true); } });
     return () => { live = false; };
   };
   useEffect(refresh, []);
@@ -89,11 +89,10 @@ export default function BountyPanel({ game, port, dispatch, setToast }: {
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-lg text-gold">수배판 · {zoneById(zone)!.shortName}</h3>
       <p className="text-text-dim text-xs">
         {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${BOUNTY_DAILY_CAP} · 이 항구 ${leftPort}/${BOUNTY_PORT_DAILY_CAP}`}
       </p>
-      {snap === null && (
+      {loaded && snap === null && (
         <Note>오프라인에서는 라이선스만 받을 수 있다. 수주·납품은 서버 연결이 필요하다.</Note>
       )}
       {licenseBlock('basic', '수배 라이선스')}

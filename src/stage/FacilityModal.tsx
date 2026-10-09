@@ -12,6 +12,8 @@ import type { GameAction } from '../game/actions';
 import { when } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import type { BaseId } from '../data/places';
+import { zoneOfPort } from '../data/bounties';
+import { zoneById } from '../data/zones';
 import BountyPanel from '../sidebar/BountyPanel';
 import { cx } from '../ui/cx';
 import CloseButton from '../ui/CloseButton';
@@ -86,7 +88,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           })} />
        )}
        {panel === 'bounty' && (base === 'harbor' || base === 'manila' || base === 'colombo') && (
-        <ModalCard title="수배판" onClose={onClose}>
+        <ModalCard title={`수배판 · ${zoneById(zoneOfPort(base)!)!.shortName}`} onClose={onClose}>
           <BountyPanel game={game} port={base} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
        )}

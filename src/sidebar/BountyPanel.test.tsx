@@ -31,7 +31,7 @@ function show(g: GameState) {
 describe('BountyPanel', () => {
   it('해역 의뢰 목록을 보인다 — 등급·수량·보상', async () => {
     show(game({ fame: 1500 }));
-    expect(await screen.findByText('수배판 · 태평양')).toBeInTheDocument();
+    expect(await screen.findByText('수배 라이선스')).toBeInTheDocument();
     expect(screen.getAllByText(/일반 250마리/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/500G/).length).toBeGreaterThan(0);
   });
