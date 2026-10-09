@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, canBuyBoat, canUpgradeRod, rodStats } from '../game/logic';
+import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, baitCost, canBuyBoat, canUpgradeRod, rodStats } from '../game/logic';
 import { upgradeCost } from '../game/balance';
 import type { GameState } from '../game/logic';
 import { BAITS } from '../data/baits';
@@ -321,7 +321,6 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
     () => Object.fromEntries(BAITS.map(b => [b.id, 1])) as Record<string, number>,
   );
   const clamp = (n: number) => Math.min(50, Math.max(1, Math.floor(n) || 1));
-  const afford = (price: number, count: number) => game.gold >= price * count && !busy;
 
   return (
     <ModalCard title="미끼 상점" onClose={onClose}>
@@ -334,8 +333,8 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
           {BAITS.map(b => {
             const owned = game.items[b.id] ?? 0;
             const count = qty[b.id] ?? 1;
-            const total = b.price * count;
-            const canAfford = afford(b.price, count);
+            const total = baitCost(game, b.price, count);
+            const canAfford = game.gold >= total && !busy;
             return (
               <div key={b.id} className="flex gap-3 px-3 py-3">
                 <span

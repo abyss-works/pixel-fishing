@@ -22,6 +22,7 @@ import { BOUNTY_LICENSE_FAME } from '../data/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../data/bounties.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
+import { ARTIFACTS } from '../data/artifacts.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 
@@ -744,6 +745,15 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   if (!Number.isInteger(n) || n < 1) return state;
   const cur = state.items[itemId] ?? 0;
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
+}
+
+/** 미끼 실구매가 — 유물 할인(바루나의 저울)을 적용한 단일 출처.
+ *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
+export function baitCost(state: Pick<GameState, 'artifacts'>, price: number, count: number): number {
+  const owned = new Set(state.artifacts);
+  const disc = ARTIFACTS.reduce((m, a) =>
+    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
+  return Math.floor(price * count * (1 - disc));
 }
 
 /** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).

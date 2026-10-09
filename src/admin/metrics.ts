@@ -84,6 +84,9 @@ export const EVENT_LABELS: Record<string, string> = {
   letter: '편지',
   buyBait: '미끼 구매',
   setActiveBait: '미끼 활성화',
+  exchangeArtifact: '유물 교환',
+  ticket: '도전권 획득',
+  resolveChallenge: '네임드 도전',
   adminSet: '관리자 스탯 수정',
   import: '이사 코드 반입',
 };
@@ -118,6 +121,9 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'claimRelief': return `${s(pay.code)} 지급`;
     case 'letter': return `"${s(pay.text).slice(0, 60)}"`;
     case 'buyBait': return `${s(pay.bait)} ×${String(pay.count ?? '?')} −${fmtNum(Number(pay.cost ?? 0))}G`;
+    case 'exchangeArtifact': return `${s(pay.artifact)} 교환`;
+    case 'ticket': return `${s(pay.questId)} 도전권`;
+    case 'resolveChallenge': return `${s(pay.questId)} ${pay.success === true ? '성공' : '실패'}`;
     case 'setActiveBait': return `${s(pay.bait)} 활성`;
     case 'adminSet': return `골드=${fmtNum(Number(pay.gold ?? NaN))} 명성=${fmtNum(Number(pay.fame ?? NaN))}`;
     case 'import': return `골드 ${fmtNum(Number(pay.gold ?? 0))} · 명성 ${fmtNum(Number(pay.fame ?? 0))}`;

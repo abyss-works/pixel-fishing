@@ -19,6 +19,25 @@ describe('이동 속도 — 씬 movement로 분기', () => {
     expect(moveSpeed(s({ boat: 0 }), 'sail').value).toBe(BOATS[0].speed);
     expect(moveSpeed(s({ boat: 3 }), 'sail').value).toBe(BOATS[2].speed);
   });
+
+  it('밤이면 감속 mods 1행', () => {
+    const st = moveSpeed(s({ boat: 3 }), 'sail', true);
+    expect(st.mods.map(m => m.id)).toEqual(['night']);
+    expect(st.value).toBeCloseTo(BOATS[2].speed * 0.85, 10);
+  });
+
+  it('유물 — 심해아귀는 밤 감속 제거 + 항해 +3%', () => {
+    const st = moveSpeed(s({ boat: 3, artifacts: ['abyss-angler'] }), 'sail', true);
+    expect(st.mods.map(m => m.id)).toEqual(['relic-abyss-angler']);
+    expect(st.value).toBeCloseTo(BOATS[2].speed * 1.03, 10);
+  });
+
+  it('유물 — 침선의 나침반은 도보·항해 +7%', () => {
+    expect(moveSpeed(s({ artifacts: ['wreck-compass'] }), 'walk').value)
+      .toBeCloseTo(WALK_SPEED * 1.07, 10);
+    expect(moveSpeed(s({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value)
+      .toBeCloseTo(BOATS[0].speed * 1.07, 10);
+  });
 });
 
 describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {

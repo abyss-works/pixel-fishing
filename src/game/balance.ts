@@ -67,14 +67,24 @@ export const BAIT_WEIGHT_MULT = 2;
 export const BAIT_BUY_MAX = 50;
 
 
-// 현상금 일일 수주 상한 — 전 해역 통합 + 항구별 (spec/bounty-hunting.md 4절).
-// 리셋 경계는 KST 체감 날짜(ActionDeps.today)라 서버가 판단한다.
+// 현상금 일일 수주 상한 — 일반은 전 해역 통합 3회,
+// 네임드는 전역 1회 (spec/bounty-hunting.md 4절). 항구별 상한은 폐지됐다
+// (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
 export const BOUNTY_DAILY_CAP = 3;
-export const BOUNTY_PORT_DAILY_CAP = 1;
+export const BOUNTY_NAMED_DAILY_CAP = 1;
 
-// 지명 수배 조우 확률 — 캐치마다 수주 중 네임드 의뢰가 있으면 맨 먼저 돈다.
-// 낮게 잡은 이유: 고레벨 입질(4~5초 사이클)과 예정 아티팩트 보너스가 분모를 키운다.
-export const NAMED_ENCOUNTER_RATE = 1 / 2000;
+// 지명 수배 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
+// 명중하면 즉시 획득이 아니라 도전권을 발급한다 (챌린지절).
+// Lv12 방치 6.8초/cycle 기준 기댓값 약 10시간 — 이게 진짜 게이트다.
+export const NAMED_ENCOUNTER_RATE = 1 / 5000;
+
+// 네임드 챌린지 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
+// 존은 고정 관대값이다 (수역 게이트와 무관 — 어렵게 하지 않는다).
+export const CHALLENGE_WINDOW_MS = 3600_000; // 도전권 유효 1시간
+export const CHALLENGE_ROUNDS = 10;
+export const CHALLENGE_MAX_MISS = 3;
+export const CHALLENGE_YELLOW = 0.3;
+export const CHALLENGE_RED = 0.1;
 
 // 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.

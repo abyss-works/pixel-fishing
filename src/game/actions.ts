@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
-  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec,
+  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec, baitCost,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -14,10 +14,11 @@ import { SPOTS, rarityWeightOf } from '../data/spots.js';
 import { baitById } from '../data/baits.js';
 import type { Bait } from '../data/baits.js';
 import { bountyById } from '../data/bounties.js';
+import { artifactById, artifactOfZone } from '../data/artifacts.js';
 import type { SpotId } from '../data/spots.js';
 import type { LocationRef } from '../data/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
-import { canAcceptQuest, canDeliverBounty } from './rules.js';
+import { canAcceptQuest, canDeliverBounty, canExchangeArtifact, canResolveChallenge } from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
@@ -44,6 +45,8 @@ export type GameAction =
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 상한은 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
+  | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
+  | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -53,7 +56,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, adminSet: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
-  acceptQuest: true, deliverBounty: true,
+  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, resolveChallenge: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -74,7 +77,7 @@ export interface ActionDeps {
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
 export type ActionResult =
   /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다 */
-  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[] }
+  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'none' };
@@ -275,26 +278,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
-      // 지명 수배 조우 — 통상 추첨보다 먼저. 명중하면 개체 없이 진행도·도감만 오른다
-      // (판매 불가 개념이라 가방·명성·크기·변이를 타지 않는다 — 보상은 납품 때).
+      // 지명 수배 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
+      // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음 — 챌린지절). 발급 행 기록은
+      // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng);
-      if (namedHit?.targetFish) {
-        const target = namedHit.targetFish;
-        const prev = state.dex[target]?.normal;
-        const rec = nextDexRec(prev, null, deps.today);
-        const uid = deps.newUid();
-        const isNew = (prev?.count ?? 0) === 0;
-        return {
-          ok: true,
-          state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } } },
-          result: { type: 'catch', fishId: target, uid,
-            info: { size: 0, form: 'normal', percentile: 100, isBig: false, isNew }, released: [] },
-          events: [{ type: 'catch', payload: {
-            uid, fishId: target, judgment: 'normal', spot: action.spot,
-            size: null, form: 'normal', isNew, named: namedHit.id,
-          } }],
-        };
-      }
+      const ticketEvents: GameEvent[] = namedHit
+        ? [{ type: 'ticket', payload: { questId: namedHit.id } }]
+        : [];
+      const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
       const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
@@ -335,8 +326,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true,
         state: next,
-        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
-        events,
+        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released, ...ticketResult },
+        events: [...events, ...ticketEvents],
       };
     }
     case 'sell': {
@@ -447,7 +438,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         return { ok: false, error: 'shop-closed' };
       }
       const n = Math.min(raw, BAIT_BUY_MAX);
-      const cost = bait.price * n;
+      const cost = baitCost(state, bait.price, n);
       if (!Number.isFinite(cost)) return { ok: false, error: 'bad-request' };
       if (state.gold < cost) return { ok: false, error: 'not-enough-gold' };
       return {
@@ -543,14 +534,65 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'deliverBounty': {
       // 납품은 골드를 만든다 — 완료 여부는 서버 주입(DB 진행도)으로만 증명된다.
+      // 네임드 납품에는 교환 재료 1개가 따라온다 (유물 교환의 유일한 입구).
       if (typeof action.questId !== 'string') return { ok: false, error: 'bad-request' };
       const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };
       const quest = bountyById(action.questId)!;
+      const mat = quest.difficulty === 'named' ? artifactOfZone(quest.zone) : undefined;
+      const rich = mat ? addItem(state, mat.materialId, 1) : state;
       return {
-        ok: true, state: { ...state, gold: state.gold + quest.reward },
+        ok: true, state: { ...rich, gold: rich.gold + quest.reward },
         result: { type: 'none' },
         events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward: quest.reward } }],
+      };
+    }
+    case 'resolveChallenge': {
+      // 네임드 챌린지 결과 확정 — 시도 자체는 클라 주장이라 서버는 티켓 유효 +
+      // 수주 활성 + 주장 정합성만 본다 (rules.canResolveChallenge).
+      // 성공하면 도감에 올리고(납품 가능해진다) 서버가 진행도 +1·티켓 소모를
+      // 뒤에서 처리한다. 실패는 감사 이벤트만 남기고 티켓은 유지된다.
+      if (typeof action.questId !== 'string' || typeof action.success !== 'boolean'
+          || typeof action.hits !== 'number' || typeof action.misses !== 'number') {
+        return { ok: false, error: 'bad-request' };
+      }
+      const check = canResolveChallenge(state, action.questId,
+        { success: action.success, hits: action.hits, misses: action.misses },
+        deps.now, deps.bounty ?? undefined);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const payload = { questId: action.questId,
+        success: action.success, hits: action.hits, misses: action.misses };
+      if (!action.success) {
+        return { ok: true, state, result: { type: 'none' },
+          events: [{ type: 'resolveChallenge', payload }] };
+      }
+      const quest = bountyById(action.questId)!;
+      const target = quest.targetFish!;
+      const prev = state.dex[target]?.normal;
+      const rec = nextDexRec(prev, null, deps.today);
+      return {
+        ok: true,
+        state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } } },
+        result: { type: 'none' },
+        events: [{ type: 'resolveChallenge', payload }],
+      };
+    }
+    case 'exchangeArtifact': {
+      // 유물 교환 — 재료 1개를 유물 1개로 바꾼다. 보관은 수배판 유물 탭에서만.
+      // 이미 가진 유물은 멱등 수용(상태 그대로·이벤트 없음).
+      if (typeof action.artifact !== 'string') return { ok: false, error: 'bad-request' };
+      const art = artifactById(action.artifact);
+      if (!art) return { ok: false, error: 'bad-request' };
+      if (state.artifacts.includes(art.id)) {
+        return { ok: true, state, result: { type: 'none' }, events: [] };
+      }
+      const check = canExchangeArtifact(state, art.id);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const spent = takeItem(state, art.materialId);
+      return {
+        ok: true, state: { ...spent, artifacts: [...spent.artifacts, art.id] },
+        result: { type: 'none' },
+        events: [{ type: 'exchangeArtifact', payload: { artifact: art.id } }],
       };
     }
     default:

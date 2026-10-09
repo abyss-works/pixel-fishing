@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../game/logic';
 import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
 import { baitById } from '../data/baits';
+import { bountyById } from '../data/bounties';
 import { namedById } from '../data/named';
 import { cx } from '../ui/cx';
 import type { GameAction } from '../game/actions';
@@ -206,12 +207,12 @@ export default function Field({
       }
       const result = r.result;
       if (result.type !== 'catch') return; // 타입 좁히기 (catch 액션의 결과는 항상 catch)
-      // 지명 수배 조우 — 개체 없이 진행도만 오른다. 카드를 띄울 물고기 행이 없어
-      // 토스트로 알리고 끝낸다 (납품은 항구 수배판에서).
-      const named = namedById(result.fishId);
-      if (named) {
-        toastRef.current(`지명 수배 달성 — [${named.name}]! 항구 수배판에서 납품하자.`);
-        return;
+      // 도전권 발급 — 낚시는 그대로 끝내고 토스트로만 알린다 (비동기 획득).
+      // 수배판 네임드 탭에서 잔여 시간·도전 시작을 본다.
+      if (result.ticket) {
+        const q = bountyById(result.ticket);
+        const n = q?.targetFish ? namedById(q.targetFish) : undefined;
+        toastRef.current(`도전권 획득 — [${n ? n.name : '지명수배'}]! 수배판에서 도전하자.`);
       }
       const caught = FISH.find(f => f.id === result.fishId)!;
       const info = result.info;

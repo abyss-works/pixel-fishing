@@ -7,7 +7,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockUids, addItem, takeItem, usableBait, rarityWeightOf,
+  autoLockUids, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
@@ -777,6 +777,12 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(st.items['bait-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
     expect(takeItem(st, 'bait-common')).toBe(st);     // 더 떨어뜨리지 않는다
     expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
+  });
+
+  it('baitCost — 유물 없으면 정가, 바루나의 저울이면 25% 감소(내림)', () => {
+    expect(baitCost({ artifacts: [] }, 200, 2)).toBe(400);
+    expect(baitCost({ artifacts: ['varuna-scale'] }, 200, 2)).toBe(300);
+    expect(baitCost({ artifacts: ['varuna-scale'] }, 25, 1)).toBe(18);
   });
 
   it('usableBait — 보유량 > 0인 유효 미끼만 행을 돌려준다 (오버레이·리듀서 단일 출처)', () => {

@@ -13,19 +13,24 @@ export interface NamedFish {
   zones: readonly BountyZone[];
   color: string;
   shape: FishShape;
-  lore: string;  // 수배서 문구 — 도감 평시 미노출이라 수배 목록에서만 읽힌다
+  lore: string;  // 도감 문구 — 도감 네임드 분류에서만 읽힌다
+  poster: string;  // 수배서 본문 — 수배판에서만 읽힌다. 로어와 같은 말(한다체)이나
+  // 현상금 의뢰 어음이다: 목격담·지급 조건 중심, 도감 설명과 문장을 공유하지 않는다
 }
 
 export const NAMED: readonly NamedFish[] = [
   { id: 'megalodon', name: '메갈로돈', zones: ['pacific'],
     color: '#7a8a99', shape: 'shark',
-    lore: '태평양 깊은 곳의 그림자. 수배서에서만 이름이 돈다.' },
+    lore: '태평양 깊은 곳의 그림자. 수배서에서만 이름이 돈다.',
+    poster: '조업 중이던 어선 세 척이 같은 그림자를 보고했다. 건져 올린 그물은 매번 비어 있었다. 생포를 확인하면 현상금을 지급한다.' },
   { id: 'leviathan', name: '리바이어던', zones: ['seasia'],
     color: '#3f5a78', shape: 'serpent',
-    lore: '동남아 바다의 긴 그림자. 침선 지대 뱃사람들이 입을 모은다.' },
+    lore: '동남아 바다의 긴 그림자. 침선 지대 뱃사람들이 입을 모은다.',
+    poster: '침선 지대 뱃사람들이 입을 모아 긴 그림자를 증언했다. 밤마다 다른 배가 같은 자리에서 목격했다. 생포를 확인하면 현상금을 지급한다.' },
   { id: 'ananta', name: '아난타', zones: ['indian'],
     color: '#2e4a5a', shape: 'serpent',
-    lore: '남인도양 차가운 물에 잠든 세계뱀. 바루나보다 오래된 질서.' },
+    lore: '남인도양 차가운 물에 잠든 세계뱀. 바루나보다 오래된 질서.',
+    poster: '차가운 남인도양에서 바루나보다 오래된 그림자가 움직인다. 본 자는 깊이를 헤아리지 못했다. 생포를 확인하면 현상금을 지급한다.' },
 ];
 
 const NAMED_BY_ID = new Map(NAMED.map(n => [n.id, n]));

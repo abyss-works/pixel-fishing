@@ -29,4 +29,11 @@ describe('named 데이터 계약', () => {
       expect(namedById(q.targetFish!)!.zones, q.id).toContain(q.zone);
     }
   });
+
+  it('수배서 본문이 있고 도감 로어와 문장을 공유하지 않는다', () => {
+    for (const n of NAMED) {
+      expect(n.poster.length).toBeGreaterThan(0);
+      expect(n.poster).not.toBe(n.lore);
+    }
+  });
 });

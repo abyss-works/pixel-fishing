@@ -1,7 +1,7 @@
 // 스탯 서비스 — 파생 스탯의 단일 출구 (next.md 1, v0.6.1)
 // UI가 규칙을 재구현해 드리프트하는 것을 막는다(선례: rules.ts). 모든 파생은
-// { base, mods[], value }를 담는다 — 기여 내역 구조. `항해 속도 115 = 정크선 115 ·
-// 밤 −15 · 어선 조명 +15`처럼 환경 요소가 생기면 mods 행 하나로 얹힌다(아직 없음).
+// { base, mods[], value }를 담는다 — 기여 내역 구조. `항해 속도 = 배 기본 ·
+// 밤 감속 · 유물 보너스`처럼 환경 요소는 mods 행으로 얹힌다(유물이 첫 환경 기여).
 //
 // 표시 원칙(사용자 확정 2026-08-24): 낚싯대는 **파워 한 축**이고 나머지 성능은 전부
 // 계산값이다. 시간 항목은 스탯창에 내지 않고, PERFECT 존·희귀 어드밴티지 등은 수역별로
@@ -40,14 +40,25 @@ export type Movement = 'walk' | 'sail';
  *  값은 "약간" 수준 — 어두우면 조심히 걷는 느낌만, 진행을 막지 않는다. */
 export const NIGHT_SPEED_FACTOR = 0.85;
 
+import { ARTIFACTS } from '../data/artifacts.js';
+
 // 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배와 무관한 고정값.
+// 유물 보너스는 레지스트리에서 파생된다 — 새 유물은 행만 추가하면 배선된다.
 export function moveSpeed(state: GameState, movement: Movement, night = false): Stat {
   const base = movement === 'walk' ? WALK_SPEED : boatSpeed(state);
-  if (!night) return stat(base);
-  return stat(base, [{
+  const owned = new Set(state.artifacts);
+  const mods: StatMod[] = [];
+  for (const a of ARTIFACTS) {
+    if (!owned.has(a.id)) continue;
+    const bonus = movement === 'sail' ? (a.effects.sail ?? 0) : (a.effects.walk ?? 0);
+    if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
+  }
+  const nightImmune = ARTIFACTS.some(a => owned.has(a.id) && a.effects.nightImmune);
+  if (night && !nightImmune) mods.push({
     id: 'night', label: '밤 — 어두워 이동이 느리다',
     delta: base * (NIGHT_SPEED_FACTOR - 1),
-  }]);
+  });
+  return stat(base, mods);
 }
 
 // 낚싯대 축 — 파워(레벨) 하나에서 파생되는 어드밴티지 (roadmap 2.1).

@@ -25,32 +25,53 @@ describe('kstDayStartISO', () => {
 describe('toBountyCtx', () => {
   const rows = {
     accepts: [
-      { accepted_at: '2026-08-22T01:00:00.000Z', port: 'harbor' }, // 22일 KST — 집계
-      { accepted_at: '2026-08-21T14:00:00.000Z', port: 'harbor' }, // 21일 KST — 제외
-      { accepted_at: '2026-08-22T02:00:00.000Z', port: 'manila' }, // 타항구 — 통합에만
+      { accepted_at: '2026-08-22T01:00:00.000Z', quest_id: 'pacific-easy-common' }, // 22일 KST — 집계
+      { accepted_at: '2026-08-21T14:00:00.000Z', quest_id: 'pacific-easy-common' }, // 21일 KST — 제외
+      { accepted_at: '2026-08-22T02:00:00.000Z', quest_id: 'pacific-easy-rare' }, // 타항구분 없이 통합에만
     ],
     progress: [
       { quest_id: 'pacific-easy-common', progress: 250 }, // 수량 충족 — 완료
       { quest_id: 'pacific-easy-rare', progress: 3 },     // 미달 — 진행 중
     ],
+    tickets: [],
   };
   const dayStart = '2026-08-21T15:00:00.000Z'; // 08-22 KST 자정
 
-  it('통합 카운트·항구 카운트를 분리한다', () => {
-    const ctx = toBountyCtx(rows, dayStart, 'harbor');
+  it('일반·네임드 카운트를 분리한다', () => {
+    const ctx = toBountyCtx(rows, dayStart);
     expect(ctx.acceptsToday).toBe(2);
-    expect(ctx.acceptsAtPortToday).toBe(1);
+    expect(ctx.namedToday).toBe(0);
+  });
+
+  it('네임드 수주는 전역 카운터로 분리된다', () => {
+    const ctx = toBountyCtx({
+      ...rows,
+      accepts: [...rows.accepts,
+        { accepted_at: '2026-08-22T03:00:00.000Z', quest_id: 'pacific-named-megalodon' }],
+    }, dayStart);
+    expect(ctx.namedToday).toBe(1);
+    expect(ctx.acceptsToday).toBe(2);
   });
 
   it('완료와 진행 중을 구분한다', () => {
-    const ctx = toBountyCtx(rows, dayStart, 'harbor');
+    const ctx = toBountyCtx(rows, dayStart);
     expect(ctx.complete).toEqual(['pacific-easy-common']);
     expect(ctx.active).toEqual(['pacific-easy-common', 'pacific-easy-rare']);
   });
 
+  it('도전권 목록을 그대로 주입한다', () => {
+    const ctx = toBountyCtx({
+      ...rows,
+      tickets: [{ quest_id: 'pacific-named-megalodon', issued_at: '2026-08-22T01:00:00.000Z' }],
+    }, dayStart);
+    expect(ctx.tickets).toEqual([
+      { questId: 'pacific-named-megalodon', issuedAt: '2026-08-22T01:00:00.000Z' },
+    ]);
+  });
+
   it('없는 의뢰의 진행 행은 무시한다', () => {
     const ctx = toBountyCtx(
-      { ...rows, progress: [{ quest_id: 'nope', progress: 99 }] }, dayStart, 'harbor');
+      { ...rows, progress: [{ quest_id: 'nope', progress: 99 }] }, dayStart);
     expect(ctx.complete).toEqual([]);
     expect(ctx.active).toEqual([]);
   });

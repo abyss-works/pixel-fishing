@@ -16,25 +16,31 @@ export default meta;
 type Story = StoryObj<typeof NamedCard>;
 
 const quest = bountyById('pacific-named-megalodon')!;
-const handlers = () => ({ onAccept: fn(), onDeliver: fn() });
+const handlers = () => ({ onAccept: fn(), onDeliver: fn(), onStartChallenge: fn() });
 const game = (dex: GameState['dex']): GameState => ({ ...newState(), dex });
 
 export const Undiscovered: Story = {
   args: {
-    game: game({}), quest, canAccept: true, busy: false, progress: 0, ...handlers(),
+    game: game({}), quest, canAccept: true, busy: false, progress: 0, ticketMins: null, ...handlers(),
   },
 };
 
 export const Discovered: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 0, ...handlers(),
+    quest, canAccept: true, busy: false, progress: 0, ticketMins: null, ...handlers(),
   },
 };
 
 export const Deliverable: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 1, ...handlers(),
+    quest, canAccept: true, busy: false, progress: 1, ticketMins: null, ...handlers(),
+  },
+};
+
+export const Ticket: Story = {
+  args: {
+    game: game({}), quest, canAccept: false, busy: false, progress: 0, ticketMins: 42, ...handlers(),
   },
 };

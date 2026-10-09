@@ -3,7 +3,7 @@
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // 모듈 해상도 클래스 ①은 api/tsconfig의 nodenext가 정적으로 전수 검사한다(여기서 중복 안 함).
 import { describe, it, expect } from 'vitest';
-import handler from './action.js';
+import handler, { SKIP_DETAIL } from './action.js';
 import { APP_VERSION } from '../src/version.js';
 
 function mkRes() {
@@ -54,5 +54,15 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     await handler({ method: 'POST', headers: { 'x-build-id': 'dev' } } as never, res as never);
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({ error: 'server-config' });
+  });
+
+  it('acceptQuest는 개체·도감 스킵 금지 — 라이선스 도감 판정이 상태를 본다', () => {
+    // 수주는 상태를 바꾸지 않지만 판정에 dex가 필요해 records를 읽어야 한다.
+    // 스킵하면 dex 빈 조립 → 도감과 무관하게 dex-incomplete 422 (수주 불가 장애).
+    expect(SKIP_DETAIL.has('acceptQuest')).toBe(false);
+    // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
+    expect(SKIP_DETAIL.has('deliverBounty')).toBe(true);
+    expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
+    expect(SKIP_DETAIL.has('boot')).toBe(true);
   });
 });

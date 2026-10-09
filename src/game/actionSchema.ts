@@ -38,6 +38,11 @@ const schemas = {
   setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
   acceptQuest: z.object({ type: z.literal('acceptQuest'), questId: z.string(), port: z.string() }),
   deliverBounty: z.object({ type: z.literal('deliverBounty'), questId: z.string() }),
+  exchangeArtifact: z.object({ type: z.literal('exchangeArtifact'), artifact: z.string() }),
+  resolveChallenge: z.object({
+    type: z.literal('resolveChallenge'),
+    questId: z.string(), success: z.boolean(), hits: z.number(), misses: z.number(),
+  }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -49,7 +54,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.setLocked, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
   schemas.claimRelief, schemas.adminSet, schemas.buyBait, schemas.setActiveBait,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
-  schemas.deliverBounty, schemas.import,
+  schemas.deliverBounty, schemas.exchangeArtifact, schemas.resolveChallenge, schemas.import,
 ]);
 
 /** 미검증 body → GameAction. 실패는 null (호출자가 400 bad-action으로). */
