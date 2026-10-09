@@ -20,7 +20,7 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
 // 서버 주입 — 라이선스 보유·오늘 0회·완료 없음이 기본값
-const ctx = (over = {}) => ({ licensed: ['pacific'], acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], ...over });
+const ctx = (over = {}) => ({ licensed: ['pacific'], acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], active: [] as string[], ...over });
 
 describe('acceptBountyLicense', () => {
   it('명성 미달이면 not-enough-fame — 소모 없이 검증만 한다', () => {
@@ -81,6 +81,13 @@ describe('acceptQuest', () => {
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'manila' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('진행 중 의뢰의 중복 수주는 quest-active', () => {
+    const out = applyAction(seed({ ...harbor }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx({ active: ['pacific-easy-common'] }) }));
+    expect(out).toEqual({ ok: false, error: 'quest-active' });
   });
 
   it('통과하면 상태 불변 + 감사 이벤트만 남긴다', () => {

@@ -33,6 +33,7 @@ export type RejectReason =
   | 'no-tickets' // 일일 통합 수주 상한 소진
   | 'port-limit' // 수주 항구의 일일 상한 소진
   | 'quest-incomplete' // 납품 조건 미달성
+  | 'quest-active' // 이미 수주 중인 의뢰 — 중복 수주는 진행도를 리셋하므로 거부
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -56,6 +57,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'no-tickets': '오늘의 수주권을 다 썼다 — 내일 다시 오자.',
   'port-limit': '이 항구에서는 오늘 이미 수주했다 — 다른 항구로 가보자.',
   'quest-incomplete': '아직 납품 조건을 채우지 못했다.',
+  'quest-active': '이미 수주 중인 의뢰다.',
   'bad-request': '처리할 수 없는 요청이다.',
 };
 
@@ -94,6 +96,7 @@ export interface BountyCtx {
   acceptsToday: number;        // 통합 수주 횟수
   acceptsAtPortToday: number;  // 수주 항구의 오늘 횟수
   complete: string[];          // 납품 가능 의뢰 id
+  active: string[];            // 진행 중 의뢰 id (중복 수주 거부용)
 }
 
 /** 수배 창구 항구 — 고향(home)에 수배 창구가 없다 (spec 4절) */
@@ -109,6 +112,7 @@ export function canAcceptQuest(
   // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   if (!ctx || !ctx.licensed.includes(q.zone)) return no('no-license');
+  if (ctx.active.includes(questId)) return no('quest-active');
   if (ctx.acceptsToday >= BOUNTY_DAILY_CAP) return no('no-tickets');
   if (ctx.acceptsAtPortToday >= BOUNTY_PORT_DAILY_CAP) return no('port-limit');
   return OK;

@@ -14,10 +14,13 @@ import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
-  takeItem,
+  takeItem, matchBountyCatch,
 } from '../src/game/logic.js';
+import { bountyById } from '../src/data/bounties.js';
+import type { SpotId } from '../src/data/spots.js';
 import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
+import type { BountyCtx } from '../src/game/rules.js';
 import { parseAction } from '../src/game/actionSchema.js';
 import { checkNickname, pickGuestName } from '../src/game/nickname.js';
 import { powerZones, rodPower } from '../src/game/stats.js';
@@ -222,6 +225,34 @@ export async function writeLetters(
   }
 }
 
+// KST 자정(UTC ISO) — todayKST()와 같은 시계. 일일 집계의 경계 단일 출처.
+export function kstDayStartISO(nowMs: number): string {
+  const day = new Date(nowMs + 9 * 3600_000).toISOString().slice(0, 10);
+  return new Date(`${day}T00:00:00+09:00`).toISOString();
+}
+
+/** 현상금 원시 행 — toBountyCtx의 입력 (supabase select 결과 그대로) */
+export interface BountyRows {
+  licenses: { zone: string }[];
+  accepts: { accepted_at: string; port: string }[];
+  progress: { quest_id: string; progress: number }[];
+}
+
+/** DB 행 → 리듀서 주입 진실. 경계 이전 수주는 세지 않고, 미등록 의뢰 행은 무시한다 */
+export function toBountyCtx(rows: BountyRows, dayStartISO: string, port: string): BountyCtx {
+  const todays = rows.accepts.filter(a => a.accepted_at >= dayStartISO);
+  const known = rows.progress.filter(p => bountyById(p.quest_id));
+  return {
+    licensed: rows.licenses.map(l => l.zone),
+    acceptsToday: todays.length,
+    acceptsAtPortToday: todays.filter(a => a.port === port).length,
+    complete: known
+      .filter(p => p.progress >= bountyById(p.quest_id)!.count)
+      .map(p => p.quest_id),
+    active: known.map(p => p.quest_id),
+  };
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
     await route(req, res);
@@ -323,12 +354,13 @@ async function route(req: Req, res: Res): Promise<void> {
   const snapshotDue = row !== null && (Number(row.version) + 1) % SNAPSHOT_EVERY === 0;
   // 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
   // boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
+  // 현상금 3종도 스칼라 이하(라이선스·수주 불변, 납품은 골드만)라 스킵한다.
   // catch는 아래 fast path가 COUNT+피해자1행+도감1행만 읽는다.
   // sell/setLocked/claimRelief/import는 가방·도감을 직접 다루어 풀 유지.
   // 스냅샷 경계 버전은 전부 풀 조회로 복귀 (saves 아카이브는 풀 스냅샷이 계약).
   const SKIP_DETAIL = new Set([
     'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
-    'setNickname',
+    'setNickname', 'acceptBountyLicense', 'acceptQuest', 'deliverBounty',
   ]);
   const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
   let instances: InstanceRow[] = [];
@@ -435,6 +467,41 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     const { error: nickErr } = await admin.from('profiles')
       .upsert({ user_id: uid, nickname: wanted, updated_at: new Date().toISOString() });
     if (nickErr) throw new ApiError(500, 'db-write', { uid, action: 'setNickname' }, { cause: nickErr });
+  }
+
+  // 현상금 — DB가 진실인 축의 서버 담당분 (spec/bounty-hunting.md 6절).
+  // 라이선스 소유·일일 카운트·진행도는 saves가 아니라 전용 테이블에 있다.
+  // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
+  let bounty: ActionDeps['bounty'] = null;
+  if ((action.type === 'acceptQuest' || action.type === 'deliverBounty')
+      && typeof action.questId === 'string') {
+    const dayStart = kstDayStartISO(Date.now());
+    const [licRes, accRes, progRes] = await Promise.all([
+      admin.from('bounty_licenses').select('zone').eq('user_id', uid),
+      admin.from('bounty_accepts').select('accepted_at, port').eq('user_id', uid)
+        .gte('accepted_at', dayStart),
+      admin.from('bounty_progress').select('quest_id, progress').eq('user_id', uid),
+    ]);
+    if (licRes.error || accRes.error || progRes.error) {
+      throw new ApiError(500, 'db-read', { uid, action: action.type });
+    }
+    const port = action.type === 'acceptQuest' && typeof action.port === 'string' ? action.port : '';
+    bounty = toBountyCtx({
+      licenses: (licRes.data ?? []) as BountyRows['licenses'],
+      accepts: (accRes.data ?? []) as BountyRows['accepts'],
+      progress: (progRes.data ?? []) as BountyRows['progress'],
+    }, dayStart, port);
+
+    // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
+    // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
+    if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
+      const delRes = await admin.from('bounty_progress')
+        .delete().eq('user_id', uid).eq('quest_id', action.questId).select('quest_id');
+      if (delRes.error) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      if (((delRes.data ?? []) as unknown[]).length === 0) {
+        bounty = { ...bounty, complete: [] };
+      }
+    }
   }
 
   let out: ApplyOutcome;
@@ -545,9 +612,35 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
+      bounty,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
+
+  // 현상금 행 기록 — 리듀서 성공 후, 버전 락 전에 확정한다. 실패는 500
+  // (락 전이라 상태 불일치가 남지 않는다). 수주 경합(멀티탭 동시 수주)으로
+  // accepts가 1행 더 들어갈 수 있으나 상한+1 이내로 묶인다 — 수용.
+  if (action.type === 'acceptBountyLicense' && typeof action.zone === 'string') {
+    const { error } = await admin.from('bounty_licenses')
+      .upsert({ user_id: uid, zone: action.zone });
+    if (error) throw new ApiError(500, 'db-write', { uid, action: action.type });
+  }
+  if (action.type === 'acceptQuest' && typeof action.questId === 'string'
+      && typeof action.port === 'string') {
+    const quest = bountyById(action.questId);
+    if (quest) {
+      const now = new Date().toISOString();
+      const { error: accErr } = await admin.from('bounty_accepts')
+        .insert({ user_id: uid, zone: quest.zone, port: action.port, quest_id: quest.id });
+      if (accErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      // 진행 행은 무시-중복 삽입 — 리듀서가 중복 수주를 막지만 경합 창에서는
+      // upsert가 진행도를 0으로 되돌릴 수 있어 insert로만 둔다
+      const { error: progErr } = await admin.from('bounty_progress')
+        .upsert({ user_id: uid, zone: quest.zone, quest_id: quest.id,
+          progress: 0, updated_at: now }, { onConflict: 'user_id,quest_id', ignoreDuplicates: true });
+      if (progErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+    }
+  }
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
   // 클라이언트(HttpBackend)가 최신 상태 위에 1회 재시도한다.
@@ -577,6 +670,31 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   if (nextVersion % SNAPSHOT_EVERY === 0) { // saves는 append-only 아카이브로 존속 (0003 안전망)
     followUps.push(Promise.resolve(admin.from('saves').insert(
       { user_id: uid, data: out.state, updated_at: new Date().toISOString() })));
+  }
+  // 현상금 진행 — catch 성공 1건이 수주 중 의뢰를 진전시킨다.
+  // 유실 허용 묶음(events와 같은 등급): 실패는 보고만 한다. 증분이라 자가 치유가
+  // 없어 유실분은 사용자가 다시 잡아야 메운다 — 그래도 캐치 자체는 확정돼 있다.
+  if (action.type === 'catch') {
+    const caught = out.events.find(e => e.type === 'catch');
+    const spot = (caught?.payload as { spot?: unknown } | undefined)?.spot;
+    const fishId = (caught?.payload as { fishId?: unknown } | undefined)?.fishId;
+    if (typeof spot === 'string' && typeof fishId === 'string') {
+      followUps.push((async () => {
+        const { data, error } = await admin.from('bounty_progress')
+          .select('quest_id, progress').eq('user_id', uid);
+        if (error || !data) return { error: error ?? new Error('bounty_progress unreadable') };
+        const now = new Date().toISOString();
+        const jobs = (data as { quest_id: string; progress: number }[])
+          .map(p => ({ quest: bountyById(p.quest_id), row: p }))
+          .filter(({ quest }) =>
+            quest && matchBountyCatch(quest, spot as SpotId, fishId))
+          .map(({ quest, row }) => Promise.resolve(admin.from('bounty_progress')
+            .update({ progress: row.progress + 1, updated_at: now })
+            .eq('user_id', uid).eq('quest_id', quest!.id)));
+        const rs = await Promise.all(jobs) as { error?: unknown }[];
+        return { error: rs.find(r => r && r.error)?.error };
+      })());
+    }
   }
   // 개체·도감 변경분 — 리듀서가 전후 비교로 뽑아준 것을 그대로 적용한다(재계산 금지).
   // records는 절대값 upsert라 한 번 실패해도 다음 캐치가 자가 치유한다.
