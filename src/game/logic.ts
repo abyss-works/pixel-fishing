@@ -16,7 +16,7 @@ import type { LocationRef, RegionId } from '../data/places.js';
 import { FISH } from '../data/fish.js';
 import type { Fish, FormId } from '../data/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../data/boats.js';
-import { topZoneOfSpot } from '../data/zones.js';
+import { topZoneOfSpot, zoneById } from '../data/zones.js';
 import { bountyById } from '../data/bounties.js';
 import { BOUNTY_LICENSE_FAME } from '../data/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../data/bounties.js';
@@ -192,13 +192,13 @@ export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
   const grades: readonly RarityId[] = tier === 'named' ? NAMED_GRADES : BASIC_GRADES;
-  const total = FISH.filter(f => topZoneOfSpot(f.spot) === zone && (grades as readonly RarityId[]).includes(f.rarity)).length;
   const missing = zoneDexMissing(state, zone, grades).length;
+  const area = zoneById(zone)?.shortName ?? zone;
   return [
-    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone]}`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
+    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone]} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
     { key: 'dex', label: tier === 'named'
-      ? `전설 포함 도감 ${total - missing}/${total}`
-      : `일반 도감 ${total - missing}/${total}`, ok: missing === 0 },
+      ? `${area} 모든 어종 수집`
+      : `${area} 모든 어종 수집(전설 제외)`, ok: missing === 0 },
   ];
 }
 
