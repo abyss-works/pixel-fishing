@@ -45,7 +45,7 @@ describe('BountyPanel', () => {
     const day = kstDay();
     for (const d of ['easy', 'normal', 'hard'] as const) {
       const q = dailyQuestFor('pacific', d, 'test-uid', day)!;
-      expect(await screen.findByText(new RegExp(`×${q.count}$`))).toBeInTheDocument();
+      expect(await screen.findByText(new RegExp(`x ${q.count}$`))).toBeInTheDocument();
     }
   });
 
