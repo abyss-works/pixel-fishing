@@ -174,7 +174,7 @@ function NamedCard({ game, quest, canAccept, busy, progress, onAccept, onDeliver
   const found = quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false;
   const done = progress >= quest.count;
   return (
-    <div className="border border-gold rounded-sm bg-surface-2 p-4 flex flex-col gap-2 text-center min-h-96 text-sm">
+    <div className="border border-gold rounded-sm bg-surface p-4 flex flex-col gap-2 text-center min-h-96 text-sm">
       <b className="pf-accent text-gold text-lg">지명수배</b>
       <div className="border-b border-line" />
       <div className="flex-1 content-center">
