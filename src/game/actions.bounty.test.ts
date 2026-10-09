@@ -6,7 +6,7 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState } from './logic';
 import type { GameState } from './logic';
-import { matchBountyCatch } from './logic';
+import { matchBountyCatch, rollNamedEncounter } from './logic';
 import { BOUNTIES } from '../data/bounties';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -116,6 +116,27 @@ describe('deliverBounty', () => {
     expect(out.state.gold).toBe(600); // 100 + 보상 500
     expect(out.events).toEqual([{ type: 'deliverBounty',
       payload: { questId: 'pacific-easy-common', reward: 500 } }]);
+  });
+});
+
+describe('rollNamedEncounter', () => {
+  it('수주 중 네임드가 없으면 null — rng를 소모하지 않는다', () => {
+    let calls = 0;
+    expect(rollNamedEncounter([], 'sea', () => { calls++; return 0; })).toBeNull();
+    expect(calls).toBe(0);
+  });
+
+  it('해역이 다르면 null', () => {
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'dragonhole', () => 0)).toBeNull();
+  });
+
+  it('게이트 확률(1/2000) 밖이면 null', () => {
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0.999)).toBeNull();
+  });
+
+  it('게이트 명중이면 그 해역 의뢰를 돌려준다', () => {
+    const q = rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0);
+    expect(q?.id).toBe('pacific-named-megalodon');
   });
 });
 
