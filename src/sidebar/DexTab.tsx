@@ -6,6 +6,7 @@ import type { Fish, FormId, GameState } from '../game/logic';
 import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../data/zones';
 import { BOUNTIES } from '../data/bounties';
 import type { BountyQuest } from '../data/bounties';
+import { namedById } from '../data/named';
 import type { ZoneId } from '../data/zones';
 import { cx } from '../ui/cx';
 import Button from '../ui/Button';
@@ -129,7 +130,7 @@ export default function DexTab({ game, view, sub, onSub }: {
         <div className="grid grid-cols-3 gap-2 mt-2">
           {namedOf(sub).map(q => {
             const ok = namedFound(q);
-            const known = q.targetFish && FISH.find(f => f.id === q.targetFish);
+            const known = q.targetFish && (FISH.find(f => f.id === q.targetFish) ?? namedById(q.targetFish));
             return (
               <div key={q.id} className={cx(RARITY_CARD, 'p-2 text-sm aspect-square opacity-[0.72]')}>
                 {ok ? (
