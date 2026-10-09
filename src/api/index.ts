@@ -43,7 +43,7 @@ export const api = createApi();
 export { LEGACY_KEY };
 // 백엔드 경계의 공용 헬퍼·타입도 여기서만 내보낸다 (backend/* 직접 import 금지)
 export { when } from '../backend/types';
-export { readBounty } from './bounty';
+export { readBounty, kstDay } from './bounty';
 export type { BountySnapshot, BountyProgressRow } from './bounty';
 export type { Backend, MaybePromise, DispatchResult } from '../backend/types';
 export type {

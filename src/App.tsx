@@ -144,7 +144,7 @@ export default function App() {
         {/* 정비 모달 — 판매/강화/배 (정비 중엔 이동하지 않으므로 게임 영역을 점유해도 자연스럽다) */}
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={dispatch}
-                         base={scene.kind === 'base' ? scene.id : undefined}
+                         base={scene.kind === 'base' ? scene.id : undefined} uid={uid}
                          setToast={setToast} onClose={() => setActionPanel(null)} />
         )}
       </div>

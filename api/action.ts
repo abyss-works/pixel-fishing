@@ -16,7 +16,7 @@ import {
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
   takeItem, matchBountyCatch, rollNamedEncounter,
 } from '../src/game/logic.js';
-import { bountyById } from '../src/data/bounties.js';
+import { bountyById, dailyQuestFor } from '../src/data/bounties.js';
 import type { SpotId } from '../src/data/spots.js';
 import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
@@ -233,7 +233,6 @@ export function kstDayStartISO(nowMs: number): string {
 
 /** 현상금 원시 행 — toBountyCtx의 입력 (supabase select 결과 그대로) */
 export interface BountyRows {
-  licenses: { zone: string; tier: string }[];
   accepts: { accepted_at: string; port: string }[];
   progress: { quest_id: string; progress: number }[];
 }
@@ -243,7 +242,6 @@ export function toBountyCtx(rows: BountyRows, dayStartISO: string, port: string)
   const todays = rows.accepts.filter(a => a.accepted_at >= dayStartISO);
   const known = rows.progress.filter(p => bountyById(p.quest_id));
   return {
-    licensed: rows.licenses.map(l => ({ zone: l.zone, tier: l.tier })),
     acceptsToday: todays.length,
     acceptsAtPortToday: todays.filter(a => a.port === port).length,
     complete: known
@@ -476,21 +474,29 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   if ((action.type === 'acceptQuest' || action.type === 'deliverBounty')
       && typeof action.questId === 'string') {
     const dayStart = kstDayStartISO(Date.now());
-    const [licRes, accRes, progRes] = await Promise.all([
-      admin.from('bounty_licenses').select('zone, tier').eq('user_id', uid),
+    const [accRes, progRes] = await Promise.all([
       admin.from('bounty_accepts').select('accepted_at, port').eq('user_id', uid)
         .gte('accepted_at', dayStart),
       admin.from('bounty_progress').select('quest_id, progress').eq('user_id', uid),
     ]);
-    if (licRes.error || accRes.error || progRes.error) {
+    if (accRes.error || progRes.error) {
       throw new ApiError(500, 'db-read', { uid, action: action.type });
     }
     const port = action.type === 'acceptQuest' && typeof action.port === 'string' ? action.port : '';
     bounty = toBountyCtx({
-      licenses: (licRes.data ?? []) as BountyRows['licenses'],
       accepts: (accRes.data ?? []) as BountyRows['accepts'],
       progress: (progRes.data ?? []) as BountyRows['progress'],
     }, dayStart, port);
+
+    // 일일 의뢰 검증 — 오늘 그 사람에게 뜬 의뢰가 아니면 변조다.
+    // 리듀서는 uid를 몰라 서버가 여기서 잠근다.
+    if (action.type === 'acceptQuest') {
+      const quest = bountyById(action.questId);
+      const offered = quest && dailyQuestFor(quest.zone, quest.difficulty, uid, todayKST());
+      if (!offered || offered.id !== action.questId) {
+        throw new ApiError(422, 'bad-request');
+      }
+    }
 
     // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
     // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
@@ -663,12 +669,6 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   // 현상금 행 기록 — 리듀서 성공 후, 버전 락 전에 확정한다. 실패는 500
   // (락 전이라 상태 불일치가 남지 않는다). 수주 경합(멀티탭 동시 수주)으로
   // accepts가 1행 더 들어갈 수 있으나 상한+1 이내로 묶인다 — 수용.
-  if (action.type === 'acceptBountyLicense' && typeof action.zone === 'string'
-      && typeof action.tier === 'string') {
-    const { error } = await admin.from('bounty_licenses')
-      .upsert({ user_id: uid, zone: action.zone, tier: action.tier });
-    if (error) throw new ApiError(500, 'db-write', { uid, action: action.type });
-  }
   if (action.type === 'acceptQuest' && typeof action.questId === 'string'
       && typeof action.port === 'string') {
     const quest = bountyById(action.questId);

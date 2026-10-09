@@ -22,65 +22,49 @@ const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
 const rec = (count: number) => ({ count, maxSize: null, first: null });
 // 태평양 일반 3종 완성 도감 (고등어·갈치·아귀)
 const pacificDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
-// 서버 주입 — 기본 라이선스 보유·오늘 0회·완료 없음이 기본값
-const ctx = (over = {}) => ({ licensed: [{ zone: 'pacific', tier: 'basic' }], acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], active: [] as string[], ...over });
+// 태평양 전설 포함 전부 (일반 폼만) — 희귀 3·영웅 3·전설 4 추가
+const pacificFullDex = {
+  ...pacificDex,
+  seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
+  tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
+  shark: { normal: rec(1) }, kraken: { normal: rec(1) },
+  moonveil: { normal: rec(1) }, abyssveil: { normal: rec(1) },
+};
+// 서버 주입 — 오늘 0회·완료 없음이 기본값 (라이선스 조건은 상태에서 직접 본다)
+const ctx = (over = {}) => ({ acceptsToday: 0, acceptsAtPortToday: 0, complete: [] as string[], active: [] as string[], ...over });
 
-describe('acceptBountyLicense', () => {
-  it('명성 미달이면 not-enough-fame — 소모 없이 검증만 한다', () => {
-    const out = applyAction(seed({ fame: 1499, dex: pacificDex }),
-      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
+describe('acceptQuest', () => {
+  // 수주 조건은 상태에서 직접 본다 — 도감 완성 태평양 + 명성 1500이 기본값
+  const ready = { ...harbor, fame: 1500, dex: pacificDex };
+
+  it('없는 의뢰는 bad-request', () => {
+    const out = applyAction(seed({ ...ready }), { type: 'acceptQuest', questId: 'nope', port: 'harbor' }, deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('명성 미달이면 not-enough-fame', () => {
+    const out = applyAction(seed({ ...harbor, fame: 100, dex: pacificDex }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'not-enough-fame' });
   });
 
   it('도감 미완이면 dex-incomplete', () => {
-    const out = applyAction(seed({ fame: 1500 }),
-      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
+    const out = applyAction(seed({ ...harbor, fame: 1500 }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('통과하면 상태 불변 + 감사 이벤트만 남긴다 (행 기록은 서버가 DB에)', () => {
-    const st = seed({ fame: 1500, dex: pacificDex });
-    const out = applyAction(st,
-      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'basic' }, deps());
-    if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(st);
-    expect(out.events).toEqual([{ type: 'acceptBountyLicense',
-      payload: { zone: 'pacific', tier: 'basic' } }]);
-  });
-
-  it('없는 해역·tier는 bad-request', () => {
-    const st = seed({ fame: 999999, dex: pacificDex });
-    expect(applyAction(st,
-      { type: 'acceptBountyLicense', zone: 'atlantis', tier: 'basic' }, deps()))
-      .toEqual({ ok: false, error: 'bad-request' });
-    expect(applyAction(st,
-      { type: 'acceptBountyLicense', zone: 'pacific', tier: 'abyss' }, deps()))
-      .toEqual({ ok: false, error: 'bad-request' });
-  });
-});
-
-describe('acceptQuest', () => {
-  it('없는 의뢰는 bad-request', () => {
-    const out = applyAction(seed({ ...harbor }), { type: 'acceptQuest', questId: 'nope', port: 'harbor' }, deps({ bounty: ctx() }));
-    expect(out).toEqual({ ok: false, error: 'bad-request' });
-  });
-
-  it('라이선스 미보유는 no-license', () => {
-    const out = applyAction(seed({ ...harbor }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx({ licensed: [] }) }));
-    expect(out).toEqual({ ok: false, error: 'no-license' });
-  });
-
   it('통합 상한 초과는 no-tickets', () => {
-    const out = applyAction(seed({ ...harbor }),
+    const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx({ acceptsToday: 3 }) }));
     expect(out).toEqual({ ok: false, error: 'no-tickets' });
   });
 
   it('항구 상한 초과는 port-limit', () => {
-    const out = applyAction(seed({ ...harbor }),
+    const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx({ acceptsAtPortToday: 1 }) }));
     expect(out).toEqual({ ok: false, error: 'port-limit' });
@@ -94,40 +78,32 @@ describe('acceptQuest', () => {
   });
 
   it('주장 항구와 실제 위치가 다르면 bad-request', () => {
-    const out = applyAction(seed({ ...harbor }),
+    const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'manila' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 
   it('진행 중 의뢰의 중복 수주는 quest-active', () => {
-    const out = applyAction(seed({ ...harbor }),
+    const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx({ active: ['pacific-easy-common'] }) }));
     expect(out).toEqual({ ok: false, error: 'quest-active' });
   });
 
-  it('네임드 의뢰는 네임드 라이선스가 있어야 한다', () => {
-    const base = seed({ ...harbor });
+  it('네임드 의뢰는 전설 포함 도감이 있어야 한다', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    expect(applyAction(base, act, deps({ bounty: ctx() })))
-      .toEqual({ ok: false, error: 'no-license' });
-    const out = applyAction(base, act,
-      deps({ bounty: ctx({ licensed: [{ zone: 'pacific', tier: 'named' }] }) }));
+    expect(applyAction(seed({ ...ready }), act, deps({ bounty: ctx() })))
+      .toEqual({ ok: false, error: 'dex-incomplete' });
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), act,
+      deps({ bounty: ctx() }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
       payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
   });
 
-  it('네임드 라이선스는 기본 의뢰도 연다', () => {
-    const out = applyAction(seed({ ...harbor }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx({ licensed: [{ zone: 'pacific', tier: 'named' }] }) }));
-    expect(out.ok).toBe(true);
-  });
-
   it('통과하면 상태 불변 + 감사 이벤트만 남긴다', () => {
-    const st = seed({ ...harbor });
+    const st = seed({ ...ready });
     const out = applyAction(st,
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));

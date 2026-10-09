@@ -36,7 +36,6 @@ const schemas = {
   setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
   boot: z.object({ type: z.literal('boot'), buildId: z.unknown().optional() }),
   setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
-  acceptBountyLicense: z.object({ type: z.literal('acceptBountyLicense'), zone: z.string(), tier: z.string() }),
   acceptQuest: z.object({ type: z.literal('acceptQuest'), questId: z.string(), port: z.string() }),
   deliverBounty: z.object({ type: z.literal('deliverBounty'), questId: z.string() }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
@@ -49,7 +48,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
   schemas.claimRelief, schemas.adminSet, schemas.buyBait, schemas.setActiveBait,
-  schemas.boot, schemas.setNickname, schemas.acceptBountyLicense, schemas.acceptQuest,
+  schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.import,
 ]);
 

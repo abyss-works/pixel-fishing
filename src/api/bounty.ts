@@ -12,6 +12,10 @@ export interface BountySnapshot {
   progress: BountyProgressRow[];
 }
 
+/** KST 날짜 — api/action.ts todayKST와 같은 시계 (일일 의뢰 해시용) */
+export const kstDay = (): string =>
+  new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+
 /** KST 자정(UTC ISO) — api/action.ts kstDayStartISO와 같은 시계 */
 const kstDayStartISO = (): string => {
   const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
