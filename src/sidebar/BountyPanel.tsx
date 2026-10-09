@@ -8,6 +8,7 @@ import {
 import type { BountyPort, BountyQuest } from '../data/bounties.js';
 import { BOUNTY_DAILY_CAP, BOUNTY_PORT_DAILY_CAP } from '../game/balance.js';
 import { RARITY } from '../data/rarity.js';
+import { namedById } from '../data/named.js';
 import { zoneById } from '../data/zones.js';
 import { canAcceptBountyLicense, FISH, REJECT_TEXT } from '../game/logic.js';
 import type { GameState } from '../game/logic.js';
@@ -23,7 +24,7 @@ const DIFF_NAME = { easy: '쉬움', normal: '보통', hard: '어려움', named: 
 
 function questLabel(q: BountyQuest): string {
   if (q.difficulty === 'named') {
-    const known = FISH.find(f => f.id === q.targetFish);
+    const known = FISH.find(f => f.id === q.targetFish) ?? namedById(q.targetFish!);
     return `지명 수배 · ${known ? known.name : q.targetFish}`;
   }
   return `${RARITY[q.grade!].name} ${q.count}마리`;
