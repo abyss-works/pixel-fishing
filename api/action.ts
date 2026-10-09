@@ -14,7 +14,7 @@ import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
-  takeItem, matchBountyCatch,
+  takeItem, matchBountyCatch, rollNamedEncounter,
 } from '../src/game/logic.js';
 import { bountyById } from '../src/data/bounties.js';
 import type { SpotId } from '../src/data/spots.js';
@@ -505,12 +505,15 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
 
   let out: ApplyOutcome;
+  // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
+  let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
     // catch fast path — 풀가방 SELECT 없이 COUNT + 등급별 top-1 + 도감 1행.
     // 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 —
     // 규칙이 여기 새로 생기지 않는다. 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
     const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
       fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    catchBase = base;
     const gate = canFish(base, action.spot);
     if (!gate.ok) {
       out = { ok: false, error: gate.reason };
@@ -617,6 +620,46 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 
+  // 지명 수배 조우 (fast path) — 게이트 명중 시 통상 결과를 버리고 네임드로 교체한다.
+  // 통상 추첨 쿼리가 헛돌지만 명중률 1/2000이라 무시한다. 아직 아무것도 기록하지
+  // 않았으니 버리기가 안전하다 (writes·events는 아래에서 out 기준으로 생긴다).
+  // 진행도 +1은 뒤의 catch 공통 증가가 맡는다 — 여기서 올리면 중복이다.
+  if (out.ok && action.type === 'catch' && catchBase) {
+    const { data: progRows } = await admin.from('bounty_progress')
+      .select('quest_id').eq('user_id', uid);
+    const namedHit = progRows ? rollNamedEncounter(
+      (progRows as { quest_id: string }[]).map(p => p.quest_id),
+      action.spot, Math.random) : null;
+    const target = namedHit?.targetFish;
+    if (namedHit && target) {
+      const { data: d, error: dexErr } = await admin.from('records')
+        .select('count,max_size,first_caught').eq('user_id', uid)
+        .eq('fish_id', target).eq('form', 'normal').maybeSingle();
+      if (dexErr) throw new ApiError(500, 'db-read', { uid, action: action.type });
+      const prev: FormRecord | undefined = d
+        ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
+        : undefined;
+      const rec = nextDexRec(prev, null, todayKST());
+      const nid = crypto.randomUUID();
+      const isNew = (prev?.count ?? 0) === 0;
+      const scalars = takeItem(catchBase, '');
+      out = {
+        ok: true,
+        state: { ...scalars },
+        result: { type: 'catch', fishId: target, uid: nid,
+          info: { size: 0, form: 'normal', percentile: 100, isBig: false, isNew }, released: [] },
+        events: [{ type: 'catch', payload: {
+          uid: nid, fishId: target, judgment: 'normal', spot: action.spot,
+          size: null, form: 'normal', isNew, named: namedHit.id,
+        } }],
+        writes: {
+          instancesAdded: [], instancesRemoved: [],
+          instancesMoved: [], instancesLocked: [],
+          records: [{ fishId: target, form: 'normal', rec }],
+        },
+      };
+    }
+  }
   // 현상금 행 기록 — 리듀서 성공 후, 버전 락 전에 확정한다. 실패는 500
   // (락 전이라 상태 불일치가 남지 않는다). 수주 경합(멀티탭 동시 수주)으로
   // accepts가 1행 더 들어갈 수 있으나 상한+1 이내로 묶인다 — 수용.

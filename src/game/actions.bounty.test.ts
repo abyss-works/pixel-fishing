@@ -140,6 +140,40 @@ describe('rollNamedEncounter', () => {
   });
 });
 
+describe('named catch', () => {
+  // 수주 중 네임드 + 게이트 명중(rng 0) → 개체 없이 진행도·도감만 오른다
+  // (sea 수역이라 배 1 필요 — 게이트는 canFish 뒤에 돈다)
+  const hitDeps = () => deps({ bounty: ctx({ active: ['pacific-named-megalodon'] }), rng: () => 0 });
+  const sea = seed({ boat: 1 });
+
+  it('가방에 개체를 넣지 않고 도감 기록만 남긴다', () => {
+    const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal' }, hitDeps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toEqual([]);
+    expect(out.state.dex.megalodon?.normal?.count).toBe(1);
+    expect(out.result).toMatchObject({ type: 'catch', fishId: 'megalodon' });
+    expect(out.events[0]).toMatchObject({
+      type: 'catch', payload: { fishId: 'megalodon', named: 'pacific-named-megalodon' },
+    });
+  });
+
+  it('명성·골드는 그대로다 (보상은 납품 때)', () => {
+    const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal' }, hitDeps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.fame).toBe(0);
+    expect(out.state.gold).toBe(0);
+  });
+
+  it('게이트 빗나감(rng 1)은 통상 캐치 그대로다', () => {
+    const out = applyAction(seed(),
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps({ bounty: ctx({ active: ['pacific-named-megalodon'] }), rng: () => 0.999 }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toHaveLength(1); // pond 붕어
+    expect(out.state.dex.megalodon).toBeUndefined();
+  });
+});
+
 describe('matchBountyCatch', () => {
   const easy = BOUNTIES.find(q => q.id === 'pacific-easy-common')!;
   const named = BOUNTIES.find(q => q.id === 'pacific-named-megalodon')!;

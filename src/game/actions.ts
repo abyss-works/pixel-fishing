@@ -4,9 +4,9 @@
 // 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
+  redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
-  addItem, takeItem, usableBait, MAX_BOAT,
+  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -276,6 +276,26 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
+      // 지명 수배 조우 — 통상 추첨보다 먼저. 명중하면 개체 없이 진행도·도감만 오른다
+      // (판매 불가 개념이라 가방·명성·크기·변이를 타지 않는다 — 보상은 납품 때).
+      const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng);
+      if (namedHit?.targetFish) {
+        const target = namedHit.targetFish;
+        const prev = state.dex[target]?.normal;
+        const rec = nextDexRec(prev, null, deps.today);
+        const uid = deps.newUid();
+        const isNew = (prev?.count ?? 0) === 0;
+        return {
+          ok: true,
+          state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } } },
+          result: { type: 'catch', fishId: target, uid,
+            info: { size: 0, form: 'normal', percentile: 100, isBig: false, isNew }, released: [] },
+          events: [{ type: 'catch', payload: {
+            uid, fishId: target, judgment: 'normal', spot: action.spot,
+            size: null, form: 'normal', isNew, named: namedHit.id,
+          } }],
+        };
+      }
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
       const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
