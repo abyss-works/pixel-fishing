@@ -1,7 +1,7 @@
 // 시간대 설정 스토어 — LocalBackend 캐치 판정에 실제로 반영되는지 (밤/낮 전환)
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalBackend } from './local';
-import { setTimeOverride, resetTimeOverride } from '../admin/timeOverride';
+import { setTimeOverride, resetTimeOverride } from '../shared/timeOverride';
 import { newState } from '../game/logic';
 
 const clear = () => {
