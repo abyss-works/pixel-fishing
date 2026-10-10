@@ -3,9 +3,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import NamedCard from './NamedCard';
-import { bountyById } from '../data/bounties';
-import { newState } from '../game/logic';
-import type { GameState } from '../game/logic';
+import { bountyById } from '../../data/bounties';
+import { newState } from '../../game/logic';
+import type { GameState } from '../../game/logic';
 
 const meta: Meta<typeof NamedCard> = {
   title: 'Bounty/Named',
