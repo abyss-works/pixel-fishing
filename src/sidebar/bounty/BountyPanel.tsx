@@ -1,5 +1,5 @@
 // 수배판 — 현상금 수주·납품 UI (항구 전용, 고향 제외).
-// 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 readBounty(RLS 본인 읽기)다.
+// 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
@@ -16,8 +16,8 @@ import { REJECT_TEXT, licenseConditions } from '../../game/logic.js';
 import type { LicenseCondition } from '../../game/logic.js';
 import type { GameState } from '../../game/logic.js';
 import type { GameAction } from '../../game/actions.js';
-import { readBounty, kstDay } from '../../api';
-import type { BountySnapshot } from '../../api';
+import { kstDay } from '../../api';
+import { useBounty } from '../../hooks/useBounty';
 import type { DispatchResult, MaybePromise } from '../../api';
 import { when } from '../../api';
 import BountyCard from './BountyCard';
@@ -63,19 +63,13 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   const zone = zoneOfPort(port)!;
-  const [snap, setSnap] = useState<BountySnapshot | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { snap, loaded, refresh } = useBounty();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
   // 도전권 잔여 표시용 시계 — 스냅샷 적재 시점에 함께 찍는다 (액션마다 refresh되므로 충분).
   // 렌더 중 Date.now 호출은 금지라 비동기 콜백에서만 찍는다.
   const [nowMs, setNowMs] = useState(0);
-  const refresh = () => {
-    let live = true;
-    readBounty().then(s => { if (live) { setSnap(s); setLoaded(true); setNowMs(Date.now()); } });
-    return () => { live = false; };
-  };
-  useEffect(refresh, []);
+  useEffect(() => { if (loaded) setNowMs(Date.now()); }, [loaded, snap]);
   const run = (action: GameAction, done: string) => {
     if (busy) return;
     setBusy(true);

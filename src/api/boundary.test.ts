@@ -41,4 +41,29 @@ describe('api 계층 경계', () => {  it('우회 패턴을 탐지한다 — 큰
     }
     expect(offenders).toEqual([]);
   });
+
+  it('readBounty 직접 import는 api·hooks뿐이다 — views는 useBounty 경유', () => {
+    expect(isReadImport(`import { readBounty } from "../api";`)).toBe(true);
+    expect(isReadImport(`import { readBounty, kstDay } from '../../api';`)).toBe(true);
+    expect(isReadImport(`import { kstDay } from '../api';`)).toBe(false);
+    expect(isReadImport(`// readBounty(RLS 본인 읽기)`)).toBe(false);
+    const offenders: string[] = [];
+    for (const [path, src] of Object.entries(sources)) {
+      if (path.startsWith('./')) continue; // api 계층 자신
+      const rel = path.replace(/^\.\.\//, '');
+      if (rel.startsWith('api/') || rel.startsWith('hooks/')) continue;
+      if (/\.test\.tsx?$/.test(rel)) continue;
+      if (/\.stories\.tsx?$/.test(rel)) continue;
+      if (isReadImport(src)) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
+
+// 읽기 직접 참조 — import문 안의 식별자만 본다 (주석·문자열 제외).
+// 구 패턴(\breadBounty\b)은 주석까지 걸려 BountyPanel 설명문이 오탐됐다.
+const READ_IMPORT = /import\s+[^;]*\breadBounty\b[^;]*\bfrom\b\s*["'][^"']+["']/;
+
+function isReadImport(src: string): boolean {
+  return READ_IMPORT.test(src);
+}
