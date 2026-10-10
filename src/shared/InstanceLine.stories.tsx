@@ -2,8 +2,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import InstanceLine, { UnsizedLine } from './InstanceLine';
-import { FISH } from '../../data/fish';
-import type { FishInstance } from '../../game/logic';
+import { FISH } from '../data/fish';
+import type { FishInstance } from '../game/logic';
 
 const meta: Meta<typeof InstanceLine> = {
   title: 'Bag/InstanceLine',

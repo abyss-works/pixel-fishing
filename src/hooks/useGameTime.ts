@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useTimeOverride } from '../admin/timeOverride';
+import { useTimeOverride } from '../shared/timeOverride';
 import { dayPhase, formatGameClock, darkness } from '../game/time';
 
 // 게임 시간 훅 — UI가 "지금 몇 시·낮밤·어두움"을 아는 단일 출처.

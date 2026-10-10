@@ -1,13 +1,13 @@
 // 수역 데이터 — 새 수역 추가 시 여기 행 추가만으로 SpotId까지 자동 확장
 // boatTier 0 = 배 없이 가능(마을), 1+ = 대양(배 필요). region = **legacy 열**(admin 표기용) —
 // 게임 로직의 그룹핑은 존 트리(data/zones.ts, spec/zone-tree.md)가 정본이다. 불변 데이터.
-// powerReq = 낚싯대 파워 요구량(stats.rodPower). 1-3부터는 **Lv 단위로 지정해 stats.powerOfLevel
-// 로 환산**하는 관례가 시작됐다(기존 행은 파워 리터럴 — 스케일 혼재는 status.md ⬜). 미달이면 그
-// 수역에서 존이 사라지고 일반 가중치·입질 시간 페널티를 받는다(stats.powerZones 참조).
+// powerReq = 낚싯대 파워 요구량(stats.rodPower). 1-3부터 Lv 표기를 파워 리터럴로 적는다
+// (환산식 10+(Lv-1)*5 — stats.powerOfLevel과 같은 식. 기존 행도 파워 리터럴이라 통일).
+// data가 game을 import하면 game→data 순환이 생겨 층서(game > data)가 깨진다.
+// 미달이면 그 수역에서 존이 사라지고 일반 가중치·입질 시간 페널티를 받는다(stats.powerZones 참조).
 // rarityWeight = 등급 예산 수역 오버라이드 — 지역 간 등급 분포 차등용(미기재 등급은 글로벌 표).
 import type { RarityId } from './rarity.js';
 import { RARITY } from './rarity.js';
-import { powerOfLevel } from '../game/stats.js';
 
 const DATA = [
   { id: 'pond',  name: '마을 연못',  boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
@@ -31,10 +31,10 @@ const DATA = [
   // 오버라이드: 2026-08-27 관리자 시뮬 확정분 — **공통/희귀/영웅 예산 전 부 ×2 상향**
   // (저등급 체감 개선: 흔한 물고기가 더 자주 나온다. legendary는 미기재 = 글로벌 1 유지).
   { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
-    powerReq: powerOfLevel(16),   // = 85
+    powerReq: 85,   // Lv16 환산 (10+(16-1)*5)
     rarityWeight: { common: 328, rare: 54, epic: 16 } },
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
-    powerReq: powerOfLevel(17),   // = 90
+    powerReq: 90,   // Lv17 환산 (10+(17-1)*5)
     rarityWeight: { common: 288, rare: 56, epic: 30 } },
 ] as const;
 

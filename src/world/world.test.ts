@@ -6,14 +6,15 @@ import { ZONES, zoneById, zoneOfSpot } from '../data/zones';
 import { WATER_STYLE } from '../pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  CAST_RANGE, REGION_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
+  REGION_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   V_BOATSHOP, V_BOATSHOP_TRIGGER,
   WORLD, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
 } from './index';
+import { CAST_RANGE } from '../game/balance';
 import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
-import { EARTH_MAP, worldToEarth, implementedRect } from '../canvas/scenes/atlas';
+import { EARTH_MAP, worldToEarth, implementedRect } from '../overlays/modal/atlas';
 
 // 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
 const worldAt = (lon: number, lat: number): [number, number] => [
@@ -83,7 +84,7 @@ describe.each(Object.values(REGION_PACKS))('$id R4b: 레벨디자인 무결성 (
   });
 
   it('시작점에서 곧바로 캐스팅할 수 없다 (군집은 사거리 밖)', () => {
-    expect(nearestSchoolInRange(pack.schools, pack.spawn.x, pack.spawn.y), pack.id).toBeNull();
+    expect(nearestSchoolInRange(pack.schools, pack.spawn.x, pack.spawn.y, CAST_RANGE), pack.id).toBeNull();
   });
 
   it('모든 군집·트리거는 시작점에서 도달 가능 (BFS)', () => {
@@ -423,9 +424,9 @@ describe.each(Object.values(REGION_PACKS))('$id 지역 이동 게이트: 재발�
 describe('R5: 군집 판정 반경', () => {
   it('반경 안이면 가장 가까운 군집, 밖이면 null', () => {
     const s = V_SCHOOLS[0];
-    expect(nearestSchoolInRange(V_SCHOOLS, s.x + 10, s.y - 10)?.id).toBe(s.id);
-    expect(nearestSchoolInRange(V_SCHOOLS, V_SPAWN.x, V_SPAWN.y)).toBeNull();
-    expect(nearestSchoolInRange(WORLD_SCHOOLS, WORLD_SPAWN.x, WORLD_SPAWN.y)).toBeNull();
+    expect(nearestSchoolInRange(V_SCHOOLS, s.x + 10, s.y - 10, CAST_RANGE)?.id).toBe(s.id);
+    expect(nearestSchoolInRange(V_SCHOOLS, V_SPAWN.x, V_SPAWN.y, CAST_RANGE)).toBeNull();
+    expect(nearestSchoolInRange(WORLD_SCHOOLS, WORLD_SPAWN.x, WORLD_SPAWN.y, CAST_RANGE)).toBeNull();
   });
 });
 

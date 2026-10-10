@@ -21,7 +21,7 @@ import { nextPhase, phaseDurationMs } from '../game/fishing';
 import type { FishingPhase } from '../game/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../game/stats';
 import { CAST_RANGE } from '../game/balance';
-import { useCanvasCover } from '../admin/canvasCover';
+import { useCanvasCover } from '../shared/canvasCover';
 import { renderRegion } from '../canvas/scenes/region.js';
 import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../canvas/scenes/worldmap.js';
 import { CANVAS_W, CANVAS_H } from '../pixel/common.js';

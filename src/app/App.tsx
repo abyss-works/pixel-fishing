@@ -1,25 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { BASE_PACKS, LIVE_REGIONS, REGION_PACKS } from './world';
-import type { FurnitureId, Point, SceneRef } from './world';
-import type { LocationRef } from './data/places';
-import Base from './canvas/Base';
-import Field from './canvas/Field';
-import FacilityModal from './overlays/modal/FacilityModal';
-import StatsModal from './overlays/modal/StatsModal';
-import MessageLog from './overlays/hud/MessageLog';
-import ResourceBar from './overlays/hud/ResourceBar';
-import { baitById } from './data/baits';
-import { cx } from './ui/cx';
-import Sidebar from './sidebar';
-import { DEFAULT_TAB } from './sidebar/tabs';
-import type { TabKey } from './sidebar/tabs';
-import type { ActionPanel } from './overlays/modal/FacilityModal';
-import { useGame } from './hooks/useGame';
-import { useAccount } from './hooks/useAccount';
-import { useMessageLog } from './hooks/useMessageLog';
-import { useSpotState } from './world/currentSpot';
-import WorldMapModal from './overlays/modal/WorldMapModal';
-import Button from './ui/Button';
+import { BASE_PACKS, LIVE_REGIONS, REGION_PACKS } from '../world';
+import type { FurnitureId, Point, SceneRef } from '../world';
+import type { LocationRef } from '../data/places';
+import Base from '../canvas/Base';
+import Field from '../canvas/Field';
+import FacilityModal from '../overlays/modal/FacilityModal';
+import StatsModal from '../overlays/modal/StatsModal';
+import MessageLog from '../overlays/hud/MessageLog';
+import ResourceBar from '../overlays/hud/ResourceBar';
+import { baitById } from '../data/baits';
+import { cx } from '../ui/cx';
+import Sidebar from '../sidebar';
+import { DEFAULT_TAB } from '../sidebar/tabs';
+import type { TabKey } from '../sidebar/tabs';
+import type { ActionPanel } from '../overlays/modal/FacilityModal';
+import { useGame } from '../hooks/useGame';
+import { useAccount } from '../hooks/useAccount';
+import { useMessageLog } from '../hooks/useMessageLog';
+import { useSpotState } from '../world/currentSpot';
+import WorldMapModal from '../overlays/modal/WorldMapModal';
+import Button from '../ui/Button';
 
 // 앱 셸 (계층: layout) — 씬 상태·탭·정비 패널과 화면 배치만 소유한다.
 // 씬 그래프(어디서 어디로, 어떤 안내문으로)는 팩 데이터가 결정 — 새 지역/거점 추가에 App 무수정.

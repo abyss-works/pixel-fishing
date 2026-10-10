@@ -16,7 +16,7 @@ import PillButton from '../../ui/PillButton';
 import SubTabs from '../../ui/SubTabs';
 import { RarityDot } from '../../ui/RarityTag';
 import { groupInstances } from '../../shared/bagRows';
-import InstanceLine, { UnsizedLine } from './InstanceLine';
+import InstanceLine, { UnsizedLine } from '../../shared/InstanceLine';
 import BagCards from './BagCards';
 import { setBagSection, toggleBagRow, useBagView } from '../../shared/bagView';
 

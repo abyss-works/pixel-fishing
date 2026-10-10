@@ -5,9 +5,8 @@ import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import { cellDefAt } from './mask';
 import { zoneById, topZoneOf } from '../data/zones';
 import type { ZoneId } from '../data/zones';
-import { CAST_RANGE } from '../game/balance';
-
-export { CAST_RANGE }; // 군집 판정 반경 — 기존 import 경로 호환
+// 반경은 호출자가 준다 — 기본값용 상수(CAST_RANGE, game/balance 소관)를 여기서
+// import하면 층서(game > world)가 깨진다. 호출부는 명시 전달.
 
 export const inRect = (x: number, y: number, r: Rect): boolean =>
   x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
@@ -150,7 +149,7 @@ export function entryPoint(pack: RegionPack, trig: TriggerDef, from: Point): Poi
 }
 
 export function nearestSchoolInRange(
-  schools: School[], x: number, y: number, range = CAST_RANGE,
+  schools: School[], x: number, y: number, range: number,
 ): School | null {
   let best: School | null = null, bestD = range;
   for (const s of schools) {
