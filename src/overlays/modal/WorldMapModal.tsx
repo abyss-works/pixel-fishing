@@ -3,6 +3,7 @@ import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import { WORLD_MAP } from '../../world';
 import type { CompiledMap, Point } from '../../world/types';
+import { useSpotState } from '../../world/currentSpot';
 
 // 세계지도 모달 — 미니맵 클릭으로 열린다(구 R23b "지역 탭" 대체, 사용자 확정 2026-08-28).
 // 지구 전체를 그리되 지금 항해할 수 있는 세계(구현 영역)만 컬러, 나머지는 흑백 —
@@ -19,11 +20,14 @@ interface AtlasModule {
                        player: Point | null, t: number) => void;
 }
 
-export default function WorldMapModal({ player, onClose }: {
-  /** 플레이어 위치(world 팩 좌표) — 마을 씬이면 null(경위도 없음, 항구 점이 고향을 가리킨다) */
-  player: Point | null;
+export default function WorldMapModal({ world, onClose }: {
+  /** 병합 바다 씬에서 열렸는가 — 마을 씬이면 위치가 아니라 항구 점을 보여준다 */
+  world: boolean;
   onClose: () => void;
 }) {
+  // 열 때만 구독한다 — App 상시 구독은 이동 중 전 트리 리렌더를 유발했다.
+  const { pos } = useSpotState();
+  const player = world ? pos : null;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<Point | null>(player);
   const [atlas, setAtlas] = useState<AtlasModule | null>(null);

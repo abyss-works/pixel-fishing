@@ -23,11 +23,10 @@ import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../g
 import { CAST_RANGE } from '../game/balance';
 import { useCanvasCover } from '../shared/canvasCover';
 import { renderRegion } from '../canvas/scenes/region.js';
-import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../canvas/scenes/worldmap.js';
+
 import { CANVAS_W, CANVAS_H } from '../pixel/common.js';
 import GameFrame from './GameFrame';
 import NightOverlay from '../overlays/hud/NightOverlay';
-import TimeBadge from '../overlays/hud/TimeBadge';
 import CatchCard from '../overlays/hud/CatchCard';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -66,7 +65,7 @@ export default function Field({
 }: Props) {
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const minimapRef = useRef<HTMLCanvasElement>(null);
+
   // 캔버스 덮개(?admin 토글) — **캔버스 요소만** 조건부 렌더. 컴포넌트·상태머신·타이머는
   // 계속 돌고(렌더링은 한다) 표시만 내려간다 — 겉보기 "멈춘 게임". ctx가 없으면 렌더
   // 루프가 자연히 스킵되고, 덮개를 여는 순간 effect가 재실행돼 다시 붙는다(deps에 covered).
@@ -369,14 +368,6 @@ export default function Field({
         red: pz ? pz.red / 100 : 0,
         t: now / 1000,
       });
-      // 필드 위 미니맵 오버레이 — 현재 위치 기준 crop(구 지역 한 장 시야, 세계지도는 모달).
-      // 상단에 표시 존 이름(어군 우선 규칙) — 통행 전용 물은 낚시 수역이 없어 위치 감각을 보완.
-      const mmCtx = minimapRef.current?.getContext('2d');
-      if (mmCtx) {
-        renderWorldMap(mmCtx, def, posRef.current, gameRef.current.boat,
-          { t: now / 1000, view: minimapView(def, posRef.current),
-            zoneName: displayZone ? zoneById(displayZone)?.name ?? null : null });
-      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -423,25 +414,7 @@ export default function Field({
       {/* 아래는 **스테이지 기준** — 프레임의 형제로 레터박스 여백까지 쓴다.
           자원바·미끼 배지는 App 조합으로 올라갔다. 남은 것 중 미니맵·획득카드·상태는
           프레임 ref·낚시 상태에 묶여 있어 씬 호스트에 둔다 (예외, 층서 문서 참조) */}
-
-      {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다.
-          현재 위치 기준 crop(1344×756 — 필드 시야의 3배, 구 지역 한 장 스케일)만 본다. 배면
-          크기는 시야 크기에 상한 912px — renderWorldMap이 pack 좌표를 스케일해 그린다.
-          전체 세계는 미니맵 클릭(월드맵). 위 좌상단에 시간 배지(해/달+시계). */}
-      <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video">
-        {covered ? (
-          <div className="w-full h-full border border-line rounded-sm bg-bg" aria-hidden="true" />
-        ) : (
-          <canvas ref={minimapRef}
-                  width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
-                  height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
-                                     * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
-                  className="w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
-                  aria-label="미니맵"
-                  onClick={() => onOpenMap?.()} />
-        )}
-        <TimeBadge className="top-1.5 left-1.5" />
-      </div>
+      {/* 미니맵은 App 조합(Minimap)으로 올라갔다 — 자기 캔버스를 소유하고 변경 시에만 그린다. */}
     </>
   );
 }
