@@ -2,20 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import { BASE_PACKS, LIVE_REGIONS, REGION_PACKS } from './world';
 import type { FurnitureId, Point, SceneRef } from './world';
 import type { LocationRef } from './data/places';
-import Base from './canvas/Base';
-import Field from './canvas/Field';
-import FacilityModal from './stage/FacilityModal';
-import StatsModal from './stage/StatsModal';
-import MessageLog from './stage/MessageLog';
+import Base from './views/scene/Base';
+import Field from './views/scene/Field';
+import FacilityModal from './views/modal/FacilityModal';
+import StatsModal from './views/modal/StatsModal';
+import MessageLog from './views/hud/MessageLog';
 import Sidebar from './sidebar';
 import { DEFAULT_TAB } from './sidebar/tabs';
 import type { TabKey } from './sidebar/tabs';
-import type { ActionPanel } from './stage/FacilityModal';
+import type { ActionPanel } from './views/modal/FacilityModal';
 import { useGame } from './hooks/useGame';
 import { useAccount } from './hooks/useAccount';
 import { useMessageLog } from './hooks/useMessageLog';
 import { useSpotState } from './world/currentSpot';
-import WorldMapModal from './stage/WorldMapModal';
+import WorldMapModal from './views/modal/WorldMapModal';
 import Button from './ui/Button';
 
 // 앱 셸 (계층: layout) — 씬 상태·탭·정비 패널과 화면 배치만 소유한다.
