@@ -37,7 +37,7 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
       <span className="flex justify-center mt-auto">
         {done
           ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
-          : <Button variant="primary" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+          : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
       </span>
     </div>
   );

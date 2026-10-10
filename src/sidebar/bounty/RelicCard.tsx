@@ -42,7 +42,7 @@ export default function RelicCard({ artifact, owned, materialCount, busy, onExch
       <span className="flex justify-center mt-auto">
         {owned
           ? <Button size="sm" disabled>보유 중</Button>
-          : <Button variant="primary" disabled={materialCount < 1 || busy} onClick={onExchange}>교환하기</Button>}
+          : <Button variant="primary" full disabled={materialCount < 1 || busy} onClick={onExchange}>교환하기</Button>}
       </span>
     </div>
   );

@@ -206,10 +206,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn:disabled { opacity: 0.4; cursor: default; }
 
-  /* 확정 버튼 — 항상 전폭 블록 (구 .primary의 레이아웃 규칙 흡수) */
+  /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리) */
   .pf-btn.primary {
-    display: block;
-    width: 100%;
     margin-top: 12px;
     background: var(--c-gold);
     border-color: #c9a227;
@@ -219,6 +217,12 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn.primary:active:not(:disabled) {
     box-shadow: inset -1px -1px 0 rgba(255, 255, 255, 0.5), inset 1px 1px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  /* 전폭 블록 — Button full 속성. variant와 무관하게 좌우로 채운다 */
+  .pf-btn.full {
+    display: block;
+    width: 100%;
   }
 
   .pf-btn.ghost {

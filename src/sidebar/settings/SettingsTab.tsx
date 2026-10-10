@@ -114,7 +114,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         </div>
       </div>
       <div className="flex flex-col gap-2 mb-2">
-        <IconButton glyph="key" label="계정 관리" variant="primary"
+        <IconButton glyph="key" label="계정 관리" variant="primary" full
                     onClick={() => setAccountOpen(true)} />
       </div>
 

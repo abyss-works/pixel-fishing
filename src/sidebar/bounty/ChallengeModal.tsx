@@ -109,7 +109,7 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
             ))}
           </span>
           <span className="flex justify-center">
-            <Button variant="primary" onClick={() => strikeRef.current()}>챔질!</Button>
+            <Button variant="primary" full onClick={() => strikeRef.current()}>챔질!</Button>
           </span>
         </>
       ) : (

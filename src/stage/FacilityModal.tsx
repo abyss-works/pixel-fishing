@@ -239,7 +239,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
             {lockedCount > 0 && (
               <Note>잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
             )}
-            <Button variant="primary" disabled={total === 0 || busy}
+            <Button variant="primary" full disabled={total === 0 || busy}
                     onClick={() => onSell(soldUids)}>
               판매하기 (+{total}G)
             </Button>
@@ -269,7 +269,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
         { label: '바 시간', value: c.sweep, next: n.sweep },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
-      <Button variant="primary" disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
+      <Button variant="primary" full disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
         강화하기 (-{cost.toLocaleString()}G)
       </Button>
     </ModalCard>
@@ -301,7 +301,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
         { label: '효과', value: next.tier === 1 ? '대양 진입 + 태평양 낚시' : opened ? `[${opened.name}] 해역 해금` : '항해 속도 상승' },
       ]} />
       {!check.ok && <Note tone="warn">{REJECT_TEXT[check.reason]}</Note>}
-      <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
+      <Button variant="primary" full disabled={!check.ok || busy} onClick={onBuy}>
         구매하기 (-{next.price.toLocaleString()}G)
       </Button>
     </ModalCard>

@@ -41,13 +41,13 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
       {!done && ticketMins !== null && (
         <span className="text-accent text-xs">
           도전권 유효 — 약 {ticketMins}분 남음
-          {' '}<Button size="sm" variant="primary" disabled={busy} onClick={onStartChallenge}>도전 시작</Button>
+          {' '}<Button size="sm" variant="primary" full disabled={busy} onClick={onStartChallenge}>도전 시작</Button>
         </span>
       )}
           <span className="flex justify-center mt-auto">
             {done
               ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
-              : <Button variant="primary" disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+              : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
           </span>
         </span>
       </div>

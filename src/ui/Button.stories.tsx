@@ -29,3 +29,11 @@ export const Small: Story = {
 export const Disabled: Story = {
   args: { variant: 'primary', disabled: true, children: '처리 중' },
 };
+
+export const Full: Story = {
+  args: { variant: 'primary', full: true, children: '확정' },
+};
+
+export const InlinePrimary: Story = {
+  args: { variant: 'primary', children: '인라인 확정' },
+};

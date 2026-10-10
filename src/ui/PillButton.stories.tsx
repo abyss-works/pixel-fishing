@@ -21,3 +21,7 @@ export const Active: Story = {
 export const Disabled: Story = {
   args: { disabled: true, children: '보유량 없음' },
 };
+
+export const Full: Story = {
+  args: { full: true, children: '전체 너비' },
+};
