@@ -11,15 +11,15 @@ import type { TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../hotkeys';
 import TabBar from '../ui/TabBar';
 import TabIcon from './TabIcon';
-import VHelp from '../pages/help/VHelp';
-import VRegion from '../pages/region/VRegion';
-import BagTab from '../pages/bag/BagTab';
-import DexTab from '../pages/dex/DexTab';
-import SettingsTab from '../pages/settings/SettingsTab';
-import VAdmin from '../pages/admin/VAdmin';
+import VHelp from '../views/tabs/help/VHelp';
+import VRegion from '../views/tabs/region/VRegion';
+import BagTab from '../views/tabs/bag/BagTab';
+import DexTab from '../views/tabs/dex/DexTab';
+import SettingsTab from '../views/tabs/settings/SettingsTab';
+import VAdmin from '../views/tabs/admin/VAdmin';
 import { setBagLayout, useBagView } from '../shared/bagView';
-import type { DexView } from '../pages/dex/DexTab';
-import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './gate';
+import type { DexView } from '../views/tabs/dex/DexTab';
+import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../shared/gate';
 
 // 탭은 씬과 무관하게 항상 5개 고정 + 조건부 관리자 탭(별도 — isAdminVisible).
 // 관리자 탭은 ?admin && (로컬 또는 소유자 계정)일 때만 6번 탭으로 노출된다.
