@@ -14,7 +14,7 @@ import {
 } from './index';
 import { CAST_RANGE } from '../game/balance';
 import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
-import { EARTH_MAP, worldToEarth, implementedRect } from '../canvas/scenes/atlas';
+import { EARTH_MAP, worldToEarth, implementedRect } from '../overlays/modal/atlas';
 
 // 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
 const worldAt = (lon: number, lat: number): [number, number] => [
