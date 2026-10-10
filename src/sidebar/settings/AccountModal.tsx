@@ -168,7 +168,7 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose, a
         가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 
       <div className="flex gap-2 mt-3">
-        <Button variant="ghost" className="w-full" onClick={onClose}>닫기</Button>
+        <Button className="w-full" onClick={onClose}>닫기</Button>
       </div>
     </Modal>
   );

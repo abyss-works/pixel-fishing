@@ -9,7 +9,7 @@ import {
 import { SPOTS } from '../data/spots';
 import type { RegionId } from '../data/places';
 import ArrowButton from '../ui/ArrowButton';
-import CloseButton from '../ui/CloseButton';
+import Button from '../ui/Button';
 import DataTable from '../ui/DataTable';
 import HelpHint from '../ui/HelpHint';
 import Modal from '../ui/Modal';
@@ -161,7 +161,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             : '낚싯대가 좋은만큼 물고기를 낚기 쉬워졌다.'}
         </Note>
 
-        <CloseButton onClick={onClose} />
+        <Button onClick={onClose}>닫기</Button>
       </Panel>
     </Modal>
   );

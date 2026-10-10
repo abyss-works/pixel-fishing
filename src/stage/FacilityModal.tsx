@@ -15,7 +15,6 @@ import type { BaseId } from '../data/places';
 import { zoneOfPort } from '../data/bounties';
 import { zoneById } from '../data/zones';
 import BountyPanel from '../sidebar/bounty/BountyPanel';
-import CloseButton from '../ui/CloseButton';
 import Panel from '../ui/Panel';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -104,8 +103,8 @@ function ModalCard({ title, onClose, children }: {
   return (
     <Panel title={title} className="min-h-0">
       {children}
-      {/* ghost가 아닌 CloseButton — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
-      <CloseButton onClick={onClose} />
+      {/* ghost가 아닌 기본 버튼 — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
+      <Button onClick={onClose}>닫기</Button>
     </Panel>
   );
 }
