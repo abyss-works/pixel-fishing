@@ -58,7 +58,68 @@ describe('api 계층 경계', () => {  it('우회 패턴을 탐지한다 — 큰
     }
     expect(offenders).toEqual([]);
   });
+
+  it('층서를 거슬러 import하지 않는다 — 단일 기준: 의존 범위', () => {
+    // app > sidebar > canvas > overlays > views > features
+    //   > capabilities(hooks·api·backend·admin·pixel·shared·ui, 내부 무순서)
+    //   > domain(game > world > data)
+    // capabilities 내부는 backend/* 직접 규칙(위 테스트)이 별도로 잡는다.
+    expect(tierOf('app/App.tsx')).toBe(0);
+    expect(tierOf('views/bag/BagTab.tsx')).toBe(4);
+    expect(tierOf('game/logic.ts')).toBe(7);
+    expect(tierOf('data/fish.ts')).toBe(9);
+    expect(tierOf('ui/Button.tsx')).toBe(6);
+    const offenders: string[] = [];
+    for (const [path, src] of Object.entries(sources)) {
+      if (path.startsWith('./')) continue; // api 계층 자신
+      const rel = path.replace(/^\.\.\//, '');
+      if (/\.test\.tsx?$/.test(rel)) continue;
+      if (/\.stories\.tsx?$/.test(rel)) continue;
+      const from = tierOf(rel);
+      for (const target of importedTops(path, src)) {
+        if (tierOf(target) < from) offenders.push(`${rel} -> ${target}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
+
+// 층 배정 — 같은 최상위 폴더는 같은 층. 루트 파일(main·errors 등)은 capabilities 취급.
+const TIER_ORDER = ['app', 'sidebar', 'canvas', 'overlays', 'views', 'features'];
+
+function tierOf(rel: string): number {
+  const top = rel.split('/')[0];
+  const at = TIER_ORDER.indexOf(top);
+  if (at >= 0) return at;
+  if (['hooks', 'api', 'backend', 'admin', 'pixel', 'shared', 'ui'].includes(top)) return 6;
+  if (top === 'game') return 7;
+  if (top === 'world') return 8;
+  if (top === 'data') return 9;
+  return 6; // src 루트 파일
+}
+
+// 상대 import를 최상위 폴더로 해소한다. 절대·패키지·확장자 경로는 무시.
+function importedTops(selfPath: string, src: string): string[] {
+  const out: string[] = [];
+  const re = /(?:import\s+[^;]*?from\s*|import\s*\()\s*["']([^"']+)["']/g;
+  // selfPath는 '../x' 형태 (api 기준) — src 루트 기준으로 정규화한다.
+  const base = selfPath.startsWith('./') ? 'api/' : selfPath.replace(/^\.\.\//, '');
+  const dir = base.includes('/') ? base.slice(0, base.lastIndexOf('/')) : '';
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    const p = m[1];
+    if (!p.startsWith('.')) continue;
+    const segs = (dir + '/' + p).split('/');
+    const norm: string[] = [];
+    for (const s of segs) {
+      if (s === '.' || s === '') continue;
+      if (s === '..') norm.pop();
+      else norm.push(s);
+    }
+    if (norm.length > 0) out.push(norm[0]);
+  }
+  return [...new Set(out)];
+}
 
 // 읽기 직접 참조 — import문 안의 식별자만 본다 (주석·문자열 제외).
 // 구 패턴(\breadBounty\b)은 주석까지 걸려 BountyPanel 설명문이 오탐됐다.
