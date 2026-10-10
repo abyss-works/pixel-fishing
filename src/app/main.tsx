@@ -2,9 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import AdminApp from './admin/AdminApp.tsx'
-import { initObservability, Sentry } from './observability.ts'
-import { installGlobalFailureHandlers, fail } from './errors.ts'
+import AdminApp from '../admin/AdminApp.tsx'
+import { initObservability, Sentry } from '../observability.ts'
+import { installGlobalFailureHandlers, fail } from '../errors.ts'
 
 // 렌더보다 먼저 — 부팅 중 터지는 예외도 잡히도록 (DSN 없으면 no-op)
 initObservability()
