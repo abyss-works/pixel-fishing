@@ -4,17 +4,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import BountyPanel from './BountyPanel';
-import { kstDay } from '../api';
-import { dailyQuestFor } from '../data/bounties';
-import { newState } from '../game/logic';
-import type { GameState } from '../game/logic';
-import type { BountySnapshot } from '../api';
+import { kstDay } from '../../api';
+import { dailyQuestFor } from '../../data/bounties';
+import { newState } from '../../game/logic';
+import type { GameState } from '../../game/logic';
+import type { BountySnapshot } from '../../api';
 
 afterEach(() => { cleanup(); mockSnap = null; });
 
 let mockSnap: BountySnapshot | null = null;
-vi.mock('../api', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('../api')>();
+vi.mock('../../api', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../api')>();
   return { ...mod, readBounty: () => Promise.resolve(mockSnap) };
 });
 

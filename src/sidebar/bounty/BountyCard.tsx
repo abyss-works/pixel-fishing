@@ -2,10 +2,10 @@
 // 수배판 3열과 동일한 구조다. 구조가 바뀌면 여기만 고친다.
 // 디자인: 이중 골드 프레임 + 가운데 정렬 + Silkscreen 마스트헤드/보상 숫자.
 // (DESIGN.md — 기억에 남는 건 프레임과 마스트헤드 하나뿐)
-import { zoneById } from '../data/zones.js';
-import type { BountyQuest } from '../data/bounties.js';
-import Button from '../ui/Button';
-import { RarityText } from '../ui/RarityTag';
+import { zoneById } from '../../data/zones.js';
+import type { BountyQuest } from '../../data/bounties.js';
+import Button from '../../ui/Button';
+import { RarityText } from '../../ui/RarityTag';
 
 const DIFF_HEAD: Record<string, string> = {
   easy: 'text-text-dim', normal: 'text-accent', hard: 'text-orange',

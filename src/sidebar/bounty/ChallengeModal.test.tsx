@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import ChallengeModal from './ChallengeModal';
-import { resetKeyScopes } from '../hotkeys';
+import { resetKeyScopes } from '../../hotkeys';
 
 beforeEach(() => { vi.useFakeTimers(); resetKeyScopes(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); resetKeyScopes(); });

@@ -1,9 +1,9 @@
 // 유물 카드 — 수배판 유물 탭의 교환 카드. 일반 카드와 같은 디자인 언어
 // (프레임·마스트헤드·룰선·중앙정렬)를 쓴다. 효과 수치는 data에서 뽑아 적는다 —
 // 손으로 적으면 밸런스를 바꾸는 순간 옛 숫자로 남는다(HelpPanel 선례).
-import type { Artifact } from '../data/artifacts.js';
-import Button from '../ui/Button';
-import { RarityText } from '../ui/RarityTag';
+import type { Artifact } from '../../data/artifacts.js';
+import Button from '../../ui/Button';
+import { RarityText } from '../../ui/RarityTag';
 
 /** 효과 행 — data 수치에서 문장을 뽑는다. 없는 효과는 행을 내지 않는다 */
 function effectLines(a: Artifact): string[] {

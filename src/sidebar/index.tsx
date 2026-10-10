@@ -13,11 +13,11 @@ import TabBar from '../ui/TabBar';
 import TabIcon from './TabIcon';
 import HelpPanel from './HelpPanel';
 import RegionTab from './RegionTab';
-import BagTab from './BagTab';
-import DexTab from './DexTab';
-import SettingsTab from './SettingsTab';
+import BagTab from './bag/BagTab';
+import DexTab from './dex/DexTab';
+import SettingsTab from './settings/SettingsTab';
 import AdminTab from './AdminTab';
-import { setBagLayout, useBagView } from './bagView';
+import { setBagLayout, useBagView } from './bag/bagView';
 import type { DexView } from './shared';
 import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './shared';
 

@@ -2,12 +2,12 @@
 // 시도 판정은 클라 주장(PERFECT 선례) — 서버는 티켓 유효+수주 활성+주장 정합성만 본다.
 // 키는 exclusive 스코프로 가져간다 — 아래 필드 낚시로 새지 않는다 (hotkeys 계층).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CHALLENGE_MAX_MISS, CHALLENGE_RED, CHALLENGE_ROUNDS, CHALLENGE_YELLOW } from '../game/balance.js';
-import { newChallenge, strikeChallenge } from '../game/challenge.js';
-import type { ChallengeRun } from '../game/challenge.js';
-import { judgeTiming } from '../game/logic.js';
-import { useKeyScope } from '../hotkeys';
-import Button from '../ui/Button';
+import { CHALLENGE_MAX_MISS, CHALLENGE_RED, CHALLENGE_ROUNDS, CHALLENGE_YELLOW } from '../../game/balance.js';
+import { newChallenge, strikeChallenge } from '../../game/challenge.js';
+import type { ChallengeRun } from '../../game/challenge.js';
+import { judgeTiming } from '../../game/logic.js';
+import { useKeyScope } from '../../hotkeys';
+import Button from '../../ui/Button';
 
 const TICK_MS = 50;
 

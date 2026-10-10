@@ -5,28 +5,28 @@
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { dailyQuestFor, zoneOfPort } from '../data/bounties.js';
-import type { BountyDifficulty, BountyPort, BountyQuest } from '../data/bounties.js';
-import { artifactOfZone } from '../data/artifacts.js';
-import { namedById } from '../data/named.js';
-import { challengeWindowMs, ticketRemainingMs } from '../game/challenge.js';
-import { rodAxes } from '../game/stats.js';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../game/balance.js';
-import { REJECT_TEXT, licenseConditions } from '../game/logic.js';
-import type { LicenseCondition } from '../game/logic.js';
-import type { GameState } from '../game/logic.js';
-import type { GameAction } from '../game/actions.js';
-import { readBounty, kstDay } from '../api';
-import type { BountySnapshot } from '../api';
-import type { DispatchResult, MaybePromise } from '../api';
-import { when } from '../api';
+import { dailyQuestFor, zoneOfPort } from '../../data/bounties.js';
+import type { BountyDifficulty, BountyPort, BountyQuest } from '../../data/bounties.js';
+import { artifactOfZone } from '../../data/artifacts.js';
+import { namedById } from '../../data/named.js';
+import { challengeWindowMs, ticketRemainingMs } from '../../game/challenge.js';
+import { rodAxes } from '../../game/stats.js';
+import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../game/balance.js';
+import { REJECT_TEXT, licenseConditions } from '../../game/logic.js';
+import type { LicenseCondition } from '../../game/logic.js';
+import type { GameState } from '../../game/logic.js';
+import type { GameAction } from '../../game/actions.js';
+import { readBounty, kstDay } from '../../api';
+import type { BountySnapshot } from '../../api';
+import type { DispatchResult, MaybePromise } from '../../api';
+import { when } from '../../api';
 import BountyCard from './BountyCard';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import ChallengeModal from './ChallengeModal';
-import Note from '../ui/Note';
-import PixelIcon from '../ui/PixelIcon';
-import SubTabs from '../ui/SubTabs';
+import Note from '../../ui/Note';
+import PixelIcon from '../../ui/PixelIcon';
+import SubTabs from '../../ui/SubTabs';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 

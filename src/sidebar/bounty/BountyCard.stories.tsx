@@ -3,7 +3,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import BountyCard from './BountyCard';
-import { bountyById } from '../data/bounties';
+import { bountyById } from '../../data/bounties';
 
 const meta: Meta<typeof BountyCard> = {
   title: 'Bounty/Card',

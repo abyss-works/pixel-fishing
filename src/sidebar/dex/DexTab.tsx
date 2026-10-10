@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import {
   FISH, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile,
-} from '../game/logic';
-import type { Fish, FormId, GameState } from '../game/logic';
-import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../data/zones';
-import { BOUNTIES } from '../data/bounties';
-import type { BountyQuest } from '../data/bounties';
-import { namedById } from '../data/named';
-import type { ZoneId } from '../data/zones';
-import { cx } from '../ui/cx';
-import Button from '../ui/Button';
-import Modal from '../ui/Modal';
-import SubTabs from '../ui/SubTabs';
-import FishSprite from '../ui/FishSprite';
-import { RarityText, RarityDot } from '../ui/RarityTag';
-import { RARITY_CARD, rarityRank } from './shared';
-import type { DexView } from './shared';
+} from '../../game/logic';
+import type { Fish, FormId, GameState } from '../../game/logic';
+import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../../data/zones';
+import { BOUNTIES } from '../../data/bounties';
+import type { BountyQuest } from '../../data/bounties';
+import { namedById } from '../../data/named';
+import type { ZoneId } from '../../data/zones';
+import { cx } from '../../ui/cx';
+import Button from '../../ui/Button';
+import Modal from '../../ui/Modal';
+import SubTabs from '../../ui/SubTabs';
+import FishSprite from '../../ui/FishSprite';
+import { RarityText, RarityDot } from '../../ui/RarityTag';
+import { RARITY_CARD, rarityRank } from '../shared';
+import type { DexView } from '../shared';
 
 // 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 폼을 전환하면 이름/로어/가격/마릿수/크기/첫 조우일이

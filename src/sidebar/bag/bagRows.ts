@@ -4,10 +4,10 @@
 // 폼(변이)으로 행을 가르지 않는다. 스키마상 변이는 별개 기록이지만(`dex[id][form]`), 가방은
 // "지금 뭘 들고 있나"를 보는 화면이고 종마다 행이 둘로 갈리면 목록이 두 배가 된다.
 // 변이는 개체 줄의 배지로 구분한다 — 최대 배지와 같은 방식.
-import { instanceFish, priceOfInstance } from '../game/logic';
-import type { FishInstance } from '../game/logic';
-import type { Fish, FormId } from '../data/fish';
-import { rarityRank } from './shared';
+import { instanceFish, priceOfInstance } from '../../game/logic';
+import type { FishInstance } from '../../game/logic';
+import type { Fish, FormId } from '../../data/fish';
+import { rarityRank } from '../shared';
 
 export interface BagRow {
   key: string;           // fishId — 행 식별자

@@ -6,7 +6,7 @@ import App from './App';
 import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
-import { resetBagView } from './sidebar/bagView';
+import { resetBagView } from './sidebar/bag/bagView';
 import { resetCanvasCover } from './admin/canvasCover';
 import { resetTimeOverride } from './admin/timeOverride';
 import { resetKeyScopes } from './hotkeys';

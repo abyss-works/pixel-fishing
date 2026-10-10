@@ -1,9 +1,9 @@
-import { sizePercentile } from '../game/logic';
-import type { FishInstance } from '../game/logic';
-import type { Fish } from '../data/fish';
-import { cx } from '../ui/cx';
-import PixelIcon from '../ui/PixelIcon';
-import SizeBar from '../ui/SizeBar';
+import { sizePercentile } from '../../game/logic';
+import type { FishInstance } from '../../game/logic';
+import type { Fish } from '../../data/fish';
+import { cx } from '../../ui/cx';
+import PixelIcon from '../../ui/PixelIcon';
+import SizeBar from '../../ui/SizeBar';
 
 // 개체 한 마리의 표시 — 가방 탭과 판매 패널이 같은 줄을 쓴다.
 // **고정 그리드**다: 값의 자릿수가 달라도 열이 흔들리면 개체끼리 크기 비교가 안 된다.
