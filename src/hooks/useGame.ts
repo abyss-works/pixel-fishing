@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, loadLegacy, LEGACY_KEY, when } from '../api';
 import type { Backend, DispatchResult, MaybePromise } from '../api';
 import type { GameAction } from '../game/actions';
@@ -73,11 +74,19 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
 
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
+  const client = useQueryClient();
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
     when(backendRef.current.dispatch(action), r => {
       if (r.status === 'ok') {
         setGame(r.state);
         if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
+        // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
+        // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
+        if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
+            || action.type === 'resolveChallenge'
+            || (action.type === 'catch' && r.result.type === 'catch' && r.result.ticket)) {
+          void client.invalidateQueries({ queryKey: ['bounty'] });
+        }
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
       return r;

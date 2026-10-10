@@ -34,7 +34,7 @@ function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; child
 export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
   // 남은 수주권 — 서버(DB)가 진실이라 액션마다 다시 읽는다(game 참조 변경이 트리거).
   // 오프라인이면 칸 자체를 숨긴다 (0으로 보이면 거짓말이다).
-  const { snap } = useBounty(game);
+  const { snap } = useBounty();
   const tickets = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
   return (
     <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
