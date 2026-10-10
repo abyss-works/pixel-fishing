@@ -1,7 +1,7 @@
-import { PATCH_NOTES } from '../../../data/patchnotes';
-import { cx } from '../../../ui/cx';
-import Accordion from '../../../ui/Accordion';
-import SectionTitle from '../../../ui/SectionTitle';
+import { PATCH_NOTES } from '../../data/patchnotes';
+import { cx } from '../../ui/cx';
+import Accordion from '../../ui/Accordion';
+import SectionTitle from '../../ui/SectionTitle';
 
 // 노트 범주 뱃지 색 — UI=하늘, 기능=골드, 그 외=낮은 톤
 const TAG_CLS: Record<string, string> = {

@@ -1,16 +1,16 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
-import { FISH, boatNameOf, dexSpeciesCount } from '../../game/logic';
-import type { GameState } from '../../game/logic';
-import { furnitureAt, BASE_PACKS } from '../../world';
-import type { BaseId, FurnitureId } from '../../world';
-import { renderBase } from '../../canvas/scenes/base.js';
-import { W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../../pixel/common.js';
-import { useCanvasCover } from '../../admin/canvasCover';
+import { FISH, boatNameOf, dexSpeciesCount } from '../game/logic';
+import type { GameState } from '../game/logic';
+import { furnitureAt, BASE_PACKS } from '../world';
+import type { BaseId, FurnitureId } from '../world';
+import { renderBase } from '../canvas/scenes/base.js';
+import { W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../pixel/common.js';
+import { useCanvasCover } from '../admin/canvasCover';
 import GameFrame from './GameFrame';
-import NightOverlay from '../hud/NightOverlay';
-import TimeBadge from '../hud/TimeBadge';
-import ResourceBar from '../hud/ResourceBar';
+import NightOverlay from '../overlays/hud/NightOverlay';
+import TimeBadge from '../overlays/hud/TimeBadge';
+
 
 interface Props {
   base: BaseId; // 'home'(마을 집) | 'harbor'(대양 항구)
@@ -18,12 +18,12 @@ interface Props {
   /** 시설 클릭(캔버스) — 탭 전환/패널 선택/장면 이동은 전부 App이 결정한다 */
   onFacility?: (id: FurnitureId) => void;
   /** 자원 바 클릭 — 스탯창 모달 (App이 소유) */
-  onOpenStats?: () => void;
+
 }
 
 // 거점 화면 — 캔버스와 그 위 자원 오버레이만 그린다.
 // 판매/강화/배 상호작용 UI는 FacilityModal(스테이지 모달) 소관.
-export default function Base({ base, game, onFacility, onOpenStats }: Props) {
+export default function Base({ base, game, onFacility }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 캔버스 덮개(?admin 토글) — 캔버스 요소만 내리고 컴포넌트는 유지(Field와 같은 계약)
   const covered = useCanvasCover();
@@ -65,8 +65,6 @@ export default function Base({ base, game, onFacility, onOpenStats }: Props) {
         <NightOverlay />
         <TimeBadge className="top-2 right-2" />
       </GameFrame>
-      {/* 스테이지 기준 — 프레임의 형제 */}
-      <ResourceBar game={game} onOpen={onOpenStats} />
     </>
   );
 }

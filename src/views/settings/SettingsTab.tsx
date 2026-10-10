@@ -1,22 +1,22 @@
 import { useState } from 'react';
-import type { GameState } from '../../../game/logic';
-import type { GameAction } from '../../../game/actions';
-import { when } from '../../../api';
-import type { DispatchResult, MaybePromise } from '../../../api';
-import { api } from '../../../api';
-import { REJECT_TEXT } from '../../../game/logic';
-import type { RejectReason } from '../../../game/rules';
-import { APP_VERSION } from '../../../version';
-import { BUILD_LABEL } from '../../../buildId';
-import { cx } from '../../../ui/cx';
-import Button from '../../../ui/Button';
-import SectionTitle from '../../../ui/SectionTitle';
+import type { GameState } from '../../game/logic';
+import type { GameAction } from '../../game/actions';
+import { when } from '../../api';
+import type { DispatchResult, MaybePromise } from '../../api';
+import { api } from '../../api';
+import { REJECT_TEXT } from '../../game/logic';
+import type { RejectReason } from '../../game/rules';
+import { APP_VERSION } from '../../version';
+import { BUILD_LABEL } from '../../buildId';
+import { cx } from '../../ui/cx';
+import Button from '../../ui/Button';
+import SectionTitle from '../../ui/SectionTitle';
 import PatchNotesPanel from './PatchNotesPanel';
 import AccountModal from './AccountModal';
-import { isAdminUrl } from '../../../shared/gate';
+import { isAdminUrl } from '../../shared/gate';
 import LetterModal from './LetterModal';
-import PixelIcon from '../../../ui/PixelIcon';
-import type { GlyphId } from '../../../ui/PixelIcon';
+import PixelIcon from '../../ui/PixelIcon';
+import type { GlyphId } from '../../ui/PixelIcon';
 
 // 설정 탭 버튼은 전부 **아이콘 + 가운데 정렬**이다. 목록형이라 왼쪽 정렬이었는데, 글자 길이가
 // 제각각(3~9자)이라 줄마다 시작점은 같고 끝점이 달라 들쭉날쭉했다. 아이콘이 붙으면서

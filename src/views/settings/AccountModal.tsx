@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import type { GameState } from '../../../game/logic';
-import { api } from '../../../api';
-import { REJECT_TEXT } from '../../../game/logic';
-import { checkNickname } from '../../../game/nickname';
-import type { RejectReason } from '../../../game/rules';
-import Button from '../../../ui/Button';
-import Modal from '../../../ui/Modal';
-import Note from '../../../ui/Note';
-import SectionTitle from '../../../ui/SectionTitle';
-import TextInput from '../../../ui/TextInput';
+import type { GameState } from '../../game/logic';
+import { api } from '../../api';
+import { REJECT_TEXT } from '../../game/logic';
+import { checkNickname } from '../../game/nickname';
+import type { RejectReason } from '../../game/rules';
+import Button from '../../ui/Button';
+import Modal from '../../ui/Modal';
+import Note from '../../ui/Note';
+import SectionTitle from '../../ui/SectionTitle';
+import TextInput from '../../ui/TextInput';
 import { maskUid } from './maskUid';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.

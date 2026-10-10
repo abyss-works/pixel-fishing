@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import {
   dexRecord, formName, priceOf, sizeParams, sizePercentile,
-} from '../../../game/logic';
-import type { Fish, GameState } from '../../../game/logic';
-import ArrowButton from '../../../ui/ArrowButton';
-import Button from '../../../ui/Button';
-import Modal from '../../../ui/Modal';
-import FishSprite from '../../../ui/FishSprite';
-import { RarityText, RarityDot } from '../../../ui/RarityTag';
+} from '../../game/logic';
+import type { Fish, GameState } from '../../game/logic';
+import ArrowButton from '../../ui/ArrowButton';
+import Button from '../../ui/Button';
+import Modal from '../../ui/Modal';
+import FishSprite from '../../ui/FishSprite';
+import { RarityText, RarityDot } from '../../ui/RarityTag';
 
 // 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 폼을 전환하면 이름/로어/가격/마릿수/크기/첫 조우일이
