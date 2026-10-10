@@ -82,14 +82,25 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 
   // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = vignette(ctx);
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.restore();
+}
+
+// 비네팅 그라데이션 — 치수 고정이라 ctx당 1회 생성 후 재사용 (매 틱 재생성 해소).
+// CanvasGradient는 ctx에 귀속되므로 ctx 키 WeakMap에 둔다.
+const vignetteCache = new WeakMap<object, CanvasGradient>();
+
+export function vignette(ctx: Ctx): CanvasGradient {
+  const hit = vignetteCache.get(ctx);
+  if (hit) return hit;
   const vg = ctx.createRadialGradient(
     CANVAS_W / 2, CANVAS_H * 0.42, CANVAS_H * 0.38,
     CANVAS_W / 2, CANVAS_H / 2, CANVAS_W * 0.62,
   );
   vg.addColorStop(0, 'rgba(4,9,18,0)');
   vg.addColorStop(1, 'rgba(4,9,18,0.34)');
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-  ctx.restore();
+  vignetteCache.set(ctx, vg);
+  return vg;
 }
