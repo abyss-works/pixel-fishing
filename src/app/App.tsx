@@ -7,6 +7,7 @@ import Field from '../canvas/Field';
 import FacilityModal from '../overlays/modal/FacilityModal';
 import StatsModal from '../overlays/modal/StatsModal';
 import MessageLog from '../overlays/hud/MessageLog';
+import Minimap from '../overlays/hud/Minimap';
 import ResourceBar from '../overlays/hud/ResourceBar';
 import { baitById } from '../data/baits';
 import { cx } from '../ui/cx';
@@ -17,7 +18,7 @@ import type { ActionPanel } from '../overlays/modal/FacilityModal';
 import { useGame } from '../hooks/useGame';
 import { useAccount } from '../hooks/useAccount';
 import { useMessageLog } from '../hooks/useMessageLog';
-import { useSpotState } from '../world/currentSpot';
+import { useCanvasCover } from '../shared/canvasCover';
 import WorldMapModal from '../overlays/modal/WorldMapModal';
 import Button from '../ui/Button';
 
@@ -62,9 +63,10 @@ export default function App() {
   const openStats = () => setStatsOpen(o => !o);
   // 세계지도 — 미니맵 클릭 진입 (구 R23b "지역 탭" 대체 — 전체 지구는 모달이 담당한다)
   const [worldMapOpen, setWorldMapOpen] = useState(false);
-  // 플레이어 위치 — 병합 바다에서만 경위도가 성립한다(마을 좌표는 지도에 못 얹는다)
-  const { pos: spotPos } = useSpotState();
-  const worldMapPlayer = scene.kind === 'region' && scene.id === 'world' ? spotPos : null;
+  // 월드맵 플레이어 점 — 모달이 열 때만 구독한다 (이동 중 App 리렌더 방지).
+  // 덮개는 미니맵과 공유한다 (게임 캔버스라 함께 가린다).
+  const covered = useCanvasCover();
+  const worldScene = scene.kind === 'region' && scene.id === 'world';
   // 경계 봉합 입장점 — travel 시 Field가 계산한 "이어지는 자리". 씬 전환과 소비되면 해제된다.
   const [entryPos, setEntryPos] = useState<Point | null>(null);
 
@@ -154,6 +156,13 @@ export default function App() {
           </div>
         )}
 
+        {/* 미니맵 — 자기 캔버스를 소유하고 변경 시에만 그린다 (메인 rAF와 분리).
+            우하단 스테이지 기준. 거점 씬에는 없다. */}
+        {scene.kind === 'region' && (
+          <Minimap def={REGION_PACKS[scene.id]} boat={game.boat}
+                   covered={covered} onOpenMap={onOpenMap} />
+        )}
+
         {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}
         <MessageLog log={log} />
 
@@ -187,7 +196,7 @@ export default function App() {
       {outdated && <UpdateModal />}
 
       {/* 세계지도 — 미니맵 클릭. 지구 전체(흑백)와 구현 영역(컬러), 점멸 점 = 지금 서 있는 곳 */}
-      {worldMapOpen && <WorldMapModal player={worldMapPlayer} onClose={() => setWorldMapOpen(false)} />}
+      {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>
   );
 }
