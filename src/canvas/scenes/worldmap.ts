@@ -1,11 +1,11 @@
 // 미니맵 인터프리터 — RegionPack을 축소 표현으로 그리고 내 위치를 점멸 표시한다.
-// (구 월드맵 라벨 모드는 호출자 없는 죽은 경로라 철거 — 전체 지구 조망은 pixel/scenes/atlas.ts 소관)
-import { R, label, UI } from '../common.js';
-import type { Ctx } from '../common.js';
-import { BUILDING_SPRITES } from '../sprites/buildings.js';
-import { drawMaskTerrain } from '../sprites/mask.js';
-import { drawLand, drawWaterFill } from '../sprites/scenery.js';
-import { drawSchools } from '../sprites/overlays.js';
+// (구 월드맵 라벨 모드는 호출자 없는 죽은 경로라 철거 — 전체 지구 조망은 canvas/scenes/atlas.ts 소관)
+import { R, label, UI } from '../../pixel/common.js';
+import type { Ctx } from '../../pixel/common.js';
+import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
+import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
+import { drawLand, drawWaterFill } from '../../pixel/sprites/scenery.js';
+import { drawSchools } from '../../pixel/sprites/overlays.js';
 import type { Point, Rect, RegionPack } from '../../world/types';
 
 /** 미니맵 crop 크기 — 필드 시야(448×252)의 3배 폭 감각. 16:9라 미니맵 프레임(aspect-video)에

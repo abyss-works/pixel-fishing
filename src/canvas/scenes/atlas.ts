@@ -7,10 +7,10 @@
 //
 // 구현 영역 판정은 world.json의 window와 **같은 래스터라이즈 계약**(earth.json이 world.json을
 // extends — 구역 문자가 earth 마스크에도 찍힌다)이라, 여기서 하는 일은 좌표 변환과 톤 분기뿐이다.
-import { R, label, UI } from '../common.js';
-import type { Ctx } from '../common.js';
+import { R, label, UI } from '../../pixel/common.js';
+import type { Ctx } from '../../pixel/common.js';
 import { compileMap, zoneLabelAnchors } from '../../world/mask';
-import { drawMaskTerrain } from '../sprites/mask.js';
+import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import type { CompiledMap, Point, Rect } from '../../world/types';
 import { WORLD_LEGEND } from '../../world/regions/world';
 import { WINDOW as EARTH_WINDOW, COLS as E_COLS, ROWS as E_ROWS, CELL_W as E_CW, CELL_H as E_CH,

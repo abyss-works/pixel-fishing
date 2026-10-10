@@ -2,16 +2,16 @@
 // 직접 그리지 않는다: 그리기는 전부 sprites/(단위)와 styles.ts(토큰)에 위임 (계층: layout).
 // 지형 소스는 둘 — 항해 지역은 마스크(sprites/mask 페인터), walk 지역은 rect 조각(scenery).
 // 지역 고유 연출은 pack.flavor 훅 하나만 허용 — 지형/건물을 훅에서 그리지 않는다.
-import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../common.js';
-import type { Ctx } from '../common.js';
-import { BUILDING_SPRITES } from '../sprites/buildings.js';
-import { drawBoat, drawPerson } from '../sprites/actors.js';
-import { drawMaskTerrain } from '../sprites/mask.js';
-import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../sprites/scenery.js';
-import { drawFishingGear, drawSchools, drawTimingBar } from '../sprites/overlays.js';
+import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../../pixel/common.js';
+import type { Ctx } from '../../pixel/common.js';
+import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
+import { drawBoat, drawPerson } from '../../pixel/sprites/actors.js';
+import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
+import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
+import { drawFishingGear, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack } from '../../world/types';
-import type { GearView } from '../sprites/overlays.js';
+import type { GearView } from '../../pixel/sprites/overlays.js';
 
 /** React 상태 → 캔버스 경계 뷰모델 — Field.tsx가 프레임마다 채워 보낸다.
     phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단). */

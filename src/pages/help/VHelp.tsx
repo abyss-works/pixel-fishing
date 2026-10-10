@@ -1,10 +1,10 @@
 ﻿import type { ReactNode } from 'react';
-import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../game/balance';
-import { BOATS, WALK_BAG_CAP } from '../data/boats';
-import Accordion from '../ui/Accordion';
-import Note from '../ui/Note';
-import PixelList from '../ui/PixelList';
-import SectionTitle from '../ui/SectionTitle';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT } from '../../game/balance';
+import { BOATS, WALK_BAG_CAP } from '../../data/boats';
+import Accordion from '../../ui/Accordion';
+import Note from '../../ui/Note';
+import PixelList from '../../ui/PixelList';
+import SectionTitle from '../../ui/SectionTitle';
 
 // 도움말 콘텐츠 — Sidebar의 '도움말' 탭에서 렌더.
 //
@@ -33,7 +33,7 @@ function Topic({ title, hint, children }: { title: string; hint: string; childre
   );
 }
 
-export default function HelpPanel() {
+export default function VHelp() {
   return (
     <div>
       <SectionTitle>처음이라면</SectionTitle>

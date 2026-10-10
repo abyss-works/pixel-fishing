@@ -1,9 +1,11 @@
 import type { GameState } from '../../game/logic';
 import type { ZoneId } from '../../data/zones';
-import type { DexView } from '../shared';
 import VDexBase from './VDexBase';
 import VDexVariant from './VDexVariant';
 import VDexNamed from './VDexNamed';
+
+/** 도감 보기 — 활성 도감 탭 재클릭으로 순환 (일반 → 돌연변이 → 네임드) */
+export type DexView = 'base' | 'variant' | 'named';
 
 // 도감은 포함관계: 전체 = 기본 어종 + 변이 (슬롯 2×종수).
 // 보기 전환(일반→돌연변이→네임드)은 활성 도감 탭 재선택(클릭·같은 숫자키), **최상위 존** 전환은

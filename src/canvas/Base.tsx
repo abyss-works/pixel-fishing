@@ -4,12 +4,13 @@ import { FISH, boatNameOf, dexSpeciesCount } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { furnitureAt, BASE_PACKS } from '../world';
 import type { BaseId, FurnitureId } from '../world';
-import { renderBase, W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../pixel';
+import { renderBase } from './scenes/base.js';
+import { W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../pixel/common.js';
 import { useCanvasCover } from '../admin/canvasCover';
-import GameFrame from './GameFrame';
-import NightOverlay from './NightOverlay';
-import TimeBadge from './TimeBadge';
-import ResourceBar from './ResourceBar';
+import GameFrame from '../stage/GameFrame';
+import NightOverlay from '../stage/NightOverlay';
+import TimeBadge from '../stage/TimeBadge';
+import ResourceBar from '../stage/ResourceBar';
 
 interface Props {
   base: BaseId; // 'home'(마을 집) | 'harbor'(대양 항구)

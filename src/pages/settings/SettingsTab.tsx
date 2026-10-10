@@ -13,7 +13,7 @@ import Button from '../../ui/Button';
 import SectionTitle from '../../ui/SectionTitle';
 import PatchNotesPanel from './PatchNotesPanel';
 import AccountModal from './AccountModal';
-import { isAdminUrl } from '../shared';
+import { isAdminUrl } from '../../sidebar/gate';
 import LetterModal from './LetterModal';
 import PixelIcon from '../../ui/PixelIcon';
 import type { GlyphId } from '../../ui/PixelIcon';

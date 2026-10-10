@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { maskUid } from './shared';
+import { maskUid } from './maskUid';
 
 describe('maskUid', () => {
   it('uuid 가운데 세 마디를 가리고 앞뒤는 남긴다', () => {

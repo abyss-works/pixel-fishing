@@ -22,12 +22,14 @@ import type { FishingPhase } from '../game/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../game/stats';
 import { CAST_RANGE } from '../game/balance';
 import { useCanvasCover } from '../admin/canvasCover';
-import { renderRegion, renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H, CANVAS_W, CANVAS_H } from '../pixel';
-import GameFrame from './GameFrame';
-import NightOverlay from './NightOverlay';
-import TimeBadge from './TimeBadge';
-import ResourceBar from './ResourceBar';
-import CatchCard from './CatchCard';
+import { renderRegion } from './scenes/region.js';
+import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from './scenes/worldmap.js';
+import { CANVAS_W, CANVAS_H } from '../pixel/common.js';
+import GameFrame from '../stage/GameFrame';
+import NightOverlay from '../stage/NightOverlay';
+import TimeBadge from '../stage/TimeBadge';
+import ResourceBar from '../stage/ResourceBar';
+import CatchCard from '../stage/CatchCard';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1],

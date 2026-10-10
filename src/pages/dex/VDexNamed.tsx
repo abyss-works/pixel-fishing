@@ -8,7 +8,7 @@ import { namedById, namedFishOf } from '../../data/named';
 import { cx } from '../../ui/cx';
 import SubTabs from '../../ui/SubTabs';
 import FishSprite from '../../ui/FishSprite';
-import { RARITY_CARD } from '../shared';
+import { RARITY_CARD } from '../../ui/RarityTag';
 
 // 도감 지명수배 화면 — 네임드는 해역별 1칸. 수배 목록에서만 공개된 히든 어종이라
 // FISH 행이 없을 수 있다. 발견 여부는 도감 기록(records) 기준이라 어종 데이터가
