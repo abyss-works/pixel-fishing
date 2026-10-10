@@ -1,23 +1,23 @@
 import { BOATS, FISH, RARITY, RARITY_ORDER, canFishSpot, rarityWeightOf,
-         speciesDiscovered, drawRows } from '../../../game/logic';
-import type { GameState } from '../../../game/logic';
-import { REGION_PACKS } from '../../../world';
-import type { RegionId } from '../../../world';
-import { useSpotState } from '../../../world/currentSpot';
-import { zoneById, zoneTips, zoneControls, spotsOfRegion, subtreeSpots, defaultZoneOfRegion, topZoneOf } from '../../../data/zones';
-import type { ZoneId } from '../../../data/zones';
-import type { SpotId } from '../../../data/spots';
-import { spotById } from '../../../data/spots';
-import type { RarityId } from '../../../data/rarity';
-import { cx } from '../../../ui/cx';
-import PixelIcon from '../../../ui/PixelIcon';
-import PixelList from '../../../ui/PixelList';
-import SectionTitle from '../../../ui/SectionTitle';
-import FishSprite from '../../../ui/FishSprite';
-import CardCarousel from '../../../ui/CardCarousel';
-import { RarityText } from '../../../ui/RarityTag';
-import { rarityRank } from '../../../data/rarity';
-import { RARITY_CARD } from '../../../ui/RarityTag';
+         speciesDiscovered, drawRows } from '../../game/logic';
+import type { GameState } from '../../game/logic';
+import { REGION_PACKS } from '../../world';
+import type { RegionId } from '../../world';
+import { useSpotState } from '../../world/currentSpot';
+import { zoneById, zoneTips, zoneControls, spotsOfRegion, subtreeSpots, defaultZoneOfRegion, topZoneOf } from '../../data/zones';
+import type { ZoneId } from '../../data/zones';
+import type { SpotId } from '../../data/spots';
+import { spotById } from '../../data/spots';
+import type { RarityId } from '../../data/rarity';
+import { cx } from '../../ui/cx';
+import PixelIcon from '../../ui/PixelIcon';
+import PixelList from '../../ui/PixelList';
+import SectionTitle from '../../ui/SectionTitle';
+import FishSprite from '../../ui/FishSprite';
+import CardCarousel from '../../ui/CardCarousel';
+import { RarityText } from '../../ui/RarityTag';
+import { rarityRank } from '../../data/rarity';
+import { RARITY_CARD } from '../../ui/RarityTag';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
 const FISH_PER_VIEW = 6;

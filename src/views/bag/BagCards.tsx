@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { FISH, SPOTS, formName, speciesDiscovered } from '../../../game/logic';
-import type { FishInstance, GameState } from '../../../game/logic';
-import { rarityRank } from '../../../data/rarity';
-import { cx } from '../../../ui/cx';
-import FishSprite from '../../../ui/FishSprite';
-import { RARITY_CARD } from '../../../ui/RarityTag';
+import { FISH, SPOTS, formName, speciesDiscovered } from '../../game/logic';
+import type { FishInstance, GameState } from '../../game/logic';
+import { rarityRank } from '../../data/rarity';
+import { cx } from '../../ui/cx';
+import FishSprite from '../../ui/FishSprite';
+import { RARITY_CARD } from '../../ui/RarityTag';
 
 // 가방 카드뷰 — 목록뷰가 정보 집약(개체 한 줄씩)이라면 이쪽은 **현황 한눈에**다.
 // 그래서 전 어종을 깔고 보유 마릿수만 얹는다: 뭘 들고 있고 뭐가 비었는지가 한 화면에 보인다.

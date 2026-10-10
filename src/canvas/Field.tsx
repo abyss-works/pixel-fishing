@@ -1,35 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../../game/logic';
-import type { CatchInfo, Fish, GameState, Judgment } from '../../game/logic';
-import { baitById } from '../../data/baits';
-import { bountyById } from '../../data/bounties';
-import { namedById } from '../../data/named';
-import { cx } from '../../ui/cx';
-import type { GameAction } from '../../game/actions';
-import { when } from '../../api';
-import { subscribeFailure } from '../../errors';
-import { useKeyScope } from '../../hotkeys';
-import { useGameTime } from '../../hooks/useGameTime';
-import type { DispatchResult, MaybePromise } from '../../api';
-import { REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer, nearestSchoolInRange, zoneOf } from '../../world';
-import type { Point, RegionId, SceneRef, School } from '../../world';
-import type { SpotId } from '../../data/spots';
-import { zoneById, zoneOfSpot, topZoneOf } from '../../data/zones';
-import type { ZoneId } from '../../data/zones';
-import { setCurrentSpot, setPlayerPos, setZone } from '../../world/currentSpot';
-import { nextPhase, phaseDurationMs } from '../../game/fishing';
-import type { FishingPhase } from '../../game/fishing';
-import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../../game/stats';
-import { CAST_RANGE } from '../../game/balance';
-import { useCanvasCover } from '../../admin/canvasCover';
-import { renderRegion } from '../../canvas/scenes/region.js';
-import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../../canvas/scenes/worldmap.js';
-import { CANVAS_W, CANVAS_H } from '../../pixel/common.js';
+import { FISH, RARITY, REJECT_TEXT, SPOTS, canFishSpot, formName, judgeTiming } from '../game/logic';
+import type { CatchInfo, Fish, GameState, Judgment } from '../game/logic';
+
+import { bountyById } from '../data/bounties';
+import { namedById } from '../data/named';
+
+import type { GameAction } from '../game/actions';
+import { when } from '../api';
+import { subscribeFailure } from '../errors';
+import { useKeyScope } from '../hotkeys';
+import { useGameTime } from '../hooks/useGameTime';
+import type { DispatchResult, MaybePromise } from '../api';
+import { REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer, nearestSchoolInRange, zoneOf } from '../world';
+import type { Point, RegionId, SceneRef, School } from '../world';
+import type { SpotId } from '../data/spots';
+import { zoneById, zoneOfSpot, topZoneOf } from '../data/zones';
+import type { ZoneId } from '../data/zones';
+import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot';
+import { nextPhase, phaseDurationMs } from '../game/fishing';
+import type { FishingPhase } from '../game/fishing';
+import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../game/stats';
+import { CAST_RANGE } from '../game/balance';
+import { useCanvasCover } from '../admin/canvasCover';
+import { renderRegion } from '../canvas/scenes/region.js';
+import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../canvas/scenes/worldmap.js';
+import { CANVAS_W, CANVAS_H } from '../pixel/common.js';
 import GameFrame from './GameFrame';
-import NightOverlay from '../hud/NightOverlay';
-import TimeBadge from '../hud/TimeBadge';
-import ResourceBar from '../hud/ResourceBar';
-import CatchCard from '../hud/CatchCard';
+import NightOverlay from '../overlays/hud/NightOverlay';
+import TimeBadge from '../overlays/hud/TimeBadge';
+import CatchCard from '../overlays/hud/CatchCard';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1],
@@ -56,14 +55,14 @@ interface Props {
   onOpenMap?: () => void;          // 미니맵 클릭 — 지역 탭 열기 (미래: 월드맵 화면으로 승격 예정)
   onShop?: () => void;             // 필드 시설(목공소) 트리거 — 사이드바 패널 열기
   onWarmup?: () => void;           // 캐스팅 순간 서버 함수 워밍 (콜드 스타트 흡수)
-  onOpenStats?: () => void;        // 자원 바 클릭 — 스탯창 모달 (App이 소유)
+
   /** 테스트용 시작 위치 */
   initialPos?: Point;
 }
 
 export default function Field({
   region, game, dispatch, setToast, onScene,
-  onOpenMap, onShop, onWarmup, onOpenStats, initialPos,
+  onOpenMap, onShop, onWarmup, initialPos,
 }: Props) {
   const def = REGION_PACKS[region];
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -76,10 +75,6 @@ export default function Field({
   const { phase: dayPhaseNow } = useGameTime();
   const nightRef = useRef(false);
   useEffect(() => { nightRef.current = dayPhaseNow === 'night'; }, [dayPhaseNow]);
-  // 활성 미끼 — 오버레이는 보유량 0에서도 유지된다(효과 무음, 횟수 소진 상태를 보여주기).
-  // 해석은 usableBait(logic)와 같은 규약: 레지스트리에 없는 id면 아예 숨긴다.
-  const activeBait = baitById(game.activeBait);
-  const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   // 상태머신 (idle = 이동 중) — R6
   const [phase, setPhase] = useState<FishingPhase>('idle');
   const [fish, setFish] = useState<Fish | null>(null);
@@ -425,26 +420,9 @@ export default function Field({
         {phase === 'catch' && fish && <CatchCard fish={fish} info={catchInfo} />}
       </GameFrame>
 
-      {/* 아래 셋은 **스테이지 기준** — 프레임의 형제라 레터박스 여백까지 쓴다 */}
-      <ResourceBar game={game} onOpen={onOpenStats} />
-
-      {/* 활성 미끼 — 우측, 미니맵 위 (pointer-events 없음: 오버레이 구역 규칙 R24).
-          소진(0)이면 어두워진다 — 효과가 무음 상태라는 걸 상시 알려주는 역할. */}
-      {activeBait && (
-        <div className={cx('absolute right-3 bottom-[152px] z-(--z-overlay) pointer-events-none',
-                           'flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line',
-                           'bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px]',
-                           '[text-shadow:0_1px_2px_rgba(0,0,0,0.6)]')}
-             aria-label="활성 미끼">
-          <span className="w-2.5 h-2.5 rounded-full border border-line shrink-0"
-                style={{ backgroundColor: activeBait.color }} />
-          <span className="sr-only">{activeBait.name}</span>
-          <span className={cx('pf-accent text-sm leading-none tracking-[0.5px]',
-                              baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
-            {baitLeft}
-          </span>
-        </div>
-      )}
+      {/* 아래는 **스테이지 기준** — 프레임의 형제로 레터박스 여백까지 쓴다.
+          자원바·미끼 배지는 App 조합으로 올라갔다. 남은 것 중 미니맵·획득카드·상태는
+          프레임 ref·낚시 상태에 묶여 있어 씬 호스트에 둔다 (예외, 층서 문서 참조) */}
 
       {/* 미니맵 (스테이지 우하단) — % 폭도 스테이지 기준. 게임 캔버스라 덮개를 함께 따른다.
           현재 위치 기준 crop(1344×756 — 필드 시야의 3배, 구 지역 한 장 스케일)만 본다. 배면

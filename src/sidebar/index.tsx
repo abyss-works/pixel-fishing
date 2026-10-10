@@ -11,14 +11,14 @@ import type { TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../hotkeys';
 import TabBar from '../ui/TabBar';
 import TabIcon from './TabIcon';
-import VHelp from '../views/tabs/help/VHelp';
-import VRegion from '../views/tabs/region/VRegion';
-import BagTab from '../views/tabs/bag/BagTab';
-import DexTab from '../views/tabs/dex/DexTab';
-import SettingsTab from '../views/tabs/settings/SettingsTab';
-import VAdmin from '../views/tabs/admin/VAdmin';
+import VHelp from '../views/help/VHelp';
+import VRegion from '../views/region/VRegion';
+import BagTab from '../views/bag/BagTab';
+import DexTab from '../views/dex/DexTab';
+import SettingsTab from '../views/settings/SettingsTab';
+import VAdmin from '../views/admin/VAdmin';
 import { setBagLayout, useBagView } from '../shared/bagView';
-import type { DexView } from '../views/tabs/dex/DexTab';
+import type { DexView } from '../views/dex/DexTab';
 import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../shared/gate';
 
 // 탭은 씬과 무관하게 항상 5개 고정 + 조건부 관리자 탭(별도 — isAdminVisible).

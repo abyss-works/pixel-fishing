@@ -1,24 +1,24 @@
 import { useMemo } from 'react';
-import { autoLockUids, sellableValue, REJECT_TEXT } from '../../../game/logic';
-import { selectBagStatus } from '../../../hooks/selectors';
-import type { GameState } from '../../../game/logic';
-import type { GameAction } from '../../../game/actions';
-import { BAITS } from '../../../data/baits';
-import type { Bait } from '../../../data/baits';
-import { when } from '../../../api';
-import type { DispatchResult, MaybePromise } from '../../../api';
-import { cx } from '../../../ui/cx';
-import Note from '../../../ui/Note';
-import FishSprite from '../../../ui/FishSprite';
-import PixelIcon from '../../../ui/PixelIcon';
-import IconButton from '../../../ui/IconButton';
-import PillButton from '../../../ui/PillButton';
-import SubTabs from '../../../ui/SubTabs';
-import { RarityDot } from '../../../ui/RarityTag';
-import { groupInstances } from '../../../shared/bagRows';
+import { autoLockUids, sellableValue, REJECT_TEXT } from '../../game/logic';
+import { selectBagStatus } from '../../hooks/selectors';
+import type { GameState } from '../../game/logic';
+import type { GameAction } from '../../game/actions';
+import { BAITS } from '../../data/baits';
+import type { Bait } from '../../data/baits';
+import { when } from '../../api';
+import type { DispatchResult, MaybePromise } from '../../api';
+import { cx } from '../../ui/cx';
+import Note from '../../ui/Note';
+import FishSprite from '../../ui/FishSprite';
+import PixelIcon from '../../ui/PixelIcon';
+import IconButton from '../../ui/IconButton';
+import PillButton from '../../ui/PillButton';
+import SubTabs from '../../ui/SubTabs';
+import { RarityDot } from '../../ui/RarityTag';
+import { groupInstances } from '../../shared/bagRows';
 import InstanceLine, { UnsizedLine } from './InstanceLine';
 import BagCards from './BagCards';
-import { setBagSection, toggleBagRow, useBagView } from '../../../shared/bagView';
+import { setBagSection, toggleBagRow, useBagView } from '../../shared/bagView';
 
 // 가방 탭 — **서브탭 2장: 물고기 / 아이템**(사용자 지시 2026-08-27: 물고기 1,500마리를 아이템과
 // 한 스크롤에서 훑게 하지 않는다). 서브탭 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.

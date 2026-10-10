@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import type { GameState } from '../../../game/logic';
-import type { GameAction } from '../../../game/actions';
-import type { DispatchResult, MaybePromise } from '../../../api';
-import { dayPhase, formatGameClock, DAY_START_MIN, NIGHT_START_MIN } from '../../../game/time';
-import { setTimeOverride, useTimeOverride } from '../../../admin/timeOverride';
-import StatsTab from '../../../admin/tabs/StatsTab';
-import { setCanvasCover, useCanvasCover } from '../../../admin/canvasCover';
-import { cx } from '../../../ui/cx';
-import PillButton from '../../../ui/PillButton';
-import Note from '../../../ui/Note';
-import SectionTitle from '../../../ui/SectionTitle';
-import PixelIcon from '../../../ui/PixelIcon';
+import type { GameState } from '../../game/logic';
+import type { GameAction } from '../../game/actions';
+import type { DispatchResult, MaybePromise } from '../../api';
+import { dayPhase, formatGameClock, DAY_START_MIN, NIGHT_START_MIN } from '../../game/time';
+import { setTimeOverride, useTimeOverride } from '../../admin/timeOverride';
+import StatsTab from '../../admin/tabs/StatsTab';
+import { setCanvasCover, useCanvasCover } from '../../admin/canvasCover';
+import { cx } from '../../ui/cx';
+import PillButton from '../../ui/PillButton';
+import Note from '../../ui/Note';
+import SectionTitle from '../../ui/SectionTitle';
+import PixelIcon from '../../ui/PixelIcon';
 
 // 관리자 탭 — 게임 셸 5탭 다음(6번) 조건부 탭. 스탯 편집 + 덮개 + 시간대 설정 + 대시보드.
 // 노출은 Sidebar가 ?admin + (로컬 또는 소유자 계정) 게이트로 통제한다.

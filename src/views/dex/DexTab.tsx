@@ -1,5 +1,5 @@
-import type { GameState } from '../../../game/logic';
-import type { ZoneId } from '../../../data/zones';
+import type { GameState } from '../../game/logic';
+import type { ZoneId } from '../../data/zones';
 import VDexBase from './VDexBase';
 import VDexVariant from './VDexVariant';
 import VDexNamed from './VDexNamed';

@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 import App from './App';
-import Field from './views/scene/Field';
-import Base from './views/scene/Base';
-import FacilityModal from './views/modal/FacilityModal';
+import Field from './canvas/Field';
+import Base from './canvas/Base';
+import FacilityModal from './overlays/modal/FacilityModal';
 import { resetBagView } from './shared/bagView';
 import { resetCanvasCover } from './admin/canvasCover';
 import { resetTimeOverride } from './admin/timeOverride';
@@ -1182,17 +1182,20 @@ describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
     expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
   });
 
-  it('필드 오버레이 — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
-    renderField('village', V_SPAWN, { items: { [COMMON]: 7 }, activeBait: COMMON });
+  it('스테이지 오버레이(App 조합) — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
+    seed({ items: { [COMMON]: 7 }, activeBait: COMMON });
+    render(<App />);
     const overlay = screen.getByLabelText('활성 미끼');
     expect(overlay).toHaveTextContent('7');
     cleanup();
 
-    renderField('village', V_SPAWN, { items: {}, activeBait: COMMON });
+    seed({ items: {}, activeBait: COMMON });
+    render(<App />);
     expect(screen.getByLabelText('활성 미끼')).toHaveTextContent('0');
     cleanup();
 
-    renderField('village', V_SPAWN, {});
+    seed({});
+    render(<App />);
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
-import type { GameState } from '../../../game/logic';
-import type { ZoneId } from '../../../data/zones';
+import type { GameState } from '../../game/logic';
+import type { ZoneId } from '../../data/zones';
 import DexGrid from './DexGrid';
 
 // 도감 돌연변이 화면 — 변이형 발견 기준 격자

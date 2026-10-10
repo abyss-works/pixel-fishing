@@ -2,20 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { BASE_PACKS, LIVE_REGIONS, REGION_PACKS } from './world';
 import type { FurnitureId, Point, SceneRef } from './world';
 import type { LocationRef } from './data/places';
-import Base from './views/scene/Base';
-import Field from './views/scene/Field';
-import FacilityModal from './views/modal/FacilityModal';
-import StatsModal from './views/modal/StatsModal';
-import MessageLog from './views/hud/MessageLog';
+import Base from './canvas/Base';
+import Field from './canvas/Field';
+import FacilityModal from './overlays/modal/FacilityModal';
+import StatsModal from './overlays/modal/StatsModal';
+import MessageLog from './overlays/hud/MessageLog';
+import ResourceBar from './overlays/hud/ResourceBar';
+import { baitById } from './data/baits';
+import { cx } from './ui/cx';
 import Sidebar from './sidebar';
 import { DEFAULT_TAB } from './sidebar/tabs';
 import type { TabKey } from './sidebar/tabs';
-import type { ActionPanel } from './views/modal/FacilityModal';
+import type { ActionPanel } from './overlays/modal/FacilityModal';
 import { useGame } from './hooks/useGame';
 import { useAccount } from './hooks/useAccount';
 import { useMessageLog } from './hooks/useMessageLog';
 import { useSpotState } from './world/currentSpot';
-import WorldMapModal from './views/modal/WorldMapModal';
+import WorldMapModal from './overlays/modal/WorldMapModal';
 import Button from './ui/Button';
 
 // 앱 셸 (계층: layout) — 씬 상태·탭·정비 패널과 화면 배치만 소유한다.
@@ -77,6 +80,10 @@ export default function App() {
   };
   // 씬 → 소속 지역 (지역 탭·도감이 거점에서도 현재 지역 정보를 알 수 있게) — 팩 데이터에서 파생
   const region = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
+  // 활성 미끼 배지 (App 조합) — 보유량 0에서도 유지된다(효과 무음 표시).
+  // game 파생이라 씬과 무관하게 스테이지 기준 한 자리에서 그린다.
+  const activeBait = baitById(game.activeBait);
+  const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
 
   // 미니맵 클릭 → 세계지도 모달 (M 키 트리거는 폐지)
   const onOpenMap = () => setWorldMapOpen(true);
@@ -120,13 +127,31 @@ export default function App() {
             App은 씬과 무관한 스테이지 오버레이(로그·정비 모달)만 여기 얹는다.
             key = 씬 전환 시 강제 리마운트 — 필드의 위치/상태머신 ref가 지역을 넘지 않게. */}
         {scene.kind === 'base' ? (
-          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility}
-                onOpenStats={openStats} />
+          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={dispatch} setToast={setToast}
-                 onScene={go} onOpenMap={onOpenMap} onWarmup={warmup} onOpenStats={openStats}
+                 onScene={go} onOpenMap={onOpenMap} onWarmup={warmup}
                  onShop={() => setActionPanel(p => (p === 'boat' ? p : 'boat'))}
                  initialPos={entryPos ?? undefined} />
+        )}
+
+        {/* 자원바·미끼 배지 — App 조합 (스테이지 기준). 씬 종류와 무관하게 한 자리에서 그린다.
+            미니맵·획득카드·상태문구는 프레임 ref·낚시 상태에 묶여 씬 호스트에 둔다 (예외). */}
+        <ResourceBar game={game} onOpen={openStats} />
+        {activeBait && (
+          <div className={cx('absolute right-3 bottom-[152px] z-(--z-overlay) pointer-events-none',
+                             'flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line',
+                             'bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px]',
+                             '[text-shadow:0_1px_2px_rgba(0,0,0,0.6)]')}
+               aria-label="활성 미끼">
+            <span className="w-2.5 h-2.5 rounded-full border border-line shrink-0"
+                  style={{ backgroundColor: activeBait.color }} />
+            <span className="sr-only">{activeBait.name}</span>
+            <span className={cx('pf-accent text-sm leading-none tracking-[0.5px]',
+                                baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
+              {baitLeft}
+            </span>
+          </div>
         )}
 
         {/* 시스템 메시지 로그 — 스테이지 좌하단 (미래 v0.9 실시간 채팅 자리) */}

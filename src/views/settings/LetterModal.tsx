@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { LETTER_MAX } from '../../../game/actions';
-import type { GameAction } from '../../../game/actions';
-import { when } from '../../../api';
-import type { DispatchResult, MaybePromise } from '../../../api';
-import Modal from '../../../ui/Modal';
-import Button from '../../../ui/Button';
-import Note from '../../../ui/Note';
+import { LETTER_MAX } from '../../game/actions';
+import type { GameAction } from '../../game/actions';
+import { when } from '../../api';
+import type { DispatchResult, MaybePromise } from '../../api';
+import Modal from '../../ui/Modal';
+import Button from '../../ui/Button';
+import Note from '../../ui/Note';
 
 // 개발자에게 보내는 편지 — 건의·신고·잡담을 **하나로 뭉뚱그린** 창구.
 // 종류를 나누지 않은 이유: 친구 규모에서 분류는 보내는 쪽에 부담만 주고, 읽는 쪽은 어차피

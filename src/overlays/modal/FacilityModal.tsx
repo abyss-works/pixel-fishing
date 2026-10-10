@@ -6,7 +6,7 @@ import type { GameState } from '../../game/logic';
 import { BAITS } from '../../data/baits';
 import { RARITY } from '../../data/rarity';
 import { groupInstances, sumPrice } from '../../shared/bagRows';
-import InstanceLine, { UnsizedLine } from '../tabs/bag/InstanceLine';
+import InstanceLine, { UnsizedLine } from '../../views/bag/InstanceLine';
 import { toggleSellRow, useSellView } from '../../shared/bagView';
 import type { GameAction } from '../../game/actions';
 import { when } from '../../api';

@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import {
   FISH, dexRecord, formDiscovered, formName, priceOf,
-} from '../../../game/logic';
-import type { Fish, FormId, GameState } from '../../../game/logic';
-import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../../../data/zones';
-import type { ZoneId } from '../../../data/zones';
-import { rarityRank } from '../../../data/rarity';
-import { cx } from '../../../ui/cx';
-import SubTabs from '../../../ui/SubTabs';
-import FishSprite from '../../../ui/FishSprite';
-import { RarityText, RarityDot, RARITY_CARD } from '../../../ui/RarityTag';
+} from '../../game/logic';
+import type { Fish, FormId, GameState } from '../../game/logic';
+import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../../data/zones';
+import type { ZoneId } from '../../data/zones';
+import { rarityRank } from '../../data/rarity';
+import { cx } from '../../ui/cx';
+import SubTabs from '../../ui/SubTabs';
+import FishSprite from '../../ui/FishSprite';
+import { RarityText, RarityDot, RARITY_CARD } from '../../ui/RarityTag';
 import type { DexView } from './DexTab';
 import DexDetail from './DexDetail';
 
