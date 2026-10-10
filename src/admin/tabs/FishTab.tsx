@@ -7,6 +7,9 @@ import type { SpotId } from '../../data/spots';
 import DataTable from '../../ui/DataTable';
 import Note from '../../ui/Note';
 import PixelIcon from '../../ui/PixelIcon';
+import IconButton from '../../ui/IconButton';
+import PillButton from '../../ui/PillButton';
+import TextInput from '../../ui/TextInput';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../ui/cx';
 
@@ -186,21 +189,15 @@ export default function FishTab() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-base text-gold">어종 · 수역 ({FISH.length}종 / {SPOTS.length}수역)</h2>
         <div className="flex items-center gap-2">
-          <button type="button" aria-label="변화량 Δ JSON 추출"
+          <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
-                  disabled={deltaCount === 0}
-                  className="flex items-center gap-1 border rounded-sm px-2 py-1 text-xs
-                             cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed
-                             border-line text-text-dim hover:text-gold hover:border-gold
-                             disabled:hover:text-text-dim disabled:hover:border-line">
+                  disabled={deltaCount === 0}>
             <PixelIcon glyph="download" size={12} />Δ JSON{deltaCount > 0 ? ` (${deltaCount})` : ''}
-          </button>
-          <button type="button" aria-label="어종 데이터 JSON 추출"
-                  onClick={exportJson}
-                  className="flex items-center gap-1 border border-line rounded-sm px-2 py-1 text-xs
-                             text-text-dim hover:text-gold hover:border-gold cursor-pointer transition">
+          </PillButton>
+          <PillButton type="button" aria-label="어종 데이터 JSON 추출"
+                  onClick={exportJson}>
             <PixelIcon glyph="download" size={12} />현황 JSON
-          </button>
+          </PillButton>
         </div>
       </div>
 
@@ -291,20 +288,19 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
     <section className="pf-frame p-3" aria-labelledby={`h-${bid}`}>
       {/* ── 머리: 해역 식별 + 펼침 토글 ── */}
       <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-        <button type="button"
+        <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
                 aria-expanded={open}
                 aria-label={`${spot.name} ${open ? '접기' : '펼치기'}`}
                 onClick={toggleOpen}
-                className="flex items-center gap-1 cursor-pointer hover:text-accent">
-          <PixelIcon glyph={open ? 'caretDown' : 'caretRight'} size={10} className="text-text-dim" />
+                className="gap-1 hover:text-accent">
           <span id={`h-${bid}`} className="text-sm text-gold">{spot.name}</span>
           <span className="text-xs text-text-dim pf-accent ml-1">
             요구 파워 {spot.powerReq ?? '-'} · 배{spot.boatTier}
             {'rarityWeight' in spot && spot.rarityWeight ? ' · 예산 오버라이드' : ''}
           </span>
-        </button>
+        </IconButton>
         {hasOverride && (
-          <button type="button" aria-label={`${spot.name} 오버라이드 초기화`}
+          <PillButton type="button" aria-label={`${spot.name} 오버라이드 초기화`}
                   onClick={() => {
                     setBudgets(p => ({ ...p, [bid]: {} }));
                     setWeights(p => ({ ...p, [bid]: {} }));
@@ -313,11 +309,9 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                       for (const f of list) delete next[f.id];
                       return next;
                     });
-                  }}
-                  className="border border-line rounded-sm px-1.5 py-0.5 text-2xs
-                             text-text-dim hover:text-gold hover:border-gold cursor-pointer">
+                  }}>
             이 수역 초기화
-          </button>
+          </PillButton>
         )}
       </div>
 
@@ -404,7 +398,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                         {firstOfGrade && (
                           <div className="flex items-center gap-1">
                             {RARITY[f.rarity].name}
-                            <input type="number" min={0}
+                            <TextInput compact type="number" min={0}
                                    placeholder={String(rarityWeightOf(spot.id, f.rarity))}
                                    value={sim.budgets[bid]?.[f.rarity] ?? ''}
                                    aria-label={`${spot.name} ${f.rarity} 예산`}
@@ -417,14 +411,14 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                                      if (!Number.isFinite(n) || n < 0) return p;
                                      return { ...p, [bid]: { ...cur, [f.rarity]: n } };
                                    })}
-                                   className="w-14 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />
+                                   className="w-14" />
                           </div>
                         )}
                       </td>
                       <td><FishSpriteThumb fish={f} /></td>
                       <td className="whitespace-nowrap">{f.name}</td>
                       <td className="whitespace-nowrap">
-                        <input type="number" min={0} placeholder={String(f.price)}
+                        <TextInput compact type="number" min={0} placeholder={String(f.price)}
                                value={sim.price[f.id] ?? ''}
                                aria-label={`${f.name} 가격`}
                                onChange={e => setPrice(p => {
@@ -433,10 +427,10 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                                  if (!Number.isFinite(n) || n < 0) return p;
                                  return { ...p, [f.id]: n };
                                })}
-                               className="w-16 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />G
+                               className="w-16" />G
                       </td>
                       <td>
-                        <input type="number" min={0} step="0.5" placeholder="1"
+                        <TextInput compact type="number" min={0} step="0.5" placeholder="1"
                                value={sim.fishWeights[bid]?.[f.id] ?? ''}
                                aria-label={`${f.name} 개체 가중치`}
                                onChange={e => setWeights(p => {
@@ -446,7 +440,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                                  if (!Number.isFinite(n) || n < 0) return p;
                                  return { ...p, [bid]: { ...cur, [f.id]: n } };
                                })}
-                               className="w-14 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />
+                               className="w-14" />
                       </td>
                       <td className="pf-accent whitespace-nowrap">{d.fishPct.toFixed(3)}%</td>
                       <td className="pf-accent whitespace-nowrap">
@@ -469,7 +463,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                     <td className="whitespace-nowrap">{f.name}
                       <span className="text-2xs text-text-dim ml-1">({RARITY[f.rarity].name})</span></td>
                     <td className="whitespace-nowrap">
-                      <input type="number" min={0} placeholder={String(f.price)}
+                      <TextInput compact type="number" min={0} placeholder={String(f.price)}
                              value={sim.price[f.id] ?? ''}
                              aria-label={`${f.name} 가격`}
                              onChange={e => setPrice(p => {
@@ -478,7 +472,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                                if (!Number.isFinite(n) || n < 0) return p;
                                return { ...p, [f.id]: n };
                              })}
-                             className="w-16 bg-bg border border-line rounded-sm px-1 py-0.5 text-xs pf-accent" />G
+                             className="w-16" />G
                     </td>
                     <td className="text-2xs text-text-dim">—</td>
                     <td className="text-2xs text-text-dim">—</td>

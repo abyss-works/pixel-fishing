@@ -4,6 +4,7 @@
 // 출현 해역(zones)은 수배 의뢰 해역과 같다 (1-1 메갈로돈=태평양 · 1-2 리바이어던=동남아).
 // 행 추가 = 여기 1행 (무결성은 named.test가 자동 검증).
 import type { FishShape } from './fish.js';
+import type { Fish } from './fish.js';
 import type { BountyZone } from './bounties.js';
 
 export interface NamedFish {
@@ -37,3 +38,11 @@ const NAMED_BY_ID = new Map(NAMED.map(n => [n.id, n]));
 
 /** id → 지명 수배 어종. 없는 id는 undefined */
 export const namedById = (id: string): NamedFish | undefined => NAMED_BY_ID.get(id);
+
+/** 수배서 사진용 Fish 껍데기 — 표시 전용, 저장 안 함.
+ *  가격은 찍지 않는다 — 도감·수배 카드에 가격을 그리지 않으므로 상관없다. */
+export const namedFishOf = (n: NamedFish): Fish => ({
+  id: n.id, name: n.name, spot: 'deep', rarity: 'legendary', price: 0,
+  color: n.color, shape: n.shape, lore: n.lore,
+  variant: { name: n.name, color: n.color, lore: n.lore },
+});

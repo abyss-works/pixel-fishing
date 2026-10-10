@@ -179,7 +179,7 @@ function UpdateModal() {
           새로고침하면 바로 이어서 플레이할 수 있어요.
           (방금 마지막 행동 하나는 저장되지 않았을 수 있어요)
         </p>
-        <Button variant="primary" onClick={() => window.location.reload()}>새로고침하고 이어하기</Button>
+        <Button variant="primary" full onClick={() => window.location.reload()}>새로고침하고 이어하기</Button>
       </div>
     </div>
   );

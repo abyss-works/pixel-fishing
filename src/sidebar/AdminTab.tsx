@@ -7,6 +7,7 @@ import { setTimeOverride, useTimeOverride } from '../admin/timeOverride';
 import StatsTab from '../admin/tabs/StatsTab';
 import { setCanvasCover, useCanvasCover } from '../admin/canvasCover';
 import { cx } from '../ui/cx';
+import PillButton from '../ui/PillButton';
 import Note from '../ui/Note';
 import SectionTitle from '../ui/SectionTitle';
 import PixelIcon from '../ui/PixelIcon';
@@ -50,12 +51,11 @@ export default function AdminTab({ game, dispatch }: {
               {phase === 'night' ? '밤' : '낮'}
             </b>
           </span>
-          <button type="button"
+          <PillButton type="button"
                   onClick={() => { setTimeOverride(null); setTick(t => t + 1); }}
-                  className="border border-line rounded-sm px-2 py-0.5 text-2xs text-text-dim
-                             hover:text-gold hover:border-gold cursor-pointer transition shrink-0">
+                  className="shrink-0">
             실제 시각{override === null ? ' (적용 중)' : ''}
-          </button>
+          </PillButton>
         </div>
 
         {/* 슬라이더 — 주기 내 분(0~59, 0=자정). 드래그하면 낮/밤·어둠·해/달이 즉시 반영된다. */}
@@ -94,15 +94,14 @@ export default function AdminTab({ game, dispatch }: {
         <span className="text-xs text-text-dim leading-relaxed">
           캔버스만 가린다. 게임은 계속 돈다.
         </span>
-        <button type="button"
+        <PillButton type="button"
+                active={canvasCover}
                 aria-pressed={canvasCover}
                 aria-label="게임 화면 덮개"
                 onClick={() => setCanvasCover(!canvasCover)}
-                className={cx('border rounded-sm px-2 py-1 text-xs cursor-pointer transition shrink-0',
-                              canvasCover ? 'border-gold text-gold bg-surface-2'
-                                          : 'border-line text-text-dim hover:text-gold hover:border-gold')}>
+                className="shrink-0">
           {canvasCover ? '덮음' : '열림'}
-        </button>
+        </PillButton>
       </div>
 
       <SectionTitle>대시보드</SectionTitle>

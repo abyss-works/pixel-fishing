@@ -5,20 +5,19 @@ import { upgradeCost } from '../game/balance';
 import type { GameState } from '../game/logic';
 import { BAITS } from '../data/baits';
 import { RARITY } from '../data/rarity';
-import { groupInstances, sumPrice } from '../sidebar/bagRows';
-import InstanceLine, { UnsizedLine } from '../sidebar/InstanceLine';
-import { toggleSellRow, useSellView } from '../sidebar/bagView';
+import { groupInstances, sumPrice } from '../sidebar/bag/bagRows';
+import InstanceLine, { UnsizedLine } from '../sidebar/bag/InstanceLine';
+import { toggleSellRow, useSellView } from '../sidebar/bag/bagView';
 import type { GameAction } from '../game/actions';
 import { when } from '../api';
 import type { DispatchResult, MaybePromise } from '../api';
 import type { BaseId } from '../data/places';
 import { zoneOfPort } from '../data/bounties';
 import { zoneById } from '../data/zones';
-import BountyPanel from '../sidebar/BountyPanel';
-import { cx } from '../ui/cx';
-import CloseButton from '../ui/CloseButton';
+import BountyPanel from '../sidebar/bounty/BountyPanel';
 import Panel from '../ui/Panel';
 import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
 import DataTable from '../ui/DataTable';
 import Modal from '../ui/Modal';
 import Note from '../ui/Note';
@@ -104,8 +103,8 @@ function ModalCard({ title, onClose, children }: {
   return (
     <Panel title={title} className="min-h-0">
       {children}
-      {/* ghost가 아닌 CloseButton — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
-      <CloseButton onClick={onClose} />
+      {/* ghost가 아닌 기본 버튼 — 테두리 없는 닫기는 버튼인지 안 보인다(사용자 피드백) */}
+      <Button onClick={onClose}>닫기</Button>
     </Panel>
   );
 }
@@ -168,23 +167,21 @@ function SellPanel({ game, onSell, onClose, busy }: {
                           <PixelIcon glyph="lock" size={13} />
                         </span>
                       ) : (
-                        <button className={cx('bg-transparent border-0 p-0 leading-none cursor-pointer',
-                                  on > 0 ? 'text-gold' : 'text-text-dim')}
-                                aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
-                                onClick={() => toggleRow(sellable.map(i => i.uid), allOn)}>
-                          <PixelIcon glyph={glyph} size={13} />
-                        </button>
+                        <IconButton glyph={glyph} size={13}
+                                  tone={on > 0 ? 'gold' : 'dim'}
+                                  className="p-0 leading-none"
+                                  aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
+                                  onClick={() => toggleRow(sellable.map(i => i.uid), allOn)} />
                       )}
                     </td>
                     <td>
-                      <button className="bg-transparent border-0 p-0 cursor-pointer text-inherit flex items-center gap-1"
-                              aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
-                              aria-expanded={expanded}
-                              onClick={() => toggleSellRow(key)}>
-                        <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
-                                   className="text-text-dim" />
+                      <IconButton glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
+                                  className="p-0 text-inherit gap-1"
+                                  aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
+                                  aria-expanded={expanded}
+                                  onClick={() => toggleSellRow(key)}>
                         {name}
-                      </button>
+                      </IconButton>
                     </td>
                     <td><RarityText rarity={fish.rarity} /></td>
                     <td className="pf-accent">
@@ -241,7 +238,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
             {lockedCount > 0 && (
               <Note>잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
             )}
-            <Button variant="primary" disabled={total === 0 || busy}
+            <Button variant="primary" full disabled={total === 0 || busy}
                     onClick={() => onSell(soldUids)}>
               판매하기 (+{total}G)
             </Button>
@@ -271,7 +268,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
         { label: '바 시간', value: c.sweep, next: n.sweep },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
-      <Button variant="primary" disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
+      <Button variant="primary" full disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
         강화하기 (-{cost.toLocaleString()}G)
       </Button>
     </ModalCard>
@@ -303,7 +300,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
         { label: '효과', value: next.tier === 1 ? '대양 진입 + 태평양 낚시' : opened ? `[${opened.name}] 해역 해금` : '항해 속도 상승' },
       ]} />
       {!check.ok && <Note tone="warn">{REJECT_TEXT[check.reason]}</Note>}
-      <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
+      <Button variant="primary" full disabled={!check.ok || busy} onClick={onBuy}>
         구매하기 (-{next.price.toLocaleString()}G)
       </Button>
     </ModalCard>

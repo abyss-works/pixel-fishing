@@ -3,6 +3,7 @@
 // 데이터 해석은 탭의 몫 — 여기선 값 배열을 그릴 뿐 도메인을 모른다.
 import type { ReactNode } from 'react';
 import { cx } from '../ui/cx';
+import PillButton from '../ui/PillButton';
 import { fmtNum } from './metrics';
 
 // ---------- 레이아웃 체계 ----------
@@ -121,8 +122,7 @@ export function TabState({ loading, error, empty, emptyText, onRetry }: {
       <div className="border border-danger/40 bg-surface rounded-sm p-3 my-2">
         <p className="text-sm text-danger">{error}</p>
         {onRetry &&
-          <button type="button" onClick={onRetry}
-                  className="pf-btn ghost mt-2 !py-1 !px-2 text-xs">다시 시도</button>}
+          <PillButton type="button" onClick={onRetry} className="mt-2">다시 시도</PillButton>}
       </div>
     );
   }

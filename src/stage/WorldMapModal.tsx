@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../ui/Modal';
-import CloseButton from '../ui/CloseButton';
+import Button from '../ui/Button';
 import { WORLD_MAP } from '../world';
 import type { CompiledMap, Point } from '../world/types';
 
@@ -70,7 +70,7 @@ export default function WorldMapModal({ player, onClose }: {
     <Modal layer="app" onClose={onClose} className="pf-modal-worldmap">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg text-gold pf-accent">세계지도</h3>
-        <CloseButton onClick={onClose} />
+        <Button onClick={onClose}>닫기</Button>
       </div>
       <canvas ref={canvasRef} width={atlas?.ATLAS_W ?? 1280} height={atlas?.ATLAS_H ?? 604}
               className="block w-full h-auto border border-line rounded-sm bg-bg

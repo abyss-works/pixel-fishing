@@ -6,7 +6,7 @@ import App from './App';
 import Field from './stage/Field';
 import Base from './stage/Base';
 import FacilityModal from './stage/FacilityModal';
-import { resetBagView } from './sidebar/bagView';
+import { resetBagView } from './sidebar/bag/bagView';
 import { resetCanvasCover } from './admin/canvasCover';
 import { resetTimeOverride } from './admin/timeOverride';
 import { resetKeyScopes } from './hotkeys';
@@ -693,7 +693,7 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByText('편지 쓰기'));
-    // primary는 전폭 블록이라 버튼행 안에서 닫기를 밀고 글자를 줄바꿈시킨다
+    // 보내기는 primary가 아니다 — 전폭(full)이면 버튼행 안에서 닫기를 밀고 줄바꿈시킨다
     expect(screen.getByRole('button', { name: '보내기' })).not.toHaveClass('primary');
   });
 

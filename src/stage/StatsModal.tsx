@@ -8,7 +8,8 @@ import {
 } from '../game/stats';
 import { SPOTS } from '../data/spots';
 import type { RegionId } from '../data/places';
-import CloseButton from '../ui/CloseButton';
+import ArrowButton from '../ui/ArrowButton';
+import Button from '../ui/Button';
 import DataTable from '../ui/DataTable';
 import HelpHint from '../ui/HelpHint';
 import Modal from '../ui/Modal';
@@ -72,11 +73,9 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
   const pz = powerZones(game, spot.id);
 
   const pageBtn = (dir: 1 | -1) => (
-    <button type="button" aria-label={dir < 0 ? '이전 수역' : '다음 수역'}
+    <ArrowButton dir={dir} aria-label={dir < 0 ? '이전 수역' : '다음 수역'}
             onClick={() => step(dir)}
-            className="px-2 py-0.5 border border-line rounded-sm text-text-dim hover:text-text cursor-pointer">
-      {dir < 0 ? '‹' : '›'}
-    </button>
+            className="px-2 py-0.5 text-text-dim hover:text-text" />
   );
 
   return (
@@ -162,7 +161,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             : '낚싯대가 좋은만큼 물고기를 낚기 쉬워졌다.'}
         </Note>
 
-        <CloseButton onClick={onClose} />
+        <Button onClick={onClose}>닫기</Button>
       </Panel>
     </Modal>
   );
