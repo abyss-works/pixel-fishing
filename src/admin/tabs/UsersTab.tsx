@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../ui/DataTable';
 import Modal from '../../ui/Modal';
 import Note from '../../ui/Note';
+import PillButton from '../../ui/PillButton';
+import TextInput from '../../ui/TextInput';
 import SectionTitle from '../../ui/SectionTitle';
 import { cx } from '../../ui/cx';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS } from '../metrics';
@@ -50,16 +52,15 @@ export default function UsersTab() {
     <div className="flex flex-col gap-2">
       {/* 툴바 — 검색과 결과 카운트를 한 행에 */}
       <div className="flex items-center gap-3 flex-wrap">
-        <input value={query} onChange={e => setQuery(e.target.value)}
+        <TextInput value={query} onChange={e => setQuery(e.target.value)}
                placeholder="이메일 또는 uid로 검색"
-               className="pf-frame bg-bg px-2 py-1.5 text-sm w-[240px]" aria-label="유저 검색" />
+               className="w-[240px]" aria-label="유저 검색" />
         <span className="text-2xs text-text-dim">
           {filtered.length}/{users.length}명{!granted && ' · 운영 DB 연결 후 채워진다'}
         </span>
         {error && <span className="text-2xs text-danger">조회 실패 — 재시도</span>}
         {error &&
-          <button type="button" onClick={() => loadAll()}
-                  className="pf-btn ghost !py-1 !px-2 text-xs">다시 시도</button>}
+          <PillButton type="button" onClick={() => loadAll()}>다시 시도</PillButton>}
       </div>
 
       {granted && loading && <TabState loading />}

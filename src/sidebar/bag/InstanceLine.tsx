@@ -2,7 +2,7 @@ import { sizePercentile } from '../../game/logic';
 import type { FishInstance } from '../../game/logic';
 import type { Fish } from '../../data/fish';
 import { cx } from '../../ui/cx';
-import PixelIcon from '../../ui/PixelIcon';
+import IconButton from '../../ui/IconButton';
 import SizeBar from '../../ui/SizeBar';
 
 // 개체 한 마리의 표시 — 가방 탭과 판매 패널이 같은 줄을 쓴다.
@@ -47,18 +47,17 @@ export default function InstanceLine({
       <span className="text-gold text-center">{best && '최대'}</span>
       <span className="text-epic text-center">{inst.form === 'variant' && '변이'}</span>
       {onLock && (
-        <button
-          className={cx('justify-self-end bg-transparent border-0 px-1 cursor-pointer',
-            inst.locked ? 'text-gold' : 'text-text-dim hover:text-text')}
+        <IconButton
+          glyph={inst.locked ? 'lock' : 'lockOpen'} size={12}
+          tone={inst.locked ? 'gold' : 'dim'}
+          className="justify-self-end px-1"
           aria-label={[
             inst.size === null ? null : `${inst.size.toFixed(1)}cm`,
             inst.form === 'variant' ? '변이' : null,
             fish.name,
             inst.locked ? '잠금 해제' : '잠금',
           ].filter(Boolean).join(' ')}
-          onClick={e => { e.stopPropagation(); onLock(); }}>
-          <PixelIcon glyph={inst.locked ? 'lock' : 'lockOpen'} size={12} />
-        </button>
+          onClick={e => { e.stopPropagation(); onLock(); }} />
       )}
     </div>
   );
@@ -91,13 +90,12 @@ export function UnsizedLine({
       <span />
       <span className="text-epic text-center">{form === 'variant' && '변이'}</span>
       {onLock && (
-        <button
-          className={cx('justify-self-end bg-transparent border-0 px-1 cursor-pointer',
-            locked ? 'text-gold' : 'text-text-dim hover:text-text')}
+        <IconButton
+          glyph={locked ? 'lock' : 'lockOpen'} size={12}
+          tone={locked ? 'gold' : 'dim'}
+          className="justify-self-end px-1"
           aria-label={`크기 미상 ${form === 'variant' ? '변이 ' : ''}${count}마리 ${locked ? '잠금 해제' : '잠금'}`}
-          onClick={e => { e.stopPropagation(); onLock(); }}>
-          <PixelIcon glyph={locked ? 'lock' : 'lockOpen'} size={12} />
-        </button>
+          onClick={e => { e.stopPropagation(); onLock(); }} />
       )}
     </div>
   );

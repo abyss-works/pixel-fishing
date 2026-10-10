@@ -11,6 +11,8 @@ import { cx } from '../../ui/cx';
 import Note from '../../ui/Note';
 import FishSprite from '../../ui/FishSprite';
 import PixelIcon from '../../ui/PixelIcon';
+import IconButton from '../../ui/IconButton';
+import PillButton from '../../ui/PillButton';
 import SubTabs from '../../ui/SubTabs';
 import { RarityDot } from '../../ui/RarityTag';
 import { groupInstances } from './bagRows';
@@ -64,20 +66,17 @@ function ItemSection({ game, dispatch, setToast }: {
                     style={{ backgroundColor: bait.color }} />
               <span className="truncate" title={bait.desc}>{bait.name}</span>
               <span className="pf-accent text-text-dim text-right">×{count}</span>
-              <button
+              <PillButton
                 type="button"
+                active={active}
                 disabled={!active && count <= 0}
                 aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
                 title={active ? '한 번 더 누르면 끈다' : count <= 0 ? '보유량이 없다' : '같은 등급 물고기 가중치 ×2'}
                 onClick={() => activate(active ? null : bait.id)}
-                className={cx('justify-self-end flex items-center gap-1 border rounded-sm px-1.5 py-0.5',
-                             'text-xs cursor-pointer transition',
-                             active ? 'border-gold text-gold bg-surface-2'
-                                    : count > 0 ? 'border-line text-text-dim hover:text-gold hover:border-gold'
-                                                : 'border-line text-text-dim opacity-40 cursor-not-allowed')}>
+                className="justify-self-end">
                 <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
                 {active ? '사용 중' : '활성'}
-              </button>
+              </PillButton>
             </div>
           );
         })}
@@ -150,15 +149,13 @@ export default function BagTab({ game, dispatch, setToast }: {
               <span className="pf-accent text-text-dim">/{cap}</span>마리)
             </h3>
             {bagCount > 0 && (
-              <button
-                className="flex items-center gap-1 border border-line rounded-sm px-2 py-1
-                           text-xs text-text-dim hover:text-gold hover:border-gold cursor-pointer"
+              <PillButton
                 aria-label="자동 잠금"
                 title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
                 onClick={autoLock}>
                 <PixelIcon glyph="lockOpen" size={12} />
                 자동 잠금
-              </button>
+              </PillButton>
             )}
           </div>
           {layout === 'cards' ? (
@@ -192,16 +189,15 @@ export default function BagTab({ game, dispatch, setToast }: {
                           {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
                         </span>
                         <span className="pf-accent text-right">{subtotal}G</span>
-                        <button
-                          className={cx('justify-self-end bg-transparent border-0 px-1 cursor-pointer',
-                            allLocked ? 'text-gold' : 'text-text-dim hover:text-text')}
+                        <IconButton
+                          glyph={allLocked ? 'lock' : 'lockOpen'} size={14}
+                          tone={allLocked ? 'gold' : 'dim'}
+                          className="justify-self-end px-1"
                           aria-label={`${name} 전체 ${allLocked ? '잠금 해제' : '잠금'}`}
                           onClick={e => {
                             e.stopPropagation(); // 잠금 토글이 행 펼침을 겸하지 않게
                             lock(uids, !allLocked, `${name} ${items.length}마리`);
-                          }}>
-                          <PixelIcon glyph={allLocked ? 'lock' : 'lockOpen'} size={14} />
-                        </button>
+                          }} />
                       </div>
                       {expanded && (
                         <div className="bg-bg pb-1">

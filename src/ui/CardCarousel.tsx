@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cx } from './cx';
-import PixelIcon from './PixelIcon';
+import ArrowButton from './ArrowButton';
 
 // 가로 카드 줄 — 한 화면에 `perView`장이 들어가고, 넘치면 좌우로 밀어 본다.
 //
@@ -41,15 +41,11 @@ export default function CardCarousel({ perView, children }: { perView: number; c
   };
 
   const arrow = (dir: 1 | -1, on: boolean) => (
-    <button
-      className={cx('absolute top-0 bottom-0 z-1 w-4 flex items-center justify-center',
-        'bg-[rgba(10,21,38,0.85)] border border-line text-text-dim hover:text-text cursor-pointer',
+    <ArrowButton dir={dir}
+      className={cx('absolute top-0 bottom-0 z-1 w-4',
+        'bg-[rgba(10,21,38,0.85)] text-text-dim hover:text-text',
         dir < 0 ? 'left-0' : 'right-0', !on && 'hidden')}
-      aria-label={dir < 0 ? '이전' : '다음'}
-      onClick={() => page(dir)}>
-      <PixelIcon glyph={dir < 0 ? 'caretRight' : 'caretRight'} size={9}
-                 className={dir < 0 ? 'rotate-180' : undefined} />
-    </button>
+      onClick={() => page(dir)} />
   );
 
   return (

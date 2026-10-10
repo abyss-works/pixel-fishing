@@ -3,6 +3,7 @@ import {
   dexRecord, formName, priceOf, sizeParams, sizePercentile,
 } from '../../game/logic';
 import type { Fish, GameState } from '../../game/logic';
+import ArrowButton from '../../ui/ArrowButton';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
 import FishSprite from '../../ui/FishSprite';
@@ -30,20 +31,21 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   });
   const [i, setI] = useState(initialForm);
   const form = forms[i];
-  const arrowCls = 'bg-surface-2 border border-line rounded-sm text-text text-base px-1 py-2 cursor-pointer hover:bg-line';
 
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center justify-center gap-2">
-        <button className={arrowCls} aria-label="이전 형태"
-                onClick={() => setI((i - 1 + forms.length) % forms.length)}>◀</button>
+        <ArrowButton dir={-1} aria-label="이전 형태"
+                onClick={() => setI((i - 1 + forms.length) % forms.length)}
+                className="bg-surface-2 text-text px-1 py-2 hover:bg-line" />
         <div>
           <FishSprite fish={fish} preset="portrait" form={form.form} discovered={form.discovered}
                       ariaLabel={form.discovered ? fish.name : '미확인 변종'} className="block" />
           <p className="text-center text-text-dim text-sm mt-1">{form.discovered ? form.name : '???'}</p>
         </div>
-        <button className={arrowCls} aria-label="다음 형태"
-                onClick={() => setI((i + 1) % forms.length)}>▶</button>
+        <ArrowButton dir={1} aria-label="다음 형태"
+                onClick={() => setI((i + 1) % forms.length)}
+                className="bg-surface-2 text-text px-1 py-2 hover:bg-line" />
       </div>
 
       <div className="mt-3">

@@ -15,10 +15,10 @@ import type { BaseId } from '../data/places';
 import { zoneOfPort } from '../data/bounties';
 import { zoneById } from '../data/zones';
 import BountyPanel from '../sidebar/bounty/BountyPanel';
-import { cx } from '../ui/cx';
 import CloseButton from '../ui/CloseButton';
 import Panel from '../ui/Panel';
 import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
 import DataTable from '../ui/DataTable';
 import Modal from '../ui/Modal';
 import Note from '../ui/Note';
@@ -168,23 +168,21 @@ function SellPanel({ game, onSell, onClose, busy }: {
                           <PixelIcon glyph="lock" size={13} />
                         </span>
                       ) : (
-                        <button className={cx('bg-transparent border-0 p-0 leading-none cursor-pointer',
-                                  on > 0 ? 'text-gold' : 'text-text-dim')}
-                                aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
-                                onClick={() => toggleRow(sellable.map(i => i.uid), allOn)}>
-                          <PixelIcon glyph={glyph} size={13} />
-                        </button>
+                        <IconButton glyph={glyph} size={13}
+                                  tone={on > 0 ? 'gold' : 'dim'}
+                                  className="p-0 leading-none"
+                                  aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
+                                  onClick={() => toggleRow(sellable.map(i => i.uid), allOn)} />
                       )}
                     </td>
                     <td>
-                      <button className="bg-transparent border-0 p-0 cursor-pointer text-inherit flex items-center gap-1"
-                              aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
-                              aria-expanded={expanded}
-                              onClick={() => toggleSellRow(key)}>
-                        <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
-                                   className="text-text-dim" />
+                      <IconButton glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
+                                  className="p-0 text-inherit gap-1"
+                                  aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
+                                  aria-expanded={expanded}
+                                  onClick={() => toggleSellRow(key)}>
                         {name}
-                      </button>
+                      </IconButton>
                     </td>
                     <td><RarityText rarity={fish.rarity} /></td>
                     <td className="pf-accent">
