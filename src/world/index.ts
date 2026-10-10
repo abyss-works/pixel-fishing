@@ -18,7 +18,7 @@ import { COLOMBO_BASE } from './bases/colombo';
 
 export * from './types';
 export {
-  CAST_RANGE, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
+  ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_BOATSHOP, V_BOATSHOP_TRIGGER, V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
