@@ -3,6 +3,7 @@
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
 import { kstDay } from '../../api';
 import { dailyQuestFor } from '../../data/bounties';
@@ -24,10 +25,18 @@ const rec = (count: number) => ({ count, maxSize: null, first: null });
 // 태평양 일반 3종 완성 (고등어·갈치·아귀)
 const fullDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
 
-function show(g: GameState) {
+function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
   const setToast = vi.fn();
-  render(<BountyPanel game={g} port="harbor" uid="test-uid"
-                      dispatch={okDispatch(g)} setToast={setToast} />);
+  // useBounty(useQuery)용 격리 클라이언트 — 테스트마다 새로 만든다 (캐시 공유 금지).
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <BountyPanel game={g} port="harbor" uid="test-uid"
+                   dispatch={dispatch ?? okDispatch(g)} setToast={setToast} />
+    </QueryClientProvider>,
+  );
   return { setToast };
 }
 
@@ -71,10 +80,10 @@ describe('BountyPanel', () => {
     mockSnap = { licensed: [], acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex });
     const dispatch = vi.fn(okDispatch(g));
-    const setToast = vi.fn();
-    render(<BountyPanel game={g} port="harbor" uid="test-uid"
-                        dispatch={dispatch} setToast={setToast} />);
+    show(g, dispatch);
     const btns = await screen.findAllByRole('button', { name: '수주하기' });
+    // 스냅샷 적재 전에는 수주 버튼이 비활성이다 — RQ fetch 완료를 기다린다.
+    await waitFor(() => expect(btns[0]).not.toBeDisabled());
     fireEvent.click(btns[0]);
     const want = dailyQuestFor('pacific', 'easy', 'test-uid', kstDay())!;
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith(
@@ -102,9 +111,7 @@ describe('BountyPanel', () => {
     mockSnap = { licensed: [], acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex, items: { 'mat-abyss-lantern': 1 } });
     const dispatch = vi.fn(okDispatch(g));
-    const setToast = vi.fn();
-    render(<BountyPanel game={g} port="harbor" uid="test-uid"
-                        dispatch={dispatch} setToast={setToast} />);
+    show(g, dispatch);
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     fireEvent.click(await screen.findByRole('button', { name: '교환하기' }));
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith(

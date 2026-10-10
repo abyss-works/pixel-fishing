@@ -21,6 +21,7 @@ import { useMessageLog } from '../hooks/useMessageLog';
 import { useCanvasCover } from '../shared/canvasCover';
 import WorldMapModal from '../overlays/modal/WorldMapModal';
 import Button from '../ui/Button';
+import { QueryProvider } from './QueryProvider';
 
 // 앱 셸 (계층: layout) — 씬 상태·탭·정비 패널과 화면 배치만 소유한다.
 // 씬 그래프(어디서 어디로, 어떤 안내문으로)는 팩 데이터가 결정 — 새 지역/거점 추가에 App 무수정.
@@ -35,7 +36,7 @@ function sceneOf(l: LocationRef): SceneRef {
   return l;
 }
 
-export default function App() {
+function AppContent() {
   // 시스템 메시지 로그 — MMO 채팅창처럼 흘러가는 기록 (좌하단 오버레이)
   const { log, setToast } = useMessageLog([
     '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
@@ -114,7 +115,6 @@ export default function App() {
   };
 
   return (
-    // 전체 화면 2패널 앱 셸: 좌 게임 스테이지 / 우 사이드바  — 페이지 스크롤 없음
     // 전체 화면 2패널 앱 셸: 좌 게임 스테이지 / 우 사이드바 — **이 셸만** 스크롤 없음(R24).
     // overflow-hidden은 body가 아니라 여기 달린다 — 독립 페이지(대시보드 등)는 자연 스크롤을 살린다.
     <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
@@ -198,6 +198,16 @@ export default function App() {
       {/* 세계지도 — 미니맵 클릭. 지구 전체(흑백)와 구현 영역(컬러), 점멸 점 = 지금 서 있는 곳 */}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>
+  );
+}
+
+// 읽기 캐시는 셸 바깥에서 연다 — useGame(dispatch 무효화)·useBounty가 Provider 안에서 돈다.
+// 테스트·스토리북의 <App/> 렌더가 그대로 받는다.
+export default function App() {
+  return (
+    <QueryProvider>
+      <AppContent />
+    </QueryProvider>
   );
 }
 
