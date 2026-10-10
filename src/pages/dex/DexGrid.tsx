@@ -5,12 +5,12 @@ import {
 import type { Fish, FormId, GameState } from '../../game/logic';
 import { ZONE_IDS, subtreeSpots, topZoneOfSpot, zoneById } from '../../data/zones';
 import type { ZoneId } from '../../data/zones';
+import { rarityRank } from '../../data/rarity';
 import { cx } from '../../ui/cx';
 import SubTabs from '../../ui/SubTabs';
 import FishSprite from '../../ui/FishSprite';
-import { RarityText, RarityDot } from '../../ui/RarityTag';
-import { RARITY_CARD, rarityRank } from '../shared';
-import type { DexView } from '../shared';
+import { RarityText, RarityDot, RARITY_CARD } from '../../ui/RarityTag';
+import type { DexView } from './DexTab';
 import DexDetail from './DexDetail';
 
 // 일반/돌연변이 공용 격자 — 폼별 발견 기준만 다르다. 변이는 별개 개체라 변이만 잡은 종은

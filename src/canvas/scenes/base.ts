@@ -1,9 +1,9 @@
 // 거점 인터프리터 — BasePack 데이터(가구 목록)를 그리는 유일한 거점 렌더러 (리팩토링 축 2).
 // 구 renderHome/renderHarbor(시설별 switch 손코딩)를 대체한다. 배경(backdrop)은 거점 고유
 // 연출이라 id 키 레지스트리로 남긴다 — 새 거점 = BasePack + backdrop 1개 + 가구 스프라이트.
-import { R, label, UI, SCALE, W, H } from '../common.js';
-import type { Ctx } from '../common.js';
-import { FURNITURE_SPRITES } from '../sprites/buildings.js';
+import { R, label, UI, SCALE, W, H } from '../../pixel/common.js';
+import type { Ctx } from '../../pixel/common.js';
+import { FURNITURE_SPRITES } from '../../pixel/sprites/buildings.js';
 import type { BaseId, BaseInfo, BasePack } from '../../world/types';
 
 const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {

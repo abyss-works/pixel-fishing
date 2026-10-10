@@ -11,15 +11,15 @@ import type { TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../hotkeys';
 import TabBar from '../ui/TabBar';
 import TabIcon from './TabIcon';
-import HelpPanel from './HelpPanel';
-import RegionTab from './RegionTab';
-import BagTab from './bag/BagTab';
-import DexTab from './dex/DexTab';
-import SettingsTab from './settings/SettingsTab';
-import AdminTab from './AdminTab';
-import { setBagLayout, useBagView } from './bag/bagView';
-import type { DexView } from './shared';
-import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './shared';
+import VHelp from '../pages/help/VHelp';
+import VRegion from '../pages/region/VRegion';
+import BagTab from '../pages/bag/BagTab';
+import DexTab from '../pages/dex/DexTab';
+import SettingsTab from '../pages/settings/SettingsTab';
+import VAdmin from '../pages/admin/VAdmin';
+import { setBagLayout, useBagView } from '../shared/bagView';
+import type { DexView } from '../pages/dex/DexTab';
+import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from './gate';
 
 // 탭은 씬과 무관하게 항상 5개 고정 + 조건부 관리자 탭(별도 — isAdminVisible).
 // 관리자 탭은 ?admin && (로컬 또는 소유자 계정)일 때만 6번 탭으로 노출된다.
@@ -121,10 +121,10 @@ export default function Sidebar(props: SidebarProps) {
                       max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t">
       <TabBar<TabKey> tabs={tabsFor(dexView, layout === 'cards', props.account)} activeKey={activeTab} onSelect={select} />
       <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
-        {activeTab === 'region' && <RegionTab region={props.region} game={game} />}
+        {activeTab === 'region' && <VRegion region={props.region} game={game} />}
         {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
         {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
-        {activeTab === 'help' && <HelpPanel />}
+        {activeTab === 'help' && <VHelp />}
         {activeTab === 'settings' && (
           <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
                        syncLabel={props.syncLabel} syncState={props.syncState}
@@ -132,7 +132,7 @@ export default function Sidebar(props: SidebarProps) {
                        nickname={props.nickname} onRename={props.onRename}
                        onAuthChanged={props.onAuthChanged} />
         )}
-        {activeTab === 'admin' && <AdminTab game={game} dispatch={props.dispatch} />}
+        {activeTab === 'admin' && <VAdmin game={game} dispatch={props.dispatch} />}
       </div>
     </aside>
   );

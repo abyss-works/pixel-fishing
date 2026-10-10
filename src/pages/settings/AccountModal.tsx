@@ -9,7 +9,7 @@ import Modal from '../../ui/Modal';
 import Note from '../../ui/Note';
 import SectionTitle from '../../ui/SectionTitle';
 import TextInput from '../../ui/TextInput';
-import { maskUid } from '../shared';
+import { maskUid } from './maskUid';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(게스트 진행 소멸 — 경고+백업).

@@ -33,7 +33,7 @@ export default function WorldMapModal({ player, onClose }: {
   // 아틀라스 모듈 로드 — 첫 오픈 때 1회 (lazy 청크: earth.mask + 렌더러)
   useEffect(() => {
     let alive = true;
-    import('../pixel/scenes/atlas').then(m => {
+    import('../canvas/scenes/atlas').then(m => {
       if (!alive) return;
       setAtlas({
         ATLAS_W: m.ATLAS_W, ATLAS_H: m.ATLAS_H, EARTH_MAP: m.EARTH_MAP,
