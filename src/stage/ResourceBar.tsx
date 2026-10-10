@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
 import { boatNameOf } from '../game/logic';
 import type { GameState } from '../game/logic';
 import { BOUNTY_DAILY_CAP } from '../game/balance';
-import { readBounty } from '../api';
+import { useBounty } from '../hooks/useBounty';
 import PixelIcon from '../ui/PixelIcon';
 import type { GlyphId } from '../ui/PixelIcon';
 
@@ -35,12 +34,8 @@ function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; child
 export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
   // 남은 수주권 — 서버(DB)가 진실이라 액션마다 다시 읽는다(game 참조 변경이 트리거).
   // 오프라인이면 칸 자체를 숨긴다 (0으로 보이면 거짓말이다).
-  const [tickets, setTickets] = useState<number | null>(null);
-  useEffect(() => {
-    let live = true;
-    readBounty().then(s => { if (live) setTickets(s ? BOUNTY_DAILY_CAP - s.acceptsToday : null); });
-    return () => { live = false; };
-  }, [game]);
+  const { snap } = useBounty(game);
+  const tickets = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
   return (
     <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
                     bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px] border-2 border-line pf-notch pf-bevel
