@@ -42,6 +42,22 @@ describe('api 계층 경계', () => {  it('우회 패턴을 탐지한다 — 큰
     expect(offenders).toEqual([]);
   });
 
+  it('@tanstack/react-query 직접 import는 app·hooks뿐이다 — views는 훅 경유', () => {
+    expect(isRqImport(`import { useQuery } from "@tanstack/react-query";`)).toBe(true);
+    expect(isRqImport(`import Button from '../ui/Button';`)).toBe(false);
+    const offenders: string[] = [];
+    for (const [path, src] of Object.entries(sources)) {
+      if (path.startsWith('./')) continue; // api 계층 자신
+      const rel = path.replace(/^\.\.\//, '');
+      if (rel.startsWith('app/') || rel.startsWith('hooks/')) continue;
+      if (/\.test\.tsx?$/.test(rel)) continue;
+      if (/\.stories\.tsx?$/.test(rel)) continue;
+      if (rel === '.storybook/preview.ts') continue;
+      if (isRqImport(src)) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('readBounty 직접 import는 api·hooks뿐이다 — views는 useBounty 경유', () => {
     expect(isReadImport(`import { readBounty } from "../api";`)).toBe(true);
     expect(isReadImport(`import { readBounty, kstDay } from '../../api';`)).toBe(true);
@@ -127,4 +143,10 @@ const READ_IMPORT = /import\s+[^;]*\breadBounty\b[^;]*\bfrom\b\s*["'][^"']+["']/
 
 function isReadImport(src: string): boolean {
   return READ_IMPORT.test(src);
+}
+
+const RQ_IMPORT = /from\s*["']@tanstack\/react-query["']/;
+
+function isRqImport(src: string): boolean {
+  return RQ_IMPORT.test(src);
 }
