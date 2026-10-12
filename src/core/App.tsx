@@ -1,0 +1,59 @@
+import { useEffect, useRef, useState } from 'react';
+import { LIVE_REGIONS } from '../game/world';
+import type { Point, SceneRef } from '../game/world';
+import type { LocationRef } from '../game/content/places';
+import { useGame } from '../features/gameplay/model/useGame';
+import { useAccount } from '../features/account/model/useAccount';
+import { useMessageLog } from '../presentation/layouts/hud/useMessageLog';
+import GameView from '../presentation/views/game/GameView';
+import { QueryProvider } from './QueryProvider';
+
+// 위치 복원 규칙: 바다 위치는 유지하지 않는다. 지역 씬이면 고향 항구에서 시작하고,
+// 거점(집·항구)은 그대로 재개한다.
+function sceneOf(location: LocationRef): SceneRef {
+  if (location.kind === 'region' && !LIVE_REGIONS.includes(location.id)) return { kind: 'base', id: 'harbor' };
+  return location;
+}
+
+function AppContent() {
+  const { log, setToast } = useMessageLog([
+    '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
+  ]);
+  const { game, setGame, dispatch, nickname, rename, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
+  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, sync, load });
+
+  const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || sync !== 'on') return;
+    restored.current = true;
+    setScene(sceneOf(game.location));
+  }, [sync, game.location]);
+
+  const [entryPos, setEntryPos] = useState<Point | null>(null);
+  const go = (nextScene: SceneRef, message: string, position?: Point) => {
+    setScene(nextScene);
+    setEntryPos(position ?? null);
+    setToast(message);
+    dispatch({ type: 'travel', to: nextScene });
+  };
+
+  return (
+    <GameView
+      game={game} scene={scene} entryPos={entryPos}
+      dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
+      log={log} syncLabel={syncLabel} syncState={sync}
+      account={account} uid={uid} nickname={nickname}
+      onRename={rename} onAuthChanged={onAuthChanged} outdated={outdated}
+    />
+  );
+}
+
+// 읽기 캐시는 셸 바깥에서 연다 — useGame(dispatch 무효화)·useBounty가 Provider 안에서 돈다.
+export default function App() {
+  return (
+    <QueryProvider>
+      <AppContent />
+    </QueryProvider>
+  );
+}

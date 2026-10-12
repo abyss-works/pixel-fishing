@@ -9,24 +9,24 @@ import { createClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
-import { migrate, newState } from '../src/game/logic.js';
-import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
+import { migrate, newState } from '../src/game/rules/logic.js';
+import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
   takeItem, matchBountyCatch, rollNamedEncounter,
-} from '../src/game/logic.js';
-import { bountyById, dailyQuestFor } from '../src/data/bounties.js';
-import type { SpotId } from '../src/data/spots.js';
-import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
-import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
-import type { BountyCtx } from '../src/game/rules.js';
-import { parseAction } from '../src/game/actionSchema.js';
-import { checkNickname, pickGuestName } from '../src/game/nickname.js';
-import { powerZones, rodPower } from '../src/game/stats.js';
-import { SPOTS } from '../src/data/spots.js';
-import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
-import { APP_VERSION } from '../src/version.js';
+} from '../src/game/rules/logic.js';
+import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
+import type { SpotId } from '../src/game/content/spots.js';
+import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import type { BountyCtx } from '../src/game/rules/rules.js';
+import { parseAction } from '../src/game/rules/actionSchema.js';
+import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
+import { powerZones, rodPower } from '../src/game/rules/stats.js';
+import { SPOTS } from '../src/game/content/spots.js';
+import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { APP_VERSION } from '../src/core/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
 // 공식 문서 확인: VERCEL_GIT_COMMIT_SHA는 빌드·런타임 양쪽에 제공된다.

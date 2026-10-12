@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // 버전은 src/version.ts(클라+서버 공유 리터럴)가 단일 근원 — define 주입 폐지 (version.test가 package.json과 동기화 강제)
+  // 버전은 src/core/version.ts(클라+서버 공유 리터럴)가 단일 근원 — define 주입 폐지 (version.test가 package.json과 동기화 강제)
   //
   // 배포 식별자는 버전과 **다른 값**이다. APP_VERSION은 릴리즈 라벨이라 dev 빌드에서는
   // 안 올린다(roadmap 0.0) — 그래서 낡은 탭 판정에 쓰면 dev 배포 사이에서는 절대 안 걸린다.
@@ -21,6 +21,6 @@ export default defineConfig({
   server: { port: 5199 },
   test: {
     environment: 'jsdom',
-    setupFiles: './src/test-setup.ts',
+    setupFiles: './src/core/test-setup.ts',
   },
 })

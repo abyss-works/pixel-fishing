@@ -4,7 +4,7 @@
 // 모듈 해상도 클래스 ①은 api/tsconfig의 nodenext가 정적으로 전수 검사한다(여기서 중복 안 함).
 import { describe, it, expect } from 'vitest';
 import handler, { SKIP_DETAIL } from './action.js';
-import { APP_VERSION } from '../src/version.js';
+import { APP_VERSION } from '../src/core/version.js';
 
 function mkRes() {
   const r = {
