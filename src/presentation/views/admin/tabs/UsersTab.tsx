@@ -10,6 +10,7 @@ import TextInput from '../../../ui/TextInput';
 import SectionTitle from '../../../ui/SectionTitle';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS } from '../../../../features/admin/model/metrics';
+import { adminNumber, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import type {
   AdminUserRow, AdminDexMismatchRow, AdminEventRow,
@@ -43,10 +44,8 @@ export default function UsersTab() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
   }, [granted]);
 
-  const q = query.trim().toLowerCase();
   const filtered = useMemo(() =>
-    users.filter(u => !q || u.user_id.toLowerCase().includes(q)
-                      || (u.email ?? '').toLowerCase().includes(q)), [users, q]);
+    filterAdminUsers(users, query), [users, query]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -87,8 +86,8 @@ export default function UsersTab() {
                 </td>
                 <td>{u.restricted === true
                   ? <span className="text-danger text-2xs pf-accent">제재</span> : null}</td>
-                <td className="text-right">{fmtNum(toNum(u.gold))}</td>
-                <td className="text-right">{fmtNum(toNum(u.fame))}</td>
+                <td className="text-right">{fmtNum(adminNumber(u.gold))}</td>
+                <td className="text-right">{fmtNum(adminNumber(u.fame))}</td>
                 <td className="whitespace-nowrap text-xs">{boatNameOf(u.boat ?? 0)}</td>
                 <td className="text-right text-xs">{u.rod ?? '—'}</td>
                 <td className="whitespace-nowrap text-xs text-text-dim">
@@ -118,7 +117,7 @@ function UserDetail({ user, onClose }: {
 }) {
   const [events, setEvents] = useState<AdminEventRow[]>([]);
   const [mismatch, setMismatch] = useState<AdminDexMismatchRow[]>([]);
-  const [flag, setFlag] = useState<AdminSpamFlagRow | null>(null);
+  const [flags, setFlags] = useState<AdminSpamFlagRow[]>([]);
   const [imports, setImports] = useState<AdminImportLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,31 +127,18 @@ function UserDetail({ user, onClose }: {
     readAdminUserDetails(user.user_id).then(([evs, mis, flags, imps]) => {
       if (!alive) return;
       setEvents(evs);
-      setMismatch(mis.filter(m => m.user_id === user.user_id));
-      setFlag(flags.find(f => f.user_id === user.user_id) ?? null);
-      setImports(imps.filter(i => i.user_id === user.user_id));
+      setMismatch(mis);
+      setFlags(flags);
+      setImports(imps);
       setLoading(false);
     }, e => { if (!alive) return; setError(String(e?.message ?? e)); setLoading(false); });
     return () => { alive = false; };
   }, [user.user_id]);
 
-  // 액션 유형 요약 (감사 ②) — 로드된 이벤트 창 안에서의 집계다(전체 아님을 명시)
-  const byType = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of events) m.set(e.type, (m.get(e.type) ?? 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [events]);
-  // 연타 간격 표시용 — 직전 catch와의 간격 <2초(감사 ⑤의 정의)인 행 인덱스 집합
-  const fastGaps = useMemo(() => {
-    const s = new Set<number>();
-    let last: AdminEventRow | null = null;
-    events.forEach((e, i) => {
-      if (e.type !== 'catch') return;
-      if (last && (Date.parse(e.created_at) - Date.parse(last.created_at)) / 1000 < 2) s.add(i);
-      last = e;
-    });
-    return s;
-  }, [events]);
+  const { mismatch: userMismatch, flag, imports: userImports, byType, fastGaps } = useMemo(
+    () => selectAdminUserDetail(user.user_id, events, mismatch, flags, imports),
+    [user.user_id, events, mismatch, flags, imports],
+  );
 
   // 도감↔이벤트 차액 — 이 유저의 근거 없는 도감 행(없으면 정합)
 
@@ -160,8 +146,8 @@ function UserDetail({ user, onClose }: {
     <Modal layer="app" wide title={`유저 상세 — ${user.email ?? `${user.user_id.slice(0, 8)}…`}`}
            onClose={onClose}>
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-        <KpiCard label="골드" value={fmtNum(toNum(user.gold))} />
-        <KpiCard label="명성" value={fmtNum(toNum(user.fame))} />
+        <KpiCard label="골드" value={fmtNum(adminNumber(user.gold))} />
+        <KpiCard label="명성" value={fmtNum(adminNumber(user.fame))} />
         <KpiCard label="배" value={boatNameOf(user.boat ?? 0)} hint={`T${user.boat ?? 0}`} />
         <KpiCard label="낚싯대" value={`Lv${user.rod ?? '—'}`} />
         <KpiCard label="7일 PERFECT" value={flag?.perfect_pct != null ? `${flag.perfect_pct}%` : '—'}
@@ -174,10 +160,10 @@ function UserDetail({ user, onClose }: {
         세이브 v{String(user.save_version ?? '?')} · 연타(gap&lt;2s) {(flag?.fast_gap_7d ?? 0)}건(7일)
       </Note>
 
-      {imports.length > 0 && (
+      {userImports.length > 0 && (
         <Note tone="warn">
-          이사 코드 반입 {imports.length}건 —
-          {imports.map(i => ` ${fmtDT(i.created_at)} 골드 ${fmtNum(toNum(i.gold))}`).join(' ·')}
+          이사 코드 반입 {userImports.length}건 —
+          {userImports.map(i => ` ${fmtDT(i.created_at)} 골드 ${fmtNum(adminNumber(i.gold))}`).join(' ·')}
         </Note>
       )}
 
@@ -196,7 +182,7 @@ function UserDetail({ user, onClose }: {
       </div>
 
       <SectionTitle>도감 ↔ 이벤트 대조 (감사 ④)</SectionTitle>
-      {mismatch.length === 0
+      {userMismatch.length === 0
         ? <p className="text-2xs text-text-dim my-1">차액 없음 — 도감 카운트가 catch 이벤트와 정합한다.</p>
         : (
           <DataTable>
@@ -206,7 +192,7 @@ function UserDetail({ user, onClose }: {
                   <th className="text-right">차액</th></tr>
             </thead>
             <tbody>
-              {mismatch.map(m => (
+                {userMismatch.map(m => (
                 <tr key={`${m.fish_id}/${m.form}`}>
                   <td className="font-mono text-2xs">{m.fish_id}</td>
                   <td className="text-xs">{m.form}</td>
@@ -259,5 +245,3 @@ const EVENT_WINDOW = 300;
 const DANGEROUS = new Set(['import', 'adminSet']);
 
 /** number|string|null(DB 스칼라) → 숫자 — 표기 전용 */
-const toNum = (v: number | string | null): number =>
-  v === null ? NaN : Number(v);

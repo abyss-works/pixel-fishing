@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  BOATS, boatNameOf, REJECT_TEXT,
-} from '../../../../game/rules/logic';
+import { REJECT_TEXT } from '../../../../game/rules/logic';
+import { parseAdminStats, selectAdminBoatOptions } from '../../../../features/admin/model/stats';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
@@ -10,6 +9,8 @@ import TextInput from '../../../ui/TextInput';
 import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
+
+const BOAT_OPTIONS = selectAdminBoatOptions();
 
 // 스탯 탭 — adminSet(테스트용 직접 수정). 운영에선 소유자·로컬만 서버가 받는다
 // 관리자 액션 권한은 서버가 검사한다 — UI는 조건 없이 렌더한다.
@@ -31,15 +32,14 @@ export default function StatsTab({ game, dispatch }: {
   }, [game.gold, game.fame, game.rod, game.boat]);
 
   const apply = () => {
-    const gold = Math.floor(Number(editGold));
-    const fame = Math.floor(Number(editFame));
-    const rod = Math.floor(Number(editRod));
-    const boat = Math.floor(Number(editBoat));
-    if ([gold, fame, rod, boat].some(n => !Number.isFinite(n))) {
+    const parsed = parseAdminStats({
+      gold: editGold, fame: editFame, rod: editRod, boat: editBoat,
+    });
+    if (!parsed.ok) {
       setMsg('숫자를 올바르게 입력하세요.');
       return;
     }
-    when(dispatch({ type: 'adminSet', gold, fame, rod, boat }), r => {
+    when(dispatch({ type: 'adminSet', ...parsed.values }), r => {
       if (r.status === 'ok') setMsg('스탯을 적용했다.');
       else if (r.status === 'rejected') setMsg(REJECT_TEXT[r.error]);
     });
@@ -61,7 +61,7 @@ export default function StatsTab({ game, dispatch }: {
         <label className="flex flex-col gap-1">배 단계
           <select value={editBoat} onChange={e => setEditBoat(e.target.value)}
                   className="bg-bg border border-line rounded-sm text-text text-sm px-3 py-2 outline-none focus:border-accent">
-            {BOATS.map(b => <option key={b.tier} value={b.tier}>{boatNameOf(b.tier)}</option>)}
+            {BOAT_OPTIONS.map(boat => <option key={boat.tier} value={boat.tier}>{boat.name}</option>)}
           </select>
         </label>
       </div>

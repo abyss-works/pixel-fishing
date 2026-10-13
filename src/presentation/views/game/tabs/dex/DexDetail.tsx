@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import {
-  dexRecord, formName, priceOf, sizeParams, sizePercentile,
-} from '../../../../../game/rules/logic';
 import type { Fish, GameState } from '../../../../../game/rules/logic';
+import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
 import ArrowButton from '../../../../ui/ArrowButton';
 import Button from '../../../../ui/Button';
 import Modal from '../../../../ui/Modal';
@@ -17,18 +15,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
 }) {
   // forms[0] = 기본형 · forms[1+] = 변이(발견해야 정보 공개). 배열인 이유: 폼이 늘어도
   // 화살표 로직 그대로. 크기 폴백 = 분포 평균(상위 50%) — 기록 없는 이관 개체 대응.
-  const forms = (['normal', 'variant'] as const).map(form => {
-    const rec = dexRecord(game, fish.id, form);
-    return {
-      form,
-      name: formName(fish, form),
-      lore: form === 'variant' ? fish.variant.lore : fish.lore,
-      discovered: (rec?.count ?? 0) > 0, // 폼별 — 변이만 잡았으면 일반 폼은 여전히 ???
-      count: rec?.count ?? 0,
-      maxSize: rec?.maxSize ?? sizeParams(fish).mean,
-      firstCaught: rec?.first ?? undefined,
-    };
-  });
+  const forms = selectDexDetailData(game, fish);
   const [i, setI] = useState(initialForm);
   const form = forms[i];
 
@@ -57,12 +44,12 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
         </p>
         <div className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm mb-2">
           <span className="text-text-dim">가격</span>
-          <span className="pf-accent">{form.discovered ? `${priceOf(fish, form.form)}G` : '???'}</span>
+          <span className="pf-accent">{form.discovered ? `${form.price}G` : '???'}</span>
           <span className="text-text-dim">잡은 수</span>
           <span>{form.discovered ? `${form.count}마리` : '???'}</span>
           <span className="text-text-dim">최대 크기</span>
           <span>{form.discovered
-            ? <>{form.maxSize.toFixed(1)}cm <span className="text-text-dim text-xs">(상위 {sizePercentile(fish, form.maxSize)}%)</span></>
+            ? <>{form.maxSize.toFixed(1)}cm <span className="text-text-dim text-xs">(상위 {form.sizePercentile}%)</span></>
             : '???'}</span>
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>

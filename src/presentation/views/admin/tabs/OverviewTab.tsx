@@ -6,9 +6,10 @@ import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, EVENT_LABELS, eventSummary } from '../../../../features/admin/model/metrics';
+import { selectOverviewMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminOverview } from '../../../../features/admin/service/queries';
 import type {
-  AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminEventRow,
+  AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminEventRow, AdminCatchQualityRow,
 } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, KpiGrid, Frame, TabState } from '../charts';
@@ -23,7 +24,7 @@ export default function OverviewTab() {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [dauToday, setDauToday] = useState<number | null>(null);
   const [wau7, setWau7] = useState<number | null>(null);
-  const [catch7d, setCatch7d] = useState<number | null>(null);
+  const [quality, setQuality] = useState<AdminCatchQualityRow[] | null>(null);
   const [recent, setRecent] = useState<AdminEventRow[]>([]);
   const [flags, setFlags] = useState<AdminSpamFlagRow[]>([]);
   const [imports, setImports] = useState<AdminImportLogRow[]>([]);
@@ -35,7 +36,7 @@ export default function OverviewTab() {
       setUsers(us);
       setDauToday(daily[0]?.dau ?? null);
       setWau7(daily[0]?.wau7 ?? null);
-      setCatch7d(quality.slice(0, 7).reduce((s, r) => s + r.catches, 0));
+      setQuality(quality);
       setRecent(recentRows);
       setFlags(flagRows);
       setImports(importRows);
@@ -49,10 +50,7 @@ export default function OverviewTab() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
   }, [granted]);
 
-  // 위험 신호 집계 — 이상탐지 탭 가기 전에 개요에서 선보인다
-  const restrictedCount = users.filter(u => u.restricted === true).length;
-  const spamUsers = flags.reduce((s, f) => s + (f.fast_gap_7d > 0 ? 1 : 0), 0);
-  const riskTotal = restrictedCount + spamUsers + imports.length;
+  const metrics = selectOverviewMetrics(users, flags, imports, quality ?? []);
 
   return (
     <div className="flex flex-col gap-3">
@@ -60,10 +58,10 @@ export default function OverviewTab() {
         <KpiCard label="등록 유저" value={fmtNum(users.length)} />
         <KpiCard label="금일 DAU" value={dauToday === null ? '—' : fmtNum(dauToday)}
                  hint={`최근 7일 WAU ${wau7 === null ? '—' : fmtNum(wau7)}`} />
-        <KpiCard label="최근 7일 낚시" value={catch7d === null ? '—' : fmtNum(catch7d)}
+        <KpiCard label="최근 7일 낚시" value={quality === null ? '—' : fmtNum(metrics.catch7d)}
                  hint="catch 이벤트 합계" />
-        <KpiCard label="보유 골드 합" value={fmtNum(users.reduce((s, u) => s + toNum(u.gold), 0))} />
-        <KpiCard label="명성 합" value={fmtNum(users.reduce((s, u) => s + toNum(u.fame), 0))} />
+        <KpiCard label="보유 골드 합" value={fmtNum(metrics.goldTotal)} />
+        <KpiCard label="명성 합" value={fmtNum(metrics.fameTotal)} />
       </KpiGrid>
 
       <TabState loading={loading && granted} error={error} onRetry={run} />
@@ -101,16 +99,16 @@ export default function OverviewTab() {
         </Frame>
 
         <div className="flex flex-col gap-2">
-          <RiskCard label="제재 계정" count={restrictedCount}
+          <RiskCard label="제재 계정" count={metrics.restrictedCount}
                     hint="saves_current.restricted 플래그 — 활동 403 차단 중"
-                    tone={restrictedCount > 0 ? 'danger' : undefined} />
-          <RiskCard label="연타 플래그 유저" count={spamUsers}
+                    tone={metrics.restrictedCount > 0 ? 'danger' : undefined} />
+          <RiskCard label="연타 플래그 유저" count={metrics.spamUsers}
                     hint="최근 7일 캐치 간격 <2초 — 물리적으로 불가한 연타"
-                    tone={spamUsers > 0 ? 'warn' : undefined} />
+                    tone={metrics.spamUsers > 0 ? 'warn' : undefined} />
           <RiskCard label="이사 코드 반입" count={imports.length}
                     hint="import 액션 원장 — 운영자 전용 경로의 흔적"
                     tone={imports.length > 0 ? 'warn' : undefined} />
-          {riskTotal > 0 && (
+          {metrics.riskTotal > 0 && (
             <p className="text-2xs text-text-dim px-1">
               상세 판독은 <span className="pf-accent text-gold">이상탐지</span> 탭에서.
             </p>
@@ -146,9 +144,5 @@ function RiskCard({ label, count, hint, tone }: {
 
 // 위험 주시 대상 이벤트 — 피드에서 즉시 눈에 밟히게
 const RISKY = new Set(['import', 'adminSet']);
-
-/** number|string|null(DB 스칼라) → 숫자 — 표기 전용 */
-const toNum = (v: number | string | null): number =>
-  v === null ? NaN : Number(v);
 
 const shortUid = (uid: string): string => uid.slice(0, 8);

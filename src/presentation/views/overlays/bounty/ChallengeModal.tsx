@@ -6,6 +6,7 @@ import { CHALLENGE_MAX_MISS, CHALLENGE_RED, CHALLENGE_ROUNDS, CHALLENGE_YELLOW }
 import { newChallenge, strikeChallenge } from '../../../../game/rules/challenge.js';
 import type { ChallengeRun } from '../../../../game/rules/challenge.js';
 import { judgeTiming } from '../../../../game/rules/logic.js';
+import { selectChallengeAttempt } from '../../../../features/bounty/model/challenge';
 import { useKeyScope } from '../../../ui/hotkeys';
 import Button from '../../../ui/Button';
 
@@ -70,7 +71,7 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
     return () => clearInterval(id);
   }, [sweepMs, advance]);
 
-  const attempt = Math.min(run.hits + run.misses + 1, CHALLENGE_ROUNDS);
+  const attempt = selectChallengeAttempt(run);
   return (
     <div className="border border-gold rounded-sm bg-surface p-4 flex flex-col gap-2 text-center text-sm" role="dialog" aria-label={`${targetName} 도전`}>
       <b className="pf-accent text-gold text-lg">{targetName} — 도전</b>

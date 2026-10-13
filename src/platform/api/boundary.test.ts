@@ -13,6 +13,13 @@ const SOURCE_ROOT_FILES = new Set([
 const SOURCE_ROOTS = new Set([
   'core', 'features', 'game', 'platform', 'presentation', 'shared',
 ]);
+const CONCERN_DIRS: Record<string, ReadonlySet<string>> = {
+  game: new Set(['content', 'rendering', 'rules', 'runtime', 'world']),
+  platform: new Set(['adapters', 'api']),
+  presentation: new Set(['layouts', 'ui', 'views']),
+  shared: new Set(['lib']),
+};
+const FEATURE_CONCERN_DIRS = new Set(['model', 'service']);
 
 const ALLOWED_IMPORTS: Record<string, ReadonlySet<string>> = {
   'src-root': new Set(['src-root', 'core', 'features', 'game', 'platform', 'presentation', 'shared']),
@@ -91,10 +98,33 @@ describe('src 구조 경계', () => {
     expect(roots.filter(root => !SOURCE_ROOTS.has(root))).toEqual([]);
   });
 
+  it('각 책임 계층의 하위 모듈은 문서화된 관심사 폴더에 둔다', () => {
+    const offenders = Object.keys(sources).map(sourcePath).filter(path => {
+      const parts = path.split('/');
+      const owner = sourceOwner(path);
+      if (owner === 'src-root') return false;
+      if (owner === 'core') return parts.length !== 2;
+      if (owner === 'features') return !FEATURE_CONCERN_DIRS.has(parts[2] ?? '');
+      if (path === 'platform/observability.ts') return false;
+      return !CONCERN_DIRS[owner]?.has(parts[1] ?? '');
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it('기능 모듈에는 화면 컴포넌트를 두지 않는다', () => {
     const offenders = Object.keys(sources)
       .map(sourcePath)
       .filter(path => path.startsWith('features/') && path.endsWith('.tsx') && !isTestOrStory(path));
+    expect(offenders).toEqual([]);
+  });
+
+  it('기능 모델은 React를 참조하지 않는다', () => {
+    const reactImport = /(?:from\s*|import\s*\()\s*["'](?:react|react-dom)(?:\/[^"']*)?["']/;
+    const offenders = Object.entries(sources)
+      .map(([key, src]) => ({ path: sourcePath(key), src }))
+      .filter(({ path, src }) => /^features\/[^/]+\/model\//.test(path)
+        && !isTestOrStory(path) && reactImport.test(src))
+      .map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
 

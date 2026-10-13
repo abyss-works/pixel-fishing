@@ -1,10 +1,8 @@
-import { formDiscovered } from '../../../../../game/rules/logic';
+import { useMemo } from 'react';
 import type { GameState } from '../../../../../game/rules/logic';
-import { ZONE_IDS, zoneById } from '../../../../../game/content/zones';
+import { zoneById } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
-import { BOUNTIES } from '../../../../../game/content/bounties';
-import type { BountyQuest } from '../../../../../game/content/bounties';
-import { namedById, namedFishOf } from '../../../../../game/content/named';
+import { selectNamedDex } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
@@ -18,52 +16,39 @@ export default function DexNamedView({ game, sub, onSub }: {
   sub: ZoneId;
   onSub: (z: ZoneId) => void;
 }) {
-  const namedOf = (zone: ZoneId): BountyQuest[] =>
-    BOUNTIES.filter(q => q.zone === zone && q.difficulty === 'named');
-  const namedFound = (q: BountyQuest): boolean =>
-    q.targetFish !== null && formDiscovered(game, q.targetFish, 'normal');
-  const namedCount = BOUNTIES.filter(q => q.difficulty === 'named' && namedFound(q)).length;
-  const namedTotal = BOUNTIES.filter(q => q.difficulty === 'named').length;
+  const data = useMemo(() => selectNamedDex(game, sub), [game, sub]);
 
   return (
     <div>
       <h3 className="text-lg text-gold mb-1">
         지명 수배
-        {' ('}<span className="pf-accent">{namedCount}/{namedTotal}</span>{')'}
+        {' ('}<span className="pf-accent">{data.foundCount}/{data.totalCount}</span>{')'}
       </h3>
       <SubTabs
-        items={ZONE_IDS.map(id => {
-          const quests = namedOf(id);
-          const caught = quests.filter(namedFound).length;
-          return {
-            key: id,
-            label: <>{zoneById(id)!.shortName}<span className="text-2xs"> {caught}/{quests.length}</span></>,
-          };
-        })}
+        items={data.zones.map(({ id, foundCount, totalCount }) => ({
+          key: id,
+          label: <>{zoneById(id)!.shortName}<span className="text-2xs"> {foundCount}/{totalCount}</span></>,
+        }))}
         activeKey={sub}
         onSelect={onSub}
       />
       {/* 네임드는 해역별 1칸 — 너비 꽉 채우는 정사각형 대형 카드 1장 */}
       <div className="flex flex-col gap-2 mt-2">
-        {namedOf(sub).map(q => {
-          const ok = namedFound(q);
-          const n = q.targetFish ? namedById(q.targetFish) : undefined;
-          const fish = n ? namedFishOf(n) : null;
-          const name = ok && n ? n.name : (ok ? q.targetFish : null);
+        {data.quests.map(({ quest: q, found: ok, fish, displayName }) => {
           return (
             <div key={q.id} className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center', !ok && 'opacity-[0.72]')}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
-                            ariaLabel={ok && n ? n.name : '미확인 지명수배'} className="block mx-auto" />
+                            ariaLabel={ok && displayName ? displayName : '미확인 지명수배'} className="block mx-auto" />
               )}
-              <b className="block mt-1 text-center">{ok ? (name ?? q.targetFish) : '???'}</b>
+              <b className="block mt-1 text-center">{ok ? (displayName ?? q.targetFish) : '???'}</b>
               <span className="block text-center text-text-dim text-xs">
                 {ok ? '수배 달성' : '미확인'}
               </span>
             </div>
           );
         })}
-        {namedOf(sub).length === 0 && (
+        {data.quests.length === 0 && (
           <p className="text-text-dim text-sm">이 해역의 지명 수배는 아직 없다.</p>
         )}
       </div>

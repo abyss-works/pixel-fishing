@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BOATS, MAX_BOAT, SPOTS, REJECT_TEXT, baitCost, canBuyBoat, canUpgradeRod, rodStats } from '../../../../game/rules/logic';
-import { upgradeCost } from '../../../../game/rules/balance';
+import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { BAITS } from '../../../../game/content/baits';
 import { RARITY } from '../../../../game/content/rarity';
-import { groupInstances, sumPrice } from '../../../../features/inventory/model/bagRows';
+import { BAIT_BUY_MAX } from '../../../../game/rules/balance';
+import { selectSalePreview } from '../../../../features/inventory/model/catalog';
+import {
+  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatPurchasePreview,
+  selectBoatPurchaseResult, selectRodUpgradePreview,
+} from '../../../../features/gameplay/model/facility';
 import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import type { GameAction } from '../../../../game/rules/actions';
@@ -74,12 +77,11 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
       {panel === 'boat' && (
         <BoatPanel game={game} onClose={onClose} busy={busy}
           onBuy={() => run({ type: 'buyBoat' }, r => {
-            const b = BOATS[r.state.boat - 1];
-            const opened = SPOTS.filter(s => s.boatTier === r.state.boat);
+            const { boatName, openedSpots } = selectBoatPurchaseResult(r.state.boat);
             onClose();
             setToast(r.state.boat === 1
-              ? `${b.name} 구매! 이제 포구에서 대양으로 나갈 수 있다.`
-              : `${b.name} 구매! 더 빠르고${opened.length > 0 ? `, [${opened.map(s => s.name).join('·')}] 해역이 열렸다!` : ' 튼튼하다.'}`);
+              ? `${boatName} 구매! 이제 포구에서 대양으로 나갈 수 있다.`
+              : `${boatName} 구매! 더 빠르고${openedSpots.length > 0 ? `, [${openedSpots.map(spot => spot.name).join('·')}] 해역이 열렸다!` : ' 튼튼하다.'}`);
           })} />
       )}
        {panel === 'shop' && (
@@ -116,13 +118,11 @@ function ModalCard({ title, onClose, children }: {
 function SellPanel({ game, onSell, onClose, busy }: {
   game: GameState; onSell: (uids: string[]) => void; onClose: () => void; busy: boolean;
 }) {
-  // 잠긴 개체는 애초에 후보에서 뺀다 — 행 잠금이 아니라 개체 잠금이라 같은 행에 섞인다
-  const rows = useMemo(() => groupInstances(game.bag).map(r => ({
-    ...r, sellable: r.items.filter(i => !i.locked),
-  })), [game.bag]);
-
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // uid 단위
   const { collapsed } = useSellView(); // 판매 패널 펼침 — 기본 닫힘(가방과 동일), 가방 탭과 별개 저장소
+  const { rows, soldUids, total, lockedCount } = useMemo(
+    () => selectSalePreview(game.bag, excluded), [game.bag, excluded],
+  );
 
   const flip = (set: Set<string>, keys: string[], on: boolean) => {
     const next = new Set(set);
@@ -133,11 +133,6 @@ function SellPanel({ game, onSell, onClose, busy }: {
     setExcluded(prev => flip(prev, uids, !allOn));
   const toggleOne = (uid: string) =>
     setExcluded(prev => flip(prev, [uid], prev.has(uid)));
-
-  const soldUids = rows.flatMap(r => r.sellable.filter(i => !excluded.has(i.uid)).map(i => i.uid));
-  const total = rows.reduce((s, r) =>
-    s + sumPrice(r.sellable.filter(i => !excluded.has(i.uid))), 0);
-  const lockedCount = game.bag.filter(i => i.locked).length;
 
   return (
     <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}>
@@ -153,10 +148,11 @@ function SellPanel({ game, onSell, onClose, busy }: {
             <DataTable>
               <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
               <tbody>
-              {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm }) => {
+              {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm,
+                          selectedCount, allSelected, selectedSubtotal }) => {
                 const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
-                const on = sellable.filter(i => !excluded.has(i.uid)).length;
-                const allOn = !locked && on === sellable.length;
+                const on = selectedCount;
+                const allOn = allSelected;
                 const glyph = on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
                 const expanded = collapsed.has(key);
                 return [
@@ -189,7 +185,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                     </td>
                     <td className="pf-accent">
                       {on > 0 && !locked
-                        ? `${sumPrice(sellable.filter(i => !excluded.has(i.uid)))}G`
+                        ? `${selectedSubtotal}G`
                         : '—'}
                     </td>
                   </tr>,
@@ -209,17 +205,16 @@ function SellPanel({ game, onSell, onClose, busy }: {
                         ))}
                         {/* 크기 미상은 묶음 단위로 고른다 — 구별할 정보가 없으니 개별 선택이 무의미하다 */}
                         {unsized.map(g => {
-                          const free = g.items.filter(i => !i.locked);
-                          const on = free.filter(i => !excluded.has(i.uid)).length;
-                          const glyph = free.length === 0 ? 'lock'
-                            : on === 0 ? 'checkOff' : on === free.length ? 'checkOn' : 'checkPartial';
+                          const on = g.selectedCount;
+                          const glyph = g.free.length === 0 ? 'lock'
+                            : on === 0 ? 'checkOff' : g.allSelected ? 'checkOn' : 'checkPartial';
                           return (
                             <UnsizedLine key={g.form} count={g.items.length} form={g.form}
-                                         locked={free.length === 0}
+                                         locked={g.free.length === 0}
                                          checked={on > 0}
-                                         onToggle={free.length === 0
+                                         onToggle={g.free.length === 0
                                            ? undefined
-                                           : () => toggleRow(free.map(i => i.uid), on === free.length)}>
+                                           : () => toggleRow(g.free.map(i => i.uid), g.allSelected)}>
                               <PixelIcon size={11} glyph={glyph}
                                          className={on > 0 ? 'text-gold' : 'text-text-dim'} />
                             </UnsizedLine>
@@ -253,9 +248,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
 function RodPanel({ game, onUpgrade, onClose, busy }: {
   game: GameState; onUpgrade: () => void; onClose: () => void; busy: boolean;
 }) {
-  const cost = upgradeCost(game.rod);
-  const cur = rodStats(game.rod);
-  const next = rodStats(game.rod + 1);
+  const { cost, current: cur, next, canUpgrade } = selectRodUpgradePreview(game);
   // 존은 이제 수역 파워 게이트 소관(stats.powerZones) — 강화 프리뷰는 시간축만 보여준다
   const fmt = (s: { biteMin: number; biteMax: number; sweep: number }) =>
     ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s` });
@@ -268,7 +261,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
         { label: '바 시간', value: c.sweep, next: n.sweep },
       ]} />
       <Note>보유 {game.gold}G · 비용 {cost.toLocaleString()}G · 상한 없음(효율 체감)</Note>
-      <Button variant="primary" full disabled={!canUpgradeRod(game).ok || busy} onClick={onUpgrade}>
+      <Button variant="primary" full disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
         강화하기 (-{cost.toLocaleString()}G)
       </Button>
     </ModalCard>
@@ -279,25 +272,23 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
 function BoatPanel({ game, onBuy, onClose, busy }: {
   game: GameState; onBuy: () => void; onClose: () => void; busy: boolean;
 }) {
-  if (game.boat >= MAX_BOAT) {
+  const preview = selectBoatPurchasePreview(game);
+  if (preview.kind === 'max') {
     return (
       <ModalCard title="조선소" onClose={onClose}>
-        <Note>이미 최고의 배({BOATS[MAX_BOAT - 1].name})다. 온 바다가 네 것.</Note>
+        <Note>이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
       </ModalCard>
     );
   }
-  const next = BOATS[game.boat];
-  const opened = SPOTS.find(s => s.boatTier === next.tier);
-  // 규칙 판정은 공통 규칙 함수 하나가 맡는다 — 여기서 조건을 다시 쓰면 밸런스 변경 시 드리프트한다
-  const check = canBuyBoat(game);
+  const { next, openedSpot, currentSpeed, check } = preview;
 
   return (
     <ModalCard title={`배 구매 — ${next.name} (${next.tier}단계)`} onClose={onClose}>
       <StatCompare rows={[
         { label: '가격', value: `${next.price.toLocaleString()}G (보유 ${game.gold.toLocaleString()}G)` },
         { label: '필요 명성', value: `${next.fameReq.toLocaleString()} (보유 ${game.fame.toLocaleString()}, 소모 없음)` },
-        { label: '항해 속도', value: `${next.speed} (현재 ${game.boat === 0 ? '-' : BOATS[game.boat - 1].speed})` },
-        { label: '효과', value: next.tier === 1 ? '대양 진입 + 태평양 낚시' : opened ? `[${opened.name}] 해역 해금` : '항해 속도 상승' },
+        { label: '항해 속도', value: `${next.speed} (현재 ${currentSpeed ?? '-'})` },
+        { label: '효과', value: next.tier === 1 ? '대양 진입 + 태평양 낚시' : openedSpot ? `[${openedSpot.name}] 해역 해금` : '항해 속도 상승' },
       ]} />
       {!check.ok && <Note tone="warn">{REJECT_TEXT[check.reason]}</Note>}
       <Button variant="primary" full disabled={!check.ok || busy} onClick={onBuy}>
@@ -314,10 +305,8 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
   onBuy: (baitId: string, count: number) => void;
   onClose: () => void; busy: boolean;
 }) {
-  const [qty, setQty] = useState<Record<string, number>>(
-    () => Object.fromEntries(BAITS.map(b => [b.id, 1])) as Record<string, number>,
-  );
-  const clamp = (n: number) => Math.min(50, Math.max(1, Math.floor(n) || 1));
+  const [qty, setQty] = useState<Record<string, number>>(createBaitQuantities);
+  const rows = useMemo(() => selectBaitShopRows(game, qty, busy), [game, qty, busy]);
 
   return (
     <ModalCard title="미끼 상점" onClose={onClose}>
@@ -327,11 +316,7 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
         </p>
 
         <div className="flex flex-col overflow-hidden rounded-sm border border-line bg-surface-2 divide-y divide-line">
-          {BAITS.map(b => {
-            const owned = game.items[b.id] ?? 0;
-            const count = qty[b.id] ?? 1;
-            const total = baitCost(game, b.price, count);
-            const canAfford = game.gold >= total && !busy;
+          {rows.map(({ bait: b, owned, count, total, canAfford }) => {
             return (
               <div key={b.id} className="flex gap-3 px-3 py-3">
                 <span
@@ -357,9 +342,9 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
                   <div className="flex items-center gap-1.5">
                     <NumberStepper
                       value={count}
-                      onChange={v => setQty(prev => ({ ...prev, [b.id]: clamp(v) }))}
+                      onChange={v => setQty(prev => ({ ...prev, [b.id]: normalizeBaitQuantity(v) }))}
                       min={1}
-                      max={50}
+                      max={BAIT_BUY_MAX}
                       disabled={busy}
                       variant="inline"
                       ariaLabel={b.name}
