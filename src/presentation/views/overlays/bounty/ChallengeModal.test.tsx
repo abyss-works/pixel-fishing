@@ -23,7 +23,7 @@ describe('ChallengeModal', () => {
     }
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(onFinish).toHaveBeenCalledWith({ hits: 7, misses: 0, success: true });
-    expect(screen.getByText(/포획/)).toBeInTheDocument();
+    expect(screen.getByText(/챌린지 성공/)).toBeInTheDocument();
   });
 
   it('스페이스바도 챔질이 된다', () => {

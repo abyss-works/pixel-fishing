@@ -65,7 +65,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'nickname-taken': '이미 쓰이는 닉네임이다.',
   'no-license': '수배 라이선스가 없다 — 명성을 쌓아 해역 라이선스를 받자.',
   'no-tickets': '오늘의 수주권을 다 썼다 — 내일 다시 오자.',
-  'quest-incomplete': '아직 납품 조건을 채우지 못했다.',
+  'quest-incomplete': '아직 의뢰 완료 조건을 충족하지 못했다.',
   'quest-active': '이미 수주 중인 의뢰다.',
   'dex-incomplete': '도감이 아직 비었다 — 해당 해역 도감을 채우자.',
   'material-missing': '교환 재료가 없다 — 네임드 의뢰를 완수하자.',

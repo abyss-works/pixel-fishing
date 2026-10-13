@@ -104,7 +104,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `의뢰를 수주했다 — ${q.id}.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품 완료! ${q.reward}G를 받았다.`)} />
+          `의뢰 완료! ${q.reward}G를 받았다.`)} />
     );
   };
 
@@ -135,7 +135,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${BOUNTY_DAILY_CAP} · 네임드 ${leftNamed}/${BOUNTY_NAMED_DAILY_CAP}`}
       </p>
       {loaded && snap === null && (
-        <Note>오프라인에서는 수주·납품이 안 된다. 서버 연결이 필요하다.</Note>
+        <Note>오프라인에서는 의뢰를 수주하거나 완료할 수 없다. 서버 연결이 필요하다.</Note>
       )}
       {challengeId && (() => {
         const q = namedQuest && namedQuest.id === challengeId ? namedQuest : undefined;
@@ -148,7 +148,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
             onFinish={r => run(
               { type: 'resolveChallenge', questId: q.id,
                 success: r.success, hits: r.hits, misses: r.misses },
-              r.success ? '네임드 포획! 수배판에서 납품하자.' : '놓쳤다 — 도전권은 유지된다.')}
+              r.success ? '네임드 챌린지 성공! 수배판에서 의뢰를 완료하자.' : '놓쳤다 — 도전권은 유지된다.')}
             onClose={() => setChallengeId(null)}
           />
         );
@@ -176,7 +176,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `의뢰를 수주했다 — ${namedQuest.id}.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `납품 완료! ${namedQuest.reward}G를 받았다.`)}
+                `의뢰 완료! ${namedQuest.reward}G를 받았다.`)}
               onStartChallenge={() => setChallengeId(namedQuest.id)} />
           )}
         </Gated>

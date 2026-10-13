@@ -28,7 +28,7 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
       <b className={`pf-accent text-lg ${DIFF_HEAD[quest.difficulty]}`}>{DIFF_NAME[quest.difficulty]}</b>
       <div className="border-b border-line" />
       <span className="flex-1 content-center">
-        {zoneById(quest.zone)?.shortName} <RarityText rarity={quest.grade!} /> 등급 어종 전달<br />
+        {zoneById(quest.zone)?.shortName} <RarityText rarity={quest.grade!} /> 등급 어종 포획<br />
         <span className="text-text-dim">x {quest.count}</span>
       </span>
       <div className="border-b border-line" />
@@ -36,7 +36,7 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
       {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
       <span className="flex justify-center mt-auto">
         {done
-          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
+          ? <Button size="sm" disabled={busy} onClick={onDeliver}>의뢰 완료</Button>
           : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
       </span>
     </div>

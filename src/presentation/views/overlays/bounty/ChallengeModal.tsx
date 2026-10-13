@@ -115,7 +115,7 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
       ) : (
         <>
           <span className="text-sm">
-            {run.success ? `${targetName} 포획! 수배판에서 납품하자.` : `놓쳤다 — 도전권은 유지된다.`}
+            {run.success ? `${targetName} 챌린지 성공! 수배판에서 의뢰를 완료하자.` : `놓쳤다 — 도전권은 유지된다.`}
           </span>
           <span className="flex justify-center">
             <Button onClick={onClose}>닫기</Button>

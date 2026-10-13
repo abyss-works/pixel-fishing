@@ -46,7 +46,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
       )}
           <span className="flex justify-center mt-auto">
             {done
-              ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
+              ? <Button size="sm" disabled={busy} onClick={onDeliver}>의뢰 완료</Button>
               : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
           </span>
         </span>
