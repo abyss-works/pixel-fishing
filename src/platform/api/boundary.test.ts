@@ -130,6 +130,19 @@ describe('src 구조 경계', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('게임 스테이지 호스트는 시뮬레이션과 프레임 루프를 게임 런타임에 위임한다', () => {
+    const hostPath = 'presentation/layouts/game-stage/Field.tsx';
+    const enginePath = 'game/runtime/fieldEngine.ts';
+    const host = Object.entries(sources).find(([key]) => sourcePath(key) === hostPath)?.[1] ?? '';
+    const runtime = Object.keys(sources).map(sourcePath);
+    const executable = host.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const engineImport = importedSources(hostPath, host);
+
+    expect(runtime).toContain(enginePath);
+    expect(engineImport).toContain('game/runtime/fieldEngine');
+    expect(executable).not.toMatch(/requestAnimationFrame|cancelAnimationFrame|setTimeout|nextPhase|phaseDurationMs|movePlayer|ZoneTracker/);
+  });
+
   it('Node 서버가 직접 읽는 game 규칙·콘텐츠의 상대 import는 .js 확장자를 쓴다', () => {
     const relativeImport = /(?:import\s+[^;]*?\sfrom\s*|export\s+[^;]*?\sfrom\s*|import\s*\()\s*["'](\.[^"']+)["']/g;
     const offenders: string[] = [];

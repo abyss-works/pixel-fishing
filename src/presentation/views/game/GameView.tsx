@@ -86,7 +86,7 @@ export default function GameView(props: GameViewProps) {
           <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onOpenMap={onOpenMap} onWarmup={props.onWarmup}
+                 onScene={go} onWarmup={props.onWarmup}
                  onShop={() => setActionPanel(panel => panel === 'boat' ? panel : 'boat')}
                  initialPos={props.entryPos ?? undefined} />
         )}
