@@ -52,10 +52,14 @@ describe('BountyPanel', () => {
   it('일일 의뢰 — 해시 결정값을 그대로 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     const day = kstDay();
-    for (const d of ['easy', 'normal', 'hard'] as const) {
-      const q = dailyQuestFor('pacific', d, 'test-uid', day)!;
-      expect(await screen.findByText(new RegExp(`x ${q.count}$`))).toBeInTheDocument();
-    }
+    const expected = (['easy', 'normal', 'hard'] as const)
+      .map(difficulty => dailyQuestFor('pacific', difficulty, 'test-uid', day)!.count)
+      .sort((a, b) => a - b);
+    const displayed = await screen.findAllByText(/^x \d+$/);
+    const actual = displayed
+      .map(quantity => Number(quantity.textContent?.replace(/\D/g, '')))
+      .sort((a, b) => a - b);
+    expect(actual).toEqual(expected);
   });
 
   it('조건 미충족이면 본문을 가리고 조건 리스트를 덮는다', async () => {
