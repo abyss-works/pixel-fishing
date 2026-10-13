@@ -1,4 +1,4 @@
--- 바운티 헌팅 저장소 (spec/bounty-hunting.md).
+-- 현상금 의뢰 진행 상태를 저장한다.
 -- 라이선스 소유·일일 수주 이력·의뢰 진행 3 테이블.
 -- 쓰기는 서버(service role)만 — RLS 쓰기 정책 없음. 읽기는 본인만 (0013 profiles 패턴).
 -- 순수 가산 — 파일 먼저 실행 → 코드 배포가 안전하다.
@@ -17,7 +17,7 @@ create table public.bounty_accepts (
   user_id uuid not null references auth.users(id) on delete cascade,
   zone text not null,
   port text not null,                       -- harbor · manila · colombo (고향 제외)
-  quest_id text not null,                   -- src/data/bounties.ts의 의뢰 id (Task 2 정의)
+  quest_id text not null,                   -- 의뢰 id (Task 2 정의)
   accepted_at timestamptz not null default now()
 );
 alter table public.bounty_accepts enable row level security;

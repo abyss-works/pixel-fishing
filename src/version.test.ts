@@ -1,4 +1,4 @@
-// 버전 단일 근원 동기화 가드 — src/version.ts(클라+서버 공유 리터럴)와 package.json이
+// 버전 단일 근원 동기화 가드 — 버전 상수(클라+서버 공유 리터럴)와 패키지 버전이
 // 어긋나면 CI가 죽는다. 릴리즈(main 머지) bump 시 두 곳을 함께 올릴 것 — dev 중에는 고정.
 import { describe, it, expect } from 'vitest';
 import { APP_VERSION } from './version';

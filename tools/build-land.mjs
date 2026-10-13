@@ -1,6 +1,6 @@
 // 지형 데이터 빌드 — world-atlas TopoJSON을 렌더용 링 배열 JSON으로 변환한다.
 // 사용법: node tools/build-land.mjs <land-XXm.json 경로> [단순화 허용오차(°)]
-// 산출: src/world/geo/land-XXm.geo.json  (Natural Earth 퍼블릭 도메인 파생)
+// 산출: Natural Earth에서 파생한 지형 데이터.
 // 재실행 시점은 데이터 갱신 시만 — 런타임은 이 산출물만 읽는다(CDN/fetch 금지).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
@@ -85,8 +85,8 @@ for (const poly of polys) {
   }
 }
 
-mkdirSync('src/world/geo', { recursive: true });
-const out = `src/world/geo/land-${tag}.geo.json`;
+mkdirSync('src/game/world/geo', { recursive: true });
+const out = `src/game/world/geo/land-${tag}.geo.json`;
 writeFileSync(out, JSON.stringify({
   source: `Natural Earth via world-atlas@2 land-${tag} — public domain`,
   rings,

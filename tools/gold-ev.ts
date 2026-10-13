@@ -1,10 +1,10 @@
 // 골드 기댓값 비교 CLI — 해역별 수동/자동 기댓값을 현행(2단)과 구 1단 추첨 기준으로 나란히 출력.
 // 사용: npx tsx tools/gold-ev.ts [--before]   (--before = 구 1단 수치 열 포함)
 // 판정 기준: 수동 = GOOD 상시(일반 ÷1.6) · 자동 = 방치 만렙(일반 ×10, 각 해역 진입 레벨 기준).
-import { FISH } from '../src/data/fish';
-import { SPOTS } from '../src/data/spots';
-import { RARITY } from '../src/data/rarity';
-import { goldEV } from '../src/game/logic';
+import { FISH } from '../src/game/content/fish';
+import { SPOTS } from '../src/game/content/spots';
+import { RARITY } from '../src/game/content/rarity';
+import { goldEV } from '../src/game/rules/logic';
 
 const showBefore = process.argv.includes('--before');
 

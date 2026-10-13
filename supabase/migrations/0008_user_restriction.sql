@@ -1,6 +1,6 @@
--- 유저 제재 — 2026-08-24 import 악용 사고 대응 (incidents/2026-08-24-import-abuse.md)
+-- 유저 제재 — import 악용을 막기 위한 서버 권한 검사
 -- deleted 행이 아니라 **제재 플래그**다: 자산·도감·기록은 그대로 두고 활동(액션)만 막는다.
--- 서버(api/action.ts)가 모든 액션에서 이 값을 검사해 403 restricted로 거부한다.
+-- 서버는 모든 액션에서 이 값을 검사해 403 restricted로 거부한다.
 -- 순수 가산 마이그레이션 — 구 코드에 무해(v0.2.1 사고 재발 방지: 먼저 적용 → 코드 배포).
 alter table public.saves_current
   add column if not exists restricted boolean not null default false;

@@ -16,7 +16,7 @@ create policy "saves_current_select_own" on public.saves_current
   for select using (auth.uid() = user_id);
 
 -- 액션 이벤트 스트림 — append-only 정본 (v0.6 랭킹/업적/감사의 근거).
--- catch 외 액션(sell/upgrade/buy/coupon/import)도 남긴다 — server-authority-design의
+-- catch 외 액션(sell/upgrade/buy/coupon/import)도 남긴다 —
 -- catch_events 전용 스키마를 일반화 개정 (payload jsonb).
 create table public.events (
   id bigint generated always as identity primary key,
