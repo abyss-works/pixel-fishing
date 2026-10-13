@@ -4,7 +4,7 @@
 //   방치 완화 relativeIdleBoost — 일반 가중치 부스트 ×10→×4 (칸당 −1, 감소)
 //   수동 보정   manualPowerBonus — 일반 가중치 분모 ×1.0→×2.0 (칸당 +0.1, 증가)
 // 미달(파워 < 요구)은 어느 쪽도 여기서 다루지 않는다 — 미달 페널티·존은
-// powerZones(stats.ts) 소관이다. 서버 리듀서(api/action)와 UI가 같은 함수를 쓴다.
+// powerZones가 판정한다. 서버 리듀서와 UI는 같은 계산 함수를 쓴다.
 import { AUTO_COMMON_BOOST } from './balance.js';
 
 /** 초과 파워를 계단 수로 — step당 1칸, 미달(음수)은 0칸 */
@@ -19,7 +19,7 @@ export function stepLadder(excessPower: number, o: {
   return Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v));
 }
 
-// ---------- 방치(auto) 완화 — 진입 대비 상대 계단 (v0.6.3 도입, fishing.ts에서 이주) ----------
+// ---------- 방치(auto) 완화 — 진입 대비 상대 계단 (v0.6.3 도입 시 별도 계산으로 분리) ----------
 // 진입 파워에서 ×10, 초과 5마다 ×1 감소, 하한 ×4. 예: 초과 0=×10 · 25=×5 · 30+=×4.
 export function relativeIdleBoost(power: number, entryReq: number): number {
   return stepLadder(power - entryReq, {

@@ -1,5 +1,5 @@
 // 액션 API — 모든 상태 변경의 유일한 서버 경로 (서버 권위 v0.5.0, Vercel Function, Node 런타임)
-// 규칙 실행은 src/game/rules/actions.ts(applyAction) — 클라이언트 LocalGameGateway와 같은 리듀서.
+// 규칙 실행은 applyAction — 클라이언트 LocalGameGateway와 같은 리듀서.
 // 저장 모델(0005): saves_current(유저당 1행, 낙관 락) + events(append-only 정본 스트림)
 // + saves(스냅샷 아카이브 — 50액션마다 append, 롤백 안전망). service role 키는 서버 전용.
 //
@@ -49,10 +49,10 @@ interface SupabaseLike { from(table: string): Q }
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-// 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
+// 이사 코드 import는 소유자 계정만 허용한다.
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
 // 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
-// 클라(src/presentation/views/admin/gate.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
+// 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
 // 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
 // 늘어나는 대가라 하지 않는다.
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
@@ -263,7 +263,7 @@ export function toBountyCtx(rows: BountyRows, dayStartISO: string): BountyCtx {
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
  * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
- * 회귀 가드: action.test.ts가 acceptQuest 미포함을 고정한다. */
+ * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact',
@@ -356,7 +356,7 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 현재 상태 로드 — saves_current는 항상, 개체·도감은 필요할 때만 읽는다.
-  // boot/sendLetter는 상태를 바꾸지 않는다(리듀서가 동일 참조 반환 — actions.ts boot/sendLetter).
+  // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.
   // 그래서 개체·도감 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
@@ -420,7 +420,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
 // 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
 // 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
-// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 근거·목록 정의는 balance.ts가 단일 출처.
+// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
 const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
 
 // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
@@ -479,7 +479,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     if (nickErr) throw new ApiError(500, 'db-write', { uid, action: 'setNickname' }, { cause: nickErr });
   }
 
-  // 현상금 — DB가 진실인 축의 서버 담당분 (spec/bounty-hunting.md 6절).
+  // 현상금 — DB가 진실의 원천인 데이터에 대한 서버 담당분.
   // 라이선스 소유·일일 카운트·진행도·도전권은 saves가 아니라 전용 테이블에 있다.
   // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
   let bounty: ActionDeps['bounty'] = null;
@@ -573,7 +573,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
         // 등급별 top-1 병렬 조회 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은
         // 칸이 풀가방 정렬의 선두와 같다. 등급 목록은 FISH에서 뽑으니 신어종 자동 반영,
         // 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이 비교자와 일치함은
-        // FormId 2종 전제 — victim.test.ts의 exhaustiveness 가드가 깨지면 여기부터 본다.
+        // FormId 2종 전제 — exhaustiveness 검증이 깨지면 이 분기를 확인한다.
         const baseQ = () => admin.from('fish_instances').select('uid,fish_id,form,size')
           .eq('user_id', uid).is('slot', null).eq('locked', false);
         const tierQ = [
@@ -717,7 +717,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
 
   // 편지 정규화 — letters(영구)에도 기록한다. 실패 시 500 (개체 쓰기와 같은 등급 — 본문 유실 방지).
   // events 쪽은 종전대로 "유실 허용" 묶음이고, letters는 콜드 아카이브가 지우지 않는 정본이다
-  // (mgmt/spec/cold-archive.md 2.3 · decisions/letters-table.md).
+  // 편지 이벤트 기록과 보관 주기는 날짜 기준으로 함께 관리한다.
   // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다(Ruling 2026-10-07).
   const eventNow = new Date().toISOString();
   await writeLetters(admin as unknown as SupabaseLike, uid, out.events, eventNow);
@@ -776,7 +776,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
-  // 보낸다(ops/egress-delta.md). import는 통째 교체라 풀 유지 (빈도 극저, 예외).
+  // 보낸다. import는 통째 교체라 풀 유지 (빈도 극저, 예외).
   // 클라(HttpGameGateway)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
   if (action.type === 'import') {
     res.status(200).json({ state: out.state, result: out.result, version: nextVersion });

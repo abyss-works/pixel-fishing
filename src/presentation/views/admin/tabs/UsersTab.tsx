@@ -1,5 +1,5 @@
-// 유저 탭 — 전체 유저 명부(v_admin_users)와 행 클릭 드릴다운(ops/queries-audit.sql ①②③④⑤⑥의
-// 상시화). 검색은 이메일·uid 부분 일치. 상세 모달이 "그 유저의 감사" 전부다:
+// 유저 탭 — v_admin_users 뷰 기반 전체 명부와 행 클릭 드릴다운을 제공한다.
+// 검색은 이메일·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
 //   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인 → 도감↔이벤트 차액(근거 없는 도감).
 import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';

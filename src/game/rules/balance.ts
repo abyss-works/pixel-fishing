@@ -7,7 +7,7 @@ import type { GameAction } from './actions.js';
 // 낚시 상태머신 타이밍 (캐스팅 연출 단계는 없음 — 던지면 바로 대기)
 export const CATCH_MS = 2000;            // 획득 카드 표시 후 자동 재캐스트
 export const CATCH_MS_LEGENDARY = 2700;  // 전설 등급은 이펙트를 더 보여주려고 아주 약간 더 길게
-// 등급별 획득 표시 시간 오버라이드 — 새 등급의 연출 연장 = 여기 행 추가 (fishing.ts가 참조)
+// 등급별 획득 표시 시간 오버라이드 — 새 등급의 연출을 연장할 때 해당 행을 추가한다.
 export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
   legendary: CATCH_MS_LEGENDARY,
 };
@@ -54,7 +54,7 @@ export function upgradeCost(level: number): number {
   return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
-// 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (api/action.ts).
+// 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (서버 액션 처리기).
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
 export const SNAPSHOT_EVERY = 50;
 
@@ -68,7 +68,7 @@ export const BAIT_BUY_MAX = 50;
 
 
 // 현상금 일일 수주 상한 — 일반은 전 해역 통합 3회,
-// 네임드는 전역 1회 (spec/bounty-hunting.md 4절). 항구별 상한은 폐지됐다
+// 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
 // (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
 export const BOUNTY_DAILY_CAP = 3;
 export const BOUNTY_NAMED_DAILY_CAP = 1;
@@ -86,21 +86,21 @@ export const CHALLENGE_MAX_MISS = 3;
 export const CHALLENGE_YELLOW = 0.3;
 export const CHALLENGE_RED = 0.1;
 
-// 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). api/action.ts가
+// 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). 서버 액션 처리기가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.
 //   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·sendLetter).
 //     인간 최소 낚시 사이클(입질 1s + 스윕 1.4s + 홀드 2s ≈ 4.4s) 대비 한참 아래라 무감각.
 //   빠름      = 상점·정비 등 UI 체인(연속 클릭)이 정상인 계열. 더블클릭(≤300ms)도 통과하고,
 //     봇 flood에는 150ms≈최대 ~6.7 rps/uid의 완화 상한으로 남는다.
-// 어느 쪽도 밸런스를 깨지 않는다 — 골드 생성점은 catch뿐이라(보안 감사 §2), 나머지는
-// 완화해도 경제가 흔들리지 않는다. 타입 목록은 actions.ts GameAction 유니온과 함께 손대는 문서다.
+// 어느 쪽도 밸런스를 깨지 않는다 — 골드 생성점은 catch뿐이라 나머지는
+// 완화해도 경제가 흔들리지 않는다. 액션 유형을 바꾸면 GameAction 유니온과 이 목록을 함께 갱신한다.
 export const MIN_ACTION_GAP_MS = 1000;
 export const MIN_ACTION_GAP_FAST_MS = 150;
 // satisfies가 액션 유니온과의 일치를 강제한다 — 'letter'(이벤트 타입) 오기로 sendLetter가
 // 빠른 창을 타던 버그의 재발 방지
 export const PACING_SLOW_TYPES = ['catch', 'sendLetter'] as const satisfies readonly GameAction['type'][];
 
-// (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — validate.ts는 v0.3.3, api/save.ts는 v0.5.0에
+// (구 저장 검증 상수 3종은 세이브 v8에서 삭제 — 저장 검증은 v0.3.3, 서버 검증은 v0.5.0에
 //  사라졌고, 서버 권위에서 클라 변조 검증은 성립하지 않는다. 상태를 만드는 쪽이 서버다)
 
 // 월척(크기)·변이 — 신규 로직 없이 기존 어종 데이터를 재사용하는 저비용 콘텐츠 

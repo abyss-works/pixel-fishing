@@ -1,7 +1,7 @@
 import { RARITY } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 
-// 등급 텍스트 — data-rarity 속성으로 색 지정 (index.css [data-rarity] → --rarity-color)
+// 등급 텍스트 — data-rarity 속성으로 색 지정 (전역 스타일 [data-rarity] → --rarity-color)
 export function RarityText({ rarity }: { rarity: RarityId }) {
   return <span data-rarity={rarity} className="text-(--rarity-color)">{RARITY[rarity].name}</span>;
 }

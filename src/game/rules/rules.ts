@@ -1,5 +1,5 @@
 // 규칙 판정 
-// "할 수 있는가? 없으면 왜?"를 값으로 답한다 — 상태 변경(logic.ts)과 분리된 순수 판정.
+// "할 수 있는가? 없으면 왜?"를 값으로 답한다 — 상태 변경(게임 로직)과 분리된 순수 판정.
 //
 // 이 모듈이 존재하는 이유: 같은 규칙이 세 곳에 필요하기 때문이다.
 //   ① 리듀서(applyAction) — 거부하고 사유를 남긴다
@@ -8,7 +8,7 @@
 // 예전엔 ①이 null로 사유를 버리고 ②가 규칙을 재구현했다(밸런스 변경 시 드리프트 위험).
 // 이제 셋이 같은 함수를 부른다.
 //
-// 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM)가 이 체인을 직접 import한다.
+// 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT } from '../content/boats.js';
@@ -23,7 +23,7 @@ import {
 import { licenseConditions } from './logic.js';
 import type { GameState } from './logic.js';
 
-/** 규칙이 거부하는 이유 — 인프라 실패(errors.ts의 FailureKind)와 다른 축이다.
+/** 규칙이 거부하는 이유 — 인프라 실패(에러 처리의 FailureKind)와 다른 축이다.
     이쪽은 "게임 규칙의 정상적인 답", 저쪽은 "예외적 사고" */
 export type RejectReason =
   | 'not-enough-gold'

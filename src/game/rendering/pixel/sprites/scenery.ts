@@ -1,5 +1,5 @@
-// 지형 스프라이트 — 물/대륙/통행판/나무/라벨. 스타일 토큰(styles.ts)을 참조해 그린다
-// (계층: 단위 스프라이트 — 어디에 놓일지는 컴포지터(scenes/)가 결정)
+// 지형 스프라이트 — 물/대륙/통행판/나무/라벨을 스타일 토큰에 맞춰 그린다.
+// (계층: 단위 스프라이트 — 배치는 장면 합성기가 결정)
 import { R, label } from '../common.js';
 import type { Ctx } from '../common.js';
 import { DECK_STYLE, FIELD_LABEL, WATER_STYLE } from '../styles.js';

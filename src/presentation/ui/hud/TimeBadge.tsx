@@ -1,6 +1,6 @@
 // 시간 배지 — 해/달 글리프 + 게임 시계로 시간 흐름을 보여준다.
 // 컨테이너 안 어디든 absolute로 얹을 수 있다(Field: 미니맵 좌상단, Base: 프레임 우상단).
-// 순수 표시 — game/time.ts 파생만 렌더. 해/달은 어둠 강도(dark) 기준이라
+// 순수 표시 — 게임 시계 파생만 렌더. 해/달은 어둠 강도(dark) 기준이라
 // 낮이어도 저녁(해 질 무렵)부터 달로 바뀌며 서서히 어두워진다.
 import PixelIcon from '../PixelIcon';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';

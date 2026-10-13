@@ -1,4 +1,4 @@
-// 모달 스토리 — app/stage 레이어 (버튼으로 연다).
+// 모달 스토리 — 스테이지 UI 레이어 (버튼으로 연다).
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';

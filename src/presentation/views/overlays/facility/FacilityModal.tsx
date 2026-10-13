@@ -288,7 +288,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   }
   const next = BOATS[game.boat];
   const opened = SPOTS.find(s => s.boatTier === next.tier);
-  // 규칙 판정은 rules.ts 하나뿐  — 여기서 조건을 다시 쓰면 밸런스 변경 시 드리프트한다
+  // 규칙 판정은 공통 규칙 함수 하나가 맡는다 — 여기서 조건을 다시 쓰면 밸런스 변경 시 드리프트한다
   const check = canBuyBoat(game);
 
   return (

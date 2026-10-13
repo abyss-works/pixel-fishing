@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// 지형 마스크 생성기 — Natural Earth 벤더 데이터(src/game/world/geo/land-XXm.geo.json)를
-// 지역 설정(tools/configs/<id>.json)대로 래스터라이즈해 TypeScript 모듈로 내보낸다.
+// 지형 마스크 생성기 — Natural Earth 벤더 지형을 지역 설정대로 래스터라이즈해
+// TypeScript 모듈로 내보낸다.
 //
 // 사용법: node tools/mask-from-earth.mjs <configs/<id>.json 경로|inline-json> [--out <파일.ts>]
-//   --out 없으면 rows만 stdout에 찍는다(view-mask.mjs로 눈 확인용).
+//   --out 없으면 rows만 stdout에 찍는다. 생성 결과를 눈으로 확인한다.
 //
 // 설정 스키마:
 //   id            산출 식별자(헤더/로그용)
-//   extends       (선택) 부모 설정 경로(app 기준 상대) — zones·openZones를 물려받는다
+//   extends       (선택) 부모 설정 — zones·openZones를 물려받는다
 //                 (부모 먼저 → 자식이 나중 = 자식 스탬프 우선). anchors는 상속하지 않는다 —
 //                 지형 검증은 각 설정의 해상도에서 성립하는 값이라 재사용하면 오탐난다.
-//   geo           벤더 링 배열 JSON 경로(app 기준 상대)
+//   geo           벤더 링 배열 JSON 입력
 //   cell          { w, h }  셀 픽셀(비등방 — 종횡비 보정용)
 //   grid          { cols, rows }
 //   window        { lonMin, lonMax, latMin, latMax }  경위도 창(단일 근원)
@@ -22,7 +22,7 @@
 //                 경위도 → 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
 // 철칙: 이 도구와 configs가 지형의 단일 근원이다. 런타임은 generated 모듈만 읽고
-// 손으로 좌표를 찍지 않는다(앵커 하드코딩 금지 — decisions/real-earth-data).
+// 손으로 좌표를 찍지 않는다. 앵커를 하드코딩하지 않는다.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
@@ -217,7 +217,7 @@ const anchorsTs = Object.entries(projected)
   .join('\n');
 
 const relCfg = src.startsWith('{') ? '(inline)' : src.replaceAll('\\', '/');
-const module_ = `// AUTO-GENERATED — tools/mask-from-earth.mjs 산출물. 손편집 금지.
+const module_ = `// AUTO-GENERATED — 생성 도구 산출물. 손편집 금지.
 // 재생성: node tools/mask-from-earth.mjs ${relCfg} --out ${outFile.replaceAll('\\', '/')}
 // 출처: ${landData.source}
 export const CELL_W = ${cellW};

@@ -1,5 +1,5 @@
 // 미니맵 인터프리터 — RegionPack을 축소 표현으로 그리고 내 위치를 점멸 표시한다.
-// (구 월드맵 라벨 모드는 호출자 없는 죽은 경로라 철거 — 전체 지구 조망은 atlas.ts 소관)
+// 구 월드맵 라벨 모드는 호출되지 않아 제거했다. 전체 지구 조망은 아틀라스가 담당한다.
 import { R, label, UI } from '../../../../game/rendering/pixel/common.js';
 import type { Ctx } from '../../../../game/rendering/pixel/common.js';
 import { BUILDING_SPRITES } from '../../../../game/rendering/pixel/sprites/buildings.js';

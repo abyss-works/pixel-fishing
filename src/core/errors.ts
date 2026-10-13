@@ -114,7 +114,7 @@ export function fail(e: unknown): AppError {
   return err;
 }
 
-/** 비동기·이벤트 핸들러·타이머 예외를 정책으로 끌어온다 (main.tsx에서 1회) */
+/** 비동기·이벤트 핸들러·타이머 예외를 정책으로 끌어온다 (화면 컴포넌트에서 1회) */
 export function installGlobalFailureHandlers(): void {
   window.addEventListener('unhandledrejection', e => { fail(e.reason); });
   window.addEventListener('error', e => { fail(e.error ?? e.message); });

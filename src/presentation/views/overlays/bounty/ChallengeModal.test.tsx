@@ -1,5 +1,5 @@
 // 챌린지 모달 — 10회 시도·7히트 성공·4실패 탈락의 UI 구동.
-// 판정 규칙 자체는 challenge.test.ts가 맡고, 여기는 타이머·입력·종료만 본다.
+// 판정 규칙은 순수 로직에서 검증하고, 여기서는 타이머·입력·종료를 본다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import ChallengeModal from './ChallengeModal';

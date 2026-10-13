@@ -1,5 +1,5 @@
 // API 계층 규약 — 관리자 읽기(http/local 교체)가 인터페이스 뒤에 갇혀 있는지 검증한다.
-// 이 계약이 깨지면 features/admin이 supabase-js를 직접 잡는다. AdminApi 계약을 확인한다.
+// 이 계약이 깨지면 기능 계층이 supabase-js를 직접 잡는다. AdminApi 계약을 확인한다.
 import { describe, it, expect } from 'vitest';
 // 규약 테스트라 구현 팩토리(local)를 직접 잡는다 — 싱글톤(api)은 조립 산출물 쪽
 import { api } from './index';

@@ -9,7 +9,7 @@ const TAG_CLS: Record<string, string> = {
   기능: 'text-gold border-[#c9a227]',
 };
 
-// 패치노트 콘텐츠 — GameTabs의 '설정' 탭에서 렌더. 데이터는 game/content/patchnotes.ts
+// 패치노트 콘텐츠 — GameTabs의 '설정' 탭에서 렌더한다.
 // 버전별 아코디언: 기본은 전부 닫힘, 노트마다 범주(UI/기능/기타) 뱃지를 단다.
 // 목록이 길어져 스크롤 상자에 넣는다 — 약 8줄(38px × 8)까지만 보이고 나머지는 휠로.
 export default function PatchNotesPanel() {

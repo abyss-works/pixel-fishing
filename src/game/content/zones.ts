@@ -1,11 +1,11 @@
 // 존 계층 트리 — zone은 **범위(range)**(존 아래 존), spot은 **조업 어군 오브젝트**.
-// 재정의 계약: spec/zone-tree.md · 결정: decisions/zone-tree.md (사용자 확정 2026-08-28).
+// 존 재정의는 기존 스팟 식별자와 소속을 유지하는 계약을 따른다.
 // 이전 모델("zone = 로어 단위, spot = 추첨 수역 범위")에서는 범위와 오브젝트가 1:1로
 // 뭉쳐 구역/수역 이름이 충돌했다. 이제 셀은 존만 알고, 스팟은 존 안에 배치된 어군이다.
 //
 // 하위 존 id는 스팟 id와 **같은 문자열**을 쓴다(deep 존 + deep 스팟) — ZoneId/SpotId가
 // 별개 타입이라 충돌하지 않고, "그 범위의 어군" 대응이 이름에서 읽힌다(사용자 확정).
-// spot 자체(spots.ts — id·fish.spot 소속)는 절대 불변. zone은 그 위의 조회 뷰다.
+// spot 자체(수역 데이터 — id·fish.spot 소속)는 절대 불변. zone은 그 위의 조회 뷰다.
 // entryBoat = 이 존으로 진입할 때 필요한 배 tier — **최상위 경계 3곳만** 존재한다.
 // 하위 존(해구 등)은 항해 가능, 캐스팅만 스팟의 배 레벨을 서버가 검증한다.
 import { SPOTS } from './spots.js';
@@ -218,7 +218,7 @@ export function zoneControls(id: ZoneId): string[] {
   return [];
 }
 
-// spot → 존 역색인 — 스팟이 배치된 존(하위 존 포함). spots.ts의 region 열(legacy)과 별개다.
+// spot → 존 역색인 — 스팟이 배치된 존(하위 존 포함). 수역 데이터의 region 열(legacy)과 별개다.
 const ZONE_OF_SPOT = new Map<SpotId, ZoneId>(
   DATA.flatMap(z => z.spots.map(s => [s, z.id] as const)),
 );

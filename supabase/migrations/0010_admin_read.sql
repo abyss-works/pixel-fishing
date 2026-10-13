@@ -1,7 +1,7 @@
 -- 관리자 읽기 계층 (대시보드 고도화) — **순수 가산**, 구 코드·구 데이터에 무해하므로
 -- ① 이 마이그레이션 먼저 실행 → ② 코드 배포 순서가 안전하다 (v0.2.1 사고 재발 방지).
 --
--- 설계 (draft/admin-dashboard-design.md 감사 결론 반영):
+-- 설계 (논의 기록 감사 결론 반영):
 --   Vercel 함수 0 증가 — 대시보드는 클라(supabase-js)가 이 뷰/RPC를 직접 읽는다.
 --   뷰는 postgres 소유(definer)라 기반 테이블 RLS(auth.users 등)를 통과하고, 대신
 --   **본문마다 is_admin() 게이트**를 넣어 비관리자에게는 에러 없이 0행을 준다.
@@ -141,7 +141,7 @@ where type = 'catch'
 group by day
 order by day desc;
 
--- ── 연타·판정 플래그 — ops/queries-audit.sql ⑤⑥의 상시화. 최근 7일 기준 유저별 요약.
+-- ── 연타·판정 플래그 — 최근 7일 기준 유저별 상시 감시 요약.
 --    fast_gap_7d: 캐치 간격 <2초(물리적으로 불가한 연타) 건수.
 --    perfect_pct 는 7일치, perfect_pct_global 은 30일 전체 평균 — 격차가 벌어지면 주목.
 create or replace view public.v_spam_flags as

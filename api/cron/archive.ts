@@ -1,6 +1,6 @@
-// Vercel Cron — 콜드 아카이브 (매일 1회). 계약: mgmt/spec/cold-archive.md 3절.
+// Vercel Cron — 콜드 아카이브를 매일 한 번 실행한다.
 // 인증: Vercel이 CRON_SECRET을 Authorization: Bearer로 자동 첨부한다 — 불일치·부재는 401.
-// ⚠️ Node (req,res) 시그니처 — Web 표준 시그니처로 배포하면 전부 500 (api/action.ts 머리말 사고).
+// ⚠️ Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runArchive } from '../cold-archive.js';
 import { reportServerIssue } from '../observability.js';

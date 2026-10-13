@@ -1,5 +1,5 @@
-// 거점: 집 (마을) — 시설 좌표·라벨은 구 world.ts HOME_FURNITURE에서 값 그대로 이식
-// 뷰 좌표 320×180 기준. 스프라이트는 pixel/buildings.ts FURNITURE_SPRITES가 그린다.
+// 거점: 집 (마을) — 시설 좌표·라벨은 구 월드 데이터 HOME_FURNITURE에서 값 그대로 이식
+// 뷰 좌표 320×180 기준. 스프라이트는 픽셀 렌더링 FURNITURE_SPRITES가 그린다.
 import type { BasePack } from '../types';
 
 export const HOME: BasePack = {

@@ -2,7 +2,7 @@ import type { SpotId } from '../content/spots.js';
 import type { ZoneId } from '../content/zones.js';
 import type { Point } from './types.js';
 
-// 현재 어군(spot)·플레이어 좌표·구역의 세션 저장소. React 구독은 features/travel이 맡는다.
+// 현재 어군(spot)·플레이어 좌표·구역의 세션 저장소. React 구독은 기능 계층이 맡는다.
 // 세이브 대상이 아니므로 새로고침하면 초기화된다.
 export interface SpotState {
   spot: SpotId | null;

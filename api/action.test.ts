@@ -1,7 +1,7 @@
 // 핸들러 규약 스모크 — v0.2.2 사고 클래스 ②(호출 규약) 가드.
 // Vercel Node 런타임은 default export를 Node 스타일 (req, res)로 호출한다 — 이 테스트는
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
-// 모듈 해상도 클래스 ①은 api/tsconfig의 nodenext가 정적으로 전수 검사한다(여기서 중복 안 함).
+// NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
 import { describe, it, expect } from 'vitest';
 import handler, { SKIP_DETAIL } from './action.js';
 import { APP_VERSION } from '../src/version.js';

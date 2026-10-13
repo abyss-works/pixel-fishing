@@ -11,7 +11,7 @@ export type DexView = 'base' | 'variant' | 'named';
 // 보기 전환(일반→돌연변이→네임드)은 활성 도감 탭 재선택(클릭·같은 숫자키), **최상위 존** 전환은
 // 하단 서브탭 또는 Tab 키 — 둘 다 GameTabs가 소유한 상태를 내려받는 제어 컴포넌트다.
 // 서브탭 단위가 최상위 존인 이유: 하위 존(해구 등) 어종은 부모 존으로 합산된다(topZoneOfSpot) —
-// 서브탭 수가 존 트리 확장과 무관하게 안정된다(오픈월드 spec/zone-tree.md).
+// 존 트리가 확장되어도 서브탭 수는 안정적으로 유지된다.
 export default function DexTab({ game, view, sub, onSub }: {
   game: GameState;
   view: DexView;

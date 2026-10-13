@@ -1,6 +1,6 @@
 // 수역 데이터 — 새 수역 추가 시 여기 행 추가만으로 SpotId까지 자동 확장
 // boatTier 0 = 배 없이 가능(마을), 1+ = 대양(배 필요). region = **legacy 열**(admin 표기용) —
-// 게임 로직의 그룹핑은 존 트리(data/zones.ts, spec/zone-tree.md)가 정본이다. 불변 데이터.
+// 게임 로직의 그룹핑은 구역 데이터가 정본이다. 불변 데이터.
 // powerReq = 낚싯대 파워 요구량(stats.rodPower). 1-3부터 Lv 표기를 파워 리터럴로 적는다
 // (환산식 10+(Lv-1)*5 — stats.powerOfLevel과 같은 식. 기존 행도 파워 리터럴이라 통일).
 // data가 game을 import하면 game→data 순환이 생겨 층서(game > data)가 깨진다.
@@ -12,7 +12,7 @@ import { RARITY } from './rarity.js';
 const DATA = [
   { id: 'pond',  name: '마을 연못',  boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
   { id: 'river', name: '마을 강',    boatTier: 0, region: 'village', powerReq: 20 }, // Lv3
-  // 수역명 = 구역명 복귀(존 계층화 — spec/zone-tree.md): spot은 이제 "그 범위의 어군
+  // 수역명 = 구역명 복귀(존 계층화): spot은 이제 "그 범위의 어군
   // 오브젝트"라 구역 이름과 겹쳐도 한 엔티티다. 구 '태평양 연안' 개명 하필 제거.
   { id: 'sea',   name: '태평양',        boatTier: 1, region: 'ocean', powerReq: 35 }, // Lv6
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 40 }, // Lv7
@@ -48,7 +48,7 @@ export interface Spot {
   region: SpotRegionId;
   /** 낚싯대 파워 요구량 — 생략 시 제한 없음. 미달 페널티는 stats.powerGate 참조 */
   powerReq?: number;
-  /** 등급 예산 수역 오버라이드 — 생략한 등급은 글로벌 가중치(rarity.ts)를 따른다 */
+  /** 등급 예산 수역 오버라이드 — 생략한 등급은 기본 가중치를 따른다 */
   rarityWeight?: Partial<Record<RarityId, number>>;
 }
 

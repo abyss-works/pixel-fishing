@@ -83,7 +83,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
     });
   };
 
-  // 지원 코드 — 제재 소프트 랜딩(incidents/2026-08-24). 운영자가 발급한 일회성 자산 패키지
+  // 지원 코드 — 제재된 사용자에게 운영자가 발급하는 일회성 자산 패키지
   // (골드·명성·낚싯대·배·도감)를 새 계정에 얹는다. 검증·소비는 서버(reliefs 선차감) 소관.
   const enterRelief = () => {
     const code = window.prompt('지원 코드를 붙여넣으세요:');
@@ -122,9 +122,9 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       <div className="flex flex-col gap-2 mb-2">
         <IconButton glyph="ticket" label="쿠폰 입력" onClick={enterCoupon} />
         <IconButton glyph="star" label="지원 코드 입력" onClick={enterRelief} />
-        {/* 이사 코드 — deprecate(incidents/2026-08-24): 무검증 import가 변조 반입 통로로 실제
+        {/* 이사 코드 — 더 이상 지원하지 않는다. 무검증 import가 변조 반입 통로로 실제
             악용됐다. 임시방편으로 ?admin에서만 노출하고, 서버도 소유자 계정/로컬만 받는다
-            (api/action.ts importOwnerEmail). 기기 이동은 계정 연동이 정답이다. */}
+            (서버의 importOwnerEmail). 기기 이동은 계정 연동으로 처리한다. */}
         {isAdminUrl() && (
           <>
             <IconButton glyph="download" label="이사 코드 내보내기" onClick={exportSave} />

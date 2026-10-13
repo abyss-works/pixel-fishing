@@ -1,4 +1,4 @@
-// 거점: 마닐라항 (병합 바다 동남아) — harbor.ts를 복제해 지역·문구만 조정했다 (가구 배치는 HARBOR_FURNITURE 패턴 상속)
+// 거점: 마닐라항 (병합 바다 동남아) — 기존 항구 배치를 바탕으로 지역·문구만 조정했다.
 import type { BasePack } from '../types';
 import { MANILA_SPAWN } from '../regions/world';
 

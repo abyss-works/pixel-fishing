@@ -6,8 +6,8 @@ import { newState } from './logic';
 import type { GameState } from './logic';
 import type { PowerZone } from './stats';
 
-const NIGHT = '2026-01-01T13:05:00Z'; // time.test.ts — night
-const DAY = '2026-12-31T23:40:00Z'; // time.test.ts — day
+const NIGHT = '2026-01-01T13:05:00Z'; // night
+const DAY = '2026-12-31T23:40:00Z'; // day
 const COMMON = 'bait-common';
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });

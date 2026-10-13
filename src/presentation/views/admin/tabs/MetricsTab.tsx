@@ -1,5 +1,5 @@
-// 지표 탭 — 접속·활동의 시간축(DAU/WAU)과 리텐션 코호트. 부팅(boot) 이벤트가 2026-08 이후에
-// 생겼으므로 그 전 기간은 '행동한 유저' 수치다(접속 미기록 시대 — spec/admin-dashboard.md).
+// 지표 탭 — 접속·활동의 시간축(DAU/WAU)과 리텐션 코호트. boot 이벤트 기록은 2026-08 이후 시작됐다.
+// 따라서 그 이전 기간의 수치는 '행동한 유저' 수다.
 import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import MetricSwitch from '../widgets/MetricSwitch';

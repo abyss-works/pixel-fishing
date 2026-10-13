@@ -1,10 +1,10 @@
-// 지역: 대양(병합 바다) — 오픈월드화 Phase 3(spec/zones.md). 태평양·동남아&오세아니아·인도양
+// 지역: 대양(병합 바다) — 오픈월드화 Phase 3(구역 데이터). 태평양·동남아&오세아니아·인도양
 // 세 바다가 **하나의 항해 지역**이 되고, 구 travel 트리거(루손 해협·말라카 해협)는 소멸한다.
-// 지형·앵커의 단일 근원은 tools/configs/world.json → generated/world.mask.ts(AUTO-GENERATED).
+// 지형과 앵커는 지역 설정에서 생성된 마스크 데이터로 결정한다.
 // 이 파일은 게임 의미론만 기술한다: 문자 해석(legend), 시설 크기, 트리거, 텍스트.
 //
 // 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양). 경계 통과
-// 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 zones.ts entryBoat다(Q5 —
+// 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
 // 4/5/6 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
 import type { MapCellDef, Point, Rect, RegionPack, School } from '../types';
@@ -13,10 +13,9 @@ import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW } from './generated/world.ma
 
 const A = ANCHORS;
 
-// 마스크 문자 해석(legend) — **셀은 존만** 안다(spec/zone-tree.md: 스팟은 셀 범위가 아니라
+// 마스크 문자 해석(legend) — **셀은 존만** 안다. 스팟은 셀 범위가 아니라
 // 존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다). 캐스팅 판정은 학교(schools)가 담당.
-// world.json과 earth.json(extends 상속)이 같은 문자 체계를 쓰므로 단일 출처로 내보낸다 —
-// 세계지도(atlas.ts)가 earth 마스크를 같은 legend로 컴파일한다.
+// 월드와 지구 마스크는 같은 문자 체계를 쓴다 — 세계지도도 이 범례로 지구 마스크를 컴파일한다.
 // 하위 존 문자(t/d/w/r/s)는 이제 하위 존의 범위다 — 셀 zone이 하위 존을 가리키고
 // 스팟은 그 존에 배치된 어군이다. '4'/'5'/'6' = 최상위 존 라벨 전용 문자(물이지만 통행만).
 export const WORLD_LEGEND: Record<string, MapCellDef> = {

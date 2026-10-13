@@ -1,4 +1,4 @@
-// 거점: 항구 (고향 항구 — 병합 바다 태평양) — 시설 좌표·라벨은 구 world.ts HARBOR_FURNITURE에서 값 그대로 이식
+// 거점: 항구 (고향 항구 — 병합 바다 태평양) — 시설 좌표·라벨은 구 월드 데이터 HARBOR_FURNITURE에서 값 그대로 이식
 import type { BasePack } from '../types';
 import { WORLD_SPAWN } from '../regions/world';
 

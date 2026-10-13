@@ -78,7 +78,7 @@ const LEVEL_CLS = {
   high: 'text-gold', mid: 'text-text-dim', low: 'text-accent', none: 'text-text-dim opacity-50',
 } as const;
 
-// 지역 탭 — 존 계층 모델로 동작한다(spec/zone-tree.md).
+// 지역 탭 — 존 계층 모델을 표시한다.
 //  로어 슬롯: **항상 존(범위) 정보** — 셀 구역 체인 중 가장 구체적인 존(해구 위면 해구,
 //             열린 바다면 최상위). 어군 근처여도 존 로어는 바뀌지 않는다.
 //  수역 정보 슬롯: 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록(거리순 3개, 게임 축척 미터)
@@ -127,7 +127,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
       </div>
 
       {/* 수역 정보 — 고정 높이 슬롯. 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록 배타 교체.
-          **존 로어를 덮지 않는다** — 로어 슬롯(존 정보)과 별개 슬롯이다(spec/zone-tree.md §2) */}
+          **존 로어를 덮지 않는다** — 존 정보와 별도 슬롯에 표시한다 */}
       <div className="shrink-0">
         <SectionTitle>어군 정보</SectionTitle>
         <div className={cx(SLOT_H, 'overflow-y-auto pf-frame p-0 flex flex-col')}>

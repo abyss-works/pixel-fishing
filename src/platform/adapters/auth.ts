@@ -88,5 +88,5 @@ export async function applyNewPassword(password: string): Promise<AuthResult> {
   return error ? authErr(error) : { ok: true };
 }
 
-// 세이브 읽기·액션 전송은 httpGameGateway.ts가 맡고, 이 모듈은 Supabase 인증을 맡는다.
+// 이 모듈은 Supabase 인증을 맡으며 세이브 읽기와 액션 전송은 게임 게이트웨이가 맡는다.
 // 구 pushCloudSave/fetchCloudSave/fetchCoupon 삭제: 쓰기는 /api/action, 동적 쿠폰 조회는 서버 소관.

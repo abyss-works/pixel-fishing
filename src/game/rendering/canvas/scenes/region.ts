@@ -1,6 +1,6 @@
 // 필드 컴포지터 — 지역 데이터를 해석해 "무엇을 어디에 어떤 순서로"만 결정한다.
-// 직접 그리지 않는다: 그리기는 전부 sprites/(단위)와 styles.ts(토큰)에 위임 (계층: layout).
-// 지형 소스는 둘 — 항해 지역은 마스크(sprites/mask 페인터), walk 지역은 rect 조각(scenery).
+// 직접 그리지 않는다. 단위 스프라이트와 스타일 토큰에 그리기를 위임한다 (계층: layout).
+// 지형 소스는 둘 — 항해 지역은 마스크 페인터, 도보 지역은 사각형 조각으로 그린다.
 // 지역 고유 연출은 pack.flavor 훅 하나만 허용 — 지형/건물을 훅에서 그리지 않는다.
 import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
@@ -13,7 +13,7 @@ import { cameraFor } from './camera.js';
 import type { RegionPack } from '../../../world/types';
 import type { GearView } from '../../pixel/sprites/overlays.js';
 
-/** React 상태 → 캔버스 경계 뷰모델 — Field.tsx가 프레임마다 채워 보낸다.
+/** React 상태 → 캔버스 경계 뷰모델 — 게임 필드가 프레임마다 채워 보낸다.
     phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단). */
 export interface FieldView extends GearView {
   boat: number;

@@ -1,6 +1,6 @@
-// 이상탐지 탭 — ops/queries-audit.sql의 상시 감시 절(⑤⑥⑦④ + 제재 현황). 운영은 여기 +
+// 이상탐지 탭 — 연타·판정 지표와 제재 현황을 확인한다. 운영 조치는 여기서 시작하고
 // Sentry 두 곳으로 관측한다. 레이아웃: 행동 이상(연타 | PERFECT) 좌우 → 기록 이상(반입 | 도감 차액)
-// 좌우 → 제재 현황 풀폭. 판정 기준(gap<2초 등)은 balance.ts·audit SQL의 근거를 문구로 옮긴 것.
+// 좌우 → 제재 현황 풀폭. 판정 기준(gap<2초 등)은 서버의 탐지 기준과 일치한다.
 import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';

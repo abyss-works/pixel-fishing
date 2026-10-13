@@ -1,4 +1,4 @@
-// 앱의 데이터 접근 API와 런타임 조립점. 외부 시스템별 구현은 platform/adapters/에 둔다.
+// 앱의 데이터 접근 API와 런타임 조립점. 외부 시스템별 구현은 플랫폼 계층에 둔다.
 import { supabase } from '../adapters/auth';
 import { clearLegacySave, loadLegacy, saveCode } from '../adapters/storage';
 import { createHttpApi } from '../adapters/httpApi';

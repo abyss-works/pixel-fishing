@@ -1,7 +1,7 @@
 // 게임 상태 셀렉터 — 파생 표시값의 단일 출처.
 // useGame이 통째 game을 내려주는 동안은 호출부가 이 함수들로 파생값을 읽고,
 // 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
-// game/의 규칙 함수는 여기서 조합만 한다 — 규칙 자체는 game/에 둔다.
+// 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
 import { bagCapacity } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 

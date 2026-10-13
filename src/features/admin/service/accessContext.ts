@@ -1,5 +1,5 @@
 // 관리자 접근 컨텍스트 — 판정 상태와 소비용 훅만 산다(컴포넌트 없음).
-// Provider·게이트 UI는 access.tsx가 담당한다 — fast refresh 규약상 컴포넌트와 비컴포넌트
+// Provider·게이트 UI는 화면 컴포넌트가 담당한다 — fast refresh 규약상 컴포넌트와 비컴포넌트
 // export를 한 파일에 섞지 않는다(oxlint only-export-components).
 import { createContext, useContext } from 'react';
 

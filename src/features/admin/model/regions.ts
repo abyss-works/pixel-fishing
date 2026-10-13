@@ -1,5 +1,5 @@
 // 관리자 화면의 지역 표기 공용 — 라이브·진행 탭이 함께 쓴다.
-// 단일 근원은 world/index(BASE_PACKS·RegionPack.name)지만, 그쪽 import는 마스크 데이터
+// 단일 근원은 월드 진입점(BASE_PACKS·RegionPack.name)지만, 그쪽 import는 마스크 데이터
 // 수백 KB를 번들로 끌어온다. 관리자 화면을 위해 이름 표기만 리터럴 미러로 둔다 —
 // 게임 로직과 무관한 표기라 드리프트 비용은 수치 오답보다 작다.
 // 'world' = 병합 바다(오픈월드 Phase 3). 구 ocean/seasia/indian은 구세이브 location·visited

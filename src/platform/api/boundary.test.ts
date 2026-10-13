@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-// Vite raw glob으로 모든 src 모듈을 읽는다. 이 테스트는 src/platform/api/에 둔다.
+// Vite raw glob으로 모든 src 모듈을 읽는다. 이 테스트는 플랫폼 계층에 둔다.
 const SOURCE_DIR = 'platform/api';
 const sources = import.meta.glob('../../**/*.{ts,tsx,css}', {
   query: '?raw', import: 'default', eager: true,

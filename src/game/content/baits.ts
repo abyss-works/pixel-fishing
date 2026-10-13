@@ -3,7 +3,7 @@
 //
 // **id는 등급과 분리됐다** — baitId ↔ targetRarity 매핑이 이 표에 있으므로 6등급 개편(rarity-design)
 // 때 등급 이름이 바뀌어도 세이브(items/activeBait 키)와 코드 신분증은 그대로다.
-// 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM) import 그래프에 물려 있다.
+// 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버의 import 그래프에 포함된다.
 import type { RarityId } from './rarity.js';
 
 export type BaitTarget = Exclude<RarityId, 'junk'>;
@@ -20,7 +20,7 @@ export interface Bait {
 // 이름·가격 — 2026-08-27 두 차례 조정을 거쳐 확정**.
 //   1차(10/50/250/500)는 "낮은 등급일수록 보조금" 성격이었으나 일반이 사실상 공짜 수준이라
 //   사용자 체감상 싸다고 판단 — 등급 간 격차(×5→×5→×2)와 EV 증분(해당 등급 기여비 ×2 배증)을
-//   유지한 채 전 등급 ×2 상향으로 마무리했다. 관찰 후 조정 가능 — baits.ts 단일 출처.
+//   유지한 채 전 등급 ×2 상향으로 마무리했다. 관찰 후 조정 가능 — 미끼 데이터 단일 출처.
 const DATA: readonly Bait[] = [
   { id: 'bait-common', name: '일반 미끼', desc: '흔한 밀웜. 일반 등급 물고기가 두 배 더 잘 낚인다.',
     targetRarity: 'common', price: 25, color: '#9e9e9e' },

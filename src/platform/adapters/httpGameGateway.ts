@@ -13,7 +13,7 @@ import type { RejectReason } from '../../game/rules/rules';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
-/** 3소스 → GameState. 서버(api/action.ts)의 조립과 같은 규칙이다 */
+/** 세 소스에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
 function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
   const bag: unknown[] = [];
   const exhibit: unknown[] = [];
@@ -63,7 +63,7 @@ export class HttpGameGateway implements GameGateway {
     if (!uid) return null;
     const [cur, inst, rec] = await Promise.all([
       supabase.from('saves_current').select('data, gold, fame, boat, rod, version').maybeSingle(),
-      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 뺀다 (서버 action.ts INST_SEL과 동일 계약).
+      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 제외한다 (서버의 INST_SEL과 같은 계약).
       // 명시 필터도 필수다 — 필터 없이 읽으면 RLS 이중 정책(0006) 탓에 남의 전시 개체가
       // 내 exhibit로 조립된다 (지금은 무증상, 전시대 착수 전 선결).
       supabase.from('fish_instances').select('uid, fish_id, form, size, caught_at, spot, judgment, slot, locked').eq('user_id', uid),
@@ -87,7 +87,7 @@ export class HttpGameGateway implements GameGateway {
     return s;
   }
 
-  // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (core/errors.ts 정책 소관)
+  // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (에러 처리 정책 소관)
   // 표시용 닉네임 읽기 — profiles RLS 본인 읽기. 공개 행은 두지 않는다 (전체 읽기는 랭킹 때 연다).
   async getNickname(): Promise<string | null> {
     if (!supabase) return null;

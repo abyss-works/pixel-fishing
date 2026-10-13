@@ -2,10 +2,10 @@
 // 비춘다. 지구는 아직 만들지 않은 바다가 대부분이라는 걸 보여주는 화면(사용자 확정 2026-08-28):
 // 흑백 = 미개척, 컬러 = 지금 항해할 수 있는 세계.
 //
-// ⚠️ 이 모듈은 **동적 import 전용**이다 — earth 마스크(~178KB)가 들어있어 pixel/index 배럴에
+// ⚠️ 이 모듈은 **동적 import 전용**이다 — earth 마스크(~178KB)가 들어있어 진입점 배럴에
 // 재수출하면 초기 번들에 녹아든다. WorldMapModal이 첫 오픈 시 import()한다.
 //
-// 구현 영역 판정은 world.json의 window와 **같은 래스터라이즈 계약**(earth.json이 world.json을
+// 구현 영역 판정은 월드 설정의 window와 **같은 래스터라이즈 계약**(지구 설정이 월드 설정을
 // extends — 구역 문자가 earth 마스크에도 찍힌다)이라, 여기서 하는 일은 좌표 변환과 톤 분기뿐이다.
 import { R, label, UI } from '../../../../game/rendering/pixel/common.js';
 import type { Ctx } from '../../../../game/rendering/pixel/common.js';
@@ -25,7 +25,7 @@ const WORLD_W = W_COLS * W_CW, WORLD_H = W_ROWS * W_CH;
 export const EARTH_MAP: CompiledMap = compileMap(E_CW, E_CH, WORLD_LEGEND, EARTH_MASK_ROWS);
 
 // 화면 크기 — 지구(5760×2717)를 폭 1280에 맞춘다(세계지도 2배 확대 — 사용자 지시 2026-08-28).
-// 배면만 커지고 모달 표시 폭은 .pf-modal-worldmap(index.css, 레이어 밖)이 min(1280px, 96vw)로
+// 배면만 커지고 모달 표시 폭은 .pf-modal-worldmap(전역 스타일, 레이어 밖)이 min(1280px, 96vw)로
 // 벌린다 — 1:1 픽셀 대응 화면에서 pixelated가 선명하다. Modal이 이 크기를 안다.
 export const ATLAS_W = 1280;
 export const ATLAS_H = Math.round(ATLAS_W * EARTH_H / EARTH_W);
@@ -41,7 +41,7 @@ export function worldToEarth(x: number, y: number): Point {
   };
 }
 
-/** 구현 영역(구 world.json window)의 earth px 사각형 — 컬러/흑백 경계의 단일 근원 */
+/** 구현 영역(구 월드 데이터 window)의 earth px 사각형 — 컬러/흑백 경계의 단일 근원 */
 export function implementedRect(): Rect {
   const a = worldToEarth(0, 0);
   const b = worldToEarth(WORLD_W, WORLD_H);

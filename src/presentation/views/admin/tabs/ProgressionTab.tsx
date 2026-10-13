@@ -1,6 +1,6 @@
 // 진행 탭 — 콘텐츠가 어디서 답답한지. 레이아웃: [배 단계 | 낚싯대 레벨] 좌우(xl) →
-// [지역 도달] → [게이트 정체 목록]. **밸런스 숫자는 data/boats.ts를 재사용**한다 —
-// 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, actions.ts 머리 주석과 같은 판단).
+// [지역 도달] → [게이트 정체 목록]. **밸런스 숫자는 배 데이터를 재사용**한다 —
+// 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, 액션 리듀서 머리 주석과 같은 판단).
 import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -12,7 +12,7 @@ import { REGION_NAMES, REGION_ORDER } from '../../../../features/admin/model/reg
 import { BarsChart, Frame, TabState } from '../charts';
 import { BOATS, boatNameOf } from '../../../../game/content/boats';
 
-// 지역 표기는 admin/regions.ts 공용(라이브 탭과 공유) — world 마스크 데이터를 끌지 않기 위한 리터럴 미러.
+// 지역 표기는 라이브 탭과 공유하는 리터럴 미러다 — 월드 마스크 데이터를 불러오지 않는다.
 // 도달 퍼널은 REGION_ORDER 그대로 쓴다.
 export default function ProgressionTab() {
   const { access } = useAdminAuth();

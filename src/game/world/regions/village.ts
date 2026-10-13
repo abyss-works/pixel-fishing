@@ -1,4 +1,4 @@
-// 지역 1: 마을 (640×360, 도보) — 좌표는 구 world.ts에서 값 그대로 이식 (v0.4.2 스키마화)
+// 지역 1: 마을 (640×360, 도보) — 좌표는 구 월드 데이터에서 값 그대로 이식 (v0.4.2 스키마화)
 // 개별 상수를 export하는 이유: world.test의 고정 좌표 회귀 검증 + 트리거/스폰 참조.
 import type { Point, Rect, RegionPack, School } from '../types';
 

@@ -64,8 +64,8 @@ function Meta({ k, v, hint }: { k: string; v: string; hint?: string }) {
   );
 }
 
-/** 이벤트 카탈로그 — game/rules/actions.ts 리듀서가 남기는 유형의 사람용 목차. 로그에 모르는
- *  타입이 보이면 actions.ts와 metrics.EVENT_LABELS가 함께 늘어난 것이고, 여기는 그 사본이다 */
+/** 이벤트 카탈로그 — 액션 리듀서가 남기는 유형의 사람용 목차다. 로그에 모르는
+ *  타입이 보이면 GameAction과 metrics.EVENT_LABELS를 함께 갱신한다. */
 function EventCatalog() {
   return (
     <>

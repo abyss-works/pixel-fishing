@@ -1,4 +1,4 @@
-// 액션 리듀서 — 서버(api/action)와 LocalGameGateway가 공유하는 상태 전이 규칙 (v0.5.0)
+// 액션 리듀서 — 서버와 LocalGameGateway가 공유하는 상태 전이 규칙 (v0.5.0)
 import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
@@ -7,7 +7,7 @@ import { BOATS, COUPONS, FISH, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 import { baitById } from '../content/baits';
 
-/** items/activeBait 키 리터럴 — data/baits.ts의 고정 신분증 */
+/** items/activeBait 키 리터럴 — 미끼 데이터의 고정 신분증 */
 const BAIT_ID = { common: 'bait-common', rare: 'bait-rare', epic: 'bait-epic',
                   legendary: 'bait-legendary' } as const;
 

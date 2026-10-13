@@ -1,7 +1,7 @@
 // 순수 게임 규칙 — DOM 의존 없음.
-// 수치 튜닝은 balance.ts, 콘텐츠는 data/ (이 파일은 기존 import 경로 호환을 위해 re-export).
-// 상대경로에 .js 확장자 필수 — 이 파일은 api/save.ts(Vercel Node 함수, 순수 ESM 로더)가
-// 그대로 import한다. Vite(브라우저 빌드)는 확장자 없어도 되지만 Node ESM은 필수라
+// 수치 튜닝은 밸런스 규칙, 콘텐츠 값은 게임 데이터에서 관리한다. 이 모듈은 기존 호출부를 위해 재수출한다.
+// 상대경로 import에는 .js 확장자를 쓴다 — Vercel Node 함수의 순수 ESM 로더가
+// 이 모듈을 직접 불러온다. Vite(브라우저 빌드)는 확장자 없어도 되지만 Node ESM은 필수라
 // 둘 다 만족시키려면 .js로 적어야 한다(소스는 .ts, 컴파일 결과가 .js).
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
@@ -78,13 +78,13 @@ export interface GameState {
   location: LocationRef;
   /** 가 본 지역 — 업적("모든 지역 방문")의 근거. events가 아니라 상태에 두는 이유:
    *  events는 보관주기 정책 대상이라 지워지면 진행도가 증발한다
-   *  (decisions/save-instancing.md — 통계 수명을 스트림 수명과 분리).
+   *  통계의 수명은 이벤트 스트림의 수명과 분리한다.
    *  오픈월드화로 병합 바다 'world'도 방문 대상이다(구 지역 id는 구세이브 잔존분). */
   visited: RegionId[];
   /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
    *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
   artifacts: string[];
-  /** 아이템 보유량(스택형) — id(data/baits.ts 등) → 개수. 물고기 개체성(uid)이 없는 소모품
+  /** 아이템 보유량(스택형) — id(미끼 데이터 등) → 개수. 물고기 개체성(uid)이 없는 소모품
    *  축이다. 아이템 종류가 늘어도 키 하나(레지스트리 행)면 된다 — 세이브 v8에 접어서 도입
    *  (없는 필드는 위생 처리에서 기본값으로 자가 치유 — migrate 주석 참조). */
   items: Record<string, number>;
@@ -125,7 +125,7 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
   return off <= yellow / 2 ? 'good' : 'normal';
 }
 
-// 추첨 — **2단 구조(v0.6.6)**: balance-metrics.md 1~2절 왜곡의 수정.
+// 추첨 — **2단 구조(v0.6.6)**: 등급 가중치와 어종 선택을 별도로 계산한다.
 //   구버그: 개체마다 등급 가중치 전액(74/20/5/1)을 부여 → 등급당 어종 수가 많은 수역일수록
 //   그 등급 확률이 팽창했다(코론 EV 332.7 vs 배리어 리프 172.5 사례).
 //   ① 등급 축: 등급 가중치는 그 수역의 **고정 예산**(개체 수와 무관). 수역 오버라이드가 있으면
@@ -204,7 +204,7 @@ export function licenseConditions(
 }
 
 // 현상금 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.
-// 서버(api/action.ts)가 catch 이벤트마다 DB 진행 행에 대해 이 함수로 검사해
+// 서버가 catch 이벤트마다 DB 진행 행에 대해 이 함수로 검사해
 // 진행도를 올린다. 수주 시점 이전 어획은 서버가 started_at으로 걸러낸다.
 export function matchBountyCatch(quest: BountyQuest, spot: SpotId, fishId: string): boolean {
   if (topZoneOfSpot(spot) !== quest.zone) return false;
@@ -214,7 +214,7 @@ export function matchBountyCatch(quest: BountyQuest, spot: SpotId, fishId: strin
 
 function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
   // 개체 가중치 합을 등급별로 모은다 — 기본(전부 1)이면 합 = 개체 수라 구 균등 배분과 동치.
-  // 다이얼(fishWeights)이 없으면 Fish.weight(개체 고정 가중치, 기본 1 — data/fish)를 쓴다.
+  // 다이얼(fishWeights)이 없으면 Fish.weight(개체 고정 가중치, 기본 1 — 어종 데이터)를 쓴다.
   const base = (f: Fish) => o.fishWeights?.[f.id] ?? f.weight ?? 1;
   const fwSum = new Map<RarityId, number>();
   for (const f of pool) {
@@ -432,7 +432,7 @@ export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean):
   return { ...extras, percentile, isBig: percentile <= BIG_CATCH_PERCENTILE, isNew };
 }
 
-// 쿠폰 — 데이터는 data/coupons.ts, 검증/지급 규칙은 여기
+// 쿠폰 데이터는 게임 데이터에서 관리하고 검증·지급 규칙은 여기서 처리한다.
 import { COUPONS } from '../content/coupons.js';
 
 export type CouponResult =
@@ -455,7 +455,7 @@ export function redeemCoupon(
   };
 }
 
-// ---------- 지원 코드 자산 병합 (제재 소프트 랜딩 — incidents/2026-08-24-import-abuse.md) ----------
+// ---------- 제재된 계정의 지원 코드 자산 병합 ----------
 // 운영자가 발급한 일회성 패키지(gold·fame·rod·boat·dex)를 새 계정 상태에 얹는다.
 // 도감은 "기록"이라 **합산하지 않는다** — count·maxSize는 큰 값을 유지하고 first는 더 이른 날을
 // 남긴다. 새 계정의 미래 캐치가 위에 더해져도 절대값 정합이 깨지지 않게 하는 게 요점이다.
@@ -947,7 +947,7 @@ export function autoLockUids(bag: readonly FishInstance[]): string[] {
   return [...top.values()].filter(i => !i.locked).map(i => i.uid).sort();
 }
 
-// 아래 셋은 **판정을 rules.ts에 위임**한다  — 규칙의 단일 근원은 거기 하나다.
+// 아래 세 판정은 공통 규칙 함수에 위임해 중복 구현을 막는다.
 // 여기 남는 것은 "허용됐을 때 상태를 어떻게 바꾸는가"뿐. 반환 형태(null)는 기존 계약 유지.
 
 // 낚싯대 강화: 골드 박치기, 상한 없음 (무한 골드 싱크)

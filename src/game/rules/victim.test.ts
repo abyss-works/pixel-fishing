@@ -1,6 +1,6 @@
-// 피해자 선정 동등성 — 서버 fast path(api/action.ts catch 분기)가 리듀서와 같은
+// 피해자 선정 동등성 — 서버의 catch fast path가 리듀서와 같은
 // 개체를 고르는지. 규칙 자체가 아니라 "읽기 생략분이 없음"만 본다.
-// 비교자·등급우선순위·도감헬퍼가 단일 근원(logic.ts)임을 잠그는 것이 목적이다.
+// 비교자·등급우선순위·도감헬퍼가 단일 근원(게임 로직)임을 잠그는 것이 목적이다.
 import { describe, it, expect } from 'vitest';
 import {
   FISH, RARITY_ORDER, capOfBoat, compareBlandness, nextDexRec, overflowUids, pickEvict,
@@ -18,7 +18,7 @@ function mixedBag(): FishInstance[] {
     mk(`u-${f.id}-${form}`, f.id, form, sizes[(i + j) % sizes.length], (i + j) % 11 === 0)));
 }
 
-/** 서버 등급별 top-1 조회 흉내 — 삭제→일반→희귀→영웅→전설 순 (api/action.ts와 같은 우선순위) */
+/** 서버 등급별 top-1 조회 흉내 — 삭제→일반→희귀→영웅→전설 순 (서버와 같은 우선순위) */
 function tierTops(bag: readonly FishInstance[]): (FishInstance | null)[] {
   const unlocked = bag.filter(i => !i.locked);
   const byTier = (pred: (i: FishInstance) => boolean): FishInstance | null =>

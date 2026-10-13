@@ -1,4 +1,4 @@
-// R4, R4b: 지역 충돌·군집 배치·경로 무결성 + 존 계층(spec/zone-tree.md)
+// R4, R4b: 지역 충돌·군집 배치·경로 무결성과 존 계층을 검증한다.
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';

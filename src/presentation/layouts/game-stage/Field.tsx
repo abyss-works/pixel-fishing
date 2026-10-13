@@ -113,7 +113,7 @@ export default function Field({
   const tryCastRef = useRef<(silent: boolean) => void>(() => {});
   const hookRef = useRef<(j: Judgment) => void>(() => {});
 
-  // 단계별 자동 전환 타이머 — 규칙은 fishing.ts (R6, R9)
+  // 단계별 자동 전환 타이머 — 전환 조건은 낚시 규칙을 따른다 (R6, R9)
   // fish를 deps에 넣는 이유: catch 진입 시각(버스트 기준)과 지속시간(등급별 분기)이
   // "이번에 잡은 물고기"에 달려 있다 — phase만 보면 어떤 물고기인지 알 수 없다.
   useEffect(() => {
@@ -247,7 +247,7 @@ export default function Field({
   });
 
   // 키보드: 이동 + 행동 (R4, R5c) — 누른 키는 **스코프**를 통해 받는다.
-  // 모달이 뜨면 스코프가 막아 주므로 여기서 모달 여부를 알 필요가 없다 (hotkeys.ts).
+  // 모달이 뜨면 키보드 스코프가 입력을 막으므로 여기서 모달 여부를 확인하지 않는다.
   useKeyScope(e => {
     if (e.code === 'Space') { e.preventDefault(); actionRef.current(); return true; }
     if (MOVE_KEYS[e.code]) {
@@ -274,7 +274,7 @@ export default function Field({
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx || typeof requestAnimationFrame === 'undefined') return;
     // 입장 즉시 현재 어군·구역·좌표를 한 번 반영 — 이동 전에도 지역 탭이 문맥을 안다.
-    // spot = 캐스팅 사거리 내 어군(spec/zone-tree.md) — 스폰은 사거리 밖(R4b)이므로 null.
+    // spot = 캐스팅 사거리 내 어군 — 스폰은 사거리 밖(R4b)이므로 null.
     // 표시 존 = 어군 우선(그 어군의 존), 사거리 밖이면 셀 구역의 최상위 존 — 아래 루프와 같은 규칙.
     const z0 = zoneOf(def, posRef.current.x, posRef.current.y) ?? null;
     trackerRef.current.init(z0);
@@ -300,7 +300,7 @@ export default function Field({
         movedFrom = prev;
         posRef.current = movePlayer(def, prev, Math.sign(dx), Math.sign(dy), dt, speed);
         // 현재 어군(사거리 내)·좌표 전역 갱신 — spot은 조업 오브젝트라 "사거리 내 어군"으로
-        // 판정한다(spec/zone-tree.md). 캐스팅 판정(tryCast)과 같은 학교 근접 규칙.
+        // 판정한다. 캐스팅 판정(tryCast)과 같은 학교 근접 규칙.
         const near = nearestSchoolInRange(def.schools, posRef.current.x, posRef.current.y, CAST_RANGE);
         const spot = near?.spot ?? null;
         if (spot !== lastSpotRef.current) {

@@ -1,11 +1,11 @@
 // 지역 엔진 — 지역 데이터에서 충돌·수역·이동을 파생하는 순수 함수들 (R4, R5)
 // 지형 소스는 둘: 항해 지역은 마스크 격자(pack.map), 마을 같은 walk 지역은 rect 조각(terrain).
-// 판정 규칙은 types.ts 주석 참조.
+// 지도 셀 판정은 각 영역의 설정값을 따른다.
 import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import { cellDefAt } from './mask';
 import { zoneById, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
-// 반경은 호출자가 준다 — 기본값용 상수(CAST_RANGE, game/balance 소관)를 여기서
+// 반경은 호출자가 준다 — 기본값용 상수(CAST_RANGE, 밸런스 규칙 소관)를 여기서
 // import하면 층서(game > world)가 깨진다. 호출부는 명시 전달.
 
 export const inRect = (x: number, y: number, r: Rect): boolean =>
@@ -30,7 +30,7 @@ export function canMove(pack: RegionPack, x: number, y: number): boolean {
 }
 
 // 구역 판정 — 마스크면 셀의 zone, walk 지역(마을)은 단일 구역. 모르면 undefined(구역 밖 물).
-// **셀은 존만 안다**(spec/zone-tree.md) — 스팟은 존 안에 배치되는 어군 오브젝트라 캐스팅
+// **셀은 존만 안다** — 스팟은 존 안에 배치되는 어군 오브젝트라 캐스팅
 // 판정도 학교(가까운 어군) 기준이다. 하위 존(해구 등) 위에 서면 하위 존이 반환된다 —
 // 로어 표시 규칙("가장 구체적인 존 우선")의 근원.
 export function zoneOf(pack: RegionPack, x: number, y: number): ZoneId | undefined {

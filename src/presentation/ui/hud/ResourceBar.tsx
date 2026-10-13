@@ -40,7 +40,7 @@ export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?
     <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
                     bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px] border-2 border-line pf-notch pf-bevel
                     px-4 py-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-      {/* 자원 바 클릭 = 스탯창 (next.md 2). .hud 클래스는 스타일이 아니라 테스트 훅(app.test querySelector) — 유지 */}
+      {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label="스탯창 열기" onClick={onOpen}
               className="hud flex items-stretch gap-4 cursor-pointer transition hover:brightness-125
                          [&>span+span]:border-l [&>span+span]:border-line [&>span+span]:pl-4">

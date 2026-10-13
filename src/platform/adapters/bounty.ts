@@ -5,11 +5,11 @@ import { supabase } from './auth';
 import { bountyById } from '../../game/content/bounties.js';
 import type { BountySnapshot } from '../api/types';
 
-/** KST 날짜 — api/action.ts todayKST와 같은 시계 (일일 의뢰 해시용) */
+/** KST 날짜 — 서버의 todayKST와 같은 일일 의뢰 해시용 날짜 */
 export const kstDay = (): string =>
   new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
-/** KST 자정(UTC ISO) — api/action.ts kstDayStartISO와 같은 시계 */
+/** KST 자정(UTC ISO) — 서버의 kstDayStartISO와 같은 기준 */
 const kstDayStartISO = (): string => {
   const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   return new Date(`${day}T00:00:00+09:00`).toISOString();

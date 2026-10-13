@@ -1,7 +1,7 @@
 // 경제 탭 — 골드 유입(sell·coupon)과 유출(upgradeRod·buyBoat·buyBait)의 일 원장 + 잔고 분포.
 // 레이아웃: [잔고 백분위 KPI 4] → 좌우 분할(유입 | 유출, xl) → 원장 대차 카드(풀폭).
 // 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
-// (v_economy_daily 뷰 머리 주석 · queries-audit.sql ⑨).
+// v_economy_daily 뷰의 일별 경제 요약을 표시한다.
 import { useEffect, useMemo, useState } from 'react';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';

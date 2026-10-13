@@ -8,9 +8,9 @@ import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 
-// 게임 상태 소유와 액션 흐름 조율 (계층: service/state — 서버 권위 v0.5.0)
+// 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
-// platform/adapters/에 갇혀 있고 이 훅은 구현체를 모른다(platform/api/boundary.test.ts가 검사).
+// 인프라 구현은 플랫폼 경계 안에 두고 이 훅은 구체 구현을 모른다.
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
 export type SyncState = 'off' | 'connecting' | 'on' | 'error';
@@ -42,7 +42,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회
   }, []);
 
-  // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 errors.ts의 정책 표가 내리고,
+  // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 에러 처리의 정책 표가 내리고,
   // 이 훅은 그 결정을 화면에 반영만 한다. 실패 에피소드당 1회만 알린다(복구되면 리셋).
   const alertedRef = useRef(false);
   const rescueRef = useRef<(headline: string) => void>(() => {});
@@ -57,7 +57,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }), []);
 
   // 진행 상황을 이사 코드로 만들어 복사해 주고 복구를 안내한다 (저장되지 않은 실패에서만)
-  // import는 이제 소유자 전용(incidents/2026-08-24) — 불러오기는 유저가 아니라 개발자가 한다.
+  // 저장 데이터 import는 소유자 전용이며 일반 사용자에게 노출하지 않는다.
   const rescueAlert = async (headline: string) => {
     const code = api.storage.saveCode(gameRef.current);
     const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 코드로 만들어 뒀어요.\n\n게임을 새로고침해 다시 접속하세요.\n같은 문제가 반복되면 아래 코드를 개발자에게 보내주세요.`;
@@ -107,7 +107,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔다.');
       } else if (init.legacy) {
-        // 구세대(localStorage) 브리지도 import 액션이라 소유자 게이트에 걸린다(incidents/2026-08-24).
+        // 구세대(localStorage) 브리지도 import 액션이므로 소유자 게이트를 적용한다.
         // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.
         try {
           await dispatch({ type: 'import', save: init.game });

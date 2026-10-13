@@ -1,12 +1,12 @@
-// 관측(클라이언트) — Sentry 초기화 + 의도적 신호. 계층 밖의 횡단 관심사라 version.ts처럼
-// src 루트에 단독으로 둔다. 서버(Vercel 함수) 쪽은 api/observability.ts가 별도로 맡는다.
+// 관측(클라이언트) — Sentry 초기화와 의도적 신호를 다룬다. 계층 밖의 횡단 관심사라
+// 소스 진입 계층에 단독으로 둔다. 서버 오류는 서버 API가 별도로 보고한다.
 //
 // 설계 판단 :
 // - **에러 모니터링만 켠다.** Tracing(성능)·Session Replay·Metrics는 전부 끔.
 //   · Replay: 화면 본체가 캔버스라 DOM 녹화로는 빈 사각형만 남는다. 번들만 커지고
 //     계정 폼의 이메일이 녹화 대상이 된다 — 값어치 없음.
 //   · Tracing: 방치 낚시가 ~5초마다 /api/action을 쳐서 접속만으로 쿼터가 마른다.
-//     레이턴시는 이미 250~500ms로 확인됨(ops/perf-action-latency.md) — 필요해지면
+//     레이턴시는 이미 250~500ms로 확인됨(운영 절차) — 필요해지면
 //     browserTracingIntegration + tracesSampleRate 두 줄로 켠다.
 //   · Metrics(직접 심는 계측): 게임 지표는 events 테이블이 이미 정본이라 중복.
 //     게다가 SDK가 아직 실험 API로 표시하고 있다.

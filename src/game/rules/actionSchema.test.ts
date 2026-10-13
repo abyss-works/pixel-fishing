@@ -1,6 +1,6 @@
-// 액션 스키마 검증 — 서버 입구의 유일한 화이트리스트 (api/action.ts route가 호출).
+// 액션 스키마 검증 — 서버 요청의 유일한 화이트리스트다.
 // 클라는 이 모듈의 런타임을 import하지 않는다 (타입만) — 번들에 zod가 타면 안 된다.
-// 배경: bugs.md — catch의 judgment enum 미검증 (임의 문자열 → NaN → 전설 확정).
+// 잘못된 judgment 문자열은 NaN 가중합으로 전설을 확정할 수 있어 입력을 검증한다.
 import { describe, it, expect } from 'vitest';
 import { parseAction, ACTION_SCHEMA_TYPES } from './actionSchema';
 import { ACTION_TYPES } from './actions';

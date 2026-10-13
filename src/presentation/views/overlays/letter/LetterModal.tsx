@@ -28,7 +28,7 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
     setBusy(true);
     when(dispatch({ type: 'sendLetter', text: body }), r => {
       setBusy(false);
-      if (r.status !== 'ok') return; // 실패는 정책(errors.ts)이 안내한다
+      if (r.status !== 'ok') return; // 실패는 정책(에러 처리)이 안내한다
       setToast('편지를 보냈어요. 읽고 반영할게요 — 고마워요!');
       onClose();
     });

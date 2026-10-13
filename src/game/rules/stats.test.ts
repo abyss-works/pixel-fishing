@@ -1,4 +1,4 @@
-// 스탯 서비스 — 파생 내역({base, mods, value})과 단일 출구 계약 (next.md 1)
+// 스탯 서비스 — 파생 내역({base, mods, value})과 단일 출구 계약을 검증한다.
 import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance';

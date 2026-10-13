@@ -1,19 +1,19 @@
 // 레벨 데이터 스키마 (리팩토링 축 2)
-// 지역/거점은 전부 이 타입의 "데이터"다 — 새 지역 = regions/<id>.ts 파일 1개(+신규 스프라이트).
-// 충돌·수역 판정은 engine.ts가 데이터에서 파생하고, 그리기는 pixel/region.ts 인터프리터가 맡는다.
+// 지역과 거점은 데이터로 정의한다 — 새 지역은 지역 정의와 신규 스프라이트를 추가한다.
+// 충돌·수역 판정은 지도 데이터에서 파생하고, 픽셀 렌더링 인터프리터가 이를 그린다.
 import type { SpotId } from '../content/spots';
 import type { BaseId, LocationRef, RegionId } from '../content/places';
 import type { ZoneId } from '../content/zones';
 
-// 지역 id의 단일 근원 = data/places(수역 region 열 + 병합 바다 'world') — 수역·지역 소개·팩이
+// 지역 id의 단일 근원 = 장소 데이터(수역 region 열 + 병합 바다 'world') — 수역·지역 소개·팩이
 // 전부 같은 타입을 쓴다 (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type { RegionId };
 export type { BaseId } from '../content/places';
 export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'dex' | 'exit' | 'travel' | 'bounty';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
- *  정의는 `data/places.ts`에 있다: 세이브(`game/`)도 같은 타입을 써야 하는데 의존 방향이
- *  world → game 단방향이라 game이 여기를 볼 수 없다. 여기서는 재수출만 한다. */
+ *  저장 데이터에서도 사용하므로 의존 방향은 월드에서 게임 데이터로만 향한다.
+ *  이 모듈에서는 타입을 재수출한다. */
 export type SceneRef = LocationRef;
 
 /** 거점(집·항구 내부) 설계 좌표 — 배경·가구가 이 공간에 깔린다. 필드와 **별개 축**이다:
@@ -28,7 +28,7 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface Point { x: number; y: number }
 export interface School { id: string; spot: SpotId; x: number; y: number }
 
-/** 물 스타일 — 채움/가장자리/모래테는 pixel/region.ts의 WATER_STYLE 레지스트리가 정의 */
+/** 물 스타일 — 채움/가장자리/모래테는 픽셀 렌더링의 WATER_STYLE 레지스트리가 정의 */
 export type WaterStyleId = 'pond' | 'river' | 'sea' | 'deep' | 'coral' | 'wreck';
 export type DeckStyleId = 'bridge' | 'pier';
 
@@ -43,7 +43,7 @@ export type TerrainPiece =
 export type BuildingSpriteId = 'house' | 'boatshop' | 'harbor';
 export interface Building { rect: Rect; sprite: BuildingSpriteId }
 
-// 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (App/Field 무수정)
+// 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (게임 필드 무수정)
 export type Edge = 'top' | 'bottom' | 'left' | 'right';
 export type TriggerDef =
   | { rect: Rect; action: 'base'; msg: string;                    // 거점 진입
@@ -71,9 +71,9 @@ export interface MapCellDef {
   land?: boolean;
   /** 물 — walk 지역에서 통행 불가 */
   water?: boolean;
-  style?: WaterStyleId;   // 물 색 토큰 (styles.ts WATER_STYLE)
-  /** 소속 구역 — 존 계층의 셀 단위 근원(spec/zone-tree.md: 셀은 zone만 안다 — 스팟은
-   *  존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다). 미지정 = 구역 밖 물(통행만) */
+  style?: WaterStyleId;   // 물 색 토큰 (WATER_STYLE)
+  /** 소속 구역 — 셀은 zone만 안다. 스팟은 존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다.
+   *  미지정 = 구역 밖 물(통행만) */
   zone?: ZoneId;
   /** 수역 표기명 — 같은 def 셀 군집의 상단 중앙에 자동 라벨로 뜬다 (하드코딩 금지) */
   label?: string;
@@ -88,7 +88,7 @@ export interface CompiledMap {
   palette: (MapCellDef | undefined)[];
 }
 
-/** 지역 소개 — 사이드바 지역 탭·도감 서브탭용 로어/팁 (구 data/regions.ts REGION_INFO 흡수) */
+/** 지역 소개 — 사이드바 지역 탭·도감 서브탭용 로어/팁 (구 게임 데이터 REGION_INFO 흡수) */
 export interface RegionLore {
   shortName: string;  // 도감 서브탭 등 좁은 UI용
   tagline: string;    // 한 줄 분위기

@@ -1,7 +1,7 @@
-// 닉네임 규칙 — 정본은 mgmt/spec/account.md 5절.
+// 닉네임 규칙 — 서버와 클라이언트가 공유하는 순수 검증이다.
 // 리듀서(setNickname)·클라 사전 체크·서버가 공유하는 순수 검증이다.
 //
-// 상대 import는 .js 확장자 필수 — api/action.ts(Node 순수 ESM)가 직접 import한다.
+// 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import { NICK_ADJ, NICK_FISH } from '../content/nicknames.js';
 import type { RuleCheck } from './rules.js';
 

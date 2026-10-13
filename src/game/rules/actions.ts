@@ -1,7 +1,7 @@
 // 액션 리듀서 — 모든 상태 변경의 유일한 진입점 (서버 권위 v0.5.0)
-// 서버(api/action.ts)와 로컬 폴백(platform/adapters/localGameGateway.ts — supabase 미설정 dev)이 같은 함수를 실행한다.
-// 기존 logic/fishing 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
-// 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
+// 서버 처리와 로컬 폴백은 같은 함수를 실행한다.
+// 기존 게임 규칙 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
+// 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
@@ -37,7 +37,7 @@ export type GameAction =
   | { type: 'travel'; to: LocationRef }
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
-  | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩 (incidents/2026-08-24)
+  | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
   | { type: 'adminSet'; gold?: number; fame?: number; rod?: number; boat?: number } // 관리자 테스트용 스탯 직접 수정
   | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
@@ -49,7 +49,7 @@ export type GameAction =
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
-// 서버(api/action.ts) 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
+// 서버와 공유하는 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
@@ -232,7 +232,7 @@ type ReduceOutcome =
   | { ok: false; error: RejectReason };
 
 /** 추첨 준비 — 판정 강등·미끼·시간대를 한 곳에서 계산한다.
- *  리듀서 catch와 서버 fast path(api/action.ts)가 공유하는 단일 진실원.
+ *  리듀서 catch와 서버 fast path가 공유하는 단일 진실원.
  *  pz는 호출자가 이미 계산한 값을 넘긴다 (재계산 없음). */
 export interface CatchDraw {
   judgment: Judgment;
@@ -252,7 +252,7 @@ export function prepareCatchDraw(
   const drawOpts: DrawOptions = bait
     ? { budgets: { [bait.targetRarity]: rarityWeightOf(spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
     : {};
-  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (game/time.ts).
+  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
   const phase: DayPhase = isNight(now) ? 'night' : 'day';
   return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
 }
@@ -268,7 +268,7 @@ export function rollCatchFish(
     return rollFish(spot, 1, rng, relativeIdleBoost(power, entry) * pzMult, phaseOpts);
   }
   // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
-  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — power.ts).
+  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — 파워 계산).
   return rollFish(spot, JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), rng, pzMult, phaseOpts);
 }
 
@@ -379,9 +379,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'sendLetter': {
       // 편지는 **게임 상태가 아니다.** 상태를 안 바꾸고 이벤트만 남긴다(감사 사본).
-      // 영구 보존은 letters 테이블이 맡는다 — 서버(api/action.ts)가 이 이벤트를 letters에도
-      // 기록하고, 실패 시 500이다. 그래서 콜드 아카이브(events 보관주기)가 날짜만으로 안전하다
-      // (mgmt/spec/cold-archive.md 2.3 · decisions/letters-table.md).
+      // 영구 보존은 letters 테이블이 맡는다 — 서버가 이 이벤트도 기록하며, 실패 시 500이다.
+      // 그래서 콜드 아카이브(events 보관주기)는 날짜만으로 안전하다.
       const text = typeof action.text === 'string' ? action.text.trim() : '';
       if (!text || text.length > LETTER_MAX) return { ok: false, error: 'bad-request' };
       return {
@@ -425,7 +424,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'buyBait': {
       // 소모품 구매 — 규칙은 골드 검증 하나다. count는 1회 요청의 폭주 상한(BAIT_BUY_MAX)으로
-      // 클램프할 뿐, 스택 적립이라 여러 번 사면 충분하다. 가격은 data/baits.ts(단일 출처).
+      // 클램프할 뿐, 스택 적립이라 여러 번 사면 충분하다. 가격은 미끼 데이터(단일 출처).
       const bait = baitById(action.bait);
       if (!bait) return { ok: false, error: 'bad-request' };
       const raw = action.count ?? 1;

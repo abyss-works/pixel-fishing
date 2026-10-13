@@ -1,4 +1,4 @@
-// AUTO-GENERATED — tools/mask-from-earth.mjs 산출물. 손편집 금지.
+// AUTO-GENERATED — 생성 도구 산출물. 손편집 금지.
 // 재생성: node tools/mask-from-earth.mjs tools/configs/earth.json --out src/game/world/regions/generated/earth.mask.ts
 // 출처: Natural Earth via world-atlas@2 land-50m — public domain
 export const CELL_W = 8;

@@ -2,16 +2,16 @@
 import type { SpotId } from './spots.js';
 import type { RarityId } from './rarity.js';
 
-// 스프라이트 몸 형태 — 실제 그리기는 pixel/sprites.ts(DOM 캔버스 의존)가 맡는다.
-// 이 타입은 여기 데이터 레이어에 둔다: fish.ts는 api/save.ts(Node, DOM 없음)가 타는
-// import 그래프에 물려 있어서, DOM 타입에 의존하는 파일을 거꾸로 import하면 안 된다.
+// 스프라이트 몸 형태 — 실제 그리기는 스프라이트 렌더러(DOM 캔버스 의존)가 맡는다.
+// 이 타입은 데이터 계층에 둔다. 서버의 DOM 비의존 import 그래프에도 포함되므로
+// DOM 타입에 의존하는 렌더러를 역방향으로 불러오면 안 된다.
 export type FishShape =
   | 'tiny' | 'round' | 'slim' | 'predator' | 'flowing' | 'eel' | 'ribbon'
   | 'whiskered' | 'shark' | 'anglerfish' | 'cephalopod' | 'ancient' | 'serpent' | 'ray';
 
 // 폼 축 — "종은 같고 다른 개체"의 갈래 (세이브 v8). 폼 추가 = 이 유니온에 문자열 하나.
-// data 계층에 두는 이유: 폼은 콘텐츠 축이고(Fish.variant가 그 데이터), ui/가 스프라이트 색을
-// 고르려면 이 타입을 봐야 하는데 의존 규칙상 ui→game은 금지·ui→data는 허용이다.
+// 데이터 계층에 두는 이유: 폼은 콘텐츠 축이고(Fish.variant가 그 데이터), UI 계층이 스프라이트 색을
+// 고를 때 이 타입을 사용한다. 의존 방향은 UI에서 콘텐츠 데이터로 향한다.
 export type FormId = 'normal' | 'variant';
 
 // lore/variant는 v0.3.0 초안 — 나중에 다시 다듬어도 됨(직접 작성 확정)
@@ -22,13 +22,13 @@ export interface Fish {
   spot: SpotId;
   rarity: RarityId;
   price: number;                         // 기본가 — 변이 판매가 = ×VARIANT_PRICE_MULT (priceOf)
-  /** 밤 전용 어종 — 낮 시간대 추첨 풀에서 빠진다(밤 시스템: game/time.ts). 미기재 = 상시 */
+  /** 밤 전용 어종 — 낮 시간대 추첨 풀에서 빠진다(밤 시스템: 게임 시계). 미기재 = 상시 */
   night?: boolean;
   /** 개체 가중치 — 기본 1. 그 등급 안에서 이 어종이 나올 상대 빈도(2 = 남들 절반 빈도의 2배).
    *  미기재는 1. drawWeights가 다이얼(fishWeights)보다 우선순위 낮은 기본값으로 소비한다. */
   weight?: number;
   color: string;
-  shape: FishShape;                      // 스프라이트 몸 형태 — 어종마다 다르게 (pixel/sprites.ts)
+  shape: FishShape;                      // 스프라이트 몸 형태 — 어종마다 다르게 (스프라이트 렌더러)
   lore: string;                          // 도감 상세보기용 짧은 로어
   variant: { name: string; color: string; lore: string }; // 색상 변이 1종 (balance.MUTATION_RATE)
 }
@@ -203,7 +203,7 @@ export const FISH: readonly Fish[] = [
       lore: '더 짙은 녹음 속에서 울었다는 개체. 울음소리만 전해진다.' } },
   // ── 인도양 (향신료의 바다 · 따뜻한 연안) — 2026-08-27 관리자 시뮬 확정분 반영:
   //    만새기·꽁치 weight 2(해당 수역 흔한 어종 대표), 마카라 17,500 / 눈다랑어 3,400 /
-  //    고래상어 3,800. 등급 예산 ×2 상향은 spots.ts rarityWeight가 단일 출처. ──
+  //    고래상어 3,800. 등급 예산 ×2 상향은 수역 데이터 rarityWeight가 단일 출처. ──
   { id: 'ribbonfish', name: '만새기',     spot: 'indian', rarity: 'common',    price: 29,   color: '#b0bec5', shape: 'ribbon',
     lore: '칼 같은 몸으로 파도를 가르며 떼로 돈다.',
     variant: { name: '은광 만새기', color: '#eceff1',
@@ -259,10 +259,10 @@ export const FISH: readonly Fish[] = [
     lore: '천 년 전 인도 영웅시에 배 장인들의 항로가 사실상 그 주위를 맴돌았던 이름.',
     variant: { name: '천년 바루나', color: '#4527a0',
       lore: '시간을 두 배로 사는 존재가 심연의 왕관을 두겁 쓴 모습이라 한다.' } },
-  // ── 밤 전용 (night: true — 낮 풀에서 빠진다. game/time.ts) ──
+  // ── 밤 전용 (night: true — 낮 풀에서 빠진다. 게임 시계) ──
   // 주기: 하루=1시간·낮 게임4~20시/밤 20시~다음4시. 가격 = 낮 동등급 앵커 대비 1.5~2배, 100 단위 올림.
   // 변이 톤: 낮 변이(색칠공부)와 달리 이름이 한 단계 어두워진다(밤→칠흑/심연/영겁).
-  // 설계 정본: mgmt/draft/night-fish.md
+  // 밤 전용 어종의 등장 조건은 night 값으로 관리한다.
   { id: 'moonveil',    name: '달무리',       spot: 'sea',         rarity: 'legendary', price: 3000,  color: '#b9c7dc', shape: 'flowing', night: true,
     lore: '달빛이 바다에 내리면 그 자리에만 잠시 나타난다. 낮의 포식자들이 물러난 시간의 정점.',
     variant: { name: '그믐달 무리', color: '#3d4a5c',

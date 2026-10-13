@@ -1,15 +1,15 @@
-// 액션 스키마 — 서버 입구의 런타임 화이트리스트 (api/action.ts route가 호출).
-// GameAction 유니온(src/game/rules/actions.ts)과 1:1이다. 새 액션을 추가하면 여기에도
-// 스키마를 추가한다 — 키 집합 일치는 actionSchema.test.ts의 parity 테스트가 강제한다.
+// 액션 스키마 — 서버 요청의 런타임 화이트리스트다.
+// GameAction 유니온과 1:1로 대응한다. 새 액션에는 스키마도 추가한다.
+// 키 집합 일치는 계약 테스트로 검증한다.
 // 클라는 이 모듈을 import하지 않는다 (타입도 필요 없음) — zod 런타임이 클라 번들에
 // 타면 안 된다. 서버·테스트 전용.
 //
-// 상대 import는 .js 확장자 필수 — api/action.ts(Node 순수 ESM)가 직접 import한다.
+// 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import { z } from 'zod';
 import type { GameAction } from './actions.js';
 
 // 판정 enum — 문자열 화이트리스트. 미지 값은 NaN 가중합 → 풀末尾 전설 확정으로
-// 이어졌던 경로(bugs.md)라, 여기서 null로 잘라 400 bad-action으로 돌린다.
+// 이어졌던 입력 경로이므로 여기서 null로 잘라 400 bad-action으로 돌린다.
 const Judgment = z.enum(['perfect', 'good', 'normal', 'auto']);
 
 const LocationRef = z.union([

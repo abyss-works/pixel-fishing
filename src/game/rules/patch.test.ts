@@ -1,6 +1,6 @@
 // 델타 동등성 — applyPatch(prev, pickScalars(next), writes) ≡ next
 // 서버가 델타만 보내도 클라가 풀 상태를 비트 단위로 복원함을 액션 14종 + 전시 합성으로 보장한다.
-// 규칙 자체는 actions.test.ts 소관 — 여기는 "전송 생략분 없음"만 본다 (유스케이스 0변화의 근거).
+// 규칙 자체는 별도 계약으로 검증하고, 여기서는 "전송 생략분 없음"만 본다 (유스케이스 0변화의 근거).
 import { describe, it, expect } from 'vitest';
 import { applyAction, pickScalars, applyPatch } from './actions';
 import type { ActionDeps, GameAction, StatePatch } from './actions';

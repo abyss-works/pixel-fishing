@@ -1,4 +1,4 @@
-// 거점: 콜롬보 항 (병합 바다 인도양) — harbor/manila 패턴 상속(manila 선례: 복제로 지역·문구만 조정).
+// 거점: 콜롬보 항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
 // 미끼 상점(shop 가구)은 미끼 릴리즈 본체로 추가됐다. 구매처는 이 항구 하나다.
 import type { BasePack } from '../types';
 import { COLOMBO_SPAWN } from '../regions/world';

@@ -1,4 +1,4 @@
-// 픽셀 렌더링 공통 헬퍼 — 인터프리터(region/base/worldmap)와 어종 스프라이트(sprites.ts)가 공유
+// 픽셀 렌더링 공통 헬퍼 — 인터프리터(region/base/worldmap)와 어종 스프라이트(스프라이트 렌더러)가 공유
 import { VIEW_W, VIEW_H, FIELD_VIEW_W, FIELD_VIEW_H } from '../../world/types';
 
 export type Ctx = CanvasRenderingContext2D;
@@ -13,7 +13,7 @@ export const SCALE = 2;
 export const CANVAS_W = FIELD_W * SCALE, CANVAS_H = FIELD_H * SCALE;
 export const BASE_CANVAS_W = W * SCALE, BASE_CANVAS_H = H * SCALE;
 
-// 캔버스 UI 팔레트 — index.css 토큰과 같은 값 
+// 캔버스 UI 팔레트 — 전역 스타일 토큰과 같은 값
 export const UI = {
   text: '#f2f7fb',
   dim: 'rgba(242,247,251,0.7)',

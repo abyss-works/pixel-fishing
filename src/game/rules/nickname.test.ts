@@ -1,5 +1,5 @@
-// 닉네임 규칙 — 정본은 mgmt/spec/account.md 5절.
-// 검증은 game/ 순수층에 둔다: 리듀서(setNickname)·클라 사전 체크가 공유한다.
+// 닉네임 규칙 — 서버와 클라이언트가 공유하는 순수 검증을 확인한다.
+// 검증은 순수한 게임 계층에 둔다: 리듀서(setNickname)·클라이언트 사전 검사가 공유한다.
 import { describe, it, expect } from 'vitest';
 import { checkNickname, nicknameWeight, pickGuestName } from './nickname';
 import { NICK_ADJ, NICK_FISH } from '../content/nicknames';

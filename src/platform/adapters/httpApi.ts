@@ -58,7 +58,7 @@ class HttpAuth implements AuthApi {
 
 // ---------- 관리자 읽기 (0010 뷰/RPC) ----------
 // 전송 상세(뷰 이름, PostgREST 파라미터, KST day 컷오프)는 여기에 갇힌다 —
-// 소비처(features/admin)는 AdminApi 인터페이스만 본다.
+// 소비처(기능 계층)는 AdminApi 인터페이스만 본다.
 
 import type {
   AdminApi,

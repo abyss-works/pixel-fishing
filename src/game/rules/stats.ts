@@ -1,5 +1,5 @@
-// 스탯 서비스 — 파생 스탯의 단일 출구 (next.md 1, v0.6.1)
-// UI가 규칙을 재구현해 드리프트하는 것을 막는다(선례: rules.ts). 모든 파생은
+// 스탯 서비스 — 파생 스탯의 단일 출구 (v0.6.1)
+// UI가 규칙을 재구현해 드리프트하는 것을 막는다. 모든 파생은
 // { base, mods[], value }를 담는다 — 기여 내역 구조. `항해 속도 = 배 기본 ·
 // 밤 감속 · 유물 보너스`처럼 환경 요소는 mods 행으로 얹힌다(유물이 첫 환경 기여).
 //
@@ -7,8 +7,8 @@
 // 계산값이다. 시간 항목은 스탯창에 내지 않고, PERFECT 존·희귀 어드밴티지 등은 수역별로
 // 다르게 갈 예정이라 절대값 표를 만들지 않는다 — 파워의 도움말로만 보여준다.
 //
-// 순수 곡선(rodStats·boatSpeed)은 logic에 남긴다: AdminPanel 가상 레벨 표와
-// FacilityModal 미리보기(rod+1)가 여전히 레벨만으로 계산해야 하므로(next.md 주의).
+// 순수 곡선(rodStats·boatSpeed)은 게임 규칙 계산에 둔다: AdminPanel 가상 레벨 표와
+// 시설 미리보기(rod+1)는 레벨만으로 계산한다.
 import { autoCommonBoost } from './fishing.js';
 import { relativeIdleBoost, manualPowerBonus, MANUAL_POWER_BONUS } from './power.js';
 import { boatSpeed, rodStats } from './logic.js';
@@ -209,7 +209,7 @@ export function powerZones(state: GameState, spotId: SpotId): PowerZone {
 }
 
 // 도움말 문장 — 스탯창 HelpHint가 띄운다. UI가 규칙 서술을 재작성하지 않게 서비스가 든다.
-// 톤 규칙: **로어 서술체, 수치 금지**(mgmt/spec/writing-voice.md) — 숫자는 각 행이 이미
+// 톤 규칙: **로어 서술체, 수치 금지** — 숫자는 각 행이 이미
 // 보여주고, 손으로 적은 수치는 밸런스를 바꾸는 순간 옛값으로 남는다(HelpPanel 선례).
 
 export function powerHelpText(): string {

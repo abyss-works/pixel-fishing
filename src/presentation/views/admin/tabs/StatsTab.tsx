@@ -12,7 +12,7 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 
 // 스탯 탭 — adminSet(테스트용 직접 수정). 운영에선 소유자·로컬만 서버가 받는다
-// (api/action.ts 관리자 액션 게이트) — UI는 조건 없이 렌더한다(게이트는 서버 책임).
+// 관리자 액션 권한은 서버가 검사한다 — UI는 조건 없이 렌더한다.
 export default function StatsTab({ game, dispatch }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;

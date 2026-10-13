@@ -1,9 +1,9 @@
-// 월드 모듈 진입점 — 데이터(regions/bases) + 엔진 조립, 기존 './world' import 경로 호환.
-// 새 지역 추가 절차: ① regions/<id>.ts 데이터 작성 ② REGION_PACKS에 등록
-// ③ (신규 건물이 있으면) pixel/buildings.ts에 스프라이트 추가 — 끝. 테스트(world.test)는
+// 월드 모듈 진입점 — 지역·거점 데이터를 엔진과 조립한다. 기존 import API와 호환한다.
+// 새 지역 추가 절차: ① 지역 데이터를 작성하고 ② REGION_PACKS에 등록한다.
+// ③ (신규 건물이 있으면) 픽셀 렌더링에 스프라이트를 추가한다. 통합 테스트는
 // REGION_PACKS를 순회하므로 자동으로 새 지역을 검증한다.
 //
-// 오픈월드화(spec/zone-tree.md): 씬 지역은 village(도보)와 world(병합 바다)뿐이다.
+// 오픈월드 씬 지역은 village(도보)와 world(병합 바다)뿐이다.
 // 구 3지역 팩(ocean/seasia/indian)은 삭제됐다 — 원본은 git 히스토리(a40bd0a)에 있다.
 // 구세이브 location의 구 지역 id(ocean 등)는 런타임 문자열로만 남는다 —
 // App.sceneOf가 고향 항구로 접는다.
@@ -30,7 +30,7 @@ export const REGION_PACKS: Record<RegionId, RegionPack> = {
   world: WORLD,
 };
 
-/** 씬 지역 id 순서의 단일 출처(등록 순서). UI 순환은 ZONE_IDS(data/zones)를 쓴다. */
+/** 씬 지역 id 순서의 단일 출처(등록 순서). UI 순환은 ZONE_IDS(구역 데이터)를 쓴다. */
 export const REGION_IDS: RegionId[] = Object.keys(REGION_PACKS) as RegionId[];
 
 /** 라이브 씬 그래프에서 도달하는 지역 — 세이브 location 복원이 이 목록으로 검증한다.

@@ -1,5 +1,5 @@
 // 편지 탭 — 유저가 보낸 편지(letters, 영구) 목록. events 7일 창 밖의 오래된 편지도 보인다
-// (정규화의 착지점 — mgmt/spec/cold-archive.md 4절).
+// 정규화된 편지 기록을 조회한다.
 import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';

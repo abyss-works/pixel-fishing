@@ -1,5 +1,5 @@
 // 현상금 서버 헬퍼 — KST 경계 집계와 DB 행 → 주입 진실 변환.
-// 리듀서 강제(수주 상한·납품 완료)는 actions.bounty.test.ts가 맡는다.
+// 계약 테스트는 리듀서의 수주 상한과 납품 완료 규칙을 검증한다.
 // 여기는 서버만 아는 것(날짜 경계·행 해석)만 다룬다.
 import { describe, it, expect } from 'vitest';
 import { kstDayStartISO, toBountyCtx } from './action.js';
