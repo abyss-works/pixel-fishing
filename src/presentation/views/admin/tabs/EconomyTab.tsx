@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
+import { selectEconomyMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminEconomy } from '../../../../features/admin/service/queries';
 import type { AdminEconomyRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
@@ -42,16 +43,15 @@ export default function EconomyTab() {
   const days = lastNDays(Number(range));
   const series = (f: (r: AdminEconomyRow) => number) =>
     fillSeries(economy, days, r => r.day, f);
-
-  // 잔고 백분위 — gold 기준
-  const goldStats = useMemo(() => users.map(u => toNum(u.gold))
-    .filter(Number.isFinite).sort((a, b) => a - b), [users]);
+  const { goldStats, goldSum, inflowTotal, outflowTotal } = useMemo(
+    () => selectEconomyMetrics(users, economy), [users, economy],
+  );
 
   return (
     <div className="flex flex-col gap-3">
       <Frame title="골드 잔고 분포">
         <KpiGrid>
-          <KpiCard label="잔고 합" value={fmtNum(goldStats.reduce((s, v) => s + v, 0))}
+          <KpiCard label="잔고 합" value={fmtNum(goldSum)}
                    hint="saves_current 골드 총합" />
           <KpiCard label="중앙값" value={fmtNum(percentile(goldStats, 50))} />
           <KpiCard label="상위 25% 이상" value={fmtNum(percentile(goldStats, 75))} />
@@ -80,9 +80,9 @@ export default function EconomyTab() {
       <Frame title="원장 대차대조">
         <TabState loading={loading && granted} error={error} onRetry={() => loadAll(range)} />
         <p className="text-xs text-text-dim leading-relaxed">
-          기간 내 유입합 {fmtNum(inflowTotal())}G · 유출합 {fmtNum(outflowTotal())}G ·
-          순유입 <span className="pf-accent text-gold">{fmtNum(inflowTotal() - outflowTotal())}G</span>.
-          전체 잔고 합({fmtNum(goldSum())}G)이 순유입보다 크게 많으면 그 차액은
+          기간 내 유입합 {fmtNum(inflowTotal)}G · 유출합 {fmtNum(outflowTotal)}G ·
+          순유입 <span className="pf-accent text-gold">{fmtNum(inflowTotal - outflowTotal)}G</span>.
+          전체 잔고 합({fmtNum(goldSum)}G)이 순유입보다 크게 많으면 그 차액은
           <span className="pf-accent text-gold">이벤트 밖 경로(import 반입)</span>가 들여온 돈이다 —
           이상탐지 탭의 반입 로그와 대조.
         </p>
@@ -90,18 +90,4 @@ export default function EconomyTab() {
     </div>
   );
 
-  function goldSum(): number {
-    return goldStats.reduce((s, v) => s + v, 0);
-  }
-  function inflowTotal(): number {
-    return economy.reduce((s, r) => s + Number(r.sell_gold) + Number(r.coupon_gold), 0);
-  }
-  function outflowTotal(): number {
-    return economy.reduce((s, r) =>
-      s + Number(r.rod_cost) + Number(r.boat_cost) + Number(r.bait_cost), 0);
-  }
 }
-
-/** number|string|null(DB 스칼라) → 숫자 — 표기 전용 */
-const toNum = (v: number | string | null): number =>
-  v === null ? NaN : Number(v);

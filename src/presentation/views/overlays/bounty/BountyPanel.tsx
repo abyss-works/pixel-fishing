@@ -5,18 +5,12 @@
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { dailyQuestFor, zoneOfPort } from '../../../../game/content/bounties.js';
-import type { BountyDifficulty, BountyPort, BountyQuest } from '../../../../game/content/bounties.js';
-import { artifactOfZone } from '../../../../game/content/artifacts.js';
-import { namedById } from '../../../../game/content/named.js';
-import { challengeWindowMs, ticketRemainingMs } from '../../../../game/rules/challenge.js';
-import { rodAxes } from '../../../../game/rules/stats.js';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../../game/rules/balance.js';
-import { REJECT_TEXT, licenseConditions } from '../../../../game/rules/logic.js';
-import type { LicenseCondition } from '../../../../game/rules/logic.js';
+import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
+import type { BountyPort } from '../../../../game/content/bounties.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { kstDay } from '../../../../features/bounty/service/queryKeys';
+import { selectBountyPanelData, selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
@@ -33,7 +27,7 @@ type BoardScreen = 'quests' | 'named' | 'relic';
 // 조건 게이트 — 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 버튼은 가려서 못 누른다 (우회는 서버 리듀서가 막는다).
 function Gated({ open, conds, children }: {
-  open: boolean; conds: LicenseCondition[]; children: ReactNode;
+  open: boolean; conds: ReturnType<typeof selectBountyPanelData>['basicConds']; children: ReactNode;
 }) {
   if (open) return <>{children}</>;
   return (
@@ -62,7 +56,6 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
 }) {
-  const zone = zoneOfPort(port)!;
   const { snap, loaded, refresh } = useBounty();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
@@ -80,22 +73,16 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     });
   };
 
-  const leftAll = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
-  const leftNamed = snap ? BOUNTY_NAMED_DAILY_CAP - snap.namedToday : null;
-  const progressOf = (id: string) => snap?.progress.find(p => p.questId === id)?.progress ?? 0;
   const day = kstDay();
-  const who = uid ?? 'local';
-  const offered = (d: BountyDifficulty): BountyQuest | undefined =>
-    dailyQuestFor(zone, d, who, day);
-  const basicConds = licenseConditions(game, zone, 'basic');
-  const namedConds = licenseConditions(game, zone, 'named');
-  const basicOpen = basicConds.every(c => c.ok);
-  const namedOpen = namedConds.every(c => c.ok);
-  const canTake = snap !== null && (leftAll ?? 0) > 0;
-  const canTakeNamed = snap !== null && (leftNamed ?? 0) > 0;
+  const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
+  const {
+    leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, basicConds, namedConds,
+    basicOpen, namedOpen, canTake, canTakeNamed, ticketMins, hasTicket,
+    relic, relicOwned, relicMats, challengeSweepMs,
+  } = data;
 
   const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
-    const q = offered(d);
+    const q = offers[d];
     if (!q) return null;
     const prog = progressOf(q.id);
     return (
@@ -108,17 +95,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     );
   };
 
-  const namedQuest = offered('named');
-  // 도전권 — 스냅샷의 발급 시각 + 윈도우로 잔여를 계산한다 (표시용, 권위는 서버).
-  const ticketIssuedAt = namedQuest
-    ? snap?.tickets.find(t => t.questId === namedQuest.id)?.issuedAt ?? null : null;
-  const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs, challengeWindowMs(game)) / 60000));
-  const hasTicket = ticketMins !== null && ticketMins > 0;
+  const namedQuest = offers.named;
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const relic = artifactOfZone(zone);
-  const relicOwned = relic ? game.artifacts.includes(relic.id) : false;
-  const relicMats = relic ? (game.items[relic.materialId] ?? 0) : 0;
 
   return (
     <div className="flex flex-col gap-2">
@@ -132,19 +110,19 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onSelect={setScreen}
       />
       <p className="text-text-dim text-xs">
-        {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${BOUNTY_DAILY_CAP} · 네임드 ${leftNamed}/${BOUNTY_NAMED_DAILY_CAP}`}
+        {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
       {loaded && snap === null && (
         <Note>오프라인에서는 의뢰를 수주하거나 완료할 수 없다. 서버 연결이 필요하다.</Note>
       )}
       {challengeId && (() => {
         const q = namedQuest && namedQuest.id === challengeId ? namedQuest : undefined;
-        const n = q?.targetFish ? namedById(q.targetFish) : undefined;
+        const target = q ? selectNamedBountyCardData(game, q, progressOf(q.id)) : null;
         if (!q) return null;
         return (
           <ChallengeModal
-            targetName={n ? n.name : '지명수배'}
-            sweepMs={rodAxes(game).sweep.value * 1000}
+            targetName={target?.name ?? '지명수배'}
+            sweepMs={challengeSweepMs}
             onFinish={r => run(
               { type: 'resolveChallenge', questId: q.id,
                 success: r.success, hits: r.hits, misses: r.misses },

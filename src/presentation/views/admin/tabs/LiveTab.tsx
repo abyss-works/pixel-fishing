@@ -6,15 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { fmtDT } from '../../../../features/admin/model/metrics';
+import { ONLINE_WINDOW_MIN, selectLiveDashboard } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { toRegionId, REGION_NAMES, REGION_ORDER } from '../../../../features/admin/model/regions';
 import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
-
-/** 온라인 근사 창(분) — 이 안에 last_action_at이 있으면 "접속 중" */
-const ONLINE_WINDOW_MIN = 10;
 
 export default function LiveTab() {
   const { access } = useAdminAuth();
@@ -41,28 +38,9 @@ export default function LiveTab() {
   }, [granted]);
 
   // 신선도 버킷 — 접속중(10분) / 최근(1시간) / 금일 활동(KST 자정 기준은 탭 아래 근사: 24h 창)
-  const buckets = useMemo(() => {
-    const fresh = (u: AdminUserRow): number | null => {
-      const t = u.last_action_at ? Date.parse(u.last_action_at) : NaN;
-      return Number.isFinite(t) ? (tick - t) / 60_000 : null;
-    };
-    const online = users.filter(u => { const m = fresh(u); return m !== null && m < ONLINE_WINDOW_MIN; });
-    const recent1h = users.filter(u => { const m = fresh(u); return m !== null && m < 60; });
-    const today = users.filter(u => { const m = fresh(u); return m !== null && m < 24 * 60; });
-    return { online, recent1h, today };
-  }, [users, tick]);
-
-  // 현재 위치 분포 — 온라인 유저의 location만. 알 수 없는 지역은 '기타'로 묶는다
-  const whereHist = useMemo(() => {
-    const labels = [...REGION_ORDER.map(id => REGION_NAMES[id]), '기타'];
-    const counts = new Array(labels.length).fill(0);
-    for (const u of buckets.online) {
-      const rid = toRegionId(u.location_kind, u.location_id);
-      const i = rid ? REGION_ORDER.indexOf(rid as never) : -1;
-      counts[i >= 0 ? i : labels.length - 1]++;
-    }
-    return { values: counts, labels };
-  }, [buckets.online]);
+  const { buckets, whereHist, regionLabel } = useMemo(
+    () => selectLiveDashboard(users, tick), [users, tick],
+  );
 
   // minAgo — 마지막 행동 'n분 전' 표시(tick 변경으로 재렌더)
   const minAgo = (iso: string | null): string => {
@@ -134,11 +112,6 @@ export default function LiveTab() {
       </div>
     </div>
   );
-}
-
-function regionLabel(u: AdminUserRow): string | undefined {
-  const rid = toRegionId(u.location_kind, u.location_id);
-  return rid ? REGION_NAMES[rid] : undefined;
 }
 
 const fmtN = (v: number): string => Number.isFinite(v) ? String(v) : '—';

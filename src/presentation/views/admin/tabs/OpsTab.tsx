@@ -71,7 +71,7 @@ function EventCatalog() {
     <>
       <SectionTitle>events 스트림 카탈로그</SectionTitle>
       <p className="text-2xs text-text-dim mb-1">
-        단일 근원은 game/rules/actions.ts — 이 표는 표시용 목차다(metrics.ts EVENT_LABELS 재사용).
+        이벤트 식별자는 게임 동작 기록을 따르며, 화면명은 이벤트 설명 카탈로그를 표시한다.
       </p>
       <DataTable>
         <thead>

@@ -2,9 +2,10 @@
 // useGame이 통째 game을 내려주는 동안은 호출부(useMemo 등)가 이 함수들로 파생값을
 // 읽고, 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 import { describe, it, expect } from 'vitest';
-import { selectBagStatus } from './selectors';
+import { selectBagStatus, selectBaitInventory } from './selectors';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { BAITS } from '../../../game/content/baits';
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -23,5 +24,14 @@ describe('selectBagStatus', () => {
     expect(s.count).toBe(70);
     expect(s.cap).toBe(70);
     expect(s.full).toBe(true);
+  });
+});
+
+describe('selectBaitInventory', () => {
+  it('레지스트리 순서와 보유 수량을 반환하고 없는 미끼는 0으로 채운다', () => {
+    const inventory = selectBaitInventory({ [BAITS[0].id]: 3 });
+    expect(inventory.map(row => row.bait.id)).toEqual(BAITS.map(bait => bait.id));
+    expect(inventory[0].count).toBe(3);
+    expect(inventory.slice(1).every(row => row.count === 0)).toBe(true);
   });
 });

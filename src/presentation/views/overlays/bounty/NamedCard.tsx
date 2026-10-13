@@ -1,10 +1,9 @@
 // 지명수배 카드 — 2열 [좌 초상화+이름 | 우 카드 통째(수배서 본문-보상-버튼)].
 // 우측 스택은 BountyCard의 수직 구조(마스트헤드·룰선·본문·룰선·보상·버튼)를 그대로 둔다.
 // 본문은 도감 로어가 아니라 수배서 전용 본문(named.poster)이다.
-import { namedById, namedFishOf } from '../../../../game/content/named.js';
-import { formDiscovered } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyQuest } from '../../../../game/content/bounties.js';
+import { selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
 
@@ -13,26 +12,23 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
   progress: number; ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
   onStartChallenge: () => void;
 }) {
-  const n = quest.targetFish ? namedById(quest.targetFish) : undefined;
-  const fish = n ? namedFishOf(n) : null;
-  const found = quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false;
-  const done = progress >= quest.count;
+  const { name, poster, fish, found, done } = selectNamedBountyCardData(game, quest, progress);
   return (
     <div className="border border-gold rounded-sm p-4 bg-surface min-h-96 h-full flex flex-col">
       <div className="grid grid-cols-2 grid-rows-1 gap-2 items-stretch flex-1">
         <span className="content-center">
           {fish && (
             <FishSprite fish={fish} preset="portrait" discovered={found}
-                        ariaLabel={found && n ? n.name : '미확인 지명수배'} className="block mx-auto" />
+                        ariaLabel={found && name ? name : '미확인 지명수배'} className="block mx-auto" />
           )}
-          <b className="block mt-1 text-gold">{found && n ? n.name : '???'}</b>
+          <b className="block mt-1 text-gold">{found && name ? name : '???'}</b>
         </span>
         <span className="text-center flex flex-col gap-2 text-sm border-l border-line pl-2">
           <b className="pf-accent text-gold text-lg">지명수배</b>
           <div className="border-b border-line" />
           <span className="flex-1 content-center">
             <span className="text-text-dim italic text-xs">
-              {n ? n.poster : '수배서에만 이름이 돈다.'}
+              {poster}
             </span>
           </span>
           <div className="border-b border-line" />

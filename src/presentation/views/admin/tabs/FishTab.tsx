@@ -1,9 +1,13 @@
 import { Fragment, useMemo, useState } from 'react';
-import {
-  FISH, RARITY, RARITY_ORDER, SPOTS, drawRows, rarityWeightOf,
-} from '../../../../game/rules/logic';
+import { FISH, RARITY, SPOTS } from '../../../../game/rules/logic';
 import type { RarityId } from '../../../../game/rules/logic';
-import type { SpotId } from '../../../../game/content/spots';
+import {
+  buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
+  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight,
+  selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws,
+  SIM_AXES, stepPercent,
+} from '../../../../features/admin/model/fishSimulation';
+import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -22,56 +26,18 @@ import { cx } from '../../../ui/cx';
 //
 // 오버라이드는 저장 안 됨(새로고침 초기화). 확정 변경은 어종 데이터·수역 데이터 수정이 정본이다.
 
-/** 시뮬레이션 오버라이드 — 컴포넌트 로컬 상태. sb* = 미확정 가안(JSON 추출에 함께 실린다) */
-export interface SimOverrides {
-  budgets: Record<string, Partial<Record<RarityId, number>>>;
-  fishWeights: Record<string, Record<string, number>>;
-  price: Record<string, number>;
-}
-
-/** 보상 축 — 다이얼 산식은 balanceReport.EV_AXES와 동일(common 축: rareMult=÷ / commonMult=×).
- *  **수동 3축과 자동 2축은 같은 선상이 아니다**(사용자 지적):
- *   수동 = 판정 사다리 — 한 번의 캐스트에서 유저가 고르는 등급. 지역내Δ를 직전 행 대비 %로
- *          연쇄한다(GOOD=무판정 대비, PERFECT=GOOD 대비) — "조금 더 잘 잡으면 얼마"의 척도.
- *   방치 = 같은 행위(자동 획득)의 파워 여유 시나리오 둘. 사다리가 아니라 **폭** 하나가 변화량이다:
- *          (×4 − ×10)/×10 — 여유를 확보하면 방치 소득이 몇 % 개선되는가.
- *   그래서 방치 두 행에는 개별 지역내Δ를 붙이지 않고, 폭 한 번만 마지막 행에 표기한다. */
-const AXES = [
-  { key: 'normal', label: '무판정', mult: {}, group: 'manual' },
-  { key: 'good', label: 'GOOD', mult: { rareMult: 1.6 }, group: 'manual' },
-  { key: 'perfect', label: 'PERFECT', mult: { rareMult: 2.0 }, group: 'manual' },
-  { key: 'idleBest', label: '방치×4', mult: { commonMult: 4 }, group: 'idle' },
-  { key: 'idleWorst', label: '방치×10', mult: { commonMult: 10 }, group: 'idle' },
-] as const;
-type AxisKey = typeof AXES[number]['key'];
-type AxisEvs = Record<AxisKey, number>;
-
 const SPOT_KEY = 'admin-spots-open';
-
-/** 한 수역의 5축 EV — 오버라이드 반영 */
-function spotAxisEvs(spot: SpotId, sim: SimOverrides): AxisEvs {
-  const entry = Object.fromEntries(AXES.map(a => {
-    const rows = drawRows(spot, { ...a.mult,
-      budgets: sim.budgets[spot as string], fishWeights: sim.fishWeights[spot as string],
-    }).map(r => ({ ...r, price: sim.price[r.fish.id] ?? r.fish.price }));
-    let num = 0, den = 0;
-    for (const r of rows) { num += r.fishPct * r.price; den += r.fishPct; }
-    return [a.key, den > 0 ? num / den : 0];
-  })) as AxisEvs;
-  return entry;
-}
 
 /** Δ 셀 — **비율(%)이 본체**다(사용자 지시: 절대치는 꼭 필요한 곳만). prev=null은 '—' */
 function Delta({ prev, cur }: { prev: number | null; cur: number }) {
   if (prev === null || !Number.isFinite(prev)) return <span className="text-text-dim">—</span>;
-  const diff = cur - prev;
-  const pct = prev !== 0 ? diff / Math.abs(prev) * 100 : null;
-  if (Math.abs(diff) <= 0.05) return <span className="text-text-dim">±0</span>;
+  const { diff, percent, unchanged } = selectDeltaValues(prev, cur);
+  if (unchanged) return <span className="text-text-dim">±0</span>;
   const up = diff > 0;
   return (
     <span className={up ? 'text-gold pf-accent whitespace-nowrap'
                         : 'text-danger pf-accent whitespace-nowrap'}>
-      {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(0)}%` : `${diff > 0 ? '+' : ''}${diff.toFixed(1)}G`}
+      {percent !== null ? `${percent > 0 ? '+' : ''}${percent.toFixed(0)}%` : `${diff > 0 ? '+' : ''}${diff.toFixed(1)}G`}
     </span>
   );
 }
@@ -80,37 +46,18 @@ export default function FishTab() {
   const [sbBudgets, setSbBudgets] = useState<Record<string, Partial<Record<RarityId, number>>>>({});
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
-  const sim: SimOverrides = { budgets: sbBudgets, fishWeights: sbFish, price: sbPrice };
+  const sim = useMemo<SimOverrides>(
+    () => ({ budgets: sbBudgets, fishWeights: sbFish, price: sbPrice }),
+    [sbBudgets, sbFish, sbPrice],
+  );
 
   // 전체 5축 EV — 편집할 때마다 다시 계산(닫힌형이라 저렴한다)
-  const evsBySpot = useMemo(() => new Map(
-    SPOTS.map(s => [s.id as SpotId, spotAxisEvs(s.id as SpotId, sim)])),
+  const evsBySpot = useMemo(() => new Map<string, AxisEvs>(
+    SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
 
   const exportJson = async () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      spots: SPOTS.map(spot => ({
-        id: spot.id, name: spot.name, boatTier: spot.boatTier,
-        powerReq: spot.powerReq ?? null,
-        rarityWeightOverride: spot.rarityWeight ?? null,
-        simEV: AXES.reduce((acc, a) =>
-          ({ ...acc, [a.key]: +(evsBySpot.get(spot.id)?.[a.key] ?? 0).toFixed(1) }), {}),
-        fish: FISH.filter(f => f.spot === spot.id).map(f => ({
-          id: f.id, name: f.name, rarity: f.rarity,
-          price: f.price, sbPrice: sim.price[f.id] ?? null,
-          budgetBase: rarityWeightOf(spot.id, f.rarity),
-          sbBudget: sim.budgets[spot.id]?.[f.rarity] ?? null,
-          individualWeight: f.weight ?? 1, sbWeight: sim.fishWeights[spot.id]?.[f.id] ?? null,
-        })),
-      })),
-      notes: {
-        drawModel: '2단 — 등급 예산(수역별 고정, 부재 등급 재균등) × 개체 균등 배분',
-        dialAxes: 'commonMult=일반 예산 × / rareMult=일반 예산 ÷ (판정·방치 다이얼)',
-        fieldsSbX: 'sb* = 관리자 화면의 미확정 오버라이드. null = 원본 값 사용 중',
-        evAxes: `simEV keys = ${AXES.map(a => a.key).join('/')}`,
-      },
-    };
+    const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       window.alert('어종 현황 JSON을 클립보드에 복사했다.');
@@ -121,60 +68,14 @@ export default function FishTab() {
   };
 
   // 변화량(Δ)만 추출 — sb* ≠ null 인 항목만 모은다. 오버라이드 0건이면 빈 spots.
-  const deltaCount = (() => {
-    let n = 0;
-    for (const spot of SPOTS) {
-      n += Object.keys(sim.budgets[spot.id] ?? {}).length;
-      n += Object.keys(sim.fishWeights[spot.id] ?? {}).length;
-    }
-    n += Object.keys(sim.price).length;
-    return n;
-  })();
+  const deltaCount = countSimulationOverrides(sim);
 
   const exportDeltaJson = async () => {
-    if (deltaCount === 0) {
+    const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString());
+    if (!payload) {
       window.alert('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
       return;
     }
-    const deltaSpots = SPOTS.map(spot => {
-      const fishDeltas = FISH.filter(f => f.spot === spot.id)
-        .map(f => {
-          const sbPrice = sim.price[f.id] ?? null;
-          const sbWeight = sim.fishWeights[spot.id]?.[f.id] ?? null;
-          if (sbPrice === null && sbWeight === null) return null;
-          return {
-            id: f.id, name: f.name, rarity: f.rarity,
-            ...(sbPrice !== null ? { price: sbPrice } : {}),
-            ...(sbWeight !== null ? { weight: sbWeight } : {}),
-          };
-        })
-        .filter(Boolean);
-
-      const budgetDelta = sim.budgets[spot.id];
-      const hasBudgetDelta = budgetDelta && Object.keys(budgetDelta).length > 0;
-      const hasFishDelta = fishDeltas.length > 0;
-      if (!hasBudgetDelta && !hasFishDelta) return null;
-
-      return {
-        id: spot.id, name: spot.name,
-        ...(hasBudgetDelta ? { rarityWeightDelta: budgetDelta } : {}),
-        ...(hasFishDelta ? { fish: fishDeltas } : {}),
-        // 참고용 EV는 델타가 있는 수역만 포함 — 변화 체감 즉시 확인
-        simEV: AXES.reduce((acc, a) =>
-          ({ ...acc, [a.key]: +(evsBySpot.get(spot.id)?.[a.key] ?? 0).toFixed(1) }), {} as Record<string, number>),
-      };
-    }).filter(Boolean);
-
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      deltaOnly: true,
-      changedFields: deltaCount,
-      spots: deltaSpots,
-      notes: {
-        usage: 'Δ JSON — sb* ≠ null 인 항목만. 비어 있으면 spots=[]',
-        fields: 'rarityWeightDelta = 수역 등급 예산 오버라이드(변경된 등급만), fish[].price/weight = 어종 확정값(변경된 어종만)',
-      },
-    };
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       window.alert(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
@@ -203,7 +104,7 @@ export default function FishTab() {
 
       {/* 수역별 통합 대시보드 — 머리에 통계, 몸통에 편집 가능한 어종 행 */}
       {SPOTS.map((spot, i) => (
-        <SpotDashboard key={spot.id} spot={spot} idx={i}
+        <SpotDashboard key={spot.id} spot={spot}
                        evs={evsBySpot.get(spot.id)!} prevEvs={i > 0 ? evsBySpot.get(SPOTS[i - 1].id)! : null}
                        sim={sim}
                        setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
@@ -218,10 +119,8 @@ export default function FishTab() {
 }
 
 /** 한 수역의 통합 대시보드 — [머리: 통계 띠] + [몸통: 편집 표]가 한 프레임이다 */
-function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
+function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
   spot: (typeof SPOTS)[number];
-  /** 진행 사다리 순서 — Δ직전 계산용(첫 행은 null) */
-  idx: number;
   evs: AxisEvs;
   prevEvs: AxisEvs | null;
   sim: SimOverrides;
@@ -229,24 +128,13 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
   setWeights: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>;
   setPrice: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }) {
-  void idx; // 향후 "지역명 기반 Δ" 확장 여지 — 현재는 prevEvs가 정본
   const bid = spot.id as string;
   // 낮 어종(확률 계산·예산 편집 대상)과 밤 전용 어종을 가른다 — drawRows(day 풀)는
   // night를 안 담아 확률·등급 합계가 낮 시간대 기준으로 정직하게 나온다.
-  const list = useMemo(
-    () => FISH.filter(f => f.spot === spot.id && !f.night)
-      .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity)),
-    [spot.id],
-  );
-  const nightList = useMemo(
-    () => FISH.filter(f => f.spot === spot.id && f.night)
-      .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity)),
-    [spot.id],
-  );
+  const list = useMemo(() => selectFishForSpot(spot.id, false), [spot.id]);
+  const nightList = useMemo(() => selectFishForSpot(spot.id, true), [spot.id]);
   const draws = useMemo(
-    () => new Map(drawRows(spot.id as SpotId, {
-      budgets: sim.budgets[bid], fishWeights: sim.fishWeights[bid],
-    }).map(r => [r.fish.id, r])),
+    () => selectSpotDraws(spot.id, sim),
     [spot.id, sim],
   );
 
@@ -275,14 +163,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
   const dropKey = <K extends string>(obj: Record<string, unknown>, key: K) => {
     const { [key]: _drop, ...rest } = obj; return rest;
   };
-  const hasOverride =
-    Object.keys(sim.budgets[bid] ?? {}).length > 0
-    || Object.keys(sim.fishWeights[bid] ?? {}).length > 0
-    || list.some(f => sim.price[f.id] != null);
-
-  // 지역 내 판정 사다리(% — 무판정→GOOD→PERFECT), 방치 간격(G 절대값)
-  const stepPct = (from: number, to: number): number =>
-    from !== 0 ? (to - from) / Math.abs(from) * 100 : 0;
+  const hasOverride = hasSpotSimulationOverride(bid, sim, list);
 
   return (
     <section className="pf-frame p-3" aria-labelledby={`h-${bid}`}>
@@ -304,11 +185,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                   onClick={() => {
                     setBudgets(p => ({ ...p, [bid]: {} }));
                     setWeights(p => ({ ...p, [bid]: {} }));
-                    setPrice(p => {
-                      const next = { ...p };
-                      for (const f of list) delete next[f.id];
-                      return next;
-                    });
+                    setPrice(p => resetSpotPriceOverrides(p, list));
                   }}>
             이 수역 초기화
           </PillButton>
@@ -332,7 +209,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                 </tr>
               </thead>
               <tbody>
-                {AXES.map((a, ai) => {
+                {SIM_AXES.map((a, ai) => {
                   const v = evs[a.key];
                   const pv = prevEvs ? prevEvs[a.key] : null;
                   // 그룹 전환점 — 수동→방치 경계에 소제목 행을 놓아 "같은 선상이 아님"을 표시
@@ -340,10 +217,10 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                   // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(×10 행에만).
                   let inRegion: string | null = null;
                   if (a.group === 'manual' && ai > 0) {
-                    const prevKey = AXES[ai - 1].key;
-                    inRegion = fmtPct(stepPct(evs[prevKey], v));
+                    const prevKey = SIM_AXES[ai - 1].key;
+                    inRegion = fmtPct(stepPercent(evs[prevKey], v));
                   } else if (a.key === 'idleWorst') {
-                    inRegion = `폭 ${fmtPct(stepPct(evs.idleWorst, evs.idleBest))}`;
+                    inRegion = `폭 ${fmtPct(stepPercent(evs.idleWorst, evs.idleBest))}`;
                   }
                   return (
                     <Fragment key={a.key}>
@@ -399,7 +276,7 @@ function SpotDashboard({ spot, idx, evs, prevEvs, sim, setBudgets, setWeights, s
                           <div className="flex items-center gap-1">
                             {RARITY[f.rarity].name}
                             <TextInput compact type="number" min={0}
-                                   placeholder={String(rarityWeightOf(spot.id, f.rarity))}
+                                   placeholder={String(selectBaseRarityWeight(spot.id, f.rarity))}
                                    value={sim.budgets[bid]?.[f.rarity] ?? ''}
                                    aria-label={`${spot.name} ${f.rarity} 예산`}
                                    onChange={e => setBudgets(p => {

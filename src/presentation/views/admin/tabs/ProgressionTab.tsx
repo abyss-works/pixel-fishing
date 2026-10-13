@@ -5,15 +5,15 @@ import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import SectionTitle from '../../../ui/SectionTitle';
 import { fmtNum } from '../../../../features/admin/model/metrics';
+import { adminNumber, selectProgressionDashboard } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { REGION_NAMES, REGION_ORDER } from '../../../../features/admin/model/regions';
+import { REGION_NAMES } from '../../../../features/admin/model/regions';
 import { BarsChart, Frame, TabState } from '../charts';
-import { BOATS, boatNameOf } from '../../../../game/content/boats';
 
 // 지역 표기는 라이브 탭과 공유하는 리터럴 미러다 — 월드 마스크 데이터를 불러오지 않는다.
-// 도달 퍼널은 REGION_ORDER 그대로 쓴다.
+// 도달 퍼널의 지역 순서는 관리자 데이터 모델이 제공한다.
 export default function ProgressionTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
@@ -34,45 +34,9 @@ export default function ProgressionTab() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
   }, [granted]);
 
-  // 배 단계 히스토그램 — 맨발(0)부터 최종 등급까지
-  const boatHist = useMemo(() => {
-    const buckets = Array.from({ length: BOATS.length + 1 }, (_, t) =>
-      users.filter(u => (u.boat ?? 0) === t).length);
-    return {
-      values: buckets,
-      labels: buckets.map((_, t) => t === 0 ? '맨발' : `T${t}`),
-      legend: buckets.map((v, t) => ({ name: t === 0 ? '맨발' : `${t} ${boatNameOf(t)}`, count: v })),
-    };
-  }, [users]);
-
-  // 낚싯대 레벨 분포 — 존재하는 최소~최대 범위만 그린다
-  const rodHist = useMemo(() => {
-    const rods = users.map(u => u.rod ?? 1).filter(v => v >= 1);
-    if (rods.length === 0) return { values: [] as number[], labels: [] as string[], min: 1 };
-    const min = Math.min(...rods), max = Math.max(...rods);
-    const values: number[] = [];
-    for (let lv = min; lv <= max; lv++) values.push(rods.filter(r => r === lv).length);
-    return { values, labels: values.map((_, i) => `${min + i}`), min };
-  }, [users]);
-
-  // 지역 도달 퍼널 — state.visited 기반("가본 적 있는 곳", 현재 위치 아님)
-  const regionReach = useMemo(() => REGION_ORDER.map(id => ({
-    id,
-    users: users.filter(u => (u.visited ?? []).includes(id)).length,
-  })), [users]);
-
-  // 게이트 정체 — 다음 배의 명성 하한을 못 넘은 유저(부족량 내림차순)
-  const stalled = useMemo(() => {
-    const out: { user: AdminUserRow; next: typeof BOATS[number]; deficit: number }[] = [];
-    for (const u of users) {
-      const next = BOATS.find(b => b.tier === (u.boat ?? 0) + 1);
-      if (!next) continue;
-      const fame = toNum(u.fame);
-      if (!(fame < next.fameReq)) continue;
-      out.push({ user: u, next, deficit: next.fameReq - fame });
-    }
-    return out.sort((a, b) => b.deficit - a.deficit);
-  }, [users]);
+  const { boatHist, rodHist, regionReach, stalled } = useMemo(
+    () => selectProgressionDashboard(users), [users],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,9 +79,7 @@ export default function ProgressionTab() {
             <div key={r.id} className="text-center min-w-[64px]">
               <div className="h-[72px] flex items-end justify-center">
                 <div className="w-14 rounded-t-[2px] bg-gold/80"
-                     style={{ height:
-                       `${Math.max(users.length ? (r.users / users.length) * 100 : 0,
-                                   r.users > 0 ? 4 : 1)}%` }} />
+                     style={{ height: `${Math.max(r.sharePercent, r.users > 0 ? 4 : 1)}%` }} />
               </div>
               <div className="text-2xs mt-1">{REGION_NAMES[r.id]}</div>
               <div className="text-2xs text-text-dim">{r.users}/{users.length}</div>
@@ -148,7 +110,7 @@ export default function ProgressionTab() {
                 <tr key={user.user_id}>
                   <td>{user.email ?? <span className="font-mono text-2xs text-text-dim">{user.user_id.slice(0, 8)}…</span>}</td>
                   <td className="text-xs">{next.name}(T{next.tier})</td>
-                  <td className="text-right">{fmtNum(toNum(user.fame))}</td>
+                  <td className="text-right">{fmtNum(adminNumber(user.fame))}</td>
                   <td className="text-right text-text-dim">{fmtNum(next.fameReq)}</td>
                   <td className="text-right pf-accent text-gold">{fmtNum(deficit)}</td>
                 </tr>
@@ -159,8 +121,4 @@ export default function ProgressionTab() {
       </section>
     </div>
   );
-}
-
-function toNum(v: number | string | null): number {
-  return v === null ? NaN : Number(v);
 }

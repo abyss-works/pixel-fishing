@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { autoLockUids, sellableValue, REJECT_TEXT } from '../../../../../game/rules/logic';
-import { selectBagStatus } from '../../../../../features/inventory/model/selectors';
+import { REJECT_TEXT } from '../../../../../game/rules/logic';
+import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
+import { selectInventoryItemCount } from '../../../../../features/inventory/model/catalog';
 import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
-import { BAITS } from '../../../../../game/content/baits';
 import type { Bait } from '../../../../../game/content/baits';
 import { when } from '../../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
@@ -45,10 +45,7 @@ function ItemSection({ game, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   // 보유량 순서는 레지스트리(BAITS) 순서다 — 세이브 items는 맵이라 삽입 순서가 유의미 없음
-  const rows = useMemo(
-    () => BAITS.map(bait => ({ bait, count: game.items[bait.id] ?? 0 })),
-    [game.items],
-  );
+  const rows = useMemo(() => selectBaitInventory(game.items), [game.items]);
   const activate = (bait: string | null) =>
     when(dispatch({ type: 'setActiveBait', bait }), r => {
       if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
@@ -95,13 +92,12 @@ export default function BagTab({ game, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
-  const { count: bagCount, cap, full: bagFull } = selectBagStatus(game);
+  const {
+    count: bagCount, cap, full: bagFull, sellableValue: total,
+    autoLockUids: autoLockCandidates,
+  } = selectBagOverview(game);
   const { layout, section, opened } = useBagView();
-  const total = sellableValue(game);
-  const itemCount = useMemo(
-    () => Object.values(game.items).reduce((s, n) => s + n, 0),
-    [game.items],
-  );
+  const itemCount = selectInventoryItemCount(game.items);
 
   const lock = (uids: string[], locked: boolean, label: string) =>
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
@@ -114,7 +110,7 @@ export default function BagTab({ game, dispatch, setToast }: {
   // 자동 잠금 — 어종·돌연변이별 최대 개체를 한 번에 보호한다 (logic.autoLockUids가 선택,
   // 적용은 기존 setLocked 액션). 눌러도 변할 게 없으면(전부 보호됨) 요청을 보내지 않는다.
   const autoLock = () => {
-    const uids = autoLockUids(game.bag);
+    const uids = autoLockCandidates;
     if (uids.length === 0) {
       setToast('새로 잠글 최대 개체가 없다 — 가방이 비었거나 이미 다 잠겨 있다.');
       return;

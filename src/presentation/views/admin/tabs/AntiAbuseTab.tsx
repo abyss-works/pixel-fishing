@@ -7,6 +7,7 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
+import { adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
 import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
 import type {
   AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminDexMismatchRow,
@@ -47,17 +48,9 @@ export default function AntiAbuseTab() {
     return u?.email ?? `${uid.slice(0, 8)}…`;
   };
 
-  const spamUsers = useMemo(() =>
-    flags.filter(f => f.fast_gap_7d > 0).sort((a, b) => b.fast_gap_7d - a.fast_gap_7d), [flags]);
-  const perfectOutliers = useMemo(() => {
-    const globalPct = flags[0]?.perfect_pct_global ?? null;
-    if (globalPct === null) return [];
-    // 정상 밴드: 전체 평균 +40%p — 도입 초기 극소 표본 대비 완화치(audit ⑥의 상시 관측 의도)
-    return flags
-      .filter(f => f.catches_7d >= 20 && (f.perfect_pct ?? 0) > globalPct + 40)
-      .sort((a, b) => (b.perfect_pct ?? 0) - (a.perfect_pct ?? 0));
-  }, [flags]);
-  const restricted = users.filter(u => u.restricted === true);
+  const { spamUsers, perfectOutliers, topMismatch, restricted } = useMemo(
+    () => selectAntiAbuseRows(users, flags, mismatch), [users, flags, mismatch],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -143,8 +136,8 @@ export default function AntiAbuseTab() {
                 <tr key={r.id}>
                   <td className="whitespace-nowrap">{fmtDT(r.created_at)}</td>
                   <td>{labelOf(r.user_id)}</td>
-                  <td className="text-right pf-accent text-gold">{fmtNum(toNum(r.gold))}</td>
-                  <td className="text-right pf-accent text-gold">{fmtNum(toNum(r.fame))}</td>
+                  <td className="text-right pf-accent text-gold">{fmtNum(adminNumber(r.gold))}</td>
+                  <td className="text-right pf-accent text-gold">{fmtNum(adminNumber(r.fame))}</td>
                 </tr>
               ))}
               {imports.length === 0 &&
@@ -166,9 +159,7 @@ export default function AntiAbuseTab() {
                   <th className="text-right">차액</th></tr>
             </thead>
             <tbody>
-              {[...mismatch]
-                .sort((a, b) => b.missing_events - a.missing_events).slice(0, 15)
-                .map((m, i) => (
+              {topMismatch.map((m, i) => (
                   <tr key={`${m.user_id}/${m.fish_id}/${m.form}/${i}`}>
                     <td>{labelOf(m.user_id)}</td>
                     <td className="font-mono text-2xs">{m.fish_id}/{m.form}</td>
@@ -196,7 +187,7 @@ export default function AntiAbuseTab() {
               <li key={u.user_id}
                   className="border border-danger/40 rounded-sm px-2 py-1 text-xs select-text">
                 <span className="pf-accent text-danger">{labelOf(u.user_id)}</span>
-                {' '}— 골드 {fmtNum(toNum(u.gold))} · 명성 {fmtNum(toNum(u.fame))} ·
+                {' '}— 골드 {fmtNum(adminNumber(u.gold))} · 명성 {fmtNum(adminNumber(u.fame))} ·
                 마지막 행동 {fmtDT(u.last_action_at)}
               </li>
             ))}
@@ -206,7 +197,3 @@ export default function AntiAbuseTab() {
     </div>
   );
 }
-
-/** number|string|null(DB 스칼라) → 숫자 — 표기 전용 */
-const toNum = (v: number | string | null): number =>
-  v === null ? NaN : Number(v);

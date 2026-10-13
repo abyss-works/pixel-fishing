@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
-import { boatNameOf } from '../../../../game/rules/logic';
 import type { Movement, Stat } from '../../../../game/rules/stats';
-import {
-  autoBoostForSpot, autoPenaltyHelpText, effectiveBite, manualBonusForSpot,
-  minLevelOfPower, moveSpeed, powerHelpText, powerZones, rodAxes, rodPower,
-} from '../../../../game/rules/stats';
-import { SPOTS } from '../../../../game/content/spots';
 import type { RegionId } from '../../../../game/content/places';
+import { SPOTS } from '../../../../game/content/spots';
+import { autoPenaltyHelpText, powerHelpText } from '../../../../game/rules/stats';
+import { selectInitialStatsSpotIndex, selectStatsModalData } from '../../../../features/gameplay/model/stats';
 import ArrowButton from '../../../ui/ArrowButton';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -47,30 +44,13 @@ interface Props {
 }
 
 export default function StatsModal({ game, movement, region, onClose }: Props) {
-  const speed = moveSpeed(game, movement);
-  const axes = rodAxes(game);
-  const boatName = boatNameOf(game.boat);
-
-  // 캐루셀 후보 = 전체 수역(SPOTS 순서). 초기값 = 현재 지역의 대표(요구량 최대) 수역.
-  const startIdx = (() => {
-    let best = 0;
-    SPOTS.forEach((s, i) => {
-      const mine = region === 'world' ? s.region !== 'village' : s.region === region;
-      if (mine && (s.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0)) best = i;
-    });
-    return best;
-  })();
-  const [idx, setIdx] = useState(startIdx);
+  const [idx, setIdx] = useState(() => selectInitialStatsSpotIndex(region));
   const step = (d: 1 | -1) => setIdx(i => (i + d + SPOTS.length) % SPOTS.length);
-
-  const spot = SPOTS[idx];
-  const req = spot.powerReq ?? 0;
-  const reqLv = minLevelOfPower(req);
-  const effBite = effectiveBite(game, spot.id);
-  const boost = autoBoostForSpot(game, spot.id);
-  const bonus = manualBonusForSpot(game, spot.id);
-  // 존 크기 — 바 폭 대비 %(powerZones가 단일 출처). 미달이면 존이 없다.
-  const pz = powerZones(game, spot.id);
+  const {
+    speed, axes, boatName, spot, requirement: req, requirementLevel: reqLv,
+    effectiveBite: effBite, autoBoost: boost, manualBonus: bonus,
+    powerZones: pz, currentPower, underpowered,
+  } = selectStatsModalData(game, movement, idx);
 
   const pageBtn = (dir: 1 | -1) => (
     <ArrowButton dir={dir} aria-label={dir < 0 ? '이전 수역' : '다음 수역'}
@@ -114,7 +94,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
           <colgroup><col className="w-[42%]" /><col /></colgroup>
           <tbody>
             <tr><th scope="row">현재 레벨</th><td>Lv.{game.rod}</td></tr>
-            <tr><th scope="row">현재 파워</th><td>{rodPower(game)}</td></tr>
+            <tr><th scope="row">현재 파워</th><td>{currentPower}</td></tr>
             <tr><th scope="row">바 시간</th><td>{axes.sweep.value.toFixed(2)}초 <span className="text-2xs text-text-dim"></span></td></tr>
             <tr><th scope="row">입질 최소 대기</th><td><StatCell stat={effBite.min} unit="초" /></td></tr>
             <tr><th scope="row">입질 최대 대기</th><td><StatCell stat={effBite.max} unit="초" /></td></tr>
@@ -156,7 +136,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
         {/* 조건부 렌더 대신 항상 렌더 — 수역을 넘길 때 높이가 흔들리는 점프를 막는다.
             유저 노출 문장이라 writing-voice 규칙 적용(로어체 · 수치 금지) */}
         <Note>
-          {rodPower(game) < req
+          {underpowered
             ? '더 좋은 낚싯대가 필요해보인다. 물고기가 미끼만 훔쳐먹고 간다.'
             : '낚싯대가 좋은만큼 물고기를 낚기 쉬워졌다.'}
         </Note>

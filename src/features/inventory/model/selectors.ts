@@ -2,8 +2,9 @@
 // useGame이 통째 game을 내려주는 동안은 호출부가 이 함수들로 파생값을 읽고,
 // 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 // 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
-import { bagCapacity } from '../../../game/rules/logic';
+import { autoLockUids, bagCapacity, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { BAITS } from '../../../game/content/baits';
 
 export interface BagStatus { count: number; cap: number; full: boolean }
 
@@ -12,4 +13,23 @@ export function selectBagStatus(game: GameState): BagStatus {
   const count = game.bag.length;
   const cap = bagCapacity(game.boat, game.bag);
   return { count, cap, full: count >= cap };
+}
+
+export interface BagOverview extends BagStatus {
+  sellableValue: number;
+  autoLockUids: string[];
+}
+
+/** 가방 탭의 수량·판매 가치·자동 잠금 후보를 한 번에 제공한다. */
+export function selectBagOverview(game: GameState): BagOverview {
+  return {
+    ...selectBagStatus(game),
+    sellableValue: sellableValue(game),
+    autoLockUids: autoLockUids(game.bag),
+  };
+}
+
+/** 아이템 탭의 미끼 목록과 보유량을 레지스트리 순서로 만든다. */
+export function selectBaitInventory(items: Readonly<Record<string, number>>) {
+  return BAITS.map(bait => ({ bait, count: items[bait.id] ?? 0 }));
 }
