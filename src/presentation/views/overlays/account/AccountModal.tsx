@@ -7,7 +7,7 @@ import {
   signInAccount,
   signOutAccount,
   signUpAccount,
-} from '../../../../features/account/model/accountActions';
+} from '../../../../features/account/service/accountActions';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';

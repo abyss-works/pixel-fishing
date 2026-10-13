@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
-import type { DispatchResult, MaybePromise } from '../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { RegionId } from '../../../game/content/places';
@@ -19,7 +19,7 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
-import { useCanvasCover } from '../../../features/admin/model/canvasCover';
+import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 
 interface GameViewProps {
   game: GameState;

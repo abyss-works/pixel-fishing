@@ -6,7 +6,7 @@ import { furnitureAt, BASE_PACKS } from '../../../game/world';
 import type { BaseId, FurnitureId } from '../../../game/world';
 import { renderBase } from '../../../game/rendering/canvas/scenes/base.js';
 import { W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../../../game/rendering/pixel/common.js';
-import { useCanvasCover } from '../../../features/admin/model/canvasCover';
+import { useCanvasCover } from './canvasCover';
 import GameFrame from './GameFrame';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import TimeBadge from '../../ui/hud/TimeBadge';

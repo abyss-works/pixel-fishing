@@ -7,11 +7,11 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
-import { readAdminAntiAbuse } from '../../../../features/admin/model/queries';
+import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
 import type {
   AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminDexMismatchRow,
 } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Frame, TabState } from '../charts';
 
 export default function AntiAbuseTab() {

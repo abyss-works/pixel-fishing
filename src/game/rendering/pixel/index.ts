@@ -7,5 +7,5 @@ export { UI, W, H, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H, BASE_CANVAS_W, B
 export type { Ctx } from './common.js';
 export { drawFishSprite } from './sprites/fish.js';
 export type { FishShape } from './sprites/fish.js';
-// 주의 — canvas/scenes/atlas.ts(세계지도)는 배럴에 없다. earth 마스크(~178KB) 때문에
+// 주의 — presentation/views/overlays/world-map/atlas.ts(세계지도)는 이 배럴에 없다. earth 마스크(~178KB) 때문에
 // WorldMapModal이 동적 import로만 불러온다 — 배럴에 넣으면 초기 번들에 녹아든다.

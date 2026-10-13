@@ -3,7 +3,7 @@
 // 순수 표시 — game/time.ts 파생만 렌더. 해/달은 어둠 강도(dark) 기준이라
 // 낮이어도 저녁(해 질 무렵)부터 달로 바뀌며 서서히 어두워진다.
 import PixelIcon from '../PixelIcon';
-import { useGameTime } from '../../../features/gameplay/model/useGameTime';
+import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { cx } from '../cx';
 
 /** 해/달 전환 임계 — 어둠이 이 값 이상이면 달 (저녁 20시쯤부터) */

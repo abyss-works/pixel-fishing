@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 지형 마스크 생성기 — Natural Earth 벤더 데이터(src/world/geo/land-XXm.geo.json)를
+// 지형 마스크 생성기 — Natural Earth 벤더 데이터(src/game/world/geo/land-XXm.geo.json)를
 // 지역 설정(tools/configs/<id>.json)대로 래스터라이즈해 TypeScript 모듈로 내보낸다.
 //
 // 사용법: node tools/mask-from-earth.mjs <configs/<id>.json 경로|inline-json> [--out <파일.ts>]

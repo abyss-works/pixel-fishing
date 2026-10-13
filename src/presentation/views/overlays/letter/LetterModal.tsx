@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { LETTER_MAX } from '../../../../game/rules/actions';
 import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';

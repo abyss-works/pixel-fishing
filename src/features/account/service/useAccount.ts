@@ -4,7 +4,7 @@ import { identifyUser } from '../../../platform/observability';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import type { MaybePromise } from '../../../platform/api';
-import type { SyncState } from '../../gameplay/model/useGame';
+import type { SyncState } from '../../gameplay/service/useGame';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
@@ -15,7 +15,7 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
   setGame: (g: GameState) => void;
   setToast: (m: string) => void;
   sync: SyncState;
-  /** useGame의 backend.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
+  /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
 }) {
   // 로컬 개발(supabase 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다

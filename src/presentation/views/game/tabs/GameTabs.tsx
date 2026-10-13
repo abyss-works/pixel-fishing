@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { RejectReason } from '../../../../game/rules/rules';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
@@ -17,7 +17,7 @@ import SettingsTab from './settings/SettingsTab';
 import VAdmin from './admin-tools/VAdmin';
 import { setBagLayout, useBagView } from './bag/bagView';
 import type { DexView } from './dex/DexTab';
-import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../../../../features/admin/model/gate';
+import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../../admin/gate';
 import Sidebar from '../../../layouts/sidebar';
 
 interface GameTabsProps {

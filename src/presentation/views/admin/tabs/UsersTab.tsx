@@ -10,12 +10,12 @@ import TextInput from '../../../ui/TextInput';
 import SectionTitle from '../../../ui/SectionTitle';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS } from '../../../../features/admin/model/metrics';
-import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/model/queries';
+import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import type {
   AdminUserRow, AdminDexMismatchRow, AdminEventRow,
   AdminSpamFlagRow, AdminImportLogRow,
 } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
 

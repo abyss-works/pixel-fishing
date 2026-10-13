@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
-import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { dayPhase, formatGameClock, DAY_START_MIN, NIGHT_START_MIN } from '../../../../../game/rules/time';
-import { setTimeOverride, useTimeOverride } from '../../../../../features/gameplay/model/timeOverride';
+import { setTimeOverride, useTimeOverride } from '../../../../../features/gameplay/service/timeOverride';
 import StatsTab from '../../../admin/tabs/StatsTab';
-import { setCanvasCover, useCanvasCover } from '../../../../../features/admin/model/canvasCover';
+import { setCanvasCover, useCanvasCover } from '../../../../layouts/game-stage/canvasCover';
 import { cx } from '../../../../ui/cx';
 import PillButton from '../../../../ui/PillButton';
 import Note from '../../../../ui/Note';

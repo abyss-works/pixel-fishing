@@ -1,9 +1,8 @@
 // HTTP API 구현 — 스테이징·운영 (supabase + /api/action)
-import { HttpBackend } from '../backend/http';
-import type { Backend } from '../backend/types';
+import { HttpGameGateway } from './httpGameGateway';
+import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AuthApi } from './types';
-import type { AuthResult } from '../backend/auth';
+import type { AuthApi, AuthResult } from '../api/types';
 import {
   supabase,
   ensureSession,
@@ -13,7 +12,7 @@ import {
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
-} from '../backend/auth';
+} from './auth';
 
 class HttpAuth implements AuthApi {
   isConfigured = true;
@@ -59,14 +58,14 @@ class HttpAuth implements AuthApi {
 
 // ---------- 관리자 읽기 (0010 뷰/RPC) ----------
 // 전송 상세(뷰 이름, PostgREST 파라미터, KST day 컷오프)는 여기에 갇힌다 —
-// 소비처(admin/**)는 AdminApi 인터페이스만 본다.
+// 소비처(features/admin)는 AdminApi 인터페이스만 본다.
 
 import type {
   AdminApi,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
-} from './types';
+} from '../api/types';
 
 /** day 문자열 비교 = ISO 사전순. KST 축이라 서버 todayKST 공식과 동일하게 자른다 */
 const kstDayCutoff = (days: number): string =>
@@ -142,10 +141,10 @@ class HttpAdmin implements AdminApi {
 }
 
 export function createHttpApi():
-{ createGame(initial?: GameState): Backend; auth: AuthApi; admin: AdminApi } {
+{ createGameGateway(initial?: GameState): GameGateway; auth: AuthApi; admin: AdminApi } {
   return {
     // 시드 전달 — 델타 캐시의 출발점. 없으면 첫 델타가 풀재동기로 나간다 (무해, 1회).
-    createGame: (initial?: GameState) => new HttpBackend(initial ?? null),
+    createGameGateway: (initial?: GameState) => new HttpGameGateway(initial ?? null),
     auth: new HttpAuth(),
     admin: new HttpAdmin(),
   };

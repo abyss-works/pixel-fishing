@@ -10,7 +10,7 @@ import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { BaseId } from '../../../../game/content/places';
 import { zoneOfPort } from '../../../../game/content/bounties';
 import { zoneById } from '../../../../game/content/zones';

@@ -1,5 +1,5 @@
 // 액션 리듀서 — 모든 상태 변경의 유일한 진입점 (서버 권위 v0.5.0)
-// 서버(api/action.ts)와 로컬 폴백(backend/local.ts — supabase 미설정 dev)이 같은 함수를 실행한다.
+// 서버(api/action.ts)와 로컬 폴백(platform/adapters/localGameGateway.ts — supabase 미설정 dev)이 같은 함수를 실행한다.
 // 기존 logic/fishing 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
 // 상대경로 .js 확장자 필수 — api/action.ts(Node 순수 ESM 로더)가 이 파일을 직접 import한다.
 import {
@@ -70,7 +70,7 @@ export interface ActionDeps {
   /** 지원 코드 자산 — 서버가 reliefs 테이블을 선소비한 뒤 공급한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
   /** 수배 DB 진실 — 서버가 라이선스·일일 카운트·완료 목록을 조회해 공급한다 (relief 선례).
-   *  로컬 dev(LocalBackend)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
+   *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
 }
 
@@ -412,7 +412,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'claimRelief': {
       // 지원 코드 — 검증·소비는 서버(reliefs 선차감)가 하고 여기엔 결과 자산만 주입된다.
-      // 로컬 dev(LocalBackend)엔 deps.relief가 항상 없다 — 오프라인 발급 불가가 의도다.
+      // 로컬 dev(LocalGameGateway)엔 deps.relief가 항상 없다 — 오프라인 발급 불가가 의도다.
       if (!deps.relief) return { ok: false, error: 'relief-invalid' };
       return {
         ok: true,

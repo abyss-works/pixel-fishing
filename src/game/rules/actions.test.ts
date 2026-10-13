@@ -1,4 +1,4 @@
-// 액션 리듀서 — 서버(api/action)와 LocalBackend가 공유하는 상태 전이 규칙 (v0.5.0)
+// 액션 리듀서 — 서버(api/action)와 LocalGameGateway가 공유하는 상태 전이 규칙 (v0.5.0)
 import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';

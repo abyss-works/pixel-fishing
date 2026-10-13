@@ -1,26 +1,26 @@
-﻿// R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
+// R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 import App from './App';
-import Field from '../presentation/layouts/game-stage/Field';
-import Base from '../presentation/layouts/game-stage/Base';
-import FacilityModal from '../presentation/views/overlays/facility/FacilityModal';
-import { resetBagView } from '../presentation/views/game/tabs/bag/bagView';
-import { resetCanvasCover } from '../features/admin/model/canvasCover';
-import { resetTimeOverride } from '../features/gameplay/model/timeOverride';
-import { resetKeyScopes } from '../presentation/ui/hotkeys';
-import { resetSpotState, setCurrentSpot, setPlayerPos } from '../game/world/currentSpot';
-import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from '../game/rules/balance';
-import { WALK_BAG_CAP } from '../game/content/boats';
-import { TAB_ORDER } from '../presentation/views/game/tabs/tabs';
-import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from '../game/rules/logic';
-import type { FishInstance, FormId, FormRecord, GameState } from '../game/rules/logic';
-import type { GameAction } from '../game/rules/actions';
-import { LocalBackend } from '../platform/backend/local';
-import { when } from '../platform/backend/types';
-import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, WORLD_SCHOOLS } from '../game/world';
-import type { Point, RegionId } from '../game/world';
+import Field from './presentation/layouts/game-stage/Field';
+import Base from './presentation/layouts/game-stage/Base';
+import FacilityModal from './presentation/views/overlays/facility/FacilityModal';
+import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
+import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
+import { resetTimeOverride } from './features/gameplay/service/timeOverride';
+import { resetKeyScopes } from './presentation/ui/hotkeys';
+import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
+import { WALK_BAG_CAP } from './game/content/boats';
+import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
+import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
+import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
+import type { GameAction } from './game/rules/actions';
+import { LocalGameGateway } from './platform/adapters/localGameGateway';
+import { when } from './platform/api';
+import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, WORLD_SCHOOLS } from './game/world';
+import type { Point, RegionId } from './game/world';
 
 const SAVE_KEY = 'pixel-fishing-save';
 
@@ -190,8 +190,8 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
   function BoatHarness({ initial }: { initial: GameState }) {
     const [g, setG] = useState(initial);
     const [open, setOpen] = useState(true);
-    const backend = useState(() => new LocalBackend(initial))[0];
-    const dispatch = (a: GameAction) => when(backend.dispatch(a), r => {
+    const gateway = useState(() => new LocalGameGateway(initial))[0];
+    const dispatch = (a: GameAction) => when(gateway.dispatch(a), r => {
       if (r.status === 'ok') { lastGame = r.state; setG(r.state); }
       return r;
     });
@@ -388,8 +388,8 @@ const goBaseFn = vi.fn();
 
 function Harness({ region, initial, pos }: { region: RegionId; initial: GameState; pos: Point }) {
   const [g, setG] = useState(initial);
-  const backend = useState(() => new LocalBackend(initial))[0];
-  const dispatch = (a: GameAction) => when(backend.dispatch(a), r => {
+  const gateway = useState(() => new LocalGameGateway(initial))[0];
+  const dispatch = (a: GameAction) => when(gateway.dispatch(a), r => {
     if (r.status === 'ok') { lastGame = r.state; setG(r.state); }
     return r;
   });
@@ -420,7 +420,7 @@ describe('R5: 캐스팅 판정(군집 근처)', () => {
 
 describe('서버 응답 지연 내성 (catch 홀드)', () => {
   it('응답이 늦어도 catch 페이즈가 만료되지 않는다 — 카드 미표시 버그 방지', () => {
-    // 영원히 안 끝나는 dispatch — HTTP 지연의 극단 모형 (타임아웃은 HttpBackend 소관)
+    // 영원히 안 끝나는 dispatch — HTTP 지연의 극단 모형 (타임아웃은 HttpGameGateway 소관)
     const pending = () => new Promise<never>(() => {});
     toastFn.mockClear();
     vi.useFakeTimers();

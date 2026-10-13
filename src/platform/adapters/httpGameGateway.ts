@@ -1,13 +1,13 @@
-// HTTP 백엔드 — /api/action 경유 (스테이징·운영의 유일한 상태 변경 경로, 서버 권위 v0.5.0)
+// HTTP 게임 게이트웨이 — /api/action 경유 (스테이징·운영의 유일한 상태 변경 경로, 서버 권위 v0.5.0)
 // 읽기(load)는 saves_current 본인 행(RLS select) → 없으면 구 saves 최신 행 폴백(이관 전 유저).
 import { supabase } from './auth';
 import { migrate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 import type { GameAction, StatePatch } from '../../game/rules/actions';
 import { applyPatch } from '../../game/rules/actions';
-import type { Backend, DispatchResult } from './types';
+import type { GameGateway, DispatchResult } from '../api/types';
 import { AppError } from '../../core/errors';
-import { BUILD_ID } from '../../core/buildId';
+import { BUILD_ID } from '../../buildId';
 import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
 
@@ -37,7 +37,7 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
     boat: c.boat, rod: c.rod, bag, exhibit, dex });
 }
 
-export class HttpBackend implements Backend {
+export class HttpGameGateway implements GameGateway {
   // 델타 캐시 — 서버는 초기 로드 이후 변경분(patch)만 보내므로, 직전 풀 상태를 들고
   // 있어야 복원할 수 있다. 생성자·load()에서 시드되고, dispatch 성공마다 갱신된다.
   // 캐시는 표시용 복사본일 뿐 진실이 아니다: 버전 어긋남·적용 실패가 있으면 버리고
@@ -140,7 +140,7 @@ export class HttpBackend implements Backend {
       await this.load().catch(() => null);
       return this.dispatch(action, true);
     }
-    if (res.status === 422) return { status: 'rejected', error: HttpBackend.reason(body?.error) };
+    if (res.status === 422) return { status: 'rejected', error: HttpGameGateway.reason(body?.error) };
     // 403 = 제재 계정(0008 restricted) 또는 권한 없는 요청(import 게이트) — 정책 표가 문구를 정한다
     if (res.status === 403) {
       throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });

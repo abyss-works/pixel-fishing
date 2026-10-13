@@ -6,7 +6,7 @@ import type { GameAction } from '../../../../../game/rules/actions';
 import { BAITS } from '../../../../../game/content/baits';
 import type { Bait } from '../../../../../game/content/baits';
 import { when } from '../../../../../shared/lib/when';
-import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { cx } from '../../../../ui/cx';
 import Note from '../../../../ui/Note';
 import FishSprite from '../../../../ui/fish/FishSprite';

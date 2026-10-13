@@ -1,6 +1,6 @@
 {
   "id": "world",
-  "geo": "src/world/geo/land-50m.geo.json",
+  "geo": "src/game/world/geo/land-50m.geo.json",
   "cell": { "w": 8, "h": 11 },
   "grid": { "cols": 456, "rows": 232 },
   "window": { "lonMin": 43, "latMax": 44, "lonMax": 157, "latMin": -36 },

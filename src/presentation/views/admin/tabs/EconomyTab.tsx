@@ -5,9 +5,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
-import { readAdminEconomy } from '../../../../features/admin/model/queries';
+import { readAdminEconomy } from '../../../../features/admin/service/queries';
 import type { AdminEconomyRow, AdminUserRow } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
 
 type Range = '30' | '90';

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
-import { kstDay } from '../../../../features/bounty/model/types';
+import { kstDay } from '../../../../features/bounty/service/queryKeys';
 import { dailyQuestFor } from '../../../../game/content/bounties';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';

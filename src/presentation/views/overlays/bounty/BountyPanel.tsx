@@ -16,9 +16,9 @@ import { REJECT_TEXT, licenseConditions } from '../../../../game/rules/logic.js'
 import type { LicenseCondition } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
-import { kstDay } from '../../../../features/bounty/model/types';
-import { useBounty } from '../../../../features/bounty/model/useBounty';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/model/types';
+import { kstDay } from '../../../../features/bounty/service/queryKeys';
+import { useBounty } from '../../../../features/bounty/service/useBounty';
+import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
 import NamedCard from './NamedCard';

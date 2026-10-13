@@ -2,7 +2,7 @@
 // 환경변수가 없으면 supabase = null → 게임은 로컬 저장만으로 정상 동작 (오프라인 모드).
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GameState } from '../../game/rules/logic';
+import type { AuthResult } from '../api/types';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -25,8 +25,6 @@ export async function ensureSession(): Promise<string | null> {
 // uid가 안 바뀌므로 세이브/DB/RLS 전부 무변경. 로그인은 다른 계정으로 갈아타는 것.
 
 // code: Supabase 에러 코드 원문 — 통합 계정 폼(v0.4.2)이 email_exists 분기에 쓴다
-export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
-
 // Supabase 에러 코드 → 유저가 행동할 수 있는 한국어 안내 (코드 없으면 원문 노출)
 const AUTH_MSG: Record<string, string> = {
   email_exists: '이미 가입된 이메일이에요.',
@@ -90,9 +88,5 @@ export async function applyNewPassword(password: string): Promise<AuthResult> {
   return error ? authErr(error) : { ok: true };
 }
 
-// 이사 코드 — 세이브를 사람이 옮길 수 있는 문자열로 (설정 탭 내보내기 + 동기화 실패 구조용 공용)
-export const saveCode = (state: GameState): string =>
-  btoa(encodeURIComponent(JSON.stringify(state)));
-
-// (v0.5.0) 세이브 읽기/쓰기는 backend/http.ts(HttpBackend)로 이관 — 이 파일은 인증·이사코드만.
+// 세이브 읽기·액션 전송은 httpGameGateway.ts가 맡고, 이 모듈은 Supabase 인증을 맡는다.
 // 구 pushCloudSave/fetchCloudSave/fetchCoupon 삭제: 쓰기는 /api/action, 동적 쿠폰 조회는 서버 소관.

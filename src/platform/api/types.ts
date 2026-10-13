@@ -1,11 +1,24 @@
-// API 계층 타입 — 프론트는 이 인터페이스만 본다 (http/local 구현 교체 가능)
-// game은 Backend(서버 권위 v0.5.0) 그대로, auth/storage는 여기서 통합한다
-import type { Backend } from '../backend/types';
-import type { AuthResult } from '../backend/auth';
+// API 계약 — 화면과 기능은 이 타입을 사용하고 adapters/가 HTTP·로컬 구현을 제공한다.
+import type { GameAction, ActionResult } from '../../game/rules/actions';
+import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
+import type { MaybePromise } from '../../shared/lib/when';
 
-export type { Backend } from '../backend/types';
-export type { AuthResult } from '../backend/auth';
+export type { MaybePromise } from '../../shared/lib/when';
+
+export type DispatchResult =
+  | { status: 'ok'; state: GameState; result: ActionResult }
+  | { status: 'rejected'; error: RejectReason };
+
+/** 게임 상태의 읽기·액션 처리 경계. HTTP와 로컬 구현은 adapters/에 둔다. */
+export interface GameGateway {
+  load(): MaybePromise<GameState | null>;
+  dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  getNickname(): MaybePromise<string | null>;
+  warmup?(): void;
+}
+
+export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
 export interface AuthApi {
   isConfigured: boolean;
@@ -23,7 +36,19 @@ export interface AuthApi {
 }
 
 export interface StorageApi {
+  loadLegacy(): { game: GameState; notice: string | null; legacy: boolean };
+  clearLegacySave(): void;
   saveCode(state: GameState): string;
+}
+
+export interface BountyProgressRow { questId: string; progress: number }
+export interface BountyTicketRow { questId: string; issuedAt: string }
+export interface BountySnapshot {
+  licensed: { zone: string; tier: string }[];
+  acceptsToday: number;
+  namedToday: number;
+  progress: BountyProgressRow[];
+  tickets: BountyTicketRow[];
 }
 
 // ---------- 관리자 읽기 API (0010 뷰/RPC — 읽기 전용) ----------
@@ -109,9 +134,8 @@ export interface AdminApi {
 }
 
 export interface ApiClient {
-  /** 게임 백엔드 생성 — http/local 분기는 여기 갇힌다. 마운트마다 새로 만든다
-      (LocalBackend가 상태를 들고 있어, 싱글톤이면 테스트 간 상태가 샌다) */
-  createGame(initial: GameState): Backend;
+  /** 게임 상태 게이트웨이 생성. LocalGameGateway가 상태를 소유하므로 마운트마다 새로 만든다. */
+  createGameGateway(initial: GameState): GameGateway;
   auth: AuthApi;
   storage: StorageApi;
   admin: AdminApi;

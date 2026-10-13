@@ -1,9 +1,8 @@
 // 로컬 API 구현 — supabase 미설정(dev·테스트) 전용
-// 게임은 LocalBackend(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
-import { LocalBackend } from '../backend/local';
-import type { Backend } from '../backend/types';
-import type { AuthApi } from './types';
-import type { AuthResult } from '../backend/auth';
+// 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
+import { LocalGameGateway } from './localGameGateway';
+import type { GameGateway, AuthApi, AuthResult } from '../api/types';
+import type { AdminApi } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
 
 const DEV_ACCOUNT = 'dev@localhost';
@@ -52,8 +51,6 @@ class LocalAuth implements AuthApi {
 // 걸러주므로 여기가 불리는 일 자체가 없어야 한다.
 // reject는 Promise로 돌려야 한다 — 동기 throw면 호출부의 await/rejects 계약이 깨진다.
 
-import type { AdminApi } from './types';
-
 const noCloudAdminData = (): Error =>
   new Error('관리자 데이터는 클라우드 연결(운영/스테이징 Supabase) 환경에서만 읽힌다');
 
@@ -80,9 +77,9 @@ class LocalAdmin implements AdminApi {
 }
 
 export function createLocalApi():
-{ createGame(initial: GameState): Backend; auth: AuthApi; admin: AdminApi } {
+{ createGameGateway(initial: GameState): GameGateway; auth: AuthApi; admin: AdminApi } {
   return {
-    createGame: initial => new LocalBackend(initial),
+    createGameGateway: initial => new LocalGameGateway(initial),
     auth: new LocalAuth(),
     admin: new LocalAdmin(),
   };

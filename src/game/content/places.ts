@@ -5,7 +5,7 @@ export type BaseId = 'home' | 'harbor' | 'manila' | 'colombo';
 
 /** 씬 지역 id — 오픈월드화로 도달 가능한 지역은 마을과 병합 바다뿐이다(spec/zone-tree.md).
  *  구세이브 location에 남은 구 지역 id(ocean/seasia/indian 등)는 **런타임 문자열**로만
- *  존재한다 — safeLocation이 무검증 통과시키고 core/App.sceneOf가 고향 항구로 접는다.
+ *  존재한다 — safeLocation이 무검증 통과시키고 App.sceneOf가 고향 항구로 접는다.
  *  구 지역 이름 표기는 admin/regions.ts의 리터럴 미러가 담당한다. */
 export type RegionId = 'village' | 'world';
 

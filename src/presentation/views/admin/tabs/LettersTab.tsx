@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { fmtDT } from '../../../../features/admin/model/metrics';
-import { readAdminLetters } from '../../../../features/admin/model/queries';
+import { readAdminLetters } from '../../../../features/admin/service/queries';
 import type { AdminLetterRow, AdminUserRow } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { TabState } from '../charts';
 
 export default function LettersTab() {

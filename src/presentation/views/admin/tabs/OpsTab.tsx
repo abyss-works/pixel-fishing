@@ -1,15 +1,15 @@
-﻿// 운영 탭 — 대시보드 자체의 메타: 지금 이 번들이 어느 배포인지, 어느 Supabase 프로젝트를
+// 운영 탭 — 대시보드 자체의 메타: 지금 이 번들이 어느 배포인지, 어느 Supabase 프로젝트를
 // 보고 있는지, 이벤트 스트림에 무엇이 기록되는지. 링크를 나열하는 게 아니라 **환경 정체를
 // 화면에 에코**하는 것이 목적이다(운영/스테이징 착오는 과거 사고의 원인 둘).
 // 권한 진단은 AdminAuthProvider가 판정한 것을 소비한다 — 여기서 판정하지 않는다.
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import DataTable from '../../../ui/DataTable';
-import { APP_VERSION } from '../../../../core/version';
-import { BUILD_LABEL } from '../../../../core/buildId';
-import { readAdminProjectRef } from '../../../../features/admin/model/queries';
+import { APP_VERSION } from '../../../../version';
+import { BUILD_LABEL } from '../../../../buildId';
+import { readAdminProjectRef } from '../../../../features/admin/service/queries';
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 
 export default function OpsTab() {
   const { access } = useAdminAuth();
@@ -24,7 +24,7 @@ export default function OpsTab() {
       <SectionTitle>이 화면의 정체</SectionTitle>
       <DataTable>
         <tbody>
-          <Meta k="릴리즈 버전" v={APP_VERSION} hint="package.json + src/core/version.ts (릴리즈 때만 bump)" />
+          <Meta k="릴리즈 버전" v={APP_VERSION} hint="package.json + src/version.ts (릴리즈 때만 bump)" />
           <Meta k="빌드 식별자" v={BUILD_LABEL} hint="VERCEL_GIT_COMMIT_SHA — 낡은 탭 차단(426) 기준값" />
           <Meta k="Supabase 프로젝트" v={readAdminProjectRef() ?? '로컬 모드'}
                 hint="VITE_SUPABASE_URL 호스트 — 운영/스테이징 ref가 다르다(착오 방지 표시)" />
@@ -43,7 +43,7 @@ export default function OpsTab() {
       <p className="text-xs text-text-dim leading-relaxed">
         읽기 전용이다 — 쓰기 액션(지급·제재·이사코드 수입)은 이 화면에 존재하지 않는다.
         권한 방어선은 DB(<code className="pf-accent">admins</code> + is_admin() 뷰 게이트)다.
-        데이터 접근은 features/admin/model이 유일한 경로다 — 전송 상세(뷰 이름·RPC 파라미터)는
+        데이터 접근은 features/admin/service가 유일한 경로다 — 전송 상세(뷰 이름·RPC 파라미터)는
         그 안에 갇혀 있다.
       </p>
 
@@ -64,14 +64,14 @@ function Meta({ k, v, hint }: { k: string; v: string; hint?: string }) {
   );
 }
 
-/** 이벤트 카탈로그 — game/actions.ts 리듀서가 남기는 유형의 사람용 목차. 로그에 모르는
+/** 이벤트 카탈로그 — game/rules/actions.ts 리듀서가 남기는 유형의 사람용 목차. 로그에 모르는
  *  타입이 보이면 actions.ts와 metrics.EVENT_LABELS가 함께 늘어난 것이고, 여기는 그 사본이다 */
 function EventCatalog() {
   return (
     <>
       <SectionTitle>events 스트림 카탈로그</SectionTitle>
       <p className="text-2xs text-text-dim mb-1">
-        단일 근원은 game/actions.ts — 이 표는 표시용 목차다(metrics.ts EVENT_LABELS 재사용).
+        단일 근원은 game/rules/actions.ts — 이 표는 표시용 목차다(metrics.ts EVENT_LABELS 재사용).
       </p>
       <DataTable>
         <thead>

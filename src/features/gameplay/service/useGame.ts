@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, loadLegacy, LEGACY_KEY, when } from '../../../platform/api';
-import type { Backend, DispatchResult, MaybePromise } from '../../../platform/api';
+import { api, when } from '../../../platform/api';
+import type { GameGateway, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
-import { BUILD_ID } from '../../../core/buildId';
+import { BUILD_ID } from '../../../buildId';
 
-// 게임 상태 소유 + 백엔드 디스패치 (계층: service&state — 서버 권위 v0.5.0)
-// 모든 상태 변경은 api.createGame이 준 백엔드의 dispatch 하나로 흐른다 — http/local 분기는
-// platform/api에 갇혀 있고, 이 훅은 backend 구현을 모른다(platform/api/boundary.test.ts가 검사).
+// 게임 상태 소유와 액션 흐름 조율 (계층: service/state — 서버 권위 v0.5.0)
+// 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
+// platform/adapters/에 갇혀 있고 이 훅은 구현체를 모른다(platform/api/boundary.test.ts가 검사).
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
 export type SyncState = 'off' | 'connecting' | 'on' | 'error';
@@ -23,10 +23,10 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
 };
 
 export function useGame({ setToast }: { setToast: (m: string) => void }) {
-  const [init] = useState(loadLegacy);
-  const backendRef = useRef<Backend>(null!);
-  if (!backendRef.current) {
-    backendRef.current = api.createGame(init.game);
+  const [init] = useState(() => api.storage.loadLegacy());
+  const gameGatewayRef = useRef<GameGateway>(null!);
+  if (!gameGatewayRef.current) {
+    gameGatewayRef.current = api.createGameGateway(init.game);
   }
   const [game, setGame] = useState<GameState>(init.game);
   const [nickname, setNickname] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
   const client = useQueryClient();
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
-    when(backendRef.current.dispatch(action), r => {
+    when(gameGatewayRef.current.dispatch(action), r => {
       if (r.status === 'ok') {
         setGame(r.state);
         if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
@@ -96,13 +96,13 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
-      void Promise.resolve(backendRef.current.getNickname()).then(setNickname);
+      void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
       return;
     }
     (async () => {
       const uid = await api.auth.ensureSession();
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const cloud = await backendRef.current.load();
+      const cloud = await gameGatewayRef.current.load();
       if (cloud) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔다.');
@@ -111,7 +111,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.
         try {
           await dispatch({ type: 'import', save: init.game });
-          localStorage.removeItem(LEGACY_KEY); // 브리지 성공 — 로컬 저장 사용 종료
+          api.storage.clearLegacySave(); // 브리지 성공 — 로컬 저장 사용 종료
         } catch (e) {
           if (!(e instanceof AppError && e.kind === 'restricted')) throw e;
         }
@@ -120,7 +120,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       // 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
       // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
       void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
-      setNickname(await backendRef.current.getNickname());
+      setNickname(await gameGatewayRef.current.getNickname());
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
@@ -130,19 +130,19 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     game, setGame, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], outdated,
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
-      const r = await backendRef.current.dispatch({ type: 'setNickname', nickname: name });
+      const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
       if (r.status === 'ok') {
-        setNickname(await backendRef.current.getNickname());
+        setNickname(await gameGatewayRef.current.getNickname());
         return null;
       }
       return r.error;
     },
     /** 계정 교체(useAccount) 시 그 계정의 상태를 다시 읽는 용도 */
-    load: () => when(backendRef.current.load(), s => {
-      void Promise.resolve(backendRef.current.getNickname()).then(setNickname);
+    load: () => when(gameGatewayRef.current.load(), s => {
+      void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
       return s;
     }),
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
-    warmup: () => backendRef.current.warmup?.(),
+    warmup: () => gameGatewayRef.current.warmup?.(),
   };
 }

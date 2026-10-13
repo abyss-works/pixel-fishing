@@ -641,7 +641,7 @@ function safeActiveBait(v: unknown): string | null {
 // 위치 위생 — 모르는 값이면 집으로. 지역 id 목록을 여기서 검사하지 않는 이유:
 // 어느 지역이 존재하는지는 world 소관이고 game은 그걸 보지 않는다(의존 단방향).
 // **런타임 문자열 통과** — 구세이브의 구 지역 id(ocean 등)도 형태만 맞으면 그대로 남긴다.
-// 없는 지역이 들어와도 부팅 시 core/App이 팩을 못 찾으면 고향 항구로 떨어진다(sceneOf).
+// 없는 지역이 들어와도 부팅 시 App이 팩을 못 찾으면 고향 항구로 떨어진다(sceneOf).
 function safeLocation(v: unknown): LocationRef {
   const l = v as Partial<LocationRef> | undefined;
   if (l && typeof l.id === 'string') {

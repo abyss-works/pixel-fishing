@@ -1,5 +1,5 @@
 // 대시보드 순수 유틸 — 날짜 축·포맷·통계 변환. 뷰(Row)를 모른다 — 탭이 계산을 맡기 전
-// 한 번 거치는 결정론적 단계라 vitest로 직접 검증한다(src/admin/metrics.test.ts).
+// 한 번 거치는 결정론적 단계라 vitest로 직접 검증한다(src/features/admin/model/metrics.test.ts).
 // 서버(api/action.ts todayKST)와 같은 KST 하루 기준을 쓴다 — 전원 한국 친구 그룹.
 
 /** 오늘(KST) YYYY-MM-DD — 서버의 todayKST와 같은 공식 */
@@ -68,7 +68,7 @@ export function sumLast(values: readonly number[], n: number): number {
 }
 
 // ---------- 이벤트 해석 ----------
-// events.type ↔ payload는 game/actions.ts 리듀서가 쓰는 형태가 유일한 근원이다.
+// events.type ↔ payload는 game/rules/actions.ts 리듀서가 쓰는 형태가 유일한 근원이다.
 // 여기서는 표시용 한 줄 요약만 만든다 — 값 검증·재구성은 하지 않는다(감사는 원문 payload로).
 
 export const EVENT_LABELS: Record<string, string> = {

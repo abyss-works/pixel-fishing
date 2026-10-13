@@ -6,11 +6,11 @@ import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, EVENT_LABELS, eventSummary } from '../../../../features/admin/model/metrics';
-import { readAdminOverview } from '../../../../features/admin/model/queries';
+import { readAdminOverview } from '../../../../features/admin/service/queries';
 import type {
   AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminEventRow,
 } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, KpiGrid, Frame, TabState } from '../charts';
 
 const DAYS = 30;

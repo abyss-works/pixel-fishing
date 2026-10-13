@@ -1,7 +1,7 @@
 // 편지 탭 — granted에서 목록을 그리고, uid를 명부 email로 라벨링한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import { AdminAuthCtx } from '../../../../features/admin/model/accessContext';
+import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import LettersTab from './LettersTab';
 
 vi.mock('../../../../platform/api', () => ({

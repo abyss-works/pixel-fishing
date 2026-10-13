@@ -8,7 +8,7 @@
 //  - 중앙 = radial 구멍(투명) — 서 있는 곳은 덜 어둡다(조명)
 //  최대 어둠도 "아, 어둡네" 수준을 넘지 않게 상한(사용자: 너무 어둡게 말 것).
 import { useMemo } from 'react';
-import { useGameTime } from '../../../features/gameplay/model/useGameTime';
+import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 
 /** 밤 어둠 최대 강도 — 1이면 거의 새까매진다. 자정 기준 "꽤 어둡네" 수준. */
 const MAX_DARK = 0.65;

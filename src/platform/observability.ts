@@ -15,7 +15,7 @@
 // - **PII 미전송**: 유저 식별은 uid만 (이메일·닉네임 안 보냄).
 // - DSN이 없으면 초기화 자체를 건너뛴다 → 로컬 dev·테스트는 완전 무음.
 import * as Sentry from '@sentry/react';
-import { APP_VERSION } from '../core/version';
+import { APP_VERSION } from '../version';
 
 const DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 

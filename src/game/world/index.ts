@@ -6,7 +6,7 @@
 // 오픈월드화(spec/zone-tree.md): 씬 지역은 village(도보)와 world(병합 바다)뿐이다.
 // 구 3지역 팩(ocean/seasia/indian)은 삭제됐다 — 원본은 git 히스토리(a40bd0a)에 있다.
 // 구세이브 location의 구 지역 id(ocean 등)는 런타임 문자열로만 남는다 —
-// core/App.sceneOf가 고향 항구로 접는다.
+// App.sceneOf가 고향 항구로 접는다.
 import type { BaseId, BasePack, Furniture, RegionId, RegionPack } from './types';
 import { inRect } from './engine';
 import { VILLAGE } from './regions/village';

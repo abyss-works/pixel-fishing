@@ -3,7 +3,7 @@ import { BOATS, FISH, RARITY, RARITY_ORDER, canFishSpot, rarityWeightOf,
 import type { GameState } from '../../../../../game/rules/logic';
 import { REGION_PACKS } from '../../../../../game/world';
 import type { RegionId } from '../../../../../game/world';
-import { useSpotState } from '../../../../../features/travel/model/useSpotState';
+import { useSpotState } from '../../../../../features/travel/service/useSpotState';
 import { zoneById, zoneTips, zoneControls, spotsOfRegion, subtreeSpots, defaultZoneOfRegion, topZoneOf } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
 import type { SpotId } from '../../../../../game/content/spots';

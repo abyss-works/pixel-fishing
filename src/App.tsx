@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { LIVE_REGIONS } from '../game/world';
-import type { Point, SceneRef } from '../game/world';
-import type { LocationRef } from '../game/content/places';
-import { useGame } from '../features/gameplay/model/useGame';
-import { useAccount } from '../features/account/model/useAccount';
-import { useMessageLog } from '../presentation/layouts/hud/useMessageLog';
-import GameView from '../presentation/views/game/GameView';
-import { QueryProvider } from './QueryProvider';
+import { LIVE_REGIONS } from './game/world';
+import type { Point, SceneRef } from './game/world';
+import type { LocationRef } from './game/content/places';
+import { useGame } from './features/gameplay/service/useGame';
+import { useAccount } from './features/account/service/useAccount';
+import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
+import GameView from './presentation/views/game/GameView';
+import { QueryProvider } from './core/QueryProvider';
 
 // 위치 복원 규칙: 바다 위치는 유지하지 않는다. 지역 씬이면 고향 항구에서 시작하고,
 // 거점(집·항구)은 그대로 재개한다.

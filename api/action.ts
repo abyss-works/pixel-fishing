@@ -1,5 +1,5 @@
 // 액션 API — 모든 상태 변경의 유일한 서버 경로 (서버 권위 v0.5.0, Vercel Function, Node 런타임)
-// 규칙 실행은 src/game/actions.ts(applyAction) — 클라이언트 LocalBackend와 같은 리듀서.
+// 규칙 실행은 src/game/rules/actions.ts(applyAction) — 클라이언트 LocalGameGateway와 같은 리듀서.
 // 저장 모델(0005): saves_current(유저당 1행, 낙관 락) + events(append-only 정본 스트림)
 // + saves(스냅샷 아카이브 — 50액션마다 append, 롤백 안전망). service role 키는 서버 전용.
 //
@@ -26,7 +26,7 @@ import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
-import { APP_VERSION } from '../src/core/version.js';
+import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
 // 공식 문서 확인: VERCEL_GIT_COMMIT_SHA는 빌드·런타임 양쪽에 제공된다.
@@ -52,7 +52,7 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 // 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
 // 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
-// 클라(src/sidebar/shared.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
+// 클라(src/presentation/views/admin/gate.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
 // 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
 // 늘어나는 대가라 하지 않는다.
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
@@ -343,7 +343,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
   // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
   // 로컬 오리진(vite dev가 실제로 이 함수를 치는 프리뷰 대상 빌드)은 개발 편의상 연다.
-  // 오프라인 dev(LocalBackend)는 애초에 이 함수에 도달하지 않는다.
+  // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
   if (action.type === 'import' || action.type === 'adminSet') {
     const origin = String(req.headers.origin ?? '');
     const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
@@ -705,7 +705,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
-  // 클라이언트(HttpBackend)가 최신 상태 위에 1회 재시도한다.
+  // 클라이언트(HttpGameGateway)가 최신 상태 위에 1회 재시도한다.
   const nextVersion = Number(row.version) + 1;
   const { data: updated, error: updErr } = await admin.from('saves_current')
     .update({ ...stateRow(out.state), version: nextVersion, updated_at: new Date().toISOString() })
@@ -777,7 +777,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
   // 보낸다(ops/egress-delta.md). import는 통째 교체라 풀 유지 (빈도 극저, 예외).
-  // 클라(HttpBackend)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
+  // 클라(HttpGameGateway)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
   if (action.type === 'import') {
     res.status(200).json({ state: out.state, result: out.result, version: nextVersion });
     return;

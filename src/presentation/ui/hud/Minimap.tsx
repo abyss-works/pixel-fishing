@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../../views/overlays/world-map/worldmap.js';
 import type { RegionPack } from '../../../game/world/types';
 import { zoneById, zoneOfSpot, topZoneOf } from '../../../game/content/zones';
-import { useSpotState } from '../../../features/travel/model/useSpotState';
+import { useSpotState } from '../../../features/travel/service/useSpotState';
 import TimeBadge from './TimeBadge';
 
 // 미니맵 — 자기 캔버스를 소유하고 변경될 때만 그린다 (메인 rAF와 분리).

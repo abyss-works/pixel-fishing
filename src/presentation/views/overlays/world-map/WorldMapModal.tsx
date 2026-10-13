@@ -3,7 +3,7 @@ import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import { WORLD_MAP } from '../../../../game/world';
 import type { CompiledMap, Point } from '../../../../game/world/types';
-import { useSpotState } from '../../../../features/travel/model/useSpotState';
+import { useSpotState } from '../../../../features/travel/service/useSpotState';
 
 // 세계지도 모달 — 미니맵 클릭으로 열린다(구 R23b "지역 탭" 대체, 사용자 확정 2026-08-28).
 // 지구 전체를 그리되 지금 항해할 수 있는 세계(구현 영역)만 컬러, 나머지는 흑백 —

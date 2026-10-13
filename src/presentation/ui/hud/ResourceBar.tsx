@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { boatNameOf } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BOUNTY_DAILY_CAP } from '../../../game/rules/balance';
-import { useBounty } from '../../../features/bounty/model/useBounty';
+import { useBounty } from '../../../features/bounty/service/useBounty';
 import PixelIcon from '../PixelIcon';
 import type { GlyphId } from '../PixelIcon';
 

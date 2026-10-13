@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
-import { readAdminMetrics } from '../../../../features/admin/model/queries';
+import { readAdminMetrics } from '../../../../features/admin/service/queries';
 import type { AdminDailyActiveRow, AdminRetentionRow } from '../../../../features/admin/model/types';
-import { useAdminAuth } from '../../../../features/admin/model/accessContext';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Frame, StackedBarsPair, RetentionCell, TabState } from '../charts';
 
 type Range = '30' | '90';

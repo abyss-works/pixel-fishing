@@ -1,4 +1,4 @@
-// 관측(서버) — Vercel 함수의 에러 보고. 클라이언트 쪽은 src/observability.ts.
+// 관측(서버) — Vercel 함수의 에러 보고. 클라이언트 쪽은 src/platform/observability.ts.
 //
 // ⚠️ **지연 로드가 핵심이다.** @sentry/node는 OpenTelemetry 의존을 끌고 오는 무거운 패키지라,
 // 모듈 최상단에서 import하면 그것만으로 콜드 스타트가 늘어난다 — 액션 레이턴시를 2~3초에서
@@ -7,7 +7,7 @@
 // 실행하지 않고, 첫 에러 한 번만 로드 비용을 낸다(에러 응답은 어차피 빠를 필요가 없다).
 //
 // 서버리스라 flush 필수 — 응답 후 프로세스가 즉시 얼어붙으면 전송 중인 이벤트가 버려진다.
-import { APP_VERSION } from '../src/core/version.js';
+import { APP_VERSION } from '../src/version.js';
 
 type SentryNode = typeof import('@sentry/node');
 let sentry: SentryNode | null = null;

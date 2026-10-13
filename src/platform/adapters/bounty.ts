@@ -1,20 +1,9 @@
 // 현상금 읽기 — 수배판 표시용 스냅샷 (RLS 본인 읽기).
-// backend/http.ts의 getNickname과 같은 위치다: 표시용 조회라 액션 경로를 타지 않는다.
+// 표시용 조회라 게임 액션 경로를 타지 않는다.
 // supabase 미설정(로컬 dev·테스트)이면 null — 패널이 오프라인 안내를 띄운다.
-import { supabase } from '../backend/auth';
+import { supabase } from './auth';
 import { bountyById } from '../../game/content/bounties.js';
-
-export interface BountyProgressRow { questId: string; progress: number }
-
-export interface BountyTicketRow { questId: string; issuedAt: string }
-
-export interface BountySnapshot {
-  licensed: { zone: string; tier: string }[];
-  acceptsToday: number;
-  namedToday: number;
-  progress: BountyProgressRow[];
-  tickets: BountyTicketRow[];
-}
+import type { BountySnapshot } from '../api/types';
 
 /** KST 날짜 — api/action.ts todayKST와 같은 시계 (일일 의뢰 해시용) */
 export const kstDay = (): string =>

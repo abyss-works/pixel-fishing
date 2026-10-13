@@ -1,4 +1,4 @@
-// LocalBackend 테스트용 시간 고정값. 운영 HTTP 요청은 이 저장소를 읽지 않는다.
+// LocalGameGateway 테스트용 시간 고정값. 운영 HTTP 요청은 이 저장소를 읽지 않는다.
 const KEY = 'pf-time-override';
 let override: string | null = null;
 try {

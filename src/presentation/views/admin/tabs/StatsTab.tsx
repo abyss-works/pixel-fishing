@@ -4,7 +4,7 @@ import {
 } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/model/types';
+import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import TextInput from '../../../ui/TextInput';
 import Button from '../../../ui/Button';
