@@ -1,33 +1,24 @@
 // 편지 탭 — 유저가 보낸 편지(letters, 영구) 목록. events 7일 창 밖의 오래된 편지도 보인다
 // 정규화된 편지 기록을 조회한다.
-import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import { readAdminLetters } from '../../../../features/admin/service/queries';
-import type { AdminLetterRow, AdminUserRow } from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { TabState } from '../charts';
+
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 표를 그린다
+const EMPTY: Awaited<ReturnType<typeof readAdminLetters>> = [[], []];
 
 export default function LettersTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [letters, setLetters] = useState<AdminLetterRow[]>([]);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.letters, readAdminLetters, granted);
 
-  const run = () =>
-    readAdminLetters()
-      .then(([ls, us]) => { setLetters(ls); setUsers(us); })
-      .then(() => setLoading(false), e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  useEffect(() => {
-    // granted가 된 순간 조회 — 그 전엔 빈 골격만 (AntiAbuseTab과 같은 계약)
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
+  const [letters, users] = data ?? EMPTY;
 
   const labelOf = (uid: string): string => {
     const u = users.find(x => x.user_id === uid);
@@ -36,7 +27,7 @@ export default function LettersTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <TabState loading={loading && granted} error={error} onRetry={run} />
+      <TabState loading={loading && granted} error={error} onRetry={refresh} />
       {!granted && <Note>운영 DB 연결 또는 admins 등록 후 채워진다.</Note>}
       <DataTable>
         <thead>

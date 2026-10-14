@@ -1,11 +1,12 @@
 // 지표 탭 — 접속·활동의 시간축(DAU/WAU)과 리텐션 코호트. boot 이벤트 기록은 2026-08 이후 시작됐다.
 // 따라서 그 이전 기간의 수치는 '행동한 유저' 수다.
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
 import { readAdminMetrics } from '../../../../features/admin/service/queries';
-import type { AdminDailyActiveRow, AdminRetentionRow } from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Frame, StackedBarsPair, RetentionCell, TabState } from '../charts';
 
@@ -16,34 +17,20 @@ const RETENTION_COLS: { key: typeof COHORTS[number]; label: string }[] = [
   { key: 'd14', label: 'D+14' }, { key: 'd30', label: 'D+30' },
 ];
 
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 축과 표를 그린다
+const EMPTY: Awaited<ReturnType<typeof readAdminMetrics>> = [[], []];
+
 export default function MetricsTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const [range, setRange] = useState<Range>('30');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [daily, setDaily] = useState<AdminDailyActiveRow[]>([]);
-  const [retention, setRetention] = useState<AdminRetentionRow[]>([]);
+  // 범위는 캐시 키에 들어간다 — 전환하면 그 범위를 새로 조회한다
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.metrics(Number(range)), () => readAdminMetrics(Number(range)), granted);
 
-  const run = (r: Range = range) =>
-    (async () => {
-      const n = Number(r);
-      const [dailyRows, retRows] = await readAdminMetrics(n);
-      // 뷰는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
-      setDaily([...dailyRows].reverse());
-      setRetention(retRows);
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  useEffect(() => {
-    // granted가 된 순간 현재 범위로 조회 — 그 전엔 빈 골격만
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
-
-  const onRange = (r: Range) => { setRange(r); if (granted) loadAll(r); };
-  const loadAll = (r: Range) => { setLoading(true); setError(null); void run(r); };
+  // 뷰는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
+  const [dailyDesc, retention] = data ?? EMPTY;
+  const daily = [...dailyDesc].reverse();
 
   const days = lastNDays(Number(range));
   // 둘 다 과거→오름차순(BarsChart는 왼쪽이 과거, 맨 오른쪽이 금일) — fillSeries가 이미
@@ -60,13 +47,13 @@ export default function MetricsTab() {
         <>
           <MetricSwitch value={range}
                         options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
-                        onChange={onRange} ariaLabel="기간 선택" />
+                        onChange={setRange} ariaLabel="기간 선택" />
           <span className="text-2xs text-text-dim self-center">
             DAU 금일 {fmtNum(dau[dau.length - 1] ?? NaN)}
           </span>
         </>
       }>
-        <TabState loading={loading && granted} error={error} onRetry={() => loadAll(range)} />
+        <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
         {daily.length > 0 ? (
           <>

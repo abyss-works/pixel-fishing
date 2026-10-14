@@ -1,13 +1,15 @@
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach, describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
+import { QueryProvider } from '../../../core/QueryProvider';
 import AdminApp from './AdminDashboard';
 
 afterEach(cleanup);
 
 describe('관리자 대시보드 페이지', () => {
   const openFish = () => {
-    render(<AdminApp />);
+    // 부팅 분기(main)와 같은 조립 — 관리자 화면은 읽기 캐시 아래에서 돈다
+    render(<QueryProvider><AdminApp /></QueryProvider>);
     expect(screen.getByText('관리자 대시보드')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^스탯$/ })).not.toBeInTheDocument();
     expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();

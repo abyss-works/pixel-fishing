@@ -2,55 +2,34 @@
 // 레이아웃(사용자 지시 반영): [KPI 격자 5] 아래 본문을 좌우 분할
 //   좌 = 최근 이벤트 피드(넓게 스크롤) / 우 = 위험 신호 카드열(제재·연타·반입).
 // Note 텍스트에 묻혔던 위험 신호가 우측 고정 카드로 승격됐다.
-import { useEffect, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, EVENT_LABELS, eventSummary } from '../../../../features/admin/model/metrics';
 import { selectOverviewMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminOverview } from '../../../../features/admin/service/queries';
-import type {
-  AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminEventRow, AdminCatchQualityRow,
-} from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, KpiGrid, Frame, TabState } from '../charts';
 
 const DAYS = 30;
 
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 KPI '—'와 빈 표를 그린다
+const EMPTY: Awaited<ReturnType<typeof readAdminOverview>> = [[], [], [], [], [], []];
+
 export default function OverviewTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
-  const [dauToday, setDauToday] = useState<number | null>(null);
-  const [wau7, setWau7] = useState<number | null>(null);
-  const [quality, setQuality] = useState<AdminCatchQualityRow[] | null>(null);
-  const [recent, setRecent] = useState<AdminEventRow[]>([]);
-  const [flags, setFlags] = useState<AdminSpamFlagRow[]>([]);
-  const [imports, setImports] = useState<AdminImportLogRow[]>([]);
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.overview(DAYS), () => readAdminOverview(DAYS), granted);
 
-  const run = () =>
-    (async () => {
-      // 부분 실패는 하나의 에러로 묶인다 — 개요 카드는 전부 함께 있어야 의미가 있다
-      const [us, daily, quality, recentRows, flagRows, importRows] = await readAdminOverview(DAYS);
-      setUsers(us);
-      setDauToday(daily[0]?.dau ?? null);
-      setWau7(daily[0]?.wau7 ?? null);
-      setQuality(quality);
-      setRecent(recentRows);
-      setFlags(flagRows);
-      setImports(importRows);
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
+  const [users, daily, quality, recent, flags, imports] = data ?? EMPTY;
+  // 7일 낚시 KPI는 "조회 전"과 "0건"을 구분한다 — 도착 전에는 '—'
+  const loaded = data !== null;
+  const dauToday = daily[0]?.dau ?? null;
+  const wau7 = daily[0]?.wau7 ?? null;
 
-  useEffect(() => {
-    // granted가 된 순간 1회 조회 — 그 전엔 빈 골격만(조회하지 않는다)
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
-
-  const metrics = selectOverviewMetrics(users, flags, imports, quality ?? []);
+  const metrics = selectOverviewMetrics(users, flags, imports, quality);
 
   return (
     <div className="flex flex-col gap-3">
@@ -58,13 +37,13 @@ export default function OverviewTab() {
         <KpiCard label="등록 유저" value={fmtNum(users.length)} />
         <KpiCard label="금일 DAU" value={dauToday === null ? '—' : fmtNum(dauToday)}
                  hint={`최근 7일 WAU ${wau7 === null ? '—' : fmtNum(wau7)}`} />
-        <KpiCard label="최근 7일 낚시" value={quality === null ? '—' : fmtNum(metrics.catch7d)}
+        <KpiCard label="최근 7일 낚시" value={loaded ? fmtNum(metrics.catch7d) : '—'}
                  hint="catch 이벤트 합계" />
         <KpiCard label="보유 골드 합" value={fmtNum(metrics.goldTotal)} />
         <KpiCard label="명성 합" value={fmtNum(metrics.fameTotal)} />
       </KpiGrid>
 
-      <TabState loading={loading && granted} error={error} onRetry={run} />
+      <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
       {/* 좌: 피드(1fr) / 우: 위험 신호 카드열(고정폭) — xl 미만에서는 세로 적층 */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-3 items-start">

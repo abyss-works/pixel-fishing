@@ -2,43 +2,33 @@
 // 레이아웃: [잔고 백분위 KPI 4] → 좌우 분할(유입 | 유출, xl) → 원장 대차 카드(풀폭).
 // 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
 // v_economy_daily 뷰의 일별 경제 요약을 표시한다.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
 import { selectEconomyMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminEconomy } from '../../../../features/admin/service/queries';
-import type { AdminEconomyRow, AdminUserRow } from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import type { AdminEconomyRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
 
 type Range = '30' | '90';
 
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 축과 표를 그린다
+const EMPTY: Awaited<ReturnType<typeof readAdminEconomy>> = [[], []];
+
 export default function EconomyTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const [range, setRange] = useState<Range>('30');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [economy, setEconomy] = useState<AdminEconomyRow[]>([]);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  // 범위는 캐시 키에 들어간다 — 전환하면 그 범위를 새로 조회한다
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.economy(Number(range)), () => readAdminEconomy(Number(range)), granted);
 
-  const run = (r: Range = range) =>
-    (async () => {
-      const [eco, us] = await readAdminEconomy(Number(r));
-      setEconomy([...eco].reverse());
-      setUsers(us);
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  useEffect(() => {
-    // granted가 된 순간 현재 범위로 조회 — 그 전엔 빈 골격만
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
-
-  const onRange = (r: Range) => { setRange(r); if (granted) loadAll(r); };
-  const loadAll = (r: Range) => { setLoading(true); setError(null); void run(r); };
+  const [economyRows, users] = data ?? EMPTY;
+  // 뷰는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
+  const economy = useMemo(() => [...economyRows].reverse(), [economyRows]);
 
   const days = lastNDays(Number(range));
   const series = (f: (r: AdminEconomyRow) => number) =>
@@ -64,7 +54,7 @@ export default function EconomyTab() {
         <Frame title="유입 — 판매·쿠폰" aside={
           <MetricSwitch value={range}
                         options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
-                        onChange={onRange} ariaLabel="기간 선택" />
+                        onChange={setRange} ariaLabel="기간 선택" />
         }>
           <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} height={72} />
           <p className="text-2xs text-text-dim">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</p>
@@ -78,7 +68,7 @@ export default function EconomyTab() {
       </div>
 
       <Frame title="원장 대차대조">
-        <TabState loading={loading && granted} error={error} onRetry={() => loadAll(range)} />
+        <TabState loading={loading && granted} error={error} onRetry={refresh} />
         <p className="text-xs text-text-dim leading-relaxed">
           기간 내 유입합 {fmtNum(inflowTotal)}G · 유출합 {fmtNum(outflowTotal)}G ·
           순유입 <span className="pf-accent text-gold">{fmtNum(inflowTotal - outflowTotal)}G</span>.

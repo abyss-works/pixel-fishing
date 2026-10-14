@@ -8,33 +8,30 @@ import Note from '../../../ui/Note';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import { ONLINE_WINDOW_MIN, selectLiveDashboard } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
 
+// 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
+const NO_USERS: AdminUserRow[] = [];
+
 export default function LiveTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  // 60초마다 갱신 — 서버리스 읽기라 부담이 미미하고(친구 규모), 실시간 감각은 이 정도면 충분
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.users, readAdminUsers, granted, 60_000);
+  const users = data ?? NO_USERS;
   const [tick, setTick] = useState(() => Date.now()); // n분 전 라벨 재계산 트리거
 
-  const run = () =>
-    (async () => {
-      setUsers(await readAdminUsers());
-      setTick(Date.now());
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
   useEffect(() => {
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // 60초마다 갱신 — 서버리스 읽기라 부담이 미미하고(친구 규모), 실시간 감각은 이 정도면 충분
-    const t = setInterval(run, 60_000);
+    if (!granted) return;
+    // 라벨은 조회와 별개로 다시 계산한다 — 재조회가 같은 명부를 돌려줄 수 있다
+    const t = setInterval(() => setTick(Date.now()), 60_000);
     return () => clearInterval(t);
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- granted 전환 시 재개
   }, [granted]);
 
   // 신선도 버킷 — 접속중(10분) / 최근(1시간) / 금일 활동(KST 자정 기준은 탭 아래 근사: 24h 창)
@@ -57,7 +54,7 @@ export default function LiveTab() {
         흔적을 남기므로 열어 둔 탭도 10분 무활동이면 자리 비움으로 계산된다. 60초 갱신.
       </Note>
 
-      <TabState loading={loading && granted} error={error} onRetry={run} />
+      <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
       <Frame title="접속 현황">
         <KpiGrid>
