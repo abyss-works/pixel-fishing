@@ -190,7 +190,7 @@ describe('rollNamedEncounter', () => {
     expect(rollNamedEncounter(['pacific-named-megalodon'], 'dragonhole', () => 0)).toBeNull();
   });
 
-  it('게이트 확률(1/2000) 밖이면 null', () => {
+  it('게이트 확률(1/1000) 밖이면 null', () => {
     expect(rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0.999)).toBeNull();
   });
 
