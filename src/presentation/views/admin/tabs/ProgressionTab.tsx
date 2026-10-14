@@ -1,38 +1,31 @@
 // 진행 탭 — 콘텐츠가 어디서 답답한지. 레이아웃: [배 단계 | 낚싯대 레벨] 좌우(xl) →
 // [지역 도달] → [게이트 정체 목록]. **밸런스 숫자는 배 데이터를 재사용**한다 —
 // 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, 액션 리듀서 머리 주석과 같은 판단).
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import SectionTitle from '../../../ui/SectionTitle';
 import { fmtNum } from '../../../../features/admin/model/metrics';
 import { adminNumber, selectProgressionDashboard } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
 import { BarsChart, Frame, TabState } from '../charts';
+
+// 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
+const NO_USERS: AdminUserRow[] = [];
 
 // 지역 표기는 라이브 탭과 공유하는 리터럴 미러다 — 월드 마스크 데이터를 불러오지 않는다.
 // 도달 퍼널의 지역 순서는 관리자 데이터 모델이 제공한다.
 export default function ProgressionTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
-
-  const run = () =>
-    (async () => {
-      setUsers(await readAdminUsers());
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  useEffect(() => {
-    // granted가 된 순간 조회 — 그 전엔 빈 골격만
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
+  // 유저 명부는 라이브·유저 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.users, readAdminUsers, granted);
+  const users = data ?? NO_USERS;
 
   const { boatHist, rodHist, regionReach, stalled } = useMemo(
     () => selectProgressionDashboard(users), [users],
@@ -40,7 +33,7 @@ export default function ProgressionTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <TabState loading={loading && granted} error={error} onRetry={run} />
+      <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
       {/* 분포 셋 — 같은 성격(히스토그램)이라 xl 이상에선 짝지어 나란히 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">

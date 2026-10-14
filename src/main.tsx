@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { QueryProvider } from './core/QueryProvider.tsx'
 import AdminApp from './presentation/views/admin/AdminDashboard.tsx'
 import { initObservability, Sentry } from './platform/observability.ts'
 import { installGlobalFailureHandlers, fail } from './core/errors.ts'
@@ -29,8 +30,9 @@ createRoot(document.getElementById('root')!).render(
         <button className="pf-btn mt-3" onClick={() => location.reload()}>새로고침</button>
       </div>
     }>
+      {/* 관리자 앱의 읽기 캐시도 앱 경계에서 연다 — 접근 판정과 탭 조회가 이 안에서 돈다 */}
       {isAdmin && onAdminPage
-        ? <AdminApp />
+        ? <QueryProvider><AdminApp /></QueryProvider>
         : <App />}
     </Sentry.ErrorBoundary>
   </StrictMode>,

@@ -1,7 +1,7 @@
 // 유저 탭 — v_admin_users 뷰 기반 전체 명부와 행 클릭 드릴다운을 제공한다.
 // 검색은 이메일·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
 //   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인 → 도감↔이벤트 차액(근거 없는 도감).
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
@@ -12,37 +12,25 @@ import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { adminNumber, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
-import type {
-  AdminUserRow, AdminDexMismatchRow, AdminEventRow,
-  AdminSpamFlagRow, AdminImportLogRow,
-} from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
 
+// 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
+const NO_USERS: AdminUserRow[] = [];
+
 export default function UsersTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  // 유저 명부는 라이브·진행 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.users, readAdminUsers, granted);
+  const users = data ?? NO_USERS;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<AdminUserRow | null>(null);
-
-  const run = () =>
-    (async () => {
-      setUsers(await readAdminUsers());
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  const loadAll = () => { setLoading(true); setError(null); void run(); };
-
-  useEffect(() => {
-    // granted가 된 순간 조회 — 그 전엔 빈 골격만
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
 
   const filtered = useMemo(() =>
     filterAdminUsers(users, query), [users, query]);
@@ -59,7 +47,7 @@ export default function UsersTab() {
         </span>
         {error && <span className="text-2xs text-danger">조회 실패 — 재시도</span>}
         {error &&
-          <PillButton type="button" onClick={() => loadAll()}>다시 시도</PillButton>}
+          <PillButton type="button" onClick={refresh}>다시 시도</PillButton>}
       </div>
 
       {granted && loading && <TabState loading />}
@@ -112,28 +100,16 @@ export default function UsersTab() {
 
 // ---------- 유저 상세 (드릴다운) ----------
 
+// 조회 전 골격 — 상세는 열릴 때 바로 조회하므로 이 값은 한 프레임만 보인다
+const EMPTY_DETAIL: Awaited<ReturnType<typeof readAdminUserDetails>> = [[], [], [], []];
+
 function UserDetail({ user, onClose }: {
   user: AdminUserRow; onClose: () => void;
 }) {
-  const [events, setEvents] = useState<AdminEventRow[]>([]);
-  const [mismatch, setMismatch] = useState<AdminDexMismatchRow[]>([]);
-  const [flags, setFlags] = useState<AdminSpamFlagRow[]>([]);
-  const [imports, setImports] = useState<AdminImportLogRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    readAdminUserDetails(user.user_id).then(([evs, mis, flags, imps]) => {
-      if (!alive) return;
-      setEvents(evs);
-      setMismatch(mis);
-      setFlags(flags);
-      setImports(imps);
-      setLoading(false);
-    }, e => { if (!alive) return; setError(String(e?.message ?? e)); setLoading(false); });
-    return () => { alive = false; };
-  }, [user.user_id]);
+  // 드릴다운은 uid별 키라 유저를 바꿔 열면 이전 조회와 섞이지 않는다
+  const { data, loading, error } =
+    useAdminQuery(adminKeys.userDetails(user.user_id), () => readAdminUserDetails(user.user_id), true);
+  const [events, mismatch, flags, imports] = data ?? EMPTY_DETAIL;
 
   const { mismatch: userMismatch, flag, imports: userImports, byType, fastGaps } = useMemo(
     () => selectAdminUserDetail(user.user_id, events, mismatch, flags, imports),

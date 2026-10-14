@@ -1,7 +1,7 @@
 // 이상탐지 탭 — 연타·판정 지표와 제재 현황을 확인한다. 운영 조치는 여기서 시작하고
 // Sentry 두 곳으로 관측한다. 레이아웃: 행동 이상(연타 | PERFECT) 좌우 → 기록 이상(반입 | 도감 차액)
 // 좌우 → 제재 현황 풀폭. 판정 기준(gap<2초 등)은 서버의 탐지 기준과 일치한다.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -9,39 +9,22 @@ import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
 import { adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
 import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
-import type {
-  AdminUserRow, AdminSpamFlagRow, AdminImportLogRow, AdminDexMismatchRow,
-} from '../../../../features/admin/model/types';
+import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Frame, TabState } from '../charts';
+
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 표를 그린다
+const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], [], [], []];
 
 export default function AntiAbuseTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
-  const [flags, setFlags] = useState<AdminSpamFlagRow[]>([]);
-  const [imports, setImports] = useState<AdminImportLogRow[]>([]);
-  const [mismatch, setMismatch] = useState<AdminDexMismatchRow[]>([]);
+  const { data, loading, error, refresh } =
+    useAdminQuery(adminKeys.antiAbuse, readAdminAntiAbuse, granted);
 
-  const run = () =>
-    (async () => {
-      // 유저 명부는 "uid → 식별" 라벨 풀로 쓴다 — 플래그 행에는 개인정보를 조인해 둘 수 없다
-      const [us, f, imps, mis] = await readAdminAntiAbuse();
-      setUsers(us);
-      setFlags(f);
-      setImports(imps);
-      setMismatch(mis);
-    })().then(() => setLoading(false),
-              e => { setError(String(e?.message ?? e)); setLoading(false); });
-
-  useEffect(() => {
-    // granted가 된 순간 조회 — 그 전엔 빈 골격만
-    if (!granted) { setLoading(false); return; }
-    void run();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 판정 완료 시점 실행
-  }, [granted]);
+  // 유저 명부는 "uid → 식별" 라벨 풀로 쓴다 — 플래그 행에는 개인정보를 조인해 둘 수 없다
+  const [users, flags, imports, mismatch] = data ?? EMPTY;
 
   const labelOf = (uid: string): string => {
     const u = users.find(x => x.user_id === uid);
@@ -54,7 +37,7 @@ export default function AntiAbuseTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <TabState loading={loading && granted} error={error} onRetry={run} />
+      <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
       {!granted && (
         <Note>운영 DB 연결 또는 admins 등록 후 채워진다. 화면 구성은 아래와 같다.</Note>
