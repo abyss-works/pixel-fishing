@@ -242,7 +242,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
 
   it('닫기를 누르면 모달이 닫힌다', () => {
     renderBoatPanel({ gold: BOATS[0].price });
-    fireEvent.click(screen.getByText('닫기'));
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(screen.queryByText(/^구매하기/)).not.toBeInTheDocument();
     expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
   });
@@ -1146,7 +1146,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
     fireEvent.mouseLeave(screen.getAllByLabelText('도움말')[0]);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('닫기'));
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(screen.queryByText('파워')).not.toBeInTheDocument();
   });
 

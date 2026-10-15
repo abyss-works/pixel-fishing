@@ -9,6 +9,7 @@ import { judgeTiming } from '../../../../game/rules/logic.js';
 import { selectChallengeAttempt } from '../../../../features/bounty/model/challenge';
 import { useKeyScope } from '../../../ui/hotkeys';
 import Button from '../../../ui/Button';
+import CloseButton from '../../../ui/CloseButton';
 
 const TICK_MS = 50;
 
@@ -73,7 +74,8 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
 
   const attempt = selectChallengeAttempt(run);
   return (
-    <div className="border border-gold rounded-sm bg-surface p-4 flex flex-col gap-2 text-center text-sm" role="dialog" aria-label={`${targetName} 도전`}>
+    <div className="relative border border-gold rounded-sm bg-surface p-4 flex flex-col gap-2 text-center text-sm" role="dialog" aria-label={`${targetName} 도전`}>
+      <CloseButton onClose={onClose} />
       <b className="pf-accent text-gold text-lg">{targetName} — 도전</b>
       <div className="border-b border-line" />
       {!run.done ? (
@@ -117,9 +119,6 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
         <>
           <span className="text-sm">
             {run.success ? `${targetName} 챌린지 성공! 수배판에서 의뢰를 완료하자.` : `놓쳤다 — 도전권은 유지된다.`}
-          </span>
-          <span className="flex justify-center">
-            <Button onClick={onClose}>닫기</Button>
           </span>
         </>
       )}

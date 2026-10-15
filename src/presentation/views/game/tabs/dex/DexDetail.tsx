@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { Fish, GameState } from '../../../../../game/rules/logic';
 import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
 import ArrowButton from '../../../../ui/ArrowButton';
-import Button from '../../../../ui/Button';
 import Modal from '../../../../ui/Modal';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityText, RarityDot } from '../../../../ui/fish/RarityTag';
@@ -57,7 +56,6 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
         </div>
-        <Button onClick={onClose}>닫기</Button>
       </div>
     </Modal>
   );

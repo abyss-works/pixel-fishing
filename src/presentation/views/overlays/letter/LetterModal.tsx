@@ -51,7 +51,6 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
           {body.length} / {LETTER_MAX}
         </span>
         <span className="ml-auto flex gap-2">
-          <Button size="sm" onClick={onClose}>닫기</Button>
           <Button size="sm" disabled={!body || over || busy} onClick={send}>
             보내기
           </Button>

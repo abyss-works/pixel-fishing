@@ -10,7 +10,7 @@ export type GlyphId =
   | 'sun' | 'moon'
   | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
   | 'caretRight' | 'caretDown' | 'checkPartial'
-  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit';
+  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 봉투 — 테두리 사각형에 접힌 덮개(V자) 두 줄
@@ -81,6 +81,11 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
     cells: [[2, 1, 8, 1], [1, 2, 1, 2], [1, 8, 1, 2], [2, 10, 3, 1], [7, 10, 3, 1],
             [10, 3, 1, 5], [5, 9, 2, 1], [3, 1, 2, 1]],
     holes: [[4, 3, 6, 6]],
+  },
+  // 닫기 — 대각선 X 두 줄(2px 굵기). 모달·패널 우상단 공통
+  close: {
+    cells: [[1, 1, 2, 2], [3, 3, 2, 2], [5, 5, 2, 2], [7, 7, 2, 2], [9, 9, 2, 2],
+            [9, 1, 2, 2], [7, 3, 2, 2], [3, 7, 2, 2], [1, 9, 2, 2]],
   },
   // 잠김: 걸쇠 닫힘 + 몸통(열쇠구멍)
   lock: {
