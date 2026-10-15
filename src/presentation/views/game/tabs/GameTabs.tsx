@@ -16,7 +16,8 @@ import BagTab from './bag/BagTab';
 import DexTab from './dex/DexTab';
 import SettingsTab from './settings/SettingsTab';
 import VAdmin from './admin-tools/VAdmin';
-import { setBagLayout, setBagSection, useBagView } from './bag/bagView';
+import { BAG_SECTIONS, setBagLayout, setBagSection, useBagView } from './bag/bagView';
+import type { BagSection } from './bag/bagView';
 import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../../admin/gate';
 import Sidebar from '../../../layouts/sidebar';
 
@@ -39,6 +40,8 @@ interface GameTabsProps {
 const isAdminVisible = (account: string | null) =>
   isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
 
+const BAG_SECTION_LABEL: Record<BagSection, string> = { fish: '물고기', items: '아이템', artifacts: '유물' };
+
 export default function GameTabs(props: GameTabsProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
@@ -47,7 +50,7 @@ export default function GameTabs(props: GameTabsProps) {
 
   const tabs = [
     { key: 'region' as const, label: '지역' },
-    { key: 'bag' as const, label: layout === 'cards' ? '가방\n(카드)' : '가방\n(목록)' },
+    { key: 'bag' as const, label: `가방\n(${BAG_SECTION_LABEL[section]})` },
     { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : dexView === 'variant' ? '도감\n(돌연변이)' : '도감\n(네임드)' },
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
@@ -55,12 +58,14 @@ export default function GameTabs(props: GameTabsProps) {
   ].map(tab => ({ ...tab, icon: <TabIcon tab={tab.key} /> }));
 
   // 메뉴 탭 선택(클릭·숫자키). 이미 열린 탭을 다시 고르면 그 탭의 보기를 순환한다
-  // (가방: 목록↔카드 · 도감: 일반→돌연변이→네임드). 현재 보기는 탭 라벨 둘째 줄이 보여 준다.
+  // (가방: 물고기→아이템→유물 · 도감: 일반→돌연변이→네임드). 현재 보기는 탭 라벨 둘째 줄이 보여 준다.
   const select = (tab: TabKey) => {
     if (tab === activeTab && tab === 'dex') {
       setDexView(DEX_VIEWS[(DEX_VIEWS.indexOf(dexView) + 1) % DEX_VIEWS.length]);
     }
-    if (tab === activeTab && tab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
+    if (tab === activeTab && tab === 'bag') {
+      setBagSection(BAG_SECTIONS[(BAG_SECTIONS.indexOf(section) + 1) % BAG_SECTIONS.length]);
+    }
     setActiveTab(tab);
   };
 
@@ -74,11 +79,12 @@ export default function GameTabs(props: GameTabsProps) {
 
   useKeyScope(event => {
     if (hasModifier(event)) return;
-    // Tab / Shift+Tab = 활성 탭의 서브탭 순환(가방: 물고기↔아이템 · 도감: 지역). 메뉴 탭은 숫자키만 바꾼다.
+    // Tab / Shift+Tab = 활성 탭의 서브탭 순환(가방 물고기: 목록↔카드 · 도감: 지역).
+    // 서브탭이 없는 화면(가방 아이템·유물 등)에서는 아무것도 하지 않는다. 메뉴 탭은 숫자키만 바꾼다.
     if (event.key === 'Tab') {
       event.preventDefault();
       const direction = event.shiftKey ? -1 : 1;
-      if (activeTab === 'bag') setBagSection(section === 'fish' ? 'items' : 'fish');
+      if (activeTab === 'bag' && section === 'fish') setBagLayout(layout === 'list' ? 'cards' : 'list');
       else if (activeTab === 'dex') cycleDexZone(direction);
       return true;
     }

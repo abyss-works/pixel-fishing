@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance } from '../../../game/rules/logic';
-import { selectBagCatalog, selectInventoryItemCount, selectSalePreview } from './catalog';
+import { selectBagCatalog, selectSalePreview } from './catalog';
 
 const instance = (uid: string, fishId: string, form: FishInstance['form'] = 'normal', locked = false): FishInstance => ({
   uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked,
@@ -41,9 +41,5 @@ describe('가방 파생 데이터', () => {
     expect(preview.rows.find(row => row.key === fish.id)).toMatchObject({
       selectedCount: 0, allSelected: false, selectedSubtotal: 0,
     });
-  });
-
-  it('아이템 스택의 보유량을 합산한다', () => {
-    expect(selectInventoryItemCount({ bait: 3, ticket: 2 })).toBe(5);
   });
 });

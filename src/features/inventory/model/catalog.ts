@@ -60,10 +60,6 @@ export function selectBagCatalog(
   });
 }
 
-export function selectInventoryItemCount(items: Readonly<Record<string, number>>): number {
-  return Object.values(items).reduce((total, count) => total + count, 0);
-}
-
 export interface SaleRow extends BagRow {
   sellable: FishInstance[];
   selected: FishInstance[];
