@@ -11,7 +11,7 @@ import { reopenWhatsNew } from '../../../../../features/announcements/service/wh
 export default function PatchNotesPanel() {
   return (
     <div>
-      <SectionTitle>업데이트 소식</SectionTitle>
+      <SectionTitle>패치노트</SectionTitle>
       {/* 접속 시 뜨는 이번 버전 소식 창을 다시 연다 */}
       <div className="flex justify-end mb-2">
         <Button size="sm" onClick={reopenWhatsNew}>이번 소식 다시 보기</Button>
