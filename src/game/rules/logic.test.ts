@@ -8,6 +8,7 @@ import {
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
   autoLockUids, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
+  moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
@@ -527,11 +528,54 @@ describe('월척(크기)·개체·폼 기록', () => {
   });
 });
 
+describe('전시대 — 가방 ↔ 슬롯 이동 (인덱스가 곧 칸 번호)', () => {
+  it('진열은 가방에서 빼서 지정 칸에 넣는다 — 앞 칸이 비어도 희소 배열로 자리를 지킨다', () => {
+    const a = mk('carp'), b = mk('carp');
+    const st = moveExhibit({ ...newState(), bag: [a, b] }, b.uid, 1);
+    expect(st.bag).toEqual([a]);
+    expect(st.exhibit[0]).toBeUndefined();
+    expect(st.exhibit[1]).toBe(b);
+  });
+
+  it('회수는 칸을 비우고(구멍 유지) 가방 맨 뒤에 붙인다', () => {
+    const a = mk('carp'), b = mk('carp'), c = mk('carp');
+    const st = moveExhibit({ ...newState(), bag: [a], exhibit: [c, b] }, c.uid, null);
+    expect(st.bag).toEqual([a, c]);
+    expect(st.exhibit[0]).toBeUndefined();
+    expect(st.exhibit[1]).toBe(b);
+  });
+
+  it('대상이 없으면 상태를 그대로 돌려준다', () => {
+    const s = { ...newState(), bag: [mk('carp')] };
+    expect(moveExhibit(s, 'nope', 0)).toBe(s);
+    expect(moveExhibit(s, 'nope', null)).toBe(s);
+  });
+
+  it('빈 칸 탐색 — 가장 앞의 빈 칸, 다 차면 null', () => {
+    const a = mk('carp'), b = mk('carp'), c = mk('carp');
+    expect(freeExhibitSlot([])).toBe(0);
+    const sparse: FishInstance[] = [];
+    sparse[0] = a; sparse[2] = c;
+    expect(freeExhibitSlot(sparse)).toBe(1);
+    expect(freeExhibitSlot([a, b, c])).toBeNull();
+  });
+});
+
 describe('R18b: 세이브 마이그레이션', () => {
   // uid 생성기를 주입해 결정적으로 검증 (기본값은 crypto.randomUUID)
   let n = 0;
   const uid = () => `m${++n}`;
   const mig = (raw: unknown) => { n = 0; return migrate(raw, uid); };
+
+  it('전시대는 칸 위치를 보존한다 — JSON 왕복의 null 구멍을 접지 않는다', () => {
+    const inst = mk('carp');
+    const raw = JSON.parse(JSON.stringify({ ...newState(), exhibit: [undefined, inst] }));
+    expect(raw.exhibit[0]).toBeNull(); // JSON은 구멍을 null로 쓴다
+    const st = mig(raw);
+    expect(st.exhibit[0]).toBeUndefined();
+    expect(st.exhibit[1]).toMatchObject({ uid: inst.uid, fishId: 'carp' });
+    expect(st.exhibit.length).toBe(2);
+  });
 
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급 + 개체화', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };

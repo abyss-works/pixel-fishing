@@ -66,6 +66,9 @@ export const BAIT_WEIGHT_MULT = 2;
 // 아니다. 스택형 items라 여러 번 사면 충분하다.
 export const BAIT_BUY_MAX = 50;
 
+// 전시대 칸 수 — 고정. 확장(골드 구매)은 결정되지 않았다. 칸 번호는 exhibit 배열 인덱스다.
+export const EXHIBIT_SLOTS = 3;
+
 
 // 현상금 일일 수주 상한 — 일반은 전 해역 통합 3회,
 // 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
