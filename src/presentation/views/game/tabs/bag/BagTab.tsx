@@ -5,7 +5,6 @@ import Subheading from '../../../../ui/Subheading';
 import { fmtGold } from '../../../../ui/format';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
-import { selectInventoryItemCount } from '../../../../../features/inventory/model/catalog';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { Bait } from '../../../../../game/content/baits';
@@ -18,19 +17,24 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import IconButton from '../../../../ui/IconButton';
 import PillButton from '../../../../ui/PillButton';
 import SubTabs from '../../../../ui/SubTabs';
-import { RarityDot } from '../../../../ui/fish/RarityTag';
+import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
-import { setBagSection, toggleBagRow, useBagView } from './bagView';
+import { setBagLayout, toggleBagRow, useBagView } from './bagView';
+import type { BagLayout } from './bagView';
+import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
+import { ARTIFACTS } from '../../../../../game/content/artifacts';
+import { artifactEffectLines } from '../../../../ui/artifactEffects';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다(사용자 결정 2026-10-15). 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
 
-// 가방 탭 — **서브탭 2장: 물고기 / 아이템**(사용자 지시 2026-08-27: 물고기 1,500마리를 아이템과
-// 한 스크롤에서 훑게 하지 않는다). 서브탭 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.
+// 가방 탭 — **섹션 3개: 물고기 / 아이템 / 유물**. 섹션은 가방 탭 재선택(클릭·같은 숫자키)으로
+// 순환하고 탭 라벨 둘째 줄이 현재 섹션을 보여 준다. 물고기 1,500마리를 아이템과 한 스크롤에서
+// 훑게 하지 않는다(사용자 지시 2026-08-27). 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.
 //
-// 물고기 섹션 — 목록/카드 2레이아웃. 카드뷰는 **물고기 목록의 렌더링만** 바꾼다(아이템과 무관).
+// 물고기 섹션 — 서브탭 목록/카드(Tab 키 순환). 카드뷰는 **물고기 목록의 렌더링만** 바꾼다.
 //  목록: 종+폼 머리 아래 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
 //  카드: 전 어종 격자에 보유 마릿수. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
 //
@@ -93,7 +97,41 @@ function ItemSection({ game, dispatch, setToast }: {
   );
 }
 
-/** 전시대 선반 — 칸 수는 EXHIBIT_SLOTS, exhibit 인덱스가 칸 번호다. 빈 칸은 자리만 보인다.
+/** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라(슬롯·장착 없음) 조작은 없다.
+ *  얻는 곳(수배판 유물 탭)은 미보유 목록 대신 안내 한 줄로 알린다 — 수배판이 교환 카드를 이미 보여 준다. */
+function ArtifactSection({ game }: { game: GameState }) {
+  const owned = selectOwnedArtifacts(game);
+  return (
+    <div className="flex flex-col gap-1">
+      <PageTitle>
+        유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
+      </PageTitle>
+      {owned.length === 0 ? (
+        <Note>아직 유물이 없다. 네임드를 납품하고 받은 재료를 항구 수배판의 유물 탭에서 교환하자.</Note>
+      ) : (
+        <>
+          <div className="pf-frame divide-y divide-line">
+            {owned.map(a => (
+              <div key={a.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
+                <span className="flex items-baseline justify-between gap-2">
+                  <b className="text-gold">{a.name}</b>
+                  <span className="text-xs"><RarityText rarity={a.grade} /></span>
+                </span>
+                {artifactEffectLines(a).map(line => (
+                  <span key={line} className="text-accent text-xs">{line}</span>
+                ))}
+                <span className="text-text-dim italic text-xs">{a.lore}</span>
+              </div>
+            ))}
+          </div>
+          <Note>유물은 가지고만 있어도 효과가 계속된다. 교환은 항구 수배판의 유물 탭에서.</Note>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 전시대 선반 —칸 수는 EXHIBIT_SLOTS, exhibit 인덱스가 칸 번호다. 빈 칸은 자리만 보인다.
  *  진열 입구는 가방 개체 줄의 별 버튼(InstanceLine.onExhibit) — 여기서는 회수만 한다. */
 function ExhibitShelf({ exhibit, onWithdraw }: {
   exhibit: readonly FishInstance[];
@@ -144,7 +182,6 @@ export default function BagTab({ game, dispatch, setToast }: {
     autoLockUids: autoLockCandidates,
   } = selectBagOverview(game);
   const { layout, section, opened } = useBagView();
-  const itemCount = selectInventoryItemCount(game.items);
 
   const lock = (uids: string[], locked: boolean, label: string) =>
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
@@ -188,20 +225,21 @@ export default function BagTab({ game, dispatch, setToast }: {
 
   return (
     <div>
-      {/* 내부 서브탭 — 물고기(개체 목록·카드) / 아이템(미끼) 완전 분리 */}
-      <SubTabs
-        items={[
-          { key: 'fish', label: '물고기', sub: bagCount },
-          { key: 'items', label: '아이템', sub: itemCount },
-        ]}
-        activeKey={section}
-        onSelect={setBagSection}
-      />
-
       {section === 'items' ? (
         <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
+      ) : section === 'artifacts' ? (
+        <ArtifactSection game={game} />
       ) : (
         <>
+          {/* 물고기 서브탭 — 목록 / 카드. 카드뷰는 물고기 목록의 렌더링만 바꾼다 */}
+          <SubTabs
+            items={[
+              { key: 'list' as BagLayout, label: '목록' },
+              { key: 'cards' as BagLayout, label: '카드' },
+            ]}
+            activeKey={layout}
+            onSelect={setBagLayout}
+          />
           {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>

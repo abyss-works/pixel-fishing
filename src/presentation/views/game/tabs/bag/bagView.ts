@@ -8,11 +8,13 @@ import { useSyncExternalStore } from 'react';
 //   둘 다 **전부 닫힘이 기본** — 수백~수천 마리에서 한눈에 훑기 위해 (판매도 2026-08-28 닫힘으로 변경).
 // 각 화면에서 건드린 종만 set에 기록된다 — set에 없는 종은 화면별 기본값을 따른다.
 export type BagLayout = 'list' | 'cards';
-export type BagSection = 'fish' | 'items';
+/** 가방 섹션 — 가방 탭 재선택이 이 순서로 순환한다(물고기 → 아이템 → 유물) */
+export type BagSection = 'fish' | 'items' | 'artifacts';
+export const BAG_SECTIONS: readonly BagSection[] = ['fish', 'items', 'artifacts'];
 
 interface BagViewState {
   layout: BagLayout;
-  section: BagSection;            // 가방 탭 내부 서브탭(사용자 지시: 물고기/아이템 분리)
+  section: BagSection;            // 가방 섹션(물고기/아이템/유물) — 탭 라벨 둘째 줄에 보인다
   opened: ReadonlySet<string>;    // 가방: **펼친** 행 키만 기록 — 기본은 전부 닫힘
   collapsed: ReadonlySet<string>; // 판매 패널: **펼친** 행 키만 기록 — 기본은 전부 닫힘 (2026-08-28 변경)
 }
