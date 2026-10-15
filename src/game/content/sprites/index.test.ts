@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fishColors, fishOutline, fishSprite, FISH_SHAPE_SPRITES, FISH_SPRITES, OUTLINE_DARK, SILHOUETTE } from './index';
+import { fishColors, fishRings, fishSprite, FISH_SHAPE_SPRITES, FISH_SPRITES, OUTLINE_DARK, SILHOUETTE } from './index';
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
 import { FISH } from '../fish';
 import { NAMED } from '../named';
@@ -16,13 +16,13 @@ describe('종별 전용 격자', () => {
   });
 });
 
-describe('윤곽 색', () => {
-  it('영웅·전설은 등급색, 일반·희귀는 어두운 윤곽, 미발견은 없음', () => {
-    expect(fishOutline({ rarity: 'legendary' })).toBe(RARITY.legendary.color);
-    expect(fishOutline({ rarity: 'epic' })).toBe(RARITY.epic.color);
-    expect(fishOutline({ rarity: 'rare' })).toBe(OUTLINE_DARK);
-    expect(fishOutline({ rarity: 'common' })).toBe(OUTLINE_DARK);
-    expect(fishOutline({ rarity: 'legendary' }, false)).toBeUndefined();
+describe('몸 둘레 링', () => {
+  it('윤곽은 항상 어둡고, 영웅·전설만 등급색 오라가 붙으며, 미발견은 링이 없다', () => {
+    expect(fishRings({ rarity: 'legendary' })).toEqual({ outline: OUTLINE_DARK, aura: RARITY.legendary.color });
+    expect(fishRings({ rarity: 'epic' })).toEqual({ outline: OUTLINE_DARK, aura: RARITY.epic.color });
+    expect(fishRings({ rarity: 'rare' })).toEqual({ outline: OUTLINE_DARK });
+    expect(fishRings({ rarity: 'common' })).toEqual({ outline: OUTLINE_DARK });
+    expect(fishRings({ rarity: 'legendary' }, false)).toEqual({});
   });
 });
 

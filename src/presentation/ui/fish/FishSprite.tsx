@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { drawSpriteCentered } from '../../../game/rendering/pixel';
-import { fishColors, fishOutline, fishSprite } from '../../../game/content/sprites';
+import { fishColors, fishRings, fishSprite } from '../../../game/content/sprites';
 import type { Fish, FormId } from '../../../game/content/fish';
 import { cx } from '../cx';
 
@@ -27,7 +27,7 @@ interface FishSpriteProps {
   className?: string;
 }
 
-// 어종 스프라이트 캔버스 — 격자·팔레트·윤곽 해석은 콘텐츠(fishSprite/fishColors/fishOutline),
+// 어종 스프라이트 캔버스 — 격자·팔레트·링 해석은 콘텐츠(fishSprite/fishColors/fishRings),
 // 굽기와 찍기는 렌더러(drawSpriteCentered)가 맡는다. jsdom엔 canvas가 없어 ctx null 가드.
 // 애니메이션은 한 캔버스당 rAF 하나 — 목록(thumb 수백 개)에서는 켜지 않는다.
 export default function FishSprite({
@@ -40,10 +40,10 @@ export default function FishSprite({
     if (!ctx) return; // jsdom
     const sprite = fishSprite(fish);
     const colors = fishColors(fish, form, discovered);
-    const outline = fishOutline(fish, discovered);
+    const rings = fishRings(fish, discovered);
     const paint = (t?: number) => {
       ctx.clearRect(0, 0, w, h);
-      drawSpriteCentered(ctx, sprite, colors, scale, w / 2, h / 2, { outline, t });
+      drawSpriteCentered(ctx, sprite, colors, scale, w / 2, h / 2, { ...rings, t });
     };
     if (!animate) { paint(); return; }
     let raf = 0;

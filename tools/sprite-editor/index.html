@@ -58,11 +58,11 @@
     </div>
     <label>기준색(일반) <input id="base" type="text" value="#c8a165" size="8"></label>
     <label>기준색(변이) <input id="base2" type="text" value="#f5c542" size="8"></label>
-    <label>윤곽 <select id="outline">
+    <label>링 <select id="outline">
       <option value="">없음</option>
-      <option value="#0b1322" selected>어두운 윤곽(일반·희귀)</option>
-      <option value="#ba68c8">영웅 #ba68c8</option>
-      <option value="#ffd54f">전설 #ffd54f</option>
+      <option value="dark" selected>어두운 윤곽(일반·희귀)</option>
+      <option value="epic">윤곽 + 영웅 오라 #ba68c8</option>
+      <option value="legendary">윤곽 + 전설 오라 #ffd54f</option>
     </select></label>
     <label><input id="wobble" type="checkbox" checked> 열 흔들기 미리보기</label>
   </div>
@@ -114,8 +114,9 @@ function wobble(t, scale) {
   }
   return out;
 }
-const opaque = (x, y) => x >= 0 && y >= 0 && x < W && y < H && cells[y][x] !== null;
-function outlineCells() {
+const OUTLINE_DARK = '#0b1322', AURA = { epic: '#ba68c8', legendary: '#ffd54f' };
+function outlineCells(grid) {
+  const opaque = (x, y) => x >= 0 && y >= 0 && x < W && y < H && grid[y][x] !== null;
   const out = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (opaque(x, y)) continue;
@@ -123,10 +124,16 @@ function outlineCells() {
   }
   return out;
 }
-function bake(colors, scale, outline) {
+function auraCells(grid) {
+  const g2 = grid.map(r => r.slice());
+  for (const [x, y] of outlineCells(grid)) g2[y][x] = 0;
+  return outlineCells(g2);
+}
+function bake(colors, scale, ring) {
   const c = document.createElement('canvas'); c.width = W * scale; c.height = H * scale;
   const ctx = c.getContext('2d');
-  if (outline) { ctx.fillStyle = outline; for (const [x, y] of outlineCells()) ctx.fillRect(x * scale, y * scale, scale, scale); }
+  if (ring && AURA[ring]) { ctx.fillStyle = AURA[ring]; for (const [x, y] of auraCells(cells)) ctx.fillRect(x * scale, y * scale, scale, scale); }
+  if (ring) { ctx.fillStyle = OUTLINE_DARK; for (const [x, y] of outlineCells(cells)) ctx.fillRect(x * scale, y * scale, scale, scale); }
   cells.forEach((row, y) => row.forEach((idx, x) => { if (idx === null) return; ctx.fillStyle = colors[idx] ?? '#f0f'; ctx.fillRect(x * scale, y * scale, scale, scale); }));
   return c;
 }
@@ -204,12 +211,12 @@ function buildPreviews() {
   }
 }
 function paintPreviews(t) {
-  const outline = document.getElementById('outline').value || undefined;
+  const ring = document.getElementById('outline').value || undefined;
   const wob = document.getElementById('wobble').checked;
   for (const c of previews.querySelectorAll('canvas')) {
     const scale = Number(c.dataset.scale), key = c.dataset.key;
     const colors = key ? palette.map(s => colorOf(s, document.getElementById(key).value)) : palette.map(() => '#22314a');
-    const img = bake(colors, scale, key ? outline : undefined);
+    const img = bake(colors, scale, key ? ring : undefined);
     const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height);
     if (!wob) { ctx.drawImage(img, 0, 0); continue; }
     const off = wobble(t, scale);
