@@ -16,7 +16,7 @@ import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { BaseId } from '../../../../game/content/places';
-import { zoneOfPort } from '../../../../game/content/bounties';
+import { isBountyPort, zoneOfPort } from '../../../../game/content/bounties';
 import { zoneById } from '../../../../game/content/zones';
 import BountyPanel from '../bounty/BountyPanel';
 import Button from '../../../ui/Button';
@@ -94,7 +94,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
             setToast('미끼를 샀다 — 가방의 아이템 섹션에서 활성화한다.');
           })} />
       )}
-      {panel === 'bounty' && (base === 'harbor' || base === 'manila' || base === 'colombo') && (
+      {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
         <ModalCard title={`수배판 — ${zoneById(zoneOfPort(base)!)!.shortName}`} onClose={onClose}>
           <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
