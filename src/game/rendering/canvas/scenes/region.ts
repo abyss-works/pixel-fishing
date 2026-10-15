@@ -8,7 +8,7 @@ import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
 import { drawBoat, drawPerson } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
-import { drawFishingGear, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
+import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack } from '../../../world/types';
 import type { GearView } from '../../pixel/sprites/overlays.js';
@@ -74,8 +74,9 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   pack.flavor?.(ctx, v.t);
 
   // 동적: 군집/낚싯줄/플레이어/타이밍 바
-  drawSchools(ctx, pack.schools, v.boat, v.t);
+  drawSchools(ctx, pack.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
+  drawHookJump(ctx, v);
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
   else drawPerson(ctx, v.player.x, v.player.y);
   drawTimingBar(ctx, v);
