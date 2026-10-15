@@ -25,7 +25,8 @@ export default function Modal({ layer = 'app', title, wide, xl, onClose, closabl
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
-  useKeyBlocker();
+  // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
+  useKeyBlocker(closable ? onClose : undefined);
   const backdrop = layer === 'app'
     ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
     : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';

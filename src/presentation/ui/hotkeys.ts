@@ -63,8 +63,11 @@ export function useKeyScope(handler: Handler, opts: { exclusive?: boolean } = {}
   }, [exclusive]);
 }
 
-/** 모달용 — 자기는 아무 키도 안 쓰지만 아래 레이어를 막는다 */
-export const useKeyBlocker = () => useKeyScope(() => {}, { exclusive: true });
+/** 모달용 — 아래 레이어를 막는다. onEscape를 주면 Esc가 그 창을 닫는다(우상단 X와 같은 출구).
+ *  X가 없는 창(새 버전 안내처럼 출구가 하나뿐인 창)은 onEscape를 주지 않는다 */
+export const useKeyBlocker = (onEscape?: () => void) => useKeyScope(e => {
+  if (onEscape && e.key === 'Escape') { e.preventDefault(); onEscape(); return true; }
+}, { exclusive: true });
 
 /** 테스트 격리용 — 스택은 모듈 전역이라 케이스 사이에 비워야 한다 */
 export function resetKeyScopes() {
