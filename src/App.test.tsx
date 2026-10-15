@@ -9,6 +9,7 @@ import FacilityModal from './presentation/views/overlays/facility/FacilityModal'
 import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
+import { resetFishArtStyle } from './features/display/service/fishArtStyle';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
@@ -62,6 +63,7 @@ beforeEach(() => {
   resetBagView();     // 가방 보기 설정은 모듈 전역이라 케이스 사이에 새로 시작해야 한다
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
+  resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
   resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
 });
@@ -571,6 +573,17 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     render(<App />);
     expect(hud()).toContain('골드 10G');
     expect(hud()).toContain('1마리');
+  });
+
+  it('설정에서 물고기 그래픽을 고른다 — 기본 v1, v2는 실험 표시, 선택은 기기에 남는다', () => {
+    render(<App />);
+    clickTab('설정');
+    const pressed = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
+    expect(pressed()).toMatch(/^v1/);
+    expect(screen.getByText(/실험/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^v2/ }));
+    expect(pressed()).toMatch(/^v2/);
+    expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
   it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
