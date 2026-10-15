@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BAITS } from '../../../game/content/baits';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, newState, rodStats } from '../../../game/rules/logic';
+import { upgradeCost } from '../../../game/rules/balance';
 import {
-  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows,
-  selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodUpgradePreview,
+  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatLadder,
+  selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
 } from './facility';
 
 describe('정비 화면 데이터', () => {
@@ -28,6 +29,25 @@ describe('정비 화면 데이터', () => {
     game.boat = MAX_BOAT;
     expect(selectBoatPurchasePreview(game)).toMatchObject({ kind: 'max' });
     expect(selectBoatPurchaseResult(1).boatName).toBeTruthy();
+  });
+
+  it('배 사다리 — 가진 배는 done, 현재는 current, 바로 다음은 next, 나머지는 locked', () => {
+    const game = newState();
+    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['next', 'locked', 'locked', 'locked', 'locked', 'locked']);
+    game.boat = 2;
+    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['done', 'current', 'next', 'locked', 'locked', 'locked']);
+    game.boat = MAX_BOAT;
+    expect(selectBoatLadder(game).at(-1)?.state).toBe('current');
+  });
+
+  it('낚싯대 사다리 — 현재 ±2단계, 1레벨 아래로는 내려가지 않고 비용은 그 레벨로 올리는 값', () => {
+    const game = newState(); // rod 1
+    const rows = selectRodLadder(game);
+    expect(rows.map(r => r.level)).toEqual([1, 2, 3]);
+    expect(rows.map(r => r.state)).toEqual(['current', 'next', 'locked']);
+    expect(rows[1].cost).toBe(upgradeCost(1));
+    game.rod = 5;
+    expect(selectRodLadder(game).map(r => r.level)).toEqual([3, 4, 5, 6, 7]);
   });
 
   it('미끼 상점의 수량·보유량·총액·구매 가능 여부를 구성한다', () => {

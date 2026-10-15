@@ -4,9 +4,11 @@ import type { GameState } from '../../../../game/rules/logic';
 import { BAIT_BUY_MAX } from '../../../../game/rules/balance';
 import { selectSalePreview } from '../../../../features/inventory/model/catalog';
 import {
-  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatPurchasePreview,
-  selectBoatPurchaseResult, selectRodUpgradePreview,
+  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatLadder,
+  selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
 } from '../../../../features/gameplay/model/facility';
+import BoatSprite from '../../../ui/BoatSprite';
+import ProgressLadder from '../../../ui/ProgressLadder';
 import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import type { GameAction } from '../../../../game/rules/actions';
@@ -241,6 +243,12 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
   const fmt = (s: { biteMin: number; biteMax: number; sweep: number }) =>
     ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s` });
   const c = fmt(cur), n = fmt(next);
+  // 사다리 — 상한이 없어 현재 ±2단계만. 어디쯤 왔는지보다 "다음 한 칸"이 보이면 된다
+  const ladder = selectRodLadder(game).map(r => ({
+    key: String(r.level), state: r.state,
+    label: <span className="pf-accent">Lv.{r.level}</span>,
+    meta: <>입질 <span className="pf-accent">{fmt(r.stats).bite}</span>{r.state !== 'done' && r.state !== 'current' && <> · <span className="pf-accent">{fmtGold(r.cost)}</span></>}</>,
+  }));
 
   return (
     <ModalCard title={`낚싯대 강화 — Lv.${game.rod} → Lv.${game.rod + 1}`} onClose={onClose}
@@ -251,6 +259,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
           강화하기 (-{fmtGold(cost)})
         </Button>
       </>}>
+      <ProgressLadder steps={ladder} />
       <StatCompare rows={[
         { label: '입질 대기', value: c.bite, next: n.bite },
         { label: '바 시간', value: c.sweep, next: n.sweep },
@@ -265,10 +274,20 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   game: GameState; onBuy: () => void; onClose: () => void; busy: boolean;
 }) {
   const preview = selectBoatPurchasePreview(game);
+  // 사다리 — 6단계 전부. 각 행은 스프라이트·이름·속도·가방·(잠긴 행은) 필요 명성
+  const ladder = selectBoatLadder(game).map(({ boat: b, state, openedSpot: spot }) => ({
+    key: String(b.tier), state,
+    leading: <BoatSprite tier={b.tier} preset="thumb" ariaLabel={b.name} />,
+    label: b.name,
+    meta: <>속도 <span className="pf-accent">{fmtNum(b.speed)}</span> · 가방 <span className="pf-accent">{fmtNum(b.bagCap)}</span>
+      {spot && <> · {spot.name}</>}
+      {state === 'locked' && b.fameReq > 0 && <> · 명성 <span className="pf-accent">{fmtNum(b.fameReq)}</span></>}</>,
+  }));
   if (preview.kind === 'max') {
     return (
       <ModalCard title="조선소" onClose={onClose}>
-        <Note>이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
+        <ProgressLadder steps={ladder} />
+        <Note className="my-0">이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
       </ModalCard>
     );
   }
@@ -284,6 +303,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
           구매하기 (-{fmtGold(next.price)})
         </Button>
       </>}>
+      <ProgressLadder steps={ladder} />
       <StatCompare rows={[
         { label: '항해 속도', value: currentSpeed ?? '도보', next: fmtNum(next.speed) },
         { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리` },

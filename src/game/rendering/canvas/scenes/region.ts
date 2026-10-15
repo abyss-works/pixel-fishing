@@ -76,7 +76,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   // 동적: 군집/낚싯줄/플레이어/타이밍 바
   drawSchools(ctx, pack.schools, v.boat, v.t);
   drawFishingGear(ctx, v);
-  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
+  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.boat);
   else drawPerson(ctx, v.player.x, v.player.y);
   drawTimingBar(ctx, v);
 
