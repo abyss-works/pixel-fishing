@@ -26,3 +26,6 @@ export const RARITY_CARD =
   + ' border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]'
   + ' transition-[translate,background-color] duration-[120ms] ease-out'
   + ' hover:-translate-y-0.5 hover:bg-surface-2';
+
+/** 미획득·미보유 카드 흐림 — 등급 카드와 짝이라 같은 모듈에 둔다. 네 화면이 같은 값을 쓴다 */
+export const DIM_CARD = 'opacity-[0.72]';

@@ -3,7 +3,7 @@ import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import { selectBagCatalog } from '../../../../../features/inventory/model/catalog';
 import { cx } from '../../../../ui/cx';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import { RARITY_CARD } from '../../../../ui/fish/RarityTag';
+import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 
 // 가방 카드뷰 — 목록뷰가 정보 집약(개체 한 줄씩)이라면 이쪽은 **현황 한눈에**다.
 // 그래서 전 어종을 깔고 보유 마릿수만 얹는다: 뭘 들고 있고 뭐가 비었는지가 한 화면에 보인다.
@@ -24,7 +24,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
           <div key={f.id} data-rarity={f.rarity}
                className={cx(RARITY_CARD, 'p-2 text-sm',
                  // 보유 0은 흐리게 — 미발견(???)보다는 진하게 둬서 셋이 구분된다
-                 n === 0 && (known ? 'opacity-[0.72]' : 'opacity-[0.55]'))}
+                 n === 0 && (known ? DIM_CARD : 'opacity-[0.55]'))}
                aria-label={!known ? '미확인 어종'
                  : n === 0 ? `${f.name} 미보유`
                  : `${f.name} 일반 ${normalCount}마리 변이 ${variantCount}마리 보유`}>

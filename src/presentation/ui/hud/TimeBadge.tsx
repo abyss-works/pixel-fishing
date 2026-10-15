@@ -15,12 +15,12 @@ export default function TimeBadge({ className }: { className?: string }) {
   return (
     <div className={cx(
       'absolute z-(--z-overlay) pointer-events-none flex items-center gap-1.5',
-      'px-2 py-0.5 rounded-full border border-line bg-[rgba(10,21,38,0.72)] backdrop-blur-[4px]',
-      '[text-shadow:0_1px_2px_rgba(0,0,0,0.6)]', className,
+      'px-2 py-0.5 rounded-full border border-line bg-bg/72 backdrop-blur-[4px]',
+      'text-shadow-hud', className,
     )}>
       <PixelIcon glyph={night ? 'moon' : 'sun'} size={11}
                  className={night ? 'text-accent' : 'text-gold'} />
-      <span className="pf-accent text-xs leading-none tracking-[0.5px] text-text">{clock}</span>
+      <span className="pf-accent text-xs leading-none text-text">{clock}</span>
     </div>
   );
 }

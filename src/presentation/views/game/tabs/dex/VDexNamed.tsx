@@ -6,7 +6,9 @@ import { selectNamedDex } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import { RARITY_CARD } from '../../../../ui/fish/RarityTag';
+import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
+import PageTitle from '../../../../ui/PageTitle';
+import Note from '../../../../ui/Note';
 
 // 도감 지명수배 화면 — 네임드는 해역별 1칸. 수배 목록에서만 공개된 히든 어종이라
 // FISH 행이 없을 수 있다. 발견 여부는 도감 기록(records) 기준이라 어종 데이터가
@@ -20,10 +22,9 @@ export default function DexNamedView({ game, sub, onSub }: {
 
   return (
     <div>
-      <h3 className="text-lg text-gold mb-1">
-        지명 수배
-        {' ('}<span className="pf-accent">{data.foundCount}/{data.totalCount}</span>{')'}
-      </h3>
+      <PageTitle className="mb-1">
+        지명 수배 ({data.foundCount}/{data.totalCount})
+      </PageTitle>
       <SubTabs
         items={data.zones.map(({ id, foundCount, totalCount }) => ({
           key: id,
@@ -36,7 +37,7 @@ export default function DexNamedView({ game, sub, onSub }: {
       <div className="flex flex-col gap-2 mt-2">
         {data.quests.map(({ quest: q, found: ok, fish, displayName }) => {
           return (
-            <div key={q.id} className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center', !ok && 'opacity-[0.72]')}>
+            <div key={q.id} className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center', !ok && DIM_CARD)}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
                             ariaLabel={ok && displayName ? displayName : '미확인 지명수배'} className="block mx-auto" />
@@ -49,7 +50,7 @@ export default function DexNamedView({ game, sub, onSub }: {
           );
         })}
         {data.quests.length === 0 && (
-          <p className="text-text-dim text-sm">이 해역의 지명 수배는 아직 없다.</p>
+          <Note className="my-0">이 해역의 지명 수배는 아직 없다.</Note>
         )}
       </div>
     </div>

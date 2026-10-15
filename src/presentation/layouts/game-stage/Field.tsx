@@ -145,7 +145,7 @@ export default function Field({
                       bottom-3 z-(--z-overlay)
                       max-w-[min(560px,calc(100%-24px))] px-3 py-1 rounded-full
                       text-sm text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
-                      [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] pointer-events-none animate-overlay-in">
+                      text-shadow-hud pointer-events-none animate-overlay-in">
           {snapshot.phase === 'catch' && fish
             ? `${RARITY[fish.rarity].name} [${formName(fish, snapshot.catchInfo?.form ?? 'normal')}] 획득!`
             : STATUS[snapshot.phase]}

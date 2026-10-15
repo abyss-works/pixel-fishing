@@ -43,7 +43,7 @@ export default function CardCarousel({ perView, children }: { perView: number; c
   const arrow = (dir: 1 | -1, on: boolean) => (
     <ArrowButton dir={dir}
       className={cx('absolute top-0 bottom-0 z-1 w-4',
-        'bg-[rgba(10,21,38,0.85)] text-text-dim hover:text-text',
+        'bg-bg/85 text-text-dim hover:text-text',
         dir < 0 ? 'left-0' : 'right-0', !on && 'hidden')}
       onClick={() => page(dir)} />
   );

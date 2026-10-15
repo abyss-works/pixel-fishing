@@ -6,7 +6,10 @@ import { selectDexGrid } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import { RarityText, RarityDot, RARITY_CARD } from '../../../../ui/fish/RarityTag';
+import { RarityText, RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
+import PageTitle from '../../../../ui/PageTitle';
+import Subheading from '../../../../ui/Subheading';
+import { fmtGold } from '../../../../ui/format';
 import type { DexView } from './DexTab';
 import DexDetail from './DexDetail';
 
@@ -26,12 +29,10 @@ export default function DexGrid({ game, view, sub, onSub }: {
 
   return (
     <div>
-      <h3 className="text-lg text-gold mb-1">
+      <PageTitle className="mb-1">
         {view === 'base' ? '일반 어종' : '돌연변이'}
-        {' ('}<span className="pf-accent">
-          {data.foundCount}/{data.fishCount}
-        </span>{')'}
-      </h3>
+        {' ('}{data.foundCount}/{data.fishCount}{')'}
+      </PageTitle>
       <SubTabs
         items={data.zones.map(({ id, foundCount, fishCount }) => ({
           key: id,
@@ -43,13 +44,13 @@ export default function DexGrid({ game, view, sub, onSub }: {
       {data.spots.map(({ spot: s, fishes }) => {
         return (
           <div key={s.id} className="mt-2">
-            <h4 className="text-sm text-text-dim font-normal border-b border-line pb-1 mb-1">{s.name}</h4>
+            <Subheading className="border-b border-line pb-1">{s.name}</Subheading>
             <div className="grid grid-cols-3 gap-2">
               {fishes.map(({ fish: f, discovered: ok, count, name, price }) => {
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게
                 return (
                   <div key={f.id} data-rarity={f.rarity}
-                       className={cx(RARITY_CARD, 'p-2 text-sm', !ok && 'opacity-[0.72]')}
+                       className={cx(RARITY_CARD, 'p-2 text-sm', !ok && DIM_CARD)}
                        role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
                        onClick={ok ? () => setDetail(f) : undefined}>
                         <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}
@@ -58,7 +59,7 @@ export default function DexGrid({ game, view, sub, onSub }: {
                     {ok ? (
                       <>
                         <b>{name}</b><br />
-                        <RarityText rarity={f.rarity} /> · <span className="pf-accent">{price}G</span><br />
+                        <RarityText rarity={f.rarity} /> · <span className="pf-accent">{fmtGold(price)}</span><br />
                         <span className="text-text-dim text-xs">
                           {count}마리 잡음
                         </span>

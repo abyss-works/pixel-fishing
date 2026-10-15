@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
+import Note from '../../../ui/Note';
+import PageTitle from '../../../ui/PageTitle';
 import { WORLD_MAP } from '../../../../game/world';
 import type { CompiledMap, Point } from '../../../../game/world/types';
 import { useSpotState } from '../../../../features/travel/service/useSpotState';
@@ -73,17 +75,17 @@ export default function WorldMapModal({ world, onClose }: {
   return (
     <Modal layer="app" onClose={onClose} className="pf-modal-worldmap">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-lg text-gold pf-accent">세계지도</h3>
+        <PageTitle>세계지도</PageTitle>
         <Button onClick={onClose}>닫기</Button>
       </div>
       <canvas ref={canvasRef} width={atlas?.ATLAS_W ?? 1280} height={atlas?.ATLAS_H ?? 604}
               className="block w-full h-auto border border-line rounded-sm bg-bg
                          [image-rendering:pixelated]"
               aria-label="세계지도" />
-      <p className="text-2xs leading-[1.6] text-text-dim mt-2">
+      <Note className="mb-0">
         밝은 바다는 지금 항해할 수 있는 세계다. 회색 물은 아직 이 배가 닿지 않는 곳 —
         해도가 다 채워지는 날까지 남겨둔 바다다.
-      </p>
+      </Note>
     </Modal>
   );
 }
