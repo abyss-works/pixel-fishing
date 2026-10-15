@@ -40,6 +40,8 @@ export interface BountyPanelData {
   namedDailyCap: number;
   offers: Record<BountyDifficulty, BountyQuest | undefined>;
   progressOf: (questId: string) => number;
+  /** 수주 중인가 — 수주하면 진행 행(진행도 0)이 생기므로 행의 존재가 곧 수주다 */
+  isAccepted: (questId: string) => boolean;
   basicConds: LicenseCondition[];
   namedConds: LicenseCondition[];
   basicOpen: boolean;
@@ -68,6 +70,8 @@ export function selectBountyPanelData({
   const leftNamed = snapshot ? BOUNTY_NAMED_DAILY_CAP - snapshot.namedToday : null;
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;
+  const isAccepted = (questId: string): boolean =>
+    snapshot?.progress.some(row => row.questId === questId) ?? false;
   const basicConds = licenseConditions(game, zone, 'basic');
   const namedConds = licenseConditions(game, zone, 'named');
   const namedQuest = offers.named;
@@ -88,6 +92,7 @@ export function selectBountyPanelData({
     namedDailyCap: BOUNTY_NAMED_DAILY_CAP,
     offers,
     progressOf,
+    isAccepted,
     basicConds,
     namedConds,
     basicOpen: basicConds.every(condition => condition.ok),

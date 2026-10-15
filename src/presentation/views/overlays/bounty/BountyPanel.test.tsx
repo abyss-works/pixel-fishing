@@ -49,6 +49,16 @@ describe('BountyPanel', () => {
     expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(3);
   });
 
+  it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', kstDay())!;
+    mockSnap = { licensed: [], acceptsToday: 1, namedToday: 0,
+      progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText(`0/${quest.count}`)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '진행 중' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(2); // 나머지 두 난이도만
+  });
+
   it('일일 의뢰 — 해시 결정값을 그대로 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     const day = kstDay();

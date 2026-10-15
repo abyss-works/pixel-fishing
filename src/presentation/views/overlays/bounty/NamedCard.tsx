@@ -7,9 +7,9 @@ import { selectNamedBountyCardData } from '../../../../features/bounty/model/pan
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
 
-export default function NamedCard({ game, quest, canAccept, busy, progress, ticketMins, onAccept, onDeliver, onStartChallenge }: {
+export default function NamedCard({ game, quest, canAccept, busy, progress, accepted, ticketMins, onAccept, onDeliver, onStartChallenge }: {
   game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
-  progress: number; ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
+  progress: number; accepted: boolean; ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
   onStartChallenge: () => void;
 }) {
   const { name, poster, fish, found, done } = selectNamedBountyCardData(game, quest, progress);
@@ -21,7 +21,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
             <FishSprite fish={fish} preset="portrait" discovered={found} animate={found}
                         ariaLabel={found && name ? name : '미확인 네임드'} className="block mx-auto" />
           )}
-          <b className="block mt-1 text-gold">{found && name ? name : '???'}</b>
+          <b className="block mt-1 text-gold text-center">{found && name ? name : '???'}</b>
         </span>
         <span className="text-center flex flex-col gap-2 text-sm border-l border-line pl-2">
           <b className="pf-accent text-gold text-lg">네임드 토벌</b>
@@ -33,7 +33,9 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
           </span>
           <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
-      {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
+      {accepted && !done && ticketMins === null && (
+        <span className="text-accent text-xs">진행 중 — 이 구역에서 낚시하다 마주치면 도전권을 받는다</span>
+      )}
       {!done && ticketMins !== null && (
         <span className="text-accent text-xs">
           도전권 유효 — 약 {ticketMins}분 남음
@@ -43,7 +45,9 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
           <span className="flex justify-center mt-auto">
             {done
               ? <Button size="sm" disabled={busy} onClick={onDeliver}>토벌하기</Button>
-              : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+              : accepted
+                ? <Button full disabled>진행 중</Button>
+                : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
           </span>
         </span>
       </div>

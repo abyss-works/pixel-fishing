@@ -13,9 +13,11 @@ const DIFF_HEAD: Record<string, string> = {
 };
 
 
-export default function BountyCard({ quest, progress, canAccept, busy, onAccept, onDeliver }: {
+export default function BountyCard({ quest, progress, accepted, canAccept, busy, onAccept, onDeliver }: {
   quest: BountyQuest;
   progress: number;
+  /** 수주 중 — 진행도가 0이어도 진행 중으로 보인다 */
+  accepted: boolean;
   canAccept: boolean;
   busy: boolean;
   onAccept: () => void;
@@ -32,11 +34,15 @@ export default function BountyCard({ quest, progress, canAccept, busy, onAccept,
       </span>
       <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
-      {progress > 0 && <span className="text-text-dim text-xs">진행 {progress}/{quest.count}</span>}
+      {accepted && (
+        <span className="text-accent text-xs">진행 중 · <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span></span>
+      )}
       <span className="flex justify-center mt-auto">
         {done
           ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
-          : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+          : accepted
+            ? <Button full disabled>진행 중</Button>
+            : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
       </span>
     </div>
   );
