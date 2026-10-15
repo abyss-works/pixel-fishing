@@ -1,6 +1,7 @@
 // 업데이트 소식 창 — 무엇을 어떤 순서로 보여줄지 정하는 순수 규칙과 새 설정 질문 목록.
 // 창은 최대 두 단계다: ① 이번 버전 소식(패치노트) ② 이번에 생긴 설정 고르기.
-// 소식은 버전마다 한 번, 질문은 질문마다 한 번이다. 처음 시작한 플레이어에게는 열지 않는다 —
+// 소식은 "다시 보지 않기"를 체크하고 닫을 때까지 접속마다 뜨고, 질문은 질문마다 한 번이다.
+// 처음 시작한 플레이어에게는 열지 않는다 —
 // 바뀐 점이 없는 사람에게 "바뀐 점"을 보여줄 이유가 없고, 설정은 기본값으로 시작한다.
 import type { PatchNote } from '../../../game/content/patchnotes';
 import type { GameState } from '../../../game/rules/logic';
@@ -40,11 +41,11 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
   },
 ];
 
-/** 현재 버전 소식 — 그 버전 노트가 있고 이 기기에서 아직 보지 않았을 때만 */
+/** 현재 버전 소식 — 그 버전 노트가 있고 이 기기에서 "다시 보지 않기"를 하지 않았을 때만 */
 export function newsFor(
-  notes: readonly PatchNote[], appVersion: string, lastSeen: string | null,
+  notes: readonly PatchNote[], appVersion: string, dismissed: string | null,
 ): PatchNote | null {
-  if (lastSeen === appVersion) return null;
+  if (dismissed === appVersion) return null;
   return notes.find(n => n.version === appVersion) ?? null;
 }
 
@@ -59,17 +60,15 @@ export function isFreshPlayer(game: Pick<GameState, 'fame' | 'dex'>): boolean {
   return game.fame === 0 && Object.keys(game.dex).length === 0;
 }
 
-/** 이번 세션에 보여줄 단계. 자동 열기를 꺼도 새 설정 질문은 한 번 묻는다 — 답하지 않으면 기본값이라 무해하지만,
- *  고를 수 있다는 사실 자체를 알리는 것이 질문의 목적이다 */
-export function planWhatsNew({ news, prompts, autoOpen, fresh }: {
+/** 이번 세션에 보여줄 단계 */
+export function planWhatsNew({ news, prompts, fresh }: {
   news: PatchNote | null;
   prompts: readonly SettingPrompt[];
-  autoOpen: boolean;
   fresh: boolean;
 }): WhatsNewStep[] {
   if (fresh) return [];
   const steps: WhatsNewStep[] = [];
-  if (news && autoOpen) steps.push('news');
+  if (news) steps.push('news');
   if (prompts.length > 0) steps.push('settings');
   return steps;
 }

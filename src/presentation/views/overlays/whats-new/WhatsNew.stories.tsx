@@ -43,7 +43,7 @@ type Story = StoryObj;
 export const News: Story = {
   render: () => (
     <Frame title="업데이트 소식" step="1 업데이트 소식 — 2 새 설정" footer={<>
-      <CheckToggle checked={false} onChange={() => {}} label="다음 업데이트부터 소식을 자동으로 열지 않기" />
+      <CheckToggle checked={false} onChange={() => {}} label="이번 소식 다시 보지 않기" />
       <Button variant="primary" className="flex-1">다음: 새 설정 고르기</Button>
     </>}>
       <NewsStep news={SAMPLE} />
