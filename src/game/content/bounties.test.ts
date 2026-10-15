@@ -51,7 +51,7 @@ describe('bounties 데이터 계약', () => {
   });
 
   it('라이선스 명성이 spec 2절 표와 일치한다', () => {
-    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 15000, indian: 70000, madagascar: 150000 });
+    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 20000, indian: 80000, madagascar: 300000 });
   });
 
   it('등급 키는 실재 등급만 쓴다', () => {
