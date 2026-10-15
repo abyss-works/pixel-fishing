@@ -6,6 +6,7 @@ import type { GameAction } from '../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import TextInput from '../../../ui/TextInput';
+import Select from '../../../ui/Select';
 import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -59,10 +60,9 @@ export default function StatsTab({ game, dispatch }: {
           <TextInput type="number" min={1} value={editRod} onChange={e => setEditRod(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1">배 단계
-          <select value={editBoat} onChange={e => setEditBoat(e.target.value)}
-                  className="bg-bg border border-line rounded-sm text-text text-sm px-3 py-2 outline-none focus:border-accent">
+          <Select value={editBoat} onChange={e => setEditBoat(e.target.value)}>
             {BOAT_OPTIONS.map(boat => <option key={boat.tier} value={boat.tier}>{boat.name}</option>)}
-          </select>
+          </Select>
         </label>
       </div>
       <Button size="sm" onClick={apply}>스탯 적용</Button>
