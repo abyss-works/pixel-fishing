@@ -67,7 +67,7 @@
 
     "toamasina":  { "lon": 49.4,  "lat": -18.1, "dx": -22, "dy": 6, "terrain": "land" },
     "t_dock":     { "lon": 49.75, "lat": -18.2, "terrain": "water" },
-    "t_spawn":    { "lon": 50.1,  "lat": -18.6, "terrain": "water" },
+    "t_spawn":    { "lon": 50.3,  "lat": -19.4, "terrain": "water" },
     "school_mz_1": { "lon": 40.8, "lat": -19.5, "terrain": "water" },
     "school_mz_2": { "lon": 38.8, "lat": -22.5, "terrain": "water" },
     "school_cd_1": { "lon": 42.6, "lat": -13.3, "terrain": "water" },

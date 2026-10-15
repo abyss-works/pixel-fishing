@@ -268,7 +268,7 @@ export const ANCHORS: Record<string, { x: number; y: number }> = {
   school_s_2: { x: 1328, y: 2322 },
   toamasina: { x: 439, y: 1987 },
   t_dock: { x: 472, y: 1984 },
-  t_spawn: { x: 483, y: 1997 },
+  t_spawn: { x: 490, y: 2022 },
   school_mz_1: { x: 186, y: 2026 },
   school_mz_2: { x: 122, y: 2121 },
   school_cd_1: { x: 243, y: 1828 },

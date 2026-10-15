@@ -6,7 +6,7 @@ import { ZONES, zoneById, zoneOfSpot } from '../content/zones';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  REGION_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
+  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
@@ -411,6 +411,22 @@ describe.each(Object.values(REGION_PACKS))('$id 지역 이동 게이트: 재발�
 
   it('스폰은 어떤 시설 트리거에서도 최소 이격 거리 밖이다', () => {
     expect(nearFacilityTrigger(pack.spawn), `${pack.id} 스폰이 시설 트리거 인접`).toBe(false);
+  });
+
+  it('이 지역으로 나오는 모든 거점의 출항 지점(exitAt)도 물 위이고 시설 트리거에서 최소 이격 거리 밖이다', () => {
+    // 출항 지점이 접안 트리거에 닿아 있으면 나오자마자 다시 접안해 항구에 갇힌다(투아마시나항)
+    for (const base of Object.values(BASE_PACKS)) {
+      if (base.region !== pack.id || !base.exitAt) continue;
+      expect(canMove(pack, base.exitAt.x, base.exitAt.y), `${base.id} 출항 지점이 육지`).toBe(true);
+      expect(nearFacilityTrigger(base.exitAt), `${base.id} 출항 지점이 시설 트리거 인접`).toBe(false);
+      // 출항하자마자 구역 경계 판정이 끼어들지 않게 — 접안한 자리와 같은 구역에서 나온다
+      const dock = pack.triggers.find(t => t.action === 'base' && t.base === base.id);
+      if (dock) {
+        const center = { x: dock.rect.x + dock.rect.w / 2, y: dock.rect.y + dock.rect.h / 2 };
+        expect(zoneOf(pack, base.exitAt.x, base.exitAt.y), `${base.id} 출항 지점의 구역`)
+          .toBe(zoneOf(pack, center.x, center.y));
+      }
+    }
   });
 
   it('모든 해상 입장 착지점(entryPoint)도 시설 트리거에서 최소 이격 거리 밖이다', () => {
