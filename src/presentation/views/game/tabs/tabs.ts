@@ -6,7 +6,7 @@ export type TabKey = 'region' | 'bag' | 'dex' | 'help' | 'settings' | 'admin';
 
 export const DEFAULT_TAB: TabKey = 'region';
 
-/** 도감 보기 — 제목 아래 첫 서브탭 줄(일반 / 돌연변이 / 네임드). Tab 키가 이 순서로 순환한다 */
+/** 도감 보기 — 도감 탭 재선택이 이 순서로 순환한다(일반 → 돌연변이 → 네임드) */
 export type DexView = 'base' | 'variant' | 'named';
 export const DEX_VIEWS: readonly DexView[] = ['base', 'variant', 'named'];
 
@@ -16,7 +16,8 @@ export const DEX_VIEWS: readonly DexView[] = ['base', 'variant', 'named'];
 export const TAB_ORDER: readonly TabKey[] = ['region', 'bag', 'dex', 'help', 'settings'];
 
 // 키보드 축은 둘이다:
-//   숫자    = 메뉴 탭 **선택**만. 같은 숫자를 다시 눌러도 보기는 바뀌지 않는다.
-//   Tab     = 활성 탭의 **첫 서브탭 줄** 순환 — 메뉴 탭을 넘나들지 않는다
-//             (가방: 물고기↔아이템 · 도감: 일반→돌연변이→네임드 · 나머지: 없음).
-//   그 아래 줄(도감 지역 등)과 가방 목록↔카드는 화면의 버튼으로만 바꾼다.
+//   숫자    = 메뉴 탭 **선택**. 메뉴 탭 이동은 숫자키(와 클릭)로만 한다.
+//             같은 탭을 한 번 더 고르면 그 탭의 보기가 순환된다
+//             (가방: 목록↔카드 · 도감: 일반→돌연변이→네임드).
+//   Tab     = 활성 탭의 **서브탭** 순환, Shift+Tab은 역방향 — 메뉴 탭을 넘나들지 않는다
+//             (가방: 물고기↔아이템 · 도감: 지역 · 나머지: 없음).

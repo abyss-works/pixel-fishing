@@ -17,6 +17,7 @@ export default function SubTabs<K extends string>({ items, activeKey, onSelect }
       {items.map(it => (
         <button
           key={it.key}
+          aria-pressed={it.key === activeKey}
           className={cx(
             'grow shrink-0 basis-auto min-w-16 border rounded-sm px-2 py-1 text-sm cursor-pointer',
             'flex flex-col items-center leading-tight',
