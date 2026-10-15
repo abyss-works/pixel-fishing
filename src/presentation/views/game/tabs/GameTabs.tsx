@@ -115,7 +115,7 @@ export default function GameTabs(props: GameTabsProps) {
                      nickname={props.nickname} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
       )}
-      {activeTab === 'admin' && <VAdmin game={game} dispatch={props.dispatch} />}
+      {activeTab === 'admin' && <VAdmin game={game} dispatch={props.dispatch} setToast={props.setToast} />}
     </Sidebar>
   );
 }

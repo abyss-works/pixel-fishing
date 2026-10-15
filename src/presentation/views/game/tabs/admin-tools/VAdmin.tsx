@@ -11,13 +11,43 @@ import PillButton from '../../../../ui/PillButton';
 import Note from '../../../../ui/Note';
 import SectionTitle from '../../../../ui/SectionTitle';
 import PixelIcon from '../../../../ui/PixelIcon';
+import Button from '../../../../ui/Button';
+import { when } from '../../../../../shared/lib/when';
+import { saveGameCode } from '../../../../../features/account/service/accountActions';
 
-// 관리자 탭 — 게임 셸 5탭 다음(6번) 조건부 탭. 스탯 편집 + 덮개 + 시간대 설정 + 대시보드.
+// 관리자 탭 — 게임 셸 5탭 다음(6번) 조건부 탭. 스탯 편집 + 덮개 + 시간대 설정 + 이사 코드 + 대시보드.
 // 노출은 GameTabs가 ?admin + (로컬 또는 소유자 계정) 게이트로 통제한다.
-export default function VAdmin({ game, dispatch }: {
+export default function VAdmin({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
+  setToast: (m: string) => void;
 }) {
+  const exportSave = async () => {
+    const code = saveGameCode(game);
+    try {
+      await navigator.clipboard.writeText(code);
+      setToast('이사 코드를 클립보드에 복사했다.');
+    } catch {
+      window.prompt('복사해서 보관하세요 (이사 코드):', code);
+    }
+  };
+
+  // 불러오기 = import 액션 — 서버가 소유자 계정·로컬만 받고, migrate 후 수입하며 events에 흔적을 남긴다
+  const importSave = () => {
+    const code = window.prompt('이사 코드를 붙여넣으세요:');
+    if (!code) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(decodeURIComponent(atob(code.trim())));
+    } catch {
+      setToast('이사 코드가 올바르지 않다.');
+      return;
+    }
+    when(dispatch({ type: 'import', save: parsed }), r => {
+      if (r.status === 'ok') setToast('세이브를 불러왔다!');
+    });
+  };
+
   const canvasCover = useCanvasCover();
   const override = useTimeOverride();
   const [, setTick] = useState(0);
@@ -102,6 +132,18 @@ export default function VAdmin({ game, dispatch }: {
                 className="shrink-0">
           {canvasCover ? '덮음' : '열림'}
         </PillButton>
+      </div>
+
+      {/* 이사 코드 — 유저 기능에서는 내렸다. 무검증 import가 변조 반입 통로로 실제 악용돼
+          서버가 소유자 계정·로컬만 받는다. 유저가 저장 실패·계정 전환 때 자동 백업으로 받은 코드를
+          보내 오면 여기서 불러와 이관한다. 기기 이동은 계정 연동으로 처리한다. */}
+      <SectionTitle>이사 코드</SectionTitle>
+      <Note size="2xs" className="my-0">
+        소유자 전용. 유저가 보내 온 코드(저장 실패·계정 전환 시 자동 백업)를 불러와 이관한다.
+      </Note>
+      <div className="grid grid-cols-2 gap-2">
+        <Button size="sm" onClick={exportSave}>이사 코드 내보내기</Button>
+        <Button size="sm" onClick={importSave}>이사 코드 불러오기</Button>
       </div>
 
       <SectionTitle>대시보드</SectionTitle>

@@ -275,10 +275,13 @@ describe('쿠폰 입력 (설정 탭)', () => {
   it('유효 코드 입력 시 골드 지급, 재사용 불가', async () => {
     render(<App />);
     clickTab('설정');
-    vi.spyOn(window, 'prompt').mockReturnValue('출항준비');
-    fireEvent.click(screen.getByText('쿠폰 입력'));
+    fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
+    expect(screen.getByRole('dialog', { name: '코드 입력' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
     await waitFor(() => expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`));
-    fireEvent.click(screen.getByText('쿠폰 입력'));
+    fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
     expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`); // 중복 지급 없음
   });
@@ -286,8 +289,10 @@ describe('쿠폰 입력 (설정 탭)', () => {
   it('없는 코드는 안내만', async () => {
     render(<App />);
     clickTab('설정');
-    vi.spyOn(window, 'prompt').mockReturnValue('없는코드');
-    fireEvent.click(screen.getByText('쿠폰 입력'));
+    fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
+    expect(screen.getByRole('button', { name: '쿠폰 사용' })).toBeDisabled(); // 빈 코드는 못 보낸다
+    fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '없는코드' } });
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
     expect(await screen.findByText(/없는 쿠폰 코드/)).toBeInTheDocument();
   });
 });
@@ -607,15 +612,35 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(hud()).toContain('1마리');
   });
 
-  it('설정에서 물고기 그래픽을 고른다 — 기본 v1, v2는 실험 표시, 선택은 기기에 남는다', () => {
+  it('설정 탭은 계정 → 화면 → 데이터 → 개발자에게 → 패치노트 순서다', () => {
     render(<App />);
     clickTab('설정');
-    const pressed = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
-    expect(pressed()).toMatch(/^v1/);
-    expect(screen.getByText(/실험/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^v2/ }));
-    expect(pressed()).toMatch(/^v2/);
+    const titles = [...document.querySelectorAll('h4')].map(h => h.textContent);
+    expect(titles).toEqual(['계정', '화면', '데이터', '개발자에게', '패치노트']);
+  });
+
+  it('화면 설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남고 요약에 보인다', () => {
+    render(<App />);
+    clickTab('설정');
+    expect(screen.getByText('v1 · legacy')).toBeInTheDocument(); // 요약 줄
+    fireEvent.click(screen.getByRole('button', { name: '화면 설정' }));
+    expect(screen.getByRole('dialog', { name: '화면' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^v1/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: /^v2/ }));
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByText('v2 · beta')).toBeInTheDocument();
+  });
+
+  it('이사 코드는 설정 탭에 없다 — 관리자 탭(소유자 전용)으로 옮겼다', () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    render(<App />);
+    clickTab('설정');
+    expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
+    clickTab('관리자');
+    expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
   });
 
   it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {

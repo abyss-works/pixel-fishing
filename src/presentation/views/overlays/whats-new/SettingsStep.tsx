@@ -15,7 +15,8 @@ function previewOf(prompt: SettingPrompt, value: string): ReactNode {
   }
 }
 
-function PromptChoices({ prompt }: { prompt: SettingPrompt }) {
+/** 질문 하나의 선택 카드 묶음 — 소식 창의 새 설정 단계와 설정 탭의 화면 창이 함께 쓴다 */
+export function PromptChoices({ prompt }: { prompt: SettingPrompt }) {
   const [value, setValue] = usePromptValue(prompt.id);
   return (
     <section className="flex flex-col gap-1.5">
