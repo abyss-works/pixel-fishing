@@ -28,6 +28,36 @@ export function paletteColors(palette: readonly PaletteSlot[], base: string): st
   return palette.map(slot => (typeof slot === 'string' ? slot : shade(base, slot.shade)));
 }
 
+export interface Bounds { minX: number; maxX: number; minY: number; maxY: number }
+
+/** 불투명 셀의 경계 — 흔들기 축·배치 계산용. 전부 투명이면 null */
+export function opaqueBounds(rows: readonly string[]): Bounds | null {
+  let b: Bounds | null = null;
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === TRANSPARENT) continue;
+      b = b
+        ? { minX: Math.min(b.minX, x), maxX: Math.max(b.maxX, x), minY: Math.min(b.minY, y), maxY: Math.max(b.maxY, y) }
+        : { minX: x, maxX: x, minY: y, maxY: y };
+    }
+  });
+  return b;
+}
+
+/** 윤곽 셀 — 불투명 셀에 4방향으로 닿는 투명 셀의 좌표. 격자 밖 좌표는 내지 않는다 */
+export function outlineCells(rows: readonly string[]): [number, number][] {
+  const h = rows.length, w = rows[0]?.length ?? 0;
+  const opaque = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && rows[y][x] !== TRANSPARENT;
+  const out: [number, number][] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (opaque(x, y)) continue;
+      if (opaque(x - 1, y) || opaque(x + 1, y) || opaque(x, y - 1) || opaque(x, y + 1)) out.push([x, y]);
+    }
+  }
+  return out;
+}
+
 /** 데이터 무결성 — 행 수·행 길이·문자·인덱스 범위. 문제가 없으면 빈 배열 */
 export function validateSprite(s: PixelSprite): string[] {
   const errors: string[] = [];

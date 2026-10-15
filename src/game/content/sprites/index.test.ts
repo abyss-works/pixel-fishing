@@ -1,9 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { fishColors, fishSprite, FISH_SHAPE_SPRITES, SILHOUETTE } from './index';
+import { fishColors, fishOutline, fishSprite, FISH_SHAPE_SPRITES, FISH_SPRITES, OUTLINE_DARK, SILHOUETTE } from './index';
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
 import { FISH } from '../fish';
 import { NAMED } from '../named';
+import { RARITY } from '../rarity';
 import { shade } from '../../../shared/lib/color';
+
+describe('종별 전용 격자', () => {
+  it('등록된 전용 격자는 모두 실제 어종 id이고 무결성 오류가 없다', () => {
+    const ids = new Set(FISH.map(f => f.id));
+    for (const [id, s] of Object.entries(FISH_SPRITES)) {
+      expect(ids.has(id), id).toBe(true);
+      expect(validateSprite(s!), id).toEqual([]);
+    }
+  });
+});
+
+describe('윤곽 색', () => {
+  it('영웅·전설은 등급색, 일반·희귀는 어두운 윤곽, 미발견은 없음', () => {
+    expect(fishOutline({ rarity: 'legendary' })).toBe(RARITY.legendary.color);
+    expect(fishOutline({ rarity: 'epic' })).toBe(RARITY.epic.color);
+    expect(fishOutline({ rarity: 'rare' })).toBe(OUTLINE_DARK);
+    expect(fishOutline({ rarity: 'common' })).toBe(OUTLINE_DARK);
+    expect(fishOutline({ rarity: 'legendary' }, false)).toBeUndefined();
+  });
+});
 
 describe('형태 격자 (생성 파일)', () => {
   it('모든 어종·네임드의 shape에 32×16 격자가 있고 무결성 오류가 없다', () => {

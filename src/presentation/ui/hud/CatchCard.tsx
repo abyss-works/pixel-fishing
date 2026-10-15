@@ -76,7 +76,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         </span>
       )}
       <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
-      <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} />
+      <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate />
       {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 (의미심장한 한 줄) */}
       <b className={cx('text-lg', isVariant && 'animate-mutated-shimmer')}>
         {formName(fish, info?.form ?? 'normal')}

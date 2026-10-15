@@ -27,6 +27,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                 className="bg-surface-2 text-text px-1 py-2 hover:bg-line" />
         <div>
           <FishSprite fish={fish} preset="portrait" form={form.form} discovered={form.discovered}
+                      animate={form.discovered}
                       ariaLabel={form.discovered ? fish.name : '미확인 변종'} className="block" />
           <p className="text-center text-text-dim text-sm mt-1">{form.discovered ? form.name : '???'}</p>
         </div>

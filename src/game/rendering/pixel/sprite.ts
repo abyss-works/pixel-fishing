@@ -1,8 +1,8 @@
-// 스프라이트 래스터라이저 — 인덱스 격자를 (색 배열, 배율, 프레임)당 한 번 오프스크린 캔버스로
+// 스프라이트 래스터라이저 — 인덱스 격자를 (색 배열, 배율, 프레임, 윤곽)당 한 번 오프스크린 캔버스로
 // 굽고 drawImage로 찍는다. 배율은 정수만 받는다(픽셀아트 — 비정수는 번짐).
 // 캐시는 스프라이트 객체를 키로 하는 WeakMap이라 데이터가 교체되면 함께 버려진다.
 // jsdom에는 canvas가 없어 null을 돌려준다 — 호출자는 그리기를 건너뛴다.
-import { cellIndex } from '../../content/sprites/types.js';
+import { cellIndex, opaqueBounds, outlineCells } from '../../content/sprites/types.js';
 import type { PixelSprite } from '../../content/sprites/types.js';
 import type { Ctx } from './common.js';
 
@@ -10,20 +10,22 @@ type Raster = HTMLCanvasElement;
 const CACHE = new WeakMap<PixelSprite, Map<string, Raster | null>>();
 
 export function rasterize(
-  sprite: PixelSprite, colors: readonly string[], scale: number, frame = 0,
+  sprite: PixelSprite, colors: readonly string[], scale: number, frame = 0, outline?: string,
 ): Raster | null {
   let bucket = CACHE.get(sprite);
   if (!bucket) { bucket = new Map(); CACHE.set(sprite, bucket); }
-  const key = `${colors.join('|')}@${scale}#${frame}`;
+  const key = `${colors.join('|')}@${scale}#${frame}~${outline ?? ''}`;
   const hit = bucket.get(key);
   if (hit !== undefined) return hit;
 
-  const raster = bake(sprite, colors, scale, frame);
+  const raster = bake(sprite, colors, scale, frame, outline);
   bucket.set(key, raster);
   return raster;
 }
 
-function bake(sprite: PixelSprite, colors: readonly string[], scale: number, frame: number): Raster | null {
+function bake(
+  sprite: PixelSprite, colors: readonly string[], scale: number, frame: number, outline?: string,
+): Raster | null {
   if (typeof document === 'undefined') return null;
   const c = document.createElement('canvas');
   c.width = sprite.w * scale;
@@ -31,6 +33,10 @@ function bake(sprite: PixelSprite, colors: readonly string[], scale: number, fra
   const ctx = c.getContext('2d');
   if (!ctx) return null;
   const rows = sprite.frames[frame] ?? sprite.frames[0];
+  if (outline) {
+    ctx.fillStyle = outline;
+    for (const [x, y] of outlineCells(rows)) ctx.fillRect(x * scale, y * scale, scale, scale);
+  }
   rows.forEach((row, y) => {
     for (let x = 0; x < row.length; x++) {
       const idx = cellIndex(row[x]);
@@ -42,26 +48,65 @@ function bake(sprite: PixelSprite, colors: readonly string[], scale: number, fra
   return c;
 }
 
-/** 좌상단 (x, y)에 찍는다. flip이면 좌우 반전 — 물고기는 왼쪽을 보는 것이 기본 */
+export interface DrawOpts {
+  frame?: number;
+  /** 좌우 반전 — 물고기는 왼쪽을 보는 것이 기본 */
+  flip?: boolean;
+  /** 윤곽 색 — 불투명 셀에 닿는 투명 셀을 이 색으로 채운다 (등급·가독성) */
+  outline?: string;
+  /** 초 단위 시각 — 주어지면 꼬리 쪽 열이 흔들린다(열 흔들기) */
+  t?: number;
+}
+
+// 열 흔들기 — 프레임 없이 움직임을 만든다. 불투명 경계의 가로 중점부터 꼬리(오른쪽) 끝까지
+// 진폭이 0→1셀로 커지고, 열마다 위상이 밀려 파도처럼 보인다. 정수 px만 돌려준다.
+const WOBBLE_HZ = 1.4;
+const WOBBLE_PHASE_PER_COL = 0.55;
+
+export function wobbleOffsets(sprite: PixelSprite, t: number, scale: number, frame = 0): number[] {
+  const rows = sprite.frames[frame] ?? sprite.frames[0];
+  const b = opaqueBounds(rows);
+  const out = new Array<number>(sprite.w).fill(0);
+  if (!b) return out;
+  const mid = (b.minX + b.maxX) / 2;
+  const span = Math.max(1, b.maxX - mid);
+  for (let x = Math.ceil(mid); x <= b.maxX; x++) {
+    const amp = Math.min(1, (x - mid) / span);
+    out[x] = Math.round(Math.sin(t * Math.PI * 2 * WOBBLE_HZ + (x - mid) * WOBBLE_PHASE_PER_COL) * amp * scale);
+  }
+  return out;
+}
+
+/** 좌상단 (x, y)에 찍는다 */
 export function drawSprite(
   ctx: Ctx, sprite: PixelSprite, colors: readonly string[], scale: number,
-  x: number, y: number, opts: { frame?: number; flip?: boolean } = {},
+  x: number, y: number, opts: DrawOpts = {},
 ): void {
-  const img = rasterize(sprite, colors, scale, opts.frame ?? 0);
+  const img = rasterize(sprite, colors, scale, opts.frame ?? 0, opts.outline);
   if (!img) return;
   const px = Math.round(x), py = Math.round(y);
-  if (!opts.flip) { ctx.drawImage(img, px, py); return; }
   ctx.save();
-  ctx.translate(px + img.width, py);
-  ctx.scale(-1, 1);
-  ctx.drawImage(img, 0, 0);
+  if (opts.flip) {
+    ctx.translate(px + img.width, py);
+    ctx.scale(-1, 1);
+  } else {
+    ctx.translate(px, py);
+  }
+  if (opts.t === undefined) {
+    ctx.drawImage(img, 0, 0);
+  } else {
+    const off = wobbleOffsets(sprite, opts.t, scale, opts.frame ?? 0);
+    for (let col = 0; col < sprite.w; col++) {
+      ctx.drawImage(img, col * scale, 0, scale, img.height, col * scale, off[col], scale, img.height);
+    }
+  }
   ctx.restore();
 }
 
 /** 격자 중심을 (cx, cy)에 맞춰 찍는다 — 프리셋 캔버스 가운데 배치용 */
 export function drawSpriteCentered(
   ctx: Ctx, sprite: PixelSprite, colors: readonly string[], scale: number,
-  cx: number, cy: number, opts: { frame?: number; flip?: boolean } = {},
+  cx: number, cy: number, opts: DrawOpts = {},
 ): void {
   drawSprite(ctx, sprite, colors, scale, cx - (sprite.w * scale) / 2, cy - (sprite.h * scale) / 2, opts);
 }

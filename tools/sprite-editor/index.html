@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스프라이트 에디터</title>
+<!--
+  어종 스프라이트 에디터 — 브라우저에서 이 파일을 직접 연다(의존성·서버 없음).
+  격자를 그리고 팔레트 슬롯을 정한 뒤 "TS 내보내기"를 src/game/content/sprites/fishSprites.ts 에 붙여 넣는다.
+  미리보기의 shade·윤곽·열 흔들기 계산은 제품 렌더러(shared/lib/color.ts, rendering/pixel/sprite.ts)와 같은 식이다.
+  두 곳이 어긋나면 제품이 정본이다.
+-->
+<style>
+  :root { --bg:#0b1322; --panel:#121c30; --line:#24324d; --fg:#e8eef7; --dim:#93a1b8; --gold:#ffd54f; --water:#0f2a44; color-scheme: dark; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 system-ui, 'Noto Sans KR', sans-serif; padding:16px; }
+  h1 { font-size:16px; margin:0 0 10px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  label { color:var(--dim); font-size:12px; }
+  input[type=text], input[type=number], textarea, select { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:2px; padding:3px 6px; font:12px ui-monospace, monospace; }
+  input[type=number] { width:64px; }
+  textarea { width:420px; height:160px; white-space:pre; }
+  button { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:2px; padding:4px 10px; cursor:pointer; }
+  button.on { border-color:var(--gold); color:var(--gold); }
+  #grid { image-rendering:pixelated; background:var(--water); cursor:crosshair; border:1px solid var(--line); touch-action:none; }
+  .slots { display:flex; flex-direction:column; gap:4px; }
+  .slot { display:flex; gap:6px; align-items:center; }
+  .slot .sw { width:18px; height:18px; border:1px solid var(--line); border-radius:2px; }
+  .slot.on .sw { outline:2px solid var(--gold); }
+  .slot .k { width:16px; font:12px ui-monospace, monospace; color:var(--dim); text-align:center; }
+  .previews { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .previews figure { margin:0; display:flex; flex-direction:column; gap:3px; align-items:center; }
+  .previews canvas { image-rendering:pixelated; background:var(--water); border-radius:2px; }
+  .previews figcaption { font-size:11px; color:var(--dim); }
+  .hint { color:var(--dim); font-size:11px; }
+</style>
+</head>
+<body>
+<h1>스프라이트 에디터</h1>
+<div class="row">
+  <div class="panel">
+    <div class="row" style="gap:8px; align-items:center">
+      <label>w <input id="w" type="number" min="4" max="64" value="32"></label>
+      <label>h <input id="h" type="number" min="4" max="64" value="32"></label>
+      <button id="resize">크기 적용</button>
+      <button id="clear">비우기</button>
+      <button id="flipH">좌우 반전</button>
+      <span class="hint">LMB 칠하기 · RMB/Shift 지우기 · 드래그 가능</span>
+    </div>
+    <canvas id="grid"></canvas>
+  </div>
+  <div class="panel">
+    <label>팔레트 슬롯 (문자 → 색 또는 shade)</label>
+    <div id="slots" class="slots"></div>
+    <div class="row" style="gap:6px">
+      <button id="addShade">+ shade</button>
+      <button id="addHex">+ hex</button>
+    </div>
+    <label>기준색(일반) <input id="base" type="text" value="#c8a165" size="8"></label>
+    <label>기준색(변이) <input id="base2" type="text" value="#f5c542" size="8"></label>
+    <label>윤곽 <select id="outline">
+      <option value="">없음</option>
+      <option value="#0b1322" selected>어두운 윤곽(일반·희귀)</option>
+      <option value="#ba68c8">영웅 #ba68c8</option>
+      <option value="#ffd54f">전설 #ffd54f</option>
+    </select></label>
+    <label><input id="wobble" type="checkbox" checked> 열 흔들기 미리보기</label>
+  </div>
+  <div class="panel">
+    <label>미리보기</label>
+    <div id="previews" class="previews"></div>
+  </div>
+</div>
+<div class="row" style="margin-top:16px">
+  <div class="panel">
+    <label>TS 내보내기 — 어종 id <input id="fishId" type="text" value="carp" size="12"></label>
+    <textarea id="out" readonly></textarea>
+    <button id="copy">복사</button>
+  </div>
+  <div class="panel">
+    <label>가져오기 — PixelSprite 객체 리터럴을 붙여 넣는다 ({ w, h, palette, frames })</label>
+    <textarea id="in" placeholder="{ w: 32, h: 16, palette: [{ shade: 1 }, '#000'], frames: [[ '....', ... ]] }"></textarea>
+    <button id="load">불러오기</button>
+  </div>
+</div>
+
+<script>
+const INDEX_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
+const CELL = 16;
+let W = 32, H = 16;
+let cells = Array.from({ length: H }, () => Array(W).fill(null));
+let palette = [{ shade: 1 }, { shade: 0.7 }, { shade: 1.3 }, '#000'];
+let active = 0;
+
+// ── 제품과 같은 계산 ──
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16); const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const mix = c => Math.max(0, Math.min(255, Math.round(f >= 1 ? c + (255 - c) * (f - 1) : c * f)));
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+}
+const colorOf = (slot, base) => (typeof slot === 'string' ? slot : shade(base, slot.shade));
+function bounds() {
+  let b = null;
+  cells.forEach((row, y) => row.forEach((c, x) => { if (c === null) return;
+    b = b ? { minX: Math.min(b.minX, x), maxX: Math.max(b.maxX, x) } : { minX: x, maxX: x }; }));
+  return b;
+}
+function wobble(t, scale) {
+  const out = Array(W).fill(0); const b = bounds(); if (!b) return out;
+  const mid = (b.minX + b.maxX) / 2, span = Math.max(1, b.maxX - mid);
+  for (let x = Math.ceil(mid); x <= b.maxX; x++) {
+    const amp = Math.min(1, (x - mid) / span);
+    out[x] = Math.round(Math.sin(t * Math.PI * 2 * 1.4 + (x - mid) * 0.55) * amp * scale);
+  }
+  return out;
+}
+const opaque = (x, y) => x >= 0 && y >= 0 && x < W && y < H && cells[y][x] !== null;
+function outlineCells() {
+  const out = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (opaque(x, y)) continue;
+    if (opaque(x - 1, y) || opaque(x + 1, y) || opaque(x, y - 1) || opaque(x, y + 1)) out.push([x, y]);
+  }
+  return out;
+}
+function bake(colors, scale, outline) {
+  const c = document.createElement('canvas'); c.width = W * scale; c.height = H * scale;
+  const ctx = c.getContext('2d');
+  if (outline) { ctx.fillStyle = outline; for (const [x, y] of outlineCells()) ctx.fillRect(x * scale, y * scale, scale, scale); }
+  cells.forEach((row, y) => row.forEach((idx, x) => { if (idx === null) return; ctx.fillStyle = colors[idx] ?? '#f0f'; ctx.fillRect(x * scale, y * scale, scale, scale); }));
+  return c;
+}
+
+// ── 격자 편집 ──
+const grid = document.getElementById('grid'), gctx = grid.getContext('2d');
+function drawGrid() {
+  grid.width = W * CELL; grid.height = H * CELL;
+  const base = document.getElementById('base').value;
+  gctx.clearRect(0, 0, grid.width, grid.height);
+  cells.forEach((row, y) => row.forEach((idx, x) => {
+    if (idx === null) return;
+    gctx.fillStyle = colorOf(palette[idx] ?? '#f0f', base); gctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+  }));
+  gctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  for (let x = 0; x <= W; x++) { gctx.beginPath(); gctx.moveTo(x * CELL + .5, 0); gctx.lineTo(x * CELL + .5, H * CELL); gctx.stroke(); }
+  for (let y = 0; y <= H; y++) { gctx.beginPath(); gctx.moveTo(0, y * CELL + .5); gctx.lineTo(W * CELL, y * CELL + .5); gctx.stroke(); }
+  gctx.strokeStyle = 'rgba(255,213,79,0.35)';
+  gctx.beginPath(); gctx.moveTo(W / 2 * CELL + .5, 0); gctx.lineTo(W / 2 * CELL + .5, H * CELL); gctx.moveTo(0, H / 2 * CELL + .5); gctx.lineTo(W * CELL, H / 2 * CELL + .5); gctx.stroke();
+}
+let painting = false, erasing = false;
+function paintAt(e) {
+  const r = grid.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / CELL), y = Math.floor((e.clientY - r.top) / CELL);
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  cells[y][x] = erasing ? null : active;
+  refresh();
+}
+grid.addEventListener('contextmenu', e => e.preventDefault());
+grid.addEventListener('pointerdown', e => { painting = true; erasing = e.button === 2 || e.shiftKey; grid.setPointerCapture(e.pointerId); paintAt(e); });
+grid.addEventListener('pointermove', e => { if (painting) paintAt(e); });
+grid.addEventListener('pointerup', () => { painting = false; });
+
+// ── 팔레트 UI ──
+function drawSlots() {
+  const base = document.getElementById('base').value;
+  const el = document.getElementById('slots'); el.innerHTML = '';
+  palette.forEach((slot, i) => {
+    const row = document.createElement('div'); row.className = 'slot' + (i === active ? ' on' : '');
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = colorOf(slot, base);
+    const k = document.createElement('span'); k.className = 'k'; k.textContent = INDEX_CHARS[i];
+    const input = document.createElement('input'); input.type = 'text'; input.size = 9;
+    input.value = typeof slot === 'string' ? slot : String(slot.shade);
+    input.title = typeof slot === 'string' ? 'hex 색' : 'shade 배율 (1 = 기준색, <1 어둡게, >1 밝게)';
+    input.addEventListener('change', () => {
+      palette[i] = typeof slot === 'string' ? input.value : { shade: Number(input.value) || 1 };
+      refresh();
+    });
+    const del = document.createElement('button'); del.textContent = '−'; del.title = '슬롯 삭제(해당 셀은 지워진다)';
+    del.addEventListener('click', ev => { ev.stopPropagation(); removeSlot(i); });
+    row.append(sw, k, input, del);
+    row.addEventListener('click', () => { active = i; drawSlots(); });
+    el.appendChild(row);
+  });
+}
+function removeSlot(i) {
+  cells = cells.map(row => row.map(c => (c === null || c === i ? null : c > i ? c - 1 : c)));
+  palette.splice(i, 1); if (active >= palette.length) active = Math.max(0, palette.length - 1);
+  refresh();
+}
+document.getElementById('addShade').addEventListener('click', () => { palette.push({ shade: 0.8 }); active = palette.length - 1; refresh(); });
+document.getElementById('addHex').addEventListener('click', () => { palette.push('#ffffff'); active = palette.length - 1; refresh(); });
+
+// ── 미리보기 ──
+const PRESETS = [['thumb 1×', 1], ['icon 3×', 3], ['card 4×', 4], ['portrait 6×', 6]];
+const previews = document.getElementById('previews');
+function buildPreviews() {
+  previews.innerHTML = '';
+  const forms = [['일반', 'base'], ['변이', 'base2'], ['미발견', null]];
+  for (const [fname, key] of forms) for (const [pname, scale] of PRESETS) {
+    const fig = document.createElement('figure'); const c = document.createElement('canvas');
+    c.width = W * scale; c.height = H * scale; c.dataset.scale = scale; c.dataset.key = key ?? '';
+    const cap = document.createElement('figcaption'); cap.textContent = `${fname} · ${pname}`;
+    fig.append(c, cap); previews.appendChild(fig);
+  }
+}
+function paintPreviews(t) {
+  const outline = document.getElementById('outline').value || undefined;
+  const wob = document.getElementById('wobble').checked;
+  for (const c of previews.querySelectorAll('canvas')) {
+    const scale = Number(c.dataset.scale), key = c.dataset.key;
+    const colors = key ? palette.map(s => colorOf(s, document.getElementById(key).value)) : palette.map(() => '#22314a');
+    const img = bake(colors, scale, key ? outline : undefined);
+    const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height);
+    if (!wob) { ctx.drawImage(img, 0, 0); continue; }
+    const off = wobble(t, scale);
+    for (let col = 0; col < W; col++) ctx.drawImage(img, col * scale, 0, scale, img.height, col * scale, off[col], scale, img.height);
+  }
+}
+requestAnimationFrame(function loop(ms) { paintPreviews(ms / 1000); requestAnimationFrame(loop); });
+
+// ── 내보내기 / 가져오기 ──
+function exportTs() {
+  const id = document.getElementById('fishId').value.trim() || 'fish';
+  const pal = palette.map(s => (typeof s === 'string' ? JSON.stringify(s) : `{ shade: ${s.shade} }`)).join(', ');
+  const rows = cells.map(row => `      '${row.map(c => (c === null ? '.' : INDEX_CHARS[c])).join('')}',`).join('\n');
+  document.getElementById('out').value =
+    `  ${id}: {\n    w: ${W}, h: ${H},\n    palette: [${pal}],\n    frames: [[\n${rows}\n    ]],\n  },`;
+}
+document.getElementById('copy').addEventListener('click', () => {
+  navigator.clipboard?.writeText(document.getElementById('out').value).catch(() => document.getElementById('out').select());
+});
+document.getElementById('load').addEventListener('click', () => {
+  try {
+    const obj = Function(`return (${document.getElementById('in').value})`)();
+    W = obj.w; H = obj.h; palette = obj.palette.slice();
+    cells = obj.frames[0].map(row => [...row].map(ch => (ch === '.' ? null : INDEX_CHARS.indexOf(ch))));
+    document.getElementById('w').value = W; document.getElementById('h').value = H; active = 0;
+    buildPreviews(); refresh();
+  } catch (e) { alert('가져오기 실패: ' + e.message); }
+});
+
+// ── 크기·기타 ──
+document.getElementById('resize').addEventListener('click', () => {
+  const nw = Number(document.getElementById('w').value), nh = Number(document.getElementById('h').value);
+  cells = Array.from({ length: nh }, (_, y) => Array.from({ length: nw }, (_, x) => cells[y]?.[x] ?? null));
+  W = nw; H = nh; buildPreviews(); refresh();
+});
+document.getElementById('clear').addEventListener('click', () => { cells = cells.map(r => r.map(() => null)); refresh(); });
+document.getElementById('flipH').addEventListener('click', () => { cells = cells.map(r => r.slice().reverse()); refresh(); });
+for (const id of ['base', 'base2', 'outline', 'fishId']) document.getElementById(id).addEventListener('input', refresh);
+
+function refresh() { drawGrid(); drawSlots(); exportTs(); }
+document.getElementById('h').value = H;
+buildPreviews(); refresh();
+</script>
+</body>
+</html>
