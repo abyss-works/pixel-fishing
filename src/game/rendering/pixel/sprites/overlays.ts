@@ -8,7 +8,7 @@ import { FISH } from '../../../content/fish';
 import type { FormId } from '../../../content/fish';
 import { fishColors, fishRings, fishSprite } from '../../../content/sprites/index.js';
 import { drawSprite } from '../sprite.js';
-import { JUMP_S, jumpHeight, orbit, rosterPick, schoolRoster } from './schoolView.js';
+import { JUMP_S, jumpHeight, orbit } from './schoolView.js';
 
 const fishById = (id: string) => FISH.find(f => f.id === id);
 
@@ -21,9 +21,6 @@ export interface GearView {
   /** 빨간 존(PERFECT) 폭 — 파워 게이트 초과 보너스. 없으면 그리지 않는다 */
   red?: number;
   t: number;
-  /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정(스포일러 규칙). 없으면 옛 점 마커 */
-  discovered?: ReadonlySet<string>;
-  night?: boolean;
   /** catch 전이 후 경과 초 — 훅 점프 연출. catch가 아니면 null */
   catchT?: number | null;
   catchFish?: { id: string; form: FormId } | null;
@@ -31,13 +28,13 @@ export interface GearView {
 
 /** 어종별 색 배열 캐시 — 매 프레임 배열을 새로 만들면 래스터 캐시 키 계산만 늘어난다 */
 const COLOR_CACHE = new Map<string, string[]>();
-function colorsOf(fishId: string, form: FormId, discovered: boolean): string[] | null {
-  const key = `${fishId}|${form}|${discovered}`;
+function colorsOf(fishId: string, form: FormId): string[] | null {
+  const key = `${fishId}|${form}`;
   let c = COLOR_CACHE.get(key);
   if (!c) {
     const fish = fishById(fishId);
     if (!fish) return null;
-    c = fishColors(fish, form, discovered);
+    c = fishColors(fish, form, true);
     COLOR_CACHE.set(key, c);
   }
   return c;
@@ -45,33 +42,18 @@ function colorsOf(fishId: string, form: FormId, discovered: boolean): string[] |
 
 /** zoom = 마커 크기 보정(1 기본). 미니맵처럼 pack 좌표를 축소 그리는 캔버스에서 지도가 커지면
  *  마커가 화면에서 쪼그라들므로, renderWorldMap이 1/s를 넣어 **표시 크기를 일정하게** 유지한다.
- *  view(discovered)가 있으면 그 수역 어종 스프라이트가 유영한다 — 발견한 종은 색, 아니면 실루엣.
- *  잠긴 수역·미발견 종은 실루엣이라 "여기 뭐가 산다"만 알리고 정체는 숨긴다(도감 ??? 규칙). */
+ *  어군은 어종과 무관한 검은 점 마커다(어종 스프라이트는 쓰지 않는다 — 사용자 결정). view가 있으면
+ *  입질 중인 어군만 찌 쪽으로 좁게 몬다. */
 export function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number,
                             lockLabel = true, zoom = 1, view?: GearView) {
   for (const s of schools) {
     const req = SPOTS.find(sp => sp.id === s.spot)!;
     const locked = boat < req.boatTier;
     R(ctx, s.x - 12 * zoom, s.y - 8 * zoom, 24 * zoom, 16 * zoom, 'rgba(255,255,255,0.05)');
-    const focused = view?.school?.id === s.id;
-    const bite = focused && view?.phase === 'bite';
-    const roster = view?.discovered ? schoolRoster(s.spot, view.night ?? false) : [];
+    const bite = view?.school?.id === s.id && view.phase === 'bite';
     for (let i = 0; i < 3; i++) {
-      const o = orbit(i, t, !!bite);
+      const o = orbit(i, t, bite);
       const fx = s.x + o.dx * zoom, fy = s.y + o.dy * zoom;
-      const fish = rosterPick(roster, i, t);
-      if (fish && view?.discovered && zoom === 1) {
-        const discovered = !locked && view.discovered.has(fish.id);
-        const colors = colorsOf(fish.id, 'normal', discovered);
-        if (colors) {
-          const sprite = fishSprite(fish);
-          // 어군은 물속이라 윤곽 없이 반투명하게 — 수면의 스프라이트(훅 점프)와 구별된다
-          ctx.globalAlpha = discovered ? 0.8 : 0.6;
-          drawSprite(ctx, sprite, colors, 1, fx - sprite.w / 2, fy - sprite.h / 2, { flip: !o.faceLeft });
-          ctx.globalAlpha = 1;
-          continue;
-        }
-      }
       const c = locked ? 'rgba(0,0,0,0.3)' : 'rgba(8,25,38,0.55)';
       R(ctx, fx - 3 * zoom, fy - 1 * zoom, 6 * zoom, 2 * zoom, c);
       R(ctx, fx + 3 * zoom, fy - 2 * zoom, 2 * zoom, 4 * zoom, c);
@@ -87,7 +69,7 @@ export function drawHookJump(ctx: Ctx, v: GearView) {
   if (h <= 0) return;
   const fish = fishById(v.catchFish.id);
   if (!fish) return;
-  const colors = colorsOf(fish.id, v.catchFish.form, true);
+  const colors = colorsOf(fish.id, v.catchFish.form);
   if (!colors) return;
   const sprite = fishSprite(fish, v.catchFish.form);
   // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
