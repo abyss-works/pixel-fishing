@@ -194,7 +194,7 @@ describe('rollNamedEncounter', () => {
     expect(rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0.999)).toBeNull();
   });
 
-  it('수역 한정 네임드(spot)는 그 수역에서만 조우한다 — 해협에서는 장로가 돌지 않는다', () => {
+  it('수역 한정 네임드(spot)는 그 수역에서만 조우한다 — 해협에서는 둔클레오스가 돌지 않는다', () => {
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'mozstrait', () => 0)).toBeNull();
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'comorodeep', () => 0)?.id)
       .toBe('madagascar-named-elder-sixgill');
