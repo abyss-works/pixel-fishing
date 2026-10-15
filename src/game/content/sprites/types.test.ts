@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cellIndex, paletteColors, validateSprite, opaqueBounds, outlineCells, auraCells } from './types';
+import { cellIndex, paletteColors, validateSprite, opaqueBounds, outlineCells } from './types';
 import type { PixelSprite } from './types';
 import { shade } from '../../../shared/lib/color';
 
@@ -36,14 +36,6 @@ describe('픽셀 스프라이트 데이터', () => {
     expect(cells).toEqual(['0,1', '1,0', '1,2', '2,1']);
     // 가장자리에 붙은 셀은 격자 안쪽 이웃만 남는다
     expect(outlineCells(['0.']).map(([x, y]) => `${x},${y}`)).toEqual(['1,0']);
-  });
-
-  it('오라 셀 — 윤곽 바깥 두 번째 링이며 윤곽·몸과 겹치지 않는다', () => {
-    const rows = ['.....', '.....', '..0..', '.....', '.....'];
-    const ring1 = new Set(outlineCells(rows).map(([x, y]) => `${x},${y}`));
-    const ring2 = auraCells(rows).map(([x, y]) => `${x},${y}`);
-    expect(ring2.sort()).toEqual(['0,2', '1,1', '1,3', '2,0', '2,4', '3,1', '3,3', '4,2']);
-    expect(ring2.some(c => ring1.has(c) || c === '2,2')).toBe(false);
   });
 
   it('무결성 — 행 수·행 길이·문자·인덱스 범위를 각각 잡아낸다', () => {

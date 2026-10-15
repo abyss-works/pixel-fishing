@@ -6,7 +6,6 @@ import {
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
 import { FISH } from '../fish';
 import { NAMED } from '../named';
-import { RARITY } from '../rarity';
 
 const NATIVE = [32, 16];
 
@@ -95,11 +94,10 @@ describe('어종 → 격자·색 배열', () => {
 });
 
 describe('몸 둘레 링', () => {
-  it('윤곽은 항상 어둡고, 영웅·전설만 등급색 오라가 붙으며, 미발견은 링이 없다', () => {
-    expect(fishRings({ rarity: 'legendary' })).toEqual({ outline: OUTLINE_DARK, aura: RARITY.legendary.color });
-    expect(fishRings({ rarity: 'epic' })).toEqual({ outline: OUTLINE_DARK, aura: RARITY.epic.color });
-    expect(fishRings({ rarity: 'rare' })).toEqual({ outline: OUTLINE_DARK });
-    expect(fishRings({ rarity: 'common' })).toEqual({ outline: OUTLINE_DARK });
+  it('발견한 개체는 등급과 무관하게 어두운 윤곽 하나, 미발견은 링이 없다', () => {
+    for (const rarity of ['common', 'rare', 'epic', 'legendary'] as const) {
+      expect(fishRings({ rarity })).toEqual({ outline: OUTLINE_DARK });
+    }
     expect(fishRings({ rarity: 'legendary' }, false)).toEqual({});
   });
 });

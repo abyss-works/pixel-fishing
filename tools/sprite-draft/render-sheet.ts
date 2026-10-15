@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs';
 import { FISH } from '../../src/game/content/fish';
 import { FISH_SHAPE_SPRITES, fishColors, fishRings, fishSprite } from '../../src/game/content/sprites';
 import type { FishRings } from '../../src/game/content/sprites';
-import { auraCells, cellIndex, outlineCells, paletteColors } from '../../src/game/content/sprites/types';
+import { cellIndex, outlineCells, paletteColors } from '../../src/game/content/sprites/types';
 import type { PixelSprite } from '../../src/game/content/sprites/types';
 import { Bitmap } from './png';
 
@@ -35,7 +35,6 @@ bmp.fill(0, 0, W, H, WATER);
 function blit(s: PixelSprite, colors: string[], rings: FishRings, scale: number, ox: number, oy: number) {
   const grid = s.frames[0];
   const cell = (x: number, y: number, c: string) => bmp.fill(ox + x * scale, oy + y * scale, scale, scale, c);
-  if (rings.aura) for (const [x, y] of auraCells(grid)) cell(x, y, rings.aura);
   if (rings.outline) for (const [x, y] of outlineCells(grid)) cell(x, y, rings.outline);
   grid.forEach((row, y) => {
     for (let x = 0; x < row.length; x++) {

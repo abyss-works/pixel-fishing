@@ -46,6 +46,6 @@ describe('유영 흔들기', () => {
 describe('래스터 캐시', () => {
   it('jsdom(canvas 없음)에서는 null을 돌려주고 던지지 않는다', () => {
     expect(rasterize(fish, ['#fff'], 2)).toBeNull();
-    expect(rasterize(fish, ['#fff'], 2, 0, { outline: '#000', aura: '#ffd54f' })).toBeNull();
+    expect(rasterize(fish, ['#fff'], 2, 0, { outline: '#000' })).toBeNull();
   });
 });

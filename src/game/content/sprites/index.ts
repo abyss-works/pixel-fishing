@@ -4,8 +4,6 @@
 // 원화 격자는 팔레트가 고정 hex라 기준색을 쓰지 않는다. 미발견은 전 슬롯을 실루엣 색으로 치환한다 —
 // 실루엣이 같은 데이터에서 파생된다는 계약(R3·R19).
 import type { Fish, FormId } from '../fish.js';
-import { RARITY } from '../rarity.js';
-import type { RarityId } from '../rarity.js';
 import { FISH_SHAPE_SPRITES } from './fishShapes.generated.js';
 import { FISH_SPRITES_GENERATED } from './fishSprites.generated.js';
 import { FISH_SPRITES } from './fishSprites.js';
@@ -14,8 +12,8 @@ import type { PixelSprite } from './types.js';
 
 /** 미발견 실루엣 색 — 몸 형태만 보여주고 색은 숨긴다 (도감 스포일러 규칙) */
 export const SILHOUETTE = '#22314a';
-/** 일반·희귀 윤곽 — 어두운 수면·패널 위에서 몸을 떼어 놓는 가독성용. 등급색을 쓰지 않는다 */
-export const OUTLINE_DARK = '#0b1322';
+/** 윤곽 — 어두운 수면·패널 위에서 몸을 떼어 놓는 가독성용. 순검정보다 한 단계 연한 남색 */
+export const OUTLINE_DARK = '#182540';
 
 export const spriteKey = (id: string, form: FormId): string => (form === 'variant' ? `${id}.variant` : id);
 
@@ -35,16 +33,12 @@ export function fishColors(
   return paletteColors(sprite.palette, form === 'variant' ? fish.variant.color : fish.color);
 }
 
-export interface FishRings { outline?: string; aura?: string }
+export interface FishRings { outline?: string }
 
-/** 몸 둘레 링 — 윤곽은 항상 어두운 색(가독성), 영웅·전설은 바깥에 등급색 오라를 한 칸 더 두른다.
- *  미발견은 링 없음(실루엣만). 등급색을 윤곽에 직접 쓰면 금빛·보랏빛 몸과 섞여 구별되지 않는다. */
-export function fishRings(fish: Pick<Fish, 'rarity'>, discovered = true): FishRings {
-  if (!discovered) return {};
-  const r: RarityId = fish.rarity;
-  return r === 'epic' || r === 'legendary'
-    ? { outline: OUTLINE_DARK, aura: RARITY[r].color }
-    : { outline: OUTLINE_DARK };
+/** 몸 둘레 링 — 발견한 개체는 어두운 윤곽 한 칸, 미발견은 링 없음(실루엣만).
+ *  등급은 스프라이트가 아니라 카드 테두리·등급 점·텍스트가 말한다(등급색 오라는 과해서 뺐다). */
+export function fishRings(_fish: Pick<Fish, 'rarity'>, discovered = true): FishRings {
+  return discovered ? { outline: OUTLINE_DARK } : {};
 }
 
 export { FISH_SHAPE_SPRITES } from './fishShapes.generated.js';

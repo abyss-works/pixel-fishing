@@ -2,22 +2,22 @@
 // 굽고 drawImage로 찍는다. 배율은 정수만 받는다(픽셀아트 — 비정수는 번짐).
 // 캐시는 스프라이트 객체를 키로 하는 WeakMap이라 데이터가 교체되면 함께 버려진다.
 // jsdom에는 canvas가 없어 null을 돌려준다 — 호출자는 그리기를 건너뛴다.
-import { auraCells, cellIndex, opaqueBounds, outlineCells } from '../../content/sprites/types.js';
+import { cellIndex, opaqueBounds, outlineCells } from '../../content/sprites/types.js';
 import type { PixelSprite } from '../../content/sprites/types.js';
 import type { Ctx } from './common.js';
 
 type Raster = HTMLCanvasElement;
 const CACHE = new WeakMap<PixelSprite, Map<string, Raster | null>>();
 
-/** 몸 둘레 링 — outline은 몸에 닿는 1칸(가독성), aura는 그 바깥 1칸(등급 표시) */
-export interface Rings { outline?: string; aura?: string }
+/** 몸 둘레 링 — outline은 몸에 닿는 1칸(가독성) */
+export interface Rings { outline?: string }
 
 export function rasterize(
   sprite: PixelSprite, colors: readonly string[], scale: number, frame = 0, rings: Rings = {},
 ): Raster | null {
   let bucket = CACHE.get(sprite);
   if (!bucket) { bucket = new Map(); CACHE.set(sprite, bucket); }
-  const key = `${colors.join('|')}@${scale}#${frame}~${rings.outline ?? ''}~${rings.aura ?? ''}`;
+  const key = `${colors.join('|')}@${scale}#${frame}~${rings.outline ?? ''}`;
   const hit = bucket.get(key);
   if (hit !== undefined) return hit;
 
@@ -36,10 +36,6 @@ function bake(
   const ctx = c.getContext('2d');
   if (!ctx) return null;
   const rows = sprite.frames[frame] ?? sprite.frames[0];
-  if (rings.aura) {
-    ctx.fillStyle = rings.aura;
-    for (const [x, y] of auraCells(rows)) ctx.fillRect(x * scale, y * scale, scale, scale);
-  }
   if (rings.outline) {
     ctx.fillStyle = rings.outline;
     for (const [x, y] of outlineCells(rows)) ctx.fillRect(x * scale, y * scale, scale, scale);
@@ -92,7 +88,7 @@ export function drawSprite(
   ctx: Ctx, sprite: PixelSprite, colors: readonly string[], scale: number,
   x: number, y: number, opts: DrawOpts = {},
 ): void {
-  const img = rasterize(sprite, colors, scale, opts.frame ?? 0, { outline: opts.outline, aura: opts.aura });
+  const img = rasterize(sprite, colors, scale, opts.frame ?? 0, { outline: opts.outline });
   if (!img) return;
   const px = Math.round(x), py = Math.round(y);
   ctx.save();
