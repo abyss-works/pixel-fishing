@@ -1,13 +1,22 @@
-// 어종 스프라이트 — 어종마다 다른 몸 형태(shape)로 그린다 
-// 고정 해상도 래스터(32/64px) 대신, 기존처럼 좌표를 s(스케일)에 곱한 사각형을 절차적으로
-// 그린다 — 어떤 화면 크기에서도 픽셀이 깨지지 않고, 실루엣당 사각형 수만 늘려 디테일을 낸다.
-// detail=false면 실루엣(도감 미획득 표시용) — 눈/하이라이트 생략, 몸 형태는 그대로 보여준다.
-import { R, shade } from '../common.js';
-import type { Ctx } from '../common.js';
-import type { FishShape } from '../../../content/fish.js';
-export type { FishShape };
+// 어종 초안 생성기 — 좌표 × 배율 사각형으로 14형태를 그리는 절차 렌더러.
+// 제품은 더 이상 이 함수로 그리지 않는다(sprite-data 결정). 신규 어종의 격자 밑그림을 뽑는
+// 초안 도구이며, generate-fish-shapes가 이 출력을 인덱스 격자로 변환한다.
+// detail=false면 실루엣 — 눈/하이라이트 생략, 몸 형태는 그대로.
+import { shade } from '../../src/shared/lib/color';
+import type { FishShape } from '../../src/game/content/fish';
 
-type Draw = (ctx: Ctx, cx: number, cy: number, s: number, color: string, detail: boolean) => void;
+/** 최소 캔버스 계약 — 실제 CanvasRenderingContext2D와 변환용 기록 컨텍스트가 모두 만족한다 */
+export interface RectCtx {
+  fillStyle: string;
+  fillRect(x: number, y: number, w: number, h: number): void;
+}
+
+function R(ctx: RectCtx, x: number, y: number, w: number, h: number, c: string) {
+  ctx.fillStyle = c;
+  ctx.fillRect(x | 0, y | 0, w, h);
+}
+
+type Draw = (ctx: RectCtx, cx: number, cy: number, s: number, color: string, detail: boolean) => void;
 
 // 아주 작은 무리어(피라미)
 const tiny: Draw = (ctx, cx, cy, s, color, detail) => {
@@ -175,13 +184,13 @@ const ray: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 2 * s, cy + 1 * s, 3 * s, s, 'rgba(255,255,255,0.3)');
 };
 
-const SHAPES: Record<FishShape, Draw> = {
+export const SHAPES: Record<FishShape, Draw> = {
   tiny, round, slim, predator, flowing, eel, ribbon,
   whiskered, shark, anglerfish, cephalopod, ancient, serpent, ray,
 };
 
 export function drawFishSprite(
-  ctx: Ctx, cx: number, cy: number, shape: FishShape, color: string, s: number, detail = true,
+  ctx: RectCtx, cx: number, cy: number, shape: FishShape, color: string, s: number, detail = true,
 ) {
   SHAPES[shape](ctx, cx, cy, s, color, detail);
 }

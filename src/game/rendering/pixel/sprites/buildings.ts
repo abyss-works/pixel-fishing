@@ -3,7 +3,8 @@
 // 새 지역/거점의 건물 = 여기 항목 추가가 전부다. mapColor는 월드맵 축소판의 플랫 색(없으면 지도 생략).
 import { R } from '../common.js';
 import type { Ctx } from '../common.js';
-import { drawFishSprite } from './fish.js';
+import { drawSpriteCentered } from '../sprite.js';
+import { FISH_SHAPE_SPRITES, paletteColors } from '../../../content/sprites/index.js';
 import type { BuildingSpriteId, Furniture, FurnitureSpriteId, Rect } from '../../../world/types';
 
 interface BuildingSprite { draw: (ctx: Ctx, r: Rect) => void; mapColor?: string }
@@ -99,8 +100,9 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x, f.y + 8, f.w, f.h - 8, '#8d6e63');
     R(ctx, f.x, f.y - 2, f.w, 6, '#1d6396');
     R(ctx, f.x + 3, f.y + 10, f.w - 6, 10, '#e3f2fd');
-    drawFishSprite(ctx, f.x + 12, f.y + 15, 'slim', '#42a5f5', 1);
-    drawFishSprite(ctx, f.x + 30, f.y + 15, 'round', '#e57373', 1);
+    const slim = FISH_SHAPE_SPRITES.slim, round = FISH_SHAPE_SPRITES.round;
+    drawSpriteCentered(ctx, slim, paletteColors(slim.palette, '#42a5f5'), 1, f.x + 12, f.y + 15);
+    drawSpriteCentered(ctx, round, paletteColors(round.palette, '#e57373'), 1, f.x + 30, f.y + 15);
   },
   // 항구: 조선소 — 건조대 위 선체 + 돛
   shipyard: (ctx, f) => {

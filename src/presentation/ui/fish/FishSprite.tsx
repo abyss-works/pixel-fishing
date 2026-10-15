@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { drawFishSprite } from '../../../game/rendering/pixel';
+import { drawSpriteCentered } from '../../../game/rendering/pixel';
+import { fishColors, fishSprite } from '../../../game/content/sprites';
 import type { Fish, FormId } from '../../../game/content/fish';
 import { cx } from '../cx';
 
-// 용도별 캔버스 크기·스케일 프리셋 — 가방 썸네일/도감 카드/도감 상세 초상화/획득 카드
+// 용도별 캔버스 크기·배율 프리셋 — 가방 썸네일/도감 카드/도감 상세 초상화/획득 카드.
+// 배율은 정수(픽셀아트). 격자(32×16)가 캔버스보다 크면 투명 여백만 잘린다.
 const PRESETS = {
   thumb:    { w: 30,  h: 16,  scale: 1 },
   icon:     { w: 84,  h: 44,  scale: 3 },
@@ -11,23 +13,20 @@ const PRESETS = {
   card:     { w: 160, h: 90,  scale: 4 },
 } as const;
 
-// 미발견 실루엣 색 — 몸 형태만 보여주고 색은 숨긴다 (도감 스포일러 규칙)
-const SILHOUETTE = '#22314a';
-
 interface FishSpriteProps {
   fish: Fish;
   preset: keyof typeof PRESETS;
-  /** 어느 폼으로 그릴지 — 변이는 변이 색 (폼 추가 시 COLOR_OF 행 추가) */
+  /** 어느 폼으로 그릴지 — 변이는 변이 색을 기준색으로 팔레트를 해석한다 */
   form?: FormId;
-  /** false면 실루엣(색·디테일 숨김) */
+  /** false면 실루엣(전 슬롯을 실루엣 색으로) */
   discovered?: boolean;
   /** 없으면 장식 취급(aria-hidden) */
   ariaLabel?: string;
   className?: string;
 }
 
-// 어종 스프라이트 캔버스 — 구 FishThumb/FishIcon/DexPortrait/CatchSprite 4벌 통합 (같은
-// ref+useEffect+drawFishSprite 패턴의 복붙이었다). jsdom엔 canvas가 없어 ctx null 가드.
+// 어종 스프라이트 캔버스 — 격자·팔레트 해석은 콘텐츠(fishSprite/fishColors), 굽기와 찍기는
+// 렌더러(drawSpriteCentered)가 맡는다. jsdom엔 canvas가 없어 ctx null 가드.
 export default function FishSprite({
   fish, preset, form = 'normal', discovered = true, ariaLabel, className,
 }: FishSpriteProps) {
@@ -37,8 +36,7 @@ export default function FishSprite({
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
     ctx.clearRect(0, 0, w, h);
-    const color = discovered ? (form === 'variant' ? fish.variant.color : fish.color) : SILHOUETTE;
-    drawFishSprite(ctx, w / 2, h / 2, fish.shape, color, scale, discovered);
+    drawSpriteCentered(ctx, fishSprite(fish), fishColors(fish, form, discovered), scale, w / 2, h / 2);
   }, [fish, form, discovered, w, h, scale]);
   return (
     <canvas
