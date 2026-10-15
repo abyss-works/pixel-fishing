@@ -30,9 +30,9 @@ export interface BountyQuest {
 // spec 2절 — 라이선스 명성 (검증만, 차감 없음)
 export const BOUNTY_LICENSE_FAME: Record<BountyZone, number> = {
   pacific: 1500,
-  seasia: 15000,
-  indian: 70000,
-  madagascar: 150000,
+  seasia: 20000,
+  indian: 80000,
+  madagascar: 300000,
 };
 
 const Q = (
