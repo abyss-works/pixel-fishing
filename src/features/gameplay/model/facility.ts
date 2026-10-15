@@ -46,6 +46,36 @@ export function selectBoatPurchasePreview(game: GameState): BoatPurchasePreview 
   };
 }
 
+export type LadderState = 'done' | 'current' | 'next' | 'locked';
+
+export interface BoatLadderRow { boat: Boat; state: LadderState; openedSpot: Spot | undefined }
+
+/** 배 6단계 사다리 — 가진 배는 done, 현재 배는 current, 바로 다음은 next, 그 뒤는 locked.
+ *  맨발(0)은 사다리에 없다 — 첫 행이 next가 된다. */
+export function selectBoatLadder(game: GameState): BoatLadderRow[] {
+  return BOATS.map(boat => ({
+    boat,
+    openedSpot: SPOTS.find(spot => spot.boatTier === boat.tier),
+    state: boat.tier < game.boat ? 'done'
+      : boat.tier === game.boat ? 'current'
+      : boat.tier === game.boat + 1 ? 'next' : 'locked',
+  }));
+}
+
+export interface RodLadderRow { level: number; stats: ReturnType<typeof rodStats>; cost: number; state: LadderState }
+
+/** 낚싯대 사다리 — 상한이 없어 현재 ±2단계만 자른다. 각 행의 cost는 그 레벨로 올리는 비용 */
+export function selectRodLadder(game: GameState, span = 2): RodLadderRow[] {
+  const rows: RodLadderRow[] = [];
+  for (let level = Math.max(1, game.rod - span); level <= game.rod + span; level++) {
+    rows.push({
+      level, stats: rodStats(level), cost: level > 1 ? upgradeCost(level - 1) : 0,
+      state: level < game.rod ? 'done' : level === game.rod ? 'current' : level === game.rod + 1 ? 'next' : 'locked',
+    });
+  }
+  return rows;
+}
+
 /** 배 구매 완료 토스트에 쓸 이름과 새로 열린 수역을 반환한다. */
 export function selectBoatPurchaseResult(tier: number): {
   boatName: string;
