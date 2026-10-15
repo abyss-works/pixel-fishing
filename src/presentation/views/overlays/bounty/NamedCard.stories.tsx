@@ -21,26 +21,26 @@ const game = (dex: GameState['dex']): GameState => ({ ...newState(), dex });
 
 export const Undiscovered: Story = {
   args: {
-    game: game({}), quest, canAccept: true, busy: false, progress: 0, ticketMins: null, ...handlers(),
+    game: game({}), quest, canAccept: true, busy: false, progress: 0, accepted: false, ticketMins: null, ...handlers(),
   },
 };
 
 export const Discovered: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 0, ticketMins: null, ...handlers(),
+    quest, canAccept: true, busy: false, progress: 0, accepted: false, ticketMins: null, ...handlers(),
   },
 };
 
 export const Deliverable: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 1, ticketMins: null, ...handlers(),
+    quest, canAccept: true, busy: false, progress: 1, accepted: true, ticketMins: null, ...handlers(),
   },
 };
 
 export const Ticket: Story = {
   args: {
-    game: game({}), quest, canAccept: false, busy: false, progress: 0, ticketMins: 42, ...handlers(),
+    game: game({}), quest, canAccept: false, busy: false, progress: 0, accepted: true, ticketMins: 42, ...handlers(),
   },
 };

@@ -29,6 +29,21 @@ describe('의뢰 화면 데이터', () => {
     expect(data.ticketMins).toBeGreaterThan(0);
   });
 
+  it('수주한 의뢰는 진행도가 0이어도 진행 중이다 — 진행 행이 수주의 표시다', () => {
+    const game = newState();
+    const day = '2026-10-13';
+    const uid = 'player-1';
+    const quest = dailyQuestFor('pacific', 'easy', uid, day)!;
+    const other = dailyQuestFor('pacific', 'normal', uid, day)!;
+    const data = selectBountyPanelData({
+      game, port: 'harbor', uid, day, nowMs: Date.parse('2026-10-13T00:01:00.000Z'),
+      snapshot: { licensed: [], acceptsToday: 1, namedToday: 0, progress: [{ questId: quest.id, progress: 0 }], tickets: [] },
+    });
+    expect(data.isAccepted(quest.id)).toBe(true);
+    expect(data.progressOf(quest.id)).toBe(0);
+    expect(data.isAccepted(other.id)).toBe(false);
+  });
+
   it('네임드 카드의 발견 공개와 완료 여부를 계산한다', () => {
     const game = newState();
     const quest = BOUNTIES.find(row => row.difficulty === 'named')!;

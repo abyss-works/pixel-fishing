@@ -76,7 +76,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = kstDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, basicConds, namedConds,
+    leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, ticketMins, hasTicket,
     relic, relicOwned, relicMats, challengeSweepMs,
   } = data;
@@ -86,7 +86,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     if (!q) return null;
     const prog = progressOf(q.id);
     return (
-      <BountyCard key={q.id} quest={q} progress={prog}
+      <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
         canAccept={basicOpen && canTake} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `${questLabel(q)}를 수주했다.`)}
@@ -147,7 +147,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
               canAccept={namedOpen && canTakeNamed} busy={busy}
-              progress={progressOf(namedQuest.id)}
+              progress={progressOf(namedQuest.id)} accepted={isAccepted(namedQuest.id)}
               ticketMins={hasTicket ? ticketMins : null}
               onAccept={() => run(
                 { type: 'acceptQuest', questId: namedQuest.id, port },

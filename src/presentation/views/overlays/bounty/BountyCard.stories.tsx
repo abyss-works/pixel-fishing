@@ -18,28 +18,28 @@ const handlers = () => ({ onAccept: fn(), onDeliver: fn() });
 
 export const Easy: Story = {
   args: {
-    quest: quest('pacific-easy-common'), progress: 0,
+    quest: quest('pacific-easy-common'), progress: 0, accepted: false,
     canAccept: true, busy: false, ...handlers(),
   },
 };
 
 export const Hard: Story = {
   args: {
-    quest: quest('pacific-hard-legendary'), progress: 0,
+    quest: quest('pacific-hard-legendary'), progress: 0, accepted: false,
     canAccept: true, busy: false, ...handlers(),
   },
 };
 
 export const InProgress: Story = {
   args: {
-    quest: quest('pacific-normal-rare'), progress: 7,
+    quest: quest('pacific-normal-rare'), progress: 7, accepted: true,
     canAccept: true, busy: false, ...handlers(),
   },
 };
 
 export const Deliverable: Story = {
   args: {
-    quest: quest('pacific-easy-common'), progress: 250,
+    quest: quest('pacific-easy-common'), progress: 250, accepted: true,
     canAccept: true, busy: false, ...handlers(),
   },
 };
