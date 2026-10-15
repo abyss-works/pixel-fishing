@@ -7,12 +7,12 @@ const note = (version: string): PatchNote => ({ version, date: '2026-10-16', sum
 const NOTES = [note('0.10.0'), note('0.9.0')];
 
 describe('이번 버전 소식', () => {
-  it('현재 버전의 노트가 있고 아직 보지 않았으면 그 노트다', () => {
+  it('현재 버전의 노트가 있고 "다시 보지 않기"를 하지 않았으면 그 노트다', () => {
     expect(newsFor(NOTES, '0.10.0', '0.9.0')?.version).toBe('0.10.0');
     expect(newsFor(NOTES, '0.10.0', null)?.version).toBe('0.10.0');
   });
 
-  it('이미 봤거나 현재 버전 노트가 없으면 없다', () => {
+  it('이 버전을 다시 보지 않기로 했거나 현재 버전 노트가 없으면 없다', () => {
     expect(newsFor(NOTES, '0.10.0', '0.10.0')).toBeNull();
     expect(newsFor(NOTES, '0.11.0', null)).toBeNull();
   });
@@ -45,20 +45,18 @@ describe('소식 창 단계 계획', () => {
   const prompts = SETTING_PROMPTS;
 
   it('소식과 미답 질문이 있으면 소식 → 새 설정 순서다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts, autoOpen: true, fresh: false }))
-      .toEqual(['news', 'settings']);
+    expect(planWhatsNew({ news: note('0.10.0'), prompts, fresh: false })).toEqual(['news', 'settings']);
   });
 
-  it('자동 열기를 끄면 소식은 빠지지만 새 설정 질문은 한 번 묻는다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts, autoOpen: false, fresh: false }))
-      .toEqual(['settings']);
+  it('소식만 남았으면 소식 한 단계다 — 질문은 한 번만 묻는다', () => {
+    expect(planWhatsNew({ news: note('0.10.0'), prompts: [], fresh: false })).toEqual(['news']);
   });
 
   it('보여줄 것이 없으면 열지 않는다', () => {
-    expect(planWhatsNew({ news: null, prompts: [], autoOpen: true, fresh: false })).toEqual([]);
+    expect(planWhatsNew({ news: null, prompts: [], fresh: false })).toEqual([]);
   });
 
   it('처음 시작한 플레이어에게는 열지 않는다 — 기본 설정으로 시작한다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts, autoOpen: true, fresh: true })).toEqual([]);
+    expect(planWhatsNew({ news: note('0.10.0'), prompts, fresh: true })).toEqual([]);
   });
 });

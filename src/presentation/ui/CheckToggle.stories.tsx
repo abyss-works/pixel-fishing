@@ -6,5 +6,5 @@ const meta: Meta<typeof CheckToggle> = { title: 'UI/CheckToggle', component: Che
 export default meta;
 type Story = StoryObj<typeof CheckToggle>;
 
-export const On: Story = { args: { checked: true, onChange: () => {}, label: '새 버전 소식을 자동으로 열기' } };
-export const Off: Story = { args: { checked: false, onChange: () => {}, label: '새 버전 소식을 자동으로 열기' } };
+export const On: Story = { args: { checked: true, onChange: () => {}, label: '이번 소식 다시 보지 않기' } };
+export const Off: Story = { args: { checked: false, onChange: () => {}, label: '이번 소식 다시 보지 않기' } };

@@ -11,7 +11,7 @@ import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover'
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
-import { markNewsSeen, markPromptsAnswered, resetAnnouncements } from './platform/adapters/announcements';
+import { markPromptsAnswered, resetAnnouncements, setDismissedVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
 import { PATCH_NOTES } from './game/content/patchnotes';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
@@ -71,7 +71,7 @@ beforeEach(() => {
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetAnnouncements();
-  markNewsSeen(APP_VERSION);
+  setDismissedVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
   resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
@@ -1329,10 +1329,11 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
 
     fireEvent.click(screen.getByRole('button', { name: '완료' }));
     expect(screen.queryByRole('dialog', { name: '새 설정' })).not.toBeInTheDocument();
-    expect(stored()).toMatchObject({ seenVersion: APP_VERSION, answered: ['fish-art'] });
+    // 다시 보지 않기를 체크하지 않았으니 소식은 남고, 질문은 답했다
+    expect(stored()).toMatchObject({ dismissedVersion: null, answered: ['fish-art'] });
   });
 
-  it('창을 닫으면 다시 열리지 않는다 — 다음 접속에도', () => {
+  it('다시 보지 않기를 체크하지 않고 닫으면 다음 접속에 소식만 다시 뜬다', () => {
     unseen();
     seed({ fame: 120 });
     const { unmount } = render(<App />);
@@ -1341,19 +1342,21 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     unmount();
     resetWhatsNewSession();
     render(<App />);
-    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '확인' })).toBeInTheDocument(); // 새 설정 단계 없음
   });
 
-  it('자동 열기를 끄면 다음 버전부터 소식은 뜨지 않고, 설정 탭에 같은 값이 보인다', () => {
+  it('다시 보지 않기를 체크하고 닫으면 이번 소식은 더 뜨지 않는다', () => {
     unseen();
     seed({ fame: 120 });
+    const { unmount } = render(<App />);
+    fireEvent.click(screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' }));
+    fireEvent.click(screen.getByLabelText('닫기'));
+    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
+    unmount();
+    resetWhatsNewSession();
     render(<App />);
-    fireEvent.click(screen.getByRole('checkbox', { name: /자동으로 열지 않기/ }));
-    fireEvent.click(screen.getByRole('button', { name: /다음/ }));
-    fireEvent.click(screen.getByRole('button', { name: '완료' }));
-    expect(stored()).toMatchObject({ autoOpen: false });
-    clickTab('설정');
-    expect(screen.getByRole('checkbox', { name: /자동으로 열기/ })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
   });
 
   it('처음 시작한 플레이어에게는 열지 않고 본 것으로 남긴다', () => {
@@ -1361,7 +1364,7 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     seed({});
     render(<App />);
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
-    expect(stored()).toMatchObject({ seenVersion: APP_VERSION, answered: ['fish-art'] });
+    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION, answered: ['fish-art'] });
   });
 
   it('설정 탭에서 이번 소식을 다시 볼 수 있다', () => {
@@ -1370,7 +1373,12 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '이번 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
+    // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
+    const check = screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' });
+    expect(check).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(check);
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(stored()).toMatchObject({ dismissedVersion: null });
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
   });
 });
