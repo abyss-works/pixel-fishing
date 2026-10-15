@@ -161,7 +161,7 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
  *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 실패해도 티켓은 남는다
  *  (윈도우 내 재시도 — 어렵게 하지 않는다). 오프라인 dev는 주입이 없어 닫힌다. */
 export function canResolveChallenge(
-  state: GameState, questId: string,
+  questId: string,
   claimed: { success: boolean; hits: number; misses: number },
   nowISO: string, ctx: BountyCtx | undefined,
 ): RuleCheck {

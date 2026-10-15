@@ -558,7 +558,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
           || typeof action.hits !== 'number' || typeof action.misses !== 'number') {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canResolveChallenge(state, action.questId,
+      const check = canResolveChallenge(action.questId,
         { success: action.success, hits: action.hits, misses: action.misses },
         deps.now, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };
