@@ -13,6 +13,9 @@ function effectLines(a: Artifact): string[] {
   if ((a.effects.baitDiscount ?? 0) > 0) {
     out.push(`미끼값 −${Math.round(a.effects.baitDiscount! * 100)}%`);
   }
+  if (a.effects.variantRate !== undefined) {
+    out.push(`변이 개체 확률 ${Math.round(a.effects.variantRate * 100)}%`);
+  }
   return out;
 }
 

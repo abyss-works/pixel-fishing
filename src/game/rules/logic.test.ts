@@ -10,7 +10,7 @@ import {
   autoLockUids, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
-  sizeParams, rollSize, sizePercentile, rollCatchExtras,
+  sizeParams, rollSize, sizePercentile, rollCatchExtras, variantRateOf,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
@@ -470,6 +470,19 @@ describe('월척(크기)·개체·폼 기록', () => {
     for (let i = 0; i < n; i++) if (rollCatchExtras(carp).form === 'variant') variant++;
     expect(variant / n).toBeGreaterThan(0.30);
     expect(variant / n).toBeLessThan(0.36);
+  });
+
+  it('rollCatchExtras: 변이 확률 인자 — rng 소비 순서(크기 2회 → 폼 1회)는 그대로', () => {
+    const seq = [0.5, 0.5, 0.4];
+    const rng = () => seq.shift() ?? 0;
+    expect(rollCatchExtras(carp, rng, 1 / 3).form).toBe('normal');   // 0.4 ≥ 1/3
+    const seq2 = [0.5, 0.5, 0.4];
+    const rng2 = () => seq2.shift() ?? 0;
+    expect(rollCatchExtras(carp, rng2, 1 / 2).form).toBe('variant'); // 0.4 < 1/2
+  });
+
+  it('variantRateOf: 유물 없으면 기본 MUTATION_RATE', () => {
+    expect(variantRateOf(newState())).toBeCloseTo(1 / 3, 10);
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {

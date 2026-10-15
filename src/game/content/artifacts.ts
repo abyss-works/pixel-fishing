@@ -13,13 +13,15 @@ export interface ArtifactEffects {
   nightImmune?: boolean;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
+  /** 변이 개체 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
+  variantRate?: number;
 }
 
 export interface Artifact {
   id: string;
   name: string;
   zone: BountyZone;
-  /** 유물 급 — 당분간 희귀만 둔다 (일반은 평범해서 제외) */
+  /** 유물 급 — 희귀가 기본이고, 낚시 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
   grade: RarityId;
   /** 교환 재료 — items 축 id/이름. 네임드 납품 시 1개 지급, 교환 시 1개 소모 */
   materialId: string;

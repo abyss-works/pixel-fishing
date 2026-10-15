@@ -368,10 +368,21 @@ export interface CatchExtras {
   form: FormId;
 }
 
-// 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종, 확률 고정.
+// 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종.
+// 변이 확률은 호출자가 variantRateOf로 넘긴다(기본 MUTATION_RATE).
 // rng 소비 순서 고정(크기 2회 → 폼 1회) — 바꾸면 시드 기반 테스트가 전부 깨진다
-export function rollCatchExtras(fish: Fish, rng: () => number = Math.random): CatchExtras {
-  return { size: rollSize(fish, rng), form: rng() < MUTATION_RATE ? 'variant' : 'normal' };
+export function rollCatchExtras(
+  fish: Fish, rng: () => number = Math.random, variantRate = MUTATION_RATE,
+): CatchExtras {
+  return { size: rollSize(fish, rng), form: rng() < variantRate ? 'variant' : 'normal' };
+}
+
+/** 변이 확률 — 소유 유물 중 가장 높은 variantRate, 없으면 기본값.
+ *  리듀서와 서버 fast path가 같은 함수를 쓴다. */
+export function variantRateOf(state: Pick<GameState, 'artifacts'>): number {
+  const owned = new Set(state.artifacts);
+  return ARTIFACTS.reduce((m, a) =>
+    owned.has(a.id) ? Math.max(m, a.effects.variantRate ?? 0) : m, MUTATION_RATE);
 }
 
 // ---------- 개체 (세이브 v8) ----------
