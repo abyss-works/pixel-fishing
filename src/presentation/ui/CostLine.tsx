@@ -4,9 +4,11 @@ import { fmtGold, fmtNum } from './format';
 // 잔액 줄 — 확정 전에 "보유 → 확정 후"를 한 줄로 보여준다. delta가 음수면 지출, 양수면 수입.
 // 모자라면 확정 후 값을 위험색으로 칠한다(버튼 비활성과 같은 신호). 명성처럼 차감 없는
 // 조건은 requirement로 아래 줄에 붙인다 — 네 패널이 네 가지로 적던 보유·비용 표기의 단일 형태.
-export default function CostLine({ have, delta, requirement, className }: {
+export default function CostLine({ have, delta, requirement, size = 'md', className }: {
   have: number;
   delta: number;
+  /** lg = 정비 패널 확정 영역 — 결과 금액을 크게 */
+  size?: 'md' | 'lg';
   /** 차감 없는 하한 조건 (예: 명성) */
   requirement?: { label: string; need: number; have: number };
   className?: string;
@@ -15,7 +17,7 @@ export default function CostLine({ have, delta, requirement, className }: {
   const short = after < 0;
   const reqShort = requirement ? requirement.have < requirement.need : false;
   return (
-    <div className={cx('text-sm flex flex-col gap-0.5', className)}>
+    <div className={cx(size === 'lg' ? 'text-base' : 'text-sm', 'flex flex-col gap-0.5', className)}>
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="text-text-dim">보유</span>
         <span className="pf-accent">{fmtGold(have)}</span>

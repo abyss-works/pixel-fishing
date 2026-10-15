@@ -6,6 +6,7 @@ import { OUTLINE_DARK } from '../../game/content/sprites';
 const PRESETS = {
   thumb: { w: 32, h: 16, scale: 1 },
   row:   { w: 64, h: 32, scale: 2 },
+  hero:  { w: 96, h: 48, scale: 3 },
 } as const;
 
 export default function BoatSprite({ tier, preset, ariaLabel, className }: {
