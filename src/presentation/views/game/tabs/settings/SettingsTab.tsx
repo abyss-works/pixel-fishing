@@ -8,7 +8,6 @@ import { REJECT_TEXT } from '../../../../../game/rules/logic';
 import type { RejectReason } from '../../../../../game/rules/rules';
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
-import { cx } from '../../../../ui/cx';
 import Button from '../../../../ui/Button';
 import SectionTitle from '../../../../ui/SectionTitle';
 import PatchNotesPanel from './PatchNotesPanel';
@@ -32,7 +31,7 @@ function LabeledButton({ glyph, label, ...rest }: {
 }
 
 // 설정 탭 — 세 묶음: 계정(요약 + 관리 모달) · 데이터 · 업데이트 소식.
-// 계정의 편집(연동·닉네임·ID)은 전부 모달 안이다 — 설정 화면은 훑어보는 요약만 남긴다.
+// 계정의 편집(연동·닉네임·ID)과 저장 상태 문구는 전부 모달 안이다 — 설정 화면은 훑어보는 요약만 남긴다.
 export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged, nickname, onRename }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -96,12 +95,6 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
   return (
     <div className="flex flex-col flex-1">
-      {syncLabel && (
-        <div className={cx('text-xs mb-2', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
-          {syncLabel}
-        </div>
-      )}
-
       <SectionTitle>계정</SectionTitle>
       <div className="pf-frame divide-y divide-line mb-2 text-sm">
         <div className="flex items-center gap-2 px-2 py-1.5">
@@ -154,6 +147,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       {accountOpen && (
         <AccountModal game={game} setToast={setToast} onAuthChanged={onAuthChanged}
                       account={account} uid={uid} nickname={nickname} onRename={onRename}
+                      syncLabel={syncLabel} syncState={syncState}
                       onClose={() => setAccountOpen(false)} />
       )}
 

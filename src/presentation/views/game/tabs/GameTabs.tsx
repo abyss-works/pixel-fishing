@@ -3,10 +3,10 @@ import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { RejectReason } from '../../../../game/rules/rules';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
-import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
+import { defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
-import { TAB_ORDER, type TabKey } from './tabs';
+import { DEX_VIEWS, TAB_ORDER, type DexView, type TabKey } from './tabs';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import TabIcon from './TabIcon';
 import VHelp from './help/VHelp';
@@ -15,8 +15,7 @@ import BagTab from './bag/BagTab';
 import DexTab from './dex/DexTab';
 import SettingsTab from './settings/SettingsTab';
 import VAdmin from './admin-tools/VAdmin';
-import { setBagLayout, useBagView } from './bag/bagView';
-import type { DexView } from './dex/DexTab';
+import { setBagSection, useBagView } from './bag/bagView';
 import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../../admin/gate';
 import Sidebar from '../../../layouts/sidebar';
 
@@ -43,34 +42,28 @@ export default function GameTabs(props: GameTabsProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
   const [dexZone, setDexZone] = useState<ZoneId>(defaultZoneOfRegion(props.region));
-  const { layout } = useBagView();
+  const { section } = useBagView();
 
   const tabs = [
     { key: 'region' as const, label: '지역' },
-    { key: 'bag' as const, label: layout === 'cards' ? '가방\n(카드)' : '가방\n(목록)' },
-    { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : dexView === 'variant' ? '도감\n(돌연변이)' : '도감\n(네임드)' },
+    { key: 'bag' as const, label: '가방' },
+    { key: 'dex' as const, label: '도감' },
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
     ...(isAdminVisible(props.account) ? [{ key: 'admin' as const, label: '관리자' }] : []),
   ].map(tab => ({ ...tab, icon: <TabIcon tab={tab.key} /> }));
 
-  const select = (tab: TabKey) => {
-    if (tab === activeTab && tab === 'dex') {
-      setDexView(view => view === 'base' ? 'variant' : view === 'variant' ? 'named' : 'base');
-    }
-    if (tab === activeTab && tab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
-    setActiveTab(tab);
-  };
-
   useKeyScope(event => {
     if (hasModifier(event)) return;
+    // Tab = 활성 탭의 **첫 서브탭 줄** 순환(가방: 물고기↔아이템 · 도감: 일반→돌연변이→네임드).
+    // 메뉴 탭은 숫자키만 바꾼다 — 같은 숫자를 다시 눌러도 보기는 움직이지 않는다.
     if (event.key === 'Tab') {
       event.preventDefault();
       const direction = event.shiftKey ? -1 : 1;
-      if (activeTab === 'bag') setBagLayout(layout === 'list' ? 'cards' : 'list');
+      if (activeTab === 'bag') setBagSection(section === 'fish' ? 'items' : 'fish');
       else if (activeTab === 'dex') {
-        const at = Math.max(0, ZONE_IDS.indexOf(dexZone));
-        setDexZone(ZONE_IDS[(at + direction + ZONE_IDS.length) % ZONE_IDS.length]);
+        const at = DEX_VIEWS.indexOf(dexView);
+        setDexView(DEX_VIEWS[(at + direction + DEX_VIEWS.length) % DEX_VIEWS.length]);
       }
       return true;
     }
@@ -83,16 +76,16 @@ export default function GameTabs(props: GameTabsProps) {
     }
     if (Number.isInteger(index) && index >= 0 && index < TAB_ORDER.length) {
       event.preventDefault();
-      select(TAB_ORDER[index]);
+      setActiveTab(TAB_ORDER[index]);
       return true;
     }
   });
 
   return (
-    <Sidebar tabs={tabs} activeKey={activeTab} onSelect={select}>
+    <Sidebar tabs={tabs} activeKey={activeTab} onSelect={setActiveTab}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
       {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
-      {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
+      {activeTab === 'dex' && <DexTab game={game} view={dexView} onView={setDexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}

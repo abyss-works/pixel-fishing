@@ -1,7 +1,7 @@
 // 가방 탭 — 전시대 선반(칸 3개)과 진열·회수 버튼이 exhibit 액션으로 이어지는지 고정한다.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import BagTab from './BagTab';
+import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView } from './bagView';
 import { newState } from '../../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -20,7 +20,8 @@ function show(g: GameState) {
   return { dispatch, setToast };
 }
 
-describe('BagTab — 전시대', () => {
+// 전시대 화면은 배포 보류 중이라 꺼져 있다 — 다시 켜면 그대로 검증된다
+describe.skipIf(!EXHIBIT_UI_ENABLED)('BagTab — 전시대', () => {
   it('칸 3개를 보이고, 전시 개체의 회수는 slot null 액션을 보낸다', () => {
     const g = game();
     g.exhibit[1] = inst('e');
