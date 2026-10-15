@@ -1,7 +1,7 @@
-// 배 스프라이트 생성 CLI — 6단계 배를 32×16 격자로 칠해 생성 파일을 쓴다.
+// 배 스프라이트 생성 CLI — 7단계 배를 32×16 격자로 칠해 생성 파일을 쓴다.
 // 사용: npx vite-node tools/sprite-draft/boats/generate-boats.ts [sheet.png]
 // 뱃머리는 왼쪽(어종과 같은 방향). 흘수선은 13행, 그 아래 2행은 물에 잠긴 선체.
-// 팔레트는 6척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
+// 팔레트는 7척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
 // 금속 2톤 · 연기 · 창 불빛. 윤곽은 렌더러가 덧그린다.
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -121,6 +121,26 @@ function liner(g: Grid) {
   g.put(5, 3, C.red);
 }
 
+function trawler(g: Grid) {
+  // 원양어선 — 높은 뱃머리의 금속 선체, 앞쪽 조타실, 선미의 트롤 갠트리(A자 틀)와 그물 롤러
+  g.hline(2, 30, WL - 1, C.metal);
+  g.hline(1, 30, WL, C.metalD);
+  g.hline(2, 29, WL + 1, C.metalD);
+  g.hline(3, 28, WL + 2, C.metalD);
+  g.put(1, WL - 2, C.metal); g.put(1, WL - 3, C.metal); g.put(2, WL - 4, C.metal); // 들린 뱃머리
+  g.hline(3, 29, WL - 2, C.deck);
+  g.hline(2, 6, WL - 3, C.red);                          // 뱃머리 붉은 띠
+  g.rect(6, 6, 9, 5, C.deck);                            // 조타실(앞쪽)
+  g.rect(8, 4, 5, 2, C.deck);                            // 조타실 윗층
+  for (let x = 7; x <= 13; x += 2) g.put(x, 8, C.win);
+  g.put(9, 5, C.win); g.put(11, 5, C.win);
+  g.vline(11, 0, 3, C.mast); g.put(11, 0, C.red);        // 마스트
+  g.vline(22, 3, WL - 3, C.metalD); g.vline(27, 3, WL - 3, C.metalD); // 갠트리 두 기둥
+  g.hline(22, 27, 3, C.metalD);                           // 갠트리 상단 보
+  g.rect(23, 8, 4, 3, C.mast);                            // 그물 롤러(어두운 드럼)
+  g.hline(16, 21, 9, C.metal);                            // 갑판 윈치 레일
+}
+
 const BOATS: { tier: number; name: string; paint: (g: Grid) => void }[] = [
   { tier: 1, name: '조각배', paint: rowboat },
   { tier: 2, name: '돛단배', paint: sailboat },
@@ -128,6 +148,7 @@ const BOATS: { tier: number; name: string; paint: (g: Grid) => void }[] = [
   { tier: 4, name: '범선', paint: tallShip },
   { tier: 5, name: '증기선', paint: steamer },
   { tier: 6, name: '대양선', paint: liner },
+  { tier: 7, name: '원양어선', paint: trawler },
 ];
 
 const grids = BOATS.map(b => { const g = new Grid(W, H); b.paint(g); return { ...b, rows: g.rows() }; });
@@ -141,7 +162,7 @@ ${b.rows.map(r => `      '${r}',`).join('\n')}
   },`);
 
 const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/boats/generate-boats.ts
-// 배 6단계 스프라이트(32×16, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
+// 배 7단계 스프라이트(32×16, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
 import type { PixelSprite } from './types.js';
 
 export const BOAT_PALETTE: readonly string[] = ${JSON.stringify(PALETTE)};
