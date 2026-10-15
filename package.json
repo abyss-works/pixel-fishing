@@ -1,24 +1,30 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
+  "packageManager": "pnpm@11.28.3",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",
     "@sentry/react": "^10.70.0",
     "@supabase/supabase-js": "^2.112.3",
+    "@tanstack/react-query": "^5.104.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@storybook/react": "^10.6.1",
+    "@storybook/react-vite": "^10.6.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -27,10 +33,18 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "jsdom": "^30.0.1",
+    "msw": "^2.15.0",
+    "msw-storybook-addon": "^3.0.3",
     "oxlint": "^1.75.0",
+    "storybook": "^10.6.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.11"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

@@ -1,6 +1,6 @@
 // 콜드 아카이브 코어 — Supabase(PostgREST) → Cloudflare R2(S3 SigV4), 의존성 0.
-// 이식 원본: mgmt/ops/r2-cold-storage/archive-to-r2.mjs (2026-09-10 일회성 실행으로 검증된 로직).
-// 계약: mgmt/spec/cold-archive.md 3절. 삭제는 업로드 검증(HEAD 바이트, 실패 시 GET 해시) 후에만.
+// 이식 원본: 운영 절차 (2026-09-10 일회성 실행으로 검증된 로직).
+// 삭제는 업로드 검증(HEAD 바이트, 실패 시 GET 해시)을 통과한 뒤에만 수행한다.
 // CLI 요소(argv·.env 로더·process.exit)를 제거하고 값을 인자로 받는다 — cron 핸들러가 유일 소비처.
 import { createHash, createHmac } from 'node:crypto';
 import { createGzip } from 'node:zlib';

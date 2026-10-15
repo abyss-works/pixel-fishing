@@ -1,5 +1,5 @@
 // 액션 API — 모든 상태 변경의 유일한 서버 경로 (서버 권위 v0.5.0, Vercel Function, Node 런타임)
-// 규칙 실행은 src/game/actions.ts(applyAction) — 클라이언트 LocalBackend와 같은 리듀서.
+// 규칙 실행은 applyAction — 클라이언트 LocalGameGateway와 같은 리듀서.
 // 저장 모델(0005): saves_current(유저당 1행, 낙관 락) + events(append-only 정본 스트림)
 // + saves(스냅샷 아카이브 — 50액션마다 append, 롤백 안전망). service role 키는 서버 전용.
 //
@@ -9,20 +9,23 @@ import { createClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다 
-import { migrate, newState } from '../src/game/logic.js';
-import type { FishInstance, FormRecord, GameState } from '../src/game/logic.js';
+import { migrate, newState } from '../src/game/rules/logic.js';
+import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
-  takeItem,
-} from '../src/game/logic.js';
-import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/actions.js';
-import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/actions.js';
-import { parseAction } from '../src/game/actionSchema.js';
-import { checkNickname, pickGuestName } from '../src/game/nickname.js';
-import { powerZones, rodPower } from '../src/game/stats.js';
-import { SPOTS } from '../src/data/spots.js';
-import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/balance.js';
+  takeItem, matchBountyCatch, rollNamedEncounter, variantRateOf,
+} from '../src/game/rules/logic.js';
+import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
+import type { SpotId } from '../src/game/content/spots.js';
+import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import type { BountyCtx } from '../src/game/rules/rules.js';
+import { parseAction } from '../src/game/rules/actionSchema.js';
+import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
+import { powerZones, rodPower } from '../src/game/rules/stats.js';
+import { SPOTS } from '../src/game/content/spots.js';
+import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { APP_VERSION } from '../src/version.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
@@ -46,10 +49,10 @@ interface SupabaseLike { from(table: string): Q }
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-// 이사 코드 import 소유자 계정 (incidents/2026-08-24-import-abuse.md).
+// 이사 코드 import는 소유자 계정만 허용한다.
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
 // 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
-// 클라(src/sidebar/shared.ts OWNER_EMAIL)는 관리자 UI 표시용 힌트일 뿐 진짜 경계가
+// 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
 // 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
 // 늘어나는 대가라 하지 않는다.
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
@@ -222,6 +225,50 @@ export async function writeLetters(
   }
 }
 
+// KST 자정(UTC ISO) — todayKST()와 같은 시계. 일일 집계의 경계 단일 출처.
+export function kstDayStartISO(nowMs: number): string {
+  const day = new Date(nowMs + 9 * 3600_000).toISOString().slice(0, 10);
+  return new Date(`${day}T00:00:00+09:00`).toISOString();
+}
+
+/** 현상금 원시 행 — toBountyCtx의 입력 (supabase select 결과 그대로) */
+export interface BountyRows {
+  accepts: { accepted_at: string; quest_id: string }[];
+  progress: { quest_id: string; progress: number }[];
+  tickets: { quest_id: string; issued_at: string }[];
+}
+
+/** DB 행 → 리듀서 주입 진실. 경계 이전 수주는 세지 않고, 미등록 의뢰 행은 무시한다.
+ *  일반·네임드 카운터는 분리된다 */
+export function toBountyCtx(rows: BountyRows, dayStartISO: string): BountyCtx {
+  const todays = rows.accepts.filter(a => a.accepted_at >= dayStartISO);
+  const isNamed = (questId: string) => bountyById(questId)?.difficulty === 'named';
+  const general = todays.filter(a => !isNamed(a.quest_id));
+  const known = rows.progress.filter(p => bountyById(p.quest_id));
+  return {
+    acceptsToday: general.length,
+    namedToday: todays.length - general.length,
+    tickets: (rows.tickets ?? []).filter(t => bountyById(t.quest_id)).map(t => ({
+      questId: t.quest_id, issuedAt: t.issued_at,
+    })),
+    complete: known
+      .filter(p => p.progress >= bountyById(p.quest_id)!.count)
+      .map(p => p.quest_id),
+    active: known.map(p => p.quest_id),
+  };
+}
+
+/** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
+ * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
+ * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
+ * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
+ * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
+ * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
+export const SKIP_DETAIL = new Set([
+  'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
+  'setNickname', 'deliverBounty', 'exchangeArtifact',
+]);
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
     await route(req, res);
@@ -296,7 +343,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
   // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
   // 로컬 오리진(vite dev가 실제로 이 함수를 치는 프리뷰 대상 빌드)은 개발 편의상 연다.
-  // 오프라인 dev(LocalBackend)는 애초에 이 함수에 도달하지 않는다.
+  // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
   if (action.type === 'import' || action.type === 'adminSet') {
     const origin = String(req.headers.origin ?? '');
     const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
@@ -309,7 +356,7 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 현재 상태 로드 — saves_current는 항상, 개체·도감은 필요할 때만 읽는다.
-  // boot/sendLetter는 상태를 바꾸지 않는다(리듀서가 동일 참조 반환 — actions.ts boot/sendLetter).
+  // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.
   // 그래서 개체·도감 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
@@ -321,15 +368,10 @@ async function route(req: Req, res: Res): Promise<void> {
 
   let row = curRes.data as StateRow | null;
   const snapshotDue = row !== null && (Number(row.version) + 1) % SNAPSHOT_EVERY === 0;
-  // 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
-  // boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
-  // catch는 아래 fast path가 COUNT+피해자1행+도감1행만 읽는다.
-  // sell/setLocked/claimRelief/import는 가방·도감을 직접 다루어 풀 유지.
-  // 스냅샷 경계 버전은 전부 풀 조회로 복귀 (saves 아카이브는 풀 스냅샷이 계약).
-  const SKIP_DETAIL = new Set([
-    'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
-    'setNickname',
-  ]);
+  // 개체·도감 스킵 — 대상은 모듈 상수 SKIP_DETAIL. catch는 아래 fast path가
+  // COUNT+피해자1행+도감1행만 읽는다. sell/setLocked/claimRelief/import는 가방·도감을
+  // 직접 다루어 풀 유지. 스냅샷 경계 버전은 전부 풀 조회로 복귀
+  // (saves 아카이브는 풀 스냅샷이 계약).
   const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
   let instances: InstanceRow[] = [];
   let records: RecordRow[] = [];
@@ -378,7 +420,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
 // 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
 // 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
-// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 근거·목록 정의는 balance.ts가 단일 출처.
+// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
 const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
 
 // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
@@ -437,13 +479,61 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     if (nickErr) throw new ApiError(500, 'db-write', { uid, action: 'setNickname' }, { cause: nickErr });
   }
 
+  // 현상금 — DB가 진실의 원천인 데이터에 대한 서버 담당분.
+  // 라이선스 소유·일일 카운트·진행도·도전권은 saves가 아니라 전용 테이블에 있다.
+  // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
+  let bounty: ActionDeps['bounty'] = null;
+  if ((action.type === 'acceptQuest' || action.type === 'deliverBounty'
+      || action.type === 'resolveChallenge' || action.type === 'catch')
+      && (action.type === 'catch' || typeof action.questId === 'string')) {
+    const dayStart = kstDayStartISO(Date.now());
+    const [accRes, progRes, tickRes] = await Promise.all([
+      admin.from('bounty_accepts').select('accepted_at, quest_id').eq('user_id', uid)
+        .gte('accepted_at', dayStart),
+      admin.from('bounty_progress').select('quest_id, progress').eq('user_id', uid),
+      admin.from('bounty_tickets').select('quest_id, issued_at').eq('user_id', uid),
+    ]);
+    if (accRes.error || progRes.error || tickRes.error) {
+      throw new ApiError(500, 'db-read', { uid, action: action.type });
+    }
+    bounty = toBountyCtx({
+      accepts: (accRes.data ?? []) as BountyRows['accepts'],
+      progress: (progRes.data ?? []) as BountyRows['progress'],
+      tickets: (tickRes.data ?? []) as BountyRows['tickets'],
+    }, dayStart);
+
+    // 일일 의뢰 검증 — 오늘 그 사람에게 뜬 의뢰가 아니면 변조다.
+    // 리듀서는 uid를 몰라 서버가 여기서 잠근다.
+    if (action.type === 'acceptQuest') {
+      const quest = bountyById(action.questId);
+      const offered = quest && dailyQuestFor(quest.zone, quest.difficulty, uid, todayKST());
+      if (!offered || offered.id !== action.questId) {
+        throw new ApiError(422, 'bad-request');
+      }
+    }
+
+    // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
+    // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
+    if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
+      const delRes = await admin.from('bounty_progress')
+        .delete().eq('user_id', uid).eq('quest_id', action.questId).select('quest_id');
+      if (delRes.error) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      if (((delRes.data ?? []) as unknown[]).length === 0) {
+        bounty = { ...bounty, complete: [] };
+      }
+    }
+  }
+
   let out: ApplyOutcome;
+  // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
+  let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
     // catch fast path — 풀가방 SELECT 없이 COUNT + 등급별 top-1 + 도감 1행.
     // 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 —
     // 규칙이 여기 새로 생기지 않는다. 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
     const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
       fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    catchBase = base;
     const gate = canFish(base, action.spot);
     if (!gate.ok) {
       out = { ok: false, error: gate.reason };
@@ -454,7 +544,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       const today = todayKST();
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       const fish = rollCatchFish(action.spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts);
-      const extras = rollCatchExtras(fish, Math.random);
+      const extras = rollCatchExtras(fish, Math.random, variantRateOf(base));
       const [dexRes, countRes] = await Promise.all([
         admin.from('records').select('count,max_size,first_caught')
           .eq('user_id', uid).eq('fish_id', fish.id).eq('form', extras.form).maybeSingle(),
@@ -483,7 +573,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
         // 등급별 top-1 병렬 조회 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은
         // 칸이 풀가방 정렬의 선두와 같다. 등급 목록은 FISH에서 뽑으니 신어종 자동 반영,
         // 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이 비교자와 일치함은
-        // FormId 2종 전제 — victim.test.ts의 exhaustiveness 가드가 깨지면 여기부터 본다.
+        // FormId 2종 전제 — exhaustiveness 검증이 깨지면 이 분기를 확인한다.
         const baseQ = () => admin.from('fish_instances').select('uid,fish_id,form,size')
           .eq('user_id', uid).is('slot', null).eq('locked', false);
         const tierQ = [
@@ -545,12 +635,77 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
+      bounty,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 
+  // 지명 수배 조우 (fast path) — 게이트 명중해도 통상 결과를 버리지 않는다.
+  // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
+  // 행 기록은 아래 현상금 블록이 맡는다. 아직 아무것도 기록하지 않았으니
+  // 덧붙이기가 안전하다 (writes·events는 아래에서 out 기준으로 생긴다).
+  if (out.ok && action.type === 'catch' && catchBase && bounty) {
+    const namedHit = rollNamedEncounter(bounty.active, action.spot, Math.random);
+    if (namedHit) {
+      out.events.push({ type: 'ticket', payload: { questId: namedHit.id } });
+      if (out.result.type === 'catch') out.result.ticket = namedHit.id;
+    }
+  }
+  // 현상금 행 기록 — 리듀서 성공 후, 버전 락 전에 확정한다. 실패는 500
+  // (락 전이라 상태 불일치가 남지 않는다). 수주 경합(멀티탭 동시 수주)으로
+  // accepts가 1행 더 들어갈 수 있으나 상한+1 이내로 묶인다 — 수용.
+  if (action.type === 'acceptQuest' && typeof action.questId === 'string'
+      && typeof action.port === 'string') {
+    const quest = bountyById(action.questId);
+    if (quest) {
+      const now = new Date().toISOString();
+      const { error: accErr } = await admin.from('bounty_accepts')
+        .insert({ user_id: uid, zone: quest.zone, port: action.port, quest_id: quest.id });
+      if (accErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      // 진행 행은 무시-중복 삽입 — 리듀서가 중복 수주를 막지만 경합 창에서는
+      // upsert가 진행도를 0으로 되돌릴 수 있어 insert로만 둔다
+      const { error: progErr } = await admin.from('bounty_progress')
+        .upsert({ user_id: uid, zone: quest.zone, quest_id: quest.id,
+          progress: 0, updated_at: now }, { onConflict: 'user_id,quest_id', ignoreDuplicates: true });
+      if (progErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+    }
+  }
+
+  // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다. 의뢰당 1행이라
+  // 재조우면 발급 시각만 갱신된다. 락 전에 확정한다 (수주 행 기록과 같은 등급).
+  for (const e of out.events) {
+    if (e.type !== 'ticket') continue;
+    const questId = (e.payload as { questId?: unknown }).questId;
+    if (typeof questId !== 'string' || !bountyById(questId)) continue;
+    const { error: tickErr } = await admin.from('bounty_tickets')
+      .upsert({ user_id: uid, quest_id: questId, issued_at: new Date().toISOString() },
+        { onConflict: 'user_id,quest_id' });
+    if (tickErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+  }
+
+  // 챌린지 성공 확정 — 진행도 +1·도전권 소모. 실패는 감사 이벤트만 남는다.
+  // 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다. 락 전에 확정한다.
+  // 동시 확정 경합으로 진행도가 2가 될 수 있으나 완료 판정(≥)에는 무해 — 수용.
+  if (action.type === 'resolveChallenge' && typeof action.questId === 'string'
+      && action.success === true) {
+    const quest = bountyById(action.questId);
+    if (quest) {
+      const now = new Date().toISOString();
+      const { data: prow, error: prErr } = await admin.from('bounty_progress')
+        .select('progress').eq('user_id', uid).eq('quest_id', quest.id).maybeSingle();
+      if (prErr) throw new ApiError(500, 'db-read', { uid, action: action.type });
+      const { error: pupErr } = await admin.from('bounty_progress')
+        .update({ progress: Number((prow as { progress?: unknown } | null)?.progress ?? 0) + 1, updated_at: now })
+        .eq('user_id', uid).eq('quest_id', quest.id);
+      if (pupErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      const { error: tdelErr } = await admin.from('bounty_tickets')
+        .delete().eq('user_id', uid).eq('quest_id', quest.id);
+      if (tdelErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+    }
+  }
+
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,
-  // 클라이언트(HttpBackend)가 최신 상태 위에 1회 재시도한다.
+  // 클라이언트(HttpGameGateway)가 최신 상태 위에 1회 재시도한다.
   const nextVersion = Number(row.version) + 1;
   const { data: updated, error: updErr } = await admin.from('saves_current')
     .update({ ...stateRow(out.state), version: nextVersion, updated_at: new Date().toISOString() })
@@ -562,7 +717,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
 
   // 편지 정규화 — letters(영구)에도 기록한다. 실패 시 500 (개체 쓰기와 같은 등급 — 본문 유실 방지).
   // events 쪽은 종전대로 "유실 허용" 묶음이고, letters는 콜드 아카이브가 지우지 않는 정본이다
-  // (mgmt/spec/cold-archive.md 2.3 · decisions/letters-table.md).
+  // 편지 이벤트 기록과 보관 주기는 날짜 기준으로 함께 관리한다.
   // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다(Ruling 2026-10-07).
   const eventNow = new Date().toISOString();
   await writeLetters(admin as unknown as SupabaseLike, uid, out.events, eventNow);
@@ -577,6 +732,32 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   if (nextVersion % SNAPSHOT_EVERY === 0) { // saves는 append-only 아카이브로 존속 (0003 안전망)
     followUps.push(Promise.resolve(admin.from('saves').insert(
       { user_id: uid, data: out.state, updated_at: new Date().toISOString() })));
+  }
+  // 현상금 진행 — catch 성공 1건이 수주 중 의뢰를 진전시킨다.
+  // 유실 허용 묶음(events와 같은 등급): 실패는 보고만 한다. 증분이라 자가 치유가
+  // 없어 유실분은 사용자가 다시 잡아야 메운다 — 그래도 캐치 자체는 확정돼 있다.
+  if (action.type === 'catch') {
+    const caught = out.events.find(e => e.type === 'catch');
+    const spot = (caught?.payload as { spot?: unknown } | undefined)?.spot;
+    const fishId = (caught?.payload as { fishId?: unknown } | undefined)?.fishId;
+    if (typeof spot === 'string' && typeof fishId === 'string') {
+      followUps.push((async () => {
+        const { data, error } = await admin.from('bounty_progress')
+          .select('quest_id, progress').eq('user_id', uid);
+        if (error || !data) return { error: error ?? new Error('bounty_progress unreadable') };
+        const now = new Date().toISOString();
+        const jobs = (data as { quest_id: string; progress: number }[])
+          .map(p => ({ quest: bountyById(p.quest_id), row: p }))
+          // 네임드는 챌린지 성공(resolveChallenge)으로만 진전한다 — 캐치 집계에서 제외
+          .filter(({ quest }) =>
+            quest && quest.difficulty !== 'named' && matchBountyCatch(quest, spot as SpotId, fishId))
+          .map(({ quest, row }) => Promise.resolve(admin.from('bounty_progress')
+            .update({ progress: row.progress + 1, updated_at: now })
+            .eq('user_id', uid).eq('quest_id', quest!.id)));
+        const rs = await Promise.all(jobs) as { error?: unknown }[];
+        return { error: rs.find(r => r && r.error)?.error };
+      })());
+    }
   }
   // 개체·도감 변경분 — 리듀서가 전후 비교로 뽑아준 것을 그대로 적용한다(재계산 금지).
   // records는 절대값 upsert라 한 번 실패해도 다음 캐치가 자가 치유한다.
@@ -595,8 +776,8 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   }
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
-  // 보낸다(ops/egress-delta.md). import는 통째 교체라 풀 유지 (빈도 극저, 예외).
-  // 클라(HttpBackend)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
+  // 보낸다. import는 통째 교체라 풀 유지 (빈도 극저, 예외).
+  // 클라(HttpGameGateway)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
   if (action.type === 'import') {
     res.status(200).json({ state: out.state, result: out.result, version: nextVersion });
     return;

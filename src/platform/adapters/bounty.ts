@@ -1,0 +1,39 @@
+// 바운티 헌팅 읽기 — 수배판 표시용 스냅샷 (RLS 본인 읽기).
+// 표시용 조회라 게임 액션 경로를 타지 않는다.
+// supabase 미설정(로컬 dev·테스트)이면 null — 패널이 오프라인 안내를 띄운다.
+import { supabase } from './auth';
+import { bountyById } from '../../game/content/bounties.js';
+import type { BountySnapshot } from '../api/types';
+
+/** KST 날짜 — 서버의 todayKST와 같은 일일 의뢰 해시용 날짜 */
+export const kstDay = (): string =>
+  new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+
+/** KST 자정(UTC ISO) — 서버의 kstDayStartISO와 같은 기준 */
+const kstDayStartISO = (): string => {
+  const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  return new Date(`${day}T00:00:00+09:00`).toISOString();
+};
+
+export async function readBounty(): Promise<BountySnapshot | null> {
+  if (!supabase) return null;
+  const dayStart = kstDayStartISO();
+  const [lic, acc, prog, tick] = await Promise.all([
+    supabase.from('bounty_licenses').select('zone'),
+    supabase.from('bounty_accepts').select('quest_id, accepted_at').gte('accepted_at', dayStart),
+    supabase.from('bounty_progress').select('quest_id, progress'),
+    supabase.from('bounty_tickets').select('quest_id, issued_at'),
+  ]);
+  if (lic.error || acc.error || prog.error || tick.error) return null;
+  const rows = (acc.data ?? []) as { quest_id: string }[];
+  const general = rows.filter(a => bountyById(a.quest_id)?.difficulty !== 'named');
+  return {
+    licensed: ((lic.data ?? []) as { zone: string; tier: string }[]).map(l => ({ zone: l.zone, tier: l.tier })),
+    acceptsToday: general.length,
+    namedToday: rows.length - general.length,
+    progress: ((prog.data ?? []) as { quest_id: string; progress: number }[])
+      .map(p => ({ questId: p.quest_id, progress: Number(p.progress) })),
+    tickets: ((tick.data ?? []) as { quest_id: string; issued_at: string }[])
+      .map(t => ({ questId: t.quest_id, issuedAt: t.issued_at })),
+  };
+}

@@ -1,7 +1,7 @@
 {
   "id": "earth",
   "extends": "tools/configs/world.json",
-  "geo": "src/world/geo/land-50m.geo.json",
+  "geo": "src/game/world/geo/land-50m.geo.json",
   "cell": { "w": 8, "h": 11 },
   "grid": { "cols": 720, "rows": 247 },
   "window": { "lonMin": -180, "latMax": 85, "lonMax": 180, "latMin": -85 },
