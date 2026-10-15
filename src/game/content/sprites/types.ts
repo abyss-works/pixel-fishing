@@ -58,13 +58,6 @@ export function outlineCells(rows: readonly string[]): [number, number][] {
   return out;
 }
 
-/** 윤곽 바깥의 두 번째 링(오라) — 윤곽 셀까지 불투명으로 본 뒤 다시 윤곽을 구한다 */
-export function auraCells(rows: readonly string[]): [number, number][] {
-  const grid = rows.map(r => r.split(''));
-  for (const [x, y] of outlineCells(rows)) grid[y][x] = '0';
-  return outlineCells(grid.map(r => r.join('')));
-}
-
 /** 데이터 무결성 — 행 수·행 길이·문자·인덱스 범위. 문제가 없으면 빈 배열 */
 export function validateSprite(s: PixelSprite): string[] {
   const errors: string[] = [];

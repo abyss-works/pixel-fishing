@@ -59,11 +59,9 @@
     </div>
     <label>기준색(일반) <input id="base" type="text" value="#c8a165" size="8"></label>
     <label>기준색(변이) <input id="base2" type="text" value="#f5c542" size="8"></label>
-    <label>링 <select id="outline">
-      <option value="">없음</option>
-      <option value="dark" selected>어두운 윤곽(일반·희귀)</option>
-      <option value="epic">윤곽 + 영웅 오라 #ba68c8</option>
-      <option value="legendary">윤곽 + 전설 오라 #ffd54f</option>
+    <label>윤곽 <select id="outline">
+      <option value="">없음(미발견)</option>
+      <option value="dark" selected>어두운 윤곽</option>
     </select></label>
     <label><input id="wobble" type="checkbox" checked> 열 흔들기 미리보기</label>
   </div>
@@ -118,7 +116,7 @@ function wobble(t, scale) {
   }
   return out;
 }
-const OUTLINE_DARK = '#0b1322', AURA = { epic: '#ba68c8', legendary: '#ffd54f' };
+const OUTLINE_DARK = '#182540';
 function outlineCells(grid) {
   const opaque = (x, y) => x >= 0 && y >= 0 && x < W && y < H && grid[y][x] !== null;
   const out = [];
@@ -128,15 +126,9 @@ function outlineCells(grid) {
   }
   return out;
 }
-function auraCells(grid) {
-  const g2 = grid.map(r => r.slice());
-  for (const [x, y] of outlineCells(grid)) g2[y][x] = 0;
-  return outlineCells(g2);
-}
 function bake(colors, scale, ring) {
   const c = document.createElement('canvas'); c.width = W * scale; c.height = H * scale;
   const ctx = c.getContext('2d');
-  if (ring && AURA[ring]) { ctx.fillStyle = AURA[ring]; for (const [x, y] of auraCells(cells)) ctx.fillRect(x * scale, y * scale, scale, scale); }
   if (ring) { ctx.fillStyle = OUTLINE_DARK; for (const [x, y] of outlineCells(cells)) ctx.fillRect(x * scale, y * scale, scale, scale); }
   cells.forEach((row, y) => row.forEach((idx, x) => { if (idx === null) return; ctx.fillStyle = colors[idx] ?? '#f0f'; ctx.fillRect(x * scale, y * scale, scale, scale); }));
   return c;
