@@ -5,7 +5,6 @@
 // 입력 데이터(RegionPack/BasePack)는 월드 모델이 소유하며 렌더러는 상태를 소유하지 않는다.
 export { UI, W, H, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H, BASE_CANVAS_W, BASE_CANVAS_H } from './common.js';
 export type { Ctx } from './common.js';
-export { drawFishSprite } from './sprites/fish.js';
-export type { FishShape } from './sprites/fish.js';
+export { rasterize, drawSprite, drawSpriteCentered } from './sprite.js';
 // 주의 — 화면 계층(세계지도)는 이 배럴에 없다. earth 마스크(~178KB) 때문에
 // WorldMapModal이 동적 import로만 불러온다 — 배럴에 넣으면 초기 번들에 녹아든다.
