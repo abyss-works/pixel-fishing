@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cx } from './cx';
 import PixelIcon from './PixelIcon';
@@ -16,9 +17,26 @@ export interface LadderStep {
 
 // 진행 사다리 — 단계 목록에서 지나온 것·현재·다음·잠긴 것을 한 줄씩 보여준다.
 // 현재는 골드, 다음은 액센트(확정 대상), 지나온 것과 잠긴 것은 보조색. pf-frame 목록 규약 그대로.
-export default function ProgressLadder({ steps, className }: { steps: LadderStep[]; className?: string }) {
+// visibleRows를 주면 그만큼만 보이고 안에서 굴린다 — 처음엔 현재 행이 가운데 오도록 맞춘다.
+export default function ProgressLadder({ steps, visibleRows, className }: {
+  steps: LadderStep[]; visibleRows?: number; className?: string;
+}) {
+  const ref = useRef<HTMLOListElement>(null);
+  const [maxH, setMaxH] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !visibleRows) return;
+    const current = el.querySelector<HTMLElement>('[aria-current="step"]') ?? el.firstElementChild as HTMLElement | null;
+    const rowH = current?.offsetHeight ?? 0;
+    if (rowH === 0) return; // jsdom — 측정 불가면 전부 보인다
+    const h = rowH * visibleRows;
+    setMaxH(h);
+    if (current) el.scrollTop = Math.max(0, current.offsetTop - (h - rowH) / 2);
+  }, [steps, visibleRows]);
   return (
-    <ol className={cx('pf-frame divide-y divide-line list-none m-0 p-0', className)}>
+    <ol ref={ref} style={maxH ? { maxHeight: maxH } : undefined}
+        className={cx('pf-frame divide-y divide-line list-none m-0 p-0',
+          !!visibleRows && 'pf-scroll overflow-y-auto', className)}>
       {steps.map(s => (
         <li key={s.key} aria-current={s.state === 'current' ? 'step' : undefined}
             className={cx('flex items-center gap-2 px-2 py-1 text-sm',
