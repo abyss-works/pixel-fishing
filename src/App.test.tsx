@@ -278,10 +278,10 @@ describe('쿠폰 입력 (설정 탭)', () => {
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
     expect(screen.getByRole('dialog', { name: '코드 입력' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
-    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
     await waitFor(() => expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`));
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
-    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
     expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`); // 중복 지급 없음
   });
@@ -290,9 +290,9 @@ describe('쿠폰 입력 (설정 탭)', () => {
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
-    expect(screen.getByRole('button', { name: '쿠폰 사용' })).toBeDisabled(); // 빈 코드는 못 보낸다
+    expect(screen.getByRole('button', { name: '쿠폰 코드 사용' })).toBeDisabled(); // 빈 코드는 못 보낸다
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '없는코드' } });
-    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용' }));
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
     expect(await screen.findByText(/없는 쿠폰 코드/)).toBeInTheDocument();
   });
 });
