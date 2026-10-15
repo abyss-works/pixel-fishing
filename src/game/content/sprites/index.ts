@@ -27,11 +27,16 @@ export function fishColors(
   return paletteColors(sprite.palette, form === 'variant' ? fish.variant.color : fish.color);
 }
 
-/** 윤곽 색 — 영웅·전설은 등급색, 일반·희귀는 어두운 윤곽. 미발견은 윤곽 없음(실루엣만) */
-export function fishOutline(fish: Pick<Fish, 'rarity'>, discovered = true): string | undefined {
-  if (!discovered) return undefined;
+export interface FishRings { outline?: string; aura?: string }
+
+/** 몸 둘레 링 — 윤곽은 항상 어두운 색(가독성), 영웅·전설은 바깥에 등급색 오라를 한 칸 더 두른다.
+ *  미발견은 링 없음(실루엣만). 등급색을 윤곽에 직접 쓰면 금빛·보랏빛 몸과 섞여 구별되지 않는다. */
+export function fishRings(fish: Pick<Fish, 'rarity'>, discovered = true): FishRings {
+  if (!discovered) return {};
   const r: RarityId = fish.rarity;
-  return r === 'epic' || r === 'legendary' ? RARITY[r].color : OUTLINE_DARK;
+  return r === 'epic' || r === 'legendary'
+    ? { outline: OUTLINE_DARK, aura: RARITY[r].color }
+    : { outline: OUTLINE_DARK };
 }
 
 export { FISH_SHAPE_SPRITES } from './fishShapes.generated.js';
