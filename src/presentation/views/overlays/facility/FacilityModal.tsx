@@ -8,6 +8,7 @@ import {
   selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
 } from '../../../../features/gameplay/model/facility';
 import BoatSprite from '../../../ui/BoatSprite';
+import GearSprite from '../../../ui/GearSprite';
 import ProgressLadder from '../../../ui/ProgressLadder';
 import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
@@ -262,7 +263,15 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
       {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세. 넓은 모달(xl)이라 두 열이 선다 */}
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
         <ProgressLadder steps={ladder} visibleRows={5} />
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 min-h-full">
+          {/* 낚싯대 머리 — 그림은 레벨과 무관한 한 장, 레벨은 글자가 말한다 */}
+          <div className="flex items-center gap-3">
+            <GearSprite kind="rod" preset="row" ariaLabel="낚싯대" />
+            <div className="min-w-0">
+              <div className="text-gold pf-accent text-base">Lv.{game.rod} → Lv.{game.rod + 1}</div>
+              <div className="text-xs text-text-dim">강화 비용 <span className="pf-accent">{fmtGold(cost)}</span></div>
+            </div>
+          </div>
           <StatCompare rows={[
             { label: '입질 대기', value: c.bite, next: n.bite },
             { label: '바 시간', value: c.sweep, next: n.sweep },

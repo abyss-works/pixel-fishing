@@ -17,24 +17,30 @@ export interface LadderStep {
 
 // 진행 사다리 — 단계 목록에서 지나온 것·현재·다음·잠긴 것을 한 줄씩 보여준다.
 // 현재는 골드, 다음은 액센트(확정 대상), 지나온 것과 잠긴 것은 보조색. pf-frame 목록 규약 그대로.
-// visibleRows를 주면 그만큼만 보이고 안에서 굴린다 — 처음엔 현재 행이 가운데 오도록 맞춘다.
+// visibleRows를 주면 그만큼만 보이고 안에서 굴린다. 처음에는 현재 행이 정확히 가운데 오도록
+// 위아래에 (보이는 행 − 1)/2 만큼 여백을 두고 스크롤을 맞춘다 — 첫 행·끝 행이 현재여도 가운데다.
 export default function ProgressLadder({ steps, visibleRows, className }: {
   steps: LadderStep[]; visibleRows?: number; className?: string;
 }) {
   const ref = useRef<HTMLOListElement>(null);
-  const [maxH, setMaxH] = useState<number | undefined>(undefined);
+  const [box, setBox] = useState<{ maxH: number; pad: number } | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !visibleRows) return;
     const current = el.querySelector<HTMLElement>('[aria-current="step"]') ?? el.firstElementChild as HTMLElement | null;
     const rowH = current?.offsetHeight ?? 0;
     if (rowH === 0) return; // jsdom — 측정 불가면 전부 보인다
-    const h = rowH * visibleRows;
-    setMaxH(h);
-    if (current) el.scrollTop = Math.max(0, current.offsetTop - (h - rowH) / 2);
+    setBox({ maxH: rowH * visibleRows, pad: (rowH * (visibleRows - 1)) / 2 });
   }, [steps, visibleRows]);
+  // 높이·여백이 적용된 뒤에 스크롤 — 같은 효과 안에서 하면 overflow가 아직 없어 scrollTop이 0에 머문다
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !box) return;
+    const current = el.querySelector<HTMLElement>('[aria-current="step"]');
+    if (current) el.scrollTop = current.offsetTop - box.pad;
+  }, [box]);
   return (
-    <ol ref={ref} style={maxH ? { maxHeight: maxH } : undefined}
+    <ol ref={ref} style={box ? { maxHeight: box.maxH, paddingBlock: box.pad } : undefined}
         className={cx('pf-frame divide-y divide-line list-none m-0 p-0',
           !!visibleRows && 'pf-scroll overflow-y-auto', className)}>
       {steps.map(s => (
