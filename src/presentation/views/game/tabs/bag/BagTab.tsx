@@ -191,8 +191,8 @@ export default function BagTab({ game, dispatch, setToast }: {
       {/* 내부 서브탭 — 물고기(개체 목록·카드) / 아이템(미끼) 완전 분리 */}
       <SubTabs
         items={[
-          { key: 'fish', label: `물고기 ${bagCount}` },
-          { key: 'items', label: `아이템 ${itemCount}` },
+          { key: 'fish', label: '물고기', sub: bagCount },
+          { key: 'items', label: '아이템', sub: itemCount },
         ]}
         activeKey={section}
         onSelect={setBagSection}

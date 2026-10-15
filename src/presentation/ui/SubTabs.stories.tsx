@@ -16,8 +16,8 @@ const Demo = () => {
   return (
     <SubTabs
       items={[
-        { key: 'fish', label: '물고기 12' },
-        { key: 'items', label: '아이템 3' },
+        { key: 'fish', label: '물고기', sub: 12 },
+        { key: 'items', label: '아이템', sub: 3 },
       ]}
       activeKey={key}
       onSelect={setKey}
