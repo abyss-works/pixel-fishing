@@ -22,7 +22,7 @@ import { RarityDot } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
-import { setBagSection, toggleBagRow, useBagView } from './bagView';
+import { setBagLayout, setBagSection, toggleBagRow, useBagView } from './bagView';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다(사용자 결정 2026-10-15). 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -191,8 +191,8 @@ export default function BagTab({ game, dispatch, setToast }: {
       {/* 내부 서브탭 — 물고기(개체 목록·카드) / 아이템(미끼) 완전 분리 */}
       <SubTabs
         items={[
-          { key: 'fish', label: `물고기 ${bagCount}` },
-          { key: 'items', label: `아이템 ${itemCount}` },
+          { key: 'fish', label: '물고기', sub: bagCount },
+          { key: 'items', label: '아이템', sub: itemCount },
         ]}
         activeKey={section}
         onSelect={setBagSection}
@@ -208,15 +208,24 @@ export default function BagTab({ game, dispatch, setToast }: {
               물고기 (<span className={cx(bagFull && 'text-danger')}>{bagCount}</span>
               <span className="text-text-dim">/{cap}</span>마리)
             </PageTitle>
-            {bagCount > 0 && (
+            <div className="flex items-center gap-1">
+              {/* 목록↔카드 — 화면 버튼으로만 바꾼다(키보드 Tab은 서브탭 줄 몫) */}
               <PillButton
-                aria-label="자동 잠금"
-                title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
-                onClick={autoLock}>
-                <PixelIcon glyph="lockOpen" size={12} />
-                자동 잠금
+                aria-label={layout === 'list' ? '카드로 보기' : '목록으로 보기'}
+                title={layout === 'list' ? '전 어종 격자에 보유 마릿수' : '종별 개체를 한 마리씩'}
+                onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}>
+                {layout === 'list' ? '카드' : '목록'}
               </PillButton>
-            )}
+              {bagCount > 0 && (
+                <PillButton
+                  aria-label="자동 잠금"
+                  title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
+                  onClick={autoLock}>
+                  <PixelIcon glyph="lockOpen" size={12} />
+                  자동 잠금
+                </PillButton>
+              )}
+            </div>
           </div>
           {EXHIBIT_UI_ENABLED && <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />}
           {layout === 'cards' ? (
