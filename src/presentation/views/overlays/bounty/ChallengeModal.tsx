@@ -97,7 +97,7 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
               style={{ left: `${(1 - CHALLENGE_RED) / 2 * 100}%`, width: `${CHALLENGE_RED * 100}%` }}
             />
             <div
-              className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-white"
+              className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-text"
               style={{ left: `${Math.min(t, 1) * 100}%` }}
             />
           </div>
