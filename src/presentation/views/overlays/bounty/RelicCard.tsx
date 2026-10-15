@@ -9,7 +9,6 @@ import { RarityText } from '../../../ui/fish/RarityTag';
 function effectLines(a: Artifact): string[] {
   const out: string[] = [];
   if ((a.effects.sail ?? 0) > 0) out.push(`항해 속도 +${Math.round(a.effects.sail! * 100)}%`);
-  if ((a.effects.walk ?? 0) > 0) out.push(`도보 속도 +${Math.round(a.effects.walk! * 100)}%`);
   if (a.effects.nightImmune) out.push('밤 이동 감속 제거');
   if ((a.effects.baitDiscount ?? 0) > 0) {
     out.push(`미끼값 −${Math.round(a.effects.baitDiscount! * 100)}%`);

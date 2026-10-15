@@ -16,7 +16,7 @@ export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
 export const CAST_RANGE = 40;
 
 // 이동 속도(px/s)
-export const WALK_SPEED = 75; // 마을 도보 (배는 data의 배별 speed)
+export const WALK_SPEED = 80; // 마을 도보 (배는 data의 배별 speed). 유물 보정은 항해에만 붙는다
 
 // 판정별 배수 — 수동 어드밴티지의 핵심. **일반 가중치를 이 값으로 나눈다**(희귀 데이터 불변,
 // 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). perfect = 빨간 존, good = 노란 존.

@@ -42,15 +42,15 @@ export const NIGHT_SPEED_FACTOR = 0.85;
 
 import { ARTIFACTS } from '../content/artifacts.js';
 
-// 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배와 무관한 고정값.
-// 유물 보너스는 레지스트리에서 파생된다 — 새 유물은 행만 추가하면 배선된다.
+// 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배·유물과 무관한 고정값이고
+// 유물 속도 보너스는 항해에만 붙는다. 보너스는 레지스트리에서 파생된다 — 새 유물은 행만 추가하면 배선된다.
 export function moveSpeed(state: GameState, movement: Movement, night = false): Stat {
   const base = movement === 'walk' ? WALK_SPEED : boatSpeed(state);
   const owned = new Set(state.artifacts);
   const mods: StatMod[] = [];
   for (const a of ARTIFACTS) {
     if (!owned.has(a.id)) continue;
-    const bonus = movement === 'sail' ? (a.effects.sail ?? 0) : (a.effects.walk ?? 0);
+    const bonus = movement === 'sail' ? (a.effects.sail ?? 0) : 0;
     if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
   }
   const nightImmune = ARTIFACTS.some(a => owned.has(a.id) && a.effects.nightImmune);
