@@ -10,7 +10,7 @@ import { RarityText, RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fis
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold } from '../../../../ui/format';
-import type { DexView } from '../tabs';
+import type { DexView } from './DexTab';
 import DexDetail from './DexDetail';
 
 // 일반/돌연변이 공용 격자 — 폼별 발견 기준만 다르다. 변이는 별개 개체라 변이만 잡은 종은
@@ -18,7 +18,7 @@ import DexDetail from './DexDetail';
 export default function DexGrid({ game, view, sub, onSub }: {
   game: GameState;
   view: DexView;
-  /** 열람 중인 최상위 존 — GameTabs 소유(탭을 떠났다 와도 유지) */
+  /** 열람 중인 최상위 존 — GameTabs 소유(Tab 키 존 순환과 상태 공유) */
   sub: ZoneId;
   onSub: (z: ZoneId) => void;
 }) {
@@ -35,7 +35,8 @@ export default function DexGrid({ game, view, sub, onSub }: {
       </PageTitle>
       <SubTabs
         items={data.zones.map(({ id, foundCount, fishCount }) => ({
-          key: id, label: zoneById(id)!.shortName, sub: `${foundCount}/${fishCount}`,
+          key: id,
+          label: <>{zoneById(id)!.shortName}<span className="text-2xs"> {foundCount}/{fishCount}</span></>,
         }))}
         activeKey={sub}
         onSelect={onSub}

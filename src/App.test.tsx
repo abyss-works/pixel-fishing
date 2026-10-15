@@ -286,7 +286,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     seed({ dex: { crucian: { normal: rec(3) } } });
     render(<App />);
     clickFurniture('dex');
-    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
     expect(screen.getByText('붕어')).toBeInTheDocument();
     expect(screen.getByText('3마리 잡음')).toBeInTheDocument();
     // 집 = 마을 지역 → 마을 어종 12종 중 붕어 1종만 공개
@@ -302,18 +302,18 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     expect(screen.queryByText('???')).not.toBeInTheDocument();
   });
 
-  it('도감 보기 서브탭 — 일반 / 돌연변이 / 네임드', () => {
+  it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환 (v0.3.0)', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
     clickFurniture('dex');
-    clickTab('돌연변이');
-    expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
+    clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
+    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
-    clickTab('네임드');
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
-    clickTab('일반');
+    clickTab(/도감\s*\(돌연변이\)/); // → 네임드 보기
+    expect(screen.getByRole('button', { name: /도감\s*\(네임드\)/ })).toHaveClass('active');
+    clickTab(/도감\s*\(네임드\)/); // → 다시 일반으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 
@@ -324,21 +324,24 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 마을 → 태평양
     expect(screen.getAllByText('???').length).toBe(13);
     clickTab('도움말');
-    clickTab('도감'); // 재진입
+    clickTab(/도감\s*\(일반\)/); // 재진입
     // 태평양 유지 — 마을로 리셋됐으면 12종(연못 6+강 6)이 뜬다
     expect(screen.getAllByText('???').length).toBe(13);
   });
 
-  it('네임드 보기 — 수배가 있는 해역만 서브탭에 있고 마을은 없다', () => {
-    seed({}); // 시작 씬 = 마을 → 도감 열람 존도 마을이지만 네임드는 첫 수배 존(태평양)을 대신 보인다
+  it('도감 3보기 순환 — 재클릭마다 일반→돌연변이→네임드', () => {
+    seed({});
     render(<App />);
     clickFurniture('dex');
-    clickTab('네임드');
+    clickTab(/도감\s*\(일반\)/); // → 돌연변이
+    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    clickTab(/도감\s*\(돌연변이\)/); // → 네임드
+    expect(screen.getByRole('button', { name: /도감\s*\(네임드\)/ })).toHaveClass('active');
     expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^마을/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /태평양/ }));
     expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
-    fireEvent.click(screen.getByRole('button', { name: /^동남아/ }));
-    expect(screen.getByText('???')).toBeInTheDocument(); // 리바이어던 미획득
+    fireEvent.click(screen.getByRole('button', { name: /마을/ }));
+    expect(screen.getByText('이 해역의 지명 수배는 아직 없다.')).toBeInTheDocument();
   });
 });
 
@@ -734,7 +737,7 @@ describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐�
     clickFurniture('exit'); // 집 → 마을 (필드 진입, 기본 탭=지역)
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
 
-    clickTab('도감'); // 다른 탭으로
+    clickTab(/도감\s*\(일반\)/); // 다른 탭으로
     fireEvent.click(screen.getByLabelText('미니맵'));
     // 세계지도 모달 — 전체 지구(흑백) + 구현 영역(컬러). 지역 탭은 그대로다.
     expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
@@ -797,7 +800,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     const shown = [...document.querySelectorAll('.pf-tabbar button')]
       .map(b => b.textContent ?? '');
     expect(shown).toHaveLength(TAB_ORDER.length);
-    // 아이콘이 붙어 있어 키가 아니라 대표 글자로 대조한다
+    // 라벨은 동적(가방(목록)/도감(일반))이라 키가 아니라 대표 글자로 대조한다
     const HEAD: Record<string, string> = {
       region: '지역', bag: '가방', dex: '도감', help: '도움말', settings: '설정',
     };
@@ -830,53 +833,48 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(active()).toBe('설정');
   });
 
-  it('Tab은 가방 안에서 물고기 ↔ 아이템 서브탭을 순환한다', () => {
-    seed({ items: { 'bait-common': 1 } });
+  it('Tab은 가방 안에서 목록 ↔ 카드를 순환한다', () => {
+    seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
-    expect(screen.getByRole('heading', { name: /^물고기/ })).toBeInTheDocument();
+    const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
+      .replace(/\s+/g, '');
+    expect(active()).toBe('가방(목록)');
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument(); // 아이템 섹션
+    expect(active()).toBe('가방(카드)');
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(screen.getByRole('heading', { name: /^물고기/ })).toBeInTheDocument();
-    const active = document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
-    expect(active).toContain('가방'); // 메뉴 탭은 안 바뀐다
+    expect(active()).toBe('가방(목록)');
   });
 
-  it('도감에서 Tab은 보기(일반→돌연변이→네임드)를 순회한다 — 메뉴 탭은 그대로다', () => {
-    seed({});
+  it('도감에서 Tab은 지역을 순회한다 — 메뉴 탭은 그대로고 서브탭이 움직인다', () => {
+    seed({}); // 시작 씬 = 마을 → 도감 초기 지역도 마을
     render(<App />);
     fireEvent.keyDown(document, { key: '3' });
-    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '마을 연못' })).toBeInTheDocument(); // 수역 헤딩 = 열람 지역
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '태평양' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '마리아나 해구' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Tab' }); // 끝에서 처음으로
-    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true }); // 역방향
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '드래곤 홀' })).toBeInTheDocument();
+    // 역방향으로 되돌아간다
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('heading', { name: '마리아나 해구' })).toBeInTheDocument();
     const active = document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
-    expect(active).toContain('도감');
+    expect(active).toContain('도감'); // 끝까지 메뉴 탭은 안 바뀐다
   });
 
-  it('같은 숫자를 다시 눌러도 보기는 바뀌지 않는다 — 숫자는 메뉴 탭 선택만', () => {
+  it('같은 숫자를 한 번 더 누르면 그 탭의 보기가 순환된다', () => {
     seed({});
     render(<App />);
+    const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
+      .replace(/\s+/g, '');
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
-    expect(screen.getByRole('heading', { name: /^물고기/ })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: '3' });
-    fireEvent.keyDown(document, { key: '3' });
-    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
-  });
-
-  it('가방 목록 ↔ 카드는 화면 버튼으로 바꾼다', () => {
-    seed({});
-    render(<App />);
-    fireEvent.keyDown(document, { key: '2' });
-    fireEvent.click(screen.getByRole('button', { name: '카드로 보기' }));
-    expect(screen.getByRole('button', { name: '목록으로 보기' })).toBeInTheDocument();
+    expect(active()).toBe('가방(카드)');
+    fireEvent.keyDown(document, { key: '3' }); // 다른 탭 경유 — 보기 건드리지 않는다
+    expect(active()).toContain('도감(일반)');
+    fireEvent.keyDown(document, { key: '3' }); // 같은 숫자 재입력 = 보기 순환
+    expect(active()).toContain('돌연변이');
   });
 
   it('모달이 떠 있으면 아래 레이어가 키를 못 받는다 — 로그인 모달 키 탈취 재발 방지', () => {
@@ -986,8 +984,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp'), inst('carp'), inst('carp', 'variant')],
            dex: { carp: { normal: rec(2), variant: rec(1) }, crucian: { normal: rec(5) } } });
     render(<App />);
-    clickTab(/^가방/);
-    clickTab('카드로 보기'); // 목록↔카드는 화면 버튼
+    clickTab(/가방\s*\(목록\)/);
+    clickTab(/가방\s*\(목록\)/); // 활성 가방 탭 재클릭 → 카드뷰 (도감과 같은 규약)
     expect(screen.getByLabelText('잉어 일반 2마리 변이 1마리 보유')).toBeInTheDocument();
     expect(screen.getAllByText('???').length).toBeGreaterThan(0); // 미발견 종
     expect(screen.queryByText('30G')).not.toBeInTheDocument();    // 카드엔 값을 안 건다
@@ -1014,8 +1012,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
       dex: { carp: { normal: rec(1) }, crucian: { normal: rec(3) } },
     });
     render(<App />);
-    clickTab(/^가방/);
-    clickTab('카드로 보기');
+    clickTab(/가방\s*\(목록\)/);
+    clickTab(/가방\s*\(목록\)/);
     const names = screen.getAllByText(/^(잉어|붕어|\?\?\?)$/).map(e => e.textContent);
     expect(names.slice(0, 3)).toEqual(['잉어', '붕어', '???']); // 보유 → 발견 → 미발견
   });
@@ -1028,7 +1026,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.queryByText('40.0cm')).not.toBeInTheDocument();
     openRow('잉어');
     expect(screen.getByText('40.0cm')).toBeInTheDocument();
-    clickTab('도감');
+    clickTab(/도감\s*\(일반\)/);
     clickTab(/^가방/);
     expect(screen.getByText('40.0cm')).toBeInTheDocument(); // 전역 저장 — 안 잊는다
   });
