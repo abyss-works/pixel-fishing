@@ -9,21 +9,19 @@ import type { BountyZone } from './bounties.js';
 export interface ArtifactEffects {
   /** 항해 속도 가산율 (예: 0.03 = +3%) */
   sail?: number;
-  /** 도보 속도 가산율 */
-  walk?: number;
   /** 밤 이동 감속 면역 */
   nightImmune?: boolean;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
-  /** 도전권 유효 기간 배수 (예: 2 = 2배) — 훅만 파둔다, 쓰는 유물은 아직 없다 */
-  challengeWindowMult?: number;
+  /** 변이 개체 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
+  variantRate?: number;
 }
 
 export interface Artifact {
   id: string;
   name: string;
   zone: BountyZone;
-  /** 유물 급 — 당분간 희귀만 둔다 (일반은 평범해서 제외) */
+  /** 유물 급 — 희귀가 기본이고, 낚시 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
   grade: RarityId;
   /** 교환 재료 — items 축 id/이름. 네임드 납품 시 1개 지급, 교환 시 1개 소모 */
   materialId: string;
@@ -40,11 +38,15 @@ export const ARTIFACTS: readonly Artifact[] = [
   { id: 'wreck-compass', name: '침선의 나침반', zone: 'seasia', grade: 'rare',
     materialId: 'mat-wreck-compass', materialName: '이끼 낀 나침반',
     lore: '코론 침선에서 건져 올린 나침반. 바늘이 가리키는 곳에 물길이 있다.',
-    effects: { walk: 0.07, sail: 0.07 } },
+    effects: { sail: 0.07 } },
   { id: 'varuna-scale', name: '바루나의 저울', zone: 'indian', grade: 'rare',
     materialId: 'mat-varuna-weight', materialName: '녹슨 저울추',
     lore: '남인도양의 왕이 쓰던 저울이라 한다. 올려놓은 것마다 값이 가벼워진다.',
     effects: { baitDiscount: 0.25 } },
+  { id: 'elder-scale', name: '장로의 비늘', zone: 'madagascar', grade: 'epic',
+    materialId: 'mat-elder-scale', materialName: '닳은 비늘',
+    lore: '코모로 아래에서 가장 오래 산 것의 비늘. 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
+    effects: { variantRate: 1 / 2 } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

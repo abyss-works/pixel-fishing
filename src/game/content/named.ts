@@ -6,12 +6,15 @@
 import type { FishShape } from './fish.js';
 import type { Fish } from './fish.js';
 import type { BountyZone } from './bounties.js';
+import type { SpotId } from './spots.js';
 
 export interface NamedFish {
   id: string;
   name: string;
   /** 출현 해역 — 최상위 존 단위. 수주 활성 시에만 이 해역들에서 확률/조건으로 나온다 */
   zones: readonly BountyZone[];
+  /** 출현 수역 한정 — 미기재면 해역 안 모든 수역. 특화 수역에만 사는 네임드가 쓴다 */
+  spot?: SpotId;
   color: string;
   shape: FishShape;
   lore: string;  // 도감 문구 — 도감 네임드 분류에서만 읽힌다
@@ -32,6 +35,10 @@ export const NAMED: readonly NamedFish[] = [
     color: '#2e4a5a', shape: 'serpent',
     lore: '남인도양 차가운 물에 잠든 세계뱀. 바루나보다 오래된 질서.',
     poster: '차가운 남인도양에서 바루나보다 오래된 그림자가 움직인다. 본 자는 깊이를 헤아리지 못했다. 챌린지에 성공하면 수배판에서 의뢰를 완료할 수 있다.' },
+  { id: 'elder-sixgill', name: '심연의 장로', zones: ['madagascar'], spot: 'comorodeep',
+    color: '#3b4a52', shape: 'shark',
+    lore: '코모로 심해 아래에서 가장 오래 산 그림자. 수배서에서만 이름이 돈다.',
+    poster: '코모로 앞바다 아래에서 배보다 긴 그림자가 올라왔다 가라앉았다. 해협 쪽에서는 한 번도 보이지 않았다. 챌린지에 성공하면 수배판에서 의뢰를 완료할 수 있다.' },
 ];
 
 const NAMED_BY_ID = new Map(NAMED.map(n => [n.id, n]));

@@ -14,7 +14,7 @@ import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logi
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
-  takeItem, matchBountyCatch, rollNamedEncounter,
+  takeItem, matchBountyCatch, rollNamedEncounter, variantRateOf,
 } from '../src/game/rules/logic.js';
 import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -544,7 +544,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
       const today = todayKST();
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       const fish = rollCatchFish(action.spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts);
-      const extras = rollCatchExtras(fish, Math.random);
+      const extras = rollCatchExtras(fish, Math.random, variantRateOf(base));
       const [dexRes, countRes] = await Promise.all([
         admin.from('records').select('count,max_size,first_caught')
           .eq('user_id', uid).eq('fish_id', fish.id).eq('form', extras.form).maybeSingle(),

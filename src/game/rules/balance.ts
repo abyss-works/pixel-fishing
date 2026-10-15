@@ -16,7 +16,7 @@ export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
 export const CAST_RANGE = 40;
 
 // 이동 속도(px/s)
-export const WALK_SPEED = 75; // 마을 도보 (배는 data의 배별 speed)
+export const WALK_SPEED = 80; // 마을 도보 (배는 data의 배별 speed). 유물 보정은 항해에만 붙는다
 
 // 판정별 배수 — 수동 어드밴티지의 핵심. **일반 가중치를 이 값으로 나눈다**(희귀 데이터 불변,
 // 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). perfect = 빨간 존, good = 노란 존.
@@ -83,7 +83,7 @@ export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
 // 네임드 챌린지 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
 // 존은 고정 관대값이다 (수역 게이트와 무관 — 어렵게 하지 않는다).
-export const CHALLENGE_WINDOW_MS = 3600_000; // 도전권 유효 1시간
+export const CHALLENGE_WINDOW_MS = 2 * 3600_000; // 도전권 유효 2시간
 export const CHALLENGE_ROUNDS = 10;
 export const CHALLENGE_MAX_MISS = 3;
 export const CHALLENGE_YELLOW = 0.3;

@@ -12,12 +12,14 @@ describe('artifacts 데이터 계약', () => {
     const zones = ARTIFACTS.map(a => a.zone);
     expect(new Set(zones).size).toBe(zones.length);
     for (const a of ARTIFACTS) {
-      expect(['pacific', 'seasia', 'indian']).toContain(a.zone);
+      expect(['pacific', 'seasia', 'indian', 'madagascar']).toContain(a.zone);
     }
   });
 
-  it('당분간 희귀만 둔다', () => {
-    for (const a of ARTIFACTS) expect(a.grade).toBe('rare');
+  it('등급 — 낚시 결과를 바꾸는 유물(변이 확률)만 영웅, 나머지는 희귀', () => {
+    for (const a of ARTIFACTS) {
+      expect(a.grade).toBe(a.effects.variantRate !== undefined ? 'epic' : 'rare');
+    }
   });
 
   it('네임드 의뢰가 있는 해역마다 유물이 있다', () => {

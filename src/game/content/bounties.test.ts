@@ -16,6 +16,7 @@ const REWARDS: Record<string, Record<string, number>> = {
   pacific: { easy: 4000, normal: 8000, hard: 16000, named: 40000 },
   seasia: { easy: 16000, normal: 30000, hard: 60000, named: 150000 },
   indian: { easy: 30000, normal: 70000, hard: 140000, named: 350000 },
+  madagascar: { easy: 45000, normal: 100000, hard: 200000, named: 500000 },
 };
 
 describe('bounties 데이터 계약', () => {
@@ -50,7 +51,7 @@ describe('bounties 데이터 계약', () => {
   });
 
   it('라이선스 명성이 spec 2절 표와 일치한다', () => {
-    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 15000, indian: 70000 });
+    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 15000, indian: 70000, madagascar: 150000 });
   });
 
   it('등급 키는 실재 등급만 쓴다', () => {

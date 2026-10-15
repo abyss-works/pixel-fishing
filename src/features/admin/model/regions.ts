@@ -6,6 +6,7 @@
 // 표기와 도달 퍼널(진행 데이터)에 여전히 필요하다.
 export const REGION_NAMES: Record<string, string> = {
   village: '마을', world: '대양', ocean: '태평양', seasia: '동남아&오세아니아', indian: '인도양',
+  madagascar: '마다가스카르',
 };
 
 /** 도달 퍼널·위치 분포 순서 — 구 지역 4개 + 병합 바다. 퍼널은 시간 순서(구 지역 → 병합)를
@@ -14,7 +15,7 @@ export const REGION_ORDER = ['village', 'ocean', 'seasia', 'indian', 'world'] as
 
 /** 거점 → 소속 지역(state.location.kind==='base'일 때의 표기용) */
 export const BASE_TO_REGION: Record<string, string> = {
-  home: 'village', harbor: 'world', manila: 'world', colombo: 'world',
+  home: 'village', harbor: 'world', manila: 'world', colombo: 'world', toamasina: 'world',
 };
 
 /** LocationRef(kind:id) → 지역 id. 미지 값은 undefined — 호출부에서 '—' 처리 */

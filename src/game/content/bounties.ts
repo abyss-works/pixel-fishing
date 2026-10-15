@@ -2,10 +2,9 @@
 // 어종 목록은 어종 데이터의 id를 참조한다(복제 금지). 수량과 보상 수치는 이 데이터가 정본이다.
 // 보상 스케일링 규칙: 난이도 보상 ≈ 그 난이도 의뢰들 판매가 평균의 3배,
 // 네임드 보상은 어려움 등급 보상의 2.5배다.
-// 1-4 대서양은 템플릿 예시로만 둔다(노선 재검토 상태라 행을 심지 않는다).
 import type { RarityId } from './rarity.js';
 
-export type BountyZone = 'pacific' | 'seasia' | 'indian';
+export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar';
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
@@ -33,6 +32,7 @@ export const BOUNTY_LICENSE_FAME: Record<BountyZone, number> = {
   pacific: 1500,
   seasia: 15000,
   indian: 70000,
+  madagascar: 150000,
 };
 
 const Q = (
@@ -84,6 +84,19 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'hard', 'epic', null, 10, 140000),
   Q('indian', 'hard', 'legendary', null, 2, 140000),
   Q('indian', 'named', null, 'ananta', 1, 350000),
+  // 1-4 마다가스카르 — 쉬움 45000 · 보통 100000 · 어려움 200000 · 네임드 500000
+  Q('madagascar', 'easy', 'common', null, 250, 45000),
+  Q('madagascar', 'easy', 'rare', null, 10, 45000),
+  Q('madagascar', 'easy', 'epic', null, 2, 45000),
+  Q('madagascar', 'normal', 'common', null, 500, 100000),
+  Q('madagascar', 'normal', 'rare', null, 20, 100000),
+  Q('madagascar', 'normal', 'epic', null, 5, 100000),
+  Q('madagascar', 'normal', 'legendary', null, 1, 100000),
+  Q('madagascar', 'hard', 'common', null, 1000, 200000),
+  Q('madagascar', 'hard', 'rare', null, 40, 200000),
+  Q('madagascar', 'hard', 'epic', null, 10, 200000),
+  Q('madagascar', 'hard', 'legendary', null, 2, 200000),
+  Q('madagascar', 'named', null, 'elder-sixgill', 1, 500000),
 ];
 
 const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
@@ -109,9 +122,13 @@ export const BOUNTY_PORT_ZONE = {
   harbor: 'pacific',
   manila: 'seasia',
   colombo: 'indian',
+  toamasina: 'madagascar',
 } as const satisfies Record<string, BountyZone>;
 
 export type BountyPort = keyof typeof BOUNTY_PORT_ZONE;
+
+/** 수배 창구가 있는 항구인가 — 시설 화면과 수주 검증이 같은 표를 본다 */
+export const isBountyPort = (port: string): port is BountyPort => port in BOUNTY_PORT_ZONE;
 
 /** 담당 해역 — 수주 항구가 아니면 undefined (고향·필드) */
 export const zoneOfPort = (port: string): BountyZone | undefined =>

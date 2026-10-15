@@ -10,7 +10,7 @@ import {
   autoLockUids, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
-  sizeParams, rollSize, sizePercentile, rollCatchExtras,
+  sizeParams, rollSize, sizePercentile, rollCatchExtras, variantRateOf,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
@@ -38,8 +38,8 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('R12: 등급 가중치와 명성', () => {
@@ -63,10 +63,10 @@ describe('R11: 추첨', () => {
 });
 
 describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
-  it('밤 어종 14종이 추가됐다 (night 플래그)', () => {
+  it('밤 어종 20종 (night 플래그)', () => {
     const nights = FISH.filter(f => f.night);
-    expect(nights.length).toBe(14);
-    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설
+    expect(nights.length).toBe(20);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설
     const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
     expect(bySpot('sea')).toEqual(['legendary']);
     expect(bySpot('deep')).toEqual(['legendary']);
@@ -75,6 +75,8 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
     expect(bySpot('barrierreef')).toEqual(['legendary', 'rare']); // 낮에 영웅 없음 → 희귀 대칭
     expect(bySpot('indian')).toEqual(['epic', 'legendary', 'rare']);
     expect(bySpot('southindian')).toEqual(['epic', 'legendary', 'rare']);
+    expect(bySpot('mozstrait')).toEqual(['epic', 'legendary', 'rare']);
+    expect(bySpot('comorodeep')).toEqual(['epic', 'legendary', 'rare']);
   });
 
   it('낮 풀 = night 어종 제외 — 밤 추가가 낮 분포를 안 흔든다', () => {
@@ -470,6 +472,19 @@ describe('월척(크기)·개체·폼 기록', () => {
     for (let i = 0; i < n; i++) if (rollCatchExtras(carp).form === 'variant') variant++;
     expect(variant / n).toBeGreaterThan(0.30);
     expect(variant / n).toBeLessThan(0.36);
+  });
+
+  it('rollCatchExtras: 변이 확률 인자 — rng 소비 순서(크기 2회 → 폼 1회)는 그대로', () => {
+    const seq = [0.5, 0.5, 0.4];
+    const rng = () => seq.shift() ?? 0;
+    expect(rollCatchExtras(carp, rng, 1 / 3).form).toBe('normal');   // 0.4 ≥ 1/3
+    const seq2 = [0.5, 0.5, 0.4];
+    const rng2 = () => seq2.shift() ?? 0;
+    expect(rollCatchExtras(carp, rng2, 1 / 2).form).toBe('variant'); // 0.4 < 1/2
+  });
+
+  it('variantRateOf: 유물 없으면 기본 MUTATION_RATE', () => {
+    expect(variantRateOf(newState())).toBeCloseTo(1 / 3, 10);
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {

@@ -15,6 +15,7 @@ import { HOME } from './bases/home';
 import { HARBOR_BASE } from './bases/harbor';
 import { MANILA_BASE } from './bases/manila';
 import { COLOMBO_BASE } from './bases/colombo';
+import { TOAMASINA_BASE } from './bases/toamasina';
 
 export * from './types';
 export {
@@ -42,6 +43,7 @@ export const BASE_PACKS: Record<BaseId, BasePack> = {
   harbor: HARBOR_BASE,
   manila: MANILA_BASE,
   colombo: COLOMBO_BASE,
+  toamasina: TOAMASINA_BASE,
 };
 
 // 기존 경로 호환 (app.test 등)
@@ -49,6 +51,7 @@ export const HOME_FURNITURE = HOME.furniture;
 export const HARBOR_FURNITURE = HARBOR_BASE.furniture;
 export const MANILA_FURNITURE = MANILA_BASE.furniture;
 export const COLOMBO_FURNITURE = COLOMBO_BASE.furniture;
+export const TOAMASINA_FURNITURE = TOAMASINA_BASE.furniture;
 
 export function furnitureAt(base: BaseId, x: number, y: number): Furniture | null {
   for (const f of BASE_PACKS[base].furniture) if (inRect(x, y, f)) return f;

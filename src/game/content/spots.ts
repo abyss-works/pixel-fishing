@@ -36,6 +36,14 @@ const DATA = [
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
     powerReq: 90,   // Lv17 환산 (10+(17-1)*5)
     rarityWeight: { common: 288, rare: 56, epic: 30 } },
+  // 1-4 마다가스카르 — 일반 연안(모잠비크 해협) + 특화 심해(코모로 심해). 두 수역 모두 tier7 한 척으로
+  // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 예산은 남인도양식을 공통 적용한다.
+  { id: 'mozstrait',   name: '모잠비크 해협', boatTier: 7, region: 'madagascar',
+    powerReq: 95,   // Lv18 환산
+    rarityWeight: { common: 288, rare: 56, epic: 30 } },
+  { id: 'comorodeep',  name: '코모로 심해',   boatTier: 7, region: 'madagascar',
+    powerReq: 100,  // Lv19 환산
+    rarityWeight: { common: 288, rare: 56, epic: 30 } },
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

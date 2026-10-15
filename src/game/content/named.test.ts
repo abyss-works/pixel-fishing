@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { NAMED, namedById } from './named';
 import { BOUNTIES } from './bounties';
+import { topZoneOfSpot } from './zones';
 
 describe('named 데이터 계약', () => {
   it('id가 유일하고 출현 해역을 1곳 이상 든다', () => {
@@ -11,8 +12,15 @@ describe('named 데이터 계약', () => {
     for (const n of NAMED) {
       expect(n.zones.length).toBeGreaterThan(0);
       for (const z of n.zones) {
-        expect(['pacific', 'seasia', 'indian']).toContain(z);
+        expect(['pacific', 'seasia', 'indian', 'madagascar']).toContain(z);
       }
+    }
+  });
+
+  it('출현 수역(spot)이 있으면 그 수역은 출현 해역 안에 있다', () => {
+    for (const n of NAMED) {
+      if (n.spot === undefined) continue;
+      expect(n.zones, n.id).toContain(topZoneOfSpot(n.spot));
     }
   });
 

@@ -52,6 +52,7 @@ const HARBORS: { name: string; anchor: { x: number; y: number } }[] = [
   { name: '항구', anchor: WORLD_ANCHORS.harbor },
   { name: '마닐라항', anchor: WORLD_ANCHORS.manila },
   { name: '콜롬보 항', anchor: WORLD_ANCHORS.colombo },
+  { name: '투아마시나항', anchor: WORLD_ANCHORS.toamasina },
 ];
 
 /** 지구 전체 1회 렌더 — 호출자가 오프스크린 캔버스에 캐시한다(모달 열림당 1회).
@@ -84,14 +85,14 @@ export function renderAtlasOverlay(
   ctx.lineWidth = 1;
   ctx.strokeRect(win.x * s + 0.5, win.y * s + 0.5, win.w * s - 1, win.h * s - 1);
 
-  // 구역 라벨 — world 마스크의 라벨 문자 앵커(태평양/동남아&오세아니아/인도양)를 표시 스케일로
+  // 구역 라벨 — world 마스크의 라벨 문자 앵커(태평양/동남아&오세아니아/인도양/마다가스카르)를 표시 스케일로
   ctx.textAlign = 'center';
   for (const a of zoneLabelAnchors(worldMap)) {
     const d = toDisplay(a);
     label(ctx, a.text, d.x, d.y, UI.gold, 9);
   }
 
-  // 항구 마커 — 접안 가능한 세 곳
+  // 항구 마커 — 접안 가능한 네 곳
   for (const h of HARBORS) {
     const d = toDisplay(h.anchor);
     R(ctx, d.x - 1.5, d.y - 1.5, 3, 3, UI.gold);

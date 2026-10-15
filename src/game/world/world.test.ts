@@ -8,6 +8,7 @@ import type { MapCellDef, RegionPack, School } from './index';
 import {
   REGION_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
+  TOAMASINA_FURNITURE,
   VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   V_BOATSHOP, V_BOATSHOP_TRIGGER,
   WORLD, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
@@ -226,6 +227,12 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     expect(zoneOf(WORLD, ...worldAt(99.5, 4)), '해협 동쪽').toBe('seasia');
   });
 
+  it('마다가스카르 섬 동해안(50.5E)을 사이에 두고 인도양/마다가스카르 구역이 나뉜다', () => {
+    expect(zoneOf(WORLD, ...worldAt(51.5, -20)), '섬 동쪽 바다').toBe('indian');
+    expect(zoneOf(WORLD, ...worldAt(40.5, -20)), '모잠비크 해협').toBe('madagascar');
+    expect(zoneOf(WORLD, ...worldAt(43.2, -13.6)), '코모로 심해').toBe('comorodeep');
+  });
+
   it('구역 밖 물(내륙해 잉여)은 zone도 spot도 없다', () => {
     // 카스피 해 남부(창 안에 걸치는 대표 내륙수) — 통행은 가능해도 구역·낚시 대상이 아니다
     const at = worldAt(51, 39);
@@ -254,6 +261,7 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
   it('게이트는 zones 데이터의 entryBoat를 따른다 (진입 방향 일괄)', () => {
     expect(zoneById('seasia')!.entryBoat).toBe(3);
     expect(zoneById('indian')!.entryBoat).toBe(5);
+    expect(zoneById('madagascar')!.entryBoat).toBe(7);
     for (const z of ZONES) {
       for (const sid of z.spots) expect(zoneOfSpot(sid)).toBe(z.id);
     }
@@ -343,6 +351,8 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
     expect(countZone('coron'), '코론').toBeGreaterThan(0);
     expect(countZone('barrierreef'), '그레이트 배리어 리프').toBeGreaterThan(0);
     expect(countZone('southindian'), '남인도양').toBeGreaterThan(0);
+    expect(countZone('madagascar'), '모잠비크 해협').toBeGreaterThan(0);
+    expect(countZone('comorodeep'), '코모로 심해').toBeGreaterThan(0);
   });
 
   it('구현 영역 밖은 지구의 나머지다 — 대서양은 물, 아메리카는 육지, 어디도 구역이 없다', () => {
@@ -353,17 +363,17 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
     expect(earthAt2(20, 0)?.land ?? earthAt2(20, 0)?.water, '아프리카 해안은 정의돼 있다').toBeDefined();
   });
 
-  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 114°×80°)', () => {
+  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 122°×80°)', () => {
     const win = implementedRect();
-    expect(win.w).toBeGreaterThanOrEqual(1820);
-    expect(win.w).toBeLessThanOrEqual(1828);
+    expect(win.w).toBeGreaterThanOrEqual(1948);
+    expect(win.w).toBeLessThanOrEqual(1956);
     expect(win.h).toBeGreaterThanOrEqual(1274);
     expect(win.h).toBeLessThanOrEqual(1282);
   });
 
   it('worldToEarth — 항구 앵커가 구현 영역 안에 뜬다', () => {
     const win = implementedRect();
-    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo]) {
+    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina]) {
       const e = worldToEarth(a.x, a.y);
       expect(e.x, `lon anchor ${a.x}`).toBeGreaterThanOrEqual(win.x);
       expect(e.x).toBeLessThanOrEqual(win.x + win.w);
@@ -443,6 +453,9 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     }
     for (const f of COLOMBO_FURNITURE) {
       expect(furnitureAt('colombo', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
+    }
+    for (const f of TOAMASINA_FURNITURE) {
+      expect(furnitureAt('toamasina', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
   });
   it('여객선은 항구에만 있다', () => {

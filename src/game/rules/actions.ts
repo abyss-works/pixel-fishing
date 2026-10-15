@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec, baitCost,
+  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec, baitCost, variantRateOf,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -296,7 +296,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       let fish: Fish;
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       fish = rollCatchFish(action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts);
-      const extras = rollCatchExtras(fish, deps.rng);
+      const extras = rollCatchExtras(fish, deps.rng, variantRateOf(state));
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
@@ -558,7 +558,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
           || typeof action.hits !== 'number' || typeof action.misses !== 'number') {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canResolveChallenge(state, action.questId,
+      const check = canResolveChallenge(action.questId,
         { success: action.success, hits: action.hits, misses: action.misses },
         deps.now, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };

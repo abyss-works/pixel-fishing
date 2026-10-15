@@ -32,9 +32,8 @@ describe('이동 속도 — 씬 movement로 분기', () => {
     expect(st.value).toBeCloseTo(BOATS[2].speed * 1.03, 10);
   });
 
-  it('유물 — 침선의 나침반은 도보·항해 +7%', () => {
-    expect(moveSpeed(s({ artifacts: ['wreck-compass'] }), 'walk').value)
-      .toBeCloseTo(WALK_SPEED * 1.07, 10);
+  it('유물 — 침선의 나침반은 항해 +7%, 도보는 그대로', () => {
+    expect(moveSpeed(s({ artifacts: ['wreck-compass'] }), 'walk').value).toBe(WALK_SPEED);
     expect(moveSpeed(s({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value)
       .toBeCloseTo(BOATS[0].speed * 1.07, 10);
   });
