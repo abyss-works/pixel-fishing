@@ -8,7 +8,7 @@ import { FISH } from '../fish';
 import { NAMED } from '../named';
 import { RARITY } from '../rarity';
 
-const NATIVE = [64, 32];
+const NATIVE = [32, 16];
 
 describe('원화 격자 (생성 파일)', () => {
   it('모든 어종에 일반·변이 격자가 있고 네임드에 일반 격자가 있다', () => {
@@ -19,7 +19,7 @@ describe('원화 격자 (생성 파일)', () => {
     for (const n of NAMED) expect(FISH_SPRITES_GENERATED[n.id], n.id).toBeDefined();
   });
 
-  it('격자는 전부 64×32이고 무결성 오류가 없으며 팔레트는 고정 hex다', () => {
+  it('격자는 전부 32×16이고 무결성 오류가 없으며 팔레트는 고정 hex다', () => {
     for (const [key, s] of Object.entries(FISH_SPRITES_GENERATED)) {
       expect([s.w, s.h], key).toEqual(NATIVE);
       expect(validateSprite(s), key).toEqual([]);
@@ -41,7 +41,7 @@ describe('원화 격자 (생성 파일)', () => {
 });
 
 describe('형태 격자 (초안 생성기)', () => {
-  it('모든 shape에 64×32 격자가 있고 무결성 오류가 없다', () => {
+  it('모든 shape에 32×16 격자가 있고 무결성 오류가 없다', () => {
     const shapes = new Set([...FISH.map(f => f.shape), ...NAMED.map(n => n.shape)]);
     for (const shape of shapes) {
       const s = FISH_SHAPE_SPRITES[shape];

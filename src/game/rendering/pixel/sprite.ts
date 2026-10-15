@@ -63,21 +63,26 @@ export interface DrawOpts extends Rings {
   t?: number;
 }
 
-// 열 흔들기 — 프레임 없이 움직임을 만든다. 불투명 경계의 가로 중점부터 꼬리(오른쪽) 끝까지
-// 진폭이 0→1셀로 커지고, 열마다 위상이 밀려 파도처럼 보인다. 정수 px만 돌려준다.
-const WOBBLE_HZ = 1.4;
-const WOBBLE_PHASE_PER_COL = 0.55;
+// 유영 흔들기 — 완만한 전신 상하 부유(bob)에 머리(왼쪽)에서 꼬리(오른쪽)로 흐르는 긴 파장의
+// S자 진행파(ωt - kx)를 2차 곡선 진폭(u²)으로 더한다. 허리 경첩 없이 몸 전체가 이어져 헤엄친다.
+const SWIM_HZ = 1.1;
+const BOB_AMP = 0.35;
+const WAVE_AMP = 0.75;
+const WAVE_RAD = Math.PI * 1.15;
 
 export function wobbleOffsets(sprite: PixelSprite, t: number, scale: number, frame = 0): number[] {
   const rows = sprite.frames[frame] ?? sprite.frames[0];
   const b = opaqueBounds(rows);
   const out = new Array<number>(sprite.w).fill(0);
   if (!b) return out;
-  const mid = (b.minX + b.maxX) / 2;
-  const span = Math.max(1, b.maxX - mid);
-  for (let x = Math.ceil(mid); x <= b.maxX; x++) {
-    const amp = Math.min(1, (x - mid) / span);
-    out[x] = Math.round(Math.sin(t * Math.PI * 2 * WOBBLE_HZ + (x - mid) * WOBBLE_PHASE_PER_COL) * amp * scale);
+  const span = Math.max(1, b.maxX - b.minX);
+  const omega = t * Math.PI * 2 * SWIM_HZ;
+  const bob = Math.sin(omega * 0.5) * BOB_AMP;
+  for (let x = b.minX; x <= b.maxX; x++) {
+    const u = (x - b.minX) / span;
+    const wave = Math.sin(omega - u * WAVE_RAD) * (u * u) * WAVE_AMP;
+    const raw = Math.round((bob + wave) * scale);
+    out[x] = Math.max(-scale, Math.min(scale, raw));
   }
   return out;
 }

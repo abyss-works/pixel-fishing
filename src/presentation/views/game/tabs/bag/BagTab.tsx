@@ -36,7 +36,7 @@ import { setBagSection, toggleBagRow, useBagView } from './bagView';
 // 행마다 어긋나 소계·최대 크기를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
 //   [캐럿] [스프라이트] [이름] [×N] [최대 크기] [소계] [자물쇠]
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
-const ROW = 'grid grid-cols-[10px_64px_1fr_28px_76px_52px_22px] items-center gap-1';
+const ROW = 'grid grid-cols-[10px_30px_1fr_28px_76px_52px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
 /** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
@@ -107,7 +107,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
           const name = fish ? formName(fish, inst.form) : inst.fishId;
           return (
             <div key={inst.uid}
-                 className="grid grid-cols-[64px_1fr_60px_auto] items-center gap-1 px-1 py-1 text-sm">
+                 className="grid grid-cols-[30px_1fr_60px_auto] items-center gap-1 px-1 py-1 text-sm">
               <span>{fish && <FishSprite fish={fish} preset="thumb" form={inst.form} animate />}</span>
               <span className="truncate">
                 {fish && <RarityDot rarity={fish.rarity} />}{name}

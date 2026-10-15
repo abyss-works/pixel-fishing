@@ -13,14 +13,18 @@ const fish: PixelSprite = {
   ]],
 };
 
-describe('열 흔들기', () => {
-  it('머리 쪽 열은 움직이지 않고 꼬리 쪽 열만 움직인다', () => {
-    const anyMoves = [0, 0.3, 0.7, 1.1].some(t => wobbleOffsets(fish, t, 3).slice(8).some(v => v !== 0));
-    expect(anyMoves).toBe(true);
-    for (const t of [0, 0.3, 0.7, 1.1]) {
-      const off = wobbleOffsets(fish, t, 3);
+describe('유영 흔들기', () => {
+  it('꼬리 끝 진폭이 머리보다 크고 인접한 불투명 열 사이의 단차가 완만하다', () => {
+    const samples = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9];
+    const headRange = Math.max(...samples.map(t => Math.abs(wobbleOffsets(fish, t, 4)[2])));
+    const tailRange = Math.max(...samples.map(t => Math.abs(wobbleOffsets(fish, t, 4)[13])));
+    expect(tailRange).toBeGreaterThan(headRange);
+    for (const t of samples) {
+      const off = wobbleOffsets(fish, t, 4);
       expect(off.length).toBe(fish.w);
-      expect(off.slice(0, 8).every(v => v === 0), `t=${t}`).toBe(true);
+      for (let x = 3; x <= 13; x++) {
+        expect(Math.abs(off[x] - off[x - 1])).toBeLessThanOrEqual(2);
+      }
     }
   });
 
