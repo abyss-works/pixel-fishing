@@ -5,8 +5,9 @@ import ArrowButton from './ArrowButton';
 
 // 가로 카드 줄 — 한 화면에 `perView`장이 들어가고, 넘치면 좌우로 밀어 본다.
 //
-// 넘치는 경우가 예외라서(수역당 어종 5~6종) 항상 화살표를 띄우면 자리만 먹는다.
-// **넘칠 때만** 나오게 하려면 실제 크기를 재야 한다 — CSS로는 판정할 수 없다.
+// 넘치는 경우가 예외라서(수역당 어종 5~6종) 화살표는 **넘칠 때만** 띄운다 — 실제 크기를
+// 재야 판정된다(CSS로는 불가). 자리는 좌우에 화살표 폭만큼 늘 비워 둔다: 화살표가 카드를
+// 덮지 않고, 화살표가 생기고 사라질 때 카드 폭이 흔들리지 않는다.
 // 스크롤 막대는 숨긴다(.pf-scroll): 픽셀 화면 옆에서 OS 막대가 튀고, 있다 없다 하면
 // 카드 높이가 흔들린다. 대신 화살표가 "더 있다"를 알린다.
 const GAP_REM = 0.25; // gap-1
@@ -49,7 +50,7 @@ export default function CardCarousel({ perView, children }: { perView: number; c
   );
 
   return (
-    <div className="relative">
+    <div className="relative px-4">
       {arrow(-1, edge.prev)}
       <div ref={ref} onScroll={measure}
            className="pf-scroll flex gap-1 overflow-x-auto snap-x snap-mandatory
