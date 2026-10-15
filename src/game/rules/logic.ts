@@ -23,6 +23,7 @@ import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { ARTIFACTS } from '../content/artifacts.js';
+import { namedById } from '../content/named.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 
@@ -158,7 +159,8 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
 }
 
 // 지명 수배 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 파이프라인보다 앞선다).
-// 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 명중하면 통상 추첨
+// 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 네임드에 출현 수역(spot)이
+// 적혀 있으면 그 수역에서만 돈다(코모로 심해의 장로). 명중하면 통상 추첨
 // (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
 // 개체는 만들지 않고 진행도만 올린다 (판매 불가 개념이라 파이프라인에 태우지 않는다).
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
@@ -169,7 +171,8 @@ export function rollNamedEncounter(
   const cands = activeIds
     .map(id => bountyById(id))
     .filter((q): q is BountyQuest =>
-      q !== undefined && q.difficulty === 'named' && q.zone === zone);
+      q !== undefined && q.difficulty === 'named' && q.zone === zone
+      && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
   if (cands.length === 0 || rng() >= NAMED_ENCOUNTER_RATE) return null;
   return cands[Math.floor(rng() * cands.length)];
 }
@@ -658,7 +661,8 @@ function safeLocation(v: unknown): LocationRef {
   if (l && typeof l.id === 'string') {
     if (l.kind === 'region') return { kind: 'region', id: l.id as RegionId };
     if (l.kind === 'base'
-        && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo')) {
+        && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo'
+          || l.id === 'toamasina')) {
       return { kind: 'base', id: l.id };
     }
   }

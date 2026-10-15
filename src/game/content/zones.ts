@@ -14,8 +14,8 @@ import type { RegionId } from './places.js';
 import { boatGateText } from './boats.js';
 
 export type ZoneId =
-  | 'village' | 'pacific' | 'seasia' | 'indian'                          // 최상위 존
-  | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian';     // 하위 존 (id = 스팟 id)
+  | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar'                   // 최상위 존
+  | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian' | 'comorodeep'; // 하위 존 (id = 스팟 id)
 
 /** 씬 지역 — 최상위 존만 명시한다. 하위 존은 부모 체인으로 파생(zoneGroup). */
 type TopGroup = Extract<RegionId, 'village' | 'world'>;
@@ -148,7 +148,7 @@ const DATA: Zone[] = [
       '인도양 연안은 열려 있지만, 차가운 남인도양은 더 튼튼한 낚싯대가 필요해요.',
       '콜롬보 항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
       '동쪽 물길을 따라 돌아가면 동남아입니다.',
-      '서쪽 수평선 너머는 아직 열리지 않았어요.',
+      `서쪽 수평선 너머 마다가스카르 해역은 ${boatGateText(7)}이 있어야 건널 수 있어요.`,
     ],
     controls: [
       '항해: 방향키 또는 WASD',
@@ -170,6 +170,37 @@ const DATA: Zone[] = [
     tagline: '회청색으로 식어가는 물',
     lore: '남쪽으로 갈수록 물이 차가워진다. 아직 이름 붙지 않은 것이 이 차가움 아래에 산다.',
     spots: ['southindian'],
+  },
+  {
+    id: 'madagascar',
+    name: '마다가스카르',
+    shortName: '마다가스카르',
+    group: 'world',
+    tagline: '야생이 그대로 남은 바다',
+    lore: '모잠비크 해협을 건너면 물빛이 짙어진다. 섬과 대륙 사이의 좁은 물에는 날치가 튀고, 코모로 앞바다 아래에는 수억 년 전과 같은 물이 그대로 있다. 거기 사는 것들도 그때 모습 그대로다.',
+    tips: [
+      '해협은 열려 있지만, 코모로 심해는 더 튼튼한 낚싯대가 필요해요.',
+      '투아마시나항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
+      '섬 동쪽 물길을 따라 돌아가면 인도양입니다.',
+    ],
+    controls: [
+      '항해: 방향키 또는 WASD',
+      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+    ],
+    spots: ['mozstrait'],
+    entryBoat: 7,
+    get gateMsg(): string {
+      return `${boatGateText(7)}이 있어야 마다가스카르 해역에 들어설 수 있다.`;
+    },
+  },
+  {
+    id: 'comorodeep',
+    parent: 'madagascar',
+    name: '코모로 심해',
+    shortName: '코모로',
+    tagline: '수억 년 전과 같은 물',
+    lore: '섬들 사이로 바닥이 갑자기 꺼진다. 이 아래의 물은 오래전부터 바뀐 적이 없다고 한다.',
+    spots: ['comorodeep'],
   },
 ];
 

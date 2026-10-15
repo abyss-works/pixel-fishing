@@ -33,9 +33,9 @@ describe('정비 화면 데이터', () => {
 
   it('배 사다리 — 가진 배는 done, 현재는 current, 바로 다음은 next, 나머지는 locked', () => {
     const game = newState();
-    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['next', 'locked', 'locked', 'locked', 'locked', 'locked']);
+    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['next', 'locked', 'locked', 'locked', 'locked', 'locked', 'locked']);
     game.boat = 2;
-    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['done', 'current', 'next', 'locked', 'locked', 'locked']);
+    expect(selectBoatLadder(game).map(r => r.state)).toEqual(['done', 'current', 'next', 'locked', 'locked', 'locked', 'locked']);
     game.boat = MAX_BOAT;
     expect(selectBoatLadder(game).at(-1)?.state).toBe('current');
   });

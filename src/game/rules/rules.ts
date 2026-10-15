@@ -12,7 +12,7 @@
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT } from '../content/boats.js';
-import { bountyById, LICENSE_TIER_OF } from '../content/bounties.js';
+import { bountyById, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
 import { artifactById } from '../content/artifacts.js';
 import {
   upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MAX_MISS, CHALLENGE_ROUNDS,
@@ -123,8 +123,6 @@ export interface BountyCtx {
   active: string[];            // 진행 중 의뢰 id (중복 수주 거부용)
 }
 
-/** 수배 창구 항구 — 고향(home)에 수배 창구가 없다 (spec 4절) */
-const BOUNTY_PORTS = ['harbor', 'manila', 'colombo'];
 
 /** 의뢰 수주 — 라이선스 조건은 상태로, 상한은 서버 주입 DB 진실로 본다 */
 export function canAcceptQuest(
@@ -132,7 +130,7 @@ export function canAcceptQuest(
 ): RuleCheck {
   const q = bountyById(questId);
   if (!q) return no('bad-request');
-  if (!BOUNTY_PORTS.includes(port)) return no('bad-request');
+  if (!isBountyPort(port)) return no('bad-request'); // 고향(home)에는 수배 창구가 없다
   // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   // 라이선스 조건 직검 — 취득 절차 없이 조건 충족이면 열린다

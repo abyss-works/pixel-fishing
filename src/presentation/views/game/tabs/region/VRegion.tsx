@@ -127,7 +127,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
       {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성).
           수역 오버라이드(rarityWeight)를 글로벌 기본값과 비교한 조회 뷰다 — 확률 자체는
           drawRows 단일 출처. 하위 존(해구 등) 위에서도 최상위 존 표가 유지돼 자주 바뀌지 않는다.
-          서브트리마다 행 수가 다르다(마을 2 / 태평양 2 / 동남아 3 / 인도양 2) — 높이 고정 */}
+          서브트리마다 행 수가 다르다(마을 2 / 태평양 2 / 동남아 3 / 인도양 2 / 마다가스카르 2) — 높이 고정 */}
       <div className="shrink-0">
         <SectionTitle>등급 분포 — {tableZone.name}</SectionTitle>
         <div className={cx(TABLE_H, 'pf-frame p-2 overflow-x-auto overflow-y-hidden')}>

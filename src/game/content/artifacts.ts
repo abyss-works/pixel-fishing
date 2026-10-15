@@ -43,6 +43,10 @@ export const ARTIFACTS: readonly Artifact[] = [
     materialId: 'mat-varuna-weight', materialName: '녹슨 저울추',
     lore: '남인도양의 왕이 쓰던 저울이라 한다. 올려놓은 것마다 값이 가벼워진다.',
     effects: { baitDiscount: 0.25 } },
+  { id: 'elder-scale', name: '장로의 비늘', zone: 'madagascar', grade: 'epic',
+    materialId: 'mat-elder-scale', materialName: '닳은 비늘',
+    lore: '코모로 아래에서 가장 오래 산 것의 비늘. 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
+    effects: { variantRate: 1 / 2 } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

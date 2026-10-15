@@ -1,7 +1,7 @@
 // 장소 식별자 — **데이터 계층에 둔다.** 저장 모델과 월드 렌더링이 둘 다 이 타입을
 // 알아야 하지만 의존 방향은 월드에서 데이터로만 향한다.
 // 거점 id도 같은 계층에 둔다.
-export type BaseId = 'home' | 'harbor' | 'manila' | 'colombo';
+export type BaseId = 'home' | 'harbor' | 'manila' | 'colombo' | 'toamasina';
 
 /** 씬 지역 id — 오픈월드에서 도달 가능한 지역은 마을과 병합 바다뿐이다.
  *  구세이브 location에 남은 구 지역 id(ocean/seasia/indian 등)는 **런타임 문자열**로만
