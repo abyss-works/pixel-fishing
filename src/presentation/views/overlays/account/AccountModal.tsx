@@ -17,6 +17,7 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { maskUid } from './maskUid';
+import { cx } from '../../../ui/cx';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(게스트 진행 소멸 — 경고+백업).
@@ -24,11 +25,15 @@ import { maskUid } from './maskUid';
 // email_exists면 "기존 계정 로그인" 확인 후 signInWithPassword로 전환.
 // 알려진 트레이드오프: 기존 유저가 이메일을 오타 내면 오타 주소로 새 계정이 생긴다
 // (진행 유실은 없음, 유령 계정 1개) — 친구 규모에서 수용
-export default function AccountModal({ game, setToast, onAuthChanged, onClose, account, uid, nickname, onRename }: {
+export default function AccountModal({
+  game, setToast, onAuthChanged, onClose, account, uid, nickname, onRename, syncLabel, syncState,
+}: {
   game: GameState; setToast: (m: string) => void;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null; uid: string | null;
   nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
+  /** 저장 상태 문구(클라우드 켜짐·미설정 등) — 계정과 한 묶음이라 여기서 보여 준다 */
+  syncLabel?: string | null; syncState?: string;
 }) {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -109,6 +114,11 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose, a
 
   return (
     <Modal title="계정 관리" onClose={onClose}>
+      {syncLabel && (
+        <div className={cx('text-xs mb-2', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
+          {syncLabel}
+        </div>
+      )}
       {offline && <Note className="mt-0">로컬 개발 모드 — 계정 기능은 동작하지 않아요(화면 확인용).</Note>}
 
       {account ? (
