@@ -15,7 +15,8 @@ import { RARITY, RARITY_ORDER } from '../../../../../game/content/rarity';
 import { RARITY_CARD } from '../../../../ui/fish/RarityTag';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
-const FISH_PER_VIEW = 6;
+// 사이드바 384px에서 4장 = 카드 안폭 약 80px — 64px 스프라이트(thumb)가 1:1로 들어간다
+const FISH_PER_VIEW = 4;
 // 가까운 어군 노출 개수 — 3개면 한눈에 들어온다(요구).
 /** 거리 표기 — 내부 게임 축척에 맞춰 유효숫자를 제한한다. */
 function fmtMeters(m: number): string {
@@ -87,7 +88,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                            className={cx(RARITY_CARD, 'p-1 basis-(--card-w)', !caught && 'opacity-[0.72]')}>
                         <FishSprite fish={f} preset="thumb" form="normal" discovered={caught}
                                     ariaLabel={caught ? f.name : '미확인 어종'}
-                                    className="block mx-auto" />
+                                    className="block mx-auto max-w-full h-auto" />
                         <div className="text-2xs leading-tight truncate">{caught ? f.name : '???'}</div>
                         <div className="text-2xs leading-tight"><RarityText rarity={f.rarity} /></div>
                       </div>

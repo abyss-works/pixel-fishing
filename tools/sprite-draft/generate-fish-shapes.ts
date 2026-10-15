@@ -14,7 +14,8 @@ import { INDEX_CHARS, TRANSPARENT } from '../../src/game/content/sprites/types';
 import type { PaletteSlot } from '../../src/game/content/sprites/types';
 import type { FishShape } from '../../src/game/content/fish';
 
-const W = 32, H = 16, CX = 16, CY = 8;
+// 종별 원화와 같은 64×32 격자, 초안 생성기는 2× 배율로 그린다 (셀 하나 = 2×2 블록)
+const W = 64, H = 32, CX = 32, CY = 16, S = 2;
 // 기준색 — 다른 어떤 고정 색과도 겹치지 않는 임의 값. 격자에는 슬롯만 남고 이 값은 사라진다.
 const BASE = '#6a8bc3';
 const SHADE_FACTORS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.15];
@@ -61,15 +62,15 @@ class GridCtx implements RectCtx {
 const shapes = Object.keys(SHAPES) as FishShape[];
 const entries = shapes.map(shape => {
   const ctx = new GridCtx();
-  drawFishSprite(ctx, CX, CY, shape, BASE, 1, true);
+  drawFishSprite(ctx, CX, CY, shape, BASE, S, true);
   const palette = ctx.palette.map(s => (typeof s === 'string' ? JSON.stringify(s) : `{ shade: ${s.shade} }`)).join(', ');
   const rows = ctx.rows().map(r => `      '${r}',`).join('\n');
   return `  ${shape}: {\n    w: ${W}, h: ${H},\n    palette: [${palette}],\n    frames: [[\n${rows}\n    ]],\n  },`;
 });
 
 const out = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/generate-fish-shapes.ts
-// 초안 생성기(절차 사각형)를 1× 배율로 32×16 격자에 옮긴 14형태 스프라이트.
-// 종별 전용 격자가 없는 어종은 이 형태 격자를 쓴다 (fishSprite 해석 순서).
+// 초안 생성기(절차 사각형)를 2× 배율로 64×32 격자에 옮긴 14형태 스프라이트.
+// 종별 격자가 없는 어종(신규 어종 초안 단계)만 이 형태 격자를 쓴다 (fishSprite 해석 순서).
 import type { PixelSprite } from './types.js';
 import type { FishShape } from '../fish.js';
 

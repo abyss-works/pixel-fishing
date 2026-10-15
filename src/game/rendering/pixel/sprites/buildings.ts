@@ -3,8 +3,6 @@
 // 새 지역/거점의 건물 = 여기 항목 추가가 전부다. mapColor는 월드맵 축소판의 플랫 색(없으면 지도 생략).
 import { R } from '../common.js';
 import type { Ctx } from '../common.js';
-import { drawSpriteCentered } from '../sprite.js';
-import { FISH_SHAPE_SPRITES, paletteColors } from '../../../content/sprites/index.js';
 import type { BuildingSpriteId, Furniture, FurnitureSpriteId, Rect } from '../../../world/types';
 
 interface BuildingSprite { draw: (ctx: Ctx, r: Rect) => void; mapColor?: string }
@@ -100,9 +98,13 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x, f.y + 8, f.w, f.h - 8, '#8d6e63');
     R(ctx, f.x, f.y - 2, f.w, 6, '#1d6396');
     R(ctx, f.x + 3, f.y + 10, f.w - 6, 10, '#e3f2fd');
-    const slim = FISH_SHAPE_SPRITES.slim, round = FISH_SHAPE_SPRITES.round;
-    drawSpriteCentered(ctx, slim, paletteColors(slim.palette, '#42a5f5'), 1, f.x + 12, f.y + 15);
-    drawSpriteCentered(ctx, round, paletteColors(round.palette, '#e57373'), 1, f.x + 30, f.y + 15);
+    // 진열 생선은 장식이라 어종 스프라이트(64×32)를 쓰지 않고 작은 사각형으로 그린다
+    for (const [x, c] of [[f.x + 7, '#42a5f5'], [f.x + 25, '#e57373']] as const) {
+      R(ctx, x, f.y + 13, 8, 3, c);
+      R(ctx, x + 8, f.y + 12, 2, 2, c);
+      R(ctx, x + 8, f.y + 15, 2, 2, c);
+      R(ctx, x + 1, f.y + 14, 1, 1, '#000');
+    }
   },
   // 항구: 조선소 — 건조대 위 선체 + 돛
   shipyard: (ctx, f) => {

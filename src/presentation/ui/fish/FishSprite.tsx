@@ -5,12 +5,12 @@ import type { Fish, FormId } from '../../../game/content/fish';
 import { cx } from '../cx';
 
 // 용도별 캔버스 크기·배율 프리셋 — 가방 썸네일/도감 카드/도감 상세 초상화/획득 카드.
-// 배율은 정수(픽셀아트). 격자(32×16)가 캔버스보다 크면 투명 여백만 잘린다.
+// 원화 격자는 64×32이고 배율은 정수만(픽셀아트). 격자가 캔버스보다 크면 투명 여백만 잘린다.
 const PRESETS = {
-  thumb:    { w: 30,  h: 16,  scale: 1 },
-  icon:     { w: 84,  h: 44,  scale: 3 },
-  portrait: { w: 240, h: 140, scale: 6 },
-  card:     { w: 160, h: 90,  scale: 4 },
+  thumb:    { w: 64,  h: 32,  scale: 1 },
+  icon:     { w: 84,  h: 44,  scale: 1 },
+  portrait: { w: 240, h: 140, scale: 3 },
+  card:     { w: 160, h: 90,  scale: 2 },
 } as const;
 
 interface FishSpriteProps {
@@ -38,7 +38,7 @@ export default function FishSprite({
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
-    const sprite = fishSprite(fish);
+    const sprite = fishSprite(fish, form);
     const colors = fishColors(fish, form, discovered);
     const rings = fishRings(fish, discovered);
     const paint = (t?: number) => {
