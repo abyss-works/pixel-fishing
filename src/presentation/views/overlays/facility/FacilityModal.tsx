@@ -28,6 +28,7 @@ import Note from '../../../ui/Note';
 import NumberStepper from '../../../ui/NumberStepper';
 import PixelIcon from '../../../ui/PixelIcon';
 import StatCompare from '../../../ui/StatCompare';
+import Subheading from '../../../ui/Subheading';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
 /** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
@@ -63,7 +64,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
-    <Modal layer="stage" xl={panel === 'bounty'} onClose={onClose}>
+    <Modal layer="stage" xl={panel === 'bounty' || panel === 'rod' || panel === 'boat'} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -243,8 +244,8 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
   const fmt = (s: { biteMin: number; biteMax: number; sweep: number }) =>
     ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s` });
   const c = fmt(cur), n = fmt(next);
-  // 사다리 — 상한이 없어 현재 ±2단계만. 어디쯤 왔는지보다 "다음 한 칸"이 보이면 된다
-  const ladder = selectRodLadder(game).map(r => ({
+  // 사다리 — 상한이 없어 현재 ±4단계를 싣고 ±2행만 보인다(안에서 굴림). "다음 한 칸"이 핵심이다
+  const ladder = selectRodLadder(game, 4).map(r => ({
     key: String(r.level), state: r.state,
     label: <span className="pf-accent">Lv.{r.level}</span>,
     meta: <>입질 <span className="pf-accent">{fmt(r.stats).bite}</span>{r.state !== 'done' && r.state !== 'current' && <> · <span className="pf-accent">{fmtGold(r.cost)}</span></>}</>,
@@ -259,12 +260,18 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
           강화하기 (-{fmtGold(cost)})
         </Button>
       </>}>
-      <ProgressLadder steps={ladder} />
-      <StatCompare rows={[
-        { label: '입질 대기', value: c.bite, next: n.bite },
-        { label: '바 시간', value: c.sweep, next: n.sweep },
-      ]} />
-      <Note className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다.</Note>
+      {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세. 넓은 모달(xl)이라 두 열이 선다 */}
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
+        <ProgressLadder steps={ladder} visibleRows={5} />
+        <div className="flex flex-col gap-2">
+          <Subheading className="mb-0">Lv.{game.rod} → Lv.{game.rod + 1}</Subheading>
+          <StatCompare rows={[
+            { label: '입질 대기', value: c.bite, next: n.bite },
+            { label: '바 시간', value: c.sweep, next: n.sweep },
+          ]} />
+          <Note className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 수역 요구치와 비교해 스탯창에서 본다.</Note>
+        </div>
+      </div>
     </ModalCard>
   );
 }
@@ -286,8 +293,10 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   if (preview.kind === 'max') {
     return (
       <ModalCard title="조선소" onClose={onClose}>
-        <ProgressLadder steps={ladder} />
-        <Note className="my-0">이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
+          <ProgressLadder steps={ladder} visibleRows={5} />
+          <Note className="my-0">이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
+        </div>
       </ModalCard>
     );
   }
@@ -303,12 +312,20 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
           구매하기 (-{fmtGold(next.price)})
         </Button>
       </>}>
-      <ProgressLadder steps={ladder} />
-      <StatCompare rows={[
-        { label: '항해 속도', value: currentSpeed ?? '도보', next: fmtNum(next.speed) },
-        { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리` },
-        { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
-      ]} />
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
+        <ProgressLadder steps={ladder} visibleRows={5} />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <BoatSprite tier={next.tier} preset="row" ariaLabel={next.name} />
+            <Subheading className="mb-0">{next.name} <span className="pf-accent">{next.tier}</span>단계</Subheading>
+          </div>
+          <StatCompare rows={[
+            { label: '항해 속도', value: currentSpeed ?? '도보', next: fmtNum(next.speed) },
+            { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리` },
+            { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
+          ]} />
+        </div>
+      </div>
     </ModalCard>
   );
 }
