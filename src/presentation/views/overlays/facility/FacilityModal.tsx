@@ -305,7 +305,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
             { label: '바 시간', value: c.sweep, next: n.sweep, delta: sec(next.sweep - cur.sweep, 2) },
           ]} />
           {/* 3차: 안내 */}
-          <Note size="xs" className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 수역 요구치와 비교해 스탯창에서 본다.</Note>
+          <Note size="xs" className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 해역 요구치와 비교해 스탯창에서 본다.</Note>
           {/* 1차: 살 수 있나 — 버튼 바로 위 */}
           <UpgradeCost>
             <CostLine size="lg" have={game.gold} delta={-cost} />
@@ -381,7 +381,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   );
 }
 
-// 미끼 상점 — 콜롬보 항 전용. 등급별 미끼를 골드로 사고, 보유 개수는 가방 아이템 섹션에서 본다.
+// 미끼 상점 — 콜롬보항 전용. 등급별 미끼를 골드로 사고, 보유 개수는 가방 아이템 섹션에서 본다.
 // 활성 토글은 가방 탭 소관 — 상점은 "파는 곳"만 담당한다. 담백체 유지.
 function ShopPanel({ game, onBuy, onClose, busy }: {
   game: GameState;

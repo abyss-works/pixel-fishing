@@ -4,12 +4,24 @@ import {
 } from '../../../game/content/bounties';
 import type { BountyDifficulty, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
+import { zoneById } from '../../../game/content/zones';
 import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { rodAxes } from '../../../game/rules/stats';
 import type { BountySnapshot } from './types';
+
+/** 일반 의뢰 난이도의 화면 이름 */
+export const DIFFICULTY_NAME: Record<Exclude<BountyDifficulty, 'named'>, string> = {
+  easy: '쉬움', normal: '보통', hard: '어려움',
+};
+
+/** 의뢰의 사람이 읽는 이름 — 토스트·안내용. 일반 의뢰는 "구역 난이도 의뢰", 네임드는 "구역 네임드 토벌" */
+export function questLabel(quest: Pick<BountyQuest, 'zone' | 'difficulty'>): string {
+  const zone = zoneById(quest.zone)?.shortName ?? quest.zone;
+  return quest.difficulty === 'named' ? `${zone} 네임드 토벌` : `${zone} ${DIFFICULTY_NAME[quest.difficulty]} 의뢰`;
+}
 
 export interface BountyPanelInput {
   game: GameState;

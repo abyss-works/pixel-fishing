@@ -1,4 +1,4 @@
-// 네임드 챌린지 모달 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락.
+// 네임드 도전 모달 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락.
 // 시도 판정은 클라 주장(PERFECT 선례) — 서버는 티켓 유효+수주 활성+주장 정합성만 본다.
 // 키는 exclusive 스코프로 가져간다 — 아래 필드 낚시로 새지 않는다 (hotkeys 계층).
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -120,7 +120,7 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
       ) : (
         <>
           <span className="text-sm">
-            {run.success ? `${targetName} 챌린지 성공! 수배판에서 의뢰를 완료하자.` : `놓쳤다 — 도전권은 유지된다.`}
+            {run.success ? `${targetName} 도전 성공! 수배판에서 토벌을 마치자.` : `놓쳤다 — 도전권은 유지된다.`}
           </span>
         </>
       )}

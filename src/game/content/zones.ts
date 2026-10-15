@@ -55,7 +55,7 @@ const DATA: Zone[] = [
     ],
     controls: [
       '이동: 방향키 또는 WASD',
-      '낚시: 물고기 군집 옆에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 옆에서 스페이스(또는 화면 클릭)',
     ],
     spots: ['pond', 'river'],
   },
@@ -73,7 +73,7 @@ const DATA: Zone[] = [
     ],
     controls: [
       '항해: 방향키 또는 WASD',
-      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 위에서 스페이스(또는 화면 클릭)',
     ],
     spots: ['sea'],
   },
@@ -101,13 +101,13 @@ const DATA: Zone[] = [
     ],
     controls: [
       '항해: 방향키 또는 WASD',
-      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 위에서 스페이스(또는 화면 클릭)',
     ],
     // 최상위 스팟 없음 — 열린 바다('2')는 통행 전용. 동남아 일반 어종은 미래 가산 여지.
     spots: [],
     entryBoat: 3,
     get gateMsg(): string {
-      return `${boatGateText(3)}가 있어야 동남아&오세아니아 해역에 들어설 수 있다.`;
+      return `${boatGateText(3)}가 있어야 동남아&오세아니아에 들어설 수 있다.`;
     },
   },
   {
@@ -152,14 +152,14 @@ const DATA: Zone[] = [
     ],
     controls: [
       '항해: 방향키 또는 WASD',
-      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 위에서 스페이스(또는 화면 클릭)',
     ],
     spots: ['indian'],
     // 말라카 해협 게이트(구 travel requiredBoat 5)의 계승 — 1-2 동남아를 건너뛰고 인도양으로
     // 넘어가려면 tier5(증기선)가 필요하다(사용자 확정 2026-08-27).
     entryBoat: 5,
     get gateMsg(): string {
-      return `${boatGateText(5)}이 있어야 인도양 해역에 들어설 수 있다.`;
+      return `${boatGateText(5)}이 있어야 인도양에 들어설 수 있다.`;
     },
   },
   {
@@ -185,12 +185,12 @@ const DATA: Zone[] = [
     ],
     controls: [
       '항해: 방향키 또는 WASD',
-      '낚시: 물고기 군집 위에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 위에서 스페이스(또는 화면 클릭)',
     ],
     spots: ['mozstrait'],
     entryBoat: 7,
     get gateMsg(): string {
-      return `${boatGateText(7)}이 있어야 마다가스카르 해역에 들어설 수 있다.`;
+      return `${boatGateText(7)}이 있어야 마다가스카르에 들어설 수 있다.`;
     },
   },
   {

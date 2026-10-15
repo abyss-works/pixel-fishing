@@ -130,7 +130,7 @@ export function buildBalanceReport(): SpotBalance[] {
   if (axes[axes.length - 1]?.key !== 'idleAvgDelta') {
     axes.push({
       key: 'idleAvgDelta', label: '방치평균 vs 전지역', hint:
-        '이 해역의 방치 평균((최소+최대)/2) − 전 수역 평균. 사다리에서 앞서나 있는 정도.',
+        '이 해역의 방치 평균((최소+최대)/2) − 전 해역 평균. 사다리에서 앞서나 있는 정도.',
       compute: (c) => idleAvgOf(c) - allIdleAvg,
     });
   }

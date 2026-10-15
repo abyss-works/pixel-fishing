@@ -49,7 +49,7 @@ export const MANILA: Rect = { ...A.manila, w: 40, h: 41 };      // 마닐라항 
 export const MANILA_DOCK: Rect = { ...A.m_dock, w: 16, h: 15 };
 export const MANILA_SPAWN: Point = A.m_spawn;
 
-export const COLOMBO: Rect = { ...A.colombo, w: 40, h: 41 };    // 콜롬보 항 외관(스리랑카 서해안)
+export const COLOMBO: Rect = { ...A.colombo, w: 40, h: 41 };    // 콜롬보항 외관(스리랑카 서해안)
 export const COLOMBO_DOCK: Rect = { ...A.c_dock, w: 16, h: 15 };
 export const COLOMBO_SPAWN: Point = A.c_spawn;
 
@@ -57,8 +57,8 @@ export const TOAMASINA: Rect = { ...A.toamasina, w: 40, h: 41 }; // 투아마시
 export const TOAMASINA_DOCK: Rect = { ...A.t_dock, w: 16, h: 15 };
 export const TOAMASINA_SPAWN: Point = A.t_spawn;
 
-// 특화 수역 군집 2개씩 + 일반 수역(연안) 2~3개 — 구 3지역의 군집을 그대로 계승한다.
-// 군집 좌표는 앵커 파생 — 생성기가 물 위 배치를 보증한다(terrain 검증).
+// 특화 해역 어군 2개씩 + 일반 해역(연안) 2~3개 — 구 3지역의 어군을 그대로 계승한다.
+// 어군 좌표는 앵커 파생 — 생성기가 물 위 배치를 보증한다(terrain 검증).
 export const WORLD_SCHOOLS: School[] = [
   { id: 'w-sea-1',  spot: 'sea',  ...A.school_sea_1 },
   { id: 'w-sea-2',  spot: 'sea',  ...A.school_sea_2 },
@@ -134,7 +134,7 @@ export const WORLD: RegionPack = {
   labels: [
     { text: '항구', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
     { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
-    { text: '콜롬보 항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
+    { text: '콜롬보항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
     { text: '투아마시나항', x: TOAMASINA.x + TOAMASINA.w / 2, y: TOAMASINA.y + 2, color: 'gold', size: 8 },
   ],
 };

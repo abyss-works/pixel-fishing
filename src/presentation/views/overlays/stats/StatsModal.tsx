@@ -52,7 +52,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
   } = selectStatsModalData(game, movement, idx);
 
   const pageBtn = (dir: 1 | -1) => (
-    <ArrowButton dir={dir} aria-label={dir < 0 ? '이전 수역' : '다음 수역'}
+    <ArrowButton dir={dir} aria-label={dir < 0 ? '이전 해역' : '다음 해역'}
             onClick={() => step(dir)}
             className="px-2 py-0.5 text-text-dim hover:text-text" />
   );

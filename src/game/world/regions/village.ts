@@ -41,7 +41,7 @@ export const VILLAGE: RegionPack = {
     ],
     controls: [
       '이동: 방향키 또는 WASD',
-      '낚시: 물고기 군집 옆에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 옆에서 스페이스(또는 화면 클릭)',
     ],
   },
   w: VILLAGE_W,
@@ -68,7 +68,7 @@ export const VILLAGE: RegionPack = {
   triggers: [
     { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
     { rect: V_PORT, action: 'travel', to: 'world', requiredBoat: 1,
-      msg: '대양으로 출항! 군집을 찾아 항해하자.',
+      msg: '대양으로 출항! 어군을 찾아 항해하자.',
       blockedMsg: '바다에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.' },
     { rect: V_BOATSHOP_TRIGGER, action: 'shop' },
   ],

@@ -91,7 +91,7 @@ function ItemSection({ game, dispatch, setToast }: {
       </div>
       <Note>
         활성하면 같은 등급 물고기가 두 배 더 잘 낚인다. 수동으로 낚아올릴 때마다 한 개가 소모되고,
-        방치 획득에는 소모되지 않는다. 구매는 콜롬보 항구의 미끼 가게에서.
+        방치 획득에는 소모되지 않는다. 구매는 콜롬보항의 미끼 상점에서.
       </Note>
     </div>
   );
@@ -107,7 +107,7 @@ function ArtifactSection({ game }: { game: GameState }) {
         유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
       </PageTitle>
       {owned.length === 0 ? (
-        <Note>아직 유물이 없다. 네임드를 납품하고 받은 재료를 항구 수배판의 유물 탭에서 교환하자.</Note>
+        <Note>아직 유물이 없다. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꾸자.</Note>
       ) : (
         <>
           <div className="pf-frame divide-y divide-line">
@@ -260,7 +260,7 @@ export default function BagTab({ game, dispatch, setToast }: {
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
-            <Note>가방이 비어 있다. 물고기 군집을 찾아 낚시하자.</Note>
+            <Note>가방이 비어 있다. 어군을 찾아 낚시하자.</Note>
           ) : (
             <>
               <div className="pf-frame divide-y divide-line">

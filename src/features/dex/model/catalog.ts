@@ -108,7 +108,7 @@ export function selectDexDetailData(game: GameState, fish: Fish): DexDetailEntry
   });
 }
 
-/** 지명 수배 도감의 발견·해역별 집계와 공개 여부를 만든다.
+/** 네임드 도감의 발견·해역별 집계와 공개 여부를 만든다.
  *  서브탭은 수배가 있는 존만이다 — 열람 존이 거기 없으면(마을 등) 첫 수배 존으로 대신한다. */
 export function selectNamedDex(game: GameState, requested: ZoneId): NamedDexData {
   const namedQuests = BOUNTIES.filter(quest => quest.difficulty === 'named');

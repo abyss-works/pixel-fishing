@@ -59,7 +59,7 @@ const SUBTITLE: Record<AdminTabKey, string> = {
   progression: '배·낚싯대 분포, 지역 도달, 게이트 정체',
   antiabuse: '연타·PERFECT 비율·반입 로그·제재 현황',
   ops: '빌드/환경 정체 · events 카탈로그',
-  fish: '수역 EV 시뮬레이션. 확정 변경은 데이터 파일(fish.ts·spots.ts)이 정본이다.',
+  fish: '해역 EV 시뮬레이션. 확정 변경은 데이터 파일(fish.ts·spots.ts)이 정본이다.',
 };
 
 const DEFAULT_HASH = '#/admin/overview';

@@ -13,7 +13,7 @@ import SizeBar from '../SizeBar';
 // 거기 쓰이는 건 크기뿐이다.
 // 마지막 열은 auto — 진열·잠금 버튼 수가 화면마다 달라서(가방 둘, 판매 없음) 고정폭이면 넘친다.
 // 버튼은 우측 정렬이라 자물쇠 위치는 줄마다 같다.
-export const CELL = 'grid grid-cols-[13px_52px_1fr_34px_26px_26px_auto] items-center gap-2';
+export const CELL = 'grid grid-cols-[13px_52px_1fr_34px_26px_48px_auto] items-center gap-2';
 
 export interface InstanceLineProps {
   inst: FishInstance;
@@ -36,7 +36,7 @@ export default function InstanceLine({
   const pct = inst.size === null ? null : sizePercentile(fish, inst.size);
   const label = [
     inst.size === null ? null : `${inst.size.toFixed(1)}cm`,
-    inst.form === 'variant' ? '변이' : null,
+    inst.form === 'variant' ? '돌연변이' : null,
     fish.name,
   ].filter(Boolean).join(' ');
 
@@ -54,7 +54,7 @@ export default function InstanceLine({
       <span className="min-w-0">{pct !== null && <SizeBar percentile={pct} />}</span>
       <span className="pf-accent text-text-dim text-right">{pct !== null && `${pct}%`}</span>
       <span className="text-gold text-center">{best && '최대'}</span>
-      <span className="text-epic text-center">{inst.form === 'variant' && '변이'}</span>
+      <span className="text-epic text-center">{inst.form === 'variant' && '돌연변이'}</span>
       {(onExhibit || onLock) && (
         <span className="flex items-center justify-end gap-0.5">
           {onExhibit && (
@@ -103,13 +103,13 @@ export function UnsizedLine({
       <span className="pf-accent text-text-dim">×{count}</span>
       <span />
       <span />
-      <span className="text-epic text-center">{form === 'variant' && '변이'}</span>
+      <span className="text-epic text-center">{form === 'variant' && '돌연변이'}</span>
       {onLock && (
         <IconButton
           glyph={locked ? 'lock' : 'lockOpen'} size={12}
           tone={locked ? 'gold' : 'dim'}
           className="justify-self-end px-1"
-          aria-label={`크기 미상 ${form === 'variant' ? '변이 ' : ''}${count}마리 ${locked ? '잠금 해제' : '잠금'}`}
+          aria-label={`크기 미상 ${form === 'variant' ? '돌연변이 ' : ''}${count}마리 ${locked ? '잠금 해제' : '잠금'}`}
           onClick={e => { e.stopPropagation(); onLock(); }} />
       )}
     </div>

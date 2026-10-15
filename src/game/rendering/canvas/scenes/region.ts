@@ -73,7 +73,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   for (const l of pack.labels) drawLabel(ctx, l);
   pack.flavor?.(ctx, v.t);
 
-  // 동적: 군집/낚싯줄/플레이어/타이밍 바
+  // 동적: 어군/낚싯줄/플레이어/타이밍 바
   drawSchools(ctx, pack.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);

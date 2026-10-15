@@ -281,8 +281,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
-      // 지명 수배 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
-      // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음 — 챌린지절). 발급 행 기록은
+      // 네임드 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
+      // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng);
       const ticketEvents: GameEvent[] = namedHit
@@ -435,7 +435,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         return { ok: false, error: 'bad-request' };
       }
       // 상점 UI가 없는 위치에서 직접 액션을 보내도 구매되지 않게 서버가 위치를 재검증한다.
-      // 콜롬보 항구는 세이브 location에 남아 있으므로 별도 세션 상태가 필요 없다.
+      // 콜롬보항은 세이브 location에 남아 있으므로 별도 세션 상태가 필요 없다.
       if (state.location.kind !== 'base' || state.location.id !== 'colombo') {
         return { ok: false, error: 'shop-closed' };
       }
@@ -536,7 +536,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'deliverBounty': {
       // 납품은 골드를 만든다 — 완료 여부는 서버 주입(DB 진행도)으로만 증명된다.
-      // 네임드 납품에는 교환 재료 1개가 따라온다 (유물 교환의 유일한 입구).
+      // 네임드 토벌에는 교환 재료 1개가 따라온다 (유물 교환의 유일한 입구).
       if (typeof action.questId !== 'string') return { ok: false, error: 'bad-request' };
       const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };
@@ -550,7 +550,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'resolveChallenge': {
-      // 네임드 챌린지 결과 확정 — 시도 자체는 클라 주장이라 서버는 티켓 유효 +
+      // 네임드 도전 결과 확정 — 시도 자체는 클라 주장이라 서버는 티켓 유효 +
       // 수주 활성 + 주장 정합성만 본다 (rules.canResolveChallenge).
       // 성공하면 도감에 올리고(납품 가능해진다) 서버가 진행도 +1·티켓 소모를
       // 뒤에서 처리한다. 실패는 감사 이벤트만 남기고 티켓은 유지된다.
