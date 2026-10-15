@@ -15,8 +15,6 @@ export interface ArtifactEffects {
   nightImmune?: boolean;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
-  /** 도전권 유효 기간 배수 (예: 2 = 2배) — 훅만 파둔다, 쓰는 유물은 아직 없다 */
-  challengeWindowMult?: number;
 }
 
 export interface Artifact {

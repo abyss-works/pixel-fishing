@@ -177,7 +177,7 @@ export function canResolveChallenge(
   if (!coherent) return no('bad-request');
   const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
-  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO), challengeWindowMs(state));
+  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO), challengeWindowMs());
   if (!(left > 0)) return no('ticket-expired');
   return OK;
 }

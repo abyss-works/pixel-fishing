@@ -32,16 +32,17 @@ describe('strikeChallenge', () => {
 });
 
 describe('도전권 유효', () => {
-  it('기본 1시간 — 아티팩트 없으면 그대로', () => {
+  it('기본 2시간 — 유물 연장 없이 상수 그대로', () => {
     expect(challengeWindowMs(newState())).toBe(CHALLENGE_WINDOW_MS);
+    expect(CHALLENGE_WINDOW_MS).toBe(2 * 3600_000);
   });
 
   it('잔여 계산 — 만료·깨진 시각이면 0', () => {
     const issued = '2026-10-09T00:00:00.000Z';
     const t0 = Date.parse(issued);
-    expect(ticketRemainingMs(issued, t0 + 30 * 60_000, CHALLENGE_WINDOW_MS)).toBe(30 * 60_000);
-    expect(ticketRemainingMs(issued, t0 + 3600_000, CHALLENGE_WINDOW_MS)).toBe(0);
+    expect(ticketRemainingMs(issued, t0 + 30 * 60_000, CHALLENGE_WINDOW_MS)).toBe(90 * 60_000);
     expect(ticketRemainingMs(issued, t0 + 7200_000, CHALLENGE_WINDOW_MS)).toBe(0);
+    expect(ticketRemainingMs(issued, t0 + 10800_000, CHALLENGE_WINDOW_MS)).toBe(0);
     expect(ticketRemainingMs('깨짐', t0, CHALLENGE_WINDOW_MS)).toBe(0);
   });
 });

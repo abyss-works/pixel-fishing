@@ -64,7 +64,7 @@ export function selectBountyPanelData({
     : null;
   const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
     : Math.max(0, Math.ceil(ticketRemainingMs(
-      ticketIssuedAt, nowMs, challengeWindowMs(game),
+      ticketIssuedAt, nowMs, challengeWindowMs(),
     ) / 60_000));
   const relic = artifactOfZone(zone);
 

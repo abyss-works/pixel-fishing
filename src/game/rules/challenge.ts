@@ -4,19 +4,12 @@
 import {
   CHALLENGE_MAX_MISS, CHALLENGE_ROUNDS, CHALLENGE_WINDOW_MS,
 } from './balance.js';
-import { ARTIFACTS } from '../content/artifacts.js';
-import type { GameState } from './logic.js';
 
 /** 조기 성공에 필요한 히트 수 — 10회 중 3실패까지 허용이라 7히트면 끝난다 */
 export const CHALLENGE_NEED_HITS = CHALLENGE_ROUNDS - CHALLENGE_MAX_MISS;
 
-/** 도전권 유효 기간 — 아티팩트 연장 훅 포함 (현재 연장은 없음, 곱 1) */
-export function challengeWindowMs(state: Pick<GameState, 'artifacts'>): number {
-  const owned = new Set(state.artifacts);
-  const mult = ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.challengeWindowMult ?? 1) : m, 1);
-  return CHALLENGE_WINDOW_MS * mult;
-}
+/** 도전권 유효 기간 — 상수 그대로. UI와 서버 만료 판정이 같은 함수를 본다 */
+export const challengeWindowMs = (): number => CHALLENGE_WINDOW_MS;
 
 export interface ChallengeRun {
   hits: number;
