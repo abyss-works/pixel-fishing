@@ -108,7 +108,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('???')).toBeInTheDocument();
-    expect(screen.getByText(/건져 올린 그물은/)).toBeInTheDocument();
+    expect(screen.getByText(/걷어 올린 그물은/)).toBeInTheDocument();
     expect(screen.getByText(/40000G/)).toBeInTheDocument();
   });
 
