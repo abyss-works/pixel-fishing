@@ -8,6 +8,7 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
+import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
@@ -115,6 +116,9 @@ export default function Field({
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
   }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onShop, onWarmup]);
+
+  const fishArtStyle = useFishArtStyle();
+  useEffect(() => { engine.setFishArt(fishArtStyle); }, [engine, fishArtStyle]);
 
   useEffect(() => {
     const onKeyUp = (event: KeyboardEvent) => engine.releaseKey(event.code);

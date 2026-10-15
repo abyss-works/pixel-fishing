@@ -19,8 +19,8 @@ interface SpriteCanvasProps {
   className?: string;
 }
 
-// 격자 스프라이트 캔버스 호스트 — 어종·배 등 모든 격자 스프라이트의 DOM 생명주기를 한 곳에서 맡는다.
-// 어떤 격자·색을 그릴지는 호출자(FishSprite/BoatSprite)가 콘텐츠에서 해석해 넘긴다.
+// 격자 스프라이트 캔버스 호스트 — 배·낚싯대 같은 격자 스프라이트의 DOM 생명주기를 한 곳에서 맡는다.
+// 어떤 격자·색을 그릴지는 호출자가 콘텐츠에서 해석해 넘긴다. 물고기는 그래픽 어댑터를 거치므로 쓰지 않는다.
 // jsdom엔 canvas가 없어 ctx null 가드. 애니메이션은 한 캔버스당 rAF 하나.
 export default function SpriteCanvas({
   sprite, colors, scale, w, h, outline, animate = false, ariaLabel, className,
