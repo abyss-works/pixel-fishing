@@ -42,7 +42,7 @@ export default function ProgressLadder({ steps, visibleRows, className }: {
             className={cx('flex items-center gap-2 px-2 py-1 text-sm',
               s.state === 'current' && 'bg-surface-2',
               (s.state === 'done' || s.state === 'locked') && 'text-text-dim')}>
-          {s.leading && <span className="shrink-0">{s.leading}</span>}
+          {s.leading && <span className="shrink-0 flex items-center">{s.leading}</span>}
           <span className="min-w-0 flex-1 flex flex-col">
             <span className={cx('flex items-center gap-1.5',
               s.state === 'current' && 'text-gold', s.state === 'next' && 'text-accent')}>

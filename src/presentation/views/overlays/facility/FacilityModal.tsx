@@ -28,7 +28,6 @@ import Note from '../../../ui/Note';
 import NumberStepper from '../../../ui/NumberStepper';
 import PixelIcon from '../../../ui/PixelIcon';
 import StatCompare from '../../../ui/StatCompare';
-import Subheading from '../../../ui/Subheading';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
 /** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
@@ -141,10 +140,12 @@ function SellPanel({ game, onSell, onClose, busy }: {
           <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
         )}
         <CostLine have={game.gold} delta={total} />
-        <Button variant="primary" full disabled={total === 0 || busy} onClick={() => onSell(soldUids)}>
+      </>}
+      confirm={
+        <Button variant="primary" disabled={total === 0 || busy} onClick={() => onSell(soldUids)}>
           판매하기 (+{fmtGold(total)})
         </Button>
-      </>}>
+      }>
       {/* ── 어종 목록 — 내부 스크롤. 높이 = min(≈30행, 모달 가용 높이) ──
           개수가 늘어도 확정 영역이 화면 밖으로 밀려나지 않게 목록만 굴린다(v0.6.4).
           840px ≈ 행 30개(28px) — flex(min-h-0)가 먼저 작아지므로 작은 화면에선
@@ -253,8 +254,8 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
 
   return (
     <ModalCard title={`낚싯대 강화 — Lv.${game.rod} → Lv.${game.rod + 1}`} onClose={onClose}
-      footer={
-        <Button variant="primary" full disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
+      confirm={
+        <Button variant="primary" disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
           강화하기 (-{fmtGold(cost)})
         </Button>
       }>
@@ -262,14 +263,13 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
         <ProgressLadder steps={ladder} visibleRows={5} />
         <div className="flex flex-col gap-2">
-          <Subheading className="mb-0">Lv.{game.rod} → Lv.{game.rod + 1}</Subheading>
           <StatCompare rows={[
             { label: '입질 대기', value: c.bite, next: n.bite },
             { label: '바 시간', value: c.sweep, next: n.sweep },
           ]} />
           <Note className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 수역 요구치와 비교해 스탯창에서 본다.</Note>
-          {/* 잔액·불가 사유는 상세 열 맨 아래 — 하단 확정 영역에는 버튼만 둔다 */}
-          <CostLine have={game.gold} delta={-cost} className="border-t border-line pt-2" />
+          {/* 잔액·불가 사유는 상세 열 맨 아래 — 하단 버튼행 바로 위에서 읽힌다 */}
+          <CostLine have={game.gold} delta={-cost} className="border-t border-line pt-2 mt-auto" />
           {!canUpgrade.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[canUpgrade.reason]}</Note>}
         </div>
       </div>
@@ -304,26 +304,34 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   const { next, openedSpot, currentSpeed, currentBagCap, check } = preview;
 
   return (
-    <ModalCard title={`배 구매 — ${next.name} (${next.tier}단계)`} onClose={onClose}
-      footer={
-        <Button variant="primary" full disabled={!check.ok || busy} onClick={onBuy}>
+    <ModalCard title="조선소" onClose={onClose}
+      confirm={
+        <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
           구매하기 (-{fmtGold(next.price)})
         </Button>
       }>
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
         <ProgressLadder steps={ladder} visibleRows={5} />
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 min-h-full">
+          {/* 다음 배 머리 — 제목은 "조선소"로 두고 어떤 배를 사는지는 여기서 말한다 */}
           <div className="flex items-center gap-3">
             <BoatSprite tier={next.tier} preset="row" ariaLabel={next.name} />
-            <Subheading className="mb-0">{next.name} <span className="pf-accent">{next.tier}</span>단계</Subheading>
+            <div className="min-w-0">
+              <div className="text-gold pf-accent text-base truncate">{next.name}</div>
+              <div className="text-xs text-text-dim">
+                <span className="pf-accent">{next.tier}</span>단계
+                {openedSpot && <> · {openedSpot.name} 해금</>}
+                {next.tier === 1 && <> · 대양 진입</>}
+              </div>
+            </div>
           </div>
           <StatCompare rows={[
             { label: '항해 속도', value: currentSpeed ?? '도보', next: fmtNum(next.speed) },
             { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리` },
             { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
           ]} />
-          {/* 잔액·조건·불가 사유는 상세 열 맨 아래 — 하단 확정 영역에는 버튼만 둔다 */}
-          <CostLine have={game.gold} delta={-next.price} className="border-t border-line pt-2"
+          {/* 잔액·조건·불가 사유는 상세 열 맨 아래 — 하단 버튼행 바로 위에서 읽힌다 */}
+          <CostLine have={game.gold} delta={-next.price} className="border-t border-line pt-2 mt-auto"
                     requirement={{ label: '명성', need: next.fameReq, have: game.fame }} />
           {!check.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[check.reason]}</Note>}
         </div>
