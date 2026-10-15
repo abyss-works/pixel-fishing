@@ -76,6 +76,10 @@ export class GameFieldEngine {
   private readonly tracker = new ZoneTracker();
   private readonly keys = new Set<string>();
   private biteStart = 0;
+  /** catch 전이 시각 — 훅 점프 연출의 기준 */
+  private catchStart = 0;
+  /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
+  private discovered: ReadonlySet<string> = new Set();
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
   private lineCutTimer: ReturnType<typeof setTimeout> | null = null;
   private frameId: number | null = null;
@@ -96,6 +100,7 @@ export class GameFieldEngine {
   readonly getSnapshot = (): FieldSnapshot => this.snapshot;
 
   updateContext(game: GameState, night: boolean, callbacks: FieldCallbacks): void {
+    if (game.dex !== this.game.dex || this.discovered.size === 0) this.discovered = new Set(Object.keys(game.dex));
     this.game = game;
     this.night = night;
     this.callbacks = callbacks;
@@ -254,6 +259,11 @@ export class GameFieldEngine {
       zone: zones ? zones.yellow / 100 : 0,
       red: zones ? zones.red / 100 : 0,
       t: now / 1000,
+      discovered: this.discovered,
+      night: this.night,
+      catchT: this.snapshot.phase === 'catch' ? (Date.now() - this.catchStart) / 1000 : null,
+      catchFish: this.snapshot.fishId
+        ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
     });
     return true;
   }
@@ -296,6 +306,7 @@ export class GameFieldEngine {
     fishId: string | null = this.snapshot.fishId,
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
+    if (phase === 'catch') this.catchStart = Date.now();
     this.snapshot = { phase, fishId, catchInfo };
     this.publish();
     this.schedulePhaseTimers();
