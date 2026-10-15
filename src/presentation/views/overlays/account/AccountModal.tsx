@@ -135,7 +135,7 @@ export default function AccountModal({ game, setToast, onAuthChanged, onClose, a
                        onChange={e => setPw(e.target.value)} />
           </div>
 
-            <Button variant="primary" full onClick={proceed} disabled={busy || offline}>이메일로 계속하기</Button>
+            <Button variant="primary" full className="mt-3" onClick={proceed} disabled={busy || offline}>이메일로 계속하기</Button>
           <div className="flex gap-2 mt-2">
             <Button variant="ghost" size="sm" onClick={reset} disabled={busy || offline}>비밀번호를 잊었어요</Button>
           </div>

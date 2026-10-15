@@ -4,7 +4,7 @@ import { BOATS } from '../../../game/content/boats';
 import type { Boat } from '../../../game/content/boats';
 import { SPOTS } from '../../../game/content/spots';
 import type { Spot } from '../../../game/content/spots';
-import { MAX_BOAT, baitCost, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
+import { MAX_BOAT, WALK_BAG_CAP, baitCost, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAIT_BUY_MAX, upgradeCost } from '../../../game/rules/balance';
 
@@ -25,6 +25,8 @@ export type BoatPurchasePreview =
     next: Boat;
     openedSpot: Spot | undefined;
     currentSpeed: number | null;
+    /** 현재 배(맨발이면 도보 상한)와 다음 배의 가방 상한 — 구매 비교 표의 두 번째 축 */
+    currentBagCap: number;
     check: ReturnType<typeof canBuyBoat>;
   };
 
@@ -39,6 +41,7 @@ export function selectBoatPurchasePreview(game: GameState): BoatPurchasePreview 
     next,
     openedSpot: SPOTS.find(spot => spot.boatTier === next.tier),
     currentSpeed: game.boat === 0 ? null : BOATS[game.boat - 1].speed,
+    currentBagCap: game.boat === 0 ? WALK_BAG_CAP : BOATS[game.boat - 1].bagCap,
     check: canBuyBoat(game),
   };
 }

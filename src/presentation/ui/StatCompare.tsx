@@ -3,7 +3,8 @@ import DataTable from './DataTable';
 
 interface Row { label: string; value: ReactNode; next?: ReactNode }
 
-// 강화/구매 확인 패널의 스탯 비교 표 — next가 있으면 현재→변경후 2열, 없으면 단일 값
+// 강화/구매 확인 패널의 스탯 비교 표 — next가 있으면 현재→변경후 3열, 없으면 2열.
+// 값 열은 둘 다 픽셀 액센트(숫자)다 — 한 행 안에서 서체가 바뀌지 않게. 변경 후는 액센트색.
 export default function StatCompare({ rows }: { rows: Row[] }) {
   const hasNext = rows.some(r => r.next !== undefined);
   return (
@@ -13,8 +14,8 @@ export default function StatCompare({ rows }: { rows: Row[] }) {
         {rows.map((r, i) => (
           <tr key={i}>
             <td>{r.label}</td>
-            <td>{r.value}</td>
-            {hasNext && <td className="text-accent pf-accent">{r.next}</td>}
+            <td className="pf-accent">{r.value}</td>
+            {hasNext && <td className="text-accent pf-accent">{r.next ?? '—'}</td>}
           </tr>
         ))}
       </tbody>

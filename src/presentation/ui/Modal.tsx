@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cx } from './cx';
 import { useKeyBlocker } from './hotkeys';
+import PageTitle from './PageTitle';
 
 interface ModalProps {
   /** app = 화면 전체(fixed) 박스형 모달(계정/도감 상세/관리자) ·
@@ -33,7 +34,7 @@ export default function Modal({ layer = 'app', title, wide, xl, onClose, childre
   return (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')} onClick={onClose}>
       <div className={cx(box, className)} onClick={e => e.stopPropagation()}>
-        {title && <h3 className="text-lg text-gold mb-2">{title}</h3>}
+        {title && <PageTitle className="mb-2">{title}</PageTitle>}
         {children}
       </div>
     </div>

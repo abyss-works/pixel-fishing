@@ -206,9 +206,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn:disabled { opacity: 0.4; cursor: default; }
 
-  /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리) */
+  /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리). 위 여백은 호출부 레이아웃(gap)이 정한다 */
   .pf-btn.primary {
-    margin-top: 12px;
     background: var(--c-gold);
     border-color: #c9a227;
     color: #08111f;
