@@ -354,12 +354,63 @@ describe('writes (변경분)', () => {
     const inst = mkInst('x', 'carp');
     const before = seed({ bag: [inst] });
     const after = { ...before, bag: [], exhibit: [inst] };
-    // 전시 액션은 아직 없으므로 diff 자체를 검증한다 — import 액션으로 상태를 갈아끼운다
+    // import로 상태를 통째 갈아끼워도 diff가 이동으로 분류하는지를 본다 (exhibit 액션과 독립)
     const out = applyAction(before, { type: 'import', save: after }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.writes.instancesMoved).toEqual([{ uid: 'x', slot: 0 }]);
     expect(out.writes.instancesAdded).toEqual([]);
     expect(out.writes.instancesRemoved).toEqual([]);
+  });
+});
+
+describe('exhibit — 전시대 진열·회수', () => {
+  const a = mkInst('a', 'carp'), b = mkInst('b', 'carp'), c = mkInst('c', 'carp'), d = mkInst('d', 'carp');
+
+  it('진열 — 가방에서 빠지고 지정 칸에 놓이며 델타는 move 한 건, 이벤트는 없다', () => {
+    const out = applyAction(seed({ bag: [a, b] }), { type: 'exhibit', uid: 'b', slot: 2 }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toEqual([a]);
+    expect(out.state.exhibit[2]).toEqual(b);
+    expect(out.writes.instancesMoved).toEqual([{ uid: 'b', slot: 2 }]);
+    expect(out.writes.instancesAdded).toEqual([]);
+    expect(out.writes.instancesRemoved).toEqual([]);
+    expect(out.events).toEqual([]);
+  });
+
+  it('회수 — 칸이 비고 가방 뒤에 붙으며 델타는 slot null 이동이다', () => {
+    const st = seed({ bag: [a] });
+    st.exhibit[1] = b;
+    const out = applyAction(st, { type: 'exhibit', uid: 'b', slot: null }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toEqual([a, b]);
+    expect(out.state.exhibit[1]).toBeUndefined();
+    expect(out.writes.instancesMoved).toEqual([{ uid: 'b', slot: null }]);
+  });
+
+  it('찬 칸·범위 밖 칸·가방에 없는 개체는 거부한다', () => {
+    const st = seed({ bag: [a] });
+    st.exhibit[0] = b;
+    expect(applyAction(st, { type: 'exhibit', uid: 'a', slot: 0 }, deps()))
+      .toEqual({ ok: false, error: 'slot-taken' });
+    expect(applyAction(st, { type: 'exhibit', uid: 'a', slot: 3 }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(st, { type: 'exhibit', uid: 'a', slot: -1 }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(st, { type: 'exhibit', uid: 'zzz', slot: 1 }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    // 전시 중인 개체를 다른 칸으로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다
+    expect(applyAction(st, { type: 'exhibit', uid: 'b', slot: 1 }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('회수 — 가방이 상한이면 거부하고, 전시 중이 아닌 개체도 거부한다', () => {
+    const full = Array.from({ length: BOATS[0].bagCap }, (_, i) => mkInst(`f${i}`, 'carp'));
+    const st = seed({ boat: 0, bag: full });
+    st.exhibit[0] = c;
+    expect(applyAction(st, { type: 'exhibit', uid: 'c', slot: null }, deps()))
+      .toEqual({ ok: false, error: 'bag-full' });
+    expect(applyAction(seed({ bag: [d] }), { type: 'exhibit', uid: 'd', slot: null }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
   });
 });
 

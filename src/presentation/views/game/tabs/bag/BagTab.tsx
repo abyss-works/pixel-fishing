@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { REJECT_TEXT } from '../../../../../game/rules/logic';
+import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
+import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
 import { selectInventoryItemCount } from '../../../../../features/inventory/model/catalog';
-import type { GameState } from '../../../../../game/rules/logic';
+import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { Bait } from '../../../../../game/content/baits';
 import { when } from '../../../../../shared/lib/when';
@@ -86,6 +87,46 @@ function ItemSection({ game, dispatch, setToast }: {
   );
 }
 
+/** 전시대 선반 — 칸 수는 EXHIBIT_SLOTS, exhibit 인덱스가 칸 번호다. 빈 칸은 자리만 보인다.
+ *  진열 입구는 가방 개체 줄의 별 버튼(InstanceLine.onExhibit) — 여기서는 회수만 한다. */
+function ExhibitShelf({ exhibit, onWithdraw }: {
+  exhibit: readonly FishInstance[];
+  onWithdraw: (inst: FishInstance, name: string) => void;
+}) {
+  const slots = Array.from({ length: EXHIBIT_SLOTS }, (_, i) => exhibit[i]);
+  const shown = slots.filter(Boolean).length;
+  return (
+    <div className="mb-2">
+      <h5 className="text-sm text-text-dim mb-1">
+        전시대 <span className="pf-accent">{shown}/{EXHIBIT_SLOTS}</span>
+      </h5>
+      <div className="pf-frame divide-y divide-line">
+        {slots.map((inst, i) => {
+          if (!inst) return <div key={i} className="px-2 py-1.5 text-xs text-text-dim">빈 칸</div>;
+          const fish = instanceFish(inst);
+          const name = fish ? formName(fish, inst.form) : inst.fishId;
+          return (
+            <div key={inst.uid}
+                 className="grid grid-cols-[30px_1fr_60px_auto] items-center gap-1 px-1 py-1 text-sm">
+              <span>{fish && <FishSprite fish={fish} preset="thumb" form={inst.form} />}</span>
+              <span className="truncate">
+                {fish && <RarityDot rarity={fish.rarity} />}{name}
+              </span>
+              <span className="pf-accent text-text-dim text-right">
+                {inst.size === null ? '미상' : `${inst.size.toFixed(1)}cm`}
+              </span>
+              <PillButton aria-label={`${name} 회수`} title="가방으로 되돌린다"
+                          onClick={() => onWithdraw(inst, name)}>
+                회수
+              </PillButton>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function BagTab({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -105,6 +146,24 @@ export default function BagTab({ game, dispatch, setToast }: {
       setToast(locked
         ? `${label} 잠금 — 판매에서 제외된다.`
         : `${label} 잠금 해제 — 다시 판매 대상이 된다.`);
+    });
+
+  // 전시대 — 칸 선택은 freeExhibitSlot(가장 앞 빈 칸)이 대신한다. 다 찼으면 요청 없이 안내만.
+  const exhibitTo = (inst: FishInstance, name: string) => {
+    const slot = freeExhibitSlot(game.exhibit);
+    if (slot === null) {
+      setToast('전시대가 가득 찼다 — 먼저 회수하자.');
+      return;
+    }
+    when(dispatch({ type: 'exhibit', uid: inst.uid, slot }), r => {
+      if (r.status === 'ok') setToast(`${name} 진열 — 전시 중에는 팔리지 않는다.`);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+    });
+  };
+  const withdraw = (inst: FishInstance, name: string) =>
+    when(dispatch({ type: 'exhibit', uid: inst.uid, slot: null }), r => {
+      if (r.status === 'ok') setToast(`${name} 회수 — 가방으로 돌아왔다.`);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
     });
 
   // 자동 잠금 — 어종·돌연변이별 최대 개체를 한 번에 보호한다 (logic.autoLockUids가 선택,
@@ -154,6 +213,7 @@ export default function BagTab({ game, dispatch, setToast }: {
               </PillButton>
             )}
           </div>
+          <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
@@ -200,6 +260,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                           {sized.map(inst => (
                             <InstanceLine key={inst.uid} inst={inst} fish={fish}
                                           best={inst.size !== null && inst.size === maxByForm[inst.form]}
+                                          onExhibit={() => exhibitTo(inst, name)}
                                           onLock={() => lock([inst.uid], !inst.locked, name)} />
                           ))}
                           {unsized.map(g => {
@@ -220,6 +281,7 @@ export default function BagTab({ game, dispatch, setToast }: {
               <Note>
                 판매 가능 <span className="pf-accent">{total}G</span> · 판매는 집 궤짝/항구 어시장에서.
                 자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.
+                별은 전시대에 올린다 — 전시 중에는 팔리지 않는다.
                 행 소계는 그 종 판매가 합계다 — 정렬은 등급이 높은 순.
               </Note>
             </>

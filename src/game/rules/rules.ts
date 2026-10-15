@@ -16,11 +16,12 @@ import { bountyById, LICENSE_TIER_OF } from '../content/bounties.js';
 import { artifactById } from '../content/artifacts.js';
 import {
   upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MAX_MISS, CHALLENGE_ROUNDS,
+  EXHIBIT_SLOTS,
 } from './balance.js';
 import {
   CHALLENGE_NEED_HITS, challengeWindowMs, ticketRemainingMs,
 } from './challenge.js';
-import { licenseConditions } from './logic.js';
+import { bagCapacity, licenseConditions } from './logic.js';
 import type { GameState } from './logic.js';
 
 /** 규칙이 거부하는 이유 — 인프라 실패(에러 처리의 FailureKind)와 다른 축이다.
@@ -44,6 +45,8 @@ export type RejectReason =
   | 'material-missing' // 유물 교환 재료 미보유 — 네임드 납품으로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
   | 'ticket-expired' // 도전권 기간 만료 — 다시 조우하면 받을 수 있다
+  | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
+  | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -71,8 +74,22 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'material-missing': '교환 재료가 없다 — 네임드 의뢰를 완수하자.',
   'ticket-missing': '도전권이 없다 — 수주 중인 해역에서 낚으면 조우로 받을 수 있다.',
   'ticket-expired': '도전권 기간이 끝났다 — 다시 조우하면 받을 수 있다.',
+  'slot-taken': '그 전시 칸은 이미 차 있다 — 먼저 회수하자.',
+  'bag-full': '가방이 가득 차서 회수할 수 없다 — 팔거나 놓아준 뒤 다시 하자.',
   'bad-request': '처리할 수 없는 요청이다.',
 };
+
+/** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).
+ *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다. */
+export function canExhibit(state: GameState, uid: string, slot: number | null): RuleCheck {
+  if (slot === null) {
+    if (!state.exhibit.some(i => i?.uid === uid)) return no('bad-request');
+    return state.bag.length < bagCapacity(state.boat, state.bag) ? OK : no('bag-full');
+  }
+  if (!Number.isInteger(slot) || slot < 0 || slot >= EXHIBIT_SLOTS) return no('bad-request');
+  if (!state.bag.some(i => i.uid === uid)) return no('bad-request');
+  return state.exhibit[slot] ? no('slot-taken') : OK;
+}
 
 /** 낚싯대 강화 — 골드만 본다 (상한 없음, 무한 골드 싱크) */
 export function canUpgradeRod(state: GameState): RuleCheck {

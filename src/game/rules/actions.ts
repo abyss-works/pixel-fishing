@@ -5,7 +5,7 @@
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
-  overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief,
+  overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, usableBait, MAX_BOAT, nextDexRec, baitCost,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
@@ -18,7 +18,9 @@ import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
-import { canAcceptQuest, canDeliverBounty, canExchangeArtifact, canResolveChallenge } from './rules.js';
+import {
+  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
+} from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
@@ -46,6 +48,7 @@ export type GameAction =
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 상한은 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
+  | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
@@ -56,7 +59,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, adminSet: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
-  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, resolveChallenge: true,
+  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -574,6 +577,21 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } } },
         result: { type: 'none' },
         events: [{ type: 'resolveChallenge', payload }],
+      };
+    }
+    case 'exhibit': {
+      // 전시대 진열·회수 — 개체는 uid를 유지한 채 가방 ↔ 칸을 오간다(델타는 move).
+      // 전시 중인 개체는 가방에 없으므로 판매·자동 방생 후보에서 자연히 빠진다.
+      // 잠금처럼 감사 가치가 없어 이벤트를 남기지 않는다.
+      if (typeof action.uid !== 'string'
+          || !(action.slot === null || typeof action.slot === 'number')) {
+        return { ok: false, error: 'bad-request' };
+      }
+      const check = canExhibit(state, action.uid, action.slot);
+      if (!check.ok) return { ok: false, error: check.reason };
+      return {
+        ok: true, state: moveExhibit(state, action.uid, action.slot),
+        result: { type: 'none' }, events: [],
       };
     }
     case 'exchangeArtifact': {

@@ -6,7 +6,7 @@
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
   MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_RATE,
+  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_RATE, EXHIBIT_SLOTS,
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
@@ -655,25 +655,42 @@ function safeLocation(v: unknown): LocationRef {
 }
 
 // 개체 위생 — uid/fishId/form이 성립하지 않는 항목은 버린다 (손상 세이브·수입 방어)
+function safeInstance(raw: unknown, uid: () => string): FishInstance | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const i = raw as Partial<FishInstance>;
+  if (typeof i.fishId !== 'string') return null;
+  return {
+    uid: typeof i.uid === 'string' && i.uid ? i.uid : uid(),
+    fishId: i.fishId,
+    form: i.form === 'variant' ? 'variant' : 'normal',
+    size: typeof i.size === 'number' ? i.size : null,
+    caughtAt: typeof i.caughtAt === 'string' ? i.caughtAt : null,
+    spot: typeof i.spot === 'string' ? i.spot : null,
+    judgment: i.judgment === 'perfect' || i.judgment === 'good' || i.judgment === 'normal' || i.judgment === 'auto'
+      ? i.judgment : null,
+    locked: i.locked === true,
+  };
+}
+
 function safeInstances(v: unknown, uid: () => string): FishInstance[] {
   if (!Array.isArray(v)) return [];
   const out: FishInstance[] = [];
   for (const raw of v) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const i = raw as Partial<FishInstance>;
-    if (typeof i.fishId !== 'string') continue;
-    out.push({
-      uid: typeof i.uid === 'string' && i.uid ? i.uid : uid(),
-      fishId: i.fishId,
-      form: i.form === 'variant' ? 'variant' : 'normal',
-      size: typeof i.size === 'number' ? i.size : null,
-      caughtAt: typeof i.caughtAt === 'string' ? i.caughtAt : null,
-      spot: typeof i.spot === 'string' ? i.spot : null,
-      judgment: i.judgment === 'perfect' || i.judgment === 'good' || i.judgment === 'normal' || i.judgment === 'auto'
-        ? i.judgment : null,
-      locked: i.locked === true,
-    });
+    const inst = safeInstance(raw, uid);
+    if (inst) out.push(inst);
   }
+  return out;
+}
+
+// 전시대 위생 — 인덱스가 칸 번호라 **자리를 보존**한다. JSON 왕복은 구멍을 null로 쓰므로
+// 무효 항목은 건너뛰되 뒤 항목을 당기지 않는다 (safeInstances처럼 접으면 칸이 밀린다).
+function safeExhibit(v: unknown, uid: () => string): FishInstance[] {
+  if (!Array.isArray(v)) return [];
+  const out: FishInstance[] = [];
+  v.forEach((raw, idx) => {
+    const inst = safeInstance(raw, uid);
+    if (inst) out[idx] = inst;
+  });
   return out;
 }
 
@@ -720,7 +737,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     boat: typeof s.boat === 'number' ? s.boat : 0,
     rod: typeof s.rod === 'number' ? s.rod : 1,
     bag: safeInstances(s.bag, uidGen),
-    exhibit: safeInstances(s.exhibit, uidGen),
+    exhibit: safeExhibit(s.exhibit, uidGen),
     dex: safeDex(s.dex),
     coupons: safeStrings(s.coupons),
     location: safeLocation(s.location),
@@ -924,6 +941,30 @@ export function setLocked(state: GameState, uids: readonly string[], locked: boo
     ...state,
     bag: state.bag.map(i => (want.has(i.uid) && i.locked !== locked ? { ...i, locked } : i)),
   };
+}
+
+// 전시대 이동 — exhibit는 **희소 배열**이고 인덱스가 곧 칸 번호다. 빈 칸은 구멍으로 둔다
+// (접으면 뒤 칸 물고기가 앞으로 밀린다). forEach는 구멍을 건너뛰므로 재조립에 안전하다.
+// 규칙 검증(칸 범위·찬 칸·가방 상한)은 rules.canExhibit — 여기는 상태 전이만 한다.
+export function moveExhibit(state: GameState, uid: string, slot: number | null): GameState {
+  if (slot === null) {
+    const inst = state.exhibit.find(i => i?.uid === uid);
+    if (!inst) return state;
+    const exhibit: FishInstance[] = [];
+    state.exhibit.forEach((i, idx) => { if (i.uid !== uid) exhibit[idx] = i; });
+    return { ...state, bag: [...state.bag, inst], exhibit };
+  }
+  const inst = state.bag.find(i => i.uid === uid);
+  if (!inst) return state;
+  const exhibit = [...state.exhibit];
+  exhibit[slot] = inst;
+  return { ...state, bag: state.bag.filter(i => i.uid !== uid), exhibit };
+}
+
+/** 가장 앞의 빈 전시 칸 — 다 찼으면 null. 진열 버튼이 칸을 고르지 않게 하는 단일 출처 */
+export function freeExhibitSlot(exhibit: readonly FishInstance[]): number | null {
+  for (let i = 0; i < EXHIBIT_SLOTS; i++) if (!exhibit[i]) return i;
+  return null;
 }
 
 /** 자동 잠금 후보 — 어종×폼별 **가장 큰 개체**의 uid (v0.6.4).
