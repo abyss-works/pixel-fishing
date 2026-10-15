@@ -24,6 +24,9 @@ import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagSection, toggleBagRow, useBagView } from './bagView';
 
+/** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다(사용자 결정 2026-10-15). 규칙·액션은 그대로다 */
+export const EXHIBIT_UI_ENABLED = false;
+
 // 가방 탭 — **서브탭 2장: 물고기 / 아이템**(사용자 지시 2026-08-27: 물고기 1,500마리를 아이템과
 // 한 스크롤에서 훑게 하지 않는다). 서브탭 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.
 //
@@ -215,7 +218,7 @@ export default function BagTab({ game, dispatch, setToast }: {
               </PillButton>
             )}
           </div>
-          <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />
+          {EXHIBIT_UI_ENABLED && <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />}
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
@@ -262,7 +265,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                           {sized.map(inst => (
                             <InstanceLine key={inst.uid} inst={inst} fish={fish}
                                           best={inst.size !== null && inst.size === maxByForm[inst.form]}
-                                          onExhibit={() => exhibitTo(inst, name)}
+                                          onExhibit={EXHIBIT_UI_ENABLED ? () => exhibitTo(inst, name) : undefined}
                                           onLock={() => lock([inst.uid], !inst.locked, name)} />
                           ))}
                           {unsized.map(g => {
