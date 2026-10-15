@@ -10,6 +10,10 @@ import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
+import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
+import { markNewsSeen, markPromptsAnswered, resetAnnouncements } from './platform/adapters/announcements';
+import { APP_VERSION } from './version';
+import { PATCH_NOTES } from './game/content/patchnotes';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
@@ -64,6 +68,11 @@ beforeEach(() => {
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
+  // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
+  resetWhatsNewSession();
+  resetAnnouncements();
+  markNewsSeen(APP_VERSION);
+  markPromptsAnswered(['fish-art']);
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
   resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
 });
@@ -1293,5 +1302,75 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+  });
+});
+
+describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설정', () => {
+  const news = PATCH_NOTES.find(n => n.version === APP_VERSION)!;
+  const unseen = () => { localStorage.removeItem('pf-announcements'); resetAnnouncements(); };
+  const stored = () => JSON.parse(localStorage.getItem('pf-announcements') ?? '{}');
+
+  it('기존 플레이어는 소식 → 새 설정 순서로 보고, 고른 그림체가 바로 적용·저장된다', () => {
+    unseen();
+    seed({ fame: 120, dex: { carp: { normal: rec(3) } } });
+    render(<App />);
+    expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
+    expect(screen.getByText(`v${news.version}`)).toBeInTheDocument();
+    expect(screen.getByText(news.notes[0].text)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /다음/ }));
+    expect(screen.getByRole('dialog', { name: '새 설정' })).toBeInTheDocument();
+    const v1 = screen.getByRole('radio', { name: /^v1/ });
+    const v2 = screen.getByRole('radio', { name: /^v2/ });
+    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 v1
+    fireEvent.click(v2);
+    expect(v2).toHaveAttribute('aria-checked', 'true');
+    expect(localStorage.getItem('pf-fish-art')).toBe('v2');
+
+    fireEvent.click(screen.getByRole('button', { name: '완료' }));
+    expect(screen.queryByRole('dialog', { name: '새 설정' })).not.toBeInTheDocument();
+    expect(stored()).toMatchObject({ seenVersion: APP_VERSION, answered: ['fish-art'] });
+  });
+
+  it('창을 닫으면 다시 열리지 않는다 — 다음 접속에도', () => {
+    unseen();
+    seed({ fame: 120 });
+    const { unmount } = render(<App />);
+    fireEvent.click(screen.getByLabelText('닫기'));
+    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+    unmount();
+    resetWhatsNewSession();
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+  });
+
+  it('자동 열기를 끄면 다음 버전부터 소식은 뜨지 않고, 설정 탭에 같은 값이 보인다', () => {
+    unseen();
+    seed({ fame: 120 });
+    render(<App />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /자동으로 열지 않기/ }));
+    fireEvent.click(screen.getByRole('button', { name: /다음/ }));
+    fireEvent.click(screen.getByRole('button', { name: '완료' }));
+    expect(stored()).toMatchObject({ autoOpen: false });
+    clickTab('설정');
+    expect(screen.getByRole('checkbox', { name: /자동으로 열기/ })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('처음 시작한 플레이어에게는 열지 않고 본 것으로 남긴다', () => {
+    unseen();
+    seed({});
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+    expect(stored()).toMatchObject({ seenVersion: APP_VERSION, answered: ['fish-art'] });
+  });
+
+  it('설정 탭에서 이번 소식을 다시 볼 수 있다', () => {
+    seed({ fame: 120 });
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(screen.getByRole('button', { name: '이번 소식 다시 보기' }));
+    expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
   });
 });

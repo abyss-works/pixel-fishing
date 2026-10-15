@@ -19,6 +19,7 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
+import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 
 interface GameViewProps {
@@ -117,6 +118,8 @@ export default function GameView(props: GameViewProps) {
         nickname={props.nickname} onRename={props.onRename}
       />
 
+      {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
+      <WhatsNewModal game={game} ready={props.syncState === 'on' || props.syncState === 'off'} />
       {props.outdated && <UpdateModal />}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>

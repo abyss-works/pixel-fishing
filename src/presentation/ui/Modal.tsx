@@ -37,7 +37,8 @@ export default function Modal({ layer = 'app', title, wide, xl, onClose, closabl
   return (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
          onClick={closable ? onClose : undefined}>
-      <div className={cx(box, className)} onClick={e => e.stopPropagation()}>
+      <div className={cx(box, className)} onClick={e => e.stopPropagation()}
+           role="dialog" aria-modal="true" aria-label={title}>
         {/* 앱 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
         {layer === 'app' && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
         {title && <PageTitle className={cx('mb-2', layer === 'app' && 'pr-6')}>{title}</PageTitle>}

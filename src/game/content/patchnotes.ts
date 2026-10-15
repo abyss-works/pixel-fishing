@@ -5,7 +5,7 @@
 // ⚠️ **릴리즈(main 머지) 시에만 쓴다** — 출시 계획 0.0절. dev 개발 중에는 손대지 않는다.
 // version 필드는 버전 부여 행위라 사용자가 정한 값만 들어간다. 릴리즈 때 사용자가 요청하면
 // CHANGELOG 미출시 구역을 유저 언어로 옮겨 여기 항목 하나를 추가한다.
-export type NoteTag = 'UI' | '기능' | '기타';
+export type NoteTag = '기능' | 'UI' | '밸런스' | '기타';
 
 export interface PatchNote {
   version: string;
