@@ -253,13 +253,11 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
 
   return (
     <ModalCard title={`낚싯대 강화 — Lv.${game.rod} → Lv.${game.rod + 1}`} onClose={onClose}
-      footer={<>
-        <CostLine have={game.gold} delta={-cost} />
-        {!canUpgrade.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[canUpgrade.reason]}</Note>}
+      footer={
         <Button variant="primary" full disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
           강화하기 (-{fmtGold(cost)})
         </Button>
-      </>}>
+      }>
       {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세. 넓은 모달(xl)이라 두 열이 선다 */}
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
         <ProgressLadder steps={ladder} visibleRows={5} />
@@ -270,6 +268,9 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
             { label: '바 시간', value: c.sweep, next: n.sweep },
           ]} />
           <Note className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 수역 요구치와 비교해 스탯창에서 본다.</Note>
+          {/* 잔액·불가 사유는 상세 열 맨 아래 — 하단 확정 영역에는 버튼만 둔다 */}
+          <CostLine have={game.gold} delta={-cost} className="border-t border-line pt-2" />
+          {!canUpgrade.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[canUpgrade.reason]}</Note>}
         </div>
       </div>
     </ModalCard>
@@ -304,14 +305,11 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
 
   return (
     <ModalCard title={`배 구매 — ${next.name} (${next.tier}단계)`} onClose={onClose}
-      footer={<>
-        <CostLine have={game.gold} delta={-next.price}
-                  requirement={{ label: '명성', need: next.fameReq, have: game.fame }} />
-        {!check.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[check.reason]}</Note>}
+      footer={
         <Button variant="primary" full disabled={!check.ok || busy} onClick={onBuy}>
           구매하기 (-{fmtGold(next.price)})
         </Button>
-      </>}>
+      }>
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 items-start">
         <ProgressLadder steps={ladder} visibleRows={5} />
         <div className="flex flex-col gap-2">
@@ -324,6 +322,10 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
             { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리` },
             { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
           ]} />
+          {/* 잔액·조건·불가 사유는 상세 열 맨 아래 — 하단 확정 영역에는 버튼만 둔다 */}
+          <CostLine have={game.gold} delta={-next.price} className="border-t border-line pt-2"
+                    requirement={{ label: '명성', need: next.fameReq, have: game.fame }} />
+          {!check.ok && <Note tone="warn" className="my-0">{REJECT_TEXT[check.reason]}</Note>}
         </div>
       </div>
     </ModalCard>
