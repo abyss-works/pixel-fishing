@@ -5,12 +5,12 @@ import type { Fish, FormId } from '../../../game/content/fish';
 import { cx } from '../cx';
 
 // 용도별 캔버스 크기·배율 프리셋 — 가방 썸네일/도감 카드/도감 상세 초상화/획득 카드.
-// 원화 격자는 64×32이고 배율은 정수만(픽셀아트). 격자가 캔버스보다 크면 투명 여백만 잘린다.
+// 원화 격자는 32×16이고 배율은 정수만(픽셀아트). 격자가 캔버스보다 크면 투명 여백만 잘린다.
 const PRESETS = {
-  thumb:    { w: 64,  h: 32,  scale: 1 },
-  icon:     { w: 84,  h: 44,  scale: 1 },
-  portrait: { w: 240, h: 140, scale: 3 },
-  card:     { w: 160, h: 90,  scale: 2 },
+  thumb:    { w: 30,  h: 16,  scale: 1 },
+  icon:     { w: 84,  h: 44,  scale: 3 },
+  portrait: { w: 240, h: 140, scale: 6 },
+  card:     { w: 160, h: 90,  scale: 4 },
 } as const;
 
 interface FishSpriteProps {
