@@ -6,6 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
+import TextArea from '../../../ui/TextArea';
 
 // 개발자에게 보내는 편지 — 건의·신고·잡담을 **하나로 뭉뚱그린** 창구.
 // 종류를 나누지 않은 이유: 친구 규모에서 분류는 보내는 쪽에 부담만 주고, 읽는 쪽은 어차피
@@ -37,9 +38,8 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
   return (
     <Modal title="개발자에게 편지" onClose={onClose}>
       <Note>건의·버그 제보·하고 싶은 말 아무거나 좋아요. 답장은 계정 이메일로 드려요.</Note>
-      <textarea
-        className="w-full h-40 resize-none my-2 bg-bg border border-line rounded-sm
-                   text-text text-sm px-3 py-2 outline-none focus:border-accent"
+      <TextArea
+        className="h-40 my-2"
         placeholder="예) 가방이 금방 차요. 조금만 늘려주세요!"
         value={text}
         maxLength={LETTER_MAX + 1} // +1이라 상한을 넘겨 봐야 경고를 볼 수 있다
@@ -51,7 +51,6 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
           {body.length} / {LETTER_MAX}
         </span>
         <span className="ml-auto flex gap-2">
-          <Button size="sm" onClick={onClose}>닫기</Button>
           <Button size="sm" disabled={!body || over || busy} onClick={send}>
             보내기
           </Button>

@@ -37,15 +37,15 @@ export default function OpsTab() {
         <Note tone="warn">이 세션은 admins에 등록되지 않았다. uid INSERT는 SQL Editor에서 한다.</Note>}
       {access === 'granted' &&
         <p className="text-xs text-gold pf-accent">관리자 세션 — 전 뷰 접근 가능.</p>}
-      {access === 'checking' && <p className="text-2xs text-text-dim">확인 중…</p>}
+      {access === 'checking' && <Note size="2xs" className="my-0">확인 중…</Note>}
 
       <SectionTitle>데이터 계약</SectionTitle>
-      <p className="text-xs text-text-dim leading-relaxed">
+      <Note size="xs" className="my-0 leading-relaxed">
         읽기 전용이다 — 쓰기 액션(지급·제재·이사코드 수입)은 이 화면에 존재하지 않는다.
         권한 방어선은 DB(<code className="pf-accent">admins</code> + is_admin() 뷰 게이트)다.
         데이터 접근은 features/admin/service가 유일한 경로다 — 전송 상세(뷰 이름·RPC 파라미터)는
         그 안에 갇혀 있다.
-      </p>
+      </Note>
 
       <EventCatalog />
     </div>
@@ -70,9 +70,9 @@ function EventCatalog() {
   return (
     <>
       <SectionTitle>events 스트림 카탈로그</SectionTitle>
-      <p className="text-2xs text-text-dim mb-1">
+      <Note size="2xs" className="my-1">
         이벤트 식별자는 게임 동작 기록을 따르며, 화면명은 이벤트 설명 카탈로그를 표시한다.
-      </p>
+      </Note>
       <DataTable>
         <thead>
           <tr><th className="text-left">type</th><th className="text-left">화면명</th></tr>
@@ -80,7 +80,7 @@ function EventCatalog() {
         <tbody>
           {Object.entries(EVENT_LABELS).map(([type, label]) => (
             <tr key={type}>
-              <td className="font-mono text-2xs select-text">{type}</td>
+              <td className="pf-accent text-2xs select-text">{type}</td>
               <td className="text-xs">{label}</td>
             </tr>
           ))}

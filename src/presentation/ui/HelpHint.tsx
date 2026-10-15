@@ -33,8 +33,8 @@ export default function HelpHint({ text }: Props) {
             onFocus={show} onBlur={hide}
             onClick={() => (pos ? hide() : show())}
             className="inline-flex items-center justify-center w-[15px] h-[15px] ml-1 align-middle
-                       rounded-full border border-line bg-[color:var(--c-surface-2)]
-                       text-text-dim text-[10px] leading-none cursor-help select-none">
+                       rounded-full border border-line bg-surface-2
+                       text-text-dim text-2xs leading-none cursor-help select-none">
         ?
       </span>
       {pos && createPortal(

@@ -31,6 +31,7 @@
   --color-text: var(--c-text);
   --color-text-dim: var(--c-text-dim);
   --color-gold: var(--c-gold);
+  --color-gold-dark: var(--c-gold-dark);
   --color-orange: var(--c-orange);
   --color-accent: var(--c-accent);
   --color-danger: var(--c-danger);
@@ -106,6 +107,7 @@
   --c-text: #f2f7fb;
   --c-text-dim: #93a8c4;
   --c-gold: #ffd54f;
+  --c-gold-dark: #c9a227; /* 골드의 테두리·침전색 — 확정 버튼 테두리, 패치노트 기능 칩 */
   --c-accent: #4fc3f7;
   --c-danger: #ff8a80;
   --c-orange: #fb923c; /* 어려움 머리색 — 보상 골드와 겹치지 않게 주황 계열로 분리 */
@@ -210,7 +212,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리). 위 여백은 호출부 레이아웃(gap)이 정한다 */
   .pf-btn.primary {
     background: var(--c-gold);
-    border-color: #c9a227;
+    border-color: var(--c-gold-dark);
     color: #08111f;
     font-weight: bold;
     box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 0 rgba(0, 0, 0, 0.25);

@@ -3,6 +3,7 @@
 // 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, 액션 리듀서 머리 주석과 같은 판단).
 import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
+import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import { fmtNum } from '../../../../features/admin/model/metrics';
 import { adminNumber, selectProgressionDashboard } from '../../../../features/admin/model/adminViews';
@@ -39,12 +40,12 @@ export default function ProgressionTab() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
         <Frame title="배 단계">
           <BarsChart values={boatHist.values} labels={boatHist.labels} height={72} />
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             {granted
               ? (boatHist.legend.filter(l => l.count > 0)
                   .map(l => `${l.name} ${l.count}`).join(' · ') || '데이터 없음')
               : '운영 DB 연결 후 채워진다.'}
-          </p>
+          </Note>
         </Frame>
 
         <Frame title="낚싯대 레벨">
@@ -54,14 +55,14 @@ export default function ProgressionTab() {
                          labels={rodHist.labels.map((l, i) =>
                            i % Math.ceil(rodHist.labels.length / 8) === 0 ? l : null)}
                          height={72} />
-              <p className="text-2xs text-text-dim">
+              <Note size="2xs" className="my-0">
                 Lv{rodHist.min} ~ Lv{rodHist.min + rodHist.values.length - 1}
-              </p>
+              </Note>
             </>
           ) : (
-            <p className="text-2xs text-text-dim">
+            <Note size="2xs" className="my-0">
               {granted ? '데이터 없음' : '운영 DB 연결 후 채워진다.'}
-            </p>
+            </Note>
           )}
         </Frame>
       </div>
@@ -79,18 +80,18 @@ export default function ProgressionTab() {
             </div>
           ))}
         </div>
-        <p className="text-2xs text-text-dim">
+        <Note size="2xs" className="my-0">
           "가본 적 있는 지역" 집계다 — 현재 위치가 아니라 state.visited 기반.
           {' '}{!granted && '운영 DB 연결 후 채워진다.'}
-        </p>
+        </Note>
       </Frame>
 
       <section>
         <SectionTitle>배 명성 게이트 — 막힌 유저</SectionTitle>
         {!granted ? (
-          <p className="text-2xs text-text-dim my-1">운영 DB 연결 후 채워진다.</p>
+          <Note size="2xs" className="my-1">운영 DB 연결 후 채워진다.</Note>
         ) : stalled.length === 0 ? (
-          <p className="text-2xs text-text-dim my-1">모두 다음 배 하한을 통과 중이다.</p>
+          <Note size="2xs" className="my-1">모두 다음 배 하한을 통과 중이다.</Note>
         ) : (
           <DataTable>
             <thead>
@@ -101,7 +102,7 @@ export default function ProgressionTab() {
             <tbody>
               {stalled.map(({ user, next, deficit }) => (
                 <tr key={user.user_id}>
-                  <td>{user.email ?? <span className="font-mono text-2xs text-text-dim">{user.user_id.slice(0, 8)}…</span>}</td>
+                  <td>{user.email ?? <span className="pf-accent text-2xs text-text-dim">{user.user_id.slice(0, 8)}…</span>}</td>
                   <td className="text-xs">{next.name}(T{next.tier})</td>
                   <td className="text-right">{fmtNum(adminNumber(user.fame))}</td>
                   <td className="text-right text-text-dim">{fmtNum(next.fameReq)}</td>

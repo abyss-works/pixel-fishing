@@ -2,6 +2,7 @@
 // 따라서 그 이전 기간의 수치는 '행동한 유저' 수다.
 import { useState } from 'react';
 import DataTable from '../../../ui/DataTable';
+import Note from '../../../ui/Note';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
 import { readAdminMetrics } from '../../../../features/admin/service/queries';
@@ -58,15 +59,15 @@ export default function MetricsTab() {
         {daily.length > 0 ? (
           <>
             <StackedBarsPair a={dau} b={wau} labels={labels} />
-            <p className="text-2xs text-text-dim">
+            <Note size="2xs" className="my-0">
               접속(boot) 도입 전 구간은 액션이 있어야 DAU로 섞인다 — 낮게 읽히는 쪽이 맞다.
               WAU는 직전 7일 합산 고유 유저.
-            </p>
+            </Note>
           </>
         ) : (
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             {granted ? '아직 활성 데이터가 없다.' : '운영 DB 연결 후 채워진다.'}
-          </p>
+          </Note>
         )}
       </Frame>
 
@@ -93,9 +94,9 @@ export default function MetricsTab() {
             </tbody>
           </DataTable>
         ) : (
-          <p className="text-2xs text-text-dim my-1">
+          <Note size="2xs" className="my-1">
             {granted ? '아직 코호트가 없다.' : '운영 DB 연결 후 채워진다.'}
-          </p>
+          </Note>
         )}
       </Frame>
     </div>

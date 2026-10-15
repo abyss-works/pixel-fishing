@@ -3,6 +3,8 @@
 // 데이터 해석은 탭의 몫 — 여기선 값 배열을 그릴 뿐 도메인을 모른다.
 import type { ReactNode } from 'react';
 import { cx } from '../../ui/cx';
+import Note from '../../ui/Note';
+import Panel from '../../ui/Panel';
 import PillButton from '../../ui/PillButton';
 import { fmtNum } from '../../../features/admin/model/metrics';
 
@@ -11,7 +13,8 @@ import { fmtNum } from '../../../features/admin/model/metrics';
 // 따로 조립하던 것(초기 구현)을 한 곳으로 — "적당한 레이아웃"의 단일 근원.
 
 /**
- * Frame — 섹션 하나 = 테두리 패널 + 헤더 행(제목 좌 / 컨트롤 우).
+ * Frame — 섹션 하나 = 공용 Panel(제목은 Panel의 title). aside가 있을 때만 제목과
+ * 컨트롤을 한 행에 놓는 헤더를 직접 그린다(Panel 제목과 같은 스타일).
  * Overview·지표·경제·진행·이상탐지가 전부 이 껍데기를 공유한다.
  */
 export function Frame({ title, aside, children, className }: {
@@ -22,13 +25,15 @@ export function Frame({ title, aside, children, className }: {
   className?: string;
 }) {
   return (
-    <section className={cx('pf-frame p-3 flex flex-col gap-2 min-w-0', className)}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h4 className="text-sm text-accent pf-accent whitespace-nowrap">{title}</h4>
-        {aside}
-      </div>
+    <Panel title={aside ? undefined : title} className={cx('min-w-0', className)}>
+      {aside && (
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="pf-accent text-base text-gold whitespace-nowrap">{title}</h3>
+          {aside}
+        </div>
+      )}
       {children}
-    </section>
+    </Panel>
   );
 }
 
@@ -44,7 +49,7 @@ export function KpiCard({ label, value, hint }: {
   return (
     <div className="pf-frame px-3 py-2 flex flex-col gap-0.5 min-w-0">
       <span className="text-2xs text-text-dim">{label}</span>
-      <span className="text-xl text-gold pf-accent truncate" title={value}>{value}</span>
+      <span className="text-lg text-gold pf-accent truncate" title={value}>{value}</span>
       {hint && <span className="text-2xs text-text-dim truncate">{hint}</span>}
     </div>
   );
@@ -104,7 +109,7 @@ export function RetentionCell({ pct, hint }: { pct: number | null; hint: string 
   const alpha = pct === null ? 0 : Math.min(0.85, pct / 100 + 0.08);
   return (
     <td className="px-1 py-0.5 text-center text-2xs"
-        style={{ background: `rgba(212,170,66,${alpha.toFixed(2)})` }}
+        style={{ background: `rgba(255,213,79,${alpha.toFixed(2)})` }}
         title={`${hint}: ${pct === null ? '—' : `${pct}%`}`}>
       <span className={pct !== null && alpha > 0.5 ? 'text-bg' : 'text-text'}>{pct === null ? '' : pct}</span>
     </td>
@@ -116,20 +121,16 @@ export function TabState({ loading, error, empty, emptyText, onRetry }: {
   loading?: boolean; error?: string | null; empty?: boolean; emptyText?: string;
   onRetry?: () => void;
 }) {
-  if (loading) return <NoteBox>불러오는 중…</NoteBox>;
+  if (loading) return <Note size="xs">불러오는 중…</Note>;
   if (error) {
     return (
-      <div className="border border-danger/40 bg-surface rounded-sm p-3 my-2">
-        <p className="text-sm text-danger">{error}</p>
+      <div className="pf-frame p-3 my-2">
+        <Note tone="warn" className="my-0">{error}</Note>
         {onRetry &&
           <PillButton type="button" onClick={onRetry} className="mt-2">다시 시도</PillButton>}
       </div>
     );
   }
-  if (empty) return <NoteBox>{emptyText ?? '데이터가 아직 없다.'}</NoteBox>;
+  if (empty) return <Note size="xs">{emptyText ?? '데이터가 아직 없다.'}</Note>;
   return null;
-}
-
-function NoteBox({ children }: { children: ReactNode }) {
-  return <p className="text-xs text-text-dim my-3">{children}</p>;
 }

@@ -17,25 +17,34 @@ export interface LadderStep {
 
 // 진행 사다리 — 단계 목록에서 지나온 것·현재·다음·잠긴 것을 한 줄씩 보여준다.
 // 현재는 골드, 다음은 액센트(확정 대상), 지나온 것과 잠긴 것은 보조색. pf-frame 목록 규약 그대로.
-// visibleRows를 주면 그만큼만 보이고 안에서 굴린다 — 처음엔 현재 행이 가운데 오도록 맞춘다.
+// visibleRows를 주면 그만큼만 보이고 안에서 굴린다. 처음에는 현재 행이 가운데 오도록 스크롤을 맞추되
+// 목록 끝을 넘기는 여백은 두지 않는다 — 첫·끝 행이 현재면 그 끝에 붙는다.
 export default function ProgressLadder({ steps, visibleRows, className }: {
   steps: LadderStep[]; visibleRows?: number; className?: string;
 }) {
   const ref = useRef<HTMLOListElement>(null);
-  const [maxH, setMaxH] = useState<number | undefined>(undefined);
+  const [maxH, setMaxH] = useState<number | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !visibleRows) return;
     const current = el.querySelector<HTMLElement>('[aria-current="step"]') ?? el.firstElementChild as HTMLElement | null;
     const rowH = current?.offsetHeight ?? 0;
     if (rowH === 0) return; // jsdom — 측정 불가면 전부 보인다
-    const h = rowH * visibleRows;
-    setMaxH(h);
-    if (current) el.scrollTop = Math.max(0, current.offsetTop - (h - rowH) / 2);
+    setMaxH(rowH * visibleRows);
   }, [steps, visibleRows]);
+  // 높이가 적용된 뒤에 스크롤 — 같은 효과 안에서 하면 overflow가 아직 없어 scrollTop이 0에 머문다.
+  // offsetTop은 목록(relative) 기준이라 바깥 패널의 위치가 섞이지 않는다.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || maxH === null) return;
+    const current = el.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!current) return;
+    const want = current.offsetTop - (el.clientHeight - current.offsetHeight) / 2;
+    el.scrollTop = Math.max(0, Math.min(want, el.scrollHeight - el.clientHeight));
+  }, [maxH]);
   return (
-    <ol ref={ref} style={maxH ? { maxHeight: maxH } : undefined}
-        className={cx('pf-frame divide-y divide-line list-none m-0 p-0',
+    <ol ref={ref} style={maxH !== null ? { maxHeight: maxH } : undefined}
+        className={cx('pf-frame divide-y divide-line list-none m-0 p-0 relative',
           !!visibleRows && 'pf-scroll overflow-y-auto', className)}>
       {steps.map(s => (
         <li key={s.key} aria-current={s.state === 'current' ? 'step' : undefined}

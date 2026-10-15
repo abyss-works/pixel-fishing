@@ -6,7 +6,7 @@ import SectionTitle from '../../../../ui/SectionTitle';
 // 노트 범주 뱃지 색 — UI=하늘, 기능=골드, 그 외=낮은 톤
 const TAG_CLS: Record<string, string> = {
   UI: 'text-accent border-accent',
-  기능: 'text-gold border-[#c9a227]',
+  기능: 'text-gold border-gold-dark',
 };
 
 // 패치노트 콘텐츠 — GameTabs의 '설정' 탭에서 렌더한다.

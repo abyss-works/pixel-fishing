@@ -21,7 +21,7 @@ import type { GlyphId } from '../../../../ui/PixelIcon';
 // 설정 탭 버튼은 전부 **아이콘 + 가운데 정렬**이다. 목록형이라 왼쪽 정렬이었는데, 글자 길이가
 // 제각각(3~9자)이라 줄마다 시작점은 같고 끝점이 달라 들쭉날쭉했다. 아이콘이 붙으면서
 // 가운데로 모으는 편이 덩어리로 읽힌다.
-function IconButton({ glyph, label, ...rest }: {
+function LabeledButton({ glyph, label, ...rest }: {
   glyph: GlyphId; label: string;
 } & React.ComponentProps<typeof Button>) {
   return (
@@ -114,21 +114,21 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         </div>
       </div>
       <div className="flex flex-col gap-2 mb-2">
-        <IconButton glyph="key" label="계정 관리" variant="primary" full
+        <LabeledButton glyph="key" label="계정 관리" variant="primary" full
                     onClick={() => setAccountOpen(true)} />
       </div>
 
       <SectionTitle>데이터</SectionTitle>
       <div className="flex flex-col gap-2 mb-2">
-        <IconButton glyph="ticket" label="쿠폰 입력" onClick={enterCoupon} />
-        <IconButton glyph="star" label="지원 코드 입력" onClick={enterRelief} />
+        <LabeledButton glyph="ticket" label="쿠폰 입력" onClick={enterCoupon} />
+        <LabeledButton glyph="star" label="지원 코드 입력" onClick={enterRelief} />
         {/* 이사 코드 — 더 이상 지원하지 않는다. 무검증 import가 변조 반입 통로로 실제
             악용됐다. 임시방편으로 ?admin에서만 노출하고, 서버도 소유자 계정/로컬만 받는다
             (서버의 importOwnerEmail). 기기 이동은 계정 연동으로 처리한다. */}
         {isAdminUrl() && (
           <>
-            <IconButton glyph="download" label="이사 코드 내보내기" onClick={exportSave} />
-            <IconButton glyph="upload" label="이사 코드 불러오기" onClick={importSave} />
+            <LabeledButton glyph="download" label="이사 코드 내보내기" onClick={exportSave} />
+            <LabeledButton glyph="upload" label="이사 코드 불러오기" onClick={importSave} />
           </>
         )}
       </div>
@@ -138,7 +138,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         <>
           <SectionTitle>개발자에게</SectionTitle>
           <div className="flex flex-col gap-2 mb-2">
-            <IconButton glyph="letter" label="편지 쓰기" onClick={() => setLetter(true)} />
+            <LabeledButton glyph="letter" label="편지 쓰기" onClick={() => setLetter(true)} />
           </div>
         </>
       )}

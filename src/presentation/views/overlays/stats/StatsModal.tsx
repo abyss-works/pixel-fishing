@@ -6,7 +6,6 @@ import { SPOTS } from '../../../../game/content/spots';
 import { autoPenaltyHelpText, powerHelpText } from '../../../../game/rules/stats';
 import { selectInitialStatsSpotIndex, selectStatsModalData } from '../../../../features/gameplay/model/stats';
 import ArrowButton from '../../../ui/ArrowButton';
-import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import HelpHint from '../../../ui/HelpHint';
 import Modal from '../../../ui/Modal';
@@ -60,7 +59,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
 
   return (
     <Modal layer="stage" onClose={onClose}>
-      <Panel title="스탯">
+      <Panel title="스탯" onClose={onClose}>
         {/* table-fixed — 값 폭('요구 미달'↔'45%' 등)에 따라 열이 흔들리는 것을 막는다.
             충족/미달 경계에서 레이아웃이 점프하지 않게 열비를 고정한다(v0.6.4). */}
         <DataTable className="table-fixed w-full">
@@ -140,8 +139,6 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             ? '더 좋은 낚싯대가 필요해보인다. 물고기가 미끼만 훔쳐먹고 간다.'
             : '낚싯대가 좋은만큼 물고기를 낚기 쉬워졌다.'}
         </Note>
-
-        <Button onClick={onClose}>닫기</Button>
       </Panel>
     </Modal>
   );

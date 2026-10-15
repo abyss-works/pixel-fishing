@@ -69,7 +69,7 @@ export default function UsersTab() {
                 <td>
                   {u.email
                     ? <span className="text-xs">{u.email}</span>
-                    : <span className="font-mono text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}
+                    : <span className="pf-accent text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}
                   {u.is_anonymous === false && <span className="ml-1 text-2xs text-gold pf-accent">가입</span>}
                 </td>
                 <td>{u.restricted === true
@@ -144,7 +144,7 @@ function UserDetail({ user, onClose }: {
       )}
 
       <SectionTitle>액션 유형 요약</SectionTitle>
-      <p className="text-2xs text-text-dim mb-1">최근 {EVENT_WINDOW}건(window) 기준 집계</p>
+      <Note size="2xs" className="my-1">최근 {EVENT_WINDOW}건(window) 기준 집계</Note>
       <div className="flex flex-wrap gap-1">
         {byType.map(([type, count]) => (
           <span key={type}
@@ -159,7 +159,7 @@ function UserDetail({ user, onClose }: {
 
       <SectionTitle>도감 ↔ 이벤트 대조 (감사 ④)</SectionTitle>
       {userMismatch.length === 0
-        ? <p className="text-2xs text-text-dim my-1">차액 없음 — 도감 카운트가 catch 이벤트와 정합한다.</p>
+        ? <Note size="2xs" className="my-1">차액 없음 — 도감 카운트가 catch 이벤트와 정합한다.</Note>
         : (
           <DataTable>
             <thead>
@@ -170,7 +170,7 @@ function UserDetail({ user, onClose }: {
             <tbody>
                 {userMismatch.map(m => (
                 <tr key={`${m.fish_id}/${m.form}`}>
-                  <td className="font-mono text-2xs">{m.fish_id}</td>
+                  <td className="pf-accent text-2xs">{m.fish_id}</td>
                   <td className="text-xs">{m.form}</td>
                   <td className="text-right">{m.dex_count}</td>
                   <td className="text-right">{m.event_count}</td>
@@ -189,8 +189,7 @@ function UserDetail({ user, onClose }: {
       <TabState loading={loading} error={error} empty={events.length === 0}
                 emptyText="이벤트가 없다." />
       {!loading && !error && (
-        <ul className="flex flex-col divide-y divide-line border border-line rounded-sm max-h-[260px]
-                       overflow-y-auto select-text">
+        <ul className="pf-frame flex flex-col divide-y divide-line max-h-[260px] overflow-y-auto select-text">
           {events.map((e, i) => (
             <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
                                          fastGaps.has(i) && 'bg-danger/10')}>
@@ -209,7 +208,7 @@ function UserDetail({ user, onClose }: {
           ))}
         </ul>
       )}
-      {loading && <p className="text-2xs text-text-dim mt-1">타임라인 불러오는 중…</p>}
+      {loading && <Note size="2xs" className="my-1">타임라인 불러오는 중…</Note>}
     </Modal>
   );
 }

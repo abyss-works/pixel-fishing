@@ -13,6 +13,7 @@ import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import IconButton from '../../../ui/IconButton';
 import PillButton from '../../../ui/PillButton';
+import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
@@ -88,7 +89,7 @@ export default function FishTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-base text-gold">어종 · 수역 ({FISH.length}종 / {SPOTS.length}수역)</h2>
+        <SectionTitle className="flex-1">어종 · 수역 ({FISH.length}종 / {SPOTS.length}수역)</SectionTitle>
         <div className="flex items-center gap-2">
           <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
@@ -199,7 +200,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
               폭 하나 — 마지막 방치 행(×10)에 한 번만 표기하고 ×4에는 붙이지 않는다. */}
           <div className="overflow-x-auto mb-3">
-            <table className="pf-table">
+            <DataTable>
               <thead>
                 <tr>
                   <th scope="col" className="whitespace-nowrap">기대값 (골드)</th>
@@ -248,7 +249,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                   );
                 })}
               </tbody>
-            </table>
+            </DataTable>
           </div>
 
           {/* ── 어종 행 — 편집 + 실시간 확률 ── */}

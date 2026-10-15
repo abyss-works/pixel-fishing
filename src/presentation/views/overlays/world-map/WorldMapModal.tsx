@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../../../ui/Modal';
-import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
 import PageTitle from '../../../ui/PageTitle';
 import { WORLD_MAP } from '../../../../game/world';
@@ -74,10 +73,7 @@ export default function WorldMapModal({ world, onClose }: {
 
   return (
     <Modal layer="app" onClose={onClose} className="pf-modal-worldmap">
-      <div className="flex items-center justify-between mb-2">
-        <PageTitle>세계지도</PageTitle>
-        <Button onClick={onClose}>닫기</Button>
-      </div>
+      <PageTitle className="mb-2 pr-6">세계지도</PageTitle>
       <canvas ref={canvasRef} width={atlas?.ATLAS_W ?? 1280} height={atlas?.ATLAS_H ?? 604}
               className="block w-full h-auto border border-line rounded-sm bg-bg
                          [image-rendering:pixelated]"
