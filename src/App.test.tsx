@@ -447,6 +447,29 @@ describe('서버 응답 지연 내성 (catch 홀드)', () => {
   });
 });
 
+describe('Esc — X가 있는 창을 닫는다', () => {
+  it('앱 모달(계정 관리)은 Esc로 닫힌다', () => {
+    seed({});
+    render(<App />);
+    clickTab('설정');
+    clickTab(/계정 관리/);
+    expect(screen.getByRole('dialog', { name: '계정 관리' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '계정 관리' })).not.toBeInTheDocument();
+  });
+
+  it('스테이지 모달(정비 패널)도 Esc로 닫히고, 닫힌 뒤에는 아래 레이어가 다시 키를 받는다', () => {
+    seed({});
+    render(<App />);
+    clickFurniture('sell');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: '3' });
+    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('도감');
+  });
+});
+
 describe('폼 타이핑 보호 (전역 키 리스너)', () => {
   it('입력 요소에 포커스가 있으면 게임 키를 가로채지 않는다 — 계정 모달 타이핑', () => {
     renderField('village', POND_SHORE);

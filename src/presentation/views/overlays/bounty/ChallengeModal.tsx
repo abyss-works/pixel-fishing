@@ -55,6 +55,8 @@ export default function ChallengeModal({ targetName, sweepMs, onFinish, onClose 
 
   useKeyScope(e => {
     if (e.code === 'Space') { e.preventDefault(); strikeRef.current(); return true; }
+    // 수배판 안에 뜨는 창이라 Esc를 여기서 받아야 수배판이 아니라 도전 창이 닫힌다(X와 같은 출구)
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); return true; }
   }, { exclusive: true });
 
   useEffect(() => {
