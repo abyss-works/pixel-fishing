@@ -44,4 +44,16 @@ describe('named 데이터 계약', () => {
       expect(n.poster).not.toBe(n.lore);
     }
   });
+
+  it('로어와 수배서가 네임드 로어 형식을 지킨다', () => {
+    const sentences = (s: string) => s.split(/(?<=다\.)\s*/).filter(Boolean);
+    for (const n of NAMED) {
+      for (const text of [n.lore, n.poster]) {
+        expect(text, n.id).not.toMatch(/\d/);
+        expect(sentences(text), n.id).toHaveLength(4);
+      }
+      expect(n.poster, n.id).toMatch(/도전에서 이기면 수배판에서 토벌을 마칠 수 있다\.$/);
+      expect(n.poster, `${n.id} 수배서는 이름을 부르지 않는다`).not.toContain(n.name);
+    }
+  });
 });
