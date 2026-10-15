@@ -3,6 +3,7 @@
 //   좌 = 최근 이벤트 피드(넓게 스크롤) / 우 = 위험 신호 카드열(제재·연타·반입).
 // Note 텍스트에 묻혔던 위험 신호가 우측 고정 카드로 승격됐다.
 import DataTable from '../../../ui/DataTable';
+import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, EVENT_LABELS, eventSummary } from '../../../../features/admin/model/metrics';
 import { selectOverviewMetrics } from '../../../../features/admin/model/adminViews';
@@ -63,7 +64,7 @@ export default function OverviewTab() {
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </td>
-                    <td className="font-mono text-2xs text-text-dim max-w-[120px] truncate"
+                    <td className="pf-accent text-2xs text-text-dim max-w-[120px] truncate"
                         title={e.user_id}>{shortUid(e.user_id)}</td>
                     <td className="max-w-[260px] truncate text-xs">{eventSummary(e.type, e.payload)}</td>
                   </tr>
@@ -88,9 +89,9 @@ export default function OverviewTab() {
                     hint="import 액션 원장 — 운영자 전용 경로의 흔적"
                     tone={imports.length > 0 ? 'warn' : undefined} />
           {metrics.riskTotal > 0 && (
-            <p className="text-2xs text-text-dim px-1">
+            <Note size="2xs" className="my-0 px-1">
               상세 판독은 <span className="pf-accent text-gold">이상탐지</span> 탭에서.
-            </p>
+            </Note>
           )}
         </div>
       </div>
@@ -116,7 +117,7 @@ function RiskCard({ label, count, hint, tone }: {
           {fmtNum(count)}
         </span>
       </div>
-      <p className="text-2xs text-text-dim leading-snug mt-0.5">{hint}</p>
+      <Note size="2xs" className="my-0">{hint}</Note>
     </div>
   );
 }

@@ -46,10 +46,10 @@ export default function AntiAbuseTab() {
       {/* 행동 이상 — 캐시 타이밍/판정율은 같은 "플레이 행위" 축이라 나란히 본다 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
         <Frame title="연타 (캐치 간격 &lt;2초 · 최근 7일)">
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             입질 하한 1초 + 스윕 1.4초라 인간은 물리적으로 못 만드는 간격. 서버에 레이트 리밋이
             없어 **간격 분포가 유일한 방어 관측점**(audit ⑤).
-          </p>
+          </Note>
           <DataTable>
             <thead>
               <tr><th className="text-left">유저</th><th className="text-right">7일 캐치</th>
@@ -75,10 +75,10 @@ export default function AntiAbuseTab() {
         </Frame>
 
         <Frame title="PERFECT 판정 비율 이상치 (7일)">
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             30일 전체 평균 {(flags[0]?.perfect_pct_global ?? '—')}%.
             PERFECT ×2는 클라 주장(의도된 구멍)이라 비율 감시가 유일한 대응이다(20캐치 이상).
-          </p>
+          </Note>
           <DataTable>
             <thead>
               <tr><th className="text-left">유저</th><th className="text-right">7일 PERFECT%</th>
@@ -132,10 +132,10 @@ export default function AntiAbuseTab() {
         </Frame>
 
         <Frame title="도감↔이벤트 차액 상위">
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             v0.5.0 이전 플레이분은 정상적으로 차액이 난다(events 제도 이전).
             그 <span className="pf-accent text-gold">이후 가입</span> 계정의 큰 차액만 위작 후보다.
-          </p>
+          </Note>
           <DataTable>
             <thead>
               <tr><th className="text-left">유저</th><th className="text-left">어종/폼</th>
@@ -145,7 +145,7 @@ export default function AntiAbuseTab() {
               {topMismatch.map((m, i) => (
                   <tr key={`${m.user_id}/${m.fish_id}/${m.form}/${i}`}>
                     <td>{labelOf(m.user_id)}</td>
-                    <td className="font-mono text-2xs">{m.fish_id}/{m.form}</td>
+                    <td className="pf-accent text-2xs">{m.fish_id}/{m.form}</td>
                     <td className="text-right pf-accent text-gold">+{m.missing_events}</td>
                   </tr>
                 ))}
@@ -161,14 +161,14 @@ export default function AntiAbuseTab() {
       <section>
         <SectionTitle>제재 계정</SectionTitle>
         {!granted || restricted.length === 0 ? (
-          <p className="text-2xs text-text-dim my-1">
+          <Note size="2xs" className="my-1">
             {granted ? '활성 제재 없음.' : '운영 DB 연결 후 확인한다.'}
-          </p>
+          </Note>
         ) : (
           <ul className="flex flex-col gap-1">
             {restricted.map(u => (
               <li key={u.user_id}
-                  className="border border-danger/40 rounded-sm px-2 py-1 text-xs select-text">
+                  className="pf-frame border-danger/40 px-2 py-1 text-xs select-text">
                 <span className="pf-accent text-danger">{labelOf(u.user_id)}</span>
                 {' '}— 골드 {fmtNum(adminNumber(u.gold))} · 명성 {fmtNum(adminNumber(u.fame))} ·
                 마지막 행동 {fmtDT(u.last_action_at)}

@@ -81,7 +81,7 @@ export default function LiveTab() {
                   <tr key={u.user_id}>
                     <td>{u.email
                       ? <span className="text-xs">{u.email}</span>
-                      : <span className="font-mono text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}</td>
+                      : <span className="pf-accent text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}</td>
                     <td className="whitespace-nowrap text-xs">
                       {regionLabel(u) ?? '—'}
                     </td>
@@ -102,9 +102,9 @@ export default function LiveTab() {
 
         <Frame title="온라인 위치 분포">
           <BarsChart values={whereHist.values} labels={whereHist.labels} height={96} />
-          <p className="text-2xs text-text-dim">
+          <Note size="2xs" className="my-0">
             접속 중 유저의 state.location 분포 — 거점은 소속 지역으로 합산한다.
-          </p>
+          </Note>
         </Frame>
       </div>
     </div>

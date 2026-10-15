@@ -7,6 +7,8 @@
 // 게이트 밖 탭(의도된 것): 어종 시뮬 = 번들 데이터만 쓰는 순수 클라 시뮬레이터,
 // 운영 = 지금 세션이 왜 막혔는지 진단해야 하는 화면이라 밖에 둔다.
 import type { ReactNode } from 'react';
+import Note from '../../ui/Note';
+import Panel from '../../ui/Panel';
 import { useAdminAccess } from '../../../features/admin/service/useAdminAccess';
 import { AdminAuthCtx, useAdminAuth } from '../../../features/admin/service/accessContext';
 
@@ -25,41 +27,41 @@ export function AdminGateBanner() {
   if (access === 'granted') return null;
   if (access === 'checking') {
     return (
-      <div className="border border-line bg-surface rounded-sm px-3 py-2 mb-3">
-        <p className="text-xs text-text-dim">접근 권한 확인 중…</p>
-      </div>
+      <Panel className="mb-3">
+        <Note size="xs" className="my-0">접근 권한 확인 중…</Note>
+      </Panel>
     );
   }
   if (access === 'local') {
     return (
-      <div className="border border-line bg-surface rounded-sm px-3 py-2 mb-3">
+      <Panel className="mb-3">
         <p className="text-sm">로컬 모드 — 클라우드가 설정되어 있지 않다.</p>
-        <p className="text-xs text-text-dim mt-1 leading-relaxed">
+        <Note size="xs" className="my-0 leading-relaxed">
           화면 골격은 그대로 보여준다. 운영·스테이징 Supabase 연결(VITE_SUPABASE_URL)을 붙이면
           아래 탭들이 실제 데이터로 채워진다. <span className="pf-accent text-gold">어종 시뮬레이션</span>처럼
           번들 데이터만 쓰는 탭은 지금도 온전히 동작한다.
-        </p>
-      </div>
+        </Note>
+      </Panel>
     );
   }
   return (
-    <div className="border border-danger/40 bg-surface rounded-sm px-3 py-2 mb-3">
-      <p className="text-sm text-danger">
+    <Panel className="mb-3">
+      <Note tone="warn" className="my-0">
         운영자 세션이 아니다 — 읽기 권한은 UI가 아니라 DB 정책(public.admins)이 결정한다.
         화면 골격은 보인다.
-      </p>
+      </Note>
       {uid && (
-        <p className="text-xs text-text-dim mt-1 leading-relaxed select-text">
+        <Note size="xs" className="my-0 leading-relaxed select-text">
           이 세션 uid: <code className="pf-accent text-gold">{uid}</code>
           　해제: 해당 프로젝트 SQL Editor에서{' '}
           <code>insert into public.admins (user_id) values ('{uid}');</code>
-        </p>
+        </Note>
       )}
       {!uid && (
-        <p className="text-xs text-text-dim mt-1">
+        <Note size="xs" className="my-0">
           세션이 없다 — 게임으로 돌아가 계정을 만들거나 로그인한 뒤 다시 열어라.
-        </p>
+        </Note>
       )}
-    </div>
+    </Panel>
   );
 }

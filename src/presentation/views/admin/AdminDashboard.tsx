@@ -15,7 +15,8 @@
 //   게이트 밖(의도): 어종 시뮬 = 번들 데이터만 쓰는 순수 클라 시뮬레이터라 클라우드가
 //                    필요 없다. 운영 = 지금 세션이 왜 막혔는지 진단하는 화면이라 밖이다.
 import { useEffect, useState } from 'react';
-import { cx } from '../../ui/cx';
+import Note from '../../ui/Note';
+import PillButton from '../../ui/PillButton';
 import { AdminAuthProvider, AdminGateBanner } from './access';
 import FishTab from './tabs/FishTab';
 import OverviewTab from './tabs/OverviewTab';
@@ -90,10 +91,10 @@ export default function AdminApp() {
                            flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-lg text-gold pf-accent">관리자 대시보드</h1>
-            <p className="text-xs text-text-dim mt-0.5">{SUBTITLE[tab]}</p>
+            <Note size="xs" className="my-0">{SUBTITLE[tab]}</Note>
           </div>
           <a href="/" aria-label="게임으로 돌아가기"
-             className="pf-btn ghost !py-1.5 !px-3 text-sm">← 게임으로</a>
+             className="pf-btn ghost text-sm">← 게임으로</a>
         </header>
 
         <div className="flex flex-col lg:flex-row min-h-[calc(100vh-64px)]">
@@ -102,22 +103,17 @@ export default function AdminApp() {
                           py-2 lg:py-3" aria-label="대시보드 섹션">
             {NAV_GROUPS.map(({ group, items }) => (
               <div key={group} className="mb-2 last:mb-0 px-2">
-                <div className={cx('text-2xs text-text-dim tracking-wider mb-1 select-none',
-                                   'lg:text-left')}>
+                <div className="text-2xs text-text-dim tracking-wider mb-1 select-none lg:text-left">
                   {group}
                 </div>
                 <div role="group" aria-label={`${group} 섹션`} className="flex lg:flex-col gap-0.5 flex-wrap">
                   {items.map(it => (
-                    <button key={it.key} type="button"
-                            aria-current={tab === it.key ? 'page' : undefined}
-                            onClick={() => go(it.key)}
-                            className={cx('text-left rounded-sm px-2 py-1 text-sm cursor-pointer transition',
-                                          'lg:w-full whitespace-nowrap',
-                                          tab === it.key
-                                            ? 'bg-surface-2 text-gold pf-accent border border-gold/40'
-                                            : 'border border-transparent text-text-dim hover:text-gold')}>
+                    <PillButton key={it.key} type="button" active={tab === it.key}
+                                aria-current={tab === it.key ? 'page' : undefined}
+                                onClick={() => go(it.key)}
+                                className="lg:w-full whitespace-nowrap">
                       {it.label}
-                    </button>
+                    </PillButton>
                   ))}
                 </div>
               </div>

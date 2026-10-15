@@ -3,6 +3,7 @@
 // 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
 // v_economy_daily 뷰의 일별 경제 요약을 표시한다.
 import { useMemo, useState } from 'react';
+import Note from '../../../ui/Note';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
 import { selectEconomyMetrics } from '../../../../features/admin/model/adminViews';
@@ -57,25 +58,25 @@ export default function EconomyTab() {
                         onChange={setRange} ariaLabel="기간 선택" />
         }>
           <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} height={72} />
-          <p className="text-2xs text-text-dim">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</p>
+          <Note size="2xs" className="my-0">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</Note>
         </Frame>
 
         <Frame title="유출 — 강화·배·미끼">
           <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.bait_cost)}
                      height={72} barClass="bg-danger/70" />
-          <p className="text-2xs text-text-dim">강화·배 구매·미끼 지출의 일별 합계.</p>
+          <Note size="2xs" className="my-0">강화·배 구매·미끼 지출의 일별 합계.</Note>
         </Frame>
       </div>
 
       <Frame title="원장 대차대조">
         <TabState loading={loading && granted} error={error} onRetry={refresh} />
-        <p className="text-xs text-text-dim leading-relaxed">
+        <Note size="xs" className="my-0 leading-relaxed">
           기간 내 유입합 {fmtNum(inflowTotal)}G · 유출합 {fmtNum(outflowTotal)}G ·
           순유입 <span className="pf-accent text-gold">{fmtNum(inflowTotal - outflowTotal)}G</span>.
           전체 잔고 합({fmtNum(goldSum)}G)이 순유입보다 크게 많으면 그 차액은
           <span className="pf-accent text-gold">이벤트 밖 경로(import 반입)</span>가 들여온 돈이다 —
           이상탐지 탭의 반입 로그와 대조.
-        </p>
+        </Note>
       </Frame>
     </div>
   );
