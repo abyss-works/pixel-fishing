@@ -329,7 +329,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
     clickTab(/도감\s*\(돌연변이\)/);
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     clickTab(/도감\s*\(네임드\)/); // 끝에서 처음으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
@@ -352,7 +352,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
     clickFurniture('dex');
     clickTab(/도감\s*\(일반\)/);
     clickTab(/도감\s*\(돌연변이\)/);
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^마을/ })).not.toBeInTheDocument();
     expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
     fireEvent.click(screen.getByRole('button', { name: /^동남아/ }));
@@ -995,7 +995,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: '3' });
-    expect(screen.getByRole('heading', { name: /지명 수배/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
   });
@@ -1087,7 +1087,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getAllByText('90G')).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
-    expect(screen.getByText('변이')).toBeInTheDocument();            // 개체 줄의 배지
+    expect(screen.getByText('돌연변이')).toBeInTheDocument();            // 개체 줄의 배지
     expect(screen.getAllByText('최대')).toHaveLength(2);             // 최대는 폼별 — 일반·변이 각각
   });
 
@@ -1109,12 +1109,12 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickTab(/^가방/);
     clickTab('카드'); // 물고기 섹션의 목록/카드 서브탭
-    expect(screen.getByLabelText('잉어 일반 2마리 변이 1마리 보유')).toBeInTheDocument();
+    expect(screen.getByLabelText('잉어 일반 2마리 돌연변이 1마리 보유')).toBeInTheDocument();
     expect(screen.getAllByText('???').length).toBeGreaterThan(0); // 미발견 종
     expect(screen.queryByText('30G')).not.toBeInTheDocument();    // 카드엔 값을 안 건다
 
     // 일반/변이가 한 행 — 흰 글씨 일반, 보라 변이 (행을 둘로 쓰면 카드 높이가 종마다 달라진다)
-    const card = screen.getByLabelText('잉어 일반 2마리 변이 1마리 보유');
+    const card = screen.getByLabelText('잉어 일반 2마리 돌연변이 1마리 보유');
     const [normal, variant] = [...card.querySelectorAll('span > span')]
       .filter(e => e.textContent?.trim());
     expect(normal.textContent).toBe('2');
@@ -1191,7 +1191,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('붕어');
     openRow('잉어');
     expect(screen.getByLabelText('40.0cm 붕어 잠금 해제')).toBeInTheDocument();
-    expect(screen.getByLabelText('55.0cm 변이 붕어 잠금 해제')).toBeInTheDocument();
+    expect(screen.getByLabelText('55.0cm 돌연변이 붕어 잠금 해제')).toBeInTheDocument();
     expect(screen.getByLabelText('33.0cm 잉어 잠금 해제')).toBeInTheDocument();
     // 최대가 아닌 것은 건드리지 않는다
     expect(screen.getByLabelText('12.0cm 붕어 잠금')).toBeInTheDocument();
@@ -1264,7 +1264,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     expect(screen.getByText('바 시간')).toBeInTheDocument();
     expect(screen.getByText('방치 낚시 페널티')).toBeInTheDocument();
     // 캐루셀 순환 — 다음 수역(마을 연못)으로 넘어간다
-    fireEvent.click(screen.getByLabelText('다음 수역'));
+    fireEvent.click(screen.getByLabelText('다음 해역'));
     expect(screen.getAllByText(/마을 연못/).length).toBeGreaterThan(0);
     // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님), 로어체 문장
     fireEvent.mouseEnter(screen.getAllByLabelText('도움말')[0]);

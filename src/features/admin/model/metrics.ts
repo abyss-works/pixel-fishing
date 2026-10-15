@@ -84,6 +84,8 @@ export const EVENT_LABELS: Record<string, string> = {
   letter: '편지',
   buyBait: '미끼 구매',
   setActiveBait: '미끼 활성화',
+  acceptQuest: '의뢰 수주',
+  deliverBounty: '납품·토벌',
   exchangeArtifact: '유물 교환',
   ticket: '도전권 획득',
   resolveChallenge: '네임드 도전',
@@ -102,7 +104,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
       return b ? `빌드 ${b.slice(0, 7)}` : '접속';
     }
     case 'catch': {
-      const parts = [`${s(pay.fishId)}${pay.form === 'variant' ? '(변이)' : ''}`,
+      const parts = [`${s(pay.fishId)}${pay.form === 'variant' ? '(돌연변이)' : ''}`,
         s(pay.judgment).toUpperCase(),
         pay.size !== undefined ? `${Number(pay.size).toFixed(1)}cm` : '',
         s(pay.spot) ? `@${s(pay.spot)}` : '',

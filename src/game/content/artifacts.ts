@@ -1,5 +1,5 @@
 // 유물 레지스트리 — 지역별 하나만 제공한다.
-// 유물은 네임드 납품으로 얻은 교환 재료(수치는 items 축)로 맞바꾼 영구 소유물이다.
+// 유물은 네임드 토벌로 얻은 교환 재료(수치는 items 축)로 맞바꾼 영구 소유물이다.
 // 슬롯·장착이 없어 소유 목록(state.artifacts)이 곧 효과다. 효과 수치는 data에 두고
 // 문장(로어·효과 설명)에는 손으로 숫자를 적지 않는다 — UI가 data에서 뽑는다.
 // 행 추가 = 여기 1행 (무결성은 artifacts.test가 자동 검증).
@@ -13,7 +13,7 @@ export interface ArtifactEffects {
   nightImmune?: boolean;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
-  /** 변이 개체 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
+  /** 돌연변이 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
   variantRate?: number;
 }
 
@@ -23,7 +23,7 @@ export interface Artifact {
   zone: BountyZone;
   /** 유물 급 — 희귀가 기본이고, 낚시 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
   grade: RarityId;
-  /** 교환 재료 — items 축 id/이름. 네임드 납품 시 1개 지급, 교환 시 1개 소모 */
+  /** 교환 재료 — items 축 id/이름. 네임드 토벌 시 1개 지급, 교환 시 1개 소모 */
   materialId: string;
   materialName: string;
   lore: string;

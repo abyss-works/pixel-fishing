@@ -1,4 +1,4 @@
-// 네임드 챌린지 순수 규칙 — 시도 상태머신 + 도전권 유효 판정.
+// 네임드 도전 순수 규칙 — 시도 상태머신 + 도전권 유효 판정.
 // UI(ChallengeModal)와 리듀서(resolveChallenge)가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import {
@@ -18,7 +18,7 @@ export interface ChallengeRun {
   success: boolean;
 }
 
-/** 새 챌린지 — 10회 시도, 7히트 조기 성공, 4번째 실패에 탈락 */
+/** 새 도전 — 10회 시도, 7히트 조기 성공, 4번째 실패에 탈락 */
 export const newChallenge = (): ChallengeRun =>
   ({ hits: 0, misses: 0, done: false, success: false });
 

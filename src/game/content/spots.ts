@@ -16,7 +16,7 @@ const DATA = [
   // 오브젝트"라 구역 이름과 겹쳐도 한 엔티티다. 구 '태평양 연안' 개명 하필 제거.
   { id: 'sea',   name: '태평양',        boatTier: 1, region: 'ocean', powerReq: 35 }, // Lv6
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 40 }, // Lv7
-  // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(군집은 특화에만 둔다)
+  // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(어군은 특화에만 둔다)
   { id: 'dragonhole',  name: '드래곤 홀',         boatTier: 3, region: 'seasia', powerReq: 55 }, // Lv10
   { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 60,
     rarityWeight: { rare: 20, epic: 9, common: 70 } },   // 사용자 밸런스 일괄 (2026-08-27 JSON)

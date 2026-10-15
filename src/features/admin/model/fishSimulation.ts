@@ -135,7 +135,7 @@ export function buildFishSnapshotExport(
       })),
     })),
     notes: {
-      drawModel: '2단 — 등급 예산(수역별 고정, 부재 등급 재균등) × 개체 균등 배분',
+      drawModel: '2단 — 등급 예산(해역별 고정, 부재 등급 재균등) × 개체 균등 배분',
       dialAxes: 'commonMult=일반 예산 × / rareMult=일반 예산 ÷ (판정·방치 다이얼)',
       fieldsSbX: 'sb* = 관리자 화면의 미확정 오버라이드. null = 원본 값 사용 중',
       evAxes: `simEV keys = ${SIM_AXES.map(axis => axis.key).join('/')}`,
@@ -185,7 +185,7 @@ export function buildFishDeltaExport(
     spots: changedSpots,
     notes: {
       usage: 'Δ JSON — sb* ≠ null 인 항목만. 비어 있으면 spots=[]',
-      fields: 'rarityWeightDelta = 수역 등급 예산 오버라이드(변경된 등급만), fish[].price/weight = 어종 확정값(변경된 어종만)',
+      fields: 'rarityWeightDelta = 해역 등급 예산 오버라이드(변경된 등급만), fish[].price/weight = 어종 확정값(변경된 어종만)',
     },
   };
 }

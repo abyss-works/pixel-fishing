@@ -135,7 +135,7 @@ export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
 export function manualBonusForSpot(state: GameState, spotId: SpotId): Stat {
   const value = manualPowerBonus(rodPower(state), powerReqOf(spotId));
   return stat(MANUAL_POWER_BONUS.base, [
-    { id: 'power', label: '수역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
+    { id: 'power', label: '해역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
   ]);
 }
 

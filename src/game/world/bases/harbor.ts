@@ -6,7 +6,7 @@ export const HARBOR_BASE: BasePack = {
   id: 'harbor',
   region: 'world',
   headline: '항구 — 시설을 클릭해 정비하자',
-  exitMsg: '출항! 군집 위에서 스페이스로 캐스팅.',
+  exitMsg: '출항! 어군 위에서 스페이스로 캐스팅.',
   exitAt: { ...WORLD_SPAWN }, // 출항 = 팩 spawn(고향 항구 앞) — 고향 항구는 팩 spawn과 같은 자리
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
   furniture: [

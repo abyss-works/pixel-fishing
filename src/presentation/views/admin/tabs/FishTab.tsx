@@ -89,7 +89,7 @@ export default function FishTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <SectionTitle className="flex-1">어종 · 수역 ({FISH.length}종 / {SPOTS.length}수역)</SectionTitle>
+        <SectionTitle className="flex-1">어종 · 해역 ({FISH.length}종 / {SPOTS.length}해역)</SectionTitle>
         <div className="flex items-center gap-2">
           <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
@@ -188,7 +188,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                     setWeights(p => ({ ...p, [bid]: {} }));
                     setPrice(p => resetSpotPriceOverrides(p, list));
                   }}>
-            이 수역 초기화
+            이 해역 초기화
           </PillButton>
         )}
       </div>

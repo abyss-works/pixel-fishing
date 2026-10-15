@@ -27,7 +27,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
                  n === 0 && (known ? DIM_CARD : 'opacity-[0.55]'))}
                aria-label={!known ? '미확인 어종'
                  : n === 0 ? `${f.name} 미보유`
-                 : `${f.name} 일반 ${normalCount}마리 변이 ${variantCount}마리 보유`}>
+                 : `${f.name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`}>
             <FishSprite fish={f} preset="icon" form="normal" discovered={known}
                         ariaLabel="" className="block mx-auto mb-1" />
             {/* 가방은 "내가 지금 뭘 들고 있나"만 본다 — 등급은 테두리가, 미발견은 ???가 말한다.

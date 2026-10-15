@@ -158,7 +158,7 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
   return phase === 'day' ? pool.filter(f => !f.night) : pool;
 }
 
-// 지명 수배 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 파이프라인보다 앞선다).
+// 네임드 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 파이프라인보다 앞선다).
 // 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 네임드에 출현 수역(spot)이
 // 적혀 있으면 그 수역에서만 돈다(코모로 심해의 장로). 명중하면 통상 추첨
 // (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
@@ -206,7 +206,7 @@ export function licenseConditions(
   ];
 }
 
-// 현상금 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.
+// 바운티 헌팅 진행 판정 — catch 성공 1건이 의뢰 조건(해역·등급/대상)을 만족하는가.
 // 서버가 catch 이벤트마다 DB 진행 행에 대해 이 함수로 검사해
 // 진행도를 올린다. 수주 시점 이전 어획은 서버가 started_at으로 걸러낸다.
 export function matchBountyCatch(quest: BountyQuest, spot: SpotId, fishId: string): boolean {

@@ -1,4 +1,4 @@
-// 현상금 액션 — 수배 라이선스·수주·납품의 상태 전이 규칙.
+// 바운티 헌팅 액션 — 라이선스·수주·납품·토벌의 상태 전이 규칙.
 // DB 진실(라이선스 소유·일일 카운트·진행도)은 서버가 deps.bounty로 주입한다
 // (deps.relief 선례). 로컬 dev엔 주입이 없어 수주·납품이 닫혀 있다.
 import { describe, it, expect } from 'vitest';
@@ -139,7 +139,7 @@ describe('deliverBounty', () => {
       payload: { questId: 'pacific-easy-common', reward: 4000 } }]);
   });
 
-  it('네임드 납품에는 교환 재료 1개가 따라온다', () => {
+  it('네임드 토벌에는 교환 재료 1개가 따라온다', () => {
     const out = applyAction(seed({ gold: 0 }),
       { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
       deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }) }));

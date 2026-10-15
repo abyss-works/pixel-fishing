@@ -96,7 +96,7 @@ describe('BountyPanel', () => {
 
   it('네임드 화면 — 이름은 초상화 아래 ???, 본문은 수배서 전용 문구다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    fireEvent.click(await screen.findByRole('button', { name: '네임드 의뢰' }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('???')).toBeInTheDocument();
     expect(screen.getByText(/건져 올린 그물은/)).toBeInTheDocument();
     expect(screen.getByText(/40000G/)).toBeInTheDocument();
@@ -135,7 +135,7 @@ describe('BountyPanel', () => {
       named('tuna'), named('coelacanth'), named('oarfish'),
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
-    fireEvent.click(await screen.findByRole('button', { name: '네임드 의뢰' }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText(/도전권 유효/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '도전 시작' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('BountyPanel', () => {
       named('tuna'), named('coelacanth'), named('oarfish'),
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
-    fireEvent.click(await screen.findByRole('button', { name: '네임드 의뢰' }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(await screen.findByRole('button', { name: '수주하기' })).toBeDisabled();
   });
 });

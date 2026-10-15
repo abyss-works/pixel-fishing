@@ -1,4 +1,4 @@
-// 거점: 콜롬보 항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
+// 거점: 콜롬보항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
 // 미끼 상점(shop 가구)은 미끼 릴리즈 본체로 추가됐다. 구매처는 이 항구 하나다.
 import type { BasePack } from '../types';
 import { COLOMBO_SPAWN } from '../regions/world';
@@ -6,7 +6,7 @@ import { COLOMBO_SPAWN } from '../regions/world';
 export const COLOMBO_BASE: BasePack = {
   id: 'colombo',
   region: 'world',
-  headline: '콜롬보 항 — 시설을 클릭해 정비하자',
+  headline: '콜롬보항 — 시설을 클릭해 정비하자',
   exitMsg: '출항! 향신료의 바다에서 스페이스로 캐스팅.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
   exitAt: { ...COLOMBO_SPAWN },

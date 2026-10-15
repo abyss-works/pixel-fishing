@@ -1,4 +1,4 @@
-// 수배판 — 현상금 수주·납품 UI (항구 전용, 고향 제외).
+// 수배판 — 바운티 헌팅의 수주·납품·토벌 UI (항구 전용, 마을의 집 제외).
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
@@ -10,7 +10,7 @@ import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyPort } from '../../../../game/content/bounties.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { kstDay } from '../../../../features/bounty/service/queryKeys';
-import { selectBountyPanelData, selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
+import { questLabel, selectBountyPanelData, selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
@@ -89,9 +89,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <BountyCard key={q.id} quest={q} progress={prog}
         canAccept={basicOpen && canTake} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
-          `의뢰를 수주했다 — ${q.id}.`)}
+          `${questLabel(q)}를 수주했다.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `의뢰 완료! ${q.reward}G를 받았다.`)} />
+          `납품 완료! ${q.reward}G를 받았다.`)} />
     );
   };
 
@@ -103,7 +103,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <SubTabs
         items={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },
-          { key: 'named' as BoardScreen, label: '네임드 의뢰' },
+          { key: 'named' as BoardScreen, label: '네임드 토벌' },
           { key: 'relic' as BoardScreen, label: '유물' },
         ]}
         activeKey={screen}
@@ -113,7 +113,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
       {loaded && snap === null && (
-        <Note>오프라인에서는 의뢰를 수주하거나 완료할 수 없다. 서버 연결이 필요하다.</Note>
+        <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없다. 서버 연결이 필요하다.</Note>
       )}
       {challengeId && (() => {
         const q = namedQuest && namedQuest.id === challengeId ? namedQuest : undefined;
@@ -121,12 +121,12 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         if (!q) return null;
         return (
           <ChallengeModal
-            targetName={target?.name ?? '지명수배'}
+            targetName={target?.name ?? '네임드'}
             sweepMs={challengeSweepMs}
             onFinish={r => run(
               { type: 'resolveChallenge', questId: q.id,
                 success: r.success, hits: r.hits, misses: r.misses },
-              r.success ? '네임드 챌린지 성공! 수배판에서 의뢰를 완료하자.' : '놓쳤다 — 도전권은 유지된다.')}
+              r.success ? '도전 성공! 수배판에서 토벌을 마치자.' : '놓쳤다 — 도전권은 유지된다.')}
             onClose={() => setChallengeId(null)}
           />
         );
@@ -151,10 +151,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
               ticketMins={hasTicket ? ticketMins : null}
               onAccept={() => run(
                 { type: 'acceptQuest', questId: namedQuest.id, port },
-                `의뢰를 수주했다 — ${namedQuest.id}.`)}
+                `${questLabel(namedQuest)}를 수주했다.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `의뢰 완료! ${namedQuest.reward}G를 받았다.`)}
+                `토벌 완료! ${namedQuest.reward}G와 교환 재료를 받았다.`)}
               onStartChallenge={() => setChallengeId(namedQuest.id)} />
           )}
         </Gated>

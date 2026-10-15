@@ -70,7 +70,7 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
     expect(eventSummary('catch', {
       fishId: 'carp', form: 'variant', judgment: 'perfect',
       size: 21.5, spot: 'pond', bait: 'bait-rare', isNew: true,
-    })).toBe('carp(변이) · PERFECT · 21.5cm · @pond · 미끼:bait-rare · NEW');
+    })).toBe('carp(돌연변이) · PERFECT · 21.5cm · @pond · 미끼:bait-rare · NEW');
   });
 
   it('경제 액션 — 유입은 +, 지출은 −로 읽힌다', () => {

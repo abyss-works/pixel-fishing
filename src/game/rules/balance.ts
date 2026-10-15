@@ -12,7 +12,7 @@ export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
   legendary: CATCH_MS_LEGENDARY,
 };
 
-// 군집 캐스팅 판정 반경(px) — "군집 위/옆"의 정의 (28 → 40 완화: 던지기가 덜 빡빡하게)
+// 어군 캐스팅 판정 반경(px) — "어군 위/옆"의 정의 (28 → 40 완화: 던지기가 덜 빡빡하게)
 export const CAST_RANGE = 40;
 
 // 이동 속도(px/s)
@@ -70,18 +70,18 @@ export const BAIT_BUY_MAX = 50;
 export const EXHIBIT_SLOTS = 3;
 
 
-// 현상금 일일 수주 상한 — 일반은 전 해역 통합 3회,
+// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 3회,
 // 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
 // (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
 export const BOUNTY_DAILY_CAP = 3;
 export const BOUNTY_NAMED_DAILY_CAP = 1;
 
-// 지명 수배 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
-// 명중하면 즉시 획득이 아니라 도전권을 발급한다 (챌린지절).
+// 네임드 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
+// 명중하면 즉시 획득이 아니라 도전권을 발급한다.
 // Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
-// 네임드 챌린지 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
+// 네임드 도전 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
 // 존은 고정 관대값이다 (수역 게이트와 무관 — 어렵게 하지 않는다).
 export const CHALLENGE_WINDOW_MS = 2 * 3600_000; // 도전권 유효 2시간
 export const CHALLENGE_ROUNDS = 10;

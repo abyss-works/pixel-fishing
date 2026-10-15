@@ -41,12 +41,12 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
   switch (event.type) {
     case 'cast': {
       const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-      setToast(`${spot.name} 군집에 찌를 던졌다.`);
+      setToast(`${spot.name} 어군에 찌를 던졌다.`);
       return;
     }
     case 'cast-denied':
       if (event.reason === 'range') {
-        setToast('물고기 군집 가까이에서 던져야 한다.');
+        setToast('어군 가까이에서 던져야 한다.');
       } else {
         const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
         setToast(`${spot.name}에서 낚시하려면 배 ${spot.boatTier}단계가 필요하다. (조선소에서 구매)`);
@@ -65,7 +65,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
       if (event.result.ticket) {
         const quest = bountyById(event.result.ticket);
         const named = quest?.targetFish ? namedById(quest.targetFish) : undefined;
-        setToast(`도전권 획득 — [${named ? named.name : '지명수배'}]! 수배판에서 도전하자.`);
+        setToast(`도전권 획득 — [${named ? named.name : '네임드'}]! 수배판에서 도전하자.`);
       }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
       const prefix = event.judgment === 'perfect' ? 'PERFECT! '

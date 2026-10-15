@@ -35,14 +35,14 @@ export type RejectReason =
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
   | 'bait-not-owned' // 활성화하려는 미끼를 보유하지 않았다 (구매 전 활성 시도)
-  | 'shop-closed' // 미끼 상점은 콜롬보 항구에서만 이용 가능
+  | 'shop-closed' // 미끼 상점은 콜롬보항에서만 이용 가능
   | 'nickname-taken' // 이미 다른 유저가 쓰는 닉네임
-  | 'no-license' // 수배 라이선스 미보유 — 해역 라이선스 없이 수주 불가
+  | 'no-license' // 바운티 헌팅 라이선스 미보유 — 구역 라이선스 없이 수주 불가
   | 'no-tickets' // 일일 통합 수주 상한 소진
   | 'quest-incomplete' // 납품 조건 미달성
   | 'quest-active' // 이미 수주 중인 의뢰 — 중복 수주는 진행도를 리셋하므로 거부
   | 'dex-incomplete' // 라이선스 도감 조건 미달성
-  | 'material-missing' // 유물 교환 재료 미보유 — 네임드 납품으로 1개씩 모은다
+  | 'material-missing' // 유물 교환 재료 미보유 — 네임드 토벌로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
   | 'ticket-expired' // 도전권 기간 만료 — 다시 조우하면 받을 수 있다
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
@@ -59,19 +59,19 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-enough-gold': '골드가 부족하다.',
   'not-enough-fame': '명성이 부족하다 — 물고기를 더 잡아 명성을 쌓자.',
   'max-boat': '이미 최고의 배다.',
-  'spot-locked': '이 수역에서 낚시하려면 더 좋은 배가 필요하다.',
+  'spot-locked': '이 해역에서 낚시하려면 더 좋은 배가 필요하다.',
   'coupon-invalid': '없는 쿠폰 코드다.',
   'coupon-used': '이미 사용한 쿠폰이다.',
   'relief-invalid': '지원 코드가 맞지 않다 — 이미 사용했거나 없는 코드다.',
   'bait-not-owned': '보유한 미끼가 없다.',
-  'shop-closed': '미끼 상점은 콜롬보 항구에서만 이용할 수 있다.',
+  'shop-closed': '미끼 상점은 콜롬보항에서만 이용할 수 있다.',
   'nickname-taken': '이미 쓰이는 닉네임이다.',
-  'no-license': '수배 라이선스가 없다 — 명성을 쌓아 해역 라이선스를 받자.',
+  'no-license': '라이선스가 없다 — 명성과 도감 조건을 채우면 열린다.',
   'no-tickets': '오늘의 수주권을 다 썼다 — 내일 다시 오자.',
-  'quest-incomplete': '아직 의뢰 완료 조건을 충족하지 못했다.',
+  'quest-incomplete': '아직 마칠 조건을 채우지 못했다.',
   'quest-active': '이미 수주 중인 의뢰다.',
-  'dex-incomplete': '도감이 아직 비었다 — 해당 해역 도감을 채우자.',
-  'material-missing': '교환 재료가 없다 — 네임드 의뢰를 완수하자.',
+  'dex-incomplete': '도감이 아직 비었다 — 그 구역의 도감을 채우자.',
+  'material-missing': '교환 재료가 없다 — 네임드를 토벌하자.',
   'ticket-missing': '도전권이 없다 — 수주 중인 해역에서 낚으면 조우로 받을 수 있다.',
   'ticket-expired': '도전권 기간이 끝났다 — 다시 조우하면 받을 수 있다.',
   'slot-taken': '그 전시 칸은 이미 차 있다 — 먼저 회수하자.',
@@ -117,7 +117,7 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
  *  KST 날짜 경계 집계를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
   acceptsToday: number;        // 일반 의뢰의 오늘 수주 횟수 (네임드 제외)
-  namedToday: number;          // 네임드 의뢰의 오늘 수주 횟수 (전역)
+  namedToday: number;          // 네임드 토벌의 오늘 수주 횟수 (전역)
   tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록
   complete: string[];          // 납품 가능 의뢰 id
   active: string[];            // 진행 중 의뢰 id (중복 수주 거부용)
@@ -155,7 +155,7 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
   return ctx && ctx.complete.includes(questId) ? OK : no('quest-incomplete');
 }
 
-/** 챌린지 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는
+/** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는
  *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 실패해도 티켓은 남는다
  *  (윈도우 내 재시도 — 어렵게 하지 않는다). 오프라인 dev는 주입이 없어 닫힌다. */
 export function canResolveChallenge(

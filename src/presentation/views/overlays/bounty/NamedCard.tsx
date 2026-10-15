@@ -1,4 +1,4 @@
-// 지명수배 카드 — 2열 [좌 초상화+이름 | 우 카드 통째(수배서 본문-보상-버튼)].
+// 네임드 토벌 카드 — 2열 [좌 초상화+이름 | 우 카드 통째(수배서 본문-보상-버튼)].
 // 우측 스택은 BountyCard의 수직 구조(마스트헤드·룰선·본문·룰선·보상·버튼)를 그대로 둔다.
 // 본문은 도감 로어가 아니라 수배서 전용 본문(named.poster)이다.
 import type { GameState } from '../../../../game/rules/logic.js';
@@ -19,12 +19,12 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
         <span className="content-center">
           {fish && (
             <FishSprite fish={fish} preset="portrait" discovered={found} animate={found}
-                        ariaLabel={found && name ? name : '미확인 지명수배'} className="block mx-auto" />
+                        ariaLabel={found && name ? name : '미확인 네임드'} className="block mx-auto" />
           )}
           <b className="block mt-1 text-gold">{found && name ? name : '???'}</b>
         </span>
         <span className="text-center flex flex-col gap-2 text-sm border-l border-line pl-2">
-          <b className="pf-accent text-gold text-lg">지명수배</b>
+          <b className="pf-accent text-gold text-lg">네임드 토벌</b>
           <div className="border-b border-line" />
           <span className="flex-1 content-center">
             <span className="text-text-dim italic text-xs">
@@ -42,7 +42,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
       )}
           <span className="flex justify-center mt-auto">
             {done
-              ? <Button size="sm" disabled={busy} onClick={onDeliver}>의뢰 완료</Button>
+              ? <Button size="sm" disabled={busy} onClick={onDeliver}>토벌하기</Button>
               : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
           </span>
         </span>
