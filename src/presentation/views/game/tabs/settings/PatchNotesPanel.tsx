@@ -1,21 +1,24 @@
 import { PATCH_NOTES } from '../../../../../game/content/patchnotes';
-import { cx } from '../../../../ui/cx';
 import Accordion from '../../../../ui/Accordion';
 import SectionTitle from '../../../../ui/SectionTitle';
-
-// 노트 범주 뱃지 색 — UI=하늘, 기능=골드, 그 외=낮은 톤
-const TAG_CLS: Record<string, string> = {
-  UI: 'text-accent border-accent',
-  기능: 'text-gold border-gold-dark',
-};
+import NoteTag from '../../../../ui/NoteTag';
+import CheckToggle from '../../../../ui/CheckToggle';
+import Button from '../../../../ui/Button';
+import { reopenWhatsNew, useNewsAutoOpen } from '../../../../../features/announcements/service/whatsNew';
 
 // 패치노트 콘텐츠 — GameTabs의 '설정' 탭에서 렌더한다.
 // 버전별 아코디언: 기본은 전부 닫힘, 노트마다 범주(UI/기능/기타) 뱃지를 단다.
 // 목록이 길어져 스크롤 상자에 넣는다 — 약 8줄(38px × 8)까지만 보이고 나머지는 휠로.
 export default function PatchNotesPanel() {
+  const [autoOpen, setAutoOpen] = useNewsAutoOpen();
   return (
     <div>
       <SectionTitle>업데이트 소식</SectionTitle>
+      {/* 접속 시 소식 창 — 자동 열기 켜고 끄기와 이번 버전 소식 다시 보기 */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <CheckToggle checked={autoOpen} onChange={setAutoOpen} label="새 버전 소식을 자동으로 열기" />
+        <Button size="sm" onClick={reopenWhatsNew}>이번 소식 다시 보기</Button>
+      </div>
       <div className="pf-scroll overflow-y-auto max-h-[304px] pr-1 flex flex-col gap-2">
         {PATCH_NOTES.map(p => (
           <Accordion
@@ -31,10 +34,7 @@ export default function PatchNotesPanel() {
             <ul className="list-none px-2 pb-2 flex flex-col gap-1 text-sm leading-[1.6]">
               {p.notes.map((n, i) => (
                 <li key={i}>
-                  <span className={cx(
-                    'inline-block text-2xs px-1 mr-1 rounded-sm border align-[1px] whitespace-nowrap',
-                    TAG_CLS[n.tag] ?? 'text-text-dim border-line',
-                  )}>{n.tag}</span>
+                  <NoteTag tag={n.tag} className="mr-1" />
                   {n.text}
                 </li>
               ))}
