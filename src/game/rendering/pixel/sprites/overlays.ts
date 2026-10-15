@@ -6,8 +6,8 @@ import { SPOTS } from '../../../content/spots';
 import type { School } from '../../../world/types';
 import { FISH } from '../../../content/fish';
 import type { FormId } from '../../../content/fish';
-import { fishColors, fishRings, fishSprite } from '../../../content/sprites/index.js';
-import { drawSprite } from '../sprite.js';
+import { DEFAULT_FISH_ART_STYLE, fishArt } from '../fishArt/index.js';
+import type { FishArtStyle } from '../fishArt/index.js';
 import { JUMP_S, jumpHeight, orbit } from './schoolView.js';
 
 const fishById = (id: string) => FISH.find(f => f.id === id);
@@ -24,20 +24,8 @@ export interface GearView {
   /** catch 전이 후 경과 초 — 훅 점프 연출. catch가 아니면 null */
   catchT?: number | null;
   catchFish?: { id: string; form: FormId } | null;
-}
-
-/** 어종별 색 배열 캐시 — 매 프레임 배열을 새로 만들면 래스터 캐시 키 계산만 늘어난다 */
-const COLOR_CACHE = new Map<string, string[]>();
-function colorsOf(fishId: string, form: FormId): string[] | null {
-  const key = `${fishId}|${form}`;
-  let c = COLOR_CACHE.get(key);
-  if (!c) {
-    const fish = fishById(fishId);
-    if (!fish) return null;
-    c = fishColors(fish, form, true);
-    COLOR_CACHE.set(key, c);
-  }
-  return c;
+  /** 물고기 그래픽 스타일 — 움직임을 지원하지 않는 스타일이면 훅 점프를 그리지 않는다 */
+  fishArt?: FishArtStyle;
 }
 
 /** zoom = 마커 크기 보정(1 기본). 미니맵처럼 pack 좌표를 축소 그리는 캔버스에서 지도가 커지면
@@ -69,12 +57,11 @@ export function drawHookJump(ctx: Ctx, v: GearView) {
   if (h <= 0) return;
   const fish = fishById(v.catchFish.id);
   if (!fish) return;
-  const colors = colorsOf(fish.id, v.catchFish.form);
-  if (!colors) return;
-  const sprite = fishSprite(fish, v.catchFish.form);
+  const art = fishArt(v.fishArt ?? DEFAULT_FISH_ART_STYLE);
+  if (!art.motion) return;
   // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
-  drawSprite(ctx, sprite, colors, 1, v.school.x - sprite.w / 2, v.school.y - sprite.h / 2 - h,
-             { ...fishRings(fish), flip: v.catchT > JUMP_S / 2 });
+  art.drawCentered(ctx, fish, v.school.x, v.school.y - h,
+                   { scale: 1, form: v.catchFish.form, flip: v.catchT > JUMP_S / 2 });
 }
 
 export function drawFishingGear(ctx: Ctx, v: GearView) {

@@ -16,6 +16,31 @@ import { isAdminUrl } from '../../../admin/gate';
 import LetterModal from '../../../overlays/letter/LetterModal';
 import PixelIcon from '../../../../ui/PixelIcon';
 import type { GlyphId } from '../../../../ui/PixelIcon';
+import SubTabs from '../../../../ui/SubTabs';
+import Note from '../../../../ui/Note';
+import { setFishArtStyle, useFishArtStyle } from '../../../../../features/display/service/fishArtStyle';
+import type { FishArtStyle } from '../../../../../game/rendering/pixel/fishArt';
+
+/** 물고기 그래픽 선택 — v1은 기존 그림체(기본), v2는 새 픽셀 그래픽(실험). 기기에만 저장된다 */
+function FishArtSetting() {
+  const style = useFishArtStyle();
+  return (
+    <>
+      <SectionTitle>화면</SectionTitle>
+      <div className="flex flex-col gap-1 mb-2">
+        <SubTabs
+          items={[
+            { key: 'v1' as FishArtStyle, label: 'v1', sub: 'legacy' },
+            { key: 'v2' as FishArtStyle, label: 'v2', sub: 'beta' },
+          ]}
+          activeKey={style}
+          onSelect={setFishArtStyle}
+        />
+        <Note>물고기 그래픽을 고른다. v2는 실험 중인 새 픽셀 그래픽이라 일부 물고기의 모양이 실제와 다를 수 있다.</Note>
+      </div>
+    </>
+  );
+}
 
 // 설정 탭 버튼은 전부 **아이콘 + 가운데 정렬**이다. 목록형이라 왼쪽 정렬이었는데, 글자 길이가
 // 제각각(3~9자)이라 줄마다 시작점은 같고 끝점이 달라 들쭉날쭉했다. 아이콘이 붙으면서
@@ -110,6 +135,8 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         <LabeledButton glyph="key" label="계정 관리" variant="primary" full
                     onClick={() => setAccountOpen(true)} />
       </div>
+
+      <FishArtSetting />
 
       <SectionTitle>데이터</SectionTitle>
       <div className="flex flex-col gap-2 mb-2">

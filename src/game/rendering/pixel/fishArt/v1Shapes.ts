@@ -1,13 +1,15 @@
-// 어종 초안 생성기 — 좌표 × 배율 사각형으로 14형태를 그리는 절차 렌더러.
-// 제품은 더 이상 이 함수로 그리지 않는다(sprite-data 결정). 신규 어종의 격자 밑그림을 뽑는
-// 초안 도구이며, generate-fish-shapes가 이 출력을 인덱스 격자로 변환한다.
+// v1 물고기 그래픽 — 스프라이트화 직전 렌더러의 스냅샷. 좌표 × 배율 사각형으로 14형태를 그린다.
+// 그림은 고정된 기록이라 기능을 더하지 않는다(윤곽·유영·점프 없음). 신규 어종은 shape 하나를 고르면
+// 그대로 그려지고, 새 몸 형태가 필요할 때만 여기에 형태를 더한다.
+// v2 형태 격자(초안용)는 이 형태들을 격자 생성 도구로 변환해 만든다.
 // detail=false면 실루엣 — 눈/하이라이트 생략, 몸 형태는 그대로.
-import { shade } from '../../src/shared/lib/color';
-import type { FishShape } from '../../src/game/content/fish';
+import { shade } from '../../../../shared/lib/color.js';
+import type { FishShape } from '../../../content/fish.js';
 
-/** 최소 캔버스 계약 — 실제 CanvasRenderingContext2D와 변환용 기록 컨텍스트가 모두 만족한다 */
+/** 최소 캔버스 계약 — 실제 CanvasRenderingContext2D와 변환용 기록 컨텍스트가 모두 만족한다.
+ *  렌더러는 fillStyle에 문자열만 쓰므로 읽는 쪽 타입은 구현이 정한다 */
 export interface RectCtx {
-  fillStyle: string;
+  fillStyle: unknown;
   fillRect(x: number, y: number, w: number, h: number): void;
 }
 

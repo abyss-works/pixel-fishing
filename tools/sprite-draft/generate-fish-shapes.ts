@@ -7,8 +7,8 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { SHAPES, drawFishSprite } from './proceduralFish';
-import type { RectCtx } from './proceduralFish';
+import { SHAPES, drawFishSprite } from '../../src/game/rendering/pixel/fishArt/v1Shapes';
+import type { RectCtx } from '../../src/game/rendering/pixel/fishArt/v1Shapes';
 import { shade } from '../../src/shared/lib/color';
 import { INDEX_CHARS, TRANSPARENT } from '../../src/game/content/sprites/types';
 import type { PaletteSlot } from '../../src/game/content/sprites/types';

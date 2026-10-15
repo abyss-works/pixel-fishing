@@ -18,6 +18,8 @@ import {
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
+import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
+import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import type { MaybePromise } from '../../shared/lib/when';
 
 type CatchAction = Extract<GameAction, { type: 'catch' }>;
@@ -70,6 +72,7 @@ export class GameFieldEngine {
     onScene: () => {},
   };
   private snapshot: FieldSnapshot = { phase: 'idle', fishId: null, catchInfo: null };
+  private fishArt: FishArtStyle = DEFAULT_FISH_ART_STYLE;
   private readonly listeners = new Set<() => void>();
   private readonly pos: Point;
   private lastSpot: SpotId | null = null;
@@ -102,6 +105,11 @@ export class GameFieldEngine {
     this.game = game;
     this.night = night;
     this.callbacks = callbacks;
+  }
+
+  /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
+  setFishArt(style: FishArtStyle): void {
+    this.fishArt = style;
   }
 
   attachCanvas(canvas: HTMLCanvasElement | null): void {
@@ -260,6 +268,7 @@ export class GameFieldEngine {
       catchT: this.snapshot.phase === 'catch' ? (Date.now() - this.catchStart) / 1000 : null,
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
+      fishArt: this.fishArt,
     });
     return true;
   }
