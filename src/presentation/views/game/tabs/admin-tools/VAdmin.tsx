@@ -40,7 +40,7 @@ export default function VAdmin({ game, dispatch }: {
       <StatsTab game={game} dispatch={dispatch} />
 
       <SectionTitle>시간대 설정</SectionTitle>
-      <div className="border border-line rounded-sm px-3 py-2 flex flex-col gap-2">
+      <div className="pf-frame px-3 py-2 flex flex-col gap-2">
         {/* 상태 줄 — 해/달 아이콘 + 게임 시각 + 낮밤 */}
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 text-sm">
@@ -82,15 +82,15 @@ export default function VAdmin({ game, dispatch }: {
           </div>
           <span className="shrink-0 w-10 text-right">다음 자정</span>
         </div>
-        <p className="text-2xs text-text-dim">
+        <Note size="2xs" className="my-0">
           낮 = 게임 04:00~20:00 · 밤 = 게임 20:00~다음 04:00.
           밤 어종·어둠·이동 감속을 보려면 슬라이더를 0~9(새벽) 또는 50~59(저녁)로.
           로컬 개발 전용 — 운영(클라우드)은 서버가 시각을 판정한다.
-        </p>
+        </Note>
       </div>
 
       <SectionTitle>화면 덮개</SectionTitle>
-      <div className="flex items-center justify-between gap-2 border border-line rounded-sm px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2 pf-frame px-2 py-1.5">
         <span className="text-xs text-text-dim leading-relaxed">
           캔버스만 가린다. 게임은 계속 돈다.
         </span>
@@ -109,12 +109,12 @@ export default function VAdmin({ game, dispatch }: {
         운영 데이터(개요·유저·지표·이상탐지 등)는 별도 페이지다. 아래 버튼으로 이동한다.
       </Note>
       <a href="?admin=1#/admin/overview" aria-label="대시보드 열기"
-         className="pf-btn ghost text-sm text-center !py-2">
+         className="pf-btn ghost text-sm text-center">
         대시보드 열기 →
       </a>
-      <p className="text-2xs text-text-dim">
+      <Note size="2xs" className="my-0">
         주소: <code className="pf-accent">?admin=1#/admin/overview</code> — 같은 탭에서 열린다.
-      </p>
+      </Note>
     </div>
   );
 }
