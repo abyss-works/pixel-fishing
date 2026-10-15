@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { drawSpriteCentered } from '../../../game/rendering/pixel';
-import { fishColors, fishSprite } from '../../../game/content/sprites';
+import { fishColors, fishOutline, fishSprite } from '../../../game/content/sprites';
 import type { Fish, FormId } from '../../../game/content/fish';
 import { cx } from '../cx';
 
@@ -18,26 +18,39 @@ interface FishSpriteProps {
   preset: keyof typeof PRESETS;
   /** 어느 폼으로 그릴지 — 변이는 변이 색을 기준색으로 팔레트를 해석한다 */
   form?: FormId;
-  /** false면 실루엣(전 슬롯을 실루엣 색으로) */
+  /** false면 실루엣(전 슬롯을 실루엣 색으로, 윤곽 없음) */
   discovered?: boolean;
+  /** true면 꼬리 열 흔들기(rAF). 획득 카드·도감 상세·전시대처럼 머무는 화면에서만 켠다 */
+  animate?: boolean;
   /** 없으면 장식 취급(aria-hidden) */
   ariaLabel?: string;
   className?: string;
 }
 
-// 어종 스프라이트 캔버스 — 격자·팔레트 해석은 콘텐츠(fishSprite/fishColors), 굽기와 찍기는
-// 렌더러(drawSpriteCentered)가 맡는다. jsdom엔 canvas가 없어 ctx null 가드.
+// 어종 스프라이트 캔버스 — 격자·팔레트·윤곽 해석은 콘텐츠(fishSprite/fishColors/fishOutline),
+// 굽기와 찍기는 렌더러(drawSpriteCentered)가 맡는다. jsdom엔 canvas가 없어 ctx null 가드.
+// 애니메이션은 한 캔버스당 rAF 하나 — 목록(thumb 수백 개)에서는 켜지 않는다.
 export default function FishSprite({
-  fish, preset, form = 'normal', discovered = true, ariaLabel, className,
+  fish, preset, form = 'normal', discovered = true, animate = false, ariaLabel, className,
 }: FishSpriteProps) {
   const { w, h, scale } = PRESETS[preset];
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return; // jsdom
-    ctx.clearRect(0, 0, w, h);
-    drawSpriteCentered(ctx, fishSprite(fish), fishColors(fish, form, discovered), scale, w / 2, h / 2);
-  }, [fish, form, discovered, w, h, scale]);
+    const sprite = fishSprite(fish);
+    const colors = fishColors(fish, form, discovered);
+    const outline = fishOutline(fish, discovered);
+    const paint = (t?: number) => {
+      ctx.clearRect(0, 0, w, h);
+      drawSpriteCentered(ctx, sprite, colors, scale, w / 2, h / 2, { outline, t });
+    };
+    if (!animate) { paint(); return; }
+    let raf = 0;
+    const loop = (ms: number) => { paint(ms / 1000); raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [fish, form, discovered, animate, w, h, scale]);
   return (
     <canvas
       ref={ref} width={w} height={h}

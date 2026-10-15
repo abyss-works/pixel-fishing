@@ -108,7 +108,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
           return (
             <div key={inst.uid}
                  className="grid grid-cols-[30px_1fr_60px_auto] items-center gap-1 px-1 py-1 text-sm">
-              <span>{fish && <FishSprite fish={fish} preset="thumb" form={inst.form} />}</span>
+              <span>{fish && <FishSprite fish={fish} preset="thumb" form={inst.form} animate />}</span>
               <span className="truncate">
                 {fish && <RarityDot rarity={fish.rarity} />}{name}
               </span>

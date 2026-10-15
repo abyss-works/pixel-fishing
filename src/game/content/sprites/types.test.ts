@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cellIndex, paletteColors, validateSprite } from './types';
+import { cellIndex, paletteColors, validateSprite, opaqueBounds, outlineCells } from './types';
 import type { PixelSprite } from './types';
 import { shade } from '../../../shared/lib/color';
 
@@ -24,6 +24,18 @@ describe('픽셀 스프라이트 데이터', () => {
 
   it('무결성 — 올바른 격자는 오류가 없다', () => {
     expect(validateSprite(sprite())).toEqual([]);
+  });
+
+  it('불투명 경계 — 좌우상하 최솟값·최댓값, 전부 투명이면 null', () => {
+    expect(opaqueBounds(['....', '.01.', '..1.', '....'])).toEqual({ minX: 1, maxX: 2, minY: 1, maxY: 2 });
+    expect(opaqueBounds(['....', '....'])).toBeNull();
+  });
+
+  it('윤곽 셀 — 불투명 셀에 4방향으로 닿는 투명 셀, 격자 밖은 제외', () => {
+    const cells = outlineCells(['...', '.0.', '...']).map(([x, y]) => `${x},${y}`).sort();
+    expect(cells).toEqual(['0,1', '1,0', '1,2', '2,1']);
+    // 가장자리에 붙은 셀은 격자 안쪽 이웃만 남는다
+    expect(outlineCells(['0.']).map(([x, y]) => `${x},${y}`)).toEqual(['1,0']);
   });
 
   it('무결성 — 행 수·행 길이·문자·인덱스 범위를 각각 잡아낸다', () => {

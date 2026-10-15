@@ -18,7 +18,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, tick
       <div className="grid grid-cols-2 grid-rows-1 gap-2 items-stretch flex-1">
         <span className="content-center">
           {fish && (
-            <FishSprite fish={fish} preset="portrait" discovered={found}
+            <FishSprite fish={fish} preset="portrait" discovered={found} animate={found}
                         ariaLabel={found && name ? name : '미확인 지명수배'} className="block mx-auto" />
           )}
           <b className="block mt-1 text-gold">{found && name ? name : '???'}</b>
