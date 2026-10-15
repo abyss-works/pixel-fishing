@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BAITS } from '../../../game/content/baits';
-import { MAX_BOAT, newState, rodStats } from '../../../game/rules/logic';
+import { BOATS, MAX_BOAT, WALK_BAG_CAP, newState, rodStats } from '../../../game/rules/logic';
 import {
   createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows,
   selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodUpgradePreview,
@@ -20,6 +20,11 @@ describe('정비 화면 데이터', () => {
     const game = newState();
     const available = selectBoatPurchasePreview(game);
     expect(available.kind).toBe('available');
+    // 맨발은 도보 상한, 배가 있으면 그 배의 가방 상한이 "현재"다
+    if (available.kind === 'available') expect(available.currentBagCap).toBe(WALK_BAG_CAP);
+    game.boat = 1;
+    const second = selectBoatPurchasePreview(game);
+    if (second.kind === 'available') expect(second.currentBagCap).toBe(BOATS[0].bagCap);
     game.boat = MAX_BOAT;
     expect(selectBoatPurchasePreview(game)).toMatchObject({ kind: 'max' });
     expect(selectBoatPurchaseResult(1).boatName).toBeTruthy();

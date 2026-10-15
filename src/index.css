@@ -43,6 +43,7 @@
   --radius-sm: 6px;  /* 구 --r-sm — rounded-sm */
   --radius-md: 10px; /* 구 --r-md — rounded-md */
   --shadow-panel: 0 6px 24px rgba(0, 0, 0, 0.45); /* 구 --shadow */
+  --text-shadow-hud: 0 1px 2px rgba(0, 0, 0, 0.6); /* 캔버스 위 HUD 글자 — text-shadow-hud */
 
   /* 애니메이션 — animate-* 유틸로 노출. 파라미터(--a/--d/--i)는 사용처가 inline style로 주입 */
   --animate-fade-in: fade-in 0.2s ease-out;
@@ -206,9 +207,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn:disabled { opacity: 0.4; cursor: default; }
 
-  /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리) */
+  /* 확정 버튼 — 전폭은 full 속성으로 (variant와 레이아웃 분리). 위 여백은 호출부 레이아웃(gap)이 정한다 */
   .pf-btn.primary {
-    margin-top: 12px;
     background: var(--c-gold);
     border-color: #c9a227;
     color: #08111f;

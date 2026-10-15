@@ -12,7 +12,8 @@ import FishSprite from '../../../../ui/fish/FishSprite';
 import CardCarousel from '../../../../ui/CardCarousel';
 import { RarityText } from '../../../../ui/fish/RarityTag';
 import { RARITY, RARITY_ORDER } from '../../../../../game/content/rarity';
-import { RARITY_CARD } from '../../../../ui/fish/RarityTag';
+import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
+import DataTable from '../../../../ui/DataTable';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
 const FISH_PER_VIEW = 6;
@@ -84,7 +85,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                 {focusedFishes.map(({ fish: f, discovered: caught }) => {
                     return (
                       <div key={f.id} data-rarity={f.rarity}
-                           className={cx(RARITY_CARD, 'p-1 basis-(--card-w)', !caught && 'opacity-[0.72]')}>
+                           className={cx(RARITY_CARD, 'p-1 basis-(--card-w)', !caught && DIM_CARD)}>
                         <FishSprite fish={f} preset="thumb" form="normal" discovered={caught}
                                     ariaLabel={caught ? f.name : '미확인 어종'}
                                     className="block mx-auto" />
@@ -130,7 +131,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
       <div className="shrink-0">
         <SectionTitle>등급 분포 — {tableZone.name}</SectionTitle>
         <div className={cx(TABLE_H, 'pf-frame p-2 overflow-x-auto overflow-y-hidden')}>
-          <table className="w-full text-2xs">
+          <DataTable className="text-2xs">
             <thead>
               <tr className="text-text-dim">
                 <th scope="col" className="text-left font-normal pb-1">어군</th>
@@ -151,7 +152,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </div>
       </div>
 

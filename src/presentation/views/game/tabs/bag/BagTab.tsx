@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
+import PageTitle from '../../../../ui/PageTitle';
+import Subheading from '../../../../ui/Subheading';
+import { fmtGold } from '../../../../ui/format';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
 import { selectInventoryItemCount } from '../../../../../features/inventory/model/catalog';
@@ -54,7 +57,7 @@ function ItemSection({ game, dispatch, setToast }: {
 
   return (
     <div className="flex flex-col gap-1">
-      <h5 className="text-sm text-text-dim mb-1">미끼</h5>
+      <Subheading>미끼</Subheading>
       <div className="pf-frame divide-y divide-line">
         {rows.map(({ bait, count }: { bait: Bait; count: number }) => {
           const active = game.activeBait === bait.id;
@@ -97,9 +100,9 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   const shown = slots.filter(Boolean).length;
   return (
     <div className="mb-2">
-      <h5 className="text-sm text-text-dim mb-1">
+      <Subheading>
         전시대 <span className="pf-accent">{shown}/{EXHIBIT_SLOTS}</span>
-      </h5>
+      </Subheading>
       <div className="pf-frame divide-y divide-line">
         {slots.map((inst, i) => {
           if (!inst) return <div key={i} className="px-2 py-1.5 text-xs text-text-dim">빈 칸</div>;
@@ -198,11 +201,10 @@ export default function BagTab({ game, dispatch, setToast }: {
         <>
           {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-lg text-gold">
-              물고기 (<span className={cx('pf-accent', bagFull && 'text-danger')}>
-                {bagCount}</span>
-              <span className="pf-accent text-text-dim">/{cap}</span>마리)
-            </h3>
+            <PageTitle>
+              물고기 (<span className={cx(bagFull && 'text-danger')}>{bagCount}</span>
+              <span className="text-text-dim">/{cap}</span>마리)
+            </PageTitle>
             {bagCount > 0 && (
               <PillButton
                 aria-label="자동 잠금"
@@ -244,7 +246,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                         <span className="pf-accent text-text-dim text-right whitespace-nowrap">
                           {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
                         </span>
-                        <span className="pf-accent text-right">{subtotal}G</span>
+                        <span className="pf-accent text-right">{fmtGold(subtotal)}</span>
                         <IconButton
                           glyph={allLocked ? 'lock' : 'lockOpen'} size={14}
                           tone={allLocked ? 'gold' : 'dim'}
@@ -279,7 +281,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </div>
               <Note>
-                판매 가능 <span className="pf-accent">{total}G</span> · 판매는 집 궤짝/항구 어시장에서.
+                판매 가능 <span className="pf-accent">{fmtGold(total)}</span> · 판매는 집 궤짝/항구 어시장에서.
                 자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.
                 별은 전시대에 올린다 — 전시 중에는 팔리지 않는다.
                 행 소계는 그 종 판매가 합계다 — 정렬은 등급이 높은 순.
