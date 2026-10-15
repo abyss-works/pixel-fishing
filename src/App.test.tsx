@@ -705,6 +705,20 @@ describe('R22: 도움말 탭', () => {
       expect(help, topic).toContain(topic);
     }
   });
+
+  it('v0.6.7 이후 콘텐츠가 도움말에 있다 — 바다·낮밤·바운티 헌팅·설정, 마지막 갱신 표기', () => {
+    render(<App />);
+    clickTab('도움말');
+    const help = document.body.textContent ?? '';
+    for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '납품', '네임드 토벌', '도전권', '유물',
+      '미끼', 'Esc', '물고기 그래픽', '다시 보지 않기', '닉네임', '도움말 마지막 갱신']) {
+      expect(help, topic).toContain(topic);
+    }
+    // 정본에서 쓰지 않는 말
+    for (const banned of ['지명 수배', '지명수배', '수역', '군집', '챌린지']) {
+      expect(help, banned).not.toContain(banned);
+    }
+  });
 });
 
 describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상세 배타 전환', () => {
