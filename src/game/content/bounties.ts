@@ -1,7 +1,7 @@
 // 바운티 헌팅 의뢰 템플릿 — 해역별 의뢰 행을 추가해 확장한다.
 // 어종 목록은 어종 데이터의 id를 참조한다(복제 금지). 수량과 보상 수치는 이 데이터가 정본이다.
 // 보상 스케일링 규칙: 난이도 보상 ≈ 그 난이도 의뢰들 판매가 평균의 3배,
-// 네임드 보상은 어려움 등급 보상의 2.5배다.
+// 네임드 보상은 어려움 등급 보상의 25배다(2026-10-17 10배 상향 — 구역 전설 수집·하루 1회 상한이 게이트).
 import type { RarityId } from './rarity.js';
 
 export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar';
@@ -45,7 +45,7 @@ const Q = (
 });
 
 export const BOUNTIES: readonly BountyQuest[] = [
-  // 1-1 태평양 — 쉬움 4000 · 보통 8000 · 어려움 16000 · 네임드 40000
+  // 1-1 태평양 — 쉬움 4000 · 보통 8000 · 어려움 16000 · 네임드 400000
   Q('pacific', 'easy', 'common', null, 250, 4000),
   Q('pacific', 'easy', 'rare', null, 10, 4000),
   Q('pacific', 'easy', 'epic', null, 2, 4000),
@@ -57,8 +57,8 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('pacific', 'hard', 'rare', null, 40, 16000),
   Q('pacific', 'hard', 'epic', null, 10, 16000),
   Q('pacific', 'hard', 'legendary', null, 2, 16000),
-  Q('pacific', 'named', null, 'megalodon', 1, 40000),
-  // 1-2 동남아 — 쉬움 16000 · 보통 30000 · 어려움 60000 · 네임드 150000
+  Q('pacific', 'named', null, 'megalodon', 1, 400000),
+  // 1-2 동남아 — 쉬움 16000 · 보통 30000 · 어려움 60000 · 네임드 1500000
   Q('seasia', 'easy', 'common', null, 250, 16000),
   Q('seasia', 'easy', 'rare', null, 10, 16000),
   Q('seasia', 'easy', 'epic', null, 2, 16000),
@@ -70,8 +70,8 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('seasia', 'hard', 'rare', null, 40, 60000),
   Q('seasia', 'hard', 'epic', null, 10, 60000),
   Q('seasia', 'hard', 'legendary', null, 2, 60000),
-  Q('seasia', 'named', null, 'leviathan', 1, 150000),
-  // 1-3 인도양 — 쉬움 30000 · 보통 70000 · 어려움 140000 · 네임드 350000
+  Q('seasia', 'named', null, 'leviathan', 1, 1500000),
+  // 1-3 인도양 — 쉬움 30000 · 보통 70000 · 어려움 140000 · 네임드 3500000
   Q('indian', 'easy', 'common', null, 250, 30000),
   Q('indian', 'easy', 'rare', null, 10, 30000),
   Q('indian', 'easy', 'epic', null, 2, 30000),
@@ -83,8 +83,8 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'hard', 'rare', null, 40, 140000),
   Q('indian', 'hard', 'epic', null, 10, 140000),
   Q('indian', 'hard', 'legendary', null, 2, 140000),
-  Q('indian', 'named', null, 'ananta', 1, 350000),
-  // 1-4 마다가스카르 — 쉬움 45000 · 보통 100000 · 어려움 200000 · 네임드 500000
+  Q('indian', 'named', null, 'ananta', 1, 3500000),
+  // 1-4 마다가스카르 — 쉬움 45000 · 보통 100000 · 어려움 200000 · 네임드 5000000
   Q('madagascar', 'easy', 'common', null, 250, 45000),
   Q('madagascar', 'easy', 'rare', null, 10, 45000),
   Q('madagascar', 'easy', 'epic', null, 2, 45000),
@@ -96,7 +96,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('madagascar', 'hard', 'rare', null, 40, 200000),
   Q('madagascar', 'hard', 'epic', null, 10, 200000),
   Q('madagascar', 'hard', 'legendary', null, 2, 200000),
-  Q('madagascar', 'named', null, 'elder-sixgill', 1, 500000),
+  Q('madagascar', 'named', null, 'elder-sixgill', 1, 5000000),
 ];
 
 const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
