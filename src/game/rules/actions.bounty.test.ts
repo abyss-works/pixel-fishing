@@ -323,11 +323,11 @@ describe('resolveChallenge', () => {
   it('실패는 감사 이벤트만 남기고 상태가 그대로다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
-      act({ success: false, hits: 5, misses: 4 }), full());
+      act({ success: false, hits: 5, misses: 3 }), full());
     if (!out.ok) throw new Error(out.error);
     expect(out.state).toEqual(st);
     expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 4 } }]);
+      payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 3 } }]);
   });
 });
 

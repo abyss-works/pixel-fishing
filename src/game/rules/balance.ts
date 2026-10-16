@@ -81,11 +81,11 @@ export const BOUNTY_NAMED_DAILY_CAP = 1;
 // Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
-// 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 6~마다가스카르 9)만큼 맞히면 성공, 4번째 실패에 탈락.
+// 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 6~마다가스카르 9)만큼 맞히면 성공, 3번째 실패에 탈락.
 // 화면은 결투(왕복 커서·옮겨 가는 존)다.
 // 존 폭은 고정 관대값이다(자리만 옮긴다 — 수역 게이트와 무관, 어렵게 하지 않는다).
 export const CHALLENGE_WINDOW_MS = 4 * 3600_000; // 도전권 유효 4시간 — 방치 중 조우해도 복귀까지 남도록
-export const CHALLENGE_MAX_MISS = 3;
+export const CHALLENGE_MISS_LIMIT = 3; // 이만큼 실패하면 탈락 — 모든 네임드 공통
 export const CHALLENGE_YELLOW = 0.3;
 export const CHALLENGE_RED = 0.1;
 

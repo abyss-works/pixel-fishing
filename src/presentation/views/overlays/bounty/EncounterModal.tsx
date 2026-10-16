@@ -2,12 +2,12 @@
 // 들어가며(목격담 + 조우 버튼) → 결투(멈추지 않고 왕복하는 커서로 존을 맞힌다. 맞히면 네임드 체력이
 // 줄고 존이 다른 자리로 옮겨 가며 빨라진다. 놓치거나 한 번 왕복하도록 치지 않으면 도주 게이지가 찬다) →
 // 이기면 이름이 드러나고 토벌 버튼이 결과를 서버로 보낸다. 지면 즉시 실패를 보내고 흔적은 사라진다.
-// 횟수 규칙(네임드 체력만큼 히트면 성공·4번째 실패 탈락)은 strikeChallenge가 정본이고, 움직임은 결투 모델이 정한다.
+// 횟수 규칙(네임드 체력만큼 히트면 성공·3번째 실패 탈락)은 strikeChallenge가 정본이고, 움직임은 결투 모델이 정한다.
 // 승부 중에는 닫을 수 없다 — 닫기가 도망이 되면 실패가 흔적을 지우는 규칙이 비어 버린다.
 // 시도 판정은 클라 주장(PERFECT 선례) — 서버는 티켓 유효+수주 활성+주장 정합성만 본다.
 // 키는 exclusive 스코프로 가져간다 — 아래 필드 낚시로 새지 않는다 (hotkeys 계층).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CHALLENGE_MAX_MISS, CHALLENGE_YELLOW } from '../../../../game/rules/balance.js';
+import { CHALLENGE_MISS_LIMIT, CHALLENGE_YELLOW } from '../../../../game/rules/balance.js';
 import { newChallenge, strikeChallenge } from '../../../../game/rules/challenge.js';
 import type { ChallengeRun } from '../../../../game/rules/challenge.js';
 import type { EncounterData } from '../../../../features/bounty/model/challenge';
@@ -24,7 +24,7 @@ import { josa } from '../../../ui/format';
 
 const TICK_MS = 50;
 /** 도주 게이지 칸 수 — 이만큼 차면 놓친다 */
-const ESCAPE_SLOTS = CHALLENGE_MAX_MISS + 1;
+const ESCAPE_SLOTS = CHALLENGE_MISS_LIMIT;
 
 export interface EncounterResult { hits: number; misses: number; success: boolean }
 

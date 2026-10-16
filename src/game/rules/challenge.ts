@@ -1,7 +1,7 @@
 // 네임드 도전 순수 규칙 — 시도 상태머신 + 도전권 유효 판정.
 // 조우 창(UI)과 리듀서(resolveChallenge)가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
-import { CHALLENGE_MAX_MISS, CHALLENGE_WINDOW_MS } from './balance.js';
+import { CHALLENGE_MISS_LIMIT, CHALLENGE_WINDOW_MS } from './balance.js';
 import { bountyById } from '../content/bounties.js';
 import { namedById } from '../content/named.js';
 
@@ -22,7 +22,7 @@ export interface ChallengeRun {
   success: boolean;
 }
 
-/** 새 도전 — 네임드 체력만큼 맞히면 성공, 4번째 실패에 탈락 */
+/** 새 도전 — 네임드 체력만큼 맞히면 성공, 3번째 실패에 탈락 */
 export const newChallenge = (): ChallengeRun =>
   ({ hits: 0, misses: 0, done: false, success: false });
 
@@ -32,7 +32,7 @@ export function strikeChallenge(s: ChallengeRun, hit: boolean, needHits: number)
   const hits = s.hits + (hit ? 1 : 0);
   const misses = s.misses + (hit ? 0 : 1);
   if (hits >= needHits) return { hits, misses, done: true, success: true };
-  if (misses > CHALLENGE_MAX_MISS) return { hits, misses, done: true, success: false };
+  if (misses >= CHALLENGE_MISS_LIMIT) return { hits, misses, done: true, success: false };
   return { hits, misses, done: false, success: false };
 }
 

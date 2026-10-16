@@ -15,11 +15,11 @@ describe('strikeChallenge', () => {
     expect(run(Array(9).fill(true), 9).success).toBe(true);
   });
 
-  it('체력과 무관하게 3실패까지는 계속, 4번째에 탈락한다', () => {
+  it('체력과 무관하게 2실패까지는 계속, 3번째 실패에 탈락한다', () => {
     for (const need of [6, 9]) {
-      expect(run([false, false, false], need).done).toBe(false);
-      expect(run([false, false, false, false], need))
-        .toEqual({ hits: 0, misses: 4, done: true, success: false });
+      expect(run([false, false], need).done).toBe(false);
+      expect(run([false, false, false], need))
+        .toEqual({ hits: 0, misses: 3, done: true, success: false });
     }
   });
 

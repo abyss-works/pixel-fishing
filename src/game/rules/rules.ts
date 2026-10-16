@@ -15,7 +15,7 @@ import { BOATS, MAX_BOAT } from '../content/boats.js';
 import { bountyById, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
 import { artifactById } from '../content/artifacts.js';
 import {
-  upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MAX_MISS,
+  upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
@@ -172,10 +172,10 @@ export function canResolveChallenge(
   const { success, hits, misses } = claimed;
   const need = challengeHpOf(questId);
   if (need === null) return no('bad-request');
-  // 성공 = 네임드 체력만큼 히트·실패 허용 이내, 실패 = 허용 초과 (체력은 네임드마다, 실패 허용은 공통)
+  // 성공 = 네임드 체력만큼 히트·실패 한도 미만, 실패 = 실패 한도 도달 (체력은 네임드마다, 실패 한도는 공통)
   const coherent = success
-    ? hits >= need && misses <= CHALLENGE_MAX_MISS
-    : misses > CHALLENGE_MAX_MISS;
+    ? hits >= need && misses < CHALLENGE_MISS_LIMIT
+    : misses >= CHALLENGE_MISS_LIMIT;
   if (!coherent) return no('bad-request');
   const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
