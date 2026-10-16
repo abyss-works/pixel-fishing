@@ -1,6 +1,7 @@
 // 조우 창 — 바다 위 스테이지 모달. 흔적 카드의 추적 버튼이 연다.
 // 들어가며(목격담 + 조우 버튼) → 승부(5배폭 단일 바에 10회 시도, 4번째 실패에 탈락) →
-// 이기면 이름이 드러나고 토벌 버튼이 결과를 서버로 보낸다. 지면 감사만 보내고 흔적은 남는다.
+// 이기면 이름이 드러나고 토벌 버튼이 결과를 서버로 보낸다. 지면 즉시 실패를 보내고 흔적은 사라진다.
+// 승부 중에는 닫을 수 없다 — 닫기가 도망이 되면 실패가 흔적을 지우는 규칙이 비어 버린다.
 // 시도 판정은 클라 주장(PERFECT 선례) — 서버는 티켓 유효+수주 활성+주장 정합성만 본다.
 // 키는 exclusive 스코프로 가져간다 — 아래 필드 낚시로 새지 않는다 (hotkeys 계층).
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -53,7 +54,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     }
     doneRef.current = true;
     setPhase(next.success ? 'won' : 'lost');
-    // 실패는 확정 버튼 없이 감사만 보낸다 — 흔적은 남아 다시 추적할 수 있다
+    // 실패는 확정 버튼 없이 바로 보낸다 — 서버가 도전권을 지우고 흔적이 사라진다
     if (!next.success) resolveRef.current({ hits: next.hits, misses: next.misses, success: false });
   }, []);
 
@@ -66,10 +67,13 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   const strikeRef = useRef(strike);
   useEffect(() => { strikeRef.current = strike; });
 
+  const closable = phase !== 'run';
+  const closableRef = useRef(closable);
+  useEffect(() => { closableRef.current = closable; });
   useKeyScope(e => {
     if (e.code === 'Space') { e.preventDefault(); strikeRef.current(); return true; }
     // 모달 자체의 Esc는 이 exclusive 스코프 아래라 닿지 않는다 — 여기서 같은 출구를 연다
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); return true; }
+    if (e.key === 'Escape') { e.preventDefault(); if (closableRef.current) onClose(); return true; }
   }, { exclusive: true });
 
   useEffect(() => {
@@ -91,8 +95,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   const attempt = selectChallengeAttempt(run);
   const revealed = found || phase === 'won';
   return (
-    <Modal layer="stage" onClose={onClose}>
-      <Panel title={phase === 'won' ? '토벌' : '조우'} onClose={onClose}
+    <Modal layer="stage" onClose={onClose} closable={closable}>
+      <Panel title={phase === 'won' ? '토벌' : '조우'} onClose={closable ? onClose : undefined}
              className="bg-surface text-center text-sm">
         <FishSprite fish={fish} preset="portrait" discovered={revealed} animate={revealed}
                     ariaLabel={revealed ? named.name : '그림자'} className="block mx-auto" />
@@ -151,7 +155,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         )}
         {phase === 'lost' && (
           <>
-            <span>놓쳤다 — 흔적은 아직 남아 있다.</span>
+            <span>놓쳤다 — 흔적이 사라졌다. 다시 조우해야 한다.</span>
             <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}

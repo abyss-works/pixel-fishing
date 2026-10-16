@@ -552,8 +552,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'resolveChallenge': {
       // 네임드 도전 결과 확정 — 시도 자체는 클라 주장이라 서버는 티켓 유효 +
       // 수주 활성 + 주장 정합성만 본다 (rules.canResolveChallenge).
-      // 성공하면 도감에 올리고(납품 가능해진다) 서버가 진행도 +1·티켓 소모를
-      // 뒤에서 처리한다. 실패는 감사 이벤트만 남기고 티켓은 유지된다.
+      // 성공하면 도감에 올리고(납품 가능해진다) 서버가 진행도 +1을 뒤에서 처리한다.
+      // 티켓은 성공·실패 모두 서버가 소모한다 — 실패는 상태를 바꾸지 않고 감사 이벤트만 남긴다.
       if (typeof action.questId !== 'string' || typeof action.success !== 'boolean'
           || typeof action.hits !== 'number' || typeof action.misses !== 'number') {
         return { ok: false, error: 'bad-request' };
