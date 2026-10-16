@@ -18,7 +18,10 @@ const LocationRef = z.union([
 ]);
 
 const schemas = {
-  catch: z.object({ type: z.literal('catch'), spot: z.string(), judgment: Judgment }),
+  catch: z.object({
+    type: z.literal('catch'), spot: z.string(), judgment: Judgment,
+    forceEncounter: z.literal(true).optional(),
+  }),
   sell: z.object({ type: z.literal('sell'), uids: z.array(z.unknown()) }),
   upgradeRod: z.object({ type: z.literal('upgradeRod') }),
   buyBoat: z.object({ type: z.literal('buyBoat') }),

@@ -164,8 +164,9 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
 // (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
 // 개체는 만들지 않고 진행도만 올린다 (판매 불가 개념이라 파이프라인에 태우지 않는다).
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
+// force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
 export function rollNamedEncounter(
-  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random,
+  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
 ): BountyQuest | null {
   const zone = topZoneOfSpot(spot);
   const cands = activeIds
@@ -173,7 +174,8 @@ export function rollNamedEncounter(
     .filter((q): q is BountyQuest =>
       q !== undefined && q.difficulty === 'named' && q.zone === zone
       && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
-  if (cands.length === 0 || rng() >= NAMED_ENCOUNTER_RATE) return null;
+  if (cands.length === 0) return null;
+  if (rng() >= NAMED_ENCOUNTER_RATE && !force) return null;
   return cands[Math.floor(rng() * cands.length)];
 }
 

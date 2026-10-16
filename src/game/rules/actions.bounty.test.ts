@@ -204,6 +204,22 @@ describe('rollNamedEncounter', () => {
     const q = rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0);
     expect(q?.id).toBe('pacific-named-megalodon');
   });
+
+  it('강제 조우는 확률 게이트만 건너뛴다 — 수주·해역·수역 조건은 그대로다', () => {
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0.999, true)?.id)
+      .toBe('pacific-named-megalodon');
+    expect(rollNamedEncounter([], 'sea', () => 0, true)).toBeNull();
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'dragonhole', () => 0, true)).toBeNull();
+    expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'mozstrait', () => 0, true)).toBeNull();
+  });
+
+  it('강제 조우도 rng 소비 횟수는 같다 — 뒤따르는 통상 추첨 결과가 바뀌지 않는다', () => {
+    let forced = 0;
+    let natural = 0;
+    rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => { forced++; return 0; }, true);
+    rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => { natural++; return 0; });
+    expect(forced).toBe(natural);
+  });
 });
 
 describe('named ticket', () => {
@@ -229,6 +245,14 @@ describe('named ticket', () => {
     expect(out.events.some(e => e.type === 'ticket')).toBe(false);
     expect(out.result).toMatchObject({ type: 'catch' });
     expect('ticket' in (out.result as object)).toBe(false);
+  });
+
+  it('강제 조우 표시가 있으면 확률과 무관하게 도전권을 남긴다', () => {
+    const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal', forceEncounter: true },
+      deps({ bounty: ctx({ active: ['pacific-named-megalodon'] }), rng: () => 0.999 }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toHaveLength(1);
+    expect(out.result).toMatchObject({ type: 'catch', ticket: 'pacific-named-megalodon' });
   });
 
   it('수주 중이 아니면 게이트가 돌지 않는다', () => {

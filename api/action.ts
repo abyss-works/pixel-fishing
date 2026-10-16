@@ -60,6 +60,15 @@ export function importOwnerEmail(): string {
   return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
 }
 
+// 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
+// 스테이징·로컬 서버에서는 소유자 계정이거나 로컬 오리진일 때만 연다.
+export function debugTriggerAllowed({ vercelEnv, localOrigin, owner }: {
+  vercelEnv: string | undefined; localOrigin: boolean; owner: boolean;
+}): boolean {
+  if (vercelEnv === 'production') return false;
+  return localOrigin || owner;
+}
+
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
@@ -335,10 +344,11 @@ async function route(req: Req, res: Res): Promise<void> {
   // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
-  const action = parseAction(body);
-  if (!action) {
+  const parsed = parseAction(body);
+  if (!parsed) {
     throw new ApiError(400, 'bad-action');
   }
+  let action = parsed;
 
   // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
   // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
@@ -352,6 +362,21 @@ async function route(req: Req, res: Res): Promise<void> {
       const { data: ud } = await admin.auth.getUser(token);
       const email = ud.user?.email?.toLowerCase() ?? '';
       if (email !== importOwnerEmail().toLowerCase()) throw new ApiError(403, 'import-owner-only');
+    }
+  }
+
+  // 테스트용 강제 조우 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
+  if (action.type === 'catch' && action.forceEncounter) {
+    const origin = String(req.headers.origin ?? '');
+    const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const vercelEnv = process.env.VERCEL_ENV;
+    let owner = false;
+    if (vercelEnv !== 'production' && !localOrigin) {
+      const { data: ud } = await admin.auth.getUser(token);
+      owner = (ud.user?.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
+    }
+    if (!debugTriggerAllowed({ vercelEnv, localOrigin, owner })) {
+      action = { type: 'catch', spot: action.spot, judgment: action.judgment };
     }
   }
 
@@ -645,7 +670,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   // 행 기록은 아래 현상금 블록이 맡는다. 아직 아무것도 기록하지 않았으니
   // 덧붙이기가 안전하다 (writes·events는 아래에서 out 기준으로 생긴다).
   if (out.ok && action.type === 'catch' && catchBase && bounty) {
-    const namedHit = rollNamedEncounter(bounty.active, action.spot, Math.random);
+    const namedHit = rollNamedEncounter(bounty.active, action.spot, Math.random, action.forceEncounter === true);
     if (namedHit) {
       out.events.push({ type: 'ticket', payload: { questId: namedHit.id } });
       if (out.result.type === 'catch') out.result.ticket = namedHit.id;

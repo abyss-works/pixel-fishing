@@ -31,7 +31,7 @@ import { isNight } from './time.js';
 import type { DayPhase } from './time.js';
 
 export type GameAction =
-  | { type: 'catch'; spot: SpotId; judgment: Judgment }
+  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true } // forceEncounter: 테스트용 강제 조우(서버가 운영에서 떼어 낸다)
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
@@ -284,7 +284,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 네임드 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
-      const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng);
+      const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng, action.forceEncounter === true);
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id } }]
         : [];
