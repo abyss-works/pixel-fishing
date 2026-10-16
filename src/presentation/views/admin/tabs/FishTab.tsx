@@ -17,6 +17,7 @@ import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
+import Frame from '../../../ui/Frame';
 
 // 어종 탭 — **수역 단위 통합 대시보드**. 한 표 안에 편집과 통계가 같이 산다(사용자 지시:
 // 어종별 데이터와 통계치를 분리하지 마라 — 수치를 조절하면 그 자리에서 즉시 읽히게).
@@ -167,7 +168,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   const hasOverride = hasSpotSimulationOverride(bid, sim, list);
 
   return (
-    <section className="pf-frame p-3" aria-labelledby={`h-${bid}`}>
+    <Frame as="section" className="p-3" aria-labelledby={`h-${bid}`}>
       {/* ── 머리: 해역 식별 + 펼침 토글 ── */}
       <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
         <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
@@ -362,7 +363,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
           </div>
         </>
       )}
-    </section>
+    </Frame>
   );
 }
 

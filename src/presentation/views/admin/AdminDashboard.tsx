@@ -28,6 +28,7 @@ import EconomyTab from './tabs/EconomyTab';
 import ProgressionTab from './tabs/ProgressionTab';
 import AntiAbuseTab from './tabs/AntiAbuseTab';
 import OpsTab from './tabs/OpsTab';
+import LinkButton from '../../ui/LinkButton';
 
 type AdminTabKey =
   | 'overview' | 'live' | 'users' | 'letters' | 'metrics' | 'economy'
@@ -93,8 +94,7 @@ export default function AdminApp() {
             <h1 className="text-lg text-gold pf-accent">관리자 대시보드</h1>
             <Note size="xs" className="my-0">{SUBTITLE[tab]}</Note>
           </div>
-          <a href="/" aria-label="게임으로 돌아가기"
-             className="pf-btn ghost text-sm">← 게임으로</a>
+          <LinkButton href="/" aria-label="게임으로 돌아가기" variant="ghost" className="text-sm">← 게임으로</LinkButton>
         </header>
 
         <div className="flex flex-col lg:flex-row min-h-[calc(100vh-64px)]">

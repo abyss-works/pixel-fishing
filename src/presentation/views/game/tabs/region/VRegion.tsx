@@ -14,6 +14,7 @@ import { RarityText } from '../../../../ui/fish/RarityTag';
 import { RARITY, RARITY_ORDER } from '../../../../../game/content/rarity';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import DataTable from '../../../../ui/DataTable';
+import Frame from '../../../../ui/Frame';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
 const FISH_PER_VIEW = 6;
@@ -63,7 +64,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   return (
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <div className={cx(LORE_H, 'shrink-0 overflow-hidden pf-frame p-2 flex flex-col justify-center gap-0.5')}>
+      <Frame className={cx(LORE_H, 'shrink-0 overflow-hidden p-2 flex flex-col justify-center gap-0.5')}>
         <h3 className="text-sm text-gold pf-accent truncate">
           {zone.name}
         </h3>
@@ -71,13 +72,13 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         <p className="text-2xs leading-[1.6] text-text-dim line-clamp-3">
           {zone.lore}
         </p>
-      </div>
+      </Frame>
 
       {/* 수역 정보 — 고정 높이 슬롯. 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록 배타 교체.
           **존 로어를 덮지 않는다** — 존 정보와 별도 슬롯에 표시한다 */}
       <div className="shrink-0">
         <SectionTitle>어군 정보</SectionTitle>
-        <div className={cx(SLOT_H, 'overflow-y-auto pf-frame p-0 flex flex-col')}>
+        <Frame className={cx(SLOT_H, 'overflow-y-auto p-0 flex flex-col')}>
           {focused ? (
             /* ── 사거리 내 어군 상세 ── */
             <div className="flex flex-col flex-1 p-2 gap-1.5">
@@ -121,7 +122,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
               })}
             </div>
           )}
-        </div>
+        </Frame>
       </div>
 
       {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성).
@@ -130,7 +131,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
           서브트리마다 행 수가 다르다(마을 2 / 태평양 2 / 동남아 3 / 인도양 2 / 마다가스카르 2) — 높이 고정 */}
       <div className="shrink-0">
         <SectionTitle>등급 분포 — {tableZone.name}</SectionTitle>
-        <div className={cx(TABLE_H, 'pf-frame p-2 overflow-x-auto overflow-y-hidden')}>
+        <Frame className={cx(TABLE_H, 'p-2 overflow-x-auto overflow-y-hidden')}>
           <DataTable className="text-2xs">
             <thead>
               <tr className="text-text-dim">
@@ -153,7 +154,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
               ))}
             </tbody>
           </DataTable>
-        </div>
+        </Frame>
       </div>
 
       {/* 팁·조작 — 최상위 존 기준(하위 존은 부모 폴백). 항목 수가 가변(3~4개)이라 한

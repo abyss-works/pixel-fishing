@@ -5,6 +5,8 @@ import { cx } from '../../ui/cx';
 import PillButton from '../../ui/PillButton';
 import Note from '../../ui/Note';
 import PixelIcon from '../../ui/PixelIcon';
+import Frame from '../../ui/Frame';
+import Slider from '../../ui/Slider';
 
 // 게임 시각 고정 — 오프라인 개발 모드(로컬 게이트웨이) 전용. 서버는 자기 시각으로 판정한다.
 export default function TimeControl() {
@@ -25,7 +27,7 @@ export default function TimeControl() {
   };
 
   return (
-    <div className="pf-frame px-3 py-2 flex flex-col gap-2">
+    <Frame className="px-3 py-2 flex flex-col gap-2">
       {/* 상태 줄 — 해/달 아이콘 + 게임 시각 + 낮밤 */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm">
@@ -44,15 +46,14 @@ export default function TimeControl() {
       </div>
 
       {/* 슬라이더 — 주기 내 분(0~59, 0=자정). 드래그하면 낮/밤·어둠·해/달이 즉시 반영된다. */}
-      <input type="range" min={0} max={59} step={1}
-             value={minute}
-             aria-label="주기 내 시각 (분)"
-             onChange={e => {
-               const m = Number(e.target.value);
-               setTimeOverride(atMinute(m));
-               setTick(t => t + 1);
-             }}
-             className="w-full accent-gold cursor-pointer" />
+      <Slider min={0} max={59} step={1}
+              value={minute}
+              aria-label="주기 내 시각 (분)"
+              onChange={e => {
+                const m = Number(e.target.value);
+                setTimeOverride(atMinute(m));
+                setTick(t => t + 1);
+              }} />
 
       {/* 눈금 — 밤(게임 20시~4시)은 양끝, 낮(4시~20시)은 가운데 */}
       <div className="flex items-center gap-2 text-xs text-text-dim">
@@ -72,6 +73,6 @@ export default function TimeControl() {
         밤 어종·어둠·이동 감속을 보려면 슬라이더를 0~9(새벽) 또는 50~59(저녁)로.
         로컬 개발 전용 — 운영(클라우드)은 서버가 시각을 판정한다.
       </Note>
-    </div>
+    </Frame>
   );
 }

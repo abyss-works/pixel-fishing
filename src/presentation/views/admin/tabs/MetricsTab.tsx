@@ -9,7 +9,7 @@ import { readAdminMetrics } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Frame, StackedBarsPair, RetentionCell, TabState } from '../charts';
+import { ChartSection, StackedBarsPair, RetentionCell, TabState } from '../charts';
 
 type Range = '30' | '90';
 const COHORTS = ['d1', 'd3', 'd7', 'd14', 'd30'] as const;
@@ -44,7 +44,7 @@ export default function MetricsTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Frame title="활성 유저" aside={
+      <ChartSection title="활성 유저" aside={
         <>
           <MetricSwitch value={range}
                         options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
@@ -69,9 +69,9 @@ export default function MetricsTab() {
             {granted ? '아직 활성 데이터가 없다.' : '운영 DB 연결 후 채워진다.'}
           </Note>
         )}
-      </Frame>
+      </ChartSection>
 
-      <Frame title="리텐션 코호트">
+      <ChartSection title="리텐션 코호트">
         {retention.length > 0 ? (
           <DataTable>
             <thead>
@@ -98,7 +98,7 @@ export default function MetricsTab() {
             {granted ? '아직 코호트가 없다.' : '운영 DB 연결 후 채워진다.'}
           </Note>
         )}
-      </Frame>
+      </ChartSection>
     </div>
   );
 }

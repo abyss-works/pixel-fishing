@@ -18,6 +18,7 @@ import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { maskUid } from './maskUid';
 import { cx } from '../../../ui/cx';
+import Frame from '../../../ui/Frame';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(게스트 진행 소멸 — 경고+백업).
@@ -153,7 +154,7 @@ export default function AccountModal({
       )}
 
       <SectionTitle>닉네임</SectionTitle>
-      <div className="pf-frame divide-y divide-line mb-2 text-xs">
+      <Frame divided className="mb-2 text-xs">
         <div className="flex items-center gap-2 px-2 py-1">
           <span className="text-text-dim shrink-0">현재</span>
           <span className="truncate" aria-label="현재 닉네임">{nickname ?? '불러오는 중…'}</span>
@@ -167,20 +168,20 @@ export default function AccountModal({
           <Button size="sm" className="shrink-0" disabled={nickBusy || draft.length === 0}
                   onClick={() => void submitNick()}>변경</Button>
         </div>
-      </div>
+      </Frame>
       <Note>한글 1~8자·영문 2~16자(가중치) — 나중에 랭킹에 표시될 이름이에요.</Note>
 
       {/* 내 정보 — **문의 대응용이다.** 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
           화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다. */}
       <SectionTitle>내 정보</SectionTitle>
-      <div className="pf-frame divide-y divide-line mb-2 text-xs">
+      <Frame divided className="mb-2 text-xs">
         <div className="flex items-center gap-2 px-2 py-1">
           <span className="text-text-dim shrink-0">ID</span>
           <span className="pf-accent text-2xs truncate select-text">{uid ? maskUid(uid) : '연결 중…'}</span>
           <Button size="sm" className="ml-auto shrink-0" disabled={!uid}
                   onClick={() => copyId(uid)}>복사</Button>
         </div>
-      </div>
+      </Frame>
       <Note>문의하실 때 이 <b>ID</b>를 함께 알려주시면 빠르게 해결할 수 있어요.<br/>
         가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 

@@ -20,6 +20,7 @@ import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
 import Modal from '../../../ui/Modal';
 import Panel from '../../../ui/Panel';
+import SlotGauge from '../../../ui/SlotGauge';
 import { josa } from '../../../ui/format';
 
 const TICK_MS = 50;
@@ -30,21 +31,6 @@ export interface EncounterResult { hits: number; misses: number; success: boolea
 
 type Phase = 'intro' | 'run' | 'won' | 'lost';
 type Flash = 'hit' | 'miss' | null;
-
-/** 칸 게이지 — 체력은 남은 칸이 빨간색, 도주는 찬 칸이 회색 */
-function Slots({ label, total, filled, tone }: { label: string; total: number; filled: number; tone: 'danger' | 'dim' }) {
-  return (
-    <span className="flex items-center gap-2" aria-label={`${label} ${filled}/${total}`}>
-      <span className="w-8 text-left text-xs text-text-dim">{label}</span>
-      <span className="flex gap-1">
-        {Array.from({ length: total }, (_, i) => (
-          <span key={i} className={cx('w-4 h-3 border border-line',
-            i < filled && (tone === 'danger' ? 'bg-danger' : 'bg-text-dim'))} />
-        ))}
-      </span>
-    </span>
-  );
-}
 
 export default function EncounterModal({ data, onResolve, onClose }: {
   data: EncounterData;
@@ -152,8 +138,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         {phase === 'run' && (
           <>
             <span className="flex flex-col items-center gap-1">
-              <Slots label="체력" total={hp} filled={hp - run.hits} tone="danger" />
-              <Slots label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="dim" />
+              <SlotGauge label="체력" total={hp} filled={hp - run.hits} tone="danger" />
+              <SlotGauge label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="dim" />
             </span>
             {/* 결투 바 — 커서는 멈추지 않고 왕복한다. 존은 맞힐 때마다 자리를 옮긴다 */}
             <div

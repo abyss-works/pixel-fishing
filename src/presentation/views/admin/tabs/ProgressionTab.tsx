@@ -13,7 +13,7 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
-import { BarsChart, Frame, TabState } from '../charts';
+import { BarsChart, ChartSection, TabState } from '../charts';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
@@ -38,7 +38,7 @@ export default function ProgressionTab() {
 
       {/* 분포 셋 — 같은 성격(히스토그램)이라 xl 이상에선 짝지어 나란히 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <Frame title="배 단계">
+        <ChartSection title="배 단계">
           <BarsChart values={boatHist.values} labels={boatHist.labels} height={72} />
           <Note size="2xs" className="my-0">
             {granted
@@ -46,9 +46,9 @@ export default function ProgressionTab() {
                   .map(l => `${l.name} ${l.count}`).join(' · ') || '데이터 없음')
               : '운영 DB 연결 후 채워진다.'}
           </Note>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="낚싯대 레벨">
+        <ChartSection title="낚싯대 레벨">
           {rodHist.values.length > 0 ? (
             <>
               <BarsChart values={rodHist.values}
@@ -64,10 +64,10 @@ export default function ProgressionTab() {
               {granted ? '데이터 없음' : '운영 DB 연결 후 채워진다.'}
             </Note>
           )}
-        </Frame>
+        </ChartSection>
       </div>
 
-      <Frame title="지역 도달 (visited 기준)">
+      <ChartSection title="지역 도달 (visited 기준)">
         <div className="flex items-end gap-4 flex-wrap px-1 pt-1">
           {regionReach.map(r => (
             <div key={r.id} className="text-center min-w-[64px]">
@@ -84,7 +84,7 @@ export default function ProgressionTab() {
           "가본 적 있는 지역" 집계다 — 현재 위치가 아니라 state.visited 기반.
           {' '}{!granted && '운영 DB 연결 후 채워진다.'}
         </Note>
-      </Frame>
+      </ChartSection>
 
       <section>
         <SectionTitle>배 명성 게이트 — 막힌 유저</SectionTitle>

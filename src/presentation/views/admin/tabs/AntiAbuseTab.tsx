@@ -12,7 +12,8 @@ import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Frame, TabState } from '../charts';
+import { ChartSection, TabState } from '../charts';
+import Frame from '../../../ui/Frame';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], [], [], []];
@@ -45,7 +46,7 @@ export default function AntiAbuseTab() {
 
       {/* 행동 이상 — 캐시 타이밍/판정율은 같은 "플레이 행위" 축이라 나란히 본다 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <Frame title="연타 (캐치 간격 &lt;2초 · 최근 7일)">
+        <ChartSection title="연타 (캐치 간격 &lt;2초 · 최근 7일)">
           <Note size="2xs" className="my-0">
             입질 하한 1초 + 스윕 1.4초라 인간은 물리적으로 못 만드는 간격. 서버에 레이트 리밋이
             없어 **간격 분포가 유일한 방어 관측점**(audit ⑤).
@@ -72,9 +73,9 @@ export default function AntiAbuseTab() {
                 </td></tr>}
             </tbody>
           </DataTable>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="PERFECT 판정 비율 이상치 (7일)">
+        <ChartSection title="PERFECT 판정 비율 이상치 (7일)">
           <Note size="2xs" className="my-0">
             30일 전체 평균 {(flags[0]?.perfect_pct_global ?? '—')}%.
             PERFECT ×2는 클라 주장(의도된 구멍)이라 비율 감시가 유일한 대응이다(20캐치 이상).
@@ -99,12 +100,12 @@ export default function AntiAbuseTab() {
                 </td></tr>}
             </tbody>
           </DataTable>
-        </Frame>
+        </ChartSection>
       </div>
 
       {/* 기록 이상 — 원장 위변조 흔적 두 축 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <Frame title="이사 코드 반입 로그">
+        <ChartSection title="이사 코드 반입 로그">
           <Note tone="warn">
             import는 검증 없이 수입되는 **운영자 전용** 경로다(2026-08-24 악용 사고).
             여기 행이 생기면 반입 시각·들여온 자산을 즉시 본다. 제재 절차는 운영 쿼리로 한다.
@@ -129,9 +130,9 @@ export default function AntiAbuseTab() {
                 </td></tr>}
             </tbody>
           </DataTable>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="도감↔이벤트 차액 상위">
+        <ChartSection title="도감↔이벤트 차액 상위">
           <Note size="2xs" className="my-0">
             v0.5.0 이전 플레이분은 정상적으로 차액이 난다(events 제도 이전).
             그 <span className="pf-accent text-gold">이후 가입</span> 계정의 큰 차액만 위작 후보다.
@@ -155,7 +156,7 @@ export default function AntiAbuseTab() {
                 </td></tr>}
             </tbody>
           </DataTable>
-        </Frame>
+        </ChartSection>
       </div>
 
       <section>
@@ -167,12 +168,12 @@ export default function AntiAbuseTab() {
         ) : (
           <ul className="flex flex-col gap-1">
             {restricted.map(u => (
-              <li key={u.user_id}
-                  className="pf-frame border-danger/40 px-2 py-1 text-xs select-text">
+              <Frame as="li" key={u.user_id}
+                     className="border-danger/40 px-2 py-1 text-xs select-text">
                 <span className="pf-accent text-danger">{labelOf(u.user_id)}</span>
                 {' '}— 골드 {fmtNum(adminNumber(u.gold))} · 명성 {fmtNum(adminNumber(u.fame))} ·
                 마지막 행동 {fmtDT(u.last_action_at)}
-              </li>
+              </Frame>
             ))}
           </ul>
         )}

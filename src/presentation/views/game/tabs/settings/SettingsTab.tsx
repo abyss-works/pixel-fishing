@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
@@ -11,6 +10,8 @@ import type { EncounterAlertSetting } from '../../../../../features/bounty/servi
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
 import Button from '../../../../ui/Button';
+import Frame from '../../../../ui/Frame';
+import KeyValueRow from '../../../../ui/KeyValueRow';
 import SectionTitle from '../../../../ui/SectionTitle';
 import PixelIcon from '../../../../ui/PixelIcon';
 import type { GlyphId } from '../../../../ui/PixelIcon';
@@ -30,17 +31,6 @@ function LabeledButton({ glyph, label, ...rest }: {
     <Button {...rest} className="text-sm flex items-center justify-center gap-1.5">
       <PixelIcon glyph={glyph} size={12} />{label}
     </Button>
-  );
-}
-
-/** 요약 줄 — 이름(보조색) · 현재 값 · 오른쪽 동작. 고치는 일은 동작이 여는 창에서 한다 */
-function SettingRow({ label, value, action }: { label: string; value: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
-      <span className="text-text-dim shrink-0">{label}</span>
-      <span className="truncate flex-1">{value}</span>
-      {action}
-    </div>
   );
 }
 
@@ -74,24 +64,24 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
   return (
     <div className="flex flex-col flex-1">
       <SectionTitle>계정</SectionTitle>
-      <div className="pf-frame divide-y divide-line mb-2">
-        <SettingRow label="계정" value={account ?? '게스트 (이메일 없음)'} />
-        <SettingRow label="닉네임" value={nickname ?? '불러오는 중…'} />
-      </div>
+      <Frame divided className="mb-2">
+        <KeyValueRow label="계정" value={account ?? '게스트 (이메일 없음)'} />
+        <KeyValueRow label="닉네임" value={nickname ?? '불러오는 중…'} />
+      </Frame>
       <div className="flex flex-col gap-2 mb-2">
         <LabeledButton glyph="key" label="계정 관리" variant="primary" full onClick={() => setOpen('account')} />
       </div>
 
       <SectionTitle>화면</SectionTitle>
-      <div className="pf-frame mb-2">
-        <SettingRow label="물고기 그래픽"
+      <Frame className="mb-2">
+        <KeyValueRow label="물고기 그래픽"
                     value={fishArtOption ? `${fishArtOption.label} · ${fishArtOption.sub}` : fishArt}
                     action={<Button size="sm" aria-label="화면 설정" onClick={() => setOpen('display')}>변경</Button>} />
-      </div>
+      </Frame>
 
       <SectionTitle>알림</SectionTitle>
-      <div className="pf-frame mb-2">
-        <SettingRow label="네임드 조우"
+      <Frame className="mb-2">
+        <KeyValueRow label="네임드 조우"
                     value={<span className="text-xs">{alertSummary(alertSetting)}</span>}
                     action={canToggleAlert && (alertSetting.active
                       ? <Button size="sm" aria-label="조우 알림 끄기" onClick={alertSetting.disable}>끄기</Button>
@@ -100,14 +90,14 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
                             if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.');
                           });
                         }}>켜기</Button>)} />
-      </div>
+      </Frame>
 
       <SectionTitle>데이터</SectionTitle>
-      <div className="pf-frame mb-2">
-        <SettingRow label="쿠폰 · 지원 코드"
+      <Frame className="mb-2">
+        <KeyValueRow label="쿠폰 · 지원 코드"
                     value={<span className="text-xs text-text-dim">받은 코드를 넣으면 골드·자산이 들어와요</span>}
                     action={<Button size="sm" aria-label="코드 입력" onClick={() => setOpen('codes')}>입력</Button>} />
-      </div>
+      </Frame>
 
       {/* 개발자 창구 — **로그인한 계정만.** 게스트는 답장 받을 방법이 없다 */}
       {account && (

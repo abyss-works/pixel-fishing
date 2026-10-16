@@ -12,7 +12,7 @@ import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import type { AdminEconomyRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
+import { BarsChart, ChartSection, KpiGrid, KpiCard, TabState } from '../charts';
 
 type Range = '30' | '90';
 
@@ -40,7 +40,7 @@ export default function EconomyTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Frame title="골드 잔고 분포">
+      <ChartSection title="골드 잔고 분포">
         <KpiGrid>
           <KpiCard label="잔고 합" value={fmtNum(goldSum)}
                    hint="saves_current 골드 총합" />
@@ -48,27 +48,27 @@ export default function EconomyTab() {
           <KpiCard label="상위 25% 이상" value={fmtNum(percentile(goldStats, 75))} />
           <KpiCard label="최대" value={fmtNum(goldStats[goldStats.length - 1] ?? NaN)} />
         </KpiGrid>
-      </Frame>
+      </ChartSection>
 
       {/* 유입·유출은 같은 날 축이라 짝지어 본다(xl 이상에서 좌우) */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <Frame title="유입 — 판매·쿠폰" aside={
+        <ChartSection title="유입 — 판매·쿠폰" aside={
           <MetricSwitch value={range}
                         options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
                         onChange={setRange} ariaLabel="기간 선택" />
         }>
           <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} height={72} />
           <Note size="2xs" className="my-0">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</Note>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="유출 — 강화·배·미끼">
+        <ChartSection title="유출 — 강화·배·미끼">
           <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.bait_cost)}
                      height={72} barClass="bg-danger/70" />
           <Note size="2xs" className="my-0">강화·배 구매·미끼 지출의 일별 합계.</Note>
-        </Frame>
+        </ChartSection>
       </div>
 
-      <Frame title="원장 대차대조">
+      <ChartSection title="원장 대차대조">
         <TabState loading={loading && granted} error={error} onRetry={refresh} />
         <Note size="xs" className="my-0 leading-relaxed">
           기간 내 유입합 {fmtNum(inflowTotal)}G · 유출합 {fmtNum(outflowTotal)}G ·
@@ -77,7 +77,7 @@ export default function EconomyTab() {
           <span className="pf-accent text-gold">이벤트 밖 경로(import 반입)</span>가 들여온 돈이다 —
           이상탐지 탭의 반입 로그와 대조.
         </Note>
-      </Frame>
+      </ChartSection>
     </div>
   );
 
