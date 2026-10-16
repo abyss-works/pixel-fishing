@@ -10,6 +10,7 @@ import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
+import { resetEncounterAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { markPromptsAnswered, resetAnnouncements, setDismissedVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
@@ -68,6 +69,7 @@ beforeEach(() => {
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
+  resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetAnnouncements();
@@ -612,11 +614,34 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(hud()).toContain('1마리');
   });
 
-  it('설정 탭은 계정 → 화면 → 데이터 → 개발자에게 → 패치노트 순서다', () => {
+  it('설정 탭은 계정 → 화면 → 알림 → 데이터 → 개발자에게 → 패치노트 순서다', () => {
     render(<App />);
     clickTab('설정');
     const titles = [...document.querySelectorAll('h4')].map(h => h.textContent);
-    expect(titles).toEqual(['계정', '화면', '데이터', '개발자에게', '패치노트']);
+    expect(titles).toEqual(['계정', '화면', '알림', '데이터', '개발자에게', '패치노트']);
+  });
+
+  it('알림을 지원하지 않는 브라우저에서는 조우 알림을 켤 수 없고 이유만 보인다', () => {
+    render(<App />);
+    clickTab('설정');
+    expect(screen.getByText('이 브라우저는 알림을 지원하지 않아요')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '조우 알림 켜기' })).toBeNull();
+  });
+
+  it('조우 알림 켜기는 브라우저 권한을 묻고, 허용되면 켜짐으로 바뀐다', async () => {
+    const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    try {
+      render(<App />);
+      clickTab('설정');
+      fireEvent.click(screen.getByRole('button', { name: '조우 알림 켜기' }));
+      expect(await screen.findByText('켜짐 · 다른 화면을 볼 때 알려 줘요')).toBeInTheDocument();
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: '조우 알림 끄기' }));
+      expect(screen.getByText('꺼짐')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('화면 설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남고 요약에 보인다', () => {

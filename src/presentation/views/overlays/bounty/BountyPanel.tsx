@@ -13,11 +13,13 @@ import type { GameAction } from '../../../../game/rules/actions.js';
 import { kstDay } from '../../../../features/bounty/service/queryKeys';
 import { questLabel, selectBountyPanelData } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
+import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
+import CheckToggle from '../../../ui/CheckToggle';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import SubTabs from '../../../ui/SubTabs';
@@ -57,6 +59,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   setToast: (m: string) => void;
 }) {
   const { snap, loaded, refresh } = useBounty();
+  const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
   // 도전권 잔여 표시용 시계 — 스냅샷 적재 시점에 함께 찍는다 (액션마다 refresh되므로 충분).
@@ -140,6 +143,18 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `토벌 보상 — ${namedQuest.reward}G와 교환 재료를 받았다.`)} />
           )}
         </Gated>
+        {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
+            권한 요청은 이 클릭 안에서 해야 브라우저가 묻는다 */}
+        {namedOpen && alertSetting.permission !== 'unsupported' && (
+          <CheckToggle className="mt-2" label="조우하면 알림 받기"
+            checked={alertSetting.active}
+            onChange={on => {
+              if (!on) { alertSetting.disable(); return; }
+              void alertSetting.enable().then(ok => {
+                if (!ok) setToast('브라우저가 알림을 막았다 — 주소창의 사이트 설정에서 허용할 수 있다.');
+              });
+            }} />
+        )}
         </div>
       ) : (
         <div className="min-h-96">
