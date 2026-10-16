@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, usableBait, MAX_BOAT, nextDexRec, baitCost, variantRateOf,
+  addItem, takeItem, usableBait, nextDexRec, baitCost, variantRateOf,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -25,6 +25,7 @@ import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
+import { reduceDebug } from './debug.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 import { isNight } from './time.js';
@@ -40,7 +41,7 @@ export type GameAction =
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
-  | { type: 'adminSet'; gold?: number; fame?: number; rod?: number; boat?: number } // 관리자 테스트용 스탯 직접 수정
+  | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
   | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
@@ -57,7 +58,7 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, adminSet: true, setNickname: true,
+  claimRelief: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
 };
@@ -494,23 +495,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }
-    case 'adminSet': {
-      const g = action.gold, f = action.fame, r = action.rod, b = action.boat;
-      const bad = (v: unknown) => v !== undefined && (!Number.isFinite(v as number) || (v as number) < 0);
-      if (bad(g) || bad(f) || bad(r) || bad(b)) return { ok: false, error: 'bad-request' };
-      if (r !== undefined && (!Number.isInteger(r) || r < 1)) return { ok: false, error: 'bad-request' };
-      if (b !== undefined && (!Number.isInteger(b) || b < 0 || b > MAX_BOAT)) return { ok: false, error: 'bad-request' };
+    case 'debug': {
+      // 개발 도구 명령 — 계산은 reduceDebug(기존 규칙 함수 조합), 허용 판정은 서버가 먼저 한다
+      const args = action.args ?? {};
+      const next = reduceDebug(state, action.command, args, deps.today);
+      if (!next) return { ok: false, error: 'bad-request' };
       return {
-        ok: true,
-        state: {
-          ...state,
-          gold: g ?? state.gold,
-          fame: f ?? state.fame,
-          rod: r ?? state.rod,
-          boat: b ?? state.boat,
-        },
-        result: { type: 'none' },
-        events: [{ type: 'adminSet', payload: { gold: g, fame: f, rod: r, boat: b } }],
+        ok: true, state: next, result: { type: 'none' },
+        events: [{ type: 'debug', payload: { command: action.command, args } }],
       };
     }
     case 'import': {

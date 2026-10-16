@@ -71,6 +71,9 @@ export function sumLast(values: readonly number[], n: number): number {
 // events.type과 payload의 구조는 GameAction 유니온을 단일 기준으로 삼는다.
 // 여기서는 표시용 한 줄 요약만 만든다 — 값 검증·재구성은 하지 않는다(감사는 원문 payload로).
 
+/** 위험 주시 이벤트 — 직접 수정·반입. 피드와 유저 상세가 같은 표를 본다 (adminSet은 과거 기록 표시용) */
+export const RISKY_EVENT_TYPES: ReadonlySet<string> = new Set(['import', 'adminSet', 'debug']);
+
 export const EVENT_LABELS: Record<string, string> = {
   boot: '접속',
   catch: '낚시',
@@ -90,6 +93,7 @@ export const EVENT_LABELS: Record<string, string> = {
   ticket: '도전권 획득',
   resolveChallenge: '네임드 도전',
   adminSet: '관리자 스탯 수정',
+  debug: '개발 도구 명령',
   import: '이사 코드 반입',
 };
 
@@ -127,6 +131,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'ticket': return `${s(pay.questId)} 도전권`;
     case 'resolveChallenge': return `${s(pay.questId)} ${pay.success === true ? '성공' : '실패'}`;
     case 'setActiveBait': return `${s(pay.bait)} 활성`;
+    case 'debug': return `${s(pay.command)} ${JSON.stringify(pay.args ?? {})}`;
     case 'adminSet': return `골드=${fmtNum(Number(pay.gold ?? NaN))} 명성=${fmtNum(Number(pay.fame ?? NaN))}`;
     case 'import': return `골드 ${fmtNum(Number(pay.gold ?? 0))} · 명성 ${fmtNum(Number(pay.fame ?? 0))}`;
     case 'autoRelease': {

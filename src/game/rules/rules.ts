@@ -47,6 +47,7 @@ export type RejectReason =
   | 'ticket-expired' // 도전권 기간 만료 — 다시 조우하면 받을 수 있다
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
+  | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -76,6 +77,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'ticket-expired': '흔적이 식었다 — 다시 조우하면 새로 남는다.',
   'slot-taken': '그 전시 칸은 이미 차 있다 — 먼저 회수하자.',
   'bag-full': '가방이 가득 차서 회수할 수 없다 — 팔거나 놓아준 뒤 다시 하자.',
+  'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없다 (운영 서버이거나 권한이 없다).',
   'bad-request': '처리할 수 없는 요청이다.',
 };
 

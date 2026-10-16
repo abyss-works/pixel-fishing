@@ -5,7 +5,7 @@
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
-import { fmtNum, fmtDT, EVENT_LABELS, eventSummary } from '../../../../features/admin/model/metrics';
+import { fmtNum, fmtDT, EVENT_LABELS, eventSummary, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
 import { selectOverviewMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminOverview } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
@@ -60,7 +60,7 @@ export default function OverviewTab() {
                   <tr key={e.id}>
                     <td className="whitespace-nowrap text-text-dim">{fmtDT(e.created_at)}</td>
                     <td className="whitespace-nowrap">
-                      <span className={cx('pf-accent', RISKY.has(e.type) ? 'text-danger' : 'text-gold')}>
+                      <span className={cx('pf-accent', RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </td>
@@ -122,7 +122,5 @@ function RiskCard({ label, count, hint, tone }: {
   );
 }
 
-// 위험 주시 대상 이벤트 — 피드에서 즉시 눈에 밟히게
-const RISKY = new Set(['import', 'adminSet']);
 
 const shortUid = (uid: string): string => uid.slice(0, 8);

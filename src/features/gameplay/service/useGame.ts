@@ -85,7 +85,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
-            || action.type === 'resolveChallenge'
+            || action.type === 'resolveChallenge' || action.type === 'debug'
             || (action.type === 'catch' && r.result.type === 'catch' && r.result.ticket)) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }

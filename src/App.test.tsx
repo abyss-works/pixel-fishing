@@ -657,12 +657,13 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(screen.getByText('v2 · beta')).toBeInTheDocument();
   });
 
-  it('이사 코드는 설정 탭에 없다 — 관리자 탭(소유자 전용)으로 옮겼다', () => {
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(소유자 전용)에 있다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     clickTab('설정');
     expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
-    clickTab('관리자');
+    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(screen.getByRole('button', { name: '운영' }));
     expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
@@ -1251,41 +1252,49 @@ describe('패치노트 (설정 탭)', () => {
   });
 });
 
-// 관리자 탭 — 게임 셸 5탭 뒤 조건부 6번 탭 복구 (?admin 게이트).
-// 상세 대시보드는 별도 페이지(관리자 화면 — ?admin#/admin)지만, 스탯 설정과 진입 링크는
-// 게임 셸 관리자 탭에서도 제공한다 (사용자 요청: 5번 뒤 관리자 탭에 스탯+대시보드 이동).
-describe('관리자 탭 — 게임 셸 6번 탭 복구 (?admin 게이트)', () => {
-  it('기본은 5탭 — ?admin 없으면 관리자 탭 없음', () => {
+// 개발 도구 — 게임 화면 위 플로팅 패널 (?admin 게이트). 사이드바는 항상 5탭이다.
+describe('개발 도구 패널 (?admin 게이트)', () => {
+  it('?admin이 없으면 패널 버튼이 없고 사이드바는 5탭이다', () => {
     render(<App />);
-    expect(screen.queryByText('관리자')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '개발 도구' })).not.toBeInTheDocument();
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
   });
 
-  it('?admin이면 관리자 탭이 6번으로 노출 — 클릭 시 스탯 설정과 대시보드 이동', () => {
+  it('?admin이면(로컬) 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    // 로컬(jsdom localhost)에서는 ?admin만으로 게이트 통과 — 6탭 노출
-    expect(screen.getByText('관리자')).toBeInTheDocument();
-    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length + 1);
-    clickTab('관리자');
-    expect(screen.getByText(/내 스탯 — 테스트용/)).toBeInTheDocument();
-    expect(screen.getByLabelText('대시보드 열기')).toBeInTheDocument();
+    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
+    fireEvent.keyDown(document, { key: 'F9' });
+    expect(screen.getByText('개발 도구')).toBeInTheDocument();
+    expect(screen.getByText('태평양 네임드 직전')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'F9' });
+    expect(screen.queryByText('태평양 네임드 직전')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(screen.getByRole('button', { name: '운영' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toContain('#/admin/overview');
     window.history.replaceState({}, '', '/');
   });
 
-  it('6키 단축키 — 게이트 열렸을 때만 관리자 탭으로 이동', () => {
+  it('상태 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.keyDown(document, { key: '6' });
-    expect(screen.getByText(/내 스탯 — 테스트용/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(screen.getByRole('button', { name: '상태' }));
+    fireEvent.change(screen.getByLabelText('스탯 설정 골드'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: '스탯 설정' }));
+    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('스탯 설정');
+    // 입력칸 placeholder는 현재 값이다 — 상태가 바뀌면 따라 바뀐다
+    expect(screen.getByLabelText('스탯 설정 골드')).toHaveAttribute('placeholder', '123456');
     window.history.replaceState({}, '', '/');
   });
 
-  it('6키 단축키 — 게이트 닫히면 무시', () => {
+  it('네임드 직전 프리셋은 그 구역 항구 밖이면 멈추고 이유를 기록한다', async () => {
+    window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.keyDown(document, { key: '6' });
-    expect(screen.queryByText(/내 스탯 — 테스트용/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(screen.getByRole('button', { name: '태평양 네임드 직전' }));
+    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('태평양 항구 안에서 실행해야 한다');
+    window.history.replaceState({}, '', '/');
   });
 });
 

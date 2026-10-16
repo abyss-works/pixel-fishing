@@ -192,12 +192,15 @@ export function zoneDexMissing(
 
 /** 라이선스 조건 2종 — 명성 + 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
 export interface LicenseCondition { key: 'fame' | 'dex'; label: string; ok: boolean }
-const BASIC_GRADES = ['common'] as const;
-const NAMED_GRADES = ['common', 'rare', 'epic', 'legendary'] as const;
+/** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다 */
+export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
+  basic: ['common'],
+  named: ['common', 'rare', 'epic', 'legendary'],
+};
 export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
-  const grades: readonly RarityId[] = tier === 'named' ? NAMED_GRADES : BASIC_GRADES;
+  const grades = LICENSE_GRADES[tier];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   return [

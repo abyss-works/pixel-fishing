@@ -55,7 +55,7 @@ function alertSummary(setting: EncounterAlertSetting): string {
 
 // 설정 탭 — 여섯 묶음: 계정 · 화면 · 알림 · 데이터 · 개발자에게 · 패치노트.
 // 화면은 지금 상태를 요약 줄로만 보이고, 항목이 여럿이거나 설명이 필요한 것은 창에서 고친다
-// (계정 관리·화면·코드 입력·편지). 이사 코드는 소유자 전용이라 관리자 탭에 있다.
+// (계정 관리·화면·코드 입력·편지). 이사 코드는 소유자 전용이라 개발 도구 패널의 운영 묶음에 있다.
 export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged, nickname, onRename }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;

@@ -25,6 +25,14 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: 'yes' })).toBeNull();
   });
 
+  it('debug는 목록에 있는 명령만 통과한다 — 인자 형태는 리듀서가 본다', () => {
+    expect(parseAction({ type: 'debug', command: 'stats.set', args: { fame: 1 } }))
+      .toEqual({ type: 'debug', command: 'stats.set', args: { fame: 1 } });
+    expect(parseAction({ type: 'debug', command: 'bounty.clearTickets' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'gold.infinite' })).toBeNull();
+    expect(parseAction({ type: 'adminSet', gold: 1 })).toBeNull();
+  });
+
   it('알 수 없는 type·비객체를 거부한다', () => {
     expect(parseAction({ type: 'fish', spot: 'pond', judgment: 'normal' })).toBeNull();
     expect(parseAction(null)).toBeNull();
