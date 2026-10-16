@@ -97,13 +97,13 @@ describe('EncounterModal', () => {
   it('커서는 끝에서 처음으로 순간이동하지 않고 되돌아온다', () => {
     show();
     enter();
-    // 첫 편도는 바 시간 1000ms의 85% = 850ms
-    act(() => { vi.advanceTimersByTime(800); });
+    // 첫 편도는 바 시간 그대로 1000ms
+    act(() => { vi.advanceTimersByTime(950); });
     const nearEnd = pct(document.querySelector('[data-duel="cursor"]'), 'left');
     act(() => { vi.advanceTimersByTime(150); });
     const after = pct(document.querySelector('[data-duel="cursor"]'), 'left');
     expect(nearEnd).toBeGreaterThan(80);
-    expect(after).toBeGreaterThan(80); // 950ms — 끝(100%)을 찍고 되돌아오는 중
+    expect(after).toBeGreaterThan(80); // 1100ms — 끝(100%)을 찍고 되돌아오는 중
     expect(after).toBeLessThan(100);
   });
 
