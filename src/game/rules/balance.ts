@@ -70,10 +70,10 @@ export const BAIT_BUY_MAX = 50;
 export const EXHIBIT_SLOTS = 3;
 
 
-// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 3회,
+// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 1회,
 // 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
 // (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
-export const BOUNTY_DAILY_CAP = 3;
+export const BOUNTY_DAILY_CAP = 1; // 일반 의뢰 하루 1회(2026-10-17, 3회 → 1회 · 보상 5배)
 export const BOUNTY_NAMED_DAILY_CAP = 1;
 
 // 네임드 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.

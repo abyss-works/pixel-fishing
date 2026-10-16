@@ -11,12 +11,12 @@ const COUNTS: Record<string, Record<string, number>> = {
   normal: { common: 500, rare: 20, epic: 5, legendary: 1 },
   hard: { common: 1000, rare: 40, epic: 10, legendary: 2 },
 };
-// spec 5절 보상표 (스케일링 규칙: 난이도 ≈ 판매가 평균 3배, 네임드 = 어려움 25배)
+// spec 5절 보상표 (스케일링 규칙: 난이도 ≈ 판매가 평균 15배, 네임드 = 어려움 5배)
 const REWARDS: Record<string, Record<string, number>> = {
-  pacific: { easy: 4000, normal: 8000, hard: 16000, named: 400000 },
-  seasia: { easy: 16000, normal: 30000, hard: 60000, named: 1500000 },
-  indian: { easy: 30000, normal: 70000, hard: 140000, named: 3500000 },
-  madagascar: { easy: 45000, normal: 100000, hard: 200000, named: 5000000 },
+  pacific: { easy: 20000, normal: 40000, hard: 80000, named: 400000 },
+  seasia: { easy: 80000, normal: 150000, hard: 300000, named: 1500000 },
+  indian: { easy: 150000, normal: 350000, hard: 700000, named: 3500000 },
+  madagascar: { easy: 225000, normal: 500000, hard: 1000000, named: 5000000 },
 };
 
 describe('bounties 데이터 계약', () => {

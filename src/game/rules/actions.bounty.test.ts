@@ -56,10 +56,10 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('통합 상한 초과는 no-tickets', () => {
+  it('일반 의뢰는 하루 1회 — 오늘 이미 1건 수주했으면 no-tickets', () => {
     const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx({ acceptsToday: 3 }) }));
+      deps({ bounty: ctx({ acceptsToday: 1 }) }));
     expect(out).toEqual({ ok: false, error: 'no-tickets' });
   });
 
@@ -73,7 +73,7 @@ describe('acceptQuest', () => {
   it('네임드는 일반 상한을 먹지 않는다', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), act,
-      deps({ bounty: ctx({ acceptsToday: 3 }) }));
+      deps({ bounty: ctx({ acceptsToday: 1 }) }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
       payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
@@ -134,9 +134,9 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-easy-common' },
       deps({ bounty: ctx({ complete: ['pacific-easy-common'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(4100); // 100 + 보상 4000
+    expect(out.state.gold).toBe(20100); // 100 + 보상 20000
     expect(out.events).toEqual([{ type: 'deliverBounty',
-      payload: { questId: 'pacific-easy-common', reward: 4000 } }]);
+      payload: { questId: 'pacific-easy-common', reward: 20000 } }]);
   });
 
   it('네임드 토벌에는 교환 재료 1개가 따라온다', () => {
