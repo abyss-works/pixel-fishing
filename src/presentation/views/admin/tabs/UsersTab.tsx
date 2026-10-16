@@ -9,7 +9,7 @@ import PillButton from '../../../ui/PillButton';
 import TextInput from '../../../ui/TextInput';
 import SectionTitle from '../../../ui/SectionTitle';
 import { cx } from '../../../ui/cx';
-import { fmtNum, fmtDT, eventSummary, EVENT_LABELS } from '../../../../features/admin/model/metrics';
+import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
 import { adminNumber, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
@@ -149,7 +149,7 @@ function UserDetail({ user, onClose }: {
         {byType.map(([type, count]) => (
           <span key={type}
                 className={cx('border rounded-sm px-1.5 py-0.5 text-2xs',
-                  type === 'import' || type === 'adminSet'
+                  RISKY_EVENT_TYPES.has(type)
                     ? 'border-danger/50 text-danger' : 'border-line text-text-dim')}>
             {EVENT_LABELS[type] ?? type} ×{count}
           </span>
@@ -197,7 +197,7 @@ function UserDetail({ user, onClose }: {
                 {fmtDT(e.created_at)}
               </span>
               <span className={cx('pf-accent whitespace-nowrap',
-                                  DANGEROUS.has(e.type) ? 'text-danger' : 'text-gold')}>
+                                  RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
                 {EVENT_LABELS[e.type] ?? e.type}
               </span>
               <span className="min-w-0 truncate text-text">
@@ -216,7 +216,5 @@ function UserDetail({ user, onClose }: {
 // RPC 창 한도 — fn_user_events(p_limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
 const EVENT_WINDOW = 300;
 
-// 특별 주시 타입 — import는 운영자 전용이라 원래 희소하고, adminSet은 직접 수정 그 자체다
-const DANGEROUS = new Set(['import', 'adminSet']);
 
 /** number|string|null(DB 스칼라) → 숫자 — 표기 전용 */

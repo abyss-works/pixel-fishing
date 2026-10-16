@@ -28,6 +28,7 @@ import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
+import DevTools from '../devtools/DevTools';
 
 interface GameViewProps {
   game: GameState;
@@ -152,6 +153,8 @@ export default function GameView(props: GameViewProps) {
       <WhatsNewModal game={game} ready={props.syncState === 'on' || props.syncState === 'off'} />
       {props.outdated && <UpdateModal />}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
+      <DevTools game={game} dispatch={props.dispatch} setToast={props.setToast}
+                account={props.account} uid={props.uid} />
     </div>
   );
 }

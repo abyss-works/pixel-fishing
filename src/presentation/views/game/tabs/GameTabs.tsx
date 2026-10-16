@@ -15,10 +15,8 @@ import VRegion from './region/VRegion';
 import BagTab from './bag/BagTab';
 import DexTab from './dex/DexTab';
 import SettingsTab from './settings/SettingsTab';
-import VAdmin from './admin-tools/VAdmin';
 import { BAG_SECTIONS, setBagLayout, setBagSection, useBagView } from './bag/bagView';
 import type { BagSection } from './bag/bagView';
-import { isAdminUrl, isLocalOrigin, OWNER_EMAIL } from '../../admin/gate';
 import Sidebar from '../../../layouts/sidebar';
 
 interface GameTabsProps {
@@ -37,9 +35,6 @@ interface GameTabsProps {
   onAuthChanged: () => Promise<void>;
 }
 
-const isAdminVisible = (account: string | null) =>
-  isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
-
 const BAG_SECTION_LABEL: Record<BagSection, string> = { fish: '물고기', items: '아이템', artifacts: '유물' };
 
 export default function GameTabs(props: GameTabsProps) {
@@ -54,7 +49,6 @@ export default function GameTabs(props: GameTabsProps) {
     { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : dexView === 'variant' ? '도감\n(돌연변이)' : '도감\n(네임드)' },
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
-    ...(isAdminVisible(props.account) ? [{ key: 'admin' as const, label: '관리자' }] : []),
   ].map(tab => ({ ...tab, icon: <TabIcon tab={tab.key} /> }));
 
   // 메뉴 탭 선택(클릭·숫자키). 이미 열린 탭을 다시 고르면 그 탭의 보기를 순환한다
@@ -90,11 +84,6 @@ export default function GameTabs(props: GameTabsProps) {
     }
 
     const index = Number(event.key) - 1;
-    if (event.key === '6' && isAdminVisible(props.account)) {
-      event.preventDefault();
-      select('admin');
-      return true;
-    }
     if (Number.isInteger(index) && index >= 0 && index < TAB_ORDER.length) {
       event.preventDefault();
       select(TAB_ORDER[index]);
@@ -115,7 +104,6 @@ export default function GameTabs(props: GameTabsProps) {
                      nickname={props.nickname} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
       )}
-      {activeTab === 'admin' && <VAdmin game={game} dispatch={props.dispatch} setToast={props.setToast} />}
     </Sidebar>
   );
 }

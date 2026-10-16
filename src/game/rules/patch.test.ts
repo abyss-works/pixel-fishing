@@ -82,8 +82,11 @@ describe('patch 동등성 — 전 액션', () => {
       check(s, action);
     }
   });
-  it('adminSet — 스칼라 직접 수정', () => {
-    check(seed(), { type: 'adminSet', gold: 5, fame: 6, rod: 2, boat: 1 });
+  it('debug stats.set — 스칼라 직접 수정', () => {
+    check(seed(), { type: 'debug', command: 'stats.set', args: { gold: 5, fame: 6, rod: 2, boat: 1 } });
+  });
+  it('debug dex.completeZone — 도감 행이 델타로 표현된다', () => {
+    check(seed(), { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } });
   });
   it('import — 통째 교체도 델타로 표현된다', () => {
     const prev = seed({ bag: [mkInst('a')], gold: 10 });

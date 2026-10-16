@@ -1,4 +1,4 @@
-// 테스트용 강제 조우 — 관리자 탭이 켜 두면 다음 캐치 요청에 표시가 실린다.
+// 테스트용 강제 조우 — 개발 도구 패널이 켜 두면 다음 캐치 요청에 표시가 실린다.
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   armForceEncounter, disarmForceEncounter, isForceEncounterArmed, settleForcedEncounter, withForcedEncounter,
