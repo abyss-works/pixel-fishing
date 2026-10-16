@@ -8,7 +8,7 @@ export default function EnvBadge({ env, build }: { env: string; build: string })
   return (
     <div role="status" aria-label={`${label} 빌드`}
          className="fixed top-1 left-1/2 -translate-x-1/2 z-[70] pointer-events-none select-none
-                    pf-accent text-xs px-2 py-0.5 border border-danger text-danger bg-bg/80 rounded-sm
+                    pf-accent text-[0.9rem] px-2.5 py-[3px] border border-danger text-danger bg-bg/80 rounded-sm
                     motion-safe:animate-pulse">
       {label} · {build}
     </div>
