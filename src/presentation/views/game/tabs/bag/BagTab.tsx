@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
@@ -12,6 +12,9 @@ import { when } from '../../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { cx } from '../../../../ui/cx';
 import Note from '../../../../ui/Note';
+import Button from '../../../../ui/Button';
+import Modal from '../../../../ui/Modal';
+import ModalCard from '../../../../ui/ModalCard';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
 import IconButton from '../../../../ui/IconButton';
@@ -179,8 +182,9 @@ export default function BagTab({ game, dispatch, setToast }: {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
     count: bagCount, cap, full: bagFull, sellableValue: total,
-    autoLockUids: autoLockCandidates,
+    autoLock: autoLockPlan,
   } = selectBagOverview(game);
+  const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
   const lock = (uids: string[], locked: boolean, label: string) =>
@@ -209,17 +213,29 @@ export default function BagTab({ game, dispatch, setToast }: {
       else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
     });
 
-  // 자동 잠금 — 어종·돌연변이별 최대 개체를 한 번에 보호한다 (logic.autoLockUids가 선택,
-  // 적용은 기존 setLocked 액션). 눌러도 변할 게 없으면(전부 보호됨) 요청을 보내지 않는다.
+  // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
+  // 같은 어종×폼의 나머지 잠금은 풀리므로 누르면 먼저 확인 창을 띄운다. 적용은 기존 setLocked 두 번
+  // (잠금 → 해제 순서라 중간에 실패해도 최대 개체는 먼저 보호된다). 변할 게 없으면 요청 없이 안내만.
   const autoLock = () => {
-    const uids = autoLockCandidates;
-    if (uids.length === 0) {
-      setToast('새로 잠글 최대 개체가 없다 — 가방이 비었거나 이미 다 잠겨 있다.');
+    if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
+      setToast('정리할 잠금이 없다 — 어종마다 가장 큰 물고기만 잠겨 있다.');
       return;
     }
-    when(dispatch({ type: 'setLocked', uids, locked: true }), r => {
-      if (r.status !== 'ok') return;
-      setToast(`최대 개체 ${uids.length}종을 잠궜다 — 판매에서 제외된다.`);
+    setLockConfirm(true);
+  };
+  const applyAutoLock = () => {
+    const { lock, unlock } = autoLockPlan;
+    setLockConfirm(false);
+    const unlockStep = () => {
+      if (unlock.length === 0) { setToast(`가장 큰 물고기 ${lock.length}마리를 잠갔다.`); return; }
+      when(dispatch({ type: 'setLocked', uids: unlock, locked: false }), r => {
+        if (r.status !== 'ok') return;
+        setToast(`가장 큰 물고기만 남기고 정리했다 — ${lock.length}마리 잠금 · ${unlock.length}마리 잠금 해제.`);
+      });
+    };
+    if (lock.length === 0) { unlockStep(); return; }
+    when(dispatch({ type: 'setLocked', uids: lock, locked: true }), r => {
+      if (r.status === 'ok') unlockStep();
     });
   };
 
@@ -249,13 +265,28 @@ export default function BagTab({ game, dispatch, setToast }: {
             {bagCount > 0 && (
               <PillButton
                 aria-label="자동 잠금"
-                title="어종·돌연변이별 가장 큰 물고기를 한 마리씩 잠근다 — 이미 큰 놈이 잠긴 종은 그대로 둔다"
+                title="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 푼다"
                 onClick={autoLock}>
                 <PixelIcon glyph="lockOpen" size={12} />
                 자동 잠금
               </PillButton>
             )}
           </div>
+          {lockConfirm && (
+            <Modal onClose={() => setLockConfirm(false)}>
+              <ModalCard title="자동 잠금" onClose={() => setLockConfirm(false)}
+                confirm={<Button variant="primary" full onClick={applyAutoLock}>정리하기</Button>}>
+                <p className="text-sm leading-relaxed">
+                  어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
+                  나머지는 잠금이 풀린다. 손으로 잠근 물고기도 가장 크지 않으면 풀린다.
+                </p>
+                <p className="text-sm">
+                  잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
+                  <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
+                </p>
+              </ModalCard>
+            </Modal>
+          )}
           {EXHIBIT_UI_ENABLED && <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />}
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
