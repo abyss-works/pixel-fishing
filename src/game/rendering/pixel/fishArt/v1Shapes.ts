@@ -174,6 +174,23 @@ const serpent: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 7 * s, cy + 1 * s, 2 * s, 1, shade(color, 0.5));
 };
 
+// 문어 — 둥근 돔 머리와 양옆·아래로 퍼져 끝이 말리는 다리
+const octopus: Draw = (ctx, cx, cy, s, color, detail) => {
+  R(ctx, cx - 3 * s, cy - 5 * s, 6 * s, 2 * s, color);
+  R(ctx, cx - 4 * s, cy - 3 * s, 8 * s, 4 * s, color);
+  R(ctx, cx - 6 * s, cy + 1 * s, 12 * s, s, shade(color, 0.85));
+  R(ctx, cx - 6 * s, cy + 1 * s, 2 * s, 3 * s, shade(color, 0.85));
+  R(ctx, cx - 3 * s, cy + 1 * s, 2 * s, 4 * s, shade(color, 0.85));
+  R(ctx, cx + 1 * s, cy + 1 * s, 2 * s, 4 * s, shade(color, 0.85));
+  R(ctx, cx + 4 * s, cy + 1 * s, 2 * s, 3 * s, shade(color, 0.85));
+  R(ctx, cx - 7 * s, cy + 3 * s, s, s, shade(color, 0.7));
+  R(ctx, cx + 6 * s, cy + 3 * s, s, s, shade(color, 0.7));
+  if (!detail) return;
+  R(ctx, cx - 2 * s, cy - 2 * s, s, s, '#000');
+  R(ctx, cx + 1 * s, cy - 2 * s, s, s, '#000');
+  R(ctx, cx - 2 * s, cy - 4 * s, 3 * s, s, 'rgba(255,255,255,0.35)');
+};
+
 // 가오리 — 납작하고 넓적한 몸 + 물결치는 날개 + 길게 늘어진 꼬리
 const ray: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 5 * s, cy - 2 * s, 9 * s, 4 * s, color);
@@ -188,7 +205,7 @@ const ray: Draw = (ctx, cx, cy, s, color, detail) => {
 
 export const SHAPES: Record<FishShape, Draw> = {
   tiny, round, slim, predator, flowing, eel, ribbon,
-  whiskered, shark, anglerfish, cephalopod, ancient, serpent, ray,
+  whiskered, shark, anglerfish, cephalopod, octopus, ancient, serpent, ray,
 };
 
 export function drawFishSprite(

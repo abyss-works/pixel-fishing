@@ -7,7 +7,7 @@ import type { RarityId } from './rarity.js';
 // DOM 타입에 의존하는 렌더러를 역방향으로 불러오면 안 된다.
 export type FishShape =
   | 'tiny' | 'round' | 'slim' | 'predator' | 'flowing' | 'eel' | 'ribbon'
-  | 'whiskered' | 'shark' | 'anglerfish' | 'cephalopod' | 'ancient' | 'serpent' | 'ray';
+  | 'whiskered' | 'shark' | 'anglerfish' | 'cephalopod' | 'octopus' | 'ancient' | 'serpent' | 'ray';
 
 // 폼 축 — "종은 같고 다른 개체"의 갈래 (세이브 v8). 폼 추가 = 이 유니온에 문자열 하나.
 // 데이터 계층에 두는 이유: 폼은 콘텐츠 축이고(Fish.variant가 그 데이터), UI 계층이 스프라이트 색을
@@ -293,7 +293,7 @@ export const FISH: readonly Fish[] = [
     lore: '빛이 닿지 않는 곳에 살아 눈이 거의 없다. 긴 몸으로 바닥을 더듬는다.',
     variant: { name: '백화 심해장어', color: '#d8d3dc',
       lore: '색이 완전히 빠진 개체. 어둠 속에서 홀로 하얗다.' } },
-  { id: 'glassoctopus', name: '유리문어', spot: 'comorodeep', rarity: 'rare',     price: 2400, color: '#a7c4d4', shape: 'cephalopod',
+  { id: 'glassoctopus', name: '유리문어', spot: 'comorodeep', rarity: 'rare',     price: 2400, color: '#a7c4d4', shape: 'octopus',
     lore: '몸이 유리처럼 비친다. 물 밖에 올리면 그제야 윤곽이 보인다.',
     variant: { name: '자수정 유리문어', color: '#b388cf',
       lore: '보랏빛이 도는 개체. 어떤 빛을 비춰도 같은 색으로 반짝인다.' } },
@@ -385,7 +385,7 @@ export const FISH: readonly Fish[] = [
     lore: '밤이면 심해에서 수면 가까이 올라오는 등불고기. 빛이 낮의 것보다 크다.',
     variant: { name: '심야 등불', color: '#2e6f80',
       lore: '한밤에만 빛을 켜는 개체. 다른 등불이 꺼진 뒤에야 보인다.' } },
-  { id: 'abyssglass',  name: '심연 유리문어', spot: 'comorodeep', rarity: 'epic', price: 10400, color: '#6f8fa8', shape: 'cephalopod', night: true,
+  { id: 'abyssglass',  name: '심연 유리문어', spot: 'comorodeep', rarity: 'epic', price: 10400, color: '#6f8fa8', shape: 'octopus', night: true,
     lore: '밤에 올라오는 유리문어는 몸 안에 작은 빛을 품고 있다. 그 빛이 어디서 왔는지는 모른다.',
     variant: { name: '심연의 유리', color: '#2b3f52',
       lore: '빛이 꺼진 유리문어. 몸이 어둠과 같은 색이라 물에서 들어 올려야 형태가 보인다.' } },
