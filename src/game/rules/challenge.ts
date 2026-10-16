@@ -1,5 +1,5 @@
 // 네임드 도전 순수 규칙 — 시도 상태머신 + 도전권 유효 판정.
-// UI(ChallengeModal)와 리듀서(resolveChallenge)가 같은 함수를 쓴다.
+// 조우 창(UI)과 리듀서(resolveChallenge)가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import {
   CHALLENGE_MAX_MISS, CHALLENGE_ROUNDS, CHALLENGE_WINDOW_MS,

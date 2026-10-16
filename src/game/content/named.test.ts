@@ -52,8 +52,18 @@ describe('named 데이터 계약', () => {
         expect(text, n.id).not.toMatch(/\d/);
         expect(sentences(text), n.id).toHaveLength(4);
       }
-      expect(n.poster, n.id).toMatch(/도전에서 이기면 수배판에서 토벌을 마칠 수 있다\.$/);
+      expect(n.poster, n.id).toMatch(/토벌하고 돌아오면 수배판에서 값을 치른다\.$/);
       expect(n.poster, `${n.id} 수배서는 이름을 부르지 않는다`).not.toContain(n.name);
+    }
+  });
+
+  it('흔적은 이름·수치 없는 한 문장이고 로어·수배서와 문장을 공유하지 않는다', () => {
+    const sentences = (s: string) => s.split(/(?<=다\.)\s*/).filter(Boolean);
+    for (const n of NAMED) {
+      expect(sentences(n.trace), n.id).toHaveLength(1);
+      expect(n.trace, n.id).not.toMatch(/\d/);
+      expect(n.trace, n.id).not.toContain(n.name);
+      expect([...sentences(n.lore), ...sentences(n.poster)], n.id).not.toContain(n.trace);
     }
   });
 });

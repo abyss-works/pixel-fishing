@@ -710,7 +710,7 @@ describe('R22: 도움말 탭', () => {
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
-    for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '납품', '네임드 토벌', '도전권', '유물',
+    for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '납품', '네임드 토벌', '흔적', '추적', '조우', '유물',
       '미끼', 'Esc', '물고기 그래픽', '다시 보지 않기', '닉네임', '도움말 마지막 갱신']) {
       expect(help, topic).toContain(topic);
     }

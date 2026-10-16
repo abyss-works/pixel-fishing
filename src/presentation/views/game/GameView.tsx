@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
+import { REJECT_TEXT } from '../../../game/rules/logic';
 import type { RejectReason } from '../../../game/rules/rules';
+import { when } from '../../../shared/lib/when';
+import { selectEncounter } from '../../../features/bounty/model/challenge';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
@@ -20,6 +23,10 @@ import StatsModal from '../overlays/stats/StatsModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
+import TraceCard from '../overlays/bounty/TraceCard';
+import EncounterModal from '../overlays/bounty/EncounterModal';
+import type { EncounterResult } from '../overlays/bounty/EncounterModal';
+import { josa } from '../../ui/format';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 
 interface GameViewProps {
@@ -47,13 +54,18 @@ export default function GameView(props: GameViewProps) {
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
+  const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
+  const atSea = scene.kind === 'region' && scene.id !== 'village';
+  const encounter = tracking ? selectEncounter(game, tracking) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
     setActionPanel(null);
     setStatsOpen(false);
+    setTracking(null);
     props.onScene(nextScene, message, entryPos);
   };
 
@@ -78,6 +90,18 @@ export default function GameView(props: GameViewProps) {
   };
 
   const openStats = () => setStatsOpen(open => !open);
+  // 승부 결과 확정 — 서버가 도감·진행도·도전권을 바꾼다. 실패는 감사만 남아 창을 그대로 둔다
+  const resolveEncounter = (r: EncounterResult) => {
+    if (!encounter) return;
+    when(props.dispatch({ type: 'resolveChallenge', questId: encounter.quest.id,
+      success: r.success, hits: r.hits, misses: r.misses }), result => {
+      if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error]); setTracking(null); return; }
+      if (r.success) {
+        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했다. 수배판에서 보상을 받자.`);
+        setTracking(null);
+      }
+    });
+  };
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
@@ -87,13 +111,19 @@ export default function GameView(props: GameViewProps) {
           <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onWarmup={props.onWarmup}
+                 onScene={go} onWarmup={props.onWarmup} paused={encounter !== null}
                  onShop={() => setActionPanel(panel => panel === 'boat' ? panel : 'boat')}
                  initialPos={props.entryPos ?? undefined} />
         )}
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap} />
+
+        {atSea && <TraceCard onTrack={setTracking} />}
+        {encounter && (
+          <EncounterModal key={encounter.quest.id} data={encounter}
+                          onResolve={resolveEncounter} onClose={() => setTracking(null)} />
+        )}
 
         {statsOpen && (
           <StatsModal game={game}
