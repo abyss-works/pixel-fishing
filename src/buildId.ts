@@ -9,3 +9,8 @@ export const BUILD_ID = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'de
 
 /** 화면 표시용 짧은 형태. 'dev'(로컬)는 그대로 둔다 */
 export const BUILD_LABEL = BUILD_ID === 'dev' ? 'dev' : BUILD_ID.slice(0, 7);
+
+// 배포 환경 — Vercel의 VERCEL_ENV(production/preview/development)를 vite가 빌드 때 박는다.
+// 로컬 빌드는 'local', Vercel 빌드인데 값이 없으면 ''(미상)이다.
+declare const __DEPLOY_ENV__: string | undefined;
+export const DEPLOY_ENV = typeof __DEPLOY_ENV__ !== 'undefined' ? __DEPLOY_ENV__ : '';

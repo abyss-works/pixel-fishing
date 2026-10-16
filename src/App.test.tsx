@@ -1252,6 +1252,13 @@ describe('패치노트 (설정 탭)', () => {
   });
 });
 
+describe('환경 배지', () => {
+  it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', () => {
+    render(<App />);
+    expect(screen.getByRole('status', { name: 'LOCAL DEV 빌드' })).toHaveTextContent('LOCAL DEV · dev');
+  });
+});
+
 // 개발 도구 — 게임 화면 위 플로팅 패널 (?admin 게이트). 사이드바는 항상 5탭이다.
 describe('개발 도구 패널 (?admin 게이트)', () => {
   it('?admin이 없으면 패널 버튼이 없고 사이드바는 5탭이다', () => {
