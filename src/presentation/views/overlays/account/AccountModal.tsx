@@ -12,7 +12,9 @@ import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
 import Button from '../../../ui/Button';
+import Field from '../../../ui/Field';
 import Modal from '../../../ui/Modal';
+import { useDialogs } from '../../../ui/useDialogs';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
@@ -41,6 +43,7 @@ export default function AccountModal({
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [nickBusy, setNickBusy] = useState(false);
+  const { confirm, notice, dialogs } = useDialogs();
   // 로컬(supabase 없음)에서도 화면은 보여준다 — 계정 폼만 막고 닉네임·ID는 그대로 동작한다.
   const offline = !isAccountConfigured();
 
@@ -63,7 +66,11 @@ export default function AccountModal({
 
     // ② 이미 가입된 이메일 → 기존 계정 로그인으로 전환 (계정 교체 = 게스트 진행 소멸: 경고+백업)
     if (r.code === 'email_exists' || r.code === 'user_already_exists') {
-      if (!window.confirm('이미 가입된 이메일이에요 — 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)')) return;
+      if (!(await confirm({
+        title: '기존 계정으로 로그인',
+        body: '이미 가입된 이메일이에요 — 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)',
+        confirmLabel: '로그인',
+      }))) return;
       try { await navigator.clipboard.writeText(saveGameCode(game)); } catch { /* 백업 실패해도 진행 */ }
       const r2 = await signInAccount(email.trim(), pw);
       if (!r2.ok) { setToast(`로그인 실패: ${r2.msg}`); return; }
@@ -82,7 +89,7 @@ export default function AccountModal({
   });
 
   const signOut = async () => {
-    if (!window.confirm('로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.')) return;
+    if (!(await confirm({ title: '로그아웃', body: '로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
     await signOutAccount();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
@@ -109,7 +116,7 @@ export default function AccountModal({
       await navigator.clipboard.writeText(value);
       setToast('내 ID를 복사했어요. 문의하실 때 함께 보내주세요.');
     } catch {
-      window.prompt('복사가 막혀 있어요. 아래 값을 직접 복사하세요.', value);
+      void notice({ title: '직접 복사', body: '복사가 막혀 있어요. 아래 값을 직접 복사하세요.', value });
     }
   };
 
@@ -139,11 +146,15 @@ export default function AccountModal({
           </Note>
 
           <div className="flex flex-col gap-2 my-2">
-            <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
-                       disabled={offline} onChange={e => setEmail(e.target.value)} />
-            <TextInput type="password" placeholder="비밀번호 (6자 이상)" value={pw}
-                       autoComplete="current-password" disabled={offline}
-                       onChange={e => setPw(e.target.value)} />
+            <Field label="이메일">
+              <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
+                         disabled={offline} onChange={e => setEmail(e.target.value)} />
+            </Field>
+            <Field label="비밀번호" hint="6자 이상">
+              <TextInput type="password" placeholder="비밀번호 (6자 이상)" value={pw}
+                         autoComplete="current-password" disabled={offline}
+                         onChange={e => setPw(e.target.value)} />
+            </Field>
           </div>
 
             <Button variant="primary" full className="mt-3" onClick={proceed} disabled={busy || offline}>이메일로 계속하기</Button>
@@ -187,6 +198,7 @@ export default function AccountModal({
 
       <div className="flex gap-2 mt-3">
       </div>
+      {dialogs}
     </Modal>
   );
 }
