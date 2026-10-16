@@ -14,14 +14,18 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import Button from '../../../../ui/Button';
 import { when } from '../../../../../shared/lib/when';
 import { saveGameCode } from '../../../../../features/account/service/accountActions';
+import {
+  armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
+} from '../../../../../features/bounty/service/forceEncounter';
 
-// 관리자 탭 — 게임 셸 5탭 다음(6번) 조건부 탭. 스탯 편집 + 덮개 + 시간대 설정 + 이사 코드 + 대시보드.
+// 관리자 탭 — 게임 셸 5탭 다음(6번) 조건부 탭. 스탯 편집 + 덮개 + 시간대 설정 + 강제 조우 + 이사 코드 + 대시보드.
 // 노출은 GameTabs가 ?admin + (로컬 또는 소유자 계정) 게이트로 통제한다.
 export default function VAdmin({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
 }) {
+  const forceArmed = useForceEncounterArmed();
   const exportSave = async () => {
     const code = saveGameCode(game);
     try {
@@ -132,6 +136,30 @@ export default function VAdmin({ game, dispatch, setToast }: {
                 className="shrink-0">
           {canvasCover ? '덮음' : '열림'}
         </PillButton>
+      </div>
+
+      {/* 강제 조우 — 1/1000 조우를 기다리지 않고 흔적 카드·알림·조우 창·토벌 흐름을 바로 띄운다.
+          다음 캐치 요청에 표시를 싣고, 서버가 허용(스테이징·로컬, 소유자)하면 확률 게이트만 건너뛴다. */}
+      <SectionTitle>네임드 조우</SectionTitle>
+      <div className="pf-frame px-3 py-2 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-text-dim leading-relaxed">
+            {forceArmed ? '대기 중 — 다음 낚시에서 조우한다.' : '꺼짐'}
+          </span>
+          <PillButton type="button"
+                  active={forceArmed}
+                  aria-pressed={forceArmed}
+                  aria-label="다음 낚시 조우 강제"
+                  onClick={() => (forceArmed ? disarmForceEncounter() : armForceEncounter())}
+                  className="shrink-0">
+            {forceArmed ? '취소' : '다음 낚시 조우 강제'}
+          </PillButton>
+        </div>
+        <Note size="2xs" className="my-0">
+          수배판에서 네임드를 수주하고 그 구역(둔클레오스는 코모로 심해)에서 낚시해야 조우한다.
+          조우하면 저절로 꺼진다. 스테이징·로컬 서버 전용 — 운영 서버는 표시를 무시한다.
+          오프라인 개발 모드는 수배 데이터가 없어 조우하지 않는다.
+        </Note>
       </div>
 
       {/* 이사 코드 — 유저 기능에서는 내렸다. 무검증 import가 변조 반입 통로로 실제 악용돼
