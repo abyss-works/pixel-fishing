@@ -70,10 +70,10 @@ export const BAIT_BUY_MAX = 50;
 export const EXHIBIT_SLOTS = 3;
 
 
-// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 3회,
+// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 1회,
 // 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
 // (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
-export const BOUNTY_DAILY_CAP = 3;
+export const BOUNTY_DAILY_CAP = 1; // 일반 의뢰 하루 1회(2026-10-17, 3회 → 1회 · 보상 5배)
 export const BOUNTY_NAMED_DAILY_CAP = 1;
 
 // 네임드 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
@@ -81,11 +81,11 @@ export const BOUNTY_NAMED_DAILY_CAP = 1;
 // Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
-// 네임드 도전 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
-// 존은 고정 관대값이다 (수역 게이트와 무관 — 어렵게 하지 않는다).
+// 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 6~마다가스카르 9)만큼 맞히면 성공, 3번째 실패에 탈락.
+// 화면은 결투(왕복 커서·옮겨 가는 존)다.
+// 존 폭은 고정 관대값이다(자리만 옮긴다 — 수역 게이트와 무관, 어렵게 하지 않는다).
 export const CHALLENGE_WINDOW_MS = 4 * 3600_000; // 도전권 유효 4시간 — 방치 중 조우해도 복귀까지 남도록
-export const CHALLENGE_ROUNDS = 10;
-export const CHALLENGE_MAX_MISS = 3;
+export const CHALLENGE_MISS_LIMIT = 3; // 이만큼 실패하면 탈락 — 모든 네임드 공통
 export const CHALLENGE_YELLOW = 0.3;
 export const CHALLENGE_RED = 0.1;
 

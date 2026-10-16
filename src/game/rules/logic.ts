@@ -164,8 +164,9 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
 // (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
 // 개체는 만들지 않고 진행도만 올린다 (판매 불가 개념이라 파이프라인에 태우지 않는다).
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
+// force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
 export function rollNamedEncounter(
-  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random,
+  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
 ): BountyQuest | null {
   const zone = topZoneOfSpot(spot);
   const cands = activeIds
@@ -173,7 +174,8 @@ export function rollNamedEncounter(
     .filter((q): q is BountyQuest =>
       q !== undefined && q.difficulty === 'named' && q.zone === zone
       && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
-  if (cands.length === 0 || rng() >= NAMED_ENCOUNTER_RATE) return null;
+  if (cands.length === 0) return null;
+  if (rng() >= NAMED_ENCOUNTER_RATE && !force) return null;
   return cands[Math.floor(rng() * cands.length)];
 }
 
@@ -190,12 +192,16 @@ export function zoneDexMissing(
 
 /** 라이선스 조건 2종 — 명성 + 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
 export interface LicenseCondition { key: 'fame' | 'dex'; label: string; ok: boolean }
-const BASIC_GRADES = ['common'] as const;
-const NAMED_GRADES = ['common', 'rare', 'epic', 'legendary'] as const;
+/** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
+ *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
+export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
+  basic: ['common', 'rare', 'epic'],
+  named: ['common', 'rare', 'epic', 'legendary'],
+};
 export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
-  const grades: readonly RarityId[] = tier === 'named' ? NAMED_GRADES : BASIC_GRADES;
+  const grades = LICENSE_GRADES[tier];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   return [
@@ -779,13 +785,17 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
 }
 
-/** 미끼 실구매가 — 유물 할인(바루나의 저울)을 적용한 단일 출처.
+/** 미끼 할인율 — 가진 유물 중 가장 큰 할인(바루나의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
+export function baitDiscount(state: Pick<GameState, 'artifacts'>): number {
+  const owned = new Set(state.artifacts);
+  return ARTIFACTS.reduce((m, a) =>
+    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
+}
+
+/** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
  *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
 export function baitCost(state: Pick<GameState, 'artifacts'>, price: number, count: number): number {
-  const owned = new Set(state.artifacts);
-  const disc = ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
-  return Math.floor(price * count * (1 - disc));
+  return Math.floor(price * count * (1 - baitDiscount(state)));
 }
 
 /** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).

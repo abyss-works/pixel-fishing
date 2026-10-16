@@ -22,8 +22,12 @@ vi.mock('../../../../platform/api', async (importOriginal) => {
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const okDispatch = (g: GameState) => () => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } });
 const rec = (count: number) => ({ count, maxSize: null, first: null });
-// 태평양 일반 3종 완성 (고등어·갈치·아귀)
-const fullDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
+// 태평양 전설 제외 전부 (일반 폼) — 기본 라이선스 도감 조건. 일반 3 · 희귀 3 · 영웅 3
+const fullDex = {
+  mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) },
+  seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
+  tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
+};
 
 function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
   const setToast = vi.fn();
@@ -109,7 +113,7 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('???')).toBeInTheDocument();
     expect(screen.getByText(/걷어 올린 그물은/)).toBeInTheDocument();
-    expect(screen.getByText(/40000G/)).toBeInTheDocument();
+    expect(screen.getByText(/400000G/)).toBeInTheDocument();
   });
 
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {

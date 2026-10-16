@@ -7,6 +7,7 @@ import type { RejectReason } from '../../../game/rules/rules';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
+import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -76,14 +77,15 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
   const client = useQueryClient();
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
-    when(gameGatewayRef.current.dispatch(action), r => {
+    when(gameGatewayRef.current.dispatch(withForcedEncounter(action)), r => {
       if (r.status === 'ok') {
         setGame(r.state);
+        settleForcedEncounter(r.result);
         if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
-            || action.type === 'resolveChallenge'
+            || action.type === 'resolveChallenge' || action.type === 'debug'
             || (action.type === 'catch' && r.result.type === 'catch' && r.result.ticket)) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }

@@ -1,4 +1,3 @@
-import { CHALLENGE_ROUNDS } from '../../../game/rules/balance';
 import { bountyById } from '../../../game/content/bounties';
 import type { BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
@@ -6,11 +5,6 @@ import type { NamedFish } from '../../../game/content/named';
 import { formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { rodAxes } from '../../../game/rules/stats';
-
-/** 현재 도전에서 화면에 표시할 시도 번호를 계산한다. */
-export function selectChallengeAttempt(run: { hits: number; misses: number }): number {
-  return Math.min(run.hits + run.misses + 1, CHALLENGE_ROUNDS);
-}
 
 /** 조우 창이 그릴 것 — 대상·초상화·도감 공개 여부·목격 문장·바 시간 */
 export interface EncounterData {
@@ -22,6 +16,8 @@ export interface EncounterData {
   /** 수배서 첫 문장 — 목격담 */
   sighting: string;
   sweepMs: number;
+  /** 결투 체력 — 이만큼 맞혀야 토벌한다 (네임드 데이터) */
+  hp: number;
 }
 
 /** 추적할 네임드 의뢰의 조우 창 데이터. 네임드 의뢰가 아니면 null */
@@ -35,5 +31,6 @@ export function selectEncounter(game: GameState, questId: string): EncounterData
     found: formDiscovered(game, named.id, 'normal'),
     sighting: named.poster.split(/(?<=다\.)\s*/)[0] ?? named.poster,
     sweepMs: rodAxes(game).sweep.value * 1000,
+    hp: named.hp,
   };
 }

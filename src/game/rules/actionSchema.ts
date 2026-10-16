@@ -7,6 +7,8 @@
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import { z } from 'zod';
 import type { GameAction } from './actions.js';
+import { DEBUG_COMMAND_IDS } from './debug.js';
+import type { DebugCommandId } from './debug.js';
 
 // 판정 enum — 문자열 화이트리스트. 미지 값은 NaN 가중합 → 풀末尾 전설 확정으로
 // 이어졌던 입력 경로이므로 여기서 null로 잘라 400 bad-action으로 돌린다.
@@ -18,7 +20,10 @@ const LocationRef = z.union([
 ]);
 
 const schemas = {
-  catch: z.object({ type: z.literal('catch'), spot: z.string(), judgment: Judgment }),
+  catch: z.object({
+    type: z.literal('catch'), spot: z.string(), judgment: Judgment,
+    forceEncounter: z.literal(true).optional(),
+  }),
   sell: z.object({ type: z.literal('sell'), uids: z.array(z.unknown()) }),
   upgradeRod: z.object({ type: z.literal('upgradeRod') }),
   buyBoat: z.object({ type: z.literal('buyBoat') }),
@@ -27,10 +32,11 @@ const schemas = {
   sendLetter: z.object({ type: z.literal('sendLetter'), text: z.string() }),
   redeemCoupon: z.object({ type: z.literal('redeemCoupon'), code: z.string() }),
   claimRelief: z.object({ type: z.literal('claimRelief'), code: z.string() }),
-  adminSet: z.object({
-    type: z.literal('adminSet'),
-    gold: z.number().optional(), fame: z.number().optional(),
-    rod: z.number().optional(), boat: z.number().optional(),
+  // 개발 도구 명령 — 명령 id는 목록 화이트리스트, 인자 형태는 리듀서(reduceDebug)가 본다
+  debug: z.object({
+    type: z.literal('debug'),
+    command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
+    args: z.record(z.string(), z.unknown()).optional(),
   }),
   buyBait: z.object({ type: z.literal('buyBait'), bait: z.unknown(), count: z.unknown().optional() }),
   setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
@@ -53,7 +59,7 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
-  schemas.claimRelief, schemas.adminSet, schemas.buyBait, schemas.setActiveBait,
+  schemas.claimRelief, schemas.debug, schemas.buyBait, schemas.setActiveBait,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.import,

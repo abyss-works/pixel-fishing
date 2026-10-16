@@ -15,8 +15,11 @@ export default defineConfig({
   // (프로젝트 설정 "Enable access to System Environment Variables"가 켜져 있어야 한다).
   // 여기(빌드)서 번들에 박고, 서버 함수는 런타임에 같은 변수를 읽는다 — 같은 배포면 같은 값.
   // 미설정이면 양쪽 다 'dev'로 떨어져 판정이 무력화될 뿐, 전원 차단 같은 사고는 안 난다.
+  // 배포 환경(VERCEL_ENV: production/preview/development)도 같은 방식으로 박는다 — 환경 배지가 본다.
+  // 로컬 빌드는 'local', Vercel 빌드인데 값이 없으면 ''(미상)으로 두어 배지가 뜨지 않게 한다.
   define: {
     __BUILD_ID__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev'),
+    __DEPLOY_ENV__: JSON.stringify(process.env.VERCEL_ENV ?? (process.env.VERCEL ? '' : 'local')),
   },
   server: { port: 5199 },
   test: {

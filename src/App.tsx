@@ -6,6 +6,9 @@ import { useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import GameView from './presentation/views/game/GameView';
+import DevTools from './presentation/views/devtools/DevTools';
+import EnvBadge from './presentation/views/devtools/EnvBadge';
+import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
 
 // 위치 복원 규칙: 바다 위치는 유지하지 않는다. 지역 씬이면 고향 항구에서 시작하고,
@@ -38,14 +41,20 @@ function AppContent() {
     dispatch({ type: 'travel', to: nextScene });
   };
 
+  // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
+  // 개발 도구 패널(?admin + 로컬·소유자만). 둘 다 게임 화면 바깥의 오버레이다.
   return (
-    <GameView
-      game={game} scene={scene} entryPos={entryPos}
-      dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
-      log={log} syncLabel={syncLabel} syncState={sync}
-      account={account} uid={uid} nickname={nickname}
-      onRename={rename} onAuthChanged={onAuthChanged} outdated={outdated}
-    />
+    <>
+      <GameView
+        game={game} scene={scene} entryPos={entryPos}
+        dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
+        log={log} syncLabel={syncLabel} syncState={sync}
+        account={account} uid={uid} nickname={nickname}
+        onRename={rename} onAuthChanged={onAuthChanged} outdated={outdated}
+      />
+      <EnvBadge env={DEPLOY_ENV} build={BUILD_LABEL} />
+      <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
+    </>
   );
 }
 

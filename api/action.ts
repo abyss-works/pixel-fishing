@@ -22,6 +22,9 @@ import { applyAction, pickScalars, prepareCatchDraw, rollCatchFish } from '../sr
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
+import { isDebugTableCommand } from '../src/game/rules/debug.js';
+import type { DebugTableCommand } from '../src/game/rules/debug.js';
+import { challengeWindowMs } from '../src/game/rules/challenge.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { SPOTS } from '../src/game/content/spots.js';
@@ -58,6 +61,33 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
 export function importOwnerEmail(): string {
   return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
+}
+
+// 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
+// 스테이징·로컬 서버에서는 소유자 계정이거나 로컬 오리진일 때만 연다.
+export function debugTriggerAllowed({ vercelEnv, localOrigin, owner }: {
+  vercelEnv: string | undefined; localOrigin: boolean; owner: boolean;
+}): boolean {
+  if (vercelEnv === 'production') return false;
+  return localOrigin || owner;
+}
+
+/** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 상한과 같은 함수를 쓴다 */
+export type DebugTablePlan =
+  | { table: string; op: 'delete'; since?: { column: string; iso: string } }
+  | { table: string; op: 'update'; values: Record<string, unknown> };
+export function debugTablePlan(command: DebugTableCommand, nowMs: number): DebugTablePlan {
+  switch (command) {
+    case 'bounty.ticketNearExpiry':
+      return { table: 'bounty_tickets', op: 'update',
+        values: { issued_at: new Date(nowMs - challengeWindowMs() + 60_000).toISOString() } };
+    case 'bounty.clearTickets':
+      return { table: 'bounty_tickets', op: 'delete' };
+    case 'bounty.resetToday':
+      return { table: 'bounty_accepts', op: 'delete', since: { column: 'accepted_at', iso: kstDayStartISO(nowMs) } };
+    case 'bounty.clearProgress':
+      return { table: 'bounty_progress', op: 'delete' };
+  }
 }
 
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
@@ -259,13 +289,14 @@ export function toBountyCtx(rows: BountyRows, dayStartISO: string): BountyCtx {
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
- * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/adminSet/redeemCoupon(스칼라만).
+ * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만).
+ * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
  * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
-  'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'adminSet', 'redeemCoupon', 'catch',
+  'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact',
 ]);
 
@@ -335,24 +366,41 @@ async function route(req: Req, res: Res): Promise<void> {
   // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
-  const action = parseAction(body);
-  if (!action) {
+  const parsed = parseAction(body);
+  if (!parsed) {
     throw new ApiError(400, 'bad-action');
   }
+  let action = parsed;
 
-  // 관리자 전용 액션 게이트 — import deprecate + 테스트용 adminSet.
-  // 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다. 운영에선 소유자 계정만,
-  // 로컬 오리진(vite dev가 실제로 이 함수를 치는 프리뷰 대상 빌드)은 개발 편의상 연다.
+  // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
+  // JWT 로컬 검증 경로는 email을 안 봤으니 필요할 때만 Auth 서버에 물어본다.
   // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
-  if (action.type === 'import' || action.type === 'adminSet') {
-    const origin = String(req.headers.origin ?? '');
-    const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    if (!local) {
-      // JWT 로컬 검증 경로는 email을 안 봤으니 관리자 액션일 때만 Auth 서버에 물어본다
-      const { data: ud } = await admin.auth.getUser(token);
-      const email = ud.user?.email?.toLowerCase() ?? '';
-      if (email !== importOwnerEmail().toLowerCase()) throw new ApiError(403, 'import-owner-only');
-    }
+  const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.origin ?? ''));
+  const isOwner = async (): Promise<boolean> => {
+    const { data: ud } = await admin.auth.getUser(token);
+    return (ud.user?.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
+  };
+  const debugAllowed = async (): Promise<boolean> => {
+    const vercelEnv = process.env.VERCEL_ENV;
+    if (vercelEnv === 'production') return false;
+    return debugTriggerAllowed({ vercelEnv, localOrigin, owner: localOrigin || await isOwner() });
+  };
+
+  // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다.
+  // 운영에서도 소유자 계정만, 로컬 오리진은 개발 편의상 연다.
+  if (action.type === 'import' && !localOrigin && !await isOwner()) {
+    throw new ApiError(403, 'import-owner-only');
+  }
+
+  // 개발 도구 명령 — 운영 배포는 전부 거부한다. 스테이징·로컬은 소유자·로컬 오리진만.
+  // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
+  if (action.type === 'debug' && !await debugAllowed()) {
+    throw new ApiError(422, 'debug-forbidden');
+  }
+
+  // 테스트용 강제 조우 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
+  if (action.type === 'catch' && action.forceEncounter && !await debugAllowed()) {
+    action = { type: 'catch', spot: action.spot, judgment: action.judgment };
   }
 
   // 현재 상태 로드 — saves_current는 항상, 개체·도감은 필요할 때만 읽는다.
@@ -645,7 +693,7 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
   // 행 기록은 아래 현상금 블록이 맡는다. 아직 아무것도 기록하지 않았으니
   // 덧붙이기가 안전하다 (writes·events는 아래에서 out 기준으로 생긴다).
   if (out.ok && action.type === 'catch' && catchBase && bounty) {
-    const namedHit = rollNamedEncounter(bounty.active, action.spot, Math.random);
+    const namedHit = rollNamedEncounter(bounty.active, action.spot, Math.random, action.forceEncounter === true);
     if (namedHit) {
       out.events.push({ type: 'ticket', payload: { questId: namedHit.id } });
       if (out.result.type === 'catch') out.result.ticket = namedHit.id;
@@ -704,6 +752,19 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
         .delete().eq('user_id', uid).eq('quest_id', quest.id);
       if (tdelErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
     }
+  }
+
+  // 개발 도구 테이블 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
+  if (action.type === 'debug' && isDebugTableCommand(action.command)) {
+    const plan = debugTablePlan(action.command, Date.now());
+    let q;
+    if (plan.op === 'update') q = admin.from(plan.table).update(plan.values).eq('user_id', uid);
+    else {
+      q = admin.from(plan.table).delete().eq('user_id', uid);
+      if (plan.since) q = q.gte(plan.since.column, plan.since.iso);
+    }
+    const { error: dbgErr } = await q;
+    if (dbgErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
   }
 
   // 낙관 락 갱신 — 읽은 version 그대로면 성공. 0행이면 다른 요청과 경합(멀티탭) → 409,

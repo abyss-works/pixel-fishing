@@ -20,13 +20,17 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
 const rec = (count: number) => ({ count, maxSize: null, first: null });
-// 태평양 일반 3종 완성 도감 (고등어·갈치·아귀)
-const pacificDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
-// 태평양 전설 포함 전부 (일반 폼만) — 희귀 3·영웅 3·전설 4 추가
-const pacificFullDex = {
-  ...pacificDex,
+// 태평양 일반 등급 3종만 (고등어·갈치·아귀) — 기본 라이선스에는 모자란다
+const pacificCommonDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
+// 태평양 전설 제외 전부 (일반 폼만) — 기본 라이선스 도감 조건. 희귀 3·영웅 3 추가
+const pacificDex = {
+  ...pacificCommonDex,
   seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
   tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
+};
+// 태평양 전설 포함 전부 (일반 폼만) — 네임드 라이선스 도감 조건. 전설 4 추가
+const pacificFullDex = {
+  ...pacificDex,
   shark: { normal: rec(1) }, kraken: { normal: rec(1) },
   moonveil: { normal: rec(1) }, abyssveil: { normal: rec(1) },
 };
@@ -49,6 +53,21 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'not-enough-fame' });
   });
 
+  it('일반 등급만 모았으면 기본 라이선스도 dex-incomplete — 전설 제외 전부(희귀·영웅 포함)가 조건이다', () => {
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificCommonDex }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
+  });
+
+  it('돌연변이 폼만 잡은 어종은 도감 조건에 세지 않는다', () => {
+    const variantOnly = { ...pacificDex, tuna: { variant: rec(1) } };
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: variantOnly }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
+  });
+
   it('도감 미완이면 dex-incomplete', () => {
     const out = applyAction(seed({ ...harbor, fame: 1500 }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
@@ -56,10 +75,10 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('통합 상한 초과는 no-tickets', () => {
+  it('일반 의뢰는 하루 1회 — 오늘 이미 1건 수주했으면 no-tickets', () => {
     const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx({ acceptsToday: 3 }) }));
+      deps({ bounty: ctx({ acceptsToday: 1 }) }));
     expect(out).toEqual({ ok: false, error: 'no-tickets' });
   });
 
@@ -73,7 +92,7 @@ describe('acceptQuest', () => {
   it('네임드는 일반 상한을 먹지 않는다', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), act,
-      deps({ bounty: ctx({ acceptsToday: 3 }) }));
+      deps({ bounty: ctx({ acceptsToday: 1 }) }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
       payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
@@ -134,9 +153,9 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-easy-common' },
       deps({ bounty: ctx({ complete: ['pacific-easy-common'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(4100); // 100 + 보상 4000
+    expect(out.state.gold).toBe(20100); // 100 + 보상 20000
     expect(out.events).toEqual([{ type: 'deliverBounty',
-      payload: { questId: 'pacific-easy-common', reward: 4000 } }]);
+      payload: { questId: 'pacific-easy-common', reward: 20000 } }]);
   });
 
   it('네임드 토벌에는 교환 재료 1개가 따라온다', () => {
@@ -144,7 +163,7 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
       deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(40000);
+    expect(out.state.gold).toBe(400000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
   });
 });
@@ -204,6 +223,22 @@ describe('rollNamedEncounter', () => {
     const q = rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0);
     expect(q?.id).toBe('pacific-named-megalodon');
   });
+
+  it('강제 조우는 확률 게이트만 건너뛴다 — 수주·해역·수역 조건은 그대로다', () => {
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0.999, true)?.id)
+      .toBe('pacific-named-megalodon');
+    expect(rollNamedEncounter([], 'sea', () => 0, true)).toBeNull();
+    expect(rollNamedEncounter(['pacific-named-megalodon'], 'dragonhole', () => 0, true)).toBeNull();
+    expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'mozstrait', () => 0, true)).toBeNull();
+  });
+
+  it('강제 조우도 rng 소비 횟수는 같다 — 뒤따르는 통상 추첨 결과가 바뀌지 않는다', () => {
+    let forced = 0;
+    let natural = 0;
+    rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => { forced++; return 0; }, true);
+    rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => { natural++; return 0; });
+    expect(forced).toBe(natural);
+  });
 });
 
 describe('named ticket', () => {
@@ -231,6 +266,14 @@ describe('named ticket', () => {
     expect('ticket' in (out.result as object)).toBe(false);
   });
 
+  it('강제 조우 표시가 있으면 확률과 무관하게 도전권을 남긴다', () => {
+    const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal', forceEncounter: true },
+      deps({ bounty: ctx({ active: ['pacific-named-megalodon'] }), rng: () => 0.999 }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toHaveLength(1);
+    expect(out.result).toMatchObject({ type: 'catch', ticket: 'pacific-named-megalodon' });
+  });
+
   it('수주 중이 아니면 게이트가 돌지 않는다', () => {
     const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal' }, deps({ rng: () => 0 }));
     if (!out.ok) throw new Error(out.error);
@@ -241,7 +284,7 @@ describe('named ticket', () => {
 describe('resolveChallenge', () => {
   const act = (over = {}) => ({
     type: 'resolveChallenge', questId: 'pacific-named-megalodon',
-    success: true, hits: 7, misses: 0, ...over,
+    success: true, hits: 6, misses: 0, ...over,
   } as const);
   const ticket = (issuedAt: string) => [{ questId: 'pacific-named-megalodon', issuedAt }];
   const NOW = '2026-10-09T01:00:00.000Z';
@@ -274,9 +317,18 @@ describe('resolveChallenge', () => {
     expect(out).toEqual({ ok: false, error: 'ticket-expired' });
   });
 
-  it('주장 정합성이 깨지면 bad-request (7히트 미만 성공 주장)', () => {
+  it('주장 정합성이 깨지면 bad-request (네임드 체력 미만 히트로 성공 주장)', () => {
     expect(applyAction(ready(), act({ hits: 5 }), full()))
       .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('성공 기준은 네임드 체력이다 — 둔클레오스(체력 9)는 8히트 성공 주장을 거부한다', () => {
+    const q = 'madagascar-named-elder-sixgill';
+    const madaDeps = () => deps({ ...dyn,
+      bounty: ctx({ active: [q], tickets: [{ questId: q, issuedAt: '2026-10-09T00:30:00.000Z' }] }) });
+    expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(ready(), act({ questId: q, hits: 9 }), madaDeps()).ok).toBe(true);
   });
 
   it('성공하면 도감에 오르고 감사 이벤트를 남긴다', () => {
@@ -284,17 +336,17 @@ describe('resolveChallenge', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.dex.megalodon?.normal?.count).toBe(1);
     expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: true, hits: 7, misses: 0 } }]);
+      payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
   });
 
   it('실패는 감사 이벤트만 남기고 상태가 그대로다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
-      act({ success: false, hits: 6, misses: 4 }), full());
+      act({ success: false, hits: 5, misses: 3 }), full());
     if (!out.ok) throw new Error(out.error);
     expect(out.state).toEqual(st);
     expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: false, hits: 6, misses: 4 } }]);
+      payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 3 } }]);
   });
 });
 
