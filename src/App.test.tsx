@@ -1217,28 +1217,32 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(hud()).toContain('0마리');
   });
 
-  it('자동 잠금 — 어종×폼별 최대 개체를 한 번에 잠그고 나머지는 그대로 둔다', () => {
+  it('자동 잠금 — 확인 뒤 어종×폼별 가장 큰 1마리만 잠그고 나머지 잠금은 푼다', () => {
     seed({ bag: [
-      inst('crucian', 'normal', 12), inst('crucian', 'normal', 40),
+      { ...inst('crucian', 'normal', 12), locked: true }, // 예전 최대 — 이제 더 큰 개체가 있다
+      inst('crucian', 'normal', 40),
       inst('crucian', 'variant', 55),
       inst('carp', 'normal', 33),
     ] });
     render(<App />);
     clickTab(/^가방/);
-    expect(screen.getByLabelText('자동 잠금')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('자동 잠금'));
-    // 잠금 적용은 개체 줄의 자물쇠로 확인한다 — 목록이 기본 닫힘이므로 두 종을 펼친다
+    // 먼저 확인 창 — 풀리는 수를 알려 준다. 정리하기를 눌러야 바뀐다
+    expect(screen.getByText(/가장 큰 물고기 한 마리만/)).toBeInTheDocument();
+    expect(screen.getByText(/잠금 해제/).textContent).toContain('1');
+    fireEvent.click(screen.getByRole('button', { name: '정리하기' }));
     openRow('붕어');
     openRow('잉어');
     expect(screen.getByLabelText('40.0cm 붕어 잠금 해제')).toBeInTheDocument();
     expect(screen.getByLabelText('55.0cm 돌연변이 붕어 잠금 해제')).toBeInTheDocument();
     expect(screen.getByLabelText('33.0cm 잉어 잠금 해제')).toBeInTheDocument();
-    // 최대가 아닌 것은 건드리지 않는다
+    // 예전 최대(12cm)는 잠금이 풀렸다
     expect(screen.getByLabelText('12.0cm 붕어 잠금')).toBeInTheDocument();
 
-    // 다시 누르면 변할 게 없다 — 요청 없이 안내만 (멱등)
+    // 다시 누르면 정리할 게 없다 — 확인 창 없이 안내만 (멱등)
     fireEvent.click(screen.getByLabelText('자동 잠금'));
-    expect(screen.getByText(/새로 잠글 최대 개체가 없다/)).toBeInTheDocument();
+    expect(screen.getByText(/정리할 잠금이 없다/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '정리하기' })).toBeNull();
   });
 });
 

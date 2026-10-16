@@ -992,14 +992,14 @@ export function freeExhibitSlot(exhibit: readonly FishInstance[]): number | null
   return null;
 }
 
-/** 자동 잠금 후보 — 어종×폼별 **가장 큰 개체**의 uid (v0.6.4).
- *  "잠그는 것도 일이다": 종별 최고 기록을 한 번에 판매 보호한다.
- *  - 그룹 최대가 이미 잠겨 있으면 그 그룹은 건너뛴다 — 목표(최대 1마리 보호)가 이미 달성됐고,
- *    눌렀을 때 결과가 변하지 않는 게 예측 가능성이다. 다른 개체의 기존 잠금은 절대 건드리지 않는다
- *    (잠금 해제는 이 함수 책임이 아니다 — 적용도 setLocked(uids, true) 하나뿐).
+/** 자동 잠금 계획 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다.
+ *  - lock: 그 최대 개체가 아직 안 잠겼으면 잠근다.
+ *  - unlock: 같은 어종×폼에서 최대가 아닌데 잠긴 개체는 푼다(손으로 잠근 것도 포함 — 잠금 기준이
+ *    대개 가장 큰 개체라 정리 대상으로 본다. 화면이 누르기 전에 확인을 받는다).
+ *  - 이미 정리된 가방이면 둘 다 비어 있다(멱등).
  *  - 크기 미상(null)은 최소 취급(blandness와 같은 규약), 동률은 uid 사전순으로 결정적.
- *  선택은 이 순수 함수, 적용은 기존 액션 — 서버 권위 경로 재사용(v0.5.0). */
-export function autoLockUids(bag: readonly FishInstance[]): string[] {
+ *  계획은 이 순수 함수, 적용은 기존 setLocked 액션 — 서버 권위 경로 재사용(v0.5.0). */
+export function autoLockPlan(bag: readonly FishInstance[]): { lock: string[]; unlock: string[] } {
   const bigger = (a: FishInstance, b: FishInstance): boolean => {
     const as = a.size ?? -1, bs = b.size ?? -1;
     return as > bs || (as === bs && a.uid.localeCompare(b.uid) < 0);
@@ -1010,7 +1010,11 @@ export function autoLockUids(bag: readonly FishInstance[]): string[] {
     const cur = top.get(k);
     if (!cur || bigger(i, cur)) top.set(k, i);
   }
-  return [...top.values()].filter(i => !i.locked).map(i => i.uid).sort();
+  const tops = new Set([...top.values()].map(i => i.uid));
+  return {
+    lock: [...top.values()].filter(i => !i.locked).map(i => i.uid).sort(),
+    unlock: bag.filter(i => i.locked && !tops.has(i.uid)).map(i => i.uid).sort(),
+  };
 }
 
 // 아래 세 판정은 공통 규칙 함수에 위임해 중복 구현을 막는다.
