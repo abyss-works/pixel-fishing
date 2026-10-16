@@ -784,13 +784,17 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
 }
 
-/** 미끼 실구매가 — 유물 할인(바루나의 저울)을 적용한 단일 출처.
+/** 미끼 할인율 — 가진 유물 중 가장 큰 할인(바루나의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
+export function baitDiscount(state: Pick<GameState, 'artifacts'>): number {
+  const owned = new Set(state.artifacts);
+  return ARTIFACTS.reduce((m, a) =>
+    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
+}
+
+/** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
  *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
 export function baitCost(state: Pick<GameState, 'artifacts'>, price: number, count: number): number {
-  const owned = new Set(state.artifacts);
-  const disc = ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
-  return Math.floor(price * count * (1 - disc));
+  return Math.floor(price * count * (1 - baitDiscount(state)));
 }
 
 /** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).
