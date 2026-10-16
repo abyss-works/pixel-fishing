@@ -25,13 +25,8 @@ const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /<textarea\b/, use: 'TextArea' },
 ];
 
-/** 브라우저 기본 대화상자 — 게임 화면은 ConfirmDialog를 쓴다. 아래 파일만 기존 사용을 남겨 둔다 */
+/** 브라우저 기본 대화상자 — 게임 화면은 useDialogs(ConfirmDialog·InputDialog·NoticeDialog)를 쓴다. 예외 없음 */
 const SYSTEM_DIALOG = /\bwindow\.(?:confirm|prompt|alert)\(/;
-const SYSTEM_DIALOG_EXCEPTIONS = new Set([
-  'views/overlays/account/AccountModal.tsx',   // 계정 전환·로그아웃 확인, 클립보드 막힘 시 복사용 prompt
-  'views/devtools/MigrationCode.tsx',           // 이사 코드 붙여넣기·복사(관리자 전용)
-  'views/admin/tabs/FishTab.tsx',               // 관리자 대시보드 복사 결과 안내
-]);
 
 /** 이야기(스토리) 없이 둘 수 있는 공용 UI — 게임 상태가 있어야 그려지는 HUD와 저수준 캔버스뿐이다 */
 const STORY_EXCEPTIONS = new Set([
@@ -53,11 +48,8 @@ describe('UI 시스템 가드', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('브라우저 기본 대화상자는 예외 목록의 파일만 쓴다 — 새 확인은 ConfirmDialog', () => {
-    const using = screens.filter(f => SYSTEM_DIALOG.test(f.src)).map(f => f.path).sort();
-    expect(using.filter(p => !SYSTEM_DIALOG_EXCEPTIONS.has(p))).toEqual([]);
-    // 예외를 다 걷어 낸 파일은 목록에서도 지운다 — 목록이 실제보다 넓게 남지 않게
-    expect([...SYSTEM_DIALOG_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  it('브라우저 기본 대화상자를 쓰지 않는다 — 확인·입력·알림은 useDialogs', () => {
+    expect(screens.filter(f => SYSTEM_DIALOG.test(f.src)).map(f => f.path)).toEqual([]);
   });
 
   it('같은 이름의 지역 컴포넌트가 두 화면 이상에 있으면 공용 UI로 올린다', () => {

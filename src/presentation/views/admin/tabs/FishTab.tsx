@@ -10,6 +10,7 @@ import {
 import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
+import { useDialogs } from '../../../ui/useDialogs';
 import PixelIcon from '../../../ui/PixelIcon';
 import IconButton from '../../../ui/IconButton';
 import PillButton from '../../../ui/PillButton';
@@ -58,14 +59,17 @@ export default function FishTab() {
     SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
 
+  const { notice, dialogs } = useDialogs();
+  const tell = (body: string) => void notice({ title: 'JSON 추출', body });
+
   const exportJson = async () => {
     const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      window.alert('어종 현황 JSON을 클립보드에 복사했다.');
+      tell('어종 현황 JSON을 클립보드에 복사했다.');
     } catch {
       console.log('pf-export', JSON.stringify(payload, null, 2));
-      window.alert('클립보드 접근 실패 — 개발자 콘솔(pf-export)에서 복사하세요.');
+      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export)에서 복사하세요.');
     }
   };
 
@@ -75,15 +79,15 @@ export default function FishTab() {
   const exportDeltaJson = async () => {
     const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     if (!payload) {
-      window.alert('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
+      tell('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
       return;
     }
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      window.alert(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
+      tell(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
     } catch {
       console.log('pf-export-delta', JSON.stringify(payload, null, 2));
-      window.alert('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
+      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
     }
   };
 
@@ -116,6 +120,7 @@ export default function FishTab() {
         입력칸 = 시뮬레이션 오버라이드(placeholder가 확정값, 비우면 원본, 저장 안 됨).
         머리의 기대값 띠와 어종 행의 확률은 입력 즉시 함께 움직인다.
       </Note>
+      {dialogs}
     </div>
   );
 }
