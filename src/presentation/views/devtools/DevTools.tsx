@@ -38,7 +38,7 @@ const SECTIONS: { key: Section; label: string }[] = [
 ];
 
 /** 패널 크기는 고정이다 — 묶음을 바꿔도 틀이 변하지 않고 본문만 스크롤한다 */
-const PANEL_W = 520;
+const PANEL_W = 390;
 const PANEL_H_MAX = 860;
 const panelSize = (): Size2 => ({
   width: Math.min(PANEL_W, window.innerWidth - 16),
