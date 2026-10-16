@@ -29,16 +29,16 @@ export default function TimeControl() {
       {/* 상태 줄 — 해/달 아이콘 + 게임 시각 + 낮밤 */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm">
-          <PixelIcon glyph={phase === 'night' ? 'moon' : 'sun'} size={14}
+          <PixelIcon glyph={phase === 'night' ? 'moon' : 'sun'} size={18}
                      className={phase === 'night' ? 'text-accent' : 'text-gold'} />
-          <b className="pf-accent text-base text-gold">{clockText}</b>
-          <b className={cx('text-xs', phase === 'night' ? 'text-accent' : 'text-gold')}>
+          <b className="pf-accent text-lg text-gold">{clockText}</b>
+          <b className={cx('text-sm', phase === 'night' ? 'text-accent' : 'text-gold')}>
             {phase === 'night' ? '밤' : '낮'}
           </b>
         </span>
         <PillButton type="button"
                 onClick={() => { setTimeOverride(null); setTick(t => t + 1); }}
-                className="shrink-0">
+                className="shrink-0 text-sm px-3 py-1.5">
           실제 시각{override === null ? ' (적용 중)' : ''}
         </PillButton>
       </div>
@@ -55,7 +55,7 @@ export default function TimeControl() {
              className="w-full accent-gold cursor-pointer" />
 
       {/* 눈금 — 밤(게임 20시~4시)은 양끝, 낮(4시~20시)은 가운데 */}
-      <div className="flex items-center gap-2 text-2xs text-text-dim">
+      <div className="flex items-center gap-2 text-xs text-text-dim">
         <span className="shrink-0 w-10">자정</span>
         <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-surface-2 border border-line">
           <div className="h-full bg-accent/50" style={{ width: `${DAY_START_MIN}%` }}
@@ -67,7 +67,7 @@ export default function TimeControl() {
         </div>
         <span className="shrink-0 w-10 text-right">다음 자정</span>
       </div>
-      <Note size="2xs" className="my-0">
+      <Note size="xs" className="my-0">
         낮 = 게임 04:00~20:00 · 밤 = 게임 20:00~다음 04:00.
         밤 어종·어둠·이동 감속을 보려면 슬라이더를 0~9(새벽) 또는 50~59(저녁)로.
         로컬 개발 전용 — 운영(클라우드)은 서버가 시각을 판정한다.
