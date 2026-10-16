@@ -11,7 +11,8 @@ import { readAdminOverview } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { KpiCard, KpiGrid, Frame, TabState } from '../charts';
+import { KpiCard, KpiGrid, ChartSection, TabState } from '../charts';
+import Frame from '../../../ui/Frame';
 
 const DAYS = 30;
 
@@ -48,7 +49,7 @@ export default function OverviewTab() {
 
       {/* 좌: 피드(1fr) / 우: 위험 신호 카드열(고정폭) — xl 미만에서는 세로 적층 */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-3 items-start">
-        <Frame title="최근 이벤트 피드">
+        <ChartSection title="최근 이벤트 피드">
           <div className="max-h-[420px] overflow-y-auto">
             <DataTable>
               <thead>
@@ -76,7 +77,7 @@ export default function OverviewTab() {
               </tbody>
             </DataTable>
           </div>
-        </Frame>
+        </ChartSection>
 
         <div className="flex flex-col gap-2">
           <RiskCard label="제재 계정" count={metrics.restrictedCount}
@@ -106,7 +107,7 @@ function RiskCard({ label, count, hint, tone }: {
 }) {
   const active = count > 0;
   return (
-    <div className={cx('pf-frame px-3 py-2',
+    <Frame className={cx('px-3 py-2',
                        tone === 'danger' && active && 'border-danger/50',
                        tone === 'warn' && active && 'border-gold/40')}>
       <div className="flex items-baseline justify-between gap-2">
@@ -118,7 +119,7 @@ function RiskCard({ label, count, hint, tone }: {
         </span>
       </div>
       <Note size="2xs" className="my-0">{hint}</Note>
-    </div>
+    </Frame>
   );
 }
 

@@ -18,6 +18,7 @@ import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
+import Frame from '../../../ui/Frame';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
@@ -189,7 +190,7 @@ function UserDetail({ user, onClose }: {
       <TabState loading={loading} error={error} empty={events.length === 0}
                 emptyText="이벤트가 없다." />
       {!loading && !error && (
-        <ul className="pf-frame flex flex-col divide-y divide-line max-h-[260px] overflow-y-auto select-text">
+        <Frame as="ul" divided className="flex flex-col max-h-[260px] overflow-y-auto select-text">
           {events.map((e, i) => (
             <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
                                          fastGaps.has(i) && 'bg-danger/10')}>
@@ -206,7 +207,7 @@ function UserDetail({ user, onClose }: {
               {fastGaps.has(i) && <span className="ml-auto text-2xs text-danger shrink-0">연타?</span>}
             </li>
           ))}
-        </ul>
+        </Frame>
       )}
       {loading && <Note size="2xs" className="my-1">타임라인 불러오는 중…</Note>}
     </Modal>

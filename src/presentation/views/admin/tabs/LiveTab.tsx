@@ -12,7 +12,7 @@ import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { BarsChart, Frame, KpiGrid, KpiCard, TabState } from '../charts';
+import { BarsChart, ChartSection, KpiGrid, KpiCard, TabState } from '../charts';
 import { boatNameOf } from '../../../../game/content/boats';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
@@ -56,7 +56,7 @@ export default function LiveTab() {
 
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
-      <Frame title="접속 현황">
+      <ChartSection title="접속 현황">
         <KpiGrid>
           <KpiCard label={`접속 중 (≤${ONLINE_WINDOW_MIN}분)`}
                    value={fmtN(buckets.online.length)}
@@ -65,11 +65,11 @@ export default function LiveTab() {
           <KpiCard label="최근 24시간" value={fmtN(buckets.today.length)} hint="금일 활동 근사" />
           <KpiCard label="등록 유저" value={fmtN(users.length)} />
         </KpiGrid>
-      </Frame>
+      </ChartSection>
 
       {/* 온라인 명부(좌)와 위치 분포(우) — xl 이상 좌우 분할 */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
-        <Frame title={`온라인 명부 (${buckets.online.length})`}>
+        <ChartSection title={`온라인 명부 (${buckets.online.length})`}>
           <div className="max-h-[360px] overflow-y-auto">
             <DataTable>
               <thead>
@@ -98,14 +98,14 @@ export default function LiveTab() {
               </tbody>
             </DataTable>
           </div>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="온라인 위치 분포">
+        <ChartSection title="온라인 위치 분포">
           <BarsChart values={whereHist.values} labels={whereHist.labels} height={96} />
           <Note size="2xs" className="my-0">
             접속 중 유저의 state.location 분포 — 거점은 소속 지역으로 합산한다.
           </Note>
-        </Frame>
+        </ChartSection>
       </div>
     </div>
   );

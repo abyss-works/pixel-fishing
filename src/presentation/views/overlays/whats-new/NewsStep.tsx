@@ -1,5 +1,6 @@
 import type { PatchNote } from '../../../../game/content/patchnotes';
 import NoteTag from '../../../ui/NoteTag';
+import Frame from '../../../ui/Frame';
 
 // 범주를 묶어 보여 주는 순서 — 새로 생긴 것 → 보이는 변화 → 수치 → 그 밖
 const TAG_ORDER = ['기능', 'UI', '밸런스', '기타'] as const;
@@ -12,13 +13,13 @@ export default function NewsStep({ news }: { news: PatchNote }) {
     .filter(g => g.items.length > 0);
   return (
     <div className="flex flex-col gap-3">
-      <div className="pf-frame px-3 py-2 flex flex-col gap-0.5">
+      <Frame className="px-3 py-2 flex flex-col gap-0.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="pf-accent text-xl text-gold">v{news.version}</span>
           <span className="pf-accent text-2xs text-text-dim">{news.date}</span>
         </div>
         <p className="text-sm">{news.summary}</p>
-      </div>
+      </Frame>
       <div className="pf-scroll overflow-y-auto max-h-[42vh] pr-1 flex flex-col gap-3">
         {groups.map(({ tag, items }) => (
           <section key={tag} className="flex flex-col gap-1">
