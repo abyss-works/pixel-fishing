@@ -31,15 +31,15 @@ export interface EncounterResult { hits: number; misses: number; success: boolea
 type Phase = 'intro' | 'run' | 'won' | 'lost';
 type Flash = 'hit' | 'miss' | null;
 
-/** 칸 게이지 — 체력은 남은 칸이 금색, 도주는 찬 칸이 위험색 */
-function Slots({ label, total, filled, tone }: { label: string; total: number; filled: number; tone: 'gold' | 'danger' }) {
+/** 칸 게이지 — 체력은 남은 칸이 빨간색, 도주는 찬 칸이 회색 */
+function Slots({ label, total, filled, tone }: { label: string; total: number; filled: number; tone: 'danger' | 'dim' }) {
   return (
     <span className="flex items-center gap-2" aria-label={`${label} ${filled}/${total}`}>
       <span className="w-8 text-left text-xs text-text-dim">{label}</span>
       <span className="flex gap-1">
         {Array.from({ length: total }, (_, i) => (
           <span key={i} className={cx('w-4 h-3 border border-line',
-            i < filled && (tone === 'gold' ? 'bg-gold' : 'bg-danger'))} />
+            i < filled && (tone === 'danger' ? 'bg-danger' : 'bg-text-dim'))} />
         ))}
       </span>
     </span>
@@ -152,13 +152,13 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         {phase === 'run' && (
           <>
             <span className="flex flex-col items-center gap-1">
-              <Slots label="체력" total={CHALLENGE_NEED_HITS} filled={CHALLENGE_NEED_HITS - run.hits} tone="gold" />
-              <Slots label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="danger" />
+              <Slots label="체력" total={CHALLENGE_NEED_HITS} filled={CHALLENGE_NEED_HITS - run.hits} tone="danger" />
+              <Slots label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="dim" />
             </span>
             {/* 결투 바 — 커서는 멈추지 않고 왕복한다. 존은 맞힐 때마다 자리를 옮긴다 */}
             <div
               className={cx('relative w-full h-8 bg-surface-2 border cursor-pointer',
-                flash === 'miss' ? 'border-danger' : flash === 'hit' ? 'border-gold' : 'border-line')}
+                flash === 'miss' ? 'border-text-dim' : flash === 'hit' ? 'border-gold' : 'border-line')}
               onClick={() => strikeRef.current()}
               role="button"
               aria-label="챔질"
@@ -174,7 +174,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
                 style={{ left: `${cursor * 100}%` }}
               />
             </div>
-            <span className={cx('h-5 text-xs', flash === 'miss' ? 'text-danger' : 'text-gold')}>
+            <span className={cx('h-5 text-xs', flash === 'miss' ? 'text-text-dim' : 'text-gold')}>
               {flash === 'hit' ? '명중!' : flash === 'miss' ? '빗나갔다 — 그림자가 멀어진다.' : ''}
             </span>
             <Button variant="primary" full onClick={() => strikeRef.current()}>챔질!</Button>

@@ -38,10 +38,11 @@ describe('결투 존', () => {
 });
 
 describe('결투 속도', () => {
-  it('맞힐수록 빨라지되 기본의 60% 아래로는 줄지 않는다', () => {
-    expect(duelSweepMs(1000, 0)).toBe(1000);
+  it('처음부터 낚싯대 바보다 빠르고, 맞힐수록 크게 빨라지되 기본의 35% 아래로는 줄지 않는다', () => {
+    expect(duelSweepMs(1000, 0)).toBe(850);
+    expect(duelSweepMs(1000, 1)).toBe(730);
     expect(duelSweepMs(1000, 3)).toBeLessThan(duelSweepMs(1000, 2));
-    expect(duelSweepMs(1000, 100)).toBe(600);
+    expect(duelSweepMs(1000, 100)).toBe(350);
   });
 
   it('한 번 왕복하도록 치지 않으면 도주로 센다', () => {
