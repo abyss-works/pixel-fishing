@@ -5,7 +5,6 @@
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyPort } from '../../../../game/content/bounties.js';
@@ -20,33 +19,23 @@ import BountyCard from './BountyCard';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
+import Gated from '../../../ui/Gated';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import SubTabs from '../../../ui/SubTabs';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 
-// 조건 게이트 — 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
-// 버튼은 가려서 못 누른다 (우회는 서버 리듀서가 막는다).
-function Gated({ open, conds, children }: {
-  open: boolean; conds: ReturnType<typeof selectBountyPanelData>['basicConds']; children: ReactNode;
-}) {
-  if (open) return <>{children}</>;
+/** 라이선스 조건 목록 — 닫힌 게이트 위에 덮는다. 충족한 조건은 줄을 긋는다 */
+function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
   return (
-    <div className="relative">
-      <div className="blur-sm pointer-events-none select-none" aria-hidden>{children}</div>
-      <div className="absolute inset-0 flex items-center justify-center p-2">
-        <div className="bg-surface border border-line rounded-sm p-2 text-sm">
-          <ul>
-            {conds.map(c => (
-              <li key={c.key} className={c.ok ? 'line-through text-text-dim' : ''}>
-                <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
+    <ul>
+      {conds.map(c => (
+        <li key={c.key} className={c.ok ? 'line-through text-text-dim' : ''}>
+          <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -119,7 +108,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       )}
       {screen === 'quests' ? (
         <div className="min-h-96">
-        <Gated open={basicOpen} conds={basicConds}>
+        <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
           <div className="grid grid-cols-3 gap-2 items-stretch">
             <div className="h-full">{gradeCard('easy')}</div>
             <div className="h-full">{gradeCard('normal')}</div>
@@ -129,7 +118,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
       ) : screen === 'named' ? (
         <div className="min-h-96">
-        <Gated open={namedOpen} conds={namedConds}>
+        <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
               canAccept={namedOpen && canTakeNamed} busy={busy}

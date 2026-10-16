@@ -8,6 +8,7 @@ import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import GameView from './presentation/views/game/GameView';
 import DevTools from './presentation/views/devtools/DevTools';
 import EnvBadge from './presentation/views/devtools/EnvBadge';
+import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
 
@@ -17,6 +18,9 @@ function sceneOf(location: LocationRef): SceneRef {
   if (location.kind === 'region' && !LIVE_REGIONS.includes(location.id)) return { kind: 'base', id: 'harbor' };
   return location;
 }
+
+/** 빌드 때 정해지는 값이라 모듈에서 한 번만 만든다 */
+const DEV_ENV = devEnvOf(DEPLOY_ENV);
 
 function AppContent() {
   const { log, setToast } = useMessageLog([
@@ -42,7 +46,8 @@ function AppContent() {
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
-  // 개발 도구 패널(?admin + 로컬·소유자만). 둘 다 게임 화면 바깥의 오버레이다.
+  // 개발 도구 패널(?admin + 로컬·소유자만). 둘 다 게임 화면 바깥의 오버레이이고,
+  // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
   return (
     <>
       <GameView
@@ -52,8 +57,10 @@ function AppContent() {
         account={account} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} outdated={outdated}
       />
-      <EnvBadge env={DEPLOY_ENV} build={BUILD_LABEL} />
-      <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
+      <DevEnvContext.Provider value={DEV_ENV}>
+        <EnvBadge build={BUILD_LABEL} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
+      </DevEnvContext.Provider>
     </>
   );
 }
