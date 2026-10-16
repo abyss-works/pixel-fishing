@@ -40,14 +40,14 @@ describe('결투 존', () => {
 });
 
 describe('결투 속도', () => {
-  it('낚싯대 바 속도로 시작해 맞힐 때마다 15%p씩 빨라지고, 40%에서 멈춘다 — 마지막 3번은 최고 속도다', () => {
-    expect(duelSweepMs(1000, 0)).toBe(1000);
-    expect(duelSweepMs(1000, 1)).toBe(850);
-    expect(duelSweepMs(1000, 3)).toBe(550);
-    expect(duelSweepMs(1000, 4)).toBe(400);
-    expect(duelSweepMs(1000, 6)).toBe(400);
+  it('바 시간의 80%로 시작해 맞힐 때마다 15%p씩, 세 번 줄어 35%에서 멈춘다', () => {
+    expect(duelSweepMs(1000, 0)).toBe(800);
+    expect(duelSweepMs(1000, 1)).toBe(650);
+    expect(duelSweepMs(1000, 2)).toBe(500);
+    expect(duelSweepMs(1000, 3)).toBe(350);
+    expect(duelSweepMs(1000, 6)).toBe(350);
     expect(duelSweepMs(1000, 3)).toBeLessThan(duelSweepMs(1000, 2));
-    expect(duelSweepMs(1000, 100)).toBe(400);
+    expect(duelSweepMs(1000, 100)).toBe(350);
   });
 
   it('한 번 왕복하도록 치지 않으면 도주로 센다', () => {

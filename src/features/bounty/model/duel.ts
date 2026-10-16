@@ -7,10 +7,11 @@ import { judgeTiming } from '../../../game/rules/logic';
 /** 쳐 내지 않고 이만큼(편도 기준) 지나가면 도주 1칸 — 2 = 한 번 왕복 */
 export const DUEL_IDLE_SWEEPS = 2;
 
-/** 편도 시간 — 낚싯대 바 속도로 시작해 맞힐 때마다 줄고, 하한에 닿으면 마지막 3번(5~7번째 명중)은 최고 속도다 */
-const START_SWEEP_RATIO = 1;
+/** 편도 시간 — 바 시간의 80%로 시작해 맞힐 때마다 15%p씩 세 번 줄어 35%에서 멈춘다.
+ *  네임드 체력이 클수록(뒤 구역) 최고 속도로 치는 횟수가 늘어난다 */
+const START_SWEEP_RATIO = 0.8;
 const SPEEDUP_PER_HIT = 0.15;
-const MIN_SWEEP_RATIO = 0.4;
+const MIN_SWEEP_RATIO = 0.35;
 
 /** 맞힌 횟수별 존 중심 — 좌우를 오가며 옮긴다. 존 폭이 바 밖으로 나가지 않는 값만 둔다 */
 const ZONE_CENTERS = [0.5, 0.25, 0.72, 0.38, 0.8, 0.2, 0.62] as const;

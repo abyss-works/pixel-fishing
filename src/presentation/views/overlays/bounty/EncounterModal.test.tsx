@@ -1,4 +1,4 @@
-// 조우 창 — 들어가며 → 결투(왕복 커서·옮겨 가는 존·네임드 체력·도주 4칸) → 토벌/놓침의 UI 구동.
+// 조우 창 — 들어가며 → 결투(왕복 커서·옮겨 가는 존·네임드 체력·도주 3칸) → 토벌/놓침의 UI 구동.
 // 판정 규칙은 순수 로직에서 검증하고, 여기서는 단계 전환·타이머·입력·결과 확정을 본다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
@@ -91,28 +91,28 @@ describe('EncounterModal', () => {
     expect(screen.getByText('명중!')).toBeInTheDocument();
     waitForZone(false);
     fireEvent.click(screen.getByRole('button', { name: '챔질!' }));
-    expect(screen.getByLabelText('도주 1/4')).toBeInTheDocument();
+    expect(screen.getByLabelText('도주 1/3')).toBeInTheDocument();
   });
 
   it('커서는 끝에서 처음으로 순간이동하지 않고 되돌아온다', () => {
     show();
     enter();
-    // 첫 편도는 바 시간 그대로 1000ms
-    act(() => { vi.advanceTimersByTime(950); });
+    // 첫 편도는 바 시간 1000ms의 80% = 800ms
+    act(() => { vi.advanceTimersByTime(760); });
     const nearEnd = pct(document.querySelector('[data-duel="cursor"]'), 'left');
-    act(() => { vi.advanceTimersByTime(150); });
+    act(() => { vi.advanceTimersByTime(120); });
     const after = pct(document.querySelector('[data-duel="cursor"]'), 'left');
     expect(nearEnd).toBeGreaterThan(80);
-    expect(after).toBeGreaterThan(80); // 1100ms — 끝(100%)을 찍고 되돌아오는 중
+    expect(after).toBeGreaterThan(80); // 880ms — 끝(100%)을 찍고 되돌아오는 중
     expect(after).toBeLessThan(100);
   });
 
-  it('치지 않고 한 번 왕복할 때마다 도주 1칸 — 4칸이 차면 탈락하고 즉시 실패를 보낸다', () => {
+  it('치지 않고 한 번 왕복할 때마다 도주 1칸 — 3칸이 차면 탈락하고 즉시 실패를 보낸다', () => {
     const { onResolve, onClose } = show();
     enter();
     act(() => { vi.advanceTimersByTime(8000); });
     expect(onResolve).toHaveBeenCalledTimes(1);
-    expect(onResolve).toHaveBeenCalledWith({ hits: 0, misses: 4, success: false });
+    expect(onResolve).toHaveBeenCalledWith({ hits: 0, misses: 3, success: false });
     expect(screen.getByText(/흔적이 사라졌다/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
