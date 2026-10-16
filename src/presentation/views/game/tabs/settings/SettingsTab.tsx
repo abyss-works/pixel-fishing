@@ -6,6 +6,8 @@ import type { DispatchResult, MaybePromise } from '../../../../../features/gamep
 import type { RejectReason } from '../../../../../game/rules/rules';
 import { SETTING_PROMPTS } from '../../../../../features/announcements/model/whatsNew';
 import { useFishArtStyle } from '../../../../../features/display/service/fishArtStyle';
+import { useEncounterAlertSetting } from '../../../../../features/bounty/service/encounterAlert';
+import type { EncounterAlertSetting } from '../../../../../features/bounty/service/encounterAlert';
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
 import Button from '../../../../ui/Button';
@@ -44,7 +46,14 @@ function SettingRow({ label, value, action }: { label: string; value: ReactNode;
 
 const FISH_ART_OPTIONS = SETTING_PROMPTS.find(p => p.id === 'fish-art')!.options;
 
-// 설정 탭 — 다섯 묶음: 계정 · 화면 · 데이터 · 개발자에게 · 패치노트.
+/** 조우 알림 요약 — 차단·미지원은 여기서 켤 수 없으니 이유만 보인다 */
+function alertSummary(setting: EncounterAlertSetting): string {
+  if (setting.permission === 'unsupported') return '이 브라우저는 알림을 지원하지 않아요';
+  if (setting.permission === 'denied') return '브라우저에서 막혀 있어요 (사이트 설정에서 허용)';
+  return setting.active ? '켜짐 · 다른 화면을 볼 때 알려 줘요' : '꺼짐';
+}
+
+// 설정 탭 — 여섯 묶음: 계정 · 화면 · 알림 · 데이터 · 개발자에게 · 패치노트.
 // 화면은 지금 상태를 요약 줄로만 보이고, 항목이 여럿이거나 설명이 필요한 것은 창에서 고친다
 // (계정 관리·화면·코드 입력·편지). 이사 코드는 소유자 전용이라 관리자 탭에 있다.
 export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged, nickname, onRename }: {
@@ -59,6 +68,8 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
   const close = () => setOpen(null);
   const fishArt = useFishArtStyle();
   const fishArtOption = FISH_ART_OPTIONS.find(o => o.value === fishArt);
+  const alertSetting = useEncounterAlertSetting();
+  const canToggleAlert = alertSetting.permission !== 'unsupported' && alertSetting.permission !== 'denied';
 
   return (
     <div className="flex flex-col flex-1">
@@ -76,6 +87,19 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
         <SettingRow label="물고기 그래픽"
                     value={fishArtOption ? `${fishArtOption.label} · ${fishArtOption.sub}` : fishArt}
                     action={<Button size="sm" aria-label="화면 설정" onClick={() => setOpen('display')}>변경</Button>} />
+      </div>
+
+      <SectionTitle>알림</SectionTitle>
+      <div className="pf-frame mb-2">
+        <SettingRow label="네임드 조우"
+                    value={<span className="text-xs">{alertSummary(alertSetting)}</span>}
+                    action={canToggleAlert && (alertSetting.active
+                      ? <Button size="sm" aria-label="조우 알림 끄기" onClick={alertSetting.disable}>끄기</Button>
+                      : <Button size="sm" aria-label="조우 알림 켜기" onClick={() => {
+                          void alertSetting.enable().then(ok => {
+                            if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.');
+                          });
+                        }}>켜기</Button>)} />
       </div>
 
       <SectionTitle>데이터</SectionTitle>

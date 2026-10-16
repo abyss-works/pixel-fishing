@@ -7,6 +7,7 @@ import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
+import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
@@ -62,7 +63,10 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
       setToast(REJECT_TEXT[event.reason]);
       return;
     case 'catch': {
-      if (event.result.ticket) setToast('흔적을 찾았다 — 수면 아래로 무언가 지나갔다.');
+      if (event.result.ticket) {
+        setToast('흔적을 찾았다 — 수면 아래로 무언가 지나갔다.');
+        alertEncounter(event.result.ticket);
+      }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
       const prefix = event.judgment === 'perfect' ? 'PERFECT! '
         : event.judgment === 'good' ? 'GOOD! '
