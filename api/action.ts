@@ -683,21 +683,23 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     if (tickErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
   }
 
-  // 챌린지 성공 확정 — 진행도 +1·도전권 소모. 실패는 감사 이벤트만 남는다.
-  // 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다. 락 전에 확정한다.
+  // 챌린지 결과 확정 — 성공·실패 모두 도전권을 소모하고, 성공만 진행도 +1.
+  // 놓치면 흔적이 사라져 다시 조우해야 한다. 리듀서가 티켓 유효·수주 활성·주장 정합성을
+  // 이미 검증했다. 락 전에 확정한다.
   // 동시 확정 경합으로 진행도가 2가 될 수 있으나 완료 판정(≥)에는 무해 — 수용.
-  if (action.type === 'resolveChallenge' && typeof action.questId === 'string'
-      && action.success === true) {
+  if (action.type === 'resolveChallenge' && typeof action.questId === 'string') {
     const quest = bountyById(action.questId);
     if (quest) {
-      const now = new Date().toISOString();
-      const { data: prow, error: prErr } = await admin.from('bounty_progress')
-        .select('progress').eq('user_id', uid).eq('quest_id', quest.id).maybeSingle();
-      if (prErr) throw new ApiError(500, 'db-read', { uid, action: action.type });
-      const { error: pupErr } = await admin.from('bounty_progress')
-        .update({ progress: Number((prow as { progress?: unknown } | null)?.progress ?? 0) + 1, updated_at: now })
-        .eq('user_id', uid).eq('quest_id', quest.id);
-      if (pupErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      if (action.success === true) {
+        const now = new Date().toISOString();
+        const { data: prow, error: prErr } = await admin.from('bounty_progress')
+          .select('progress').eq('user_id', uid).eq('quest_id', quest.id).maybeSingle();
+        if (prErr) throw new ApiError(500, 'db-read', { uid, action: action.type });
+        const { error: pupErr } = await admin.from('bounty_progress')
+          .update({ progress: Number((prow as { progress?: unknown } | null)?.progress ?? 0) + 1, updated_at: now })
+          .eq('user_id', uid).eq('quest_id', quest.id);
+        if (pupErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
+      }
       const { error: tdelErr } = await admin.from('bounty_tickets')
         .delete().eq('user_id', uid).eq('quest_id', quest.id);
       if (tdelErr) throw new ApiError(500, 'db-write', { uid, action: action.type });

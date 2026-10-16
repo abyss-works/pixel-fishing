@@ -55,13 +55,21 @@ describe('EncounterModal', () => {
     expect(screen.getByRole('button', { name: '토벌' })).toBeInTheDocument();
   });
 
+  it('승부 중에는 닫기 X·Esc가 없다 — 도망으로 흔적을 지키지 못한다', () => {
+    const { onClose } = show();
+    enter();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('챔질 없이 두면 시간 초과 실패가 쌓여 4번째에 탈락하고 즉시 실패를 보낸다', () => {
     const { onResolve, onClose } = show();
     enter();
     act(() => { vi.advanceTimersByTime(4000); });
     expect(onResolve).toHaveBeenCalledTimes(1);
     expect(onResolve).toHaveBeenCalledWith({ hits: 0, misses: 4, success: false });
-    expect(screen.getByText(/흔적은 아직 남아 있다/)).toBeInTheDocument();
+    expect(screen.getByText(/흔적이 사라졌다/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

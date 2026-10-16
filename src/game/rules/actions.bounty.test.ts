@@ -287,7 +287,7 @@ describe('resolveChallenge', () => {
       payload: { questId: 'pacific-named-megalodon', success: true, hits: 7, misses: 0 } }]);
   });
 
-  it('실패는 감사 이벤트만 남기고 상태가 그대로다', () => {
+  it('실패는 감사 이벤트만 남기고 상태가 그대로다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
       act({ success: false, hits: 6, misses: 4 }), full());
