@@ -16,7 +16,7 @@ export default meta;
 type Story = StoryObj<typeof NamedCard>;
 
 const quest = bountyById('pacific-named-megalodon')!;
-const handlers = () => ({ onAccept: fn(), onDeliver: fn(), onStartChallenge: fn() });
+const handlers = () => ({ onAccept: fn(), onDeliver: fn() });
 const game = (dex: GameState['dex']): GameState => ({ ...newState(), dex });
 
 export const Undiscovered: Story = {

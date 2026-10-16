@@ -9,7 +9,6 @@ import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challe
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
-import { rodAxes } from '../../../game/rules/stats';
 import type { BountySnapshot } from './types';
 
 /** 일반 의뢰 난이도의 화면 이름 */
@@ -53,7 +52,6 @@ export interface BountyPanelData {
   relic: ReturnType<typeof artifactOfZone>;
   relicOwned: boolean;
   relicMats: number;
-  challengeSweepMs: number;
 }
 
 /** 오늘 의뢰판의 데이터·조건·진행 상태를 모은다. */
@@ -104,7 +102,6 @@ export function selectBountyPanelData({
     relic,
     relicOwned: relic ? game.artifacts.includes(relic.id) : false,
     relicMats: relic ? game.items[relic.materialId] ?? 0 : 0,
-    challengeSweepMs: rodAxes(game).sweep.value * 1000,
   };
 }
 

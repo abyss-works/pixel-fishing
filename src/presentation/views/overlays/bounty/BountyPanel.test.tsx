@@ -132,7 +132,7 @@ describe('BountyPanel', () => {
       expect.objectContaining({ type: 'exchangeArtifact', artifact: 'abyss-angler' })));
   });
 
-  it('도전권이 있으면 네임드 카드에 잔여와 도전 시작이 보인다', async () => {
+  it('흔적(도전권)이 있으면 네임드 카드에 상태 한 줄만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
     mockSnap = {
       licensed: [], acceptsToday: 0, namedToday: 0, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
@@ -146,9 +146,9 @@ describe('BountyPanel', () => {
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(screen.getByText(/도전권 유효/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '도전 시작' }));
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/흔적이 남아 있다 — 바다에서 추적하자/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('네임드 수주권을 다 쓰면 네임드 수주 버튼이 막힌다', async () => {

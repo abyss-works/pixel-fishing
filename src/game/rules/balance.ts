@@ -83,7 +83,7 @@ export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
 // 네임드 도전 — 5배폭 단일 바에 10회 시도, 4번째 실패에 탈락 (7히트면 조기 성공).
 // 존은 고정 관대값이다 (수역 게이트와 무관 — 어렵게 하지 않는다).
-export const CHALLENGE_WINDOW_MS = 2 * 3600_000; // 도전권 유효 2시간
+export const CHALLENGE_WINDOW_MS = 4 * 3600_000; // 도전권 유효 4시간 — 방치 중 조우해도 복귀까지 남도록
 export const CHALLENGE_ROUNDS = 10;
 export const CHALLENGE_MAX_MISS = 3;
 export const CHALLENGE_YELLOW = 0.3;
