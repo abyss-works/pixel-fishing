@@ -12,7 +12,7 @@ describe('의뢰 화면 데이터', () => {
     const quest = dailyQuestFor('pacific', 'easy', uid, day)!;
     const namedQuest = dailyQuestFor('pacific', 'named', uid, day)!;
     const snapshot = {
-      licensed: [], acceptsToday: 2, namedToday: 1,
+      licensed: [], acceptsToday: 1, namedToday: 1,
       progress: [{ questId: quest.id, progress: 3 }],
       tickets: [{ questId: namedQuest.id, issuedAt: '2026-10-13T00:00:00.000Z' }],
     };
@@ -23,7 +23,8 @@ describe('의뢰 화면 데이터', () => {
     });
 
     expect(data.offers.easy?.id).toBe(quest.id);
-    expect(data.leftAll).toBe(BOUNTY_DAILY_CAP - 2);
+    expect(BOUNTY_DAILY_CAP).toBe(1); // 일반 의뢰 하루 1회
+    expect(data.leftAll).toBe(0);
     expect(data.leftNamed).toBe(BOUNTY_NAMED_DAILY_CAP - 1);
     expect(data.progressOf(quest.id)).toBe(3);
     expect(data.ticketMins).toBeGreaterThan(0);
