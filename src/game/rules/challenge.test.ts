@@ -1,32 +1,31 @@
 // 네임드 챌린지 순수 규칙 — 시도 상태머신 + 도전권 유효 판정.
 import { describe, it, expect } from 'vitest';
 import {
-  CHALLENGE_NEED_HITS, challengeWindowMs, newChallenge, strikeChallenge, ticketRemainingMs,
+  challengeWindowMs, newChallenge, strikeChallenge, ticketRemainingMs,
 } from './challenge';
 import { CHALLENGE_WINDOW_MS } from './balance';
 
-const run = (marks: boolean[]) => marks.reduce(strikeChallenge, newChallenge());
+const run = (marks: boolean[], need = 7) =>
+  marks.reduce((s, hit) => strikeChallenge(s, hit, need), newChallenge());
 
 describe('strikeChallenge', () => {
-  it('7히트면 조기 성공한다', () => {
-    const s = run([true, true, true, true, true, true, true]);
-    expect(s).toEqual({ hits: 7, misses: 0, done: true, success: true });
+  it('네임드 체력만큼 맞히면 조기 성공한다', () => {
+    expect(run([true, true, true, true, true, true], 6)).toEqual({ hits: 6, misses: 0, done: true, success: true });
+    expect(run([true, true, true, true, true, true], 9).done).toBe(false);
+    expect(run(Array(9).fill(true), 9).success).toBe(true);
   });
 
-  it('3실패까지는 계속, 4번째에 탈락한다', () => {
-    expect(run([false, false, false]).done).toBe(false);
-    expect(run([false, false, false, false]))
-      .toEqual({ hits: 0, misses: 4, done: true, success: false });
-  });
-
-  it('10회를 채우면 히트로 승패가 갈린다', () => {
-    expect(run([true, true, true, true, true, true, false, false, false, true]).success).toBe(true);
-    expect(run([true, true, true, true, true, true, false, false, false, false]).success).toBe(false);
+  it('체력과 무관하게 3실패까지는 계속, 4번째에 탈락한다', () => {
+    for (const need of [6, 9]) {
+      expect(run([false, false, false], need).done).toBe(false);
+      expect(run([false, false, false, false], need))
+        .toEqual({ hits: 0, misses: 4, done: true, success: false });
+    }
   });
 
   it('끝난 뒤의 타격은 무시한다', () => {
-    const done = run([true, true, true, true, true, true, true]);
-    expect(strikeChallenge(done, false)).toBe(done);
+    const done = run([true, true, true, true, true, true], 6);
+    expect(strikeChallenge(done, false, 6)).toBe(done);
   });
 });
 
@@ -43,11 +42,5 @@ describe('도전권 유효', () => {
     expect(ticketRemainingMs(issued, t0 + 14400_000, CHALLENGE_WINDOW_MS)).toBe(0);
     expect(ticketRemainingMs(issued, t0 + 18000_000, CHALLENGE_WINDOW_MS)).toBe(0);
     expect(ticketRemainingMs('깨짐', t0, CHALLENGE_WINDOW_MS)).toBe(0);
-  });
-});
-
-describe('CHALLENGE_NEED_HITS', () => {
-  it('10회 중 3실패 허용 = 7히트', () => {
-    expect(CHALLENGE_NEED_HITS).toBe(7);
   });
 });

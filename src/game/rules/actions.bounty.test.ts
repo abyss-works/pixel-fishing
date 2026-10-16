@@ -265,7 +265,7 @@ describe('named ticket', () => {
 describe('resolveChallenge', () => {
   const act = (over = {}) => ({
     type: 'resolveChallenge', questId: 'pacific-named-megalodon',
-    success: true, hits: 7, misses: 0, ...over,
+    success: true, hits: 6, misses: 0, ...over,
   } as const);
   const ticket = (issuedAt: string) => [{ questId: 'pacific-named-megalodon', issuedAt }];
   const NOW = '2026-10-09T01:00:00.000Z';
@@ -298,9 +298,18 @@ describe('resolveChallenge', () => {
     expect(out).toEqual({ ok: false, error: 'ticket-expired' });
   });
 
-  it('주장 정합성이 깨지면 bad-request (7히트 미만 성공 주장)', () => {
+  it('주장 정합성이 깨지면 bad-request (네임드 체력 미만 히트로 성공 주장)', () => {
     expect(applyAction(ready(), act({ hits: 5 }), full()))
       .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('성공 기준은 네임드 체력이다 — 둔클레오스(체력 9)는 8히트 성공 주장을 거부한다', () => {
+    const q = 'madagascar-named-elder-sixgill';
+    const madaDeps = () => deps({ ...dyn,
+      bounty: ctx({ active: [q], tickets: [{ questId: q, issuedAt: '2026-10-09T00:30:00.000Z' }] }) });
+    expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(ready(), act({ questId: q, hits: 9 }), madaDeps()).ok).toBe(true);
   });
 
   it('성공하면 도감에 오르고 감사 이벤트를 남긴다', () => {
@@ -308,17 +317,17 @@ describe('resolveChallenge', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.dex.megalodon?.normal?.count).toBe(1);
     expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: true, hits: 7, misses: 0 } }]);
+      payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
   });
 
   it('실패는 감사 이벤트만 남기고 상태가 그대로다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
-      act({ success: false, hits: 6, misses: 4 }), full());
+      act({ success: false, hits: 5, misses: 4 }), full());
     if (!out.ok) throw new Error(out.error);
     expect(out.state).toEqual(st);
     expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: false, hits: 6, misses: 4 } }]);
+      payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 4 } }]);
   });
 });
 

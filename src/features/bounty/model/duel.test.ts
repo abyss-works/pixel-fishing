@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGE_YELLOW } from '../../../game/rules/balance';
-import { CHALLENGE_NEED_HITS } from '../../../game/rules/challenge';
+import { NAMED } from '../../../game/content/named';
+
+const MAX_HP = Math.max(...NAMED.map(n => n.hp));
 import { DUEL_IDLE_SWEEPS, duelCursor, duelHit, duelSweepMs, duelZoneCenter } from './duel';
 
 describe('결투 커서', () => {
@@ -17,13 +19,13 @@ describe('결투 커서', () => {
 describe('결투 존', () => {
   it('첫 존은 가운데이고, 맞힐 때마다 다른 자리로 옮긴다', () => {
     expect(duelZoneCenter(0)).toBe(0.5);
-    for (let h = 1; h < CHALLENGE_NEED_HITS; h++) {
+    for (let h = 1; h < MAX_HP; h++) {
       expect(duelZoneCenter(h)).not.toBe(duelZoneCenter(h - 1));
     }
   });
 
   it('존은 언제나 바 안에 다 들어간다', () => {
-    for (let h = 0; h < CHALLENGE_NEED_HITS + 3; h++) {
+    for (let h = 0; h < MAX_HP + 3; h++) {
       const c = duelZoneCenter(h);
       expect(c - CHALLENGE_YELLOW / 2).toBeGreaterThanOrEqual(0);
       expect(c + CHALLENGE_YELLOW / 2).toBeLessThanOrEqual(1);
