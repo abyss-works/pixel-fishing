@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
 import type { GameState, Fish } from '../../../game/rules/logic';
-import { bountyById } from '../../../game/content/bounties';
-import { namedById } from '../../../game/content/named';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
@@ -35,6 +33,8 @@ interface Props {
   onShop?: () => void;
   onWarmup?: () => void;
   initialPos?: Point;
+  /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
+  paused?: boolean;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
@@ -62,11 +62,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
       setToast(REJECT_TEXT[event.reason]);
       return;
     case 'catch': {
-      if (event.result.ticket) {
-        const quest = bountyById(event.result.ticket);
-        const named = quest?.targetFish ? namedById(quest.targetFish) : undefined;
-        setToast(`도전권 획득 — [${named ? named.name : '네임드'}]! 수배판에서 도전하자.`);
-      }
+      if (event.result.ticket) setToast('흔적을 찾았다 — 수면 아래로 무언가 지나갔다.');
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
       const prefix = event.judgment === 'perfect' ? 'PERFECT! '
         : event.judgment === 'good' ? 'GOOD! '
@@ -89,7 +85,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onShop, onWarmup, initialPos,
+  region, game, dispatch, setToast, onScene, onShop, onWarmup, initialPos, paused,
 }: Props) {
   const [engine] = useState(() => new GameFieldEngine(region, game, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
@@ -127,6 +123,7 @@ export default function Field({
   }, [engine]);
 
   useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
+  useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => engine.dispose(), [engine]);
 
   useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));

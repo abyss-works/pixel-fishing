@@ -1,4 +1,5 @@
-// 수배판 — 바운티 헌팅의 수주·납품·토벌 UI (항구 전용, 마을의 집 제외).
+// 수배판 — 바운티 헌팅의 수주·납품·보상 UI (항구 전용, 마을의 집 제외).
+// 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
@@ -10,14 +11,13 @@ import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyPort } from '../../../../game/content/bounties.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { kstDay } from '../../../../features/bounty/service/queryKeys';
-import { questLabel, selectBountyPanelData, selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
+import { questLabel, selectBountyPanelData } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
-import ChallengeModal from './ChallengeModal';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import SubTabs from '../../../ui/SubTabs';
@@ -78,7 +78,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const {
     leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, ticketMins, hasTicket,
-    relic, relicOwned, relicMats, challengeSweepMs,
+    relic, relicOwned, relicMats,
   } = data;
 
   const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
@@ -96,7 +96,6 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   };
 
   const namedQuest = offers.named;
-  const [challengeId, setChallengeId] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-2">
@@ -115,22 +114,6 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       {loaded && snap === null && (
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없다. 서버 연결이 필요하다.</Note>
       )}
-      {challengeId && (() => {
-        const q = namedQuest && namedQuest.id === challengeId ? namedQuest : undefined;
-        const target = q ? selectNamedBountyCardData(game, q, progressOf(q.id)) : null;
-        if (!q) return null;
-        return (
-          <ChallengeModal
-            targetName={target?.name ?? '네임드'}
-            sweepMs={challengeSweepMs}
-            onFinish={r => run(
-              { type: 'resolveChallenge', questId: q.id,
-                success: r.success, hits: r.hits, misses: r.misses },
-              r.success ? '도전 성공! 수배판에서 토벌을 마치자.' : '놓쳤다 — 도전권은 유지된다.')}
-            onClose={() => setChallengeId(null)}
-          />
-        );
-      })()}
       {screen === 'quests' ? (
         <div className="min-h-96">
         <Gated open={basicOpen} conds={basicConds}>
@@ -154,8 +137,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `${questLabel(namedQuest)}를 수주했다.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 완료! ${namedQuest.reward}G와 교환 재료를 받았다.`)}
-              onStartChallenge={() => setChallengeId(namedQuest.id)} />
+                `토벌 보상 — ${namedQuest.reward}G와 교환 재료를 받았다.`)} />
           )}
         </Gated>
         </div>

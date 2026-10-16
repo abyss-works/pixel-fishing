@@ -6,11 +6,13 @@ import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
+import { fmtMinutes } from '../../../ui/format';
 
-export default function NamedCard({ game, quest, canAccept, busy, progress, accepted, ticketMins, onAccept, onDeliver, onStartChallenge }: {
+export default function NamedCard({ game, quest, canAccept, busy, progress, accepted, ticketMins, onAccept, onDeliver }: {
   game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
-  progress: number; accepted: boolean; ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
-  onStartChallenge: () => void;
+  progress: number; accepted: boolean;
+  /** 흔적(도전권)이 남아 있으면 남은 분 — 도전은 바다에서 치르므로 여기서는 상태만 보인다 */
+  ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
 }) {
   const { name, poster, fish, found, done } = selectNamedBountyCardData(game, quest, progress);
   return (
@@ -34,17 +36,14 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, acce
           <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
       {accepted && !done && ticketMins === null && (
-        <span className="text-accent text-xs">진행 중 — 이 구역에서 낚시하다 마주치면 도전권을 받는다</span>
+        <span className="text-accent text-xs">진행 중 — 이 구역에서 낚시하다 마주치면 흔적이 남는다</span>
       )}
       {!done && ticketMins !== null && (
-        <span className="text-accent text-xs">
-          도전권 유효 — 약 {ticketMins}분 남음
-          {' '}<Button size="sm" variant="primary" full disabled={busy} onClick={onStartChallenge}>도전 시작</Button>
-        </span>
+        <span className="text-accent text-xs">흔적이 남아 있다 — 바다에서 추적하자 · {fmtMinutes(ticketMins)}</span>
       )}
           <span className="flex justify-center mt-auto">
             {done
-              ? <Button size="sm" disabled={busy} onClick={onDeliver}>토벌하기</Button>
+              ? <Button size="sm" disabled={busy} onClick={onDeliver}>보상 받기</Button>
               : accepted
                 ? <Button full disabled>진행 중</Button>
                 : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
