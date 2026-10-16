@@ -2,7 +2,7 @@
 // useGame이 통째 game을 내려주는 동안은 호출부가 이 함수들로 파생값을 읽고,
 // 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 // 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
-import { autoLockUids, bagCapacity, sellableValue } from '../../../game/rules/logic';
+import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAITS } from '../../../game/content/baits';
 import { ARTIFACTS } from '../../../game/content/artifacts';
@@ -19,15 +19,16 @@ export function selectBagStatus(game: GameState): BagStatus {
 
 export interface BagOverview extends BagStatus {
   sellableValue: number;
-  autoLockUids: string[];
+  /** 자동 잠금 계획 — 어종×폼별 최대만 잠그고 나머지 잠금은 푼다 */
+  autoLock: { lock: string[]; unlock: string[] };
 }
 
-/** 가방 탭의 수량·판매 가치·자동 잠금 후보를 한 번에 제공한다. */
+/** 가방 탭의 수량·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
 export function selectBagOverview(game: GameState): BagOverview {
   return {
     ...selectBagStatus(game),
     sellableValue: sellableValue(game),
-    autoLockUids: autoLockUids(game.bag),
+    autoLock: autoLockPlan(game.bag),
   };
 }
 

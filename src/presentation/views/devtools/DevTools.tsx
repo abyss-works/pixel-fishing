@@ -18,9 +18,11 @@ import Button from '../../ui/Button';
 import IconButton from '../../ui/IconButton';
 import PillButton from '../../ui/PillButton';
 import PixelIcon from '../../ui/PixelIcon';
+import Gated from '../../ui/Gated';
 import Note from '../../ui/Note';
 import SubTabs from '../../ui/SubTabs';
 import { canSeeDevTools } from '../admin/gate';
+import { useDevEnv } from './devEnv';
 import CommandForm from './CommandForm';
 import TimeControl from './TimeControl';
 import MigrationCode from './MigrationCode';
@@ -50,6 +52,10 @@ const viewport = (): Size2 => ({ width: window.innerWidth, height: window.innerH
 // 머리줄을 끌어 옮기고, 옮긴 자리는 브라우저 설정으로 남는다.
 // 노출은 ?admin + (로컬 또는 소유자 계정)일 때만이고, 서버 명령의 허용 판정은 서버가 따로 한다
 // (운영 서버는 개발 명령을 모두 거부한다). 명령·프리셋은 기능 계층의 목록을 그대로 그린다.
+// 운영 빌드(앱 최상위가 공급한 개발 환경이 restricted)에서는 조작을 모두 흐리게 막고
+// 정보 조회용 대시보드 이동만 남긴다.
+const RESTRICTED_NOTE = '운영 서버다 — 여기서는 대시보드 조회만 열 수 있다. 개발 도구는 스테이징·로컬에서 쓴다.';
+
 export default function DevTools({ game, dispatch, setToast, account, uid }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -58,8 +64,9 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
   uid: string | null;
 }) {
   const visible = canSeeDevTools(account);
+  const { restricted } = useDevEnv();
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>('presets');
+  const [section, setSection] = useState<Section>(restricted ? 'ops' : 'presets');
   const [size, setSize] = useState<Size2>(panelSize);
   const [pos, setPos] = useState<Point2>(() =>
     clampPanel(loadPanelPosition() ?? defaultPanelPosition(viewport(), panelSize()), viewport(), panelSize()));
@@ -137,65 +144,75 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
           {/* 본문 — 남는 높이를 모두 쓰고 안에서만 스크롤한다 */}
           <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-3">
-            {section === 'presets' && DEV_PRESETS.map(preset => (
-              <div key={preset.id} className="flex flex-col gap-1">
-                <Button full disabled={tools.busy}
-                        onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: kstDay() })}>
-                  {preset.label}
-                </Button>
-                <span className="text-xs text-text-dim">{preset.hint}</span>
-              </div>
-            ))}
+            {restricted && <Note tone="warn" className="my-0">{RESTRICTED_NOTE}</Note>}
+            {section !== 'ops' && (
+            <Gated open={!restricted} overlay={RESTRICTED_NOTE}>
+              <div className="flex flex-col gap-3">
+                {section === 'presets' && DEV_PRESETS.map(preset => (
+                  <div key={preset.id} className="flex flex-col gap-1">
+                    <Button full disabled={tools.busy}
+                            onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: kstDay() })}>
+                      {preset.label}
+                    </Button>
+                    <span className="text-xs text-text-dim">{preset.hint}</span>
+                  </div>
+                ))}
 
-            {section === 'state' && commandsOf('state').map(command => (
-              <CommandForm key={command.id} command={command} busy={tools.busy}
-                           placeholders={command.id === 'stats.set' ? statPlaceholders : undefined}
-                           onRun={args => void tools.runCommand(command.id, args)} />
-            ))}
-
-            {section === 'bounty' && (
-              <>
-                <div className="flex items-center justify-between gap-2">
-                  <span className={forceArmed ? 'text-gold' : 'text-text-dim'}>
-                    {forceArmed ? '강제 조우 대기 — 다음 낚시에서 조우한다.' : '강제 조우 꺼짐'}
-                  </span>
-                  <Button variant={forceArmed ? 'primary' : 'default'} aria-pressed={forceArmed}
-                          aria-label="다음 낚시 조우 강제"
-                          onClick={() => (forceArmed ? disarmForceEncounter() : armForceEncounter())}>
-                    {forceArmed ? '취소' : '다음 낚시 조우 강제'}
-                  </Button>
-                </div>
-                <Note className="my-0">
-                  네임드를 수주한 구역(둔클레오스는 코모로 심해)에서 낚시해야 조우한다. 조우하면 저절로 꺼진다.
-                </Note>
-                {commandsOf('bounty').map(command => (
+                {section === 'state' && commandsOf('state').map(command => (
                   <CommandForm key={command.id} command={command} busy={tools.busy}
+                               placeholders={command.id === 'stats.set' ? statPlaceholders : undefined}
                                onRun={args => void tools.runCommand(command.id, args)} />
                 ))}
-              </>
-            )}
 
-            {section === 'view' && (
-              <>
-                <TimeControl />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-text-dim">캔버스만 가린다. 게임은 계속 돈다.</span>
-                  <PillButton type="button" active={canvasCover} aria-pressed={canvasCover}
-                              aria-label="게임 화면 덮개" className="text-sm px-3 py-1.5"
-                              onClick={() => setCanvasCover(!canvasCover)}>
-                    {canvasCover ? '덮음' : '열림'}
-                  </PillButton>
-                </div>
-              </>
+                {section === 'bounty' && (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={forceArmed ? 'text-gold' : 'text-text-dim'}>
+                        {forceArmed ? '강제 조우 대기 — 다음 낚시에서 조우한다.' : '강제 조우 꺼짐'}
+                      </span>
+                      <Button variant={forceArmed ? 'primary' : 'default'} aria-pressed={forceArmed}
+                              aria-label="다음 낚시 조우 강제"
+                              onClick={() => (forceArmed ? disarmForceEncounter() : armForceEncounter())}>
+                        {forceArmed ? '취소' : '다음 낚시 조우 강제'}
+                      </Button>
+                    </div>
+                    <Note className="my-0">
+                      네임드를 수주한 구역(둔클레오스는 코모로 심해)에서 낚시해야 조우한다. 조우하면 저절로 꺼진다.
+                    </Note>
+                    {commandsOf('bounty').map(command => (
+                      <CommandForm key={command.id} command={command} busy={tools.busy}
+                                   onRun={args => void tools.runCommand(command.id, args)} />
+                    ))}
+                  </>
+                )}
+
+                {section === 'view' && (
+                  <>
+                    <TimeControl />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-dim">캔버스만 가린다. 게임은 계속 돈다.</span>
+                      <PillButton type="button" active={canvasCover} aria-pressed={canvasCover}
+                                  aria-label="게임 화면 덮개" className="text-sm px-3 py-1.5"
+                                  onClick={() => setCanvasCover(!canvasCover)}>
+                        {canvasCover ? '덮음' : '열림'}
+                      </PillButton>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Gated>
             )}
 
             {section === 'ops' && (
               <>
-                <MigrationCode game={game} dispatch={dispatch} setToast={setToast} />
+                {/* 대시보드는 조회 전용이라 운영에서도 연다 */}
                 <a href="?admin=1#/admin/overview" aria-label="대시보드 열기"
                    className="pf-btn ghost text-sm text-center">
                   대시보드 열기 →
                 </a>
+                <Gated open={!restricted} overlay={RESTRICTED_NOTE}>
+                  <MigrationCode game={game} dispatch={dispatch} setToast={setToast} />
+                </Gated>
               </>
             )}
           </div>

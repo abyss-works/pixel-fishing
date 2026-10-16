@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.10.3',
+    date: '2026-10-17',
+    summary: '자동 잠금이 가장 큰 물고기만 남겨요',
+    notes: [
+      { tag: 'UI', text: '가방의 자동 잠금이 어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그도록 바뀌었어요. 같은 물고기의 나머지는 잠금이 풀리고, 누르기 전에 몇 마리가 잠기고 풀리는지 먼저 알려 줘요.' },
+    ],
+  },
+  {
     version: '0.10.2',
     date: '2026-10-17',
     summary: '네임드와 결투를 벌이고, 보상이 크게 늘었어요',

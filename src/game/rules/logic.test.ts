@@ -7,7 +7,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockUids, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
+  autoLockPlan, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, variantRateOf,
@@ -345,32 +345,30 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     expect(sellableValue(unlocked)).toBe(carp.price * 2);
   });
 
-  it('autoLockUids — 어종×폼별 최대 1마리, 그 최대가 이미 잠기면 그룹은 건너뛴다', () => {
-    const bag = [
-      mk('crucian', 'normal', 30), mk('crucian', 'normal', 10),
-      mk('crucian', 'variant', 99),
-      mk('carp', 'normal', 50), mk('carp', 'normal', 70),
-    ];
-    const uids = autoLockUids(bag);
-    expect(uids).toHaveLength(3); // 붕어일반(30) · 붕어변이(99) · 잉어(70)
-    const byUid = (uid: string) => bag.find(i => i.uid === uid)!.size;
-    expect(uids.map(byUid).sort((a, b) => (b ?? -1) - (a ?? -1))).toEqual([99, 70, 30]);
-
-    // 최대가 이미 잠긴 그룹(잉어)은 제외 — 눌러도 변하지 않는다 (멱등)
-    const carpTop = bag.find(i => i.fishId === 'carp' && i.size === 70)!;
-    const lockedTop = bag.map(i => (i.uid === carpTop.uid ? { ...i, locked: true } : i));
-    expect(autoLockUids(lockedTop)).toHaveLength(2);
+  it('autoLockPlan — 어종×폼별 최대 1마리를 잠그고, 같은 어종×폼의 나머지 잠금은 푼다', () => {
+    const oldTop = { ...mk('crucian', 'normal', 30), locked: true };   // 예전 최대 — 더 큰 개체가 들어왔다
+    const newTop = mk('crucian', 'normal', 45);
+    const small = mk('crucian', 'normal', 10);
+    const variant = mk('crucian', 'variant', 99);
+    const carp = { ...mk('carp', 'normal', 70), locked: true };       // 이미 최대가 잠김 — 건드리지 않는다
+    const plan = autoLockPlan([oldTop, newTop, small, variant, carp]);
+    expect(plan.lock.sort()).toEqual([newTop.uid, variant.uid].sort());
+    expect(plan.unlock).toEqual([oldTop.uid]);
   });
 
-  it('autoLockUids — 크기 미상은 최소 취급, 동률이어도 그룹당 1마리', () => {
-    const bag = [mk('crucian'), mk('crucian', 'normal', null)];
-    const uids = autoLockUids(bag);
-    expect(uids).toHaveLength(1); // 미상보다 20cm가 이긴다
-    expect(bag.find(i => i.uid === uids[0])!.size).toBe(20);
+  it('autoLockPlan — 이미 정리된 가방이면 할 일이 없다 (멱등)', () => {
+    const top = { ...mk('crucian', 'normal', 30), locked: true };
+    expect(autoLockPlan([top, mk('crucian', 'normal', 10)])).toEqual({ lock: [], unlock: [] });
+    expect(autoLockPlan([])).toEqual({ lock: [], unlock: [] });
+  });
 
+  it('autoLockPlan — 크기 미상은 최소 취급, 동률이어도 그룹당 1마리', () => {
+    const bag = [mk('crucian'), mk('crucian', 'normal', null)];
+    const { lock } = autoLockPlan(bag);
+    expect(lock).toHaveLength(1); // 미상보다 20cm가 이긴다
+    expect(bag.find(i => i.uid === lock[0])!.size).toBe(20);
     const ties = Array.from({ length: 5 }, () => mk('crucian', 'normal', null));
-    expect(autoLockUids(ties)).toHaveLength(1);
-    expect(autoLockUids([])).toEqual([]);
+    expect(autoLockPlan(ties).lock).toHaveLength(1);
   });
 
   it('가방 상한: 안 넘치면 아무것도 안 놓아준다', () => {
