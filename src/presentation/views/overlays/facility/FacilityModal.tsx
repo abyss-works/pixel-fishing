@@ -21,6 +21,7 @@ import { isBountyPort, zoneOfPort } from '../../../../game/content/bounties';
 import { zoneById } from '../../../../game/content/zones';
 import BountyPanel from '../bounty/BountyPanel';
 import Button from '../../../ui/Button';
+import { cx } from '../../../ui/cx';
 import CostLine from '../../../ui/CostLine';
 import IconButton from '../../../ui/IconButton';
 import DataTable from '../../../ui/DataTable';
@@ -65,7 +66,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
-    <Modal layer="stage" xl={panel === 'bounty' || panel === 'rod' || panel === 'boat'} onClose={onClose}>
+    <Modal layer="stage" xl={panel === 'bounty' || panel === 'rod' || panel === 'boat' || panel === 'shop'} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -381,7 +382,27 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   );
 }
 
-// 미끼 상점 — 콜롬보항 전용. 등급별 미끼를 골드로 사고, 보유 개수는 가방 아이템 섹션에서 본다.
+/** 미끼 색 칸 — 미끼는 그림이 없어 데이터의 도트색을 픽셀 칸으로 크게 세운다 */
+function BaitSwatch({ color, big }: { color: string; big?: boolean }) {
+  return (
+    <span aria-hidden="true" className={cx('shrink-0 border-2 border-line pf-frame', big ? 'size-16' : 'size-5')}
+          style={{ backgroundColor: color }} />
+  );
+}
+
+/** 가격 표기 — 할인이 있으면 정가에 취소선을 긋고 할인가를 옆에 세운다 */
+function PriceTag({ list, price, size = 'sm' }: { list: number; price: number; size?: 'sm' | 'lg' }) {
+  const discounted = price < list;
+  return (
+    <span className={cx('pf-accent whitespace-nowrap flex items-baseline gap-1.5', size === 'lg' ? 'text-base' : 'text-sm')}>
+      {discounted && <s className="text-text-dim text-xs" aria-label={`정가 ${fmtGold(list)}`}>{fmtGold(list)}</s>}
+      <span className={discounted ? 'text-gold' : undefined}>{fmtGold(price)}</span>
+    </span>
+  );
+}
+
+// 미끼 상점 — 콜롬보항 전용. 정비 패널과 같은 2열 골격: 좌 미끼 목록 · 우 고른 미끼 상세(수량·가격·잔액).
+// 가격은 실제 차감액과 같은 함수(baitCost)로 보이고, 할인이 있으면 정가에 취소선을 긋는다.
 // 활성 토글은 가방 탭 소관 — 상점은 "파는 곳"만 담당한다. 담백체 유지.
 function ShopPanel({ game, onBuy, onClose, busy }: {
   game: GameState;
@@ -390,44 +411,74 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
 }) {
   const [qty, setQty] = useState<Record<string, number>>(createBaitQuantities);
   const rows = useMemo(() => selectBaitShopRows(game, qty, busy), [game, qty, busy]);
+  const [selectedId, setSelectedId] = useState(() => rows[0].bait.id);
+  const sel = rows.find(r => r.bait.id === selectedId) ?? rows[0];
+  const discountPct = Math.round(sel.discountRate * 100);
 
   return (
-    <ModalCard title="미끼 상점" onClose={onClose}>
-      <Note className="my-0">
-        같은 등급이 조금 더 잘 낚인다. 수동으로 낚아올릴 때마다 하나씩 사라지고, 방치 낚시에는 쓰이지 않는다.
-      </Note>
-      <div className="pf-frame divide-y divide-line">
-        {rows.map(({ bait: b, owned, count, total, canAfford }) => (
-          <div key={b.id} className="flex gap-3 px-2 py-2">
-            <span className="size-2.5 shrink-0 rounded-full border border-line mt-1.5"
-                  style={{ backgroundColor: b.color }} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm">
-                <span>{b.name}</span>
-                <span className="text-xs"><RarityText rarity={b.targetRarity} /></span>
-                {owned > 0 && <span className="text-xs text-text-dim">보유 <span className="pf-accent">{owned}</span></span>}
-              </div>
-              <div className="text-xs leading-relaxed text-text-dim">{b.desc}</div>
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              <span className="text-xs pf-accent whitespace-nowrap">
-                {fmtGold(b.price)}
-                {count > 1 && <span className="text-text-dim"> ×{count} = {fmtGold(total)}</span>}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <NumberStepper value={count} min={1} max={BAIT_BUY_MAX} disabled={busy} variant="inline"
-                               ariaLabel={b.name}
-                               onChange={v => setQty(prev => ({ ...prev, [b.id]: normalizeBaitQuantity(v) }))} />
-                <Button size="sm" disabled={!canAfford} aria-label={`${b.name} 구입`}
-                        className="min-w-[56px]" onClick={() => onBuy(b.id, count)}>
-                  구입
-                </Button>
-              </div>
-            </div>
+    <ModalCard title="미끼 상점" onClose={onClose}
+      confirm={
+        <Button variant="primary" disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
+          구입하기 (-{fmtGold(sel.total)})
+        </Button>
+      }>
+      <div className={UPGRADE_GRID}>
+        {/* 좌: 미끼 목록 — 고르면 오른쪽 상세가 바뀐다 */}
+        <div className="pf-frame divide-y divide-line flex flex-col" role="listbox" aria-label="미끼 목록">
+          {rows.map(r => {
+            const selected = r.bait.id === sel.bait.id;
+            return (
+              <button key={r.bait.id} type="button" role="option" aria-selected={selected}
+                      onClick={() => setSelectedId(r.bait.id)}
+                      className={cx('flex items-center gap-3 px-3 py-3 text-left cursor-pointer transition',
+                        selected ? 'bg-surface-2' : 'hover:bg-surface-2/50')}>
+                <BaitSwatch color={r.bait.color} />
+                <span className="min-w-0 flex-1 flex flex-col gap-0.5">
+                  <span className={cx('text-base', selected && 'text-gold')}>{r.bait.name}</span>
+                  <span className="text-xs text-text-dim">
+                    <RarityText rarity={r.bait.targetRarity} /> · 보유 <span className="pf-accent">{r.owned}</span>
+                  </span>
+                </span>
+                <PriceTag list={r.bait.price} price={r.unitPrice} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 우: 고른 미끼 상세 */}
+        <div className="flex flex-col gap-3">
+          <UpgradeHero sprite={<BaitSwatch color={sel.bait.color} big />}
+                       title={sel.bait.name}
+                       tags={[
+                         <><RarityText rarity={sel.bait.targetRarity} /> 미끼</>,
+                         <>보유 <span className="pf-accent">{sel.owned}</span>개</>,
+                         ...(discountPct > 0 ? [<>할인 <span className="pf-accent">{discountPct}%</span></>] : []),
+                       ]} />
+          <Note size="xs" className="my-0">{sel.bait.desc}</Note>
+          <StatCompare size="lg" rows={[
+            { label: '보유', value: `${sel.owned}개`, next: `${sel.owned + sel.count}개`, delta: `+${sel.count}` },
+            { label: '1개 가격', value: <PriceTag list={sel.bait.price} price={sel.unitPrice} size="lg" /> },
+          ]} />
+          <div className="pf-frame px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-sm text-text-dim">수량</span>
+            <NumberStepper value={sel.count} min={1} max={BAIT_BUY_MAX} disabled={busy} variant="inline"
+                           ariaLabel={sel.bait.name}
+                           onChange={v => setQty(prev => ({ ...prev, [sel.bait.id]: normalizeBaitQuantity(v) }))} />
           </div>
-        ))}
+          <UpgradeCost>
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-text-dim">합계</span>
+              <PriceTag list={sel.listTotal} price={sel.total} size="lg" />
+            </div>
+            <CostLine size="lg" have={game.gold} delta={-sel.total} />
+            {game.gold < sel.total && <Note tone="warn" size="xs" className="my-0">골드가 부족하다.</Note>}
+          </UpgradeCost>
+        </div>
       </div>
-      <Note className="my-0">보유 {fmtGold(game.gold)} · 산 미끼는 가방 탭의 아이템에서 켠다. 한 번에 하나만 켜진다.</Note>
+      <Note size="xs" className="my-0">
+        같은 등급이 조금 더 잘 낚인다. 수동으로 낚아올릴 때마다 하나씩 사라지고, 방치 낚시에는 쓰이지 않는다.
+        산 미끼는 가방 탭의 아이템에서 켠다. 한 번에 하나만 켜진다.
+      </Note>
     </ModalCard>
   );
 }

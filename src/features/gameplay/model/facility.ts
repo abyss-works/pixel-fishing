@@ -4,7 +4,7 @@ import { BOATS } from '../../../game/content/boats';
 import type { Boat } from '../../../game/content/boats';
 import { SPOTS } from '../../../game/content/spots';
 import type { Spot } from '../../../game/content/spots';
-import { MAX_BOAT, WALK_BAG_CAP, baitCost, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
+import { MAX_BOAT, WALK_BAG_CAP, baitCost, baitDiscount, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAIT_BUY_MAX, upgradeCost } from '../../../game/rules/balance';
 
@@ -101,7 +101,14 @@ export interface BaitShopRow {
   bait: Bait;
   owned: number;
   count: number;
+  /** 실제 차감액(할인 적용) — 리듀서와 같은 baitCost */
   total: number;
+  /** 정가 합계 — 할인이 있으면 취소선으로 함께 보인다 */
+  listTotal: number;
+  /** 1개 할인가 */
+  unitPrice: number;
+  /** 할인율(0이면 할인 없음) */
+  discountRate: number;
   canAfford: boolean;
 }
 
@@ -117,6 +124,9 @@ export function selectBaitShopRows(
       owned: game.items[bait.id] ?? 0,
       count,
       total,
+      listTotal: bait.price * count,
+      unitPrice: baitCost(game, bait.price, 1),
+      discountRate: baitDiscount(game),
       canAfford: game.gold >= total && !busy,
     };
   });
