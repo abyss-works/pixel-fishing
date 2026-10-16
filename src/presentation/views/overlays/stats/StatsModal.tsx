@@ -11,6 +11,7 @@ import HelpHint from '../../../ui/HelpHint';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import Panel from '../../../ui/Panel';
+import Subheading from '../../../ui/Subheading';
 
 // 스탯창 — 자원 바 클릭으로 여는 내 캐릭터 성능 화면.
 // 값은 전부 스탯 서비스(스탯 계산)에서 온다 — 여기서 규칙을 재계산하지 않는다.
@@ -72,10 +73,10 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
           </tbody>
         </DataTable>
 
-        <h4 className="text-sm text-text-dim">
+        <Subheading>
           낚싯대
           <HelpHint text={powerHelpText()} />
-        </h4>
+        </Subheading>
 
         {/* 수역 캐루셀 — 좌우로 수역을 넘기면 아래 표가 그 수역 기준으로 바뀐다 */}
         <div className="flex items-center justify-between gap-2 mb-1 text-xs">
