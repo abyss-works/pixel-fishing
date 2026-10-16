@@ -7,9 +7,10 @@ import { judgeTiming } from '../../../game/rules/logic';
 /** 쳐 내지 않고 이만큼(편도 기준) 지나가면 도주 1칸 — 2 = 한 번 왕복 */
 export const DUEL_IDLE_SWEEPS = 2;
 
-/** 맞힐 때마다 줄어드는 편도 시간 비율과 하한 */
-const SPEEDUP_PER_HIT = 0.07;
-const MIN_SWEEP_RATIO = 0.6;
+/** 편도 시간 — 첫 시도부터 낚싯대 바보다 빠르고, 맞힐 때마다 크게 줄며 하한이 있다 */
+const START_SWEEP_RATIO = 0.85;
+const SPEEDUP_PER_HIT = 0.12;
+const MIN_SWEEP_RATIO = 0.35;
 
 /** 맞힌 횟수별 존 중심 — 좌우를 오가며 옮긴다. 존 폭이 바 밖으로 나가지 않는 값만 둔다 */
 const ZONE_CENTERS = [0.5, 0.25, 0.72, 0.38, 0.8, 0.2, 0.62] as const;
@@ -29,7 +30,7 @@ export function duelZoneCenter(hits: number): number {
 
 /** 맞힌 횟수 → 편도 시간(ms). 기본은 낚싯대 바 시간이다 */
 export function duelSweepMs(baseMs: number, hits: number): number {
-  return Math.round(baseMs * Math.max(MIN_SWEEP_RATIO, 1 - SPEEDUP_PER_HIT * hits));
+  return Math.round(baseMs * Math.max(MIN_SWEEP_RATIO, START_SWEEP_RATIO - SPEEDUP_PER_HIT * hits));
 }
 
 /** 커서가 존 안에 있는가 — 존을 가운데로 옮겨 기존 판정 함수로 본다 */

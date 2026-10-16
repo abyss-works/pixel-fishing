@@ -97,12 +97,14 @@ describe('EncounterModal', () => {
   it('커서는 끝에서 처음으로 순간이동하지 않고 되돌아온다', () => {
     show();
     enter();
-    act(() => { vi.advanceTimersByTime(900); });
+    // 첫 편도는 바 시간 1000ms의 85% = 850ms
+    act(() => { vi.advanceTimersByTime(800); });
     const nearEnd = pct(document.querySelector('[data-duel="cursor"]'), 'left');
-    act(() => { vi.advanceTimersByTime(200); });
+    act(() => { vi.advanceTimersByTime(150); });
     const after = pct(document.querySelector('[data-duel="cursor"]'), 'left');
     expect(nearEnd).toBeGreaterThan(80);
-    expect(after).toBeGreaterThan(80); // 1100ms — 끝(100%)을 찍고 되돌아오는 중
+    expect(after).toBeGreaterThan(80); // 950ms — 끝(100%)을 찍고 되돌아오는 중
+    expect(after).toBeLessThan(100);
   });
 
   it('치지 않고 한 번 왕복할 때마다 도주 1칸 — 4칸이 차면 탈락하고 즉시 실패를 보낸다', () => {
