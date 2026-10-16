@@ -12,6 +12,7 @@ import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
 import Button from '../../../ui/Button';
+import Field from '../../../ui/Field';
 import Modal from '../../../ui/Modal';
 import { useDialogs } from '../../../ui/useDialogs';
 import Note from '../../../ui/Note';
@@ -145,11 +146,15 @@ export default function AccountModal({
           </Note>
 
           <div className="flex flex-col gap-2 my-2">
-            <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
-                       disabled={offline} onChange={e => setEmail(e.target.value)} />
-            <TextInput type="password" placeholder="비밀번호 (6자 이상)" value={pw}
-                       autoComplete="current-password" disabled={offline}
-                       onChange={e => setPw(e.target.value)} />
+            <Field label="이메일">
+              <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
+                         disabled={offline} onChange={e => setEmail(e.target.value)} />
+            </Field>
+            <Field label="비밀번호" hint="6자 이상">
+              <TextInput type="password" placeholder="비밀번호 (6자 이상)" value={pw}
+                         autoComplete="current-password" disabled={offline}
+                         onChange={e => setPw(e.target.value)} />
+            </Field>
           </div>
 
             <Button variant="primary" full className="mt-3" onClick={proceed} disabled={busy || offline}>이메일로 계속하기</Button>

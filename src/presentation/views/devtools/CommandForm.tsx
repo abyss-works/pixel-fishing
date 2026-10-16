@@ -4,6 +4,7 @@ import type { DevCommand } from '../../../features/devtools/model/commands';
 import TextInput from '../../ui/TextInput';
 import Select from '../../ui/Select';
 import Button from '../../ui/Button';
+import Field from '../../ui/Field';
 import Note from '../../ui/Note';
 
 // 명령 한 줄 — 명령 목록의 정의(인자 종류·선택지)대로 입력칸을 그리고 실행 버튼 하나를 둔다.
@@ -29,8 +30,7 @@ export default function CommandForm({ command, placeholders, busy, onRun }: {
       {command.params.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {command.params.map(param => (
-            <label key={param.key} className="flex flex-col gap-1">
-              <span className="text-text-dim">{param.label}</span>
+            <Field key={param.key} label={param.label}>
               {param.kind === 'select' ? (
                 <Select value={raw[param.key] ?? ''} aria-label={`${command.label} ${param.label}`}
                         onChange={e => set(param.key, e.target.value)}>
@@ -42,7 +42,7 @@ export default function CommandForm({ command, placeholders, busy, onRun }: {
                            aria-label={`${command.label} ${param.label}`}
                            onChange={e => set(param.key, e.target.value)} />
               )}
-            </label>
+            </Field>
           ))}
         </div>
       )}

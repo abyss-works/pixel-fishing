@@ -2,16 +2,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useDialogs } from './useDialogs';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { resetKeyScopes } from './hotkeys';
 
 afterEach(() => { cleanup(); resetKeyScopes(); });
 
-let api: ReturnType<typeof useDialogs>;
+const holder: { api: ReturnType<typeof useDialogs> | null } = { api: null };
 function Harness(): ReactNode {
-  api = useDialogs();
-  return api.dialogs;
+  const dialogs = useDialogs();
+  useEffect(() => { holder.api = dialogs; });
+  return dialogs.dialogs;
 }
+const api = new Proxy({} as ReturnType<typeof useDialogs>, { get: (_, k) => holder.api![k as keyof ReturnType<typeof useDialogs>] });
 
 describe('useDialogs', () => {
   it('확인은 확정이면 true, 닫기(Esc)면 false', async () => {
