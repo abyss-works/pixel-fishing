@@ -86,6 +86,11 @@ export interface AdminEconomyRow {
   day: string; sells: number; sell_gold: number; coupon_gold: number;
   rod_cost: number; boat_cost: number; bait_cost: number;
 }
+/** 바운티 퍼널 일계 — 네임드 수주 → 흔적(도전권) → 결투 승·패 → 토벌 보상, 일반 수주·납품 */
+export interface AdminBountyFunnelRow {
+  day: string; named_accepts: number; tickets: number; duels_won: number; duels_lost: number;
+  named_rewards: number; general_accepts: number; general_rewards: number;
+}
 export interface AdminCatchQualityRow {
   day: string; catches: number; perfect: number; with_bait: number; avg_size: number | null;
 }
@@ -122,6 +127,7 @@ export interface AdminApi {
   dailyActive(days: number): Promise<AdminDailyActiveRow[]>;
   retention(): Promise<AdminRetentionRow[]>;
   economy(days: number): Promise<AdminEconomyRow[]>;
+  bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
   catchQuality(days: number): Promise<AdminCatchQualityRow[]>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   imports(): Promise<AdminImportLogRow[]>;

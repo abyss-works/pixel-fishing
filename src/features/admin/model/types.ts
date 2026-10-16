@@ -1,4 +1,5 @@
 export type {
+  AdminBountyFunnelRow,
   AdminCatchQualityRow,
   AdminDailyActiveRow,
   AdminDexMismatchRow,
