@@ -2,13 +2,13 @@
 // 들어가며(목격담 + 조우 버튼) → 결투(멈추지 않고 왕복하는 커서로 존을 맞힌다. 맞히면 네임드 체력이
 // 줄고 존이 다른 자리로 옮겨 가며 빨라진다. 놓치거나 한 번 왕복하도록 치지 않으면 도주 게이지가 찬다) →
 // 이기면 이름이 드러나고 토벌 버튼이 결과를 서버로 보낸다. 지면 즉시 실패를 보내고 흔적은 사라진다.
-// 횟수 규칙(7히트 성공·4번째 실패 탈락)은 strikeChallenge가 정본이고, 움직임은 결투 모델이 정한다.
+// 횟수 규칙(네임드 체력만큼 히트면 성공·4번째 실패 탈락)은 strikeChallenge가 정본이고, 움직임은 결투 모델이 정한다.
 // 승부 중에는 닫을 수 없다 — 닫기가 도망이 되면 실패가 흔적을 지우는 규칙이 비어 버린다.
 // 시도 판정은 클라 주장(PERFECT 선례) — 서버는 티켓 유효+수주 활성+주장 정합성만 본다.
 // 키는 exclusive 스코프로 가져간다 — 아래 필드 낚시로 새지 않는다 (hotkeys 계층).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CHALLENGE_MAX_MISS, CHALLENGE_YELLOW } from '../../../../game/rules/balance.js';
-import { CHALLENGE_NEED_HITS, newChallenge, strikeChallenge } from '../../../../game/rules/challenge.js';
+import { newChallenge, strikeChallenge } from '../../../../game/rules/challenge.js';
 import type { ChallengeRun } from '../../../../game/rules/challenge.js';
 import type { EncounterData } from '../../../../features/bounty/model/challenge';
 import {
@@ -52,7 +52,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   onResolve: (r: EncounterResult) => void;
   onClose: () => void;
 }) {
-  const { named, fish, found, sighting, sweepMs } = data;
+  const { named, fish, found, sighting, sweepMs, hp } = data;
   const [phase, setPhase] = useState<Phase>('intro');
   const [run, setRun] = useState<ChallengeRun>(newChallenge);
   const [cursor, setCursor] = useState(0);
@@ -77,7 +77,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   }, []);
 
   const advance = useCallback((hit: boolean, now: number) => {
-    const next = strikeChallenge(runRef.current, hit);
+    const next = strikeChallenge(runRef.current, hit, hp);
     runRef.current = next;
     setRun(next);
     setFlash(hit ? 'hit' : 'miss');
@@ -88,7 +88,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     setPhase(next.success ? 'won' : 'lost');
     // 실패는 확정 버튼 없이 바로 보낸다 — 서버가 도전권을 지우고 흔적이 사라진다
     if (!next.success) resolveRef.current({ hits: next.hits, misses: next.misses, success: false });
-  }, [sweepMs]);
+  }, [sweepMs, hp]);
 
   const strike = () => {
     if (phase !== 'run' || runRef.current.done || doneRef.current) return;
@@ -152,7 +152,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         {phase === 'run' && (
           <>
             <span className="flex flex-col items-center gap-1">
-              <Slots label="체력" total={CHALLENGE_NEED_HITS} filled={CHALLENGE_NEED_HITS - run.hits} tone="danger" />
+              <Slots label="체력" total={hp} filled={hp - run.hits} tone="danger" />
               <Slots label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="dim" />
             </span>
             {/* 결투 바 — 커서는 멈추지 않고 왕복한다. 존은 맞힐 때마다 자리를 옮긴다 */}

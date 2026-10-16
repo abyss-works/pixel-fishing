@@ -15,11 +15,11 @@ import { BOATS, MAX_BOAT } from '../content/boats.js';
 import { bountyById, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
 import { artifactById } from '../content/artifacts.js';
 import {
-  upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MAX_MISS, CHALLENGE_ROUNDS,
+  upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MAX_MISS,
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
-  CHALLENGE_NEED_HITS, challengeWindowMs, ticketRemainingMs,
+  challengeHpOf, challengeWindowMs, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
 import type { GameState } from './logic.js';
@@ -170,10 +170,12 @@ export function canResolveChallenge(
   if (!ctx) return no('no-license');
   if (!ctx.active.includes(questId)) return no('bad-request');
   const { success, hits, misses } = claimed;
+  const need = challengeHpOf(questId);
+  if (need === null) return no('bad-request');
+  // 성공 = 네임드 체력만큼 히트·실패 허용 이내, 실패 = 허용 초과 (체력은 네임드마다, 실패 허용은 공통)
   const coherent = success
-    ? hits >= CHALLENGE_NEED_HITS && misses <= CHALLENGE_MAX_MISS
-    : misses > CHALLENGE_MAX_MISS
-      || (hits + misses >= CHALLENGE_ROUNDS && hits < CHALLENGE_NEED_HITS);
+    ? hits >= need && misses <= CHALLENGE_MAX_MISS
+    : misses > CHALLENGE_MAX_MISS;
   if (!coherent) return no('bad-request');
   const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
