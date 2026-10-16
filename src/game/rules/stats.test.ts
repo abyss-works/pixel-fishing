@@ -26,16 +26,16 @@ describe('이동 속도 — 씬 movement로 분기', () => {
     expect(st.value).toBeCloseTo(BOATS[2].speed * 0.85, 10);
   });
 
-  it('유물 — 심해아귀는 밤 감속 제거 + 항해 +3%', () => {
+  it('유물 — 심해아귀는 밤 감속 제거 + 항해 +5%', () => {
     const st = moveSpeed(s({ boat: 3, artifacts: ['abyss-angler'] }), 'sail', true);
     expect(st.mods.map(m => m.id)).toEqual(['relic-abyss-angler']);
-    expect(st.value).toBeCloseTo(BOATS[2].speed * 1.03, 10);
+    expect(st.value).toBeCloseTo(BOATS[2].speed * 1.05, 10);
   });
 
-  it('유물 — 침선의 나침반은 항해 +7%, 도보는 그대로', () => {
+  it('유물 — 침선의 나침반은 항해 +10%, 도보는 그대로', () => {
     expect(moveSpeed(s({ artifacts: ['wreck-compass'] }), 'walk').value).toBe(WALK_SPEED);
     expect(moveSpeed(s({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value)
-      .toBeCloseTo(BOATS[0].speed * 1.07, 10);
+      .toBeCloseTo(BOATS[0].speed * 1.1, 10);
   });
 });
 
