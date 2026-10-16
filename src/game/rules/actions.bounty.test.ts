@@ -20,13 +20,17 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
 const rec = (count: number) => ({ count, maxSize: null, first: null });
-// 태평양 일반 3종 완성 도감 (고등어·갈치·아귀)
-const pacificDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
-// 태평양 전설 포함 전부 (일반 폼만) — 희귀 3·영웅 3·전설 4 추가
-const pacificFullDex = {
-  ...pacificDex,
+// 태평양 일반 등급 3종만 (고등어·갈치·아귀) — 기본 라이선스에는 모자란다
+const pacificCommonDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
+// 태평양 전설 제외 전부 (일반 폼만) — 기본 라이선스 도감 조건. 희귀 3·영웅 3 추가
+const pacificDex = {
+  ...pacificCommonDex,
   seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
   tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
+};
+// 태평양 전설 포함 전부 (일반 폼만) — 네임드 라이선스 도감 조건. 전설 4 추가
+const pacificFullDex = {
+  ...pacificDex,
   shark: { normal: rec(1) }, kraken: { normal: rec(1) },
   moonveil: { normal: rec(1) }, abyssveil: { normal: rec(1) },
 };
@@ -47,6 +51,21 @@ describe('acceptQuest', () => {
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'not-enough-fame' });
+  });
+
+  it('일반 등급만 모았으면 기본 라이선스도 dex-incomplete — 전설 제외 전부(희귀·영웅 포함)가 조건이다', () => {
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificCommonDex }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
+  });
+
+  it('돌연변이 폼만 잡은 어종은 도감 조건에 세지 않는다', () => {
+    const variantOnly = { ...pacificDex, tuna: { variant: rec(1) } };
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: variantOnly }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
   it('도감 미완이면 dex-incomplete', () => {
