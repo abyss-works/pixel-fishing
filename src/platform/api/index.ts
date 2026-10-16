@@ -22,7 +22,7 @@ export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
-  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
+  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
 } from './types';

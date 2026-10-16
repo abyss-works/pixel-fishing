@@ -62,7 +62,7 @@ class HttpAuth implements AuthApi {
 
 import type {
   AdminApi,
-  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow,
+  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
 } from '../api/types';
@@ -106,6 +106,9 @@ class HttpAdmin implements AdminApi {
   }
   economy(days: number): Promise<AdminEconomyRow[]> {
     return selectView<AdminEconomyRow>('v_economy_daily', days);
+  }
+  bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
+    return selectView<AdminBountyFunnelRow>('v_bounty_funnel_daily', days);
   }
   catchQuality(days: number): Promise<AdminCatchQualityRow[]> {
     return selectView<AdminCatchQualityRow>('v_catch_quality', days);

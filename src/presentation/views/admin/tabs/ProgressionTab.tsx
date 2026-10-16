@@ -1,5 +1,5 @@
 // 진행 탭 — 콘텐츠가 어디서 답답한지. 레이아웃: [배 단계 | 낚싯대 레벨] 좌우(xl) →
-// [지역 도달] → [게이트 정체 목록]. **밸런스 숫자는 배 데이터를 재사용**한다 —
+// [지역 도달] → [게이트 정체 목록] → [바운티 퍼널]. **밸런스 숫자는 배 데이터를 재사용**한다 —
 // 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, 액션 리듀서 머리 주석과 같은 판단).
 import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
@@ -14,6 +14,7 @@ import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
 import { BarsChart, ChartSection, TabState } from '../charts';
+import BountyFunnelSection from './BountyFunnelSection';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
@@ -113,6 +114,8 @@ export default function ProgressionTab() {
           </DataTable>
         )}
       </section>
+
+      <BountyFunnelSection granted={granted} />
     </div>
   );
 }

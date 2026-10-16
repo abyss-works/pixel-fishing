@@ -7,6 +7,7 @@ export const adminKeys = {
   antiAbuse: ['admin', 'antiabuse'] as const,
   overview: (days: number) => ['admin', 'overview', days] as const,
   economy: (days: number) => ['admin', 'economy', days] as const,
+  bountyFunnel: (days: number) => ['admin', 'bountyFunnel', days] as const,
   metrics: (days: number) => ['admin', 'metrics', days] as const,
   userDetails: (uid: string) => ['admin', 'user', uid] as const,
 };
