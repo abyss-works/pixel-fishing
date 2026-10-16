@@ -1288,6 +1288,26 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    render(<App />);
+    fireEvent.keyDown(document, { key: 'F9' });
+    const panel = screen.getByRole('dialog', { name: '개발 도구' });
+    const box = () => ({ left: panel.style.left, top: panel.style.top, w: panel.style.width, h: panel.style.height });
+    const before = box();
+    const handle = screen.getByText('F9 · 끌어서 이동');
+    fireEvent.pointerDown(handle, { clientX: 500, clientY: 30, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 400, clientY: 130, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientX: 400, clientY: 130, pointerId: 1 });
+    expect(parseFloat(box().top)).toBe(parseFloat(before.top) + 100);
+    expect(JSON.parse(localStorage.getItem('pf-devtools-pos')!)).toMatchObject({ y: parseFloat(before.top) + 100 });
+    for (const name of ['상태', '수배', '시간·화면', '운영']) {
+      fireEvent.click(screen.getByRole('button', { name }));
+      expect([box().w, box().h]).toEqual([before.w, before.h]);
+    }
+    window.history.replaceState({}, '', '/');
+  });
+
   it('네임드 직전 프리셋은 그 구역 항구 밖이면 멈추고 이유를 기록한다', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);

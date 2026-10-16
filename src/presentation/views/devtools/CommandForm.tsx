@@ -25,20 +25,20 @@ export default function CommandForm({ command, placeholders, busy, onRun }: {
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {command.params.length > 0 && (
-        <div className="grid grid-cols-2 gap-1 text-xs">
+        <div className="grid grid-cols-2 gap-2">
           {command.params.map(param => (
-            <label key={param.key} className="flex flex-col gap-0.5">
+            <label key={param.key} className="flex flex-col gap-1">
               <span className="text-text-dim">{param.label}</span>
               {param.kind === 'select' ? (
-                <Select compact value={raw[param.key] ?? ''} aria-label={`${command.label} ${param.label}`}
+                <Select value={raw[param.key] ?? ''} aria-label={`${command.label} ${param.label}`}
                         onChange={e => set(param.key, e.target.value)}>
                   <option value="">{placeholders?.[param.key] ?? '선택'}</option>
                   {param.options().map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
               ) : (
-                <TextInput compact type="number" value={raw[param.key] ?? ''} placeholder={placeholders?.[param.key]}
+                <TextInput type="number" value={raw[param.key] ?? ''} placeholder={placeholders?.[param.key]}
                            aria-label={`${command.label} ${param.label}`}
                            onChange={e => set(param.key, e.target.value)} />
               )}
@@ -46,8 +46,11 @@ export default function CommandForm({ command, placeholders, busy, onRun }: {
           ))}
         </div>
       )}
-      <Button size="sm" disabled={busy} onClick={run} title={command.hint}>{command.label}</Button>
-      {bad && <Note size="2xs" className="my-0">숫자를 올바르게 입력하세요.</Note>}
+      <div className="flex items-center gap-2">
+        <Button disabled={busy} onClick={run}>{command.label}</Button>
+        <span className="text-xs text-text-dim">{command.hint}</span>
+      </div>
+      {bad && <Note className="my-0">숫자를 올바르게 입력하세요.</Note>}
     </div>
   );
 }
