@@ -27,6 +27,24 @@ describe('selectBagStatus', () => {
   });
 });
 
+describe('selectBagStatus — 채움 비율과 경고 단계', () => {
+  const bagOf = (n: number) => Array.from({ length: n }, (_, i) => ({
+    uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
+    caughtAt: null, spot: null, judgment: null, locked: false,
+  }));
+
+  it('비율은 내림한 정수 퍼센트다', () => {
+    expect(selectBagStatus(seed({ boat: 0, bag: bagOf(10) })).percent).toBe(16); // 10/60 = 16.6…
+  });
+
+  it('75% 미만은 normal, 75% 이상은 warn, 95% 이상은 danger', () => {
+    expect(selectBagStatus(seed({ boat: 0, bag: bagOf(44) })).level).toBe('normal'); // 73%
+    expect(selectBagStatus(seed({ boat: 0, bag: bagOf(45) })).level).toBe('warn');   // 75%
+    expect(selectBagStatus(seed({ boat: 0, bag: bagOf(56) })).level).toBe('warn');   // 93%
+    expect(selectBagStatus(seed({ boat: 0, bag: bagOf(57) })).level).toBe('danger'); // 95%
+  });
+});
+
 describe('selectBaitInventory', () => {
   it('레지스트리 순서와 보유 수량을 반환하고 없는 미끼는 0으로 채운다', () => {
     const inventory = selectBaitInventory({ [BAITS[0].id]: 3 });

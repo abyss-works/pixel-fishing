@@ -96,8 +96,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
     fireEvent.click(screen.getByText('판매하기 (+60G)')); // 기본 전부 체크
-    expect(hud()).toContain('골드 60G');
-    expect(hud()).toContain('0마리');
+    expect(hud()).toMatch(/골드 60(?![\d.,])/);
+    expect(hud()).toContain('가방 0 (');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
   });
 
@@ -108,8 +108,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
     expect(screen.getByText('판매하기 (+6G)')).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매하기/));
-    expect(hud()).toContain('골드 6G');
-    expect(hud()).toContain('1마리'); // 잉어는 남는다
+    expect(hud()).toMatch(/골드 6(?![\d.,])/);
+    expect(hud()).toContain('가방 1 ('); // 잉어는 남는다
   });
 
   it('전부 체크 해제하면 판매 버튼 비활성', () => {
@@ -150,8 +150,8 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
     fireEvent.click(screen.getByText(/^판매하기/));
-    expect(hud()).toContain('골드 30G');
-    expect(hud()).toContain('1마리');
+    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    expect(hud()).toContain('가방 1 (');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
     // 가방 목록은 **기본 전부 닫힘**(사용자 지시) — 행을 펼쳐야 개체가 보인다
@@ -178,7 +178,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화하기/));
     expect(hud()).toContain('낚싯대 Lv.2');
-    expect(hud()).toContain('골드 0G');
+    expect(hud()).toMatch(/골드 0(?![\d.,])/);
   });
 
   it('골드 부족이면 강화 버튼 비활성', () => {
@@ -281,11 +281,11 @@ describe('쿠폰 입력 (설정 탭)', () => {
     expect(screen.getByRole('dialog', { name: '코드 입력' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
-    await waitFor(() => expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`));
+    await waitFor(() => expect(hud()).toMatch(new RegExp(`골드 ${COUPONS['출항준비'].gold}(?![\\d.,])`)));
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
     expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
-    expect(hud()).toContain(`골드 ${COUPONS['출항준비'].gold}G`); // 중복 지급 없음
+    expect(hud()).toMatch(new RegExp(`골드 ${COUPONS['출항준비'].gold}(?![\\d.,])`)); // 중복 지급 없음
   });
 
   it('없는 코드는 안내만', async () => {
@@ -610,8 +610,8 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   it('레거시 localStorage 세이브는 최초 로드 때 메모리로 이관된다 (읽기 전용 브리지)', () => {
     seed({ bag: [inst('carp')], gold: 10 });
     render(<App />);
-    expect(hud()).toContain('골드 10G');
-    expect(hud()).toContain('1마리');
+    expect(hud()).toMatch(/골드 10(?![\d.,])/);
+    expect(hud()).toContain('가방 1 (');
   });
 
   it('설정 탭은 계정 → 화면 → 알림 → 데이터 → 개발자에게 → 패치노트 순서다', () => {
@@ -681,7 +681,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     localStorage.setItem(SAVE_KEY,
       JSON.stringify({ gold: 500, xp: 200, rod: 4, bag: [], caught: { tuna: 2 }, spot: 'sea' }));
     render(<App />);
-    expect(hud()).toContain('골드 500G');
+    expect(hud()).toMatch(/골드 500(?![\d.,])/);
     expect(hud()).toContain('낚싯대 Lv.4');
     expect(hud()).toContain('조각배'); // v1 증정
     expect(hud()).toContain(`명성 ${RARITY.epic.fame * 2}`); // 참치 2마리 소급
@@ -889,8 +889,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText(/판매하기 \(\+6G\)/)).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
     fireEvent.click(screen.getByText(/^판매하기/));
-    expect(hud()).toContain('골드 6G');
-    expect(hud()).toContain('2마리'); // 잠긴 잉어 2마리는 가방에 남는다
+    expect(hud()).toMatch(/골드 6(?![\d.,])/);
+    expect(hud()).toContain('가방 2 ('); // 잠긴 잉어 2마리는 가방에 남는다
   });
 
   it('행 안 개체는 큰 놈부터 — 잡은 순서와 무관하고 크기 미상은 맨 뒤', () => {
@@ -1139,7 +1139,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText(/판매하기 \(\+90G\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
     fireEvent.click(screen.getByText(/판매하기 \(\+60G\)/));                // 변이만
-    expect(hud()).toContain('골드 60G');
+    expect(hud()).toMatch(/골드 60(?![\d.,])/);
   });
 
   it('카드뷰는 보유 마릿수만 보이고, 안 잡은 종은 도감처럼 ???', () => {
@@ -1202,8 +1202,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/)); // 작은 놈 1마리만
-    expect(hud()).toContain('골드 30G');
-    expect(hud()).toContain('1마리');
+    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    expect(hud()).toContain('가방 1 (');
   });
 
   it('잠금 해제하면 다시 판매 대상', () => {
@@ -1213,8 +1213,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
     fireEvent.click(screen.getByText(/판매하기 \(\+30G\)/));
-    expect(hud()).toContain('골드 30G');
-    expect(hud()).toContain('0마리');
+    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    expect(hud()).toContain('가방 0 (');
   });
 
   it('자동 잠금 — 확인 뒤 어종×폼별 가장 큰 1마리만 잠그고 나머지 잠금은 푼다', () => {

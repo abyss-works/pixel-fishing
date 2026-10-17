@@ -19,25 +19,27 @@ describe('josa — 받침에 따른 조사', () => {
   });
 });
 
-describe('fmtCompact — HUD용 네 자리 줄임 표기', () => {
+describe('fmtCompact — HUD용 줄임 표기', () => {
   it('9,999까지는 쉼표 표기 그대로 둔다', () => {
     expect(fmtCompact(0)).toBe('0');
     expect(fmtCompact(60)).toBe('60');
     expect(fmtCompact(9_999)).toBe('9,999');
   });
 
-  it('만 단위부터 K·M·B로 줄이고 단위 아래는 버린다', () => {
+  it('만 단위부터 K·M·B로 줄이고 소수 한 자리까지 버림으로 보인다', () => {
     expect(fmtCompact(10_000)).toBe('10K');
-    expect(fmtCompact(10_999)).toBe('10K');
-    expect(fmtCompact(999_999)).toBe('999K');
+    expect(fmtCompact(10_999)).toBe('10.9K');
+    expect(fmtCompact(12_345)).toBe('12.3K');
+    expect(fmtCompact(999_999)).toBe('999.9K');
     expect(fmtCompact(1_000_000)).toBe('1M');
-    expect(fmtCompact(1_500_000)).toBe('1M');
-    expect(fmtCompact(999_999_999)).toBe('999M');
+    expect(fmtCompact(1_500_000)).toBe('1.5M');
+    expect(fmtCompact(2_300_000)).toBe('2.3M'); // 부동소수 오차로 2.2가 되지 않는다
+    expect(fmtCompact(999_999_999)).toBe('999.9M');
     expect(fmtCompact(1_000_000_000)).toBe('1B');
-    expect(fmtCompact(999_999_999_999)).toBe('999B');
+    expect(fmtCompact(999_999_999_999)).toBe('999.9B');
   });
 
-  it('B 다음은 T로 이어 네 자리를 넘지 않는다', () => {
+  it('B 다음은 T로 잇는다', () => {
     expect(fmtCompact(1_000_000_000_000)).toBe('1T');
   });
 });
