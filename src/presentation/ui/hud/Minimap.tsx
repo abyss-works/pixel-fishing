@@ -9,6 +9,7 @@ import TimeBadge from './TimeBadge';
 // 위치·구역·어군은 전역 스토어를 **직접 구독**한다: 좌표가 바뀌어도 React를 다시 그리지 않고
 // 캔버스만 다시 그린다(이동 중 재렌더 해소). 생기(점멸·bob)는 500ms 틱이 맡는다.
 // 프레임 ref를 읽지 않으므로 React 바깥 루프와 얽히지 않는다.
+// 자리와 폭은 HUD 배치(HudLayout)가 정한다 — 여기서는 받은 폭을 채우고 16:9를 지킨다.
 export default function Minimap({ def, boat, covered, onOpenMap }: {
   def: RegionPack;
   boat: number;
@@ -38,7 +39,7 @@ export default function Minimap({ def, boat, covered, onOpenMap }: {
   }, [def, boat, covered]);
 
   return (
-    <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(120px,25%,225px)] aspect-video">
+    <div className="relative w-full aspect-video">
       {covered ? (
         <div className="w-full h-full border border-line rounded-sm bg-bg" aria-hidden="true" />
       ) : (
