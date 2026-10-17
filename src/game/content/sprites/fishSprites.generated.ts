@@ -1,5 +1,5 @@
 // 생성 파일 — 손으로 고치지 않는다. 원화 PNG에서 다시 만들려면:
-//   npx vite-node tools/sprite-draft/import-png.ts tools/sprite-draft/png/fish
+//   pnpm exec tsx tools/sprite-draft/import-png.ts tools/sprite-draft/png/fish
 // 키는 "<어종 id>" 와 "<어종 id>.variant". 팔레트는 원화 색 그대로(고정 hex)라 기준색을 쓰지 않는다.
 import type { PixelSprite } from './types.js';
 

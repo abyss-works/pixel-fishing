@@ -27,7 +27,7 @@ function AppContent() {
     '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
   ]);
   const { game, setGame, dispatch, nickname, rename, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
-  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, sync, load });
+  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, load });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
   const restored = useRef(false);

@@ -8,6 +8,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
+import { fetchSession } from '../../account/service/session';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -94,7 +95,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       return r;
     });
 
-  // 부트스트랩 — 익명 로그인 → 서버 상태 채택. 서버가 비어 있고 레거시 진행이 있으면
+  // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
@@ -102,9 +103,12 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       return;
     }
     (async () => {
-      const uid = await api.auth.ensureSession();
+      const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const cloud = await gameGatewayRef.current.load();
+      const [cloud, nick] = await Promise.all([
+        gameGatewayRef.current.load(),
+        gameGatewayRef.current.getNickname(),
+      ]);
       if (cloud) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔다.');
@@ -122,7 +126,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       // 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
       // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
       void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
-      setNickname(await gameGatewayRef.current.getNickname());
+      setNickname(nick);
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩

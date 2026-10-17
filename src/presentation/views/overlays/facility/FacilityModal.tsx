@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import { BAIT_BUY_MAX } from '../../../../game/rules/balance';
@@ -31,6 +30,13 @@ import Note from '../../../ui/Note';
 import NumberStepper from '../../../ui/NumberStepper';
 import PixelIcon from '../../../ui/PixelIcon';
 import StatCompare from '../../../ui/StatCompare';
+import TwoColumn from '../../../ui/TwoColumn';
+import HeroHeader from '../../../ui/HeroHeader';
+import CostBox from '../../../ui/CostBox';
+import Frame from '../../../ui/Frame';
+import ColorSwatch from '../../../ui/ColorSwatch';
+import PriceTag from '../../../ui/PriceTag';
+import SelectList from '../../../ui/SelectList';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
 /** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
@@ -239,31 +245,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   );
 }
 
-/** 정비 패널 2열 골격 — 좌: 진행 사다리(직전 3 · 현재 · 이후 3이 보인다) · 우: 상세. 넓은 모달(xl) 전용 */
-const UPGRADE_GRID = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 items-stretch';
 const LADDER_ROWS = 7;
-
-/** 상세 머리 — 무엇이 되나. 큰 그림 + 이름 + 꼬리표(단계·해금 등) */
-function UpgradeHero({ sprite, title, tags }: { sprite: ReactNode; title: string; tags: ReactNode[] }) {
-  return (
-    <div className="pf-frame bg-surface-2 flex items-center gap-4 px-3 py-3">
-      <span className="shrink-0 flex items-center justify-center">{sprite}</span>
-      <div className="min-w-0 flex flex-col gap-1.5">
-        <div className="text-gold pf-accent text-xl truncate">{title}</div>
-        <div className="flex flex-wrap gap-1">
-          {tags.map((t, i) => (
-            <span key={i} className="text-xs px-1.5 py-0.5 rounded-sm border border-line text-text-dim">{t}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** 확정 영역 바로 위의 살 수 있나 — 잔액 줄과 불가 사유를 한 상자에 */
-function UpgradeCost({ children }: { children: ReactNode }) {
-  return <div className="pf-frame px-3 py-2 flex flex-col gap-1 mt-auto">{children}</div>;
-}
 
 /** 초 단위 변화량 — 줄어드는 게 좋은 값(대기·바 시간)이라 음수를 −로 그대로 보인다 */
 const sec = (d: number, digits = 1): string | undefined =>
@@ -293,11 +275,11 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
         </Button>
       }>
       {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세 */}
-      <div className={UPGRADE_GRID}>
+      <TwoColumn>
         <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
         <div className="flex flex-col gap-3">
           {/* 1차: 무엇이 되나 — 그림은 레벨과 무관한 한 장, 레벨은 글자가 말한다 */}
-          <UpgradeHero sprite={<GearSprite kind="rod" preset="hero" ariaLabel="낚싯대" />}
+          <HeroHeader sprite={<GearSprite kind="rod" preset="hero" ariaLabel="낚싯대" />}
                        title={`Lv.${game.rod + 1}`}
                        tags={[`지금 Lv.${game.rod}`, '입질이 빨라진다', '파워 상승']} />
           {/* 1차: 얼마나 바뀌나 */}
@@ -308,12 +290,12 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
           {/* 3차: 안내 */}
           <Note size="xs" className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 해역 요구치와 비교해 스탯창에서 본다.</Note>
           {/* 1차: 살 수 있나 — 버튼 바로 위 */}
-          <UpgradeCost>
+          <CostBox>
             <CostLine size="lg" have={game.gold} delta={-cost} />
             {!canUpgrade.ok && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT[canUpgrade.reason]}</Note>}
-          </UpgradeCost>
+          </CostBox>
         </div>
-      </div>
+      </TwoColumn>
     </ModalCard>
   );
 }
@@ -335,10 +317,10 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
   if (preview.kind === 'max') {
     return (
       <ModalCard title="조선소" onClose={onClose}>
-        <div className={UPGRADE_GRID}>
+        <TwoColumn>
           <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
           <Note className="my-0">이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
-        </div>
+        </TwoColumn>
       </ModalCard>
     );
   }
@@ -351,11 +333,11 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
           구매하기 (-{fmtGold(next.price)})
         </Button>
       }>
-      <div className={UPGRADE_GRID}>
+      <TwoColumn>
         <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
         <div className="flex flex-col gap-3">
           {/* 1차: 무엇을 사나 — 제목은 "조선소"로 두고 어떤 배인지는 여기서 말한다 */}
-          <UpgradeHero sprite={<BoatSprite tier={next.tier} preset="hero" ariaLabel={next.name} />}
+          <HeroHeader sprite={<BoatSprite tier={next.tier} preset="hero" ariaLabel={next.name} />}
                        title={next.name}
                        tags={[
                          <><span className="pf-accent">{next.tier}</span>단계</>,
@@ -371,33 +353,14 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
             { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
           ]} />
           {/* 잔액·조건·불가 사유는 상세 열 맨 아래 — 하단 버튼행 바로 위에서 읽힌다 */}
-          <UpgradeCost>
+          <CostBox>
             <CostLine size="lg" have={game.gold} delta={-next.price}
                       requirement={{ label: '명성', need: next.fameReq, have: game.fame }} />
             {!check.ok && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT[check.reason]}</Note>}
-          </UpgradeCost>
+          </CostBox>
         </div>
-      </div>
+      </TwoColumn>
     </ModalCard>
-  );
-}
-
-/** 미끼 색 칸 — 미끼는 그림이 없어 데이터의 도트색을 픽셀 칸으로 크게 세운다 */
-function BaitSwatch({ color, big }: { color: string; big?: boolean }) {
-  return (
-    <span aria-hidden="true" className={cx('shrink-0 border-2 border-line pf-frame', big ? 'size-16' : 'size-5')}
-          style={{ backgroundColor: color }} />
-  );
-}
-
-/** 가격 표기 — 할인이 있으면 정가에 취소선을 긋고 할인가를 옆에 세운다 */
-function PriceTag({ list, price, size = 'sm' }: { list: number; price: number; size?: 'sm' | 'lg' }) {
-  const discounted = price < list;
-  return (
-    <span className={cx('pf-accent whitespace-nowrap flex items-baseline gap-1.5', size === 'lg' ? 'text-base' : 'text-sm')}>
-      {discounted && <s className="text-text-dim text-xs" aria-label={`정가 ${fmtGold(list)}`}>{fmtGold(list)}</s>}
-      <span className={discounted ? 'text-gold' : undefined}>{fmtGold(price)}</span>
-    </span>
   );
 }
 
@@ -422,32 +385,26 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
           구입하기 (-{fmtGold(sel.total)})
         </Button>
       }>
-      <div className={UPGRADE_GRID}>
+      <TwoColumn>
         {/* 좌: 미끼 목록 — 고르면 오른쪽 상세가 바뀐다 */}
-        <div className="pf-frame divide-y divide-line flex flex-col" role="listbox" aria-label="미끼 목록">
-          {rows.map(r => {
-            const selected = r.bait.id === sel.bait.id;
-            return (
-              <button key={r.bait.id} type="button" role="option" aria-selected={selected}
-                      onClick={() => setSelectedId(r.bait.id)}
-                      className={cx('flex items-center gap-3 px-3 py-3 text-left cursor-pointer transition',
-                        selected ? 'bg-surface-2' : 'hover:bg-surface-2/50')}>
-                <BaitSwatch color={r.bait.color} />
-                <span className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <span className={cx('text-base', selected && 'text-gold')}>{r.bait.name}</span>
-                  <span className="text-xs text-text-dim">
-                    <RarityText rarity={r.bait.targetRarity} /> · 보유 <span className="pf-accent">{r.owned}</span>
-                  </span>
-                </span>
-                <PriceTag list={r.bait.price} price={r.unitPrice} />
-              </button>
-            );
-          })}
-        </div>
+        <SelectList label="미끼 목록" items={rows} keyOf={r => r.bait.id} selectedKey={sel.bait.id}
+                    onSelect={setSelectedId}
+                    renderItem={(r, selected) => (
+                      <>
+                        <ColorSwatch color={r.bait.color} />
+                        <span className="min-w-0 flex-1 flex flex-col gap-0.5">
+                          <span className={cx('text-base', selected && 'text-gold')}>{r.bait.name}</span>
+                          <span className="text-xs text-text-dim">
+                            <RarityText rarity={r.bait.targetRarity} /> · 보유 <span className="pf-accent">{r.owned}</span>
+                          </span>
+                        </span>
+                        <PriceTag list={r.bait.price} price={r.unitPrice} />
+                      </>
+                    )} />
 
         {/* 우: 고른 미끼 상세 */}
         <div className="flex flex-col gap-3">
-          <UpgradeHero sprite={<BaitSwatch color={sel.bait.color} big />}
+          <HeroHeader sprite={<ColorSwatch color={sel.bait.color} big />}
                        title={sel.bait.name}
                        tags={[
                          <><RarityText rarity={sel.bait.targetRarity} /> 미끼</>,
@@ -459,22 +416,22 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
             { label: '보유', value: `${sel.owned}개`, next: `${sel.owned + sel.count}개`, delta: `+${sel.count}` },
             { label: '1개 가격', value: <PriceTag list={sel.bait.price} price={sel.unitPrice} size="lg" /> },
           ]} />
-          <div className="pf-frame px-3 py-2 flex items-center justify-between gap-2">
+          <Frame className="px-3 py-2 flex items-center justify-between gap-2">
             <span className="text-sm text-text-dim">수량</span>
             <NumberStepper value={sel.count} min={1} max={BAIT_BUY_MAX} disabled={busy} variant="inline"
                            ariaLabel={sel.bait.name}
                            onChange={v => setQty(prev => ({ ...prev, [sel.bait.id]: normalizeBaitQuantity(v) }))} />
-          </div>
-          <UpgradeCost>
+          </Frame>
+          <CostBox>
             <div className="flex items-baseline justify-between gap-2 text-sm">
               <span className="text-text-dim">합계</span>
               <PriceTag list={sel.listTotal} price={sel.total} size="lg" />
             </div>
             <CostLine size="lg" have={game.gold} delta={-sel.total} />
             {game.gold < sel.total && <Note tone="warn" size="xs" className="my-0">골드가 부족하다.</Note>}
-          </UpgradeCost>
+          </CostBox>
         </div>
-      </div>
+      </TwoColumn>
       <Note size="xs" className="my-0">
         같은 등급이 조금 더 잘 낚인다. 수동으로 낚아올릴 때마다 하나씩 사라지고, 방치 낚시에는 쓰이지 않는다.
         산 미끼는 가방 탭의 아이템에서 켠다. 한 번에 하나만 켜진다.

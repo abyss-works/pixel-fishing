@@ -12,9 +12,7 @@ import { when } from '../../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { cx } from '../../../../ui/cx';
 import Note from '../../../../ui/Note';
-import Button from '../../../../ui/Button';
-import Modal from '../../../../ui/Modal';
-import ModalCard from '../../../../ui/ModalCard';
+import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
 import IconButton from '../../../../ui/IconButton';
@@ -29,6 +27,7 @@ import type { BagLayout } from './bagView';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines } from '../../../../ui/artifactEffects';
+import Frame from '../../../../ui/Frame';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다(사용자 결정 2026-10-15). 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -68,7 +67,7 @@ function ItemSection({ game, dispatch, setToast }: {
   return (
     <div className="flex flex-col gap-1">
       <Subheading>미끼</Subheading>
-      <div className="pf-frame divide-y divide-line">
+      <Frame divided>
         {rows.map(({ bait, count }: { bait: Bait; count: number }) => {
           const active = game.activeBait === bait.id;
           return (
@@ -91,7 +90,7 @@ function ItemSection({ game, dispatch, setToast }: {
             </div>
           );
         })}
-      </div>
+      </Frame>
       <Note>
         활성하면 같은 등급 물고기가 두 배 더 잘 낚인다. 수동으로 낚아올릴 때마다 한 개가 소모되고,
         방치 획득에는 소모되지 않는다. 구매는 콜롬보항의 미끼 상점에서.
@@ -113,7 +112,7 @@ function ArtifactSection({ game }: { game: GameState }) {
         <Note>아직 유물이 없다. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꾸자.</Note>
       ) : (
         <>
-          <div className="pf-frame divide-y divide-line">
+          <Frame divided>
             {owned.map(a => (
               <div key={a.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
                 <span className="flex items-baseline justify-between gap-2">
@@ -126,7 +125,7 @@ function ArtifactSection({ game }: { game: GameState }) {
                 <span className="text-text-dim italic text-xs">{a.lore}</span>
               </div>
             ))}
-          </div>
+          </Frame>
           <Note>유물은 가지고만 있어도 효과가 계속된다. 교환은 항구 수배판의 유물 탭에서.</Note>
         </>
       )}
@@ -147,7 +146,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
       <Subheading>
         전시대 <span className="pf-accent">{shown}/{EXHIBIT_SLOTS}</span>
       </Subheading>
-      <div className="pf-frame divide-y divide-line">
+      <Frame divided>
         {slots.map((inst, i) => {
           if (!inst) return <div key={i} className="px-2 py-1.5 text-xs text-text-dim">빈 칸</div>;
           const fish = instanceFish(inst);
@@ -169,7 +168,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
             </div>
           );
         })}
-      </div>
+      </Frame>
     </div>
   );
 }
@@ -273,9 +272,8 @@ export default function BagTab({ game, dispatch, setToast }: {
             )}
           </div>
           {lockConfirm && (
-            <Modal onClose={() => setLockConfirm(false)}>
-              <ModalCard title="자동 잠금" onClose={() => setLockConfirm(false)}
-                confirm={<Button variant="primary" full onClick={applyAutoLock}>정리하기</Button>}>
+            <ConfirmDialog title="자동 잠금" confirmLabel="정리하기"
+                           onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
                   나머지는 잠금이 풀린다. 손으로 잠근 물고기도 가장 크지 않으면 풀린다.
@@ -284,8 +282,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                   잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
                   <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
                 </p>
-              </ModalCard>
-            </Modal>
+            </ConfirmDialog>
           )}
           {EXHIBIT_UI_ENABLED && <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />}
           {layout === 'cards' ? (
@@ -294,7 +291,7 @@ export default function BagTab({ game, dispatch, setToast }: {
             <Note>가방이 비어 있다. 어군을 찾아 낚시하자.</Note>
           ) : (
             <>
-              <div className="pf-frame divide-y divide-line">
+              <Frame divided>
                 {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxSize, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
@@ -351,7 +348,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                     </div>
                   );
                 })}
-              </div>
+              </Frame>
               <Note>
                 판매 가능 <span className="pf-accent">{fmtGold(total)}</span> · 판매는 집 궤짝/항구 어시장에서.
                 자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.

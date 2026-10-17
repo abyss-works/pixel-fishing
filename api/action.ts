@@ -72,6 +72,39 @@ export function debugTriggerAllowed({ vercelEnv, localOrigin, owner }: {
   return localOrigin || owner;
 }
 
+/** 네임드 결투 결과 확정 — 성공·실패 모두 도전권 행을 지우고, 성공만 진행도를 1 올린다.
+ *  놓치면 흔적이 사라져 다시 조우해야 한다. 없는 의뢰면 아무것도 쓰지 않는다.
+ *  동시 확정 경합으로 진행도가 2가 될 수 있으나 완료 판정(≥)에는 무해 — 수용. */
+/** 결투 결과 확정이 쓰는 쿼리 빌더 모양 — eq 사슬 뒤에 실행(then)하거나 한 행(maybeSingle)을 받는다 */
+interface EqChain<T> { eq(column: string, value: unknown): EqChain<T> & T }
+interface ChallengeDb {
+  from(table: string): {
+    select(columns: string): EqChain<{ maybeSingle(): PromiseLike<{ data: unknown; error: unknown }> }>;
+    update(values: Record<string, unknown>): EqChain<PromiseLike<{ error: unknown }>>;
+    delete(): EqChain<PromiseLike<{ error: unknown }>>;
+  };
+}
+
+export async function applyChallengeResult(
+  admin: ChallengeDb, uid: string, questId: string, success: boolean, nowISO: string,
+): Promise<void> {
+  const quest = bountyById(questId);
+  if (!quest) return;
+  const ctx = { uid, action: 'resolveChallenge' };
+  if (success) {
+    const { data: prow, error: prErr } = await admin.from('bounty_progress')
+      .select('progress').eq('user_id', uid).eq('quest_id', quest.id).maybeSingle();
+    if (prErr) throw new ApiError(500, 'db-read', ctx);
+    const { error: pupErr } = await admin.from('bounty_progress')
+      .update({ progress: Number((prow as { progress?: unknown } | null)?.progress ?? 0) + 1, updated_at: nowISO })
+      .eq('user_id', uid).eq('quest_id', quest.id);
+    if (pupErr) throw new ApiError(500, 'db-write', ctx);
+  }
+  const { error: tdelErr } = await admin.from('bounty_tickets')
+    .delete().eq('user_id', uid).eq('quest_id', quest.id);
+  if (tdelErr) throw new ApiError(500, 'db-write', ctx);
+}
+
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 상한과 같은 함수를 쓴다 */
 export type DebugTablePlan =
   | { table: string; op: 'delete'; since?: { column: string; iso: string } }
@@ -731,27 +764,9 @@ if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     if (tickErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
   }
 
-  // 챌린지 결과 확정 — 성공·실패 모두 도전권을 소모하고, 성공만 진행도 +1.
-  // 놓치면 흔적이 사라져 다시 조우해야 한다. 리듀서가 티켓 유효·수주 활성·주장 정합성을
-  // 이미 검증했다. 락 전에 확정한다.
-  // 동시 확정 경합으로 진행도가 2가 될 수 있으나 완료 판정(≥)에는 무해 — 수용.
+  // 챌린지 결과 확정 — 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다. 락 전에 확정한다.
   if (action.type === 'resolveChallenge' && typeof action.questId === 'string') {
-    const quest = bountyById(action.questId);
-    if (quest) {
-      if (action.success === true) {
-        const now = new Date().toISOString();
-        const { data: prow, error: prErr } = await admin.from('bounty_progress')
-          .select('progress').eq('user_id', uid).eq('quest_id', quest.id).maybeSingle();
-        if (prErr) throw new ApiError(500, 'db-read', { uid, action: action.type });
-        const { error: pupErr } = await admin.from('bounty_progress')
-          .update({ progress: Number((prow as { progress?: unknown } | null)?.progress ?? 0) + 1, updated_at: now })
-          .eq('user_id', uid).eq('quest_id', quest.id);
-        if (pupErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
-      }
-      const { error: tdelErr } = await admin.from('bounty_tickets')
-        .delete().eq('user_id', uid).eq('quest_id', quest.id);
-      if (tdelErr) throw new ApiError(500, 'db-write', { uid, action: action.type });
-    }
+    await applyChallengeResult(admin as unknown as ChallengeDb, uid, action.questId, action.success === true, new Date().toISOString());
   }
 
   // 개발 도구 테이블 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.

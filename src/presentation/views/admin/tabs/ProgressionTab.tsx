@@ -1,5 +1,5 @@
 // 진행 탭 — 콘텐츠가 어디서 답답한지. 레이아웃: [배 단계 | 낚싯대 레벨] 좌우(xl) →
-// [지역 도달] → [게이트 정체 목록]. **밸런스 숫자는 배 데이터를 재사용**한다 —
+// [지역 도달] → [게이트 정체 목록] → [바운티 퍼널]. **밸런스 숫자는 배 데이터를 재사용**한다 —
 // 대시보드에 임계값을 새로 두지 않는다(이중 구현 금지 원칙, 액션 리듀서 머리 주석과 같은 판단).
 import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
@@ -13,7 +13,8 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
-import { BarsChart, Frame, TabState } from '../charts';
+import { BarsChart, ChartSection, TabState } from '../charts';
+import BountyFunnelSection from './BountyFunnelSection';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
@@ -38,7 +39,7 @@ export default function ProgressionTab() {
 
       {/* 분포 셋 — 같은 성격(히스토그램)이라 xl 이상에선 짝지어 나란히 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <Frame title="배 단계">
+        <ChartSection title="배 단계">
           <BarsChart values={boatHist.values} labels={boatHist.labels} height={72} />
           <Note size="2xs" className="my-0">
             {granted
@@ -46,9 +47,9 @@ export default function ProgressionTab() {
                   .map(l => `${l.name} ${l.count}`).join(' · ') || '데이터 없음')
               : '운영 DB 연결 후 채워진다.'}
           </Note>
-        </Frame>
+        </ChartSection>
 
-        <Frame title="낚싯대 레벨">
+        <ChartSection title="낚싯대 레벨">
           {rodHist.values.length > 0 ? (
             <>
               <BarsChart values={rodHist.values}
@@ -64,10 +65,10 @@ export default function ProgressionTab() {
               {granted ? '데이터 없음' : '운영 DB 연결 후 채워진다.'}
             </Note>
           )}
-        </Frame>
+        </ChartSection>
       </div>
 
-      <Frame title="지역 도달 (visited 기준)">
+      <ChartSection title="지역 도달 (visited 기준)">
         <div className="flex items-end gap-4 flex-wrap px-1 pt-1">
           {regionReach.map(r => (
             <div key={r.id} className="text-center min-w-[64px]">
@@ -84,7 +85,7 @@ export default function ProgressionTab() {
           "가본 적 있는 지역" 집계다 — 현재 위치가 아니라 state.visited 기반.
           {' '}{!granted && '운영 DB 연결 후 채워진다.'}
         </Note>
-      </Frame>
+      </ChartSection>
 
       <section>
         <SectionTitle>배 명성 게이트 — 막힌 유저</SectionTitle>
@@ -113,6 +114,8 @@ export default function ProgressionTab() {
           </DataTable>
         )}
       </section>
+
+      <BountyFunnelSection granted={granted} />
     </div>
   );
 }

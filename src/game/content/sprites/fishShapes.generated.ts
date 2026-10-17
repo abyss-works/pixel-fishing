@@ -1,4 +1,4 @@
-// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/generate-fish-shapes.ts
+// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/generate-fish-shapes.ts
 // 초안 생성기(절차 사각형)를 1× 배율로 32×16 격자에 옮긴 14형태 스프라이트.
 // 종별 격자가 없는 어종(신규 어종 초안 단계)만 이 형태 격자를 쓴다 (fishSprite 해석 순서).
 import type { PixelSprite } from './types.js';

@@ -1,6 +1,6 @@
 import { cx } from './cx';
 
-// 인라인 픽셀 아이콘 — TabIcon과 같은 12×12 rect 기법, currentColor로 글자색을 따른다.
+// 인라인 픽셀 아이콘 — 12×12 그리드에 rect 셀을 찍는다. currentColor로 글자색을 따른다.
 // 이모지 금지 정책(v0.4.2)의 대체재: UI 크롬의 그림 기호는 전부 여기서 찍는다.
 // holes는 마스크로 뚫는 부분(자물쇠 열쇠구멍 등).
 type Cell = [x: number, y: number, w: number, h: number];
@@ -10,7 +10,9 @@ export type GlyphId =
   | 'sun' | 'moon'
   | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
   | 'caretRight' | 'caretDown' | 'checkPartial'
-  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close';
+  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
+  | 'plus' | 'minus'
+  | 'compass' | 'backpack' | 'book' | 'question' | 'gear';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 봉투 — 테두리 사각형에 접힌 덮개(V자) 두 줄
@@ -87,6 +89,41 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
     cells: [[1, 1, 2, 2], [3, 3, 2, 2], [5, 5, 2, 2], [7, 7, 2, 2], [9, 9, 2, 2],
             [9, 1, 2, 2], [7, 3, 2, 2], [3, 7, 2, 2], [1, 9, 2, 2]],
   },
+  // 나침반 — 원형 테두리 + 대각 바늘
+  compass: {
+    cells: [
+      [4, 0, 4, 1], [2, 1, 2, 1], [8, 1, 2, 1], [1, 2, 1, 2], [10, 2, 1, 2],
+      [0, 4, 1, 4], [11, 4, 1, 4], [1, 8, 1, 2], [10, 8, 1, 2],
+      [2, 10, 2, 1], [8, 10, 2, 1], [4, 11, 4, 1],
+      [7, 3, 2, 2], [5, 5, 2, 2], [3, 7, 2, 2],
+    ],
+  },
+  // 배낭 — 몸통 + 손잡이 + 주머니 구멍
+  backpack: {
+    cells: [[4, 1, 4, 1], [3, 2, 1, 2], [8, 2, 1, 2], [2, 4, 8, 7]],
+    holes: [[4, 6, 4, 2]],
+  },
+  // 책 — 표지 + 페이지 줄 구멍
+  book: {
+    cells: [[2, 1, 8, 10]],
+    holes: [[4, 3, 4, 1], [4, 5, 4, 1], [4, 7, 4, 1]],
+  },
+  // 물음표
+  question: {
+    cells: [[3, 1, 6, 2], [8, 3, 2, 2], [6, 5, 3, 2], [5, 7, 2, 2], [5, 10, 2, 2]],
+  },
+  // 톱니 — 십자·대각 이빨 + 몸통, 중앙 구멍
+  gear: {
+    cells: [
+      [5, 0, 2, 2], [5, 10, 2, 2], [0, 5, 2, 2], [10, 5, 2, 2],
+      [1, 1, 2, 2], [9, 1, 2, 2], [1, 9, 2, 2], [9, 9, 2, 2],
+      [3, 3, 6, 6],
+    ],
+    holes: [[5, 5, 2, 2]],
+  },
+  // 더하기·빼기 — 2px 굵기 막대. 확대·축소 같은 증감 조작
+  plus: { cells: [[1, 5, 10, 2], [5, 1, 2, 10]] },
+  minus: { cells: [[1, 5, 10, 2]] },
   // 잠김: 걸쇠 닫힘 + 몸통(열쇠구멍)
   lock: {
     cells: [[3, 1, 6, 1], [3, 2, 1, 2], [8, 2, 1, 2], [2, 4, 8, 7]],

@@ -113,7 +113,7 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('???')).toBeInTheDocument();
     expect(screen.getByText(/걷어 올린 그물은/)).toBeInTheDocument();
-    expect(screen.getByText(/400000G/)).toBeInTheDocument();
+    expect(screen.getByText(/400,000G/)).toBeInTheDocument();
   });
 
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {
@@ -150,7 +150,8 @@ describe('BountyPanel', () => {
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(screen.getByText(/흔적이 남아 있다 — 바다에서 추적하자/)).toBeInTheDocument();
+    // 스냅샷은 세션 게이트가 선 뒤 도착한다
+    expect(await screen.findByText(/흔적이 남아 있다 — 바다에서 추적하자/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });

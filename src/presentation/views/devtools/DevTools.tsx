@@ -18,7 +18,9 @@ import Button from '../../ui/Button';
 import IconButton from '../../ui/IconButton';
 import PillButton from '../../ui/PillButton';
 import PixelIcon from '../../ui/PixelIcon';
+import Frame from '../../ui/Frame';
 import Gated from '../../ui/Gated';
+import LinkButton from '../../ui/LinkButton';
 import Note from '../../ui/Note';
 import SubTabs from '../../ui/SubTabs';
 import { canSeeDevTools } from '../admin/gate';
@@ -118,17 +120,17 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
   return (
     <>
-      <button type="button" aria-label="개발 도구" aria-pressed={open} title="개발 도구 (F9)"
-              onClick={() => setOpen(o => !o)}
-              className={cx('fixed right-3 bottom-3 z-[60] pf-frame p-2 cursor-pointer',
-                open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
+      <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open} title="개발 도구 (F9)"
+             onClick={() => setOpen(o => !o)}
+             className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
+               open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
         <PixelIcon glyph="key" size={20} />
-      </button>
+      </Frame>
 
       {open && (
-        <div role="dialog" aria-label="개발 도구"
-             className="fixed z-[60] pf-frame bg-bg flex flex-col text-sm"
-             style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}>
+        <Frame role="dialog" aria-label="개발 도구"
+               className="fixed z-[60] bg-bg flex flex-col text-sm"
+               style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}>
           {/* 머리줄 — 끌어서 옮긴다 */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-line cursor-move select-none touch-none"
                onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
@@ -206,10 +208,10 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
             {section === 'ops' && (
               <>
                 {/* 대시보드는 조회 전용이라 운영에서도 연다 */}
-                <a href="?admin=1#/admin/overview" aria-label="대시보드 열기"
-                   className="pf-btn ghost text-sm text-center">
+                <LinkButton href="?admin=1#/admin/overview" aria-label="대시보드 열기" variant="ghost"
+                            className="text-sm text-center">
                   대시보드 열기 →
-                </a>
+                </LinkButton>
                 <Gated open={!restricted} overlay={RESTRICTED_NOTE}>
                   <MigrationCode game={game} dispatch={dispatch} setToast={setToast} />
                 </Gated>
@@ -229,7 +231,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
               ))}
             </ul>
           </div>
-        </div>
+        </Frame>
       )}
     </>
   );

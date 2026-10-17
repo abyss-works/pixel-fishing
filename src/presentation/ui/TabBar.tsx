@@ -20,7 +20,7 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
   return (
     <div className={cx('pf-tabbar', className)}>
       {tabs.map(t => (
-        <button key={t.key} className={activeKey === t.key ? 'active' : ''} onClick={() => onSelect(t.key)}>
+        <button key={t.key} type="button" className={activeKey === t.key ? 'active' : ''} onClick={() => onSelect(t.key)}>
           {t.icon}
           <span>{t.label}</span>
         </button>

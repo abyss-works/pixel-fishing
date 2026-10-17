@@ -1,40 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../platform/api';
 import { identifyUser } from '../../../platform/observability';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import type { MaybePromise } from '../../../platform/api';
-import type { SyncState } from '../../gameplay/service/useGame';
+import { setSessionUid, useSession } from './session';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
+// uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 supabase를 직접 모른다.
 
-export function useAccount({ game, setGame, setToast, sync, load }: {
+export function useAccount({ game, setGame, setToast, load }: {
   game: GameState;
   setGame: (g: GameState) => void;
   setToast: (m: string) => void;
-  sync: SyncState;
   /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
 }) {
   // 로컬 개발(supabase 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
+  const client = useQueryClient();
+  const session = useSession();
   // 화면에 띄울 uid — 문의가 들어왔을 때 그 사람 세이브를 DB에서 찾는 유일한 열쇠다.
   // 게스트는 이메일이 없어서 uid 말고는 식별할 방법이 없다.
-  const [uid, setUid] = useState<string | null>(api.auth.isConfigured ? null : '00000000-0000-4000-8000-000000000000');
-  const uidRef = useRef<string | null>(null); // 부트스트랩 시점 uid — 승격/교체 판별 기준
+  const uid = api.auth.isConfigured ? session.uid : '00000000-0000-4000-8000-000000000000';
+  const uidRef = useRef<string | null>(null); // 마지막으로 채택한 uid — 승격/교체 판별 기준
 
-  // 부트스트랩이 끝나면(on) 영구 계정 이메일 표시 — 게스트면 null 유지
+  // 세션이 서면(서버 상태 로드와 병렬로) 영구 계정 이메일 표시 — 게스트면 null 유지
   useEffect(() => {
-    if (sync !== 'on' || !api.auth.isConfigured) return;
+    if (!session.ready || !session.uid || !api.auth.isConfigured) return;
+    if (!uidRef.current) uidRef.current = session.uid;
     api.auth.currentAccount().then(setAccount);
-    api.auth.getSession().then(({ uid: sid }) => {
-      if (!uidRef.current) uidRef.current = sid;
-      setUid(sid);
-      identifyUser(sid); // uid만 — PII 미전송
-    });
-  }, [sync]);
+    identifyUser(session.uid); // uid만 — PII 미전송
+  }, [session.ready, session.uid]);
 
   // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택.
   // 승격(가입)은 uid 불변이라 스킵 — 갓 승격한 게스트는 서버가 아직 비어 있을 수 있어서
@@ -42,7 +42,7 @@ export function useAccount({ game, setGame, setToast, sync, load }: {
   const onAuthChanged = async () => {
     setAccount(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();
-    setUid(next);
+    setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
       const cloud = await load();

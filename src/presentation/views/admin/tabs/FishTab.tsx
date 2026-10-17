@@ -10,6 +10,7 @@ import {
 import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
+import { useDialogs } from '../../../ui/useDialogs';
 import PixelIcon from '../../../ui/PixelIcon';
 import IconButton from '../../../ui/IconButton';
 import PillButton from '../../../ui/PillButton';
@@ -17,6 +18,7 @@ import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
+import Frame from '../../../ui/Frame';
 
 // 어종 탭 — **수역 단위 통합 대시보드**. 한 표 안에 편집과 통계가 같이 산다(사용자 지시:
 // 어종별 데이터와 통계치를 분리하지 마라 — 수치를 조절하면 그 자리에서 즉시 읽히게).
@@ -57,14 +59,17 @@ export default function FishTab() {
     SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
 
+  const { notice, dialogs } = useDialogs();
+  const tell = (body: string) => void notice({ title: 'JSON 추출', body });
+
   const exportJson = async () => {
     const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      window.alert('어종 현황 JSON을 클립보드에 복사했다.');
+      tell('어종 현황 JSON을 클립보드에 복사했다.');
     } catch {
       console.log('pf-export', JSON.stringify(payload, null, 2));
-      window.alert('클립보드 접근 실패 — 개발자 콘솔(pf-export)에서 복사하세요.');
+      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export)에서 복사하세요.');
     }
   };
 
@@ -74,15 +79,15 @@ export default function FishTab() {
   const exportDeltaJson = async () => {
     const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     if (!payload) {
-      window.alert('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
+      tell('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
       return;
     }
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      window.alert(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
+      tell(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
     } catch {
       console.log('pf-export-delta', JSON.stringify(payload, null, 2));
-      window.alert('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
+      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
     }
   };
 
@@ -115,6 +120,7 @@ export default function FishTab() {
         입력칸 = 시뮬레이션 오버라이드(placeholder가 확정값, 비우면 원본, 저장 안 됨).
         머리의 기대값 띠와 어종 행의 확률은 입력 즉시 함께 움직인다.
       </Note>
+      {dialogs}
     </div>
   );
 }
@@ -167,7 +173,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   const hasOverride = hasSpotSimulationOverride(bid, sim, list);
 
   return (
-    <section className="pf-frame p-3" aria-labelledby={`h-${bid}`}>
+    <Frame as="section" className="p-3" aria-labelledby={`h-${bid}`}>
       {/* ── 머리: 해역 식별 + 펼침 토글 ── */}
       <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
         <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
@@ -362,7 +368,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
           </div>
         </>
       )}
-    </section>
+    </Frame>
   );
 }
 
