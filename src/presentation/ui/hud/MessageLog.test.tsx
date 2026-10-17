@@ -29,8 +29,12 @@ describe('메시지 창', () => {
     expect(screen.queryByRole('button', { name: '시스템' })).not.toBeInTheDocument();
   });
 
-  it('기록이 없으면 창을 그리지 않는다', () => {
+  it('기록 수와 무관하게 같은 높이의 창을 그린다', () => {
     render(<MessageLog log={[]} />);
-    expect(screen.queryByRole('log')).not.toBeInTheDocument();
+    const empty = screen.getByRole('log').style.height;
+    cleanup();
+    render(<MessageLog log={logOf(50)} />);
+    expect(empty).not.toBe('');
+    expect(screen.getByRole('log').style.height).toBe(empty);
   });
 });

@@ -5,7 +5,8 @@ import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf } from './messageFeed'
 import type { MessageChannel, Msg } from './messageFeed';
 
 // 메시지 창 — 스테이지 왼쪽 아래의 채팅창형 기록.
-// 정해진 줄 수만큼의 높이에 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
+// 높이는 기록 수와 무관하게 항상 정해진 줄 수만큼이다. 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
+// 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 맨 아래를 보고 있을 때만 새 메시지를 따라 내려가고, 위로 올려 읽는 중이면 자리를 지킨다.
 // 휠을 받으려고 창 상자는 포인터를 받는다. 창 바깥의 빈 열은 캔버스 클릭을 막지 않는다.
 // 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 채널 탭을 그린다.
@@ -53,8 +54,6 @@ export default function MessageLog({ log }: { log: Msg[] }) {
     if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
   };
 
-  if (log.length === 0) return null;
-
   return (
     <div className="absolute left-3 bottom-3 z-(--z-overlay) w-[min(360px,55%)] flex flex-col items-stretch gap-1 pointer-events-none">
       {channels.length > 1 && (
@@ -65,8 +64,8 @@ export default function MessageLog({ log }: { log: Msg[] }) {
       )}
       <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
            className="pointer-events-auto pf-glass pf-scroll border border-line rounded-sm px-2 py-1
-                      text-sm overflow-y-auto overscroll-contain select-text"
-           style={{ maxHeight: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 2px)` }}>
+                      text-sm flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text"
+           style={{ height: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 2px)` }}>
         {shown.map(m => <Line key={m.id} m={m} />)}
       </div>
     </div>
