@@ -3,8 +3,8 @@
 /** 넛지를 띄우는 명성 기준 — 진행이 이만큼 쌓인 게스트에게만 계정을 권한다 */
 export const ACCOUNT_NUDGE_FAME = 500;
 
-/** 비밀번호 최소 길이 — 인증 서버의 최소 길이 설정과 같은 값이어야 한다 */
-export const MIN_PASSWORD_LENGTH = 8;
+/** 비밀번호 최소 길이 — 인증 서버(Supabase Auth) 기본 최소 길이와 같은 값이어야 한다 */
+export const MIN_PASSWORD_LENGTH = 6;
 
 export const passwordLongEnough = (password: string): boolean => password.length >= MIN_PASSWORD_LENGTH;
 

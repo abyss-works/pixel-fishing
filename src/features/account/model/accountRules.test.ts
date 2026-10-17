@@ -35,8 +35,8 @@ describe('계정 만들기 넛지', () => {
 
 describe('비밀번호 길이', () => {
   it(`${MIN_PASSWORD_LENGTH}자 이상만 통과한다`, () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(8);
-    expect(passwordLongEnough('1234567')).toBe(false);
-    expect(passwordLongEnough('12345678')).toBe(true);
+    expect(MIN_PASSWORD_LENGTH).toBe(6);
+    expect(passwordLongEnough('12345')).toBe(false);
+    expect(passwordLongEnough('123456')).toBe(true);
   });
 });
