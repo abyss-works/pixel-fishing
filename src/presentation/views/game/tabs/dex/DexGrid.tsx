@@ -8,10 +8,12 @@ import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityText, RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
+import PillButton from '../../../../ui/PillButton';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold } from '../../../../ui/format';
 import type { DexView } from '../tabs';
 import DexDetail from './DexDetail';
+import RankingModal from '../../../overlays/ranking/RankingModal';
 
 // 일반/돌연변이 공용 격자 — 폼별 발견 기준만 다르다. 변이는 별개 개체라 변이만 잡은 종은
 // 기본 도감에서 여전히 ??? (v0.3.3)
@@ -26,13 +28,18 @@ export default function DexGrid({ game, view, sub, onSub }: {
   const viewForm: FormId = view === 'variant' ? 'variant' : 'normal';
   const data = useMemo(() => selectDexGrid(game, sub, viewForm), [game, sub, viewForm]);
   const [detail, setDetail] = useState<Fish | null>(null);
+  const [rankingOpen, setRankingOpen] = useState(false);
 
   return (
     <div>
-      <PageTitle className="mb-1">
-        {view === 'base' ? '일반 어종' : '돌연변이'}
-        {' ('}{data.foundCount}/{data.fishCount}{')'}
-      </PageTitle>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <PageTitle>
+          {view === 'base' ? '일반 어종' : '돌연변이'}
+          {' ('}{data.foundCount}/{data.fishCount}{')'}
+        </PageTitle>
+        <PillButton onClick={() => setRankingOpen(true)}>랭킹</PillButton>
+      </div>
+      {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
       <SubTabs
         items={data.zones.map(({ id, foundCount, fishCount }) => ({
           key: id, label: zoneById(id)!.shortName, sub: `${foundCount}/${fishCount}`,
