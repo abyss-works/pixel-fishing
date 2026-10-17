@@ -300,13 +300,16 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   .pf-scroll::-webkit-scrollbar { width: 0; height: 0; }
 
   /* HUD 스크롤 — 브라우저 기본 막대 대신 6px 흰 막대(트랙 투명). 캔버스 위 글줄 상자(메시지 창)용.
+     막대는 상자에 마우스를 올렸을 때만 보인다. 폭은 늘 잡아 두어 나타날 때 글줄이 밀리지 않는다.
      Chromium은 scrollbar-color가 있으면 ::-webkit-scrollbar를 무시하므로, 표준 속성은 지원 안 하는 브라우저에만 준다. */
   .pf-scroll-hud::-webkit-scrollbar { width: 6px; height: 6px; }
   .pf-scroll-hud::-webkit-scrollbar-track { background: transparent; }
-  .pf-scroll-hud::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.85); }
-  .pf-scroll-hud::-webkit-scrollbar-thumb:hover { background: #fff; }
+  .pf-scroll-hud::-webkit-scrollbar-thumb { background: transparent; }
+  .pf-scroll-hud:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.85); }
+  .pf-scroll-hud:hover::-webkit-scrollbar-thumb:hover { background: #fff; }
   @supports not selector(::-webkit-scrollbar) {
-    .pf-scroll-hud { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.85) transparent; }
+    .pf-scroll-hud { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+    .pf-scroll-hud:hover { scrollbar-color: rgb(255 255 255 / 0.85) transparent; }
   }
 
   /* 공통 표 (구 .data-table/.pf-compare 통합) — 셀 후손 셀렉터가 유틸 반복보다 나은 유일한 곳 */
