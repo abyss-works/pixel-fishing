@@ -1,4 +1,4 @@
-// 흔적 카드 — 바다 HUD 오른쪽 열(미끼 칩 위)에 뜨는 네임드 흔적.
+// 흔적 카드 — 바다 HUD 오른쪽 열(미끼 칩 위)에 뜨는 네임드 흔적. 자리와 폭은 HUD 배치가 정한다.
 // 조우로 받은 도전권이 남아 있는 동안 흔적 문장·남은 시간·추적 버튼을 보인다.
 // 의뢰 구역 밖에서는 한 줄로 줄이고, 토벌을 마치면 수배판에서 보상을 받으라는 안내만 남긴다.
 // 깜빡임·흔들림 없이 낮은 채도의 골드 테두리로만 "다른 알림과 다르다"를 말한다.
@@ -23,8 +23,7 @@ export default function TraceCard({ onTrack }: {
   const card = selectTraceCard(snap, zone, nowMs);
   if (!card) return null;
 
-  const frame = cx('absolute right-3 bottom-[188px] z-(--z-overlay) w-[clamp(120px,25%,225px)]',
-    'flex flex-col gap-1 px-2.5 py-1.5 rounded-sm border border-gold/60',
+  const frame = cx('w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-sm border border-gold/60',
     'bg-bg/72 backdrop-blur-[4px] text-shadow-hud text-xs');
 
   if (card.done) {

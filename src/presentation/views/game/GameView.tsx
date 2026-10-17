@@ -117,9 +117,8 @@ export default function GameView(props: GameViewProps) {
         )}
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
-                   onOpenStats={openStats} onOpenMap={onOpenMap} />
-
-        {atSea && <TraceCard onTrack={setTracking} />}
+                   onOpenStats={openStats} onOpenMap={onOpenMap}
+                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} />
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
                           onResolve={resolveEncounter} onClose={() => setTracking(null)} />
