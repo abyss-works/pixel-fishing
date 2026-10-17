@@ -3,6 +3,7 @@
 // ⚠️ Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runArchive } from '../cold-archive.js';
+import { database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
 
 type Req = IncomingMessage;
@@ -21,9 +22,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(401).json({ error: 'unauthorized' }); return;
   }
   try {
+    reqEnv('DATABASE_URL');
     const summary = await runArchive({
-      supabaseUrl: reqEnv('VITE_SUPABASE_URL'),
-      supabaseKey: reqEnv('SUPABASE_SERVICE_ROLE_KEY'),
+      db: database().db,
       r2AccountId: reqEnv('R2_ACCOUNT_ID'),
       r2Bucket: reqEnv('R2_BUCKET'),
       r2AccessKeyId: reqEnv('R2_ACCESS_KEY_ID'),

@@ -1,4 +1,4 @@
-// 콜드 아카이브 코어 — Supabase(PostgREST) → Cloudflare R2(S3 SigV4), 의존성 0.
+// 콜드 아카이브 코어 — Postgres → Cloudflare R2(S3 SigV4). 표 읽기·지우기는 표의 소유 저장 모듈이 한다.
 // 이식 원본: 운영 절차 (2026-09-10 일회성 실행으로 검증된 로직).
 // 삭제는 업로드 검증(HEAD 바이트, 실패 시 GET 해시)을 통과한 뒤에만 수행한다.
 // CLI 요소(argv·.env 로더·process.exit)를 제거하고 값을 인자로 받는다 — cron 핸들러가 유일 소비처.
@@ -6,10 +6,12 @@ import { createHash, createHmac } from 'node:crypto';
 import { createGzip } from 'node:zlib';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
+import type { Executor } from './_db/client.js';
+import { deleteSavesByIds, savesByIds, savesMetaPage } from './_data/save.js';
+import { countEventsBefore, deleteEventsUpTo, eventsBefore } from './_data/telemetry.js';
 
 export interface ColdArchiveEnv {
-  supabaseUrl: string;
-  supabaseKey: string;
+  db: Executor;
   r2AccountId: string;
   r2Bucket: string;
   r2AccessKeyId: string;
@@ -51,29 +53,11 @@ export function selectSavesVictims(rows: SaveMetaRow[], keep: number, cutoff: st
   return victims;
 }
 
-// ---------- PostgREST (service role) ----------
-async function sb(env: ColdArchiveEnv, method: 'GET' | 'DELETE', qs: string) {
-  const res = await fetch(`${env.supabaseUrl}/rest/v1${qs}`, {
-    method,
-    headers: {
-      apikey: env.supabaseKey,
-      Authorization: `Bearer ${env.supabaseKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'count=exact',
-    },
-  });
-  if (!res.ok) throw new Error(`postgrest ${method} ${qs} → ${res.status} ${await res.text()}`);
-  const range = res.headers.get('content-range');
-  const total = range === null ? null
-    : range.split('/')[1] === '*' ? null : parseInt(range.split('/')[1] ?? 'NaN', 10);
-  const data = method === 'DELETE' ? [] : (await res.json()) as Record<string, unknown>[];
-  return { data, total: total !== null && Number.isNaN(total) ? null : total };
-}
-
-async function sbGetRetry(env: ColdArchiveEnv, qs: string, tries = 4) {
+/** 본문 조회 재시도 — 큰 블롭 묶음의 일시 실패를 흡수한다 */
+async function withRetry<T>(run: () => Promise<T>, tries = 4): Promise<T> {
   let last: unknown;
   for (let i = 0; i < tries; i++) {
-    try { return await sb(env, 'GET', qs); }
+    try { return await run(); }
     catch (e) { last = e; console.log(`retry ${i + 1}/${tries}`); await sleep(2000 * (i + 1)); }
   }
   throw last;
@@ -158,14 +142,13 @@ async function openStager(tmpDir: string, key: string) {
 // ---------- events: 단일 패스(id 오름차순) → 스테이징 → 업로드 검증 → 범위 DELETE ----------
 async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<TableResult> {
   const date = cutoff.slice(0, 10);
-  const { total: est } = await sb(env, 'GET', `/events?select=id&created_at=lt.${cutoff}&limit=1`);
-  console.log(`events 대상 약 ${est ?? '?'} rows`);
+  const est = await countEventsBefore(env.db, cutoff);
+  console.log(`events 대상 약 ${est} rows`);
   const tmpKey = `${env.r2Prefix}/events/created_lt_${date}/_tmp_${stamp()}.jsonl.gz`;
   const st = await openStager(env.tmpDir, tmpKey);
   let lastId = 0, minId: number | null = null, maxId = 0, n = 0;
   for (;;) {
-    const { data } = await sb(env, 'GET',
-      `/events?select=id,user_id,type,payload,created_at&created_at=lt.${cutoff}&id=gt.${lastId}&order=id&limit=${BATCH}`);
+    const data = await eventsBefore(env.db, cutoff, lastId, BATCH);
     if (data.length === 0) break;
     st.write(data);
     minId ??= Number(data[0].id);
@@ -185,9 +168,9 @@ async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<Table
   };
   await r2put(env, key, gz, 'application/gzip');
   await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-  const del = await sb(env, 'DELETE', `/events?id=lte.${maxId}&created_at=lt.${cutoff}`);
-  if (del.total !== null && del.total !== n) {
-    console.log(`events delete ${del.total} != archived ${n} — R2에 전량 있으므로 유실 없음`);
+  const deleted = await deleteEventsUpTo(env.db, maxId, cutoff);
+  if (deleted !== n) {
+    console.log(`events delete ${deleted} != archived ${n} — R2에 전량 있으므로 유실 없음`);
   }
   return { rows: n, r2Key: key };
 }
@@ -197,12 +180,10 @@ async function archiveSaves(env: ColdArchiveEnv, cutoff: string): Promise<TableR
   const order: SaveMetaRow[] = [];
   let off = 0;
   for (;;) {
-    const { data, total } = await sb(env, 'GET',
-      `/saves?select=id,user_id,updated_at&order=user_id,updated_at.desc&limit=${BATCH}&offset=${off}`);
-    order.push(...(data as unknown as SaveMetaRow[]));
+    const data = await savesMetaPage(env.db, BATCH, off);
+    order.push(...data);
     off += data.length;
     if (data.length < BATCH) break;
-    if (total !== null && off >= total) break;
   }
   const victims = selectSavesVictims(order, SAVES_KEEP, cutoff);
   console.log(`saves scanned ${order.length}, archive-target ${victims.length}`);
@@ -210,8 +191,7 @@ async function archiveSaves(env: ColdArchiveEnv, cutoff: string): Promise<TableR
   const key = `${env.r2Prefix}/saves/updated_lt_${cutoff.slice(0, 10)}_keep${SAVES_KEEP}/${stamp()}_n${victims.length}.jsonl.gz`;
   const st = await openStager(env.tmpDir, key);
   for (let i = 0; i < victims.length; i += SAVES_FETCH_CHUNK) {
-    const { data } = await sbGetRetry(env, `/saves?select=*&id=in.(${victims.slice(i, i + SAVES_FETCH_CHUNK).join(',')})`);
-    st.write(data);
+    st.write(await withRetry(() => savesByIds(env.db, victims.slice(i, i + SAVES_FETCH_CHUNK))));
   }
   const { raw, gz } = await st.finish();
   const manifest = {
@@ -221,7 +201,7 @@ async function archiveSaves(env: ColdArchiveEnv, cutoff: string): Promise<TableR
   await r2put(env, key, gz, 'application/gzip');
   await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
   for (let i = 0; i < victims.length; i += DEL_CHUNK) {
-    await sb(env, 'DELETE', `/saves?id=in.(${victims.slice(i, i + DEL_CHUNK).join(',')})`);
+    await deleteSavesByIds(env.db, victims.slice(i, i + DEL_CHUNK));
   }
   return { rows: victims.length, r2Key: key };
 }

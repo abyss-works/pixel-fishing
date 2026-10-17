@@ -1,5 +1,5 @@
 // cron 핸들러 규약 — 인증(CRON_SECRET bearer)·메서드 가드·성공 경로.
-// runArchive는 모킹한다(네트워크부는 스테이징 통합 QA — 스펙 5절).
+// runArchive는 모킹한다. DB·R2를 포함한 전체 흐름은 실제 Postgres 특성 테스트가 맡는다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../cold-archive.js', () => ({
@@ -41,8 +41,8 @@ describe('api/cron/archive 핸들러', () => {
   });
 
   it('시크릿 일치 + env 완비면 200 요약 응답', async () => {
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://s.example');
-    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'k');
+    // 접속 문자열만 있으면 된다 — runArchive가 모킹이라 실제 연결은 일어나지 않는다
+    vi.stubEnv('DATABASE_URL', 'postgres://user:pass@127.0.0.1:1/none');
     vi.stubEnv('R2_ACCOUNT_ID', 'a'); vi.stubEnv('R2_BUCKET', 'b');
     vi.stubEnv('R2_ACCESS_KEY_ID', 'i'); vi.stubEnv('R2_SECRET_ACCESS_KEY', 's');
     const res = mkRes();
@@ -53,7 +53,7 @@ describe('api/cron/archive 핸들러', () => {
   });
 
   it('env 누락이면 500 (Sentry 보고 경로 — DSN 없으면 무음)', async () => {
-    // VITE_SUPABASE_URL 미설정 상태(스텁 안 함)
+    // DATABASE_URL 미설정 상태(스텁 안 함)
     const res = mkRes();
     await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' } } as never, res as never);
     expect(res.statusCode).toBe(500);
