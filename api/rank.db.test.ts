@@ -86,11 +86,19 @@ describe('랭킹 읽기 함수', () => {
     });
   });
 
-  it('어종별 월척: 어종마다 가장 큰 크기와 주인. 제재 계정은 빠진다', async () => {
-    const res = await callRank({ board: 'biggest' }, userToken(a));
-    const species = (res.body as { species: { fishId: string; size: number; nickname: string; me: boolean }[] }).species;
-    expect(species.find(s => s.fishId === 'crucian')).toEqual({ fishId: 'crucian', size: 50, nickname: '가', me: true });
-    expect(species.find(s => s.fishId === 'carp')).toEqual({ fishId: 'carp', size: 50, nickname: '나', me: false });
-    expect(species.every(s => s.size !== 999)).toBe(true);
+  it('어종 순위: 그 어종의 사람별 가장 큰 크기 순. 어종이 없거나 모르면 400, 제재 계정은 빠진다', async () => {
+    expect((await callRank({ board: 'species' })).status).toBe(400);
+    expect((await callRank({ board: 'species', fish: 'no-such-fish' })).status).toBe(400);
+    const res = await callRank({ board: 'species', fish: 'crucian' }, userToken(c));
+    expect(res.body).toEqual({
+      board: 'species',
+      fishId: 'crucian',
+      top: [
+        { rank: 1, nickname: '가', value: 50, me: false },
+        { rank: 2, nickname: '다', value: 40, me: true },
+        { rank: 3, nickname: '나', value: 10, me: false },
+      ],
+      me: { rank: 2, value: 40 },
+    });
   });
 });
