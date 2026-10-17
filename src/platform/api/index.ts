@@ -23,7 +23,7 @@ export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
-  RankingBoardId, RankingRow, RankingBoard, RankingBiggestRow, RankingBiggest,
+  RankingBoardId, RankingRow, RankingBoard,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow,

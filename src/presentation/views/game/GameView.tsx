@@ -21,6 +21,7 @@ import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import RankingModal from '../overlays/ranking/RankingModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
@@ -56,6 +57,7 @@ export default function GameView(props: GameViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export default function GameView(props: GameViewProps) {
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
     setActionPanel(null);
     setStatsOpen(false);
+    setRankingOpen(false);
     setTracking(null);
     props.onScene(nextScene, message, entryPos);
   };
@@ -82,6 +85,10 @@ export default function GameView(props: GameViewProps) {
       case 'dex':
         setActionPanel(null);
         setActiveTab('dex');
+        return;
+      case 'rank':
+        setActionPanel(null);
+        setRankingOpen(true);
         return;
       case 'exit':
         go({ kind: 'region', id: pack.region }, pack.exitMsg, pack.exitAt);
@@ -133,6 +140,7 @@ export default function GameView(props: GameViewProps) {
                       region={region}
                       onClose={() => setStatsOpen(false)} />
         )}
+        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}

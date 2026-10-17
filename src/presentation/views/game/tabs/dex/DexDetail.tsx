@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Fish, GameState } from '../../../../../game/rules/logic';
 import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
-import { biggestHolder } from '../../../../../features/ranking/model/ranking';
-import { useRankingBiggest } from '../../../../../features/ranking/service/useRanking';
+import { useSpeciesRanking } from '../../../../../features/ranking/service/useRanking';
+import RankList from '../../../../ui/RankList';
+import Subheading from '../../../../ui/Subheading';
+import RankingStatus from '../../../overlays/ranking/RankingStatus';
 import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
 import FishSprite from '../../../../ui/fish/FishSprite';
@@ -21,9 +23,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   const forms = selectDexDetailData(game, fish);
   const [i, setI] = useState(initialForm);
   const form = forms[i];
-  // 월척 기록 — 폼과 무관하게 어종 단위다. 랭킹이 없는 로컬 모드에서는 줄을 숨긴다
-  const biggest = useRankingBiggest();
-  const holder = biggestHolder(biggest.species, fish.id);
+  // 어종 크기 순위 — 폼과 무관하게 어종 단위다. 랭킹이 없는 로컬 모드에서는 구역을 숨긴다
+  const ranking = useSpeciesRanking(fish.id);
 
   return (
     <Modal onClose={onClose}>
@@ -58,15 +59,18 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
             : '???'}</span>
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
-          {!biggest.offline && (
-            <>
-              <span className="text-text-dim">월척 기록</span>
-              <span>{holder
-                ? <>{holder.size.toFixed(1)}cm · {holder.nickname ?? '이름 없음'}{holder.me && <span className="text-accent"> (나)</span>}</>
-                : biggest.loading ? '…' : '기록 없음'}</span>
-            </>
-          )}
         </div>
+        {!ranking.offline && (
+          <div className="mt-3">
+            <Subheading>크기 순위</Subheading>
+            <RankingStatus loading={ranking.loading} failed={ranking.failed} offline={false}
+                           empty={!!ranking.data && ranking.data.top.length === 0} />
+            {ranking.data && ranking.data.top.length > 0 && (
+              <RankList rows={ranking.data.top} me={ranking.data.me} valueLabel="크기"
+                        format={v => `${v.toFixed(1)}cm`} />
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   );

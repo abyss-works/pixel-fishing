@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FISH } from '../../../../game/rules/logic';
 
 const state = vi.hoisted(() => ({ result: null as unknown }));
 vi.mock('../../../../platform/api', async importOriginal => {
@@ -38,12 +37,11 @@ describe('랭킹 창', () => {
     expect(screen.queryByText(/내 순위/)).not.toBeInTheDocument();
   });
 
-  it('월척 탭은 어종 이름과 크기·주인을 보여 준다', async () => {
-    state.result = { board: 'biggest', species: [{ fishId: FISH[0].id, size: 12.34, nickname: '가', me: false }] };
+  it('도감 탭은 발견 어종 수로 보여 준다', async () => {
+    state.result = { board: 'dex', top: [{ rank: 1, nickname: '가', value: 42, me: false }], me: null };
     show();
-    fireEvent.click(screen.getByRole('button', { name: '월척' }));
-    expect(await screen.findByText('12.3cm')).toBeInTheDocument();
-    expect(screen.getByText(FISH[0].name, { exact: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '도감' }));
+    expect(await screen.findByText('42종')).toBeInTheDocument();
   });
 
   it('로컬 모드(조회 결과 없음)는 온라인 안내를 띄운다', async () => {

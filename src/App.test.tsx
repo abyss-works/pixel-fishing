@@ -88,6 +88,17 @@ afterEach(() => {
 
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
 
+describe('마을 랭킹 게시판', () => {
+  it('게시판 클릭 → 명성·도감 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
+    seed({});
+    render(<App />);
+    clickFurniture('rank');
+    expect(screen.getByRole('button', { name: '명성' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '도감' })).toBeInTheDocument();
+    expect(await screen.findByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument();
+  });
+});
+
 describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 선택)', () => {
   it('궤짝 클릭 → 기본 전부 체크 → 판매 확정 시 골드 증가', () => {
     seed({ bag: [inst('carp'), inst('carp')] }); // 잉어 30G × 2
