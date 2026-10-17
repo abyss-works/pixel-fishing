@@ -43,11 +43,10 @@ export interface StorageApi {
 }
 
 /** 랭킹 — 서버 읽기 함수의 응답. 닉네임·순위·값만 담긴다 */
-export type RankingBoardId = 'fame' | 'dex' | 'biggest';
+export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
-export interface RankingBoard { board: 'fame' | 'dex'; top: RankingRow[]; me: { rank: number; value: number } | null }
-export interface RankingBiggestRow { fishId: string; size: number; nickname: string | null; me: boolean }
-export interface RankingBiggest { board: 'biggest'; species: RankingBiggestRow[] }
+/** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
+export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }
 
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }

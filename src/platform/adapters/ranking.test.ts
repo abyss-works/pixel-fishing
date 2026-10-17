@@ -23,11 +23,11 @@ describe('readRanking', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/rank?board=fame', { headers: { authorization: 'Bearer tok' } });
   });
 
-  it('세션이 없으면 토큰 없이 읽는다', async () => {
+  it('세션이 없으면 토큰 없이 읽고, 어종 순위는 어종 id를 붙인다', async () => {
     state.session = null;
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ board: 'biggest', species: [] }), { status: 200 }));
-    await readRanking('biggest');
-    expect(fetchMock).toHaveBeenCalledWith('/api/rank?board=biggest', { headers: {} });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ board: 'species', fishId: 'carp', top: [], me: null }), { status: 200 }));
+    await readRanking('species', 'carp');
+    expect(fetchMock).toHaveBeenCalledWith('/api/rank?board=species&fish=carp', { headers: {} });
   });
 
   it('실패 응답은 오류로 던진다', async () => {

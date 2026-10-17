@@ -3,15 +3,15 @@
 // 그 밖의 실패는 null로 숨기지 않고 던진다(조회가 다시 시도한다).
 import { AppError } from '../../core/errors';
 import { supabase } from './auth';
-import type { RankingBiggest, RankingBoard } from '../api/types';
+import type { RankingBoard, RankingBoardId } from '../api/types';
 
-export async function readRanking(board: 'fame' | 'dex'): Promise<RankingBoard | null>;
-export async function readRanking(board: 'biggest'): Promise<RankingBiggest | null>;
-export async function readRanking(board: 'fame' | 'dex' | 'biggest'): Promise<RankingBoard | RankingBiggest | null> {
+/** board가 species면 fishId 어종의 순위다 */
+export async function readRanking(board: RankingBoardId, fishId?: string): Promise<RankingBoard | null> {
   if (!supabase) return null;
   const { data: { session } } = await supabase.auth.getSession();
   const headers: Record<string, string> = session ? { authorization: `Bearer ${session.access_token}` } : {};
-  const res = await fetch(`/api/rank?board=${board}`, { headers });
+  const query = board === 'species' ? `board=species&fish=${encodeURIComponent(fishId ?? '')}` : `board=${board}`;
+  const res = await fetch(`/api/rank?${query}`, { headers });
   if (!res.ok) throw new AppError('network', 'ranking read failed', { status: res.status });
-  return await res.json() as RankingBoard | RankingBiggest;
+  return await res.json() as RankingBoard;
 }

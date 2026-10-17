@@ -14,6 +14,8 @@ export const HOME: BasePack = {
       label: i => `작업대 · 낚싯대 Lv.${i.rod}`, labelDy: -10 },
     { id: 'sell', x: 200, y: 94,  w: 44, h: 32, sprite: 'chest',
       label: () => '판매 궤짝', labelDy: -4 },
+    { id: 'rank', x: 84,  y: 30,  w: 40, h: 30, sprite: 'board',
+      label: () => '게시판 · 랭킹', labelDy: -4 },
     { id: 'exit', x: 272, y: 104, w: 34, h: 56, sprite: 'door',
       label: () => '문 · 마을로', labelDy: -4 },
   ],
