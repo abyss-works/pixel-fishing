@@ -27,9 +27,23 @@ describe('자원 바', () => {
     expect(hud()).toMatch(/수주\/토벌 01$/);
   });
 
-  it('골드·명성은 네 자리 줄임 표기다', () => {
+  it('골드·명성은 단위 없이 줄임 표기다', () => {
     render(<ResourceBar game={{ ...newState(), gold: 1_534_000, fame: 12_345 }} />);
-    expect(hud()).toContain('골드 1MG');
-    expect(hud()).toContain('명성 12K');
+    expect(hud()).toContain('골드 1.5M');
+    expect(hud()).toContain('명성 12.3K');
+  });
+
+  it('가방은 수량과 채움 비율을 보이고, 75% 이상이면 주황·95% 이상이면 빨강 계열이다', () => {
+    const fish = (i: number) => ({ uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
+      caughtAt: null, spot: null, judgment: null, locked: false });
+    const bagValue = () => screen.getByText('가방', { exact: false }).parentElement!.lastElementChild!;
+    const { rerender } = render(<ResourceBar game={{ ...newState(), boat: 0, bag: [] }} />);
+    expect(hud()).toContain('가방 0 (0%)');
+    expect(bagValue().className).toContain('text-gold');
+    rerender(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 45 }, (_, i) => fish(i)) }} />);
+    expect(hud()).toContain('가방 45 (75%)');
+    expect(bagValue().className).toContain('text-orange');
+    rerender(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 57 }, (_, i) => fish(i)) }} />);
+    expect(bagValue().className).toContain('text-danger');
   });
 });

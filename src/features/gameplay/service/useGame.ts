@@ -104,6 +104,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     (async () => {
       const uid = await api.auth.ensureSession();
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
+      // 세션이 선 뒤 수배 스냅샷을 다시 읽는다 — 마운트 직후의 조회는 세션 전이라 실패했을 수 있다.
+      void client.invalidateQueries({ queryKey: ['bounty'] });
       const cloud = await gameGatewayRef.current.load();
       if (cloud) {
         setGame(cloud);

@@ -8,13 +8,21 @@ import { BAITS } from '../../../game/content/baits';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
 
-export interface BagStatus { count: number; cap: number; full: boolean }
+/** 가방 채움 경고 단계 — 이 비율(%) 이상이면 warn·danger */
+export const BAG_WARN_PERCENT = 75;
+export const BAG_DANGER_PERCENT = 95;
 
-/** 가방 현황 — count/cap/full을 한 번에. 래칫 상한은 bagCapacity가 정한다. */
+export type BagLevel = 'normal' | 'warn' | 'danger';
+export interface BagStatus { count: number; cap: number; full: boolean; percent: number; level: BagLevel }
+
+/** 가방 현황 — 수량·상한·비율(내림 정수 %)·경고 단계를 한 번에. 래칫 상한은 bagCapacity가 정한다. */
 export function selectBagStatus(game: GameState): BagStatus {
   const count = game.bag.length;
   const cap = bagCapacity(game.boat, game.bag);
-  return { count, cap, full: count >= cap };
+  const percent = cap > 0 ? Math.floor(count / cap * 100) : 0;
+  const level: BagLevel = percent >= BAG_DANGER_PERCENT ? 'danger'
+    : percent >= BAG_WARN_PERCENT ? 'warn' : 'normal';
+  return { count, cap, full: count >= cap, percent, level };
 }
 
 export interface BagOverview extends BagStatus {

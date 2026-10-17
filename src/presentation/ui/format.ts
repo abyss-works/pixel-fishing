@@ -4,12 +4,14 @@ export const fmtNum = (n: number): string => n.toLocaleString('ko-KR');
 export const fmtGold = (n: number): string => `${fmtNum(n)}G`;
 
 const COMPACT_UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const;
-/** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T로 네 자리 이내.
+/** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
  *  단위 아래는 버린다(가진 것보다 많아 보이지 않게). 정확한 값이 필요한 가격·잔액에는 쓰지 않는다. */
 export function fmtCompact(n: number): string {
   if (Math.abs(n) < 10_000) return fmtNum(n);
   const [size, unit] = COMPACT_UNITS.find(([s]) => Math.abs(n) >= s)!;
-  return `${Math.trunc(n / size)}${unit}`;
+  // 단위의 1/10로 먼저 나눈다 — 정수끼리 나눠야 2.3M이 부동소수 오차로 2.2M이 되지 않는다
+  const tenths = Math.trunc(n / (size / 10));
+  return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)}${unit}`;
 }
 /** 남은 시간 — 분 단위를 "1시간 52분"/"52분"으로. 0 이하는 "1분 미만" */
 export function fmtMinutes(min: number): string {

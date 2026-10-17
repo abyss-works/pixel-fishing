@@ -1,6 +1,9 @@
 // 바운티 헌팅 읽기 — 수배판 표시용 스냅샷 (RLS 본인 읽기).
 // 표시용 조회라 게임 액션 경로를 타지 않는다.
 // supabase 미설정(로컬 dev·테스트)이면 null — 패널이 오프라인 안내를 띄운다.
+// 그 밖의 실패는 null로 숨기지 않고 던진다. null은 "오프라인"이라는 뜻이라, 실패를 null로 바꾸면
+// 조회가 다시 시도하지 않고 화면이 수주 정보를 잃은 채 머문다.
+import { AppError } from '../../core/errors';
 import { supabase } from './auth';
 import { bountyById } from '../../game/content/bounties.js';
 import type { BountySnapshot } from '../api/types';
@@ -17,6 +20,10 @@ const kstDayStartISO = (): string => {
 
 export async function readBounty(): Promise<BountySnapshot | null> {
   if (!supabase) return null;
+  // 세션부터 확정한다 — 저장된 토큰의 갱신을 여기서 한 번 끝내고 네 조회가 같은 토큰을 쓴다.
+  // 세션이 아직 없으면(부트스트랩의 익명 로그인 전) 익명 권한의 빈 결과를 진실로 삼지 않는다.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new AppError('unauthorized', 'bounty read before session');
   const dayStart = kstDayStartISO();
   const [lic, acc, prog, tick] = await Promise.all([
     supabase.from('bounty_licenses').select('zone'),
@@ -24,7 +31,8 @@ export async function readBounty(): Promise<BountySnapshot | null> {
     supabase.from('bounty_progress').select('quest_id, progress'),
     supabase.from('bounty_tickets').select('quest_id, issued_at'),
   ]);
-  if (lic.error || acc.error || prog.error || tick.error) return null;
+  const failed = [lic, acc, prog, tick].find(r => r.error);
+  if (failed?.error) throw new AppError('network', 'bounty read failed', { message: failed.error.message });
   const rows = (acc.data ?? []) as { quest_id: string }[];
   const general = rows.filter(a => bountyById(a.quest_id)?.difficulty !== 'named');
   return {
