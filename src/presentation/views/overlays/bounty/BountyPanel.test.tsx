@@ -113,7 +113,7 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('???')).toBeInTheDocument();
     expect(screen.getByText(/걷어 올린 그물은/)).toBeInTheDocument();
-    expect(screen.getByText(/400000G/)).toBeInTheDocument();
+    expect(screen.getByText(/400,000G/)).toBeInTheDocument();
   });
 
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {

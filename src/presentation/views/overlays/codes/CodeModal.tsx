@@ -8,6 +8,7 @@ import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
+import { fmtGold } from '../../../ui/format';
 
 type Dispatch = (a: GameAction) => MaybePromise<DispatchResult>;
 
@@ -54,7 +55,7 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   const redeemCoupon = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'redeemCoupon', code }), r => {
       if (r.status === 'ok' && r.result.type === 'coupon') {
-        setToast(`쿠폰 사용! +${r.result.gold}G — ${r.result.desc}`);
+        setToast(`쿠폰 사용! +${fmtGold(r.result.gold)} — ${r.result.desc}`);
         done(true);
       } else {
         if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);

@@ -1,8 +1,11 @@
+import { Fragment } from 'react';
 import type { ReactNode } from 'react';
 import { boatNameOf } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { BOUNTY_DAILY_CAP } from '../../../game/rules/balance';
 import { useBounty } from '../../../features/bounty/service/useBounty';
+import { acceptsLeft } from '../../../features/bounty/model/panel';
+import Divider from '../Divider';
+import { fmtCompact } from '../format';
 import PixelIcon from '../PixelIcon';
 import type { GlyphId } from '../PixelIcon';
 
@@ -18,6 +21,10 @@ import type { GlyphId } from '../PixelIcon';
 // 곳에 두면 한쪽만 고쳐질 때 갈라진다.
 //
 // 자원 기호는 이모지 대신 픽셀 아이콘(PixelIcon) — v0.4.1 이모지 폐지.
+//
+// **골드·명성은 네 자리 줄임 표기(fmtCompact)** — 값이 커져도 칸 폭이 거의 그대로다.
+// **칸은 처음부터 모두 그린다** — 서버 값(수주/토벌)이 아직 없으면 자리만 두고 "–"를 보인다.
+// 늦게 도착한 칸이 끼어들며 바 전체가 늘어나지 않게 하려는 것이다.
 function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; children: ReactNode }) {
   return (
     <span className="flex flex-col items-center justify-center gap-1 whitespace-nowrap">
@@ -31,27 +38,40 @@ function Stat({ glyph, label, children }: { glyph: GlyphId; label: string; child
   );
 }
 
+const UNKNOWN = '–';
+
 export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
-  // 남은 수주권 — 서버(DB)가 진실이라 액션마다 다시 읽는다(game 참조 변경이 트리거).
-  // 오프라인이면 칸 자체를 숨긴다 (0으로 보이면 거짓말이다).
+  // 남은 수주(일반)·토벌(네임드) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면
+  // 숫자 대신 "–"를 둔다 (0으로 보이면 거짓말이다).
   const { snap } = useBounty();
-  const tickets = snap ? BOUNTY_DAILY_CAP - snap.acceptsToday : null;
+  const left = acceptsLeft(snap);
+  const stats = [
+    <Stat key="gold" glyph="coin" label="골드"><b className="font-bold">{fmtCompact(game.gold)}</b>G</Stat>,
+    <Stat key="fame" glyph="star" label="명성"><b className="font-bold">{fmtCompact(game.fame)}</b></Stat>,
+    <Stat key="bag" glyph="fish" label="가방"><b className="font-bold">{game.bag.length}</b>마리</Stat>,
+    <Stat key="boat" glyph="boat" label="배">{boatNameOf(game.boat)}</Stat>,
+    <Stat key="rod" glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>,
+    <Stat key="bounty" glyph="ticket" label="수주/토벌">
+      <span className="inline-flex items-center gap-1.5">
+        <b className="font-bold">{left?.general ?? UNKNOWN}</b>
+        <Divider vertical />
+        <b className="font-bold">{left?.named ?? UNKNOWN}</b>
+      </span>
+    </Stat>,
+  ];
   return (
     <div className="absolute top-3 left-3 z-(--z-overlay) max-w-[calc(100%-24px)]
                     bg-bg/72 backdrop-blur-[4px] border-2 border-line pf-notch pf-bevel
                     px-4 py-2 text-shadow-hud">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label="스탯창 열기" onClick={onOpen}
-              className="hud flex items-stretch gap-4 cursor-pointer transition hover:brightness-125
-                         [&>span+span]:border-l [&>span+span]:border-line [&>span+span]:pl-4">
-        <Stat glyph="coin" label="골드"><b className="font-bold">{game.gold}</b>G</Stat>
-        <Stat glyph="star" label="명성"><b className="font-bold">{game.fame}</b></Stat>
-        <Stat glyph="fish" label="가방"><b className="font-bold">{game.bag.length}</b>마리</Stat>
-        <Stat glyph="boat" label="배">{boatNameOf(game.boat)}</Stat>
-        <Stat glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>
-        {tickets !== null && (
-          <Stat glyph="ticket" label="수주권"><b className="font-bold">{tickets}</b></Stat>
-        )}
+              className="hud flex items-stretch gap-4 cursor-pointer transition hover:brightness-125">
+        {stats.map((stat, i) => (
+          <Fragment key={stat.key}>
+            {i > 0 && <Divider vertical />}
+            {stat}
+          </Fragment>
+        ))}
       </button>
     </div>
   );

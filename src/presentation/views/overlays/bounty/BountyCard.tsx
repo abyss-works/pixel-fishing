@@ -7,6 +7,7 @@ import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { DIFFICULTY_NAME } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import { RarityText } from '../../../ui/fish/RarityTag';
+import { fmtGold } from '../../../ui/format';
 
 const DIFF_HEAD: Record<string, string> = {
   easy: 'text-text-dim', normal: 'text-accent', hard: 'text-orange',
@@ -33,7 +34,7 @@ export default function BountyCard({ quest, progress, accepted, canAccept, busy,
         <span className="text-text-dim">x {quest.count}</span>
       </span>
       <div className="border-b border-line" />
-      <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
+      <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
       {accepted && (
         <span className="text-accent text-xs">진행 중 · <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span></span>
       )}

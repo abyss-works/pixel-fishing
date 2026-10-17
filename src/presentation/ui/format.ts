@@ -2,6 +2,15 @@
 // 관리자 대시보드의 만/억 축약(fmtNum)과는 성격이 달라 따로 둔다.
 export const fmtNum = (n: number): string => n.toLocaleString('ko-KR');
 export const fmtGold = (n: number): string => `${fmtNum(n)}G`;
+
+const COMPACT_UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const;
+/** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T로 네 자리 이내.
+ *  단위 아래는 버린다(가진 것보다 많아 보이지 않게). 정확한 값이 필요한 가격·잔액에는 쓰지 않는다. */
+export function fmtCompact(n: number): string {
+  if (Math.abs(n) < 10_000) return fmtNum(n);
+  const [size, unit] = COMPACT_UNITS.find(([s]) => Math.abs(n) >= s)!;
+  return `${Math.trunc(n / size)}${unit}`;
+}
 /** 남은 시간 — 분 단위를 "1시간 52분"/"52분"으로. 0 이하는 "1분 미만" */
 export function fmtMinutes(min: number): string {
   if (min < 1) return '1분 미만';
