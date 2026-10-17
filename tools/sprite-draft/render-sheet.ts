@@ -1,5 +1,5 @@
 // 시안 시트 CLI — 어종 하나를 제품과 같은 규칙(팔레트·링·프리셋 배율)으로 PNG에 그린다.
-// 사용: npx vite-node tools/sprite-draft/render-sheet.ts <fishId> <out.png>
+// 사용: pnpm exec tsx tools/sprite-draft/render-sheet.ts <fishId> <out.png>
 // 행: 일반 · 변이 · 미발견 · (원화 격자가 있으면) 형태 격자 비교. 열: 1× · 3× · 4× · 6×.
 import { writeFileSync } from 'node:fs';
 import { FISH } from '../../src/game/content/fish';
