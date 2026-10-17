@@ -42,7 +42,7 @@ const RAW_HEADING_EXCEPTIONS = new Set([
 /** 이야기(스토리) 없이 둘 수 있는 공용 UI — 게임 상태가 있어야 그려지는 HUD와 저수준 캔버스뿐이다 */
 const STORY_EXCEPTIONS = new Set([
   'ui/SpriteCanvas.tsx',
-  'ui/hud/CatchCard.tsx', 'ui/hud/MessageLog.tsx', 'ui/hud/NightOverlay.tsx',
+  'ui/hud/CatchCard.tsx', 'ui/hud/NightOverlay.tsx',
   'ui/hud/ResourceBar.tsx', 'ui/hud/TimeBadge.tsx',
 ]);
 
