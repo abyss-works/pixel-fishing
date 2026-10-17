@@ -8,7 +8,8 @@ const GLYPHS: GlyphId[] = [
   'sun', 'moon',
   'lock', 'lockOpen', 'checkOn', 'checkOff', 'checkPartial',
   'caretRight', 'caretDown',
-  'letter', 'key', 'ticket', 'download', 'upload', 'exit',
+  'letter', 'key', 'ticket', 'download', 'upload', 'exit', 'close',
+  'plus', 'minus',
 ];
 
 const meta: Meta<typeof PixelIcon> = {

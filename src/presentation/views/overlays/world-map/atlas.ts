@@ -13,6 +13,8 @@ import { compileMap, zoneLabelAnchors } from '../../../../game/world/mask';
 import { drawMaskTerrain } from '../../../../game/rendering/pixel/sprites/mask.js';
 import type { CompiledMap, Point, Rect } from '../../../../game/world/types';
 import { WORLD_LEGEND } from '../../../../game/world/regions/world';
+import { FULL_VIEW, toScreen } from './mapView';
+import type { MapView } from './mapView';
 import { WINDOW as EARTH_WINDOW, COLS as E_COLS, ROWS as E_ROWS, CELL_W as E_CW, CELL_H as E_CH,
   MASK_ROWS as EARTH_MASK_ROWS } from '../../../../game/world/regions/generated/earth.mask';
 import { WINDOW as WORLD_WINDOW, COLS as W_COLS, ROWS as W_ROWS, CELL_W as W_CW, CELL_H as W_CH,
@@ -68,14 +70,15 @@ export function renderAtlasBase(ctx: Ctx, earth: CompiledMap): void {
 }
 
 /** 동적 레이어 — 경계선·구역 라벨·항구·점멸 점 (프레임마다, base 위에 얹는다).
- *  player는 world 팩 좌표(마을이면 null — 마을 좌표는 경위도가 없다). */
+ *  player는 world 팩 좌표(마을이면 null — 마을 좌표는 경위도가 없다).
+ *  view는 확대·이동 상태다. 위치만 보기 상태로 옮기고 글자·점 크기는 그대로 둬 확대해도 읽힌다. */
 export function renderAtlasOverlay(
-  ctx: Ctx, worldMap: CompiledMap, player: Point | null, t: number,
+  ctx: Ctx, worldMap: CompiledMap, player: Point | null, t: number, view: MapView = FULL_VIEW,
 ): void {
   const s = ctx.canvas.width / EARTH_W;
   const toDisplay = (p: Point): Point => {
     const e = worldToEarth(p.x, p.y);
-    return { x: e.x * s, y: e.y * s };
+    return toScreen(view, e.x * s, e.y * s);
   };
 
   // 구현 영역 경계선 — "지금의 세계"가 지구에서 차지하는 자리
@@ -83,7 +86,8 @@ export function renderAtlasOverlay(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.strokeStyle = 'rgba(255,213,79,0.55)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(win.x * s + 0.5, win.y * s + 0.5, win.w * s - 1, win.h * s - 1);
+  const tl = toScreen(view, win.x * s, win.y * s);
+  ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, win.w * s * view.scale - 1, win.h * s * view.scale - 1);
 
   // 구역 라벨 — world 마스크의 라벨 문자 앵커(태평양/동남아&오세아니아/인도양/마다가스카르)를 표시 스케일로
   ctx.textAlign = 'center';
