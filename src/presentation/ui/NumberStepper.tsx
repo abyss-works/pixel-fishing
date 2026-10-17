@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cx } from './cx';
+import { FIELD_BOX } from './fieldStyle';
+import PixelIcon from './PixelIcon';
 
 type Variant = 'inline' | 'side';
 
@@ -86,10 +88,10 @@ export default function NumberStepper({
   if (variant === 'side') {
     return (
       <span className={cx('inline-flex items-center gap-1.5', className)}>
-        <span className="min-w-8 py-1.5 px-2 rounded-sm border border-line bg-bg">
+        <span className={cx(FIELD_BOX, 'min-w-8 py-1.5 px-2 focus-within:border-accent')}>
           {input}
         </span>
-        <span className="inline-flex overflow-hidden rounded-sm border border-line bg-bg">
+        <span className={cx(FIELD_BOX, 'inline-flex overflow-hidden')}>
           <button
             type="button"
             aria-label={ariaLabel ? `${ariaLabel} 수량 감소` : '수량 감소'}
@@ -97,7 +99,7 @@ export default function NumberStepper({
             onClick={dec}
             className={cx(btnBase, 'border-r border-line')}
           >
-            −
+            <PixelIcon glyph="minus" size={8} />
           </button>
           <button
             type="button"
@@ -106,7 +108,7 @@ export default function NumberStepper({
             onClick={inc}
             className={btnBase}
           >
-            +
+            <PixelIcon glyph="plus" size={8} />
           </button>
         </span>
       </span>
@@ -115,7 +117,7 @@ export default function NumberStepper({
 
   // inline — [−] [값] [+] 한 박스
   return (
-    <span className={cx('inline-flex items-center overflow-hidden rounded-sm border border-line bg-bg', className)}>
+    <span className={cx(FIELD_BOX, 'inline-flex items-center overflow-hidden focus-within:border-accent', className)}>
       <button
         type="button"
         aria-label={ariaLabel ? `${ariaLabel} 수량 감소` : '수량 감소'}
@@ -123,7 +125,7 @@ export default function NumberStepper({
         onClick={dec}
         className={btnBase}
       >
-        −
+        <PixelIcon glyph="minus" size={8} />
       </button>
       <span className="w-9 border-x border-line py-1 flex justify-center">
         {input}
@@ -135,7 +137,7 @@ export default function NumberStepper({
         onClick={inc}
         className={btnBase}
       >
-        +
+        <PixelIcon glyph="plus" size={8} />
       </button>
     </span>
   );
