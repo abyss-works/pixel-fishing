@@ -337,12 +337,12 @@ async function route(req: Req, res: Res): Promise<void> {
       instances = again.instances ?? [];
       records = again.records ?? [];
     } else {
-      // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다.
-      // 도감은 비운 채 조립한다(시딩 직후 액션은 저장된 도감 없이 처리해 온 동작을 유지한다).
+      // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다(개체·도감 포함).
       row = { data: stateRow(seed).data, version: 1,
               gold: seed.gold, fame: seed.fame, boat: seed.boat, rod: seed.rod };
       instances = seed.bag.map(i => instRow(uid, i, null) as InstanceRow);
-      records = [];
+      records = Object.entries(seed.dex).flatMap(([fishId, forms]) => Object.entries(forms).flatMap(([form, rec]) =>
+        rec ? [{ fish_id: fishId, form, count: rec.count, max_size: rec.maxSize, first_caught: rec.first }] : []));
     }
   }
 

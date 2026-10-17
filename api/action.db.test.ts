@@ -393,3 +393,23 @@ describe('개발 명령', () => {
     }).toMatchSnapshot();
   });
 });
+
+describe('첫 액션 시딩 뒤 도감', () => {
+  it('구 saves에서 시딩한 첫 캐치는 시딩한 도감 횟수를 이어 센다', async () => {
+    const uid = await seed();
+    const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
+    for (const id of ['crucian', 'minnow', 'loach', 'carp', 'goldfish']) dex[id] = { normal: { count: 3, maxSize: 99, first: '2026-01-02' } };
+    await env.client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)', [uid, {
+      v: 8, gold: 0, fame: 0, boat: 0, rod: 1, bag: [], exhibit: [], dex,
+      coupons: [], location: at('home'), visited: [], artifacts: [], items: {}, activeBait: null,
+    }, '2026-01-03T00:00:00.000Z']);
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const { rows } = await env.client.query<{ fish_id: string; count: string }>(
+      `select fish_id, count from public.records where user_id = $1 and form = 'normal'`, [uid]);
+    // 잡힌 어종(일반 폼이면)은 3 → 4, 나머지는 시딩 값 3 그대로다. 변이로 잡혔으면 일반 폼 행은 전부 3이다
+    const counts = rows.map(r => Number(r.count)).sort();
+    expect(counts.every(c => c === 3 || c === 4)).toBe(true);
+    expect(counts.filter(c => c === 1)).toEqual([]);
+  });
+});

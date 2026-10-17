@@ -22,7 +22,7 @@ describe('자원 바', () => {
   });
 
   it('서버 값이 있으면 남은 일반 수주와 네임드 토벌을 나란히 보인다', () => {
-    snap = { licensed: [], acceptsToday: 1, namedToday: 0, progress: [], tickets: [] };
+    snap = { acceptsToday: 1, namedToday: 0, progress: [], tickets: [] };
     render(<ResourceBar game={newState()} />);
     expect(hud()).toMatch(/수주\/토벌 01$/);
   });

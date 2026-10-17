@@ -6,7 +6,7 @@
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버의 import 그래프에 포함된다.
 import type { RarityId } from './rarity.js';
 
-export type BaitTarget = Exclude<RarityId, 'junk'>;
+export type BaitTarget = RarityId;
 
 export interface Bait {
   id: string;               // items/activeBait 키 — 등급 개편과 무관한 고정 신분증

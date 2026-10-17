@@ -12,7 +12,7 @@ describe('의뢰 화면 데이터', () => {
     const quest = dailyQuestFor('pacific', 'easy', uid, day)!;
     const namedQuest = dailyQuestFor('pacific', 'named', uid, day)!;
     const snapshot = {
-      licensed: [], acceptsToday: 1, namedToday: 1,
+      acceptsToday: 1, namedToday: 1,
       progress: [{ questId: quest.id, progress: 3 }],
       tickets: [{ questId: namedQuest.id, issuedAt: '2026-10-13T00:00:00.000Z' }],
     };
@@ -38,7 +38,7 @@ describe('의뢰 화면 데이터', () => {
     const other = dailyQuestFor('pacific', 'normal', uid, day)!;
     const data = selectBountyPanelData({
       game, port: 'harbor', uid, day, nowMs: Date.parse('2026-10-13T00:01:00.000Z'),
-      snapshot: { licensed: [], acceptsToday: 1, namedToday: 0, progress: [{ questId: quest.id, progress: 0 }], tickets: [] },
+      snapshot: { acceptsToday: 1, namedToday: 0, progress: [{ questId: quest.id, progress: 0 }], tickets: [] },
     });
     expect(data.isAccepted(quest.id)).toBe(true);
     expect(data.progressOf(quest.id)).toBe(0);
@@ -69,7 +69,7 @@ describe('의뢰 이름 — 토스트·안내에 쓰는 사람이 읽는 이름'
 
 describe('오늘 남은 수주 횟수', () => {
   it('일반 수주와 네임드 토벌을 따로 센다', () => {
-    const snapshot = { licensed: [], acceptsToday: 1, namedToday: 0, progress: [], tickets: [] };
+    const snapshot = { acceptsToday: 1, namedToday: 0, progress: [], tickets: [] };
     expect(acceptsLeft(snapshot)).toEqual({
       general: BOUNTY_DAILY_CAP - 1, named: BOUNTY_NAMED_DAILY_CAP,
     });
