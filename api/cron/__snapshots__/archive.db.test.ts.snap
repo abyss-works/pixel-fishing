@@ -1,0 +1,134 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`콜드 아카이브 크론 > 컷오프 이전 events와 사용자별 최신 1행을 넘는 오래된 saves만 옮기고 지운다 1`] = `
+{
+  "left": {
+    "events": [
+      {
+        "created_at": "2030-03-03T05:06:07.000Z",
+        "type": "boot",
+        "user_id": "<user>",
+      },
+    ],
+    "saves": [
+      {
+        "data": {
+          "gold": 3,
+        },
+        "updated_at": "2030-02-22T05:06:07.000Z",
+        "user_id": "<user>",
+      },
+      {
+        "data": {
+          "gold": 5,
+        },
+        "updated_at": "2030-03-02T05:06:07.000Z",
+        "user_id": "<uuid>",
+      },
+    ],
+  },
+  "res": {
+    "body": {
+      "cutoff": "2030-02-25T05:06:07.000Z",
+      "events": {
+        "r2Key": "test/cold/events/created_lt_2030-02-25/2030-03-04T05-06-07Z_ids_1-3_n3.jsonl.gz",
+        "rows": 3,
+      },
+      "saves": {
+        "r2Key": "test/cold/saves/updated_lt_2030-02-25_keep1/2030-03-04T05-06-07Z_n3.jsonl.gz",
+        "rows": 3,
+      },
+    },
+    "status": 200,
+  },
+  "uploaded": [
+    {
+      "content": [
+        {
+          "created_at": "2030-02-22T05:06:07.000Z",
+          "payload": {
+            "at": "2030-02-22T05:06:07.000Z",
+          },
+          "type": "catch",
+          "user_id": "<user>",
+        },
+        {
+          "created_at": "2030-02-24T05:06:07.000Z",
+          "payload": {
+            "at": "2030-02-24T05:06:07.000Z",
+          },
+          "type": "sell",
+          "user_id": "<user>",
+        },
+        {
+          "created_at": "2030-02-23T05:06:07.000Z",
+          "payload": {
+            "at": "2030-02-23T05:06:07.000Z",
+          },
+          "type": "boot",
+          "user_id": "<uuid>",
+        },
+      ],
+      "key": "test/cold/events/created_lt_2030-02-25/2030-03-04T05-06-07Z_ids_1-3_n3.jsonl.gz",
+    },
+    {
+      "content": {
+        "at": "<now>",
+        "bytesGzip": "<bytes>",
+        "bytesRaw": 472,
+        "cutoff": "2030-02-25T05:06:07.000Z",
+        "idMax": 3,
+        "idMin": 1,
+        "r2Key": "test/cold/events/created_lt_2030-02-25/2030-03-04T05-06-07Z_ids_1-3_n3.jsonl.gz",
+        "rows": 3,
+        "sha256": "<sha256>",
+        "table": "events",
+      },
+      "key": "test/cold/events/created_lt_2030-02-25/2030-03-04T05-06-07Z_ids_1-3_n3.jsonl.gz.manifest.json",
+    },
+    {
+      "content": [
+        {
+          "data": {
+            "gold": 1,
+          },
+          "schema_version": null,
+          "updated_at": "2030-02-02T05:06:07.000Z",
+          "user_id": "<user>",
+        },
+        {
+          "data": {
+            "gold": 2,
+          },
+          "schema_version": null,
+          "updated_at": "2030-02-12T05:06:07.000Z",
+          "user_id": "<user>",
+        },
+        {
+          "data": {
+            "gold": 4,
+          },
+          "schema_version": null,
+          "updated_at": "2030-02-23T05:06:07.000Z",
+          "user_id": "<uuid>",
+        },
+      ],
+      "key": "test/cold/saves/updated_lt_2030-02-25_keep1/2030-03-04T05-06-07Z_n3.jsonl.gz",
+    },
+    {
+      "content": {
+        "at": "<now>",
+        "bytesGzip": "<bytes>",
+        "bytesRaw": 417,
+        "cutoff": "2030-02-25T05:06:07.000Z",
+        "keepPerUser": 1,
+        "r2Key": "test/cold/saves/updated_lt_2030-02-25_keep1/2030-03-04T05-06-07Z_n3.jsonl.gz",
+        "rows": 3,
+        "sha256": "<sha256>",
+        "table": "saves",
+      },
+      "key": "test/cold/saves/updated_lt_2030-02-25_keep1/2030-03-04T05-06-07Z_n3.jsonl.gz.manifest.json",
+    },
+  ],
+}
+`;
