@@ -2,6 +2,11 @@
 # esbuild·msw의 설치 스크립트는 이 저장소에서 필요하지 않으므로 명시적으로 거부한다
 # (미결정으로 두면 strictDepBuilds가 설치를 실패시킨다):
 # 빌드는 vite 8의 rolldown이 맡고, msw 서비스 워커는 public/에 커밋돼 있다.
+# cpu-features·ssh2·protobufjs는 DB 테스트용 testcontainers의 간접 의존이다. 네이티브 가속과
+# 설치 후 스크립트 없이도 로컬 Docker 연결이 동작하므로 거부한다.
 allowBuilds:
   esbuild: false
   msw: false
+  cpu-features: false
+  ssh2: false
+  protobufjs: false

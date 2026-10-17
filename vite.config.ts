@@ -1,5 +1,5 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -25,5 +25,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test-setup.ts',
+    // 실제 Postgres가 필요한 테스트는 test:db(vitest.db.config.ts)가 따로 실행한다.
+    exclude: [...configDefaults.exclude, '**/*.db.test.ts'],
   },
 })
