@@ -1,5 +1,6 @@
 // 세계지도 보기 상태 — 확대 배율과 화면 왼쪽 위가 가리키는 지도 좌표(지도 px).
-// 순수 계산만 둔다. 좌표 입력은 모두 캔버스 px(화면 표시 크기와 무관한 내부 해상도)다.
+// 계산은 순수 함수이고, 좌표 입력은 모두 캔버스 px(화면 표시 크기와 무관한 내부 해상도)다.
+// 보던 보기는 브라우저 설정으로 남겨 창을 닫았다 열어도 이어 본다(개발 도구 패널 위치와 같은 표현 설정).
 
 export interface MapView { scale: number; x: number; y: number }
 
@@ -36,4 +37,23 @@ export function panBy(v: MapView, dx: number, dy: number, w: number, h: number):
 /** 지도 좌표 → 캔버스 좌표 */
 export function toScreen(v: MapView, x: number, y: number): { x: number; y: number } {
   return { x: (x - v.x) * v.scale, y: (y - v.y) * v.scale };
+}
+
+export const MAP_VIEW_KEY = 'pf-worldmap-view';
+
+export function loadMapView(): MapView | null {
+  try {
+    const raw = localStorage.getItem(MAP_VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<MapView>;
+    return [v.scale, v.x, v.y].every(n => typeof n === 'number' && Number.isFinite(n))
+      ? { scale: v.scale!, x: v.x!, y: v.y! }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveMapView(v: MapView): void {
+  try { localStorage.setItem(MAP_VIEW_KEY, JSON.stringify(v)); } catch { /* 저장 실패 무해 */ }
 }
