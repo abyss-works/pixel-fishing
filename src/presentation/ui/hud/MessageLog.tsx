@@ -9,6 +9,7 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 맨 아래를 보고 있을 때만 새 메시지를 따라 내려가고, 위로 올려 읽는 중이면 자리를 지킨다.
 // 휠을 받으려고 창 상자는 포인터를 받는다. 창 바깥의 빈 열은 캔버스 클릭을 막지 않는다.
+// 바탕은 마우스를 올렸을 때만 보인다(평소에는 글줄과 글자 그림자만). 스크롤 막대는 HUD용 흰 막대다.
 // 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 채널 탭을 그린다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
@@ -55,7 +56,7 @@ export default function MessageLog({ log }: { log: Msg[] }) {
   };
 
   return (
-    <div className="absolute left-3 bottom-3 z-(--z-overlay) w-[min(360px,55%)] flex flex-col items-stretch gap-1 pointer-events-none">
+    <div className="absolute left-3 bottom-3 z-(--z-overlay) w-[min(520px,58%)] flex flex-col items-stretch gap-1 pointer-events-none">
       {channels.length > 1 && (
         <div className="pointer-events-auto">
           <SubTabs items={channels.map(c => ({ key: c, label: CHANNEL_LABEL[c] }))}
@@ -63,7 +64,7 @@ export default function MessageLog({ log }: { log: Msg[] }) {
         </div>
       )}
       <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
-           className="pointer-events-auto pf-glass pf-scroll border border-line rounded-sm px-2 py-1
+           className="pointer-events-auto pf-glass-hover pf-scroll-hud border rounded-sm px-2 py-1
                       text-sm flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text"
            style={{ height: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 2px)` }}>
         {shown.map(m => <Line key={m.id} m={m} />)}
