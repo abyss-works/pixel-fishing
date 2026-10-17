@@ -6,7 +6,7 @@ import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
-import { fmtMinutes } from '../../../ui/format';
+import { fmtGold, fmtMinutes } from '../../../ui/format';
 
 export default function NamedCard({ game, quest, canAccept, busy, progress, accepted, ticketMins, onAccept, onDeliver }: {
   game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
@@ -34,7 +34,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, acce
             </span>
           </span>
           <div className="border-b border-line" />
-      <span className="pf-accent text-gold text-2xl">{quest.reward}G</span>
+      <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
       {accepted && !done && ticketMins === null && (
         <span className="text-accent text-xs">진행 중 — 이 구역에서 낚시하다 마주치면 흔적이 남는다</span>
       )}

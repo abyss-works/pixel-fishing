@@ -54,6 +54,15 @@ export interface BountyPanelData {
   relicMats: number;
 }
 
+/** 오늘 남은 수주 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
+export function acceptsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
+  if (!snapshot) return null;
+  return {
+    general: BOUNTY_DAILY_CAP - snapshot.acceptsToday,
+    named: BOUNTY_NAMED_DAILY_CAP - snapshot.namedToday,
+  };
+}
+
 /** 오늘 의뢰판의 데이터·조건·진행 상태를 모은다. */
 export function selectBountyPanelData({
   game, port, uid, day, nowMs, snapshot,
@@ -64,8 +73,9 @@ export function selectBountyPanelData({
   const offers = Object.fromEntries(difficulties.map(difficulty => [
     difficulty, dailyQuestFor(zone, difficulty, who, day),
   ])) as Record<BountyDifficulty, BountyQuest | undefined>;
-  const leftAll = snapshot ? BOUNTY_DAILY_CAP - snapshot.acceptsToday : null;
-  const leftNamed = snapshot ? BOUNTY_NAMED_DAILY_CAP - snapshot.namedToday : null;
+  const left = acceptsLeft(snapshot);
+  const leftAll = left?.general ?? null;
+  const leftNamed = left?.named ?? null;
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;
   const isAccepted = (questId: string): boolean =>

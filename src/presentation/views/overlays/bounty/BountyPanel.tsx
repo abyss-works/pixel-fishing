@@ -23,6 +23,7 @@ import Gated from '../../../ui/Gated';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import SubTabs from '../../../ui/SubTabs';
+import { fmtGold } from '../../../ui/format';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 
@@ -83,7 +84,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `${questLabel(q)}를 수주했다.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품 완료! ${q.reward}G를 받았다.`)} />
+          `납품 완료! ${fmtGold(q.reward)}를 받았다.`)} />
     );
   };
 
@@ -129,7 +130,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `${questLabel(namedQuest)}를 수주했다.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 보상 — ${namedQuest.reward}G와 교환 재료를 받았다.`)} />
+                `토벌 보상 — ${fmtGold(namedQuest.reward)}와 교환 재료를 받았다.`)} />
           )}
         </Gated>
         {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
