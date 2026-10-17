@@ -24,7 +24,7 @@ export default function TraceCard({ onTrack }: {
   if (!card) return null;
 
   const frame = cx('w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-sm border border-gold/60',
-    'bg-bg/72 backdrop-blur-[4px] text-shadow-hud text-xs');
+    'pf-glass text-xs');
 
   if (card.done) {
     return (

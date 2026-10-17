@@ -23,18 +23,16 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center justify-center gap-2">
-        <ArrowButton dir={-1} aria-label="이전 형태"
-                onClick={() => setI((i - 1 + forms.length) % forms.length)}
-                className="bg-surface-2 text-text px-1 py-2 hover:bg-line" />
+        <ArrowButton dir={-1} tone="solid" aria-label="이전 형태"
+                onClick={() => setI((i - 1 + forms.length) % forms.length)} />
         <div>
           <FishSprite fish={fish} preset="portrait" form={form.form} discovered={form.discovered}
                       animate={form.discovered}
                       ariaLabel={form.discovered ? fish.name : '미확인 변종'} className="block" />
           <p className="text-center text-text-dim text-sm mt-1">{form.discovered ? form.name : '???'}</p>
         </div>
-        <ArrowButton dir={1} aria-label="다음 형태"
-                onClick={() => setI((i + 1) % forms.length)}
-                className="bg-surface-2 text-text px-1 py-2 hover:bg-line" />
+        <ArrowButton dir={1} tone="solid" aria-label="다음 형태"
+                onClick={() => setI((i + 1) % forms.length)} />
       </div>
 
       <div className="mt-3">

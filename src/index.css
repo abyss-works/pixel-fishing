@@ -180,6 +180,13 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-bevel { box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi); }
 
+  /* HUD 반투명 표면 — 캔버스 위에 뜨는 자원 바·알약·흔적 카드의 공통 바탕(배경 72% + 흐림 + 글자 그림자) */
+  .pf-glass {
+    background-color: color-mix(in oklab, var(--color-bg) 72%, transparent);
+    backdrop-filter: blur(4px);
+    text-shadow: var(--text-shadow-hud);
+  }
+
   .pf-frame {
     background: var(--c-surface);
     border: 2px solid var(--c-line);
@@ -271,7 +278,6 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-bottom-color: var(--c-gold);
     background: linear-gradient(180deg, rgba(255, 213, 79, 0.1), transparent);
   }
-  .tab-icon { display: block; }
 
   /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.
      384px 폭에 OS 기본 스크롤바가 얹히면 픽셀 화면 옆에서 튀고, 탭을 옮길 때마다

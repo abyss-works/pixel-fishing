@@ -44,10 +44,8 @@ export default function ScrollRow({ step = 0.8, className, innerClassName, style
   };
 
   const arrow = (dir: 1 | -1, on: boolean) => (
-    <ArrowButton dir={dir}
-      className={cx('absolute top-0 bottom-0 z-1 w-4',
-        'bg-bg/85 text-text-dim hover:text-text',
-        dir < 0 ? 'left-0' : 'right-0', !on && 'hidden')}
+    <ArrowButton dir={dir} tone="edge"
+      className={cx('absolute top-0 bottom-0 z-1 w-4', dir < 0 ? 'left-0' : 'right-0', !on && 'hidden')}
       onClick={() => page(dir)} />
   );
 

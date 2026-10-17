@@ -17,6 +17,7 @@ export default function IconButton({ glyph, size = 12, tone, full, className, ch
   return (
     <button
       className={cx('inline-flex items-center bg-transparent border-0 cursor-pointer',
+        'disabled:opacity-40 disabled:cursor-not-allowed',
         tone === 'gold' ? 'text-gold' : tone === 'dim' ? 'text-text-dim hover:text-text' : '',
         full && 'w-full justify-center',
         className)}

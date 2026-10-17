@@ -6,6 +6,7 @@ import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
+import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
 import ResourceBar from '../../ui/hud/ResourceBar';
 
@@ -34,9 +35,7 @@ export default function HudLayout({ game, scene, log, covered, onOpenStats, onOp
                       flex flex-col items-end gap-2 pointer-events-none">
         {notice && <div className="w-full pointer-events-auto">{notice}</div>}
         {activeBait && (
-          <div className={cx('flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line',
-                             'bg-bg/72 backdrop-blur-[4px] text-shadow-hud')}
-               aria-label="활성 미끼">
+          <HudChip aria-label="활성 미끼">
             <span className="w-2.5 h-2.5 rounded-full border border-line shrink-0"
                   style={{ backgroundColor: activeBait.color }} />
             <span className="sr-only">{activeBait.name}</span>
@@ -44,7 +43,7 @@ export default function HudLayout({ game, scene, log, covered, onOpenStats, onOp
                                 baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
               {baitLeft}
             </span>
-          </div>
+          </HudChip>
         )}
         {scene.kind === 'region' && (
           <div className="w-full pointer-events-auto">

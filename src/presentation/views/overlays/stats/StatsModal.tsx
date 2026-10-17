@@ -54,8 +54,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
 
   const pageBtn = (dir: 1 | -1) => (
     <ArrowButton dir={dir} aria-label={dir < 0 ? '이전 해역' : '다음 해역'}
-            onClick={() => step(dir)}
-            className="px-2 py-0.5 text-text-dim hover:text-text" />
+            onClick={() => step(dir)} />
   );
 
   return (
