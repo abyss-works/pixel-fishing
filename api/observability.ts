@@ -8,6 +8,7 @@
 //
 // 서버리스라 flush 필수 — 응답 후 프로세스가 즉시 얼어붙으면 전송 중인 이벤트가 버려진다.
 import { APP_VERSION } from '../src/version.js';
+import { scrubDatabaseErrorEvent } from './_db/errors.js';
 
 type SentryNode = typeof import('@sentry/node');
 let sentry: SentryNode | null = null;
@@ -22,6 +23,8 @@ async function load(dsn: string): Promise<SentryNode | null> {
     dataCollection: { userInfo: false },
     // 에러만 — 트레이싱/프로파일링은 끔 (쿼터·콜드스타트 보호)
     tracesSampleRate: 0,
+    // 쿼리 빌더 오류 메시지에 실리는 쿼리 인자(사용자 식별값 등)를 전송 전에 가린다
+    beforeSend: event => scrubDatabaseErrorEvent(event),
   });
   sentry = mod;
   return sentry;
