@@ -4,4 +4,4 @@ api/**/*.test.ts
 # 실제 Postgres 테스트 하네스. 배포 함수가 import하지 않는다.
 api/_dbTest/
 # 특성 테스트 스냅샷
-api/__snapshots__/
+api/**/__snapshots__/

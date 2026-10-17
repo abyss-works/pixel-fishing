@@ -1,5 +1,5 @@
-// 콜드 아카이브 코어 — 순수 선정 로직과 컷오프 계산. 네트워크부(PostgREST·R2)는
-// 스테이징 통합 QA가 담당한다(스펙 5절).
+// 콜드 아카이브 코어 — 순수 선정 로직과 컷오프 계산. DB·R2를 포함한 전체 흐름은
+// 실제 Postgres 특성 테스트(크론 핸들러)가 맡는다.
 import { describe, it, expect } from 'vitest';
 import { cutoffIso, selectSavesVictims } from './cold-archive.js';
 

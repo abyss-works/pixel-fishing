@@ -1,5 +1,5 @@
 // 서버 함수의 Postgres 연결. Supabase의 transaction 모드 풀러(Supavisor)를 거친다.
-// 풀러는 prepared statement와 연결 단위 세션 상태를 유지하지 않으므로 .prepare()와 트랜잭션 밖 SET을 쓰지 않는다.
+// 풀러는 이름 붙은 prepared statement와 연결 단위 세션 상태를 유지하지 않으므로 둘 다 쓰지 않는다(트랜잭션 밖 SET 포함).
 import { attachDatabasePool } from '@vercel/functions';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';

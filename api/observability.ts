@@ -8,7 +8,7 @@
 //
 // 서버리스라 flush 필수 — 응답 후 프로세스가 즉시 얼어붙으면 전송 중인 이벤트가 버려진다.
 import { APP_VERSION } from '../src/version.js';
-import { scrubDatabaseErrorEvent } from './_db/errors.js';
+import { redactQueryParams, scrubDatabaseErrorEvent } from './_db/errors.js';
 
 type SentryNode = typeof import('@sentry/node');
 let sentry: SentryNode | null = null;
@@ -56,6 +56,9 @@ export async function reportServerIssue(
 }
 
 const safe = (v: unknown): unknown => {
-  if (v instanceof Error) return { name: v.name, message: v.message, stack: v.stack };
+  // 쿼리 빌더 오류는 메시지에 쿼리 인자를 싣는다. 스택 첫머리에도 같은 메시지가 들어가므로 인자 줄만 가린다
+  if (v instanceof Error) {
+    return { name: v.name, message: redactQueryParams(v.message), stack: v.stack?.replace(/\nparams: [^\n]*/g, '\nparams: [redacted]') };
+  }
   try { return JSON.parse(JSON.stringify(v)); } catch { return String(v); }
 };

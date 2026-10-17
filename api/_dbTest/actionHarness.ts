@@ -1,18 +1,13 @@
 // 액션 엔드포인트 특성 테스트 하네스 — 요청 처리 함수를 실제 Postgres에 연결해 호출하고,
-// 응답과 사용자별 DB 상태를 정규화해 비교할 수 있게 한다.
-// 전환 전 구현은 supabase-js(PostgREST)로, 전환 뒤 구현은 DATABASE_URL로 같은 데이터베이스에 닿는다.
+// 응답과 사용자별 DB 상태를 정규화해 비교할 수 있게 한다. 요청 처리 함수는 DATABASE_URL로 테스트 데이터베이스에 닿는다.
 import { createHmac, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
-import { GenericContainer, Wait } from 'testcontainers';
-import type { StartedTestContainer } from 'testcontainers';
-import { inject } from 'vitest';
 import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
 import { newState } from '../../src/game/rules/logic.js';
-import { AUTHENTICATOR_PASSWORD, DB_NETWORK_ALIAS } from './config.js';
+import { pendingAfterResponse } from './supabaseShim.js';
 import { createTestDatabase } from './testDatabase.js';
 import type { TestDatabase } from './testDatabase.js';
 
-export const POSTGREST_IMAGE = 'postgrest/postgrest:v13.0.5';
 const JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef0123456789';
 
 function sign(payload: Record<string, unknown>): string {
@@ -32,24 +27,10 @@ export interface ActionEnv {
   stop(): Promise<void>;
 }
 
-/** 테스트 데이터베이스, 그 위의 PostgREST, 요청 처리 함수가 읽는 환경 변수를 준비한다 */
+/** 테스트 데이터베이스와 요청 처리 함수가 읽는 환경 변수를 준비한다. 인증 서버 조회는 supabaseShim이 받는다 */
 export async function startActionEnv(): Promise<ActionEnv> {
   const db = await createTestDatabase();
-  const dbName = new URL(db.url).pathname.slice(1);
-  const postgrest: StartedTestContainer = await new GenericContainer(POSTGREST_IMAGE)
-    .withNetworkMode(inject('dbNetwork'))
-    .withEnvironment({
-      PGRST_DB_URI: `postgres://authenticator:${AUTHENTICATOR_PASSWORD}@${DB_NETWORK_ALIAS}:5432/${dbName}`,
-      PGRST_DB_SCHEMAS: 'public',
-      PGRST_DB_ANON_ROLE: 'anon',
-      PGRST_JWT_SECRET: JWT_SECRET,
-    })
-    .withExposedPorts(3000)
-    .withWaitStrategy(Wait.forHttp('/', 3000))
-    .withStartupTimeout(120_000)
-    .start();
-
-  process.env.VITE_SUPABASE_URL = `http://${postgrest.getHost()}:${postgrest.getMappedPort(3000)}`;
+  process.env.VITE_SUPABASE_URL = 'http://auth.test';
   process.env.SUPABASE_SERVICE_ROLE_KEY = sign({ role: 'service_role', exp: 4_102_444_800 });
   process.env.SUPABASE_JWT_SECRET = JWT_SECRET;
   process.env.DATABASE_URL = db.url;
@@ -62,7 +43,6 @@ export async function startActionEnv(): Promise<ActionEnv> {
     db, client,
     stop: async () => {
       await client.end();
-      await postgrest.stop();
       await db.drop();
     },
   };
@@ -85,6 +65,7 @@ export async function callAction(token: string | null, body: unknown, opts: {
     end() {},
   };
   await handler({ method: opts.method ?? 'POST', headers, body } as never, res as never);
+  await Promise.all(pendingAfterResponse.splice(0));
   return out;
 }
 
