@@ -19,6 +19,7 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { maskUid } from './maskUid';
+import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
 import { cx } from '../../../ui/cx';
 import Frame from '../../../ui/Frame';
 
@@ -53,7 +54,7 @@ export default function AccountModal({
   };
 
   const proceed = () => run(async () => {
-    if (!email.trim() || pw.length < 6) { setToast('이메일과 6자 이상 비밀번호를 입력하세요.'); return; }
+    if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상 비밀번호를 입력하세요.`); return; }
 
     // ① 승격 시도 — 처음 보는 이메일이면 여기서 끝 (익명 uid 유지, 진행 그대로)
     const r = await signUpAccount(email.trim(), pw);
@@ -150,8 +151,8 @@ export default function AccountModal({
               <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
                          disabled={offline} onChange={e => setEmail(e.target.value)} />
             </Field>
-            <Field label="비밀번호" hint="6자 이상">
-              <TextInput type="password" placeholder="비밀번호 (6자 이상)" value={pw}
+            <Field label="비밀번호" hint={`${MIN_PASSWORD_LENGTH}자 이상`}>
+              <TextInput type="password" placeholder={`비밀번호 (${MIN_PASSWORD_LENGTH}자 이상)`} value={pw}
                          autoComplete="current-password" disabled={offline}
                          onChange={e => setPw(e.target.value)} />
             </Field>

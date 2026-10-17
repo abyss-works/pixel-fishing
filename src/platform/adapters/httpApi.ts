@@ -48,11 +48,13 @@ class HttpAuth implements AuthApi {
   applyNewPassword(password: string): Promise<AuthResult> {
     return applyNewPassword(password);
   }
-  onAccountNudged(): boolean {
-    return !!localStorage.getItem('pf-account-nudged');
+  accountNudgedDay(): string | null {
+    const v = localStorage.getItem('pf-account-nudged');
+    // 하루 한 번 규칙 이전의 값('1')은 날짜가 아니므로 띄운 적 없는 것으로 본다
+    return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
   }
-  markAccountNudged(): void {
-    localStorage.setItem('pf-account-nudged', '1');
+  markAccountNudged(day: string): void {
+    localStorage.setItem('pf-account-nudged', day);
   }
 }
 
