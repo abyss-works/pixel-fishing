@@ -40,8 +40,6 @@ beforeAll(async () => {
         ? new Response(null, { status: 200, headers: { 'content-length': String(body.length) } })
         : new Response(body, { status: 200 });
     }
-    // 테스트 PostgREST는 /rest/v1 접두어 없이 루트에서 응답한다
-    url.pathname = url.pathname.replace(/^\/rest\/v1/, '');
     return realFetch(url, init);
   });
 });

@@ -1,15 +1,13 @@
 import { Client } from 'pg';
-import { GenericContainer, Network, Wait } from 'testcontainers';
+import { GenericContainer, Wait } from 'testcontainers';
 import type { StartedTestContainer } from 'testcontainers';
 import type { TestProject } from 'vitest/node';
-import { AUTHENTICATOR_PASSWORD, DB_NETWORK_ALIAS, DB_TEST_IMAGE, TEMPLATE_DATABASE } from './config.js';
+import { DB_TEST_IMAGE, TEMPLATE_DATABASE } from './config.js';
 import { applySqlMigrations } from './migrations.js';
 
 declare module 'vitest' {
   export interface ProvidedContext {
     dbAdminUrl: string;
-    /** 테스트 파일이 띄우는 보조 컨테이너(PostgREST)가 DB에 닿는 Docker 네트워크 */
-    dbNetwork: string;
   }
 }
 
@@ -85,18 +83,8 @@ async function buildTemplate(container: StartedTestContainer, adminUrl: string):
   }
 }
 
-// PostgREST가 접속하는 authenticator 역할에 암호를 준다. 이 역할은 anon·authenticated·service_role로 전환할 수 있다.
-async function enableAuthenticator(container: StartedTestContainer): Promise<void> {
-  const { stderr, exitCode } = await container.exec(['psql', '-U', 'supabase_admin', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q',
-    '-c', `alter role authenticator with password '${AUTHENTICATOR_PASSWORD}'`]);
-  if (exitCode !== 0) throw new Error(`authenticator 암호 설정에 실패했습니다: ${stderr}`);
-}
-
 export default async function setup(project: TestProject) {
-  const network = await new Network().start();
   const container: StartedTestContainer = await new GenericContainer(DB_TEST_IMAGE)
-    .withNetwork(network)
-    .withNetworkAliases(DB_NETWORK_ALIAS)
     .withEnvironment({ POSTGRES_PASSWORD: PASSWORD })
     .withExposedPorts(5432)
     // 이미지 자체 상태 검사는 시작 유예 없이 약 20초 안에 준비되지 않으면 실패로 판정한다.
@@ -108,12 +96,9 @@ export default async function setup(project: TestProject) {
   const adminUrl = `postgresql://postgres:${PASSWORD}@${container.getHost()}:${container.getMappedPort(5432)}/postgres`;
   await waitForDatabase(adminUrl);
   await buildTemplate(container, adminUrl);
-  await enableAuthenticator(container);
   project.provide('dbAdminUrl', adminUrl);
-  project.provide('dbNetwork', network.getName());
 
   return async () => {
     await container.stop();
-    await network.stop();
   };
 }

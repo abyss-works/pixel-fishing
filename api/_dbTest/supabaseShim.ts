@@ -1,6 +1,5 @@
-// supabase-js가 테스트용 PostgREST 컨테이너에 닿게 하는 대역. test:db의 setupFiles에서만 쓴다.
-// 호스팅 환경은 PostgREST를 /rest/v1 아래에 두고, 테스트 컨테이너는 루트에서 응답하므로 경로 접두어를 뗀다.
-// 인증 서버는 띄우지 않는다. auth.getUser는 요청 토큰의 클레임(sub·email)으로 사용자 응답을 만든다.
+// 서버 함수가 쓰는 외부 호출의 테스트 대역. test:db의 setupFiles에서만 쓴다.
+// 인증 서버는 띄우지 않는다. supabase-js의 auth.getUser는 요청 토큰의 클레임(sub·email)으로 사용자 응답을 만든다.
 import { vi } from 'vitest';
 
 function claims(authorization: string | null): Record<string, unknown> | null {
@@ -25,8 +24,7 @@ const shimFetch: typeof fetch = async (input, init) => {
     return new Response(JSON.stringify({ id: c.sub, email: c.email ?? null, aud: 'authenticated', role: 'authenticated' }),
       { status: 200, headers: { 'content-type': 'application/json' } });
   }
-  url.pathname = url.pathname.replace(/^\/rest\/v1/, '');
-  return fetch(input instanceof Request ? new Request(url, input) : url, init);
+  throw new Error(`테스트에서 예상하지 못한 supabase 요청입니다: ${url.pathname}`);
 };
 
 vi.mock('@supabase/supabase-js', async importOriginal => {
@@ -36,4 +34,11 @@ vi.mock('@supabase/supabase-js', async importOriginal => {
     createClient: ((url: string, key: string, options?: Parameters<typeof mod.createClient>[2]) =>
       mod.createClient(url, key, { ...options, global: { ...options?.global, fetch: shimFetch } })) as typeof mod.createClient,
   };
+});
+
+// 응답 뒤 후속 쓰기(waitUntil) — 테스트는 요청 처리 함수가 끝난 뒤 이 작업까지 기다리고 DB 상태를 본다.
+export const pendingAfterResponse: Promise<unknown>[] = [];
+vi.mock('@vercel/functions', async importOriginal => {
+  const mod = await importOriginal<typeof import('@vercel/functions')>();
+  return { ...mod, waitUntil: (p: Promise<unknown>) => { pendingAfterResponse.push(p); } };
 });
