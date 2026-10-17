@@ -6,7 +6,9 @@ import PageTitle from '../../../ui/PageTitle';
 import { cx } from '../../../ui/cx';
 import PillButton from '../../../ui/PillButton';
 import PixelIcon from '../../../ui/PixelIcon';
-import { FULL_VIEW, MAP_ZOOM_MAX, MAP_ZOOM_MIN, MAP_ZOOM_STEP, panBy, zoomAt } from './mapView';
+import {
+  FULL_VIEW, MAP_ZOOM_MAX, MAP_ZOOM_MIN, MAP_ZOOM_STEP, clampView, loadMapView, panBy, saveMapView, zoomAt,
+} from './mapView';
 import type { MapView } from './mapView';
 import { WORLD_MAP } from '../../../../game/world';
 import type { CompiledMap, Point } from '../../../../game/world/types';
@@ -18,7 +20,7 @@ import { useSpotState } from '../../../../features/travel/service/useSpotState';
 // earth 마스크(~178KB)는 이 화면에서만 쓰므로 아틀라스 모듈째 **동적 import**한다 —
 // 첫 오픈 전까지 초기 번들에 녹지 않는다. 로딩 순간엔 캔버스 자리만 유지된다.
 // 확대·축소(휠·버튼)와 끌어서 이동을 지원한다. 지형은 배율대로 키워 그리고, 라벨·점은
-// 위치만 옮겨 크기를 유지한다. 보기 상태는 창을 닫으면 버린다(열 때마다 전체 보기).
+// 위치만 옮겨 크기를 유지한다. 보던 배율과 위치는 기기에 남겨 창을 닫았다 열어도 이어서 보여 준다.
 
 interface AtlasModule {
   ATLAS_W: number;
@@ -42,7 +44,7 @@ export default function WorldMapModal({ world, onClose }: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<Point | null>(player);
   const [atlas, setAtlas] = useState<AtlasModule | null>(null);
-  const [view, setView] = useState<MapView>(FULL_VIEW);
+  const [view, setView] = useState<MapView>(() => clampView(loadMapView() ?? FULL_VIEW, DEFAULT_W, DEFAULT_H));
   const viewRef = useRef(view);
   const dragRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -50,7 +52,7 @@ export default function WorldMapModal({ world, onClose }: {
   const h = atlas?.ATLAS_H ?? DEFAULT_H;
 
   useEffect(() => { playerRef.current = player; }, [player]);
-  useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => { viewRef.current = view; saveMapView(view); }, [view]);
 
   // 화면 좌표 → 캔버스 내부 px (캔버스는 CSS로 늘어나 표시되므로 비율을 곱한다)
   const toCanvas = (clientX: number, clientY: number) => {
