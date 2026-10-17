@@ -1,5 +1,5 @@
 // 초안 생성기 → 인덱스 격자 변환 CLI.
-// 사용: npx vite-node tools/sprite-draft/generate-fish-shapes.ts
+// 사용: pnpm exec tsx tools/sprite-draft/generate-fish-shapes.ts
 // 14형태를 1× 배율로 32×16 기록 컨텍스트에 그리고, 쓰인 색을 팔레트 슬롯으로 환원해
 // src/game/content/sprites/fishShapes.generated.ts 를 다시 쓴다.
 // 색 환원 규칙: 기준색 → { shade: 1 }, shade(기준색, f) → { shade: f },
@@ -68,7 +68,7 @@ const entries = shapes.map(shape => {
   return `  ${shape}: {\n    w: ${W}, h: ${H},\n    palette: [${palette}],\n    frames: [[\n${rows}\n    ]],\n  },`;
 });
 
-const out = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/generate-fish-shapes.ts
+const out = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/generate-fish-shapes.ts
 // 초안 생성기(절차 사각형)를 1× 배율로 32×16 격자에 옮긴 14형태 스프라이트.
 // 종별 격자가 없는 어종(신규 어종 초안 단계)만 이 형태 격자를 쓴다 (fishSprite 해석 순서).
 import type { PixelSprite } from './types.js';

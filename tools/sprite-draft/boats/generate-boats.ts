@@ -1,5 +1,5 @@
 // 배 스프라이트 생성 CLI — 7단계 배를 32×16 격자로 칠해 생성 파일을 쓴다.
-// 사용: npx vite-node tools/sprite-draft/boats/generate-boats.ts [sheet.png]
+// 사용: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts [sheet.png]
 // 뱃머리는 왼쪽(어종과 같은 방향). 흘수선은 13행, 그 아래 2행은 물에 잠긴 선체.
 // 팔레트는 7척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
 // 금속 2톤 · 연기 · 창 불빛. 윤곽은 렌더러가 덧그린다.
@@ -161,7 +161,7 @@ ${b.rows.map(r => `      '${r}',`).join('\n')}
     ]],
   },`);
 
-const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/boats/generate-boats.ts
+const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts
 // 배 7단계 스프라이트(32×16, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
 import type { PixelSprite } from './types.js';
 

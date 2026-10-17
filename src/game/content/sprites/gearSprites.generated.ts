@@ -1,4 +1,4 @@
-// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: npx vite-node tools/sprite-draft/boats/generate-gear.ts
+// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/boats/generate-gear.ts
 // 장비 스프라이트(32×16). 낚싯대는 레벨과 무관한 한 그림이다.
 import type { PixelSprite } from './types.js';
 

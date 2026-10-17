@@ -1,5 +1,5 @@
 // 원화 PNG → 인덱스 격자 변환 CLI.
-// 사용: npx vite-node tools/sprite-draft/import-png.ts <png 폴더> [out.ts]
+// 사용: pnpm exec tsx tools/sprite-draft/import-png.ts <png 폴더> [out.ts]
 // 폴더의 <id>.png / <id>.variant.png 를 읽어 색마다 팔레트 슬롯(고정 hex)을 매기고
 // src/game/content/sprites/fishSprites.generated.ts 를 다시 쓴다. preview-*.png 는 건너뛴다.
 // 알파가 0이면 투명, 그 외는 불투명으로 본다(반투명 픽셀은 거부 — 픽셀아트는 2값 알파).
@@ -56,7 +56,7 @@ const entries = sprites.map(s => {
 });
 
 const src = `// 생성 파일 — 손으로 고치지 않는다. 원화 PNG에서 다시 만들려면:
-//   npx vite-node tools/sprite-draft/import-png.ts tools/sprite-draft/png/fish
+//   pnpm exec tsx tools/sprite-draft/import-png.ts tools/sprite-draft/png/fish
 // 키는 "<어종 id>" 와 "<어종 id>.variant". 팔레트는 원화 색 그대로(고정 hex)라 기준색을 쓰지 않는다.
 import type { PixelSprite } from './types.js';
 

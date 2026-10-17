@@ -1,5 +1,5 @@
 // 밸런스 측정 CLI — 제품 규칙(추첨·낚싯대·배·바운티 데이터)을 그대로 불러 기본 지표를 표로 찍는다.
-// 사용: npx vite-node tools/balance-report.ts [income|growth|fame|dex|bounty ...] [--runs N] [--seed N]
+// 사용: pnpm balance [income|growth|fame|dex|bounty ...] [--runs N] [--seed N]
 //   섹션을 생략하면 전부 출력한다. dex 섹션은 몬테카를로(기본 400회, 시드 고정이라 결과가 재현된다).
 //
 // 가정(측정치가 아닌 근사):
