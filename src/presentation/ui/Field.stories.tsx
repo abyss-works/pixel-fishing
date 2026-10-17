@@ -8,5 +8,5 @@ export default meta;
 type Story = StoryObj<typeof Field>;
 
 export const Basic: Story = { args: { label: '이메일', children: <TextInput type="email" /> } };
-export const WithHint: Story = { args: { label: '비밀번호', hint: '8자 이상', children: <TextInput type="password" /> } };
+export const WithHint: Story = { args: { label: '비밀번호', hint: '6자 이상', children: <TextInput type="password" /> } };
 export const WithError: Story = { args: { label: '골드', error: '숫자를 올바르게 입력하세요.', children: <TextInput type="number" /> } };

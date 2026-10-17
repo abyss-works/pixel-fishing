@@ -31,7 +31,7 @@ const AUTH_MSG: Record<string, string> = {
   user_already_exists: '이미 가입된 이메일이에요.',
   email_provider_disabled: '서버에서 이메일 가입이 꺼져 있어요 (Supabase 대시보드 → Email provider ON 필요).',
   signup_disabled: '서버에서 가입이 꺼져 있어요 (Supabase 대시보드 설정 필요).',
-  weak_password: '비밀번호가 너무 짧아요 (8자 이상).',
+  weak_password: '비밀번호가 너무 짧아요 (6자 이상).',
   invalid_credentials: '이메일 또는 비밀번호가 틀렸어요.',
   validation_failed: '이메일 형식을 확인하세요.',
   over_email_send_rate_limit: '메일을 너무 자주 보냈어요 — 잠시 후 다시 시도하세요.',
