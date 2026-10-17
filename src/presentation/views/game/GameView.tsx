@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../game/rules/logic';
@@ -46,6 +47,8 @@ interface GameViewProps {
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
   outdated: boolean;
+  /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
+  badge?: ReactNode;
 }
 
 export default function GameView(props: GameViewProps) {
@@ -118,7 +121,7 @@ export default function GameView(props: GameViewProps) {
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
-                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} />
+                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} badge={props.badge} />
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
                           onResolve={resolveEncounter} onClose={() => setTracking(null)} />
