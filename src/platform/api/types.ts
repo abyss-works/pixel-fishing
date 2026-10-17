@@ -31,8 +31,9 @@ export interface AuthApi {
   signOut(): Promise<void>;
   requestPasswordReset(email: string): Promise<AuthResult>;
   applyNewPassword(password: string): Promise<AuthResult>;
-  onAccountNudged(): boolean;
-  markAccountNudged(): void;
+  /** 마지막으로 계정 만들기 넛지를 띄운 날(KST yyyy-mm-dd). 없으면 null */
+  accountNudgedDay(): string | null;
+  markAccountNudged(day: string): void;
 }
 
 export interface StorageApi {
