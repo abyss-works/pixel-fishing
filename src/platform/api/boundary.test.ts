@@ -37,6 +37,7 @@ const CROSS_LAYER_IMPORTS = new Set([
   'features/gameplay/service/useGame.ts -> buildId',
   'features/announcements/service/whatsNew.ts -> version',
   'platform/adapters/bounty.ts -> core/errors',
+  'platform/adapters/ranking.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> buildId',
   'platform/observability.ts -> version',

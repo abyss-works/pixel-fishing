@@ -18,10 +18,12 @@ export const api = createApi();
 
 export { when } from '../../shared/lib/when';
 export { readBounty, kstDay } from '../adapters/bounty';
+export { readRanking } from '../adapters/ranking';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
+  RankingBoardId, RankingRow, RankingBoard, RankingBiggestRow, RankingBiggest,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
