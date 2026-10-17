@@ -5,6 +5,7 @@
 import PixelIcon from '../PixelIcon';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { cx } from '../cx';
+import HudChip from './HudChip';
 
 /** 해/달 전환 임계 — 어둠이 이 값 이상이면 달 (저녁 20시쯤부터) */
 const MOON_AT = 0.15;
@@ -13,14 +14,10 @@ export default function TimeBadge({ className }: { className?: string }) {
   const { clock, dark } = useGameTime();
   const night = dark >= MOON_AT;
   return (
-    <div className={cx(
-      'absolute z-(--z-overlay) pointer-events-none flex items-center gap-1.5',
-      'px-2 py-0.5 rounded-full border border-line bg-bg/72 backdrop-blur-[4px]',
-      'text-shadow-hud', className,
-    )}>
+    <HudChip size="sm" className={cx('absolute z-(--z-overlay) pointer-events-none', className)}>
       <PixelIcon glyph={night ? 'moon' : 'sun'} size={11}
                  className={night ? 'text-accent' : 'text-gold'} />
       <span className="pf-accent text-xs leading-none text-text">{clock}</span>
-    </div>
+    </HudChip>
   );
 }

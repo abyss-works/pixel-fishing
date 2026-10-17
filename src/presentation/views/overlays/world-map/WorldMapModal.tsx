@@ -144,7 +144,7 @@ export default function WorldMapModal({ world, onClose }: {
                 aria-label="세계지도"
                 onPointerDown={onPointerDown} onPointerMove={onPointerMove}
                 onPointerUp={endDrag} onPointerCancel={endDrag} />
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-bg/72 backdrop-blur-[4px] p-1 rounded-sm">
+        <div className="absolute top-2 right-2 flex items-center gap-1 pf-glass p-1 rounded-sm">
           <PillButton aria-label="축소" disabled={view.scale <= MAP_ZOOM_MIN}
                       onClick={() => zoomBy(1 / MAP_ZOOM_STEP)}>
             <PixelIcon glyph="minus" size={10} />
