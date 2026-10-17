@@ -1,13 +1,14 @@
 import { useDevEnv } from './devEnv';
 
-// 환경 배지 — 스테이징·개발·로컬 빌드임을 화면 위 가운데에 깜빡이며 알린다. 클릭을 가로채지 않는다.
+// 환경 배지 — 스테이징·개발·로컬 빌드임을 화면 왼쪽 위에 깜빡이며 알린다. 클릭을 가로채지 않는다.
+// 화면 위 가운데는 스테이지의 자원 바 자리라 겹치지 않게 모서리에 둔다.
 // 운영이거나 알 수 없는 환경이면 아무것도 그리지 않는다(앱 최상위가 공급한 개발 환경을 읽는다).
 export default function EnvBadge({ build }: { build: string }) {
   const { label } = useDevEnv();
   if (!label) return null;
   return (
     <div role="status" aria-label={`${label} 빌드`}
-         className="fixed top-1 left-1/2 -translate-x-1/2 z-[70] pointer-events-none select-none
+         className="fixed top-1 left-1 z-[70] pointer-events-none select-none
                     pf-accent text-[0.9rem] px-2.5 py-[3px] border border-danger text-danger bg-bg/80 rounded-sm
                     motion-safe:animate-pulse">
       {label} · {build}
