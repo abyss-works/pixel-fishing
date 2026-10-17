@@ -1,4 +1,4 @@
-// 메시지 창 스토리 — 접힘(최근 몇 줄)과 펼침(스크롤 기록)은 창 안의 버튼으로 오간다.
+// 메시지 창 스토리 — 정해진 줄 수 높이의 창 안에서 휠로 이전 기록을 거슬러 본다.
 import type { Meta, StoryObj } from '@storybook/react';
 import MessageLog from './MessageLog';
 import { createMessage } from './messageFeed';
