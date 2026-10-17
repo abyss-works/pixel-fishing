@@ -9,3 +9,9 @@ export const TEMPLATE_DATABASE = 'app_template';
 
 // 호스팅 환경의 데이터베이스 기본값과 맞춘다.
 export const STATEMENT_TIMEOUT = '2min';
+
+// DB 컨테이너의 Docker 네트워크 별칭. 같은 네트워크의 보조 컨테이너는 이 이름으로 접속한다.
+export const DB_NETWORK_ALIAS = 'db';
+
+// 테스트 전용 authenticator 암호.
+export const AUTHENTICATOR_PASSWORD = 'test-only-authenticator';
