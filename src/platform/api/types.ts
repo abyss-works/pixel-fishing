@@ -45,7 +45,6 @@ export interface StorageApi {
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }
 export interface BountySnapshot {
-  licensed: { zone: string; tier: string }[];
   acceptsToday: number;
   namedToday: number;
   progress: BountyProgressRow[];

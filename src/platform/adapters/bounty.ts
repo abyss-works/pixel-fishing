@@ -20,23 +20,21 @@ const kstDayStartISO = (): string => {
 
 export async function readBounty(): Promise<BountySnapshot | null> {
   if (!supabase) return null;
-  // 세션부터 확정한다 — 저장된 토큰의 갱신을 여기서 한 번 끝내고 네 조회가 같은 토큰을 쓴다.
+  // 세션부터 확정한다 — 저장된 토큰의 갱신을 여기서 한 번 끝내고 세 조회가 같은 토큰을 쓴다.
   // 세션이 아직 없으면(부트스트랩의 익명 로그인 전) 익명 권한의 빈 결과를 진실로 삼지 않는다.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new AppError('unauthorized', 'bounty read before session');
   const dayStart = kstDayStartISO();
-  const [lic, acc, prog, tick] = await Promise.all([
-    supabase.from('bounty_licenses').select('zone'),
+  const [acc, prog, tick] = await Promise.all([
     supabase.from('bounty_accepts').select('quest_id, accepted_at').gte('accepted_at', dayStart),
     supabase.from('bounty_progress').select('quest_id, progress'),
     supabase.from('bounty_tickets').select('quest_id, issued_at'),
   ]);
-  const failed = [lic, acc, prog, tick].find(r => r.error);
+  const failed = [acc, prog, tick].find(r => r.error);
   if (failed?.error) throw new AppError('network', 'bounty read failed', { message: failed.error.message });
   const rows = (acc.data ?? []) as { quest_id: string }[];
   const general = rows.filter(a => bountyById(a.quest_id)?.difficulty !== 'named');
   return {
-    licensed: ((lic.data ?? []) as { zone: string; tier: string }[]).map(l => ({ zone: l.zone, tier: l.tier })),
     acceptsToday: general.length,
     namedToday: rows.length - general.length,
     progress: ((prog.data ?? []) as { quest_id: string; progress: number }[])
