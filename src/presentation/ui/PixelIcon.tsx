@@ -10,7 +10,8 @@ export type GlyphId =
   | 'sun' | 'moon'
   | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
   | 'caretRight' | 'caretDown' | 'checkPartial'
-  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close';
+  | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
+  | 'plus' | 'minus';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 봉투 — 테두리 사각형에 접힌 덮개(V자) 두 줄
@@ -87,6 +88,9 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
     cells: [[1, 1, 2, 2], [3, 3, 2, 2], [5, 5, 2, 2], [7, 7, 2, 2], [9, 9, 2, 2],
             [9, 1, 2, 2], [7, 3, 2, 2], [3, 7, 2, 2], [1, 9, 2, 2]],
   },
+  // 더하기·빼기 — 2px 굵기 막대. 확대·축소 같은 증감 조작
+  plus: { cells: [[1, 5, 10, 2], [5, 1, 2, 10]] },
+  minus: { cells: [[1, 5, 10, 2]] },
   // 잠김: 걸쇠 닫힘 + 몸통(열쇠구멍)
   lock: {
     cells: [[3, 1, 6, 1], [3, 2, 1, 2], [8, 2, 1, 2], [2, 4, 8, 7]],

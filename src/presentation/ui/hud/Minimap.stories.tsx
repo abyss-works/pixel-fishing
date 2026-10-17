@@ -7,6 +7,8 @@ import { setPlayerPos } from '../../../game/world/currentSpot';
 const meta: Meta<typeof Minimap> = {
   title: 'Overlays/Minimap',
   component: Minimap,
+  // 폭은 HUD 배치가 정한다 — 스토리에서는 HUD 최대 폭으로 감싼다
+  decorators: [Story => <div className="w-[292px]"><Story /></div>],
 };
 
 export default meta;
