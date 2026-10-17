@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.10.5',
+    date: '2026-10-17',
+    summary: '낚시와 거래가 훨씬 빨리 반영돼요',
+    notes: [
+      { tag: '기타', text: '서버가 저장 정보를 읽고 쓰는 방식을 바꿔, 낚시·판매·수주 같은 행동이 처리되는 시간이 절반 아래로 줄었어요. 게임 규칙과 저장된 진행은 그대로예요.' },
+    ],
+  },
+  {
     version: '0.10.4',
     date: '2026-10-17',
     summary: '세계지도를 확대해 보고, 화면 위 정보가 한눈에 들어와요',
