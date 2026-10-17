@@ -271,7 +271,6 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-bottom-color: var(--c-gold);
     background: linear-gradient(180deg, rgba(255, 213, 79, 0.1), transparent);
   }
-  .tab-icon { display: block; }
 
   /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.
      384px 폭에 OS 기본 스크롤바가 얹히면 픽셀 화면 옆에서 튀고, 탭을 옮길 때마다

@@ -10,6 +10,7 @@ const GLYPHS: GlyphId[] = [
   'caretRight', 'caretDown',
   'letter', 'key', 'ticket', 'download', 'upload', 'exit', 'close',
   'plus', 'minus',
+  'compass', 'backpack', 'book', 'question', 'gear',
 ];
 
 const meta: Meta<typeof PixelIcon> = {
