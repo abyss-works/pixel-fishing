@@ -40,7 +40,8 @@ export default function ProgressionTab() {
       {/* 분포 셋 — 같은 성격(히스토그램)이라 xl 이상에선 짝지어 나란히 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
         <ChartSection title="배 단계">
-          <BarsChart values={boatHist.values} labels={boatHist.labels} height={72} />
+          <BarsChart values={boatHist.values} labels={boatHist.labels} height={72} highlight="peak"
+                     ariaLabel="배 단계별 유저 수" />
           <Note size="2xs" className="my-0">
             {granted
               ? (boatHist.legend.filter(l => l.count > 0)
@@ -52,10 +53,8 @@ export default function ProgressionTab() {
         <ChartSection title="낚싯대 레벨">
           {rodHist.values.length > 0 ? (
             <>
-              <BarsChart values={rodHist.values}
-                         labels={rodHist.labels.map((l, i) =>
-                           i % Math.ceil(rodHist.labels.length / 8) === 0 ? l : null)}
-                         height={72} />
+              <BarsChart values={rodHist.values} labels={rodHist.labels} height={72} highlight="peak"
+                         ariaLabel="낚싯대 레벨별 유저 수" />
               <Note size="2xs" className="my-0">
                 Lv{rodHist.min} ~ Lv{rodHist.min + rodHist.values.length - 1}
               </Note>

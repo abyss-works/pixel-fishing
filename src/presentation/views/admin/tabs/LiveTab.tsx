@@ -101,7 +101,8 @@ export default function LiveTab() {
         </ChartSection>
 
         <ChartSection title="온라인 위치 분포">
-          <BarsChart values={whereHist.values} labels={whereHist.labels} height={96} />
+          <BarsChart values={whereHist.values} labels={whereHist.labels} height={96} highlight="peak"
+                     ariaLabel="접속 중인 유저의 위치 분포" />
           <Note size="2xs" className="my-0">
             접속 중 유저의 state.location 분포 — 거점은 소속 지역으로 합산한다.
           </Note>

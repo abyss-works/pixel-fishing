@@ -38,9 +38,8 @@ export default function MetricsTab() {
   // days 축과 같은 순서로 채우므로 여기서 뒤집지 않는다(이중 반전은 축을 깬다)
   const dau = fillSeries(daily, days, r => r.day, r => r.dau);
   const wau = fillSeries(daily, days, r => r.day, r => r.wau7);
-  // 눈금 라벨은 ~6칸마다만 — 친구 규모 화면 폭을 위해
-  const labels = days.map((d, i) =>
-    i % Math.ceil(days.length / 6) === 0 ? d.slice(5) : null);
+  // 막대 이름은 월-일만 — 눈금은 차트가 일정 간격으로 골라 보인다
+  const labels = days.map(d => d.slice(5));
 
   return (
     <div className="flex flex-col gap-3">
@@ -58,7 +57,8 @@ export default function MetricsTab() {
 
         {daily.length > 0 ? (
           <>
-            <StackedBarsPair a={dau} b={wau} labels={labels} />
+            <StackedBarsPair a={dau} b={wau} labels={labels}
+                             ariaLabel={`일별 활성 유저, 최근 ${range}일의 DAU와 WAU`} />
             <Note size="2xs" className="my-0">
               접속(boot) 도입 전 구간은 액션이 있어야 DAU로 섞인다 — 낮게 읽히는 쪽이 맞다.
               WAU는 직전 7일 합산 고유 유저.

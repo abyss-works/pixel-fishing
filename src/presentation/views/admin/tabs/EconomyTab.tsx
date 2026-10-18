@@ -31,6 +31,7 @@ export default function EconomyTab() {
   const economy = useMemo(() => [...economyRows].reverse(), [economyRows]);
 
   const days = lastNDays(Number(range));
+  const dayLabels = days.map(d => d.slice(5));
   const series = (f: (r: AdminEconomyRow) => number) =>
     fillSeries(economy, days, r => r.day, f);
   const { goldStats, goldSum, inflowTotal, outflowTotal } = useMemo(
@@ -56,13 +57,14 @@ export default function EconomyTab() {
                         options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
                         onChange={setRange} ariaLabel="기간 선택" />
         }>
-          <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} height={72} />
+          <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} labels={dayLabels} height={72}
+                     highlight="last" highlightName="금일" ariaLabel="골드 유입 일별 추이" />
           <Note size="2xs" className="my-0">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</Note>
         </ChartSection>
 
         <ChartSection title="유출 — 강화·배·미끼">
-          <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.bait_cost)}
-                     height={72} barClass="bg-danger/70" />
+          <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.bait_cost)} labels={dayLabels}
+                     height={72} highlight="last" highlightName="금일" ariaLabel="골드 유출 일별 추이" />
           <Note size="2xs" className="my-0">강화·배 구매·미끼 지출의 일별 합계.</Note>
         </ChartSection>
       </div>
