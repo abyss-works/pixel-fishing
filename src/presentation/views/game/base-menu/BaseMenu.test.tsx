@@ -16,7 +16,13 @@ describe('거점 카드 메뉴', () => {
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
     render(<BaseMenu base="harbor" game={newState()} />);
     expect(names()).toEqual(['게시판 · 랭킹', '수배판 · 의뢰/토벌', '공방 · 낚싯대 Lv.1', '조선소 · 배 없음',
-      '어시장 · 판매', '여객선 · 마을로', '승선 · 바다로']);
+      '어시장 · 판매', '마을 · 집으로', '승선 · 바다로']);
+  });
+
+  it('항구의 승선 카드는 내 배를, 마을 카드는 집을 아이콘으로 쓴다', () => {
+    render(<BaseMenu base="harbor" game={{ ...newState(), boat: 2 }} />);
+    expect(document.querySelector('[data-facility="exit"] [data-icon="boat"]')).not.toBeNull();
+    expect(document.querySelector('[data-facility="travel"] [data-icon="house"]')).not.toBeNull();
   });
 
   it('카드는 정보·상점·이동 구역으로 나뉜다', () => {

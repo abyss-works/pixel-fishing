@@ -21,7 +21,7 @@ export const HARBOR_BASE: BasePack = {
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
       label: () => '어시장 · 판매', labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
-      label: () => '여객선 · 마을로', labelDy: -2 },
+      label: () => '마을 · 집으로', labelDy: -2 },
     { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
       label: () => '승선 · 바다로', labelDy: 8 },
   ],
