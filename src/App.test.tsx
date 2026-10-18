@@ -997,9 +997,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 유물
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
-    expect(screen.getByText('바루나의 저울')).toBeInTheDocument();
+    expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
     expect(screen.getByText('미끼값 −25%')).toBeInTheDocument();
-    expect(screen.queryByText('심해아귀')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
   });
 
   it('가방 유물 섹션 — 보유가 없으면 수배판 안내', () => {

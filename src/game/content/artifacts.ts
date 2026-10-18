@@ -31,21 +31,22 @@ export interface Artifact {
 }
 
 export const ARTIFACTS: readonly Artifact[] = [
-  { id: 'abyss-angler', name: '심해아귀', zone: 'pacific', grade: 'rare',
-    materialId: 'mat-abyss-lantern', materialName: '아귀의 등불',
-    lore: '심해의 아귀는 등불 하나 달고 다닌다. 그 빛 아래에서는 밤이 밤이 아니다.',
+  // id는 세이브의 소유 목록·재료 스택이 참조하므로 개명 전 값을 유지한다
+  { id: 'abyss-angler', name: '해구의 이빨', zone: 'pacific', grade: 'rare',
+    materialId: 'mat-abyss-lantern', materialName: '돌이 된 이빨',
+    lore: '해구 바닥에서 건져 올린 거대한 이빨이다. 뱃머리에 매달면 밤바다의 물고기들도 먼저 길을 비켜 선다.',
     effects: { sail: 0.05, nightImmune: true } },
   { id: 'wreck-compass', name: '침선의 나침반', zone: 'seasia', grade: 'rare',
     materialId: 'mat-wreck-compass', materialName: '이끼 낀 나침반',
-    lore: '코론 침선에서 건져 올린 나침반. 바늘이 가리키는 곳에 물길이 있다.',
+    lore: '코론 침선의 선실에서 건져 올린 나침반이다. 바다가 자리를 고쳐 누운 밤에도 바늘은 새로 열린 물길을 먼저 가리킨다.',
     effects: { sail: 0.1 } },
-  { id: 'varuna-scale', name: '바루나의 저울', zone: 'indian', grade: 'rare',
+  { id: 'varuna-scale', name: '진주 상인의 저울', zone: 'indian', grade: 'rare',
     materialId: 'mat-varuna-weight', materialName: '녹슨 저울추',
-    lore: '남인도양의 왕이 쓰던 저울이라 한다. 올려놓은 것마다 값이 가벼워진다.',
+    lore: '진주를 달던 상인들이 대를 물려 쓴 저울이다. 사원의 등잔 아래에서 눈금을 맞춘 뒤로, 올려놓은 것마다 값이 가벼워졌다고 한다.',
     effects: { baitDiscount: 0.25 } },
-  { id: 'elder-scale', name: '장로의 비늘', zone: 'madagascar', grade: 'epic',
-    materialId: 'mat-elder-scale', materialName: '닳은 비늘',
-    lore: '코모로 아래에서 가장 오래 산 것의 비늘. 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
+  { id: 'elder-scale', name: '코모로의 골판', zone: 'madagascar', grade: 'epic',
+    materialId: 'mat-elder-scale', materialName: '깨진 골판',
+    lore: '코모로 심해 바닥에서 떨어져 나온 골판 조각이다. 오래된 것이 아직 살아 있는 바다의 것이라, 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
     effects: { variantRate: 1 / 2 } },
 ];
 

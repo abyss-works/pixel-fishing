@@ -785,7 +785,7 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
 }
 
-/** 미끼 할인율 — 가진 유물 중 가장 큰 할인(바루나의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
+/** 미끼 할인율 — 가진 유물 중 가장 큰 할인(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
 export function baitDiscount(state: Pick<GameState, 'artifacts'>): number {
   const owned = new Set(state.artifacts);
   return ARTIFACTS.reduce((m, a) =>

@@ -836,7 +836,7 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
   });
 
-  it('baitCost — 유물 없으면 정가, 바루나의 저울이면 25% 감소(내림)', () => {
+  it('baitCost — 유물 없으면 정가, 진주 상인의 저울이면 25% 감소(내림)', () => {
     expect(baitCost({ artifacts: [] }, 200, 2)).toBe(400);
     expect(baitCost({ artifacts: ['varuna-scale'] }, 200, 2)).toBe(300);
     expect(baitCost({ artifacts: ['varuna-scale'] }, 25, 1)).toBe(18);

@@ -119,8 +119,8 @@ describe('BountyPanel', () => {
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
-    expect(screen.getByText('심해아귀')).toBeInTheDocument();
-    expect(screen.getByText(/아귀의 등불 보유 0\/1/)).toBeInTheDocument();
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    expect(screen.getByText(/돌이 된 이빨 보유 0\/1/)).toBeInTheDocument();
     // 재료 없으면 교환 불가
     expect(screen.getByRole('button', { name: '교환하기' })).toBeDisabled();
   });
