@@ -25,7 +25,7 @@ describe('거점 카드 메뉴', () => {
       .querySelectorAll('[data-facility]')].map(el => el.getAttribute('data-facility'));
     expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['정보', '상점', '이동']);
     expect(section('정보')).toEqual(['rank', 'bounty']);
-    expect(section('상점')).toEqual(['rod', 'boat', 'shop', 'sell']);
+    expect(section('상점')).toEqual(['rod', 'boat', 'sell', 'shop']);
     expect(section('이동')).toEqual(['travel', 'exit']);
   });
 
