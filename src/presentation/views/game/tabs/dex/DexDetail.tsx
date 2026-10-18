@@ -10,7 +10,7 @@ import Modal from '../../../../ui/Modal';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityText, RarityDot } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
-import { fmtGold } from '../../../../ui/format';
+import { fmtGold, fmtSize } from '../../../../ui/format';
 
 // 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 폼을 전환하면 이름/로어/가격/마릿수/크기/첫 조우일이
@@ -55,7 +55,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           <span className="pf-accent">{form.discovered ? `${form.count}마리` : '???'}</span>
           <span className="text-text-dim">최대 크기</span>
           <span className="pf-accent">{form.discovered
-            ? <>{form.maxSize.toFixed(1)}cm <span className="text-text-dim text-xs">(상위 {form.sizePercentile}%)</span></>
+            ? <>{fmtSize(form.maxSize)} <span className="text-text-dim text-xs">(상위 {form.sizePercentile}%)</span></>
             : '???'}</span>
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
@@ -67,7 +67,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                            empty={!!ranking.data && ranking.data.top.length === 0} />
             {ranking.data && ranking.data.top.length > 0 && (
               <RankList rows={ranking.data.top} me={ranking.data.me} valueLabel="크기"
-                        format={v => `${v.toFixed(1)}cm`} />
+                        format={fmtSize} />
             )}
           </div>
         )}

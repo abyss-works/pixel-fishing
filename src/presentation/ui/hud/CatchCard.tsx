@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { RARITY, formName, priceOf } from '../../../game/rules/logic';
 import type { CatchInfo, Fish } from '../../../game/rules/logic';
 import { cx } from '../cx';
+import { fmtSize } from '../format';
 import FishSprite from '../fish/FishSprite';
 import { RarityText } from '../fish/RarityTag';
 
@@ -82,7 +83,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         {formName(fish, info?.form ?? 'normal')}
       </b>
       <span className="text-sm text-text-dim">
-        {info && `${info.size.toFixed(1)}cm`}
+        {info && fmtSize(info.size)}
         {info?.isBig && <b className="text-gold"> ★ 월척! 상위 {info.percentile}%</b>}
       </span>
       {isVariant && <span className="text-sm italic text-text-dim">{variantLine}</span>}

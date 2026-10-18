@@ -3,6 +3,11 @@
 export const fmtNum = (n: number): string => n.toLocaleString('ko-KR');
 export const fmtGold = (n: number): string => `${fmtNum(n)}G`;
 
+/** 물고기 크기(cm 값) — 1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리(99.9cm · 3.85m) */
+export function fmtSize(cm: number): string {
+  return Math.round(cm * 10) / 10 < 100 ? `${cm.toFixed(1)}cm` : `${(cm / 100).toFixed(2)}m`;
+}
+
 const COMPACT_UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const;
 /** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
  *  단위 아래는 버린다(가진 것보다 많아 보이지 않게). 정확한 값이 필요한 가격·잔액에는 쓰지 않는다. */
