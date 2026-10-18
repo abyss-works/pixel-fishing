@@ -9,23 +9,24 @@ import {
 } from '../../../../features/admin/model/fishSimulation';
 import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
+import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
 import { useDialogs } from '../../../ui/useDialogs';
 import PixelIcon from '../../../ui/PixelIcon';
 import IconButton from '../../../ui/IconButton';
 import PillButton from '../../../ui/PillButton';
-import SectionTitle from '../../../ui/SectionTitle';
+import Subheading from '../../../ui/Subheading';
 import TextInput from '../../../ui/TextInput';
+import TitledCell from '../../../ui/TitledCell';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
-import Frame from '../../../ui/Frame';
 
-// 어종 탭 — **수역 단위 통합 대시보드**. 한 표 안에 편집과 통계가 같이 산다(사용자 지시:
+// 시뮬레이션 구역 — **수역 단위 통합 대시보드**. 한 칸 안에 편집과 통계가 같이 산다(사용자 지시:
 // 어종별 데이터와 통계치를 분리하지 마라 — 수치를 조절하면 그 자리에서 즉시 읽히게).
 //
-//   [머리] 해역명 · 요구 파워 · 배 단계 · 축별 EV 요약 띠(5축 + 지역 내 Δ + Δ직전)
-//   [본문] 어종 행 — 등급/예산·가격·개체가중치는 인라인 편집(오버라이드), 확률은 실시간
-//   [바닥] 수역 초기화 버튼 (오버라이드가 있을 때만)
+//   [칸 제목] 해역명 · 요구 파워 · 배 단계 + 접기 토글, 오버라이드가 있을 때 수역 초기화 버튼
+//   [왼쪽]   축별 EV 요약 띠(5축 + 지역 내 Δ + Δ직전) — 좁은 화면에서는 위에 놓인다
+//   [오른쪽] 어종 행 — 등급/예산·가격·개체가중치는 인라인 편집(오버라이드), 확률은 실시간
 //
 // 오버라이드는 저장 안 됨(새로고침 초기화). 확정 변경은 어종 데이터·수역 데이터 수정이 정본이다.
 
@@ -66,10 +67,10 @@ export default function FishTab() {
     const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      tell('어종 현황 JSON을 클립보드에 복사했다.');
+      tell('어종 현황 JSON을 클립보드에 복사했어요.');
     } catch {
       console.log('pf-export', JSON.stringify(payload, null, 2));
-      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export)에서 복사하세요.');
+      tell('클립보드에 접근하지 못했어요. 개발자 콘솔(pf-export)에서 복사해 주세요.');
     }
   };
 
@@ -79,22 +80,22 @@ export default function FishTab() {
   const exportDeltaJson = async () => {
     const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString());
     if (!payload) {
-      tell('변경된 항목이 없습니다 — Δ JSON은 비어 있습니다.');
+      tell('변경된 항목이 없어요. Δ JSON이 비어 있어요.');
       return;
     }
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      tell(`변화량 Δ JSON (${deltaCount}건)을 클립보드에 복사했다.`);
+      tell(`변화량 Δ JSON(${deltaCount}건)을 클립보드에 복사했어요.`);
     } catch {
       console.log('pf-export-delta', JSON.stringify(payload, null, 2));
-      tell('클립보드 접근 실패 — 개발자 콘솔(pf-export-delta)에서 복사하세요.');
+      tell('클립보드에 접근하지 못했어요. 개발자 콘솔(pf-export-delta)에서 복사해 주세요.');
     }
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <SectionTitle className="flex-1">어종 · 해역 ({FISH.length}종 / {SPOTS.length}해역)</SectionTitle>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Subheading className="mb-0">해역 시뮬레이션 (어종 {FISH.length}종 · 해역 {SPOTS.length}개)</Subheading>
         <div className="flex items-center gap-2">
           <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
@@ -107,25 +108,24 @@ export default function FishTab() {
           </PillButton>
         </div>
       </div>
+      <Note size="xs" className="my-0">
+        입력칸은 시뮬레이션 오버라이드예요. 흐린 글씨가 확정값이고, 비우면 원본으로 돌아가요.
+        저장되지 않아서 새로고침하면 초기화돼요. 기대값 띠와 어종 행의 확률은 입력하는 즉시 함께 움직여요.
+      </Note>
 
-      {/* 수역별 통합 대시보드 — 머리에 통계, 몸통에 편집 가능한 어종 행 */}
+      {/* 수역별 통합 대시보드 — 한 칸에 통계 띠와 편집 가능한 어종 행 */}
       {SPOTS.map((spot, i) => (
         <SpotDashboard key={spot.id} spot={spot}
                        evs={evsBySpot.get(spot.id)!} prevEvs={i > 0 ? evsBySpot.get(SPOTS[i - 1].id)! : null}
                        sim={sim}
                        setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
       ))}
-
-      <Note>
-        입력칸 = 시뮬레이션 오버라이드(placeholder가 확정값, 비우면 원본, 저장 안 됨).
-        머리의 기대값 띠와 어종 행의 확률은 입력 즉시 함께 움직인다.
-      </Note>
       {dialogs}
     </div>
   );
 }
 
-/** 한 수역의 통합 대시보드 — [머리: 통계 띠] + [몸통: 편집 표]가 한 프레임이다 */
+/** 한 수역의 통합 대시보드 — [통계 띠]와 [편집 표]가 한 칸 안의 오목한 칸에 같이 산다 */
 function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
   spot: (typeof SPOTS)[number];
   evs: AxisEvs;
@@ -173,39 +173,40 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   const hasOverride = hasSpotSimulationOverride(bid, sim, list);
 
   return (
-    <Frame as="section" className="p-3" aria-labelledby={`h-${bid}`}>
-      {/* ── 머리: 해역 식별 + 펼침 토글 ── */}
-      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-        <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
-                aria-expanded={open}
-                aria-label={`${spot.name} ${open ? '접기' : '펼치기'}`}
-                onClick={toggleOpen}
-                className="gap-1 hover:text-accent">
-          <span id={`h-${bid}`} className="text-sm text-gold">{spot.name}</span>
-          <span className="text-xs text-text-dim pf-accent ml-1">
-            요구 파워 {spot.powerReq ?? '-'} · 배{spot.boatTier}
-            {'rarityWeight' in spot && spot.rarityWeight ? ' · 예산 오버라이드' : ''}
-          </span>
-        </IconButton>
-        {hasOverride && (
-          <PillButton type="button" aria-label={`${spot.name} 오버라이드 초기화`}
-                  onClick={() => {
-                    setBudgets(p => ({ ...p, [bid]: {} }));
-                    setWeights(p => ({ ...p, [bid]: {} }));
-                    setPrice(p => resetSpotPriceOverrides(p, list));
-                  }}>
-            이 해역 초기화
-          </PillButton>
-        )}
-      </div>
-
-      {/* ── 기대값 띠 — 접었을 때도 보인다(요약의 역할). 5축 값+Δ를 한 줄에 ── */}
+    <TitledCell aria-labelledby={`h-${bid}`}
+      title={
+        /* 칸 제목 줄 — 해역 식별 + 펼침 토글, 오른쪽에 수역 초기화 */
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
+                  aria-expanded={open}
+                  aria-label={`${spot.name} ${open ? '접기' : '펼치기'}`}
+                  onClick={toggleOpen}
+                  className="gap-1">
+            <span id={`h-${bid}`}>{spot.name}</span>
+            <span className="text-xs text-text-dim pf-accent ml-1">
+              요구 파워 {spot.powerReq ?? '-'} · 배{spot.boatTier}
+              {'rarityWeight' in spot && spot.rarityWeight ? ' · 예산 오버라이드' : ''}
+            </span>
+          </IconButton>
+          {hasOverride && (
+            <PillButton type="button" aria-label={`${spot.name} 오버라이드 초기화`}
+                    onClick={() => {
+                      setBudgets(p => ({ ...p, [bid]: {} }));
+                      setWeights(p => ({ ...p, [bid]: {} }));
+                      setPrice(p => resetSpotPriceOverrides(p, list));
+                    }}>
+              이 해역 초기화
+            </PillButton>
+          )}
+        </span>
+      }>
       {open && (
-        <>
+        // 넓은 화면에서는 통계 띠(내용 폭)와 어종 표(남는 폭)를 나란히 둔다
+        <Inset className="grid grid-cols-1 gap-3 p-2 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start">
           {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV|직전|지역내] ──
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
               폭 하나 — 마지막 방치 행(×10)에 한 번만 표기하고 ×4에는 붙이지 않는다. */}
-          <div className="overflow-x-auto mb-3">
+          <div className="overflow-x-auto">
             <DataTable>
               <thead>
                 <tr>
@@ -366,9 +367,9 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
               </tbody>
             </DataTable>
           </div>
-        </>
+        </Inset>
       )}
-    </Frame>
+    </TitledCell>
   );
 }
 
