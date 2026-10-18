@@ -24,7 +24,8 @@ export const VARIANT_EV = 1 + MUTATION_RATE * (VARIANT_PRICE_MULT - 1);
 export const SPEC_MARGIN = 6;
 
 export type Axis = 'normal' | 'good' | 'perfect' | 'idle';
-export const AXES: readonly Axis[] = ['normal', 'good', 'perfect', 'idle'];
+/** 방치가 기준 축이므로 먼저 둔다 */
+export const AXES: readonly Axis[] = ['idle', 'normal', 'good', 'perfect'];
 export const AXIS_LABEL: Record<Axis, string> = { normal: '무판정', good: 'GOOD', perfect: 'PERFECT', idle: '방치' };
 
 export interface Row { fish: Fish; prob: number }

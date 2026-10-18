@@ -51,6 +51,15 @@ const rate = (spot: SpotId, axis: Axis, margin = 0) => {
 };
 const manualAxis = (spot: SpotId, margin = 0): Axis => (axisAvailable(rodSpec(spot, entryLevel(spot) + margin), 'good') ? 'good' : 'normal');
 
+/** 비교 축 — 방치가 기준 축이고 수동 GOOD은 보조 축이다. 출력은 기준 축을 먼저 둔다 */
+type Play = 'idle' | 'manual';
+const PLAYS: readonly Play[] = ['idle', 'manual'];
+const PLAY_LABEL: Record<Play, string> = { idle: '방치', manual: '수동 GOOD' };
+const playAxis = (spot: SpotId, play: Play, margin = 0): Axis => (play === 'idle' ? 'idle' : manualAxis(spot, margin));
+const journeyOf = (play: Play) => simulateJourney(play === 'idle' ? 'idle' : 'good');
+/** 두 축의 값을 기준 축부터 잇는다 */
+const byPlay = (f: (play: Play) => string) => PLAYS.map(p => `${PLAY_LABEL[p]} ${f(p)}`).join(' · ');
+
 // ── 기대값 (관리자 대시보드 어종·해역 탭과 같은 계산 — 낮 풀, 기본 판매가, 고정 다이얼) ──
 if (show('ev')) {
   console.log('\n## 기대값 — 캐치당 골드·명성 (대시보드와 같은 계산: 낮 풀, 돌연변이 제외, 고정 다이얼)');
@@ -95,22 +104,23 @@ if (show('income')) {
   console.log('\n## 수입 — 시간당 골드·명성·캐치 (낮밤 혼합·돌연변이 포함)');
   for (const m of [0, SPEC_MARGIN]) {
     console.log(`\n### ${m ? `여유 스펙(+${m})` : '최소 스펙(진입 레벨)'} — 축: ${AXES.map(a => AXIS_LABEL[a]).join(' · ')} (존이 없는 축은 —)`);
-    console.log('해역 | G/h | 명성/h | 캐치/h(수동·방치) | 수동GOOD÷방치 골드·명성·희귀이상');
+    console.log('해역 | G/h | 명성/h | 캐치/h(방치·수동) | 수동GOOD÷방치 골드·명성·희귀이상');
     for (const s of SPOTS) {
       const spec = rodSpec(s.id, entryLevel(s.id) + m);
       const cell = (f: (r: ReturnType<typeof rates>) => number) =>
         AXES.map(a => (axisAvailable(spec, a) ? n0(f(rate(s.id, a, m))) : '—')).join(' · ');
       const man = rate(s.id, manualAxis(s.id, m), m), idle = rate(s.id, 'idle', m);
       const rare = (r: ReturnType<typeof rates>) => 1 - (r.rarity.common ?? 0);
-      console.log(`${s.name} | ${cell(r => r.goldPerHour)} | ${cell(r => r.famePerHour)} | ${n0(man.catchesPerHour)}·${n0(idle.catchesPerHour)}`
+      console.log(`${s.name} | ${cell(r => r.goldPerHour)} | ${cell(r => r.famePerHour)} | ${n0(idle.catchesPerHour)}·${n0(man.catchesPerHour)}`
         + ` | ×${(man.goldPerHour / idle.goldPerHour).toFixed(1)}·×${(man.famePerHour / idle.famePerHour).toFixed(1)}·×${(rare(man) / rare(idle)).toFixed(1)}`);
     }
   }
-  console.log('\n### 지역 간 배율 — 지역 첫 해역의 수동 GOOD 시간당 골드(최소 스펙)');
+  console.log('\n### 지역 간 배율 — 지역 첫 해역의 시간당 골드(최소 스펙)');
   const firsts = ZONE_ORDER.map(z => spotsOfZone(z)[0]);
   for (let i = 1; i < firsts.length; i++) {
-    const a = rate(firsts[i - 1].id, manualAxis(firsts[i - 1].id)), b = rate(firsts[i].id, manualAxis(firsts[i].id));
-    console.log(`${ZONE_ORDER[i - 1]} → ${ZONE_ORDER[i]}: ×${(b.goldPerHour / a.goldPerHour).toFixed(2)} (${firsts[i - 1].name} → ${firsts[i].name})`);
+    const a = firsts[i - 1].id, b = firsts[i].id;
+    const ratio = (p: Play) => `×${(rate(b, playAxis(b, p)).goldPerHour / rate(a, playAxis(a, p)).goldPerHour).toFixed(2)}`;
+    console.log(`${ZONE_ORDER[i - 1]} → ${ZONE_ORDER[i]}: ${byPlay(ratio)} (${firsts[i - 1].name} → ${firsts[i].name})`);
   }
 }
 
@@ -123,7 +133,7 @@ if (show('growth')) {
     const rod = rodCum(entryLevel(b.id)) - rodCum(entryLevel(a.id));
     const gold = (boat?.price ?? 0) + rod;
     console.log(`${a.name} → ${b.name}: ${n0(gold)}G (배 ${n0(boat?.price ?? 0)} + 강화 ${n0(rod)}, 명성 ${n0(boat?.fameReq ?? 0)})`
-      + ` = 수동 ${hrs(gold / rate(a.id, manualAxis(a.id)).goldPerHour)} · 방치 ${hrs(gold / rate(a.id, 'idle').goldPerHour)}`);
+      + ` = ${byPlay(p => hrs(gold / rate(a.id, playAxis(a.id, p)).goldPerHour))}`);
   }
   console.log('강화비: ' + [1, 5, 10, 15, 18, 19, 20, 22, 25].map(l => `L${l}→${l + 1} ${n0(upgradeCost(l))}`).join(' · '));
 }
@@ -131,9 +141,9 @@ if (show('growth')) {
 // ── 새 계정 진행 ──
 if (show('journey')) {
   console.log('\n## 새 계정 진행 — 열린 최고 해역에서 낚고 다음 해역에 필요한 배·강화를 바로 산다');
-  for (const axis of ['good', 'idle'] as const) {
-    const j = simulateJourney(axis);
-    console.log(`\n### ${axis === 'good' ? '수동 GOOD' : '방치'}`);
+  for (const p of PLAYS) {
+    const j = journeyOf(p);
+    console.log(`\n### ${PLAY_LABEL[p]}`);
     console.log('도착 해역 | 누적 | 이전 해역에서 기다린 것(골드·명성·둘 다)');
     for (const a of j.arrivals.slice(1)) {
       console.log(`${nameOf(a.spot)} (${zoneOf(a.spot)}) | ${hrs(a.hours)} | ${hrs(a.waitGold / 3600)}·${hrs(a.waitFame / 3600)}·${hrs(a.waitBoth / 3600)}`);
@@ -159,7 +169,7 @@ if (show('fame')) {
     const tier = Math.max(0, ...BOATS.filter(b => b.fameReq <= fame).map(b => b.tier));
     return SPOTS.filter(s => s.boatTier <= tier).at(-1)!;
   };
-  for (const axis of ['good', 'idle'] as const) {
+  for (const p of PLAYS) {
     let fame = 0, h = 0;
     const out: string[] = [];
     for (const g of gates) {
@@ -167,12 +177,12 @@ if (show('fame')) {
         const nextBoat = BOATS.filter(b => b.fameReq > fame).sort((a, b) => a.fameReq - b.fameReq)[0];
         const target = Math.min(g.fame, nextBoat?.fameReq ?? Infinity);
         const s = bestSpot(fame).id;
-        h += (target - fame) / rate(s, axis === 'good' ? manualAxis(s) : 'idle').famePerHour;
+        h += (target - fame) / rate(s, playAxis(s, p)).famePerHour;
         fame = target;
       }
       out.push(`${g.name} ${n0(g.fame)} → ${hrs(h)}`);
     }
-    console.log(`${axis === 'good' ? '수동 GOOD' : '방치'}: ${out.join(' · ')}`);
+    console.log(`${PLAY_LABEL[p]}: ${out.join(' · ')}`);
   }
 }
 
@@ -180,9 +190,9 @@ if (show('fame')) {
 if (show('monotonic')) {
   console.log('\n## 단조성 — 해역 순서대로 시간당 골드·명성이 줄어드는 쌍과 완화 여유');
   for (const m of [0, SPEC_MARGIN]) {
-    for (const kind of ['manual', 'idle'] as const) {
-      const val = (s: SpotId, k: 'goldPerHour' | 'famePerHour') => rate(s, kind === 'manual' ? manualAxis(s, m) : 'idle', m)[k];
-      const label = `${kind === 'manual' ? '수동 GOOD' : '방치'} · ${m ? `여유 +${m}` : '최소 스펙'}`;
+    for (const p of PLAYS) {
+      const val = (s: SpotId, k: 'goldPerHour' | 'famePerHour') => rate(s, playAxis(s, p, m), m)[k];
+      const label = `${PLAY_LABEL[p]} · ${m ? `여유 +${m}` : '최소 스펙'}`;
       const goldInv = inversions(SPOTS, s => val(s.id, 'goldPerHour'));
       const fameInv = inversions(SPOTS, s => val(s.id, 'famePerHour'));
       console.log(`\n### ${label}`);
@@ -200,33 +210,35 @@ if (show('monotonic')) {
 // ── 경제 ──
 if (show('economy')) {
   console.log('\n## 경제');
-  console.log('\n### 강화 1단계 시간 — 진입 레벨에서 다음 강화비를 버는 시간(수동·방치)');
+  console.log('\n### 강화 1단계 시간 — 진입 레벨에서 다음 강화비를 버는 시간');
   console.log(SPOTS.map(s => {
     const c = upgradeCost(entryLevel(s.id));
-    return `${s.name} L${entryLevel(s.id)} ${n0(c)}G ${hrs(c / rate(s.id, manualAxis(s.id)).goldPerHour)}·${hrs(c / rate(s.id, 'idle').goldPerHour)}`;
+    return `${s.name} L${entryLevel(s.id)} ${n0(c)}G ${byPlay(p => hrs(c / rate(s.id, playAxis(s.id, p)).goldPerHour))}`;
   }).join('\n'));
-  console.log('\n### 미끼 손익 — 수동 GOOD 최소 스펙, 캐치당 (판매가 증가 − 미끼값) · 명성 증가');
-  for (const s of SPOTS) {
-    const base = rate(s.id, manualAxis(s.id));
-    const perCatch = (r: ReturnType<typeof rates>) => ({ g: r.goldPerHour / r.catchesPerHour, f: r.famePerHour / r.catchesPerHour });
-    const b0 = perCatch(base);
-    const line = BAITS.map(bait => {
-      const w = rarityWeightOf(s.id, bait.targetRarity);
-      if (w <= 0) return `${bait.name} —`;
-      const r = rates(s.id, entryLevel(s.id), manualAxis(s.id), { budgets: { [bait.targetRarity]: w * BAIT_WEIGHT_MULT } });
-      const b1 = perCatch(r);
-      const df = b1.f - b0.f;
-      return `${bait.name} ${n0(b1.g - b0.g - bait.price)}G·명성${df >= 0 ? '+' : ''}${n1(df)}`;
-    }).join(' · ');
-    console.log(`${s.name}: ${line}`);
+  const perCatch = (r: ReturnType<typeof rates>) => ({ g: r.goldPerHour / r.catchesPerHour, f: r.famePerHour / r.catchesPerHour });
+  for (const p of PLAYS) {
+    console.log(`\n### 미끼 손익 — ${PLAY_LABEL[p]} 최소 스펙, 캐치당 (판매가 증가 − 미끼값) · 명성 증가`);
+    for (const s of SPOTS) {
+      const b0 = perCatch(rate(s.id, playAxis(s.id, p)));
+      const line = BAITS.map(bait => {
+        const w = rarityWeightOf(s.id, bait.targetRarity);
+        if (w <= 0) return `${bait.name} —`;
+        const b1 = perCatch(rates(s.id, entryLevel(s.id), playAxis(s.id, p), { budgets: { [bait.targetRarity]: w * BAIT_WEIGHT_MULT } }));
+        const df = b1.f - b0.f;
+        return `${bait.name} ${n0(b1.g - b0.g - bait.price)}G·명성${df >= 0 ? '+' : ''}${n1(df)}`;
+      }).join(' · ');
+      console.log(`${s.name}: ${line}`);
+    }
   }
   const last = SPOTS.at(-1)!;
-  const j = simulateJourney('good');
   console.log('\n### 남는 골드 — 배를 모두 산 뒤의 소모처는 강화뿐');
-  console.log(`마지막 배 구매(수동 GOOD 진행): ${j.lastBoatHours === null ? '—' : hrs(j.lastBoatHours)}`);
+  console.log(`마지막 배 구매(새 계정 진행): ${byPlay(p => {
+    const h = journeyOf(p).lastBoatHours;
+    return h === null ? '—' : hrs(h);
+  })}`);
   for (const m of [0, SPEC_MARGIN]) {
     const lv = entryLevel(last.id) + m;
-    console.log(`${last.name} Lv.${lv}: 다음 강화 ${n0(upgradeCost(lv))}G = 수동 ${hrs(upgradeCost(lv) / rates(last.id, lv, manualAxis(last.id, m)).goldPerHour)} · 방치 ${hrs(upgradeCost(lv) / rates(last.id, lv, 'idle').goldPerHour)}`);
+    console.log(`${last.name} Lv.${lv}: 다음 강화 ${n0(upgradeCost(lv))}G = ${byPlay(p => hrs(upgradeCost(lv) / rates(last.id, lv, playAxis(last.id, p, m)).goldPerHour))}`);
   }
 }
 
@@ -238,9 +250,9 @@ if (show('dex')) {
     const s = [...xs].sort((a, b) => a - b);
     return `평균 ${hrs(s.reduce((a, b) => a + b, 0) / s.length)} · p90 ${hrs(s[Math.floor(s.length * 0.9)])}`;
   };
-  const simulate = (zone: string, kind: 'manual' | 'idle') => {
+  const simulate = (zone: string, p: Play) => {
     const spots = spotsOfZone(zone);
-    const tables = spots.map(s => rate(s.id, kind === 'manual' ? manualAxis(s.id) : 'idle'));
+    const tables = spots.map(s => rate(s.id, playAxis(s.id, p)));
     const ids = FISH.filter(f => spots.some(s => s.id === f.spot));
     const noLegend = ids.filter(f => f.rarity !== 'legendary').map(f => f.id);
     const all = ids.map(f => f.id);
@@ -271,9 +283,9 @@ if (show('dex')) {
   for (const z of ZONE_ORDER) {
     const n = FISH.filter(f => spotsOfZone(z).some(s => s.id === f.spot)).length;
     console.log(`\n### ${z} (${n}종)`);
-    for (const kind of ['manual', 'idle'] as const) {
-      const x = simulate(z, kind);
-      console.log(`${kind === 'manual' ? '수동 GOOD' : '방치'}: 일반(전설 제외) ${stat(x.noLegend)} | 일반 전부 ${stat(x.all)} | 돌연변이 전부 ${stat(x.variant)}`
+    for (const p of PLAYS) {
+      const x = simulate(z, p);
+      console.log(`${PLAY_LABEL[p]}: 일반(전설 제외) ${stat(x.noLegend)} | 일반 전부 ${stat(x.all)} | 돌연변이 전부 ${stat(x.variant)}`
         + ` | 전설 첫 조우 ${x.legend.length ? stat(x.legend) : '전설 없음'}`);
     }
   }
@@ -287,14 +299,14 @@ if (show('bounty')) {
     const spots = spotsOfZone(z);
     const avg = (f: (s: SpotId) => number) => spots.reduce((s, sp) => s + f(sp.id), 0) / spots.length;
     const named = BOUNTIES.find(q => q.zone === z && q.difficulty === 'named')!;
-    const encounterH = (axis: 'good' | 'idle') => 1 / NAMED_ENCOUNTER_RATE / avg(s => rate(s, axis === 'good' ? manualAxis(s) : 'idle').catchesPerHour);
-    console.log(`[${z}] 네임드 토벌 ${n0(named.reward)}G — 조우까지 수동 ${hrs(encounterH('good'))} · 방치 ${hrs(encounterH('idle'))}`);
+    const encounterH = (p: Play) => 1 / NAMED_ENCOUNTER_RATE / avg(s => rate(s, playAxis(s, p)).catchesPerHour);
+    console.log(`[${z}] 네임드 토벌 ${n0(named.reward)}G — 조우까지 ${byPlay(p => hrs(encounterH(p)))}`);
     for (const q of BOUNTIES.filter(b => b.zone === z && b.difficulty !== 'named')) {
-      const line = (['good', 'idle'] as const).map(axis => {
-        const r = (s: SpotId) => rate(s, axis === 'good' ? manualAxis(s) : 'idle');
+      const line = PLAYS.map(p => {
+        const r = (s: SpotId) => rate(s, playAxis(s, p));
         const perHour = avg(s => r(s).rows.filter(x => x.fish.rarity === q.grade).reduce((a, x) => a + x.prob, 0) * r(s).catchesPerHour);
         const h = q.count / perHour;
-        return `${axis === 'good' ? '수동' : '방치'} ${hrs(h)}(${(q.reward / (h * avg(s => r(s).goldPerHour)) * 100).toFixed(0)}%)`;
+        return `${PLAY_LABEL[p]} ${hrs(h)}(${(q.reward / (h * avg(s => r(s).goldPerHour)) * 100).toFixed(0)}%)`;
       }).join(' · ');
       console.log(`  ${q.difficulty} ${q.grade}×${q.count} ${n0(q.reward)}G: ${line}`);
     }
