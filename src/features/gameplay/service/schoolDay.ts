@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { schoolDayOf } from '../../../game/rules/time';
+import { gameDayOf } from '../../../game/rules/time';
 import { schoolsOf } from '../../../game/world';
 import type { RegionId, School } from '../../../game/world';
 
@@ -11,7 +11,7 @@ let day: string | null = null;
 const listeners = new Set<() => void>();
 
 export function getSchoolDay(): string {
-  day ??= schoolDayOf(new Date().toISOString());
+  day ??= gameDayOf(new Date().toISOString());
   return day;
 }
 

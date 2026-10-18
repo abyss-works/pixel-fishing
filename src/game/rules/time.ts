@@ -55,19 +55,28 @@ export function formatGameClock(nowIso: string): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
-// ---------- 어군 배치 날짜 — 벽시계 날짜 주기(KST 04:00 경계) ----------
-// 낮/밤(1시간 주기)과 별개로, 대양 어군 배치는 실제 하루에 한 번 바뀐다. 00:00~04:00 정산
-// 구간 뒤에 리셋한다는 운영 관례를 따라 경계는 KST 04:00이고, 그 전은 전날로 센다.
-// 서버가 boot 결과에 실어 주므로 모든 사용자가 같은 날짜(=같은 배치)를 본다.
+// ---------- 게임 날짜 — 벽시계 날짜 주기(KST 04:00 경계) ----------
+// 낮/밤(1시간 주기)과 별개로, 실제 하루에 한 번 바뀌는 것은 모두 같은 경계를 쓴다 — 대양 어군 배치,
+// 바운티 헌팅의 의뢰 만료·하루 클리어 횟수·일일 의뢰. 00:00~04:00 정산 구간 뒤에 리셋한다는
+// 운영 관례를 따라 경계는 KST 04:00이고, 그 전은 전날로 센다. 시각은 서버가 정하므로 모든
+// 사용자가 같은 날짜를 본다.
 
-/** 어군 배치가 바뀌는 KST 시각 */
-export const SCHOOL_DAY_RESET_HOUR_KST = 4;
+/** 게임 날짜가 바뀌는 KST 시각 */
+export const GAME_DAY_RESET_HOUR_KST = 4;
 const KST_OFFSET_MS = 9 * 3600_000;
+const DAY_MS = 86_400_000;
+/** UTC 시각에 더하면 UTC 날짜가 곧 게임 날짜가 되는 이동량 — KST로 옮긴 뒤 경계 시각만큼 되돌린다 */
+const GAME_DAY_SHIFT_MS = KST_OFFSET_MS - GAME_DAY_RESET_HOUR_KST * 3600_000;
 
-/** 어군 배치 시드가 되는 날짜(YYYY-MM-DD) — KST 04:00 경계. 04:00 이전은 전날이다 */
-export function schoolDayOf(nowIso: string): string {
-  const shifted = Date.parse(nowIso) + KST_OFFSET_MS - SCHOOL_DAY_RESET_HOUR_KST * 3600_000;
-  return new Date(shifted).toISOString().slice(0, 10);
+/** 게임 날짜(YYYY-MM-DD) — KST 04:00 경계. 04:00 이전은 전날이다 */
+export function gameDayOf(nowIso: string): string {
+  return new Date(Date.parse(nowIso) + GAME_DAY_SHIFT_MS).toISOString().slice(0, 10);
+}
+
+/** 그 시각이 속한 게임 날짜가 시작된 순간(UTC ISO) — 그날의 KST 04:00. 하루 단위 집계와 만료의 경계다 */
+export function gameDayStartISO(nowIso: string): string {
+  const shifted = Date.parse(nowIso) + GAME_DAY_SHIFT_MS;
+  return new Date(Math.floor(shifted / DAY_MS) * DAY_MS - GAME_DAY_SHIFT_MS).toISOString();
 }
 
 /** 어둠 강도 0~1 — **경계에서 급격히 튀지 않고 서서히 변한다** (UI 연출용).

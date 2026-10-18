@@ -28,7 +28,7 @@ import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
-import { isNight, schoolDayOf } from './time.js';
+import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 
 export type GameAction =
@@ -84,7 +84,7 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
-  /** schoolDay = 이 세션의 대양 어군 배치 날짜(KST 04:00 경계) — 시계의 정본은 서버다 */
+  /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
   | { type: 'none' };
 
@@ -495,7 +495,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const buildId = typeof action.buildId === 'string'
         ? action.buildId.trim().slice(0, 64) : '';
       return {
-        ok: true, state, result: { type: 'boot', schoolDay: schoolDayOf(deps.now) },
+        ok: true, state, result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }
