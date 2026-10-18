@@ -90,7 +90,7 @@ describe('마을 랭킹 게시판', () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
-    const dialog = screen.getByRole('dialog', { name: '랭킹' });
+    const dialog = screen.getByRole('heading', { name: '랭킹' }).closest('[role="dialog"]') as HTMLElement;
     expect(within(dialog).getByRole('heading', { name: '명성' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: '도감' })).toBeInTheDocument();
     await waitFor(() => expect(within(dialog).getAllByText('랭킹은 온라인에서만 볼 수 있어요.')).toHaveLength(2));

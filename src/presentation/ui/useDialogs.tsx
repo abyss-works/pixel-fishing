@@ -6,7 +6,7 @@ import NoticeDialog from './NoticeDialog';
 import { TextNotice } from './NoticeBody';
 
 type Pending =
-  | { kind: 'confirm'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
+  | { kind: 'confirm'; layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
   | { kind: 'input'; title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string; resolve: (v: string | null) => void }
   | { kind: 'notice'; title: string; body: ReactNode; value?: string; resolve: () => void };
 
@@ -20,7 +20,7 @@ export function useDialogs() {
   const [pending, setPending] = useState<Pending | null>(null);
   const close = () => setPending(null);
 
-  const confirm = (o: { title: string; body: ReactNode; confirmLabel: string }) =>
+  const confirm = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string }) =>
     new Promise<boolean>(resolve => setPending({ kind: 'confirm', ...o, resolve }));
   const input = (o: { title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string }) =>
     new Promise<string | null>(resolve => setPending({ kind: 'input', ...o, resolve }));
@@ -29,7 +29,7 @@ export function useDialogs() {
 
   const dialogs = !pending ? null
     : pending.kind === 'confirm' ? (
-      <ConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel}
+      <ConfirmDialog layer={pending.layer} title={pending.title} confirmLabel={pending.confirmLabel}
                      onConfirm={() => { close(); pending.resolve(true); }}
                      onCancel={() => { close(); pending.resolve(false); }}>
         {bodyOf(pending.body)}
