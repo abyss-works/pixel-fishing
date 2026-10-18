@@ -17,7 +17,7 @@ export function createApi(): ApiClient {
 export const api = createApi();
 
 export { when } from '../../shared/lib/when';
-export { readBounty, kstDay } from '../adapters/bounty';
+export { readBounty, kstDay, gameDay } from '../adapters/bounty';
 export { readRanking } from '../adapters/ranking';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,

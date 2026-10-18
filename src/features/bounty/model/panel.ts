@@ -1,12 +1,12 @@
 import { artifactOfZone } from '../../../game/content/artifacts';
 import {
-  dailyQuestFor, zoneOfPort,
+  bountyById, bountyKindOf, dailyQuestFor, zoneOfPort,
 } from '../../../game/content/bounties';
-import type { BountyDifficulty, BountyPort, BountyQuest } from '../../../game/content/bounties';
+import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { zoneById } from '../../../game/content/zones';
 import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challenge';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
+import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import type { BountySnapshot } from './types';
@@ -33,10 +33,14 @@ export interface BountyPanelInput {
 
 export interface BountyPanelData {
   zone: NonNullable<ReturnType<typeof zoneOfPort>>;
+  /** 오늘 남은 클리어 횟수 — 일반 의뢰. 스냅샷이 없으면 null */
   leftAll: number | null;
+  /** 오늘 남은 클리어 횟수 — 네임드 토벌. 스냅샷이 없으면 null */
   leftNamed: number | null;
   dailyCap: number;
   namedDailyCap: number;
+  /** 난이도 칸에 보일 의뢰 — 그 칸에서 수주 중인 의뢰가 있으면 오늘의 의뢰 대신 그것이다.
+   *  날이 바뀐 뒤에도 조건을 채운 의뢰를 마칠 수 있어야 한다 */
   offers: Record<BountyDifficulty, BountyQuest | undefined>;
   progressOf: (questId: string) => number;
   /** 수주 중인가 — 수주하면 진행 행(진행도 0)이 생기므로 행의 존재가 곧 수주다 */
@@ -47,6 +51,8 @@ export interface BountyPanelData {
   namedOpen: boolean;
   canTake: boolean;
   canTakeNamed: boolean;
+  /** 수주 버튼이 갈래 단위로 막힌 이유 — 한도를 다 썼거나 다른 구역에서 수주 중일 때만 있다 */
+  notice: Record<BountyKind, string | null>;
   ticketMins: number | null;
   hasTicket: boolean;
   relic: ReturnType<typeof artifactOfZone>;
@@ -54,14 +60,23 @@ export interface BountyPanelData {
   relicMats: number;
 }
 
-/** 오늘 남은 수주 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
-export function acceptsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
+/** 오늘 남은 클리어 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
+export function clearsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
   if (!snapshot) return null;
   return {
-    general: BOUNTY_DAILY_CAP - snapshot.acceptsToday,
-    named: BOUNTY_NAMED_DAILY_CAP - snapshot.namedToday,
+    general: Math.max(0, bountyDailyCap('general') - snapshot.clearsToday.general),
+    named: Math.max(0, bountyDailyCap('named') - snapshot.clearsToday.named),
   };
 }
+
+const CLEARED_NOTICE: Record<BountyKind, string> = {
+  general: '오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
+  named: '오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
+};
+const ELSEWHERE_NOTICE: Record<BountyKind, string> = {
+  general: '다른 구역에서 수주한 일반 의뢰가 있어요. 먼저 마쳐 주세요.',
+  named: '다른 구역에서 수주한 네임드 토벌이 있어요. 먼저 마쳐 주세요.',
+};
 
 /** 오늘 의뢰판의 데이터·조건·진행 상태를 모은다. */
 export function selectBountyPanelData({
@@ -70,12 +85,27 @@ export function selectBountyPanelData({
   const zone = zoneOfPort(port)!;
   const who = uid ?? 'local';
   const difficulties: BountyDifficulty[] = ['easy', 'normal', 'hard', 'named'];
-  const offers = Object.fromEntries(difficulties.map(difficulty => [
-    difficulty, dailyQuestFor(zone, difficulty, who, day),
-  ])) as Record<BountyDifficulty, BountyQuest | undefined>;
-  const left = acceptsLeft(snapshot);
+  const left = clearsLeft(snapshot);
   const leftAll = left?.general ?? null;
   const leftNamed = left?.named ?? null;
+  // 갈래마다 수주 중인 의뢰 하나 — 어느 구역의 것이든 같은 갈래의 새 수주를 막는다
+  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
+  for (const row of snapshot?.progress ?? []) {
+    const held = bountyById(row.questId);
+    if (held) holding[bountyKindOf(held)] ??= held;
+  }
+  const heldHere = (difficulty: BountyDifficulty): BountyQuest | undefined =>
+    Object.values(holding).find(q => q?.zone === zone && q.difficulty === difficulty);
+  const offers = Object.fromEntries(difficulties.map(difficulty => [
+    difficulty, heldHere(difficulty) ?? dailyQuestFor(zone, difficulty, who, day),
+  ])) as Record<BountyDifficulty, BountyQuest | undefined>;
+  const shown = new Set(Object.values(offers).map(q => q?.id));
+  const noticeOf = (kind: BountyKind): string | null => {
+    if (left === null) return null;
+    if (left[kind] <= 0) return CLEARED_NOTICE[kind];
+    const held = holding[kind];
+    return held && !shown.has(held.id) ? ELSEWHERE_NOTICE[kind] : null;
+  };
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;
   const isAccepted = (questId: string): boolean =>
@@ -105,8 +135,9 @@ export function selectBountyPanelData({
     namedConds,
     basicOpen: basicConds.every(condition => condition.ok),
     namedOpen: namedConds.every(condition => condition.ok),
-    canTake: snapshot !== null && (leftAll ?? 0) > 0,
-    canTakeNamed: snapshot !== null && (leftNamed ?? 0) > 0,
+    canTake: snapshot !== null && (leftAll ?? 0) > 0 && !holding.general,
+    canTakeNamed: snapshot !== null && (leftNamed ?? 0) > 0 && !holding.named,
+    notice: { general: noticeOf('general'), named: noticeOf('named') },
     ticketMins,
     hasTicket: ticketMins !== null && ticketMins > 0,
     relic,

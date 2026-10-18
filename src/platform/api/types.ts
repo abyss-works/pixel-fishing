@@ -2,6 +2,7 @@
 import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
+import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
 export type { MaybePromise } from '../../shared/lib/when';
@@ -51,9 +52,11 @@ export interface RankingBoard { board: RankingBoardId; fishId?: string; top: Ran
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }
 export interface BountySnapshot {
-  acceptsToday: number;
-  namedToday: number;
+  /** 오늘(게임 날짜, KST 04:00 경계) 클리어한 횟수 — 수배판에서 보상을 받은 납품·토벌. 갈래별로 센다 */
+  clearsToday: Record<BountyKind, number>;
+  /** 수주 중인 의뢰의 진행도 — 날이 바뀌며 만료된 의뢰는 담기지 않는다 */
   progress: BountyProgressRow[];
+  /** 수주 중인 의뢰의 도전권 */
   tickets: BountyTicketRow[];
 }
 

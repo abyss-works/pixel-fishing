@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { boatNameOf } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { useBounty } from '../../../features/bounty/service/useBounty';
-import { acceptsLeft } from '../../../features/bounty/model/panel';
+import { clearsLeft } from '../../../features/bounty/model/panel';
 import Divider from '../Divider';
 import { fmtCompact } from '../format';
 import { cx } from '../cx';
@@ -28,7 +28,7 @@ import type { GlyphId } from '../PixelIcon';
 // **골드·명성은 줄임 표기(fmtCompact)** — 값이 커져도 칸 폭이 거의 그대로다. 단위 G는 이름 줄이 대신한다.
 // **가방은 "수량 (비율%)"** — 채울수록 주황·빨강으로 바뀌어 팔 때를 알린다.
 // **자리는 스테이지(사이드바를 뺀 화면 영역) 위쪽 가운데**다. 스테이지가 이 바의 기준 상자다.
-// **칸은 처음부터 모두 그린다** — 서버 값(수주/토벌)이 아직 없으면 자리만 두고 "–"를 보인다.
+// **칸은 처음부터 모두 그린다** — 서버 값(오늘 의뢰)이 아직 없으면 자리만 두고 "–"를 보인다.
 // 늦게 도착한 칸이 끼어들며 바 전체가 늘어나지 않게 하려는 것이다.
 const TONE = { gold: 'text-gold', orange: 'text-orange', danger: 'text-danger' } as const;
 
@@ -53,10 +53,10 @@ const BAG_TONE: Record<BagLevel, keyof typeof TONE> = { normal: 'gold', warn: 'o
 const UNKNOWN = '–';
 
 export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
-  // 남은 수주(일반)·토벌(네임드) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면
+  // 오늘 남은 클리어 횟수(일반 의뢰 · 네임드 토벌) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면
   // 숫자 대신 "–"를 둔다 (0으로 보이면 거짓말이다).
   const { snap } = useBounty();
-  const left = acceptsLeft(snap);
+  const left = clearsLeft(snap);
   const bag = selectBagStatus(game);
   const stats = [
     <Stat key="gold" glyph="coin" label="골드"><b className="font-bold">{fmtCompact(game.gold)}</b></Stat>,
@@ -66,7 +66,7 @@ export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?
     </Stat>,
     <Stat key="boat" glyph="boat" label="배">{boatNameOf(game.boat)}</Stat>,
     <Stat key="rod" glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>,
-    <Stat key="bounty" glyph="ticket" label="수주/토벌">
+    <Stat key="bounty" glyph="ticket" label="오늘 의뢰">
       <span className="inline-flex items-center gap-1.5">
         <b className="font-bold">{left?.general ?? UNKNOWN}</b>
         <Divider vertical />

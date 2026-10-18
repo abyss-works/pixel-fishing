@@ -22,7 +22,7 @@ vi.mock('../../../platform/api', () => ({
     },
   },
   readBounty: async () => { state.bountyCalls++; return null; },
-  kstDay: () => '2026-10-17',
+  gameDay: () => '2026-10-17',
 }));
 
 import { fetchSession, setSessionUid, toGate, useSession } from './session';

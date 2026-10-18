@@ -10,7 +10,7 @@ import { useDevTools } from '../../../features/devtools/service/useDevTools';
 import {
   armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
 } from '../../../features/bounty/service/forceEncounter';
-import { kstDay } from '../../../features/bounty/service/queryKeys';
+import { gameDay } from '../../../features/bounty/service/queryKeys';
 import { setCanvasCover, useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useKeyScope } from '../../ui/hotkeys';
 import { cx } from '../../ui/cx';
@@ -154,7 +154,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
                 {section === 'presets' && DEV_PRESETS.map(preset => (
                   <div key={preset.id} className="flex flex-col gap-1">
                     <Button full disabled={tools.busy}
-                            onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: kstDay() })}>
+                            onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: gameDay() })}>
                       {preset.label}
                     </Button>
                     <span className="text-xs text-text-dim">{preset.hint}</span>
