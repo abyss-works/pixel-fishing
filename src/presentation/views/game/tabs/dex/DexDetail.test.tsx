@@ -33,6 +33,12 @@ describe('도감 상세의 크기 순위', () => {
     expect(state.asked).toEqual([['species', fish.id]]);
   });
 
+  it('크기 분포에 내 최대 기록의 상위 백분율을 표시한다', async () => {
+    show();
+    expect(await screen.findByText(/^상위 [\d.]+%$/)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /내 최대 기록 20\.0cm/ })).toBeInTheDocument();
+  });
+
   it('로컬 모드에서는 순위 구역을 숨긴다', async () => {
     state.result = null;
     show();

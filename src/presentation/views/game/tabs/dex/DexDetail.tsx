@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Fish, GameState } from '../../../../../game/rules/logic';
 import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
+import { selectSizeDistribution } from '../../../../../features/dex/model/sizeDistribution';
+import SizeDistributionChart from './SizeDistributionChart';
 import { useSpeciesRanking } from '../../../../../features/ranking/service/useRanking';
 import RankList from '../../../../ui/RankList';
 import Subheading from '../../../../ui/Subheading';
@@ -12,7 +14,8 @@ import { RarityText, RarityDot } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import { fmtGold, fmtSize } from '../../../../ui/format';
 
-// 도감 상세보기 — 위(초상화, 좌우 화살표로 기본형/변이 전환) + 아래(정보) 2단 구성.
+// 도감 상세보기 — 왼쪽(초상화·이름·로어·기록, 좌우 화살표로 기본형/변이 전환) · 오른쪽(크기 분포·크기 순위) 2열.
+// 좁은 화면에서는 위아래로 쌓는다.
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 폼을 전환하면 이름/로어/가격/마릿수/크기/첫 조우일이
 // 전부 그 폼의 것으로 바뀐다. 등급·형태·크기 분포만 종에 종속.
 export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
@@ -25,9 +28,12 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   const form = forms[i];
   // 어종 크기 순위 — 폼과 무관하게 어종 단위다. 랭킹이 없는 로컬 모드에서는 구역을 숨긴다
   const ranking = useSpeciesRanking(fish.id);
+  const distribution = selectSizeDistribution(game, fish);
 
   return (
-    <Modal onClose={onClose}>
+    <Modal xl onClose={onClose}>
+      <div className="grid grid-cols-2 gap-5 max-[640px]:grid-cols-1">
+      <section className="min-w-0">
       <div className="flex items-center justify-center gap-2">
         <ArrowButton dir={-1} tone="solid" aria-label="이전 형태"
                 onClick={() => setI((i - 1 + forms.length) % forms.length)} />
@@ -60,8 +66,16 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           <span className="text-text-dim">처음 만난 날</span>
           <span>{form.discovered ? (form.firstCaught ?? '알 수 없음') : '???'}</span>
         </div>
+      </div>
+      </section>
+
+      <section className="min-w-0 flex flex-col gap-3">
+        <div>
+          <Subheading>크기 분포</Subheading>
+          <SizeDistributionChart data={distribution} />
+        </div>
         {!ranking.offline && (
-          <div className="mt-3">
+          <div>
             <Subheading>크기 순위</Subheading>
             <RankingStatus loading={ranking.loading} failed={ranking.failed} offline={false}
                            empty={!!ranking.data && ranking.data.top.length === 0} />
@@ -71,6 +85,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
             )}
           </div>
         )}
+      </section>
       </div>
     </Modal>
   );
