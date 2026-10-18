@@ -13,7 +13,7 @@ describe('네임드 상세', () => {
   it('토벌 전에는 이름과 전승을 가리고 잠금 안내를 보인다', () => {
     render(<NamedDetail quest={quest} game={newState()} onClose={() => {}} />);
     expect(screen.getByText('???')).toBeInTheDocument();
-    expect(screen.getByText(/토벌한 뒤에 읽을 수 있다/)).toBeInTheDocument();
+    expect(screen.getByText(/토벌한 뒤에 읽을 수 있어요/)).toBeInTheDocument();
     expect(screen.queryByText(named.chronicle[0])).not.toBeInTheDocument();
   });
 

@@ -20,6 +20,7 @@ import AccountModal from '../../../overlays/account/AccountModal';
 import LetterModal from '../../../overlays/letter/LetterModal';
 import DisplayModal from '../../../overlays/display/DisplayModal';
 import CodeModal from '../../../overlays/codes/CodeModal';
+import type { Notify } from '../../../../ui/hud/messageFeed';
 
 // 설정 탭 버튼은 전부 **아이콘 + 가운데 정렬**이다. 목록형이라 왼쪽 정렬이었는데, 글자 길이가
 // 제각각(3~9자)이라 줄마다 시작점은 같고 끝점이 달라 들쭉날쭉했다. 아이콘이 붙으면서
@@ -39,7 +40,7 @@ const FISH_ART_OPTIONS = SETTING_PROMPTS.find(p => p.id === 'fish-art')!.options
 /** 조우 알림 요약 — 차단·미지원은 여기서 켤 수 없으니 이유만 보인다 */
 function alertSummary(setting: EncounterAlertSetting): string {
   if (setting.permission === 'unsupported') return '이 브라우저는 알림을 지원하지 않아요';
-  if (setting.permission === 'denied') return '브라우저에서 막혀 있어요 (사이트 설정에서 허용)';
+  if (setting.permission === 'denied') return '브라우저에서 막혀 있어요. 사이트 설정에서 허용할 수 있어요.';
   return setting.active ? '켜짐 · 다른 화면을 볼 때 알려 줘요' : '꺼짐';
 }
 
@@ -49,7 +50,7 @@ function alertSummary(setting: EncounterAlertSetting): string {
 export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncState, account, uid, onAuthChanged, nickname, onRename }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
   syncLabel: string | null; syncState: string;
   account: string | null; uid: string | null; onAuthChanged: () => Promise<void>;
   nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
@@ -87,7 +88,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
                       ? <Button size="sm" aria-label="조우 알림 끄기" onClick={alertSetting.disable}>끄기</Button>
                       : <Button size="sm" aria-label="조우 알림 켜기" onClick={() => {
                           void alertSetting.enable().then(ok => {
-                            if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.');
+                            if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
                           });
                         }}>켜기</Button>)} />
       </Frame>

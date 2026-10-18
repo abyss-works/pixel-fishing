@@ -40,9 +40,9 @@ describe('EncounterModal', () => {
     expect(screen.getByText(/같은 그림자를 보고했다/)).toBeInTheDocument();
     expect(screen.getByText('그림자가 돌아선다.')).toBeInTheDocument();
     expect(screen.queryByText('메갈로돈')).toBeNull();
-    expect(screen.queryByRole('button', { name: '챔질!' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '챔질' })).toBeNull();
     enter();
-    expect(screen.getByRole('button', { name: '챔질!' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '챔질' })).toBeInTheDocument();
   });
 
   it('네임드 체력(메갈로돈 6)만큼 맞히면 이름이 드러나고 토벌 버튼이 결과를 보낸다', () => {
@@ -52,7 +52,7 @@ describe('EncounterModal', () => {
     for (let i = 0; i < 6; i++) {
       zoneLefts.add(pct(document.querySelector('[data-duel="zone"]'), 'left'));
       waitForZone();
-      fireEvent.click(screen.getByRole('button', { name: '챔질!' }));
+      fireEvent.click(screen.getByRole('button', { name: '챔질' }));
     }
     expect(zoneLefts.size).toBeGreaterThan(1); // 맞힐 때마다 존이 옮겨 갔다
     expect(onResolve).not.toHaveBeenCalled();
@@ -86,11 +86,11 @@ describe('EncounterModal', () => {
     enter();
     expect(screen.getByLabelText('체력 6/6')).toBeInTheDocument();
     waitForZone();
-    fireEvent.click(screen.getByRole('button', { name: '챔질!' }));
+    fireEvent.click(screen.getByRole('button', { name: '챔질' }));
     expect(screen.getByLabelText('체력 5/6')).toBeInTheDocument();
-    expect(screen.getByText('명중!')).toBeInTheDocument();
+    expect(screen.getByText('명중')).toBeInTheDocument();
     waitForZone(false);
-    fireEvent.click(screen.getByRole('button', { name: '챔질!' }));
+    fireEvent.click(screen.getByRole('button', { name: '챔질' }));
     expect(screen.getByLabelText('도주 1/3')).toBeInTheDocument();
   });
 
@@ -113,7 +113,7 @@ describe('EncounterModal', () => {
     act(() => { vi.advanceTimersByTime(8000); });
     expect(onResolve).toHaveBeenCalledTimes(1);
     expect(onResolve).toHaveBeenCalledWith({ hits: 0, misses: 3, success: false });
-    expect(screen.getByText(/흔적이 사라졌다/)).toBeInTheDocument();
+    expect(screen.getByText(/흔적이 사라졌으니/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

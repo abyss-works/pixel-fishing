@@ -11,7 +11,7 @@ export function loadLegacy(): { game: GameState; notice: string | null; legacy: 
       const parsed = JSON.parse(raw);
       const game = migrate(parsed);
       const notice = parsed?.v !== 4 && game.fame > 0
-        ? `업데이트! 그동안 잡은 물고기가 명성으로 소급 인정되었다. 명성 ${game.fame}`
+        ? `그동안 잡은 물고기를 명성으로 소급해 인정했어요. (명성 ${game.fame})`
         : null;
       return { game, notice, legacy: true };
     }

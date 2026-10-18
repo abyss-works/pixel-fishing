@@ -5,7 +5,7 @@ import { CHALLENGE_WINDOW_MS } from '../../../game/rules/balance';
 describe('조우 알림 문구', () => {
   it('구역 이름과 흔적이 남는 시간을 알린다', () => {
     const text = encounterAlertText('pacific-named-megalodon', CHALLENGE_WINDOW_MS)!;
-    expect(text.title).toBe('흔적을 찾았다');
+    expect(text.title).toBe('흔적 발견');
     expect(text.body).toContain('태평양');
     expect(text.body).toContain('4시간');
   });

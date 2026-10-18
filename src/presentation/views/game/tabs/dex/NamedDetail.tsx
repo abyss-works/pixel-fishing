@@ -55,7 +55,7 @@ export default function NamedDetail({ quest, game, onClose }: {
               </article>
             ) : (
               <div className="flex h-full items-center justify-center text-center text-sm leading-[1.8] text-text-dim">
-                이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있다.
+                이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있어요.
               </div>
             )}
           </Inset>

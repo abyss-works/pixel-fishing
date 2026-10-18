@@ -55,7 +55,7 @@ export function moveSpeed(state: GameState, movement: Movement, night = false): 
   }
   const nightImmune = ARTIFACTS.some(a => owned.has(a.id) && a.effects.nightImmune);
   if (night && !nightImmune) mods.push({
-    id: 'night', label: '밤 — 어두워 이동이 느리다',
+    id: 'night', label: '밤 — 어둠 속 이동 감속',
     delta: base * (NIGHT_SPEED_FACTOR - 1),
   });
   return stat(base, mods);
@@ -213,10 +213,10 @@ export function powerZones(state: GameState, spotId: SpotId): PowerZone {
 // 보여주고, 손으로 적은 수치는 밸런스를 바꾸는 순간 옛값으로 남는다(HelpPanel 선례).
 
 export function powerHelpText(): string {
-  return '강해질수록 입질은 빨라지고 바늘을 견디는 시간도 늘어난다. '
-    + '다만 해역마다 요구하는 파워가 달라서, 같은 낚싯대가 다르게 듣는다.';
+  return '강해질수록 입질은 빨라지고 바늘을 견디는 시간도 늘어나요. '
+    + '다만 해역마다 요구하는 파워가 달라서, 같은 낚싯대라도 해역마다 효과가 달라요.';
 }
 
 export function autoPenaltyHelpText(): string {
-  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않는다. 낚싯대가 강할수록 그 차이는 줄어든다.';
+  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요. 낚싯대가 강할수록 그 차이는 줄어들어요.';
 }

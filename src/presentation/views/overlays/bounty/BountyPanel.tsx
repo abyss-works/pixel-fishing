@@ -23,7 +23,8 @@ import Gated from '../../../ui/Gated';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import TabBar from '../../../ui/TabBar';
-import { fmtGold } from '../../../ui/format';
+import { fmtGold, josa } from '../../../ui/format';
+import type { MessageTone, Notify } from '../../../ui/hud/messageFeed';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 
@@ -46,7 +47,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   /** 표시 대상 — 일일 의뢰 해시에 쓴다. 없으면 로컬 고정값 (서버 검증은 uid 기준) */
   uid: string | null;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
 }) {
   const { snap, loaded, refresh } = useBounty();
   const alertSetting = useEncounterAlertSetting();
@@ -56,13 +57,13 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   // 렌더 중 Date.now 호출은 금지라 비동기 콜백에서만 찍는다.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => { if (loaded) setNowMs(Date.now()); }, [loaded, snap]);
-  const run = (action: GameAction, done: string) => {
+  const run = (action: GameAction, done: string, tone: MessageTone = 'info') => {
     if (busy) return;
     setBusy(true);
     when(dispatch(action), r => {
       setBusy(false);
-      if (r.status === 'ok') { setToast(done); refresh(); }
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      if (r.status === 'ok') { setToast(done, tone); refresh(); }
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
     });
   };
 
@@ -82,9 +83,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
         canAccept={basicOpen && canTake} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
-          `${questLabel(q)}를 수주했다.`)}
+          `${josa(questLabel(q), '을/를')} 수주했어요.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품 완료! ${fmtGold(q.reward)}를 받았다.`)} />
+          `납품 완료! ${fmtGold(q.reward)}를 받았어요.`, 'gold')} />
     );
   };
 
@@ -105,7 +106,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
       {loaded && snap === null && (
-        <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없다. 서버 연결이 필요하다.</Note>
+        <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.</Note>
       )}
       {screen === 'quests' ? (
         <div className="min-h-[26rem]">
@@ -127,10 +128,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
               ticketMins={hasTicket ? ticketMins : null}
               onAccept={() => run(
                 { type: 'acceptQuest', questId: namedQuest.id, port },
-                `${questLabel(namedQuest)}를 수주했다.`)}
+                `${josa(questLabel(namedQuest), '을/를')} 수주했어요.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 보상 — ${fmtGold(namedQuest.reward)}와 교환 재료를 받았다.`)} />
+                `토벌 보상으로 ${fmtGold(namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
           )}
         </Gated>
         {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
@@ -141,7 +142,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
             onChange={on => {
               if (!on) { alertSetting.disable(); return; }
               void alertSetting.enable().then(ok => {
-                if (!ok) setToast('브라우저가 알림을 막았다 — 주소창의 사이트 설정에서 허용할 수 있다.');
+                if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
               });
             }} />
         )}
@@ -153,7 +154,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
               materialCount={relicMats} busy={busy}
               onExchange={() => run(
                 { type: 'exchangeArtifact', artifact: relic.id },
-                `유물을 손에 넣었다 — ${relic.name}.`)} />
+                `${josa(relic.name, '을/를')} 손에 넣었어요!`, 'gold')} />
           )}
         </div>
       )}

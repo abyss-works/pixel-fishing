@@ -30,7 +30,7 @@ export const VILLAGE: RegionPack = {
   info: {
     shortName: '마을',
     tagline: '모든 낚시꾼의 이야기가 시작되는 곳',
-    lore: '당신이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다 — 배 한 척만 있다면.',
+    lore: '낚시꾼들이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다. 배 한 척만 있다면.',
     tips: [
       '연못과 강은 배 없이 낚시할 수 있어요.',
       '강 다리를 건너 남쪽 포구로 가면 대양으로 출항할 수 있어요 (배 필요).',
@@ -39,7 +39,7 @@ export const VILLAGE: RegionPack = {
     ],
     controls: [
       '이동: 방향키 또는 WASD',
-      '낚시: 어군 옆에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 옆에서 스페이스(또는 화면 누르기)',
     ],
   },
   w: VILLAGE_W,
@@ -62,10 +62,10 @@ export const VILLAGE: RegionPack = {
   ].map(([x, y]) => ({ kind: 'tree' as const, x, y })),
   spawn: V_SPAWN,
   triggers: [
-    { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
+    { rect: V_DOOR, action: 'base', msg: '집이에요. 가구를 눌러 정비해 보세요.' },
     { rect: V_PORT, action: 'travel', to: 'world', requiredBoat: 1,
-      msg: '대양으로 출항! 어군을 찾아 항해하자.',
-      blockedMsg: '바다에 나가려면 배가 필요하다. 집의 목공소에서 조각배를 사자.' },
+      msg: '대양으로 출항했어요. 어군을 찾아 항해해 보세요.',
+      blockedMsg: '바다에 나가려면 배가 필요해요. 집의 목공소에서 조각배를 구매해 보세요.' },
   ],
   labels: [
     { text: '포구 — 대양으로', x: V_PIER.x + 8, y: V_PIER.y - 4, color: 'gold', size: 8 },

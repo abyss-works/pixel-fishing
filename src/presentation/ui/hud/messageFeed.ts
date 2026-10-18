@@ -5,6 +5,10 @@
 export type MessageChannel = 'system';
 export type MessageTone = 'info' | 'gold' | 'warn';
 
+/** 메시지를 남기는 쪽이 받는 함수 — 톤은 부르는 쪽이 정한다(기본 info).
+ *  보상 순간은 gold, 거부·실패는 warn을 넘긴다. 문구로 톤을 추정하지 않는다. */
+export type Notify = (text: string, tone?: MessageTone) => void;
+
 export interface Msg {
   id: number;
   /** 표시용 시각 HH:MM */
@@ -25,13 +29,6 @@ export const MESSAGE_KEEP = 200;
 /** 메시지 창 높이 — 한 번에 보이는 줄 수. 그 위는 휠로 거슬러 본다 */
 export const MESSAGE_VISIBLE_LINES = 8;
 
-// 톤 분류 — 명시 tone이 우선이고, 없으면 키워드로 추정한다.
-// 문구가 바뀌면 추정이 어긋나므로 새 메시지는 tone을 명시한다.
-export function classifyTone(text: string): MessageTone {
-  if (/부족하다|올바르지|없는 쿠폰|실패|거부|끊겨|않아요/.test(text)) return 'warn';
-  if (/PERFECT|획득|구매|벌었다|해금|열렸다|쿠폰 사용|달성/.test(text)) return 'gold';
-  return 'info';
-}
 
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -41,7 +38,7 @@ export function createMessage(id: number, text: string, opts: {
 } = {}): Msg {
   return {
     id, ts: hhmm(opts.now ?? new Date()), text,
-    tone: opts.tone ?? classifyTone(text),
+    tone: opts.tone ?? 'info',
     channel: opts.channel ?? 'system',
     ...(opts.author ? { author: opts.author } : {}),
   };

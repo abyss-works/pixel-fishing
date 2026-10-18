@@ -22,6 +22,7 @@ import { maskUid } from './maskUid';
 import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
 import { cx } from '../../../ui/cx';
 import Frame from '../../../ui/Frame';
+import type { Notify } from '../../../ui/hud/messageFeed';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(게스트 진행 소멸 — 경고+백업).
@@ -32,7 +33,7 @@ import Frame from '../../../ui/Frame';
 export default function AccountModal({
   game, setToast, onAuthChanged, onClose, account, uid, nickname, onRename, syncLabel, syncState,
 }: {
-  game: GameState; setToast: (m: string) => void;
+  game: GameState; setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null; uid: string | null;
   nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
@@ -54,13 +55,13 @@ export default function AccountModal({
   };
 
   const proceed = () => run(async () => {
-    if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상 비밀번호를 입력하세요.`); return; }
+    if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`, 'warn'); return; }
 
     // ① 승격 시도 — 처음 보는 이메일이면 여기서 끝 (익명 uid 유지, 진행 그대로)
     const r = await signUpAccount(email.trim(), pw);
     if (r.ok) {
       await onAuthChanged();
-      setToast('계정이 만들어졌다! 이제 어느 기기에서든 이 진행을 이어갈 수 있다.');
+      setToast('계정을 만들었어요. 이제 어느 기기에서든 이 진행을 이어갈 수 있어요.');
       onClose();
       return;
     }
@@ -69,24 +70,25 @@ export default function AccountModal({
     if (r.code === 'email_exists' || r.code === 'user_already_exists') {
       if (!(await confirm({
         title: '기존 계정으로 로그인',
-        body: '이미 가입된 이메일이에요 — 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)',
+        body: '이미 가입된 이메일이에요. 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)',
         confirmLabel: '로그인',
       }))) return;
       try { await navigator.clipboard.writeText(saveGameCode(game)); } catch { /* 백업 실패해도 진행 */ }
       const r2 = await signInAccount(email.trim(), pw);
-      if (!r2.ok) { setToast(`로그인 실패: ${r2.msg}`); return; }
+      if (!r2.ok) { setToast(`로그인하지 못했어요. ${r2.msg}`, 'warn'); return; }
       await onAuthChanged();
       onClose();
       return;
     }
 
-    setToast(`실패: ${r.msg}`);
+    setToast(`처리하지 못했어요. ${r.msg}`, 'warn');
   });
 
   const reset = () => run(async () => {
-    if (!email.trim()) { setToast('비밀번호를 재설정할 이메일을 입력하세요.'); return; }
+    if (!email.trim()) { setToast('비밀번호를 재설정할 이메일을 입력해 주세요.', 'warn'); return; }
     const r = await requestAccountPasswordReset(email.trim());
-    setToast(r.ok ? '재설정 메일을 보냈다. 받은편지함을 확인하세요.' : `실패: ${r.msg}`);
+    if (r.ok) setToast('재설정 메일을 보냈어요. 받은편지함을 확인해 주세요.');
+    else setToast(`메일을 보내지 못했어요. ${r.msg}`, 'warn');
   });
 
   const signOut = async () => {
@@ -97,13 +99,13 @@ export default function AccountModal({
 
   const submitNick = async () => {
     if (!checkNickname(draft).ok) {
-      setToast('한글 1~8자·영문 2~16자(가중치) — 한글·영문·숫자·-_만 쓸 수 있어요.');
+      setToast('닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요. 한글·영문·숫자와 -_만 쓸 수 있어요.', 'warn');
       return;
     }
     setNickBusy(true);
     try {
       const err = await onRename(draft);
-      if (err) setToast(REJECT_TEXT[err]);
+      if (err) setToast(REJECT_TEXT[err], 'warn');
       else { setToast(`닉네임을 ${draft}(으)로 바꿨어요.`); setDraft(''); }
     } finally {
       setNickBusy(false);
@@ -115,9 +117,9 @@ export default function AccountModal({
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
-      setToast('내 ID를 복사했어요. 문의하실 때 함께 보내주세요.');
+      setToast('내 ID를 복사했어요. 문의하실 때 함께 보내 주세요.');
     } catch {
-      void notice({ title: '직접 복사', body: '복사가 막혀 있어요. 아래 값을 직접 복사하세요.', value });
+      void notice({ title: '직접 복사', body: '복사가 막혀 있어요. 아래 값을 직접 복사해 주세요.', value });
     }
   };
 
@@ -128,12 +130,12 @@ export default function AccountModal({
           {syncLabel}
         </div>
       )}
-      {offline && <Note className="mt-0">로컬 개발 모드 — 계정 기능은 동작하지 않아요(화면 확인용).</Note>}
+      {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요. 화면 확인용이에요.</Note>}
 
       {account ? (
         <>
           <Note className={offline ? 'mt-2' : 'mt-0'}>
-            <b className="text-gold">{account}</b>로 로그인됨 — 진행이 이 계정에 저장돼요.
+            <b className="text-gold">{account}</b>(으)로 로그인했어요. 진행은 이 계정에 저장돼요.
           </Note>
           <div className="flex flex-col gap-2 mt-2">
             <Button disabled={offline} onClick={signOut}>로그아웃</Button>
@@ -142,7 +144,7 @@ export default function AccountModal({
       ) : (
         <>
           <Note className="mt-0">
-            이메일과 비밀번호를 입력하세요. 처음이면 계정이 만들어지고 지금 진행이 그대로 이어져요.
+            이메일과 비밀번호를 입력해 주세요. 처음이면 계정이 만들어지고 지금 진행이 그대로 이어져요.
             이미 가입한 이메일이면 그 계정으로 로그인해요.
           </Note>
 
@@ -158,9 +160,9 @@ export default function AccountModal({
             </Field>
           </div>
 
-            <Button variant="primary" full className="mt-3" onClick={proceed} disabled={busy || offline}>이메일로 계속하기</Button>
+            <Button variant="primary" full className="mt-3" onClick={proceed} disabled={busy || offline}>이메일로 계속</Button>
           <div className="flex gap-2 mt-2">
-            <Button variant="ghost" size="sm" onClick={reset} disabled={busy || offline}>비밀번호를 잊었어요</Button>
+            <Button variant="ghost" size="sm" onClick={reset} disabled={busy || offline}>비밀번호 재설정</Button>
           </div>
         </>
       )}
@@ -181,7 +183,7 @@ export default function AccountModal({
                   onClick={() => void submitNick()}>변경</Button>
         </div>
       </Frame>
-      <Note>한글 1~8자·영문 2~16자(가중치) — 나중에 랭킹에 표시될 이름이에요.</Note>
+      <Note>닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요. 나중에 랭킹에 표시될 이름이에요.</Note>
 
       {/* 내 정보 — **문의 대응용이다.** 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
           화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다. */}
@@ -194,7 +196,7 @@ export default function AccountModal({
                   onClick={() => copyId(uid)}>복사</Button>
         </div>
       </Frame>
-      <Note>문의하실 때 이 <b>ID</b>를 함께 알려주시면 빠르게 해결할 수 있어요.<br/>
+      <Note>문의하실 때 이 <b>ID</b>를 함께 알려 주시면 빠르게 해결할 수 있어요.<br/>
         가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 
       <div className="flex gap-2 mt-3">
