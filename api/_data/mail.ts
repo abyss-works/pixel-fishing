@@ -1,6 +1,8 @@
 // 편지(letters) 쓰기 소유 모듈 — letters는 콜드 아카이브가 지우지 않는 편지 본문의 정본이다.
+// 사용자 단위로 지우는 경로는 계정 정리뿐이다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+import type { Executor } from '../_db/client.js';
 import type { GameEvent } from '../../src/game/rules/actions.js';
 import { at, textArray } from './json.js';
 
@@ -14,4 +16,9 @@ export function letterFragment(guard: SQL, uid: string, events: readonly GameEve
   if (texts.length === 0) return null;
   return sql`insert into public.letters (user_id, text, created_at)
     select ${uid}, t, ${at(createdAtISO)} from unnest(${textArray(texts)}) as t where ${guard}`;
+}
+
+/** 계정 정리에서 사용자의 편지를 모두 지운다 */
+export async function deleteUserLetters(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.letters where user_id = ${uid}`);
 }

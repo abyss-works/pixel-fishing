@@ -10,7 +10,7 @@ const API = join(import.meta.dirname, '..');
 const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/save.ts': ['saves_current', 'fish_instances', 'records', 'saves'],
   '_data/profile.ts': ['profiles'],
-  '_data/bounty.ts': ['bounty_accepts', 'bounty_progress', 'bounty_tickets'],
+  '_data/bounty.ts': ['bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses'],
   '_data/codes.ts': ['coupons', 'reliefs'],
   '_data/mail.ts': ['letters'],
   '_data/telemetry.ts': ['events'],
@@ -26,12 +26,21 @@ function sources(dir: string): string[] {
 
 const files = sources(API).map(path => ({ path: relative(API, path).replaceAll('\\', '/'), src: readFileSync(path, 'utf8') }));
 const WRITE = /\b(?:insert\s+into|update|delete\s+from)\s+public\.([a-z_]+)/gi;
+const AUTH_WRITE = /\b(?:insert\s+into|update|delete\s+from)\s+auth\.([a-z_]+)/gi;
+/** 인증 스키마(auth)를 쓰는 SQL을 가진 유일한 모듈 */
+const AUTH_OWNER = '_data/account.ts';
 
 describe('서버 데이터 계층 경계', () => {
   it('표를 쓰는 SQL은 그 표의 소유 저장 모듈에만 있다', () => {
     const violations = files.flatMap(({ path, src }) =>
       [...src.matchAll(WRITE)].map(m => m[1]).filter(table => !(WRITE_OWNERS[path] ?? []).includes(table))
         .map(table => `${path} -> ${table}`));
+    expect(violations).toEqual([]);
+  });
+
+  it('인증 스키마(auth)를 쓰는 SQL은 계정 정리 모듈에만 있다', () => {
+    const violations = files.filter(({ path }) => path !== AUTH_OWNER)
+      .flatMap(({ path, src }) => [...src.matchAll(AUTH_WRITE)].map(m => `${path} -> ${m[1]}`));
     expect(violations).toEqual([]);
   });
 
