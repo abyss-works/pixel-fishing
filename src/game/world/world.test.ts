@@ -9,8 +9,7 @@ import {
   REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE,
-  VILLAGE, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  V_BOATSHOP, V_BOATSHOP_TRIGGER,
+  VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   WORLD, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
@@ -144,8 +143,8 @@ function mapPalette(map: NonNullable<RegionPack['map']>): NonNullable<MapCellDef
 describe('마을 R4: 충돌 (도보)', () => {
   it('땅은 걷고 물은 못 걷는다', () => {
     expect(canMove(VILLAGE, V_SPAWN.x, V_SPAWN.y)).toBe(true);
-    expect(canMove(VILLAGE, 150, 120)).toBe(false); // 연못
-    expect(canMove(VILLAGE, 400, 220)).toBe(false); // 강
+    expect(canMove(VILLAGE, 214, 120)).toBe(false); // 연못
+    expect(canMove(VILLAGE, 250, 220)).toBe(false); // 강
     expect(canMove(VILLAGE, 100, 330)).toBe(false); // 남쪽 바다
     expect(canMove(VILLAGE, V_HOUSE.x + 10, V_HOUSE.y + 10)).toBe(false); // 집
   });
@@ -156,19 +155,19 @@ describe('마을 R4: 충돌 (도보)', () => {
   });
 
   it('존 판정: 마을 전체가 village 존', () => {
-    expect(zoneOf(VILLAGE, 150, 120)).toBe('village');
-    expect(zoneOf(VILLAGE, 400, 220)).toBe('village');
+    expect(zoneOf(VILLAGE, 214, 120)).toBe('village');
+    expect(zoneOf(VILLAGE, 250, 220)).toBe('village');
     expect(zoneOf(VILLAGE, 100, 330)).toBe('village');
     expect(zoneOf(VILLAGE, V_SPAWN.x, V_SPAWN.y)).toBe('village');
   });
 
   it('연못으로 걸으면 막히고, 물가를 따라 미끄러진다', () => {
-    let pos = { x: 106, y: 120 }; // 연못 서쪽 물가
+    let pos = { x: 170, y: 120 }; // 연못 서쪽 물가
     expect(canMove(VILLAGE, pos.x, pos.y)).toBe(true);
     for (let i = 0; i < 40; i++) pos = movePlayer(VILLAGE, pos, 1, 0, 0.05, 75);
     expect(canMove(VILLAGE, pos.x, pos.y)).toBe(true);
     expect(pos.x).toBeLessThan(V_POND.x);
-    let slid = { x: 106, y: 120 };
+    let slid = { x: 170, y: 120 };
     for (let i = 0; i < 10; i++) slid = movePlayer(VILLAGE, slid, 1, 1, 0.05, 75);
     expect(slid.y).toBeGreaterThan(120);
     expect(canMove(VILLAGE, slid.x, slid.y)).toBe(true);
@@ -181,14 +180,21 @@ describe('마을 트리거', () => {
     expect(inTrigger({ x: V_PORT.x + 8, y: V_PORT.y + 6 }, V_PORT)).toBe(true);
   });
 
-  it('목공소: 건물은 충돌체, 문 앞 트리거는 걸을 수 있는 땅 위', () => {
-    expect(canMove(VILLAGE, V_BOATSHOP.x + 10, V_BOATSHOP.y + 10)).toBe(false); // 건물 통과 불가
-    const tc = { x: V_BOATSHOP_TRIGGER.x + 4, y: V_BOATSHOP_TRIGGER.y + 10 };
-    expect(canMove(VILLAGE, tc.x, tc.y)).toBe(true);            // 트리거 지점은 접근 가능
-    expect(inTrigger(tc, V_BOATSHOP_TRIGGER)).toBe(true);
-    // 필드 트리거 연결: 마을엔 shop 트리거가 있고, 대양엔 없다(조선소는 항구 안)
-    expect(VILLAGE.triggers.find(t => t.action === 'shop')?.rect).toBe(V_BOATSHOP_TRIGGER);
-    expect(WORLD.triggers.some(t => t.action === 'shop')).toBe(false);
+  it('필드에는 상점 트리거가 없다 — 배 구매는 집의 목공소에서 한다', () => {
+    expect(VILLAGE.triggers.map(t => t.action).sort()).toEqual(['base', 'travel']);
+    expect(VILLAGE.buildings.map(b => b.sprite)).toEqual(['house']);
+  });
+});
+
+describe('마을 지형 — 화면 한 장 너비', () => {
+  it('너비는 필드 화면 한 장(448)이고 모든 어군·장식·지형이 그 안에 있다', () => {
+    expect(VILLAGE_W).toBe(448);
+    for (const s of V_SCHOOLS) expect(s.x).toBeLessThan(VILLAGE_W);
+    for (const d of VILLAGE.decorations) expect(d.x).toBeLessThan(VILLAGE_W);
+    for (const t of VILLAGE.terrain ?? []) expect(t.rect.x + t.rect.w).toBeLessThanOrEqual(VILLAGE_W);
+  });
+  it('다리·부두·출항 지점은 가로 가운데에 있다', () => {
+    for (const r of [V_BRIDGE, V_PIER, V_PORT]) expect(r.x + r.w / 2).toBe(VILLAGE_W / 2);
   });
 });
 
@@ -477,6 +483,26 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   it('여객선은 항구에만 있다', () => {
     expect(HARBOR_FURNITURE.some(f => f.id === 'travel')).toBe(true);
     expect(HOME_FURNITURE.some(f => f.id === 'travel')).toBe(false);
+  });
+  it('시설 순서 — 집과 항구의 메뉴 구성', () => {
+    const ids = (id: keyof typeof BASE_PACKS) => BASE_PACKS[id].furniture.map(f => f.id);
+    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'exit']);
+    const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'exit'];
+    expect(ids('harbor')).toEqual(port);
+    expect(ids('manila')).toEqual(port);
+    expect(ids('toamasina')).toEqual(port);
+    // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
+    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'exit']);
+  });
+  it('같은 거점 안의 시설 영역은 서로 겹치지 않는다', () => {
+    for (const pack of Object.values(BASE_PACKS)) {
+      const fs = pack.furniture;
+      for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) {
+        const a = fs[i], b = fs[j];
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        expect(overlap, `${pack.id}: ${a.id}·${b.id}`).toBe(false);
+      }
+    }
   });
   it('빈 공간은 null', () => {
     expect(furnitureAt('home', 160, 40)).toBeNull();

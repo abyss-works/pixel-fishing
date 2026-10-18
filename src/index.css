@@ -144,7 +144,12 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   user-select: none;
+  /* 한국어는 어절 단위로 줄을 바꾼다(단어 중간 끊김 방지). 공백 없는 긴 문자열만 글자 단위로 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
+/* 문단·목록은 마지막 줄에 한 어절만 남지 않게 줄 길이를 고르게 맞춘다 */
+p, li { text-wrap: pretty; }
 
 /* 키보드 포커스 — pf-btn 아닌 커스텀 소형 버튼(잠금/체크/서브탭 등)에도 공통 적용 */
 button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
@@ -310,6 +315,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   @supports not selector(::-webkit-scrollbar) {
     .pf-scroll-hud { scrollbar-width: thin; scrollbar-color: transparent transparent; }
     .pf-scroll-hud:hover { scrollbar-color: rgb(255 255 255 / 0.85) transparent; }
+  }
+
+  /* 패널 스크롤 — 창 안 목록(랭킹 등)용. HUD 스크롤과 같은 6px 흰 막대를 늘 보이고, 트랙은 어두운 선으로 깐다. */
+  .pf-scroll-panel::-webkit-scrollbar { width: 6px; height: 6px; }
+  .pf-scroll-panel::-webkit-scrollbar-track { background: var(--c-bg); }
+  .pf-scroll-panel::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.85); }
+  .pf-scroll-panel::-webkit-scrollbar-thumb:hover { background: #fff; }
+  @supports not selector(::-webkit-scrollbar) {
+    .pf-scroll-panel { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.85) var(--c-bg); }
   }
 
   /* 공통 표 (구 .data-table/.pf-compare 통합) — 셀 후손 셀렉터가 유틸 반복보다 나은 유일한 곳 */

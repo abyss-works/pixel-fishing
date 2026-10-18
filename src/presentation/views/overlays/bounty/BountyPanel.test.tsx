@@ -55,7 +55,7 @@ describe('BountyPanel', () => {
 
   it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
     const quest = dailyQuestFor('pacific', 'easy', 'test-uid', kstDay())!;
-    mockSnap = { licensed: [], acceptsToday: 1, namedToday: 0,
+    mockSnap = { acceptsToday: 1, namedToday: 0,
       progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ fame: 1500, dex: fullDex }));
     expect(await screen.findByText(`0/${quest.count}`)).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('BountyPanel', () => {
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
-    mockSnap = { licensed: [], acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
+    mockSnap = { acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
@@ -126,7 +126,7 @@ describe('BountyPanel', () => {
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {
-    mockSnap = { licensed: [], acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
+    mockSnap = { acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex, items: { 'mat-abyss-lantern': 1 } });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
@@ -138,7 +138,7 @@ describe('BountyPanel', () => {
 
   it('흔적(도전권)이 있으면 네임드 카드에 상태 한 줄만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
     mockSnap = {
-      licensed: [], acceptsToday: 0, namedToday: 0, progress: [],
+      acceptsToday: 0, namedToday: 0, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
     };
     // 네임드 개방 상태에서 배너가 보이는지 본다
@@ -157,7 +157,7 @@ describe('BountyPanel', () => {
   });
 
   it('네임드 수주권을 다 쓰면 네임드 수주 버튼이 막힌다', async () => {
-    mockSnap = { licensed: [], acceptsToday: 0, namedToday: 1, progress: [], tickets: [] };
+    mockSnap = { acceptsToday: 0, namedToday: 1, progress: [], tickets: [] };
     // 네임드 개방(전설 포함 전부) 상태에서 티켓 소진만으로 막히는지 본다
     const rec = (count: number) => ({ count, maxSize: null, first: null });
     const named = (id: string) => ({ [id]: { normal: rec(1) } });

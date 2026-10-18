@@ -31,8 +31,9 @@ export interface AuthApi {
   signOut(): Promise<void>;
   requestPasswordReset(email: string): Promise<AuthResult>;
   applyNewPassword(password: string): Promise<AuthResult>;
-  onAccountNudged(): boolean;
-  markAccountNudged(): void;
+  /** 마지막으로 계정 만들기 넛지를 띄운 날(KST yyyy-mm-dd). 없으면 null */
+  accountNudgedDay(): string | null;
+  markAccountNudged(day: string): void;
 }
 
 export interface StorageApi {
@@ -41,10 +42,15 @@ export interface StorageApi {
   saveCode(state: GameState): string;
 }
 
+/** 랭킹 — 서버 읽기 함수의 응답. 닉네임·순위·값만 담긴다 */
+export type RankingBoardId = 'fame' | 'dex' | 'species';
+export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
+/** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
+export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }
+
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }
 export interface BountySnapshot {
-  licensed: { zone: string; tier: string }[];
   acceptsToday: number;
   namedToday: number;
   progress: BountyProgressRow[];

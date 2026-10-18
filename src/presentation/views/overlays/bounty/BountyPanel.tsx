@@ -22,7 +22,7 @@ import CheckToggle from '../../../ui/CheckToggle';
 import Gated from '../../../ui/Gated';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
-import SubTabs from '../../../ui/SubTabs';
+import TabBar from '../../../ui/TabBar';
 import { fmtGold } from '../../../ui/format';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
@@ -92,8 +92,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
 
   return (
     <div className="flex flex-col gap-2">
-      <SubTabs
-        items={[
+      <TabBar
+        tabs={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },
           { key: 'named' as BoardScreen, label: '네임드 토벌' },
           { key: 'relic' as BoardScreen, label: '유물' },
@@ -108,7 +108,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없다. 서버 연결이 필요하다.</Note>
       )}
       {screen === 'quests' ? (
-        <div className="min-h-96">
+        <div className="min-h-[26rem]">
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
           <div className="grid grid-cols-3 gap-2 items-stretch">
             <div className="h-full">{gradeCard('easy')}</div>
@@ -118,7 +118,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </Gated>
         </div>
       ) : screen === 'named' ? (
-        <div className="min-h-96">
+        <div className="min-h-[26rem]">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
@@ -147,7 +147,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         )}
         </div>
       ) : (
-        <div className="min-h-96">
+        <div className="min-h-[26rem]">
           {relic && (
             <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
               materialCount={relicMats} busy={busy}

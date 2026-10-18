@@ -1,5 +1,5 @@
 // 거점: 콜롬보항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
-// 미끼 상점(shop 가구)은 미끼 릴리즈 본체로 추가됐다. 구매처는 이 항구 하나다.
+// 향료전(shop 가구, 미끼 상점)은 미끼 구매처이며 이 항구 하나에만 있다.
 import type { BasePack } from '../types';
 import { COLOMBO_SPAWN } from '../regions/world';
 
@@ -12,22 +12,22 @@ export const COLOMBO_BASE: BasePack = {
   exitAt: { ...COLOMBO_SPAWN },
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
   furniture: [
-    { id: 'dex',    x: 36,  y: 58,  w: 40, h: 60, sprite: 'office',
-      label: i => `사무소 · 도감 ${i.dexCount}/${i.dexTotal}`, labelDy: -4 },
+    { id: 'rank',   x: 36,  y: 58,  w: 40, h: 30, sprite: 'board',
+      label: () => '게시판 · 랭킹', labelDy: -4 },
+    { id: 'bounty', x: 200, y: 54,  w: 40, h: 30, sprite: 'board',
+      label: () => '수배판 · 의뢰/토벌', labelDy: -8 },
     { id: 'rod',    x: 130, y: 90,  w: 50, h: 34, sprite: 'rodshop',
       label: i => `공방 · 낚싯대 Lv.${i.rod}`, labelDy: -8 },
-    { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
-      label: () => '어시장', labelDy: -8 },
-    { id: 'bounty', x: 200, y: 54,  w: 40, h: 30, sprite: 'board',
-      label: () => '수배판', labelDy: -8 },
-    // 출항 시설(x272~306,y104~160)과 겹치지 않도록 상단에 둔다.
-    { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
-      label: () => '미끼 상점', labelDy: -8 },
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => `조선소 · ${i.boatName}`, labelDy: -3 },
-    { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
-      label: () => '승선 · 출항', labelDy: 8 },
+    { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
+      label: () => '어시장 · 판매', labelDy: -8 },
+    // 출항 시설(x272~306,y104~160)과 겹치지 않도록 상단에 둔다.
+    { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
+      label: () => '향료전 · 미끼', labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
-      label: () => '여객선 · 마을로', labelDy: -2 },
+      label: () => '마을 · 집으로', labelDy: -2 },
+    { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
+      label: () => '승선 · 바다로', labelDy: 8 },
   ],
 };

@@ -18,17 +18,6 @@ export const BUILDING_SPRITES: Record<BuildingSpriteId, BuildingSprite> = {
       R(ctx, r.x + 8, r.y + 24, 12, 12, '#a5d8ff');
     },
   },
-  // 목공소 — 지붕 + 서쪽 문(포구 쪽 트리거 방향) + 작업 중인 배 골격
-  boatshop: {
-    mapColor: '#546e7a',
-    draw: (ctx, r) => {
-      R(ctx, r.x, r.y + 8, r.w, r.h - 8, '#8d6e63');
-      R(ctx, r.x - 3, r.y, r.w + 6, 12, '#546e7a');
-      R(ctx, r.x + 2, r.y + 16, 10, 16, '#4e342e');
-      R(ctx, r.x + r.w - 18, r.y + 16, 12, 8, '#a5d8ff');
-      R(ctx, r.x + 8, r.y + r.h - 8, r.w - 24, 4, '#a1887f');
-    },
-  },
   // 항구 외관 — 붉은 지붕 창고 + 크레인 (접안 부두는 지형 deck 조각)
   harbor: {
     draw: (ctx, r) => {
@@ -43,16 +32,6 @@ export const BUILDING_SPRITES: Record<BuildingSpriteId, BuildingSprite> = {
 type FurnitureDraw = (ctx: Ctx, f: Furniture) => void;
 
 export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
-  // 집: 책장(도감) — 3단 × 5권, 색 순환
-  bookshelf: (ctx, f) => {
-    R(ctx, f.x, f.y, f.w, f.h, '#4e342e');
-    for (let row = 0; row < 3; row++) {
-      for (let i = 0; i < 5; i++) {
-        R(ctx, f.x + 4 + i * 7, f.y + 6 + row * 18, 5, 12,
-          ['#e57373', '#4fc3f7', '#ffd54f', '#81c784', '#ba68c8'][(i + row) % 5]);
-      }
-    }
-  },
   // 집: 작업대(낚싯대 강화) — 상판 + 다리 + 세워 둔 낚싯대
   workbench: (ctx, f) => {
     R(ctx, f.x, f.y + 14, f.w, 8, '#4e342e');
@@ -72,15 +51,6 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x, f.y, f.w, f.h, '#4e342e');
     R(ctx, f.x + 3, f.y + 3, f.w - 6, f.h - 6, '#5d4037');
     R(ctx, f.x + f.w - 9, f.y + f.h / 2 - 2, 4, 4, '#ffd54f');
-  },
-  // 항구: 항만 사무소(도감) — 문 + 창 + 간판
-  office: (ctx, f) => {
-    R(ctx, f.x, f.y + 10, f.w, f.h - 10, '#a1887f');
-    R(ctx, f.x - 3, f.y, f.w + 6, 12, '#37474f');
-    R(ctx, f.x + 6, f.y + 22, 12, 14, '#4e342e');
-    R(ctx, f.x + 24, f.y + 20, 11, 10, '#a5d8ff');
-    R(ctx, f.x + 4, f.y + 42, f.w - 8, 12, '#4e342e');
-    R(ctx, f.x + 6, f.y + 44, f.w - 12, 8, '#ffe0b2');
   },
   // 항구: 낚시 공방 — 붉은 차양 + 진열 낚싯대 3대
   rodshop: (ctx, f) => {

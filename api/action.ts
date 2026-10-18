@@ -13,7 +13,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SQL } from 'drizzle-orm';
 import { waitUntil } from '@vercel/functions';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
@@ -37,6 +36,7 @@ import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { APP_VERSION } from '../src/version.js';
+import { bearerToken, verifyJwtLocal } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import { acceptFragments, advanceProgress, challengeFragments, consumeDelivery, debugFragment, ticketFragment } from './_data/bounty.js';
@@ -100,25 +100,6 @@ export function debugTablePlan(command: DebugTableCommand, nowMs: number): Debug
 
 // 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-
-// 세션 토큰 로컬 검증 (HS256, 레거시 JWT secret) — Auth 서버 왕복(~수백 ms, 리전 원거리면 그 이상)을
-// 제거하는 레이턴시 최적화. SUPABASE_JWT_SECRET 미설정이면 기존 auth.getUser 경로로 폴백(무해 배포).
-function verifyJwtLocal(token: string, secret: string): string | null {
-  const [h, p, sig] = token.split('.');
-  if (!h || !p || !sig) return null;
-  try {
-    const header = JSON.parse(Buffer.from(h, 'base64url').toString());
-    if (header.alg !== 'HS256') return null; // 알고리즘 고정 — alg 혼동 공격 차단
-    const expected = createHmac('sha256', secret).update(`${h}.${p}`).digest('base64url');
-    const a = Buffer.from(sig), b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
-    if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
-    return typeof payload.sub === 'string' ? payload.sub : null;
-  } catch {
-    return null;
-  }
-}
 
 /** 3소스 → GameState 조립 */
 function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[]): GameState {
@@ -234,7 +215,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const auth = createClient(url, serviceKey, { auth: { persistSession: false } }).auth;
 
   // 유저 확인 — JWT secret이 있으면 로컬 검증(왕복 0), 없으면 Auth 서버 조회 폴백
-  const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+  const token = bearerToken(req.headers.authorization);
   let uid: string;
   const jwtSecret = process.env.SUPABASE_JWT_SECRET;
   if (jwtSecret) {
@@ -337,12 +318,12 @@ async function route(req: Req, res: Res): Promise<void> {
       instances = again.instances ?? [];
       records = again.records ?? [];
     } else {
-      // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다.
-      // 도감은 비운 채 조립한다(시딩 직후 액션은 저장된 도감 없이 처리해 온 동작을 유지한다).
+      // 방금 쓴 값을 다시 읽지 않는다 — 시딩 결과가 곧 현재 상태다(개체·도감 포함).
       row = { data: stateRow(seed).data, version: 1,
               gold: seed.gold, fame: seed.fame, boat: seed.boat, rod: seed.rod };
       instances = seed.bag.map(i => instRow(uid, i, null) as InstanceRow);
-      records = [];
+      records = Object.entries(seed.dex).flatMap(([fishId, forms]) => Object.entries(forms).flatMap(([form, rec]) =>
+        rec ? [{ fish_id: fishId, form, count: rec.count, max_size: rec.maxSize, first_caught: rec.first }] : []));
     }
   }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../game/rules/logic';
@@ -11,15 +12,17 @@ import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { RegionId } from '../../../game/content/places';
 import type { Msg } from '../../layouts/hud/useMessageLog';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
-import Base from '../../layouts/game-stage/Base';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
+import BaseMenu from './base-menu/BaseMenu';
 import GameTabs from './tabs/GameTabs';
 import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import { useDialogs } from '../../ui/useDialogs';
+import RankingModal from '../overlays/ranking/RankingModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
@@ -46,6 +49,8 @@ interface GameViewProps {
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
   outdated: boolean;
+  /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
+  badge?: ReactNode;
 }
 
 export default function GameView(props: GameViewProps) {
@@ -53,6 +58,7 @@ export default function GameView(props: GameViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
@@ -65,9 +71,12 @@ export default function GameView(props: GameViewProps) {
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
     setActionPanel(null);
     setStatsOpen(false);
+    setRankingOpen(false);
     setTracking(null);
     props.onScene(nextScene, message, entryPos);
   };
+
+  const { confirm, dialogs } = useDialogs();
 
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
@@ -76,16 +85,25 @@ export default function GameView(props: GameViewProps) {
       case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty':
         setActionPanel(panel => panel === id ? null : id);
         return;
-      case 'dex':
+      case 'rank':
         setActionPanel(null);
-        setActiveTab('dex');
+        setRankingOpen(true);
         return;
       case 'exit':
         go({ kind: 'region', id: pack.region }, pack.exitMsg, pack.exitAt);
         return;
-      case 'travel':
-        if (pack.travel) go({ kind: 'region', id: pack.travel.to }, pack.travel.msg);
+      case 'travel': {
+        // 여객선은 다른 지역으로 위치를 통째로 옮기므로 확인을 받는다
+        const travel = pack.travel;
+        if (!travel) return;
+        setActionPanel(null);
+        const place = REGION_PACKS[travel.to].info.shortName;
+        void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${place}로 돌아갈까요?
+지금 있는 바다를 떠나 ${place}에서 다시 시작해요.`,
+          confirmLabel: `${place}로 가기` })
+          .then(ok => { if (ok) go({ kind: 'region', id: travel.to }, travel.msg); });
         return;
+      }
     }
   };
 
@@ -108,17 +126,17 @@ export default function GameView(props: GameViewProps) {
     <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null}
-                 onShop={() => setActionPanel(panel => panel === 'boat' ? panel : 'boat')}
                  initialPos={props.entryPos ?? undefined} />
         )}
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
-                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} />
+                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} badge={props.badge} />
+        {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
                           onResolve={resolveEncounter} onClose={() => setTracking(null)} />
@@ -130,6 +148,7 @@ export default function GameView(props: GameViewProps) {
                       region={region}
                       onClose={() => setStatsOpen(false)} />
         )}
+        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}

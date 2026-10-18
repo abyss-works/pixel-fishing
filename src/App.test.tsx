@@ -1,7 +1,7 @@
 // R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, waitFor, within } from '@testing-library/react';
 import App from './App';
 import Field from './presentation/layouts/game-stage/Field';
 import Base from './presentation/layouts/game-stage/Base';
@@ -25,7 +25,7 @@ import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/l
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
-import { HOME_FURNITURE, HARBOR_FURNITURE, V_SPAWN, WORLD_SCHOOLS } from './game/world';
+import { V_SPAWN, WORLD_SCHOOLS } from './game/world';
 import type { Point, RegionId } from './game/world';
 
 const SAVE_KEY = 'pixel-fishing-save';
@@ -51,14 +51,11 @@ const hud = () => document.querySelector('.hud')!.textContent!;
 const phase = () =>
   (document.querySelector('.status-overlay') as HTMLElement | null)?.dataset.phase ?? 'idle';
 
-// jsdom에서 getBoundingClientRect()는 0×0 → 클릭 좌표가 내부 좌표 그대로 전달됨
-function clickFurniture(id: string, canvasLabel = '집') {
-  const set = canvasLabel === '항구' ? HARBOR_FURNITURE : HOME_FURNITURE;
-  const f = set.find(x => x.id === id)!;
-  fireEvent.click(screen.getByLabelText(canvasLabel), {
-    clientX: f.x + f.w / 2,
-    clientY: f.y + f.h / 2,
-  });
+// 거점은 시설 카드 메뉴로 그려진다 — 카드는 시설 id를 data-facility로 단다
+function clickFurniture(id: string) {
+  const card = document.querySelector(`[data-facility="${id}"]`);
+  if (!card) throw new Error(`시설 카드 없음: ${id}`);
+  fireEvent.click(card);
 }
 
 const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('button', { name: label }));
@@ -87,6 +84,18 @@ afterEach(() => {
 });
 
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
+
+describe('마을 랭킹 게시판', () => {
+  it('게시판 클릭 → 명성·도감 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
+    seed({});
+    render(<App />);
+    clickFurniture('rank');
+    const dialog = screen.getByRole('heading', { name: '랭킹' }).closest('[role="dialog"]') as HTMLElement;
+    expect(within(dialog).getByRole('heading', { name: '명성' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: '도감' })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getAllByText('랭킹은 온라인에서만 볼 수 있어요.')).toHaveLength(2));
+  });
+});
 
 describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 선택)', () => {
   it('궤짝 클릭 → 기본 전부 체크 → 판매 확정 시 골드 증가', () => {
@@ -299,11 +308,11 @@ describe('쿠폰 입력 (설정 탭)', () => {
   });
 });
 
-describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
+describe('R3: 도감 탭 (지역 서브탭)', () => {
   it('현재 지역 서브탭 기본 — 잡은 물고기는 상세, 안 잡은 물고기는 ???', () => {
     seed({ dex: { crucian: { normal: rec(3) } } });
     render(<App />);
-    clickFurniture('dex');
+    clickTab(/^도감/);
     expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
     expect(screen.getByText('붕어')).toBeInTheDocument();
     expect(screen.getByText('3마리 잡음')).toBeInTheDocument();
@@ -323,7 +332,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
-    clickFurniture('dex');
+    clickTab(/^도감/);
     clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
     expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
@@ -339,7 +348,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   it('도감 재진입 시 마지막 서브탭 유지 — 씬 기본값으로 리셋하지 않는다', () => {
     seed({});
     render(<App />);
-    clickFurniture('dex');
+    clickTab(/^도감/);
     fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 마을 → 태평양
     expect(screen.getAllByText('???').length).toBe(13);
     clickTab('도움말');
@@ -351,7 +360,7 @@ describe('R3: 책장(도감) → 도감 탭 (지역 서브탭)', () => {
   it('네임드 보기 — 수배가 있는 해역만 서브탭에 있고 마을은 없다', () => {
     seed({}); // 시작 씬 = 마을 → 도감 열람 존도 마을이지만 네임드는 첫 수배 존(태평양)을 대신 보인다
     render(<App />);
-    clickFurniture('dex');
+    clickTab(/^도감/);
     clickTab(/도감\s*\(일반\)/);
     clickTab(/도감\s*\(돌연변이\)/);
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
@@ -366,7 +375,7 @@ describe('현상금 — 항구 수배판 진입', () => {
   it('항구 수배판 가구 클릭 → 수배판 패널이 열린다', async () => {
     seed({ location: { kind: 'base', id: 'harbor' } });
     render(<App />);
-    clickFurniture('bounty', '항구');
+    clickFurniture('bounty');
     expect(await screen.findByText('수배판 — 태평양')).toBeInTheDocument();
   });
 });
@@ -384,6 +393,20 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
     expect(screen.getByLabelText('집')).toBeInTheDocument();
   });
 
+  it('여객선은 확인 창을 거친다 — 닫으면 항구에 남고 확정하면 마을로 간다', async () => {
+    seed({ location: { kind: 'base', id: 'harbor' } });
+    render(<App />);
+    clickFurniture('travel');
+    expect(await screen.findByText(/마을로 돌아갈까요/)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText(/마을로 돌아갈까요/)).not.toBeInTheDocument());
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
+
+    clickFurniture('travel');
+    fireEvent.click(await screen.findByRole('button', { name: '마을로 가기' }));
+    expect(await screen.findByLabelText('마을')).toBeInTheDocument();
+  });
+
   it('항구 거점: 여객선 클릭 → onFacility("travel") 호출', () => {
     const onFacility = vi.fn();
     render(<Base base="harbor" game={newState()} onFacility={onFacility} />);
@@ -394,7 +417,7 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
 
 // ---------- 필드: 낚시 상태머신 (Field 단독 하네스 — 사이드바 없이 순수 로직 검증) ----------
 
-const POND_SHORE: Point = { x: 150, y: 92 };   // v-pond-1(150,118) 물가
+const POND_SHORE: Point = { x: 214, y: 92 };   // v-pond-1(214,118) 물가
 // 어군 좌표는 앵커 파생 — 마스크 재생성과 무관하게 항상 어군 위에 선다
 const SEA_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-sea-1')!;  
 const DEEP_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-deep-1')!;
@@ -778,7 +801,7 @@ describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상�
     seed({ boat: 1 });
     render(<App />);
     clickTab('지역');
-    // 연못 학교(150,118)보다 강 학교(100,222) 쪽에 서 있으면 강이 먼저다
+    // 연못 학교(214,118)보다 강 학교(100,222) 쪽에 서 있으면 강이 먼저다
     act(() => setPlayerPos({ x: 100, y: 200 }));
     const list = screen.getByText('어군 정보').parentElement!;
     const names = [...list.querySelectorAll('span')].map(s => s.textContent).filter(Boolean);

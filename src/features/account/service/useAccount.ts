@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '../../../platform/api';
+import { api, kstDay } from '../../../platform/api';
 import { identifyUser } from '../../../platform/observability';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import type { MaybePromise } from '../../../platform/api';
 import { setSessionUid, useSession } from './session';
+import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
@@ -21,6 +22,8 @@ export function useAccount({ game, setGame, setToast, load }: {
 }) {
   // 로컬 개발(supabase 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
+  // 계정 여부 확인이 끝났는가 — 끝나기 전의 null은 게스트가 아니라 미확인이다
+  const [accountChecked, setAccountChecked] = useState(!api.auth.isConfigured);
   const client = useQueryClient();
   const session = useSession();
   // 화면에 띄울 uid — 문의가 들어왔을 때 그 사람 세이브를 DB에서 찾는 유일한 열쇠다.
@@ -32,7 +35,7 @@ export function useAccount({ game, setGame, setToast, load }: {
   useEffect(() => {
     if (!session.ready || !session.uid || !api.auth.isConfigured) return;
     if (!uidRef.current) uidRef.current = session.uid;
-    api.auth.currentAccount().then(setAccount);
+    api.auth.currentAccount().then(a => { setAccount(a); setAccountChecked(true); });
     identifyUser(session.uid); // uid만 — PII 미전송
   }, [session.ready, session.uid]);
 
@@ -56,8 +59,9 @@ export function useAccount({ game, setGame, setToast, load }: {
     if (!api.auth.isConfigured) return;
     const { unsubscribe } = api.auth.onAuthStateChange(event => {
       if (event !== 'PASSWORD_RECOVERY') return;
-      const pw = window.prompt('새 비밀번호를 입력하세요 (6자 이상):');
+      const pw = window.prompt(`새 비밀번호를 입력하세요 (${MIN_PASSWORD_LENGTH}자 이상):`);
       if (!pw) return;
+      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`); return; }
       api.auth.applyNewPassword(pw).then(r =>
         setToast(r.ok ? '비밀번호가 변경되었다.' : `비밀번호 변경 실패: ${r.msg}`));
     });
@@ -65,15 +69,18 @@ export function useAccount({ game, setGame, setToast, load }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독, setToast는 항상 최신 클로저가 필요 없다
   }, []);
 
-  // 로그인 유도 넛지 — 명성 500 도달 시 1회 (게스트만). 세이브 필드 대신 localStorage 1키.
+  // 로그인 유도 넛지 — 명성 기준을 넘은 게스트에게 하루 한 번. 띄운 날짜는 세이브 대신 localStorage 1키에 둔다.
   useEffect(() => {
-    if (!api.auth.isConfigured || account || game.fame < 500) return;
-    if (api.auth.onAccountNudged()) return;
-    api.auth.markAccountNudged();
-    // oxlint-disable-next-line react/set-state-in-effect -- 명성이 문턱을 넘는 "순간"에 1회만 쏘는 알림이라 이벤트 지점이 따로 없다
-    setToast('명성 500 달성! 진행을 지키려면 설정 탭에서 계정을 만들어 두세요.');
+    const today = kstDay();
+    if (!shouldNudgeAccount({
+      configured: api.auth.isConfigured, accountChecked, signedIn: account !== null,
+      fame: game.fame, lastNudgedDay: api.auth.accountNudgedDay(), today,
+    })) return;
+    api.auth.markAccountNudged(today);
+    // oxlint-disable-next-line react/set-state-in-effect -- 조건이 처음 맞는 순간(그날 첫 접속·명성 도달)에 한 번 쏘는 알림이라 이벤트 지점이 따로 없다
+    setToast(`명성 ${ACCOUNT_NUDGE_FAME.toLocaleString()} 이상이에요! 진행을 지키려면 설정 탭에서 계정을 만들어 두세요.`);
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.fame, account]);
+  }, [game.fame, account, accountChecked]);
 
   return { account, uid, onAuthChanged };
 }

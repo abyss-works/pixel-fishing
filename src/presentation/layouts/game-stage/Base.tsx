@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
-import { FISH, boatNameOf, dexSpeciesCount } from '../../../game/rules/logic';
+import { boatNameOf } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { furnitureAt, BASE_PACKS } from '../../../game/world';
 import type { BaseId, FurnitureId } from '../../../game/world';
@@ -28,15 +28,14 @@ export default function Base({ base, game, onFacility }: Props) {
   // 캔버스 덮개(?admin 토글) — 캔버스 요소만 내리고 컴포넌트는 유지(Field와 같은 계약)
   const covered = useCanvasCover();
 
-  const dexCount = dexSpeciesCount(game);
   const boatName = boatNameOf(game.boat, '배 없음');
 
   useEffect(() => {
     if (covered) return; // 캔버스가 없으면 그릴 것도 없다 — 열면 effect 재실행(deps)으로 복원
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
-    renderBase(ctx, BASE_PACKS[base], { rod: game.rod, boatName, dexCount, dexTotal: FISH.length });
-  }, [base, game.rod, boatName, dexCount, covered]);
+    renderBase(ctx, BASE_PACKS[base], { rod: game.rod, boatName });
+  }, [base, game.rod, boatName, covered]);
 
   // 캔버스 클릭 → 내부 좌표 → 시설 히트테스트 (R1~R3b)
   // 요소 박스 크기는 부모(.game-frame 상당)가 비율 고정으로 결정하므로

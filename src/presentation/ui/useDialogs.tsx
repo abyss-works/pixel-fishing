@@ -3,11 +3,15 @@ import type { ReactNode } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import InputDialog from './InputDialog';
 import NoticeDialog from './NoticeDialog';
+import { TextNotice } from './NoticeBody';
 
 type Pending =
-  | { kind: 'confirm'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
+  | { kind: 'confirm'; layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
   | { kind: 'input'; title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string; resolve: (v: string | null) => void }
   | { kind: 'notice'; title: string; body: ReactNode; value?: string; resolve: () => void };
+
+/** 문자열 본문은 안내문 위계로 그린다(첫 줄 핵심 · 괄호 줄 참고 · 나머지 설명). 노드는 그대로 둔다 */
+const bodyOf = (body: ReactNode) => (typeof body === 'string' ? <TextNotice text={body} /> : body);
 
 /** 게임 대화상자 — 브라우저 confirm·prompt·alert 대신 쓴다. 각 함수는 사용자가 답할 때까지 기다리는 Promise를
  *  돌려주므로 호출 흐름은 그대로 두고 `if (!(await confirm(...))) return;`처럼 쓴다.
@@ -16,7 +20,7 @@ export function useDialogs() {
   const [pending, setPending] = useState<Pending | null>(null);
   const close = () => setPending(null);
 
-  const confirm = (o: { title: string; body: ReactNode; confirmLabel: string }) =>
+  const confirm = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string }) =>
     new Promise<boolean>(resolve => setPending({ kind: 'confirm', ...o, resolve }));
   const input = (o: { title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string }) =>
     new Promise<string | null>(resolve => setPending({ kind: 'input', ...o, resolve }));
@@ -25,18 +29,18 @@ export function useDialogs() {
 
   const dialogs = !pending ? null
     : pending.kind === 'confirm' ? (
-      <ConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel}
+      <ConfirmDialog layer={pending.layer} title={pending.title} confirmLabel={pending.confirmLabel}
                      onConfirm={() => { close(); pending.resolve(true); }}
                      onCancel={() => { close(); pending.resolve(false); }}>
-        <div className="text-sm leading-relaxed whitespace-pre-line">{pending.body}</div>
+        {bodyOf(pending.body)}
       </ConfirmDialog>
     ) : pending.kind === 'input' ? (
-      <InputDialog title={pending.title} body={pending.body} label={pending.label} placeholder={pending.placeholder}
+      <InputDialog title={pending.title} body={pending.body === undefined ? undefined : bodyOf(pending.body)} label={pending.label} placeholder={pending.placeholder}
                    confirmLabel={pending.confirmLabel}
                    onSubmit={v => { close(); pending.resolve(v); }}
                    onCancel={() => { close(); pending.resolve(null); }} />
     ) : (
-      <NoticeDialog title={pending.title} body={pending.body} value={pending.value}
+      <NoticeDialog title={pending.title} body={bodyOf(pending.body)} value={pending.value}
                     onClose={() => { close(); pending.resolve(); }} />
     );
 

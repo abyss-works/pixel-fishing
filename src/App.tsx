@@ -56,9 +56,9 @@ function AppContent() {
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} outdated={outdated}
+        badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <EnvBadge build={BUILD_LABEL} />
         <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
       </DevEnvContext.Provider>
     </>
