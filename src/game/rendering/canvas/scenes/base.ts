@@ -64,10 +64,15 @@ const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
   },
 };
 
+/** 거점 배경만 그린다 — 가구와 라벨 없이 배경 위에 다른 표현을 얹을 때 쓴다 */
+export function renderBaseBackdrop(ctx: Ctx, id: BaseId) {
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  BACKDROPS[id](ctx);
+}
+
 // 사람은 그리지 않는다 — 거점은 "들어와서 둘러보는 중" 1인칭 시점
 export function renderBase(ctx: Ctx, pack: BasePack, info: BaseInfo) {
-  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-  BACKDROPS[pack.id](ctx);
+  renderBaseBackdrop(ctx, pack.id);
   for (const f of pack.furniture) {
     FURNITURE_SPRITES[f.sprite](ctx, f);
     label(ctx, f.label(info), f.x + f.w / 2, f.y + f.labelDy, UI.gold, 8);

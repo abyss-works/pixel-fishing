@@ -51,7 +51,6 @@ export interface FieldCallbacks {
   dispatch: (action: CatchAction) => MaybePromise<FieldDispatchResult>;
   onEvent: (event: FieldEvent) => void;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
-  onShop?: () => void;
   onWarmup?: () => void;
 }
 
@@ -244,12 +243,6 @@ export class GameFieldEngine {
           this.pos.y = movedFrom.y;
         }
         this.callbacks.onEvent({ type: 'trigger-blocked', message: trigger.blockedMsg });
-      } else if (trigger.action === 'shop') {
-        if (movedFrom) {
-          this.pos.x = movedFrom.x;
-          this.pos.y = movedFrom.y;
-        }
-        this.callbacks.onShop?.();
       }
     }
 

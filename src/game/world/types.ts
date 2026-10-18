@@ -9,7 +9,7 @@ import type { ZoneId } from '../content/zones';
 // 전부 같은 타입을 쓴다 (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type { RegionId };
 export type { BaseId } from '../content/places';
-export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'dex' | 'exit' | 'travel' | 'bounty' | 'rank';
+export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'exit' | 'travel' | 'bounty' | 'rank';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
  *  저장 데이터에서도 사용하므로 의존 방향은 월드에서 게임 데이터로만 향한다.
@@ -40,7 +40,7 @@ export type TerrainPiece =
   | { kind: 'land'; rect: Rect; name?: string }         // sail 지역의 장애물 대륙
   | { kind: 'deck'; rect: Rect; style: DeckStyleId };   // 물 위 통행로(다리/부두)
 
-export type BuildingSpriteId = 'house' | 'boatshop' | 'harbor';
+export type BuildingSpriteId = 'house' | 'harbor';
 export interface Building { rect: Rect; sprite: BuildingSpriteId }
 
 // 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (게임 필드 무수정)
@@ -54,8 +54,7 @@ export type TriggerDef =
       /** 경계 봉합(오픈월드) — 지정하면 스폰 텔레포트 대신 상대 지역의 마주 보는 가장자리에서
        *  벗어난 자리 좌표를 보존해 입장한다(edge=top/bottom이면 x, left/right면 y 보존).
        *  미지정이면 목적지 pack.spawn에서 시작(거점 항로 — 포구→항구 앞). */
-      entry?: { edge: Edge } }
-  | { rect: Rect; action: 'shop' };                                  // 필드 시설 패널
+      entry?: { edge: Edge } };
 
 export interface MapLabel {
   text: string; x: number; y: number;
@@ -133,11 +132,11 @@ export interface RegionPack {
 // ---------- 거점 (집/항구) ----------
 
 export type FurnitureSpriteId =
-  | 'bookshelf' | 'workbench' | 'chest' | 'door'            // 집
-  | 'office' | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
+  | 'workbench' | 'chest' | 'door'                        // 집
+  | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
 
-/** 라벨의 동적 데이터(도감 수·낚싯대 Lv·배 이름) 주입 */
-export interface BaseInfo { rod: number; boatName: string; dexCount: number; dexTotal: number }
+/** 라벨의 동적 데이터(낚싯대 Lv·배 이름) 주입 */
+export interface BaseInfo { rod: number; boatName: string }
 
 // Rect 평면 필드 유지 — 히트테스트/테스트가 f.x + f.w/2 형태로 읽는 기존 계약 보존
 export interface Furniture extends Rect {

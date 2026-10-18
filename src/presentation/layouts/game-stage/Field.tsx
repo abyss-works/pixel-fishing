@@ -31,7 +31,6 @@ interface Props {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: (message: string) => void;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
-  onShop?: () => void;
   onWarmup?: () => void;
   initialPos?: Point;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
@@ -89,7 +88,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onShop, onWarmup, initialPos, paused,
+  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused,
 }: Props) {
   const [engine] = useState(() => new GameFieldEngine(region, game, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
@@ -111,11 +110,10 @@ export default function Field({
       },
       onEvent: event => presentEvent(event, setToast),
       onScene,
-      onShop,
       onWarmup,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onShop, onWarmup]);
+  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup]);
 
   const fishArtStyle = useFishArtStyle();
   useEffect(() => { engine.setFishArt(fishArtStyle); }, [engine, fishArtStyle]);

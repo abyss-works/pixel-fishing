@@ -1,28 +1,25 @@
-// 지역 1: 마을 (640×360, 도보) — 좌표는 구 월드 데이터에서 값 그대로 이식 (v0.4.2 스키마화)
+// 지역 1: 마을 (448×360, 도보) — 너비는 필드 화면 한 장이라 가로로 스크롤하지 않는다
 // 개별 상수를 export하는 이유: world.test의 고정 좌표 회귀 검증 + 트리거/스폰 참조.
 import type { Point, Rect, RegionPack, School } from '../types';
 
-export const VILLAGE_W = 640, VILLAGE_H = 360;
+export const VILLAGE_W = 448, VILLAGE_H = 360;
 
-export const V_POND: Rect = { x: 110, y: 95, w: 90, h: 56 };
-export const V_RIVER: Rect = { x: 0, y: 200, w: 640, h: 44 };  // 마을을 가로지르는 강
-export const V_SEA: Rect = { x: 0, y: 310, w: 640, h: 50 };    // 남쪽 바다(대양 연결) — 낚시 수역 아님
-export const V_HOUSE: Rect = { x: 36, y: 28, w: 64, h: 52 };
-export const V_DOOR: Rect = { x: 58, y: 80, w: 20, h: 8 };     // 집 진입 트리거
-export const V_SPAWN: Point = { x: 68, y: 100 };
-export const V_BRIDGE: Rect = { x: 300, y: 196, w: 24, h: 52 }; // 강 다리
-export const V_PIER: Rect = { x: 308, y: 304, w: 16, h: 40 };   // 포구 부두(바다 위 보행)
-export const V_PORT: Rect = { x: 308, y: 332, w: 16, h: 12 };   // 대양 출항 트리거(배 필요)
-export const V_PORT_FRONT: Point = { x: 316, y: 296 };          // 여객선 귀향 도착 지점
-// 목공소 — 포구 오른쪽 해안 건물(포구 라벨을 가리지 않게 동쪽 배치). 배 구매는 여기서.
-export const V_BOATSHOP: Rect = { x: 374, y: 264, w: 44, h: 34 };
-export const V_BOATSHOP_TRIGGER: Rect = { x: 366, y: 270, w: 8, h: 22 }; // 건물 서쪽 문 앞(포구 쪽)
+export const V_POND: Rect = { x: 174, y: 95, w: 90, h: 56 };
+export const V_RIVER: Rect = { x: 0, y: 200, w: 448, h: 44 };  // 마을을 가로지르는 강
+export const V_SEA: Rect = { x: 0, y: 310, w: 448, h: 50 };    // 남쪽 바다(대양 연결) — 낚시 수역 아님
+export const V_HOUSE: Rect = { x: 100, y: 28, w: 64, h: 52 };
+export const V_DOOR: Rect = { x: 122, y: 80, w: 20, h: 8 };     // 집 진입 트리거
+export const V_SPAWN: Point = { x: 132, y: 100 };
+// 다리·부두·출항 지점은 마을 가로 가운데에 한 줄로 놓는다
+export const V_BRIDGE: Rect = { x: 212, y: 196, w: 24, h: 52 }; // 강 다리
+export const V_PIER: Rect = { x: 216, y: 304, w: 16, h: 40 };   // 포구 부두(바다 위 보행)
+export const V_PORT: Rect = { x: 216, y: 332, w: 16, h: 12 };   // 대양 출항 트리거(배 필요)
+export const V_PORT_FRONT: Point = { x: 224, y: 296 };          // 여객선 귀향 도착 지점
 
 export const V_SCHOOLS: School[] = [
-  { id: 'v-pond-1',  spot: 'pond',  x: 150, y: 118 },
-  { id: 'v-pond-2',  spot: 'pond',  x: 180, y: 138 },
+  { id: 'v-pond-1',  spot: 'pond',  x: 214, y: 118 },
+  { id: 'v-pond-2',  spot: 'pond',  x: 244, y: 138 },
   { id: 'v-river-1', spot: 'river', x: 100, y: 222 },
-  { id: 'v-river-2', spot: 'river', x: 480, y: 222 },
 ];
 
 export const VILLAGE: RegionPack = {
@@ -36,7 +33,7 @@ export const VILLAGE: RegionPack = {
     tips: [
       '연못과 강은 배 없이 낚시할 수 있어요.',
       '강 다리를 건너 남쪽 포구로 가면 대양으로 출항할 수 있어요 (배 필요).',
-      '포구 옆 목공소에서 배를 살 수 있어요.',
+      '배는 집의 목공소에서 살 수 있어요.',
       '집 문 앞에 서면 자동으로 집에 들어가요.',
     ],
     controls: [
@@ -58,10 +55,9 @@ export const VILLAGE: RegionPack = {
   ],
   buildings: [
     { rect: V_HOUSE, sprite: 'house' },
-    { rect: V_BOATSHOP, sprite: 'boatshop' },
   ],
   decorations: [
-    [260, 60], [420, 90], [560, 50], [80, 270], [600, 270], [450, 160],
+    [40, 70], [330, 60], [400, 130], [80, 270], [380, 280],
   ].map(([x, y]) => ({ kind: 'tree' as const, x, y })),
   schools: V_SCHOOLS,
   spawn: V_SPAWN,
@@ -69,12 +65,10 @@ export const VILLAGE: RegionPack = {
     { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
     { rect: V_PORT, action: 'travel', to: 'world', requiredBoat: 1,
       msg: '대양으로 출항! 어군을 찾아 항해하자.',
-      blockedMsg: '바다에 나가려면 배가 필요하다. 포구 옆 목공소에서 조각배를 사자.' },
-    { rect: V_BOATSHOP_TRIGGER, action: 'shop' },
+      blockedMsg: '바다에 나가려면 배가 필요하다. 집의 목공소에서 조각배를 사자.' },
   ],
   labels: [
     { text: '포구 — 대양으로', x: V_PIER.x + 8, y: V_PIER.y - 4, color: 'gold', size: 8 },
-    { text: '목공소 — 배 만드는 곳', x: V_BOATSHOP.x + V_BOATSHOP.w / 2, y: V_BOATSHOP.y - 4, color: 'gold', size: 8 },
     { text: '집', x: V_HOUSE.x + V_HOUSE.w / 2, y: V_HOUSE.y - 4, color: 'text', size: 8 },
   ],
 };
