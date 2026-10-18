@@ -106,6 +106,13 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
   });
 
+  it('게이트는 내용을 교체하지 않는다 — 로컬 모드 배너와 개요의 빈 골격이 함께 보인다', async () => {
+    open('#/admin/overview');
+    expect(await screen.findByText('로컬 모드예요. 클라우드가 설정되어 있지 않아요.')).toBeInTheDocument();
+    expect(screen.getByText('등록 유저')).toBeInTheDocument();
+    expect(screen.getByText('운영 DB에 연결하면 채워져요.')).toBeInTheDocument();
+  });
+
   it('밸런스 탭에는 라이브 지표 구역이 비어 있는 채로 구분되어 있다', () => {
     open('#/admin/balance');
     expect(screen.getByRole('heading', { name: '라이브 지표' })).toBeInTheDocument();
