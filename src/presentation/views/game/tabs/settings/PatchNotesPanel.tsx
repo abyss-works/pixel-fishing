@@ -28,11 +28,12 @@ export default function PatchNotesPanel() {
               </>
             }
           >
-            <ul className="list-none px-2 pb-2 flex flex-col gap-1 text-sm leading-[1.6]">
+            {/* 범주 배지를 왼쪽 열에 두어 줄바꿈된 본문이 배지 아래로 파고들지 않게 한다 */}
+            <ul className="list-none px-2 pb-2 flex flex-col gap-2 text-sm leading-[1.6]">
               {p.notes.map((n, i) => (
-                <li key={i}>
-                  <NoteTag tag={n.tag} className="mr-1" />
-                  {n.text}
+                <li key={i} className="flex items-start gap-2">
+                  <NoteTag tag={n.tag} className="shrink-0 mt-[0.15em]" />
+                  <span>{n.text}</span>
                 </li>
               ))}
             </ul>
