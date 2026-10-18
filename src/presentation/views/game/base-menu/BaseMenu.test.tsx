@@ -10,7 +10,7 @@ const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-
 describe('거점 카드 메뉴', () => {
   it('집은 게시판·작업대·목공소·판매 궤짝·문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '작업대 · 낚싯대 Lv.1', '목공소 · 배 없음', '판매 궤짝', '문 · 마을로']);
+    expect(names()).toEqual(['게시판 · 랭킹', '작업대 · 낚싯대 Lv.1', '목공소 · 배 없음', '궤짝 · 판매', '문 · 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {

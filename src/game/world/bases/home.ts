@@ -15,7 +15,7 @@ export const HOME: BasePack = {
     { id: 'boat', x: 36,  y: 92,  w: 48, h: 30, sprite: 'shipyard',
       label: i => `목공소 · ${i.boatName}`, labelDy: -4 },
     { id: 'sell', x: 200, y: 94,  w: 44, h: 32, sprite: 'chest',
-      label: () => '판매 궤짝', labelDy: -4 },
+      label: () => '궤짝 · 판매', labelDy: -4 },
     { id: 'exit', x: 272, y: 104, w: 34, h: 56, sprite: 'door',
       label: () => '문 · 마을로', labelDy: -4 },
   ],
