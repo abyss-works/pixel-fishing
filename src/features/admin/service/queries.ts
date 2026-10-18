@@ -44,3 +44,6 @@ export const readAdminUserDetails = (uid: string) => Promise.all([
 
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */
 export const readAdminBountyFunnel = (days: number) => api.admin.bountyFunnel(days);
+
+/** 밸런스 라이브 지표. 이벤트 지표는 보관 기간(7일) 안의 범위만 의미가 있다 */
+export const readAdminBalanceLive = (days?: number) => api.admin.balanceLive(days);
