@@ -48,7 +48,8 @@ export const EXHIBIT_UI_ENABLED = false;
 // 행마다 어긋나 소계를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
 //   [캐럿] [스프라이트] [이름] [×N] [소계] [자물쇠]
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
-const ROW = 'grid grid-cols-[10px_30px_1fr_24px_80px_22px] items-center gap-1';
+// 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
+const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
 /** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
@@ -311,7 +312,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                         <span className="truncate">
                           <RarityDot rarity={fish.rarity} />{name}
                         </span>
-                        <span className="pf-accent text-text-dim text-right">×{items.length}</span>
+                        <span className="pf-accent text-text-dim whitespace-nowrap">×{items.length}</span>
                         <span className="pf-accent text-right">{fmtGold(subtotal)}</span>
                         <IconButton
                           glyph={allLocked ? 'lock' : 'lockOpen'} size={14}
