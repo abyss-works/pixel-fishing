@@ -108,7 +108,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없다. 서버 연결이 필요하다.</Note>
       )}
       {screen === 'quests' ? (
-        <div className="min-h-96">
+        <div className="min-h-[28rem]">
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
           <div className="grid grid-cols-3 gap-2 items-stretch">
             <div className="h-full">{gradeCard('easy')}</div>
@@ -118,7 +118,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </Gated>
         </div>
       ) : screen === 'named' ? (
-        <div className="min-h-96">
+        <div className="min-h-[28rem]">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
@@ -147,7 +147,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         )}
         </div>
       ) : (
-        <div className="min-h-96">
+        <div className="min-h-[28rem]">
           {relic && (
             <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
               materialCount={relicMats} busy={busy}
