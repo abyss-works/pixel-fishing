@@ -491,8 +491,8 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
-    // 미끼 상점은 상점끼리(낚싯대·배·미끼) 묶는다
-    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'shop', 'sell', 'travel', 'exit']);
+    // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
+    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'exit']);
   });
   it('같은 거점 안의 시설 영역은 서로 겹치지 않는다', () => {
     for (const pack of Object.values(BASE_PACKS)) {

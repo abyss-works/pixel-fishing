@@ -65,7 +65,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'coupon-used': '이미 사용한 쿠폰이다.',
   'relief-invalid': '지원 코드가 맞지 않다 — 이미 사용했거나 없는 코드다.',
   'bait-not-owned': '보유한 미끼가 없다.',
-  'shop-closed': '미끼 상점은 콜롬보항에서만 이용할 수 있다.',
+  'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있다.',
   'nickname-taken': '이미 쓰이는 닉네임이다.',
   'no-license': '라이선스가 없다 — 명성과 도감 조건을 채우면 열린다.',
   'no-tickets': '오늘의 수주권을 다 썼다 — 내일 다시 오자.',

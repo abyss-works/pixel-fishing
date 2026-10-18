@@ -379,7 +379,7 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
   const discountPct = Math.round(sel.discountRate * 100);
 
   return (
-    <ModalCard title="미끼 상점" onClose={onClose}
+    <ModalCard title="향료전 — 미끼" onClose={onClose}
       confirm={
         <Button variant="primary" disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
           구입하기 (-{fmtGold(sel.total)})
