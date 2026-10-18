@@ -12,12 +12,28 @@ import TimeBadge from '../../../ui/hud/TimeBadge';
 import Button from '../../../ui/Button';
 import Panel from '../../../ui/Panel';
 import FacilityIcon from './FacilityIcon';
+import BoatSprite from '../../../ui/BoatSprite';
+import { BUILDING_SPRITES, FURNITURE_SPRITES } from '../../../../game/rendering/pixel/sprites/buildings.js';
+import type { Furniture } from '../../../../game/world';
 
 interface Props {
   base: BaseId;
   game: GameState;
   /** 카드 선택 — 패널 선택과 장면 이동은 호출부가 결정한다 */
   onFacility?: (id: FurnitureId) => void;
+}
+
+// 집 아이콘(마을로 돌아가는 여객선 카드) — 마을 필드의 집 건물 스프라이트를 쓴다
+const HOUSE_RECT = { x: 0, y: 0, w: 64, h: 52 };
+const drawHouse = (ctx: Parameters<typeof BUILDING_SPRITES.house.draw>[0]) => BUILDING_SPRITES.house.draw(ctx, HOUSE_RECT);
+
+/** 카드 아이콘 — 승선은 지금 내 배, 여객선은 집, 나머지는 가구 스프라이트 */
+function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture; boat: number }) {
+  if (facility.id === 'exit' && base !== 'home' && boat > 0) {
+    return <span data-icon="boat" className="flex h-full items-center justify-center"><BoatSprite tier={boat} preset="row" /></span>;
+  }
+  if (facility.id === 'travel') return <span data-icon="house" className="block h-full"><FacilityIcon rect={HOUSE_RECT} draw={drawHouse} /></span>;
+  return <FacilityIcon rect={facility} draw={ctx => FURNITURE_SPRITES[facility.sprite](ctx, facility)} />;
 }
 
 /** 시설 구역 — 구역 순서대로 놓고, 구역 안의 카드는 거점 데이터의 가구 순서를 따른다 */
@@ -68,7 +84,7 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
                       <Button key={f.id} type="button" aria-label={label} data-facility={f.id}
                               onClick={() => onFacility?.(f.id)}
                               className="flex w-[clamp(84px,12vw,128px)] flex-col items-center gap-1 px-1.5 py-2">
-                        <span className="h-14 w-full"><FacilityIcon facility={f} /></span>
+                        <span className="h-14 w-full"><CardIcon base={base} facility={f} boat={game.boat} /></span>
                         <span className="pf-accent text-sm text-gold">{title}</span>
                         {sub && <span className="text-xs text-text-dim">{sub}</span>}
                       </Button>

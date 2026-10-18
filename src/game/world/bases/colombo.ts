@@ -26,7 +26,7 @@ export const COLOMBO_BASE: BasePack = {
     { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
       label: () => '향료전 · 미끼', labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
-      label: () => '여객선 · 마을로', labelDy: -2 },
+      label: () => '마을 · 집으로', labelDy: -2 },
     { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
       label: () => '승선 · 바다로', labelDy: 8 },
   ],
