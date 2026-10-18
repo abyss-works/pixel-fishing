@@ -30,7 +30,7 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
     when(dispatch({ type: 'sendLetter', text: body }), r => {
       setBusy(false);
       if (r.status !== 'ok') return; // 실패는 정책(에러 처리)이 안내한다
-      setToast('편지를 보냈어요. 읽고 반영할게요 — 고마워요!');
+      setToast('편지를 보냈어요. 꼼꼼히 읽고 반영할게요. 고마워요.');
       onClose();
     });
   };
@@ -40,7 +40,7 @@ export default function LetterModal({ dispatch, setToast, onClose }: {
       <Note>건의·버그 제보·하고 싶은 말 아무거나 좋아요. 답장은 계정 이메일로 드려요.</Note>
       <TextArea
         className="h-40 my-2"
-        placeholder="예) 가방이 금방 차요. 조금만 늘려주세요!"
+        placeholder="예) 가방 칸을 조금 늘려 주세요"
         value={text}
         maxLength={LETTER_MAX + 1} // +1이라 상한을 넘겨 봐야 경고를 볼 수 있다
         onChange={e => setText(e.target.value)}

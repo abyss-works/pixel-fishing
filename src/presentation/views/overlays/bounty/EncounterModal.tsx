@@ -147,7 +147,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
                 flash === 'miss' ? 'border-text-dim' : flash === 'hit' ? 'border-gold' : 'border-line')}
               onClick={() => strikeRef.current()}
               role="button"
-              aria-label="챔질"
+              aria-label="결투 바"
             >
               <div
                 data-duel="zone"
@@ -161,9 +161,9 @@ export default function EncounterModal({ data, onResolve, onClose }: {
               />
             </div>
             <span className={cx('h-5 text-xs', flash === 'miss' ? 'text-text-dim' : 'text-gold')}>
-              {flash === 'hit' ? '명중!' : flash === 'miss' ? '빗나갔다 — 그림자가 멀어진다.' : ''}
+              {flash === 'hit' ? '명중' : flash === 'miss' ? '빗나갔어요. 그림자가 멀어져요.' : ''}
             </span>
-            <Button variant="primary" full onClick={() => strikeRef.current()}>챔질!</Button>
+            <Button variant="primary" full onClick={() => strikeRef.current()}>챔질</Button>
           </>
         )}
         {phase === 'won' && (
@@ -178,7 +178,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         )}
         {phase === 'lost' && (
           <>
-            <span>놓쳤다 — 흔적이 사라졌다. 다시 조우해야 한다.</span>
+            <span>놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.</span>
             <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}

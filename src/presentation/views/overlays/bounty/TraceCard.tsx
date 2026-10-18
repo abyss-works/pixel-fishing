@@ -32,14 +32,14 @@ export default function TraceCard({ onTrack }: {
         <span className="pf-accent text-gold text-sm leading-none flex items-center gap-1">
           <PixelIcon glyph="ticket" size={11} /> 토벌
         </span>
-        <span>{josa(card.named.name, '을/를')} 토벌했다. 수배판에서 보상을 받자.</span>
+        <span>{josa(card.named.name, '을/를')} 토벌했어요! 수배판에서 보상을 받을 수 있어요.</span>
       </div>
     );
   }
   if (!card.here) {
     return (
       <div className={frame} role="status" aria-label="흔적">
-        <span className="text-text-dim">흔적이 {card.zoneName}에 남아 있다 · {fmtMinutes(card.leftMins)}</span>
+        <span className="text-text-dim">흔적이 {card.zoneName}에 남아 있어요. 남은 시간 {fmtMinutes(card.leftMins)}</span>
       </div>
     );
   }

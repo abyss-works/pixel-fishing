@@ -9,7 +9,7 @@ import { encounterAlertText, shouldAlertEncounter } from '../model/encounterAler
 
 export { resetEncounterAlert };
 
-const FLASH_TEXT = '흔적 발견!';
+const FLASH_TEXT = '흔적 발견';
 
 /** 조우 직후 부른다 — 다른 화면을 보고 있는 플레이어에게만 알린다 */
 export function alertEncounter(questId: string): void {

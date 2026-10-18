@@ -11,8 +11,8 @@ export function encounterAlertText(questId: string, windowMs: number): Encounter
   const zone = zoneById(quest.zone)?.shortName ?? quest.zone;
   const hours = Math.round(windowMs / 3_600_000);
   return {
-    title: '흔적을 찾았다',
-    body: `${zone}의 수면 아래로 무언가 지나갔다. 흔적은 ${hours}시간 동안 남는다.`,
+    title: '흔적 발견',
+    body: `${zone}의 수면 아래로 무언가 지나갔어요. 흔적은 ${hours}시간 동안 남아요.`,
   };
 }
 

@@ -9,6 +9,7 @@ import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { fmtGold } from '../../../ui/format';
+import type { Notify } from '../../../ui/hud/messageFeed';
 
 type Dispatch = (a: GameAction) => MaybePromise<DispatchResult>;
 
@@ -48,17 +49,17 @@ function CodeField({ label, placeholder, submit }: {
 // 코드 입력 창 — 쿠폰과 지원 코드를 한곳에서 넣는다. 판정은 전부 서버 소관이고, 결과는 토스트로 알린다.
 export default function CodeModal({ dispatch, setToast, onClose }: {
   dispatch: Dispatch;
-  setToast: (m: string) => void;
+  setToast: Notify;
   onClose: () => void;
 }) {
   // 쿠폰 — 정적 코드와 동적 쿠폰 조회는 서버가 판정한다. 클라는 코드만 보낸다
   const redeemCoupon = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'redeemCoupon', code }), r => {
       if (r.status === 'ok' && r.result.type === 'coupon') {
-        setToast(`쿠폰 사용! +${fmtGold(r.result.gold)} — ${r.result.desc}`);
+        setToast(`쿠폰을 사용했어요! ${fmtGold(r.result.gold)}를 받았어요. (${r.result.desc})`, 'gold');
         done(true);
       } else {
-        if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+        if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
         done(false);
       }
     });
@@ -66,8 +67,8 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   // 지원 코드 — 운영자가 발급하는 일회성 자산 패키지. 검증·소비는 서버 소관
   const claimRelief = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'claimRelief', code }), r => {
-      if (r.status === 'ok') setToast('지원 코드를 적용했다!');
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      if (r.status === 'ok') setToast('지원 코드를 적용했어요!', 'gold');
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
       done(r.status === 'ok');
     });
 

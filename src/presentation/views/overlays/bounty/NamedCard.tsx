@@ -36,17 +36,17 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, acce
           <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
       {accepted && !done && ticketMins === null && (
-        <span className="text-accent text-xs">진행 중 — 이 구역에서 낚시하다 마주치면 흔적이 남는다</span>
+        <span className="text-accent text-xs">진행 중이에요. 이 구역에서 낚시하다 마주치면 흔적이 남아요.</span>
       )}
       {!done && ticketMins !== null && (
-        <span className="text-accent text-xs">흔적이 남아 있다 — 바다에서 추적하자 · {fmtMinutes(ticketMins)}</span>
+        <span className="text-accent text-xs">흔적이 남아 있어요. 바다에서 추적해 보세요. 남은 시간 {fmtMinutes(ticketMins)}</span>
       )}
           <span className="flex justify-center mt-auto">
             {done
-              ? <Button size="sm" disabled={busy} onClick={onDeliver}>보상 받기</Button>
+              ? <Button size="sm" disabled={busy} onClick={onDeliver}>보상 수령</Button>
               : accepted
                 ? <Button full disabled>진행 중</Button>
-                : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+                : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주</Button>}
           </span>
         </span>
       </div>

@@ -24,17 +24,17 @@ class LocalAuth implements AuthApi {
     return { unsubscribe() {} };
   }
   async signUp(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드 미설정' };
+    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
   async signIn(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드 미설정' };
+    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
   async signOut(): Promise<void> {}
   async requestPasswordReset(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드 미설정' };
+    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
   async applyNewPassword(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드 미설정' };
+    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
   accountNudgedDay(): string | null {
     const v = localStorage.getItem('pf-account-nudged');
