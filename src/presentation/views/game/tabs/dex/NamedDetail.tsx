@@ -3,7 +3,7 @@ import { zoneById } from '../../../../../game/content/zones';
 import type { GameState } from '../../../../../game/rules/logic';
 import { selectNamedDetail } from '../../../../../features/dex/model/catalog';
 import Modal from '../../../../ui/Modal';
-import DetailCell from './DetailCell';
+import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
@@ -28,7 +28,7 @@ export default function NamedDetail({ quest, game, onClose }: {
 
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,7fr)] grid-rows-[auto_1fr] gap-x-5 gap-y-4
                       max-[640px]:grid-cols-1">
-        <DetailCell title="표본">
+        <TitledCell title="표본">
           <Inset tone="light" className="flex flex-1 flex-col
                  bg-[linear-gradient(180deg,var(--c-surface-2),color-mix(in_oklab,var(--c-bg)_60%,var(--c-surface))_60%)]">
             <div className="flex justify-center px-2 pt-4">
@@ -39,9 +39,9 @@ export default function NamedDetail({ quest, game, onClose }: {
               {d.lore ?? '…수배서에만 그림자로 남은 존재다. 토벌하면 정체가 드러난다.'}
             </p>
           </Inset>
-        </DetailCell>
+        </TitledCell>
 
-        <DetailCell title="전해 오는 이야기" className="row-span-2 max-[640px]:row-span-1">
+        <TitledCell title="전해 오는 이야기" className="row-span-2 max-[640px]:row-span-1">
           <Inset className="pf-scroll-panel flex-1 min-h-64 max-h-[min(62vh,560px)] overflow-y-auto px-5 py-4">
             {d.chronicle ? (
               <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
@@ -59,9 +59,9 @@ export default function NamedDetail({ quest, game, onClose }: {
               </div>
             )}
           </Inset>
-        </DetailCell>
+        </TitledCell>
 
-        <DetailCell title="기록">
+        <TitledCell title="기록">
           <Inset divided className="flex-1">
             <KeyValueRow label="출현 구역" value={zone} />
             <KeyValueRow label="결투 체력" value={<span className="pf-accent">{d.hp}</span>} />
@@ -69,7 +69,7 @@ export default function NamedDetail({ quest, game, onClose }: {
             <KeyValueRow label="처음 토벌한 날" value={d.firstCaught ?? (d.found ? '알 수 없음' : '—')} />
             {d.trace && <KeyValueRow label="흔적" value={<span className="italic text-text-dim">{d.trace}</span>} />}
           </Inset>
-        </DetailCell>
+        </TitledCell>
       </div>
     </Modal>
   );
