@@ -1,9 +1,8 @@
 // 경제 탭 — 골드 유입(sell·coupon)과 유출(upgradeRod·buyBoat·buyBait)의 일 원장 + 잔고 분포.
 // 레이아웃: [잔고 백분위 KPI 4] → 좌우 분할(유입 | 유출, xl) → 원장 대차 카드(풀폭).
 // 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Note from '../../../ui/Note';
-import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
 import { selectEconomyMetrics } from '../../../../features/admin/model/adminViews';
 import { readAdminEconomy } from '../../../../features/admin/service/queries';
@@ -12,16 +11,14 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import type { AdminEconomyRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart, ChartSection, KpiGrid, KpiCard, TabState } from '../charts';
-
-type Range = '30' | '90';
+import type { DayRange } from './dayRange';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 축과 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminEconomy>> = [[], []];
 
-export default function EconomyTab() {
+export default function EconomyTab({ range }: { range: DayRange }) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [range, setRange] = useState<Range>('30');
   // 범위는 캐시 키에 들어간다 — 전환하면 그 범위를 새로 조회한다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.economy(Number(range)), () => readAdminEconomy(Number(range)), granted);
@@ -52,11 +49,7 @@ export default function EconomyTab() {
 
       {/* 유입·유출은 같은 날 축이라 짝지어 본다(xl 이상에서 좌우) */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <ChartSection title="유입 — 판매·쿠폰" aside={
-          <MetricSwitch value={range}
-                        options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
-                        onChange={setRange} ariaLabel="기간 선택" />
-        }>
+        <ChartSection title="유입 — 판매·쿠폰">
           <BarsChart values={series(r => r.sell_gold + r.coupon_gold)} labels={dayLabels} height={72}
                      highlight="last" highlightName="금일" ariaLabel="골드 유입 일별 추이" />
           <Note size="2xs" className="my-0">판매 골드에 쿠폰 지급이 더해진 일별 흐름.</Note>

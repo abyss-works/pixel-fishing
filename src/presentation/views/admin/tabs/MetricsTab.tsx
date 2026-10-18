@@ -1,17 +1,14 @@
 // 지표 탭 — 접속·활동의 시간축(DAU/WAU)과 리텐션 코호트. boot 이벤트 기록은 2026-08 이후 시작됐다.
 // 따라서 그 이전 기간의 수치는 '행동한 유저' 수다.
-import { useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
-import MetricSwitch from '../widgets/MetricSwitch';
 import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
 import { readAdminMetrics } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { ChartSection, StackedBarsPair, RetentionCell, TabState } from '../charts';
-
-type Range = '30' | '90';
+import type { DayRange } from './dayRange';
 const COHORTS = ['d1', 'd3', 'd7', 'd14', 'd30'] as const;
 const RETENTION_COLS: { key: typeof COHORTS[number]; label: string }[] = [
   { key: 'd1', label: 'D+1' }, { key: 'd3', label: 'D+3' }, { key: 'd7', label: 'D+7' },
@@ -21,10 +18,9 @@ const RETENTION_COLS: { key: typeof COHORTS[number]; label: string }[] = [
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 축과 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminMetrics>> = [[], []];
 
-export default function MetricsTab() {
+export default function MetricsTab({ range }: { range: DayRange }) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const [range, setRange] = useState<Range>('30');
   // 범위는 캐시 키에 들어간다 — 전환하면 그 범위를 새로 조회한다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.metrics(Number(range)), () => readAdminMetrics(Number(range)), granted);
@@ -44,14 +40,9 @@ export default function MetricsTab() {
   return (
     <div className="flex flex-col gap-3">
       <ChartSection title="활성 유저" aside={
-        <>
-          <MetricSwitch value={range}
-                        options={[{ key: '30', label: '30일' }, { key: '90', label: '90일' }]}
-                        onChange={setRange} ariaLabel="기간 선택" />
-          <span className="text-2xs text-text-dim self-center">
-            DAU 금일 {fmtNum(dau[dau.length - 1] ?? NaN)}
-          </span>
-        </>
+        <span className="text-2xs text-text-dim self-center">
+          DAU 금일 {fmtNum(dau[dau.length - 1] ?? NaN)}
+        </span>
       }>
         <TabState loading={loading && granted} error={error} onRetry={refresh} />
 

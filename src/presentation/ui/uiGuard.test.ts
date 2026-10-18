@@ -33,7 +33,6 @@ const SYSTEM_DIALOG = /\bwindow\.(?:confirm|prompt|alert)\(/;
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
 const RAW_HEADING_EXCEPTIONS = new Set([
-  'views/admin/AdminDashboard.tsx',   // 관리자 페이지 머리(h1) — 게임 셸 밖의 독립 페이지
   'views/admin/charts.tsx',           // 차트 섹션 — 제목 옆에 조작(aside)을 두는 Panel 머리 변형
   'views/devtools/DevTools.tsx',      // 떠 있는 창 머리 — 끌기 손잡이를 겸한다
   'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
