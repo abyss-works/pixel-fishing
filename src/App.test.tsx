@@ -1,7 +1,7 @@
 // R1~R3b, R5, R5b, R6~R10, R18, R22~R25 + 관리자 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, waitFor, within } from '@testing-library/react';
 import App from './App';
 import Field from './presentation/layouts/game-stage/Field';
 import Base from './presentation/layouts/game-stage/Base';
@@ -90,9 +90,10 @@ describe('마을 랭킹 게시판', () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
-    expect(screen.getByRole('button', { name: '명성' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '도감' })).toBeInTheDocument();
-    expect(await screen.findByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '랭킹' });
+    expect(within(dialog).getByRole('heading', { name: '명성' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: '도감' })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getAllByText('랭킹은 온라인에서만 볼 수 있어요.')).toHaveLength(2));
   });
 });
 
