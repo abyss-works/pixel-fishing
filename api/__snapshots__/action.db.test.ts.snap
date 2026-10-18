@@ -4,6 +4,7 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -155,6 +156,7 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -255,6 +257,7 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -366,6 +369,7 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -696,6 +700,7 @@ exports[`개발 명령 > 로컬 오리진의 상태 명령은 허용된다 1`] =
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -790,6 +795,7 @@ exports[`개발 명령 > 소유자가 아니고 로컬 오리진도 아니면 �
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -844,6 +850,7 @@ exports[`개발 명령 > 운영 배포는 로컬 오리진이어도 거부한다
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -897,13 +904,13 @@ exports[`개발 명령 > 운영 배포는 로컬 오리진이어도 거부한다
 exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
 {
   "db": {
-    "bounty_accepts": [
+    "bounty_accepts": [],
+    "bounty_clears": [
       {
-        "accepted_at": "2030-03-01T00:00:00.000Z",
-        "port": "harbor",
+        "cleared_at": "2030-03-01T00:00:00.000Z",
+        "kind": "general",
         "quest_id": "pacific-easy-rare",
         "user_id": "<user>",
-        "zone": "pacific",
       },
     ],
     "bounty_licenses": [],
@@ -1010,20 +1017,19 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
     "status": 200,
   },
   "other": {
-    "bounty_accepts": [
+    "bounty_accepts": [],
+    "bounty_clears": [
       {
-        "accepted_at": "2030-03-04T05:06:07.000Z",
-        "port": "harbor",
+        "cleared_at": "2030-03-04T05:06:07.000Z",
+        "kind": "general",
         "quest_id": "pacific-easy-common",
         "user_id": "<user>",
-        "zone": "pacific",
       },
       {
-        "accepted_at": "2030-03-01T00:00:00.000Z",
-        "port": "harbor",
+        "cleared_at": "2030-03-01T00:00:00.000Z",
+        "kind": "general",
         "quest_id": "pacific-easy-rare",
         "user_id": "<user>",
-        "zone": "pacific",
       },
     ],
     "bounty_licenses": [],
@@ -1148,6 +1154,7 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -2022,6 +2029,7 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -2902,12 +2910,13 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-named-megalodon",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -3065,12 +3074,13 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-named-megalodon",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -3243,6 +3253,7 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -3433,6 +3444,7 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -3653,6 +3665,7 @@ exports[`낚시 > 잠긴 수역은 거부한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -3707,12 +3720,13 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 1,
         "quest_id": "pacific-easy-common",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -3720,7 +3734,7 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
       {
         "progress": 0,
         "quest_id": "pacific-easy-epic",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -3728,7 +3742,7 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
       {
         "progress": 0,
         "quest_id": "pacific-easy-rare",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -3886,6 +3900,7 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4040,6 +4055,7 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4094,6 +4110,7 @@ exports[`닉네임 > 바꾸기 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4185,6 +4202,7 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4239,6 +4257,7 @@ exports[`상점·이동 > 골드가 모자란 강화는 거부한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4293,6 +4312,7 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4421,6 +4441,7 @@ exports[`상점·이동 > 미끼 구매와 장착 1`] = `
   },
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4526,6 +4547,7 @@ exports[`상점·이동 > 배 구매 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4618,6 +4640,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4713,6 +4736,7 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4767,6 +4791,7 @@ exports[`요청 경계 > 직전 액션과 간격이 너무 짧으면 429다 1`] 
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4821,6 +4846,7 @@ exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4875,6 +4901,7 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -4929,6 +4956,7 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5057,6 +5085,7 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5236,6 +5265,7 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5328,6 +5358,7 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5432,6 +5463,7 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5531,6 +5563,7 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
   "first": {
     "db": {
       "bounty_accepts": [],
+      "bounty_clears": [],
       "bounty_licenses": [],
       "bounty_progress": [],
       "bounty_tickets": [],
@@ -5659,6 +5692,7 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
   "second": {
     "db": {
       "bounty_accepts": [],
+      "bounty_clears": [],
       "bounty_licenses": [],
       "bounty_progress": [],
       "bounty_tickets": [],
@@ -5714,6 +5748,7 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -5811,12 +5846,13 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 1,
         "quest_id": "pacific-named-megalodon",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -5934,12 +5970,13 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-named-megalodon",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -6037,12 +6074,13 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-named-megalodon",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -6106,6 +6144,7 @@ exports[`현상금 > 배정되지 않은 의뢰 수주는 거부한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -6243,19 +6282,20 @@ exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행
   "db": {
     "bounty_accepts": [
       {
-        "accepted_at": "<db-now>",
+        "accepted_at": "<now>",
         "port": "harbor",
         "quest_id": "pacific-easy-rare",
         "user_id": "<user>",
         "zone": "pacific",
       },
     ],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-easy-rare",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -6429,16 +6469,16 @@ exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행
 }
 `;
 
-exports[`현상금 > 오늘 이미 수주했으면 거부한다 1`] = `
+exports[`현상금 > 오늘 이미 클리어했으면 거부한다 1`] = `
 {
   "db": {
-    "bounty_accepts": [
+    "bounty_accepts": [],
+    "bounty_clears": [
       {
-        "accepted_at": "<now>",
-        "port": "harbor",
+        "cleared_at": "<now>",
+        "kind": "general",
         "quest_id": "pacific-easy-common",
         "user_id": "<user>",
-        "zone": "pacific",
       },
     ],
     "bounty_licenses": [],
@@ -6566,7 +6606,7 @@ exports[`현상금 > 오늘 이미 수주했으면 거부한다 1`] = `
   },
   "res": {
     "body": {
-      "error": "no-tickets",
+      "error": "daily-cleared",
     },
     "status": 422,
   },
@@ -6577,12 +6617,13 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [
       {
         "progress": 0,
         "quest_id": "pacific-easy-common",
-        "started_at": "<db-now>",
+        "started_at": "<now>",
         "updated_at": "<db-now>",
         "user_id": "<user>",
         "zone": "pacific",
@@ -6640,6 +6681,14 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [
+      {
+        "cleared_at": "<now>",
+        "kind": "general",
+        "quest_id": "pacific-easy-common",
+        "user_id": "<user>",
+      },
+    ],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -6732,6 +6781,7 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
 {
   "db": {
     "bounty_accepts": [],
+    "bounty_clears": [],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],

@@ -14,8 +14,8 @@ export type InstanceRow = {
 };
 export type RecordRow = { fish_id: string; form: string; count: number; max_size: number | null; first_caught: string | null };
 export interface BountyRows {
-  accepts: { accepted_at: string; quest_id: string }[];
-  progress: { quest_id: string; progress: number }[];
+  clears: { kind: string; cleared_at: string }[];
+  progress: { quest_id: string; progress: number; started_at: string }[];
   tickets: { quest_id: string; issued_at: string }[];
 }
 
@@ -53,15 +53,15 @@ export async function loadContext(db: Executor, uid: string, opts: {
   const day = opts.bountyDayStart;
   const { rows } = await db.execute<{
     nickname: string | null; cur: StateRow | null; instances: InstanceRow[] | null; records: RecordRow[] | null;
-    accepts: BountyRows['accepts'] | null; progress: BountyRows['progress'] | null; tickets: BountyRows['tickets'] | null;
+    clears: BountyRows['clears'] | null; progress: BountyRows['progress'] | null; tickets: BountyRows['tickets'] | null;
   }>(sql`select
     (select nickname from public.profiles where user_id = ${uid}) as nickname,
     ${stateJson(uid)} as cur,
     case when ${wantDetail} then ${instancesJson(uid)} end as instances,
     case when ${wantDetail} then ${recordsJson(uid)} end as records,
-    case when ${day !== null} then (select coalesce(json_agg(a), '[]') from (select accepted_at, quest_id
-      from public.bounty_accepts where user_id = ${uid} and accepted_at >= ${at(day ?? '1970-01-01T00:00:00Z')}) a) end as accepts,
-    case when ${day !== null} then (select coalesce(json_agg(p), '[]') from (select quest_id, progress
+    case when ${day !== null} then (select coalesce(json_agg(c), '[]') from (select kind, cleared_at
+      from public.bounty_clears where user_id = ${uid} and cleared_at >= ${at(day ?? '1970-01-01T00:00:00Z')}) c) end as clears,
+    case when ${day !== null} then (select coalesce(json_agg(p), '[]') from (select quest_id, progress, started_at
       from public.bounty_progress where user_id = ${uid}) p) end as progress,
     case when ${day !== null} then (select coalesce(json_agg(t), '[]') from (select quest_id, issued_at
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets`);
@@ -71,7 +71,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
     row: r.cur,
     instances: r.instances,
     records: r.records,
-    bounty: day !== null ? { accepts: r.accepts ?? [], progress: r.progress ?? [], tickets: r.tickets ?? [] } : null,
+    bounty: day !== null ? { clears: r.clears ?? [], progress: r.progress ?? [], tickets: r.tickets ?? [] } : null,
   };
 }
 

@@ -1,7 +1,8 @@
 // 테스트용 트리거 허용 판정 — 운영 배포는 어떤 경우에도 막고, 스테이징·로컬은 소유자·로컬 오리진만 연다.
 import { describe, it, expect } from 'vitest';
-import { debugTablePlan, debugTriggerAllowed, kstDayStartISO } from './action.js';
+import { debugTablePlan, debugTriggerAllowed } from './action.js';
 import { challengeWindowMs } from '../src/game/rules/challenge.js';
+import { gameDayStartISO } from '../src/game/rules/time.js';
 
 describe('debugTriggerAllowed', () => {
   it('운영 배포는 소유자·로컬 오리진이어도 막는다', () => {
@@ -29,10 +30,11 @@ describe('debugTablePlan', () => {
     });
   });
 
-  it('오늘 수주 기록 초기화는 KST 자정 이후 행만 지운다', () => {
+  it('오늘 클리어 기록 초기화는 게임 날짜 시작(KST 04:00) 이후 행만 지운다', () => {
     expect(debugTablePlan('bounty.resetToday', now)).toEqual({
-      table: 'bounty_accepts', op: 'delete', since: { column: 'accepted_at', iso: kstDayStartISO(now) },
+      table: 'bounty_clears', op: 'delete', since: { column: 'cleared_at', iso: '2026-10-15T19:00:00.000Z' },
     });
+    expect(gameDayStartISO(new Date(now).toISOString())).toBe('2026-10-15T19:00:00.000Z');
   });
 
   it('도전권·진행 정리는 본인 행 전체를 지운다', () => {

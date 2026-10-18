@@ -10,7 +10,7 @@ const API = join(import.meta.dirname, '..');
 const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/save.ts': ['saves_current', 'fish_instances', 'records', 'saves'],
   '_data/profile.ts': ['profiles'],
-  '_data/bounty.ts': ['bounty_accepts', 'bounty_progress', 'bounty_tickets'],
+  '_data/bounty.ts': ['bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets'],
   '_data/codes.ts': ['coupons', 'reliefs'],
   '_data/mail.ts': ['letters'],
   '_data/telemetry.ts': ['events'],

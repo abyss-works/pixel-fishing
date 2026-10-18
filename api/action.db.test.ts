@@ -2,7 +2,7 @@
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOUNTIES, dailyQuestFor } from '../src/game/content/bounties.js';
+import { BOUNTIES, bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
@@ -143,8 +143,8 @@ describe('낚시', () => {
   it('진행 중인 일반 의뢰가 캐치에 맞으면 진행도가 오른다', async () => {
     const uid = await seed({ state: { boat: 1 } });
     for (const q of BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty === 'easy')) {
-      await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, 0)',
-        [uid, q.zone, q.id]);
+      await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+        [uid, q.zone, q.id, NOW]);
     }
     expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' })))
       .toMatchSnapshot();
@@ -153,8 +153,8 @@ describe('낚시', () => {
   it('강제 조우를 허용받은 캐치는 진행 중인 네임드의 도전권을 발급한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
     const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
-    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, 0)',
-      [uid, named.zone, named.id]);
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true },
       { origin: LOCAL_ORIGIN });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
@@ -163,8 +163,8 @@ describe('낚시', () => {
   it('강제 조우가 허용되지 않으면 통상 캐치로 처리한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
     const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
-    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, 0)',
-      [uid, named.zone, named.id]);
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
@@ -279,10 +279,10 @@ describe('현상금', () => {
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
 
-  it('오늘 이미 수주했으면 거부한다', async () => {
+  it('오늘 이미 클리어했으면 거부한다', async () => {
     const uid = await seed({ state: pacificState() });
-    await env.client.query(`insert into public.bounty_accepts (user_id, zone, port, quest_id, accepted_at)
-      values ($1, 'pacific', 'harbor', 'pacific-easy-common', $2)`, [uid, NOW]);
+    await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
+      values ($1, 'general', 'pacific-easy-common', $2)`, [uid, NOW]);
     const quest = dailyQuestFor('pacific', 'easy', uid, TODAY_KST)!;
     const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
@@ -291,8 +291,8 @@ describe('현상금', () => {
   it('완료한 의뢰 납품은 진행 행을 지우고 보상을 준다', async () => {
     const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
     const uid = await seed({ state: {} });
-    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, $4)',
-      [uid, quest.zone, quest.id, quest.count]);
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, quest.zone, quest.id, quest.count, NOW]);
     expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })))
       .toMatchSnapshot();
   });
@@ -300,8 +300,8 @@ describe('현상금', () => {
   it('완료하지 않은 의뢰 납품은 거부하고 진행 행을 남긴다', async () => {
     const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
     const uid = await seed({ state: {} });
-    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, 0)',
-      [uid, quest.zone, quest.id]);
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, quest.zone, quest.id, NOW]);
     expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })))
       .toMatchSnapshot();
   });
@@ -309,8 +309,8 @@ describe('현상금', () => {
   async function namedSetup(issuedAgoMs: number) {
     const uid = await seed({ state: { boat: 1 } });
     const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
-    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress) values ($1, $2, $3, 0)',
-      [uid, named.zone, named.id]);
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW]);
     await env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
       [uid, named.id, new Date(Date.parse(NOW) - issuedAgoMs).toISOString()]);
     return { uid, named };
@@ -379,8 +379,8 @@ describe('개발 명령', () => {
     const uid = await seed({ state: {} });
     for (const u of [uid, other]) {
       await env.client.query(`insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, 'pacific-named-megalodon', $2)`, [u, NOW]);
-      await env.client.query(`insert into public.bounty_accepts (user_id, zone, port, quest_id, accepted_at)
-        values ($1, 'pacific', 'harbor', 'pacific-easy-common', $2), ($1, 'pacific', 'harbor', 'pacific-easy-rare', '2030-03-01T00:00:00Z')`, [u, NOW]);
+      await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
+        values ($1, 'general', 'pacific-easy-common', $2), ($1, 'general', 'pacific-easy-rare', '2030-03-01T00:00:00Z')`, [u, NOW]);
     }
     const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.ticketNearExpiry' }, { origin: LOCAL_ORIGIN });
     vi.setSystemTime(Date.parse(NOW) + 2000);
@@ -411,5 +411,216 @@ describe('첫 액션 시딩 뒤 도감', () => {
     const counts = rows.map(r => Number(r.count)).sort();
     expect(counts.every(c => c === 3 || c === 4)).toBe(true);
     expect(counts.filter(c => c === 1)).toEqual([]);
+  });
+});
+
+describe('현상금 — 클리어 기준 한도와 만료', () => {
+  // NOW(2030-03-04 KST 14:06)가 속한 게임 날짜는 그날 KST 04:00에 시작했다
+  const DAY_START = '2030-03-03T19:00:00.000Z';
+  const BEFORE_START = '2030-03-03T18:59:59.999Z';
+  const pacificState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const namedState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'named'), location: at('harbor') });
+  const offered = (uid: string, difficulty: 'easy' | 'normal' | 'hard' | 'named', day = TODAY_KST) =>
+    dailyQuestFor('pacific', difficulty, uid, day)!;
+  const accept = (uid: string, questId: string) =>
+    callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'harbor' });
+  const deliver = (uid: string, questId: string) => callAction(userToken(uid), { type: 'deliverBounty', questId });
+  const after = (ms: number) => vi.setSystemTime(Date.parse(NOW) + ms);
+  const progressRow = (uid: string, questId: string, progress: number, startedAt: string) =>
+    env.client.query(`insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at, updated_at)
+      values ($1, $2, $3, $4, $5, $5)`, [uid, bountyById(questId)!.zone, questId, progress, startedAt]);
+  const clearRow = (uid: string, kind: string, questId: string, clearedAt: string) =>
+    env.client.query('insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values ($1, $2, $3, $4)',
+      [uid, kind, questId, clearedAt]);
+  const ticketRow = (uid: string, questId: string, issuedAt: string) =>
+    env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)', [uid, questId, issuedAt]);
+  const questIds = async (uid: string) => ((await dumpUser(env.client, uid)).bounty_progress as { quest_id: string }[]).map(r => r.quest_id);
+
+  it('수주는 수주 기록과 진행 행을 서버 시각으로 쓰고 클리어는 쓰지 않는다 — 수주만으로는 한도를 쓰지 않는다', async () => {
+    const uid = await seed({ state: pacificState() });
+    const quest = offered(uid, 'easy');
+    expect((await accept(uid, quest.id)).status).toBe(200);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_progress).toEqual([{
+      user_id: '<user>', zone: 'pacific', quest_id: quest.id, progress: 0, started_at: '<now>', updated_at: '<now>',
+    }]);
+    expect(dump.bounty_accepts).toEqual([{
+      user_id: '<user>', zone: 'pacific', port: 'harbor', quest_id: quest.id, accepted_at: '<now>',
+    }]);
+    expect(dump.bounty_clears).toEqual([]);
+  });
+
+  it('일반 의뢰 납품은 같은 확정 문장에서 클리어를 남기고 진행 행을 지운다', async () => {
+    const quest = bountyById('pacific-easy-common')!;
+    const uid = await seed({ state: {} });
+    await progressRow(uid, quest.id, quest.count, NOW);
+    expect((await deliver(uid, quest.id)).status).toBe(200);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears).toEqual([{ user_id: '<user>', kind: 'general', quest_id: quest.id, cleared_at: '<now>' }]);
+    expect(dump.bounty_progress).toEqual([]);
+  });
+
+  it('네임드 토벌 보상은 named 클리어로 남는다', async () => {
+    const quest = bountyById('pacific-named-megalodon')!;
+    const uid = await seed({ state: {} });
+    await progressRow(uid, quest.id, 1, NOW);
+    expect((await deliver(uid, quest.id)).status).toBe(200);
+    expect((await dumpUser(env.client, uid)).bounty_clears)
+      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
+  });
+
+  it('같은 의뢰를 동시에 납품해도 보상과 클리어는 한 번이다', async () => {
+    const quest = bountyById('pacific-easy-common')!;
+    const uid = await seed({ state: {} });
+    await progressRow(uid, quest.id, quest.count, NOW);
+    const results = await Promise.all([deliver(uid, quest.id), deliver(uid, quest.id)]);
+    // 진 쪽은 진행 행 선소비에서 지거나(422) 직전 성공 액션과의 간격에서 걸린다(429)
+    const statuses = results.map(r => r.status).sort();
+    expect(statuses[0]).toBe(200);
+    expect([422, 429]).toContain(statuses[1]);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears).toHaveLength(1);
+    expect(dump.saves_current[0]).toMatchObject({ gold: String(quest.reward) });
+  });
+
+  it('납품이 거부되면 클리어도 남기지 않는다', async () => {
+    const quest = bountyById('pacific-easy-common')!;
+    const uid = await seed({ state: {} });
+    await progressRow(uid, quest.id, quest.count - 1, NOW);
+    expect(await deliver(uid, quest.id)).toMatchObject({ status: 422, body: { error: 'quest-incomplete' } });
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears).toEqual([]);
+    expect(dump.bounty_progress).toHaveLength(1);
+  });
+
+  it('한 갈래를 클리어하면 그 갈래만 막힌다 — 일반을 클리어해도 네임드는 수주한다', async () => {
+    const uid = await seed({ state: namedState() });
+    await clearRow(uid, 'general', 'pacific-easy-common', NOW);
+    expect(await accept(uid, offered(uid, 'easy').id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+    after(2000);
+    expect((await accept(uid, offered(uid, 'named').id)).status).toBe(200);
+  });
+
+  it('클리어 뒤에는 같은 날 수주하지 못하고 다음 게임 날짜(KST 04:00 정각)부터 수주한다', async () => {
+    const uid = await seed({ state: pacificState() });
+    const first = offered(uid, 'easy');
+    expect((await accept(uid, first.id)).status).toBe(200);
+    await env.client.query('update public.bounty_progress set progress = $2 where user_id = $1', [uid, first.count]);
+    after(2000);
+    expect((await deliver(uid, first.id)).status).toBe(200);
+    after(4000);
+    expect(await accept(uid, offered(uid, 'normal').id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+    // 다음 날 KST 03:59:59.999 — 아직 같은 게임 날짜다
+    vi.setSystemTime(Date.parse('2030-03-04T18:59:59.999Z'));
+    expect(await accept(uid, offered(uid, 'normal').id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+    // 04:00 정각 — 다음 게임 날짜, 일일 의뢰도 그날 것으로 바뀐다
+    vi.setSystemTime(Date.parse('2030-03-04T19:00:00.000Z'));
+    expect((await accept(uid, offered(uid, 'normal', '2030-03-05').id)).status).toBe(200);
+  });
+
+  it('일반 의뢰가 진행 중이면 다른 난이도도 수주하지 못하고 네임드는 수주한다 — 갈래마다 하나씩', async () => {
+    const uid = await seed({ state: namedState() });
+    const held = offered(uid, 'normal');
+    await progressRow(uid, held.id, 0, NOW);
+    expect(await accept(uid, offered(uid, 'easy').id)).toMatchObject({ status: 422, body: { error: 'quest-active' } });
+    after(2000);
+    expect((await accept(uid, offered(uid, 'named').id)).status).toBe(200);
+    expect(await questIds(uid)).toEqual([offered(uid, 'named').id, held.id].sort());
+  });
+
+  it('오늘 배정은 게임 날짜로 정한다 — KST 04:00 전에는 전날 배정 의뢰만 수주한다', async () => {
+    let n = 5000;
+    const differs = (u: string) => offered(u, 'easy', '2030-03-03').id !== offered(u, 'easy', '2030-03-04').id;
+    while (!differs(testUid(n))) n++;
+    const uid = await seed({ uid: testUid(n), state: pacificState() });
+    vi.setSystemTime(Date.parse('2030-03-03T18:59:59.000Z')); // 2030-03-04 KST 03:59:59
+    expect(await accept(uid, offered(uid, 'easy', '2030-03-04').id)).toMatchObject({ status: 422, body: { error: 'bad-request' } });
+    expect((await accept(uid, offered(uid, 'easy', '2030-03-03').id)).status).toBe(200);
+  });
+
+  describe('만료', () => {
+    it('경계 이전에 수주하고 마치지 못한 의뢰는 없는 것이라 새 수주를 막지 않고, 정리된다', async () => {
+      const uid = await seed({ state: pacificState() });
+      const stale = offered(uid, 'normal');
+      await progressRow(uid, stale.id, stale.count - 1, BEFORE_START); // 한 마리 모자라 마치지 못했다
+      const quest = offered(uid, 'easy');
+      expect((await accept(uid, quest.id)).status).toBe(200);
+      expect(await questIds(uid)).toEqual([quest.id]); // 만료 행은 응답 뒤 정리로 지워졌다
+    });
+
+    it('수주 시각이 04:00 정각이면 오늘 몫이라 만료되지 않는다 — 1ms 전과 갈린다', async () => {
+      const onTime = await seed({ state: pacificState() });
+      await progressRow(onTime, offered(onTime, 'normal').id, 0, DAY_START);
+      expect(await accept(onTime, offered(onTime, 'easy').id)).toMatchObject({ status: 422, body: { error: 'quest-active' } });
+      const late = await seed({ state: pacificState() });
+      await progressRow(late, offered(late, 'normal').id, 0, BEFORE_START);
+      expect((await accept(late, offered(late, 'easy').id)).status).toBe(200);
+    });
+
+    it('마친 의뢰는 경계를 넘어도 보상을 받을 수 있고 클리어는 받은 날의 몫이다', async () => {
+      const quest = bountyById('pacific-easy-common')!;
+      const uid = await seed({ state: pacificState() });
+      await progressRow(uid, quest.id, quest.count, BEFORE_START);
+      expect((await deliver(uid, quest.id)).status).toBe(200);
+      const dump = await dumpUser(env.client, uid);
+      expect(dump.bounty_clears).toEqual([{ user_id: '<user>', kind: 'general', quest_id: quest.id, cleared_at: '<now>' }]);
+      expect(dump.bounty_progress).toEqual([]);
+      after(2000);
+      expect(await accept(uid, offered(uid, 'easy').id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+    });
+
+    it('마쳤지만 보상을 받지 않은 의뢰가 남아 있으면 같은 갈래는 수주하지 못한다', async () => {
+      const quest = bountyById('pacific-easy-common')!;
+      const uid = await seed({ state: pacificState() });
+      await progressRow(uid, quest.id, quest.count, BEFORE_START);
+      expect(await accept(uid, offered(uid, 'normal').id)).toMatchObject({ status: 422, body: { error: 'quest-active' } });
+    });
+
+    it('만료된 의뢰를 다시 수주하면 진행도 0·새 시작 시각으로 시작하고 묵은 도전권은 지워진다', async () => {
+      const uid = await seed({ state: namedState() });
+      const named = offered(uid, 'named');
+      await progressRow(uid, named.id, 0, BEFORE_START);
+      await ticketRow(uid, named.id, '2030-03-03T18:30:00.000Z'); // 아직 유효 시간 안이지만 전날 수주의 것이다
+      expect((await accept(uid, named.id)).status).toBe(200);
+      const dump = await dumpUser(env.client, uid);
+      expect(dump.bounty_progress).toEqual([{
+        user_id: '<user>', zone: 'pacific', quest_id: named.id, progress: 0, started_at: '<now>', updated_at: '<now>',
+      }]);
+      expect(dump.bounty_tickets).toEqual([]);
+    });
+
+    it('만료된 일반 의뢰를 같은 의뢰로 다시 수주하면 묵은 진행도를 이어받지 않는다', async () => {
+      const uid = await seed({ state: pacificState() });
+      const quest = offered(uid, 'easy');
+      await progressRow(uid, quest.id, Math.min(quest.count - 1, 100), BEFORE_START);
+      expect((await accept(uid, quest.id)).status).toBe(200);
+      expect((await dumpUser(env.client, uid)).bounty_progress).toEqual([{
+        user_id: '<user>', zone: 'pacific', quest_id: quest.id, progress: 0, started_at: '<now>', updated_at: '<now>',
+      }]);
+    });
+
+    it('만료된 네임드 의뢰의 도전권으로는 결투 결과를 확정하지 못한다', async () => {
+      const uid = await seed({ state: { boat: 1 } });
+      const named = offered(uid, 'named');
+      await progressRow(uid, named.id, 0, BEFORE_START);
+      await ticketRow(uid, named.id, '2030-03-03T18:30:00.000Z');
+      expect(await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 }))
+        .toMatchObject({ status: 422, body: { error: 'bad-request' } });
+    });
+
+    it('수배 액션이 만료 행과 그 도전권을 지우고 살아 있는 행은 남긴다', async () => {
+      const uid = await seed({ state: {} });
+      await progressRow(uid, 'pacific-easy-common', 10, BEFORE_START);          // 만료
+      await progressRow(uid, 'pacific-named-megalodon', 0, BEFORE_START);       // 만료 + 도전권
+      await ticketRow(uid, 'pacific-named-megalodon', '2030-03-03T18:30:00.000Z');
+      await progressRow(uid, 'pacific-normal-common', 0, DAY_START);            // 04:00 정각 — 오늘 몫
+      await progressRow(uid, 'pacific-hard-legendary', 2, '2030-02-01T00:00:00.000Z'); // 마쳤다(수량 2) — 보상 대기
+      await progressRow(uid, 'seasia-named-leviathan', 0, NOW);                 // 오늘 수주 + 도전권
+      await ticketRow(uid, 'seasia-named-leviathan', NOW);
+      expect((await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).status).toBe(200);
+      expect(await questIds(uid)).toEqual(['pacific-hard-legendary', 'pacific-normal-common', 'seasia-named-leviathan']);
+      expect(((await dumpUser(env.client, uid)).bounty_tickets as { quest_id: string }[]).map(r => r.quest_id))
+        .toEqual(['seasia-named-leviathan']);
+    });
   });
 });

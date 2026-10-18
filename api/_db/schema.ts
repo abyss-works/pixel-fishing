@@ -113,3 +113,11 @@ export const bountyTickets = pgTable('bounty_tickets', {
   questId: text('quest_id').notNull(),
   issuedAt: at('issued_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.userId, t.questId] })]);
+
+export const bountyClears = pgTable('bounty_clears', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid('user_id').notNull(),
+  kind: text('kind').notNull(),
+  questId: text('quest_id').notNull(),
+  clearedAt: at('cleared_at').notNull().defaultNow(),
+});

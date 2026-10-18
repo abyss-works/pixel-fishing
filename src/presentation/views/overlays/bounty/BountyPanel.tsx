@@ -1,7 +1,7 @@
 // 수배판 — 바운티 헌팅의 수주·납품·보상 UI (항구 전용, 마을의 집 제외).
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
-// 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·수주권은 서버(DB)가 진실이다.
+// 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
@@ -9,7 +9,7 @@ import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyPort } from '../../../../game/content/bounties.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
-import { kstDay } from '../../../../features/bounty/service/queryKeys';
+import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { questLabel, selectBountyPanelData } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
@@ -67,11 +67,11 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     });
   };
 
-  const day = kstDay();
+  const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
     leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
-    basicOpen, namedOpen, canTake, canTakeNamed, ticketMins, hasTicket,
+    basicOpen, namedOpen, canTake, canTakeNamed, notice, ticketMins, hasTicket,
     relic, relicOwned, relicMats,
   } = data;
 
@@ -103,11 +103,14 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onSelect={setScreen}
       />
       <p className="text-text-dim text-xs">
-        {leftAll === null ? '수주권 —' : `수주권 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
+        {leftAll === null ? '오늘 남은 클리어 —' : `오늘 남은 클리어 일반 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
+      <p className="text-text-dim text-xs">조건을 채우지 못한 의뢰는 새벽 4시에 사라져요.</p>
       {loaded && snap === null && (
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.</Note>
       )}
+      {screen === 'quests' && notice.general && <Note size="xs" className="my-0">{notice.general}</Note>}
+      {screen === 'named' && notice.named && <Note size="xs" className="my-0">{notice.named}</Note>}
       {screen === 'quests' ? (
         <div className="min-h-[26rem]">
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>

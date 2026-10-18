@@ -5,8 +5,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
-import { kstDay } from '../../../../features/bounty/service/queryKeys';
-import { dailyQuestFor } from '../../../../game/content/bounties';
+import { gameDay } from '../../../../features/bounty/service/queryKeys';
+import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
@@ -54,18 +54,65 @@ describe('BountyPanel', () => {
   });
 
   it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
-    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', kstDay())!;
-    mockSnap = { acceptsToday: 1, namedToday: 0,
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    mockSnap = { clearsToday: { general: 0, named: 0 },
       progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ fame: 1500, dex: fullDex }));
     expect(await screen.findByText(`0/${quest.count}`)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '진행 중' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: '수주' })).toHaveLength(2); // 나머지 두 난이도만
+    // 일반 의뢰는 한 번에 하나 — 나머지 두 난이도는 보이지만 누를 수 없다
+    const others = screen.getAllByRole('button', { name: '수주' });
+    expect(others).toHaveLength(2);
+    for (const button of others) expect(button).toBeDisabled();
+  });
+
+  it('수주만으로는 오늘 남은 클리어가 줄지 않는다 — 상태 줄은 일반 1/1 · 네임드 1/1이다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText('오늘 남은 클리어 일반 1/1 · 네임드 1/1')).toBeInTheDocument();
+  });
+
+  it('스냅샷이 오기 전에는 상태 줄이 값 대신 —를 보인다', async () => {
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText('오늘 남은 클리어 —')).toBeInTheDocument();
+  });
+
+  it('마치지 못한 의뢰가 새벽 4시에 사라진다는 안내가 있다', async () => {
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText('조건을 채우지 못한 의뢰는 새벽 4시에 사라져요.')).toBeInTheDocument();
+  });
+
+  it('일반 의뢰를 오늘 클리어했으면 수주 버튼이 모두 막히고 이유를 안내한다', async () => {
+    mockSnap = { clearsToday: { general: 1, named: 0 }, progress: [], tickets: [] };
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText('오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('오늘 남은 클리어 일반 0/1 · 네임드 1/1')).toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: '수주' })) expect(button).toBeDisabled();
+  });
+
+  it('다른 구역에서 수주한 일반 의뢰가 진행 중이면 이 판의 수주가 막히고 이유를 안내한다', async () => {
+    const held = dailyQuestFor('seasia', 'hard', 'test-uid', gameDay())!;
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: held.id, progress: 0 }], tickets: [] };
+    show(game({ fame: 1500, dex: fullDex }));
+    expect(await screen.findByText('다른 구역에서 수주한 일반 의뢰가 있어요. 먼저 마쳐 주세요.')).toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: '수주' })) expect(button).toBeDisabled();
+  });
+
+  it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 납품할 수 있다', async () => {
+    const today = dailyQuestFor('pacific', 'normal', 'test-uid', gameDay())!;
+    const old = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'normal' && q.id !== today.id)!;
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: old.id, progress: old.count }], tickets: [] };
+    const g = game({ fame: 1500, dex: fullDex });
+    const dispatch = vi.fn(okDispatch(g));
+    show(g, dispatch);
+    fireEvent.click(await screen.findByRole('button', { name: '납품' }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'deliverBounty', questId: old.id }));
   });
 
   it('일일 의뢰 — 해시 결정값을 그대로 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    const day = kstDay();
+    const day = gameDay();
     const expected = (['easy', 'normal', 'hard'] as const)
       .map(difficulty => dailyQuestFor('pacific', difficulty, 'test-uid', day)!.count)
       .sort((a, b) => a - b);
@@ -95,7 +142,7 @@ describe('BountyPanel', () => {
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
-    mockSnap = { acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
@@ -103,7 +150,7 @@ describe('BountyPanel', () => {
     // 스냅샷 적재 전에는 수주 버튼이 비활성이다 — RQ fetch 완료를 기다린다.
     await waitFor(() => expect(btns[0]).not.toBeDisabled());
     fireEvent.click(btns[0]);
-    const want = dailyQuestFor('pacific', 'easy', 'test-uid', kstDay())!;
+    const want = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'acceptQuest', questId: want.id, port: 'harbor' })));
   });
@@ -126,7 +173,7 @@ describe('BountyPanel', () => {
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {
-    mockSnap = { acceptsToday: 0, namedToday: 0, progress: [], tickets: [] };
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
     const g = game({ fame: 1500, dex: fullDex, items: { 'mat-abyss-lantern': 1 } });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
@@ -138,7 +185,7 @@ describe('BountyPanel', () => {
 
   it('흔적(도전권)이 있으면 네임드 카드에 상태 한 줄만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
     mockSnap = {
-      acceptsToday: 0, namedToday: 0, progress: [],
+      clearsToday: { general: 0, named: 0 }, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
     };
     // 네임드 개방 상태에서 배너가 보이는지 본다
@@ -156,9 +203,9 @@ describe('BountyPanel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('네임드 수주권을 다 쓰면 네임드 수주 버튼이 막힌다', async () => {
-    mockSnap = { acceptsToday: 0, namedToday: 1, progress: [], tickets: [] };
-    // 네임드 개방(전설 포함 전부) 상태에서 티켓 소진만으로 막히는지 본다
+  it('오늘 네임드 토벌을 클리어했으면 네임드 수주 버튼이 막히고 이유를 안내한다', async () => {
+    mockSnap = { clearsToday: { general: 0, named: 1 }, progress: [], tickets: [] };
+    // 네임드 개방(전설 포함 전부) 상태에서 한도 소진만으로 막히는지 본다
     const rec = (count: number) => ({ count, maxSize: null, first: null });
     const named = (id: string) => ({ [id]: { normal: rec(1) } });
     const dex = Object.assign({ mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } },
@@ -167,6 +214,8 @@ describe('BountyPanel', () => {
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(await screen.findByRole('button', { name: '수주' })).toBeDisabled();
+    // 스냅샷이 오기 전에도 버튼은 막혀 있으므로 안내가 뜰 때까지 기다린 뒤 버튼을 본다
+    expect(await screen.findByText('오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '수주' })).toBeDisabled();
   });
 });
