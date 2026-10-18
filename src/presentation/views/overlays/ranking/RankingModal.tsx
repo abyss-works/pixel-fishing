@@ -19,7 +19,8 @@ function Board({ board }: { board: (typeof BOARDS)[number] }) {
   const listed = !!data && data.top.length > 0;
   return (
     <Panel title={board.title} className="min-w-0">
-      <div className="h-[min(56vh,480px)] overflow-y-auto">
+      {/* 표 머리 한 줄과 순위 10줄 높이 */}
+      <div className="pf-scroll-panel h-80 overflow-y-auto pr-1">
         {listed ? (
           <RankList rows={data.top} me={data.me} valueLabel={board.valueLabel} format={board.format} />
         ) : (
