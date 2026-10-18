@@ -329,7 +329,11 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                       </td>
                       <td className="pf-accent whitespace-nowrap">{d.fishPct.toFixed(3)}%</td>
                       <td className="pf-accent whitespace-nowrap">
-                        {firstOfGrade ? `${d.gradePct.toFixed(2)}%` : '( ↑ )'}
+                        {firstOfGrade ? `${d.gradePct.toFixed(2)}%` : (
+                          <span className="text-text-dim" title="위 줄과 같은 등급">
+                            <PixelIcon glyph="caretDown" size={8} className="rotate-180" />
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
