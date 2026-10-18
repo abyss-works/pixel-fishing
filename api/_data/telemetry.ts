@@ -31,3 +31,8 @@ export async function deleteEventsUpTo(db: Executor, maxId: number, cutoffISO: s
   const result = await db.execute(sql`delete from public.events where id <= ${maxId} and created_at < ${at(cutoffISO)}`);
   return result.rowCount ?? 0;
 }
+
+/** 계정 정리에서 사용자의 이벤트를 모두 지운다 */
+export async function deleteUserEvents(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.events where user_id = ${uid}`);
+}

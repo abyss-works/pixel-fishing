@@ -34,3 +34,8 @@ export async function setNickname(db: Executor, uid: string, nickname: string, n
     values (${uid}, ${nickname}, ${at(nowISO)})
     on conflict (user_id) do update set nickname = excluded.nickname, updated_at = excluded.updated_at`);
 }
+
+/** 계정 정리에서 사용자의 프로필 행을 지운다 */
+export async function deleteUserProfile(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.profiles where user_id = ${uid}`);
+}

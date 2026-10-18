@@ -1,5 +1,6 @@
-// 현상금 표(bounty_accepts·bounty_clears·bounty_progress·bounty_tickets) 쓰기 소유 모듈.
+// 현상금 표(bounty_accepts·bounty_clears·bounty_progress·bounty_tickets·bounty_licenses) 쓰기 소유 모듈.
 // 액션 확정과 함께 쓰는 행은 핵심 쓰기에 들어가는 조각으로 만든다. 조각은 guard가 참일 때만 쓴다.
+// bounty_licenses에는 서버의 쓰기 경로가 없고, 이 모듈에는 계정 정리의 삭제만 있다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
@@ -98,4 +99,13 @@ export function advanceProgress(uid: string, questIds: readonly string[], nowISO
   if (questIds.length === 0) return null;
   return sql`update public.bounty_progress set progress = progress + 1, updated_at = ${at(nowISO)}
     where user_id = ${uid} and quest_id = any(${textArray(questIds)})`;
+}
+
+/** 계정 정리에서 사용자의 도전권·진행·수주·라이선스 행을 모두 지운다 */
+export async function deleteUserBounty(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.bounty_tickets where user_id = ${uid}`);
+  await db.execute(sql`delete from public.bounty_progress where user_id = ${uid}`);
+  await db.execute(sql`delete from public.bounty_accepts where user_id = ${uid}`);
+  await db.execute(sql`delete from public.bounty_clears where user_id = ${uid}`);
+  await db.execute(sql`delete from public.bounty_licenses where user_id = ${uid}`);
 }

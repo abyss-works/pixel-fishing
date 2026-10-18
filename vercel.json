@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["icn1"],
-  "crons": [{ "path": "/api/cron/archive", "schedule": "0 18 * * *" }],
-  "functions": { "api/cron/archive.ts": { "maxDuration": 300 } }
+  "crons": [
+    { "path": "/api/cron/archive", "schedule": "0 18 * * *" },
+    { "path": "/api/cron/purge-anon", "schedule": "30 18 * * *" }
+  ],
+  "functions": {
+    "api/cron/archive.ts": { "maxDuration": 300 },
+    "api/cron/purge-anon.ts": { "maxDuration": 300 }
+  }
 }
