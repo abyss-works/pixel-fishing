@@ -167,6 +167,7 @@ const USER_TABLES: Record<string, string> = {
   saves_current: 'user_id', fish_instances: 'user_id', records: 'user_id', saves: 'user_id',
   profiles: 'user_id', events: 'user_id', letters: 'user_id',
   bounty_licenses: 'user_id', bounty_accepts: 'user_id', bounty_progress: 'user_id', bounty_tickets: 'user_id',
+  bounty_clears: 'user_id',
   reliefs: 'claimed_by',
 };
 
