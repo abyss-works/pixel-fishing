@@ -237,7 +237,8 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state).toEqual(s);                                  // 게임 상태 무변경
-    expect(out.result).toEqual({ type: 'none' });
+    // 결과에는 어군 배치 날짜가 실린다 — deps.now(KST 12:00) 기준 당일
+    expect(out.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
     expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
     // writes도 비어 있다 — 접속은 상태가 아니니 DB 쓰기 대상이 없다
     expect(out.writes).toEqual({
@@ -255,6 +256,17 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
       if (!out.ok) throw new Error(out.error);
       expect(out.events).toEqual([{ type: 'boot', payload: {} }]);
     }
+  });
+
+  it('boot — 어군 배치 날짜는 deps.now의 KST 04:00 경계로 정한다 (서버 시계가 정본)', () => {
+    // 2026-08-22 03:30 KST = 전날 배치
+    const early = applyAction(seed(), { type: 'boot' }, deps({ now: '2026-08-21T18:30:00.000Z' }));
+    if (!early.ok) throw new Error(early.error);
+    expect(early.result).toEqual({ type: 'boot', schoolDay: '2026-08-21' });
+    // 2026-08-22 04:00 KST = 당일 배치
+    const reset = applyAction(seed(), { type: 'boot' }, deps({ now: '2026-08-21T19:00:00.000Z' }));
+    if (!reset.ok) throw new Error(reset.error);
+    expect(reset.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
   });
 });
 

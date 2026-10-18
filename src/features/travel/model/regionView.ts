@@ -1,6 +1,5 @@
 import { canFishSpot, drawRows, FISH, rarityWeightOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { REGION_PACKS } from '../../../game/world';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
 import { BOATS } from '../../../game/content/boats';
@@ -50,9 +49,10 @@ export interface RegionViewData {
   tendency: SpotTendency | null;
 }
 
-/** 지역·현재 위치 상태에서 지역 화면이 표시할 존, 주목 어군, 가까운 어군을 고른다. */
+/** 지역·현재 위치 상태에서 지역 화면이 표시할 존, 주목 어군, 가까운 어군을 고른다.
+ *  schools = 이 지역의 현재 어군(세션 배치 날짜 기준) — 가까운 어군 거리의 근거. */
 export function selectRegionViewData(
-  game: GameState, region: RegionId, storeZone: ZoneId | null,
+  game: GameState, region: RegionId, schools: readonly School[], storeZone: ZoneId | null,
   currentSpot: SpotId | null, pos: Point | null,
 ): RegionViewData {
   const spots = spotsOfRegion(region);
@@ -69,7 +69,7 @@ export function selectRegionViewData(
       rarity, selectGradeLevel(spot.id, rarity),
     ])) as Record<RarityId, GradeLevel>,
   }));
-  const nearby = rankNearbySpots(spots, REGION_PACKS[region].schools, pos)
+  const nearby = rankNearbySpots(spots, schools, pos)
     .map(row => ({
       ...row,
       fishable: canFishSpot(game, row.spot.id),

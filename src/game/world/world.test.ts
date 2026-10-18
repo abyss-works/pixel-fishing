@@ -10,11 +10,16 @@ import {
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
+  WORLD, WORLD_SPAWN, WORLD_W, WORLD_H, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
 import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
 import { EARTH_MAP, worldToEarth, implementedRect } from '../../presentation/views/overlays/world-map/atlas';
+
+// 대양 어군은 날짜 시드 배치다 — 팩 공통 검증은 고정 날짜 하나로, 도달 가능성은 여러 날로 본다
+const TEST_DAY = '2026-10-18';
+const SCHOOL_DAYS = ['2026-10-18', '2026-10-19', '2026-10-20', '2026-12-31', '2027-03-01'];
+const schoolsFor = (pack: RegionPack): School[] => schoolsOf(pack.id, TEST_DAY);
 
 // 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
 const worldAt = (lon: number, lat: number): [number, number] => [
@@ -68,7 +73,7 @@ function reachabilityCheck(pack: RegionPack) {
 
 describe.each(Object.values(REGION_PACKS))('$id R4b: 레벨디자인 무결성 (팩 공통)', pack => {
   it('군집은 자기 존 위에 있다', () => {
-    for (const s of pack.schools) {
+    for (const s of schoolsFor(pack)) {
       const cellZone = zoneOf(pack, s.x, s.y);
       const expected = zoneOfSpot(s.spot);
       expect(cellZone, `${s.id} 셀 구역`).toBe(expected);
@@ -84,12 +89,12 @@ describe.each(Object.values(REGION_PACKS))('$id R4b: 레벨디자인 무결성 (
   });
 
   it('시작점에서 곧바로 캐스팅할 수 없다 (군집은 사거리 밖)', () => {
-    expect(nearestSchoolInRange(pack.schools, pack.spawn.x, pack.spawn.y, CAST_RANGE), pack.id).toBeNull();
+    expect(nearestSchoolInRange(schoolsFor(pack), pack.spawn.x, pack.spawn.y, CAST_RANGE), pack.id).toBeNull();
   });
 
   it('모든 군집·트리거는 시작점에서 도달 가능 (BFS)', () => {
     const { reachableNear, reachedRect } = reachabilityCheck(pack);
-    for (const s of pack.schools) {
+    for (const s of schoolsFor(pack)) {
       expect(reachableNear(s), `${s.id}에 닿을 자리가 없음`).toBe(true);
     }
     for (const trig of pack.triggers) {
@@ -100,9 +105,18 @@ describe.each(Object.values(REGION_PACKS))('$id R4b: 레벨디자인 무결성 (
 
 // ============ 마스크 정합성 — 지형·수역 작성 실수 감시 ============
 
+describe('대양 어군 — 날짜가 바뀌어도 시작점에서 바다로 닿는다 (BFS)', () => {
+  it.each(SCHOOL_DAYS)('%s', day => {
+    const { reachableNear } = reachabilityCheck(WORLD);
+    for (const s of generateWorldSchools(day)) {
+      expect(reachableNear(s), `${day} ${s.id}에 닿을 자리가 없음`).toBe(true);
+    }
+  });
+});
+
 describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
   it('군집 spot은 실제 수역 데이터에 있다', () => {
-    for (const s of pack.schools) {
+    for (const s of schoolsFor(pack)) {
       expect(SPOTS.some(sp => sp.id === s.spot), `${pack.id}/${s.id} 알 수 없는 수역`).toBe(true);
     }
   });
@@ -117,12 +131,12 @@ describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
 
   it('낚시 수역은 충분한 면적을 유지한다 (육지가 덮어 삼켜지지 않았나)', () => {
     if (!pack.map) { // rect 지형 — 조각 존재만 확인
-      for (const s of pack.schools) {
+      for (const s of schoolsFor(pack)) {
         expect(pack.terrain!.some(t => t.kind === 'water'), s.spot).toBe(true);
       }
       return;
     }
-    for (const spot of new Set(pack.schools.map(s => s.spot))) {
+    for (const spot of new Set(schoolsFor(pack).map(s => s.spot))) {
       let cells = 0;
       for (const code of pack.map.codes) {
         const def = pack.map.palette[code];
@@ -216,8 +230,10 @@ describe('대양(병합) R4: 충돌 (항해)', () => {
 
   it('수역 판정 — 군집이 모여 있는 곳의 존이 곧 수역이다 (존 계층 모델)', () => {
     // spot은 어군 오브젝트 — 좌표 → spot 매핑이 아니라 군집의 존 소속으로 확인한다 (R4b 공통)
-    for (const s of WORLD_SCHOOLS) {
-      expect(zoneOf(WORLD, s.x, s.y), `${s.id}(${s.spot}) 존`).toBe(zoneOfSpot(s.spot));
+    for (const day of SCHOOL_DAYS) {
+      for (const s of generateWorldSchools(day)) {
+        expect(zoneOf(WORLD, s.x, s.y), `${day} ${s.id}(${s.spot}) 존`).toBe(zoneOfSpot(s.spot));
+      }
     }
   });
 });
@@ -244,7 +260,9 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     const at = worldAt(51, 39);
     if (canMove(WORLD, at[0], at[1])) { // 마스크 재생성에 따라 잉여 물의 존재는 변할 수 있다
       expect(zoneOf(WORLD, at[0], at[1])).toBeUndefined();
-      expect(nearestSchoolInRange(WORLD_SCHOOLS, at[0], at[1], CAST_RANGE * 5)).toBeNull();
+      for (const day of SCHOOL_DAYS) {
+        expect(nearestSchoolInRange(generateWorldSchools(day), at[0], at[1], CAST_RANGE * 5), day).toBeNull();
+      }
     }
   });
 
@@ -458,7 +476,10 @@ describe('R5: 군집 판정 반경', () => {
     const s = V_SCHOOLS[0];
     expect(nearestSchoolInRange(V_SCHOOLS, s.x + 10, s.y - 10, CAST_RANGE)?.id).toBe(s.id);
     expect(nearestSchoolInRange(V_SCHOOLS, V_SPAWN.x, V_SPAWN.y, CAST_RANGE)).toBeNull();
-    expect(nearestSchoolInRange(WORLD_SCHOOLS, WORLD_SPAWN.x, WORLD_SPAWN.y, CAST_RANGE)).toBeNull();
+    for (const day of SCHOOL_DAYS) {
+      expect(nearestSchoolInRange(generateWorldSchools(day), WORLD_SPAWN.x, WORLD_SPAWN.y, CAST_RANGE), day)
+        .toBeNull();
+    }
   });
 });
 

@@ -16,6 +16,7 @@ export const V_PIER: Rect = { x: 216, y: 304, w: 16, h: 40 };   // 포구 부두
 export const V_PORT: Rect = { x: 216, y: 332, w: 16, h: 12 };   // 대양 출항 트리거(배 필요)
 export const V_PORT_FRONT: Point = { x: 224, y: 296 };          // 여객선 귀향 도착 지점
 
+// 마을 어군은 고정이다 — 대양과 달리 날짜 시드 배치의 범위 밖(schoolsOf가 그대로 돌려준다)
 export const V_SCHOOLS: School[] = [
   { id: 'v-pond-1',  spot: 'pond',  x: 214, y: 118 },
   { id: 'v-pond-2',  spot: 'pond',  x: 244, y: 138 },
@@ -59,7 +60,6 @@ export const VILLAGE: RegionPack = {
   decorations: [
     [40, 70], [330, 60], [400, 130], [80, 270], [380, 280],
   ].map(([x, y]) => ({ kind: 'tree' as const, x, y })),
-  schools: V_SCHOOLS,
   spawn: V_SPAWN,
   triggers: [
     { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },

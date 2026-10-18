@@ -55,6 +55,21 @@ export function formatGameClock(nowIso: string): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
+// ---------- 어군 배치 날짜 — 벽시계 날짜 주기(KST 04:00 경계) ----------
+// 낮/밤(1시간 주기)과 별개로, 대양 어군 배치는 실제 하루에 한 번 바뀐다. 00:00~04:00 정산
+// 구간 뒤에 리셋한다는 운영 관례를 따라 경계는 KST 04:00이고, 그 전은 전날로 센다.
+// 서버가 boot 결과에 실어 주므로 모든 사용자가 같은 날짜(=같은 배치)를 본다.
+
+/** 어군 배치가 바뀌는 KST 시각 */
+export const SCHOOL_DAY_RESET_HOUR_KST = 4;
+const KST_OFFSET_MS = 9 * 3600_000;
+
+/** 어군 배치 시드가 되는 날짜(YYYY-MM-DD) — KST 04:00 경계. 04:00 이전은 전날이다 */
+export function schoolDayOf(nowIso: string): string {
+  const shifted = Date.parse(nowIso) + KST_OFFSET_MS - SCHOOL_DAY_RESET_HOUR_KST * 3600_000;
+  return new Date(shifted).toISOString().slice(0, 10);
+}
+
 /** 어둠 강도 0~1 — **경계에서 급격히 튀지 않고 서서히 변한다** (UI 연출용).
  *
  *  주기 60분(하루), 게임 1일 = 실제 1시간.

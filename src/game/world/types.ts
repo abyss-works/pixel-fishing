@@ -121,7 +121,8 @@ export interface RegionPack {
   terrain?: TerrainPiece[];
   buildings: Building[];
   decorations: Decoration[];
-  schools: School[];
+  /** 어군은 팩 데이터가 아니다 — 지역별 현재 어군은 schoolsOf(region, day)가 돌려준다
+   *  (마을은 고정, 대양은 날짜 시드 생성). */
   spawn: Point;
   triggers: TriggerDef[]; // 배열 순서 = 검사 순서
   labels: MapLabel[];     // 필드 라벨
