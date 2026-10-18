@@ -123,6 +123,42 @@ export interface AdminLetterRow {
   id: number; user_id: string; text: string; created_at: string;
 }
 
+/**
+ * 밸런스 라이브 지표. 서버가 한 번의 읽기로 모은 한 시점의 집계이고, 키 이름이 곧 계약이다.
+ * 제재된 계정과 골드·명성이 모두 0인 익명 계정은 사용자 수 지표와 이벤트 지표 모두에서 빠져 있다.
+ * 이벤트는 최근 7일만 보관하므로 기간은 1~7일이고, 지금부터 거슬러 올라가는 시간 구간이다. 도감, 배, 낚싯대,
+ * 골드 분위, 이탈, 명성 게이트는 현재 저장 상태라 기간과 무관하다.
+ */
+export interface BalanceLive {
+  /** 판정 분포. 기간 안 캐치를 판정별로 센 값이고 많은 순이다. 판정이 기록되지 않은 캐치는 '?'이다. pct는 전체 대비 백분율(소수 첫째 자리)이다 */
+  judgment: { judgment: string; catches: number; pct: number }[];
+  /** 체류 해역. 기간 안 캐치의 해역별 수와 사용자 수이고 캐치 많은 순이다. 해역이 기록되지 않은 캐치는 spot이 null이다 */
+  spots: { spot: string | null; catches: number; users: number }[];
+  /** 도감 진행. 일반 폼을 하나 이상 발견한 사용자의 발견 어종 수 분포이다. 10종 구간이고 fromSpecies 90은 90종 이상이다 */
+  dexBuckets: { fromSpecies: number; users: number }[];
+  /** 배 단계 분포. boat 0은 배가 없는 상태이다 */
+  boats: { boat: number; users: number }[];
+  /** 낚싯대 레벨 분포. 5레벨 구간이고 fromLevel 31은 31레벨 이상이다 */
+  rodBuckets: { fromLevel: number; users: number }[];
+  /** 골드 잔고의 25·50·75·90분위와 최대. 사용자가 없으면 모두 null이다 */
+  gold: { p25: number | null; p50: number | null; p75: number | null; p90: number | null; max: number | null };
+  /** 골드 흐름. 기간 안 유입(판매, 쿠폰)과 유출(강화, 배, 미끼)의 합이다 */
+  goldFlow: { sellGold: number; couponGold: number; rodCost: number; boatCost: number; baitCost: number };
+  /** 일일 활성. 이벤트가 있는 사용자 수이다. KST 날짜(yyyy-mm-dd) 오름차순이고 이벤트가 없는 날은 행이 없다. 기간 시작 시각이 날짜 중간이면 첫 날은 일부만 센다 */
+  dau: { day: string; dau: number }[];
+  /** 이탈 지점. 7일 넘게 저장이 없는 사용자의 배별 인원과 평균 명성, 평균 낚싯대 레벨이다 */
+  churn: { boat: number; users: number; avgFame: number; avgRod: number }[];
+  /** 바운티 퍼널. 기간 안 이벤트 합계이고, delivered는 네임드와 일반 납품을 합친 수이다 */
+  bountyFunnel: {
+    namedAccepts: number; tickets: number; duelsWon: number; duelsLost: number;
+    generalAccepts: number; delivered: number;
+  };
+  /** 이상 탐지. fastGaps는 캐치 간격 2초 미만 건수, fastUsers는 그 사용자 수, perfectPct는 캐치 중 PERFECT 백분율이다. 캐치가 없으면 perfectPct는 null이다 */
+  anomalies: { fastGaps: number; fastUsers: number; perfectPct: number | null };
+  /** 명성 게이트 정체. 다음 배를 살 골드는 있으나 명성이 모자란 사용자를 다음 배 단계별로 센 값이다 */
+  fameGateStuck: { nextBoat: number; users: number }[];
+}
+
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), denied는 DB admins 비등록 */
 export interface AdminAccessResult {
   kind: 'granted' | 'denied' | 'local';
@@ -144,6 +180,8 @@ export interface AdminApi {
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
+  /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
+  balanceLive(days?: number): Promise<BalanceLive>;
   /** 연결된 Supabase 프로젝트 식별자 — 운영/스테이징 착오 방지 표시값(Ops 탭) */
   projectRef(): string | null;
 }

@@ -9,6 +9,7 @@ import { bearerToken, userOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import * as read from './_data/admin.js';
+import { balanceLive } from './_data/adminBalance.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -65,6 +66,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
     case 'catchQuality': { const days = daysOf(req); return db => read.catchQuality(db, days); }
+    case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
       const user = param(req, 'user');
       if (user === undefined || !UUID.test(user)) throw new ApiError(400, 'bad-user');
@@ -85,6 +87,14 @@ function daysOf(req: Req): number {
   const days = raw !== undefined && /^\d{1,3}$/.test(raw) ? Number(raw) : 0;
   if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
   return days;
+}
+
+/** 이벤트 지표의 기간. 없으면 null이고 기본값과 범위는 읽기가 정한다. 정수가 아니면 400이다 */
+function optionalDaysOf(req: Req): number | null {
+  const raw = param(req, 'days');
+  if (raw === undefined) return null;
+  if (!/^\d{1,3}$/.test(raw)) throw new ApiError(400, 'bad-days');
+  return Number(raw);
 }
 
 /** 이벤트 건수. 없으면 null이고 기본값과 범위는 읽기가 정한다 */

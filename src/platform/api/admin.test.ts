@@ -10,7 +10,7 @@ describe('admin 계층 규약', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'users', 'dailyActive', 'retention', 'economy', 'bountyFunnel',
       'catchQuality', 'spamFlags', 'imports', 'dexMismatch',
-      'recentEvents', 'userEvents', 'letters', 'projectRef'] as const) {
+      'recentEvents', 'userEvents', 'letters', 'balanceLive', 'projectRef'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }
@@ -22,5 +22,7 @@ describe('admin 계층 규약', () => {
     // 조용한 빈 배열은 "데이터 없음"이라는 거짓말 — 게이트 우회 오용은 시끄럽게 실패한다
     await expect(admin.users()).rejects.toThrow(/클라우드/);
     await expect(admin.dailyActive(30)).rejects.toThrow();
+    await expect(admin.balanceLive()).rejects.toThrow(/클라우드/);
+    await expect(admin.balanceLive(3)).rejects.toThrow(/클라우드/);
   });
 });
