@@ -32,7 +32,7 @@ function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture;
   if (facility.id === 'exit' && base !== 'home' && boat > 0) {
     return <span data-icon="boat" className="flex h-full items-center justify-center"><BoatSprite tier={boat} preset="row" /></span>;
   }
-  if (facility.id === 'travel') return <span data-icon="house" className="block h-full"><FacilityIcon rect={HOUSE_RECT} draw={drawHouse} /></span>;
+  if (facility.id === 'travel') return <span data-icon="house" className="block h-full p-1"><FacilityIcon rect={HOUSE_RECT} draw={drawHouse} /></span>;
   return <FacilityIcon rect={facility} draw={ctx => FURNITURE_SPRITES[facility.sprite](ctx, facility)} />;
 }
 
