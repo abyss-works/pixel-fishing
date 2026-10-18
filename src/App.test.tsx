@@ -923,7 +923,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     openRow('잉어');
     const shown = screen.getAllByText(/cm|미상/).map(e => e.textContent);
-    expect(shown).toEqual(['최대 42.0cm', '42.0cm', '12.0cm', '미상']);
+    expect(shown).toEqual(['42.0cm', '12.0cm', '미상']);
   });
 
   it('TAB_ORDER가 실제 탭바 순서와 같다 — 어긋나면 숫자키가 엉뚱한 탭을 연다', () => {
@@ -1123,8 +1123,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     openRow('잉어');
     const shown = screen.getAllByText(/cm/).map(e => e.textContent?.replace(/ 상위 .*/, ''));
-    // 머리(최대 40.0cm) 다음 — 변이 33 → 변이 12 → 일반 40 → 일반 8
-    expect(shown).toEqual(['최대 40.0cm', '33.0cm', '12.0cm', '40.0cm', '8.0cm']);
+    // 변이 33 → 변이 12 → 일반 40 → 일반 8
+    expect(shown).toEqual(['33.0cm', '12.0cm', '40.0cm', '8.0cm']);
   });
 
   it('최대 배지는 폼별 — 변이 중 가장 큰 놈도 배지를 받는다', () => {

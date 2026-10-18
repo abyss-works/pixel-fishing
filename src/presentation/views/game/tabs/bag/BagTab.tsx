@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import { fmtGold } from '../../../../ui/format';
+import { fmtGold, fmtSize } from '../../../../ui/format';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -42,13 +42,13 @@ export const EXHIBIT_UI_ENABLED = false;
 //
 // 목록은 **기본 전부 닫힘**(사용자 지시 2026-08-27) — 1,500마리 세이브에서 펼침 기본은
 // 스크롤 지옥이다. 개체 선택 화면은 판매 패널이 담당하고(그쪽은 기본 펼침 유지), 가방은
-// 열람 화면이므로 종 머리(마릿수·최대 크기·소계)만으로 훑고 필요한 종만 펼친다.
+// 열람 화면이므로 종 머리(마릿수·소계)만으로 훑고 필요한 종만 펼친다. 개체별 크기는 펼친 줄에서 본다.
 //
 // 종 행 머리 — **고정 그리드**. flex로 나열하면 이름·마릿수 자릿수에 따라 숫자 열이
-// 행마다 어긋나 소계·최대 크기를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
-//   [캐럿] [스프라이트] [이름] [×N] [최대 크기] [소계] [자물쇠]
+// 행마다 어긋나 소계를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
+//   [캐럿] [스프라이트] [이름] [×N] [소계] [자물쇠]
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
-const ROW = 'grid grid-cols-[10px_30px_1fr_28px_76px_52px_22px] items-center gap-1';
+const ROW = 'grid grid-cols-[10px_30px_1fr_28px_52px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
 /** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
@@ -159,7 +159,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
                 {fish && <RarityDot rarity={fish.rarity} />}{name}
               </span>
               <span className="pf-accent text-text-dim text-right">
-                {inst.size === null ? '미상' : `${inst.size.toFixed(1)}cm`}
+                {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
               <PillButton aria-label={`${name} 회수`} title="가방으로 되돌린다"
                           onClick={() => onWithdraw(inst, name)}>
@@ -292,7 +292,7 @@ export default function BagTab({ game, dispatch, setToast }: {
           ) : (
             <>
               <Frame divided>
-                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxSize, maxByForm }) => {
+                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
                   // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
@@ -312,9 +312,6 @@ export default function BagTab({ game, dispatch, setToast }: {
                           <RarityDot rarity={fish.rarity} />{name}
                         </span>
                         <span className="pf-accent text-text-dim text-right">×{items.length}</span>
-                        <span className="pf-accent text-text-dim text-right whitespace-nowrap">
-                          {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
-                        </span>
                         <span className="pf-accent text-right">{fmtGold(subtotal)}</span>
                         <IconButton
                           glyph={allLocked ? 'lock' : 'lockOpen'} size={14}
