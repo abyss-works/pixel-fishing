@@ -469,6 +469,20 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
   });
 
+  it('같은 의뢰를 동시에 납품해도 보상과 클리어는 한 번이다', async () => {
+    const quest = bountyById('pacific-easy-common')!;
+    const uid = await seed({ state: {} });
+    await progressRow(uid, quest.id, quest.count, NOW);
+    const results = await Promise.all([deliver(uid, quest.id), deliver(uid, quest.id)]);
+    // 진 쪽은 진행 행 선소비에서 지거나(422) 직전 성공 액션과의 간격에서 걸린다(429)
+    const statuses = results.map(r => r.status).sort();
+    expect(statuses[0]).toBe(200);
+    expect([422, 429]).toContain(statuses[1]);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears).toHaveLength(1);
+    expect(dump.saves_current[0]).toMatchObject({ gold: String(quest.reward) });
+  });
+
   it('납품이 거부되면 클리어도 남기지 않는다', async () => {
     const quest = bountyById('pacific-easy-common')!;
     const uid = await seed({ state: {} });
@@ -528,7 +542,7 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     it('경계 이전에 수주하고 마치지 못한 의뢰는 없는 것이라 새 수주를 막지 않고, 정리된다', async () => {
       const uid = await seed({ state: pacificState() });
       const stale = offered(uid, 'normal');
-      await progressRow(uid, stale.id, 7, BEFORE_START);
+      await progressRow(uid, stale.id, stale.count - 1, BEFORE_START); // 한 마리 모자라 마치지 못했다
       const quest = offered(uid, 'easy');
       expect((await accept(uid, quest.id)).status).toBe(200);
       expect(await questIds(uid)).toEqual([quest.id]); // 만료 행은 응답 뒤 정리로 지워졌다
