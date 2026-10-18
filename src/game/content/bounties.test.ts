@@ -2,7 +2,7 @@
 // 2절(라이선스 표)의 수치 계약을 강제한다. 표가 여기서 깨지면 수배 UI와
 // 서버 판정이 조용히 틀린 값을 쓴다.
 import { describe, it, expect } from 'vitest';
-import { BOUNTIES, BOUNTY_LICENSE_FAME, dailyQuestFor } from './bounties';
+import { BOUNTIES, BOUNTY_LICENSE_FAME, bountyById, bountyKindOf, dailyQuestFor } from './bounties';
 import { RARITY } from './rarity';
 
 // spec 3절 수량표 (EV 반올림)
@@ -70,5 +70,14 @@ describe('bounties 데이터 계약', () => {
     const q = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-10');
     expect(q?.zone).toBe('pacific');
     expect(q?.difficulty).toBe('easy');
+  });
+});
+
+describe('의뢰의 갈래', () => {
+  it('네임드는 named, 난이도 의뢰는 모두 general이다', () => {
+    expect(bountyKindOf(bountyById('pacific-named-megalodon')!)).toBe('named');
+    for (const q of BOUNTIES.filter(row => row.difficulty !== 'named')) {
+      expect(bountyKindOf(q), q.id).toBe('general');
+    }
   });
 });

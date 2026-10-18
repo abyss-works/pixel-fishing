@@ -10,6 +10,11 @@ export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
 export type BountyTier = 'basic' | 'named';
 
+/** 의뢰의 갈래 — 일반 의뢰(난이도 3종)와 네임드 토벌. 하루 클리어 한도와 동시 수주를 갈래마다 따로 센다 */
+export type BountyKind = 'general' | 'named';
+export const BOUNTY_KINDS: readonly BountyKind[] = ['general', 'named'];
+export const isBountyKind = (value: string): value is BountyKind => (BOUNTY_KINDS as readonly string[]).includes(value);
+
 /** 의뢰 → 요구 라이선스. 네임드만 별도, 나머지는 기본 */
 export const LICENSE_TIER_OF: Record<BountyDifficulty, BountyTier> = {
   easy: 'basic', normal: 'basic', hard: 'basic', named: 'named',
@@ -98,6 +103,10 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('madagascar', 'hard', 'legendary', null, 2, 1000000),
   Q('madagascar', 'named', null, 'elder-sixgill', 1, 5000000),
 ];
+
+/** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */
+export const bountyKindOf = (quest: Pick<BountyQuest, 'difficulty'>): BountyKind =>
+  quest.difficulty === 'named' ? 'named' : 'general';
 
 const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 

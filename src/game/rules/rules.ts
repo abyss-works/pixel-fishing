@@ -12,10 +12,11 @@
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT } from '../content/boats.js';
-import { bountyById, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
+import { bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
+import type { BountyKind } from '../content/bounties.js';
 import { artifactById } from '../content/artifacts.js';
 import {
-  upgradeCost, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT,
+  upgradeCost, bountyDailyCap, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
@@ -38,9 +39,9 @@ export type RejectReason =
   | 'shop-closed' // 미끼 상점은 콜롬보항에서만 이용 가능
   | 'nickname-taken' // 이미 다른 유저가 쓰는 닉네임
   | 'no-license' // 바운티 헌팅 라이선스 미보유 — 구역 라이선스 없이 수주 불가
-  | 'no-tickets' // 일일 통합 수주 상한 소진
+  | 'daily-cleared' // 그 갈래의 하루 클리어 한도 소진 — 클리어(보상 수령)를 센다
   | 'quest-incomplete' // 납품 조건 미달성
-  | 'quest-active' // 이미 수주 중인 의뢰 — 중복 수주는 진행도를 리셋하므로 거부
+  | 'quest-active' // 같은 갈래의 의뢰가 이미 수주 중 — 갈래마다 한 번에 하나만 수주한다
   | 'dex-incomplete' // 라이선스 도감 조건 미달성
   | 'material-missing' // 유물 교환 재료 미보유 — 네임드 토벌로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
@@ -68,9 +69,9 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
   'no-license': '라이선스가 없어요. 명성과 도감 조건을 채우면 열려요.',
-  'no-tickets': '오늘의 수주권을 다 썼어요. 내일 다시 수주할 수 있어요.',
+  'daily-cleared': '이 종류의 의뢰는 오늘 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
-  'quest-active': '이미 수주 중인 의뢰예요.',
+  'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마친 뒤에 수주해 주세요.',
   'dex-incomplete': '도감이 아직 비어 있어요. 그 구역의 도감을 채워 보세요.',
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
@@ -114,19 +115,19 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
 }
 
-/** 서버 주입 수배 진실 — 일일 카운트·완료·진행 목록은 DB가 들고 있다.
+/** 서버 주입 수배 진실 — 오늘 클리어 횟수·완료·진행 목록은 DB가 들고 있다.
  *  라이선스 조건(명성·도감)은 상태에서 직접 본다 — 취득 절차가 없어 행이 없다.
- *  KST 날짜 경계 집계를 서버가 끝낸 값만 들어온다. */
+ *  하루 경계(KST 04:00) 집계와 의뢰 만료를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
-  acceptsToday: number;        // 일반 의뢰의 오늘 수주 횟수 (네임드 제외)
-  namedToday: number;          // 네임드 토벌의 오늘 수주 횟수 (전역)
-  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록
-  complete: string[];          // 납품 가능 의뢰 id
-  active: string[];            // 진행 중 의뢰 id (중복 수주 거부용)
+  clearsToday: Record<BountyKind, number>; // 오늘 클리어(보상 수령)한 횟수 — 갈래별
+  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록 (수주 중인 의뢰의 것만)
+  complete: string[];          // 보상을 받을 수 있는 의뢰 id
+  active: string[];            // 수주 중 의뢰 id — 만료되지 않은 것만. 마쳤지만 보상을 받지 않은 의뢰도 포함
 }
 
 
-/** 의뢰 수주 — 라이선스 조건은 상태로, 상한은 서버 주입 DB 진실로 본다 */
+/** 의뢰 수주 — 라이선스 조건은 상태로, 하루 한도와 수주 중 여부는 서버 주입 DB 진실로 본다.
+ *  갈래(일반 의뢰·네임드 토벌)마다 하루 클리어 한도가 있고 한 번에 하나만 수주한다. */
 export function canAcceptQuest(
   state: GameState, questId: string, port: string, ctx: BountyCtx | undefined,
 ): RuleCheck {
@@ -140,13 +141,14 @@ export function canAcceptQuest(
     if (!c.ok) return no(c.key === 'fame' ? 'not-enough-fame' : 'dex-incomplete');
   }
   if (!ctx) return no('no-license');
-  if (ctx.active.includes(questId)) return no('quest-active');
-  // 네임드는 전역 1회만 본다
-  if (q.difficulty === 'named') {
-    if (ctx.namedToday >= BOUNTY_NAMED_DAILY_CAP) return no('no-tickets');
-    return OK;
-  }
-  if (ctx.acceptsToday >= BOUNTY_DAILY_CAP) return no('no-tickets');
+  const kind = bountyKindOf(q);
+  // 한도가 먼저다 — 진행 중인 의뢰를 마쳐도 오늘 몫이 없으면 수주할 수 없다
+  if (ctx.clearsToday[kind] >= bountyDailyCap(kind)) return no('daily-cleared');
+  const holding = ctx.active.some(id => {
+    const held = bountyById(id);
+    return held !== undefined && bountyKindOf(held) === kind;
+  });
+  if (holding) return no('quest-active');
   return OK;
 }
 

@@ -1,5 +1,5 @@
 // 바운티 헌팅 액션 — 라이선스·수주·납품·토벌의 상태 전이 규칙.
-// DB 진실(라이선스 소유·일일 카운트·진행도)은 서버가 deps.bounty로 주입한다
+// DB 진실(오늘 클리어 횟수·수주 중 의뢰·진행도)은 서버가 deps.bounty로 주입한다
 // (deps.relief 선례). 로컬 dev엔 주입이 없어 수주·납품이 닫혀 있다.
 import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
@@ -7,6 +7,7 @@ import type { ActionDeps } from './actions';
 import { newState } from './logic';
 import type { GameState } from './logic';
 import { matchBountyCatch, rollNamedEncounter } from './logic';
+import type { BountyCtx } from './rules';
 import { BOUNTIES } from '../content/bounties';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -34,8 +35,11 @@ const pacificFullDex = {
   shark: { normal: rec(1) }, kraken: { normal: rec(1) },
   moonveil: { normal: rec(1) }, abyssveil: { normal: rec(1) },
 };
-// 서버 주입 — 오늘 0회·완료 없음이 기본값 (라이선스 조건은 상태에서 직접 본다)
-const ctx = (over = {}) => ({ acceptsToday: 0, namedToday: 0, tickets: [] as { questId: string; issuedAt: string }[], complete: [] as string[], active: [] as string[], ...over });
+// 서버 주입 — 오늘 클리어 0회·수주 중인 의뢰 없음이 기본값 (라이선스 조건은 상태에서 직접 본다)
+const ctx = (over: Partial<BountyCtx> = {}): BountyCtx => ({
+  clearsToday: { general: 0, named: 0 }, tickets: [], complete: [], active: [], ...over,
+});
+const cleared = (general: number, named = 0): BountyCtx['clearsToday'] => ({ general, named });
 
 describe('acceptQuest', () => {
   // 수주 조건은 상태에서 직접 본다 — 도감 완성 태평양 + 명성 1500이 기본값
@@ -75,27 +79,40 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('일반 의뢰는 하루 1회 — 오늘 이미 1건 수주했으면 no-tickets', () => {
+  it('일반 의뢰는 하루 1회 클리어 — 오늘 이미 클리어했으면 daily-cleared', () => {
     const out = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx({ acceptsToday: 1 }) }));
-    expect(out).toEqual({ ok: false, error: 'no-tickets' });
+      deps({ bounty: ctx({ clearsToday: cleared(1) }) }));
+    expect(out).toEqual({ ok: false, error: 'daily-cleared' });
   });
 
-  it('네임드는 전역 1회 — 오늘 이미 수주했으면 no-tickets', () => {
+  it('네임드도 하루 1회 클리어 — 오늘 이미 보상을 받았으면 daily-cleared', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     const full = seed({ ...harbor, fame: 1500, dex: pacificFullDex });
-    expect(applyAction(full, act, deps({ bounty: ctx({ namedToday: 1 }) })))
-      .toEqual({ ok: false, error: 'no-tickets' });
+    expect(applyAction(full, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
+      .toEqual({ ok: false, error: 'daily-cleared' });
   });
 
-  it('네임드는 일반 상한을 먹지 않는다', () => {
-    const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), act,
-      deps({ bounty: ctx({ acceptsToday: 1 }) }));
+  it('한 갈래의 클리어는 다른 갈래의 한도를 먹지 않는다 — 일반을 클리어해도 네임드를 수주할 수 있다', () => {
+    const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), named,
+      deps({ bounty: ctx({ clearsToday: cleared(1, 0) }) }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
       payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
+    // 반대로 네임드를 클리어해도 일반 의뢰는 그대로 열려 있다
+    const general = applyAction(seed({ ...ready }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) }));
+    expect(general.ok).toBe(true);
+  });
+
+  it('수주만으로는 한도를 쓰지 않는다 — 수주 중이 아니고 클리어 0이면 몇 번째 수주든 통과한다', () => {
+    for (const questId of ['pacific-easy-common', 'pacific-normal-rare', 'pacific-hard-epic']) {
+      const out = applyAction(seed({ ...ready }), { type: 'acceptQuest', questId, port: 'harbor' },
+        deps({ bounty: ctx() }));
+      expect(out.ok, questId).toBe(true);
+    }
   });
 
   it('고향 수주는 bad-request — 고향에 수배 창구가 없다', () => {
@@ -117,6 +134,44 @@ describe('acceptQuest', () => {
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx({ active: ['pacific-easy-common'] }) }));
     expect(out).toEqual({ ok: false, error: 'quest-active' });
+  });
+
+  it('일반 의뢰는 한 번에 하나 — 다른 난이도·다른 구역의 일반 의뢰가 진행 중이어도 quest-active', () => {
+    const act = { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' } as const;
+    for (const active of ['pacific-normal-rare', 'seasia-hard-epic']) {
+      expect(applyAction(seed({ ...ready }), act, deps({ bounty: ctx({ active: [active] }) })), active)
+        .toEqual({ ok: false, error: 'quest-active' });
+    }
+  });
+
+  it('마쳤지만 아직 보상을 받지 않은 의뢰도 진행 중이다 — 보상을 받아야 다음 의뢰를 수주한다', () => {
+    const out = applyAction(seed({ ...ready }),
+      { type: 'acceptQuest', questId: 'pacific-easy-rare', port: 'harbor' },
+      deps({ bounty: ctx({ active: ['pacific-easy-common'], complete: ['pacific-easy-common'] }) }));
+    expect(out).toEqual({ ok: false, error: 'quest-active' });
+  });
+
+  it('네임드는 한 번에 하나 — 진행 중인 네임드가 있으면 다른 구역 네임드도 quest-active', () => {
+    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }),
+      { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
+      deps({ bounty: ctx({ active: ['seasia-named-leviathan'] }) }));
+    expect(out).toEqual({ ok: false, error: 'quest-active' });
+  });
+
+  it('진행 중인 갈래가 다르면 막지 않는다 — 일반 의뢰를 진행해도 네임드를 수주할 수 있고 그 반대도 같다', () => {
+    const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
+    expect(applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), named,
+      deps({ bounty: ctx({ active: ['pacific-easy-common'] }) })).ok).toBe(true);
+    expect(applyAction(seed({ ...ready }),
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      deps({ bounty: ctx({ active: ['pacific-named-megalodon'] }) })).ok).toBe(true);
+  });
+
+  it('하루 한도와 진행 중이 함께 걸리면 한도가 먼저다 — 보상을 받아도 오늘은 수주하지 못한다', () => {
+    const out = applyAction(seed({ ...ready }),
+      { type: 'acceptQuest', questId: 'pacific-easy-rare', port: 'harbor' },
+      deps({ bounty: ctx({ clearsToday: cleared(1), active: ['pacific-easy-common'] }) }));
+    expect(out).toEqual({ ok: false, error: 'daily-cleared' });
   });
 
   it('네임드 의뢰는 전설 포함 도감이 있어야 한다', () => {
