@@ -1,4 +1,4 @@
-// 유저 탭 — v_admin_users 뷰 기반 전체 명부와 행 클릭 드릴다운을 제공한다.
+// 유저 탭 — 전체 명부와 행 클릭 드릴다운을 제공한다.
 // 검색은 이메일·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
 //   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인 → 도감↔이벤트 차액(근거 없는 도감).
 import { useMemo, useState } from 'react';
@@ -214,7 +214,7 @@ function UserDetail({ user, onClose }: {
   );
 }
 
-// RPC 창 한도 — fn_user_events(p_limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
+// 사용자 이벤트 조회 창. 조회가 요청하는 건수(userEvents의 limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
 const EVENT_WINDOW = 300;
 
 

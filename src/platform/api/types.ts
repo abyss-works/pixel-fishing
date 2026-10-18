@@ -57,9 +57,9 @@ export interface BountySnapshot {
   tickets: BountyTicketRow[];
 }
 
-// ---------- 관리자 읽기 API (0010 뷰/RPC — 읽기 전용) ----------
-// 행 타입 = 마이그레이션 뷰의 컬럼명이 곧 계약이다. 소비처(admin/**)는 이 인터페이스만
-// 알고 supabase-js·뷰 이름 같은 전송 상세는 http 구현 안에 갇힌다.
+// ---------- 관리자 읽기 API (서버 읽기 함수, 읽기 전용) ----------
+// 행 타입 = 서버 읽기 함수가 돌려주는 행의 컬럼명이 곧 계약이다(관리자 뷰의 컬럼명과 같다).
+// 소비처(admin/**)는 이 인터페이스만 알고 요청 이름·세션 토큰 같은 전송 상세는 http 구현 안에 갇힌다.
 // local 구현은 "클라우드 미설정"이라 데이터가 존재하지 않는다 — 접근 판정만 'local'을
 // 주고 나머지는 reject한다(조용한 빈 배열은 거짓말이라).
 
@@ -123,7 +123,7 @@ export interface AdminLetterRow {
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), denied는 DB admins 비등록 */
 export interface AdminAccessResult {
   kind: 'granted' | 'denied' | 'local';
-  /** 현재 세션 uid — denied 안내("이 uid를 등록하라")용. 세션 토큰 로컬 읽기라 왕복 없음 */
+  /** 서버가 확인한 세션 uid. denied 안내("이 uid를 등록하라")에 쓴다 */
   uid: string | null;
 }
 

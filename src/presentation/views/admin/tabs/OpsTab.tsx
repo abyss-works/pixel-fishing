@@ -42,8 +42,8 @@ export default function OpsTab() {
       <SectionTitle>데이터 계약</SectionTitle>
       <Note size="xs" className="my-0 leading-relaxed">
         읽기 전용이다 — 쓰기 액션(지급·제재·이사코드 수입)은 이 화면에 존재하지 않는다.
-        권한 방어선은 DB(<code className="pf-accent">admins</code> + is_admin() 뷰 게이트)다.
-        데이터 접근은 features/admin/service가 유일한 경로다 — 전송 상세(뷰 이름·RPC 파라미터)는
+        권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이다.
+        데이터 접근은 features/admin/service가 유일한 경로다 — 전송 상세(요청 이름·인자)는
         그 안에 갇혀 있다.
       </Note>
 
