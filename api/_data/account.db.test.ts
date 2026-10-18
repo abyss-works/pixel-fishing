@@ -4,7 +4,9 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
-import { fish, seedUser, testUid } from '../_dbTest/actionHarness.js';
+import { GONE, USER_TABLES, rowCounts, seedAccount, seedFullAccount, seeded } from '../_dbTest/accountFixtures.js';
+import type { AccountSpec } from '../_dbTest/accountFixtures.js';
+import { testUid } from '../_dbTest/actionHarness.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import { purgeAccount, selectPurgeTargets } from './account.js';
@@ -13,48 +15,6 @@ const NOW = Date.parse('2030-03-04T05:06:07.000Z');
 const DAY = 86_400_000;
 const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
 const CUTOFF = ago(7);
-
-/** 계정 행을 가진 공개 표 전부. 계정 정리가 비워야 하는 목록이다 */
-const USER_TABLES = [
-  'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
-  'bounty_licenses', 'bounty_accepts', 'bounty_progress', 'bounty_tickets',
-] as const;
-/** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
-const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
-
-interface AccountSpec {
-  /** 지정하지 않으면 이메일이 없을 때 익명이다 */
-  anonymous?: boolean;
-  email?: string;
-  /** null이면 saves_current 행이 없다 */
-  save: { gold?: number; fame?: number; updatedAt: string; restricted?: boolean } | null;
-  createdAt: string | null;
-  lastSignInAt: string | null;
-  admin?: boolean;
-  /** saves_current 없이 구 saves 행만 있는 계정 */
-  legacySave?: boolean;
-}
-
-let seq = 100;
-
-/** 인증 계정과 저장 상태를 만들고 인증 계정의 시각과 익명 여부를 지정한다 */
-async function seedAccount(client: Client, spec: AccountSpec): Promise<string> {
-  const uid = testUid(seq++);
-  await seedUser(client, {
-    uid, email: spec.email ?? null, nickname: null,
-    ...(spec.save ? {
-      state: { gold: spec.save.gold ?? 0, fame: spec.save.fame ?? 0 },
-      updatedAt: spec.save.updatedAt, restricted: spec.save.restricted ?? false,
-    } : {}),
-  });
-  await client.query('update auth.users set created_at = $2, last_sign_in_at = $3, is_anonymous = $4 where id = $1',
-    [uid, spec.createdAt, spec.lastSignInAt, spec.anonymous ?? spec.email === undefined]);
-  if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
-  if (spec.legacySave) {
-    await client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)', [uid, { v: 4, gold: 0 }, ago(60)]);
-  }
-  return uid;
-}
 
 interface Case { key: string; name: string; target: boolean; spec: AccountSpec }
 
@@ -140,41 +100,6 @@ const DROP_FOREIGN_KEYS = `do $$ declare r record; begin
   loop execute format('alter table %s drop constraint %I', r.tbl, r.conname); end loop;
 end $$`;
 
-/** 계정 행을 공개 표에 하나씩 만든다. 저장이 없는 계정은 저장 상태에 딸린 표를 비워 둔다 */
-async function seedFullAccount(client: Client, spec: AccountSpec & { nickname: string }): Promise<string> {
-  const uid = await seedAccount(client, spec);
-  await client.query('insert into public.profiles (user_id, nickname) values ($1, $2)', [uid, spec.nickname]);
-  await client.query(`insert into public.events (user_id, type, payload) values ($1, 'boot', '{}')`, [uid]);
-  await client.query(`insert into public.letters (user_id, text) values ($1, '편지')`, [uid]);
-  await client.query(`insert into public.bounty_licenses (user_id, zone) values ($1, 'pacific')`, [uid]);
-  await client.query(`insert into public.bounty_accepts (user_id, zone, port, quest_id) values ($1, 'pacific', 'harbor', 'q1')`, [uid]);
-  await client.query(`insert into public.bounty_progress (user_id, zone, quest_id) values ($1, 'pacific', 'q1')`, [uid]);
-  await client.query(`insert into public.bounty_tickets (user_id, quest_id) values ($1, 'q1')`, [uid]);
-  if (spec.save) {
-    await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
-      [fish('crucian').uid, uid]);
-    await client.query(`insert into public.records (user_id, fish_id, form, count) values ($1, 'crucian', 'normal', 1)`, [uid]);
-    await client.query(`insert into public.saves (user_id, data) values ($1, '{"v":8}')`, [uid]);
-  }
-  return uid;
-}
-
-/** 계정의 표별 행 수. 인증 계정은 auth.users 항목이다 */
-async function rowCounts(client: Client, uid: string): Promise<Record<string, number>> {
-  const out: Record<string, number> = {};
-  for (const table of USER_TABLES) {
-    const { rows } = await client.query<{ n: number }>(`select count(*)::int as n from public.${table} where user_id = $1`, [uid]);
-    out[table] = rows[0].n;
-  }
-  const { rows } = await client.query<{ n: number }>('select count(*)::int as n from auth.users where id = $1', [uid]);
-  out['auth.users'] = rows[0].n;
-  return out;
-}
-
-/** 시딩 직후의 표별 행 수 */
-const seeded = (hasSave: boolean) => Object.fromEntries([...USER_TABLES, 'auth.users']
-  .map(table => [table, SAVE_TABLES.includes(table) && !hasSave ? 0 : 1]));
-const GONE = Object.fromEntries([...USER_TABLES, 'auth.users'].map(table => [table, 0]));
 const IDLE: AccountSpec = { save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(12) };
 
 describe.each([
