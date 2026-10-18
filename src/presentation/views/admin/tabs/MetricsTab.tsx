@@ -29,7 +29,7 @@ export default function MetricsTab() {
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.metrics(Number(range)), () => readAdminMetrics(Number(range)), granted);
 
-  // 뷰는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
+  // 조회 결과는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
   const [dailyDesc, retention] = data ?? EMPTY;
   const daily = [...dailyDesc].reverse();
 

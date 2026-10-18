@@ -1,7 +1,6 @@
 // 경제 탭 — 골드 유입(sell·coupon)과 유출(upgradeRod·buyBoat·buyBait)의 일 원장 + 잔고 분포.
 // 레이아웃: [잔고 백분위 KPI 4] → 좌우 분할(유입 | 유출, xl) → 원장 대차 카드(풀폭).
 // 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
-// v_economy_daily 뷰의 일별 경제 요약을 표시한다.
 import { useMemo, useState } from 'react';
 import Note from '../../../ui/Note';
 import MetricSwitch from '../widgets/MetricSwitch';
@@ -28,7 +27,7 @@ export default function EconomyTab() {
     useAdminQuery(adminKeys.economy(Number(range)), () => readAdminEconomy(Number(range)), granted);
 
   const [economyRows, users] = data ?? EMPTY;
-  // 뷰는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
+  // 조회 결과는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
   const economy = useMemo(() => [...economyRows].reverse(), [economyRows]);
 
   const days = lastNDays(Number(range));
