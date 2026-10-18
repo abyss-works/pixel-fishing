@@ -21,6 +21,7 @@ import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
@@ -75,6 +76,8 @@ export default function GameView(props: GameViewProps) {
     props.onScene(nextScene, message, entryPos);
   };
 
+  const { confirm, dialogs } = useDialogs();
+
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
@@ -89,9 +92,18 @@ export default function GameView(props: GameViewProps) {
       case 'exit':
         go({ kind: 'region', id: pack.region }, pack.exitMsg, pack.exitAt);
         return;
-      case 'travel':
-        if (pack.travel) go({ kind: 'region', id: pack.travel.to }, pack.travel.msg);
+      case 'travel': {
+        // 여객선은 다른 지역으로 위치를 통째로 옮기므로 확인을 받는다
+        const travel = pack.travel;
+        if (!travel) return;
+        setActionPanel(null);
+        const place = REGION_PACKS[travel.to].info.shortName;
+        void confirm({ title: '여객선', body: `여객선을 타고 ${place}로 돌아갈까요?
+지금 있는 바다를 떠나 ${place}에서 다시 시작해요.`,
+          confirmLabel: `${place}로 가기` })
+          .then(ok => { if (ok) go({ kind: 'region', id: travel.to }, travel.msg); });
         return;
+      }
     }
   };
 
@@ -124,6 +136,7 @@ export default function GameView(props: GameViewProps) {
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? <TraceCard onTrack={setTracking} /> : null} badge={props.badge} />
+        {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
                           onResolve={resolveEncounter} onClose={() => setTracking(null)} />

@@ -392,6 +392,20 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
     expect(screen.getByLabelText('집')).toBeInTheDocument();
   });
 
+  it('여객선은 확인 창을 거친다 — 닫으면 항구에 남고 확정하면 마을로 간다', async () => {
+    seed({ location: { kind: 'base', id: 'harbor' } });
+    render(<App />);
+    clickFurniture('travel');
+    expect(await screen.findByText(/마을로 돌아갈까요/)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText(/마을로 돌아갈까요/)).not.toBeInTheDocument());
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
+
+    clickFurniture('travel');
+    fireEvent.click(await screen.findByRole('button', { name: '마을로 가기' }));
+    expect(await screen.findByLabelText('마을')).toBeInTheDocument();
+  });
+
   it('항구 거점: 여객선 클릭 → onFacility("travel") 호출', () => {
     const onFacility = vi.fn();
     render(<Base base="harbor" game={newState()} onFacility={onFacility} />);
