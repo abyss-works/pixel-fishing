@@ -6,6 +6,18 @@ import { BOUNTIES } from './bounties';
 import { topZoneOfSpot } from './zones';
 
 describe('named 데이터 계약', () => {
+  it('전승은 네 문단이고 아라비아 숫자를 쓰지 않으며 도감 로어·수배서와 문장을 공유하지 않는다', () => {
+    for (const n of NAMED) {
+      expect(n.chronicle, n.id).toHaveLength(4);
+      for (const p of n.chronicle) {
+        expect(p, n.id).not.toMatch(/[0-9]/);
+        for (const sentence of p.split('. ')) {
+          expect(n.lore.includes(sentence) || n.poster.includes(sentence), `${n.id}: ${sentence}`).toBe(false);
+        }
+      }
+    }
+  });
+
   it('id가 유일하고 출현 해역을 1곳 이상 든다', () => {
     const ids = NAMED.map(n => n.id);
     expect(new Set(ids).size).toBe(ids.length);
