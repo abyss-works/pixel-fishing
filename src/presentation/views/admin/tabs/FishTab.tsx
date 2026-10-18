@@ -94,8 +94,8 @@ export default function FishTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Subheading className="mb-0">해역 시뮬레이션 (어종 {FISH.length}종 · 해역 {SPOTS.length}개)</Subheading>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <Subheading>해역 시뮬레이션 (어종 {FISH.length}종 · 해역 {SPOTS.length}개)</Subheading>
         <div className="flex items-center gap-2">
           <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
