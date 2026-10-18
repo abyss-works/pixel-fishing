@@ -312,6 +312,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     .pf-scroll-hud:hover { scrollbar-color: rgb(255 255 255 / 0.85) transparent; }
   }
 
+  /* 패널 스크롤 — 창 안 목록(랭킹 등)용. HUD 스크롤과 같은 6px 흰 막대를 늘 보이고, 트랙은 어두운 선으로 깐다. */
+  .pf-scroll-panel::-webkit-scrollbar { width: 6px; height: 6px; }
+  .pf-scroll-panel::-webkit-scrollbar-track { background: var(--c-bg); }
+  .pf-scroll-panel::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.85); }
+  .pf-scroll-panel::-webkit-scrollbar-thumb:hover { background: #fff; }
+  @supports not selector(::-webkit-scrollbar) {
+    .pf-scroll-panel { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.85) var(--c-bg); }
+  }
+
   /* 공통 표 (구 .data-table/.pf-compare 통합) — 셀 후손 셀렉터가 유틸 반복보다 나은 유일한 곳 */
   .pf-table {
     width: 100%;
