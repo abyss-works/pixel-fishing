@@ -66,7 +66,7 @@ import type {
   AdminApi,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
 } from '../api/types';
 
 /** 서버 읽기 함수에 조회 하나를 요청한다. 세션이 없거나 응답이 실패면 던진다 */
@@ -124,6 +124,9 @@ class HttpAdmin implements AdminApi {
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
+  }
+  balanceLive(days?: number): Promise<BalanceLive> {
+    return readAdmin('balanceLive', days === undefined ? {} : { days });
   }
   projectRef(): string | null {
     const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;

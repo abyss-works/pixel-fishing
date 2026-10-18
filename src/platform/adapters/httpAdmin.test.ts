@@ -25,6 +25,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
+  ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
 ];
 
 describe('HttpAdmin', () => {
@@ -60,12 +61,21 @@ describe('HttpAdmin', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=userEvents&user=u-1&limit=500');
   });
 
+  it('balanceLive는 기간을 생략하면 기간 인자 없이 요청해 서버의 기본 기간을 따른다', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+    await admin.balanceLive();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=balanceLive');
+  });
+
   it('서버 응답 본문을 그대로 돌려준다', async () => {
     const rows = [{ day: '2026-10-18', dau: 3, wau7: 5 }];
     fetchMock.mockResolvedValue(new Response(JSON.stringify(rows), { status: 200 }));
     await expect(admin.dailyActive(7)).resolves.toEqual(rows);
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'denied', uid: 'u-1' }), { status: 200 }));
     await expect(admin.access()).resolves.toEqual({ kind: 'denied', uid: 'u-1' });
+    const live = { boats: [{ boat: 0, users: 2 }], gold: { p25: null, max: null }, anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null } };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(live), { status: 200 }));
+    await expect(admin.balanceLive(7)).resolves.toEqual(live);
   });
 
   it('세션이 없으면 접근 판정을 포함한 모든 조회가 서버를 부르지 않고 실패한다', async () => {
@@ -79,6 +89,8 @@ describe('HttpAdmin', () => {
     await expect(admin.users()).rejects.toThrow('users 조회 실패: 403 forbidden');
     fetchMock.mockResolvedValue(new Response('<html>bad gateway</html>', { status: 502 }));
     await expect(admin.letters()).rejects.toThrow('letters 조회 실패: 502');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-days' }), { status: 400 }));
+    await expect(admin.balanceLive(1.5)).rejects.toThrow('balanceLive 조회 실패: 400 bad-days');
   });
 
   it('네트워크 오류는 그대로 던진다', async () => {
