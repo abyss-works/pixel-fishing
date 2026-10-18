@@ -1,11 +1,11 @@
-// 거점: 항구 (고향 항구 — 병합 바다 태평양) — 시설 좌표·라벨은 구 월드 데이터 HARBOR_FURNITURE에서 값 그대로 이식
+// 거점: 부산항 (고향 항구 — 병합 바다 태평양). 가구 배열의 순서가 거점 메뉴의 순서다.
 import type { BasePack } from '../types';
 import { WORLD_SPAWN } from '../regions/world';
 
 export const HARBOR_BASE: BasePack = {
   id: 'harbor',
   region: 'world',
-  headline: '항구 — 시설을 클릭해 정비하자',
+  headline: '부산항 — 시설을 클릭해 정비하자',
   exitMsg: '출항! 어군 위에서 스페이스로 캐스팅.',
   exitAt: { ...WORLD_SPAWN }, // 출항 = 팩 spawn(고향 항구 앞) — 고향 항구는 팩 spawn과 같은 자리
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },

@@ -51,7 +51,7 @@ export function implementedRect(): Rect {
 }
 
 const HARBORS: { name: string; anchor: { x: number; y: number } }[] = [
-  { name: '항구', anchor: WORLD_ANCHORS.harbor },
+  { name: '부산항', anchor: WORLD_ANCHORS.harbor },
   { name: '마닐라항', anchor: WORLD_ANCHORS.manila },
   { name: '콜롬보항', anchor: WORLD_ANCHORS.colombo },
   { name: '투아마시나항', anchor: WORLD_ANCHORS.toamasina },

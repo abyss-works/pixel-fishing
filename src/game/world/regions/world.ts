@@ -123,7 +123,7 @@ export const WORLD: RegionPack = {
   // 접안 트리거만 4개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
   triggers: [
     { rect: HARBOR_DOCK, action: 'base', base: 'harbor',
-      msg: '항구에 접안했다. 시설을 눌러 정비하자.' },
+      msg: '부산항에 접안했다. 시설을 눌러 정비하자.' },
     { rect: MANILA_DOCK, action: 'base', base: 'manila',
       msg: '마닐라항에 접안했다. 시설을 눌러 정비하자.' },
     { rect: COLOMBO_DOCK, action: 'base', base: 'colombo',
@@ -132,7 +132,7 @@ export const WORLD: RegionPack = {
       msg: '투아마시나항에 접안했다. 시설을 눌러 정비하자.' },
   ],
   labels: [
-    { text: '항구', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
+    { text: '부산항', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
     { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
     { text: '콜롬보항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
     { text: '투아마시나항', x: TOAMASINA.x + TOAMASINA.w / 2, y: TOAMASINA.y + 2, color: 'gold', size: 8 },
