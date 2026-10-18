@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MESSAGE_KEEP, appendMessage, channelsOf, classifyTone, createMessage } from './messageFeed';
+import { MESSAGE_KEEP, appendMessage, channelsOf, createMessage } from './messageFeed';
+import { REJECT_TEXT } from '../../../game/rules/rules';
 
 describe('메시지 피드', () => {
   it('메시지는 시각 HH:MM과 채널을 가진다 — 기본 채널은 시스템', () => {
@@ -8,10 +9,16 @@ describe('메시지 피드', () => {
     expect(m.author).toBeUndefined();
   });
 
-  it('톤은 명시값이 우선이고, 없으면 문구로 추정한다', () => {
-    expect(classifyTone('골드가 부족하다.')).toBe('warn');
-    expect(classifyTone('참치 획득!')).toBe('gold');
-    expect(createMessage(1, '참치 획득!', { tone: 'info' }).tone).toBe('info');
+  it('톤은 부르는 쪽이 넘긴 값을 그대로 쓴다 — 세 톤 모두', () => {
+    expect(createMessage(1, REJECT_TEXT['not-enough-gold'], { tone: 'warn' }).tone).toBe('warn');
+    expect(createMessage(2, '일반 등급 [붕어] 획득!', { tone: 'gold' }).tone).toBe('gold');
+    expect(createMessage(3, '태평양에 들어섰어요.', { tone: 'info' }).tone).toBe('info');
+  });
+
+  it('톤을 넘기지 않으면 문구와 무관하게 info다 — 문구로 톤을 추정하지 않는다', () => {
+    for (const text of [REJECT_TEXT['not-enough-gold'], '전시 중에는 팔리지 않아요.', '참치 획득!']) {
+      expect(createMessage(1, text).tone).toBe('info');
+    }
   });
 
   it('보관 상한을 넘으면 오래된 것부터 버린다', () => {
