@@ -109,8 +109,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       {loaded && snap === null && (
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.</Note>
       )}
-      {screen === 'quests' && notice.general && <Note className="my-0">{notice.general}</Note>}
-      {screen === 'named' && notice.named && <Note className="my-0">{notice.named}</Note>}
+      {screen === 'quests' && notice.general && <Note size="xs" className="my-0">{notice.general}</Note>}
+      {screen === 'named' && notice.named && <Note size="xs" className="my-0">{notice.named}</Note>}
       {screen === 'quests' ? (
         <div className="min-h-[26rem]">
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
