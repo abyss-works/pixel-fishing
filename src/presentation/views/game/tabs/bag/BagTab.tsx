@@ -48,7 +48,7 @@ export const EXHIBIT_UI_ENABLED = false;
 // 행마다 어긋나 소계를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
 //   [캐럿] [스프라이트] [이름] [×N] [소계] [자물쇠]
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
-const ROW = 'grid grid-cols-[10px_30px_1fr_28px_52px_22px] items-center gap-1';
+const ROW = 'grid grid-cols-[10px_30px_1fr_24px_80px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
 /** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
