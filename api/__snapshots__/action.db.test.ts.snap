@@ -5223,7 +5223,8 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
         },
       },
       "result": {
-        "type": "none",
+        "schoolDay": "2030-03-04",
+        "type": "boot",
       },
     },
     "status": 200,
@@ -5314,7 +5315,8 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
         },
       },
       "result": {
-        "type": "none",
+        "schoolDay": "2030-03-04",
+        "type": "boot",
       },
     },
     "status": 200,

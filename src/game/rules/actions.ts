@@ -28,7 +28,7 @@ import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
-import { isNight } from './time.js';
+import { isNight, schoolDayOf } from './time.js';
 import type { DayPhase } from './time.js';
 
 export type GameAction =
@@ -84,6 +84,8 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
+  /** schoolDay = 이 세션의 대양 어군 배치 날짜(KST 04:00 경계) — 시계의 정본은 서버다 */
+  | { type: 'boot'; schoolDay: string }
   | { type: 'none' };
 
 /** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
@@ -488,10 +490,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // '행동한 유저'가 아니라 '들어온 유저'의 정본이 된다(새로고침 = 1부팅).
       // buildId를 함께 남겨 어느 배포 시점의 접속인지도 쪼갤 수 있다. 식별자 상한 64자 —
       // 깨진 클라이언트가 이벤트 payload를 무한히 부리지 않게 (LETTER_MAX와 같은 판단).
+      // 결과에는 어군 배치 날짜를 싣는다 — deps.now가 서버 시계라 모든 클라이언트가 같은
+      // 배치를 계산하고, 클라이언트는 이 값을 세션 동안 유지한다(04:00이 지나도 재배치 없음).
       const buildId = typeof action.buildId === 'string'
         ? action.buildId.trim().slice(0, 64) : '';
       return {
-        ok: true, state, result: { type: 'none' },
+        ok: true, state, result: { type: 'boot', schoolDay: schoolDayOf(deps.now) },
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }
