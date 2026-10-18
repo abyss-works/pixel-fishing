@@ -15,8 +15,18 @@ describe('거점 카드 메뉴', () => {
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
     render(<BaseMenu base="harbor" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '수배판', '공방 · 낚싯대 Lv.1', '조선소 · 배 없음',
-      '어시장', '여객선 · 마을로', '승선 · 출항']);
+    expect(names()).toEqual(['게시판 · 랭킹', '수배판 · 의뢰/토벌', '공방 · 낚싯대 Lv.1', '조선소 · 배 없음',
+      '어시장 · 판매', '여객선 · 마을로', '승선 · 바다로']);
+  });
+
+  it('카드는 정보·상점·이동 구역으로 나뉜다', () => {
+    render(<BaseMenu base="colombo" game={newState()} />);
+    const section = (title: string) => [...screen.getByRole('heading', { name: title }).parentElement!
+      .querySelectorAll('[data-facility]')].map(el => el.getAttribute('data-facility'));
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['정보', '상점', '이동']);
+    expect(section('정보')).toEqual(['rank', 'bounty']);
+    expect(section('상점')).toEqual(['rod', 'boat', 'shop', 'sell']);
+    expect(section('이동')).toEqual(['travel', 'exit']);
   });
 
   it('카드를 누르면 그 시설을 알린다', () => {
