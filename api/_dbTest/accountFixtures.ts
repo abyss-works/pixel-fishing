@@ -14,6 +14,8 @@ export interface AccountSpec {
   /** 지정하지 않으면 이메일이 없을 때 익명이다 */
   anonymous?: boolean;
   email?: string;
+  /** 이메일 변경 확인을 기다리는 주소(email_change) */
+  pendingEmail?: string;
   /** null이면 saves_current 행이 없다 */
   save: { gold?: number; fame?: number; updatedAt: string; restricted?: boolean } | null;
   createdAt: string | null;
@@ -35,8 +37,8 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
       updatedAt: spec.save.updatedAt, restricted: spec.save.restricted ?? false,
     } : {}),
   });
-  await client.query('update auth.users set created_at = $2, last_sign_in_at = $3, is_anonymous = $4 where id = $1',
-    [uid, spec.createdAt, spec.lastSignInAt, spec.anonymous ?? spec.email === undefined]);
+  await client.query('update auth.users set created_at = $2, last_sign_in_at = $3, is_anonymous = $4, email_change = $5 where id = $1',
+    [uid, spec.createdAt, spec.lastSignInAt, spec.anonymous ?? spec.email === undefined, spec.pendingEmail ?? null]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
   if (spec.legacySave) {
     await client.query('insert into public.saves (user_id, data) values ($1, $2)', [uid, { v: 4, gold: 0 }]);

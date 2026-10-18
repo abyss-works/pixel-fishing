@@ -45,6 +45,8 @@ const CASES: Case[] = [
     spec: { email: 'player@example.test', save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(30) } },
   { key: 'anonymousWithEmail', name: '익명이라도 이메일이 붙은 계정은 대상이 아니다', target: false,
     spec: { anonymous: true, email: 'upgrading@example.test', save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(30) } },
+  { key: 'pendingEmail', name: '이메일 변경 확인을 기다리는 익명 계정은 대상이 아니다', target: false,
+    spec: { pendingEmail: 'pending@example.test', save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(30) } },
   { key: 'restricted', name: '제재 계정은 대상이 아니다', target: false,
     spec: { save: { updatedAt: ago(10), restricted: true }, createdAt: ago(30), lastSignInAt: ago(30) } },
   { key: 'admin', name: '관리자는 대상이 아니다', target: false,

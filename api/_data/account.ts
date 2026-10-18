@@ -20,14 +20,15 @@ export interface PurgeTargets {
 
 /**
  * 정리 대상 조건이다. 선정과 삭제 직전 재확인이 같은 정의를 쓴다.
- * 이메일이 없는 익명 계정 가운데 저장 상태가 비었거나(골드·명성 0) 저장이 없고, 제재·관리자가 아니며,
- * 마지막 활동(저장 갱신·로그인·가입 중 가장 늦은 시각)이 컷오프보다 이른 계정이다.
+ * 이메일이 없고 이메일 변경 확인을 기다리지 않는 익명 계정 가운데 저장 상태가 비었거나(골드·명성 0) 저장이 없고,
+ * 제재·관리자가 아니며, 마지막 활동(저장 갱신·로그인·가입 중 가장 늦은 시각)이 컷오프보다 이른 계정이다.
+ * email_change에 주소가 있으면 가입을 시도하고 이메일 확인을 기다리는 계정이다.
  * greatest는 null을 건너뛰므로 시각이 하나라도 있으면 그중 가장 늦은 값이고, 전부 null이면 대상이 아니다.
  * 저장 상태가 없어도 구 saves 행이 있으면 정규화 이전 진행이 남아 있을 수 있어 대상에서 뺀다.
  */
 const targetFrom = (cutoffISO: string): SQL => sql`from auth.users u
   left join public.saves_current c on c.user_id = u.id
-  where u.is_anonymous and u.email is null
+  where u.is_anonymous and u.email is null and coalesce(u.email_change, '') = ''
     and ((c.user_id is not null and c.gold = 0 and c.fame = 0)
       or (c.user_id is null and not exists (select 1 from public.saves s where s.user_id = u.id)))
     and not coalesce(c.restricted, false)
