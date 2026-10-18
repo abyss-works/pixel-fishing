@@ -113,10 +113,10 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByText('운영 DB에 연결하면 채워져요.')).toBeInTheDocument();
   });
 
-  it('밸런스 탭에는 라이브 지표 구역이 비어 있는 채로 구분되어 있다', () => {
+  it('밸런스 탭은 라이브 지표 구역을 따로 두고, 로컬 모드에서는 연결 안내를 보인다', () => {
     open('#/admin/balance');
-    expect(screen.getByRole('heading', { name: '라이브 지표' })).toBeInTheDocument();
-    expect(screen.getByText(/라이브 지표는 아직 연결되지 않았어요/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '라이브 지표 (최근 7일)' })).toBeInTheDocument();
+    expect(screen.getByText('운영 DB에 연결하면 실측 지표가 채워져요.')).toBeInTheDocument();
     expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
   });
 });
