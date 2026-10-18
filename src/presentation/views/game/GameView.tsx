@@ -98,7 +98,7 @@ export default function GameView(props: GameViewProps) {
         if (!travel) return;
         setActionPanel(null);
         const place = REGION_PACKS[travel.to].info.shortName;
-        void confirm({ title: '여객선', body: `여객선을 타고 ${place}로 돌아갈까요?
+        void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${place}로 돌아갈까요?
 지금 있는 바다를 떠나 ${place}에서 다시 시작해요.`,
           confirmLabel: `${place}로 가기` })
           .then(ok => { if (ok) go({ kind: 'region', id: travel.to }, travel.msg); });
