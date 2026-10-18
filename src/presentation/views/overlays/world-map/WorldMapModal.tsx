@@ -164,8 +164,8 @@ export default function WorldMapModal({ world, onClose }: {
         </div>
       </div>
       <Note className="mb-0">
-        밝은 바다는 지금 항해할 수 있는 세계다. 회색 물은 아직 이 배가 닿지 않는 곳 —
-        해도가 다 채워지는 날까지 남겨둔 바다다. 휠이나 버튼으로 확대하고, 끌어서 둘러본다.
+        밝은 바다는 지금 배로 갈 수 있는 곳이에요. 회색 바다는 아직 지금 배로 갈 수 없어요.
+        휠이나 버튼으로 확대하고, 끌어서 둘러볼 수 있어요.
       </Note>
     </Modal>
   );

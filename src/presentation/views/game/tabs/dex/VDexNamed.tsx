@@ -56,7 +56,7 @@ export default function DexNamedView({ game, sub, onSub }: {
           );
         })}
         {data.quests.length === 0 && (
-          <Note className="my-0">이 구역의 네임드는 아직 없다.</Note>
+          <Note className="my-0">이 구역의 네임드는 아직 없어요.</Note>
         )}
       </div>
       {detail && <NamedDetail quest={detail} game={game} onClose={() => setDetail(null)} />}

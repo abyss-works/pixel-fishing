@@ -62,7 +62,7 @@ export default function InstanceLine({
             <IconButton
               glyph="star" size={12} tone="dim" className="px-1"
               aria-label={`${label} 진열`}
-              title="전시대에 올린다 — 전시 중에는 팔리지 않는다"
+              title="전시대에 올려요. 전시 중에는 팔리지 않아요"
               onClick={e => { e.stopPropagation(); onExhibit(); }} />
           )}
           {onLock && (
