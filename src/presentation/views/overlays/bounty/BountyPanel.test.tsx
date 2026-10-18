@@ -50,7 +50,7 @@ describe('BountyPanel', () => {
     expect(await screen.findByText('쉬움')).toBeInTheDocument();
     expect(screen.getByText('보통')).toBeInTheDocument();
     expect(screen.getByText('어려움')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: '수주' })).toHaveLength(3);
   });
 
   it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
@@ -60,7 +60,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex: fullDex }));
     expect(await screen.findByText(`0/${quest.count}`)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '진행 중' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: '수주하기' })).toHaveLength(2); // 나머지 두 난이도만
+    expect(screen.getAllByRole('button', { name: '수주' })).toHaveLength(2); // 나머지 두 난이도만
   });
 
   it('일일 의뢰 — 해시 결정값을 그대로 보인다', async () => {
@@ -99,7 +99,7 @@ describe('BountyPanel', () => {
     const g = game({ fame: 1500, dex: fullDex });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
-    const btns = await screen.findAllByRole('button', { name: '수주하기' });
+    const btns = await screen.findAllByRole('button', { name: '수주' });
     // 스냅샷 적재 전에는 수주 버튼이 비활성이다 — RQ fetch 완료를 기다린다.
     await waitFor(() => expect(btns[0]).not.toBeDisabled());
     fireEvent.click(btns[0]);
@@ -119,10 +119,10 @@ describe('BountyPanel', () => {
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
-    expect(screen.getByText('심해아귀')).toBeInTheDocument();
-    expect(screen.getByText(/아귀의 등불 보유 0\/1/)).toBeInTheDocument();
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    expect(screen.getByText(/돌이 된 이빨 보유 0\/1/)).toBeInTheDocument();
     // 재료 없으면 교환 불가
-    expect(screen.getByRole('button', { name: '교환하기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '교환' })).toBeDisabled();
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {
@@ -131,7 +131,7 @@ describe('BountyPanel', () => {
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
-    fireEvent.click(await screen.findByRole('button', { name: '교환하기' }));
+    fireEvent.click(await screen.findByRole('button', { name: '교환' }));
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'exchangeArtifact', artifact: 'abyss-angler' })));
   });
@@ -151,7 +151,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
-    expect(await screen.findByText(/흔적이 남아 있다 — 바다에서 추적하자/)).toBeInTheDocument();
+    expect(await screen.findByText(/흔적이 남아 있어요. 바다에서 추적해 보세요/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -167,6 +167,6 @@ describe('BountyPanel', () => {
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(await screen.findByRole('button', { name: '수주하기' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: '수주' })).toBeDisabled();
   });
 });

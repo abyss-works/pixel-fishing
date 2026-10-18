@@ -1,6 +1,7 @@
 import type { GameState } from '../../../../../game/rules/logic';
 import type { RegionId } from '../../../../../game/world';
 import { useSpotState } from '../../../../../features/travel/service/useSpotState';
+import { useSchools } from '../../../../../features/gameplay/service/schoolDay';
 import { zoneTips, zoneControls } from '../../../../../game/content/zones';
 import { selectRegionViewData } from '../../../../../features/travel/model/regionView';
 import type { SpotTendency } from '../../../../../features/travel/model/regionView';
@@ -52,9 +53,10 @@ const LEVEL_CLS = {
 // 좌표·어군·구역은 전역 스토어(Field가 기록, 저장 안 함 — 클라 신뢰).
 export default function VRegion({ region, game }: { region: RegionId; game: GameState }) {
   const { spot: currentSpot, zone: storeZone, pos } = useSpotState();
+  const schools = useSchools(region);
   const {
     focused, contextZone, zone, tableZone, tableSpots, nearby, focusedFishes, tendency,
-  } = selectRegionViewData(game, region, storeZone, currentSpot, pos);
+  } = selectRegionViewData(game, region, schools, storeZone, currentSpot, pos);
   const tendencyText: Record<SpotTendency, string> = {
     legendary: '낮에는 밝은 바다다. 다만 줄을 올릴 때 손끝이 유난히 무거워지는 날이 있다. 그 무게가 언제 오는지는 아무도 가르쳐 주지 않는다.',
     high: '수면은 평범한 하루처럼 보인다. 그 아래에서는 언제나 시선이 엇갈리고 있다. 오래 기다린 사람의 손끝에만 그 기척이 닿는다.',

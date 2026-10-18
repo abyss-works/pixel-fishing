@@ -26,7 +26,7 @@ describe('이동 속도 — 씬 movement로 분기', () => {
     expect(st.value).toBeCloseTo(BOATS[2].speed * 0.85, 10);
   });
 
-  it('유물 — 심해아귀는 밤 감속 제거 + 항해 +5%', () => {
+  it('유물 — 해구의 이빨은 밤 감속 제거 + 항해 +5%', () => {
     const st = moveSpeed(s({ boat: 3, artifacts: ['abyss-angler'] }), 'sail', true);
     expect(st.mods.map(m => m.id)).toEqual(['relic-abyss-angler']);
     expect(st.value).toBeCloseTo(BOATS[2].speed * 1.05, 10);
@@ -141,7 +141,7 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writin
 
   it('파워는 해역별 요구 차이를, 페널티는 방치의 결과를 사실로 알린다', () => {
     expect(powerHelpText()).toContain('요구하는 파워가 달라서');
-    expect(autoPenaltyHelpText()).toContain('희귀한 어종이 잘 걸리지 않는다');
+    expect(autoPenaltyHelpText()).toContain('희귀한 어종이 잘 걸리지 않아요');
   });
 });
 

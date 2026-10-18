@@ -30,6 +30,7 @@ import TimeControl from './TimeControl';
 import MigrationCode from './MigrationCode';
 import { clampPanel, defaultPanelPosition, loadPanelPosition, savePanelPosition } from './panelPosition';
 import type { Point2, Size2 } from './panelPosition';
+import type { Notify } from '../../ui/hud/messageFeed';
 
 type Section = 'presets' | DevGroup | 'view' | 'ops';
 
@@ -61,7 +62,7 @@ const RESTRICTED_NOTE = '운영 서버다 — 여기서는 대시보드 조회�
 export default function DevTools({ game, dispatch, setToast, account, uid }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
   account: string | null;
   uid: string | null;
 }) {

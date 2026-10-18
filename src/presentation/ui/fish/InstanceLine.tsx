@@ -2,6 +2,7 @@ import { sizePercentile } from '../../../game/rules/logic';
 import type { FishInstance } from '../../../game/rules/logic';
 import type { Fish } from '../../../game/content/fish';
 import { cx } from '../cx';
+import { fmtSize } from '../format';
 import IconButton from '../IconButton';
 import SizeBar from '../SizeBar';
 
@@ -35,7 +36,7 @@ export default function InstanceLine({
 }: InstanceLineProps) {
   const pct = inst.size === null ? null : sizePercentile(fish, inst.size);
   const label = [
-    inst.size === null ? null : `${inst.size.toFixed(1)}cm`,
+    inst.size === null ? null : fmtSize(inst.size),
     inst.form === 'variant' ? '돌연변이' : null,
     fish.name,
   ].filter(Boolean).join(' ');
@@ -49,7 +50,7 @@ export default function InstanceLine({
       <span>{children}</span>
       {/* 값은 픽셀 폰트(pf-accent = Silkscreen). 한글 글리프가 없는 건 폰트 스택이 폴백한다 */}
       <span className="pf-accent">
-        {inst.size === null ? <span className="text-text-dim">미상</span> : `${inst.size.toFixed(1)}cm`}
+        {inst.size === null ? <span className="text-text-dim">미상</span> : fmtSize(inst.size)}
       </span>
       <span className="min-w-0">{pct !== null && <SizeBar percentile={pct} />}</span>
       <span className="pf-accent text-text-dim text-right">{pct !== null && `${pct}%`}</span>
@@ -61,7 +62,7 @@ export default function InstanceLine({
             <IconButton
               glyph="star" size={12} tone="dim" className="px-1"
               aria-label={`${label} 진열`}
-              title="전시대에 올린다 — 전시 중에는 팔리지 않는다"
+              title="전시대에 올려요. 전시 중에는 팔리지 않아요"
               onClick={e => { e.stopPropagation(); onExhibit(); }} />
           )}
           {onLock && (

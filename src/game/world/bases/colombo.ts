@@ -6,11 +6,11 @@ import { COLOMBO_SPAWN } from '../regions/world';
 export const COLOMBO_BASE: BasePack = {
   id: 'colombo',
   region: 'world',
-  headline: '콜롬보항 — 시설을 클릭해 정비하자',
-  exitMsg: '출항! 향신료의 바다에서 스페이스로 캐스팅.',
+  headline: '콜롬보항 — 시설을 눌러 정비해 보세요',
+  exitMsg: '출항했어요. 향신료의 바다에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
   exitAt: { ...COLOMBO_SPAWN },
-  travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔다.' },
+  travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔어요.' },
   furniture: [
     { id: 'rank',   x: 36,  y: 58,  w: 40, h: 30, sprite: 'board',
       label: () => '게시판 · 랭킹', labelDy: -4 },

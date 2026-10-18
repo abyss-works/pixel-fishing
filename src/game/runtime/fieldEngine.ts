@@ -86,10 +86,13 @@ export class GameFieldEngine {
   private frameId: number | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private school: School | null = null;
+  /** 이 지역의 현재 어군 — 대양은 세션의 배치 날짜로 정해지므로 호스트가 넘겨준다 */
+  private schools: School[];
 
-  constructor(region: RegionId, game: GameState, initialPos?: Point) {
+  constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
     this.game = game;
+    this.schools = schools;
     this.pos = { ...(initialPos ?? this.def.spawn) };
   }
 
@@ -109,6 +112,13 @@ export class GameFieldEngine {
   /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
   setFishArt(style: FishArtStyle): void {
     this.fishArt = style;
+  }
+
+  /** 어군 교체 — 배치 날짜가 서버 값으로 바뀌면 사거리 내 어군을 다시 판정한다 */
+  setSchools(schools: School[]): void {
+    if (this.schools === schools) return;
+    this.schools = schools;
+    this.refreshNearby();
   }
 
   attachCanvas(canvas: HTMLCanvasElement | null): void {
@@ -179,11 +189,16 @@ export class GameFieldEngine {
   private initializePositionState(): void {
     const zone = zoneOf(this.def, this.pos.x, this.pos.y) ?? null;
     this.tracker.init(zone);
-    const nearby = nearestSchoolInRange(this.def.schools, this.pos.x, this.pos.y, CAST_RANGE);
-    this.lastSpot = nearby?.spot ?? null;
-    setCurrentSpot(this.lastSpot);
+    this.refreshNearby();
     setZone(this.lastSpot ? zoneOfSpot(this.lastSpot) ?? null : (zone ? topZoneOf(zone) : null));
     setPlayerPos({ x: this.pos.x, y: this.pos.y });
+  }
+
+  /** 현재 자리에서 사거리 내 어군을 다시 구해 스토어에 반영한다 (스토어가 같은 값은 거른다) */
+  private refreshNearby(): void {
+    const nearby = nearestSchoolInRange(this.schools, this.pos.x, this.pos.y, CAST_RANGE);
+    this.lastSpot = nearby?.spot ?? null;
+    setCurrentSpot(this.lastSpot);
   }
 
   private updateFrame(ctx: CanvasRenderingContext2D, now: number, last: number): boolean {
@@ -201,12 +216,7 @@ export class GameFieldEngine {
       const next = movePlayer(this.def, this.pos, Math.sign(dx), Math.sign(dy), dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
-      const nearby = nearestSchoolInRange(this.def.schools, this.pos.x, this.pos.y, CAST_RANGE);
-      const spot = nearby?.spot ?? null;
-      if (spot !== this.lastSpot) {
-        this.lastSpot = spot;
-        setCurrentSpot(spot);
-      }
+      this.refreshNearby();
       setPlayerPos({ x: this.pos.x, y: this.pos.y });
     }
 
@@ -250,6 +260,7 @@ export class GameFieldEngine {
     const zones = this.school ? powerZones(this.game, this.school.spot) : null;
     renderRegion(ctx, this.def, {
       player: this.pos,
+      schools: this.schools,
       phase: this.snapshot.phase,
       school: this.school,
       boat: this.game.boat,
@@ -267,7 +278,7 @@ export class GameFieldEngine {
   }
 
   private tryCast(silent: boolean): void {
-    const nearby = nearestSchoolInRange(this.def.schools, this.pos.x, this.pos.y, CAST_RANGE);
+    const nearby = nearestSchoolInRange(this.schools, this.pos.x, this.pos.y, CAST_RANGE);
     if (!nearby) {
       if (!silent) this.callbacks.onEvent({ type: 'cast-denied', reason: 'range' });
       return;

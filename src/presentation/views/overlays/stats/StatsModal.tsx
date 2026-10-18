@@ -3,7 +3,8 @@ import type { GameState } from '../../../../game/rules/logic';
 import type { Movement, Stat } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
 import { SPOTS } from '../../../../game/content/spots';
-import { autoPenaltyHelpText, powerHelpText } from '../../../../game/rules/stats';
+import { POWER_RULES, autoPenaltyHelpText, powerHelpText } from '../../../../game/rules/stats';
+import { MANUAL_POWER_BONUS } from '../../../../game/rules/power';
 import { selectInitialStatsSpotIndex, selectStatsModalData } from '../../../../features/gameplay/model/stats';
 import ArrowButton from '../../../ui/ArrowButton';
 import DataTable from '../../../ui/DataTable';
@@ -99,22 +100,22 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             <tr><th scope="row">입질 최대 대기</th><td><StatCell stat={effBite.max} unit="초" /></td></tr>
             <tr>
               <th scope="row">
-                good 존
-                <HelpHint text="노란 존 — 바 폭에서 차지하는 크기다. 요구를 넘친 만큼 넓어진다." />
+                GOOD 영역
+                <HelpHint text="노란 영역이 바 폭에서 차지하는 크기예요. 요구 파워를 넘친 만큼 넓어져요." />
               </th>
               <td>{pz.yellow > 0 ? `${Math.round(pz.yellow)}%` : '요구 미달'}</td>
             </tr>
             <tr>
               <th scope="row">
-                perfect 존
-                <HelpHint text="빨간 존 — 중앙에 열리는 특등 존. 파워가 30을 초과할 때부터 생긴다." />
+                PERFECT 영역
+                <HelpHint text={`가운데에 열리는 빨간 영역이에요. 파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`} />
               </th>
               <td>{pz.red > 0 ? `${Math.round(pz.red)}%` : pz.yellow > 0 ? '-' : '요구 미달'}</td>
             </tr>
             <tr>
               <th scope="row">
                 수동 확률 보정
-                <HelpHint text="수동 낚시에서 희귀한 물고기가 더 잘 낚인다. 최대 ×2.0." />
+                <HelpHint text={`직접 낚을 때 희귀한 물고기가 더 잘 낚여요. 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`} />
               </th>
               <td>×{bonus.value.toFixed(1)}</td>
             </tr>
@@ -133,11 +134,11 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
           </tbody>
         </DataTable>
         {/* 조건부 렌더 대신 항상 렌더 — 수역을 넘길 때 높이가 흔들리는 점프를 막는다.
-            유저 노출 문장이라 writing-voice 규칙 적용(로어체 · 수치 금지) */}
+            플레이어에게 하는 안내라 해요체로 쓴다 */}
         <Note>
           {underpowered
-            ? '더 좋은 낚싯대가 필요해보인다. 물고기가 미끼만 훔쳐먹고 간다.'
-            : '낚싯대가 좋은만큼 물고기를 낚기 쉬워졌다.'}
+            ? '이 해역에서는 더 강한 낚싯대가 필요해요. 물고기가 미끼만 먹고 달아나요.'
+            : '낚싯대가 충분히 강해서 이 해역의 물고기를 낚기 쉬워요.'}
         </Note>
       </Panel>
     </Modal>

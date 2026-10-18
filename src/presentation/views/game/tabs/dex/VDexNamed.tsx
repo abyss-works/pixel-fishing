@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import type { BountyQuest } from '../../../../../game/content/bounties';
 import type { GameState } from '../../../../../game/rules/logic';
 import { zoneById } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
@@ -9,6 +10,7 @@ import FishSprite from '../../../../ui/fish/FishSprite';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import Note from '../../../../ui/Note';
+import NamedDetail from './NamedDetail';
 
 // 도감 네임드 화면 — 네임드는 구역별 1칸. 수배가 없는 존(마을)은 서브탭에 두지 않는다.
 // 수배 목록에서만 공개된 히든 어종이라
@@ -20,6 +22,7 @@ export default function DexNamedView({ game, sub, onSub }: {
   onSub: (z: ZoneId) => void;
 }) {
   const data = useMemo(() => selectNamedDex(game, sub), [game, sub]);
+  const [detail, setDetail] = useState<BountyQuest | null>(null);
 
   return (
     <div>
@@ -37,7 +40,10 @@ export default function DexNamedView({ game, sub, onSub }: {
       <div className="flex flex-col gap-2 mt-2">
         {data.quests.map(({ quest: q, found: ok, fish, displayName }) => {
           return (
-            <div key={q.id} className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center', !ok && DIM_CARD)}>
+            <div key={q.id} role="button" tabIndex={0} aria-label={`${ok ? (displayName ?? q.targetFish) : '미확인 네임드'} 상세 보기`}
+                 onClick={() => setDetail(q)}
+                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(q); } }}
+                 className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
                             ariaLabel={ok && displayName ? displayName : '미확인 네임드'} className="block mx-auto" />
@@ -50,9 +56,10 @@ export default function DexNamedView({ game, sub, onSub }: {
           );
         })}
         {data.quests.length === 0 && (
-          <Note className="my-0">이 구역의 네임드는 아직 없다.</Note>
+          <Note className="my-0">이 구역의 네임드는 아직 없어요.</Note>
         )}
       </div>
+      {detail && <NamedDetail quest={detail} game={game} onClose={() => setDetail(null)} />}
     </div>
   );
 }

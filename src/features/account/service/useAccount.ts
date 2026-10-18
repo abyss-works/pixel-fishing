@@ -16,7 +16,8 @@ import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudg
 export function useAccount({ game, setGame, setToast, load }: {
   game: GameState;
   setGame: (g: GameState) => void;
-  setToast: (m: string) => void;
+  /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
+  setToast: (message: string, tone?: 'info' | 'gold' | 'warn') => void;
   /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
 }) {
@@ -50,7 +51,7 @@ export function useAccount({ game, setGame, setToast, load }: {
       uidRef.current = next;
       const cloud = await load();
       setGame(cloud ?? newState());
-      setToast('계정의 클라우드 세이브를 불러왔다.');
+      setToast('계정의 클라우드 세이브를 불러왔어요.');
     }
   };
 
@@ -59,11 +60,13 @@ export function useAccount({ game, setGame, setToast, load }: {
     if (!api.auth.isConfigured) return;
     const { unsubscribe } = api.auth.onAuthStateChange(event => {
       if (event !== 'PASSWORD_RECOVERY') return;
-      const pw = window.prompt(`새 비밀번호를 입력하세요 (${MIN_PASSWORD_LENGTH}자 이상):`);
+      const pw = window.prompt(`새 비밀번호를 입력해 주세요. (${MIN_PASSWORD_LENGTH}자 이상)`);
       if (!pw) return;
-      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`); return; }
-      api.auth.applyNewPassword(pw).then(r =>
-        setToast(r.ok ? '비밀번호가 변경되었다.' : `비밀번호 변경 실패: ${r.msg}`));
+      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
+      api.auth.applyNewPassword(pw).then(r => {
+        if (r.ok) setToast('비밀번호를 바꿨어요.');
+        else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
+      });
     });
     return () => unsubscribe();
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독, setToast는 항상 최신 클로저가 필요 없다
@@ -78,7 +81,7 @@ export function useAccount({ game, setGame, setToast, load }: {
     })) return;
     api.auth.markAccountNudged(today);
     // oxlint-disable-next-line react/set-state-in-effect -- 조건이 처음 맞는 순간(그날 첫 접속·명성 도달)에 한 번 쏘는 알림이라 이벤트 지점이 따로 없다
-    setToast(`명성 ${ACCOUNT_NUDGE_FAME.toLocaleString()} 이상이에요! 진행을 지키려면 설정 탭에서 계정을 만들어 두세요.`);
+    setToast(`명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 계정을 만들어 보세요.`);
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 

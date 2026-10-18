@@ -40,10 +40,10 @@ export default function BountyCard({ quest, progress, accepted, canAccept, busy,
       )}
       <span className="flex justify-center mt-auto">
         {done
-          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품하기</Button>
+          ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품</Button>
           : accepted
             ? <Button full disabled>진행 중</Button>
-            : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주하기</Button>}
+            : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주</Button>}
       </span>
     </div>
   );

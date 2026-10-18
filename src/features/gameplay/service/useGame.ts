@@ -9,6 +9,7 @@ import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
+import { setSchoolDay } from './schoolDay';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -18,10 +19,10 @@ import { fetchSession } from '../../account/service/session';
 export type SyncState = 'off' | 'connecting' | 'on' | 'error';
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
-  off: '클라우드 미설정 — 새로고침하면 사라진다 (개발 모드)',
-  connecting: '클라우드 연결 중...',
+  off: '클라우드가 설정되지 않았어요. 새로고침하면 진행이 사라져요. (개발 모드)',
+  connecting: '클라우드 연결 중…',
   on: '클라우드 저장 켜짐',
-  error: '클라우드 연결 실패 — 진행이 저장되지 않는 중',
+  error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
 export function useGame({ setToast }: { setToast: (m: string) => void }) {
@@ -62,13 +63,13 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   // 저장 데이터 import는 소유자 전용이며 일반 사용자에게 노출하지 않는다.
   const rescueAlert = async (headline: string) => {
     const code = api.storage.saveCode(gameRef.current);
-    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 코드로 만들어 뒀어요.\n\n게임을 새로고침해 다시 접속하세요.\n같은 문제가 반복되면 아래 코드를 개발자에게 보내주세요.`;
+    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 코드로 만들어 뒀어요.\n\n게임을 새로고침해 다시 접속해 주세요.\n같은 문제가 반복되면 아래 코드를 개발자에게 보내 주세요.`;
     try {
       await navigator.clipboard.writeText(code);
       window.alert(`${guide}\n\n(이사 코드는 클립보드에 복사되어 있어요)`);
     } catch {
       window.alert(guide);
-      window.prompt('이사 코드 — 복사해서 보관하세요:', code);
+      window.prompt('이사 코드예요. 복사해서 보관해 주세요.', code);
     }
   };
 
@@ -82,6 +83,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       if (r.status === 'ok') {
         setGame(r.state);
         settleForcedEncounter(r.result);
+        // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
+        if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
         if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
@@ -100,6 +103,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   useEffect(() => {
     if (!api.auth.isConfigured) {
       void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
+      // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
+      void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
       return;
     }
     (async () => {
@@ -111,7 +116,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       ]);
       if (cloud) {
         setGame(cloud);
-        setToast('클라우드 세이브를 불러왔다.');
+        setToast('클라우드 세이브를 불러왔어요.');
       } else if (init.legacy) {
         // 구세대(localStorage) 브리지도 import 액션이므로 소유자 게이트를 적용한다.
         // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.

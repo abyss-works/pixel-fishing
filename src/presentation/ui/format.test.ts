@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtMinutes, josa } from './format';
+import { fmtCompact, fmtMinutes, fmtSize, josa } from './format';
+
+describe('fmtSize — 물고기 크기', () => {
+  it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
+    expect(fmtSize(12.34)).toBe('12.3cm');
+    expect(fmtSize(99.94)).toBe('99.9cm');
+    expect(fmtSize(100)).toBe('1.00m');
+    expect(fmtSize(385.2)).toBe('3.85m');
+    expect(fmtSize(1085)).toBe('10.85m');
+  });
+});
 
 describe('fmtMinutes — 남은 시간', () => {
   it('시·분으로 나누고 0분은 생략한다', () => {

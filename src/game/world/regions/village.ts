@@ -16,6 +16,7 @@ export const V_PIER: Rect = { x: 216, y: 304, w: 16, h: 40 };   // 포구 부두
 export const V_PORT: Rect = { x: 216, y: 332, w: 16, h: 12 };   // 대양 출항 트리거(배 필요)
 export const V_PORT_FRONT: Point = { x: 224, y: 296 };          // 여객선 귀향 도착 지점
 
+// 마을 어군은 고정이다 — 대양과 달리 날짜 시드 배치의 범위 밖(schoolsOf가 그대로 돌려준다)
 export const V_SCHOOLS: School[] = [
   { id: 'v-pond-1',  spot: 'pond',  x: 214, y: 118 },
   { id: 'v-pond-2',  spot: 'pond',  x: 244, y: 138 },
@@ -29,7 +30,7 @@ export const VILLAGE: RegionPack = {
   info: {
     shortName: '마을',
     tagline: '모든 낚시꾼의 이야기가 시작되는 곳',
-    lore: '당신이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다 — 배 한 척만 있다면.',
+    lore: '낚시꾼들이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다. 배 한 척만 있다면.',
     tips: [
       '연못과 강은 배 없이 낚시할 수 있어요.',
       '강 다리를 건너 남쪽 포구로 가면 대양으로 출항할 수 있어요 (배 필요).',
@@ -38,7 +39,7 @@ export const VILLAGE: RegionPack = {
     ],
     controls: [
       '이동: 방향키 또는 WASD',
-      '낚시: 어군 옆에서 스페이스(또는 화면 클릭)',
+      '낚시: 어군 옆에서 스페이스(또는 화면 누르기)',
     ],
   },
   w: VILLAGE_W,
@@ -59,13 +60,12 @@ export const VILLAGE: RegionPack = {
   decorations: [
     [40, 70], [330, 60], [400, 130], [80, 270], [380, 280],
   ].map(([x, y]) => ({ kind: 'tree' as const, x, y })),
-  schools: V_SCHOOLS,
   spawn: V_SPAWN,
   triggers: [
-    { rect: V_DOOR, action: 'base', msg: '집이다. 시설을 눌러 정비하자.' },
+    { rect: V_DOOR, action: 'base', msg: '집이에요. 가구를 눌러 정비해 보세요.' },
     { rect: V_PORT, action: 'travel', to: 'world', requiredBoat: 1,
-      msg: '대양으로 출항! 어군을 찾아 항해하자.',
-      blockedMsg: '바다에 나가려면 배가 필요하다. 집의 목공소에서 조각배를 사자.' },
+      msg: '대양으로 출항했어요. 어군을 찾아 항해해 보세요.',
+      blockedMsg: '바다에 나가려면 배가 필요해요. 집의 목공소에서 조각배를 구매해 보세요.' },
   ],
   labels: [
     { text: '포구 — 대양으로', x: V_PIER.x + 8, y: V_PIER.y - 4, color: 'gold', size: 8 },

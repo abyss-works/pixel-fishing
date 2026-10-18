@@ -3,6 +3,7 @@ import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../
 import type { RegionPack } from '../../../game/world/types';
 import { zoneById, zoneOfSpot, topZoneOf } from '../../../game/content/zones';
 import { getSpotState, subscribeSpotState } from '../../../game/world/currentSpot.js';
+import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import TimeBadge from './TimeBadge';
 
 // 미니맵 — 자기 캔버스를 소유하고 변경될 때만 그린다 (메인 rAF와 분리).
@@ -17,6 +18,8 @@ export default function Minimap({ def, boat, covered, onOpenMap }: {
   onOpenMap?: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 어군은 미니맵에만 그린다 — 세션의 배치 날짜가 바뀌면(부트 결과) 다시 그린다
+  const schools = useSchools(def.id);
 
   useEffect(() => {
     if (covered) return;
@@ -26,7 +29,7 @@ export default function Minimap({ def, boat, covered, onOpenMap }: {
       const { pos, zone, spot } = getSpotState();
       if (!pos) return;
       const displayZone = (spot ? zoneOfSpot(spot) : null) ?? (zone ? topZoneOf(zone) : null);
-      renderWorldMap(ctx, def, pos, boat, {
+      renderWorldMap(ctx, def, schools, pos, boat, {
         t: Date.now() / 1000, view: minimapView(def, pos),
         zoneName: displayZone ? zoneById(displayZone)?.name ?? null : null,
       });
@@ -36,7 +39,7 @@ export default function Minimap({ def, boat, covered, onOpenMap }: {
     // 생기 틱 — 위치 변화가 없어도 점멸·bob이 이어지도록 500ms마다 다시 그린다.
     const id = setInterval(draw, 500);
     return () => { unsubscribe(); clearInterval(id); };
-  }, [def, boat, covered]);
+  }, [def, schools, boat, covered]);
 
   return (
     <div className="relative w-full aspect-video">

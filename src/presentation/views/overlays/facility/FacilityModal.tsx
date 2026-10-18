@@ -37,7 +37,9 @@ import Frame from '../../../ui/Frame';
 import ColorSwatch from '../../../ui/ColorSwatch';
 import PriceTag from '../../../ui/PriceTag';
 import SelectList from '../../../ui/SelectList';
-import { fmtGold, fmtNum } from '../../../ui/format';
+import { fmtGold, fmtNum, josa } from '../../../ui/format';
+import { baitEffectLine } from '../../../ui/baitEffects';
+import type { Notify } from '../../../ui/hud/messageFeed';
 import { RarityText } from '../../../ui/fish/RarityTag';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
 export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | null;
@@ -51,7 +53,7 @@ interface Props {
   uid?: string | null;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (msg: string) => void;
+  setToast: Notify;
   onClose: () => void;
 }
 
@@ -67,7 +69,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') onOk(r);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
     });
   };
 
@@ -77,13 +79,13 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
-            setToast(`물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었다!`);
+            setToast(`물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었어요!`, 'gold');
           })} />
       )}
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
           onUpgrade={() => run({ type: 'upgradeRod' }, r => {
-            setToast(`낚싯대가 Lv.${r.state.rod}이 되었다! 입질이 빨라지고 파워도 오른다.`);
+            setToast(`낚싯대가 Lv.${r.state.rod}이 되었어요! 입질이 빨라지고 파워도 올라요.`, 'gold');
           })} />
       )}
       {panel === 'boat' && (
@@ -92,14 +94,14 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
             const { boatName, openedSpots } = selectBoatPurchaseResult(r.state.boat);
             onClose();
             setToast(r.state.boat === 1
-              ? `${boatName} 구매! 이제 포구에서 대양으로 나갈 수 있다.`
-              : `${boatName} 구매! 더 빠르고${openedSpots.length > 0 ? `, [${openedSpots.map(spot => spot.name).join('·')}] 해역이 열렸다!` : ' 튼튼하다.'}`);
+              ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
+              : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join('·')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`, 'gold');
           })} />
       )}
       {panel === 'shop' && (
         <ShopPanel game={game} onClose={onClose} busy={busy}
           onBuy={(baitId, count) => run({ type: 'buyBait', bait: baitId, count }, () => {
-            setToast('미끼를 샀다 — 가방의 아이템 섹션에서 활성화한다.');
+            setToast('미끼를 구매했어요! 가방 탭의 아이템에서 켤 수 있어요.', 'gold');
           })} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
@@ -137,7 +139,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   if (rows.length === 0) {
     return (
       <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}>
-        <Note>가방이 비어 있다. 낚시하러 가자.</Note>
+        <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
       </ModalCard>
     );
   }
@@ -146,13 +148,13 @@ function SellPanel({ game, onSell, onClose, busy }: {
     <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}
       footer={<>
         {lockedCount > 0 && (
-          <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않는다 (가방 탭에서 잠금 해제)</Note>
+          <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요. 잠금은 가방 탭에서 풀 수 있어요.</Note>
         )}
         <CostLine have={game.gold} delta={total} />
       </>}
       confirm={
         <Button variant="primary" disabled={total === 0 || busy} onClick={() => onSell(soldUids)}>
-          판매하기 (+{fmtGold(total)})
+          판매 (+{fmtGold(total)})
         </Button>
       }>
       {/* ── 어종 목록 — 내부 스크롤. 높이 = min(≈30행, 모달 가용 높이) ──
@@ -174,7 +176,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
               <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                 <td>
                   {locked ? (
-                    <span className="text-text-dim cursor-default" title="가방 탭에서 잠금 해제">
+                    <span className="text-text-dim cursor-default" title="잠금은 가방 탭에서 풀 수 있어요">
                       <PixelIcon glyph="lock" size={13} />
                     </span>
                   ) : (
@@ -271,7 +273,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
     <ModalCard title={`낚싯대 강화 — Lv.${game.rod} → Lv.${game.rod + 1}`} onClose={onClose}
       confirm={
         <Button variant="primary" disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
-          강화하기 (-{fmtGold(cost)})
+          강화 (-{fmtGold(cost)})
         </Button>
       }>
       {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세 */}
@@ -281,14 +283,14 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
           {/* 1차: 무엇이 되나 — 그림은 레벨과 무관한 한 장, 레벨은 글자가 말한다 */}
           <HeroHeader sprite={<GearSprite kind="rod" preset="hero" ariaLabel="낚싯대" />}
                        title={`Lv.${game.rod + 1}`}
-                       tags={[`지금 Lv.${game.rod}`, '입질이 빨라진다', '파워 상승']} />
+                       tags={[`지금 Lv.${game.rod}`, '입질 단축', '파워 상승']} />
           {/* 1차: 얼마나 바뀌나 */}
           <StatCompare size="lg" rows={[
             { label: '입질 대기', value: c.bite, next: n.bite, delta: sec(next.biteMax - cur.biteMax) },
             { label: '바 시간', value: c.sweep, next: n.sweep, delta: sec(next.sweep - cur.sweep, 2) },
           ]} />
           {/* 3차: 안내 */}
-          <Note size="xs" className="my-0">상한 없음 — 레벨이 오를수록 체감은 줄어든다. 파워는 해역 요구치와 비교해 스탯창에서 본다.</Note>
+          <Note size="xs" className="my-0">강화에는 상한이 없어요. 레벨이 오를수록 체감은 줄어들어요. 파워가 해역 요구치에 닿는지는 스탯창에서 확인해 보세요.</Note>
           {/* 1차: 살 수 있나 — 버튼 바로 위 */}
           <CostBox>
             <CostLine size="lg" have={game.gold} delta={-cost} />
@@ -319,7 +321,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
       <ModalCard title="조선소" onClose={onClose}>
         <TwoColumn>
           <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
-          <Note className="my-0">이미 최고의 배({preview.boatName})다. 온 바다가 네 것.</Note>
+          <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요. 모든 해역에 나갈 수 있어요.</Note>
         </TwoColumn>
       </ModalCard>
     );
@@ -330,7 +332,7 @@ function BoatPanel({ game, onBuy, onClose, busy }: {
     <ModalCard title="조선소" onClose={onClose}
       confirm={
         <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
-          구매하기 (-{fmtGold(next.price)})
+          구매 (-{fmtGold(next.price)})
         </Button>
       }>
       <TwoColumn>
@@ -382,7 +384,7 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
     <ModalCard title="향료전 — 미끼" onClose={onClose}
       confirm={
         <Button variant="primary" disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
-          구입하기 (-{fmtGold(sel.total)})
+          구매 (-{fmtGold(sel.total)})
         </Button>
       }>
       <TwoColumn>
@@ -411,7 +413,7 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
                          <>보유 <span className="pf-accent">{sel.owned}</span>개</>,
                          ...(discountPct > 0 ? [<>할인 <span className="pf-accent">{discountPct}%</span></>] : []),
                        ]} />
-          <Note size="xs" className="my-0">{sel.bait.desc}</Note>
+          <Note size="xs" className="my-0">{sel.bait.desc} {baitEffectLine(sel.bait)}</Note>
           <StatCompare size="lg" rows={[
             { label: '보유', value: `${sel.owned}개`, next: `${sel.owned + sel.count}개`, delta: `+${sel.count}` },
             { label: '1개 가격', value: <PriceTag list={sel.bait.price} price={sel.unitPrice} size="lg" /> },
@@ -428,13 +430,13 @@ function ShopPanel({ game, onBuy, onClose, busy }: {
               <PriceTag list={sel.listTotal} price={sel.total} size="lg" />
             </div>
             <CostLine size="lg" have={game.gold} delta={-sel.total} />
-            {game.gold < sel.total && <Note tone="warn" size="xs" className="my-0">골드가 부족하다.</Note>}
+            {game.gold < sel.total && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT['not-enough-gold']}</Note>}
           </CostBox>
         </div>
       </TwoColumn>
       <Note size="xs" className="my-0">
-        같은 등급이 조금 더 잘 낚인다. 수동으로 낚아올릴 때마다 하나씩 사라지고, 방치 낚시에는 쓰이지 않는다.
-        산 미끼는 가방 탭의 아이템에서 켠다. 한 번에 하나만 켜진다.
+        미끼는 직접 낚아 올릴 때마다 하나씩 줄고, 방치 낚시에는 쓰이지 않아요.
+        산 미끼는 가방 탭의 아이템에서 켤 수 있어요. 한 번에 하나만 켜져요.
       </Note>
     </ModalCard>
   );

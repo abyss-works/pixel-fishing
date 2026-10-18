@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import { fmtGold } from '../../../../ui/format';
+import { fmtGold, fmtSize, josa } from '../../../../ui/format';
+import { baitBoostText, baitEffectLine } from '../../../../ui/baitEffects';
+import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -42,26 +44,27 @@ export const EXHIBIT_UI_ENABLED = false;
 //
 // 목록은 **기본 전부 닫힘**(사용자 지시 2026-08-27) — 1,500마리 세이브에서 펼침 기본은
 // 스크롤 지옥이다. 개체 선택 화면은 판매 패널이 담당하고(그쪽은 기본 펼침 유지), 가방은
-// 열람 화면이므로 종 머리(마릿수·최대 크기·소계)만으로 훑고 필요한 종만 펼친다.
+// 열람 화면이므로 종 머리(마릿수·소계)만으로 훑고 필요한 종만 펼친다. 개체별 크기는 펼친 줄에서 본다.
 //
 // 종 행 머리 — **고정 그리드**. flex로 나열하면 이름·마릿수 자릿수에 따라 숫자 열이
-// 행마다 어긋나 소계·최대 크기를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
-//   [캐럿] [스프라이트] [이름] [×N] [최대 크기] [소계] [자물쇠]
+// 행마다 어긋나 소계를 세로로 훑을 수가 없다. 개체 줄(InstanceLine)도 같은 이유로 그리드다.
+//   [캐럿] [스프라이트] [이름] [×N] [소계] [자물쇠]
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
-const ROW = 'grid grid-cols-[10px_30px_1fr_28px_76px_52px_22px] items-center gap-1';
+// 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
+const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
 const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
 /** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
 function ItemSection({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
 }) {
   // 보유량 순서는 레지스트리(BAITS) 순서다 — 세이브 items는 맵이라 삽입 순서가 유의미 없음
   const rows = useMemo(() => selectBaitInventory(game.items), [game.items]);
   const activate = (bait: string | null) =>
     when(dispatch({ type: 'setActiveBait', bait }), r => {
-      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
     });
 
   return (
@@ -74,14 +77,14 @@ function ItemSection({ game, dispatch, setToast }: {
             <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
               <span className="w-3 h-3 rounded-full border border-line justify-self-center"
                     style={{ backgroundColor: bait.color }} />
-              <span className="truncate" title={bait.desc}>{bait.name}</span>
+              <span className="truncate" title={`${bait.desc} ${baitEffectLine(bait)}`}>{bait.name}</span>
               <span className="pf-accent text-text-dim text-right">×{count}</span>
               <PillButton
                 type="button"
                 active={active}
                 disabled={!active && count <= 0}
                 aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
-                title={active ? '한 번 더 누르면 끈다' : count <= 0 ? '보유량이 없다' : '같은 등급 물고기 가중치 ×2'}
+                title={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
                 onClick={() => activate(active ? null : bait.id)}
                 className="justify-self-end">
                 <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
@@ -92,8 +95,8 @@ function ItemSection({ game, dispatch, setToast }: {
         })}
       </Frame>
       <Note>
-        활성하면 같은 등급 물고기가 두 배 더 잘 낚인다. 수동으로 낚아올릴 때마다 한 개가 소모되고,
-        방치 획득에는 소모되지 않는다. 구매는 콜롬보항의 향료전에서.
+        미끼를 켜면 {baitBoostText('같은 등급')} 직접 낚아 올릴 때마다 하나씩 줄고,
+        방치 낚시에는 쓰이지 않아요. 미끼는 콜롬보항의 향료전에서 살 수 있어요.
       </Note>
     </div>
   );
@@ -109,7 +112,7 @@ function ArtifactSection({ game }: { game: GameState }) {
         유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
       </PageTitle>
       {owned.length === 0 ? (
-        <Note>아직 유물이 없다. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꾸자.</Note>
+        <Note>아직 유물이 없어요. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
           <Frame divided>
@@ -126,7 +129,7 @@ function ArtifactSection({ game }: { game: GameState }) {
               </div>
             ))}
           </Frame>
-          <Note>유물은 가지고만 있어도 효과가 계속된다. 교환은 항구 수배판의 유물 탭에서.</Note>
+          <Note>유물은 가지고만 있어도 효과가 계속돼요. 교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
       )}
     </div>
@@ -159,9 +162,9 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
                 {fish && <RarityDot rarity={fish.rarity} />}{name}
               </span>
               <span className="pf-accent text-text-dim text-right">
-                {inst.size === null ? '미상' : `${inst.size.toFixed(1)}cm`}
+                {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
-              <PillButton aria-label={`${name} 회수`} title="가방으로 되돌린다"
+              <PillButton aria-label={`${name} 회수`} title="가방으로 되돌려요"
                           onClick={() => onWithdraw(inst, name)}>
                 회수
               </PillButton>
@@ -176,7 +179,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
 export default function BagTab({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
@@ -190,26 +193,26 @@ export default function BagTab({ game, dispatch, setToast }: {
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
       if (r.status !== 'ok') return;
       setToast(locked
-        ? `${label} 잠금 — 판매에서 제외된다.`
-        : `${label} 잠금 해제 — 다시 판매 대상이 된다.`);
+        ? `${josa(label, '을/를')} 잠갔어요. 판매에서 제외돼요.`
+        : `${label}의 잠금을 풀었어요. 다시 판매할 수 있어요.`);
     });
 
   // 전시대 — 칸 선택은 freeExhibitSlot(가장 앞 빈 칸)이 대신한다. 다 찼으면 요청 없이 안내만.
   const exhibitTo = (inst: FishInstance, name: string) => {
     const slot = freeExhibitSlot(game.exhibit);
     if (slot === null) {
-      setToast('전시대가 가득 찼다 — 먼저 회수하자.');
+      setToast('전시대가 가득 찼어요. 먼저 한 마리를 회수해 주세요.', 'warn');
       return;
     }
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot }), r => {
-      if (r.status === 'ok') setToast(`${name} 진열 — 전시 중에는 팔리지 않는다.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      if (r.status === 'ok') setToast(`${josa(name, '을/를')} 진열했어요. 전시 중에는 팔리지 않아요.`);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
     });
   };
   const withdraw = (inst: FishInstance, name: string) =>
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot: null }), r => {
-      if (r.status === 'ok') setToast(`${name} 회수 — 가방으로 돌아왔다.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error]);
+      if (r.status === 'ok') setToast(`${josa(name, '이/가')} 가방으로 돌아왔어요.`);
+      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
     });
 
   // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
@@ -217,7 +220,7 @@ export default function BagTab({ game, dispatch, setToast }: {
   // (잠금 → 해제 순서라 중간에 실패해도 최대 개체는 먼저 보호된다). 변할 게 없으면 요청 없이 안내만.
   const autoLock = () => {
     if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
-      setToast('정리할 잠금이 없다 — 어종마다 가장 큰 물고기만 잠겨 있다.');
+      setToast('정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.');
       return;
     }
     setLockConfirm(true);
@@ -226,10 +229,10 @@ export default function BagTab({ game, dispatch, setToast }: {
     const { lock, unlock } = autoLockPlan;
     setLockConfirm(false);
     const unlockStep = () => {
-      if (unlock.length === 0) { setToast(`가장 큰 물고기 ${lock.length}마리를 잠갔다.`); return; }
+      if (unlock.length === 0) { setToast(`가장 큰 물고기 ${lock.length}마리를 잠갔어요.`); return; }
       when(dispatch({ type: 'setLocked', uids: unlock, locked: false }), r => {
         if (r.status !== 'ok') return;
-        setToast(`가장 큰 물고기만 남기고 정리했다 — ${lock.length}마리 잠금 · ${unlock.length}마리 잠금 해제.`);
+        setToast(`가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`);
       });
     };
     if (lock.length === 0) { unlockStep(); return; }
@@ -264,7 +267,7 @@ export default function BagTab({ game, dispatch, setToast }: {
             {bagCount > 0 && (
               <PillButton
                 aria-label="자동 잠금"
-                title="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 푼다"
+                title="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요"
                 onClick={autoLock}>
                 <PixelIcon glyph="lockOpen" size={12} />
                 자동 잠금
@@ -272,11 +275,11 @@ export default function BagTab({ game, dispatch, setToast }: {
             )}
           </div>
           {lockConfirm && (
-            <ConfirmDialog title="자동 잠금" confirmLabel="정리하기"
+            <ConfirmDialog title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
-                  나머지는 잠금이 풀린다. 손으로 잠근 물고기도 가장 크지 않으면 풀린다.
+                  나머지는 잠금이 풀려요. 직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
                 <p className="text-sm">
                   잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
@@ -288,11 +291,11 @@ export default function BagTab({ game, dispatch, setToast }: {
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
-            <Note>가방이 비어 있다. 어군을 찾아 낚시하자.</Note>
+            <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
           ) : (
             <>
               <Frame divided>
-                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxSize, maxByForm }) => {
+                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
                   // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
@@ -311,10 +314,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                         <span className="truncate">
                           <RarityDot rarity={fish.rarity} />{name}
                         </span>
-                        <span className="pf-accent text-text-dim text-right">×{items.length}</span>
-                        <span className="pf-accent text-text-dim text-right whitespace-nowrap">
-                          {maxSize !== null && `최대 ${maxSize.toFixed(1)}cm`}
-                        </span>
+                        <span className="pf-accent text-text-dim whitespace-nowrap">×{items.length}</span>
                         <span className="pf-accent text-right">{fmtGold(subtotal)}</span>
                         <IconButton
                           glyph={allLocked ? 'lock' : 'lockOpen'} size={14}
@@ -350,10 +350,10 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </Frame>
               <Note>
-                판매 가능 <span className="pf-accent">{fmtGold(total)}</span> · 판매는 집 궤짝/항구 어시장에서.
-                자물쇠는 개체마다 걸 수 있고, 머리의 자물쇠는 그 종 전부에 건다.
-                별은 전시대에 올린다 — 전시 중에는 팔리지 않는다.
-                행 소계는 그 종 판매가 합계다 — 정렬은 등급이 높은 순.
+                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요. 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.
+                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.
+                별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요.
+                행 소계는 그 종의 판매가 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
               </Note>
             </>
           )}

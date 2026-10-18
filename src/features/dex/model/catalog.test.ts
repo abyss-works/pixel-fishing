@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOUNTIES } from '../../../game/content/bounties';
 import { FISH, newState } from '../../../game/rules/logic';
 import { topZoneOfSpot } from '../../../game/content/zones';
-import { selectDexDetailData, selectDexGrid, selectNamedDex } from './catalog';
+import { selectDexDetailData, selectDexGrid, selectNamedDetail, selectNamedDex } from './catalog';
 
 describe('도감 조회 데이터', () => {
   it('폼별 발견 수와 존·수역 어종을 구성한다', () => {
@@ -50,5 +50,27 @@ describe('도감 조회 데이터', () => {
     expect(forms[0].price).toBeGreaterThan(0);
     expect(forms[0].sizePercentile).toBeGreaterThanOrEqual(0);
     expect(forms[1].discovered).toBe(false);
+  });
+});
+
+describe('네임드 상세', () => {
+  const quest = BOUNTIES.find(q => q.difficulty === 'named')!;
+
+  it('토벌 전에는 이름·로어·흔적·전승을 가리고 체력과 보상만 보인다', () => {
+    const d = selectNamedDetail(newState(), quest)!;
+    expect(d.found).toBe(false);
+    expect([d.name, d.lore, d.trace, d.chronicle, d.firstCaught]).toEqual([null, null, null, null, null]);
+    expect(d.hp).toBeGreaterThan(0);
+    expect(d.reward).toBe(quest.reward);
+  });
+
+  it('토벌한 뒤에는 이름·로어·흔적·전승과 처음 토벌한 날을 공개한다', () => {
+    const game = newState();
+    game.dex[quest.targetFish!] = { normal: { count: 1, maxSize: null, first: '2026-10-18' } };
+    const d = selectNamedDetail(game, quest)!;
+    expect(d.found).toBe(true);
+    expect(d.name).not.toBeNull();
+    expect(d.chronicle).toHaveLength(4);
+    expect(d.firstCaught).toBe('2026-10-18');
   });
 });

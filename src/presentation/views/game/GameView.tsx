@@ -11,6 +11,7 @@ import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { RegionId } from '../../../game/content/places';
 import type { Msg } from '../../layouts/hud/useMessageLog';
+import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
@@ -37,7 +38,7 @@ interface GameViewProps {
   scene: SceneRef;
   entryPos: Point | null;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (message: string) => void;
+  setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup: () => void;
   log: Msg[];
@@ -113,9 +114,9 @@ export default function GameView(props: GameViewProps) {
     if (!encounter) return;
     when(props.dispatch({ type: 'resolveChallenge', questId: encounter.quest.id,
       success: r.success, hits: r.hits, misses: r.misses }), result => {
-      if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error]); setTracking(null); return; }
+      if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error], 'warn'); setTracking(null); return; }
       if (r.success) {
-        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했다. 수배판에서 보상을 받자.`);
+        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! 수배판에서 보상을 받을 수 있어요.`, 'gold');
         setTracking(null);
       }
     });

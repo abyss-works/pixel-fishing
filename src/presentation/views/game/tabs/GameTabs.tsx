@@ -19,6 +19,7 @@ import SettingsTab from './settings/SettingsTab';
 import { BAG_SECTIONS, setBagLayout, setBagSection, useBagView } from './bag/bagView';
 import type { BagSection } from './bag/bagView';
 import Sidebar from '../../../layouts/sidebar';
+import type { Notify } from '../../../ui/hud/messageFeed';
 
 interface GameTabsProps {
   region: RegionId;
@@ -26,7 +27,7 @@ interface GameTabsProps {
   setActiveTab: (tab: TabKey) => void;
   game: GameState;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (message: string) => void;
+  setToast: Notify;
   syncLabel: string | null;
   syncState: string;
   account: string | null;

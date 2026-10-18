@@ -6,6 +6,7 @@ import { when } from '../../../shared/lib/when';
 import Button from '../../ui/Button';
 import Note from '../../ui/Note';
 import { useDialogs } from '../../ui/useDialogs';
+import type { Notify } from '../../ui/hud/messageFeed';
 
 // 이사 코드 — 유저 기능에서는 내렸다. 무검증 import가 변조 반입 통로로 실제 악용돼
 // 서버가 소유자 계정·로컬만 받는다. 유저가 저장 실패·계정 전환 때 자동 백업으로 받은 코드를
@@ -13,7 +14,7 @@ import { useDialogs } from '../../ui/useDialogs';
 export default function MigrationCode({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: Notify;
 }) {
   const { input, notice, dialogs } = useDialogs();
 
@@ -35,7 +36,7 @@ export default function MigrationCode({ game, dispatch, setToast }: {
     try {
       parsed = JSON.parse(decodeURIComponent(atob(code.trim())));
     } catch {
-      setToast('이사 코드가 올바르지 않다.');
+      setToast('이사 코드가 올바르지 않다.', 'warn');
       return;
     }
     when(dispatch({ type: 'import', save: parsed }), r => {

@@ -20,8 +20,6 @@ export interface BagRow {
   sized: FishInstance[];
   /** 크기 미상(v0.4.0 이관) — **묶어서 한 줄**. 폼별로 값이 다르니 폼으로만 가른다 */
   unsized: { form: FormId; items: FishInstance[] }[];
-  /** 이 행(어종) 전체의 최대 크기 — 행 머리 요약용. 전부 미상이면 null */
-  maxSize: number | null;
   /** **폼별** 최대 크기 — 개체 줄의 `최대` 배지 기준.
    *  변이는 "종만 같고 다른 개체"라 최대 기록도 폼별 독립이다(rarity-design 7절, 도감도 같다).
    *  종 단위로 재면 일반 42cm가 있을 때 변이 중 가장 큰 놈이 배지를 못 받는다 — 남길지
@@ -40,10 +38,9 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
     if (!fish) continue; // 삭제된 어종 id — 표시에서 제외 (판매 대상에서도 빠진다)
     const row = rows.get(inst.fishId)
       ?? { key: inst.fishId, fish, name: fish.name, items: [], subtotal: 0, sized: [],
-           unsized: [], maxSize: null, maxByForm: {} };
+           unsized: [], maxByForm: {} };
     row.items.push(inst);
     if (inst.size !== null) {
-      row.maxSize = Math.max(row.maxSize ?? 0, inst.size);
       row.maxByForm[inst.form] = Math.max(row.maxByForm[inst.form] ?? 0, inst.size);
     }
     rows.set(inst.fishId, row);

@@ -10,13 +10,15 @@ import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
 import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
-import type { RegionPack } from '../../../world/types';
+import type { RegionPack, School } from '../../../world/types';
 import type { GearView } from '../../pixel/sprites/overlays.js';
 
 /** React 상태 → 캔버스 경계 뷰모델 — 게임 필드가 프레임마다 채워 보낸다.
-    phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단). */
+    phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단).
+    schools = 이 지역의 현재 어군 — 팩 데이터가 아니라 세션(배치 날짜)이 정하므로 뷰로 받는다. */
 export interface FieldView extends GearView {
   boat: number;
+  schools: School[];
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
@@ -74,7 +76,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   pack.flavor?.(ctx, v.t);
 
   // 동적: 어군/낚싯줄/플레이어/타이밍 바
-  drawSchools(ctx, pack.schools, v.boat, v.t, true, 1, v);
+  drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);

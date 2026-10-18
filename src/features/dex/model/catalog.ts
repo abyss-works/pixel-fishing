@@ -108,6 +108,43 @@ export function selectDexDetailData(game: GameState, fish: Fish): DexDetailEntry
   });
 }
 
+export interface NamedDetailData {
+  id: string;
+  fish: Fish;
+  found: boolean;
+  /** 공개 이름 — 토벌 전에는 null */
+  name: string | null;
+  zone: ZoneId;
+  hp: number;
+  reward: number;
+  /** 처음 토벌한 날 — 기록이 없거나 토벌 전이면 null */
+  firstCaught: string | null;
+  /** 도감 로어·흔적·전승은 토벌한 뒤에만 공개한다 */
+  lore: string | null;
+  trace: string | null;
+  chronicle: readonly string[] | null;
+}
+
+/** 네임드 상세 — 수배 의뢰 하나의 대상 네임드와 공개 범위. 대상이 없으면 null */
+export function selectNamedDetail(game: GameState, quest: BountyQuest): NamedDetailData | null {
+  const named = quest.targetFish ? namedById(quest.targetFish) : undefined;
+  if (!named) return null;
+  const found = formDiscovered(game, named.id, 'normal');
+  return {
+    id: named.id,
+    fish: namedFishOf(named),
+    found,
+    name: found ? named.name : null,
+    zone: quest.zone,
+    hp: named.hp,
+    reward: quest.reward,
+    firstCaught: found ? dexRecord(game, named.id, 'normal')?.first ?? null : null,
+    lore: found ? named.lore : null,
+    trace: found ? named.trace : null,
+    chronicle: found ? named.chronicle : null,
+  };
+}
+
 /** 네임드 도감의 발견·해역별 집계와 공개 여부를 만든다.
  *  서브탭은 수배가 있는 존만이다 — 열람 존이 거기 없으면(마을 등) 첫 수배 존으로 대신한다. */
 export function selectNamedDex(game: GameState, requested: ZoneId): NamedDexData {

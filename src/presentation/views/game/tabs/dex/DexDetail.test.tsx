@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FISH, newState } from '../../../../../game/rules/logic';
 
@@ -31,6 +31,12 @@ describe('도감 상세의 크기 순위', () => {
     expect(await screen.findByText('33.3cm')).toBeInTheDocument();
     expect(screen.getByText('나').closest('tr')).toHaveAttribute('aria-current', 'true');
     expect(state.asked).toEqual([['species', fish.id]]);
+  });
+
+  it('크기 분포에 내 최대 기록의 상위 백분율을 표시한다', async () => {
+    show();
+    const chart = await screen.findByRole('img', { name: /내 최대 기록 20\.0cm/ });
+    expect(within(chart).getByText(/^상위 [\d.]+%$/)).toBeInTheDocument();
   });
 
   it('로컬 모드에서는 순위 구역을 숨긴다', async () => {

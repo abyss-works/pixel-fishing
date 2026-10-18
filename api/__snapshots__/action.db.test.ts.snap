@@ -5223,7 +5223,8 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
         },
       },
       "result": {
-        "type": "none",
+        "schoolDay": "2030-03-04",
+        "type": "boot",
       },
     },
     "status": 200,
@@ -5314,7 +5315,8 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
         },
       },
       "result": {
-        "type": "none",
+        "schoolDay": "2030-03-04",
+        "type": "boot",
       },
     },
     "status": 200,
@@ -5514,7 +5516,7 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
         },
       },
       "result": {
-        "desc": "레벨디자인 개편 보상 — 조각배 값",
+        "desc": "조각배 한 척 값의 출항 지원금",
         "gold": 300,
         "type": "coupon",
       },
