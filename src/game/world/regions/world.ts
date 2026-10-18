@@ -2,12 +2,14 @@
 // 세 바다가 **하나의 항해 지역**이 되고, 구 travel 트리거(루손 해협·말라카 해협)는 소멸한다.
 // 지형과 앵커는 지역 설정에서 생성된 마스크 데이터로 결정한다.
 // 이 파일은 게임 의미론만 기술한다: 문자 해석(legend), 시설 크기, 트리거, 텍스트.
+// 어군은 고정 앵커가 아니라 날짜 시드로 절차 배치한다(schoolsOf) — 생성 데이터의 school_* 앵커는
+// 더 이상 읽지 않는다.
 //
 // 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르). 경계 통과
 // 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
 // 4/5/6/7 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
-import type { MapCellDef, Point, Rect, RegionPack, School } from '../types';
+import type { MapCellDef, Point, Rect, RegionPack } from '../types';
 import { compileMap } from '../mask';
 import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW } from './generated/world.mask';
 
@@ -57,30 +59,6 @@ export const TOAMASINA: Rect = { ...A.toamasina, w: 40, h: 41 }; // 투아마시
 export const TOAMASINA_DOCK: Rect = { ...A.t_dock, w: 16, h: 15 };
 export const TOAMASINA_SPAWN: Point = A.t_spawn;
 
-// 특화 해역 어군 2개씩 + 일반 해역(연안) 2~3개 — 구 3지역의 어군을 그대로 계승한다.
-// 어군 좌표는 앵커 파생 — 생성기가 물 위 배치를 보증한다(terrain 검증).
-export const WORLD_SCHOOLS: School[] = [
-  { id: 'w-sea-1',  spot: 'sea',  ...A.school_sea_1 },
-  { id: 'w-sea-2',  spot: 'sea',  ...A.school_sea_2 },
-  { id: 'w-sea-3',  spot: 'sea',  ...A.school_sea_3 },
-  { id: 'w-deep-1', spot: 'deep', ...A.school_deep_1 },
-  { id: 'w-deep-2', spot: 'deep', ...A.school_deep_2 },
-  { id: 'w-dh-1',   spot: 'dragonhole',  ...A.school_dh_1 },
-  { id: 'w-dh-2',   spot: 'dragonhole',  ...A.school_dh_2 },
-  { id: 'w-cw-1',   spot: 'coron',       ...A.school_cw_1 },
-  { id: 'w-cw-2',   spot: 'coron',       ...A.school_cw_2 },
-  { id: 'w-br-1',   spot: 'barrierreef', ...A.school_br_1 },
-  { id: 'w-br-2',   spot: 'barrierreef', ...A.school_br_2 },
-  { id: 'w-i-1',    spot: 'indian',      ...A.school_i_1 },
-  { id: 'w-i-2',    spot: 'indian',      ...A.school_i_2 },
-  { id: 'w-s-1',    spot: 'southindian', ...A.school_s_1 },
-  { id: 'w-s-2',    spot: 'southindian', ...A.school_s_2 },
-  { id: 'w-mz-1',   spot: 'mozstrait',   ...A.school_mz_1 },
-  { id: 'w-mz-2',   spot: 'mozstrait',   ...A.school_mz_2 },
-  { id: 'w-cd-1',   spot: 'comorodeep',  ...A.school_cd_1 },
-  { id: 'w-cd-2',   spot: 'comorodeep',  ...A.school_cd_2 },
-];
-
 export const WORLD: RegionPack = {
   id: 'world',
   name: '대양',
@@ -117,7 +95,6 @@ export const WORLD: RegionPack = {
     { rect: TOAMASINA, sprite: 'harbor' },
   ],
   decorations: [],
-  schools: WORLD_SCHOOLS,
   spawn: WORLD_SPAWN,
   // travel 트리거 없음 — 구역 경계 게이트(Field zoneOf 전이 판정)가 대체한다.
   // 접안 트리거만 4개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).

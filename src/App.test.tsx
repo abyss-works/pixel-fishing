@@ -25,8 +25,9 @@ import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/l
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
-import { V_SPAWN, WORLD_SCHOOLS } from './game/world';
+import { V_SPAWN, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
+import { setSchoolDay } from './features/gameplay/service/schoolDay';
 
 const SAVE_KEY = 'pixel-fishing-save';
 
@@ -418,9 +419,10 @@ describe('R3b: 문(마을로) + 항구 여객선', () => {
 // ---------- 필드: 낚시 상태머신 (Field 단독 하네스 — 사이드바 없이 순수 로직 검증) ----------
 
 const POND_SHORE: Point = { x: 214, y: 92 };   // v-pond-1(214,118) 물가
-// 어군 좌표는 앵커 파생 — 마스크 재생성과 무관하게 항상 어군 위에 선다
-const SEA_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-sea-1')!;  
-const DEEP_SCHOOL: Point = WORLD_SCHOOLS.find(s => s.id === 'w-deep-1')!;
+// 대양 어군은 날짜 시드 배치 — 고정 날짜의 생성 결과에서 자리를 뽑아 항상 어군 위에 선다
+const SCHOOL_DAY = '2026-10-18';
+const SEA_SCHOOL: Point = schoolsOf('world', SCHOOL_DAY).find(s => s.spot === 'sea')!;
+const DEEP_SCHOOL: Point = schoolsOf('world', SCHOOL_DAY).find(s => s.spot === 'deep')!;
 
 let lastGame: GameState;
 const toastFn = vi.fn();
@@ -439,6 +441,7 @@ function Harness({ region, initial, pos }: { region: RegionId; initial: GameStat
 
 function renderField(region: RegionId, pos: Point, initial: Partial<GameState> = {}) {
   toastFn.mockClear();
+  setSchoolDay(SCHOOL_DAY); // 하네스는 boot를 보내지 않으므로 어군 배치 날짜를 직접 고정한다
   vi.useFakeTimers();
   vi.spyOn(Math, 'random').mockReturnValue(0); // wait=biteMin(4s), 추첨=풀 첫 어종, 자동챔질=sweep×0.3
   const init = { ...newState(), ...initial };

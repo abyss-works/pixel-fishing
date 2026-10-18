@@ -9,6 +9,7 @@ import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
+import { setSchoolDay } from './schoolDay';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -82,6 +83,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       if (r.status === 'ok') {
         setGame(r.state);
         settleForcedEncounter(r.result);
+        // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
+        if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
         if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
@@ -100,6 +103,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   useEffect(() => {
     if (!api.auth.isConfigured) {
       void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
+      // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
+      void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
       return;
     }
     (async () => {

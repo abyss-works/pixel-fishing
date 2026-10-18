@@ -23,8 +23,9 @@ export {
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
-export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
+export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_W, WORLD_H,
   HARBOR_DOCK, MANILA_DOCK, COLOMBO_DOCK, MANILA_SPAWN, COLOMBO_SPAWN } from './regions/world';
+export { schoolsOf, generateWorldSchools, SCHOOL_MIN_GAP } from './schools';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
   village: VILLAGE,

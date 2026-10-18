@@ -6,6 +6,7 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
+import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
@@ -90,7 +91,9 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
 export default function Field({
   region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused,
 }: Props) {
-  const [engine] = useState(() => new GameFieldEngine(region, game, initialPos));
+  // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
+  const schools = useSchools(region);
+  const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
@@ -114,6 +117,8 @@ export default function Field({
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
   }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup]);
+
+  useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 
   const fishArtStyle = useFishArtStyle();
   useEffect(() => { engine.setFishArt(fishArtStyle); }, [engine, fishArtStyle]);
