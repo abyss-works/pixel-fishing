@@ -78,7 +78,7 @@ export class ZoneTracker {
       // 게이트 — 진입 요구 배 미달이면 즉시 되밀기 (기준 zone은 그대로다)
       const gate = zoneById(z);
       if (gate?.entryBoat && boat < gate.entryBoat) {
-        return { revert: true, blocked: gate.gateMsg ?? '더 튼튼한 배가 필요하다.', enteredTop: null };
+        return { revert: true, blocked: gate.gateMsg ?? '더 튼튼한 배가 필요해요.', enteredTop: null };
       }
       this.zone = z;
       const top = topZoneOf(z);

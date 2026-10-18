@@ -24,7 +24,7 @@ const DEV_ENV = devEnvOf(DEPLOY_ENV);
 
 function AppContent() {
   const { log, setToast } = useMessageLog([
-    '집이다. 가구를 클릭해 정비하고, 문으로 나가 마을 물가에서 낚시하자.',
+    '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
   const { game, setGame, dispatch, nickname, rename, sync, syncLabel, outdated, load, warmup } = useGame({ setToast });
   const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, load });

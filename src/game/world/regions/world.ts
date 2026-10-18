@@ -88,7 +88,7 @@ export const WORLD: RegionPack = {
   info: {
     shortName: '대양',
     tagline: '세계의 바다가 하나로 이어진다',
-    lore: '한 배로 건너는 세계의 바다. 지역 탭은 지금 서 있는 물의 이야기를 들려준다.',
+    lore: '한 배로 건너는 세계의 바다. 물빛도, 그 아래 사는 것도 지나는 물마다 다르다.',
     tips: [],
     controls: [],
   },
@@ -123,13 +123,13 @@ export const WORLD: RegionPack = {
   // 접안 트리거만 4개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
   triggers: [
     { rect: HARBOR_DOCK, action: 'base', base: 'harbor',
-      msg: '부산항에 접안했다. 시설을 눌러 정비하자.' },
+      msg: '부산항에 접안했어요. 시설을 눌러 정비해 보세요.' },
     { rect: MANILA_DOCK, action: 'base', base: 'manila',
-      msg: '마닐라항에 접안했다. 시설을 눌러 정비하자.' },
+      msg: '마닐라항에 접안했어요. 시설을 눌러 정비해 보세요.' },
     { rect: COLOMBO_DOCK, action: 'base', base: 'colombo',
-      msg: '콜롬보 항에 접안했다. 시설을 눌러 정비하자.' },
+      msg: '콜롬보항에 접안했어요. 시설을 눌러 정비해 보세요.' },
     { rect: TOAMASINA_DOCK, action: 'base', base: 'toamasina',
-      msg: '투아마시나항에 접안했다. 시설을 눌러 정비하자.' },
+      msg: '투아마시나항에 접안했어요. 시설을 눌러 정비해 보세요.' },
   ],
   labels: [
     { text: '부산항', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
