@@ -22,7 +22,7 @@ export {
   ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
-  V_BOATSHOP, V_BOATSHOP_TRIGGER, V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
+  V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
 export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_SCHOOLS, WORLD_W, WORLD_H,
   HARBOR_DOCK, MANILA_DOCK, COLOMBO_DOCK, MANILA_SPAWN, COLOMBO_SPAWN } from './regions/world';
 

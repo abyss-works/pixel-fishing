@@ -39,7 +39,7 @@ import PriceTag from '../../../ui/PriceTag';
 import SelectList from '../../../ui/SelectList';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
-/** 열려 있는 정비 패널 — 시설 클릭(거점)·목공소 트리거(필드)가 연다. null = 닫힘 */
+/** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
 export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | null;
 
 interface Props {

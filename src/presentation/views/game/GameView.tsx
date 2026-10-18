@@ -12,9 +12,9 @@ import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { RegionId } from '../../../game/content/places';
 import type { Msg } from '../../layouts/hud/useMessageLog';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
-import Base from '../../layouts/game-stage/Base';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
+import BaseMenu from './base-menu/BaseMenu';
 import GameTabs from './tabs/GameTabs';
 import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
@@ -82,10 +82,6 @@ export default function GameView(props: GameViewProps) {
       case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty':
         setActionPanel(panel => panel === id ? null : id);
         return;
-      case 'dex':
-        setActionPanel(null);
-        setActiveTab('dex');
-        return;
       case 'rank':
         setActionPanel(null);
         setRankingOpen(true);
@@ -118,11 +114,10 @@ export default function GameView(props: GameViewProps) {
     <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <Base key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null}
-                 onShop={() => setActionPanel(panel => panel === 'boat' ? panel : 'boat')}
                  initialPos={props.entryPos ?? undefined} />
         )}
 
