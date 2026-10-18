@@ -6,7 +6,6 @@ import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import { deleteUserBounty } from './bounty.js';
 import { at } from './json.js';
-import { deleteUserLetters } from './mail.js';
 import { deleteUserProfile } from './profile.js';
 import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
@@ -25,6 +24,7 @@ export interface PurgeTargets {
  * email_change에 주소가 있으면 가입을 시도하고 이메일 확인을 기다리는 계정이다.
  * greatest는 null을 건너뛰므로 시각이 하나라도 있으면 그중 가장 늦은 값이고, 전부 null이면 대상이 아니다.
  * 저장 상태가 없어도 구 saves 행이 있으면 정규화 이전 진행이 남아 있을 수 있어 대상에서 뺀다.
+ * 개발자에게 편지를 보낸 계정은 편지(인증 계정에 연쇄 삭제로 묶여 있다)를 보존하려고 대상에서 뺀다.
  */
 const targetFrom = (cutoffISO: string): SQL => sql`from auth.users u
   left join public.saves_current c on c.user_id = u.id
@@ -33,7 +33,8 @@ const targetFrom = (cutoffISO: string): SQL => sql`from auth.users u
       or (c.user_id is null and not exists (select 1 from public.saves s where s.user_id = u.id)))
     and not coalesce(c.restricted, false)
     and greatest(c.updated_at, u.last_sign_in_at, u.created_at) < ${at(cutoffISO)}
-    and not exists (select 1 from public.admins a where a.user_id = u.id)`;
+    and not exists (select 1 from public.admins a where a.user_id = u.id)
+    and not exists (select 1 from public.letters l where l.user_id = u.id)`;
 
 /** 정리 대상을 마지막 활동이 오래된 순으로 상한까지 고른다. 지우지 않는다 */
 export async function selectPurgeTargets(db: Executor, cutoffISO: string, limit: number): Promise<PurgeTargets> {
@@ -57,7 +58,6 @@ export async function purgeAccount(withTransaction: Database['withTransaction'],
     const { rows } = await tx.execute(sql`select u.id ${targetFrom(cutoffISO)} and u.id = ${uid} for update of u`);
     if (rows.length === 0) return false;
     await deleteUserEvents(tx, uid);
-    await deleteUserLetters(tx, uid);
     await deleteUserBounty(tx, uid);
     await deleteUserProfile(tx, uid);
     await deleteUserSaves(tx, uid);

@@ -23,6 +23,8 @@ export interface AccountSpec {
   admin?: boolean;
   /** saves_current 없이 구 saves 행만 있는 계정 */
   legacySave?: boolean;
+  /** 개발자에게 보낸 편지가 있는 계정 */
+  letter?: boolean;
 }
 
 let seq = 100;
@@ -51,7 +53,7 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   const uid = await seedAccount(client, spec);
   await client.query('insert into public.profiles (user_id, nickname) values ($1, $2)', [uid, spec.nickname]);
   await client.query(`insert into public.events (user_id, type, payload) values ($1, 'boot', '{}')`, [uid]);
-  await client.query(`insert into public.letters (user_id, text) values ($1, '편지')`, [uid]);
+  if (spec.letter) await client.query(`insert into public.letters (user_id, text) values ($1, '편지')`, [uid]);
   await client.query(`insert into public.bounty_licenses (user_id, zone) values ($1, 'pacific')`, [uid]);
   await client.query(`insert into public.bounty_accepts (user_id, zone, port, quest_id) values ($1, 'pacific', 'harbor', 'q1')`, [uid]);
   await client.query(`insert into public.bounty_progress (user_id, zone, quest_id) values ($1, 'pacific', 'q1')`, [uid]);
@@ -78,8 +80,8 @@ export async function rowCounts(client: Client, uid: string): Promise<Record<str
 }
 
 /** seedFullAccount 직후의 표별 행 수 */
-export const seeded = (hasSave: boolean): Record<string, number> => Object.fromEntries([...USER_TABLES, 'auth.users']
-  .map(table => [table, SAVE_TABLES.includes(table) && !hasSave ? 0 : 1]));
+export const seeded = (hasSave: boolean, hasLetter = false): Record<string, number> => Object.fromEntries([...USER_TABLES, 'auth.users']
+  .map(table => [table, (SAVE_TABLES.includes(table) && !hasSave) || (table === 'letters' && !hasLetter) ? 0 : 1]));
 
 /** 계정을 지운 뒤의 표별 행 수 */
 export const GONE: Record<string, number> = Object.fromEntries([...USER_TABLES, 'auth.users'].map(table => [table, 0]));

@@ -171,6 +171,13 @@ describe.each([
     }
   });
 
+  it('편지를 보낸 계정은 대상이 아니고 지우지 않는다', async () => {
+    const writer = await seedFullAccount(client, { ...IDLE, letter: true, nickname: '편지' });
+    expect((await selectPurgeTargets(database.db, CUTOFF, 500)).ids).not.toContain(writer);
+    expect(await purgeAccount(database.withTransaction, writer, CUTOFF)).toBe(false);
+    expect(await rowCounts(client, writer)).toEqual(seeded(true, true));
+  });
+
   it('없는 계정은 false다', async () => {
     expect(await purgeAccount(database.withTransaction, testUid(999_000), CUTOFF)).toBe(false);
   });
