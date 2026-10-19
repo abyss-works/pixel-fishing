@@ -45,11 +45,11 @@ describe('EncounterModal', () => {
     expect(screen.getByRole('button', { name: '챔질' })).toBeInTheDocument();
   });
 
-  it('네임드 체력(메갈로돈 6)만큼 맞히면 이름이 드러나고 토벌 버튼이 결과를 보낸다', () => {
+  it('네임드 체력(메갈로돈 5)만큼 맞히면 이름이 드러나고 토벌 버튼이 결과를 보낸다', () => {
     const { onResolve } = show();
     enter();
     const zoneLefts = new Set<number>();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       zoneLefts.add(pct(document.querySelector('[data-duel="zone"]'), 'left'));
       waitForZone();
       fireEvent.click(screen.getByRole('button', { name: '챔질' }));
@@ -60,13 +60,13 @@ describe('EncounterModal', () => {
     expect(screen.getByText('메갈로돈이 수면 위로 떠올랐다.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '토벌' }));
     expect(onResolve).toHaveBeenCalledTimes(1);
-    expect(onResolve).toHaveBeenCalledWith({ hits: 6, misses: 0, success: true });
+    expect(onResolve).toHaveBeenCalledWith({ hits: 5, misses: 0, success: true });
   });
 
   it('스페이스바도 챔질이 된다', () => {
     show();
     enter();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       waitForZone();
       fireEvent.keyDown(document.body, { code: 'Space' });
     }
@@ -84,10 +84,10 @@ describe('EncounterModal', () => {
   it('맞히면 체력이 줄고, 존 밖에서 치면 도주 게이지가 찬다', () => {
     show();
     enter();
-    expect(screen.getByLabelText('체력 6/6')).toBeInTheDocument();
+    expect(screen.getByLabelText('체력 5/5')).toBeInTheDocument();
     waitForZone();
     fireEvent.click(screen.getByRole('button', { name: '챔질' }));
-    expect(screen.getByLabelText('체력 5/6')).toBeInTheDocument();
+    expect(screen.getByLabelText('체력 4/5')).toBeInTheDocument();
     expect(screen.getByText('명중')).toBeInTheDocument();
     waitForZone(false);
     fireEvent.click(screen.getByRole('button', { name: '챔질' }));

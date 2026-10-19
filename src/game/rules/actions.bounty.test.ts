@@ -373,17 +373,17 @@ describe('resolveChallenge', () => {
   });
 
   it('주장 정합성이 깨지면 bad-request (네임드 체력 미만 히트로 성공 주장)', () => {
-    expect(applyAction(ready(), act({ hits: 5 }), full()))
+    expect(applyAction(ready(), act({ hits: 4 }), full()))
       .toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('성공 기준은 네임드 체력이다 — 둔클레오스(체력 9)는 8히트 성공 주장을 거부한다', () => {
+  it('성공 기준은 네임드 체력이다 — 둔클레오스(체력 8)는 7히트 성공 주장을 거부한다', () => {
     const q = 'madagascar-named-elder-sixgill';
     const madaDeps = () => deps({ ...dyn,
       bounty: ctx({ active: [q], tickets: [{ questId: q, issuedAt: '2026-10-09T00:30:00.000Z' }] }) });
-    expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()))
+    expect(applyAction(ready(), act({ questId: q, hits: 7 }), madaDeps()))
       .toEqual({ ok: false, error: 'bad-request' });
-    expect(applyAction(ready(), act({ questId: q, hits: 9 }), madaDeps()).ok).toBe(true);
+    expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()).ok).toBe(true);
   });
 
   it('성공하면 도감에 오르고 감사 이벤트를 남긴다', () => {
