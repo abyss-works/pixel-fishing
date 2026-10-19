@@ -5,7 +5,9 @@ import type { Artifact } from '../../game/content/artifacts';
 export function artifactEffectLines(a: Artifact): string[] {
   const out: string[] = [];
   if ((a.effects.sail ?? 0) > 0) out.push(`항해 속도 +${Math.round(a.effects.sail! * 100)}%`);
-  if (a.effects.nightImmune) out.push('밤 이동 감속 제거');
+  if ((a.effects.duelSpeedupCut ?? 0) > 0) {
+    out.push(`네임드 결투 가속 −${Math.round(a.effects.duelSpeedupCut! * 100)}%`);
+  }
   if ((a.effects.baitDiscount ?? 0) > 0) {
     out.push(`미끼값 −${Math.round(a.effects.baitDiscount! * 100)}%`);
   }

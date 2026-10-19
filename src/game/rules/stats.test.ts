@@ -26,10 +26,9 @@ describe('이동 속도 — 씬 movement로 분기', () => {
     expect(st.value).toBeCloseTo(BOATS[2].speed * 0.85, 10);
   });
 
-  it('유물 — 해구의 이빨은 밤 감속 제거 + 항해 +5%', () => {
+  it('유물 — 해구의 이빨은 결투 유물이라 이동 속도를 바꾸지 않는다', () => {
     const st = moveSpeed(s({ boat: 3, artifacts: ['abyss-angler'] }), 'sail', true);
-    expect(st.mods.map(m => m.id)).toEqual(['relic-abyss-angler']);
-    expect(st.value).toBeCloseTo(BOATS[2].speed * 1.05, 10);
+    expect(st.mods.map(m => m.id)).toEqual(['night']);
   });
 
   it('유물 — 침선의 나침반은 항해 +10%, 도보는 그대로', () => {

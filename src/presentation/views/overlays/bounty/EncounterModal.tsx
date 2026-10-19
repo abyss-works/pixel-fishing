@@ -38,7 +38,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   onResolve: (r: EncounterResult) => void;
   onClose: () => void;
 }) {
-  const { named, fish, found, sighting, sweepMs, hp } = data;
+  const { named, fish, found, sighting, sweepMs, hp, speedupScale } = data;
   const [phase, setPhase] = useState<Phase>('intro');
   const [run, setRun] = useState<ChallengeRun>(newChallenge);
   const [cursor, setCursor] = useState(0);
@@ -68,13 +68,13 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     setRun(next);
     setFlash(hit ? 'hit' : 'miss');
     lastStrikeRef.current = now;
-    sweepRef.current = duelSweepMs(sweepMs, next.hits);
+    sweepRef.current = duelSweepMs(sweepMs, next.hits, speedupScale);
     if (!next.done) return;
     doneRef.current = true;
     setPhase(next.success ? 'won' : 'lost');
     // 실패는 확정 버튼 없이 바로 보낸다 — 서버가 도전권을 지우고 흔적이 사라진다
     if (!next.success) resolveRef.current({ hits: next.hits, misses: next.misses, success: false });
-  }, [sweepMs, hp]);
+  }, [sweepMs, hp, speedupScale]);
 
   const strike = () => {
     if (phase !== 'run' || runRef.current.done || doneRef.current) return;
@@ -101,7 +101,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     uRef.current = 0;
     lastTickRef.current = start;
     lastStrikeRef.current = start;
-    sweepRef.current = duelSweepMs(sweepMs, 0);
+    sweepRef.current = duelSweepMs(sweepMs, 0, speedupScale);
     const id = setInterval(() => {
       if (runRef.current.done || doneRef.current) return;
       const now = Date.now();
@@ -110,7 +110,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
       if (now - lastStrikeRef.current >= DUEL_IDLE_SWEEPS * sweepRef.current) advance(false, now);
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [phase, sweepMs, sample, advance]);
+  }, [phase, sweepMs, speedupScale, sample, advance]);
 
   // 명중·빗나감 표시는 잠깐만 보인다
   useEffect(() => {

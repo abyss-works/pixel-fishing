@@ -50,6 +50,13 @@ describe('결투 속도', () => {
     expect(duelSweepMs(1000, 100)).toBe(350);
   });
 
+  it('가속 배수만큼 히트당 감소폭이 줄고, 가속은 세 번에서 멈춘다', () => {
+    expect(duelSweepMs(1000, 0, 0.9)).toBe(800);
+    expect(duelSweepMs(1000, 1, 0.9)).toBe(665);
+    expect(duelSweepMs(1000, 3, 0.9)).toBe(395);
+    expect(duelSweepMs(1000, 6, 0.9)).toBe(395);
+  });
+
   it('한 번 왕복하도록 치지 않으면 도주로 센다', () => {
     expect(DUEL_IDLE_SWEEPS).toBe(2);
   });
