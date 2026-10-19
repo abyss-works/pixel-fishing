@@ -1,56 +1,39 @@
-// 현상금 서버 헬퍼 — KST 경계 집계와 DB 행 → 주입 진실 변환.
-// 계약 테스트는 리듀서의 수주 상한과 납품 완료 규칙을 검증한다.
-// 여기는 서버만 아는 것(날짜 경계·행 해석)만 다룬다.
+// 현상금 서버 헬퍼 — DB 행 → 주입 진실 변환과 만료 판정.
+// 계약 테스트는 리듀서의 수주 한도와 납품 완료 규칙을 검증한다.
+// 여기는 서버만 아는 것(행 해석·하루 경계 적용)만 다룬다.
 import { describe, it, expect } from 'vitest';
-import { kstDayStartISO, toBountyCtx } from './action.js';
+import { catchProgressQuests, expiredQuests, toBountyCtx } from './action.js';
+import { gameDayStartISO } from '../src/game/rules/time.js';
 
-describe('kstDayStartISO', () => {
-  it('KST 오후는 같은 날 자정을 UTC로 돌려준다', () => {
-    // 2026-08-22 15:00 KST = 06:00Z
-    expect(kstDayStartISO(Date.parse('2026-08-22T06:00:00.000Z')))
-      .toBe('2026-08-21T15:00:00.000Z'); // 08-22 00:00+09:00
-  });
-
-  it('KST 자정 1ms 전은 전날로 떨어진다', () => {
-    expect(kstDayStartISO(Date.parse('2026-08-21T14:59:59.999Z')))
-      .toBe('2026-08-20T15:00:00.000Z');
-  });
-
-  it('KST 자정 정각은 당일로 올라간다', () => {
-    expect(kstDayStartISO(Date.parse('2026-08-21T15:00:00.000Z')))
-      .toBe('2026-08-21T15:00:00.000Z');
-  });
-});
+// 2026-08-22 15:00 KST의 게임 날짜는 그날 04:00 KST에 시작했다 = 2026-08-21T19:00:00Z
+const dayStart = gameDayStartISO('2026-08-22T06:00:00.000Z');
+const BEFORE = '2026-08-21T18:59:59.999Z'; // 03:59:59.999 KST — 전날
 
 describe('toBountyCtx', () => {
   const rows = {
-    accepts: [
-      { accepted_at: '2026-08-22T01:00:00.000Z', quest_id: 'pacific-easy-common' }, // 22일 KST — 집계
-      { accepted_at: '2026-08-21T14:00:00.000Z', quest_id: 'pacific-easy-common' }, // 21일 KST — 제외
-      { accepted_at: '2026-08-22T02:00:00.000Z', quest_id: 'pacific-easy-rare' }, // 타항구분 없이 통합에만
+    clears: [
+      { kind: 'general', cleared_at: '2026-08-22T01:00:00.000Z' }, // 22일 04:00 KST 이후 — 집계
+      { kind: 'general', cleared_at: BEFORE },                      // 전날 — 제외
+      { kind: 'named', cleared_at: '2026-08-22T02:00:00+00:00' },   // Postgres 표기 — 집계
     ],
     progress: [
-      { quest_id: 'pacific-easy-common', progress: 250 }, // 수량 충족 — 완료
-      { quest_id: 'pacific-easy-rare', progress: 3 },     // 미달 — 진행 중
+      { quest_id: 'pacific-easy-common', progress: 250, started_at: '2026-08-22T00:00:00+00:00' }, // 수량 충족 — 완료
+      { quest_id: 'pacific-easy-rare', progress: 3, started_at: '2026-08-22T00:00:00+00:00' },     // 미달 — 진행 중
     ],
     tickets: [],
   };
-  const dayStart = '2026-08-21T15:00:00.000Z'; // 08-22 KST 자정
 
-  it('일반·네임드 카운트를 분리한다', () => {
-    const ctx = toBountyCtx(rows, dayStart);
-    expect(ctx.acceptsToday).toBe(2);
-    expect(ctx.namedToday).toBe(0);
+  it('오늘 클리어를 갈래별로 센다 — 경계 이전 클리어는 세지 않는다', () => {
+    expect(toBountyCtx(rows, dayStart).clearsToday).toEqual({ general: 1, named: 1 });
   });
 
-  it('네임드 수주는 전역 카운터로 분리된다', () => {
-    const ctx = toBountyCtx({
-      ...rows,
-      accepts: [...rows.accepts,
-        { accepted_at: '2026-08-22T03:00:00.000Z', quest_id: 'pacific-named-megalodon' }],
-    }, dayStart);
-    expect(ctx.namedToday).toBe(1);
-    expect(ctx.acceptsToday).toBe(2);
+  it('클리어 기록이 없으면 두 갈래 모두 0이다', () => {
+    expect(toBountyCtx({ ...rows, clears: [] }, dayStart).clearsToday).toEqual({ general: 0, named: 0 });
+  });
+
+  it('수주만으로는 클리어로 세지 않는다 — 진행 행이 있어도 클리어 0이다', () => {
+    expect(toBountyCtx({ ...rows, clears: [] }, dayStart).clearsToday).toEqual({ general: 0, named: 0 });
+    expect(toBountyCtx({ ...rows, clears: [] }, dayStart).active).toHaveLength(2);
   });
 
   it('완료와 진행 중을 구분한다', () => {
@@ -59,9 +42,46 @@ describe('toBountyCtx', () => {
     expect(ctx.active).toEqual(['pacific-easy-common', 'pacific-easy-rare']);
   });
 
-  it('도전권 목록을 그대로 주입한다', () => {
+  it('경계 이전에 수주하고 마치지 못한 의뢰는 진행 중에서 빠진다 — 03:59:59.999와 04:00 정각이 갈린다', () => {
     const ctx = toBountyCtx({
       ...rows,
+      progress: [
+        { quest_id: 'pacific-easy-common', progress: 249, started_at: BEFORE },
+        { quest_id: 'pacific-easy-rare', progress: 0, started_at: dayStart },
+      ],
+    }, dayStart);
+    expect(ctx.active).toEqual(['pacific-easy-rare']);
+    expect(ctx.complete).toEqual([]);
+  });
+
+  it('경계 이전에 수주했어도 마친 의뢰는 남고 보상을 받을 수 있다', () => {
+    const ctx = toBountyCtx({
+      ...rows,
+      progress: [{ quest_id: 'pacific-easy-common', progress: 250, started_at: BEFORE }],
+    }, dayStart);
+    expect(ctx.active).toEqual(['pacific-easy-common']);
+    expect(ctx.complete).toEqual(['pacific-easy-common']);
+  });
+
+  it('만료된 의뢰의 도전권은 주입하지 않는다', () => {
+    const ctx = toBountyCtx({
+      ...rows,
+      progress: [
+        { quest_id: 'pacific-named-megalodon', progress: 0, started_at: BEFORE },
+        { quest_id: 'seasia-named-leviathan', progress: 0, started_at: dayStart },
+      ],
+      tickets: [
+        { quest_id: 'pacific-named-megalodon', issued_at: '2026-08-21T18:30:00.000Z' },
+        { quest_id: 'seasia-named-leviathan', issued_at: '2026-08-22T01:00:00.000Z' },
+      ],
+    }, dayStart);
+    expect(ctx.tickets).toEqual([{ questId: 'seasia-named-leviathan', issuedAt: '2026-08-22T01:00:00.000Z' }]);
+  });
+
+  it('수주 중인 의뢰의 도전권 목록을 그대로 주입한다', () => {
+    const ctx = toBountyCtx({
+      ...rows,
+      progress: [{ quest_id: 'pacific-named-megalodon', progress: 0, started_at: '2026-08-22T00:00:00.000Z' }],
       tickets: [{ quest_id: 'pacific-named-megalodon', issued_at: '2026-08-22T01:00:00.000Z' }],
     }, dayStart);
     expect(ctx.tickets).toEqual([
@@ -71,8 +91,37 @@ describe('toBountyCtx', () => {
 
   it('없는 의뢰의 진행 행은 무시한다', () => {
     const ctx = toBountyCtx(
-      { ...rows, progress: [{ quest_id: 'nope', progress: 99 }] }, dayStart);
+      { ...rows, progress: [{ quest_id: 'nope', progress: 99, started_at: dayStart }] }, dayStart);
     expect(ctx.complete).toEqual([]);
     expect(ctx.active).toEqual([]);
+  });
+});
+
+describe('expiredQuests — 정리할 만료 의뢰', () => {
+  it('경계 이전에 수주하고 수량 미달인 행만 돌려준다', () => {
+    const expired = expiredQuests({
+      clears: [], tickets: [],
+      progress: [
+        { quest_id: 'pacific-easy-common', progress: 249, started_at: BEFORE },     // 만료
+        { quest_id: 'pacific-easy-rare', progress: 10, started_at: BEFORE },        // 수량 충족(10) — 남는다
+        { quest_id: 'pacific-easy-epic', progress: 0, started_at: dayStart },       // 오늘 수주 — 남는다
+        { quest_id: 'nope', progress: 0, started_at: BEFORE },                      // 없는 의뢰 — 다루지 않는다
+      ],
+    }, dayStart);
+    expect(expired).toEqual([{ id: 'pacific-easy-common', count: 250 }]);
+  });
+});
+
+describe('catchProgressQuests — 캐치가 진전시키는 의뢰', () => {
+  const caught = (spot: string, fishId: string) => [{ type: 'catch', payload: { spot, fishId } }];
+
+  it('수주 중인 일반 의뢰만 진전시킨다 — 목록에 없는 만료 의뢰는 올리지 않는다', () => {
+    // mackerel은 태평양 일반 등급
+    expect(catchProgressQuests(caught('sea', 'mackerel'), ['pacific-easy-common'])).toEqual(['pacific-easy-common']);
+    expect(catchProgressQuests(caught('sea', 'mackerel'), [])).toEqual([]);
+  });
+
+  it('네임드는 캐치로 진전하지 않는다', () => {
+    expect(catchProgressQuests(caught('sea', 'megalodon'), ['pacific-named-megalodon'])).toEqual([]);
   });
 });

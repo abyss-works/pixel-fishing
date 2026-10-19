@@ -211,6 +211,16 @@ describe('src 구조 경계', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('브라우저 코드는 관리자 뷰와 RPC를 직접 읽지 않고 서버 읽기 함수에 맡긴다', () => {
+    // 뷰 이름(v_*)과 supabase RPC 호출이 주석을 뺀 코드에 없어야 한다
+    const direct = /\bv_[a-z0-9_]+\b|\.rpc\(/;
+    const offenders = Object.entries(sources)
+      .map(([key, src]) => ({ path: sourcePath(key), code: src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') }))
+      .filter(({ path, code }) => !isTestOrStory(path) && direct.test(code))
+      .map(({ path }) => path);
+    expect(offenders).toEqual([]);
+  });
+
   it('의뢰 스냅샷은 platform API 또는 의뢰 service를 통해서만 읽는다', () => {
     const directRead = /import\s+[^;]*\breadBounty\b[^;]*\bfrom\s*["']([^"']+)["']/;
     const offenders = Object.entries(sources)

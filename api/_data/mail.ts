@@ -1,4 +1,5 @@
 // 편지(letters) 쓰기 소유 모듈 — letters는 콜드 아카이브가 지우지 않는 편지 본문의 정본이다.
+// 사용자 단위로 지우는 경로는 계정 정리뿐이다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { GameEvent } from '../../src/game/rules/actions.js';

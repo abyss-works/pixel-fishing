@@ -31,6 +31,9 @@ import { parseAction } from '../src/game/rules/actionSchema.js';
 import { isDebugTableCommand } from '../src/game/rules/debug.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { challengeWindowMs } from '../src/game/rules/challenge.js';
+import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
+import type { QuestRow } from '../src/game/rules/bountyRows.js';
+import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { SPOTS } from '../src/game/content/spots.js';
@@ -39,7 +42,10 @@ import { APP_VERSION } from '../src/version.js';
 import { bearerToken, verifyJwtLocal } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
-import { acceptFragments, advanceProgress, challengeFragments, consumeDelivery, debugFragment, ticketFragment } from './_data/bounty.js';
+import {
+  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDelivery, debugFragment,
+  expiredCleanup, ticketFragment,
+} from './_data/bounty.js';
 import { consumeRelief, findCoupon } from './_data/codes.js';
 import { COMMIT_GUARD, commitAction, runFollowUps } from './_data/commit.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext } from './_data/load.js';
@@ -80,7 +86,7 @@ export function debugTriggerAllowed({ vercelEnv, localOrigin, owner }: {
   return localOrigin || owner;
 }
 
-/** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 상한과 같은 함수를 쓴다 */
+/** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
 export type DebugTablePlan =
   | { table: string; op: 'delete'; since?: { column: string; iso: string } }
   | { table: string; op: 'update'; values: Record<string, unknown> };
@@ -92,13 +98,14 @@ export function debugTablePlan(command: DebugTableCommand, nowMs: number): Debug
     case 'bounty.clearTickets':
       return { table: 'bounty_tickets', op: 'delete' };
     case 'bounty.resetToday':
-      return { table: 'bounty_accepts', op: 'delete', since: { column: 'accepted_at', iso: kstDayStartISO(nowMs) } };
+      return { table: 'bounty_clears', op: 'delete', since: { column: 'cleared_at', iso: gameDayStartISO(new Date(nowMs).toISOString()) } };
     case 'bounty.clearProgress':
       return { table: 'bounty_progress', op: 'delete' };
   }
 }
 
-// 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국)
+// 첫 조우일은 유저 체감 날짜 — 서버는 UTC라 KST(UTC+9)로 고정 계산 (친구 그룹 전원 한국).
+// 달력 날짜다. 바운티 헌팅의 하루(의뢰 배정·만료·클리어 한도)는 04:00 경계의 게임 날짜를 쓴다(gameDayOf).
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
 /** 3소스 → GameState 조립 */
@@ -125,30 +132,30 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
-// KST 자정(UTC ISO) — todayKST()와 같은 시계. 일일 집계의 경계 단일 출처.
-export function kstDayStartISO(nowMs: number): string {
-  const day = new Date(nowMs + 9 * 3600_000).toISOString().slice(0, 10);
-  return new Date(`${day}T00:00:00+09:00`).toISOString();
-}
+/** 진행 행(DB 표기) → 판정 함수의 입력 */
+const questRows = (rows: BountyRows): QuestRow[] =>
+  rows.progress.map(p => ({ questId: p.quest_id, progress: Number(p.progress), startedAt: p.started_at }));
 
-/** DB 행 → 리듀서 주입 진실. 경계 이전 수주는 세지 않고, 미등록 의뢰 행은 무시한다.
- *  일반·네임드 카운터는 분리된다 */
+/** DB 행 → 리듀서 주입 진실. 하루의 시작 이전에 수주하고 마치지 못한 의뢰는 없는 것으로 친다(진행도·도전권 포함).
+ *  마쳐서 보상을 받을 수 있는 의뢰는 날이 바뀌어도 남는다. 미등록 의뢰 행은 무시한다.
+ *  클리어는 갈래별로 센다 */
 export function toBountyCtx(rows: BountyRows, dayStartISO: string): BountyCtx {
-  const todays = rows.accepts.filter(a => a.accepted_at >= dayStartISO);
-  const isNamed = (questId: string) => bountyById(questId)?.difficulty === 'named';
-  const general = todays.filter(a => !isNamed(a.quest_id));
-  const known = rows.progress.filter(p => bountyById(p.quest_id));
+  const { live } = splitQuestRows(questRows(rows), dayStartISO);
+  const liveIds = new Set(live.map(r => r.questId));
   return {
-    acceptsToday: general.length,
-    namedToday: todays.length - general.length,
-    tickets: (rows.tickets ?? []).filter(t => bountyById(t.quest_id)).map(t => ({
+    clearsToday: clearsOf(rows.clears.map(c => ({ kind: c.kind, clearedAt: c.cleared_at })), dayStartISO),
+    tickets: rows.tickets.filter(t => liveIds.has(t.quest_id)).map(t => ({
       questId: t.quest_id, issuedAt: t.issued_at,
     })),
-    complete: known
-      .filter(p => p.progress >= bountyById(p.quest_id)!.count)
-      .map(p => p.quest_id),
-    active: known.map(p => p.quest_id),
+    complete: live.filter(r => r.progress >= bountyById(r.questId)!.count).map(r => r.questId),
+    active: live.map(r => r.questId),
   };
+}
+
+/** 정리할 만료 의뢰 — 의뢰 id와 수량(SQL이 같은 조건을 다시 걸 때 쓴다) */
+export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: string; count: number }[] {
+  return splitQuestRows(questRows(rows), dayStartISO).expired
+    .map(r => ({ id: r.questId, count: bountyById(r.questId)!.count }));
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
@@ -256,7 +263,9 @@ async function route(req: Req, res: Res): Promise<void> {
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   const wantsBounty = BOUNTY_ACTIONS.has(action.type)
     && (action.type === 'catch' || typeof (action as { questId?: unknown }).questId === 'string');
-  const dayStart = kstDayStartISO(Date.now());
+  // 하루의 경계 — 의뢰 배정·만료·클리어 한도가 모두 이 게임 날짜(KST 04:00)를 쓴다. 한 요청 안에서는 한 시각으로 정한다
+  const requestISO = new Date().toISOString();
+  const dayStart = gameDayStartISO(requestISO);
   const loaded = await step('db-read', { uid, action: action.type }, () => loadContext(db, uid, {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
     bountyDayStart: wantsBounty ? dayStart : null,
@@ -375,15 +384,17 @@ async function route(req: Req, res: Res): Promise<void> {
   // 라이선스 소유·일일 카운트·진행도·도전권은 saves가 아니라 전용 테이블에 있다.
   // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
   let bounty: ActionDeps['bounty'] = null;
+  let expired: ReturnType<typeof expiredQuests> = []; // 이번 읽기에서 만료로 판정한 의뢰 — 응답 뒤에 정리한다
   if (wantsBounty) {
-    const rows = loaded.bounty ?? { accepts: [], progress: [], tickets: [] };
+    const rows = loaded.bounty ?? { clears: [], progress: [], tickets: [] };
     bounty = toBountyCtx(rows, dayStart);
+    expired = expiredQuests(rows, dayStart);
 
-    // 일일 의뢰 검증 — 오늘 그 사람에게 뜬 의뢰가 아니면 변조다.
+    // 일일 의뢰 검증 — 오늘(게임 날짜) 그 사람에게 뜬 의뢰가 아니면 변조다.
     // 리듀서는 uid를 몰라 서버가 여기서 잠근다.
     if (action.type === 'acceptQuest') {
       const quest = bountyById(action.questId);
-      const offered = quest && dailyQuestFor(quest.zone, quest.difficulty, uid, todayKST());
+      const offered = quest && dailyQuestFor(quest.zone, quest.difficulty, uid, gameDayOf(requestISO));
       if (!offered || offered.id !== action.questId) {
         throw new ApiError(422, 'bad-request');
       }
@@ -429,7 +440,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 확정 — 낙관 락 갱신과, 그것이 성공했을 때만 쓰는 행(개체·도감·수배·편지)을 한 문장으로 쓴다.
   // 읽은 version이 그대로가 아니면 아무것도 쓰지 않고 409를 돌려준다. 클라이언트(HttpGameGateway)가
-  // 최신 상태 위에 1회 재시도한다. 수주 경합(멀티탭 동시 수주)은 일일 상한 +1 이내로 묶인다 — 수용.
+  // 최신 상태 위에 1회 재시도한다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
   const nowISO = new Date().toISOString();
   // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다(Ruling 2026-10-07).
   const eventNow = nowISO;
@@ -437,7 +448,12 @@ async function route(req: Req, res: Res): Promise<void> {
   const fragments: (SQL | null)[] = [...writeFragments(guard, uid, out.writes, nowISO)];
   if (action.type === 'acceptQuest' && typeof action.questId === 'string' && typeof action.port === 'string') {
     const quest = bountyById(action.questId);
-    if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO));
+    if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO, dayStart));
+  }
+  // 클리어 기록 — 보상을 주는 납품·토벌과 같은 확정 문장에서 쓴다. 리듀서가 완료를 이미 검증했다.
+  if (action.type === 'deliverBounty' && typeof action.questId === 'string') {
+    const quest = bountyById(action.questId);
+    if (quest) fragments.push(clearFragment(guard, uid, quest, nowISO));
   }
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
@@ -463,14 +479,16 @@ async function route(req: Req, res: Res): Promise<void> {
     () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO), fragments));
   if (!committed) throw new ApiError(409, 'version-conflict');
 
-  // 후속 쓰기 — 이벤트 append, 주기 스냅샷, 캐치의 의뢰 진행. 유실 허용 묶음이라 응답 뒤에 실행하고
+  // 후속 쓰기 — 이벤트 append, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.
   // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
-  const followUps = [eventsInsert(uid, out.events, eventNow)];
+  // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
+  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow)];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
   if (action.type === 'catch' && bounty) {
-    followUps.push(advanceProgress(uid, catchProgressQuests(out.events, loaded.bounty?.progress ?? []), nowISO));
+    followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));
   }
+  followUps.push(...expiredCleanup(uid, expired, dayStart));
   const actionType = action.type;
   waitUntil(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
@@ -489,14 +507,14 @@ async function route(req: Req, res: Res): Promise<void> {
   res.status(200).json({ patch, result: out.result });
 }
 
-/** 캐치가 진전시키는 일반 의뢰 — 네임드는 결투 성공(resolveChallenge)으로만 진전한다 */
-function catchProgressQuests(events: readonly GameEvent[], progress: readonly { quest_id: string }[]): string[] {
+/** 캐치가 진전시키는 일반 의뢰 — 수주 중(만료되지 않은) 의뢰만 본다. 네임드는 결투 성공(resolveChallenge)으로만 진전한다 */
+export function catchProgressQuests(events: readonly GameEvent[], activeIds: readonly string[]): string[] {
   const caught = events.find(e => e.type === 'catch');
   const spot = (caught?.payload as { spot?: unknown } | undefined)?.spot;
   const fishId = (caught?.payload as { fishId?: unknown } | undefined)?.fishId;
   if (typeof spot !== 'string' || typeof fishId !== 'string') return [];
-  return progress
-    .map(p => bountyById(p.quest_id))
+  return activeIds
+    .map(id => bountyById(id))
     .filter(q => q && q.difficulty !== 'named' && matchBountyCatch(q, spot as SpotId, fishId))
     .map(q => q!.id);
 }

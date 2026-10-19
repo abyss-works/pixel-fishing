@@ -1,8 +1,9 @@
 // 개요 탭 — "살아 있는가 · 이상한 일이 진행 중인가"를 한 화면으로.
-// 레이아웃(사용자 지시 반영): [KPI 격자 5] 아래 본문을 좌우 분할
-//   좌 = 최근 이벤트 피드(넓게 스크롤) / 우 = 위험 신호 카드열(제재·연타·반입).
-// Note 텍스트에 묻혔던 위험 신호가 우측 고정 카드로 승격됐다.
+// 레이아웃: 지표 줄(5장) 아래에 칸 둘을 좌우로 놓는다.
+//   왼쪽 = 최근 이벤트 피드(넓게 스크롤) / 오른쪽 = 위험 신호(제재·연타·반입) 목록.
+// 위험 신호는 본문 안내문에 묻히지 않도록 오른쪽 고정 칸의 건수로 세운다.
 import DataTable from '../../../ui/DataTable';
+import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, EVENT_LABELS, eventSummary, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
@@ -11,12 +12,11 @@ import { readAdminOverview } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { KpiCard, KpiGrid, ChartSection, TabState } from '../charts';
-import Frame from '../../../ui/Frame';
+import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
 
 const DAYS = 30;
 
-// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 KPI '—'와 빈 표를 그린다
+// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 지표 '—'와 빈 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminOverview>> = [[], [], [], [], [], []];
 
 export default function OverviewTab() {
@@ -26,7 +26,7 @@ export default function OverviewTab() {
     useAdminQuery(adminKeys.overview(DAYS), () => readAdminOverview(DAYS), granted);
 
   const [users, daily, quality, recent, flags, imports] = data ?? EMPTY;
-  // 7일 낚시 KPI는 "조회 전"과 "0건"을 구분한다 — 도착 전에는 '—'
+  // 7일 낚시 지표는 "조회 전"과 "0건"을 구분한다 — 도착 전에는 '—'
   const loaded = data !== null;
   const dauToday = daily[0]?.dau ?? null;
   const wau7 = daily[0]?.wau7 ?? null;
@@ -34,23 +34,23 @@ export default function OverviewTab() {
   const metrics = selectOverviewMetrics(users, flags, imports, quality);
 
   return (
-    <div className="flex flex-col gap-3">
-      <KpiGrid>
-        <KpiCard label="등록 유저" value={fmtNum(users.length)} />
-        <KpiCard label="금일 DAU" value={dauToday === null ? '—' : fmtNum(dauToday)}
+    <TabPage title="개요" context="등록 유저와 접속·낚시 지표를 한눈에 보고, 위험 신호를 확인해요.">
+      <KpiRow>
+        <KpiTile label="등록 유저" value={fmtNum(users.length)} />
+        <KpiTile label="금일 DAU" value={dauToday === null ? '—' : fmtNum(dauToday)}
                  hint={`최근 7일 WAU ${wau7 === null ? '—' : fmtNum(wau7)}`} />
-        <KpiCard label="최근 7일 낚시" value={loaded ? fmtNum(metrics.catch7d) : '—'}
-                 hint="catch 이벤트 합계" />
-        <KpiCard label="보유 골드 합" value={fmtNum(metrics.goldTotal)} />
-        <KpiCard label="명성 합" value={fmtNum(metrics.fameTotal)} />
-      </KpiGrid>
+        <KpiTile label="최근 7일 낚시" value={loaded ? fmtNum(metrics.catch7d) : '—'}
+                 hint="낚시 이벤트 합계" />
+        <KpiTile label="보유 골드 합" value={fmtNum(metrics.goldTotal)} />
+        <KpiTile label="명성 합" value={fmtNum(metrics.fameTotal)} />
+      </KpiRow>
 
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
-      {/* 좌: 피드(1fr) / 우: 위험 신호 카드열(고정폭) — xl 미만에서는 세로 적층 */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-3 items-start">
-        <ChartSection title="최근 이벤트 피드">
-          <div className="max-h-[420px] overflow-y-auto">
+      {/* 왼쪽 피드(1fr) / 오른쪽 위험 신호(고정폭) — xl 미만에서는 세로로 쌓는다 */}
+      <CellGrid side>
+        <Cell title="최근 이벤트 피드" flush>
+          <div className="pf-scroll-panel max-h-[420px] overflow-y-auto px-1">
             <DataTable>
               <thead>
                 <tr><th className="text-left">시각</th><th className="text-left">유형</th>
@@ -72,46 +72,44 @@ export default function OverviewTab() {
                 ))}
                 {recent.length === 0 &&
                   <tr><td colSpan={4} className="text-text-dim text-center py-3">
-                    {granted ? '아직 이벤트가 없다.' : '운영 DB 연결 후 채워진다.'}
+                    {granted ? '아직 이벤트가 없어요.' : '운영 DB에 연결하면 채워져요.'}
                   </td></tr>}
               </tbody>
             </DataTable>
           </div>
-        </ChartSection>
+        </Cell>
 
-        <div className="flex flex-col gap-2">
-          <RiskCard label="제재 계정" count={metrics.restrictedCount}
-                    hint="saves_current.restricted 플래그 — 활동 403 차단 중"
-                    tone={metrics.restrictedCount > 0 ? 'danger' : undefined} />
-          <RiskCard label="연타 플래그 유저" count={metrics.spamUsers}
-                    hint="최근 7일 캐치 간격 <2초 — 물리적으로 불가한 연타"
-                    tone={metrics.spamUsers > 0 ? 'warn' : undefined} />
-          <RiskCard label="이사 코드 반입" count={imports.length}
-                    hint="import 액션 원장 — 운영자 전용 경로의 흔적"
-                    tone={imports.length > 0 ? 'warn' : undefined} />
+        <Cell title="위험 신호" flush divided>
+          <RiskRow label="제재 계정" count={metrics.restrictedCount}
+                   hint="제재 플래그가 켜져서 활동이 막힌 계정이에요."
+                   tone="danger" />
+          <RiskRow label="연타 플래그 유저" count={metrics.spamUsers}
+                   hint="최근 7일 동안 낚시 간격이 2초보다 짧았던 유저예요. 사람이 낼 수 없는 간격이에요."
+                   tone="warn" />
+          <RiskRow label="이사 코드 반입" count={imports.length}
+                   hint="운영자 전용 경로로 반입한 기록이에요."
+                   tone="warn" />
           {metrics.riskTotal > 0 && (
-            <Note size="2xs" className="my-0 px-1">
-              상세 판독은 <span className="pf-accent text-gold">이상탐지</span> 탭에서.
+            <Note size="2xs" className="my-0 px-3 py-2">
+              자세한 내용은 플레이어 탭의 <span className="pf-accent text-gold">이상탐지</span>에서 볼 수 있어요.
             </Note>
           )}
-        </div>
-      </div>
-    </div>
+        </Cell>
+      </CellGrid>
+    </TabPage>
   );
 }
 
-// 위험 신호 카드 — 숫자 하나 + 근거 한 줄. 클릭 없음(탐색은 탭으로 한다)
-function RiskCard({ label, count, hint, tone }: {
+// 위험 신호 한 줄 — 건수 하나와 그 근거 한 줄. 누르는 동작은 없다(자세한 내용은 플레이어 탭에서 본다)
+function RiskRow({ label, count, hint, tone }: {
   label: string; count: number; hint: string;
-  tone?: 'warn' | 'danger';
+  tone: 'warn' | 'danger';
 }) {
   const active = count > 0;
   return (
-    <Frame className={cx('px-3 py-2',
-                       tone === 'danger' && active && 'border-danger/50',
-                       tone === 'warn' && active && 'border-gold/40')}>
+    <div className="px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs">{label}</span>
+        <span className="text-sm">{label}</span>
         <span className={cx('text-lg pf-accent',
                             !active ? 'text-text-dim'
                             : tone === 'danger' ? 'text-danger' : 'text-gold')}>
@@ -119,9 +117,8 @@ function RiskCard({ label, count, hint, tone }: {
         </span>
       </div>
       <Note size="2xs" className="my-0">{hint}</Note>
-    </Frame>
+    </div>
   );
 }
-
 
 const shortUid = (uid: string): string => uid.slice(0, 8);

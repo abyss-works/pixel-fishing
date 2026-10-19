@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isNight, dayPhase, DAY_START_MIN, NIGHT_START_MIN, gameHour, formatGameClock, darkness,
-  schoolDayOf,
+  gameDayOf, gameDayStartISO,
 } from './time';
 
 const iso = (min: number): string => {
@@ -80,20 +80,41 @@ describe('UI 파생 — 게임 시각·어둠 강도', () => {
   });
 });
 
-describe('schoolDayOf — KST 04:00 경계의 어군 배치 날짜', () => {
+describe('gameDayOf — KST 04:00 경계의 게임 날짜', () => {
   it('KST 04:00 이전은 전날로 센다', () => {
     // 2026-10-19 03:59:59.999 KST = 2026-10-18T18:59:59.999Z
-    expect(schoolDayOf('2026-10-18T18:59:59.999Z')).toBe('2026-10-18');
-    // 2026-10-19 00:00 KST(자정 직후)도 아직 전날 배치다
-    expect(schoolDayOf('2026-10-18T15:00:00.000Z')).toBe('2026-10-18');
+    expect(gameDayOf('2026-10-18T18:59:59.999Z')).toBe('2026-10-18');
+    // 2026-10-19 00:00 KST(자정 직후)도 아직 전날이다
+    expect(gameDayOf('2026-10-18T15:00:00.000Z')).toBe('2026-10-18');
   });
   it('KST 04:00 정각부터 당일이다', () => {
     // 2026-10-19 04:00:00 KST = 2026-10-18T19:00:00Z
-    expect(schoolDayOf('2026-10-18T19:00:00.000Z')).toBe('2026-10-19');
+    expect(gameDayOf('2026-10-18T19:00:00.000Z')).toBe('2026-10-19');
     // 2026-10-19 12:00 KST
-    expect(schoolDayOf('2026-10-19T03:00:00.000Z')).toBe('2026-10-19');
+    expect(gameDayOf('2026-10-19T03:00:00.000Z')).toBe('2026-10-19');
   });
   it('UTC 날짜가 아니라 KST 체감 날짜를 돌려준다 — UTC 23시는 KST 다음날 08시', () => {
-    expect(schoolDayOf('2026-10-18T23:00:00.000Z')).toBe('2026-10-19');
+    expect(gameDayOf('2026-10-18T23:00:00.000Z')).toBe('2026-10-19');
+  });
+});
+
+describe('gameDayStartISO — 게임 날짜가 시작된 순간(그날의 KST 04:00)', () => {
+  it('04:00 직전은 전날의 04:00을 돌려준다', () => {
+    // 2026-10-19 03:59:59.999 KST → 시작은 2026-10-18 04:00 KST = 2026-10-17T19:00:00Z
+    expect(gameDayStartISO('2026-10-18T18:59:59.999Z')).toBe('2026-10-17T19:00:00.000Z');
+  });
+  it('04:00 정각은 그날의 04:00, 곧 자기 자신이다', () => {
+    expect(gameDayStartISO('2026-10-18T19:00:00.000Z')).toBe('2026-10-18T19:00:00.000Z');
+  });
+  it('낮 시각은 같은 날의 04:00을 돌려준다', () => {
+    // 2026-10-19 12:00 KST
+    expect(gameDayStartISO('2026-10-19T03:00:00.000Z')).toBe('2026-10-18T19:00:00.000Z');
+  });
+  it('시작 순간은 게임 날짜가 바뀌는 지점과 정확히 일치한다', () => {
+    for (const now of ['2026-10-18T18:59:59.999Z', '2026-10-18T19:00:00.000Z', '2026-10-19T03:00:00.000Z', '2026-10-19T18:59:59.999Z']) {
+      const start = gameDayStartISO(now);
+      expect(gameDayOf(start)).toBe(gameDayOf(now));
+      expect(gameDayOf(new Date(Date.parse(start) - 1).toISOString())).not.toBe(gameDayOf(now));
+    }
   });
 });

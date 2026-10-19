@@ -74,6 +74,7 @@ class LocalAdmin implements AdminApi {
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
+  balanceLive(_days?: number): Promise<never> { return rejected(); }
   projectRef(): string | null {
     return null;
   }

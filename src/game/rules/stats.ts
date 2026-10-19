@@ -53,8 +53,7 @@ export function moveSpeed(state: GameState, movement: Movement, night = false): 
     const bonus = movement === 'sail' ? (a.effects.sail ?? 0) : 0;
     if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
   }
-  const nightImmune = ARTIFACTS.some(a => owned.has(a.id) && a.effects.nightImmune);
-  if (night && !nightImmune) mods.push({
+  if (night) mods.push({
     id: 'night', label: '밤 — 어둠 속 이동 감속',
     delta: base * (NIGHT_SPEED_FACTOR - 1),
   });

@@ -58,8 +58,8 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   },
   { id: 'bounty.clearTickets', group: 'bounty', label: '흔적 지우기', hint: '도전권을 모두 지운다.', params: [] },
   {
-    id: 'bounty.resetToday', group: 'bounty', label: '오늘 수주 초기화',
-    hint: '오늘 수주 기록을 지워 일일 상한을 되돌린다.', params: [],
+    id: 'bounty.resetToday', group: 'bounty', label: '오늘 클리어 초기화',
+    hint: '오늘 클리어 기록을 지워 일일 한도를 되돌린다.', params: [],
   },
   { id: 'bounty.clearProgress', group: 'bounty', label: '진행 의뢰 정리', hint: '진행 중 의뢰를 모두 지운다.', params: [] },
 ];

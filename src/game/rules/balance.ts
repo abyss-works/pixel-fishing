@@ -1,6 +1,7 @@
 // 밸런스 상수 — 튜닝 가능한 모든 수치는 이 파일에만 둔다 
 // 여기 값을 바꾸는 것만으로 게임 감각이 조정되어야 하고, 로직 파일에 수치를 흘리지 않는다.
 
+import type { BountyKind } from '../content/bounties.js';
 import type { RarityId } from '../content/rarity.js';
 import type { GameAction } from './actions.js';
 
@@ -70,18 +71,22 @@ export const BAIT_BUY_MAX = 50;
 export const EXHIBIT_SLOTS = 3;
 
 
-// 바운티 헌팅 일일 수주 상한 — 일반은 전 해역 통합 1회,
-// 네임드는 전역에서 1회만 진행할 수 있으며 항구별 상한은 없다.
-// (한 항구에서 여러 번 수주 가능). 리셋 경계는 KST 체감 날짜라 서버가 판단한다.
+// 바운티 헌팅 일일 클리어 상한 — 수주가 아니라 클리어(수배판에서 보상을 받은 납품·토벌)를 센다.
+// 일반 의뢰는 전 구역 통합, 네임드 토벌은 전역에서 따로 센다. 항구별 상한은 없다.
+// 두 갈래 모두 한 번에 하나만 수주할 수 있다. 하루는 KST 04:00에 바뀐다(게임 날짜) — 서버가 판단한다.
 export const BOUNTY_DAILY_CAP = 1; // 일반 의뢰 하루 1회(2026-10-17, 3회 → 1회 · 보상 5배)
 export const BOUNTY_NAMED_DAILY_CAP = 1;
+
+/** 갈래의 하루 클리어 상한 */
+export const bountyDailyCap = (kind: BountyKind): number =>
+  kind === 'named' ? BOUNTY_NAMED_DAILY_CAP : BOUNTY_DAILY_CAP;
 
 // 네임드 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
 // 명중하면 즉시 획득이 아니라 도전권을 발급한다.
 // Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_RATE = 1 / 1000;
 
-// 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 6~마다가스카르 9)만큼 맞히면 성공, 3번째 실패에 탈락.
+// 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 5~마다가스카르 8)만큼 맞히면 성공, 3번째 실패에 탈락.
 // 화면은 결투(왕복 커서·옮겨 가는 존)다.
 // 존 폭은 고정 관대값이다(자리만 옮긴다 — 수역 게이트와 무관, 어렵게 하지 않는다).
 export const CHALLENGE_WINDOW_MS = 4 * 3600_000; // 도전권 유효 4시간 — 방치 중 조우해도 복귀까지 남도록

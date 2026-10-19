@@ -28,7 +28,7 @@ import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
 import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
-import { isNight, schoolDayOf } from './time.js';
+import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 
 export type GameAction =
@@ -46,7 +46,7 @@ export type GameAction =
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
-  | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 상한은 서버 주입 진실로
+  | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
@@ -73,7 +73,7 @@ export interface ActionDeps {
   dynamicCoupon?: { gold: number; desc: string } | null;
   /** 지원 코드 자산 — 서버가 reliefs 테이블을 선소비한 뒤 공급한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
-  /** 수배 DB 진실 — 서버가 라이선스·일일 카운트·완료 목록을 조회해 공급한다 (relief 선례).
+  /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
 }
@@ -84,7 +84,7 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
-  /** schoolDay = 이 세션의 대양 어군 배치 날짜(KST 04:00 경계) — 시계의 정본은 서버다 */
+  /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
   | { type: 'none' };
 
@@ -495,7 +495,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const buildId = typeof action.buildId === 'string'
         ? action.buildId.trim().slice(0, 64) : '';
       return {
-        ok: true, state, result: { type: 'boot', schoolDay: schoolDayOf(deps.now) },
+        ok: true, state, result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }
@@ -518,8 +518,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'acceptQuest': {
-      // 수주도 상태가 아니다 — 상한 소모·진행 행은 서버가 bounty_accepts·bounty_progress에
-      // 쓴다. 리듀서는 형태·위치·주입 진실을 검증하고 감사 흔적만 남긴다.
+      // 수주도 상태가 아니다 — 수주 기록·진행 행은 서버가 bounty_accepts·bounty_progress에 쓴다.
+      // 하루 한도는 수주가 아니라 클리어(아래 납품)가 쓴다. 리듀서는 형태·위치·주입 진실을
+      // 검증하고 감사 흔적만 남긴다.
       if (typeof action.questId !== 'string' || typeof action.port !== 'string') {
         return { ok: false, error: 'bad-request' };
       }
@@ -532,6 +533,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'deliverBounty': {
       // 납품은 골드를 만든다 — 완료 여부는 서버 주입(DB 진행도)으로만 증명된다.
+      // 서버가 같은 확정 문장에서 bounty_clears에 클리어를 남겨 하루 한도를 쓴다.
       // 네임드 토벌에는 교환 재료 1개가 따라온다 (유물 교환의 유일한 입구).
       if (typeof action.questId !== 'string') return { ok: false, error: 'bad-request' };
       const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);

@@ -29,9 +29,9 @@ describe('named 데이터 계약', () => {
     }
   });
 
-  it('결투 체력은 태평양 6에서 구역마다 1씩 늘어난다 — 뒤 구역 네임드일수록 어렵다', () => {
+  it('결투 체력은 태평양 5에서 구역마다 1씩 늘어난다 — 뒤 구역 네임드일수록 어렵다', () => {
     expect(Object.fromEntries(NAMED.map(n => [n.zones[0], n.hp])))
-      .toEqual({ pacific: 6, seasia: 7, indian: 8, madagascar: 9 });
+      .toEqual({ pacific: 5, seasia: 6, indian: 7, madagascar: 8 });
   });
 
   it('출현 수역(spot)이 있으면 그 수역은 출현 해역 안에 있다', () => {

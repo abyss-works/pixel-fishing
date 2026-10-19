@@ -17,7 +17,7 @@ export function createApi(): ApiClient {
 export const api = createApi();
 
 export { when } from '../../shared/lib/when';
-export { readBounty, kstDay } from '../adapters/bounty';
+export { readBounty, kstDay, gameDay } from '../adapters/bounty';
 export { readRanking } from '../adapters/ranking';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
@@ -26,5 +26,5 @@ export type {
   RankingBoardId, RankingRow, RankingBoard,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
 } from './types';

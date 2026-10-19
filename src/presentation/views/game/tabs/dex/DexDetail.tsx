@@ -7,7 +7,7 @@ import RankList from '../../../../ui/RankList';
 import RankingStatus from '../../../overlays/ranking/RankingStatus';
 import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
-import DetailCell from './DetailCell';
+import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import FishSprite from '../../../../ui/fish/FishSprite';
@@ -45,7 +45,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
 
       {/* 메인 그리드 2×2 — 위 줄(표본 | 크기 분포), 아래 줄(기록 | 크기 순위). 같은 줄의 칸은 높이를 맞춘다 */}
       <div className="grid grid-cols-2 gap-x-5 gap-y-4 max-[640px]:grid-cols-1">
-        <DetailCell title="표본">
+        <TitledCell title="표본">
           <Inset tone="light" className="flex flex-1 flex-col
                  bg-[linear-gradient(180deg,var(--c-surface-2),color-mix(in_oklab,var(--c-bg)_40%,var(--c-surface))_85%)]">
             <div className="flex items-center justify-between gap-2 px-2 pt-3">
@@ -60,15 +60,15 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               {known ? form.lore : '…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.'}
             </p>
           </Inset>
-        </DetailCell>
+        </TitledCell>
 
-        <DetailCell title="크기 분포">
+        <TitledCell title="크기 분포">
           <Inset className="flex flex-1 flex-col justify-center px-3 pt-3 pb-2">
             <SizeDistributionChart data={distribution} />
           </Inset>
-        </DetailCell>
+        </TitledCell>
 
-        <DetailCell title="기록">
+        <TitledCell title="기록">
           <Inset divided className="flex-1">
             <KeyValueRow label="가격" value={<span className="pf-accent">{known ? fmtGold(form.price) : '???'}</span>} />
             <KeyValueRow label="잡은 수" value={<span className="pf-accent">{known ? `${form.count}마리` : '???'}</span>} />
@@ -78,10 +78,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               : '???'} />
             <KeyValueRow label="처음 만난 날" value={known ? (form.firstCaught ?? '알 수 없음') : '???'} />
           </Inset>
-        </DetailCell>
+        </TitledCell>
 
         {!ranking.offline && (
-          <DetailCell title="크기 순위">
+          <TitledCell title="크기 순위">
             <Inset className="flex flex-1 flex-col">
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
@@ -102,7 +102,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                 </div>
               )}
             </Inset>
-          </DetailCell>
+          </TitledCell>
         )}
       </div>
     </Modal>

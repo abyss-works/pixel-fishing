@@ -58,85 +58,75 @@ class HttpAuth implements AuthApi {
   }
 }
 
-// ---------- 관리자 읽기 (0010 뷰/RPC) ----------
-// 전송 상세(뷰 이름, PostgREST 파라미터, KST day 컷오프)는 여기에 갇힌다 —
-// 소비처(기능 계층)는 AdminApi 인터페이스만 본다.
+// ---------- 관리자 읽기 (서버 읽기 함수) ----------
+// 관리자 조회는 서버 읽기 함수가 대신 읽는다. 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다.
+// 전송 상세(요청 이름, 인자, 세션 토큰)는 여기에 갇히고, 소비처(기능 계층)는 AdminApi 인터페이스만 본다.
 
 import type {
   AdminApi,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
 } from '../api/types';
 
-/** day 문자열 비교 = ISO 사전순. KST 축이라 서버 todayKST 공식과 동일하게 자른다 */
-const kstDayCutoff = (days: number): string =>
-  new Date(Date.now() + 9 * 3600_000 - (days - 1) * 86_400_000)
-    .toISOString().slice(0, 10);
-
-async function selectView<T>(view: string, days?: number): Promise<T[]> {
+/** 서버 읽기 함수에 조회 하나를 요청한다. 세션이 없거나 응답이 실패면 던진다 */
+async function readAdmin<T>(query: string, params: Record<string, string | number> = {}): Promise<T> {
   if (!supabase) throw new Error('클라우드 미설정 — 관리자 데이터는 운영 DB에서만 읽힌다');
-  let q = supabase.from(view).select('*');
-  if (days !== undefined) q = q.gte('day', kstDayCutoff(days));
-  const { data, error } = await q;
-  if (error) throw new Error(`${view} 조회 실패: ${error.message}`);
-  return (data ?? []) as T[];
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('세션이 없어 관리자 데이터를 읽지 못했다');
+  const search = new URLSearchParams({ q: query });
+  for (const [key, value] of Object.entries(params)) search.set(key, String(value));
+  const res = await fetch(`/api/admin?${search}`, { headers: { authorization: `Bearer ${session.access_token}` } });
+  if (!res.ok) {
+    const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
+    throw new Error(`${query} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+  }
+  return await res.json() as T;
 }
 
 class HttpAdmin implements AdminApi {
-  async access(): Promise<{ kind: 'granted' | 'denied'; uid: string | null }> {
-    if (!supabase) throw new Error('클라우드 미설정');
-    // uid 먼저 — 비권한 판정이라도 안내문에는 본인 식별값이 필요하다
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user.id ?? null;
-    const { data, error } = await supabase.rpc('is_admin');
-    if (error) throw new Error(`권한 판정 실패: ${error.message}`);
-    return { kind: data === true ? 'granted' : 'denied', uid };
+  access(): Promise<{ kind: 'granted' | 'denied'; uid: string }> {
+    return readAdmin('access');
   }
 
   users(): Promise<AdminUserRow[]> {
-    // 최근 행동순이 대시보드 기본 정렬 — 뷰가 보장하지 않으므로 여기서 고정한다
-    return selectView<AdminUserRow>('v_admin_users').then(rows =>
-      rows.sort((a, b) => String(b.last_action_at ?? '')
-        .localeCompare(String(a.last_action_at ?? ''))));
+    return readAdmin('users');
   }
   dailyActive(days: number): Promise<AdminDailyActiveRow[]> {
-    return selectView<AdminDailyActiveRow>('v_daily_active', days);
+    return readAdmin('dailyActive', { days });
   }
   retention(): Promise<AdminRetentionRow[]> {
-    return selectView<AdminRetentionRow>('v_retention_cohorts');
+    return readAdmin('retention');
   }
   economy(days: number): Promise<AdminEconomyRow[]> {
-    return selectView<AdminEconomyRow>('v_economy_daily', days);
+    return readAdmin('economy', { days });
   }
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
-    return selectView<AdminBountyFunnelRow>('v_bounty_funnel_daily', days);
+    return readAdmin('bountyFunnel', { days });
   }
   catchQuality(days: number): Promise<AdminCatchQualityRow[]> {
-    return selectView<AdminCatchQualityRow>('v_catch_quality', days);
+    return readAdmin('catchQuality', { days });
   }
   spamFlags(): Promise<AdminSpamFlagRow[]> {
-    return selectView<AdminSpamFlagRow>('v_spam_flags');
+    return readAdmin('spamFlags');
   }
   imports(): Promise<AdminImportLogRow[]> {
-    return selectView<AdminImportLogRow>('v_import_log');
+    return readAdmin('imports');
   }
   dexMismatch(): Promise<AdminDexMismatchRow[]> {
-    return selectView<AdminDexMismatchRow>('v_dex_mismatch');
+    return readAdmin('dexMismatch');
   }
   recentEvents(): Promise<AdminEventRow[]> {
-    // 뷰 LIMIT 유지를 위해 id 내림차순 재정렬만
-    return selectView<AdminEventRow>('v_events_recent').then(rows => rows.sort((a, b) => b.id - a.id));
+    return readAdmin('recentEvents');
   }
   letters(): Promise<AdminLetterRow[]> {
-    return selectView<AdminLetterRow>('v_admin_letters'); // 뷰가 최신순 보장
+    return readAdmin('letters');
   }
-  async userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
-    if (!supabase) throw new Error('클라우드 미설정');
-    const { data, error } = await supabase.rpc('fn_user_events',
-      { p_uid: userId, p_limit: limit });
-    if (error) throw new Error(`유저 이벤트 조회 실패: ${error.message}`);
-    return ((data ?? []) as AdminEventRow[]).sort((a, b) => a.id - b.id);
+  userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
+    return readAdmin('userEvents', { user: userId, limit });
+  }
+  balanceLive(days?: number): Promise<BalanceLive> {
+    return readAdmin('balanceLive', days === undefined ? {} : { days });
   }
   projectRef(): string | null {
     const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;

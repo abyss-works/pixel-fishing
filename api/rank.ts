@@ -3,9 +3,8 @@
 // 세션 토큰이 있으면 내 순위를 함께 돌려주고, 없으면 상위 목록만 돌려주며 짧게 공유 캐시한다.
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다. default export = Node 시그니처.
-import { createClient } from '@supabase/supabase-js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { bearerToken, verifyJwtLocal } from './_auth/session.js';
+import { bearerToken, userOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import { dexBoard, fameBoard, speciesBoard } from './_data/rank.js';
 import { FISH } from '../src/game/rules/logic.js';
@@ -57,15 +56,4 @@ async function read<T>(run: () => Promise<T>): Promise<T> {
   } catch (e) {
     throw new ApiError(500, 'db-read', {}, { cause: e });
   }
-}
-
-/** 토큰의 사용자 — JWT secret이 있으면 로컬 검증(왕복 0), 없으면 인증 서버 조회 */
-async function userOf(token: string): Promise<string | null> {
-  const secret = process.env.SUPABASE_JWT_SECRET;
-  if (secret) return verifyJwtLocal(token, secret);
-  const url = process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new ApiError(500, 'server-config');
-  const { data, error } = await createClient(url, serviceKey, { auth: { persistSession: false } }).auth.getUser(token);
-  return error || !data.user ? null : data.user.id;
 }

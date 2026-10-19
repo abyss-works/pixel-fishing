@@ -5,7 +5,7 @@ import { CHALLENGE_WINDOW_MS } from '../../../game/rules/balance';
 const issued = '2026-10-16T00:00:00.000Z';
 const now = Date.parse(issued) + 8 * 60_000;
 const snap = (over: Partial<Parameters<typeof selectTraceCard>[0] & object> = {}) => ({
-  acceptsToday: 0, namedToday: 0, progress: [], tickets: [], ...over,
+  clearsToday: { general: 0, named: 0 }, progress: [], tickets: [], ...over,
 });
 
 describe('흔적 카드 선택', () => {

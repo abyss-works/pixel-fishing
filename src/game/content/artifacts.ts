@@ -9,8 +9,8 @@ import type { BountyZone } from './bounties.js';
 export interface ArtifactEffects {
   /** 항해 속도 가산율 (예: 0.03 = +3%) */
   sail?: number;
-  /** 밤 이동 감속 면역 */
-  nightImmune?: boolean;
+  /** 네임드 결투 가속 단위 감소율 — 가속 배수에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
+  duelSpeedupCut?: number;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
   /** 돌연변이 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
@@ -21,7 +21,7 @@ export interface Artifact {
   id: string;
   name: string;
   zone: BountyZone;
-  /** 유물 급 — 희귀가 기본이고, 낚시 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
+  /** 유물 급 — 희귀가 기본이고, 낚시·결투 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
   grade: RarityId;
   /** 교환 재료 — items 축 id/이름. 네임드 토벌 시 1개 지급, 교환 시 1개 소모 */
   materialId: string;
@@ -32,10 +32,10 @@ export interface Artifact {
 
 export const ARTIFACTS: readonly Artifact[] = [
   // id는 세이브의 소유 목록·재료 스택이 참조하므로 개명 전 값을 유지한다
-  { id: 'abyss-angler', name: '해구의 이빨', zone: 'pacific', grade: 'rare',
+  { id: 'abyss-angler', name: '해구의 이빨', zone: 'pacific', grade: 'epic',
     materialId: 'mat-abyss-lantern', materialName: '돌이 된 이빨',
-    lore: '해구 바닥에서 건져 올린 거대한 이빨이다. 뱃머리에 매달면 밤바다의 물고기들도 먼저 길을 비켜 선다.',
-    effects: { sail: 0.05, nightImmune: true } },
+    lore: '해구 바닥에 돌처럼 쌓여 있던 거대한 이빨이다. 이 이빨을 지닌 배와 맞붙으면 깊은 곳의 것들도 더 큰 것을 떠올리고 몸을 사린다.',
+    effects: { duelSpeedupCut: 0.1 } },
   { id: 'wreck-compass', name: '침선의 나침반', zone: 'seasia', grade: 'rare',
     materialId: 'mat-wreck-compass', materialName: '이끼 낀 나침반',
     lore: '코론 침선의 선실에서 건져 올린 나침반이다. 바다가 자리를 고쳐 누운 밤에도 바늘은 새로 열린 물길을 먼저 가리킨다.',

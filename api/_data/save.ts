@@ -140,4 +140,12 @@ export async function deleteSavesByIds(db: Executor, ids: readonly number[]): Pr
   await db.execute(sql`delete from public.saves where id = any(${idArray(ids)})`);
 }
 
+/** 계정 정리에서 사용자의 개체·도감·스냅샷과 저장 상태 행을 모두 지운다. 저장 상태 행은 마지막에 지운다 */
+export async function deleteUserSaves(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.fish_instances where user_id = ${uid}`);
+  await db.execute(sql`delete from public.records where user_id = ${uid}`);
+  await db.execute(sql`delete from public.saves where user_id = ${uid}`);
+  await db.execute(sql`delete from public.saves_current where user_id = ${uid}`);
+}
+
 const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}}`}::bigint[]`;
