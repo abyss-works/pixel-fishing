@@ -1,3 +1,4 @@
+import { ARTIFACTS } from '../../../game/content/artifacts';
 import { bountyById } from '../../../game/content/bounties';
 import type { BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
@@ -18,6 +19,15 @@ export interface EncounterData {
   sweepMs: number;
   /** 결투 체력 — 이만큼 맞혀야 토벌한다 (네임드 데이터) */
   hp: number;
+  /** 결투 가속 배수 — 네임드 배수 × 보유 유물 배수 */
+  speedupScale: number;
+}
+
+/** 보유 유물이 결투 가속에 거는 배수 — 유물마다 (1 − 감소율)을 곱한다 */
+function relicSpeedupScale(game: GameState): number {
+  const owned = new Set(game.artifacts);
+  return ARTIFACTS.reduce((scale, a) =>
+    owned.has(a.id) ? scale * (1 - (a.effects.duelSpeedupCut ?? 0)) : scale, 1);
 }
 
 /** 추적할 네임드 의뢰의 조우 창 데이터. 네임드 의뢰가 아니면 null */
@@ -32,5 +42,6 @@ export function selectEncounter(game: GameState, questId: string): EncounterData
     sighting: named.poster.split(/(?<=다\.)\s*/)[0] ?? named.poster,
     sweepMs: rodAxes(game).sweep.value * 1000,
     hp: named.hp,
+    speedupScale: (named.duelSpeedup ?? 1) * relicSpeedupScale(game),
   };
 }
