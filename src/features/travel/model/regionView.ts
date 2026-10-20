@@ -3,6 +3,8 @@ import type { GameState } from '../../../game/rules/logic';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
 import { BOATS } from '../../../game/content/boats';
+import type { Boat } from '../../../game/content/boats';
+import { powerZones } from '../../../game/rules/stats';
 import { defaultZoneOfRegion, spotsOfRegion, subtreeSpots, topZoneOf, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { Zone, ZoneId } from '../../../game/content/zones';
 import { spotById } from '../../../game/content/spots';
@@ -44,9 +46,29 @@ export interface RegionViewData {
     fishable: boolean;
     grades: Record<RarityId, GradeLevel>;
   }>;
-  nearby: Array<NearbySpot & { fishable: boolean; requiredBoatName: string }>;
+  /** 하위 존이면 상위 구역, 최상위 존이면 null */
+  parentZone: Zone | null;
+  nearby: Array<NearbySpot & { status: SpotStatus }>;
   focusedFishes: ReturnType<typeof selectFishAtSpot>;
+  focusedStatus: SpotStatus | null;
+  focusedDex: { caught: number; total: number } | null;
   tendency: SpotTendency | null;
+  /** 지금 배의 다음 단계. 마지막 배를 가졌으면 null */
+  nextBoat: Boat | null;
+}
+
+export type SpotStatus =
+  | { kind: 'ok' }
+  | { kind: 'boat'; boatName: string }
+  | { kind: 'power'; power: number; req: number };
+
+/** 해역 낚시 상태 — 배 단계가 먼저, 그다음 낚싯대 파워가 요구치에 닿는지 본다. */
+export function selectSpotStatus(game: GameState, spot: SpotId): SpotStatus {
+  if (!canFishSpot(game, spot)) {
+    return { kind: 'boat', boatName: BOATS[spotById(spot)!.boatTier - 1]?.name ?? '' };
+  }
+  const { power, req } = powerZones(game, spot);
+  return power < req ? { kind: 'power', power, req } : { kind: 'ok' };
 }
 
 /** 지역·현재 위치 상태에서 지역 화면이 표시할 존, 주목 어군, 가까운 어군을 고른다.
@@ -69,17 +91,19 @@ export function selectRegionViewData(
       rarity, selectGradeLevel(spot.id, rarity),
     ])) as Record<RarityId, GradeLevel>,
   }));
+  const parentZone = zone.parent ? zoneById(zone.parent) ?? null : null;
   const nearby = rankNearbySpots(spots, schools, pos)
-    .map(row => ({
-      ...row,
-      fishable: canFishSpot(game, row.spot.id),
-      requiredBoatName: row.spot.boatTier > 0 ? BOATS[row.spot.boatTier - 1]?.name ?? '' : '',
-    }));
+    .map(row => ({ ...row, status: selectSpotStatus(game, row.spot.id) }));
   const focusedFishes = focused ? selectFishAtSpot(focused.id, game) : [];
+  const focusedStatus = focused ? selectSpotStatus(game, focused.id) : null;
+  const focusedDex = focused
+    ? { caught: focusedFishes.filter(row => row.discovered).length, total: focusedFishes.length }
+    : null;
   const tendency = focused ? selectSpotTendency(focused.id) : null;
+  const nextBoat = BOATS[game.boat] ?? null;
   return {
-    spots, focused, contextZone, zone, tableZone, tableSpots, nearby,
-    focusedFishes, tendency,
+    spots, focused, contextZone, zone, parentZone, tableZone, tableSpots, nearby,
+    focusedFishes, focusedStatus, focusedDex, tendency, nextBoat,
   };
 }
 
