@@ -464,12 +464,12 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
   });
 
-  it('rollCatchExtras: 변이 폼 확률은 대략 1/3 (통계적)', () => {
+  it('rollCatchExtras: 변이 폼 확률은 대략 1/4 — 돌연변이:일반 = 1:3 (통계적)', () => {
     let variant = 0;
     const n = 20000;
     for (let i = 0; i < n; i++) if (rollCatchExtras(carp).form === 'variant') variant++;
-    expect(variant / n).toBeGreaterThan(0.30);
-    expect(variant / n).toBeLessThan(0.36);
+    expect(variant / n).toBeGreaterThan(0.22);
+    expect(variant / n).toBeLessThan(0.28);
   });
 
   it('rollCatchExtras: 변이 확률 인자 — rng 소비 순서(크기 2회 → 폼 1회)는 그대로', () => {
@@ -482,7 +482,11 @@ describe('월척(크기)·개체·폼 기록', () => {
   });
 
   it('variantRateOf: 유물 없으면 기본 MUTATION_RATE', () => {
-    expect(variantRateOf(newState())).toBeCloseTo(1 / 3, 10);
+    expect(variantRateOf(newState())).toBeCloseTo(1 / 4, 10);
+  });
+
+  it('variantRateOf: 코모로의 골판을 가지면 돌연변이:일반 = 1:2', () => {
+    expect(variantRateOf({ artifacts: ['elder-scale'] })).toBeCloseTo(1 / 3, 10);
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
