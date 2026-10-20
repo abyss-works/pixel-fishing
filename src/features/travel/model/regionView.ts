@@ -3,7 +3,7 @@ import type { GameState } from '../../../game/rules/logic';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
 import { BOATS } from '../../../game/content/boats';
-import { defaultZoneOfRegion, spotsOfRegion, subtreeSpots, topZoneOf, zoneById } from '../../../game/content/zones';
+import { defaultZoneOfRegion, spotsOfRegion, subtreeSpots, topZoneOf, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { Zone, ZoneId } from '../../../game/content/zones';
 import { spotById } from '../../../game/content/spots';
 import type { Spot, SpotId } from '../../../game/content/spots';
@@ -58,7 +58,7 @@ export function selectRegionViewData(
   const spots = spotsOfRegion(region);
   const focused = currentSpot && spots.some(spot => spot.id === currentSpot)
     ? spotById(currentSpot) : undefined;
-  const contextZone: ZoneId = (storeZone && zoneById(storeZone)?.group === region)
+  const contextZone: ZoneId = (storeZone && zoneGroup(storeZone) === region)
     ? storeZone : defaultZoneOfRegion(region);
   const zone = zoneById(contextZone)!;
   const tableZone = zoneById(topZoneOf(contextZone))!;
