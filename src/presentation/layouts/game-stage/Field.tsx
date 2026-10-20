@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
+import { boatGateText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
@@ -51,11 +52,11 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
         setToast('어군 가까이에서 찌를 던져 주세요.', 'warn');
       } else {
         const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-        setToast(`${spot.name}에서 낚시하려면 배 ${spot.boatTier}단계가 필요해요. 배는 조선소에서 구매할 수 있어요.`, 'warn');
+        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. 배는 집 목공소나 항구 조선소에서 살 수 있어요.`, 'warn');
       }
       return;
     case 'line-cut':
-      setToast('물고기가 미끼만 먹고 달아났어요. 이 해역에서는 더 강한 낚싯대가 필요해요.', 'warn');
+      setToast('이 해역에서는 낚싯대 파워가 모자라요. 희귀한 물고기가 덜 걸리고 입질이 늦어져요. 작업대나 공방에서 낚싯대를 강화해 주세요.', 'warn');
       return;
     case 'movement-cancelled':
       setToast('낚시를 접고 이동해요.');
@@ -65,7 +66,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
       return;
     case 'catch': {
       if (event.result.ticket) {
-        setToast('흔적을 찾았어요. 수면 아래로 무언가 지나갔어요.');
+        setToast('흔적을 찾았어요. 화면 오른쪽 흔적 카드에서 추적을 눌러 보세요.');
         alertEncounter(event.result.ticket);
       }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;

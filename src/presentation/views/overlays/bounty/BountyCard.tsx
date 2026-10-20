@@ -7,7 +7,7 @@ import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { DIFFICULTY_NAME } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import { RarityText } from '../../../ui/fish/RarityTag';
-import { fmtGold } from '../../../ui/format';
+import { fmtGold, fmtNum } from '../../../ui/format';
 
 const DIFF_HEAD: Record<string, string> = {
   easy: 'text-text-dim', normal: 'text-accent', hard: 'text-orange',
@@ -31,13 +31,14 @@ export default function BountyCard({ quest, progress, accepted, canAccept, busy,
       <div className="border-b border-line" />
       <span className="flex-1 content-center">
         {zoneById(quest.zone)?.shortName} <RarityText rarity={quest.grade!} /> 등급 어종 포획<br />
-        <span className="text-text-dim">x {quest.count}</span>
+        <span className="text-text-dim">{fmtNum(quest.count)}마리</span>
       </span>
       <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
       {accepted && (
         <span className="text-accent text-xs">진행 중 · <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span></span>
       )}
+      {!done && <span className="text-text-dim text-xs">수주한 뒤에 잡은 물고기부터 세요. 물고기는 가방에 남아요.</span>}
       <span className="flex justify-center mt-auto">
         {done
           ? <Button size="sm" disabled={busy} onClick={onDeliver}>납품</Button>

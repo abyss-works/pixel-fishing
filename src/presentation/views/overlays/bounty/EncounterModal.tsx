@@ -132,6 +132,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
           <>
             <span className="text-text-dim italic text-xs">{sighting}</span>
             <span>그림자가 돌아선다.</span>
+            <span className="text-text-dim text-xs">조우하면 끝날 때까지 창을 닫을 수 없어요. 놓치면 흔적이 사라져요.</span>
             <Button variant="primary" full onClick={() => setPhase('run')}>조우</Button>
           </>
         )}
@@ -161,7 +162,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
               />
             </div>
             <span className={cx('h-5 text-xs', flash === 'miss' ? 'text-text-dim' : 'text-gold')}>
-              {flash === 'hit' ? '명중' : flash === 'miss' ? '빗나갔어요. 그림자가 멀어져요.' : ''}
+              {flash === 'hit' ? '명중' : flash === 'miss' ? '빗나갔어요. 그림자가 멀어져요.'
+                : <span className="text-text-dim">커서가 금색 칸에 들어왔을 때 챔질해 주세요.</span>}
             </span>
             <Button variant="primary" full onClick={() => strikeRef.current()}>챔질</Button>
           </>
@@ -170,6 +172,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
           <>
             <b className="pf-accent text-gold text-lg">{named.name}</b>
             <span>{josa(named.name, '이/가')} 수면 위로 떠올랐다.</span>
+            <span className="text-text-dim text-xs">토벌을 눌러야 결과가 남아요.</span>
             <Button variant="primary" full
                     onClick={() => onResolve({ hits: run.hits, misses: run.misses, success: true })}>
               토벌

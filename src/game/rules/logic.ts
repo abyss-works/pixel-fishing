@@ -205,10 +205,10 @@ export function licenseConditions(
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   return [
-    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone]} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
+    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone].toLocaleString('ko-KR')} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
     { key: 'dex', label: tier === 'named'
-      ? `${area} 모든 어종 수집`
-      : `${area} 모든 어종 수집(전설 제외)`, ok: missing === 0 },
+      ? `${area} 모든 어종 수집(밤 어종 포함)`
+      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`, ok: missing === 0 },
   ];
 }
 

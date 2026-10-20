@@ -85,7 +85,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
           onUpgrade={() => run({ type: 'upgradeRod' }, r => {
-            setToast(`낚싯대가 Lv.${r.state.rod}이 되었어요! 입질이 빨라지고 파워도 올라요.`, 'gold');
+            setToast(`낚싯대를 강화했어요! 지금 Lv.${r.state.rod} · 입질이 빨라지고 파워도 올라요.`, 'gold');
           })} />
       )}
       {panel === 'boat' && (
@@ -290,7 +290,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
             { label: '바 시간', value: c.sweep, next: n.sweep, delta: sec(next.sweep - cur.sweep, 2) },
           ]} />
           {/* 3차: 안내 */}
-          <Note size="xs" className="my-0">강화에는 상한이 없어요. 레벨이 오를수록 체감은 줄어들어요. 파워가 해역 요구치에 닿는지는 스탯창에서 확인해 보세요.</Note>
+          <Note size="xs" className="my-0">강화에는 상한이 없어요. 레벨이 오를수록 체감은 줄어들어요. 파워가 해역 요구치에 닿는지는 화면 위 자원 바를 눌러 스탯창에서 확인해 보세요.</Note>
           {/* 1차: 살 수 있나 — 버튼 바로 위 */}
           <CostBox>
             <CostLine size="lg" have={game.gold} delta={-cost} />
