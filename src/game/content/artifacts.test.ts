@@ -18,7 +18,7 @@ describe('artifacts 데이터 계약', () => {
 
   it('등급 — 낚시·결투 결과를 바꾸는 유물(변이 확률·결투 가속)만 영웅, 나머지는 희귀', () => {
     for (const a of ARTIFACTS) {
-      const decisive = a.effects.variantRate !== undefined || a.effects.duelSpeedupCut !== undefined;
+      const decisive = a.effects.mutationWeight !== undefined || a.effects.duelSpeedupCut !== undefined;
       expect(a.grade).toBe(decisive ? 'epic' : 'rare');
     }
   });

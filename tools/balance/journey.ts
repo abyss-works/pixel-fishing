@@ -6,7 +6,8 @@ import type { SpotId } from '../../src/game/content/spots';
 import { BOATS } from '../../src/game/content/boats';
 import { FISH } from '../../src/game/content/fish';
 import { powerOfLevel } from '../../src/game/rules/stats';
-import { MUTATION_RATE, upgradeCost } from '../../src/game/rules/balance';
+import { upgradeCost } from '../../src/game/rules/balance';
+import { mutationWeightsOf, variantShare } from '../../src/game/rules/logic';
 import { rates } from './model';
 import type { Axis } from './model';
 
@@ -44,7 +45,7 @@ export function simulateJourney(axis: Axis, snapshotMinutes: readonly number[] =
     fame += r.famePerHour * STEP_SEC / 3600;
     const catches = r.catchesPerHour * STEP_SEC / 3600;
     for (const row of r.rows) {
-      const p = row.prob * (1 - MUTATION_RATE);
+      const p = row.prob * (1 - variantShare(mutationWeightsOf({ artifacts: [] }, here.id)));
       missNormal.set(row.fish.id, missNormal.get(row.fish.id)! * (1 - p) ** catches);
     }
     sec += STEP_SEC;

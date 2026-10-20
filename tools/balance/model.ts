@@ -15,11 +15,12 @@ import { drawRows, rodStats } from '../../src/game/rules/logic';
 import type { DrawOptions } from '../../src/game/rules/logic';
 import { minLevelOfPower, powerOfLevel, zonesFor } from '../../src/game/rules/stats';
 import { manualPowerBonus, relativeIdleBoost } from '../../src/game/rules/power';
-import { CATCH_MS, JUDGMENT_MULT, MUTATION_RATE, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
+import { CATCH_MS, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
+import { variantShare } from '../../src/game/rules/logic';
 import { DAY_START_MIN, NIGHT_START_MIN } from '../../src/game/rules/time';
 
 export const NIGHT_SHARE = 1 - (NIGHT_START_MIN - DAY_START_MIN) / 60;
-export const VARIANT_EV = 1 + MUTATION_RATE * (VARIANT_PRICE_MULT - 1);
+export const VARIANT_EV = 1 + variantShare() * (VARIANT_PRICE_MULT - 1);
 /** 여유 스펙 — 진입 레벨에서 몇 레벨 위를 함께 재는가 */
 export const SPEC_MARGIN = 6;
 

@@ -25,6 +25,9 @@ export default function RelicCard({ artifact, owned, materialCount, busy, onExch
         <span className="text-text-dim text-xs">
           {artifact.materialName} 보유 {materialCount}/1
         </span>
+        {!owned && materialCount < 1 && (
+          <span className="text-text-dim text-xs">교환 재료는 네임드 토벌 보상으로 받아요.</span>
+        )}
       </span>
       <div className="border-b border-line" />
       <span className="flex justify-center mt-auto">

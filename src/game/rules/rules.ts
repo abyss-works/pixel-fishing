@@ -20,9 +20,10 @@ import {
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
-  challengeHpOf, challengeWindowMs, ticketRemainingMs,
+  challengeHpOf, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
+import { GAME_DAY_RESET_TEXT } from './time.js';
 import type { GameState } from './logic.js';
 
 /** 규칙이 거부하는 이유 — 인프라 실패(에러 처리의 FailureKind)와 다른 축이다.
@@ -68,11 +69,11 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'bait-not-owned': '가지고 있는 미끼가 없어요.',
   'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
-  'no-license': '라이선스가 없어요. 명성과 도감 조건을 채우면 열려요.',
-  'daily-cleared': '오늘 이 종류의 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
+  'no-license': '서버에 연결되지 않아 의뢰를 처리할 수 없어요. 연결된 뒤 다시 해 주세요.',
+  'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
-  'dex-incomplete': '도감이 아직 비어 있어요. 그 구역의 도감을 채워 보세요.',
+  'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
   'ticket-expired': '흔적이 식었어요. 다시 조우하면 새로 남아요.',
@@ -160,8 +161,8 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
 }
 
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는
- *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 실패해도 티켓은 남는다
- *  (윈도우 내 재시도 — 어렵게 하지 않는다). 오프라인 dev는 주입이 없어 닫힌다. */
+ *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 티켓은 성공·실패 모두 소모한다.
+ *  오프라인 dev는 주입이 없어 닫힌다. */
 export function canResolveChallenge(
   questId: string,
   claimed: { success: boolean; hits: number; misses: number },
@@ -181,7 +182,7 @@ export function canResolveChallenge(
   if (!coherent) return no('bad-request');
   const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
-  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO), challengeWindowMs());
+  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO));
   if (!(left > 0)) return no('ticket-expired');
   return OK;
 }

@@ -7,6 +7,7 @@
 // 미달이면 그 수역에서 존이 사라지고 일반 가중치·입질 시간 페널티를 받는다(stats.powerZones 참조).
 // rarityWeight = 등급 예산 수역 오버라이드 — 지역 간 등급 분포 차등용(미기재 등급은 글로벌 표).
 import type { RarityId } from './rarity.js';
+import type { FormId } from './fish.js';
 import { RARITY } from './rarity.js';
 
 const DATA = [
@@ -58,6 +59,10 @@ export interface Spot {
   powerReq?: number;
   /** 등급 예산 수역 오버라이드 — 생략한 등급은 기본 가중치를 따른다 */
   rarityWeight?: Partial<Record<RarityId, number>>;
+  /** 폼(일반·돌연변이) 가중치 수역 오버라이드 — 생략한 폼은 전역 기본 가중치를 따른다 */
+  mutationWeight?: Partial<Record<FormId, number>>;
+  /** 네임드 조우 가중치 수역 오버라이드 — 생략한 항목은 전역 기본 가중치를 따른다 */
+  namedWeight?: Partial<Record<'named' | 'none', number>>;
 }
 
 export const SPOTS: readonly Spot[] = DATA;

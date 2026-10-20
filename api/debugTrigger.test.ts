@@ -1,7 +1,6 @@
 // 테스트용 트리거 허용 판정 — 운영 배포는 어떤 경우에도 막고, 스테이징·로컬은 소유자·로컬 오리진만 연다.
 import { describe, it, expect } from 'vitest';
 import { debugTablePlan, debugTriggerAllowed } from './action.js';
-import { challengeWindowMs } from '../src/game/rules/challenge.js';
 import { gameDayStartISO } from '../src/game/rules/time.js';
 
 describe('debugTriggerAllowed', () => {
@@ -23,10 +22,9 @@ describe('debugTriggerAllowed', () => {
 describe('debugTablePlan', () => {
   const now = Date.parse('2026-10-16T05:00:00.000Z'); // KST 14:00
 
-  it('도전권 만료 직전 — 발급 시각을 유효 시간에서 1분 모자라게 당긴다', () => {
-    expect(debugTablePlan('bounty.ticketNearExpiry', now)).toEqual({
-      table: 'bounty_tickets', op: 'update',
-      values: { issued_at: new Date(now - challengeWindowMs() + 60_000).toISOString() },
+  it('흔적 만료 — 발급 시각을 전날 게임 날짜(KST 04:00 1분 전)로 옮긴다', () => {
+    expect(debugTablePlan('bounty.expireTickets', now)).toEqual({
+      table: 'bounty_tickets', op: 'update', values: { issued_at: '2026-10-15T18:59:00.000Z' },
     });
   });
 

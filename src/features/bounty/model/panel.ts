@@ -5,10 +5,11 @@ import {
 import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { zoneById } from '../../../game/content/zones';
-import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challenge';
+import { ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
+import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import type { BountySnapshot } from './types';
 
 /** 일반 의뢰 난이도의 화면 이름 */
@@ -69,14 +70,15 @@ export function clearsLeft(snapshot: BountySnapshot | null): { general: number; 
   };
 }
 
+const KIND_SUBJECT: Record<BountyKind, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const CLEARED_NOTICE: Record<BountyKind, string> = {
-  general: '오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
-  named: '오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.',
+  general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
+  named: `오늘 네임드 토벌은 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
 };
-const ELSEWHERE_NOTICE: Record<BountyKind, string> = {
-  general: '다른 구역에서 수주한 일반 의뢰가 있어요. 먼저 마쳐 주세요.',
-  named: '다른 구역에서 수주한 네임드 토벌이 있어요. 먼저 마쳐 주세요.',
-};
+/** 이 판의 다른 난이도 칸이 왜 막혔는지 — 네임드는 구역마다 한 칸이라 일반 의뢰만 해당한다 */
+const ONE_AT_A_TIME_NOTICE = '일반 의뢰는 한 번에 하나만 수주할 수 있어요. 진행 중인 의뢰를 먼저 마쳐 주세요.';
+const elsewhereNotice = (kind: BountyKind, held: BountyQuest): string =>
+  `${zoneById(held.zone)?.shortName ?? held.zone}에서 수주한 ${KIND_SUBJECT[kind]} 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.`;
 
 /** 오늘 의뢰판의 데이터·조건·진행 상태를 모은다. */
 export function selectBountyPanelData({
@@ -104,7 +106,9 @@ export function selectBountyPanelData({
     if (left === null) return null;
     if (left[kind] <= 0) return CLEARED_NOTICE[kind];
     const held = holding[kind];
-    return held && !shown.has(held.id) ? ELSEWHERE_NOTICE[kind] : null;
+    if (!held) return null;
+    if (!shown.has(held.id)) return elsewhereNotice(kind, held);
+    return kind === 'general' ? ONE_AT_A_TIME_NOTICE : null;
   };
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;
@@ -117,9 +121,7 @@ export function selectBountyPanelData({
     ? snapshot?.tickets.find(ticket => ticket.questId === namedQuest.id)?.issuedAt ?? null
     : null;
   const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(
-      ticketIssuedAt, nowMs, challengeWindowMs(),
-    ) / 60_000));
+    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs) / 60_000));
   const relic = artifactOfZone(zone);
 
   return {

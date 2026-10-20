@@ -114,11 +114,18 @@ describe('낚시', () => {
   });
 
   it('도감 기록이 있는 어종은 횟수를 이어 센다', async () => {
+    // 연못 전 어종의 두 폼을 모두 채워 둔다 — 난수가 무엇을 뽑아도 기록이 있는 어종·폼이 잡힌다
     const dex: GameState['dex'] = {};
-    for (const id of ['crucian', 'minnow', 'loach', 'carp', 'goldfish']) {
-      dex[id] = { normal: { count: 5, maxSize: 99, first: '2026-01-01' } };
+    for (const id of ['crucian', 'minnow', 'loach', 'carp', 'goldfish', 'goldcarp']) {
+      const rec = { count: 5, maxSize: 99, first: '2026-01-01' };
+      dex[id] = { normal: rec, variant: rec };
     }
-    expect(await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' })).toMatchSnapshot();
+    const out = await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string; isNew: boolean } }).payload;
+    const records = out.db.records as { fish_id: string; form: string; count: string }[];
+    expect(caught.isNew).toBe(false);
+    expect(records.find(r => r.fish_id === caught.fishId && r.form === caught.form)?.count).toBe('6');
+    expect(out).toMatchSnapshot();
   });
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {
@@ -329,7 +336,7 @@ describe('현상금', () => {
   });
 
   it('만료된 도전권은 거부한다', async () => {
-    const { uid, named } = await namedSetup(5 * 3600_000);
+    const { uid, named } = await namedSetup(10.5 * 3600_000); // KST 03:36 발급 — 전날 게임 날짜
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
@@ -382,7 +389,7 @@ describe('개발 명령', () => {
       await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
         values ($1, 'general', 'pacific-easy-common', $2), ($1, 'general', 'pacific-easy-rare', '2030-03-01T00:00:00Z')`, [u, NOW]);
     }
-    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.ticketNearExpiry' }, { origin: LOCAL_ORIGIN });
+    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.expireTickets' }, { origin: LOCAL_ORIGIN });
     vi.setSystemTime(Date.parse(NOW) + 2000);
     const reset = await callAction(userToken(uid), { type: 'debug', command: 'bounty.resetToday' }, { origin: LOCAL_ORIGIN });
     vi.setSystemTime(Date.parse(NOW) + 4000);
@@ -621,6 +628,15 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       expect(await questIds(uid)).toEqual(['pacific-hard-legendary', 'pacific-normal-common', 'seasia-named-leviathan']);
       expect(((await dumpUser(env.client, uid)).bounty_tickets as { quest_id: string }[]).map(r => r.quest_id))
         .toEqual(['seasia-named-leviathan']);
+    });
+
+    it('발급 4시간이 지나도 같은 게임 날짜의 도전권으로는 결투 결과를 확정한다', async () => {
+      const uid = await seed({ state: { boat: 1 } });
+      const named = offered(uid, 'named');
+      await progressRow(uid, named.id, 0, DAY_START);
+      await ticketRow(uid, named.id, DAY_START);           // KST 04:00 발급 — NOW(KST 14:06)는 10시간 뒤
+      expect((await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 })).status)
+        .toBe(200);
     });
   });
 });

@@ -10,6 +10,7 @@ import type { DispatchResult, MaybePromise } from '../../../features/gameplay/se
 import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { RegionId } from '../../../game/content/places';
+import { zoneById } from '../../../game/content/zones';
 import type { Msg } from '../../layouts/hud/useMessageLog';
 import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
@@ -116,7 +117,8 @@ export default function GameView(props: GameViewProps) {
       success: r.success, hits: r.hits, misses: r.misses }), result => {
       if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error], 'warn'); setTracking(null); return; }
       if (r.success) {
-        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! 수배판에서 보상을 받을 수 있어요.`, 'gold');
+        const zoneName = zoneById(encounter.quest.zone)?.shortName ?? encounter.quest.zone;
+        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName} 항구 수배판에서 보상 받기를 눌러 주세요.`, 'gold');
         setTracking(null);
       }
     });

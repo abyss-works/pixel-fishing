@@ -63,6 +63,8 @@ export function formatGameClock(nowIso: string): string {
 
 /** 게임 날짜가 바뀌는 KST 시각 */
 export const GAME_DAY_RESET_HOUR_KST = 4;
+/** 안내 문장에 쓰는 경계 시각 — 게임 속 시계와 헷갈리지 않게 한국 시간임을 밝힌다 */
+export const GAME_DAY_RESET_TEXT = `한국 시간 새벽 ${GAME_DAY_RESET_HOUR_KST}시`;
 const KST_OFFSET_MS = 9 * 3600_000;
 const DAY_MS = 86_400_000;
 /** UTC 시각에 더하면 UTC 날짜가 곧 게임 날짜가 되는 이동량 — KST로 옮긴 뒤 경계 시각만큼 되돌린다 */

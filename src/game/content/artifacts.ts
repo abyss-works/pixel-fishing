@@ -4,6 +4,7 @@
 // 문장(로어·효과 설명)에는 손으로 숫자를 적지 않는다 — UI가 data에서 뽑는다.
 // 행 추가 = 여기 1행 (무결성은 artifacts.test가 자동 검증).
 import type { RarityId } from './rarity.js';
+import type { FormId } from './fish.js';
 import type { BountyZone } from './bounties.js';
 
 export interface ArtifactEffects {
@@ -13,8 +14,8 @@ export interface ArtifactEffects {
   duelSpeedupCut?: number;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
-  /** 돌연변이 확률 — 기본 MUTATION_RATE를 이 값으로 대체한다 (예: 0.5) */
-  variantRate?: number;
+  /** 폼 가중치 — 해역·전역 폼 가중치를 이 값으로 대체한다 (예: 일반 2 : 돌연변이 1) */
+  mutationWeight?: Record<FormId, number>;
 }
 
 export interface Artifact {
@@ -47,7 +48,7 @@ export const ARTIFACTS: readonly Artifact[] = [
   { id: 'elder-scale', name: '코모로의 골판', zone: 'madagascar', grade: 'epic',
     materialId: 'mat-elder-scale', materialName: '깨진 골판',
     lore: '코모로 심해 바닥에서 떨어져 나온 골판 조각이다. 오래된 것이 아직 살아 있는 바다의 것이라, 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
-    effects: { variantRate: 1 / 2 } },
+    effects: { mutationWeight: { variant: 1, normal: 2 } } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

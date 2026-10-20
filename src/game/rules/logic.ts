@@ -5,12 +5,12 @@
 // 둘 다 만족시키려면 .js로 적어야 한다(소스는 .ts, 컴파일 결과가 .js).
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
-  MUTATION_RATE, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_RATE, EXHIBIT_SLOTS,
+  MUTATION_WEIGHTS, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
+  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_WEIGHTS, EXHIBIT_SLOTS,
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
-import { rarityWeightOf } from '../content/spots.js';
+import { rarityWeightOf, spotById } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef, RegionId } from '../content/places.js';
 import { FISH } from '../content/fish.js';
@@ -126,17 +126,12 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
   return off <= yellow / 2 ? 'good' : 'normal';
 }
 
-// 추첨 — **2단 구조(v0.6.6)**: 등급 가중치와 어종 선택을 별도로 계산한다.
-//   구버그: 개체마다 등급 가중치 전액(74/20/5/1)을 부여 → 등급당 어종 수가 많은 수역일수록
-//   그 등급 확률이 팽창했다(코론 EV 332.7 vs 배리어 리프 172.5 사례).
-//   ① 등급 축: 등급 가중치는 그 수역의 **고정 예산**(개체 수와 무관). 수역 오버라이드가 있으면
-//     그 값(spots.rarityWeight — 배리어 리프 전설 2), 없으면 글로벌 표를 쓴다(rarityWeightOf).
-//     일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·해역 게이트·수동 보정 전부)은
-//     일반 예산에만 곱한다. 희귀 이상 가중치 데이터는 언제나 원본 유지(단일 다이얼).
-//   ② 개체 축: 같은 등급 내선 균등 배분 — 개체 가중치 기본 1(fishWeights로 가중치 부여 가능,
-//     그러면 등급 내 배분이 w_i 비율이 된다. 기본값은 n과 동치라 구 균등과 동일).
-// 수학적으로 "개체별 유효가중치 = 등급예산 × 다이얼 × 개체가중치"의 단일 누적 추첨과 동치라
-// rng 소비는 1회 유지된다(테스트 결정성 계약). 열람용 정규화 뷰는 drawRows.
+// 추첨 — 모든 판정이 가중치 추첨(pickWeighted)이다. 캐치 한 번의 순서:
+//   ① 네임드 조우(namedWeightsOf) → ② 등급(rarityDrawWeights) → ③ 어종(fishDrawWeight) → 크기 → ④ 폼(mutationWeightsOf)
+//   등급 가중치는 해역의 **절대치**다(spots.rarityWeight, 없는 등급은 전역 RARITY.weight). 분모는 그 해역에
+//   있는 등급 가중치의 합이라 해역마다 다르다. 일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·
+//   해역 게이트·수동 보정)은 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
+//   열람용으로 등급×어종을 한 줄로 펼친 값은 drawRows·goldEV가 쓴다.
 
 /** 추첨 시뮬레이션 옵션 — 미지정 필드는 현행 규칙값. 관리자 샌드박스 전용 오버라이드 포함. */
 export interface DrawOptions {
@@ -158,11 +153,34 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
   return phase === 'day' ? pool.filter(f => !f.night) : pool;
 }
 
-// 네임드 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 파이프라인보다 앞선다).
+// 가중치 추첨 — 모든 확률 판정(네임드 조우·등급·어종·폼)의 단일 방식.
+// 확률 = 항목 가중치 / 가중치 합. 분모는 그 판정에 들어온 가중치의 합이라 해역마다 다를 수 있다.
+// rng 1회를 소비하고, 항목 순서대로 누적해 고른다. 합이 0이면 마지막 항목.
+export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng: () => number): K {
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  let r = rng() * total;
+  for (const [key, w] of entries) {
+    r -= w;
+    if (r < 0) return key;
+  }
+  return entries[entries.length - 1][0];
+}
+
+/** 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본 */
+export function namedWeightsOf(spot: SpotId): { named: number; none: number } {
+  return { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
+}
+
+/** 해역의 네임드 조우 확률 — 조우 가중치에서 계산한다(분석 도구용) */
+export function namedEncounterShare(spot: SpotId): number {
+  const w = namedWeightsOf(spot);
+  return w.named / (w.named + w.none);
+}
+
+// 네임드 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 추첨보다 앞선다).
 // 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 네임드에 출현 수역(spot)이
-// 적혀 있으면 그 수역에서만 돈다(코모로 심해의 둔클레오스). 명중하면 통상 추첨
-// (시간대 필터·등급·개체·크기·변이)을 전부 스킵하고 그 자리에서 네임드 캐치가 된다 —
-// 개체는 만들지 않고 진행도만 올린다 (판매 불가 개념이라 파이프라인에 태우지 않는다).
+// 적혀 있으면 그 수역에서만 돈다(코모로 심해의 둔클레오스). 명중해도 이번 캐치는 그대로
+// 진행하고, 호출부가 도전권 발급 이벤트만 덧붙인다.
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
 // force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
 export function rollNamedEncounter(
@@ -175,7 +193,9 @@ export function rollNamedEncounter(
       q !== undefined && q.difficulty === 'named' && q.zone === zone
       && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
   if (cands.length === 0) return null;
-  if (rng() >= NAMED_ENCOUNTER_RATE && !force) return null;
+  const w = namedWeightsOf(spot);
+  const drawn = pickWeighted([['named', w.named], ['none', w.none]] as const, rng);
+  if (drawn === 'none' && !force) return null;
   return cands[Math.floor(rng() * cands.length)];
 }
 
@@ -205,10 +225,10 @@ export function licenseConditions(
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   return [
-    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone]} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
+    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone].toLocaleString('ko-KR')} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
     { key: 'dex', label: tier === 'named'
-      ? `${area} 모든 어종 수집`
-      : `${area} 모든 어종 수집(전설 제외)`, ok: missing === 0 },
+      ? `${area} 모든 어종 수집(밤 어종 포함)`
+      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`, ok: missing === 0 },
   ];
 }
 
@@ -221,34 +241,49 @@ export function matchBountyCatch(quest: BountyQuest, spot: SpotId, fishId: strin
   return FISH.find(f => f.id === fishId)?.rarity === quest.grade;
 }
 
+// 열람용 어종별 유효 가중치 — 등급 가중치 × (어종 가중치 / 같은 등급 어종 가중치 합).
+// rollFish의 2단계 추첨과 같은 확률을 한 줄로 펼친 값이다(drawRows·goldEV 전용).
 function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
-  // 개체 가중치 합을 등급별로 모은다 — 기본(전부 1)이면 합 = 개체 수라 구 균등 배분과 동치.
-  // 다이얼(fishWeights)이 없으면 Fish.weight(개체 고정 가중치, 기본 1 — 어종 데이터)를 쓴다.
-  const base = (f: Fish) => o.fishWeights?.[f.id] ?? f.weight ?? 1;
+  const gradeW = new Map(rarityDrawWeights(pool, spotId, o));
   const fwSum = new Map<RarityId, number>();
-  for (const f of pool) {
-    fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + base(f));
-  }
-  return pool.map(f =>
-    (o.budgets?.[f.rarity] ?? rarityWeightOf(spotId, f.rarity))
-      * (f.rarity === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)
-      * (base(f) / (fwSum.get(f.rarity) ?? 1)));
+  for (const f of pool) fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + fishDrawWeight(f, o));
+  return pool.map(f => (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / (fwSum.get(f.rarity) ?? 1)));
 }
 
+/** 등급 단계의 가중치 — 풀에 있는 등급만, 등급 예산 × 일반 다이얼. rollFish와 drawWeights가 공유한다 */
+function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [RarityId, number][] {
+  const present = new Set(pool.map(f => f.rarity));
+  return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
+    (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
+      * (r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)]);
+}
+
+/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치(기본 1) */
+const fishDrawWeight = (f: Fish, o: DrawOptions): number => o.fishWeights?.[f.id] ?? f.weight ?? 1;
+
+// 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
 export function rollFish(
   spotId: SpotId, rareMult = 1, rng: () => number = Math.random, commonMult = 1,
   o: DrawOptions = {},
 ): Fish {
   const pool = fishPool(spotId, o.phase);
+  const opts = { ...o, rareMult, commonMult };
+  const rarity = pickWeighted(rarityDrawWeights(pool, spotId, opts), rng);
+  const cands = pool.filter(f => f.rarity === rarity);
+  return pickWeighted(cands.map(f => [f, fishDrawWeight(f, opts)] as const), rng);
+}
 
-  const weights = drawWeights(pool, spotId, { ...o, rareMult, commonMult });
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = rng() * total;
-  for (let i = 0; i < pool.length; i++) {
-    r -= weights[i];
-    if (r < 0) return pool[i];
-  }
-  return pool[pool.length - 1];
+/** 해역의 등급 확률 — 해역 등급 가중치 / 그 해역에 있는 등급 가중치의 합(시간대 무관, 판정 보정 없음) */
+export function rarityShareOf(spotId: SpotId, rarity: RarityId): number {
+  const present = new Set(FISH.filter(f => f.spot === spotId).map(f => f.rarity));
+  if (!present.has(rarity)) return 0;
+  const total = RARITY_ORDER.reduce((sum, r) => sum + (present.has(r) ? rarityWeightOf(spotId, r) : 0), 0);
+  return rarityWeightOf(spotId, rarity) / total;
+}
+
+/** 전역 기본 등급 확률 — 전역 등급 가중치 / 전역 가중치 합 */
+export function globalRarityShare(rarity: RarityId): number {
+  return RARITY[rarity].weight / RARITY_ORDER.reduce((sum, r) => sum + RARITY[r].weight, 0);
 }
 
 /** 수역 추첨 모델 열람 — 관리자 대시보드 단일 출처(rollFish와 같은 산식, 다이얼 기본 중립).
@@ -378,20 +413,26 @@ export interface CatchExtras {
 }
 
 // 캐치 시점 부가 롤 — 어종 추첨(rollFish)과 독립적으로 어종당 변이 1종.
-// 변이 확률은 호출자가 variantRateOf로 넘긴다(기본 MUTATION_RATE).
+// 폼은 가중치로 뽑는다 — 호출자가 mutationWeightsOf로 넘긴다(기본 전역 MUTATION_WEIGHTS).
 // rng 소비 순서 고정(크기 2회 → 폼 1회) — 바꾸면 시드 기반 테스트가 전부 깨진다
 export function rollCatchExtras(
-  fish: Fish, rng: () => number = Math.random, variantRate = MUTATION_RATE,
+  fish: Fish, rng: () => number = Math.random,
+  weights: Record<FormId, number> = MUTATION_WEIGHTS,
 ): CatchExtras {
-  return { size: rollSize(fish, rng), form: rng() < variantRate ? 'variant' : 'normal' };
+  const size = rollSize(fish, rng);
+  return { size, form: pickWeighted([['variant', weights.variant], ['normal', weights.normal]] as const, rng) };
 }
 
-/** 변이 확률 — 소유 유물 중 가장 높은 variantRate, 없으면 기본값.
- *  리듀서와 서버 fast path가 같은 함수를 쓴다. */
-export function variantRateOf(state: Pick<GameState, 'artifacts'>): number {
+/** 돌연변이 확률 — 폼 가중치에서 계산한다(기본 전역 가중치). 안내 문구가 이 값을 보인다 */
+export function variantShare(weights: Record<FormId, number> = MUTATION_WEIGHTS): number {
+  return weights.variant / (weights.variant + weights.normal);
+}
+
+/** 폼 가중치 — 유물 효과 → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다 */
+export function mutationWeightsOf(state: Pick<GameState, 'artifacts'>, spot: SpotId): Record<FormId, number> {
   const owned = new Set(state.artifacts);
-  return ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.variantRate ?? 0) : m, MUTATION_RATE);
+  const relic = ARTIFACTS.find(a => owned.has(a.id) && a.effects.mutationWeight)?.effects.mutationWeight;
+  return relic ?? { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
 
 // ---------- 개체 (세이브 v8) ----------

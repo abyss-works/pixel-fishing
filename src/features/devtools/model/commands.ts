@@ -53,8 +53,8 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
     hint: '구역 유물의 교환 재료 1개.', params: [zoneParam],
   },
   {
-    id: 'bounty.ticketNearExpiry', group: 'bounty', label: '흔적 만료 직전',
-    hint: '보유 도전권을 만료 1분 전으로 옮긴다.', params: [],
+    id: 'bounty.expireTickets', group: 'bounty', label: '흔적 만료',
+    hint: '보유 도전권을 전날 발급한 것으로 옮겨 만료시킨다.', params: [],
   },
   { id: 'bounty.clearTickets', group: 'bounty', label: '흔적 지우기', hint: '도전권을 모두 지운다.', params: [] },
   {

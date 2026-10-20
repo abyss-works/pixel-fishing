@@ -1,5 +1,6 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
+import { spotById } from '../content/spots';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
@@ -10,7 +11,8 @@ import {
   autoLockPlan, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
-  sizeParams, rollSize, sizePercentile, rollCatchExtras, variantRateOf,
+  sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
+  namedWeightsOf, namedEncounterShare, variantShare,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
@@ -464,25 +466,35 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
   });
 
-  it('rollCatchExtras: 변이 폼 확률은 대략 1/3 (통계적)', () => {
+  it('rollCatchExtras: 변이 폼 확률은 대략 1/4 — 돌연변이:일반 = 1:3 (통계적)', () => {
     let variant = 0;
     const n = 20000;
     for (let i = 0; i < n; i++) if (rollCatchExtras(carp).form === 'variant') variant++;
-    expect(variant / n).toBeGreaterThan(0.30);
-    expect(variant / n).toBeLessThan(0.36);
+    expect(variant / n).toBeGreaterThan(0.22);
+    expect(variant / n).toBeLessThan(0.28);
   });
 
-  it('rollCatchExtras: 변이 확률 인자 — rng 소비 순서(크기 2회 → 폼 1회)는 그대로', () => {
-    const seq = [0.5, 0.5, 0.4];
+  it('rollCatchExtras: 폼 가중치로 뽑는다 — rng 소비 순서(크기 2회 → 폼 1회)는 그대로', () => {
+    const seq = [0.5, 0.5, 0.3];
     const rng = () => seq.shift() ?? 0;
-    expect(rollCatchExtras(carp, rng, 1 / 3).form).toBe('normal');   // 0.4 ≥ 1/3
-    const seq2 = [0.5, 0.5, 0.4];
+    expect(rollCatchExtras(carp, rng, { variant: 1, normal: 3 }).form).toBe('normal');   // 0.3×4 = 1.2 ≥ 1
+    const seq2 = [0.5, 0.5, 0.2];
     const rng2 = () => seq2.shift() ?? 0;
-    expect(rollCatchExtras(carp, rng2, 1 / 2).form).toBe('variant'); // 0.4 < 1/2
+    expect(rollCatchExtras(carp, rng2, { variant: 1, normal: 3 }).form).toBe('variant'); // 0.2×4 = 0.8 < 1
   });
 
-  it('variantRateOf: 유물 없으면 기본 MUTATION_RATE', () => {
-    expect(variantRateOf(newState())).toBeCloseTo(1 / 3, 10);
+  it('rollCatchExtras: 같은 난수라도 폼 가중치가 바뀌면 결과가 갈린다', () => {
+    const at = (weights: { variant: number; normal: number }) => {
+      const seq = [0.5, 0.5, 0.3];
+      return rollCatchExtras(carp, () => seq.shift() ?? 0, weights).form;
+    };
+    expect(at({ variant: 1, normal: 3 })).toBe('normal');  // 0.3×4 = 1.2 ≥ 1
+    expect(at({ variant: 1, normal: 2 })).toBe('variant'); // 0.3×3 = 0.9 < 1
+  });
+
+  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판이면 2 : 1', () => {
+    expect(mutationWeightsOf(newState(), 'pond')).toEqual({ normal: 3, variant: 1 });
+    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 2, variant: 1 });
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
@@ -902,5 +914,51 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
     // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/399 = 41.1%)
     expect(share.horsejack).toBeCloseTo(41.1028, 3);
     expect(share.ribbonfish).toBeCloseTo(20.5514, 3);
+  });
+});
+
+describe('가중치 추첨', () => {
+  it('pickWeighted: 가중치 합을 분모로 순서대로 누적해 고른다', () => {
+    const w = [['a', 1], ['b', 3]] as const;
+    expect(pickWeighted(w, () => 0)).toBe('a');
+    expect(pickWeighted(w, () => 0.249)).toBe('a');
+    expect(pickWeighted(w, () => 0.25)).toBe('b');
+    expect(pickWeighted(w, () => 0.999)).toBe('b');
+  });
+
+  it('rollFish: 등급을 먼저 뽑고(rng 1회) 그 등급 안에서 어종을 뽑는다(rng 1회)', () => {
+    const seq = [0.99, 0];               // 0.99 → 마지막 등급(전설), 0 → 그 등급의 첫 어종
+    let calls = 0;
+    const f = rollFish('pond', 1, () => { calls++; return seq.shift() ?? 0; });
+    expect(f.rarity).toBe('legendary');
+    expect(calls).toBe(2);
+  });
+
+  it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
+    expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 100, 10);
+    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(1 / 399, 10);
+    expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(23 / 100, 10);
+    expect(globalRarityShare('rare')).toBeCloseTo(20 / 100, 10);
+  });
+
+  it('해역 데이터의 폼·조우 가중치가 전역 기본값을 항목별로 덮어쓰고, 유물은 해역보다 우선한다', () => {
+    const pond = spotById('pond') as { mutationWeight?: object; namedWeight?: object };
+    try {
+      pond.mutationWeight = { variant: 2 };
+      pond.namedWeight = { named: 9 };
+      expect(mutationWeightsOf(newState(), 'pond')).toEqual({ variant: 2, normal: 3 });
+      expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1, normal: 2 });
+      expect(namedWeightsOf('pond')).toEqual({ named: 9, none: 999 });
+      expect(namedWeightsOf('river')).toEqual({ named: 1, none: 999 });
+    } finally {
+      delete pond.mutationWeight;
+      delete pond.namedWeight;
+    }
+  });
+
+  it('표시용 확률은 가중치에서 계산한다', () => {
+    expect(variantShare()).toBeCloseTo(1 / 4, 10);
+    expect(variantShare({ variant: 1, normal: 2 })).toBeCloseTo(1 / 3, 10);
+    expect(namedEncounterShare('sea')).toBeCloseTo(1 / 1000, 10);
   });
 });

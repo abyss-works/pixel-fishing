@@ -101,7 +101,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             <tr>
               <th scope="row">
                 GOOD 영역
-                <HelpHint text="노란 영역이 바 폭에서 차지하는 크기예요. 요구 파워를 넘친 만큼 넓어져요." />
+                <HelpHint text="노란 영역이 바 폭에서 차지하는 크기예요. 가운데 빨간 영역도 포함해요. 요구 파워를 넘을수록 넓어져요." />
               </th>
               <td>{pz.yellow > 0 ? `${Math.round(pz.yellow)}%` : '요구 미달'}</td>
             </tr>
@@ -115,7 +115,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             <tr>
               <th scope="row">
                 수동 확률 보정
-                <HelpHint text={`직접 낚을 때 희귀한 물고기가 더 잘 낚여요. 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`} />
+                <HelpHint text={`해역 요구 파워를 넘을수록 직접 낚을 때 희귀한 물고기가 더 잘 걸려요. 초과 ${MANUAL_POWER_BONUS.step}마다 ×${MANUAL_POWER_BONUS.perStep}씩, 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`} />
               </th>
               <td>×{bonus.value.toFixed(1)}</td>
             </tr>
@@ -137,7 +137,7 @@ export default function StatsModal({ game, movement, region, onClose }: Props) {
             플레이어에게 하는 안내라 해요체로 쓴다 */}
         <Note>
           {underpowered
-            ? '이 해역에서는 더 강한 낚싯대가 필요해요. 물고기가 미끼만 먹고 달아나요.'
+            ? '이 해역에서는 낚싯대 파워가 모자라요. GOOD · PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸려요. 입질도 늦어져요. 집 작업대나 항구 공방에서 강화해 주세요.'
             : '낚싯대가 충분히 강해서 이 해역의 물고기를 낚기 쉬워요.'}
         </Note>
       </Panel>

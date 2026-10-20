@@ -537,14 +537,14 @@ describe('R5b: 배 게이트', () => {
     renderField('world', SEA_SCHOOL, { boat: 0 });
     space();
     expect(phase()).toBe('idle');
-    expect(lastToast()).toContain('배 1단계');
+    expect(lastToast()).toContain('조각배(1단계)');
   });
 
   it('심해 해구는 배 2단계 필요, 충분하면 캐스팅', () => {
     renderField('world', DEEP_SCHOOL, { boat: 1 });
     space();
     expect(phase()).toBe('idle');
-    expect(lastToast()).toContain('배 2단계');
+    expect(lastToast()).toContain('돛단배(2단계)');
     cleanup();
     renderField('world', DEEP_SCHOOL, { boat: 2 });
     space();
@@ -784,8 +784,8 @@ describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상�
     seed({ dex: { crucian: { normal: rec(1) } } });
     render(<App />);
     clickTab('지역');
-    // 존 계층화 — 로어 슬롯은 항상 존 정보 ('고향 물')
-    expect(screen.getByRole('heading', { name: '고향 물' })).toBeInTheDocument();
+    // 존 계층화 — 로어 슬롯은 항상 존 정보 ('고향 마을')
+    expect(screen.getByRole('heading', { name: '고향 마을' })).toBeInTheDocument();
     expect(screen.getAllByText('마을 연못').length).toBeGreaterThan(0);
     expect(screen.queryByText('태평양')).not.toBeInTheDocument();      // 다른 지역 수역 미노출
     // 사거리 내 어군이 없으면 어군 목록만 — 어종 카드는 사거리 진입 시
@@ -812,7 +812,7 @@ describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상�
     clickTab('지역');
     // 연못 학교(214,118)보다 강 학교(100,222) 쪽에 서 있으면 강이 먼저다
     act(() => setPlayerPos({ x: 100, y: 200 }));
-    const list = screen.getByText('어군 정보').parentElement!;
+    const list = screen.getByText('가까운 어군').parentElement!;
     const names = [...list.querySelectorAll('span')].map(s => s.textContent).filter(Boolean);
     // 가벼운 UI만 — 물고기 카드·서사 없음
     expect(screen.queryByText('붕어')).not.toBeInTheDocument();
