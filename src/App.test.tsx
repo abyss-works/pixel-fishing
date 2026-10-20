@@ -537,14 +537,14 @@ describe('R5b: 배 게이트', () => {
     renderField('world', SEA_SCHOOL, { boat: 0 });
     space();
     expect(phase()).toBe('idle');
-    expect(lastToast()).toContain('배 1단계');
+    expect(lastToast()).toContain('조각배(1단계)');
   });
 
   it('심해 해구는 배 2단계 필요, 충분하면 캐스팅', () => {
     renderField('world', DEEP_SCHOOL, { boat: 1 });
     space();
     expect(phase()).toBe('idle');
-    expect(lastToast()).toContain('배 2단계');
+    expect(lastToast()).toContain('돛단배(2단계)');
     cleanup();
     renderField('world', DEEP_SCHOOL, { boat: 2 });
     space();

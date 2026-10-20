@@ -95,7 +95,7 @@ function ItemSection({ game, dispatch, setToast }: {
         })}
       </Frame>
       <Note>
-        미끼를 켜면 {baitBoostText('같은 등급')} 직접 낚아 올릴 때마다 하나씩 줄고,
+        미끼를 켜면 {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고,
         방치 낚시에는 쓰이지 않아요. 미끼는 콜롬보항의 향료전에서 살 수 있어요.
       </Note>
     </div>
@@ -352,8 +352,8 @@ export default function BagTab({ game, dispatch, setToast }: {
               <Note>
                 판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요. 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.
                 자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.
-                별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요.
-                행 소계는 그 종의 판매가 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
+                {' '}{EXHIBIT_UI_ENABLED && '별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요. '}
+                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
               </Note>
             </>
           )}

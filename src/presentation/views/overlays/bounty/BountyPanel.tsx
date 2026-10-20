@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
+import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import type { BountyPort } from '../../../../game/content/bounties.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
@@ -83,9 +84,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
         canAccept={basicOpen && canTake} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
-          `${josa(questLabel(q), '을/를')} 수주했어요.`)}
+          `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품 완료! ${fmtGold(q.reward)}를 받았어요.`, 'gold')} />
+          `납품했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
     );
   };
 
@@ -105,7 +106,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <p className="text-text-dim text-xs">
         {leftAll === null ? '오늘 남은 클리어 —' : `오늘 남은 클리어 일반 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
-      <p className="text-text-dim text-xs">조건을 채우지 못한 의뢰는 새벽 4시에 사라져요.</p>
+      <p className="text-text-dim text-xs">조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요. 보상을 받으면 클리어 1번이에요.</p>
       {loaded && snap === null && (
         <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.</Note>
       )}
