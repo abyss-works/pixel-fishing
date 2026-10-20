@@ -12,8 +12,8 @@ import { RARITY, RARITY_ORDER } from '../src/game/content/rarity';
 import { BOUNTIES, BOUNTY_LICENSE_FAME } from '../src/game/content/bounties';
 import type { BountyZone } from '../src/game/content/bounties';
 import { BAITS } from '../src/game/content/baits';
-import { drawRows, rarityWeightOf } from '../src/game/rules/logic';
-import { BAIT_WEIGHT_MULT, MUTATION_RATE, NAMED_ENCOUNTER_RATE, upgradeCost } from '../src/game/rules/balance';
+import { drawRows, mutationWeightsOf, namedEncounterShare, rarityWeightOf, variantShare } from '../src/game/rules/logic';
+import { BAIT_WEIGHT_MULT, upgradeCost } from '../src/game/rules/balance';
 import { DELTA_AXES, EV_AXES, buildBalanceReport } from '../src/features/admin/model/balanceReport';
 import {
   AXES, AXIS_LABEL, SPEC_MARGIN, VARIANT_EV, ZONE_ORDER, axisAvailable, entryLevel, headroom, inversions,
@@ -267,7 +267,7 @@ if (show('dex')) {
         for (const row of t.rows) {
           r -= row.prob;
           if (r >= 0) continue;
-          if (rand() < MUTATION_RATE) variant.delete(row.fish.id); else normal.delete(row.fish.id);
+          if (rand() < variantShare(mutationWeightsOf({ artifacts: [] }, row.fish.spot))) variant.delete(row.fish.id); else normal.delete(row.fish.id);
           if (row.fish.rarity === 'legendary' && tLeg < 0) tLeg = secs;
           break;
         }
@@ -299,7 +299,7 @@ if (show('bounty')) {
     const spots = spotsOfZone(z);
     const avg = (f: (s: SpotId) => number) => spots.reduce((s, sp) => s + f(sp.id), 0) / spots.length;
     const named = BOUNTIES.find(q => q.zone === z && q.difficulty === 'named')!;
-    const encounterH = (p: Play) => 1 / NAMED_ENCOUNTER_RATE / avg(s => rate(s, playAxis(s, p)).catchesPerHour);
+    const encounterH = (p: Play) => avg(s => 1 / namedEncounterShare(s)) / avg(s => rate(s, playAxis(s, p)).catchesPerHour);
     console.log(`[${z}] 네임드 토벌 ${n0(named.reward)}G — 조우까지 ${byPlay(p => hrs(encounterH(p)))}`);
     for (const q of BOUNTIES.filter(b => b.zone === z && b.difficulty !== 'named')) {
       const line = PLAYS.map(p => {

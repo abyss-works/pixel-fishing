@@ -1,9 +1,10 @@
 ﻿import type { ReactNode } from 'react';
 import {
-  BIG_CATCH_PERCENTILE, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT, MUTATION_RATE, VARIANT_PRICE_MULT,
+  BIG_CATCH_PERCENTILE, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT, VARIANT_PRICE_MULT,
 } from '../../../../../game/rules/balance';
 import { GAME_DAY_RESET_TEXT } from '../../../../../game/rules/time';
 import { TICKET_EXPIRY_TEXT } from '../../../../../game/rules/challenge';
+import { variantShare } from '../../../../../game/rules/logic';
 import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
 import { baitBoostText } from '../../../../ui/baitEffects';
 import Accordion from '../../../../ui/Accordion';
@@ -109,7 +110,7 @@ export default function VHelp() {
             <li>같은 어종 중 <b>상위 {BIG_CATCH_PERCENTILE}%</b>면 <b>월척</b>이에요. 막대 끝이 금색이 돼요.</li>
             <li>그 어종 중 가장 큰 개체에는 <b>최대</b> 배지가 붙어요.
               역대 최고 기록은 도감에 영원히 남아요. 팔아도 기록은 사라지지 않아요.</li>
-            <li>잡을 때마다 {Math.round(MUTATION_RATE * 100)}% 확률로 색이 다른 <b>돌연변이</b>가 나와요. 가방에서 보라색 배지로 구분되고{' '}
+            <li>잡을 때마다 {Math.round(variantShare() * 100)}% 확률로 색이 다른 <b>돌연변이</b>가 나와요. 가방에서 보라색 배지로 구분되고{' '}
               <b>{VARIANT_PRICE_MULT}배 가격</b>에 팔려요. 도감에서는 따로 세고,
               상세보기의 화살표로 구경할 수 있어요.</li>
             <li>어종마다 돌연변이는 한 가지뿐이에요. 계속 낚다 보면 언젠가 만나요.</li>

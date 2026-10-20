@@ -81,10 +81,11 @@ export const BOUNTY_NAMED_DAILY_CAP = 1;
 export const bountyDailyCap = (kind: BountyKind): number =>
   kind === 'named' ? BOUNTY_NAMED_DAILY_CAP : BOUNTY_DAILY_CAP;
 
-// 네임드 조우 확률 — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 돈다.
+// 네임드 조우 가중치(전역 기본) — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 뽑는다.
+// 확률 = named / (named + none). 해역 데이터(spots.namedWeight)가 있으면 그 해역은 그 값을 쓴다.
 // 명중하면 즉시 획득이 아니라 도전권을 발급한다.
 // Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
-export const NAMED_ENCOUNTER_RATE = 1 / 1000;
+export const NAMED_ENCOUNTER_WEIGHTS = { named: 1, none: 999 } as const;
 
 // 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 5~마다가스카르 8)만큼 맞히면 성공, 3번째 실패에 탈락.
 // 화면은 결투(왕복 커서·옮겨 가는 존)다.
@@ -115,7 +116,9 @@ export const PACING_SLOW_TYPES = ['catch', 'sendLetter'] as const satisfies read
 export const SIZE_MEAN_BASE = 10;      // cm — 가격 0일 때 평균 크기
 export const SIZE_MEAN_PER_PRICE = 0.15; // cm/G — 비쌀수록(대체로 큰 어종일수록) 평균 크기도 커짐
 export const SIZE_STD_RATIO = 0.18;    // 표준편차 = 평균 × 이 비율
-export const MUTATION_RATE = 1 / 4;    // 캐치마다 변이(색상 변이) 확률 — 돌연변이:일반 = 1:3. 어종당 변이 1종 고정
+// 폼 가중치(전역 기본) — 캐치마다 일반·돌연변이를 이 가중치로 뽑는다(확률 = 가중치 / 합).
+// 해역 데이터(spots.mutationWeight)가 있으면 그 해역은 그 값을, 유물 효과가 있으면 유물 값을 쓴다. 어종당 변이 1종 고정
+export const MUTATION_WEIGHTS = { variant: 1, normal: 3 } as const;
 export const VARIANT_PRICE_MULT = 2;   // 변이 개체 판매가 배수
 export const BIG_CATCH_PERCENTILE = 20; // 크기가 상위 이 %(이하) 안에 들면 "월척" 표시
 

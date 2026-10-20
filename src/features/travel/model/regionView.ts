@@ -1,4 +1,4 @@
-import { canFishSpot, drawRows, FISH, rarityWeightOf, speciesDiscovered } from '../../../game/rules/logic';
+import { canFishSpot, drawRows, FISH, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
@@ -9,7 +9,7 @@ import { defaultZoneOfRegion, spotsOfRegion, subtreeSpots, topZoneOf, zoneById, 
 import type { Zone, ZoneId } from '../../../game/content/zones';
 import { spotById } from '../../../game/content/spots';
 import type { Spot, SpotId } from '../../../game/content/spots';
-import { RARITY, RARITY_ORDER, rarityRank } from '../../../game/content/rarity';
+import { RARITY_ORDER, rarityRank } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 
 export interface NearbySpot {
@@ -134,10 +134,12 @@ export function selectSpotTendency(spot: SpotId): SpotTendency {
 
 export type GradeLevel = 'high' | 'mid' | 'low' | 'none';
 
-/** 수역 등급 예산을 글로벌 기본값과 비교해 지역 화면의 정성 등급을 만든다. */
+/** 해역의 등급 확률을 전역 기본 확률과 비교해 지역 화면의 정성 등급을 만든다.
+ *  해역마다 가중치 합(분모)이 달라 가중치 절대치끼리는 비교하지 않는다. */
 export function selectGradeLevel(spot: SpotId, rarity: RarityId): GradeLevel {
-  if (!FISH.some(fish => fish.spot === spot && fish.rarity === rarity)) return 'none';
-  const weight = rarityWeightOf(spot, rarity);
-  const base = RARITY[rarity].weight;
-  return weight > base ? 'high' : weight < base ? 'low' : 'mid';
+  const share = rarityShareOf(spot, rarity);
+  if (share === 0) return 'none';
+  const base = globalRarityShare(rarity);
+  const EPS = 1e-9;
+  return share > base + EPS ? 'high' : share < base - EPS ? 'low' : 'mid';
 }
