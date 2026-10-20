@@ -812,7 +812,7 @@ describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상�
     clickTab('지역');
     // 연못 학교(214,118)보다 강 학교(100,222) 쪽에 서 있으면 강이 먼저다
     act(() => setPlayerPos({ x: 100, y: 200 }));
-    const list = screen.getByText('어군 정보').parentElement!;
+    const list = screen.getByText('가까운 어군').parentElement!;
     const names = [...list.querySelectorAll('span')].map(s => s.textContent).filter(Boolean);
     // 가벼운 UI만 — 물고기 카드·서사 없음
     expect(screen.queryByText('붕어')).not.toBeInTheDocument();
