@@ -31,10 +31,10 @@ function fmtMeters(m: number): string {
 /** 슬롯 고정 높이 — 지역 탭의 모든 가변 구간은 **부모 높이를 고정**한다(사용자 요구 —
  *  구역 전환·수역 입장 전/후 배타 교체 시 레이아웃이 뒤바뀌면 안 된다). 내용이 넘치면
  *  그 슬롯만 스크롤된다. 탭 전체 높이는 씬(마을/바다)이 같으면 항상 같다.
- *  LORE = 구역/수역 로어(클램프 3줄 + 제목·한 줄 감정) · SLOT = 수역 정보(목록↔상세) ·
+ *  LORE = 구역 로어(제목·한 줄 소개·본문 전문, 넘치면 상자 안 스크롤) · SLOT = 수역 정보(목록↔상세) ·
  *  TABLE = 등급 분포(수역 2~3행) · FOOT = 다음 배·팁·조작(구역별 항목 수·줄바꿈 가변 — 최대
  *  동남아 4팁 8줄 기준, 안전 여유로 스크롤 허용). */
-const LORE_H = 'h-[112px]';
+const LORE_H = 'h-[148px]';
 const SLOT_H = 'h-[168px]';
 /** 등급 분포 — 최대 3행(동남아) + 헤더 + 프레임 여백을 정확히 담는 높이. **스크롤 없음**:
  *  세로 스크롤은 켜지지도 않고(내용 < 높이), 가로만 필요 시 스크롤된다. */
@@ -86,13 +86,13 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   return (
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <Frame className={cx(LORE_H, 'shrink-0 overflow-hidden p-2 flex flex-col justify-start gap-0.5')}>
+      <Frame className={cx(LORE_H, 'shrink-0 overflow-y-auto p-2 flex flex-col justify-start gap-0.5')}>
         <h3 className="text-sm text-gold pf-accent truncate">
           {parentZone && <span className="text-text-dim">{parentZone.name} &gt; </span>}
           {zone.name}
         </h3>
         <p className="text-accent text-xs">{zone.tagline}</p>
-        <p className="text-2xs leading-[1.6] text-text-dim line-clamp-3">
+        <p className="text-2xs leading-[1.6] text-text-dim">
           {zone.lore}
         </p>
       </Frame>
