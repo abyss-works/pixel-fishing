@@ -114,11 +114,18 @@ describe('낚시', () => {
   });
 
   it('도감 기록이 있는 어종은 횟수를 이어 센다', async () => {
+    // 연못 전 어종의 두 폼을 모두 채워 둔다 — 난수가 무엇을 뽑아도 기록이 있는 어종·폼이 잡힌다
     const dex: GameState['dex'] = {};
-    for (const id of ['crucian', 'minnow', 'loach', 'carp', 'goldfish']) {
-      dex[id] = { normal: { count: 5, maxSize: 99, first: '2026-01-01' } };
+    for (const id of ['crucian', 'minnow', 'loach', 'carp', 'goldfish', 'goldcarp']) {
+      const rec = { count: 5, maxSize: 99, first: '2026-01-01' };
+      dex[id] = { normal: rec, variant: rec };
     }
-    expect(await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' })).toMatchSnapshot();
+    const out = await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string; isNew: boolean } }).payload;
+    const records = out.db.records as { fish_id: string; form: string; count: string }[];
+    expect(caught.isNew).toBe(false);
+    expect(records.find(r => r.fish_id === caught.fishId && r.form === caught.form)?.count).toBe('6');
+    expect(out).toMatchSnapshot();
   });
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {

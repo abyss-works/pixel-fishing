@@ -1,5 +1,6 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
+import { spotById } from '../content/spots';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
@@ -11,6 +12,7 @@ import {
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
+  namedWeightsOf, namedEncounterShare, variantShare,
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
@@ -481,6 +483,15 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(rollCatchExtras(carp, rng2, { variant: 1, normal: 3 }).form).toBe('variant'); // 0.2×4 = 0.8 < 1
   });
 
+  it('rollCatchExtras: 같은 난수라도 폼 가중치가 바뀌면 결과가 갈린다', () => {
+    const at = (weights: { variant: number; normal: number }) => {
+      const seq = [0.5, 0.5, 0.3];
+      return rollCatchExtras(carp, () => seq.shift() ?? 0, weights).form;
+    };
+    expect(at({ variant: 1, normal: 3 })).toBe('normal');  // 0.3×4 = 1.2 ≥ 1
+    expect(at({ variant: 1, normal: 2 })).toBe('variant'); // 0.3×3 = 0.9 < 1
+  });
+
   it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판이면 2 : 1', () => {
     expect(mutationWeightsOf(newState(), 'pond')).toEqual({ normal: 3, variant: 1 });
     expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 2, variant: 1 });
@@ -928,5 +939,26 @@ describe('가중치 추첨', () => {
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(1 / 399, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(23 / 100, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(20 / 100, 10);
+  });
+
+  it('해역 데이터의 폼·조우 가중치가 전역 기본값을 항목별로 덮어쓰고, 유물은 해역보다 우선한다', () => {
+    const pond = spotById('pond') as { mutationWeight?: object; namedWeight?: object };
+    try {
+      pond.mutationWeight = { variant: 2 };
+      pond.namedWeight = { named: 9 };
+      expect(mutationWeightsOf(newState(), 'pond')).toEqual({ variant: 2, normal: 3 });
+      expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1, normal: 2 });
+      expect(namedWeightsOf('pond')).toEqual({ named: 9, none: 999 });
+      expect(namedWeightsOf('river')).toEqual({ named: 1, none: 999 });
+    } finally {
+      delete pond.mutationWeight;
+      delete pond.namedWeight;
+    }
+  });
+
+  it('표시용 확률은 가중치에서 계산한다', () => {
+    expect(variantShare()).toBeCloseTo(1 / 4, 10);
+    expect(variantShare({ variant: 1, normal: 2 })).toBeCloseTo(1 / 3, 10);
+    expect(namedEncounterShare('sea')).toBeCloseTo(1 / 1000, 10);
   });
 });
