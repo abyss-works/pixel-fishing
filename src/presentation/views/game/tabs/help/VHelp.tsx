@@ -3,6 +3,7 @@ import {
   BIG_CATCH_PERCENTILE, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT, MUTATION_RATE, VARIANT_PRICE_MULT,
 } from '../../../../../game/rules/balance';
 import { GAME_DAY_RESET_TEXT } from '../../../../../game/rules/time';
+import { TICKET_EXPIRY_TEXT } from '../../../../../game/rules/challenge';
 import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
 import { baitBoostText } from '../../../../ui/baitEffects';
 import Accordion from '../../../../ui/Accordion';
@@ -157,8 +158,8 @@ export default function VHelp() {
             <li><b>네임드 토벌</b>: 구역마다 거대한 존재가 하나씩 숨어 있어요. 네임드 토벌을 수주한 채
               그 구역에서 낚시하면 아주 드물게 마주쳐요. 방치 낚시 중에도 마주칠 수 있어요.
               네임드에 따라 구역 안의 정해진 해역에서만 나타나기도 해요. 수주하기 전이나 다른 구역에서는 마주치지 않아요.</li>
-            <li>마주치면 바다 화면 오른쪽에 <b>흔적</b> 카드가 떠요. 흔적은 정해진 시간 동안만 남고,
-              그 사이 {GAME_DAY_RESET_TEXT}가 지나면 의뢰와 함께 사라져요. 의뢰 구역 안에서 <b>추적</b>을 누르고{' '}
+            <li>마주치면 바다 화면 오른쪽에 <b>흔적</b> 카드가 떠요. 흔적은 {TICKET_EXPIRY_TEXT} 남고,
+              그 시각이 지나면 의뢰와 함께 사라져요. 의뢰 구역 안에서 <b>추적</b>을 누르고{' '}
               <b>조우</b>를 누르면 결투가 시작돼요. 이긴 뒤 <b>토벌</b>을 눌러야 토벌이 끝나요.
               결투에서 놓치면 흔적이 사라지니 다시 마주쳐야 해요.</li>
             <li>다른 탭을 보고 있을 때 마주치면 브라우저 탭 제목이 깜빡여요. 설정의 <b>알림</b>에서

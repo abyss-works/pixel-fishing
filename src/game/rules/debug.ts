@@ -16,7 +16,7 @@ import { artifactOfZone } from '../content/artifacts.js';
 const STATE_COMMANDS = ['stats.set', 'dex.completeZone', 'bounty.grantMaterial'] as const;
 /** 전용 테이블만 바꾸는 명령 — 리듀서는 상태를 그대로 둔다 */
 export const DEBUG_TABLE_COMMANDS = [
-  'bounty.ticketNearExpiry', 'bounty.clearTickets', 'bounty.resetToday', 'bounty.clearProgress',
+  'bounty.expireTickets', 'bounty.clearTickets', 'bounty.resetToday', 'bounty.clearProgress',
 ] as const;
 
 export type DebugCommandId = typeof STATE_COMMANDS[number] | typeof DEBUG_TABLE_COMMANDS[number];

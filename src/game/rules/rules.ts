@@ -20,7 +20,7 @@ import {
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
-  challengeHpOf, challengeWindowMs, ticketRemainingMs,
+  challengeHpOf, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
 import { GAME_DAY_RESET_TEXT } from './time.js';
@@ -182,7 +182,7 @@ export function canResolveChallenge(
   if (!coherent) return no('bad-request');
   const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
-  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO), challengeWindowMs());
+  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO));
   if (!(left > 0)) return no('ticket-expired');
   return OK;
 }

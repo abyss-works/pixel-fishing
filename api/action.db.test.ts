@@ -329,7 +329,7 @@ describe('현상금', () => {
   });
 
   it('만료된 도전권은 거부한다', async () => {
-    const { uid, named } = await namedSetup(5 * 3600_000);
+    const { uid, named } = await namedSetup(10.5 * 3600_000); // KST 03:36 발급 — 전날 게임 날짜
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
@@ -382,7 +382,7 @@ describe('개발 명령', () => {
       await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
         values ($1, 'general', 'pacific-easy-common', $2), ($1, 'general', 'pacific-easy-rare', '2030-03-01T00:00:00Z')`, [u, NOW]);
     }
-    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.ticketNearExpiry' }, { origin: LOCAL_ORIGIN });
+    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.expireTickets' }, { origin: LOCAL_ORIGIN });
     vi.setSystemTime(Date.parse(NOW) + 2000);
     const reset = await callAction(userToken(uid), { type: 'debug', command: 'bounty.resetToday' }, { origin: LOCAL_ORIGIN });
     vi.setSystemTime(Date.parse(NOW) + 4000);
@@ -621,6 +621,15 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       expect(await questIds(uid)).toEqual(['pacific-hard-legendary', 'pacific-normal-common', 'seasia-named-leviathan']);
       expect(((await dumpUser(env.client, uid)).bounty_tickets as { quest_id: string }[]).map(r => r.quest_id))
         .toEqual(['seasia-named-leviathan']);
+    });
+
+    it('발급 4시간이 지나도 같은 게임 날짜의 도전권으로는 결투 결과를 확정한다', async () => {
+      const uid = await seed({ state: { boat: 1 } });
+      const named = offered(uid, 'named');
+      await progressRow(uid, named.id, 0, DAY_START);
+      await ticketRow(uid, named.id, DAY_START);           // KST 04:00 발급 — NOW(KST 14:06)는 10시간 뒤
+      expect((await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 })).status)
+        .toBe(200);
     });
   });
 });
