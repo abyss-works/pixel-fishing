@@ -30,7 +30,7 @@ export interface Fish {
   color: string;
   shape: FishShape;                      // 스프라이트 몸 형태 — 어종마다 다르게 (스프라이트 렌더러)
   lore: string;                          // 도감 상세보기용 짧은 로어
-  variant: { name: string; color: string; lore: string }; // 색상 변이 1종 (balance.MUTATION_RATE)
+  variant: { name: string; color: string; lore: string }; // 색상 변이 1종 (폼 가중치 balance.MUTATION_WEIGHTS)
 }
 
 export const FISH: readonly Fish[] = [

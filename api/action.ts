@@ -20,7 +20,7 @@ import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logi
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER, rollCatchExtras,
-  takeItem, matchBountyCatch, rollNamedEncounter, variantRateOf,
+  takeItem, matchBountyCatch, rollNamedEncounter, mutationWeightsOf,
 } from '../src/game/rules/logic.js';
 import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -534,7 +534,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const today = todayKST();
   const entry = SPOTS.find(s => s.id === spot)?.powerReq ?? 0;
   const fish = rollCatchFish(spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts);
-  const extras = rollCatchExtras(fish, Math.random, variantRateOf(base));
+  const extras = rollCatchExtras(fish, Math.random, mutationWeightsOf(base, spot));
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
   const prev: FormRecord | undefined = d

@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, usableBait, nextDexRec, baitCost, variantRateOf,
+  addItem, takeItem, usableBait, nextDexRec, baitCost, mutationWeightsOf,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -299,7 +299,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       let fish: Fish;
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       fish = rollCatchFish(action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts);
-      const extras = rollCatchExtras(fish, deps.rng, variantRateOf(state));
+      const extras = rollCatchExtras(fish, deps.rng, mutationWeightsOf(state, action.spot));
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
