@@ -54,6 +54,11 @@ function StatusText({ status, detail = false }: { status: SpotStatus; detail?: b
   );
 }
 
+// 어군 슬롯의 두 모드(상세 ⇄ 가까운 목록)가 같은 행·바닥줄 규격을 쓴다 — 전환 시 배치가 흔들리지 않게
+const SLOT_ROW = 'flex items-center justify-between gap-2 px-2 py-1.5 text-sm';
+const SLOT_ROW_SIDE = 'flex items-center gap-1.5 text-xs whitespace-nowrap';
+const SLOT_FOOT = 'mt-auto px-2 py-1.5 text-2xs leading-[1.5] text-text-dim border-t border-line';
+
 const LEVEL_TEXT = { high: '높음', mid: '보통', low: '낮음', none: '—' } as const;
 const LEVEL_CLS = {
   high: 'text-gold', mid: 'text-text-dim', low: 'text-accent', none: 'text-text-dim opacity-50',
@@ -82,16 +87,12 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
       <Frame className={cx(LORE_H, 'shrink-0 overflow-hidden p-2 flex flex-col justify-center gap-0.5')}>
-        {parentZone && (
-          <p className="text-2xs text-text-dim truncate">
-            {parentZone.name} › <span className="text-gold">특수 해역</span>
-          </p>
-        )}
         <h3 className="text-sm text-gold pf-accent truncate">
           {zone.name}
+          {parentZone && <span className="ml-1 text-2xs text-text-dim">({parentZone.name} 특수 해역)</span>}
         </h3>
         <p className="text-accent text-xs">{zone.tagline}</p>
-        <p className={cx('text-2xs leading-[1.6] text-text-dim', parentZone ? 'line-clamp-2' : 'line-clamp-3')}>
+        <p className="text-2xs leading-[1.6] text-text-dim line-clamp-3">
           {zone.lore}
         </p>
       </Frame>
@@ -108,13 +109,14 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         <Frame className={cx(SLOT_H, 'overflow-y-auto p-0 flex flex-col')}>
           {focused ? (
             /* ── 사거리 내 어군 상세 ── */
-            <div className="flex flex-col flex-1 p-2 gap-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex flex-col flex-1">
+              <div className={cx(SLOT_ROW, 'border-b border-line')}>
                 <span className="truncate">{focused.name}</span>
                 {focusedStatus && (
-                  <span className="text-2xs whitespace-nowrap"><StatusText status={focusedStatus} detail /></span>
+                  <span className={SLOT_ROW_SIDE}><StatusText status={focusedStatus} detail /></span>
                 )}
               </div>
+              <div className="px-2 py-1.5">
               <CardCarousel perView={FISH_PER_VIEW}>
                 {focusedFishes.map(({ fish: f, discovered: caught }) => {
                     return (
@@ -129,7 +131,8 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                     );
                   })}
               </CardCarousel>
-              <p className="text-2xs leading-[1.5] text-text-dim border-t border-line pt-1.5">
+              </div>
+              <p className={SLOT_FOOT}>
                 {tendency ? tendencyText[tendency] : null}
               </p>
             </div>
@@ -139,9 +142,9 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             <div className="flex flex-col divide-y divide-line">
               {nearby.map(({ spot: s, distancePx: d, status }) => {
                 return (
-                  <div key={s.id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+                  <div key={s.id} className={SLOT_ROW}>
                     <span className="truncate">{s.name}</span>
-                    <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                    <span className={SLOT_ROW_SIDE}>
                       {Number.isFinite(d) && <span className="text-text-dim">{fmtMeters(d)}</span>}
                       <StatusText status={status} />
                     </span>
@@ -149,7 +152,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                 );
               })}
             </div>
-            <p className="mt-auto px-2 py-1.5 text-2xs text-text-dim border-t border-line">
+            <p className={SLOT_FOOT}>
               어군 가까이 가면 사는 물고기를 볼 수 있어요.
             </p>
             </div>
