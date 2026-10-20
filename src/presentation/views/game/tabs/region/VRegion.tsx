@@ -86,10 +86,10 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   return (
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <Frame className={cx(LORE_H, 'shrink-0 overflow-hidden p-2 flex flex-col justify-center gap-0.5')}>
+      <Frame className={cx(LORE_H, 'shrink-0 overflow-hidden p-2 flex flex-col justify-start gap-0.5')}>
         <h3 className="text-sm text-gold pf-accent truncate">
+          {parentZone && <span className="text-text-dim">{parentZone.shortName} &gt; </span>}
           {zone.name}
-          {parentZone && <span className="ml-1 text-2xs text-text-dim">({parentZone.name} 특수 해역)</span>}
         </h3>
         <p className="text-accent text-xs">{zone.tagline}</p>
         <p className="text-2xs leading-[1.6] text-text-dim line-clamp-3">
