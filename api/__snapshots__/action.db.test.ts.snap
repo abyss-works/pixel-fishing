@@ -927,19 +927,19 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
         "user_id": "<user>",
       },
       {
-        "created_at": "2030-03-04T05:06:09.000Z",
+        "created_at": "2030-03-04T05:06:07.000Z",
         "payload": {
           "args": {},
-          "command": "bounty.resetToday",
+          "command": "bounty.expireTickets",
         },
         "type": "debug",
         "user_id": "<user>",
       },
       {
-        "created_at": "2030-03-04T05:06:07.000Z",
+        "created_at": "2030-03-04T05:06:09.000Z",
         "payload": {
           "args": {},
-          "command": "bounty.ticketNearExpiry",
+          "command": "bounty.resetToday",
         },
         "type": "debug",
         "user_id": "<user>",
@@ -6088,7 +6088,7 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
     ],
     "bounty_tickets": [
       {
-        "issued_at": "2030-03-04T00:06:07.000Z",
+        "issued_at": "2030-03-03T18:36:07.000Z",
         "quest_id": "pacific-named-megalodon",
         "user_id": "<user>",
       },

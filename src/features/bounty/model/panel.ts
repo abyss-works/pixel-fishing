@@ -5,7 +5,7 @@ import {
 import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { zoneById } from '../../../game/content/zones';
-import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challenge';
+import { ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
@@ -121,9 +121,7 @@ export function selectBountyPanelData({
     ? snapshot?.tickets.find(ticket => ticket.questId === namedQuest.id)?.issuedAt ?? null
     : null;
   const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(
-      ticketIssuedAt, nowMs, challengeWindowMs(),
-    ) / 60_000));
+    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs) / 60_000));
   const relic = artifactOfZone(zone);
 
   return {

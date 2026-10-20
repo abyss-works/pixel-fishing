@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { selectTraceCard } from './trace';
-import { CHALLENGE_WINDOW_MS } from '../../../game/rules/balance';
 
-const issued = '2026-10-16T00:00:00.000Z';
+const issued = '2026-10-16T00:00:00.000Z'; // KST 09:00 — 다음 날 KST 04:00(19:00Z)까지 유효
+const expires = Date.parse('2026-10-16T19:00:00.000Z');
 const now = Date.parse(issued) + 8 * 60_000;
 const snap = (over: Partial<Parameters<typeof selectTraceCard>[0] & object> = {}) => ({
   clearsToday: { general: 0, named: 0 }, progress: [], tickets: [], ...over,
@@ -18,7 +18,7 @@ describe('흔적 카드 선택', () => {
     const card = selectTraceCard(snap({ tickets: [{ questId: 'pacific-named-megalodon', issuedAt: issued }] }), 'deep', now)!;
     expect(card.named.id).toBe('megalodon');
     expect(card.named.trace).toContain('그물');
-    expect(card.leftMins).toBe(CHALLENGE_WINDOW_MS / 60_000 - 8);
+    expect(card.leftMins).toBe((expires - now) / 60_000);
     expect(card.here).toBe(true); // 해구는 태평양의 하위 존이다
     expect(card.done).toBe(false);
   });
@@ -31,7 +31,9 @@ describe('흔적 카드 선택', () => {
 
   it('만료된 도전권과 시계를 아직 안 찍은 때(nowMs 0)는 카드가 없다', () => {
     const tickets = [{ questId: 'pacific-named-megalodon', issuedAt: issued }];
-    expect(selectTraceCard(snap({ tickets }), 'pacific', Date.parse(issued) + CHALLENGE_WINDOW_MS + 1)).toBeNull();
+    expect(selectTraceCard(snap({ tickets }), 'pacific', expires)).toBeNull();
+    // 발급 4시간 뒤에도 같은 게임 날짜 안이면 남아 있다
+    expect(selectTraceCard(snap({ tickets }), 'pacific', Date.parse(issued) + 5 * 3600_000)).not.toBeNull();
     expect(selectTraceCard(snap({ tickets }), 'pacific', 0)).toBeNull();
   });
 

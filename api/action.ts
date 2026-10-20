@@ -30,7 +30,7 @@ import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
 import { isDebugTableCommand } from '../src/game/rules/debug.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
-import { challengeWindowMs } from '../src/game/rules/challenge.js';
+import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
 import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
@@ -92,9 +92,8 @@ export type DebugTablePlan =
   | { table: string; op: 'update'; values: Record<string, unknown> };
 export function debugTablePlan(command: DebugTableCommand, nowMs: number): DebugTablePlan {
   switch (command) {
-    case 'bounty.ticketNearExpiry':
-      return { table: 'bounty_tickets', op: 'update',
-        values: { issued_at: new Date(nowMs - challengeWindowMs() + 60_000).toISOString() } };
+    case 'bounty.expireTickets':
+      return { table: 'bounty_tickets', op: 'update', values: { issued_at: expiredTicketIssuedAt(nowMs) } };
     case 'bounty.clearTickets':
       return { table: 'bounty_tickets', op: 'delete' };
     case 'bounty.resetToday':

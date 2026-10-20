@@ -4,7 +4,7 @@ import { namedById } from '../../../game/content/named';
 import type { NamedFish } from '../../../game/content/named';
 import { topZoneOf, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
-import { challengeWindowMs, ticketRemainingMs } from '../../../game/rules/challenge';
+import { ticketRemainingMs } from '../../../game/rules/challenge';
 import type { BountySnapshot } from './types';
 
 /** 바다 위 흔적 카드 한 장 — 유효한 도전권(흔적) 또는 토벌을 마치고 보상을 안 받은 네임드 의뢰 */
@@ -48,7 +48,7 @@ export function selectTraceCard(
   for (const ticket of snapshot.tickets) {
     const quest = bountyById(ticket.questId);
     if (!quest) continue;
-    const leftMs = ticketRemainingMs(ticket.issuedAt, nowMs, challengeWindowMs());
+    const leftMs = ticketRemainingMs(ticket.issuedAt, nowMs);
     if (leftMs <= 0) continue;
     const card = cardOf(quest, zone, Math.ceil(leftMs / 60_000), false);
     if (card) return card;

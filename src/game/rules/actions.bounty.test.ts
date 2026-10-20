@@ -372,6 +372,14 @@ describe('resolveChallenge', () => {
     expect(out).toEqual({ ok: false, error: 'ticket-expired' });
   });
 
+  it('발급 4시간이 지나도 같은 게임 날짜면 유효하고, KST 04:00을 넘기면 ticket-expired', () => {
+    const issued = ticket('2026-10-09T00:30:00.000Z'); // KST 09:30 → 2026-10-09T19:00Z(KST 04:00)까지
+    const at = (now: string) => applyAction(ready(), act(), deps({ ...dyn, now,
+      bounty: ctx({ active: ['pacific-named-megalodon'], tickets: issued }) }));
+    expect(at('2026-10-09T06:00:00.000Z').ok).toBe(true);
+    expect(at('2026-10-09T19:00:00.000Z')).toEqual({ ok: false, error: 'ticket-expired' });
+  });
+
   it('주장 정합성이 깨지면 bad-request (네임드 체력 미만 히트로 성공 주장)', () => {
     expect(applyAction(ready(), act({ hits: 4 }), full()))
       .toEqual({ ok: false, error: 'bad-request' });
