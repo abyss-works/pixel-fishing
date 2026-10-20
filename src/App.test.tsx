@@ -784,8 +784,8 @@ describe('지역 탭: 수역 정보 슬롯 — 가까운 수역 ↔ 진입 상�
     seed({ dex: { crucian: { normal: rec(1) } } });
     render(<App />);
     clickTab('지역');
-    // 존 계층화 — 로어 슬롯은 항상 존 정보 ('고향 물')
-    expect(screen.getByRole('heading', { name: '고향 물' })).toBeInTheDocument();
+    // 존 계층화 — 로어 슬롯은 항상 존 정보 ('고향 마을')
+    expect(screen.getByRole('heading', { name: '고향 마을' })).toBeInTheDocument();
     expect(screen.getAllByText('마을 연못').length).toBeGreaterThan(0);
     expect(screen.queryByText('태평양')).not.toBeInTheDocument();      // 다른 지역 수역 미노출
     // 사거리 내 어군이 없으면 어군 목록만 — 어종 카드는 사거리 진입 시
