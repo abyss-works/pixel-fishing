@@ -3,7 +3,7 @@ import type { School } from '../../../game/world/types';
 import { SPOTS } from '../../../game/content/spots';
 import { rarityRank } from '../../../game/content/rarity';
 import { newState } from '../../../game/rules/logic';
-import { rankNearbySpots, selectFishAtSpot, selectRegionViewData, selectSpotStatus } from './regionView';
+import { rankNearbySpots, selectFishAtSpot, selectGradeLevel, selectRegionViewData, selectSpotStatus } from './regionView';
 
 describe('지역 탭 파생 데이터', () => {
   it('위치가 있으면 가장 가까운 어군을 앞에 두고 제한 수만 반환한다', () => {
@@ -78,5 +78,12 @@ describe('지역 탭 파생 데이터', () => {
       { ...newState(), boat: 3, rod: 10 }, 'world', schools, null, null, { x: 0, y: 0 });
     expect(view.nearby[0].spot.id).toBe('coron');
     expect(view.nearby[0].status).toEqual({ kind: 'power', power: 55, req: 60 });
+  });
+
+  it('등급 분포는 해역의 등급 확률을 전역 확률과 비교한다 — 가중치 절대치가 아니다', () => {
+    expect(selectGradeLevel('indian', 'rare')).toBe('low');        // 54/399 = 13.5% < 20%
+    expect(selectGradeLevel('indian', 'legendary')).toBe('low');   // 1/399 < 1%
+    expect(selectGradeLevel('coron', 'epic')).toBe('high');        // 9% > 5%
+    expect(selectGradeLevel('coron', 'rare')).toBe('mid');         // 20% = 20%
   });
 });
