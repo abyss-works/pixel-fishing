@@ -3,7 +3,7 @@ import type { School } from '../../../game/world/types';
 import { SPOTS } from '../../../game/content/spots';
 import { rarityRank } from '../../../game/content/rarity';
 import { newState } from '../../../game/rules/logic';
-import { rankNearbySpots, selectFishAtSpot } from './regionView';
+import { rankNearbySpots, selectFishAtSpot, selectRegionViewData } from './regionView';
 
 describe('지역 탭 파생 데이터', () => {
   it('위치가 있으면 가장 가까운 어군을 앞에 두고 제한 수만 반환한다', () => {
@@ -32,5 +32,17 @@ describe('지역 탭 파생 데이터', () => {
     expect(fishes.every(row => row.fish.spot === spot.id)).toBe(true);
     const ranks = fishes.map(row => rarityRank(row.fish.rarity));
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+  });
+
+  it('하위 존(특수 해역)에 있으면 그 존을 문맥으로 쓰고 표는 최상위 존을 쓴다', () => {
+    const view = selectRegionViewData(newState(), 'world', [], 'coron', null, null);
+    expect(view.contextZone).toBe('coron');
+    expect(view.zone.id).toBe('coron');
+    expect(view.tableZone.id).toBe('seasia');
+  });
+
+  it('다른 씬의 구역이 스토어에 남아 있으면 지역 기본 구역을 쓴다', () => {
+    expect(selectRegionViewData(newState(), 'village', [], 'coron', null, null).contextZone)
+      .toBe('village');
   });
 });
