@@ -81,6 +81,20 @@ describe('EncounterModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('이긴 뒤에도 토벌을 누르기 전에는 닫기 X·Esc가 없다 — 닫으면 결과가 사라진다', () => {
+    const { onClose, onResolve } = show();
+    enter();
+    for (let i = 0; i < 5; i++) {
+      waitForZone();
+      fireEvent.click(screen.getByRole('button', { name: '챔질' }));
+    }
+    expect(screen.getByRole('button', { name: '토벌' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onResolve).not.toHaveBeenCalled();
+  });
+
   it('맞히면 체력이 줄고, 존 밖에서 치면 도주 게이지가 찬다', () => {
     show();
     enter();
