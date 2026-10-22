@@ -25,6 +25,8 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
+import MailboxButton from '../overlays/mailbox/MailboxButton';
+import MailboxModal from '../overlays/mailbox/MailboxModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import UpdateModal from '../overlays/update/UpdateModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
@@ -61,6 +63,7 @@ export default function GameView(props: GameViewProps) {
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
@@ -152,6 +155,10 @@ export default function GameView(props: GameViewProps) {
                       onClose={() => setStatsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
+        {mailboxOpen && (
+          <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
+        )}
 
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
