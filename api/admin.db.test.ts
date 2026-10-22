@@ -85,6 +85,8 @@ interface Case {
   key?: (r: Row) => string;
   /** 함수 결과를 읽기 함수의 반환 순서로 맞춘다 */
   after?: (rows: Row[]) => Row[];
+  /** 읽기 함수에만 있는 열을 뺀다 — 뷰가 만들어진 뒤 읽기 함수에 더한 열 */
+  only?: (r: Row) => Row;
   /** 데이터가 있는 상태에서 비어 있지 않아야 하는가 */
   filled: boolean;
 }
@@ -94,6 +96,8 @@ const byId = (r: Row) => String(r.id).padStart(12, '0');
 const dayCase = (name: string, view: string, days: number): Case => ({
   name, params: { days: String(days) }, view: `select * from public.${view} ${sinceDay(days)}`,
   filled: days > 1 || name === 'dailyActive',
+  // 우편 유입(mail_gold)은 v_economy_daily가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
+  ...(name === 'economy' ? { only: ({ mail_gold: _mail, ...rest }: Row) => rest } : {}),
 });
 const CASES: Case[] = [
   { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true },
@@ -119,7 +123,7 @@ const DAY_CASES: Case[] = [1, 7, 90].flatMap(days => [
 async function expectSameAsView(c: Case): Promise<Row[]> {
   const res = await callAdmin({ q: c.name, ...c.params }, userToken(ADMIN));
   expect(res.status, c.name).toBe(200);
-  const actual = res.body as Row[];
+  const actual = c.only ? (res.body as Row[]).map(c.only) : res.body as Row[];
   const expected = c.after ? c.after(await asBrowser(ADMIN, c.view)) : await asBrowser(ADMIN, c.view);
   expect(c.key ? byKey(actual, c.key) : actual, c.name).toEqual(c.key ? byKey(expected, c.key) : expected);
   return actual;
@@ -280,6 +284,7 @@ describe('조회 결과', () => {
     await event(GUEST, 'sell', { gold: 100 }, '1 hour');
     await event(GUEST, 'sell', { gold: 250 }, '2 hours');
     await event(GUEST, 'coupon', { gold: 500 }, '1 day');
+    await event(GUEST, 'claimMail', { mailId: 1, gold: 250 }, '1 day');
     await event(GUEST, 'upgradeRod', { cost: 80 }, '1 day');
     await event(GUEST, 'buyBoat', { cost: 1000 }, '2 days');
     await event(GUEST, 'buyBait', { cost: 30 }, '30 minutes');
@@ -334,9 +339,9 @@ describe('조회 결과', () => {
   it('economy: 골드 유입·유출을 일 단위로 합산한다', async () => {
     const rows = (await callAdmin({ q: 'economy', days: '90' }, userToken(ADMIN))).body as Row[];
     const total = (key: string) => rows.reduce((sum, r) => sum + Number(r[key]), 0);
-    expect({ sells: total('sells'), sell_gold: total('sell_gold'), coupon_gold: total('coupon_gold'),
+    expect({ sells: total('sells'), sell_gold: total('sell_gold'), coupon_gold: total('coupon_gold'), mail_gold: total('mail_gold'),
       rod_cost: total('rod_cost'), boat_cost: total('boat_cost'), bait_cost: total('bait_cost') })
-      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, rod_cost: 80, boat_cost: 1000, bait_cost: 30 });
+      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, mail_gold: 250, rod_cost: 80, boat_cost: 1000, bait_cost: 30 });
   });
 
   it('bountyFunnel: 네임드와 일반 의뢰, 도전권, 결투 승패, 보상을 나누어 센다', async () => {

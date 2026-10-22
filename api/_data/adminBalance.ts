@@ -81,6 +81,7 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
       'goldFlow', (select json_build_object(
           'sellGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'sell'), 0),
           'couponGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'coupon'), 0),
+          'mailGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'claimMail'), 0),
           'rodCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'upgradeRod'), 0),
           'boatCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBoat'), 0),
           'baitCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBait'), 0))

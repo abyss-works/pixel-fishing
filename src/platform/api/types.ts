@@ -92,7 +92,7 @@ export interface AdminRetentionRow {
   d14: number | null; d30: number | null;
 }
 export interface AdminEconomyRow {
-  day: string; sells: number; sell_gold: number; coupon_gold: number;
+  day: string; sells: number; sell_gold: number; coupon_gold: number; mail_gold: number;
   rod_cost: number; boat_cost: number; bait_cost: number;
 }
 /** 바운티 퍼널 일계 — 네임드 수주 → 흔적(도전권) → 결투 승·패 → 토벌 보상, 일반 수주·납품 */
@@ -142,8 +142,8 @@ export interface BalanceLive {
   rodBuckets: { fromLevel: number; users: number }[];
   /** 골드 잔고의 25·50·75·90분위와 최대. 사용자가 없으면 모두 null이다 */
   gold: { p25: number | null; p50: number | null; p75: number | null; p90: number | null; max: number | null };
-  /** 골드 흐름. 기간 안 유입(판매, 쿠폰)과 유출(강화, 배, 미끼)의 합이다 */
-  goldFlow: { sellGold: number; couponGold: number; rodCost: number; boatCost: number; baitCost: number };
+  /** 골드 흐름. 기간 안 유입(판매, 쿠폰, 우편)과 유출(강화, 배, 미끼)의 합이다 */
+  goldFlow: { sellGold: number; couponGold: number; mailGold: number; rodCost: number; boatCost: number; baitCost: number };
   /** 일일 활성. 이벤트가 있는 사용자 수이다. KST 날짜(yyyy-mm-dd) 오름차순이고 이벤트가 없는 날은 행이 없다. 기간 시작 시각이 날짜 중간이면 첫 날은 일부만 센다 */
   dau: { day: string; dau: number }[];
   /** 이탈 지점. 7일 넘게 저장이 없는 사용자의 배별 인원과 평균 명성, 평균 낚싯대 레벨이다 */

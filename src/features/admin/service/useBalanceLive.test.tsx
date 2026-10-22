@@ -15,7 +15,7 @@ import { BALANCE_LIVE_DAYS, useBalanceLive } from './useBalanceLive';
 const live = (marker: number) => ({
   judgment: [], spots: [], dexBuckets: [], boats: [{ boat: 0, users: marker }], rodBuckets: [],
   gold: { p25: null, p50: null, p75: null, p90: null, max: null },
-  goldFlow: { sellGold: 0, couponGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
+  goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
   dau: [], churn: [],
   bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 0, generalAccepts: 0, delivered: 0 },
   anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null }, fameGateStuck: [],
