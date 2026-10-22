@@ -84,6 +84,7 @@ describe('지역 탭 파생 데이터', () => {
     expect(selectGradeLevel('indian', 'rare')).toBe('low');        // 54/399 = 13.5% < 20%
     expect(selectGradeLevel('indian', 'legendary')).toBe('low');   // 1/399 < 1%
     expect(selectGradeLevel('coron', 'epic')).toBe('high');        // 9% > 5%
-    expect(selectGradeLevel('coron', 'rare')).toBe('mid');         // 20% = 20%
+    expect(selectGradeLevel('coron', 'rare')).toBe('high');        // 20/100 = 20% > 20/101
+    expect(selectGradeLevel('pond', 'rare')).toBe('mid');          // 전역 가중치를 쓰는 해역은 전역 확률과 같다
   });
 });

@@ -13,7 +13,7 @@ export interface Rarity {
 }
 
 const DATA = {
-  common:    { name: '일반', color: '#b8c2cc', weight: 74, fame: 5,   order: 0, sparks: 0,  sparkDist: 0,   halo: false },
+  common:    { name: '일반', color: '#b8c2cc', weight: 75, fame: 5,   order: 0, sparks: 0,  sparkDist: 0,   halo: false },
   rare:      { name: '희귀', color: '#4fc3f7', weight: 20, fame: 15,  order: 1, sparks: 0,  sparkDist: 0,   halo: false },
   epic:      { name: '영웅', color: '#ba68c8', weight: 5,  fame: 40,  order: 2, sparks: 12, sparkDist: 70,  halo: false },
   legendary: { name: '전설', color: '#ffd54f', weight: 1,  fame: 100, order: 3, sparks: 20, sparkDist: 110, halo: true },

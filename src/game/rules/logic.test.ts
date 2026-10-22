@@ -45,7 +45,7 @@ describe('데이터 무결성', () => {
   });
 
   it('R12: 등급 가중치와 명성', () => {
-    expect(RARITY.common.weight).toBe(74);
+    expect(RARITY.common.weight).toBe(75);
     expect(RARITY.rare.weight).toBe(20);
     expect(RARITY.epic.weight).toBe(5);
     expect(RARITY.legendary.weight).toBe(1);
@@ -152,10 +152,10 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
-  it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 74/3%', () => {
+  it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 75/3%', () => {
     const commons = drawRows('pond').filter(x => x.fish.rarity === 'common');
     expect(commons).toHaveLength(3);
-    for (const x of commons) expect(x.fishPct).toBeCloseTo(74 / 3 / (74 + 20 + 5 + 1) * 100, 5);
+    for (const x of commons) expect(x.fishPct).toBeCloseTo(75 / 3 / (75 + 20 + 5 + 1) * 100, 5);
     // 개체 가중치는 기본 1 (고도화 예약 축)
     for (const x of drawRows('pond')) expect(x.individualWeight).toBe(1);
   });
@@ -936,7 +936,7 @@ describe('가중치 추첨', () => {
   });
 
   it('rollFish: 등급을 먼저 뽑고(rng 1회) 그 등급 안에서 어종을 뽑는다(rng 1회)', () => {
-    const seq = [0.99, 0];               // 0.99 → 마지막 등급(전설), 0 → 그 등급의 첫 어종
+    const seq = [0.995, 0];              // 0.995 → 마지막 등급(전설, 100/101 이상), 0 → 그 등급의 첫 어종
     let calls = 0;
     const f = rollFish('pond', 1, () => { calls++; return seq.shift() ?? 0; });
     expect(f.rarity).toBe('legendary');
@@ -944,10 +944,10 @@ describe('가중치 추첨', () => {
   });
 
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
-    expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 100, 10);
+    expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 101, 10);
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(2 / 400, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(23 / 100, 10);
-    expect(globalRarityShare('rare')).toBeCloseTo(20 / 100, 10);
+    expect(globalRarityShare('rare')).toBeCloseTo(20 / 101, 10);
   });
 
   it('해역 데이터의 폼·조우 가중치가 전역 기본값을 항목별로 덮어쓰고, 유물은 해역보다 우선한다', () => {
