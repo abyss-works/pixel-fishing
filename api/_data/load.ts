@@ -93,6 +93,13 @@ export async function catchLookup(db: Executor, uid: string, fishId: string, for
   return { dex: rows[0].dex, bagCount: rows[0].bag };
 }
 
+/** 어종 천장 후보 가운데 일반 폼을 이미 가진 어종 — 후보가 있을 때만 부른다 */
+export async function ownedNormalForms(db: Executor, uid: string, fishIds: readonly string[]): Promise<Set<string>> {
+  const { rows } = await db.execute<{ fish_id: string }>(sql`select fish_id from public.records
+    where user_id = ${uid} and form = 'normal' and count > 0 and fish_id = any(${textArray(fishIds)})`);
+  return new Set(rows.map(r => r.fish_id));
+}
+
 export type VictimRow = { uid: string; fish_id: string; form: string; size: number | null };
 
 /**

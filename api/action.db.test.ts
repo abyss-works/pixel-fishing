@@ -6,6 +6,7 @@ import { BOUNTIES, bountyById, dailyQuestFor } from '../src/game/content/bountie
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
+import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
 import {
   LOCAL_ORIGIN, callAction, captureRealClock, dumpUser, fish, normalize, seedUser, seededRandom,
   startActionEnv, testUid, userToken,
@@ -638,5 +639,35 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       expect((await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 })).status)
         .toBe(200);
     });
+  });
+});
+
+describe('천장', () => {
+  it('어종 천장에 닿은 미보유 어종은 일반 폼으로 확정하고 천장을 끝낸다', async () => {
+    const out = await run({ state: { pity: { goldcarp: SPECIES_PITY_K } } }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: Record<string, unknown> }).payload;
+    expect(caught).toMatchObject({ fishId: 'goldcarp', form: 'normal', pity: true });
+    const data = (out.db.saves_current[0] as { data: GameState }).data;
+    expect(data.pity.goldcarp).toBe(PITY_DONE);
+  });
+
+  it('어종 천장 후보가 이미 일반 폼을 가진 어종이면 확정하지 않고 끝 표시만 한다', async () => {
+    const dex: GameState['dex'] = { goldcarp: { normal: { count: 1, maxSize: 50, first: '2026-01-01' } } };
+    const out = await run({ state: { dex, pity: { goldcarp: SPECIES_PITY_K } } }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: Record<string, unknown> }).payload;
+    expect(caught.pity).toBeUndefined();
+    const data = (out.db.saves_current[0] as { data: GameState }).data;
+    expect(data.pity.goldcarp).toBe(PITY_DONE);
+  });
+
+  it('네임드 천장에 닿은 캐치는 도전권을 발급하고 빗나감 수를 되돌린다', async () => {
+    const uid = await seed({ state: { boat: 1, namedPity: { day: TODAY_KST, misses: NAMED_PITY_CATCHES - 1, fails: 0 } } });
+    const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW]);
+    await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+    const db = await dumpUser(env.client, uid);
+    expect(db.bounty_tickets).toHaveLength(1);
+    expect((db.saves_current[0] as { data: GameState }).data.namedPity).toEqual({ day: TODAY_KST, misses: 0, fails: 0 });
   });
 });
