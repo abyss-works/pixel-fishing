@@ -69,7 +69,7 @@ export interface GameState {
   gold: number;
   fame: number; // 명성 — 무한 누적, 직접 상태 변화 없음, 구매 시 하한 검증용
   boat: number; // 0(없음, 마을 낚시만)~4
-  rod: number;  // 1~∞ (무한 강화, 스탯은 점근 수렴)
+  rod: number;  // 1~∞ (무한 강화, 입질은 레벨마다 곱연산 단축)
   bag: FishInstance[];      // 잡은 개체 목록 (미판매)
   exhibit: FishInstance[];  // 전시대 — v8은 필드만 신설(항상 빈 배열), 액션·UI는 전시 릴리즈에서
   /** 도감 = 종 → 폼 → 기록. 폼이 늘어도 키 하나만 늘어난다 (구 병렬 Record 6개를 흡수) */
@@ -105,21 +105,20 @@ export interface RodStats {
   sweep: number;   // 타이밍 바 커서가 끝까지 가는 시간(초) = 챔질 가능 시간
 }
 
-// 낚싯대 성장 곡선 t: 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD)
+// 방치 부스트 절대치 곡선 t(fishing.autoCommonBoost): 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD.curveK)
 // ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
 // 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
 export function rodCurveT(level: number): number {
   return 1 - 1 / (1 + ROD.curveK * (level - 1));
 }
 
-// 낚싯대 = 무한 강화. 스탯은 점근 수렴(상한 없음, 효율 체감) — 무한 플레이 원칙.
+// 낚싯대 = 무한 강화. 입질 대기는 레벨마다 같은 비율로 줄어든다(상한 없음).
 export function rodStats(level: number): RodStats {
-  const t = rodCurveT(level);
-  const lerp = (r: { from: number; to: number }) => r.from + (r.to - r.from) * t;
+  const decay = Math.pow(ROD.biteDecay, level - 1);
   return {
-    biteMin: lerp(ROD.biteMin),
-    biteMax: lerp(ROD.biteMax),
-    sweep: lerp(ROD.sweep),
+    biteMin: ROD.biteMin * decay,
+    biteMax: ROD.biteMax * decay,
+    sweep: ROD.sweep,
   };
 }
 
