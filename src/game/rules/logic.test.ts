@@ -898,30 +898,31 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 시뮬 JSON의 simEV를 그대로 앵커로 고정한다 — 등급 예산 ×2 + 만새기/꽁치 weight 2 +
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
+  // 전설 1차 완화(legendary 1→2) 반영 — 인도양 425.9 / 남인도양 555.2.
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
     idleWorst: { commonMult: 10 },
   } as const;
 
-  it('인도양 — normal 383.1 / perfect 630.5 / 방치×10 70.7', () => {
-    expect(goldEV('indian', dials.normal)).toBeCloseTo(383.1, 1);
-    expect(goldEV('indian', dials.perfect)).toBeCloseTo(630.5, 1);
-    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(70.7, 1);
+  it('인도양 — normal 425.9 / perfect 702.0 / 방치×10 75.9', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(425.87, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(702.01, 1);
+    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(75.92, 1);
   });
 
-  it('남인도양 — normal 503.3 / perfect 798.4 / 방치×10 89.8', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(503.3, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(798.4, 1);
-    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(89.8, 1);
+  it('남인도양 — normal 555.2 / perfect 881.1 / 방치×10 96.5', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(555.16, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(881.12, 1);
+    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(96.53, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
     const rows = drawRows('indian', {}).filter(r => r.fish.rarity === 'common');
     const share = Object.fromEntries(rows.map(r => [r.fish.id, r.fishPct]));
-    // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/399 = 41.1%)
-    expect(share.horsejack).toBeCloseTo(41.1028, 3);
-    expect(share.ribbonfish).toBeCloseTo(20.5514, 3);
+    // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/400 = 41%)
+    expect(share.horsejack).toBeCloseTo(41, 3);
+    expect(share.ribbonfish).toBeCloseTo(20.5, 3);
   });
 });
 
@@ -944,7 +945,7 @@ describe('가중치 추첨', () => {
 
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 100, 10);
-    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(1 / 399, 10);
+    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(2 / 400, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(23 / 100, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(20 / 100, 10);
   });
