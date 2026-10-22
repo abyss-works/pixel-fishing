@@ -13,6 +13,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/bounty.ts': ['bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'bounty_licenses'],
   '_data/codes.ts': ['coupons', 'reliefs'],
   '_data/mail.ts': ['letters'],
+  '_data/mailbox.ts': ['mails'],
   '_data/telemetry.ts': ['events'],
 };
 

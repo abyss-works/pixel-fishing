@@ -23,7 +23,7 @@ export interface MailRow {
   claimedAt: string | null;
 }
 
-interface RawMail { id: string | number; title: string; body: string; gold: string | number; created_at: Date | string; read_at: Date | string | null; claimed_at: Date | string | null }
+type RawMail = { id: string | number; title: string; body: string; gold: string | number; created_at: Date | string; read_at: Date | string | null; claimed_at: Date | string | null };
 
 const iso = (v: Date | string | null): string | null => (v === null ? null : new Date(v).toISOString());
 

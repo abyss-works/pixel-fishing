@@ -36,6 +36,7 @@ export type RejectReason =
   | 'coupon-invalid'
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
+  | 'mail-unavailable' // 받을 수 없는 우편 — 없거나 남의 것이거나 이미 받았다(서버가 구분 없이 답한다)
   | 'bait-not-owned' // 활성화하려는 미끼를 보유하지 않았다 (구매 전 활성 시도)
   | 'shop-closed' // 미끼 상점은 콜롬보항에서만 이용 가능
   | 'nickname-taken' // 이미 다른 유저가 쓰는 닉네임
@@ -66,6 +67,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'coupon-invalid': '없는 쿠폰 코드예요.',
   'coupon-used': '이미 사용한 쿠폰이에요.',
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
+  'mail-unavailable': '이미 받았거나 받을 수 없는 우편이에요.',
   'bait-not-owned': '가지고 있는 미끼가 없어요.',
   'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',

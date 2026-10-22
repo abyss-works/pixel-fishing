@@ -49,6 +49,7 @@ import {
   expiredCleanup, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon } from './_data/codes.js';
+import { claimMailFragment, claimableGold } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, runFollowUps } from './_data/commit.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
@@ -167,7 +168,7 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
-  'setNickname', 'deliverBounty', 'exchangeArtifact',
+  'setNickname', 'deliverBounty', 'exchangeArtifact', 'claimMail',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -370,6 +371,15 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 우편 골드 — 본인의 받지 않은 골드 우편이면 금액을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
+  // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 금액이 없어 거부된다.
+  let mail: ActionDeps['mail'] = null;
+  if (action.type === 'claimMail') {
+    const mailId = action.id;
+    const gold = await step('db-read', { uid, action: action.type }, () => claimableGold(db, uid, mailId));
+    if (gold !== null) mail = { id: mailId, gold };
+  }
+
   // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
   if (action.type === 'setNickname' && typeof action.nickname === 'string'
       && checkNickname(action.nickname).ok) {
@@ -424,6 +434,7 @@ async function route(req: Req, res: Res): Promise<void> {
       dynamicCoupon,
       relief,
       bounty,
+      mail,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -474,6 +485,7 @@ async function route(req: Req, res: Res): Promise<void> {
     fragments.push(debugFragment(guard, uid, debugTablePlan(action.command, Date.now())));
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
+  if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;

@@ -46,6 +46,7 @@ export type GameAction =
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
+  | { type: 'claimMail'; id: number }           // 우편 골드 받기 — 받을 금액은 서버가 우편 표에서 주입한다
   | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
   | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
@@ -63,7 +64,7 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, debug: true, setNickname: true,
+  claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
 };
@@ -81,6 +82,8 @@ export interface ActionDeps {
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
+  /** 받을 우편 — 서버가 본인의 받지 않은 골드 우편을 조회해 공급한다. 로컬 dev엔 항상 없다 */
+  mail?: { id: number; gold: number } | null;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
@@ -89,6 +92,7 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
+  | { type: 'mail'; gold: number }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
   | { type: 'none' };
@@ -465,6 +469,16 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'claimRelief', payload: {
           code: typeof action.code === 'string' ? action.code.trim() : '',
         } }],
+      };
+    }
+    case 'claimMail': {
+      // 우편 골드 받기 — 대상·금액 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 금액만 주입된다.
+      if (!deps.mail || deps.mail.id !== action.id) return { ok: false, error: 'mail-unavailable' };
+      return {
+        ok: true,
+        state: { ...state, gold: state.gold + deps.mail.gold },
+        result: { type: 'mail', gold: deps.mail.gold },
+        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold } }],
       };
     }
     case 'buyBait': {

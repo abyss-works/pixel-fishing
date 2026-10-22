@@ -32,6 +32,7 @@ const schemas = {
   sendLetter: z.object({ type: z.literal('sendLetter'), text: z.string() }),
   redeemCoupon: z.object({ type: z.literal('redeemCoupon'), code: z.string() }),
   claimRelief: z.object({ type: z.literal('claimRelief'), code: z.string() }),
+  claimMail: z.object({ type: z.literal('claimMail'), id: z.number().int().positive() }),
   // 개발 도구 명령 — 명령 id는 목록 화이트리스트, 인자 형태는 리듀서(reduceDebug)가 본다
   debug: z.object({
     type: z.literal('debug'),
@@ -59,7 +60,7 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
-  schemas.claimRelief, schemas.debug, schemas.buyBait, schemas.setActiveBait,
+  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.buyBait, schemas.setActiveBait,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.import,
