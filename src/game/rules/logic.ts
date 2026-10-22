@@ -26,6 +26,7 @@ import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
+import type { NamedPity, SpeciesPity } from './pity.js';
 
 export { JUDGMENT_MULT };
 export { RARITY, RARITY_ORDER } from '../content/rarity.js';
@@ -92,6 +93,10 @@ export interface GameState {
   /** 활성화 중인 미끼 id — 4중 1(상호배척). null = 없음. 보유량이 0이 되면 효과만 무음
    *  (자동 해제하지 않는다 — 보충하면 그대로 재개되는 게 유저 의도다) */
   activeBait: string | null;
+  /** 어종 천장 진척 — 어종 → 누적 확률 질량(끝나면 -1). 화면에 보이지 않아 응답 스칼라에서 뺀다 */
+  pity: SpeciesPity;
+  /** 네임드 조우 천장 진척 — 게임 날짜 단위. 화면에 보이지 않아 응답 스칼라에서 뺀다 */
+  namedPity: NamedPity;
 }
 
 export interface RodStats {
@@ -177,6 +182,16 @@ export function namedEncounterShare(spot: SpotId): number {
   return w.named / (w.named + w.none);
 }
 
+/** 이 해역 캐치에서 조우할 수 있는 수주 중 네임드 의뢰 — 비어 있으면 조우 게이트가 돌지 않는다 */
+export function namedEncounterCandidates(activeIds: readonly string[], spot: SpotId): BountyQuest[] {
+  const zone = topZoneOfSpot(spot);
+  return activeIds
+    .map(id => bountyById(id))
+    .filter((q): q is BountyQuest =>
+      q !== undefined && q.difficulty === 'named' && q.zone === zone
+      && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
+}
+
 // 네임드 조우 게이트 — 캐치 추첨의 맨 첫 단계다 (통상 추첨보다 앞선다).
 // 수주 중인 네임드 의뢰가 있고 그 해역에서 낚시할 때만 돈다. 네임드에 출현 수역(spot)이
 // 적혀 있으면 그 수역에서만 돈다(코모로 심해의 둔클레오스). 명중해도 이번 캐치는 그대로
@@ -186,12 +201,7 @@ export function namedEncounterShare(spot: SpotId): number {
 export function rollNamedEncounter(
   activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
 ): BountyQuest | null {
-  const zone = topZoneOfSpot(spot);
-  const cands = activeIds
-    .map(id => bountyById(id))
-    .filter((q): q is BountyQuest =>
-      q !== undefined && q.difficulty === 'named' && q.zone === zone
-      && (namedById(q.targetFish ?? '')?.spot ?? spot) === spot);
+  const cands = namedEncounterCandidates(activeIds, spot);
   if (cands.length === 0) return null;
   const w = namedWeightsOf(spot);
   const drawn = pickWeighted([['named', w.named], ['none', w.none]] as const, rng);
@@ -319,6 +329,14 @@ export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
   return rows.map(r => ({ ...r, gradePct: gradeSum.get(r.fish.rarity) ?? 0 }));
 }
 
+/** 이번 추첨에서 각 어종이 나올 확률 — rollFish와 같은 산식에 다이얼(판정·방치·미끼·시간대)까지 반영한 값 */
+export function fishDrawShares(spotId: SpotId, o: DrawOptions = {}): { fish: Fish; share: number }[] {
+  const pool = fishPool(spotId, o.phase);
+  const weights = drawWeights(pool, spotId, o);
+  const total = weights.reduce((s, w) => s + w, 0);
+  return pool.map((fish, i) => ({ fish, share: total > 0 ? weights[i] / total : 0 }));
+}
+
 /** 수역 골드 기댓값 — rollFish와 같은 가중치 산식의 닫힌형(관리자·분석·도구 공용 모듈).
  *  다이얼 기본값 = 중립(판정 없음). 일반 폼 기준이며 변이는 공통 승수라 별도 인자 없음.
  *  budgets/fishWeights를 넘기면 관리자 샌드박스 시나리오의 EV가 된다. */
@@ -345,6 +363,8 @@ export function newState(): GameState {
     artifacts: [],
     items: {},
     activeBait: null,
+    pity: {},
+    namedPity: { day: '', misses: 0, fails: 0 },
   };
 }
 
@@ -693,6 +713,22 @@ function safeItems(v: unknown): Record<string, number> {
   return out;
 }
 
+/** 어종 천장 위생 — 유한한 수만 살린다(끝 표시 -1 포함) */
+function safePity(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(safeRecord<number>(v))) {
+    if (typeof n === 'number' && Number.isFinite(n) && n >= -1) out[id] = n;
+  }
+  return out;
+}
+
+/** 네임드 천장 위생 — 형태가 틀리면 처음 상태 */
+function safeNamedPity(v: unknown): NamedPity {
+  const r = safeRecord<unknown>(v);
+  const count = (n: unknown) => (typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : 0);
+  return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails) };
+}
+
 /** activeBait 위생 — 레지스트리에 있는 id만 살린다 (모르는 문자열은 없음 처리).
  *  보유량 검증은 여기서 하지 않는다 — "0개짜리 활성"은 합법 상태(효과 무음)다 */
 function safeActiveBait(v: unknown): string | null {
@@ -808,6 +844,8 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     artifacts: safeStrings(s.artifacts),
     items: safeItems(s.items),
     activeBait: safeActiveBait(s.activeBait),
+    pity: safePity(s.pity),
+    namedPity: safeNamedPity(s.namedPity),
   };
 }
 
