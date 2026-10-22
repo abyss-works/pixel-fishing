@@ -133,6 +133,59 @@ export async function allPlayerIds(db: Executor): Promise<string[]> {
   return rows.map(r => r.id);
 }
 
+/** 보낼 대상 — 지정한 계정마다 금액, 또는 전체 플레이어에게 같은 금액 */
+export type MailTarget =
+  | { kind: 'users'; recipients: readonly MailRecipient[] }
+  | { kind: 'all'; gold: number };
+
+export interface MailRequest { title: string; body: string; target: MailTarget }
+
+export interface MailPlan { problems: DraftProblem[]; preview: SendPreview | null }
+
+async function draftOf(db: Executor, req: MailRequest): Promise<MailDraft> {
+  const recipients = req.target.kind === 'all'
+    ? (await allPlayerIds(db)).map(userId => ({ userId, gold: (req.target as { gold: number }).gold }))
+    : req.target.recipients;
+  return { title: req.title, body: req.body, recipients };
+}
+
+/**
+ * 보내기 미리보기 — 관리자 서버 함수와 운영 스크립트가 같은 함수를 쓴다. 쓰지 않는다.
+ * 형태 문제가 있으면 미리보기 없이 문제만 돌려준다.
+ */
+export async function planMail(db: Executor, req: MailRequest): Promise<MailPlan> {
+  const draft = await draftOf(db, req);
+  const problems = draftProblems(draft);
+  return { problems, preview: problems.length > 0 ? null : await previewMails(db, draft) };
+}
+
+/** 보내기 — 형태 문제가 없을 때만 넣는다. 넣은 수(sent)와 넣기 직전 미리보기를 돌려준다 */
+export async function deliverMail(db: Executor, req: MailRequest, nowISO: string): Promise<MailPlan & { sent: number }> {
+  const draft = await draftOf(db, req);
+  const problems = draftProblems(draft);
+  if (problems.length > 0) return { problems, preview: null, sent: 0 };
+  const preview = await previewMails(db, draft);
+  return { problems, preview, sent: await sendMails(db, draft, nowISO) };
+}
+
+/** 요청 본문을 보내기 요청으로 읽는다. 형태가 틀리면 null — 값의 범위 검증은 draftProblems가 한다 */
+export function parseMailRequest(raw: unknown): MailRequest | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { title, body, target } = raw as Record<string, unknown>;
+  if (typeof title !== 'string' || typeof body !== 'string' || typeof target !== 'object' || target === null) return null;
+  const t = target as Record<string, unknown>;
+  if (t.kind === 'all') return typeof t.gold === 'number' ? { title, body, target: { kind: 'all', gold: t.gold } } : null;
+  if (t.kind !== 'users' || !Array.isArray(t.recipients)) return null;
+  const recipients: MailRecipient[] = [];
+  for (const r of t.recipients) {
+    if (typeof r !== 'object' || r === null) return null;
+    const { userId, gold } = r as Record<string, unknown>;
+    if (typeof userId !== 'string' || typeof gold !== 'number') return null;
+    recipients.push({ userId, gold });
+  }
+  return { title, body, target: { kind: 'users', recipients } };
+}
+
 // ---------- 관리자 조회 ----------
 
 export interface SentMailRow extends MailRow { userId: string }
