@@ -45,7 +45,7 @@ describe('데이터 무결성', () => {
   });
 
   it('R12: 등급 가중치와 명성', () => {
-    expect(RARITY.common.weight).toBe(74);
+    expect(RARITY.common.weight).toBe(75);
     expect(RARITY.rare.weight).toBe(20);
     expect(RARITY.epic.weight).toBe(5);
     expect(RARITY.legendary.weight).toBe(1);
@@ -152,10 +152,10 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
-  it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 74/3%', () => {
+  it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 75/3%', () => {
     const commons = drawRows('pond').filter(x => x.fish.rarity === 'common');
     expect(commons).toHaveLength(3);
-    for (const x of commons) expect(x.fishPct).toBeCloseTo(74 / 3 / (74 + 20 + 5 + 1) * 100, 5);
+    for (const x of commons) expect(x.fishPct).toBeCloseTo(75 / 3 / (75 + 20 + 5 + 1) * 100, 5);
     // 개체 가중치는 기본 1 (고도화 예약 축)
     for (const x of drawRows('pond')) expect(x.individualWeight).toBe(1);
   });
@@ -464,6 +464,14 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(sizePercentile(carp, mean)).toBeCloseTo(50, 0);
     expect(sizePercentile(carp, mean + std * 3)).toBeLessThan(1);
     expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
+  });
+
+  it('sizePercentile: 표준정규 꼬리 확률을 소수 1자리로 올림한다', () => {
+    const { mean, std } = sizeParams(carp);
+    expect(sizePercentile(carp, mean + std)).toBe(15.9);          // 15.87
+    expect(sizePercentile(carp, mean + std * 0.8417)).toBe(20);   // 19.998 — 월척 경계 안
+    expect(sizePercentile(carp, mean + std * 2.5)).toBe(0.7);     // 0.621
+    expect(sizePercentile(carp, mean + std * 4)).toBe(0.1);       // 0.003 — 0%로 보이지 않는다
   });
 
   it('rollCatchExtras: 변이 폼 확률은 대략 1/4 — 돌연변이:일반 = 1:3 (통계적)', () => {
@@ -890,30 +898,31 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 시뮬 JSON의 simEV를 그대로 앵커로 고정한다 — 등급 예산 ×2 + 만새기/꽁치 weight 2 +
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
+  // 전설 1차 완화(legendary 1→2) 반영 — 인도양 425.9 / 남인도양 555.2.
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
     idleWorst: { commonMult: 10 },
   } as const;
 
-  it('인도양 — normal 383.1 / perfect 630.5 / 방치×10 70.7', () => {
-    expect(goldEV('indian', dials.normal)).toBeCloseTo(383.1, 1);
-    expect(goldEV('indian', dials.perfect)).toBeCloseTo(630.5, 1);
-    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(70.7, 1);
+  it('인도양 — normal 425.9 / perfect 702.0 / 방치×10 75.9', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(425.87, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(702.01, 1);
+    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(75.92, 1);
   });
 
-  it('남인도양 — normal 503.3 / perfect 798.4 / 방치×10 89.8', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(503.3, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(798.4, 1);
-    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(89.8, 1);
+  it('남인도양 — normal 555.2 / perfect 881.1 / 방치×10 96.5', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(555.16, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(881.12, 1);
+    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(96.53, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
     const rows = drawRows('indian', {}).filter(r => r.fish.rarity === 'common');
     const share = Object.fromEntries(rows.map(r => [r.fish.id, r.fishPct]));
-    // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/399 = 41.1%)
-    expect(share.horsejack).toBeCloseTo(41.1028, 3);
-    expect(share.ribbonfish).toBeCloseTo(20.5514, 3);
+    // common 예산 328 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(164/400 = 41%)
+    expect(share.horsejack).toBeCloseTo(41, 3);
+    expect(share.ribbonfish).toBeCloseTo(20.5, 3);
   });
 });
 
@@ -927,7 +936,7 @@ describe('가중치 추첨', () => {
   });
 
   it('rollFish: 등급을 먼저 뽑고(rng 1회) 그 등급 안에서 어종을 뽑는다(rng 1회)', () => {
-    const seq = [0.99, 0];               // 0.99 → 마지막 등급(전설), 0 → 그 등급의 첫 어종
+    const seq = [0.995, 0];              // 0.995 → 마지막 등급(전설, 100/101 이상), 0 → 그 등급의 첫 어종
     let calls = 0;
     const f = rollFish('pond', 1, () => { calls++; return seq.shift() ?? 0; });
     expect(f.rarity).toBe('legendary');
@@ -935,10 +944,10 @@ describe('가중치 추첨', () => {
   });
 
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
-    expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 100, 10);
-    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(1 / 399, 10);
+    expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(1 / 101, 10);
+    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(2 / 400, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(23 / 100, 10);
-    expect(globalRarityShare('rare')).toBeCloseTo(20 / 100, 10);
+    expect(globalRarityShare('rare')).toBeCloseTo(20 / 101, 10);
   });
 
   it('해역 데이터의 폼·조우 가중치가 전역 기본값을 항목별로 덮어쓰고, 유물은 해역보다 우선한다', () => {

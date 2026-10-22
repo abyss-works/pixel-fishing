@@ -30,13 +30,14 @@ const DATA = [
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
   // 여러 해역을 한 번에 탐험하는 느낌).
   // 오버라이드: 2026-08-27 관리자 시뮬 확정분 — **공통/희귀/영웅 예산 전 부 ×2 상향**
-  // (저등급 체감 개선: 흔한 물고기가 더 자주 나온다. legendary는 미기재 = 글로벌 1 유지).
+  // (저등급 체감 개선: 흔한 물고기가 더 자주 나온다).
+  // legendary 2 = 지역 전설 확률 1차 완화 단계(신지역 1의 2배, 캐치당 약 0.5%).
   { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
     powerReq: 85,   // Lv16 환산 (10+(16-1)*5)
-    rarityWeight: { common: 328, rare: 54, epic: 16 } },
+    rarityWeight: { common: 328, rare: 54, epic: 16, legendary: 2 } },
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
     powerReq: 90,   // Lv17 환산 (10+(17-1)*5)
-    rarityWeight: { common: 288, rare: 56, epic: 30 } },
+    rarityWeight: { common: 288, rare: 56, epic: 30, legendary: 2 } },
   // 1-4 마다가스카르 — 일반 연안(모잠비크 해협) + 특화 심해(코모로 심해). 두 수역 모두 tier7 한 척으로
   // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 예산은 남인도양식을 공통 적용한다.
   { id: 'mozstrait',   name: '모잠비크 해협', boatTier: 7, region: 'madagascar',

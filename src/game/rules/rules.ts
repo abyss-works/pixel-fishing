@@ -69,14 +69,14 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'bait-not-owned': '가지고 있는 미끼가 없어요.',
   'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
-  'no-license': '서버에 연결되지 않아 의뢰를 처리할 수 없어요. 연결된 뒤 다시 해 주세요.',
+  'no-license': '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.',
   'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
   'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
-  'ticket-expired': '흔적이 식었어요. 다시 조우하면 새로 남아요.',
+  'ticket-expired': '흔적이 사라졌어요. 다시 조우하면 새로 남아요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
@@ -121,9 +121,14 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
  *  하루 경계(KST 04:00) 집계와 의뢰 만료를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
   clearsToday: Record<BountyKind, number>; // 오늘 클리어(보상 수령)한 횟수 — 갈래별
-  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록 (수주 중인 의뢰의 것만)
+  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록 (만료된 의뢰의 것도 포함 — 결투 확정이 만료로 거부한다)
   complete: string[];          // 보상을 받을 수 있는 의뢰 id
   active: string[];            // 수주 중 의뢰 id — 만료되지 않은 것만. 마쳤지만 보상을 받지 않은 의뢰도 포함
+}
+
+/** 캐치의 네임드 조우 대상 — 수주 중이고 아직 마치지 않은 의뢰만. 마친 토벌은 보상 수령만 남았다 */
+export function encounterQuests(ctx: BountyCtx | null | undefined): string[] {
+  return ctx ? ctx.active.filter(id => !ctx.complete.includes(id)) : [];
 }
 
 
@@ -171,7 +176,11 @@ export function canResolveChallenge(
   const q = bountyById(questId);
   if (!q || q.difficulty !== 'named') return no('bad-request');
   if (!ctx) return no('no-license');
-  if (!ctx.active.includes(questId)) return no('bad-request');
+  // 만료 판정을 먼저 한다 — 결투 중 KST 04:00을 넘기면 의뢰도 수주 목록에서 빠지므로, 그 경우도 만료로 알린다
+  const ticket = ctx.tickets.find(t => t.questId === questId);
+  if (ticket && !(ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO)) > 0)) return no('ticket-expired');
+  // 이미 마친 토벌은 보상 수령만 남았다 — 결투를 다시 확정하지 않는다
+  if (!ctx.active.includes(questId) || ctx.complete.includes(questId)) return no('bad-request');
   const { success, hits, misses } = claimed;
   const need = challengeHpOf(questId);
   if (need === null) return no('bad-request');
@@ -180,10 +189,7 @@ export function canResolveChallenge(
     ? hits >= need && misses < CHALLENGE_MISS_LIMIT
     : misses >= CHALLENGE_MISS_LIMIT;
   if (!coherent) return no('bad-request');
-  const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
-  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO));
-  if (!(left > 0)) return no('ticket-expired');
   return OK;
 }
 

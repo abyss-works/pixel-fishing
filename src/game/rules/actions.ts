@@ -4,11 +4,16 @@
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, rollNamedEncounter, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
+  redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, usableBait, nextDexRec, baitCost, mutationWeightsOf,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import { FISH } from '../content/fish.js';
+import {
+  accrueSpeciesPity, drawNamedEncounter, recordDuelFailure, resolveSpeciesPity, settleSpeciesPity, speciesPityCandidates,
+} from './pity.js';
+import type { SpeciesPity } from './pity.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
 import { SPOTS, rarityWeightOf } from '../content/spots.js';
 import { baitById } from '../content/baits.js';
@@ -17,7 +22,7 @@ import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
+import { canBuyBoat, canFish, canUpgradeRod, encounterQuests } from './rules.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -99,15 +104,16 @@ export interface StatePatch {
   /** 읽은 saves_current.version — 캐시 버전과 다르면 순서가 어긋난 것이므로 버린다.
    *  연속 액션이 역순 도착해도 골드·가방이 과거값에 고착되지 않는 장치다. */
   baseVersion: number;
-  /** bag/exhibit/dex를 뺀 나머지 — 통째 교체 (액션당 수백B) */
-  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex'>;
+  /** bag/exhibit/dex와 천장 진척을 뺀 나머지 — 통째 교체 (액션당 수백B).
+   *  천장 진척은 화면에 쓰지 않고 서버 blob에만 있으면 되므로 보내지 않는다(클라는 이전 값을 유지) */
+  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex' | 'pity' | 'namedPity'>;
   /** bag/exhibit/dex 변경분 — diffWrites가 뽑은 것과 동일한 형태 */
   writes: StateWrites;
 }
 
 /** 풀 상태에서 스칼라 분리 — 서버 응답용. bag/exhibit/dex는 writes로 간다 */
 export function pickScalars(state: GameState): StatePatch['scalars'] {
-  const { v: _v, bag: _b, exhibit: _e, dex: _d, ...rest } = state;
+  const { v: _v, bag: _b, exhibit: _e, dex: _d, pity: _p, namedPity: _n, ...rest } = state;
   return rest;
 }
 
@@ -263,19 +269,47 @@ export function prepareCatchDraw(
   return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
 }
 
-/** 추첨 실행 — auto는 상대 페널티 스케일링, 수동은 판정 배수 × 파워 보정.
- *  호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
+/** 추첨 다이얼 — auto는 상대 페널티 스케일링, 수동은 판정 배수 × 파워 보정.
+ *  추첨(rollCatchFish)과 천장 누적(accrueSpeciesPity)이 같은 다이얼을 쓴다. */
+export function catchDrawOptions(
+  judgment: Judgment, power: number, entry: number,
+  pzMult: number, phaseOpts: DrawOptions & { phase: DayPhase },
+): DrawOptions & { phase: DayPhase; rareMult: number; commonMult: number } {
+  if (judgment === 'auto') {
+    // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링
+    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, entry) * pzMult };
+  }
+  // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
+  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — 파워 계산).
+  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), commonMult: pzMult };
+}
+
+/** 추첨 실행 — 호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
 export function rollCatchFish(
   spot: SpotId, judgment: Judgment, power: number, entry: number,
   pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): Fish {
-  if (judgment === 'auto') {
-    // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링
-    return rollFish(spot, 1, rng, relativeIdleBoost(power, entry) * pzMult, phaseOpts);
-  }
-  // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
-  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — 파워 계산).
-  return rollFish(spot, JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), rng, pzMult, phaseOpts);
+  const o = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  return rollFish(spot, o.rareMult, rng, o.commonMult, o);
+}
+
+/** 캐치의 어종 결정 — 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼), 없으면 통상 추첨.
+ *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
+ *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)만 호출자가 공급한다. */
+export function drawCatch(
+  state: Pick<GameState, 'pity' | 'artifacts'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
+  pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
+  ownsNormal: (fishId: string) => boolean,
+): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; byCeiling: boolean } {
+  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
+  const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
+  const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
+  const fish = target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
+  const forms = mutationWeightsOf(state, spot);
+  const extras = rollCatchExtras(fish, rng, target ? { normal: 1, variant: 0 } : forms);
+  const opts = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
+  return { fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form), byCeiling: target !== undefined };
 }
 
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
@@ -287,19 +321,23 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 네임드 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
-      const namedHit = rollNamedEncounter(deps.bounty?.active ?? [], action.spot, deps.rng, action.forceEncounter === true);
+      // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
+      const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
+        deps.rng, action.forceEncounter === true);
+      const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
-        ? [{ type: 'ticket', payload: { questId: namedHit.id } }]
+        ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
         : [];
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
       const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
-      // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서
-      let fish: Fish;
+      // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
+      // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      fish = rollCatchFish(action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts);
-      const extras = rollCatchExtras(fish, deps.rng, mutationWeightsOf(state, action.spot));
+      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts,
+        id => (state.dex[id]?.normal?.count ?? 0) > 0);
+      const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
@@ -323,12 +361,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         size: info.size, form: info.form, isNew: info.isNew,
         // 미끼 사용은 감사 흔적로 catch에 합친다 — 별도 이벤트면 스트림이 낚시 로그로 두 배가 된다
         ...(bait ? { bait: bait.id } : {}),
+        ...(drawn.byCeiling ? { pity: true } : {}),
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
       if (overflow.length > 0) {
         events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
       }
-      const next = takeItem(release(caught, overflow), bait?.id ?? '');
+      const next = { ...takeItem(release(caught, overflow), bait?.id ?? ''), pity: drawn.pity, namedPity: named.pity };
       return {
         ok: true,
         state: next,
@@ -563,8 +602,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const payload = { questId: action.questId,
         success: action.success, hits: action.hits, misses: action.misses };
       if (!action.success) {
-        return { ok: true, state, result: { type: 'none' },
-          events: [{ type: 'resolveChallenge', payload }] };
+        // 실패는 그날 다음 조우의 천장을 줄인다(네임드 조우 천장)
+        return { ok: true, state: { ...state, namedPity: recordDuelFailure(state.namedPity, deps.now) },
+          result: { type: 'none' }, events: [{ type: 'resolveChallenge', payload }] };
       }
       const quest = bountyById(action.questId)!;
       const target = quest.targetFish!;

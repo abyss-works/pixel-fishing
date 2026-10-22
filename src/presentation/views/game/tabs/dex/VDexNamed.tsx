@@ -50,7 +50,7 @@ export default function DexNamedView({ game, sub, onSub }: {
               )}
               <b className="block mt-1 text-center">{ok ? (displayName ?? q.targetFish) : '???'}</b>
               <span className="block text-center text-text-dim text-xs">
-                {ok ? '수배 달성' : '미확인'}
+                {ok ? '토벌' : '미확인'}
               </span>
             </div>
           );

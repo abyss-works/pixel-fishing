@@ -63,7 +63,7 @@ describe('toBountyCtx', () => {
     expect(ctx.complete).toEqual(['pacific-easy-common']);
   });
 
-  it('만료된 의뢰의 도전권은 주입하지 않는다', () => {
+  it('만료된 의뢰의 도전권도 주입한다 — 결투 확정이 만료로 거부한다', () => {
     const ctx = toBountyCtx({
       ...rows,
       progress: [
@@ -75,7 +75,10 @@ describe('toBountyCtx', () => {
         { quest_id: 'seasia-named-leviathan', issued_at: '2026-08-22T01:00:00.000Z' },
       ],
     }, dayStart);
-    expect(ctx.tickets).toEqual([{ questId: 'seasia-named-leviathan', issuedAt: '2026-08-22T01:00:00.000Z' }]);
+    expect(ctx.tickets).toEqual([
+      { questId: 'pacific-named-megalodon', issuedAt: '2026-08-21T18:30:00.000Z' },
+      { questId: 'seasia-named-leviathan', issuedAt: '2026-08-22T01:00:00.000Z' },
+    ]);
   });
 
   it('수주 중인 의뢰의 도전권 목록을 그대로 주입한다', () => {

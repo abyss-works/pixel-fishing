@@ -73,9 +73,9 @@ describe('BountyPanel', () => {
     expect(await screen.findByText('오늘 남은 클리어 일반 1/1 · 네임드 1/1')).toBeInTheDocument();
   });
 
-  it('스냅샷이 오기 전에는 상태 줄이 값 대신 —를 보인다', async () => {
+  it('스냅샷이 오기 전에는 상태 줄이 값 대신 –를 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('오늘 남은 클리어 —')).toBeInTheDocument();
+    expect(await screen.findByText('오늘 남은 클리어 –')).toBeInTheDocument();
   });
 
   it('마치지 못한 의뢰가 한국 시간 새벽 4시에 사라진다는 안내가 있다', async () => {
