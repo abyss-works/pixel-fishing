@@ -12,5 +12,5 @@ create table public.mails (
   claimed_at timestamptz                             -- 골드를 받은 시각(골드 0이면 비어 있다)
 );
 alter table public.mails enable row level security;
--- 본인 목록(최근 순)과 받지 않은 우편 집계용
+-- 본인 목록(최근 순) 조회용
 create index mails_user_created_idx on public.mails (user_id, created_at desc);

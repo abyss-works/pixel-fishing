@@ -10,7 +10,7 @@ export const MAIL_TITLE_MAX = 60;
 export const MAIL_BODY_MAX = 2000;
 /** 한 통에 붙일 수 있는 골드 상한 — 입력 실수(자릿수)를 막는 상한일 뿐 밸런스 값이 아니다 */
 export const MAIL_GOLD_MAX = 1_000_000_000;
-/** 목록 상한 — 최근 순 */
+/** 목록 상한 — 할 일이 끝난 우편은 최근 순으로 이만큼만 돌려준다. 할 일이 남은 우편은 상한과 상관없이 모두 돌려준다 */
 export const MAIL_LIST_LIMIT = 100;
 
 export interface MailRow {
@@ -32,14 +32,18 @@ const toMail = (r: RawMail): MailRow => ({
   createdAt: iso(r.created_at)!, readAt: iso(r.read_at), claimedAt: iso(r.claimed_at),
 });
 
-/** 아직 할 일이 남은 우편인가 — 골드가 있으면 받지 않은 것, 글만 있으면 읽지 않은 것 */
-export const isPending = (m: Pick<MailRow, 'gold' | 'readAt' | 'claimedAt'>): boolean =>
-  (m.gold > 0 ? m.claimedAt === null : m.readAt === null);
-
-/** 본인 우편 목록(최근 순) */
+/**
+ * 본인 우편 목록(최근 순). 할 일이 남은 우편(골드는 받기 전, 글은 읽기 전)은 모두 넣고,
+ * 그 밖의 우편은 최근 MAIL_LIST_LIMIT통만 넣는다. 오래 쌓여도 받을 우편이 목록에서 빠지지 않는다.
+ */
 export async function listMails(db: Executor, uid: string): Promise<MailRow[]> {
   const { rows } = await db.execute<RawMail>(sql`select id, title, body, gold, created_at, read_at, claimed_at
-    from public.mails where user_id = ${uid} order by created_at desc, id desc limit ${MAIL_LIST_LIMIT}`);
+    from public.mails m
+    where m.user_id = ${uid}
+      and ((m.gold > 0 and m.claimed_at is null) or (m.gold = 0 and m.read_at is null)
+        or m.id in (select r.id from public.mails r where r.user_id = ${uid}
+                    order by r.created_at desc, r.id desc limit ${MAIL_LIST_LIMIT}))
+    order by m.created_at desc, m.id desc`);
   return rows.map(toMail);
 }
 

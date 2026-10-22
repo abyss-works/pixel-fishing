@@ -8,8 +8,8 @@ import type { Database } from '../_db/client.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
-  allPlayerIds, claimMailFragment, claimableGold, draftProblems, isPending, listMails, markMailRead,
-  previewMails, recentSentMails, sendMails,
+  allPlayerIds, claimMailFragment, claimableGold, deliverMail, draftProblems, listMails, markMailRead,
+  MAIL_LIST_LIMIT, parseMailRequest, planMail, previewMails, recentSentMails, sendMails,
 } from './mailbox.js';
 
 let testDb: TestDatabase;
@@ -41,6 +41,35 @@ async function user(withSave = true, restricted = false): Promise<string> {
 }
 
 describe('보내기', () => {
+  it('요청 본문 해석 — 지정 계정과 전체 대상, 형태가 틀리면 null', () => {
+    const id = randomUUID();
+    expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'all', gold: 5 } }))
+      .toEqual({ title: 't', body: 'b', target: { kind: 'all', gold: 5 } });
+    expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: 1 }] } }))
+      .toEqual({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: 1 }] } });
+    for (const bad of [null, 'x', { title: 't', body: 'b' }, { title: 't', body: 'b', target: { kind: 'all', gold: '5' } },
+      { title: 't', body: 'b', target: { kind: 'users', recipients: 'x' } },
+      { title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id }] } },
+      { title: 1, body: 'b', target: { kind: 'all', gold: 1 } }]) {
+      expect(parseMailRequest(bad)).toBeNull();
+    }
+  });
+
+  it('전체 대상 — 미리보기와 보내기가 저장 상태가 있는 제재되지 않은 계정에 같은 금액을 쓴다', async () => {
+    const live = await user();
+    const banned = await user(true, true);
+    const req = { title: '전체', body: '모두에게', target: { kind: 'all' as const, gold: 7 } };
+    const plan = await planMail(database.db, req);
+    expect(plan.problems).toEqual([]);
+    expect(plan.preview!.count).toBeGreaterThan(0);
+    expect(plan.preview!.totalGold).toBe(plan.preview!.count * 7);
+    const out = await deliverMail(database.db, req, NOW);
+    expect(out.sent).toBe(out.preview!.count);
+    expect((await listMails(database.db, live)).some(m => m.title === '전체' && m.gold === 7)).toBe(true);
+    expect((await listMails(database.db, banned)).some(m => m.title === '전체')).toBe(false);
+    expect(await deliverMail(database.db, { ...req, title: '' }, NOW)).toEqual({ problems: ['title'], preview: null, sent: 0 });
+  });
+
   it('형태 검증 — 제목·본문·골드·대상·중복', () => {
     const ok = { title: '제목', body: '본문', recipients: [{ userId: randomUUID(), gold: 10 }] };
     expect(draftProblems(ok)).toEqual([]);
@@ -98,11 +127,18 @@ describe('플레이어 쪽', () => {
     expect(after[0].readAt).toBeNull();
   });
 
-  it('할 일이 남은 우편 — 골드 우편은 받기 전, 글 우편은 읽기 전', () => {
-    expect(isPending({ gold: 10, readAt: NOW, claimedAt: null })).toBe(true);
-    expect(isPending({ gold: 10, readAt: NOW, claimedAt: NOW })).toBe(false);
-    expect(isPending({ gold: 0, readAt: null, claimedAt: null })).toBe(true);
-    expect(isPending({ gold: 0, readAt: NOW, claimedAt: null })).toBe(false);
+  it('목록 상한을 넘어도 할 일이 남은 우편은 빠지지 않는다', async () => {
+    const me = await user();
+    await sendMails(database.db, { title: '오래된 골드', body: 'b', recipients: [{ userId: me, gold: 10 }] }, '2026-01-01T00:00:00.000Z');
+    await sendMails(database.db, { title: '오래된 글', body: 'b', recipients: [{ userId: me, gold: 0 }] }, '2026-01-01T00:00:01.000Z');
+    const doneAt = '2026-02-01T00:00:00.000Z';
+    await client.query(`insert into public.mails (user_id, title, body, gold, created_at, read_at)
+      select $1, '읽은 글 ' || g, 'b', 0, $2::timestamptz + g * interval '1 minute', $2::timestamptz
+      from generate_series(1, ${MAIL_LIST_LIMIT + 5}) g`, [me, doneAt]);
+    const list = await listMails(database.db, me);
+    expect(list).toHaveLength(MAIL_LIST_LIMIT + 2);
+    expect(list.slice(-2).map(m => m.title)).toEqual(['오래된 글', '오래된 골드']);
+    expect(list[0].title).toBe(`읽은 글 ${MAIL_LIST_LIMIT + 5}`);
   });
 
   it('받을 골드는 본인의 받지 않은 골드 우편에만 있고, 받기 조각은 확정 조건이 참일 때 한 번만 쓴다', async () => {
