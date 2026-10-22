@@ -12,7 +12,8 @@
 //   명성 하한 = 기하 스케일링. 직전 배 가방 용량 × 일반 어종 ⭐5 × 가속 계수 k(0.7→1.3→2→3→6)
 //     — 초반은 기존 값과 동일(500/2000/6000), 후반은 벽을 세워 방치 누적 명성(운영 관찰
 //     8~12만)을 고려했다. 선형이면 벽이 사라져버린다.
-//   가방 용량 = 사용자 지정: tier5·6 신설분 1500/2000 (기존 불변 — 래칫 보호).
+//   가방 용량 = 사용자 지정: tier5·6 신설분 1500/2000. 정크선은 600 → 500(2026-10-22 사용자 확정) —
+//     해역을 열지 않는 범선의 장점을 가방 확장으로 둔다. 줄여도 bagCapacity 래칫이 든 개체를 지킨다.
 //   가격 = "새로 열리는 최고 수역 무판정 EV 약 28~35배" 암묵 규칙 + 상승 비율 완만 감소.
 export interface Boat {
   tier: number;
@@ -26,8 +27,8 @@ export interface Boat {
 export const BOATS: readonly Boat[] = [
   { tier: 1, name: '조각배',   price: 300,    fameReq: 0,     speed: 85,  bagCap: 140 },  // 1-1 태평양
   { tier: 2, name: '돛단배',   price: 2000,   fameReq: 1000,  speed: 100, bagCap: 300 }, // 1-1 마리아나 해구
-  { tier: 3, name: '정크선',   price: 6000,   fameReq: 3500,  speed: 115, bagCap: 600 },  // 1-2 동남아 진입
-  { tier: 4, name: '범선',     price: 15000,  fameReq: 11000, speed: 130, bagCap: 1000 }, // 1-2 특화수역(코론/리프)
+  { tier: 3, name: '정크선',   price: 6000,   fameReq: 3500,  speed: 115, bagCap: 500 },  // 1-2 동남아 진입
+  { tier: 4, name: '범선',     price: 15000,  fameReq: 11000, speed: 130, bagCap: 1000 }, // 1-2 새 해역 없음 — 가방 확장(정크선의 두 배)
   { tier: 5, name: '증기선',   price: 32000,  fameReq: 24000, speed: 145, bagCap: 1500 }, // 1-3 인도양 — 동남아 건너뛰기
   { tier: 6, name: '대양선',   price: 70000,  fameReq: 50000, speed: 160, bagCap: 2000 }, // 1-3 남인도양
   { tier: 7, name: '원양어선', price: 150000, fameReq: 100000, speed: 175, bagCap: 3000 }, // 1-4 마다가스카르(두 수역 공통)
