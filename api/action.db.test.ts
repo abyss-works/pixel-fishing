@@ -613,7 +613,7 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       await progressRow(uid, named.id, 0, BEFORE_START);
       await ticketRow(uid, named.id, '2030-03-03T18:30:00.000Z');
       expect(await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 }))
-        .toMatchObject({ status: 422, body: { error: 'bad-request' } });
+        .toMatchObject({ status: 422, body: { error: 'ticket-expired' } });
     });
 
     it('수배 액션이 만료 행과 그 도전권을 지우고 살아 있는 행은 남긴다', async () => {

@@ -121,9 +121,14 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
  *  하루 경계(KST 04:00) 집계와 의뢰 만료를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
   clearsToday: Record<BountyKind, number>; // 오늘 클리어(보상 수령)한 횟수 — 갈래별
-  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록 (수주 중인 의뢰의 것만)
+  tickets: { questId: string; issuedAt: string }[]; // 유효·만료 가리지 않은 도전권 목록 (만료된 의뢰의 것도 포함 — 결투 확정이 만료로 거부한다)
   complete: string[];          // 보상을 받을 수 있는 의뢰 id
   active: string[];            // 수주 중 의뢰 id — 만료되지 않은 것만. 마쳤지만 보상을 받지 않은 의뢰도 포함
+}
+
+/** 캐치의 네임드 조우 대상 — 수주 중이고 아직 마치지 않은 의뢰만. 마친 토벌은 보상 수령만 남았다 */
+export function encounterQuests(ctx: BountyCtx | null | undefined): string[] {
+  return ctx ? ctx.active.filter(id => !ctx.complete.includes(id)) : [];
 }
 
 
@@ -171,7 +176,11 @@ export function canResolveChallenge(
   const q = bountyById(questId);
   if (!q || q.difficulty !== 'named') return no('bad-request');
   if (!ctx) return no('no-license');
-  if (!ctx.active.includes(questId)) return no('bad-request');
+  // 만료 판정을 먼저 한다 — 결투 중 KST 04:00을 넘기면 의뢰도 수주 목록에서 빠지므로, 그 경우도 만료로 알린다
+  const ticket = ctx.tickets.find(t => t.questId === questId);
+  if (ticket && !(ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO)) > 0)) return no('ticket-expired');
+  // 이미 마친 토벌은 보상 수령만 남았다 — 결투를 다시 확정하지 않는다
+  if (!ctx.active.includes(questId) || ctx.complete.includes(questId)) return no('bad-request');
   const { success, hits, misses } = claimed;
   const need = challengeHpOf(questId);
   if (need === null) return no('bad-request');
@@ -180,10 +189,7 @@ export function canResolveChallenge(
     ? hits >= need && misses < CHALLENGE_MISS_LIMIT
     : misses >= CHALLENGE_MISS_LIMIT;
   if (!coherent) return no('bad-request');
-  const ticket = ctx.tickets.find(t => t.questId === questId);
   if (!ticket) return no('ticket-missing');
-  const left = ticketRemainingMs(ticket.issuedAt, Date.parse(nowISO));
-  if (!(left > 0)) return no('ticket-expired');
   return OK;
 }
 
