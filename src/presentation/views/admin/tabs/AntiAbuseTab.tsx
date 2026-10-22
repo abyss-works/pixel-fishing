@@ -64,7 +64,7 @@ export default function AntiAbuseTab() {
       <CellGrid>
         <Cell title="연타 (낚시 간격 2초 미만 · 최근 7일)">
           <Note size="2xs" className="my-0">
-            입질 하한 1초에 스윕 1.4초라서 사람은 이 간격을 만들 수 없어요.
+            낚을 때마다 획득 카드가 2초 떠 있어서 사람은 이 간격을 만들 수 없어요.
             서버에 레이트 리밋이 없어서 간격 분포가 유일한 방어 관측점이에요.
           </Note>
           <div className="overflow-x-auto">
