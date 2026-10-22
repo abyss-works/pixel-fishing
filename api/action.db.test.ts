@@ -702,4 +702,21 @@ describe('우편 받기', () => {
     const ev = await env.client.query<{ payload: unknown }>(`select payload from public.events where user_id = $1 and type = 'claimMail'`, [uid]);
     expect(ev.rows.map(r => r.payload)).toEqual([{ mailId: mine, gold: 500 }]);
   });
+
+  it('같은 우편을 동시에 두 번 받으면 한 번만 지급되고 받은 기록과 골드가 함께 남는다', async () => {
+    const uid = await seed({ state: { gold: 0 } });
+    const { rows } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold) values ($1, '동시', '본문', 800) returning id`, [uid]);
+    const id = Number(rows[0].id);
+    const results = await Promise.all([
+      callAction(userToken(uid), { type: 'claimMail', id }),
+      callAction(userToken(uid), { type: 'claimMail', id }),
+    ]);
+    expect(results.filter(r => r.status === 200)).toHaveLength(1);
+    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422])]);
+    const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
+    expect(Number(gold.rows[0].gold)).toBe(800);
+    const mail = await env.client.query<{ claimed_at: Date | null }>('select claimed_at from public.mails where id = $1', [id]);
+    expect(mail.rows[0].claimed_at).not.toBeNull();
+  });
 });

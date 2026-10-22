@@ -425,9 +425,15 @@ describe('우편 보내기', () => {
     title: '환급', body: '강화비 차액을 돌려드려요.', target: { kind: 'users', recipients },
   });
 
-  it('관리자만 보낼 수 있고, 형태가 틀리면 400이다', async () => {
-    expect(await callAdmin({ q: 'mail' }, userToken(PLAYER), 'POST', { op: 'preview', request: request([{ userId: PLAYER, gold: 1 }]) }))
-      .toMatchObject({ status: 403 });
+  it('관리자만 보내고 볼 수 있고, 형태가 틀리면 400이다', async () => {
+    for (const op of ['preview', 'send']) {
+      expect(await callAdmin({ q: 'mail' }, userToken(PLAYER), 'POST', { op, request: request([{ userId: PLAYER, gold: 1 }]) }))
+        .toMatchObject({ status: 403 });
+    }
+    expect(await callAdmin({ q: 'mail' }, null, 'POST', { op: 'send', request: request([{ userId: PLAYER, gold: 1 }]) }))
+      .toMatchObject({ status: 401 });
+    expect(await callAdmin({ q: 'mails' }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await env.client.query('select 1 from public.mails where user_id = $1', [PLAYER])).toMatchObject({ rows: [] });
     expect(await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'drop', request: request([]) }))
       .toMatchObject({ status: 400, body: { error: 'bad-mail' } });
     expect(await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'send', request: { title: 1 } }))

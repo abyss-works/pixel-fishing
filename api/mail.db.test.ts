@@ -53,6 +53,9 @@ describe('우편함 함수', () => {
     expect(await callMail('POST', userToken(ME), { id })).toMatchObject({ status: 200, body: { ok: true } });
     read = await env.client.query<{ read_at: Date | null }>('select read_at from public.mails where id = $1', [id]);
     expect(read.rows[0].read_at).not.toBeNull();
-    expect(await callMail('POST', userToken(ME), { id: 'x' })).toMatchObject({ status: 400, body: { error: 'bad-id' } });
+    for (const bad of ['x', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 2, null]) {
+      expect(await callMail('POST', userToken(ME), { id: bad })).toMatchObject({ status: 400, body: { error: 'bad-id' } });
+    }
+    expect(await callMail('POST', userToken(ME), { id: 999_999_999 })).toMatchObject({ status: 200 });
   });
 });
