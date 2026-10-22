@@ -172,6 +172,21 @@ export interface AdminAccessResult {
   uid: string | null;
 }
 
+/** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
+export interface AdminSentMailRow extends MailItem { userId: string }
+/** 관리자 — 우편 보내기 요청. 대상은 지정 계정별 금액 또는 전체 플레이어 같은 금액이다 */
+export interface AdminMailRequest {
+  title: string; body: string;
+  target: { kind: 'users'; recipients: { userId: string; gold: number }[] } | { kind: 'all'; gold: number };
+}
+/** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
+export interface AdminMailPlan {
+  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate')[];
+  preview: { count: number; totalGold: number; missing: string[] } | null;
+  /** 보내기에서만 — 넣은 우편 수 */
+  sent?: number;
+}
+
 export interface AdminApi {
   access(): Promise<AdminAccessResult>;
   users(): Promise<AdminUserRow[]>;
@@ -186,6 +201,10 @@ export interface AdminApi {
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
+  /** 최근 보낸 우편 */
+  sentMails(): Promise<AdminSentMailRow[]>;
+  /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */
+  mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 연결된 Supabase 프로젝트 식별자 — 운영/스테이징 착오 방지 표시값(Ops 탭) */

@@ -67,6 +67,7 @@ import type {
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
 /** 서버 읽기 함수에 조회 하나를 요청한다. 세션이 없거나 응답이 실패면 던진다 */
@@ -82,6 +83,23 @@ async function readAdmin<T>(query: string, params: Record<string, string | numbe
     throw new Error(`${query} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
   }
   return await res.json() as T;
+}
+
+/** 관리자 쓰기 — 우편 보내기. 세션이 없거나 응답이 실패면 던진다 */
+async function writeAdminMail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
+  if (!supabase) throw new Error('클라우드 미설정 — 우편은 운영 DB에서만 보낸다');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('세션이 없어 우편을 보내지 못했다');
+  const res = await fetch('/api/admin?q=mail', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ op, request }),
+  });
+  if (!res.ok) {
+    const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
+    throw new Error(`우편 ${op} 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+  }
+  return await res.json() as AdminMailPlan;
 }
 
 class HttpAdmin implements AdminApi {
@@ -121,6 +139,12 @@ class HttpAdmin implements AdminApi {
   }
   letters(): Promise<AdminLetterRow[]> {
     return readAdmin('letters');
+  }
+  sentMails(): Promise<AdminSentMailRow[]> {
+    return readAdmin('mails');
+  }
+  mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
+    return writeAdminMail(op, request);
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });

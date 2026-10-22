@@ -4,6 +4,7 @@ export const adminKeys = {
   access: ['admin', 'access'] as const,
   users: ['admin', 'users'] as const,
   letters: ['admin', 'letters'] as const,
+  mails: ['admin', 'mails'] as const,
   antiAbuse: ['admin', 'antiabuse'] as const,
   overview: (days: number) => ['admin', 'overview', days] as const,
   economy: (days: number) => ['admin', 'economy', days] as const,

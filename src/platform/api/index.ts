@@ -28,4 +28,5 @@ export type {
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';
