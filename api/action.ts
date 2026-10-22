@@ -27,6 +27,7 @@ import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
+import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
 import { isDebugTableCommand } from '../src/game/rules/debug.js';
@@ -141,10 +142,9 @@ const questRows = (rows: BountyRows): QuestRow[] =>
  *  클리어는 갈래별로 센다 */
 export function toBountyCtx(rows: BountyRows, dayStartISO: string): BountyCtx {
   const { live } = splitQuestRows(questRows(rows), dayStartISO);
-  const liveIds = new Set(live.map(r => r.questId));
   return {
     clearsToday: clearsOf(rows.clears.map(c => ({ kind: c.kind, clearedAt: c.cleared_at })), dayStartISO),
-    tickets: rows.tickets.filter(t => liveIds.has(t.quest_id)).map(t => ({
+    tickets: rows.tickets.map(t => ({
       questId: t.quest_id, issuedAt: t.issued_at,
     })),
     complete: live.filter(r => r.progress >= bountyById(r.questId)!.count).map(r => r.questId),
@@ -432,7 +432,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
-    const named = drawNamedEncounter(catchBase.namedPity, bounty.active, action.spot, new Date().toISOString(),
+    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
       Math.random, action.forceEncounter === true);
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {

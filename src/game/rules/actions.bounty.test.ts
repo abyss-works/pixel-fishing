@@ -330,6 +330,14 @@ describe('named ticket', () => {
     expect(out.result).toMatchObject({ type: 'catch', ticket: 'pacific-named-megalodon' });
   });
 
+  it('토벌을 마치고 보상을 받지 않은 의뢰는 조우하지 않는다', () => {
+    const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal' }, deps({ rng: () => 0,
+      bounty: ctx({ active: ['pacific-named-megalodon'], complete: ['pacific-named-megalodon'] }) }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events.some(e => e.type === 'ticket')).toBe(false);
+    expect(out.state.namedPity.misses).toBe(0);
+  });
+
   it('수주 중이 아니면 게이트가 돌지 않는다', () => {
     const out = applyAction(sea, { type: 'catch', spot: 'sea', judgment: 'normal' }, deps({ rng: () => 0 }));
     if (!out.ok) throw new Error(out.error);
@@ -360,6 +368,20 @@ describe('resolveChallenge', () => {
   it('수주 중이 아니면 bad-request', () => {
     expect(applyAction(ready(), act(), deps({ ...dyn, bounty: ctx() })))
       .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('결투 중 KST 04:00을 넘겨 의뢰가 만료됐으면 ticket-expired', () => {
+    // 2026-10-08 KST 09:30 발급, 그 게임 날짜가 끝나 의뢰도 수주 목록에서 빠졌다
+    const out = applyAction(ready(), act(), deps({ ...dyn,
+      bounty: ctx({ active: [], tickets: ticket('2026-10-08T00:30:00.000Z') }) }));
+    expect(out).toEqual({ ok: false, error: 'ticket-expired' });
+  });
+
+  it('토벌을 마치고 보상을 받지 않은 의뢰는 결투를 다시 확정하지 않는다', () => {
+    const out = applyAction(ready(), act(), full({ bounty: ctx({
+      active: ['pacific-named-megalodon'], complete: ['pacific-named-megalodon'],
+      tickets: ticket('2026-10-09T00:30:00.000Z') }) }));
+    expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 
   it('도전권 없으면 ticket-missing', () => {

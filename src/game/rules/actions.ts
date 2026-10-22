@@ -22,7 +22,7 @@ import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
+import { canBuyBoat, canFish, canUpgradeRod, encounterQuests } from './rules.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -322,7 +322,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
-      const named = drawNamedEncounter(state.namedPity, deps.bounty?.active ?? [], action.spot, deps.now,
+      const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
         deps.rng, action.forceEncounter === true);
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
