@@ -251,6 +251,9 @@ describe('R15: 강화/구매 비용', () => {
       expect(upgradeCost(l) / upgradeCost(l - 1)).toBeLessThan(upgradeCost(l - 1) / upgradeCost(l - 2));
     }
   });
+  it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000]);
+  });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
       expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);

@@ -31,6 +31,12 @@ describe('정비 화면 데이터', () => {
     expect(selectBoatPurchaseResult(1).boatName).toBeTruthy();
   });
 
+  it('가방 상한보다 많이 든 상태면 현재 가방은 든 수(래칫)로 보인다', () => {
+    const game = { ...newState(), boat: 3, bag: Array.from({ length: 550 }, () => ({}) as never) };
+    const preview = selectBoatPurchasePreview(game);
+    expect(preview.kind === 'available' && preview.currentBagCap).toBe(550);
+  });
+
   it('배 사다리 — 가진 배는 done, 현재는 current, 바로 다음은 next, 나머지는 locked', () => {
     const game = newState();
     expect(selectBoatLadder(game).map(r => r.state)).toEqual(['next', 'locked', 'locked', 'locked', 'locked', 'locked', 'locked']);
