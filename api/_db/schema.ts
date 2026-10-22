@@ -90,6 +90,17 @@ export const reliefs = pgTable('reliefs', {
   createdAt: at('created_at').notNull().defaultNow(),
 });
 
+export const mails = pgTable('mails', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid('user_id').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  gold: bigint('gold', { mode: 'number' }).notNull().default(0),
+  createdAt: at('created_at').notNull().defaultNow(),
+  readAt: at('read_at'),
+  claimedAt: at('claimed_at'),
+});
+
 export const bountyAccepts = pgTable('bounty_accepts', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   userId: uuid('user_id').notNull(),

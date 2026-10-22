@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -81,6 +81,55 @@ describe('테스트 데이터베이스', () => {
         const { rows } = await other.query<{ name: string }>(
           `select table_name as name from information_schema.tables where table_schema = 'public' and table_name like 'bounty%'`);
         expect(rows.map(r => r.name).sort()).toEqual(['bounty_accepts', 'bounty_licenses', 'bounty_progress', 'bounty_tickets']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('mails (0019)', () => {
+    const user = async (): Promise<string> => {
+      const uid = randomUUID();
+      await client.query('insert into auth.users (id, email, is_anonymous) values ($1, null, true)', [uid]);
+      return uid;
+    };
+
+    it('골드는 0 이상만 받고, 기본값은 0이다', async () => {
+      const uid = await user();
+      const { rows } = await client.query<{ gold: string }>(
+        `insert into public.mails (user_id, title, body) values ($1, '제목', '본문') returning gold`, [uid]);
+      expect(Number(rows[0].gold)).toBe(0);
+      await expect(client.query(`insert into public.mails (user_id, title, body, gold) values ($1, 't', 'b', -1)`, [uid]))
+        .rejects.toMatchObject({ code: '23514' });
+    });
+
+    it('인증 사용자는 본인 우편도 읽거나 쓰지 못한다 — 서버(service role) 전용', async () => {
+      const a = await user();
+      await client.query(`insert into public.mails (user_id, title, body) values ($1, 't', 'b')`, [a]);
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [a]);
+        const { rows } = await client.query('select id from public.mails');
+        expect(rows).toEqual([]);
+        await expect(client.query(`insert into public.mails (user_id, title, body) values ($1, 't', 'b')`, [a]))
+          .rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+
+    it('되돌리기 SQL은 우편 표만 지운다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const down = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '0019_mails.down.sql'), 'utf8');
+        await other.query(down);
+        const { rows } = await other.query<{ name: string }>(
+          `select table_name as name from information_schema.tables where table_schema = 'public' and table_name in ('mails', 'letters')`);
+        expect(rows.map(r => r.name)).toEqual(['letters']);
       } finally {
         await other.end();
         await copy.drop();
