@@ -216,29 +216,40 @@ describe('R6b: 타이밍 판정', () => {
   });
 });
 
-describe('R13: 낚싯대 스탯 (무한 강화, 점근 수렴)', () => {
+describe('R13: 낚싯대 스탯 (무한 강화, 입질 곱연산 단축)', () => {
   it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관), 바 시간은 1.4초 고정', () => {
     expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1.4 });
   });
-  it('강할수록 입질이 빨라진다 (단조성, 상한 없음) — 바 시간은 고정', () => {
+  it('레벨마다 입질 최소·최대 대기가 직전의 94%가 된다 — 바 시간은 고정', () => {
     for (let l = 2; l <= 100; l++) {
-      expect(rodStats(l).biteMax).toBeLessThan(rodStats(l - 1).biteMax);
+      expect(rodStats(l).biteMin / rodStats(l - 1).biteMin).toBeCloseTo(0.94, 10);
+      expect(rodStats(l).biteMax / rodStats(l - 1).biteMax).toBeCloseTo(0.94, 10);
       expect(rodStats(l).sweep).toBe(1.4);
     }
   });
-  it('아무리 강해도 한계에 수렴할 뿐 넘지 않는다 (무한 플레이 안전)', () => {
-    const s = rodStats(100000);
-    expect(s.biteMin).toBeGreaterThan(1);
-    expect(s.biteMax).toBeGreaterThan(2.5);
-    expect(s.sweep).toBe(1.4);
+  it('입질 대기는 Lv1 값에 0.94^(Lv-1)을 곱한 값이다', () => {
+    expect(rodStats(11).biteMin).toBeCloseTo(4 * 0.94 ** 10, 10);
+    expect(rodStats(11).biteMax).toBeCloseTo(8 * 0.94 ** 10, 10);
   });
 });
 
 describe('R15: 강화/구매 비용', () => {
-  it('낚싯대: 50 × 1.8^(레벨-1)', () => {
+  it('낚싯대: Lv15까지 50 × 1.7^(레벨-1)', () => {
     expect(upgradeCost(1)).toBe(50);
-    expect(upgradeCost(2)).toBe(85);   // costGrowth 1.7
+    expect(upgradeCost(2)).toBe(85);
     expect(upgradeCost(3)).toBe(144);
+    expect(upgradeCost(15)).toBe(84189);
+  });
+  it('낚싯대: Lv16부터 Lv15 비용 × (레벨/15)^8', () => {
+    expect(upgradeCost(16)).toBe(141086);
+    expect(upgradeCost(24)).toBe(3615886);
+    expect(upgradeCost(30)).toBe(21552362);
+  });
+  it('낚싯대: 비용은 계속 늘고, Lv16부터는 직전 대비 배율이 줄어든다', () => {
+    for (let l = 2; l <= 60; l++) expect(upgradeCost(l)).toBeGreaterThan(upgradeCost(l - 1));
+    for (let l = 17; l <= 60; l++) {
+      expect(upgradeCost(l) / upgradeCost(l - 1)).toBeLessThan(upgradeCost(l - 1) / upgradeCost(l - 2));
+    }
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
