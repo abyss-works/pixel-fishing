@@ -33,6 +33,7 @@ describe('우편함 버튼', () => {
   it('로컬 모드(우편함 없음)에서는 그리지 않는다', async () => {
     const toast = vi.fn();
     wrap(<MailboxButton onOpen={() => {}} setToast={toast} />);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /우편함/ })).not.toBeInTheDocument());
     await new Promise(r => setTimeout(r, 0));
     expect(screen.queryByRole('button', { name: /우편함/ })).not.toBeInTheDocument();
     expect(toast).not.toHaveBeenCalled();
@@ -57,7 +58,11 @@ describe('우편함 버튼', () => {
 describe('우편함 창', () => {
   it('우편을 고르면 본문을 보이고 읽음을 남긴다. 골드 우편은 받기로 받는다', async () => {
     state.mails = [mail({ id: 7, title: '강화비 차액', body: '돌려드려요.', gold: 6309483 })];
-    const dispatch = vi.fn(() => ({ status: 'ok', state: {}, result: { type: 'mail', gold: 6309483 } }) as never);
+    // 서버처럼 받은 뒤의 조회에는 받은 시각이 들어 있다
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 6309483 } } as never;
+    });
     const toast = vi.fn();
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('option', { name: /강화비 차액/ }));
@@ -66,6 +71,9 @@ describe('우편함 창', () => {
     fireEvent.click(screen.getByRole('button', { name: '받기' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 7 });
     await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 6,309,483G를 받았어요!', 'gold'));
+    // 받으면 다시 읽기 전에도 바로 받은 것으로 보인다
+    expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
+    expect(screen.getByText('받음')).toBeInTheDocument();
   });
 
   it('받을 수 없으면 거부 사유를 안내하고, 받은 우편에는 받기 버튼이 없다', async () => {
