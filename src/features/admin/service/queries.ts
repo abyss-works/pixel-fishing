@@ -1,4 +1,5 @@
 import { api } from '../../../platform/api';
+import type { AdminMailRequest } from '../../../platform/api';
 
 export const readAdminAccess = () => api.admin.access();
 export const readAdminUsers = () => api.admin.users();
@@ -29,6 +30,14 @@ export const readAdminLetters = () => Promise.all([
   api.admin.letters(),
   api.admin.users(),
 ]);
+
+export const readAdminMails = () => Promise.all([
+  api.admin.sentMails(),
+  api.admin.users(),
+]);
+
+/** 우편 미리보기(쓰지 않음) 또는 보내기 */
+export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest) => api.admin.mail(op, request);
 
 export const readAdminMetrics = (days: number) => Promise.all([
   api.admin.dailyActive(days),

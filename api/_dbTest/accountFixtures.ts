@@ -4,7 +4,7 @@ import { fish, seedUser, testUid } from './actionHarness.js';
 
 /** 계정 행을 가진 공개 표 전부. 계정 정리가 비워야 하는 목록이다 */
 export const USER_TABLES = [
-  'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
+  'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
@@ -54,6 +54,7 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query('insert into public.profiles (user_id, nickname) values ($1, $2)', [uid, spec.nickname]);
   await client.query(`insert into public.events (user_id, type, payload) values ($1, 'boot', '{}')`, [uid]);
   if (spec.letter) await client.query(`insert into public.letters (user_id, text) values ($1, '편지')`, [uid]);
+  await client.query(`insert into public.mails (user_id, title, body, gold) values ($1, '우편', '본문', 100)`, [uid]);
   await client.query(`insert into public.bounty_licenses (user_id, zone) values ($1, 'pacific')`, [uid]);
   await client.query(`insert into public.bounty_accepts (user_id, zone, port, quest_id) values ($1, 'pacific', 'harbor', 'q1')`, [uid]);
   await client.query(`insert into public.bounty_progress (user_id, zone, quest_id) values ($1, 'pacific', 'q1')`, [uid]);

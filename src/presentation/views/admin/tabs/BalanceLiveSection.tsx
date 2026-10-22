@@ -56,6 +56,7 @@ export default function BalanceLiveSection({ granted }: {
         <KeyValueRow label="최대 잔고" value={gold(data.gold.max)} />
         <KeyValueRow label="판매 유입" value={fmtGold(data.goldFlow.sellGold)} />
         <KeyValueRow label="쿠폰 유입" value={fmtGold(data.goldFlow.couponGold)} />
+        <KeyValueRow label="우편 유입" value={fmtGold(data.goldFlow.mailGold)} />
         <KeyValueRow label="강화 유출" value={fmtGold(data.goldFlow.rodCost)} />
         <KeyValueRow label="배 유출" value={fmtGold(data.goldFlow.boatCost)} />
         <KeyValueRow label="미끼 유출" value={fmtGold(data.goldFlow.baitCost)} />

@@ -96,17 +96,18 @@ export function retention(db: Executor): Promise<unknown[]> {
     group by f.cohort`, sql`t.cohort desc`);
 }
 
-/** 경제 일계. 골드 유입(sell·coupon)과 유출(upgradeRod·buyBoat·buyBait) 원장 */
+/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장 */
 export function economy(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*) filter (where type = 'sell')::int as sells,
            coalesce(sum((payload->>'gold')::numeric) filter (where type = 'sell'), 0) as sell_gold,
            coalesce(sum((payload->>'gold')::numeric) filter (where type = 'coupon'), 0) as coupon_gold,
+           coalesce(sum((payload->>'gold')::numeric) filter (where type = 'claimMail'), 0) as mail_gold,
            coalesce(sum((payload->>'cost')::numeric) filter (where type = 'upgradeRod'), 0) as rod_cost,
            coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBoat'), 0) as boat_cost,
            coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBait'), 0) as bait_cost
     from public.events
-    where type in ('sell', 'coupon', 'upgradeRod', 'buyBoat', 'buyBait')
+    where type in ('sell', 'coupon', 'claimMail', 'upgradeRod', 'buyBoat', 'buyBait')
     group by day`);
 }
 

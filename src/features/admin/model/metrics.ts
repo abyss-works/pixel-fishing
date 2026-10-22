@@ -84,6 +84,7 @@ export const EVENT_LABELS: Record<string, string> = {
   visit: '지역 첫 도달',
   coupon: '쿠폰',
   claimRelief: '지원 코드',
+  claimMail: '우편 받기',
   letter: '편지',
   buyBait: '미끼 구매',
   setActiveBait: '미끼 활성화',
@@ -125,6 +126,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'visit': return `첫 도달: ${s(pay.region)}`;
     case 'coupon': return `${s(pay.code)} +${fmtNum(Number(pay.gold ?? 0))}G`;
     case 'claimRelief': return `${s(pay.code)} 지급`;
+    case 'claimMail': return `우편 ${String(pay.mailId ?? '?')} +${fmtNum(Number(pay.gold ?? 0))}G`;
     case 'letter': return `"${s(pay.text).slice(0, 60)}"`;
     case 'buyBait': return `${s(pay.bait)} ×${String(pay.count ?? '?')} −${fmtNum(Number(pay.cost ?? 0))}G`;
     case 'exchangeArtifact': return `${s(pay.artifact)} 교환`;

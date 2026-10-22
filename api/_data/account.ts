@@ -6,6 +6,7 @@ import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import { deleteUserBounty } from './bounty.js';
 import { at } from './json.js';
+import { deleteUserMails } from './mailbox.js';
 import { deleteUserProfile } from './profile.js';
 import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
@@ -59,6 +60,7 @@ export async function purgeAccount(withTransaction: Database['withTransaction'],
     if (rows.length === 0) return false;
     await deleteUserEvents(tx, uid);
     await deleteUserBounty(tx, uid);
+    await deleteUserMails(tx, uid);
     await deleteUserProfile(tx, uid);
     await deleteUserSaves(tx, uid);
     await tx.execute(sql`delete from auth.users where id = ${uid}`);
