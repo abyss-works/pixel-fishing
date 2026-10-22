@@ -9,6 +9,7 @@ import type { GameState } from './logic';
 import { matchBountyCatch, rollNamedEncounter } from './logic';
 import type { BountyCtx } from './rules';
 import { BOUNTIES } from '../content/bounties';
+import { gameDayOf } from './time';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
   let n = 0;
@@ -402,12 +403,12 @@ describe('resolveChallenge', () => {
       payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
   });
 
-  it('실패는 감사 이벤트만 남기고 상태가 그대로다 — 티켓 소모는 서버 행 처리다', () => {
+  it('실패는 감사 이벤트와 그날의 결투 실패 수만 남긴다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
       act({ success: false, hits: 5, misses: 3 }), full());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(st);
+    expect(out.state).toEqual({ ...st, namedPity: { day: gameDayOf(NOW), misses: 0, fails: 1 } });
     expect(out.events).toEqual([{ type: 'resolveChallenge',
       payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 3 } }]);
   });
