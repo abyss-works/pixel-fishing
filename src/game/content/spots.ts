@@ -24,7 +24,8 @@ const DATA = [
   { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 65,
     rarityWeight: { common: 74, rare: 23, legendary: 3 } }, // 최종 콘텐츠 — 사용자 밸런스 일괄 (2026-08-27 JSON)
   // 1-3 인도양 — 지역당 수역 2개 원칙(일반 연안 + 특화) 복귀. powerReq는 사용자 확정
-  // (2026-08-27): **낚싯대 Lv 단위**로 지정 — Lv16/17 → powerOfLevel로 환산한 파워.
+  // (2026-08-27): **낚싯대 Lv 단위**로 지정 — powerOfLevel로 환산한 파워. 인도양 Lv16,
+  // 남인도양 Lv18, 모잠비크 해협 Lv20, 코모로 심해 Lv22(2026-10-22 사용자 확정, 해역당 2레벨 간격).
   // 배 게이트: 사용자 확정(2026-08-27) — 1-2 동남아를 **건너뛰고** 인도양으로 넘어가려면
   // tier5(증기선)가 필요하다. 즉 1-2의 말라카 트리거는 requiredBoat 4에서 5로 올라야 하고,
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
@@ -36,15 +37,15 @@ const DATA = [
     powerReq: 85,   // Lv16 환산 (10+(16-1)*5)
     rarityWeight: { common: 328, rare: 54, epic: 16, legendary: 2 } },
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
-    powerReq: 90,   // Lv17 환산 (10+(17-1)*5)
+    powerReq: 95,   // Lv18 환산 (10+(18-1)*5)
     rarityWeight: { common: 288, rare: 56, epic: 30, legendary: 2 } },
   // 1-4 마다가스카르 — 일반 연안(모잠비크 해협) + 특화 심해(코모로 심해). 두 수역 모두 tier7 한 척으로
   // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 예산은 남인도양식을 공통 적용한다.
   { id: 'mozstrait',   name: '모잠비크 해협', boatTier: 7, region: 'madagascar',
-    powerReq: 95,   // Lv18 환산
+    powerReq: 105,  // Lv20 환산
     rarityWeight: { common: 288, rare: 56, epic: 30 } },
   { id: 'comorodeep',  name: '코모로 심해',   boatTier: 7, region: 'madagascar',
-    powerReq: 100,  // Lv19 환산
+    powerReq: 115,  // Lv22 환산
     rarityWeight: { common: 288, rare: 56, epic: 30 } },
 ] as const;
 
