@@ -1,6 +1,7 @@
 // 스탯 서비스 — 파생 내역({base, mods, value})과 단일 출구 계약을 검증한다.
 import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
+import { powerReqOf } from '../content/spots';
 import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance';
 import { autoBoost, autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 import { manualPowerBonus, relativeIdleBoost } from './power';
@@ -45,7 +46,7 @@ describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {
     expect(axes.biteMax.mods).toEqual([]);
   });
 
-  it('강화하면 점근 방향으로 움직인다', () => {
+  it('강화하면 입질 대기가 줄어든다', () => {
     expect(rodAxes(s({ rod: 50 })).biteMin.value).toBeLessThan(
       rodAxes(s()).biteMin.value,
     );
@@ -162,5 +163,14 @@ describe('파워 계단 스케일링 (game/power.ts)', () => {
     expect(relativeIdleBoost(65, 40)).toBe(5);
     expect(relativeIdleBoost(70, 40)).toBe(AUTO_COMMON_BOOST.to);
     expect(relativeIdleBoost(10, 40)).toBe(AUTO_COMMON_BOOST.from); // 미달도 완화 아님
+  });
+});
+
+describe('해역 요구 파워', () => {
+  it('인도양 이후 해역은 약 2레벨 간격으로 요구 파워가 오른다', () => {
+    expect(powerReqOf('indian')).toBe(85);       // Lv16
+    expect(powerReqOf('southindian')).toBe(95);  // Lv18
+    expect(powerReqOf('mozstrait')).toBe(105);   // Lv20
+    expect(powerReqOf('comorodeep')).toBe(115);  // Lv22
   });
 });
