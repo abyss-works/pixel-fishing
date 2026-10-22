@@ -118,7 +118,7 @@ export default function GameView(props: GameViewProps) {
       if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error], 'warn'); setTracking(null); return; }
       if (r.success) {
         const zoneName = zoneById(encounter.quest.zone)?.shortName ?? encounter.quest.zone;
-        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName} 항구 수배판에서 보상 받기를 눌러 주세요.`, 'gold');
+        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName}의 수배판에서 보상 받기를 눌러 주세요.`, 'gold');
         setTracking(null);
       }
     });
