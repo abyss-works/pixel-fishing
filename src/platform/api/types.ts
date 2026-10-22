@@ -44,6 +44,12 @@ export interface StorageApi {
 }
 
 /** 랭킹 — 서버 읽기 함수의 응답. 닉네임·순위·값만 담긴다 */
+/** 우편 한 통 — 골드가 0이면 글만 있는 우편이다. 시각은 ISO 문자열 */
+export interface MailItem {
+  id: number; title: string; body: string; gold: number;
+  createdAt: string; readAt: string | null; claimedAt: string | null;
+}
+
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
