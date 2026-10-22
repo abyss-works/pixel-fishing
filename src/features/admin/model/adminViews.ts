@@ -179,7 +179,7 @@ export function selectEconomyMetrics(
     .filter(Number.isFinite).sort((a, b) => a - b);
   const goldSum = goldStats.reduce((sum, value) => sum + value, 0);
   const inflowTotal = economy.reduce((sum, row) =>
-    sum + Number(row.sell_gold) + Number(row.coupon_gold), 0);
+    sum + Number(row.sell_gold) + Number(row.coupon_gold) + Number(row.mail_gold), 0);
   const outflowTotal = economy.reduce((sum, row) =>
     sum + Number(row.rod_cost) + Number(row.boat_cost) + Number(row.bait_cost), 0);
   return { goldStats, goldSum, inflowTotal, outflowTotal };

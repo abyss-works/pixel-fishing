@@ -20,6 +20,7 @@ export const ADMIN_SECTIONS = {
     { key: 'roster', label: '명부' },
     { key: 'abuse', label: '이상탐지' },
     { key: 'letters', label: '편지' },
+    { key: 'mail', label: '우편' },
   ],
   analysis: [
     { key: 'economy', label: '경제' },

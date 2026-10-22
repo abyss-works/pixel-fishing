@@ -105,7 +105,7 @@ describe('데이터가 없는 상태', () => {
       boats: [],
       rodBuckets: [],
       gold: { p25: null, p50: null, p75: null, p90: null, max: null },
-      goldFlow: { sellGold: 0, couponGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
+      goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
       dau: [],
       churn: [],
       bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 0, generalAccepts: 0, delivered: 0 },
@@ -185,6 +185,7 @@ describe('지표 결과', () => {
     await event(ALICE, 'catch', catchOf('good', 'pond'), 5, 3);
     await event(ALICE, 'sell', { gold: 100 }, 5, 10);
     await event(ALICE, 'coupon', { code: 'WELCOME', gold: 300 }, 5, 11);
+    await event(ALICE, 'claimMail', { mailId: 1, gold: 120 }, 5, 11);
     await event(ALICE, 'upgradeRod', { toLevel: 6, cost: 80 }, 5, 12);
     await event(CAROL, 'catch', catchOf(null, null), 5);
     await event(CAROL, 'acceptQuest', { questId: 'harbor-general-3' }, 5, 10);
@@ -282,7 +283,7 @@ describe('지표 결과', () => {
   });
 
   it('골드 흐름: 7일 안의 유입과 유출을 합산한다', async () => {
-    expect((await live()).goldFlow).toEqual({ sellGold: 1110, couponGold: 300, rodCost: 80, boatCost: 1000, baitCost: 30 });
+    expect((await live()).goldFlow).toEqual({ sellGold: 1110, couponGold: 300, mailGold: 120, rodCost: 80, boatCost: 1000, baitCost: 30 });
   });
 
   it('일일 활성: KST 날짜별로 이벤트가 있는 사용자 수를 날짜 오름차순으로 센다. 저장 행이 없는 계정도 센다', async () => {
@@ -369,7 +370,7 @@ describe('지표 결과', () => {
           { judgment: 'normal', catches: 1, pct: 50 },
         ],
         spots: [{ spot: 'pond', catches: 2, users: 2 }],
-        goldFlow: { sellGold: 10, couponGold: 0, rodCost: 0, boatCost: 0, baitCost: 30 },
+        goldFlow: { sellGold: 10, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 30 },
         dau: [{ day: await dayAgo(2), dau: 5 }],
         bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 1, generalAccepts: 1, delivered: 0 },
         anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: 0 },
@@ -380,7 +381,7 @@ describe('지표 결과', () => {
       const one = await live({ days: '1' });
       expect(one).toMatchObject({
         judgment: [], spots: [], dau: [],
-        goldFlow: { sellGold: 0, couponGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
+        goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
         bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 0, generalAccepts: 0, delivered: 0 },
         anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null },
         boats: (await live()).boats,

@@ -1,7 +1,7 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.13.2",
+  "version": "0.14.0",
   "type": "module",
   "packageManager": "pnpm@11.28.3",
   "scripts": {
@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:db": "vitest run --config vitest.db.config.ts",
     "balance": "tsx tools/balance-report.ts",
+    "mail:send": "tsx tools/mail-send.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

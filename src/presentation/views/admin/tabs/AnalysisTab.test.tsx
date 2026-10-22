@@ -18,7 +18,7 @@ vi.mock('../../../../platform/api', () => ({
           visited: ['village', 'ocean'], restricted: false, last_action_at: null },
       ]),
       economy: vi.fn(async () => [{
-        day: todayKST(), sells: 2, sell_gold: 1000, coupon_gold: 200,
+        day: todayKST(), sells: 2, sell_gold: 1000, coupon_gold: 200, mail_gold: 0,
         rod_cost: 300, boat_cost: 0, bait_cost: 100,
       }]),
       dailyActive: vi.fn(async () => [{ day: todayKST(), dau: 5, wau7: 9 }]),

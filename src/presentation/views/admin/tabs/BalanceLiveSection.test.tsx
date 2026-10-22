@@ -17,7 +17,7 @@ const sample: BalanceLive = {
   boats: [{ boat: 0, users: 5 }, { boat: 6, users: 2 }],
   rodBuckets: [{ fromLevel: 16, users: 2 }],
   gold: { p25: 0, p50: 120, p75: 1209, p90: 980553, max: 6061422 },
-  goldFlow: { sellGold: 6165488, couponGold: 0, rodCost: 5873757, boatCost: 300300, baitCost: 0 },
+  goldFlow: { sellGold: 6165488, couponGold: 0, mailGold: 0, rodCost: 5873757, boatCost: 300300, baitCost: 0 },
   dau: [{ day: '2026-10-18', dau: 13 }],
   churn: [{ boat: 6, users: 1, avgFame: 202708, avgRod: 19 }],
   bountyFunnel: { namedAccepts: 2, tickets: 1, duelsWon: 1, duelsLost: 0, generalAccepts: 6, delivered: 1 },

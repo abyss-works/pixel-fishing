@@ -26,6 +26,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
+  ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],
 ];
 
 describe('HttpAdmin', () => {
@@ -50,9 +51,22 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 projectRef뿐이다', () => {
-    const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin)).filter(m => m !== 'constructor' && m !== 'projectRef');
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 projectRef와 우편 쓰기(mail)뿐이다', () => {
+    const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
+      .filter(m => m !== 'constructor' && m !== 'projectRef' && m !== 'mail');
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
+  });
+
+  it('우편 쓰기는 POST로 op와 요청을 보내고 세션 토큰을 붙인다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ problems: [], preview: { count: 1, totalGold: 5, missing: [] } }), { status: 200 }));
+    const request = { title: 't', body: 'b', target: { kind: 'all' as const, gold: 5 } };
+    const plan = await admin.mail('preview', request);
+    expect(plan.preview?.count).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin?q=mail', {
+      method: 'POST',
+      headers: { authorization: 'Bearer tok', 'content-type': 'application/json' },
+      body: JSON.stringify({ op: 'preview', request }),
+    });
   });
 
   it('userEvents는 건수를 생략하면 500건을 요청한다', async () => {

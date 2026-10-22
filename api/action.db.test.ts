@@ -671,3 +671,52 @@ describe('천장', () => {
     expect((db.saves_current[0] as { data: GameState }).data.namedPity).toEqual({ day: TODAY_KST, misses: 0, fails: 0 });
   });
 });
+
+// 파일 끝에 둔다 — 시드 순번(testUid)을 쓰므로 앞에 두면 뒤쪽 스냅샷의 사용자 id가 밀린다
+describe('우편 받기', () => {
+  it('본인의 받지 않은 골드 우편만 한 번 받는다', async () => {
+    const uid = await seed({ state: { gold: 1000 } });
+    const other = await seed({ state: {} });
+    const { rows } = await env.client.query<{ id: string; user_id: string }>(`insert into public.mails (user_id, title, body, gold)
+      values ($1, '환급', '본문', 500), ($2, '남의 우편', '본문', 900), ($1, '글만', '본문', 0) returning id, user_id`, [uid, other]);
+    const [mine, others, textOnly] = rows.map(r => Number(r.id));
+
+    const first = await callAction(userToken(uid), { type: 'claimMail', id: mine });
+    expect(first.status).toBe(200);
+    expect((first.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 500 });
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const again = await callAction(userToken(uid), { type: 'claimMail', id: mine });
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const notMine = await callAction(userToken(uid), { type: 'claimMail', id: others });
+    vi.setSystemTime(Date.parse(NOW) + 6000);
+    const noGold = await callAction(userToken(uid), { type: 'claimMail', id: textOnly });
+    for (const res of [again, notMine, noGold]) expect(res).toMatchObject({ status: 422, body: { error: 'mail-unavailable' } });
+
+    const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
+    expect(Number(gold.rows[0].gold)).toBe(1500);
+    const mails = await env.client.query<{ id: string; claimed_at: Date | null; read_at: Date | null }>(
+      'select id, claimed_at, read_at from public.mails where id = any($1::bigint[]) order by id', [[mine, others]]);
+    expect(mails.rows[0].claimed_at?.toISOString()).toBe(NOW);
+    expect(mails.rows[0].read_at?.toISOString()).toBe(NOW);
+    expect(mails.rows[1].claimed_at).toBeNull();
+    const ev = await env.client.query<{ payload: unknown }>(`select payload from public.events where user_id = $1 and type = 'claimMail'`, [uid]);
+    expect(ev.rows.map(r => r.payload)).toEqual([{ mailId: mine, gold: 500 }]);
+  });
+
+  it('같은 우편을 동시에 두 번 받으면 한 번만 지급되고 받은 기록과 골드가 함께 남는다', async () => {
+    const uid = await seed({ state: { gold: 0 } });
+    const { rows } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold) values ($1, '동시', '본문', 800) returning id`, [uid]);
+    const id = Number(rows[0].id);
+    const results = await Promise.all([
+      callAction(userToken(uid), { type: 'claimMail', id }),
+      callAction(userToken(uid), { type: 'claimMail', id }),
+    ]);
+    expect(results.filter(r => r.status === 200)).toHaveLength(1);
+    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422])]);
+    const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
+    expect(Number(gold.rows[0].gold)).toBe(800);
+    const mail = await env.client.query<{ claimed_at: Date | null }>('select claimed_at from public.mails where id = $1', [id]);
+    expect(mail.rows[0].claimed_at).not.toBeNull();
+  });
+});

@@ -69,7 +69,7 @@ describe('관리자 화면 파생 데이터', () => {
       { user_id: 'user-1', fish_id: 'b', form: 'normal', dex_count: 4, event_count: 1, missing_events: 3 },
     ];
     const economy: AdminEconomyRow[] = [{
-      day: '2026-10-13', sells: 1, sell_gold: 100, coupon_gold: 10,
+      day: '2026-10-13', sells: 1, sell_gold: 100, coupon_gold: 10, mail_gold: 0,
       rod_cost: 20, boat_cost: 30, bait_cost: 5,
     }];
     const abuse = selectAntiAbuseRows([user({ restricted: true })], flags, mismatch);

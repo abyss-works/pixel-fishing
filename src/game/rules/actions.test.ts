@@ -426,6 +426,22 @@ describe('exhibit — 전시대 진열·회수', () => {
   });
 });
 
+describe('claimMail — 우편 골드 받기', () => {
+  it('deps.mail이 없거나 다른 우편이면 거부한다', () => {
+    expect(applyAction(seed(), { type: 'claimMail', id: 7 }, deps())).toEqual({ ok: false, error: 'mail-unavailable' });
+    expect(applyAction(seed(), { type: 'claimMail', id: 7 }, deps({ mail: { id: 8, gold: 100 } })))
+      .toEqual({ ok: false, error: 'mail-unavailable' });
+  });
+
+  it('주입된 골드를 더하고 결과와 이벤트에 금액을 남긴다', () => {
+    const out = applyAction(seed({ gold: 1_000 }), { type: 'claimMail', id: 7 }, deps({ mail: { id: 7, gold: 6_309_483 } }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(6_310_483);
+    expect(out.result).toEqual({ type: 'mail', gold: 6_309_483 });
+    expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 7, gold: 6_309_483 } }]);
+  });
+});
+
 describe('claimRelief — 지원 코드 (제재 소프트 랜딩, incidents/2026-08-24)', () => {
   const grant = {
     gold: 83_662, fame: 6_535, rod: 14, boat: 3,

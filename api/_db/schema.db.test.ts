@@ -45,7 +45,7 @@ describe('Drizzle 스키마', () => {
   it('서버가 쓰는 표를 모두 선언한다', () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
       'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'coupons', 'events', 'fish_instances',
-      'letters', 'profiles', 'records', 'reliefs', 'saves', 'saves_current',
+      'letters', 'mails', 'profiles', 'records', 'reliefs', 'saves', 'saves_current',
     ]);
   });
 
