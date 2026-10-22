@@ -16,6 +16,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.14.0',
+    date: '2026-10-23',
+    summary: '우편함이 생겼어요',
+    notes: [
+      { tag: '기능', text: '게임 화면 오른쪽 위에 우편함이 생겼어요. 보내 드린 소식과 선물을 여기서 받을 수 있어요.' },
+      { tag: '기능', text: '받지 않은 우편이 있으면 접속할 때 알려 드려요.' },
+    ],
+  },
+  {
     version: '0.13.2',
     date: '2026-10-22',
     summary: '낚싯대 밸런스를 조정했어요',
