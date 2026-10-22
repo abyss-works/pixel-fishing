@@ -104,7 +104,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onSelect={setScreen}
       />
       <p className="text-text-dim text-xs">
-        {leftAll === null ? '오늘 남은 클리어 —' : `오늘 남은 클리어 일반 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
+        {leftAll === null ? '오늘 남은 클리어 –' : `오늘 남은 클리어 일반 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
       </p>
       <p className="text-text-dim text-xs">조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요. 보상을 받으면 클리어 1번이에요.</p>
       {loaded && snap === null && (

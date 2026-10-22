@@ -32,7 +32,7 @@ export default function TraceCard({ onTrack }: {
         <span className="pf-accent text-gold text-sm leading-none flex items-center gap-1">
           <PixelIcon glyph="ticket" size={11} /> 토벌
         </span>
-        <span>{josa(card.named.name, '을/를')} 토벌했어요! {card.zoneName} 항구 수배판에서 보상 받기를 눌러 주세요.</span>
+        <span>{josa(card.named.name, '을/를')} 토벌했어요! {card.zoneName}의 수배판에서 보상 받기를 눌러 주세요.</span>
       </div>
     );
   }
