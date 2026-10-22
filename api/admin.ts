@@ -1,4 +1,4 @@
-// 관리자 읽기 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽는다 (Vercel Function, Node 런타임)
+// 관리자 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽고, 우편 보내기(POST q=mail)를 받는다 (Vercel Function, Node 런타임)
 // 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 세션 토큰의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
 // 토큰이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
 // 응답에는 이메일 같은 개인정보가 담기므로 어떤 응답도 캐시하지 않는다.
@@ -10,10 +10,11 @@ import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
+import { deliverMail, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
-type Req = IncomingMessage & { query?: Record<string, string | string[] | undefined> };
+type Req = IncomingMessage & { query?: Record<string, string | string[] | undefined>; body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
 /** 대시보드가 보는 가장 긴 기간. 일별 활성 조회의 창(90일)과 같다 */
@@ -32,7 +33,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
 }
 
 async function route(req: Req, res: Res): Promise<void> {
-  if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
+  const write = req.method === 'POST' && param(req, 'q') === 'mail';
+  if (req.method !== 'GET' && !write) throw new ApiError(405, 'method-not-allowed');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
   const token = bearerToken(req.headers.authorization);
@@ -48,6 +50,10 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   if (!admin) throw new ApiError(403, 'forbidden');
 
+  if (write) {
+    res.status(200).json(await mail(db, req.body));
+    return;
+  }
   const query = parse(name, req);
   res.status(200).json(await dbRead(() => query(db)));
 }
@@ -62,6 +68,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'dexMismatch': return read.dexMismatch;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
+    case 'mails': return db => recentSentMails(db);
     case 'dailyActive': { const days = daysOf(req); return db => read.dailyActive(db, days); }
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
@@ -74,6 +81,19 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
       return db => read.userEvents(db, user, limit);
     }
     default: throw new ApiError(400, 'bad-query');
+  }
+}
+
+/** 우편 보내기 — op가 preview면 미리보기만, send면 보낸다. 같은 데이터 모듈을 운영 스크립트도 쓴다 */
+async function mail(db: Executor, raw: unknown): Promise<unknown> {
+  const op = (raw as { op?: unknown } | null)?.op;
+  const request = parseMailRequest((raw as { request?: unknown } | null)?.request);
+  if ((op !== 'preview' && op !== 'send') || !request) throw new ApiError(400, 'bad-mail');
+  if (op === 'preview') return dbRead(() => planMail(db, request));
+  try {
+    return await deliverMail(db, request, new Date().toISOString());
+  } catch (e) {
+    throw new ApiError(500, 'db-write', {}, { cause: e });
   }
 }
 

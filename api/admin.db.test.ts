@@ -37,7 +37,7 @@ afterAll(async () => {
   await env?.stop();
 });
 
-async function callAdmin(query: Record<string, string>, token: string | null = null, method = 'GET'): Promise<Out> {
+async function callAdmin(query: Record<string, string>, token: string | null = null, method = 'GET', body?: unknown): Promise<Out> {
   const { default: handler } = await import('./admin.js');
   const out: Out = { status: 0, body: undefined, headers: {} };
   const res = {
@@ -45,7 +45,7 @@ async function callAdmin(query: Record<string, string>, token: string | null = n
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, query, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
+  await handler({ method, query, body, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
   return out;
 }
 
@@ -417,5 +417,37 @@ describe('조회 결과', () => {
   it('letters: 최신순으로 본문과 보낸 사용자를 준다', async () => {
     const rows = (await callAdmin({ q: 'letters' }, userToken(ADMIN))).body as Row[];
     expect(rows.map(r => [r.user_id, r.text])).toEqual([[PLAYER, '바다가 좋아요'], [ADMIN, '안녕하세요'], [GUEST, '문의합니다']]);
+  });
+});
+
+describe('우편 보내기', () => {
+  const request = (recipients: { userId: string; gold: number }[]) => ({
+    title: '환급', body: '강화비 차액을 돌려드려요.', target: { kind: 'users', recipients },
+  });
+
+  it('관리자만 보낼 수 있고, 형태가 틀리면 400이다', async () => {
+    expect(await callAdmin({ q: 'mail' }, userToken(PLAYER), 'POST', { op: 'preview', request: request([{ userId: PLAYER, gold: 1 }]) }))
+      .toMatchObject({ status: 403 });
+    expect(await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'drop', request: request([]) }))
+      .toMatchObject({ status: 400, body: { error: 'bad-mail' } });
+    expect(await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'send', request: { title: 1 } }))
+      .toMatchObject({ status: 400, body: { error: 'bad-mail' } });
+  });
+
+  it('미리보기는 쓰지 않고, 보내기는 계정이 있는 대상에게 넣는다. 보낸 우편은 조회에 나온다', async () => {
+    const ghost = '00000000-0000-4000-8000-000000000999';
+    const body = request([{ userId: PLAYER, gold: 700 }, { userId: ghost, gold: 5 }]);
+    const preview = await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'preview', request: body });
+    expect(preview).toMatchObject({ status: 200, body: { problems: [], preview: { count: 1, totalGold: 700, missing: [ghost] } } });
+    const before = await env.client.query('select 1 from public.mails where user_id = $1', [PLAYER]);
+    expect(before.rows).toHaveLength(0);
+
+    const sent = await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'send', request: body });
+    expect(sent).toMatchObject({ status: 200, body: { sent: 1, preview: { count: 1, totalGold: 700 } } });
+    const bad = await callAdmin({ q: 'mail' }, userToken(ADMIN), 'POST', { op: 'send', request: { ...body, title: ' ' } });
+    expect(bad).toMatchObject({ status: 200, body: { sent: 0, problems: ['title'] } });
+
+    const list = await callAdmin({ q: 'mails' }, userToken(ADMIN));
+    expect((list.body as Row[]).filter(r => r.userId === PLAYER)).toMatchObject([{ title: '환급', gold: 700, claimedAt: null }]);
   });
 });
