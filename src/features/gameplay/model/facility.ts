@@ -4,7 +4,7 @@ import { BOATS } from '../../../game/content/boats';
 import type { Boat } from '../../../game/content/boats';
 import { SPOTS } from '../../../game/content/spots';
 import type { Spot } from '../../../game/content/spots';
-import { MAX_BOAT, WALK_BAG_CAP, baitCost, baitDiscount, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
+import { MAX_BOAT, bagCapacity, baitCost, baitDiscount, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAIT_BUY_MAX, upgradeCost } from '../../../game/rules/balance';
 
@@ -41,7 +41,7 @@ export function selectBoatPurchasePreview(game: GameState): BoatPurchasePreview 
     next,
     openedSpot: SPOTS.find(spot => spot.boatTier === next.tier),
     currentSpeed: game.boat === 0 ? null : BOATS[game.boat - 1].speed,
-    currentBagCap: game.boat === 0 ? WALK_BAG_CAP : BOATS[game.boat - 1].bagCap,
+    currentBagCap: bagCapacity(game.boat, game.bag),
     check: canBuyBoat(game),
   };
 }

@@ -28,31 +28,36 @@ export const JUDGMENT_MULT = {
 } as const;
 
 // 방치(auto) 판정: 일반 등급 가중치를 이만큼 곱해서 추첨 — 희귀 이상이 수동의 1/10 수준
-// 낚싯대 곡선(t)에 따라 from → to로 완화 (강화할수록 방치 효율도 개선)
+// 낚싯대 곡선(t, ROD.curveK)에 따라 from → to로 완화 (강화할수록 방치 효율도 개선)
 export const AUTO_COMMON_BOOST = { from: 10, to: 4 } as const;
 
-// 낚싯대 곡선 — 무한 강화, 점근 수렴
-// t = 1 - 1/(1 + curveK*(lv-1)): 레벨 1 → 0, ∞ → 1
+// 낚싯대 — 무한 강화.
+// 입질 대기: Lv1의 최소·최대 대기에 레벨마다 biteDecay를 곱한다(곱연산 단축, 레벨마다 체감).
+// 방치 부스트의 절대치 버전(fishing.autoCommonBoost)만 점근 곡선 t = 1 - 1/(1 + curveK*(lv-1))을 쓴다.
 // ⚠️ 구 zone(레벨당 PERFECT 존 확대)은 폐기 — 존은 수역 파워 게이트 초과 보너스로 이관(stats.powerZones)
 export const ROD = {
   curveK: 0.15,
-  biteMin: { from: 4, to: 1 },     // 입질 최소 대기(초)
-  biteMax: { from: 8, to: 2.5 },   // 입질 최대 대기(초)
-  sweep: { from: 1.4, to: 1.4 },     // 타이밍 바 시간(초) — 레벨 무관 1.4초 고정
-  costBase: 50,                     // 강화 비용 = round(costBase × costGrowth^(lv-1))
-  // costGrowth 1.7 (v0.6.4 조정, 구 1.8) — **소프트캡 = 최종 수역 빨간 존 10%**.
-  // 파워는 레벨당 +5라 빨간 존 폭도 5%p 계단: L19=5% · L20=10% · L22=20%(캡).
-  // 1.7에서 L20 도달 누적 ≈171만 G(최고 어종 2,000G 기준 ~855마리)로 "겨우 걸치는" 규모가
-  // 되고, 그 다음 단계부터 단독 백만 단위의 벽 — 콘텐츠 진입(L12에 요구 65 충족)과
-  // 엔드게임 최적화(빨간 존)의 가격이 분리된다. 지수 자체는 유지(사용자 확정).
+  biteMin: 4,                       // Lv1 입질 최소 대기(초)
+  biteMax: 8,                       // Lv1 입질 최대 대기(초)
+  biteDecay: 0.94,                  // 레벨마다 입질 대기에 곱하는 값(6% 단축)
+  sweep: 1.4,                       // 타이밍 바 시간(초) — 레벨 무관 고정
+  // 강화 비용: costPowerFrom 레벨까지는 round(costBase × costGrowth^(lv-1)),
+  // 그 뒤로는 costPowerFrom 레벨 비용 × (lv / costPowerFrom)^costPowerExp.
+  // 경계는 인도양 최소 요구 파워를 채우는 Lv16 직전이다. 동남아까지는 지수로 가파르게 두고,
+  // 그 뒤로는 직전 대비 배율이 레벨마다 줄어 강화 간격이 완만하게 늘어난다.
+  costBase: 50,
   costGrowth: 1.7,
+  costPowerFrom: 15,
+  costPowerExp: 8,
 } as const;
 
-// 낚싯대 강화 비용 — round(costBase × costGrowth^(lv-1)).
+// 낚싯대 강화 비용 — level에서 level+1로 올리는 비용.
 // rules(구매 가능 판정)·logic(강화 실행)이 함께 쓰므로, 둘의 공통 하류인 여기에 둔다.
 // logic에 두면 rules → logic → rules 순환이 생긴다 (logic이 rules의 판정을 쓴다).
 export function upgradeCost(level: number): number {
-  return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
+  const exp = (lv: number) => ROD.costBase * Math.pow(ROD.costGrowth, lv - 1);
+  if (level <= ROD.costPowerFrom) return Math.round(exp(level));
+  return Math.round(exp(ROD.costPowerFrom) * Math.pow(level / ROD.costPowerFrom, ROD.costPowerExp));
 }
 
 // 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (서버 액션 처리기).
@@ -84,7 +89,7 @@ export const bountyDailyCap = (kind: BountyKind): number =>
 // 네임드 조우 가중치(전역 기본) — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 뽑는다.
 // 확률 = named / (named + none). 해역 데이터(spots.namedWeight)가 있으면 그 해역은 그 값을 쓴다.
 // 명중하면 즉시 획득이 아니라 도전권을 발급한다.
-// Lv12 방치 6.8초/cycle 기준 기댓값 약 2시간 — 이게 진짜 게이트다.
+// Lv12 방치 약 6.4초/cycle 기준 기댓값 약 1.8시간 — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_WEIGHTS = { named: 1, none: 999 } as const;
 
 // 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 5~마다가스카르 8)만큼 맞히면 성공, 3번째 실패에 탈락.
@@ -97,7 +102,7 @@ export const CHALLENGE_RED = 0.1;
 // 매크로 페이싱 게이트(2단계) — 같은 uid의 성공 액션 사이 최소 간격(ms). 서버 액션 처리기가
 // saves_current.updated_at(성공 커밋마다 갱신됨)과 서버 시각을 비교해 미달이면 429.
 //   느림(기본) = 서버 추첨으로 가치를 '생성'하거나 쓰기 비용이 큰 것(catch·sendLetter).
-//     인간 최소 낚시 사이클(입질 1s + 스윕 1.4s + 홀드 2s ≈ 4.4s) 대비 한참 아래라 무감각.
+//     인간 최소 낚시 사이클(획득 표시 2s + 입질 대기 + 반응) 대비 아래라 무감각.
 //   빠름      = 상점·정비 등 UI 체인(연속 클릭)이 정상인 계열. 더블클릭(≤300ms)도 통과하고,
 //     봇 flood에는 150ms≈최대 ~6.7 rps/uid의 완화 상한으로 남는다.
 // 어느 쪽도 밸런스를 깨지 않는다 — 골드 생성점은 catch뿐이라 나머지는

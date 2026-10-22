@@ -12,7 +12,7 @@ export const Boats: Story = {
     steps: [
       { key: '1', label: '조각배', meta: '속도 85 · 가방 140', state: 'done', leading: <BoatSprite tier={1} preset="thumb" /> },
       { key: '2', label: '돛단배', meta: '속도 100 · 가방 300', state: 'current', leading: <BoatSprite tier={2} preset="thumb" /> },
-      { key: '3', label: '정크선', meta: '속도 115 · 가방 600 · 명성 3,500', state: 'next', leading: <BoatSprite tier={3} preset="thumb" /> },
+      { key: '3', label: '정크선', meta: '속도 115 · 가방 500 · 명성 3,500', state: 'next', leading: <BoatSprite tier={3} preset="thumb" /> },
       { key: '4', label: '범선', meta: '명성 11,000', state: 'locked', leading: <BoatSprite tier={4} preset="thumb" /> },
     ],
   },
@@ -21,9 +21,9 @@ export const Boats: Story = {
 export const Rod: Story = {
   args: {
     steps: [
-      { key: '3', label: 'Lv.3', meta: '입질 3.4~6.8s', state: 'done' },
-      { key: '4', label: 'Lv.4', meta: '입질 3.2~6.4s', state: 'current' },
-      { key: '5', label: 'Lv.5', meta: '입질 3.0~6.0s · 800G', state: 'next' },
+      { key: '3', label: 'Lv.3', meta: '입질 3.5~7.1s', state: 'done' },
+      { key: '4', label: 'Lv.4', meta: '입질 3.3~6.6s', state: 'current' },
+      { key: '5', label: 'Lv.5', meta: '입질 3.1~6.2s · 418G', state: 'next' },
       { key: '6', label: 'Lv.6', meta: '1,000G', state: 'locked' },
     ],
   },
