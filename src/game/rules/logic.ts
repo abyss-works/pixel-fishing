@@ -391,20 +391,21 @@ export function rollSize(fish: Fish, rng: () => number = Math.random): number {
   return Math.max(mean + z * std, 1);
 }
 
-// 표준정규 CDF 근사 (Abramowitz-Stegun 7.1.26, 최대오차 1.5e-7) — 의존성 없이 순수 함수로 충분
+// 표준정규 CDF Φ(z) = ½(1 + erf(z/√2)) — erf는 Abramowitz-Stegun 7.1.26 근사(최대오차 1.5e-7)
 function stdNormalCdf(z: number): number {
-  const t = 1 / (1 + 0.3275911 * Math.abs(z));
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
   const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741
     + t * (-1.453152027 + t * 1.061405429))));
-  const y = 1 - poly * Math.exp(-z * z);
-  return 0.5 * (1 + Math.sign(z) * y);
+  const erf = 1 - poly * Math.exp(-x * x);
+  return 0.5 * (1 + Math.sign(z) * erf);
 }
 
-// 이 크기가 해당 어종 분포에서 상위 몇 %인지 (도감 상세보기 표시용, 소수 1자리)
+// 이 크기가 해당 어종 분포에서 상위 몇 %인지 — 소수 1자리 올림이라 상위 0%로 표시되지 않는다
 export function sizePercentile(fish: Fish, size: number): number {
   const { mean, std } = sizeParams(fish);
   const z = (size - mean) / std;
-  return Math.round((1 - stdNormalCdf(z)) * 1000) / 10;
+  return Math.ceil((1 - stdNormalCdf(z)) * 1000) / 10;
 }
 
 export interface CatchExtras {

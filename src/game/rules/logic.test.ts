@@ -466,6 +466,14 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(sizePercentile(carp, mean - std * 3)).toBeGreaterThan(99);
   });
 
+  it('sizePercentile: 표준정규 꼬리 확률을 소수 1자리로 올림한다', () => {
+    const { mean, std } = sizeParams(carp);
+    expect(sizePercentile(carp, mean + std)).toBe(15.9);          // 15.87
+    expect(sizePercentile(carp, mean + std * 0.8417)).toBe(20);   // 19.998 — 월척 경계 안
+    expect(sizePercentile(carp, mean + std * 2.5)).toBe(0.7);     // 0.621
+    expect(sizePercentile(carp, mean + std * 4)).toBe(0.1);       // 0.003 — 0%로 보이지 않는다
+  });
+
   it('rollCatchExtras: 변이 폼 확률은 대략 1/4 — 돌연변이:일반 = 1:3 (통계적)', () => {
     let variant = 0;
     const n = 20000;
