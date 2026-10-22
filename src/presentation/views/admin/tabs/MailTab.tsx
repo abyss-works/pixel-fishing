@@ -40,6 +40,7 @@ export default function MailTab() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   const parsed = parseRecipients(recipientText);
   const gold = Number(allGold);
@@ -49,17 +50,23 @@ export default function MailTab() {
   };
   const inputBad = kind === 'users' ? parsed.badLines.length > 0 : !Number.isSafeInteger(gold) || gold < 0;
   // 입력이 바뀌면 이전 미리보기는 무효다
-  const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPlan(null); setFailure(null); };
+  const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPlan(null); setFailure(null); setDone(null); };
 
   const run = async (op: 'preview' | 'send') => {
     setBusy(true);
     setFailure(null);
+    setDone(null);
     try {
       const result = await writeMail(op, request);
       setPlan(op === 'send' ? null : result);
       if (op === 'send') {
-        setTitle(''); setBody(''); setRecipientText(''); setAllGold('0');
-        setFailure(result.problems.length > 0 ? result.problems.map(p => MAIL_PROBLEM_TEXT[p]).join(' ') : null);
+        if (result.problems.length > 0) {
+          // 거절되면 입력을 남겨 고칠 수 있게 한다
+          setFailure(result.problems.map(p => MAIL_PROBLEM_TEXT[p]).join(' '));
+        } else {
+          setTitle(''); setBody(''); setRecipientText(''); setAllGold('0');
+          setDone(`${result.sent ?? 0}통을 보냈어요. 골드 합계 ${fmtGold(result.preview?.totalGold ?? 0)}.`);
+        }
       }
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
@@ -144,6 +151,7 @@ export default function MailTab() {
               </Note>
             )}
             {failure && <Note tone="warn" className="my-0">{failure}</Note>}
+            {done && <Note className="my-0">{done}</Note>}
             <div className="flex gap-2">
               <Button size="sm" disabled={!granted || busy || inputBad} onClick={() => void run('preview')}>미리보기</Button>
               <Button size="sm" variant="primary" disabled={!granted || busy || !plan?.preview || plan.preview.count === 0}

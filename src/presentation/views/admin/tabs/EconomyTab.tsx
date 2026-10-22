@@ -51,10 +51,10 @@ export default function EconomyTab({ range }: { range: DayRange }) {
 
       {/* 유입·유출은 같은 날 축이라 짝지어 본다(xl 이상에서 좌우) */}
       <CellGrid>
-        <Cell title="유입 — 판매·쿠폰">
+        <Cell title="유입 — 판매·쿠폰·우편">
           <BarsChart values={series(r => r.sell_gold + r.coupon_gold + r.mail_gold)} labels={dayLabels} height={72}
                      highlight="last" highlightName="금일" ariaLabel="골드 유입 일별 추이" />
-          <Note size="2xs" className="my-0">판매 골드에 쿠폰 지급이 더해진 일별 흐름이에요.</Note>
+          <Note size="2xs" className="my-0">판매 골드에 쿠폰과 우편 지급이 더해진 일별 흐름이에요.</Note>
         </Cell>
 
         <Cell title="유출 — 강화·배·미끼">
