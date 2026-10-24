@@ -151,7 +151,7 @@ export default function GameView(props: GameViewProps) {
         {statsOpen && (
           <StatsModal game={game}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
-                      region={region}
+                      region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
