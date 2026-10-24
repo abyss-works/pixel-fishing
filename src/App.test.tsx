@@ -1362,37 +1362,55 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
 });
 
 describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
-  it('클릭하면 열리고 파생 축·수역 캐루셀이 보인다, 닫기로 닫힌다', () => {
+  const statsDialog = () => screen.getAllByRole('dialog').at(-1)!;
+  const openTab = (name: string) => fireEvent.click(within(statsDialog()).getByRole('button', { name }));
+
+  it('클릭하면 요약 탭으로 열리고, 탭마다 배·낚싯대·보너스를 보여 주며 닫기로 닫힌다', () => {
     render(<App />);
     fireEvent.click(screen.getByLabelText('스탯창 열기'));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
-    expect(screen.getByText('이동 속도')).toBeInTheDocument();
-    // 낚싯대: 레벨/파워 + 수역 캐루셔(기본 = 현재 지역 대표 수역)의 상대 스탯 행들
-    expect(screen.getByText('현재 레벨')).toBeInTheDocument();
-    expect(screen.getByText('현재 파워')).toBeInTheDocument();
-    expect(screen.getAllByText(/마을 강/).length).toBeGreaterThan(0); // village 최고 요구 수역
-    expect(screen.getByText('입질 최소 대기')).toBeInTheDocument();
-    expect(screen.getByText('바 시간')).toBeInTheDocument();
-    expect(screen.getByText('방치 낚시 페널티')).toBeInTheDocument();
-    // 캐루셀 순환 — 다음 수역(마을 연못)으로 넘어간다
-    fireEvent.click(screen.getByLabelText('다음 해역'));
-    expect(screen.getAllByText(/마을 연못/).length).toBeGreaterThan(0);
-    // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님), 로어체 문장
-    fireEvent.mouseEnter(screen.getAllByLabelText('도움말')[0]);
+    // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을에서는 요구 파워가 가장 높은 마을 강)
+    const dialog = within(statsDialog());
+    expect(dialog.getByText('도감')).toBeInTheDocument();
+    expect(dialog.getByText('이 지역 해역')).toBeInTheDocument();
+    expect(dialog.getAllByText(/마을 강/).length).toBeGreaterThan(0);
+    expect(dialog.getByRole('meter', { name: '파워' })).toBeInTheDocument();
+
+    openTab('배');
+    expect(dialog.getByText('이동 속도')).toBeInTheDocument();
+    expect(dialog.getByText('갈 수 있는 곳')).toBeInTheDocument();
+
+    // 낚싯대 — 지역 서브탭과 해역 목록, 고른 해역의 상대 스탯 행
+    openTab('낚싯대');
+    expect(dialog.getByText('바 시간')).toBeInTheDocument();
+    expect(dialog.getByText('입질 최소 대기')).toBeInTheDocument();
+    expect(dialog.getByText('방치 낚시 페널티')).toBeInTheDocument();
+    expect(dialog.getByRole('option', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(dialog.getByRole('option', { name: /마을 연못/ }));
+    expect(dialog.getByRole('option', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님)
+    fireEvent.mouseEnter(dialog.getAllByLabelText('도움말')[0]);
     expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
-    fireEvent.mouseLeave(screen.getAllByLabelText('도움말')[0]);
+    fireEvent.mouseLeave(dialog.getAllByLabelText('도움말')[0]);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-    expect(screen.queryByText('파워')).not.toBeInTheDocument();
+
+    // 보너스 — 새 게임은 유물·미끼가 없다. 갈래마다 빈 자리를 지킨다
+    openTab('보너스');
+    expect(dialog.getByText('지금 받는 보너스')).toBeInTheDocument();
+    expect(dialog.getAllByText('받는 보너스가 없어요.').length).toBeGreaterThan(0);
+
+    fireEvent.click(dialog.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByText('지금 받는 보너스')).not.toBeInTheDocument();
   });
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
     render(<App />);
     fireEvent.click(screen.getByLabelText('스탯창 열기'));
     expect(screen.getByText('스탯')).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: '파워' })).toBeInTheDocument();
     // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환
     clickFurniture('exit');
-    expect(screen.queryByText('이동 속도')).not.toBeInTheDocument();
+    expect(screen.queryByRole('meter', { name: '파워' })).not.toBeInTheDocument();
   });
 });
 
