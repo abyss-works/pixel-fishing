@@ -58,12 +58,38 @@ export async function purgeAccount(withTransaction: Database['withTransaction'],
     await tx.execute(sql`select 1 from public.saves_current where user_id = ${uid} for update`);
     const { rows } = await tx.execute(sql`select u.id ${targetFrom(cutoffISO)} and u.id = ${uid} for update of u`);
     if (rows.length === 0) return false;
-    await deleteUserEvents(tx, uid);
-    await deleteUserBounty(tx, uid);
-    await deleteUserMails(tx, uid);
-    await deleteUserProfile(tx, uid);
-    await deleteUserSaves(tx, uid);
-    await tx.execute(sql`delete from auth.users where id = ${uid}`);
+    await deleteAccountRows(tx, uid);
     return true;
   });
+}
+
+/** 본인 탈퇴의 결과. admin은 관리자 계정이라 지우지 않았고, missing은 인증 계정이 이미 없다 */
+export type OwnDeletion = 'deleted' | 'admin' | 'missing';
+
+/**
+ * 본인 요청으로 계정을 지운다. 익명 계정과 이메일 계정 모두 대상이다.
+ * 정리 대상 조건 없이 계정의 공개 표 행과 인증 계정을 한 트랜잭션에서 지운다. 편지는 인증 계정에 연쇄 삭제로 묶여 함께 사라진다.
+ * 관리자 계정은 지우지 않는다. 중간에 실패하면 던지고 계정은 그대로 남는다.
+ */
+export async function deleteOwnAccount(withTransaction: Database['withTransaction'], uid: string): Promise<OwnDeletion> {
+  return withTransaction(async tx => {
+    // 저장 행과 인증 계정 행을 잠가 진행 중인 액션 확정이 끝난 뒤 지운다. 이후의 확정은 행이 없어 낙관 락 경합으로 끝난다
+    await tx.execute(sql`select 1 from public.saves_current where user_id = ${uid} for update`);
+    const { rows } = await tx.execute<{ admin: boolean }>(sql`select exists (select 1 from public.admins a where a.user_id = u.id) as admin
+      from auth.users u where u.id = ${uid} for update of u`);
+    if (rows.length === 0) return 'missing';
+    if (rows[0].admin) return 'admin';
+    await deleteAccountRows(tx, uid);
+    return 'deleted';
+  });
+}
+
+/** 계정의 공개 표 행을 표의 소유 저장 모듈로 지우고 마지막에 인증 계정을 지운다 */
+async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
+  await deleteUserEvents(tx, uid);
+  await deleteUserBounty(tx, uid);
+  await deleteUserMails(tx, uid);
+  await deleteUserProfile(tx, uid);
+  await deleteUserSaves(tx, uid);
+  await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }
