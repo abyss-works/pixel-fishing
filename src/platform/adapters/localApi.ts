@@ -36,6 +36,9 @@ class LocalAuth implements AuthApi {
   async applyNewPassword(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
+  async deleteAccount(): Promise<AuthResult> {
+    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
+  }
   accountNudgedDay(): string | null {
     const v = localStorage.getItem('pf-account-nudged');
     // 하루 한 번 규칙 이전의 값('1')은 날짜가 아니므로 띄운 적 없는 것으로 본다

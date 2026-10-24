@@ -12,6 +12,7 @@ import {
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
+  deleteOwnAccount,
 } from './auth';
 
 class HttpAuth implements AuthApi {
@@ -47,6 +48,9 @@ class HttpAuth implements AuthApi {
   }
   applyNewPassword(password: string): Promise<AuthResult> {
     return applyNewPassword(password);
+  }
+  deleteAccount(): Promise<AuthResult> {
+    return deleteOwnAccount();
   }
   accountNudgedDay(): string | null {
     const v = localStorage.getItem('pf-account-nudged');
