@@ -88,5 +88,30 @@ export async function applyNewPassword(password: string): Promise<AuthResult> {
   return error ? authErr(error) : { ok: true };
 }
 
+// 본인 탈퇴 — 서버 함수(/api/account)가 계정 행과 인증 계정을 지운다. 지운 뒤 이 기기의 세션을 끝낸다
+const DELETE_MSG: Record<number, string> = {
+  403: '관리자 계정은 여기서 삭제할 수 없어요.',
+  404: '이미 삭제된 계정이에요.',
+};
+export async function deleteOwnAccount(): Promise<AuthResult> {
+  if (!supabase) return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, msg: '로그인 정보를 확인하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.' };
+  let res: Response;
+  try {
+    res = await fetch('/api/account', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ op: 'delete' }),
+    });
+  } catch {
+    return { ok: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.' };
+  }
+  if (!res.ok) return { ok: false, msg: DELETE_MSG[res.status] ?? `잠시 뒤 다시 시도해 주세요. (${res.status})` };
+  // 인증 계정이 이미 없으므로 서버 로그아웃을 부르지 않고 이 기기의 세션만 지운다
+  await supabase.auth.signOut({ scope: 'local' });
+  return { ok: true };
+}
+
 // 이 모듈은 Supabase 인증을 맡으며 세이브 읽기와 액션 전송은 게임 게이트웨이가 맡는다.
 // 구 pushCloudSave/fetchCloudSave/fetchCoupon 삭제: 쓰기는 /api/action, 동적 쿠폰 조회는 서버 소관.
