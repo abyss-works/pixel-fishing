@@ -94,30 +94,20 @@ describe('스탯 요약', () => {
 describe('받는 보너스', () => {
   it('가진 유물의 효과를 효과마다 한 줄로, 갈래를 붙여 모은다', () => {
     const g = game({ boat: 5, rod: 18, artifacts: ['abyss-angler', 'wreck-compass'] });
-    const relics = selectActiveBonuses(g, rowOf(g, 'indian')).filter(b => b.source.kind === 'relic');
+    const relics = selectActiveBonuses(g).filter(b => b.source.kind === 'relic');
     expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.effect]))
       .toEqual([['duel', 'abyss-angler', 'duelSpeedupCut'], ['move', 'wreck-compass', 'sail']]);
   });
 
   it('켜 둔 미끼는 낚시 갈래의 직접 낚을 때만 효과다', () => {
     const g = game({ activeBait: 'bait-rare' });
-    const bait = selectActiveBonuses(g, rowOf(g, 'river')).find(b => b.source.kind === 'bait');
+    const bait = selectActiveBonuses(g).find(b => b.source.kind === 'bait');
     expect(bait).toMatchObject({ category: 'fish', manualOnly: true });
   });
 
-  it('파워가 요구를 넘는 해역에서는 수동 보정과 영역을 낚싯대 보너스로 싣는다', () => {
+  it('낚싯대 파워에서 오는 효과는 보너스에 넣지 않는다 — 낚싯대 탭이 해역별로 보여 준다', () => {
     const g = game({ boat: 5, rod: 18 });
-    const row = rowOf(g, 'indian');
-    const power = selectActiveBonuses(g, row).filter(b => b.source.kind === 'power');
-    expect(power.map(b => b.source.kind === 'power' && b.source.stat)).toEqual(['manual', 'good']);
-    expect(power[0]).toMatchObject({ category: 'fish', manualOnly: true });
-    expect(power[0].source.kind === 'power' && power[0].source.value).toBe(row.data.manualBonus.value);
-  });
-
-  it('파워가 모자라거나 배가 없는 해역에서는 낚싯대 보너스가 없다', () => {
-    const g = game({ boat: 1, rod: 3 });
-    expect(selectActiveBonuses(g, rowOf(g, 'sea'))).toEqual([]);
-    expect(selectActiveBonuses(g, rowOf(g, 'deep'))).toEqual([]);
+    expect(selectActiveBonuses(g)).toEqual([]);
   });
 
   it('갈래 순서는 이동, 낚시, 결투, 상점이다', () => {

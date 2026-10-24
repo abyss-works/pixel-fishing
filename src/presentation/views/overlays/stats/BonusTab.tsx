@@ -17,21 +17,11 @@ const CATEGORY: Record<BonusCategory, { label: string; glyph: GlyphId }> = {
   shop: { label: '상점', glyph: 'coin' },
 };
 
-/** 효과 문장 — 유물·미끼는 기존 문장 함수에서 뽑는다. 낚싯대는 낚싯대 표와 같은 이름을 쓴다 */
-function effectText(row: BonusRow): string {
-  const s = row.source;
-  if (s.kind === 'relic') return artifactEffectLine(s.artifact, s.effect) ?? '';
-  if (s.kind === 'bait') return baitEffectLine(s.bait);
-  if (s.stat === 'manual') return `수동 확률 보정 ×${s.value.toFixed(1)}`;
-  return `${s.stat === 'good' ? 'GOOD' : 'PERFECT'} 영역 ${Math.round(s.value)}%`;
-}
-
-function sourceText(row: BonusRow): string {
-  const s = row.source;
-  if (s.kind === 'relic') return s.artifact.name;
-  if (s.kind === 'bait') return s.bait.name;
-  return `낚싯대 파워 · ${s.spot.name}`;
-}
+/** 효과 문장 — 유물·미끼의 기존 문장 함수에서 뽑는다 */
+const effectText = (row: BonusRow): string =>
+  row.source.kind === 'relic' ? artifactEffectLine(row.source.artifact, row.source.effect) ?? '' : baitEffectLine(row.source.bait);
+const sourceText = (row: BonusRow): string =>
+  row.source.kind === 'relic' ? row.source.artifact.name : row.source.bait.name;
 
 // 보너스 탭 — 지금 받는 효과만 이동·낚시·결투·상점으로 모은다. 줄마다 출처를 꼬리표로 붙인다.
 // 받는 효과가 없는 갈래도 자리를 지켜 예시마다 창 모양이 같다.
@@ -68,7 +58,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
         })}
       </div>
       <Note size="xs" className="my-0">
-        유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요. 미끼는 가방에서 켜고 끌 수 있어요. 낚싯대 보너스는 고른 해역 기준이에요.
+        유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요. 미끼는 가방에서 켜고 끌 수 있어요.
       </Note>
     </div>
   );
