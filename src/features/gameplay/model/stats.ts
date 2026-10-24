@@ -133,8 +133,7 @@ const EFFECT_CATEGORY: Record<keyof ArtifactEffects, BonusCategory> = {
 
 export type BonusSource =
   | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects }
-  | { kind: 'bait'; bait: Bait }
-  | { kind: 'power'; spot: Spot; stat: 'manual' | 'good' | 'perfect'; value: number };
+  | { kind: 'bait'; bait: Bait };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -144,10 +143,10 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 켜 둔 미끼, 고른 해역에서 파워가 요구를 넘어 생기는 효과.
- * 배가 없거나 파워가 모자란 해역에서는 낚싯대 보너스가 없다.
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄)와 켜 둔 미끼.
+ * 낚싯대 파워에서 오는 효과(수동 보정·GOOD·PERFECT)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
-export function selectActiveBonuses(game: GameState, row: StatsSpotRow): BonusRow[] {
+export function selectActiveBonuses(game: GameState): BonusRow[] {
   const out: BonusRow[] = [];
   const owned = new Set(game.artifacts);
   for (const artifact of ARTIFACTS) {
@@ -159,13 +158,5 @@ export function selectActiveBonuses(game: GameState, row: StatsSpotRow): BonusRo
   }
   const bait = baitById(game.activeBait);
   if (bait) out.push({ category: 'fish', source: { kind: 'bait', bait }, manualOnly: true });
-  if (row.fit === 'ok') {
-    const { manualBonus, powerZones: zones } = row.data;
-    const power = (stat: 'manual' | 'good' | 'perfect', value: number, manualOnly: boolean) =>
-      out.push({ category: 'fish', source: { kind: 'power', spot: row.spot, stat, value }, manualOnly });
-    if (manualBonus.value > 1) power('manual', manualBonus.value, true);
-    if (zones.yellow > 0) power('good', zones.yellow, false);
-    if (zones.red > 0) power('perfect', zones.red, false);
-  }
   return out;
 }

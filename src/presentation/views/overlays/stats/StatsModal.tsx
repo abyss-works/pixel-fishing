@@ -21,7 +21,7 @@ import SummaryTab from './SummaryTab';
 // 스탯창 — 자원 바 클릭으로 여는 내 캐릭터 성능 화면. 요약·배·낚싯대·보너스 네 탭이다.
 // 값은 전부 스탯 선택자에서 온다 — 여기서 규칙을 재계산하지 않는다.
 // 탭 본문 높이를 고정해 탭을 바꿔도 창 크기가 흔들리지 않는다. 긴 목록은 그 구역 안에서만 굴린다.
-// 고른 해역은 탭 사이에 이어진다 — 요약의 해역 칸과 보너스의 낚싯대 보너스가 낚싯대 탭에서 고른 해역을 따른다.
+// 고른 해역은 탭 사이에 이어진다 — 요약의 해역 칸이 낚싯대 탭에서 고른 해역을 따른다.
 
 type StatsTab = 'summary' | 'boat' | 'rod' | 'bonus';
 const TABS: TabDef<StatsTab>[] = [
@@ -76,7 +76,7 @@ export default function StatsModal({ game, movement, region, nickname, onClose }
             <RodTab game={game} rows={rows} zoneTabs={zoneTabs} zone={zone} selected={selected}
                     onZone={pickZone} onSelect={setSpotIndex} />
           )}
-          {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game, selected)} />}
+          {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game)} />}
         </div>
       </Panel>
     </Modal>
