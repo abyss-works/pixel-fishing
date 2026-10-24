@@ -32,6 +32,8 @@ export interface AuthApi {
   signOut(): Promise<void>;
   requestPasswordReset(email: string): Promise<AuthResult>;
   applyNewPassword(password: string): Promise<AuthResult>;
+  /** 본인 계정과 진행을 지운다. 성공하면 세션도 끝낸다 */
+  deleteAccount(): Promise<AuthResult>;
   /** 마지막으로 계정 만들기 넛지를 띄운 날(KST yyyy-mm-dd). 없으면 null */
   accountNudgedDay(): string | null;
   markAccountNudged(day: string): void;

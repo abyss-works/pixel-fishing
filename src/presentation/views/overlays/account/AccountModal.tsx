@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import {
+  deleteAccount,
   isAccountConfigured,
   requestAccountPasswordReset,
   saveGameCode,
@@ -45,7 +46,7 @@ export default function AccountModal({
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [nickBusy, setNickBusy] = useState(false);
-  const { confirm, notice, dialogs } = useDialogs();
+  const { confirm, input, notice, dialogs } = useDialogs();
   // 로컬(supabase 없음)에서도 화면은 보여준다 — 계정 폼만 막고 닉네임·ID는 그대로 동작한다.
   const offline = !isAccountConfigured();
 
@@ -96,6 +97,20 @@ export default function AccountModal({
     await signOutAccount();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
+
+  // 되돌릴 수 없는 동작이라 확인 문구를 직접 입력해야 지운다
+  const removeAccount = () => run(async () => {
+    const typed = await input({
+      title: '계정 삭제',
+      body: '계정을 삭제하면 진행, 도감, 골드, 우편, 편지가 모두 지워지고 되돌릴 수 없어요.\n삭제하려면 아래 칸에 “삭제”를 입력해 주세요.',
+      label: '확인 문구', placeholder: '삭제', confirmLabel: '계정 삭제',
+    });
+    if (typed === null) return;
+    if (typed.trim() !== '삭제') { setToast('확인 문구가 달라 삭제하지 않았어요.', 'warn'); return; }
+    const r = await deleteAccount();
+    if (!r.ok) { setToast(`계정을 삭제하지 못했어요. ${r.msg}`, 'warn'); return; }
+    window.location.reload(); // 재부팅 = 새 익명 세션으로 처음부터 시작
+  });
 
   const submitNick = async () => {
     if (!checkNickname(draft).ok) {
@@ -199,7 +214,10 @@ export default function AccountModal({
       <Note>문의하실 때 이 <b>ID</b>를 함께 알려 주시면 빠르게 해결할 수 있어요.<br/>
         가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 
-      <div className="flex gap-2 mt-3">
+      <SectionTitle>계정 삭제</SectionTitle>
+      <Note>계정과 모든 진행을 지워요. 삭제한 뒤에는 되돌릴 수 없어요.</Note>
+      <div className="flex gap-2 mt-2">
+        <Button variant="ghost" size="sm" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
       </div>
       {dialogs}
     </Modal>
