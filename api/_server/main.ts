@@ -3,6 +3,7 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
+import account from '../account.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import mail from '../mail.js';
@@ -14,6 +15,7 @@ import { settleAfterResponse } from './afterResponse.js';
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
 const routes: Record<string, NodeHandler> = {
+  '/api/account': account,
   '/api/action': action,
   '/api/admin': admin,
   '/api/mail': mail,
