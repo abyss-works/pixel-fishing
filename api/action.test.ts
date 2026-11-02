@@ -1,5 +1,5 @@
 // 핸들러 규약 스모크 — v0.2.2 사고 클래스 ②(호출 규약) 가드.
-// Vercel Node 런타임은 default export를 Node 스타일 (req, res)로 호출한다 — 이 테스트는
+// 서버 진입점은 default export를 Node 스타일 (req, res)로 호출한다 — 이 테스트는
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
 import { describe, it, expect } from 'vitest';
@@ -49,7 +49,7 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
   });
 
   it('배포 식별자 일치 + 서버 환경변수 없으면 500 server-config (테스트 환경 = env 없음)', async () => {
-    // 테스트 환경엔 VERCEL_GIT_COMMIT_SHA가 없어 서버 기준값이 'dev'로 떨어진다
+    // 테스트 환경엔 BUILD_ID가 없어 서버 기준값이 'dev'로 떨어진다
     const res = mkRes();
     await handler({ method: 'POST', headers: { 'x-build-id': 'dev' } } as never, res as never);
     expect(res.statusCode).toBe(500);

@@ -1,4 +1,4 @@
-// 액션 API — 모든 상태 변경의 유일한 서버 경로 (서버 권위 v0.5.0, Vercel Function, Node 런타임)
+// 액션 API — 모든 상태 변경의 유일한 서버 경로 (서버 권위 v0.5.0, Node 런타임)
 // 규칙 실행은 applyAction — 클라이언트 LocalGameGateway와 같은 리듀서.
 // 저장 모델(0005): saves_current(유저당 1행, 낙관 락) + events(append-only 정본 스트림)
 // + saves(스냅샷 아카이브 — 50액션마다 append, 롤백 안전망).
@@ -12,8 +12,8 @@
 // 사고(2026-08-21) 재발 방지. default export = Node 시그니처.
 import { createClient } from '@supabase/supabase-js';
 import type { SQL } from 'drizzle-orm';
-import { waitUntil } from '@vercel/functions';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { afterResponse } from './_server/afterResponse.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
@@ -60,9 +60,8 @@ import { eventsInsert } from './_data/telemetry.js';
 
 export type { BountyRows } from './_data/load.js';
 
-// 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(Vercel 시스템 환경변수).
-// 공식 문서 확인: VERCEL_GIT_COMMIT_SHA는 빌드·런타임 양쪽에 제공된다.
-const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev';
+// 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(이미지 빌드 인자 BUILD_ID).
+const BUILD_ID = process.env.BUILD_ID ?? 'dev';
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
 
@@ -82,10 +81,10 @@ export function importOwnerEmail(): string {
 
 // 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
 // 스테이징·로컬 서버에서는 소유자 계정이거나 로컬 오리진일 때만 연다.
-export function debugTriggerAllowed({ vercelEnv, localOrigin, owner }: {
-  vercelEnv: string | undefined; localOrigin: boolean; owner: boolean;
+export function debugTriggerAllowed({ deployEnv, localOrigin, owner }: {
+  deployEnv: string | undefined; localOrigin: boolean; owner: boolean;
 }): boolean {
-  if (vercelEnv === 'production') return false;
+  if (deployEnv === 'production') return false;
   return localOrigin || owner;
 }
 
@@ -246,7 +245,7 @@ async function route(req: Req, res: Res): Promise<void> {
     if (!ok) throw new ApiError(500, 'db-write', { uid, action: 'profile' });
   };
 
-  // body = GameAction (content-type: application/json이면 Vercel이 파싱해 둔다).
+  // body = GameAction (content-type: application/json이면 서버 진입점이 파싱해 둔다).
   // 런타임 검증은 actionSchema가 맡는다 — type 화이트리스트와 judgment enum을 여기서
   // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
@@ -282,9 +281,9 @@ async function route(req: Req, res: Res): Promise<void> {
     return (ud.user?.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
   };
   const debugAllowed = async (): Promise<boolean> => {
-    const vercelEnv = process.env.VERCEL_ENV;
-    if (vercelEnv === 'production') return false;
-    return debugTriggerAllowed({ vercelEnv, localOrigin, owner: localOrigin || await isOwner() });
+    const deployEnv = process.env.DEPLOY_ENV;
+    if (deployEnv === 'production') return false;
+    return debugTriggerAllowed({ deployEnv, localOrigin, owner: localOrigin || await isOwner() });
   };
 
   // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다.
@@ -505,7 +504,7 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   followUps.push(...expiredCleanup(uid, expired, dayStart));
   const actionType = action.type;
-  waitUntil(runFollowUps(db, followUps).catch(e =>
+  afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만

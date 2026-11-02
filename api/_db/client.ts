@@ -1,6 +1,5 @@
 // 서버 함수의 Postgres 연결. Supabase의 transaction 모드 풀러(Supavisor)를 거친다.
 // 풀러는 이름 붙은 prepared statement와 연결 단위 세션 상태를 유지하지 않으므로 둘 다 쓰지 않는다(트랜잭션 밖 SET 포함).
-import { attachDatabasePool } from '@vercel/functions';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
@@ -68,7 +67,5 @@ export function database(): Database {
     idleTimeoutMillis: 5000,
     connectionTimeoutMillis: 5000,
   });
-  // 함수 인스턴스가 일시 중지되기 전에 유휴 연결을 정리하도록 풀을 등록한다. Vercel 밖에서는 동작하지 않는다.
-  attachDatabasePool(appDatabase.pool);
   return appDatabase;
 }

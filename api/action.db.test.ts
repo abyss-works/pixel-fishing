@@ -32,7 +32,7 @@ beforeEach(() => {
   return () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    delete process.env.VERCEL_ENV;
+    delete process.env.DEPLOY_ENV;
   };
 });
 
@@ -372,7 +372,7 @@ describe('개발 명령', () => {
   });
 
   it('운영 배포는 로컬 오리진이어도 거부한다', async () => {
-    process.env.VERCEL_ENV = 'production';
+    process.env.DEPLOY_ENV = 'production';
     expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } }, { origin: LOCAL_ORIGIN }))
       .toMatchSnapshot();
   });

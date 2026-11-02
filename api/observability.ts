@@ -1,4 +1,4 @@
-// 관측(서버) — Vercel 함수의 에러를 보고한다. 클라이언트 오류는 플랫폼 계층에서 처리한다.
+// 관측(서버) — 서버 함수의 에러를 보고한다. 클라이언트 오류는 플랫폼 계층에서 처리한다.
 //
 // ⚠️ **지연 로드가 핵심이다.** @sentry/node는 OpenTelemetry 의존을 끌고 오는 무거운 패키지라,
 // 모듈 최상단에서 import하면 그것만으로 콜드 스타트가 늘어난다 — 액션 레이턴시를 2~3초에서
@@ -18,7 +18,7 @@ async function load(dsn: string): Promise<SentryNode | null> {
   const mod = await import('@sentry/node');
   mod.init({
     dsn,
-    environment: process.env.SENTRY_ENV ?? process.env.VERCEL_ENV ?? 'development',
+    environment: process.env.SENTRY_ENV ?? process.env.DEPLOY_ENV ?? 'development',
     release: APP_VERSION,          // 클라와 같은 릴리즈 문자열로 묶인다
     dataCollection: { userInfo: false },
     // 에러만 — 트레이싱/프로파일링은 끔 (쿼터·콜드스타트 보호)

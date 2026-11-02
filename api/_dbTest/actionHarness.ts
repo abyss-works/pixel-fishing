@@ -34,7 +34,7 @@ export async function startActionEnv(): Promise<ActionEnv> {
   process.env.SUPABASE_SERVICE_ROLE_KEY = sign({ role: 'service_role', exp: 4_102_444_800 });
   process.env.SUPABASE_JWT_SECRET = JWT_SECRET;
   process.env.DATABASE_URL = db.url;
-  delete process.env.VERCEL_ENV;
+  delete process.env.DEPLOY_ENV;
   delete process.env.SENTRY_DSN;
 
   const client = new Client({ connectionString: db.url });
