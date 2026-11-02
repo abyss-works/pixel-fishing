@@ -12,6 +12,8 @@ import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
 import { resetEncounterAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
+import { resetTutorialSession } from './features/tutorial/service/tutorial';
+import { TUTORIAL_IDS } from './game/content/tutorials';
 import { markPromptsAnswered, resetAnnouncements, setDismissedVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
 import { PATCH_NOTES } from './game/content/patchnotes';
@@ -31,8 +33,11 @@ import { setSchoolDay } from './features/gameplay/service/schoolDay';
 
 const SAVE_KEY = 'pixel-fishing-save';
 
+// 튜토리얼 창도 접속 시 떠서 키를 막는다 — 튜토리얼 자체를 다루는 케이스 밖에서는 모두 본 것으로 시작한다
+const SEEN_TUTORIALS = { tutorials: [...TUTORIAL_IDS] };
+
 function seed(over: Partial<GameState> = {}) {
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...newState(), ...over }));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...newState(), ...SEEN_TUTORIALS, ...over }));
 }
 
 // 세이브 v8 픽스처 헬퍼 — 개체(가방)와 도감 기록을 짧게 쓴다
@@ -70,6 +75,7 @@ beforeEach(() => {
   resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
+  resetTutorialSession();
   resetAnnouncements();
   setDismissedVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
@@ -225,7 +231,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
   }
   const renderBoatPanel = (over: Partial<GameState> = {}) => {
     toastFn.mockClear();
-    const init = { ...newState(), ...over };
+    const init = { ...newState(), ...SEEN_TUTORIALS, ...over };
     lastGame = init;
     render(<BoatHarness initial={init} />);
   };
@@ -445,7 +451,7 @@ function renderField(region: RegionId, pos: Point, initial: Partial<GameState> =
   setSchoolDay(SCHOOL_DAY); // 하네스는 boot를 보내지 않으므로 어군 배치 날짜를 직접 고정한다
   vi.useFakeTimers();
   vi.spyOn(Math, 'random').mockReturnValue(0); // wait=biteMin(4s), 추첨=풀 첫 어종, 자동챔질=sweep×0.3
-  const init = { ...newState(), ...initial };
+  const init = { ...newState(), ...SEEN_TUTORIALS, ...initial };
   lastGame = init;
   render(<Harness region={region} initial={init} pos={pos} />);
 }
@@ -1305,6 +1311,7 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
 
   it('?admin이면(로컬) 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', () => {
     window.history.replaceState({}, '', '/?admin=1');
+    seed();
     render(<App />);
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
     fireEvent.keyDown(document, { key: 'F9' });
@@ -1333,6 +1340,7 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
 
   it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', () => {
     window.history.replaceState({}, '', '/?admin=1');
+    seed();
     render(<App />);
     fireEvent.keyDown(document, { key: 'F9' });
     const panel = screen.getByRole('dialog', { name: '개발 도구' });
@@ -1366,6 +1374,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   const openTab = (name: string) => fireEvent.click(within(statsDialog()).getByRole('button', { name }));
 
   it('클릭하면 요약 탭으로 열리고, 탭마다 배·낚싯대·보너스를 보여 주며 닫기로 닫힌다', () => {
+    seed();
     render(<App />);
     fireEvent.click(screen.getByLabelText('스탯창 열기'));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
@@ -1479,6 +1488,32 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+  });
+});
+
+describe('튜토리얼 창 — 트리거마다 한 번', () => {
+  it('처음 시작하면 마을 튜토리얼이 뜨고, 닫으면 본 것으로 남아 다시 뜨지 않는다', async () => {
+    seed({ tutorials: [] });
+    const { unmount } = render(<App />);
+    const dialog = await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '알겠어요' }));
+    expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}').tutorials).toEqual(['village']));
+    unmount();
+    resetTutorialSession();
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
+  });
+
+  it('업데이트 소식 창이 떠 있으면 그 창을 닫은 뒤에 뜬다', async () => {
+    localStorage.removeItem('pf-announcements');
+    resetAnnouncements();
+    seed({ fame: 120, tutorials: [] });
+    render(<App />);
+    expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('닫기'));
+    expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
   });
 });
 

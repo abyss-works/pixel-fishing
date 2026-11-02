@@ -5,6 +5,7 @@
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
 import { useEffect, useState } from 'react';
+import { useTutorialTrigger } from '../../../../features/tutorial/service/tutorial';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
@@ -54,6 +55,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
+  // 튜토리얼 트리거 — 일반 의뢰·네임드 토벌 탭을 처음 열었을 때
+  useTutorialTrigger('bounty-quests', screen === 'quests');
+  useTutorialTrigger('bounty-named', screen === 'named');
   // 도전권 잔여 표시용 시계 — 스냅샷 적재 시점에 함께 찍는다 (액션마다 refresh되므로 충분).
   // 렌더 중 Date.now 호출은 금지라 비동기 콜백에서만 찍는다.
   const [nowMs, setNowMs] = useState(0);

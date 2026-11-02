@@ -20,6 +20,7 @@ import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactOfZone } from '../content/artifacts.js';
+import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canFish, canUpgradeRod, encounterQuests } from './rules.js';
@@ -52,6 +53,7 @@ export type GameAction =
   | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
+  | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
@@ -67,6 +69,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
+  seeTutorial: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -536,6 +539,11 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ok: true, state, result: { type: 'none' },
         events: [{ type: 'setNickname', payload: { nickname: action.nickname } }],
       };
+    }
+    case 'seeTutorial': {
+      if (!isTutorialId(action.id)) return { ok: false, error: 'bad-request' };
+      if (state.tutorials.includes(action.id)) return { ok: true, state, result: { type: 'none' }, events: [] };
+      return { ok: true, state: { ...state, tutorials: [...state.tutorials, action.id] }, result: { type: 'none' }, events: [] };
     }
     case 'boot': {
       // 접속(부팅) 기록 — sendLetter와 같은 "상태가 아닌 이벤트" 계열. 편지(events)와 마찬가지로

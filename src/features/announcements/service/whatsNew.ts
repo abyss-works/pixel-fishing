@@ -101,6 +101,12 @@ export function useWhatsNew(game: Pick<GameState, 'fame' | 'dex'>, ready: boolea
   };
 }
 
+/** 업데이트 소식 창이 떠 있거나 아직 판정 전인지 — 다른 안내 창이 이 창 뒤로 차례를 미룬다 */
+export function useWhatsNewPending(): boolean {
+  const s = useSyncExternalStore(subscribe, getSession, getSession);
+  return !s.evaluated || s.steps.length > 0;
+}
+
 /** 테스트 격리용 — 세션을 처음으로 되돌린다 */
 export function resetWhatsNewSession(): void {
   update(CLOSED);
