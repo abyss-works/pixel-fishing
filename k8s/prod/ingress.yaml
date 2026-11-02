@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-fishing
+  annotations:
+    # import 액션이 게임 상태 전체를 싣는다. 서버 본문 한도(5mb)와 맞춘다.
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pixel-fishing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pixel-fishing
+  template:
+    metadata:
+      labels:
+        app: pixel-fishing
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: oci-node
+      containers:
+        - name: pixel-fishing
+          image: ghcr.io/abyss-works/pixel-fishing
+          # 서버 환경 변수(DB 연결, Supabase 키, CRON_SECRET, R2, Sentry)는 저장소 밖에서 만든 Secret이 준다.
+          envFrom:
+            - secretRef:
+                name: pixel-fishing
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/action
+              port: 3000
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 3000
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
