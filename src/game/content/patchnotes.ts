@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.14.1',
+    date: '2026-11-02',
+    summary: '게임 서버를 옮겼어요',
+    notes: [
+      { tag: '기타', text: '게임 서버를 옮겼어요. 진행 상황은 그대로예요.' },
+    ],
+  },
+  {
     version: '0.14.0',
     date: '2026-10-23',
     summary: '우편함이 생겼어요',
