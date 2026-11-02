@@ -13,6 +13,9 @@ import type { RejectReason } from '../../game/rules/rules';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
+// 창 식별자 — 창(탭)마다 새로 만든다. 서버는 마지막으로 접속(boot)한 창의 액션만 받는다
+const CLIENT_ID = crypto.randomUUID();
+
 /** 세 소스에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
 function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
   const bag: unknown[] = [];
@@ -149,6 +152,8 @@ export class HttpGameGateway implements GameGateway {
     if (res.status === 429) {
       throw new AppError('rate-limited', 'action pacing rejected', { action: action.type });
     }
+    // 423 = 다른 창이 활성 창이 됐다 — 액션은 적용되지 않았다. 정책 표가 이 창을 막는다
+    if (res.status === 423) throw new AppError('replaced', 'another window took over the session', { action: action.type });
     if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
       { server: (body as { server?: string } | null)?.server });
     if (res.status === 401) throw new AppError('unauthorized', 'session rejected');
@@ -178,6 +183,7 @@ export class HttpGameGateway implements GameGateway {
           // 낡은 탭 차단 — 서버가 자기 배포 식별자와 대조 (426).
           // APP_VERSION이 아니라 배포 식별자다: 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가른다
           'x-build-id': BUILD_ID,
+          'x-client-id': CLIENT_ID,
         },
         body: JSON.stringify(action),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
