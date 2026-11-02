@@ -720,3 +720,46 @@ describe('우편 받기', () => {
     expect(mail.rows[0].claimed_at).not.toBeNull();
   });
 });
+
+describe('캐치 간격과 활성 창', () => {
+  const CLIENT_A = '11111111-1111-4111-8111-111111111111';
+  const CLIENT_B = '22222222-2222-4222-8222-222222222222';
+  const ago = (ms: number) => new Date(Date.parse(NOW) - ms).toISOString();
+  const column = async (uid: string, name: 'last_catch_at' | 'active_client') =>
+    (await env.client.query(`select ${name} as v from public.saves_current where user_id = $1`, [uid])).rows[0].v as unknown;
+
+  it('직전 캐치로부터 낚시 한 사이클이 지나지 않은 catch는 429다', async () => {
+    const uid = await seed({ state: {}, lastCatchAt: ago(2_000) });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' }))
+      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
+  });
+
+  it('한 사이클이 지난 catch는 받고 캐치 시각을 남긴다', async () => {
+    const uid = await seed({ state: {}, lastCatchAt: ago(60_000) });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
+    expect((await column(uid, 'last_catch_at') as Date).toISOString()).toBe(NOW);
+  });
+
+  it('활성 창이 아닌 창의 액션은 423이다', async () => {
+    const uid = await seed({ state: {}, activeClient: CLIENT_A });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' }, { clientId: CLIENT_B }))
+      .toMatchObject({ status: 423, body: { error: 'session-replaced' } });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' }, { clientId: CLIENT_A }))
+      .toMatchObject({ status: 200 });
+  });
+
+  it('boot한 창이 활성 창이 되고 이전 창의 액션은 423이 된다', async () => {
+    const uid = await seed({ state: {}, activeClient: CLIENT_A });
+    expect(await callAction(userToken(uid), { type: 'boot', buildId: 'dev' }, { clientId: CLIENT_B }))
+      .toMatchObject({ status: 200 });
+    expect(await column(uid, 'active_client')).toBe(CLIENT_B);
+    vi.setSystemTime(Date.parse(NOW) + 60_000);
+    expect(await callAction(userToken(uid), { type: 'upgradeRod' }, { clientId: CLIENT_A }))
+      .toMatchObject({ status: 423, body: { error: 'session-replaced' } });
+  });
+
+  it('활성 창 기록이 없으면 창 식별자 없이도 받는다', async () => {
+    const uid = await seed({ state: {} });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
+  });
+});

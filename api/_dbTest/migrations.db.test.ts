@@ -136,4 +136,40 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('saves_current 캐치 간격·활성 창 (0020)', () => {
+    const columns = async (c: Client): Promise<string[]> => {
+      const { rows } = await c.query<{ name: string }>(
+        `select column_name as name from information_schema.columns
+         where table_schema = 'public' and table_name = 'saves_current' and column_name in ('last_catch_at', 'active_client')
+         order by column_name`);
+      return rows.map(r => r.name);
+    };
+
+    it('두 열이 비어 있는 값을 허용하는 채로 있다', async () => {
+      expect(await columns(client)).toEqual(['active_client', 'last_catch_at']);
+      const { rows } = await client.query<{ nullable: string }>(
+        `select is_nullable as nullable from information_schema.columns
+         where table_schema = 'public' and table_name = 'saves_current' and column_name in ('last_catch_at', 'active_client')`);
+      expect(rows.every(r => r.nullable === 'YES')).toBe(true);
+    });
+
+    it('되돌리기 SQL은 두 열만 지운다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const down = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '0020_catch_pacing_session.down.sql'), 'utf8');
+        await other.query(down);
+        expect(await columns(other)).toEqual([]);
+        const { rows } = await other.query<{ n: string }>(
+          `select count(*) as n from information_schema.columns
+           where table_schema = 'public' and table_name = 'saves_current' and column_name in ('version', 'updated_at')`);
+        expect(Number(rows[0].n)).toBe(2);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

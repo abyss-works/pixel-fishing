@@ -7,6 +7,7 @@ import { at, textArray } from './json.js';
 export type StateRow = {
   data: unknown; version: number; gold: number; fame: number; boat: number; rod: number;
   restricted?: boolean | null; updated_at?: string | null;
+  last_catch_at?: string | null; active_client?: string | null;
 };
 export type InstanceRow = {
   uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null;
@@ -38,7 +39,8 @@ export const instancesJson = (uid: string) =>
 export const recordsJson = (uid: string) =>
   sql`(select coalesce(json_agg(r), '[]') from (select ${RECORD_COLS} from public.records where user_id = ${uid}) r)`;
 export const stateJson = (uid: string) =>
-  sql`(select row_to_json(c) from (select data, version, gold, fame, boat, rod, restricted, updated_at
+  sql`(select row_to_json(c) from (select data, version, gold, fame, boat, rod, restricted, updated_at,
+       last_catch_at, active_client
        from public.saves_current where user_id = ${uid}) c)`;
 
 /**

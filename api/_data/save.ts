@@ -52,11 +52,19 @@ function upsertRecords(guard: SQL, uid: string, records: StateWrites['records'],
       first_caught = excluded.first_caught, updated_at = excluded.updated_at`;
 }
 
+/** 확정과 함께 남기는 접속 표시 — catch는 캐치 시각을, boot는 활성 창을 바꾼다. 없으면 그대로 둔다 */
+export interface CommitMarks {
+  lastCatchAt?: string;
+  activeClient?: string | null;
+}
+
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다 */
-export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string): SQL {
+export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}): SQL {
   const r = stateRow(state);
+  const lastCatch = marks.lastCatchAt === undefined ? sql`` : sql`, last_catch_at = ${at(marks.lastCatchAt)}`;
+  const client = marks.activeClient === undefined ? sql`` : sql`, active_client = ${marks.activeClient}`;
   return sql`update public.saves_current set gold = ${r.gold}, fame = ${r.fame}, boat = ${r.boat}, rod = ${r.rod},
-    data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}
+    data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}${lastCatch}${client}
     where user_id = ${uid} and version = ${readVersion} returning user_id`;
 }
 

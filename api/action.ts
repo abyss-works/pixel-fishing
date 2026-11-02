@@ -40,6 +40,7 @@ import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
 import { bearerToken, verifyJwtLocal } from './_auth/session.js';
 import { database } from './_db/client.js';
@@ -62,6 +63,14 @@ export type { BountyRows } from './_data/load.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(이미지 빌드 인자 BUILD_ID).
 const BUILD_ID = process.env.BUILD_ID ?? 'dev';
+// 창 식별자 형식 — 클라이언트는 crypto.randomUUID()를 쓴다
+const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
+
+/** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
+function scalarState(row: StateRow): GameState {
+  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+}
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
 
@@ -223,6 +232,9 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 유저 확인 — JWT secret이 있으면 로컬 검증(왕복 0), 없으면 Auth 서버 조회 폴백
   const token = bearerToken(req.headers.authorization);
+  // 창 식별자 — 클라이언트가 창(탭)마다 만들어 보낸다. 형식이 맞지 않으면 없는 것으로 본다.
+  const rawClient = req.headers['x-client-id'];
+  const clientId = typeof rawClient === 'string' && CLIENT_ID_PATTERN.test(rawClient) ? rawClient : null;
   let uid: string;
   const jwtSecret = process.env.SUPABASE_JWT_SECRET;
   if (jwtSecret) {
@@ -340,6 +352,12 @@ async function route(req: Req, res: Res): Promise<void> {
   // 시딩 직후의 새 행은 default false라 여기서 걸리는 건 운영자가 명시적으로 표시한 계정뿐.
   if (row.restricted) throw new ApiError(403, 'restricted');
 
+  // 활성 창 검사 — 계정당 게임 창은 하나다. 접속(boot)한 창이 활성 창이 되고, 다른 창의 액션은 423으로 거부한다.
+  // 창을 여러 개 띄워 낚시를 겹치는 것을 막는다. 활성 창 기록이 없으면(이 검사 도입 전 상태) 검사하지 않는다.
+  if (action.type !== 'boot' && row.active_client && clientId !== row.active_client) {
+    throw new ApiError(423, 'session-replaced');
+  }
+
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
   // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
   // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
@@ -349,6 +367,10 @@ async function route(req: Req, res: Res): Promise<void> {
     if (Date.now() - lastActionMs < gapMs) {
       throw new ApiError(429, 'too-fast');
     }
+  }
+  // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
+  if (action.type === 'catch' && catchTooSoon(scalarState(row), action.spot, row.last_catch_at ?? null, new Date().toISOString())) {
+    throw new ApiError(429, 'too-fast');
   }
 
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
@@ -423,8 +445,7 @@ async function route(req: Req, res: Res): Promise<void> {
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment);
-    if (out.ok) catchBase = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
-      fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
     out = applyAction(state, action, {
@@ -490,7 +511,10 @@ async function route(req: Req, res: Res): Promise<void> {
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
   const committed = await step('db-write', { uid, action: action.type },
-    () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO), fragments));
+    () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO, {
+      ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
+      ...(action.type === 'boot' ? { activeClient: clientId } : {}),
+    }), fragments));
   if (!committed) throw new ApiError(409, 'version-conflict');
 
   // 후속 쓰기 — 이벤트 append, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
