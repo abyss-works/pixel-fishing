@@ -22,3 +22,39 @@ jobs:
       - run: pnpm exec tsc -b
       - run: pnpm run lint
       - run: pnpm run build
+
+  # main 푸시마다 운영 이미지를 빌드해 올린다. ArgoCD가 k8s/prod의 태그를 보고 배포한다.
+  image:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check image tag matches package version
+        run: |
+          TAG="v$(node -p 'require("./package.json").version')"
+          grep -q "newTag: ${TAG}$" k8s/prod/kustomization.yaml || { echo "k8s/prod/kustomization.yaml newTag must be ${TAG}"; exit 1; }
+          echo "TAG=${TAG}" >> "${GITHUB_ENV}"
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - name: Build and push image
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENV: ${{ vars.VITE_SENTRY_ENV }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${TAG}"
+          docker build -t "${IMAGE}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --build-arg BUILD_ID="${GITHUB_SHA}" \
+            --build-arg DEPLOY_ENV=production \
+            --build-arg VITE_SUPABASE_URL \
+            --build-arg VITE_SUPABASE_ANON_KEY \
+            --build-arg VITE_SENTRY_DSN \
+            --build-arg VITE_SENTRY_ENV \
+            .
+          docker push "${IMAGE}"

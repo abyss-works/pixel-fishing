@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pixel-fishing-prod
+labels:
+  - pairs:
+      abyssworks.dev/project: pixel-fishing
+      abyssworks.dev/environment: prod
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - certificate.yaml
+  - cronjob-archive.yaml
+  - cronjob-purge-anon.yaml
+# 태그는 package.json의 버전과 같아야 한다. 릴리즈 커밋에서 함께 올린다.
+images:
+  - name: ghcr.io/abyss-works/pixel-fishing
+    newTag: v0.14.1

@@ -36,9 +36,9 @@ vi.mock('@supabase/supabase-js', async importOriginal => {
   };
 });
 
-// 응답 뒤 후속 쓰기(waitUntil) — 테스트는 요청 처리 함수가 끝난 뒤 이 작업까지 기다리고 DB 상태를 본다.
+// 응답 뒤 후속 쓰기(afterResponse) — 테스트는 요청 처리 함수가 끝난 뒤 이 작업까지 기다리고 DB 상태를 본다.
 export const pendingAfterResponse: Promise<unknown>[] = [];
-vi.mock('@vercel/functions', async importOriginal => {
-  const mod = await importOriginal<typeof import('@vercel/functions')>();
-  return { ...mod, waitUntil: (p: Promise<unknown>) => { pendingAfterResponse.push(p); } };
-});
+vi.mock('../_server/afterResponse.js', () => ({
+  afterResponse: (p: Promise<unknown>) => { pendingAfterResponse.push(p); },
+  settleAfterResponse: async () => { await Promise.allSettled(pendingAfterResponse); },
+}));

@@ -9,7 +9,7 @@ const LABELS: Record<string, string> = {
 };
 
 export interface DevEnv {
-  /** 배포 환경(VERCEL_ENV, 로컬은 local, 미상은 빈 값) */
+  /** 배포 환경(DEPLOY_ENV, 로컬은 local, 미상은 빈 값) */
   env: string;
   /** 환경 배지 문구 — 운영·미상은 null */
   label: string | null;

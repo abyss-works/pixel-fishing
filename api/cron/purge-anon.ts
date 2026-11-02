@@ -1,6 +1,6 @@
-// Vercel Cron: 빈 익명 계정을 매일 한 번 정리한다.
+// 예약 작업: 빈 익명 계정을 매일 한 번 정리한다.
 // 기본은 dry-run이다. 대상을 세어 요약만 돌려주고, PURGE_ANON_ENABLED가 정확히 1일 때만 지운다.
-// 인증: Vercel이 CRON_SECRET을 Authorization: Bearer로 자동 첨부한다. 불일치와 부재는 401.
+// 인증: 예약 실행기가 CRON_SECRET을 Authorization: Bearer로 첨부한다. 불일치와 부재는 401.
 // 주의: Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { purgeAccount, selectPurgeTargets } from '../_data/account.js';

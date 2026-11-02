@@ -25,7 +25,7 @@ export function initObservability(): void {
   if (!DSN) return;
   Sentry.init({
     dsn: DSN,
-    // 스테이징/운영 에러가 한 통에 섞이지 않게 — Vercel 환경변수로 주입
+    // 스테이징/운영 에러가 한 통에 섞이지 않게 — 이미지 빌드 인자로 주입
     environment: (import.meta.env.VITE_SENTRY_ENV as string | undefined) ?? import.meta.env.MODE,
     // 릴리즈 귀속 — APP_VERSION이 클라·서버 단일 근원이라 그대로 물린다 
     release: APP_VERSION,

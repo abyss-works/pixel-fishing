@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pixel-fishing
+spec:
+  type: ClusterIP
+  selector:
+    app: pixel-fishing
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

@@ -24,7 +24,7 @@ export default function OpsTab() {
                 <Meta k="릴리즈 버전" v={APP_VERSION}
                       hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요." />
                 <Meta k="빌드 식별자" v={BUILD_LABEL}
-                      hint="VERCEL_GIT_COMMIT_SHA 값이에요. 낡은 탭을 막는 기준(426)이에요." />
+                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 낡은 탭을 막는 기준(426)이에요." />
                 <Meta k="Supabase 프로젝트" v={readAdminProjectRef() ?? '로컬 모드'}
                       hint="VITE_SUPABASE_URL의 호스트예요. 운영과 스테이징의 ref가 달라서 착오를 막으려고 보여 줘요." />
               </tbody>
@@ -43,7 +43,7 @@ export default function OpsTab() {
 
         <Cell title="관측">
           <Note className="my-0 leading-relaxed">
-            게임 데이터는 이 대시보드로, 예외는 Sentry로, 함수와 배포는 Vercel 대시보드로 봐요.
+            게임 데이터는 이 대시보드로, 예외는 Sentry로, 서버와 배포는 클러스터(ArgoCD)로 봐요.
             Sentry의 release는 위 릴리즈 버전과 같아요. 서버 예외는 reportServerIssue로 Sentry에 올라가요.
           </Note>
         </Cell>

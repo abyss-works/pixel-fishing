@@ -1,0 +1,9 @@
+.git
+node_modules
+dist
+dist-ssr
+storybook-static
+coverage
+k8s
+.env*
+!.env.example
