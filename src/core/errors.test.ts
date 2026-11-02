@@ -19,6 +19,9 @@ describe('실패 분류', () => {
     // outdated: 진행은 서버에 안전 — 새로고침 안내만
     expect(POLICY.outdated.rescue).toBe(false);
     expect(POLICY.outdated.modal).toBe('update');
+    // replaced: 다른 창이 활성 창이 됐다 — 진행은 서버에 안전, 이 창을 막고 새로고침으로 되찾는다
+    expect(POLICY.replaced.rescue).toBe(false);
+    expect(POLICY.replaced.modal).toBe('replaced');
     // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
     expect(POLICY.bug.rescue).toBe(false);
   });

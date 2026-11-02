@@ -52,12 +52,13 @@ export interface ActionResponse { status: number; body: unknown }
 
 /** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev')이다 */
 export async function callAction(token: string | null, body: unknown, opts: {
-  method?: string; origin?: string; buildId?: string;
+  method?: string; origin?: string; buildId?: string; clientId?: string;
 } = {}): Promise<ActionResponse> {
   const { default: handler } = await import('../action.js');
   const headers: Record<string, string> = { 'x-build-id': opts.buildId ?? 'dev' };
   if (token) headers.authorization = `Bearer ${token}`;
   if (opts.origin) headers.origin = opts.origin;
+  if (opts.clientId) headers['x-client-id'] = opts.clientId;
   const out: ActionResponse = { status: 0, body: undefined };
   const res = {
     status(code: number) { out.status = code; return res; },
@@ -82,6 +83,10 @@ export interface SeedOptions {
   version?: number;
   updatedAt?: string;
   restricted?: boolean;
+  /** 직전 캐치 시각(saves_current.last_catch_at) */
+  lastCatchAt?: string;
+  /** 활성 창 식별자(saves_current.active_client) */
+  activeClient?: string;
 }
 
 /** 사용자와 그 저장 상태를 표에 직접 만든다. 저장 형식은 서버의 stateRow·instRow와 같다 */
@@ -97,9 +102,10 @@ export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<
     const state: GameState = { ...newState(), ...opts.state };
     const { bag, exhibit, dex, gold, fame, boat, rod, ...rest } = state;
     await client.query(
-      `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, updated_at, restricted)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [uid, rest, gold, fame, boat, rod, opts.version ?? 2, opts.updatedAt ?? '2026-01-01T00:00:00.000Z', opts.restricted ?? false]);
+      `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, updated_at, restricted, last_catch_at, active_client)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [uid, rest, gold, fame, boat, rod, opts.version ?? 2, opts.updatedAt ?? '2026-01-01T00:00:00.000Z', opts.restricted ?? false,
+        opts.lastCatchAt ?? null, opts.activeClient ?? null]);
     const inst = (i: FishInstance, slot: number | null) => client.query(
       `insert into public.fish_instances (uid, user_id, fish_id, form, size, caught_at, spot, judgment, slot, locked)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,

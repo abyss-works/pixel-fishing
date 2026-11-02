@@ -6,6 +6,7 @@ import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
+import type { BlockingModal } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
@@ -34,8 +35,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [game, setGame] = useState<GameState>(init.game);
   const [nickname, setNickname] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
-  // 배포 후 새로고침 안 한 낡은 탭 (서버 426) — true면 GameView가 업데이트 모달로 전체를 덮는다
-  const [outdated, setOutdated] = useState(false);
+  // 진행을 막는 모달 — 낡은 탭(서버 426)이나 다른 창의 접속(서버 423). 값이 있으면 GameView가 그 모달로 전체를 덮는다
+  const [blocker, setBlocker] = useState<BlockingModal | null>(null);
   const gameRef = useRef(game);
   useEffect(() => { gameRef.current = game; }, [game]);
 
@@ -51,7 +52,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const rescueRef = useRef<(headline: string) => void>(() => {});
   useEffect(() => subscribeFailure((err: AppError) => {
     const policy = POLICY[err.kind];
-    if (policy.modal === 'update') setOutdated(true);
+    const modal = policy.modal;
+    if (modal) setBlocker(current => current ?? modal);
     if (!policy.rescue) return;
     setSync(api.auth.isConfigured ? 'error' : 'off');
     if (alertedRef.current) return;
@@ -138,7 +140,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }, [init.legacy]);
 
   return {
-    game, setGame, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], outdated,
+    game, setGame, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker,
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
