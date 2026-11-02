@@ -29,6 +29,8 @@ import MailboxButton from '../overlays/mailbox/MailboxButton';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
+import TutorialModal from '../overlays/tutorial/TutorialModal';
+import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import TraceCard from '../overlays/bounty/TraceCard';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
@@ -69,6 +71,9 @@ export default function GameView(props: GameViewProps) {
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
   const atSea = scene.kind === 'region' && scene.id !== 'village';
+  // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
+  useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
+  useTutorialTrigger('sea', atSea);
   const encounter = tracking ? selectEncounter(game, tracking) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -178,6 +183,8 @@ export default function GameView(props: GameViewProps) {
 
       {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
       <WhatsNewModal game={game} ready={props.syncState === 'on' || props.syncState === 'off'} />
+      <TutorialModal seen={game.tutorials} ready={props.syncState === 'on' || props.syncState === 'off'}
+                     dispatch={props.dispatch} />
       {props.blocker}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>
