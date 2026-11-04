@@ -13,13 +13,15 @@ import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudg
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
-export function useAccount({ game, setGame, setToast, load }: {
+export function useAccount({ game, setGame, setToast, load, claimSession }: {
   game: GameState;
   setGame: (g: GameState) => void;
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
   setToast: (message: string, tone?: 'info' | 'gold' | 'warn') => void;
   /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
+  /** useGame의 접속 기록 — 계정 교체 뒤 이 창을 그 계정의 활성 창으로 등록한다 */
+  claimSession: () => void;
 }) {
   // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
@@ -40,7 +42,8 @@ export function useAccount({ game, setGame, setToast, load }: {
     identifyUser(session.uid); // uid만 — PII 미전송
   }, [session.ready, session.uid]);
 
-  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택.
+  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
+  // 서버는 접속(boot)한 창을 계정의 활성 창으로 삼으므로, 교체한 계정에도 접속을 보내야 이 창의 액션이 거부되지 않는다.
   // 승격(가입)은 uid 불변이라 스킵 — 갓 승격한 게스트는 서버가 아직 비어 있을 수 있어서
   // load()를 타면 로컬 진행이 newState로 덮인다 (v0.4.0 구조 원칙: 가입 = 승격이지 이전이 아니다).
   const onAuthChanged = async () => {
@@ -51,6 +54,7 @@ export function useAccount({ game, setGame, setToast, load }: {
       uidRef.current = next;
       const cloud = await load();
       setGame(cloud ?? newState());
+      claimSession();
       setToast('계정의 클라우드 세이브를 불러왔어요.');
     }
   };
