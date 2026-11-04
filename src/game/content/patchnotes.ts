@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.15.1',
+    date: '2026-11-04',
+    summary: '로그인 관련 문제를 고쳤어요',
+    notes: [
+      { tag: '기타', text: '계정에 로그인한 뒤 다른 창에서 접속했다는 안내가 뜨던 문제를 고쳤어요.' },
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-11-04',
     summary: '게임 시스템을 정비했어요',
