@@ -4,7 +4,7 @@ import { spotById } from '../content/spots';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
-  drawRows, goldEV, fishPool,
+  drawRows, goldEV, fishPool, fishDrawShares,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
@@ -18,7 +18,7 @@ import {
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
-import { upgradeCost } from './balance';
+import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -109,6 +109,17 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
         expect(f.night, `${s.id} 시드 ${seed}`).toBeFalsy();
       }
     }
+  });
+
+  it('밤에는 같은 등급 안에서 밤 어종이 기본 어종 가중치 NIGHT_FISH_WEIGHT로 뽑힌다', () => {
+    // 인도양 희귀: 낮 어종(가중치 미지정 = 1)과 밤 어종이 함께 있다
+    const shares = fishDrawShares('indian', { phase: 'night' });
+    const rare = shares.filter(s => s.fish.rarity === 'rare' && s.fish.weight === undefined);
+    const day = rare.find(s => !s.fish.night);
+    const night = rare.find(s => s.fish.night);
+    expect(day && night).toBeTruthy();
+    expect(NIGHT_FISH_WEIGHT).toBe(2);
+    expect(night!.share / day!.share).toBeCloseTo(NIGHT_FISH_WEIGHT, 10);
   });
 
   it('밤 rollFish의 결과는 밤 풀에 속한다 — night 어종은 풀에 있다', () => {

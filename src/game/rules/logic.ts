@@ -6,7 +6,7 @@
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
   MUTATION_WEIGHTS, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_WEIGHTS, EXHIBIT_SLOTS,
+  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_WEIGHTS, EXHIBIT_SLOTS, NIGHT_FISH_WEIGHT,
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
@@ -271,8 +271,9 @@ function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [Rarit
       * (r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)]);
 }
 
-/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치(기본 1) */
-const fishDrawWeight = (f: Fish, o: DrawOptions): number => o.fishWeights?.[f.id] ?? f.weight ?? 1;
+/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치. 기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT */
+const fishDrawWeight = (f: Fish, o: DrawOptions): number =>
+  o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT : 1);
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
 export function rollFish(
@@ -305,7 +306,7 @@ export interface DrawRow {
   fish: Fish;
   rarityWeight: number;     // 등급 예산 (수역 오버라이드/샌드박스 반영)
   gradePct: number;         // 등급 실질확률 % — 설계표와 일치 (부재 등급 제외 재균등)
-  individualWeight: number; // 개체 가중치 (기본 1 — fishWeights로 비율 조정 가능)
+  individualWeight: number; // 개체 가중치 (기본 1, 밤 어종 NIGHT_FISH_WEIGHT — fishWeights로 비율 조정 가능)
   fishPct: number;          // 개체 실질확률 %
 }
 export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
@@ -322,7 +323,7 @@ export function drawRows(spotId: SpotId, o: DrawOptions = {}): DrawRow[] {
     fish: f,
     rarityWeight: o.budgets?.[f.rarity] ?? rarityWeightOf(spotId, f.rarity),
     gradePct: 0, // 아래에서 등급 합계로 확정 — 표시·계산이 한 경로(등급 % ≡ Σ개체 %)
-    individualWeight: o.fishWeights?.[f.id] ?? 1,
+    individualWeight: fishDrawWeight(f, o),
     fishPct: weights[i] / budgetTotal * 100,
   }));
   const gradeSum = new Map<RarityId, number>();
