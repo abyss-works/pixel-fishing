@@ -6,8 +6,8 @@ export default defineConfig({
     include: ['**/*.db.test.ts'],
     exclude: [...configDefaults.exclude, '**/.worktrees/**'],
     globalSetup: ['./api/_dbTest/globalSetup.ts'],
-    // 인증 서버 조회와 응답 뒤 후속 쓰기의 테스트 대역
-    setupFiles: ['./api/_dbTest/supabaseShim.ts'],
+    // 메일 발송과 응답 뒤 후속 쓰기의 테스트 대역
+    setupFiles: ['./api/_dbTest/serverShim.ts'],
     // 배포 환경의 함수와 같은 UTC 시간대로 실행한다. 시간대 없는 타임스탬프의 해석이 배포 환경과 같아진다.
     env: { TZ: 'UTC' },
     testTimeout: 60_000,

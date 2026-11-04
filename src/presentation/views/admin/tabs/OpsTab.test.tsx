@@ -18,7 +18,7 @@ describe('운영 탭', () => {
     const identity = screen.getByText('이 화면의 정체').closest('section')!;
     expect(within(identity).getByText('릴리즈 버전')).toBeInTheDocument();
     expect(within(identity).getByText('빌드 식별자')).toBeInTheDocument();
-    expect(within(identity).getByText('로컬 모드')).toBeInTheDocument(); // 연결된 Supabase 프로젝트가 없다
+    expect(within(identity).getByText('로컬 모드')).toBeInTheDocument(); // 붙은 서버가 없다
     const auth = screen.getByText('권한').closest('section')!;
     expect(within(auth).getByText(/로컬 모드에서는 관리자 데이터가 없어요/)).toBeInTheDocument();
   });

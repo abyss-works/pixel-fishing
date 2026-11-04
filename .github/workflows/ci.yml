@@ -42,8 +42,6 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
       - name: Build and push image
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           VITE_SENTRY_ENV: ${{ vars.VITE_SENTRY_ENV }}
         run: |
@@ -52,8 +50,6 @@ jobs:
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --build-arg BUILD_ID="${GITHUB_SHA}" \
             --build-arg DEPLOY_ENV=production \
-            --build-arg VITE_SUPABASE_URL \
-            --build-arg VITE_SUPABASE_ANON_KEY \
             --build-arg VITE_SENTRY_DSN \
             --build-arg VITE_SENTRY_ENV \
             .
@@ -76,14 +72,12 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
       - name: Build and push image
         env:
-          VITE_SUPABASE_URL: ${{ vars.STAGE_VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGE_VITE_SUPABASE_ANON_KEY }}
           VITE_SENTRY_DSN: ${{ vars.STAGE_VITE_SENTRY_DSN }}
           VITE_SENTRY_ENV: ${{ vars.STAGE_VITE_SENTRY_ENV }}
         run: |
           TAG="dev-${GITHUB_SHA::7}"
           IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${TAG}"
-          docker build -t "${IMAGE}"             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"             --build-arg BUILD_ID="${GITHUB_SHA}"             --build-arg DEPLOY_ENV=preview             --build-arg VITE_SUPABASE_URL             --build-arg VITE_SUPABASE_ANON_KEY             --build-arg VITE_SENTRY_DSN             --build-arg VITE_SENTRY_ENV             .
+          docker build -t "${IMAGE}"             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"             --build-arg BUILD_ID="${GITHUB_SHA}"             --build-arg DEPLOY_ENV=preview             --build-arg VITE_SENTRY_DSN             --build-arg VITE_SENTRY_ENV             .
           docker push "${IMAGE}"
           echo "TAG=${TAG}" >> "${GITHUB_ENV}"
       - name: Update stage image tag

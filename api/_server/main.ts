@@ -3,13 +3,16 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
+import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import mail from '../mail.js';
+import me from '../me.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
+import { appAuth } from '../_auth/session.js';
 import { settleAfterResponse } from './afterResponse.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
@@ -19,6 +22,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/action': action,
   '/api/admin': admin,
   '/api/mail': mail,
+  '/api/me': me,
   '/api/rank': rank,
   '/api/cron/archive': archive,
   '/api/cron/purge-anon': purgeAnon,
@@ -26,6 +30,8 @@ const routes: Record<string, NodeHandler> = {
 
 const app = express();
 app.disable('x-powered-by');
+// 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
+app.all('/api/auth/*splat', toNodeHandler(appAuth()));
 // import 액션은 게임 상태 전체를 싣는다.
 app.use('/api', express.json({ limit: '5mb' }));
 for (const [path, handler] of Object.entries(routes)) {

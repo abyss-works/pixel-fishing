@@ -38,7 +38,7 @@ export function AdminGateBanner() {
       <Inset tone="deep" className="flex flex-col gap-1 px-4 py-3">
         <p className="text-sm">로컬 모드예요. 클라우드가 설정되어 있지 않아요.</p>
         <Note size="xs" className="my-0 leading-relaxed">
-          화면 골격은 그대로 보여 줘요. 운영·스테이징 Supabase 연결(VITE_SUPABASE_URL)을 붙이면
+          화면 골격은 그대로 보여 줘요. 클라우드 빌드(VITE_CLOUD=1)로 운영·스테이징 서버에 붙으면
           아래 탭이 실제 데이터로 채워져요. <span className="pf-accent text-gold">밸런스</span>처럼
           번들 데이터만 쓰는 탭은 지금도 온전히 동작해요.
         </Note>

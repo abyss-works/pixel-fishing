@@ -39,7 +39,7 @@ describe('테스트 데이터베이스', () => {
   describe('bounty_clears (0018)', () => {
     const user = async (): Promise<string> => {
       const uid = randomUUID();
-      await client.query('insert into auth.users (id, email, is_anonymous) values ($1, null, true)', [uid]);
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
       return uid;
     };
 
@@ -91,7 +91,7 @@ describe('테스트 데이터베이스', () => {
   describe('mails (0019)', () => {
     const user = async (): Promise<string> => {
       const uid = randomUUID();
-      await client.query('insert into auth.users (id, email, is_anonymous) values ($1, null, true)', [uid]);
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
       return uid;
     };
 

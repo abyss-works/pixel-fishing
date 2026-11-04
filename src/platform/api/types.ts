@@ -26,7 +26,8 @@ export interface AuthApi {
   ensureSession(): Promise<string | null>;
   currentAccount(): Promise<string | null>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
-  onAuthStateChange(cb: (event: string) => void): { unsubscribe(): void };
+  /** 비밀번호 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크를 쓸 수 없다. 부팅 때 한 번 읽는다 */
+  takePasswordResetLanding(): 'ready' | 'invalid' | null;
   signUp(email: string, password: string): Promise<AuthResult>;
   signIn(email: string, password: string): Promise<AuthResult>;
   signOut(): Promise<void>;
@@ -209,8 +210,8 @@ export interface AdminApi {
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
-  /** 연결된 Supabase 프로젝트 식별자 — 운영/스테이징 착오 방지 표시값(Ops 탭) */
-  projectRef(): string | null;
+  /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */
+  deployHost(): string | null;
 }
 
 export interface ApiClient {

@@ -1,4 +1,4 @@
-// 로컬 API 구현 — supabase 미설정(dev·테스트) 전용
+// 로컬 API 구현 — 클라우드 미설정(dev·테스트) 전용
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
 import type { GameGateway, AuthApi, AuthResult } from '../api/types';
@@ -20,8 +20,8 @@ class LocalAuth implements AuthApi {
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     return { uid: DEV_UID, email: DEV_ACCOUNT };
   }
-  onAuthStateChange(_cb: (event: string) => void): { unsubscribe(): void } {
-    return { unsubscribe() {} };
+  takePasswordResetLanding(): 'ready' | 'invalid' | null {
+    return null;
   }
   async signUp(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
@@ -57,7 +57,7 @@ class LocalAuth implements AuthApi {
 // reject는 Promise로 돌려야 한다 — 동기 throw면 호출부의 await/rejects 계약이 깨진다.
 
 const noCloudAdminData = (): Error =>
-  new Error('관리자 데이터는 클라우드 연결(운영/스테이징 Supabase) 환경에서만 읽힌다');
+  new Error('관리자 데이터는 클라우드 연결(운영/스테이징 서버) 환경에서만 읽힌다');
 
 const rejected = <T>(): Promise<T> => Promise.reject(noCloudAdminData());
 
@@ -80,7 +80,7 @@ class LocalAdmin implements AdminApi {
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }
-  projectRef(): string | null {
+  deployHost(): string | null {
     return null;
   }
 }

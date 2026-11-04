@@ -90,10 +90,11 @@ describe('빈 익명 계정 정리 크론', () => {
   });
 
   it('상한 500을 넘는 대상은 한 번에 500개만 지우고 다음 실행이 나머지를 지운다', async () => {
-    await env.client.query(`insert into auth.users (id, aud, is_anonymous, created_at)
-      select gen_random_uuid(), 'bulk-test', true, now() - interval '30 days' from generate_series(1, 501)`);
+    await env.client.query(`insert into auth.users (id, email, is_anonymous, created_at)
+      select id, id::text || '@bulk-test.invalid', true, now() - interval '30 days'
+      from (select gen_random_uuid() as id from generate_series(1, 501)) g`);
     const remaining = async () => (await env.client.query<{ n: number }>(
-      `select count(*)::int as n from auth.users where aud = 'bulk-test'`)).rows[0].n;
+      `select count(*)::int as n from auth.users where email like '%@bulk-test.invalid'`)).rows[0].n;
     expect(await remaining()).toBe(501);
 
     expect((await run()).body).toMatchObject({ dryRun: true, targets: 501, batch: 500, deleted: 0 });

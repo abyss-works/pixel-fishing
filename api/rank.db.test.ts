@@ -1,6 +1,6 @@
 // 랭킹 읽기 함수 — 실제 Postgres에서 순위 규칙(정렬·동순위·제외·내 순위)을 검사한다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 let env: ActionEnv;
@@ -20,7 +20,7 @@ async function callRank(query: Record<string, string>, token: string | null = nu
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, query, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
+  await handler({ method, query, headers: sessionHeaders(token) } as never, res as never);
   return out;
 }
 
@@ -69,8 +69,10 @@ describe('랭킹 읽기 함수', () => {
     expect(res.headers['cache-control']).toContain('no-store');
   });
 
-  it('잘못된 토큰은 401이다', async () => {
-    expect((await callRank({ board: 'fame' }, 'bad.token.here')).status).toBe(401);
+  it('세션이 없는 토큰이면 공개 순위만 준다', async () => {
+    const res = await callRank({ board: 'fame' }, 'no-such-session');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ me: null });
   });
 
   it('도감 완성도 순위: 일반 폼 발견 어종 수, 같은 수면 마지막 새 어종을 먼저 낚은 사람이 위다', async () => {

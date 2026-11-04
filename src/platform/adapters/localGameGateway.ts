@@ -1,6 +1,6 @@
-// 로컬 게임 게이트웨이 — supabase 미설정(오프라인 dev·테스트) 전용. 서버와 같은 리듀서(applyAction)를
+// 로컬 게임 게이트웨이 — 클라우드 미설정(오프라인 dev·테스트) 전용. 서버와 같은 리듀서(applyAction)를
 // 로컬에서 동기 실행한다 — 순수 리듀서 공유 덕에 구현이 얇다. 프로덕션에선 절대 안 탄다
-// (HttpGameGateway 생성 조건이 supabase 존재). 동적 쿠폰은 오프라인이라 항상 없음(정적 쿠폰만).
+// (HttpGameGateway 생성 조건이 클라우드 빌드). 동적 쿠폰은 오프라인이라 항상 없음(정적 쿠폰만).
 import { applyAction } from '../../game/rules/actions';
 import type { GameAction } from '../../game/rules/actions';
 import { localDate } from '../../game/rules/logic';

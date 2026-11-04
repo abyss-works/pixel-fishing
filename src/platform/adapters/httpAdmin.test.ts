@@ -1,10 +1,5 @@
-// 관리자 읽기(HTTP 구현). 모든 조회가 서버 읽기 함수의 같은 이름 조회로 가고, 세션 토큰을 붙이며, 실패를 숨기지 않는다.
+// 관리자 읽기(HTTP 구현). 모든 조회가 서버 읽기 함수의 같은 이름 조회로 가고, 세션은 쿠키가 싣으며, 실패를 숨기지 않는다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const state = vi.hoisted(() => ({ session: null as { access_token: string } | null }));
-vi.mock('./auth', () => ({
-  supabase: { auth: { getSession: async () => ({ data: { session: state.session } }) } },
-}));
 
 import { createHttpApi } from './httpApi';
 
@@ -32,7 +27,6 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
 describe('HttpAdmin', () => {
   const fetchMock = vi.fn();
   beforeEach(() => {
-    state.session = { access_token: 'tok' };
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -41,30 +35,30 @@ describe('HttpAdmin', () => {
     vi.unstubAllEnvs();
   });
 
-  it('조회마다 서버 읽기 함수에 같은 이름과 인자로 세션 토큰을 붙여 요청한다', async () => {
+  it('조회마다 서버 읽기 함수에 같은 이름과 인자로 요청한다. 인증 헤더는 붙이지 않는다', async () => {
     for (const [method, call, url] of CALLS) {
       fetchMock.mockReset();
       fetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
       await call();
       expect(fetchMock, method).toHaveBeenCalledTimes(1);
-      expect(fetchMock, method).toHaveBeenCalledWith(url, { headers: { authorization: 'Bearer tok' } });
+      expect(fetchMock, method).toHaveBeenCalledWith(url);
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 projectRef와 우편 쓰기(mail)뿐이다', () => {
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost와 우편 쓰기(mail)뿐이다', () => {
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
-      .filter(m => m !== 'constructor' && m !== 'projectRef' && m !== 'mail');
+      .filter(m => m !== 'constructor' && m !== 'deployHost' && m !== 'mail');
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
   });
 
-  it('우편 쓰기는 POST로 op와 요청을 보내고 세션 토큰을 붙인다', async () => {
+  it('우편 쓰기는 POST로 op와 요청을 보낸다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ problems: [], preview: { count: 1, totalGold: 5, missing: [] } }), { status: 200 }));
     const request = { title: 't', body: 'b', target: { kind: 'all' as const, gold: 5 } };
     const plan = await admin.mail('preview', request);
     expect(plan.preview?.count).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/admin?q=mail', {
       method: 'POST',
-      headers: { authorization: 'Bearer tok', 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ op: 'preview', request }),
     });
   });
@@ -92,10 +86,9 @@ describe('HttpAdmin', () => {
     await expect(admin.balanceLive(7)).resolves.toEqual(live);
   });
 
-  it('세션이 없으면 접근 판정을 포함한 모든 조회가 서버를 부르지 않고 실패한다', async () => {
-    state.session = null;
-    for (const [method, call] of CALLS) await expect(call(), method).rejects.toThrow(/세션/);
-    expect(fetchMock).not.toHaveBeenCalled();
+  it('세션이 없어 서버가 거절하면(401) 접근 판정을 포함한 모든 조회가 실패한다', async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
+    for (const [method, call] of CALLS) await expect(call(), method).rejects.toThrow('401 unauthorized');
   });
 
   it('실패 응답은 상태와 서버 오류 코드를 담아 던진다', async () => {
@@ -112,12 +105,7 @@ describe('HttpAdmin', () => {
     await expect(admin.retention()).rejects.toThrow('Failed to fetch');
   });
 
-  it('projectRef는 Supabase 주소의 호스트 이름 첫 마디다', () => {
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://abcdwxyz.supabase.co');
-    expect(admin.projectRef()).toBe('abcdwxyz');
-    vi.stubEnv('VITE_SUPABASE_URL', '');
-    expect(admin.projectRef()).toBeNull();
-    vi.stubEnv('VITE_SUPABASE_URL', 'not a url');
-    expect(admin.projectRef()).toBeNull();
+  it('deployHost는 이 화면이 붙은 주소의 호스트다', () => {
+    expect(admin.deployHost()).toBe(window.location.hostname);
   });
 });

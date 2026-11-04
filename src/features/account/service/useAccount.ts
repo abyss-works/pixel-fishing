@@ -11,7 +11,7 @@ import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudg
 // 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
-// api.auth가 http/local을 갈아끼운다 — 훅은 supabase를 직접 모른다.
+// api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
 export function useAccount({ game, setGame, setToast, load }: {
   game: GameState;
@@ -21,7 +21,7 @@ export function useAccount({ game, setGame, setToast, load }: {
   /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
   load: () => MaybePromise<GameState | null>;
 }) {
-  // 로컬 개발(supabase 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
+  // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
   // 계정 여부 확인이 끝났는가 — 끝나기 전의 null은 게스트가 아니라 미확인이다
   const [accountChecked, setAccountChecked] = useState(!api.auth.isConfigured);
@@ -55,21 +55,23 @@ export function useAccount({ game, setGame, setToast, load }: {
     }
   };
 
-  // 비밀번호 재설정 착지 — 메일 링크로 들어오면 Supabase가 PASSWORD_RECOVERY를 쏜다
+  // 비밀번호 재설정 착지 — 메일 링크는 서버를 거쳐 재설정 토큰을 단 주소로 돌아온다. 부팅 때 한 번 확인한다
   useEffect(() => {
     if (!api.auth.isConfigured) return;
-    const { unsubscribe } = api.auth.onAuthStateChange(event => {
-      if (event !== 'PASSWORD_RECOVERY') return;
-      const pw = window.prompt(`새 비밀번호를 입력해 주세요. (${MIN_PASSWORD_LENGTH}자 이상)`);
-      if (!pw) return;
-      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
-      api.auth.applyNewPassword(pw).then(r => {
-        if (r.ok) setToast('비밀번호를 바꿨어요.');
-        else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
-      });
+    const landing = api.auth.takePasswordResetLanding();
+    if (!landing) return;
+    if (landing === 'invalid') {
+      setToast('비밀번호를 바꾸지 못했어요. 재설정 링크가 만료됐거나 이미 쓰였어요. 재설정을 다시 요청해 주세요.', 'warn');
+      return;
+    }
+    const pw = window.prompt(`새 비밀번호를 입력해 주세요. (${MIN_PASSWORD_LENGTH}자 이상)`);
+    if (!pw) return;
+    if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
+    api.auth.applyNewPassword(pw).then(r => {
+      if (r.ok) setToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.');
+      else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
     });
-    return () => unsubscribe();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독, setToast는 항상 최신 클로저가 필요 없다
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 확인, setToast는 항상 최신 클로저가 필요 없다
   }, []);
 
   // 로그인 유도 넛지 — 명성 기준을 넘은 게스트에게 하루 한 번. 띄운 날짜는 세이브 대신 localStorage 1키에 둔다.
