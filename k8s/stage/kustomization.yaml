@@ -21,24 +21,24 @@ patches:
     patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: pixel-fishing-stage.abyssworks.dev
+        value: pixel-fishing-preview.abyssworks.dev
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: pixel-fishing-stage.abyssworks.dev
+        value: pixel-fishing-preview.abyssworks.dev
   - target:
       kind: Certificate
       name: pixel-fishing-tls
     patch: |-
       - op: replace
         path: /spec/dnsNames/0
-        value: pixel-fishing-stage.abyssworks.dev
+        value: pixel-fishing-preview.abyssworks.dev
   - target:
       kind: Deployment
       name: pixel-fishing
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
-        value: https://pixel-fishing-stage.abyssworks.dev
+        value: https://pixel-fishing-preview.abyssworks.dev
   - target:
       kind: CronJob
     patch: |-
