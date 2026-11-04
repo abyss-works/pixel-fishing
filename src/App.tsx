@@ -28,8 +28,8 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, setGame, dispatch, nickname, rename, sync, syncLabel, blocker, load, warmup } = useGame({ setToast });
-  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, load });
+  const { game, setGame, dispatch, nickname, rename, sync, syncLabel, blocker, load, claimSession, warmup } = useGame({ setToast });
+  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, load, claimSession });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
   const restored = useRef(false);

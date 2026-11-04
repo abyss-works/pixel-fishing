@@ -100,13 +100,18 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       return r;
     });
 
+  // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
+  // 세션 시작과 계정 교체마다 보낸다. 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
+  // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  const boot = () => { void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ }); };
+
   // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
       void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
       // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
+      boot();
       return;
     }
     (async () => {
@@ -129,10 +134,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
           if (!(e instanceof AppError && e.kind === 'restricted')) throw e;
         }
       }
-      // 접속 기록 — DAU·리텐션의 정본(events). 세션 시작에 1회, 새로고침마다 다시 센다.
-      // 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
-      // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
-      void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ });
+      // 세션 시작에 1회, 새로고침마다 다시 센다.
+      boot();
       setNickname(nick);
       setSync('on');
     })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
@@ -155,6 +158,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
       return s;
     }),
+    /** 접속 기록 — 이 창을 현재 계정의 활성 창으로 등록한다. 계정 교체(useAccount) 뒤에 부른다 */
+    claimSession: boot,
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),
   };
