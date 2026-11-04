@@ -33,6 +33,13 @@ patches:
         path: /spec/dnsNames/0
         value: pixel-fishing-stage.abyssworks.dev
   - target:
+      kind: Deployment
+      name: pixel-fishing
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: https://pixel-fishing-stage.abyssworks.dev
+  - target:
       kind: CronJob
     patch: |-
       $patch: delete
