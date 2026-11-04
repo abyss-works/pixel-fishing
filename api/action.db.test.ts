@@ -661,14 +661,14 @@ describe('천장', () => {
   });
 
   it('네임드 천장에 닿은 캐치는 도전권을 발급하고 빗나감 수를 되돌린다', async () => {
-    const uid = await seed({ state: { boat: 1, namedPity: { day: TODAY_KST, misses: NAMED_PITY_CATCHES - 1, fails: 0 } } });
+    const uid = await seed({ state: { boat: 1, namedPity: { day: TODAY_KST, misses: NAMED_PITY_CATCHES - 1, fails: 0, wounds: {} } } });
     const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
     const db = await dumpUser(env.client, uid);
     expect(db.bounty_tickets).toHaveLength(1);
-    expect((db.saves_current[0] as { data: GameState }).data.namedPity).toEqual({ day: TODAY_KST, misses: 0, fails: 0 });
+    expect((db.saves_current[0] as { data: GameState }).data.namedPity).toEqual({ day: TODAY_KST, misses: 0, fails: 0, wounds: {} });
   });
 });
 

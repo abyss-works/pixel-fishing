@@ -3,8 +3,11 @@ import { describe, it, expect } from 'vitest';
 import {
   SPECIES_PITY_K, PITY_DONE, NAMED_PITY_CATCHES,
   speciesPityCandidates, resolveSpeciesPity, accrueSpeciesPity, settleSpeciesPity,
-  namedPityCeiling, newNamedPity, drawNamedEncounter, recordDuelFailure,
+  namedPityCeiling, newNamedPity, drawNamedEncounter, recordDuelFailure, clearDuelWound, namedWoundOf,
 } from './pity';
+import { NAMED_DUEL_WOUND_CAP } from './balance';
+import { challengeHpOf, duelHpOf } from './challenge';
+import { NAMED } from '../content/named';
 import { drawRows, fishDrawShares, newState } from './logic';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
@@ -103,26 +106,89 @@ describe('네임드 조우 천장', () => {
   });
 
   it('자연 조우도 빗나감 수를 0으로 되돌린다', () => {
-    const r = drawNamedEncounter({ day: '2027-01-01', misses: 10, fails: 0 }, [named.id], spot, NIGHT, () => 0);
+    const r = drawNamedEncounter({ day: '2027-01-01', misses: 10, fails: 0, wounds: {} }, [named.id], spot, NIGHT, () => 0);
     expect(r.quest?.id).toBe(named.id);
     expect(r.byCeiling).toBe(false);
     expect(r.pity.misses).toBe(0);
   });
 
   it('결투 실패는 그날의 실패 수를 올리고, 게임 날짜가 바뀌면 모두 초기화된다', () => {
-    const failed = recordDuelFailure(newNamedPity(), DAY);
-    expect(failed).toEqual({ day: '2027-01-01', misses: 0, fails: 1 });
-    const again = recordDuelFailure({ ...failed, misses: 7 }, NIGHT);
-    expect(again).toEqual({ day: '2027-01-01', misses: 7, fails: 2 });
+    const failed = recordDuelFailure(newNamedPity(), DAY, named.id, 1);
+    expect(failed).toEqual({ day: '2027-01-01', misses: 0, fails: 1, wounds: { [named.id]: 1 } });
+    const again = recordDuelFailure({ ...failed, misses: 7 }, NIGHT, named.id, 1);
+    expect(again).toEqual({ day: '2027-01-01', misses: 7, fails: 2, wounds: { [named.id]: 2 } });
     const next = drawNamedEncounter(again, [named.id], spot, NEXT_DAY, never);
-    expect(next.pity).toEqual({ day: '2027-01-02', misses: 1, fails: 0 });
+    expect(next.pity).toEqual({ day: '2027-01-02', misses: 1, fails: 0, wounds: {} });
   });
 
   it('실패 뒤에는 줄어든 천장에서 조우를 확정한다', () => {
     const ceiling = namedPityCeiling(1);
-    const r = drawNamedEncounter({ day: '2027-01-01', misses: ceiling - 1, fails: 1 }, [named.id], spot, DAY, never);
+    const r = drawNamedEncounter({ day: '2027-01-01', misses: ceiling - 1, fails: 1, wounds: {} }, [named.id], spot, DAY, never);
     expect(r.quest?.id).toBe(named.id);
     expect(r.byCeiling).toBe(true);
+  });
+});
+
+describe('네임드 상처 — 그날 실패한 결투의 히트가 다음 조우 체력을 깎는다', () => {
+  const named = BOUNTIES.find(q => q.difficulty === 'named' && q.zone === 'pacific')!;
+  const other = BOUNTIES.find(q => q.difficulty === 'named' && q.zone === 'seasia')!;
+  const hp = challengeHpOf(named.id)!;
+
+  it('실패한 결투의 히트를 네임드별로 쌓고, 상한에서 멈춘다', () => {
+    let p = recordDuelFailure(newNamedPity(), DAY, named.id, 2);
+    expect(namedWoundOf(p, named.id, DAY)).toBe(2);
+    expect(namedWoundOf(p, other.id, DAY)).toBe(0);
+    p = recordDuelFailure(p, NIGHT, named.id, 4);
+    expect(namedWoundOf(p, named.id, NIGHT)).toBe(NAMED_DUEL_WOUND_CAP);
+  });
+
+  it('결투 체력은 네임드 체력에서 그날의 상처를 뺀 값이고, 게임 날짜가 바뀌면 다시 가득 찬다', () => {
+    const p = recordDuelFailure(newNamedPity(), DAY, named.id, 4);
+    expect(duelHpOf(named.id, p, DAY)).toBe(hp - NAMED_DUEL_WOUND_CAP);
+    expect(duelHpOf(named.id, p, NEXT_DAY)).toBe(hp);
+    expect(duelHpOf(named.id, newNamedPity(), DAY)).toBe(hp);
+  });
+
+  it('토벌에 성공하면 그 네임드의 상처를 지운다', () => {
+    const p = recordDuelFailure(recordDuelFailure(newNamedPity(), DAY, named.id, 2), DAY, other.id, 1);
+    const cleared = clearDuelWound(p, named.id);
+    expect(namedWoundOf(cleared, named.id, DAY)).toBe(0);
+    expect(namedWoundOf(cleared, other.id, DAY)).toBe(1);
+  });
+
+  it('모든 네임드는 상처가 상한까지 쌓여도 체력이 1 이상 남는다', () => {
+    for (const n of NAMED) expect(n.hp - NAMED_DUEL_WOUND_CAP, n.id).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('리듀서 resolveChallenge — 상처 반영', () => {
+  const named = BOUNTIES.find(q => q.difficulty === 'named' && q.zone === 'pacific')!;
+  const hp = challengeHpOf(named.id)!;
+  const bounty = {
+    active: [named.id], complete: [], tickets: [{ questId: named.id, issuedAt: DAY }],
+    clearsToday: { general: 0, named: 0 },
+  } satisfies BountyCtx;
+  const deps = (): ActionDeps => ({ rng: () => 0, today: '2027-01-01', now: DAY, newUid: () => 'uid', bounty });
+  const resolve = (success: boolean, hits: number, misses: number) =>
+    ({ type: 'resolveChallenge', questId: named.id, success, hits, misses }) as const;
+
+  it('실패하면 그 결투의 히트를 상처로 남긴다', () => {
+    const out = applyAction(newState(), resolve(false, 2, 3), deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(namedWoundOf(out.state.namedPity, named.id, DAY)).toBe(2);
+    expect(out.state.namedPity.fails).toBe(1);
+  });
+
+  it('상처가 있으면 깎인 체력만큼만 맞혀도 성공이고, 성공하면 상처를 지운다', () => {
+    const st = { ...newState(), namedPity: recordDuelFailure(newNamedPity(), DAY, named.id, 2) };
+    const out = applyAction(st, resolve(true, hp - 2, 0), deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(namedWoundOf(out.state.namedPity, named.id, DAY)).toBe(0);
+  });
+
+  it('상처가 없으면 깎인 만큼의 히트로는 성공할 수 없다', () => {
+    const out = applyAction(newState(), resolve(true, hp - 2, 0), deps());
+    expect(out.ok).toBe(false);
   });
 });
 
@@ -155,7 +221,7 @@ describe('리듀서 catch — 천장 적용', () => {
   it('네임드 천장에 닿으면 도전권을 발급하고 빗나감 수를 되돌린다', () => {
     const named = BOUNTIES.find(q => q.difficulty === 'named' && q.zone === 'pacific')!;
     const st = { ...newState(), boat: 2, location: { kind: 'base', id: 'harbor' } as const,
-      namedPity: { day: '2027-01-01', misses: NAMED_PITY_CATCHES - 1, fails: 0 } };
+      namedPity: { day: '2027-01-01', misses: NAMED_PITY_CATCHES - 1, fails: 0, wounds: {} } };
     const out = applyAction(st, { type: 'catch', spot: 'sea', judgment: 'auto' }, deps({
       rng: () => 0.9999,
       bounty: { active: [named.id], complete: [], tickets: [], clearsToday: { general: 0, named: 0 } } satisfies BountyCtx,

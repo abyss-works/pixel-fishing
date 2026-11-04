@@ -100,6 +100,9 @@ export const NAMED_ENCOUNTER_WEIGHTS = { named: 1, none: 999 } as const;
 // 화면은 결투(왕복 커서·옮겨 가는 존)다.
 // 존 폭은 고정 관대값이다(자리만 옮긴다 — 수역 게이트와 무관, 어렵게 하지 않는다).
 export const CHALLENGE_MISS_LIMIT = 3; // 이만큼 실패하면 탈락 — 모든 네임드 공통
+// 네임드 상처 상한 — 그날 실패한 결투에서 맞힌 히트가 그 네임드에 쌓여 다음 조우의 체력을 깎는다. 이 값까지만 쌓인다.
+// 결투 속도는 그대로라, 체력이 줄면 최고 속도로 맞혀야 하는 횟수가 함께 준다. 모든 네임드의 체력은 이 값보다 커야 한다.
+export const NAMED_DUEL_WOUND_CAP = 3;
 export const CHALLENGE_YELLOW = 0.3;
 export const CHALLENGE_RED = 0.1;
 

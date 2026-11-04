@@ -4,6 +4,7 @@ import {
 } from '../../../game/content/bounties';
 import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
+import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
 import { ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
@@ -154,9 +155,11 @@ export interface NamedBountyCardData {
   fish: ReturnType<typeof namedFishOf> | null;
   found: boolean;
   done: boolean;
+  /** 나타나는 곳 — 출현 수역이 정해진 네임드는 그 수역, 아니면 해역 이름 */
+  haunt: string;
 }
 
-/** 네임드 카드의 공개 이름·스프라이트·완료 여부를 계산한다. */
+/** 네임드 카드의 공개 이름·스프라이트·완료 여부·나타나는 곳을 계산한다. */
 export function selectNamedBountyCardData(
   game: GameState, quest: BountyQuest, progress: number,
 ): NamedBountyCardData {
@@ -167,5 +170,6 @@ export function selectNamedBountyCardData(
     fish: named ? namedFishOf(named) : null,
     found: quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false,
     done: progress >= quest.count,
+    haunt: (named?.spot ? spotById(named.spot)?.name : undefined) ?? zoneById(quest.zone)?.shortName ?? quest.zone,
   };
 }

@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); resetKeyScopes(); });
 const show = () => {
   const onResolve = vi.fn();
   const onClose = vi.fn();
-  const data = { ...selectEncounter(newState(), 'pacific-named-megalodon')!, sweepMs: 1000 };
+  const data = { ...selectEncounter(newState(), 'pacific-named-megalodon', '2027-01-01T03:00:00Z')!, sweepMs: 1000 };
   render(<EncounterModal data={data} onResolve={onResolve} onClose={onClose} />);
   return { onResolve, onClose };
 };
