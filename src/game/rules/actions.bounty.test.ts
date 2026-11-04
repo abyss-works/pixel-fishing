@@ -2,6 +2,7 @@
 // DB 진실(오늘 클리어 횟수·수주 중 의뢰·진행도)은 서버가 deps.bounty로 주입한다
 // (deps.relief 선례). 로컬 dev엔 주입이 없어 수주·납품이 닫혀 있다.
 import { describe, it, expect } from 'vitest';
+import { NAMED_DUEL_WOUND_CAP } from './balance';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState } from './logic';
@@ -425,12 +426,13 @@ describe('resolveChallenge', () => {
       payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
   });
 
-  it('실패는 감사 이벤트와 그날의 결투 실패 수만 남긴다 — 티켓 소모는 서버 행 처리다', () => {
+  it('실패는 감사 이벤트와 그날의 결투 실패 수·상처만 남긴다 — 티켓 소모는 서버 행 처리다', () => {
     const st = ready();
     const out = applyAction(st,
       act({ success: false, hits: 5, misses: 3 }), full());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual({ ...st, namedPity: { day: gameDayOf(NOW), misses: 0, fails: 1 } });
+    expect(out.state).toEqual({ ...st, namedPity: { day: gameDayOf(NOW), misses: 0, fails: 1,
+      wounds: { 'pacific-named-megalodon': NAMED_DUEL_WOUND_CAP } } });
     expect(out.events).toEqual([{ type: 'resolveChallenge',
       payload: { questId: 'pacific-named-megalodon', success: false, hits: 5, misses: 3 } }]);
   });

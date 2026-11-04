@@ -39,7 +39,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   onResolve: (r: EncounterResult) => void;
   onClose: () => void;
 }) {
-  const { named, fish, found, sighting, sweepMs, hp, speedupScale } = data;
+  const { named, fish, found, sighting, sweepMs, hp, maxHp, speedupScale } = data;
   const [phase, setPhase] = useState<Phase>('intro');
   const [run, setRun] = useState<ChallengeRun>(newChallenge);
   const [cursor, setCursor] = useState(0);
@@ -134,6 +134,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
           <>
             <span className="text-text-dim italic text-xs">{sighting}</span>
             <span>그림자가 돌아선다.</span>
+            {hp < maxHp && <span className="text-text-dim text-xs">지난 결투에서 입힌 상처가 아직 아물지 않았다.</span>}
             <span className="text-text-dim text-xs">조우하면 끝날 때까지 창을 닫을 수 없어요. 놓치면 흔적이 사라져요.</span>
             <Button variant="primary" full onClick={() => setPhase('run')}>조우</Button>
           </>
@@ -141,7 +142,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         {phase === 'run' && (
           <>
             <span className="flex flex-col items-center gap-1">
-              <SlotGauge label="체력" total={hp} filled={hp - run.hits} tone="danger" />
+              <SlotGauge label="체력" total={maxHp} filled={hp - run.hits} tone="danger" />
               <SlotGauge label="도주" total={ESCAPE_SLOTS} filled={run.misses} tone="dim" />
             </span>
             {/* 결투 바 — 커서는 멈추지 않고 왕복한다. 존은 맞힐 때마다 자리를 옮긴다 */}

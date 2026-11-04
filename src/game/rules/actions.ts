@@ -11,7 +11,7 @@ import {
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { FISH } from '../content/fish.js';
 import {
-  accrueSpeciesPity, drawNamedEncounter, recordDuelFailure, resolveSpeciesPity, settleSpeciesPity, speciesPityCandidates,
+  accrueSpeciesPity, clearDuelWound, drawNamedEncounter, recordDuelFailure, resolveSpeciesPity, settleSpeciesPity, speciesPityCandidates,
 } from './pity.js';
 import type { SpeciesPity } from './pity.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
@@ -111,16 +111,17 @@ export interface StatePatch {
   /** 읽은 saves_current.version — 캐시 버전과 다르면 순서가 어긋난 것이므로 버린다.
    *  연속 액션이 역순 도착해도 골드·가방이 과거값에 고착되지 않는 장치다. */
   baseVersion: number;
-  /** bag/exhibit/dex와 천장 진척을 뺀 나머지 — 통째 교체 (액션당 수백B).
-   *  천장 진척은 화면에 쓰지 않고 서버 blob에만 있으면 되므로 보내지 않는다(클라는 이전 값을 유지) */
-  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex' | 'pity' | 'namedPity'>;
+  /** bag/exhibit/dex와 어종 천장 진척을 뺀 나머지 — 통째 교체 (액션당 수백B).
+   *  어종 천장 진척은 화면에 쓰지 않고 서버 blob에만 있으면 되므로 보내지 않는다(클라는 이전 값을 유지).
+   *  네임드 천장 상태는 조우 창이 그날의 상처(결투 체력 감소)를 그려야 해서 보낸다 */
+  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex' | 'pity'>;
   /** bag/exhibit/dex 변경분 — diffWrites가 뽑은 것과 동일한 형태 */
   writes: StateWrites;
 }
 
 /** 풀 상태에서 스칼라 분리 — 서버 응답용. bag/exhibit/dex는 writes로 간다 */
 export function pickScalars(state: GameState): StatePatch['scalars'] {
-  const { v: _v, bag: _b, exhibit: _e, dex: _d, pity: _p, namedPity: _n, ...rest } = state;
+  const { v: _v, bag: _b, exhibit: _e, dex: _d, pity: _p, ...rest } = state;
   return rest;
 }
 
@@ -619,13 +620,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       }
       const check = canResolveChallenge(action.questId,
         { success: action.success, hits: action.hits, misses: action.misses },
-        deps.now, deps.bounty ?? undefined);
+        deps.now, deps.bounty ?? undefined, state.namedPity);
       if (!check.ok) return { ok: false, error: check.reason };
       const payload = { questId: action.questId,
         success: action.success, hits: action.hits, misses: action.misses };
       if (!action.success) {
-        // 실패는 그날 다음 조우의 천장을 줄인다(네임드 조우 천장)
-        return { ok: true, state: { ...state, namedPity: recordDuelFailure(state.namedPity, deps.now) },
+        // 실패는 그날 다음 조우의 천장을 줄이고, 맞힌 히트를 그 네임드의 상처로 남긴다
+        return { ok: true,
+          state: { ...state, namedPity: recordDuelFailure(state.namedPity, deps.now, action.questId, action.hits) },
           result: { type: 'none' }, events: [{ type: 'resolveChallenge', payload }] };
       }
       const quest = bountyById(action.questId)!;
@@ -634,7 +636,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const rec = nextDexRec(prev, null, deps.today);
       return {
         ok: true,
-        state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } } },
+        state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } },
+          namedPity: clearDuelWound(state.namedPity, action.questId) },
         result: { type: 'none' },
         events: [{ type: 'resolveChallenge', payload }],
       };

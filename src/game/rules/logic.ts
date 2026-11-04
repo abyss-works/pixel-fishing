@@ -6,7 +6,7 @@
 import {
   JUDGMENT_MULT, ROD, upgradeCost,
   MUTATION_WEIGHTS, SIZE_MEAN_BASE, SIZE_MEAN_PER_PRICE, SIZE_STD_RATIO, BIG_CATCH_PERCENTILE,
-  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_WEIGHTS, EXHIBIT_SLOTS, NIGHT_FISH_WEIGHT,
+  VARIANT_PRICE_MULT, NAMED_ENCOUNTER_WEIGHTS, EXHIBIT_SLOTS, NIGHT_FISH_WEIGHT, NAMED_DUEL_WOUND_CAP,
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
@@ -368,7 +368,7 @@ export function newState(): GameState {
     items: {},
     activeBait: null,
     pity: {},
-    namedPity: { day: '', misses: 0, fails: 0 },
+    namedPity: { day: '', misses: 0, fails: 0, wounds: {} },
     tutorials: [],
   };
 }
@@ -731,7 +731,11 @@ function safePity(v: unknown): Record<string, number> {
 function safeNamedPity(v: unknown): NamedPity {
   const r = safeRecord<unknown>(v);
   const count = (n: unknown) => (typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : 0);
-  return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails) };
+  const wounds: Record<string, number> = {};
+  for (const [questId, n] of Object.entries(safeRecord<unknown>(r.wounds))) {
+    if (typeof n === 'number' && Number.isInteger(n) && n > 0) wounds[questId] = Math.min(n, NAMED_DUEL_WOUND_CAP);
+  }
+  return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
 /** activeBait 위생 — 레지스트리에 있는 id만 살린다 (모르는 문자열은 없음 처리).
