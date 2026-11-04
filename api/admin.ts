@@ -5,7 +5,7 @@
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. default export가 Node 시그니처다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { bearerToken, userOf } from './_auth/session.js';
+import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import * as read from './_data/admin.js';
@@ -37,8 +37,7 @@ async function route(req: Req, res: Res): Promise<void> {
   if (req.method !== 'GET' && !write) throw new ApiError(405, 'method-not-allowed');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
-  const token = bearerToken(req.headers.authorization);
-  const uid = token ? await userOf(token) : null;
+  const uid = (await sessionOf(req.headers))?.id ?? null;
   if (!uid) throw new ApiError(401, 'unauthorized');
 
   const { db } = database();

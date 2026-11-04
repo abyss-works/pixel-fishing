@@ -33,7 +33,7 @@ const LATER = '2026-10-23T01:00:00.000Z';
 
 async function user(withSave = true, restricted = false): Promise<string> {
   const uid = randomUUID();
-  await client.query('insert into auth.users (id, email, is_anonymous) values ($1, null, true)', [uid]);
+  await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
   if (withSave) {
     await client.query(`insert into public.saves_current (user_id, data, restricted) values ($1, '{}', $2)`, [uid, restricted]);
   }

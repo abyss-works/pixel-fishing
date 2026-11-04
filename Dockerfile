@@ -11,8 +11,8 @@ COPY . .
 # 클라이언트 번들에 박히는 값이다. VITE_* 값은 브라우저에 공개되는 값만 넘긴다.
 ARG BUILD_ID=dev
 ARG DEPLOY_ENV=production
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
+# 이미지는 항상 서버 API와 함께 서빙되므로 클라우드 모드로 빌드한다.
+ARG VITE_CLOUD=1
 ARG VITE_SENTRY_DSN
 ARG VITE_SENTRY_ENV
 RUN BUILD_ID="$BUILD_ID" DEPLOY_ENV="$DEPLOY_ENV" pnpm run build && pnpm run build:server && pnpm prune --prod

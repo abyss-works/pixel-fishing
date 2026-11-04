@@ -1,5 +1,5 @@
 // 수배판 패널 — 일일 의뢰 3열·네임드 카드·조건 게이트.
-// 테스트 환경엔 supabase가 없어 readBounty가 null이다 — 티켓·진행은 빈 값으로,
+// 테스트 환경은 클라우드 빌드가 아니라 readBounty가 null이다 — 티켓·진행은 빈 값으로,
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';

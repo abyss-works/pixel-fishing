@@ -1,7 +1,7 @@
 // 계정 함수 — 실제 Postgres에서 본인 탈퇴가 모든 계정 행과 인증 계정을 지우는지 검사한다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GONE, rowCounts, seedFullAccount, seeded } from './_dbTest/accountFixtures.js';
-import { callAction, startActionEnv, userToken } from './_dbTest/actionHarness.js';
+import { callAction, startActionEnv, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 let env: ActionEnv;
@@ -21,7 +21,7 @@ async function callAccount(method: string, token: string | null, body?: unknown)
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, body, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
+  await handler({ method, body, headers: sessionHeaders(token) } as never, res as never);
   return out;
 }
 
@@ -61,17 +61,16 @@ describe('계정 함수', () => {
     expect(await rowCounts(env.client, admin)).toEqual(seeded(true));
   });
 
-  it('탈퇴 뒤 남은 토큰으로 게임 액션을 보내도 거부되고 계정 행이 다시 생기지 않는다', async () => {
+  it('탈퇴 뒤 남은 세션으로 게임 액션을 보내면 401이고 계정 행이 다시 생기지 않는다', async () => {
     const me = await seedFullAccount(env.client, { ...ACTIVE, email: 'stale@example.com', nickname: '남은탭' });
     expect(await callAccount('POST', userToken(me), { op: 'delete' })).toMatchObject({ status: 200 });
-    const res = await callAction(userToken(me), { type: 'boot' });
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await callAction(userToken(me), { type: 'boot' })).toMatchObject({ status: 401 });
     expect(await rowCounts(env.client, me)).toEqual(GONE);
   });
 
-  it('이미 지운 계정의 토큰으로 다시 요청하면 404다', async () => {
+  it('이미 지운 계정의 세션으로 다시 요청하면 401이다', async () => {
     const me = await seedFullAccount(env.client, { ...ACTIVE, email: 'twice@example.com', nickname: '두번' });
     expect(await callAccount('POST', userToken(me), { op: 'delete' })).toMatchObject({ status: 200 });
-    expect(await callAccount('POST', userToken(me), { op: 'delete' })).toMatchObject({ status: 404, body: { error: 'account-missing' } });
+    expect(await callAccount('POST', userToken(me), { op: 'delete' })).toMatchObject({ status: 401, body: { error: 'unauthorized' } });
   });
 });

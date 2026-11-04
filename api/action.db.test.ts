@@ -47,7 +47,7 @@ async function snapshotOf(uid: string, res: unknown) {
 /** 사용자를 만들고 액션 하나를 보낸 뒤 응답과 DB 상태를 정규화해 돌려준다 */
 async function run(opts: SeedOptions, action: unknown, call: { origin?: string } = {}) {
   const uid = await seed(opts);
-  return snapshotOf(uid, await callAction(userToken(uid, opts.email ?? null), action, call));
+  return snapshotOf(uid, await callAction(userToken(uid), action, call));
 }
 
 /** 해역 라이선스 도감 조건을 채운 도감 */

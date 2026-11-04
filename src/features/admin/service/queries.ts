@@ -3,7 +3,7 @@ import type { AdminMailRequest } from '../../../platform/api';
 
 export const readAdminAccess = () => api.admin.access();
 export const readAdminUsers = () => api.admin.users();
-export const readAdminProjectRef = () => api.admin.projectRef();
+export const readAdminDeployHost = () => api.admin.deployHost();
 
 export const readAdminOverview = (days: number) => Promise.all([
   api.admin.users(),

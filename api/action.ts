@@ -3,14 +3,13 @@
 // 저장 모델(0005): saves_current(유저당 1행, 낙관 락) + events(append-only 정본 스트림)
 // + saves(스냅샷 아카이브 — 50액션마다 append, 롤백 안전망).
 // DB는 Postgres 직접 연결(DATABASE_URL)로 읽고 쓴다. 표마다 쓰기를 맡는 저장 모듈이 하나씩 있고,
-// 이 파일은 읽기 → 규칙 실행 → 확정 → 응답의 순서만 조율한다. 인증 서버 조회만 supabase-js를 쓴다.
+// 이 파일은 읽기 → 규칙 실행 → 확정 → 응답의 순서만 조율한다. 요청 사용자는 로그인 세션으로 정한다.
 //
 // 왕복 순서: 상태 읽기 1회 → (캐치면 도감·가방 수 1회, 가방이 가득 차면 방생 후보 1회) → 확정 1회 → 응답.
 // 이벤트·주기 스냅샷·의뢰 진행도처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행한다.
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500 났던
 // 사고(2026-08-21) 재발 방지. default export = Node 시그니처.
-import { createClient } from '@supabase/supabase-js';
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
@@ -42,7 +41,7 @@ import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
-import { bearerToken, verifyJwtLocal } from './_auth/session.js';
+import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
@@ -222,33 +221,19 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 
-  const url = process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey || !process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
+  if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
   const { db, withTransaction } = database();
 
-  // 인증 서버 조회 전용 — DB 읽기·쓰기는 하지 않는다
-  const auth = createClient(url, serviceKey, { auth: { persistSession: false } }).auth;
-
-  // 유저 확인 — JWT secret이 있으면 로컬 검증(왕복 0), 없으면 Auth 서버 조회 폴백
-  const token = bearerToken(req.headers.authorization);
+  // 유저 확인 — 요청 쿠키의 로그인 세션
+  const user = await sessionOf(req.headers);
+  if (!user) throw new ApiError(401, 'unauthorized');
+  const uid = user.id;
   // 창 식별자 — 클라이언트가 창(탭)마다 만들어 보낸다. 형식이 맞지 않으면 없는 것으로 본다.
   const rawClient = req.headers['x-client-id'];
   const clientId = typeof rawClient === 'string' && CLIENT_ID_PATTERN.test(rawClient) ? rawClient : null;
-  let uid: string;
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET;
-  if (jwtSecret) {
-    const sub = verifyJwtLocal(token, jwtSecret);
-    if (!sub) throw new ApiError(401, 'unauthorized');
-    uid = sub;
-  } else {
-    const { data: userData, error: authError } = await auth.getUser(token);
-    if (authError || !userData.user) throw new ApiError(401, 'unauthorized');
-    uid = userData.user.id;
-  }
 
   // 프로필 보장 — 행이 없으면 게스트명을 지어 넣는다 (첫 액션 1회).
-  // 표시용 읽기는 클라가 RLS 본인 읽기로 가져간다.
+  // 표시용 읽기는 클라이언트가 /api/me로 가져간다.
   const ensureGuestName = async () => {
     const ok = await step('db-write', { uid, action: 'profile' }, () => ensureProfile(db, uid, i => {
       const base = pickGuestName(Math.random);
@@ -285,13 +270,10 @@ async function route(req: Req, res: Res): Promise<void> {
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
-  // JWT 로컬 검증 경로는 email을 안 봤으니 필요할 때만 Auth 서버에 물어본다.
   // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
   const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.origin ?? ''));
-  const isOwner = async (): Promise<boolean> => {
-    const { data: ud } = await auth.getUser(token);
-    return (ud.user?.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
-  };
+  const isOwner = async (): Promise<boolean> =>
+    (user.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
   const debugAllowed = async (): Promise<boolean> => {
     const deployEnv = process.env.DEPLOY_ENV;
     if (deployEnv === 'production') return false;

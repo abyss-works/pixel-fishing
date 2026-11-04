@@ -59,7 +59,7 @@ describe('서버 데이터 계층 경계', () => {
     expect(violations).toEqual([]);
   });
 
-  it('서버 코드는 supabase-js로 표를 읽고 쓰지 않는다(인증 서버 조회만 쓴다)', () => {
+  it('서버 코드는 질의 빌더 SDK로 표를 읽고 쓰지 않는다(SQL로만 읽고 쓴다)', () => {
     const violations = files.filter(({ src }) => /\.from\(\s*'[a-z_]+'\s*\)|\.rpc\(/.test(src)).map(({ path }) => path);
     expect(violations).toEqual([]);
   });

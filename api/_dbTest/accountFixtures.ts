@@ -14,11 +14,10 @@ export interface AccountSpec {
   /** 지정하지 않으면 이메일이 없을 때 익명이다 */
   anonymous?: boolean;
   email?: string;
-  /** 이메일 변경 확인을 기다리는 주소(email_change) */
-  pendingEmail?: string;
   /** null이면 saves_current 행이 없다 */
   save: { gold?: number; fame?: number; updatedAt: string; restricted?: boolean } | null;
-  createdAt: string | null;
+  createdAt: string;
+  /** 세션의 마지막 사용 시각 */
   lastSignInAt: string | null;
   admin?: boolean;
   /** saves_current 없이 구 saves 행만 있는 계정 */
@@ -39,8 +38,11 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
       updatedAt: spec.save.updatedAt, restricted: spec.save.restricted ?? false,
     } : {}),
   });
-  await client.query('update auth.users set created_at = $2, last_sign_in_at = $3, is_anonymous = $4, email_change = $5 where id = $1',
-    [uid, spec.createdAt, spec.lastSignInAt, spec.anonymous ?? spec.email === undefined, spec.pendingEmail ?? null]);
+  await client.query('update auth.users set created_at = $2, is_anonymous = $3 where id = $1',
+    [uid, spec.createdAt, spec.anonymous ?? spec.email === undefined]);
+  // 세션 사용 시각이 없으면 세션이 없는 계정이다. 가입 시각만 활동 근거로 남는다
+  if (spec.lastSignInAt) await client.query('update auth.sessions set updated_at = $2 where user_id = $1', [uid, spec.lastSignInAt]);
+  else await client.query('delete from auth.sessions where user_id = $1', [uid]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
   if (spec.legacySave) {
     await client.query('insert into public.saves (user_id, data) values ($1, $2)', [uid, { v: 4, gold: 0 }]);

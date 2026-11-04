@@ -41,7 +41,10 @@ async function waitForDatabase(url: string): Promise<void> {
 // 마이그레이션이 참조하는 것(is_anonymous, 관리자 명부 뷰)을 호스팅 환경과 같은 정의로 더한다.
 const AUTH_USERS_SUPPLEMENT = 'alter table auth.users add column if not exists is_anonymous boolean not null default false';
 // 테스트가 사용자 행을 직접 만들 수 있게 auth.users 쓰기를 postgres에 허용한다(테스트 전용).
-const AUTH_USERS_TEST_GRANT = 'grant select, insert, update, delete on auth.users to postgres';
+// 마이그레이션(0021)이 auth.users의 이름을 바꾸고 auth 스키마에 인증 표를 만들 수 있게 소유권과 생성 권한도 준다.
+// 클러스터 DB에서는 앱 사용자가 auth 스키마와 그 표를 소유한다.
+const AUTH_USERS_TEST_GRANT = 'grant select, insert, update, delete on auth.users to postgres; '
+  + 'alter table auth.users owner to postgres; grant usage, create on schema auth to postgres';
 // public 스키마 권한과 기본 권한은 데이터베이스마다 따로라 새 데이터베이스에는 없다.
 // 이미지가 postgres 데이터베이스에 두는 것과 같게 맞춘다. 마이그레이션이 만드는 표를 service_role 등이 쓰게 된다.
 const API_ROLES = 'postgres, anon, authenticated, service_role';

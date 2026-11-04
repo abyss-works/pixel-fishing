@@ -27,8 +27,8 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
 // 가입 = 익명 계정 승격(진행 유지) / 로그인 = 다른 계정으로 교체(게스트 진행 소멸 — 경고+백업).
-// 신규/기존 판별은 유저가 아니라 서버가 한다: 승격(updateUser) 먼저 시도하고,
-// email_exists면 "기존 계정 로그인" 확인 후 signInWithPassword로 전환.
+// 신규/기존 판별은 유저가 아니라 서버가 한다: 승격 먼저 시도하고,
+// email_exists면 "기존 계정 로그인" 확인 후 이메일 로그인으로 전환.
 // 알려진 트레이드오프: 기존 유저가 이메일을 오타 내면 오타 주소로 새 계정이 생긴다
 // (진행 유실은 없음, 유령 계정 1개) — 친구 규모에서 수용
 export default function AccountModal({
@@ -47,7 +47,7 @@ export default function AccountModal({
   const [busy, setBusy] = useState(false);
   const [nickBusy, setNickBusy] = useState(false);
   const { confirm, input, notice, dialogs } = useDialogs();
-  // 로컬(supabase 없음)에서도 화면은 보여준다 — 계정 폼만 막고 닉네임·ID는 그대로 동작한다.
+  // 로컬(클라우드 미설정)에서도 화면은 보여준다 — 계정 폼만 막고 닉네임·ID는 그대로 동작한다.
   const offline = !isAccountConfigured();
 
   const run = async (fn: () => Promise<void>) => {
@@ -68,7 +68,7 @@ export default function AccountModal({
     }
 
     // ② 이미 가입된 이메일 → 기존 계정 로그인으로 전환 (계정 교체 = 게스트 진행 소멸: 경고+백업)
-    if (r.code === 'email_exists' || r.code === 'user_already_exists') {
+    if (r.code === 'email_exists') {
       if (!(await confirm({
         title: '기존 계정으로 로그인',
         body: '이미 가입된 이메일이에요. 이 계정으로 로그인할까요?\n로그인하면 지금 게스트 진행은 사라져요.\n(만약을 위해 이사 코드를 클립보드에 복사해 둘게요)',
