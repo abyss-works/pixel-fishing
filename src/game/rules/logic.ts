@@ -24,6 +24,8 @@ import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
+import { isTutorialId } from '../content/tutorials.js';
+import type { TutorialId } from '../content/tutorials.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
@@ -97,6 +99,8 @@ export interface GameState {
   pity: SpeciesPity;
   /** 네임드 조우 천장 진척 — 게임 날짜 단위. 화면에 보이지 않아 응답 스칼라에서 뺀다 */
   namedPity: NamedPity;
+  /** 본 튜토리얼 — 트리거마다 한 번만 뜨게 한다. 세이브 v8에 접어서 도입(없으면 빈 목록) */
+  tutorials: TutorialId[];
 }
 
 export interface RodStats {
@@ -364,6 +368,7 @@ export function newState(): GameState {
     activeBait: null,
     pity: {},
     namedPity: { day: '', misses: 0, fails: 0 },
+    tutorials: [],
   };
 }
 
@@ -845,6 +850,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     activeBait: safeActiveBait(s.activeBait),
     pity: safePity(s.pity),
     namedPity: safeNamedPity(s.namedPity),
+    tutorials: Array.isArray(s.tutorials) ? s.tutorials.filter(isTutorialId) : [],
   };
 }
 

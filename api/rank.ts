@@ -4,7 +4,7 @@
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다. default export = Node 시그니처.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { bearerToken, userOf } from './_auth/session.js';
+import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import { dexBoard, fameBoard, speciesBoard } from './_data/rank.js';
 import { FISH } from '../src/game/rules/logic.js';
@@ -36,10 +36,8 @@ async function route(req: Req, res: Res): Promise<void> {
   if (board === 'species' && !(typeof fish === 'string' && FISH.some(f => f.id === fish))) throw new ApiError(400, 'bad-fish');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
-  // 토큰이 있으면 내 순위를 위해 사용자를 확인한다. 잘못된 토큰은 익명으로 넘기지 않고 거부한다
-  const token = bearerToken(req.headers.authorization);
-  const uid = token ? await userOf(token) : null;
-  if (token && !uid) throw new ApiError(401, 'unauthorized');
+  // 로그인 세션이 있으면 내 순위를 함께 준다
+  const uid = (await sessionOf(req.headers))?.id ?? null;
 
   const { db } = database();
   const body = board === 'species'

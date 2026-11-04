@@ -624,3 +624,23 @@ describe('catch × 미끼 (낚아올리는 순간 소모)', () => {
     expect('bait' in out.events[0].payload).toBe(false);
   });
 });
+
+describe('seeTutorial', () => {
+  it('본 튜토리얼을 상태에 남긴다', () => {
+    const out = applyAction(seed(), { type: 'seeTutorial', id: 'village' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.tutorials).toEqual(['village']);
+  });
+
+  it('이미 본 튜토리얼은 상태를 바꾸지 않는다', () => {
+    const before = seed({ tutorials: ['village'] });
+    const out = applyAction(before, { type: 'seeTutorial', id: 'village' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toBe(before);
+  });
+
+  it('모르는 튜토리얼은 거부한다', () => {
+    expect(applyAction(seed(), { type: 'seeTutorial', id: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'seeTutorial', id: 3 }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+});

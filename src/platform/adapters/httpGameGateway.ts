@@ -1,6 +1,7 @@
 // HTTP 게임 게이트웨이 — /api/action 경유 (스테이징·운영의 유일한 상태 변경 경로, 서버 권위 v0.5.0)
-// 읽기(load)는 saves_current 본인 행(RLS select) → 없으면 구 saves 최신 행 폴백(이관 전 유저).
-import { supabase } from './auth';
+// 읽기(load)는 서버 읽기 함수가 주는 본인 행 → saves_current가 없으면 구 saves 최신 본문 폴백(이관 전 유저).
+import { isCloud } from './auth';
+import { readMe } from './me';
 import { migrate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 import type { GameAction, StatePatch } from '../../game/rules/actions';
@@ -12,6 +13,9 @@ import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
 
 type Row = Record<string, never> | Record<string, unknown>;
+
+// 창 식별자 — 창(탭)마다 새로 만든다. 서버는 마지막으로 접속(boot)한 창의 액션만 받는다
+const CLIENT_ID = crypto.randomUUID();
 
 /** 세 소스에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
 function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
@@ -52,53 +56,36 @@ export class HttpGameGateway implements GameGateway {
     this.lastVersion = null;
   }
   // 저장소가 셋으로 갈려 있다(0006): saves_current(스칼라+blob) · fish_instances · records.
-  // 셋을 병렬로 읽어 GameState로 조립한다 — RLS가 본인 행만 통과시킨다.
+  // 서버가 세 표의 본인 행을 한 번에 돌려주고, 여기서 GameState로 조립한다.
   async load(): Promise<GameState | null> {
-    if (!supabase) return null;
-    // fish_instances만 명시 필터가 필수다 — RLS가 "본인 행 OR 전시 공개(slot not null)"
-    // 이중 정책(0006)이라, 필터 없이 읽으면 남의 전시 개체가 내 exhibit로 조립된다.
-    // (지금은 slot을 채우는 액션이 없어 무증상이지만 전시 기능이 켜지는 순간 발현)
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user.id;
-    if (!uid) return null;
-    const [cur, inst, rec] = await Promise.all([
-      supabase.from('saves_current').select('data, gold, fame, boat, rod, version').maybeSingle(),
-      // SELECT * 금지 — user_id는 RLS 필터 전용이라 전송에서 제외한다 (서버의 INST_SEL과 같은 계약).
-      // 명시 필터도 필수다 — 필터 없이 읽으면 RLS 이중 정책(0006) 탓에 남의 전시 개체가
-      // 내 exhibit로 조립된다 (지금은 무증상, 전시대 착수 전 선결).
-      supabase.from('fish_instances').select('uid, fish_id, form, size, caught_at, spot, judgment, slot, locked').eq('user_id', uid),
-      supabase.from('records').select('fish_id, form, count, max_size, first_caught'),
-    ]);
-    if (cur.data) {
-      const s = assemble(cur.data, inst.data ?? [], rec.data ?? []);
+    if (!isCloud) return null;
+    const me = await readMe<{ cur: Row | null; instances: Row[]; records: Row[]; legacy: unknown }>('state');
+    if (me.cur) {
+      const s = assemble(me.cur, me.instances, me.records);
       this.lastState = s;
-      const v = Number((cur.data as { version?: unknown })?.version);
+      const v = Number((me.cur as { version?: unknown }).version);
       this.lastVersion = Number.isFinite(v) ? v : null;
       return s;
     }
 
     // 이관 폴백 — 아직 첫 액션을 하지 않은 유저는 구 saves(blob)의 최신 행이 유일한 정본이다
-    const { data: old } = await supabase
-      .from('saves').select('data')
-      .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    const s = old ? migrate(old.data) : null;
+    const s = me.legacy ? migrate(me.legacy) : null;
     this.lastState = s;
     this.lastVersion = null; // 버전 모름 — 다음 델타는 풀재동기로 받는다
     return s;
   }
 
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (에러 처리 정책 소관)
-  // 표시용 닉네임 읽기 — profiles RLS 본인 읽기. 공개 행은 두지 않는다 (전체 읽기는 랭킹 때 연다).
+  // 표시용 닉네임 읽기 — 표시 전용이라 실패는 이름 없음(null)으로 둔다.
   async getNickname(): Promise<string | null> {
-    if (!supabase) return null;
-    const { data } = await supabase.from('profiles').select('nickname').maybeSingle();
-    const nickname = (data as { nickname?: unknown } | null)?.nickname;
-    return typeof nickname === 'string' ? nickname : null;
+    if (!isCloud) return null;
+    const me = await readMe<{ nickname: unknown }>('profile').catch(() => null);
+    return typeof me?.nickname === 'string' ? me.nickname : null;
   }
 
   async dispatch(action: GameAction, retried = false): Promise<DispatchResult> {
-    const session = await this.session();
-    const res = await this.post(action, session);
+    if (!isCloud) throw new AppError('network', 'cloud not configured');
+    const res = await this.post(action);
 
     if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
       // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
@@ -149,6 +136,8 @@ export class HttpGameGateway implements GameGateway {
     if (res.status === 429) {
       throw new AppError('rate-limited', 'action pacing rejected', { action: action.type });
     }
+    // 423 = 다른 창이 활성 창이 됐다 — 액션은 적용되지 않았다. 정책 표가 이 창을 막는다
+    if (res.status === 423) throw new AppError('replaced', 'another window took over the session', { action: action.type });
     if (res.status === 426) throw new AppError('outdated', 'client version mismatch',
       { server: (body as { server?: string } | null)?.server });
     if (res.status === 401) throw new AppError('unauthorized', 'session rejected');
@@ -161,23 +150,16 @@ export class HttpGameGateway implements GameGateway {
     return typeof v === 'string' && v in REJECT_TEXT ? v as RejectReason : 'bad-request';
   }
 
-  private async session(): Promise<string> {
-    if (!supabase) throw new AppError('network', 'supabase not configured');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new AppError('unauthorized', 'no session');
-    return session.access_token;
-  }
-
-  private async post(action: GameAction, token: string): Promise<Response> {
+  private async post(action: GameAction): Promise<Response> {
     try {
       return await fetch('/api/action', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${token}`,
           // 낡은 탭 차단 — 서버가 자기 배포 식별자와 대조 (426).
           // APP_VERSION이 아니라 배포 식별자다: 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가른다
           'x-build-id': BUILD_ID,
+          'x-client-id': CLIENT_ID,
         },
         body: JSON.stringify(action),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지

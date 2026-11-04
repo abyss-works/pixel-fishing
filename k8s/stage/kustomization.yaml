@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# 운영 구성을 그대로 쓰고 네임스페이스·환경 라벨·도메인·이미지 태그만 바꾼다. 예약 작업은 두지 않는다.
+namespace: pixel-fishing-stage
+resources:
+  - ../prod
+labels:
+  - pairs:
+      abyssworks.dev/environment: stage
+patches:
+  - target:
+      kind: Namespace
+      name: pixel-fishing-prod
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: pixel-fishing-stage
+  - target:
+      kind: Ingress
+      name: pixel-fishing
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: pixel-fishing-stage.abyssworks.dev
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: pixel-fishing-stage.abyssworks.dev
+  - target:
+      kind: Certificate
+      name: pixel-fishing-tls
+    patch: |-
+      - op: replace
+        path: /spec/dnsNames/0
+        value: pixel-fishing-stage.abyssworks.dev
+  - target:
+      kind: Deployment
+      name: pixel-fishing
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: https://pixel-fishing-stage.abyssworks.dev
+  - target:
+      kind: CronJob
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: unused
+# dev 푸시마다 CI가 태그를 dev-<커밋 SHA 7자리>로 갱신한다.
+images:
+  - name: ghcr.io/abyss-works/pixel-fishing
+    newTag: dev-c38c8b6

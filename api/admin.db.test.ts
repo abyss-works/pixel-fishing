@@ -2,7 +2,7 @@
 // 조회 결과는 관리자 뷰·함수의 결과와 같아야 한다. 같은 데이터를 authenticated 역할과 세션 클레임으로 읽은
 // 뷰·함수 결과(PostgREST의 읽기 방식)를 기댓값으로 쓴다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
@@ -28,8 +28,10 @@ beforeAll(async () => {
     state: { gold: 10, fame: 0, boat: 0, rod: 1 }, restricted: true, updatedAt: '2026-10-17T08:00:00.000Z' });
   await seedUser(env.client, { uid: IDLE_A, nickname: null });
   await seedUser(env.client, { uid: IDLE_B, nickname: null });
-  await env.client.query(`update auth.users set created_at = '2026-10-01T00:00:00Z', last_sign_in_at = '2026-10-18T08:30:00Z'
-    where id = $1`, [ADMIN]);
+  await env.client.query(`update auth.users set created_at = '2026-10-01T00:00:00Z' where id = $1`, [ADMIN]);
+  // 마지막 로그인은 세션의 마지막 사용 시각이다. 세션이 없는 계정은 null이다
+  await env.client.query(`update auth.sessions set updated_at = '2026-10-18T08:30:00Z' where user_id = $1`, [ADMIN]);
+  await env.client.query('delete from auth.sessions where user_id = $1', [GUEST]);
   await env.client.query(`update auth.users set created_at = '2026-10-05T12:00:00Z' where id = $1`, [PLAYER]);
   await env.client.query('insert into public.admins (user_id) values ($1)', [ADMIN]);
 });
@@ -45,7 +47,7 @@ async function callAdmin(query: Record<string, string>, token: string | null = n
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, query, body, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
+  await handler({ method, query, body, headers: sessionHeaders(token) } as never, res as never);
   return out;
 }
 
@@ -151,8 +153,8 @@ describe('요청 검증과 관리자 판정', () => {
     expect((await callAdmin({ q: 'nope' }, userToken(PLAYER))).status).toBe(403);
   });
 
-  it('계정이 없는 사용자의 유효한 토큰은 403이다', async () => {
-    expect((await callAdmin({ q: 'users' }, userToken(testUid(999)))).status).toBe(403);
+  it('계정이 없는 사용자의 토큰은 세션이 없어 401이다', async () => {
+    expect((await callAdmin({ q: 'users' }, userToken(testUid(999)))).status).toBe(401);
   });
 
   it('접근 판정: 명부에 있으면 granted, 없으면 denied이고 세션 uid를 함께 돌려준다', async () => {
@@ -202,15 +204,8 @@ describe('요청 검증과 관리자 판정', () => {
     expect((await callAdmin({ q: 'users' }, userToken(ADMIN))).status).toBe(200);
   });
 
-  it('JWT secret이 없으면 인증 서버 조회로 같은 사용자를 확인한다', async () => {
-    const secret = process.env.SUPABASE_JWT_SECRET;
-    delete process.env.SUPABASE_JWT_SECRET;
-    try {
-      expect((await callAdmin({ q: 'access' }, userToken(ADMIN))).body).toEqual({ kind: 'granted', uid: ADMIN });
-      expect((await callAdmin({ q: 'access' }, 'bad.token.here')).status).toBe(401);
-    } finally {
-      process.env.SUPABASE_JWT_SECRET = secret;
-    }
+  it('세션이 없는 토큰은 401이다', async () => {
+    expect((await callAdmin({ q: 'access' }, 'no-such-session')).status).toBe(401);
   });
 
   it('DATABASE_URL이 없으면 500 server-config다', async () => {

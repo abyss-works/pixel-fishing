@@ -36,7 +36,7 @@ const CROSS_LAYER_IMPORTS = new Set([
   'features/gameplay/service/useGame.ts -> core/errors',
   'features/gameplay/service/useGame.ts -> buildId',
   'features/announcements/service/whatsNew.ts -> version',
-  'platform/adapters/bounty.ts -> core/errors',
+  'platform/adapters/me.ts -> core/errors',
   'platform/adapters/ranking.ts -> core/errors',
   'platform/adapters/mailbox.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> core/errors',
@@ -213,7 +213,7 @@ describe('src 구조 경계', () => {
   });
 
   it('브라우저 코드는 관리자 뷰와 RPC를 직접 읽지 않고 서버 읽기 함수에 맡긴다', () => {
-    // 뷰 이름(v_*)과 supabase RPC 호출이 주석을 뺀 코드에 없어야 한다
+    // 뷰 이름(v_*)과 RPC 호출이 주석을 뺀 코드에 없어야 한다
     const direct = /\bv_[a-z0-9_]+\b|\.rpc\(/;
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), code: src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') }))

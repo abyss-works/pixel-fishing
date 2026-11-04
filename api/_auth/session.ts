@@ -1,38 +1,42 @@
-// 세션 토큰 확인 — 서버 함수가 요청한 사용자를 정한다.
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
+// 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 앱의 인증 인스턴스를 환경 변수로 조립한다.
+import type { IncomingHttpHeaders } from 'node:http';
+import { fromNodeHeaders } from 'better-auth/node';
+import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
+import { createAuth } from './auth.js';
+import type { Auth } from './auth.js';
+import { resendSender } from './mail.js';
 
-// 세션 토큰 로컬 검증 (HS256, 레거시 JWT secret) — Auth 서버 왕복(~수백 ms, 리전 원거리면 그 이상)을
-// 제거하는 레이턴시 최적화. 검증에 성공하면 사용자 id(sub)를, 실패하면 null을 돌려준다.
-export function verifyJwtLocal(token: string, secret: string): string | null {
-  const [h, p, sig] = token.split('.');
-  if (!h || !p || !sig) return null;
-  try {
-    const header = JSON.parse(Buffer.from(h, 'base64url').toString());
-    if (header.alg !== 'HS256') return null; // 알고리즘 고정 — alg 혼동 공격 차단
-    const expected = createHmac('sha256', secret).update(`${h}.${p}`).digest('base64url');
-    const a = Buffer.from(sig), b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
-    if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
-    return typeof payload.sub === 'string' ? payload.sub : null;
-  } catch {
-    return null;
-  }
+let appAuthInstance: Auth | null = null;
+
+/** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */
+export function appAuth(): Auth {
+  if (appAuthInstance) return appAuthInstance;
+  const secret = process.env.BETTER_AUTH_SECRET;
+  const baseURL = process.env.BETTER_AUTH_URL;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.MAIL_FROM;
+  if (!secret || !baseURL || !apiKey || !from) throw new ApiError(500, 'server-config');
+  appAuthInstance = createAuth({
+    pool: database().pool, secret, baseURL,
+    mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
+  });
+  return appAuthInstance;
 }
 
-/** Authorization 헤더의 Bearer 토큰. 없으면 빈 문자열 */
-export const bearerToken = (authorization: string | undefined): string =>
-  (authorization ?? '').replace(/^Bearer\s+/i, '');
+export interface SessionUser {
+  id: string;
+  /** 영구 계정의 이메일. 게스트는 null이다 */
+  email: string | null;
+}
 
-/** 토큰의 사용자. JWT secret이 있으면 로컬 검증(왕복 0), 없으면 인증 서버 조회. 확인하지 못하면 null */
-export async function userOf(token: string): Promise<string | null> {
-  const secret = process.env.SUPABASE_JWT_SECRET;
-  if (secret) return verifyJwtLocal(token, secret);
-  const url = process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new ApiError(500, 'server-config');
-  const { data, error } = await createClient(url, serviceKey, { auth: { persistSession: false } }).auth.getUser(token);
-  return error || !data.user ? null : data.user.id;
+/**
+ * 요청 쿠키의 로그인 사용자. 세션이 없거나 만료됐으면 null이다.
+ * 쿠키 캐시를 쓰지 않고 세션 표를 읽는다. 재설정·탈퇴로 끊은 세션이 캐시 수명 동안 통과하지 않게 하기 위해서다.
+ */
+export async function sessionOf(headers: IncomingHttpHeaders): Promise<SessionUser | null> {
+  const result = await appAuth().api.getSession({ headers: fromNodeHeaders(headers), query: { disableCookieCache: true } });
+  if (!result) return null;
+  const user = result.user as { id: string; email: string; isAnonymous?: boolean | null };
+  return { id: user.id, email: user.isAnonymous ? null : user.email };
 }

@@ -4,21 +4,23 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
 import { newState } from '../../src/game/rules/logic.js';
-import { pendingAfterResponse } from './supabaseShim.js';
+import { pendingAfterResponse } from './serverShim.js';
 import { createTestDatabase } from './testDatabase.js';
 import type { TestDatabase } from './testDatabase.js';
 
-const JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef0123456789';
+const AUTH_SECRET = 'test-only-auth-secret-0123456789abcdef0123456789';
+const SESSION_COOKIE = 'better-auth.session_token';
 
-function sign(payload: Record<string, unknown>): string {
-  const enc = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
-  const head = `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc(payload)}`;
-  return `${head}.${createHmac('sha256', JWT_SECRET).update(head).digest('base64url')}`;
+/** 사용자 세션 토큰. seedUser가 이 토큰의 세션을 만들어 둔다 */
+export function userToken(uid: string): string {
+  return `test-session-${uid}`;
 }
 
-/** 사용자 세션 토큰. 만료는 현재(가짜) 시각 기준 1시간 뒤다 */
-export function userToken(uid: string, email: string | null = null): string {
-  return sign({ sub: uid, role: 'authenticated', email, exp: Math.floor(Date.now() / 1000) + 3600 });
+/** 세션 토큰을 서명한 세션 쿠키 헤더. 토큰이 없으면 빈 헤더다 */
+export function sessionHeaders(token: string | null): Record<string, string> {
+  if (!token) return {};
+  const signature = createHmac('sha256', AUTH_SECRET).update(token).digest('base64');
+  return { cookie: `${SESSION_COOKIE}=${encodeURIComponent(`${token}.${signature}`)}` };
 }
 
 export interface ActionEnv {
@@ -27,12 +29,13 @@ export interface ActionEnv {
   stop(): Promise<void>;
 }
 
-/** 테스트 데이터베이스와 요청 처리 함수가 읽는 환경 변수를 준비한다. 인증 서버 조회는 supabaseShim이 받는다 */
+/** 테스트 데이터베이스와 요청 처리 함수가 읽는 환경 변수를 준비한다. 메일 발송은 serverShim이 받는다 */
 export async function startActionEnv(): Promise<ActionEnv> {
   const db = await createTestDatabase();
-  process.env.VITE_SUPABASE_URL = 'http://auth.test';
-  process.env.SUPABASE_SERVICE_ROLE_KEY = sign({ role: 'service_role', exp: 4_102_444_800 });
-  process.env.SUPABASE_JWT_SECRET = JWT_SECRET;
+  process.env.BETTER_AUTH_SECRET = AUTH_SECRET;
+  process.env.BETTER_AUTH_URL = 'http://localhost:3000';
+  process.env.RESEND_API_KEY = 'test-only-resend-key';
+  process.env.MAIL_FROM = 'test <no-reply@example.test>';
   process.env.DATABASE_URL = db.url;
   delete process.env.DEPLOY_ENV;
   delete process.env.SENTRY_DSN;
@@ -52,12 +55,12 @@ export interface ActionResponse { status: number; body: unknown }
 
 /** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev')이다 */
 export async function callAction(token: string | null, body: unknown, opts: {
-  method?: string; origin?: string; buildId?: string;
+  method?: string; origin?: string; buildId?: string; clientId?: string;
 } = {}): Promise<ActionResponse> {
   const { default: handler } = await import('../action.js');
-  const headers: Record<string, string> = { 'x-build-id': opts.buildId ?? 'dev' };
-  if (token) headers.authorization = `Bearer ${token}`;
+  const headers: Record<string, string> = { 'x-build-id': opts.buildId ?? 'dev', ...sessionHeaders(token) };
   if (opts.origin) headers.origin = opts.origin;
+  if (opts.clientId) headers['x-client-id'] = opts.clientId;
   const out: ActionResponse = { status: 0, body: undefined };
   const res = {
     status(code: number) { out.status = code; return res; },
@@ -82,13 +85,19 @@ export interface SeedOptions {
   version?: number;
   updatedAt?: string;
   restricted?: boolean;
+  /** 직전 캐치 시각(saves_current.last_catch_at) */
+  lastCatchAt?: string;
+  /** 활성 창 식별자(saves_current.active_client) */
+  activeClient?: string;
 }
 
 /** 사용자와 그 저장 상태를 표에 직접 만든다. 저장 형식은 서버의 stateRow·instRow와 같다 */
 export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<string> {
   const uid = opts.uid ?? randomUUID();
   await client.query('insert into auth.users (id, email, is_anonymous) values ($1, $2, $3)',
-    [uid, opts.email ?? null, !opts.email]);
+    [uid, opts.email ?? `${uid}@anonymous.invalid`, !opts.email]);
+  await client.query(`insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')`,
+    [uid, userToken(uid)]);
   if (opts.nickname !== null) {
     await client.query('insert into public.profiles (user_id, nickname) values ($1, $2)',
       [uid, opts.nickname ?? `user-${uid.slice(-8)}`]);
@@ -97,9 +106,10 @@ export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<
     const state: GameState = { ...newState(), ...opts.state };
     const { bag, exhibit, dex, gold, fame, boat, rod, ...rest } = state;
     await client.query(
-      `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, updated_at, restricted)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [uid, rest, gold, fame, boat, rod, opts.version ?? 2, opts.updatedAt ?? '2026-01-01T00:00:00.000Z', opts.restricted ?? false]);
+      `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, updated_at, restricted, last_catch_at, active_client)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [uid, rest, gold, fame, boat, rod, opts.version ?? 2, opts.updatedAt ?? '2026-01-01T00:00:00.000Z', opts.restricted ?? false,
+        opts.lastCatchAt ?? null, opts.activeClient ?? null]);
     const inst = (i: FishInstance, slot: number | null) => client.query(
       `insert into public.fish_instances (uid, user_id, fish_id, form, size, caught_at, spot, judgment, slot, locked)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,

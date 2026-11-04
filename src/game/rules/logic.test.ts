@@ -836,6 +836,11 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
   const usableOf = (items: Record<string, number>, active: string | null) =>
     usableBait({ items, activeBait: active });
 
+  it('migrate: tutorials 부재 → 빈 목록, 모르는 튜토리얼 id는 버린다', () => {
+    expect(mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] }).tutorials).toEqual([]);
+    expect(mig({ v: 8, tutorials: ['village', 'nope', 3, 'sea'] } as never).tutorials).toEqual(['village', 'sea']);
+  });
+
   it('migrate: items/activeBait 부재 → 기본값으로 채워진다 (마이그레이션 스텝 없음)', () => {
     const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.items).toEqual({});

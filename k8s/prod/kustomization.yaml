@@ -13,7 +13,9 @@ resources:
   - certificate.yaml
   - cronjob-archive.yaml
   - cronjob-purge-anon.yaml
+  - db.yaml
+  - db-backup.yaml
 # 태그는 package.json의 버전과 같아야 한다. 릴리즈 커밋에서 함께 올린다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: v0.14.1
+    newTag: v0.15.0

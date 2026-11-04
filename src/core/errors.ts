@@ -11,6 +11,7 @@ export type FailureKind =
   | 'network'       // 순단·타임아웃·플랫폼 장애
   | 'unauthorized'  // 세션 없음/만료
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
+  | 'replaced'      // 423 — 같은 계정이 다른 창에서 접속해 이 창이 활성 창이 아니다
   | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
   | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)
   | 'server'        // 5xx
@@ -34,12 +35,15 @@ export class AppError extends Error {
   }
 }
 
+/** 화면 전체를 덮어 진행을 막는 모달 — 새로고침만이 출구다 */
+export type BlockingModal = 'update' | 'replaced';
+
 /** 종류별 대응 — 새 실패 종류 = 여기 행 하나. UI 문구를 각 지점에 흩지 않는다 */
 export interface FailureResponse {
   /** 이사 코드를 만들어 복구를 안내한다 (진행이 저장되지 않은 실패) */
   rescue: boolean;
   /** 전체를 덮는 모달 */
-  modal?: 'update';
+  modal?: BlockingModal;
   /** 유저에게 보일 한 줄 (rescue 안내문의 머리글로도 쓰인다) */
   message: string;
   /** Sentry 보고 수준 — outdated는 정상 동작이라 warning */
@@ -59,6 +63,11 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     // 진행은 서버에 안전하다 — 구조 불필요, 새로고침만 안내
     rescue: false, modal: 'update', level: 'warning',
     message: '새 버전이 배포되었어요. 새로고침하면 이어서 플레이할 수 있어요.',
+  },
+  replaced: {
+    // 진행은 서버에 안전 — 구조 불필요. 새로고침하면 이 창이 다시 활성 창이 된다
+    rescue: false, modal: 'replaced', level: 'warning',
+    message: '다른 창에서 게임을 열었어요. 이 창에서 계속하려면 새로고침해 주세요.',
   },
   restricted: {
     // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 구조 불필요, 문의 유도.

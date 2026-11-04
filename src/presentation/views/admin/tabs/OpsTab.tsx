@@ -1,12 +1,12 @@
-// 운영 탭 — 대시보드 자체의 메타: 지금 이 번들이 어느 배포인지, 어느 Supabase 프로젝트를
-// 보고 있는지, 이벤트 스트림에 무엇이 기록되는지. 링크를 나열하는 게 아니라 **환경 정체를
+// 운영 탭 — 대시보드 자체의 메타: 지금 이 번들이 어느 배포인지, 어느 서버 주소에
+// 붙어 있는지, 이벤트 스트림에 무엇이 기록되는지. 링크를 나열하는 게 아니라 **환경 정체를
 // 화면에 에코**하는 것이 목적이다(운영/스테이징 착오는 과거 사고의 원인 둘).
 // 권한 진단은 AdminAuthProvider가 판정한 것을 소비한다 — 여기서 판정하지 않는다.
 import Note from '../../../ui/Note';
 import DataTable from '../../../ui/DataTable';
 import { APP_VERSION } from '../../../../version';
 import { BUILD_LABEL } from '../../../../buildId';
-import { readAdminProjectRef } from '../../../../features/admin/service/queries';
+import { readAdminDeployHost } from '../../../../features/admin/service/queries';
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
@@ -15,7 +15,7 @@ export default function OpsTab() {
   const { access } = useAdminAuth();
 
   return (
-    <TabPage title="운영" context="이 대시보드가 어느 배포와 어느 Supabase 프로젝트를 보고 있는지 확인해요.">
+    <TabPage title="운영" context="이 대시보드가 어느 배포를 보고 있는지 확인해요.">
       <CellGrid>
         <Cell title="이 화면의 정체" flush>
           <div className="px-1">
@@ -25,8 +25,8 @@ export default function OpsTab() {
                       hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요." />
                 <Meta k="빌드 식별자" v={BUILD_LABEL}
                       hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 낡은 탭을 막는 기준(426)이에요." />
-                <Meta k="Supabase 프로젝트" v={readAdminProjectRef() ?? '로컬 모드'}
-                      hint="VITE_SUPABASE_URL의 호스트예요. 운영과 스테이징의 ref가 달라서 착오를 막으려고 보여 줘요." />
+                <Meta k="배포 주소" v={readAdminDeployHost() ?? '로컬 모드'}
+                      hint="이 화면이 붙은 서버의 호스트예요. 운영과 스테이징의 주소가 달라서 착오를 막으려고 보여 줘요." />
               </tbody>
             </DataTable>
           </div>

@@ -28,8 +28,9 @@ import RankingModal from '../overlays/ranking/RankingModal';
 import MailboxButton from '../overlays/mailbox/MailboxButton';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
-import UpdateModal from '../overlays/update/UpdateModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
+import TutorialModal from '../overlays/tutorial/TutorialModal';
+import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import TraceCard from '../overlays/bounty/TraceCard';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
@@ -52,7 +53,8 @@ interface GameViewProps {
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
-  outdated: boolean;
+  /** 진행을 막는 앱 모달(새 버전, 다른 창 접속) — 앱 최상위가 실패 정책에 따라 공급한다 */
+  blocker?: ReactNode;
   /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
   badge?: ReactNode;
 }
@@ -69,6 +71,9 @@ export default function GameView(props: GameViewProps) {
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
   const atSea = scene.kind === 'region' && scene.id !== 'village';
+  // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
+  useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
+  useTutorialTrigger('sea', atSea);
   const encounter = tracking ? selectEncounter(game, tracking) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -151,7 +156,7 @@ export default function GameView(props: GameViewProps) {
         {statsOpen && (
           <StatsModal game={game}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
-                      region={region}
+                      region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
@@ -178,7 +183,9 @@ export default function GameView(props: GameViewProps) {
 
       {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
       <WhatsNewModal game={game} ready={props.syncState === 'on' || props.syncState === 'off'} />
-      {props.outdated && <UpdateModal />}
+      <TutorialModal seen={game.tutorials} ready={props.syncState === 'on' || props.syncState === 'off'}
+                     dispatch={props.dispatch} />
+      {props.blocker}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>
   );

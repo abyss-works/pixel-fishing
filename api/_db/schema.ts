@@ -15,6 +15,8 @@ export const savesCurrent = pgTable('saves_current', {
   boat: integer('boat').notNull().default(0),
   rod: integer('rod').notNull().default(1),
   restricted: boolean('restricted').notNull().default(false),
+  lastCatchAt: at('last_catch_at'),
+  activeClient: text('active_client'),
 });
 
 export const fishInstances = pgTable('fish_instances', {

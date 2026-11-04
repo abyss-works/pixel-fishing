@@ -109,6 +109,9 @@ export const CHALLENGE_RED = 0.1;
 // 완화해도 경제가 흔들리지 않는다. 액션 유형을 바꾸면 GameAction 유니온과 이 목록을 함께 갱신한다.
 export const MIN_ACTION_GAP_MS = 1000;
 export const MIN_ACTION_GAP_FAST_MS = 150;
+// 캐치 간격 허용 오차(ms) — 두 캐치 요청의 서버 도착 간격은 네트워크 지연 차이만큼 낚시 사이클보다
+// 짧아질 수 있다. 이만큼 이른 도착은 정상으로 본다.
+export const CATCH_PACING_SLACK_MS = 500;
 // satisfies가 액션 유니온과의 일치를 강제한다 — 'letter'(이벤트 타입) 오기로 sendLetter가
 // 빠른 창을 타던 버그의 재발 방지
 export const PACING_SLOW_TYPES = ['catch', 'sendLetter'] as const satisfies readonly GameAction['type'][];

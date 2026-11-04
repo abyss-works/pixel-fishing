@@ -1,5 +1,5 @@
 // 앱의 데이터 접근 API와 런타임 조립점. 외부 시스템별 구현은 플랫폼 계층에 둔다.
-import { supabase } from '../adapters/auth';
+import { isCloud } from '../adapters/auth';
 import { clearLegacySave, loadLegacy, saveCode } from '../adapters/storage';
 import { createHttpApi } from '../adapters/httpApi';
 import { createLocalApi } from '../adapters/localApi';
@@ -9,7 +9,7 @@ import type { ApiClient, StorageApi } from './types';
 const storage: StorageApi = { loadLegacy, clearLegacySave, saveCode };
 
 export function createApi(): ApiClient {
-  const impl = supabase ? createHttpApi() : createLocalApi();
+  const impl = isCloud ? createHttpApi() : createLocalApi();
   return { ...impl, storage };
 }
 

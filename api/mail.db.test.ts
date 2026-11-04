@@ -1,6 +1,6 @@
 // 우편함 함수 — 실제 Postgres에서 본인 목록과 읽음 기록을 검사한다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 let env: ActionEnv;
@@ -24,7 +24,7 @@ async function callMail(method: string, token: string | null, body?: unknown) {
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, body, headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
+  await handler({ method, body, headers: sessionHeaders(token) } as never, res as never);
   return out;
 }
 

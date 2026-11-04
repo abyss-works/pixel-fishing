@@ -14,4 +14,6 @@ export const requestAccountPasswordReset = (email: string) =>
 
 export const signOutAccount = () => api.auth.signOut();
 
+export const deleteAccount = () => api.auth.deleteAccount();
+
 export const saveGameCode = (game: GameState): string => api.storage.saveCode(game);

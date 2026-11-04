@@ -1,10 +1,10 @@
-// HTTP API 구현 — 스테이징·운영 (supabase + /api/action)
+// HTTP API 구현 — 스테이징·운영 (/api/auth 쿠키 세션 + /api/action)
 import { HttpGameGateway } from './httpGameGateway';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
 import type { AuthApi, AuthResult } from '../api/types';
 import {
-  supabase,
+  sessionUid,
   ensureSession,
   currentAccount,
   signUpWithEmail,
@@ -12,6 +12,8 @@ import {
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
+  takePasswordResetLanding,
+  deleteOwnAccount,
 } from './auth';
 
 class HttpAuth implements AuthApi {
@@ -24,14 +26,11 @@ class HttpAuth implements AuthApi {
     return currentAccount();
   }
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
-    if (!supabase) return { uid: null, email: null };
-    const { data: { session } } = await supabase.auth.getSession();
-    return { uid: session?.user.id ?? null, email: session?.user.email ?? null };
+    const [uid, email] = await Promise.all([sessionUid(), currentAccount()]);
+    return { uid, email };
   }
-  onAuthStateChange(cb: (event: string) => void): { unsubscribe(): void } {
-    if (!supabase) return { unsubscribe() {} };
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => cb(event));
-    return { unsubscribe: () => subscription.unsubscribe() };
+  takePasswordResetLanding(): 'ready' | 'invalid' | null {
+    return takePasswordResetLanding();
   }
   signUp(email: string, password: string): Promise<AuthResult> {
     return signUpWithEmail(email, password);
@@ -48,6 +47,9 @@ class HttpAuth implements AuthApi {
   applyNewPassword(password: string): Promise<AuthResult> {
     return applyNewPassword(password);
   }
+  deleteAccount(): Promise<AuthResult> {
+    return deleteOwnAccount();
+  }
   accountNudgedDay(): string | null {
     const v = localStorage.getItem('pf-account-nudged');
     // 하루 한 번 규칙 이전의 값('1')은 날짜가 아니므로 띄운 적 없는 것으로 본다
@@ -60,7 +62,7 @@ class HttpAuth implements AuthApi {
 
 // ---------- 관리자 읽기 (서버 읽기 함수) ----------
 // 관리자 조회는 서버 읽기 함수가 대신 읽는다. 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다.
-// 전송 상세(요청 이름, 인자, 세션 토큰)는 여기에 갇히고, 소비처(기능 계층)는 AdminApi 인터페이스만 본다.
+// 전송 상세(요청 이름, 인자)는 여기에 갇히고, 소비처(기능 계층)는 AdminApi 인터페이스만 본다. 세션은 쿠키가 싣는다.
 
 import type {
   AdminApi,
@@ -70,14 +72,11 @@ import type {
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
-/** 서버 읽기 함수에 조회 하나를 요청한다. 세션이 없거나 응답이 실패면 던진다 */
+/** 서버 읽기 함수에 조회 하나를 요청한다. 응답이 실패면(세션이 없으면 401) 던진다 */
 async function readAdmin<T>(query: string, params: Record<string, string | number> = {}): Promise<T> {
-  if (!supabase) throw new Error('클라우드 미설정 — 관리자 데이터는 운영 DB에서만 읽힌다');
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('세션이 없어 관리자 데이터를 읽지 못했다');
   const search = new URLSearchParams({ q: query });
   for (const [key, value] of Object.entries(params)) search.set(key, String(value));
-  const res = await fetch(`/api/admin?${search}`, { headers: { authorization: `Bearer ${session.access_token}` } });
+  const res = await fetch(`/api/admin?${search}`);
   if (!res.ok) {
     const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
     throw new Error(`${query} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
@@ -85,14 +84,11 @@ async function readAdmin<T>(query: string, params: Record<string, string | numbe
   return await res.json() as T;
 }
 
-/** 관리자 쓰기 — 우편 보내기. 세션이 없거나 응답이 실패면 던진다 */
+/** 관리자 쓰기 — 우편 보내기. 응답이 실패면(세션이 없으면 401) 던진다 */
 async function writeAdminMail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
-  if (!supabase) throw new Error('클라우드 미설정 — 우편은 운영 DB에서만 보낸다');
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('세션이 없어 우편을 보내지 못했다');
   const res = await fetch('/api/admin?q=mail', {
     method: 'POST',
-    headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ op, request }),
   });
   if (!res.ok) {
@@ -152,10 +148,8 @@ class HttpAdmin implements AdminApi {
   balanceLive(days?: number): Promise<BalanceLive> {
     return readAdmin('balanceLive', days === undefined ? {} : { days });
   }
-  projectRef(): string | null {
-    const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-    if (!url) return null;
-    try { return new URL(url).hostname.split('.')[0]; } catch { return null; }
+  deployHost(): string | null {
+    return window.location.hostname || null;
   }
 }
 
