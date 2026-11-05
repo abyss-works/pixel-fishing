@@ -1,4 +1,4 @@
-// 인증 계정(auth.users) 정리 소유 모듈. 빈 익명 계정의 대상 선정과 계정 단위 삭제를 맡는다.
+// 인증 스키마(auth) 쓰기 소유 모듈. 빈 익명 계정의 대상 선정과 계정 단위 삭제, 관리자가 발급하는 비밀번호 재설정 토큰을 맡는다.
 // 공개 표는 auth.users에 외래 키로 묶여 있지 않을 수 있어 인증 계정만 지우면 행이 고아로 남는다.
 // 그래서 한 계정의 삭제는 한 트랜잭션에서 표의 소유 저장 모듈이 공개 표 행을 지우고 마지막에 인증 계정을 지운다.
 import { sql } from 'drizzle-orm';
@@ -93,4 +93,22 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserProfile(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
+}
+
+/** 비밀번호 재설정 대상으로서의 계정 상태. member는 가입 계정, anonymous는 게스트 계정, missing은 인증 계정이 없다 */
+export type AccountKind = 'member' | 'anonymous' | 'missing';
+
+export async function accountKind(db: Executor, uid: string): Promise<AccountKind> {
+  const { rows } = await db.execute<{ is_anonymous: boolean | null }>(sql`select is_anonymous from auth.users where id = ${uid}`);
+  if (rows.length === 0) return 'missing';
+  return rows[0].is_anonymous ? 'anonymous' : 'member';
+}
+
+/**
+ * 비밀번호 재설정 토큰을 Better Auth의 재설정 요청(request-password-reset)과 같은 행으로 넣는다.
+ * identifier는 'reset-password:<토큰>', value는 사용자 id다. 재설정(reset-password)이 이 행을 찾아 쓰고 지운다.
+ */
+export async function insertPasswordResetToken(db: Executor, uid: string, token: string, expiresAtISO: string): Promise<void> {
+  await db.execute(sql`insert into auth.verifications (identifier, value, expires_at)
+    values (${`reset-password:${token}`}, ${uid}, ${at(expiresAtISO)})`);
 }

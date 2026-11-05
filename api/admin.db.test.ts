@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
+import { appAuth } from './_auth/session.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
 const PLAYER = testUid(902); // 명부에 없는 일반 사용자
@@ -429,5 +430,84 @@ describe('우편 보내기', () => {
 
     const list = await callAdmin({ q: 'mails' }, userToken(ADMIN));
     expect((list.body as Row[]).filter(r => r.userId === PLAYER)).toMatchObject([{ title: '환급', gold: 700, claimedAt: null }]);
+  });
+});
+
+describe('관리자 조치', () => {
+  const TARGET = testUid(906); // 제재·재설정 대상인 가입 사용자
+  const NO_SAVE = testUid(907); // 저장 상태가 없는 가입 사용자
+  const post = (q: string, body: unknown, token: string | null = userToken(ADMIN)) => callAdmin({ q }, token, 'POST', body);
+  const restrictedOf = async (uid: string) =>
+    (await env.client.query('select restricted from public.saves_current where user_id = $1', [uid])).rows[0]?.restricted as boolean | undefined;
+  const adminEvents = async (uid: string) => (await env.client.query(
+    `select type, payload from public.events where user_id = $1 and type like 'admin%' order by id`, [uid])).rows as Row[];
+
+  beforeAll(async () => {
+    await seedUser(env.client, { uid: TARGET, email: 'target@example.test', nickname: '대상', state: { gold: 5, fame: 1 } });
+    await seedUser(env.client, { uid: NO_SAVE, email: 'nosave@example.test', nickname: '저장없음' });
+  });
+
+  it('관리자가 아니면 403, 세션이 없으면 401이고 아무것도 바꾸지 않는다', async () => {
+    for (const [q, body] of [['restrict', { userId: TARGET, restricted: true }], ['resetLink', { userId: TARGET }]] as const) {
+      expect(await post(q, body, userToken(PLAYER)), q).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+      expect(await post(q, body, null), q).toMatchObject({ status: 401 });
+    }
+    expect(await restrictedOf(TARGET)).toBe(false);
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [TARGET])).rows).toEqual([]);
+    expect(await adminEvents(TARGET)).toEqual([]);
+  });
+
+  it('형태가 틀린 요청은 400이다', async () => {
+    for (const body of [null, {}, { userId: 'x', restricted: true }, { userId: TARGET }, { userId: TARGET, restricted: 'yes' }]) {
+      expect(await post('restrict', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-restrict' } });
+    }
+    for (const body of [null, {}, { userId: 'not-a-uuid' }]) {
+      expect(await post('resetLink', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    }
+  });
+
+  it('제재와 해제는 저장 상태의 restricted를 바꾸고, 조치마다 관리자 id를 담은 이벤트를 남긴다', async () => {
+    expect(await post('restrict', { userId: TARGET, restricted: true })).toMatchObject({ status: 200, body: { restricted: true } });
+    expect(await restrictedOf(TARGET)).toBe(true);
+    expect(await post('restrict', { userId: TARGET, restricted: false })).toMatchObject({ status: 200, body: { restricted: false } });
+    expect(await restrictedOf(TARGET)).toBe(false);
+    expect(await adminEvents(TARGET)).toEqual([
+      { type: 'adminRestrict', payload: { adminId: ADMIN } },
+      { type: 'adminUnrestrict', payload: { adminId: ADMIN } },
+    ]);
+  });
+
+  it('저장 상태가 없는 계정은 제재할 수 없어 404이고 이벤트도 남기지 않는다', async () => {
+    expect(await post('restrict', { userId: NO_SAVE, restricted: true })).toMatchObject({ status: 404, body: { error: 'no-save' } });
+    expect(await adminEvents(NO_SAVE)).toEqual([]);
+  });
+
+  it('익명 계정과 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
+    expect(await post('resetLink', { userId: GUEST })).toMatchObject({ status: 409, body: { error: 'anonymous-user' } });
+    expect(await post('resetLink', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [GUEST])).rows).toEqual([]);
+    expect(await adminEvents(GUEST)).toEqual([]);
+  });
+
+  it('재설정 링크는 1시간 유효한 재설정 토큰으로 게임 착지 주소를 만들고, 그 토큰으로 비밀번호를 바꿀 수 있다', async () => {
+    const before = Date.now();
+    const res = await post('resetLink', { userId: TARGET });
+    expect(res.status).toBe(200);
+    const { url, expiresAt } = res.body as { url: string; expiresAt: string };
+    // 재설정 메일의 링크가 서버 콜백을 거쳐 도착하는 주소와 같다: 앱 주소의 루트에 token 질의
+    const token = /^http:\/\/localhost:3000\/\?token=([A-Za-z0-9]{24})$/.exec(url)?.[1];
+    expect(token, url).toBeDefined();
+    const ttl = Date.parse(expiresAt) - before;
+    expect(ttl).toBeGreaterThan(3590_000);
+    expect(ttl).toBeLessThan(3610_000);
+    const { rows } = await env.client.query(`select value, expires_at from auth.verifications where identifier = $1`, [`reset-password:${token}`]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe(TARGET);
+    expect((rows[0].expires_at as Date).toISOString()).toBe(new Date(expiresAt).toISOString());
+    expect(await adminEvents(TARGET)).toContainEqual({ type: 'adminResetLink', payload: { adminId: ADMIN, expiresAt } });
+
+    await expect(appAuth().api.resetPassword({ body: { newPassword: 'new-pass-906', token: token! } })).resolves.toEqual({ status: true });
+    expect((await env.client.query(`select 1 from auth.verifications where identifier = $1`, [`reset-password:${token}`])).rows).toEqual([]);
+    expect((await env.client.query(`select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [TARGET])).rows).toHaveLength(1);
   });
 });

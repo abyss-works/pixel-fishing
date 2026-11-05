@@ -157,3 +157,9 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
 }
 
 const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}}`}::bigint[]`;
+
+/** 저장 상태의 제재 여부를 바꾼다. 저장 상태가 없으면 바꾸지 않고 false를 돌려준다 */
+export async function setRestricted(db: Executor, uid: string, restricted: boolean): Promise<boolean> {
+  const result = await db.execute(sql`update public.saves_current set restricted = ${restricted} where user_id = ${uid}`);
+  return (result.rowCount ?? 0) > 0;
+}

@@ -36,3 +36,13 @@ export async function deleteEventsUpTo(db: Executor, maxId: number, cutoffISO: s
 export async function deleteUserEvents(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.events where user_id = ${uid}`);
 }
+
+/** 관리자 조치의 이벤트 유형. 제재, 제재 해제, 비밀번호 재설정 링크 발급이다 */
+export type AdminActionType = 'adminRestrict' | 'adminUnrestrict' | 'adminResetLink';
+
+/** 관리자 조치를 대상 사용자의 이벤트로 남긴다. 조치한 관리자 id는 payload.adminId다 */
+export async function recordAdminAction(db: Executor, uid: string, type: AdminActionType, adminId: string,
+  detail: Record<string, unknown> = {}): Promise<void> {
+  await db.execute(sql`insert into public.events (user_id, type, payload)
+    values (${uid}, ${type}, ${JSON.stringify({ adminId, ...detail })}::jsonb)`);
+}
