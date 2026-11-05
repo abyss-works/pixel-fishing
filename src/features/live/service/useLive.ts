@@ -6,7 +6,7 @@ import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
 import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
-import type { ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
+import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
@@ -25,6 +25,8 @@ const glides = new Map<string, Glide>();
 /** 다른 플레이어가 마지막으로 보낸 채팅과 받은 시각, 입력 중 표시를 켠 시각 — 머리 위 말풍선용(performance.now 기준) */
 const said = new Map<string, { text: string; at: number }>();
 const typingAt = new Map<string, number>();
+/** 내가 입력 중 표시를 켠 시각 — 서버는 내 입력 중 소식을 나에게 돌려주지 않으므로 보낼 때 기록한다 */
+let myTypingAt: number | null = null;
 /** 친구 알림 구독자 — 화면 상태가 아니라 한 번 일어나는 일이라 상태에 넣지 않고 바로 넘긴다 */
 type FriendEvent = Extract<ServerMessage, { t: 'friend' }>;
 const friendListeners = new Set<(e: FriendEvent) => void>();
@@ -55,6 +57,7 @@ function notify(): void {
 function reset(): void {
   state = EMPTY_LIVE;
   glides.clear();
+  myTypingAt = null;
   notify();
 }
 
@@ -92,15 +95,26 @@ export function useOnline(uid: string): boolean {
   return uid in s.others;
 }
 
-/** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
-export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: string | 'typing' | null }[] {
+type Speech = string | 'typing' | null;
+const speechOf = (b: Bubble | null): Speech => b ? (b.kind === 'chat' ? b.text : 'typing') : null;
+
+/**
+ * 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려주고, 내 머리 위 말풍선을 함께 돌려준다.
+ * 내 말풍선은 서버가 돌려준 내 월드 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
+ */
+export function liveFrame(region: string, now: number): {
+  others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech }[];
+  bubble: Speech;
+} {
   const wall = Date.now();
-  return othersInRegion(state, region).map(o => {
+  const others = othersInRegion(state, region).map(o => {
     const { uid, x, y, nick, line, bob } = o.presence;
     const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
-    const b = bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now);
-    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble: b ? (b.kind === 'chat' ? b.text : 'typing') : null };
+    const bubble = speechOf(bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now));
+    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble };
   });
+  const mine = state.you === null ? null : said.get(state.you) ?? null;
+  return { others, bubble: speechOf(bubbleOf(mine, myTypingAt, now)) };
 }
 
 /**
@@ -141,7 +155,9 @@ export function useChat(): ChatView {
 
 /** 입력 중 표시를 켜고 끈다. 연결이 끊긴 동안에는 버린다 */
 export function sendTyping(on: boolean): void {
-  conn?.send({ t: 'typing', on });
+  if (!conn) return;
+  conn.send({ t: 'typing', on });
+  myTypingAt = on ? performance.now() : null;
 }
 
 /** 그 방에 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
