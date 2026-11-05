@@ -15,6 +15,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/mail.ts': ['letters'],
   '_data/mailbox.ts': ['mails'],
   '_data/blocks.ts': ['blocks'],
+  '_data/chat.ts': ['chat_messages', 'chat_reports'],
   '_data/friends.ts': ['friends'],
   '_data/telemetry.ts': ['events'],
 };

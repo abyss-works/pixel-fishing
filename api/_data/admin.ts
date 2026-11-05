@@ -191,3 +191,11 @@ export function letters(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at, l.handled_at
     from public.letters l`, sql`t.created_at desc, t.id desc`);
 }
+
+/** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */
+export function chatReports(db: Executor): Promise<unknown[]> {
+  return jsonRows(db, sql`select r.id, r.user_id, r.message_id, r.target_id, r.lines, r.created_at
+    from public.chat_reports r
+    order by r.created_at desc, r.id desc
+    limit 200`, sql`t.created_at desc, t.id desc`);
+}

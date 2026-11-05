@@ -33,9 +33,12 @@ import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
-import { useLive } from '../../../features/live/service/useLive';
+import { useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
 import PresenceChip from '../overlays/live/PresenceChip';
+import ChatBar from '../overlays/live/ChatBar';
+import { chatMessages } from '../overlays/live/chatFeed';
+import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
@@ -80,6 +83,10 @@ export default function GameView(props: GameViewProps) {
   useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
   useTutorialTrigger('sea', atSea);
   useLive();
+  const chat = useChat();
+  /** 메시지 창에서 고른 다른 사람의 채팅 글줄 — 신고·차단 대상 */
+  const [pickedLine, setPickedLine] = useState<Msg | null>(null);
+  const log = chat.enabled ? mergeMessages(props.log, chatMessages(chat.lines)) : props.log;
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -150,7 +157,9 @@ export default function GameView(props: GameViewProps) {
                  initialPos={props.entryPos ?? undefined} />
         )}
 
-        <HudLayout game={game} scene={scene} log={props.log} covered={covered}
+        <HudLayout game={game} scene={scene} log={log} covered={covered}
+                   logFooter={chat.enabled ? <ChatBar picked={pickedLine} onDone={() => setPickedLine(null)} /> : null}
+                   onPickLine={chat.enabled ? m => setPickedLine(m.from?.uid === chat.you ? null : m) : undefined}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? (
                      <div className="flex flex-col gap-2">

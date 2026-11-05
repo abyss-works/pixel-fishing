@@ -1,15 +1,16 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { openLive } from '../../../platform/api';
+import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
 import type { ServerMessage } from '../../../game/rules/live';
 import { followTarget, LIVE_MOVE_MS } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
-import { applyLiveMessage, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion } from '../model/live';
-import type { LiveState, MyPosition, SentPosition } from '../model/live';
+import { applyLiveMessage, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
+import type { ChatError, LiveState, MyPosition, SentPosition } from '../model/live';
+import type { ChatLine } from '../../../game/rules/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
 // 연결은 로그인 쿠키로 인증되므로 세션이 선 뒤 열고, 계정이 바뀌면 새 쿠키로 다시 연다.
-// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동 때만 알린다.
+// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동·채팅 때만 알린다.
 
 let state: LiveState = EMPTY_LIVE;
 let conn: LiveConnection | null = null;
@@ -26,15 +27,19 @@ function receive(msg: ServerMessage): void {
   if (msg.t === 'hello') { helloCount++; drawn.clear(); }
   if (msg.t === 'leave') drawn.delete(msg.uid);
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
-  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || regionChanged) {
-    for (const listener of listeners) listener();
+  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged) {
+    notify();
   }
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
 }
 
 function reset(): void {
   state = EMPTY_LIVE;
   drawn.clear();
-  for (const listener of listeners) listener();
+  notify();
 }
 
 const subscribe = (listener: () => void) => {
@@ -89,4 +94,37 @@ export function useLivePosition(read: () => MyPosition): void {
     }, LIVE_MOVE_MS);
     return () => clearInterval(timer);
   }, [read]);
+}
+
+export interface ChatView {
+  /** 채팅을 쓸 수 있는 환경인가. 로컬 모드에는 실시간 채널이 없다 */
+  enabled: boolean;
+  /** 내 id. 연결 전에는 null */
+  you: string | null;
+  lines: readonly ChatLine[];
+  error: ChatError | null;
+}
+
+/** 채팅 목록과 마지막 거부 이유 */
+export function useChat(): ChatView {
+  const s = useSyncExternalStore(subscribe, getState, getState);
+  return { enabled: liveAvailable, you: s.you, lines: s.chat, error: s.chatError };
+}
+
+/** 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
+export function sendChat(text: string): void {
+  conn?.send({ t: 'chat', text });
+}
+
+/** 보이고 있는 거부 이유를 지운다 */
+export function clearChatError(): void {
+  if (state.chatError === null) return;
+  state = { ...state, chatError: null };
+  notify();
+}
+
+/** 차단한 사람의 채팅 줄을 화면에서 지운다 */
+export function hideAuthor(uid: string): void {
+  state = withoutAuthor(state, uid);
+  notify();
 }

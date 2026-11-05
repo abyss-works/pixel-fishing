@@ -18,6 +18,14 @@ export async function blockedIds(db: Executor, uid: string): Promise<string[]> {
   return rows.map(r => r.id);
 }
 
+/** 내가 차단한 사람과 표시 이름(차단 목록 화면용). 프로필이 없으면 이름은 null이다 */
+export async function blockedUsers(db: Executor, uid: string): Promise<{ uid: string; nick: string | null }[]> {
+  const { rows } = await db.execute<{ uid: string; nick: string | null }>(sql`select b.blocked_id::text as uid, p.nickname as nick
+    from public.blocks b left join public.profiles p on p.user_id = b.blocked_id
+    where b.user_id = ${uid} order by b.created_at, b.blocked_id`);
+  return rows;
+}
+
 /** 계정 정리에서 그 사용자가 차단한 행과 그 사용자를 차단한 행을 지운다 */
 export async function deleteUserBlocks(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.blocks where user_id = ${uid} or blocked_id = ${uid}`);

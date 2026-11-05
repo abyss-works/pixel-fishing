@@ -74,6 +74,7 @@ class LocalAdmin implements AdminApi {
   spamFlags(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
+  chatReports(): Promise<never[]> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }

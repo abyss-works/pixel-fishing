@@ -3,10 +3,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../_data/account.js', () => ({ selectPurgeTargets: vi.fn(), purgeAccount: vi.fn() }));
+vi.mock('../_data/chat.js', () => ({ deleteExpiredChat: vi.fn() }));
 vi.mock('../_db/client.js', () => ({ database: vi.fn(() => ({ db: 'DB', withTransaction: 'TX' })) }));
 vi.mock('../observability.js', () => ({ reportServerIssue: vi.fn(async () => undefined) }));
 import handler from './purge-anon.js';
 import { purgeAccount, selectPurgeTargets } from '../_data/account.js';
+import { deleteExpiredChat } from '../_data/chat.js';
 import { reportServerIssue } from '../observability.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
@@ -40,12 +42,14 @@ describe('api/cron/purge-anon 핸들러', () => {
     vi.stubEnv('DATABASE_URL', 'postgres://user:pass@127.0.0.1:1/none');
     vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
     vi.mocked(purgeAccount).mockResolvedValue(true);
+    vi.mocked(deleteExpiredChat).mockResolvedValue({ messages: 0, reports: 0 });
   });
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.mocked(selectPurgeTargets).mockReset();
     vi.mocked(purgeAccount).mockReset();
+    vi.mocked(deleteExpiredChat).mockReset();
     vi.mocked(reportServerIssue).mockClear();
   });
 
@@ -80,10 +84,19 @@ describe('api/cron/purge-anon 핸들러', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({
       dryRun: true, cutoff: CUTOFF, targets: 3, batch: 3, deleted: 0, skipped: 0, failed: 0,
-      sample: ['3f2a91bc', '3f2a91bc', '3f2a91bc'],
+      sample: ['3f2a91bc', '3f2a91bc', '3f2a91bc'], chat: { messages: 0, reports: 0 },
     });
     expect(selectPurgeTargets).toHaveBeenCalledWith('DB', CUTOFF, 500);
     expect(purgeAccount).not.toHaveBeenCalled();
+  });
+
+  it('dry-run이어도 보관 기간이 지난 채팅과 신고를 지우고 지운 수를 요약에 싣는다', async () => {
+    targets(0);
+    vi.mocked(deleteExpiredChat).mockResolvedValue({ messages: 7, reports: 2 });
+    const res = await call();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ dryRun: true, chat: { messages: 7, reports: 2 } });
+    expect(deleteExpiredChat).toHaveBeenCalledWith('DB', NOW);
   });
 
   it.each(['', '0', 'true', 'yes', ' 1', '1 '])('PURGE_ANON_ENABLED가 %j이면 dry-run이다', async value => {
@@ -126,7 +139,7 @@ describe('api/cron/purge-anon 핸들러', () => {
     vi.stubEnv('PURGE_ANON_ENABLED', '1');
     targets(0);
     const res = await call();
-    expect(res.body).toEqual({ dryRun: false, cutoff: CUTOFF, targets: 0, batch: 0, deleted: 0, skipped: 0, failed: 0, sample: [] });
+    expect(res.body).toEqual({ dryRun: false, cutoff: CUTOFF, targets: 0, batch: 0, deleted: 0, skipped: 0, failed: 0, sample: [], chat: { messages: 0, reports: 0 } });
     expect(purgeAccount).not.toHaveBeenCalled();
   });
 

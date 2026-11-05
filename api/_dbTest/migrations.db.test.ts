@@ -172,7 +172,6 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
-
   describe('편지 처리 시각 (0022)', () => {
     const column = async (c: Client): Promise<{ nullable: string }[]> => (await c.query<{ nullable: string }>(
       `select is_nullable as nullable from information_schema.columns
@@ -191,6 +190,26 @@ describe('테스트 데이터베이스', () => {
         await other.query(down);
         expect(await column(other)).toEqual([]);
         expect((await other.query('select * from public.v_admin_letters')).rows).toEqual([]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('채팅 메시지·신고 (0024)', () => {
+    it('되돌리기 SQL은 채팅 표 둘만 지운다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const tables = async (c: Client) => (await c.query<{ name: string }>(
+          `select table_name as name from information_schema.tables where table_schema = 'public'
+           and table_name in ('chat_messages', 'chat_reports', 'blocks') order by table_name`)).rows.map(r => r.name);
+        expect(await tables(other)).toEqual(['blocks', 'chat_messages', 'chat_reports']);
+        const down = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '0024_chat.down.sql'), 'utf8');
+        await other.query(down);
+        expect(await tables(other)).toEqual(['blocks']);
       } finally {
         await other.end();
         await copy.drop();

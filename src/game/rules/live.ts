@@ -63,6 +63,33 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
 }
 
+/** 채팅 한 메시지의 최대 길이(문자 수, 앞뒤 공백을 지운 뒤) */
+export const CHAT_MAX_LENGTH = 100;
+/** 채팅 도배 판정의 슬라이딩 윈도우 길이 */
+export const CHAT_RATE_WINDOW_MS = 10_000;
+/** 슬라이딩 윈도우 안에서 계정 하나가 보낼 수 있는 메시지 수 */
+export const CHAT_RATE_MAX = 25;
+/** 연결 직후 hello에 싣는 최근 대화 수 */
+export const CHAT_RECENT = 50;
+
+/** 보낼 채팅 본문. 앞뒤 공백을 지운 뒤 1~100자가 아니면 null이다 */
+export function chatText(raw: string): string | null {
+  const text = raw.trim();
+  const length = [...text].length;
+  return length >= 1 && length <= CHAT_MAX_LENGTH ? text : null;
+}
+
+/**
+ * 슬라이딩 윈도우 도배 판정. 최근 10초 안에 보낸 메시지가 25개면 거부한다.
+ * @param sentAt 지금까지 보낸 시각(오름차순)
+ * @returns 보낼 수 있는지와, 창 안의 기록만 남긴 다음 기록(허용이면 now를 더한다)
+ */
+export function chatRate(sentAt: readonly number[], now: number): { ok: boolean; window: number[] } {
+  const window = sentAt.filter(t => now - t < CHAT_RATE_WINDOW_MS);
+  if (window.length >= CHAT_RATE_MAX) return { ok: false, window };
+  return { ok: true, window: [...window, now] };
+}
+
 /** 이동 중 위치 송신 주기(5Hz). 보간이 사이를 메우므로 더 자주 보낼 필요가 없다 */
 export const LIVE_MOVE_MS = 200;
 /** 이동 중인 플레이어에게서 이 시간 동안 받은 것이 없으면 반투명으로 그린다 */

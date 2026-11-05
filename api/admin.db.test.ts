@@ -391,6 +391,16 @@ describe('조회 결과', () => {
     expect((await callAdmin({ q: 'userEvents', user: testUid(777) }, token)).body).toEqual([]);
   });
 
+  it('chatReports: 관리자만 읽고 최신순으로 신고와 대화 복사본을 준다', async () => {
+    await env.client.query(`insert into public.chat_reports (user_id, message_id, target_id, lines, created_at) values
+      ($1, 1, $2, '[{"id":1,"uid":"x","nick":"n","text":"먼저","at":"a"}]', now() - interval '2 days'),
+      ($1, 2, $2, '[{"id":2,"uid":"x","nick":"n","text":"나중","at":"a"}]', now() - interval '1 day')`, [PLAYER, GUEST]);
+    expect((await callAdmin({ q: 'chatReports' }, userToken(PLAYER))).status).toBe(403);
+    const rows = (await callAdmin({ q: 'chatReports' }, userToken(ADMIN))).body as Row[];
+    expect(rows.map(r => [r.user_id, r.message_id, r.target_id, (r.lines as { text: string }[])[0].text]))
+      .toEqual([[PLAYER, 2, GUEST, '나중'], [PLAYER, 1, GUEST, '먼저']]);
+  });
+
   it('letters: 최신순으로 본문과 보낸 사용자를 준다', async () => {
     const rows = (await callAdmin({ q: 'letters' }, userToken(ADMIN))).body as Row[];
     expect(rows.map(r => [r.user_id, r.text])).toEqual([[PLAYER, '바다가 좋아요'], [ADMIN, '안녕하세요'], [GUEST, '문의합니다']]);
