@@ -132,7 +132,7 @@ export function handoverOutcome(actor: GuildActor, targetUid: string): 'ok' | 's
 export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up';
 
 /** 길드원 한 사람이 하루(게임 날짜)에 명성으로 쌓을 수 있는 기여 */
-export const GUILD_DAILY_FAME_CAP = 1_000;
+export const GUILD_DAILY_FAME_CAP = 2_000;
 /** 의뢰 클리어 한 번의 기여 — 명성 기여의 하루 상한과 별개다 */
 const CLEAR_CONTRIBUTION = { general: 500, named: 1_000 } as const;
 

@@ -60,14 +60,14 @@ describe('기여', () => {
     expect(await env.client.query('select 1 from public.guild_contributions where user_id = $1', [solo])).toMatchObject({ rowCount: 0 });
   });
 
-  it('명성 기여는 하루 1,000에서 멈추고, 전날의 기여는 상한에 들지 않는다', async () => {
+  it('명성 기여는 하루 2,000에서 멈추고, 전날의 기여는 상한에 들지 않는다', async () => {
     const { uid, guild } = await member();
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values
-      ($1, $2, $3, 1000, 0), ($1, $2, $4, 998, 0)`, [guild, uid, YESTERDAY, TODAY]);
+      ($1, $2, $3, 2000, 0), ($1, $2, $4, 1998, 0)`, [guild, uid, YESTERDAY, TODAY]);
     expect((await callAction(userToken(uid), catchPond)).status).toBe(200);
     expect(await contributions(uid)).toEqual([
-      { day: YESTERDAY, fame: 1000, clears: 0 },
-      { day: TODAY, fame: 1000, clears: 0 },
+      { day: YESTERDAY, fame: 2000, clears: 0 },
+      { day: TODAY, fame: 2000, clears: 0 },
     ]);
   });
 

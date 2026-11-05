@@ -138,7 +138,7 @@ describe('길드장 위임', () => {
 
 describe('하루 기여 상한', () => {
   it('명성 기여 상한과, 의뢰 갈래마다 하루 클리어 횟수만큼의 클리어 기여', () => {
-    expect(guildDailyContributionCaps()).toEqual({ fame: 1_000, general: 500, named: 1_000 });
+    expect(guildDailyContributionCaps()).toEqual({ fame: 2_000, general: 500, named: 1_000 });
   });
 });
 
@@ -256,9 +256,9 @@ describe('길드 성장 — 기여', () => {
     expect(contributionFor(-50, null)).toEqual({ fame: 0, clears: 0 });
   });
 
-  it('명성 기여의 하루 상한은 1,000이고 클리어 기여는 상한과 별개다', () => {
-    expect(GUILD_DAILY_FAME_CAP).toBe(1_000);
-    expect(contributionFor(5_000, named)).toEqual({ fame: 1_000, clears: 1_000 });
+  it('명성 기여의 하루 상한은 2,000이고 클리어 기여는 상한과 별개다', () => {
+    expect(GUILD_DAILY_FAME_CAP).toBe(2_000);
+    expect(contributionFor(5_000, named)).toEqual({ fame: 2_000, clears: 1_000 });
   });
 
   it('기여의 하루는 게임 날짜다(한국 시간 새벽 4시 경계)', () => {

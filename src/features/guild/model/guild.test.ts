@@ -121,7 +121,7 @@ describe('길드 성장 화면 모델', () => {
 describe('오늘 기여 도움말', () => {
   it('하루 기여 상한을 갈래별 이름과 값의 목록으로 보인다', () => {
     expect(dailyContributionRows()).toEqual([
-      { label: '명성', value: '1,000' },
+      { label: '명성', value: '2,000' },
       { label: '일반 의뢰', value: '500' },
       { label: '네임드 토벌', value: '1,000' },
     ]);
