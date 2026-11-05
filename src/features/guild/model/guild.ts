@@ -1,6 +1,6 @@
 import type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
 import {
-  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, guildDailyContributionCaps, handoverOutcome, removalOutcome,
+  GUILD_BONUS_IDS, GUILD_INVITE_TTL_MS, guildDailyContributionCaps, handoverOutcome, removalOutcome,
 } from '../../../game/rules/guild';
 import type { GuildBonusId } from '../../../game/rules/guild';
 import { FISH } from '../../../game/content/fish';
@@ -111,9 +111,9 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
   return growth.next === null ? num(growth.total) : `${num(growth.total)} / ${num(growth.next)}`;
 }
 
-/** 기여가 쌓이는 방식과 레벨, 길드 스킬의 관계 */
-export const GUILD_CONTRIBUTION_HELP = `길드원이 얻은 명성만큼 기여가 쌓여요. 한 사람당 하루 ${num(GUILD_DAILY_FAME_CAP)}까지예요. `
-  + '일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 레벨이 오르면 길드 스킬이 하나씩 열리고, 단계는 기부로 올려요.';
+/** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
+export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요. '
+  + '레벨이 오르면 길드 스킬이 하나씩 열리고, 스킬마다 올릴 수 있는 단계 상한도 올라가요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한 */
 export function dailyContributionRows(): { label: string; value: string }[] {
