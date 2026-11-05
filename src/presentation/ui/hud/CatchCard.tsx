@@ -21,7 +21,7 @@ const VARIANT_LINES = [
 
 // 획득 오버레이 — 게임 프레임 중앙에 뜨는 DOM 카드. 등급색 테두리(알파 70%)의 노치 패널이다.
 // 스프라이트만 캔버스, 나머지(이름/크기/판매가/월척/변이/NEW)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
-// 크기와 판매가는 두 칸으로 나누고, 월척 줄(골드 왕관)은 월척이 아니어도 자리를 비워 둔다.
+// 크기와 판매가는 두 칸으로 나누고, 월척 줄(골드 왕관)은 월척일 때만 둔다. 잠깐 떴다 사라지는 카드라 자리를 비워 두지 않고 높이를 줄인다.
 // 신규 발견은 왼쪽 위 모서리의 골드 노치 꼬리표다.
 export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo | null }) {
   const r = RARITY[fish.rarity];
@@ -73,7 +73,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         ))}
       </div>
       <HudPanel tone="none"
-                className="flex flex-col items-center gap-1.5 min-w-[250px] px-[18px] py-3.5
+                className="flex flex-col items-center gap-1 min-w-[240px] px-3.5 py-2.5
                            bg-[color-mix(in_oklab,var(--c-bg)_85%,transparent)] shadow-panel
                            border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]">
         <span className="text-sm font-bold"><RarityText rarity={fish.rarity} /></span>
@@ -91,9 +91,11 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
             판매가<b className="pf-accent text-gold">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
           </span>
         </span>
-        <span className="flex items-center gap-1 h-4 text-xs text-gold">
-          {info?.isBig && <><PixelIcon glyph="crown" size={12} />월척 <span className="pf-accent">상위 {info.percentile}%</span></>}
-        </span>
+        {info?.isBig && (
+          <span className="flex items-center gap-1 text-xs text-gold">
+            <PixelIcon glyph="crown" size={12} />월척 <span className="pf-accent">상위 {info.percentile}%</span>
+          </span>
+        )}
       </HudPanel>
       {/* 신규 발견 — 왼쪽 위 모서리의 골드 노치 꼬리표 */}
       {info?.isNew && (

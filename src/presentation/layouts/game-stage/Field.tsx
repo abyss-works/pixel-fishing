@@ -167,13 +167,13 @@ export default function Field({
                 onClick={() => engine.action()} />
       )}
       <NightOverlay />
-      {/* 낚시 상태 — 메시지 창 윗선보다 위의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
+      {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
           {snapshot.phase === 'catch' && fish ? (
             <CatchCard fish={fish} info={snapshot.catchInfo} />
           ) : (
-            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-[270px] z-(--z-overlay)
+            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-3 z-(--z-overlay)
                                  max-w-[min(480px,calc(100%-24px))] px-3.5 py-1.5 whitespace-pre-line
                                  text-sm text-center text-text pointer-events-none animate-overlay-in">
               {STATUS[snapshot.phase]}
