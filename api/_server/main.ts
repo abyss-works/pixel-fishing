@@ -7,6 +7,7 @@ import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
 import action from '../action.js';
 import admin from '../admin.js';
+import awayReport from '../awayReport.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
 import friends from '../friends.js';
@@ -44,6 +45,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/admin/stats/daily': admin,
   '/api/admin/retention': admin,
   '/api/admin/sessions': admin,
+  '/api/away-report': awayReport,
   // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
   '/api/blocks': blocks,
   '/api/blocks/:uid': blocks,
