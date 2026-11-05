@@ -14,7 +14,6 @@ vi.mock('../../../../platform/api', async importOriginal => {
   };
 });
 
-import MailboxButton from './MailboxButton';
 import MailboxModal from './MailboxModal';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
@@ -28,32 +27,6 @@ function wrap(node: ReactNode) {
 }
 
 afterEach(() => { cleanup(); state.mails = null; state.read = []; });
-
-describe('우편함 버튼', () => {
-  it('로컬 모드(우편함 없음)에서는 그리지 않는다', async () => {
-    const toast = vi.fn();
-    wrap(<MailboxButton onOpen={() => {}} setToast={toast} />);
-    await waitFor(() => expect(screen.queryByRole('button', { name: /우편함/ })).not.toBeInTheDocument());
-    await new Promise(r => setTimeout(r, 0));
-    expect(screen.queryByRole('button', { name: /우편함/ })).not.toBeInTheDocument();
-    expect(toast).not.toHaveBeenCalled();
-  });
-
-  it('남은 우편 수를 붙이고, 처음 확인했을 때 안내를 한 번만 띄운다', async () => {
-    state.mails = [mail({ id: 1, gold: 100 }), mail({ id: 2, readAt: '2026-10-23T01:00:00.000Z' }), mail({ id: 3 })];
-    const toast = vi.fn();
-    const onOpen = vi.fn();
-    const view = wrap(<MailboxButton onOpen={onOpen} setToast={toast} />);
-    const button = await screen.findByRole('button', { name: '우편함, 받지 않은 우편 2통' });
-    expect(button).toHaveTextContent('2');
-    view.again(<MailboxButton onOpen={onOpen} setToast={toast} />);
-    await screen.findByRole('button', { name: '우편함, 받지 않은 우편 2통' });
-    expect(toast).toHaveBeenCalledTimes(1);
-    expect(toast).toHaveBeenCalledWith('받지 않은 우편이 있어요. 오른쪽 위 우편함에서 확인해 주세요.', 'gold');
-    fireEvent.click(button);
-    expect(onOpen).toHaveBeenCalled();
-  });
-});
 
 describe('우편함 창', () => {
   it('우편을 고르면 본문을 보이고 읽음을 남긴다. 골드 우편은 받기로 받는다', async () => {

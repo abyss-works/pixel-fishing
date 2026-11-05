@@ -27,11 +27,9 @@ import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
-import MailboxButton from '../overlays/mailbox/MailboxButton';
+import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
-import FriendsButton from '../overlays/friends/FriendsButton';
 import FriendsModal from '../overlays/friends/FriendsModal';
-import GuildButton from '../overlays/guild/GuildButton';
 import GuildModal from '../overlays/guild/GuildModal';
 import { useGuild } from '../../../features/guild/service/useGuild';
 import { useFriendAlerts } from '../../../features/friends/service/useFriendAlerts';
@@ -240,10 +238,10 @@ export default function GameView(props: GameViewProps) {
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
         )}
-        <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
-        <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
+        <GameMenu account={props.account} setToast={props.setToast}
+                  onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
+                  onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
-        <GuildButton account={props.account} onOpen={() => setGuildOpen(true)} />
         {guildOpen && <GuildModal setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {playersOpen && atSea && (
           <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
