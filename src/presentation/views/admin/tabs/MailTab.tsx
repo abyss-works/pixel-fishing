@@ -7,6 +7,7 @@ import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
 import { fmtGold } from '../../../ui/format';
 import Note from '../../../ui/Note';
+import SelectList from '../../../ui/SelectList';
 import SubTabs from '../../../ui/SubTabs';
 import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
@@ -146,18 +147,12 @@ export default function MailTab({ to = null }: {
                 <Field label="계정 찾기" hint="이메일이나 닉네임 일부를 입력하고, 결과를 누르면 아래 목록에 더해요.">
                   <TextInput value={search} onChange={e => setSearch(e.target.value)} placeholder="이메일 또는 닉네임" />
                 </Field>
-                {search.trim() !== '' && (
-                  <ul aria-label="검색 결과" className="flex flex-col divide-y divide-line border border-line">
-                    {found.map(u => (
-                      <li key={u.user_id}>
-                        <button type="button" onClick={() => pick(u.user_id)}
-                                className="w-full px-2 py-1 text-left text-xs hover:bg-surface-2">
-                          {adminUserLabel(u)}
-                        </button>
-                      </li>
-                    ))}
-                    {found.length === 0 && <li className="px-2 py-1 text-xs text-text-dim">찾는 계정이 없어요.</li>}
-                  </ul>
+                {found.length > 0 && (
+                  <SelectList label="검색 결과" items={found} keyOf={u => u.user_id} selectedKey="" onSelect={pick}
+                              renderItem={u => <span className="text-xs">{adminUserLabel(u)}</span>} />
+                )}
+                {search.trim() !== '' && found.length === 0 && (
+                  <Note size="xs" className="my-0">찾는 계정이 없어요.</Note>
                 )}
                 <Field label="받는 사람(한 줄에 '계정 id 골드')"
                        error={parsed.badLines.length > 0 ? `형식이 틀린 줄: ${parsed.badLines.join(', ')}` : undefined}>

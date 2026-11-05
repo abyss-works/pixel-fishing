@@ -80,9 +80,9 @@ describe('MailTab', () => {
     await screen.findByText('지난 우편');
     const search = screen.getByLabelText(/계정 찾기/);
     fireEvent.change(search, { target: { value: '바다' } });
-    fireEvent.click(screen.getByRole('button', { name: 'friend@example.com · 바다친구' }));
+    fireEvent.click(screen.getByRole('option', { name: 'friend@example.com · 바다친구' }));
     fireEvent.change(search, { target: { value: '민물' } });
-    fireEvent.click(screen.getByRole('button', { name: '민물러' }));
+    fireEvent.click(screen.getByRole('option', { name: '민물러' }));
     const list = screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement;
     expect(list.value).toBe(`${USER} 0\ne747e6c9-f0c2-4192-a462-9cd26e8a812a 0`);
     expect(screen.getByText('받는 사람 2명: friend@example.com · 바다친구, 민물러')).toBeTruthy();
