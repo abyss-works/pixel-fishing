@@ -62,9 +62,12 @@ const noCloudAdminData = (): Error =>
 const rejected = <T>(): Promise<T> => Promise.reject(noCloudAdminData());
 
 class LocalAdmin implements AdminApi {
+  isConfigured = false;
   async access(): Promise<{ kind: 'local'; uid: null }> {
     return { kind: 'local', uid: null };
   }
+  signIn(_email: string, _password: string): Promise<never> { return rejected(); }
+  signOut(): Promise<never> { return rejected(); }
   users(): Promise<never[]> { return rejected(); }
   live(): Promise<never> { return rejected(); }
   dailyStats(_from: string, _to: string): Promise<never[]> { return rejected(); }

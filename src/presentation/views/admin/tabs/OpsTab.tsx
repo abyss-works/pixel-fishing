@@ -34,11 +34,8 @@ export default function OpsTab() {
 
         <Cell title="권한">
           {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
-          {access === 'denied' &&
-            <Note tone="warn" className="my-0">이 세션은 admins에 등록되지 않았어요. uid는 SQL Editor에서 INSERT해 주세요.</Note>}
           {access === 'granted' &&
             <Note className="my-0"><span className="pf-accent text-gold">관리자 세션</span>이에요. 모든 뷰를 볼 수 있어요.</Note>}
-          {access === 'checking' && <Note size="xs" className="my-0">확인 중…</Note>}
         </Cell>
 
         <Cell title="관측">
