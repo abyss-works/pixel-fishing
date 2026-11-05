@@ -37,7 +37,7 @@ describe('공개 프로필 읽기', () => {
 
   it('게스트도 다른 사용자의 공개 프로필을 읽는다', async () => {
     expect(await callPlayer(TARGET, userToken(GUEST))).toEqual({ status: 200,
-      body: { nickname: '갈치', boat: 1, fame: 40, dex: 1, account: true } });
+      body: { nickname: '갈치', boat: 1, rod: 1, fame: 40, dexFish: ['crucian'], artifacts: [], account: true } });
   });
 
   it('형식이 틀린 uid는 400, 없는 사용자는 404다', async () => {

@@ -48,19 +48,31 @@ export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: s
   return { nick: rows[0]?.nick ?? null, boat: rows[0]?.boat ?? 0 };
 }
 
-/** 다른 사용자에게 보이는 공개 프로필. 도감 수는 일반 폼으로 한 번이라도 낚은 어종 수(도감 순위와 같은 기준)다 */
-export interface PublicProfile { nickname: string | null; boat: number; fame: number; dex: number; account: boolean }
+/**
+ * 다른 사용자에게 보이는 공개 프로필. dexFish는 일반 폼으로 한 번이라도 낚은 어종 id(도감 순위와 같은 기준),
+ * artifacts는 가진 유물 id다. 골드·가방·순위는 주지 않는다
+ */
+export interface PublicProfile {
+  nickname: string | null; boat: number; rod: number; fame: number;
+  dexFish: string[]; artifacts: string[]; account: boolean;
+}
 
-/** 공개 프로필을 읽는다. 사용자가 없으면 null. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0이다 */
+/** 공개 프로필을 읽는다. 사용자가 없으면 null. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0, 낚싯대는 1이다 */
 export async function publicProfile(db: Executor, uid: string): Promise<PublicProfile | null> {
-  const { rows } = await db.execute<{ nickname: string | null; boat: number | null; fame: string | number | null;
-    dex: number; account: boolean }>(sql`select p.nickname, c.boat, c.fame, not u.is_anonymous as account,
-      (select count(*)::int from public.records r where r.user_id = u.id and r.form = 'normal' and r.count > 0) as dex
+  const { rows } = await db.execute<{ nickname: string | null; boat: number | null; rod: number | null;
+    fame: string | number | null; artifacts: unknown; dex_fish: string[]; account: boolean }>(sql`select
+      p.nickname, c.boat, c.rod, c.fame, c.data->'artifacts' as artifacts, not u.is_anonymous as account,
+      array(select r.fish_id from public.records r
+        where r.user_id = u.id and r.form = 'normal' and r.count > 0 order by r.fish_id) as dex_fish
     from auth.users u
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id
     where u.id = ${uid}`);
   const r = rows[0];
   if (!r) return null;
-  return { nickname: r.nickname, boat: r.boat ?? 0, fame: Number(r.fame ?? 0), dex: r.dex, account: r.account };
+  const artifacts = Array.isArray(r.artifacts) ? r.artifacts.filter((a): a is string => typeof a === 'string') : [];
+  return {
+    nickname: r.nickname, boat: r.boat ?? 0, rod: r.rod ?? 1, fame: Number(r.fame ?? 0),
+    dexFish: r.dex_fish, artifacts, account: r.account,
+  };
 }

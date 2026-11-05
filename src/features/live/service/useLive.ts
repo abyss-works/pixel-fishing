@@ -76,6 +76,12 @@ export function usePlayersIn(region: string): { uid: string; nick: string }[] {
   return othersInRegion(s, region).map(o => ({ uid: o.presence.uid, nick: o.presence.nick }));
 }
 
+/** 그 플레이어가 지금 실시간 채널에 접속해 있는가 — 위치를 한 번이라도 보낸 연결만 접속으로 본다 */
+export function useOnline(uid: string): boolean {
+  const s = useSyncExternalStore(subscribe, getState, getState);
+  return uid in s.others;
+}
+
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
 export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; stale: boolean; bubble: string | 'typing' | null }[] {
   const wall = Date.now();
