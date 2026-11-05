@@ -5,12 +5,14 @@
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
 // 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이, 차단 해제는 소셜 창의 차단 탭이 맡는다.
 // 서버가 거부한 이유는 입력 줄 위에 짧게 보인다.
-// 입력 줄 앞의 방 버튼으로 보낼 곳(월드·길드)을 바꾼다. 길드가 없으면 버튼은 회색으로 보이고 언제나 월드로 보낸다.
-import { useRef, useState } from 'react';
+// 입력 줄 앞의 방 버튼이나 입력 중 Tab으로 보낼 곳(월드·길드)을 바꾼다. 길드가 없으면 버튼은 회색으로 보이고 언제나 월드로 보낸다.
+// 입력 줄의 열림과 보낼 방은 채팅 입력 상태머신(chatInputReducer)이 정한다. 입력 중 Tab은 포커스를 옮기지 않는다.
+import { useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
 import type { ChatError, ChatRoom } from '../../../../features/live/model/live';
+import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf } from '../../../../features/live/model/chatInput';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PillButton from '../../../ui/PillButton';
 import TextInput from '../../../ui/TextInput';
@@ -30,13 +32,12 @@ const ROOM_LABEL: Record<ChatRoom, string> = { world: '월드', guild: '길드' 
 export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
   const chat = useChat();
   const [text, setText] = useState('');
-  const [picked, setPicked] = useState<ChatRoom>('world');
-  const room: ChatRoom = inGuild ? picked : 'world';
+  const [input, dispatch] = useReducer(chatInputReducer, CHAT_INPUT_INITIAL);
+  const room = chatRoomOf(input, inGuild);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  // 입력 줄에 포커스가 있고 글이 있는 동안 다른 사람에게 입력 중 표시를 보인다
-  const [focused, setFocused] = useState(false);
-  useTypingSignal(focused && text.trim() !== '');
+  // 입력 줄이 열려 있고 글이 있는 동안 다른 사람에게 입력 중 표시를 보인다
+  useTypingSignal(input.mode === 'typing' && text.trim() !== '');
 
   useKeyScope(e => {
     if (e.key !== 'Enter' || e.repeat || e.isComposing || hasModifier(e)) return;
@@ -47,6 +48,12 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      dispatch({ type: 'tab', inGuild });
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (e.repeat) return;
@@ -63,11 +70,11 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
       <div className="flex items-center gap-1">
         <PillButton active={room === 'guild'} disabled={!inGuild} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                     title={inGuild ? '보낼 곳 바꾸기' : '길드에 들어가면 길드 채팅을 쓸 수 있어요'}
-                    onClick={() => setPicked(room === 'guild' ? 'world' : 'guild')}>{ROOM_LABEL[room]}</PillButton>
+                    onClick={() => dispatch({ type: 'toggleRoom', inGuild })}>{ROOM_LABEL[room]}</PillButton>
         <TextInput ref={inputRef} compact className="flex-1 min-w-0" aria-label="채팅 입력"
                    placeholder={`${room === 'guild' ? '길드 채팅' : '채팅'} (Enter로 입력·보내기)`}
                    maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
-                   onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+                   onFocus={() => dispatch({ type: 'open' })} onBlur={() => dispatch({ type: 'close' })}
                    onChange={e => { setText(e.target.value); clearChatError(); }} />
       </div>
     </div>
