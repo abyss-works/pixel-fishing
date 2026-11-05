@@ -19,6 +19,9 @@ export function createApi(): ApiClient {
 // 편의를 위한 싱글톤 (테스트는 createApi()로 격리 생성)
 export const api = createApi();
 
+/** 실시간 채널을 쓸 수 있는가. 로컬 모드에는 게임 서버가 없다 */
+export const liveAvailable = isCloud;
+
 /** 실시간 채널에 연결한다. 로컬 모드에는 게임 서버가 없어 연결하지 않고 null을 돌려준다 */
 export function openLive(onMessage: (msg: ServerMessage) => void): LiveConnection | null {
   return isCloud ? connectLive(onMessage) : null;
@@ -29,6 +32,8 @@ export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
 export { readRanking } from '../adapters/ranking';
 export { readMails, markMailRead } from '../adapters/mailbox';
+export { readBlocks, changeBlock, reportChat } from '../adapters/chat';
+export type { BlockedUser, ChatActionError } from '../adapters/chat';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,

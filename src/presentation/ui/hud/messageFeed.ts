@@ -1,8 +1,8 @@
 // 메시지 피드 — HUD 메시지 창이 보여 주는 기록의 형식과 보관 규칙(순수 함수).
-// 지금은 시스템 메시지 채널 하나다. 멀티플레이 채팅은 채널(MessageChannel)과 보낸 사람(author)을
-// 더하는 것으로 들어온다 — 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 채널 탭을 그린다.
+// 채널은 시스템 메시지와 채팅이다. 채팅 글줄은 보낸 사람(author)과 원본(from)을 가진다.
+// 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 채널 탭(전체와 채널별)을 그린다.
 
-export type MessageChannel = 'system';
+export type MessageChannel = 'system' | 'chat';
 export type MessageTone = 'info' | 'gold' | 'warn';
 
 /** 메시지를 남기는 쪽이 받는 함수 — 톤은 부르는 쪽이 정한다(기본 info).
@@ -18,10 +18,14 @@ export interface Msg {
   channel: MessageChannel;
   /** 보낸 사람 — 시스템 메시지는 없다 */
   author?: string;
+  /** 만든 시각(ms) — 채널이 다른 기록을 시간순으로 합칠 때 쓴다 */
+  at: number;
+  /** 채팅 글줄의 원본 — 보낸 사람 id와 채팅 id(신고·차단 대상) */
+  from?: { uid: string; chatId: number };
 }
 
 /** 채널 표시 이름 — 글줄 앞 [채널] 머리표와 채널 탭 라벨 */
-export const CHANNEL_LABEL: Record<MessageChannel, string> = { system: '시스템' };
+export const CHANNEL_LABEL: Record<MessageChannel, string> = { system: '시스템', chat: '채팅' };
 
 /** 보관 상한 — 넘으면 오래된 것부터 버린다(긴 세션에서 기록이 끝없이 쌓이지 않게) */
 export const MESSAGE_KEEP = 200;
@@ -34,14 +38,22 @@ const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export function createMessage(id: number, text: string, opts: {
-  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date;
+  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from'];
 } = {}): Msg {
+  const now = opts.now ?? new Date();
   return {
-    id, ts: hhmm(opts.now ?? new Date()), text,
+    id, ts: hhmm(now), text, at: now.getTime(),
     tone: opts.tone ?? 'info',
     channel: opts.channel ?? 'system',
     ...(opts.author ? { author: opts.author } : {}),
+    ...(opts.from ? { from: opts.from } : {}),
   };
+}
+
+/** 두 기록을 만든 시각 순으로 합친다. 시각이 같으면 앞 기록이 먼저다 */
+export function mergeMessages(a: readonly Msg[], b: readonly Msg[]): Msg[] {
+  if (b.length === 0) return [...a];
+  return [...a, ...b].sort((x, y) => x.at - y.at);
 }
 
 /** 기록 끝에 덧붙이고 보관 상한을 넘는 오래된 메시지를 버린다 */
