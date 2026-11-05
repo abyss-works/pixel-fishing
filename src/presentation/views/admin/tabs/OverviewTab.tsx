@@ -8,7 +8,7 @@ import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, lastNDays, EVENT_LABELS, eventSummary, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
-import { selectRiskSignals } from '../../../../features/admin/model/adminViews';
+import { adminIdentityLookup, selectRiskSignals } from '../../../../features/admin/model/adminViews';
 import {
   fmtDuration, latestRetention, selectActiveUsers, selectDailySeries, selectNewToday, selectTodaySessions,
 } from '../../../../features/admin/model/dashboard';
@@ -22,6 +22,7 @@ import {
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 import MetricSwitch from '../widgets/MetricSwitch';
 import { OVERVIEW_RANGE_OPTIONS } from './dayRange';
 import type { DayRange } from './dayRange';
@@ -48,6 +49,7 @@ export default function OverviewTab() {
 
   const [users, recent, flags] = overview.data ?? EMPTY;
   const risk = selectRiskSignals(users, flags);
+  const identityOf = adminIdentityLookup(users);
   // 오늘·7일·30일 경계는 조회가 도착한 시각 기준이다 — 다시 읽으면 함께 다시 센다
   const active = overview.data && selectActiveUsers(users, overview.updatedAt);
   const fresh = overview.data && selectNewToday(users, overview.updatedAt);
@@ -121,8 +123,7 @@ export default function OverviewTab() {
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </td>
-                    <td className="pf-accent text-2xs text-text-dim max-w-[120px] truncate"
-                        title={e.user_id}>{shortUid(e.user_id)}</td>
+                    <td className="max-w-[200px]"><UserIdentity user={identityOf(e.user_id)} /></td>
                     <td className="max-w-[260px] truncate text-xs">{eventSummary(e.type, e.payload)}</td>
                   </tr>
                 ))}
@@ -182,5 +183,3 @@ function RiskRow({ label, count, hint, tone }: {
     </div>
   );
 }
-
-const shortUid = (uid: string): string => uid.slice(0, 8);

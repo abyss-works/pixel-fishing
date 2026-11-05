@@ -1,16 +1,17 @@
 // 실시간 탭 — "지금 누가 어디에 있는가". 실시간 채널(WebSocket)에 연결된 사람을 서버에서 15초마다 다시 읽는다.
 // 지표 줄(접속·가입·게스트·가장 오래 접속) → 접속 목록(넓게)과 위치 분포(오른쪽 고정 칸) → 채팅 신고.
 import { useEffect, useMemo, useState } from 'react';
-import Badge from '../../../ui/Badge';
 import DataTable from '../../../ui/DataTable';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
 import { fmtDT, fmtNum } from '../../../../features/admin/model/metrics';
+import { adminUserLabel } from '../../../../features/admin/model/adminViews';
 import { fmtDuration, selectLiveBoard } from '../../../../features/admin/model/dashboard';
 import { useAdminLive } from '../../../../features/admin/service/useAdminStats';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 import ChatReportsSection from './ChatReportsSection';
 
 const POLL_MS = 15_000;
@@ -38,7 +39,7 @@ export default function LiveTab() {
         <KpiTile label="가입 계정" value={count(board.members)} />
         <KpiTile label="게스트" value={count(board.guests)} />
         <KpiTile label="가장 오래 접속" value={fmtDuration(board.rows[0]?.connectedSec)}
-                 hint={board.rows[0]?.nick} />
+                 hint={board.rows[0] && adminUserLabel(board.rows[0].identity)} />
       </KpiRow>
 
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
@@ -49,15 +50,13 @@ export default function LiveTab() {
           <div className="pf-scroll-panel max-h-[420px] overflow-y-auto px-1">
             <DataTable>
               <thead>
-                <tr><th className="text-left">닉네임</th><th className="text-left">위치</th>
+                <tr><th className="text-left">계정</th><th className="text-left">위치</th>
                     <th className="text-right">접속 시간</th></tr>
               </thead>
               <tbody>
                 {board.rows.map(row => (
                   <tr key={row.uid}>
-                    <td className="text-xs" title={row.uid}>
-                      {row.nick} {row.guest && <Badge>게스트</Badge>}
-                    </td>
+                    <td><UserIdentity user={row.identity} /></td>
                     <td className="whitespace-nowrap text-xs">{row.place}</td>
                     <td className="whitespace-nowrap text-right text-xs" title={`${fmtDT(row.connectedAt)}부터`}>
                       {fmtDuration(row.connectedSec)}

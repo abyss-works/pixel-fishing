@@ -86,6 +86,18 @@ describe('GET /api/admin/live', () => {
     provideOnline(() => online);
     expect(await call('/api/admin/live')).toMatchObject({ status: 200, body: { count: 2, online } });
   });
+
+  it('접속한 사람마다 닉네임과 이메일을 붙인다. 게스트의 임시 이메일과 정하지 않은 닉네임, 인증 계정이 없는 사람은 null이다', async () => {
+    const missing = testUid(954);
+    provideOnline(() => [PLAYER, GUEST, missing].map(uid => (
+      { uid, nick: '낚시꾼', region: null, zone: null, connectedAt: '2030-01-01T00:00:00.000Z', guest: uid !== PLAYER })));
+    const { body } = await call('/api/admin/live');
+    expect((body as { online: Row[] }).online.map(({ uid, nickname, email }) => ({ uid, nickname, email }))).toEqual([
+      { uid: PLAYER, nickname: '플레이어', email: 'player@example.test' },
+      { uid: GUEST, nickname: null, email: null },
+      { uid: missing, nickname: null, email: null },
+    ]);
+  });
 });
 
 describe('GET /api/admin/stats/daily', () => {

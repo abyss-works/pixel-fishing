@@ -1,14 +1,16 @@
 // 채팅 신고 구역 — 플레이어가 신고한 채팅 메시지와 앞뒤 대화(신고 시점의 복사본) 목록. 읽기 전용이다.
-// 신고한 메시지 줄을 강조하고, 신고자와 보낸 사람은 명부 email로 표시한다. 제재는 SQL로 한다.
+// 신고한 메시지 줄을 강조하고, 신고자와 보낸 사람은 명부의 계정 식별 표기로 보인다. 제재는 SQL로 한다.
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtDT } from '../../../../features/admin/model/metrics';
+import { adminIdentityLookup } from '../../../../features/admin/model/adminViews';
 import { readAdminChatReports } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminChatReports>> = [[], []];
@@ -21,10 +23,7 @@ export default function ChatReportsSection() {
 
   const [reports, users] = data ?? EMPTY;
 
-  const labelOf = (uid: string): string => {
-    const u = users.find(x => x.user_id === uid);
-    return u?.email ?? `${uid.slice(0, 8)}…`;
-  };
+  const identityOf = adminIdentityLookup(users);
 
   return (
     <>
@@ -45,8 +44,8 @@ export default function ChatReportsSection() {
               {reports.map(r => (
                 <tr key={r.id}>
                   <td className="text-2xs text-text-dim whitespace-nowrap align-top">{fmtDT(r.created_at)}</td>
-                  <td className="text-xs align-top">{labelOf(r.user_id)}</td>
-                  <td className="text-xs align-top">{labelOf(r.target_id)}</td>
+                  <td className="align-top"><UserIdentity user={identityOf(r.user_id)} /></td>
+                  <td className="align-top"><UserIdentity user={identityOf(r.target_id)} /></td>
                   <td className="text-xs select-text">
                     {r.lines.map(l => (
                       <div key={l.id} className={cx('whitespace-pre-wrap', l.id === r.message_id ? 'text-danger' : 'text-text-dim')}>

@@ -135,10 +135,13 @@ export interface AdminUserRow {
   total_session_sec: number;
 }
 
-/** 지금 실시간 채널에 연결된 사람 한 명. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다 */
+/**
+ * 지금 실시간 채널에 연결된 사람 한 명. nick은 채팅 이름, nickname은 프로필 닉네임(정하지 않았으면 null)이고,
+ * email은 게스트이거나 인증 계정이 없으면 null이다. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다
+ */
 export interface AdminLiveConnection {
-  uid: string; nick: string; region: string | null; zone: string | null;
-  connectedAt: string; guest: boolean;
+  uid: string; nick: string; nickname: string | null; email: string | null;
+  region: string | null; zone: string | null; connectedAt: string; guest: boolean;
 }
 /** 지금 실시간 채널에 연결된 수와 목록 */
 export interface AdminLive { count: number; online: AdminLiveConnection[] }

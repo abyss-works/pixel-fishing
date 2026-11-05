@@ -3,7 +3,7 @@ import type {
   AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
 import {
-  adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail, selectAntiAbuseRows,
+  adminIdentityLookup, adminNumber, adminUserLabel, filterAdminUsers, shortUid, selectAdminUserDetail, selectAntiAbuseRows,
   selectEconomyMetrics, selectRiskSignals,
   selectProgressionDashboard,
 } from './adminViews';
@@ -72,13 +72,31 @@ describe('관리자 화면 파생 데이터', () => {
     expect(filterAdminUsers(users, 'ANGLER')).toEqual([users[0]]);
     const named = [...users, user({ user_id: 'user-3', nickname: '바다낚시꾼' })];
     expect(filterAdminUsers(named, '낚시').map(row => row.user_id)).toEqual(['user-3']);
-    expect(adminUserLabel(user({ email: 'a@example.test', nickname: '바다' }))).toBe('a@example.test · 바다');
-    expect(adminUserLabel(user({ nickname: '바다' }))).toBe('바다');
-    expect(adminUserLabel(user({ user_id: 'abcdef0123456789' }))).toBe('abcdef01…');
+    expect(filterAdminUsers(users, 'user-2')).toEqual([users[1]]);
     const detail = selectAdminUserDetail('user-1', events, flags);
     expect(detail.byType).toEqual([['catch', 2], ['sell', 1]]);
     expect([...detail.fastGaps]).toEqual([2]);
     expect(detail.flag).toEqual(flags[1]);
     expect(adminNumber(null)).toBeNaN();
+  });
+});
+
+describe('계정 식별 표기', () => {
+  it('닉네임(이메일)으로 적는다. 게스트는 이메일 대신 게스트, 닉네임이 없으면 이름 없음이다', () => {
+    expect(adminUserLabel(user({ nickname: '갈치', email: 'galchi@example.com', is_anonymous: false }))).toBe('갈치(galchi@example.com)');
+    expect(adminUserLabel(user({ nickname: '갈치', is_anonymous: true }))).toBe('갈치(게스트)');
+    expect(adminUserLabel(user({ email: 'galchi@example.com', is_anonymous: false }))).toBe('이름 없음(galchi@example.com)');
+    expect(adminUserLabel(user({ is_anonymous: null }))).toBe('이름 없음(—)');
+  });
+
+  it('짧은 uid는 앞 8자리다', () => {
+    expect(shortUid('abcdef01-2345-4678-9abc-def012345678')).toBe('abcdef01');
+  });
+
+  it('명부에서 uid의 식별 정보를 대소문자 구분 없이 찾고, 명부에 없으면 uid만 가진 식별 정보를 준다', () => {
+    const known = user({ user_id: 'ABCDEF01-0000', nickname: '갈치', email: 'galchi@example.com', is_anonymous: false });
+    const lookup = adminIdentityLookup([known]);
+    expect(lookup('abcdef01-0000')).toBe(known);
+    expect(lookup('ffff0000-0000')).toEqual({ user_id: 'ffff0000-0000', nickname: null, email: null, is_anonymous: null });
   });
 });

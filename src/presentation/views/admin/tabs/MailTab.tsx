@@ -14,7 +14,7 @@ import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import { MAIL_PROBLEM_TEXT, addRecipient, parseRecipients, searchRecipients } from '../../../../features/admin/model/mailDraft';
-import { adminUserLabel } from '../../../../features/admin/model/adminViews';
+import { adminIdentityLookup, adminUserLabel } from '../../../../features/admin/model/adminViews';
 import { readAdminMails } from '../../../../features/admin/service/queries';
 import type { writeAdminMail } from '../../../../features/admin/service/queries';
 import { useAdminMailWriter } from '../../../../features/admin/service/useAdminMail';
@@ -22,6 +22,7 @@ import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 
 type TargetKind = 'users' | 'all';
 type Plan = Awaited<ReturnType<typeof writeAdminMail>>;
@@ -91,10 +92,7 @@ export default function MailTab({ to = null }: {
     if (ok) await run('send');
   };
 
-  const labelOf = (uid: string): string => {
-    const u = users.find(x => x.user_id.toLowerCase() === uid.toLowerCase());
-    return u ? adminUserLabel(u) : `${uid.slice(0, 8)}…`;
-  };
+  const identityOf = adminIdentityLookup(users);
   const found = searchRecipients(users, search);
   const pick = (uid: string) => { edit(setRecipientText)(addRecipient(recipientText, uid)); setSearch(''); };
 
@@ -119,7 +117,7 @@ export default function MailTab({ to = null }: {
                 {mails.map(m => (
                   <tr key={m.id}>
                     <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(m.createdAt)}</td>
-                    <td className="text-xs">{labelOf(m.userId)}</td>
+                    <td><UserIdentity user={identityOf(m.userId)} /></td>
                     <td className="text-xs">{m.title}</td>
                     <td className="text-xs text-right">{m.gold > 0 ? fmtGold(m.gold) : '–'}</td>
                     <td className="text-xs text-text-dim">{m.claimedAt ? '받음' : m.readAt ? '읽음' : '안 읽음'}</td>
@@ -149,7 +147,7 @@ export default function MailTab({ to = null }: {
                 </Field>
                 {found.length > 0 && (
                   <SelectList label="검색 결과" items={found} keyOf={u => u.user_id} selectedKey="" onSelect={pick}
-                              renderItem={u => <span className="text-xs">{adminUserLabel(u)}</span>} />
+                              renderItem={u => <UserIdentity inline user={u} />} />
                 )}
                 {search.trim() !== '' && found.length === 0 && (
                   <Note size="xs" className="my-0">찾는 계정이 없어요.</Note>
@@ -161,7 +159,7 @@ export default function MailTab({ to = null }: {
                 </Field>
                 {parsed.recipients.length > 0 && (
                   <Note size="xs" className="my-0">
-                    {`받는 사람 ${parsed.recipients.length}명: ${parsed.recipients.map(r => labelOf(r.userId)).join(', ')}`}
+                    {`받는 사람 ${parsed.recipients.length}명: ${parsed.recipients.map(r => adminUserLabel(identityOf(r.userId))).join(', ')}`}
                   </Note>
                 )}
               </>

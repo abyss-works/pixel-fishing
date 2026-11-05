@@ -14,6 +14,7 @@ import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 import BountyFunnelSection from './BountyFunnelSection';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
@@ -98,7 +99,7 @@ export default function ProgressionTab() {
                 <tbody>
                   {stalled.map(({ user, next, deficit }) => (
                     <tr key={user.user_id}>
-                      <td>{user.email ?? <span className="pf-accent text-2xs text-text-dim">{user.user_id.slice(0, 8)}…</span>}</td>
+                      <td><UserIdentity user={user} /></td>
                       <td className="text-xs">{next.name}(T{next.tier})</td>
                       <td className="text-right">{fmtNum(adminNumber(user.fame))}</td>
                       <td className="text-right text-text-dim">{fmtNum(next.fameReq)}</td>
