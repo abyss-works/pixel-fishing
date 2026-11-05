@@ -1,6 +1,6 @@
-// 공개 프로필 읽기 함수 — 다른 플레이어의 닉네임·배·명성·도감 수를 읽는다 (Node 런타임)
+// 공개 프로필 읽기 함수 — 다른 플레이어의 닉네임·배·낚싯대·명성·도감·유물을 읽는다 (Node 런타임)
 // 세션이 있으면 게스트도 읽는다. 순위·가방 같은 그 밖의 상태는 주지 않는다.
-//   GET /api/players/:uid   { nickname, boat, fame, dex, account }
+//   GET /api/players/:uid   { nickname, boat, rod, fame, dexFish, artifacts, account }
 //   오류: 세션 없음 401, 형식이 틀린 uid 400 bad-user, 없는 사용자 404 not-found
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. default export가 Node 시그니처다.
