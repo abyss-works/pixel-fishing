@@ -11,14 +11,11 @@ export const readAdminOverview = (days: number) => Promise.all([
   api.admin.catchQuality(days),
   api.admin.recentEvents(),
   api.admin.spamFlags(),
-  api.admin.imports(),
 ]);
 
 export const readAdminAntiAbuse = () => Promise.all([
   api.admin.users(),
   api.admin.spamFlags(),
-  api.admin.imports(),
-  api.admin.dexMismatch(),
 ]);
 
 export const readAdminEconomy = (days: number) => Promise.all([
@@ -46,9 +43,7 @@ export const readAdminMetrics = (days: number) => Promise.all([
 
 export const readAdminUserDetails = (uid: string) => Promise.all([
   api.admin.userEvents(uid, 300),
-  api.admin.dexMismatch(),
   api.admin.spamFlags(),
-  api.admin.imports(),
 ]);
 
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */

@@ -63,8 +63,6 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'users': return read.users;
     case 'retention': return read.retention;
     case 'spamFlags': return read.spamFlags;
-    case 'imports': return read.imports;
-    case 'dexMismatch': return read.dexMismatch;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
     case 'mails': return db => recentSentMails(db);

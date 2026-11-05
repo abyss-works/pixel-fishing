@@ -10,8 +10,8 @@ import MailTab from './MailTab';
 import UsersTab from './UsersTab';
 
 const CONTEXT: Record<PlayersSection, string> = {
-  roster: '유저를 누르면 도감과 이벤트를 대조한 감사 정보를 볼 수 있어요.',
-  abuse: '연타와 PERFECT 비율, 이사 코드 반입, 제재 현황을 확인해요.',
+  roster: '유저를 누르면 최근 이벤트와 연타·판정 기록을 볼 수 있어요.',
+  abuse: '연타와 PERFECT 비율, 제재 현황을 확인해요.',
   letters: '유저가 보낸 편지를 모두 볼 수 있어요. 이벤트 보관 기간(7일)이 지나도 남아 있어요.',
   mail: '플레이어에게 우편을 보내고 읽음·받음을 확인해요. 보내기 전에 미리보기로 대상과 골드 합계를 확인해요.',
 };

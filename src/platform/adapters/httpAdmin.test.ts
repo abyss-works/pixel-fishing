@@ -15,8 +15,6 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['bountyFunnel', () => admin.bountyFunnel(7), '/api/admin?q=bountyFunnel&days=7'],
   ['catchQuality', () => admin.catchQuality(30), '/api/admin?q=catchQuality&days=30'],
   ['spamFlags', () => admin.spamFlags(), '/api/admin?q=spamFlags'],
-  ['imports', () => admin.imports(), '/api/admin?q=imports'],
-  ['dexMismatch', () => admin.dexMismatch(), '/api/admin?q=dexMismatch'],
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
   ['letters', () => admin.letters(), '/api/admin?q=letters'],

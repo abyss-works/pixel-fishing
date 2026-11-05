@@ -72,8 +72,6 @@ class LocalAdmin implements AdminApi {
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
   catchQuality(_days: number): Promise<never[]> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
-  imports(): Promise<never[]> { return rejected(); }
-  dexMismatch(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }

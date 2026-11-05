@@ -1,7 +1,6 @@
 import { BOATS, boatNameOf } from '../../../game/content/boats';
 import type {
-  AdminCatchQualityRow, AdminEconomyRow, AdminEventRow, AdminDexMismatchRow,
-  AdminImportLogRow, AdminSpamFlagRow, AdminUserRow,
+  AdminCatchQualityRow, AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
 import { REGION_NAMES, REGION_ORDER, toRegionId } from './regions';
 
@@ -23,7 +22,7 @@ export interface OverviewMetrics {
 /** 개요 탭의 KPI와 위험 수를 원본 행에서 계산한다. */
 export function selectOverviewMetrics(
   users: readonly AdminUserRow[], flags: readonly AdminSpamFlagRow[],
-  imports: readonly AdminImportLogRow[], quality: readonly AdminCatchQualityRow[],
+  quality: readonly AdminCatchQualityRow[],
 ): OverviewMetrics {
   const catch7d = quality.slice(0, 7).reduce((sum, row) => sum + row.catches, 0);
   const restrictedCount = users.filter(user => user.restricted === true).length;
@@ -32,7 +31,7 @@ export function selectOverviewMetrics(
     catch7d,
     restrictedCount,
     spamUsers,
-    riskTotal: restrictedCount + spamUsers + imports.length,
+    riskTotal: restrictedCount + spamUsers,
     goldTotal: users.reduce((sum, user) => sum + adminNumber(user.gold), 0),
     fameTotal: users.reduce((sum, user) => sum + adminNumber(user.fame), 0),
   };
@@ -142,14 +141,12 @@ export function selectLiveDashboard(users: readonly AdminUserRow[], nowMs: numbe
 export interface AntiAbuseRows {
   spamUsers: AdminSpamFlagRow[];
   perfectOutliers: AdminSpamFlagRow[];
-  topMismatch: AdminDexMismatchRow[];
   restricted: AdminUserRow[];
 }
 
 /** 이상탐지 탭에서 정렬·필터하는 운영 자료를 만든다. */
 export function selectAntiAbuseRows(
   users: readonly AdminUserRow[], flags: readonly AdminSpamFlagRow[],
-  mismatch: readonly AdminDexMismatchRow[],
 ): AntiAbuseRows {
   const spamUsers = flags.filter(flag => flag.fast_gap_7d > 0)
     .sort((a, b) => b.fast_gap_7d - a.fast_gap_7d);
@@ -157,11 +154,8 @@ export function selectAntiAbuseRows(
   const perfectOutliers = globalPct === null ? [] : flags
     .filter(flag => flag.catches_7d >= 20 && (flag.perfect_pct ?? 0) > globalPct + 40)
     .sort((a, b) => (b.perfect_pct ?? 0) - (a.perfect_pct ?? 0));
-  const topMismatch = [...mismatch]
-    .sort((a, b) => b.missing_events - a.missing_events)
-    .slice(0, 15);
   const restricted = users.filter(user => user.restricted === true);
-  return { spamUsers, perfectOutliers, topMismatch, restricted };
+  return { spamUsers, perfectOutliers, restricted };
 }
 
 export interface EconomyMetrics {
@@ -193,17 +187,14 @@ export function filterAdminUsers(users: readonly AdminUserRow[], query: string):
 }
 
 export interface AdminUserDetailData {
-  mismatch: AdminDexMismatchRow[];
   flag: AdminSpamFlagRow | null;
-  imports: AdminImportLogRow[];
   byType: Array<[string, number]>;
   fastGaps: Set<number>;
 }
 
-/** 한 사용자 감사 창의 이벤트 집계·연타 인덱스와 관련 레코드를 추린다. */
+/** 한 사용자 감사 창의 이벤트 집계·연타 인덱스와 연타·판정 플래그를 추린다. */
 export function selectAdminUserDetail(
-  userId: string, events: readonly AdminEventRow[], mismatch: readonly AdminDexMismatchRow[],
-  flags: readonly AdminSpamFlagRow[], imports: readonly AdminImportLogRow[],
+  userId: string, events: readonly AdminEventRow[], flags: readonly AdminSpamFlagRow[],
 ): AdminUserDetailData {
   const byTypeCounts = new Map<string, number>();
   for (const event of events) {
@@ -219,9 +210,7 @@ export function selectAdminUserDetail(
     lastCatch = event;
   });
   return {
-    mismatch: mismatch.filter(row => row.user_id === userId),
     flag: flags.find(row => row.user_id === userId) ?? null,
-    imports: imports.filter(row => row.user_id === userId),
     byType: [...byTypeCounts.entries()].sort((a, b) => b[1] - a[1]),
     fastGaps,
   };

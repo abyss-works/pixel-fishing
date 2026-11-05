@@ -116,14 +116,6 @@ export interface AdminSpamFlagRow {
   user_id: string; catches_7d: number; fast_gap_7d: number;
   perfect_pct: number | null; perfect_pct_global: number | null;
 }
-export interface AdminImportLogRow {
-  id: number; user_id: string; created_at: string;
-  gold: number | string | null; fame: number | string | null;
-}
-export interface AdminDexMismatchRow {
-  user_id: string; fish_id: string; form: string;
-  dex_count: number; event_count: number; missing_events: number;
-}
 export interface AdminEventRow {
   id: number; user_id: string; type: string;
   payload: Record<string, unknown>; created_at: string;
@@ -199,8 +191,6 @@ export interface AdminApi {
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
   catchQuality(days: number): Promise<AdminCatchQualityRow[]>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
-  imports(): Promise<AdminImportLogRow[]>;
-  dexMismatch(): Promise<AdminDexMismatchRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;

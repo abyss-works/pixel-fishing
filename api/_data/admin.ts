@@ -1,6 +1,6 @@
 // 관리자 읽기. 관리자 대시보드가 보는 조회이며 읽기만 한다.
-// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·v_import_log·
-// v_dex_mismatch·v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
+// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·
+// v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
 // 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
 // 행은 Postgres JSON 직렬화 그대로다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, 날짜는 'yyyy-mm-dd', 수는 수다.
 // 뷰가 순서를 정하지 않는 조회에는 같은 요청이 같은 순서를 받도록 정렬을 둔다.
@@ -165,35 +165,6 @@ export function spamFlags(db: Executor): Promise<unknown[]> {
     )
     select p.user_id, p.catches_7d, p.fast_gap_7d, p.perfect_pct, g.perfect_pct_global
     from per_user p cross join glob g`, sql`t.user_id`);
-}
-
-/** import 반입 기록. 이벤트 id 오름차순 */
-export function imports(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select e.id, e.user_id, e.created_at,
-           (e.payload->>'gold')::numeric as gold,
-           (e.payload->>'fame')::numeric as fame
-    from public.events e
-    where e.type = 'import'`, sql`t.id`);
-}
-
-/** 도감과 이벤트의 차이. 도감 카운트가 catch 이벤트 수보다 큰 행 */
-export function dexMismatch(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`with evc as (
-      select user_id, payload->>'fishId' as fish_id, payload->>'form' as form,
-             count(*)::int as n
-      from public.events
-      where type = 'catch'
-      group by 1, 2, 3
-    )
-    select r.user_id, r.fish_id, r.form,
-           r.count as dex_count,
-           coalesce(evc.n, 0) as event_count,
-           r.count - coalesce(evc.n, 0) as missing_events
-    from public.records r
-    left join evc on evc.user_id = r.user_id
-                 and evc.fish_id = r.fish_id
-                 and evc.form = r.form
-    where r.count > coalesce(evc.n, 0)`, sql`t.user_id, t.fish_id, t.form`);
 }
 
 /** 최근 이벤트 피드. 최신 80행, id 내림차순 */

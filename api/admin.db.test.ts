@@ -93,7 +93,6 @@ interface Case {
   filled: boolean;
 }
 
-const byId = (r: Row) => String(r.id).padStart(12, '0');
 /** 기간(days)을 받는 일 단위 조회. 뷰는 day 열로 거른다 */
 const dayCase = (name: string, view: string, days: number): Case => ({
   name, params: { days: String(days) }, view: `select * from public.${view} ${sinceDay(days)}`,
@@ -109,8 +108,6 @@ const CASES: Case[] = [
   dayCase('bountyFunnel', 'v_bounty_funnel_daily', 7),
   dayCase('catchQuality', 'v_catch_quality', 90),
   { name: 'spamFlags', view: 'select * from public.v_spam_flags', key: r => String(r.user_id), filled: true },
-  { name: 'imports', view: 'select * from public.v_import_log', key: byId, filled: true },
-  { name: 'dexMismatch', view: 'select * from public.v_dex_mismatch', key: r => `${r.user_id}/${r.fish_id}/${r.form}`, filled: true },
   { name: 'recentEvents', view: 'select * from public.v_events_recent', filled: true },
   { name: 'userEvents', params: { user: PLAYER, limit: '300' }, view: `select * from public.fn_user_events('${PLAYER}', 300)`,
     after: rows => [...rows].sort((a, b) => Number(a.id) - Number(b.id)), filled: true },
@@ -271,7 +268,7 @@ describe('조회 결과', () => {
     await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1' }, '2 hours');
     await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3' }, '2 hours');
     // 제재된 익명 사용자: 기간 경계의 캐치(30일 밖, 7일 경계 안팎. 이벤트 id 순서가 시간 순서가 되게 오래된 것부터),
-    // 골드 원장 이벤트와 반입 기록
+    // 골드 원장 이벤트
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 80 }, '40 days');
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 70 }, '8 days');
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 60 }, '7 days');
@@ -283,8 +280,6 @@ describe('조회 결과', () => {
     await event(GUEST, 'upgradeRod', { cost: 80 }, '1 day');
     await event(GUEST, 'buyBoat', { cost: 1000 }, '2 days');
     await event(GUEST, 'buyBait', { cost: 30 }, '30 minutes');
-    await event(GUEST, 'import', { gold: 5000, fame: 100 }, '20 minutes');
-    await event(GUEST, 'import', { gold: 70, fame: 1 }, '3 days');
     // 리텐션: 열흘 전 코호트(저장 없는 두 사용자 중 하나만 다음 날과 사흘 뒤에 돌아왔다)
     await event(IDLE_A, 'boot', {}, '10 days');
     await event(IDLE_B, 'boot', {}, '10 days');
@@ -293,10 +288,6 @@ describe('조회 결과', () => {
     // 최근 이벤트 피드의 상한(80행)을 넘기는 부팅 기록
     await env.client.query(`insert into public.events (user_id, type, payload, created_at)
       select $1, 'boot', '{}'::jsonb, now() - (g || ' minutes')::interval from generate_series(1, 85) g`, [IDLE_B]);
-    // 도감: 관리자는 캐치 이벤트보다 도감이 많고, 플레이어는 이벤트와 도감이 같다
-    await env.client.query(`insert into public.records (user_id, fish_id, form, count, max_size, first_caught) values
-      ($1, 'carp', 'normal', 5, 15, '2026-10-16'), ($1, 'minnow', 'normal', 2, 5, '2026-10-16'),
-      ($2, 'carp', 'normal', 3, 30, '2026-10-18'), ($2, 'minnow', 'normal', 1, 7.5, '2026-10-18')`, [ADMIN, PLAYER]);
     // 편지
     await env.client.query(`insert into public.letters (user_id, text, created_at) values
       ($1, '바다가 좋아요', now() - interval '1 day'), ($2, '안녕하세요', now() - interval '2 days'), ($3, '문의합니다', now() - interval '3 days')`,
@@ -368,20 +359,6 @@ describe('조회 결과', () => {
     expect(await daysOf(8)).toContain(await dayAgo(7));
     expect(await daysOf(30)).not.toContain(await dayAgo(40));
     expect(await daysOf(90)).toContain(await dayAgo(40));
-  });
-
-  it('imports: 반입 기록을 id 오름차순으로 준다', async () => {
-    const rows = (await callAdmin({ q: 'imports' }, userToken(ADMIN))).body as Row[];
-    expect(rows.map(r => [r.gold, r.fame])).toEqual([[5000, 100], [70, 1]]);
-    expect(rows.every(r => r.user_id === GUEST)).toBe(true);
-  });
-
-  it('dexMismatch: 도감이 캐치 이벤트보다 많은 행만 준다', async () => {
-    const rows = (await callAdmin({ q: 'dexMismatch' }, userToken(ADMIN))).body as Row[];
-    expect(rows).toEqual([
-      { user_id: ADMIN, fish_id: 'carp', form: 'normal', dex_count: 5, event_count: 3, missing_events: 2 },
-      { user_id: ADMIN, fish_id: 'minnow', form: 'normal', dex_count: 2, event_count: 0, missing_events: 2 },
-    ]);
   });
 
   it('retention: 첫 행동일 코호트별 재방문률을 준다', async () => {

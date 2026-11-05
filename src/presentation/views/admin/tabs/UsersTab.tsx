@@ -1,6 +1,6 @@
 // 명부 구역 — 전체 유저 명부와, 행을 눌러 여는 드릴다운을 제공한다.
 // 검색은 이메일·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
-//   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인 → 도감↔이벤트 차액(근거 없는 도감).
+//   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인.
 import { useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
 import KeyValueRow from '../../../ui/KeyValueRow';
@@ -25,7 +25,7 @@ const NO_USERS: AdminUserRow[] = [];
 export default function UsersTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 유저 명부는 라이브·진행 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
+  // 유저 명부는 실시간·진행 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const users = data ?? NO_USERS;
@@ -99,7 +99,7 @@ export default function UsersTab() {
 // ---------- 유저 상세 (드릴다운) ----------
 
 // 조회 전 골격 — 상세는 열릴 때 바로 조회하므로 이 값은 한 프레임만 보인다
-const EMPTY_DETAIL: Awaited<ReturnType<typeof readAdminUserDetails>> = [[], [], [], []];
+const EMPTY_DETAIL: Awaited<ReturnType<typeof readAdminUserDetails>> = [[], []];
 
 function UserDetail({ user, onClose }: {
   user: AdminUserRow; onClose: () => void;
@@ -107,11 +107,11 @@ function UserDetail({ user, onClose }: {
   // 드릴다운은 uid별 키라 유저를 바꿔 열면 이전 조회와 섞이지 않는다
   const { data, loading, error } =
     useAdminQuery(adminKeys.userDetails(user.user_id), () => readAdminUserDetails(user.user_id), true);
-  const [events, mismatch, flags, imports] = data ?? EMPTY_DETAIL;
+  const [events, flags] = data ?? EMPTY_DETAIL;
 
-  const { mismatch: userMismatch, flag, imports: userImports, byType, fastGaps } = useMemo(
-    () => selectAdminUserDetail(user.user_id, events, mismatch, flags, imports),
-    [user.user_id, events, mismatch, flags, imports],
+  const { flag, byType, fastGaps } = useMemo(
+    () => selectAdminUserDetail(user.user_id, events, flags),
+    [user.user_id, events, flags],
   );
 
   return (
@@ -138,13 +138,6 @@ function UserDetail({ user, onClose }: {
           } />
         </Cell>
 
-        {userImports.length > 0 && (
-          <Note tone="warn" className="my-0">
-            이사 코드로 {userImports.length}건을 반입했어요.{' '}
-            {userImports.map(i => `${fmtDT(i.created_at)} 골드 ${fmtNum(adminNumber(i.gold))}`).join(' · ')}
-          </Note>
-        )}
-
         <Cell title="액션 유형 요약">
           <div className="flex flex-wrap gap-1">
             {byType.map(([type, count]) => (
@@ -158,35 +151,6 @@ function UserDetail({ user, onClose }: {
             {byType.length === 0 && <span className="text-2xs text-text-dim">이벤트가 없어요.</span>}
           </div>
           <Note size="2xs" className="my-0">최근 {EVENT_WINDOW}건을 기준으로 집계해요.</Note>
-        </Cell>
-
-        <Cell title="도감 ↔ 이벤트 대조">
-          {userMismatch.length === 0
-            ? <Note size="2xs" className="my-0">차액이 없어요. 도감 수가 낚시 이벤트와 맞아요.</Note>
-            : (
-              <DataTable>
-                <thead>
-                  <tr><th className="text-left">어종</th><th className="text-left">폼</th>
-                      <th className="text-right">도감</th><th className="text-right">이벤트</th>
-                      <th className="text-right">차액</th></tr>
-                </thead>
-                <tbody>
-                  {userMismatch.map(m => (
-                    <tr key={`${m.fish_id}/${m.form}`}>
-                      <td className="pf-accent text-2xs">{m.fish_id}</td>
-                      <td className="text-xs">{m.form}</td>
-                      <td className="text-right">{m.dex_count}</td>
-                      <td className="text-right">{m.event_count}</td>
-                      <td className="text-right text-danger pf-accent">+{m.missing_events}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            )}
-          <Note size="2xs" className="my-0">
-            v0.5.0(서버 권위 도입) 이전에 플레이한 기록은 이벤트가 없어서 차액이 나는 게 정상이에요.
-            가입일이 그 이후인데 차액이 크면 근거 없는 도감이에요.
-          </Note>
         </Cell>
 
         <Cell title="최근 이벤트 타임라인" flush>

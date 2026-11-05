@@ -1,4 +1,4 @@
-// 관리자 해시 경로 — 정식 해시의 왕복, 탭을 합치기 전의 해시 이전, 잘못된 해시의 수렴을 고정한다.
+// 관리자 해시 경로 — 정식 해시의 왕복과 잘못된 해시의 수렴을 고정한다.
 import { describe, expect, it } from 'vitest';
 import { ADMIN_SECTIONS, ADMIN_TABS, adminHash, adminRouteOf, parseAdminHash } from './routes';
 
@@ -12,22 +12,6 @@ describe('관리자 해시 경로', () => {
     for (const hash of canonical) expect(adminHash(parseAdminHash(hash))).toBe(hash);
   });
 
-  it('옛 해시는 합친 뒤의 자리로 옮겨진다', () => {
-    const moved: Record<string, string> = {
-      '#/admin/overview': '#/admin/overview',
-      '#/admin/live': '#/admin/live',
-      '#/admin/users': '#/admin/players/roster',
-      '#/admin/letters': '#/admin/players/letters',
-      '#/admin/antiabuse': '#/admin/players/abuse',
-      '#/admin/metrics': '#/admin/analysis/activity',
-      '#/admin/economy': '#/admin/analysis/economy',
-      '#/admin/progression': '#/admin/analysis/progression',
-      '#/admin/fish': '#/admin/balance',
-      '#/admin/ops': '#/admin/ops',
-    };
-    for (const [old, now] of Object.entries(moved)) expect(adminHash(parseAdminHash(old))).toBe(now);
-  });
-
   it('구역이 없거나 틀린 해시는 그 탭의 기본 구역으로 모인다', () => {
     expect(adminHash(parseAdminHash('#/admin/players'))).toBe('#/admin/players/roster');
     expect(adminHash(parseAdminHash('#/admin/players/nope'))).toBe('#/admin/players/roster');
@@ -35,7 +19,7 @@ describe('관리자 해시 경로', () => {
   });
 
   it('모르는 해시와 관리자 밖 해시는 개요가 된다', () => {
-    for (const hash of ['', '#', '#/admin', '#/admin/', '#/admin/nope', '#/other/live']) {
+    for (const hash of ['', '#', '#/admin', '#/admin/', '#/admin/nope', '#/admin/users', '#/admin/fish', '#/other/live']) {
       expect(adminHash(parseAdminHash(hash))).toBe('#/admin/overview');
     }
   });

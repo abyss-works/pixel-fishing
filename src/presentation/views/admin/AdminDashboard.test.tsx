@@ -61,25 +61,10 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
   });
 
-  it('옛 해시는 합친 탭의 구역으로 열리고 주소도 정식 해시로 바뀐다', () => {
-    const cases: [string, string, string | null][] = [
-      ['#/admin/users', '플레이어', '명부'],
-      ['#/admin/letters', '플레이어', '편지'],
-      ['#/admin/antiabuse', '플레이어', '이상탐지'],
-      ['#/admin/metrics', '경제·진행', '활동'],
-      ['#/admin/economy', '경제·진행', '경제'],
-      ['#/admin/progression', '경제·진행', '진행'],
-      ['#/admin/fish', '밸런스', null],
-    ];
-    for (const [old, title, section] of cases) {
-      open(old);
-      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
-      if (section) expect(screen.getByRole('button', { name: section, pressed: true })).toBeInTheDocument();
-      expect(window.location.hash).not.toBe(old);
-      cleanup();
-    }
-    open('#/admin/fish');
-    expect(window.location.hash).toBe('#/admin/balance');
+  it('모르는 해시는 개요로 열리고 주소도 정식 해시로 바뀐다', () => {
+    open('#/admin/users');
+    expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/admin/overview');
   });
 
   it('탭을 누르면 그 탭의 기본 구역 해시로 간다', () => {
@@ -99,9 +84,9 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
   });
 
-  it('주소의 해시가 바뀌면 화면이 따라가고, 옛 해시도 새 자리로 옮긴다', async () => {
+  it('주소의 해시가 바뀌면 화면이 따라간다', async () => {
     open('#/admin/overview');
-    act(() => { window.location.hash = '#/admin/antiabuse'; });
+    act(() => { window.location.hash = '#/admin/players/abuse'; });
     await waitFor(() => expect(window.location.hash).toBe('#/admin/players/abuse'));
     expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
   });

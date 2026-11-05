@@ -20,13 +20,6 @@ vi.mock('../../../../platform/api', () => ({
         user_id: 'aaaaaaaa-0000-0000-0000-000000000000', catches_7d: 40, fast_gap_7d: 12,
         perfect_pct: 90, perfect_pct_global: 30,
       }]),
-      imports: vi.fn(async () => [{
-        id: 1, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', gold: 500, fame: 5, created_at: '2026-10-06T00:00:00Z',
-      }]),
-      dexMismatch: vi.fn(async () => [{
-        user_id: 'aaaaaaaa-0000-0000-0000-000000000000', fish_id: 'f1', form: 'base',
-        dex_count: 3, event_count: 1, missing_events: 2,
-      }]),
       userEvents: vi.fn(async () => [{
         id: 7, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', type: 'sell',
         payload: { count: 2, gold: 300 }, created_at: '2026-10-07T00:00:00Z',
@@ -57,8 +50,8 @@ describe('플레이어 탭', () => {
     const dialog = await screen.findByRole('dialog', { name: '유저 상세 — friend@example.com' });
     // 오목한 칸(pf-notch)은 clip-path로 안쪽을 잘라서, 그 안에 모달을 두면 화면 전체를 덮지 못한다
     expect(dialog.closest('.pf-notch')).toBeNull();
-    expect(await within(dialog).findByText('도감 ↔ 이벤트 대조')).toBeInTheDocument();
-    expect(within(dialog).getByText('판매')).toBeInTheDocument();
+    expect(await within(dialog).findByText('판매')).toBeInTheDocument();
+    expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
   it('이상탐지 구역 — 신호 건수 지표와 제재 계정이 같은 조회로 채워진다', async () => {
@@ -68,8 +61,6 @@ describe('플레이어 탭', () => {
       .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
     expect(await within(tile('연타 유저')).findByText('1')).toBeInTheDocument();
     expect(within(tile('PERFECT 이상치')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('이사 코드 반입')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('도감 차액')).getByText('1')).toBeInTheDocument();
     expect(within(tile('제재 계정')).getByText('1')).toBeInTheDocument();
     // 제재 계정 칸은 명부 라벨과 지표 줄(골드·명성·마지막 행동)을 함께 보인다
     expect(screen.getAllByText('friend@example.com').length).toBeGreaterThan(0);

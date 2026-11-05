@@ -9,7 +9,7 @@ describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'users', 'dailyActive', 'retention', 'economy', 'bountyFunnel',
-      'catchQuality', 'spamFlags', 'imports', 'dexMismatch',
+      'catchQuality', 'spamFlags',
       'recentEvents', 'userEvents', 'letters', 'balanceLive', 'deployHost'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');

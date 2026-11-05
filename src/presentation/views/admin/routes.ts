@@ -1,6 +1,5 @@
 // 관리자 화면의 해시 경로 — 탭 여섯 개와 두 탭 안의 구역을 `#/admin/<탭>[/<구역>]`으로 주소화한다.
-// 탭을 합치기 전의 해시(users·letters·metrics 등)는 합친 뒤의 자리로 옮기므로, 옛 북마크도
-// 가까운 화면에 닿는다. 순수 함수만 두고, 주소를 바꾸는 일은 화면 셸이 맡는다.
+// 순수 함수만 두고, 주소를 바꾸는 일은 화면 셸이 맡는다.
 
 export type AdminTab = 'overview' | 'live' | 'players' | 'analysis' | 'balance' | 'ops';
 
@@ -40,17 +39,6 @@ export type AdminRoute =
 
 const DEFAULT_ROUTE: AdminRoute = { tab: 'overview' };
 
-/** 탭을 합치기 전의 해시 키 → 합친 뒤의 자리 */
-const LEGACY_ROUTES: Record<string, AdminRoute> = {
-  users: { tab: 'players', section: 'roster' },
-  letters: { tab: 'players', section: 'letters' },
-  antiabuse: { tab: 'players', section: 'abuse' },
-  metrics: { tab: 'analysis', section: 'activity' },
-  economy: { tab: 'analysis', section: 'economy' },
-  progression: { tab: 'analysis', section: 'progression' },
-  fish: { tab: 'balance' },
-};
-
 const pickSection = <S extends readonly { key: string }[]>(sections: S, key: string): S[number]['key'] =>
   (sections.find(s => s.key === key) ?? sections[0]).key;
 
@@ -66,7 +54,7 @@ export function parseAdminHash(hash: string): AdminRoute {
     case 'analysis':
       return { tab, section: pickSection(ADMIN_SECTIONS.analysis, section) };
     default:
-      return LEGACY_ROUTES[tab] ?? DEFAULT_ROUTE;
+      return DEFAULT_ROUTE;
   }
 }
 
