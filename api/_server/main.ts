@@ -12,8 +12,9 @@ import me from '../me.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
-import { appAuth } from '../_auth/session.js';
+import { appAuth, sessionOf } from '../_auth/session.js';
 import { settleAfterResponse } from './afterResponse.js';
+import { attachLive } from './live.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -46,8 +47,14 @@ app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
+// 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
+const live = attachLive(server, {
+  origin: new URL(process.env.BETTER_AUTH_URL as string).origin,
+  authenticate: async (req) => (await sessionOf(req.headers))?.id ?? null,
+});
 
 process.on('SIGTERM', () => {
+  live.close();
   server.close(() => {
     void settleAfterResponse().then(() => process.exit(0));
   });

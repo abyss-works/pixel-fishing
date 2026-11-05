@@ -31,6 +31,7 @@ import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
+import { useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
@@ -74,6 +75,7 @@ export default function GameView(props: GameViewProps) {
   // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
   useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
   useTutorialTrigger('sea', atSea);
+  useLive();
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
