@@ -7,6 +7,7 @@ import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
 import action from '../action.js';
 import admin from '../admin.js';
+import { chatHandler } from '../chat.js';
 import mail from '../mail.js';
 import me from '../me.js';
 import rank from '../rank.js';
@@ -17,6 +18,8 @@ import { settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
+import { blockedIds } from '../_data/blocks.js';
+import { recentChat, saveChat } from '../_data/chat.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -24,6 +27,8 @@ const routes: Record<string, NodeHandler> = {
   '/api/account': account,
   '/api/action': action,
   '/api/admin': admin,
+  // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
+  '/api/chat': chatHandler((uid, ids) => live.setBlocked(uid, ids)),
   '/api/mail': mail,
   '/api/me': me,
   '/api/rank': rank,
@@ -57,7 +62,12 @@ const live = attachLive(server, {
     if (!session) return null;
     const { nick, boat } = await liveIdentity(database().db, session.id);
     // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
-    return { uid: session.id, nick: nick ?? '낚시꾼', boat };
+    return { uid: session.id, nick: nick ?? '낚시꾼', boat, guest: session.email === null };
+  },
+  chat: {
+    save: (user, text) => saveChat(database().db, user.uid, user.nick, text),
+    recent: (uid, limit) => recentChat(database().db, uid, limit),
+    blocked: (uid) => blockedIds(database().db, uid),
   },
 });
 

@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { GONE, rowCounts, seedFullAccount, seeded } from '../_dbTest/accountFixtures.js';
 import type { AccountSpec } from '../_dbTest/accountFixtures.js';
-import { startActionEnv } from '../_dbTest/actionHarness.js';
+import { seedUser, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 
 vi.mock('../observability.js', () => ({ reportServerIssue: vi.fn(async () => undefined) }));
@@ -130,5 +130,16 @@ describe('빈 익명 계정 정리 크론', () => {
     }
     expect(await rowCounts(env.client, failing)).toEqual(seeded(true));
     expect(await rowCounts(env.client, passing)).toEqual(GONE);
+  });
+  it('보관 기간이 지난 채팅(30일)과 신고(1년)를 dry-run에서도 지운다', async () => {
+    const author = await seedUser(env.client, { email: 'chat@example.test' });
+    const { rows } = await env.client.query<{ id: string }>(`insert into public.chat_messages (user_id, nick, text, created_at)
+      values ($1, 'a', '오래됨', $2), ($1, 'a', '최근', $3) returning id`, [author, ago(31), ago(1)]);
+    await env.client.query(`insert into public.chat_reports (user_id, message_id, target_id, lines, created_at)
+      values ($1, $2, $1, '[]', $3), ($1, $4, $1, '[]', $5)`, [author, rows[0].id, ago(370), rows[1].id, ago(300)]);
+
+    expect((await run()).body).toMatchObject({ dryRun: true, chat: { messages: 1, reports: 1 } });
+    const left = await env.client.query<{ text: string }>('select text from public.chat_messages where user_id = $1', [author]);
+    expect(left.rows).toEqual([{ text: '최근' }]);
   });
 });
