@@ -12,7 +12,7 @@ import type { GameState } from './logic.js';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 /** 결과 카드를 띄우는 최소 부재 시간 */
-const REPORT_MIN_MS = 10 * MINUTE;
+const REPORT_MIN_MS = 2 * MINUTE;
 /** 조회 기간 상한 — 행동 기록 보관 기간 */
 const WINDOW_MAX_MS = 7 * 24 * HOUR;
 

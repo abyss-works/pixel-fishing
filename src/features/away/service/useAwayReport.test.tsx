@@ -1,4 +1,4 @@
-// 방치 결과 보고 훅 — 돌아오면 요약을 읽어 잡은 물고기가 있을 때 한 줄을 남기고, 10분 이상이면 결과 카드를 띄운다.
+// 방치 결과 보고 훅 — 돌아오면 요약을 읽어 잡은 물고기가 있을 때 한 줄을 남기고, 2분 이상이면 결과 카드를 띄운다.
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,24 +18,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useAwayReport', () => {
-  it('10분 이상 비웠고 잡은 물고기가 있으면 한 줄을 남기고 카드를 띄운다. 닫으면 내린다', async () => {
+  it('2분 이상 비웠고 잡은 물고기가 있으면 한 줄을 남기고 카드를 띄운다. 닫으면 내린다', async () => {
     const summary = { catches: 3 };
     readAwayReport.mockResolvedValue(summary);
     const onLine = vi.fn();
     const { result } = renderHook(() => useAwayReport(onLine));
-    act(() => back(10 * 60_000));
+    act(() => back(2 * 60_000));
     await waitFor(() => expect(result.current.report).toBe(summary));
-    expect(readAwayReport).toHaveBeenCalledWith(10 * 60_000);
+    expect(readAwayReport).toHaveBeenCalledWith(2 * 60_000);
     expect(onLine).toHaveBeenCalledWith(summary);
     act(() => result.current.dismiss());
     expect(result.current.report).toBeNull();
   });
 
-  it('10분 미만이면 한 줄만 남긴다', async () => {
+  it('2분 미만이면 한 줄만 남긴다', async () => {
     readAwayReport.mockResolvedValue({ catches: 2 });
     const onLine = vi.fn();
     const { result } = renderHook(() => useAwayReport(onLine));
-    act(() => back(9 * 60_000));
+    act(() => back(2 * 60_000 - 1));
     await waitFor(() => expect(onLine).toHaveBeenCalledTimes(1));
     expect(result.current.report).toBeNull();
   });
