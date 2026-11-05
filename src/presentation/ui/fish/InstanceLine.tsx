@@ -18,9 +18,12 @@ import SizeBar from '../SizeBar';
 // 거기 쓰이는 건 크기뿐이다.
 // 마지막 열은 auto — 진열·잠금 버튼 수가 화면마다 달라서(가방 둘, 판매 없음) 고정폭이면 넘친다.
 // 버튼은 우측 정렬이라 자물쇠 위치는 줄마다 같다.
-const CELL = 'grid items-center gap-2';
-const COLS_CHECK = 'grid-cols-[13px_52px_1fr_34px_12px_12px_auto]';
-const COLS_VIEW = 'grid-cols-[52px_1fr_34px_12px_12px_auto]';
+// 크기와 백분율 열은 픽셀 폰트 글자 폭(ch) 기준이다. 줄 전체를 그 폰트로 두어 ch가 그 폰트의 숫자 폭이 되게 하고,
+// 가장 긴 값("99.9cm", "99.9%")에 글자 사이 간격까지 들어가게 한 글자씩 여유를 둔다. 픽셀로 고정하면 넓은 폰트의 값이
+// 열을 넘쳐 막대 칸을 덮는다.
+const CELL = 'pf-accent grid items-center gap-2 whitespace-nowrap';
+const COLS_CHECK = 'grid-cols-[13px_7ch_minmax(0,1fr)_6ch_12px_12px_auto]';
+const COLS_VIEW = 'grid-cols-[7ch_minmax(0,1fr)_6ch_12px_12px_auto]';
 
 function lineClass(hasCheck: boolean, interactive: boolean, dim: boolean) {
   return cx(CELL, hasCheck ? COLS_CHECK : COLS_VIEW, 'text-xs py-0.5 px-1',
