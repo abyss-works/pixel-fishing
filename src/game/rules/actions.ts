@@ -23,7 +23,7 @@ import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canEnterBase, canFish, canUpgradeRod, deliveryReward, encounterQuests } from './rules.js';
+import { canBuyBoat, canEnterBase, canFish, canUpgradeRod, encounterQuests } from './rules.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -36,8 +36,6 @@ import { rollFish } from './logic.js';
 import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
-import { NO_GUILD_BONUS } from './guild.js';
-import type { GuildBonus } from './guild.js';
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true } // forceEncounter: 테스트용 강제 조우(서버가 운영에서 떼어 낸다)
@@ -89,8 +87,6 @@ export interface ActionDeps {
   bounty?: BountyCtx | null;
   /** 받을 우편 — 서버가 본인의 받지 않은 골드 우편을 조회해 공급한다. 로컬 dev엔 항상 없다 */
   mail?: { id: number; gold: number } | null;
-  /** 길드 보너스 — 서버가 소속 길드의 누적 기여도로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
-  guild?: GuildBonus | null;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
@@ -307,13 +303,13 @@ export function rollCatchFish(
 
 /** 캐치의 어종 결정 — 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼), 없으면 통상 추첨.
  *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
- *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)와 길드 보너스만 호출자가 공급한다. */
+ *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)만 호출자가 공급한다. */
 export function drawCatch(
   state: Pick<GameState, 'pity' | 'artifacts'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
   pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
-  ownsNormal: (fishId: string) => boolean, guild: GuildBonus = NO_GUILD_BONUS,
+  ownsNormal: (fishId: string) => boolean,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; byCeiling: boolean } {
-  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase, guild.speciesPity);
+  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const fish = target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
@@ -334,9 +330,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
-      const guild = deps.guild ?? NO_GUILD_BONUS;
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
-        deps.rng, action.forceEncounter === true, guild.namedPity);
+        deps.rng, action.forceEncounter === true);
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -349,7 +344,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts,
-        id => (state.dex[id]?.normal?.count ?? 0) > 0, guild);
+        id => (state.dex[id]?.normal?.count ?? 0) > 0);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
@@ -612,11 +607,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const quest = bountyById(action.questId)!;
       const mat = quest.difficulty === 'named' ? artifactOfZone(quest.zone) : undefined;
       const rich = mat ? addItem(state, mat.materialId, 1) : state;
-      const reward = deliveryReward(quest, (deps.guild ?? NO_GUILD_BONUS).bountyReward);
       return {
-        ok: true, state: { ...rich, gold: rich.gold + reward },
+        ok: true, state: { ...rich, gold: rich.gold + quest.reward },
         result: { type: 'none' },
-        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward } }],
+        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward: quest.reward } }],
       };
     }
     case 'resolveChallenge': {

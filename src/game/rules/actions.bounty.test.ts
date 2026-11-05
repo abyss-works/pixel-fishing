@@ -11,7 +11,6 @@ import { matchBountyCatch, rollNamedEncounter } from './logic';
 import type { BountyCtx } from './rules';
 import { BOUNTIES } from '../content/bounties';
 import { gameDayOf } from './time';
-import { guildBonusOf } from './guild';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
   let n = 0;
@@ -223,20 +222,6 @@ describe('deliverBounty', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(400000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
-  });
-
-  it('길드 보너스는 일반 의뢰 보상만 늘린다(Lv3 +5%). 네임드 토벌 보상과 길드 없는 납품은 그대로다', () => {
-    const general = applyAction(seed({ gold: 0 }), { type: 'deliverBounty', questId: 'pacific-easy-common' },
-      deps({ bounty: ctx({ complete: ['pacific-easy-common'] }), guild: guildBonusOf(3) }));
-    const named = applyAction(seed({ gold: 0 }), { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
-      deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }), guild: guildBonusOf(5) }));
-    const low = applyAction(seed({ gold: 0 }), { type: 'deliverBounty', questId: 'pacific-easy-common' },
-      deps({ bounty: ctx({ complete: ['pacific-easy-common'] }), guild: guildBonusOf(2) }));
-    if (!general.ok || !named.ok || !low.ok) throw new Error('deliver failed');
-    expect(general.state.gold).toBe(21000);
-    expect(general.events[0].payload).toEqual({ questId: 'pacific-easy-common', reward: 21000 });
-    expect(named.state.gold).toBe(400000);
-    expect(low.state.gold).toBe(20000);
   });
 });
 

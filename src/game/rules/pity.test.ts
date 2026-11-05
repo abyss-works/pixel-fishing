@@ -13,7 +13,6 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import type { BountyCtx } from './rules';
 import { BOUNTIES } from '../content/bounties';
-import { NO_GUILD_BONUS, guildBonusOf } from './guild';
 
 const DAY = '2026-12-31T23:40:00Z';   // 낮(분 40), 게임 날짜 2027-01-01
 const NIGHT = '2026-12-31T23:55:00Z'; // 밤(분 55), 같은 게임 날짜
@@ -230,48 +229,5 @@ describe('리듀서 catch — 천장 적용', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: named.id, pity: true });
     expect(out.state.namedPity.misses).toBe(0);
-  });
-});
-
-describe('길드 보너스 — 천장이 빨리 찬다', () => {
-  it('어종 천장은 확정 문턱에 (1 − 비율)을 곱한다. 길드가 없으면 그대로다', () => {
-    const pity = { goldcarp: SPECIES_PITY_K * 0.95 };
-    expect(speciesPityCandidates(pity, 'pond', 'day')).toEqual([]);
-    expect(speciesPityCandidates(pity, 'pond', 'day', NO_GUILD_BONUS.speciesPity)).toEqual([]);
-    expect(speciesPityCandidates(pity, 'pond', 'day', guildBonusOf(2).speciesPity)).toEqual(['goldcarp']);
-    expect(speciesPityCandidates({ goldcarp: SPECIES_PITY_K * 0.9 }, 'pond', 'day', guildBonusOf(3).speciesPity)).toEqual([]);
-    expect(speciesPityCandidates({ goldcarp: SPECIES_PITY_K * 0.9 }, 'pond', 'day', guildBonusOf(4).speciesPity)).toEqual(['goldcarp']);
-  });
-
-  it('네임드 조우 천장도 문턱에 (1 − 비율)을 곱한다. 결투 실패 완화와 겹친다', () => {
-    expect(namedPityCeiling(0, 0)).toBe(NAMED_PITY_CATCHES);
-    expect(namedPityCeiling(0, guildBonusOf(5).namedPity)).toBe(Math.round(NAMED_PITY_CATCHES * 0.9));
-    expect(namedPityCeiling(1, guildBonusOf(5).namedPity)).toBe(Math.round(NAMED_PITY_CATCHES / 2 * 0.9));
-  });
-
-  it('리듀서 catch는 주입된 길드 보너스로 어종 천장을 판정한다', () => {
-    const st = { ...newState(), pity: { goldcarp: SPECIES_PITY_K * 0.95 } };
-    const deps = (guild?: ActionDeps['guild']): ActionDeps => ({ rng: () => 0, today: '2027-01-01', now: DAY, newUid: () => 'u', guild });
-    const catchPond = { type: 'catch', spot: 'pond', judgment: 'auto' } as const;
-    const plain = applyAction(st, catchPond, deps());
-    const boosted = applyAction(st, catchPond, deps(guildBonusOf(2)));
-    if (!plain.ok || !boosted.ok) throw new Error('catch failed');
-    expect(plain.events[0].payload.pity).toBeUndefined();
-    expect(boosted.events[0].payload).toMatchObject({ fishId: 'goldcarp', pity: true });
-  });
-
-  it('리듀서 catch는 주입된 길드 보너스로 네임드 천장을 판정한다', () => {
-    const named = BOUNTIES.find(q => q.difficulty === 'named' && q.zone === 'pacific')!;
-    const misses = Math.round(NAMED_PITY_CATCHES * 0.9) - 1;
-    const st = { ...newState(), boat: 2, location: { kind: 'base', id: 'harbor' } as const,
-      namedPity: { day: '2027-01-01', misses, fails: 0, wounds: {} } };
-    const bounty = { active: [named.id], complete: [], tickets: [], clearsToday: { general: 0, named: 0 } } satisfies BountyCtx;
-    const run = (guild?: ActionDeps['guild']) => applyAction(st, { type: 'catch', spot: 'sea', judgment: 'auto' },
-      { rng: () => 0.9999, today: '2027-01-01', now: DAY, newUid: () => 'u', bounty, guild });
-    const plain = run();
-    const boosted = run(guildBonusOf(5));
-    if (!plain.ok || !boosted.ok) throw new Error('catch failed');
-    expect(plain.events.some(e => e.type === 'ticket')).toBe(false);
-    expect(boosted.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: named.id, pity: true });
   });
 });
