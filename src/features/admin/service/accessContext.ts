@@ -6,12 +6,13 @@ import { createContext, useContext } from 'react';
 export type AdminAccess =
   | 'checking'   // 판정 중
   | 'local'      // 클라우드 미설정 — 권한 실패가 아니라 판정 자체가 불가능한 모드
+  | 'signedOut'  // 관리자 세션 없음 — 대시보드 로그인이 필요하다
   | 'denied'     // DB까지 도달했으나 admins에 없음
   | 'granted';
 
 export interface AdminAuth {
   access: AdminAccess;
-  /** 현재 세션 uid — denied일 때 "이 uid를 등록하라" 안내에 쓴다 */
+  /** 관리자 세션 uid — denied일 때 권한 없음 안내에 보인다 */
   uid: string | null;
 }
 

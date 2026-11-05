@@ -226,9 +226,9 @@ export interface BalanceLive {
   fameGateStuck: { nextBoat: number; users: number }[];
 }
 
-/** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), denied는 DB admins 비등록 */
+/** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), signedOut은 관리자 세션 없음, denied는 DB admins 비등록 */
 export interface AdminAccessResult {
-  kind: 'granted' | 'denied' | 'local';
+  kind: 'granted' | 'denied' | 'signedOut' | 'local';
   /** 서버가 확인한 세션 uid. denied 안내("이 uid를 등록하라")에 쓴다 */
   uid: string | null;
 }
@@ -252,7 +252,13 @@ export interface AdminMailPlan {
 export interface AdminResetLink { url: string; expiresAt: string }
 
 export interface AdminApi {
+  /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 false다 */
+  isConfigured: boolean;
   access(): Promise<AdminAccessResult>;
+  /** 게임과 같은 계정으로 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
+  signIn(email: string, password: string): Promise<AuthResult>;
+  /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
+  signOut(): Promise<void>;
   users(): Promise<AdminUserRow[]>;
   /** 지금 실시간 채널에 연결된 사람 */
   live(): Promise<AdminLive>;

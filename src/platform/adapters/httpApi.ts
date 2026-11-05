@@ -1,4 +1,4 @@
-// HTTP API 구현 — 스테이징·운영 (/api/auth 쿠키 세션 + /api/action)
+// HTTP API 구현 — 스테이징·운영 (/api/auth 쿠키 세션 + /api/action, 관리자는 /api/admin/auth 쿠키 세션)
 import { HttpGameGateway } from './httpGameGateway';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
@@ -65,7 +65,7 @@ class HttpAuth implements AuthApi {
 // 전송 상세(요청 이름, 인자)는 여기에 갇히고, 소비처(기능 계층)는 AdminApi 인터페이스만 본다. 세션은 쿠키가 싣는다.
 
 import type {
-  AdminApi,
+  AdminApi, AdminAccessResult,
   AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
@@ -73,7 +73,11 @@ import type {
 
 /** 관리자 조회 하나를 GET으로 읽는다. 응답이 실패면(세션이 없으면 401) 조회 이름과 상태를 담아 던진다 */
 async function getAdmin<T>(url: string, label: string): Promise<T> {
-  const res = await fetch(url);
+  return adminBody(await fetch(url), label);
+}
+
+/** 관리자 조회 응답의 본문. 실패 응답이면 조회 이름과 상태를 담아 던진다 */
+async function adminBody<T>(res: Response, label: string): Promise<T> {
   if (!res.ok) {
     const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
     throw new Error(`${label} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
@@ -110,9 +114,36 @@ async function writeAdmin<T>(query: string, body: unknown, label: string): Promi
   return await res.json() as T;
 }
 
+/** 관리자 인증 경로에 JSON 본문을 POST한다. 세션 쿠키는 게임과 이름이 다른 관리자 쿠키다 */
+const postAdminAuth = (path: string, body: unknown): Promise<Response> => fetch(`/api/admin/auth/${path}`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
 class HttpAdmin implements AdminApi {
-  access(): Promise<{ kind: 'granted' | 'denied'; uid: string }> {
-    return readAdmin('access');
+  isConfigured = true;
+
+  /** 관리자 세션이 없으면(401) signedOut이다 */
+  async access(): Promise<AdminAccessResult> {
+    const res = await fetch('/api/admin?q=access');
+    if (res.status === 401) return { kind: 'signedOut', uid: null };
+    return adminBody(res, 'access');
+  }
+  async signIn(email: string, password: string): Promise<AuthResult> {
+    let res: Response;
+    try {
+      res = await postAdminAuth('sign-in/email', { email, password });
+    } catch {
+      return { ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' };
+    }
+    if (res.ok) return { ok: true };
+    if (res.status === 401) return { ok: false, msg: '이메일 또는 비밀번호가 틀렸어요.' };
+    if (res.status === 429) return { ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' };
+    return { ok: false, msg: `로그인하지 못했어요. (${res.status})` };
+  }
+  async signOut(): Promise<void> {
+    await postAdminAuth('sign-out', {});
   }
 
   users(): Promise<AdminUserRow[]> {

@@ -45,8 +45,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost와 쓰기(mail·restrict·resetLink·letterHandled)뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled), 관리자 로그인·로그아웃뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'signIn', 'signOut'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -112,9 +112,41 @@ describe('HttpAdmin', () => {
     await expect(admin.balanceLive(7)).resolves.toEqual(live);
   });
 
-  it('세션이 없어 서버가 거절하면(401) 접근 판정을 포함한 모든 조회가 실패한다', async () => {
+  it('관리자 세션이 없어 서버가 거절하면(401) 접근 판정은 signedOut이고 나머지 조회는 실패한다', async () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
-    for (const [method, call] of CALLS) await expect(call(), method).rejects.toThrow('401 unauthorized');
+    await expect(admin.access()).resolves.toEqual({ kind: 'signedOut', uid: null });
+    for (const [method, call] of CALLS.filter(([m]) => m !== 'access')) await expect(call(), method).rejects.toThrow('401 unauthorized');
+  });
+
+  it('접근 판정이 401 외의 이유로 실패하면 던진다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'db-read' }), { status: 500 }));
+    await expect(admin.access()).rejects.toThrow('access 조회 실패: 500 db-read');
+  });
+
+  it('클라우드 구현이라 관리자 로그인이 필요하다', () => {
+    expect(admin.isConfigured).toBe(true);
+  });
+
+  it('관리자 로그인은 관리자 인증 경로에 이메일과 비밀번호를 보내고, 틀리면 안내 문구를 돌려준다', async () => {
+    const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: 'u-1' } }), { status: 200 }));
+    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin/auth/sign-in/email', post({ email: 'a@example.test', password: 'pw' }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: 'INVALID_EMAIL_OR_PASSWORD' }), { status: 401 }));
+    await expect(admin.signIn('a@example.test', 'bad')).resolves.toEqual({ ok: false, msg: '이메일 또는 비밀번호가 틀렸어요.' });
+    fetchMock.mockResolvedValue(new Response('', { status: 429 }));
+    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' });
+    fetchMock.mockResolvedValue(new Response('', { status: 502 }));
+    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. (502)' });
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' });
+  });
+
+  it('관리자 로그아웃은 관리자 인증 경로에만 보낸다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    await admin.signOut();
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/auth/sign-out',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   });
 
   it('실패 응답은 상태와 서버 오류 코드를 담아 던진다', async () => {

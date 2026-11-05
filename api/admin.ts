@@ -1,15 +1,16 @@
 // 관리자 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽고, 관리자 쓰기(POST)를 받는다 (Node 런타임)
 // 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 비밀번호 재설정 링크 발급(q=resetLink), 편지 처리 표시(q=letterHandled)이다.
 // 제재·해제와 재설정 링크 발급은 조치한 관리자 id를 대상 사용자의 이벤트로 함께 남긴다.
-// 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 세션 토큰의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
-// 토큰이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
+// 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 관리자 세션의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
+// 관리자 세션은 대시보드 로그인이 발급한 쿠키만 인정하고 게임 세션 쿠키는 받지 않는다.
+// 관리자 세션이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
 // 응답에는 이메일 같은 개인정보가 담기므로 어떤 응답도 캐시하지 않는다.
 // 리소스 경로 조회(GET /api/admin/live·stats/daily·retention·sessions)도 같은 판정을 거친다. 질의 문자열은 필터에만 쓴다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. default export가 Node 시그니처다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { newPasswordResetToken, passwordResetLanding, RESET_PASSWORD_EXPIRES_IN } from './_auth/auth.js';
-import { sessionOf } from './_auth/session.js';
+import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { onlineUsers } from './_server/livePresence.js';
@@ -76,10 +77,10 @@ const RESOURCES: Record<string, (req: Req) => (db: Executor) => Promise<unknown>
   },
 };
 
-/** 세션의 사용자와 관리자 여부. 세션이 없으면 401이다 */
+/** 관리자 세션의 사용자와 관리자 여부. 관리자 세션이 없으면 401이다 */
 async function caller(req: Req): Promise<{ uid: string; admin: boolean; store: Database }> {
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
-  const uid = (await sessionOf(req.headers))?.id ?? null;
+  const uid = await adminSessionUid(req.headers);
   if (!uid) throw new ApiError(401, 'unauthorized');
   const store = database();
   const admin = await dbRead(() => read.isAdmin(store.db, uid));
