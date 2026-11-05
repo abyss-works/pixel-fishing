@@ -582,6 +582,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let released: ReleasedFish[] = [];
+  let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
     // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이
@@ -599,9 +600,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
       const gone = tops.find(t => t?.uid === pick.evictUid)!;
       const f = instanceFish(gone);
       released = [{ uid: gone.uid, name: f ? formName(f, gone.form) : gone.fishId }];
+      goneFish = [gone];
     } else if (pick.evictNew) {
       added = []; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
       released = [{ uid: inst.uid, name: formName(fish, inst.form) }];
+      goneFish = [inst];
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
   }
@@ -613,7 +616,8 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     ...(drawn.byCeiling ? { pity: true } : {}),
   } }];
   if (overflow.length > 0) {
-    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
+    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+      fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
   const scalars = takeItem(base, bait?.id ?? '');
   return {

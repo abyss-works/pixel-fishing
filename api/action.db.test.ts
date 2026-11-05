@@ -131,7 +131,12 @@ describe('낚시', () => {
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish(i % 2 ? 'minnow' : 'crucian', { size: 10 + i }));
-    expect(await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' })).toMatchSnapshot();
+    const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    // 자동 방생 이벤트는 놓아준 개체의 어종과 폼을 함께 남긴다
+    const release = (out.db.events as { type: string; payload: { uids: string[]; fish: unknown[] } }[])
+      .find(e => e.type === 'autoRelease')!;
+    expect(release.payload.fish).toEqual([{ uid: release.payload.uids[0], fishId: expect.any(String), form: expect.any(String) }]);
+    expect(out).toMatchSnapshot();
   });
 
   it('가방이 가득 차고 모두 잠겨 있으면 상한을 넘겨 보관한다', async () => {
