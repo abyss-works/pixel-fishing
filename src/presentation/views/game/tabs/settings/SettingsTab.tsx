@@ -82,11 +82,11 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
 
       <SectionTitle>알림</SectionTitle>
       <Frame className="mb-2">
-        <KeyValueRow label="네임드 조우"
+        <KeyValueRow label="네임드 조우 · 업데이트"
                     value={<span className="text-xs">{alertSummary(alertSetting)}</span>}
                     action={canToggleAlert && (alertSetting.active
-                      ? <Button size="sm" aria-label="조우 알림 끄기" onClick={alertSetting.disable}>끄기</Button>
-                      : <Button size="sm" aria-label="조우 알림 켜기" onClick={() => {
+                      ? <Button size="sm" aria-label="알림 끄기" onClick={alertSetting.disable}>끄기</Button>
+                      : <Button size="sm" aria-label="알림 켜기" onClick={() => {
                           void alertSetting.enable().then(ok => {
                             if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
                           });

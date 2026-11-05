@@ -12,6 +12,7 @@ import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
 import { setSchoolDay } from './schoolDay';
+import { alertUpdate } from './updateAlert';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -57,7 +58,11 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   useEffect(() => subscribeFailure((err: AppError) => {
     const policy = POLICY[err.kind];
     const modal = policy.modal;
-    if (modal) setBlocker(current => current ?? modal);
+    if (modal) {
+      setBlocker(current => current ?? modal);
+      // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
+      if (modal === 'update') alertUpdate();
+    }
     if (!policy.rescue) return;
     setSync(api.auth.isConfigured ? 'error' : 'off');
     if (alertedRef.current) return;

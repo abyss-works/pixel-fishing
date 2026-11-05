@@ -662,7 +662,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     render(<App />);
     clickTab('설정');
     expect(screen.getByText('이 브라우저는 알림을 지원하지 않아요')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '조우 알림 켜기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '알림 켜기' })).toBeNull();
   });
 
   it('조우 알림 켜기는 브라우저 권한을 묻고, 허용되면 켜짐으로 바뀐다', async () => {
@@ -671,10 +671,10 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     try {
       render(<App />);
       clickTab('설정');
-      fireEvent.click(screen.getByRole('button', { name: '조우 알림 켜기' }));
+      fireEvent.click(screen.getByRole('button', { name: '알림 켜기' }));
       expect(await screen.findByText('켜짐 · 다른 화면을 볼 때 알려 줘요')).toBeInTheDocument();
       expect(requestPermission).toHaveBeenCalledTimes(1);
-      fireEvent.click(screen.getByRole('button', { name: '조우 알림 끄기' }));
+      fireEvent.click(screen.getByRole('button', { name: '알림 끄기' }));
       expect(screen.getByText('꺼짐')).toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();
