@@ -24,10 +24,11 @@ function request(op: GuildOp): [string, RequestInit] {
     case 'invite': return [`${guild(op.guildId)}/invites`, { method: 'POST' }];
     case 'remove': return [`${guild(op.guildId)}/members/${encodeURIComponent(op.uid)}`, { method: 'DELETE' }];
     case 'handover': return [`${guild(op.guildId)}/leader`, json('PUT', { uid: op.uid })];
+    case 'donate': return [`${guild(op.guildId)}/bonuses/${encodeURIComponent(op.bonus)}/donations`, json('POST', { amount: op.amount })];
   }
 }
 
-/** 만들기·가입·코드 발급·떠나기·내보내기·위임. 서버가 거절하면 오류 코드를 돌려주고, 연결 실패는 던진다 */
+/** 만들기·가입·코드 발급·떠나기·내보내기·위임·보너스 기부. 서버가 거절하면 오류 코드를 돌려주고, 연결 실패는 던진다 */
 export async function guildAction(op: GuildOp): Promise<GuildOpResult> {
   const res = await fetch(...request(op));
   if (res.status >= 500) throw new AppError('network', 'guild action failed', { status: res.status });

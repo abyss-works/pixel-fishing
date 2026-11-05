@@ -1,10 +1,10 @@
 // 액션 경로의 길드 성장 — 실제 Postgres에서 기여 기록(하루 상한·게임 날짜·의뢰 클리어), 항해일지,
-// 서버가 누적 기여도로 정한 보너스(어종 천장, 일반 의뢰 보상)를 검사한다.
+// 길드 레벨이 천장·의뢰 보상을 바꾸지 않음과 서버가 보너스 단계로 정한 효과(판매가·가방·돌연변이)를 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES } from '../src/game/content/bounties.js';
-import { RARITY } from '../src/game/rules/logic.js';
+import { RARITY, capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
 import { SPECIES_PITY_K } from '../src/game/rules/pity.js';
-import { callAction, captureRealClock, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
 const NOW = '2030-03-04T05:06:07.000Z'; // KST 14:06 — 게임 날짜 2030-03-04
@@ -89,27 +89,69 @@ describe('기여', () => {
   });
 });
 
-describe('보너스(서버 판정)', () => {
-  it('Lv2부터 어종 천장이 5% 빨리 찬다 — 길드가 없으면 같은 진척으로 확정하지 않는다. 전설 획득은 항해일지에 남는다', async () => {
-    const pity = { goldcarp: SPECIES_PITY_K * 0.95 };
-    const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'solo2@test.dev', state: { pity } });
-    const plain = await callAction(userToken(solo), catchPond);
+describe('길드 레벨과 천장·의뢰 보상', () => {
+  it('어종 천장은 길드 레벨과 관계없이 같은 문턱에서 확정한다. 전설 획득은 항해일지에 남는다', async () => {
+    const near = await member({ state: { pity: { goldcarp: SPECIES_PITY_K * 0.95 } } }, 100_000);
+    const plain = await callAction(userToken(near.uid), catchPond);
     expect((plain.body as { result: { fishId: string } }).result.fishId).not.toBe('goldcarp');
 
-    const { uid, guild } = await member({ state: { pity } }, 10_000);
-    const boosted = await callAction(userToken(uid), catchPond);
-    expect((boosted.body as { result: { fishId: string } }).result.fishId).toBe('goldcarp');
+    const { uid, guild } = await member({ state: { pity: { goldcarp: SPECIES_PITY_K } } }, 100_000);
+    const full = await callAction(userToken(uid), catchPond);
+    expect((full.body as { result: { fishId: string } }).result.fishId).toBe('goldcarp');
     expect(await logs(guild)).toEqual([{ kind: 'legendary', user_id: uid, detail: 'goldcarp' }]);
     expect(await contributions(uid)).toEqual([{ day: TODAY, fame: RARITY.legendary.fame, clears: 0 }]);
   });
 
-  it('Lv3부터 일반 의뢰 보상이 5% 늘어난다', async () => {
+  it('일반 의뢰 보상은 길드 레벨과 관계없이 그대로다', async () => {
     const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
-    const { uid } = await member({ state: { gold: 0 } }, 25_000);
+    const { uid } = await member({ state: { gold: 0 } }, 100_000);
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
       [uid, quest.zone, quest.id, quest.count, NOW]);
     expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })).status).toBe(200);
     const { rows: [s] } = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
-    expect(Number(s.gold)).toBe(Math.round(quest.reward * 1.05));
+    expect(Number(s.gold)).toBe(quest.reward);
+  });
+});
+
+describe('보너스 효과(서버 판정)', () => {
+  const rank = (guild: string, bonus: string, r: number) => env.client.query(
+    'insert into public.guild_bonuses (guild_id, bonus, rank) values ($1, $2, $3)', [guild, bonus, r]);
+  const goldOf = async (uid: string) =>
+    Number((await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
+
+  it('판매는 판매가 보너스를 판매 총액에 한 번 더한다. 레벨로 열린 1단계는 기부 없이도 적용된다', async () => {
+    const bag = [fish('crucian'), fish('crucian')];
+    const base = bag.reduce((a, i) => a + priceOfInstance(i), 0);
+    const sell = async (total: number, stored: number | null) => {
+      const items = bag.map(i => ({ ...i, uid: crypto.randomUUID() }));
+      const { uid, guild } = await member({ state: { gold: 0, bag: items } }, total);
+      if (stored !== null) await rank(guild, 'sell', stored);
+      expect((await callAction(userToken(uid), { type: 'sell', uids: items.map(i => i.uid) })).status).toBe(200);
+      return goldOf(uid);
+    };
+    expect(await sell(0, null)).toBe(base + Math.round(base * 0.02));
+    expect(await sell(25_000, 3)).toBe(base + Math.round(base * 0.06));
+  });
+
+  it('캐치 fast path는 가방 보너스만큼 늘어난 칸으로 넘침을 판정한다', async () => {
+    const full = () => Array.from({ length: capOfBoat(0) }, () => fish('crucian'));
+    const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'bag-solo@test.dev', state: { boat: 0, bag: full() } });
+    const plain = await callAction(userToken(solo), catchPond);
+    expect((plain.body as { result: { released: unknown[] } }).result.released).toHaveLength(1);
+    const { uid } = await member({ state: { boat: 0, bag: full() } }, 10_000); // Lv2 — 가방 용량 1단계
+    const boosted = await callAction(userToken(uid), catchPond);
+    expect((boosted.body as { result: { released: unknown[] } }).result.released).toEqual([]);
+  });
+
+  it('캐치 fast path는 돌연변이 확률에 퍼센트포인트를 더한다', async () => {
+    const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.02;
+    vi.spyOn(Math, 'random').mockReturnValue(r);
+    const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'mut-solo@test.dev', state: {} });
+    const plain = await callAction(userToken(solo), catchPond);
+    expect((plain.body as { result: { info: { form: string } } }).result.info.form).toBe('normal');
+    const { uid, guild } = await member({}, 100_000);
+    await rank(guild, 'mutation', 5);
+    const boosted = await callAction(userToken(uid), catchPond);
+    expect((boosted.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
   });
 });

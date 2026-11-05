@@ -1,15 +1,17 @@
-// 길드(guilds·guild_members·guild_invites·guild_contributions·guild_logs) 소유 모듈 — 만들기, 초대 코드, 가입,
-// 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록, 조회, 계정 정리.
+// 길드(guilds·guild_members·guild_invites·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations) 소유 모듈 —
+// 만들기, 초대 코드, 가입, 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록, 보너스 기부, 조회, 계정 정리.
 // 인원과 역할을 보고 바꾸는 작업은 트랜잭션 안에서 길드 행을 잠가 같은 길드의 변경을 줄 세운다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import {
-  GUILD_DAILY_FAME_CAP, contributionDayOf, guildBonusOf, guildFull, guildProgress, handoverOutcome, inviteExpiresAt,
-  removalOutcome,
+  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome,
+  guildBonusLevels,
+  guildEffectsOf, guildFull, guildLevelOf, guildProgress, handoverOutcome, inviteExpiresAt, removalOutcome,
 } from '../../src/game/rules/guild.js';
-import type { GuildActor, GuildBonus, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
+import type { GuildActor, GuildBonusId, GuildEffects, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
+import { goldDebit } from './save.js';
 
 type Tx = Database['withTransaction'];
 
@@ -24,15 +26,40 @@ export interface GuildMember {
   contribution: { total: number; today: number };
 }
 
-/** 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id다 */
+/**
+ * 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id, 기부·단계 상승이면 보너스 id다.
+ * value는 기부면 골드, 단계 상승이면 새 단계이고 그 밖에는 null이다
+ */
 export interface GuildLog {
   id: number;
   kind: GuildLogKind;
   uid: string;
   nick: string | null;
   detail: string | null;
+  value: number | null;
   at: string;
 }
+
+/**
+ * 보너스 하나의 상태 — 해금 레벨, 지금 단계(열렸으면 최소 1)와 상한(길드 레벨, 열리지 않았으면 0), 다음 단계를 향해
+ * 모인 골드와 비용, 지금·다음 단계 효과, 내가 이 보너스에 기부한 골드
+ */
+export interface GuildBonusView {
+  id: GuildBonusId;
+  unlock: number;
+  rank: number;
+  cap: number;
+  pool: number;
+  /** 다음 단계 비용. 5단계이거나 열리지 않았으면 null */
+  next: number | null;
+  /** 지금 단계의 효과와 다음 단계의 효과(5단계면 null) */
+  effect: number;
+  nextEffect: number | null;
+  mine: number;
+}
+
+/** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
+export interface GuildDonor { uid: string | null; nick: string | null; gold: number }
 
 /** 조회에 싣는 항해일지 줄 수(최근 순) */
 const LOGBOOK_LIMIT = 50;
@@ -47,8 +74,12 @@ export interface GuildView {
   members: GuildMember[];
   /** 쓸 수 있는 초대 코드. 길드장에게만 싣고, 없거나 만료됐으면 null */
   invite: { code: string; expiresAt: string } | null;
-  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null), 지금 받는 보너스 */
-  growth: { level: number; total: number; floor: number; next: number | null; bonus: GuildBonus };
+  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null) */
+  growth: { level: number; total: number; floor: number; next: number | null };
+  /** 보너스 다섯(해금 순)과, 그 단계로 서버가 액션에 적용하는 효과, 기부 순위(전체 기부액 많은 순) */
+  bonuses: GuildBonusView[];
+  effects: GuildEffects;
+  donors: GuildDonor[];
   /** 항해일지 — 최근 순 */
   logbook: GuildLog[];
 }
@@ -87,13 +118,15 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
   const { rows: [sum] } = await db.execute<{ total: number | string }>(sql`select ${guildTotal(sql`${g.id}::uuid`)} as total`);
   const progress = guildProgress(Number(sum.total));
   const { rows: logs } = await db.execute<{
-    id: number | string; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; created_at: string | Date;
+    id: number | string; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null;
+    value: number | string | null; created_at: string | Date;
   }>(sql`
-    select l.id, l.kind, l.user_id::text as uid, p.nickname as nick, l.detail, l.created_at
+    select l.id, l.kind, l.user_id::text as uid, p.nickname as nick, l.detail, l.value, l.created_at
     from public.guild_logs l left join public.profiles p on p.user_id = l.user_id
     where l.guild_id = ${g.id} order by l.id desc limit ${LOGBOOK_LIMIT}`);
   const logbook = logs.map(l => ({ id: Number(l.id), kind: l.kind, uid: l.uid, nick: l.nick, detail: l.detail,
-    at: iso(l.created_at) }));
+    value: l.value === null ? null : Number(l.value), at: iso(l.created_at) }));
+  const { bonuses, effects, donors } = await bonusViews(db, g.id, uid, progress.level);
   let invite: GuildView['invite'] = null;
   if (g.role === 'leader') {
     const { rows: [i] } = await db.execute<{ code: string; expires_at: string | Date }>(sql`select code, expires_at
@@ -101,8 +134,77 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
     if (i) invite = { code: i.code, expiresAt: iso(i.expires_at) };
   }
   return { id: g.id, name: g.name, createdAt: iso(g.created_at), role: g.role, members, invite,
-    growth: { ...progress, bonus: guildBonusOf(progress.level) }, logbook };
+    growth: progress, bonuses, effects, donors, logbook };
 }
+
+/** 보너스 다섯의 상태, 효과, 기부 순위 — 기부가 없던 보너스는 저장된 단계 0, 모인 골드 0이다 */
+async function bonusViews(db: Executor, guildId: string, uid: string, level: number):
+  Promise<{ bonuses: GuildBonusView[]; effects: GuildEffects; donors: GuildDonor[] }> {
+  const { rows: ranks } = await db.execute<{ bonus: GuildBonusId; rank: number; pool: number | string }>(sql`
+    select bonus, rank, pool from public.guild_bonuses where guild_id = ${guildId}`);
+  const { rows: mine } = await db.execute<{ bonus: GuildBonusId; gold: number | string }>(sql`
+    select bonus, gold from public.guild_bonus_donations where guild_id = ${guildId} and user_id = ${uid}`);
+  const { rows: totals } = await db.execute<{ uid: string | null; nick: string | null; gold: number | string }>(sql`
+    select d.user_id::text as uid, p.nickname as nick, sum(d.gold) as gold
+    from public.guild_bonus_donations d left join public.profiles p on p.user_id = d.user_id
+    where d.guild_id = ${guildId} group by d.user_id, p.nickname order by sum(d.gold) desc, d.user_id`);
+  const stored = Object.fromEntries(ranks.map(r => [r.bonus, r.rank])) as Partial<Record<GuildBonusId, number>>;
+  const bonuses = guildBonusLevels(level).map(({ id, unlock, cap }) => {
+    const rank = bonusRank(id, level, stored[id] ?? 0);
+    return { id, unlock, rank, cap, pool: Number(ranks.find(r => r.bonus === id)?.pool ?? 0),
+      next: rank > 0 ? bonusRankCost(rank + 1) : null, effect: bonusEffect(id, rank),
+      nextEffect: rank < GUILD_BONUS_MAX_RANK ? bonusEffect(id, rank + 1) : null,
+      mine: Number(mine.find(m => m.bonus === id)?.gold ?? 0) };
+  });
+  return { bonuses, effects: guildEffectsOf(level, stored),
+    donors: totals.map(t => ({ uid: t.uid, nick: t.nick, gold: Number(t.gold) })) };
+}
+
+export type DonateOutcome =
+  | { ok: true; rank: number; pool: number; accepted: number; gold: number }
+  | { ok: false; error: 'not-member' | 'restricted' | 'bonus-locked' | 'rank-maxed' | 'not-enough-gold' };
+
+/**
+ * 보너스 기부 — 기부한 사람의 저장 골드를 빼고, 그 보너스의 단계와 모인 골드, 기부 합계, 항해일지를 한 트랜잭션에 쓴다.
+ * 길드 행을 잠가 같은 길드의 기부를 줄 세우고, 저장 행을 잠근 뒤 골드를 확인한다. 저장 버전을 올리므로
+ * 기부 전에 상태를 읽은 액션은 낙관 락에서 거부되고(409) 최신 상태로 다시 시도한다 — 기부로 뺀 골드를 덮어쓰지 않는다.
+ * 저장 행이 없으면 가진 골드가 0이다. 기부는 기여로 세지 않는다.
+ */
+export async function donateToBonus(withTransaction: Tx, uid: string, guildId: string, bonus: GuildBonusId,
+  amount: number, nowISO: string): Promise<DonateOutcome> {
+  return withTransaction(async tx => {
+    const members = await lockMembers(tx, guildId);
+    if (!members?.some(m => m.uid === uid)) return { ok: false, error: 'not-member' };
+    const { rows: [sum] } = await tx.execute<{ total: number | string }>(sql`select ${guildTotal(sql`${guildId}::uuid`)} as total`);
+    const { rows: [cur] } = await tx.execute<{ rank: number; pool: number | string }>(sql`select rank, pool
+      from public.guild_bonuses where guild_id = ${guildId} and bonus = ${bonus}`);
+    const { rows: [save] } = await tx.execute<{ gold: number | string; restricted: boolean | null }>(sql`select gold, restricted
+      from public.saves_current where user_id = ${uid} for update`);
+    if (save?.restricted) return { ok: false, error: 'restricted' };
+    const gold = Number(save?.gold ?? 0);
+    const level = guildLevelOf(Number(sum.total));
+    const before = bonusRank(bonus, level, cur?.rank ?? 0);
+    const r = donationOutcome(bonus, level, { rank: cur?.rank ?? 0, pool: Number(cur?.pool ?? 0) }, gold, amount);
+    if (!r.ok) return r;
+    await tx.execute(goldDebit(uid, r.accepted));
+    await tx.execute(sql`insert into public.guild_bonuses (guild_id, bonus, rank, pool) values (${guildId}, ${bonus}, ${r.rank}, ${r.pool})
+      on conflict (guild_id, bonus) do update set rank = excluded.rank, pool = excluded.pool`);
+    await tx.execute(sql`insert into public.guild_bonus_donations (guild_id, user_id, bonus, gold)
+      values (${guildId}, ${uid}, ${bonus}, ${r.accepted})
+      on conflict (guild_id, user_id, bonus) do update set gold = public.guild_bonus_donations.gold + excluded.gold`);
+    await tx.execute(sql`insert into public.guild_logs (guild_id, user_id, kind, detail, value, created_at)
+      values (${guildId}, ${uid}, 'donate', ${bonus}, ${r.accepted}, ${at(nowISO)})`);
+    if (r.rank > before) {
+      await tx.execute(sql`insert into public.guild_logs (guild_id, user_id, kind, detail, value, created_at)
+        values (${guildId}, ${uid}, 'bonus-up', ${bonus}, ${r.rank}, ${at(nowISO)})`);
+    }
+    return { ok: true, rank: r.rank, pool: r.pool, accepted: r.accepted, gold: gold - r.accepted };
+  });
+}
+
+/** 길드의 저장된 보너스별 단계를 { 보너스: 단계 } JSON으로 읽는 하위 쿼리 — 액션 읽기가 효과를 계산할 때 쓴다 */
+export const guildRanksJson = (guildId: SQL) =>
+  sql`(select coalesce(json_object_agg(b.bonus, b.rank), '{}') from public.guild_bonuses b where b.guild_id = ${guildId})`;
 
 /**
  * 길드의 누적 기여도 — 그 길드의 하루 기여 행(떠난 선원·지운 계정 포함)의 합.
@@ -244,12 +346,13 @@ export async function handOver(withTransaction: Tx, uid: string, guildId: string
 
 /**
  * 계정 정리에서 그 사용자의 길드원 행과 항해일지 줄을 모두 지운다(떠난 길드의 기록 포함).
- * 기여 행은 사람 열만 비우고 남긴다 — 길드의 누적 기여도와 레벨이 줄지 않는다.
+ * 기여 행과 기부 행은 사람 열만 비우고 남긴다 — 길드의 누적 기여도와 레벨, 보너스 기부 기록이 줄지 않는다.
  * 길드장이면 가장 먼저 들어온 길드원에게 길드장을 넘기고, 혼자면 길드를 없앤다.
  */
 export async function deleteUserGuild(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.guild_logs where user_id = ${uid}`);
   await db.execute(sql`update public.guild_contributions set user_id = null where user_id = ${uid}`);
+  await db.execute(sql`update public.guild_bonus_donations set user_id = null where user_id = ${uid}`);
   const { rows: [led] } = await db.execute<{ id: string }>(sql`select guild_id::text as id from public.guild_members
     where user_id = ${uid} and role = 'leader'`);
   await db.execute(sql`delete from public.guild_members where user_id = ${uid}`);

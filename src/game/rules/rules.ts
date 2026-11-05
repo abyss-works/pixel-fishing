@@ -13,7 +13,7 @@ import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
-import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../content/bounties.js';
+import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
 import { zoneById } from '../content/zones.js';
 import type { BaseId } from '../content/places.js';
 import { artifactById } from '../content/artifacts.js';
@@ -91,11 +91,12 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
 };
 
 /** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).
- *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다. */
-export function canExhibit(state: GameState, uid: string, slot: number | null): RuleCheck {
+ *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다.
+ *  @param bagBonus 가방 칸에 더하는 비율(길드 가방 용량 보너스) */
+export function canExhibit(state: GameState, uid: string, slot: number | null, bagBonus = 0): RuleCheck {
   if (slot === null) {
     if (!state.exhibit.some(i => i?.uid === uid)) return no('bad-request');
-    return state.bag.length < bagCapacity(state.boat, state.bag) ? OK : no('bag-full');
+    return state.bag.length < bagCapacity(state.boat, state.bag, bagBonus) ? OK : no('bag-full');
   }
   if (!Number.isInteger(slot) || slot < 0 || slot >= EXHIBIT_SLOTS) return no('bad-request');
   if (!state.bag.some(i => i.uid === uid)) return no('bad-request');
@@ -193,14 +194,6 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
   const q = bountyById(questId);
   if (!q) return no('bad-request');
   return ctx && ctx.complete.includes(questId) ? OK : no('quest-incomplete');
-}
-
-/**
- * 납품 보상 골드. 길드 보너스는 일반 의뢰에만 붙고 네임드 토벌 보상은 그대로다.
- * @param rewardBonus 길드 보너스의 일반 의뢰 보상 비율
- */
-export function deliveryReward(quest: Pick<BountyQuest, 'difficulty' | 'reward'>, rewardBonus: number): number {
-  return bountyKindOf(quest) === 'named' ? quest.reward : Math.round(quest.reward * (1 + rewardBonus));
 }
 
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는

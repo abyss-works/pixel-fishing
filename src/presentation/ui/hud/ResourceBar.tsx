@@ -52,12 +52,12 @@ const BAG_TONE: Record<BagLevel, keyof typeof TONE> = { normal: 'gold', warn: 'o
 
 const UNKNOWN = '–';
 
-export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
+export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: GameState; bagBonus?: number; onOpen?: () => void }) {
   // 오늘 남은 클리어 횟수(일반 의뢰 · 네임드 토벌) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면
   // 숫자 대신 "–"를 둔다 (0으로 보이면 거짓말이다).
   const { snap } = useBounty();
   const left = clearsLeft(snap);
-  const bag = selectBagStatus(game);
+  const bag = selectBagStatus(game, bagBonus);
   const stats = [
     <Stat key="gold" glyph="coin" label="골드"><b className="font-bold">{fmtCompact(game.gold)}</b></Stat>,
     <Stat key="fame" glyph="star" label="명성"><b className="font-bold">{fmtCompact(game.fame)}</b></Stat>,

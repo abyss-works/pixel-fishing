@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   GUILD_INVITE_TTL_MS, GUILD_MAX_MEMBERS, checkGuildName, guildFull, handoverOutcome, inviteCode, inviteExpiresAt,
   normalizeInviteCode, removalOutcome,
-  GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, NO_GUILD_BONUS, contributionDayOf, contributionFor, guildBonusOf, guildLevelOf,
-  guildProgress,
+  GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
+  GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, donationOutcome, guildBonusLevels,
+  guildEffectsOf, validDonationAmount,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -99,14 +100,82 @@ describe('길드 성장 — 레벨', () => {
   });
 });
 
-describe('길드 성장 — 보너스', () => {
-  it('레벨이 오르면 누적된다. Lv4는 어종 천장을 10%로 바꾸고, Lv5는 네임드 천장을 더한다', () => {
-    expect(guildBonusOf(1)).toEqual(NO_GUILD_BONUS);
-    expect(NO_GUILD_BONUS).toEqual({ speciesPity: 0, bountyReward: 0, namedPity: 0 });
-    expect(guildBonusOf(2)).toEqual({ speciesPity: 0.05, bountyReward: 0, namedPity: 0 });
-    expect(guildBonusOf(3)).toEqual({ speciesPity: 0.05, bountyReward: 0.05, namedPity: 0 });
-    expect(guildBonusOf(4)).toEqual({ speciesPity: 0.1, bountyReward: 0.05, namedPity: 0 });
-    expect(guildBonusOf(5)).toEqual({ speciesPity: 0.1, bountyReward: 0.05, namedPity: 0.1 });
+describe('길드 보너스 — 해금과 단계 상한', () => {
+  it('다섯 보너스가 Lv1~5에 하나씩 열리고, 단계 상한은 길드 레벨이다. 열리지 않은 보너스는 상한 0이다', () => {
+    expect(GUILD_BONUS_IDS).toEqual(['sell', 'bag', 'named', 'rare', 'mutation']);
+    expect(guildBonusLevels(1)).toEqual([
+      { id: 'sell', unlock: 1, cap: 1 }, { id: 'bag', unlock: 2, cap: 0 }, { id: 'named', unlock: 3, cap: 0 },
+      { id: 'rare', unlock: 4, cap: 0 }, { id: 'mutation', unlock: 5, cap: 0 },
+    ]);
+    expect(guildBonusLevels(3).map(b => b.cap)).toEqual([3, 3, 3, 0, 0]);
+    expect(guildBonusLevels(5).map(b => b.cap)).toEqual([5, 5, 5, 5, 5]);
+  });
+
+  it('1단계는 레벨 도달로 비용 없이 열린다. 2~5단계 비용은 15만 · 50만 · 150만 · 500만 골드다', () => {
+    expect([2, 3, 4, 5].map(bonusRankCost)).toEqual([150_000, 500_000, 1_500_000, 5_000_000]);
+    expect(bonusRankCost(1)).toBeNull();
+    expect(bonusRankCost(6)).toBeNull();
+  });
+
+  it('지금 단계 — 열린 보너스는 기부가 없어도 1단계다. 열리지 않았으면 0단계다', () => {
+    expect(bonusRank('sell', 1, 0)).toBe(1);
+    expect(bonusRank('sell', 3, 2)).toBe(2);
+    expect(bonusRank('bag', 1, 0)).toBe(0);
+    expect(bonusRank('mutation', 5, 0)).toBe(1);
+  });
+});
+
+describe('길드 보너스 — 기부', () => {
+  it('모인 골드가 다음 단계 비용에 닿으면 단계가 오르고 남은 골드는 이어진다', () => {
+    expect(applyDonation(0, 1, 5, 100_000)).toEqual({ rank: 1, pool: 100_000, accepted: 100_000 });
+    expect(applyDonation(100_000, 1, 5, 100_000)).toEqual({ rank: 2, pool: 50_000, accepted: 100_000 });
+  });
+
+  it('한 번에 여러 단계가 오를 수 있다', () => {
+    expect(applyDonation(0, 1, 5, 700_000)).toEqual({ rank: 3, pool: 50_000, accepted: 700_000 });
+  });
+
+  it('상한을 넘는 골드는 받지 않는다 — 상한 단계까지 필요한 만큼만 받는다', () => {
+    expect(applyDonation(50_000, 1, 3, 5_000_000)).toEqual({ rank: 3, pool: 0, accepted: 600_000 });
+    expect(applyDonation(0, 3, 3, 1_000)).toEqual({ rank: 3, pool: 0, accepted: 0 });
+  });
+
+  it('판정 — 열리지 않았으면 bonus-locked, 상한이면 rank-maxed, 받을 골드보다 가진 골드가 적으면 not-enough-gold', () => {
+    expect(donationOutcome('bag', 1, { rank: 0, pool: 0 }, 1e9, 1_000)).toEqual({ ok: false, error: 'bonus-locked' });
+    // Lv1 판매가는 비용 없이 1단계이고 상한도 1이라 기부할 곳이 없다
+    expect(donationOutcome('sell', 1, { rank: 0, pool: 0 }, 1e9, 1_000)).toEqual({ ok: false, error: 'rank-maxed' });
+    expect(donationOutcome('sell', 3, { rank: 0, pool: 0 }, 999, 1_000)).toEqual({ ok: false, error: 'not-enough-gold' });
+    // 처음 기부도 1단계 위(2단계 비용)부터 모은다. 상한까지 필요한 골드만 받으므로 요청액보다 적게 가져도 된다
+    expect(donationOutcome('sell', 2, { rank: 0, pool: 140_000 }, 10_000, 50_000))
+      .toEqual({ ok: true, rank: 2, pool: 0, accepted: 10_000 });
+  });
+
+  it('기부액은 1 이상의 정수 골드다', () => {
+    expect(validDonationAmount(1)).toBe(true);
+    expect(validDonationAmount(100_000)).toBe(true);
+    for (const v of [0, -1, 1.5, '100', null, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) expect(validDonationAmount(v)).toBe(false);
+  });
+});
+
+describe('길드 보너스 — 효과(합연산)', () => {
+  it('단계당 효과 — 판매가 +2%, 가방 +4%, 네임드 조우 +5%, 일반 가중치 −2%, 돌연변이 +1%p', () => {
+    expect([1, 5].map(r => bonusEffect('sell', r))).toEqual([0.02, 0.1]);
+    expect([1, 5].map(r => bonusEffect('bag', r))).toEqual([0.04, 0.2]);
+    expect([1, 5].map(r => bonusEffect('named', r))).toEqual([0.05, 0.25]);
+    expect([1, 5].map(r => bonusEffect('rare', r))).toEqual([0.02, 0.1]);
+    expect([1, 5].map(r => bonusEffect('mutation', r))).toEqual([0.01, 0.05]);
+  });
+
+  it('효과는 단계 효과를 더한 값 하나다 — 단계마다 곱하지 않는다', () => {
+    expect(bonusEffect('sell', 3)).toBe(0.06);
+    expect(bonusEffect('rare', 5)).toBe(0.1); // 0.98^5가 아니다
+    expect(NO_GUILD_EFFECTS).toEqual({ sell: 0, bag: 0, named: 0, rare: 0, mutation: 0 });
+  });
+
+  it('길드 효과는 레벨로 열린 1단계와 기부로 오른 단계 중 높은 단계로 정한다', () => {
+    expect(guildEffectsOf(3, { sell: 3, bag: 2 })).toEqual({ sell: 0.06, bag: 0.08, named: 0.05, rare: 0, mutation: 0 });
+    expect(guildEffectsOf(1, {})).toEqual({ sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 });
+    expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.01 });
   });
 });
 
