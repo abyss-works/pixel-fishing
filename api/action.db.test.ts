@@ -713,7 +713,8 @@ describe('우편 받기', () => {
       callAction(userToken(uid), { type: 'claimMail', id }),
     ]);
     expect(results.filter(r => r.status === 200)).toHaveLength(1);
-    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422])]);
+    // 두 요청이 겹치면 409(동시 갱신)나 422(이미 받음), 앞 요청이 먼저 확정되면 429(액션 간격)다. 어느 쪽이든 지급은 한 번이다
+    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422, 429])]);
     const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
     expect(Number(gold.rows[0].gold)).toBe(800);
     const mail = await env.client.query<{ claimed_at: Date | null }>('select claimed_at from public.mails where id = $1', [id]);
