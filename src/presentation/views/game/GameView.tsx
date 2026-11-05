@@ -41,6 +41,10 @@ import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
+import AwayCard from '../overlays/away/AwayCard';
+import AwayReportModal from '../overlays/away/AwayReportModal';
+import { awayLineText } from '../overlays/away/awayText';
+import { useAwayReport } from '../../../features/away/service/useAwayReport';
 import PresenceChip from '../overlays/live/PresenceChip';
 import ChatBar from '../overlays/live/ChatBar';
 import PlayersModal from '../overlays/live/PlayersModal';
@@ -104,6 +108,10 @@ export default function GameView(props: GameViewProps) {
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
   useFriendAlerts(props.account !== null, props.setToast);
+  // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
+  const away = useAwayReport(s => props.setToast(awayLineText(s), 'gold'));
+  const [awayOpen, setAwayOpen] = useState(false);
+  const closeAway = () => { setAwayOpen(false); away.dismiss(); };
   const log = chat.enabled
     ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
     : props.log;
@@ -201,10 +209,13 @@ export default function GameView(props: GameViewProps) {
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
-                   notice={atSea ? (
+                   notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
-                       <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} />
-                       <TraceCard onTrack={setTracking} />
+                       {away.report && !awayOpen && (
+                         <AwayCard report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
+                       )}
+                       {atSea && <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} />}
+                       {atSea && <TraceCard onTrack={setTracking} />}
                      </div>
                    ) : null} badge={props.badge} />
         {dialogs}
@@ -220,6 +231,10 @@ export default function GameView(props: GameViewProps) {
                       onClose={() => setStatsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        {away.report && awayOpen && (
+          <AwayReportModal report={away.report} game={game} onClose={closeAway}
+                           onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
+        )}
         <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
         <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
