@@ -18,25 +18,25 @@ describe('자원 바', () => {
   it('오늘 의뢰 칸은 서버 값이 오기 전에도 자리를 지키고 "–"를 보인다', () => {
     render(<ResourceBar game={newState()} />);
     expect(hud()).toContain('오늘 의뢰');
-    expect(hud()).toContain('––');
+    expect(hud()).toContain('일반–네임드–');
   });
 
-  it('서버 값이 있으면 오늘 남은 클리어를 일반 의뢰 · 네임드 토벌 순서로 나란히 보인다', () => {
+  it('서버 값이 있으면 오늘 남은 클리어를 일반 · 네임드 이름을 붙여 그 순서로 나란히 보인다', () => {
     snap = { clearsToday: { general: 1, named: 0 }, progress: [], tickets: [] };
     render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 01$/);
+    expect(hud()).toMatch(/오늘 의뢰 일반0네임드1$/);
   });
 
   it('수주만으로는 남은 클리어가 줄지 않는다 — 진행 중인 의뢰가 있어도 클리어 0이면 그대로다', () => {
     snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-common', progress: 3 }], tickets: [] };
     render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 11$/);
+    expect(hud()).toMatch(/오늘 의뢰 일반1네임드1$/);
   });
 
   it('두 갈래를 모두 클리어했으면 0 · 0이다', () => {
     snap = { clearsToday: { general: 1, named: 1 }, progress: [], tickets: [] };
     render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 00$/);
+    expect(hud()).toMatch(/오늘 의뢰 일반0네임드0$/);
   });
 
   it('골드·명성은 단위 없이 줄임 표기다', () => {
