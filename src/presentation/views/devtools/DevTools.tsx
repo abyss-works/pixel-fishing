@@ -209,7 +209,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
             {section === 'ops' && (
               <>
                 {/* 대시보드는 조회 전용이라 운영에서도 연다 */}
-                <LinkButton href="?admin=1#/admin/overview" aria-label="대시보드 열기" variant="ghost"
+                <LinkButton href="/admin/#/admin/overview" aria-label="대시보드 열기" variant="ghost"
                             className="text-sm text-center">
                   대시보드 열기 →
                 </LinkButton>

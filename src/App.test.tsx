@@ -1321,7 +1321,7 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     expect(screen.queryByText('태평양 네임드 직전')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '운영' }));
-    expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toContain('#/admin/overview');
+    expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
     window.history.replaceState({}, '', '/');
   });
 

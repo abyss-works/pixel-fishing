@@ -7,7 +7,7 @@ const sources = import.meta.glob('../../**/*.{ts,tsx,css}', {
 }) as Record<string, string>;
 
 const SOURCE_ROOT_FILES = new Set([
-  'App.tsx', 'App.test.tsx', 'buildId.ts', 'index.css', 'main.tsx',
+  'admin.tsx', 'App.tsx', 'App.test.tsx', 'boot.tsx', 'buildId.ts', 'index.css', 'main.tsx',
   'test-setup.ts', 'version.ts', 'version.test.ts', 'vite-env.d.ts',
 ]);
 const SOURCE_ROOTS = new Set([
