@@ -3,17 +3,14 @@
 // 한글 조합 중의 Enter는 조합을 끝낼 뿐 보내지 않는다.
 // 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
-// 차단 목록을 펼쳐 풀 수 있다. 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이 맡는다.
-// 서버가 거부한 이유와 차단 해제 결과는 입력 줄 위에 짧게 보인다.
+// 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이, 차단 해제는 소셜 창의 차단 탭이 맡는다.
+// 서버가 거부한 이유는 입력 줄 위에 짧게 보인다.
 // 입력 줄 앞의 방 버튼으로 보낼 곳(월드·길드)을 바꾼다. 길드가 없으면 버튼은 회색으로 보이고 언제나 월드로 보낸다.
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
 import type { ChatError, ChatRoom } from '../../../../features/live/model/live';
-import { useChatModeration } from '../../../../features/live/service/useChatModeration';
-import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
-import { cx } from '../../../ui/cx';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PillButton from '../../../ui/PillButton';
 import TextInput from '../../../ui/TextInput';
@@ -30,20 +27,11 @@ const CHAT_ERROR_TEXT: Record<ChatError, string> = {
 
 const ROOM_LABEL: Record<ChatRoom, string> = { world: '월드', guild: '길드' };
 
-const ACTION_ERROR_TEXT: Record<ChatActionError, string> = {
-  guest: GUEST_TEXT,
-  missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
-  failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
-};
-
 export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
   const chat = useChat();
   const [text, setText] = useState('');
   const [picked, setPicked] = useState<ChatRoom>('world');
   const room: ChatRoom = inGuild ? picked : 'world';
-  const [listOpen, setListOpen] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; warn: boolean } | null>(null);
-  const moderation = useChatModeration(listOpen);
 
   const inputRef = useRef<HTMLInputElement>(null);
   // 입력 줄에 포커스가 있고 글이 있는 동안 다른 사람에게 입력 중 표시를 보인다
@@ -67,29 +55,11 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
     }
     if (e.key === 'Escape') e.currentTarget.blur();
   };
-  const act = async (run: () => Promise<ChatActionError | null>, done: string) => {
-    const error = await run();
-    setNotice(error ? { text: ACTION_ERROR_TEXT[error], warn: true } : { text: done, warn: false });
-  };
-
-  const status = chat.error ? { text: CHAT_ERROR_TEXT[chat.error], warn: true } : notice;
+  const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : null;
 
   return (
     <div className="flex flex-col gap-1 text-xs">
-      {listOpen && (
-        <div className="pf-glass border border-line rounded-sm px-2 py-1 flex flex-col gap-1" role="group" aria-label="차단 목록">
-          {moderation.blocks === null && <span className="text-text-dim">불러오는 중이에요.</span>}
-          {typeof moderation.blocks === 'string' && <span className="text-text-dim">{ACTION_ERROR_TEXT[moderation.blocks]}</span>}
-          {Array.isArray(moderation.blocks) && moderation.blocks.length === 0 && <span className="text-text-dim">차단한 사람이 없어요.</span>}
-          {Array.isArray(moderation.blocks) && moderation.blocks.map(b => (
-            <div key={b.uid} className="flex items-center justify-between gap-2">
-              <span>{b.nick ?? '이름 없음'}</span>
-              <PillButton onClick={() => void act(() => moderation.unblock(b.uid), '차단을 풀었어요.')}>해제</PillButton>
-            </div>
-          ))}
-        </div>
-      )}
-      {status && <p className={cx('text-shadow-hud m-0', status.warn ? 'text-danger' : 'text-text')} role="status">{status.text}</p>}
+      {status && <p className="text-shadow-hud m-0 text-danger" role="status">{status}</p>}
       <div className="flex items-center gap-1">
         <PillButton active={room === 'guild'} disabled={!inGuild} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                     title={inGuild ? '보낼 곳 바꾸기' : '길드에 들어가면 길드 채팅을 쓸 수 있어요'}
@@ -98,8 +68,7 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
                    placeholder={`${room === 'guild' ? '길드 채팅' : '채팅'} (Enter로 입력·보내기)`}
                    maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
                    onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-                   onChange={e => { setText(e.target.value); setNotice(null); clearChatError(); }} />
-        <PillButton active={listOpen} aria-expanded={listOpen} onClick={() => setListOpen(open => !open)}>차단 목록</PillButton>
+                   onChange={e => { setText(e.target.value); clearChatError(); }} />
       </div>
     </div>
   );
