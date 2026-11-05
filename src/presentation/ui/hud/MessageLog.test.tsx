@@ -47,6 +47,13 @@ describe('메시지 창', () => {
     expect(lines[0].className).not.toContain('text-guild');
   });
 
+  it('늘 보일 채널을 주면 기록과 관계없이 토글을 그리고, 쓸 수 없는 채널은 회색으로 꺼 둔다', () => {
+    render(<MessageLog log={logOf(1)} filter={FILTER_CHANNELS} onToggle={() => {}} channels={FILTER_CHANNELS} disabledChannels={['guild']} />);
+    expect(screen.getAllByRole('checkbox').map(c => c.textContent)).toEqual(['채팅', '길드', '시스템']);
+    expect((screen.getByRole('checkbox', { name: '길드' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('checkbox', { name: '채팅' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('채널이 하나면 채널 토글을 그리지 않는다', () => {
     render(<Filtered log={logOf(3)} />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();

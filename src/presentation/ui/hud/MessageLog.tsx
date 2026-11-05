@@ -38,7 +38,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [] }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -49,9 +49,15 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   filter?: MessageFilter;
   /** 채널 토글을 눌렀다. present는 기록에 나온 채널(토글이 보이는 채널)이다. 없으면 토글을 그리지 않는다 */
   onToggle?: (channel: MessageChannel, present: readonly MessageChannel[]) => void;
+  /** 기록과 관계없이 늘 보일 채널 토글. 없으면 기록에 나온 채널이 둘 이상일 때만 그린다 */
+  channels?: readonly MessageChannel[];
+  /** 토글은 보이되 쓸 수 없는 채널(회색) — 길드에 들어가 있지 않을 때의 길드 */
+  disabledChannels?: readonly MessageChannel[];
 }) {
-  const present = channelsOf(log);
-  const toggles = present.length > 1 && onToggle !== undefined;
+  const fixed = channels !== undefined;
+  const listed = channels ?? channelsOf(log);
+  const present = listed.filter(c => !disabledChannels.includes(c));
+  const toggles = onToggle !== undefined && (fixed || present.length > 1);
   const shown = toggles ? log.filter(m => isChannelShown(filter, m.channel)) : log;
   /** 이 시각 뒤에 꺼 둔 채널에 온 글줄을 새 글줄로 친다 — 처음 그린 때와 토글을 누른 때 */
   const [hiddenSince, setHiddenSince] = useState(() => Date.now());
@@ -78,9 +84,9 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
     <div className="absolute left-3 bottom-3 z-(--z-overlay) w-[min(520px,58%)] flex flex-col items-stretch gap-1 pointer-events-none">
       {toggles && (
         <div className="pointer-events-auto self-start flex items-center gap-3 px-1 text-shadow-hud" role="group" aria-label="메시지 채널">
-          {FILTER_CHANNELS.filter(c => present.includes(c)).map(c => (
+          {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => (
             <span key={c} className="inline-flex items-center gap-1">
-              <CheckToggle label={CHANNEL_LABEL[c]} checked={isChannelShown(filter, c)}
+              <CheckToggle label={CHANNEL_LABEL[c]} checked={isChannelShown(filter, c)} disabled={disabledChannels.includes(c)}
                            onChange={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }} />
               {unread(c) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-gold">

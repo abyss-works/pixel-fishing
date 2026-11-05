@@ -14,9 +14,12 @@ import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Panel from '../../../ui/Panel';
 import SelectList from '../../../ui/SelectList';
+import SubTabs from '../../../ui/SubTabs';
+import BlockList from './BlockList';
 import TextInput from '../../../ui/TextInput';
 
-// 친구 창 — 게임 스테이지 안에 뜬다. 왼쪽은 닉네임으로 요청하기와 받은·보낸 요청, 오른쪽은 친구 목록이다.
+// 소셜 창 — 게임 스테이지 안에 뜬다. 친구·차단 두 탭이다.
+// 친구 탭의 왼쪽은 닉네임으로 요청하기와 받은·보낸 요청, 오른쪽은 친구 목록이다. 차단 탭은 차단한 사람과 해제다.
 // 친구에게는 접속 중인지와 있는 곳, 아니면 마지막 행동이 얼마나 지났는지 보인다.
 // 닉네임을 치는 동안 앞부분이 같은 계정 유저를 후보로 보이고, 후보를 고르면 입력을 그 이름으로 채운다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
@@ -28,6 +31,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<FriendItem | null>(null);
+  const [tab, setTab] = useState<'friends' | 'blocks'>('friends');
   const suggestions = useNicknameSuggestions(nickname)
     .filter(p => p.nickname.toLowerCase() !== nickname.trim().toLowerCase());
 
@@ -61,7 +65,12 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
 
   return (
     <Modal layer="stage" xl onClose={onClose}>
-      <ModalCard title="친구" onClose={onClose}>
+      <ModalCard title="소셜" onClose={onClose}>
+        <SubTabs items={[
+          { key: 'friends', label: '친구', sub: groups && groups.incoming.length > 0 ? `받은 요청 ${groups.incoming.length}` : undefined },
+          { key: 'blocks', label: '차단' },
+        ]} activeKey={tab} onSelect={setTab} />
+        {tab === 'blocks' ? <BlockList setToast={setToast} /> : (
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 max-[640px]:grid-cols-1">
           <Panel title="친구 요청" className="min-w-0">
             <div className="pf-scroll-panel h-80 overflow-y-auto pr-1 flex flex-col gap-3 max-[640px]:h-auto">
@@ -130,6 +139,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
             </div>
           </Panel>
         </div>
+        )}
       </ModalCard>
       {removing && (
         <ConfirmDialog layer="stage" title="친구 끊기" confirmLabel="끊기"

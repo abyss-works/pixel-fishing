@@ -16,6 +16,7 @@ import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
+import { FILTER_CHANNELS } from '../../../features/display/model/messageFilter';
 import BaseMenu from './base-menu/BaseMenu';
 import GameTabs from './tabs/GameTabs';
 import { DEFAULT_TAB } from './tabs/tabs';
@@ -73,6 +74,9 @@ interface GameViewProps {
   /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
   badge?: ReactNode;
 }
+
+// 길드에 들어가 있지 않으면 길드 채널 토글을 회색으로 둔다
+const GUILD_OFF = ['guild'] as const;
 
 export default function GameView(props: GameViewProps) {
   const { game, scene } = props;
@@ -194,6 +198,8 @@ export default function GameView(props: GameViewProps) {
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
                    } : undefined}
                    you={chat.you}
+                   channels={chat.enabled ? FILTER_CHANNELS : undefined}
+                   disabledChannels={guild === null ? GUILD_OFF : undefined}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? (
                      <div className="flex flex-col gap-2">
