@@ -5,7 +5,13 @@ on:
     branches: [main, dev]
   pull_request:
 
-# 검사는 서로 기다리지 않도록 세 작업으로 나눈다. 이미지 작업은 셋이 모두 통과해야 시작한다.
+# dev는 새 푸시가 오면 이전 실행을 취소한다 — 선형 병합이라 다음 실행이 그 커밋을 포함한다. main은 취소하지 않는다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/dev' }}
+
+# 검사는 서로 기다리지 않도록 세 작업으로 나눈다. main의 이미지 작업은 셋이 모두 통과해야 시작한다.
+# dev의 이미지 작업은 검사와 함께 시작하고, 스테이징 태그 커밋(stage-tag)만 검사와 두 이미지를 모두 기다린다.
 jobs:
   unit:
     runs-on: ubuntu-latest
@@ -114,14 +120,10 @@ jobs:
           cache-from: type=gha,scope=admin
           cache-to: type=gha,scope=admin,mode=max
 
-  # dev 푸시마다 스테이징 관리자 이미지를 빌드해 올린다. 태그 커밋은 stage-image가 두 이미지를 함께 갱신한다.
+  # dev 푸시마다 스테이징 관리자 이미지를 빌드해 올린다. 검사를 기다리지 않는다 — 검사에 실패하면 stage-tag가 태그를 바꾸지 않아 배포되지 않는다.
   stage-admin-image:
-    needs: [unit, db, static]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04-arm
-    concurrency:
-      group: stage-admin-image
-      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -148,17 +150,12 @@ jobs:
           cache-from: type=gha,scope=admin
           cache-to: type=gha,scope=admin,mode=max
 
-  # dev 푸시마다 스테이징 이미지를 빌드해 올리고 k8s/stage의 태그를 갱신한다. ArgoCD가 dev의 k8s/stage를 보고 배포한다.
+  # dev 푸시마다 스테이징 게임 이미지를 빌드해 올린다. 관리자 이미지와 함께, 검사를 기다리지 않고 시작한다.
   stage-image:
-    # 관리자 이미지가 올라간 뒤에 태그를 커밋한다. 태그 갱신은 두 이미지의 newTag를 한 커밋으로 바꾼다.
-    needs: [unit, db, static, stage-admin-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04-arm
-    concurrency:
-      group: stage-image
-      cancel-in-progress: false
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
@@ -181,6 +178,21 @@ jobs:
             VITE_SENTRY_ENV=${{ vars.STAGE_VITE_SENTRY_ENV }}
           cache-from: type=gha,scope=game
           cache-to: type=gha,scope=game,mode=max
+
+  # 검사 셋과 두 이미지가 모두 통과한 뒤에만 k8s/stage의 두 이미지 태그를 한 커밋으로 갱신한다. ArgoCD가 dev의 k8s/stage를 보고 배포한다.
+  stage-tag:
+    needs: [unit, db, static, stage-image, stage-admin-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stage-tag
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage image tag
+        run: echo "TAG=dev-${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
       # 태그는 dev의 최신 사람 커밋을 빌드한 실행만 갱신한다. 그사이 더 새 커밋이 들어왔으면 그 실행이 갱신하므로 건너뛴다.
       # 다른 실행의 bot 커밋 위에 rebase하면 같은 newTag 줄에서 충돌하므로, 최신 origin/dev 위에서 다시 고친다.
       - name: Update stage image tag
