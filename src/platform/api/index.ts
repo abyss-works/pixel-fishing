@@ -36,6 +36,6 @@ export type {
   RankingBoardId, RankingRow, RankingBoard, MailItem,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
+  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';

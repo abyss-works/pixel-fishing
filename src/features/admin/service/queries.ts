@@ -31,6 +31,11 @@ export const readAdminLetters = () => Promise.all([
   api.admin.users(),
 ]);
 
+export const readAdminChatReports = () => Promise.all([
+  api.admin.chatReports(),
+  api.admin.users(),
+]);
+
 export const readAdminMails = () => Promise.all([
   api.admin.sentMails(),
   api.admin.users(),

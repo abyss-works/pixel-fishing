@@ -2,6 +2,7 @@
 import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
+import type { ChatLine } from '../../game/rules/live';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
@@ -131,6 +132,13 @@ export interface AdminEventRow {
 export interface AdminLetterRow {
   id: number; user_id: string; text: string; created_at: string;
 }
+/** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
+export interface AdminChatReportRow {
+  id: number; user_id: string; message_id: number; target_id: string;
+  /** 신고한 메시지와 앞뒤 대화의 복사본(오래된 순) */
+  lines: ChatLine[];
+  created_at: string;
+}
 
 /**
  * 밸런스 라이브 지표. 서버가 한 번의 읽기로 모은 한 시점의 집계이고, 키 이름이 곧 계약이다.
@@ -204,6 +212,8 @@ export interface AdminApi {
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
+  /** 채팅 신고 목록(최근 순) */
+  chatReports(): Promise<AdminChatReportRow[]>;
   /** 최근 보낸 우편 */
   sentMails(): Promise<AdminSentMailRow[]>;
   /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */

@@ -67,6 +67,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'dexMismatch': return read.dexMismatch;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
+    case 'chatReports': return read.chatReports;
     case 'mails': return db => recentSentMails(db);
     case 'dailyActive': { const days = daysOf(req); return db => read.dailyActive(db, days); }
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
