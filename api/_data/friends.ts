@@ -81,3 +81,22 @@ export async function listFriends(db: Executor, me: string): Promise<FriendRow[]
 export async function deleteUserFriends(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.friends where requester_id = ${uid} or addressee_id = ${uid}`);
 }
+
+/**
+ * 친구 요청 닉네임 자동완성 — 앞부분이 같은(대소문자 무시) 계정 유저를 이름 순으로 limit명.
+ * 나, 게스트, 이미 친구이거나 요청 중인 사람, 어느 쪽이든 차단한 사이는 뺀다. %와 _는 글자 그대로 찾는다.
+ */
+export async function searchAccounts(db: Executor, me: string, prefix: string, limit: number): Promise<{ uid: string; nickname: string }[]> {
+  const pattern = prefix.toLowerCase().replace(/[\\%_]/g, c => `\\${c}`) + '%';
+  const { rows } = await db.execute<{ uid: string; nickname: string }>(sql`select p.user_id::text as uid, p.nickname
+    from public.profiles p
+    join auth.users u on u.id = p.user_id
+    where not u.is_anonymous and p.user_id <> ${me} and lower(p.nickname) like ${pattern} escape '\\'
+      and not exists (select 1 from public.friends f
+        where (f.requester_id = ${me} and f.addressee_id = p.user_id) or (f.requester_id = p.user_id and f.addressee_id = ${me}))
+      and not exists (select 1 from public.blocks b
+        where (b.user_id = ${me} and b.blocked_id = p.user_id) or (b.user_id = p.user_id and b.blocked_id = ${me}))
+    order by lower(p.nickname)
+    limit ${limit}`);
+  return rows;
+}
