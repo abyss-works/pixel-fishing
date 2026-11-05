@@ -7,8 +7,8 @@
 // 구 3지역 팩(ocean/seasia/indian)은 삭제됐다 — 원본은 git 히스토리(a40bd0a)에 있다.
 // 구세이브 location의 구 지역 id(ocean 등)는 런타임 문자열로만 남는다 —
 // App.sceneOf가 고향 항구로 접는다.
-import type { BaseId, BasePack, Furniture, RegionId, RegionPack } from './types';
-import { inRect } from './engine';
+import type { BaseId, BasePack, Furniture, Point, RegionId, RegionPack } from './types';
+import { canMove, inRect } from './engine';
 import { VILLAGE } from './regions/village';
 import { WORLD } from './regions/world';
 import { HOME } from './bases/home';
@@ -57,4 +57,18 @@ export const TOAMASINA_FURNITURE = TOAMASINA_BASE.furniture;
 export function furnitureAt(base: BaseId, x: number, y: number): Furniture | null {
   for (const f of BASE_PACKS[base].furniture) if (inRect(x, y, f)) return f;
   return null;
+}
+
+/**
+ * 다시 접속했을 때의 시작점. 마지막 위치가 같은 지역의 갈 수 있는 자리이고 이동 트리거 위가 아니면 그 좌표다.
+ * 그 밖에는 null이고, 호출자는 지역 출발점에서 시작한다.
+ */
+export function resumePoint(region: RegionId, saved: { region: string; x: number; y: number } | null): Point | null {
+  if (!saved || saved.region !== region) return null;
+  const { x, y } = saved;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const pack = REGION_PACKS[region];
+  if (!canMove(pack, x, y)) return null;
+  if (pack.triggers.some(t => inRect(x, y, t.rect))) return null;
+  return { x, y };
 }

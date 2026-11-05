@@ -9,6 +9,7 @@ import { at } from './json.js';
 import { deleteUserMails } from './mailbox.js';
 import { deleteUserProfile } from './profile.js';
 import { deleteUserActivity } from './activity.js';
+import { deleteUserPosition } from './position.js';
 import { deleteUserBlocks } from './blocks.js';
 import { deleteUserChat } from './chat.js';
 import { deleteUserFriends } from './friends.js';
@@ -101,6 +102,7 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserFriends(tx, uid);
   await deleteUserGuild(tx, uid);
   await deleteUserActivity(tx, uid);
+  await deleteUserPosition(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }

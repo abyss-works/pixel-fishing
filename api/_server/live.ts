@@ -40,6 +40,13 @@ export interface LiveOptions {
   chat: LiveChat;
   /** 끝난 연결 하나를 접속 세션으로 기록한다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다 */
   recordSession: (uid: string, startedAt: string, endedAt: string) => void;
+  /**
+   * 그 사용자의 마지막 위치를 남긴다. 첫 위치와, 움직이는 동안 positionSaveMs마다 한 번, 그리고 연결이 끝날 때
+   * 마지막으로 남긴 뒤 움직였으면 한 번 부른다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다
+   */
+  savePosition: (uid: string, pos: { region: string; x: number; y: number }) => void;
+  /** 움직이는 동안 마지막 위치를 남기는 최소 간격. 기본값은 1분이다 */
+  positionSaveMs?: number;
 }
 
 /** 지금 연결된 사용자 하나. 아직 위치를 보내지 않았으면 region과 zone은 null이다 */
@@ -78,10 +85,16 @@ interface Conn {
   guild: string | null;
   connectedAt: number;
   lastSeen: number;
+  /** 마지막 위치를 마지막으로 남긴 시각. 아직 남기지 않았으면 null */
+  positionSavedAt: number | null;
+  /** 마지막으로 남긴 뒤 움직였는지 */
+  positionDirty: boolean;
   windowStart: number;
   windowCount: number;
 }
 
+// 움직이는 동안 마지막 위치를 남기는 기본 간격. 서버가 갑자기 내려가도 이 간격 안의 이동만 잃는다
+const POSITION_SAVE_MS = 60_000;
 // 정책 위반 종료 코드(RFC 6455 1008)
 const CLOSE_POLICY = 1008;
 // 메시지 하나의 최대 바이트. 형식 검사의 길이 상한보다 넉넉하다
@@ -95,6 +108,7 @@ function reject(socket: Duplex, status: 401 | 403 | 500): void {
 /** HTTP 서버에 실시간 채널을 붙인다 */
 export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const idleMs = opts.idleMs ?? LIVE_IDLE_MS;
+  const positionSaveMs = opts.positionSaveMs ?? POSITION_SAVE_MS;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   const conns = new Map<WebSocket, Conn>();
   // 계정별 최근 채팅 시각. 다시 연결해도 창이 이어지도록 연결이 아니라 계정에 둔다
@@ -128,7 +142,15 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     if (!line) { send(ws, { t: 'error', code: 'chat-restricted' }); return; }
     sendChat(line, guild);
   };
+  const savePosition = (conn: Conn, at: number) => {
+    if (!conn.presence) return;
+    const { region, x, y } = conn.presence;
+    opts.savePosition(conn.user.uid, { region, x, y });
+    conn.positionSavedAt = at;
+    conn.positionDirty = false;
+  };
   const recordEnd = (conn: Conn) => {
+    if (conn.positionDirty) savePosition(conn, Date.now());
     opts.recordSession(conn.user.uid, new Date(conn.connectedAt).toISOString(), new Date().toISOString());
   };
   // 연결을 목록에서 빼 세션으로 기록하고, 이미 알린 사람이면 떠났다고 알린다
@@ -158,6 +180,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         const now = Date.now();
         const conn: Conn = {
           user, presence: null, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
+          positionSavedAt: null, positionDirty: false,
         };
         conns.set(ws, conn);
         ws.on('message', (data, isBinary) => {
@@ -177,6 +200,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               Object.assign(conn.presence, { region, zone, x, y, dir, line, bob });
               broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...(bob ? { bob } : {}) });
             }
+            conn.positionDirty = true;
+            if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
           } else if (msg?.t === 'stop' && conn.presence) {
             broadcast(ws, { t: 'stop', uid: user.uid });
           } else if (msg?.t === 'chat') {
