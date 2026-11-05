@@ -39,9 +39,9 @@ describe('알림 카드', () => {
     render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
     const card = screen.getByRole('status', { name: '자리를 비운 사이' });
     expect(card).toHaveTextContent('2시간 14분');
-    expect(card).toHaveTextContent('잡음 3');
-    expect(card).toHaveTextContent(`명성 +${full.fame}`);
-    expect(card).toHaveTextContent('새 도감 2');
+    expect(card).toHaveTextContent('잡은 물고기3');
+    expect(card).toHaveTextContent(`명성+${full.fame}`);
+    expect(card).toHaveTextContent('새 도감2');
     expect(card).toHaveTextContent('1시간 32분 만에 가방이 차서 1마리를 놓아줬어요.');
   });
 

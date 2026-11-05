@@ -226,10 +226,11 @@ export default function GameView(props: GameViewProps) {
                        {away.report && !awayOpen && (
                          <AwayCard report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
                        )}
-                       {atSea && <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} />}
                        {atSea && <TraceCard onTrack={setTracking} />}
                      </div>
-                   ) : null} badge={props.badge} />
+                   ) : null}
+                   chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
+                   badge={props.badge} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
