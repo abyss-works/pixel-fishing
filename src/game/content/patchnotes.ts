@@ -16,6 +16,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.15.4',
+    date: '2026-11-05',
+    summary: '연결 문제를 고쳤어요',
+    notes: [
+      { tag: '기타', text: '플레이 중에 가끔 연결 오류로 행동이 실패하던 문제를 고쳤어요.' },
+    ],
+  },
+  {
     version: '0.15.3',
     date: '2026-11-05',
     summary: '접속 관련 문제를 고쳤어요',

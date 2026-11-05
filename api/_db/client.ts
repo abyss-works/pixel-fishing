@@ -62,9 +62,12 @@ export function database(): Database {
   if (!connectionString) throw new Error('DATABASE_URL is not set');
   appDatabase = createDatabase({
     connectionString,
-    // 한 인스턴스가 여러 요청을 동시에 처리하므로 작게 시작한다(hamsudoku 운영 기준값).
-    max: 3,
-    idleTimeoutMillis: 5000,
+    // 게임 서버 파드 하나가 모든 요청(액션·세션 확인·조회)을 처리한다. 3개로는 동시 요청이 몰리면
+    // 연결을 기다리다 연결 대기 시간(5초)을 넘겼다. DB 최대 연결(100)에 비해 넉넉히 작다.
+    max: 10,
+    // 놀던 연결을 너무 빨리 닫으면 다음 요청마다 새로 연결해야 한다
+    idleTimeoutMillis: 30_000,
+    keepAlive: true,
     connectionTimeoutMillis: 5000,
   });
   return appDatabase;
