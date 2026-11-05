@@ -42,7 +42,7 @@ describe('알림 카드', () => {
     expect(card).toHaveTextContent('잡음 3');
     expect(card).toHaveTextContent(`명성 +${full.fame}`);
     expect(card).toHaveTextContent('새 도감 2');
-    expect(card).toHaveTextContent('1시간 32분 만에 가방이 차서 1마리를 놓쳤어요.');
+    expect(card).toHaveTextContent('1시간 32분 만에 가방이 차서 1마리를 놓아줬어요.');
   });
 
   it('가방이 차지 않았으면 가방 줄이 없다. 닫기와 자세히를 알린다', () => {
