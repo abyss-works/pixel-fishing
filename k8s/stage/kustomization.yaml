@@ -50,6 +50,6 @@ patches:
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-60bb0fc
+    newTag: dev-0682e26
   - name: ghcr.io/abyss-works/pixel-fishing-admin
-    newTag: dev-60bb0fc
+    newTag: dev-0682e26
