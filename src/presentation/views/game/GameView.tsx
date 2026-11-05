@@ -140,7 +140,7 @@ export default function GameView(props: GameViewProps) {
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onWarmup={props.onWarmup} paused={encounter !== null}
+                 onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} />
         )}
 

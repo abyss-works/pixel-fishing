@@ -30,16 +30,13 @@ function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  const calls: string[] = [];
   const props = {
     game: newState(),
-    setGame: vi.fn(() => { calls.push('setGame'); }),
     setToast: vi.fn(),
-    load: vi.fn(async () => { calls.push('load'); return newState(); }),
-    claimSession: vi.fn(() => { calls.push('claimSession'); }),
+    adoptAccount: vi.fn(async () => {}),
   };
   const hook = renderHook(() => ({ account: useAccount(props), session: useSession() }), { wrapper });
-  return { hook, props, calls };
+  return { hook, props };
 }
 
 describe('계정 교체', () => {
@@ -49,19 +46,18 @@ describe('계정 교체', () => {
   });
   afterEach(cleanup);
 
-  it('다른 계정으로 로그인하면 그 계정 상태를 채택한 뒤 이 창을 활성 창으로 등록한다', async () => {
-    const { hook, calls } = setup();
+  it('다른 계정으로 로그인하면 그 계정을 채택한다(상태 채택과 활성 창 등록)', async () => {
+    const { hook, props } = setup();
     await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
     state.nextUid = 'account-uid';
     await act(() => hook.result.current.account.onAuthChanged());
-    expect(calls).toEqual(['load', 'setGame', 'claimSession']);
+    expect(props.adoptAccount).toHaveBeenCalledTimes(1);
   });
 
-  it('승격(같은 uid)은 상태를 다시 읽지 않고 활성 창 등록도 하지 않는다', async () => {
+  it('승격(같은 uid)은 계정을 다시 채택하지 않는다', async () => {
     const { hook, props } = setup();
     await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
     await act(() => hook.result.current.account.onAuthChanged());
-    expect(props.load).not.toHaveBeenCalled();
-    expect(props.claimSession).not.toHaveBeenCalled();
+    expect(props.adoptAccount).not.toHaveBeenCalled();
   });
 });

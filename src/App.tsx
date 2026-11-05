@@ -8,6 +8,7 @@ import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
+import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import DevTools from './presentation/views/devtools/DevTools';
 import EnvBadge from './presentation/views/devtools/EnvBadge';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
@@ -28,8 +29,8 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, setGame, dispatch, nickname, rename, sync, syncLabel, blocker, load, claimSession, warmup } = useGame({ setToast });
-  const { account, uid, onAuthChanged } = useAccount({ game, setGame, setToast, load, claimSession });
+  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, adoptAccount, warmup } = useGame({ setToast });
+  const { account, uid, onAuthChanged } = useAccount({ game, setToast, adoptAccount });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
   const restored = useRef(false);
@@ -57,7 +58,7 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
-        onRename={rename} onAuthChanged={onAuthChanged} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : null}
+        onRename={rename} onAuthChanged={onAuthChanged} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
