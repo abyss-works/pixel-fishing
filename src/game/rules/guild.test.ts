@@ -1,6 +1,7 @@
 // 길드 규칙 — 이름 검사, 인원 상한, 초대 코드 형식, 권한 판정을 확인한다.
 import { describe, expect, it } from 'vitest';
 import {
+  guildDailyContributionCaps,
   GUILD_INVITE_TTL_MS, GUILD_MAX_MEMBERS, checkGuildName, guildFull, handoverOutcome, inviteCode, inviteExpiresAt,
   normalizeInviteCode, removalOutcome,
   GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
@@ -76,6 +77,12 @@ describe('길드장 위임', () => {
     expect(handoverOutcome({ uid: 'L', role: 'leader' }, 'M')).toBe('ok');
     expect(handoverOutcome({ uid: 'L', role: 'leader' }, 'L')).toBe('self');
     expect(handoverOutcome({ uid: 'M', role: 'member' }, 'N')).toBe('not-leader');
+  });
+});
+
+describe('하루 기여 상한', () => {
+  it('명성 기여 상한과, 의뢰 갈래마다 하루 클리어 횟수만큼의 클리어 기여', () => {
+    expect(guildDailyContributionCaps()).toEqual({ fame: 1_000, general: 500, named: 1_000 });
   });
 });
 

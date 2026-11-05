@@ -1,6 +1,6 @@
 import type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
 import {
-  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, handoverOutcome, removalOutcome,
+  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, guildDailyContributionCaps, handoverOutcome, removalOutcome,
 } from '../../../game/rules/guild';
 import type { GuildBonusId } from '../../../game/rules/guild';
 import { FISH } from '../../../game/content/fish';
@@ -114,6 +114,16 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 /** 기여가 쌓이는 방식과 레벨, 길드 스킬의 관계 */
 export const GUILD_CONTRIBUTION_HELP = `길드원이 얻은 명성만큼 기여가 쌓여요. 한 사람당 하루 ${num(GUILD_DAILY_FAME_CAP)}까지예요. `
   + '일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 레벨이 오르면 길드 스킬이 하나씩 열리고, 단계는 기부로 올려요.';
+
+/** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한 */
+export function dailyContributionRows(): { label: string; value: string }[] {
+  const caps = guildDailyContributionCaps();
+  return [
+    { label: '명성', value: num(caps.fame) },
+    { label: '일반 의뢰', value: num(caps.general) },
+    { label: '네임드 토벌', value: num(caps.named) },
+  ];
+}
 
 /** 길드 스킬의 화면 이름 */
 export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
