@@ -41,11 +41,16 @@ const SLOT_H = 'h-[168px]';
 const TABLE_H = 'h-[124px]';
 const FOOT_H = 'h-[360px]';
 
-/** 해역 상태 표시 — 파워 부족은 경고색(orange), 배 부족은 자물쇠 */
+/** 해역 상태 표시 — 파워 부족은 경고색(orange)으로 요구 파워를, 배 부족은 자물쇠로 필요한 배를 보인다.
+ *  상세(사거리 내 어군)는 내 파워와 요구 파워를 나란히 보인다 */
 function StatusText({ status, detail = false }: { status: SpotStatus; detail?: boolean }) {
   if (status.kind === 'ok') return <span className="text-text-dim">낚시 가능</span>;
   if (status.kind === 'power') {
-    return <span className="text-orange">파워 부족{detail && ` · ${status.power}/${status.req}`}</span>;
+    return (
+      <span className="text-orange">
+        {detail ? `파워 부족 · ${status.power}/${status.req}` : `파워 ${status.req} 필요`}
+      </span>
+    );
   }
   return (
     <span className="flex items-center gap-0.5 text-text-dim">
