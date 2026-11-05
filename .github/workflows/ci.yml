@@ -13,8 +13,13 @@ concurrency:
 # 검사는 서로 기다리지 않도록 세 작업으로 나눈다. main의 이미지 작업은 셋이 모두 통과해야 시작한다.
 # dev의 이미지 작업은 검사와 함께 시작하고, 스테이징 태그 커밋(stage-tag)만 검사와 두 이미지를 모두 기다린다.
 jobs:
+  # 단위 테스트는 파일을 둘로 나눠 동시에 돌린다. 한 파일은 한쪽에서만 돌고, 이 작업을 기다리는 작업은 두 쪽이 모두 통과해야 진행한다.
   unit:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,7 +28,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm test --shard=${{ matrix.shard }}/2
 
   db:
     runs-on: ubuntu-latest
