@@ -35,6 +35,8 @@ export { readMails, markMailRead } from '../adapters/mailbox';
 export { readBlocks, changeBlock, reportChat } from '../adapters/chat';
 export type { BlockedUser, ChatActionError } from '../adapters/chat';
 export { readFriends, friendAction } from '../adapters/friends';
+export { readPlayer } from '../adapters/player';
+export type { PublicProfile } from '../adapters/player';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,

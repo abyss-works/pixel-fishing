@@ -11,6 +11,7 @@ import { chatHandler } from '../chat.js';
 import mail from '../mail.js';
 import friends from '../friends.js';
 import me from '../me.js';
+import players from '../players.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
@@ -35,6 +36,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/mail': mail,
   '/api/friends': friends,
   '/api/me': me,
+  '/api/players/:uid': players,
   '/api/rank': rank,
   '/api/cron/archive': archive,
   '/api/cron/purge-anon': purgeAnon,

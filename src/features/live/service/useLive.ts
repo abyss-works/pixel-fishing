@@ -61,10 +61,10 @@ export function useLive(): void {
   }, [ready, uid]);
 }
 
-/** 그 바다에 있는 다른 플레이어의 이름 목록 */
-export function usePlayersIn(region: string): string[] {
+/** 그 바다에 있는 다른 플레이어 — 이름 순. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
+export function usePlayersIn(region: string): { uid: string; nick: string }[] {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return othersInRegion(s, region).map(o => o.presence.nick);
+  return othersInRegion(s, region).map(o => ({ uid: o.presence.uid, nick: o.presence.nick }));
 }
 
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */

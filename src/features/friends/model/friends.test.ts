@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendItem } from '../../../platform/api';
-import { friendStatusText, groupFriends } from './friends';
+import { friendRelation, friendStatusText, groupFriends } from './friends';
 
 const f = (uid: string, state: FriendItem['state'], extra: Partial<FriendItem> = {}): FriendItem =>
   ({ uid, nick: uid, state, lastActiveAt: null, online: false, region: null, ...extra });
@@ -30,5 +30,12 @@ describe('friendStatusText', () => {
     expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-05T11:15:00Z' }), now)).toBe('45분 전');
     expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-05T09:00:00Z' }), now)).toBe('3시간 전');
     expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-02T12:00:00Z' }), now)).toBe('3일 전');
+  });
+});
+
+describe('friendRelation', () => {
+  it('그 사람과의 관계를 돌려주고, 관계가 없으면 null이다', () => {
+    const g = groupFriends([f('a', 'friend'), f('b', 'incoming'), f('c', 'outgoing')]);
+    expect(['a', 'b', 'c', 'd'].map(uid => friendRelation(g, uid))).toEqual(['friend', 'incoming', 'outgoing', null]);
   });
 });

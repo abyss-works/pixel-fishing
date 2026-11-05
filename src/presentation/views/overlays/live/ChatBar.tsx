@@ -3,8 +3,8 @@
 // 한글 조합 중의 Enter는 조합을 끝낼 뿐 보내지 않는다.
 // 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
-// 메시지 창에서 고른 글줄의 보낸 사람에게 신고·차단을 걸고, 차단 목록을 펼쳐 풀 수 있다.
-// 서버가 거부한 이유와 신고·차단 결과는 입력 줄 위에 짧게 보인다.
+// 차단 목록을 펼쳐 풀 수 있다. 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이 맡는다.
+// 서버가 거부한 이유와 차단 해제 결과는 입력 줄 위에 짧게 보인다.
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
@@ -16,7 +16,6 @@ import { cx } from '../../../ui/cx';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PillButton from '../../../ui/PillButton';
 import TextInput from '../../../ui/TextInput';
-import type { Msg } from '../../../ui/hud/messageFeed';
 
 const GUEST_TEXT = '채팅은 계정을 만든 뒤 쓸 수 있어요. 계정 관리에서 계정을 만들어 주세요.';
 
@@ -33,11 +32,7 @@ const ACTION_ERROR_TEXT: Record<ChatActionError, string> = {
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
 
-export default function ChatBar({ picked, onDone }: {
-  /** 메시지 창에서 고른 다른 사람의 채팅 글줄 */
-  picked: Msg | null;
-  onDone: () => void;
-}) {
+export default function ChatBar() {
   const chat = useChat();
   const [text, setText] = useState('');
   const [listOpen, setListOpen] = useState(false);
@@ -66,22 +61,12 @@ export default function ChatBar({ picked, onDone }: {
   const act = async (run: () => Promise<ChatActionError | null>, done: string) => {
     const error = await run();
     setNotice(error ? { text: ACTION_ERROR_TEXT[error], warn: true } : { text: done, warn: false });
-    onDone();
   };
 
-  const from = picked?.from;
   const status = chat.error ? { text: CHAT_ERROR_TEXT[chat.error], warn: true } : notice;
 
   return (
     <div className="flex flex-col gap-1 text-xs">
-      {picked && from && (
-        <div className="flex flex-wrap items-center gap-1 pf-glass border border-line rounded-sm px-2 py-1" role="group" aria-label="채팅 사용자">
-          <span className="text-accent mr-1">{picked.author}</span>
-          <PillButton onClick={() => void act(() => moderation.report(from.chatId), '신고했어요. 운영자가 확인할게요.')}>신고</PillButton>
-          <PillButton onClick={() => void act(() => moderation.block(from.uid), '차단했어요. 이 사람의 채팅이 보이지 않아요.')}>차단</PillButton>
-          <PillButton onClick={onDone}>닫기</PillButton>
-        </div>
-      )}
       {listOpen && (
         <div className="pf-glass border border-line rounded-sm px-2 py-1 flex flex-col gap-1" role="group" aria-label="차단 목록">
           {moderation.blocks === null && <span className="text-text-dim">불러오는 중이에요.</span>}

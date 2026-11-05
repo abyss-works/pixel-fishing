@@ -6,7 +6,7 @@ import { createDatabase } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
-import { liveIdentity } from './profile.js';
+import { liveIdentity, publicProfile } from './profile.js';
 
 let testDb: TestDatabase;
 let client: Client;
@@ -24,9 +24,10 @@ afterAll(async () => {
   await testDb?.drop();
 });
 
-async function user(): Promise<string> {
+async function user(account = false): Promise<string> {
   const uid = randomUUID();
-  await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+  await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, $3)`,
+    [uid, account ? `${uid}@example.com` : `${uid}@anonymous.invalid`, !account]);
   return uid;
 }
 
@@ -40,5 +41,25 @@ describe('liveIdentity', () => {
 
   it('프로필과 저장 상태가 없으면 이름은 null, 배는 0이다', async () => {
     expect(await liveIdentity(database.db, await user())).toEqual({ nick: null, boat: 0 });
+  });
+});
+
+describe('publicProfile', () => {
+  it('닉네임·배·명성과 일반 폼으로 낚은 어종 수를 읽는다', async () => {
+    const uid = await user(true);
+    await client.query(`insert into public.profiles (user_id, nickname) values ($1, '고등어왕')`, [uid]);
+    await client.query(`insert into public.saves_current (user_id, data, boat, fame) values ($1, '{}', 2, 12345)`, [uid]);
+    await client.query(`insert into public.records (user_id, fish_id, form, count) values
+      ($1, 'crucian', 'normal', 3), ($1, 'crucian', 'variant', 1), ($1, 'carp', 'variant', 2),
+      ($1, 'eel', 'normal', 1), ($1, 'perch', 'normal', 0)`, [uid]);
+    expect(await publicProfile(database.db, uid)).toEqual({ nickname: '고등어왕', boat: 2, fame: 12345, dex: 2, account: true });
+  });
+
+  it('프로필과 저장 상태가 없는 게스트는 기본값으로 읽는다', async () => {
+    expect(await publicProfile(database.db, await user())).toEqual({ nickname: null, boat: 0, fame: 0, dex: 0, account: false });
+  });
+
+  it('없는 사용자는 null이다', async () => {
+    expect(await publicProfile(database.db, randomUUID())).toBeNull();
   });
 });
