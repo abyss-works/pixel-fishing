@@ -1,8 +1,10 @@
 // 예약 작업 — 콜드 아카이브를 매일 한 번 실행한다.
+// 아카이브가 events를 옮기기 전에 일별 집계와 활동일을 그 events로 먼저 갱신한다. 집계가 실패하면 아카이브도 하지 않는다.
 // 인증: 예약 실행기가 CRON_SECRET을 Authorization: Bearer로 첨부한다 — 불일치·부재는 401.
 // ⚠️ Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runArchive } from '../cold-archive.js';
+import { refreshDailyStats } from '../_data/activity.js';
 import { database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
 
@@ -23,8 +25,12 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   }
   try {
     reqEnv('DATABASE_URL');
+    const now = new Date();
+    const { db } = database();
+    const days = await refreshDailyStats(db, now.toISOString());
+    console.log('== daily stats ==', JSON.stringify({ days }));
     const summary = await runArchive({
-      db: database().db,
+      db,
       r2AccountId: reqEnv('R2_ACCOUNT_ID'),
       r2Bucket: reqEnv('R2_BUCKET'),
       r2AccessKeyId: reqEnv('R2_ACCESS_KEY_ID'),
@@ -32,7 +38,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       r2Prefix: process.env.R2_PREFIX ?? 'pixel-fishing/cold',
       cutoffDays: Math.max(1, parseInt(process.env.ARCHIVE_CUTOFF_DAYS ?? '7', 10)),
       tmpDir: process.env.ARCHIVE_TMP_DIR ?? '/tmp',
-    });
+    }, now);
     res.status(200).json(summary);
   } catch (e) {
     await reportServerIssue('cold-archive', e);   // 재시도가 없어 Sentry가 유일 알림 (스펙 3절)

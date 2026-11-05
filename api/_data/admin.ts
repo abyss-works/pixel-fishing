@@ -28,7 +28,10 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
-/** 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
+/**
+ * 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다.
+ * 마지막 세션(last_session_at)은 접속 세션이 가장 늦게 끝난 시각, 누적 세션(total_session_sec)은 접속 세션 길이의 합(초)이다.
+ */
 export function users(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
       p.nickname,
@@ -38,8 +41,11 @@ export function users(db: Executor): Promise<unknown[]> {
       c.data -> 'location' ->> 'kind' as location_kind,
       c.data -> 'location' ->> 'id' as location_id,
       c.data -> 'visited' as visited,
-      c.restricted, c.version as save_version, c.updated_at as last_action_at
+      c.restricted, c.version as save_version, c.updated_at as last_action_at,
+      ps.last_session_at, coalesce(ps.total_session_sec, 0) as total_session_sec
     from auth.users u
+    left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
+      from public.play_sessions group by user_id) ps on ps.user_id = u.id
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
 }
@@ -198,4 +204,44 @@ export function chatReports(db: Executor): Promise<unknown[]> {
     from public.chat_reports r
     order by r.created_at desc, r.id desc
     limit 200`, sql`t.created_at desc, t.id desc`);
+}
+
+/** 일별 집계 행을 from부터 to까지(KST 날짜, 양끝 포함) 날짜 오름차순으로 준다. 집계되지 않은 날은 행이 없다 */
+export function dailyStats(db: Executor, from: string, to: string): Promise<unknown[]> {
+  return jsonRows(db, sql`select day, dau, new_users as "newUsers", new_accounts as "newAccounts",
+      sessions, session_minutes as "sessionMinutes", median_session_minutes as "medianSessionMinutes",
+      catches, gold_in as "goldIn", gold_out as "goldOut", actions
+    from public.daily_stats
+    where day between ${from}::date and ${to}::date`, sql`t.day`);
+}
+
+/**
+ * 가입일 리텐션. 최근 60일(오늘 포함)의 KST 가입일 코호트별 크기와, 가입 1·7·30일 뒤에 활동일이 있는 비율(0~1, 소수 넷째 자리)이다.
+ * 그 날이 아직 오지 않았으면 null이다. 최신 코호트부터 준다.
+ */
+export function signupRetention(db: Executor): Promise<unknown[]> {
+  const ratio = (offset: number) => sql`case when c.day + ${offset}::int <= t.d then round(count(*) filter (where exists (
+      select 1 from public.user_active_days a where a.user_id = c.id and a.day = c.day + ${offset}::int))::numeric / count(*), 4) end`;
+  return jsonRows(db, sql`with today as (
+      select (now() at time zone 'Asia/Seoul')::date as d
+    ),
+    cohort as (
+      select u.id, (u.created_at at time zone 'Asia/Seoul')::date as day
+      from auth.users u, today t
+      where u.created_at >= (t.d - 59)::timestamp at time zone 'Asia/Seoul'
+    )
+    select c.day, count(*)::int as size, ${ratio(1)} as d1, ${ratio(7)} as d7, ${ratio(30)} as d30
+    from cohort c cross join today t
+    group by c.day, t.d`, sql`t.day desc`);
+}
+
+/** 접속 세션 목록. 시작이 늦은 순으로 limit건(1~500, 기본 100)이고, 사용자를 주면 그 사람의 세션만 준다 */
+export function sessions(db: Executor, userId: string | null, limit: number | null): Promise<unknown[]> {
+  return jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
+      s.started_at as "startedAt", s.ended_at as "endedAt", s.duration_sec as "durationSec"
+    from public.play_sessions s
+    left join public.profiles p on p.user_id = s.user_id
+    where ${userId}::uuid is null or s.user_id = ${userId}::uuid
+    order by s.started_at desc, s.id desc
+    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
 }

@@ -7,7 +7,7 @@ import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
 import action from '../action.js';
 import admin from '../admin.js';
-import { chatHandler } from '../chat.js';
+import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
 import friends from '../friends.js';
 import me from '../me.js';
@@ -16,25 +16,37 @@ import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
 import { appAuth, sessionOf } from '../_auth/session.js';
-import { settleAfterResponse } from './afterResponse.js';
+import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { providePresence } from './livePresence.js';
+import { provideOnline, providePresence } from './livePresence.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
 import { recentChat, saveChat } from '../_data/chat.js';
+import { recordSession } from '../_data/activity.js';
+import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
+
+// 차단 목록이 바뀌면 실시간 채널의 채팅 거르기를 갱신한다(허브는 아래에서 서버를 띄운 뒤 붙는다)
+const blocks = blocksHandler((uid, ids) => live.setBlocked(uid, ids));
 
 const routes: Record<string, NodeHandler> = {
   '/api/account': account,
   '/api/action': action,
   '/api/admin': admin,
+  '/api/admin/live': admin,
+  '/api/admin/stats/daily': admin,
+  '/api/admin/retention': admin,
+  '/api/admin/sessions': admin,
   // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
-  '/api/chat': chatHandler((uid, ids) => live.setBlocked(uid, ids)),
+  '/api/blocks': blocks,
+  '/api/blocks/:uid': blocks,
+  '/api/chat/messages/:id/reports': chatReportHandler,
   '/api/mail': mail,
   '/api/friends': friends,
+  '/api/friends/:uid': friends,
   '/api/me': me,
   '/api/players/:uid': players,
   '/api/rank': rank,
@@ -76,9 +88,15 @@ const live = attachLive(server, {
     recent: (uid, limit) => recentChat(database().db, uid, limit),
     blocked: (uid) => blockedIds(database().db, uid),
   },
+  // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
+  recordSession: (uid, startedAt, endedAt) => {
+    afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
+      reportServerIssue('접속 세션 기록 실패', e, { uid, startedAt, endedAt })));
+  },
 });
 
 providePresence(uid => live.presenceOf(uid));
+provideOnline(() => live.online());
 
 process.on('SIGTERM', () => {
   live.close();

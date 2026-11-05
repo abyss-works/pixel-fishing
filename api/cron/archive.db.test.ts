@@ -99,6 +99,16 @@ describe('콜드 아카이브 크론', () => {
         saves: (await env.client.query('select user_id, data, updated_at from public.saves order by updated_at')).rows,
       };
       expect({ res: normalize(res, a), left: normalize(left, a), uploaded: uploaded(a) }).toMatchSnapshot();
+      // 옮기기 전에 events가 있던 KST 날짜마다 일별 집계와 활동일을 남겼다
+      const stats = await env.client.query('select day::text as day, dau, catches, actions from public.daily_stats order by day');
+      expect(stats.rows).toEqual([
+        { day: '2030-02-22', dau: 1, catches: 1, actions: 1 },
+        { day: '2030-02-23', dau: 1, catches: 0, actions: 1 },
+        { day: '2030-02-24', dau: 1, catches: 0, actions: 1 },
+        { day: '2030-03-03', dau: 1, catches: 0, actions: 1 },
+      ]);
+      const active = await env.client.query('select count(*)::int as n from public.user_active_days');
+      expect(active.rows[0].n).toBe(4);
     } finally {
       vi.useRealTimers();
     }

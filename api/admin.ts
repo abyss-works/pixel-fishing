@@ -4,6 +4,7 @@
 // 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 세션 토큰의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
 // 토큰이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
 // 응답에는 이메일 같은 개인정보가 담기므로 어떤 응답도 캐시하지 않는다.
+// 리소스 경로 조회(GET /api/admin/live·stats/daily·retention·sessions)도 같은 판정을 거친다. 질의 문자열은 필터에만 쓴다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. default export가 Node 시그니처다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -11,6 +12,7 @@ import { newPasswordResetToken, passwordResetLanding, RESET_PASSWORD_EXPIRES_IN 
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
+import { onlineUsers } from './_server/livePresence.js';
 import { accountKind, insertPasswordResetToken } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
@@ -27,6 +29,13 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 /** 대시보드가 보는 가장 긴 기간. 일별 활성 조회의 창(90일)과 같다 */
 const MAX_DAYS = 90;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** 이름 조회(?q=)와 관리자 쓰기의 경로 */
+const ROOT = '/api/admin';
+/** 일별 집계 조회의 기본 기간과 최대 기간(일) */
+const STATS_DEFAULT_DAYS = 30;
+const STATS_MAX_DAYS = 180;
+const DAY_MS = 86_400_000;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function handler(req: Req, res: Res): Promise<void> {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -48,18 +57,53 @@ const WRITES: Record<string, Write> = {
   letterHandled,
 };
 
+/** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
+const RESOURCES: Record<string, (req: Req) => (db: Executor) => Promise<unknown>> = {
+  '/api/admin/live': () => async () => {
+    const online = onlineUsers();
+    return { count: online.length, online };
+  },
+  '/api/admin/stats/daily': req => {
+    const { from, to } = rangeOf(req);
+    return db => read.dailyStats(db, from, to);
+  },
+  '/api/admin/retention': () => read.signupRetention,
+  '/api/admin/sessions': req => {
+    const user = param(req, 'user');
+    if (user !== undefined && !UUID.test(user)) throw new ApiError(400, 'bad-user');
+    const limit = limitOf(req);
+    return db => read.sessions(db, user ?? null, limit);
+  },
+};
+
+/** 세션의 사용자와 관리자 여부. 세션이 없으면 401이다 */
+async function caller(req: Req): Promise<{ uid: string; admin: boolean; store: Database }> {
+  if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
+  const uid = (await sessionOf(req.headers))?.id ?? null;
+  if (!uid) throw new ApiError(401, 'unauthorized');
+  const store = database();
+  const admin = await dbRead(() => read.isAdmin(store.db, uid));
+  return { uid, admin, store };
+}
+
 async function route(req: Req, res: Res): Promise<void> {
+  const path = new URL(req.url ?? ROOT, 'http://x').pathname.replace(/\/+$/, '');
+  if (path !== ROOT) {
+    const resource = Object.hasOwn(RESOURCES, path) ? RESOURCES[path] : null;
+    if (!resource) throw new ApiError(404, 'not-found');
+    if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
+    const { admin, store } = await caller(req);
+    if (!admin) throw new ApiError(403, 'forbidden');
+    const query = resource(req);
+    res.status(200).json(await dbRead(() => query(store.db)));
+    return;
+  }
+
   const q = param(req, 'q');
   const write = req.method === 'POST' && q !== undefined && Object.hasOwn(WRITES, q) ? WRITES[q] : null;
   if (req.method !== 'GET' && !write) throw new ApiError(405, 'method-not-allowed');
-  if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
-
-  const uid = (await sessionOf(req.headers))?.id ?? null;
-  if (!uid) throw new ApiError(401, 'unauthorized');
-
-  const store = database();
+  const { uid, admin, store } = await caller(req);
   const { db } = store;
-  const admin = await dbRead(() => read.isAdmin(db, uid));
   const name = param(req, 'q');
   if (name === 'access') {
     res.status(200).json({ kind: admin ? 'granted' : 'denied', uid });
@@ -176,6 +220,27 @@ function optionalDaysOf(req: Req): number | null {
   if (raw === undefined) return null;
   if (!/^\d{1,3}$/.test(raw)) throw new ApiError(400, 'bad-days');
   return Number(raw);
+}
+
+/**
+ * 일별 집계 조회의 KST 날짜 범위(양끝 포함). to가 없으면 KST 오늘, from이 없으면 to부터 30일 전이다.
+ * 날짜 형식이 틀리면 400 bad-date, from이 to보다 늦거나 기간이 180일을 넘으면 400 bad-range다.
+ */
+function rangeOf(req: Req): { from: string; to: string } {
+  const dayOf = (key: string): number | null => {
+    const raw = param(req, key);
+    if (raw === undefined) return null;
+    const ms = DATE.test(raw) ? Date.parse(raw) : NaN;
+    if (Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== raw) throw new ApiError(400, 'bad-date');
+    return ms;
+  };
+  const kstToday = Date.parse(new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10));
+  const to = dayOf('to') ?? kstToday;
+  const from = dayOf('from') ?? to - (STATS_DEFAULT_DAYS - 1) * DAY_MS;
+  const days = (to - from) / DAY_MS + 1;
+  if (days < 1 || days > STATS_MAX_DAYS) throw new ApiError(400, 'bad-range');
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { from: iso(from), to: iso(to) };
 }
 
 /** 이벤트 건수. 없으면 null이고 기본값과 범위는 읽기가 정한다 */

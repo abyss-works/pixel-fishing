@@ -22,7 +22,7 @@ afterAll(async () => {
 });
 afterEach(() => providePresence(() => null));
 
-async function call(method: string, token: string | null, body?: unknown) {
+async function call(method: string, token: string | null, body?: unknown, uid?: string) {
   const { default: handler } = await import('./friends.js');
   const out: { status: number; body: unknown } = { status: 0, body: undefined };
   const res = {
@@ -30,7 +30,7 @@ async function call(method: string, token: string | null, body?: unknown) {
     json(b: unknown) { out.body = b; },
     setHeader() {},
   };
-  await handler({ method, body, headers: sessionHeaders(token) } as never, res as never);
+  await handler({ method, body, params: uid ? { uid } : {}, headers: sessionHeaders(token) } as never, res as never);
   return out;
 }
 
@@ -43,26 +43,27 @@ describe('친구 함수', () => {
   });
 
   it('닉네임으로 요청하고 수락하면 친구가 되고, 접속한 친구에게는 접속 여부와 바다가 붙는다', async () => {
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '나루' })).toMatchObject({ status: 200, body: { result: 'requested' } });
+    expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ status: 200, body: { result: 'requested' } });
     expect((await list(userToken(B))).friends).toMatchObject([{ uid: A, state: 'incoming', online: false }]);
-    expect(await call('POST', userToken(B), { op: 'accept', uid: A })).toMatchObject({ status: 200 });
+    expect(await call('PUT', userToken(B), undefined, A)).toMatchObject({ status: 200 });
     providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
     expect((await list(userToken(A))).friends).toEqual([expect.objectContaining({ uid: B, state: 'friend', online: true, region: 'deep' })]);
-    expect(await call('POST', userToken(A), { op: 'remove', uid: B })).toMatchObject({ status: 200 });
+    expect(await call('DELETE', userToken(A), undefined, B)).toMatchObject({ status: 200 });
     expect((await list(userToken(A))).friends).toEqual([]);
   });
 
   it('없는 닉네임·게스트·차단 사이는 404, 자기 자신은 400이다', async () => {
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '없는이름' })).toMatchObject({ status: 404 });
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '손님' })).toMatchObject({ status: 404 });
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '가람' })).toMatchObject({ status: 400, body: { error: 'self' } });
+    expect(await call('POST', userToken(A), { nickname: '없는이름' })).toMatchObject({ status: 404 });
+    expect(await call('POST', userToken(A), { nickname: '손님' })).toMatchObject({ status: 404 });
+    expect(await call('POST', userToken(A), { nickname: '가람' })).toMatchObject({ status: 400, body: { error: 'self' } });
     await env.client.query('insert into public.blocks (user_id, blocked_id) values ($1, $2)', [C, A]);
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '다온' })).toMatchObject({ status: 404 });
+    expect(await call('POST', userToken(A), { nickname: '다온' })).toMatchObject({ status: 404 });
   });
 
   it('형식이 틀린 요청은 400이다', async () => {
-    expect(await call('POST', userToken(A), { op: 'request', nickname: '' })).toMatchObject({ status: 400 });
-    expect(await call('POST', userToken(A), { op: 'accept', uid: 'x' })).toMatchObject({ status: 400 });
-    expect(await call('POST', userToken(A), { op: 'nope', uid: B })).toMatchObject({ status: 400, body: { error: 'bad-op' } });
+    expect(await call('POST', userToken(A), { nickname: '' })).toMatchObject({ status: 400 });
+    expect(await call('PUT', userToken(A), undefined, 'x')).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    expect(await call('PATCH', userToken(A), undefined, B)).toMatchObject({ status: 405 });
+    expect(await call('DELETE', userToken(A))).toMatchObject({ status: 405 });
   });
 });
