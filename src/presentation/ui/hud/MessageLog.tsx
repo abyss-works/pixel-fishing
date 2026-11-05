@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { isChannelShown } from '../../../features/display/model/messageFilter';
+import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
 import CheckToggle from '../CheckToggle';
@@ -14,7 +14,7 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 최근 채팅 묶음처럼) 마찬가지다. 위로 올려 읽는 중이면 자리를 지키고, 다시 맨 아래로 내리면 또 따라 내려간다.
 // 휠을 받으려고 창 상자는 포인터를 받는다. 창 바깥의 빈 열은 캔버스 클릭을 막지 않는다.
 // 바탕은 마우스를 올렸을 때만 보인다(평소에는 글줄과 글자 그림자만). 스크롤 막대(HUD용 흰 막대)도 마우스를 올렸을 때만 보인다.
-// 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 채널 토글(채팅·시스템)을 그린다.
+// 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 기록에 나온 채널의 토글(채팅·길드·시스템)을 그린다.
 // 꺼 둔 채널에 새 글줄이 오면 그 토글 옆에 점을 찍는다. 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
@@ -23,8 +23,6 @@ const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } a
 
 /** 한 줄 높이(em) — 창 높이를 줄 수로 정한다 */
 const LINE_EM = 1.45;
-
-const TOGGLES: MessageChannel[] = ['chat', 'system'];
 
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = mine ? 'text-gold' : 'text-accent';
@@ -40,7 +38,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = 'all', onToggle }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -49,10 +47,11 @@ export default function MessageLog({ log, onPick, footer, you, filter = 'all', o
   you?: string | null;
   /** 보이는 채널 */
   filter?: MessageFilter;
-  /** 채널 토글을 눌렀다. 없으면 토글을 그리지 않는다 */
-  onToggle?: (channel: MessageChannel) => void;
+  /** 채널 토글을 눌렀다. present는 기록에 나온 채널(토글이 보이는 채널)이다. 없으면 토글을 그리지 않는다 */
+  onToggle?: (channel: MessageChannel, present: readonly MessageChannel[]) => void;
 }) {
-  const toggles = channelsOf(log).length > 1 && onToggle !== undefined;
+  const present = channelsOf(log);
+  const toggles = present.length > 1 && onToggle !== undefined;
   const shown = toggles ? log.filter(m => isChannelShown(filter, m.channel)) : log;
   /** 이 시각 뒤에 꺼 둔 채널에 온 글줄을 새 글줄로 친다 — 처음 그린 때와 토글을 누른 때 */
   const [hiddenSince, setHiddenSince] = useState(() => Date.now());
@@ -79,10 +78,10 @@ export default function MessageLog({ log, onPick, footer, you, filter = 'all', o
     <div className="absolute left-3 bottom-3 z-(--z-overlay) w-[min(520px,58%)] flex flex-col items-stretch gap-1 pointer-events-none">
       {toggles && (
         <div className="pointer-events-auto self-start flex items-center gap-3 px-1 text-shadow-hud" role="group" aria-label="메시지 채널">
-          {TOGGLES.map(c => (
+          {FILTER_CHANNELS.filter(c => present.includes(c)).map(c => (
             <span key={c} className="inline-flex items-center gap-1">
               <CheckToggle label={CHANNEL_LABEL[c]} checked={isChannelShown(filter, c)}
-                           onChange={() => { setHiddenSince(Date.now()); onToggle?.(c); }} />
+                           onChange={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }} />
               {unread(c) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-gold">
                   <span className="sr-only">새 메시지</span>

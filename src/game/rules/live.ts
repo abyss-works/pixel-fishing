@@ -8,7 +8,7 @@ export type Dir = 0 | 1 | 2 | 3;
 export type ClientMessage =
   | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태
   | { t: 'stop' }
-  | { t: 'chat'; text: string }
+  | { t: 'chat'; text: string; room?: 'guild' } // room이 없으면 월드 채팅, guild면 내 길드 채팅
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
@@ -16,14 +16,14 @@ export interface Presence { uid: string; nick: string; boat: number; region: str
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
-  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[] }
+  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
   | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
-  | { t: 'chat'; line: ChatLine }
+  | { t: 'chat'; line: ChatLine; room?: 'guild' } // 길드 채팅은 그 길드의 접속한 길드원에게만 간다
   | { t: 'typing'; uid: string; on: boolean }
-  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' };
+  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */
 export const LIVE_PATH = '/api/live';
@@ -61,7 +61,9 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
-    case 'chat': return typeof o.text === 'string' ? { t: 'chat', text: o.text } : null;
+    case 'chat':
+      if (typeof o.text !== 'string' || (o.room !== undefined && o.room !== 'guild')) return null;
+      return o.room === 'guild' ? { t: 'chat', text: o.text, room: 'guild' } : { t: 'chat', text: o.text };
     case 'typing': return typeof o.on === 'boolean' ? { t: 'typing', on: o.on } : null;
     default: return null;
   }

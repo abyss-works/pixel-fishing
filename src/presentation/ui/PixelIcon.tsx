@@ -12,12 +12,17 @@ export type GlyphId =
   | 'caretRight' | 'caretDown' | 'checkPartial'
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
-  | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people';
+  | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 두 사람 — 머리 둘과 어깨 둘 (친구)
   people: {
     cells: [[1, 1, 3, 3], [8, 1, 3, 3], [0, 5, 5, 5], [7, 5, 5, 5]],
+  },
+  // 깃발 — 깃대와 끝이 갈라진 기 (길드)
+  flag: {
+    cells: [[1, 0, 1, 12], [0, 11, 4, 1], [2, 1, 9, 5]],
+    holes: [[8, 3, 3, 1]],
   },
   // 봉투 — 테두리 사각형에 접힌 덮개(V자) 두 줄
   letter: {

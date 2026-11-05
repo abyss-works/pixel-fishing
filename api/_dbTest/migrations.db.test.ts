@@ -253,4 +253,30 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('길드·길드 채팅 (0027)', () => {
+    it('되돌리기 SQL은 길드 표 셋과 채팅의 길드 열만 지우고, 길드 채팅 메시지는 함께 지운다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const tables = async () => (await other.query<{ name: string }>(
+          `select table_name as name from information_schema.tables where table_schema = 'public'
+           and table_name in ('guilds', 'guild_members', 'guild_invites', 'chat_messages') order by table_name`)).rows.map(r => r.name);
+        expect(await tables()).toEqual(['chat_messages', 'guild_invites', 'guild_members', 'guilds']);
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@test.dev`]);
+        const { rows: [g] } = await other.query<{ id: string }>(`insert into public.guilds (name) values ('심해') returning id`);
+        await other.query(`insert into public.chat_messages (user_id, nick, text) values ($1, 'n', '월드')`, [uid]);
+        await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, 'n', '길드', $2)`, [uid, g.id]);
+        const down = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '0027_guilds.down.sql'), 'utf8');
+        await other.query(down);
+        expect(await tables()).toEqual(['chat_messages']);
+        expect((await other.query('select text from public.chat_messages')).rows).toEqual([{ text: '월드' }]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

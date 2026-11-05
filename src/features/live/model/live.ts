@@ -19,11 +19,16 @@ export interface LiveState {
   others: Readonly<Record<string, OtherPlayer>>;
   /** 받은 채팅(오래된 순). 보관 상한을 넘으면 오래된 줄부터 버린다 */
   chat: readonly ChatLine[];
+  /** 받은 길드 채팅(오래된 순). 보관 상한은 월드 채팅과 같다 */
+  guildChat: readonly ChatLine[];
   /** 마지막으로 거부된 내 채팅의 이유. 내 채팅이 저장되면 지운다 */
   chatError: ChatError | null;
 }
 
-export const EMPTY_LIVE: LiveState = { you: null, others: {}, chat: [], chatError: null };
+export const EMPTY_LIVE: LiveState = { you: null, others: {}, chat: [], guildChat: [], chatError: null };
+
+/** 채팅 방 — 월드(전체)와 내 길드 */
+export type ChatRoom = 'world' | 'guild';
 
 /** 화면에 남기는 채팅 줄 수 */
 export const CHAT_KEEP = 200;
@@ -36,13 +41,15 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
         you: msg.you,
         others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now }])),
         chat: msg.recentChat.slice(-CHAT_KEEP),
+        guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
         chatError: null,
       };
     case 'chat': {
-      if (state.chat.some(l => l.id === msg.line.id)) return state;
+      const key = msg.room === 'guild' ? 'guildChat' : 'chat';
+      if (state[key].some(l => l.id === msg.line.id)) return state;
       return {
         ...state,
-        chat: [...state.chat, msg.line].slice(-CHAT_KEEP),
+        [key]: [...state[key], msg.line].slice(-CHAT_KEEP),
         chatError: msg.line.uid === state.you ? null : state.chatError,
       };
     }
@@ -74,9 +81,9 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
   }
 }
 
-/** 차단한 사람의 채팅 줄을 지운 상태. 이후 줄은 서버가 보내지 않는다 */
+/** 차단한 사람의 채팅 줄을 두 방에서 지운 상태. 이후 줄은 서버가 보내지 않는다 */
 export function withoutAuthor(state: LiveState, uid: string): LiveState {
-  return { ...state, chat: state.chat.filter(l => l.uid !== uid) };
+  return { ...state, chat: state.chat.filter(l => l.uid !== uid), guildChat: state.guildChat.filter(l => l.uid !== uid) };
 }
 
 /** 이동 중인데 오래 소식이 없는 플레이어 — 반투명으로 그린다 */

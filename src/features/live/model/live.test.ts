@@ -87,9 +87,24 @@ describe('채팅 상태', () => {
     expect(s.chatError).toBeNull();
   });
 
-  it('withoutAuthor는 그 사람의 줄을 지운다', () => {
-    const s = hello([line(1, 'a'), line(2, 'b'), line(3, 'a')]);
+  it('withoutAuthor는 그 사람의 줄을 두 방에서 모두 지운다', () => {
+    let s = hello([line(1, 'a'), line(2, 'b'), line(3, 'a')]);
+    s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(4, 'a') }, 1);
     expect(withoutAuthor(s, 'a').chat.map(l => l.id)).toEqual([2]);
+    expect(withoutAuthor(s, 'a').guildChat).toEqual([]);
+  });
+
+  it('길드 채팅은 월드 채팅과 따로 쌓고, hello의 길드 최근 대화로 시작한다', () => {
+    let s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [], recentChat: [line(1)], recentGuildChat: [line(2)] }, 0);
+    expect(s.guildChat.map(l => l.id)).toEqual([2]);
+    s = applyLiveMessage(s, { t: 'error', code: 'chat-no-guild' }, 1);
+    s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 2);
+    expect(applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 3)).toBe(s);
+    expect(s.chat.map(l => l.id)).toEqual([1]);
+    expect(s.guildChat.map(l => l.id)).toEqual([2, 3]);
+    expect(s.chatError).toBeNull();
+    // 길드가 없는 연결의 hello는 길드 대화를 비운다
+    expect(applyLiveMessage(s, { t: 'hello', you: 'me', others: [], recentChat: [] }, 4).guildChat).toEqual([]);
   });
 });
 

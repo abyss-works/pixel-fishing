@@ -9,6 +9,7 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('{"t":"ping"}')).toEqual({ t: 'ping' });
     expect(parseClientMessage('{"t":"typing","on":true}')).toEqual({ t: 'typing', on: true });
     expect(parseClientMessage('{"t":"chat","text":"안녕"}')).toEqual({ t: 'chat', text: '안녕' });
+    expect(parseClientMessage('{"t":"chat","text":"안녕","room":"guild"}')).toEqual({ t: 'chat', text: '안녕', room: 'guild' });
   });
 
   it('형식이 틀리면 null', () => {
@@ -21,6 +22,7 @@ describe('parseClientMessage', () => {
       '{"t":"move","x":1,"y":2,"dir":0}',
       '{"t":"move","x":1e999,"y":2,"dir":0,"line":false}',
       '{"t":"chat","text":5}',
+      '{"t":"chat","text":"안녕","room":"world"}',
       '{"t":"typing","on":"yes"}',
     ]) expect(parseClientMessage(raw), raw).toBeNull();
   });

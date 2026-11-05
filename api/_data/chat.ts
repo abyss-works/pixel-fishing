@@ -1,4 +1,5 @@
 // 채팅(chat_messages)과 채팅 신고(chat_reports) 소유 모듈 — 저장, 최근 대화, 신고 복사, 보관 기간 정리, 계정 정리.
+// 월드 채팅과 길드 채팅이 같은 표를 쓴다. guild_id가 비어 있으면 월드 채팅, 차 있으면 그 길드의 채팅이다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { ChatLine } from '../../src/game/rules/live.js';
@@ -19,24 +20,31 @@ const toLine = (r: RawLine): ChatLine => ({ id: Number(r.id), uid: r.uid, nick: 
 const isoOf = (column: string) =>
   sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
 
+// 그 방의 메시지만 고르는 조건 — 월드(guild_id 없음) 또는 그 길드
+const roomOf = (column: string, guildId: string | null) =>
+  guildId === null ? sql`${sql.raw(column)} is null` : sql`${sql.raw(column)} = ${guildId}`;
+
 /**
  * 메시지를 저장하고 보낼 줄을 돌려준다. 제재된 계정(saves_current.restricted)이면 저장하지 않고 null이다.
- * 제재는 연결 중에도 SQL로 걸리므로 저장 문장에서 함께 판정한다.
+ * 길드 채팅(guildId)은 지금 그 길드원일 때만 저장하고, 아니면 null이다.
+ * 제재와 길드 탈퇴는 연결 중에도 바뀌므로 저장 문장에서 함께 판정한다.
  */
-export async function saveChat(db: Executor, uid: string, nick: string, text: string): Promise<ChatLine | null> {
-  const { rows } = await db.execute<RawLine>(sql`insert into public.chat_messages (user_id, nick, text)
-    select ${uid}, ${nick}, ${text}
-    where not exists (select 1 from public.saves_current c where c.user_id = ${uid} and c.restricted)
+export async function saveChat(db: Executor, uid: string, nick: string, text: string, guildId: string | null = null): Promise<ChatLine | null> {
+  const member = guildId === null ? sql`true` : sql`exists (select 1 from public.guild_members g
+    where g.guild_id = ${guildId} and g.user_id = ${uid} and g.left_at is null)`;
+  const { rows } = await db.execute<RawLine>(sql`insert into public.chat_messages (user_id, nick, text, guild_id)
+    select ${uid}, ${nick}, ${text}, ${guildId}::uuid
+    where not exists (select 1 from public.saves_current c where c.user_id = ${uid} and c.restricted) and ${member}
     returning id, user_id::text as uid, nick, text, ${isoOf('created_at')} as at`);
   return rows[0] ? toLine(rows[0]) : null;
 }
 
-/** 최근 대화 limit개를 오래된 순으로. 그 사용자가 차단한 사람의 메시지는 뺀다 */
-export async function recentChat(db: Executor, uid: string, limit: number): Promise<ChatLine[]> {
+/** 그 방(월드 또는 길드)의 최근 대화 limit개를 오래된 순으로. 그 사용자가 차단한 사람의 메시지는 뺀다 */
+export async function recentChat(db: Executor, uid: string, limit: number, guildId: string | null = null): Promise<ChatLine[]> {
   const { rows } = await db.execute<RawLine>(sql`select * from (
       select m.id, m.user_id::text as uid, m.nick, m.text, ${isoOf('m.created_at')} as at
       from public.chat_messages m
-      where not exists (select 1 from public.blocks b where b.user_id = ${uid} and b.blocked_id = m.user_id)
+      where ${roomOf('m.guild_id', guildId)} and not exists (select 1 from public.blocks b where b.user_id = ${uid} and b.blocked_id = m.user_id)
       order by m.id desc
       limit ${limit}
     ) t order by t.id`);
@@ -44,16 +52,18 @@ export async function recentChat(db: Executor, uid: string, limit: number): Prom
 }
 
 /**
- * 메시지를 신고한다. 그 메시지와 앞뒤 대화를 신고 표에 복사한다. 같은 사람이 같은 메시지를 다시 신고하면 그대로 둔다.
+ * 메시지를 신고한다. 그 메시지와 같은 방(월드 또는 그 길드)의 앞뒤 대화를 신고 표에 복사한다. 같은 사람이 같은 메시지를 다시 신고하면 그대로 둔다.
  * @returns 메시지가 없으면(보관 기간이 지나 지워졌거나 잘못된 id) false
  */
 export async function reportChat(db: Executor, uid: string, messageId: number, nowISO: string): Promise<boolean> {
   const { rows } = await db.execute<{ found: number }>(sql`with target as (
-      select id, user_id from public.chat_messages where id = ${messageId}
+      select id, user_id, guild_id from public.chat_messages where id = ${messageId}
     ), context as (
-      (select * from public.chat_messages where id <= ${messageId} order by id desc limit ${REPORT_CONTEXT + 1})
+      (select m.* from public.chat_messages m, target t where m.id <= t.id and m.guild_id is not distinct from t.guild_id
+        order by m.id desc limit ${REPORT_CONTEXT + 1})
       union all
-      (select * from public.chat_messages where id > ${messageId} order by id limit ${REPORT_CONTEXT})
+      (select m.* from public.chat_messages m, target t where m.id > t.id and m.guild_id is not distinct from t.guild_id
+        order by m.id limit ${REPORT_CONTEXT})
     ), saved as (
       insert into public.chat_reports (user_id, message_id, target_id, lines, created_at)
       select ${uid}, t.id, t.user_id,

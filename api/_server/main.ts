@@ -10,6 +10,7 @@ import admin from '../admin.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
 import friends from '../friends.js';
+import { guildRoutes } from '../guilds.js';
 import me from '../me.js';
 import players from '../players.js';
 import rank from '../rank.js';
@@ -23,6 +24,7 @@ import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
 import { recentChat, saveChat } from '../_data/chat.js';
+import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
@@ -31,6 +33,8 @@ type NodeHandler = (req: never, res: never) => Promise<void>;
 
 // 차단 목록이 바뀌면 실시간 채널의 채팅 거르기를 갱신한다(허브는 아래에서 서버를 띄운 뒤 붙는다)
 const blocks = blocksHandler((uid, ids) => live.setBlocked(uid, ids));
+// 소속 길드가 바뀌면 실시간 채널의 길드 채팅 방을 바꾼다
+const guilds = guildRoutes((uid, guild) => live.setGuild(uid, guild));
 
 const routes: Record<string, NodeHandler> = {
   '/api/account': account,
@@ -47,6 +51,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/mail': mail,
   '/api/friends': friends,
   '/api/friends/:uid': friends,
+  ...guilds,
   '/api/me': me,
   '/api/players/:uid': players,
   '/api/rank': rank,
@@ -84,9 +89,10 @@ const live = attachLive(server, {
     return { uid: session.id, nick: nick ?? '낚시꾼', boat, guest: session.email === null };
   },
   chat: {
-    save: (user, text) => saveChat(database().db, user.uid, user.nick, text),
-    recent: (uid, limit) => recentChat(database().db, uid, limit),
+    save: (user, text, guild) => saveChat(database().db, user.uid, user.nick, text, guild),
+    recent: (uid, limit, guild) => recentChat(database().db, uid, limit, guild),
     blocked: (uid) => blockedIds(database().db, uid),
+    guildOf: (uid) => guildIdOf(database().db, uid),
   },
   // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
   recordSession: (uid, startedAt, endedAt) => {

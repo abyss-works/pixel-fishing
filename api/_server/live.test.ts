@@ -33,14 +33,19 @@ async function listen(server: Server): Promise<void> {
 
 // 쿠키 값을 사용자 id로 쓰는 시험용 인증. 닉네임은 n-<id>, 배는 2다. 쿠키가 guest:로 시작하면 게스트다
 // 채팅 저장소는 메모리 대역이다. restricted에 넣은 계정은 제재된 계정, blocks는 계정별 차단 목록이다
-interface ChatFake { lines: ChatLine[]; restricted: Set<string>; blocks: Map<string, string[]> }
+// guilds는 계정별 소속 길드, guildLines는 길드별 채팅이다. 메시지 id는 두 방이 함께 센다
+interface ChatFake {
+  lines: ChatLine[]; restricted: Set<string>; blocks: Map<string, string[]>;
+  guilds: Map<string, string>; guildLines: Map<string, ChatLine[]>;
+}
 
 /** 기록된 접속 세션 — 시각은 ISO 문자열이다 */
 interface SessionRecord { uid: string; startedAt: string; endedAt: string }
 
 async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
   const server = createServer();
-  const chat: ChatFake = { lines: [], restricted: new Set(), blocks: new Map() };
+  const chat: ChatFake = { lines: [], restricted: new Set(), blocks: new Map(), guilds: new Map(), guildLines: new Map() };
+  let seq = 0;
   const sessions: SessionRecord[] = [];
   const live = attachLive(server, {
     origin: ORIGIN,
@@ -52,14 +57,18 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; l
       return { uid, nick: `n-${uid}`, boat: 2, guest };
     },
     chat: {
-      save: async (user, text) => {
+      save: async (user, text, guild) => {
         if (chat.restricted.has(user.uid)) return null;
-        const line = { id: chat.lines.length + 1, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' };
-        chat.lines.push(line);
+        if (guild !== null && chat.guilds.get(user.uid) !== guild) return null;
+        const line = { id: ++seq, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' };
+        if (guild === null) chat.lines.push(line);
+        else chat.guildLines.set(guild, [...chat.guildLines.get(guild) ?? [], line]);
         return line;
       },
-      recent: async (uid) => chat.lines.filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
+      recent: async (uid, _limit, guild) => (guild === null ? chat.lines : chat.guildLines.get(guild) ?? [])
+        .filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
       blocked: async (uid) => chat.blocks.get(uid) ?? [],
+      guildOf: async (uid) => chat.guilds.get(uid) ?? null,
     },
     recordSession: (uid, startedAt, endedAt) => { sessions.push({ uid, startedAt, endedAt }); },
     ...extra,
@@ -336,5 +345,63 @@ describe('실시간 채널 채팅', () => {
     store.blocks.set('u2', ['u3']);
     const b = connect(url, 'u2');
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [store.lines[0]] });
+  });
+});
+
+describe('실시간 채널 길드 채팅', () => {
+  const guildChat = (c: Client, text: string) => c.ws.send(JSON.stringify({ t: 'chat', text, room: 'guild' }));
+  const guildLine = (id: number, uid: string, text: string): ServerMessage =>
+    ({ t: 'chat', room: 'guild', line: { id, uid, nick: `n-${uid}`, text, at: '2030-01-01T00:00:00.000Z' } });
+
+  it('길드 채팅은 같은 길드의 접속한 길드원에게만 가고, 차단한 사람의 줄은 받지 않으며, 월드 채팅은 그대로 모두에게 간다', async () => {
+    const { url, chat: store } = await start();
+    store.guilds.set('u1', 'g1').set('u2', 'g1').set('u3', 'g2').set('u5', 'g1');
+    store.blocks.set('u5', ['u1']);
+    const [a, b, c, d, e] = ['u1', 'u2', 'u3', 'u4', 'u5'].map(uid => connect(url, uid));
+    for (const x of [a, b, c, d, e]) await x.next();
+    guildChat(a, '  길드 안녕  ');
+    expect(await a.next()).toEqual(guildLine(1, 'u1', '길드 안녕'));
+    expect(await b.next()).toEqual(guildLine(1, 'u1', '길드 안녕'));
+    a.ws.send(JSON.stringify({ t: 'chat', text: '월드' }));
+    const world = { t: 'chat', line: { id: 2, uid: 'u1', nick: 'n-u1', text: '월드', at: '2030-01-01T00:00:00.000Z' } };
+    expect(await c.next()).toEqual(world);
+    expect(await d.next()).toEqual(world);
+    expect(await b.next()).toEqual(world);
+    guildChat(b, '둘');
+    expect(await e.next()).toEqual(guildLine(3, 'u2', '둘'));
+    expect(store.guildLines.get('g1')?.map(l => l.text)).toEqual(['길드 안녕', '둘']);
+  });
+
+  it('길드가 없으면 chat-no-guild로 거부하고, setGuild로 소속이 바뀌면 바로 따른다', async () => {
+    const { url, live, chat: store } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    guildChat(a, '혼자');
+    expect(await a.next()).toEqual({ t: 'error', code: 'chat-no-guild' });
+    store.guilds.set('u1', 'g1').set('u2', 'g1');
+    live.setGuild('u1', 'g1');
+    live.setGuild('u2', 'g1');
+    guildChat(a, '이제');
+    expect(await b.next()).toEqual(guildLine(1, 'u1', '이제'));
+    store.guilds.delete('u2');
+    live.setGuild('u2', null);
+    guildChat(a, '떠남');
+    expect(await a.next()).toEqual(guildLine(1, 'u1', '이제'));
+    expect(await a.next()).toEqual(guildLine(2, 'u1', '떠남'));
+    guildChat(b, '나도');
+    expect(await b.next()).toEqual({ t: 'error', code: 'chat-no-guild' });
+  });
+
+  it('hello는 길드원에게만 그 길드의 최근 대화를 싣고, 내가 차단한 사람의 줄은 뺀다', async () => {
+    const { url, chat: store } = await start();
+    const line = (id: number, uid: string) => ({ id, uid, nick: `n-${uid}`, text: `줄${id}`, at: 'x' });
+    store.guildLines.set('g1', [line(1, 'u1'), line(2, 'u3')]);
+    store.guilds.set('u2', 'g1');
+    store.blocks.set('u2', ['u3']);
+    const b = connect(url, 'u2');
+    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [], recentGuildChat: [line(1, 'u1')] });
+    const c = connect(url, 'u4');
+    expect(await c.next()).toEqual({ t: 'hello', you: 'u4', others: [], recentChat: [] });
   });
 });
