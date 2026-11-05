@@ -1,5 +1,5 @@
 // cron 핸들러 규약 — 인증(CRON_SECRET bearer)·메서드 가드·성공 경로.
-// runArchive는 모킹한다. DB·R2를 포함한 전체 흐름은 실제 Postgres 특성 테스트가 맡는다.
+// runArchive와 일별 집계 갱신은 모킹한다. DB·R2를 포함한 전체 흐름은 실제 Postgres 특성 테스트가 맡는다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../cold-archive.js', () => ({
@@ -7,8 +7,10 @@ vi.mock('../cold-archive.js', () => ({
     events: { rows: 0, r2Key: null }, saves: { rows: 0, r2Key: null }, cutoff: 'x',
   })),
 }));
+vi.mock('../_data/activity.js', () => ({ refreshDailyStats: vi.fn(async () => []) }));
 import handler from './archive.js';
 import { runArchive } from '../cold-archive.js';
+import { refreshDailyStats } from '../_data/activity.js';
 
 function mkRes() {
   const r = {
@@ -22,7 +24,7 @@ function mkRes() {
 
 describe('api/cron/archive 핸들러', () => {
   beforeEach(() => { vi.stubEnv('CRON_SECRET', 'test-secret'); });
-  afterEach(() => { vi.unstubAllEnvs(); vi.mocked(runArchive).mockClear(); });
+  afterEach(() => { vi.unstubAllEnvs(); vi.mocked(runArchive).mockClear(); vi.mocked(refreshDailyStats).mockClear(); });
 
   it('GET 외 메서드는 405', async () => {
     const res = mkRes();
@@ -38,6 +40,7 @@ describe('api/cron/archive 핸들러', () => {
     await handler({ method: 'GET', headers: { authorization: 'Bearer wrong' } } as never, res2 as never);
     expect(res2.statusCode).toBe(401);
     expect(vi.mocked(runArchive)).not.toHaveBeenCalled();
+    expect(vi.mocked(refreshDailyStats)).not.toHaveBeenCalled();
   });
 
   it('시크릿 일치 + env 완비면 200 요약 응답', async () => {
@@ -49,6 +52,8 @@ describe('api/cron/archive 핸들러', () => {
     await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' } } as never, res as never);
     expect(res.statusCode).toBe(200);
     expect(vi.mocked(runArchive)).toHaveBeenCalledTimes(1);
+    // 일별 집계는 아카이브가 events를 옮기기 전에 갱신한다
+    expect(vi.mocked(refreshDailyStats).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(runArchive).mock.invocationCallOrder[0]);
     expect(res.body).toEqual({ events: { rows: 0, r2Key: null }, saves: { rows: 0, r2Key: null }, cutoff: 'x' });
   });
 

@@ -6,7 +6,7 @@ import { fish, seedUser, testUid } from './actionHarness.js';
 export const USER_TABLES = [
   'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
-  'chat_messages', 'chat_reports',
+  'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -72,6 +72,8 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
     `insert into public.chat_messages (user_id, nick, text) values ($1, $2, '안녕') returning id`, [uid, spec.nickname]);
   await client.query(`insert into public.chat_reports (user_id, message_id, target_id, lines) values ($1, $2, $3, '[]')`,
     [uid, chat.id, other]);
+  await client.query(`insert into public.play_sessions (user_id, started_at, ended_at, duration_sec) values ($1, now(), now(), 0)`, [uid]);
+  await client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);
