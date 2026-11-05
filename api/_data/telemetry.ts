@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { GameEvent } from '../../src/game/rules/actions.js';
+import type { AwayEvent } from '../../src/game/rules/away.js';
 import { at, jsonParam } from './json.js';
 
 export function eventsInsert(uid: string, events: readonly GameEvent[], createdAtISO: string): SQL | null {
@@ -45,4 +46,14 @@ export async function recordAdminAction(db: Executor, uid: string, type: AdminAc
   detail: Record<string, unknown> = {}): Promise<void> {
   await db.execute(sql`insert into public.events (user_id, type, payload)
     values (${uid}, ${type}, ${JSON.stringify({ adminId, ...detail })}::jsonb)`);
+}
+
+/** 방치 결과 보고 — 기간 안의 캐치·자동 방생 이벤트를 시각 순서로. 시각은 Postgres JSON 직렬화 문자열이다 */
+export async function awayEvents(db: Executor, uid: string, fromISO: string, toISO: string): Promise<AwayEvent[]> {
+  const { rows } = await db.execute<{ events: AwayEvent[] }>(sql`select coalesce(json_agg(json_build_object(
+      'type', e.type, 'payload', e.payload, 'at', e.created_at) order by e.created_at, e.id), '[]') as events
+    from public.events e
+    where e.user_id = ${uid} and e.type in ('catch', 'autoRelease')
+      and e.created_at >= ${at(fromISO)} and e.created_at <= ${at(toISO)}`);
+  return rows[0].events;
 }

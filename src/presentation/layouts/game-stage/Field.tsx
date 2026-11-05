@@ -102,7 +102,11 @@ export default function Field({
   // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어를 엔진이 프레임마다 그린다
   const readPosition = useCallback(() => {
     const pos = engine.getPosition();
-    return { region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y), line: engine.getSnapshot().phase !== 'idle' };
+    const bob = engine.getBobber();
+    return {
+      region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
+      line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
+    };
   }, [engine, region]);
   useLivePosition(readPosition);
   useEffect(() => {

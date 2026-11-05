@@ -2214,6 +2214,13 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
       {
         "created_at": "<now>",
         "payload": {
+          "fish": [
+            {
+              "fishId": "crucian",
+              "form": "normal",
+              "uid": "<uuid>",
+            },
+          ],
           "reason": "bag-full",
           "uids": [
             "<uuid>",

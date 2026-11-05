@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
-import type { ServerMessage } from '../../../game/rules/live';
+import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
@@ -93,13 +93,13 @@ export function useOnline(uid: string): boolean {
 }
 
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
-export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; stale: boolean; bubble: string | 'typing' | null }[] {
+export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: string | 'typing' | null }[] {
   const wall = Date.now();
   return othersInRegion(state, region).map(o => {
-    const { uid, x, y, nick, line } = o.presence;
+    const { uid, x, y, nick, line, bob } = o.presence;
     const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
     const b = bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now);
-    return { x: pos.x, y: pos.y, nick, line, stale: isStale(o, wall), bubble: b ? (b.kind === 'chat' ? b.text : 'typing') : null };
+    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble: b ? (b.kind === 'chat' ? b.text : 'typing') : null };
   });
 }
 

@@ -122,6 +122,12 @@ export class GameFieldEngine {
     return { x: this.pos.x, y: this.pos.y };
   }
 
+  /** 찌가 떠 있는 자리 — 낚싯줄을 드리운 동안 던진 어군의 위치. 드리우지 않았으면 null */
+  getBobber(): Point | null {
+    if (this.snapshot.phase === 'idle' || !this.school) return null;
+    return { x: this.school.x, y: this.school.y };
+  }
+
   /** 다른 플레이어 위치의 출처를 정한다. null이면 그리지 않는다 */
   setOthersSource(source: ((now: number) => OtherShipView[]) | null): void {
     this.othersSource = source;

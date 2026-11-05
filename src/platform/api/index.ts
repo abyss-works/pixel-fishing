@@ -37,6 +37,7 @@ export type { BlockedUser, ChatActionError } from '../adapters/chat';
 export { readFriends, friendAction } from '../adapters/friends';
 export { readGuild, guildAction } from '../adapters/guild';
 export { readPlayer, searchPlayers } from '../adapters/player';
+export { readAwayReport, watchAway } from '../adapters/away';
 export type { PublicProfile } from '../adapters/player';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,

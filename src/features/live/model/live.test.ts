@@ -38,11 +38,12 @@ describe('applyLiveMessage', () => {
 });
 
 describe('nextPositionMessage', () => {
-  const at = (x: number, y: number, line = false) => ({ region: 'sea', zone: null, x, y, line });
+  const at = (x: number, y: number, line = false, bob: { x: number; y: number } | null = null) => ({ region: 'sea', zone: null, x, y, line, bob });
 
   it('처음과 바뀐 위치는 move, 그대로면 stop 한 번, 그 뒤로는 보내지 않는다', () => {
     let r = nextPositionMessage(null, at(0, 0));
     expect(r.msg).toEqual({ t: 'move', region: 'sea', zone: null, x: 0, y: 0, dir: 2, line: false });
+    expect(r.msg).not.toHaveProperty('bob');
     r = nextPositionMessage(r.sent, at(3, 0));
     expect(r.msg).toMatchObject({ t: 'move', x: 3, dir: 1 });
     r = nextPositionMessage(r.sent, at(3, 0));
@@ -55,6 +56,13 @@ describe('nextPositionMessage', () => {
     const still = nextPositionMessage(nextPositionMessage(null, at(1, 1)).sent, at(1, 1)).sent;
     expect(nextPositionMessage(still, at(1, 1, true)).msg).toMatchObject({ t: 'move', line: true });
     expect(nextPositionMessage(still, { ...at(1, 1), region: 'deep' }).msg).toMatchObject({ t: 'move', region: 'deep' });
+  });
+
+  it('찌 위치를 함께 보내고, 같은 자리에서 다른 어군으로 던지면 move를 다시 보낸다', () => {
+    const cast = nextPositionMessage(null, at(1, 1, true, { x: 30, y: 8 }));
+    expect(cast.msg).toMatchObject({ t: 'move', line: true, bob: { x: 30, y: 8 } });
+    const still = nextPositionMessage(cast.sent, at(1, 1, true, { x: 30, y: 8 })).sent;
+    expect(nextPositionMessage(still, at(1, 1, true, { x: 60, y: 8 })).msg).toMatchObject({ t: 'move', bob: { x: 60, y: 8 } });
   });
 });
 

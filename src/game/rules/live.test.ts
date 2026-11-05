@@ -2,6 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
 
 describe('parseClientMessage', () => {
+  it('낚싯줄을 드리웠으면 찌 위치를 함께 받고, 형식이 틀린 찌 위치는 메시지째 버린다', () => {
+    expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true,"bob":{"x":40,"y":-5,"z":9}}'))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true, bob: { x: 40, y: -5 } });
+    expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true,"bob":{"x":"a","y":1}}')).toBeNull();
+    expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true,"bob":null}'))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
+  });
+
   it('정상 메시지는 필요한 필드만 남긴다', () => {
     expect(parseClientMessage('{"t":"move","region":"sea","x":1.5,"y":-2,"dir":3,"line":true,"extra":1}'))
       .toEqual({ t: 'move', region: 'sea', x: 1.5, y: -2, dir: 3, line: true });
