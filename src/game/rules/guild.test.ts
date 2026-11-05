@@ -2,8 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   guildDailyContributionCaps,
-  GUILD_INVITE_TTL_MS, GUILD_MAX_MEMBERS, checkGuildName, guildFull, handoverOutcome, inviteCode, inviteExpiresAt,
-  normalizeInviteCode, removalOutcome,
+  DEFAULT_GUILD_PITCH, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, GUILD_PITCH_MAX, checkGuildName, guildCode, guildFull,
+  guildLinkPath, handoverOutcome, joinOutcome, joinRequestActive, joinRequestDaysLeft, normalizeGuildCode, normalizeGuildPitch,
+  parseJoinMode, removalOutcome,
   GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
   GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, donationOutcome, guildBonusLevels,
   guildEffectsOf, validDonationAmount,
@@ -30,24 +31,79 @@ describe('인원 상한', () => {
   });
 });
 
-describe('초대 코드', () => {
+describe('길드 고유 코드', () => {
   it('헷갈리는 글자(0 O 1 I L)를 뺀 8자 대문자 코드를 만든다', () => {
     let i = 0;
-    const code = inviteCode(n => (i++ * 7) % n);
+    const code = guildCode(n => (i++ * 7) % n);
     expect(code).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
-    expect(inviteCode(() => 0)).toBe('AAAAAAAA');
+    expect(guildCode(() => 0)).toBe('AAAAAAAA');
   });
 
   it('입력은 앞뒤 공백과 대소문자를 무시하고, 형식이 틀리면 null이다', () => {
-    expect(normalizeInviteCode(' abcd2345 ')).toBe('ABCD2345');
-    expect(normalizeInviteCode('ABCD234')).toBeNull();
-    expect(normalizeInviteCode('ABCD234O')).toBeNull();
-    expect(normalizeInviteCode(12345678)).toBeNull();
+    expect(normalizeGuildCode(' abcd2345 ')).toBe('ABCD2345');
+    expect(normalizeGuildCode('ABCD234')).toBeNull();
+    expect(normalizeGuildCode('ABCD234O')).toBeNull();
+    expect(normalizeGuildCode(12345678)).toBeNull();
   });
 
-  it('발급한 때부터 24시간 쓸 수 있다', () => {
-    expect(GUILD_INVITE_TTL_MS).toBe(24 * 3600_000);
-    expect(inviteExpiresAt('2026-11-05T00:00:00.000Z')).toBe('2026-11-06T00:00:00.000Z');
+  it('초대 링크 경로는 /g/ 뒤에 코드를 붙인다', () => {
+    expect(guildLinkPath('ABCD2345')).toBe('/g/ABCD2345');
+  });
+});
+
+describe('가입 방식', () => {
+  it('자유 가입은 바로 들어오고, 승인 가입은 신청이 되며, 닫힘은 받지 않는다', () => {
+    expect(joinOutcome('open', 3)).toBe('join');
+    expect(joinOutcome('approval', 3)).toBe('request');
+    expect(joinOutcome('closed', 3)).toBe('closed');
+  });
+
+  it('인원이 가득 차면 자유 가입과 승인 가입 모두 받지 않는다. 닫힘은 닫힘이 먼저다', () => {
+    expect(joinOutcome('open', GUILD_MAX_MEMBERS)).toBe('guild-full');
+    expect(joinOutcome('approval', GUILD_MAX_MEMBERS)).toBe('guild-full');
+    expect(joinOutcome('closed', GUILD_MAX_MEMBERS)).toBe('closed');
+  });
+
+  it('가입 방식 입력은 셋 가운데 하나만 받는다', () => {
+    expect(parseJoinMode('open')).toBe('open');
+    expect(parseJoinMode('approval')).toBe('approval');
+    expect(parseJoinMode('closed')).toBe('closed');
+    expect(parseJoinMode('free')).toBeNull();
+    expect(parseJoinMode(1)).toBeNull();
+  });
+});
+
+describe('가입 신청', () => {
+  const at = '2026-11-05T00:00:00.000Z';
+  it('신청한 때부터 7일 동안 남는다', () => {
+    expect(GUILD_JOIN_REQUEST_TTL_MS).toBe(7 * 86_400_000);
+    expect(joinRequestActive(at, '2026-11-11T23:59:59.000Z')).toBe(true);
+    expect(joinRequestActive(at, '2026-11-12T00:00:00.000Z')).toBe(false);
+  });
+
+  it('남은 기간은 올림한 날 수다', () => {
+    expect(joinRequestDaysLeft(at, at)).toBe(7);
+    expect(joinRequestDaysLeft(at, '2026-11-05T01:00:00.000Z')).toBe(7);
+    expect(joinRequestDaysLeft(at, '2026-11-11T12:00:00.000Z')).toBe(1);
+    expect(joinRequestDaysLeft(at, '2026-11-12T00:00:00.000Z')).toBe(0);
+  });
+});
+
+describe('권유 문구', () => {
+  it('앞뒤 공백을 다듬고, 비면 기본 문구를 쓰라는 뜻으로 null이다', () => {
+    expect(normalizeGuildPitch('  같이 낚시해요  ')).toEqual({ ok: true, pitch: '같이 낚시해요' });
+    expect(normalizeGuildPitch('   ')).toEqual({ ok: true, pitch: null });
+    expect(normalizeGuildPitch(null)).toEqual({ ok: true, pitch: null });
+  });
+
+  it('상한을 넘거나 문자열이 아니면 거부한다', () => {
+    expect(normalizeGuildPitch('가'.repeat(GUILD_PITCH_MAX))).toEqual({ ok: true, pitch: '가'.repeat(GUILD_PITCH_MAX) });
+    expect(normalizeGuildPitch('가'.repeat(GUILD_PITCH_MAX + 1))).toEqual({ ok: false });
+    expect(normalizeGuildPitch(3)).toEqual({ ok: false });
+  });
+
+  it('기본 문구는 부드러운 권유다', () => {
+    expect(DEFAULT_GUILD_PITCH).toBe('나랑 같이 낚시하자!');
   });
 });
 

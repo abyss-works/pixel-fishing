@@ -1,4 +1,4 @@
-// 길드 모듈 — 실제 Postgres에서 만들기, 초대 코드, 가입, 떠나기·내보내기, 위임, 조회, 계정 정리를 검사한다.
+// 길드 모듈 — 실제 Postgres에서 만들기, 가입 방식과 가입 신청, 떠나기·내보내기, 위임, 조회, 미리보기, 계정 정리를 검사한다.
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -7,7 +7,8 @@ import type { Database } from '../_db/client.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
-  createGuild, deleteUserGuild, donateToBonus, guildIdOf, handOver, issueInvite, joinGuild, myGuild, removeMember,
+  cancelJoinRequest, createGuild, decideJoinRequest, deleteUserGuild, donateToBonus, guildIdOf, guildPreview, handOver, joinByCode,
+  myGuild, myJoinRequest, removeMember, setJoinSettings,
 } from './guilds.js';
 import { commitAction } from './commit.js';
 import { versionUpdate } from './save.js';
@@ -40,65 +41,140 @@ async function user(): Promise<string> {
   return uid;
 }
 
-const code = () => `C${String(seq++).padStart(7, '2').replace(/0/g, 'X').replace(/1/g, 'Y')}`;
+// 코드 글자(헷갈리는 0 O 1 I L 제외)만 쓰는 테스트용 고유 코드
+const code = () => `C${String(seq++).padStart(7, 'A').replace(/0/g, 'X').replace(/1/g, 'Y')}`;
 const tx = () => database.withTransaction;
 
-/** 길드장 하나와 길드원 n명이 있는 길드 */
-async function guildWith(n: number): Promise<{ id: string; leader: string; members: string[] }> {
-  const leader = await user();
-  const created = await createGuild(tx(), leader, `g${seq++}`, NOW);
-  if (!created.ok) throw new Error(created.error);
+/** 길드를 만들고 고유 코드를 돌려준다 */
+async function make(leader: string, name = `g${seq++}`, at = NOW): Promise<{ id: string; code: string }> {
   const c = code();
-  await issueInvite(database.db, leader, created.id, c, NOW);
+  const created = await createGuild(tx(), leader, name, c, at);
+  if (!created.ok) throw new Error(created.error);
+  return { id: created.id, code: c };
+}
+
+/** 길드장 하나와 길드원 n명이 있는 자유 가입 길드 */
+async function guildWith(n: number): Promise<{ id: string; code: string; leader: string; members: string[] }> {
+  const leader = await user();
+  const g = await make(leader);
+  await setJoinSettings(database.db, leader, g.id, { joinMode: 'open' });
   const members: string[] = [];
   for (let i = 0; i < n; i++) {
     const m = await user();
-    await joinGuild(tx(), m, c, NOW);
+    const r = await joinByCode(tx(), m, g.code, NOW);
+    if (!r.ok) throw new Error(r.error);
     members.push(m);
   }
-  return { id: created.id, leader, members };
+  return { ...g, leader, members };
 }
 
 describe('guilds', () => {
-  it('만들면 만든 사람이 길드장이고, 이름은 대소문자를 무시하고 겹칠 수 없으며, 한 사람은 길드 하나에만 속한다', async () => {
+  it('만들면 만든 사람이 길드장이고 승인 가입이다. 이름과 코드는 겹칠 수 없고, 한 사람은 길드 하나에만 속한다', async () => {
     const a = await user();
     const b = await user();
-    const made = await createGuild(tx(), a, 'DeepSea', NOW);
-    expect(made).toMatchObject({ ok: true });
-    expect(await createGuild(tx(), b, 'deepsea', NOW)).toEqual({ ok: false, error: 'name-taken' });
-    expect(await createGuild(tx(), a, 'Other', NOW)).toEqual({ ok: false, error: 'already-in-guild' });
+    const made = await make(a, 'DeepSea');
+    expect(await createGuild(tx(), b, 'deepsea', code(), NOW)).toEqual({ ok: false, error: 'name-taken' });
+    expect(await createGuild(tx(), b, 'Fresh', made.code, NOW)).toEqual({ ok: false, error: 'code-taken' });
+    expect(await createGuild(tx(), a, 'Other', code(), NOW)).toEqual({ ok: false, error: 'already-in-guild' });
     const view = await myGuild(database.db, a, NOW);
-    expect(view).toMatchObject({ name: 'DeepSea', role: 'leader', invite: null, createdAt: NOW,
-      members: [{ uid: a, role: 'leader', joinedAt: NOW, leftAt: null }] });
+    expect(view).toMatchObject({ name: 'DeepSea', role: 'leader', code: made.code, joinMode: 'approval', pitch: null, requests: [],
+      createdAt: NOW, members: [{ uid: a, role: 'leader', joinedAt: NOW, leftAt: null }] });
     expect(await myGuild(database.db, b, NOW)).toBeNull();
   });
 
-  it('길드장만 초대 코드를 발급하고, 다시 발급하면 이전 코드는 쓸 수 없으며, 만료된 코드도 쓸 수 없다', async () => {
-    const g = await guildWith(1);
-    expect(await issueInvite(database.db, g.members[0], g.id, code(), NOW)).toEqual({ ok: false, error: 'not-leader' });
-    expect(await issueInvite(database.db, await user(), g.id, code(), NOW)).toEqual({ ok: false, error: 'not-member' });
-    const first = code();
-    const second = code();
-    await issueInvite(database.db, g.leader, g.id, first, NOW);
-    expect(await issueInvite(database.db, g.leader, g.id, second, NOW))
-      .toEqual({ ok: true, code: second, expiresAt: '2026-11-06T03:00:00.000Z' });
-    expect((await myGuild(database.db, g.leader, NOW))?.invite).toEqual({ code: second, expiresAt: '2026-11-06T03:00:00.000Z' });
-    expect((await myGuild(database.db, g.members[0], NOW))?.invite).toBeNull();
+  it('자유 가입은 코드로 바로 들어오고, 닫힘은 받지 않으며, 없는 코드는 bad-code다', async () => {
+    const leader = await user();
+    const g = await make(leader);
+    await setJoinSettings(database.db, leader, g.id, { joinMode: 'open' });
     const c = await user();
-    expect(await joinGuild(tx(), c, first, NOW)).toEqual({ ok: false, error: 'bad-code' });
-    expect(await joinGuild(tx(), c, second, '2026-11-06T03:00:00.000Z')).toEqual({ ok: false, error: 'bad-code' });
-    expect(await joinGuild(tx(), c, second, LATER)).toEqual({ ok: true, id: g.id });
+    expect(await joinByCode(tx(), c, g.code, NOW)).toEqual({ ok: true, id: g.id, result: 'joined' });
     expect(await guildIdOf(database.db, c)).toBe(g.id);
+    await setJoinSettings(database.db, leader, g.id, { joinMode: 'closed' });
+    expect(await joinByCode(tx(), await user(), g.code, NOW)).toEqual({ ok: false, error: 'guild-closed' });
+    expect(await joinByCode(tx(), await user(), 'ZZZZZZZZ', NOW)).toEqual({ ok: false, error: 'bad-code' });
   });
 
-  it('길드원이 10명이면 더 들어올 수 없고, 다른 길드에 있으면 들어올 수 없다', async () => {
-    const g = await guildWith(9);
-    const c = code();
-    await issueInvite(database.db, g.leader, g.id, c, NOW);
-    expect(await joinGuild(tx(), await user(), c, NOW)).toEqual({ ok: false, error: 'guild-full' });
-    expect(await joinGuild(tx(), g.members[0], c, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
+  it('승인 가입은 신청이 되고 길드장만 신청 목록을 보며, 승인하면 들어오고 거절하면 신청만 사라진다', async () => {
+    const leader = await user();
+    const g = await make(leader);
+    const [a, b] = [await user(), await user()];
+    const nickA = (await client.query('select nickname from public.profiles where user_id = $1', [a])).rows[0].nickname;
+    expect(await joinByCode(tx(), a, g.code, NOW)).toMatchObject({ ok: true, result: 'requested', leader, nick: nickA });
+    expect(await joinByCode(tx(), b, g.code, LATER)).toMatchObject({ ok: true, result: 'requested' });
+    expect(await guildIdOf(database.db, a)).toBeNull();
+    expect((await myGuild(database.db, leader, LATER))?.requests).toEqual([
+      { uid: a, nick: nickA, requestedAt: NOW }, expect.objectContaining({ uid: b, requestedAt: LATER })]);
+    expect(await myJoinRequest(database.db, a, LATER)).toMatchObject({ code: g.code, requestedAt: NOW });
+    const member = await user();
+    await setJoinSettings(database.db, leader, g.id, { joinMode: 'open' });
+    await joinByCode(tx(), member, g.code, NOW);
+    expect((await myGuild(database.db, member, LATER))?.requests).toEqual([]);
+    expect(await decideJoinRequest(tx(), member, g.id, a, true, LATER)).toEqual({ ok: false, error: 'not-leader' });
+    expect(await decideJoinRequest(tx(), leader, g.id, a, true, LATER)).toMatchObject({ ok: true });
+    expect(await guildIdOf(database.db, a)).toBe(g.id);
+    expect(await myJoinRequest(database.db, a, LATER)).toBeNull();
+    expect(await decideJoinRequest(tx(), leader, g.id, b, false, LATER)).toMatchObject({ ok: true });
+    expect(await guildIdOf(database.db, b)).toBeNull();
+    expect(await myJoinRequest(database.db, b, LATER)).toBeNull();
+    expect(await decideJoinRequest(tx(), leader, g.id, b, true, LATER)).toEqual({ ok: false, error: 'no-request' });
+  });
+
+  it('신청은 한 사람에 하나라 새 신청이 이전 신청을 바꾸고, 7일이 지나면 사라지며, 스스로 거둘 수 있다', async () => {
+    const g1 = await make(await user());
+    const g2 = await make(await user());
+    const a = await user();
+    await joinByCode(tx(), a, g1.code, NOW);
+    await joinByCode(tx(), a, g2.code, LATER);
+    expect(await myJoinRequest(database.db, a, LATER)).toMatchObject({ code: g2.code });
+    expect(await myJoinRequest(database.db, a, '2026-11-12T04:00:00.000Z')).toBeNull();
+    await cancelJoinRequest(database.db, a);
+    expect(await myJoinRequest(database.db, a, LATER)).toBeNull();
+  });
+
+  it('신청한 사람이 그 사이 다른 길드에 들어갔으면 승인하지 않고 신청을 지운다. 들어가면 내 신청은 사라진다', async () => {
+    const leader = await user();
+    const g = await make(leader);
+    const a = await user();
+    await joinByCode(tx(), a, g.code, NOW);
     const other = await guildWith(0);
-    expect(await joinGuild(tx(), other.leader, c, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
+    expect(await joinByCode(tx(), a, other.code, NOW)).toMatchObject({ ok: true, result: 'joined' });
+    expect(await myJoinRequest(database.db, a, NOW)).toBeNull();
+    const b = await user();
+    await joinByCode(tx(), b, g.code, NOW);
+    await client.query('insert into public.guild_members (guild_id, user_id) values ($1, $2)', [other.id, b]);
+    expect(await decideJoinRequest(tx(), leader, g.id, b, true, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
+    expect((await myGuild(database.db, leader, NOW))?.requests).toEqual([]);
+  });
+
+  it('가입 방식과 권유 문구는 길드장만 바꾸고, 넘기지 않은 값은 그대로 둔다', async () => {
+    const g = await guildWith(1);
+    expect(await setJoinSettings(database.db, g.members[0], g.id, { joinMode: 'closed' })).toEqual({ ok: false, error: 'not-leader' });
+    expect(await setJoinSettings(database.db, await user(), g.id, { joinMode: 'closed' })).toEqual({ ok: false, error: 'not-member' });
+    expect(await setJoinSettings(database.db, g.leader, g.id, { pitch: '같이 가요' })).toEqual({ ok: true, joinMode: 'open', pitch: '같이 가요' });
+    expect(await setJoinSettings(database.db, g.leader, g.id, { joinMode: 'approval' })).toEqual({ ok: true, joinMode: 'approval', pitch: '같이 가요' });
+    expect(await setJoinSettings(database.db, g.leader, g.id, { pitch: null })).toEqual({ ok: true, joinMode: 'approval', pitch: null });
+  });
+
+  it('미리보기는 이름, 레벨, 인원과 상한, 가입 방식만 싣고, 없는 코드는 null이다', async () => {
+    const g = await guildWith(2);
+    const name = (await myGuild(database.db, g.leader, NOW))?.name;
+    expect(await guildPreview(database.db, g.code)).toEqual({ code: g.code, name, level: 1, members: 3, cap: 10, joinMode: 'open' });
+    expect(await guildPreview(database.db, 'ZZZZZZZZ')).toBeNull();
+  });
+
+  it('길드원이 10명이면 더 들어오거나 승인할 수 없고, 다른 길드에 있으면 들어올 수 없다', async () => {
+    const g = await guildWith(8);
+    const waiting = await user();
+    await setJoinSettings(database.db, g.leader, g.id, { joinMode: 'approval' });
+    await joinByCode(tx(), waiting, g.code, NOW);
+    await setJoinSettings(database.db, g.leader, g.id, { joinMode: 'open' });
+    await joinByCode(tx(), await user(), g.code, NOW);
+    expect(await joinByCode(tx(), await user(), g.code, NOW)).toEqual({ ok: false, error: 'guild-full' });
+    expect(await decideJoinRequest(tx(), g.leader, g.id, waiting, true, NOW)).toEqual({ ok: false, error: 'guild-full' });
+    expect(await joinByCode(tx(), g.members[0], g.code, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
+    const other = await guildWith(0);
+    await setJoinSettings(database.db, g.leader, g.id, { joinMode: 'open' });
+    expect(await joinByCode(tx(), other.leader, g.code, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
   });
 
   it('떠난 선원은 기록이 남고, 바로 다른 길드에 들어갈 수 있으며, 같은 길드에 돌아오면 같은 행이 되살아난다', async () => {
@@ -109,13 +185,9 @@ describe('guilds', () => {
     expect(view?.members.map(m => [m.uid, m.leftAt])).toEqual([[g.leader, null], [m2, null], [m1, LATER]]);
     expect(await myGuild(database.db, m1, LATER)).toBeNull();
     const other = await guildWith(0);
-    const oc = code();
-    await issueInvite(database.db, other.leader, other.id, oc, LATER);
-    expect(await joinGuild(tx(), m1, oc, LATER)).toMatchObject({ ok: true });
+    expect(await joinByCode(tx(), m1, other.code, LATER)).toMatchObject({ ok: true });
     expect(await removeMember(tx(), m1, other.id, m1, LATER)).toMatchObject({ ok: true });
-    const gc = code();
-    await issueInvite(database.db, g.leader, g.id, gc, LATER);
-    expect(await joinGuild(tx(), m1, gc, LATER)).toMatchObject({ ok: true });
+    expect(await joinByCode(tx(), m1, g.code, LATER)).toMatchObject({ ok: true });
     const back = await myGuild(database.db, m1, LATER);
     expect(back?.members.filter(m => m.uid === m1)).toEqual([expect.objectContaining({ role: 'member', leftAt: null, joinedAt: LATER })]);
   });

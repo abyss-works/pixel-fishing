@@ -10,6 +10,8 @@ export default function Frame({ as: Tag = 'div', divided, className, children, .
   as?: FrameTag;
   /** as="button"일 때 */
   type?: 'button';
+  /** as="button"일 때 누를 수 없게 한다 */
+  disabled?: boolean;
   divided?: boolean;
   className?: string;
   children?: ReactNode;

@@ -31,6 +31,10 @@ import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
+import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
+import AccountModal from '../overlays/account/AccountModal';
+import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
+import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
 import { useFriendAlerts } from '../../../features/friends/service/useFriendAlerts';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
@@ -111,6 +115,11 @@ export default function GameView(props: GameViewProps) {
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
   useFriendAlerts(props.account !== null, props.setToast);
+  useGuildAlerts(props.account !== null, props.setToast);
+  // 초대 링크로 열렸으면 게임 상태를 불러온 뒤 확인 창을 띄운다. 게스트가 계정 창을 여는 동안은 숨기고, 계정이 생기면 다시 띄운다
+  const invite = useGuildInviteLanding();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
   // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
   const away = useAwayReport(s => props.setToast(awayLineText(s), 'gold'));
   const [awayOpen, setAwayOpen] = useState(false);
@@ -243,6 +252,15 @@ export default function GameView(props: GameViewProps) {
                   onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
         {guildOpen && <GuildModal setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
+        {inviteReady && invite.code && (
+          <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
+                             onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
+        )}
+        {accountOpen && (
+          <AccountModal game={game} setToast={props.setToast} onAuthChanged={props.onAuthChanged}
+                        account={props.account} uid={props.uid} nickname={props.nickname} onRename={props.onRename}
+                        syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
+        )}
         {playersOpen && atSea && (
           <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
         )}

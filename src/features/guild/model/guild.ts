@@ -1,16 +1,21 @@
-import type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
+import type {
+  GuildBonusItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
+} from '../../../platform/api';
+import type { ServerMessage } from '../../../game/rules/live';
 import {
-  GUILD_BONUS_IDS, GUILD_INVITE_TTL_MS, guildDailyContributionCaps, handoverOutcome, removalOutcome,
+  DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, guildDailyContributionCaps, guildLinkPath,
+  handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome,
 } from '../../../game/rules/guild';
-import type { GuildBonusId } from '../../../game/rules/guild';
+import type { GuildBonusId, GuildJoinMode } from '../../../game/rules/guild';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
 import { namedById } from '../../../game/content/named';
 import { josa } from '../../../shared/lib/josa';
 
-export type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp };
+export type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp };
 
-// 길드 화면 모델: 길드원 표, 길드원별로 열리는 관리 동작과 확인 문장, 초대 코드 남은 시간, 거부 안내 문장,
+// 길드 화면 모델: 길드원 표, 길드원별로 열리는 관리 동작과 확인 문장, 가입 방식과 초대 링크, 가입 신청 줄, 초대 확인 창 상태,
+// 실시간 길드 알림 문장, 거부 안내 문장,
 // 레벨 진행, 길드 스킬 줄과 효과 값, 날짜별 항해일지. 길드 스킬 값은 서버 응답을 그대로 보인다.
 
 const num = (n: number) => n.toLocaleString('ko-KR');
@@ -65,26 +70,87 @@ export function leaveConfirm(guild: GuildInfo, me: string): GuildConfirm | null 
       text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?`,
       done: `${guild.name} 길드를 해산했어요.` }
     : { title: '길드 떠나기', label: '떠나기', op,
-      text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.`,
+      text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.`,
       done: `${guild.name} 길드를 떠났어요.` };
 }
 
-/** 초대 코드를 쓸 수 있는 남은 시간 */
-export function inviteLeftText(expiresAt: string, nowMs: number): string {
-  const mins = Math.floor((Date.parse(expiresAt) - nowMs) / 60_000);
-  if (mins <= 0) return '만료됨';
-  return mins >= 60 ? `${Math.floor(mins / 60)}시간 남음` : `${mins}분 남음`;
+// ── 가입 방식과 초대 링크 ──────────────────────────────────────────
+
+/** 가입 방식의 이름과 한 줄 설명 */
+export const GUILD_JOIN_MODE_TEXT: Record<GuildJoinMode, { name: string; desc: string }> = {
+  open: { name: '자유 가입', desc: '링크나 코드로 바로 들어와요.' },
+  approval: { name: '승인 가입', desc: '신청을 받고 길드장이 승인해요.' },
+  closed: { name: '닫힘', desc: '새 길드원을 받지 않아요.' },
+};
+
+/** 초대 링크 — 서비스 주소에 길드 코드 경로를 붙인다 */
+export const guildLinkUrl = (origin: string, code: string): string => `${origin}${guildLinkPath(code)}`;
+
+/** 링크 복사로 넣는 글: 권유 문구(비었으면 기본 문구) 다음 줄에 링크 */
+export const inviteShareText = (pitch: string | null, url: string): string => `${pitch ?? DEFAULT_GUILD_PITCH}\n${url}`;
+
+/** 권유 문구 입력의 기본 문구와 길이 상한 */
+export const GUILD_PITCH_PLACEHOLDER = DEFAULT_GUILD_PITCH;
+export const GUILD_PITCH_LIMIT = GUILD_PITCH_MAX;
+
+/** 가입 신청 줄 — 이름, 신청 시각(한국 시간 "11월 5일 21:40"), 사라지기까지 남은 날 수 */
+export interface RequestRow { uid: string; name: string; when: string; daysLeft: number }
+const REQUEST_TIME = new Intl.DateTimeFormat('ko-KR',
+  { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+export function requestRows(requests: readonly GuildJoinRequestItem[], nowISO: string): RequestRow[] {
+  return requests.map(r => ({ uid: r.uid, name: memberName(r), when: REQUEST_TIME.format(new Date(r.requestedAt)),
+    daysLeft: joinRequestDaysLeft(r.requestedAt, nowISO) }));
 }
 
-/** 초대 코드 규칙: 유효 기간과 새 코드를 받으면 이전 코드가 무효가 된다는 것 */
-export const GUILD_INVITE_RULE = `${GUILD_INVITE_TTL_MS / 3600_000}시간 동안 여러 사람이 쓸 수 있어요. 새 코드를 받으면 이전 코드는 더 쓸 수 없어요.`;
+/** 가입 신청이 남는 기간 안내 */
+export const GUILD_REQUEST_RULE = `신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_400_000}일 동안 남고, 처리하지 않으면 사라져요.`;
+
+/** 초대 확인 창의 상태, 안내 문장, 확정 버튼(없으면 확정할 수 없다) */
+export interface InviteDialogView {
+  state: 'bad' | 'guest' | 'member' | 'closed' | 'full' | 'open' | 'approval';
+  text: string;
+  action: { label: string } | null;
+}
+
+/**
+ * 초대 확인 창이 보일 것. preview가 null이면 없는 코드다.
+ * @param viewer account는 계정 유저인지, guild는 지금 속한 길드 이름(없으면 null)
+ */
+export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null }): InviteDialogView {
+  if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null };
+  if (!viewer.account) {
+    return { state: 'guest', text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.', action: null };
+  }
+  if (viewer.guild !== null) {
+    return { state: 'member', action: null, text: viewer.guild === preview.name
+      ? `이미 ${preview.name} 길드에 있어요.`
+      : `이미 다른 길드(${viewer.guild})에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.` };
+  }
+  const outcome = joinOutcome(preview.joinMode, preview.members);
+  if (outcome === 'closed') return { state: 'closed', text: '이 길드는 지금 새 길드원을 받지 않아요.', action: null };
+  if (outcome === 'guild-full') return { state: 'full', text: '길드 인원이 가득 찼어요.', action: null };
+  return outcome === 'join'
+    ? { state: 'open', text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.', action: { label: '들어가기' } }
+    : { state: 'approval', text: `길드장이 승인하면 들어가요. 신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_400_000}일 동안 남아요.`, action: { label: '가입 신청' } };
+}
+
+/** 실시간 길드 알림 한 줄 — 가입 신청 도착(길드장), 승인과 거절(신청한 사람) */
+export function guildAlertText(e: Extract<ServerMessage, { t: 'guild' }>): string {
+  if (e.kind === 'request') return `${e.nick ?? '이름 없음'} 님이 ${e.guild} 길드에 가입을 신청했어요.`;
+  return e.kind === 'approved' ? `${e.guild} 길드 가입이 승인됐어요.` : `${e.guild} 길드 가입 신청이 거절됐어요.`;
+}
 
 /** 요청 실패 코드를 안내 문장으로 */
 export const GUILD_ERROR_TEXT: Record<string, string> = {
   'bad-name': '길드 이름은 한글 1~8자 또는 영문 2~16자로, 한글, 영문, 숫자와 - _만 쓸 수 있어요.',
   'name-taken': '이미 쓰이는 길드 이름이에요.',
   'already-in-guild': '이미 길드에 들어가 있어요. 한 사람은 길드 하나에만 들어갈 수 있어요.',
-  'bad-code': '초대 코드를 찾지 못했어요. 코드가 맞는지, 만료되지 않았는지 확인해 주세요.',
+  'bad-code': '길드 코드를 찾지 못했어요. 코드가 맞는지 확인해 주세요.',
+  'guild-closed': '이 길드는 지금 새 길드원을 받지 않아요.',
+  'no-request': '처리할 가입 신청을 찾지 못했어요. 이미 처리했거나 기간이 지났어요.',
+  'bad-pitch': `권유 문구는 ${GUILD_PITCH_MAX}자까지 쓸 수 있어요.`,
+  'bad-join-mode': '가입 방식을 다시 골라 주세요.',
+  'rate-limited': '요청이 너무 많아요. 잠시 뒤 다시 해 주세요.',
   'guild-full': '길드 인원이 가득 찼어요.',
   'not-leader': '길드장만 할 수 있어요.',
   'not-member': '길드원을 찾지 못했어요. 창을 다시 열어 주세요.',

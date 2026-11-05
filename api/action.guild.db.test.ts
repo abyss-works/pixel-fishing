@@ -32,7 +32,7 @@ beforeEach(() => {
 /** 길드 하나에 든 계정. total을 주면 다른 길드원이 그만큼 쌓아 둔 것으로 시작한다 */
 async function member(opts: SeedOptions = {}, total = 0): Promise<{ uid: string; guild: string }> {
   const uid = await seedUser(env.client, { uid: testUid(nextUid++), email: `g${nextUid}@test.dev`, state: {}, ...opts });
-  const { rows: [g] } = await env.client.query<{ id: string }>('insert into public.guilds (name) values ($1) returning id', [`gg${nextUid}`]);
+  const { rows: [g] } = await env.client.query<{ id: string }>('insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id', [`gg${nextUid}`]);
   await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g.id, uid]);
   if (total > 0) {
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)

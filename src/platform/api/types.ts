@@ -3,7 +3,7 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { ChatLine } from '../../game/rules/live';
-import type { GuildBonusId, GuildEffects, GuildLogKind, GuildRole } from '../../game/rules/guild';
+import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
@@ -88,11 +88,17 @@ export interface GuildBonusItem {
 }
 /** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
 export interface GuildDonorItem { uid: string | null; nick: string | null; gold: number }
-/** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). invite는 길드장에게만 온다 */
+/** 가입 신청 한 줄 — 신청한 사람과 신청 시각 */
+export interface GuildJoinRequestItem { uid: string; nick: string | null; requestedAt: string }
+/** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). requests는 길드장에게만 차 있다 */
 export interface GuildInfo {
   id: string; name: string; createdAt: string; role: GuildRole;
   members: GuildMemberItem[];
-  invite: { code: string; expiresAt: string } | null;
+  /** 바뀌지 않는 고유 코드(초대 링크와 코드 입력에 쓴다), 가입 방식, 초대 링크의 권유 문구(비었으면 null) */
+  code: string;
+  joinMode: GuildJoinMode;
+  pitch: string | null;
+  requests: GuildJoinRequestItem[];
   /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null) */
   growth: { level: number; total: number; floor: number; next: number | null };
   /** 보너스 다섯(해금 순)과 서버가 액션에 적용하는 효과, 전체 기부 순위(많은 순) — 화면은 표시만 한다 */
@@ -102,15 +108,24 @@ export interface GuildInfo {
   /** 항해일지 — 최근 순 */
   logbook: GuildLogItem[];
 }
+/** 길드가 없을 때 내가 넣어 둔 가입 신청 */
+export interface GuildMyRequest { code: string; name: string; requestedAt: string }
+/** 내 길드 조회 결과 — 길드가 있으면 request는 null이다 */
+export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null }
+/** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
+export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 export type GuildOp =
   | { op: 'create'; name: string }
   | { op: 'join'; code: string }
-  | { op: 'invite'; guildId: string }
+  | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
+  | { op: 'approve'; guildId: string; uid: string }
+  | { op: 'reject'; guildId: string; uid: string }
+  | { op: 'cancelRequest' }
   | { op: 'remove'; guildId: string; uid: string }
   | { op: 'handover'; guildId: string; uid: string }
   | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number };
-/** 길드 요청 결과 — 실패는 서버 오류 코드(name-taken, guild-full, not-leader 등) */
-export type GuildOpResult = { ok: true } | { ok: false; error: string };
+/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를 싣는다. 실패는 서버 오류 코드 */
+export type GuildOpResult = { ok: true; result?: 'joined' | 'requested' } | { ok: false; error: string };
 
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
