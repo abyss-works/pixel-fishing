@@ -158,7 +158,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
-    expect(screen.getByText('최대')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '이 형태 최대' })).toBeInTheDocument();
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
@@ -1152,7 +1152,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickTab(/^가방/);
     openRow('잉어');
-    expect(screen.getAllByText('최대')).toHaveLength(2); // 일반 42 + 변이 30
+    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 일반 42 + 변이 30
   });
 
   it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
@@ -1165,8 +1165,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getAllByText('90G')).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
-    expect(screen.getByText('돌연변이')).toBeInTheDocument();            // 개체 줄의 배지
-    expect(screen.getAllByText('최대')).toHaveLength(2);             // 최대는 폼별 — 일반·변이 각각
+    expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
+    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });
 
   it('변이만 골라 파는 것도 개체 단위로 된다', () => {
