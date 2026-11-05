@@ -1,8 +1,9 @@
 // 명부 구역 — 전체 유저 명부와, 행을 눌러 여는 드릴다운을 제공한다.
-// 검색은 이메일·닉네임·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보와 관리 조치를 보여준다:
+// 검색은 이메일·닉네임·uid 부분 일치. 진행이 없는 휴면 게스트는 기본으로 숨기고 토글로 함께 본다. 상세 모달이 해당 유저의 감사 정보와 관리 조치를 보여준다:
 //   스냅샷 → 관리 조치(우편·제재·재설정 링크) → 세션 기록 → 액션 유형 요약 → 최근 이벤트 타임라인.
 import { useMemo, useState } from 'react';
 import Button from '../../../ui/Button';
+import CheckToggle from '../../../ui/CheckToggle';
 import DataTable from '../../../ui/DataTable';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
@@ -12,7 +13,7 @@ import TextInput from '../../../ui/TextInput';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
-import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
+import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail, splitDormantGuests } from '../../../../features/admin/model/adminViews';
 import { fmtDuration } from '../../../../features/admin/model/dashboard';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
@@ -39,10 +40,12 @@ export default function UsersTab({ onCompose }: {
     useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const users = data ?? NO_USERS;
   const [query, setQuery] = useState('');
+  const [showDormant, setShowDormant] = useState(false);
   const [selected, setSelected] = useState<AdminUserRow | null>(null);
 
+  const { active, dormant } = useMemo(() => splitDormantGuests(users), [users]);
   const filtered = useMemo(() =>
-    filterAdminUsers(users, query), [users, query]);
+    filterAdminUsers(showDormant ? users : active, query), [users, active, showDormant, query]);
   // 조치 뒤 다시 읽은 명부의 행을 보인다 — 선택할 때의 행은 제재 여부가 낡을 수 있다
   const current = selected && (users.find(u => u.user_id === selected.user_id) ?? selected);
 
@@ -57,6 +60,8 @@ export default function UsersTab({ onCompose }: {
                  placeholder="이메일·닉네임·uid로 검색"
                  className="w-[240px]" aria-label="유저 검색" />
           <span className="text-2xs text-text-dim">{filtered.length}/{users.length}명</span>
+          <CheckToggle checked={showDormant} onChange={setShowDormant}
+                       label={`휴면 게스트 보기 (${dormant.length}명)`} />
         </div>
 
         <div className="pf-scroll-panel max-h-[640px] overflow-auto px-1 pb-1">

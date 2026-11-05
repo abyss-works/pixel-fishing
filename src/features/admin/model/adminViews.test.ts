@@ -3,7 +3,7 @@ import type {
   AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
 import {
-  adminIdentityLookup, adminNumber, adminUserLabel, filterAdminUsers, shortUid, selectAdminUserDetail, selectAntiAbuseRows,
+  adminIdentityLookup, adminNumber, isDormantGuest, splitDormantGuests, adminUserLabel, filterAdminUsers, shortUid, selectAdminUserDetail, selectAntiAbuseRows,
   selectEconomyMetrics, selectRiskSignals,
   selectProgressionDashboard,
 } from './adminViews';
@@ -98,5 +98,32 @@ describe('계정 식별 표기', () => {
     const lookup = adminIdentityLookup([known]);
     expect(lookup('abcdef01-0000')).toBe(known);
     expect(lookup('ffff0000-0000')).toEqual({ user_id: 'ffff0000-0000', nickname: null, email: null, is_anonymous: null });
+  });
+});
+
+describe('휴면 게스트', () => {
+  it('진행이 없는 게스트만 휴면이다: 저장이 없거나 골드와 명성이 모두 0', () => {
+    expect(isDormantGuest(user({ gold: null, fame: null, save_version: null }))).toBe(true);
+    expect(isDormantGuest(user({ gold: 0, fame: 0 }))).toBe(true);
+    expect(isDormantGuest(user({ gold: '0', fame: '0' }))).toBe(true);
+    expect(isDormantGuest(user({ gold: 10, fame: 0 }))).toBe(false);
+    expect(isDormantGuest(user({ gold: 0, fame: 3 }))).toBe(false);
+  });
+
+  it('계정 유저와 제재된 게스트는 진행이 없어도 휴면이 아니다', () => {
+    expect(isDormantGuest(user({ is_anonymous: false, gold: 0, fame: 0 }))).toBe(false);
+    expect(isDormantGuest(user({ gold: 0, fame: 0, restricted: true }))).toBe(false);
+  });
+
+  it('명부를 활동 계정과 휴면 게스트로 나누고 순서를 지킨다', () => {
+    const rows = [
+      user({ user_id: 'a' }),
+      user({ user_id: 'b', gold: 0, fame: 0 }),
+      user({ user_id: 'c', is_anonymous: false, gold: 0, fame: 0 }),
+      user({ user_id: 'd', gold: null, fame: null, save_version: null }),
+    ];
+    const { active, dormant } = splitDormantGuests(rows);
+    expect(active.map(r => r.user_id)).toEqual(['a', 'c']);
+    expect(dormant.map(r => r.user_id)).toEqual(['b', 'd']);
   });
 });

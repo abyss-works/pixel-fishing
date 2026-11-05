@@ -145,6 +145,26 @@ export function adminIdentityLookup(users: readonly AdminIdentity[]): (uid: stri
   return uid => byUid.get(uid.toLowerCase()) ?? { user_id: uid, nickname: null, email: null, is_anonymous: null };
 }
 
+/**
+ * 휴면 게스트 여부. 진행이 없는 게스트(저장이 없거나 골드와 명성이 모두 0)이고 제재되지 않은 계정이다.
+ * 저장 상태만으로 정하므로 그 계정이 진행을 시작하면 별도 처리 없이 휴면에서 벗어난다.
+ * 계정 유저와 제재된 계정은 관리 대상이라 진행이 없어도 휴면으로 보지 않는다.
+ */
+export function isDormantGuest(user: AdminUserRow): boolean {
+  if (user.is_anonymous !== true || user.restricted === true) return false;
+  // 저장이 없는 계정은 골드와 명성 열이 null이다
+  return (user.gold === null || adminNumber(user.gold) === 0)
+    && (user.fame === null || adminNumber(user.fame) === 0);
+}
+
+/** 명부를 활동 계정과 휴면 게스트로 나눈다. 각 목록은 입력 순서를 유지한다 */
+export function splitDormantGuests(users: readonly AdminUserRow[]): { active: AdminUserRow[]; dormant: AdminUserRow[] } {
+  const active: AdminUserRow[] = [];
+  const dormant: AdminUserRow[] = [];
+  for (const user of users) (isDormantGuest(user) ? dormant : active).push(user);
+  return { active, dormant };
+}
+
 /** 사용자 명부 검색을 계정 id·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */
 export function filterAdminUsers(users: readonly AdminUserRow[], query: string): AdminUserRow[] {
   const normalized = query.trim().toLowerCase();

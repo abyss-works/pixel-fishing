@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { fmtNum } from '../../../../features/admin/model/metrics';
-import { adminNumber, selectProgressionDashboard } from '../../../../features/admin/model/adminViews';
+import { adminNumber, selectProgressionDashboard, splitDormantGuests } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
@@ -28,7 +28,8 @@ export default function ProgressionTab() {
   // 유저 명부는 실시간·명부 구역과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.users, readAdminUsers, granted);
-  const users = data ?? NO_USERS;
+  // 분포는 진행이 있는 계정만 센다. 휴면 게스트는 모두 출발 단계라 분포를 한쪽으로 기울인다
+  const users = useMemo(() => splitDormantGuests(data ?? NO_USERS).active, [data]);
 
   const { boatHist, rodHist, regionReach, stalled } = useMemo(
     () => selectProgressionDashboard(users), [users],
