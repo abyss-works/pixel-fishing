@@ -15,6 +15,7 @@ import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
+import ChatReportsSection from './ChatReportsSection';
 import { boatNameOf } from '../../../../game/content/boats';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
@@ -50,7 +51,7 @@ export default function LiveTab() {
   };
 
   return (
-    <TabPage title="실시간" context="마지막 행동 시각으로 접속을 추정하고, 60초마다 갱신해요.">
+    <TabPage title="실시간" context="마지막 행동 시각으로 접속을 추정하고 60초마다 갱신해요. 아래에는 플레이어가 신고한 채팅이 있어요.">
       <KpiRow>
         <KpiTile label="접속 중" value={fmtN(buckets.online.length)}
                  hint={`마지막 행동 ${ONLINE_WINDOW_MIN}분 이내`} />
@@ -107,6 +108,9 @@ export default function LiveTab() {
           </Note>
         </Cell>
       </CellGrid>
+      <div className="mt-3">
+        <ChatReportsSection />
+      </div>
     </TabPage>
   );
 }
