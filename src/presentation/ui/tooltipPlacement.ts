@@ -17,3 +17,9 @@ export function placeBubble(anchor: Anchor, size: Size, viewport: Size): { x: nu
   if (above >= MARGIN) return { x, y: above };
   return { x, y: clamp(below, MARGIN, Math.max(MARGIN, viewport.h - size.h - MARGIN)) };
 }
+
+/** 요소의 rect를 배치 기준으로 바꾼다. 크기가 0이면(테스트 환경) null이다 */
+export function anchorOf(el: HTMLElement | null): Anchor | null {
+  const r = el?.getBoundingClientRect();
+  return r && (r.width || r.height) ? { left: r.left, top: r.top, bottom: r.bottom } : null;
+}
