@@ -1,40 +1,26 @@
 import { BOATS, boatNameOf } from '../../../game/content/boats';
 import type {
-  AdminCatchQualityRow, AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
+  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
-import { REGION_NAMES, REGION_ORDER, toRegionId } from './regions';
-
-export const ONLINE_WINDOW_MIN = 10;
+import { REGION_ORDER } from './regions';
 
 /** DB 숫자 열은 number·string·null 어느 형태로도 올 수 있다. */
 export const adminNumber = (value: number | string | null): number =>
   value === null ? NaN : Number(value);
 
-export interface OverviewMetrics {
-  catch7d: number;
+export interface RiskSignals {
   restrictedCount: number;
   spamUsers: number;
   riskTotal: number;
-  goldTotal: number;
-  fameTotal: number;
 }
 
-/** 개요 탭의 KPI와 위험 수를 원본 행에서 계산한다. */
-export function selectOverviewMetrics(
+/** 개요 탭의 위험 신호(제재 계정, 연타 플래그 사용자) 수를 센다. */
+export function selectRiskSignals(
   users: readonly AdminUserRow[], flags: readonly AdminSpamFlagRow[],
-  quality: readonly AdminCatchQualityRow[],
-): OverviewMetrics {
-  const catch7d = quality.slice(0, 7).reduce((sum, row) => sum + row.catches, 0);
+): RiskSignals {
   const restrictedCount = users.filter(user => user.restricted === true).length;
   const spamUsers = flags.reduce((count, flag) => count + (flag.fast_gap_7d > 0 ? 1 : 0), 0);
-  return {
-    catch7d,
-    restrictedCount,
-    spamUsers,
-    riskTotal: restrictedCount + spamUsers,
-    goldTotal: users.reduce((sum, user) => sum + adminNumber(user.gold), 0),
-    fameTotal: users.reduce((sum, user) => sum + adminNumber(user.fame), 0),
-  };
+  return { restrictedCount, spamUsers, riskTotal: restrictedCount + spamUsers };
 }
 
 export interface ProgressionDashboard {
@@ -98,44 +84,6 @@ export function selectProgressionDashboard(users: readonly AdminUserRow[]): Prog
     regionReach,
     stalled: stalled.sort((a, b) => b.deficit - a.deficit),
   };
-}
-
-export interface LiveDashboard {
-  buckets: { online: AdminUserRow[]; recent1h: AdminUserRow[]; today: AdminUserRow[] };
-  whereHist: { values: number[]; labels: string[] };
-  regionLabel: (user: AdminUserRow) => string | undefined;
-}
-
-/** 마지막 행동 시각으로 접속 신선도 구간과 온라인 위치 분포를 만든다. */
-export function selectLiveDashboard(users: readonly AdminUserRow[], nowMs: number): LiveDashboard {
-  const freshness = (user: AdminUserRow): number | null => {
-    const time = user.last_action_at ? Date.parse(user.last_action_at) : NaN;
-    return Number.isFinite(time) ? (nowMs - time) / 60_000 : null;
-  };
-  const online = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < ONLINE_WINDOW_MIN;
-  });
-  const recent1h = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < 60;
-  });
-  const today = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < 24 * 60;
-  });
-  const labels = [...REGION_ORDER.map(id => REGION_NAMES[id]), '기타'];
-  const values = new Array(labels.length).fill(0) as number[];
-  for (const user of online) {
-    const region = toRegionId(user.location_kind, user.location_id);
-    const index = region ? REGION_ORDER.findIndex(id => id === region) : -1;
-    values[index >= 0 ? index : labels.length - 1]++;
-  }
-  const regionLabel = (user: AdminUserRow): string | undefined => {
-    const region = toRegionId(user.location_kind, user.location_id);
-    return region ? REGION_NAMES[region] : undefined;
-  };
-  return { buckets: { online, recent1h, today }, whereHist: { values, labels }, regionLabel };
 }
 
 export interface AntiAbuseRows {

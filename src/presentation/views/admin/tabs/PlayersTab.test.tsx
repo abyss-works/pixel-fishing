@@ -20,6 +20,7 @@ vi.mock('../../../../platform/api', () => ({
         signed_up_at: '2026-10-01T00:00:00Z', last_sign_in_at: '2026-10-07T00:00:00Z',
         gold: 1200, fame: 30, boat: 1, rod: 3, location_kind: 'region', location_id: 'ocean',
         visited: ['village'], restricted: true, save_version: 8, last_action_at: '2026-10-07T00:00:00Z',
+        last_session_at: '2026-10-07T00:30:00Z', total_session_sec: 5000,
       }]),
       spamFlags: vi.fn(async () => [{
         user_id: 'aaaaaaaa-0000-0000-0000-000000000000', catches_7d: 40, fast_gap_7d: 12,
@@ -29,6 +30,12 @@ vi.mock('../../../../platform/api', () => ({
         id: 7, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', type: 'sell',
         payload: { count: 2, gold: 300 }, created_at: '2026-10-07T00:00:00Z',
       }]),
+      sessions: vi.fn(async () => [
+        { id: 2, userId: 'aaaaaaaa-0000-0000-0000-000000000000', nick: null,
+          startedAt: '2026-10-07T00:00:00Z', endedAt: '2026-10-07T00:30:00Z', durationSec: 1800 },
+        { id: 1, userId: 'aaaaaaaa-0000-0000-0000-000000000000', nick: null,
+          startedAt: '2026-10-06T00:00:00Z', endedAt: '2026-10-06T00:04:10Z', durationSec: 250 },
+      ]),
       restrict: mocks.restrict,
       resetLink: mocks.resetLink,
     },
@@ -52,12 +59,22 @@ describe('플레이어 탭', () => {
     show('roster');
     expect(await screen.findByText('friend@example.com')).toBeInTheDocument();
     expect(screen.getByText('1/1명')).toBeInTheDocument();
+    // 명부의 마지막 세션과 누적 플레이 열
+    const row = screen.getByText('friend@example.com').closest('tr')!;
+    expect(within(row).getByText('10-07 09:30')).toBeInTheDocument();
+    expect(within(row).getByText('1시간 23분')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('friend@example.com'));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세 — friend@example.com' });
     // 오목한 칸(pf-notch)은 clip-path로 안쪽을 잘라서, 그 안에 모달을 두면 화면 전체를 덮지 못한다
     expect(dialog.closest('.pf-notch')).toBeNull();
     expect(await within(dialog).findByText('판매')).toBeInTheDocument();
+    // 세션 기록 — 누적 플레이와 최근 세션의 시작 시각·길이
+    const sessions = within(dialog).getByText('세션 기록').closest('section')!;
+    expect(within(sessions).getByText('1시간 23분')).toBeInTheDocument();
+    expect(await within(sessions).findByText('30분')).toBeInTheDocument();
+    expect(within(sessions).getByText('4분')).toBeInTheDocument();
+    expect(within(sessions).getByText('10-07 09:00')).toBeInTheDocument();
     expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 

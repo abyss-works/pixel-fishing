@@ -1,6 +1,6 @@
 // 명부 구역 — 전체 유저 명부와, 행을 눌러 여는 드릴다운을 제공한다.
 // 검색은 이메일·닉네임·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보와 관리 조치를 보여준다:
-//   스냅샷 → 관리 조치(우편·제재·재설정 링크) → 액션 유형 요약 → 최근 이벤트 타임라인.
+//   스냅샷 → 관리 조치(우편·제재·재설정 링크) → 세션 기록 → 액션 유형 요약 → 최근 이벤트 타임라인.
 import { useMemo, useState } from 'react';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -13,10 +13,12 @@ import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
 import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
+import { fmtDuration } from '../../../../features/admin/model/dashboard';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
+import { useAdminSessions } from '../../../../features/admin/service/useAdminStats';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
@@ -31,7 +33,7 @@ export default function UsersTab({ onCompose }: {
 }) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 유저 명부는 실시간·진행 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
+  // 유저 명부는 진행 구역과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const users = data ?? NO_USERS;
@@ -64,6 +66,7 @@ export default function UsersTab({ onCompose }: {
                 <th className="text-right">골드</th><th className="text-right">명성</th>
                 <th className="text-left">배</th><th className="text-right">낚싯대</th>
                 <th className="text-left">위치</th><th className="text-left">마지막 행동</th>
+                <th className="text-left">마지막 세션</th><th className="text-right">누적 플레이</th>
               </tr>
             </thead>
             <tbody>
@@ -85,10 +88,12 @@ export default function UsersTab({ onCompose }: {
                   <td className="whitespace-nowrap text-xs text-text-dim">
                     {u.location_kind ? `${u.location_kind}:${u.location_id}` : '—'}</td>
                   <td className="whitespace-nowrap text-2xs text-text-dim">{fmtDT(u.last_action_at)}</td>
+                  <td className="whitespace-nowrap text-2xs text-text-dim">{fmtDT(u.last_session_at)}</td>
+                  <td className="whitespace-nowrap text-right text-xs">{fmtDuration(u.total_session_sec)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-text-dim text-center py-4">
+                <tr><td colSpan={10} className="text-text-dim text-center py-4">
                   {granted ? '검색 결과가 없어요.' : '운영 DB에 연결하면 유저 명부가 채워져요.'}
                 </td></tr>
               )}
@@ -141,6 +146,8 @@ function UserDetail({ user, onClose, onCompose }: {
           </div>
 
           <UserActions user={user} onCompose={onCompose} confirm={confirm} />
+
+          <UserSessions user={user} />
 
           <Cell title="기본 정보" flush divided>
             <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
@@ -203,6 +210,46 @@ function UserDetail({ user, onClose, onCompose }: {
 
 // 사용자 이벤트 조회 창. 조회가 요청하는 건수(userEvents의 limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
 const EVENT_WINDOW = 300;
+
+// ---------- 세션 기록 ----------
+
+// 상세에 보이는 최근 세션 건수
+const SESSION_WINDOW = 30;
+
+/** 누적 플레이 시간과 마지막 세션, 최근 세션 목록(시작 시각·길이) */
+function UserSessions({ user }: { user: AdminUserRow }) {
+  const { data, loading, error } = useAdminSessions(user.user_id, SESSION_WINDOW);
+  const sessions = data ?? [];
+  return (
+    <Cell title="세션 기록" flush divided>
+      <KeyValueRow label="누적 플레이" value={fmtDuration(user.total_session_sec)} />
+      <KeyValueRow label="마지막 세션 종료" value={fmtDT(user.last_session_at)} />
+      {(loading || error || sessions.length === 0) ? (
+        <div className="px-3 py-2">
+          <TabState loading={loading} error={error} empty={sessions.length === 0} emptyText="세션 기록이 없어요." />
+        </div>
+      ) : (
+        <div className="pf-scroll-panel max-h-[220px] overflow-y-auto px-1">
+          <DataTable>
+            <thead>
+              <tr><th className="text-left">시작</th><th className="text-left">끝</th><th className="text-right">길이</th></tr>
+            </thead>
+            <tbody>
+              {sessions.map(s => (
+                <tr key={s.id}>
+                  <td className="whitespace-nowrap text-xs">{fmtDT(s.startedAt)}</td>
+                  <td className="whitespace-nowrap text-xs text-text-dim">{fmtDT(s.endedAt)}</td>
+                  <td className="whitespace-nowrap text-right text-xs">{fmtDuration(s.durationSec)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
+          <Note size="2xs" className="my-0 px-2 pb-2">최근 {SESSION_WINDOW}건까지 보여요.</Note>
+        </div>
+      )}
+    </Cell>
+  );
+}
 
 // ---------- 관리 조치 ----------
 

@@ -1,7 +1,7 @@
 // 대시보드 막대 차트의 값→높이 대응과 강조·눈금 규칙을 고정한다.
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BarsChart, StackedBarsPair } from './charts';
+import { BarsChart } from './charts';
 
 afterEach(cleanup);
 
@@ -22,9 +22,11 @@ describe('막대 차트', () => {
     expect(heights(container)).toEqual(['10px', '40px']);
   });
 
-  it('유한하지 않은 값은 0으로 본다', () => {
-    const { container } = render(<BarsChart values={[NaN, 10]} height={20} ariaLabel="시험" />);
-    expect(heights(container)).toEqual(['1px', '20px']);
+  it('유한하지 않은 값은 미집계 칸으로 비워 두고 0과 구분한다', () => {
+    const { container } = render(<BarsChart values={[NaN, 0, 10]} labels={['a', 'b', 'c']} height={20} ariaLabel="시험" />);
+    expect(heights(container)).toEqual(['0px', '1px', '20px']);
+    expect(bars(container)[0]).not.toHaveClass('bg-line');
+    expect(container.querySelector('[title]')?.getAttribute('title')).toBe('a: 미집계');
   });
 
   it('차트의 접근성 이름과 막대별 title(이름: 값)을 가진다', () => {
@@ -57,19 +59,5 @@ describe('막대 차트', () => {
     const { container } = render(<BarsChart values={labels.map(() => 1)} labels={labels} ariaLabel="시험" />);
     const ticks = [...container.querySelectorAll('[aria-hidden="true"].relative span')].map(el => el.textContent);
     expect(ticks).toEqual(['d0', 'd5', 'd10', 'd15', 'd20', 'd25']);
-  });
-});
-
-describe('이중 막대', () => {
-  it('두 줄이 한 상한을 써서 높이를 그대로 견줄 수 있다', () => {
-    const { container } = render(<StackedBarsPair a={[10]} b={[40]} labels={['10-01']} ariaLabel="시험" />);
-    // 위 줄이 WAU, 아래 줄이 DAU다
-    expect(heights(container)).toEqual(['44px', '11px']);
-  });
-
-  it('맨 오른쪽(금일)의 DAU와 WAU를 윗줄에 적는다', () => {
-    render(<StackedBarsPair a={[1, 7]} b={[2, 9]} labels={['a', 'b']} ariaLabel="시험" />);
-    const legend = screen.getByText('금일 DAU', { exact: false });
-    expect(legend.textContent).toBe('금일 DAU 7 · WAU 9');
   });
 });

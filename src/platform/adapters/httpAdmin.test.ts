@@ -1,19 +1,20 @@
-// 관리자 읽기(HTTP 구현). 모든 조회가 서버 읽기 함수의 같은 이름 조회로 가고, 세션은 쿠키가 싣으며, 실패를 숨기지 않는다.
+// 관리자 읽기(HTTP 구현). 모든 조회가 서버 읽기 함수의 조회 이름이나 관리자 REST 경로로 가고, 세션은 쿠키가 싣으며, 실패를 숨기지 않는다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createHttpApi } from './httpApi';
 
 const admin = createHttpApi().admin;
 
-/** AdminApi 조회와 그 조회가 서버 읽기 함수로 보내는 요청 주소 */
+/** AdminApi 조회와 그 조회가 보내는 요청 주소 */
 const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['access', () => admin.access(), '/api/admin?q=access'],
   ['users', () => admin.users(), '/api/admin?q=users'],
-  ['dailyActive', () => admin.dailyActive(30), '/api/admin?q=dailyActive&days=30'],
-  ['retention', () => admin.retention(), '/api/admin?q=retention'],
+  ['live', () => admin.live(), '/api/admin/live'],
+  ['dailyStats', () => admin.dailyStats('2026-10-07', '2026-11-05'), '/api/admin/stats/daily?from=2026-10-07&to=2026-11-05'],
+  ['retention', () => admin.retention(), '/api/admin/retention'],
+  ['sessions', () => admin.sessions('u-1', 20), '/api/admin/sessions?user=u-1&limit=20'],
   ['economy', () => admin.economy(90), '/api/admin?q=economy&days=90'],
   ['bountyFunnel', () => admin.bountyFunnel(7), '/api/admin?q=bountyFunnel&days=7'],
-  ['catchQuality', () => admin.catchQuality(30), '/api/admin?q=catchQuality&days=30'],
   ['spamFlags', () => admin.spamFlags(), '/api/admin?q=spamFlags'],
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
@@ -81,6 +82,13 @@ describe('HttpAdmin', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=letterHandled', post({ letterId: 3, handled: true }));
   });
 
+  it('sessions는 생략한 인자를 보내지 않는다', async () => {
+    fetchMock.mockImplementation(async () => new Response('[]', { status: 200 }));
+    await admin.sessions(undefined, 500);
+    await admin.sessions();
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['/api/admin/sessions?limit=500', '/api/admin/sessions']);
+  });
+
   it('userEvents는 건수를 생략하면 500건을 요청한다', async () => {
     fetchMock.mockResolvedValue(new Response('[]', { status: 200 }));
     await admin.userEvents('u-1');
@@ -94,9 +102,9 @@ describe('HttpAdmin', () => {
   });
 
   it('서버 응답 본문을 그대로 돌려준다', async () => {
-    const rows = [{ day: '2026-10-18', dau: 3, wau7: 5 }];
+    const rows = [{ day: '2026-10-18', size: 3, d1: 0.5, d7: null, d30: null }];
     fetchMock.mockResolvedValue(new Response(JSON.stringify(rows), { status: 200 }));
-    await expect(admin.dailyActive(7)).resolves.toEqual(rows);
+    await expect(admin.retention()).resolves.toEqual(rows);
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'denied', uid: 'u-1' }), { status: 200 }));
     await expect(admin.access()).resolves.toEqual({ kind: 'denied', uid: 'u-1' });
     const live = { boats: [{ boat: 0, users: 2 }], gold: { p25: null, max: null }, anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null } };
@@ -116,6 +124,8 @@ describe('HttpAdmin', () => {
     await expect(admin.letters()).rejects.toThrow('letters 조회 실패: 502');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-days' }), { status: 400 }));
     await expect(admin.balanceLive(1.5)).rejects.toThrow('balanceLive 조회 실패: 400 bad-days');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-range' }), { status: 400 }));
+    await expect(admin.dailyStats('2026-01-01', '2026-11-05')).rejects.toThrow('stats/daily 조회 실패: 400 bad-range');
   });
 
   it('네트워크 오류는 그대로 던진다', async () => {

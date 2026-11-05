@@ -42,7 +42,7 @@ export type {
   AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
-  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminCatchQualityRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
+  AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from './types';

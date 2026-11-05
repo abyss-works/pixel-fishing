@@ -8,6 +8,8 @@ export interface AdminQuery<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  /** 지금 data가 도착한 시각(ms). 도착 전이면 0 */
+  updatedAt: number;
   refresh: () => void;
 }
 
@@ -23,6 +25,7 @@ export function useAdminQuery<T>(
     // 도착 전과 재조회 중을 모두 loading으로 본다 — 수동 훅의 시작값 true와 같은 계약이다
     loading: q.isPending || q.isFetching,
     error: q.error ? String((q.error as { message?: unknown }).message ?? q.error) : null,
+    updatedAt: q.dataUpdatedAt,
     refresh: () => { void q.refetch(); },
   };
 }

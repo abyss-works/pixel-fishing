@@ -66,11 +66,12 @@ class LocalAdmin implements AdminApi {
     return { kind: 'local', uid: null };
   }
   users(): Promise<never[]> { return rejected(); }
-  dailyActive(_days: number): Promise<never[]> { return rejected(); }
+  live(): Promise<never> { return rejected(); }
+  dailyStats(_from: string, _to: string): Promise<never[]> { return rejected(); }
   retention(): Promise<never[]> { return rejected(); }
+  sessions(_userId?: string, _limit?: number): Promise<never[]> { return rejected(); }
   economy(_days: number): Promise<never[]> { return rejected(); }
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
-  catchQuality(_days: number): Promise<never[]> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }

@@ -66,21 +66,34 @@ class HttpAuth implements AuthApi {
 
 import type {
   AdminApi,
-  AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminCatchQualityRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
+  AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from '../api/types';
 
-/** 서버 읽기 함수에 조회 하나를 요청한다. 응답이 실패면(세션이 없으면 401) 던진다 */
-async function readAdmin<T>(query: string, params: Record<string, string | number> = {}): Promise<T> {
-  const search = new URLSearchParams({ q: query });
-  for (const [key, value] of Object.entries(params)) search.set(key, String(value));
-  const res = await fetch(`/api/admin?${search}`);
+/** 관리자 조회 하나를 GET으로 읽는다. 응답이 실패면(세션이 없으면 401) 조회 이름과 상태를 담아 던진다 */
+async function getAdmin<T>(url: string, label: string): Promise<T> {
+  const res = await fetch(url);
   if (!res.ok) {
     const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
-    throw new Error(`${query} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+    throw new Error(`${label} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
   }
   return await res.json() as T;
+}
+
+/** 서버 읽기 함수에 조회 하나를 요청한다(`?q=` 조회) */
+function readAdmin<T>(query: string, params: Record<string, string | number> = {}): Promise<T> {
+  const search = new URLSearchParams({ q: query });
+  for (const [key, value] of Object.entries(params)) search.set(key, String(value));
+  return getAdmin(`/api/admin?${search}`, query);
+}
+
+/** 관리자 REST 경로 하나를 읽는다. 값이 없는 인자는 보내지 않는다 */
+function readAdminPath<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value));
+  const query = search.toString();
+  return getAdmin(`/api/admin/${path}${query ? `?${query}` : ''}`, path);
 }
 
 /** 관리자 쓰기 하나를 POST로 보낸다. 응답이 실패면(세션이 없으면 401) 작업 이름과 상태를 담아 던진다 */
@@ -105,20 +118,23 @@ class HttpAdmin implements AdminApi {
   users(): Promise<AdminUserRow[]> {
     return readAdmin('users');
   }
-  dailyActive(days: number): Promise<AdminDailyActiveRow[]> {
-    return readAdmin('dailyActive', { days });
+  live(): Promise<AdminLive> {
+    return readAdminPath('live');
+  }
+  dailyStats(from: string, to: string): Promise<AdminDailyStatsRow[]> {
+    return readAdminPath('stats/daily', { from, to });
   }
   retention(): Promise<AdminRetentionRow[]> {
-    return readAdmin('retention');
+    return readAdminPath('retention');
+  }
+  sessions(userId?: string, limit?: number): Promise<AdminSessionRow[]> {
+    return readAdminPath('sessions', { user: userId, limit });
   }
   economy(days: number): Promise<AdminEconomyRow[]> {
     return readAdmin('economy', { days });
   }
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
     return readAdmin('bountyFunnel', { days });
-  }
-  catchQuality(days: number): Promise<AdminCatchQualityRow[]> {
-    return readAdmin('catchQuality', { days });
   }
   spamFlags(): Promise<AdminSpamFlagRow[]> {
     return readAdmin('spamFlags');

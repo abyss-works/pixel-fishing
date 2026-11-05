@@ -106,13 +106,36 @@ export interface AdminUserRow {
   restricted: boolean | null;
   save_version: number | string | null;
   last_action_at: string | null;
+  /** 마지막 접속 세션이 끝난 시각. 세션 기록이 없으면 null */
+  last_session_at: string | null;
+  /** 접속 세션 길이의 합(초) */
+  total_session_sec: number;
 }
 
-export interface AdminDailyActiveRow { day: string; dau: number; wau7: number }
+/** 지금 실시간 채널에 연결된 사람 한 명. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다 */
+export interface AdminLiveConnection {
+  uid: string; nick: string; region: string | null; zone: string | null;
+  connectedAt: string; guest: boolean;
+}
+/** 지금 실시간 채널에 연결된 수와 목록 */
+export interface AdminLive { count: number; online: AdminLiveConnection[] }
+/**
+ * 하루(KST) 집계 한 행. 집계하지 않은 날은 행이 없다.
+ * sessionMinutes는 그날 세션 길이의 합(분), medianSessionMinutes는 중앙값(세션이 없으면 null)이다
+ */
+export interface AdminDailyStatsRow {
+  day: string; dau: number; newUsers: number; newAccounts: number;
+  sessions: number; sessionMinutes: number; medianSessionMinutes: number | null;
+  catches: number; goldIn: number; goldOut: number; actions: number;
+}
+/** 가입일 코호트 리텐션. day는 가입일(KST), d1·d7·d30은 0~1 비율이고 아직 그날이 오지 않았으면 null이다 */
 export interface AdminRetentionRow {
-  cohort: string; users: number;
-  d1: number | null; d3: number | null; d7: number | null;
-  d14: number | null; d30: number | null;
+  day: string; size: number; d1: number | null; d7: number | null; d30: number | null;
+}
+/** 끝난 접속 세션 한 건. 시각은 ISO 문자열이다 */
+export interface AdminSessionRow {
+  id: number; userId: string; nick: string | null;
+  startedAt: string; endedAt: string; durationSec: number;
 }
 export interface AdminEconomyRow {
   day: string; sells: number; sell_gold: number; coupon_gold: number; mail_gold: number;
@@ -122,9 +145,6 @@ export interface AdminEconomyRow {
 export interface AdminBountyFunnelRow {
   day: string; named_accepts: number; tickets: number; duels_won: number; duels_lost: number;
   named_rewards: number; general_accepts: number; general_rewards: number;
-}
-export interface AdminCatchQualityRow {
-  day: string; catches: number; perfect: number; with_bait: number; avg_size: number | null;
 }
 export interface AdminSpamFlagRow {
   user_id: string; catches_7d: number; fast_gap_7d: number;
@@ -211,11 +231,16 @@ export interface AdminResetLink { url: string; expiresAt: string }
 export interface AdminApi {
   access(): Promise<AdminAccessResult>;
   users(): Promise<AdminUserRow[]>;
-  dailyActive(days: number): Promise<AdminDailyActiveRow[]>;
+  /** 지금 실시간 채널에 연결된 사람 */
+  live(): Promise<AdminLive>;
+  /** from~to(KST 날짜, 양끝 포함)의 일별 집계. 집계하지 않은 날은 빠진다 */
+  dailyStats(from: string, to: string): Promise<AdminDailyStatsRow[]>;
+  /** 가입일 코호트 리텐션 */
   retention(): Promise<AdminRetentionRow[]>;
+  /** 끝난 접속 세션(최근 순). userId를 주면 그 사람의 기록만 */
+  sessions(userId?: string, limit?: number): Promise<AdminSessionRow[]>;
   economy(days: number): Promise<AdminEconomyRow[]>;
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
-  catchQuality(days: number): Promise<AdminCatchQualityRow[]>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;

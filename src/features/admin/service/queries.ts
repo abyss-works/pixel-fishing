@@ -1,17 +1,29 @@
 import { api } from '../../../platform/api';
 import type { AdminMailRequest } from '../../../platform/api';
+import { lastNDays } from '../model/metrics';
 
 export const readAdminAccess = () => api.admin.access();
 export const readAdminUsers = () => api.admin.users();
 export const readAdminDeployHost = () => api.admin.deployHost();
 
-export const readAdminOverview = (days: number) => Promise.all([
+export const readAdminOverview = () => Promise.all([
   api.admin.users(),
-  api.admin.dailyActive(days),
-  api.admin.catchQuality(days),
   api.admin.recentEvents(),
   api.admin.spamFlags(),
 ]);
+
+export const readAdminLive = () => api.admin.live();
+
+/** 오늘(KST)까지 최근 days일의 일별 집계 */
+export const readAdminDailyStats = (days: number) => {
+  const axis = lastNDays(days);
+  return api.admin.dailyStats(axis[0], axis[axis.length - 1]);
+};
+
+export const readAdminRetention = () => api.admin.retention();
+
+/** 끝난 접속 세션(최근 순). userId를 주면 그 사람의 기록만 */
+export const readAdminSessions = (userId: string | undefined, limit: number) => api.admin.sessions(userId, limit);
 
 export const readAdminAntiAbuse = () => Promise.all([
   api.admin.users(),
@@ -49,11 +61,6 @@ export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userI
 
 /** 편지 처리 표시 또는 취소 */
 export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
-
-export const readAdminMetrics = (days: number) => Promise.all([
-  api.admin.dailyActive(days),
-  api.admin.retention(),
-]);
 
 export const readAdminUserDetails = (uid: string) => Promise.all([
   api.admin.userEvents(uid, 300),
