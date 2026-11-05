@@ -4,7 +4,7 @@ import type {
 } from './types';
 import {
   adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail, selectAntiAbuseRows,
-  selectEconomyMetrics, selectLiveDashboard, selectOverviewMetrics,
+  selectEconomyMetrics, selectRiskSignals,
   selectProgressionDashboard,
 } from './adminViews';
 
@@ -12,22 +12,17 @@ const user = (overrides: Partial<AdminUserRow> = {}): AdminUserRow => ({
   user_id: 'user-1', email: null, nickname: null, is_anonymous: true, signed_up_at: null,
   last_sign_in_at: null, gold: 10, fame: 0, boat: 0, rod: 1,
   location_kind: null, location_id: null, visited: [], restricted: false,
-  save_version: 8, last_action_at: null, ...overrides,
+  save_version: 8, last_action_at: null, last_session_at: null, total_session_sec: 0, ...overrides,
 });
 
 describe('관리자 화면 파생 데이터', () => {
-  it('개요 합계와 위험 수치를 계산한다', () => {
-    const metrics = selectOverviewMetrics(
-      [user({ gold: '12', fame: 4, restricted: true }), user({ user_id: 'user-2', gold: 8 })],
-      [{ user_id: 'user-1', catches_7d: 20, fast_gap_7d: 2, perfect_pct: null, perfect_pct_global: null }],
-      Array.from({ length: 8 }, (_, index) => ({
-        day: `d${index}`, catches: index + 1, perfect: 0, with_bait: 0, avg_size: null,
-      })),
+  it('위험 신호 수를 센다', () => {
+    const metrics = selectRiskSignals(
+      [user({ restricted: true }), user({ user_id: 'user-2' })],
+      [{ user_id: 'user-1', catches_7d: 20, fast_gap_7d: 2, perfect_pct: null, perfect_pct_global: null },
+       { user_id: 'user-2', catches_7d: 20, fast_gap_7d: 0, perfect_pct: null, perfect_pct_global: null }],
     );
-
-    expect(metrics).toMatchObject({
-      restrictedCount: 1, spamUsers: 1, riskTotal: 2, goldTotal: 20, fameTotal: 4, catch7d: 28,
-    });
+    expect(metrics).toEqual({ restrictedCount: 1, spamUsers: 1, riskTotal: 2 });
   });
 
   it('진행 대시보드에서 분포·방문·다음 배 명성 부족을 만든다', () => {
@@ -42,19 +37,6 @@ describe('관리자 화면 파생 데이터', () => {
     expect(data.regionReach.find(row => row.id === 'village')?.users).toBe(1);
     expect(data.regionReach.find(row => row.id === 'village')?.sharePercent).toBe(50);
     expect(data.stalled[0]).toMatchObject({ user: expect.objectContaining({ user_id: 'user-2' }) });
-  });
-
-  it('접속 신선도와 위치 분포를 계산한다', () => {
-    const now = Date.parse('2026-10-13T00:10:00.000Z');
-    const data = selectLiveDashboard([
-      user({ last_action_at: '2026-10-13T00:05:00.000Z', location_kind: 'base', location_id: 'harbor' }),
-      user({ user_id: 'user-2', last_action_at: 'invalid' }),
-    ], now);
-
-    expect(data.buckets.online.map(row => row.user_id)).toEqual(['user-1']);
-    expect(data.buckets.recent1h).toHaveLength(1);
-    expect(data.whereHist.values.reduce((sum, count) => sum + count, 0)).toBe(1);
-    expect(data.regionLabel(user({ location_kind: 'base', location_id: 'harbor' }))).toBeTruthy();
   });
 
   it('이상탐지 목록과 경제 요약을 만든다', () => {

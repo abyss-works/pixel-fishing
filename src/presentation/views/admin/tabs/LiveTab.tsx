@@ -1,110 +1,83 @@
-// 실시간 탭 — "지금 누가 어디에 있는가". 실시간 접속의 정본은 없다(웹소켓/프레즌스 미구현) —
-// 부팅(boot)+액션이 곧 흔적이므로 **last_action_at 신선도**로 근사한다. 10분 = 낚시 한 사이클
-// 이상의 공백이면 자리 비움으로 보는 운영 판단값(balance.MIN_ACTION_GAP와 무관, 가안).
-// 상용 대시보드의 Realtime 화면 축소판: 접속 추정 지표 + 온라인 명부 + 현재 위치 분포.
+// 실시간 탭 — "지금 누가 어디에 있는가". 실시간 채널(WebSocket)에 연결된 사람을 서버에서 15초마다 다시 읽는다.
+// 지표 줄(접속·가입·게스트·가장 오래 접속) → 접속 목록(넓게)과 위치 분포(오른쪽 고정 칸) → 채팅 신고.
 import { useEffect, useMemo, useState } from 'react';
+import Badge from '../../../ui/Badge';
 import DataTable from '../../../ui/DataTable';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
-import { fmtDT } from '../../../../features/admin/model/metrics';
-import { ONLINE_WINDOW_MIN, selectLiveDashboard } from '../../../../features/admin/model/adminViews';
-import { readAdminUsers } from '../../../../features/admin/service/queries';
-import { adminKeys } from '../../../../features/admin/service/queryKeys';
-import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
-import type { AdminUserRow } from '../../../../features/admin/model/types';
+import { fmtDT, fmtNum } from '../../../../features/admin/model/metrics';
+import { fmtDuration, selectLiveBoard } from '../../../../features/admin/model/dashboard';
+import { useAdminLive } from '../../../../features/admin/service/useAdminStats';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
 import ChatReportsSection from './ChatReportsSection';
-import { boatNameOf } from '../../../../game/content/boats';
 
-// 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
-const NO_USERS: AdminUserRow[] = [];
+const POLL_MS = 15_000;
 
 export default function LiveTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 60초마다 갱신 — 서버리스 읽기라 부담이 미미하고(친구 규모), 실시간 감각은 이 정도면 충분
-  const { data, loading, error, refresh } =
-    useAdminQuery(adminKeys.users, readAdminUsers, granted, 60_000);
-  const users = data ?? NO_USERS;
-  const [tick, setTick] = useState(() => Date.now()); // 신선도 구간과 n분 전 라벨의 기준 시각
+  const { data, loading, error, refresh } = useAdminLive(POLL_MS);
+  const [tick, setTick] = useState(() => Date.now()); // 접속 시간의 기준 시각
 
   useEffect(() => {
     if (!granted) return;
-    // 라벨은 조회와 별개로 다시 계산한다 — 재조회가 같은 명부를 돌려줄 수 있다
-    const t = setInterval(() => setTick(Date.now()), 60_000);
+    // 접속 시간은 조회와 별개로 다시 계산한다 — 재조회가 같은 목록을 돌려줄 수 있다
+    const t = setInterval(() => setTick(Date.now()), POLL_MS);
     return () => clearInterval(t);
   }, [granted]);
 
-  // 신선도 버킷 — 접속중(10분) / 최근(1시간) / 금일 활동(KST 자정 기준은 탭 아래 근사: 24h 창)
-  const { buckets, whereHist, regionLabel } = useMemo(
-    () => selectLiveDashboard(users, tick), [users, tick],
-  );
-
-  // minAgo — 마지막 행동 'n분 전' 표시. 신선도 구간과 같은 기준 시각(tick)을 쓴다
-  const minAgo = (iso: string | null): string => {
-    if (!iso) return '—';
-    const m = Math.floor((tick - Date.parse(iso)) / 60_000);
-    if (!Number.isFinite(m)) return '—';
-    return m < 1 ? '방금' : `${m}분 전`;
-  };
+  const board = useMemo(() => selectLiveBoard(data, tick), [data, tick]);
+  const count = (v: number) => (data ? fmtNum(v) : '—');
 
   return (
-    <TabPage title="실시간" context="마지막 행동 시각으로 접속을 추정하고 60초마다 갱신해요. 아래에는 플레이어가 신고한 채팅이 있어요.">
+    <TabPage title="실시간" context="실시간 채널에 연결된 사람을 15초마다 다시 읽어요. 아래에는 플레이어가 신고한 채팅이 있어요.">
       <KpiRow>
-        <KpiTile label="접속 중" value={fmtN(buckets.online.length)}
-                 hint={`마지막 행동 ${ONLINE_WINDOW_MIN}분 이내`} />
-        <KpiTile label="최근 1시간" value={fmtN(buckets.recent1h.length)} />
-        <KpiTile label="최근 24시간" value={fmtN(buckets.today.length)} hint="금일 활동 근사" />
-        <KpiTile label="등록 유저" value={fmtN(users.length)} />
+        <KpiTile label="지금 접속" value={count(data?.count ?? NaN)} hint="실시간 채널 연결 수" />
+        <KpiTile label="가입 계정" value={count(board.members)} />
+        <KpiTile label="게스트" value={count(board.guests)} />
+        <KpiTile label="가장 오래 접속" value={fmtDuration(board.rows[0]?.connectedSec)}
+                 hint={board.rows[0]?.nick} />
       </KpiRow>
 
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
-      {/* 온라인 명부(좌)와 위치 분포(우) — xl 이상 좌우 분할 */}
+      {/* 접속 목록(좌)과 위치 분포(우) — xl 이상 좌우 분할 */}
       <CellGrid side>
-        <Cell title={`온라인 명부 (${buckets.online.length})`} flush>
-          <div className="pf-scroll-panel max-h-[360px] overflow-y-auto px-1">
+        <Cell title={`접속 목록 (${board.rows.length})`} flush>
+          <div className="pf-scroll-panel max-h-[420px] overflow-y-auto px-1">
             <DataTable>
               <thead>
-                <tr><th className="text-left">식별</th><th className="text-left">위치</th>
-                    <th className="text-left">배</th><th className="text-left">마지막</th></tr>
+                <tr><th className="text-left">닉네임</th><th className="text-left">위치</th>
+                    <th className="text-right">접속 시간</th></tr>
               </thead>
               <tbody>
-                {buckets.online.map(u => (
-                  <tr key={u.user_id}>
-                    <td>{u.email
-                      ? <span className="text-xs">{u.email}</span>
-                      : <span className="pf-accent text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}</td>
-                    <td className="whitespace-nowrap text-xs">
-                      {regionLabel(u) ?? '—'}
+                {board.rows.map(row => (
+                  <tr key={row.uid}>
+                    <td className="text-xs" title={row.uid}>
+                      {row.nick} {row.guest && <Badge>게스트</Badge>}
                     </td>
-                    <td className="whitespace-nowrap text-xs">{boatNameOf(u.boat ?? 0)}</td>
-                    <td className="whitespace-nowrap text-2xs text-text-dim" title={fmtDT(u.last_action_at)}>
-                      {minAgo(u.last_action_at)}
+                    <td className="whitespace-nowrap text-xs">{row.place}</td>
+                    <td className="whitespace-nowrap text-right text-xs" title={`${fmtDT(row.connectedAt)}부터`}>
+                      {fmtDuration(row.connectedSec)}
                     </td>
                   </tr>
                 ))}
-                {buckets.online.length === 0 &&
-                  <tr><td colSpan={4} className="text-text-dim text-center py-3">
-                    {granted ? `${ONLINE_WINDOW_MIN}분 안에 활동한 유저가 없어요.` : '운영 DB에 연결하면 채워져요.'}
+                {board.rows.length === 0 &&
+                  <tr><td colSpan={3} className="text-text-dim text-center py-3">
+                    {granted ? '지금 연결된 사람이 없어요.' : '운영 DB에 연결하면 채워져요.'}
                   </td></tr>}
               </tbody>
             </DataTable>
           </div>
-          <Note size="2xs" className="my-0 px-3 pb-2">
-            프레즌스(websocket)를 구현하지 않아서 마지막 행동 시각(last_action_at)으로 추정해요.
-            새로고침과 모든 행동이 흔적을 남기므로, 열어 둔 탭도 {ONLINE_WINDOW_MIN}분 동안 행동이 없으면
-            자리 비움으로 계산해요.
-          </Note>
         </Cell>
 
-        <Cell title="온라인 위치 분포">
-          <BarsChart values={whereHist.values} labels={whereHist.labels} height={96} highlight="peak"
-                     ariaLabel="접속 중인 유저의 위치 분포" />
+        <Cell title="위치 분포">
+          <BarsChart values={board.places.values} labels={board.places.labels} height={96} highlight="peak"
+                     ariaLabel="접속 중인 사람의 위치 분포" />
           <Note size="2xs" className="my-0">
-            접속 중인 유저의 위치를 분포로 보여 줘요. 거점은 소속 지역으로 합산해요.
+            바다에 있는 사람은 지금 있는 해역으로, 해역을 모르면 지역으로 묶어요.
           </Note>
         </Cell>
       </CellGrid>
@@ -114,5 +87,3 @@ export default function LiveTab() {
     </TabPage>
   );
 }
-
-const fmtN = (v: number): string => Number.isFinite(v) ? String(v) : '—';

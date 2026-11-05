@@ -97,8 +97,8 @@ describe('관리자 대시보드 탐색', () => {
   it('게이트는 내용을 교체하지 않는다 — 로컬 모드 배너와 개요의 빈 골격이 함께 보인다', async () => {
     open('#/admin/overview');
     expect(await screen.findByText('로컬 모드예요. 클라우드가 설정되어 있지 않아요.')).toBeInTheDocument();
-    expect(screen.getByText('등록 유저')).toBeInTheDocument();
-    expect(screen.getByText('운영 DB에 연결하면 채워져요.')).toBeInTheDocument();
+    expect(screen.getByText('지금 접속')).toBeInTheDocument();
+    expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
   });
 
   it('밸런스 탭은 라이브 지표 구역을 따로 두고, 로컬 모드에서는 연결 안내를 보인다', () => {

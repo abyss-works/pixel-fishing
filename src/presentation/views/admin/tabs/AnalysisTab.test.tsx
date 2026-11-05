@@ -21,9 +21,12 @@ vi.mock('../../../../platform/api', () => ({
         day: todayKST(), sells: 2, sell_gold: 1000, coupon_gold: 200, mail_gold: 0,
         rod_cost: 300, boat_cost: 0, bait_cost: 100,
       }]),
-      dailyActive: vi.fn(async () => [{ day: todayKST(), dau: 5, wau7: 9 }]),
+      dailyStats: vi.fn(async () => [{
+        day: todayKST(), dau: 5, newUsers: 2, newAccounts: 1, sessions: 7, sessionMinutes: 70,
+        medianSessionMinutes: 8, catches: 40, goldIn: 1000, goldOut: 300, actions: 90,
+      }]),
       retention: vi.fn(async () => [
-        { cohort: '2026-10-01', users: 4, d1: 50, d3: null, d7: null, d14: null, d30: null },
+        { day: '2026-10-01', size: 4, d1: 0.5, d7: null, d30: null },
       ]),
       bountyFunnel: vi.fn(async () => [{
         day: todayKST(), named_accepts: 3, tickets: 2, duels_won: 1, duels_lost: 1,
@@ -82,12 +85,20 @@ describe('경제·진행 탭', () => {
     expect(screen.queryByRole('group', { name: '기간 선택' })).not.toBeInTheDocument();
   });
 
-  it('활동 구역 — 금일 DAU·WAU 차트와 리텐션 코호트를 채운다', async () => {
+  it('활동 구역 — 일별 집계 차트와 리텐션 코호트를 채우고, 집계되지 않은 날을 센다', async () => {
     show('activity');
-    const chart = await screen.findByRole('img', { name: /일별 활성 유저, 최근 30일의 DAU와 WAU, 금일 DAU 5/ });
-    expect(within(chart).getByText(/금일 DAU/).textContent).toBe('금일 DAU 5 · WAU 9');
+    // 막대의 title은 '월-일: 값', 집계되지 않은 날은 '월-일: 미집계'다
+    const bar = (name: string) => screen.getByRole('img', { name })
+      .querySelector(`[title^="${todayKST().slice(5)}:"]`)?.getAttribute('title');
+    await waitFor(() => expect(bar('최근 30일 일별 활성 사람 수')).toBe(`${todayKST().slice(5)}: 5`));
+    expect(bar('최근 30일 일별 접속 세션 수')).toBe(`${todayKST().slice(5)}: 7`);
+    expect(screen.getByRole('img', { name: '최근 30일 일별 활성 사람 수' })
+      .querySelectorAll('[title$=": 미집계"]')).toHaveLength(29);
+    expect(screen.getByText(/최근 30일 중 1일이 집계되어 있어요/)).toBeInTheDocument();
     expect(await screen.findByText('2026-10-01')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
-    expect(vi.mocked(api.admin.dailyActive)).toHaveBeenCalledWith(30);
+    const [from, to] = vi.mocked(api.admin.dailyStats).mock.calls[0];
+    expect(to).toBe(todayKST());
+    expect((Date.parse(to) - Date.parse(from)) / 86_400_000).toBe(29);
   });
 });

@@ -17,7 +17,7 @@ import ProgressionTab from './ProgressionTab';
 const CONTEXT: Record<AnalysisSection, string> = {
   economy: '골드가 들어오고 나가는 흐름과 잔고 분포를 봐요.',
   progression: '배와 낚싯대 단계, 지역 도달, 명성 게이트에서 막힌 유저를 봐요.',
-  activity: '일별 활성 유저와 가입일 기준 리텐션을 봐요.',
+  activity: '일별 활성·세션·신규 추이와 가입일 코호트 리텐션을 봐요.',
 };
 
 export default function AnalysisTab({ section, onSection }: {
