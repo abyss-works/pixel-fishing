@@ -62,6 +62,8 @@ export interface LiveServer {
   setBlocked(uid: string, ids: readonly string[]): void;
   /** 그 사용자의 소속 길드가 바뀌었다(null은 길드 없음). 이후 길드 채팅부터 바뀐 길드로 주고받는다 */
   setGuild(uid: string, guild: string | null): void;
+  /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
+  sendTo(uid: string, msg: ServerMessage): void;
   /** 열린 연결을 세션으로 기록하고 재시작 코드로 닫은 뒤 정리 주기를 멈춘다 */
   close(): void;
 }
@@ -222,6 +224,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     },
     setGuild(uid, guild) {
       for (const c of conns.values()) if (c.user.uid === uid) c.guild = guild;
+    },
+    sendTo(uid, msg) {
+      for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);
     },
     close() {
       clearInterval(timer);

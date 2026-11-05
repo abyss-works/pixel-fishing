@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { readPlayer } from '../../../platform/api';
 import type { PublicProfile } from '../../../platform/api';
 
-// 다른 플레이어의 공개 프로필(닉네임·배·명성·도감 수) — 정보 창을 열 때 읽는다.
+// 다른 플레이어의 공개 프로필(닉네임·배·낚싯대·명성·도감·유물) — 정보 창을 열 때 읽는다.
 export type { PublicProfile };
 
 export function usePlayerProfile(uid: string) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendItem } from '../../../platform/api';
-import { friendRelation, friendStatusText, groupFriends } from './friends';
+import { friendRelation, friendStatusText, groupFriends, friendAlertText } from './friends';
 import { zoneById } from '../../../game/content/zones';
 
 const f = (uid: string, state: FriendItem['state'], extra: Partial<FriendItem> = {}): FriendItem =>
@@ -39,5 +39,13 @@ describe('friendRelation', () => {
   it('그 사람과의 관계를 돌려주고, 관계가 없으면 null이다', () => {
     const g = groupFriends([f('a', 'friend'), f('b', 'incoming'), f('c', 'outgoing')]);
     expect(['a', 'b', 'c', 'd'].map(uid => friendRelation(g, uid))).toEqual(['friend', 'incoming', 'outgoing', null]);
+  });
+});
+
+describe('친구 알림 문구', () => {
+  it('받은 요청과 수락을 보낸 사람 이름으로 알린다', () => {
+    expect(friendAlertText({ kind: 'request', nick: '나루' })).toBe('나루 님이 친구 요청을 보냈어요.');
+    expect(friendAlertText({ kind: 'accepted', nick: '나루' })).toBe('나루 님과 친구가 됐어요.');
+    expect(friendAlertText({ kind: 'request', nick: null })).toBe('새 친구 요청이 왔어요.');
   });
 });

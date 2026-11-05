@@ -3,8 +3,14 @@
 import { AppError } from '../../core/errors';
 import { isCloud } from './auth';
 
-/** 다른 플레이어에게 보이는 정보. dex는 일반 폼으로 한 번이라도 낚은 어종 수, account는 게스트가 아닌 계정인가 */
-export interface PublicProfile { nickname: string | null; boat: number; fame: number; dex: number; account: boolean }
+/**
+ * 다른 플레이어에게 보이는 정보. dexFish는 일반 폼으로 한 번이라도 낚은 어종 id, artifacts는 가진 유물 id,
+ * account는 게스트가 아닌 계정인가
+ */
+export interface PublicProfile {
+  nickname: string | null; boat: number; rod: number; fame: number;
+  dexFish: string[]; artifacts: string[]; account: boolean;
+}
 
 export async function readPlayer(uid: string): Promise<PublicProfile | null> {
   if (!isCloud) return null;

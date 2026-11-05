@@ -32,6 +32,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildButton from '../overlays/guild/GuildButton';
 import GuildModal from '../overlays/guild/GuildModal';
 import { useGuild } from '../../../features/guild/service/useGuild';
+import { useFriendAlerts } from '../../../features/friends/service/useFriendAlerts';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
@@ -96,6 +97,7 @@ export default function GameView(props: GameViewProps) {
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
+  useFriendAlerts(props.account !== null, props.setToast);
   const log = chat.enabled
     ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
     : props.log;

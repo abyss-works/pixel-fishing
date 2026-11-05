@@ -1,19 +1,27 @@
 import { useState } from 'react';
-import { boatNameOf } from '../../../../game/content/boats';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import { usePlayerProfile } from '../../../../features/live/service/usePlayerProfile';
+import { useOnline } from '../../../../features/live/service/useLive';
+import { selectProfileView } from '../../../../features/live/model/profile';
+import type { ProfileView } from '../../../../features/live/model/profile';
+import Badge from '../../../ui/Badge';
+import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import KeyValueRow from '../../../ui/KeyValueRow';
+import Inset from '../../../ui/Inset';
+import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import { cx } from '../../../ui/cx';
+import { fmtNum } from '../../../ui/format';
 
-// 플레이어 정보 — 다른 플레이어의 닉네임·배·명성·도감 수와 친구 요청·차단·신고.
+// 플레이어 정보 — 스탯창 요약처럼 머리 카드(배·닉네임·꼬리표), 명성·도감 타일, 해역별 도감, 배·낚싯대, 유물 칸을 보이고
+// 맨 아래 오른쪽에 친구 요청·차단·신고를 둔다.
 // 접속 목록과 채팅 이름에서 연다. 내 정보는 동작 없이 보인다. 동작은 계정 유저만 쓴다.
 // 채팅 글줄에서 열었을 때만 그 글줄을 신고할 수 있다.
 
@@ -40,6 +48,7 @@ export function PlayerInfo({ target, self, account, setToast }: {
   setToast: Notify;
 }) {
   const { profile, loading, failed } = usePlayerProfile(target.uid);
+  const online = useOnline(target.uid);
   const member = account !== null && !self;
   const friends = useFriends(member);
   const moderation = useChatModeration(member);
@@ -88,15 +97,10 @@ export function PlayerInfo({ target, self, account, setToast }: {
 
   return (
     <div className="flex flex-col gap-2">
-      <Frame divided className="flex flex-col">
-        <KeyValueRow label="닉네임" value={name} />
-        <KeyValueRow label="배" value={profile.boat < 1 ? '없음' : `${boatNameOf(profile.boat)} · ${profile.boat}단계`} />
-        <KeyValueRow label="명성" value={profile.fame.toLocaleString('ko-KR')} />
-        <KeyValueRow label="도감" value={`${profile.dex}종`} />
-      </Frame>
+      <ProfileBody name={name} online={online && !self} view={selectProfileView(profile)} />
       {!self && account === null && <Note size="xs">친구 요청·차단·신고는 계정을 만든 뒤 쓸 수 있어요.</Note>}
       {member && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {profile.account && !friends.offline && blocked === false && (
             relation === 'friend' ? <span className="text-xs text-accent">친구예요</span>
             : relation === 'outgoing' ? <span className="text-xs text-text-dim">친구 요청을 보냈어요</span>
@@ -116,6 +120,78 @@ export function PlayerInfo({ target, self, account, setToast }: {
         </div>
       )}
     </div>
+  );
+}
+
+// 등급색 — 가진 유물 칸의 테두리와 이름
+const GRADE_CLASS: Record<NonNullable<ProfileView['artifacts']['slots'][number]['grade']>, string> = {
+  common: 'border-common text-common',
+  rare: 'border-rare text-rare',
+  epic: 'border-epic text-epic',
+  legendary: 'border-legend text-legend',
+};
+
+function ProfileBody({ name, online, view }: { name: string; online: boolean; view: ProfileView }) {
+  const { dex, boat, rod, artifacts } = view;
+  return (
+    <>
+      <Frame className="bg-surface-2 flex items-center gap-3 px-3 py-2">
+        {boat.tier > 0 && <BoatSprite tier={boat.tier} preset="row" />}
+        <div className="min-w-0 flex flex-col gap-1">
+          <span className="text-base font-bold truncate">{name}</span>
+          <span className="flex flex-wrap gap-1">
+            <Badge>{boat.name}</Badge><Badge>낚싯대 Lv.{rod.level}</Badge>
+            {online && <span className="text-xs px-1.5 py-0.5 rounded-sm border border-accent text-accent">접속 중</span>}
+          </span>
+        </div>
+      </Frame>
+      <div className="grid grid-cols-2 gap-2">
+        <KpiTile label="명성" value={fmtNum(view.fame)} />
+        <KpiTile label="도감" value={`${dex.found} / ${dex.total}`} hint="일반 폼으로 한 번이라도 낚은 어종" />
+      </div>
+      <Inset className="px-3 py-2 flex flex-col gap-1.5" >
+        {dex.zones.map(z => (
+          <div key={z.zone} className="grid grid-cols-[6rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-xs"
+               aria-label={`${z.name} 도감 ${z.found}/${z.total}`}>
+            <span className="truncate">{z.name}</span>
+            <span className="h-2 border border-line bg-surface-2">
+              <span className={cx('block h-full', z.complete ? 'bg-gold' : 'bg-accent')}
+                    style={{ width: `${z.total ? (z.found / z.total) * 100 : 0}%` }} />
+            </span>
+            <span className="text-right text-text-dim"><b className="text-text">{z.found}</b> / {z.total}</span>
+          </div>
+        ))}
+      </Inset>
+      <div className="grid grid-cols-2 gap-2">
+        <Inset className="px-3 py-2 flex flex-col gap-1">
+          <span className="text-xs text-text-dim">배</span>
+          <b className="text-sm truncate">{boat.tier > 0 ? `${boat.name} · ${boat.tier}단계` : '없음'}</b>
+          <span className="flex gap-0.5" aria-label={`배 ${boat.tier}/${boat.max}단계`}>
+            {Array.from({ length: boat.max }, (_, i) => (
+              <span key={i} className={cx('h-1.5 flex-1 border border-line', i < boat.tier && 'bg-accent')} />
+            ))}
+          </span>
+        </Inset>
+        <Inset className="px-3 py-2 flex flex-col gap-1">
+          <span className="text-xs text-text-dim">낚싯대</span>
+          <b className="text-sm">Lv.{rod.level}</b>
+          <span className="text-xs text-text-dim">파워 {rod.power}</span>
+        </Inset>
+      </div>
+      <div className="flex justify-between text-xs text-text-dim">
+        <span>유물</span><span>{artifacts.owned} / {artifacts.slots.length}</span>
+      </div>
+      <ul className="grid grid-cols-4 gap-1.5">
+        {artifacts.slots.map(s => (
+          <li key={s.id}
+              className={cx('min-h-12 border-2 px-1 py-1.5 flex items-center justify-center text-center text-2xs leading-tight',
+                s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
+              aria-label={s.name ? `유물 ${s.name}` : `${s.zone} 유물 없음`}>
+            {s.name ?? s.zone}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

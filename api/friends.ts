@@ -11,7 +11,8 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import { blockedEitherWay } from './_data/blocks.js';
 import { acceptFriend, accountByNickname, listFriends, removeFriend, requestFriend } from './_data/friends.js';
-import { presenceOf } from './_server/livePresence.js';
+import { liveIdentity } from './_data/profile.js';
+import { notifyUser, presenceOf } from './_server/livePresence.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -62,13 +63,20 @@ async function route(req: Req, res: Res): Promise<void> {
     if (target === me) throw new ApiError(400, 'self');
     if (!target || await run('db-read', () => blockedEitherWay(db, me, target))) throw new ApiError(404, 'not-found');
     const result = await run('db-write', () => requestFriend(db, me, target, now));
+    if (result !== 'already') await tell(target, result === 'requested' ? 'request' : 'accepted');
     res.status(200).json({ result });
     return;
+  }
+  // 받은 요청·내 요청의 수락을 상대의 실시간 연결에 알린다 — 상대 화면이 목록을 바로 다시 읽는다
+  async function tell(uid: string, kind: 'request' | 'accepted') {
+    const { nick } = await run('db-read', () => liveIdentity(db, me));
+    notifyUser(uid, { t: 'friend', kind, uid: me, nick });
   }
   if (!UUID.test(other)) throw new ApiError(400, 'bad-user');
   if (req.method === 'PUT') {
     if (await run('db-read', () => blockedEitherWay(db, me, other))) throw new ApiError(404, 'not-found');
     if (!await run('db-write', () => acceptFriend(db, me, other, now))) throw new ApiError(404, 'not-found');
+    await tell(other, 'accepted');
     res.status(200).json({ result: 'accepted' });
     return;
   }

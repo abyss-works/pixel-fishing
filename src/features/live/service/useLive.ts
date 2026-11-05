@@ -25,6 +25,9 @@ const glides = new Map<string, Glide>();
 /** 다른 플레이어가 마지막으로 보낸 채팅과 받은 시각, 입력 중 표시를 켠 시각 — 머리 위 말풍선용(performance.now 기준) */
 const said = new Map<string, { text: string; at: number }>();
 const typingAt = new Map<string, number>();
+/** 친구 알림 구독자 — 화면 상태가 아니라 한 번 일어나는 일이라 상태에 넣지 않고 바로 넘긴다 */
+type FriendEvent = Extract<ServerMessage, { t: 'friend' }>;
+const friendListeners = new Set<(e: FriendEvent) => void>();
 
 function receive(msg: ServerMessage): void {
   const prev = state;
@@ -37,6 +40,7 @@ function receive(msg: ServerMessage): void {
     if (msg.on) typingAt.set(msg.uid, performance.now());
     else typingAt.delete(msg.uid);
   }
+  if (msg.t === 'friend') for (const listener of friendListeners) listener(msg);
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged) {
@@ -74,6 +78,18 @@ export function useLive(): void {
 export function usePlayersIn(region: string): { uid: string; nick: string }[] {
   const s = useSyncExternalStore(subscribe, getState, getState);
   return othersInRegion(s, region).map(o => ({ uid: o.presence.uid, nick: o.presence.nick }));
+}
+
+/** 친구 알림(받은 요청·내 요청의 수락)을 받는다. 돌려준 함수로 구독을 끝낸다 */
+export function onFriendEvent(listener: (e: FriendEvent) => void): () => void {
+  friendListeners.add(listener);
+  return () => { friendListeners.delete(listener); };
+}
+
+/** 그 플레이어가 지금 실시간 채널에 접속해 있는가 — 위치를 한 번이라도 보낸 연결만 접속으로 본다 */
+export function useOnline(uid: string): boolean {
+  const s = useSyncExternalStore(subscribe, getState, getState);
+  return uid in s.others;
 }
 
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
