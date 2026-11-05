@@ -34,6 +34,7 @@
   --color-gold-dark: var(--c-gold-dark);
   --color-orange: var(--c-orange);
   --color-accent: var(--c-accent);
+  --color-guild: var(--c-guild);
   --color-danger: var(--c-danger);
   --color-common: var(--c-common);
   --color-rare: var(--c-rare);
@@ -111,6 +112,7 @@
   --c-accent: #4fc3f7;
   --c-danger: #ff8a80;
   --c-orange: #fb923c; /* 어려움 머리색 — 보상 골드와 겹치지 않게 주황 계열로 분리 */
+  --c-guild: #b3e5fc; /* 메시지 창 길드 채팅 본문 — 흰 본문(월드 채팅·시스템)과 하늘색 이름 사이의 연한 하늘색 */
 
   /* 등급색 — 게임 로직 RARITY와 동일 값 */
   --c-common: #b8c2cc;

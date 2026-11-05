@@ -38,9 +38,13 @@ describe('메시지 창', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('글줄 앞에 채널 머리표를 붙인다', () => {
-    render(<MessageLog log={logOf(1)} />);
-    expect(screen.getByRole('log').textContent).toContain('[시스템]');
+  it('글줄 앞에 채널 머리표를 붙이지 않고, 길드 글줄은 길드 색으로 그린다', () => {
+    const guild = createMessage(2, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 2 } });
+    render(<MessageLog log={[...logOf(1), guild]} />);
+    expect(screen.getByRole('log').textContent).not.toMatch(/\[(시스템|채팅|길드)\]/);
+    const lines = [...screen.getByRole('log').children];
+    expect(lines.find(l => l.textContent?.includes('길드 안녕'))?.className).toContain('text-guild');
+    expect(lines[0].className).not.toContain('text-guild');
   });
 
   it('채널이 하나면 채널 토글을 그리지 않는다', () => {
@@ -75,7 +79,7 @@ describe('메시지 창', () => {
     const guild = createMessage(2, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 2 } });
     render(<Filtered log={[...logOf(1), guild]} />);
     expect(screen.getAllByRole('checkbox').map(c => c.textContent)).toEqual(['길드', '시스템']);
-    expect(screen.getByRole('log').textContent).toContain('[길드]');
+    expect(screen.getByRole('log').textContent).toContain('길드 안녕');
     fireEvent.click(screen.getByRole('checkbox', { name: '시스템' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '길드' }));
     expect(screen.getByRole('checkbox', { name: '길드' })).toHaveAttribute('aria-checked', 'true');
