@@ -1,5 +1,5 @@
-// 길드 창 — 길드가 없으면 만들기·가입, 길드장에게는 초대 코드와 접힌 관리 메뉴, 길드원에게는 떠나기만 보인다.
-// 왼쪽 길드 정보는 탭을 바꿔도 남고, 보너스 탭은 트리 옆에 상세와 기부 순위를 둔다.
+// 길드 창: 길드가 없으면 만들기와 가입. 길드가 있으면 제목 아래 고정 정보 줄(레벨, 진행, 인원)이 탭을 바꿔도 남고,
+// 길드원 탭(표, 초대 코드, 떠나기), 길드 스킬 탭(트리, 고른 스킬, 기부 창), 항해일지 탭(날짜별 기록)이 있다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
@@ -56,126 +56,99 @@ describe('GuildModal', () => {
     expect(s.act).toHaveBeenLastCalledWith({ op: 'join', code: 'abcd2345' });
   });
 
-  it('길드장은 초대 코드와 접힌 관리 메뉴를 보고, 다른 길드원이 있으면 떠나기 대신 위임 안내를 본다', async () => {
+  it('길드장은 초대 코드와 접힌 관리 메뉴를 보고, 다른 길드원이 있으면 떠나기를 누를 때 위임 안내를 받는다', async () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    const toast = vi.fn();
+    render(<GuildModal setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('ABCD2345')).toBeTruthy();
-    const info = within(screen.getByLabelText('길드 정보'));
-    expect(info.getByText('2/10명')).toBeTruthy();
-    expect(info.getByText('길드장')).toBeTruthy(); // 내 역할 꼬리표
-    expect(screen.getByText('다온')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '길드 떠나기' })).toBeNull();
-    expect(screen.getByText('다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.')).toBeTruthy();
-    // 넘기기·내보내기는 관리 메뉴를 펼쳐야 보인다. 나 자신의 행에는 메뉴가 없다
+    // 떠난 선원은 길드원 표에 없다
+    expect(screen.queryByText('다온')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '길드 떠나기' }));
+    expect(toast).toHaveBeenCalledWith('다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.', 'warn');
+    // 넘기기와 내보내기는 관리 메뉴를 펼쳐야 보인다. 나 자신의 행에는 메뉴가 없다
     expect(screen.queryByRole('button', { name: '가람 관리' })).toBeNull();
     expect(screen.queryByRole('button', { name: '내보내기' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '나루 관리' }));
-    expect(screen.getByRole('button', { name: '넘기기' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '길드장 넘기기' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '내보내기' }));
     fireEvent.click(screen.getAllByRole('button', { name: '내보내기' }).at(-1) as HTMLElement);
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'remove', guildId: 'g1', uid: 'M' }));
   });
 
-  it('길드원은 관리 동작 없이 떠나기만 한다', () => {
+  it('길드원은 관리 동작과 초대 코드 없이 떠나기만 한다', () => {
     s.guild = { ...GUILD, role: 'member', invite: null };
     s.you = 'M';
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.queryByText('초대 코드')).toBeNull();
-    expect(screen.queryByRole('button', { name: '내보내기' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '넘기기' })).toBeNull();
     expect(screen.queryByRole('button', { name: /관리$/ })).toBeNull();
-    const info = within(screen.getByLabelText('길드 정보'));
-    expect(info.getByText('2/10명')).toBeTruthy();
-    expect(info.getAllByText('길드원')).toHaveLength(2); // 줄 이름과 내 역할 꼬리표
-    expect(info.queryByText('길드장')).toBeNull();
-    expect(screen.getByRole('button', { name: '길드 떠나기' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '길드 떠나기' }));
+    const dialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+    expect(within(dialog).getByText(/길드를 떠날까요/)).toBeTruthy();
   });
 
-  it('왼쪽 길드 정보(레벨·진행·초대 코드·받는 보너스)는 항해일지·보너스 탭으로 바꿔도 그대로 보인다', () => {
+  it('길드원 표는 사람마다 오늘 기여, 누적 기여, 기부 합을 숫자로 보인다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getAllByText('Lv.3')).toHaveLength(1); // 레벨 요약
-    expect(screen.getByLabelText('길드 레벨').textContent).toContain('31,000 / 50,000');
-    expect(screen.getByText('누적 29,100')).toBeTruthy();
-    const infoStays = () => {
-      expect(screen.getByText('다음 레벨까지 기여 19,000')).toBeTruthy();
-      expect(screen.getByText('판매가 +4% · 가방 용량 +12% · 네임드 조우 +5%')).toBeTruthy();
-      expect(screen.getByText('ABCD2345')).toBeTruthy();
+    const row = screen.getByText('나루').closest('tr') as HTMLElement;
+    expect(within(row).getByText('900,000')).toBeTruthy();
+    const mine = screen.getByText('가람').closest('tr') as HTMLElement;
+    expect(within(mine).getByText('900')).toBeTruthy();
+    expect(within(mine).getByText('1,900')).toBeTruthy();
+    expect(within(mine).getByText('100,000')).toBeTruthy();
+  });
+
+  it('고정 정보 줄(레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 기여 방식은 진행 막대의 툴팁이다', () => {
+    s.guild = GUILD;
+    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    const stays = () => {
+      expect(screen.getByText('Lv.3')).toBeTruthy();
+      expect(screen.getByText('31,000 / 50,000')).toBeTruthy();
+      expect(screen.getByText('2/10')).toBeTruthy();
     };
-    infoStays();
-    fireEvent.click(screen.getByRole('button', { name: /항해일지/ }));
-    expect(screen.getByText('가람 님이 전설 황금잉어 낚시에 성공했어요!')).toBeTruthy();
-    expect(screen.getByText('나루 님이 길드에 들어왔어요.')).toBeTruthy();
-    infoStays();
-    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
-    infoStays();
+    stays();
+    expect(screen.getAllByRole('tooltip', { hidden: true }).some(t => t.textContent?.includes('하루 1,000까지'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
+    stays();
+    fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
+    stays();
   });
 
-  it('보조 탭은 길드원·보너스·항해일지 셋이고, 기여가 쌓이는 방식은 진행 막대 옆 도움말에 있다', () => {
+  it('길드 스킬 탭: 열리지 않은 스킬은 고를 수 없고, 고른 스킬의 현재와 다음 단계 효과, 모인 골드를 보인다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /^길드원/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^보너스/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^항해일지/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^레벨/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
-    expect(screen.getByRole('tooltip').textContent).toContain('네임드를 토벌하면 1,000');
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
+    const tree = screen.getByRole('group', { name: '길드 스킬 트리' });
+    expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).title).toBe('길드 Lv.4에 열려요.');
+    expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
+    expect(screen.getByText('현재(2단계)')).toBeTruthy();
+    expect(screen.getByText('다음(3단계)')).toBeTruthy();
+    expect(screen.getByText('125,000 / 500,000')).toBeTruthy();
+    // 상한에 닿은 스킬을 고르면 기부를 열 수 없다
+    fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 고르기' }));
+    expect((screen.getByRole('button', { name: '기부' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('보너스 탭 위에 레벨 문턱 줄이 있다 — 레벨마다 문턱과 열리는 것을 담고 지금 레벨을 표시한다', () => {
-    s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
-    const strip = screen.getByRole('list', { name: '길드 레벨 문턱' });
-    expect(strip.textContent).toContain('Lv.4 50,000');
-    expect(screen.getByLabelText('Lv.5 기여 100,000 · 돌연변이 보너스 열림 · 보너스 단계 상한 5')).toBeTruthy();
-    expect(screen.getByLabelText(/^Lv\.3 기여 25,000/).getAttribute('aria-current')).toBe('step');
-  });
-
-  it('받는 보너스가 없으면 없다고 보인다', () => {
-    s.guild = { ...GUILD, bonuses: GUILD.bonuses.map(b => ({ ...b, rank: 0, effect: 0 })) };
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('받는 보너스가 없어요.')).toBeTruthy();
-  });
-
-  it('보너스 탭은 스킬 트리다 — 열리지 않은 보너스는 열리는 레벨을, 단계 노드는 상태를 보이고 전체 기부 순위를 보인다', () => {
-    s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
-    expect(screen.getByText('Lv4에 열림')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '판매가 2단계 이룸' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '판매가 3단계 모으는 중' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '판매가 4단계 상한 위' })).toBeTruthy();
-    expect(screen.getByText('900,000골드')).toBeTruthy();
-    // 상세와 기부 순위는 트리 옆 한 열에 함께 놓인다
-    const tree = screen.getByRole('group', { name: '보너스 스킬 트리' });
-    const side = screen.getByLabelText('판매가 상세').parentElement as HTMLElement;
-    expect(side.contains(screen.getByLabelText('기부 순위'))).toBe(true);
-    expect(side.contains(tree)).toBe(false);
-    expect(side.parentElement?.contains(tree)).toBe(true);
-    // 상한에 닿은 보너스를 고르면 기부 입력이 없다
-    fireEvent.click(screen.getByRole('button', { name: '가방 용량 고르기' }));
-    expect(screen.queryByLabelText('가방 용량 기부 골드')).toBeNull();
-  });
-
-  it('고른 보너스에 기부하면 실제로 받을 골드를 알리고 게임 상태를 다시 읽는다. 빠른 금액은 입력에 더한다', async () => {
+  it('기부 창에서 기부하면 실제로 받을 골드를 알리고 게임 상태를 다시 읽는다. 빠른 금액은 입력에 더한다', async () => {
     s.guild = GUILD;
     const toast = vi.fn();
     const resync = vi.fn(async () => {});
     render(<GuildModal setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
-    const input = screen.getByLabelText('판매가 기부 골드') as HTMLInputElement;
-    fireEvent.click(screen.getByRole('button', { name: '+10만' }));
-    fireEvent.click(screen.getByRole('button', { name: '+50만' }));
-    expect(input.value).toBe('600000');
-    fireEvent.click(screen.getByRole('button', { name: '남은 만큼' }));
-    expect(input.value).toBe('375000');
-    // 상한 3단계까지 필요한 골드는 500,000 − 125,000 = 375,000 — 그 이상은 받지 않는다
-    fireEvent.change(input, { target: { value: '1000000' } });
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     fireEvent.click(screen.getByRole('button', { name: '기부' }));
+    const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    const input = dialog.getByLabelText('판매가 보너스 기부 골드') as HTMLInputElement;
+    fireEvent.click(dialog.getByRole('button', { name: '+10만' }));
+    fireEvent.click(dialog.getByRole('button', { name: '+50만' }));
+    expect(input.value).toBe('600000');
+    fireEvent.click(dialog.getByRole('button', { name: '남은 만큼' }));
+    expect(input.value).toBe('375000');
+    // 상한 3단계까지 필요한 골드는 375,000이고, 그 이상은 받지 않는다
+    fireEvent.change(input, { target: { value: '1000000' } });
+    fireEvent.click(dialog.getByRole('button', { name: '기부' }));
     await waitFor(() => expect(resync).toHaveBeenCalled());
     expect(s.act).toHaveBeenCalledWith({ op: 'donate', guildId: 'g1', bonus: 'sell', amount: 1_000_000 });
-    expect(toast).toHaveBeenCalledWith('판매가에 375,000골드를 기부했어요.');
+    expect(toast).toHaveBeenCalledWith('판매가 보너스에 375,000G를 기부했어요.');
   });
 
   it('기부가 거부되면 이유를 알리고 게임 상태를 다시 읽지 않는다', async () => {
@@ -184,10 +157,22 @@ describe('GuildModal', () => {
     const toast = vi.fn();
     const resync = vi.fn(async () => {});
     render(<GuildModal setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     fireEvent.click(screen.getByRole('button', { name: '기부' }));
+    const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    fireEvent.click(dialog.getByRole('button', { name: '기부' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('골드가 모자라요.', 'warn'));
     expect(s.act).toHaveBeenCalledWith({ op: 'donate', guildId: 'g1', bonus: 'sell', amount: 375_000 });
     expect(resync).not.toHaveBeenCalled();
+  });
+
+  it('항해일지는 한국 날짜 머리 아래에 시각과 강조한 이름, 전설 어종을 보인다', () => {
+    s.guild = GUILD;
+    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
+    const day = within(screen.getByRole('region', { name: '11월 5일' }));
+    expect(day.getAllByText('09:00')).toHaveLength(2);
+    expect(day.getByText('전설 황금잉어')).toBeTruthy();
+    expect(day.getByText('나루')).toBeTruthy();
   });
 });

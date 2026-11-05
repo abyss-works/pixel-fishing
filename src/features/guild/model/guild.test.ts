@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, activeEffectLines, bonusEffectText, bonusRows, donorRanking, growthBar, growthHintText,
-  growthTotalText, inviteHintText, inviteLeftText, leaveConfirm, leaveOutcome, levelStepText, levelSteps, logAgoText, logLine,
-  memberActions, memberConfirm, memberName, splitMembers,
+  GUILD_BONUS_NAME, GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
+  growthTotalText, inviteLeftText, leaveConfirm, leaveOutcome, logbookDays, memberActions, memberConfirm, memberName, memberRows,
+  splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -38,11 +38,8 @@ describe('길드 화면 모델', () => {
     expect(inviteLeftText('2026-11-04T00:00:00.000Z', now)).toBe('만료됨');
   });
 
-  it('초대 코드 안내는 남은 시간과 24시간 유효 기간이고, 코드가 없으면 유효 기간만이다', () => {
-    const now = Date.parse('2026-11-05T00:00:00.000Z');
-    expect(inviteHintText({ code: 'ABCD2345', expiresAt: '2026-11-05T00:30:00.000Z' }, now))
-      .toBe('30분 남음 · 코드는 24시간 동안 여러 사람이 쓸 수 있어요.');
-    expect(inviteHintText(null, now)).toBe('코드는 24시간 동안 여러 사람이 쓸 수 있어요.');
+  it('초대 코드 규칙은 24시간 유효 기간과 새 코드를 받으면 이전 코드가 무효가 된다는 것이다', () => {
+    expect(GUILD_INVITE_RULE).toBe('24시간 동안 여러 사람이 쓸 수 있어요. 새 코드를 받으면 이전 코드는 더 쓸 수 없어요.');
   });
 
   it('이름이 없는 길드원은 이름 없음으로 부른다', () => {
@@ -94,54 +91,79 @@ describe('길드 성장 화면 모델', () => {
     expect(growthBar(growth(5, 150_000, 100_000, null))).toEqual({ ratio: 1, remaining: null });
   });
 
-  it('누적 기여와 다음 레벨 문턱, 남은 기여를 문장으로 보인다. 최고 레벨은 누적만 보이고 최고 레벨이라고 알린다', () => {
+  it('누적 기여와 다음 레벨 문턱을 숫자로 보인다. 최고 레벨은 누적만 보인다', () => {
     expect(growthTotalText(growth(3, 31_000, 25_000, 50_000))).toBe('31,000 / 50,000');
-    expect(growthHintText(growth(3, 31_000, 25_000, 50_000))).toBe('다음 레벨까지 기여 19,000');
     expect(growthTotalText(growth(5, 150_000, 100_000, null))).toBe('150,000');
-    expect(growthHintText(growth(5, 150_000, 100_000, null))).toBe('최고 레벨이에요.');
   });
 
   it('기여 안내는 명성 하루 상한을 담는다', () => {
     expect(GUILD_CONTRIBUTION_HELP).toContain('하루 1,000까지');
   });
 
-  it('레벨 사다리 레벨마다 문턱과 새로 열리는 보너스를 보이고, 지나온·현재·다음·잠긴 레벨을 나눈다', () => {
-    const steps = levelSteps(growth(3, 45_000, 25_000, 50_000));
-    expect(steps.map(s => [s.level, s.floor, s.state])).toEqual([
-      [1, 0, 'done'], [2, 10_000, 'done'], [3, 25_000, 'current'], [4, 50_000, 'next'], [5, 100_000, 'locked'],
-    ]);
-    expect(steps.map(s => s.perks)).toEqual([
-      ['판매가 열림'],
-      ['가방 용량 열림', '보너스 단계 상한 2'],
-      ['네임드 조우 보너스 열림', '보너스 단계 상한 3'],
-      ['희귀 어종 보너스 열림', '보너스 단계 상한 4'],
-      ['돌연변이 보너스 열림', '보너스 단계 상한 5'],
-    ]);
-    expect(steps.map(levelStepText)).toEqual([
-      '기여 0 · 판매가 열림',
-      '기여 10,000 · 가방 용량 열림 · 보너스 단계 상한 2',
-      '기여 25,000 · 네임드 조우 보너스 열림 · 보너스 단계 상한 3',
-      '기여 50,000 · 희귀 어종 보너스 열림 · 보너스 단계 상한 4',
-      '기여 100,000 · 돌연변이 보너스 열림 · 보너스 단계 상한 5',
+});
+
+describe('길드원 표', () => {
+  it('지금 길드원만, 서버 순서대로, 사람별 전체 기부를 붙인다. 기부가 없으면 0이다', () => {
+    const g = { ...guild('leader', [member('L', 'leader'), member('A', 'member'), member('B', 'member', '2026-11-05T01:00:00.000Z')]),
+      donors: [{ uid: 'A', nick: 'A', gold: 900 }, { uid: null, nick: null, gold: 5 }] };
+    g.members[0] = { ...g.members[0], online: true, contribution: { total: 30, today: 7 } };
+    expect(memberRows(g, 'L')).toEqual([
+      { uid: 'L', name: 'L', leader: true, me: true, online: true, today: 7, total: 30, gave: 0 },
+      { uid: 'A', name: 'A', leader: false, me: false, online: false, today: 0, total: 0, gave: 900 },
     ]);
   });
+});
 
-  it('항해일지 한 줄을 문장으로 옮긴다', () => {
-    const log = (kind: GuildInfo['logbook'][number]['kind'], detail: string | null = null, nick: string | null = '가람',
-      value: number | null = null) => ({ id: 1, kind, uid: 'u', nick, detail, value, at: '2026-11-05T00:00:00.000Z' });
-    expect(logLine(log('join'))).toBe('가람 님이 길드에 들어왔어요.');
-    expect(logLine(log('leave'))).toBe('가람 님이 길드를 떠났어요.');
-    expect(logLine(log('kick', null, null))).toBe('이름 없음 님이 길드에서 내보내졌어요.');
-    expect(logLine(log('legendary', 'goldcarp'))).toBe('가람 님이 전설 황금잉어 낚시에 성공했어요!');
-    expect(logLine(log('named', 'pacific-named-megalodon'))).toBe('가람 님이 네임드 메갈로돈 토벌에 성공했어요!');
-    expect(logLine(log('donate', 'sell', '가람', 100_000))).toBe('가람 님이 판매가에 100,000골드를 기부했어요.');
-    expect(logLine(log('bonus-up', 'mutation', '가람', 2))).toBe('가람 님의 기부로 돌연변이 보너스 2단계가 됐어요!');
+describe('항해일지', () => {
+  const log = (id: number, kind: GuildInfo['logbook'][number]['kind'], at: string, detail: string | null = null,
+    value: number | null = null, uid = 'u', nick: string | null = '가람') => ({ id, kind, uid, nick, detail, value, at });
+
+  it('한국 날짜마다 묶고, 각 줄은 한국 시각과 강조 조각으로 나눈 문장이다', () => {
+    const days = logbookDays([
+      log(3, 'legendary', '2026-11-05T05:20:00.000Z', 'goldcarp', null, 'me', '나'),
+      log(2, 'join', '2026-11-04T16:00:00.000Z'),
+      log(1, 'leave', '2026-11-04T01:12:00.000Z', null, null, 'u', null),
+    ], 'me');
+    expect(days.map(d => [d.day, d.items.map(i => [i.id, i.time])])).toEqual([
+      ['11월 5일', [[3, '14:20'], [2, '01:00']]],
+      ['11월 4일', [[1, '10:12']]],
+    ]);
+    expect(days[0].items[0].parts).toEqual([
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 황금잉어', tone: 'legend' }, { text: '를 낚았어요!' },
+    ]);
+    expect(days[1].items[0]).toMatchObject({ kind: 'leave', quiet: true,
+      parts: [{ text: '이름 없음', tone: 'nick' }, { text: ' 님이 길드를 떠났어요.' }] });
+  });
+
+  it('네임드 토벌, 기부, 단계 상승. 단계 상승은 누구의 기부로 올랐는지 적지 않는다', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    const [day] = logbookDays([
+      log(3, 'named', at, 'pacific-named-megalodon'),
+      log(2, 'donate', at, 'sell', 150_000),
+      log(1, 'bonus-up', at, 'rare', 2),
+    ], 'me');
+    expect(day.items.map(i => i.parts)).toEqual([
+      [{ text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '네임드 메갈로돈', tone: 'named' }, { text: '을 토벌했어요!' }],
+      [{ text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '판매가 보너스', tone: 'skill' }, { text: '에 ' },
+        { text: '150,000G', tone: 'num' }, { text: '를 기부했어요.' }],
+      [{ text: '길드 스킬 ' }, { text: '희귀 어종 확률', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
+    ]);
   });
 });
 
 describe('길드 보너스 화면 모델', () => {
   const item = (over: Partial<GuildBonusItem>): GuildBonusItem => ({ id: 'sell', unlock: 1, rank: 0, cap: 0, pool: 0,
     next: null, effect: 0, nextEffect: 0.02, mine: 0, ...over });
+
+  it('길드 스킬 이름', () => {
+    expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 확률', '돌연변이 확률']);
+  });
+
+  it('효과 값 — 비율은 %, 돌연변이는 %p, 희귀 어종은 줄이는 쪽이라 −', () => {
+    expect(bonusEffectValue('sell', 0.06)).toBe('+6%');
+    expect(bonusEffectValue('rare', 0.04)).toBe('−4%');
+    expect(bonusEffectValue('mutation', 0.03)).toBe('+3%p');
+  });
 
   it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 어종 가중치를 줄인다', () => {
     expect(bonusEffectText('sell', 0.06)).toBe('판매가 +6%');
@@ -157,10 +179,10 @@ describe('길드 보너스 화면 모델', () => {
       item({ id: 'bag', unlock: 2, rank: 3, cap: 3, next: 1_500_000, effect: 0.12, nextEffect: 0.16 }),
       item({ id: 'named', unlock: 4, cap: 0, nextEffect: 0.05 }),
     ]);
-    expect(sell).toMatchObject({ name: '판매가', locked: false, now: '판매가 +4%', after: '판매가 +6%', ratio: 0.25,
-      need: 375_000, canDonate: true, mine: 9 });
-    expect(bag).toMatchObject({ now: '가방 용량 +12%', canDonate: false, need: null, ratio: 0 });
-    expect(named).toMatchObject({ name: '네임드 조우 보너스', locked: true, now: null, canDonate: false });
+    expect(sell).toMatchObject({ name: '판매가 보너스', locked: false, now: '+4%', after: '+6%', ratio: 0.25,
+      need: 375_000, canDonate: true });
+    expect(bag).toMatchObject({ now: '+12%', canDonate: false, need: null, ratio: 0 });
+    expect(named).toMatchObject({ name: '네임드 조우 확률', locked: true, now: null, canDonate: false });
   });
 
   it('스킬 트리 노드 — 이룬 단계, 모으는 다음 단계(채운 비율), 상한 안의 먼 단계, 상한 위 단계', () => {
@@ -175,26 +197,4 @@ describe('길드 보너스 화면 모델', () => {
     expect(named.nodes.every(n => n.state === 'capped')).toBe(true);
   });
 
-  it('기부 순위는 전체 기부액 순이고 같은 금액은 같은 순위다. 내 줄을 표시한다', () => {
-    expect(donorRanking([{ uid: 'a', nick: 'A', gold: 300 }, { uid: 'me', nick: 'M', gold: 300 }, { uid: null, nick: null, gold: 10 }], 'me'))
-      .toEqual([
-        { rank: 1, nickname: 'A', value: 300, me: false },
-        { rank: 1, nickname: 'M', value: 300, me: true },
-        { rank: 3, nickname: null, value: 10, me: false },
-      ]);
-  });
-
-  it('받는 보너스 문장 — 1단계 이상인 보너스만', () => {
-    expect(activeEffectLines([item({ rank: 1, effect: 0.02 }), item({ id: 'bag', rank: 0 })])).toEqual(['판매가 +2%']);
-  });
-});
-
-describe('항해일지 시각', () => {
-  it('지난 시간을 분·시간·일로 보인다', () => {
-    const now = Date.parse('2026-11-05T12:00:00Z');
-    expect(logAgoText('2026-11-05T11:59:40Z', now)).toBe('방금 전');
-    expect(logAgoText('2026-11-05T11:15:00Z', now)).toBe('45분 전');
-    expect(logAgoText('2026-11-05T09:00:00Z', now)).toBe('3시간 전');
-    expect(logAgoText('2026-11-02T12:00:00Z', now)).toBe('3일 전');
-  });
 });
