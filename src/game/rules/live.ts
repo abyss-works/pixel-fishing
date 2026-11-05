@@ -9,6 +9,7 @@ export type ClientMessage =
   | { t: 'move'; region: string; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 바다, line: 낚싯줄을 드리운 상태
   | { t: 'stop' }
   | { t: 'chat'; text: string }
+  | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
 export interface Presence { uid: string; nick: string; boat: number; region: string; x: number; y: number; dir: Dir; line: boolean }
@@ -21,6 +22,7 @@ export type ServerMessage =
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
   | { t: 'chat'; line: ChatLine }
+  | { t: 'typing'; uid: string; on: boolean }
   | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */
@@ -59,6 +61,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
     case 'chat': return typeof o.text === 'string' ? { t: 'chat', text: o.text } : null;
+    case 'typing': return typeof o.on === 'boolean' ? { t: 'typing', on: o.on } : null;
     default: return null;
   }
 }

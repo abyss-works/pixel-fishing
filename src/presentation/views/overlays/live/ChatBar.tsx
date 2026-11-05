@@ -8,7 +8,7 @@
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
-import { clearChatError, sendChat, useChat } from '../../../../features/live/service/useLive';
+import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
 import type { ChatError } from '../../../../features/live/model/live';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
@@ -40,6 +40,9 @@ export default function ChatBar() {
   const moderation = useChatModeration(listOpen);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  // 입력 줄에 포커스가 있고 글이 있는 동안 다른 사람에게 입력 중 표시를 보인다
+  const [focused, setFocused] = useState(false);
+  useTypingSignal(focused && text.trim() !== '');
 
   useKeyScope(e => {
     if (e.key !== 'Enter' || e.repeat || e.isComposing || hasModifier(e)) return;
@@ -84,6 +87,7 @@ export default function ChatBar() {
       <div className="flex items-center gap-1">
         <TextInput ref={inputRef} compact className="flex-1 min-w-0" aria-label="채팅 입력" placeholder="채팅 (Enter로 입력·보내기)"
                    maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
+                   onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
                    onChange={e => { setText(e.target.value); setNotice(null); clearChatError(); }} />
         <PillButton active={listOpen} aria-expanded={listOpen} onClick={() => setListOpen(open => !open)}>차단 목록</PillButton>
       </div>

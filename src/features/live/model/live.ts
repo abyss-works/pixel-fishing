@@ -113,3 +113,21 @@ export function nextPositionMessage(last: SentPosition | null, cur: MyPosition):
   if (!last.stopped) return { msg: { t: 'stop' }, sent: { ...last, stopped: true } };
   return { msg: null, sent: last };
 }
+
+/** 머리 위 말풍선을 보이는 시간 */
+export const BUBBLE_MS = 5000;
+/** 입력 중 표시를 끄라는 소식이 없어도 이 시간이 지나면 끈다(끊김·창 닫힘 대비) */
+export const TYPING_MS = 6000;
+
+export type Bubble = { kind: 'chat'; text: string } | { kind: 'typing' };
+
+/**
+ * 다른 플레이어 머리 위에 그릴 것. 최근 채팅이 있으면 그 말풍선, 아니면 입력 중이면 "…", 둘 다 아니면 null.
+ * @param said 마지막으로 받은 채팅과 받은 시각
+ * @param typingAt 입력 중 표시를 켠 시각(꺼졌으면 null)
+ */
+export function bubbleOf(said: { text: string; at: number } | null, typingAt: number | null, now: number): Bubble | null {
+  if (said && now - said.at < BUBBLE_MS) return { kind: 'chat', text: said.text };
+  if (typingAt !== null && now - typingAt < TYPING_MS) return { kind: 'typing' };
+  return null;
+}

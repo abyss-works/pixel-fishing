@@ -13,6 +13,7 @@ const live = vi.hoisted(() => ({
   error: null as string | null,
   sendChat: vi.fn(),
   clearChatError: vi.fn(),
+  typing: [] as boolean[],
 }));
 const moderation = vi.hoisted(() => ({
   unblock: vi.fn(async () => null),
@@ -22,12 +23,25 @@ vi.mock('../../../../features/live/service/useLive', () => ({
   useChat: () => ({ enabled: true, you: 'me', lines: [], error: live.error }),
   sendChat: live.sendChat,
   clearChatError: live.clearChatError,
+  useTypingSignal: (active: boolean) => { live.typing.push(active); },
 }));
 vi.mock('../../../../features/live/service/useChatModeration', () => ({
   useChatModeration: () => ({ blocks: [{ uid: 'b1', nick: '무례' }], ...moderation }),
 }));
 
 describe('ChatBar', () => {
+  it('입력 줄에 포커스가 있고 글이 있는 동안만 입력 중 표시를 켠다', () => {
+    live.typing = [];
+    render(<ChatBar />);
+    const input = screen.getByLabelText('채팅 입력');
+    fireEvent.focus(input);
+    expect(live.typing.at(-1)).toBe(false);
+    fireEvent.change(input, { target: { value: '안' } });
+    expect(live.typing.at(-1)).toBe(true);
+    fireEvent.blur(input);
+    expect(live.typing.at(-1)).toBe(false);
+  });
+
   afterEach(() => { cleanup(); resetKeyScopes(); live.error = null; vi.clearAllMocks(); });
 
   it('Enter로 보내고 입력을 비운 뒤 입력 줄을 벗어난다. 빈 입력은 보내지 않고 벗어나기만 한다', () => {

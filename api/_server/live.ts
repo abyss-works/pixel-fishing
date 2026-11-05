@@ -138,6 +138,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             broadcast(ws, { t: 'stop', uid: user.uid });
           } else if (msg?.t === 'chat') {
             onChat(ws, user, msg.text).catch((err: unknown) => { console.error('[live] chat save failed', err); });
+          } else if (msg?.t === 'typing' && !user.guest) {
+            // 입력 중 표시 — 채팅을 쓸 수 있는 계정만 알린다. 저장하지 않는다
+            broadcast(ws, { t: 'typing', uid: user.uid, on: msg.on });
           }
         });
         ws.on('close', () => drop(ws, conn));

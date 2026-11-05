@@ -20,7 +20,25 @@ export function drawBoat(ctx: Ctx, x: number, y: number, t: number) {
 }
 
 /** 다른 플레이어의 배 — 내 배와 구분되게 반투명으로 그리고, 이름과 드리운 낚싯줄을 함께 그린다 */
-export interface OtherShipView { x: number; y: number; nick: string; line: boolean; stale: boolean }
+export interface OtherShipView {
+  x: number; y: number; nick: string; line: boolean; stale: boolean;
+  /** 머리 위 말풍선 — 최근 채팅 글, 입력 중이면 'typing', 없으면 null */
+  bubble?: string | 'typing' | null;
+}
+
+// 말풍선에 보이는 최대 글자 수 — 넘으면 줄여서 보인다
+const BUBBLE_CHARS = 14;
+
+function drawBubble(ctx: Ctx, x: number, y: number, text: string) {
+  ctx.font = "bold 8px 'Malgun Gothic', sans-serif";
+  const w = Math.ceil(ctx.measureText(text).width) + 8;
+  const left = Math.round(x - w / 2);
+  R(ctx, left, y - 10, w, 12, 'rgba(242,247,251,0.92)');
+  R(ctx, x - 1, y + 2, 3, 2, 'rgba(242,247,251,0.92)');
+  ctx.fillStyle = '#0a1526';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y - 1);
+}
 
 export function drawOtherShip(ctx: Ctx, o: OtherShipView, t: number) {
   ctx.save();
@@ -38,4 +56,9 @@ export function drawOtherShip(ctx: Ctx, o: OtherShipView, t: number) {
   }
   ctx.restore();
   label(ctx, o.nick, o.x, o.y - 24, 'rgba(255,255,255,0.75)', 8);
+  if (o.bubble === 'typing') drawBubble(ctx, o.x, o.y - 34, '…');
+  else if (o.bubble) {
+    const chars = [...o.bubble];
+    drawBubble(ctx, o.x, o.y - 34, chars.length > BUBBLE_CHARS ? `${chars.slice(0, BUBBLE_CHARS).join('')}…` : o.bubble);
+  }
 }
