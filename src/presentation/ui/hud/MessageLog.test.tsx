@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FILTER_CHANNELS, toggleChannel } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
@@ -23,6 +23,8 @@ function fakeLayout(el: HTMLElement) {
   Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => 160 });
 }
 const scrollTo = (el: HTMLElement, top: number) => { el.scrollTop = top; fireEvent.scroll(el); };
+/** 채널 토글 칩 */
+const chips = () => within(screen.getByRole('group', { name: '메시지 채널' })).getAllByRole('button');
 
 describe('메시지 창', () => {
   afterEach(cleanup);
@@ -49,14 +51,39 @@ describe('메시지 창', () => {
 
   it('늘 보일 채널을 주면 기록과 관계없이 토글을 그리고, 쓸 수 없는 채널은 회색으로 꺼 둔다', () => {
     render(<MessageLog log={logOf(1)} filter={FILTER_CHANNELS} onToggle={() => {}} channels={FILTER_CHANNELS} disabledChannels={['guild']} />);
-    expect(screen.getAllByRole('checkbox').map(c => c.textContent)).toEqual(['채팅', '길드', '시스템']);
-    expect((screen.getByRole('checkbox', { name: '길드' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('checkbox', { name: '채팅' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(chips().map(c => c.textContent)).toEqual(['채팅', '길드', '시스템']);
+    expect((screen.getByRole('button', { name: '길드' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '채팅' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('켜진 채널 칩은 일반 켜짐 단계라 골드로 세우지 않고, 꺼진 칩은 테두리 없이 보조색이다', () => {
+    render(<MessageLog log={logOf(1)} filter={['chat', 'system']} onToggle={() => {}} channels={FILTER_CHANNELS} />);
+    const chat = screen.getByRole('button', { name: '채팅', pressed: true });
+    expect(chat).toHaveClass('border-line', 'text-text');
+    expect(chat).not.toHaveClass('text-gold');
+    expect(screen.getByRole('button', { name: '길드', pressed: false })).toHaveClass('border-transparent', 'text-text-dim');
+  });
+
+  it('꺼 둔 채널의 새 글 점은 네모 골드 점이다', () => {
+    const { container } = render(<Filtered log={[...logOf(1), chatAt(1, new Date(Date.now() + 60_000))]} initial={['system']} />);
+    const dot = container.querySelector('.bg-gold');
+    expect(dot).not.toBeNull();
+    expect(dot).not.toHaveClass('rounded-full');
+  });
+
+  it('창 폭은 400px이고, 기록 상자는 노치 틀이며 바탕은 마우스를 올렸거나 입력 중일 때만 보인다', () => {
+    const { container } = render(<MessageLog log={logOf(1)} footer={<input aria-label="채팅 입력" />} />);
+    expect(container.firstElementChild).toHaveClass('w-[min(400px,58%)]');
+    const list = screen.getByRole('log');
+    expect(list).toHaveClass('pf-notch', 'border-transparent');
+    expect(list).not.toHaveClass('rounded-sm');
+    expect(list.className).toMatch(/hover:bg-/);
+    expect(list.className).toMatch(/group-has-\[input:focus\]:bg-/);
   });
 
   it('채널이 하나면 채널 토글을 그리지 않는다', () => {
     render(<Filtered log={logOf(3)} />);
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '메시지 채널' })).not.toBeInTheDocument();
   });
 
   it('기록 수와 무관하게 같은 높이의 창을 그린다', () => {
@@ -73,23 +100,23 @@ describe('메시지 창', () => {
     render(<Filtered log={[...logOf(2), chat]} />);
     const log = () => screen.getByRole('log');
     expect(log().children).toHaveLength(3);
-    fireEvent.click(screen.getByRole('checkbox', { name: '시스템' }));
+    fireEvent.click(screen.getByRole('button', { name: '시스템' }));
     expect(log().children).toHaveLength(1);
-    fireEvent.click(screen.getByRole('checkbox', { name: '채팅' }));
-    expect(screen.getByRole('checkbox', { name: '채팅' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '채팅' }));
+    expect(screen.getByRole('button', { name: '채팅' })).toHaveAttribute('aria-pressed', 'true');
     expect(log().children).toHaveLength(1);
-    fireEvent.click(screen.getByRole('checkbox', { name: '시스템' }));
+    fireEvent.click(screen.getByRole('button', { name: '시스템' }));
     expect(log().children).toHaveLength(3);
   });
 
   it('길드 글줄이 있으면 길드 토글을 더하고, 기록에 없는 채널은 마지막 하나 판정에 넣지 않는다', () => {
     const guild = createMessage(2, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 2 } });
     render(<Filtered log={[...logOf(1), guild]} />);
-    expect(screen.getAllByRole('checkbox').map(c => c.textContent)).toEqual(['길드', '시스템']);
+    expect(chips().map(c => c.textContent)).toEqual(['길드', '시스템']);
     expect(screen.getByRole('log').textContent).toContain('길드 안녕');
-    fireEvent.click(screen.getByRole('checkbox', { name: '시스템' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '길드' }));
-    expect(screen.getByRole('checkbox', { name: '길드' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '시스템' }));
+    fireEvent.click(screen.getByRole('button', { name: '길드' }));
+    expect(screen.getByRole('button', { name: '길드' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('log').children).toHaveLength(1);
   });
 
@@ -104,7 +131,7 @@ describe('메시지 창', () => {
   it('내 채팅 이름은 골드, 다른 사람 이름은 하늘색이다', () => {
     const at = new Date();
     render(<MessageLog log={[chatAt(1, at, 'me'), chatAt(2, at, 'other')]} you="me" onPick={() => {}} />);
-    const [mine, other] = screen.getAllByRole('button', { name: '가람:' });
+    const [mine, other] = screen.getAllByRole('button', { name: '가람' });
     expect(mine).toHaveClass('text-gold');
     expect(other).toHaveClass('text-accent');
     expect(other).not.toHaveClass('text-gold');
@@ -142,7 +169,7 @@ describe('메시지 창', () => {
     const list = screen.getByRole('log');
     fakeLayout(list);
     scrollTo(list, 0);
-    fireEvent.click(screen.getByRole('checkbox', { name: '채팅' }));
+    fireEvent.click(screen.getByRole('button', { name: '채팅' }));
     expect(list.scrollTop).toBe(20 * 20);
   });
 
@@ -150,7 +177,7 @@ describe('메시지 창', () => {
     const chat = createMessage(7, '안녕', { channel: 'chat', author: '가람', from: { uid: 'u', chatId: 7 } });
     const onPick = vi.fn();
     render(<MessageLog log={[chat]} onPick={onPick} footer={<input aria-label="채팅 입력" />} />);
-    fireEvent.click(screen.getByRole('button', { name: '가람:' }));
+    fireEvent.click(screen.getByRole('button', { name: '가람' }));
     expect(onPick).toHaveBeenCalledWith(chat);
     expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
   });
