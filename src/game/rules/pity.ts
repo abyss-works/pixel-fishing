@@ -4,6 +4,8 @@
 //    어떤 플레이 방식이든 천장 전 미획득 확률이 e^−K 이하로 묶인다. 초기화하지 않는다.
 //  - 네임드 조우 천장: 조우 후보가 있는 캐치의 빗나감을 세고, 하루(게임 날짜)의 천장 번째 캐치에서 조우를 확정한다.
 //    결투에 실패하면 그날 다음 천장을 절반으로 줄인다(두 번까지). 게임 날짜가 바뀌면 모두 초기화한다.
+//  - 네임드 상처: 그날 실패한 결투에서 맞힌 히트를 네임드별로 쌓아 다음 조우의 결투 체력에서 뺀다(상한 있음).
+//    토벌에 성공하거나 게임 날짜가 바뀌면 사라진다.
 // 리듀서 catch와 서버 fast path가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { fishDrawShares, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
@@ -11,6 +13,7 @@ import type { DrawOptions, FormId } from './logic.js';
 import { gameDayOf } from './time.js';
 import type { DayPhase } from './time.js';
 import type { SpotId } from '../content/spots.js';
+import { NAMED_DUEL_WOUND_CAP } from './balance.js';
 import type { BountyQuest } from '../content/bounties.js';
 
 /** 어종 천장 상수 — 기대 시행의 3배(운 나쁜 하위 5%를 자른다) */
@@ -68,8 +71,10 @@ export interface NamedPity {
   day: string;    // 게임 날짜 — 바뀌면 아래 값이 초기화된다
   misses: number; // 마지막 조우 뒤 후보가 있었던 캐치의 빗나감 수
   fails: number;  // 그날 결투 실패 수
+  /** 의뢰 id → 그날 실패한 결투에서 맞힌 히트 누적(NAMED_DUEL_WOUND_CAP까지). 다음 조우 체력에서 뺀다 */
+  wounds: Record<string, number>;
 }
-export const newNamedPity = (): NamedPity => ({ day: '', misses: 0, fails: 0 });
+export const newNamedPity = (): NamedPity => ({ day: '', misses: 0, fails: 0, wounds: {} });
 
 /** 그날 결투 실패 수에 따른 천장 — 실패마다 절반, 두 번까지 */
 export function namedPityCeiling(fails: number): number {
@@ -78,7 +83,7 @@ export function namedPityCeiling(fails: number): number {
 
 const onDay = (p: NamedPity, nowIso: string): NamedPity => {
   const day = gameDayOf(nowIso);
-  return p.day === day ? p : { day, misses: 0, fails: 0 };
+  return p.day === day ? p : { day, misses: 0, fails: 0, wounds: {} };
 };
 
 /** 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다) */
@@ -95,8 +100,20 @@ export function drawNamedEncounter(
     : { quest: null, pity: { ...cur, misses: cur.misses + 1 }, byCeiling: false };
 }
 
-/** 결투 실패 반영 — 그날 다음 조우의 천장이 줄어든다 */
-export function recordDuelFailure(p: NamedPity, nowIso: string): NamedPity {
+/** 결투 실패 반영 — 그날 다음 조우의 천장이 줄고, 그 결투에서 맞힌 히트가 그 네임드의 상처로 쌓인다 */
+export function recordDuelFailure(p: NamedPity, nowIso: string, questId: string, hits: number): NamedPity {
   const cur = onDay(p, nowIso);
-  return { ...cur, fails: cur.fails + 1 };
+  const wound = Math.min((cur.wounds[questId] ?? 0) + Math.max(0, hits), NAMED_DUEL_WOUND_CAP);
+  return { ...cur, fails: cur.fails + 1, wounds: { ...cur.wounds, [questId]: wound } };
+}
+
+/** 토벌 성공 반영 — 그 네임드의 상처를 지운다 */
+export function clearDuelWound(p: NamedPity, questId: string): NamedPity {
+  const { [questId]: _cleared, ...rest } = p.wounds;
+  return { ...p, wounds: rest };
+}
+
+/** 그 네임드에 그날 남은 상처. 게임 날짜가 바뀌었으면 0이다 */
+export function namedWoundOf(p: NamedPity, questId: string, nowIso: string): number {
+  return onDay(p, nowIso).wounds[questId] ?? 0;
 }

@@ -20,11 +20,12 @@ import {
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
-  challengeHpOf, ticketRemainingMs,
+  duelHpOf, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
 import { GAME_DAY_RESET_TEXT } from './time.js';
 import type { GameState } from './logic.js';
+import type { NamedPity } from './pity.js';
 
 /** 규칙이 거부하는 이유 — 인프라 실패(에러 처리의 FailureKind)와 다른 축이다.
     이쪽은 "게임 규칙의 정상적인 답", 저쪽은 "예외적 사고" */
@@ -168,12 +169,12 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
 }
 
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는
- *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 티켓은 성공·실패 모두 소모한다.
- *  오프라인 dev는 주입이 없어 닫힌다. */
+ *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 성공에 필요한 히트는 그날의 상처를 뺀 결투 체력이다.
+ *  티켓은 성공·실패 모두 소모한다. 오프라인 dev는 주입이 없어 닫힌다. */
 export function canResolveChallenge(
   questId: string,
   claimed: { success: boolean; hits: number; misses: number },
-  nowISO: string, ctx: BountyCtx | undefined,
+  nowISO: string, ctx: BountyCtx | undefined, pity: NamedPity,
 ): RuleCheck {
   const q = bountyById(questId);
   if (!q || q.difficulty !== 'named') return no('bad-request');
@@ -184,7 +185,7 @@ export function canResolveChallenge(
   // 이미 마친 토벌은 보상 수령만 남았다 — 결투를 다시 확정하지 않는다
   if (!ctx.active.includes(questId) || ctx.complete.includes(questId)) return no('bad-request');
   const { success, hits, misses } = claimed;
-  const need = challengeHpOf(questId);
+  const need = duelHpOf(questId, pity, nowISO);
   if (need === null) return no('bad-request');
   // 성공 = 네임드 체력만큼 히트·실패 한도 미만, 실패 = 실패 한도 도달 (체력은 네임드마다, 실패 한도는 공통)
   const coherent = success

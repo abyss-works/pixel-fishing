@@ -5,12 +5,20 @@ import { CHALLENGE_MISS_LIMIT } from './balance.js';
 import { GAME_DAY_RESET_TEXT, gameDayStartISO } from './time.js';
 import { bountyById } from '../content/bounties.js';
 import { namedById } from '../content/named.js';
+import { namedWoundOf } from './pity.js';
+import type { NamedPity } from './pity.js';
 
-/** 의뢰의 결투 체력(성공에 필요한 히트 수) — 네임드 데이터가 정본. 네임드 의뢰가 아니면 null */
+/** 의뢰의 네임드 체력 — 네임드 데이터가 정본. 네임드 의뢰가 아니면 null */
 export function challengeHpOf(questId: string): number | null {
   const quest = bountyById(questId);
   const named = quest?.targetFish ? namedById(quest.targetFish) : undefined;
   return named ? named.hp : null;
+}
+
+/** 이번 결투의 체력(성공에 필요한 히트 수) — 네임드 체력에서 그날의 상처를 뺀다. 네임드 의뢰가 아니면 null */
+export function duelHpOf(questId: string, pity: NamedPity, nowIso: string): number | null {
+  const hp = challengeHpOf(questId);
+  return hp === null ? null : hp - namedWoundOf(pity, questId, nowIso);
 }
 
 

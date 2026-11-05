@@ -14,7 +14,7 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, acce
   /** 흔적(도전권)이 남아 있으면 남은 분 — 도전은 바다에서 치르므로 여기서는 상태만 보인다 */
   ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
 }) {
-  const { name, poster, fish, found, done } = selectNamedBountyCardData(game, quest, progress);
+  const { name, poster, fish, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
   return (
     <div className="border border-gold rounded-sm p-4 bg-surface min-h-96 h-full flex flex-col">
       <div className="grid grid-cols-2 grid-rows-1 gap-2 items-stretch flex-1">
@@ -33,10 +33,11 @@ export default function NamedCard({ game, quest, canAccept, busy, progress, acce
               {poster}
             </span>
           </span>
+          <span className="text-text-dim text-xs">나타나는 곳: {haunt}</span>
           <div className="border-b border-line" />
       <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
       {accepted && !done && ticketMins === null && (
-        <span className="text-accent text-xs">진행 중이에요. 이 구역에서 낚시하면 아주 드물게 마주쳐요. 정해진 해역에서만 나타나는 네임드도 있어요.</span>
+        <span className="text-accent text-xs">진행 중이에요. {haunt}에서 낚시하면 아주 드물게 마주쳐요.</span>
       )}
       {!done && ticketMins !== null && (
         <span className="text-accent text-xs">흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요. 남은 시간 {fmtMinutes(ticketMins)}</span>
