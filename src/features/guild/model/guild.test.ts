@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_BONUS_NAME, GUILD_CONTRIBUTION_HELP, dailyContributionRows, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
+  GUILD_BONUS_NAME, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
   growthTotalText, inviteLeftText, leaveConfirm, leaveOutcome, logbookDays, memberActions, memberConfirm, memberName, memberRows,
   splitMembers,
 } from './guild';
@@ -97,7 +97,9 @@ describe('길드 성장 화면 모델', () => {
   });
 
   it('기여 안내는 명성 하루 상한을 담는다', () => {
-    expect(GUILD_CONTRIBUTION_HELP).toContain('하루 1,000까지');
+    // 하루 상한은 오늘 기여 도움말이 맡으므로 레벨 도움말에는 넣지 않는다
+    expect(GUILD_LEVEL_HELP).toContain('길드 스킬');
+    expect(GUILD_LEVEL_HELP).not.toMatch(/1,000|500/);
   });
 
 });

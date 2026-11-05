@@ -102,7 +102,7 @@ describe('GuildModal', () => {
     expect(within(mine).getByText('100,000')).toBeTruthy();
   });
 
-  it('창 제목은 길드 정보이고, 고정 정보 줄(길드 이름, 레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 기여 방식은 진행 막대의 툴팁이다', () => {
+  it('창 제목은 길드 정보이고, 고정 정보 줄(길드 이름, 레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 레벨이 오르는 조건은 진행 막대의 툴팁이다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('길드 정보')).toBeTruthy();
@@ -114,7 +114,7 @@ describe('GuildModal', () => {
     };
     stays();
     fireEvent.mouseEnter(screen.getByRole('meter', { name: '다음 레벨까지 진행' }).parentElement as HTMLElement);
-    expect(screen.getByRole('tooltip').textContent).toContain('하루 1,000까지');
+    expect(screen.getByRole('tooltip').textContent).toContain('길드 레벨이 올라요');
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     stays();
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));

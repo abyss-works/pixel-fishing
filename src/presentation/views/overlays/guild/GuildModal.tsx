@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
-import { GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
+import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
@@ -105,14 +105,14 @@ function GuildView({ ask, onGoldChanged, ...part }: GuildPartProps & { ask: Guil
   );
 }
 
-/** 고정 정보 줄: 길드 이름, 길드 레벨, 다음 레벨까지 진행 막대와 누적 기여, 인원. 기여가 쌓이는 방식은 막대의 툴팁이다 */
+/** 고정 정보 줄: 길드 이름, 길드 레벨, 다음 레벨까지 진행 막대와 누적 기여, 인원. 레벨이 오르는 조건은 막대의 툴팁이다 */
 function GuildStatus({ guild }: { guild: GuildInfo }) {
   const bar = growthBar(guild.growth);
   return (
     <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-10 px-3 shrink-0">
       <b className="max-w-40 truncate pr-3 border-r border-line text-text">{guild.name}</b>
       <span className="pf-accent text-base text-gold">Lv.{guild.growth.level}</span>
-      <Tip plain text={GUILD_CONTRIBUTION_HELP} className="block">
+      <Tip plain text={GUILD_LEVEL_HELP} className="block">
         <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
               aria-label="다음 레벨까지 진행" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
           <span className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
