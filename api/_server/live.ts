@@ -127,12 +127,13 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           const msg = parseClientMessage(data.toString());
           if (msg?.t === 'move') {
             const { region, x, y, dir, line } = msg;
+            const zone = msg.zone ?? null;
             if (!conn.presence) {
-              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, x, y, dir, line };
+              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line };
               broadcast(ws, { t: 'join', presence: conn.presence });
             } else {
-              Object.assign(conn.presence, { region, x, y, dir, line });
-              broadcast(ws, { t: 'move', uid: user.uid, region, x, y, dir, line });
+              Object.assign(conn.presence, { region, zone, x, y, dir, line });
+              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line });
             }
           } else if (msg?.t === 'stop' && conn.presence) {
             broadcast(ws, { t: 'stop', uid: user.uid });

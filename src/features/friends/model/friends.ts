@@ -1,4 +1,6 @@
 import type { FriendItem } from '../../../platform/api';
+import { zoneById } from '../../../game/content/zones';
+import type { ZoneId } from '../../../game/content/zones';
 
 export type { FriendItem };
 
@@ -30,7 +32,11 @@ export function friendRelation(groups: FriendGroups, uid: string): FriendItem['s
 
 /** 친구의 지금 상태 한 줄 — 접속 중이면 있는 곳, 아니면 마지막 행동이 얼마나 지났는지 */
 export function friendStatusText(f: FriendItem, nowMs: number): string {
-  if (f.online) return f.region === 'village' ? '접속 중 · 마을' : '접속 중 · 바다';
+  if (f.online) {
+    if (f.region === 'village') return '접속 중 · 마을';
+    const zone = f.zone ? zoneById(f.zone as ZoneId)?.name : undefined;
+    return `접속 중 · ${zone ?? '바다'}`;
+  }
   if (!f.lastActiveAt) return '아직 기록이 없어요';
   const mins = Math.max(0, Math.floor((nowMs - Date.parse(f.lastActiveAt)) / 60_000));
   if (mins < 1) return '방금 전';

@@ -58,6 +58,8 @@ export interface MailItem {
 export interface FriendItem {
   uid: string; nick: string | null; state: 'friend' | 'incoming' | 'outgoing';
   lastActiveAt: string | null; online: boolean; region: string | null;
+  /** 지금 있는 해역(접속 중이고 바다에 있을 때) */
+  zone: string | null;
 }
 export type FriendOp = { op: 'request'; nickname: string } | { op: 'accept' | 'remove'; uid: string };
 /** 친구 요청 결과 — 실패는 서버 오류 코드(not-found, self, account-only 등) */

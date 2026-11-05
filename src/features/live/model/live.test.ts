@@ -13,7 +13,7 @@ describe('applyLiveMessage', () => {
     expect(applyLiveMessage(s, { t: 'join', presence: p('me', '나') }, 1)).toBe(s);
     s = applyLiveMessage(s, { t: 'join', presence: p('b', '나') }, 1);
     s = applyLiveMessage(s, { t: 'move', uid: 'b', region: 'deep', x: 5, y: 6, dir: 1, line: true }, 2);
-    expect(s.others.b).toEqual({ presence: { ...p('b', '나', 'deep'), x: 5, y: 6, dir: 1, line: true }, moving: true, lastAt: 2 });
+    expect(s.others.b).toEqual({ presence: { ...p('b', '나', 'deep'), zone: null, x: 5, y: 6, dir: 1, line: true }, moving: true, lastAt: 2 });
     s = applyLiveMessage(s, { t: 'stop', uid: 'b' }, 3);
     expect(s.others.b.moving).toBe(false);
     expect(applyLiveMessage(s, { t: 'move', uid: 'zz', region: 'sea', x: 0, y: 0, dir: 0, line: false }, 4)).toBe(s);
@@ -38,11 +38,11 @@ describe('applyLiveMessage', () => {
 });
 
 describe('nextPositionMessage', () => {
-  const at = (x: number, y: number, line = false) => ({ region: 'sea', x, y, line });
+  const at = (x: number, y: number, line = false) => ({ region: 'sea', zone: null, x, y, line });
 
   it('처음과 바뀐 위치는 move, 그대로면 stop 한 번, 그 뒤로는 보내지 않는다', () => {
     let r = nextPositionMessage(null, at(0, 0));
-    expect(r.msg).toEqual({ t: 'move', region: 'sea', x: 0, y: 0, dir: 2, line: false });
+    expect(r.msg).toEqual({ t: 'move', region: 'sea', zone: null, x: 0, y: 0, dir: 2, line: false });
     r = nextPositionMessage(r.sent, at(3, 0));
     expect(r.msg).toMatchObject({ t: 'move', x: 3, dir: 1 });
     r = nextPositionMessage(r.sent, at(3, 0));
