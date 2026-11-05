@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, kstDay } from '../../../platform/api';
 import { identifyUser } from '../../../platform/observability';
-import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import type { MaybePromise } from '../../../platform/api';
 import { setSessionUid, useSession } from './session';
 import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
@@ -13,15 +11,12 @@ import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudg
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
-export function useAccount({ game, setGame, setToast, load, claimSession }: {
+export function useAccount({ game, setToast, adoptAccount }: {
   game: GameState;
-  setGame: (g: GameState) => void;
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
   setToast: (message: string, tone?: 'info' | 'gold' | 'warn') => void;
-  /** useGame의 gateway.load — 계정 교체 시 그 계정의 서버 상태를 읽는다 */
-  load: () => MaybePromise<GameState | null>;
-  /** useGame의 접속 기록 — 계정 교체 뒤 이 창을 그 계정의 활성 창으로 등록한다 */
-  claimSession: () => void;
+  /** useGame의 계정 교체 — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다 */
+  adoptAccount: () => Promise<void>;
 }) {
   // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
@@ -45,16 +40,14 @@ export function useAccount({ game, setGame, setToast, load, claimSession }: {
   // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
   // 서버는 접속(boot)한 창을 계정의 활성 창으로 삼으므로, 교체한 계정에도 접속을 보내야 이 창의 액션이 거부되지 않는다.
   // 승격(가입)은 uid 불변이라 스킵 — 갓 승격한 게스트는 서버가 아직 비어 있을 수 있어서
-  // load()를 타면 로컬 진행이 newState로 덮인다 (v0.4.0 구조 원칙: 가입 = 승격이지 이전이 아니다).
+  // 상태를 다시 읽으면 로컬 진행이 새 상태로 덮인다 (v0.4.0 구조 원칙: 가입 = 승격이지 이전이 아니다).
   const onAuthChanged = async () => {
     setAccount(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();
     setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
-      const cloud = await load();
-      setGame(cloud ?? newState());
-      claimSession();
+      await adoptAccount();
       setToast('계정의 클라우드 세이브를 불러왔어요.');
     }
   };

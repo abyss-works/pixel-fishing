@@ -4,6 +4,7 @@ import { api, when } from '../../../platform/api';
 import type { GameGateway, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
+import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import type { BlockingModal } from '../../../core/errors';
@@ -11,6 +12,7 @@ import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
 import { setSchoolDay } from './schoolDay';
+import { alertUpdate } from './updateAlert';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -35,6 +37,9 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [game, setGame] = useState<GameState>(init.game);
   const [nickname, setNickname] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
+  // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
+  // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
+  const [loading, setLoading] = useState(api.auth.isConfigured);
   // 진행을 막는 모달 — 낡은 탭(서버 426)이나 다른 창의 접속(서버 423). 값이 있으면 GameView가 그 모달로 전체를 덮는다
   const [blocker, setBlocker] = useState<BlockingModal | null>(null);
   const gameRef = useRef(game);
@@ -53,7 +58,11 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   useEffect(() => subscribeFailure((err: AppError) => {
     const policy = POLICY[err.kind];
     const modal = policy.modal;
-    if (modal) setBlocker(current => current ?? modal);
+    if (modal) {
+      setBlocker(current => current ?? modal);
+      // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
+      if (modal === 'update') alertUpdate();
+    }
     if (!policy.rescue) return;
     setSync(api.auth.isConfigured ? 'error' : 'off');
     if (alertedRef.current) return;
@@ -101,9 +110,11 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     });
 
   // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
-  // 세션 시작과 계정 교체마다 보낸다. 텔레메트리이므로 **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가
-  // 없고, fail()을 거치면 rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
-  const boot = () => { void Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).catch(() => { /* 무음 */ }); };
+  // 세션 시작과 계정 교체마다 보내고, 응답이 올 때까지 플레이를 열지 않는다.
+  // **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가 없고, fail()을 거치면
+  // rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  const boot = (): Promise<void> =>
+    Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).then(() => {}, () => { /* 무음 */ });
 
   // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
@@ -111,7 +122,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     if (!api.auth.isConfigured) {
       void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
       // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      boot();
+      void boot();
       return;
     }
     (async () => {
@@ -135,15 +146,16 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         }
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
-      boot();
+      await boot();
       setNickname(nick);
       setSync('on');
-    })().catch(fail); // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+    })().catch(fail) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+      .finally(() => setLoading(false));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
   return {
-    game, setGame, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker,
+    game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
@@ -153,13 +165,21 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       }
       return r.error;
     },
-    /** 계정 교체(useAccount) 시 그 계정의 상태를 다시 읽는 용도 */
-    load: () => when(gameGatewayRef.current.load(), s => {
-      void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
-      return s;
-    }),
-    /** 접속 기록 — 이 창을 현재 계정의 활성 창으로 등록한다. 계정 교체(useAccount) 뒤에 부른다 */
-    claimSession: boot,
+    /**
+     * 계정 교체(useAccount) — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다.
+     * 끝날 때까지 불러오는 중이다. 상태 읽기 실패는 호출자에게 던진다.
+     */
+    adoptAccount: async (): Promise<void> => {
+      setLoading(true);
+      try {
+        const [cloud, nick] = await Promise.all([gameGatewayRef.current.load(), gameGatewayRef.current.getNickname()]);
+        setGame(cloud ?? newState());
+        setNickname(nick);
+        await boot();
+      } finally {
+        setLoading(false);
+      }
+    },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),
   };
