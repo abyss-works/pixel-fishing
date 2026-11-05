@@ -24,8 +24,9 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
-/** 길드가 있을 때의 창 높이: 스테이지 높이에서 위아래 16px을 뺀다. 좁은 화면에서는 내용 높이를 따른다 */
-const FIXED_HEIGHT = 'h-[calc(100%-32px)] max-[640px]:h-auto';
+/** 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
+    좁은 화면에서는 내용 높이를 따른다 */
+const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
 
 export default function GuildModal({ setToast, onGoldChanged, onClose }: {
   setToast: Notify;
