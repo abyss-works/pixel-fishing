@@ -53,6 +53,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/friends/:uid': friends,
   ...guilds,
   '/api/me': me,
+  '/api/players': players,
   '/api/players/:uid': players,
   '/api/rank': rank,
   '/api/cron/archive': archive,
