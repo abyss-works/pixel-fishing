@@ -82,8 +82,9 @@ export function drawFishingGear(ctx: Ctx, v: GearView) {
 // 타이밍 바 — 중앙 노란 존 = GOOD, 그 안의 빨간 존 = PERFECT (R6b + 파워 게이트 보너스)
 export function drawTimingBar(ctx: Ctx, v: GearView) {
   if (v.phase !== 'bite' || v.biteT === null) return;
+  // 머리 위는 닉네임과 말풍선 자리라, 게이지는 배(또는 캐릭터) 아래에 그린다
   const bw = 44, bh = 5;
-  const bx = v.player.x - bw / 2, by = v.player.y - 30;
+  const bx = v.player.x - bw / 2, by = v.player.y + 12;
   R(ctx, bx - 1, by - 1, bw + 2, bh + 2, UI.shadow);
   R(ctx, bx, by, bw, bh, '#26364f');
   if (v.zone > 0.02) {
