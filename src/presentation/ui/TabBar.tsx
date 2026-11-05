@@ -5,6 +5,8 @@ export interface TabDef<K extends string> {
   key: K;
   label: string; // \n 포함 시 두 줄 라벨 (pf-tabbar가 pre-line 처리)
   icon?: ReactNode;
+  /** 라벨 옆에 붙이는 처리할 일의 수. 0이거나 없으면 붙이지 않는다 */
+  count?: number;
 }
 
 interface TabBarProps<K extends string> {
@@ -23,6 +25,7 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
         <button key={t.key} type="button" className={activeKey === t.key ? 'active' : ''} onClick={() => onSelect(t.key)}>
           {t.icon}
           <span>{t.label}</span>
+          {t.count ? <span className="pf-accent ml-1 px-1 text-2xs leading-4 bg-gold text-bg" aria-label={`${t.count}건`}>{t.count}</span> : null}
         </button>
       ))}
     </div>

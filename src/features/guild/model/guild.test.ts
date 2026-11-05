@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { GuildBonusItem, GuildInfo, GuildMemberItem } from '../../../platform/api';
+import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_BONUS_NAME, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
-  growthTotalText, inviteLeftText, leaveConfirm, leaveOutcome, logbookDays, memberActions, memberConfirm, memberName, memberRows,
-  splitMembers,
+  GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
+  bonusRows, growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
-  ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, invite: null,
+  ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
+    requests: [],
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -31,15 +32,28 @@ describe('길드 화면 모델', () => {
     expect(leaveOutcome(guild('leader', [members[0]]), 'L')).toBe('dissolve');
   });
 
-  it('초대 코드가 남은 시간을 시간·분으로 알린다', () => {
-    const now = Date.parse('2026-11-05T00:00:00.000Z');
-    expect(inviteLeftText('2026-11-06T00:00:00.000Z', now)).toBe('24시간 남음');
-    expect(inviteLeftText('2026-11-05T00:30:00.000Z', now)).toBe('30분 남음');
-    expect(inviteLeftText('2026-11-04T00:00:00.000Z', now)).toBe('만료됨');
+  it('가입 방식은 이름과 한 줄 설명을 갖는다', () => {
+    expect(GUILD_JOIN_MODE_TEXT.open).toEqual({ name: '자유 가입', desc: '링크나 코드로 바로 들어와요.' });
+    expect(GUILD_JOIN_MODE_TEXT.approval).toEqual({ name: '승인 가입', desc: '신청을 받고 길드장이 승인해요.' });
+    expect(GUILD_JOIN_MODE_TEXT.closed).toEqual({ name: '닫힘', desc: '새 길드원을 받지 않아요.' });
   });
 
-  it('초대 코드 규칙은 24시간 유효 기간과 새 코드를 받으면 이전 코드가 무효가 된다는 것이다', () => {
-    expect(GUILD_INVITE_RULE).toBe('24시간 동안 여러 사람이 쓸 수 있어요. 새 코드를 받으면 이전 코드는 더 쓸 수 없어요.');
+  it('초대 링크는 서비스 주소에 /g/코드를 붙이고, 복사 문구는 권유 문구(비었으면 기본 문구) 다음 줄에 링크를 둔다', () => {
+    const url = guildLinkUrl('https://pf.dev', 'K7QX2MAB');
+    expect(url).toBe('https://pf.dev/g/K7QX2MAB');
+    expect(inviteShareText(null, url)).toBe('나랑 같이 낚시하자!\nhttps://pf.dev/g/K7QX2MAB');
+    expect(inviteShareText('같이 가요', url)).toBe('같이 가요\nhttps://pf.dev/g/K7QX2MAB');
+  });
+
+  it('가입 신청 줄은 이름, 신청 시각, 남은 날 수를 싣는다', () => {
+    expect(requestRows([{ uid: 'a', nick: null, requestedAt: '2026-11-05T00:00:00.000Z' }], '2026-11-06T12:00:00.000Z'))
+      .toEqual([{ uid: 'a', name: '이름 없음', when: '11월 5일 09:00', daysLeft: 6 }]);
+  });
+
+  it('길드 알림 문장', () => {
+    expect(guildAlertText({ t: 'guild', kind: 'request', guild: '심해', nick: '가람' })).toBe('가람 님이 심해 길드에 가입을 신청했어요.');
+    expect(guildAlertText({ t: 'guild', kind: 'approved', guild: '심해', nick: null })).toBe('심해 길드 가입이 승인됐어요.');
+    expect(guildAlertText({ t: 'guild', kind: 'rejected', guild: '심해', nick: null })).toBe('심해 길드 가입 신청이 거절됐어요.');
   });
 
   it('이름이 없는 길드원은 이름 없음으로 부른다', () => {
@@ -64,7 +78,7 @@ describe('길드 화면 모델', () => {
   it('떠나기 확인 창 — 길드원은 떠나기, 혼자 남은 길드장은 해산, 다른 길드원이 있는 길드장은 창이 없다', () => {
     expect(leaveConfirm(guild('member', members), 'A')).toEqual({
       title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: 'g', uid: 'A' },
-      text: '심해 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.',
+      text: '심해 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.',
       done: '심해 길드를 떠났어요.',
     });
     expect(leaveConfirm(guild('leader', [members[0]]), 'L')).toEqual({
@@ -209,4 +223,36 @@ describe('길드 보너스 화면 모델', () => {
     expect(named.nodes.every(n => n.state === 'capped')).toBe(true);
   });
 
+});
+
+describe('초대 확인 창', () => {
+  const preview = (over: Partial<GuildInvitePreview> = {}): GuildInvitePreview =>
+    ({ code: 'K7QX2MAB', name: '새벽선단', level: 3, members: 6, cap: 10, joinMode: 'open', ...over });
+  const viewer = { account: true, guild: null as string | null };
+
+  it('없는 코드는 찾지 못했다고 알리고 확인만 둔다', () => {
+    expect(inviteDialogView(null, viewer)).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null });
+  });
+
+  it('게스트는 계정이 있어야 한다고 알린다', () => {
+    expect(inviteDialogView(preview(), { account: false, guild: null })).toMatchObject({ state: 'guest', action: null,
+      text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.' });
+  });
+
+  it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {
+    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' })).toMatchObject({ state: 'member', action: null,
+      text: '이미 다른 길드(심해조합)에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.' });
+    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' })).toMatchObject({ state: 'member', action: null,
+      text: '이미 새벽선단 길드에 있어요.' });
+  });
+
+  it('가입 방식과 인원에 따라 들어가기, 가입 신청, 받지 않음이다', () => {
+    expect(inviteDialogView(preview(), viewer)).toEqual({ state: 'open', action: { label: '들어가기' },
+      text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer)).toEqual({ state: 'approval', action: { label: '가입 신청' },
+      text: '길드장이 승인하면 들어가요. 신청은 7일 동안 남아요.' });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer)).toEqual({ state: 'closed', action: null,
+      text: '이 길드는 지금 새 길드원을 받지 않아요.' });
+    expect(inviteDialogView(preview({ members: 10 }), viewer)).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+  });
 });
