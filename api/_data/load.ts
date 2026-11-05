@@ -2,7 +2,8 @@
 // 행은 Postgres JSON 직렬화로 받는다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, bigint는 수다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { guildTotal } from './guilds.js';
+import { guildRanksJson } from './guilds.js';
+import type { GuildBonusId } from '../../src/game/rules/guild.js';
 import { at, textArray } from './json.js';
 
 export type StateRow = {
@@ -29,8 +30,8 @@ export interface ActionContext {
   records: RecordRow[] | null;
   /** 수배 행 — 읽지 않았으면 null */
   bounty: BountyRows | null;
-  /** 지금 속한 길드와 그 길드의 누적 기여도. 길드가 없거나 읽지 않았으면 null */
-  guild: { id: string; total: number } | null;
+  /** 지금 속한 길드와 그 길드의 보너스별 단계. 길드가 없거나 읽지 않았으면 null */
+  guild: { id: string; ranks: Partial<Record<GuildBonusId, number>> } | null;
 }
 
 const INSTANCE_COLS = sql`uid, fish_id, form, size, caught_at, spot, judgment, slot, locked`;
@@ -49,7 +50,7 @@ export const stateJson = (uid: string) =>
 /**
  * 프로필·저장 상태와, 필요하면 개체·도감·수배 행을 한 번에 읽는다.
  * skipDetailType: 개체·도감 없이 처리할 수 있는 액션인가. 저장 상태가 없거나 다음 버전이 스냅샷 경계면 그래도 읽는다.
- * guild: 소속 길드와 누적 기여도(길드 보너스·기여 기록)가 필요한 액션인가.
+ * guild: 소속 길드와 보너스 단계(길드 보너스 효과·기여 기록)가 필요한 액션인가.
  */
 export async function loadContext(db: Executor, uid: string, opts: {
   skipDetailType: boolean; snapshotEvery: number; bountyDayStart: string | null; guild?: boolean;
@@ -72,7 +73,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
       from public.bounty_progress where user_id = ${uid}) p) end as progress,
     case when ${day !== null} then (select coalesce(json_agg(t), '[]') from (select quest_id, issued_at
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets,
-    case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'total', ${guildTotal(sql`m.guild_id`)})
+    case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'ranks', ${guildRanksJson(sql`m.guild_id`)})
       from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild`);
   const r = rows[0];
   return {
@@ -81,7 +82,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
     instances: r.instances,
     records: r.records,
     bounty: day !== null ? { clears: r.clears ?? [], progress: r.progress ?? [], tickets: r.tickets ?? [] } : null,
-    guild: r.guild ? { id: r.guild.id, total: Number(r.guild.total) } : null,
+    guild: r.guild,
   };
 }
 
