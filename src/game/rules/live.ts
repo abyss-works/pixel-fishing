@@ -23,6 +23,7 @@ export type ServerMessage =
   | { t: 'leave'; uid: string }
   | { t: 'chat'; line: ChatLine; room?: 'guild' } // 길드 채팅은 그 길드의 접속한 길드원에게만 간다
   | { t: 'typing'; uid: string; on: boolean }
+  | { t: 'friend'; kind: 'request' | 'accepted'; uid: string; nick: string | null } // 받은 친구 요청·내 요청의 수락. 그 사람에게만 간다
   | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */
