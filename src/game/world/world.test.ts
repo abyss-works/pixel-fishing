@@ -2,7 +2,8 @@
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
-import { ZONES, zoneById, zoneOfSpot } from '../content/zones';
+import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
+import { zoneOfPort } from '../content/bounties';
 import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
@@ -467,6 +468,24 @@ describe.each(Object.values(REGION_PACKS))('$id 지역 이동 게이트: 재발�
         expect(zoneOf(pack, base.exitAt.x, base.exitAt.y), `${base.id} 출항 지점의 구역`)
           .toBe(zoneOf(pack, center.x, center.y));
       }
+    }
+  });
+
+  it('접안 트리거의 물칸은 그 항구가 있는 바다에 속한다 — 접안은 바다의 경계 게이트를 지난 뒤다', () => {
+    // 리듀서는 항구 이동을 그 바다의 진입 배 단계로 재검증한다. 접안 자리가 게이트 밖이면 정상 접안이 거부된다
+    for (const trig of pack.triggers) {
+      if (trig.action !== 'base' || !trig.base) continue;
+      const port = zoneOfPort(trig.base);
+      let water = 0;
+      for (let x = trig.rect.x; x < trig.rect.x + trig.rect.w; x++) {
+        for (let y = trig.rect.y; y < trig.rect.y + trig.rect.h; y++) {
+          if (!canMove(pack, x, y)) continue;
+          water++;
+          const z = zoneOf(pack, x, y);
+          expect(z && topZoneOf(z), `${trig.base} 접안 (${x},${y})`).toBe(port);
+        }
+      }
+      expect(water, `${trig.base} 접안 물칸`).toBeGreaterThan(0);
     }
   });
 

@@ -764,3 +764,22 @@ describe('캐치 간격과 활성 창', () => {
     expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
   });
 });
+
+describe('항구 빠른 이동', () => {
+  const locationOf = async (uid: string) =>
+    (await env.client.query("select data -> 'location' as v from public.saves_current where user_id = $1", [uid])).rows[0].v as unknown;
+
+  it('배가 그 바다의 진입 단계에 못 미치면 422로 거부하고 위치를 그대로 둔다', async () => {
+    const uid = await seed({ state: { boat: 2, location: at('harbor') } });
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'manila' } }))
+      .toMatchObject({ status: 422, body: { error: 'zone-locked' } });
+    expect(await locationOf(uid)).toEqual({ kind: 'base', id: 'harbor' });
+  });
+
+  it('배가 진입 단계 이상이면 그 항구로 옮긴다', async () => {
+    const uid = await seed({ state: { boat: 3, location: at('harbor') } });
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'manila' } }))
+      .toMatchObject({ status: 200 });
+    expect(await locationOf(uid)).toEqual({ kind: 'base', id: 'manila' });
+  });
+});

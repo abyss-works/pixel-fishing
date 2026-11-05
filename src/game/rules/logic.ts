@@ -1039,9 +1039,10 @@ export function sellAll(state: GameState): GameState {
 }
 
 // 장소 이동 — 위치를 기록하고, 지역이면 방문 목록에 넣는다.
-// **게이트를 여기서 검증하지 않는다.** 낚시는 `canFish`가 서버에서 배 단계를 재검증하므로
-// 클라가 못 갈 지역을 주장해도 얻는 게 없다. 이 액션의 목적은 보안이 아니라
-// **새로고침 후 재개 위치**와 **방문 기록**이다.
+// **지역 게이트는 검증하지 않는다.** 낚시는 `canFish`가 서버에서 배 단계를 재검증하므로
+// 클라가 못 갈 지역을 주장해도 얻는 게 없다. 이 액션의 목적은 **새로고침 후 재개 위치**와
+// **방문 기록**이다. 항구는 여객선 빠른 이동으로 바다를 건너뛰어 닿으므로 리듀서가
+// `canEnterBase`로 그 바다의 진입 배 단계를 재검증한다.
 export function travel(state: GameState, to: LocationRef): GameState {
   const visited = to.kind === 'region' && !state.visited.includes(to.id)
     ? [...state.visited, to.id]
