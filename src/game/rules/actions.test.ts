@@ -218,6 +218,21 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.state.visited).toEqual([]);
   });
 
+  it('travel — 배가 그 바다의 진입 단계에 못 미치는 항구로는 옮기지 않는다', () => {
+    expect(applyAction(seed({ boat: 2 }), { type: 'travel', to: { kind: 'base', id: 'manila' } }, deps()))
+      .toEqual({ ok: false, error: 'zone-locked' });
+    const ok = applyAction(seed({ boat: 3 }), { type: 'travel', to: { kind: 'base', id: 'manila' } }, deps());
+    if (!ok.ok) throw new Error(ok.error);
+    expect(ok.state.location).toEqual({ kind: 'base', id: 'manila' });
+  });
+
+  it('travel — 집·게이트 없는 항구·지역은 배 없이도 옮긴다', () => {
+    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'base', id: 'harbor' },
+      { kind: 'region', id: 'village' }, { kind: 'region', id: 'world' }] as const) {
+      expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()).ok, `${to.kind}:${to.id}`).toBe(true);
+    }
+  });
+
   it('travel — 형태가 깨진 목적지는 거부', () => {
     expect(applyAction(seed(), { type: 'travel', to: { kind: 'nowhere', id: 'x' } } as never, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
