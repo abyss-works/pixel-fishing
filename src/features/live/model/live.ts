@@ -54,9 +54,9 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
     case 'move': {
       const prev = state.others[msg.uid];
       if (!prev) return state;
-      const { region, x, y, dir, line } = msg;
+      const { region, zone, x, y, dir, line } = msg;
       return { ...state, others: { ...state.others,
-        [msg.uid]: { presence: { ...prev.presence, region, x, y, dir, line }, moving: true, lastAt: now } } };
+        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line }, moving: true, lastAt: now } } };
     }
     case 'stop': {
       const prev = state.others[msg.uid];
@@ -92,9 +92,9 @@ export function othersInRegion(state: LiveState, region: string): OtherPlayer[] 
 }
 
 /** 마지막으로 보낸 내 위치 */
-export interface SentPosition { region: string; x: number; y: number; line: boolean; stopped: boolean }
+export interface SentPosition { region: string; zone: string | null; x: number; y: number; line: boolean; stopped: boolean }
 
-export interface MyPosition { region: string; x: number; y: number; line: boolean }
+export interface MyPosition { region: string; zone: string | null; x: number; y: number; line: boolean }
 
 const dirOf = (dx: number, dy: number): Dir =>
   Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 1 : 3) : (dy >= 0 ? 2 : 0);
@@ -105,7 +105,7 @@ const dirOf = (dx: number, dy: number): Dir =>
  * @returns 보낼 메시지와 그 뒤의 '마지막으로 보낸 위치'. 보낼 것이 없으면 메시지는 null이다
  */
 export function nextPositionMessage(last: SentPosition | null, cur: MyPosition): { msg: ClientMessage | null; sent: SentPosition | null } {
-  const changed = !last || last.region !== cur.region || last.x !== cur.x || last.y !== cur.y || last.line !== cur.line;
+  const changed = !last || last.region !== cur.region || last.zone !== cur.zone || last.x !== cur.x || last.y !== cur.y || last.line !== cur.line;
   if (changed) {
     const dir = last ? dirOf(cur.x - last.x, cur.y - last.y) : 2;
     return { msg: { t: 'move', ...cur, dir }, sent: { ...cur, stopped: false } };

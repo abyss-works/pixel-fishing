@@ -6,18 +6,18 @@
 export type Dir = 0 | 1 | 2 | 3;
 
 export type ClientMessage =
-  | { t: 'move'; region: string; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 바다, line: 낚싯줄을 드리운 상태
+  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태
   | { t: 'stop' }
   | { t: 'chat'; text: string }
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; x: number; y: number; dir: Dir; line: boolean }
+export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean }
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[] }
-  | { t: 'move'; uid: string; region: string; x: number; y: number; dir: Dir; line: boolean }
+  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
@@ -57,7 +57,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   switch (o.t) {
     case 'move':
       if (!isRegion(o.region) || !isCoord(o.x) || !isCoord(o.y) || !isDir(o.dir) || typeof o.line !== 'boolean') return null;
-      return { t: 'move', region: o.region, x: o.x, y: o.y, dir: o.dir, line: o.line };
+      if (o.zone !== undefined && o.zone !== null && !isRegion(o.zone)) return null;
+      return { t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
     case 'chat': return typeof o.text === 'string' ? { t: 'chat', text: o.text } : null;

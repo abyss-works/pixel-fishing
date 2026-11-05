@@ -17,6 +17,7 @@ import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
 import { GameFieldEngine } from '../../../game/runtime/fieldEngine';
+import { getSpotState } from '../../../game/world/currentSpot';
 import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
 import GameFrame from './GameFrame';
 import NightOverlay from '../../ui/hud/NightOverlay';
@@ -101,7 +102,7 @@ export default function Field({
   // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어를 엔진이 프레임마다 그린다
   const readPosition = useCallback(() => {
     const pos = engine.getPosition();
-    return { region, x: Math.round(pos.x), y: Math.round(pos.y), line: engine.getSnapshot().phase !== 'idle' };
+    return { region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y), line: engine.getSnapshot().phase !== 'idle' };
   }, [engine, region]);
   useLivePosition(readPosition);
   useEffect(() => {

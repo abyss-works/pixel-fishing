@@ -110,9 +110,9 @@ describe('실시간 채널 서버', () => {
     await a.next(); await b.next();
     a.ws.send('{"t":"move","x":"bad"}');
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 3, y: 4, dir: 1, line: false }));
-    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', x: 3, y: 4, dir: 1, line: false } });
+    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 5, y: 4, dir: 1, line: true }));
-    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', x: 5, y: 4, dir: 1, line: true });
+    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 5, y: 4, dir: 1, line: true });
     a.ws.send('{"t":"stop"}');
     expect(await b.next()).toEqual({ t: 'stop', uid: 'u1' });
     expect(a.messages).toEqual([]);
@@ -129,7 +129,7 @@ describe('실시간 채널 서버', () => {
     expect(live.presenceOf('u3')).toBeNull();
     const b = connect(url, 'u2');
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [],
-      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', x: 1, y: 2, dir: 0, line: false }] });
+      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
     a.ws.close();
     expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
   });
