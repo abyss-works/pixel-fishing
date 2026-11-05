@@ -17,11 +17,12 @@ import RankList from '../../../ui/RankList';
 import Subheading from '../../../ui/Subheading';
 import TextInput from '../../../ui/TextInput';
 
-// 길드 보너스 탭 — 스킬 트리. 보너스 다섯이 가로로 놓이고, 각 보너스의 단계 1~5가 위에서 아래로 뻗는다.
+// 길드 보너스 탭 — 왼쪽은 스킬 트리, 오른쪽 좁은 열은 고른 보너스의 상세와 그 아래 기부 순위다.
+// 보너스 다섯이 가로로 놓이고, 각 보너스의 단계 1~5가 위에서 아래로 뻗는다.
 // 이룬 단계는 금색으로 빛나고 그 사이 연결선도 금색이다. 다음 단계 노드는 모인 골드 비율만큼 위에서 아래로 찬다.
-// 상한(길드 레벨) 위 노드와 열리지 않은 보너스는 흐리게 그린다. 보너스 머리나 노드를 고르면 아래 상세에서 기부한다.
-// 맨 아래는 보너스를 합친 사람별 전체 기부 순위다. 값은 서버 응답을 그대로 보이고, 기부 뒤에는 길드 정보와
-// 게임 상태(골드)를 다시 읽는다.
+// 상한(길드 레벨) 위 노드와 열리지 않은 보너스는 흐리게 그린다. 보너스 머리나 노드를 고르면 옆 상세에서 기부한다.
+// 기부 순위는 보너스를 합친 사람별 전체 기부액이고, 길어지면 그 칸 안에서만 굴린다. 값은 서버 응답을 그대로 보이고,
+// 기부 뒤에는 길드 정보와 게임 상태(골드)를 다시 읽는다.
 type Run = (op: GuildOp) => Promise<string | null>;
 
 /** 열 머리의 짧은 이름과 아이콘 — 다섯 열이 한 줄에 들어가도록 줄인다 */
@@ -44,21 +45,30 @@ export default function GuildBonusPanel({ guild, me, busy, run, setToast, onGold
   const mine = ranking.find(r => r.me);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-5 gap-1" role="group" aria-label="보너스 스킬 트리">
-        {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}
+    <div className="grid grid-cols-[minmax(0,1fr)_210px] grid-rows-[minmax(0,1fr)] gap-3 flex-1 min-h-0
+                    max-[640px]:grid-cols-1 max-[640px]:grid-rows-none">
+      <div className="flex flex-col gap-2 min-w-0">
+        <div className="grid grid-cols-5 gap-1" role="group" aria-label="보너스 스킬 트리">
+          {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}
+        </div>
+        <Note size="xs" className="my-0">
+          길드 레벨이 오르면 그 레벨의 보너스가 1단계로 열려요. 2단계부터는 길드원 누구나 골드를 기부해 올리고,
+          기부한 골드는 돌려받지 않아요.
+        </Note>
       </div>
-      {selected && (
-        <Detail key={selected.id} row={selected} myTotal={myTotal} guildId={guild.id} busy={busy} run={run}
-                setToast={setToast} onGoldChanged={onGoldChanged} />
-      )}
-      <section className="flex flex-col gap-1" aria-label="기부 순위">
-        <Subheading className="mb-0">기부 순위</Subheading>
-        {ranking.length > 0
-          ? <RankList rows={ranking.slice(0, 10)} me={mine ? { rank: mine.rank, value: mine.value } : null} valueLabel="기부"
-                      format={v => `${fmtNum(v)}골드`} />
-          : <Note size="xs" className="my-0">아직 기부한 길드원이 없어요.</Note>}
-      </section>
+      <div className="flex flex-col gap-2 min-w-0 min-h-0">
+        {selected && (
+          <Detail key={selected.id} row={selected} myTotal={myTotal} guildId={guild.id} busy={busy} run={run}
+                  setToast={setToast} onGoldChanged={onGoldChanged} />
+        )}
+        <section className="pf-scroll-panel flex flex-col gap-1 flex-1 min-h-20 overflow-y-auto pr-1" aria-label="기부 순위">
+          <Subheading className="mb-0">기부 순위</Subheading>
+          {ranking.length > 0
+            ? <RankList rows={ranking.slice(0, 10)} me={mine ? { rank: mine.rank, value: mine.value } : null} valueLabel="기부"
+                        format={v => `${fmtNum(v)}골드`} />
+            : <Note size="xs" className="my-0">아직 기부한 길드원이 없어요.</Note>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -103,7 +113,7 @@ function Node({ node, label, onPick }: { node: BonusNode; label: string; onPick:
   );
 }
 
-/** 고른 보너스의 상세 — 지금 → 다음 효과, 모인 골드 / 비용, 기부 입력과 빠른 금액, 내 기부 */
+/** 고른 보너스의 상세 — 지금 → 다음 효과, 모인 골드 / 비용, 기부 입력과 빠른 금액, 내 기부. 트리 옆 좁은 열에 놓인다 */
 function Detail({ row, myTotal, guildId, busy, run, setToast, onGoldChanged }: {
   row: BonusRow; myTotal: number; guildId: string; busy: boolean; run: Run; setToast: Notify;
   onGoldChanged: () => Promise<void> | void;
@@ -130,7 +140,7 @@ function Detail({ row, myTotal, guildId, busy, run, setToast, onGoldChanged }: {
   };
 
   return (
-    <section aria-label={`${row.name} 상세`}><Inset className="px-2 py-2 flex flex-col gap-1.5 text-sm">
+    <section className="shrink-0" aria-label={`${row.name} 상세`}><Inset className="px-2 py-2 flex flex-col gap-1.5 text-sm">
       <div className="flex items-baseline justify-between gap-2">
         <b className="text-gold">{row.name}</b>
         <span className="text-xs text-text-dim">
@@ -154,7 +164,7 @@ function Detail({ row, myTotal, guildId, busy, run, setToast, onGoldChanged }: {
                          onChange={e => setAmount(e.target.value)} aria-label={`${row.name} 기부 골드`} />
               <Button type="submit" size="sm" variant="primary" disabled={busy}>기부</Button>
             </div>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {DONATION_STEPS.map(step => (
                 <Button key={step} type="button" size="sm" disabled={busy} onClick={() => add(step)}>+{step / 10_000}만</Button>
               ))}
@@ -171,10 +181,6 @@ function Detail({ row, myTotal, guildId, busy, run, setToast, onGoldChanged }: {
       <span className="text-xs text-text-dim">
         이 보너스에 내 기부 <b className="text-text">{fmtNum(row.mine)}</b> · 내 전체 기부 <b className="text-text">{fmtNum(myTotal)}</b>
       </span>
-      <Note size="xs" className="my-0">
-        길드 레벨이 오르면 그 레벨의 보너스가 1단계로 열려요. 2단계부터는 길드원 누구나 골드를 기부해 올리고,
-        기부한 골드는 돌려받지 않아요.
-      </Note>
     </Inset></section>
   );
 }
