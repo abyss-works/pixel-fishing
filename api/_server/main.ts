@@ -16,7 +16,7 @@ import players from '../players.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
-import { appAuth, sessionOf } from '../_auth/session.js';
+import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
 import { provideOnline, providePresence } from './livePresence.js';
@@ -63,6 +63,8 @@ const app = express();
 app.disable('x-powered-by');
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
 app.all('/api/auth/*splat', toNodeHandler(appAuth()));
+// 관리자 인증은 로그인과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
+app.post(['/api/admin/auth/sign-in/email', '/api/admin/auth/sign-out'], toNodeHandler(adminAuth()));
 // import 액션은 게임 상태 전체를 싣는다.
 app.use('/api', express.json({ limit: '5mb' }));
 for (const [path, handler] of Object.entries(routes)) {

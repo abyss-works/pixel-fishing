@@ -2,7 +2,7 @@
 // 조회 결과는 관리자 뷰·함수의 결과와 같아야 한다. 같은 데이터를 authenticated 역할과 세션 클레임으로 읽은
 // 뷰·함수 결과(PostgREST의 읽기 방식)를 기댓값으로 쓴다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
+import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { appAuth } from './_auth/session.js';
 
@@ -40,7 +40,8 @@ afterAll(async () => {
   await env?.stop();
 });
 
-async function callAdmin(query: Record<string, string>, token: string | null = null, method = 'GET', body?: unknown): Promise<Out> {
+async function callAdmin(query: Record<string, string>, token: string | null = null, method = 'GET', body?: unknown,
+  headers: (token: string | null) => Record<string, string> = adminSessionHeaders): Promise<Out> {
   const { default: handler } = await import('./admin.js');
   const out: Out = { status: 0, body: undefined, headers: {} };
   const res = {
@@ -48,7 +49,7 @@ async function callAdmin(query: Record<string, string>, token: string | null = n
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method, query, body, headers: sessionHeaders(token) } as never, res as never);
+  await handler({ method, query, body, headers: headers(token) } as never, res as never);
   return out;
 }
 
@@ -153,6 +154,20 @@ describe('요청 검증과 관리자 판정', () => {
     }
     // 조회 이름이 틀려도 판정이 먼저다. 비관리자에게 이름의 유효 여부를 알려 주지 않는다
     expect((await callAdmin({ q: 'nope' }, userToken(PLAYER))).status).toBe(403);
+  });
+
+  it('게임 세션 쿠키로는 관리자 계정이라도 모든 조회와 쓰기가 401이다', async () => {
+    const token = userToken(ADMIN);
+    // 게임 쿠키의 값을 관리자 쿠키 이름으로 옮긴 경우. 서명 키가 달라 세션으로 인정되지 않는다
+    const renamed = () => ({ cookie: sessionHeaders(token).cookie.replace('better-auth.', 'pixel-fishing-admin.') });
+    for (const headers of [sessionHeaders, renamed]) {
+      for (const c of [...CASES, { name: 'access', params: undefined }]) {
+        expect(await callAdmin({ q: c.name, ...c.params }, token, 'GET', undefined, headers), c.name)
+          .toMatchObject({ status: 401, body: { error: 'unauthorized' } });
+      }
+      expect(await callAdmin({ q: 'restrict' }, token, 'POST', { userId: PLAYER, restricted: true }, headers))
+        .toMatchObject({ status: 401 });
+    }
   });
 
   it('계정이 없는 사용자의 토큰은 세션이 없어 401이다', async () => {

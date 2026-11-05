@@ -1,7 +1,7 @@
 // 관리자 리소스 경로 조회(접속 목록, 일별 집계, 가입일 리텐션, 접속 세션)를 실제 Postgres에서 검사한다.
 // 관리자 판정과 캐시 금지는 이름 조회(?q=)와 같다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { adminSessionHeaders, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { provideOnline } from './_server/livePresence.js';
 
@@ -26,7 +26,8 @@ afterAll(async () => {
   await env?.stop();
 });
 
-async function call(url: string, token: string | null = userToken(ADMIN), method = 'GET'): Promise<Out> {
+async function call(url: string, token: string | null = userToken(ADMIN), method = 'GET',
+  headers: (token: string | null) => Record<string, string> = adminSessionHeaders): Promise<Out> {
   const { default: handler } = await import('./admin.js');
   const out: Out = { status: 0, body: undefined, headers: {} };
   const res = {
@@ -35,7 +36,7 @@ async function call(url: string, token: string | null = userToken(ADMIN), method
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
   const query = Object.fromEntries(new URL(url, 'http://x').searchParams);
-  await handler({ method, url, query, headers: sessionHeaders(token) } as never, res as never);
+  await handler({ method, url, query, headers: headers(token) } as never, res as never);
   return out;
 }
 
@@ -56,6 +57,12 @@ describe('요청 검증과 관리자 판정', () => {
       expect(player, path).toMatchObject({ status: 403 });
       expect(player.body, path).toEqual({ error: 'forbidden' });
       for (const res of [none, player, await call(path)]) expect(res.headers['cache-control'], path).toBe('private, no-store');
+    }
+  });
+
+  it('게임 세션 쿠키로는 관리자 계정이라도 401이다', async () => {
+    for (const path of PATHS) {
+      expect(await call(path, userToken(ADMIN), 'GET', sessionHeaders), path).toMatchObject({ status: 401, body: { error: 'unauthorized' } });
     }
   });
 

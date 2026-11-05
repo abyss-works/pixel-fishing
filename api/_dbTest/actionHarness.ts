@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
 import { newState } from '../../src/game/rules/logic.js';
 import { APP_VERSION } from '../../src/version.js';
+import { ADMIN_COOKIE_PREFIX, adminSecret } from '../_auth/auth.js';
 import { pendingAfterResponse } from './serverShim.js';
 import { createTestDatabase } from './testDatabase.js';
 import type { TestDatabase } from './testDatabase.js';
@@ -17,11 +18,21 @@ export function userToken(uid: string): string {
   return `test-session-${uid}`;
 }
 
-/** 세션 토큰을 서명한 세션 쿠키 헤더. 토큰이 없으면 빈 헤더다 */
-export function sessionHeaders(token: string | null): Record<string, string> {
+/** 세션 토큰을 서명한 쿠키 헤더. 토큰이 없으면 빈 헤더다 */
+function signedCookie(name: string, secret: string, token: string | null): Record<string, string> {
   if (!token) return {};
-  const signature = createHmac('sha256', AUTH_SECRET).update(token).digest('base64');
-  return { cookie: `${SESSION_COOKIE}=${encodeURIComponent(`${token}.${signature}`)}` };
+  const signature = createHmac('sha256', secret).update(token).digest('base64');
+  return { cookie: `${name}=${encodeURIComponent(`${token}.${signature}`)}` };
+}
+
+/** 게임 세션 쿠키 헤더. 토큰이 없으면 빈 헤더다 */
+export function sessionHeaders(token: string | null): Record<string, string> {
+  return signedCookie(SESSION_COOKIE, AUTH_SECRET, token);
+}
+
+/** 관리자 세션 쿠키 헤더. 같은 세션 토큰을 관리자 인증의 쿠키 이름과 서명 키로 싣는다. 토큰이 없으면 빈 헤더다 */
+export function adminSessionHeaders(token: string | null): Record<string, string> {
+  return signedCookie(`${ADMIN_COOKIE_PREFIX}.session_token`, adminSecret(AUTH_SECRET), token);
 }
 
 export interface ActionEnv {
