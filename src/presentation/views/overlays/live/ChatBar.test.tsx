@@ -68,6 +68,29 @@ describe('ChatBar', () => {
     expect(live.sendChat).toHaveBeenLastCalledWith('월드 안녕', 'world');
   });
 
+  it('입력 중 Tab은 길드원이면 보낼 곳을 월드와 길드로 번갈아 바꾸고 입력 줄에 머문다', () => {
+    render(<ChatBar inGuild />);
+    const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '보낼 곳: 길드' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: '길드 안녕' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenLastCalledWith('길드 안녕', 'guild');
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '보낼 곳: 월드' })).toBeInTheDocument();
+  });
+
+  it('길드가 없으면 입력 중 Tab을 눌러도 월드에 머문다', () => {
+    render(<ChatBar />);
+    const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '보낼 곳: 월드' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(input);
+  });
+
   it('게임 화면에서 Enter를 누르면 입력 줄로 들어간다', () => {
     render(<ChatBar />);
     fireEvent.keyDown(document.body, { key: 'Enter' });
