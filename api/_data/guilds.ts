@@ -11,6 +11,7 @@ import {
 } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildBonusId, GuildEffects, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
+import { goldDebit } from './save.js';
 
 type Tx = Database['withTransaction'];
 
@@ -185,8 +186,7 @@ export async function donateToBonus(withTransaction: Tx, uid: string, guildId: s
     const before = bonusRank(bonus, level, cur?.rank ?? 0);
     const r = donationOutcome(bonus, level, { rank: cur?.rank ?? 0, pool: Number(cur?.pool ?? 0) }, gold, amount);
     if (!r.ok) return r;
-    await tx.execute(sql`update public.saves_current set gold = gold - ${r.accepted}, version = version + 1
-      where user_id = ${uid}`);
+    await tx.execute(goldDebit(uid, r.accepted));
     await tx.execute(sql`insert into public.guild_bonuses (guild_id, bonus, rank, pool) values (${guildId}, ${bonus}, ${r.rank}, ${r.pool})
       on conflict (guild_id, bonus) do update set rank = excluded.rank, pool = excluded.pool`);
     await tx.execute(sql`insert into public.guild_bonus_donations (guild_id, user_id, bonus, gold)
