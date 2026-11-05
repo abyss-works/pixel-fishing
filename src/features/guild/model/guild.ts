@@ -1,16 +1,17 @@
 import type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
 import {
-  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, GUILD_LEVEL_FLOORS, bonusUnlockLevel, handoverOutcome, removalOutcome,
+  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, handoverOutcome, removalOutcome,
 } from '../../../game/rules/guild';
 import type { GuildBonusId } from '../../../game/rules/guild';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
 import { namedById } from '../../../game/content/named';
+import { josa } from '../../../shared/lib/josa';
 
 export type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp };
 
-// 길드 화면 모델 — 길드원 묶음, 길드원별로 열리는 관리 동작과 확인 문장, 초대 코드 남은 시간, 거부 안내 문장,
-// 레벨 진행·레벨 사다리, 보너스 줄과 효과 문장, 항해일지 문장. 보너스 값은 서버 응답을 그대로 보인다.
+// 길드 화면 모델: 길드원 표, 길드원별로 열리는 관리 동작과 확인 문장, 초대 코드 남은 시간, 거부 안내 문장,
+// 레벨 진행, 길드 스킬 줄과 효과 값, 날짜별 항해일지. 길드 스킬 값은 서버 응답을 그대로 보인다.
 
 const num = (n: number) => n.toLocaleString('ko-KR');
 
@@ -75,15 +76,12 @@ export function inviteLeftText(expiresAt: string, nowMs: number): string {
   return mins >= 60 ? `${Math.floor(mins / 60)}시간 남음` : `${mins}분 남음`;
 }
 
-/** 초대 코드 안내 — 남은 시간(코드가 있을 때)과 유효 기간 */
-export function inviteHintText(invite: GuildInfo['invite'], nowMs: number): string {
-  const rule = `코드는 ${GUILD_INVITE_TTL_MS / 3600_000}시간 동안 여러 사람이 쓸 수 있어요.`;
-  return invite ? `${inviteLeftText(invite.expiresAt, nowMs)} · ${rule}` : rule;
-}
+/** 초대 코드 규칙: 유효 기간과 새 코드를 받으면 이전 코드가 무효가 된다는 것 */
+export const GUILD_INVITE_RULE = `${GUILD_INVITE_TTL_MS / 3600_000}시간 동안 여러 사람이 쓸 수 있어요. 새 코드를 받으면 이전 코드는 더 쓸 수 없어요.`;
 
 /** 요청 실패 코드를 안내 문장으로 */
 export const GUILD_ERROR_TEXT: Record<string, string> = {
-  'bad-name': '길드 이름은 한글 1~8자 또는 영문 2~16자로, 한글·영문·숫자와 - _만 쓸 수 있어요.',
+  'bad-name': '길드 이름은 한글 1~8자 또는 영문 2~16자로, 한글, 영문, 숫자와 - _만 쓸 수 있어요.',
   'name-taken': '이미 쓰이는 길드 이름이에요.',
   'already-in-guild': '이미 길드에 들어가 있어요. 한 사람은 길드 하나에만 들어갈 수 있어요.',
   'bad-code': '초대 코드를 찾지 못했어요. 코드가 맞는지, 만료되지 않았는지 확인해 주세요.',
@@ -94,7 +92,7 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   self: '자기 자신에게는 넘길 수 없어요.',
   'account-only': '길드는 계정을 만든 뒤에 쓸 수 있어요.',
   'not-enough-gold': '골드가 모자라요.',
-  'bonus-locked': '아직 열리지 않은 보너스예요. 길드 레벨이 오르면 열려요.',
+  'bonus-locked': '아직 열리지 않은 길드 스킬이에요. 길드 레벨이 오르면 열려요.',
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',
   'bad-amount': '기부할 골드를 1 이상의 정수로 입력해 주세요.',
   restricted: '이용이 제한된 계정은 기부할 수 없어요.',
@@ -113,38 +111,39 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
   return growth.next === null ? num(growth.total) : `${num(growth.total)} / ${num(growth.next)}`;
 }
 
-/** 진행 막대 아래 안내 — 다음 레벨까지 남은 기여, 최고 레벨이면 그렇다고 */
-export function growthHintText(growth: GuildInfo['growth']): string {
-  const { remaining } = growthBar(growth);
-  return remaining === null ? '최고 레벨이에요.' : `다음 레벨까지 기여 ${num(remaining)}`;
-}
+/** 기여가 쌓이는 방식과 레벨, 길드 스킬의 관계 */
+export const GUILD_CONTRIBUTION_HELP = `길드원이 얻은 명성만큼 기여가 쌓여요. 한 사람당 하루 ${num(GUILD_DAILY_FAME_CAP)}까지예요. `
+  + '일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 레벨이 오르면 길드 스킬이 하나씩 열리고, 단계는 기부로 올려요.';
 
-/** 기여가 쌓이는 방식과 레벨·보너스의 관계 */
-export const GUILD_CONTRIBUTION_HELP = `길드원이 얻은 명성만큼 기여가 쌓여요(한 사람당 하루 ${num(GUILD_DAILY_FAME_CAP)}까지, `
-  + '한국 시간 새벽 4시에 새로 세요). 일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. '
-  + '레벨마다 보너스가 하나씩 열리고, 단계는 기부로 올려요. 보너스는 길드원 모두가 같게 받아요.';
-
-/** 보너스의 화면 이름 */
+/** 길드 스킬의 화면 이름 */
 export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
-  sell: '판매가', bag: '가방 용량', named: '네임드 조우 보너스', rare: '희귀 어종 보너스', mutation: '돌연변이 보너스',
+  sell: '판매가 보너스', bag: '가방 용량 증가', named: '네임드 조우 확률', rare: '희귀 어종 확률', mutation: '돌연변이 확률',
+};
+
+/** 길드 스킬이 하는 일 */
+export const GUILD_BONUS_TIP: Record<GuildBonusId, string> = {
+  sell: '물고기를 팔 때 받는 골드가 늘어요.',
+  bag: '배의 가방 칸이 늘어요.',
+  named: '네임드를 만날 확률이 올라가요.',
+  rare: '일반 등급 물고기가 걸릴 확률을 줄여요.',
+  mutation: '돌연변이가 나올 확률이 올라가요.',
 };
 
 const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
 
-/** 효과 값 하나의 문장 — 비율은 %, 돌연변이는 확률에 더하는 %p */
-export function bonusEffectText(id: GuildBonusId, value: number): string {
-  switch (id) {
-    case 'sell': return `판매가 +${pct(value)}`;
-    case 'bag': return `가방 용량 +${pct(value)}`;
-    case 'named': return `네임드 조우 +${pct(value)}`;
-    case 'rare': return `일반 어종 가중치 −${pct(value)}`;
-    case 'mutation': return `돌연변이 확률 +${pct(value)}p`;
-  }
+/** 효과 값 하나: 비율은 %, 돌연변이는 확률에 더하는 %p, 희귀 어종은 일반 어종 가중치를 줄이므로 − */
+export function bonusEffectValue(id: GuildBonusId, value: number): string {
+  if (id === 'rare') return `−${pct(value)}`;
+  return id === 'mutation' ? `+${pct(value)}p` : `+${pct(value)}`;
 }
 
-/** 받는 보너스 문장 — 1단계 이상인 보너스만, 해금 순 */
-export function activeEffectLines(bonuses: readonly GuildBonusItem[]): string[] {
-  return bonuses.filter(b => b.rank > 0).map(b => bonusEffectText(b.id, b.effect));
+const EFFECT_LABEL: Record<GuildBonusId, string> = {
+  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 어종 가중치', mutation: '돌연변이 확률',
+};
+
+/** 효과 문장: 무엇이 얼마나 바뀌는지 */
+export function bonusEffectText(id: GuildBonusId, value: number): string {
+  return `${EFFECT_LABEL[id]} ${bonusEffectValue(id, value)}`;
 }
 
 /**
@@ -183,8 +182,8 @@ export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
     });
     return {
       ...b, name: GUILD_BONUS_NAME[b.id], locked: b.cap === 0,
-      now: b.rank > 0 ? bonusEffectText(b.id, b.effect) : null,
-      after: b.nextEffect === null ? null : bonusEffectText(b.id, b.nextEffect),
+      now: b.rank > 0 ? bonusEffectValue(b.id, b.effect) : null,
+      after: b.nextEffect === null ? null : bonusEffectValue(b.id, b.nextEffect),
       ratio, need: canDonate && b.next !== null ? b.next - b.pool : null, canDonate, nodes,
     };
   });
@@ -193,70 +192,81 @@ export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
 /** 기부 입력의 빠른 금액 — 10만·50만 더하기와 다음 단계까지 남은 만큼 */
 export const DONATION_STEPS = [100_000, 500_000] as const;
 
-/** 기부 순위 — 보너스를 합친 사람별 전체 기부액. 같은 금액은 같은 순위다 */
-export function donorRanking(donors: readonly GuildInfo['donors'][number][], me: string):
-  { rank: number; nickname: string | null; value: number; me: boolean }[] {
-  return donors.map(d => ({
-    rank: donors.findIndex(o => o.gold === d.gold) + 1,
-    nickname: d.nick, value: d.gold, me: d.uid === me,
+/** 길드원 표 한 줄 */
+export interface MemberRow {
+  uid: string; name: string; leader: boolean; me: boolean; online: boolean;
+  /** 오늘 기여와 누적 기여 */
+  today: number; total: number;
+  /** 길드 스킬에 기부한 골드 합 */
+  gave: number;
+}
+
+/** 길드원 표: 지금 길드원만 서버 순서대로, 사람별 전체 기부를 붙인다 */
+export function memberRows(guild: GuildInfo, me: string): MemberRow[] {
+  return splitMembers(guild.members).active.map(m => ({
+    uid: m.uid, name: memberName(m), leader: m.role === 'leader', me: m.uid === me, online: m.online,
+    today: m.contribution.today, total: m.contribution.total,
+    gave: guild.donors.find(d => d.uid === m.uid)?.gold ?? 0,
   }));
 }
 
-export interface LevelStep {
-  level: number;
-  /** 이 레벨에 필요한 누적 기여도 */
-  floor: number;
-  /** 이 레벨에서 새로 열리는 보너스와 늘어나는 단계 상한 */
-  perks: string[];
-  state: 'done' | 'current' | 'next' | 'locked';
+/** 항해일지 문장 조각. tone이 없으면 보통 글자다 */
+export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'named' | 'skill' | 'num' }
+export interface LogEntry {
+  id: number; kind: GuildLogItem['kind'];
+  /** 한국 시각 HH:MM */
+  time: string;
+  parts: LogPart[];
+  /** 떠남·내보냄처럼 낮춰 보일 줄 */
+  quiet: boolean;
 }
 
-/** 레벨 사다리 — 레벨마다 문턱, 새로 열리는 보너스, 보너스 단계 상한 */
-export function levelSteps(growth: GuildInfo['growth']): LevelStep[] {
-  return GUILD_LEVEL_FLOORS.map((floor, i) => {
-    const level = i + 1;
-    const state = level < growth.level ? 'done' : level === growth.level ? 'current' : level === growth.level + 1 ? 'next' : 'locked';
-    const opened = GUILD_BONUS_IDS.filter(id => bonusUnlockLevel(id) === level).map(id => `${GUILD_BONUS_NAME[id]} 열림`);
-    return { level, floor, perks: level > 1 ? [...opened, `보너스 단계 상한 ${level}`] : opened, state };
-  });
-}
+const KST_MS = 9 * 3600_000;
+const kst = (at: string) => new Date(Date.parse(at) + KST_MS);
+const two = (n: number) => String(n).padStart(2, '0');
 
-/** 레벨 사다리 한 칸의 요약 — 문턱과 새로 열리는 것 */
-export function levelStepText(step: LevelStep): string {
-  return `기여 ${num(step.floor)}${step.perks.length > 0 ? ` · ${step.perks.join(' · ')}` : ''}`;
-}
+const skillName = (id: string | null): string =>
+  (GUILD_BONUS_IDS as readonly string[]).includes(id ?? '') ? GUILD_BONUS_NAME[id as GuildBonusId] : '길드 스킬';
 
-/** 항해일지 한 줄의 문장 */
-export function logLine(log: GuildLogItem): string {
-  const who = `${memberName(log)} 님`;
+function logParts(log: GuildLogItem, me: string): LogPart[] {
+  const who: LogPart = { text: memberName(log), tone: log.uid === me ? 'me' : 'nick' };
   switch (log.kind) {
-    case 'join': return `${who}이 길드에 들어왔어요.`;
-    case 'leave': return `${who}이 길드를 떠났어요.`;
-    case 'kick': return `${who}이 길드에서 내보내졌어요.`;
+    case 'join': return [who, { text: ' 님이 길드에 들어왔어요.' }];
+    case 'leave': return [who, { text: ' 님이 길드를 떠났어요.' }];
+    case 'kick': return [who, { text: ' 님이 길드에서 내보내졌어요.' }];
     case 'legendary': {
-      const fish = FISH.find(f => f.id === log.detail);
-      return `${who}이 전설 ${fish?.name ?? '어종'} 낚시에 성공했어요!`;
+      const fish = FISH.find(f => f.id === log.detail)?.name ?? '어종';
+      return [who, { text: ' 님이 ' }, { text: `전설 ${fish}`, tone: 'legend' }, { text: `${josa(fish, '을/를')} 낚았어요!` }];
     }
     case 'named': {
       const quest = log.detail ? bountyById(log.detail) : undefined;
-      const named = quest?.targetFish ? namedById(quest.targetFish) : undefined;
-      return `${who}이 네임드 ${named?.name ?? '어종'} 토벌에 성공했어요!`;
+      const named = (quest?.targetFish ? namedById(quest.targetFish)?.name : undefined) ?? '어종';
+      return [who, { text: ' 님이 ' }, { text: `네임드 ${named}`, tone: 'named' }, { text: `${josa(named, '을/를')} 토벌했어요!` }];
     }
     case 'donate':
-      return `${who}이 ${bonusName(log.detail)}에 ${num(log.value ?? 0)}골드를 기부했어요.`;
-    case 'bonus-up':
-      return `${who}의 기부로 ${bonusName(log.detail)} ${log.value ?? 0}단계가 됐어요!`;
+      return [who, { text: ' 님이 ' }, { text: skillName(log.detail), tone: 'skill' }, { text: '에 ' },
+        { text: `${num(log.value ?? 0)}G`, tone: 'num' }, { text: '를 기부했어요.' }];
+    case 'bonus-up': {
+      const skill = skillName(log.detail);
+      return [{ text: '길드 스킬 ' }, { text: skill, tone: 'skill' }, { text: `${josa(skill, '이/가')} ` },
+        { text: String(log.value ?? 0), tone: 'num' }, { text: '단계가 됐어요!' }];
+    }
   }
 }
 
-const bonusName = (id: string | null): string =>
-  (GUILD_BONUS_IDS as readonly string[]).includes(id ?? '') ? GUILD_BONUS_NAME[id as GuildBonusId] : '보너스';
-
-/** 항해일지 줄이 남은 뒤 지난 시간 */
-export function logAgoText(at: string, nowMs: number): string {
-  const mins = Math.max(0, Math.floor((nowMs - Date.parse(at)) / 60_000));
-  if (mins < 1) return '방금 전';
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.floor(mins / 60);
-  return hours < 24 ? `${hours}시간 전` : `${Math.floor(hours / 24)}일 전`;
+/** 항해일지: 한국 날짜마다 묶는다. 서버가 보낸 최신 순서를 그대로 둔다 */
+export function logbookDays(logbook: readonly GuildLogItem[], me: string): { day: string; items: LogEntry[] }[] {
+  const days: { day: string; items: LogEntry[] }[] = [];
+  for (const log of logbook) {
+    const d = kst(log.at);
+    const day = `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+    const entry: LogEntry = {
+      id: log.id, kind: log.kind, time: `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`,
+      parts: logParts(log, me), quiet: log.kind === 'leave' || log.kind === 'kick',
+    };
+    const last = days.at(-1);
+    if (last?.day === day) last.items.push(entry);
+    else days.push({ day, items: [entry] });
+  }
+  return days;
 }
