@@ -6,7 +6,7 @@
 export type Dir = 0 | 1 | 2 | 3;
 
 export type ClientMessage =
-  | { t: 'move'; x: number; y: number; dir: Dir; line: boolean } // line: 낚싯줄을 드리운 상태
+  | { t: 'move'; region: string; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 바다, line: 낚싯줄을 드리운 상태
   | { t: 'stop' }
   | { t: 'chat'; text: string }
   | { t: 'ping' };
@@ -16,7 +16,8 @@ export interface ChatLine { id: number; uid: string; nick: string; text: string;
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[] }
-  | { t: 'move'; uid: string; x: number; y: number; dir: Dir; line: boolean }
+  | { t: 'move'; uid: string; region: string; x: number; y: number; dir: Dir; line: boolean }
+  | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
   | { t: 'chat'; line: ChatLine }
@@ -39,6 +40,7 @@ export const LIVE_CLOSE_REPLACED = 4000;
 
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
+const isRegion = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9-]{1,32}$/.test(v);
 
 /**
  * 클라이언트 메시지 원문을 검사한다. 서버가 신뢰 경계에서 쓴다.
@@ -52,11 +54,32 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   const o = m as Record<string, unknown>;
   switch (o.t) {
     case 'move':
-      if (!isCoord(o.x) || !isCoord(o.y) || !isDir(o.dir) || typeof o.line !== 'boolean') return null;
-      return { t: 'move', x: o.x, y: o.y, dir: o.dir, line: o.line };
+      if (!isRegion(o.region) || !isCoord(o.x) || !isCoord(o.y) || !isDir(o.dir) || typeof o.line !== 'boolean') return null;
+      return { t: 'move', region: o.region, x: o.x, y: o.y, dir: o.dir, line: o.line };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
     case 'chat': return typeof o.text === 'string' ? { t: 'chat', text: o.text } : null;
     default: return null;
   }
+}
+
+/** 이동 중 위치 송신 주기 */
+export const LIVE_MOVE_MS = 100;
+/** 이동 중인 플레이어에게서 이 시간 동안 받은 것이 없으면 반투명으로 그린다 */
+export const LIVE_STALE_MS = 3000;
+// 보간 시간 상수 — 송신 주기(100ms) 안에 목표까지 대부분 다가가게 한다
+const FOLLOW_TAU_MS = 60;
+// 이보다 먼 목표는 보간하지 않고 바로 옮긴다(지역 이동·재접속)
+const SNAP_DISTANCE = 160;
+
+/**
+ * 받은 좌표를 향해 한 프레임만큼 다가간 위치. 순간이동하지 않고 매 프레임 일정 비율로 좁힌다.
+ * @param dtMs 직전 프레임과의 간격
+ */
+export function followTarget(from: { x: number; y: number }, to: { x: number; y: number }, dtMs: number): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.hypot(dx, dy) > SNAP_DISTANCE) return { x: to.x, y: to.y };
+  const k = 1 - Math.exp(-Math.max(dtMs, 0) / FOLLOW_TAU_MS);
+  return { x: from.x + dx * k, y: from.y + dy * k };
 }

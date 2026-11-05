@@ -8,11 +8,14 @@ import {
   LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
   parseClientMessage,
 } from '../../src/game/rules/live.js';
-import type { ServerMessage } from '../../src/game/rules/live.js';
+import type { Presence, ServerMessage } from '../../src/game/rules/live.js';
+
+/** 연결한 사용자 — 표시 이름과 배는 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다 */
+export interface LiveUser { uid: string; nick: string; boat: number }
 
 export interface LiveOptions {
-  /** 업그레이드 요청의 로그인 사용자 id. 세션이 없으면 null을 돌려준다 */
-  authenticate: (req: IncomingMessage) => Promise<string | null>;
+  /** 업그레이드 요청의 로그인 사용자. 세션이 없으면 null을 돌려준다 */
+  authenticate: (req: IncomingMessage) => Promise<LiveUser | null>;
   /** 허용하는 `Origin` 헤더 값(서비스 주소의 origin) */
   origin: string;
   /** 서버 ping과 무응답 정리 주기. 기본값은 접속 확인 주기다 */
@@ -22,12 +25,16 @@ export interface LiveOptions {
 }
 
 export interface LiveServer {
+  /** 그 사용자의 접속 상태. 연결돼 있지 않거나 아직 위치를 보내지 않았으면 null */
+  presenceOf(uid: string): Presence | null;
   /** 열린 연결을 재시작 코드로 닫고 정리 주기를 멈춘다 */
   close(): void;
 }
 
 interface Conn {
-  uid: string;
+  user: LiveUser;
+  /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
+  presence: Presence | null;
   lastSeen: number;
   windowStart: number;
   windowCount: number;
@@ -54,17 +61,27 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const data = JSON.stringify(msg);
     for (const ws of conns.keys()) if (ws !== from && ws.readyState === WebSocket.OPEN) ws.send(data);
   };
+  // 연결을 목록에서 빼고, 이미 알린 사람이면 떠났다고 알린다
+  const drop = (ws: WebSocket, conn: Conn) => {
+    if (conns.get(ws) !== conn) return;
+    conns.delete(ws);
+    if (conn.presence) broadcast(ws, { t: 'leave', uid: conn.user.uid });
+  };
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
     if (req.headers.origin !== opts.origin) { reject(socket, 403); return; }
-    opts.authenticate(req).then((uid) => {
-      if (!uid) { reject(socket, 401); return; }
+    opts.authenticate(req).then((user) => {
+      if (!user) { reject(socket, 401); return; }
       wss.handleUpgrade(req, socket, head, (ws) => {
         // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
-        for (const [other, c] of conns) if (c.uid === uid) other.close(LIVE_CLOSE_REPLACED);
+        for (const [other, c] of conns) {
+          if (c.user.uid !== user.uid) continue;
+          drop(other, c);
+          other.close(LIVE_CLOSE_REPLACED);
+        }
         const now = Date.now();
-        const conn: Conn = { uid, lastSeen: now, windowStart: now, windowCount: 0 };
+        const conn: Conn = { user, presence: null, lastSeen: now, windowStart: now, windowCount: 0 };
         conns.set(ws, conn);
         ws.on('message', (data, isBinary) => {
           const at = Date.now();
@@ -73,11 +90,23 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           conn.lastSeen = at;
           if (isBinary) return;
           const msg = parseClientMessage(data.toString());
-          if (msg?.t === 'move') broadcast(ws, { t: 'move', uid, x: msg.x, y: msg.y, dir: msg.dir, line: msg.line });
+          if (msg?.t === 'move') {
+            const { region, x, y, dir, line } = msg;
+            if (!conn.presence) {
+              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, x, y, dir, line };
+              broadcast(ws, { t: 'join', presence: conn.presence });
+            } else {
+              Object.assign(conn.presence, { region, x, y, dir, line });
+              broadcast(ws, { t: 'move', uid: user.uid, region, x, y, dir, line });
+            }
+          } else if (msg?.t === 'stop' && conn.presence) {
+            broadcast(ws, { t: 'stop', uid: user.uid });
+          }
         });
-        ws.on('close', () => { conns.delete(ws); });
+        ws.on('close', () => drop(ws, conn));
         ws.on('error', () => { ws.terminate(); });
-        send(ws, { t: 'hello', you: uid, others: [], recentChat: [] });
+        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [c.presence] : []));
+        send(ws, { t: 'hello', you: user.uid, others, recentChat: [] });
       });
     }).catch((err: unknown) => {
       console.error('[live] upgrade authentication failed', err);
@@ -96,6 +125,10 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   timer.unref();
 
   return {
+    presenceOf(uid) {
+      for (const c of conns.values()) if (c.user.uid === uid) return c.presence;
+      return null;
+    },
     close() {
       clearInterval(timer);
       for (const ws of conns.keys()) ws.close(LIVE_CLOSE_RESTART);
