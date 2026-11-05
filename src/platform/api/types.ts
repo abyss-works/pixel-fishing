@@ -53,6 +53,15 @@ export interface MailItem {
   createdAt: string; readAt: string | null; claimedAt: string | null;
 }
 
+/** 친구 목록 한 줄 — 친구, 받은 요청, 보낸 요청. 접속 여부와 바다는 친구에게만 붙는다 */
+export interface FriendItem {
+  uid: string; nick: string | null; state: 'friend' | 'incoming' | 'outgoing';
+  lastActiveAt: string | null; online: boolean; region: string | null;
+}
+export type FriendOp = { op: 'request'; nickname: string } | { op: 'accept' | 'remove'; uid: string };
+/** 친구 요청 결과 — 실패는 서버 오류 코드(not-found, self, account-only 등) */
+export type FriendOpResult = { ok: true; result: string } | { ok: false; error: string };
+
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
