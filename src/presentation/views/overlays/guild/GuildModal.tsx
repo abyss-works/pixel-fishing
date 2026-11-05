@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
-import { GUILD_ERROR_TEXT, inviteLeftText, leaveOutcome, memberActions, splitMembers } from '../../../../features/guild/model/guild';
+import { GUILD_DAILY_FAME_CAP, GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
+import {
+  GUILD_ERROR_TEXT, bonusLines, growthBar, inviteLeftText, leaveOutcome, levelSteps, logAgoText, logLine, memberActions,
+  splitMembers,
+} from '../../../../features/guild/model/guild';
 import type { GuildInfo, GuildMemberItem, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
@@ -9,16 +12,22 @@ import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import { cx } from '../../../ui/cx';
+import { fmtNum } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Panel from '../../../ui/Panel';
+import ProgressLadder from '../../../ui/ProgressLadder';
+import SubTabs from '../../../ui/SubTabs';
 import TextInput from '../../../ui/TextInput';
 
 // 길드 창 — 게임 스테이지 안에 뜬다.
 // 길드가 없으면 위는 길드 만들기, 아래는 초대 코드로 들어가기다.
-// 길드가 있으면 위는 길드 정보와 초대 코드(길드장)·떠나기, 아래는 길드원 목록(접속 여부, 길드장의 위임·내보내기)과 떠난 선원이다.
+// 길드가 있으면 위는 길드 정보(레벨·진행 막대·받는 보너스, 초대 코드(길드장)·떠나기), 아래는 보조 탭 셋이다.
+// 길드원(접속 여부·기여, 길드장의 위임·내보내기, 떠난 선원), 레벨(문턱과 보너스 사다리), 항해일지.
+// 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주기만 한다.
 const nameOf = (m: GuildMemberItem) => m.nick ?? '이름 없음';
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 
@@ -124,11 +133,14 @@ function NoGuild({ busy, run, setToast }: { busy: boolean; run: Run; setToast: N
   );
 }
 
-/** 길드가 있을 때 — 길드 정보·초대 코드·떠나기와 길드원 목록 */
+type GuildTab = 'members' | 'levels' | 'logbook';
+
+/** 길드가 있을 때 — 위는 길드 정보(성장·초대 코드·떠나기), 아래는 길드원·레벨·항해일지 탭 */
 function GuildView({ guild, me, busy, run, setToast, ask }: {
   guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: Confirm) => void;
 }) {
   const nowMs = Date.parse(useNow());
+  const [tab, setTab] = useState<GuildTab>('members');
   const { active, departed } = splitMembers(guild.members);
   const leader = guild.role === 'leader';
   const leave = leaveOutcome(guild, me);
@@ -150,6 +162,7 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
     <div className="flex flex-col gap-3">
       <Panel title="길드 정보" className="min-w-0">
         <div className="flex flex-col gap-3 text-sm">
+          <GrowthSummary growth={guild.growth} />
           <p className="m-0">길드원 {active.length}/{GUILD_MAX_MEMBERS}명 · 나는 {leader ? '길드장' : '길드원'}이에요.</p>
           {leader && (
             <section className="flex flex-col gap-1.5" aria-label="초대 코드">
@@ -179,7 +192,7 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
                             text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?`,
                             done: `${guild.name} 길드를 해산했어요.` }
                           : { title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: guild.id, uid: me },
-                            text: `${guild.name} 길드를 떠날까요? 남긴 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.`,
+                            text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.`,
                             done: `${guild.name} 길드를 떠났어요.` })}>
                   길드 떠나기
                 </Button>
@@ -187,47 +200,117 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
           </section>
         </div>
       </Panel>
-      <Panel title={`길드원 ${active.length}명`} className="min-w-0">
+      <Panel className="min-w-0">
+        <SubTabs<GuildTab> activeKey={tab} onSelect={setTab} items={[
+          { key: 'members', label: '길드원', sub: `${active.length}명` },
+          { key: 'levels', label: '레벨', sub: `Lv.${guild.growth.level}` },
+          { key: 'logbook', label: '항해일지', sub: `${guild.logbook.length}건` },
+        ]} />
         <div className="pf-scroll-panel h-56 overflow-y-auto pr-1 flex flex-col gap-3">
-          <ul className="flex flex-col gap-1.5">
-            {active.map(m => {
-              const can = memberActions(guild, me, m);
-              return (
-                <li key={m.uid} className="flex items-center gap-2 text-sm">
-                  <span className={cx('size-2 shrink-0', m.online ? 'bg-accent' : 'bg-line')} aria-hidden="true" />
-                  <span className="flex-1 min-w-0">
-                    <b className={cx('block truncate', m.uid === me && 'text-gold')}>{nameOf(m)}</b>
-                    <span className={cx('block text-xs', m.online ? 'text-accent' : 'text-text-dim')}>
-                      {m.online ? '접속 중' : '접속하지 않음'}
+          {tab === 'members' && (
+            <>
+              <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
+                {active.map(m => {
+                  const can = memberActions(guild, me, m);
+                  return (
+                    <li key={m.uid} className="flex items-center gap-2 text-sm">
+                      <span className={cx('size-2 shrink-0', m.online ? 'bg-accent' : 'bg-line')} aria-hidden="true" />
+                      <span className="flex-1 min-w-0">
+                        <b className={cx('block truncate', m.uid === me && 'text-gold')}>{nameOf(m)}</b>
+                        <span className="block text-xs text-text-dim">
+                          <span className={m.online ? 'text-accent' : undefined}>{m.online ? '접속 중' : '접속하지 않음'}</span>
+                          {' · '}오늘 <b className="text-text">{fmtNum(m.contribution.today)}</b>
+                          {' · '}누적 <b className="text-text">{fmtNum(m.contribution.total)}</b>
+                        </span>
+                      </span>
+                      {m.role === 'leader' && <Badge>길드장</Badge>}
+                      {can.handover && (
+                        <Button size="sm" disabled={busy}
+                                onClick={() => ask({ title: '길드장 넘기기', label: '넘기기',
+                                  op: { op: 'handover', guildId: guild.id, uid: m.uid },
+                                  text: `${nameOf(m)} 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
+                                  done: `${nameOf(m)} 님에게 길드장을 넘겼어요.` })}>넘기기</Button>
+                      )}
+                      {can.kick && (
+                        <Button size="sm" disabled={busy}
+                                onClick={() => ask({ title: '길드원 내보내기', label: '내보내기',
+                                  op: { op: 'remove', guildId: guild.id, uid: m.uid },
+                                  text: `${nameOf(m)} 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.`,
+                                  done: `${nameOf(m)} 님을 내보냈어요.` })}>내보내기</Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {departed.length > 0 && (
+                <section className="flex flex-col gap-1" aria-label="떠난 선원">
+                  <b className="text-xs">떠난 선원</b>
+                  {departed.map(m => (
+                    <span key={m.uid} className="flex items-center gap-2 text-sm text-text-dim">
+                      <span className="flex-1 min-w-0 truncate">{nameOf(m)}</span>
+                      <span className="shrink-0 text-xs">누적 {fmtNum(m.contribution.total)}</span>
                     </span>
-                  </span>
-                  {m.role === 'leader' && <Badge>길드장</Badge>}
-                  {can.handover && (
-                    <Button size="sm" disabled={busy}
-                            onClick={() => ask({ title: '길드장 넘기기', label: '넘기기',
-                              op: { op: 'handover', guildId: guild.id, uid: m.uid },
-                              text: `${nameOf(m)} 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
-                              done: `${nameOf(m)} 님에게 길드장을 넘겼어요.` })}>넘기기</Button>
-                  )}
-                  {can.kick && (
-                    <Button size="sm" disabled={busy}
-                            onClick={() => ask({ title: '길드원 내보내기', label: '내보내기',
-                              op: { op: 'remove', guildId: guild.id, uid: m.uid },
-                              text: `${nameOf(m)} 님을 길드에서 내보낼까요? 남긴 기록은 길드에 남아요.`,
-                              done: `${nameOf(m)} 님을 내보냈어요.` })}>내보내기</Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-          {departed.length > 0 && (
-            <section className="flex flex-col gap-1" aria-label="떠난 선원">
-              <b className="text-xs">떠난 선원</b>
-              {departed.map(m => <span key={m.uid} className="text-sm text-text-dim truncate">{nameOf(m)}</span>)}
-            </section>
+                  ))}
+                </section>
+              )}
+            </>
           )}
+          {tab === 'levels' && (
+            <>
+              <ProgressLadder steps={levelSteps(guild.growth).map(s => ({
+                key: String(s.level),
+                label: `Lv.${s.level}`,
+                meta: s.level === 1 ? '보너스 없음'
+                  : `기여 ${fmtNum(s.floor)}${s.perks.length > 0 ? ` · ${s.perks.join(' · ')}` : ''}`,
+                state: s.state,
+              }))} />
+              <Note size="xs" className="my-0">
+                길드원이 얻은 명성만큼 기여가 쌓여요(한 사람당 하루 {fmtNum(GUILD_DAILY_FAME_CAP)}까지, 한국 시간 새벽 4시에 새로 세요).
+                일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 보너스는 길드원 모두가 같게 받아요.
+              </Note>
+            </>
+          )}
+          {tab === 'logbook' && (guild.logbook.length > 0 ? (
+            <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
+              {guild.logbook.map(l => (
+                <li key={l.id} className={cx('flex items-start gap-2 text-sm',
+                  (l.kind === 'legendary' || l.kind === 'named') && 'text-gold')}>
+                  <span className="flex-1 min-w-0">{logLine(l)}</span>
+                  <span className="shrink-0 text-xs text-text-dim">{logAgoText(l.at, nowMs)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <Note>아직 남은 기록이 없어요. 가입·탈퇴, 전설 획득, 네임드 토벌이 여기에 남아요.</Note>)}
         </div>
       </Panel>
     </div>
+  );
+}
+
+/** 길드 레벨 요약 — 레벨, 누적 기여, 다음 레벨까지의 막대, 지금 받는 보너스 */
+function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
+  const bar = growthBar(growth);
+  const lines = bonusLines(growth.bonus);
+  return (
+    <section className="flex flex-col gap-1.5" aria-label="길드 레벨">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="pf-accent text-lg text-gold">Lv.{growth.level}</span>
+        <span className="text-xs text-text-dim">누적 기여 <b className="text-text">{fmtNum(growth.total)}</b></span>
+      </div>
+      <span className="block h-2 border border-line bg-surface-2" role="meter" aria-label="다음 레벨까지 진행"
+            aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
+        <span className={cx('block h-full', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
+              style={{ width: `${bar.ratio * 100}%` }} />
+      </span>
+      <span className="text-xs text-text-dim">
+        {bar.remaining === null ? '최고 레벨이에요.' : `다음 레벨까지 기여 ${fmtNum(bar.remaining)}`}
+      </span>
+      <Inset className="px-2 py-1.5 flex flex-col gap-0.5">
+        <b className="text-xs">받는 보너스</b>
+        {lines.length > 0
+          ? lines.map(line => <span key={line} className="text-sm text-accent">{line}</span>)
+          : <span className="text-xs text-text-dim">Lv.2부터 길드원 모두가 보너스를 받아요.</span>}
+      </Inset>
+    </section>
   );
 }
