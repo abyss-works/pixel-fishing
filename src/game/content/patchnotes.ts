@@ -16,6 +16,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.15.3',
+    date: '2026-11-05',
+    summary: '접속 관련 문제를 고쳤어요',
+    notes: [
+      { tag: '기타', text: '새로고침한 직후 다른 창에서 접속했다는 안내가 뜨던 문제를 고쳤어요.' },
+      { tag: 'UI', text: '게임을 불러오는 동안 불러오는 중 화면이 떠요.' },
+      { tag: '기능', text: '다른 화면을 보는 동안 업데이트가 나오면 알려 드려요. 설정의 알림에서 시스템 알림을 켤 수 있어요.' },
+    ],
+  },
+  {
     version: '0.15.2',
     date: '2026-11-05',
     summary: '네임드 결투와 밤 낚시를 조정했어요',
