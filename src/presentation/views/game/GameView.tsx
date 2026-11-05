@@ -27,12 +27,15 @@ import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
 import MailboxButton from '../overlays/mailbox/MailboxButton';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
+import FriendsButton from '../overlays/friends/FriendsButton';
+import FriendsModal from '../overlays/friends/FriendsModal';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
+import PresenceChip from '../overlays/live/PresenceChip';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
@@ -67,6 +70,7 @@ export default function GameView(props: GameViewProps) {
   const [statsOpen, setStatsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
@@ -148,7 +152,12 @@ export default function GameView(props: GameViewProps) {
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
-                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} badge={props.badge} />
+                   notice={atSea ? (
+                     <div className="flex flex-col gap-2">
+                       <PresenceChip region={region} />
+                       <TraceCard onTrack={setTracking} />
+                     </div>
+                   ) : null} badge={props.badge} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
@@ -163,6 +172,8 @@ export default function GameView(props: GameViewProps) {
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
+        <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
+        {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
         {mailboxOpen && (
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
         )}

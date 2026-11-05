@@ -10,6 +10,7 @@ import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
+import { othersFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
@@ -97,6 +98,16 @@ export default function Field({
   const schools = useSchools(region);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어를 엔진이 프레임마다 그린다
+  const readPosition = useCallback(() => {
+    const pos = engine.getPosition();
+    return { region, x: Math.round(pos.x), y: Math.round(pos.y), line: engine.getSnapshot().phase !== 'idle' };
+  }, [engine, region]);
+  useLivePosition(readPosition);
+  useEffect(() => {
+    engine.setOthersSource(now => othersFrame(region, now));
+    return () => engine.setOthersSource(null);
+  }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
   const fish: Fish | null = snapshot.fishId

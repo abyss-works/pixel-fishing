@@ -5,7 +5,7 @@ import { fish, seedUser, testUid } from './actionHarness.js';
 /** 계정 행을 가진 공개 표 전부. 계정 정리가 비워야 하는 목록이다 */
 export const USER_TABLES = [
   'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
-  'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets',
+  'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -62,6 +62,10 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.bounty_progress (user_id, zone, quest_id) values ($1, 'pacific', 'q1')`, [uid]);
   await client.query(`insert into public.bounty_tickets (user_id, quest_id) values ($1, 'q1')`, [uid]);
   await client.query(`insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'general', 'q0')`, [uid]);
+  // 차단은 상대 계정이 있어야 한다 — 이 계정이 차단한 행 하나와 이 계정을 차단한 행 하나를 만든다
+  const other = testUid(seq++);
+  await seedUser(client, { uid: other, email: null, nickname: null });
+  await client.query('insert into public.blocks (user_id, blocked_id) values ($1, $2), ($2, $1)', [uid, other]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);
