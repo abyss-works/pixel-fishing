@@ -47,14 +47,15 @@ function BarPlot({ values, labels, height, max, mark, valueText }: {
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-line" />
       <div className="absolute inset-0 flex items-end gap-px">
         {values.map((v, i) => {
-          const h = Math.max(v > 0 ? 4 : 1,
-            Math.round((Number.isFinite(v) ? Math.max(0, v) : 0) / max * height));
+          // 유한하지 않은 값은 집계되지 않은 칸이다 — 0(1px 선)과 구분되게 비워 둔다
+          const missing = !Number.isFinite(v);
+          const h = missing ? 0 : Math.max(v > 0 ? 4 : 1, Math.round(Math.max(0, v) / max * height));
           const hi = i === mark;
           return (
             <div key={i} className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                 title={`${labels?.[i] ?? i}: ${valueText(v, i)}`}>
+                 title={`${labels?.[i] ?? i}: ${missing ? '미집계' : valueText(v, i)}`}>
               <div className={cx('rounded-t-[1px]',
-                                 v > 0 ? cx('border-t-2', hi ? 'border-gold' : 'border-text-dim') : 'bg-line')}
+                                 v > 0 ? cx('border-t-2', hi ? 'border-gold' : 'border-text-dim') : !missing && 'bg-line')}
                    style={{ height: h, backgroundImage: v > 0 ? (hi ? BODY_HI : BODY) : undefined }} />
             </div>
           );
@@ -121,44 +122,6 @@ export function BarsChart({ values, labels, height = 88, max, highlight, highlig
       </div>
       <BarPlot values={values} labels={labels} height={height} max={domain} mark={mark} valueText={valueText} />
       {labels && <BarTicks count={values.length} labels={labels} />}
-    </figure>
-  );
-}
-
-/**
- * 이중 막대 — 두 수열을 위아래로 놓고 같은 날 축·같은 눈금 상한으로 비교한다(DAU vs WAU).
- * 두 줄이 한 상한을 쓰므로 높이를 그대로 견줄 수 있다. 맨 오른쪽(금일)을 골드로 세운다.
- */
-export function StackedBarsPair({ a, b, labels, ariaLabel }: {
-  a: readonly number[]; b: readonly number[]; labels?: readonly string[];
-  ariaLabel: string;
-}) {
-  const max = Math.max(1, ...[...a, ...b].map(finite));
-  const lastOf = (xs: readonly number[]) => (xs.length > 0 ? fmtNum(xs[xs.length - 1]) : '—');
-  return (
-    <figure role="img" aria-label={ariaLabel} className="m-0 flex flex-col gap-1">
-      <div className="flex items-baseline justify-between gap-2 pl-10 text-2xs text-text-dim">
-        <span>최대 <span className="pf-accent">{fmtNum(max)}</span></span>
-        <span>
-          금일 DAU <span className="pf-accent text-gold">{lastOf(a)}</span>
-          {' · '}WAU <span className="pf-accent text-gold">{lastOf(b)}</span>
-        </span>
-      </div>
-      {[{ name: 'WAU', data: b }, { name: 'DAU', data: a }].map(row => (
-        <div key={row.name} className="flex items-end gap-2">
-          <span className="w-8 shrink-0 pb-px text-right text-2xs text-text-dim">{row.name}</span>
-          <div className="min-w-0 flex-1">
-            <BarPlot values={row.data} labels={labels} height={44} max={max}
-                     mark={row.data.length - 1} valueText={v => fmtNum(v)} />
-          </div>
-        </div>
-      ))}
-      {labels && (
-        <div className="flex gap-2">
-          <span className="w-8 shrink-0" />
-          <div className="min-w-0 flex-1"><BarTicks count={a.length} labels={labels} /></div>
-        </div>
-      )}
     </figure>
   );
 }

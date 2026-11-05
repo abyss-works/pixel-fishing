@@ -1,9 +1,11 @@
-// 예약 작업: 빈 익명 계정을 매일 한 번 정리한다.
-// 기본은 dry-run이다. 대상을 세어 요약만 돌려주고, PURGE_ANON_ENABLED가 정확히 1일 때만 지운다.
+// 예약 작업: 빈 익명 계정을 매일 한 번 정리한다. 같은 실행에서 보관 기간이 지난 채팅과 채팅 신고도 지운다.
+// 계정 정리의 기본은 dry-run이다. 대상을 세어 요약만 돌려주고, PURGE_ANON_ENABLED가 정확히 1일 때만 지운다.
+// 채팅 보관 기간 정리는 보관 정책이라 dry-run 설정과 무관하게 항상 지운다.
 // 인증: 예약 실행기가 CRON_SECRET을 Authorization: Bearer로 첨부한다. 불일치와 부재는 401.
 // 주의: Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { purgeAccount, selectPurgeTargets } from '../_data/account.js';
+import { deleteExpiredChat } from '../_data/chat.js';
 import { database } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
@@ -32,6 +34,8 @@ interface PurgeSummary {
   failed: number;
   /** 대상 id의 앞 8자리 */
   sample: string[];
+  /** 보관 기간이 지나 지운 채팅 메시지와 신고 기록 수 */
+  chat: { messages: number; reports: number };
 }
 
 function reqEnv(key: string): string {
@@ -47,11 +51,12 @@ interface PurgeFailure { id: string; error: unknown }
 async function runPurge(
   { db, withTransaction }: Pick<Database, 'db' | 'withTransaction'>, enabled: boolean, now: Date,
 ): Promise<{ summary: PurgeSummary; firstFailure?: PurgeFailure }> {
+  const chat = await deleteExpiredChat(db, now.toISOString());
   const cutoff = new Date(now.getTime() - IDLE_DAYS * 86_400_000).toISOString();
   const found = await selectPurgeTargets(db, cutoff, BATCH_LIMIT);
   const summary: PurgeSummary = {
     dryRun: !enabled, cutoff, targets: found.total, batch: found.ids.length,
-    deleted: 0, skipped: 0, failed: 0, sample: found.ids.slice(0, SAMPLE_SIZE).map(id => id.slice(0, 8)),
+    deleted: 0, skipped: 0, failed: 0, sample: found.ids.slice(0, SAMPLE_SIZE).map(id => id.slice(0, 8)), chat,
   };
   let firstFailure: PurgeFailure | undefined;
   if (enabled) {

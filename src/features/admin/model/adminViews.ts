@@ -1,41 +1,26 @@
 import { BOATS, boatNameOf } from '../../../game/content/boats';
 import type {
-  AdminCatchQualityRow, AdminEconomyRow, AdminEventRow, AdminDexMismatchRow,
-  AdminImportLogRow, AdminSpamFlagRow, AdminUserRow,
+  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
-import { REGION_NAMES, REGION_ORDER, toRegionId } from './regions';
-
-export const ONLINE_WINDOW_MIN = 10;
+import { REGION_ORDER } from './regions';
 
 /** DB 숫자 열은 number·string·null 어느 형태로도 올 수 있다. */
 export const adminNumber = (value: number | string | null): number =>
   value === null ? NaN : Number(value);
 
-export interface OverviewMetrics {
-  catch7d: number;
+export interface RiskSignals {
   restrictedCount: number;
   spamUsers: number;
   riskTotal: number;
-  goldTotal: number;
-  fameTotal: number;
 }
 
-/** 개요 탭의 KPI와 위험 수를 원본 행에서 계산한다. */
-export function selectOverviewMetrics(
+/** 개요 탭의 위험 신호(제재 계정, 연타 플래그 사용자) 수를 센다. */
+export function selectRiskSignals(
   users: readonly AdminUserRow[], flags: readonly AdminSpamFlagRow[],
-  imports: readonly AdminImportLogRow[], quality: readonly AdminCatchQualityRow[],
-): OverviewMetrics {
-  const catch7d = quality.slice(0, 7).reduce((sum, row) => sum + row.catches, 0);
+): RiskSignals {
   const restrictedCount = users.filter(user => user.restricted === true).length;
   const spamUsers = flags.reduce((count, flag) => count + (flag.fast_gap_7d > 0 ? 1 : 0), 0);
-  return {
-    catch7d,
-    restrictedCount,
-    spamUsers,
-    riskTotal: restrictedCount + spamUsers + imports.length,
-    goldTotal: users.reduce((sum, user) => sum + adminNumber(user.gold), 0),
-    fameTotal: users.reduce((sum, user) => sum + adminNumber(user.fame), 0),
-  };
+  return { restrictedCount, spamUsers, riskTotal: restrictedCount + spamUsers };
 }
 
 export interface ProgressionDashboard {
@@ -101,55 +86,15 @@ export function selectProgressionDashboard(users: readonly AdminUserRow[]): Prog
   };
 }
 
-export interface LiveDashboard {
-  buckets: { online: AdminUserRow[]; recent1h: AdminUserRow[]; today: AdminUserRow[] };
-  whereHist: { values: number[]; labels: string[] };
-  regionLabel: (user: AdminUserRow) => string | undefined;
-}
-
-/** 마지막 행동 시각으로 접속 신선도 구간과 온라인 위치 분포를 만든다. */
-export function selectLiveDashboard(users: readonly AdminUserRow[], nowMs: number): LiveDashboard {
-  const freshness = (user: AdminUserRow): number | null => {
-    const time = user.last_action_at ? Date.parse(user.last_action_at) : NaN;
-    return Number.isFinite(time) ? (nowMs - time) / 60_000 : null;
-  };
-  const online = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < ONLINE_WINDOW_MIN;
-  });
-  const recent1h = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < 60;
-  });
-  const today = users.filter(user => {
-    const minutes = freshness(user);
-    return minutes !== null && minutes < 24 * 60;
-  });
-  const labels = [...REGION_ORDER.map(id => REGION_NAMES[id]), '기타'];
-  const values = new Array(labels.length).fill(0) as number[];
-  for (const user of online) {
-    const region = toRegionId(user.location_kind, user.location_id);
-    const index = region ? REGION_ORDER.findIndex(id => id === region) : -1;
-    values[index >= 0 ? index : labels.length - 1]++;
-  }
-  const regionLabel = (user: AdminUserRow): string | undefined => {
-    const region = toRegionId(user.location_kind, user.location_id);
-    return region ? REGION_NAMES[region] : undefined;
-  };
-  return { buckets: { online, recent1h, today }, whereHist: { values, labels }, regionLabel };
-}
-
 export interface AntiAbuseRows {
   spamUsers: AdminSpamFlagRow[];
   perfectOutliers: AdminSpamFlagRow[];
-  topMismatch: AdminDexMismatchRow[];
   restricted: AdminUserRow[];
 }
 
 /** 이상탐지 탭에서 정렬·필터하는 운영 자료를 만든다. */
 export function selectAntiAbuseRows(
   users: readonly AdminUserRow[], flags: readonly AdminSpamFlagRow[],
-  mismatch: readonly AdminDexMismatchRow[],
 ): AntiAbuseRows {
   const spamUsers = flags.filter(flag => flag.fast_gap_7d > 0)
     .sort((a, b) => b.fast_gap_7d - a.fast_gap_7d);
@@ -157,11 +102,8 @@ export function selectAntiAbuseRows(
   const perfectOutliers = globalPct === null ? [] : flags
     .filter(flag => flag.catches_7d >= 20 && (flag.perfect_pct ?? 0) > globalPct + 40)
     .sort((a, b) => (b.perfect_pct ?? 0) - (a.perfect_pct ?? 0));
-  const topMismatch = [...mismatch]
-    .sort((a, b) => b.missing_events - a.missing_events)
-    .slice(0, 15);
   const restricted = users.filter(user => user.restricted === true);
-  return { spamUsers, perfectOutliers, topMismatch, restricted };
+  return { spamUsers, perfectOutliers, restricted };
 }
 
 export interface EconomyMetrics {
@@ -185,25 +127,61 @@ export function selectEconomyMetrics(
   return { goldStats, goldSum, inflowTotal, outflowTotal };
 }
 
-/** 사용자 명부 검색을 대소문자 구분 없는 부분 일치로 처리한다. */
+/** 관리자 화면이 계정을 가리킬 때 보이는 식별 정보. 명부 행이 그대로 이 모양이다. 게스트의 email은 null이다 */
+export type AdminIdentity = Pick<AdminUserRow, 'user_id' | 'email' | 'nickname' | 'is_anonymous'>;
+
+/** 계정 표시 이름 "닉네임(이메일)". 게스트는 이메일 대신 게스트, 닉네임이 없으면 이름 없음, 이메일을 모르면 —이다 */
+export function adminUserLabel(user: AdminIdentity): string {
+  const contact = user.is_anonymous === true ? '게스트' : user.email ?? '—';
+  return `${user.nickname ?? '이름 없음'}(${contact})`;
+}
+
+/** 짧은 계정 id(앞 8자리) */
+export const shortUid = (uid: string): string => uid.slice(0, 8);
+
+/** 명부로 uid의 식별 정보를 찾는 함수를 만든다. uid는 대소문자를 구분하지 않고, 명부에 없으면 uid만 있는 식별 정보다 */
+export function adminIdentityLookup(users: readonly AdminIdentity[]): (uid: string) => AdminIdentity {
+  const byUid = new Map(users.map(user => [user.user_id.toLowerCase(), user]));
+  return uid => byUid.get(uid.toLowerCase()) ?? { user_id: uid, nickname: null, email: null, is_anonymous: null };
+}
+
+/**
+ * 휴면 게스트 여부. 진행이 없는 게스트(저장이 없거나 골드와 명성이 모두 0)이고 제재되지 않은 계정이다.
+ * 저장 상태만으로 정하므로 그 계정이 진행을 시작하면 별도 처리 없이 휴면에서 벗어난다.
+ * 계정 유저와 제재된 계정은 관리 대상이라 진행이 없어도 휴면으로 보지 않는다.
+ */
+export function isDormantGuest(user: AdminUserRow): boolean {
+  if (user.is_anonymous !== true || user.restricted === true) return false;
+  // 저장이 없는 계정은 골드와 명성 열이 null이다
+  return (user.gold === null || adminNumber(user.gold) === 0)
+    && (user.fame === null || adminNumber(user.fame) === 0);
+}
+
+/** 명부를 활동 계정과 휴면 게스트로 나눈다. 각 목록은 입력 순서를 유지한다 */
+export function splitDormantGuests(users: readonly AdminUserRow[]): { active: AdminUserRow[]; dormant: AdminUserRow[] } {
+  const active: AdminUserRow[] = [];
+  const dormant: AdminUserRow[] = [];
+  for (const user of users) (isDormantGuest(user) ? dormant : active).push(user);
+  return { active, dormant };
+}
+
+/** 사용자 명부 검색을 계정 id·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */
 export function filterAdminUsers(users: readonly AdminUserRow[], query: string): AdminUserRow[] {
   const normalized = query.trim().toLowerCase();
   return users.filter(user => !normalized || user.user_id.toLowerCase().includes(normalized)
-    || (user.email ?? '').toLowerCase().includes(normalized));
+    || (user.email ?? '').toLowerCase().includes(normalized)
+    || (user.nickname ?? '').toLowerCase().includes(normalized));
 }
 
 export interface AdminUserDetailData {
-  mismatch: AdminDexMismatchRow[];
   flag: AdminSpamFlagRow | null;
-  imports: AdminImportLogRow[];
   byType: Array<[string, number]>;
   fastGaps: Set<number>;
 }
 
-/** 한 사용자 감사 창의 이벤트 집계·연타 인덱스와 관련 레코드를 추린다. */
+/** 한 사용자 감사 창의 이벤트 집계·연타 인덱스와 연타·판정 플래그를 추린다. */
 export function selectAdminUserDetail(
-  userId: string, events: readonly AdminEventRow[], mismatch: readonly AdminDexMismatchRow[],
-  flags: readonly AdminSpamFlagRow[], imports: readonly AdminImportLogRow[],
+  userId: string, events: readonly AdminEventRow[], flags: readonly AdminSpamFlagRow[],
 ): AdminUserDetailData {
   const byTypeCounts = new Map<string, number>();
   for (const event of events) {
@@ -219,9 +197,7 @@ export function selectAdminUserDetail(
     lastCatch = event;
   });
   return {
-    mismatch: mismatch.filter(row => row.user_id === userId),
     flag: flags.find(row => row.user_id === userId) ?? null,
-    imports: imports.filter(row => row.user_id === userId),
     byType: [...byTypeCounts.entries()].sort((a, b) => b[1] - a[1]),
     fastGaps,
   };

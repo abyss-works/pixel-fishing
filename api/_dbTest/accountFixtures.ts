@@ -5,7 +5,9 @@ import { fish, seedUser, testUid } from './actionHarness.js';
 /** 계정 행을 가진 공개 표 전부. 계정 정리가 비워야 하는 목록이다 */
 export const USER_TABLES = [
   'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
-  'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets',
+  'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
+  'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
+  'guild_bonus_donations', 'last_positions', 'guild_join_requests',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -62,6 +64,26 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.bounty_progress (user_id, zone, quest_id) values ($1, 'pacific', 'q1')`, [uid]);
   await client.query(`insert into public.bounty_tickets (user_id, quest_id) values ($1, 'q1')`, [uid]);
   await client.query(`insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'general', 'q0')`, [uid]);
+  // 차단은 상대 계정이 있어야 한다 — 이 계정이 차단한 행 하나와 이 계정을 차단한 행 하나를 만든다
+  const other = testUid(seq++);
+  await seedUser(client, { uid: other, email: null, nickname: null });
+  await client.query('insert into public.blocks (user_id, blocked_id) values ($1, $2), ($2, $1)', [uid, other]);
+  // 채팅 — 이 계정이 보낸 메시지 하나와 이 계정이 낸 신고 하나
+  const { rows: [chat] } = await client.query<{ id: string }>(
+    `insert into public.chat_messages (user_id, nick, text) values ($1, $2, '안녕') returning id`, [uid, spec.nickname]);
+  await client.query(`insert into public.chat_reports (user_id, message_id, target_id, lines) values ($1, $2, $3, '[]')`,
+    [uid, chat.id, other]);
+  // 길드 — 이 계정이 길드장인 길드 하나(혼자라 계정 정리 때 길드도 없어진다)
+  const { rows: [guild] } = await client.query<{ id: string }>(
+    'insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id', [`g-${spec.nickname}`]);
+  await client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [guild.id, uid]);
+  await client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame) values ($1, $2, current_date, 10)`, [guild.id, uid]);
+  await client.query(`insert into public.guild_logs (guild_id, user_id, kind) values ($1, $2, 'join')`, [guild.id, uid]);
+  await client.query(`insert into public.guild_bonus_donations (guild_id, user_id, bonus, gold) values ($1, $2, 'sell', 100)`, [guild.id, uid]);
+  await client.query(`insert into public.guild_join_requests (user_id, guild_id) values ($1, $2)`, [uid, guild.id]);
+  await client.query(`insert into public.play_sessions (user_id, started_at, ended_at, duration_sec) values ($1, now(), now(), 0)`, [uid]);
+  await client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]);
+  await client.query(`insert into public.last_positions (user_id, region, x, y) values ($1, 'world', 10, 20)`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);

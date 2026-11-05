@@ -8,7 +8,6 @@ import { BASE_CANVAS_W, BASE_CANVAS_H } from '../../../../game/rendering/pixel/c
 import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
 import NightOverlay from '../../../ui/hud/NightOverlay';
-import TimeBadge from '../../../ui/hud/TimeBadge';
 import Button from '../../../ui/Button';
 import Panel from '../../../ui/Panel';
 import FacilityIcon from './FacilityIcon';
@@ -27,7 +26,7 @@ interface Props {
 const HOUSE_RECT = { x: 0, y: 0, w: 64, h: 52 };
 const drawHouse = (ctx: Parameters<typeof BUILDING_SPRITES.house.draw>[0]) => BUILDING_SPRITES.house.draw(ctx, HOUSE_RECT);
 
-/** 카드 아이콘 — 승선은 지금 내 배, 여객선은 집, 나머지는 가구 스프라이트 */
+/** 카드 아이콘 — 승선은 지금 내 배, 마을행은 집, 나머지(빠른 이동 여객선 포함)는 가구 스프라이트 */
 function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture; boat: number }) {
   if (facility.id === 'exit' && base !== 'home' && boat > 0) {
     return <span data-icon="boat" className="flex h-full items-center justify-center"><BoatSprite tier={boat} preset="row" /></span>;
@@ -41,7 +40,7 @@ const SECTIONS = ['정보', '상점', '이동'] as const;
 const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
   rank: '정보', bounty: '정보',
   rod: '상점', boat: '상점', shop: '상점', sell: '상점',
-  travel: '이동', exit: '이동',
+  travel: '이동', ferry: '이동', exit: '이동',
 };
 
 // 거점 카드 메뉴 — 거점 배경 위 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
@@ -96,7 +95,6 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
           })}
         </div>
       </div>
-      <TimeBadge className="top-2 right-2" />
     </GameFrame>
   );
 }

@@ -1,97 +1,89 @@
-// 활동 구역 — 접속·활동의 시간축(DAU/WAU)과 리텐션 코호트. boot 이벤트 기록은 2026-08 이후 시작됐다.
-// 따라서 그 이전 기간의 수치는 '행동한 유저' 수다.
+// 활동 구역 — 일별 집계의 장기 시계열(활성·세션·신규)과 가입일 코호트 리텐션(D+1·D+7·D+30).
+// 일별 집계는 하루가 끝난 뒤 쌓이므로 집계되지 않은 날은 빈 막대(미집계)로 남는다.
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
-import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
-import { readAdminMetrics } from '../../../../features/admin/service/queries';
-import { adminKeys } from '../../../../features/admin/service/queryKeys';
-import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import { fmtNum, lastNDays } from '../../../../features/admin/model/metrics';
+import { selectDailySeries, selectRetentionTable } from '../../../../features/admin/model/dashboard';
+import { useAdminDailyStats, useAdminRetention } from '../../../../features/admin/service/useAdminStats';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { StackedBarsPair, RetentionCell } from '../charts';
+import { BarsChart, RetentionCell } from '../charts';
 import { Cell, CellGrid, TabState } from '../layout';
 import type { DayRange } from './dayRange';
 
-const COHORTS = ['d1', 'd3', 'd7', 'd14', 'd30'] as const;
-const RETENTION_COLS: { key: typeof COHORTS[number]; label: string }[] = [
-  { key: 'd1', label: 'D+1' }, { key: 'd3', label: 'D+3' }, { key: 'd7', label: 'D+7' },
-  { key: 'd14', label: 'D+14' }, { key: 'd30', label: 'D+30' },
-];
+const RETENTION_COLS = [
+  { key: 'd1', label: 'D+1' }, { key: 'd7', label: 'D+7' }, { key: 'd30', label: 'D+30' },
+] as const;
 
-// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 축과 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminMetrics>> = [[], []];
+// 코호트 표에 보이는 가입일 수
+const COHORT_ROWS = 30;
 
 export default function MetricsTab({ range }: { range: DayRange }) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 범위는 캐시 키에 들어간다 — 전환하면 그 범위를 새로 조회한다
-  const { data, loading, error, refresh } =
-    useAdminQuery(adminKeys.metrics(Number(range)), () => readAdminMetrics(Number(range)), granted);
+  const days = Number(range);
+  const stats = useAdminDailyStats(days);
+  const retention = useAdminRetention();
 
-  // 조회 결과는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
-  const [dailyDesc, retention] = data ?? EMPTY;
-  const daily = [...dailyDesc].reverse();
-
-  const days = lastNDays(Number(range));
-  // 둘 다 과거→오름차순(BarsChart는 왼쪽이 과거, 맨 오른쪽이 금일) — fillSeries가 이미
-  // days 축과 같은 순서로 채우므로 여기서 뒤집지 않는다(이중 반전은 축을 깬다)
-  const dau = fillSeries(daily, days, r => r.day, r => r.dau);
-  const wau = fillSeries(daily, days, r => r.day, r => r.wau7);
-  // 막대 이름은 월-일만 — 눈금은 차트가 일정 간격으로 골라 보인다
-  const labels = days.map(d => d.slice(5));
+  const series = selectDailySeries(stats.data ?? [], lastNDays(days));
+  const cohorts = selectRetentionTable(retention.data ?? [], COHORT_ROWS);
+  const charts = [
+    { title: '활성 사람(DAU)', values: series.dau, aria: `최근 ${days}일 일별 활성 사람 수` },
+    { title: '세션 수', values: series.sessions, aria: `최근 ${days}일 일별 접속 세션 수` },
+    { title: '신규 사용자', values: series.newUsers, aria: `최근 ${days}일 일별 신규 사용자 수(게스트 포함)` },
+    { title: '신규 가입 계정', values: series.newAccounts, aria: `최근 ${days}일 일별 신규 가입 계정 수` },
+  ];
 
   return (
     <>
-      <TabState loading={loading && granted} error={error} onRetry={refresh} />
+      <TabState loading={(stats.loading || retention.loading) && granted} />
+      <TabState error={stats.error} onRetry={stats.refresh} />
+      <TabState error={retention.error} onRetry={retention.refresh} />
 
       <CellGrid>
-        <Cell title="활성 유저">
-          {daily.length > 0 ? (
-            <>
-              <StackedBarsPair a={dau} b={wau} labels={labels}
-                               ariaLabel={`일별 활성 유저, 최근 ${range}일의 DAU와 WAU, 금일 DAU ${fmtNum(dau[dau.length - 1] ?? NaN)}`} />
-              <Note size="2xs" className="my-0">
-                접속(boot) 기록이 생기기 전 구간은 행동이 있어야 DAU로 잡혀요. 그래서 낮게 읽히는 쪽이 맞아요.
-                WAU는 직전 7일을 합산한 고유 유저예요.
-              </Note>
-            </>
-          ) : (
-            <Note size="2xs" className="my-0">
-              {granted ? '아직 활성 데이터가 없어요.' : '운영 DB에 연결하면 채워져요.'}
-            </Note>
-          )}
-        </Cell>
-
-        <Cell title="리텐션 코호트" flush>
-          {retention.length > 0 ? (
-            <div className="overflow-x-auto px-1">
-              <DataTable>
-                <thead>
-                  <tr>
-                    <th className="text-left">코호트</th><th className="text-right">유저</th>
-                    {RETENTION_COLS.map(c => <th key={c.key} className="text-center">{c.label}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {retention.slice(0, 14).map(r => (
-                    <tr key={r.cohort}>
-                      <td className="whitespace-nowrap text-xs">{r.cohort}</td>
-                      <td className="text-right text-xs text-text-dim">{fmtNum(r.users)}</td>
-                      {RETENTION_COLS.map(c => (
-                        <RetentionCell key={c.key} pct={r[c.key]}
-                                       hint={`${r.cohort} 코호트 ${c.label}`} />
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </div>
-          ) : (
-            <Note size="2xs" className="my-0 px-3 py-2">
-              {granted ? '아직 코호트가 없어요.' : '운영 DB에 연결하면 채워져요.'}
-            </Note>
-          )}
-        </Cell>
+        {charts.map(c => (
+          <Cell key={c.title} title={c.title}>
+            <BarsChart values={c.values} labels={series.labels} height={72} highlight="peak" ariaLabel={c.aria} />
+          </Cell>
+        ))}
       </CellGrid>
+      <Note size="2xs" className="my-0">
+        {granted
+          ? `최근 ${days}일 중 ${series.collected}일이 집계되어 있어요. 비어 있는 날은 아직 집계하지 않은 날(미집계)이에요. 신규 사용자는 게스트를 포함해요.`
+          : '운영 DB에 연결하면 채워져요.'}
+      </Note>
+
+      <Cell title="리텐션 코호트" flush>
+        {cohorts.length > 0 ? (
+          <div className="overflow-x-auto px-1">
+            <DataTable>
+              <thead>
+                <tr>
+                  <th className="text-left">가입일</th><th className="text-right">인원</th>
+                  {RETENTION_COLS.map(c => <th key={c.key} className="text-center">{c.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {cohorts.map(r => (
+                  <tr key={r.day}>
+                    <td className="whitespace-nowrap text-xs">{r.day}</td>
+                    <td className="text-right text-xs text-text-dim">{fmtNum(r.size)}</td>
+                    {RETENTION_COLS.map(c => (
+                      <RetentionCell key={c.key} pct={r[c.key]} hint={`${r.day} 가입 ${c.label}`} />
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+            <Note size="2xs" className="my-0 px-2 pb-2">
+              가입일 코호트에서 D+N일에 활동한 사람의 비율(%)이에요. 빈 칸은 아직 그날이 오지 않은 코호트예요.
+            </Note>
+          </div>
+        ) : (
+          <Note size="2xs" className="my-0 px-3 py-2">
+            {granted ? '아직 코호트가 없어요.' : '운영 DB에 연결하면 채워져요.'}
+          </Note>
+        )}
+      </Cell>
     </>
   );
 }

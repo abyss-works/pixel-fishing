@@ -9,6 +9,8 @@ import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
+import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
 import {
   autoBoostForSpot, effectiveBite, manualBonusForSpot, minLevelOfPower,
   moveSpeed, powerZones, rodAxes, rodPower,
@@ -94,17 +96,17 @@ export interface ReachableZone {
   /** 지금 배로 갈 수 있는 해역 수 */
   open: number;
   total: number;
-  /** 하나도 못 갈 때 가장 먼저 필요한 배 단계. 하나라도 갈 수 있으면 null */
-  needBoat: number | null;
+  /** 아직 못 가는 해역을 하나 더 여는 가장 낮은 배 단계. 모두 갈 수 있으면 null */
+  nextBoat: number | null;
 }
 
-/** 지역마다 지금 배로 갈 수 있는 해역 수 */
+/** 지역마다 지금 배로 갈 수 있는 해역 수와 다음에 필요한 배 */
 export function selectReachableZones(game: GameState): ReachableZone[] {
   return ZONE_IDS.map(zone => {
     const spots = SPOTS.filter(spot => zoneOf(spot) === zone);
-    const open = spots.filter(spot => spot.boatTier <= game.boat).length;
-    const needBoat = open > 0 ? null : Math.min(...spots.map(spot => spot.boatTier));
-    return { zone, name: zoneById(zone)?.name ?? zone, open, total: spots.length, needBoat };
+    const closed = spots.filter(spot => spot.boatTier > game.boat);
+    const nextBoat = closed.length > 0 ? Math.min(...closed.map(spot => spot.boatTier)) : null;
+    return { zone, name: zoneById(zone)?.name ?? zone, open: spots.length - closed.length, total: spots.length, nextBoat };
   }).filter(zone => zone.total > 0);
 }
 
@@ -115,11 +117,12 @@ export interface StatsSummary {
   bag: BagStatus;
 }
 
-export function selectStatsSummary(game: GameState): StatsSummary {
+/** bagBonus는 서버가 알려 준 길드 가방 용량 보너스다(표시용) */
+export function selectStatsSummary(game: GameState, bagBonus = 0): StatsSummary {
   return {
     dexFound: FISH.filter(fish => formDiscovered(game, fish.id, 'normal')).length,
     dexTotal: FISH.length,
-    bag: selectBagStatus(game),
+    bag: selectBagStatus(game, bagBonus),
   };
 }
 
@@ -131,9 +134,16 @@ const EFFECT_CATEGORY: Record<keyof ArtifactEffects, BonusCategory> = {
   sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop',
 };
 
+/** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */
+const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
+  sell: 'shop', bag: 'fish', named: 'duel', rare: 'fish', mutation: 'fish',
+};
+
 export type BonusSource =
   | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects }
-  | { kind: 'bait'; bait: Bait };
+  | { kind: 'bait'; bait: Bait }
+  /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
+  | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -143,10 +153,11 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄)와 켜 둔 미끼.
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 켜 둔 미끼, 길드 보너스(1단계 이상).
+ * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
  * 낚싯대 파워에서 오는 효과(수동 보정·GOOD·PERFECT)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
-export function selectActiveBonuses(game: GameState): BonusRow[] {
+export function selectActiveBonuses(game: GameState, guild: { level: number; effects: GuildEffects } | null = null): BonusRow[] {
   const out: BonusRow[] = [];
   const owned = new Set(game.artifacts);
   for (const artifact of ARTIFACTS) {
@@ -158,5 +169,11 @@ export function selectActiveBonuses(game: GameState): BonusRow[] {
   }
   const bait = baitById(game.activeBait);
   if (bait) out.push({ category: 'fish', source: { kind: 'bait', bait }, manualOnly: true });
+  if (guild) {
+    for (const bonus of GUILD_BONUS_IDS) {
+      const value = guild.effects[bonus];
+      if (value > 0) out.push({ category: GUILD_CATEGORY[bonus], source: { kind: 'guild', level: guild.level, bonus, value }, manualOnly: false });
+    }
+  }
   return out;
 }

@@ -1,66 +1,79 @@
+import type { ReactNode } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
-import type { Movement } from '../../../../game/rules/stats';
 import { boatNameOf } from '../../../../game/content/boats';
 import type { ReachableZone, StatsSpotRow, StatsSummary } from '../../../../features/gameplay/model/stats';
-import Badge from '../../../ui/Badge';
 import BoatSprite from '../../../ui/BoatSprite';
-import Frame from '../../../ui/Frame';
-import Inset from '../../../ui/Inset';
-import PixelIcon from '../../../ui/PixelIcon';
-import SectionTitle from '../../../ui/SectionTitle';
-import StatCompare from '../../../ui/StatCompare';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
+import Inset from '../../../ui/Inset';
 import { StatValue } from './RodStatTable';
 
 const BAG_FILL = { normal: 'bg-gold', warn: 'bg-orange', danger: 'bg-danger' } as const;
-const BAG_CELLS = 10;
+const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
 
-// 배 탭 — 큰 배 그림, 이동 속도·가방 용량, 가방 칸 게이지, 지역별로 갈 수 있는지.
-export default function BoatTab({ game, movement, summary, row, zones }: {
-  game: GameState; movement: Movement; summary: StatsSummary; row: StatsSpotRow; zones: ReachableZone[];
+// 배 탭: 배 그림과 이름, 이동 속도와 가방 용량, 가방 막대, 지역별로 열린 해역 수와 남은 해역을 여는 배.
+export default function BoatTab({ game, summary, row, zones }: {
+  game: GameState; summary: StatsSummary; row: StatsSpotRow; zones: ReachableZone[];
 }) {
   const { bag } = summary;
-  const filled = Math.floor(bag.percent / BAG_CELLS);
   return (
-    <div className="flex flex-col gap-2 h-full">
-      <Frame className="bg-surface-2 flex items-center gap-4 px-3 py-3 min-h-[74px]">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      <div className="flex items-center gap-3 min-h-12">
         {game.boat > 0 && <BoatSprite tier={game.boat} preset="hero" />}
-        <div className="min-w-0 flex flex-col gap-1.5">
-          <div className="text-gold pf-accent text-xl truncate">{boatNameOf(game.boat, '배 없음')}</div>
-          <div className="flex flex-wrap gap-1">
-            {game.boat > 0 && <Badge>{game.boat}단계</Badge>}
-            <Badge>{movement === 'walk' ? '걷는 중' : '항해 중'}</Badge>
-          </div>
-        </div>
-      </Frame>
-      <StatCompare size="lg" rows={[
-        { label: '이동 속도', value: <StatValue stat={row.data.speed} unit="" digits={0} /> },
-        { label: '가방 용량', value: `${fmtNum(bag.cap)}마리` },
-      ]} />
-      <Inset className="px-3 py-2 flex flex-col gap-1.5">
-        <span className="flex items-center justify-between text-xs text-text-dim">
-          <span>가방</span>
-          <span className="pf-accent text-text">{fmtNum(bag.count)} / {fmtNum(bag.cap)} ({bag.percent}%)</span>
-        </span>
-        <span className="flex gap-1" aria-hidden="true">
-          {Array.from({ length: BAG_CELLS }, (_, i) => (
-            <span key={i} className={cx('flex-1 h-3 border border-line', i < filled && BAG_FILL[bag.level])} />
-          ))}
-        </span>
-      </Inset>
-      <SectionTitle>갈 수 있는 곳</SectionTitle>
-      <div className="flex flex-wrap gap-1.5">
-        {zones.map(z => z.needBoat === null ? (
-          <span key={z.zone} className="text-xs px-2 py-1 rounded-sm border border-line text-text">
-            {z.name}{z.open < z.total && <span className="text-text-dim"> {z.open}/{z.total}</span>}
-          </span>
-        ) : (
-          <span key={z.zone} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm border border-line text-text-dim">
-            <PixelIcon glyph="lock" size={10} />{z.name} · {boatNameOf(z.needBoat)}
-          </span>
-        ))}
+        <b className="pf-accent text-base font-normal text-gold truncate">{boatNameOf(game.boat, '배 없음')}</b>
+        {game.boat > 0 && <span className="text-sm text-text-dim">({game.boat}단계)</span>}
       </div>
+      <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
+        <ul className="flex flex-col text-xs">
+          <BoatStatLine label="이동 속도"><StatValue stat={row.data.speed} unit="" digits={0} /></BoatStatLine>
+          <BoatStatLine label="가방 용량">{fmtNum(bag.cap)}마리</BoatStatLine>
+        </ul>
+        <div className="flex items-center gap-2.5 text-xs" role="meter" aria-label="가방"
+             aria-valuemin={0} aria-valuemax={bag.cap} aria-valuenow={bag.count}>
+          <span className="text-text-dim shrink-0">가방</span>
+          <span className="flex-1 h-2 bg-bg border border-line shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+            <span className={cx('block h-full', BAG_FILL[bag.level])} style={{ width: `${Math.min(100, bag.percent)}%` }} />
+          </span>
+          <span className="pf-accent shrink-0">{fmtNum(bag.count)} / {fmtNum(bag.cap)} <span className="text-text-dim">({bag.percent}%)</span></span>
+        </div>
+      </Inset>
+      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+        <table className="w-full table-fixed border-collapse text-sm">
+          <colgroup><col /><col className="w-[110px]" /><col className="w-[140px]" /></colgroup>
+          <thead>
+            <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
+              <th className={cx(HEAD, 'pl-0 text-left')}>갈 수 있는 곳</th>
+              <th className={cx(HEAD, 'text-right')}>열린 해역</th>
+              <th className={cx(HEAD, 'pr-0 text-right')}>필요한 배</th>
+            </tr>
+          </thead>
+          <tbody>
+            {zones.map((z, i) => {
+              const cell = cx('h-[34px]', i > 0 && 'border-t border-line/60');
+              const closed = z.open === 0;
+              return (
+                <tr key={z.zone} className={cx(closed && 'text-text-dim')}>
+                  <td className={cx(cell, 'truncate')}>{z.name}</td>
+                  <td className={cx(cell, 'px-2 text-right pf-accent text-xs')}>{z.open}/{z.total}</td>
+                  <td className={cx(cell, 'pl-2 text-right text-xs truncate', !closed && 'text-text-dim')}>
+                    {z.nextBoat !== null && `${boatNameOf(z.nextBoat)}(${z.nextBoat}단계)`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Inset>
     </div>
+  );
+}
+
+/** 배 수치 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
+function BoatStatLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <li className="flex items-center justify-between gap-2 h-[26px] [&+&]:border-t [&+&]:border-line/60">
+      <span className="text-text-dim">{label}</span>
+      <span className="pf-accent">{children}</span>
+    </li>
   );
 }

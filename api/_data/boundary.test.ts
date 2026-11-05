@@ -14,7 +14,14 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/codes.ts': ['coupons', 'reliefs'],
   '_data/mail.ts': ['letters'],
   '_data/mailbox.ts': ['mails'],
+  '_data/blocks.ts': ['blocks'],
+  '_data/chat.ts': ['chat_messages', 'chat_reports'],
+  '_data/friends.ts': ['friends'],
+  '_data/guilds.ts': ['guilds', 'guild_members', 'guild_join_requests', 'guild_contributions', 'guild_logs', 'guild_bonuses',
+    'guild_bonus_donations'],
   '_data/telemetry.ts': ['events'],
+  '_data/activity.ts': ['play_sessions', 'user_active_days', 'daily_stats'],
+  '_data/position.ts': ['last_positions'],
 };
 
 function sources(dir: string): string[] {
@@ -28,7 +35,7 @@ function sources(dir: string): string[] {
 const files = sources(API).map(path => ({ path: relative(API, path).replaceAll('\\', '/'), src: readFileSync(path, 'utf8') }));
 const WRITE = /\b(?:insert\s+into|update|delete\s+from)\s+public\.([a-z_]+)/gi;
 const AUTH_WRITE = /\b(?:insert\s+into|update|delete\s+from)\s+auth\.([a-z_]+)/gi;
-/** 인증 스키마(auth)를 쓰는 SQL을 가진 유일한 모듈 */
+/** 인증 스키마(auth)를 쓰는 SQL을 가진 유일한 모듈(계정 모듈) */
 const AUTH_OWNER = '_data/account.ts';
 
 describe('서버 데이터 계층 경계', () => {
@@ -39,7 +46,7 @@ describe('서버 데이터 계층 경계', () => {
     expect(violations).toEqual([]);
   });
 
-  it('인증 스키마(auth)를 쓰는 SQL은 계정 정리 모듈에만 있다', () => {
+  it('인증 스키마(auth)를 쓰는 SQL은 계정 모듈에만 있다', () => {
     const violations = files.filter(({ path }) => path !== AUTH_OWNER)
       .flatMap(({ path, src }) => [...src.matchAll(AUTH_WRITE)].map(m => `${path} -> ${m[1]}`));
     expect(violations).toEqual([]);

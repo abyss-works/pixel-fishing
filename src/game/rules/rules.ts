@@ -11,9 +11,11 @@
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
-import { BOATS, MAX_BOAT } from '../content/boats.js';
-import { bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF } from '../content/bounties.js';
-import type { BountyKind } from '../content/bounties.js';
+import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
+import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
+import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
+import { zoneById } from '../content/zones.js';
+import type { BaseId } from '../content/places.js';
 import { artifactById } from '../content/artifacts.js';
 import {
   upgradeCost, bountyDailyCap, CHALLENGE_MISS_LIMIT,
@@ -34,6 +36,7 @@ export type RejectReason =
   | 'not-enough-fame'
   | 'max-boat'
   | 'spot-locked'
+  | 'zone-locked' // 항구가 있는 바다의 진입 배 단계 미달 — 빠른 이동 목적지 재검증
   | 'coupon-invalid'
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
@@ -65,6 +68,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-enough-fame': '명성이 부족해요. 물고기를 더 잡아 명성을 쌓아 보세요.',
   'max-boat': '이미 가장 좋은 배를 가지고 있어요.',
   'spot-locked': '이 해역에서 낚시하려면 더 좋은 배가 필요해요.',
+  'zone-locked': '그 항구가 있는 바다에 들어서려면 더 좋은 배가 필요해요.',
   'coupon-invalid': '없는 쿠폰 코드예요.',
   'coupon-used': '이미 사용한 쿠폰이에요.',
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
@@ -87,11 +91,12 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
 };
 
 /** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).
- *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다. */
-export function canExhibit(state: GameState, uid: string, slot: number | null): RuleCheck {
+ *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다.
+ *  @param bagBonus 가방 칸에 더하는 비율(길드 가방 용량 보너스) */
+export function canExhibit(state: GameState, uid: string, slot: number | null, bagBonus = 0): RuleCheck {
   if (slot === null) {
     if (!state.exhibit.some(i => i?.uid === uid)) return no('bad-request');
-    return state.bag.length < bagCapacity(state.boat, state.bag) ? OK : no('bag-full');
+    return state.bag.length < bagCapacity(state.boat, state.bag, bagBonus) ? OK : no('bag-full');
   }
   if (!Number.isInteger(slot) || slot < 0 || slot >= EXHIBIT_SLOTS) return no('bad-request');
   if (!state.bag.some(i => i.uid === uid)) return no('bad-request');
@@ -117,6 +122,29 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
   const spot = SPOTS.find(s => s.id === spotId);
   if (!spot) return no('bad-request');
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
+}
+
+/** 항구의 진입 배 단계 — 항구가 있는 최상위 존의 entryBoat. 게이트가 없는 바다와 항구가 아닌 거점(집)은 0 */
+function portGate(base: string): number {
+  const zone = zoneOfPort(base);
+  return zone ? zoneById(zone)?.entryBoat ?? 0 : 0;
+}
+
+/** 거점 이동 — 항구로 옮기려면 배가 그 바다의 진입 단계 이상이어야 한다.
+ *  바다에서 접안할 때는 이미 경계 게이트를 지났으므로 항상 통과하고, 빠른 이동만 실제로 걸린다 */
+export function canEnterBase(state: GameState, base: string): RuleCheck {
+  return state.boat >= portGate(base) ? OK : no('zone-locked');
+}
+
+/** 빠른 이동 목적지 — 지금 있는 항구를 뺀 항구 목록. locked는 갈 수 없을 때 보일 사유(갈 수 있으면 null) */
+export interface FastTravelTarget { port: BountyPort; zone: BountyZone; locked: string | null }
+
+export function fastTravelTargets(state: GameState, from: BaseId): FastTravelTarget[] {
+  return (Object.keys(BOUNTY_PORT_ZONE) as BountyPort[]).filter(port => port !== from).map(port => ({
+    port,
+    zone: BOUNTY_PORT_ZONE[port],
+    locked: canEnterBase(state, port).ok ? null : `${boatGateText(portGate(port))} 필요`,
+  }));
 }
 
 /** 서버 주입 수배 진실 — 오늘 클리어 횟수·완료·진행 목록은 DB가 들고 있다.

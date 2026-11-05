@@ -1,4 +1,4 @@
-// 라이브 탭 — 접속 추정 구간(10분·1시간·24시간)과 온라인 명부의 "n분 전" 표시가 같은 기준 시각을 쓰는지 확인한다.
+// 실시간 탭 — 실시간 접속 목록을 오래 연결된 순으로 놓고, 위치 이름·게스트 표시·접속 시간을 같은 기준 시각으로 적는지 확인한다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
@@ -8,12 +8,15 @@ import LiveTab from './LiveTab';
 vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
-      users: vi.fn(async () => [
-        { user_id: 'u1', email: 'near@example.com', boat: 1, location_kind: 'region', location_id: 'ocean',
-          last_action_at: '2026-10-18T11:55:00Z' },
-        { user_id: 'u2', email: 'far@example.com', boat: 0, location_kind: 'region', location_id: 'village',
-          last_action_at: '2026-10-18T09:00:00Z' },
-      ]),
+      live: vi.fn(async () => ({
+        count: 2,
+        online: [
+          { uid: 'u2', nick: '새내기', nickname: '새내기', email: null, region: 'village', zone: null, connectedAt: '2026-11-05T02:56:00Z', guest: true },
+          { uid: 'u1', nick: '고참', nickname: '고참', email: 'old@example.com', region: 'world', zone: 'indian', connectedAt: '2026-11-05T01:37:00Z', guest: false },
+        ],
+      })),
+      chatReports: vi.fn(async () => []),
+      users: vi.fn(async () => []),
     },
   },
 }));
@@ -21,12 +24,12 @@ vi.mock('../../../../platform/api', () => ({
 // 시계는 Date만 고정한다 — 조회의 비동기 흐름은 그대로 흐른다
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
+  vi.setSystemTime(new Date('2026-11-05T03:00:00Z'));
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
-describe('라이브 탭', () => {
-  it('10분 안에 행동한 유저만 온라인 명부에 올리고 몇 분 전인지 적는다', async () => {
+describe('실시간 탭', () => {
+  it('접속 목록·위치 분포·지표 줄을 실시간 접속으로 채운다', async () => {
     render(
       <QueryProvider>
         <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin' }}>
@@ -34,16 +37,25 @@ describe('라이브 탭', () => {
         </AdminAuthCtx.Provider>
       </QueryProvider>,
     );
-    expect(await screen.findByText('5분 전')).toBeInTheDocument();
-    expect(screen.getByText('near@example.com')).toBeInTheDocument();
-    expect(screen.queryByText('far@example.com')).not.toBeInTheDocument();
+    await screen.findAllByText('고참(old@example.com)');
+    const rows = screen.getAllByRole('row').slice(1, 3);
+    // 오래 연결된 사람이 위에 온다
+    expect(within(rows[0]).getByText('고참(old@example.com)')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('u1')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('인도양')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('1시간 23분')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('새내기(게스트)')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('마을')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('4분')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '접속 중인 사람의 위치 분포' })).toBeInTheDocument();
 
     // 지표 타일은 오목한 칸(pf-notch) 하나다 — 같은 글자가 다른 곳에도 있을 수 있어 타일만 고른다
     const tile = (label: string) => screen.getAllByText(label)
       .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
-    expect(within(tile('접속 중')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('최근 1시간')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('최근 24시간')).getByText('2')).toBeInTheDocument();
-    expect(within(tile('등록 유저')).getByText('2')).toBeInTheDocument();
+    expect(within(tile('지금 접속')).getByText('2')).toBeInTheDocument();
+    expect(within(tile('가입 계정')).getByText('1')).toBeInTheDocument();
+    expect(within(tile('게스트')).getByText('1')).toBeInTheDocument();
+    expect(within(tile('가장 오래 접속')).getByText('1시간 23분')).toBeInTheDocument();
+    expect(within(tile('가장 오래 접속')).getByText('고참(old@example.com)')).toBeInTheDocument();
   });
 });

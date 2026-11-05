@@ -1,12 +1,13 @@
 // 관리자 읽기. 관리자 대시보드가 보는 조회이며 읽기만 한다.
-// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·v_import_log·
-// v_dex_mismatch·v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
+// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·
+// v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
 // 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
 // 행은 Postgres JSON 직렬화 그대로다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, 날짜는 'yyyy-mm-dd', 수는 수다.
 // 뷰가 순서를 정하지 않는 조회에는 같은 요청이 같은 순서를 받도록 정렬을 둔다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { uuidArray } from './json.js';
 
 /** 사용자가 관리자 명부(admins)에 있는가. is_admin()과 같은 명부를 세션의 uid로 직접 조회한다 */
 export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
@@ -28,18 +29,36 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
-/** 사용자 명부. 인증 계정과 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
+/**
+ * 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다.
+ * 마지막 세션(last_session_at)은 접속 세션이 가장 늦게 끝난 시각, 누적 세션(total_session_sec)은 접속 세션 길이의 합(초)이다.
+ */
 export function users(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
+      p.nickname,
       u.created_at as signed_up_at,
       (select max(s.updated_at) from auth.sessions s where s.user_id = u.id) as last_sign_in_at,
       c.gold, c.fame, c.boat, c.rod,
       c.data -> 'location' ->> 'kind' as location_kind,
       c.data -> 'location' ->> 'id' as location_id,
       c.data -> 'visited' as visited,
-      c.restricted, c.version as save_version, c.updated_at as last_action_at
+      c.restricted, c.version as save_version, c.updated_at as last_action_at,
+      ps.last_session_at, coalesce(ps.total_session_sec, 0) as total_session_sec
     from auth.users u
+    left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
+      from public.play_sessions group by user_id) ps on ps.user_id = u.id
+    left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
+}
+
+/** 계정 식별 정보. 닉네임과 이메일이고, 게스트의 임시 이메일은 null이다. 인증 계정이 없는 uid는 결과에 없다 */
+export async function identities(db: Executor, uids: readonly string[]): Promise<Map<string, { nickname: string | null; email: string | null }>> {
+  const { rows } = await db.execute<{ user_id: string; nickname: string | null; email: string | null }>(sql`select u.id::text as user_id,
+      p.nickname, case when u.is_anonymous then null else u.email end as email
+    from auth.users u
+    left join public.profiles p on p.user_id = u.id
+    where u.id = any(${uuidArray(uids)})`);
+  return new Map(rows.map(({ user_id, ...identity }) => [user_id, identity]));
 }
 
 /** 일별 활성. boot를 포함한 전 이벤트 기준 DAU와 직전 7일 WAU이며, 날짜는 KST 하루 축이고 최대 90일 창이다 */
@@ -167,35 +186,6 @@ export function spamFlags(db: Executor): Promise<unknown[]> {
     from per_user p cross join glob g`, sql`t.user_id`);
 }
 
-/** import 반입 기록. 이벤트 id 오름차순 */
-export function imports(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select e.id, e.user_id, e.created_at,
-           (e.payload->>'gold')::numeric as gold,
-           (e.payload->>'fame')::numeric as fame
-    from public.events e
-    where e.type = 'import'`, sql`t.id`);
-}
-
-/** 도감과 이벤트의 차이. 도감 카운트가 catch 이벤트 수보다 큰 행 */
-export function dexMismatch(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`with evc as (
-      select user_id, payload->>'fishId' as fish_id, payload->>'form' as form,
-             count(*)::int as n
-      from public.events
-      where type = 'catch'
-      group by 1, 2, 3
-    )
-    select r.user_id, r.fish_id, r.form,
-           r.count as dex_count,
-           coalesce(evc.n, 0) as event_count,
-           r.count - coalesce(evc.n, 0) as missing_events
-    from public.records r
-    left join evc on evc.user_id = r.user_id
-                 and evc.fish_id = r.fish_id
-                 and evc.form = r.form
-    where r.count > coalesce(evc.n, 0)`, sql`t.user_id, t.fish_id, t.form`);
-}
-
 /** 최근 이벤트 피드. 최신 80행, id 내림차순 */
 export function recentEvents(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select id, user_id, type, payload, created_at
@@ -213,8 +203,56 @@ export function userEvents(db: Executor, userId: string, limit: number | null): 
     limit least(greatest(coalesce(${limit}::int, 500), 1), 2000)`, sql`t.id`);
 }
 
-/** 편지 목록. 영구 보관 표에서 최신순 */
+/** 편지 목록. 영구 보관 표에서 최신순이고, 관리자가 처리한 편지는 처리 시각(handled_at)을 가진다 */
 export function letters(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at
+  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at, l.handled_at
     from public.letters l`, sql`t.created_at desc, t.id desc`);
+}
+
+/** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */
+export function chatReports(db: Executor): Promise<unknown[]> {
+  return jsonRows(db, sql`select r.id, r.user_id, r.message_id, r.target_id, r.lines, r.created_at
+    from public.chat_reports r
+    order by r.created_at desc, r.id desc
+    limit 200`, sql`t.created_at desc, t.id desc`);
+}
+
+/** 일별 집계 행을 from부터 to까지(KST 날짜, 양끝 포함) 날짜 오름차순으로 준다. 집계되지 않은 날은 행이 없다 */
+export function dailyStats(db: Executor, from: string, to: string): Promise<unknown[]> {
+  return jsonRows(db, sql`select day, dau, new_users as "newUsers", new_accounts as "newAccounts",
+      sessions, session_minutes as "sessionMinutes", median_session_minutes as "medianSessionMinutes",
+      catches, gold_in as "goldIn", gold_out as "goldOut", actions
+    from public.daily_stats
+    where day between ${from}::date and ${to}::date`, sql`t.day`);
+}
+
+/**
+ * 가입일 리텐션. 최근 60일(오늘 포함)의 KST 가입일 코호트별 크기와, 가입 1·7·30일 뒤에 활동일이 있는 비율(0~1, 소수 넷째 자리)이다.
+ * 그 날이 아직 오지 않았으면 null이다. 최신 코호트부터 준다.
+ */
+export function signupRetention(db: Executor): Promise<unknown[]> {
+  const ratio = (offset: number) => sql`case when c.day + ${offset}::int <= t.d then round(count(*) filter (where exists (
+      select 1 from public.user_active_days a where a.user_id = c.id and a.day = c.day + ${offset}::int))::numeric / count(*), 4) end`;
+  return jsonRows(db, sql`with today as (
+      select (now() at time zone 'Asia/Seoul')::date as d
+    ),
+    cohort as (
+      select u.id, (u.created_at at time zone 'Asia/Seoul')::date as day
+      from auth.users u, today t
+      where u.created_at >= (t.d - 59)::timestamp at time zone 'Asia/Seoul'
+    )
+    select c.day, count(*)::int as size, ${ratio(1)} as d1, ${ratio(7)} as d7, ${ratio(30)} as d30
+    from cohort c cross join today t
+    group by c.day, t.d`, sql`t.day desc`);
+}
+
+/** 접속 세션 목록. 시작이 늦은 순으로 limit건(1~500, 기본 100)이고, 사용자를 주면 그 사람의 세션만 준다 */
+export function sessions(db: Executor, userId: string | null, limit: number | null): Promise<unknown[]> {
+  return jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
+      s.started_at as "startedAt", s.ended_at as "endedAt", s.duration_sec as "durationSec"
+    from public.play_sessions s
+    left join public.profiles p on p.user_id = s.user_id
+    where ${userId}::uuid is null or s.user_id = ${userId}::uuid
+    order by s.started_at desc, s.id desc
+    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
 }

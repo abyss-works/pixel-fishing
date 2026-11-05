@@ -3,7 +3,7 @@
 // 이벤트 시각은 오늘(KST) 정오에서 며칠 전인지로 정한다. 테스트를 실행하는 시각이 결과에 영향을 주지 않는다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BOATS } from '../src/game/content/boats.js';
-import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
+import { adminSessionHeaders, seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 const ADMIN = testUid(901);    // 관리자 명부에 있는 이메일 사용자. 저장 행이 없다
@@ -48,7 +48,7 @@ async function callAdmin(query: Record<string, string>, token: string | null = n
     json(b: unknown) { out.body = b; },
     setHeader(k: string, v: string) { out.headers[k.toLowerCase()] = v; },
   };
-  await handler({ method: 'GET', query, headers: sessionHeaders(token) } as never, res as never);
+  await handler({ method: 'GET', query, headers: adminSessionHeaders(token) } as never, res as never);
   return out;
 }
 

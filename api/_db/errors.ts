@@ -2,6 +2,7 @@
 // 메시지에는 쿼리 인자가 포함되므로 기록에는 코드와 대상 이름만 남긴다.
 
 const UNIQUE_VIOLATION = '23505';
+const FOREIGN_KEY_VIOLATION = '23503';
 
 interface PgErrorFields {
   code?: unknown;
@@ -21,6 +22,10 @@ function driverError(error: unknown): PgErrorFields | null {
 
 export function isUniqueViolation(error: unknown): boolean {
   return driverError(error)?.code === UNIQUE_VIOLATION;
+}
+
+export function isForeignKeyViolation(error: unknown): boolean {
+  return driverError(error)?.code === FOREIGN_KEY_VIOLATION;
 }
 
 export interface DbErrorSummary {

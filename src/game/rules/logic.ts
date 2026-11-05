@@ -152,6 +152,8 @@ export interface DrawOptions {
   /** 시간대 — 기본 'day'(밤 전용 어종 제외). 'night'면 낮+밤 전부(합류).
    *  미지정 호출 전부가 day라 기존 낮 어종만 있는 지금은 분포 불변(night 어종 추가 후 안전망). */
   phase?: DayPhase;
+  /** 일반 등급 가중치를 줄이는 비율(길드 희귀 어종 보너스). 다이얼을 적용한 일반 가중치에 (1 − commonCut)을 한 번 곱한다 */
+  commonCut?: number;
 }
 
 /** 수역 어종 풀 — 시간대 필터. 낮에는 night 어종이 아예 풀에서 빠진다(등급 분포 불변),
@@ -174,9 +176,13 @@ export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng:
   return entries[entries.length - 1][0];
 }
 
-/** 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본 */
-export function namedWeightsOf(spot: SpotId): { named: number; none: number } {
-  return { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
+/**
+ * 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본.
+ * @param bonus 네임드 가중치에 더하는 비율(길드 네임드 조우 보너스). 네임드 가중치에 (1 + bonus)를 한 번 곱한다
+ */
+export function namedWeightsOf(spot: SpotId, bonus = 0): { named: number; none: number } {
+  const w = { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
+  return bonus > 0 ? { named: w.named * (1 + bonus), none: w.none } : w;
 }
 
 /** 해역의 네임드 조우 확률 — 조우 가중치에서 계산한다(분석 도구용) */
@@ -201,12 +207,13 @@ export function namedEncounterCandidates(activeIds: readonly string[], spot: Spo
 // 진행하고, 호출부가 도전권 발급 이벤트만 덧붙인다.
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
 // force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
+// bonus는 네임드 가중치에 더하는 비율이다(namedWeightsOf).
 export function rollNamedEncounter(
-  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
+  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false, bonus = 0,
 ): BountyQuest | null {
   const cands = namedEncounterCandidates(activeIds, spot);
   if (cands.length === 0) return null;
-  const w = namedWeightsOf(spot);
+  const w = namedWeightsOf(spot, bonus);
   const drawn = pickWeighted([['named', w.named], ['none', w.none]] as const, rng);
   if (drawn === 'none' && !force) return null;
   return cands[Math.floor(rng() * cands.length)];
@@ -237,11 +244,13 @@ export function licenseConditions(
   const grades = LICENSE_GRADES[tier];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
+  // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
+  const left = missing > 0 ? ` · 남은 ${missing}종` : '';
   return [
     { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone].toLocaleString('ko-KR')} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
-    { key: 'dex', label: tier === 'named'
+    { key: 'dex', label: (tier === 'named'
       ? `${area} 모든 어종 수집(밤 어종 포함)`
-      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`, ok: missing === 0 },
+      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },
   ];
 }
 
@@ -268,7 +277,7 @@ function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [Rarit
   const present = new Set(pool.map(f => f.rarity));
   return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
     (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
-      * (r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1)]);
+      * (r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) * (1 - (o.commonCut ?? 0)) : 1)]);
 }
 
 /** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치. 기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT */
@@ -452,6 +461,16 @@ export function rollCatchExtras(
 /** 돌연변이 확률 — 폼 가중치에서 계산한다(기본 전역 가중치). 안내 문구가 이 값을 보인다 */
 export function variantShare(weights: Record<FormId, number> = MUTATION_WEIGHTS): number {
   return weights.variant / (weights.variant + weights.normal);
+}
+
+/**
+ * 돌연변이 확률에 퍼센트포인트를 더한 폼 가중치(길드 돌연변이 보너스). 확률은 1을 넘지 않는다.
+ * 가중치를 곱하지 않고 최종 확률에 더한다 — 유물·해역이 정한 확률 위에 그대로 얹힌다. 더할 것이 없으면 그대로 돌려준다.
+ */
+export function withVariantPoints(weights: Record<FormId, number>, points: number): Record<FormId, number> {
+  if (points <= 0) return weights;
+  const variant = Math.min(1, variantShare(weights) + points);
+  return { variant, normal: 1 - variant };
 }
 
 /** 폼 가중치 — 유물 효과 → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다 */
@@ -982,13 +1001,16 @@ export function pickEvict(
  * 래칫이면 자산을 하나도 건드리지 않고 의미가 성립한다: 넘겨 든 유저는 **늘리지 못할 뿐**이고,
  * 팔아서 기본 상한 아래로 내려오면 그때부터 평소 규칙이 적용된다. 골드를 지어내지도 않는다.
  */
-export const bagCapacity = (boat: number, bag: readonly FishInstance[]): number =>
-  Math.max(capOfBoat(boat), bag.length);
+export const bagCapacity = (boat: number, bag: readonly FishInstance[], bonus = 0): number =>
+  Math.max(capOfBoat(boat, bonus), bag.length);
 
 // boat는 상태에서 항상 0..MAX_BOAT로 정규화되지만, 방어적으로 범위 밖이면 클램프한다.
 // 맨발(0)은 BOATS 행이 없으므로 WALK_BAG_CAP, 이상은 행의 bagCap을 쓴다.
-export const capOfBoat = (boat: number): number =>
-  boat < 1 ? WALK_BAG_CAP : boatAt(boat)!.bagCap;
+// bonus는 배의 가방 칸에 더하는 비율(길드 가방 용량 보너스)이다. 칸 수에 한 번 더하고 반올림한다.
+export const capOfBoat = (boat: number, bonus = 0): number => {
+  const base = boat < 1 ? WALK_BAG_CAP : boatAt(boat)!.bagCap;
+  return base + Math.round(base * bonus);
+};
 
 /** 넘친 만큼 놓아줄 개체를 고른다 — 잠근 개체는 절대 후보가 아니다 */
 export function overflowUids(bag: readonly FishInstance[], capacity: number): string[] {
@@ -1020,13 +1042,15 @@ export function sellableValue(state: GameState): number {
 
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
-export function sellSelected(state: GameState, uids: readonly string[]): GameState {
+// bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
+export function sellSelected(state: GameState, uids: readonly string[], bonus = 0): GameState {
   const want = new Set(uids);
   const sold = state.bag.filter(i => want.has(i.uid) && !i.locked);
   const soldUids = new Set(sold.map(i => i.uid));
+  const base = sold.reduce((s, i) => s + priceOfInstance(i), 0);
   return {
     ...state,
-    gold: state.gold + sold.reduce((s, i) => s + priceOfInstance(i), 0),
+    gold: state.gold + base + Math.round(base * bonus),
     bag: state.bag.filter(i => !soldUids.has(i.uid)),
   };
 }
@@ -1037,9 +1061,10 @@ export function sellAll(state: GameState): GameState {
 }
 
 // 장소 이동 — 위치를 기록하고, 지역이면 방문 목록에 넣는다.
-// **게이트를 여기서 검증하지 않는다.** 낚시는 `canFish`가 서버에서 배 단계를 재검증하므로
-// 클라가 못 갈 지역을 주장해도 얻는 게 없다. 이 액션의 목적은 보안이 아니라
-// **새로고침 후 재개 위치**와 **방문 기록**이다.
+// **지역 게이트는 검증하지 않는다.** 낚시는 `canFish`가 서버에서 배 단계를 재검증하므로
+// 클라가 못 갈 지역을 주장해도 얻는 게 없다. 이 액션의 목적은 **새로고침 후 재개 위치**와
+// **방문 기록**이다. 항구는 여객선 빠른 이동으로 바다를 건너뛰어 닿으므로 리듀서가
+// `canEnterBase`로 그 바다의 진입 배 단계를 재검증한다.
 export function travel(state: GameState, to: LocationRef): GameState {
   const visited = to.kind === 'region' && !state.visited.includes(to.id)
     ? [...state.visited, to.id]

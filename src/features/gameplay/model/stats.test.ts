@@ -68,11 +68,13 @@ describe('스탯 해역 목록', () => {
 });
 
 describe('갈 수 있는 지역', () => {
-  it('지역마다 배로 갈 수 있는 해역 수를 세고, 하나도 못 가면 가장 낮은 필요한 배를 준다', () => {
+  it('지역마다 배로 갈 수 있는 해역 수를 세고, 못 가는 해역을 여는 가장 낮은 배를 준다', () => {
     const zones = selectReachableZones(game({ boat: 1 }));
-    expect(zones.find(z => z.zone === 'pacific')).toMatchObject({ open: 1, total: 2, needBoat: null });
-    expect(zones.find(z => z.zone === 'seasia')).toMatchObject({ open: 0, total: 3, needBoat: 3 });
-    expect(zones.find(z => z.zone === 'village')).toMatchObject({ open: 2, total: 2, needBoat: null });
+    const pacific = zones.find(z => z.zone === 'pacific')!;
+    expect(pacific).toMatchObject({ open: 1, total: 2 });
+    expect(pacific.nextBoat).toBe(2);
+    expect(zones.find(z => z.zone === 'seasia')).toMatchObject({ open: 0, total: 3, nextBoat: 3 });
+    expect(zones.find(z => z.zone === 'village')).toMatchObject({ open: 2, total: 2, nextBoat: null });
   });
 });
 
@@ -103,6 +105,19 @@ describe('받는 보너스', () => {
     const g = game({ activeBait: 'bait-rare' });
     const bait = selectActiveBonuses(g).find(b => b.source.kind === 'bait');
     expect(bait).toMatchObject({ category: 'fish', manualOnly: true });
+  });
+
+  it('길드 보너스는 1단계 이상인 효과만 "길드 Lv.N" 출처로 갈래를 붙여 모은다', () => {
+    const effects = { sell: 0.04, bag: 0.08, named: 0, rare: 0.02, mutation: 0.01 };
+    const guild = selectActiveBonuses(game({}), { level: 5, effects }).filter(b => b.source.kind === 'guild');
+    expect(guild.map(b => [b.category, b.source.kind === 'guild' && b.source.bonus, b.source.kind === 'guild' && b.source.value]))
+      .toEqual([['shop', 'sell', 0.04], ['fish', 'bag', 0.08], ['fish', 'rare', 0.02], ['fish', 'mutation', 0.01]]);
+    expect(guild[0].source).toMatchObject({ kind: 'guild', level: 5 });
+    expect(guild.every(b => !b.manualOnly)).toBe(true);
+  });
+
+  it('요약의 가방은 길드 가방 보너스를 반영한다', () => {
+    expect(selectStatsSummary(game({ boat: 0 }), 0.2).bag.cap).toBe(72);
   });
 
   it('낚싯대 파워에서 오는 효과는 보너스에 넣지 않는다 — 낚싯대 탭이 해역별로 보여 준다', () => {

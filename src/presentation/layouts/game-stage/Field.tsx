@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
-import { boatGateText } from '../../../game/content/boats';
+import { boatGateText, nextBoatText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
@@ -10,16 +10,19 @@ import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
+import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
 import { GameFieldEngine } from '../../../game/runtime/fieldEngine';
+import { getSpotState } from '../../../game/world/currentSpot';
 import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
 import GameFrame from './GameFrame';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
+import HudPanel from '../../ui/hud/HudPanel';
 import type { Notify } from '../../ui/hud/messageFeed';
 
 const STATUS = {
@@ -40,7 +43,7 @@ interface Props {
   paused?: boolean;
 }
 
-function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
+function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: number): void {
   switch (event.type) {
     case 'cast': {
       const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
@@ -52,7 +55,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
         setToast('어군 가까이에서 찌를 던져 주세요.', 'warn');
       } else {
         const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. 배는 집 목공소나 항구 조선소에서 살 수 있어요.`, 'warn');
+        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(boat)}`, 'warn');
       }
       return;
     case 'line-cut':
@@ -70,9 +73,10 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
         alertEncounter(event.result.ticket);
       }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
-      const prefix = event.judgment === 'perfect' ? 'PERFECT · '
-        : event.judgment === 'good' ? 'GOOD · '
-        : event.judgment === 'auto' ? '방치 · ' : '';
+      // 판정은 대괄호 꼬리표로 앞에 붙인다(화면 문구에 가운뎃점을 쓰지 않는다)
+      const prefix = event.judgment === 'perfect' ? '[PERFECT] '
+        : event.judgment === 'good' ? '[GOOD] '
+        : event.judgment === 'auto' ? '[방치] ' : '';
       setToast(`${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, event.result.info.form)}] 획득!`, 'gold');
       if (event.result.released.length > 0) {
         const names = event.result.released.map(released => released.name).join(', ');
@@ -97,6 +101,20 @@ export default function Field({
   const schools = useSchools(region);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어와 내 말풍선을 엔진이 프레임마다 그린다
+  const readPosition = useCallback(() => {
+    const pos = engine.getPosition();
+    const bob = engine.getBobber();
+    return {
+      region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
+      line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
+    };
+  }, [engine, region]);
+  useLivePosition(readPosition);
+  useEffect(() => {
+    engine.setLiveSource(now => liveFrame(region, now));
+    return () => engine.setLiveSource(null);
+  }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
   const fish: Fish | null = snapshot.fishId
@@ -113,7 +131,7 @@ export default function Field({
           ? { status: 'ok', result: result.result }
           : result);
       },
-      onEvent: event => presentEvent(event, setToast),
+      onEvent: event => presentEvent(event, setToast, game.boat),
       onScene,
       onWarmup,
     };
@@ -149,19 +167,20 @@ export default function Field({
                 onClick={() => engine.action()} />
       )}
       <NightOverlay />
+      {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
-        <div data-phase={snapshot.phase}
-           className="status-overlay absolute left-1/2 -translate-x-1/2 whitespace-pre-line
-                      bottom-3 z-(--z-overlay)
-                      max-w-[min(560px,calc(100%-24px))] px-3 py-1 rounded-full
-                      text-sm text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
-                      text-shadow-hud pointer-events-none animate-overlay-in">
-          {snapshot.phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} 등급 [${formName(fish, snapshot.catchInfo?.form ?? 'normal')}] 획득!`
-            : STATUS[snapshot.phase]}
+        <div data-phase={snapshot.phase} className="status-overlay contents">
+          {snapshot.phase === 'catch' && fish ? (
+            <CatchCard fish={fish} info={snapshot.catchInfo} />
+          ) : (
+            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-3 z-(--z-overlay)
+                                 max-w-[min(480px,calc(100%-24px))] px-3.5 py-1.5 whitespace-pre-line
+                                 text-sm text-center text-text pointer-events-none animate-overlay-in">
+              {STATUS[snapshot.phase]}
+            </HudPanel>
+          )}
         </div>
       )}
-      {snapshot.phase === 'catch' && fish && <CatchCard fish={fish} info={snapshot.catchInfo} />}
     </GameFrame>
   );
 }

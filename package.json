@@ -1,12 +1,13 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.15.4",
+  "version": "0.16.0",
   "type": "module",
   "packageManager": "pnpm@11.28.3",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:admin": "vite build -c vite.admin.config.ts",
     "build:server": "vite build --ssr api/_server/main.ts --outDir dist-ssr",
     "start": "node dist-ssr/main.js",
     "lint": "oxlint",
@@ -29,6 +30,7 @@
     "pg": "8.23.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "ws": "8.22.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
@@ -42,6 +44,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "^6.0.4",
     "drizzle-kit": "0.31.11",
     "jsdom": "^30.0.1",

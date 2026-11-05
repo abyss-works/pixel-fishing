@@ -1,4 +1,4 @@
-// HUD 알약 스토리 — 기본(활성 미끼 같은 값 표시)과 낮은 알약(시계).
+// HUD 칩 스토리 — 값 표시(활성 미끼), 누르는 칩(접속 수), 낮은 칩(시계).
 import type { Meta, StoryObj } from '@storybook/react';
 import HudChip from './HudChip';
 import PixelIcon from '../PixelIcon';
@@ -10,8 +10,17 @@ type Story = StoryObj<typeof HudChip>;
 export const Value: Story = {
   render: () => (
     <HudChip className="w-fit">
-      <span className="w-2.5 h-2.5 rounded-full border border-line bg-accent" />
+      <span className="size-2.5 bg-accent" />
       <span className="pf-accent text-sm leading-none text-gold">12</span>
+    </HudChip>
+  ),
+};
+
+export const Button: Story = {
+  render: () => (
+    <HudChip className="w-fit" onClick={() => {}} aria-label="이 바다의 플레이어 3명, 목록 열기">
+      <PixelIcon glyph="people" size={12} />
+      <span className="pf-accent leading-none">3</span>
     </HudChip>
   ),
 };

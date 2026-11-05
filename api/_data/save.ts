@@ -58,6 +58,14 @@ export interface CommitMarks {
   activeClient?: string | null;
 }
 
+/**
+ * 액션 밖에서 골드를 빼는 문장(길드 보너스 기부). 저장 버전을 올려, 그 전에 상태를 읽은 액션이 낙관 락에서 거부되게 한다.
+ * 액션 페이싱 기준(updated_at)은 바꾸지 않는다. 호출자는 같은 트랜잭션에서 행을 잠그고 골드를 확인한 뒤 실행한다.
+ */
+export function goldDebit(uid: string, gold: number): SQL {
+  return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid}`;
+}
+
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다 */
 export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}): SQL {
   const r = stateRow(state);
@@ -157,3 +165,9 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
 }
 
 const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}}`}::bigint[]`;
+
+/** 저장 상태의 제재 여부를 바꾼다. 저장 상태가 없으면 바꾸지 않고 false를 돌려준다 */
+export async function setRestricted(db: Executor, uid: string, restricted: boolean): Promise<boolean> {
+  const result = await db.execute(sql`update public.saves_current set restricted = ${restricted} where user_id = ${uid}`);
+  return (result.rowCount ?? 0) > 0;
+}

@@ -22,9 +22,9 @@ export default function OpsTab() {
             <DataTable>
               <tbody>
                 <Meta k="릴리즈 버전" v={APP_VERSION}
-                      hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요." />
+                      hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요. 운영에서 낡은 탭을 막는 기준(426)이에요." />
                 <Meta k="빌드 식별자" v={BUILD_LABEL}
-                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 낡은 탭을 막는 기준(426)이에요." />
+                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 스테이징·개발 배포에서 낡은 탭을 막는 기준(426)이에요." />
                 <Meta k="배포 주소" v={readAdminDeployHost() ?? '로컬 모드'}
                       hint="이 화면이 붙은 서버의 호스트예요. 운영과 스테이징의 주소가 달라서 착오를 막으려고 보여 줘요." />
               </tbody>
@@ -34,11 +34,8 @@ export default function OpsTab() {
 
         <Cell title="권한">
           {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
-          {access === 'denied' &&
-            <Note tone="warn" className="my-0">이 세션은 admins에 등록되지 않았어요. uid는 SQL Editor에서 INSERT해 주세요.</Note>}
           {access === 'granted' &&
             <Note className="my-0"><span className="pf-accent text-gold">관리자 세션</span>이에요. 모든 뷰를 볼 수 있어요.</Note>}
-          {access === 'checking' && <Note size="xs" className="my-0">확인 중…</Note>}
         </Cell>
 
         <Cell title="관측">
@@ -50,7 +47,8 @@ export default function OpsTab() {
 
         <Cell title="데이터 계약">
           <Note className="my-0 leading-relaxed">
-            읽기 전용이에요. 쓰기 액션(지급·제재·이사 코드 반입)은 이 화면에 없어요.
+            쓰기는 우편 보내기, 편지 처리 표시, 사용자 상세의 관리 조치(제재·해제, 비밀번호 재설정 링크)뿐이에요.
+            관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
             권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
             데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름·인자)는 그 안에서만 다뤄요.
           </Note>
@@ -74,13 +72,14 @@ function Meta({ k, v, hint }: { k: string; v: string; hint?: string }) {
   );
 }
 
-/** 이벤트 카탈로그 — 액션 리듀서가 남기는 유형의 사람용 목차다. 로그에 모르는
- *  타입이 보이면 GameAction과 metrics.EVENT_LABELS를 함께 갱신한다. */
+/** 이벤트 카탈로그 — 액션 리듀서와 관리자 조치가 남기는 유형의 사람용 목차다. 로그에 모르는
+ *  타입이 보이면 GameAction(또는 관리자 조치 유형)과 metrics.EVENT_LABELS를 함께 갱신한다. */
 function EventCatalog() {
   return (
     <Cell title="events 스트림 카탈로그" className="xl:col-span-2" flush>
       <Note size="2xs" className="my-0 px-3 pt-2">
         이벤트 식별자는 게임 동작 기록을 따르고, 화면명은 이벤트 설명 카탈로그를 보여 줘요.
+        admin으로 시작하는 유형은 이 대시보드의 관리 조치예요.
       </Note>
       <div className="pf-scroll-panel max-h-[360px] overflow-y-auto px-1">
         <DataTable>

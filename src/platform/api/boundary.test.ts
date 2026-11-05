@@ -7,7 +7,7 @@ const sources = import.meta.glob('../../**/*.{ts,tsx,css}', {
 }) as Record<string, string>;
 
 const SOURCE_ROOT_FILES = new Set([
-  'App.tsx', 'App.test.tsx', 'buildId.ts', 'index.css', 'main.tsx',
+  'admin.tsx', 'App.tsx', 'App.test.tsx', 'boot.tsx', 'buildId.ts', 'index.css', 'main.tsx',
   'test-setup.ts', 'version.ts', 'version.test.ts', 'vite-env.d.ts',
 ]);
 const SOURCE_ROOTS = new Set([
@@ -39,8 +39,14 @@ const CROSS_LAYER_IMPORTS = new Set([
   'platform/adapters/me.ts -> core/errors',
   'platform/adapters/ranking.ts -> core/errors',
   'platform/adapters/mailbox.ts -> core/errors',
+  'platform/adapters/friends.ts -> core/errors',
+  'platform/adapters/guild.ts -> core/errors',
+  'platform/adapters/player.ts -> core/errors',
+  'platform/adapters/away.ts -> core/errors',
+  'platform/adapters/position.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> buildId',
+  'platform/adapters/httpGameGateway.ts -> version',
   'platform/observability.ts -> version',
   'presentation/layouts/game-stage/Field.tsx -> core/errors',
   'presentation/views/admin/tabs/OpsTab.tsx -> version',

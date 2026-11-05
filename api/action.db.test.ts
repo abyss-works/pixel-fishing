@@ -131,7 +131,12 @@ describe('낚시', () => {
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish(i % 2 ? 'minnow' : 'crucian', { size: 10 + i }));
-    expect(await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' })).toMatchSnapshot();
+    const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    // 자동 방생 이벤트는 놓아준 개체의 어종과 폼을 함께 남긴다
+    const release = (out.db.events as { type: string; payload: { uids: string[]; fish: unknown[] } }[])
+      .find(e => e.type === 'autoRelease')!;
+    expect(release.payload.fish).toEqual([{ uid: release.payload.uids[0], fishId: expect.any(String), form: expect.any(String) }]);
+    expect(out).toMatchSnapshot();
   });
 
   it('가방이 가득 차고 모두 잠겨 있으면 상한을 넘겨 보관한다', async () => {
@@ -762,5 +767,24 @@ describe('캐치 간격과 활성 창', () => {
   it('활성 창 기록이 없으면 창 식별자 없이도 받는다', async () => {
     const uid = await seed({ state: {} });
     expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
+  });
+});
+
+describe('항구 빠른 이동', () => {
+  const locationOf = async (uid: string) =>
+    (await env.client.query("select data -> 'location' as v from public.saves_current where user_id = $1", [uid])).rows[0].v as unknown;
+
+  it('배가 그 바다의 진입 단계에 못 미치면 422로 거부하고 위치를 그대로 둔다', async () => {
+    const uid = await seed({ state: { boat: 2, location: at('harbor') } });
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'manila' } }))
+      .toMatchObject({ status: 422, body: { error: 'zone-locked' } });
+    expect(await locationOf(uid)).toEqual({ kind: 'base', id: 'harbor' });
+  });
+
+  it('배가 진입 단계 이상이면 그 항구로 옮긴다', async () => {
+    const uid = await seed({ state: { boat: 3, location: at('harbor') } });
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'manila' } }))
+      .toMatchObject({ status: 200 });
+    expect(await locationOf(uid)).toEqual({ kind: 'base', id: 'manila' });
   });
 });

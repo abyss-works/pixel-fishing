@@ -34,6 +34,7 @@
   --color-gold-dark: var(--c-gold-dark);
   --color-orange: var(--c-orange);
   --color-accent: var(--c-accent);
+  --color-guild: var(--c-guild);
   --color-danger: var(--c-danger);
   --color-common: var(--c-common);
   --color-rare: var(--c-rare);
@@ -54,7 +55,6 @@
   --animate-fx-orbit: fx-orbit 2.4s linear infinite;
   --animate-fx-spark: fx-spark 0.5s ease-out forwards;
   --animate-fx-wisp: fx-wisp 3s ease-in-out infinite;
-  --animate-new-bounce: new-bounce 0.5s cubic-bezier(0.2, 1.8, 0.4, 1);
 
   /* transform으로 3px 슬라이드 — translate/rotate 유틸을 가진 요소에는 쓰지 말 것(아래 ⚠ 규칙) */
   @keyframes fade-in {
@@ -92,10 +92,6 @@
     35%  { opacity: 0.95; }
     100% { translate: 0 -60px; opacity: 0; }
   }
-  @keyframes new-bounce {
-    from { transform: rotate(-12deg) scale(0); }
-    to   { transform: rotate(-12deg) scale(1); }
-  }
 }
 
 :root {
@@ -111,6 +107,7 @@
   --c-accent: #4fc3f7;
   --c-danger: #ff8a80;
   --c-orange: #fb923c; /* 어려움 머리색 — 보상 골드와 겹치지 않게 주황 계열로 분리 */
+  --c-guild: #d9b3ff; /* 메시지 창 길드 채팅 본문 — 하늘색(다른 사람 이름)과 겹치지 않는 밝은 보라. 영웅 등급색(#ba68c8)보다 밝다 */
 
   /* 등급색 — 게임 로직 RARITY와 동일 값 */
   --c-common: #b8c2cc;
@@ -190,17 +187,6 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     background-color: color-mix(in oklab, var(--color-bg) 72%, transparent);
     backdrop-filter: blur(4px);
     text-shadow: var(--text-shadow-hud);
-  }
-  /* 평소에는 글줄만 보이고 마우스를 올렸을 때만 pf-glass 바탕과 테두리를 보인다 — 늘 떠 있는 큰 HUD 상자(메시지 창)용 */
-  .pf-glass-hover {
-    border-color: transparent;
-    text-shadow: var(--text-shadow-hud);
-    transition: background-color 150ms, border-color 150ms;
-  }
-  .pf-glass-hover:hover {
-    background-color: color-mix(in oklab, var(--color-bg) 72%, transparent);
-    backdrop-filter: blur(4px);
-    border-color: var(--color-line);
   }
 
   .pf-frame {

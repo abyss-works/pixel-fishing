@@ -4,6 +4,7 @@ import { WORLD_SPAWN } from '../regions/world';
 
 export const HARBOR_BASE: BasePack = {
   id: 'harbor',
+  name: '부산항',
   region: 'world',
   headline: '부산항 — 시설을 눌러 정비해 보세요',
   exitMsg: '출항했어요. 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
@@ -22,6 +23,8 @@ export const HARBOR_BASE: BasePack = {
       label: () => '어시장 · 판매', labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
       label: () => '마을 · 집으로', labelDy: -2 },
+    { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',
+      label: () => '여객선 · 빠른 이동', labelDy: -2 },
     { id: 'exit',   x: 272, y: 104, w: 34, h: 56, sprite: 'boarding',
       label: () => '승선 · 바다로', labelDy: 8 },
   ],

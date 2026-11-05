@@ -2,7 +2,9 @@
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
-import { ZONES, zoneById, zoneOfSpot } from '../content/zones';
+import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
+import { zoneOfPort } from '../content/bounties';
+import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
@@ -305,6 +307,22 @@ describe('ZoneTracker — 게이트는 즉시, 표시 전환은 히스테리시�
     expect(t.step('seasia', 0, 2).revert).toBe(true);
   });
 
+  it('게이트 안내문은 다음 배의 조건과 살 곳을 배 데이터에서 덧붙인다', () => {
+    const t = new ZoneTracker();
+    t.init('pacific');
+    const blocked = t.step('seasia', 0, 1).blocked!; // 돛단배가 다음 단계
+    const next = BOATS[1];
+    expect(blocked).toContain(`다음 배 ${next.name}`);
+    expect(blocked).toContain(`명성 ${next.fameReq.toLocaleString('ko-KR')}`);
+    expect(blocked).toContain(`골드 ${next.price.toLocaleString('ko-KR')}`);
+    expect(blocked).toContain('조선소');
+  });
+
+  it('다음 배 안내 — 명성 조건이 없으면 골드만, 마지막 배면 빈 문자열', () => {
+    expect(nextBoatText(0)).toBe(`다음 배 ${BOATS[0].name}: 골드 ${BOATS[0].price.toLocaleString('ko-KR')}. 집 목공소나 항구 조선소에서 살 수 있어요.`);
+    expect(nextBoatText(MAX_BOAT)).toBe('');
+  });
+
   it('자격이 되면 dwell(400ms) 후에야 "들어섰다"가 커밋된다', () => {
     const t = new ZoneTracker();
     t.init('pacific');
@@ -453,6 +471,24 @@ describe.each(Object.values(REGION_PACKS))('$id 지역 이동 게이트: 재발�
     }
   });
 
+  it('접안 트리거의 물칸은 그 항구가 있는 바다에 속한다 — 접안은 바다의 경계 게이트를 지난 뒤다', () => {
+    // 리듀서는 항구 이동을 그 바다의 진입 배 단계로 재검증한다. 접안 자리가 게이트 밖이면 정상 접안이 거부된다
+    for (const trig of pack.triggers) {
+      if (trig.action !== 'base' || !trig.base) continue;
+      const port = zoneOfPort(trig.base);
+      let water = 0;
+      for (let x = trig.rect.x; x < trig.rect.x + trig.rect.w; x++) {
+        for (let y = trig.rect.y; y < trig.rect.y + trig.rect.h; y++) {
+          if (!canMove(pack, x, y)) continue;
+          water++;
+          const z = zoneOf(pack, x, y);
+          expect(z && topZoneOf(z), `${trig.base} 접안 (${x},${y})`).toBe(port);
+        }
+      }
+      expect(water, `${trig.base} 접안 물칸`).toBeGreaterThan(0);
+    }
+  });
+
   it('모든 해상 입장 착지점(entryPoint)도 시설 트리거에서 최소 이격 거리 밖이다', () => {
     for (const src of Object.values(REGION_PACKS)) {
       for (const trig of src.triggers) {
@@ -504,16 +540,17 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   it('여객선은 항구에만 있다', () => {
     expect(HARBOR_FURNITURE.some(f => f.id === 'travel')).toBe(true);
     expect(HOME_FURNITURE.some(f => f.id === 'travel')).toBe(false);
+    expect(HOME_FURNITURE.some(f => f.id === 'ferry')).toBe(false);
   });
   it('시설 순서 — 집과 항구의 메뉴 구성', () => {
     const ids = (id: keyof typeof BASE_PACKS) => BASE_PACKS[id].furniture.map(f => f.id);
     expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'exit']);
-    const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'exit'];
+    const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'ferry', 'exit'];
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
     // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
-    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'exit']);
+    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'ferry', 'exit']);
   });
   it('같은 거점 안의 시설 영역은 서로 겹치지 않는다', () => {
     for (const pack of Object.values(BASE_PACKS)) {

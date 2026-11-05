@@ -16,7 +16,10 @@ vi.mock('../../../../platform/api', () => ({
         { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: 'b', gold: 500,
           createdAt: '2026-10-22T00:00:00Z', readAt: '2026-10-22T01:00:00Z', claimedAt: null },
       ]),
-      users: vi.fn(async () => [{ user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com' }]),
+      users: vi.fn(async () => [
+        { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
+        { user_id: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', email: null, nickname: '민물러', is_anonymous: true },
+      ]),
       mail: mocks.mail,
     },
   },
@@ -35,10 +38,10 @@ function show() {
 describe('MailTab', () => {
   afterEach(() => { cleanup(); mocks.mail.mockReset(); });
 
-  it('보낸 우편을 받는 사람 email과 상태로 그린다', async () => {
+  it('보낸 우편을 받는 사람의 닉네임(이메일)과 상태로 그린다', async () => {
     show();
     expect(await screen.findByText('지난 우편')).toBeTruthy();
-    expect(screen.getByText('friend@example.com')).toBeTruthy();
+    expect(screen.getByText('바다친구(friend@example.com)')).toBeTruthy();
     expect(screen.getByText('읽음')).toBeTruthy();
   });
 
@@ -69,5 +72,42 @@ describe('MailTab', () => {
     fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: 'nope 1' } });
     expect(screen.getByText('형식이 틀린 줄: 1')).toBeTruthy();
     expect(screen.getByRole('button', { name: '미리보기' })).toBeDisabled();
+  });
+
+  it('이메일·닉네임으로 찾은 계정을 받는 사람 목록에 더하고, 계정 id로 보낸다', async () => {
+    mocks.mail.mockResolvedValue({ problems: [], preview: { count: 2, totalGold: 0, missing: [] } });
+    show();
+    await screen.findByText('지난 우편');
+    const search = screen.getByLabelText(/계정 찾기/);
+    fireEvent.change(search, { target: { value: '바다' } });
+    fireEvent.click(screen.getByRole('option', { name: /^바다친구\(friend@example\.com\)/ }));
+    fireEvent.change(search, { target: { value: '민물' } });
+    fireEvent.click(screen.getByRole('option', { name: /^민물러\(게스트\)/ }));
+    const list = screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement;
+    expect(list.value).toBe(`${USER} 0\ne747e6c9-f0c2-4192-a462-9cd26e8a812a 0`);
+    expect(screen.getByText('받는 사람 2명: 바다친구(friend@example.com), 민물러(게스트)')).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: 'nobody' } });
+    expect(screen.getByText('찾는 계정이 없어요.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '안내' } });
+    fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+    await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
+      title: '안내', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }, { userId: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', gold: 0 }] },
+    }));
+  });
+
+  it('다른 화면의 우편 보내기로 열리면 그 계정을 받는 사람으로 넣어 둔다', async () => {
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+          <MailTab to={USER} />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+    expect((screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement).value).toBe(`${USER} 0`);
+    expect(await screen.findByText('받는 사람 1명: 바다친구(friend@example.com)')).toBeTruthy();
   });
 });

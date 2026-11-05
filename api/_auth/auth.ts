@@ -3,8 +3,9 @@
 // 표는 auth 스키마의 users·sessions·accounts·verifications이고 열 이름은 snake_case다.
 import { betterAuth } from 'better-auth';
 import { anonymous } from 'better-auth/plugins';
+import { generateRandomString } from 'better-auth/crypto';
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { MailSender } from './mail.js';
 import { anonymousUpgrade } from './upgrade.js';
@@ -26,6 +27,52 @@ export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
 
 const timestamps = { createdAt: 'created_at', updatedAt: 'updated_at' } as const;
 
+/** 비밀번호 재설정 토큰의 유효 시간(초) */
+export const RESET_PASSWORD_EXPIRES_IN = 60 * 60;
+
+/** 재설정 요청(request-password-reset)이 만드는 것과 같은 형식의 재설정 토큰. 영문 대소문자와 숫자 24자다 */
+export const newPasswordResetToken = (): string => generateRandomString(24, 'a-z', 'A-Z', '0-9');
+
+/**
+ * 재설정 토큰으로 들어가는 게임의 재설정 착지 주소.
+ * 게임은 재설정 요청의 redirectTo로 앱 루트를 넘기고, 재설정 콜백(/reset-password/:token)은 그 주소에 token 질의를 붙여 보낸다.
+ * 콜백을 거친 뒤와 같은 주소다.
+ */
+export function passwordResetLanding(baseURL: string, token: string): string {
+  const url = new URL('/', baseURL);
+  url.searchParams.set('token', token);
+  return url.href;
+}
+
+// 이전 인증 서버에서 옮긴 해시가 bcrypt라 새 해시도 bcrypt로 맞춘다.
+const bcryptPassword = {
+  hash: (password: string) => bcrypt.hash(password, 10),
+  verify: ({ hash, password }: { hash: string; password: string }) => bcrypt.compare(password, hash),
+};
+
+// 게임과 관리자 인증이 함께 쓰는 표 구성
+const userTable = {
+  modelName: 'auth.users',
+  fields: { emailVerified: 'email_verified', ...timestamps },
+};
+const sessionTable = {
+  modelName: 'auth.sessions',
+  fields: { userId: 'user_id', expiresAt: 'expires_at', ipAddress: 'ip_address', userAgent: 'user_agent', ...timestamps },
+};
+const accountTable = {
+  modelName: 'auth.accounts',
+  fields: {
+    userId: 'user_id', accountId: 'account_id', providerId: 'provider_id',
+    accessToken: 'access_token', refreshToken: 'refresh_token', idToken: 'id_token',
+    accessTokenExpiresAt: 'access_token_expires_at', refreshTokenExpiresAt: 'refresh_token_expires_at',
+    ...timestamps,
+  },
+};
+const verificationTable = {
+  modelName: 'auth.verifications',
+  fields: { expiresAt: 'expires_at', ...timestamps },
+};
+
 export function createAuth(config: AuthConfig) {
   return betterAuth({
     database: config.pool,
@@ -36,37 +83,19 @@ export function createAuth(config: AuthConfig) {
       enabled: true,
       minPasswordLength: MIN_PASSWORD_LENGTH,
       maxPasswordLength: MAX_PASSWORD_LENGTH,
-      // 이전 인증 서버에서 옮긴 해시가 bcrypt라 새 해시도 bcrypt로 맞춘다.
-      password: {
-        hash: password => bcrypt.hash(password, 10),
-        verify: ({ hash, password }) => bcrypt.compare(password, hash),
-      },
+      password: bcryptPassword,
       sendResetPassword: ({ user, url }) => config.mail.sendPasswordReset(user.email, url),
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN,
       revokeSessionsOnPasswordReset: true,
     },
-    user: {
-      modelName: 'auth.users',
-      fields: { emailVerified: 'email_verified', ...timestamps },
-    },
+    user: userTable,
     session: {
-      modelName: 'auth.sessions',
-      fields: { userId: 'user_id', expiresAt: 'expires_at', ipAddress: 'ip_address', userAgent: 'user_agent', ...timestamps },
+      ...sessionTable,
       expiresIn: SESSION_EXPIRES_IN,
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
-    account: {
-      modelName: 'auth.accounts',
-      fields: {
-        userId: 'user_id', accountId: 'account_id', providerId: 'provider_id',
-        accessToken: 'access_token', refreshToken: 'refresh_token', idToken: 'id_token',
-        accessTokenExpiresAt: 'access_token_expires_at', refreshTokenExpiresAt: 'refresh_token_expires_at',
-        ...timestamps,
-      },
-    },
-    verification: {
-      modelName: 'auth.verifications',
-      fields: { expiresAt: 'expires_at', ...timestamps },
-    },
+    account: accountTable,
+    verification: verificationTable,
     advanced: { database: { generateId: 'uuid' } },
     plugins: [
       anonymous({
@@ -80,4 +109,34 @@ export function createAuth(config: AuthConfig) {
   });
 }
 
+/** 관리자 세션 쿠키 이름의 앞부분. 게임 세션 쿠키(better-auth)와 이름이 달라 서로의 로그인·로그아웃이 영향을 주지 않는다 */
+export const ADMIN_COOKIE_PREFIX = 'pixel-fishing-admin';
+
+/**
+ * 관리자 세션 쿠키를 서명하는 비밀값. 앱 비밀값에서 파생한다.
+ * 서명 키가 달라 게임 세션 쿠키의 값을 관리자 쿠키 이름으로 옮겨도 관리자 세션으로 인정되지 않는다.
+ */
+export const adminSecret = (secret: string): string =>
+  createHmac('sha256', secret).update('admin-session').digest('base64url');
+
+/**
+ * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표에 이메일·비밀번호로 로그인하고 별도 쿠키의 세션을 받는다.
+ * 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
+ */
+export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
+  return betterAuth({
+    database: config.pool,
+    secret: adminSecret(config.secret),
+    baseURL: config.baseURL,
+    basePath: '/api/admin/auth',
+    emailAndPassword: { enabled: true, disableSignUp: true, password: bcryptPassword },
+    user: userTable,
+    session: sessionTable,
+    account: accountTable,
+    verification: verificationTable,
+    advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
+  });
+}
+
 export type Auth = ReturnType<typeof createAuth>;
+export type AdminAuth = ReturnType<typeof createAdminAuth>;

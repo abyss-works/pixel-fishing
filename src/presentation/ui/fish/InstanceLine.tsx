@@ -4,17 +4,43 @@ import type { Fish } from '../../../game/content/fish';
 import { cx } from '../cx';
 import { fmtSize } from '../format';
 import IconButton from '../IconButton';
+import PixelIcon from '../PixelIcon';
 import SizeBar from '../SizeBar';
 
 // 개체 한 마리의 표시 — 가방 탭과 판매 패널이 같은 줄을 쓴다.
 // **고정 그리드**다: 값의 자릿수가 달라도 열이 흔들리면 개체끼리 크기 비교가 안 된다.
 //   [체크] [크기] [막대(1fr — 남는 폭을 전부 먹어 좌우로 펼친다)] [백분위] [최대] [변이] [버튼들]
-// 행이 어종 단위로 묶이므로 변이 여부는 이 줄이 배지로 알린다 (bagRows 참고).
+// 체크 열은 선택 표시(children)를 받는 판매 패널에만 있다. 조회 전용 줄은 그 자리를 비우지 않는다.
+// 최대와 변이는 글자 대신 12px 아이콘(골드 왕관, 보라 반짝이)으로, 표시가 없어도 같은 폭을 차지한다.
+// 아이콘 뜻은 줄마다 달지 않고 화면의 도움말 한 곳에서 알린다(aria-label만 둔다).
+// 행이 어종 단위로 묶이므로 변이 여부는 이 줄이 아이콘으로 알린다 (bagRows 참고).
 // 판정(방치/PERFECT)·잡은 날은 기록만 하고 걸지 않는다 — 여기서 내리는 판단은 "남길까 팔까"고
 // 거기 쓰이는 건 크기뿐이다.
 // 마지막 열은 auto — 진열·잠금 버튼 수가 화면마다 달라서(가방 둘, 판매 없음) 고정폭이면 넘친다.
 // 버튼은 우측 정렬이라 자물쇠 위치는 줄마다 같다.
-export const CELL = 'grid grid-cols-[13px_52px_1fr_34px_26px_48px_auto] items-center gap-2';
+// 크기와 백분율 열은 픽셀 폰트 글자 폭(ch) 기준이다. 줄 전체를 그 폰트로 두어 ch가 그 폰트의 숫자 폭이 되게 하고,
+// 가장 긴 값("99.9cm", "99.9%")에 글자 사이 간격까지 들어가게 한 글자씩 여유를 둔다. 픽셀로 고정하면 넓은 폰트의 값이
+// 열을 넘쳐 막대 칸을 덮는다.
+const CELL = 'pf-accent grid items-center gap-2 whitespace-nowrap';
+const COLS_CHECK = 'grid-cols-[13px_7ch_minmax(0,1fr)_6ch_12px_12px_auto]';
+const COLS_VIEW = 'grid-cols-[7ch_minmax(0,1fr)_6ch_12px_12px_auto]';
+
+function lineClass(hasCheck: boolean, interactive: boolean, dim: boolean) {
+  return cx(CELL, hasCheck ? COLS_CHECK : COLS_VIEW, 'text-xs py-0.5 px-1',
+            interactive && 'cursor-pointer hover:bg-surface-2', dim && 'text-text-dim');
+}
+
+function BestMark({ on }: { on: boolean | undefined }) {
+  return on
+    ? <span className="text-gold leading-none" role="img" aria-label="이 형태 최대"><PixelIcon glyph="crown" size={12} /></span>
+    : <span />;
+}
+
+function VariantMark({ on }: { on: boolean }) {
+  return on
+    ? <span className="text-epic leading-none" role="img" aria-label="돌연변이"><PixelIcon glyph="sparkle" size={12} /></span>
+    : <span />;
+}
 
 export interface InstanceLineProps {
   inst: FishInstance;
@@ -42,20 +68,18 @@ export default function InstanceLine({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={cx(CELL, 'text-xs py-0.5 pl-4 pr-1',
-                       onToggle && 'cursor-pointer hover:bg-surface-2',
-                       (checked === false || inst.locked) && 'text-text-dim')}
+    <div className={lineClass(children !== undefined, !!onToggle, checked === false || inst.locked)}
          onClick={onToggle}
          role={onToggle ? 'button' : undefined}>
-      <span>{children}</span>
+      {children !== undefined && <span>{children}</span>}
       {/* 값은 픽셀 폰트(pf-accent = Silkscreen). 한글 글리프가 없는 건 폰트 스택이 폴백한다 */}
       <span className="pf-accent">
         {inst.size === null ? <span className="text-text-dim">미상</span> : fmtSize(inst.size)}
       </span>
       <span className="min-w-0">{pct !== null && <SizeBar percentile={pct} />}</span>
       <span className="pf-accent text-text-dim text-right">{pct !== null && `${pct}%`}</span>
-      <span className="text-gold text-center">{best && '최대'}</span>
-      <span className="text-epic text-center">{inst.form === 'variant' && '돌연변이'}</span>
+      <BestMark on={best} />
+      <VariantMark on={inst.form === 'variant'} />
       {(onExhibit || onLock) && (
         <span className="flex items-center justify-end gap-0.5">
           {onExhibit && (
@@ -94,17 +118,15 @@ export function UnsizedLine({
   children?: React.ReactNode;
 }) {
   return (
-    <div className={cx(CELL, 'text-xs py-0.5 pl-4 pr-1',
-                       onToggle && 'cursor-pointer hover:bg-surface-2',
-                       (checked === false || locked) && 'text-text-dim')}
+    <div className={lineClass(children !== undefined, !!onToggle, checked === false || locked)}
          onClick={onToggle}
          role={onToggle ? 'button' : undefined}>
-      <span>{children}</span>
+      {children !== undefined && <span>{children}</span>}
       <span className="pf-accent text-text-dim">미상</span>
       <span className="pf-accent text-text-dim">×{count}</span>
       <span />
       <span />
-      <span className="text-epic text-center">{form === 'variant' && '돌연변이'}</span>
+      <VariantMark on={form === 'variant'} />
       {onLock && (
         <IconButton
           glyph={locked ? 'lock' : 'lockOpen'} size={12}

@@ -23,10 +23,7 @@ describe('운영 탭', () => {
     expect(within(auth).getByText(/로컬 모드에서는 관리자 데이터가 없어요/)).toBeInTheDocument();
   });
 
-  it('권한 상태마다 다른 문구를 보인다', () => {
-    show('denied');
-    expect(screen.getByText(/admins에 등록되지 않았어요/)).toBeInTheDocument();
-    cleanup();
+  it('관리자 세션이면 로컬 모드와 다른 문구를 보인다', () => {
     show('granted');
     expect(screen.getByText('관리자 세션')).toBeInTheDocument();
   });
@@ -39,5 +36,8 @@ describe('운영 탭', () => {
       expect(within(row).getByText(label)).toBeInTheDocument();
     }
     expect(within(catalog).getByText(/이벤트를 남기지 않아요/)).toBeInTheDocument();
+    for (const type of ['adminRestrict', 'adminUnrestrict', 'adminResetLink']) {
+      expect(within(catalog).getByText(type)).toBeInTheDocument();
+    }
   });
 });

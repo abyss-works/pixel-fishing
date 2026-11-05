@@ -1,4 +1,4 @@
-// 수배판 패널 — 일일 의뢰 3열·네임드 카드·조건 게이트.
+// 수배판 패널 — 고정 정보 줄·일일 의뢰 3열·네임드 카드·조건 게이트.
 // 테스트 환경은 클라우드 빌드가 아니라 readBounty가 null이다 — 티켓·진행은 빈 값으로,
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -28,6 +28,14 @@ const fullDex = {
   seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
   tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
 };
+
+/** 요소에 마우스를 올려 뜬 게임 툴팁의 글을 돌려준다 */
+const tipOf = (el: HTMLElement): string => {
+  fireEvent.mouseEnter(el);
+  return screen.getByRole('tooltip').textContent ?? '';
+};
+/** 버튼을 감싼 툴팁 자리 */
+const tipOfButton = (button: HTMLElement): string => tipOf(button.parentElement!);
 
 function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
   const setToast = vi.fn();
@@ -66,37 +74,54 @@ describe('BountyPanel', () => {
     for (const button of others) expect(button).toBeDisabled();
   });
 
-  it('수주만으로는 오늘 남은 클리어가 줄지 않는다 — 상태 줄은 일반 1/1 · 네임드 1/1이다', async () => {
+  it('고정 정보 줄 — 구역과 오늘 남은 클리어. 수주만으로는 남은 클리어가 줄지 않는다', async () => {
     const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('오늘 남은 클리어 일반 1/1 · 네임드 1/1')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('1/1'));
+    expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('1/1');
+    expect(screen.getByText('태평양')).toBeInTheDocument();
   });
 
-  it('스냅샷이 오기 전에는 상태 줄이 값 대신 –를 보인다', async () => {
+  it('스냅샷이 오기 전에는 고정 정보 줄이 값 대신 -를 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('오늘 남은 클리어 –')).toBeInTheDocument();
+    expect(await screen.findByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('-');
+    expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('-');
   });
 
-  it('마치지 못한 의뢰가 한국 시간 새벽 4시에 사라진다는 안내가 있다', async () => {
+  it('클리어 기준과 마치지 못한 의뢰가 한국 시간 새벽 4시에 사라진다는 안내는 오늘 남은 클리어의 툴팁이다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('조건을 채우지 못한 의뢰는 한국 시간 새벽 4시에 사라져요. 보상을 받으면 클리어 1번이에요.')).toBeInTheDocument();
+    const tip = tipOf(await screen.findByText('오늘 남은 클리어'));
+    expect(tip).toContain('보상을 받으면 클리어 1번이에요.');
+    expect(tip).toContain('조건을 채우지 못한 의뢰는 한국 시간 새벽 4시에 사라져요.');
   });
 
-  it('일반 의뢰를 오늘 클리어했으면 수주 버튼이 모두 막히고 이유를 안내한다', async () => {
+  it('일반 의뢰를 오늘 클리어했으면 수주 버튼이 모두 막히고 이유를 버튼 툴팁으로 안내한다', async () => {
     mockSnap = { clearsToday: { general: 1, named: 0 }, progress: [], tickets: [] };
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('오늘 일반 의뢰는 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.')).toBeInTheDocument();
-    expect(screen.getByText('오늘 남은 클리어 일반 0/1 · 네임드 1/1')).toBeInTheDocument();
-    for (const button of screen.getAllByRole('button', { name: '수주' })) expect(button).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('0/1'));
+    expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('1/1');
+    const buttons = screen.getAllByRole('button', { name: '수주' });
+    for (const button of buttons) expect(button).toBeDisabled();
+    expect(tipOfButton(buttons[0])).toBe('오늘 일반 의뢰는 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 
-  it('다른 구역에서 수주한 일반 의뢰가 진행 중이면 이 판의 수주가 막히고 이유를 안내한다', async () => {
+  it('다른 구역에서 수주한 일반 의뢰가 진행 중이면 이 판의 수주가 막히고 이유를 버튼 툴팁으로 안내한다', async () => {
     const held = dailyQuestFor('seasia', 'hard', 'test-uid', gameDay())!;
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: held.id, progress: 0 }], tickets: [] };
     show(game({ fame: 1500, dex: fullDex }));
-    expect(await screen.findByText('동남아에서 수주한 일반 의뢰가 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.')).toBeInTheDocument();
-    for (const button of screen.getAllByRole('button', { name: '수주' })) expect(button).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('1/1'));
+    const buttons = screen.getAllByRole('button', { name: '수주' });
+    for (const button of buttons) expect(button).toBeDisabled();
+    expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.');
+  });
+
+  it('수주할 수 있으면 수주 버튼의 툴팁은 세는 기준을 알린다', async () => {
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
+    show(game({ fame: 1500, dex: fullDex }));
+    const buttons = await screen.findAllByRole('button', { name: '수주' });
+    await waitFor(() => expect(buttons[0]).not.toBeDisabled());
+    expect(tipOfButton(buttons[0])).toBe('수주한 뒤에 잡은 물고기부터 세요. 물고기는 가방에 남아요.');
   });
 
   it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 납품할 수 있다', async () => {
@@ -126,7 +151,7 @@ describe('BountyPanel', () => {
   it('조건 미충족이면 본문을 가리고 조건 리스트를 덮는다', async () => {
     show(game({ fame: 0 }));
     expect(await screen.findByText('명성 1,500 달성')).toBeInTheDocument();
-    expect(screen.getByText('태평양 모든 어종 수집(전설 제외, 밤 어종 포함)')).toBeInTheDocument();
+    expect(screen.getByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/)).toBeInTheDocument();
     // 본문은 blur+pointer-events-none으로 가려진다
     const blurred = document.querySelector('.blur-sm.pointer-events-none');
     expect(blurred).not.toBeNull();
@@ -136,7 +161,7 @@ describe('BountyPanel', () => {
   it('체크 방향 — 달성 조건은 체크+취소선, 미달은 빈박스', async () => {
     show(game({ fame: 1500 })); // 명성만 달성, 도감 비어 있음
     const fameLi = (await screen.findByText('명성 1,500 달성')).closest('li')!;
-    const dexLi = screen.getByText('태평양 모든 어종 수집(전설 제외, 밤 어종 포함)').closest('li')!;
+    const dexLi = screen.getByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/).closest('li')!;
     expect(fameLi.className).toMatch(/line-through/);
     expect(dexLi.className).not.toMatch(/line-through/);
   });
@@ -155,21 +180,25 @@ describe('BountyPanel', () => {
       expect.objectContaining({ type: 'acceptQuest', questId: want.id, port: 'harbor' })));
   });
 
-  it('네임드 화면 — 이름은 초상화 아래 ???, 본문은 수배서 전용 문구다', async () => {
+  it('네임드 화면 — 이름은 ???, 수배서 전용 문구는 이름의 툴팁, 나타나는 곳과 보상과 교환 재료를 줄로 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(screen.getByText('???')).toBeInTheDocument();
-    expect(screen.getByText(/걷어 올린 그물은/)).toBeInTheDocument();
+    expect(tipOf(screen.getByText('???'))).toMatch(/걷어 올린 그물은/);
+    expect(screen.getByText('나타나는 곳')).toBeInTheDocument();
     expect(screen.getByText(/400,000G/)).toBeInTheDocument();
+    expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
   });
 
   it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
-    expect(screen.getByText(/돌이 된 이빨 보유 0\/1/)).toBeInTheDocument();
-    // 재료 없으면 교환 불가
-    expect(screen.getByRole('button', { name: '교환' })).toBeDisabled();
+    expect(screen.getByText(/돌이 된 이빨/)).toBeInTheDocument();
+    expect(screen.getByText('0/1')).toBeInTheDocument();
+    // 재료 없으면 교환 불가 — 이유는 버튼 툴팁이다
+    const exchange = screen.getByRole('button', { name: '교환' });
+    expect(exchange).toBeDisabled();
+    expect(tipOfButton(exchange)).toBeTruthy();
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {
@@ -183,7 +212,7 @@ describe('BountyPanel', () => {
       expect.objectContaining({ type: 'exchangeArtifact', artifact: 'abyss-angler' })));
   });
 
-  it('흔적(도전권)이 있으면 네임드 카드에 상태 한 줄만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
+  it('흔적(도전권)이 있으면 네임드 카드 머리에 도전권 남은 시간만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
     mockSnap = {
       clearsToday: { general: 0, named: 0 }, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
@@ -198,7 +227,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
-    expect(await screen.findByText(/흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/)).toBeInTheDocument();
+    expect(tipOf(await screen.findByText('도전권'))).toMatch(/흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -214,8 +243,10 @@ describe('BountyPanel', () => {
       named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    // 스냅샷이 오기 전에도 버튼은 막혀 있으므로 안내가 뜰 때까지 기다린 뒤 버튼을 본다
-    expect(await screen.findByText('오늘 네임드 토벌은 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '수주' })).toBeDisabled();
+    // 스냅샷이 오기 전에도 버튼은 막혀 있으므로 고정 정보 줄이 값을 받을 때까지 기다린 뒤 버튼을 본다
+    await waitFor(() => expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('0/1'));
+    const accept = screen.getByRole('button', { name: '수주' });
+    expect(accept).toBeDisabled();
+    expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 });

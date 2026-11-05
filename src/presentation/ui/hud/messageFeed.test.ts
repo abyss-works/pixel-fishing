@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MESSAGE_KEEP, appendMessage, channelsOf, createMessage } from './messageFeed';
+import { MESSAGE_KEEP, appendMessage, channelsOf, createMessage, isAtBottom, mergeMessages } from './messageFeed';
 import { REJECT_TEXT } from '../../../game/rules/rules';
 
 describe('메시지 피드', () => {
@@ -29,8 +29,24 @@ describe('메시지 피드', () => {
     expect(list.at(-1)?.text).toBe('new');
   });
 
+  it('맨 아래에서 여유 안쪽이면 맨 아래를 보고 있는 것으로 친다', () => {
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 400, clientHeight: 100 })).toBe(true);
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 395, clientHeight: 100 })).toBe(true);
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 300, clientHeight: 100 })).toBe(false);
+    expect(isAtBottom({ scrollHeight: 100, scrollTop: 0, clientHeight: 100 })).toBe(true);
+  });
+
   it('채널 목록은 등장 순서대로 중복 없이 모은다', () => {
     const list = [createMessage(1, 'a'), createMessage(2, 'b')];
     expect(channelsOf(list)).toEqual(['system']);
+  });
+
+  it('채널이 다른 기록은 만든 시각 순으로 합치고, 같은 시각이면 앞 기록이 먼저다', () => {
+    const t = (min: number) => new Date(2026, 9, 17, 9, min);
+    const system = [createMessage(1, '가', { now: t(1) }), createMessage(2, '다', { now: t(3) })];
+    const chat = [createMessage(1, '나', { channel: 'chat', author: '가람', now: t(2), from: { uid: 'u', chatId: 1 } }),
+      createMessage(2, '라', { channel: 'chat', now: t(3) })];
+    expect(mergeMessages(system, chat).map(m => m.text)).toEqual(['가', '나', '다', '라']);
+    expect(mergeMessages(system, [])).toEqual(system);
   });
 });

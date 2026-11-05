@@ -118,6 +118,8 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.writes.instancesRemoved).toEqual([releasedUid]);
     expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
     expect(out.events[1].payload).toMatchObject({ uids: [releasedUid], reason: 'bag-full' });
+    // 놓아준 개체의 어종과 폼을 함께 남긴다 — 방치 결과 보고가 놓친 가치를 센다
+    expect(out.events[1].payload).toMatchObject({ fish: [{ uid: releasedUid, fishId: 'crucian', form: 'normal' }] });
 
     // 명성·도감은 방생해도 남는다 — 잡은 사실이 사라지는 게 아니다
     expect(out.state.fame).toBeGreaterThan(0);
@@ -216,6 +218,21 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.location).toEqual({ kind: 'base', id: 'harbor' });
     expect(out.state.visited).toEqual([]);
+  });
+
+  it('travel — 배가 그 바다의 진입 단계에 못 미치는 항구로는 옮기지 않는다', () => {
+    expect(applyAction(seed({ boat: 2 }), { type: 'travel', to: { kind: 'base', id: 'manila' } }, deps()))
+      .toEqual({ ok: false, error: 'zone-locked' });
+    const ok = applyAction(seed({ boat: 3 }), { type: 'travel', to: { kind: 'base', id: 'manila' } }, deps());
+    if (!ok.ok) throw new Error(ok.error);
+    expect(ok.state.location).toEqual({ kind: 'base', id: 'manila' });
+  });
+
+  it('travel — 집·게이트 없는 항구·지역은 배 없이도 옮긴다', () => {
+    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'base', id: 'harbor' },
+      { kind: 'region', id: 'village' }, { kind: 'region', id: 'world' }] as const) {
+      expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()).ok, `${to.kind}:${to.id}`).toBe(true);
+    }
   });
 
   it('travel — 형태가 깨진 목적지는 거부', () => {

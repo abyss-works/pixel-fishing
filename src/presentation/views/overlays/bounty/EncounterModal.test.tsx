@@ -106,6 +106,17 @@ describe('EncounterModal', () => {
     waitForZone(false);
     fireEvent.click(screen.getByRole('button', { name: '챔질' }));
     expect(screen.getByLabelText('도주 1/3')).toBeInTheDocument();
+    expect(screen.getByText('빗나갔어요. 그림자가 멀어져요.')).toBeInTheDocument();
+  });
+
+  it('치지 않아 찬 도주는 빗나감과 다른 문구로 알린다', () => {
+    show();
+    enter();
+    // 첫 편도 800ms — 한 번 왕복(1600ms)하도록 치지 않으면 도주 1칸
+    act(() => { vi.advanceTimersByTime(1650); });
+    expect(screen.getByLabelText('도주 1/3')).toBeInTheDocument();
+    expect(screen.getByText('챔질하지 않는 사이 그림자가 멀어져요.')).toBeInTheDocument();
+    expect(screen.queryByText(/빗나갔어요/)).not.toBeInTheDocument();
   });
 
   it('커서는 끝에서 처음으로 순간이동하지 않고 되돌아온다', () => {
@@ -127,7 +138,7 @@ describe('EncounterModal', () => {
     act(() => { vi.advanceTimersByTime(8000); });
     expect(onResolve).toHaveBeenCalledTimes(1);
     expect(onResolve).toHaveBeenCalledWith({ hits: 0, misses: 3, success: false });
-    expect(screen.getByText(/흔적이 사라졌으니/)).toBeInTheDocument();
+    expect(screen.getByText(/^챔질하지 않는 사이 놓쳤어요\. 흔적이 사라졌으니/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

@@ -57,11 +57,22 @@ import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
 import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
+import { activeDayUpsert } from './_data/activity.js';
+import { contributionUpsert, logbookInsert } from './_data/guilds.js';
+import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
+import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(이미지 빌드 인자 BUILD_ID).
 const BUILD_ID = process.env.BUILD_ID ?? 'dev';
+
+/** 낡은 탭 판정 — 운영(DEPLOY_ENV=production)은 릴리즈 버전, 그 밖의 배포는 배포 식별자를 대조한다 */
+function staleClient(headers: IncomingMessage['headers']): boolean {
+  return process.env.DEPLOY_ENV === 'production'
+    ? headers['x-client-version'] !== APP_VERSION
+    : headers['x-build-id'] !== BUILD_ID;
+}
 // 창 식별자 형식 — 클라이언트는 crypto.randomUUID()를 쓴다
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
@@ -181,6 +192,10 @@ export const SKIP_DETAIL = new Set([
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
 const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChallenge', 'catch']);
 
+/** 길드가 필요한 액션 — 보너스 효과를 쓰거나(캐치, 판매, 전시대 회수의 가방 상한) 기여를 쌓는다(명성을 얻는 캐치·지원 코드,
+ *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
+const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
+
 // 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
 // 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
 // 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
@@ -212,12 +227,12 @@ async function route(req: Req, res: Res): Promise<void> {
   if (req.method === 'GET') { res.status(204).end(); return; }
   if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
 
-  // 낡은 탭 차단 — **배포 단위**로 판정한다. APP_VERSION은 릴리즈 라벨이라 dev 빌드에서
-  // 올라가지 않아(roadmap 0.0) 개발·스테이징 배포 사이에서는 영원히 일치했다.
-  // 클라는 빌드 시 번들에 박힌 값을, 서버는 런타임 env를 읽는다 — 같은 배포면 같은 값이다.
+  // 낡은 탭 차단 — 운영은 릴리즈 버전(APP_VERSION)으로, 그 밖의 배포는 커밋 단위 배포 식별자로 판정한다.
+  // 운영 배포는 릴리즈마다 버전이 오르므로 같은 버전의 재배포는 열린 탭을 끊지 않는다.
+  // 개발·스테이징 배포는 버전을 올리지 않고 규칙을 바꾸므로 배포 식별자로 가른다.
   // 인증/리듀서보다 먼저: 새 서버의 결과를 낡은 번들이 해석 못 해 깨지는 것을 원천 차단하고,
   // 클라이언트는 업데이트 모달(새로고침 안내)을 띄운다. 헤더 부재 = 기능 도입 전 구버전 → 동일 처리.
-  if (req.headers['x-build-id'] !== BUILD_ID) {
+  if (staleClient(req.headers)) {
     throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 
@@ -265,8 +280,10 @@ async function route(req: Req, res: Res): Promise<void> {
   const dayStart = gameDayStartISO(requestISO);
   const loaded = await step('db-read', { uid, action: action.type }, () => loadContext(db, uid, {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
-    bountyDayStart: wantsBounty ? dayStart : null,
+    bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
   }));
+  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계)과 기부로 오른 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
+  const guildEffects = loaded.guild ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks) : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
@@ -426,7 +443,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, guildEffects);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
@@ -437,6 +454,7 @@ async function route(req: Req, res: Res): Promise<void> {
       relief,
       bounty,
       mail,
+      guild: guildEffects,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -446,7 +464,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
-      Math.random, action.forceEncounter === true);
+      Math.random, action.forceEncounter === true, guildEffects.named);
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -499,11 +517,12 @@ async function route(req: Req, res: Res): Promise<void> {
     }), fragments));
   if (!committed) throw new ApiError(409, 'version-conflict');
 
-  // 후속 쓰기 — 이벤트 append, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
+  // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.
   // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
-  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow)];
+  // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
+  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow), activeDayUpsert(uid, eventNow)];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
   if (action.type === 'catch' && bounty) {
     followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));
@@ -512,6 +531,16 @@ async function route(req: Req, res: Res): Promise<void> {
   const actionType = action.type;
   afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
+  // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 실패가 이벤트 쓰기를 막지 않게 따로 실행한다
+  if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
+    const guildId = loaded.guild.id;
+    const cleared = action.type === 'deliverBounty' ? bountyById(action.questId) ?? null : null;
+    const add = contributionFor(out.state.fame - Number(row.fame), cleared);
+    afterResponse(runFollowUps(db, [
+      contributionUpsert(guildId, uid, nowISO, add),
+      logbookInsert(guildId, uid, guildLogsOf(out.events), nowISO),
+    ]).catch(e => reportServerIssue('후속 쓰기 실패 — 길드 기여/항해일지 유실', e, { uid, action: actionType, version: nextVersion })));
+  }
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
   // 보낸다. import는 통째 교체라 풀 유지 (빈도 극저, 예외).
@@ -525,6 +554,18 @@ async function route(req: Req, res: Res): Promise<void> {
     scalars: pickScalars(out.state), writes: out.writes,
   };
   res.status(200).json({ patch, result: out.result });
+}
+
+/** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
+export function guildLogsOf(events: readonly GameEvent[]): { kind: GuildLogKind; detail: string }[] {
+  return events.flatMap((e): { kind: GuildLogKind; detail: string }[] => {
+    const p = e.payload as { fishId?: unknown; questId?: unknown };
+    if (e.type === 'catch' && typeof p.fishId === 'string'
+      && FISH.find(f => f.id === p.fishId)?.rarity === 'legendary') return [{ kind: 'legendary', detail: p.fishId }];
+    if (e.type === 'deliverBounty' && typeof p.questId === 'string'
+      && bountyById(p.questId)?.difficulty === 'named') return [{ kind: 'named', detail: p.questId }];
+    return [];
+  });
 }
 
 /** 캐치가 진전시키는 일반 의뢰 — 수주 중(만료되지 않은) 의뢰만 본다. 네임드는 결투 성공(resolveChallenge)으로만 진전한다 */
@@ -544,7 +585,8 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2]): Promise<ApplyOutcome> {
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2],
+  guild: GuildEffects): Promise<ApplyOutcome> {
   const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
@@ -558,7 +600,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts, id => owned.has(id));
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
@@ -569,10 +611,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const info = buildCatchInfo(fish, extras, isNew);
   const inst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
   const rec = nextDexRec(prev, inst.size, today);
-  const over = bagCount + 1 - Math.max(capOfBoat(base.boat), bagCount);
+  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let released: ReleasedFish[] = [];
+  let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
     // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이
@@ -590,9 +633,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
       const gone = tops.find(t => t?.uid === pick.evictUid)!;
       const f = instanceFish(gone);
       released = [{ uid: gone.uid, name: f ? formName(f, gone.form) : gone.fishId }];
+      goneFish = [gone];
     } else if (pick.evictNew) {
       added = []; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
       released = [{ uid: inst.uid, name: formName(fish, inst.form) }];
+      goneFish = [inst];
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
   }
@@ -604,7 +649,8 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     ...(drawn.byCeiling ? { pity: true } : {}),
   } }];
   if (overflow.length > 0) {
-    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
+    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+      fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
   const scalars = takeItem(base, bait?.id ?? '');
   return {

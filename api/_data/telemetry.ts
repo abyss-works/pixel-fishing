@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { GameEvent } from '../../src/game/rules/actions.js';
+import type { AwayEvent } from '../../src/game/rules/away.js';
 import { at, jsonParam } from './json.js';
 
 export function eventsInsert(uid: string, events: readonly GameEvent[], createdAtISO: string): SQL | null {
@@ -35,4 +36,24 @@ export async function deleteEventsUpTo(db: Executor, maxId: number, cutoffISO: s
 /** 계정 정리에서 사용자의 이벤트를 모두 지운다 */
 export async function deleteUserEvents(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.events where user_id = ${uid}`);
+}
+
+/** 관리자 조치의 이벤트 유형. 제재, 제재 해제, 비밀번호 재설정 링크 발급이다 */
+export type AdminActionType = 'adminRestrict' | 'adminUnrestrict' | 'adminResetLink';
+
+/** 관리자 조치를 대상 사용자의 이벤트로 남긴다. 조치한 관리자 id는 payload.adminId다 */
+export async function recordAdminAction(db: Executor, uid: string, type: AdminActionType, adminId: string,
+  detail: Record<string, unknown> = {}): Promise<void> {
+  await db.execute(sql`insert into public.events (user_id, type, payload)
+    values (${uid}, ${type}, ${JSON.stringify({ adminId, ...detail })}::jsonb)`);
+}
+
+/** 방치 결과 보고 — 기간 안의 캐치·자동 방생 이벤트를 시각 순서로. 시각은 Postgres JSON 직렬화 문자열이다 */
+export async function awayEvents(db: Executor, uid: string, fromISO: string, toISO: string): Promise<AwayEvent[]> {
+  const { rows } = await db.execute<{ events: AwayEvent[] }>(sql`select coalesce(json_agg(json_build_object(
+      'type', e.type, 'payload', e.payload, 'at', e.created_at) order by e.created_at, e.id), '[]') as events
+    from public.events e
+    where e.user_id = ${uid} and e.type in ('catch', 'autoRelease')
+      and e.created_at >= ${at(fromISO)} and e.created_at <= ${at(toISO)}`);
+  return rows[0].events;
 }

@@ -1,56 +1,53 @@
-// 네임드 토벌 카드 — 2열 [좌 초상화+이름 | 우 카드 통째(수배서 본문-보상-버튼)].
-// 우측 스택은 BountyCard의 수직 구조(마스트헤드·룰선·본문·룰선·보상·버튼)를 그대로 둔다.
-// 본문은 도감 로어가 아니라 수배서 전용 본문(named.poster)이다.
+// 네임드 토벌 카드 — 수배판 네임드 토벌 탭의 카드 한 장. 머리에 대상 이름과 (흔적이 있으면) 도전권 남은 시간을 두고,
+// 본문은 나타나는 곳, 진행, 보상, 교환 재료의 줄 목록, 맨 아래에 버튼이다.
+// 수배서 문구(named.poster)는 이름의 툴팁이다. 도전은 바다에서 치르므로 여기서는 상태만 보인다.
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
-import FishSprite from '../../../ui/fish/FishSprite';
+import Frame from '../../../ui/Frame';
+import Tip from '../../../ui/Tip';
 import { fmtGold, fmtMinutes } from '../../../ui/format';
+import { AcceptButton, BoardRows } from './boardParts';
 
-export default function NamedCard({ game, quest, canAccept, busy, progress, accepted, ticketMins, onAccept, onDeliver }: {
-  game: GameState; quest: BountyQuest; canAccept: boolean; busy: boolean;
+export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onAccept, onDeliver }: {
+  game: GameState; quest: BountyQuest; canAccept: boolean;
+  /** 수주할 수 없는 이유 — 버튼의 툴팁으로 보인다 */
+  reason: string | null;
+  busy: boolean;
   progress: number; accepted: boolean;
-  /** 흔적(도전권)이 남아 있으면 남은 분 — 도전은 바다에서 치르므로 여기서는 상태만 보인다 */
-  ticketMins: number | null; onAccept: () => void; onDeliver: () => void;
+  /** 흔적(도전권)이 남아 있으면 남은 분 */
+  ticketMins: number | null;
+  /** 토벌 보상으로 받는 교환 재료 이름 */
+  materialName: string | null;
+  onAccept: () => void; onDeliver: () => void;
 }) {
-  const { name, poster, fish, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
+  const { name, poster, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
   return (
-    <div className="border border-gold rounded-sm p-4 bg-surface min-h-96 h-full flex flex-col">
-      <div className="grid grid-cols-2 grid-rows-1 gap-2 items-stretch flex-1">
-        <span className="content-center">
-          {fish && (
-            <FishSprite fish={fish} preset="portrait" discovered={found} animate={found}
-                        ariaLabel={found && name ? name : '미확인 네임드'} className="block mx-auto" />
-          )}
-          <b className="block mt-1 text-gold text-center">{found && name ? name : '???'}</b>
-        </span>
-        <span className="text-center flex flex-col gap-2 text-sm border-l border-line pl-2">
-          <b className="pf-accent text-gold text-lg">네임드 토벌</b>
-          <div className="border-b border-line" />
-          <span className="flex-1 content-center">
-            <span className="text-text-dim italic text-xs">
-              {poster}
-            </span>
+    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
+      <div className="flex items-baseline justify-between gap-2 h-6">
+        <b className="text-base text-epic truncate"><Tip text={poster}>{found && name ? name : '???'}</Tip></b>
+        {!done && ticketMins !== null && (
+          <span className="text-xs text-text-dim whitespace-nowrap">
+            <Tip text="흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.">도전권</Tip>
+            {' '}<span className="pf-accent text-text">{fmtMinutes(ticketMins)}</span>
           </span>
-          <span className="text-text-dim text-xs">나타나는 곳: {haunt}</span>
-          <div className="border-b border-line" />
-      <span className="pf-accent text-gold text-2xl">{fmtGold(quest.reward)}</span>
-      {accepted && !done && ticketMins === null && (
-        <span className="text-accent text-xs">진행 중이에요. {haunt}에서 낚시하면 아주 드물게 마주쳐요.</span>
-      )}
-      {!done && ticketMins !== null && (
-        <span className="text-accent text-xs">흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요. 남은 시간 {fmtMinutes(ticketMins)}</span>
-      )}
-          <span className="flex justify-center mt-auto">
-            {done
-              ? <Button size="sm" disabled={busy} onClick={onDeliver}>보상 받기</Button>
-              : accepted
-                ? <Button full disabled>진행 중</Button>
-                : <Button variant="primary" full disabled={!canAccept || busy} onClick={onAccept}>수주</Button>}
-          </span>
-        </span>
+        )}
       </div>
-    </div>
+      <BoardRows rows={[
+        { key: 'haunt', label: '나타나는 곳', value: haunt },
+        { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
+          value: <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span> },
+        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(quest.reward)}</span> },
+        ...(materialName ? [{ key: 'material', label: '교환 재료', value: materialName }] : []),
+      ]} />
+      <div className="mt-auto">
+        {done
+          ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>보상 받기</Button>
+          : accepted
+            ? <Button full disabled>진행 중</Button>
+            : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept} />}
+      </div>
+    </Frame>
   );
 }

@@ -62,22 +62,28 @@ const noCloudAdminData = (): Error =>
 const rejected = <T>(): Promise<T> => Promise.reject(noCloudAdminData());
 
 class LocalAdmin implements AdminApi {
+  isConfigured = false;
   async access(): Promise<{ kind: 'local'; uid: null }> {
     return { kind: 'local', uid: null };
   }
+  signIn(_email: string, _password: string): Promise<never> { return rejected(); }
+  signOut(): Promise<never> { return rejected(); }
   users(): Promise<never[]> { return rejected(); }
-  dailyActive(_days: number): Promise<never[]> { return rejected(); }
+  live(): Promise<never> { return rejected(); }
+  dailyStats(_from: string, _to: string): Promise<never[]> { return rejected(); }
   retention(): Promise<never[]> { return rejected(); }
+  sessions(_userId?: string, _limit?: number): Promise<never[]> { return rejected(); }
   economy(_days: number): Promise<never[]> { return rejected(); }
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
-  catchQuality(_days: number): Promise<never[]> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
-  imports(): Promise<never[]> { return rejected(); }
-  dexMismatch(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
+  chatReports(): Promise<never[]> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
+  restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
+  resetLink(_userId: string): Promise<never> { return rejected(); }
+  letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }
   deployHost(): string | null {

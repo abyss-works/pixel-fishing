@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { fmtNum } from '../../../../features/admin/model/metrics';
-import { adminNumber, selectProgressionDashboard } from '../../../../features/admin/model/adminViews';
+import { adminNumber, selectProgressionDashboard, splitDormantGuests } from '../../../../features/admin/model/adminViews';
 import { readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
@@ -14,20 +14,22 @@ import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { REGION_NAMES } from '../../../../features/admin/model/regions';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 import BountyFunnelSection from './BountyFunnelSection';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
 
-// 지역 표기는 라이브 탭과 공유하는 리터럴 미러다 — 월드 마스크 데이터를 불러오지 않는다.
+// 지역 표기는 실시간 탭과 공유하는 리터럴 미러다 — 월드 마스크 데이터를 불러오지 않는다.
 // 도달 퍼널의 지역 순서는 관리자 데이터 모델이 제공한다.
 export default function ProgressionTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 유저 명부는 라이브·유저 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
+  // 유저 명부는 실시간·명부 구역과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.users, readAdminUsers, granted);
-  const users = data ?? NO_USERS;
+  // 분포는 진행이 있는 계정만 센다. 휴면 게스트는 모두 출발 단계라 분포를 한쪽으로 기울인다
+  const users = useMemo(() => splitDormantGuests(data ?? NO_USERS).active, [data]);
 
   const { boatHist, rodHist, regionReach, stalled } = useMemo(
     () => selectProgressionDashboard(users), [users],
@@ -98,7 +100,7 @@ export default function ProgressionTab() {
                 <tbody>
                   {stalled.map(({ user, next, deficit }) => (
                     <tr key={user.user_id}>
-                      <td>{user.email ?? <span className="pf-accent text-2xs text-text-dim">{user.user_id.slice(0, 8)}…</span>}</td>
+                      <td><UserIdentity user={user} /></td>
                       <td className="text-xs">{next.name}(T{next.tier})</td>
                       <td className="text-right">{fmtNum(adminNumber(user.fame))}</td>
                       <td className="text-right text-text-dim">{fmtNum(next.fameReq)}</td>

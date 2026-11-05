@@ -1,10 +1,10 @@
-// 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 앱의 인증 인스턴스를 환경 변수로 조립한다.
+// 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 게임과 관리자 대시보드의 인증 인스턴스를 환경 변수로 조립한다.
 import type { IncomingHttpHeaders } from 'node:http';
 import { fromNodeHeaders } from 'better-auth/node';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
-import { createAuth } from './auth.js';
-import type { Auth } from './auth.js';
+import { createAdminAuth, createAuth } from './auth.js';
+import type { AdminAuth, Auth } from './auth.js';
 import { resendSender } from './mail.js';
 
 let appAuthInstance: Auth | null = null;
@@ -39,4 +39,22 @@ export async function sessionOf(headers: IncomingHttpHeaders): Promise<SessionUs
   if (!result) return null;
   const user = result.user as { id: string; email: string; isAnonymous?: boolean | null };
   return { id: user.id, email: user.isAnonymous ? null : user.email };
+}
+
+let adminAuthInstance: AdminAuth | null = null;
+
+/** 관리자 대시보드의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */
+export function adminAuth(): AdminAuth {
+  if (adminAuthInstance) return adminAuthInstance;
+  const secret = process.env.BETTER_AUTH_SECRET;
+  const baseURL = process.env.BETTER_AUTH_URL;
+  if (!secret || !baseURL) throw new ApiError(500, 'server-config');
+  adminAuthInstance = createAdminAuth({ pool: database().pool, secret, baseURL });
+  return adminAuthInstance;
+}
+
+/** 요청 쿠키의 관리자 세션 사용자 id. 게임 세션 쿠키는 인정하지 않고, 세션이 없거나 만료됐으면 null이다 */
+export async function adminSessionUid(headers: IncomingHttpHeaders): Promise<string | null> {
+  const result = await adminAuth().api.getSession({ headers: fromNodeHeaders(headers) });
+  return result?.user.id ?? null;
 }
