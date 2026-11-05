@@ -13,6 +13,7 @@ import type { Executor } from './_db/client.js';
 import { isForeignKeyViolation } from './_db/errors.js';
 import { block, blockedIds, blockedUsers, unblock } from './_data/blocks.js';
 import { reportChat } from './_data/chat.js';
+import { removeFriend } from './_data/friends.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -70,13 +71,17 @@ async function route(req: Req, res: Res, blocksChanged: BlocksChanged): Promise<
 }
 
 /**
- * 차단하거나 푼다. 차단에 딸린 다른 관계 정리(예: 친구 관계 해제)는 이 함수에 더한다.
+ * 차단하거나 푼다. 차단하면 두 사람 사이의 친구 관계와 요청도 지운다(차단 목록은 하나, `friends.md`).
  * 없는 계정을 차단하면 404다.
  */
 async function changeBlock(db: Executor, uid: string, target: string, op: 'block' | 'unblock'): Promise<void> {
   try {
-    if (op === 'block') await block(db, uid, target);
-    else await unblock(db, uid, target);
+    if (op === 'block') {
+      await block(db, uid, target);
+      await removeFriend(db, uid, target);
+    } else {
+      await unblock(db, uid, target);
+    }
   } catch (e) {
     if (isForeignKeyViolation(e)) throw new ApiError(404, 'user-missing');
     throw new ApiError(500, 'db-write', {}, { cause: e });

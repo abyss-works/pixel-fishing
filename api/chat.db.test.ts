@@ -49,6 +49,14 @@ describe('채팅 함수', () => {
     expect(blocksChanged).toHaveBeenLastCalledWith(ME, []);
   });
 
+  it('차단하면 두 사람 사이의 친구 관계가 끊긴다', async () => {
+    await env.client.query('insert into public.friends (requester_id, addressee_id, accepted_at) values ($1, $2, now())', [RUDE, ME]);
+    expect(await callChat('POST', userToken(ME), { op: 'block', uid: RUDE })).toMatchObject({ status: 200 });
+    const { rows } = await env.client.query('select 1 from public.friends where requester_id = $1 and addressee_id = $2', [RUDE, ME]);
+    expect(rows).toEqual([]);
+    await callChat('POST', userToken(ME), { op: 'unblock', uid: RUDE });
+  });
+
   it('자기 자신·형식이 틀린 id는 400, 없는 계정은 404다', async () => {
     expect(await callChat('POST', userToken(ME), { op: 'block', uid: ME })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
     expect(await callChat('POST', userToken(ME), { op: 'block', uid: 'x' })).toMatchObject({ status: 400 });
