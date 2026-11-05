@@ -1,18 +1,19 @@
 // 편지 구역 — 유저가 보낸 편지(letters, 영구) 목록. events 7일 창 밖의 오래된 편지도 보인다.
-// 보낸 사람은 명부의 이메일·닉네임으로 보이고, 우편으로 답장하거나 처리 표시를 남길 수 있다.
+// 보낸 사람은 명부의 계정 식별 표기로 보이고, 우편으로 답장하거나 처리 표시를 남길 수 있다.
 import { useState } from 'react';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtDT } from '../../../../features/admin/model/metrics';
-import { adminUserLabel } from '../../../../features/admin/model/adminViews';
+import { adminIdentityLookup } from '../../../../features/admin/model/adminViews';
 import { readAdminLetters } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminLetterHandled } from '../../../../features/admin/service/useAdminMail';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminLetters>> = [[], []];
@@ -31,10 +32,7 @@ export default function LettersTab({ onCompose }: {
 
   const [letters, users] = data ?? EMPTY;
 
-  const labelOf = (uid: string): string => {
-    const u = users.find(x => x.user_id === uid);
-    return u ? adminUserLabel(u) : `${uid.slice(0, 8)}…`;
-  };
+  const identityOf = adminIdentityLookup(users);
 
   const toggle = async (id: number, handled: boolean) => {
     setBusy(id);
@@ -70,7 +68,7 @@ export default function LettersTab({ onCompose }: {
               {letters.map(l => (
                 <tr key={l.id} className={cx(l.handled_at && 'text-text-dim')}>
                   <td className="text-2xs text-text-dim whitespace-nowrap align-top">{fmtDT(l.created_at)}</td>
-                  <td className="text-xs align-top">{labelOf(l.user_id)}</td>
+                  <td className="align-top"><UserIdentity user={identityOf(l.user_id)} /></td>
                   <td className="text-xs whitespace-pre-wrap select-text">{l.text}</td>
                   <td className="align-top">
                     <div className="flex flex-col items-start gap-1">

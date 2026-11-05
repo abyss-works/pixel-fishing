@@ -12,7 +12,7 @@ vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
       users: vi.fn(async () => [
-        { user_id: 'u1', email: 'a@example.com', gold: 100, fame: 100, boat: 1, rod: 1,
+        { user_id: 'u1', email: 'a@example.com', nickname: '갈치', is_anonymous: false, gold: 100, fame: 100, boat: 1, rod: 1,
           visited: ['village'], restricted: false, last_action_at: null },
         { user_id: 'u2', email: 'b@example.com', gold: 300, fame: 5000, boat: 2, rod: 3,
           visited: ['village', 'ocean'], restricted: false, last_action_at: null },
@@ -78,7 +78,7 @@ describe('경제·진행 탭', () => {
     expect(screen.getByRole('img', { name: '낚싯대 레벨별 유저 수' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '지역별 도달한 유저 수' })).toBeInTheDocument();
     expect(screen.getByText(/마을 2\/2 · 태평양 1\/2/)).toBeInTheDocument();
-    expect(screen.getByText('a@example.com')).toBeInTheDocument();
+    expect(screen.getByText('갈치(a@example.com)')).toBeInTheDocument();
     expect(await screen.findByText('바운티 퍼널 (최근 7일)')).toBeInTheDocument();
     expect(screen.getByText('결투 없이 남은 흔적')).toBeInTheDocument();
     expect(screen.getByText('결투까지 100%')).toBeInTheDocument();

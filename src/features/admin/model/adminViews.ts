@@ -127,10 +127,22 @@ export function selectEconomyMetrics(
   return { goldStats, goldSum, inflowTotal, outflowTotal };
 }
 
-/** 계정 표시 이름. 이메일과 닉네임을 함께 보이고, 둘 다 없으면 계정 id 앞 8자리다. */
-export function adminUserLabel(user: Pick<AdminUserRow, 'user_id' | 'email' | 'nickname'>): string {
-  const parts = [user.email, user.nickname].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : `${user.user_id.slice(0, 8)}…`;
+/** 관리자 화면이 계정을 가리킬 때 보이는 식별 정보. 명부 행이 그대로 이 모양이다. 게스트의 email은 null이다 */
+export type AdminIdentity = Pick<AdminUserRow, 'user_id' | 'email' | 'nickname' | 'is_anonymous'>;
+
+/** 계정 표시 이름 "닉네임(이메일)". 게스트는 이메일 대신 게스트, 닉네임이 없으면 이름 없음, 이메일을 모르면 —이다 */
+export function adminUserLabel(user: AdminIdentity): string {
+  const contact = user.is_anonymous === true ? '게스트' : user.email ?? '—';
+  return `${user.nickname ?? '이름 없음'}(${contact})`;
+}
+
+/** 짧은 계정 id(앞 8자리) */
+export const shortUid = (uid: string): string => uid.slice(0, 8);
+
+/** 명부로 uid의 식별 정보를 찾는 함수를 만든다. uid는 대소문자를 구분하지 않고, 명부에 없으면 uid만 있는 식별 정보다 */
+export function adminIdentityLookup(users: readonly AdminIdentity[]): (uid: string) => AdminIdentity {
+  const byUid = new Map(users.map(user => [user.user_id.toLowerCase(), user]));
+  return uid => byUid.get(uid.toLowerCase()) ?? { user_id: uid, nickname: null, email: null, is_anonymous: null };
 }
 
 /** 사용자 명부 검색을 계정 id·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */

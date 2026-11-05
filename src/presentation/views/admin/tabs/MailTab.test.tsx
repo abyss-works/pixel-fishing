@@ -17,8 +17,8 @@ vi.mock('../../../../platform/api', () => ({
           createdAt: '2026-10-22T00:00:00Z', readAt: '2026-10-22T01:00:00Z', claimedAt: null },
       ]),
       users: vi.fn(async () => [
-        { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구' },
-        { user_id: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', email: null, nickname: '민물러' },
+        { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
+        { user_id: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', email: null, nickname: '민물러', is_anonymous: true },
       ]),
       mail: mocks.mail,
     },
@@ -38,10 +38,10 @@ function show() {
 describe('MailTab', () => {
   afterEach(() => { cleanup(); mocks.mail.mockReset(); });
 
-  it('보낸 우편을 받는 사람 email·닉네임과 상태로 그린다', async () => {
+  it('보낸 우편을 받는 사람의 닉네임(이메일)과 상태로 그린다', async () => {
     show();
     expect(await screen.findByText('지난 우편')).toBeTruthy();
-    expect(screen.getByText('friend@example.com · 바다친구')).toBeTruthy();
+    expect(screen.getByText('바다친구(friend@example.com)')).toBeTruthy();
     expect(screen.getByText('읽음')).toBeTruthy();
   });
 
@@ -80,12 +80,12 @@ describe('MailTab', () => {
     await screen.findByText('지난 우편');
     const search = screen.getByLabelText(/계정 찾기/);
     fireEvent.change(search, { target: { value: '바다' } });
-    fireEvent.click(screen.getByRole('option', { name: 'friend@example.com · 바다친구' }));
+    fireEvent.click(screen.getByRole('option', { name: /^바다친구\(friend@example\.com\)/ }));
     fireEvent.change(search, { target: { value: '민물' } });
-    fireEvent.click(screen.getByRole('option', { name: '민물러' }));
+    fireEvent.click(screen.getByRole('option', { name: /^민물러\(게스트\)/ }));
     const list = screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement;
     expect(list.value).toBe(`${USER} 0\ne747e6c9-f0c2-4192-a462-9cd26e8a812a 0`);
-    expect(screen.getByText('받는 사람 2명: friend@example.com · 바다친구, 민물러')).toBeTruthy();
+    expect(screen.getByText('받는 사람 2명: 바다친구(friend@example.com), 민물러(게스트)')).toBeTruthy();
 
     fireEvent.change(search, { target: { value: 'nobody' } });
     expect(screen.getByText('찾는 계정이 없어요.')).toBeTruthy();
@@ -108,6 +108,6 @@ describe('MailTab', () => {
       </QueryProvider>,
     );
     expect((screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement).value).toBe(`${USER} 0`);
-    expect(await screen.findByText('받는 사람 1명: friend@example.com · 바다친구')).toBeTruthy();
+    expect(await screen.findByText('받는 사람 1명: 바다친구(friend@example.com)')).toBeTruthy();
   });
 });
