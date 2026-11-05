@@ -35,9 +35,13 @@ async function listen(server: Server): Promise<void> {
 // 채팅 저장소는 메모리 대역이다. restricted에 넣은 계정은 제재된 계정, blocks는 계정별 차단 목록이다
 interface ChatFake { lines: ChatLine[]; restricted: Set<string>; blocks: Map<string, string[]> }
 
-async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; live: LiveServer; chat: ChatFake }> {
+/** 기록된 접속 세션 — 시각은 ISO 문자열이다 */
+interface SessionRecord { uid: string; startedAt: string; endedAt: string }
+
+async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
   const server = createServer();
   const chat: ChatFake = { lines: [], restricted: new Set(), blocks: new Map() };
+  const sessions: SessionRecord[] = [];
   const live = attachLive(server, {
     origin: ORIGIN,
     authenticate: async (req) => {
@@ -57,11 +61,12 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; l
       recent: async (uid) => chat.lines.filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
       blocked: async (uid) => chat.blocks.get(uid) ?? [],
     },
+    recordSession: (uid, startedAt, endedAt) => { sessions.push({ uid, startedAt, endedAt }); },
     ...extra,
   });
   await listen(server);
   cleanup = async () => { live.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); };
-  return { url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}`, live, chat };
+  return { url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}`, live, chat, sessions };
 }
 
 interface Client { ws: WebSocket; messages: ServerMessage[]; next: () => Promise<ServerMessage>; closed: Promise<number> }
@@ -171,6 +176,67 @@ describe('실시간 채널 서버', () => {
     await a.next();
     live.close();
     expect(await a.closed).toBe(LIVE_CLOSE_RESTART);
+  });
+});
+
+describe('실시간 채널 접속 목록과 세션 기록', () => {
+  const until = async (ok: () => boolean) => { while (!ok()) await new Promise(r => setTimeout(r, 5)); };
+  const isoOrdered = (s: SessionRecord) => Date.parse(s.startedAt) <= Date.parse(s.endedAt);
+
+  it('online은 위치를 보내기 전의 연결도 지역·해역 없이 싣고, 위치를 보내면 지역과 해역을 싣는다', async () => {
+    const { url, live } = await start();
+    const before = Date.now();
+    const a = connect(url, 'u1');
+    const g = connect(url, 'guest:g1');
+    await a.next(); await g.next();
+    expect(live.online()).toEqual([
+      { uid: 'u1', nick: 'n-u1', region: null, zone: null, connectedAt: expect.any(String), guest: false },
+      { uid: 'g1', nick: 'n-g1', region: null, zone: null, connectedAt: expect.any(String), guest: true },
+    ]);
+    expect(Date.parse(live.online()[0].connectedAt)).toBeGreaterThanOrEqual(before - 1);
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', zone: 'pacific', x: 3, y: 4, dir: 1, line: false }));
+    await until(() => live.online()[0].region !== null);
+    expect(live.online()[0]).toMatchObject({ uid: 'u1', region: 'sea', zone: 'pacific' });
+    a.ws.close();
+    await until(() => live.online().length === 1);
+    expect(live.online().map(o => o.uid)).toEqual(['g1']);
+  });
+
+  it('연결이 끝나면 연결 시각부터 끝난 시각까지를 세션 하나로 기록한다', async () => {
+    const { url, sessions } = await start();
+    const a = connect(url, 'u1');
+    await a.next();
+    expect(sessions).toEqual([]);
+    a.ws.close();
+    await until(() => sessions.length === 1);
+    expect(sessions[0].uid).toBe('u1');
+    expect(isoOrdered(sessions[0])).toBe(true);
+  });
+
+  it('같은 계정의 새 연결로 교체된 연결과 무응답으로 정리된 연결도 세션으로 기록한다', async () => {
+    const { url, sessions } = await start({ sweepMs: 20, idleMs: 300 });
+    const a = connect(url, 'u1');
+    await a.next();
+    const a2 = connect(url, 'u1');
+    await a2.next();
+    expect(await a.closed).toBe(LIVE_CLOSE_REPLACED);
+    expect(sessions.map(s => s.uid)).toEqual(['u1']);
+    // 교체한 새 연결은 아무것도 보내지 않아 정리된다
+    expect(await a2.closed).toBe(1006);
+    await until(() => sessions.length === 2);
+    expect(sessions.every(isoOrdered)).toBe(true);
+  });
+
+  it('close는 닫기 응답을 기다리지 않고 열린 연결을 모두 바로 세션으로 기록한다', async () => {
+    const { url, live, sessions } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    live.close();
+    expect(sessions.map(s => s.uid).sort()).toEqual(['u1', 'u2']);
+    expect(live.online()).toEqual([]);
+    expect(await a.closed).toBe(LIVE_CLOSE_RESTART);
+    expect(sessions).toHaveLength(2);
   });
 });
 

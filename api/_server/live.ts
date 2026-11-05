@@ -1,6 +1,7 @@
 // 실시간 채널 — 게임 서버의 HTTP 업그레이드를 받아 WebSocket 연결을 관리한다.
 // 채널은 전체 하나이고 상태는 이 프로세스 메모리에만 있다. 서버 파드가 하나라는 전제다.
 // 표시용 채널이라 게임 상태를 바꾸지 않는다. 채팅은 저장한 뒤 보내고, 수신자가 차단한 사람의 채팅은 그 수신자에게 보내지 않는다.
+// 연결이 끝나면(정상 종료, 무응답 정리, 같은 계정의 새 연결로 교체, 서버 종료) 그 연결을 접속 세션으로 기록한다.
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -34,14 +35,29 @@ export interface LiveOptions {
   /** 받은 메시지가 없을 때 연결을 끊기까지의 시간 */
   idleMs?: number;
   chat: LiveChat;
+  /** 끝난 연결 하나를 접속 세션으로 기록한다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다 */
+  recordSession: (uid: string, startedAt: string, endedAt: string) => void;
+}
+
+/** 지금 연결된 사용자 하나. 아직 위치를 보내지 않았으면 region과 zone은 null이다 */
+export interface LiveOnline {
+  uid: string;
+  nick: string;
+  region: string | null;
+  zone: string | null;
+  /** 이 연결이 열린 시각(ISO) */
+  connectedAt: string;
+  guest: boolean;
 }
 
 export interface LiveServer {
   /** 그 사용자의 접속 상태. 연결돼 있지 않거나 아직 위치를 보내지 않았으면 null */
   presenceOf(uid: string): Presence | null;
+  /** 지금 연결된 사용자 전부(연결한 순서) */
+  online(): LiveOnline[];
   /** 그 사용자의 차단 목록이 바뀌었다. 이후 채팅부터 바뀐 목록으로 거른다 */
   setBlocked(uid: string, ids: readonly string[]): void;
-  /** 열린 연결을 재시작 코드로 닫고 정리 주기를 멈춘다 */
+  /** 열린 연결을 세션으로 기록하고 재시작 코드로 닫은 뒤 정리 주기를 멈춘다 */
   close(): void;
 }
 
@@ -51,6 +67,7 @@ interface Conn {
   presence: Presence | null;
   /** 이 사용자가 차단한 사람 — 그 사람의 채팅을 이 연결에 보내지 않는다 */
   blocked: Set<string>;
+  connectedAt: number;
   lastSeen: number;
   windowStart: number;
   windowCount: number;
@@ -95,10 +112,14 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     if (!line) { send(ws, { t: 'error', code: 'chat-restricted' }); return; }
     sendChat(line);
   };
-  // 연결을 목록에서 빼고, 이미 알린 사람이면 떠났다고 알린다
+  const recordEnd = (conn: Conn) => {
+    opts.recordSession(conn.user.uid, new Date(conn.connectedAt).toISOString(), new Date().toISOString());
+  };
+  // 연결을 목록에서 빼 세션으로 기록하고, 이미 알린 사람이면 떠났다고 알린다
   const drop = (ws: WebSocket, conn: Conn) => {
     if (conns.get(ws) !== conn) return;
     conns.delete(ws);
+    recordEnd(conn);
     if (conn.presence) broadcast(ws, { t: 'leave', uid: conn.user.uid });
   };
 
@@ -116,7 +137,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           other.close(LIVE_CLOSE_REPLACED);
         }
         const now = Date.now();
-        const conn: Conn = { user, presence: null, blocked: new Set(blocked), lastSeen: now, windowStart: now, windowCount: 0 };
+        const conn: Conn = {
+          user, presence: null, blocked: new Set(blocked), connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
+        };
         conns.set(ws, conn);
         ws.on('message', (data, isBinary) => {
           const at = Date.now();
@@ -171,12 +194,23 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       for (const c of conns.values()) if (c.user.uid === uid) return c.presence;
       return null;
     },
+    online() {
+      return [...conns.values()].map(c => ({
+        uid: c.user.uid, nick: c.user.nick, region: c.presence?.region ?? null, zone: c.presence?.zone ?? null,
+        connectedAt: new Date(c.connectedAt).toISOString(), guest: c.user.guest,
+      }));
+    },
     setBlocked(uid, ids) {
       for (const c of conns.values()) if (c.user.uid === uid) c.blocked = new Set(ids);
     },
     close() {
       clearInterval(timer);
-      for (const ws of conns.keys()) ws.close(LIVE_CLOSE_RESTART);
+      // 닫기 응답을 기다리지 않고 지금 기록한다. 모두 함께 닫히므로 떠남은 알리지 않는다
+      for (const [ws, c] of conns) {
+        conns.delete(ws);
+        recordEnd(c);
+        ws.close(LIVE_CLOSE_RESTART);
+      }
     },
   };
 }
