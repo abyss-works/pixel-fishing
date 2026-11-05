@@ -22,9 +22,29 @@ export default defineConfig({
   },
   server: { port: 5199 },
   test: {
-    environment: 'jsdom',
     setupFiles: './src/test-setup.ts',
-    // 실제 Postgres가 필요한 테스트는 test:db(vitest.db.config.ts)가 따로 실행한다.
-    exclude: [...configDefaults.exclude, '**/*.db.test.ts'],
+    // DOM이 필요 없는 테스트(게임 규칙·서버·도구)는 node 환경으로 돌린다. jsdom 준비 비용이 테스트 시간의 대부분이다.
+    // 실제 Postgres가 필요한 테스트는 test:db(vitest.db.config.ts)가 따로 실행한다. 작업용 워크트리는 검사 대상이 아니다.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['src/game/**/*.test.ts', 'src/shared/**/*.test.ts', 'api/**/*.test.ts', 'tools/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, '**/*.db.test.ts', '**/.worktrees/**'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          include: ['**/*.test.{ts,tsx}'],
+          exclude: [...configDefaults.exclude, '**/*.db.test.ts', '**/.worktrees/**',
+            'src/game/**', 'src/shared/**', 'api/**', 'tools/**'],
+        },
+      },
+    ],
   },
 })
