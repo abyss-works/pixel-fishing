@@ -249,7 +249,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
 
 const LADDER_ROWS = 7;
 
-/** 초 단위 변화량 — 줄어드는 게 좋은 값(대기·바 시간)이라 음수를 −로 그대로 보인다 */
+/** 초 단위 변화량 — 줄어드는 게 좋은 값(대기 시간)이라 음수를 −로 그대로 보인다 */
 const sec = (d: number, digits = 1): string | undefined =>
   Math.abs(d) < 10 ** -digits / 2 ? undefined : `${d < 0 ? '−' : '+'}${Math.abs(d).toFixed(digits)}s`;
 
@@ -257,10 +257,10 @@ const sec = (d: number, digits = 1): string | undefined =>
 function RodPanel({ game, onUpgrade, onClose, busy }: {
   game: GameState; onUpgrade: () => void; onClose: () => void; busy: boolean;
 }) {
-  const { cost, current: cur, next, canUpgrade } = selectRodUpgradePreview(game);
-  // 존은 이제 수역 파워 게이트 소관(stats.powerZones) — 강화 프리뷰는 시간축만 보여준다
-  const fmt = (s: { biteMin: number; biteMax: number; sweep: number }) =>
-    ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s`, sweep: `${s.sweep.toFixed(2)}s` });
+  const { cost, current: cur, next, power, canUpgrade } = selectRodUpgradePreview(game);
+  // 강화로 바뀌는 두 축 — 입질 대기와 파워. 바 시간은 레벨과 무관해 싣지 않는다
+  const fmt = (s: { biteMin: number; biteMax: number }) =>
+    ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s` });
   const c = fmt(cur), n = fmt(next);
   // 사다리 — 상한이 없어 현재 ±4단계를 싣고 ±3행만 보인다(안에서 굴림). "다음 한 칸"이 핵심이다
   const ladder = selectRodLadder(game, 4).map(r => ({
@@ -287,7 +287,7 @@ function RodPanel({ game, onUpgrade, onClose, busy }: {
           {/* 1차: 얼마나 바뀌나 */}
           <StatCompare size="lg" rows={[
             { label: '입질 대기', value: c.bite, next: n.bite, delta: sec(next.biteMax - cur.biteMax) },
-            { label: '바 시간', value: c.sweep, next: n.sweep, delta: sec(next.sweep - cur.sweep, 2) },
+            { label: '파워', value: power.current, next: power.next, delta: `+${power.next - power.current}` },
           ]} />
           {/* 3차: 안내 */}
           <Note size="xs" className="my-0">강화에는 상한이 없어요. 레벨이 오를수록 체감은 줄어들어요. 파워가 해역 요구치에 닿는지는 화면 위 자원 바를 눌러 스탯창에서 확인해 보세요.</Note>

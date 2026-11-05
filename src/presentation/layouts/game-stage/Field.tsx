@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
-import { boatGateText } from '../../../game/content/boats';
+import { boatGateText, nextBoatText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
@@ -42,7 +42,7 @@ interface Props {
   paused?: boolean;
 }
 
-function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
+function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: number): void {
   switch (event.type) {
     case 'cast': {
       const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
@@ -54,7 +54,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast']): void {
         setToast('어군 가까이에서 찌를 던져 주세요.', 'warn');
       } else {
         const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. 배는 집 목공소나 항구 조선소에서 살 수 있어요.`, 'warn');
+        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(boat)}`, 'warn');
       }
       return;
     case 'line-cut':
@@ -125,7 +125,7 @@ export default function Field({
           ? { status: 'ok', result: result.result }
           : result);
       },
-      onEvent: event => presentEvent(event, setToast),
+      onEvent: event => presentEvent(event, setToast, game.boat),
       onScene,
       onWarmup,
     };

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BAITS } from '../../../game/content/baits';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, baitCost, newState, rodStats } from '../../../game/rules/logic';
 import { upgradeCost } from '../../../game/rules/balance';
+import { powerOfLevel } from '../../../game/rules/stats';
 import {
   createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatLadder,
   selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
@@ -13,6 +14,8 @@ describe('정비 화면 데이터', () => {
     const preview = selectRodUpgradePreview(game);
     expect(preview.current).toEqual(rodStats(game.rod));
     expect(preview.next).toEqual(rodStats(game.rod + 1));
+    expect(preview.power).toEqual({ current: powerOfLevel(game.rod), next: powerOfLevel(game.rod + 1) });
+    expect(preview.power.next).toBeGreaterThan(preview.power.current);
     expect(preview.cost).toBeGreaterThan(0);
     expect(typeof preview.canUpgrade.ok).toBe('boolean');
   });

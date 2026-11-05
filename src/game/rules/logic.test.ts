@@ -16,6 +16,7 @@ import {
   makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
+  licenseConditions, zoneDexMissing, LICENSE_GRADES,
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
@@ -839,6 +840,31 @@ describe('규칙 판정 (rules.ts)', () => {
     for (const [reason, text] of Object.entries(REJECT_TEXT)) {
       expect(text, reason).toBeTruthy();
     }
+  });
+});
+
+describe('라이선스 도감 조건 — 남은 어종 수', () => {
+  const dexLabel = (state: ReturnType<typeof newState>) =>
+    licenseConditions(state, 'pacific', 'basic').find(c => c.key === 'dex')!;
+
+  it('미달이면 판정과 같은 기준으로 센 남은 어종 수를 붙인다', () => {
+    const state = newState();
+    const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic);
+    expect(missing.length).toBeGreaterThan(1);
+    expect(dexLabel(state)).toEqual({
+      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) · 남은 ${missing.length}종`,
+    });
+    const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
+    const oneCaught = { ...state, dex: { [missing[0]]: { normal: caught } } };
+    expect(dexLabel(oneCaught).label).toMatch(new RegExp(` · 남은 ${missing.length - 1}종$`));
+  });
+
+  it('다 채우면 남은 수 없이 원래 문구다', () => {
+    const state = newState();
+    const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
+    const full = { ...state, dex: Object.fromEntries(
+      zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic).map(id => [id, { normal: caught }])) };
+    expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 모든 어종 수집(전설 제외, 밤 어종 포함)' });
   });
 });
 
