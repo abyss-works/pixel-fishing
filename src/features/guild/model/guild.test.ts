@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_ERROR_TEXT, activeEffectLines, bonusEffectText, bonusRows, donorRanking, growthBar, inviteLeftText, leaveOutcome, levelSteps,
-  logAgoText, logLine, memberActions, splitMembers,
+  GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, activeEffectLines, bonusEffectText, bonusRows, donorRanking, growthBar, growthHintText,
+  growthTotalText, inviteHintText, inviteLeftText, leaveConfirm, leaveOutcome, levelStepText, levelSteps, logAgoText, logLine,
+  memberActions, memberConfirm, memberName, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -37,6 +38,46 @@ describe('길드 화면 모델', () => {
     expect(inviteLeftText('2026-11-04T00:00:00.000Z', now)).toBe('만료됨');
   });
 
+  it('초대 코드 안내는 남은 시간과 24시간 유효 기간이고, 코드가 없으면 유효 기간만이다', () => {
+    const now = Date.parse('2026-11-05T00:00:00.000Z');
+    expect(inviteHintText({ code: 'ABCD2345', expiresAt: '2026-11-05T00:30:00.000Z' }, now))
+      .toBe('30분 남음 · 코드는 24시간 동안 여러 사람이 쓸 수 있어요.');
+    expect(inviteHintText(null, now)).toBe('코드는 24시간 동안 여러 사람이 쓸 수 있어요.');
+  });
+
+  it('이름이 없는 길드원은 이름 없음으로 부른다', () => {
+    expect(memberName({ nick: '가람' })).toBe('가람');
+    expect(memberName({ nick: null })).toBe('이름 없음');
+  });
+
+  it('넘기기·내보내기 확인 창은 대상 이름과 보낼 요청을 담는다', () => {
+    const g = { ...guild('leader', members), name: '심해' };
+    expect(memberConfirm(g, members[1], 'handover')).toEqual({
+      title: '길드장 넘기기', label: '넘기기', op: { op: 'handover', guildId: 'g', uid: 'A' },
+      text: 'A 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.',
+      done: 'A 님에게 길드장을 넘겼어요.',
+    });
+    expect(memberConfirm(g, members[1], 'kick')).toEqual({
+      title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: 'g', uid: 'A' },
+      text: 'A 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.',
+      done: 'A 님을 내보냈어요.',
+    });
+  });
+
+  it('떠나기 확인 창 — 길드원은 떠나기, 혼자 남은 길드장은 해산, 다른 길드원이 있는 길드장은 창이 없다', () => {
+    expect(leaveConfirm(guild('member', members), 'A')).toEqual({
+      title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: 'g', uid: 'A' },
+      text: '심해 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.',
+      done: '심해 길드를 떠났어요.',
+    });
+    expect(leaveConfirm(guild('leader', [members[0]]), 'L')).toEqual({
+      title: '길드 해산', label: '해산', op: { op: 'remove', guildId: 'g', uid: 'L' },
+      text: '혼자 남은 길드라 떠나면 심해 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?',
+      done: '심해 길드를 해산했어요.',
+    });
+    expect(leaveConfirm(guild('leader', members), 'L')).toBeNull();
+  });
+
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
       'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted']) {
@@ -53,7 +94,18 @@ describe('길드 성장 화면 모델', () => {
     expect(growthBar(growth(5, 150_000, 100_000, null))).toEqual({ ratio: 1, remaining: null });
   });
 
-  it('레벨 사다리는 레벨마다 문턱과 새로 열리는 보너스를 보이고, 지나온·현재·다음·잠긴 레벨을 나눈다', () => {
+  it('누적 기여와 다음 레벨 문턱, 남은 기여를 문장으로 보인다. 최고 레벨은 누적만 보이고 최고 레벨이라고 알린다', () => {
+    expect(growthTotalText(growth(3, 31_000, 25_000, 50_000))).toBe('31,000 / 50,000');
+    expect(growthHintText(growth(3, 31_000, 25_000, 50_000))).toBe('다음 레벨까지 기여 19,000');
+    expect(growthTotalText(growth(5, 150_000, 100_000, null))).toBe('150,000');
+    expect(growthHintText(growth(5, 150_000, 100_000, null))).toBe('최고 레벨이에요.');
+  });
+
+  it('기여 안내는 명성 하루 상한을 담는다', () => {
+    expect(GUILD_CONTRIBUTION_HELP).toContain('하루 1,000까지');
+  });
+
+  it('레벨 사다리 레벨마다 문턱과 새로 열리는 보너스를 보이고, 지나온·현재·다음·잠긴 레벨을 나눈다', () => {
     const steps = levelSteps(growth(3, 45_000, 25_000, 50_000));
     expect(steps.map(s => [s.level, s.floor, s.state])).toEqual([
       [1, 0, 'done'], [2, 10_000, 'done'], [3, 25_000, 'current'], [4, 50_000, 'next'], [5, 100_000, 'locked'],
@@ -64,6 +116,13 @@ describe('길드 성장 화면 모델', () => {
       ['네임드 조우 보너스 열림', '보너스 단계 상한 3'],
       ['희귀 어종 보너스 열림', '보너스 단계 상한 4'],
       ['돌연변이 보너스 열림', '보너스 단계 상한 5'],
+    ]);
+    expect(steps.map(levelStepText)).toEqual([
+      '기여 0 · 판매가 열림',
+      '기여 10,000 · 가방 용량 열림 · 보너스 단계 상한 2',
+      '기여 25,000 · 네임드 조우 보너스 열림 · 보너스 단계 상한 3',
+      '기여 50,000 · 희귀 어종 보너스 열림 · 보너스 단계 상한 4',
+      '기여 100,000 · 돌연변이 보너스 열림 · 보너스 단계 상한 5',
     ]);
   });
 
