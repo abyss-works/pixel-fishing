@@ -119,13 +119,18 @@ describe('보너스 효과(서버 판정)', () => {
   const goldOf = async (uid: string) =>
     Number((await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
 
-  it('판매는 판매가 보너스를 판매 총액에 한 번 더한다', async () => {
+  it('판매는 판매가 보너스를 판매 총액에 한 번 더한다. 레벨로 열린 1단계는 기부 없이도 적용된다', async () => {
     const bag = [fish('crucian'), fish('crucian')];
     const base = bag.reduce((a, i) => a + priceOfInstance(i), 0);
-    const { uid, guild } = await member({ state: { gold: 0, bag } });
-    await rank(guild, 'sell', 3);
-    expect((await callAction(userToken(uid), { type: 'sell', uids: bag.map(i => i.uid) })).status).toBe(200);
-    expect(await goldOf(uid)).toBe(base + Math.round(base * 0.06));
+    const sell = async (total: number, stored: number | null) => {
+      const items = bag.map(i => ({ ...i, uid: crypto.randomUUID() }));
+      const { uid, guild } = await member({ state: { gold: 0, bag: items } }, total);
+      if (stored !== null) await rank(guild, 'sell', stored);
+      expect((await callAction(userToken(uid), { type: 'sell', uids: items.map(i => i.uid) })).status).toBe(200);
+      return goldOf(uid);
+    };
+    expect(await sell(0, null)).toBe(base + Math.round(base * 0.02));
+    expect(await sell(25_000, 3)).toBe(base + Math.round(base * 0.06));
   });
 
   it('캐치 fast path는 가방 보너스만큼 늘어난 칸으로 넘침을 판정한다', async () => {
@@ -133,8 +138,7 @@ describe('보너스 효과(서버 판정)', () => {
     const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'bag-solo@test.dev', state: { boat: 0, bag: full() } });
     const plain = await callAction(userToken(solo), catchPond);
     expect((plain.body as { result: { released: unknown[] } }).result.released).toHaveLength(1);
-    const { uid, guild } = await member({ state: { boat: 0, bag: full() } });
-    await rank(guild, 'bag', 1);
+    const { uid } = await member({ state: { boat: 0, bag: full() } }, 10_000); // Lv2 — 가방 용량 1단계
     const boosted = await callAction(userToken(uid), catchPond);
     expect((boosted.body as { result: { released: unknown[] } }).result.released).toEqual([]);
   });
@@ -145,7 +149,7 @@ describe('보너스 효과(서버 판정)', () => {
     const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'mut-solo@test.dev', state: {} });
     const plain = await callAction(userToken(solo), catchPond);
     expect((plain.body as { result: { info: { form: string } } }).result.info.form).toBe('normal');
-    const { uid, guild } = await member();
+    const { uid, guild } = await member({}, 100_000);
     await rank(guild, 'mutation', 5);
     const boosted = await callAction(userToken(uid), catchPond);
     expect((boosted.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');

@@ -64,7 +64,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
   it('판매는 판매가 보너스를 더한 골드를 준다', () => {
     const st: GameState = { ...newState(), gold: 0, bag: [inst('a'), inst('b')] };
     const plain = applyAction(st, { type: 'sell', uids: ['a', 'b'] }, deps(() => 0));
-    const boosted = applyAction(st, { type: 'sell', uids: ['a', 'b'] }, deps(() => 0, guildEffectsOf({ sell: 3 })));
+    const boosted = applyAction(st, { type: 'sell', uids: ['a', 'b'] }, deps(() => 0, guildEffectsOf(5, { sell: 3 })));
     if (!plain.ok || !boosted.ok) throw new Error('sell failed');
     const base = plain.state.gold;
     expect(boosted.state.gold).toBe(base + Math.round(base * 0.06));
@@ -76,7 +76,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
     const st: GameState = { ...newState(), bag: Array.from({ length: cap }, (_, i) => inst(`b${i}`)) };
     const catchPond = { type: 'catch', spot: 'pond', judgment: 'auto' } as const;
     const plain = applyAction(st, catchPond, deps(() => 0.5));
-    const boosted = applyAction(st, catchPond, deps(() => 0.5, guildEffectsOf({ bag: 1 })));
+    const boosted = applyAction(st, catchPond, deps(() => 0.5, guildEffectsOf(2, { bag: 1 })));
     if (!plain.ok || !boosted.ok) throw new Error('catch failed');
     expect(plain.state.bag).toHaveLength(cap);
     expect(boosted.state.bag).toHaveLength(cap + 1);
@@ -93,7 +93,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
     const run = (guild?: GuildEffects) => applyAction(st, { type: 'catch', spot: 'sea', judgment: 'auto' },
       { ...deps(() => r, guild), bounty });
     const plain = run();
-    const boosted = run(guildEffectsOf({ named: 5 }));
+    const boosted = run(guildEffectsOf(5, { named: 5 }));
     if (!plain.ok || !boosted.ok) throw new Error('catch failed');
     expect(plain.events.some(e => e.type === 'ticket')).toBe(false);
     expect(boosted.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: named.id });
@@ -113,7 +113,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
       return FISH.find(f => f.id === fishId)?.rarity;
     };
     expect(rarityOf()).toBe('common');
-    expect(rarityOf(guildEffectsOf({ rare: 5 }))).not.toBe('common');
+    expect(rarityOf(guildEffectsOf(5, { rare: 5 }))).not.toBe('common');
   });
 
   it('돌연변이 보너스는 돌연변이 확률에 퍼센트포인트를 더한다', () => {

@@ -5,7 +5,8 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import {
-  GUILD_DAILY_FAME_CAP, bonusEffect, bonusRankCost, contributionDayOf, donationOutcome, guildBonusLevels,
+  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome,
+  guildBonusLevels,
   guildEffectsOf, guildFull, guildLevelOf, guildProgress, handoverOutcome, inviteExpiresAt, removalOutcome,
 } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildBonusId, GuildEffects, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
@@ -38,23 +39,26 @@ export interface GuildLog {
   at: string;
 }
 
-/** 보너스 하나의 상태 — 해금 레벨, 단계와 상한(길드 레벨, 열리지 않았으면 0), 모인 골드, 다음 단계 비용과 효과, 기부 */
+/**
+ * 보너스 하나의 상태 — 해금 레벨, 지금 단계(열렸으면 최소 1)와 상한(길드 레벨, 열리지 않았으면 0), 다음 단계를 향해
+ * 모인 골드와 비용, 지금·다음 단계 효과, 내가 이 보너스에 기부한 골드
+ */
 export interface GuildBonusView {
   id: GuildBonusId;
   unlock: number;
   rank: number;
   cap: number;
   pool: number;
-  /** 다음 단계 비용. 5단계면 null */
+  /** 다음 단계 비용. 5단계이거나 열리지 않았으면 null */
   next: number | null;
   /** 지금 단계의 효과와 다음 단계의 효과(5단계면 null) */
   effect: number;
   nextEffect: number | null;
-  /** 내가 이 보너스에 기부한 골드 */
   mine: number;
-  /** 기부한 사람(많은 순). 지운 계정은 uid가 null이다 */
-  donors: { uid: string | null; nick: string | null; gold: number }[];
 }
+
+/** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
+export interface GuildDonor { uid: string | null; nick: string | null; gold: number }
 
 /** 조회에 싣는 항해일지 줄 수(최근 순) */
 const LOGBOOK_LIMIT = 50;
@@ -71,9 +75,10 @@ export interface GuildView {
   invite: { code: string; expiresAt: string } | null;
   /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null) */
   growth: { level: number; total: number; floor: number; next: number | null };
-  /** 보너스 다섯(해금 순)과, 그 단계로 서버가 액션에 적용하는 효과 */
+  /** 보너스 다섯(해금 순)과, 그 단계로 서버가 액션에 적용하는 효과, 기부 순위(전체 기부액 많은 순) */
   bonuses: GuildBonusView[];
   effects: GuildEffects;
+  donors: GuildDonor[];
   /** 항해일지 — 최근 순 */
   logbook: GuildLog[];
 }
@@ -120,7 +125,7 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
     where l.guild_id = ${g.id} order by l.id desc limit ${LOGBOOK_LIMIT}`);
   const logbook = logs.map(l => ({ id: Number(l.id), kind: l.kind, uid: l.uid, nick: l.nick, detail: l.detail,
     value: l.value === null ? null : Number(l.value), at: iso(l.created_at) }));
-  const bonuses = await bonusViews(db, g.id, uid, progress.level);
+  const { bonuses, effects, donors } = await bonusViews(db, g.id, uid, progress.level);
   let invite: GuildView['invite'] = null;
   if (g.role === 'leader') {
     const { rows: [i] } = await db.execute<{ code: string; expires_at: string | Date }>(sql`select code, expires_at
@@ -128,25 +133,30 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
     if (i) invite = { code: i.code, expiresAt: iso(i.expires_at) };
   }
   return { id: g.id, name: g.name, createdAt: iso(g.created_at), role: g.role, members, invite,
-    growth: progress, bonuses, effects: guildEffectsOf(Object.fromEntries(bonuses.map(b => [b.id, b.rank]))), logbook };
+    growth: progress, bonuses, effects, donors, logbook };
 }
 
-/** 보너스 다섯의 상태와 기부 — 기부가 없던 보너스는 0단계, 모인 골드 0이다 */
-async function bonusViews(db: Executor, guildId: string, uid: string, level: number): Promise<GuildBonusView[]> {
+/** 보너스 다섯의 상태, 효과, 기부 순위 — 기부가 없던 보너스는 저장된 단계 0, 모인 골드 0이다 */
+async function bonusViews(db: Executor, guildId: string, uid: string, level: number):
+  Promise<{ bonuses: GuildBonusView[]; effects: GuildEffects; donors: GuildDonor[] }> {
   const { rows: ranks } = await db.execute<{ bonus: GuildBonusId; rank: number; pool: number | string }>(sql`
     select bonus, rank, pool from public.guild_bonuses where guild_id = ${guildId}`);
-  const { rows: gifts } = await db.execute<{ bonus: GuildBonusId; uid: string | null; nick: string | null; gold: number | string }>(sql`
-    select d.bonus, d.user_id::text as uid, p.nickname as nick, d.gold
+  const { rows: mine } = await db.execute<{ bonus: GuildBonusId; gold: number | string }>(sql`
+    select bonus, gold from public.guild_bonus_donations where guild_id = ${guildId} and user_id = ${uid}`);
+  const { rows: totals } = await db.execute<{ uid: string | null; nick: string | null; gold: number | string }>(sql`
+    select d.user_id::text as uid, p.nickname as nick, sum(d.gold) as gold
     from public.guild_bonus_donations d left join public.profiles p on p.user_id = d.user_id
-    where d.guild_id = ${guildId} order by d.gold desc, d.id`);
-  return guildBonusLevels(level).map(({ id, unlock, cap }) => {
-    const row = ranks.find(r => r.bonus === id);
-    const rank = row?.rank ?? 0;
-    const donors = gifts.filter(d => d.bonus === id).map(d => ({ uid: d.uid, nick: d.nick, gold: Number(d.gold) }));
-    const next = bonusRankCost(rank + 1);
-    return { id, unlock, rank, cap, pool: Number(row?.pool ?? 0), next, effect: bonusEffect(id, rank),
-      nextEffect: next === null ? null : bonusEffect(id, rank + 1), mine: donors.find(d => d.uid === uid)?.gold ?? 0, donors };
+    where d.guild_id = ${guildId} group by d.user_id, p.nickname order by sum(d.gold) desc, d.user_id`);
+  const stored = Object.fromEntries(ranks.map(r => [r.bonus, r.rank])) as Partial<Record<GuildBonusId, number>>;
+  const bonuses = guildBonusLevels(level).map(({ id, unlock, cap }) => {
+    const rank = bonusRank(id, level, stored[id] ?? 0);
+    return { id, unlock, rank, cap, pool: Number(ranks.find(r => r.bonus === id)?.pool ?? 0),
+      next: rank > 0 ? bonusRankCost(rank + 1) : null, effect: bonusEffect(id, rank),
+      nextEffect: rank < GUILD_BONUS_MAX_RANK ? bonusEffect(id, rank + 1) : null,
+      mine: Number(mine.find(m => m.bonus === id)?.gold ?? 0) };
   });
+  return { bonuses, effects: guildEffectsOf(level, stored),
+    donors: totals.map(t => ({ uid: t.uid, nick: t.nick, gold: Number(t.gold) })) };
 }
 
 export type DonateOutcome =
@@ -171,8 +181,9 @@ export async function donateToBonus(withTransaction: Tx, uid: string, guildId: s
       from public.saves_current where user_id = ${uid} for update`);
     if (save?.restricted) return { ok: false, error: 'restricted' };
     const gold = Number(save?.gold ?? 0);
-    const before = cur?.rank ?? 0;
-    const r = donationOutcome(bonus, guildLevelOf(Number(sum.total)), { rank: before, pool: Number(cur?.pool ?? 0) }, gold, amount);
+    const level = guildLevelOf(Number(sum.total));
+    const before = bonusRank(bonus, level, cur?.rank ?? 0);
+    const r = donationOutcome(bonus, level, { rank: cur?.rank ?? 0, pool: Number(cur?.pool ?? 0) }, gold, amount);
     if (!r.ok) return r;
     await tx.execute(sql`update public.saves_current set gold = gold - ${r.accepted}, version = version + 1
       where user_id = ${uid}`);
@@ -191,7 +202,7 @@ export async function donateToBonus(withTransaction: Tx, uid: string, guildId: s
   });
 }
 
-/** 길드의 보너스별 단계를 { 보너스: 단계 } JSON으로 읽는 하위 쿼리 — 액션 읽기가 효과를 계산할 때 쓴다 */
+/** 길드의 저장된 보너스별 단계를 { 보너스: 단계 } JSON으로 읽는 하위 쿼리 — 액션 읽기가 효과를 계산할 때 쓴다 */
 export const guildRanksJson = (guildId: SQL) =>
   sql`(select coalesce(json_object_agg(b.bonus, b.rank), '{}') from public.guild_bonuses b where b.guild_id = ${guildId})`;
 

@@ -211,42 +211,52 @@ describe('길드 보너스 기부', () => {
   const bonusLogs = async (guildId: string) => (await client.query<{ kind: string; detail: string; value: string }>(
     `select kind, detail, value from public.guild_logs where guild_id = $1 and kind in ('donate', 'bonus-up') order by id`, [guildId]))
     .rows.map(r => [r.kind, r.detail, Number(r.value)]);
+  /** 길드 누적 기여도를 total로 맞춘다 — 10,000이면 Lv2, 25,000이면 Lv3 */
   const levelUp = (guildId: string, total: number) => client.query(
     `insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2026-01-01', 0, $2)`, [guildId, total]);
 
   it('기부하면 골드를 빼고 저장 버전을 올리며, 모인 골드는 다음 단계로 이어진다. 기부는 항해일지에 남는다', async () => {
     const g = await guildWith(0);
+    await levelUp(g.id, 10_000);
     await save(g.leader, 500_000);
     expect(await donateToBonus(tx(), g.leader, g.id, 'sell', 60_000, NOW))
-      .toEqual({ ok: true, rank: 0, pool: 60_000, accepted: 60_000, gold: 440_000 });
+      .toEqual({ ok: true, rank: 1, pool: 60_000, accepted: 60_000, gold: 440_000 });
     expect(await saveOf(g.leader)).toEqual({ gold: 440_000, version: 3 });
     expect(await bonusLogs(g.id)).toEqual([['donate', 'sell', 60_000]]);
   });
 
   it('비용에 닿으면 단계가 오르고, 상한(길드 레벨)까지 필요한 골드만 받는다. 상한에 닿으면 더 받지 않는다', async () => {
     const g = await guildWith(0);
+    await levelUp(g.id, 25_000);
     await save(g.leader, 2_000_000);
-    await donateToBonus(tx(), g.leader, g.id, 'sell', 60_000, NOW);
+    await donateToBonus(tx(), g.leader, g.id, 'sell', 100_000, NOW);
     expect(await donateToBonus(tx(), g.leader, g.id, 'sell', 1_000_000, NOW))
-      .toEqual({ ok: true, rank: 1, pool: 0, accepted: 40_000, gold: 1_900_000 });
-    expect(await bonusLogs(g.id)).toEqual([['donate', 'sell', 60_000], ['donate', 'sell', 40_000], ['bonus-up', 'sell', 1]]);
+      .toEqual({ ok: true, rank: 3, pool: 0, accepted: 550_000, gold: 1_350_000 });
+    expect(await bonusLogs(g.id)).toEqual([['donate', 'sell', 100_000], ['donate', 'sell', 550_000], ['bonus-up', 'sell', 3]]);
     expect(await donateToBonus(tx(), g.leader, g.id, 'sell', 1_000, NOW)).toEqual({ ok: false, error: 'rank-maxed' });
-    expect(await saveOf(g.leader)).toEqual({ gold: 1_900_000, version: 4 });
+    expect(await saveOf(g.leader)).toEqual({ gold: 1_350_000, version: 4 });
   });
 
-  it('열리지 않은 보너스, 모자란 골드, 길드원이 아닌 사람, 제재 계정은 거부하고 아무것도 바꾸지 않는다', async () => {
+  it('열리지 않은 보너스, 상한인 보너스(Lv1 판매가는 비용 없이 1단계), 모자란 골드, 길드원이 아닌 사람, 제재 계정은 거부한다', async () => {
+    const lv1 = await guildWith(0);
+    await save(lv1.leader, 1_000_000);
+    expect(await donateToBonus(tx(), lv1.leader, lv1.id, 'bag', 500, NOW)).toEqual({ ok: false, error: 'bonus-locked' });
+    expect(await donateToBonus(tx(), lv1.leader, lv1.id, 'sell', 500, NOW)).toEqual({ ok: false, error: 'rank-maxed' });
     const g = await guildWith(0);
+    await levelUp(g.id, 10_000);
     await save(g.leader, 1_000);
-    expect(await donateToBonus(tx(), g.leader, g.id, 'bag', 500, NOW)).toEqual({ ok: false, error: 'bonus-locked' });
     expect(await donateToBonus(tx(), g.leader, g.id, 'sell', 5_000, NOW)).toEqual({ ok: false, error: 'not-enough-gold' });
     const outsider = await user();
     await save(outsider, 1_000_000);
     expect(await donateToBonus(tx(), outsider, g.id, 'sell', 5_000, NOW)).toEqual({ ok: false, error: 'not-member' });
     const unsaved = await guildWith(0);
+    await levelUp(unsaved.id, 10_000);
     expect(await donateToBonus(tx(), unsaved.leader, unsaved.id, 'sell', 5_000, NOW)).toEqual({ ok: false, error: 'not-enough-gold' });
     const banned = await guildWith(0);
+    await levelUp(banned.id, 10_000);
     await save(banned.leader, 1_000_000, { restricted: true });
     expect(await donateToBonus(tx(), banned.leader, banned.id, 'sell', 5_000, NOW)).toEqual({ ok: false, error: 'restricted' });
+    expect(await saveOf(lv1.leader)).toEqual({ gold: 1_000_000, version: 2 });
     expect(await saveOf(g.leader)).toEqual({ gold: 1_000, version: 2 });
     expect(await saveOf(banned.leader)).toEqual({ gold: 1_000_000, version: 2 });
     expect(await bonusLogs(g.id)).toEqual([]);
@@ -254,6 +264,7 @@ describe('길드 보너스 기부', () => {
 
   it('기부 전에 상태를 읽은 액션은 확정하지 못한다(낙관 락) — 기부로 뺀 골드를 덮어쓰지 않는다', async () => {
     const g = await guildWith(0);
+    await levelUp(g.id, 10_000);
     await save(g.leader, 500_000);
     await donateToBonus(tx(), g.leader, g.id, 'sell', 100_000, NOW);
     const stale = versionUpdate(g.leader, { ...newState(), gold: 500_000 }, 2, NOW);
@@ -261,7 +272,7 @@ describe('길드 보너스 기부', () => {
     expect(await saveOf(g.leader)).toEqual({ gold: 400_000, version: 3 });
   });
 
-  it('조회는 보너스별 해금 레벨·단계·상한·모인 골드·다음 비용·효과와 기부 순위·내 기부를 싣는다. 기부는 기여로 세지 않는다', async () => {
+  it('조회는 보너스별 단계(열리면 1단계)·상한·모인 골드·다음 비용·효과·내 기부와 전체 기부 순위를 싣는다. 기부는 기여로 세지 않는다', async () => {
     const g = await guildWith(1);
     const [m1] = g.members;
     await levelUp(g.id, 25_000);
@@ -272,26 +283,27 @@ describe('길드 보너스 기부', () => {
     await donateToBonus(tx(), m1, g.id, 'named', 50_000, NOW);
     const view = await myGuild(database.db, g.leader, NOW);
     expect(view?.growth).toMatchObject({ level: 3, total: 25_000 });
-    expect(view?.effects).toEqual({ sell: 0.04, bag: 0, named: 0, rare: 0, mutation: 0 });
+    expect(view?.effects).toEqual({ sell: 0.04, bag: 0.04, named: 0.05, rare: 0, mutation: 0 });
     const [sell, bag, named, rare] = view!.bonuses;
-    expect(sell).toMatchObject({ id: 'sell', unlock: 1, rank: 2, cap: 3, pool: 50_000, next: 600_000, effect: 0.04,
+    expect(sell).toEqual({ id: 'sell', unlock: 1, rank: 2, cap: 3, pool: 250_000, next: 500_000, effect: 0.04,
       nextEffect: 0.06, mine: 100_000 });
-    expect(sell.donors.map(d => [d.uid, d.gold])).toEqual([[m1, 300_000], [g.leader, 100_000]]);
-    expect(bag).toMatchObject({ id: 'bag', unlock: 2, rank: 0, cap: 3, pool: 0, next: 100_000, mine: 0, donors: [] });
-    expect(named).toMatchObject({ id: 'named', rank: 0, pool: 50_000, mine: 0 });
-    expect(rare).toMatchObject({ id: 'rare', unlock: 4, rank: 0, cap: 0 });
+    expect(bag).toEqual({ id: 'bag', unlock: 2, rank: 1, cap: 3, pool: 0, next: 150_000, effect: 0.04, nextEffect: 0.08, mine: 0 });
+    expect(named).toMatchObject({ id: 'named', rank: 1, pool: 50_000, mine: 0 });
+    expect(rare).toEqual({ id: 'rare', unlock: 4, rank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0 });
+    expect(view!.donors.map(d => [d.uid, d.gold])).toEqual([[m1, 350_000], [g.leader, 100_000]]);
     expect(view!.logbook[0]).toMatchObject({ kind: 'donate', detail: 'named', value: 50_000 });
   });
 
   it('계정 정리는 기부 행의 사람만 비우고 모인 골드와 단계를 지킨다', async () => {
     const g = await guildWith(1);
     const [m1] = g.members;
+    await levelUp(g.id, 10_000);
     await save(m1, 1_000_000);
-    await donateToBonus(tx(), m1, g.id, 'sell', 150_000, NOW);
+    await donateToBonus(tx(), m1, g.id, 'sell', 400_000, NOW);
     await deleteUserGuild(database.db, m1);
     expect((await client.query('select 1 from public.guild_bonus_donations where user_id = $1', [m1])).rows).toEqual([]);
-    const sell = (await myGuild(database.db, g.leader, NOW))!.bonuses[0];
-    expect(sell).toMatchObject({ rank: 1, pool: 0 });
-    expect(sell.donors).toEqual([{ uid: null, nick: null, gold: 100_000 }]);
+    const view = (await myGuild(database.db, g.leader, NOW))!;
+    expect(view.bonuses[0]).toMatchObject({ rank: 2, pool: 0 });
+    expect(view.donors).toEqual([{ uid: null, nick: null, gold: 150_000 }]);
   });
 });

@@ -59,7 +59,7 @@ import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragm
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
-import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf } from '../src/game/rules/guild.js';
+import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
@@ -282,8 +282,8 @@ async function route(req: Req, res: Res): Promise<void> {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
     bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
   }));
-  // 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
-  const guildEffects = loaded.guild ? guildEffectsOf(loaded.guild.ranks) : NO_GUILD_EFFECTS;
+  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계)과 기부로 오른 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
+  const guildEffects = loaded.guild ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks) : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.

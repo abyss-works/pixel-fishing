@@ -22,7 +22,7 @@ beforeAll(async () => {
   await seedUser(env.client, { uid: B, email: 'gb@test.dev', nickname: '나루', state: {} });
   await seedUser(env.client, { uid: C, email: 'gc@test.dev', nickname: '다온', state: {} });
   await seedUser(env.client, { uid: GUEST, nickname: '손님', state: {} });
-  await seedUser(env.client, { uid: D, email: 'gd@test.dev', nickname: '라온', state: { gold: 120_000 } });
+  await seedUser(env.client, { uid: D, email: 'gd@test.dev', nickname: '라온', state: { gold: 200_000 } });
   await seedUser(env.client, { uid: E, email: 'ge@test.dev', nickname: '마루', state: { gold: 1_000_000 } });
 });
 afterAll(async () => {
@@ -79,10 +79,10 @@ describe('길드 함수', () => {
     expect(view.guild?.members.map(m => [m.nick, m.role, m.online])).toEqual(
       [['가람', 'leader', false], ['나루', 'member', true], ['다온', 'member', false]]);
     expect((await mine(B)).guild).toMatchObject({ role: 'member', invite: null });
-    // 성장·기여·항해일지 — 새 길드는 Lv1이고 보너스 효과가 없다. 만든 사람과 들어온 사람이 항해일지에 남는다
+    // 성장·기여·항해일지 — 새 길드는 Lv1이고 판매가 보너스가 비용 없이 1단계다. 만든 사람과 들어온 사람이 항해일지에 남는다
     expect(view.guild).toMatchObject({
       growth: { level: 1, total: 0, floor: 0, next: 10_000 },
-      effects: { sell: 0, bag: 0, named: 0, rare: 0, mutation: 0 },
+      effects: { sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 },
       members: [{ contribution: { total: 0, today: 0 } }, { contribution: { total: 0, today: 0 } }, { contribution: { total: 0, today: 0 } }],
     });
     expect((view.guild as unknown as { logbook: { kind: string; nick: string }[] }).logbook.map(l => [l.kind, l.nick]))
@@ -123,34 +123,35 @@ describe('보너스 기부', () => {
   const goldOf = async (uid: string) => Number((await env.client.query<{ gold: string }>(
     'select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
 
-  it('길드원은 열린 보너스에 기부하고, 내 길드 조회가 보너스 상태와 기부 순위를 싣는다', async () => {
+  it('길드원은 열린 보너스에 기부하고, 내 길드 조회가 보너스 상태와 전체 기부 순위를 싣는다', async () => {
     const made = await call('/api/guilds', 'POST', D, { body: { name: '기부선단' } });
     const id = (made.body as { id: string }).id;
+    expect(await donate(D, id, 'sell', 1_000)).toMatchObject({ status: 409, body: { error: 'rank-maxed' } }); // Lv1은 1단계가 상한
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+      values ($1, null, '2030-01-01', 0, 10000)`, [id]);
     expect(await donate(GUEST, id, 'sell', 1_000)).toMatchObject({ status: 403, body: { error: 'account-only' } });
     expect(await donate(D, id, 'x', 1_000)).toMatchObject({ status: 400, body: { error: 'bad-bonus' } });
     for (const bad of [0, -5, 1.5, '1000', null]) {
       expect(await donate(D, id, 'sell', bad)).toMatchObject({ status: 400, body: { error: 'bad-amount' } });
     }
     expect(await donate(E, id, 'sell', 1_000)).toMatchObject({ status: 404, body: { error: 'not-member' } });
-    expect(await donate(D, id, 'bag', 1_000)).toMatchObject({ status: 409, body: { error: 'bonus-locked' } });
-    expect(await donate(D, id, 'sell', 200_000)).toMatchObject({ status: 201, body: { rank: 1, pool: 0, accepted: 100_000, gold: 20_000 } });
-    expect(await goldOf(D)).toBe(20_000);
+    expect(await donate(D, id, 'named', 1_000)).toMatchObject({ status: 409, body: { error: 'bonus-locked' } });
+    expect(await donate(D, id, 'sell', 200_000)).toMatchObject({ status: 201, body: { rank: 2, pool: 0, accepted: 150_000, gold: 50_000 } });
+    expect(await goldOf(D)).toBe(50_000);
     expect(await donate(D, id, 'sell', 1_000)).toMatchObject({ status: 409, body: { error: 'rank-maxed' } });
+    expect(await donate(D, id, 'bag', 60_000)).toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
+    expect(await goldOf(D)).toBe(50_000);
 
     const view = (await call('/api/guilds/me', 'GET', D)).body as { guild: {
-      effects: Record<string, number>; bonuses: Record<string, unknown>[]; logbook: { kind: string; detail: string; value: number }[] } };
-    expect(view.guild.effects).toEqual({ sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 });
+      effects: Record<string, number>; bonuses: Record<string, unknown>[]; donors: unknown[];
+      logbook: { kind: string; detail: string; value: number }[] } };
+    expect(view.guild.effects).toEqual({ sell: 0.04, bag: 0.04, named: 0, rare: 0, mutation: 0 });
     expect(view.guild.bonuses.map(b => b.id)).toEqual(['sell', 'bag', 'named', 'rare', 'mutation']);
-    expect(view.guild.bonuses[0]).toEqual({ id: 'sell', unlock: 1, rank: 1, cap: 1, pool: 0, next: 250_000, effect: 0.02,
-      nextEffect: 0.04, mine: 100_000, donors: [{ uid: D, nick: '라온', gold: 100_000 }] });
-    expect(view.guild.bonuses[1]).toMatchObject({ id: 'bag', unlock: 2, rank: 0, cap: 0 });
+    expect(view.guild.bonuses[0]).toEqual({ id: 'sell', unlock: 1, rank: 2, cap: 2, pool: 0, next: 500_000, effect: 0.04,
+      nextEffect: 0.06, mine: 150_000 });
+    expect(view.guild.bonuses[2]).toMatchObject({ id: 'named', unlock: 3, rank: 0, cap: 0 });
+    expect(view.guild.donors).toEqual([{ uid: D, nick: '라온', gold: 150_000 }]);
     expect(view.guild.logbook.slice(0, 2).map(l => [l.kind, l.detail, l.value]))
-      .toEqual([['bonus-up', 'sell', 1], ['donate', 'sell', 100_000]]);
-
-    // 레벨이 오르면 상한이 늘어 다시 기부할 수 있다. 가진 골드보다 많이 받아야 하면 거부한다
-    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
-      values ($1, null, '2030-01-01', 0, 10000)`, [id]);
-    expect(await donate(D, id, 'sell', 30_000)).toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
-    expect(await goldOf(D)).toBe(20_000);
+      .toEqual([['bonus-up', 'sell', 2], ['donate', 'sell', 150_000]]);
   });
 });
