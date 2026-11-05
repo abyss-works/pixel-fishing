@@ -160,6 +160,7 @@ export default function GameView(props: GameViewProps) {
         <HudLayout game={game} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? <ChatBar picked={pickedLine} onDone={() => setPickedLine(null)} /> : null}
                    onPickLine={chat.enabled ? m => setPickedLine(m.from?.uid === chat.you ? null : m) : undefined}
+                   you={chat.you}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? (
                      <div className="flex flex-col gap-2">

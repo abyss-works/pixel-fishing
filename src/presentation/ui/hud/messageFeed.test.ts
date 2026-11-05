@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MESSAGE_KEEP, appendMessage, channelsOf, createMessage, mergeMessages } from './messageFeed';
+import { MESSAGE_KEEP, appendMessage, channelsOf, createMessage, isAtBottom, mergeMessages } from './messageFeed';
 import { REJECT_TEXT } from '../../../game/rules/rules';
 
 describe('메시지 피드', () => {
@@ -27,6 +27,13 @@ describe('메시지 피드', () => {
     expect(list).toHaveLength(MESSAGE_KEEP);
     expect(list[0].id).toBe(1);
     expect(list.at(-1)?.text).toBe('new');
+  });
+
+  it('맨 아래에서 여유 안쪽이면 맨 아래를 보고 있는 것으로 친다', () => {
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 400, clientHeight: 100 })).toBe(true);
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 395, clientHeight: 100 })).toBe(true);
+    expect(isAtBottom({ scrollHeight: 500, scrollTop: 300, clientHeight: 100 })).toBe(false);
+    expect(isAtBottom({ scrollHeight: 100, scrollTop: 0, clientHeight: 100 })).toBe(true);
   });
 
   it('채널 목록은 등장 순서대로 중복 없이 모은다', () => {
