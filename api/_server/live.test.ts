@@ -196,9 +196,11 @@ describe('실시간 채널 접속 목록과 세션 기록', () => {
   it('online은 위치를 보내기 전의 연결도 지역·해역 없이 싣고, 위치를 보내면 지역과 해역을 싣는다', async () => {
     const { url, live } = await start();
     const before = Date.now();
+    // online은 연결한 순서다. 인증은 비동기라 동시에 열면 순서가 바뀔 수 있어 차례로 연다
     const a = connect(url, 'u1');
+    await a.next();
     const g = connect(url, 'guest:g1');
-    await a.next(); await g.next();
+    await g.next();
     expect(live.online()).toEqual([
       { uid: 'u1', nick: 'n-u1', region: null, zone: null, connectedAt: expect.any(String), guest: false },
       { uid: 'g1', nick: 'n-g1', region: null, zone: null, connectedAt: expect.any(String), guest: true },
