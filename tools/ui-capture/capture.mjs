@@ -109,6 +109,7 @@ async function launchChrome() {
 }
 
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
+const SEND_TIMEOUT_MS = 20_000;
 
 /** DevTools 프로토콜 연결 하나. send는 응답의 result를 돌려준다 */
 async function connect(url) {
@@ -124,9 +125,14 @@ async function connect(url) {
     if (msg.error) w.fail(new Error(msg.error.message)); else w.ok(msg.result);
   };
   return {
+    // 응답이 끊기면 실행 전체가 멈추지 않도록 호출마다 제한 시간을 둔다
     send: (method, params = {}, sessionId) => new Promise((ok, fail) => {
       const id = ++seq;
-      waiting.set(id, { ok, fail });
+      const timer = setTimeout(() => { waiting.delete(id); fail(new Error(`${method} 응답 시간 초과`)); }, SEND_TIMEOUT_MS);
+      waiting.set(id, {
+        ok: v => { clearTimeout(timer); ok(v); },
+        fail: e => { clearTimeout(timer); fail(e); },
+      });
       ws.send(JSON.stringify({ id, method, params, sessionId }));
     }),
     close: () => ws.close(),
@@ -161,7 +167,7 @@ async function capture(browser, origin, entry, size, outDir) {
     writeFileSync(png, Buffer.from(data, 'base64'));
     return { id: entry.id, ok: ready && !error, png, note: !ready ? '렌더 대기 시간 초과' : error ? '스토리 오류 화면' : '' };
   } finally {
-    await browser.send('Target.closeTarget', { targetId });
+    await browser.send('Target.closeTarget', { targetId }).catch(() => {});
   }
 }
 
@@ -189,7 +195,8 @@ async function main() {
     const queue = [...entries];
     const worker = async () => {
       for (let item = queue.shift(); item; item = queue.shift()) {
-        const r = await capture(chrome.browser, server.origin, item.entry, item.size, outDir);
+        const r = await capture(chrome.browser, server.origin, item.entry, item.size, outDir)
+          .catch(e => ({ id: item.entry.id, ok: false, note: e instanceof Error ? e.message : String(e) }));
         console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${r.id}${r.note ? ` (${r.note})` : ''}`);
         results.push(r);
       }
