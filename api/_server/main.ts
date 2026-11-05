@@ -22,6 +22,7 @@ import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
 import { recentChat, saveChat } from '../_data/chat.js';
+import { applyKeepAlive } from './keepAlive.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -57,6 +58,7 @@ app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
+applyKeepAlive(server);
 // 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
 const live = attachLive(server, {
   origin: new URL(process.env.BETTER_AUTH_URL as string).origin,
