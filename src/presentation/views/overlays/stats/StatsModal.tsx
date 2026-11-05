@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
+import type { GuildEffects } from '../../../../game/rules/guild';
 import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
 import type { ZoneId } from '../../../../game/content/zones';
@@ -38,10 +39,12 @@ interface Props {
   /** 현재 위치 지역 — 사거리 안의 어군이 없으면 이 지역의 기준 해역부터 보여 준다 */
   region: RegionId;
   nickname: string | null;
+  /** 길드 레벨과 서버가 적용하는 길드 보너스 효과. 길드가 없으면 null */
+  guild: { level: number; effects: GuildEffects } | null;
   onClose: () => void;
 }
 
-export default function StatsModal({ game, movement, region, nickname, onClose }: Props) {
+export default function StatsModal({ game, movement, region, nickname, guild, onClose }: Props) {
   const { spot: here } = useSpotState();
   const [tab, setTab] = useState<StatsTab>('summary');
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
@@ -51,7 +54,7 @@ export default function StatsModal({ game, movement, region, nickname, onClose }
   const selected = rows[spotIndex];
   const [zone, setZone] = useState<ZoneId>(rows[start].zone);
   const zoneTabs = selectStatsZoneTabs(rows, rows[start].zone);
-  const summary = selectStatsSummary(game);
+  const summary = selectStatsSummary(game, guild?.effects.bag ?? 0);
 
   // 지역을 바꾸면 그 지역의 첫 해역을 고른다 — 상세가 다른 지역 해역에 머물지 않게 한다
   const pickZone = (next: ZoneId) => {
@@ -76,7 +79,7 @@ export default function StatsModal({ game, movement, region, nickname, onClose }
             <RodTab game={game} rows={rows} zoneTabs={zoneTabs} zone={zone} selected={selected}
                     onZone={pickZone} onSelect={setSpotIndex} />
           )}
-          {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game)} />}
+          {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game, guild)} />}
         </div>
       </Panel>
     </Modal>

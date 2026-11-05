@@ -3,7 +3,7 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { ChatLine } from '../../game/rules/live';
-import type { GuildBonus, GuildLogKind, GuildRole } from '../../game/rules/guild';
+import type { GuildBonusId, GuildEffects, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
@@ -75,17 +75,30 @@ export interface GuildMemberItem {
   /** 이 길드에 쌓은 기여 — 누적과 오늘(게임 날짜) */
   contribution: { total: number; today: number };
 }
-/** 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id다 */
+/** 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id, 기부·단계 상승이면 보너스 id다.
+ *  value는 기부면 골드, 단계 상승이면 새 단계다 */
 export interface GuildLogItem {
-  id: number; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; at: string;
+  id: number; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; value: number | null; at: string;
 }
+/** 길드 보너스 하나 — 해금 레벨, 지금 단계(열리면 최소 1)와 상한(길드 레벨, 열리지 않았으면 0), 다음 단계를 향해 모인 골드와
+ *  비용(5단계이거나 열리지 않았으면 null), 지금·다음 단계 효과, 내가 이 보너스에 기부한 골드 */
+export interface GuildBonusItem {
+  id: GuildBonusId; unlock: number; rank: number; cap: number; pool: number; next: number | null;
+  effect: number; nextEffect: number | null; mine: number;
+}
+/** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
+export interface GuildDonorItem { uid: string | null; nick: string | null; gold: number }
 /** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). invite는 길드장에게만 온다 */
 export interface GuildInfo {
   id: string; name: string; createdAt: string; role: GuildRole;
   members: GuildMemberItem[];
   invite: { code: string; expiresAt: string } | null;
-  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null), 서버가 적용하는 보너스 */
-  growth: { level: number; total: number; floor: number; next: number | null; bonus: GuildBonus };
+  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null) */
+  growth: { level: number; total: number; floor: number; next: number | null };
+  /** 보너스 다섯(해금 순)과 서버가 액션에 적용하는 효과, 전체 기부 순위(많은 순) — 화면은 표시만 한다 */
+  bonuses: GuildBonusItem[];
+  effects: GuildEffects;
+  donors: GuildDonorItem[];
   /** 항해일지 — 최근 순 */
   logbook: GuildLogItem[];
 }
@@ -94,7 +107,8 @@ export type GuildOp =
   | { op: 'join'; code: string }
   | { op: 'invite'; guildId: string }
   | { op: 'remove'; guildId: string; uid: string }
-  | { op: 'handover'; guildId: string; uid: string };
+  | { op: 'handover'; guildId: string; uid: string }
+  | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number };
 /** 길드 요청 결과 — 실패는 서버 오류 코드(name-taken, guild-full, not-leader 등) */
 export type GuildOpResult = { ok: true } | { ok: false; error: string };
 

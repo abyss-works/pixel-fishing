@@ -27,6 +27,12 @@ describe('selectBagStatus', () => {
   });
 });
 
+describe('selectBagStatus — 길드 가방 보너스', () => {
+  it('서버가 알려 준 가방 보너스만큼 늘어난 칸으로 상한을 보인다', () => {
+    expect(selectBagStatus(seed({ boat: 0 }), 0.2).cap).toBe(72); // 60 + 12
+  });
+});
+
 describe('selectBagStatus — 채움 비율과 경고 단계', () => {
   const bagOf = (n: number) => Array.from({ length: n }, (_, i) => ({
     uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,

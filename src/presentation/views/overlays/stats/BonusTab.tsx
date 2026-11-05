@@ -9,6 +9,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 import Subheading from '../../../ui/Subheading';
 import { artifactEffectLine } from '../../../ui/artifactEffects';
 import { baitEffectLine } from '../../../ui/baitEffects';
+import { bonusEffectText } from '../../../../features/guild/model/guild';
 
 const CATEGORY: Record<BonusCategory, { label: string; glyph: GlyphId }> = {
   move: { label: '이동', glyph: 'boat' },
@@ -17,11 +18,21 @@ const CATEGORY: Record<BonusCategory, { label: string; glyph: GlyphId }> = {
   shop: { label: '상점', glyph: 'coin' },
 };
 
-/** 효과 문장 — 유물·미끼의 기존 문장 함수에서 뽑는다 */
-const effectText = (row: BonusRow): string =>
-  row.source.kind === 'relic' ? artifactEffectLine(row.source.artifact, row.source.effect) ?? '' : baitEffectLine(row.source.bait);
-const sourceText = (row: BonusRow): string =>
-  row.source.kind === 'relic' ? row.source.artifact.name : row.source.bait.name;
+/** 효과 문장 — 유물·미끼·길드 보너스의 기존 문장 함수에서 뽑는다 */
+function effectText(row: BonusRow): string {
+  switch (row.source.kind) {
+    case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect) ?? '';
+    case 'bait': return baitEffectLine(row.source.bait);
+    case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
+  }
+}
+function sourceText(row: BonusRow): string {
+  switch (row.source.kind) {
+    case 'relic': return row.source.artifact.name;
+    case 'bait': return row.source.bait.name;
+    case 'guild': return `길드 Lv.${row.source.level}`;
+  }
+}
 
 // 보너스 탭 — 지금 받는 효과만 이동·낚시·결투·상점으로 모은다. 줄마다 출처를 꼬리표로 붙인다.
 // 받는 효과가 없는 갈래도 자리를 지켜 예시마다 창 모양이 같다.
@@ -58,7 +69,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
         })}
       </div>
       <Note size="xs" className="my-0">
-        유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요. 미끼는 가방에서 켜고 끌 수 있어요.
+        유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요. 미끼는 가방에서 켜고 끌 수 있어요. 길드 보너스는 길드 창에서 기부로 올려요.
       </Note>
     </div>
   );

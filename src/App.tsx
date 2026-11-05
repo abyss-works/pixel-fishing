@@ -29,7 +29,7 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, adoptAccount, warmup } = useGame({ setToast });
+  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, adoptAccount, warmup, resync } = useGame({ setToast });
   const { account, uid, onAuthChanged } = useAccount({ game, setToast, adoptAccount });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
@@ -58,7 +58,7 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
-        onRename={rename} onAuthChanged={onAuthChanged} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
+        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>

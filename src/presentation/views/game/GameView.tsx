@@ -69,6 +69,8 @@ interface GameViewProps {
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
+  /** 액션 밖에서 서버가 바꾼 게임 상태를 다시 읽는다(길드 보너스 기부의 골드) */
+  onResync: () => Promise<void>;
   /** 진행을 막는 앱 모달(새 버전, 다른 창 접속) — 앱 최상위가 실패 정책에 따라 공급한다 */
   blocker?: ReactNode;
   /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
@@ -103,6 +105,9 @@ export default function GameView(props: GameViewProps) {
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
+  // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
+  const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
+  const bagBonus = guildBonus?.effects.bag ?? 0;
   useFriendAlerts(props.account !== null, props.setToast);
   const log = chat.enabled
     ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
@@ -191,7 +196,7 @@ export default function GameView(props: GameViewProps) {
                  initialPos={props.entryPos ?? undefined} />
         )}
 
-        <HudLayout game={game} scene={scene} log={log} covered={covered}
+        <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} /> : null}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
@@ -214,7 +219,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         {statsOpen && (
-          <StatsModal game={game}
+          <StatsModal game={game} guild={guildBonus}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
                       region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
@@ -224,7 +229,7 @@ export default function GameView(props: GameViewProps) {
         <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
         <GuildButton account={props.account} onOpen={() => setGuildOpen(true)} />
-        {guildOpen && <GuildModal setToast={props.setToast} onClose={() => setGuildOpen(false)} />}
+        {guildOpen && <GuildModal setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {playersOpen && atSea && (
           <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
         )}

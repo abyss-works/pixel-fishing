@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { GUILD_DAILY_FAME_CAP, GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import {
-  GUILD_ERROR_TEXT, bonusLines, growthBar, inviteLeftText, leaveOutcome, levelSteps, logAgoText, logLine, memberActions,
+  GUILD_ERROR_TEXT, activeEffectLines, growthBar, inviteLeftText, leaveOutcome, levelSteps, logAgoText, logLine, memberActions,
   splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { GuildInfo, GuildMemberItem, GuildOp } from '../../../../features/guild/model/guild';
@@ -22,18 +22,25 @@ import Panel from '../../../ui/Panel';
 import ProgressLadder from '../../../ui/ProgressLadder';
 import SubTabs from '../../../ui/SubTabs';
 import TextInput from '../../../ui/TextInput';
+import GuildBonusPanel from './GuildBonusPanel';
 
 // 길드 창 — 게임 스테이지 안에 뜬다.
 // 길드가 없으면 위는 길드 만들기, 아래는 초대 코드로 들어가기다.
-// 길드가 있으면 위는 길드 정보(레벨·진행 막대·받는 보너스, 초대 코드(길드장)·떠나기), 아래는 보조 탭 셋이다.
-// 길드원(접속 여부·기여, 길드장의 위임·내보내기, 떠난 선원), 레벨(문턱과 보너스 사다리), 항해일지.
-// 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주기만 한다.
+// 길드가 있으면 위는 길드 정보(레벨·진행 막대·받는 보너스, 초대 코드(길드장)·떠나기), 아래는 보조 탭 넷이다.
+// 길드원(접속 여부·기여, 길드장의 위임·내보내기, 떠난 선원), 보너스(단계와 기부), 레벨(문턱과 해금 사다리), 항해일지.
+// 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주고 기부를 보내기만 한다.
+// 스크롤은 탭 본문 한 곳뿐이다 — 정보 영역은 줄지 않고, 탭 본문이 높이를 맞추며 그 안에서만 굴린다.
 const nameOf = (m: GuildMemberItem) => m.nick ?? '이름 없음';
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 
 type Confirm = { title: string; label: string; text: string; op: GuildOp; done: string };
 
-export default function GuildModal({ setToast, onClose }: { setToast: Notify; onClose: () => void }) {
+export default function GuildModal({ setToast, onGoldChanged, onClose }: {
+  setToast: Notify;
+  /** 기부로 골드가 바뀐 뒤 게임 상태를 다시 읽는다 */
+  onGoldChanged: () => Promise<void> | void;
+  onClose: () => void;
+}) {
   const { guild, loading, failed, you, act } = useGuild(true, true);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -52,7 +59,7 @@ export default function GuildModal({ setToast, onClose }: { setToast: Notify; on
   };
 
   const body = guild && you
-    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} />
+    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} onGoldChanged={onGoldChanged} />
     : guild === null && !loading && !failed
       ? <NoGuild busy={busy} run={run} setToast={setToast} />
       : (
@@ -133,11 +140,12 @@ function NoGuild({ busy, run, setToast }: { busy: boolean; run: Run; setToast: N
   );
 }
 
-type GuildTab = 'members' | 'levels' | 'logbook';
+type GuildTab = 'members' | 'bonus' | 'levels' | 'logbook';
 
-/** 길드가 있을 때 — 위는 길드 정보(성장·초대 코드·떠나기), 아래는 길드원·레벨·항해일지 탭 */
-function GuildView({ guild, me, busy, run, setToast, ask }: {
+/** 길드가 있을 때 — 위는 길드 정보(성장·초대 코드·떠나기), 아래는 길드원·보너스·레벨·항해일지 탭 */
+function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
   guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: Confirm) => void;
+  onGoldChanged: () => Promise<void> | void;
 }) {
   const nowMs = Date.parse(useNow());
   const [tab, setTab] = useState<GuildTab>('members');
@@ -159,10 +167,10 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <Panel title="길드 정보" className="min-w-0">
+    <div className="flex flex-col gap-3 min-h-0">
+      <Panel title="길드 정보" className="min-w-0 shrink-0">
         <div className="flex flex-col gap-3 text-sm">
-          <GrowthSummary growth={guild.growth} />
+          <GrowthSummary growth={guild.growth} bonuses={guild.bonuses} />
           <p className="m-0">길드원 {active.length}/{GUILD_MAX_MEMBERS}명 · 나는 {leader ? '길드장' : '길드원'}이에요.</p>
           {leader && (
             <section className="flex flex-col gap-1.5" aria-label="초대 코드">
@@ -200,13 +208,14 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
           </section>
         </div>
       </Panel>
-      <Panel className="min-w-0">
+      <Panel className="min-w-0 min-h-0">
         <SubTabs<GuildTab> activeKey={tab} onSelect={setTab} items={[
           { key: 'members', label: '길드원', sub: `${active.length}명` },
+          { key: 'bonus', label: '보너스' },
           { key: 'levels', label: '레벨', sub: `Lv.${guild.growth.level}` },
           { key: 'logbook', label: '항해일지', sub: `${guild.logbook.length}건` },
         ]} />
-        <div className="pf-scroll-panel h-56 overflow-y-auto pr-1 flex flex-col gap-3">
+        <div className="pf-scroll-panel h-72 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
           {tab === 'members' && (
             <>
               <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
@@ -255,18 +264,21 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
               )}
             </>
           )}
+          {tab === 'bonus' && (
+            <GuildBonusPanel guild={guild} me={me} busy={busy} run={run} setToast={setToast} onGoldChanged={onGoldChanged} />
+          )}
           {tab === 'levels' && (
             <>
               <ProgressLadder steps={levelSteps(guild.growth).map(s => ({
                 key: String(s.level),
                 label: `Lv.${s.level}`,
-                meta: s.level === 1 ? '보너스 없음'
-                  : `기여 ${fmtNum(s.floor)}${s.perks.length > 0 ? ` · ${s.perks.join(' · ')}` : ''}`,
+                meta: `기여 ${fmtNum(s.floor)}${s.perks.length > 0 ? ` · ${s.perks.join(' · ')}` : ''}`,
                 state: s.state,
               }))} />
               <Note size="xs" className="my-0">
                 길드원이 얻은 명성만큼 기여가 쌓여요(한 사람당 하루 {fmtNum(GUILD_DAILY_FAME_CAP)}까지, 한국 시간 새벽 4시에 새로 세요).
-                일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 보너스는 길드원 모두가 같게 받아요.
+                일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 레벨마다 보너스가 하나씩 열리고, 단계는 기부로 올려요.
+                보너스는 길드원 모두가 같게 받아요.
               </Note>
             </>
           )}
@@ -288,9 +300,9 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
 }
 
 /** 길드 레벨 요약 — 레벨, 누적 기여, 다음 레벨까지의 막대, 지금 받는 보너스 */
-function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
+function GrowthSummary({ growth, bonuses }: { growth: GuildInfo['growth']; bonuses: GuildInfo['bonuses'] }) {
   const bar = growthBar(growth);
-  const lines = bonusLines(growth.bonus);
+  const lines = activeEffectLines(bonuses);
   return (
     <section className="flex flex-col gap-1.5" aria-label="길드 레벨">
       <div className="flex items-baseline justify-between gap-2">
@@ -308,8 +320,8 @@ function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
       <Inset className="px-2 py-1.5 flex flex-col gap-0.5">
         <b className="text-xs">받는 보너스</b>
         {lines.length > 0
-          ? lines.map(line => <span key={line} className="text-sm text-accent">{line}</span>)
-          : <span className="text-xs text-text-dim">Lv.2부터 길드원 모두가 보너스를 받아요.</span>}
+          ? <span className="text-sm text-accent">{lines.join(' · ')}</span>
+          : <span className="text-xs text-text-dim">보너스 탭에서 골드를 기부해 단계를 올리면 길드원 모두가 받아요.</span>}
       </Inset>
     </section>
   );

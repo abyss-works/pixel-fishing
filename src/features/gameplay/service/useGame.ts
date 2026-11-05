@@ -180,6 +180,14 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         setLoading(false);
       }
     },
+    /**
+     * 액션 밖에서 서버가 바꾼 상태(길드 보너스 기부로 빠진 골드 등)를 다시 읽어 채택한다. 게이트웨이의 캐시와 버전도
+     * 새로 읽은 상태로 맞춰진다. 읽기에 실패하면 그대로 둔다 — 다음 액션의 응답이 버전 차이를 보고 다시 읽는다.
+     */
+    resync: async (): Promise<void> => {
+      const s = await Promise.resolve(gameGatewayRef.current.load()).catch(() => null);
+      if (s) setGame(s);
+    },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),
   };

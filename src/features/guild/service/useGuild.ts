@@ -18,7 +18,7 @@ export function useGuild(account: boolean, poll = false) {
     refetchInterval: poll ? REFRESH : false,
     retry: 1,
   });
-  /** 만들기·가입·코드 발급·떠나기·내보내기·위임 — 성공하면 다시 읽는다 */
+  /** 만들기·가입·코드 발급·떠나기·내보내기·위임·보너스 기부 — 성공하면 다시 읽는다 */
   const act = async (op: GuildOp): Promise<GuildOpResult> => {
     const result = await guildAction(op);
     if (result.ok) await client.invalidateQueries({ queryKey: key });
