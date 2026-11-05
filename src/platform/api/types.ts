@@ -3,7 +3,7 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { ChatLine } from '../../game/rules/live';
-import type { GuildRole } from '../../game/rules/guild';
+import type { GuildBonus, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
@@ -72,12 +72,22 @@ export interface GuildMemberItem {
   leftAt: string | null;
   /** 실시간 채널에 접속해 있는가(떠난 선원은 항상 false) */
   online: boolean;
+  /** 이 길드에 쌓은 기여 — 누적과 오늘(게임 날짜) */
+  contribution: { total: number; today: number };
+}
+/** 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id다 */
+export interface GuildLogItem {
+  id: number; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; at: string;
 }
 /** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). invite는 길드장에게만 온다 */
 export interface GuildInfo {
   id: string; name: string; createdAt: string; role: GuildRole;
   members: GuildMemberItem[];
   invite: { code: string; expiresAt: string } | null;
+  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null), 서버가 적용하는 보너스 */
+  growth: { level: number; total: number; floor: number; next: number | null; bonus: GuildBonus };
+  /** 항해일지 — 최근 순 */
+  logbook: GuildLogItem[];
 }
 export type GuildOp =
   | { op: 'create'; name: string }

@@ -13,7 +13,7 @@ import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
-import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
+import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../content/bounties.js';
 import { zoneById } from '../content/zones.js';
 import type { BaseId } from '../content/places.js';
 import { artifactById } from '../content/artifacts.js';
@@ -193,6 +193,14 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
   const q = bountyById(questId);
   if (!q) return no('bad-request');
   return ctx && ctx.complete.includes(questId) ? OK : no('quest-incomplete');
+}
+
+/**
+ * 납품 보상 골드. 길드 보너스는 일반 의뢰에만 붙고 네임드 토벌 보상은 그대로다.
+ * @param rewardBonus 길드 보너스의 일반 의뢰 보상 비율
+ */
+export function deliveryReward(quest: Pick<BountyQuest, 'difficulty' | 'reward'>, rewardBonus: number): number {
+  return bountyKindOf(quest) === 'named' ? quest.reward : Math.round(quest.reward * (1 + rewardBonus));
 }
 
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는

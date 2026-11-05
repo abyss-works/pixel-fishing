@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
+import { guildBonusOf } from '../../../../game/rules/guild';
 import GuildModal from './GuildModal';
 
 const s = vi.hoisted(() => ({
@@ -18,9 +19,14 @@ const GUILD: GuildInfo = {
   id: 'g1', name: '심해선단', createdAt: at, role: 'leader',
   invite: { code: 'ABCD2345', expiresAt: '2999-01-01T00:00:00.000Z' },
   members: [
-    { uid: 'L', nick: '가람', role: 'leader', joinedAt: at, leftAt: null, online: true },
-    { uid: 'M', nick: '나루', role: 'member', joinedAt: at, leftAt: null, online: false },
-    { uid: 'X', nick: '다온', role: 'member', joinedAt: at, leftAt: at, online: false },
+    { uid: 'L', nick: '가람', role: 'leader', joinedAt: at, leftAt: null, online: true, contribution: { total: 1_900, today: 900 } },
+    { uid: 'M', nick: '나루', role: 'member', joinedAt: at, leftAt: null, online: false, contribution: { total: 0, today: 0 } },
+    { uid: 'X', nick: '다온', role: 'member', joinedAt: at, leftAt: at, online: false, contribution: { total: 29_100, today: 0 } },
+  ],
+  growth: { level: 3, total: 31_000, floor: 25_000, next: 50_000, bonus: guildBonusOf(3) },
+  logbook: [
+    { id: 2, kind: 'legendary', uid: 'L', nick: '가람', detail: 'goldcarp', at },
+    { id: 1, kind: 'join', uid: 'M', nick: '나루', detail: null, at },
   ],
 };
 
@@ -61,5 +67,20 @@ describe('GuildModal', () => {
     expect(screen.queryByRole('button', { name: '내보내기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '넘기기' })).toBeNull();
     expect(screen.getByRole('button', { name: '길드 떠나기' })).toBeTruthy();
+  });
+
+  it('길드 레벨·다음 레벨까지 남은 기여·받는 보너스와 길드원 기여를 보이고, 레벨과 항해일지 탭을 연다', () => {
+    s.guild = GUILD;
+    render(<GuildModal setToast={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getAllByText('Lv.3')).toHaveLength(2); // 레벨 요약과 레벨 탭 머리
+    expect(screen.getByText('다음 레벨까지 기여 19,000')).toBeTruthy();
+    expect(screen.getByText('처음 보는 어종 천장이 5% 빨리 차요')).toBeTruthy();
+    expect(screen.getByText('일반 의뢰 보상 +5%')).toBeTruthy();
+    expect(screen.getByText('누적 29,100')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /레벨/ }));
+    expect(screen.getByText(/기여 100,000 · 네임드 조우 천장이 10% 빨리 차요/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /항해일지/ }));
+    expect(screen.getByText('가람 님이 전설 황금잉어 낚시에 성공했어요!')).toBeTruthy();
+    expect(screen.getByText('나루 님이 길드에 들어왔어요.')).toBeTruthy();
   });
 });

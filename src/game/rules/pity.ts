@@ -6,6 +6,8 @@
 //    결투에 실패하면 그날 다음 천장을 절반으로 줄인다(두 번까지). 게임 날짜가 바뀌면 모두 초기화한다.
 //  - 네임드 상처: 그날 실패한 결투에서 맞힌 히트를 네임드별로 쌓아 다음 조우의 결투 체력에서 뺀다(상한 있음).
 //    토벌에 성공하거나 게임 날짜가 바뀌면 사라진다.
+//  - 길드 보너스: 두 천장 모두 확정 문턱에 (1 − 비율)을 곱해 그만큼 빨리 찬다. 쌓는 양(확률 질량·빗나감 수)은
+//    그대로라 길드를 옮기거나 레벨이 바뀌어도 진척이 바뀌지 않고, 다음 판정부터 새 문턱을 쓴다. 비율은 길드 규칙이 정한다.
 // 리듀서 catch와 서버 fast path가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { fishDrawShares, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
@@ -23,10 +25,14 @@ export const PITY_DONE = -1;
 /** 어종 → 누적 확률 질량(또는 PITY_DONE) */
 export type SpeciesPity = Record<string, number>;
 
-/** 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에 있고 누적이 K 이상인 미완료 어종, 누적 큰 순 */
-export function speciesPityCandidates(pity: SpeciesPity, spot: SpotId, phase: DayPhase): string[] {
+/**
+ * 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에 있고 누적이 문턱 이상인 미완료 어종, 누적 큰 순.
+ * @param faster 길드 보너스의 어종 천장 비율. 문턱은 K × (1 − faster)다
+ */
+export function speciesPityCandidates(pity: SpeciesPity, spot: SpotId, phase: DayPhase, faster = 0): string[] {
+  const threshold = SPECIES_PITY_K * (1 - faster);
   return fishPool(spot, phase)
-    .filter(f => (pity[f.id] ?? 0) >= SPECIES_PITY_K)
+    .filter(f => (pity[f.id] ?? 0) >= threshold)
     .sort((a, b) => pity[b.id] - pity[a.id])
     .map(f => f.id);
 }
@@ -76,9 +82,12 @@ export interface NamedPity {
 }
 export const newNamedPity = (): NamedPity => ({ day: '', misses: 0, fails: 0, wounds: {} });
 
-/** 그날 결투 실패 수에 따른 천장 — 실패마다 절반, 두 번까지 */
-export function namedPityCeiling(fails: number): number {
-  return Math.round(NAMED_PITY_CATCHES / 2 ** Math.min(fails, NAMED_PITY_MAX_RELIEF));
+/**
+ * 그날 결투 실패 수에 따른 천장 — 실패마다 절반, 두 번까지.
+ * @param faster 길드 보너스의 네임드 천장 비율. 천장에 (1 − faster)를 곱한다
+ */
+export function namedPityCeiling(fails: number, faster = 0): number {
+  return Math.round(NAMED_PITY_CATCHES / 2 ** Math.min(fails, NAMED_PITY_MAX_RELIEF) * (1 - faster));
 }
 
 const onDay = (p: NamedPity, nowIso: string): NamedPity => {
@@ -86,14 +95,17 @@ const onDay = (p: NamedPity, nowIso: string): NamedPity => {
   return p.day === day ? p : { day, misses: 0, fails: 0, wounds: {} };
 };
 
-/** 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다) */
+/**
+ * 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다).
+ * @param faster 길드 보너스의 네임드 천장 비율
+ */
 export function drawNamedEncounter(
   p: NamedPity, activeIds: readonly string[], spot: SpotId, nowIso: string,
-  rng: () => number = Math.random, force = false,
+  rng: () => number = Math.random, force = false, faster = 0,
 ): { quest: BountyQuest | null; pity: NamedPity; byCeiling: boolean } {
   const cur = onDay(p, nowIso);
   if (namedEncounterCandidates(activeIds, spot).length === 0) return { quest: null, pity: cur, byCeiling: false };
-  const byCeiling = cur.misses + 1 >= namedPityCeiling(cur.fails);
+  const byCeiling = cur.misses + 1 >= namedPityCeiling(cur.fails, faster);
   const quest = rollNamedEncounter(activeIds, spot, rng, force || byCeiling);
   return quest
     ? { quest, pity: { ...cur, misses: 0 }, byCeiling: byCeiling && !force }
