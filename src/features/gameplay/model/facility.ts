@@ -7,6 +7,7 @@ import type { Spot } from '../../../game/content/spots';
 import { MAX_BOAT, bagCapacity, baitCost, baitDiscount, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAIT_BUY_MAX, upgradeCost } from '../../../game/rules/balance';
+import { powerOfLevel } from '../../../game/rules/stats';
 
 /** 낚싯대 강화 전후 수치와 구매 가능 판정을 계산한다. */
 export function selectRodUpgradePreview(game: GameState) {
@@ -14,6 +15,8 @@ export function selectRodUpgradePreview(game: GameState) {
     cost: upgradeCost(game.rod),
     current: rodStats(game.rod),
     next: rodStats(game.rod + 1),
+    /** 파워 — 해역 요구 파워와 견주는 값. 강화마다 오르는 축이라 바 시간(레벨 무관 고정) 대신 보인다 */
+    power: { current: powerOfLevel(game.rod), next: powerOfLevel(game.rod + 1) },
     canUpgrade: canUpgradeRod(game),
   };
 }

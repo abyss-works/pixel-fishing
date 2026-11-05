@@ -126,7 +126,7 @@ describe('BountyPanel', () => {
   it('조건 미충족이면 본문을 가리고 조건 리스트를 덮는다', async () => {
     show(game({ fame: 0 }));
     expect(await screen.findByText('명성 1,500 달성')).toBeInTheDocument();
-    expect(screen.getByText('태평양 모든 어종 수집(전설 제외, 밤 어종 포함)')).toBeInTheDocument();
+    expect(screen.getByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/)).toBeInTheDocument();
     // 본문은 blur+pointer-events-none으로 가려진다
     const blurred = document.querySelector('.blur-sm.pointer-events-none');
     expect(blurred).not.toBeNull();
@@ -136,7 +136,7 @@ describe('BountyPanel', () => {
   it('체크 방향 — 달성 조건은 체크+취소선, 미달은 빈박스', async () => {
     show(game({ fame: 1500 })); // 명성만 달성, 도감 비어 있음
     const fameLi = (await screen.findByText('명성 1,500 달성')).closest('li')!;
-    const dexLi = screen.getByText('태평양 모든 어종 수집(전설 제외, 밤 어종 포함)').closest('li')!;
+    const dexLi = screen.getByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/).closest('li')!;
     expect(fameLi.className).toMatch(/line-through/);
     expect(dexLi.className).not.toMatch(/line-through/);
   });

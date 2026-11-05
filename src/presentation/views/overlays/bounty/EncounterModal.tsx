@@ -31,7 +31,16 @@ const ESCAPE_SLOTS = CHALLENGE_MISS_LIMIT;
 export interface EncounterResult { hits: number; misses: number; success: boolean }
 
 type Phase = 'intro' | 'run' | 'won' | 'lost';
-type Flash = 'hit' | 'miss' | null;
+/** 판정 표시 — 도주 칸은 빗나간 챔질(miss)과 치지 않고 흘려보낸 왕복(idle) 둘 다로 차서 문구를 나눈다 */
+type Flash = 'hit' | 'miss' | 'idle' | null;
+type Escape = Exclude<Flash, 'hit' | null>;
+const ESCAPE_TEXT: Record<Escape, { flash: string; lost: string }> = {
+  miss: { flash: '빗나갔어요. 그림자가 멀어져요.', lost: '놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.' },
+  idle: {
+    flash: '챔질하지 않는 사이 그림자가 멀어져요.',
+    lost: '챔질하지 않는 사이 놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.',
+  },
+};
 
 export default function EncounterModal({ data, onResolve, onClose }: {
   data: EncounterData;
@@ -44,6 +53,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   const [run, setRun] = useState<ChallengeRun>(newChallenge);
   const [cursor, setCursor] = useState(0);
   const [flash, setFlash] = useState<Flash>(null);
+  const [lostBy, setLostBy] = useState<Escape>('miss');
   // 진행량 u(편도 1)를 시간에 따라 적분한다 — 속도가 바뀌어도 커서가 순간이동하지 않는다.
   // ref가 정본이고 state는 표시용이다(렌더가 배치돼도 같은 베이스에 중복 집계되지 않게).
   const uRef = useRef(0);
@@ -63,11 +73,13 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     return duelCursor(uRef.current);
   }, []);
 
-  const advance = useCallback((hit: boolean, now: number) => {
+  const advance = useCallback((hit: boolean, now: number, idle = false) => {
     const next = strikeChallenge(runRef.current, hit, hp);
     runRef.current = next;
     setRun(next);
-    setFlash(hit ? 'hit' : 'miss');
+    const escape: Escape = idle ? 'idle' : 'miss';
+    setFlash(hit ? 'hit' : escape);
+    if (!hit) setLostBy(escape);
     lastStrikeRef.current = now;
     sweepRef.current = duelSweepMs(sweepMs, next.hits, speedupScale);
     if (!next.done) return;
@@ -109,7 +121,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
       const now = Date.now();
       setCursor(sample(now));
       // 한 번 왕복하도록 치지 않으면 도주 1칸 — 기다리기만 해서는 이길 수 없다
-      if (now - lastStrikeRef.current >= DUEL_IDLE_SWEEPS * sweepRef.current) advance(false, now);
+      if (now - lastStrikeRef.current >= DUEL_IDLE_SWEEPS * sweepRef.current) advance(false, now, true);
     }, TICK_MS);
     return () => clearInterval(id);
   }, [phase, sweepMs, speedupScale, sample, advance]);
@@ -148,7 +160,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
             {/* 결투 바 — 커서는 멈추지 않고 왕복한다. 존은 맞힐 때마다 자리를 옮긴다 */}
             <div
               className={cx('relative w-full h-8 bg-surface-2 border cursor-pointer',
-                flash === 'miss' ? 'border-text-dim' : flash === 'hit' ? 'border-gold' : 'border-line')}
+                flash === 'hit' ? 'border-gold' : flash ? 'border-text-dim' : 'border-line')}
               onClick={() => strikeRef.current()}
               role="button"
               aria-label="결투 바"
@@ -164,8 +176,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
                 style={{ left: `${cursor * 100}%` }}
               />
             </div>
-            <span className={cx('h-5 text-xs', flash === 'miss' ? 'text-text-dim' : 'text-gold')}>
-              {flash === 'hit' ? '명중' : flash === 'miss' ? '빗나갔어요. 그림자가 멀어져요.'
+            <span className={cx('h-5 text-xs', flash && flash !== 'hit' ? 'text-text-dim' : 'text-gold')}>
+              {flash === 'hit' ? '명중' : flash ? ESCAPE_TEXT[flash].flash
                 : <span className="text-text-dim">커서가 금색 칸에 들어왔을 때 챔질해 주세요.</span>}
             </span>
             <Button variant="primary" full onClick={() => strikeRef.current()}>챔질</Button>
@@ -184,7 +196,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         )}
         {phase === 'lost' && (
           <>
-            <span>놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.</span>
+            <span>{ESCAPE_TEXT[lostBy].lost}</span>
             <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}

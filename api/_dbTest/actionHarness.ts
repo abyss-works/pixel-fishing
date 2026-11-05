@@ -4,6 +4,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
 import { newState } from '../../src/game/rules/logic.js';
+import { APP_VERSION } from '../../src/version.js';
 import { pendingAfterResponse } from './serverShim.js';
 import { createTestDatabase } from './testDatabase.js';
 import type { TestDatabase } from './testDatabase.js';
@@ -53,12 +54,14 @@ export async function startActionEnv(): Promise<ActionEnv> {
 
 export interface ActionResponse { status: number; body: unknown }
 
-/** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev')이다 */
+/** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev'), 버전은 현재 APP_VERSION이다 */
 export async function callAction(token: string | null, body: unknown, opts: {
   method?: string; origin?: string; buildId?: string; clientId?: string;
 } = {}): Promise<ActionResponse> {
   const { default: handler } = await import('../action.js');
-  const headers: Record<string, string> = { 'x-build-id': opts.buildId ?? 'dev', ...sessionHeaders(token) };
+  const headers: Record<string, string> = {
+    'x-build-id': opts.buildId ?? 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token),
+  };
   if (opts.origin) headers.origin = opts.origin;
   if (opts.clientId) headers['x-client-id'] = opts.clientId;
   const out: ActionResponse = { status: 0, body: undefined };

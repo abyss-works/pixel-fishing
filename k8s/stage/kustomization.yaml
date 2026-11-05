@@ -47,7 +47,9 @@ patches:
       kind: CronJob
       metadata:
         name: unused
-# dev 푸시마다 CI가 태그를 dev-<커밋 SHA 7자리>로 갱신한다.
+# dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-769307f
+    newTag: dev-6398a23
+  - name: ghcr.io/abyss-works/pixel-fishing-admin
+    newTag: dev-6398a23

@@ -5,6 +5,7 @@ import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import { cellDefAt } from './mask';
 import { zoneById, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
+import { nextBoatText } from '../content/boats';
 // 반경은 호출자가 준다 — 기본값용 상수(CAST_RANGE, 밸런스 규칙 소관)를 여기서
 // import하면 층서(game > world)가 깨진다. 호출부는 명시 전달.
 
@@ -78,7 +79,8 @@ export class ZoneTracker {
       // 게이트 — 진입 요구 배 미달이면 즉시 되밀기 (기준 zone은 그대로다)
       const gate = zoneById(z);
       if (gate?.entryBoat && boat < gate.entryBoat) {
-        return { revert: true, blocked: gate.gateMsg ?? '더 튼튼한 배가 필요해요.', enteredTop: null };
+        const blocked = `${gate.gateMsg ?? '더 튼튼한 배가 필요해요.'} ${nextBoatText(boat)}`.trim();
+        return { revert: true, blocked, enteredTop: null };
       }
       this.zone = z;
       const top = topZoneOf(z);

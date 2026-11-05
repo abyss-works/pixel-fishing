@@ -66,11 +66,12 @@ export default function ResourceBar({ game, onOpen }: { game: GameState; onOpen?
     </Stat>,
     <Stat key="boat" glyph="boat" label="배">{boatNameOf(game.boat)}</Stat>,
     <Stat key="rod" glyph="rod" label="낚싯대">Lv.<b className="font-bold">{game.rod}</b></Stat>,
+    // 두 숫자 앞에 갈래 이름을 작게 붙인다 — 수배판의 "일반 · 네임드"와 같은 말. 이름은 고정 글자라 칸 폭이 흔들리지 않는다
     <Stat key="bounty" glyph="ticket" label="오늘 의뢰">
-      <span className="inline-flex items-center gap-1.5">
-        <b className="font-bold">{left?.general ?? UNKNOWN}</b>
+      <span className="inline-flex items-baseline gap-1.5">
+        <span className="text-2xs text-text-dim">일반</span><b className="font-bold">{left?.general ?? UNKNOWN}</b>
         <Divider vertical />
-        <b className="font-bold">{left?.named ?? UNKNOWN}</b>
+        <span className="text-2xs text-text-dim">네임드</span><b className="font-bold">{left?.named ?? UNKNOWN}</b>
       </span>
     </Stat>,
   ];
