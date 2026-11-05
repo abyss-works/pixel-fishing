@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, followTarget, LIVE_MAX_LENGTH, parseClientMessage } from './live';
+import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
 
 describe('parseClientMessage', () => {
   it('정상 메시지는 필요한 필드만 남긴다', () => {
@@ -29,17 +29,19 @@ describe('parseClientMessage', () => {
   });
 });
 
-describe('followTarget', () => {
-  it('송신 주기 안에 목표까지 대부분 다가가고 넘어서지 않는다', () => {
-    let p = { x: 0, y: 0 };
-    for (let i = 0; i < 12; i++) p = followTarget(p, { x: 10, y: 0 }, 16);
-    expect(p.x).toBeGreaterThan(7.5);
-    expect(p.x).toBeLessThan(10);
+describe('glide', () => {
+  it('송신 주기 동안 일정 속도로 움직이고, 주기가 지나면 목표에 머문다', () => {
+    const g = nextGlide(nextGlide(null, { x: 0, y: 0 }, 0), { x: 10, y: 0 }, 1000);
+    expect(glidePosition(g, 1000)).toEqual({ x: 0, y: 0 });
+    expect(glidePosition(g, 1000 + LIVE_MOVE_MS / 2)).toEqual({ x: 5, y: 0 });
+    expect(glidePosition(g, 1000 + LIVE_MOVE_MS * 3)).toEqual({ x: 10, y: 0 });
   });
 
-  it('간격이 0이면 그대로이고, 멀리 떨어진 목표는 바로 옮긴다', () => {
-    expect(followTarget({ x: 1, y: 1 }, { x: 5, y: 5 }, 0)).toEqual({ x: 1, y: 1 });
-    expect(followTarget({ x: 0, y: 0 }, { x: 500, y: 0 }, 16)).toEqual({ x: 500, y: 0 });
+  it('이동 중에 새 좌표가 오면 지금 위치에서 다시 출발하고, 먼 목표는 바로 옮긴다', () => {
+    const g = nextGlide(nextGlide(null, { x: 0, y: 0 }, 0), { x: 10, y: 0 }, 0);
+    const next = nextGlide(g, { x: 20, y: 0 }, LIVE_MOVE_MS / 2);
+    expect(next.from).toEqual({ x: 5, y: 0 });
+    expect(nextGlide(next, { x: 500, y: 0 }, LIVE_MOVE_MS)).toEqual({ from: { x: 500, y: 0 }, to: { x: 500, y: 0 }, at: LIVE_MOVE_MS });
   });
 });
 

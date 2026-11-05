@@ -90,23 +90,30 @@ export function chatRate(sentAt: readonly number[], now: number): { ok: boolean;
   return { ok: true, window: [...window, now] };
 }
 
-/** 이동 중 위치 송신 주기(5Hz). 보간이 사이를 메우므로 더 자주 보낼 필요가 없다 */
-export const LIVE_MOVE_MS = 200;
+/** 이동 중 위치 송신 주기(10Hz). 받는 쪽은 이 주기 동안 직전 위치에서 새 위치까지 일정 속도로 옮긴다 */
+export const LIVE_MOVE_MS = 100;
 /** 이동 중인 플레이어에게서 이 시간 동안 받은 것이 없으면 반투명으로 그린다 */
 export const LIVE_STALE_MS = 3000;
-// 보간 시간 상수 — 송신 주기(200ms) 안에 목표까지 대부분 다가가게 한다
-const FOLLOW_TAU_MS = 120;
-// 이보다 먼 목표는 보간하지 않고 바로 옮긴다(지역 이동·재접속)
+// 이보다 먼 목표는 미끄러지지 않고 바로 옮긴다(지역 이동·재접속)
 const SNAP_DISTANCE = 160;
 
+/** 다른 플레이어의 화면 이동 — at부터 송신 주기 동안 from에서 to로 간다 */
+export interface Glide { from: { x: number; y: number }; to: { x: number; y: number }; at: number }
+
+/** 지금 그릴 위치. 송신 주기가 지나면 목표에 머문다 */
+export function glidePosition(g: Glide, now: number): { x: number; y: number } {
+  const t = Math.min(1, Math.max(0, (now - g.at) / LIVE_MOVE_MS));
+  return { x: g.from.x + (g.to.x - g.from.x) * t, y: g.from.y + (g.to.y - g.from.y) * t };
+}
+
 /**
- * 받은 좌표를 향해 한 프레임만큼 다가간 위치. 순간이동하지 않고 매 프레임 일정 비율로 좁힌다.
- * @param dtMs 직전 프레임과의 간격
+ * 새 좌표를 받았을 때의 다음 이동. 지금 그리던 위치에서 출발해 일정 속도로 간다.
+ * 처음 받았거나 멀리 떨어진 목표는 바로 옮긴다.
  */
-export function followTarget(from: { x: number; y: number }, to: { x: number; y: number }, dtMs: number): { x: number; y: number } {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (Math.hypot(dx, dy) > SNAP_DISTANCE) return { x: to.x, y: to.y };
-  const k = 1 - Math.exp(-Math.max(dtMs, 0) / FOLLOW_TAU_MS);
-  return { x: from.x + dx * k, y: from.y + dy * k };
+export function nextGlide(prev: Glide | null, to: { x: number; y: number }, now: number): Glide {
+  const target = { x: to.x, y: to.y };
+  if (!prev) return { from: target, to: target, at: now };
+  const from = glidePosition(prev, now);
+  if (Math.hypot(target.x - from.x, target.y - from.y) > SNAP_DISTANCE) return { from: target, to: target, at: now };
+  return { from, to: target, at: now };
 }
