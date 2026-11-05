@@ -103,10 +103,11 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
             const dot = !on && !disabled && unread(c);
             return (
               <span key={c} className="inline-flex">
-                <ToggleChip pressed={on} disabled={disabled}
+                {/* 채널 토글은 모두 같은 폭이다. 새 글 점은 칩 오른쪽 위 모서리에 겹쳐 그려 폭을 바꾸지 않는다 */}
+                <ToggleChip pressed={on} disabled={disabled} className="relative w-[52px] justify-center"
                             onClick={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }}>
                   {CHANNEL_LABEL[c]}
-                  {!on && !disabled && <span className={cx('size-1.5', dot ? 'bg-gold' : 'invisible')} aria-hidden="true" />}
+                  {dot && !on && !disabled && <span className="absolute top-0.5 right-0.5 size-1.5 bg-gold" aria-hidden="true" />}
                 </ToggleChip>
                 {dot && <span className="sr-only">새 메시지</span>}
               </span>
