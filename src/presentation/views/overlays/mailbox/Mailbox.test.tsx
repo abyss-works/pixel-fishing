@@ -38,7 +38,7 @@ describe('우편함 창', () => {
     });
     const toast = vi.fn();
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
-    fireEvent.click(await screen.findByRole('option', { name: /강화비 차액/ }));
+    fireEvent.click(await screen.findByRole('row', { name: /강화비 차액/ }));
     expect(screen.getByText('돌려드려요.')).toBeInTheDocument();
     await waitFor(() => expect(state.read).toEqual([7]));
     fireEvent.click(screen.getByRole('button', { name: '받기' }));
@@ -57,13 +57,27 @@ describe('우편함 창', () => {
     const dispatch = vi.fn(() => ({ status: 'rejected', error: 'mail-unavailable' }) as never);
     const toast = vi.fn();
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
-    fireEvent.click(await screen.findByRole('option', { name: /이미 받음/ }));
+    fireEvent.click(await screen.findByRole('row', { name: /이미 받음/ }));
     expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
     expect(screen.getByText('받음')).toBeInTheDocument();
     expect(state.read).toEqual([]);
-    fireEvent.click(screen.getByRole('option', { name: /받을 우편/ }));
+    fireEvent.click(screen.getByRole('row', { name: /받을 우편/ }));
     fireEvent.click(screen.getByRole('button', { name: '받기' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('이미 받았거나 받을 수 없는 우편이에요.', 'warn'));
+  });
+
+  it('고르기 전에는 본문 칸에 고르라는 안내를 두고, 할 일이 남은 우편 제목은 굵게 쓴다', async () => {
+    state.mails = [
+      mail({ id: 3, title: '새 소식' }),
+      mail({ id: 4, title: '읽은 소식', readAt: '2026-10-23T01:00:00.000Z' }),
+    ];
+    wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
+    expect(await screen.findByText('위에서 우편을 골라 주세요.')).toBeInTheDocument();
+    expect(screen.getByText('새 소식')).toHaveClass('font-bold');
+    expect(screen.getByText('읽은 소식')).toHaveClass('font-normal');
+    fireEvent.keyDown(screen.getByRole('row', { name: /새 소식/ }), { key: 'Enter' });
+    expect(screen.getByRole('row', { name: /새 소식/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('본문')).toBeInTheDocument();
   });
 
   it('우편이 없으면 빈 상태를 안내한다', async () => {
