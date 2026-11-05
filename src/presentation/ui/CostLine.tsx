@@ -1,39 +1,38 @@
+import type { ReactNode } from 'react';
 import { cx } from './cx';
 import { fmtGold, fmtNum } from './format';
 
-// 잔액 줄 — 확정 전에 "보유 → 확정 후"를 한 줄로 보여준다. delta가 음수면 지출, 양수면 수입.
+// 잔액 줄 — 확정 전에 "보유 → 확정 후"를 이름 왼쪽, 값 오른쪽의 한 줄로 보인다. delta가 음수면 지출, 양수면 수입.
 // 모자라면 확정 후 값을 위험색으로 칠한다(버튼 비활성과 같은 신호). 명성처럼 차감 없는
-// 조건은 requirement로 아래 줄에 붙인다 — 네 패널이 네 가지로 적던 보유·비용 표기의 단일 형태.
-export default function CostLine({ have, delta, requirement, size = 'md', className }: {
+// 조건은 requirement로 아래 줄에 `보유 / 필요`를 붙인다. 변화량은 확정 버튼이 보이므로 여기서 다시 쓰지 않는다.
+export default function CostLine({ have, delta, requirement, className }: {
   have: number;
   delta: number;
-  /** lg = 정비 패널 확정 영역 — 결과 금액을 크게 */
-  size?: 'md' | 'lg';
-  /** 차감 없는 하한 조건 (예: 명성) */
-  requirement?: { label: string; need: number; have: number };
+  /** 차감 없는 하한 조건 (예: 명성). label에 규칙 설명 툴팁을 달 수 있다 */
+  requirement?: { label: ReactNode; need: number; have: number };
   className?: string;
 }) {
   const after = have + delta;
   const short = after < 0;
   const reqShort = requirement ? requirement.have < requirement.need : false;
   return (
-    <div className={cx(size === 'lg' ? 'text-base' : 'text-sm', 'flex flex-col gap-0.5', className)}>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="text-text-dim">보유</span>
-        <span className="pf-accent">{fmtGold(have)}</span>
-        <span className="text-text-dim">→</span>
-        <span className={cx('pf-accent', short ? 'text-danger' : 'text-gold')}>{fmtGold(after)}</span>
-        <span className="pf-accent text-text-dim text-xs">
-          ({delta < 0 ? '-' : '+'}{fmtGold(Math.abs(delta))})
+    <div className={cx('text-sm flex flex-col gap-1', className)}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-text-dim">골드</span>
+        <span className="pf-accent text-xs flex items-baseline gap-1.5">
+          <span>{fmtGold(have)}</span>
+          <span className="text-text-dim">→</span>
+          <span className={cx(short && 'text-danger')}>{fmtGold(after)}</span>
         </span>
       </div>
       {requirement && (
-        <div className="flex items-baseline gap-2 flex-wrap">
+        <div className="flex items-baseline justify-between gap-2">
           <span className="text-text-dim">{requirement.label}</span>
-          <span className={cx('pf-accent', reqShort && 'text-danger')}>{fmtNum(requirement.have)}</span>
-          <span className="text-text-dim">/ 필요</span>
-          <span className="pf-accent">{fmtNum(requirement.need)}</span>
-          <span className="text-text-dim text-xs">소모 없음</span>
+          <span className="pf-accent text-xs flex items-baseline gap-1.5">
+            <span className={cx(reqShort && 'text-danger')}>{fmtNum(requirement.have)}</span>
+            <span className="text-text-dim">/</span>
+            <span className="text-text-dim">{fmtNum(requirement.need)}</span>
+          </span>
         </div>
       )}
     </div>

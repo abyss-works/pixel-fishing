@@ -49,14 +49,26 @@ describe('정비 화면 데이터', () => {
     expect(selectBoatLadder(game).at(-1)?.state).toBe('current');
   });
 
-  it('낚싯대 사다리 — 현재 ±2단계, 1레벨 아래로는 내려가지 않고 비용은 그 레벨로 올리는 값', () => {
+  it('낚싯대 목록 — 현재 앞 2단계부터 7행, 1레벨 아래로는 내려가지 않고 비용은 그 레벨로 올리는 값', () => {
     const game = newState(); // rod 1
     const rows = selectRodLadder(game);
-    expect(rows.map(r => r.level)).toEqual([1, 2, 3]);
-    expect(rows.map(r => r.state)).toEqual(['current', 'next', 'locked']);
+    expect(rows.map(r => r.level)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(rows.map(r => r.state)).toEqual(['current', 'next', 'locked', 'locked', 'locked', 'locked', 'locked']);
     expect(rows[1].cost).toBe(upgradeCost(1));
-    game.rod = 5;
-    expect(selectRodLadder(game).map(r => r.level)).toEqual([3, 4, 5, 6, 7]);
+    expect(rows.map(r => r.power)).toEqual(rows.map(r => powerOfLevel(r.level)));
+    game.rod = 12;
+    const later = selectRodLadder(game);
+    expect(later.map(r => r.level)).toEqual([10, 11, 12, 13, 14, 15, 16]);
+    expect(later.map(r => r.state)).toEqual(['done', 'done', 'current', 'next', 'locked', 'locked', 'locked']);
+  });
+
+  it('배 구매 미리보기는 지금 탄 배 이름을 함께 준다 — 맨발이면 null', () => {
+    const game = newState();
+    const none = selectBoatPurchasePreview(game);
+    expect(none.kind === 'available' && none.currentName).toBeNull();
+    game.boat = 2;
+    const sail = selectBoatPurchasePreview(game);
+    expect(sail.kind === 'available' && sail.currentName).toBe(BOATS[1].name);
   });
 
   it('미끼 상점의 수량·보유량·총액·구매 가능 여부를 구성한다', () => {

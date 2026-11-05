@@ -1,5 +1,5 @@
 // 지명수배 카드 스토리 — 백엔드 없이 눈으로 확인한다.
-// 상태별 3종: 미발견(실루엣) / 발견(실물) / 납품 가능.
+// 상태별 4종: 미발견 / 발견 / 납품 가능 / 흔적 남음.
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import NamedCard from './NamedCard';
@@ -21,26 +21,26 @@ const game = (dex: GameState['dex']): GameState => ({ ...newState(), dex });
 
 export const Undiscovered: Story = {
   args: {
-    game: game({}), quest, canAccept: true, busy: false, progress: 0, accepted: false, ticketMins: null, ...handlers(),
+    game: game({}), quest, canAccept: true, reason: null, busy: false, materialName: '돌이 된 이빨', progress: 0, accepted: false, ticketMins: null, ...handlers(),
   },
 };
 
 export const Discovered: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 0, accepted: false, ticketMins: null, ...handlers(),
+    quest, canAccept: true, reason: null, busy: false, materialName: '돌이 된 이빨', progress: 0, accepted: false, ticketMins: null, ...handlers(),
   },
 };
 
 export const Deliverable: Story = {
   args: {
     game: game({ megalodon: { normal: { count: 1, maxSize: null, first: null } } }),
-    quest, canAccept: true, busy: false, progress: 1, accepted: true, ticketMins: null, ...handlers(),
+    quest, canAccept: true, reason: null, busy: false, materialName: '돌이 된 이빨', progress: 1, accepted: true, ticketMins: null, ...handlers(),
   },
 };
 
 export const Ticket: Story = {
   args: {
-    game: game({}), quest, canAccept: false, busy: false, progress: 0, accepted: true, ticketMins: 42, ...handlers(),
+    game: game({}), quest, canAccept: false, reason: null, busy: false, materialName: '돌이 된 이빨', progress: 0, accepted: true, ticketMins: 42, ...handlers(),
   },
 };

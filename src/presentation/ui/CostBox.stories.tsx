@@ -7,4 +7,4 @@ const meta: Meta<typeof CostBox> = { title: 'UI/CostBox', component: CostBox };
 export default meta;
 type Story = StoryObj<typeof CostBox>;
 
-export const Default: Story = { args: { children: <CostLine size="lg" have={12000} delta={-3000} /> } };
+export const Default: Story = { args: { children: <CostLine have={12000} delta={-3000} /> } };

@@ -27,6 +27,8 @@ export type BoatPurchasePreview =
     kind: 'available';
     next: Boat;
     openedSpot: Spot | undefined;
+    /** 지금 탄 배 이름. 맨발이면 null */
+    currentName: string | null;
     currentSpeed: number | null;
     /** 현재 배(맨발이면 도보 상한)와 다음 배의 가방 상한 — 구매 비교 표의 두 번째 축 */
     currentBagCap: number;
@@ -43,6 +45,7 @@ export function selectBoatPurchasePreview(game: GameState): BoatPurchasePreview 
     kind: 'available',
     next,
     openedSpot: SPOTS.find(spot => spot.boatTier === next.tier),
+    currentName: game.boat === 0 ? null : BOATS[game.boat - 1].name,
     currentSpeed: game.boat === 0 ? null : BOATS[game.boat - 1].speed,
     currentBagCap: bagCapacity(game.boat, game.bag),
     check: canBuyBoat(game),
@@ -65,18 +68,31 @@ export function selectBoatLadder(game: GameState): BoatLadderRow[] {
   }));
 }
 
-export interface RodLadderRow { level: number; stats: ReturnType<typeof rodStats>; cost: number; state: LadderState }
+export interface RodLadderRow {
+  level: number;
+  stats: ReturnType<typeof rodStats>;
+  /** 해역 요구 파워와 견주는 값 */
+  power: number;
+  /** 그 레벨로 올리는 비용 */
+  cost: number;
+  state: LadderState;
+}
 
-/** 낚싯대 사다리 — 상한이 없어 현재 ±2단계만 자른다. 각 행의 cost는 그 레벨로 올리는 비용 */
-export function selectRodLadder(game: GameState, span = 2): RodLadderRow[] {
-  const rows: RodLadderRow[] = [];
-  for (let level = Math.max(1, game.rod - span); level <= game.rod + span; level++) {
-    rows.push({
-      level, stats: rodStats(level), cost: level > 1 ? upgradeCost(level - 1) : 0,
+/** 낚싯대 목록에 앞서 보이는 지난 단계 수 */
+const ROD_LADDER_BEFORE = 2;
+/** 낚싯대 목록의 행 수 — 상한이 없어 지난 단계 둘, 현재, 그 뒤 단계로 고정 길이만 자른다 */
+const ROD_LADDER_ROWS = 7;
+
+/** 낚싯대 단계 목록 — 현재 레벨 앞 두 단계부터 일곱 행. 1레벨 아래로는 내려가지 않고 그만큼 뒤를 더 보인다 */
+export function selectRodLadder(game: GameState): RodLadderRow[] {
+  const first = Math.max(1, game.rod - ROD_LADDER_BEFORE);
+  return Array.from({ length: ROD_LADDER_ROWS }, (_, i) => {
+    const level = first + i;
+    return {
+      level, stats: rodStats(level), power: powerOfLevel(level), cost: level > 1 ? upgradeCost(level - 1) : 0,
       state: level < game.rod ? 'done' : level === game.rod ? 'current' : level === game.rod + 1 ? 'next' : 'locked',
-    });
-  }
-  return rows;
+    };
+  });
 }
 
 /** 배 구매 완료 토스트에 쓸 이름과 새로 열린 수역을 반환한다. */
