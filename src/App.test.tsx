@@ -388,7 +388,9 @@ describe('현상금 — 항구 수배판 진입', () => {
     seed({ location: { kind: 'base', id: 'harbor' } });
     render(<App />);
     clickFurniture('bounty');
-    expect(await screen.findByText('수배판 — 태평양')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('수배판')).toBeInTheDocument();
+    expect(within(dialog).getByText('태평양')).toBeInTheDocument();
   });
 });
 

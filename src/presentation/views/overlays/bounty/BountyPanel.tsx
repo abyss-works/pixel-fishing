@@ -4,12 +4,15 @@
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
 // 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
 // 본문을 흐리게 하고 조건 리스트를 덮는다.
+// 창은 탭이 있어 높이가 고정이다. 구역과 오늘 남은 클리어는 어느 탭에서나 의미가 있어 탭 위 고정 정보 줄에 두고,
+// 초기화 시각과 클리어 기준은 그 줄의 툴팁이다. 수주를 막는 이유(오프라인, 한도 소진, 다른 구역 수주)는 수주 버튼의 툴팁이다.
 import { useEffect, useState } from 'react';
 import { useTutorialTrigger } from '../../../../features/tutorial/service/tutorial';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
-import type { BountyPort } from '../../../../game/content/bounties.js';
+import type { BountyKind, BountyPort } from '../../../../game/content/bounties.js';
+import { zoneById } from '../../../../game/content/zones.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { questLabel, selectBountyPanelData } from '../../../../features/bounty/model/panel';
@@ -22,13 +25,39 @@ import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
 import Gated from '../../../ui/Gated';
-import Note from '../../../ui/Note';
+import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import TabBar from '../../../ui/TabBar';
+import Tip from '../../../ui/Tip';
 import { fmtGold, josa } from '../../../ui/format';
 import type { MessageTone, Notify } from '../../../ui/hud/messageFeed';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
+
+const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.';
+
+/** 고정 정보 줄: 구역, 오늘 남은 클리어(일반 의뢰, 네임드 토벌). 스냅샷이 오기 전에는 값 자리에 -를 둔다 */
+function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: {
+  zoneName: string; leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
+}) {
+  const left = (n: number | null, cap: number) => (n === null ? '-' : `${n}/${cap}`);
+  return (
+    <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
+      <b className="text-sm text-text">{zoneName}</b>
+      <span className="pl-3 border-l border-line text-text-dim">
+        <Tip text={<>보상을 받으면 클리어 1번이에요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
+      </span>
+      <span className="flex items-baseline gap-2">
+        <span className="text-text-dim">일반 의뢰</span>
+        <span className="pf-accent" aria-label="오늘 남은 일반 의뢰">{left(leftAll, dailyCap)}</span>
+      </span>
+      <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+        <span className="text-text-dim">네임드 토벌</span>
+        <span className="pf-accent" aria-label="오늘 남은 네임드 토벌">{left(leftNamed, namedDailyCap)}</span>
+      </span>
+    </Inset>
+  );
+}
 
 /** 라이선스 조건 목록 — 닫힌 게이트 위에 덮는다. 충족한 조건은 줄을 긋는다 */
 function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
@@ -75,10 +104,14 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
+    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, ticketMins, hasTicket,
     relic, relicOwned, relicMats,
   } = data;
+
+  /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
+  const reasonOf = (kind: BountyKind): string | null =>
+    loaded && snap === null ? OFFLINE_TEXT : notice[kind];
 
   const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
     const q = offers[d];
@@ -86,7 +119,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     const prog = progressOf(q.id);
     return (
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
-        canAccept={basicOpen && canTake} busy={busy}
+        canAccept={basicOpen && canTake} reason={reasonOf('general')} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
@@ -97,7 +130,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const namedQuest = offers.named;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      <BoardStatus zoneName={zoneById(zone)?.shortName ?? zone} leftAll={leftAll} leftNamed={leftNamed}
+                   dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
       <TabBar
         tabs={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },
@@ -107,33 +142,25 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         activeKey={screen}
         onSelect={setScreen}
       />
-      <p className="text-text-dim text-xs">
-        {leftAll === null ? '오늘 남은 클리어 –' : `오늘 남은 클리어 일반 ${leftAll}/${dailyCap} · 네임드 ${leftNamed}/${namedDailyCap}`}
-      </p>
-      <p className="text-text-dim text-xs">조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요. 보상을 받으면 클리어 1번이에요.</p>
-      {loaded && snap === null && (
-        <Note>오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.</Note>
-      )}
-      {screen === 'quests' && notice.general && <Note size="xs" className="my-0">{notice.general}</Note>}
-      {screen === 'named' && notice.named && <Note size="xs" className="my-0">{notice.named}</Note>}
+      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pf-scroll">
       {screen === 'quests' ? (
-        <div className="min-h-[26rem]">
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
-          <div className="grid grid-cols-3 gap-2 items-stretch">
-            <div className="h-full">{gradeCard('easy')}</div>
-            <div className="h-full">{gradeCard('normal')}</div>
-            <div className="h-full">{gradeCard('hard')}</div>
+          <div className="grid grid-cols-3 gap-2 items-stretch h-full">
+            {gradeCard('easy')}
+            {gradeCard('normal')}
+            {gradeCard('hard')}
           </div>
         </Gated>
-        </div>
       ) : screen === 'named' ? (
-        <div className="min-h-[26rem]">
+        <>
+        <div className="flex-1 min-h-0 flex flex-col">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           {namedQuest && (
             <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
-              canAccept={namedOpen && canTakeNamed} busy={busy}
+              canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
               progress={progressOf(namedQuest.id)} accepted={isAccepted(namedQuest.id)}
               ticketMins={hasTicket ? ticketMins : null}
+              materialName={relic?.materialName ?? null}
               onAccept={() => run(
                 { type: 'acceptQuest', questId: namedQuest.id, port },
                 `${josa(questLabel(namedQuest), '을/를')} 수주했어요.`)}
@@ -142,30 +169,32 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `토벌 보상으로 ${fmtGold(namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
           )}
         </Gated>
-        {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
-            권한 요청은 이 클릭 안에서 해야 브라우저가 묻는다 */}
-        {namedOpen && alertSetting.permission !== 'unsupported' && (
-          <CheckToggle className="mt-2" label="조우하면 알림 받기"
-            checked={alertSetting.active}
-            onChange={on => {
-              if (!on) { alertSetting.disable(); return; }
-              void alertSetting.enable().then(ok => {
-                if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
-              });
-            }} />
-        )}
         </div>
-      ) : (
-        <div className="min-h-[26rem]">
-          {relic && (
-            <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
-              materialCount={relicMats} busy={busy}
-              onExchange={() => run(
-                { type: 'exchangeArtifact', artifact: relic.id },
-                `${josa(relic.name, '을/를')} 손에 넣었어요!`, 'gold')} />
+        {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
+            권한 요청은 이 클릭 안에서 해야 브라우저가 묻는다. 체크가 없을 때도 줄 높이를 비워 둔다 */}
+        <div className="h-6 shrink-0 flex items-center">
+          {namedOpen && alertSetting.permission !== 'unsupported' && (
+            <CheckToggle label="조우하면 알림 받기"
+              checked={alertSetting.active}
+              onChange={on => {
+                if (!on) { alertSetting.disable(); return; }
+                void alertSetting.enable().then(ok => {
+                  if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
+                });
+              }} />
           )}
         </div>
+        </>
+      ) : (
+        relic && (
+          <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
+            materialCount={relicMats} busy={busy}
+            onExchange={() => run(
+              { type: 'exchangeArtifact', artifact: relic.id },
+              `${josa(relic.name, '을/를')} 손에 넣었어요!`, 'gold')} />
+        )
       )}
+      </div>
     </div>
   );
 }

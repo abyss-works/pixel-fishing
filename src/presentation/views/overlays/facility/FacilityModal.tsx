@@ -9,8 +9,7 @@ import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { BaseId } from '../../../../game/content/places';
-import { isBountyPort, zoneOfPort } from '../../../../game/content/bounties';
-import { zoneById } from '../../../../game/content/zones';
+import { isBountyPort } from '../../../../game/content/bounties';
 import BountyPanel from '../bounty/BountyPanel';
 import Button from '../../../ui/Button';
 import CostLine from '../../../ui/CostLine';
@@ -42,9 +41,14 @@ interface Props {
   onClose: () => void;
 }
 
+/** 수배판 창 높이: 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
+    좁은 화면에서는 내용 높이를 따른다 */
+const BOUNTY_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
+
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
 // 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
+// 수배판은 탭이 있는 창이라 680 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
 export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid }: Props) {
   const [busy, setBusy] = useState(false);
@@ -59,7 +63,8 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
-    <Modal layer="stage" xl={panel === 'bounty' || panel === 'rod' || panel === 'boat' || panel === 'shop'} onClose={onClose}>
+    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty'}
+           className={panel === 'bounty' ? BOUNTY_HEIGHT : undefined} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -90,7 +95,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           })} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
-        <ModalCard title={`수배판 — ${zoneById(zoneOfPort(base)!)!.shortName}`} onClose={onClose}>
+        <ModalCard title="수배판" onClose={onClose} className="flex-1">
           <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
       )}
