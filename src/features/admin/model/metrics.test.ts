@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   todayKST, lastNDays, fmtNum, fmtPct, fmtDT,
-  fillSeries, percentile, sumLast, eventSummary,
+  fillSeries, percentile, sumLast, eventSummary, EVENT_LABELS,
 } from './metrics';
 
 describe('날짜 축', () => {
@@ -80,6 +80,17 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
       .toBe('bait-rare ×10 −500G');
     expect(eventSummary('import', { gold: 2_340_000_000, fame: 100_000_000 }))
       .toBe('골드 23.4억 · 명성 1억');
+  });
+
+  it('관리자 조치는 조치한 관리자 id 앞부분을 보인다', () => {
+    const adminId = 'abcdef01-0000-0000-0000-000000000000';
+    expect(eventSummary('adminRestrict', { adminId })).toBe('관리자 abcdef01');
+    expect(eventSummary('adminUnrestrict', { adminId })).toBe('관리자 abcdef01');
+    expect(eventSummary('adminResetLink', { adminId, expiresAt: '2026-11-05T01:00:00.000Z' }))
+      .toBe('관리자 abcdef01 · 11-05 10:00까지');
+    expect(EVENT_LABELS.adminRestrict).toBe('관리자 제재');
+    expect(EVENT_LABELS.adminUnrestrict).toBe('관리자 제재 해제');
+    expect(EVENT_LABELS.adminResetLink).toBe('재설정 링크 발급');
   });
 
   it('알 수 없는 타입은 빈 요약 — 무음이 아니라 타입명은 피드에 이미 보인다', () => {

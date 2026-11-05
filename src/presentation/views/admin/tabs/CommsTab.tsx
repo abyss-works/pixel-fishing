@@ -12,8 +12,10 @@ const CONTEXT: Record<CommsSection, string> = {
   mail: '플레이어에게 우편을 보내고 읽음·받음을 확인해요. 보내기 전에 미리보기로 대상과 골드 합계를 확인해요.',
 };
 
-export default function CommsTab({ section, onSection }: {
+export default function CommsTab({ section, onSection, mailTo }: {
   section: CommsSection; onSection: (section: CommsSection) => void;
+  /** 우편 쓰기에 미리 넣을 받는 사람(계정 id). 다른 화면의 우편 보내기에서 넘어올 때만 있다 */
+  mailTo: string | null;
 }) {
   return (
     <TabPage title="소통" context={CONTEXT[section]}>
@@ -22,7 +24,7 @@ export default function CommsTab({ section, onSection }: {
                  activeKey={section} onSelect={onSection} />
       </div>
       {section === 'letters' && <LettersTab />}
-      {section === 'mail' && <MailTab />}
+      {section === 'mail' && <MailTab key={mailTo ?? ''} to={mailTo} />}
     </TabPage>
   );
 }

@@ -1,7 +1,8 @@
 // 명부 구역 — 전체 유저 명부와, 행을 눌러 여는 드릴다운을 제공한다.
-// 검색은 이메일·닉네임·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
-//   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인.
+// 검색은 이메일·닉네임·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보와 관리 조치를 보여준다:
+//   스냅샷 → 관리 조치(우편·제재·재설정 링크) → 액션 유형 요약 → 최근 이벤트 타임라인.
 import { useMemo, useState } from 'react';
+import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
@@ -9,11 +10,13 @@ import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import TextInput from '../../../ui/TextInput';
 import { cx } from '../../../ui/cx';
+import { useDialogs } from '../../../ui/useDialogs';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
 import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
@@ -22,7 +25,10 @@ import { boatNameOf } from '../../../../game/content/boats';
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
 
-export default function UsersTab() {
+export default function UsersTab({ onCompose }: {
+  /** 이 계정을 받는 사람으로 넣고 우편 쓰기를 연다 */
+  onCompose: (userId: string) => void;
+}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   // 유저 명부는 실시간·진행 탭과 같은 키를 쓴다 — 한 번 받은 명부를 함께 본다
@@ -34,6 +40,8 @@ export default function UsersTab() {
 
   const filtered = useMemo(() =>
     filterAdminUsers(users, query), [users, query]);
+  // 조치 뒤 다시 읽은 명부의 행을 보인다 — 선택할 때의 행은 제재 여부가 낡을 수 있다
+  const current = selected && (users.find(u => u.user_id === selected.user_id) ?? selected);
 
   return (
     <>
@@ -90,8 +98,8 @@ export default function UsersTab() {
       </Cell>
 
       {/* 상세 모달은 칸 밖에 둔다 — 오목한 칸의 clip-path 안에서는 화면 전체를 덮는 모달이 잘린다 */}
-      {selected &&
-        <UserDetail key={selected.user_id} user={selected} onClose={() => setSelected(null)} />}
+      {current &&
+        <UserDetail key={current.user_id} user={current} onClose={() => setSelected(null)} onCompose={onCompose} />}
     </>
   );
 }
@@ -101,8 +109,8 @@ export default function UsersTab() {
 // 조회 전 골격 — 상세는 열릴 때 바로 조회하므로 이 값은 한 프레임만 보인다
 const EMPTY_DETAIL: Awaited<ReturnType<typeof readAdminUserDetails>> = [[], []];
 
-function UserDetail({ user, onClose }: {
-  user: AdminUserRow; onClose: () => void;
+function UserDetail({ user, onClose, onCompose }: {
+  user: AdminUserRow; onClose: () => void; onCompose: (userId: string) => void;
 }) {
   // 드릴다운은 uid별 키라 유저를 바꿔 열면 이전 조회와 섞이지 않는다
   const { data, loading, error } =
@@ -113,78 +121,163 @@ function UserDetail({ user, onClose }: {
     () => selectAdminUserDetail(user.user_id, events, flags),
     [user.user_id, events, flags],
   );
+  // 확인 창은 모달의 형제로 그린다 — 모달 상자 안에 두면 상자의 스크롤 영역에 갇힌다
+  const { confirm, dialogs } = useDialogs();
 
   return (
-    <Modal layer="app" wide title={`유저 상세 — ${adminUserLabel(user)}`}
-           onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-3 gap-2">
-          <KpiTile label="골드" value={fmtNum(adminNumber(user.gold))} />
-          <KpiTile label="명성" value={fmtNum(adminNumber(user.fame))} />
-          <KpiTile label="배" value={boatNameOf(user.boat ?? 0)} hint={`T${user.boat ?? 0}`} />
-          <KpiTile label="낚싯대" value={`Lv${user.rod ?? '—'}`} />
-          <KpiTile label="7일 PERFECT" value={flag?.perfect_pct != null ? `${flag.perfect_pct}%` : '—'}
-                   hint={`30일 전체 평균 ${flag?.perfect_pct_global ?? '—'}%`} />
-          <KpiTile label="제재" value={user.restricted === true ? 'ON' : '—'}
-                   tone={user.restricted === true ? 'danger' : 'dim'} />
-        </div>
-
-        <Cell title="기본 정보" flush divided>
-          <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
-          <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />
-          <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />
-          <KeyValueRow label="연타 (간격 2초 미만, 7일)" value={
-            <span className={cx(flag && flag.fast_gap_7d > 0 && 'text-danger')}>{flag?.fast_gap_7d ?? 0}건</span>
-          } />
-        </Cell>
-
-        <Cell title="액션 유형 요약">
-          <div className="flex flex-wrap gap-1">
-            {byType.map(([type, count]) => (
-              <span key={type}
-                    className={cx('border rounded-sm px-1.5 py-0.5 text-2xs',
-                      RISKY_EVENT_TYPES.has(type)
-                        ? 'border-danger/50 text-danger' : 'border-line text-text-dim')}>
-                {EVENT_LABELS[type] ?? type} ×{count}
-              </span>
-            ))}
-            {byType.length === 0 && <span className="text-2xs text-text-dim">이벤트가 없어요.</span>}
+    <>
+      <Modal layer="app" wide title={`유저 상세 — ${adminUserLabel(user)}`}
+             onClose={onClose}>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-3 gap-2">
+            <KpiTile label="골드" value={fmtNum(adminNumber(user.gold))} />
+            <KpiTile label="명성" value={fmtNum(adminNumber(user.fame))} />
+            <KpiTile label="배" value={boatNameOf(user.boat ?? 0)} hint={`T${user.boat ?? 0}`} />
+            <KpiTile label="낚싯대" value={`Lv${user.rod ?? '—'}`} />
+            <KpiTile label="7일 PERFECT" value={flag?.perfect_pct != null ? `${flag.perfect_pct}%` : '—'}
+                     hint={`30일 전체 평균 ${flag?.perfect_pct_global ?? '—'}%`} />
+            <KpiTile label="제재" value={user.restricted === true ? 'ON' : '—'}
+                     tone={user.restricted === true ? 'danger' : 'dim'} />
           </div>
-          <Note size="2xs" className="my-0">최근 {EVENT_WINDOW}건을 기준으로 집계해요.</Note>
-        </Cell>
 
-        <Cell title="최근 이벤트 타임라인" flush>
-          {(loading || error || events.length === 0) && (
-            <div className="px-3 py-2">
-              <TabState loading={loading} error={error} empty={events.length === 0}
-                        emptyText="이벤트가 없어요." />
-            </div>
-          )}
-          {!loading && !error && events.length > 0 && (
-            <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line overflow-y-auto select-text">
-              {events.map((e, i) => (
-                <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
-                                             fastGaps.has(i) && 'bg-danger/10')}>
-                  <span className="text-2xs text-text-dim whitespace-nowrap w-[76px] shrink-0">
-                    {fmtDT(e.created_at)}
-                  </span>
-                  <span className={cx('pf-accent whitespace-nowrap',
-                                      RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
-                    {EVENT_LABELS[e.type] ?? e.type}
-                  </span>
-                  <span className="min-w-0 truncate text-text">
-                    {eventSummary(e.type, e.payload)}
-                  </span>
-                  {fastGaps.has(i) && <span className="ml-auto text-2xs text-danger shrink-0">연타?</span>}
-                </li>
+          <UserActions user={user} onCompose={onCompose} confirm={confirm} />
+
+          <Cell title="기본 정보" flush divided>
+            <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
+            <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />
+            <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />
+            <KeyValueRow label="연타 (간격 2초 미만, 7일)" value={
+              <span className={cx(flag && flag.fast_gap_7d > 0 && 'text-danger')}>{flag?.fast_gap_7d ?? 0}건</span>
+            } />
+          </Cell>
+
+          <Cell title="액션 유형 요약">
+            <div className="flex flex-wrap gap-1">
+              {byType.map(([type, count]) => (
+                <span key={type}
+                      className={cx('border rounded-sm px-1.5 py-0.5 text-2xs',
+                        RISKY_EVENT_TYPES.has(type)
+                          ? 'border-danger/50 text-danger' : 'border-line text-text-dim')}>
+                  {EVENT_LABELS[type] ?? type} ×{count}
+                </span>
               ))}
-            </ul>
-          )}
-        </Cell>
-      </div>
-    </Modal>
+              {byType.length === 0 && <span className="text-2xs text-text-dim">이벤트가 없어요.</span>}
+            </div>
+            <Note size="2xs" className="my-0">최근 {EVENT_WINDOW}건을 기준으로 집계해요.</Note>
+          </Cell>
+
+          <Cell title="최근 이벤트 타임라인" flush>
+            {(loading || error || events.length === 0) && (
+              <div className="px-3 py-2">
+                <TabState loading={loading} error={error} empty={events.length === 0}
+                          emptyText="이벤트가 없어요." />
+              </div>
+            )}
+            {!loading && !error && events.length > 0 && (
+              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line overflow-y-auto select-text">
+                {events.map((e, i) => (
+                  <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
+                                               fastGaps.has(i) && 'bg-danger/10')}>
+                    <span className="text-2xs text-text-dim whitespace-nowrap w-[76px] shrink-0">
+                      {fmtDT(e.created_at)}
+                    </span>
+                    <span className={cx('pf-accent whitespace-nowrap',
+                                        RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
+                      {EVENT_LABELS[e.type] ?? e.type}
+                    </span>
+                    <span className="min-w-0 truncate text-text">
+                      {eventSummary(e.type, e.payload)}
+                    </span>
+                    {fastGaps.has(i) && <span className="ml-auto text-2xs text-danger shrink-0">연타?</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Cell>
+        </div>
+      </Modal>
+      {dialogs}
+    </>
   );
 }
 
 // 사용자 이벤트 조회 창. 조회가 요청하는 건수(userEvents의 limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
 const EVENT_WINDOW = 300;
+
+// ---------- 관리 조치 ----------
+
+/** 우편 보내기, 제재·해제(확인을 거친다), 가입 계정의 비밀번호 재설정 링크 발급 */
+function UserActions({ user, onCompose, confirm }: {
+  user: AdminUserRow; onCompose: (userId: string) => void;
+  confirm: ReturnType<typeof useDialogs>['confirm'];
+}) {
+  const actions = useAdminUserActions();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const restricted = user.restricted === true;
+  const member = user.is_anonymous === false;
+
+  const run = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await work();
+    } catch (e) {
+      setFailure(String((e as { message?: unknown }).message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRestrict = async () => {
+    const ok = await confirm(restricted
+      ? { layer: 'app', title: '제재 해제', confirmLabel: '해제하기',
+          body: `${adminUserLabel(user)} 계정의 제재를 풀어요. 다시 게임을 진행할 수 있어요.` }
+      : { layer: 'app', title: '계정 제재', confirmLabel: '제재하기',
+          body: `${adminUserLabel(user)} 계정의 게임 진행을 막아요. 자산과 기록은 그대로 남고, 나중에 해제할 수 있어요.` });
+    if (ok) await run(() => actions.restrict(user.user_id, !restricted));
+  };
+
+  const issueLink = () => run(async () => {
+    setCopied(false);
+    setLink(await actions.resetLink(user.user_id));
+  });
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+    } catch {
+      setFailure('복사하지 못했어요. 주소 칸을 눌러 직접 복사해 주세요.');
+    }
+  };
+
+  return (
+    <Cell title="관리 조치">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => onCompose(user.user_id)}>우편 보내기</Button>
+        <Button size="sm" disabled={busy || user.restricted === null}
+                onClick={() => void toggleRestrict()}>{restricted ? '제재 해제' : '제재'}</Button>
+        <Button size="sm" disabled={busy || !member} onClick={() => void issueLink()}>재설정 링크 만들기</Button>
+      </div>
+      {user.restricted === null && <Note size="2xs" className="my-0">저장 상태가 없는 계정은 제재할 수 없어요.</Note>}
+      {!member && <Note size="2xs" className="my-0">게스트 계정은 비밀번호가 없어서 재설정 링크를 만들 수 없어요.</Note>}
+      {failure && <Note tone="warn" className="my-0">{failure}</Note>}
+      {link && (
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-2">
+            <TextInput readOnly value={link.url} aria-label="재설정 링크" className="min-w-0 flex-1 font-mono text-xs"
+                       onFocus={e => e.currentTarget.select()} />
+            <Button size="sm" onClick={() => void copy()}>{copied ? '복사됨' : '복사'}</Button>
+          </div>
+          <Note size="2xs" className="my-0">
+            {`${fmtDT(link.expiresAt)}까지 한 번 쓸 수 있어요. 메일은 보내지 않았어요. 플레이어에게 직접 전해 주세요.`}
+          </Note>
+        </div>
+      )}
+    </Cell>
+  );
+}

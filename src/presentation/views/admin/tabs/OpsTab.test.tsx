@@ -39,5 +39,8 @@ describe('운영 탭', () => {
       expect(within(row).getByText(label)).toBeInTheDocument();
     }
     expect(within(catalog).getByText(/이벤트를 남기지 않아요/)).toBeInTheDocument();
+    for (const type of ['adminRestrict', 'adminUnrestrict', 'adminResetLink']) {
+      expect(within(catalog).getByText(type)).toBeInTheDocument();
+    }
   });
 });

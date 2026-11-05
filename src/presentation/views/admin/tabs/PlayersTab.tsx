@@ -12,8 +12,10 @@ const CONTEXT: Record<PlayersSection, string> = {
   abuse: '연타와 PERFECT 비율, 제재 현황을 확인해요.',
 };
 
-export default function PlayersTab({ section, onSection }: {
+export default function PlayersTab({ section, onSection, onCompose }: {
   section: PlayersSection; onSection: (section: PlayersSection) => void;
+  /** 이 계정을 받는 사람으로 넣고 우편 쓰기를 연다 */
+  onCompose: (userId: string) => void;
 }) {
   return (
     <TabPage title="플레이어" context={CONTEXT[section]}>
@@ -21,7 +23,7 @@ export default function PlayersTab({ section, onSection }: {
         <SubTabs items={ADMIN_SECTIONS.players.map(s => ({ key: s.key, label: s.label }))}
                  activeKey={section} onSelect={onSection} />
       </div>
-      {section === 'roster' && <UsersTab />}
+      {section === 'roster' && <UsersTab onCompose={onCompose} />}
       {section === 'abuse' && <AntiAbuseTab />}
     </TabPage>
   );

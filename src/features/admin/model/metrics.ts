@@ -96,6 +96,9 @@ export const EVENT_LABELS: Record<string, string> = {
   adminSet: '관리자 스탯 수정',
   debug: '개발 도구 명령',
   import: '이사 코드 반입',
+  adminRestrict: '관리자 제재',
+  adminUnrestrict: '관리자 제재 해제',
+  adminResetLink: '재설정 링크 발급',
 };
 
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -136,6 +139,8 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'debug': return `${s(pay.command)} ${JSON.stringify(pay.args ?? {})}`;
     case 'adminSet': return `골드=${fmtNum(Number(pay.gold ?? NaN))} 명성=${fmtNum(Number(pay.fame ?? NaN))}`;
     case 'import': return `골드 ${fmtNum(Number(pay.gold ?? 0))} · 명성 ${fmtNum(Number(pay.fame ?? 0))}`;
+    case 'adminRestrict': case 'adminUnrestrict': return `관리자 ${s(pay.adminId).slice(0, 8)}`;
+    case 'adminResetLink': return `관리자 ${s(pay.adminId).slice(0, 8)} · ${fmtDT(s(pay.expiresAt))}까지`;
     case 'autoRelease': {
       const uids = Array.isArray(pay.uids) ? pay.uids.length : 0;
       return `${uids}마리 놓아줌 (${s(pay.reason)})`;

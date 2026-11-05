@@ -26,7 +26,10 @@ type TargetKind = 'users' | 'all';
 type Plan = Awaited<ReturnType<typeof writeAdminMail>>;
 const EMPTY: Awaited<ReturnType<typeof readAdminMails>> = [[], []];
 
-export default function MailTab() {
+export default function MailTab({ to = null }: {
+  /** 받는 사람 입력에 미리 넣을 계정 id */
+  to?: string | null;
+}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const writeMail = useAdminMailWriter();
@@ -37,7 +40,7 @@ export default function MailTab() {
   const [kind, setKind] = useState<TargetKind>('users');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [recipientText, setRecipientText] = useState('');
+  const [recipientText, setRecipientText] = useState(() => (to ? addRecipient('', to) : ''));
   const [search, setSearch] = useState('');
   const [allGold, setAllGold] = useState('0');
   const [plan, setPlan] = useState<Plan | null>(null);

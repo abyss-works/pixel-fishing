@@ -36,5 +36,5 @@ export type {
   RankingBoardId, RankingRow, RankingBoard, MailItem,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from './types';

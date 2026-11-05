@@ -36,6 +36,12 @@ export const readAdminMails = () => Promise.all([
 /** 우편 미리보기(쓰지 않음) 또는 보내기 */
 export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest) => api.admin.mail(op, request);
 
+/** 계정 제재(true) 또는 해제(false) */
+export const writeAdminRestrict = (userId: string, restricted: boolean) => api.admin.restrict(userId, restricted);
+
+/** 가입 계정의 비밀번호 재설정 링크 발급 */
+export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userId);
+
 export const readAdminMetrics = (days: number) => Promise.all([
   api.admin.dailyActive(days),
   api.admin.retention(),

@@ -5,7 +5,7 @@
 // 탐색은 탭 일곱 개다. 개요 · 실시간 · 플레이어(명부·이상탐지) · 소통(편지·우편)
 // · 경제·진행(경제·진행·활동) · 밸런스 · 운영. 괄호 안은 탭 안의 구역이고 해시에 `#/admin/<탭>/<구역>`으로 담긴다.
 // 데이터 접근은 **기능 계층**(platform API 조회를 기능별로 조합) 하나로
-// 모이고, 쓰기 액션은 존재하지 않는다(읽기 전용). 접근 판정은 AdminAuthProvider가 1회 해석.
+// 모인다. 쓰기는 우편 보내기와 사용자 상세의 관리 조치(제재·해제, 재설정 링크)뿐이다. 접근 판정은 AdminAuthProvider가 1회 해석.
 //
 // UI 정책(사용자 결정): 게이트는 내용을 교체하지 않는다 — 상단 배너 + 빈 골격(지표 '—',
 // 빈 표)을 항상 그려서 "무엇이 어디에 올 화면인가"를 로컬에서도 보여준다. 탭은 granted일 때만
@@ -44,19 +44,23 @@ const canonicalize = (route: AdminRoute) => {
 
 export default function AdminApp() {
   const [route, setRoute] = useState<AdminRoute>(() => parseAdminHash(window.location.hash));
+  // 우편 쓰기에 미리 넣을 받는 사람 — 명부·편지의 우편 보내기가 정하고, 다른 곳으로 옮기면 비운다
+  const [mailTo, setMailTo] = useState<string | null>(null);
   useEffect(() => {
     // 처음 열 때 주소를 정식 해시로 맞춘다 — 잘못된 해시는 여기서 기본 화면으로 옮겨진다
     canonicalize(parseAdminHash(window.location.hash));
     const onHash = () => {
       const next = parseAdminHash(window.location.hash);
       setRoute(next);
+      setMailTo(null);
       canonicalize(next);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const go = (next: AdminRoute) => {
+  const go = (next: AdminRoute, to: string | null = null) => {
     setRoute(next);
+    setMailTo(to);
     const hash = adminHash(next);
     if (window.location.hash !== hash) {
       try { window.history.pushState(null, '', hash); } catch { /* 무해 */ }
@@ -64,6 +68,8 @@ export default function AdminApp() {
   };
   // 이미 열린 탭을 다시 누르면 그대로 둔다 — 탭 안의 구역은 구역 탭이 바꾼다
   const selectTab = (tab: AdminTab) => { if (tab !== route.tab) go(adminRouteOf(tab)); };
+  // 우편 보내기 — 소통 탭의 우편 구역을 열고 그 계정을 받는 사람으로 넣는다
+  const compose = (userId: string) => go({ tab: 'comms', section: 'mail' }, userId);
 
   const tabs = ADMIN_TABS.map(t => ({
     key: t.key, label: t.label, icon: <PixelIcon glyph={TAB_GLYPH[t.key]} size={16} />,
@@ -91,9 +97,10 @@ export default function AdminApp() {
           {route.tab === 'overview' && <OverviewTab />}
           {route.tab === 'live' && <LiveTab />}
           {route.tab === 'players' &&
-            <PlayersTab section={route.section} onSection={section => go({ tab: 'players', section })} />}
+            <PlayersTab section={route.section} onSection={section => go({ tab: 'players', section })}
+                        onCompose={compose} />}
           {route.tab === 'comms' &&
-            <CommsTab section={route.section} onSection={section => go({ tab: 'comms', section })} />}
+            <CommsTab section={route.section} onSection={section => go({ tab: 'comms', section })} mailTo={mailTo} />}
           {route.tab === 'analysis' &&
             <AnalysisTab section={route.section} onSection={section => go({ tab: 'analysis', section })} />}
           {route.tab === 'balance' && <BalanceTab />}

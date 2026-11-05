@@ -98,4 +98,16 @@ describe('MailTab', () => {
       target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }, { userId: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', gold: 0 }] },
     }));
   });
+
+  it('다른 화면의 우편 보내기로 열리면 그 계정을 받는 사람으로 넣어 둔다', async () => {
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+          <MailTab to={USER} />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+    expect((screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement).value).toBe(`${USER} 0`);
+    expect(await screen.findByText('받는 사람 1명: friend@example.com · 바다친구')).toBeTruthy();
+  });
 });
