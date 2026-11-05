@@ -54,6 +54,15 @@ export interface MailItem {
   createdAt: string; readAt: string | null; claimedAt: string | null;
 }
 
+/** 친구 목록 한 줄 — 친구, 받은 요청, 보낸 요청. 접속 여부와 바다는 친구에게만 붙는다 */
+export interface FriendItem {
+  uid: string; nick: string | null; state: 'friend' | 'incoming' | 'outgoing';
+  lastActiveAt: string | null; online: boolean; region: string | null;
+}
+export type FriendOp = { op: 'request'; nickname: string } | { op: 'accept' | 'remove'; uid: string };
+/** 친구 요청 결과 — 실패는 서버 오류 코드(not-found, self, account-only 등) */
+export type FriendOpResult = { ok: true; result: string } | { ok: false; error: string };
+
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
@@ -79,6 +88,8 @@ export interface BountySnapshot {
 export interface AdminUserRow {
   user_id: string;
   email: string | null;
+  /** 닉네임(profiles). 정하지 않았으면 null */
+  nickname: string | null;
   is_anonymous: boolean | null;
   signed_up_at: string | null;
   last_sign_in_at: string | null;
@@ -117,20 +128,14 @@ export interface AdminSpamFlagRow {
   user_id: string; catches_7d: number; fast_gap_7d: number;
   perfect_pct: number | null; perfect_pct_global: number | null;
 }
-export interface AdminImportLogRow {
-  id: number; user_id: string; created_at: string;
-  gold: number | string | null; fame: number | string | null;
-}
-export interface AdminDexMismatchRow {
-  user_id: string; fish_id: string; form: string;
-  dex_count: number; event_count: number; missing_events: number;
-}
 export interface AdminEventRow {
   id: number; user_id: string; type: string;
   payload: Record<string, unknown>; created_at: string;
 }
 export interface AdminLetterRow {
   id: number; user_id: string; text: string; created_at: string;
+  /** 관리자가 처리 표시한 시각. 처리 전이면 null */
+  handled_at: string | null;
 }
 /** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
 export interface AdminChatReportRow {
@@ -198,6 +203,9 @@ export interface AdminMailPlan {
   sent?: number;
 }
 
+/** 관리자 — 비밀번호 재설정 링크. url은 게임의 재설정 착지 주소이고 expiresAt까지 쓸 수 있다 */
+export interface AdminResetLink { url: string; expiresAt: string }
+
 export interface AdminApi {
   access(): Promise<AdminAccessResult>;
   users(): Promise<AdminUserRow[]>;
@@ -207,8 +215,6 @@ export interface AdminApi {
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
   catchQuality(days: number): Promise<AdminCatchQualityRow[]>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
-  imports(): Promise<AdminImportLogRow[]>;
-  dexMismatch(): Promise<AdminDexMismatchRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
@@ -218,6 +224,12 @@ export interface AdminApi {
   sentMails(): Promise<AdminSentMailRow[]>;
   /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan>;
+  /** 계정 제재(true) 또는 해제(false). 저장 상태가 없는 계정은 실패한다 */
+  restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }>;
+  /** 가입 계정의 비밀번호 재설정 링크를 만든다. 메일은 보내지 않는다 */
+  resetLink(userId: string): Promise<AdminResetLink>;
+  /** 편지 처리 표시(true) 또는 취소(false) */
+  letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */

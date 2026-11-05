@@ -55,31 +55,16 @@ describe('관리자 대시보드 탐색', () => {
   const tabNames = () => within(screen.getByRole('navigation', { name: '대시보드 섹션' }))
     .getAllByRole('button').map(b => b.textContent?.trim());
 
-  it('탭은 여섯 개다 — 개요 · 라이브 · 플레이어 · 경제·진행 · 밸런스 · 운영', () => {
+  it('탭은 일곱 개다 — 개요 · 실시간 · 플레이어 · 소통 · 경제·진행 · 밸런스 · 운영', () => {
     open('#/admin/overview');
-    expect(tabNames()).toEqual(['개요', '라이브', '플레이어', '경제·진행', '밸런스', '운영']);
+    expect(tabNames()).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '운영']);
     expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
   });
 
-  it('옛 해시는 합친 탭의 구역으로 열리고 주소도 정식 해시로 바뀐다', () => {
-    const cases: [string, string, string | null][] = [
-      ['#/admin/users', '플레이어', '명부'],
-      ['#/admin/letters', '플레이어', '편지'],
-      ['#/admin/antiabuse', '플레이어', '이상탐지'],
-      ['#/admin/metrics', '경제·진행', '활동'],
-      ['#/admin/economy', '경제·진행', '경제'],
-      ['#/admin/progression', '경제·진행', '진행'],
-      ['#/admin/fish', '밸런스', null],
-    ];
-    for (const [old, title, section] of cases) {
-      open(old);
-      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
-      if (section) expect(screen.getByRole('button', { name: section, pressed: true })).toBeInTheDocument();
-      expect(window.location.hash).not.toBe(old);
-      cleanup();
-    }
-    open('#/admin/fish');
-    expect(window.location.hash).toBe('#/admin/balance');
+  it('모르는 해시는 개요로 열리고 주소도 정식 해시로 바뀐다', () => {
+    open('#/admin/users');
+    expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/admin/overview');
   });
 
   it('탭을 누르면 그 탭의 기본 구역 해시로 간다', () => {
@@ -89,6 +74,9 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('heading', { name: '경제·진행' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
     expect(window.location.hash).toBe('#/admin/players/roster');
+    fireEvent.click(screen.getByRole('button', { name: '소통' }));
+    expect(window.location.hash).toBe('#/admin/comms/letters');
+    expect(screen.getByRole('heading', { name: '소통' })).toBeInTheDocument();
   });
 
   it('구역 탭을 누르면 해시가 구역까지 바뀐다', () => {
@@ -99,9 +87,9 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
   });
 
-  it('주소의 해시가 바뀌면 화면이 따라가고, 옛 해시도 새 자리로 옮긴다', async () => {
+  it('주소의 해시가 바뀌면 화면이 따라간다', async () => {
     open('#/admin/overview');
-    act(() => { window.location.hash = '#/admin/antiabuse'; });
+    act(() => { window.location.hash = '#/admin/players/abuse'; });
     await waitFor(() => expect(window.location.hash).toBe('#/admin/players/abuse'));
     expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
   });

@@ -1,11 +1,16 @@
 // 플레이어 탭 — granted에서 명부·이상탐지 구역이 같은 조회로 채워지고, 상세 모달이 칸 밖에 뜨는지 확인한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import PlayersTab from './PlayersTab';
 
 const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
+const mocks = vi.hoisted(() => ({
+  restrict: vi.fn(async (_userId: string, restricted: boolean) => ({ restricted })),
+  resetLink: vi.fn(async () => ({ url: 'https://game.example/?token=abcDEF0123456789abcdEFGH', expiresAt: '2026-10-07T01:00:00Z' })),
+  compose: vi.fn(),
+}));
 
 vi.mock('../../../../platform/api', () => ({
   api: {
@@ -20,28 +25,23 @@ vi.mock('../../../../platform/api', () => ({
         user_id: 'aaaaaaaa-0000-0000-0000-000000000000', catches_7d: 40, fast_gap_7d: 12,
         perfect_pct: 90, perfect_pct_global: 30,
       }]),
-      imports: vi.fn(async () => [{
-        id: 1, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', gold: 500, fame: 5, created_at: '2026-10-06T00:00:00Z',
-      }]),
-      dexMismatch: vi.fn(async () => [{
-        user_id: 'aaaaaaaa-0000-0000-0000-000000000000', fish_id: 'f1', form: 'base',
-        dex_count: 3, event_count: 1, missing_events: 2,
-      }]),
       userEvents: vi.fn(async () => [{
         id: 7, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', type: 'sell',
         payload: { count: 2, gold: 300 }, created_at: '2026-10-07T00:00:00Z',
       }]),
+      restrict: mocks.restrict,
+      resetLink: mocks.resetLink,
     },
   },
 }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-function show(section: 'roster' | 'abuse' | 'letters') {
+function show(section: 'roster' | 'abuse') {
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID }}>
-        <PlayersTab section={section} onSection={() => {}} />
+        <PlayersTab section={section} onSection={() => {}} onCompose={mocks.compose} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
   );
@@ -57,8 +57,8 @@ describe('플레이어 탭', () => {
     const dialog = await screen.findByRole('dialog', { name: '유저 상세 — friend@example.com' });
     // 오목한 칸(pf-notch)은 clip-path로 안쪽을 잘라서, 그 안에 모달을 두면 화면 전체를 덮지 못한다
     expect(dialog.closest('.pf-notch')).toBeNull();
-    expect(await within(dialog).findByText('도감 ↔ 이벤트 대조')).toBeInTheDocument();
-    expect(within(dialog).getByText('판매')).toBeInTheDocument();
+    expect(await within(dialog).findByText('판매')).toBeInTheDocument();
+    expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
   it('이상탐지 구역 — 신호 건수 지표와 제재 계정이 같은 조회로 채워진다', async () => {
@@ -68,11 +68,35 @@ describe('플레이어 탭', () => {
       .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
     expect(await within(tile('연타 유저')).findByText('1')).toBeInTheDocument();
     expect(within(tile('PERFECT 이상치')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('이사 코드 반입')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('도감 차액')).getByText('1')).toBeInTheDocument();
     expect(within(tile('제재 계정')).getByText('1')).toBeInTheDocument();
     // 제재 계정 칸은 명부 라벨과 지표 줄(골드·명성·마지막 행동)을 함께 보인다
     expect(screen.getAllByText('friend@example.com').length).toBeGreaterThan(0);
     expect(screen.getByText(/골드 1,200 · 명성 30 · 마지막 행동/)).toBeInTheDocument();
+  });
+
+  it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 재설정 링크 발급과 복사 칸', async () => {
+    show('roster');
+    fireEvent.click(await screen.findByText('friend@example.com'));
+    const dialog = await screen.findByRole('dialog', { name: '유저 상세 — friend@example.com' });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '우편 보내기' }));
+    expect(mocks.compose).toHaveBeenCalledWith(UID);
+
+    // 제재 계정이라 해제 버튼이 보이고, 확인 창을 닫으면 보내지 않는다
+    fireEvent.click(within(dialog).getByRole('button', { name: '제재 해제' }));
+    await screen.findByRole('button', { name: '해제하기' });
+    fireEvent.click(screen.getAllByRole('button', { name: '닫기' }).at(-1)!);
+    expect(screen.queryByRole('button', { name: '해제하기' })).toBeNull();
+    expect(mocks.restrict).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: '제재 해제' }));
+    fireEvent.click(await screen.findByRole('button', { name: '해제하기' }));
+    await waitFor(() => expect(mocks.restrict).toHaveBeenCalledWith(UID, false));
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '재설정 링크 만들기' }));
+    const field = await within(dialog).findByLabelText('재설정 링크');
+    expect(field).toHaveValue('https://game.example/?token=abcDEF0123456789abcdEFGH');
+    expect(mocks.resetLink).toHaveBeenCalledWith(UID);
+    expect(within(dialog).getByRole('button', { name: '복사' })).toBeInTheDocument();
+    expect(within(dialog).getByText(/메일은 보내지 않았어요/)).toBeInTheDocument();
   });
 });

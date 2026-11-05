@@ -11,14 +11,11 @@ export const readAdminOverview = (days: number) => Promise.all([
   api.admin.catchQuality(days),
   api.admin.recentEvents(),
   api.admin.spamFlags(),
-  api.admin.imports(),
 ]);
 
 export const readAdminAntiAbuse = () => Promise.all([
   api.admin.users(),
   api.admin.spamFlags(),
-  api.admin.imports(),
-  api.admin.dexMismatch(),
 ]);
 
 export const readAdminEconomy = (days: number) => Promise.all([
@@ -44,6 +41,15 @@ export const readAdminMails = () => Promise.all([
 /** 우편 미리보기(쓰지 않음) 또는 보내기 */
 export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest) => api.admin.mail(op, request);
 
+/** 계정 제재(true) 또는 해제(false) */
+export const writeAdminRestrict = (userId: string, restricted: boolean) => api.admin.restrict(userId, restricted);
+
+/** 가입 계정의 비밀번호 재설정 링크 발급 */
+export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userId);
+
+/** 편지 처리 표시 또는 취소 */
+export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
+
 export const readAdminMetrics = (days: number) => Promise.all([
   api.admin.dailyActive(days),
   api.admin.retention(),
@@ -51,9 +57,7 @@ export const readAdminMetrics = (days: number) => Promise.all([
 
 export const readAdminUserDetails = (uid: string) => Promise.all([
   api.admin.userEvents(uid, 300),
-  api.admin.dexMismatch(),
   api.admin.spamFlags(),
-  api.admin.imports(),
 ]);
 
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */

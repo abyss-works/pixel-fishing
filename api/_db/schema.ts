@@ -70,6 +70,7 @@ export const letters = pgTable('letters', {
   userId: uuid('user_id').notNull(),
   text: text('text').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
+  handledAt: at('handled_at'),
 });
 
 export const coupons = pgTable('coupons', {

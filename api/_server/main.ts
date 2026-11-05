@@ -9,6 +9,7 @@ import action from '../action.js';
 import admin from '../admin.js';
 import { chatHandler } from '../chat.js';
 import mail from '../mail.js';
+import friends from '../friends.js';
 import me from '../me.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
@@ -16,6 +17,7 @@ import purgeAnon from '../cron/purge-anon.js';
 import { appAuth, sessionOf } from '../_auth/session.js';
 import { settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
+import { providePresence } from './livePresence.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
@@ -30,6 +32,7 @@ const routes: Record<string, NodeHandler> = {
   // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
   '/api/chat': chatHandler((uid, ids) => live.setBlocked(uid, ids)),
   '/api/mail': mail,
+  '/api/friends': friends,
   '/api/me': me,
   '/api/rank': rank,
   '/api/cron/archive': archive,
@@ -70,6 +73,8 @@ const live = attachLive(server, {
     blocked: (uid) => blockedIds(database().db, uid),
   },
 });
+
+providePresence(uid => live.presenceOf(uid));
 
 process.on('SIGTERM', () => {
   live.close();

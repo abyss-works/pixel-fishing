@@ -6477,6 +6477,7 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
     "letters": [
       {
         "created_at": "<now>",
+        "handled_at": null,
         "text": "안녕하세요",
         "user_id": "<user>",
       },

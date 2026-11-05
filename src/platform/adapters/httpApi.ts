@@ -67,9 +67,8 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
+  AdminCatchQualityRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from '../api/types';
 
 /** 서버 읽기 함수에 조회 하나를 요청한다. 응답이 실패면(세션이 없으면 401) 던진다 */
@@ -84,18 +83,18 @@ async function readAdmin<T>(query: string, params: Record<string, string | numbe
   return await res.json() as T;
 }
 
-/** 관리자 쓰기 — 우편 보내기. 응답이 실패면(세션이 없으면 401) 던진다 */
-async function writeAdminMail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
-  const res = await fetch('/api/admin?q=mail', {
+/** 관리자 쓰기 하나를 POST로 보낸다. 응답이 실패면(세션이 없으면 401) 작업 이름과 상태를 담아 던진다 */
+async function writeAdmin<T>(query: string, body: unknown, label: string): Promise<T> {
+  const res = await fetch(`/api/admin?q=${query}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ op, request }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
-    throw new Error(`우편 ${op} 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+    const code = await res.json().then((b: { error?: unknown }) => b.error, () => undefined);
+    throw new Error(`${label} 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
   }
-  return await res.json() as AdminMailPlan;
+  return await res.json() as T;
 }
 
 class HttpAdmin implements AdminApi {
@@ -124,12 +123,6 @@ class HttpAdmin implements AdminApi {
   spamFlags(): Promise<AdminSpamFlagRow[]> {
     return readAdmin('spamFlags');
   }
-  imports(): Promise<AdminImportLogRow[]> {
-    return readAdmin('imports');
-  }
-  dexMismatch(): Promise<AdminDexMismatchRow[]> {
-    return readAdmin('dexMismatch');
-  }
   recentEvents(): Promise<AdminEventRow[]> {
     return readAdmin('recentEvents');
   }
@@ -143,7 +136,16 @@ class HttpAdmin implements AdminApi {
     return readAdmin('mails');
   }
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
-    return writeAdminMail(op, request);
+    return writeAdmin('mail', { op, request }, `우편 ${op}`);
+  }
+  restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }> {
+    return writeAdmin('restrict', { userId, restricted }, restricted ? '제재' : '제재 해제');
+  }
+  resetLink(userId: string): Promise<AdminResetLink> {
+    return writeAdmin('resetLink', { userId }, '재설정 링크 발급');
+  }
+  letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }> {
+    return writeAdmin('letterHandled', { letterId, handled }, '편지 처리 표시');
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
