@@ -357,10 +357,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
       const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag));
-      const released: ReleasedFish[] = overflow.map(uid => {
-        const i = caught.bag.find(b => b.uid === uid)!;
+      const gone = overflow.map(uid => caught.bag.find(b => b.uid === uid)!);
+      const released: ReleasedFish[] = gone.map(i => {
         const f = instanceFish(i);
-        return { uid, name: f ? formName(f, i.form) : i.fishId };
+        return { uid: i.uid, name: f ? formName(f, i.form) : i.fishId };
       });
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
@@ -373,7 +373,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
       if (overflow.length > 0) {
-        events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full' } });
+        // fish는 놓아준 개체의 어종·폼 — 놓친 가치를 셀 수 있게 uids 옆에 덧붙인다
+        events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+          fish: gone.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
       }
       const next = { ...takeItem(release(caught, overflow), bait?.id ?? ''), pity: drawn.pity, namedPity: named.pity };
       return {

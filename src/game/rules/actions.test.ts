@@ -118,6 +118,8 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.writes.instancesRemoved).toEqual([releasedUid]);
     expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
     expect(out.events[1].payload).toMatchObject({ uids: [releasedUid], reason: 'bag-full' });
+    // 놓아준 개체의 어종과 폼을 함께 남긴다 — 방치 결과 보고가 놓친 가치를 센다
+    expect(out.events[1].payload).toMatchObject({ fish: [{ uid: releasedUid, fishId: 'crucian', form: 'normal' }] });
 
     // 명성·도감은 방생해도 남는다 — 잡은 사실이 사라지는 게 아니다
     expect(out.state.fame).toBeGreaterThan(0);
