@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { FRIEND_ERROR_TEXT, friendStatusText } from '../../../../features/friends/model/friends';
 import type { FriendItem } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
+import { useNicknameSuggestions } from '../../../../features/friends/service/useNicknameSuggestions';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
@@ -12,10 +13,12 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Panel from '../../../ui/Panel';
+import SelectList from '../../../ui/SelectList';
 import TextInput from '../../../ui/TextInput';
 
 // 친구 창 — 게임 스테이지 안에 뜬다. 왼쪽은 닉네임으로 요청하기와 받은·보낸 요청, 오른쪽은 친구 목록이다.
 // 친구에게는 접속 중인지와 있는 곳, 아니면 마지막 행동이 얼마나 지났는지 보인다.
+// 닉네임을 치는 동안 앞부분이 같은 계정 유저를 후보로 보이고, 후보를 고르면 입력을 그 이름으로 채운다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
 
 export default function FriendsModal({ setToast, onClose }: { setToast: Notify; onClose: () => void }) {
@@ -25,6 +28,8 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<FriendItem | null>(null);
+  const suggestions = useNicknameSuggestions(nickname)
+    .filter(p => p.nickname.toLowerCase() !== nickname.trim().toLowerCase());
 
   const run = async (op: Parameters<typeof act>[0], done: (result: string) => void) => {
     setBusy(true);
@@ -67,6 +72,11 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
                          onChange={e => setNickname(e.target.value)} aria-label="친구 닉네임" placeholder="닉네임" />
                   <Button type="submit" size="sm" variant="primary">요청</Button>
                 </div>
+                {suggestions.length > 0 && (
+                  <SelectList label="닉네임 후보" items={suggestions} keyOf={p => p.uid} selectedKey=""
+                              onSelect={key => { setNickname(suggestions.find(p => p.uid === key)?.nickname ?? nickname); setError(null); }}
+                              renderItem={p => <span className="text-sm">{p.nickname}</span>} />
+                )}
                 {error && <Note tone="warn">{error}</Note>}
               </form>
               {groups && groups.incoming.length > 0 && (

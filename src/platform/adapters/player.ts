@@ -18,3 +18,11 @@ export async function readPlayer(uid: string): Promise<PublicProfile | null> {
   if (!res.ok) throw new AppError('network', 'player read failed', { status: res.status });
   return await res.json() as PublicProfile;
 }
+
+/** 친구 요청 닉네임 자동완성 후보 — 앞부분이 같은 계정 유저. 클라우드 미설정이면 빈 목록이다. 그 밖의 실패는 던진다 */
+export async function searchPlayers(prefix: string): Promise<{ uid: string; nickname: string }[]> {
+  if (!isCloud) return [];
+  const res = await fetch(`/api/players?nickname=${encodeURIComponent(prefix)}`);
+  if (!res.ok) throw new AppError('network', 'player search failed', { status: res.status });
+  return ((await res.json()) as { players: { uid: string; nickname: string }[] }).players;
+}
