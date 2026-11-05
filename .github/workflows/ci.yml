@@ -5,8 +5,9 @@ on:
     branches: [main, dev]
   pull_request:
 
+# 검사는 서로 기다리지 않도록 세 작업으로 나눈다. 이미지 작업은 셋이 모두 통과해야 시작한다.
 jobs:
-  check:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,15 +18,37 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      # 실제 Postgres 테스트 — 호스팅 러너의 Docker로 Supabase Postgres 컨테이너를 띄운다
+
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 실제 Postgres 테스트 — 호스팅 러너의 Docker로 Postgres 컨테이너를 띄운다
       - run: pnpm run test:db
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec tsc -b
       - run: pnpm run lint
       - run: pnpm run build
 
   # main 푸시마다 운영 이미지를 빌드해 올린다. ArgoCD가 k8s/prod의 태그를 보고 배포한다.
   image:
-    needs: check
+    needs: [unit, db, static]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -40,24 +63,26 @@ jobs:
           echo "TAG=${TAG}" >> "${GITHUB_ENV}"
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - uses: docker/setup-buildx-action@v3
+      # 레이어 캐시(GitHub Actions 캐시) — 잠금 파일이 그대로면 의존성 설치 레이어를 다시 쓴다
       - name: Build and push image
-        env:
-          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-          VITE_SENTRY_ENV: ${{ vars.VITE_SENTRY_ENV }}
-        run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${TAG}"
-          docker build -t "${IMAGE}" \
-            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
-            --build-arg BUILD_ID="${GITHUB_SHA}" \
-            --build-arg DEPLOY_ENV=production \
-            --build-arg VITE_SENTRY_DSN \
-            --build-arg VITE_SENTRY_ENV \
-            .
-          docker push "${IMAGE}"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            BUILD_ID=${{ github.sha }}
+            DEPLOY_ENV=production
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
+            VITE_SENTRY_ENV=${{ vars.VITE_SENTRY_ENV }}
+          cache-from: type=gha,scope=game
+          cache-to: type=gha,scope=game,mode=max
 
   # dev 푸시마다 스테이징 이미지를 빌드해 올리고 k8s/stage의 태그를 갱신한다. ArgoCD가 dev의 k8s/stage를 보고 배포한다.
   stage-image:
-    needs: check
+    needs: [unit, db, static]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04-arm
     concurrency:
@@ -70,16 +95,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - name: Stage image tag
+        run: echo "TAG=dev-${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
+      - uses: docker/setup-buildx-action@v3
       - name: Build and push image
-        env:
-          VITE_SENTRY_DSN: ${{ vars.STAGE_VITE_SENTRY_DSN }}
-          VITE_SENTRY_ENV: ${{ vars.STAGE_VITE_SENTRY_ENV }}
-        run: |
-          TAG="dev-${GITHUB_SHA::7}"
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${TAG}"
-          docker build -t "${IMAGE}"             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"             --build-arg BUILD_ID="${GITHUB_SHA}"             --build-arg DEPLOY_ENV=preview             --build-arg VITE_SENTRY_DSN             --build-arg VITE_SENTRY_ENV             .
-          docker push "${IMAGE}"
-          echo "TAG=${TAG}" >> "${GITHUB_ENV}"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            BUILD_ID=${{ github.sha }}
+            DEPLOY_ENV=preview
+            VITE_SENTRY_DSN=${{ vars.STAGE_VITE_SENTRY_DSN }}
+            VITE_SENTRY_ENV=${{ vars.STAGE_VITE_SENTRY_ENV }}
+          cache-from: type=gha,scope=game
+          cache-to: type=gha,scope=game,mode=max
       - name: Update stage image tag
         run: |
           sed -i "s|newTag: .*|newTag: ${TAG}|" k8s/stage/kustomization.yaml
