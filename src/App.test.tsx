@@ -1301,7 +1301,7 @@ describe('패치노트 (설정 탭)', () => {
 describe('환경 배지', () => {
   it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', () => {
     render(<App />);
-    expect(screen.getByRole('status', { name: 'LOCAL DEV 빌드' })).toHaveTextContent('LOCAL DEV · dev');
+    expect(screen.getByRole('status', { name: 'LOCAL DEV 빌드 dev' })).toHaveTextContent('LOCAL DEVdev');
   });
 });
 

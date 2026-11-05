@@ -8,7 +8,6 @@ import { BASE_CANVAS_W, BASE_CANVAS_H } from '../../../../game/rendering/pixel/c
 import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
 import NightOverlay from '../../../ui/hud/NightOverlay';
-import TimeBadge from '../../../ui/hud/TimeBadge';
 import Button from '../../../ui/Button';
 import Panel from '../../../ui/Panel';
 import FacilityIcon from './FacilityIcon';
@@ -96,7 +95,6 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
           })}
         </div>
       </div>
-      <TimeBadge className="top-2 right-2" />
     </GameFrame>
   );
 }

@@ -28,7 +28,7 @@ import type { GlyphId } from '../PixelIcon';
 // **골드·명성은 줄임 표기(fmtCompact)** — 값이 커져도 칸 폭이 거의 그대로다. 단위 G는 이름 줄이 대신한다.
 // **가방은 "수량 (비율%)"** — 채울수록 주황·빨강으로 바뀌어 팔 때를 알린다.
 // **자리는 스테이지(사이드바를 뺀 화면 영역) 위쪽 가운데**다. 스테이지가 이 바의 기준 상자다.
-// **칸은 처음부터 모두 그린다** — 서버 값(오늘 의뢰)이 아직 없으면 자리만 두고 "–"를 보인다.
+// **칸은 처음부터 모두 그린다** — 서버 값(오늘 의뢰)이 아직 없으면 자리를 지키고 0을 보인다.
 // 늦게 도착한 칸이 끼어들며 바 전체가 늘어나지 않게 하려는 것이다.
 const TONE = { gold: 'text-gold', orange: 'text-orange', danger: 'text-danger' } as const;
 
@@ -50,11 +50,11 @@ function Stat({ glyph, label, tone = 'gold', children }: {
 /** 가방 경고 단계 → 글자색 (75% 이상 주황, 95% 이상 빨강 계열) */
 const BAG_TONE: Record<BagLevel, keyof typeof TONE> = { normal: 'gold', warn: 'orange', danger: 'danger' };
 
-const UNKNOWN = '–';
+/** 서버 값(오늘 의뢰)이 아직 없을 때 보이는 수 */
+const UNKNOWN = 0;
 
 export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: GameState; bagBonus?: number; onOpen?: () => void }) {
-  // 오늘 남은 클리어 횟수(일반 의뢰 · 네임드 토벌) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면
-  // 숫자 대신 "–"를 둔다 (0으로 보이면 거짓말이다).
+  // 오늘 남은 클리어 횟수(일반 의뢰, 네임드 토벌) — 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면 0을 둔다.
   const { snap } = useBounty();
   const left = clearsLeft(snap);
   const bag = selectBagStatus(game, bagBonus);

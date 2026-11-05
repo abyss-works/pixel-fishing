@@ -11,6 +11,7 @@ import type { MessageChannel } from '../../ui/hud/messageFeed';
 import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
 import ResourceBar from '../../ui/hud/ResourceBar';
+import TimeBadge from '../../ui/hud/TimeBadge';
 import Tip from '../../ui/Tip';
 
 interface HudLayoutProps {
@@ -42,6 +43,7 @@ interface HudLayoutProps {
 // 플레이 화면에서 공통으로 쓰는 자원 표시, 미니맵, 시스템 로그를 배치한다.
 // 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(chips와 활성 미끼), 미니맵(바다에서만).
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
+// 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 40px 폭) 왼쪽에 붙인다.
 export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels }: HudLayoutProps) {
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
@@ -50,6 +52,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
   return (
     <>
       <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
+      {scene.kind === 'base' && <TimeBadge className="top-5 right-[58px]" />}
       <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(156px,32.5%,292px)]
                       flex flex-col items-end gap-2 pointer-events-none">
         {notice && <div className="w-full pointer-events-auto">{notice}</div>}

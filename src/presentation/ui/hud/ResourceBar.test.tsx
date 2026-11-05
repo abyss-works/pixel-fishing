@@ -15,10 +15,11 @@ describe('자원 바', () => {
   beforeEach(() => { snap = null; });
   afterEach(cleanup);
 
-  it('오늘 의뢰 칸은 서버 값이 오기 전에도 자리를 지키고 "–"를 보인다', () => {
+  it('오늘 의뢰 칸은 서버 값이 오기 전에도 자리를 지키고 0을 보인다', () => {
     render(<ResourceBar game={newState()} />);
     expect(hud()).toContain('오늘 의뢰');
-    expect(hud()).toContain('일반–네임드–');
+    expect(hud()).toContain('일반0네임드0');
+    expect(hud()).not.toMatch(/[–—]/);
   });
 
   it('서버 값이 있으면 오늘 남은 클리어를 일반 · 네임드 이름을 붙여 그 순서로 나란히 보인다', () => {
