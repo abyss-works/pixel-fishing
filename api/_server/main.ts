@@ -15,6 +15,8 @@ import purgeAnon from '../cron/purge-anon.js';
 import { appAuth, sessionOf } from '../_auth/session.js';
 import { settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
+import { database } from '../_db/client.js';
+import { liveIdentity } from '../_data/profile.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -50,7 +52,13 @@ const server = app.listen(port, () => { console.info(`Server listening on port $
 // 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
 const live = attachLive(server, {
   origin: new URL(process.env.BETTER_AUTH_URL as string).origin,
-  authenticate: async (req) => (await sessionOf(req.headers))?.id ?? null,
+  authenticate: async (req) => {
+    const session = await sessionOf(req.headers);
+    if (!session) return null;
+    const { nick, boat } = await liveIdentity(database().db, session.id);
+    // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
+    return { uid: session.id, nick: nick ?? '낚시꾼', boat };
+  },
 });
 
 process.on('SIGTERM', () => {

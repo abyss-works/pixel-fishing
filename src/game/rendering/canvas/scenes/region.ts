@@ -5,7 +5,8 @@
 import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
-import { drawBoat, drawPerson } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawOtherShip, drawPerson } from '../../pixel/sprites/actors.js';
+import type { OtherShipView } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
 import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
@@ -19,6 +20,8 @@ import type { GearView } from '../../pixel/sprites/overlays.js';
 export interface FieldView extends GearView {
   boat: number;
   schools: School[];
+  /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
+  others?: OtherShipView[];
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
@@ -79,6 +82,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);
+  if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
   else drawPerson(ctx, v.player.x, v.player.y);
   drawTimingBar(ctx, v);

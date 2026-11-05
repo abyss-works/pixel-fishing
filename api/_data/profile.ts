@@ -39,3 +39,11 @@ export async function setNickname(db: Executor, uid: string, nickname: string, n
 export async function deleteUserProfile(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.profiles where user_id = ${uid}`);
 }
+
+/** 실시간 채널에 보일 이름과 배. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배는 0이다 */
+export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: string | null; boat: number }> {
+  const { rows } = await db.execute<{ nick: string | null; boat: number | null }>(sql`select
+      (select nickname from public.profiles where user_id = ${uid}) as nick,
+      (select boat from public.saves_current where user_id = ${uid}) as boat`);
+  return { nick: rows[0]?.nick ?? null, boat: rows[0]?.boat ?? 0 };
+}
