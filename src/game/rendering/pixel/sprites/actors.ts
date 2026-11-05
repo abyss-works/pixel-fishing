@@ -22,6 +22,8 @@ export function drawBoat(ctx: Ctx, x: number, y: number, t: number) {
 /** 다른 플레이어의 배 — 내 배와 구분되게 반투명으로 그리고, 이름과 드리운 낚싯줄을 함께 그린다 */
 export interface OtherShipView {
   x: number; y: number; nick: string; line: boolean; stale: boolean;
+  /** 찌가 떠 있는 자리 — 보낸 사람의 실제 어군 위치. 없으면(이전 클라이언트) 배 옆에 그린다 */
+  bob?: { x: number; y: number } | null;
   /** 머리 위 말풍선 — 최근 채팅 글, 입력 중이면 'typing', 없으면 null */
   bubble?: string | 'typing' | null;
 }
@@ -45,14 +47,17 @@ export function drawOtherShip(ctx: Ctx, o: OtherShipView, t: number) {
   ctx.globalAlpha = o.stale ? 0.25 : 0.6;
   drawBoat(ctx, o.x, o.y, t);
   if (o.line) {
-    const bob = Math.sin(t * 2) * 1;
+    // 내 찌(drawFishingGear)와 같은 모양 — 낚싯대 끝에서 어군 위의 찌까지 줄을 긋는다
+    const wave = Math.sin(t * 2);
+    const bx = o.bob ? o.bob.x : o.x + 16, by = (o.bob ? o.bob.y : o.y + 4) + wave;
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(o.x + 6, o.y - 14);
-    ctx.lineTo(o.x + 16, o.y + 4 + bob);
+    ctx.moveTo(o.x, o.y - 14);
+    ctx.lineTo(bx, by - 2);
     ctx.stroke();
-    R(ctx, o.x + 14, o.y + 2 + bob, 4, 4, '#e53935');
+    R(ctx, bx - 2, by - 2, 4, 4, '#e53935');
+    R(ctx, bx - 2, by - 4, 4, 2, '#fff');
   }
   ctx.restore();
   label(ctx, o.nick, o.x, o.y - 24, 'rgba(255,255,255,0.75)', 8);

@@ -4,20 +4,22 @@
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 
 export type Dir = 0 | 1 | 2 | 3;
+/** 찌가 떠 있는 자리(어군 위치) — 낚싯줄을 드리웠을 때만 보낸다 */
+export interface Bob { x: number; y: number }
 
 export type ClientMessage =
-  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태
+  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치
   | { t: 'stop' }
   | { t: 'chat'; text: string; room?: 'guild' } // room이 없으면 월드 채팅, guild면 내 길드 채팅
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean }
+export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
-  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean }
+  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
@@ -42,6 +44,8 @@ export const LIVE_CLOSE_RESTART = 1012;
 export const LIVE_CLOSE_REPLACED = 4000;
 
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isBob = (v: unknown): v is Bob =>
+  typeof v === 'object' && v !== null && isCoord((v as Record<string, unknown>).x) && isCoord((v as Record<string, unknown>).y);
 const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
 const isRegion = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9-]{1,32}$/.test(v);
 
@@ -59,7 +63,11 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     case 'move':
       if (!isRegion(o.region) || !isCoord(o.x) || !isCoord(o.y) || !isDir(o.dir) || typeof o.line !== 'boolean') return null;
       if (o.zone !== undefined && o.zone !== null && !isRegion(o.zone)) return null;
-      return { t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line };
+      if (o.bob !== undefined && o.bob !== null && !isBob(o.bob)) return null;
+      return {
+        t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line,
+        ...(isBob(o.bob) ? { bob: { x: o.bob.x, y: o.bob.y } } : {}),
+      };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
     case 'chat':
