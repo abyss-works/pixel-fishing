@@ -1,8 +1,11 @@
-// 채팅 입력 줄 — HUD 메시지 창 아래에 놓인다. Enter로 보내고 Esc로 입력을 벗어난다.
-// 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다.
+// 채팅 입력 줄 — HUD 메시지 창 아래에 놓인다. 게임 화면에서 Enter를 누르면 입력 줄로 들어간다.
+// 입력 중 Enter는 보내고 입력 줄을 벗어난다(빈 입력은 벗어나기만 한다). Esc는 보내지 않고 벗어난다.
+// 한글 조합 중의 Enter는 조합을 끝낼 뿐 보내지 않는다.
+// 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
+// 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
 // 메시지 창에서 고른 글줄의 보낸 사람에게 신고·차단을 걸고, 차단 목록을 펼쳐 풀 수 있다.
 // 서버가 거부한 이유와 신고·차단 결과는 입력 줄 위에 짧게 보인다.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat } from '../../../../features/live/service/useLive';
@@ -10,6 +13,7 @@ import type { ChatError } from '../../../../features/live/model/live';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import { cx } from '../../../ui/cx';
+import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PillButton from '../../../ui/PillButton';
 import TextInput from '../../../ui/TextInput';
 import type { Msg } from '../../../ui/hud/messageFeed';
@@ -40,14 +44,23 @@ export default function ChatBar({ picked, onDone }: {
   const [notice, setNotice] = useState<{ text: string; warn: boolean } | null>(null);
   const moderation = useChatModeration(listOpen);
 
-  const submit = () => {
-    if (text.trim() === '') return;
-    sendChat(text);
-    setText('');
-  };
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useKeyScope(e => {
+    if (e.key !== 'Enter' || e.repeat || e.isComposing || hasModifier(e)) return;
+    e.preventDefault();
+    inputRef.current?.focus();
+    return true;
+  });
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (text.trim() !== '') { sendChat(text); setText(''); }
+      e.currentTarget.blur();
+    }
     if (e.key === 'Escape') e.currentTarget.blur();
   };
   const act = async (run: () => Promise<ChatActionError | null>, done: string) => {
@@ -84,7 +97,7 @@ export default function ChatBar({ picked, onDone }: {
       )}
       {status && <p className={cx('text-shadow-hud m-0', status.warn ? 'text-danger' : 'text-text')} role="status">{status.text}</p>}
       <div className="flex items-center gap-1">
-        <TextInput compact className="flex-1 min-w-0" aria-label="채팅 입력" placeholder="채팅 (Enter로 보내기)"
+        <TextInput ref={inputRef} compact className="flex-1 min-w-0" aria-label="채팅 입력" placeholder="채팅 (Enter로 입력·보내기)"
                    maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
                    onChange={e => { setText(e.target.value); setNotice(null); clearChatError(); }} />
         <PillButton active={listOpen} aria-expanded={listOpen} onClick={() => setListOpen(open => !open)}>차단 목록</PillButton>
