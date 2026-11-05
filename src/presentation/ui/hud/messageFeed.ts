@@ -33,6 +33,13 @@ export const MESSAGE_KEEP = 200;
 /** 메시지 창 높이 — 한 번에 보이는 줄 수. 그 위는 휠로 거슬러 본다 */
 export const MESSAGE_VISIBLE_LINES = 8;
 
+/** 맨 아래로 보는 여유(px) — 이만큼 안쪽이면 맨 아래를 보고 있는 것으로 친다 */
+const BOTTOM_SLACK_PX = 8;
+
+/** 스크롤 상자가 맨 아래를 보고 있는가 — 맨 아래면 새 글줄을 따라 내려가고, 위로 올려 읽는 중이면 자리를 지킨다 */
+export const isAtBottom = (el: { scrollHeight: number; scrollTop: number; clientHeight: number }): boolean =>
+  el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_SLACK_PX;
+
 
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
