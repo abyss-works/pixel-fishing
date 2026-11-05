@@ -91,11 +91,12 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
 };
 
 /** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).
- *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다. */
-export function canExhibit(state: GameState, uid: string, slot: number | null): RuleCheck {
+ *  전시 중인 개체를 다른 칸으로 바로 옮기는 것은 지원하지 않는다 — 회수 후 다시 진열한다.
+ *  @param bagBonus 가방 칸에 더하는 비율(길드 가방 용량 보너스) */
+export function canExhibit(state: GameState, uid: string, slot: number | null, bagBonus = 0): RuleCheck {
   if (slot === null) {
     if (!state.exhibit.some(i => i?.uid === uid)) return no('bad-request');
-    return state.bag.length < bagCapacity(state.boat, state.bag) ? OK : no('bag-full');
+    return state.bag.length < bagCapacity(state.boat, state.bag, bagBonus) ? OK : no('bag-full');
   }
   if (!Number.isInteger(slot) || slot < 0 || slot >= EXHIBIT_SLOTS) return no('bad-request');
   if (!state.bag.some(i => i.uid === uid)) return no('bad-request');

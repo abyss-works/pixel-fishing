@@ -1,5 +1,5 @@
-// 길드 규칙 — 서버와 클라이언트가 공유하는 순수 판정이다. 이름 검사, 인원 상한, 초대 코드, 길드원 권한과
-// 성장(기여도·레벨·보너스)을 맡는다.
+// 길드 규칙 — 서버와 클라이언트가 공유하는 순수 판정이다. 이름 검사, 인원 상한, 초대 코드, 길드원 권한,
+// 성장(기여도·레벨)과 보너스(해금·단계·기부·효과)를 맡는다.
 //
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import { checkNickname } from './nickname.js';
@@ -79,10 +79,10 @@ export function handoverOutcome(actor: GuildActor, targetUid: string): 'ok' | 's
 
 // ── 성장 ──────────────────────────────────────────────
 // 기여도는 길드원이 얻은 명성(하루 상한)과 의뢰 클리어(상한과 별개)로 쌓이고, 누적 기여도가 레벨을 정한다.
-// 떠난 선원의 기여도 길드에 남는다. 보너스는 레벨이 오르면 누적되며 지금 길드원 모두에게 같다.
+// 떠난 선원의 기여도 길드에 남는다.
 
-/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌 */
-export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named';
+/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌, 보너스 기부, 보너스 단계 상승 */
+export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up';
 
 /** 길드원 한 사람이 하루(게임 날짜)에 명성으로 쌓을 수 있는 기여 */
 export const GUILD_DAILY_FAME_CAP = 1_000;
@@ -105,29 +105,110 @@ export function guildProgress(total: number): { level: number; total: number; fl
   return { level, total, floor: GUILD_LEVEL_FLOORS[level - 1], next: level < GUILD_MAX_LEVEL ? GUILD_LEVEL_FLOORS[level] : null };
 }
 
-/**
- * 길드 보너스 — 비율(0.05 = 5%)이다. 받는 규칙이 효과를 정한다.
- * 천장 두 가지는 확정 문턱에 (1 − 비율)을 곱해 그만큼 빨리 찬다(speciesPityCandidates·namedPityCeiling).
- */
-export interface GuildBonus {
-  /** 미보유 어종 일반 폼 최초 획득 천장이 빨리 차는 비율 */
-  speciesPity: number;
-  /** 일반 의뢰 보상이 늘어나는 비율. 네임드 토벌 보상에는 붙지 않는다 */
-  bountyReward: number;
-  /** 네임드 조우 천장이 빨리 차는 비율 */
-  namedPity: number;
+// ── 보너스 ──────────────────────────────────────────────
+// 보너스 다섯이 Lv1~5에 하나씩 열린다. 보너스마다 단계(0~5)가 있고 단계 상한은 길드 레벨이다.
+// 길드원 누구나 열린 보너스에 골드를 기부한다. 보너스에 모인 골드가 다음 단계 비용에 닿으면 단계가 오르고
+// 남은 골드는 다음 단계로 이어진다. 상한까지 필요한 골드보다 많이 내면 필요한 만큼만 받는다.
+//
+// 합연산: 보너스 하나의 효과는 "단계 × 단계당 효과"인 값 하나다(단계마다 곱하지 않는다). 받는 규칙은 그 값을
+// 적용 지점 한 곳에서 한 번만 쓴다 — 판매 총액·배의 가방 칸·네임드 조우 가중치·일반 등급 가중치에 (1 ± 효과)를,
+// 돌연변이는 유물·해역이 정한 확률 위에 퍼센트포인트를 더한다. 같은 효과를 다른 지점에서 다시 쓰지 않는다.
+
+/** 보너스 — 판매가, 가방 용량, 네임드 조우, 희귀 어종(일반 등급 가중치 감소), 돌연변이. 순서가 해금 순서다 */
+export type GuildBonusId = 'sell' | 'bag' | 'named' | 'rare' | 'mutation';
+export const GUILD_BONUS_IDS: readonly GuildBonusId[] = ['sell', 'bag', 'named', 'rare', 'mutation'];
+export const GUILD_BONUS_MAX_RANK = 5;
+/** 단계 1~5에 오르는 비용(골드) — 인덱스 0이 1단계다 */
+const RANK_COSTS = [100_000, 250_000, 600_000, 1_500_000, 4_000_000] as const;
+/** 단계당 효과(만분율) — 판매가 +2%, 가방 칸 +4%, 네임드 조우 가중치 +5%, 일반 등급 가중치 −2%, 돌연변이 확률 +1%p */
+const EFFECT_BP_PER_RANK: Record<GuildBonusId, number> = { sell: 200, bag: 400, named: 500, rare: 200, mutation: 100 };
+
+/** 보너스가 열리는 길드 레벨 */
+export function bonusUnlockLevel(id: GuildBonusId): number {
+  return GUILD_BONUS_IDS.indexOf(id) + 1;
 }
 
-/** 길드가 없을 때(또는 Lv1) — 모든 규칙이 길드 없이 동작한다 */
-export const NO_GUILD_BONUS: GuildBonus = { speciesPity: 0, bountyReward: 0, namedPity: 0 };
+/** 그 길드 레벨에서 보너스가 오를 수 있는 단계 상한 — 열리지 않았으면 0 */
+function rankCap(id: GuildBonusId, guildLevel: number): number {
+  return guildLevel >= bonusUnlockLevel(id) ? Math.min(guildLevel, GUILD_BONUS_MAX_RANK) : 0;
+}
 
-/** 레벨의 보너스 — Lv2 어종 천장 5% · Lv3 일반 의뢰 보상 +5% · Lv4 어종 천장 10%로 · Lv5 네임드 천장 10% */
-export function guildBonusOf(level: number): GuildBonus {
-  return {
-    speciesPity: level >= 4 ? 0.1 : level >= 2 ? 0.05 : 0,
-    bountyReward: level >= 3 ? 0.05 : 0,
-    namedPity: level >= 5 ? 0.1 : 0,
-  };
+/** 길드 레벨의 보너스별 해금 레벨과 단계 상한 */
+export function guildBonusLevels(guildLevel: number): { id: GuildBonusId; unlock: number; cap: number }[] {
+  return GUILD_BONUS_IDS.map(id => ({ id, unlock: bonusUnlockLevel(id), cap: rankCap(id, guildLevel) }));
+}
+
+/** 그 단계(1~5)에 오르는 비용. 범위 밖이면 null */
+export function bonusRankCost(rank: number): number | null {
+  return RANK_COSTS[rank - 1] ?? null;
+}
+
+/**
+ * 기부 하나를 보너스에 반영한다. 모인 골드(pool)로 오를 수 있는 만큼 단계를 올리고, 상한(cap)까지 필요한 골드만 받는다.
+ * @returns 새 단계, 새로 모인 골드, 받은 골드(accepted ≤ amount)
+ */
+export function applyDonation(pool: number, rank: number, cap: number, amount: number): { rank: number; pool: number; accepted: number } {
+  let needed = -pool;
+  for (let r = rank + 1; r <= cap; r++) needed += bonusRankCost(r) ?? 0;
+  const accepted = Math.max(0, Math.min(amount, needed));
+  let next = rank;
+  let left = pool + accepted;
+  while (next < cap && left >= (bonusRankCost(next + 1) ?? Infinity)) {
+    left -= bonusRankCost(next + 1)!;
+    next++;
+  }
+  return { rank: next, pool: left, accepted };
+}
+
+export type DonationOutcome =
+  | { ok: true; rank: number; pool: number; accepted: number }
+  | { ok: false; error: 'bonus-locked' | 'rank-maxed' | 'not-enough-gold' };
+
+/**
+ * 기부 판정 — 열리지 않은 보너스와 상한에 닿은 보너스에는 기부할 수 없고, 받을 골드만큼 가지고 있어야 한다.
+ * @param bonus 지금 단계와 모인 골드
+ * @param gold 기부하는 사람이 가진 골드
+ */
+export function donationOutcome(id: GuildBonusId, guildLevel: number, bonus: { rank: number; pool: number },
+  gold: number, amount: number): DonationOutcome {
+  const cap = rankCap(id, guildLevel);
+  if (cap === 0) return { ok: false, error: 'bonus-locked' };
+  if (bonus.rank >= cap) return { ok: false, error: 'rank-maxed' };
+  const next = applyDonation(bonus.pool, bonus.rank, cap, amount);
+  if (next.accepted > gold) return { ok: false, error: 'not-enough-gold' };
+  return { ok: true, ...next };
+}
+
+/** 기부액 형식 — 1 이상의 안전한 정수 골드 */
+export function validDonationAmount(v: unknown): v is number {
+  return typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
+}
+
+/**
+ * 길드 보너스 효과 — 보너스마다 단계 효과를 더한 값 하나다. 판매가·가방·네임드는 늘어나는 비율, rare는 일반 등급 가중치가
+ * 줄어드는 비율, mutation은 돌연변이 확률에 더하는 퍼센트포인트(0.01 = 1%p)다. 서버 액션 경로만 적용한다.
+ */
+export interface GuildEffects {
+  sell: number;
+  bag: number;
+  named: number;
+  rare: number;
+  mutation: number;
+}
+
+/** 길드가 없을 때 — 모든 규칙이 길드 없이 동작한다 */
+export const NO_GUILD_EFFECTS: GuildEffects = { sell: 0, bag: 0, named: 0, rare: 0, mutation: 0 };
+
+/** 보너스 하나의 그 단계 효과 */
+export function bonusEffect(id: GuildBonusId, rank: number): number {
+  return rank * EFFECT_BP_PER_RANK[id] / 10_000;
+}
+
+/** 보너스별 단계에서 효과를 모은다. 없는 보너스는 0단계다 */
+export function guildEffectsOf(ranks: Partial<Record<GuildBonusId, number>>): GuildEffects {
+  const out = { ...NO_GUILD_EFFECTS };
+  for (const id of GUILD_BONUS_IDS) out[id] = bonusEffect(id, ranks[id] ?? 0);
+  return out;
 }
 
 /** 기여를 세는 하루 — 의뢰 클리어 한도와 같은 게임 날짜(한국 시간 새벽 4시 경계)다 */
