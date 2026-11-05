@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import Button from '../../../ui/Button';
+import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
-import Panel from '../../../ui/Panel';
+import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
 
-// 소셜 창의 차단 탭 — 내가 차단한 사람과 해제. 차단은 플레이어 정보 창에서 한다.
+// 소셜 창의 차단 탭: 내가 차단한 사람 표와 행 끝의 해제. 차단은 플레이어 정보 창에서 한다.
 const ERROR_TEXT: Record<ChatActionError, string> = {
   guest: '계정을 만든 뒤 쓸 수 있어요.',
   missing: '대상을 찾을 수 없어요.',
@@ -26,25 +28,34 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
     }
   };
   return (
-    <Panel title={Array.isArray(blocks) ? `차단 ${blocks.length}명` : '차단'} className="min-w-0">
-      <div className="pf-scroll-panel h-80 overflow-y-auto pr-1 max-[640px]:h-56">
-        {Array.isArray(blocks) && blocks.length > 0 ? (
-          <ul className="flex flex-col gap-1.5">
-            {blocks.map(b => (
-              <li key={b.uid} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 min-w-0 truncate">{b.nick ?? '이름 없음'}</span>
-                <Button size="sm" disabled={busy} onClick={() => { void release(b.uid, b.nick ?? '이름 없음'); }}>해제</Button>
-              </li>
+    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+      {Array.isArray(blocks) && blocks.length > 0 ? (
+        <table className={SOCIAL_TABLE}>
+          <colgroup><col /><col className="w-16" /></colgroup>
+          <thead>
+            <tr className={SOCIAL_HEAD.row}>
+              <th className={SOCIAL_HEAD.left}>차단한 사람</th>
+              <th className={SOCIAL_HEAD.right} aria-label="해제" />
+            </tr>
+          </thead>
+          <tbody>
+            {blocks.map((b, i) => (
+              <tr key={b.uid}>
+                <td className={cx(SOCIAL_CELL(i), 'truncate')}>{b.nick ?? '이름 없음'}</td>
+                <td className={cx(SOCIAL_CELL(i), 'text-right')}>
+                  <Button size="sm" disabled={busy} onClick={() => { void release(b.uid, b.nick ?? '이름 없음'); }}>해제</Button>
+                </td>
+              </tr>
             ))}
-          </ul>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            {blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note>
-              : typeof blocks === 'string' ? <Note tone="warn">{ERROR_TEXT[blocks]}</Note>
-              : <Note>차단한 사람이 없어요. 채팅 이름을 눌러 연 플레이어 정보에서 차단할 수 있어요.</Note>}
-          </div>
-        )}
-      </div>
-    </Panel>
+          </tbody>
+        </table>
+      ) : (
+        <div className="flex h-full items-center justify-center text-center">
+          {blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note>
+            : typeof blocks === 'string' ? <Note tone="warn">{ERROR_TEXT[blocks]}</Note>
+            : <Note>차단한 사람이 없어요. 채팅 이름을 눌러 연 플레이어 정보에서 차단할 수 있어요.</Note>}
+        </div>
+      )}
+    </Inset>
   );
 }
