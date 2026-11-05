@@ -93,14 +93,14 @@ afterEach(() => {
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
 
 describe('마을 랭킹 게시판', () => {
-  it('게시판 클릭 → 명성·도감 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
+  it('게시판 클릭 → 명성, 도감 탭의 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
     const dialog = screen.getByRole('heading', { name: '랭킹' }).closest('[role="dialog"]') as HTMLElement;
-    expect(within(dialog).getByRole('heading', { name: '명성' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('heading', { name: '도감' })).toBeInTheDocument();
-    await waitFor(() => expect(within(dialog).getAllByText('랭킹은 온라인에서만 볼 수 있어요.')).toHaveLength(2));
+    expect(within(dialog).getByRole('button', { name: '명성' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '도감' })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument());
   });
 });
 
@@ -1394,22 +1394,22 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     expect(dialog.getByText('바 시간')).toBeInTheDocument();
     expect(dialog.getByText('입질 최소 대기')).toBeInTheDocument();
     expect(dialog.getByText('방치 낚시 페널티')).toBeInTheDocument();
-    expect(dialog.getByRole('option', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(dialog.getByRole('option', { name: /마을 연못/ }));
-    expect(dialog.getByRole('option', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
-    // 호버 도움말 — 게임 스타일 버블(title 툴팁 아님)
-    fireEvent.mouseEnter(dialog.getAllByLabelText('도움말')[0]);
+    expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(dialog.getByRole('row', { name: /마을 연못/ }));
+    expect(dialog.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    // 고정 정보 줄의 파워 툴팁 — 게임 스타일 버블(title 툴팁 아님)
+    fireEvent.mouseEnter(dialog.getByText('파워', { selector: '[tabindex="0"]' }));
     expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
-    fireEvent.mouseLeave(dialog.getAllByLabelText('도움말')[0]);
+    fireEvent.mouseLeave(dialog.getByText('파워', { selector: '[tabindex="0"]' }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
     // 보너스 — 새 게임은 유물·미끼가 없다. 갈래마다 빈 자리를 지킨다
     openTab('보너스');
-    expect(dialog.getByText('지금 받는 보너스')).toBeInTheDocument();
+    expect(dialog.getByText('받는 효과')).toBeInTheDocument();
     expect(dialog.getAllByText('받는 보너스가 없어요.').length).toBeGreaterThan(0);
 
     fireEvent.click(dialog.getByRole('button', { name: '닫기' }));
-    expect(screen.queryByText('지금 받는 보너스')).not.toBeInTheDocument();
+    expect(screen.queryByText('받는 효과')).not.toBeInTheDocument();
   });
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
