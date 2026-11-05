@@ -245,10 +245,12 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
     expect(lastTone()).toBe('gold');
   });
 
-  it('골드 부족이면 구매 버튼 비활성 + 안내', () => {
+  it('골드 부족이면 구매 버튼 비활성 + 버튼 툴팁 안내', () => {
     renderBoatPanel({ gold: BOATS[0].price - 1 });
-    expect(screen.getByText(/^구매 \(/)).toBeDisabled();
-    expect(screen.getByText(/골드가 부족해요/)).toBeInTheDocument();
+    const buy = screen.getByText(/^구매 \(/);
+    expect(buy).toBeDisabled();
+    fireEvent.mouseEnter(buy.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/골드가 부족해요/);
   });
 
   it('돛단배 구매 시 심해 해구 해금 안내, 명성은 소모되지 않음', () => {
@@ -258,10 +260,12 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
     expect(lastGame.fame).toBe(BOATS[1].fameReq); // 소모 없음
   });
 
-  it('명성 부족이면 구매 버튼 비활성 + 하한 안내 (골드 있어도 불가)', () => {
+  it('명성 부족이면 구매 버튼 비활성 + 버튼 툴팁 하한 안내 (골드 있어도 불가)', () => {
     renderBoatPanel({ boat: 1, gold: BOATS[1].price, fame: BOATS[1].fameReq - 1 });
-    expect(screen.getByText(/^구매 \(/)).toBeDisabled();
-    expect(screen.getByText(/명성이 부족해요/)).toBeInTheDocument();
+    const buy = screen.getByText(/^구매 \(/);
+    expect(buy).toBeDisabled();
+    fireEvent.mouseEnter(buy.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/명성이 부족해요/);
   });
 
   it('최고 단계면 안내만', () => {

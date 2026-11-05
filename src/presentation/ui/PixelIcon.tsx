@@ -8,7 +8,7 @@ type Cell = [x: number, y: number, w: number, h: number];
 export type GlyphId =
   | 'coin' | 'star' | 'boat' | 'rod' | 'fish'
   | 'sun' | 'moon'
-  | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff'
+  | 'lock' | 'lockOpen' | 'checkOn' | 'checkOff' | 'check'
   | 'caretRight' | 'caretDown' | 'checkPartial'
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
@@ -164,6 +164,10 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   },
   checkOff: {
     cells: [[0, 0, 12, 1], [0, 11, 12, 1], [0, 1, 1, 10], [11, 1, 1, 10]],
+  },
+  // 체크 표시만 — 지나온 단계처럼 고르는 칸이 아닌 곳의 완료 표시
+  check: {
+    cells: [[1, 6, 2, 2], [3, 8, 2, 2], [5, 6, 2, 2], [7, 4, 2, 2], [9, 2, 2, 2]],
   },
   // 일부만 선택 — 체크 대신 가로 막대 (전체/없음과 한눈에 구분된다)
   checkPartial: {

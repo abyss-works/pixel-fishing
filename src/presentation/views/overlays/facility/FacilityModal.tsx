@@ -1,15 +1,8 @@
 import { useMemo, useState } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { BAIT_BUY_MAX } from '../../../../game/rules/balance';
 import { selectSalePreview } from '../../../../features/inventory/model/catalog';
-import {
-  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatLadder,
-  selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
-} from '../../../../features/gameplay/model/facility';
-import BoatSprite from '../../../ui/BoatSprite';
-import GearSprite from '../../../ui/GearSprite';
-import ProgressLadder from '../../../ui/ProgressLadder';
+import { selectBoatPurchaseResult } from '../../../../features/gameplay/model/facility';
 import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import type { GameAction } from '../../../../game/rules/actions';
@@ -20,27 +13,19 @@ import { isBountyPort, zoneOfPort } from '../../../../game/content/bounties';
 import { zoneById } from '../../../../game/content/zones';
 import BountyPanel from '../bounty/BountyPanel';
 import Button from '../../../ui/Button';
-import { cx } from '../../../ui/cx';
 import CostLine from '../../../ui/CostLine';
 import IconButton from '../../../ui/IconButton';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
-import NumberStepper from '../../../ui/NumberStepper';
 import PixelIcon from '../../../ui/PixelIcon';
-import StatCompare from '../../../ui/StatCompare';
-import TwoColumn from '../../../ui/TwoColumn';
-import HeroHeader from '../../../ui/HeroHeader';
-import CostBox from '../../../ui/CostBox';
-import Frame from '../../../ui/Frame';
-import ColorSwatch from '../../../ui/ColorSwatch';
-import PriceTag from '../../../ui/PriceTag';
-import SelectList from '../../../ui/SelectList';
-import { fmtGold, fmtNum, josa } from '../../../ui/format';
-import { baitEffectLine } from '../../../ui/baitEffects';
+import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { RarityText } from '../../../ui/fish/RarityTag';
+import BoatPanel from './BoatPanel';
+import RodPanel from './RodPanel';
+import ShopPanel from './ShopPanel';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
 export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | null;
 
@@ -59,7 +44,7 @@ interface Props {
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
-// 패널 골격은 ModalCard 하나다: 제목 — 본문(비교 표·목록) — 확정 영역(잔액 줄 · 사유 · 확정 버튼) — 닫기.
+// 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
 export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid }: Props) {
   const [busy, setBusy] = useState(false);
@@ -243,201 +228,6 @@ function SellPanel({ game, onSell, onClose, busy }: {
           </tbody>
         </DataTable>
       </div>
-    </ModalCard>
-  );
-}
-
-const LADDER_ROWS = 7;
-
-/** 초 단위 변화량 — 줄어드는 게 좋은 값(대기 시간)이라 음수를 −로 그대로 보인다 */
-const sec = (d: number, digits = 1): string | undefined =>
-  Math.abs(d) < 10 ** -digits / 2 ? undefined : `${d < 0 ? '−' : '+'}${Math.abs(d).toFixed(digits)}s`;
-
-// R2: 낚싯대 강화 패널 (상한 없음)
-function RodPanel({ game, onUpgrade, onClose, busy }: {
-  game: GameState; onUpgrade: () => void; onClose: () => void; busy: boolean;
-}) {
-  const { cost, current: cur, next, power, canUpgrade } = selectRodUpgradePreview(game);
-  // 강화로 바뀌는 두 축 — 입질 대기와 파워. 바 시간은 레벨과 무관해 싣지 않는다
-  const fmt = (s: { biteMin: number; biteMax: number }) =>
-    ({ bite: `${s.biteMin.toFixed(1)}~${s.biteMax.toFixed(1)}s` });
-  const c = fmt(cur), n = fmt(next);
-  // 사다리 — 상한이 없어 현재 ±4단계를 싣고 ±3행만 보인다(안에서 굴림). "다음 한 칸"이 핵심이다
-  const ladder = selectRodLadder(game, 4).map(r => ({
-    key: String(r.level), state: r.state,
-    label: <span className="pf-accent">Lv.{r.level}</span>,
-    meta: <>입질 <span className="pf-accent">{fmt(r.stats).bite}</span>{r.state !== 'done' && r.state !== 'current' && <> · <span className="pf-accent">{fmtGold(r.cost)}</span></>}</>,
-  }));
-
-  return (
-    <ModalCard title={`낚싯대 강화 — Lv.${game.rod} → Lv.${game.rod + 1}`} onClose={onClose}
-      confirm={
-        <Button variant="primary" disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
-          강화 (-{fmtGold(cost)})
-        </Button>
-      }>
-      {/* 좌: 사다리(단계 + 간단 스펙) · 우: 현재→다음 상세 */}
-      <TwoColumn>
-        <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
-        <div className="flex flex-col gap-3">
-          {/* 1차: 무엇이 되나 — 그림은 레벨과 무관한 한 장, 레벨은 글자가 말한다 */}
-          <HeroHeader sprite={<GearSprite kind="rod" preset="hero" ariaLabel="낚싯대" />}
-                       title={`Lv.${game.rod + 1}`}
-                       tags={[`지금 Lv.${game.rod}`, '입질 단축', '파워 상승']} />
-          {/* 1차: 얼마나 바뀌나 */}
-          <StatCompare size="lg" rows={[
-            { label: '입질 대기', value: c.bite, next: n.bite, delta: sec(next.biteMax - cur.biteMax) },
-            { label: '파워', value: power.current, next: power.next, delta: `+${power.next - power.current}` },
-          ]} />
-          {/* 3차: 안내 */}
-          <Note size="xs" className="my-0">강화에는 상한이 없어요. 레벨이 오를수록 체감은 줄어들어요. 파워가 해역 요구치에 닿는지는 화면 위 자원 바를 눌러 스탯창에서 확인해 보세요.</Note>
-          {/* 1차: 살 수 있나 — 버튼 바로 위 */}
-          <CostBox>
-            <CostLine size="lg" have={game.gold} delta={-cost} />
-            {!canUpgrade.ok && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT[canUpgrade.reason]}</Note>}
-          </CostBox>
-        </div>
-      </TwoColumn>
-    </ModalCard>
-  );
-}
-
-// R2b: 배 구매 패널 (골드 차감 + 명성 하한 검증)
-function BoatPanel({ game, onBuy, onClose, busy }: {
-  game: GameState; onBuy: () => void; onClose: () => void; busy: boolean;
-}) {
-  const preview = selectBoatPurchasePreview(game);
-  // 사다리 — 6단계 전부. 각 행은 스프라이트·이름·속도·가방·(잠긴 행은) 필요 명성
-  const ladder = selectBoatLadder(game).map(({ boat: b, state, openedSpot: spot }) => ({
-    key: String(b.tier), state,
-    leading: <BoatSprite tier={b.tier} preset="row" ariaLabel={b.name} />,
-    label: b.name,
-    meta: <>속도 <span className="pf-accent">{fmtNum(b.speed)}</span> · 가방 <span className="pf-accent">{fmtNum(b.bagCap)}</span>
-      {spot && <> · {spot.name}</>}
-      {state === 'locked' && b.fameReq > 0 && <> · 명성 <span className="pf-accent">{fmtNum(b.fameReq)}</span></>}</>,
-  }));
-  if (preview.kind === 'max') {
-    return (
-      <ModalCard title="조선소" onClose={onClose}>
-        <TwoColumn>
-          <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
-          <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요. 모든 해역에 나갈 수 있어요.</Note>
-        </TwoColumn>
-      </ModalCard>
-    );
-  }
-  const { next, openedSpot, currentSpeed, currentBagCap, check } = preview;
-
-  return (
-    <ModalCard title="조선소" onClose={onClose}
-      confirm={
-        <Button variant="primary" disabled={!check.ok || busy} onClick={onBuy}>
-          구매 (-{fmtGold(next.price)})
-        </Button>
-      }>
-      <TwoColumn>
-        <ProgressLadder steps={ladder} visibleRows={LADDER_ROWS} size="lg" />
-        <div className="flex flex-col gap-3">
-          {/* 1차: 무엇을 사나 — 제목은 "조선소"로 두고 어떤 배인지는 여기서 말한다 */}
-          <HeroHeader sprite={<BoatSprite tier={next.tier} preset="hero" ariaLabel={next.name} />}
-                       title={next.name}
-                       tags={[
-                         <><span className="pf-accent">{next.tier}</span>단계</>,
-                         ...(openedSpot ? [`${openedSpot.name} 해금`] : []),
-                         ...(next.tier === 1 ? ['대양 진입'] : []),
-                       ]} />
-          {/* 1차: 얼마나 바뀌나 */}
-          <StatCompare size="lg" rows={[
-            { label: '항해 속도', value: currentSpeed ?? '도보', next: fmtNum(next.speed),
-              delta: currentSpeed === null ? undefined : `+${fmtNum(next.speed - currentSpeed)}` },
-            { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리`,
-              delta: `+${fmtNum(next.bagCap - currentBagCap)}` },
-            { label: '새 해역', value: '—', next: next.tier === 1 ? '대양 진입 · 태평양' : openedSpot ? openedSpot.name : '없음' },
-          ]} />
-          {/* 잔액·조건·불가 사유는 상세 열 맨 아래 — 하단 버튼행 바로 위에서 읽힌다 */}
-          <CostBox>
-            <CostLine size="lg" have={game.gold} delta={-next.price}
-                      requirement={{ label: '명성', need: next.fameReq, have: game.fame }} />
-            {!check.ok && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT[check.reason]}</Note>}
-          </CostBox>
-        </div>
-      </TwoColumn>
-    </ModalCard>
-  );
-}
-
-// 미끼 상점 — 콜롬보항 전용. 정비 패널과 같은 2열 골격: 좌 미끼 목록 · 우 고른 미끼 상세(수량·가격·잔액).
-// 가격은 실제 차감액과 같은 함수(baitCost)로 보이고, 할인이 있으면 정가에 취소선을 긋는다.
-// 활성 토글은 가방 탭 소관 — 상점은 "파는 곳"만 담당한다. 담백체 유지.
-function ShopPanel({ game, onBuy, onClose, busy }: {
-  game: GameState;
-  onBuy: (baitId: string, count: number) => void;
-  onClose: () => void; busy: boolean;
-}) {
-  const [qty, setQty] = useState<Record<string, number>>(createBaitQuantities);
-  const rows = useMemo(() => selectBaitShopRows(game, qty, busy), [game, qty, busy]);
-  const [selectedId, setSelectedId] = useState(() => rows[0].bait.id);
-  const sel = rows.find(r => r.bait.id === selectedId) ?? rows[0];
-  const discountPct = Math.round(sel.discountRate * 100);
-
-  return (
-    <ModalCard title="향료전 — 미끼" onClose={onClose}
-      confirm={
-        <Button variant="primary" disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
-          구매 (-{fmtGold(sel.total)})
-        </Button>
-      }>
-      <TwoColumn>
-        {/* 좌: 미끼 목록 — 고르면 오른쪽 상세가 바뀐다 */}
-        <SelectList label="미끼 목록" items={rows} keyOf={r => r.bait.id} selectedKey={sel.bait.id}
-                    onSelect={setSelectedId}
-                    renderItem={(r, selected) => (
-                      <>
-                        <ColorSwatch color={r.bait.color} />
-                        <span className="min-w-0 flex-1 flex flex-col gap-0.5">
-                          <span className={cx('text-base', selected && 'text-gold')}>{r.bait.name}</span>
-                          <span className="text-xs text-text-dim">
-                            <RarityText rarity={r.bait.targetRarity} /> · 보유 <span className="pf-accent">{r.owned}</span>
-                          </span>
-                        </span>
-                        <PriceTag list={r.bait.price} price={r.unitPrice} />
-                      </>
-                    )} />
-
-        {/* 우: 고른 미끼 상세 */}
-        <div className="flex flex-col gap-3">
-          <HeroHeader sprite={<ColorSwatch color={sel.bait.color} big />}
-                       title={sel.bait.name}
-                       tags={[
-                         <><RarityText rarity={sel.bait.targetRarity} /> 미끼</>,
-                         <>보유 <span className="pf-accent">{sel.owned}</span>개</>,
-                         ...(discountPct > 0 ? [<>할인 <span className="pf-accent">{discountPct}%</span></>] : []),
-                       ]} />
-          <Note size="xs" className="my-0">{sel.bait.desc} {baitEffectLine(sel.bait)}</Note>
-          <StatCompare size="lg" rows={[
-            { label: '보유', value: `${sel.owned}개`, next: `${sel.owned + sel.count}개`, delta: `+${sel.count}` },
-            { label: '1개 가격', value: <PriceTag list={sel.bait.price} price={sel.unitPrice} size="lg" /> },
-          ]} />
-          <Frame className="px-3 py-2 flex items-center justify-between gap-2">
-            <span className="text-sm text-text-dim">수량</span>
-            <NumberStepper value={sel.count} min={1} max={BAIT_BUY_MAX} disabled={busy} variant="inline"
-                           ariaLabel={sel.bait.name}
-                           onChange={v => setQty(prev => ({ ...prev, [sel.bait.id]: normalizeBaitQuantity(v) }))} />
-          </Frame>
-          <CostBox>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-text-dim">합계</span>
-              <PriceTag list={sel.listTotal} price={sel.total} size="lg" />
-            </div>
-            <CostLine size="lg" have={game.gold} delta={-sel.total} />
-            {game.gold < sel.total && <Note tone="warn" size="xs" className="my-0">{REJECT_TEXT['not-enough-gold']}</Note>}
-          </CostBox>
-        </div>
-      </TwoColumn>
-      <Note size="xs" className="my-0">
-        미끼는 직접 낚아 올릴 때마다 하나씩 줄고, 방치 낚시에는 쓰이지 않아요.
-        산 미끼는 가방 탭의 아이템에서 켤 수 있어요. 한 번에 하나만 켜져요.
-      </Note>
     </ModalCard>
   );
 }
