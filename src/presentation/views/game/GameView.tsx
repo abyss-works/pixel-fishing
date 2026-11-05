@@ -9,7 +9,7 @@ import { selectEncounter } from '../../../features/bounty/model/challenge';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
-import type { RegionId } from '../../../game/content/places';
+import type { BaseId, RegionId } from '../../../game/content/places';
 import { zoneById } from '../../../game/content/zones';
 import type { Msg } from '../../layouts/hud/useMessageLog';
 import type { Notify } from '../../ui/hud/messageFeed';
@@ -22,6 +22,7 @@ import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
+import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
@@ -83,6 +84,7 @@ export default function GameView(props: GameViewProps) {
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [guildOpen, setGuildOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [ferryOpen, setFerryOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
@@ -141,7 +143,21 @@ export default function GameView(props: GameViewProps) {
           .then(ok => { if (ok) go({ kind: 'region', id: travel.to }, travel.msg); });
         return;
       }
+      case 'ferry':
+        setActionPanel(null);
+        setFerryOpen(true);
+        return;
     }
+  };
+
+  // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 그 항구로 옮긴다
+  const pickPort = (port: BaseId) => {
+    setFerryOpen(false);
+    const name = BASE_PACKS[port].name;
+    void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
+지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
+      confirmLabel: `${name}에 가기` })
+      .then(ok => { if (ok) go({ kind: 'base', id: port }, `여객선을 타고 ${name}에 도착했어요. 시설을 눌러 정비해 보세요.`); });
   };
 
   const openStats = () => setStatsOpen(open => !open);
@@ -214,6 +230,9 @@ export default function GameView(props: GameViewProps) {
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
         )}
 
+        {ferryOpen && scene.kind === 'base' && (
+          <FerryModal game={game} from={scene.id} onPick={pickPort} onClose={() => setFerryOpen(false)} />
+        )}
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
