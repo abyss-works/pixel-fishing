@@ -5,7 +5,7 @@ import type { ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
-import { applyLiveMessage, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
+import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
 import type { ChatError, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
@@ -22,12 +22,20 @@ const listeners = new Set<() => void>();
 /** 다른 플레이어의 화면 이동 — 좌표를 받을 때마다 지금 위치에서 새 위치까지 송신 주기 동안 일정 속도로 간다.
     시각은 화면 프레임과 같은 performance.now 기준이다 */
 const glides = new Map<string, Glide>();
+/** 다른 플레이어가 마지막으로 보낸 채팅과 받은 시각, 입력 중 표시를 켠 시각 — 머리 위 말풍선용(performance.now 기준) */
+const said = new Map<string, { text: string; at: number }>();
+const typingAt = new Map<string, number>();
 
 function receive(msg: ServerMessage): void {
   const prev = state;
   state = applyLiveMessage(state, msg, Date.now());
-  if (msg.t === 'hello') { helloCount++; glides.clear(); }
-  if (msg.t === 'leave') glides.delete(msg.uid);
+  if (msg.t === 'hello') { helloCount++; glides.clear(); said.clear(); typingAt.clear(); }
+  if (msg.t === 'leave') { glides.delete(msg.uid); said.delete(msg.uid); typingAt.delete(msg.uid); }
+  if (msg.t === 'chat') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
+  if (msg.t === 'typing') {
+    if (msg.on) typingAt.set(msg.uid, performance.now());
+    else typingAt.delete(msg.uid);
+  }
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged) {
@@ -68,12 +76,13 @@ export function usePlayersIn(region: string): { uid: string; nick: string }[] {
 }
 
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
-export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; stale: boolean }[] {
+export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; stale: boolean; bubble: string | 'typing' | null }[] {
   const wall = Date.now();
   return othersInRegion(state, region).map(o => {
     const { uid, x, y, nick, line } = o.presence;
     const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
-    return { x: pos.x, y: pos.y, nick, line, stale: isStale(o, wall) };
+    const b = bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now);
+    return { x: pos.x, y: pos.y, nick, line, stale: isStale(o, wall), bubble: b ? (b.kind === 'chat' ? b.text : 'typing') : null };
   });
 }
 
@@ -111,6 +120,11 @@ export function useChat(): ChatView {
   return { enabled: liveAvailable, you: s.you, lines: s.chat, error: s.chatError };
 }
 
+/** 입력 중 표시를 켜고 끈다. 연결이 끊긴 동안에는 버린다 */
+export function sendTyping(on: boolean): void {
+  conn?.send({ t: 'typing', on });
+}
+
 /** 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
 export function sendChat(text: string): void {
   conn?.send({ t: 'chat', text });
@@ -127,4 +141,17 @@ export function clearChatError(): void {
 export function hideAuthor(uid: string): void {
   state = withoutAuthor(state, uid);
   notify();
+}
+
+// 입력 중 표시를 켠 동안 다시 알리는 간격 — 받는 쪽은 소식이 끊기면 스스로 끈다
+const TYPING_REFRESH_MS = 4000;
+
+/** 채팅 입력 중(포커스가 있고 글이 있음)인 동안 입력 중 표시를 켜 둔다. 끝나거나 화면이 사라지면 끈다 */
+export function useTypingSignal(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    sendTyping(true);
+    const timer = setInterval(() => sendTyping(true), TYPING_REFRESH_MS);
+    return () => { clearInterval(timer); sendTyping(false); };
+  }, [active]);
 }

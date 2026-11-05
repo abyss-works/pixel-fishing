@@ -190,6 +190,20 @@ describe('실시간 채널 채팅', () => {
     expect(store.lines).toHaveLength(1);
   });
 
+  it('계정 유저의 입력 중 표시는 다른 사람에게만 가고, 게스트의 입력 중 표시는 보내지 않는다', async () => {
+    const { url } = await start();
+    const a = connect(url, 'u1');
+    const g = connect(url, 'guest:u3');
+    const b = connect(url, 'u2');
+    await a.next(); await g.next(); await b.next();
+    g.ws.send(JSON.stringify({ t: 'typing', on: true }));
+    a.ws.send(JSON.stringify({ t: 'typing', on: true }));
+    expect(await b.next()).toEqual({ t: 'typing', uid: 'u1', on: true });
+    a.ws.send(JSON.stringify({ t: 'typing', on: false }));
+    expect(await b.next()).toEqual({ t: 'typing', uid: 'u1', on: false });
+    expect(a.messages).toEqual([]);
+  });
+
   it('게스트·길이·제재 위반은 보낸 사람에게만 오류를 보내고 저장하지 않는다', async () => {
     const { url, chat: store } = await start();
     store.restricted.add('u3');

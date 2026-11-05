@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
-import { applyLiveMessage, CHAT_KEEP, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -90,5 +90,14 @@ describe('채팅 상태', () => {
   it('withoutAuthor는 그 사람의 줄을 지운다', () => {
     const s = hello([line(1, 'a'), line(2, 'b'), line(3, 'a')]);
     expect(withoutAuthor(s, 'a').chat.map(l => l.id)).toEqual([2]);
+  });
+});
+
+describe('bubbleOf', () => {
+  it('최근 채팅이 입력 중보다 먼저고, 시간이 지나면 사라진다', () => {
+    expect(bubbleOf({ text: '안녕', at: 0 }, 0, BUBBLE_MS - 1)).toEqual({ kind: 'chat', text: '안녕' });
+    expect(bubbleOf({ text: '안녕', at: 0 }, BUBBLE_MS, BUBBLE_MS)).toEqual({ kind: 'typing' });
+    expect(bubbleOf(null, 0, TYPING_MS)).toBeNull();
+    expect(bubbleOf(null, null, 0)).toBeNull();
   });
 });

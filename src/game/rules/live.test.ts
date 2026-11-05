@@ -7,6 +7,7 @@ describe('parseClientMessage', () => {
       .toEqual({ t: 'move', region: 'sea', x: 1.5, y: -2, dir: 3, line: true });
     expect(parseClientMessage('{"t":"stop"}')).toEqual({ t: 'stop' });
     expect(parseClientMessage('{"t":"ping"}')).toEqual({ t: 'ping' });
+    expect(parseClientMessage('{"t":"typing","on":true}')).toEqual({ t: 'typing', on: true });
     expect(parseClientMessage('{"t":"chat","text":"안녕"}')).toEqual({ t: 'chat', text: '안녕' });
   });
 
@@ -20,6 +21,7 @@ describe('parseClientMessage', () => {
       '{"t":"move","x":1,"y":2,"dir":0}',
       '{"t":"move","x":1e999,"y":2,"dir":0,"line":false}',
       '{"t":"chat","text":5}',
+      '{"t":"typing","on":"yes"}',
     ]) expect(parseClientMessage(raw), raw).toBeNull();
   });
 
