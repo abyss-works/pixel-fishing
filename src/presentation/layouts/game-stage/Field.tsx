@@ -73,9 +73,10 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
         alertEncounter(event.result.ticket);
       }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
-      const prefix = event.judgment === 'perfect' ? 'PERFECT · '
-        : event.judgment === 'good' ? 'GOOD · '
-        : event.judgment === 'auto' ? '방치 · ' : '';
+      // 판정은 대괄호 꼬리표로 앞에 붙인다(화면 문구에 가운뎃점을 쓰지 않는다)
+      const prefix = event.judgment === 'perfect' ? '[PERFECT] '
+        : event.judgment === 'good' ? '[GOOD] '
+        : event.judgment === 'auto' ? '[방치] ' : '';
       setToast(`${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, event.result.info.form)}] 획득!`, 'gold');
       if (event.result.released.length > 0) {
         const names = event.result.released.map(released => released.name).join(', ');

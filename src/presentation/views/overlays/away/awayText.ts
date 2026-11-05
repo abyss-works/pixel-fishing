@@ -28,7 +28,7 @@ export function bagFullText(s: AwaySummary): string | null {
 export function bagTimelineText(s: AwaySummary): string {
   const full = s.bagFullAfterMs ?? 0;
   const head = full < MINUTE ? '떠날 때 이미 가득 참' : `${awayDuration(full)} 만에 가득 참`;
-  return `${head} · 이후 ${awayDuration(s.awayMs - full)} 동안 ${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)})를 놓아줌`;
+  return `${head}. 이후 ${awayDuration(s.awayMs - full)} 동안 ${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)})를 놓아줌`;
 }
 
 /** "다음엔" 조언 한 줄 */
