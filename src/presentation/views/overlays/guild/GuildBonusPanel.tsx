@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
 import { DONATION_STEPS, GUILD_ERROR_TEXT, bonusRows, donorRanking, levelStepText, levelSteps } from '../../../../features/guild/model/guild';
-import type { BonusNode, BonusRow, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
+import type { BonusNode, BonusRow, GuildInfo } from '../../../../features/guild/model/guild';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
@@ -16,6 +16,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 import RankList from '../../../ui/RankList';
 import Subheading from '../../../ui/Subheading';
 import TextInput from '../../../ui/TextInput';
+import type { GuildPartProps, GuildRun } from './guildProps';
 
 // 길드 보너스 탭 — 왼쪽은 레벨 문턱 줄과 스킬 트리, 오른쪽 좁은 열은 고른 보너스의 상세와 그 아래 기부 순위다.
 // 레벨 문턱 줄은 레벨마다 필요한 누적 기여를 한 줄로 보이고 지금 레벨을 금색으로 세운다.
@@ -24,7 +25,6 @@ import TextInput from '../../../ui/TextInput';
 // 상한(길드 레벨) 위 노드와 열리지 않은 보너스는 흐리게 그린다. 보너스 머리나 노드를 고르면 옆 상세에서 기부한다.
 // 기부 순위는 보너스를 합친 사람별 전체 기부액이고, 길어지면 그 칸 안에서만 굴린다. 값은 서버 응답을 그대로 보이고,
 // 기부 뒤에는 길드 정보와 게임 상태(골드)를 다시 읽는다.
-type Run = (op: GuildOp) => Promise<string | null>;
 
 /** 열 머리의 짧은 이름과 아이콘 — 다섯 열이 한 줄에 들어가도록 줄인다 */
 const HEAD: Record<GuildBonusId, { label: string; glyph: GlyphId }> = {
@@ -35,8 +35,8 @@ const HEAD: Record<GuildBonusId, { label: string; glyph: GlyphId }> = {
   mutation: { label: '돌연변이', glyph: 'plus' },
 };
 
-export default function GuildBonusPanel({ guild, me, busy, run, setToast, onGoldChanged }: {
-  guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; onGoldChanged: () => Promise<void> | void;
+export default function GuildBonusPanel({ guild, me, busy, run, setToast, onGoldChanged }: GuildPartProps & {
+  onGoldChanged: () => Promise<void> | void;
 }) {
   const rows = bonusRows(guild.bonuses);
   const [picked, setPicked] = useState<GuildBonusId>(() => rows.find(r => r.canDonate)?.id ?? rows[0]?.id ?? 'sell');
@@ -132,7 +132,7 @@ function Node({ node, label, onPick }: { node: BonusNode; label: string; onPick:
 
 /** 고른 보너스의 상세 — 지금 → 다음 효과, 모인 골드 / 비용, 기부 입력과 빠른 금액, 내 기부. 트리 옆 좁은 열에 놓인다 */
 function Detail({ row, myTotal, guildId, busy, run, setToast, onGoldChanged }: {
-  row: BonusRow; myTotal: number; guildId: string; busy: boolean; run: Run; setToast: Notify;
+  row: BonusRow; myTotal: number; guildId: string; busy: boolean; run: GuildRun; setToast: Notify;
   onGoldChanged: () => Promise<void> | void;
 }) {
   const [amount, setAmount] = useState('');

@@ -1,28 +1,19 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
-import {
-  GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, activeEffectLines, growthBar, growthHintText, growthTotalText, inviteHintText,
-  leaveConfirm, logAgoText, logLine, memberActions, memberConfirm, memberName, splitMembers,
-} from '../../../../features/guild/model/guild';
-import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
+import { GUILD_ERROR_TEXT, splitMembers } from '../../../../features/guild/model/guild';
+import type { GuildConfirm, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
-import { useNow } from '../../../../features/gameplay/service/useGameTime';
-import Badge from '../../../ui/Badge';
-import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
-import { cx } from '../../../ui/cx';
-import { fmtNum } from '../../../ui/format';
-import HelpHint from '../../../ui/HelpHint';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
-import Panel from '../../../ui/Panel';
 import SubTabs from '../../../ui/SubTabs';
-import TextInput from '../../../ui/TextInput';
 import GuildBonusPanel from './GuildBonusPanel';
+import GuildLogbookTab from './GuildLogbookTab';
+import GuildMembersTab from './GuildMembersTab';
+import GuildSidebar from './GuildSidebar';
+import NoGuild from './NoGuild';
+import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드 창 — 게임 스테이지 안에 뜨는 넓은 창(플레이어 목록 창과 같은 폭)이다.
 // 길드가 없으면 왼쪽은 길드 만들기, 오른쪽은 초대 코드로 들어가기다.
@@ -31,6 +22,7 @@ import GuildBonusPanel from './GuildBonusPanel';
 // 길드원(접속 여부·기여, 길드장에게만 보이는 위임·내보내기 메뉴, 떠난 선원), 보너스(레벨 문턱, 스킬 트리와 기부), 항해일지.
 // 기여가 쌓이는 방식은 진행 막대 아래 도움말로 둔다.
 // 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주고 기부를 보내기만 한다.
+// 이 창은 길드 정보를 읽고 요청과 확인 창을 맡으며, 길드 정보 열과 각 탭 본문은 따로 그린다.
 // 창 자체는 스크롤하지 않는다 — 넘치는 내용은 탭 본문(또는 기부 순위 칸) 안에서만 굴린다.
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 /** 길드가 있을 때의 창 높이 — 스테이지(16:9) 안에 들어가도록 고정한다. 좁은 화면에서는 내용 높이를 따른다 */
@@ -91,232 +83,28 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
   );
 }
 
-type Run = (op: GuildOp) => Promise<string | null>;
-
-/** 길드가 없을 때 — 좌우 두 칸, 만들기와 초대 코드로 들어가기 */
-function NoGuild({ busy, run, setToast }: { busy: boolean; run: Run; setToast: Notify }) {
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [codeError, setCodeError] = useState<string | null>(null);
-
-  const onCreate = async (e: FormEvent) => {
-    e.preventDefault();
-    const value = name.trim();
-    const error = await run({ op: 'create', name: value });
-    setNameError(error);
-    if (!error) setToast(`${value} 길드를 만들었어요.`);
-  };
-  const onJoin = async (e: FormEvent) => {
-    e.preventDefault();
-    const error = await run({ op: 'join', code: code.trim() });
-    setCodeError(error);
-    if (!error) setToast('길드에 들어갔어요.');
-  };
-
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 max-[640px]:grid-cols-1">
-      <Panel title="길드 만들기" className="min-w-0">
-        <form className="flex flex-col gap-1.5" onSubmit={e => { void onCreate(e); }}>
-          <span className="text-xs text-text-dim">
-            만든 사람이 길드장이 돼요. 이름은 닉네임과 같은 규칙(한글 1~8자, 영문 2~16자)이에요. 최대 {GUILD_MAX_MEMBERS}명까지 함께해요.
-          </span>
-          <div className="flex gap-2">
-            <TextInput compact className="flex-1 min-w-0" value={name} maxLength={16}
-                       onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
-            <Button type="submit" size="sm" variant="primary" disabled={busy}>만들기</Button>
-          </div>
-          {nameError && <Note tone="warn">{nameError}</Note>}
-        </form>
-      </Panel>
-      <Panel title="초대 코드로 들어가기" className="min-w-0">
-        <form className="flex flex-col gap-1.5" onSubmit={e => { void onJoin(e); }}>
-          <span className="text-xs text-text-dim">길드장에게 받은 8자리 초대 코드를 입력해 주세요.</span>
-          <div className="flex gap-2">
-            <TextInput compact className="flex-1 min-w-0 uppercase" value={code} maxLength={16}
-                       onChange={e => setCode(e.target.value)} aria-label="초대 코드" placeholder="초대 코드" />
-            <Button type="submit" size="sm" variant="primary" disabled={busy}>들어가기</Button>
-          </div>
-          {codeError && <Note tone="warn">{codeError}</Note>}
-        </form>
-      </Panel>
-    </div>
-  );
-}
-
 type GuildTab = 'members' | 'bonus' | 'logbook';
 
-/** 길드가 있을 때 — 왼쪽 열은 길드 정보(성장·인원·초대 코드·받는 보너스·떠나기), 오른쪽은 길드원·보너스·항해일지 탭 */
-function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
-  guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: GuildConfirm) => void;
-  onGoldChanged: () => Promise<void> | void;
-}) {
-  const nowMs = Date.parse(useNow());
+/** 길드가 있을 때 — 왼쪽 길드 정보 열과 오른쪽 길드원·보너스·항해일지 탭 */
+function GuildView({ ask, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; onGoldChanged: () => Promise<void> | void }) {
   const [tab, setTab] = useState<GuildTab>('members');
-  /** 관리 메뉴를 펼친 길드원 — 한 번에 하나만 펼친다 */
-  const [menu, setMenu] = useState<string | null>(null);
-  const { active, departed } = splitMembers(guild.members);
-  const leader = guild.role === 'leader';
-  const leave = leaveConfirm(guild, me);
-  const lines = activeEffectLines(guild.bonuses);
-
-  const issue = async () => {
-    const error = await run({ op: 'invite', guildId: guild.id });
-    setToast(error ?? '새 초대 코드를 발급했어요. 이전 코드는 더 쓸 수 없어요.', error ? 'warn' : 'info');
-  };
-  const copy = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setToast('초대 코드를 복사했어요.');
-    } catch {
-      setToast('복사하지 못했어요. 코드를 직접 옮겨 적어 주세요.', 'warn');
-    }
-  };
-  const askAndClose = (c: GuildConfirm) => { setMenu(null); ask(c); };
+  const { guild } = part;
 
   return (
     <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-3 flex-1 min-h-0 max-[640px]:grid-cols-1">
-      <section className="pf-scroll-panel flex flex-col gap-2 min-h-0 overflow-y-auto text-sm" aria-label="길드 정보">
-        <GrowthSummary growth={guild.growth} />
-        <Inset className="px-2 py-1.5 flex flex-col gap-1.5">
-          <p className="m-0">길드원 <b>{active.length}</b>/{GUILD_MAX_MEMBERS}명 · {leader ? '길드장' : '길드원'}</p>
-          {leader && (
-            <section className="flex flex-col gap-1" aria-label="초대 코드">
-              <span className="text-xs text-text-dim">초대 코드</span>
-              {guild.invite ? (
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 min-w-0 font-mono tracking-widest text-gold">{guild.invite.code}</span>
-                  <Button size="sm" onClick={() => { void copy(guild.invite?.code ?? ''); }}>복사</Button>
-                </div>
-              ) : <span className="text-xs text-text-dim">쓸 수 있는 코드가 없어요.</span>}
-              <span className="text-xs text-text-dim">
-                {inviteHintText(guild.invite, nowMs)}
-              </span>
-              <Button size="sm" disabled={busy} onClick={() => { void issue(); }}>
-                {guild.invite ? '새 코드 발급' : '코드 발급'}
-              </Button>
-            </section>
-          )}
-        </Inset>
-        <Inset className="px-2 py-1.5 flex flex-col gap-0.5">
-          <span className="text-xs text-text-dim">받는 보너스</span>
-          {lines.length > 0
-            ? <span className="text-accent">{lines.join(' · ')}</span>
-            : <span className="text-xs text-text-dim">받는 보너스가 없어요.</span>}
-        </Inset>
-        <section className="mt-auto flex flex-col" aria-label="길드 떠나기">
-          {leave === null
-            ? <Note size="xs" className="my-0">다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.</Note>
-            : (
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => ask(leave)}>
-                길드 떠나기
-              </Button>
-            )}
-        </section>
-      </section>
+      <GuildSidebar {...part} ask={ask} />
       <div className="flex flex-col min-w-0 min-h-0">
         <SubTabs<GuildTab> activeKey={tab} onSelect={setTab} items={[
-          { key: 'members', label: '길드원', sub: `${active.length}명` },
+          { key: 'members', label: '길드원', sub: `${splitMembers(guild.members).active.length}명` },
           { key: 'bonus', label: '보너스' },
           { key: 'logbook', label: '항해일지', sub: `${guild.logbook.length}건` },
         ]} />
         <div className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
-          {tab === 'members' && (
-            <>
-              <ul className="flex flex-col m-0 p-0 list-none divide-y divide-line">
-                {active.map(m => {
-                  const can = memberActions(guild, me, m);
-                  const open = menu === m.uid;
-                  return (
-                    <li key={m.uid} className="flex flex-col gap-1 py-1 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className={cx('size-2 shrink-0', m.online ? 'bg-accent' : 'bg-line')} aria-hidden="true" />
-                        <span className="flex-1 min-w-0 truncate">
-                          <b className={cx(m.uid === me && 'text-gold')}>{memberName(m)}</b>
-                          {' '}<span className={cx('text-xs', m.online ? 'text-accent' : 'text-text-dim')}>
-                            {m.online ? '접속 중' : '접속하지 않음'}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-xs text-text-dim">
-                          오늘 <b className="text-text">{fmtNum(m.contribution.today)}</b>
-                          {' · '}누적 <b className="text-text">{fmtNum(m.contribution.total)}</b>
-                        </span>
-                        {m.role === 'leader' && <Badge>길드장</Badge>}
-                        {(can.handover || can.kick) && (
-                          <Button size="sm" variant="ghost" aria-expanded={open} aria-label={`${memberName(m)} 관리`}
-                                  onClick={() => setMenu(open ? null : m.uid)}>관리</Button>
-                        )}
-                      </div>
-                      {open && (
-                        <div className="flex justify-end gap-1">
-                          {can.handover && (
-                            <Button size="sm" disabled={busy}
-                                    onClick={() => askAndClose(memberConfirm(guild, m, 'handover'))}>넘기기</Button>
-                          )}
-                          {can.kick && (
-                            <Button size="sm" disabled={busy}
-                                    onClick={() => askAndClose(memberConfirm(guild, m, 'kick'))}>내보내기</Button>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              {departed.length > 0 && (
-                <section className="flex flex-col gap-0.5" aria-label="떠난 선원">
-                  <span className="text-xs text-text-dim">떠난 선원</span>
-                  {departed.map(m => (
-                    <span key={m.uid} className="flex items-center gap-2 text-xs text-text-dim">
-                      <span className="flex-1 min-w-0 truncate">{memberName(m)}</span>
-                      <span className="shrink-0">누적 {fmtNum(m.contribution.total)}</span>
-                    </span>
-                  ))}
-                </section>
-              )}
-            </>
-          )}
-          {tab === 'bonus' && (
-            <GuildBonusPanel guild={guild} me={me} busy={busy} run={run} setToast={setToast} onGoldChanged={onGoldChanged} />
-          )}
-          {tab === 'logbook' && (guild.logbook.length > 0 ? (
-            <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
-              {guild.logbook.map(l => (
-                <li key={l.id} className={cx('flex items-start gap-2 text-sm',
-                  (l.kind === 'legendary' || l.kind === 'named') && 'text-gold')}>
-                  <span className="flex-1 min-w-0">{logLine(l)}</span>
-                  <span className="shrink-0 text-xs text-text-dim">{logAgoText(l.at, nowMs)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : <Note>아직 남은 기록이 없어요. 가입·탈퇴, 전설 획득, 네임드 토벌이 여기에 남아요.</Note>)}
+          {tab === 'members' && <GuildMembersTab guild={guild} me={part.me} busy={part.busy} ask={ask} />}
+          {tab === 'bonus' && <GuildBonusPanel {...part} onGoldChanged={onGoldChanged} />}
+          {tab === 'logbook' && <GuildLogbookTab logbook={guild.logbook} />}
         </div>
       </div>
     </div>
-  );
-}
-
-/** 길드 레벨 요약 — 레벨, 누적 기여 / 다음 레벨 문턱, 진행 막대, 다음 레벨까지 남은 기여 */
-function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
-  const bar = growthBar(growth);
-  return (
-    <Inset className="px-2 py-1.5">
-      <section className="flex flex-col gap-1" aria-label="길드 레벨">
-        <div className="flex items-baseline gap-2">
-          <span className="pf-accent text-lg text-gold">Lv.{growth.level}</span>
-          <span className="text-xs text-text-dim">
-            {growthTotalText(growth)}
-          </span>
-        </div>
-        <span className="block h-2 border border-line bg-surface-2" role="meter" aria-label="다음 레벨까지 진행"
-              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
-          <span className={cx('block h-full', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
-                style={{ width: `${bar.ratio * 100}%` }} />
-        </span>
-        <span className="text-xs text-text-dim">
-          <span>{growthHintText(growth)}</span><HelpHint text={GUILD_CONTRIBUTION_HELP} />
-        </span>
-      </section>
-    </Inset>
   );
 }
