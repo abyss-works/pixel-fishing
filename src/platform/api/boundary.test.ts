@@ -43,6 +43,7 @@ const CROSS_LAYER_IMPORTS = new Set([
   'platform/adapters/guild.ts -> core/errors',
   'platform/adapters/player.ts -> core/errors',
   'platform/adapters/away.ts -> core/errors',
+  'platform/adapters/position.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> buildId',
   'platform/adapters/httpGameGateway.ts -> version',

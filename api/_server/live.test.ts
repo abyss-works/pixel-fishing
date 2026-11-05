@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -71,6 +71,7 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; l
       guildOf: async (uid) => chat.guilds.get(uid) ?? null,
     },
     recordSession: (uid, startedAt, endedAt) => { sessions.push({ uid, startedAt, endedAt }); },
+    savePosition: () => {},
     ...extra,
   });
   await listen(server);
@@ -253,6 +254,50 @@ describe('실시간 채널 채팅', () => {
   const chat = (c: Client, text: string) => c.ws.send(JSON.stringify({ t: 'chat', text }));
   const lineOf = (id: number, uid: string, text: string): ServerMessage =>
     ({ t: 'chat', line: { id, uid, nick: `n-${uid}`, text, at: '2030-01-01T00:00:00.000Z' } });
+
+  it('마지막 위치는 첫 위치에서 쓰고, 간격 안의 이동은 쓰지 않으며, 연결이 끝날 때 마지막 자리를 쓴다', async () => {
+    const saved: Array<{ uid: string; region: string; x: number; y: number }> = [];
+    const { url } = await start({ savePosition: (uid, pos) => { saved.push({ uid, ...pos }); } });
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 2, dir: 0, line: false }));
+    await b.next();
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 3, y: 4, dir: 0, line: false }));
+    await b.next();
+    expect(saved).toEqual([{ uid: 'u1', region: 'sea', x: 1, y: 2 }]);
+    a.ws.close();
+    await b.next(); // leave
+    expect(saved).toEqual([{ uid: 'u1', region: 'sea', x: 1, y: 2 }, { uid: 'u1', region: 'sea', x: 3, y: 4 }]);
+  });
+
+  it('간격이 지나면 움직이는 동안에도 쓰고, 마지막으로 쓴 뒤 움직이지 않았으면 끊길 때 다시 쓰지 않는다', async () => {
+    const saved: Array<{ x: number }> = [];
+    const { url } = await start({ positionSaveMs: 30, savePosition: (_uid, pos) => { saved.push({ x: pos.x }); } });
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 0, dir: 0, line: false }));
+    await b.next();
+    await new Promise(r => setTimeout(r, 40));
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 2, y: 0, dir: 0, line: false }));
+    await b.next();
+    expect(saved).toEqual([{ x: 1 }, { x: 2 }]);
+    a.ws.close();
+    await b.next(); // leave
+    expect(saved).toEqual([{ x: 1 }, { x: 2 }]);
+  });
+
+  it('위치를 보내지 않은 연결은 끝나도 마지막 위치를 쓰지 않는다', async () => {
+    const saved: unknown[] = [];
+    const { url, sessions } = await start({ savePosition: (_uid, pos) => { saved.push(pos); } });
+    const a = connect(url, 'u1');
+    await a.next();
+    a.ws.close();
+    await a.closed;
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+    expect(saved).toEqual([]);
+  });
 
   it('계정 유저의 채팅은 다듬어 저장한 뒤 보낸 사람을 포함한 모두에게 보낸다', async () => {
     const { url, chat: store } = await start();

@@ -14,6 +14,7 @@ import friends from '../friends.js';
 import { guildRoutes } from '../guilds.js';
 import me from '../me.js';
 import players from '../players.js';
+import position from '../position.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
@@ -27,6 +28,7 @@ import { blockedIds } from '../_data/blocks.js';
 import { recentChat, saveChat } from '../_data/chat.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
+import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 
@@ -55,6 +57,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/friends/:uid': friends,
   ...guilds,
   '/api/me': me,
+  '/api/me/position': position,
   '/api/players': players,
   '/api/players/:uid': players,
   '/api/rank': rank,
@@ -103,6 +106,11 @@ const live = attachLive(server, {
   recordSession: (uid, startedAt, endedAt) => {
     afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
       reportServerIssue('접속 세션 기록 실패', e, { uid, startedAt, endedAt })));
+  },
+  // 다시 접속하면 이 자리에서 시작한다. 세션 기록과 같이 응답 뒤 작업으로 추적한다
+  savePosition: (uid, pos) => {
+    afterResponse(saveLastPosition(database().db, uid, pos).catch(e =>
+      reportServerIssue('마지막 위치 기록 실패', e, { uid, region: pos.region })));
   },
 });
 

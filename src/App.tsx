@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { LIVE_REGIONS } from './game/world';
+import { LIVE_REGIONS, resumePoint } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { LocationRef } from './game/content/places';
 import { useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
+import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
@@ -15,8 +16,8 @@ import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
 
-// 위치 복원 규칙: 바다 위치는 유지하지 않는다. 지역 씬이면 고향 항구에서 시작하고,
-// 거점(집·항구)은 그대로 재개한다.
+// 장소 복원 규칙: 지금 열린 바다 지역이면 그 지역에서, 닫힌 지역이면 고향 항구에서 시작하고,
+// 거점(집·항구)은 그대로 재개한다. 바다 지역 안의 좌표는 마지막 위치(resumePoint)가 정한다.
 function sceneOf(location: LocationRef): SceneRef {
   if (location.kind === 'region' && !LIVE_REGIONS.includes(location.id)) return { kind: 'base', id: 'harbor' };
   return location;
@@ -33,14 +34,18 @@ function AppContent() {
   const { account, uid, onAuthChanged } = useAccount({ game, setToast, adoptAccount });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
+  const [entryPos, setEntryPos] = useState<Point | null>(null);
+  // 접속 복원 — 저장된 장소로 옮기고, 바다면 마지막 위치를 읽은 뒤 그 자리에서 시작한다(갈 수 없는 자리면 출발점)
+  const last = useLastPosition();
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current || sync !== 'on') return;
+    if (restored.current || sync !== 'on' || !last.settled) return;
     restored.current = true;
-    setScene(sceneOf(game.location));
-  }, [sync, game.location]);
+    const next = sceneOf(game.location);
+    setScene(next);
+    setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
+  }, [sync, game.location, last.settled, last.position]);
 
-  const [entryPos, setEntryPos] = useState<Point | null>(null);
   const go = (nextScene: SceneRef, message: string, position?: Point) => {
     setScene(nextScene);
     setEntryPos(position ?? null);

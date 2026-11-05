@@ -1,0 +1,39 @@
+// 재접속 시작점 — 마지막 위치를 지역 출발점 대신 쓸 수 있는지 판정한다.
+import { describe, expect, it } from 'vitest';
+import { REGION_PACKS, canMove, resumePoint } from './index';
+
+const world = REGION_PACKS.world;
+const openWater = (() => {
+  for (let y = 50; y < world.h; y += 7) for (let x = 50; x < world.w; x += 7) {
+    if (canMove(world, x, y) && !world.triggers.some(t => x >= t.rect.x && x < t.rect.x + t.rect.w && y >= t.rect.y && y < t.rect.y + t.rect.h)) return { x, y };
+  }
+  throw new Error('no open water');
+})();
+
+describe('재접속 시작점', () => {
+  it('같은 지역의 갈 수 있는 자리면 그 좌표에서 시작한다', () => {
+    expect(resumePoint('world', { region: 'world', ...openWater })).toEqual(openWater);
+  });
+
+  it('기록이 없거나 지역이 다르면 출발점(null)이다', () => {
+    expect(resumePoint('world', null)).toBeNull();
+    expect(resumePoint('world', { region: 'village', ...openWater })).toBeNull();
+  });
+
+  it('막힌 자리, 지도 밖, 숫자가 아닌 좌표는 출발점(null)이다', () => {
+    expect(resumePoint('world', { region: 'world', x: -10, y: -10 })).toBeNull();
+    expect(resumePoint('world', { region: 'world', x: Number.NaN, y: 10 })).toBeNull();
+    const land = (() => {
+      for (let y = 10; y < world.h; y += 5) for (let x = 10; x < world.w; x += 5) if (!canMove(world, x, y)) return { x, y };
+      throw new Error('no land');
+    })();
+    expect(resumePoint('world', { region: 'world', ...land })).toBeNull();
+  });
+
+  it('이동 트리거 위의 자리는 다시 접속하자마자 이동하지 않도록 출발점(null)이다', () => {
+    const pack = REGION_PACKS.village;
+    const trig = pack.triggers[0];
+    const inside = { x: trig.rect.x + trig.rect.w / 2, y: trig.rect.y + trig.rect.h / 2 };
+    expect(resumePoint('village', { region: 'village', ...inside })).toBeNull();
+  });
+});
