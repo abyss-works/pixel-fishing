@@ -2,7 +2,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
-import { providePresence } from './_server/livePresence.js';
+import { provideNotify, providePresence } from './_server/livePresence.js';
+import type { ServerMessage } from '../src/game/rules/live.js';
 
 let env: ActionEnv;
 const A = testUid(961);
@@ -20,7 +21,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await env?.stop();
 });
-afterEach(() => providePresence(() => null));
+afterEach(() => { providePresence(() => null); provideNotify(() => {}); });
 
 async function call(method: string, token: string | null, body?: unknown, uid?: string) {
   const { default: handler } = await import('./friends.js');
@@ -58,6 +59,23 @@ describe('친구 함수', () => {
     expect(await call('POST', userToken(A), { nickname: '가람' })).toMatchObject({ status: 400, body: { error: 'self' } });
     await env.client.query('insert into public.blocks (user_id, blocked_id) values ($1, $2)', [C, A]);
     expect(await call('POST', userToken(A), { nickname: '다온' })).toMatchObject({ status: 404 });
+  });
+
+  it('요청하면 받는 사람에게, 수락하면 요청한 사람에게 실시간 채널로 알린다', async () => {
+    const sent: [string, ServerMessage][] = [];
+    provideNotify((uid, msg) => { sent.push([uid, msg]); });
+    await call('DELETE', userToken(A), undefined, B);
+    expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ body: { result: 'requested' } });
+    expect(sent).toEqual([[B, { t: 'friend', kind: 'request', uid: A, nick: '가람' }]]);
+    await call('POST', userToken(A), { nickname: '나루' }); // already — 다시 알리지 않는다
+    expect(sent).toHaveLength(1);
+    expect(await call('PUT', userToken(B), undefined, A)).toMatchObject({ status: 200 });
+    expect(sent[1]).toEqual([A, { t: 'friend', kind: 'accepted', uid: B, nick: '나루' }]);
+    await call('DELETE', userToken(A), undefined, B);
+    await call('POST', userToken(B), { nickname: '가람' });
+    expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ body: { result: 'accepted' } });
+    expect(sent.at(-1)).toEqual([B, { t: 'friend', kind: 'accepted', uid: A, nick: '가람' }]);
+    await call('DELETE', userToken(A), undefined, B);
   });
 
   it('형식이 틀린 요청은 400이다', async () => {
