@@ -75,7 +75,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
           onUpgrade={() => run({ type: 'upgradeRod' }, r => {
-            setToast(`낚싯대를 강화했어요! 지금 Lv.${r.state.rod} · 입질이 빨라지고 파워도 올라요.`, 'gold');
+            setToast(`낚싯대를 강화했어요! 지금 Lv.${r.state.rod}이에요. 입질이 빨라지고 파워도 올라요.`, 'gold');
           })} />
       )}
       {panel === 'boat' && (
@@ -85,7 +85,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
             onClose();
             setToast(r.state.boat === 1
               ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
-              : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join('·')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`, 'gold');
+              : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`, 'gold');
           })} />
       )}
       {panel === 'shop' && (
@@ -128,14 +128,14 @@ function SellPanel({ game, onSell, onClose, busy }: {
 
   if (rows.length === 0) {
     return (
-      <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}>
+      <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}>
         <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
       </ModalCard>
     );
   }
 
   return (
-    <ModalCard title={`판매 — 가방 (${game.bag.length}마리)`} onClose={onClose}
+    <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}
       footer={<>
         {lockedCount > 0 && (
           <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요. 잠금은 가방 탭에서 풀 수 있어요.</Note>
@@ -191,7 +191,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
                   {on === items.length ? `×${items.length}` : `${on}/${items.length}`}
                 </td>
                 <td className="pf-accent">
-                  {on > 0 && !locked ? fmtGold(selectedSubtotal) : '—'}
+                  {on > 0 && !locked ? fmtGold(selectedSubtotal) : '0G'}
                 </td>
               </tr>,
               expanded ? (

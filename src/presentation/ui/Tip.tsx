@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cx } from './cx';
-import TooltipBubble, { anchorOf } from './TooltipBubble';
+import TooltipBubble from './TooltipBubble';
+import { anchorOf } from './tooltipPlacement';
 import type { Anchor } from './tooltipPlacement';
 
 // 툴팁: 설명이 붙은 요소. 마우스를 올리거나 키보드로 포커스하면 설명 버블이 뜬다.

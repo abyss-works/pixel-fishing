@@ -43,7 +43,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
       )}>
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="pf-accent text-gold text-2xl">{awayDuration(report.awayMs)}</span>
-          <span className="text-xs text-text-dim">{awayPeriodText(report)}{spot ? ` · ${spot}` : ''}</span>
+          <span className="text-xs text-text-dim">{awayPeriodText(report)}{spot ? `, ${spot}` : ''}</span>
         </div>
 
         <div className="grid grid-cols-4 gap-1.5 max-[520px]:grid-cols-2">
@@ -65,7 +65,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
                        className={cx(RARITY_CARD, 'flex flex-col items-center gap-0.5 px-1 py-1.5 text-xs')}>
                     <FishSprite fish={fish} form={n.form} preset="icon" className="max-w-full" />
                     <span>{formName(fish, n.form)}</span>
-                    <span className="text-2xs text-text-dim"><RarityText rarity={n.rarity} /> · {fmtSize(n.maxSize)}</span>
+                    <span className="text-2xs text-text-dim"><RarityText rarity={n.rarity} />, {fmtSize(n.maxSize)}</span>
                     {n.form === 'variant'
                       ? <NoteTag tag="돌연변이" className="text-epic border-epic" />
                       : <NoteTag tag="새 도감" className="text-accent border-accent" />}

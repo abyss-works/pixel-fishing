@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import TooltipBubble, { anchorOf } from './TooltipBubble';
+import TooltipBubble from './TooltipBubble';
+import { anchorOf } from './tooltipPlacement';
 import type { Anchor } from './tooltipPlacement';
 
 // 호버 도움말 — 요소 옆에 붙는 작은 물음표 (사용자 지정 2026-08-24).

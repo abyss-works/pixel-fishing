@@ -68,7 +68,7 @@ describe('결과 창', () => {
     expect(dex.getByText('새 도감')).toBeInTheDocument();
     expect(dex.getByText('돌연변이')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '등급' })).toHaveTextContent('돌연변이 1마리 (33.3%)');
-    expect(screen.getByRole('region', { name: '가방' })).toHaveTextContent('1시간 32분 만에 가득 참 · 이후 42분 동안 1마리');
+    expect(screen.getByRole('region', { name: '가방' })).toHaveTextContent('1시간 32분 만에 가득 참. 이후 42분 동안 1마리');
     const tips = screen.getByRole('region', { name: '다음엔' });
     expect(tips).toHaveTextContent('이번엔 1시간 32분 만에 가방이 찼어요. 오래 비울 땐 먼저 팔고 가세요.');
     expect(tips).toHaveTextContent(`다음 배 ${BOATS[1].name}까지 명성 500 남았어요. 지금 속도면 약`);
