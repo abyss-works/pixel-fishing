@@ -1,6 +1,6 @@
 // 개요 탭 — "살아 있는가 · 이상한 일이 진행 중인가"를 한 화면으로.
 // 레이아웃: 지표 줄(5장) 아래에 칸 둘을 좌우로 놓는다.
-//   왼쪽 = 최근 이벤트 피드(넓게 스크롤) / 오른쪽 = 위험 신호(제재·연타·반입) 목록.
+//   왼쪽 = 최근 이벤트 피드(넓게 스크롤) / 오른쪽 = 위험 신호(제재·연타) 목록.
 // 위험 신호는 본문 안내문에 묻히지 않도록 오른쪽 고정 칸의 건수로 세운다.
 import DataTable from '../../../ui/DataTable';
 import KpiTile from '../../../ui/KpiTile';
@@ -17,7 +17,7 @@ import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
 const DAYS = 30;
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 지표 '—'와 빈 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminOverview>> = [[], [], [], [], [], []];
+const EMPTY: Awaited<ReturnType<typeof readAdminOverview>> = [[], [], [], [], []];
 
 export default function OverviewTab() {
   const { access } = useAdminAuth();
@@ -25,13 +25,13 @@ export default function OverviewTab() {
   const { data, loading, error, refresh } =
     useAdminQuery(adminKeys.overview(DAYS), () => readAdminOverview(DAYS), granted);
 
-  const [users, daily, quality, recent, flags, imports] = data ?? EMPTY;
+  const [users, daily, quality, recent, flags] = data ?? EMPTY;
   // 7일 낚시 지표는 "조회 전"과 "0건"을 구분한다 — 도착 전에는 '—'
   const loaded = data !== null;
   const dauToday = daily[0]?.dau ?? null;
   const wau7 = daily[0]?.wau7 ?? null;
 
-  const metrics = selectOverviewMetrics(users, flags, imports, quality);
+  const metrics = selectOverviewMetrics(users, flags, quality);
 
   return (
     <TabPage title="개요" context="등록 유저와 접속·낚시 지표를 한눈에 보고, 위험 신호를 확인해요.">
@@ -85,9 +85,6 @@ export default function OverviewTab() {
                    tone="danger" />
           <RiskRow label="연타 플래그 유저" count={metrics.spamUsers}
                    hint="최근 7일 동안 낚시 간격이 2초보다 짧았던 유저예요. 사람이 낼 수 없는 간격이에요."
-                   tone="warn" />
-          <RiskRow label="이사 코드 반입" count={imports.length}
-                   hint="운영자 전용 경로로 반입한 기록이에요."
                    tone="warn" />
           {metrics.riskTotal > 0 && (
             <Note size="2xs" className="my-0 px-3 py-2">

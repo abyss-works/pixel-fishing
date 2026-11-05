@@ -50,7 +50,8 @@ export default function OpsTab() {
 
         <Cell title="데이터 계약">
           <Note className="my-0 leading-relaxed">
-            읽기 전용이에요. 쓰기 액션(지급·제재·이사 코드 반입)은 이 화면에 없어요.
+            쓰기는 우편 보내기, 편지 처리 표시, 사용자 상세의 관리 조치(제재·해제, 비밀번호 재설정 링크)뿐이에요.
+            관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
             권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
             데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름·인자)는 그 안에서만 다뤄요.
           </Note>
@@ -74,13 +75,14 @@ function Meta({ k, v, hint }: { k: string; v: string; hint?: string }) {
   );
 }
 
-/** 이벤트 카탈로그 — 액션 리듀서가 남기는 유형의 사람용 목차다. 로그에 모르는
- *  타입이 보이면 GameAction과 metrics.EVENT_LABELS를 함께 갱신한다. */
+/** 이벤트 카탈로그 — 액션 리듀서와 관리자 조치가 남기는 유형의 사람용 목차다. 로그에 모르는
+ *  타입이 보이면 GameAction(또는 관리자 조치 유형)과 metrics.EVENT_LABELS를 함께 갱신한다. */
 function EventCatalog() {
   return (
     <Cell title="events 스트림 카탈로그" className="xl:col-span-2" flush>
       <Note size="2xs" className="my-0 px-3 pt-2">
         이벤트 식별자는 게임 동작 기록을 따르고, 화면명은 이벤트 설명 카탈로그를 보여 줘요.
+        admin으로 시작하는 유형은 이 대시보드의 관리 조치예요.
       </Note>
       <div className="pf-scroll-panel max-h-[360px] overflow-y-auto px-1">
         <DataTable>

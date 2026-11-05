@@ -24,7 +24,6 @@ vi.mock('../../../../platform/api', () => ({
       spamFlags: vi.fn(async () => [{
         user_id: 'u1', catches_7d: 40, fast_gap_7d: 3, perfect_pct: 10, perfect_pct_global: 10,
       }]),
-      imports: vi.fn(async () => []),
     },
   },
 }));
@@ -52,11 +51,10 @@ describe('개요 탭', () => {
     expect(within(tile('보유 골드 합')).getByText('400')).toBeInTheDocument();
     expect(within(tile('명성 합')).getByText('30')).toBeInTheDocument();
 
-    // 위험 신호 — 제재 1건, 연타 1명, 반입 0건. 신호가 있으면 이상탐지 안내가 붙는다
+    // 위험 신호 — 제재 1건, 연타 1명. 신호가 있으면 이상탐지 안내가 붙는다
     const risk = screen.getByText('위험 신호').closest('section')!;
     expect(within(risk).getByText('제재 계정').nextElementSibling).toHaveTextContent('1');
     expect(within(risk).getByText('연타 플래그 유저').nextElementSibling).toHaveTextContent('1');
-    expect(within(risk).getByText('이사 코드 반입').nextElementSibling).toHaveTextContent('0');
     expect(within(risk).getByText(/이상탐지/)).toBeInTheDocument();
   });
 

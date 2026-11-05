@@ -72,12 +72,13 @@ class LocalAdmin implements AdminApi {
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
   catchQuality(_days: number): Promise<never[]> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
-  imports(): Promise<never[]> { return rejected(); }
-  dexMismatch(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
+  restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
+  resetLink(_userId: string): Promise<never> { return rejected(); }
+  letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }
   deployHost(): string | null {

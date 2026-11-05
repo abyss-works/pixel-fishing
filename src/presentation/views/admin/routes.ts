@@ -1,14 +1,14 @@
-// 관리자 화면의 해시 경로 — 탭 여섯 개와 두 탭 안의 구역을 `#/admin/<탭>[/<구역>]`으로 주소화한다.
-// 탭을 합치기 전의 해시(users·letters·metrics 등)는 합친 뒤의 자리로 옮기므로, 옛 북마크도
-// 가까운 화면에 닿는다. 순수 함수만 두고, 주소를 바꾸는 일은 화면 셸이 맡는다.
+// 관리자 화면의 해시 경로 — 탭 일곱 개와 세 탭 안의 구역을 `#/admin/<탭>[/<구역>]`으로 주소화한다.
+// 순수 함수만 두고, 주소를 바꾸는 일은 화면 셸이 맡는다.
 
-export type AdminTab = 'overview' | 'live' | 'players' | 'analysis' | 'balance' | 'ops';
+export type AdminTab = 'overview' | 'live' | 'players' | 'comms' | 'analysis' | 'balance' | 'ops';
 
 /** 내비게이션 순서 = 확인 우선순위 */
 export const ADMIN_TABS: readonly { key: AdminTab; label: string }[] = [
   { key: 'overview', label: '개요' },
-  { key: 'live', label: '라이브' },
+  { key: 'live', label: '실시간' },
   { key: 'players', label: '플레이어' },
+  { key: 'comms', label: '소통' },
   { key: 'analysis', label: '경제·진행' },
   { key: 'balance', label: '밸런스' },
   { key: 'ops', label: '운영' },
@@ -19,6 +19,8 @@ export const ADMIN_SECTIONS = {
   players: [
     { key: 'roster', label: '명부' },
     { key: 'abuse', label: '이상탐지' },
+  ],
+  comms: [
     { key: 'letters', label: '편지' },
     { key: 'mail', label: '우편' },
   ],
@@ -30,26 +32,17 @@ export const ADMIN_SECTIONS = {
 } as const;
 
 export type PlayersSection = (typeof ADMIN_SECTIONS.players)[number]['key'];
+export type CommsSection = (typeof ADMIN_SECTIONS.comms)[number]['key'];
 export type AnalysisSection = (typeof ADMIN_SECTIONS.analysis)[number]['key'];
 
 /** 현재 화면 — 구역이 있는 탭은 구역까지 정해져 있다 */
 export type AdminRoute =
   | { tab: 'overview' | 'live' | 'balance' | 'ops' }
   | { tab: 'players'; section: PlayersSection }
+  | { tab: 'comms'; section: CommsSection }
   | { tab: 'analysis'; section: AnalysisSection };
 
 const DEFAULT_ROUTE: AdminRoute = { tab: 'overview' };
-
-/** 탭을 합치기 전의 해시 키 → 합친 뒤의 자리 */
-const LEGACY_ROUTES: Record<string, AdminRoute> = {
-  users: { tab: 'players', section: 'roster' },
-  letters: { tab: 'players', section: 'letters' },
-  antiabuse: { tab: 'players', section: 'abuse' },
-  metrics: { tab: 'analysis', section: 'activity' },
-  economy: { tab: 'analysis', section: 'economy' },
-  progression: { tab: 'analysis', section: 'progression' },
-  fish: { tab: 'balance' },
-};
 
 const pickSection = <S extends readonly { key: string }[]>(sections: S, key: string): S[number]['key'] =>
   (sections.find(s => s.key === key) ?? sections[0]).key;
@@ -63,10 +56,12 @@ export function parseAdminHash(hash: string): AdminRoute {
       return { tab };
     case 'players':
       return { tab, section: pickSection(ADMIN_SECTIONS.players, section) };
+    case 'comms':
+      return { tab, section: pickSection(ADMIN_SECTIONS.comms, section) };
     case 'analysis':
       return { tab, section: pickSection(ADMIN_SECTIONS.analysis, section) };
     default:
-      return LEGACY_ROUTES[tab] ?? DEFAULT_ROUTE;
+      return DEFAULT_ROUTE;
   }
 }
 

@@ -36,7 +36,6 @@ export type {
   BountySnapshot, BountyProgressRow, BountyTicketRow,
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
-  AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
+  AdminCatchQualityRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, BalanceLive,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from './types';

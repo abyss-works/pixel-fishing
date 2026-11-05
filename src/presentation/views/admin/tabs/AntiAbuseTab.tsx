@@ -1,6 +1,6 @@
 // 이상탐지 구역 — 연타·판정 지표와 제재 현황을 확인한다. 운영 조치는 여기서 시작하고
 // Sentry 두 곳으로 관측한다. 레이아웃: 신호 요약 지표 줄 → 행동 이상(연타 | PERFECT) 좌우 →
-// 기록 이상(반입 | 도감 차액) 좌우 → 제재 현황 풀폭. 판정 기준(gap<2초 등)은 서버의 탐지 기준과 일치한다.
+// 제재 현황 풀폭. 판정 기준(gap<2초 등)은 서버의 탐지 기준과 일치한다.
 import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import KeyValueRow from '../../../ui/KeyValueRow';
@@ -16,7 +16,7 @@ import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, KpiRow, TabState } from '../layout';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], [], [], []];
+const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], []];
 
 export default function AntiAbuseTab() {
   const { access } = useAdminAuth();
@@ -25,15 +25,15 @@ export default function AntiAbuseTab() {
     useAdminQuery(adminKeys.antiAbuse, readAdminAntiAbuse, granted);
 
   // 유저 명부는 "uid → 식별" 라벨 풀로 쓴다 — 플래그 행에는 개인정보를 조인해 둘 수 없다
-  const [users, flags, imports, mismatch] = data ?? EMPTY;
+  const [users, flags] = data ?? EMPTY;
 
   const labelOf = (uid: string): string => {
     const u = users.find(x => x.user_id === uid);
     return u?.email ?? `${uid.slice(0, 8)}…`;
   };
 
-  const { spamUsers, perfectOutliers, topMismatch, restricted } = useMemo(
-    () => selectAntiAbuseRows(users, flags, mismatch), [users, flags, mismatch],
+  const { spamUsers, perfectOutliers, restricted } = useMemo(
+    () => selectAntiAbuseRows(users, flags), [users, flags],
   );
 
   // 신호가 있으면 골드·경고색, 없으면 낮춘다
@@ -52,10 +52,6 @@ export default function AntiAbuseTab() {
                  tone={tone(spamUsers.length, 'gold')} />
         <KpiTile label="PERFECT 이상치" value={fmtNum(perfectOutliers.length)} hint="7일 20낚시 이상"
                  tone={tone(perfectOutliers.length, 'danger')} />
-        <KpiTile label="이사 코드 반입" value={fmtNum(imports.length)} hint="전체 반입 로그"
-                 tone={tone(imports.length, 'gold')} />
-        <KpiTile label="도감 차액" value={fmtNum(mismatch.length)} hint="차액이 난 도감 행"
-                 tone={tone(mismatch.length, 'gold')} />
         <KpiTile label="제재 계정" value={fmtNum(restricted.length)}
                  tone={tone(restricted.length, 'danger')} />
       </KpiRow>
@@ -116,66 +112,6 @@ export default function AntiAbuseTab() {
                 {perfectOutliers.length === 0 &&
                   <tr><td colSpan={4} className="text-text-dim text-center py-2">
                     {granted ? '이상치가 없어요.' : '—'}
-                  </td></tr>}
-              </tbody>
-            </DataTable>
-          </div>
-        </Cell>
-      </CellGrid>
-
-      {/* 기록 이상 — 원장 위변조 흔적 두 축 */}
-      <CellGrid>
-        <Cell title="이사 코드 반입 로그">
-          <Note tone="warn" size="2xs" className="my-0">
-            import는 검증 없이 반입하는 운영자 전용 경로예요(2026-08-24 악용 사고).
-            행이 생기면 반입 시각과 들여온 자산을 바로 확인해 주세요. 제재 절차는 운영 쿼리로 진행해요.
-          </Note>
-          <div className="overflow-x-auto">
-            <DataTable>
-              <thead>
-                <tr><th className="text-left">시각</th><th className="text-left">유저</th>
-                    <th className="text-right">골드</th><th className="text-right">명성</th></tr>
-              </thead>
-              <tbody>
-                {imports.map(r => (
-                  <tr key={r.id}>
-                    <td className="whitespace-nowrap">{fmtDT(r.created_at)}</td>
-                    <td>{labelOf(r.user_id)}</td>
-                    <td className="text-right pf-accent text-gold">{fmtNum(adminNumber(r.gold))}</td>
-                    <td className="text-right pf-accent text-gold">{fmtNum(adminNumber(r.fame))}</td>
-                  </tr>
-                ))}
-                {imports.length === 0 &&
-                  <tr><td colSpan={4} className="text-text-dim text-center py-2">
-                    {granted ? '반입 이력이 없어요.' : '—'}
-                  </td></tr>}
-              </tbody>
-            </DataTable>
-          </div>
-        </Cell>
-
-        <Cell title="도감↔이벤트 차액 상위">
-          <Note size="2xs" className="my-0">
-            v0.5.0 이전에 플레이한 기록은 이벤트 제도 이전이라 차액이 나는 게 정상이에요.
-            그 <span className="pf-accent text-gold">이후에 가입한</span> 계정의 큰 차액만 위작 후보예요.
-          </Note>
-          <div className="overflow-x-auto">
-            <DataTable>
-              <thead>
-                <tr><th className="text-left">유저</th><th className="text-left">어종/폼</th>
-                    <th className="text-right">차액</th></tr>
-              </thead>
-              <tbody>
-                {topMismatch.map((m, i) => (
-                  <tr key={`${m.user_id}/${m.fish_id}/${m.form}/${i}`}>
-                    <td>{labelOf(m.user_id)}</td>
-                    <td className="pf-accent text-2xs">{m.fish_id}/{m.form}</td>
-                    <td className="text-right pf-accent text-gold">+{m.missing_events}</td>
-                  </tr>
-                ))}
-                {mismatch.length === 0 &&
-                  <tr><td colSpan={3} className="text-text-dim text-center py-2">
-                    {granted ? '차액이 없어요.' : '—'}
                   </td></tr>}
               </tbody>
             </DataTable>

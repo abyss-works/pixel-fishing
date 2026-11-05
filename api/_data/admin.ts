@@ -1,6 +1,6 @@
 // 관리자 읽기. 관리자 대시보드가 보는 조회이며 읽기만 한다.
-// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·v_import_log·
-// v_dex_mismatch·v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
+// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·
+// v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
 // 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
 // 행은 Postgres JSON 직렬화 그대로다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, 날짜는 'yyyy-mm-dd', 수는 수다.
 // 뷰가 순서를 정하지 않는 조회에는 같은 요청이 같은 순서를 받도록 정렬을 둔다.
@@ -28,9 +28,10 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
-/** 사용자 명부. 인증 계정과 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
+/** 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
 export function users(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
+      p.nickname,
       u.created_at as signed_up_at,
       (select max(s.updated_at) from auth.sessions s where s.user_id = u.id) as last_sign_in_at,
       c.gold, c.fame, c.boat, c.rod,
@@ -39,6 +40,7 @@ export function users(db: Executor): Promise<unknown[]> {
       c.data -> 'visited' as visited,
       c.restricted, c.version as save_version, c.updated_at as last_action_at
     from auth.users u
+    left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
 }
 
@@ -167,35 +169,6 @@ export function spamFlags(db: Executor): Promise<unknown[]> {
     from per_user p cross join glob g`, sql`t.user_id`);
 }
 
-/** import 반입 기록. 이벤트 id 오름차순 */
-export function imports(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select e.id, e.user_id, e.created_at,
-           (e.payload->>'gold')::numeric as gold,
-           (e.payload->>'fame')::numeric as fame
-    from public.events e
-    where e.type = 'import'`, sql`t.id`);
-}
-
-/** 도감과 이벤트의 차이. 도감 카운트가 catch 이벤트 수보다 큰 행 */
-export function dexMismatch(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`with evc as (
-      select user_id, payload->>'fishId' as fish_id, payload->>'form' as form,
-             count(*)::int as n
-      from public.events
-      where type = 'catch'
-      group by 1, 2, 3
-    )
-    select r.user_id, r.fish_id, r.form,
-           r.count as dex_count,
-           coalesce(evc.n, 0) as event_count,
-           r.count - coalesce(evc.n, 0) as missing_events
-    from public.records r
-    left join evc on evc.user_id = r.user_id
-                 and evc.fish_id = r.fish_id
-                 and evc.form = r.form
-    where r.count > coalesce(evc.n, 0)`, sql`t.user_id, t.fish_id, t.form`);
-}
-
 /** 최근 이벤트 피드. 최신 80행, id 내림차순 */
 export function recentEvents(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select id, user_id, type, payload, created_at
@@ -213,8 +186,8 @@ export function userEvents(db: Executor, userId: string, limit: number | null): 
     limit least(greatest(coalesce(${limit}::int, 500), 1), 2000)`, sql`t.id`);
 }
 
-/** 편지 목록. 영구 보관 표에서 최신순 */
+/** 편지 목록. 영구 보관 표에서 최신순이고, 관리자가 처리한 편지는 처리 시각(handled_at)을 가진다 */
 export function letters(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at
+  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at, l.handled_at
     from public.letters l`, sql`t.created_at desc, t.id desc`);
 }

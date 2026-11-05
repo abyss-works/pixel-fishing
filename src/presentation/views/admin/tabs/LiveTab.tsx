@@ -1,4 +1,4 @@
-// 라이브 탭 — "지금 누가 어디에 있는가". 실시간 접속의 정본은 없다(웹소켓/프레즌스 미구현) —
+// 실시간 탭 — "지금 누가 어디에 있는가". 실시간 접속의 정본은 없다(웹소켓/프레즌스 미구현) —
 // 부팅(boot)+액션이 곧 흔적이므로 **last_action_at 신선도**로 근사한다. 10분 = 낚시 한 사이클
 // 이상의 공백이면 자리 비움으로 보는 운영 판단값(balance.MIN_ACTION_GAP와 무관, 가안).
 // 상용 대시보드의 Realtime 화면 축소판: 접속 추정 지표 + 온라인 명부 + 현재 위치 분포.
@@ -50,7 +50,7 @@ export default function LiveTab() {
   };
 
   return (
-    <TabPage title="라이브" context="마지막 행동 시각으로 접속을 추정하고, 60초마다 갱신해요.">
+    <TabPage title="실시간" context="마지막 행동 시각으로 접속을 추정하고, 60초마다 갱신해요.">
       <KpiRow>
         <KpiTile label="접속 중" value={fmtN(buckets.online.length)}
                  hint={`마지막 행동 ${ONLINE_WINDOW_MIN}분 이내`} />

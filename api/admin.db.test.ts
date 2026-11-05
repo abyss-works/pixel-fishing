@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
+import { appAuth } from './_auth/session.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
 const PLAYER = testUid(902); // 명부에 없는 일반 사용자
@@ -93,7 +94,6 @@ interface Case {
   filled: boolean;
 }
 
-const byId = (r: Row) => String(r.id).padStart(12, '0');
 /** 기간(days)을 받는 일 단위 조회. 뷰는 day 열로 거른다 */
 const dayCase = (name: string, view: string, days: number): Case => ({
   name, params: { days: String(days) }, view: `select * from public.${view} ${sinceDay(days)}`,
@@ -102,19 +102,21 @@ const dayCase = (name: string, view: string, days: number): Case => ({
   ...(name === 'economy' ? { only: ({ mail_gold: _mail, ...rest }: Row) => rest } : {}),
 });
 const CASES: Case[] = [
-  { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true },
+  // 닉네임(nickname)은 v_admin_users가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
+  { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true,
+    only: ({ nickname: _nickname, ...rest }: Row) => rest },
   dayCase('dailyActive', 'v_daily_active', 30),
   { name: 'retention', view: 'select * from public.v_retention_cohorts', filled: true },
   dayCase('economy', 'v_economy_daily', 30),
   dayCase('bountyFunnel', 'v_bounty_funnel_daily', 7),
   dayCase('catchQuality', 'v_catch_quality', 90),
   { name: 'spamFlags', view: 'select * from public.v_spam_flags', key: r => String(r.user_id), filled: true },
-  { name: 'imports', view: 'select * from public.v_import_log', key: byId, filled: true },
-  { name: 'dexMismatch', view: 'select * from public.v_dex_mismatch', key: r => `${r.user_id}/${r.fish_id}/${r.form}`, filled: true },
   { name: 'recentEvents', view: 'select * from public.v_events_recent', filled: true },
   { name: 'userEvents', params: { user: PLAYER, limit: '300' }, view: `select * from public.fn_user_events('${PLAYER}', 300)`,
     after: rows => [...rows].sort((a, b) => Number(a.id) - Number(b.id)), filled: true },
-  { name: 'letters', view: 'select * from public.v_admin_letters', filled: true },
+  // 처리 시각(handled_at)은 v_admin_letters가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
+  { name: 'letters', view: 'select * from public.v_admin_letters', filled: true,
+    only: ({ handled_at: _handled, ...rest }: Row) => rest },
 ];
 /** 기간 하한의 경계: 하루, 일주일, 대시보드의 최대 기간 */
 const DAY_CASES: Case[] = [1, 7, 90].flatMap(days => [
@@ -271,7 +273,7 @@ describe('조회 결과', () => {
     await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1' }, '2 hours');
     await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3' }, '2 hours');
     // 제재된 익명 사용자: 기간 경계의 캐치(30일 밖, 7일 경계 안팎. 이벤트 id 순서가 시간 순서가 되게 오래된 것부터),
-    // 골드 원장 이벤트와 반입 기록
+    // 골드 원장 이벤트
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 80 }, '40 days');
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 70 }, '8 days');
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 60 }, '7 days');
@@ -283,8 +285,6 @@ describe('조회 결과', () => {
     await event(GUEST, 'upgradeRod', { cost: 80 }, '1 day');
     await event(GUEST, 'buyBoat', { cost: 1000 }, '2 days');
     await event(GUEST, 'buyBait', { cost: 30 }, '30 minutes');
-    await event(GUEST, 'import', { gold: 5000, fame: 100 }, '20 minutes');
-    await event(GUEST, 'import', { gold: 70, fame: 1 }, '3 days');
     // 리텐션: 열흘 전 코호트(저장 없는 두 사용자 중 하나만 다음 날과 사흘 뒤에 돌아왔다)
     await event(IDLE_A, 'boot', {}, '10 days');
     await event(IDLE_B, 'boot', {}, '10 days');
@@ -293,10 +293,6 @@ describe('조회 결과', () => {
     // 최근 이벤트 피드의 상한(80행)을 넘기는 부팅 기록
     await env.client.query(`insert into public.events (user_id, type, payload, created_at)
       select $1, 'boot', '{}'::jsonb, now() - (g || ' minutes')::interval from generate_series(1, 85) g`, [IDLE_B]);
-    // 도감: 관리자는 캐치 이벤트보다 도감이 많고, 플레이어는 이벤트와 도감이 같다
-    await env.client.query(`insert into public.records (user_id, fish_id, form, count, max_size, first_caught) values
-      ($1, 'carp', 'normal', 5, 15, '2026-10-16'), ($1, 'minnow', 'normal', 2, 5, '2026-10-16'),
-      ($2, 'carp', 'normal', 3, 30, '2026-10-18'), ($2, 'minnow', 'normal', 1, 7.5, '2026-10-18')`, [ADMIN, PLAYER]);
     // 편지
     await env.client.query(`insert into public.letters (user_id, text, created_at) values
       ($1, '바다가 좋아요', now() - interval '1 day'), ($2, '안녕하세요', now() - interval '2 days'), ($3, '문의합니다', now() - interval '3 days')`,
@@ -312,12 +308,12 @@ describe('조회 결과', () => {
     const rows = (await callAdmin({ q: 'users' }, userToken(ADMIN))).body as Row[];
     expect(rows.map(r => r.user_id)).toEqual([PLAYER, ADMIN, GUEST, IDLE_A, IDLE_B]);
     expect(rows[1]).toEqual({
-      user_id: ADMIN, email: 'admin@example.test', is_anonymous: false,
+      user_id: ADMIN, email: 'admin@example.test', nickname: '운영', is_anonymous: false,
       signed_up_at: '2026-10-01T00:00:00+00:00', last_sign_in_at: '2026-10-18T08:30:00+00:00',
       gold: 1200, fame: 80, boat: 1, rod: 4, location_kind: 'region', location_id: 'world', visited: ['village', 'world'],
       restricted: false, save_version: 2, last_action_at: '2026-10-18T09:00:00+00:00',
     });
-    expect(rows[2]).toMatchObject({ user_id: GUEST, email: null, is_anonymous: true, restricted: true, last_sign_in_at: null });
+    expect(rows[2]).toMatchObject({ user_id: GUEST, email: null, nickname: null, is_anonymous: true, restricted: true, last_sign_in_at: null });
     expect(rows[3]).toMatchObject({ user_id: IDLE_A, gold: null, location_kind: null, visited: null, restricted: null, last_action_at: null });
   });
 
@@ -368,20 +364,6 @@ describe('조회 결과', () => {
     expect(await daysOf(8)).toContain(await dayAgo(7));
     expect(await daysOf(30)).not.toContain(await dayAgo(40));
     expect(await daysOf(90)).toContain(await dayAgo(40));
-  });
-
-  it('imports: 반입 기록을 id 오름차순으로 준다', async () => {
-    const rows = (await callAdmin({ q: 'imports' }, userToken(ADMIN))).body as Row[];
-    expect(rows.map(r => [r.gold, r.fame])).toEqual([[5000, 100], [70, 1]]);
-    expect(rows.every(r => r.user_id === GUEST)).toBe(true);
-  });
-
-  it('dexMismatch: 도감이 캐치 이벤트보다 많은 행만 준다', async () => {
-    const rows = (await callAdmin({ q: 'dexMismatch' }, userToken(ADMIN))).body as Row[];
-    expect(rows).toEqual([
-      { user_id: ADMIN, fish_id: 'carp', form: 'normal', dex_count: 5, event_count: 3, missing_events: 2 },
-      { user_id: ADMIN, fish_id: 'minnow', form: 'normal', dex_count: 2, event_count: 0, missing_events: 2 },
-    ]);
   });
 
   it('retention: 첫 행동일 코호트별 재방문률을 준다', async () => {
@@ -450,5 +432,108 @@ describe('우편 보내기', () => {
 
     const list = await callAdmin({ q: 'mails' }, userToken(ADMIN));
     expect((list.body as Row[]).filter(r => r.userId === PLAYER)).toMatchObject([{ title: '환급', gold: 700, claimedAt: null }]);
+  });
+});
+
+describe('관리자 조치', () => {
+  const TARGET = testUid(906); // 제재·재설정 대상인 가입 사용자
+  const NO_SAVE = testUid(907); // 저장 상태가 없는 가입 사용자
+  const post = (q: string, body: unknown, token: string | null = userToken(ADMIN)) => callAdmin({ q }, token, 'POST', body);
+  const restrictedOf = async (uid: string) =>
+    (await env.client.query('select restricted from public.saves_current where user_id = $1', [uid])).rows[0]?.restricted as boolean | undefined;
+  const adminEvents = async (uid: string) => (await env.client.query(
+    `select type, payload from public.events where user_id = $1 and type like 'admin%' order by id`, [uid])).rows as Row[];
+
+  beforeAll(async () => {
+    await seedUser(env.client, { uid: TARGET, email: 'target@example.test', nickname: '대상', state: { gold: 5, fame: 1 } });
+    await seedUser(env.client, { uid: NO_SAVE, email: 'nosave@example.test', nickname: '저장없음' });
+  });
+
+  it('관리자가 아니면 403, 세션이 없으면 401이고 아무것도 바꾸지 않는다', async () => {
+    for (const [q, body] of [['restrict', { userId: TARGET, restricted: true }], ['resetLink', { userId: TARGET }]] as const) {
+      expect(await post(q, body, userToken(PLAYER)), q).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+      expect(await post(q, body, null), q).toMatchObject({ status: 401 });
+    }
+    expect(await restrictedOf(TARGET)).toBe(false);
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [TARGET])).rows).toEqual([]);
+    expect(await adminEvents(TARGET)).toEqual([]);
+  });
+
+  it('형태가 틀린 요청은 400이다', async () => {
+    for (const body of [null, {}, { userId: 'x', restricted: true }, { userId: TARGET }, { userId: TARGET, restricted: 'yes' }]) {
+      expect(await post('restrict', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-restrict' } });
+    }
+    for (const body of [null, {}, { userId: 'not-a-uuid' }]) {
+      expect(await post('resetLink', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    }
+  });
+
+  it('제재와 해제는 저장 상태의 restricted를 바꾸고, 조치마다 관리자 id를 담은 이벤트를 남긴다', async () => {
+    expect(await post('restrict', { userId: TARGET, restricted: true })).toMatchObject({ status: 200, body: { restricted: true } });
+    expect(await restrictedOf(TARGET)).toBe(true);
+    expect(await post('restrict', { userId: TARGET, restricted: false })).toMatchObject({ status: 200, body: { restricted: false } });
+    expect(await restrictedOf(TARGET)).toBe(false);
+    expect(await adminEvents(TARGET)).toEqual([
+      { type: 'adminRestrict', payload: { adminId: ADMIN } },
+      { type: 'adminUnrestrict', payload: { adminId: ADMIN } },
+    ]);
+  });
+
+  it('저장 상태가 없는 계정은 제재할 수 없어 404이고 이벤트도 남기지 않는다', async () => {
+    expect(await post('restrict', { userId: NO_SAVE, restricted: true })).toMatchObject({ status: 404, body: { error: 'no-save' } });
+    expect(await adminEvents(NO_SAVE)).toEqual([]);
+  });
+
+  it('익명 계정과 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
+    expect(await post('resetLink', { userId: GUEST })).toMatchObject({ status: 409, body: { error: 'anonymous-user' } });
+    expect(await post('resetLink', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [GUEST])).rows).toEqual([]);
+    expect(await adminEvents(GUEST)).toEqual([]);
+  });
+
+  it('재설정 링크는 1시간 유효한 재설정 토큰으로 게임 착지 주소를 만들고, 그 토큰으로 비밀번호를 바꿀 수 있다', async () => {
+    const before = Date.now();
+    const res = await post('resetLink', { userId: TARGET });
+    expect(res.status).toBe(200);
+    const { url, expiresAt } = res.body as { url: string; expiresAt: string };
+    // 재설정 메일의 링크가 서버 콜백을 거쳐 도착하는 주소와 같다: 앱 주소의 루트에 token 질의
+    const token = /^http:\/\/localhost:3000\/\?token=([A-Za-z0-9]{24})$/.exec(url)?.[1];
+    expect(token, url).toBeDefined();
+    const ttl = Date.parse(expiresAt) - before;
+    expect(ttl).toBeGreaterThan(3590_000);
+    expect(ttl).toBeLessThan(3610_000);
+    const { rows } = await env.client.query(`select value, expires_at from auth.verifications where identifier = $1`, [`reset-password:${token}`]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe(TARGET);
+    expect((rows[0].expires_at as Date).toISOString()).toBe(new Date(expiresAt).toISOString());
+    expect(await adminEvents(TARGET)).toContainEqual({ type: 'adminResetLink', payload: { adminId: ADMIN, expiresAt } });
+
+    await expect(appAuth().api.resetPassword({ body: { newPassword: 'new-pass-906', token: token! } })).resolves.toEqual({ status: true });
+    expect((await env.client.query(`select 1 from auth.verifications where identifier = $1`, [`reset-password:${token}`])).rows).toEqual([]);
+    expect((await env.client.query(`select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [TARGET])).rows).toHaveLength(1);
+  });
+
+  it('편지 처리 표시는 처음 처리한 시각을 남기고 취소하면 비운다. 관리자만 바꾸고 형식이 틀리면 400, 없는 편지는 404다', async () => {
+    const { rows } = await env.client.query(`insert into public.letters (user_id, text) values ($1, '답장 주세요') returning id`, [TARGET]);
+    const letterId = Number(rows[0].id);
+    const handledAt = async () => (await env.client.query('select handled_at from public.letters where id = $1', [letterId])).rows[0].handled_at as Date | null;
+
+    expect(await post('letterHandled', { letterId, handled: true }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await handledAt()).toBeNull();
+    for (const body of [null, { letterId }, { letterId: '1', handled: true }, { letterId: 0, handled: true }, { letterId: 1.5, handled: false }]) {
+      expect(await post('letterHandled', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-letter' } });
+    }
+    expect(await post('letterHandled', { letterId: 999999, handled: true })).toMatchObject({ status: 404, body: { error: 'no-letter' } });
+
+    expect(await post('letterHandled', { letterId, handled: true })).toMatchObject({ status: 200, body: { handled: true } });
+    const first = await handledAt();
+    expect(first).toBeInstanceOf(Date);
+    await post('letterHandled', { letterId, handled: true });
+    expect(await handledAt()).toEqual(first);
+    const listed = ((await callAdmin({ q: 'letters' }, userToken(ADMIN))).body as Row[]).find(r => Number(r.id) === letterId);
+    expect(listed?.handled_at).toEqual(expect.any(String));
+
+    expect(await post('letterHandled', { letterId, handled: false })).toMatchObject({ status: 200, body: { handled: false } });
+    expect(await handledAt()).toBeNull();
   });
 });

@@ -3,6 +3,7 @@
 // 표는 auth 스키마의 users·sessions·accounts·verifications이고 열 이름은 snake_case다.
 import { betterAuth } from 'better-auth';
 import { anonymous } from 'better-auth/plugins';
+import { generateRandomString } from 'better-auth/crypto';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
@@ -26,6 +27,23 @@ export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
 
 const timestamps = { createdAt: 'created_at', updatedAt: 'updated_at' } as const;
 
+/** 비밀번호 재설정 토큰의 유효 시간(초) */
+export const RESET_PASSWORD_EXPIRES_IN = 60 * 60;
+
+/** 재설정 요청(request-password-reset)이 만드는 것과 같은 형식의 재설정 토큰. 영문 대소문자와 숫자 24자다 */
+export const newPasswordResetToken = (): string => generateRandomString(24, 'a-z', 'A-Z', '0-9');
+
+/**
+ * 재설정 토큰으로 들어가는 게임의 재설정 착지 주소.
+ * 게임은 재설정 요청의 redirectTo로 앱 루트를 넘기고, 재설정 콜백(/reset-password/:token)은 그 주소에 token 질의를 붙여 보낸다.
+ * 콜백을 거친 뒤와 같은 주소다.
+ */
+export function passwordResetLanding(baseURL: string, token: string): string {
+  const url = new URL('/', baseURL);
+  url.searchParams.set('token', token);
+  return url.href;
+}
+
 export function createAuth(config: AuthConfig) {
   return betterAuth({
     database: config.pool,
@@ -42,6 +60,7 @@ export function createAuth(config: AuthConfig) {
         verify: ({ hash, password }) => bcrypt.compare(password, hash),
       },
       sendResetPassword: ({ user, url }) => config.mail.sendPasswordReset(user.email, url),
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN,
       revokeSessionsOnPasswordReset: true,
     },
     user: {
