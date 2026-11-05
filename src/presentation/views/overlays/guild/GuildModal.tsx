@@ -17,8 +17,8 @@ import Panel from '../../../ui/Panel';
 import TextInput from '../../../ui/TextInput';
 
 // 길드 창 — 게임 스테이지 안에 뜬다.
-// 길드가 없으면 왼쪽은 길드 만들기, 오른쪽은 초대 코드로 들어가기다.
-// 길드가 있으면 왼쪽은 길드 정보와 초대 코드(길드장)·떠나기, 오른쪽은 길드원 목록(접속 여부, 길드장의 위임·내보내기)과 떠난 선원이다.
+// 길드가 없으면 위는 길드 만들기, 아래는 초대 코드로 들어가기다.
+// 길드가 있으면 위는 길드 정보와 초대 코드(길드장)·떠나기, 아래는 길드원 목록(접속 여부, 길드장의 위임·내보내기)과 떠난 선원이다.
 const nameOf = (m: GuildMemberItem) => m.nick ?? '이름 없음';
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 
@@ -54,7 +54,7 @@ export default function GuildModal({ setToast, onClose }: { setToast: Notify; on
       );
 
   return (
-    <Modal layer="stage" xl onClose={onClose}>
+    <Modal layer="stage" onClose={onClose}>
       <ModalCard title={guild ? `길드 · ${guild.name}` : '길드'} onClose={onClose}>{body}</ModalCard>
       {confirm && (
         <ConfirmDialog layer="stage" title={confirm.title} confirmLabel={confirm.label}
@@ -95,7 +95,7 @@ function NoGuild({ busy, run, setToast }: { busy: boolean; run: Run; setToast: N
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
+    <div className="flex flex-col gap-3">
       <Panel title="길드 만들기" className="min-w-0">
         <form className="flex flex-col gap-1.5" onSubmit={e => { void onCreate(e); }}>
           <span className="text-xs text-text-dim">
@@ -147,7 +147,7 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 max-[640px]:grid-cols-1">
+    <div className="flex flex-col gap-3">
       <Panel title="길드 정보" className="min-w-0">
         <div className="flex flex-col gap-3 text-sm">
           <p className="m-0">길드원 {active.length}/{GUILD_MAX_MEMBERS}명 · 나는 {leader ? '길드장' : '길드원'}이에요.</p>
@@ -188,7 +188,7 @@ function GuildView({ guild, me, busy, run, setToast, ask }: {
         </div>
       </Panel>
       <Panel title={`길드원 ${active.length}명`} className="min-w-0">
-        <div className="pf-scroll-panel h-80 overflow-y-auto pr-1 flex flex-col gap-3 max-[640px]:h-56">
+        <div className="pf-scroll-panel h-56 overflow-y-auto pr-1 flex flex-col gap-3">
           <ul className="flex flex-col gap-1.5">
             {active.map(m => {
               const can = memberActions(guild, me, m);
