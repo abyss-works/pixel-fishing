@@ -15,11 +15,13 @@ export async function readFriends(): Promise<FriendItem[] | null> {
 
 /** 요청·수락·삭제. 서버가 거절하면 오류 코드를 돌려주고, 연결 실패는 던진다 */
 export async function friendAction(body: FriendOp): Promise<FriendOpResult> {
-  const res = await fetch('/api/friends', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = body.op === 'request'
+    ? await fetch('/api/friends', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nickname: body.nickname }),
+    })
+    : await fetch(`/api/friends/${encodeURIComponent(body.uid)}`, { method: body.op === 'accept' ? 'PUT' : 'DELETE' });
   if (res.status >= 500) throw new AppError('network', 'friend action failed', { status: res.status });
   const json = await res.json() as { result?: string; error?: string };
   return res.ok ? { ok: true, result: json.result ?? '' } : { ok: false, error: json.error ?? 'unknown' };
