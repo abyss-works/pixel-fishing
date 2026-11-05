@@ -101,7 +101,9 @@ const dayCase = (name: string, view: string, days: number): Case => ({
   ...(name === 'economy' ? { only: ({ mail_gold: _mail, ...rest }: Row) => rest } : {}),
 });
 const CASES: Case[] = [
-  { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true },
+  // 닉네임(nickname)은 v_admin_users가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
+  { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true,
+    only: ({ nickname: _nickname, ...rest }: Row) => rest },
   dayCase('dailyActive', 'v_daily_active', 30),
   { name: 'retention', view: 'select * from public.v_retention_cohorts', filled: true },
   dayCase('economy', 'v_economy_daily', 30),
@@ -303,12 +305,12 @@ describe('조회 결과', () => {
     const rows = (await callAdmin({ q: 'users' }, userToken(ADMIN))).body as Row[];
     expect(rows.map(r => r.user_id)).toEqual([PLAYER, ADMIN, GUEST, IDLE_A, IDLE_B]);
     expect(rows[1]).toEqual({
-      user_id: ADMIN, email: 'admin@example.test', is_anonymous: false,
+      user_id: ADMIN, email: 'admin@example.test', nickname: '운영', is_anonymous: false,
       signed_up_at: '2026-10-01T00:00:00+00:00', last_sign_in_at: '2026-10-18T08:30:00+00:00',
       gold: 1200, fame: 80, boat: 1, rod: 4, location_kind: 'region', location_id: 'world', visited: ['village', 'world'],
       restricted: false, save_version: 2, last_action_at: '2026-10-18T09:00:00+00:00',
     });
-    expect(rows[2]).toMatchObject({ user_id: GUEST, email: null, is_anonymous: true, restricted: true, last_sign_in_at: null });
+    expect(rows[2]).toMatchObject({ user_id: GUEST, email: null, nickname: null, is_anonymous: true, restricted: true, last_sign_in_at: null });
     expect(rows[3]).toMatchObject({ user_id: IDLE_A, gold: null, location_kind: null, visited: null, restricted: null, last_action_at: null });
   });
 

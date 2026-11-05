@@ -1,5 +1,5 @@
 // 명부 구역 — 전체 유저 명부와, 행을 눌러 여는 드릴다운을 제공한다.
-// 검색은 이메일·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
+// 검색은 이메일·닉네임·uid 부분 일치. 상세 모달이 해당 유저의 감사 정보를 보여준다:
 //   스냅샷 → 액션 유형 요약 → 최근 이벤트 타임라인.
 import { useMemo, useState } from 'react';
 import DataTable from '../../../ui/DataTable';
@@ -10,7 +10,7 @@ import Note from '../../../ui/Note';
 import TextInput from '../../../ui/TextInput';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
-import { adminNumber, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
+import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail } from '../../../../features/admin/model/adminViews';
 import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
@@ -43,7 +43,7 @@ export default function UsersTab() {
         {/* 툴바 — 검색과 결과 카운트를 한 행에 */}
         <div className="flex flex-wrap items-center gap-3 px-3 pt-3">
           <TextInput value={query} onChange={e => setQuery(e.target.value)}
-                 placeholder="이메일 또는 uid로 검색"
+                 placeholder="이메일·닉네임·uid로 검색"
                  className="w-[240px]" aria-label="유저 검색" />
           <span className="text-2xs text-text-dim">{filtered.length}/{users.length}명</span>
         </div>
@@ -63,8 +63,8 @@ export default function UsersTab() {
                 <tr key={u.user_id} onClick={() => setSelected(u)}
                     className="cursor-pointer hover:bg-surface-2 transition">
                   <td>
-                    {u.email
-                      ? <span className="text-xs">{u.email}</span>
+                    {u.email || u.nickname
+                      ? <span className="text-xs">{adminUserLabel(u)}</span>
                       : <span className="pf-accent text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}
                     {u.is_anonymous === false && <span className="ml-1 text-2xs text-gold pf-accent">가입</span>}
                   </td>
@@ -115,7 +115,7 @@ function UserDetail({ user, onClose }: {
   );
 
   return (
-    <Modal layer="app" wide title={`유저 상세 — ${user.email ?? `${user.user_id.slice(0, 8)}…`}`}
+    <Modal layer="app" wide title={`유저 상세 — ${adminUserLabel(user)}`}
            onClose={onClose}>
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-3 gap-2">

@@ -78,6 +78,8 @@ export interface BountySnapshot {
 export interface AdminUserRow {
   user_id: string;
   email: string | null;
+  /** 닉네임(profiles). 정하지 않았으면 null */
+  nickname: string | null;
   is_anonymous: boolean | null;
   signed_up_at: string | null;
   last_sign_in_at: string | null;

@@ -28,9 +28,10 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
-/** 사용자 명부. 인증 계정과 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
+/** 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다 */
 export function users(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
+      p.nickname,
       u.created_at as signed_up_at,
       (select max(s.updated_at) from auth.sessions s where s.user_id = u.id) as last_sign_in_at,
       c.gold, c.fame, c.boat, c.rod,
@@ -39,6 +40,7 @@ export function users(db: Executor): Promise<unknown[]> {
       c.data -> 'visited' as visited,
       c.restricted, c.version as save_version, c.updated_at as last_action_at
     from auth.users u
+    left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
 }
 

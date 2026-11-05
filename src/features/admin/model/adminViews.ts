@@ -179,11 +179,18 @@ export function selectEconomyMetrics(
   return { goldStats, goldSum, inflowTotal, outflowTotal };
 }
 
-/** 사용자 명부 검색을 대소문자 구분 없는 부분 일치로 처리한다. */
+/** 계정 표시 이름. 이메일과 닉네임을 함께 보이고, 둘 다 없으면 계정 id 앞 8자리다. */
+export function adminUserLabel(user: Pick<AdminUserRow, 'user_id' | 'email' | 'nickname'>): string {
+  const parts = [user.email, user.nickname].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : `${user.user_id.slice(0, 8)}…`;
+}
+
+/** 사용자 명부 검색을 계정 id·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */
 export function filterAdminUsers(users: readonly AdminUserRow[], query: string): AdminUserRow[] {
   const normalized = query.trim().toLowerCase();
   return users.filter(user => !normalized || user.user_id.toLowerCase().includes(normalized)
-    || (user.email ?? '').toLowerCase().includes(normalized));
+    || (user.email ?? '').toLowerCase().includes(normalized)
+    || (user.nickname ?? '').toLowerCase().includes(normalized));
 }
 
 export interface AdminUserDetailData {

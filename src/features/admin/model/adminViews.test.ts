@@ -3,13 +3,13 @@ import type {
   AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
 import {
-  adminNumber, filterAdminUsers, selectAdminUserDetail, selectAntiAbuseRows,
+  adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail, selectAntiAbuseRows,
   selectEconomyMetrics, selectLiveDashboard, selectOverviewMetrics,
   selectProgressionDashboard,
 } from './adminViews';
 
 const user = (overrides: Partial<AdminUserRow> = {}): AdminUserRow => ({
-  user_id: 'user-1', email: null, is_anonymous: true, signed_up_at: null,
+  user_id: 'user-1', email: null, nickname: null, is_anonymous: true, signed_up_at: null,
   last_sign_in_at: null, gold: 10, fame: 0, boat: 0, rod: 1,
   location_kind: null, location_id: null, visited: [], restricted: false,
   save_version: 8, last_action_at: null, ...overrides,
@@ -88,6 +88,11 @@ describe('관리자 화면 파생 데이터', () => {
     ];
 
     expect(filterAdminUsers(users, 'ANGLER')).toEqual([users[0]]);
+    const named = [...users, user({ user_id: 'user-3', nickname: '바다낚시꾼' })];
+    expect(filterAdminUsers(named, '낚시').map(row => row.user_id)).toEqual(['user-3']);
+    expect(adminUserLabel(user({ email: 'a@example.test', nickname: '바다' }))).toBe('a@example.test · 바다');
+    expect(adminUserLabel(user({ nickname: '바다' }))).toBe('바다');
+    expect(adminUserLabel(user({ user_id: 'abcdef0123456789' }))).toBe('abcdef01…');
     const detail = selectAdminUserDetail('user-1', events, flags);
     expect(detail.byType).toEqual([['catch', 2], ['sell', 1]]);
     expect([...detail.fastGaps]).toEqual([2]);

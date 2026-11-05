@@ -1,5 +1,6 @@
 // 우편 구역 — 플레이어에게 우편(제목·본문·골드)을 보내고, 최근 보낸 우편의 읽음·받음을 본다.
 // 보내기는 미리보기로 대상 수와 골드 합계를 확인한 뒤에만 열린다. 운영 스크립트(pnpm mail:send)와 같은 서버 모듈을 쓴다.
+// 받는 사람은 계정 id를 붙여 넣거나, 이메일·닉네임으로 검색해 고른 계정을 입력에 한 줄로 더한다.
 import { useState } from 'react';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -11,7 +12,8 @@ import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtDT } from '../../../../features/admin/model/metrics';
-import { MAIL_PROBLEM_TEXT, parseRecipients } from '../../../../features/admin/model/mailDraft';
+import { MAIL_PROBLEM_TEXT, addRecipient, parseRecipients, searchRecipients } from '../../../../features/admin/model/mailDraft';
+import { adminUserLabel } from '../../../../features/admin/model/adminViews';
 import { readAdminMails } from '../../../../features/admin/service/queries';
 import type { writeAdminMail } from '../../../../features/admin/service/queries';
 import { useAdminMailWriter } from '../../../../features/admin/service/useAdminMail';
@@ -36,6 +38,7 @@ export default function MailTab() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [recipientText, setRecipientText] = useState('');
+  const [search, setSearch] = useState('');
   const [allGold, setAllGold] = useState('0');
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,7 +87,12 @@ export default function MailTab() {
     if (ok) await run('send');
   };
 
-  const labelOf = (uid: string): string => users.find(u => u.user_id === uid)?.email ?? `${uid.slice(0, 8)}…`;
+  const labelOf = (uid: string): string => {
+    const u = users.find(x => x.user_id.toLowerCase() === uid.toLowerCase());
+    return u ? adminUserLabel(u) : `${uid.slice(0, 8)}…`;
+  };
+  const found = searchRecipients(users, search);
+  const pick = (uid: string) => { edit(setRecipientText)(addRecipient(recipientText, uid)); setSearch(''); };
 
   return (
     <>
@@ -131,11 +139,34 @@ export default function MailTab() {
               <TextArea rows={5} value={body} maxLength={2000} onChange={e => edit(setBody)(e.target.value)} />
             </Field>
             {kind === 'users' ? (
-              <Field label="받는 사람(한 줄에 '계정 id 골드')"
-                     error={parsed.badLines.length > 0 ? `형식이 틀린 줄: ${parsed.badLines.join(', ')}` : undefined}>
-                <TextArea rows={5} value={recipientText} onChange={e => edit(setRecipientText)(e.target.value)}
-                          className="font-mono text-xs" />
-              </Field>
+              <>
+                <Field label="계정 찾기" hint="이메일이나 닉네임 일부를 입력하고, 결과를 누르면 아래 목록에 더해요.">
+                  <TextInput value={search} onChange={e => setSearch(e.target.value)} placeholder="이메일 또는 닉네임" />
+                </Field>
+                {search.trim() !== '' && (
+                  <ul aria-label="검색 결과" className="flex flex-col divide-y divide-line border border-line">
+                    {found.map(u => (
+                      <li key={u.user_id}>
+                        <button type="button" onClick={() => pick(u.user_id)}
+                                className="w-full px-2 py-1 text-left text-xs hover:bg-surface-2">
+                          {adminUserLabel(u)}
+                        </button>
+                      </li>
+                    ))}
+                    {found.length === 0 && <li className="px-2 py-1 text-xs text-text-dim">찾는 계정이 없어요.</li>}
+                  </ul>
+                )}
+                <Field label="받는 사람(한 줄에 '계정 id 골드')"
+                       error={parsed.badLines.length > 0 ? `형식이 틀린 줄: ${parsed.badLines.join(', ')}` : undefined}>
+                  <TextArea rows={5} value={recipientText} onChange={e => edit(setRecipientText)(e.target.value)}
+                            className="font-mono text-xs" />
+                </Field>
+                {parsed.recipients.length > 0 && (
+                  <Note size="xs" className="my-0">
+                    {`받는 사람 ${parsed.recipients.length}명: ${parsed.recipients.map(r => labelOf(r.userId)).join(', ')}`}
+                  </Note>
+                )}
+              </>
             ) : (
               <Field label="한 사람당 골드" hint="저장 상태가 있고 제재되지 않은 모든 계정에 보내요.">
                 <TextInput inputMode="numeric" value={allGold} onChange={e => edit(setAllGold)(e.target.value)} />
