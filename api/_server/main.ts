@@ -14,6 +14,7 @@ import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
 import { appAuth } from '../_auth/session.js';
 import { settleAfterResponse } from './afterResponse.js';
+import { applyKeepAlive } from './keepAlive.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -46,6 +47,7 @@ app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
+applyKeepAlive(server);
 
 process.on('SIGTERM', () => {
   server.close(() => {
