@@ -53,3 +53,9 @@ export const FRIEND_ERROR_TEXT: Record<string, string> = {
   'account-only': '친구는 계정을 만든 뒤에 쓸 수 있어요.',
   'bad-nickname': '닉네임을 입력해 주세요.',
 };
+
+/** 실시간 친구 알림의 메시지 창 문구 — 받은 요청과 내 요청의 수락. 이름을 모르면 이름 없이 알린다 */
+export function friendAlertText(e: { kind: 'request' | 'accepted'; nick: string | null }): string {
+  if (e.kind === 'request') return e.nick ? `${e.nick} 님이 친구 요청을 보냈어요.` : '새 친구 요청이 왔어요.';
+  return e.nick ? `${e.nick} 님과 친구가 됐어요.` : '친구 요청이 수락됐어요.';
+}
