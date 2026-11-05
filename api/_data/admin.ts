@@ -186,8 +186,8 @@ export function userEvents(db: Executor, userId: string, limit: number | null): 
     limit least(greatest(coalesce(${limit}::int, 500), 1), 2000)`, sql`t.id`);
 }
 
-/** 편지 목록. 영구 보관 표에서 최신순 */
+/** 편지 목록. 영구 보관 표에서 최신순이고, 관리자가 처리한 편지는 처리 시각(handled_at)을 가진다 */
 export function letters(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at
+  return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at, l.handled_at
     from public.letters l`, sql`t.created_at desc, t.id desc`);
 }

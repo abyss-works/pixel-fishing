@@ -1,5 +1,5 @@
 // 관리자 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽고, 관리자 쓰기(POST)를 받는다 (Node 런타임)
-// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 비밀번호 재설정 링크 발급(q=resetLink)이다.
+// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 비밀번호 재설정 링크 발급(q=resetLink), 편지 처리 표시(q=letterHandled)이다.
 // 제재·해제와 재설정 링크 발급은 조치한 관리자 id를 대상 사용자의 이벤트로 함께 남긴다.
 // 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 세션 토큰의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
 // 토큰이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
@@ -14,6 +14,7 @@ import type { Database, Executor } from './_db/client.js';
 import { accountKind, insertPasswordResetToken } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
+import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
@@ -44,6 +45,7 @@ const WRITES: Record<string, Write> = {
   mail: ({ db }, body) => mail(db, body),
   restrict,
   resetLink,
+  letterHandled,
 };
 
 async function route(req: Req, res: Res): Promise<void> {
@@ -144,6 +146,15 @@ async function resetLink({ withTransaction }: Database, raw: unknown, adminId: s
   if (kind === 'missing') throw new ApiError(404, 'no-user');
   if (kind === 'anonymous') throw new ApiError(409, 'anonymous-user');
   return { url: passwordResetLanding(baseURL, token), expiresAt };
+}
+
+/** 편지 처리 표시 — 처리하면 처리 시각을 남기고 취소하면 비운다. 편지가 없으면 404다 */
+async function letterHandled({ db }: Database, raw: unknown): Promise<{ handled: boolean }> {
+  const { letterId, handled } = (raw ?? {}) as { letterId?: unknown; handled?: unknown };
+  if (!Number.isSafeInteger(letterId) || (letterId as number) < 1 || typeof handled !== 'boolean') throw new ApiError(400, 'bad-letter');
+  const found = await dbWrite(() => setLetterHandled(db, letterId as number, handled, new Date().toISOString()));
+  if (!found) throw new ApiError(404, 'no-letter');
+  return { handled };
 }
 
 const param = (req: Req, key: string): string | undefined => {

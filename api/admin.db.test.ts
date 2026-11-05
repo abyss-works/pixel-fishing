@@ -114,7 +114,9 @@ const CASES: Case[] = [
   { name: 'recentEvents', view: 'select * from public.v_events_recent', filled: true },
   { name: 'userEvents', params: { user: PLAYER, limit: '300' }, view: `select * from public.fn_user_events('${PLAYER}', 300)`,
     after: rows => [...rows].sort((a, b) => Number(a.id) - Number(b.id)), filled: true },
-  { name: 'letters', view: 'select * from public.v_admin_letters', filled: true },
+  // 처리 시각(handled_at)은 v_admin_letters가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
+  { name: 'letters', view: 'select * from public.v_admin_letters', filled: true,
+    only: ({ handled_at: _handled, ...rest }: Row) => rest },
 ];
 /** 기간 하한의 경계: 하루, 일주일, 대시보드의 최대 기간 */
 const DAY_CASES: Case[] = [1, 7, 90].flatMap(days => [
@@ -509,5 +511,29 @@ describe('관리자 조치', () => {
     await expect(appAuth().api.resetPassword({ body: { newPassword: 'new-pass-906', token: token! } })).resolves.toEqual({ status: true });
     expect((await env.client.query(`select 1 from auth.verifications where identifier = $1`, [`reset-password:${token}`])).rows).toEqual([]);
     expect((await env.client.query(`select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [TARGET])).rows).toHaveLength(1);
+  });
+
+  it('편지 처리 표시는 처음 처리한 시각을 남기고 취소하면 비운다. 관리자만 바꾸고 형식이 틀리면 400, 없는 편지는 404다', async () => {
+    const { rows } = await env.client.query(`insert into public.letters (user_id, text) values ($1, '답장 주세요') returning id`, [TARGET]);
+    const letterId = Number(rows[0].id);
+    const handledAt = async () => (await env.client.query('select handled_at from public.letters where id = $1', [letterId])).rows[0].handled_at as Date | null;
+
+    expect(await post('letterHandled', { letterId, handled: true }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await handledAt()).toBeNull();
+    for (const body of [null, { letterId }, { letterId: '1', handled: true }, { letterId: 0, handled: true }, { letterId: 1.5, handled: false }]) {
+      expect(await post('letterHandled', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-letter' } });
+    }
+    expect(await post('letterHandled', { letterId: 999999, handled: true })).toMatchObject({ status: 404, body: { error: 'no-letter' } });
+
+    expect(await post('letterHandled', { letterId, handled: true })).toMatchObject({ status: 200, body: { handled: true } });
+    const first = await handledAt();
+    expect(first).toBeInstanceOf(Date);
+    await post('letterHandled', { letterId, handled: true });
+    expect(await handledAt()).toEqual(first);
+    const listed = ((await callAdmin({ q: 'letters' }, userToken(ADMIN))).body as Row[]).find(r => Number(r.id) === letterId);
+    expect(listed?.handled_at).toEqual(expect.any(String));
+
+    expect(await post('letterHandled', { letterId, handled: false })).toMatchObject({ status: 200, body: { handled: false } });
+    expect(await handledAt()).toBeNull();
   });
 });
