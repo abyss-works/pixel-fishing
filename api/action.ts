@@ -57,6 +57,7 @@ import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
 import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
+import { activeDayUpsert } from './_data/activity.js';
 
 export type { BountyRows } from './_data/load.js';
 
@@ -499,11 +500,12 @@ async function route(req: Req, res: Res): Promise<void> {
     }), fragments));
   if (!committed) throw new ApiError(409, 'version-conflict');
 
-  // 후속 쓰기 — 이벤트 append, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
+  // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.
   // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
-  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow)];
+  // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
+  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow), activeDayUpsert(uid, eventNow)];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
   if (action.type === 'catch' && bounty) {
     followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));

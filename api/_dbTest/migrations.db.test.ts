@@ -216,4 +216,41 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('접속 세션·활동일·일별 집계 (0026)', () => {
+    const tables = async (c: Client) => (await c.query<{ name: string }>(
+      `select table_name as name from information_schema.tables where table_schema = 'public'
+       and table_name in ('play_sessions', 'user_active_days', 'daily_stats', 'events') order by table_name`)).rows.map(r => r.name);
+
+    it('인증 사용자는 본인 세션도 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      await client.query(`insert into public.play_sessions (user_id, started_at, ended_at, duration_sec) values ($1, now(), now(), 0)`, [uid]);
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select id from public.play_sessions')).rows).toEqual([]);
+        await expect(client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]))
+          .rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+
+    it('되돌리기 SQL은 세 표만 지운다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        expect(await tables(other)).toEqual(['daily_stats', 'events', 'play_sessions', 'user_active_days']);
+        const down = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '0026_activity.down.sql'), 'utf8');
+        await other.query(down);
+        expect(await tables(other)).toEqual(['events']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
