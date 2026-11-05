@@ -4,6 +4,7 @@ import type { SceneRef } from '../../../game/world';
 import { baitById } from '../../../game/content/baits';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
+import { useMessageFilter } from '../../../features/display/service/messageFilter';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
 import HudChip from '../../ui/hud/HudChip';
@@ -33,6 +34,7 @@ interface HudLayoutProps {
 export default function HudLayout({ game, scene, log, covered, onOpenStats, onOpenMap, notice, badge, logFooter, onPickLine }: HudLayoutProps) {
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
+  const messageFilter = useMessageFilter();
 
   return (
     <>
@@ -58,7 +60,8 @@ export default function HudLayout({ game, scene, log, covered, onOpenStats, onOp
           </div>
         )}
       </div>
-      <MessageLog log={log} footer={logFooter} onPick={onPickLine} />
+      <MessageLog log={log} footer={logFooter} onPick={onPickLine}
+                  filter={messageFilter.filter} onToggle={messageFilter.toggle} />
       {badge}
     </>
   );

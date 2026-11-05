@@ -1,6 +1,6 @@
 // 메시지 피드 — HUD 메시지 창이 보여 주는 기록의 형식과 보관 규칙(순수 함수).
 // 채널은 시스템 메시지와 채팅이다. 채팅 글줄은 보낸 사람(author)과 원본(from)을 가진다.
-// 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 채널 탭(전체와 채널별)을 그린다.
+// 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 채널 토글(채팅·시스템)을 그린다.
 
 export type MessageChannel = 'system' | 'chat';
 export type MessageTone = 'info' | 'gold' | 'warn';
@@ -24,7 +24,7 @@ export interface Msg {
   from?: { uid: string; chatId: number };
 }
 
-/** 채널 표시 이름 — 글줄 앞 [채널] 머리표와 채널 탭 라벨 */
+/** 채널 표시 이름 — 글줄 앞 [채널] 머리표와 채널 토글 라벨 */
 export const CHANNEL_LABEL: Record<MessageChannel, string> = { system: '시스템', chat: '채팅' };
 
 /** 보관 상한 — 넘으면 오래된 것부터 버린다(긴 세션에서 기록이 끝없이 쌓이지 않게) */
