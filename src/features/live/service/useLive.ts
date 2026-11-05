@@ -2,7 +2,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
 import type { ServerMessage } from '../../../game/rules/live';
-import { followTarget, LIVE_MOVE_MS } from '../../../game/rules/live';
+import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
+import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
 import { applyLiveMessage, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
 import type { ChatError, LiveState, MyPosition, SentPosition } from '../model/live';
@@ -18,14 +19,16 @@ let conn: LiveConnection | null = null;
 let helloCount = 0;
 const listeners = new Set<() => void>();
 /** 화면에 그리는 위치 — 받은 좌표를 향해 프레임마다 다가간다 */
-const drawn = new Map<string, { x: number; y: number }>();
-let lastFrame = 0;
+/** 다른 플레이어의 화면 이동 — 좌표를 받을 때마다 지금 위치에서 새 위치까지 송신 주기 동안 일정 속도로 간다.
+    시각은 화면 프레임과 같은 performance.now 기준이다 */
+const glides = new Map<string, Glide>();
 
 function receive(msg: ServerMessage): void {
   const prev = state;
   state = applyLiveMessage(state, msg, Date.now());
-  if (msg.t === 'hello') { helloCount++; drawn.clear(); }
-  if (msg.t === 'leave') drawn.delete(msg.uid);
+  if (msg.t === 'hello') { helloCount++; glides.clear(); }
+  if (msg.t === 'leave') glides.delete(msg.uid);
+  if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged) {
     notify();
@@ -38,7 +41,7 @@ function notify(): void {
 
 function reset(): void {
   state = EMPTY_LIVE;
-  drawn.clear();
+  glides.clear();
   notify();
 }
 
@@ -66,13 +69,10 @@ export function usePlayersIn(region: string): string[] {
 
 /** 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려준다 */
 export function othersFrame(region: string, now: number): { x: number; y: number; nick: string; line: boolean; stale: boolean }[] {
-  const dt = lastFrame ? now - lastFrame : 0;
-  lastFrame = now;
   const wall = Date.now();
   return othersInRegion(state, region).map(o => {
     const { uid, x, y, nick, line } = o.presence;
-    const pos = followTarget(drawn.get(uid) ?? { x, y }, { x, y }, dt);
-    drawn.set(uid, pos);
+    const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
     return { x: pos.x, y: pos.y, nick, line, stale: isStale(o, wall) };
   });
 }
