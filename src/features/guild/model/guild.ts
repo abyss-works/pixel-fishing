@@ -1,5 +1,7 @@
 import type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
-import { GUILD_BONUS_IDS, GUILD_LEVEL_FLOORS, bonusUnlockLevel, handoverOutcome, removalOutcome } from '../../../game/rules/guild';
+import {
+  GUILD_BONUS_IDS, GUILD_DAILY_FAME_CAP, GUILD_INVITE_TTL_MS, GUILD_LEVEL_FLOORS, bonusUnlockLevel, handoverOutcome, removalOutcome,
+} from '../../../game/rules/guild';
 import type { GuildBonusId } from '../../../game/rules/guild';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
@@ -7,8 +9,13 @@ import { namedById } from '../../../game/content/named';
 
 export type { GuildBonusItem, GuildInfo, GuildLogItem, GuildMemberItem, GuildOp };
 
-// 길드 화면 모델 — 길드원 묶음, 길드원별로 열리는 관리 동작, 초대 코드 남은 시간, 거부 안내 문장,
+// 길드 화면 모델 — 길드원 묶음, 길드원별로 열리는 관리 동작과 확인 문장, 초대 코드 남은 시간, 거부 안내 문장,
 // 레벨 진행·레벨 사다리, 보너스 줄과 효과 문장, 항해일지 문장. 보너스 값은 서버 응답을 그대로 보인다.
+
+const num = (n: number) => n.toLocaleString('ko-KR');
+
+/** 길드원의 화면 이름 — 닉네임이 없으면 '이름 없음' */
+export const memberName = (m: { nick: string | null }): string => m.nick ?? '이름 없음';
 
 /** 지금 길드원과 떠난 선원. 순서는 서버가 정한 그대로다 */
 export function splitMembers(members: readonly GuildMemberItem[]): { active: GuildMemberItem[]; departed: GuildMemberItem[] } {
@@ -32,11 +39,46 @@ export function leaveOutcome(guild: GuildInfo, me: string): 'leave' | 'dissolve'
   return outcome === 'dissolve' || outcome === 'handover-first' ? outcome : 'leave';
 }
 
+/** 확인 창 하나 — 제목, 확정 버튼 이름, 본문, 확정하면 보낼 요청, 성공 알림 */
+export interface GuildConfirm { title: string; label: string; text: string; op: GuildOp; done: string }
+
+/** 길드장이 다른 길드원에게 하는 넘기기·내보내기의 확인 창 */
+export function memberConfirm(guild: GuildInfo, target: GuildMemberItem, action: 'handover' | 'kick'): GuildConfirm {
+  const name = memberName(target);
+  return action === 'handover'
+    ? { title: '길드장 넘기기', label: '넘기기', op: { op: 'handover', guildId: guild.id, uid: target.uid },
+      text: `${name} 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
+      done: `${name} 님에게 길드장을 넘겼어요.` }
+    : { title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: guild.id, uid: target.uid },
+      text: `${name} 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.`,
+      done: `${name} 님을 내보냈어요.` };
+}
+
+/** 떠나기의 확인 창 — 혼자 남은 길드면 해산이다. 길드장을 먼저 넘겨야 하면 null */
+export function leaveConfirm(guild: GuildInfo, me: string): GuildConfirm | null {
+  const outcome = leaveOutcome(guild, me);
+  if (outcome === 'handover-first') return null;
+  const op: GuildOp = { op: 'remove', guildId: guild.id, uid: me };
+  return outcome === 'dissolve'
+    ? { title: '길드 해산', label: '해산', op,
+      text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?`,
+      done: `${guild.name} 길드를 해산했어요.` }
+    : { title: '길드 떠나기', label: '떠나기', op,
+      text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.`,
+      done: `${guild.name} 길드를 떠났어요.` };
+}
+
 /** 초대 코드를 쓸 수 있는 남은 시간 */
 export function inviteLeftText(expiresAt: string, nowMs: number): string {
   const mins = Math.floor((Date.parse(expiresAt) - nowMs) / 60_000);
   if (mins <= 0) return '만료됨';
   return mins >= 60 ? `${Math.floor(mins / 60)}시간 남음` : `${mins}분 남음`;
+}
+
+/** 초대 코드 안내 — 남은 시간(코드가 있을 때)과 유효 기간 */
+export function inviteHintText(invite: GuildInfo['invite'], nowMs: number): string {
+  const rule = `코드는 ${GUILD_INVITE_TTL_MS / 3600_000}시간 동안 여러 사람이 쓸 수 있어요.`;
+  return invite ? `${inviteLeftText(invite.expiresAt, nowMs)} · ${rule}` : rule;
 }
 
 /** 요청 실패 코드를 안내 문장으로 */
@@ -65,6 +107,22 @@ export function growthBar(growth: GuildInfo['growth']): { ratio: number; remaini
   if (growth.next === null) return { ratio: 1, remaining: null };
   return { ratio: (growth.total - growth.floor) / (growth.next - growth.floor), remaining: growth.next - growth.total };
 }
+
+/** 누적 기여와 다음 레벨 문턱 — 최고 레벨이면 누적 기여만 */
+export function growthTotalText(growth: GuildInfo['growth']): string {
+  return growth.next === null ? num(growth.total) : `${num(growth.total)} / ${num(growth.next)}`;
+}
+
+/** 진행 막대 아래 안내 — 다음 레벨까지 남은 기여, 최고 레벨이면 그렇다고 */
+export function growthHintText(growth: GuildInfo['growth']): string {
+  const { remaining } = growthBar(growth);
+  return remaining === null ? '최고 레벨이에요.' : `다음 레벨까지 기여 ${num(remaining)}`;
+}
+
+/** 기여가 쌓이는 방식과 레벨·보너스의 관계 */
+export const GUILD_CONTRIBUTION_HELP = `길드원이 얻은 명성만큼 기여가 쌓여요(한 사람당 하루 ${num(GUILD_DAILY_FAME_CAP)}까지, `
+  + '한국 시간 새벽 4시에 새로 세요). 일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. '
+  + '레벨마다 보너스가 하나씩 열리고, 단계는 기부로 올려요. 보너스는 길드원 모두가 같게 받아요.';
 
 /** 보너스의 화면 이름 */
 export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
@@ -163,9 +221,14 @@ export function levelSteps(growth: GuildInfo['growth']): LevelStep[] {
   });
 }
 
+/** 레벨 사다리 한 칸의 요약 — 문턱과 새로 열리는 것 */
+export function levelStepText(step: LevelStep): string {
+  return `기여 ${num(step.floor)}${step.perks.length > 0 ? ` · ${step.perks.join(' · ')}` : ''}`;
+}
+
 /** 항해일지 한 줄의 문장 */
 export function logLine(log: GuildLogItem): string {
-  const who = `${log.nick ?? '이름 없음'} 님`;
+  const who = `${memberName(log)} 님`;
   switch (log.kind) {
     case 'join': return `${who}이 길드에 들어왔어요.`;
     case 'leave': return `${who}이 길드를 떠났어요.`;
@@ -180,7 +243,7 @@ export function logLine(log: GuildLogItem): string {
       return `${who}이 네임드 ${named?.name ?? '어종'} 토벌에 성공했어요!`;
     }
     case 'donate':
-      return `${who}이 ${bonusName(log.detail)}에 ${(log.value ?? 0).toLocaleString('ko-KR')}골드를 기부했어요.`;
+      return `${who}이 ${bonusName(log.detail)}에 ${num(log.value ?? 0)}골드를 기부했어요.`;
     case 'bonus-up':
       return `${who}의 기부로 ${bonusName(log.detail)} ${log.value ?? 0}단계가 됐어요!`;
   }

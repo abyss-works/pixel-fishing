@@ -2,10 +2,10 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { GUILD_DAILY_FAME_CAP, GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import {
-  GUILD_ERROR_TEXT, activeEffectLines, growthBar, inviteLeftText, leaveOutcome, levelSteps, logAgoText, logLine, memberActions,
-  splitMembers,
+  GUILD_ERROR_TEXT, activeEffectLines, growthBar, growthHintText, growthTotalText, inviteHintText, leaveConfirm, levelStepText,
+  levelSteps, logAgoText, logLine, memberActions, memberConfirm, memberName, splitMembers,
 } from '../../../../features/guild/model/guild';
-import type { GuildInfo, GuildMemberItem, GuildOp } from '../../../../features/guild/model/guild';
+import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import Badge from '../../../ui/Badge';
@@ -31,12 +31,9 @@ import GuildBonusPanel from './GuildBonusPanel';
 // 길드원(접속 여부·기여, 길드장에게만 보이는 위임·내보내기 메뉴, 떠난 선원), 보너스(스킬 트리와 기부), 레벨, 항해일지.
 // 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주고 기부를 보내기만 한다.
 // 창 자체는 스크롤하지 않는다 — 넘치는 내용은 탭 본문(또는 기부 순위 칸) 안에서만 굴린다.
-const nameOf = (m: GuildMemberItem) => m.nick ?? '이름 없음';
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 /** 길드가 있을 때의 창 높이 — 스테이지(16:9) 안에 들어가도록 고정한다. 좁은 화면에서는 내용 높이를 따른다 */
 const FIXED_HEIGHT = 'h-[min(420px,calc(100%-32px))] max-[640px]:h-auto';
-
-type Confirm = { title: string; label: string; text: string; op: GuildOp; done: string };
 
 export default function GuildModal({ setToast, onGoldChanged, onClose }: {
   setToast: Notify;
@@ -46,7 +43,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
 }) {
   const { guild, loading, failed, you, act } = useGuild(true, true);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
 
   /** 요청 하나 — 거부는 안내 문장으로 돌려주고, 연결 실패는 알림으로 보인다 */
   const run = async (op: GuildOp): Promise<string | null> => {
@@ -150,7 +147,7 @@ type GuildTab = 'members' | 'bonus' | 'levels' | 'logbook';
 
 /** 길드가 있을 때 — 왼쪽 열은 길드 정보(성장·인원·초대 코드·받는 보너스·떠나기), 오른쪽은 길드원·보너스·레벨·항해일지 탭 */
 function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
-  guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: Confirm) => void;
+  guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: GuildConfirm) => void;
   onGoldChanged: () => Promise<void> | void;
 }) {
   const nowMs = Date.parse(useNow());
@@ -159,7 +156,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
   const [menu, setMenu] = useState<string | null>(null);
   const { active, departed } = splitMembers(guild.members);
   const leader = guild.role === 'leader';
-  const leave = leaveOutcome(guild, me);
+  const leave = leaveConfirm(guild, me);
   const lines = activeEffectLines(guild.bonuses);
 
   const issue = async () => {
@@ -174,7 +171,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
       setToast('복사하지 못했어요. 코드를 직접 옮겨 적어 주세요.', 'warn');
     }
   };
-  const askAndClose = (c: Confirm) => { setMenu(null); ask(c); };
+  const askAndClose = (c: GuildConfirm) => { setMenu(null); ask(c); };
 
   return (
     <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-3 flex-1 min-h-0 max-[640px]:grid-cols-1">
@@ -192,8 +189,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
                 </div>
               ) : <span className="text-xs text-text-dim">쓸 수 있는 코드가 없어요.</span>}
               <span className="text-xs text-text-dim">
-                {guild.invite ? `${inviteLeftText(guild.invite.expiresAt, nowMs)} · ` : ''}
-                코드는 24시간 동안 여러 사람이 쓸 수 있어요.
+                {inviteHintText(guild.invite, nowMs)}
               </span>
               <Button size="sm" disabled={busy} onClick={() => { void issue(); }}>
                 {guild.invite ? '새 코드 발급' : '코드 발급'}
@@ -208,17 +204,10 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
             : <span className="text-xs text-text-dim">받는 보너스가 없어요.</span>}
         </Inset>
         <section className="mt-auto flex flex-col" aria-label="길드 떠나기">
-          {leave === 'handover-first'
+          {leave === null
             ? <Note size="xs" className="my-0">다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.</Note>
             : (
-              <Button size="sm" variant="ghost" disabled={busy}
-                      onClick={() => ask(leave === 'dissolve'
-                        ? { title: '길드 해산', label: '해산', op: { op: 'remove', guildId: guild.id, uid: me },
-                          text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?`,
-                          done: `${guild.name} 길드를 해산했어요.` }
-                        : { title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: guild.id, uid: me },
-                          text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 초대 코드가 필요해요.`,
-                          done: `${guild.name} 길드를 떠났어요.` })}>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => ask(leave)}>
                 길드 떠나기
               </Button>
             )}
@@ -243,7 +232,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
                       <div className="flex items-center gap-2">
                         <span className={cx('size-2 shrink-0', m.online ? 'bg-accent' : 'bg-line')} aria-hidden="true" />
                         <span className="flex-1 min-w-0 truncate">
-                          <b className={cx(m.uid === me && 'text-gold')}>{nameOf(m)}</b>
+                          <b className={cx(m.uid === me && 'text-gold')}>{memberName(m)}</b>
                           {' '}<span className={cx('text-xs', m.online ? 'text-accent' : 'text-text-dim')}>
                             {m.online ? '접속 중' : '접속하지 않음'}
                           </span>
@@ -254,7 +243,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
                         </span>
                         {m.role === 'leader' && <Badge>길드장</Badge>}
                         {(can.handover || can.kick) && (
-                          <Button size="sm" variant="ghost" aria-expanded={open} aria-label={`${nameOf(m)} 관리`}
+                          <Button size="sm" variant="ghost" aria-expanded={open} aria-label={`${memberName(m)} 관리`}
                                   onClick={() => setMenu(open ? null : m.uid)}>관리</Button>
                         )}
                       </div>
@@ -262,17 +251,11 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
                         <div className="flex justify-end gap-1">
                           {can.handover && (
                             <Button size="sm" disabled={busy}
-                                    onClick={() => askAndClose({ title: '길드장 넘기기', label: '넘기기',
-                                      op: { op: 'handover', guildId: guild.id, uid: m.uid },
-                                      text: `${nameOf(m)} 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
-                                      done: `${nameOf(m)} 님에게 길드장을 넘겼어요.` })}>넘기기</Button>
+                                    onClick={() => askAndClose(memberConfirm(guild, m, 'handover'))}>넘기기</Button>
                           )}
                           {can.kick && (
                             <Button size="sm" disabled={busy}
-                                    onClick={() => askAndClose({ title: '길드원 내보내기', label: '내보내기',
-                                      op: { op: 'remove', guildId: guild.id, uid: m.uid },
-                                      text: `${nameOf(m)} 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.`,
-                                      done: `${nameOf(m)} 님을 내보냈어요.` })}>내보내기</Button>
+                                    onClick={() => askAndClose(memberConfirm(guild, m, 'kick'))}>내보내기</Button>
                           )}
                         </div>
                       )}
@@ -285,7 +268,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
                   <span className="text-xs text-text-dim">떠난 선원</span>
                   {departed.map(m => (
                     <span key={m.uid} className="flex items-center gap-2 text-xs text-text-dim">
-                      <span className="flex-1 min-w-0 truncate">{nameOf(m)}</span>
+                      <span className="flex-1 min-w-0 truncate">{memberName(m)}</span>
                       <span className="shrink-0">누적 {fmtNum(m.contribution.total)}</span>
                     </span>
                   ))}
@@ -301,7 +284,7 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
               <ProgressLadder steps={levelSteps(guild.growth).map(s => ({
                 key: String(s.level),
                 label: `Lv.${s.level}`,
-                meta: `기여 ${fmtNum(s.floor)}${s.perks.length > 0 ? ` · ${s.perks.join(' · ')}` : ''}`,
+                meta: levelStepText(s),
                 state: s.state,
               }))} />
               <Note size="xs" className="my-0">
@@ -337,7 +320,7 @@ function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
         <div className="flex items-baseline gap-2">
           <span className="pf-accent text-lg text-gold">Lv.{growth.level}</span>
           <span className="text-xs text-text-dim">
-            <b className="text-text">{fmtNum(growth.total)}</b>{growth.next !== null && ` / ${fmtNum(growth.next)}`}
+            {growthTotalText(growth)}
           </span>
         </div>
         <span className="block h-2 border border-line bg-surface-2" role="meter" aria-label="다음 레벨까지 진행"
@@ -346,7 +329,7 @@ function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
                 style={{ width: `${bar.ratio * 100}%` }} />
         </span>
         <span className="text-xs text-text-dim">
-          {bar.remaining === null ? '최고 레벨이에요.' : `다음 레벨까지 기여 ${fmtNum(bar.remaining)}`}
+          {growthHintText(growth)}
         </span>
       </section>
     </Inset>
