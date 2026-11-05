@@ -16,6 +16,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.15.2',
+    date: '2026-11-05',
+    summary: '네임드 결투와 밤 낚시를 조정했어요',
+    notes: [
+      { tag: '밸런스', text: '네임드와의 결투에서 놓치면 다음에 만날 때 체력이 조금 줄어든 채 나타나요.' },
+      { tag: '밸런스', text: '밤에는 밤에만 나오는 물고기가 더 자주 낚여요.' },
+      { tag: 'UI', text: '네임드 카드에서 네임드가 나타나는 곳을 볼 수 있어요.' },
+    ],
+  },
+  {
     version: '0.15.1',
     date: '2026-11-04',
     summary: '로그인 관련 문제를 고쳤어요',
