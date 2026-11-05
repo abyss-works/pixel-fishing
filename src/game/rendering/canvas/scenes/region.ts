@@ -5,8 +5,8 @@
 import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
-import { drawBoat, drawOtherShip, drawPerson } from '../../pixel/sprites/actors.js';
-import type { OtherShipView } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
+import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
 import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
@@ -22,6 +22,8 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
+  /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
+  bubble?: Speech;
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
@@ -85,6 +87,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
   else drawPerson(ctx, v.player.x, v.player.y);
+  drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
   drawTimingBar(ctx, v);
 
   // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)

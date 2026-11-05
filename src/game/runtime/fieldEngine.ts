@@ -18,7 +18,7 @@ import {
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
-import type { OtherShipView } from '../rendering/pixel/sprites/actors.js';
+import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import type { MaybePromise } from '../../shared/lib/when';
@@ -29,6 +29,9 @@ type CatchResult = Extract<ActionResult, { type: 'catch' }>;
 export type FieldDispatchResult =
   | { status: 'ok'; result: ActionResult }
   | { status: 'rejected'; error: RejectReason };
+
+/** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어와 내 머리 위 말풍선 */
+export interface LiveFrame { others: OtherShipView[]; bubble: Speech }
 
 export interface FieldSnapshot {
   phase: FishingPhase;
@@ -89,8 +92,8 @@ export class GameFieldEngine {
   private school: School | null = null;
   /** 이 지역의 현재 어군 — 대양은 세션의 배치 날짜로 정해지므로 호스트가 넘겨준다 */
   private schools: School[];
-  /** 같은 바다의 다른 플레이어 — 실시간 채널이 프레임마다 보간한 위치를 돌려준다 */
-  private othersSource: ((now: number) => OtherShipView[]) | null = null;
+  /** 같은 바다의 다른 플레이어와 내 말풍선 — 실시간 채널이 프레임마다 보간한 위치와 함께 돌려준다 */
+  private liveSource: ((now: number) => LiveFrame) | null = null;
 
   constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
@@ -128,9 +131,9 @@ export class GameFieldEngine {
     return { x: this.school.x, y: this.school.y };
   }
 
-  /** 다른 플레이어 위치의 출처를 정한다. null이면 그리지 않는다 */
-  setOthersSource(source: ((now: number) => OtherShipView[]) | null): void {
-    this.othersSource = source;
+  /** 다른 플레이어 위치와 내 말풍선의 출처를 정한다. null이면 그리지 않는다 */
+  setLiveSource(source: ((now: number) => LiveFrame) | null): void {
+    this.liveSource = source;
   }
 
   /** 어군 교체 — 배치 날짜가 서버 값으로 바뀌면 사거리 내 어군을 다시 판정한다 */
@@ -292,7 +295,7 @@ export class GameFieldEngine {
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
-      others: this.othersSource?.(now) ?? [],
+      ...(this.liveSource?.(now) ?? { others: [], bubble: null }),
     });
     return true;
   }

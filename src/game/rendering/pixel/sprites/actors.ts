@@ -19,13 +19,15 @@ export function drawBoat(ctx: Ctx, x: number, y: number, t: number) {
   drawPerson(ctx, x, y - 1 + rock);
 }
 
+/** 머리 위 말풍선 — 최근 채팅 글, 입력 중이면 'typing', 없으면 null */
+export type Speech = string | 'typing' | null;
+
 /** 다른 플레이어의 배 — 내 배와 구분되게 반투명으로 그리고, 이름과 드리운 낚싯줄을 함께 그린다 */
 export interface OtherShipView {
   x: number; y: number; nick: string; line: boolean; stale: boolean;
   /** 찌가 떠 있는 자리 — 보낸 사람의 실제 어군 위치. 없으면(이전 클라이언트) 배 옆에 그린다 */
   bob?: { x: number; y: number } | null;
-  /** 머리 위 말풍선 — 최근 채팅 글, 입력 중이면 'typing', 없으면 null */
-  bubble?: string | 'typing' | null;
+  bubble?: Speech;
 }
 
 // 말풍선에 보이는 최대 글자 수 — 넘으면 줄여서 보인다
@@ -61,9 +63,12 @@ export function drawOtherShip(ctx: Ctx, o: OtherShipView, t: number) {
   }
   ctx.restore();
   label(ctx, o.nick, o.x, o.y - 24, 'rgba(255,255,255,0.75)', 8);
-  if (o.bubble === 'typing') drawBubble(ctx, o.x, o.y - 34, '…');
-  else if (o.bubble) {
-    const chars = [...o.bubble];
-    drawBubble(ctx, o.x, o.y - 34, chars.length > BUBBLE_CHARS ? `${chars.slice(0, BUBBLE_CHARS).join('')}…` : o.bubble);
-  }
+  drawSpeech(ctx, o.x, o.y - 34, o.bubble ?? null);
+}
+
+/** 말풍선 — (x, y)는 꼬리 바로 위다. 입력 중이면 "…", 긴 글은 줄여서 보인다 */
+export function drawSpeech(ctx: Ctx, x: number, y: number, speech: Speech) {
+  if (speech === null) return;
+  const chars = [...(speech === 'typing' ? '…' : speech)];
+  drawBubble(ctx, x, y, chars.length > BUBBLE_CHARS ? `${chars.slice(0, BUBBLE_CHARS).join('')}…` : chars.join(''));
 }
