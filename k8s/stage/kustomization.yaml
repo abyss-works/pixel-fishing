@@ -50,4 +50,4 @@ patches:
 # dev 푸시마다 CI가 태그를 dev-<커밋 SHA 7자리>로 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-16b2aec
+    newTag: dev-3b742e1
