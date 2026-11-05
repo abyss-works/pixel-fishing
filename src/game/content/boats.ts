@@ -60,3 +60,13 @@ export const boatNameOf = (boat: number, none = '없음'): string =>
  *  ("정크선(3단계)" 같은 문자열을 손으로 적으면 배 개명·tier 재배치 때 따로 썩는다) */
 export const boatGateText = (tier: number): string =>
   `${boatNameOf(tier)}(${tier}단계)`;
+
+/** 배 게이트에 막혔을 때 덧붙이는 다음 배 안내 — 배는 한 단계씩 사므로 지금 배의 바로 다음 단계를 보인다.
+ *  조건 수치는 BOATS에서 읽는다. 마지막 배를 가졌으면 빈 문자열 */
+export function nextBoatText(boat: number): string {
+  const next = BOATS[boat];
+  if (!next) return '';
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
+  const fame = next.fameReq > 0 ? `명성 ${fmt(next.fameReq)} · ` : '';
+  return `다음 배 ${next.name}: ${fame}골드 ${fmt(next.price)}. 집 목공소나 항구 조선소에서 살 수 있어요.`;
+}
