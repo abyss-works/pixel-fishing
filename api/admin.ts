@@ -60,9 +60,13 @@ const WRITES: Record<string, Write> = {
 
 /** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
 const RESOURCES: Record<string, (req: Req) => (db: Executor) => Promise<unknown>> = {
-  '/api/admin/live': () => async () => {
+  '/api/admin/live': () => async db => {
     const online = onlineUsers();
-    return { count: online.length, online };
+    const known = await read.identities(db, online.map(entry => entry.uid));
+    return {
+      count: online.length,
+      online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
+    };
   },
   '/api/admin/stats/daily': req => {
     const { from, to } = rangeOf(req);
