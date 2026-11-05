@@ -53,10 +53,10 @@ function StatsKpi({ label, value, danger }: { label: ReactNode; value: string; d
   );
 }
 
-/** 해역 칸의 핵심 수치 하나: 왼쪽 구분선과 이름, 값 */
+/** 해역 칸의 핵심 수치 하나: 이름과 값. 둘째 칸부터 왼쪽에 구분선을 긋는다 */
 function SummaryFigure({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 pl-3 border-l border-line">
+    <div className="flex flex-col gap-0.5 pl-3 border-l border-line first:pl-0 first:border-l-0">
       <span className="text-2xs text-text-dim">{label}</span>
       <span className="pf-accent text-xs">{children}</span>
     </div>

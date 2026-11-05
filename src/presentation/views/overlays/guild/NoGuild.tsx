@@ -15,6 +15,9 @@ import Tip from '../../../ui/Tip';
 import GuildInviteSummary from './GuildInviteSummary';
 import type { GuildRun } from './guildProps';
 
+/** 찾기와 만들기 버튼의 같은 폭. 두 입력의 오른쪽 끝이 맞는다 */
+const ACTION_WIDTH = 'w-16 shrink-0';
+
 /** 코드로 들어오기 — 바로 들어갔는지 신청이 됐는지, 거부면 안내 문장 */
 export type GuildJoin = (code: string) => Promise<{ error: string | null; requested: boolean }>;
 
@@ -77,7 +80,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0 uppercase pf-accent tracking-widest" value={input} maxLength={16}
                      onChange={e => setInput(e.target.value)} aria-label="길드 코드" placeholder="길드 코드" />
-          <Button type="submit" size="sm" disabled={busy}>찾기</Button>
+          <Button type="submit" size="sm" className={ACTION_WIDTH} disabled={busy}>찾기</Button>
         </div>
       </form>
       <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void onJoin(); }} />
@@ -92,7 +95,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0" value={name} maxLength={16}
                      onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
-          <Button type="submit" size="sm" variant="primary" disabled={busy}>만들기</Button>
+          <Button type="submit" size="sm" variant="primary" className={ACTION_WIDTH} disabled={busy}>만들기</Button>
         </div>
         {nameError && <Note tone="warn">{nameError}</Note>}
       </form>

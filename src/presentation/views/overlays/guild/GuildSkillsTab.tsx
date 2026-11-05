@@ -33,7 +33,7 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
 
   return (
     <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
-      <Inset className="shrink-0 px-3 py-4">
+      <Inset className="grow shrink-0 flex flex-col justify-center px-3 py-4">
         <div className="grid grid-cols-5 gap-3" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}
         </div>

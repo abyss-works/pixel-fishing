@@ -19,6 +19,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
+import Tip from '../../../ui/Tip';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { RarityText } from '../../../ui/fish/RarityTag';
@@ -151,7 +152,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
           개수가 늘어도 확정 영역이 화면 밖으로 밀려나지 않게 목록만 굴린다(v0.6.4).
           840px ≈ 행 30개(28px) — flex(min-h-0)가 먼저 작아지므로 작은 화면에선
           가용 높이가 이긴다("둘 중 작은 값"). */}
-      <div className="pf-scroll overflow-y-auto flex-1 min-h-0 max-h-[840px] pr-1">
+      <div className="pf-scroll-panel overflow-y-auto flex-1 min-h-0 max-h-[840px] pr-2 [scrollbar-gutter:stable]">
         <DataTable>
           <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
           <tbody>
@@ -166,9 +167,9 @@ function SellPanel({ game, onSell, onClose, busy }: {
               <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                 <td>
                   {locked ? (
-                    <span className="text-text-dim cursor-default" title="잠금은 가방 탭에서 풀 수 있어요">
+                    <Tip plain text="잠금은 가방 탭에서 풀 수 있어요." className="flex text-text-dim">
                       <PixelIcon glyph="lock" size={13} />
-                    </span>
+                    </Tip>
                   ) : (
                     <IconButton glyph={glyph} size={13}
                               tone={on > 0 ? 'gold' : 'dim'}
