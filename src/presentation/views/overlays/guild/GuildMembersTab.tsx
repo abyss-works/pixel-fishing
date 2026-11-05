@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  GUILD_ERROR_TEXT, GUILD_INVITE_RULE, inviteLeftText, leaveConfirm, memberActions, memberConfirm, memberRows, splitMembers,
+  GUILD_ERROR_TEXT, GUILD_INVITE_RULE, dailyContributionRows, inviteLeftText, leaveConfirm, memberActions, memberConfirm, memberRows, splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
@@ -10,7 +10,7 @@ import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 import Frame from '../../../ui/Frame';
 import Inset from '../../../ui/Inset';
-import Tip from '../../../ui/Tip';
+import Tip, { TipList } from '../../../ui/Tip';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드원 탭: 길드원 표(접속 점, 이름, 오늘 기여, 누적 기여, 기부)와 맨 아래 한 줄(초대 코드, 떠나기).
@@ -36,7 +36,7 @@ export default function GuildMembersTab({ guild, me, busy, run, setToast, ask }:
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text="한국 시간 새벽 4시에 새로 세요.">오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows()} note="하루 상한이에요. 한국 시간 새벽 4시에 새로 세요." />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>
@@ -82,8 +82,9 @@ function MemberLine({ row, first, busy, open, onToggle, onHandover, onKick }: {
       <tr>
         <td className={line}>
           <span className="flex items-center gap-2 min-w-0">
-            <span className={cx('size-2 shrink-0', row.online ? 'bg-accent' : 'bg-line')}
-                  title={row.online ? '접속 중' : '접속 안 함'} aria-label={row.online ? '접속 중' : '접속 안 함'} />
+            <Tip plain text={row.online ? '접속 중' : '접속 안 함'} className="flex">
+              <span className={cx('size-2 shrink-0', row.online ? 'bg-accent' : 'bg-line')} aria-label={row.online ? '접속 중' : '접속 안 함'} />
+            </Tip>
             <b className={cx('truncate', row.me ? 'text-gold' : 'font-normal')}>{row.name}</b>
             {row.leader && <Badge>길드장</Badge>}
           </span>

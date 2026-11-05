@@ -19,7 +19,7 @@ import NoGuild from './NoGuild';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드 창. 게임 스테이지 안에 뜨고, 길드가 있으면 680px 폭에 스테이지 높이로 고정한다.
-// 제목 아래 한 줄에는 어느 탭에서나 의미가 있는 고정 정보(레벨, 진행, 인원)를 두고,
+// 제목(길드 정보) 아래 한 줄에는 어느 탭에서나 의미가 있는 고정 정보(길드 이름, 레벨, 진행, 인원)를 두고,
 // 그 아래 탭(길드원, 길드 스킬, 항해일지)이 각자 자기 일에 쓰는 정보만 보인다.
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
@@ -65,7 +65,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
 
   return (
     <Modal layer="stage" md={inGuild} xl={!inGuild} onClose={onClose} className={inGuild ? FIXED_HEIGHT : undefined}>
-      <ModalCard title={guild ? guild.name : '길드'} onClose={onClose} className={inGuild ? 'flex-1' : undefined}>
+      <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} className={inGuild ? 'flex-1' : undefined}>
         {body}
       </ModalCard>
       {confirm && (
@@ -105,11 +105,12 @@ function GuildView({ ask, onGoldChanged, ...part }: GuildPartProps & { ask: Guil
   );
 }
 
-/** 고정 정보 줄: 길드 레벨, 다음 레벨까지 진행 막대와 누적 기여, 인원. 기여가 쌓이는 방식은 막대의 툴팁이다 */
+/** 고정 정보 줄: 길드 이름, 길드 레벨, 다음 레벨까지 진행 막대와 누적 기여, 인원. 기여가 쌓이는 방식은 막대의 툴팁이다 */
 function GuildStatus({ guild }: { guild: GuildInfo }) {
   const bar = growthBar(guild.growth);
   return (
-    <Inset className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-10 px-3 shrink-0">
+    <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-10 px-3 shrink-0">
+      <b className="max-w-40 truncate pr-3 border-r border-line text-text">{guild.name}</b>
       <span className="pf-accent text-base text-gold">Lv.{guild.growth.level}</span>
       <Tip plain text={GUILD_CONTRIBUTION_HELP} className="block">
         <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"

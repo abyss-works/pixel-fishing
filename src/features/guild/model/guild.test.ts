@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_BONUS_NAME, GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
+  GUILD_BONUS_NAME, GUILD_CONTRIBUTION_HELP, dailyContributionRows, GUILD_ERROR_TEXT, GUILD_INVITE_RULE, bonusEffectText, bonusEffectValue, bonusRows, growthBar,
   growthTotalText, inviteLeftText, leaveConfirm, leaveOutcome, logbookDays, memberActions, memberConfirm, memberName, memberRows,
   splitMembers,
 } from './guild';
@@ -100,6 +100,16 @@ describe('길드 성장 화면 모델', () => {
     expect(GUILD_CONTRIBUTION_HELP).toContain('하루 1,000까지');
   });
 
+});
+
+describe('오늘 기여 도움말', () => {
+  it('하루 기여 상한을 갈래별 이름과 값의 목록으로 보인다', () => {
+    expect(dailyContributionRows()).toEqual([
+      { label: '명성', value: '1,000' },
+      { label: '일반 의뢰', value: '500' },
+      { label: '네임드 토벌', value: '1,000' },
+    ]);
+  });
 });
 
 describe('길드원 표', () => {
