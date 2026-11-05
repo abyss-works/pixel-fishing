@@ -852,11 +852,11 @@ describe('라이선스 도감 조건 — 남은 어종 수', () => {
     const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic);
     expect(missing.length).toBeGreaterThan(1);
     expect(dexLabel(state)).toEqual({
-      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) · 남은 ${missing.length}종`,
+      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) (남은 ${missing.length}종)`,
     });
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const oneCaught = { ...state, dex: { [missing[0]]: { normal: caught } } };
-    expect(dexLabel(oneCaught).label).toMatch(new RegExp(` · 남은 ${missing.length - 1}종$`));
+    expect(dexLabel(oneCaught).label).toMatch(new RegExp(` \\(남은 ${missing.length - 1}종\\)$`));
   });
 
   it('다 채우면 남은 수 없이 원래 문구다', () => {
