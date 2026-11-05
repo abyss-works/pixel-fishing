@@ -5,6 +5,7 @@ import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
+import Subheading from '../../../ui/Subheading';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드원 탭 — 지금 길드원 행(접속 여부·오늘/누적 기여·길드장 표시)과 떠난 선원.
@@ -30,7 +31,7 @@ export default function GuildMembersTab({ guild, me, busy, ask }: Pick<GuildPart
       </ul>
       {departed.length > 0 && (
         <section className="flex flex-col gap-0.5" aria-label="떠난 선원">
-          <span className="text-xs text-text-dim">떠난 선원</span>
+          <Subheading className="mb-0">떠난 선원</Subheading>
           {departed.map(m => (
             <span key={m.uid} className="flex items-center gap-2 text-xs text-text-dim">
               <span className="flex-1 min-w-0 truncate">{memberName(m)}</span>

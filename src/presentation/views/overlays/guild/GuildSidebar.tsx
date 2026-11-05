@@ -4,11 +4,15 @@ import {
 } from '../../../../features/guild/model/guild';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import HelpHint from '../../../ui/HelpHint';
 import Inset from '../../../ui/Inset';
+import KeyValueRow from '../../../ui/KeyValueRow';
+import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
+import Subheading from '../../../ui/Subheading';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드 정보 열 — 레벨과 진행 막대, 인원과 내 역할, 초대 코드(길드장), 받는 보너스, 떠나기.
@@ -21,15 +25,18 @@ export default function GuildSidebar({ guild, me, busy, run, setToast, ask }: Gu
   return (
     <section className="pf-scroll-panel flex flex-col gap-2 min-h-0 overflow-y-auto text-sm" aria-label="길드 정보">
       <GrowthSummary growth={guild.growth} />
-      <Inset className="px-2 py-1.5 flex flex-col gap-1.5">
-        <p className="m-0">길드원 <b>{splitMembers(guild.members).active.length}</b>/{GUILD_MAX_MEMBERS}명 · {leader ? '길드장' : '길드원'}</p>
+      <Inset divided>
+        <KeyValueRow label="길드원" value={`${splitMembers(guild.members).active.length}/${GUILD_MAX_MEMBERS}명`}
+                     action={<Badge>{leader ? '길드장' : '길드원'}</Badge>} />
         {leader && <InviteCode guild={guild} busy={busy} run={run} setToast={setToast} />}
       </Inset>
-      <Inset className="px-2 py-1.5 flex flex-col gap-0.5">
-        <span className="text-xs text-text-dim">받는 보너스</span>
-        {lines.length > 0
-          ? <span className="text-accent">{lines.join(' · ')}</span>
-          : <span className="text-xs text-text-dim">받는 보너스가 없어요.</span>}
+      <Inset className="px-2 py-1.5">
+        <section aria-label="받는 보너스">
+          <Subheading className="mb-0.5">받는 보너스</Subheading>
+          {lines.length > 0
+            ? <span className="text-accent">{lines.join(' · ')}</span>
+            : <Note size="xs" className="my-0">받는 보너스가 없어요.</Note>}
+        </section>
       </Inset>
       <section className="mt-auto flex flex-col" aria-label="길드 떠나기">
         {leave === null
@@ -40,28 +47,19 @@ export default function GuildSidebar({ guild, me, busy, run, setToast, ask }: Gu
   );
 }
 
-/** 길드 레벨 요약 — 레벨, 누적 기여 / 다음 레벨 문턱, 진행 막대, 다음 레벨까지 남은 기여와 기여 도움말 */
+/** 길드 레벨 요약 — 레벨과 누적 기여 / 다음 레벨 문턱 타일, 그 아래 진행 막대와 남은 기여, 기여 도움말 */
 function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
   const bar = growthBar(growth);
   return (
-    <Inset className="px-2 py-1.5">
-      <section className="flex flex-col gap-1" aria-label="길드 레벨">
-        <div className="flex items-baseline gap-2">
-          <span className="pf-accent text-lg text-gold">Lv.{growth.level}</span>
-          <span className="text-xs text-text-dim">
-            {growthTotalText(growth)}
-          </span>
-        </div>
-        <span className="block h-2 border border-line bg-surface-2" role="meter" aria-label="다음 레벨까지 진행"
-              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
-          <span className={cx('block h-full', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
-                style={{ width: `${bar.ratio * 100}%` }} />
-        </span>
-        <span className="text-xs text-text-dim">
-          <span>{growthHintText(growth)}</span><HelpHint text={GUILD_CONTRIBUTION_HELP} />
-        </span>
-      </section>
-    </Inset>
+    <section className="flex flex-col gap-1" aria-label="길드 레벨">
+      <KpiTile label="길드 레벨" value={`Lv.${growth.level}`} hint={`기여 ${growthTotalText(growth)}`} />
+      <span className="block h-2 border border-line bg-surface-2" role="meter" aria-label="다음 레벨까지 진행"
+            aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
+        <span className={cx('block h-full', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
+              style={{ width: `${bar.ratio * 100}%` }} />
+      </span>
+      <Note size="xs" className="my-0"><span>{growthHintText(growth)}</span><HelpHint text={GUILD_CONTRIBUTION_HELP} /></Note>
+    </section>
   );
 }
 
@@ -82,15 +80,15 @@ function InviteCode({ guild, busy, run, setToast }: Omit<GuildPartProps, 'me'>) 
   };
 
   return (
-    <section className="flex flex-col gap-1" aria-label="초대 코드">
-      <span className="text-xs text-text-dim">초대 코드</span>
+    <section className="flex flex-col gap-1 px-2 py-1.5" aria-label="초대 코드">
+      <Subheading className="mb-0">초대 코드</Subheading>
       {guild.invite ? (
         <div className="flex items-center gap-2">
           <span className="flex-1 min-w-0 font-mono tracking-widest text-gold">{guild.invite.code}</span>
           <Button size="sm" onClick={() => { void copy(guild.invite?.code ?? ''); }}>복사</Button>
         </div>
-      ) : <span className="text-xs text-text-dim">쓸 수 있는 코드가 없어요.</span>}
-      <span className="text-xs text-text-dim">{inviteHintText(guild.invite, nowMs)}</span>
+      ) : <Note size="xs" className="my-0">쓸 수 있는 코드가 없어요.</Note>}
+      <Note size="xs" className="my-0">{inviteHintText(guild.invite, nowMs)}</Note>
       <Button size="sm" disabled={busy} onClick={() => { void issue(); }}>
         {guild.invite ? '새 코드 발급' : '코드 발급'}
       </Button>

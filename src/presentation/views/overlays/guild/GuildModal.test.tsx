@@ -1,7 +1,7 @@
 // 길드 창 — 길드가 없으면 만들기·가입, 길드장에게는 초대 코드와 접힌 관리 메뉴, 길드원에게는 떠나기만 보인다.
 // 왼쪽 길드 정보는 탭을 바꿔도 남고, 보너스 탭은 트리 옆에 상세와 기부 순위를 둔다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
 import GuildModal from './GuildModal';
 
@@ -60,7 +60,9 @@ describe('GuildModal', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('ABCD2345')).toBeTruthy();
-    expect(screen.getByLabelText('길드 정보').textContent).toContain('길드원 2/10명 · 길드장');
+    const info = within(screen.getByLabelText('길드 정보'));
+    expect(info.getByText('2/10명')).toBeTruthy();
+    expect(info.getByText('길드장')).toBeTruthy(); // 내 역할 꼬리표
     expect(screen.getByText('다온')).toBeTruthy();
     expect(screen.queryByRole('button', { name: '길드 떠나기' })).toBeNull();
     expect(screen.getByText('다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.')).toBeTruthy();
@@ -82,7 +84,10 @@ describe('GuildModal', () => {
     expect(screen.queryByRole('button', { name: '내보내기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '넘기기' })).toBeNull();
     expect(screen.queryByRole('button', { name: /관리$/ })).toBeNull();
-    expect(screen.getByLabelText('길드 정보').textContent).toContain('길드원 2/10명 · 길드원');
+    const info = within(screen.getByLabelText('길드 정보'));
+    expect(info.getByText('2/10명')).toBeTruthy();
+    expect(info.getAllByText('길드원')).toHaveLength(2); // 줄 이름과 내 역할 꼬리표
+    expect(info.queryByText('길드장')).toBeNull();
     expect(screen.getByRole('button', { name: '길드 떠나기' })).toBeTruthy();
   });
 
