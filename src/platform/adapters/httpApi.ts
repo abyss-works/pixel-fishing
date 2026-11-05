@@ -141,6 +141,9 @@ class HttpAdmin implements AdminApi {
   resetLink(userId: string): Promise<AdminResetLink> {
     return writeAdmin('resetLink', { userId }, '재설정 링크 발급');
   }
+  letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }> {
+    return writeAdmin('letterHandled', { letterId, handled }, '편지 처리 표시');
+  }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
   }

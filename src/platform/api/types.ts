@@ -124,6 +124,8 @@ export interface AdminEventRow {
 }
 export interface AdminLetterRow {
   id: number; user_id: string; text: string; created_at: string;
+  /** 관리자가 처리 표시한 시각. 처리 전이면 null */
+  handled_at: string | null;
 }
 
 /**
@@ -207,6 +209,8 @@ export interface AdminApi {
   restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }>;
   /** 가입 계정의 비밀번호 재설정 링크를 만든다. 메일은 보내지 않는다 */
   resetLink(userId: string): Promise<AdminResetLink>;
+  /** 편지 처리 표시(true) 또는 취소(false) */
+  letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */

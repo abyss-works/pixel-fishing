@@ -42,6 +42,9 @@ export const writeAdminRestrict = (userId: string, restricted: boolean) => api.a
 /** 가입 계정의 비밀번호 재설정 링크 발급 */
 export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userId);
 
+/** 편지 처리 표시 또는 취소 */
+export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
+
 export const readAdminMetrics = (days: number) => Promise.all([
   api.admin.dailyActive(days),
   api.admin.retention(),

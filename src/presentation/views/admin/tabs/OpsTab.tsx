@@ -50,7 +50,7 @@ export default function OpsTab() {
 
         <Cell title="데이터 계약">
           <Note className="my-0 leading-relaxed">
-            쓰기는 우편 보내기와 사용자 상세의 관리 조치(제재·해제, 비밀번호 재설정 링크)뿐이에요.
+            쓰기는 우편 보내기, 편지 처리 표시, 사용자 상세의 관리 조치(제재·해제, 비밀번호 재설정 링크)뿐이에요.
             관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
             권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
             데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름·인자)는 그 안에서만 다뤄요.

@@ -8,12 +8,14 @@ import LettersTab from './LettersTab';
 import MailTab from './MailTab';
 
 const CONTEXT: Record<CommsSection, string> = {
-  letters: '유저가 보낸 편지를 모두 볼 수 있어요. 이벤트 보관 기간(7일)이 지나도 남아 있어요.',
+  letters: '유저가 보낸 편지를 모두 볼 수 있어요. 우편으로 답장하고, 마친 편지는 처리 표시를 남겨요.',
   mail: '플레이어에게 우편을 보내고 읽음·받음을 확인해요. 보내기 전에 미리보기로 대상과 골드 합계를 확인해요.',
 };
 
-export default function CommsTab({ section, onSection, mailTo }: {
+export default function CommsTab({ section, onSection, mailTo, onCompose }: {
   section: CommsSection; onSection: (section: CommsSection) => void;
+  /** 이 계정을 받는 사람으로 넣고 우편 쓰기를 연다 */
+  onCompose: (userId: string) => void;
   /** 우편 쓰기에 미리 넣을 받는 사람(계정 id). 다른 화면의 우편 보내기에서 넘어올 때만 있다 */
   mailTo: string | null;
 }) {
@@ -23,7 +25,7 @@ export default function CommsTab({ section, onSection, mailTo }: {
         <SubTabs items={ADMIN_SECTIONS.comms.map(s => ({ key: s.key, label: s.label }))}
                  activeKey={section} onSelect={onSection} />
       </div>
-      {section === 'letters' && <LettersTab />}
+      {section === 'letters' && <LettersTab onCompose={onCompose} />}
       {section === 'mail' && <MailTab key={mailTo ?? ''} to={mailTo} />}
     </TabPage>
   );

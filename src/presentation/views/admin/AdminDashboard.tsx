@@ -5,7 +5,7 @@
 // 탐색은 탭 일곱 개다. 개요 · 실시간 · 플레이어(명부·이상탐지) · 소통(편지·우편)
 // · 경제·진행(경제·진행·활동) · 밸런스 · 운영. 괄호 안은 탭 안의 구역이고 해시에 `#/admin/<탭>/<구역>`으로 담긴다.
 // 데이터 접근은 **기능 계층**(platform API 조회를 기능별로 조합) 하나로
-// 모인다. 쓰기는 우편 보내기와 사용자 상세의 관리 조치(제재·해제, 재설정 링크)뿐이다. 접근 판정은 AdminAuthProvider가 1회 해석.
+// 모인다. 쓰기는 우편 보내기, 편지 처리 표시, 사용자 상세의 관리 조치(제재·해제, 재설정 링크)뿐이다. 접근 판정은 AdminAuthProvider가 1회 해석.
 //
 // UI 정책(사용자 결정): 게이트는 내용을 교체하지 않는다 — 상단 배너 + 빈 골격(지표 '—',
 // 빈 표)을 항상 그려서 "무엇이 어디에 올 화면인가"를 로컬에서도 보여준다. 탭은 granted일 때만
@@ -100,7 +100,8 @@ export default function AdminApp() {
             <PlayersTab section={route.section} onSection={section => go({ tab: 'players', section })}
                         onCompose={compose} />}
           {route.tab === 'comms' &&
-            <CommsTab section={route.section} onSection={section => go({ tab: 'comms', section })} mailTo={mailTo} />}
+            <CommsTab section={route.section} onSection={section => go({ tab: 'comms', section })}
+                      mailTo={mailTo} onCompose={compose} />}
           {route.tab === 'analysis' &&
             <AnalysisTab section={route.section} onSection={section => go({ tab: 'analysis', section })} />}
           {route.tab === 'balance' && <BalanceTab />}

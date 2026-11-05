@@ -43,8 +43,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost와 쓰기(mail·restrict·resetLink)뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost와 쓰기(mail·restrict·resetLink·letterHandled)뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -75,6 +75,9 @@ describe('HttpAdmin', () => {
     await expect(admin.resetLink('u-1')).rejects.toThrow('재설정 링크 발급 실패: 409 anonymous-user');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-save' }), { status: 404 }));
     await expect(admin.restrict('u-1', false)).rejects.toThrow('제재 해제 실패: 404 no-save');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ handled: true }), { status: 200 }));
+    await expect(admin.letterHandled(3, true)).resolves.toEqual({ handled: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=letterHandled', post({ letterId: 3, handled: true }));
   });
 
   it('userEvents는 건수를 생략하면 500건을 요청한다', async () => {
