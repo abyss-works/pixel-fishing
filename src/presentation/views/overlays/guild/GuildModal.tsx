@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { GUILD_DAILY_FAME_CAP, GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
+import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import {
-  GUILD_ERROR_TEXT, activeEffectLines, growthBar, growthHintText, growthTotalText, inviteHintText, leaveConfirm, levelStepText,
-  levelSteps, logAgoText, logLine, memberActions, memberConfirm, memberName, splitMembers,
+  GUILD_CONTRIBUTION_HELP, GUILD_ERROR_TEXT, activeEffectLines, growthBar, growthHintText, growthTotalText, inviteHintText,
+  leaveConfirm, logAgoText, logLine, memberActions, memberConfirm, memberName, splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
@@ -13,13 +13,13 @@ import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
+import HelpHint from '../../../ui/HelpHint';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Panel from '../../../ui/Panel';
-import ProgressLadder from '../../../ui/ProgressLadder';
 import SubTabs from '../../../ui/SubTabs';
 import TextInput from '../../../ui/TextInput';
 import GuildBonusPanel from './GuildBonusPanel';
@@ -27,8 +27,9 @@ import GuildBonusPanel from './GuildBonusPanel';
 // 길드 창 — 게임 스테이지 안에 뜨는 넓은 창(플레이어 목록 창과 같은 폭)이다.
 // 길드가 없으면 왼쪽은 길드 만들기, 오른쪽은 초대 코드로 들어가기다.
 // 길드가 있으면 창 높이를 스테이지 안에 고정하고, 왼쪽 좁은 열에 길드 정보(레벨·진행 막대, 인원과 내 역할,
-// 초대 코드(길드장), 받는 보너스, 떠나기), 오른쪽에 보조 탭 넷을 둔다. 탭을 바꿔도 왼쪽 정보는 그대로다.
-// 길드원(접속 여부·기여, 길드장에게만 보이는 위임·내보내기 메뉴, 떠난 선원), 보너스(스킬 트리와 기부), 레벨, 항해일지.
+// 초대 코드(길드장), 받는 보너스, 떠나기), 오른쪽에 보조 탭 셋을 둔다. 탭을 바꿔도 왼쪽 정보는 그대로다.
+// 길드원(접속 여부·기여, 길드장에게만 보이는 위임·내보내기 메뉴, 떠난 선원), 보너스(레벨 문턱, 스킬 트리와 기부), 항해일지.
+// 기여가 쌓이는 방식은 진행 막대 아래 도움말로 둔다.
 // 보너스는 서버가 판정해 적용한다. 이 창은 서버가 보낸 레벨과 보너스를 보여 주고 기부를 보내기만 한다.
 // 창 자체는 스크롤하지 않는다 — 넘치는 내용은 탭 본문(또는 기부 순위 칸) 안에서만 굴린다.
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
@@ -143,9 +144,9 @@ function NoGuild({ busy, run, setToast }: { busy: boolean; run: Run; setToast: N
   );
 }
 
-type GuildTab = 'members' | 'bonus' | 'levels' | 'logbook';
+type GuildTab = 'members' | 'bonus' | 'logbook';
 
-/** 길드가 있을 때 — 왼쪽 열은 길드 정보(성장·인원·초대 코드·받는 보너스·떠나기), 오른쪽은 길드원·보너스·레벨·항해일지 탭 */
+/** 길드가 있을 때 — 왼쪽 열은 길드 정보(성장·인원·초대 코드·받는 보너스·떠나기), 오른쪽은 길드원·보너스·항해일지 탭 */
 function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
   guild: GuildInfo; me: string; busy: boolean; run: Run; setToast: Notify; ask: (c: GuildConfirm) => void;
   onGoldChanged: () => Promise<void> | void;
@@ -217,7 +218,6 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
         <SubTabs<GuildTab> activeKey={tab} onSelect={setTab} items={[
           { key: 'members', label: '길드원', sub: `${active.length}명` },
           { key: 'bonus', label: '보너스' },
-          { key: 'levels', label: '레벨', sub: `Lv.${guild.growth.level}` },
           { key: 'logbook', label: '항해일지', sub: `${guild.logbook.length}건` },
         ]} />
         <div className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
@@ -279,21 +279,6 @@ function GuildView({ guild, me, busy, run, setToast, ask, onGoldChanged }: {
           {tab === 'bonus' && (
             <GuildBonusPanel guild={guild} me={me} busy={busy} run={run} setToast={setToast} onGoldChanged={onGoldChanged} />
           )}
-          {tab === 'levels' && (
-            <>
-              <ProgressLadder steps={levelSteps(guild.growth).map(s => ({
-                key: String(s.level),
-                label: `Lv.${s.level}`,
-                meta: levelStepText(s),
-                state: s.state,
-              }))} />
-              <Note size="xs" className="my-0">
-                길드원이 얻은 명성만큼 기여가 쌓여요(한 사람당 하루 {fmtNum(GUILD_DAILY_FAME_CAP)}까지, 한국 시간 새벽 4시에 새로 세요).
-                일반 의뢰를 마치면 500, 네임드를 토벌하면 1,000이 따로 쌓여요. 레벨마다 보너스가 하나씩 열리고, 단계는 기부로 올려요.
-                보너스는 길드원 모두가 같게 받아요.
-              </Note>
-            </>
-          )}
           {tab === 'logbook' && (guild.logbook.length > 0 ? (
             <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
               {guild.logbook.map(l => (
@@ -329,7 +314,7 @@ function GrowthSummary({ growth }: { growth: GuildInfo['growth'] }) {
                 style={{ width: `${bar.ratio * 100}%` }} />
         </span>
         <span className="text-xs text-text-dim">
-          {growthHintText(growth)}
+          <span>{growthHintText(growth)}</span><HelpHint text={GUILD_CONTRIBUTION_HELP} />
         </span>
       </section>
     </Inset>

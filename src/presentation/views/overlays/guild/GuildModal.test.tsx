@@ -86,10 +86,10 @@ describe('GuildModal', () => {
     expect(screen.getByRole('button', { name: '길드 떠나기' })).toBeTruthy();
   });
 
-  it('왼쪽 길드 정보(레벨·진행·초대 코드·받는 보너스)는 레벨·항해일지·보너스 탭으로 바꿔도 그대로 보인다', () => {
+  it('왼쪽 길드 정보(레벨·진행·초대 코드·받는 보너스)는 항해일지·보너스 탭으로 바꿔도 그대로 보인다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getAllByText('Lv.3')).toHaveLength(2); // 레벨 요약과 레벨 탭 머리
+    expect(screen.getAllByText('Lv.3')).toHaveLength(1); // 레벨 요약
     expect(screen.getByLabelText('길드 레벨').textContent).toContain('31,000 / 50,000');
     expect(screen.getByText('누적 29,100')).toBeTruthy();
     const infoStays = () => {
@@ -98,15 +98,33 @@ describe('GuildModal', () => {
       expect(screen.getByText('ABCD2345')).toBeTruthy();
     };
     infoStays();
-    fireEvent.click(screen.getByRole('button', { name: /^레벨/ }));
-    expect(screen.getByText(/기여 100,000 · 돌연변이 보너스 열림 · 보너스 단계 상한 5/)).toBeTruthy();
-    infoStays();
     fireEvent.click(screen.getByRole('button', { name: /항해일지/ }));
     expect(screen.getByText('가람 님이 전설 황금잉어 낚시에 성공했어요!')).toBeTruthy();
     expect(screen.getByText('나루 님이 길드에 들어왔어요.')).toBeTruthy();
     infoStays();
     fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
     infoStays();
+  });
+
+  it('보조 탭은 길드원·보너스·항해일지 셋이고, 기여가 쌓이는 방식은 진행 막대 옆 도움말에 있다', () => {
+    s.guild = GUILD;
+    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /^길드원/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^보너스/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^항해일지/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^레벨/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
+    expect(screen.getByRole('tooltip').textContent).toContain('네임드를 토벌하면 1,000');
+  });
+
+  it('보너스 탭 위에 레벨 문턱 줄이 있다 — 레벨마다 문턱과 열리는 것을 담고 지금 레벨을 표시한다', () => {
+    s.guild = GUILD;
+    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /^보너스/ }));
+    const strip = screen.getByRole('list', { name: '길드 레벨 문턱' });
+    expect(strip.textContent).toContain('Lv.4 50,000');
+    expect(screen.getByLabelText('Lv.5 기여 100,000 · 돌연변이 보너스 열림 · 보너스 단계 상한 5')).toBeTruthy();
+    expect(screen.getByLabelText(/^Lv\.3 기여 25,000/).getAttribute('aria-current')).toBe('step');
   });
 
   it('받는 보너스가 없으면 없다고 보인다', () => {
