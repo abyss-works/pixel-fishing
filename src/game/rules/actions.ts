@@ -23,7 +23,7 @@ import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canFish, canUpgradeRod, deliveryReward, encounterQuests } from './rules.js';
+import { canBuyBoat, canEnterBase, canFish, canUpgradeRod, deliveryReward, encounterQuests } from './rules.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -426,6 +426,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const to = action.to;
       if (!to || typeof to.id !== 'string'
           || (to.kind !== 'region' && to.kind !== 'base')) return { ok: false, error: 'bad-request' };
+      if (to.kind === 'base') {
+        const check = canEnterBase(state, to.id);
+        if (!check.ok) return { ok: false, error: check.reason };
+      }
       const next = travel(state, to);
       // 첫 방문만 이벤트로 남긴다 — 오갈 때마다 남기면 스트림이 이동 로그로 뒤덮인다.
       // 업적 진행도는 state.visited가 들고 있으므로 이벤트는 "언제 처음 갔나"의 기록이다.

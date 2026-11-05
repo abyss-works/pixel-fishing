@@ -135,12 +135,18 @@ describe('실시간 접속', () => {
     const board = selectLiveBoard({
       count: 3,
       online: [
-        { uid: 'a', nick: '가', region: 'village', zone: null, connectedAt: '2026-11-05T02:55:00Z', guest: true },
-        { uid: 'b', nick: '나', region: 'world', zone: 'indian', connectedAt: '2026-11-05T01:00:00Z', guest: false },
-        { uid: 'c', nick: '다', region: 'village', zone: null, connectedAt: '2026-11-05T02:00:00Z', guest: false },
+        { uid: 'a', nick: '가', nickname: '가', email: null, region: 'village', zone: null, connectedAt: '2026-11-05T02:55:00Z', guest: true },
+        { uid: 'b', nick: '나', nickname: '나', email: 'b@example.test', region: 'world', zone: 'indian', connectedAt: '2026-11-05T01:00:00Z', guest: false },
+        { uid: 'c', nick: '낚시꾼', nickname: null, email: 'c@example.test', region: 'village', zone: null, connectedAt: '2026-11-05T02:00:00Z', guest: false },
       ],
     }, NOW);
     expect(board.rows.map(row => [row.uid, row.connectedSec])).toEqual([['b', 7200], ['c', 3600], ['a', 300]]);
+    // 식별 정보는 채팅 이름(nick)이 아니라 프로필 닉네임과 이메일이다
+    expect(board.rows.map(row => row.identity)).toEqual([
+      { user_id: 'b', nickname: '나', email: 'b@example.test', is_anonymous: false },
+      { user_id: 'c', nickname: null, email: 'c@example.test', is_anonymous: false },
+      { user_id: 'a', nickname: '가', email: null, is_anonymous: true },
+    ]);
     expect(board).toMatchObject({ members: 2, guests: 1, places: { labels: ['마을', '인도양'], values: [2, 1] } });
     expect(selectLiveBoard(null, NOW)).toMatchObject({ rows: [], members: 0, guests: 0 });
   });

@@ -11,8 +11,8 @@ vi.mock('../../../../platform/api', () => ({
       live: vi.fn(async () => ({
         count: 2,
         online: [
-          { uid: 'u2', nick: '새내기', region: 'village', zone: null, connectedAt: '2026-11-05T02:56:00Z', guest: true },
-          { uid: 'u1', nick: '고참', region: 'world', zone: 'indian', connectedAt: '2026-11-05T01:37:00Z', guest: false },
+          { uid: 'u2', nick: '새내기', nickname: '새내기', email: null, region: 'village', zone: null, connectedAt: '2026-11-05T02:56:00Z', guest: true },
+          { uid: 'u1', nick: '고참', nickname: '고참', email: 'old@example.com', region: 'world', zone: 'indian', connectedAt: '2026-11-05T01:37:00Z', guest: false },
         ],
       })),
       chatReports: vi.fn(async () => []),
@@ -37,14 +37,14 @@ describe('실시간 탭', () => {
         </AdminAuthCtx.Provider>
       </QueryProvider>,
     );
-    await screen.findAllByText('고참');
+    await screen.findAllByText('고참(old@example.com)');
     const rows = screen.getAllByRole('row').slice(1, 3);
     // 오래 연결된 사람이 위에 온다
-    expect(within(rows[0]).getByText('고참')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('고참(old@example.com)')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('u1')).toBeInTheDocument();
     expect(within(rows[0]).getByText('인도양')).toBeInTheDocument();
     expect(within(rows[0]).getByText('1시간 23분')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('새내기')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('게스트')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('새내기(게스트)')).toBeInTheDocument();
     expect(within(rows[1]).getByText('마을')).toBeInTheDocument();
     expect(within(rows[1]).getByText('4분')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '접속 중인 사람의 위치 분포' })).toBeInTheDocument();
@@ -56,6 +56,6 @@ describe('실시간 탭', () => {
     expect(within(tile('가입 계정')).getByText('1')).toBeInTheDocument();
     expect(within(tile('게스트')).getByText('1')).toBeInTheDocument();
     expect(within(tile('가장 오래 접속')).getByText('1시간 23분')).toBeInTheDocument();
-    expect(within(tile('가장 오래 접속')).getByText('고참')).toBeInTheDocument();
+    expect(within(tile('가장 오래 접속')).getByText('고참(old@example.com)')).toBeInTheDocument();
   });
 });

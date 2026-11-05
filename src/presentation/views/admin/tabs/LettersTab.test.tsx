@@ -1,4 +1,4 @@
-// 편지 탭 — granted에서 목록을 그리고, uid를 명부 email·닉네임으로 라벨링하며, 답장과 처리 표시를 보낸다.
+// 편지 탭 — granted에서 목록을 그리고, uid를 명부의 계정 식별 표기로 보이며, 답장과 처리 표시를 보낸다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
@@ -19,7 +19,7 @@ vi.mock('../../../../platform/api', () => ({
         { id: 2, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', text: '고마워요', created_at: '2026-10-06T00:00:00Z', handled_at: '2026-10-06T03:00:00Z' },
       ]),
       users: vi.fn(async () => [
-        { user_id: 'aaaaaaaa-0000-0000-0000-000000000000', email: 'friend@example.com', nickname: '바다친구' },
+        { user_id: 'aaaaaaaa-0000-0000-0000-000000000000', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
       ]),
       letterHandled: mocks.letterHandled,
     },
@@ -39,10 +39,10 @@ function show() {
 describe('LettersTab', () => {
   afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-  it('granted — 편지 본문과 보낸 사람 email·닉네임, 처리 전 편지 수를 그린다', async () => {
+  it('granted — 편지 본문과 보낸 사람의 닉네임(이메일), 처리 전 편지 수를 그린다', async () => {
     show();
     expect(await screen.findByText('바다가 좋아요')).toBeTruthy();
-    expect((await screen.findAllByText('friend@example.com · 바다친구')).length).toBe(2);
+    expect((await screen.findAllByText('바다친구(friend@example.com)')).length).toBe(2);
     expect(screen.getByText('편지 (2, 처리 전 1)')).toBeTruthy();
   });
 

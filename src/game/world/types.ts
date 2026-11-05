@@ -9,7 +9,7 @@ import type { ZoneId } from '../content/zones';
 // 전부 같은 타입을 쓴다 (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type { RegionId };
 export type { BaseId } from '../content/places';
-export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'exit' | 'travel' | 'bounty' | 'rank';
+export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'exit' | 'travel' | 'ferry' | 'bounty' | 'rank';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
  *  저장 데이터에서도 사용하므로 의존 방향은 월드에서 게임 데이터로만 향한다.
@@ -149,6 +149,8 @@ export interface Furniture extends Rect {
 
 export interface BasePack {
   id: BaseId;
+  /** 거점 이름 — 빠른 이동 목적지와 도착 안내에 쓴다 */
+  name: string;
   /** 소속 지역 — exit 시설이 내보내는 곳이자 사이드바 지역 탭의 문맥 */
   region: RegionId;
   headline: string;  // 상단 안내 문구

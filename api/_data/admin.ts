@@ -7,6 +7,7 @@
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { uuidArray } from './json.js';
 
 /** 사용자가 관리자 명부(admins)에 있는가. is_admin()과 같은 명부를 세션의 uid로 직접 조회한다 */
 export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
@@ -48,6 +49,16 @@ export function users(db: Executor): Promise<unknown[]> {
       from public.play_sessions group by user_id) ps on ps.user_id = u.id
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
+}
+
+/** 계정 식별 정보. 닉네임과 이메일이고, 게스트의 임시 이메일은 null이다. 인증 계정이 없는 uid는 결과에 없다 */
+export async function identities(db: Executor, uids: readonly string[]): Promise<Map<string, { nickname: string | null; email: string | null }>> {
+  const { rows } = await db.execute<{ user_id: string; nickname: string | null; email: string | null }>(sql`select u.id::text as user_id,
+      p.nickname, case when u.is_anonymous then null else u.email end as email
+    from auth.users u
+    left join public.profiles p on p.user_id = u.id
+    where u.id = any(${uuidArray(uids)})`);
+  return new Map(rows.map(({ user_id, ...identity }) => [user_id, identity]));
 }
 
 /** 일별 활성. boot를 포함한 전 이벤트 기준 DAU와 직전 7일 WAU이며, 날짜는 KST 하루 축이고 최대 90일 창이다 */

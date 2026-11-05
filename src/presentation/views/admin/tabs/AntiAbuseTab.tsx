@@ -3,17 +3,17 @@
 // 제재 현황 풀폭. 판정 기준(gap<2초 등)은 서버의 탐지 기준과 일치한다.
 import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
-import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
-import { adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
+import { adminIdentityLookup, adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
 import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, KpiRow, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 
 // 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 표를 그린다
 const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], []];
@@ -27,10 +27,7 @@ export default function AntiAbuseTab() {
   // 유저 명부는 "uid → 식별" 라벨 풀로 쓴다 — 플래그 행에는 개인정보를 조인해 둘 수 없다
   const [users, flags] = data ?? EMPTY;
 
-  const labelOf = (uid: string): string => {
-    const u = users.find(x => x.user_id === uid);
-    return u?.email ?? `${uid.slice(0, 8)}…`;
-  };
+  const identityOf = adminIdentityLookup(users);
 
   const { spamUsers, perfectOutliers, restricted } = useMemo(
     () => selectAntiAbuseRows(users, flags), [users, flags],
@@ -72,7 +69,7 @@ export default function AntiAbuseTab() {
               <tbody>
                 {spamUsers.map(f => (
                   <tr key={f.user_id}>
-                    <td>{labelOf(f.user_id)}</td>
+                    <td><UserIdentity user={identityOf(f.user_id)} /></td>
                     <td className="text-right">{f.catches_7d}</td>
                     <td className={cx('text-right pf-accent',
                                       f.fast_gap_7d > 10 ? 'text-danger' : 'text-gold')}>
@@ -103,7 +100,7 @@ export default function AntiAbuseTab() {
               <tbody>
                 {perfectOutliers.map(f => (
                   <tr key={f.user_id}>
-                    <td>{labelOf(f.user_id)}</td>
+                    <td><UserIdentity user={identityOf(f.user_id)} /></td>
                     <td className="text-right text-danger pf-accent">{f.perfect_pct}%</td>
                     <td className="text-right text-text-dim">{f.perfect_pct_global}%</td>
                     <td className="text-right">{f.catches_7d}</td>
@@ -125,8 +122,12 @@ export default function AntiAbuseTab() {
             {granted ? '활성 제재가 없어요.' : '운영 DB에 연결하면 확인할 수 있어요.'}
           </Note>
         ) : restricted.map(u => (
-          <KeyValueRow key={u.user_id} label={labelOf(u.user_id)}
-                       value={`골드 ${fmtNum(adminNumber(u.gold))} · 명성 ${fmtNum(adminNumber(u.fame))} · 마지막 행동 ${fmtDT(u.last_action_at)}`} />
+          <div key={u.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm">
+            <UserIdentity user={u} />
+            <span className="text-xs text-text-dim">
+              {`골드 ${fmtNum(adminNumber(u.gold))} · 명성 ${fmtNum(adminNumber(u.fame))} · 마지막 행동 ${fmtDT(u.last_action_at)}`}
+            </span>
+          </div>
         ))}
       </Cell>
     </>

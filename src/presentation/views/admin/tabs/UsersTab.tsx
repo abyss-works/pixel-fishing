@@ -22,6 +22,7 @@ import { useAdminSessions } from '../../../../features/admin/service/useAdminSta
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
+import UserIdentity from '../UserIdentity';
 import { boatNameOf } from '../../../../game/content/boats';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
@@ -73,12 +74,7 @@ export default function UsersTab({ onCompose }: {
               {filtered.map(u => (
                 <tr key={u.user_id} onClick={() => setSelected(u)}
                     className="cursor-pointer hover:bg-surface-2 transition">
-                  <td>
-                    {u.email || u.nickname
-                      ? <span className="text-xs">{adminUserLabel(u)}</span>
-                      : <span className="pf-accent text-2xs text-text-dim">{u.user_id.slice(0, 8)}…</span>}
-                    {u.is_anonymous === false && <span className="ml-1 text-2xs text-gold pf-accent">가입</span>}
-                  </td>
+                  <td><UserIdentity user={u} /></td>
                   <td>{u.restricted === true
                     ? <span className="text-danger text-2xs pf-accent">제재</span> : null}</td>
                   <td className="text-right">{fmtNum(adminNumber(u.gold))}</td>
@@ -150,6 +146,7 @@ function UserDetail({ user, onClose, onCompose }: {
           <UserSessions user={user} />
 
           <Cell title="기본 정보" flush divided>
+            <KeyValueRow label="계정 id" value={<span className="pf-accent text-xs select-text">{user.user_id}</span>} />
             <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
             <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />
             <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />

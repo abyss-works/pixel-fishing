@@ -3,6 +3,7 @@
 import { zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { REGION_NAMES } from './regions';
+import type { AdminIdentity } from './adminViews';
 import type {
   AdminDailyStatsRow, AdminLive, AdminRetentionRow, AdminSessionRow, AdminUserRow,
 } from './types';
@@ -156,7 +157,7 @@ export function placeName(region: string | null, zone: string | null): string {
 }
 
 export interface LiveRow {
-  uid: string; nick: string; guest: boolean; place: string; connectedAt: string;
+  uid: string; identity: AdminIdentity; guest: boolean; place: string; connectedAt: string;
   /** 지금까지 연결된 시간(초) */
   connectedSec: number;
 }
@@ -173,7 +174,7 @@ export interface LiveBoard {
 export function selectLiveBoard(live: AdminLive | null, nowMs: number): LiveBoard {
   const rows: LiveRow[] = (live?.online ?? []).map(entry => ({
     uid: entry.uid,
-    nick: entry.nick,
+    identity: { user_id: entry.uid, nickname: entry.nickname, email: entry.email, is_anonymous: entry.guest },
     guest: entry.guest,
     place: placeName(entry.region, entry.zone),
     connectedAt: entry.connectedAt,
