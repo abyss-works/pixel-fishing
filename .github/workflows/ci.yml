@@ -80,9 +80,78 @@ jobs:
           cache-from: type=gha,scope=game
           cache-to: type=gha,scope=game,mode=max
 
+  # main 푸시마다 관리자 대시보드 이미지를 빌드해 올린다. 태그는 게임 이미지와 같은 package.json 버전이다.
+  admin-image:
+    needs: [unit, db, static]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check image tag matches package version
+        run: |
+          TAG="v$(node -p 'require("./package.json").version')"
+          grep -A1 "name: ghcr.io/${GITHUB_REPOSITORY}-admin$" k8s/prod/kustomization.yaml | grep -q "newTag: ${TAG}$" || { echo "k8s/prod/kustomization.yaml admin newTag must be ${TAG}"; exit 1; }
+          echo "TAG=${TAG}" >> "${GITHUB_ENV}"
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push admin image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: admin/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}-admin:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            BUILD_ID=${{ github.sha }}
+            DEPLOY_ENV=production
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
+            VITE_SENTRY_ENV=${{ vars.VITE_SENTRY_ENV }}
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,scope=admin,mode=max
+
+  # dev 푸시마다 스테이징 관리자 이미지를 빌드해 올린다. 태그 커밋은 stage-image가 두 이미지를 함께 갱신한다.
+  stage-admin-image:
+    needs: [unit, db, static]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-24.04-arm
+    concurrency:
+      group: stage-admin-image
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - name: Stage image tag
+        run: echo "TAG=dev-${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push admin image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: admin/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}-admin:${{ env.TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            BUILD_ID=${{ github.sha }}
+            DEPLOY_ENV=preview
+            VITE_SENTRY_DSN=${{ vars.STAGE_VITE_SENTRY_DSN }}
+            VITE_SENTRY_ENV=${{ vars.STAGE_VITE_SENTRY_ENV }}
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,scope=admin,mode=max
+
   # dev 푸시마다 스테이징 이미지를 빌드해 올리고 k8s/stage의 태그를 갱신한다. ArgoCD가 dev의 k8s/stage를 보고 배포한다.
   stage-image:
-    needs: [unit, db, static]
+    # 관리자 이미지가 올라간 뒤에 태그를 커밋한다. 태그 갱신은 두 이미지의 newTag를 한 커밋으로 바꾼다.
+    needs: [unit, db, static, stage-admin-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04-arm
     concurrency:

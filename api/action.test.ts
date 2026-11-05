@@ -2,7 +2,7 @@
 // 서버 진입점은 default export를 Node 스타일 (req, res)로 호출한다 — 이 테스트는
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import handler, { SKIP_DETAIL } from './action.js';
 import { APP_VERSION } from '../src/version.js';
 
@@ -46,6 +46,35 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     const res = mkRes();
     await handler({ method: 'POST', headers: { 'x-client-version': APP_VERSION } } as never, res as never);
     expect(res.statusCode).toBe(426);
+  });
+
+  describe('운영은 릴리즈 버전으로 낡은 탭을 가른다', () => {
+    afterEach(() => { delete process.env.DEPLOY_ENV; });
+
+    it('운영: 버전이 같으면 배포 식별자가 달라도 통과한다', async () => {
+      process.env.DEPLOY_ENV = 'production';
+      const res = mkRes();
+      await handler({ method: 'POST', headers: { 'x-build-id': 'other-deploy', 'x-client-version': APP_VERSION } } as never, res as never);
+      // 낡은 탭 판정을 지나 다음 관문(서버 설정)에서 멈춘다
+      expect(res.statusCode).toBe(500);
+    });
+
+    it('운영: 버전이 다르거나 없으면 426이다', async () => {
+      process.env.DEPLOY_ENV = 'production';
+      for (const headers of [{ 'x-build-id': 'dev', 'x-client-version': '0.0.1' }, { 'x-build-id': 'dev' }]) {
+        const res = mkRes();
+        await handler({ method: 'POST', headers } as never, res as never);
+        expect(res.statusCode).toBe(426);
+        expect(res.body).toEqual({ error: 'version-mismatch', server: APP_VERSION });
+      }
+    });
+
+    it('스테이징: 버전이 같아도 배포 식별자가 다르면 426이다', async () => {
+      process.env.DEPLOY_ENV = 'preview';
+      const res = mkRes();
+      await handler({ method: 'POST', headers: { 'x-build-id': 'other-deploy', 'x-client-version': APP_VERSION } } as never, res as never);
+      expect(res.statusCode).toBe(426);
+    });
   });
 
   it('배포 식별자 일치 + 서버 환경변수 없으면 500 server-config (테스트 환경 = env 없음)', async () => {

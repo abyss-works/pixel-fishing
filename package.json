@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:admin": "vite build -c vite.admin.config.ts",
     "build:server": "vite build --ssr api/_server/main.ts --outDir dist-ssr",
     "start": "node dist-ssr/main.js",
     "lint": "oxlint",

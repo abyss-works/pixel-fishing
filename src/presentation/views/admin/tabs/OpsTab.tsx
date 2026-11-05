@@ -22,9 +22,9 @@ export default function OpsTab() {
             <DataTable>
               <tbody>
                 <Meta k="릴리즈 버전" v={APP_VERSION}
-                      hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요." />
+                      hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요. 운영에서 낡은 탭을 막는 기준(426)이에요." />
                 <Meta k="빌드 식별자" v={BUILD_LABEL}
-                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 낡은 탭을 막는 기준(426)이에요." />
+                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 스테이징·개발 배포에서 낡은 탭을 막는 기준(426)이에요." />
                 <Meta k="배포 주소" v={readAdminDeployHost() ?? '로컬 모드'}
                       hint="이 화면이 붙은 서버의 호스트예요. 운영과 스테이징의 주소가 달라서 착오를 막으려고 보여 줘요." />
               </tbody>

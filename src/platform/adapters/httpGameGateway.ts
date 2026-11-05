@@ -9,6 +9,7 @@ import { applyPatch } from '../../game/rules/actions';
 import type { GameGateway, DispatchResult } from '../api/types';
 import { AppError } from '../../core/errors';
 import { BUILD_ID } from '../../buildId';
+import { APP_VERSION } from '../../version';
 import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
 
@@ -156,9 +157,10 @@ export class HttpGameGateway implements GameGateway {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          // 낡은 탭 차단 — 서버가 자기 배포 식별자와 대조 (426).
-          // APP_VERSION이 아니라 배포 식별자다: 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가른다
+          // 낡은 탭 차단(426) — 운영 서버는 릴리즈 버전을, 그 밖의 서버는 배포 식별자를 대조한다.
+          // 버전은 릴리즈 때만 올라가서 dev 배포 사이를 못 가르므로 둘 다 보낸다
           'x-build-id': BUILD_ID,
+          'x-client-version': APP_VERSION,
           'x-client-id': CLIENT_ID,
         },
         body: JSON.stringify(action),

@@ -11,6 +11,14 @@ spec:
     - host: pixel-fishing.abyssworks.dev
       http:
         paths:
+          # 관리자 대시보드는 별도 이미지로 배포한다. 나머지 경로는 게임 서버가 받는다.
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing-admin
+                port:
+                  number: 80
           - path: /
             pathType: Prefix
             backend:
