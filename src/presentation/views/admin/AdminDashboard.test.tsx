@@ -55,9 +55,9 @@ describe('관리자 대시보드 탐색', () => {
   const tabNames = () => within(screen.getByRole('navigation', { name: '대시보드 섹션' }))
     .getAllByRole('button').map(b => b.textContent?.trim());
 
-  it('탭은 여섯 개다 — 개요 · 라이브 · 플레이어 · 경제·진행 · 밸런스 · 운영', () => {
+  it('탭은 일곱 개다 — 개요 · 실시간 · 플레이어 · 소통 · 경제·진행 · 밸런스 · 운영', () => {
     open('#/admin/overview');
-    expect(tabNames()).toEqual(['개요', '라이브', '플레이어', '경제·진행', '밸런스', '운영']);
+    expect(tabNames()).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '운영']);
     expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
   });
 
@@ -74,6 +74,9 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('heading', { name: '경제·진행' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
     expect(window.location.hash).toBe('#/admin/players/roster');
+    fireEvent.click(screen.getByRole('button', { name: '소통' }));
+    expect(window.location.hash).toBe('#/admin/comms/letters');
+    expect(screen.getByRole('heading', { name: '소통' })).toBeInTheDocument();
   });
 
   it('구역 탭을 누르면 해시가 구역까지 바뀐다', () => {

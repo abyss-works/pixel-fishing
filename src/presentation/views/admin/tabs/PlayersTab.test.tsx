@@ -30,7 +30,7 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-function show(section: 'roster' | 'abuse' | 'letters') {
+function show(section: 'roster' | 'abuse') {
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID }}>

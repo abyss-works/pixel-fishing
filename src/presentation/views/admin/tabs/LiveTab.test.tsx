@@ -1,4 +1,4 @@
-// 라이브 탭 — 접속 추정 구간(10분·1시간·24시간)과 온라인 명부의 "n분 전" 표시가 같은 기준 시각을 쓰는지 확인한다.
+// 실시간 탭 — 접속 추정 구간(10분·1시간·24시간)과 온라인 명부의 "n분 전" 표시가 같은 기준 시각을 쓰는지 확인한다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
-describe('라이브 탭', () => {
+describe('실시간 탭', () => {
   it('10분 안에 행동한 유저만 온라인 명부에 올리고 몇 분 전인지 적는다', async () => {
     render(
       <QueryProvider>
