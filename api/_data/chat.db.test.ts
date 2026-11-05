@@ -84,6 +84,27 @@ describe('chat', () => {
     expect(rows[0].lines[5].uid).toBe(rude);
   });
 
+  it('길드 채팅은 그 길드원만 저장하고, 최근 대화와 신고 복사는 방(월드·길드)을 섞지 않는다', async () => {
+    const [member, outsider] = [await user(), await user()];
+    const { rows: [g] } = await client.query<{ id: string }>(`insert into public.guilds (name) values ($1) returning id`,
+      [`g${member.slice(0, 6)}`]);
+    await client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g.id, member]);
+    await message(outsider, '월드1');
+    const guildLine = await saveChat(database.db, member, '가람', '길드1', g.id);
+    expect(guildLine).toMatchObject({ text: '길드1' });
+    expect(await saveChat(database.db, outsider, '나루', '끼어들기', g.id)).toBeNull();
+    await message(outsider, '월드2');
+    expect((await recentChat(database.db, member, 10)).map(l => l.text)).toEqual(['월드1', '월드2']);
+    expect((await recentChat(database.db, member, 10, g.id)).map(l => l.text)).toEqual(['길드1']);
+    expect(await reportChat(database.db, outsider, guildLine?.id ?? 0, '2030-01-01T00:00:00.000Z')).toBe(true);
+    const { rows } = await client.query<{ lines: { text: string }[] }>('select lines from public.chat_reports');
+    expect(rows[0].lines.map(l => l.text)).toEqual(['길드1']);
+    // 길드에서 떠나면 길드 채팅을 저장하지 않는다
+    await client.query('update public.guild_members set left_at = now(), role = $3 where guild_id = $1 and user_id = $2',
+      [g.id, member, 'member']);
+    expect(await saveChat(database.db, member, '가람', '길드2', g.id)).toBeNull();
+  });
+
   it('보관 기간 정리는 30일이 지난 메시지와 1년이 지난 신고만 지운다', async () => {
     const [a, b] = [await user(), await user()];
     const now = '2030-03-01T00:00:00.000Z';

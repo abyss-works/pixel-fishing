@@ -3,6 +3,7 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { ChatLine } from '../../game/rules/live';
+import type { GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
 
@@ -64,6 +65,28 @@ export interface FriendItem {
 export type FriendOp = { op: 'request'; nickname: string } | { op: 'accept' | 'remove'; uid: string };
 /** 친구 요청 결과 — 실패는 서버 오류 코드(not-found, self, account-only 등) */
 export type FriendOpResult = { ok: true; result: string } | { ok: false; error: string };
+
+export interface GuildMemberItem {
+  uid: string; nick: string | null; role: GuildRole; joinedAt: string;
+  /** 떠난 시각. 지금 길드원이면 null */
+  leftAt: string | null;
+  /** 실시간 채널에 접속해 있는가(떠난 선원은 항상 false) */
+  online: boolean;
+}
+/** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). invite는 길드장에게만 온다 */
+export interface GuildInfo {
+  id: string; name: string; createdAt: string; role: GuildRole;
+  members: GuildMemberItem[];
+  invite: { code: string; expiresAt: string } | null;
+}
+export type GuildOp =
+  | { op: 'create'; name: string }
+  | { op: 'join'; code: string }
+  | { op: 'invite'; guildId: string }
+  | { op: 'remove'; guildId: string; uid: string }
+  | { op: 'handover'; guildId: string; uid: string };
+/** 길드 요청 결과 — 실패는 서버 오류 코드(name-taken, guild-full, not-leader 등) */
+export type GuildOpResult = { ok: true } | { ok: false; error: string };
 
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }

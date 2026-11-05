@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { toggleChannel } from '../../../features/display/model/messageFilter';
+import { FILTER_CHANNELS, toggleChannel } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import MessageLog from './MessageLog';
 import { createMessage, mergeMessages } from './messageFeed';
@@ -12,9 +12,9 @@ const chatAt = (id: number, at: Date, uid = 'u') =>
   createMessage(id, `채팅 ${id}`, { channel: 'chat', author: '가람', now: at, from: { uid, chatId: id } });
 
 /** 채널 토글 상태를 가진 메시지 창 — 화면이 쓰는 것과 같은 토글 규칙 */
-function Filtered({ log, initial = 'all' }: { log: Msg[]; initial?: MessageFilter }) {
+function Filtered({ log, initial = FILTER_CHANNELS }: { log: Msg[]; initial?: MessageFilter }) {
   const [filter, setFilter] = useState<MessageFilter>(initial);
-  return <MessageLog log={log} filter={filter} onToggle={c => setFilter(f => toggleChannel(f, c))} />;
+  return <MessageLog log={log} filter={filter} onToggle={(c, present) => setFilter(f => toggleChannel(f, c, present))} />;
 }
 
 /** jsdom은 배치를 하지 않는다 — 한 줄 20px, 창 160px(8줄)로 스크롤 크기를 흉내 낸다 */
@@ -71,11 +71,22 @@ describe('메시지 창', () => {
     expect(log().children).toHaveLength(3);
   });
 
+  it('길드 글줄이 있으면 길드 토글을 더하고, 기록에 없는 채널은 마지막 하나 판정에 넣지 않는다', () => {
+    const guild = createMessage(2, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 2 } });
+    render(<Filtered log={[...logOf(1), guild]} />);
+    expect(screen.getAllByRole('checkbox').map(c => c.textContent)).toEqual(['길드', '시스템']);
+    expect(screen.getByRole('log').textContent).toContain('[길드]');
+    fireEvent.click(screen.getByRole('checkbox', { name: '시스템' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '길드' }));
+    expect(screen.getByRole('checkbox', { name: '길드' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('log').children).toHaveLength(1);
+  });
+
   it('꺼 둔 채널에 새 글줄이 오면 토글 옆에 점을 찍는다', () => {
     const base = [...logOf(2), chatAt(1, new Date(Date.now() - 60_000))];
-    const { rerender } = render(<Filtered log={base} initial="system" />);
+    const { rerender } = render(<Filtered log={base} initial={['system']} />);
     expect(screen.queryByText('새 메시지')).not.toBeInTheDocument();
-    rerender(<Filtered log={[...base, chatAt(2, new Date(Date.now() + 60_000))]} initial="system" />);
+    rerender(<Filtered log={[...base, chatAt(2, new Date(Date.now() + 60_000))]} initial={['system']} />);
     expect(screen.getByText('새 메시지')).toBeInTheDocument();
   });
 

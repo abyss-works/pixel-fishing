@@ -29,6 +29,9 @@ import MailboxButton from '../overlays/mailbox/MailboxButton';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsButton from '../overlays/friends/FriendsButton';
 import FriendsModal from '../overlays/friends/FriendsModal';
+import GuildButton from '../overlays/guild/GuildButton';
+import GuildModal from '../overlays/guild/GuildModal';
+import { useGuild } from '../../../features/guild/service/useGuild';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
@@ -77,6 +80,7 @@ export default function GameView(props: GameViewProps) {
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [guildOpen, setGuildOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
@@ -91,7 +95,10 @@ export default function GameView(props: GameViewProps) {
   const [playersOpen, setPlayersOpen] = useState(false);
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
-  const log = chat.enabled ? mergeMessages(props.log, chatMessages(chat.lines)) : props.log;
+  const { guild } = useGuild(props.account !== null);
+  const log = chat.enabled
+    ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
+    : props.log;
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -163,7 +170,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         <HudLayout game={game} scene={scene} log={log} covered={covered}
-                   logFooter={chat.enabled ? <ChatBar /> : null}
+                   logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} /> : null}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
@@ -192,6 +199,8 @@ export default function GameView(props: GameViewProps) {
         <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
         <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
+        <GuildButton account={props.account} onOpen={() => setGuildOpen(true)} />
+        {guildOpen && <GuildModal setToast={props.setToast} onClose={() => setGuildOpen(false)} />}
         {playersOpen && atSea && (
           <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
         )}

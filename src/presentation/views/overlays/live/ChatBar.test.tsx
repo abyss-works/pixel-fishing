@@ -54,10 +54,25 @@ describe('ChatBar', () => {
     input.focus();
     fireEvent.change(input, { target: { value: '안녕하세요' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(live.sendChat).toHaveBeenCalledWith('안녕하세요');
+    expect(live.sendChat).toHaveBeenCalledWith('안녕하세요', 'world');
     expect(input.value).toBe('');
     expect(document.activeElement).not.toBe(input);
     expect(input.maxLength).toBe(100);
+  });
+
+  it('길드원이면 방 버튼으로 길드에 보낼 수 있고, 길드가 없으면 방 버튼 없이 월드로 보낸다', () => {
+    live.sendChat.mockClear();
+    const { rerender } = render(<ChatBar inGuild />);
+    fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 월드' }));
+    const input = screen.getByLabelText('채팅 입력');
+    fireEvent.change(input, { target: { value: '길드 안녕' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenLastCalledWith('길드 안녕', 'guild');
+    rerender(<ChatBar />);
+    expect(screen.queryByRole('button', { name: /보낼 곳/ })).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '월드 안녕' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenLastCalledWith('월드 안녕', 'world');
   });
 
   it('게임 화면에서 Enter를 누르면 입력 줄로 들어간다', () => {

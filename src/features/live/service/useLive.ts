@@ -6,7 +6,7 @@ import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
 import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
-import type { ChatError, LiveState, MyPosition, SentPosition } from '../model/live';
+import type { ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
@@ -31,7 +31,8 @@ function receive(msg: ServerMessage): void {
   state = applyLiveMessage(state, msg, Date.now());
   if (msg.t === 'hello') { helloCount++; glides.clear(); said.clear(); typingAt.clear(); }
   if (msg.t === 'leave') { glides.delete(msg.uid); said.delete(msg.uid); typingAt.delete(msg.uid); }
-  if (msg.t === 'chat') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
+  // 머리 위 말풍선은 월드 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
+  if (msg.t === 'chat' && msg.room !== 'guild') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
   if (msg.t === 'typing') {
     if (msg.on) typingAt.set(msg.uid, performance.now());
     else typingAt.delete(msg.uid);
@@ -111,13 +112,15 @@ export interface ChatView {
   /** 내 id. 연결 전에는 null */
   you: string | null;
   lines: readonly ChatLine[];
+  /** 내 길드의 채팅 줄 */
+  guildLines: readonly ChatLine[];
   error: ChatError | null;
 }
 
 /** 채팅 목록과 마지막 거부 이유 */
 export function useChat(): ChatView {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return { enabled: liveAvailable, you: s.you, lines: s.chat, error: s.chatError };
+  return { enabled: liveAvailable, you: s.you, lines: s.chat, guildLines: s.guildChat, error: s.chatError };
 }
 
 /** 입력 중 표시를 켜고 끈다. 연결이 끊긴 동안에는 버린다 */
@@ -125,9 +128,9 @@ export function sendTyping(on: boolean): void {
   conn?.send({ t: 'typing', on });
 }
 
-/** 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
-export function sendChat(text: string): void {
-  conn?.send({ t: 'chat', text });
+/** 그 방에 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
+export function sendChat(text: string, room: ChatRoom = 'world'): void {
+  conn?.send(room === 'guild' ? { t: 'chat', text, room: 'guild' } : { t: 'chat', text });
 }
 
 /** 보이고 있는 거부 이유를 지운다 */
