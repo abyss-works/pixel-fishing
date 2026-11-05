@@ -30,12 +30,13 @@ export function friendRelation(groups: FriendGroups, uid: string): FriendItem['s
   return [...groups.friends, ...groups.incoming, ...groups.outgoing].find(f => f.uid === uid)?.state ?? null;
 }
 
-/** 친구의 지금 상태 한 줄 — 접속 중이면 있는 곳, 아니면 마지막 행동이 얼마나 지났는지 */
-export function friendStatusText(f: FriendItem, nowMs: number): string {
+/** 친구 목록의 있는 곳 칸 — 접속 중이면 지금 있는 곳, 아니면 마지막 행동이 얼마나 지났는지.
+    접속 여부는 접속 점이 보이므로 문장에 다시 쓰지 않는다 */
+export function friendPlaceText(f: FriendItem, nowMs: number): string {
   if (f.online) {
-    if (f.region === 'village') return '접속 중 · 마을';
+    if (f.region === 'village') return '마을';
     const zone = f.zone ? zoneById(f.zone as ZoneId)?.name : undefined;
-    return `접속 중 · ${zone ?? '바다'}`;
+    return zone ?? '바다';
   }
   if (!f.lastActiveAt) return '아직 기록이 없어요';
   const mins = Math.max(0, Math.floor((nowMs - Date.parse(f.lastActiveAt)) / 60_000));

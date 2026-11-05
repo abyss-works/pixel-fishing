@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendItem } from '../../../platform/api';
-import { friendRelation, friendStatusText, groupFriends, friendAlertText } from './friends';
+import { friendRelation, friendPlaceText, groupFriends, friendAlertText } from './friends';
 import { zoneById } from '../../../game/content/zones';
 
 const f = (uid: string, state: FriendItem['state'], extra: Partial<FriendItem> = {}): FriendItem =>
@@ -21,17 +21,17 @@ describe('groupFriends', () => {
   });
 });
 
-describe('friendStatusText', () => {
+describe('friendPlaceText', () => {
   const now = Date.parse('2026-11-05T12:00:00Z');
-  it('접속 중이면 있는 곳, 아니면 지난 시간', () => {
-    expect(friendStatusText(f('a', 'friend', { online: true, region: 'world' }), now)).toBe('접속 중 · 바다');
-    expect(friendStatusText(f('a', 'friend', { online: true, region: 'world', zone: 'pacific' }), now)).toBe(`접속 중 · ${zoneById('pacific')!.name}`);
-    expect(friendStatusText(f('a', 'friend', { online: true, region: 'village' }), now)).toBe('접속 중 · 마을');
-    expect(friendStatusText(f('a', 'friend'), now)).toBe('아직 기록이 없어요');
-    expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-05T11:59:40Z' }), now)).toBe('방금 전');
-    expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-05T11:15:00Z' }), now)).toBe('45분 전');
-    expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-05T09:00:00Z' }), now)).toBe('3시간 전');
-    expect(friendStatusText(f('a', 'friend', { lastActiveAt: '2026-11-02T12:00:00Z' }), now)).toBe('3일 전');
+  it('접속 중이면 있는 곳만, 아니면 지난 시간', () => {
+    expect(friendPlaceText(f('a', 'friend', { online: true, region: 'world' }), now)).toBe('바다');
+    expect(friendPlaceText(f('a', 'friend', { online: true, region: 'world', zone: 'pacific' }), now)).toBe(zoneById('pacific')!.name);
+    expect(friendPlaceText(f('a', 'friend', { online: true, region: 'village' }), now)).toBe('마을');
+    expect(friendPlaceText(f('a', 'friend'), now)).toBe('아직 기록이 없어요');
+    expect(friendPlaceText(f('a', 'friend', { lastActiveAt: '2026-11-05T11:59:40Z' }), now)).toBe('방금 전');
+    expect(friendPlaceText(f('a', 'friend', { lastActiveAt: '2026-11-05T11:15:00Z' }), now)).toBe('45분 전');
+    expect(friendPlaceText(f('a', 'friend', { lastActiveAt: '2026-11-05T09:00:00Z' }), now)).toBe('3시간 전');
+    expect(friendPlaceText(f('a', 'friend', { lastActiveAt: '2026-11-02T12:00:00Z' }), now)).toBe('3일 전');
   });
 });
 

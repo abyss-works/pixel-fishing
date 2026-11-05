@@ -1,4 +1,4 @@
-// 플레이어 정보 — 공개 프로필(명성·도감·배·낚싯대·유물)과, 계정 유저에게만 보이는 친구 요청·차단·신고.
+// 플레이어 정보: 공개 프로필(명성, 도감, 배, 낚싯대, 유물)과 계정 유저가 쓰는 친구 요청, 차단, 신고.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ARTIFACTS } from '../../../../game/content/artifacts';
@@ -68,10 +68,13 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('친구 요청을 보냈어요')).toBeTruthy();
   });
 
-  it('게스트와 내 정보에는 동작이 없다', () => {
+  it('게스트에게는 친구 요청과 차단을 흐리게 두고 이유를 툴팁으로 보인다. 내 정보에는 동작이 없다', () => {
     show({ account: null });
-    expect(screen.queryAllByRole('button')).toEqual([]);
-    expect(screen.getByText(/계정을 만든 뒤/)).toBeTruthy();
+    const buttons = screen.getAllByRole('button') as HTMLButtonElement[];
+    expect(buttons.map(b => [b.textContent, b.disabled])).toEqual([['친구 요청', true], ['차단', true]]);
+    expect(screen.queryByText(/계정을 만든 뒤/)).toBeNull();
+    fireEvent.mouseEnter(buttons[0].parentElement!);
+    expect(screen.getByText('친구 요청과 차단은 계정을 만든 뒤 쓸 수 있어요.')).toBeTruthy();
     cleanup();
     show({ self: true });
     expect(screen.queryAllByRole('button')).toEqual([]);
