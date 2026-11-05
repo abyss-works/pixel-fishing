@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   GUILD_INVITE_TTL_MS, GUILD_MAX_MEMBERS, checkGuildName, guildFull, handoverOutcome, inviteCode, inviteExpiresAt,
   normalizeInviteCode, removalOutcome,
+  GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, NO_GUILD_BONUS, contributionDayOf, contributionFor, guildBonusOf, guildLevelOf,
+  guildProgress,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -73,5 +75,62 @@ describe('길드장 위임', () => {
     expect(handoverOutcome({ uid: 'L', role: 'leader' }, 'M')).toBe('ok');
     expect(handoverOutcome({ uid: 'L', role: 'leader' }, 'L')).toBe('self');
     expect(handoverOutcome({ uid: 'M', role: 'member' }, 'N')).toBe('not-leader');
+  });
+});
+
+describe('길드 성장 — 레벨', () => {
+  it('누적 기여도 10,000·25,000·50,000·100,000에서 Lv2~5가 되고 Lv5가 끝이다', () => {
+    expect(GUILD_MAX_LEVEL).toBe(5);
+    expect(guildLevelOf(0)).toBe(1);
+    expect(guildLevelOf(9_999)).toBe(1);
+    expect(guildLevelOf(10_000)).toBe(2);
+    expect(guildLevelOf(24_999)).toBe(2);
+    expect(guildLevelOf(25_000)).toBe(3);
+    expect(guildLevelOf(50_000)).toBe(4);
+    expect(guildLevelOf(99_999)).toBe(4);
+    expect(guildLevelOf(100_000)).toBe(5);
+    expect(guildLevelOf(9_000_000)).toBe(5);
+  });
+
+  it('진행도는 지금 레벨의 시작 문턱과 다음 레벨 문턱을 준다. 최대 레벨은 다음 문턱이 없다', () => {
+    expect(guildProgress(0)).toEqual({ level: 1, total: 0, floor: 0, next: 10_000 });
+    expect(guildProgress(45_000)).toEqual({ level: 3, total: 45_000, floor: 25_000, next: 50_000 });
+    expect(guildProgress(200_000)).toEqual({ level: 5, total: 200_000, floor: 100_000, next: null });
+  });
+});
+
+describe('길드 성장 — 보너스', () => {
+  it('레벨이 오르면 누적된다. Lv4는 어종 천장을 10%로 바꾸고, Lv5는 네임드 천장을 더한다', () => {
+    expect(guildBonusOf(1)).toEqual(NO_GUILD_BONUS);
+    expect(NO_GUILD_BONUS).toEqual({ speciesPity: 0, bountyReward: 0, namedPity: 0 });
+    expect(guildBonusOf(2)).toEqual({ speciesPity: 0.05, bountyReward: 0, namedPity: 0 });
+    expect(guildBonusOf(3)).toEqual({ speciesPity: 0.05, bountyReward: 0.05, namedPity: 0 });
+    expect(guildBonusOf(4)).toEqual({ speciesPity: 0.1, bountyReward: 0.05, namedPity: 0 });
+    expect(guildBonusOf(5)).toEqual({ speciesPity: 0.1, bountyReward: 0.05, namedPity: 0.1 });
+  });
+});
+
+describe('길드 성장 — 기여', () => {
+  const general = { difficulty: 'easy' } as const;
+  const named = { difficulty: 'named' } as const;
+
+  it('얻은 명성만큼 쌓고, 의뢰 클리어는 일반 500·네임드 1,000을 따로 쌓는다', () => {
+    expect(contributionFor(15, null)).toEqual({ fame: 15, clears: 0 });
+    expect(contributionFor(0, general)).toEqual({ fame: 0, clears: 500 });
+    expect(contributionFor(0, named)).toEqual({ fame: 0, clears: 1_000 });
+  });
+
+  it('명성이 줄어든 액션은 기여를 깎지 않는다', () => {
+    expect(contributionFor(-50, null)).toEqual({ fame: 0, clears: 0 });
+  });
+
+  it('명성 기여의 하루 상한은 1,000이고 클리어 기여는 상한과 별개다', () => {
+    expect(GUILD_DAILY_FAME_CAP).toBe(1_000);
+    expect(contributionFor(5_000, named)).toEqual({ fame: 1_000, clears: 1_000 });
+  });
+
+  it('기여의 하루는 게임 날짜다(한국 시간 새벽 4시 경계)', () => {
+    expect(contributionDayOf('2026-11-05T18:59:59Z')).toBe('2026-11-05'); // KST 03:59
+    expect(contributionDayOf('2026-11-05T19:00:00Z')).toBe('2026-11-06'); // KST 04:00
   });
 });

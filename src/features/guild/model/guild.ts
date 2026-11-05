@@ -1,9 +1,14 @@
-import type { GuildInfo, GuildMemberItem, GuildOp } from '../../../platform/api';
-import { handoverOutcome, removalOutcome } from '../../../game/rules/guild';
+import type { GuildInfo, GuildLogItem, GuildMemberItem, GuildOp } from '../../../platform/api';
+import { GUILD_LEVEL_FLOORS, guildBonusOf, handoverOutcome, removalOutcome } from '../../../game/rules/guild';
+import type { GuildBonus } from '../../../game/rules/guild';
+import { FISH } from '../../../game/content/fish';
+import { bountyById } from '../../../game/content/bounties';
+import { namedById } from '../../../game/content/named';
 
-export type { GuildInfo, GuildMemberItem, GuildOp };
+export type { GuildInfo, GuildLogItem, GuildMemberItem, GuildOp };
 
-// 길드 화면 모델 — 길드원 묶음, 길드원별로 열리는 관리 동작, 초대 코드 남은 시간, 거부 안내 문장.
+// 길드 화면 모델 — 길드원 묶음, 길드원별로 열리는 관리 동작, 초대 코드 남은 시간, 거부 안내 문장,
+// 레벨 진행·보너스 문장·레벨 사다리, 항해일지 문장.
 
 /** 지금 길드원과 떠난 선원. 순서는 서버가 정한 그대로다 */
 export function splitMembers(members: readonly GuildMemberItem[]): { active: GuildMemberItem[]; departed: GuildMemberItem[] } {
@@ -47,3 +52,69 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   self: '자기 자신에게는 넘길 수 없어요.',
   'account-only': '길드는 계정을 만든 뒤에 쓸 수 있어요.',
 };
+
+// ── 성장과 항해일지 ──────────────────────────────────────────────
+
+/** 레벨 진행 막대 — 지금 레벨 안에서 채운 비율과 다음 레벨까지 남은 기여. 최고 레벨이면 가득 차고 남은 기여가 없다 */
+export function growthBar(growth: GuildInfo['growth']): { ratio: number; remaining: number | null } {
+  if (growth.next === null) return { ratio: 1, remaining: null };
+  return { ratio: (growth.total - growth.floor) / (growth.next - growth.floor), remaining: growth.next - growth.total };
+}
+
+const pct = (r: number) => `${Math.round(r * 100)}%`;
+
+/** 받는 보너스 문장 — 어종 천장, 일반 의뢰 보상, 네임드 조우 천장 순. 없는 보너스는 빼고 보인다 */
+export function bonusLines(bonus: GuildBonus): string[] {
+  return [
+    bonus.speciesPity > 0 && `처음 보는 어종 천장이 ${pct(bonus.speciesPity)} 빨리 차요`,
+    bonus.bountyReward > 0 && `일반 의뢰 보상 +${pct(bonus.bountyReward)}`,
+    bonus.namedPity > 0 && `네임드 조우 천장이 ${pct(bonus.namedPity)} 빨리 차요`,
+  ].filter((line): line is string => typeof line === 'string');
+}
+
+export interface LevelStep {
+  level: number;
+  /** 이 레벨에 필요한 누적 기여도 */
+  floor: number;
+  /** 이 레벨에서 새로 열리거나 커지는 보너스 */
+  perks: string[];
+  state: 'done' | 'current' | 'next' | 'locked';
+}
+
+/** 레벨 사다리 — 레벨마다 문턱과 새로 열리는 보너스 */
+export function levelSteps(growth: GuildInfo['growth']): LevelStep[] {
+  return GUILD_LEVEL_FLOORS.map((floor, i) => {
+    const level = i + 1;
+    const before = new Set(bonusLines(guildBonusOf(level - 1)));
+    const state = level < growth.level ? 'done' : level === growth.level ? 'current' : level === growth.level + 1 ? 'next' : 'locked';
+    return { level, floor, perks: bonusLines(guildBonusOf(level)).filter(line => !before.has(line)), state };
+  });
+}
+
+/** 항해일지 한 줄의 문장 */
+export function logLine(log: GuildLogItem): string {
+  const who = `${log.nick ?? '이름 없음'} 님`;
+  switch (log.kind) {
+    case 'join': return `${who}이 길드에 들어왔어요.`;
+    case 'leave': return `${who}이 길드를 떠났어요.`;
+    case 'kick': return `${who}이 길드에서 내보내졌어요.`;
+    case 'legendary': {
+      const fish = FISH.find(f => f.id === log.detail);
+      return `${who}이 전설 ${fish?.name ?? '어종'} 낚시에 성공했어요!`;
+    }
+    case 'named': {
+      const quest = log.detail ? bountyById(log.detail) : undefined;
+      const named = quest?.targetFish ? namedById(quest.targetFish) : undefined;
+      return `${who}이 네임드 ${named?.name ?? '어종'} 토벌에 성공했어요!`;
+    }
+  }
+}
+
+/** 항해일지 줄이 남은 뒤 지난 시간 */
+export function logAgoText(at: string, nowMs: number): string {
+  const mins = Math.max(0, Math.floor((nowMs - Date.parse(at)) / 60_000));
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  return hours < 24 ? `${hours}시간 전` : `${Math.floor(hours / 24)}일 전`;
+}

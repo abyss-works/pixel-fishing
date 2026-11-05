@@ -1,9 +1,14 @@
-// 길드(guilds·guild_members·guild_invites) 소유 모듈 — 만들기, 초대 코드, 가입, 떠나기·내보내기, 길드장 위임, 조회, 계정 정리.
+// 길드(guilds·guild_members·guild_invites·guild_contributions·guild_logs) 소유 모듈 — 만들기, 초대 코드, 가입,
+// 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록, 조회, 계정 정리.
 // 인원과 역할을 보고 바꾸는 작업은 트랜잭션 안에서 길드 행을 잠가 같은 길드의 변경을 줄 세운다.
 import { sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
-import { guildFull, handoverOutcome, inviteExpiresAt, removalOutcome } from '../../src/game/rules/guild.js';
-import type { GuildActor, GuildRole } from '../../src/game/rules/guild.js';
+import {
+  GUILD_DAILY_FAME_CAP, contributionDayOf, guildBonusOf, guildFull, guildProgress, handoverOutcome, inviteExpiresAt,
+  removalOutcome,
+} from '../../src/game/rules/guild.js';
+import type { GuildActor, GuildBonus, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
 
 type Tx = Database['withTransaction'];
@@ -15,7 +20,22 @@ export interface GuildMember {
   joinedAt: string;
   /** 떠난 시각. 지금 길드원이면 null */
   leftAt: string | null;
+  /** 이 길드에 쌓은 기여 — 누적과 오늘(게임 날짜) */
+  contribution: { total: number; today: number };
 }
+
+/** 항해일지 한 줄. detail은 전설 획득이면 어종 id, 네임드 토벌이면 의뢰 id다 */
+export interface GuildLog {
+  id: number;
+  kind: GuildLogKind;
+  uid: string;
+  nick: string | null;
+  detail: string | null;
+  at: string;
+}
+
+/** 조회에 싣는 항해일지 줄 수(최근 순) */
+const LOGBOOK_LIMIT = 50;
 
 export interface GuildView {
   id: string;
@@ -27,6 +47,10 @@ export interface GuildView {
   members: GuildMember[];
   /** 쓸 수 있는 초대 코드. 길드장에게만 싣고, 없거나 만료됐으면 null */
   invite: { code: string; expiresAt: string } | null;
+  /** 성장 — 누적 기여도, 레벨, 지금 레벨의 시작 문턱과 다음 문턱(최대 레벨이면 null), 지금 받는 보너스 */
+  growth: { level: number; total: number; floor: number; next: number | null; bonus: GuildBonus };
+  /** 항해일지 — 최근 순 */
+  logbook: GuildLog[];
 }
 
 const iso = (v: string | Date) => new Date(v).toISOString();
@@ -45,20 +69,76 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
     join public.guilds g on g.id = m.guild_id
     where m.user_id = ${uid} and m.left_at is null`);
   if (!g) return null;
-  const { rows } = await db.execute<{ uid: string; nick: string | null; role: GuildRole; joined_at: string | Date; left_at: string | Date | null }>(sql`
-    select m.user_id::text as uid, p.nickname as nick, m.role, m.joined_at, m.left_at
+  const today = contributionDayOf(nowISO);
+  const { rows } = await db.execute<{
+    uid: string; nick: string | null; role: GuildRole; joined_at: string | Date; left_at: string | Date | null;
+    total: number | string; today: number | string;
+  }>(sql`
+    select m.user_id::text as uid, p.nickname as nick, m.role, m.joined_at, m.left_at,
+      coalesce(sum(c.fame + c.clears), 0) as total,
+      coalesce(sum(c.fame + c.clears) filter (where c.day = ${today}::date), 0) as today
     from public.guild_members m left join public.profiles p on p.user_id = m.user_id
+    left join public.guild_contributions c on c.guild_id = m.guild_id and c.user_id = m.user_id
     where m.guild_id = ${g.id}
+    group by m.user_id, p.nickname, m.role, m.joined_at, m.left_at
     order by m.left_at is not null, m.role = 'leader' desc, m.left_at desc, m.joined_at, m.user_id`);
   const members = rows.map(r => ({ uid: r.uid, nick: r.nick, role: r.role, joinedAt: iso(r.joined_at),
-    leftAt: r.left_at ? iso(r.left_at) : null }));
+    leftAt: r.left_at ? iso(r.left_at) : null, contribution: { total: Number(r.total), today: Number(r.today) } }));
+  const { rows: [sum] } = await db.execute<{ total: number | string }>(sql`select ${guildTotal(sql`${g.id}::uuid`)} as total`);
+  const progress = guildProgress(Number(sum.total));
+  const { rows: logs } = await db.execute<{
+    id: number | string; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; created_at: string | Date;
+  }>(sql`
+    select l.id, l.kind, l.user_id::text as uid, p.nickname as nick, l.detail, l.created_at
+    from public.guild_logs l left join public.profiles p on p.user_id = l.user_id
+    where l.guild_id = ${g.id} order by l.id desc limit ${LOGBOOK_LIMIT}`);
+  const logbook = logs.map(l => ({ id: Number(l.id), kind: l.kind, uid: l.uid, nick: l.nick, detail: l.detail,
+    at: iso(l.created_at) }));
   let invite: GuildView['invite'] = null;
   if (g.role === 'leader') {
     const { rows: [i] } = await db.execute<{ code: string; expires_at: string | Date }>(sql`select code, expires_at
       from public.guild_invites where guild_id = ${g.id} and expires_at > ${at(nowISO)}`);
     if (i) invite = { code: i.code, expiresAt: iso(i.expires_at) };
   }
-  return { id: g.id, name: g.name, createdAt: iso(g.created_at), role: g.role, members, invite };
+  return { id: g.id, name: g.name, createdAt: iso(g.created_at), role: g.role, members, invite,
+    growth: { ...progress, bonus: guildBonusOf(progress.level) }, logbook };
+}
+
+/**
+ * 길드의 누적 기여도 — 그 길드의 하루 기여 행(떠난 선원·지운 계정 포함)의 합.
+ * ponytail: 읽을 때마다 합한다. 길드당 행은 길드원 수 × 날짜 수라 작다. 느려지면 길드 행에 합계 열을 두고 기여와 함께 갱신한다.
+ */
+export const guildTotal = (guildId: SQL) =>
+  sql`(select coalesce(sum(c.fame + c.clears), 0)::bigint from public.guild_contributions c where c.guild_id = ${guildId})`;
+
+/** 항해일지 한 줄을 쓰는 문장 */
+const logInsert = (guildId: string, uid: string, kind: GuildLogKind, nowISO: string) =>
+  sql`insert into public.guild_logs (guild_id, user_id, kind, created_at) values (${guildId}, ${uid}, ${kind}, ${at(nowISO)})`;
+
+/**
+ * 액션 하나가 쌓은 기여를 그날(게임 날짜) 그 길드원의 행에 더하는 후속 쓰기. 쌓을 것이 없으면 null.
+ * 명성 기여는 그날 이미 쌓은 것과 합쳐 하루 상한(GUILD_DAILY_FAME_CAP)에서 멈춘다. 한 행의 갱신이라 동시에 써도 상한을 넘지 않는다.
+ * 그 사이 길드가 없어졌으면 쓰지 않는다.
+ */
+export function contributionUpsert(guildId: string, uid: string, nowISO: string,
+  add: { fame: number; clears: number }): SQL | null {
+  if (add.fame <= 0 && add.clears <= 0) return null;
+  return sql`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+    select g.id, ${uid}::uuid, ${contributionDayOf(nowISO)}::date, ${add.fame}::int, ${add.clears}::int
+    from public.guilds g where g.id = ${guildId}
+    on conflict (guild_id, user_id, day) do update set
+      fame = least(${GUILD_DAILY_FAME_CAP}::int, public.guild_contributions.fame + excluded.fame),
+      clears = public.guild_contributions.clears + excluded.clears`;
+}
+
+/** 액션이 남긴 항해일지 줄(전설 획득·네임드 토벌)을 쓰는 후속 쓰기. 없으면 null. 그 사이 길드가 없어졌으면 쓰지 않는다 */
+export function logbookInsert(guildId: string, uid: string, entries: readonly { kind: GuildLogKind; detail: string }[],
+  nowISO: string): SQL | null {
+  if (entries.length === 0) return null;
+  const values = sql.join(entries.map(e => sql`(${e.kind}::text, ${e.detail}::text)`), sql`, `);
+  return sql`insert into public.guild_logs (guild_id, user_id, kind, detail, created_at)
+    select g.id, ${uid}::uuid, v.kind, v.detail, ${at(nowISO)} from public.guilds g, (values ${values}) as v(kind, detail)
+    where g.id = ${guildId}`;
 }
 
 export type CreateOutcome = { ok: true; id: string } | { ok: false; error: 'already-in-guild' | 'name-taken' };
@@ -72,6 +152,7 @@ export async function createGuild(withTransaction: Tx, uid: string, name: string
     if (!g) return { ok: false, error: 'name-taken' };
     await tx.execute(sql`insert into public.guild_members (guild_id, user_id, role, joined_at)
       values (${g.id}, ${uid}, 'leader', ${at(nowISO)})`);
+    await tx.execute(logInsert(g.id, uid, 'join', nowISO));
     return { ok: true, id: g.id };
   });
 }
@@ -114,6 +195,7 @@ export async function joinGuild(withTransaction: Tx, uid: string, code: string, 
     await tx.execute(sql`insert into public.guild_members (guild_id, user_id, role, joined_at)
       values (${inv.id}, ${uid}, 'member', ${at(nowISO)})
       on conflict (guild_id, user_id) do update set role = 'member', joined_at = excluded.joined_at, left_at = null`);
+    await tx.execute(logInsert(inv.id, uid, 'join', nowISO));
     return { ok: true, id: inv.id };
   });
 }
@@ -137,6 +219,7 @@ export async function removeMember(withTransaction: Tx, uid: string, guildId: st
     }
     await tx.execute(sql`update public.guild_members set left_at = ${at(nowISO)}
       where guild_id = ${guildId} and user_id = ${target}`);
+    await tx.execute(logInsert(guildId, target, outcome === 'leave' ? 'leave' : 'kick', nowISO));
     return { ok: true, result: outcome === 'leave' ? 'left' : 'kicked' };
   });
 }
@@ -160,10 +243,13 @@ export async function handOver(withTransaction: Tx, uid: string, guildId: string
 }
 
 /**
- * 계정 정리에서 그 사용자의 길드원 행을 모두 지운다(떠난 길드의 기록 포함).
+ * 계정 정리에서 그 사용자의 길드원 행과 항해일지 줄을 모두 지운다(떠난 길드의 기록 포함).
+ * 기여 행은 사람 열만 비우고 남긴다 — 길드의 누적 기여도와 레벨이 줄지 않는다.
  * 길드장이면 가장 먼저 들어온 길드원에게 길드장을 넘기고, 혼자면 길드를 없앤다.
  */
 export async function deleteUserGuild(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.guild_logs where user_id = ${uid}`);
+  await db.execute(sql`update public.guild_contributions set user_id = null where user_id = ${uid}`);
   const { rows: [led] } = await db.execute<{ id: string }>(sql`select guild_id::text as id from public.guild_members
     where user_id = ${uid} and role = 'leader'`);
   await db.execute(sql`delete from public.guild_members where user_id = ${uid}`);
