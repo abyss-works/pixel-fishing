@@ -3,6 +3,9 @@ import { isCloud } from '../adapters/auth';
 import { clearLegacySave, loadLegacy, saveCode } from '../adapters/storage';
 import { createHttpApi } from '../adapters/httpApi';
 import { createLocalApi } from '../adapters/localApi';
+import { connectLive } from '../adapters/live';
+import type { LiveConnection } from '../adapters/live';
+import type { ServerMessage } from '../../game/rules/live';
 import type { ApiClient, StorageApi } from './types';
 
 // 저장 어댑터는 런타임 API 구현과 독립된 공통 브라우저 기능이다.
@@ -15,6 +18,12 @@ export function createApi(): ApiClient {
 
 // 편의를 위한 싱글톤 (테스트는 createApi()로 격리 생성)
 export const api = createApi();
+
+/** 실시간 채널에 연결한다. 로컬 모드에는 게임 서버가 없어 연결하지 않고 null을 돌려준다 */
+export function openLive(onMessage: (msg: ServerMessage) => void): LiveConnection | null {
+  return isCloud ? connectLive(onMessage) : null;
+}
+export type { LiveConnection };
 
 export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
