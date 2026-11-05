@@ -68,11 +68,13 @@ describe('스탯 해역 목록', () => {
 });
 
 describe('갈 수 있는 지역', () => {
-  it('지역마다 배로 갈 수 있는 해역 수를 세고, 하나도 못 가면 가장 낮은 필요한 배를 준다', () => {
+  it('지역마다 배로 갈 수 있는 해역 수를 세고, 못 가는 해역을 여는 가장 낮은 배를 준다', () => {
     const zones = selectReachableZones(game({ boat: 1 }));
-    expect(zones.find(z => z.zone === 'pacific')).toMatchObject({ open: 1, total: 2, needBoat: null });
-    expect(zones.find(z => z.zone === 'seasia')).toMatchObject({ open: 0, total: 3, needBoat: 3 });
-    expect(zones.find(z => z.zone === 'village')).toMatchObject({ open: 2, total: 2, needBoat: null });
+    const pacific = zones.find(z => z.zone === 'pacific')!;
+    expect(pacific).toMatchObject({ open: 1, total: 2 });
+    expect(pacific.nextBoat).toBe(2);
+    expect(zones.find(z => z.zone === 'seasia')).toMatchObject({ open: 0, total: 3, nextBoat: 3 });
+    expect(zones.find(z => z.zone === 'village')).toMatchObject({ open: 2, total: 2, nextBoat: null });
   });
 });
 

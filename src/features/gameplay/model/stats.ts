@@ -96,17 +96,17 @@ export interface ReachableZone {
   /** 지금 배로 갈 수 있는 해역 수 */
   open: number;
   total: number;
-  /** 하나도 못 갈 때 가장 먼저 필요한 배 단계. 하나라도 갈 수 있으면 null */
-  needBoat: number | null;
+  /** 아직 못 가는 해역을 하나 더 여는 가장 낮은 배 단계. 모두 갈 수 있으면 null */
+  nextBoat: number | null;
 }
 
-/** 지역마다 지금 배로 갈 수 있는 해역 수 */
+/** 지역마다 지금 배로 갈 수 있는 해역 수와 다음에 필요한 배 */
 export function selectReachableZones(game: GameState): ReachableZone[] {
   return ZONE_IDS.map(zone => {
     const spots = SPOTS.filter(spot => zoneOf(spot) === zone);
-    const open = spots.filter(spot => spot.boatTier <= game.boat).length;
-    const needBoat = open > 0 ? null : Math.min(...spots.map(spot => spot.boatTier));
-    return { zone, name: zoneById(zone)?.name ?? zone, open, total: spots.length, needBoat };
+    const closed = spots.filter(spot => spot.boatTier > game.boat);
+    const nextBoat = closed.length > 0 ? Math.min(...closed.map(spot => spot.boatTier)) : null;
+    return { zone, name: zoneById(zone)?.name ?? zone, open: spots.length - closed.length, total: spots.length, nextBoat };
   }).filter(zone => zone.total > 0);
 }
 
