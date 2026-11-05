@@ -79,6 +79,15 @@ describe('메시지 창', () => {
     expect(screen.getByText('새 메시지')).toBeInTheDocument();
   });
 
+  it('내 채팅 이름은 골드, 다른 사람 이름은 하늘색이다', () => {
+    const at = new Date();
+    render(<MessageLog log={[chatAt(1, at, 'me'), chatAt(2, at, 'other')]} you="me" onPick={() => {}} />);
+    const [mine, other] = screen.getAllByRole('button', { name: '가람:' });
+    expect(mine).toHaveClass('text-gold');
+    expect(other).toHaveClass('text-accent');
+    expect(other).not.toHaveClass('text-gold');
+  });
+
   it('최근 채팅 묶음이 기록 앞쪽에 끼어들어도 맨 아래(최신)를 보인다', () => {
     const now = Date.now();
     const system = [createMessage(100, '항구에 닿았다.', { now: new Date(now) })];

@@ -20,5 +20,5 @@ type Story = StoryObj<typeof MessageLog>;
 
 export const System: Story = { args: { log } };
 
-/** 채팅이 섞인 기록 — 창 위에 채널 토글이 생긴다 */
-export const WithChat: Story = { args: { log: mergeMessages(log, chat), filter: 'all', onToggle: () => {}, onPick: () => {} } };
+/** 채팅이 섞인 기록 — 내 이름(가람)은 골드, 다른 사람 이름은 하늘색 */
+export const WithChat: Story = { args: { log: mergeMessages(log, chat), you: 'me', filter: 'all', onToggle: () => {}, onPick: () => {} } };

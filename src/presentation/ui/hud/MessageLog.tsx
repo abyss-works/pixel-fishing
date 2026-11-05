@@ -16,7 +16,7 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 바탕은 마우스를 올렸을 때만 보인다(평소에는 글줄과 글자 그림자만). 스크롤 막대(HUD용 흰 막대)도 마우스를 올렸을 때만 보인다.
 // 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 채널 토글(채팅·시스템)을 그린다.
 // 꺼 둔 채널에 새 글줄이 오면 그 토글 옆에 점을 찍는다. 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
-// 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다.
+// 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
@@ -26,24 +26,27 @@ const LINE_EM = 1.45;
 
 const TOGGLES: MessageChannel[] = ['chat', 'system'];
 
-function Line({ m, onPick }: { m: Msg; onPick?: (m: Msg) => void }) {
+function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
+  const nameCls = mine ? 'text-gold' : 'text-accent';
   return (
     <div className={cx('leading-[1.45] text-shadow-hud', TONE_CLS[m.tone])}>
       <span className="text-text-dim text-2xs mr-0.5">{m.ts}</span>{' '}
       <span className="text-text-dim">[{CHANNEL_LABEL[m.channel]}]</span>{' '}
       {m.author && (m.from && onPick
-        ? <button type="button" className="text-accent hover:underline cursor-pointer" onClick={() => onPick(m)}>{m.author}: </button>
-        : <span className="text-accent">{m.author}: </span>)}
+        ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}: </button>
+        : <span className={nameCls}>{m.author}: </span>)}
       {m.text}
     </div>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, filter = 'all', onToggle }: {
+export default function MessageLog({ log, onPick, footer, you, filter = 'all', onToggle }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
   footer?: ReactNode;
+  /** 내 id — 내가 보낸 채팅 글줄의 이름을 구분한다 */
+  you?: string | null;
   /** 보이는 채널 */
   filter?: MessageFilter;
   /** 채널 토글을 눌렀다. 없으면 토글을 그리지 않는다 */
@@ -93,7 +96,9 @@ export default function MessageLog({ log, onPick, footer, filter = 'all', onTogg
            className="pointer-events-auto pf-glass-hover pf-scroll-hud border rounded-sm px-2 py-1
                       text-sm flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text"
            style={{ height: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 2px)` }}>
-        {shown.map(m => <Line key={`${m.channel}-${m.id}`} m={m} onPick={onPick} />)}
+        {shown.map(m => (
+          <Line key={`${m.channel}-${m.id}`} m={m} mine={you != null && m.from?.uid === you} onPick={onPick} />
+        ))}
       </div>
       {footer && <div className="pointer-events-auto">{footer}</div>}
     </div>
