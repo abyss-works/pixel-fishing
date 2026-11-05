@@ -1,5 +1,5 @@
 // 채팅 입력 줄 — HUD 메시지 창 아래에 놓인다. 게임 화면에서 Enter를 누르면 입력 줄로 들어간다.
-// 입력 중 Enter는 보내고 입력 줄을 벗어난다(빈 입력은 벗어나기만 한다). Esc는 보내지 않고 벗어난다.
+// 입력 중 Enter는 보내고 입력 줄에 머문다. 빈 입력의 Enter와 Esc만 입력 줄을 벗어난다.
 // 한글 조합 중의 Enter는 조합을 끝낼 뿐 보내지 않는다.
 // 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
@@ -62,7 +62,7 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (e.repeat) return;
-      if (text.trim() !== '') { sendChat(text, room); setText(''); }
+      if (text.trim() !== '') { sendChat(text, room); setText(''); return; }
       e.currentTarget.blur();
     }
     if (e.key === 'Escape') e.currentTarget.blur();

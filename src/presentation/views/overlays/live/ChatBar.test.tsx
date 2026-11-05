@@ -44,18 +44,17 @@ describe('ChatBar', () => {
 
   afterEach(() => { cleanup(); resetKeyScopes(); live.error = null; vi.clearAllMocks(); });
 
-  it('Enter로 보내고 입력을 비운 뒤 입력 줄을 벗어난다. 빈 입력은 보내지 않고 벗어나기만 한다', () => {
+  it('Enter로 보내고 입력을 비운 뒤에도 입력 줄에 머문다. 빈 입력의 Enter는 보내지 않고 벗어난다', () => {
     render(<ChatBar />);
     const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
-    input.focus();
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(live.sendChat).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(input);
     input.focus();
     fireEvent.change(input, { target: { value: '안녕하세요' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenCalledWith('안녕하세요', 'world');
     expect(input.value).toBe('');
+    expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenCalledTimes(1);
     expect(document.activeElement).not.toBe(input);
     expect(input.maxLength).toBe(100);
   });
