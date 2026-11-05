@@ -22,6 +22,7 @@ import PillButton from '../../../../ui/PillButton';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
+import HelpHint from '../../../../ui/HelpHint';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagLayout, toggleBagRow, useBagView } from './bagView';
@@ -354,6 +355,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                 자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.
                 {' '}{EXHIBIT_UI_ENABLED && '별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요. '}
                 행 소계는 잠근 개체를 포함한 그 종의 값 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
+                <HelpHint text="펼친 개체 줄의 금색 왕관은 같은 형태에서 가장 큰 개체, 보라 반짝이는 돌연변이 개체예요." />
               </Note>
             </>
           )}
