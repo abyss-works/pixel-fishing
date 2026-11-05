@@ -56,9 +56,13 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
                   aria-label={`${sel.name} 다음 단계까지`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sel.ratio * 100)}>
               <span className="block h-full bg-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" style={{ width: `${sel.ratio * 100}%` }} />
             </span>
-            <span className="mt-auto" title={sel.canDonate ? undefined : GUILD_ERROR_TEXT[sel.locked ? 'bonus-locked' : 'rank-maxed']}>
-              <Button variant="primary" full disabled={busy || !sel.canDonate} onClick={() => setDonating(true)}>기부</Button>
-            </span>
+            {sel.canDonate ? (
+              <Button variant="primary" full disabled={busy} onClick={() => setDonating(true)} className="mt-auto">기부</Button>
+            ) : (
+              <Tip wraps text={GUILD_ERROR_TEXT[sel.locked ? 'bonus-locked' : 'rank-maxed']} className="mt-auto block">
+                <Button variant="primary" full disabled className="pointer-events-none">기부</Button>
+              </Tip>
+            )}
           </Inset>
         </div>
       )}
@@ -87,8 +91,9 @@ const GLYPH: Record<GuildBonusId, GlyphId> = { sell: 'coin', bag: 'fish', named:
 function Branch({ row, active, onPick }: { row: BonusRow; active: boolean; onPick: () => void }) {
   return (
     <div className={cx('flex flex-col items-center min-w-0', row.locked && 'opacity-45')}>
+      <Tip wraps text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
       <Frame as="button" type="button" onClick={row.locked ? undefined : onPick} aria-disabled={row.locked || undefined}
-             aria-pressed={active} aria-label={`${row.name} 고르기`} title={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : undefined}
+             aria-pressed={active} aria-label={`${row.name} 고르기`}
              className={cx('w-full h-14 px-1 flex flex-col items-center justify-center gap-1 text-xs',
                row.locked ? 'cursor-default' : 'cursor-pointer',
                active
@@ -97,6 +102,7 @@ function Branch({ row, active, onPick }: { row: BonusRow; active: boolean; onPic
         <PixelIcon glyph={GLYPH[row.id]} size={16} />
         <span className="text-center leading-tight">{row.name}</span>
       </Frame>
+      </Tip>
       {row.nodes.map((node, i) => (
         <div key={node.rank} className={cx('flex flex-col items-center', i === 0 && 'mt-2.5')}>
           {i > 0 && <span className={cx('block w-0.5 h-1.5', node.state === 'done' ? 'bg-gold' : 'bg-line')} aria-hidden="true" />}

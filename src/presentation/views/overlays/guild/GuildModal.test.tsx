@@ -86,9 +86,14 @@ describe('GuildModal', () => {
     expect(within(dialog).getByText(/길드를 떠날까요/)).toBeTruthy();
   });
 
-  it('길드원 표는 사람마다 오늘 기여, 누적 기여, 기부 합을 숫자로 보인다', () => {
+  it('길드원 표는 사람마다 오늘 기여, 누적 기여, 기부 합을 숫자로 보인다. 오늘 기여 머리의 툴팁은 하루 상한 목록이다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.mouseEnter(screen.getByText('오늘 기여'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('네임드 토벌')).toBeTruthy();
+    expect(tip.textContent).toContain('새벽 4시');
+    fireEvent.mouseLeave(screen.getByText('오늘 기여'));
     const row = screen.getByText('나루').closest('tr') as HTMLElement;
     expect(within(row).getByText('900,000')).toBeTruthy();
     const mine = screen.getByText('가람').closest('tr') as HTMLElement;
@@ -97,16 +102,19 @@ describe('GuildModal', () => {
     expect(within(mine).getByText('100,000')).toBeTruthy();
   });
 
-  it('고정 정보 줄(레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 기여 방식은 진행 막대의 툴팁이다', () => {
+  it('창 제목은 길드 정보이고, 고정 정보 줄(길드 이름, 레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 기여 방식은 진행 막대의 툴팁이다', () => {
     s.guild = GUILD;
     render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('길드 정보')).toBeTruthy();
     const stays = () => {
+      expect(screen.getByText('심해선단')).toBeTruthy();
       expect(screen.getByText('Lv.3')).toBeTruthy();
       expect(screen.getByText('31,000 / 50,000')).toBeTruthy();
       expect(screen.getByText('2/10')).toBeTruthy();
     };
     stays();
-    expect(screen.getAllByRole('tooltip', { hidden: true }).some(t => t.textContent?.includes('하루 1,000까지'))).toBe(true);
+    fireEvent.mouseEnter(screen.getByRole('meter', { name: '다음 레벨까지 진행' }).parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toContain('하루 1,000까지');
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     stays();
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
@@ -119,7 +127,8 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     const tree = screen.getByRole('group', { name: '길드 스킬 트리' });
     expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).getAttribute('aria-disabled')).toBe('true');
-    expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).title).toBe('길드 Lv.4에 열려요.');
+    fireEvent.mouseEnter(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('길드 Lv.4에 열려요.');
     expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
     expect(screen.getByText('현재(2단계)')).toBeTruthy();
     expect(screen.getByText('다음(3단계)')).toBeTruthy();
