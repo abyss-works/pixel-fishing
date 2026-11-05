@@ -29,11 +29,12 @@ export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
 export { readRanking } from '../adapters/ranking';
 export { readMails, markMailRead } from '../adapters/mailbox';
+export { readFriends, friendAction } from '../adapters/friends';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
-  RankingBoardId, RankingRow, RankingBoard, MailItem,
+  RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
   AdminUserRow, AdminDailyActiveRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminCatchQualityRow, AdminSpamFlagRow, AdminImportLogRow,
   AdminDexMismatchRow, AdminEventRow, AdminLetterRow, BalanceLive,
