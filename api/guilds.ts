@@ -1,21 +1,25 @@
-// 길드 함수 — 내 길드 조회, 만들기, 초대 코드 발급, 가입, 떠나기·내보내기, 길드장 위임 (Node 런타임)
+// 길드 함수 — 내 길드 조회, 만들기, 초대 코드 발급, 가입, 떠나기·내보내기, 길드장 위임, 보너스 기부 (Node 런타임)
 // 계정 유저만 쓴다(게스트 제외). 권한과 인원 상한은 저장 모듈이 길드 행을 잠근 뒤 길드 규칙으로 판정한다.
-//   GET    /api/guilds/me                  → { guild }                내 길드, 길드원(접속 여부·기여 포함), 성장(레벨·보너스), 항해일지.
-//                                                                       없으면 null
+//   GET    /api/guilds/me                  → { guild }                내 길드, 길드원(접속 여부·기여 포함), 성장(레벨), 보너스(단계·모인 골드·
+//                                                                       기부 순위·내 기부)와 효과, 항해일지. 없으면 null
 //   POST   /api/guilds { name }            → 201 { id }               만들기. 만든 사람이 길드장이다
 //   POST   /api/guilds/:id/invites         → 201 { code, expiresAt }  초대 코드 발급(길드장). 이전 코드는 사라진다
 //   POST   /api/guild-memberships { code } → 201 { id }               초대 코드로 가입
 //   DELETE /api/guilds/:id/members/:uid    → { result }               자기 자신이면 떠나기, 다른 길드원이면 내보내기(길드장)
 //   PUT    /api/guilds/:id/leader { uid }  → { result }               길드장 위임(길드장)
+//   POST   /api/guilds/:id/bonuses/:bonus/donations { amount }
+//                                          → 201 { rank, pool, accepted, gold }  보너스 기부(길드원 누구나). 상한까지 필요한 골드만 받고
+//                                                                       accepted만큼 내 골드에서 뺀다. gold는 기부 뒤 내 골드다
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. 경로 변수는 Express가 req.params로 넘긴다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomInt } from 'node:crypto';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
-import { createGuild, handOver, issueInvite, joinGuild, myGuild, removeMember } from './_data/guilds.js';
+import { createGuild, donateToBonus, handOver, issueInvite, joinGuild, myGuild, removeMember } from './_data/guilds.js';
 import { presenceOf } from './_server/livePresence.js';
-import { checkGuildName, inviteCode, normalizeInviteCode } from '../src/game/rules/guild.js';
+import { GUILD_BONUS_IDS, checkGuildName, inviteCode, normalizeInviteCode, validDonationAmount } from '../src/game/rules/guild.js';
+import type { GuildBonusId } from '../src/game/rules/guild.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -32,6 +36,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUS: Record<string, number> = {
   'already-in-guild': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409,
   'not-leader': 403, 'not-member': 404, 'bad-code': 404, self: 400,
+  'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403,
 };
 const refuse = (error: string) => new ApiError(STATUS[error] ?? 400, error);
 
@@ -125,8 +130,21 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     res.status(200).json({ result: 'handed-over' });
   });
 
+  const donate = handle(['POST'], async (req, res, uid) => {
+    const id = uuidParam(req, 'id');
+    const bonus = req.params?.bonus ?? '';
+    if (!(GUILD_BONUS_IDS as readonly string[]).includes(bonus)) throw new ApiError(400, 'bad-bonus');
+    const amount = bodyField(req, 'amount');
+    if (!validDonationAmount(amount)) throw new ApiError(400, 'bad-amount');
+    const r = await run('db-write', () => donateToBonus(database().withTransaction, uid, id, bonus as GuildBonusId, amount,
+      new Date().toISOString()));
+    if (!r.ok) throw refuse(r.error);
+    res.status(201).json({ rank: r.rank, pool: r.pool, accepted: r.accepted, gold: r.gold });
+  });
+
   return {
     '/api/guilds/me': me,
+    '/api/guilds/:id/bonuses/:bonus/donations': donate,
     '/api/guilds': create,
     '/api/guilds/:id/invites': invites,
     '/api/guilds/:id/members/:uid': member,

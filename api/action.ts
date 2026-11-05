@@ -59,8 +59,8 @@ import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragm
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
-import { contributionFor } from '../src/game/rules/guild.js';
-import type { GuildLogKind } from '../src/game/rules/guild.js';
+import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf } from '../src/game/rules/guild.js';
+import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
 
@@ -192,9 +192,9 @@ export const SKIP_DETAIL = new Set([
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
 const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChallenge', 'catch']);
 
-/** 길드가 필요한 액션 — 기여를 쌓는다(명성을 얻는 캐치·지원 코드, 의뢰 클리어).
- *  이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
-const GUILD_ACTIONS = new Set(['catch', 'deliverBounty', 'claimRelief']);
+/** 길드가 필요한 액션 — 보너스 효과를 쓰거나(캐치, 판매, 전시대 회수의 가방 상한) 기여를 쌓는다(명성을 얻는 캐치·지원 코드,
+ *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
+const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
 
 // 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
 // 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
@@ -282,6 +282,8 @@ async function route(req: Req, res: Res): Promise<void> {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
     bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
   }));
+  // 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
+  const guildEffects = loaded.guild ? guildEffectsOf(loaded.guild.ranks) : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
@@ -441,7 +443,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, guildEffects);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
@@ -452,6 +454,7 @@ async function route(req: Req, res: Res): Promise<void> {
       relief,
       bounty,
       mail,
+      guild: guildEffects,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -461,7 +464,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
-      Math.random, action.forceEncounter === true);
+      Math.random, action.forceEncounter === true, guildEffects.named);
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -582,7 +585,8 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2]): Promise<ApplyOutcome> {
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2],
+  guild: GuildEffects): Promise<ApplyOutcome> {
   const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
@@ -596,7 +600,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts, id => owned.has(id));
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
@@ -607,7 +611,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const info = buildCatchInfo(fish, extras, isNew);
   const inst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
   const rec = nextDexRec(prev, inst.size, today);
-  const over = bagCount + 1 - Math.max(capOfBoat(base.boat), bagCount);
+  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let released: ReleasedFish[] = [];

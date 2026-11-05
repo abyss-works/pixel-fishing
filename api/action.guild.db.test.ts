@@ -1,10 +1,10 @@
-// 액션 경로의 길드 성장 — 실제 Postgres에서 기여 기록(하루 상한·게임 날짜·의뢰 클리어), 항해일지와
-// 길드 레벨이 천장·의뢰 보상을 바꾸지 않음을 검사한다.
+// 액션 경로의 길드 성장 — 실제 Postgres에서 기여 기록(하루 상한·게임 날짜·의뢰 클리어), 항해일지,
+// 길드 레벨이 천장·의뢰 보상을 바꾸지 않음과 서버가 보너스 단계로 정한 효과(판매가·가방·돌연변이)를 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES } from '../src/game/content/bounties.js';
-import { RARITY } from '../src/game/rules/logic.js';
+import { RARITY, capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
 import { SPECIES_PITY_K } from '../src/game/rules/pity.js';
-import { callAction, captureRealClock, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
 const NOW = '2030-03-04T05:06:07.000Z'; // KST 14:06 — 게임 날짜 2030-03-04
@@ -110,5 +110,44 @@ describe('길드 레벨과 천장·의뢰 보상', () => {
     expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })).status).toBe(200);
     const { rows: [s] } = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
     expect(Number(s.gold)).toBe(quest.reward);
+  });
+});
+
+describe('보너스 효과(서버 판정)', () => {
+  const rank = (guild: string, bonus: string, r: number) => env.client.query(
+    'insert into public.guild_bonuses (guild_id, bonus, rank) values ($1, $2, $3)', [guild, bonus, r]);
+  const goldOf = async (uid: string) =>
+    Number((await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
+
+  it('판매는 판매가 보너스를 판매 총액에 한 번 더한다', async () => {
+    const bag = [fish('crucian'), fish('crucian')];
+    const base = bag.reduce((a, i) => a + priceOfInstance(i), 0);
+    const { uid, guild } = await member({ state: { gold: 0, bag } });
+    await rank(guild, 'sell', 3);
+    expect((await callAction(userToken(uid), { type: 'sell', uids: bag.map(i => i.uid) })).status).toBe(200);
+    expect(await goldOf(uid)).toBe(base + Math.round(base * 0.06));
+  });
+
+  it('캐치 fast path는 가방 보너스만큼 늘어난 칸으로 넘침을 판정한다', async () => {
+    const full = () => Array.from({ length: capOfBoat(0) }, () => fish('crucian'));
+    const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'bag-solo@test.dev', state: { boat: 0, bag: full() } });
+    const plain = await callAction(userToken(solo), catchPond);
+    expect((plain.body as { result: { released: unknown[] } }).result.released).toHaveLength(1);
+    const { uid, guild } = await member({ state: { boat: 0, bag: full() } });
+    await rank(guild, 'bag', 1);
+    const boosted = await callAction(userToken(uid), catchPond);
+    expect((boosted.body as { result: { released: unknown[] } }).result.released).toEqual([]);
+  });
+
+  it('캐치 fast path는 돌연변이 확률에 퍼센트포인트를 더한다', async () => {
+    const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.02;
+    vi.spyOn(Math, 'random').mockReturnValue(r);
+    const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'mut-solo@test.dev', state: {} });
+    const plain = await callAction(userToken(solo), catchPond);
+    expect((plain.body as { result: { info: { form: string } } }).result.info.form).toBe('normal');
+    const { uid, guild } = await member();
+    await rank(guild, 'mutation', 5);
+    const boosted = await callAction(userToken(uid), catchPond);
+    expect((boosted.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
   });
 });
