@@ -149,3 +149,49 @@ describe('guilds', () => {
     expect((await client.query('select 1 from public.guilds where id = $1', [solo.id])).rows).toEqual([]);
   });
 });
+
+describe('길드 성장과 항해일지', () => {
+  const logsOf = async (guildId: string) => (await client.query<{ kind: string; user_id: string }>(
+    'select kind, user_id::text from public.guild_logs where guild_id = $1 order by id', [guildId])).rows.map(r => [r.kind, r.user_id]);
+  const give = (guildId: string, uid: string | null, day: string, fame: number, clears = 0) => client.query(
+    'insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, $2, $3, $4, $5)', [guildId, uid, day, fame, clears]);
+
+  it('만들기·가입·떠나기·내보내기를 항해일지에 남긴다', async () => {
+    const g = await guildWith(2);
+    const [m1, m2] = g.members;
+    await removeMember(tx(), m1, g.id, m1, LATER);
+    await removeMember(tx(), g.leader, g.id, m2, LATER);
+    expect(await logsOf(g.id)).toEqual([['join', g.leader], ['join', m1], ['join', m2], ['leave', m1], ['kick', m2]]);
+    const view = await myGuild(database.db, g.leader, LATER);
+    expect(view?.logbook.map(l => [l.kind, l.uid, l.at])).toEqual([['kick', m2, LATER], ['leave', m1, LATER], ['join', m2, NOW],
+      ['join', m1, NOW], ['join', g.leader, NOW]]);
+    expect(view?.logbook[0]).toMatchObject({ nick: expect.any(String), detail: null, id: expect.any(Number) });
+  });
+
+  it('조회는 누적 기여도·레벨·다음 문턱·보너스와 길드원별 누적·오늘 기여를 싣는다. 떠난 선원의 기여도 길드에 남는다', async () => {
+    const g = await guildWith(1);
+    const [m1] = g.members;
+    // NOW(KST 12:00)의 게임 날짜는 2026-11-05다
+    await give(g.id, g.leader, '2026-11-05', 400, 500);
+    await give(g.id, g.leader, '2026-11-04', 1000);
+    await give(g.id, m1, '2026-11-04', 1000, 28_100);
+    await removeMember(tx(), m1, g.id, m1, NOW);
+    const view = await myGuild(database.db, g.leader, NOW);
+    expect(view?.growth).toEqual({ level: 3, total: 31_000, floor: 25_000, next: 50_000,
+      bonus: { speciesPity: 0.05, bountyReward: 0.05, namedPity: 0 } });
+    expect(view?.members.map(m => [m.uid, m.contribution])).toEqual([
+      [g.leader, { total: 1_900, today: 900 }],
+      [m1, { total: 29_100, today: 0 }],
+    ]);
+  });
+
+  it('계정 정리는 그 사람의 항해일지 줄을 지우고, 기여 행은 사람만 비워 길드의 누적 기여도를 지킨다', async () => {
+    const g = await guildWith(1);
+    const [m1] = g.members;
+    await give(g.id, m1, '2026-11-05', 1000, 9_000);
+    await deleteUserGuild(database.db, m1);
+    expect(await logsOf(g.id)).toEqual([['join', g.leader]]);
+    expect((await client.query('select 1 from public.guild_contributions where user_id = $1', [m1])).rows).toEqual([]);
+    expect((await myGuild(database.db, g.leader, NOW))?.growth).toMatchObject({ level: 2, total: 10_000 });
+  });
+});
