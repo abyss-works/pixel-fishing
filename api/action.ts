@@ -63,6 +63,13 @@ export type { BountyRows } from './_data/load.js';
 
 // 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(이미지 빌드 인자 BUILD_ID).
 const BUILD_ID = process.env.BUILD_ID ?? 'dev';
+
+/** 낡은 탭 판정 — 운영(DEPLOY_ENV=production)은 릴리즈 버전, 그 밖의 배포는 배포 식별자를 대조한다 */
+function staleClient(headers: IncomingMessage['headers']): boolean {
+  return process.env.DEPLOY_ENV === 'production'
+    ? headers['x-client-version'] !== APP_VERSION
+    : headers['x-build-id'] !== BUILD_ID;
+}
 // 창 식별자 형식 — 클라이언트는 crypto.randomUUID()를 쓴다
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
@@ -213,12 +220,12 @@ async function route(req: Req, res: Res): Promise<void> {
   if (req.method === 'GET') { res.status(204).end(); return; }
   if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
 
-  // 낡은 탭 차단 — **배포 단위**로 판정한다. APP_VERSION은 릴리즈 라벨이라 dev 빌드에서
-  // 올라가지 않아(roadmap 0.0) 개발·스테이징 배포 사이에서는 영원히 일치했다.
-  // 클라는 빌드 시 번들에 박힌 값을, 서버는 런타임 env를 읽는다 — 같은 배포면 같은 값이다.
+  // 낡은 탭 차단 — 운영은 릴리즈 버전(APP_VERSION)으로, 그 밖의 배포는 커밋 단위 배포 식별자로 판정한다.
+  // 운영 배포는 릴리즈마다 버전이 오르므로 같은 버전의 재배포는 열린 탭을 끊지 않는다.
+  // 개발·스테이징 배포는 버전을 올리지 않고 규칙을 바꾸므로 배포 식별자로 가른다.
   // 인증/리듀서보다 먼저: 새 서버의 결과를 낡은 번들이 해석 못 해 깨지는 것을 원천 차단하고,
   // 클라이언트는 업데이트 모달(새로고침 안내)을 띄운다. 헤더 부재 = 기능 도입 전 구버전 → 동일 처리.
-  if (req.headers['x-build-id'] !== BUILD_ID) {
+  if (staleClient(req.headers)) {
     throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 
