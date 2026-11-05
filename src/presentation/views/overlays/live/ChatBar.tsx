@@ -5,7 +5,7 @@
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
 // 차단 목록을 펼쳐 풀 수 있다. 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이 맡는다.
 // 서버가 거부한 이유와 차단 해제 결과는 입력 줄 위에 짧게 보인다.
-// 길드원이면 입력 줄 앞의 방 버튼으로 보낼 곳(월드·길드)을 바꾼다. 길드가 없으면 언제나 월드로 보낸다.
+// 입력 줄 앞의 방 버튼으로 보낼 곳(월드·길드)을 바꾼다. 길드가 없으면 버튼은 회색으로 보이고 언제나 월드로 보낸다.
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
@@ -91,10 +91,9 @@ export default function ChatBar({ inGuild = false }: { inGuild?: boolean }) {
       )}
       {status && <p className={cx('text-shadow-hud m-0', status.warn ? 'text-danger' : 'text-text')} role="status">{status.text}</p>}
       <div className="flex items-center gap-1">
-        {inGuild && (
-          <PillButton active={room === 'guild'} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`} title="보낼 곳 바꾸기"
-                      onClick={() => setPicked(room === 'guild' ? 'world' : 'guild')}>{ROOM_LABEL[room]}</PillButton>
-        )}
+        <PillButton active={room === 'guild'} disabled={!inGuild} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
+                    title={inGuild ? '보낼 곳 바꾸기' : '길드에 들어가면 길드 채팅을 쓸 수 있어요'}
+                    onClick={() => setPicked(room === 'guild' ? 'world' : 'guild')}>{ROOM_LABEL[room]}</PillButton>
         <TextInput ref={inputRef} compact className="flex-1 min-w-0" aria-label="채팅 입력"
                    placeholder={`${room === 'guild' ? '길드 채팅' : '채팅'} (Enter로 입력·보내기)`}
                    maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}

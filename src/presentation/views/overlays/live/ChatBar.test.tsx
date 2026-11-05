@@ -59,7 +59,7 @@ describe('ChatBar', () => {
     expect(input.maxLength).toBe(100);
   });
 
-  it('길드원이면 방 버튼으로 길드에 보낼 수 있고, 길드가 없으면 방 버튼 없이 월드로 보낸다', () => {
+  it('길드원이면 방 버튼으로 길드에 보낼 수 있고, 길드가 없으면 방 버튼이 회색으로 꺼진 채 월드로 보낸다', () => {
     live.sendChat.mockClear();
     const { rerender } = render(<ChatBar inGuild />);
     fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 월드' }));
@@ -68,7 +68,7 @@ describe('ChatBar', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenLastCalledWith('길드 안녕', 'guild');
     rerender(<ChatBar />);
-    expect(screen.queryByRole('button', { name: /보낼 곳/ })).not.toBeInTheDocument();
+    expect((screen.getByRole('button', { name: /보낼 곳/ }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(input, { target: { value: '월드 안녕' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenLastCalledWith('월드 안녕', 'world');
