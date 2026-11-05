@@ -4,7 +4,7 @@
 // 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
 // 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이, 차단 해제는 소셜 창의 차단 탭이 맡는다.
-// 서버가 거부한 이유는 입력 줄 바로 위의 한 줄에 보인다. 이 줄의 자리는 이유가 없을 때도 비워 둔다.
+// 서버가 거부한 이유는 입력 줄 바로 위에 떠 있는 작은 노치 말풍선으로 보인다. 자리를 차지하지 않고, 다시 입력하면 사라진다.
 // 입력 줄 앞의 방 버튼이나 입력 중 Tab으로 보낼 곳(월드·길드)을 바꾼다. 길드 방이면 버튼 글자가 길드색이다.
 // 길드가 없으면 버튼은 흐리게 꺼지고 언제나 월드로 보낸다. 버튼의 설명과 꺼진 이유는 게임 툴팁으로 보인다.
 // 게스트는 채팅을 보낼 수 없어 입력 칸 대신 흐린 안내 칸을 두고, 계정을 만드는 곳을 툴팁으로 알린다.
@@ -17,6 +17,7 @@ import type { ChatError, ChatRoom } from '../../../../features/live/model/live';
 import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf } from '../../../../features/live/model/chatInput';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import { cx } from '../../../ui/cx';
+import { NOTCH_SM } from '../../../ui/notch';
 import Tip from '../../../ui/Tip';
 import HudButton from '../../../ui/hud/HudButton';
 import HudInput from '../../../ui/hud/HudInput';
@@ -75,8 +76,14 @@ export default function ChatBar({ inGuild = false, guest = false }: { inGuild?: 
   const usable = inGuild && !guest;
 
   return (
-    <div className="flex flex-col gap-1 text-xs">
-      <p className="m-0 h-[18px] leading-[18px] px-0.5 truncate text-danger text-shadow-hud" role="status">{status}</p>
+    <div className="relative text-xs">
+      {status && (
+        <p role="status"
+           className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 truncate text-danger',
+             'bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)] border border-[color-mix(in_srgb,var(--c-danger)_60%,transparent)]', NOTCH_SM)}>
+          {status}
+        </p>
+      )}
       <div className="flex items-center gap-1.5">
         <Tip wraps text={guest ? GUEST_ROOM_TIP : inGuild ? ROOM_TIP : NO_GUILD_TIP} className="flex">
           <HudButton active={room === 'guild'} disabled={!usable} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}

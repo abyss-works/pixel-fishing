@@ -24,7 +24,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
 }) {
   const { name, poster, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
   return (
-    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 h-full">
+    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
       <div className="flex items-baseline justify-between gap-2 h-6">
         <b className="text-base text-epic truncate"><Tip text={poster}>{found && name ? name : '???'}</Tip></b>
         {!done && ticketMins !== null && (

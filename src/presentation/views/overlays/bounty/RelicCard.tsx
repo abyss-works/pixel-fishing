@@ -18,7 +18,7 @@ export default function RelicCard({ artifact, owned, materialCount, busy, onExch
 }) {
   const exchange = <Button variant="primary" full disabled={materialCount < 1 || busy} onClick={onExchange}>교환</Button>;
   return (
-    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 h-full">
+    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
       <div className="flex items-baseline gap-2 h-6">
         <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
       </div>

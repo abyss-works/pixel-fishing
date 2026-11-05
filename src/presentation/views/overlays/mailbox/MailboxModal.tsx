@@ -105,7 +105,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <b className="text-gold truncate">{selected.title}</b>
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
-                <p className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
+                <p className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable] whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
                 <div className="h-9 shrink-0 flex items-center justify-between gap-2 border-t border-line pt-1.5">
                   {selected.gold > 0 && (
                     <>

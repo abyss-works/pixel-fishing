@@ -130,11 +130,12 @@ describe('ChatBar', () => {
     expect(screen.getByRole('status').textContent).toContain('계정을 만든 뒤');
   });
 
-  it('거부 이유가 없어도 이유 한 줄의 자리를 비워 둔다', () => {
-    render(<ChatBar />);
-    const line = screen.getByRole('status');
-    expect(line.textContent).toBe('');
-    expect(line).toHaveClass('h-[18px]');
+  it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {
+    const { rerender } = render(<ChatBar />);
+    expect(screen.queryByRole('status')).toBeNull();
+    live.error = 'chat-rate';
+    rerender(<ChatBar />);
+    expect(screen.getByRole('status')).toHaveClass('absolute', 'bottom-full');
   });
 
   it('입력 안내는 가운뎃점 없이 Enter로 채팅이고, 길드 방이면 Enter로 길드 채팅이다', () => {
