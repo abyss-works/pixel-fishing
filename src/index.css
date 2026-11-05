@@ -55,7 +55,6 @@
   --animate-fx-orbit: fx-orbit 2.4s linear infinite;
   --animate-fx-spark: fx-spark 0.5s ease-out forwards;
   --animate-fx-wisp: fx-wisp 3s ease-in-out infinite;
-  --animate-new-bounce: new-bounce 0.5s cubic-bezier(0.2, 1.8, 0.4, 1);
 
   /* transform으로 3px 슬라이드 — translate/rotate 유틸을 가진 요소에는 쓰지 말 것(아래 ⚠ 규칙) */
   @keyframes fade-in {
@@ -92,10 +91,6 @@
     0%   { translate: 0 26px; opacity: 0; }
     35%  { opacity: 0.95; }
     100% { translate: 0 -60px; opacity: 0; }
-  }
-  @keyframes new-bounce {
-    from { transform: rotate(-12deg) scale(0); }
-    to   { transform: rotate(-12deg) scale(1); }
   }
 }
 

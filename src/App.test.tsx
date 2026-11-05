@@ -569,7 +569,11 @@ describe('R6~R10: 낚시 상태머신 + 타이밍 판정 (마을 연못)', () =>
     space(); // 즉시 챔질 = 커서 0 위치 → 존 밖 = 일반 판정
     expect(phase()).toBe('catch');
     // rng=0 고정이라 변이 롤(0 < 1/3)도 확정 — 표시 이름은 변이 이름이다 (v0.3.0)
-    expect(screen.getByText('일반 등급 [황금 붕어] 획득!')).toBeInTheDocument();
+    // 획득 순간에는 상태 띠 대신 획득 카드가 등급과 이름을 보인다
+    const card = document.querySelector('[data-rarity]')!;
+    expect(card).toHaveTextContent('일반');
+    expect(card).toHaveTextContent('황금 붕어');
+    expect(screen.queryByText('일반 등급 [황금 붕어] 획득!')).not.toBeInTheDocument();
     expect(lastToast()).not.toContain('PERFECT');
     expect(bagOf(lastGame)).toEqual(['crucian:variant']); // R8 — rng=0 → 변이 확정 (개체, v8)
     expect(lastGame.dex.crucian.variant?.count).toBe(1);

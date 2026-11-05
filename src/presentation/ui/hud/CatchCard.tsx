@@ -2,7 +2,10 @@ import type { CSSProperties } from 'react';
 import { RARITY, formName, priceOf } from '../../../game/rules/logic';
 import type { CatchInfo, Fish } from '../../../game/rules/logic';
 import { cx } from '../cx';
-import { fmtSize } from '../format';
+import { fmtGold, fmtSize } from '../format';
+import { NOTCH_SM } from '../notch';
+import PixelIcon from '../PixelIcon';
+import HudPanel from './HudPanel';
 import FishSprite from '../fish/FishSprite';
 import { RarityText } from '../fish/RarityTag';
 
@@ -16,8 +19,10 @@ const VARIANT_LINES = [
   '…자꾸만 눈이 가는 녀석이다.',
 ] as const;
 
-// 획득 오버레이 — 게임 프레임 중앙에 뜨는 DOM 카드 (v0.3.0)
-// 스프라이트만 캔버스, 나머지(이름/크기/월척/변이/NEW)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
+// 획득 오버레이 — 게임 프레임 중앙에 뜨는 DOM 카드. 등급색 테두리(알파 70%)의 노치 패널이다.
+// 스프라이트만 캔버스, 나머지(이름/크기/판매가/월척/변이/NEW)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
+// 크기와 판매가는 두 칸으로 나누고, 월척 줄(골드 왕관)은 월척이 아니어도 자리를 비워 둔다.
+// 신규 발견은 왼쪽 위 모서리의 골드 노치 꼬리표다.
 export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo | null }) {
   const r = RARITY[fish.rarity];
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
@@ -28,11 +33,9 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   return (
     <div data-rarity={fish.rarity}
          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-(--z-card)
-                    flex flex-col items-center gap-1 min-w-[240px] px-4 py-3
-                    bg-[rgba(6,12,24,0.82)] backdrop-blur-[4px] rounded-md shadow-panel
-                    border border-[color-mix(in_srgb,var(--rarity-color)_45%,transparent)]
                     pointer-events-none animate-catch-pop">
-      {/* 이펙트 레이어 — 캔버스가 아니라 카드 위에 그린다 (카드가 캔버스 중앙을 덮어 캔버스 파티클은 안 보였음) */}
+      {/* 이펙트 레이어 — 캔버스가 아니라 카드 위에 그린다 (카드가 캔버스 중앙을 덮어 캔버스 파티클은 안 보였음).
+          패널의 노치가 잘라 내지 않도록 패널 바깥 층에 둔다 */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         {/* 획득 순간 방사형 스파크 — 영웅 12개, 전설 20개·더 멀리·더 오래 */}
         {sparks > 0 && Array.from({ length: sparks }, (_, i) => (
@@ -69,25 +72,35 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                 style={{ '--i': i } as CSSProperties} />
         ))}
       </div>
-      {/* 신규 발견 — 왼쪽 위 모서리에 기울어진 리본 */}
+      <HudPanel tone="none"
+                className="flex flex-col items-center gap-1.5 min-w-[250px] px-[18px] py-3.5
+                           bg-[color-mix(in_oklab,var(--c-bg)_85%,transparent)] shadow-panel
+                           border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]">
+        <span className="text-sm font-bold"><RarityText rarity={fish.rarity} /></span>
+        <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate />
+        {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 (의미심장한 한 줄) */}
+        <b className={cx('text-lg', isVariant && 'animate-mutated-shimmer')}>
+          {formName(fish, info?.form ?? 'normal')}
+        </b>
+        {isVariant && <span className="text-sm text-text-dim">{variantLine}</span>}
+        <span className="grid grid-cols-2 gap-1.5 w-full">
+          <span className={cx('flex flex-col items-center gap-0.5 p-1 text-2xs text-text-dim bg-bg/60', NOTCH_SM)}>
+            크기<b className="pf-accent text-text">{info ? fmtSize(info.size) : ''}</b>
+          </span>
+          <span className={cx('flex flex-col items-center gap-0.5 p-1 text-2xs text-text-dim bg-bg/60', NOTCH_SM)}>
+            판매가<b className="pf-accent text-gold">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
+          </span>
+        </span>
+        <span className="flex items-center gap-1 h-4 text-xs text-gold">
+          {info?.isBig && <><PixelIcon glyph="crown" size={12} />월척 <span className="pf-accent">상위 {info.percentile}%</span></>}
+        </span>
+      </HudPanel>
+      {/* 신규 발견 — 왼쪽 위 모서리의 골드 노치 꼬리표 */}
       {info?.isNew && (
-        <span className="absolute -top-2.5 -left-3.5 [transform:rotate(-12deg)] bg-[#ff4081] text-white
-                         font-bold text-sm px-2 py-0.5 rounded-sm shadow-panel animate-new-bounce">
-          NEW!
+        <span className={cx('absolute -top-0.5 -left-0.5 px-2 py-0.5 pf-accent text-2xs bg-gold text-bg animate-fade-in', NOTCH_SM)}>
+          NEW
         </span>
       )}
-      <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
-      <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate />
-      {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 (의미심장한 한 줄) */}
-      <b className={cx('text-lg', isVariant && 'animate-mutated-shimmer')}>
-        {formName(fish, info?.form ?? 'normal')}
-      </b>
-      <span className="text-sm text-text-dim">
-        {info && fmtSize(info.size)}
-        {info?.isBig && <b className="text-gold"> ★ 월척! 상위 {info.percentile}%</b>}
-      </span>
-      {isVariant && <span className="text-sm italic text-text-dim">{variantLine}</span>}
-      <span className="text-sm text-text-dim">{r.name} 등급 · {priceOf(fish, info?.form ?? 'normal')}G</span>
     </div>
   );
 }
