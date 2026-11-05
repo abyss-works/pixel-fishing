@@ -166,7 +166,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
+    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
