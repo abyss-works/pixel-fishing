@@ -63,12 +63,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
 }
 
-/** 이동 중 위치 송신 주기 */
-export const LIVE_MOVE_MS = 100;
+/** 이동 중 위치 송신 주기(5Hz). 보간이 사이를 메우므로 더 자주 보낼 필요가 없다 */
+export const LIVE_MOVE_MS = 200;
 /** 이동 중인 플레이어에게서 이 시간 동안 받은 것이 없으면 반투명으로 그린다 */
 export const LIVE_STALE_MS = 3000;
-// 보간 시간 상수 — 송신 주기(100ms) 안에 목표까지 대부분 다가가게 한다
-const FOLLOW_TAU_MS = 60;
+// 보간 시간 상수 — 송신 주기(200ms) 안에 목표까지 대부분 다가가게 한다
+const FOLLOW_TAU_MS = 120;
 // 이보다 먼 목표는 보간하지 않고 바로 옮긴다(지역 이동·재접속)
 const SNAP_DISTANCE = 160;
 

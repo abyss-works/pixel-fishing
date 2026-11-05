@@ -32,7 +32,7 @@ describe('parseClientMessage', () => {
 describe('followTarget', () => {
   it('송신 주기 안에 목표까지 대부분 다가가고 넘어서지 않는다', () => {
     let p = { x: 0, y: 0 };
-    for (let i = 0; i < 6; i++) p = followTarget(p, { x: 10, y: 0 }, 16);
+    for (let i = 0; i < 12; i++) p = followTarget(p, { x: 10, y: 0 }, 16);
     expect(p.x).toBeGreaterThan(7.5);
     expect(p.x).toBeLessThan(10);
   });

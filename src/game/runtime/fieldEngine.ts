@@ -18,6 +18,7 @@ import {
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
+import type { OtherShipView } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import type { MaybePromise } from '../../shared/lib/when';
@@ -88,6 +89,8 @@ export class GameFieldEngine {
   private school: School | null = null;
   /** 이 지역의 현재 어군 — 대양은 세션의 배치 날짜로 정해지므로 호스트가 넘겨준다 */
   private schools: School[];
+  /** 같은 바다의 다른 플레이어 — 실시간 채널이 프레임마다 보간한 위치를 돌려준다 */
+  private othersSource: ((now: number) => OtherShipView[]) | null = null;
 
   constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
@@ -112,6 +115,16 @@ export class GameFieldEngine {
   /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
   setFishArt(style: FishArtStyle): void {
     this.fishArt = style;
+  }
+
+  /** 지금 내 위치(복사본) */
+  getPosition(): Point {
+    return { x: this.pos.x, y: this.pos.y };
+  }
+
+  /** 다른 플레이어 위치의 출처를 정한다. null이면 그리지 않는다 */
+  setOthersSource(source: ((now: number) => OtherShipView[]) | null): void {
+    this.othersSource = source;
   }
 
   /** 어군 교체 — 배치 날짜가 서버 값으로 바뀌면 사거리 내 어군을 다시 판정한다 */
@@ -273,6 +286,7 @@ export class GameFieldEngine {
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
+      others: this.othersSource?.(now) ?? [],
     });
     return true;
   }

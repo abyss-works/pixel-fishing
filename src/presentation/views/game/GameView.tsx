@@ -33,6 +33,7 @@ import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
+import PresenceChip from '../overlays/live/PresenceChip';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
@@ -148,7 +149,12 @@ export default function GameView(props: GameViewProps) {
 
         <HudLayout game={game} scene={scene} log={props.log} covered={covered}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
-                   notice={atSea ? <TraceCard onTrack={setTracking} /> : null} badge={props.badge} />
+                   notice={atSea ? (
+                     <div className="flex flex-col gap-2">
+                       <PresenceChip region={region} />
+                       <TraceCard onTrack={setTracking} />
+                     </div>
+                   ) : null} badge={props.badge} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
