@@ -12,9 +12,19 @@ export type GlyphId =
   | 'caretRight' | 'caretDown' | 'checkPartial'
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
-  | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag';
+  | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
+  | 'crown' | 'sparkle';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
+  // 왕관 — 뾰족 셋 + 띠 + 받침, 가운데 보석 자리 구멍 (가장 큰 개체)
+  crown: {
+    cells: [[1, 2, 2, 2], [5, 1, 2, 2], [9, 2, 2, 2], [1, 4, 10, 3], [2, 7, 8, 2], [1, 9, 10, 2]],
+    holes: [[5, 5, 2, 1]],
+  },
+  // 반짝이 — 십자 광선 + 대각 네 점 (돌연변이)
+  sparkle: {
+    cells: [[5, 0, 2, 12], [0, 5, 12, 2], [3, 3, 2, 2], [7, 3, 2, 2], [3, 7, 2, 2], [7, 7, 2, 2]],
+  },
   // 두 사람 — 머리 둘과 어깨 둘 (친구)
   people: {
     cells: [[1, 1, 3, 3], [8, 1, 3, 3], [0, 5, 5, 5], [7, 5, 5, 5]],
