@@ -34,6 +34,8 @@ export const LIVE_MAX_PER_SEC = 15;
 export const LIVE_MAX_LENGTH = 1024;
 /** 서버 재시작으로 닫는 연결의 종료 코드(RFC 6455 1012). 클라이언트는 다시 연결한다 */
 export const LIVE_CLOSE_RESTART = 1012;
+/** 같은 계정의 새 연결이 들어와 이전 연결을 닫는 종료 코드. 닫힌 쪽은 다시 연결하지 않는다 */
+export const LIVE_CLOSE_REPLACED = 4000;
 
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
