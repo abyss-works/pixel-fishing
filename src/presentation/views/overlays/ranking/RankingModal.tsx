@@ -85,7 +85,8 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
         <Frame className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 bg-surface-2 text-accent text-sm"
                aria-label="내 순위">
           <span className="pf-accent text-xs">{mine.rank}</span>
-          <b>나</b>
+          {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
+          <b className="pl-2">나</b>
           <span className="pf-accent text-xs text-right">{format(mine.value)}</span>
         </Frame>
       ) : <div className="h-9 shrink-0" aria-hidden="true" />}

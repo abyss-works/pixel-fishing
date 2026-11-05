@@ -106,7 +106,8 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
                 <p className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable] whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
-                <div className="h-9 shrink-0 flex items-center justify-between gap-2 border-t border-line pt-1.5">
+                {/* 받기 버튼(41px)과 구분선 아래 8px이 들어가는 높이 */}
+                <div className="h-[50px] shrink-0 flex items-center justify-between gap-2 border-t border-line pt-2">
                   {selected.gold > 0 && (
                     <>
                       <span className="inline-flex items-center gap-1.5 text-gold">

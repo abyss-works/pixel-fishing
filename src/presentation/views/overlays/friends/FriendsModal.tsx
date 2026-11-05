@@ -138,7 +138,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
   );
 }
 
-/** 요청 탭: 위에 닉네임 입력, 아래에 받은 요청과 보낸 요청 표(각 세 줄 높이, 넘치면 표 안에서 굴린다) */
+/** 요청 탭: 위에 닉네임 입력, 아래에 받은 요청과 보낸 요청 표. 두 표가 남은 높이를 반씩 채우고(480 창에서 세 줄 남짓), 넘치면 표 안에서 굴린다 */
 function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   groups: FriendGroups | null;
   pending: ReactNode;
@@ -166,7 +166,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
@@ -200,16 +200,16 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   );
 }
 
-/** 요청 표 하나: 이름표 줄(이름과 수), 표 머리 한 줄과 세 줄 높이의 칸 */
+/** 요청 표 하나: 이름표 줄(이름과 수)과 남은 높이를 채우는 칸. 칸은 적어도 한 줄 높이를 지킨다 */
 function FriendRequestTable({ label, rows, pending, empty, actions }: {
   label: string; rows: FriendItem[] | null; pending: ReactNode; empty: string; actions: (f: FriendItem) => ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-1.5 shrink-0" aria-label={label}>
+    <section className="flex flex-col gap-1.5 flex-1 min-h-0" aria-label={label}>
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <Inset className="pf-scroll-panel h-[138px] overflow-y-auto px-3 py-1">
+      <Inset className="pf-scroll-panel flex-1 min-h-[48px] overflow-y-auto px-3 py-1">
         {rows && rows.length > 0 ? (
           <table className={SOCIAL_TABLE}>
             <colgroup><col /><col className="w-[132px]" /></colgroup>
