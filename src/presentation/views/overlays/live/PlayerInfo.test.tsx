@@ -1,6 +1,8 @@
-// 플레이어 정보 — 공개 프로필 네 항목과, 계정 유저에게만 보이는 친구 요청·차단·신고.
+// 플레이어 정보 — 공개 프로필(명성·도감·배·낚싯대·유물)과, 계정 유저에게만 보이는 친구 요청·차단·신고.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ARTIFACTS } from '../../../../game/content/artifacts';
+import { FISH } from '../../../../game/content/fish';
 import { PlayerInfo } from './PlayerInfo';
 
 const s = vi.hoisted(() => ({
@@ -12,7 +14,9 @@ const s = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
-  usePlayerProfile: () => ({ profile: { nickname: '갈치', boat: 2, fame: 12345, dex: 7, account: true }, loading: false, failed: false }),
+  usePlayerProfile: () => ({ profile: {
+    nickname: '갈치', boat: 2, rod: 7, fame: 12345, dexFish: ['crucian', 'minnow'], artifacts: ['abyss-angler'], account: true,
+  }, loading: false, failed: false }),
 }));
 vi.mock('../../../../features/friends/service/useFriends', () => ({
   useFriends: () => ({ groups: { friends: [], incoming: [], outgoing: [] }, offline: false, act: s.act }),
@@ -32,10 +36,13 @@ const show = (over: Partial<Parameters<typeof PlayerInfo>[0]> = {}) =>
 describe('PlayerInfo', () => {
   afterEach(() => { cleanup(); s.relation = null; s.blocked = false; vi.clearAllMocks(); });
 
-  it('닉네임·배·명성·도감 수를 보이고, 친구 요청·차단·신고를 보낸다', async () => {
+  it('명성·도감·낚싯대·가진 유물을 보이고, 친구 요청·차단·신고를 보낸다', async () => {
     show();
     expect(screen.getByText('12,345')).toBeTruthy();
-    expect(screen.getByText('7종')).toBeTruthy();
+    expect(screen.getByText('2 / ' + FISH.length)).toBeTruthy();
+    expect(screen.getByText('Lv.7')).toBeTruthy();
+    expect(screen.getByLabelText('유물 해구의 이빨')).toBeTruthy();
+    expect(screen.getAllByLabelText(/유물 없음$/)).toHaveLength(ARTIFACTS.length - 1);
     fireEvent.click(screen.getByRole('button', { name: '친구 요청' }));
     expect(s.act).toHaveBeenCalledWith({ op: 'request', nickname: '갈치' });
     const blockButton = screen.getByRole('button', { name: '차단' }) as HTMLButtonElement;
