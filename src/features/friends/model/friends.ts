@@ -23,6 +23,11 @@ export function groupFriends(list: readonly FriendItem[]): FriendGroups {
   };
 }
 
+/** 그 사람과의 관계 — 친구, 받은 요청, 보낸 요청. 관계가 없으면 null */
+export function friendRelation(groups: FriendGroups, uid: string): FriendItem['state'] | null {
+  return [...groups.friends, ...groups.incoming, ...groups.outgoing].find(f => f.uid === uid)?.state ?? null;
+}
+
 /** 친구의 지금 상태 한 줄 — 접속 중이면 있는 곳, 아니면 마지막 행동이 얼마나 지났는지 */
 export function friendStatusText(f: FriendItem, nowMs: number): string {
   if (f.online) return f.region === 'village' ? '접속 중 · 마을' : '접속 중 · 바다';

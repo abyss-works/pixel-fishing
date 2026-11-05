@@ -37,6 +37,9 @@ import { useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
 import PresenceChip from '../overlays/live/PresenceChip';
 import ChatBar from '../overlays/live/ChatBar';
+import PlayersModal from '../overlays/live/PlayersModal';
+import PlayerModal from '../overlays/live/PlayerInfo';
+import type { PlayerTarget } from '../overlays/live/PlayerInfo';
 import { chatMessages } from '../overlays/live/chatFeed';
 import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
@@ -84,8 +87,10 @@ export default function GameView(props: GameViewProps) {
   useTutorialTrigger('sea', atSea);
   useLive();
   const chat = useChat();
-  /** 메시지 창에서 고른 다른 사람의 채팅 글줄 — 신고·차단 대상 */
-  const [pickedLine, setPickedLine] = useState<Msg | null>(null);
+  /** 같은 바다 접속 목록 창 */
+  const [playersOpen, setPlayersOpen] = useState(false);
+  /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
+  const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const log = chat.enabled ? mergeMessages(props.log, chatMessages(chat.lines)) : props.log;
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
@@ -158,12 +163,15 @@ export default function GameView(props: GameViewProps) {
         )}
 
         <HudLayout game={game} scene={scene} log={log} covered={covered}
-                   logFooter={chat.enabled ? <ChatBar picked={pickedLine} onDone={() => setPickedLine(null)} /> : null}
-                   onPickLine={chat.enabled ? m => setPickedLine(m.from?.uid === chat.you ? null : m) : undefined}
+                   logFooter={chat.enabled ? <ChatBar /> : null}
+                   onPickLine={chat.enabled ? m => {
+                     if (!m.from) return;
+                     setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
+                   } : undefined}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? (
                      <div className="flex flex-col gap-2">
-                       <PresenceChip region={region} />
+                       <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} />
                        <TraceCard onTrack={setTracking} />
                      </div>
                    ) : null} badge={props.badge} />
@@ -183,6 +191,13 @@ export default function GameView(props: GameViewProps) {
         <MailboxButton onOpen={() => setMailboxOpen(true)} setToast={props.setToast} />
         <FriendsButton account={props.account} onOpen={() => setFriendsOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
+        {playersOpen && atSea && (
+          <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
+        )}
+        {player && (
+          <PlayerModal target={player} self={player.uid === chat.you} account={props.account}
+                       setToast={props.setToast} onClose={() => setPlayer(null)} />
+        )}
         {mailboxOpen && (
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
         )}
