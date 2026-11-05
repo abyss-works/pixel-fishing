@@ -75,6 +75,13 @@ describe('길드 함수', () => {
     expect(view.guild?.members.map(m => [m.nick, m.role, m.online])).toEqual(
       [['가람', 'leader', false], ['나루', 'member', true], ['다온', 'member', false]]);
     expect((await mine(B)).guild).toMatchObject({ role: 'member', invite: null });
+    // 성장·기여·항해일지 — 새 길드는 Lv1이고 보너스가 없다. 만든 사람과 들어온 사람이 항해일지에 남는다
+    expect(view.guild).toMatchObject({
+      growth: { level: 1, total: 0, floor: 0, next: 10_000, bonus: { speciesPity: 0, bountyReward: 0, namedPity: 0 } },
+      members: [{ contribution: { total: 0, today: 0 } }, { contribution: { total: 0, today: 0 } }, { contribution: { total: 0, today: 0 } }],
+    });
+    expect((view.guild as unknown as { logbook: { kind: string; nick: string }[] }).logbook.map(l => [l.kind, l.nick]))
+      .toEqual([['join', '다온'], ['join', '나루'], ['join', '가람']]);
 
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', B, { params: { id, uid: C } })).toMatchObject({ status: 403 });
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: A } }))

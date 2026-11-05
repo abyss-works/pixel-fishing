@@ -1,6 +1,7 @@
 // 길드 함수 — 내 길드 조회, 만들기, 초대 코드 발급, 가입, 떠나기·내보내기, 길드장 위임 (Node 런타임)
 // 계정 유저만 쓴다(게스트 제외). 권한과 인원 상한은 저장 모듈이 길드 행을 잠근 뒤 길드 규칙으로 판정한다.
-//   GET    /api/guilds/me                  → { guild }                내 길드와 길드원(접속 여부 포함). 없으면 null
+//   GET    /api/guilds/me                  → { guild }                내 길드, 길드원(접속 여부·기여 포함), 성장(레벨·보너스), 항해일지.
+//                                                                       없으면 null
 //   POST   /api/guilds { name }            → 201 { id }               만들기. 만든 사람이 길드장이다
 //   POST   /api/guilds/:id/invites         → 201 { code, expiresAt }  초대 코드 발급(길드장). 이전 코드는 사라진다
 //   POST   /api/guild-memberships { code } → 201 { id }               초대 코드로 가입
