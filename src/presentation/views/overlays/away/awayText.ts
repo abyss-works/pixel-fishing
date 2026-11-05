@@ -18,7 +18,7 @@ export function awayLineText(s: AwaySummary): string {
 /** 가방이 찼을 때의 한 줄. 차지 않았으면 null */
 export function bagFullText(s: AwaySummary): string | null {
   if (s.bagFullAfterMs === null) return null;
-  const lost = `${fmtNum(s.released.count)}마리를 놓쳤어요.`;
+  const lost = `${fmtNum(s.released.count)}마리를 놓아줬어요.`;
   return s.bagFullAfterMs < MINUTE
     ? `가방이 이미 차 있어서 ${lost}`
     : `${awayDuration(s.bagFullAfterMs)} 만에 가방이 차서 ${lost}`;
@@ -28,7 +28,7 @@ export function bagFullText(s: AwaySummary): string | null {
 export function bagTimelineText(s: AwaySummary): string {
   const full = s.bagFullAfterMs ?? 0;
   const head = full < MINUTE ? '떠날 때 이미 가득 참' : `${awayDuration(full)} 만에 가득 참`;
-  return `${head} · 이후 ${awayDuration(s.awayMs - full)} 동안 ${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)}) 놓침`;
+  return `${head} · 이후 ${awayDuration(s.awayMs - full)} 동안 ${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)})를 놓아줌`;
 }
 
 /** "다음엔" 조언 한 줄 */
