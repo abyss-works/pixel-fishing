@@ -1,4 +1,4 @@
-// 길드 규칙 — 서버와 클라이언트가 공유하는 순수 판정이다. 이름 검사, 인원 상한, 초대 코드, 길드원 권한,
+// 길드 규칙 — 서버와 클라이언트가 공유하는 순수 판정이다. 이름 검사, 인원 상한, 고유 코드와 가입 방식, 가입 신청, 길드원 권한,
 // 성장(기여도·레벨)과 보너스(해금·단계·기부·효과)를 맡는다.
 //
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
@@ -17,9 +17,6 @@ export interface GuildActor { uid: string; role: GuildRole }
 /** 길드 하나의 최대 인원 */
 export const GUILD_MAX_MEMBERS = 10;
 
-/** 초대 코드를 쓸 수 있는 시간. 다시 발급하면 이전 코드는 사라진다 */
-export const GUILD_INVITE_TTL_MS = 24 * 3600_000;
-
 // 읽고 옮겨 적기 쉽게 헷갈리는 글자(0 O 1 I L)를 뺀 대문자·숫자
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
@@ -36,25 +33,74 @@ export function guildFull(activeCount: number): boolean {
 }
 
 /**
- * 새 초대 코드.
+ * 새 길드 고유 코드. 길드를 만들 때 한 번 정하고 바꾸지 않는다. 초대 링크와 코드 입력이 이 코드를 쓴다.
  * @param randomIndex 0 이상 n 미만의 정수를 고르는 난수(서버는 암호학적 난수를 넘긴다)
  */
-export function inviteCode(randomIndex: (n: number) => number): string {
+export function guildCode(randomIndex: (n: number) => number): string {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[randomIndex(CODE_ALPHABET.length)];
   return code;
 }
 
-/** 입력한 초대 코드를 저장 형식으로. 앞뒤 공백과 대소문자를 무시하고, 형식이 틀리면 null이다 */
-export function normalizeInviteCode(raw: unknown): string | null {
+/** 입력한 길드 코드를 저장 형식으로. 앞뒤 공백과 대소문자를 무시하고, 형식이 틀리면 null이다 */
+export function normalizeGuildCode(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const code = raw.trim().toUpperCase();
   return CODE_PATTERN.test(code) ? code : null;
 }
 
-/** 지금 발급한 초대 코드의 만료 시각 */
-export function inviteExpiresAt(nowISO: string): string {
-  return new Date(Date.parse(nowISO) + GUILD_INVITE_TTL_MS).toISOString();
+/** 초대 링크의 경로. 서버는 이 경로에 길드 미리보기를 담은 HTML을 내고, 앱은 부팅 때 이 경로를 초대로 받는다 */
+export const GUILD_LINK_PREFIX = '/g/';
+export function guildLinkPath(code: string): string {
+  return `${GUILD_LINK_PREFIX}${code}`;
+}
+
+/** 가입 방식. open은 자유 가입, approval은 길드장 승인, closed는 새 길드원을 받지 않는다 */
+export const GUILD_JOIN_MODES = ['open', 'approval', 'closed'] as const;
+export type GuildJoinMode = typeof GUILD_JOIN_MODES[number];
+/** 새 길드의 가입 방식 */
+export const DEFAULT_GUILD_JOIN_MODE: GuildJoinMode = 'approval';
+
+export function parseJoinMode(raw: unknown): GuildJoinMode | null {
+  return (GUILD_JOIN_MODES as readonly unknown[]).includes(raw) ? raw as GuildJoinMode : null;
+}
+
+/**
+ * 코드나 링크로 들어오려는 사람에게 일어날 일. join은 바로 들어가고, request는 가입 신청이 된다.
+ * 닫힌 길드는 인원과 무관하게 닫힘이고, 열린 길드는 인원이 가득 차면 받지 않는다.
+ * @param activeCount 지금 길드원 수
+ */
+export function joinOutcome(mode: GuildJoinMode, activeCount: number): 'join' | 'request' | 'closed' | 'guild-full' {
+  if (mode === 'closed') return 'closed';
+  if (guildFull(activeCount)) return 'guild-full';
+  return mode === 'open' ? 'join' : 'request';
+}
+
+/** 가입 신청이 남는 기간. 처리하지 않으면 사라진다 */
+export const GUILD_JOIN_REQUEST_TTL_MS = 7 * 86_400_000;
+
+/** 그 시각에 신청이 아직 살아 있는가 */
+export function joinRequestActive(requestedAtISO: string, nowISO: string): boolean {
+  return Date.parse(nowISO) < Date.parse(requestedAtISO) + GUILD_JOIN_REQUEST_TTL_MS;
+}
+
+/** 신청이 사라지기까지 남은 날 수(올림). 이미 사라졌으면 0 */
+export function joinRequestDaysLeft(requestedAtISO: string, nowISO: string): number {
+  const left = Date.parse(requestedAtISO) + GUILD_JOIN_REQUEST_TTL_MS - Date.parse(nowISO);
+  return left <= 0 ? 0 : Math.ceil(left / 86_400_000);
+}
+
+/** 초대 링크와 함께 복사하는 권유 문구의 최대 길이와, 길드장이 비워 두었을 때의 기본 문구 */
+export const GUILD_PITCH_MAX = 60;
+export const DEFAULT_GUILD_PITCH = '나랑 같이 낚시하자!';
+
+/** 권유 문구 입력. 앞뒤 공백을 다듬고, 비었으면 기본 문구를 쓴다는 뜻으로 null이다 */
+export function normalizeGuildPitch(raw: unknown): { ok: true; pitch: string | null } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, pitch: null };
+  if (typeof raw !== 'string') return { ok: false };
+  const pitch = raw.trim();
+  if (pitch === '') return { ok: true, pitch: null };
+  return [...pitch].length <= GUILD_PITCH_MAX ? { ok: true, pitch } : { ok: false };
 }
 
 /**

@@ -86,7 +86,7 @@ describe('chat', () => {
 
   it('길드 채팅은 그 길드원만 저장하고, 최근 대화와 신고 복사는 방(월드·길드)을 섞지 않는다', async () => {
     const [member, outsider] = [await user(), await user()];
-    const { rows: [g] } = await client.query<{ id: string }>(`insert into public.guilds (name) values ($1) returning id`,
+    const { rows: [g] } = await client.query<{ id: string }>(`insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
       [`g${member.slice(0, 6)}`]);
     await client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g.id, member]);
     await message(outsider, '월드1');

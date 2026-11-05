@@ -15,6 +15,8 @@ import { guildRoutes } from '../guilds.js';
 import me from '../me.js';
 import players from '../players.js';
 import position from '../position.js';
+import { guildInviteRoutes, readIndexHtml } from '../guildInvites.js';
+import { defaultMeta, withMeta } from './ogMeta.js';
 import rank from '../rank.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
@@ -33,6 +35,11 @@ import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
+
+const staticDir = fileURLToPath(new URL('../dist/', import.meta.url));
+const origin = new URL(process.env.BETTER_AUTH_URL as string).origin;
+// 초대 링크와 그 미리보기 API는 로그인 없이 열린다
+const invites = guildInviteRoutes(origin, readIndexHtml(staticDir));
 
 // 차단 목록이 바뀌면 실시간 채널의 채팅 거르기를 갱신한다(허브는 아래에서 서버를 띄운 뒤 붙는다)
 const blocks = blocksHandler((uid, ids) => live.setBlocked(uid, ids));
@@ -56,6 +63,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/friends': friends,
   '/api/friends/:uid': friends,
   ...guilds,
+  '/api/guild-invites/:code': invites.api,
   '/api/me': me,
   '/api/me/position': position,
   '/api/players': players,
@@ -78,9 +86,16 @@ for (const [path, handler] of Object.entries(routes)) {
 }
 app.use('/api', (_req, res) => { res.status(404).json({ error: 'not-found' }); });
 
-const staticDir = fileURLToPath(new URL('../dist/', import.meta.url));
 // 해시가 붙은 빌드 산출물만 오래 캐시한다. index.html은 매번 검증해 새 배포를 바로 받는다.
 app.use('/assets', express.static(`${staticDir}assets`, { immutable: true, maxAge: '1y' }));
+// 첫 화면과 초대 링크는 링크 미리보기 태그를 절대 주소로 채워 낸다. 나머지 정적 파일은 그대로 낸다
+app.get('/g/:code', (req: Request, res: Response) => { void invites.page(req as never, res as never); });
+app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
+  readIndexHtml(staticDir)().then(html => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('html').send(withMeta(html, defaultMeta(origin)));
+  }, next);
+});
 app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
@@ -88,7 +103,7 @@ const server = app.listen(port, () => { console.info(`Server listening on port $
 applyKeepAlive(server);
 // 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
 const live = attachLive(server, {
-  origin: new URL(process.env.BETTER_AUTH_URL as string).origin,
+  origin,
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;
