@@ -14,7 +14,8 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 최근 채팅 묶음처럼) 마찬가지다. 위로 올려 읽는 중이면 자리를 지키고, 다시 맨 아래로 내리면 또 따라 내려간다.
 // 휠을 받으려고 창 상자는 포인터를 받는다. 창 바깥의 빈 열은 캔버스 클릭을 막지 않는다.
 // 바탕은 마우스를 올렸을 때만 보인다(평소에는 글줄과 글자 그림자만). 스크롤 막대(HUD용 흰 막대)도 마우스를 올렸을 때만 보인다.
-// 채널: 글줄마다 [채널] 머리표를 붙이고, 기록에 채널이 둘 이상 나타나면 창 위에 기록에 나온 채널의 토글(채팅·길드·시스템)을 그린다.
+// 채널: 머리표 없이 색으로 가른다 — 채팅은 보낸 사람 이름이 앞에 오고 본문은 흰색, 길드 채팅 본문은 연한 하늘색,
+// 시스템은 흰색·보상은 골드·거부와 실패는 빨강이다. 기록에 채널이 둘 이상 나타나면 창 위에 기록에 나온 채널의 토글(채팅·길드·시스템)을 그린다.
 // 꺼 둔 채널에 새 글줄이 오면 그 토글 옆에 점을 찍는다. 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
@@ -27,9 +28,8 @@ const LINE_EM = 1.45;
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = mine ? 'text-gold' : 'text-accent';
   return (
-    <div className={cx('leading-[1.45] text-shadow-hud', TONE_CLS[m.tone])}>
+    <div className={cx('leading-[1.45] text-shadow-hud', m.channel === 'guild' ? 'text-guild' : TONE_CLS[m.tone])}>
       <span className="text-text-dim text-2xs mr-0.5">{m.ts}</span>{' '}
-      <span className="text-text-dim">[{CHANNEL_LABEL[m.channel]}]</span>{' '}
       {m.author && (m.from && onPick
         ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}: </button>
         : <span className={nameCls}>{m.author}: </span>)}
