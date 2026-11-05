@@ -1,7 +1,13 @@
-// 채팅 입력 줄 — Enter로 보내고, 서버 거부 이유를 보이며, 차단 목록에서 차단을 푼다.
+// 채팅 입력 줄 — Enter로 열고 보내며, 서버 거부 이유를 보이고, 차단 목록에서 차단을 푼다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ChatBar from './ChatBar';
+import { resetKeyScopes, useKeyBlocker } from '../../../ui/hotkeys';
+
+function Blocker() {
+  useKeyBlocker();
+  return null;
+}
 
 const live = vi.hoisted(() => ({
   error: null as string | null,
@@ -22,18 +28,55 @@ vi.mock('../../../../features/live/service/useChatModeration', () => ({
 }));
 
 describe('ChatBar', () => {
-  afterEach(() => { cleanup(); live.error = null; vi.clearAllMocks(); });
+  afterEach(() => { cleanup(); resetKeyScopes(); live.error = null; vi.clearAllMocks(); });
 
-  it('Enter로 보내고 입력을 비운다. 빈 입력은 보내지 않는다', () => {
+  it('Enter로 보내고 입력을 비운 뒤 입력 줄을 벗어난다. 빈 입력은 보내지 않고 벗어나기만 한다', () => {
     render(<ChatBar />);
     const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    input.focus();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(input);
+    input.focus();
     fireEvent.change(input, { target: { value: '안녕하세요' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenCalledWith('안녕하세요');
     expect(input.value).toBe('');
+    expect(document.activeElement).not.toBe(input);
     expect(input.maxLength).toBe(100);
+  });
+
+  it('게임 화면에서 Enter를 누르면 입력 줄로 들어간다', () => {
+    render(<ChatBar />);
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(document.activeElement).toBe(screen.getByLabelText('채팅 입력'));
+  });
+
+  it('창이 떠 있으면 Enter로 입력 줄에 들어가지 않는다', () => {
+    render(<><ChatBar /><Blocker /></>);
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(document.activeElement).not.toBe(screen.getByLabelText('채팅 입력'));
+  });
+
+  it('한글 조합 중의 Enter는 보내지 않는다', () => {
+    render(<ChatBar />);
+    const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: '안녕' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(live.sendChat).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('Esc는 보내지 않고 입력 줄을 벗어난다', () => {
+    render(<ChatBar />);
+    const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: '안녕' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(live.sendChat).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(input);
   });
 
   it('서버가 거부한 이유를 짧게 보인다', () => {

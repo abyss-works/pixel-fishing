@@ -168,6 +168,7 @@ export default function GameView(props: GameViewProps) {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
                    } : undefined}
+                   you={chat.you}
                    onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea ? (
                      <div className="flex flex-col gap-2">
