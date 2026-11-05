@@ -9,9 +9,10 @@ export default function Gated({ open, overlay, children }: {
   children: ReactNode;
 }) {
   if (open) return <>{children}</>;
+  // 열렸을 때와 같은 자리를 차지하도록, 세로 flex 부모 안에서는 남는 높이를 채운다
   return (
-    <div className="relative">
-      <div className="blur-sm pointer-events-none select-none" aria-hidden>{children}</div>
+    <div className="relative flex flex-col flex-1 min-h-0">
+      <div className="flex flex-col flex-1 min-h-0 blur-sm pointer-events-none select-none" aria-hidden>{children}</div>
       <div className="absolute inset-0 flex items-center justify-center p-2">
         <div className="bg-surface border border-line rounded-sm p-2 text-sm">{overlay}</div>
       </div>

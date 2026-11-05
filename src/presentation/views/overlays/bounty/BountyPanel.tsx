@@ -145,7 +145,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pf-scroll">
       {screen === 'quests' ? (
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
-          <div className="grid grid-cols-3 gap-2 items-stretch h-full">
+          <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0">
             {gradeCard('easy')}
             {gradeCard('normal')}
             {gradeCard('hard')}
