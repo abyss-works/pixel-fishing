@@ -22,6 +22,7 @@ import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
 import GameFrame from './GameFrame';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
+import HudPanel from '../../ui/hud/HudPanel';
 import type { Notify } from '../../ui/hud/messageFeed';
 
 const STATUS = {
@@ -165,19 +166,20 @@ export default function Field({
                 onClick={() => engine.action()} />
       )}
       <NightOverlay />
+      {/* 낚시 상태 — 메시지 창 윗선보다 위의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
-        <div data-phase={snapshot.phase}
-           className="status-overlay absolute left-1/2 -translate-x-1/2 whitespace-pre-line
-                      bottom-3 z-(--z-overlay)
-                      max-w-[min(560px,calc(100%-24px))] px-3 py-1 rounded-full
-                      text-sm text-center text-text bg-[rgba(6,12,24,0.55)] backdrop-blur-[4px]
-                      text-shadow-hud pointer-events-none animate-overlay-in">
-          {snapshot.phase === 'catch' && fish
-            ? `${RARITY[fish.rarity].name} 등급 [${formName(fish, snapshot.catchInfo?.form ?? 'normal')}] 획득!`
-            : STATUS[snapshot.phase]}
+        <div data-phase={snapshot.phase} className="status-overlay contents">
+          {snapshot.phase === 'catch' && fish ? (
+            <CatchCard fish={fish} info={snapshot.catchInfo} />
+          ) : (
+            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-[270px] z-(--z-overlay)
+                                 max-w-[min(480px,calc(100%-24px))] px-3.5 py-1.5 whitespace-pre-line
+                                 text-sm text-center text-text pointer-events-none animate-overlay-in">
+              {STATUS[snapshot.phase]}
+            </HudPanel>
+          )}
         </div>
       )}
-      {snapshot.phase === 'catch' && fish && <CatchCard fish={fish} info={snapshot.catchInfo} />}
     </GameFrame>
   );
 }

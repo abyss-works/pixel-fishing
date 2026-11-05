@@ -130,5 +130,37 @@ describe('ChatBar', () => {
     expect(screen.getByRole('status').textContent).toContain('계정을 만든 뒤');
   });
 
+  it('거부 이유가 없어도 이유 한 줄의 자리를 비워 둔다', () => {
+    render(<ChatBar />);
+    const line = screen.getByRole('status');
+    expect(line.textContent).toBe('');
+    expect(line).toHaveClass('h-[18px]');
+  });
+
+  it('입력 안내는 가운뎃점 없이 Enter로 채팅이고, 길드 방이면 Enter로 길드 채팅이다', () => {
+    render(<ChatBar inGuild />);
+    expect(screen.getByLabelText('채팅 입력')).toHaveAttribute('placeholder', 'Enter로 채팅');
+    fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 월드' }));
+    expect(screen.getByLabelText('채팅 입력')).toHaveAttribute('placeholder', 'Enter로 길드 채팅');
+    expect(screen.getByRole('button', { name: '보낼 곳: 길드' })).toHaveClass('text-guild', 'border-gold');
+  });
+
+  it('방 버튼은 브라우저 기본 툴팁 대신 게임 툴팁으로 설명과 꺼진 이유를 보인다', () => {
+    render(<ChatBar />);
+    const button = screen.getByRole('button', { name: '보낼 곳: 월드' });
+    expect(button).not.toHaveAttribute('title');
+    fireEvent.mouseEnter(button.parentElement!);
+    expect(screen.getByText('길드에 들어가면 길드 채팅을 쓸 수 있어요.')).toBeInTheDocument();
+  });
+
+  it('게스트는 입력 칸 대신 흐린 안내 칸을 보고, Enter로 입력 줄에 들어가지 않는다', () => {
+    render(<ChatBar guest />);
+    expect(screen.queryByLabelText('채팅 입력')).not.toBeInTheDocument();
+    expect(screen.getByText('채팅은 계정을 만든 뒤 쓸 수 있어요')).toBeInTheDocument();
+    expect((screen.getByRole('button', { name: '보낼 곳: 월드' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(document.activeElement).toBe(document.body);
+  });
+
 
 });

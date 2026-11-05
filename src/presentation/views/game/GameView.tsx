@@ -212,7 +212,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
-                   logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} /> : null}
+                   logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} guest={props.account === null} /> : null}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
@@ -226,10 +226,11 @@ export default function GameView(props: GameViewProps) {
                        {away.report && !awayOpen && (
                          <AwayCard report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
                        )}
-                       {atSea && <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} />}
                        {atSea && <TraceCard onTrack={setTracking} />}
                      </div>
-                   ) : null} badge={props.badge} />
+                   ) : null}
+                   chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
+                   badge={props.badge} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
