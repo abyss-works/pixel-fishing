@@ -125,12 +125,34 @@ describe('실시간 채널 서버', () => {
     await a.next(); await b.next();
     a.ws.send('{"t":"move","x":"bad"}');
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 3, y: 4, dir: 1, line: false }));
-    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
+    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false, idleMs: 0 } });
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 5, y: 4, dir: 1, line: true }));
-    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 5, y: 4, dir: 1, line: true });
+    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 5, y: 4, dir: 1, line: true, idleMs: 0 });
     a.ws.send('{"t":"stop"}');
     expect(await b.next()).toEqual({ t: 'stop', uid: 'u1' });
     expect(a.messages).toEqual([]);
+  });
+
+  it('방치 시간은 위치가 바뀐 시각부터 센다. 위치가 같은 move는 시간을 유지하고, join과 hello에도 싣는다', async () => {
+    const { url } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    const at = (x: number, line = false) => JSON.stringify({ t: 'move', region: 'sea', x, y: 4, dir: 1, line });
+    a.ws.send(at(3));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { idleMs: 0 } });
+    await new Promise(r => setTimeout(r, 120));
+    a.ws.send(at(3, true)); // 낚싯줄만 바뀌고 위치는 같다
+    const same = await b.next();
+    expect(same).toMatchObject({ t: 'move', line: true });
+    expect((same as { idleMs: number }).idleMs).toBeGreaterThanOrEqual(100);
+    a.ws.send(at(4));
+    expect(await b.next()).toMatchObject({ t: 'move', idleMs: 0 });
+    await new Promise(r => setTimeout(r, 120));
+    const c = connect(url, 'u3');
+    const hello = await c.next() as Extract<ServerMessage, { t: 'hello' }>;
+    expect(hello.others[0].idleMs).toBeGreaterThanOrEqual(100);
+    expect(hello.others[0].idleMs).toBeLessThan(2000);
   });
 
   it('외형은 검사해 전하고, 외형이 없는 move는 직전 외형을 유지한다', async () => {
@@ -142,7 +164,7 @@ describe('실시간 채널 서버', () => {
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 1, dir: 1, line: false, look }));
     expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', look } });
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 2, y: 1, dir: 1, line: false }));
-    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 2, y: 1, dir: 1, line: false });
+    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 2, y: 1, dir: 1, line: false, idleMs: expect.any(Number) });
     expect(live.presenceOf('u1')?.look).toEqual(look);
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 2, y: 1, dir: 1, line: false, look: { shirt: 99, pants: 0, hat: null } }));
     expect(await b.next()).toMatchObject({ t: 'move', look: { shirt: 0, pants: 0, hat: null } });
@@ -160,7 +182,7 @@ describe('실시간 채널 서버', () => {
     expect(live.presenceOf('u3')).toBeNull();
     const b = connect(url, 'u2');
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [],
-      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
+      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false, idleMs: expect.any(Number) }] });
     a.ws.close();
     expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
   });

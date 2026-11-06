@@ -1,6 +1,6 @@
 import type { Look } from '../../../game/content/wardrobe';
-import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage } from '../../../game/rules/live';
-import { LIVE_STALE_MS } from '../../../game/rules/live';
+import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage, Spot } from '../../../game/rules/live';
+import { formatIdle, LIVE_STALE_MS, movedAtOf } from '../../../game/rules/live';
 
 // 실시간 채널의 다른 플레이어 상태와 내 위치 송신 판정 — 표시용이라 게임 상태와 섞지 않는다.
 
@@ -10,7 +10,12 @@ export interface OtherPlayer {
   moving: boolean;
   /** 마지막으로 위치를 받은 시각 */
   lastAt: number;
+  /** 마지막으로 위치가 바뀐 시각(내 시계, Date.now 기준). 서버가 경과 시간을 싣지 않았으면 null */
+  movedAt: number | null;
 }
+
+// 서버가 보낸 경과 시간을 받은 시각의 내 시계로 옮긴다. 두 시계를 직접 맞추지 않으므로 시계 차이가 끼지 않고 전송 지연만 남는다
+const movedAtFrom = (idleMs: number | undefined, now: number): number | null => idleMs === undefined ? null : now - idleMs;
 
 /** 서버가 채팅을 거부한 이유 */
 export type ChatError = Extract<ServerMessage, { t: 'error' }>['code'];
@@ -40,7 +45,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
     case 'hello':
       return {
         you: msg.you,
-        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now }])),
+        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now, movedAt: movedAtFrom(p.idleMs, now) }])),
         chat: msg.recentChat.slice(-CHAT_KEEP),
         guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
         chatError: null,
@@ -58,13 +63,13 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       return { ...state, chatError: msg.code };
     case 'join':
       if (msg.presence.uid === state.you) return state;
-      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now } } };
+      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now, movedAt: movedAtFrom(msg.presence.idleMs, now) } } };
     case 'move': {
       const prev = state.others[msg.uid];
       if (!prev) return state;
       const { region, zone, x, y, dir, line, bob, look } = msg;
       return { ...state, others: { ...state.others,
-        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob, ...(look ? { look } : {}) }, moving: true, lastAt: now } } };
+        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob, ...(look ? { look } : {}) }, moving: true, lastAt: now, movedAt: movedAtFrom(msg.idleMs, now) } } };
     }
     case 'stop': {
       const prev = state.others[msg.uid];
@@ -152,4 +157,18 @@ export function bubbleOf(said: { text: string; at: number } | null, typingAt: nu
   if (said && now - said.at < BUBBLE_MS) return { kind: 'chat', text: said.text };
   if (typingAt !== null && now - typingAt < TYPING_MS) return { kind: 'typing' };
   return null;
+}
+
+/** 내 캐릭터의 방치 시간 추적 — 위치를 읽을 때마다 갱신한다 */
+export interface MyIdle { spot: Spot; movedAt: number; moving: boolean }
+
+/** 읽은 위치로 다음 추적 상태를 정한다. 위치가 바뀐 읽기는 이동 중이고, 같은 위치가 이어지면 멈춘 것이다 */
+export function nextMyIdle(prev: MyIdle | null, spot: Spot, now: number): MyIdle {
+  const movedAt = movedAtOf(prev?.spot ?? null, prev?.movedAt ?? 0, spot, now);
+  return { spot: { region: spot.region, x: spot.x, y: spot.y }, movedAt, moving: movedAt === now };
+}
+
+/** 머리 위에 그릴 방치 시간. 이동 중이거나 시각을 모르면 null이다 */
+export function idleLabel(movedAt: number | null, moving: boolean, now: number): string | null {
+  return movedAt === null || moving ? null : formatIdle(now - movedAt);
 }
