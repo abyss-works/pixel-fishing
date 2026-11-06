@@ -212,7 +212,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn:hover:not(:disabled) { border-color: var(--c-accent); }
   .pf-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
-  .pf-btn:active:not(:disabled) {
+  .pf-btn:active:not(:disabled),
+  .pf-btn.pressed {
     box-shadow: inset -1px -1px 0 var(--bevel-lo), inset 1px 1px 0 var(--bevel-hi);
     transform: translateY(1px);
   }
@@ -226,7 +227,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     font-weight: bold;
     box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 0 rgba(0, 0, 0, 0.25);
   }
-  .pf-btn.primary:active:not(:disabled) {
+  .pf-btn.primary:active:not(:disabled),
+  .pf-btn.primary.pressed {
     box-shadow: inset -1px -1px 0 rgba(255, 255, 255, 0.5), inset 1px 1px 0 rgba(0, 0, 0, 0.25);
   }
 
