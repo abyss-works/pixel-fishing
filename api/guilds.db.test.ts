@@ -1,4 +1,4 @@
-// 길드 함수 — 실제 Postgres에서 계정 전용, 만들기·가입 방식·코드로 들어오기·가입 신청 처리·떠나기·내보내기·위임·보너스 기부와
+// 길드 함수 — 실제 Postgres에서 계정 전용, 만들기·이름 바꾸기·가입 방식·코드로 들어오기·가입 신청 처리·떠나기·내보내기·위임·보너스 기부와
 // 응답 형식, 소속 변경 알림과 실시간 알림을 검사한다.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
@@ -200,5 +200,53 @@ describe('보너스 기부', () => {
     expect(view.guild.donors).toEqual([{ uid: D, nick: '라온', gold: 150_000 }]);
     expect(view.guild.logbook.slice(0, 2).map(l => [l.kind, l.detail, l.value]))
       .toEqual([['bonus-up', 'sell', 2], ['donate', 'sell', 150_000]]);
+  });
+});
+
+describe('길드 이름 바꾸기 함수', () => {
+  const F = testUid(977);
+  const G = testUid(978);
+  const rename = (who: string | null, id: string, name: unknown) => call('/api/guilds/:id/name', 'PUT', who, { params: { id }, body: { name } });
+  const goldOf = async (uid: string) => Number((await env.client.query<{ gold: string }>(
+    'select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
+
+  it('길드장이 골드 10만을 내고 하루에 한 번 바꾼다. 내 길드 조회와 항해일지가 새 이름을 보인다', async () => {
+    await seedUser(env.client, { uid: F, email: 'gf@test.dev', nickname: '바람', state: { gold: 250_000 } });
+    await seedUser(env.client, { uid: G, email: 'gg@test.dev', nickname: '노을', state: { gold: 500_000 } });
+    const id = ((await call('/api/guilds', 'POST', F, { body: { name: '옛이름' } })).body as { id: string }).id;
+    expect(await call('/api/guilds/:id/name', 'GET', F, { params: { id } })).toMatchObject({ status: 405 });
+    expect(await rename(null, id, '새이름')).toMatchObject({ status: 401 });
+    expect(await rename(GUEST, id, '새이름')).toMatchObject({ status: 403, body: { error: 'account-only' } });
+    expect(await call('/api/guilds/:id/name', 'PUT', F, { params: { id: 'x' }, body: { name: '새이름' } }))
+      .toMatchObject({ status: 400, body: { error: 'bad-guild' } });
+    expect(await rename(F, id, '가 나')).toMatchObject({ status: 400, body: { error: 'bad-name' } });
+    expect(await rename(F, id, undefined)).toMatchObject({ status: 400, body: { error: 'bad-name' } });
+    expect(await rename(F, id, '옛이름')).toMatchObject({ status: 400, body: { error: 'same-name' } });
+    expect(await rename(F, id, '기부선단')).toMatchObject({ status: 409, body: { error: 'name-taken' } });
+    expect(await rename(G, id, '새이름')).toMatchObject({ status: 404, body: { error: 'not-member' } });
+    expect(await goldOf(F)).toBe(250_000);
+    expect(await rename(F, id, ' 새이름 ')).toMatchObject({ status: 200, body: { name: '새이름', gold: 150_000 } });
+    expect(await goldOf(F)).toBe(150_000);
+    expect(await rename(F, id, '또새이름')).toMatchObject({ status: 409, body: { error: 'renamed-today' } });
+    const view = (await call('/api/guilds/me', 'GET', F)).body as { guild: {
+      name: string; renamedAt: string | null; logbook: { kind: string; detail: string }[] } };
+    expect(view.guild.name).toBe('새이름');
+    expect(view.guild.renamedAt).not.toBeNull();
+    expect(view.guild.logbook[0]).toMatchObject({ kind: 'rename', detail: '새이름' });
+  });
+
+  it('길드원은 바꿀 수 없고, 길드장이라도 골드가 모자라면 바꿀 수 없다', async () => {
+    const H = testUid(979);
+    const I = testUid(980);
+    await seedUser(env.client, { uid: H, email: 'gh@test.dev', nickname: '파도', state: { gold: 99_999 } });
+    await seedUser(env.client, { uid: I, email: 'gi@test.dev', nickname: '물결', state: { gold: 500_000 } });
+    const id = ((await call('/api/guilds', 'POST', H, { body: { name: '가난선단' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', H, { params: { id }, body: { joinMode: 'open' } });
+    const code = ((await call('/api/guilds/me', 'GET', H)).body as { guild: { code: string } }).guild.code;
+    await call('/api/guild-memberships', 'POST', I, { body: { code } });
+    expect(await rename(I, id, '길드원이름')).toMatchObject({ status: 403, body: { error: 'not-leader' } });
+    expect(await rename(H, id, '모자람')).toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
+    expect(await goldOf(H)).toBe(99_999);
+    expect(await goldOf(I)).toBe(500_000);
   });
 });
