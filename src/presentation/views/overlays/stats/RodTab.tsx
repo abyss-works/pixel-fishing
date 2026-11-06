@@ -5,6 +5,8 @@ import type { StatsSpotRow, StatsZoneTab } from '../../../../features/gameplay/m
 import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
 import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import SubTabs from '../../../ui/SubTabs';
 import PowerMeter from './PowerMeter';
@@ -29,9 +31,8 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
     <div className="flex flex-col gap-3">
       <SubTabs items={zoneTabs.map(tab => ({ key: tab.zone, label: tab.name, sub: `${tab.ok}/${tab.total} 충족` }))}
                activeKey={zone} onSelect={onZone} />
-      <Inset className="pf-scroll-panel h-[140px] shrink-0 pf-vscroll px-3 pb-2">
-        <table className="w-full table-fixed border-collapse text-sm" aria-label="해역">
-          <colgroup><col /><col className="w-[90px]" /><col className="w-[90px]" /></colgroup>
+      <TableBox className="h-[140px] shrink-0 px-3 pb-2">
+        <DataTable cols={[null, '90px', '90px']} nameMin="8rem" aria-label="해역">
           <thead>
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className={cx(HEAD, 'pl-0 text-left')}>해역</th>
@@ -54,8 +55,8 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
               );
             })}
           </tbody>
-        </table>
-      </Inset>
+        </DataTable>
+      </TableBox>
       <Inset className="px-3 py-2.5 flex flex-col gap-2.5">
         {selected.fit === 'boat' ? (
           <div className="h-[130px] flex flex-col items-center justify-center gap-2 text-center">

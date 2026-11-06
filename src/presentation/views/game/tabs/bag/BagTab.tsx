@@ -19,6 +19,7 @@ import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
 import IconButton from '../../../../ui/IconButton';
 import PillButton from '../../../../ui/PillButton';
+import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
@@ -78,19 +79,20 @@ function ItemSection({ game, dispatch, setToast }: {
             <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
               <span className="w-3 h-3 rounded-full border border-line justify-self-center"
                     style={{ backgroundColor: bait.color }} />
-              <span className="truncate" title={`${bait.desc} ${baitEffectLine(bait)}`}>{bait.name}</span>
+              <Tip text={`${bait.desc} ${baitEffectLine(bait)}`} className="block truncate">{bait.name}</Tip>
               <span className="pf-accent text-text-dim text-right">×{count}</span>
-              <PillButton
-                type="button"
-                active={active}
-                disabled={!active && count <= 0}
-                aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
-                title={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
-                onClick={() => activate(active ? null : bait.id)}
-                className="justify-self-end">
-                <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
-                {active ? '사용 중' : '활성'}
-              </PillButton>
+              <Tip wraps text={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
+                   className="justify-self-end">
+                <PillButton
+                  type="button"
+                  active={active}
+                  disabled={!active && count <= 0}
+                  aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
+                  onClick={() => activate(active ? null : bait.id)}>
+                  <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
+                  {active ? '사용 중' : '활성'}
+                </PillButton>
+              </Tip>
             </div>
           );
         })}
@@ -166,10 +168,11 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
               <span className="pf-accent text-text-dim text-right">
                 {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
-              <PillButton aria-label={`${name} 회수`} title="가방으로 되돌려요"
-                          onClick={() => onWithdraw(inst, name)}>
-                회수
-              </PillButton>
+              <Tip wraps text="가방으로 되돌려요">
+                <PillButton aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
+                  회수
+                </PillButton>
+              </Tip>
             </div>
           );
         })}
@@ -267,13 +270,12 @@ export default function BagTab({ game, dispatch, setToast }: {
               <span className="text-text-dim">/{cap}</span>마리)
             </PageTitle>
             {bagCount > 0 && (
-              <PillButton
-                aria-label="자동 잠금"
-                title="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요"
-                onClick={autoLock}>
-                <PixelIcon glyph="lockOpen" size={12} />
-                자동 잠금
-              </PillButton>
+              <Tip wraps text="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
+                <PillButton aria-label="자동 잠금" onClick={autoLock}>
+                  <PixelIcon glyph="lockOpen" size={12} />
+                  자동 잠금
+                </PillButton>
+              </Tip>
             )}
           </div>
           {lockConfirm && (

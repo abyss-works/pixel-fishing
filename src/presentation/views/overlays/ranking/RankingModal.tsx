@@ -4,7 +4,8 @@ import { useRankingBoard } from '../../../../features/ranking/service/useRanking
 import { cx } from '../../../ui/cx';
 import Frame from '../../../ui/Frame';
 import { fmtNum } from '../../../ui/format';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import TabBar from '../../../ui/TabBar';
@@ -48,10 +49,9 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
   const mine = data ? pinnedMyRank(data) : null;
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
+      <TableBox className="flex-1 min-h-0 px-3 pb-2">
         {listed ? (
-          <table className="w-full table-fixed border-collapse text-sm">
-            <colgroup><col className="w-14" /><col /><col className="w-[110px]" /></colgroup>
+          <DataTable cols={['3.5rem', null, '110px']} nameMin="8rem">
             <thead>
               <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
                 <th className={cx(HEAD, 'pl-0 text-left')}>순위</th>
@@ -73,13 +73,13 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
                 );
               })}
             </tbody>
-          </table>
+          </DataTable>
         ) : (
           <div className="flex h-full items-center justify-center">
             <RankingStatus loading={loading} failed={failed} offline={offline} empty={!!data} />
           </div>
         )}
-      </Inset>
+      </TableBox>
       {/* 내 줄 자리: 목록 밖일 때만 채우고, 아니면 같은 높이로 비워 둔다 */}
       {mine ? (
         <Frame className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 bg-surface-2 text-accent text-sm"

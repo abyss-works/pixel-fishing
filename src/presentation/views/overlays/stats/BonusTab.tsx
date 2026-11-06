@@ -2,7 +2,8 @@ import { Fragment } from 'react';
 import { BONUS_CATEGORIES } from '../../../../features/gameplay/model/stats';
 import type { BonusCategory, BonusRow } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLine } from '../../../ui/artifactEffects';
 import { baitEffectLine } from '../../../ui/baitEffects';
@@ -36,9 +37,8 @@ function sourceText(row: BonusRow): string {
 // 받는 효과가 없는 갈래도 자리를 지켜 예시마다 표 모양이 같다. 출처를 얻는 방법은 출처 열 머리의 툴팁이다.
 export default function BonusTab({ rows }: { rows: BonusRow[] }) {
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
-      <table className="w-full table-fixed border-collapse text-sm">
-        <colgroup><col /><col className="w-[150px]" /></colgroup>
+    <TableBox className="flex-1 min-h-0 px-3 pb-2">
+      <DataTable cols={[null, '150px']} nameMin="10rem">
         <thead>
           <tr className="sticky top-0 z-[1] bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
             <th className={cx(HEAD, 'text-left')}>받는 효과</th>
@@ -75,7 +75,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
             );
           })}
         </tbody>
-      </table>
-    </Inset>
+      </DataTable>
+    </TableBox>
   );
 }

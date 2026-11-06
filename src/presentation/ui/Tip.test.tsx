@@ -79,4 +79,12 @@ describe('Tip: 거친 포인터(터치)', () => {
     fireEvent.click(screen.getByText('열림'));
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
+  it('누르기로도 여는 감싼 툴팁은 켜진 버튼을 눌러도 열린다', () => {
+    setPointer(true);
+    render(<Tip wraps pressOpens text="설명"><button type="button">열림</button></Tip>);
+    fireEvent.click(screen.getByText('열림'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+    fireEvent.click(screen.getByText('열림'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
 });

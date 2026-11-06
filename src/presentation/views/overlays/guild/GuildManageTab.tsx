@@ -12,6 +12,8 @@ import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import Frame from '../../../ui/Frame';
 import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Subheading from '../../../ui/Subheading';
@@ -103,7 +105,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
 
       <section aria-label="가입 신청" className="flex flex-col gap-1.5 flex-1 min-h-0">
         <Subheading className="mb-0 text-xs">가입 신청</Subheading>
-        <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
+        <TableBox className="flex-1 min-h-0 px-3 pb-2">
           {guild.joinMode !== 'approval' && rows.length === 0 ? (
             <p className="m-0 py-6 text-center text-sm text-text-dim">
               {guild.joinMode === 'open' ? '자유 가입이라 신청 없이 바로 들어와요.' : '닫혀 있어 새 신청을 받지 않아요.'}
@@ -111,8 +113,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
           ) : rows.length === 0 ? (
             <p className="m-0 py-6 text-center text-sm text-text-dim">신청이 없어요.</p>
           ) : (
-            <table className="w-full table-fixed border-collapse text-sm">
-              <colgroup><col /><col className="w-32" /><col className="w-16" /><col className="w-36" /></colgroup>
+            <DataTable cols={[null, '8rem', '4rem', '9rem']} nameMin="8rem">
               <thead>
                 <tr className="text-2xs text-text-dim">
                   <th className="h-8 text-left font-normal border-b border-line">신청한 사람</th>
@@ -142,9 +143,9 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
           )}
-        </Inset>
+        </TableBox>
       </section>
       {renaming && (
         <RenameDialog guildId={guild.id} current={guild.name} busy={busy} run={run} setToast={setToast}

@@ -91,7 +91,7 @@ const GLYPH: Record<GuildBonusId, GlyphId> = { sell: 'coin', bag: 'fish', named:
 function Branch({ row, active, onPick }: { row: BonusRow; active: boolean; onPick: () => void }) {
   return (
     <div className={cx('flex flex-col items-center min-w-0', row.locked && 'opacity-45')}>
-      <Tip wraps text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
+      <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
       <Frame as="button" type="button" onClick={row.locked ? undefined : onPick} aria-disabled={row.locked || undefined}
              aria-pressed={active} aria-label={`${row.name} 고르기`}
              className={cx('w-full h-14 px-1 flex flex-col items-center justify-center gap-1 text-xs',
