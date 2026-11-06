@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
 import { cx } from './cx';
-import { NOTCH_SM } from './notch';
+import { NOTCH_SM, PRESSED_BEVEL } from './notch';
 
 // 토글 칩 — 켜고 끄는 작은 노치 버튼(메시지 창 채널 토글 등). 강조는 세 단계다.
 // 완전 강조(emphasis): 골드 테두리와 골드 글자. 한 묶음에서 가장 중요한 하나에만 준다.
@@ -12,8 +12,6 @@ interface ToggleChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   /** 켜져 있을 때 완전 강조로 세운다 */
   emphasis?: boolean;
 }
-
-const PRESSED_BEVEL = 'shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]';
 
 export default function ToggleChip({ pressed, emphasis = false, disabled, className, children, ...props }: ToggleChipProps) {
   const tier = disabled ? 'off-disabled' : !pressed ? 'off' : emphasis ? 'emphasis' : 'on';

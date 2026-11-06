@@ -55,7 +55,7 @@ export default function ScrollRow({ step = 0.8, className, innerClassName, style
     <div className={cx('relative px-4', className)}>
       {arrow(-1, edge.prev)}
       <div ref={ref} onScroll={measure}
-           className={cx('pf-scroll flex gap-1 overflow-x-auto [&>*]:shrink-0', innerClassName)}
+           className={cx('pf-scroll flex gap-1 overflow-x-auto overflow-y-hidden [&>*]:shrink-0', innerClassName)}
            style={style}>
         {children}
       </div>
