@@ -112,10 +112,11 @@ export default function Field({
   const readPosition = useCallback(() => {
     const pos = engine.getPosition();
     const bob = engine.getBobber();
+    const resultAt = engine.getResultAt();
     return {
       region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
       line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
-      look: game.look,
+      look: game.look, ...(resultAt === null ? {} : { idleMs: Date.now() - resultAt }),
     };
   }, [engine, region, game.look]);
   useLivePosition(readPosition);

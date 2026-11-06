@@ -5,7 +5,7 @@ import { zoneOfSpot, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
 import type { ActionResult, GameAction } from '../rules/actions';
 import type { RejectReason } from '../rules/rules';
-import { nextPhase, phaseDurationMs } from '../rules/fishing';
+import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
 import { CAST_RANGE } from '../rules/balance';
@@ -86,6 +86,8 @@ export class GameFieldEngine {
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
   private biteStart = 0;
+  /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
+  private resultAt: number | null = null;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
   /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
@@ -134,6 +136,11 @@ export class GameFieldEngine {
   /** 지금 내 위치(복사본) */
   getPosition(): Point {
     return { x: this.pos.x, y: this.pos.y };
+  }
+
+  /** 이번 던짐의 첫 결과 시각 — 방치 시간의 시작. 줄을 거두면 null */
+  getResultAt(): number | null {
+    return this.resultAt;
   }
 
   /** 찌가 떠 있는 자리 — 낚싯줄을 드리운 동안 던진 어군의 위치. 드리우지 않았으면 null */
@@ -366,6 +373,7 @@ export class GameFieldEngine {
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
     if (phase === 'catch') this.catchStart = Date.now();
+    this.resultAt = resultAtOf(this.resultAt, phase, Date.now());
     this.snapshot = { phase, fishId, catchInfo };
     this.publish();
     this.schedulePhaseTimers();

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
 import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextMyIdle, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -14,7 +14,7 @@ describe('applyLiveMessage', () => {
     expect(applyLiveMessage(s, { t: 'join', presence: p('me', '나') }, 1)).toBe(s);
     s = applyLiveMessage(s, { t: 'join', presence: p('b', '나') }, 1);
     s = applyLiveMessage(s, { t: 'move', uid: 'b', region: 'deep', x: 5, y: 6, dir: 1, line: true }, 2);
-    expect(s.others.b).toEqual({ presence: { ...p('b', '나', 'deep'), zone: null, x: 5, y: 6, dir: 1, line: true }, moving: true, lastAt: 2, movedAt: null });
+    expect(s.others.b).toEqual({ presence: { ...p('b', '나', 'deep'), zone: null, x: 5, y: 6, dir: 1, line: true }, moving: true, lastAt: 2, idleSince: null });
     s = applyLiveMessage(s, { t: 'stop', uid: 'b' }, 3);
     expect(s.others.b.moving).toBe(false);
     expect(applyLiveMessage(s, { t: 'move', uid: 'zz', region: 'sea', x: 0, y: 0, dir: 0, line: false }, 4)).toBe(s);
@@ -161,45 +161,49 @@ describe('다른 플레이어의 방치 시간', () => {
   const at = (idleMs?: number) => ({ ...p('a', '가'), ...(idleMs === undefined ? {} : { idleMs }) });
   it('hello, join, move가 실은 경과 시간을 받은 시각의 내 시계로 옮긴다', () => {
     let s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [at(4000)], recentChat: [] }, 10_000);
-    expect(s.others.a.movedAt).toBe(6000);
+    expect(s.others.a.idleSince).toBe(6000);
     s = applyLiveMessage(s, { t: 'join', presence: { ...at(0), uid: 'b' } }, 11_000);
-    expect(s.others.b.movedAt).toBe(11_000);
-    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: false, idleMs: 0 }, 12_000);
-    expect(s.others.a.movedAt).toBe(12_000);
+    expect(s.others.b.idleSince).toBe(11_000);
     s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: true, idleMs: 300 }, 12_500);
-    expect(s.others.a.movedAt).toBe(12_200);
+    expect(s.others.a.idleSince).toBe(12_200);
   });
 
-  it('이전 서버가 경과 시간을 싣지 않으면 시간을 모른다', () => {
+  it('경과 시간이 없으면 시간을 모른다. 줄을 거둔 move는 지운다', () => {
     let s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [at()], recentChat: [] }, 10_000);
-    expect(s.others.a.movedAt).toBeNull();
-    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: false }, 11_000);
-    expect(s.others.a.movedAt).toBeNull();
+    expect(s.others.a.idleSince).toBeNull();
+    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: true, idleMs: 100 }, 11_000);
+    expect(s.others.a.idleSince).toBe(10_900);
+    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: false }, 12_000);
+    expect(s.others.a.idleSince).toBeNull();
   });
 });
 
 describe('idleLabel', () => {
-  it('움직이는 중이거나 시각을 모르면 null, 멈췄으면 경과 시간 문자열이다', () => {
-    expect(idleLabel(1000, false, 1000)).toBe('00:00');
-    expect(idleLabel(1000, false, 66_000)).toBe('01:05');
-    expect(idleLabel(1000, true, 66_000)).toBeNull();
-    expect(idleLabel(null, false, 66_000)).toBeNull();
+  it('시작 시각을 모르면 null, 알면 경과 시간 문자열이다', () => {
+    expect(idleLabel(1000, 1000)).toBe('00:00');
+    expect(idleLabel(1000, 66_000)).toBe('01:05');
+    expect(idleLabel(null, 66_000)).toBeNull();
   });
   it('시계가 뒤로 가도 00:00 아래로 내려가지 않는다', () => {
-    expect(idleLabel(5000, false, 1000)).toBe('00:00');
+    expect(idleLabel(5000, 1000)).toBe('00:00');
   });
 });
 
-describe('nextMyIdle', () => {
-  const spot = { region: 'sea', x: 1, y: 1 };
-  it('처음과 위치가 바뀐 틱은 이동 중이고, 같은 위치가 이어지면 멈춘 것이며 시각은 마지막 이동 틱이다', () => {
-    let s = nextMyIdle(null, spot, 100);
-    expect(s).toMatchObject({ movedAt: 100, moving: true });
-    s = nextMyIdle(s, spot, 200);
-    expect(s).toMatchObject({ movedAt: 100, moving: false });
-    s = nextMyIdle(s, spot, 5000);
-    expect(s).toMatchObject({ movedAt: 100, moving: false });
-    s = nextMyIdle(s, { ...spot, x: 2 }, 5100);
-    expect(s).toMatchObject({ movedAt: 5100, moving: true });
+describe('nextPositionMessage의 첫 결과 경과', () => {
+  const cast = { region: 'sea', zone: null, x: 1, y: 1, line: true, bob: { x: 30, y: 8 }, look: DEFAULT_LOOK };
+  it('첫 결과가 나오면 같은 자리여도 idleMs를 실은 move를 한 번 보낸다', () => {
+    const before = nextPositionMessage(nextPositionMessage(null, cast).sent, cast).sent;
+    const r = nextPositionMessage(before, { ...cast, idleMs: 0 });
+    expect(r.msg).toMatchObject({ t: 'move', line: true, idleMs: 0 });
+    // 경과만 늘어난 것은 변경이 아니다
+    expect(nextPositionMessage(r.sent, { ...cast, idleMs: 3000 }).msg).toEqual({ t: 'stop' });
+  });
+  it('결과 전에는 idleMs를 싣지 않고, 다시 연결하면(last 없음) 현재 경과를 싣는다', () => {
+    expect(nextPositionMessage(null, cast).msg).not.toHaveProperty('idleMs');
+    expect(nextPositionMessage(null, { ...cast, idleMs: 7000 }).msg).toMatchObject({ idleMs: 7000 });
+  });
+  it('줄을 거두어 경과가 사라지면 move를 보낸다', () => {
+    const counting = nextPositionMessage(null, { ...cast, idleMs: 5 }).sent;
+    expect(nextPositionMessage(counting, { ...cast, line: false, bob: null }).msg).not.toHaveProperty('idleMs');
   });
 });

@@ -1,6 +1,6 @@
 // 낚시 상태머신 순수 모듈 — 전이/판정/획득 규칙
 import { describe, it, expect } from 'vitest';
-import { nextPhase, phaseDurationMs, resolveCatch, autoCommonBoost } from './fishing';
+import { nextPhase, resultAtOf, phaseDurationMs, resolveCatch, autoCommonBoost } from './fishing';
 import { judgeTiming, rodStats, RARITY } from './logic';
 import type { Judgment } from './logic';
 import { AUTO_COMMON_BOOST, CATCH_MS, CATCH_MS_LEGENDARY } from './balance';
@@ -82,5 +82,23 @@ describe('R8/R9/R11: 획득 결정', () => {
     expect(autoCommonBoost(50)).toBeLessThan(AUTO_COMMON_BOOST.from);
     expect(autoCommonBoost(100000)).toBeGreaterThan(AUTO_COMMON_BOOST.to);
     expect(rareRate('auto', 50)).toBeGreaterThan(rareRate('auto', 1));
+  });
+});
+
+describe('resultAtOf: 던짐의 첫 결과 시각', () => {
+  it('던진 뒤 결과가 나오기 전에는 null, 처음 catch 단계에 든 시각이 첫 결과다', () => {
+    expect(resultAtOf(null, 'wait', 100)).toBeNull();
+    expect(resultAtOf(null, 'bite', 200)).toBeNull();
+    expect(resultAtOf(null, 'catch', 300)).toBe(300);
+  });
+  it('이어지는 단계와 재캐스트에서는 첫 결과 시각을 유지한다', () => {
+    expect(resultAtOf(300, 'catch', 400)).toBe(300);
+    expect(resultAtOf(300, 'wait', 500)).toBe(300);
+    expect(resultAtOf(300, 'bite', 600)).toBe(300);
+  });
+  it('줄을 거두면(idle) 지우고, 다시 던진 뒤 첫 결과부터 새로 센다', () => {
+    expect(resultAtOf(300, 'idle', 700)).toBeNull();
+    expect(resultAtOf(null, 'wait', 800)).toBeNull();
+    expect(resultAtOf(null, 'catch', 900)).toBe(900);
   });
 });

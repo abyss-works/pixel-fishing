@@ -1,6 +1,6 @@
 import type { Look } from '../../../game/content/wardrobe';
-import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage, Spot } from '../../../game/rules/live';
-import { formatIdle, LIVE_STALE_MS, movedAtOf } from '../../../game/rules/live';
+import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage } from '../../../game/rules/live';
+import { formatIdle, LIVE_STALE_MS } from '../../../game/rules/live';
 
 // 실시간 채널의 다른 플레이어 상태와 내 위치 송신 판정 — 표시용이라 게임 상태와 섞지 않는다.
 
@@ -10,12 +10,12 @@ export interface OtherPlayer {
   moving: boolean;
   /** 마지막으로 위치를 받은 시각 */
   lastAt: number;
-  /** 마지막으로 위치가 바뀐 시각(내 시계, Date.now 기준). 서버가 경과 시간을 싣지 않았으면 null */
-  movedAt: number | null;
+  /** 방치 시간을 세기 시작한 시각(내 시계, Date.now 기준). 서버가 경과 시간을 싣지 않았으면 null */
+  idleSince: number | null;
 }
 
 // 서버가 보낸 경과 시간을 받은 시각의 내 시계로 옮긴다. 두 시계를 직접 맞추지 않으므로 시계 차이가 끼지 않고 전송 지연만 남는다
-const movedAtFrom = (idleMs: number | undefined, now: number): number | null => idleMs === undefined ? null : now - idleMs;
+const idleSinceFrom = (idleMs: number | undefined, now: number): number | null => idleMs === undefined ? null : now - idleMs;
 
 /** 서버가 채팅을 거부한 이유 */
 export type ChatError = Extract<ServerMessage, { t: 'error' }>['code'];
@@ -45,7 +45,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
     case 'hello':
       return {
         you: msg.you,
-        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now, movedAt: movedAtFrom(p.idleMs, now) }])),
+        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now, idleSince: idleSinceFrom(p.idleMs, now) }])),
         chat: msg.recentChat.slice(-CHAT_KEEP),
         guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
         chatError: null,
@@ -63,13 +63,13 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       return { ...state, chatError: msg.code };
     case 'join':
       if (msg.presence.uid === state.you) return state;
-      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now, movedAt: movedAtFrom(msg.presence.idleMs, now) } } };
+      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now, idleSince: idleSinceFrom(msg.presence.idleMs, now) } } };
     case 'move': {
       const prev = state.others[msg.uid];
       if (!prev) return state;
       const { region, zone, x, y, dir, line, bob, look } = msg;
       return { ...state, others: { ...state.others,
-        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob, ...(look ? { look } : {}) }, moving: true, lastAt: now, movedAt: movedAtFrom(msg.idleMs, now) } } };
+        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob, ...(look ? { look } : {}) }, moving: true, lastAt: now, idleSince: idleSinceFrom(msg.idleMs, now) } } };
     }
     case 'stop': {
       const prev = state.others[msg.uid];
@@ -114,8 +114,8 @@ export function othersInRegion(state: LiveState, region: string): OtherPlayer[] 
 /** 마지막으로 보낸 내 위치 */
 export interface SentPosition extends MyPosition { stopped: boolean }
 
-/** 내 위치와 외형. bob은 낚싯줄을 드리운 동안의 찌 위치이고, 드리우지 않았으면 null이다 */
-export interface MyPosition { region: string; zone: string | null; x: number; y: number; line: boolean; bob: Bob | null; look: Look }
+/** 내 위치와 외형. idleMs는 이번 던짐의 첫 결과 뒤 지난 시간이고, 결과 전이거나 줄이 없으면 없다. bob은 낚싯줄을 드리운 동안의 찌 위치이고, 드리우지 않았으면 null이다 */
+export interface MyPosition { region: string; zone: string | null; x: number; y: number; line: boolean; bob: Bob | null; look: Look; idleMs?: number }
 
 const sameLook = (a: Look, b: Look) => a.shirt === b.shirt && a.pants === b.pants && a.hat === b.hat;
 
@@ -128,14 +128,14 @@ const dirOf = (dx: number, dy: number): Dir =>
  * @returns 보낼 메시지와 그 뒤의 '마지막으로 보낸 위치'. 보낼 것이 없으면 메시지는 null이다
  */
 export function nextPositionMessage(last: SentPosition | null, cur: MyPosition): { msg: ClientMessage | null; sent: SentPosition | null } {
-  const changed = !last || last.region !== cur.region || last.zone !== cur.zone || last.x !== cur.x || last.y !== cur.y
+  const changed = !last || (last.idleMs === undefined) !== (cur.idleMs === undefined) || last.region !== cur.region || last.zone !== cur.zone || last.x !== cur.x || last.y !== cur.y
     || last.line !== cur.line || last.bob?.x !== cur.bob?.x || last.bob?.y !== cur.bob?.y || !sameLook(last.look, cur.look);
   if (changed) {
     const dir = last ? dirOf(cur.x - last.x, cur.y - last.y) : 2;
-    const { bob, look, ...pos } = cur;
+    const { bob, look, idleMs, ...pos } = cur;
     // 외형은 처음과 바뀐 때만 싣는다
     const lookChanged = !last || !sameLook(last.look, look);
-    return { msg: { t: 'move', ...pos, dir, ...(bob ? { bob } : {}), ...(lookChanged ? { look } : {}) }, sent: { ...cur, stopped: false } };
+    return { msg: { t: 'move', ...pos, dir, ...(bob ? { bob } : {}), ...(idleMs !== undefined ? { idleMs } : {}), ...(lookChanged ? { look } : {}) }, sent: { ...cur, stopped: false } };
   }
   if (!last.stopped) return { msg: { t: 'stop' }, sent: { ...last, stopped: true } };
   return { msg: null, sent: last };
@@ -159,16 +159,7 @@ export function bubbleOf(said: { text: string; at: number } | null, typingAt: nu
   return null;
 }
 
-/** 내 캐릭터의 방치 시간 추적 — 위치를 읽을 때마다 갱신한다 */
-export interface MyIdle { spot: Spot; movedAt: number; moving: boolean }
-
-/** 읽은 위치로 다음 추적 상태를 정한다. 위치가 바뀐 읽기는 이동 중이고, 같은 위치가 이어지면 멈춘 것이다 */
-export function nextMyIdle(prev: MyIdle | null, spot: Spot, now: number): MyIdle {
-  const movedAt = movedAtOf(prev?.spot ?? null, prev?.movedAt ?? 0, spot, now);
-  return { spot: { region: spot.region, x: spot.x, y: spot.y }, movedAt, moving: movedAt === now };
-}
-
-/** 머리 위에 그릴 방치 시간. 이동 중이거나 시각을 모르면 null이다 */
-export function idleLabel(movedAt: number | null, moving: boolean, now: number): string | null {
-  return movedAt === null || moving ? null : formatIdle(now - movedAt);
+/** 머리 위에 그릴 방치 시간. 세기 시작한 시각을 모르면 null이다 */
+export function idleLabel(since: number | null, now: number): string | null {
+  return since === null ? null : formatIdle(now - since);
 }
