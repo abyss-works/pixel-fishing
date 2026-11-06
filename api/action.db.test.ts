@@ -847,3 +847,14 @@ describe('옷장', () => {
     expect((await saved(uid)).gold).toBe(49_999);
   });
 });
+
+describe('자동 잠금', () => {
+  it('자동 잠금은 요청 한 번으로 잠금과 해제를 함께 적용한다', async () => {
+    const small = fish('carp', { uid: testUid(9010), size: 10, locked: true });
+    const big = fish('carp', { uid: testUid(9011), size: 30 });
+    const uid = await seed({ state: { bag: [small, big] } });
+    const out = await callAction(userToken(uid), { type: 'autoLock' });
+    expect(out.status).toBe(200);
+    expect(await snapshotOf(uid, out)).toMatchSnapshot();
+  });
+});

@@ -1153,7 +1153,7 @@ export function freeExhibitSlot(exhibit: readonly FishInstance[]): number | null
  *    대개 가장 큰 개체라 정리 대상으로 본다. 화면이 누르기 전에 확인을 받는다).
  *  - 이미 정리된 가방이면 둘 다 비어 있다(멱등).
  *  - 크기 미상(null)은 최소 취급(blandness와 같은 규약), 동률은 uid 사전순으로 결정적.
- *  계획은 이 순수 함수, 적용은 기존 setLocked 액션 — 서버 권위 경로 재사용(v0.5.0). */
+ *  계획은 이 순수 함수, 적용은 applyAutoLock — 서버가 현재 상태로 계획을 다시 계산해 한 액션으로 적용한다. */
 export function autoLockPlan(bag: readonly FishInstance[]): { lock: string[]; unlock: string[] } {
   const bigger = (a: FishInstance, b: FishInstance): boolean => {
     const as = a.size ?? -1, bs = b.size ?? -1;
@@ -1170,6 +1170,12 @@ export function autoLockPlan(bag: readonly FishInstance[]): { lock: string[]; un
     lock: [...top.values()].filter(i => !i.locked).map(i => i.uid).sort(),
     unlock: bag.filter(i => i.locked && !tops.has(i.uid)).map(i => i.uid).sort(),
   };
+}
+
+/** 자동 잠금 적용 — 현재 가방의 계획을 계산해 잠금과 해제를 한 번에 반영한다. */
+export function applyAutoLock(state: GameState): GameState {
+  const { lock, unlock } = autoLockPlan(state.bag);
+  return setLocked(setLocked(state, lock, true), unlock, false);
 }
 
 // 아래 세 판정은 공통 규칙 함수에 위임해 중복 구현을 막는다.

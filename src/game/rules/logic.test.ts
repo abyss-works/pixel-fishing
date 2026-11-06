@@ -8,7 +8,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockPlan, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
+  autoLockPlan, applyAutoLock, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
@@ -388,6 +388,17 @@ describe('상태 변경 (잡기/판매/강화)', () => {
     const top = { ...mk('crucian', 'normal', 30), locked: true };
     expect(autoLockPlan([top, mk('crucian', 'normal', 10)])).toEqual({ lock: [], unlock: [] });
     expect(autoLockPlan([])).toEqual({ lock: [], unlock: [] });
+  });
+
+  it('applyAutoLock — 계획의 잠금과 해제를 한 번에 적용하고, 다시 적용해도 같다', () => {
+    const oldTop = { ...mk('crucian', 'normal', 30), locked: true };
+    const newTop = mk('crucian', 'normal', 45);
+    const small = mk('crucian', 'normal', 10);
+    const state = { ...newState(), bag: [oldTop, newTop, small] };
+    const once = applyAutoLock(state);
+    expect(once.bag.map(i => i.locked)).toEqual([false, true, false]);
+    expect(autoLockPlan(once.bag)).toEqual({ lock: [], unlock: [] });
+    expect(applyAutoLock(once)).toEqual(once);
   });
 
   it('autoLockPlan — 크기 미상은 최소 취급, 동률이어도 그룹당 1마리', () => {
