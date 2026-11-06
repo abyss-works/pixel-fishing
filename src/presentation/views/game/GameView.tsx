@@ -7,7 +7,7 @@ import type { RejectReason } from '../../../game/rules/rules';
 import { when } from '../../../shared/lib/when';
 import { selectEncounter } from '../../../features/bounty/model/challenge';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
-import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
+import { BASE_PACKS, REGION_PACKS, boardingOf } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { BaseId, RegionId } from '../../../game/content/places';
 import { zoneById } from '../../../game/content/zones';
@@ -23,6 +23,7 @@ import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
+import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import { useDialogs } from '../../ui/useDialogs';
@@ -68,6 +69,8 @@ interface GameViewProps {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  /** 서버에 알리지 않고 화면의 장소만 바꾼다 */
+  onPlace: (scene: SceneRef, entryPos?: Point) => void;
   onWarmup: () => void;
   log: Msg[];
   syncLabel: string | null;
@@ -106,6 +109,8 @@ export default function GameView(props: GameViewProps) {
   const [guildOpen, setGuildOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [ferryOpen, setFerryOpen] = useState(false);
+  /** 진행 중인 빠른 이동 — 떠나는 항구와 가는 항구 */
+  const [trip, setTrip] = useState<{ from: BaseId; to: BaseId } | null>(null);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
@@ -145,11 +150,10 @@ export default function GameView(props: GameViewProps) {
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
 
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
+
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
-    setActionPanel(null);
-    setStatsOpen(false);
-    setRankingOpen(false);
-    setTracking(null);
+    resetPanels();
     props.onScene(nextScene, message, entryPos);
   };
 
@@ -158,6 +162,7 @@ export default function GameView(props: GameViewProps) {
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
+    const boarding = boardingOf(scene.id);
     switch (id) {
       case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty': case 'wardrobe':
         setActionPanel(panel => panel === id ? null : id);
@@ -167,7 +172,7 @@ export default function GameView(props: GameViewProps) {
         setRankingOpen(true);
         return;
       case 'exit':
-        go({ kind: 'region', id: pack.region }, pack.exitMsg, pack.exitAt);
+        go({ kind: 'region', id: boarding.region }, boarding.msg, boarding.at);
         return;
       case 'travel': {
         // 여객선은 다른 지역으로 위치를 통째로 옮기므로 확인을 받는다
@@ -188,14 +193,38 @@ export default function GameView(props: GameViewProps) {
     }
   };
 
-  // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 그 항구로 옮긴다
+  // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
     const name = BASE_PACKS[port].name;
     void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
 지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
       confirmLabel: `${name}에 가기` })
-      .then(ok => { if (ok) go({ kind: 'base', id: port }, `여객선을 타고 ${name}에 도착했어요. 시설을 눌러 정비해 보세요.`); });
+      .then(ok => { if (ok && scene.kind === 'base') setTrip({ from: scene.id, to: port }); });
+  };
+
+  // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
+  const ferrySurface = () => {
+    if (!trip) return;
+    const b = boardingOf(trip.from);
+    resetPanels();
+    props.onPlace({ kind: 'region', id: b.region }, b.at);
+  };
+  // 전환 2단계 — 도착 항구의 승선 자리로 옮기고 서버에 알린다. 실패하면 떠난 항구에 남는다
+  const ferryMove = async () => {
+    if (!trip) return;
+    const b = boardingOf(trip.to);
+    let result: DispatchResult | null = null;
+    try {
+      result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
+    } catch { /* 인프라 실패는 오류 정책이 알린다 */ }
+    if (result?.status === 'ok') {
+      props.onPlace({ kind: 'region', id: b.region }, b.at);
+      props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
+      return;
+    }
+    if (result?.status === 'rejected') props.setToast(REJECT_TEXT[result.error], 'warn');
+    props.onPlace({ kind: 'base', id: trip.from });
   };
 
   const openStats = () => setStatsOpen(open => !open);
@@ -293,6 +322,7 @@ export default function GameView(props: GameViewProps) {
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
         )}
 
+        {trip && <FerryVeil onSurface={ferrySurface} onMove={ferryMove} onDone={() => setTrip(null)} />}
         {ferryOpen && scene.kind === 'base' && (
           <FerryModal game={game} from={scene.id} onPick={pickPort} onClose={() => setFerryOpen(false)} />
         )}
