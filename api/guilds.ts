@@ -9,8 +9,8 @@
 //                                          → { joinMode, pitch }      가입 방식과 권유 문구 바꾸기(길드장)
 //   PUT    /api/guilds/:id/name { name }   → { name, gold }           이름 바꾸기(길드장). 길드장의 골드를 내고 하루(게임 날짜)에 한 번이다.
 //                                                                       gold는 바꾼 뒤 내 골드다
-//   POST   /api/guild-memberships { code } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
-//                                                                       고유 코드로 들어오기. 승인 가입 길드면 가입 신청이 된다
+//   POST   /api/guild-memberships { code, via? } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
+//                                                                       고유 코드로 들어오기. 승인 가입 길드면 가입 신청이 된다. via가 'link'(초대 링크의 확인 창)이면 승인 가입 길드도 바로 들어간다
 //   DELETE /api/guild-requests/me          → { result: 'cancelled' }  내 가입 신청 거두기
 //   POST   /api/guilds/:id/requests/:uid/approval
 //                                          → 201 { result: 'approved' } 가입 신청 승인(길드장)
@@ -33,7 +33,7 @@ import {
 } from './_data/guilds.js';
 import { notifyUser, presenceOf } from './_server/livePresence.js';
 import {
-  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, validDonationAmount,
+  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, parseJoinVia, validDonationAmount,
 } from '../src/game/rules/guild.js';
 import type { GuildBonusId, GuildJoinMode } from '../src/game/rules/guild.js';
 import { ApiError, toApiError } from './errors.js';
@@ -159,7 +159,10 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
   const join = handle(['POST'], async (req, res, uid) => {
     const code = normalizeGuildCode(bodyField(req, 'code'));
     if (!code) throw new ApiError(400, 'bad-code');
-    const r = await run('db-write', () => joinByCode(database().withTransaction, uid, code, new Date().toISOString()));
+    // via는 초대 링크의 확인 창에서 온 요청에만 붙는다. 링크의 내용이 곧 고유 코드라 코드를 아는 사람이 via를 붙여도
+    // 링크를 받은 사람과 얻는 것이 같으므로 서버는 이 표시를 그대로 받는다
+    const via = parseJoinVia(bodyField(req, 'via'));
+    const r = await run('db-write', () => joinByCode(database().withTransaction, uid, code, new Date().toISOString(), via));
     if (!r.ok) throw refuse(r.error);
     if (r.result === 'joined') {
       changed(uid, r.id);

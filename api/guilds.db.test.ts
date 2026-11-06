@@ -156,6 +156,23 @@ describe('길드 함수', () => {
     await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: A } });
   });
 
+  it('초대 링크로 오면 승인 가입 길드에도 바로 들어오고, 닫힘은 링크로도 받지 않는다. 경로 표시가 없거나 다르면 코드 경로다', async () => {
+    const id = ((await call('/api/guilds', 'POST', A, { body: { name: '링크선단' } })).body as { id: string }).id;
+    const code = (await mine(A)).guild!.code;
+    notes.length = 0;
+    expect(await call('/api/guild-memberships', 'POST', B, { body: { code, via: 'code' } })).toMatchObject({ status: 202, body: { result: 'requested' } });
+    expect(await call('/api/guild-memberships', 'POST', B, { body: { code, via: 'x' } })).toMatchObject({ status: 202, body: { result: 'requested' } });
+    expect(notes).toHaveLength(2);
+    expect(await call('/api/guild-memberships', 'POST', B, { body: { code, via: 'link' } }))
+      .toMatchObject({ status: 201, body: { id, result: 'joined' } });
+    expect(changes.at(-1)).toEqual([B, id]);
+    expect(await mine(B)).toMatchObject({ guild: { id, role: 'member' }, request: null });
+    await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'closed' } });
+    expect(await call('/api/guild-memberships', 'POST', C, { body: { code, via: 'link' } })).toMatchObject({ status: 409, body: { error: 'guild-closed' } });
+    await call('/api/guilds/:id/members/:uid', 'DELETE', B, { params: { id, uid: B } });
+    await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: A } });
+  });
+
   it('경로 변수 형식이 틀리면 400이다', async () => {
     expect(await call('/api/guilds/:id', 'PATCH', A, { params: { id: 'x' }, body: { joinMode: 'open' } })).toMatchObject({ status: 400, body: { error: 'bad-guild' } });
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id: A, uid: 'y' } }))
