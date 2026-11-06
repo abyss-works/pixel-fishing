@@ -1,16 +1,17 @@
 // 길드(guilds·guild_members·guild_join_requests·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations) 소유 모듈 —
-// 만들기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록,
+// 만들기, 이름 바꾸기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록,
 // 보너스 기부, 조회, 미리보기, 계정 정리.
 // 인원과 역할을 보고 바꾸는 작업은 트랜잭션 안에서 길드 행을 잠가 같은 길드의 변경을 줄 세운다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import {
-  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome,
+  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_RENAME_COST, bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome,
   guildBonusLevels,
   GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildLevelOf, guildProgress, handoverOutcome, joinOutcome,
-  removalOutcome,
+  removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
+import type { RenameError } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
 import { goldDebit } from './save.js';
@@ -73,6 +74,8 @@ export interface GuildView {
   id: string;
   name: string;
   createdAt: string;
+  /** 마지막으로 이름을 바꾼 시각. 바꾼 적이 없으면 null */
+  renamedAt: string | null;
   /** 내 역할 */
   role: GuildRole;
   /** 지금 길드원(길드장 먼저, 들어온 순)과 떠난 선원(최근에 떠난 순) */
@@ -106,9 +109,10 @@ export async function guildIdOf(db: Executor, uid: string): Promise<string | nul
 /** 내 길드와 길드원. 길드가 없으면 null */
 export async function myGuild(db: Executor, uid: string, nowISO: string): Promise<GuildView | null> {
   const { rows: [g] } = await db.execute<{
-    id: string; name: string; created_at: string | Date; role: GuildRole; code: string; join_mode: GuildJoinMode; pitch: string | null;
+    id: string; name: string; created_at: string | Date; renamed_at: string | Date | null; role: GuildRole; code: string;
+    join_mode: GuildJoinMode; pitch: string | null;
   }>(sql`
-    select g.id::text as id, g.name, g.created_at, m.role, g.code, g.join_mode, g.pitch from public.guild_members m
+    select g.id::text as id, g.name, g.created_at, g.renamed_at, m.role, g.code, g.join_mode, g.pitch from public.guild_members m
     join public.guilds g on g.id = m.guild_id
     where m.user_id = ${uid} and m.left_at is null`);
   if (!g) return null;
@@ -140,7 +144,7 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
     value: l.value === null ? null : Number(l.value), at: iso(l.created_at) }));
   const { bonuses, effects, donors } = await bonusViews(db, g.id, uid, progress.level);
   const requests = g.role === 'leader' ? await joinRequests(db, g.id, nowISO) : [];
-  return { id: g.id, name: g.name, createdAt: iso(g.created_at), role: g.role, members, code: g.code, joinMode: g.join_mode,
+  return { id: g.id, name: g.name, createdAt: iso(g.created_at), renamedAt: g.renamed_at ? iso(g.renamed_at) : null, role: g.role, members, code: g.code, joinMode: g.join_mode,
     pitch: g.pitch, requests, growth: progress, bonuses, effects, donors, logbook };
 }
 
@@ -418,6 +422,40 @@ export async function setJoinSettings(db: Executor, uid: string, guildId: string
   const { rows: [g] } = await db.execute<{ join_mode: GuildJoinMode; pitch: string | null }>(sql`update public.guilds
     set join_mode = ${mode}, pitch = ${pitch} where id = ${guildId} returning join_mode, pitch`);
   return { ok: true, joinMode: g.join_mode, pitch: g.pitch };
+}
+
+export type RenameGuildOutcome =
+  | { ok: true; name: string; gold: number }
+  | { ok: false; error: RenameError | 'not-member' | 'restricted' };
+
+/**
+ * 길드 이름을 바꾼다(길드장). 길드장의 저장 골드를 빼고, 이름과 마지막 변경 시각, 항해일지(detail에 새 이름)를 한 트랜잭션에 쓴다.
+ * 길드 행을 잠가 같은 길드의 변경을 줄 세우고, 저장 행을 잠근 뒤 골드를 확인한다. 저장 버전을 올리므로 이름을 바꾸기 전에
+ * 상태를 읽은 액션은 낙관 락에서 거부되고(409) 최신 상태로 다시 시도한다. 저장 행이 없으면 가진 골드가 0이다.
+ * ponytail: 다른 길드가 같은 이름으로 동시에 바꾸면 유일 인덱스 위반이 서버 오류가 된다. 잦아지면 위반을 name-taken으로 바꾼다.
+ */
+export async function renameGuild(withTransaction: Tx, uid: string, guildId: string, name: string, nowISO: string):
+  Promise<RenameGuildOutcome> {
+  return withTransaction(async tx => {
+    const members = await lockMembers(tx, guildId);
+    const me = members?.find(m => m.uid === uid);
+    if (!me) return { ok: false, error: 'not-member' };
+    const { rows: [g] } = await tx.execute<{ name: string; renamed_at: string | Date | null }>(sql`select name, renamed_at
+      from public.guilds where id = ${guildId}`);
+    const { rows: taken } = await tx.execute(sql`select 1 from public.guilds where lower(name) = lower(${name}) and id <> ${guildId}`);
+    const { rows: [save] } = await tx.execute<{ gold: number | string; restricted: boolean | null }>(sql`select gold, restricted
+      from public.saves_current where user_id = ${uid} for update`);
+    const gold = Number(save?.gold ?? 0);
+    const r = renameOutcome(me, { current: g.name, next: name, taken: taken.length > 0,
+      lastRenamedAt: g.renamed_at ? iso(g.renamed_at) : null, nowISO, gold });
+    if (!r.ok) return r;
+    if (save?.restricted) return { ok: false, error: 'restricted' };
+    await tx.execute(goldDebit(uid, GUILD_RENAME_COST));
+    await tx.execute(sql`update public.guilds set name = ${name}, renamed_at = ${at(nowISO)} where id = ${guildId}`);
+    await tx.execute(sql`insert into public.guild_logs (guild_id, user_id, kind, detail, created_at)
+      values (${guildId}, ${uid}, 'rename', ${name}, ${at(nowISO)})`);
+    return { ok: true, name, gold: gold - GUILD_RENAME_COST };
+  });
 }
 
 export type RemoveOutcome =
