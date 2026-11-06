@@ -8,8 +8,10 @@
 // 입력 줄 앞의 방 버튼이나 입력 중 Tab으로 보낼 곳(월드·길드)을 바꾼다. 길드 방이면 버튼 글자가 길드색이다.
 // 길드가 없으면 버튼은 흐리게 꺼지고 언제나 월드로 보낸다. 버튼의 설명과 꺼진 이유는 게임 툴팁으로 보인다.
 // 게스트는 채팅을 보낼 수 없어 입력 칸 대신 흐린 안내 칸을 두고, 계정을 만드는 곳을 툴팁으로 알린다.
+// 모바일에서는 메시지 창 기록 칸을 눌러야 입력 줄이 열린다(open). 열리면 입력 칸에 포커스를 주어 키보드가 뜨고,
+// 입력 칸을 벗어나면(키보드를 닫거나 바깥을 누르면) onLeave로 닫는다. 보내도 입력 줄에 머문다.
 // 입력 줄의 열림과 보낼 방은 채팅 입력 상태머신(chatInputReducer)이 정한다. 입력 중 Tab은 포커스를 옮기지 않는다.
-import { useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
@@ -39,7 +41,13 @@ const NO_GUILD_TIP = '길드에 들어가면 길드 채팅을 쓸 수 있어요.
 const GUEST_ROOM_TIP = '채팅은 계정을 만든 뒤 쓸 수 있어요.';
 const GUEST_BLOCKED = { text: '채팅은 계정을 만든 뒤 쓸 수 있어요', reason: '설정 탭의 계정 관리에서 계정을 만들 수 있어요.' };
 
-export default function ChatBar({ inGuild = false, guest = false }: { inGuild?: boolean; guest?: boolean }) {
+export default function ChatBar({ inGuild = false, guest = false, open = true, onLeave }: {
+  inGuild?: boolean; guest?: boolean;
+  /** 입력 줄을 보이는가. PC는 늘 보인다 */
+  open?: boolean;
+  /** 입력 칸을 벗어났다(모바일에서 입력 줄을 닫는다) */
+  onLeave?: () => void;
+}) {
   const chat = useChat();
   const [text, setText] = useState('');
   const [input, dispatch] = useReducer(chatInputReducer, CHAT_INPUT_INITIAL);
@@ -72,11 +80,14 @@ export default function ChatBar({ inGuild = false, guest = false }: { inGuild?: 
     }
     if (e.key === 'Escape') e.currentTarget.blur();
   };
+  useEffect(() => { if (open && onLeave) inputRef.current?.focus(); }, [open, onLeave]);
   const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : null;
   const usable = inGuild && !guest;
 
+  if (!open) return null;
   return (
-    <div className="relative text-xs">
+    <div className="relative text-xs"
+         onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onLeave?.(); }}>
       {status && (
         <p role="status"
            className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 truncate text-danger',
@@ -88,6 +99,7 @@ export default function ChatBar({ inGuild = false, guest = false }: { inGuild?: 
         <Tip wraps text={guest ? GUEST_ROOM_TIP : inGuild ? ROOM_TIP : NO_GUILD_TIP} className="flex">
           <HudButton active={room === 'guild'} disabled={!usable} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                      className={cx(room === 'guild' && 'text-guild', !usable && 'pointer-events-none')}
+                     onPointerDown={e => { if (onLeave) e.preventDefault(); }}
                      onClick={() => dispatch({ type: 'toggleRoom', inGuild })}>{ROOM_LABEL[room]}</HudButton>
         </Tip>
         {guest ? (

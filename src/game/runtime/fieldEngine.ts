@@ -17,6 +17,8 @@ import {
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
+import { FIELD_VIEW } from '../world/fieldView.js';
+import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
@@ -81,6 +83,8 @@ export class GameFieldEngine {
   private lastSpot: SpotId | null = null;
   private readonly tracker = new ZoneTracker();
   private readonly keys = new Set<string>();
+  /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
+  private padDir: Point | null = null;
   private biteStart = 0;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
@@ -94,6 +98,8 @@ export class GameFieldEngine {
   private schools: School[];
   /** 같은 바다의 다른 플레이어와 내 말풍선 — 실시간 채널이 프레임마다 보간한 위치와 함께 돌려준다 */
   private liveSource: ((now: number) => LiveFrame) | null = null;
+  /** 카메라 시야 크기 — 모바일은 스테이지 비율로 호스트가 정해 준다 */
+  private view: ViewSize = FIELD_VIEW;
 
   constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
@@ -113,6 +119,11 @@ export class GameFieldEngine {
     this.game = game;
     this.night = night;
     this.callbacks = callbacks;
+  }
+
+  /** 카메라 시야 크기 — 캔버스 크기와 짝이다 */
+  setView(view: ViewSize): void {
+    this.view = view;
   }
 
   /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
@@ -179,6 +190,16 @@ export class GameFieldEngine {
     return true;
   }
 
+  /** 원 패드의 이동 방향 — 키 이동처럼 낚시를 접고 움직이며, (0, 0)이나 null이면 멈춘다 */
+  setMoveDirection(dir: Point | null): void {
+    const moving = dir !== null && (dir.x !== 0 || dir.y !== 0);
+    this.padDir = moving ? dir : null;
+    if (moving && this.snapshot.phase !== 'idle') {
+      this.cancelFishing();
+      this.callbacks.onEvent({ type: 'movement-cancelled' });
+    }
+  }
+
   releaseKey(code: string): void {
     this.keys.delete(code);
   }
@@ -205,6 +226,7 @@ export class GameFieldEngine {
     this.stopFrame();
     this.clearPhaseTimers();
     this.keys.clear();
+    this.padDir = null;
     this.listeners.clear();
   }
 
@@ -232,10 +254,13 @@ export class GameFieldEngine {
     }
 
     let movedFrom: Point | null = null;
-    if ((dx || dy) && this.snapshot.phase === 'idle') {
+    // 키 이동은 방향 부호(대각선 포함)로, 원 패드는 끄는 각도 그대로의 단위 벡터로 움직인다
+    const pad = this.padDir;
+    if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(this.def, this.pos, Math.sign(dx), Math.sign(dy), dt, speed);
+      const next = movePlayer(
+        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();
@@ -296,6 +321,7 @@ export class GameFieldEngine {
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
+      view: this.view,
       ...(this.liveSource?.(now) ?? { others: [], bubble: null }),
     });
     return true;

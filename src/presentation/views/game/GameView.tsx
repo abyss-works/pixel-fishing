@@ -57,7 +57,9 @@ import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
+import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
+import { useMobileLayout } from '../../layouts/useMobileLayout';
 
 interface GameViewProps {
   game: GameState;
@@ -89,6 +91,13 @@ const GUILD_OFF = ['guild'] as const;
 export default function GameView(props: GameViewProps) {
   const { game, scene } = props;
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
+  const mobile = useMobileLayout();
+  /** 모바일 시트 — 처음에는 닫혀 있다 */
+  const [sheetOpen, setSheetOpen] = useState(false);
+  /** 모바일 채팅 입력 줄 — 메시지 창 기록 칸을 누르면 열린다 */
+  const [chatOpen, setChatOpen] = useState(false);
+  /** 모바일 낚시 상태 띠가 들어갈 HUD 자리 */
+  const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -206,18 +215,23 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
+    <div className={cx('flex w-screen overflow-hidden', mobile ? 'h-dvh flex-col' : 'h-screen max-[820px]:flex-col')}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
-                 initialPos={props.entryPos ?? undefined} />
+                 initialPos={props.entryPos ?? undefined} statusSlot={statusSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
-                   logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} guest={props.account === null} /> : null}
+                   logFooter={chat.enabled ? (
+                     <ChatBar inGuild={guild !== null} guest={props.account === null}
+                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined} />
+                   ) : null}
+                   sheetOpen={sheetOpen} onStatusSlot={setStatusSlot}
+                   onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
@@ -292,6 +306,7 @@ export default function GameView(props: GameViewProps) {
       <GameTabs
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
+        sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
         game={game} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} uid={props.uid} onAuthChanged={props.onAuthChanged}

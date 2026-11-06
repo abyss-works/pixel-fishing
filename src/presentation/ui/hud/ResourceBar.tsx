@@ -77,13 +77,15 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
   ];
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-(--z-overlay) max-w-[calc(100%-24px)]
-                    pf-glass border-2 border-line pf-notch pf-bevel px-[18px] py-[9px]">
+                    pf-glass border-2 border-line pf-notch pf-bevel px-[18px] py-[9px]
+                    mobile:top-2 mobile:left-2 mobile:translate-x-0 mobile:max-w-[calc(100%-72px)] mobile:px-3">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label="스탯창 열기" onClick={onOpen}
-              className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125">
+              className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125
+                         mobile:grid mobile:grid-cols-3 mobile:gap-x-3.5 mobile:gap-y-2">
         {stats.map((stat, i) => (
           <Fragment key={stat.key}>
-            {i > 0 && <Divider vertical />}
+            {i > 0 && <Divider vertical className="mobile:hidden" />}
             {stat}
           </Fragment>
         ))}

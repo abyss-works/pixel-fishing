@@ -37,6 +37,12 @@ const GLASS_ON = cx(
   'group-has-[input:focus]:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
 );
 
+/** 모바일은 마우스를 올릴 수 없으므로 활성 모양을 늘 유지한다 */
+const GLASS_ALWAYS = cx(
+  'mobile:border-line mobile:bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] mobile:backdrop-blur-[4px]',
+  'mobile:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
+);
+
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = cx('font-bold', mine ? 'text-gold' : 'text-accent');
   return (
@@ -51,7 +57,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [] }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, onActivate }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -66,6 +72,10 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   channels?: readonly MessageChannel[];
   /** 토글은 보이되 쓸 수 없는 채널(흐림) — 길드에 들어가 있지 않을 때의 길드 */
   disabledChannels?: readonly MessageChannel[];
+  /** 한 번에 보이는 글줄 수 */
+  lines?: number;
+  /** 기록 칸을 눌렀다(글줄의 이름 버튼을 누른 경우는 제외). 모바일에서 입력 줄을 여는 데 쓴다 */
+  onActivate?: () => void;
 }) {
   const fixed = channels !== undefined;
   const listed = channels ?? channelsOf(log);
@@ -94,7 +104,8 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   };
 
   return (
-    <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none">
+    <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
+                    mobile:static mobile:w-full">
       {toggles && (
         <div className="pointer-events-auto self-start flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
           {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => {
@@ -116,10 +127,11 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
         </div>
       )}
       <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
+           onClick={e => { if (!(e.target as HTMLElement).closest('button')) onActivate?.(); }}
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
-             'flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text',
-             'transition-[background-color,border-color] duration-150', GLASS_ON)}
-           style={{ height: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 4px)` }}>
+             'flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text mobile:touch-pan-y',
+             'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
+           style={{ height: `calc(${lines * LINE_EM}em + 0.5rem + 4px)` }}>
         {shown.map(m => (
           <Line key={`${m.channel}-${m.id}`} m={m} mine={you != null && m.from?.uid === you} onPick={onPick} />
         ))}

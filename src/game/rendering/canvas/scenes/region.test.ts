@@ -22,3 +22,13 @@ describe('vignette', () => {
     expect(b.createRadialGradient).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('vignette 크기', () => {
+  it('캔버스 크기가 바뀌면 다시 생성한다', () => {
+    const ctx = stubCtx();
+    vignette(ctx, 504, 904);
+    vignette(ctx, 504, 904);
+    vignette(ctx, 504, 800);
+    expect(ctx.createRadialGradient).toHaveBeenCalledTimes(2);
+  });
+});

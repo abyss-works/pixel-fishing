@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import type { PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
 import { boatGateText, nextBoatText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
@@ -13,23 +15,24 @@ import { alertEncounter } from '../../../features/bounty/service/encounterAlert'
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
+import { isTap, movePad, startPad } from '../../../game/runtime/movePad';
+import type { Pad } from '../../../game/runtime/movePad';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
+import { cx } from '../../ui/cx';
 import { GameFieldEngine } from '../../../game/runtime/fieldEngine';
 import { getSpotState } from '../../../game/world/currentSpot';
-import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
+import { SCALE } from '../../../game/rendering/pixel/common.js';
+import { FIELD_VIEW, mobileFieldView } from '../../../game/world/fieldView.js';
 import GameFrame from './GameFrame';
+import MovePad from './MovePad';
+import { statusText } from './statusText';
+import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
 import HudPanel from '../../ui/hud/HudPanel';
 import type { Notify } from '../../ui/hud/messageFeed';
-
-const STATUS = {
-  wait: '입질을 기다리는 중이에요. “!”가 뜨면 스페이스를 눌러 주세요.\n빨간 영역은 PERFECT, 노란 영역은 GOOD이에요.',
-  bite: '지금 눌러 주세요. 빨간 영역이면 PERFECT, 노란 영역이면 GOOD이에요.',
-  catch: '물고기를 끌어올리는 중이에요…',
-} as const;
 
 interface Props {
   region: RegionId;
@@ -41,6 +44,8 @@ interface Props {
   initialPos?: Point;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
   paused?: boolean;
+  /** 모바일에서 낚시 상태 띠를 넣을 HUD 자리 — 없으면 프레임 아래 가운데에 둔다 */
+  statusSlot?: HTMLElement | null;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: number): void {
@@ -95,10 +100,12 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused,
+  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused, statusSlot,
 }: Props) {
+  const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
   const schools = useSchools(region);
+  const observer = useRef<ResizeObserver | null>(null);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어와 내 말풍선을 엔진이 프레임마다 그린다
@@ -121,8 +128,19 @@ export default function Field({
   const fish: Fish | null = snapshot.fishId
     ? FISH.find(candidate => candidate.id === snapshot.fishId) ?? null
     : null;
+  // 모바일 시야 — 캔버스가 차지한 스테이지 크기에서 정한다. PC는 늘 PC 시야다
+  const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
+  const view = useMemo(
+    () => mobile && stageSize ? mobileFieldView(stageSize.w, stageSize.h) : FIELD_VIEW, [mobile, stageSize]);
+  useEffect(() => { engine.setView(view); }, [engine, view]);
   const attachCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     engine.attachCanvas(canvas);
+    observer.current?.disconnect();
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(([entry]) => {
+      setStageSize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.current.observe(canvas);
   }, [engine]);
 
   useEffect(() => {
@@ -152,33 +170,70 @@ export default function Field({
 
   useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
-  useEffect(() => () => engine.dispose(), [engine]);
+  useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 
   useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
+
+  // 모바일 스테이지 입력 — 누른 자리에서 10px를 넘게 끌면 원 패드로 이동, 그 안에서 떼면 짧게 누르기(클릭과 같은 상호작용)
+  const [pad, setPad] = useState<Pad | null>(null);
+  const gesture = useRef<{ id: number; pad: Pad } | null>(null);
+  const pointAt = (e: PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const onPadDown = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (gesture.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    gesture.current = { id: e.pointerId, pad: startPad(pointAt(e)) };
+  };
+  const onPadMove = (e: PointerEvent<HTMLCanvasElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    const next = movePad(g.pad, pointAt(e));
+    if (next === g.pad) return;
+    g.pad = next;
+    engine.setMoveDirection(next.dir);
+    setPad(next);
+  };
+  const onPadEnd = (e: PointerEvent<HTMLCanvasElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    gesture.current = null;
+    engine.setMoveDirection(null);
+    setPad(null);
+    if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
+  };
+
+  const inSlot = mobile && statusSlot != null;
+  const statusBand = snapshot.phase === 'idle' ? null : (
+    <HudPanel className={cx('z-(--z-overlay) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
+      inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
+      {statusText(snapshot.phase, mobile)}
+    </HudPanel>
+  );
 
   return (
     <GameFrame>
       {covered ? (
         <div className="block w-full h-full bg-bg" aria-label="게임 화면(덮개)" />
       ) : (
-        <canvas ref={attachCanvas} width={CANVAS_W} height={CANVAS_H}
+        <canvas ref={attachCanvas} width={view.w * SCALE} height={view.h * SCALE}
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
                 aria-label={region === 'village' ? '마을' : '바다'}
-                onClick={() => engine.action()} />
+                onClick={mobile ? undefined : () => engine.action()}
+                onPointerDown={mobile ? onPadDown : undefined} onPointerMove={mobile ? onPadMove : undefined}
+                onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}
       <NightOverlay />
+      {pad?.active && <MovePad pad={pad} />}
       {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
           {snapshot.phase === 'catch' && fish ? (
             <CatchCard fish={fish} info={snapshot.catchInfo} />
           ) : (
-            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-3 z-(--z-overlay)
-                                 max-w-[min(480px,calc(100%-24px))] px-3.5 py-1.5 whitespace-pre-line
-                                 text-sm text-center text-text pointer-events-none animate-overlay-in">
-              {STATUS[snapshot.phase]}
-            </HudPanel>
+            inSlot ? createPortal(statusBand, statusSlot) : statusBand
           )}
         </div>
       )}

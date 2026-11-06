@@ -2,7 +2,7 @@
 // 직접 그리지 않는다. 단위 스프라이트와 스타일 토큰에 그리기를 위임한다 (계층: layout).
 // 지형 소스는 둘 — 항해 지역은 마스크 페인터, 도보 지역은 사각형 조각으로 그린다.
 // 지역 고유 연출은 pack.flavor 훅 하나만 허용 — 지형/건물을 훅에서 그리지 않는다.
-import { R, SCALE, CANVAS_W, CANVAS_H, FIELD_W, FIELD_H } from '../../pixel/common.js';
+import { R, SCALE } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
 import { drawBoat, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
@@ -12,6 +12,8 @@ import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/
 import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
+import { FIELD_VIEW } from '../../../world/fieldView.js';
+import type { ViewSize } from '../../../world/fieldView.js';
 import type { GearView } from '../../pixel/sprites/overlays.js';
 import type { Look } from '../../../content/wardrobe.js';
 
@@ -25,13 +27,16 @@ export interface FieldView extends GearView {
   others?: OtherShipView[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
+  /** 카메라 시야 크기(월드 픽셀) — 없으면 PC 시야. 캔버스는 이 크기의 SCALE배다 */
+  view?: ViewSize;
   /** 내 외형 — 없으면 기본 외형 */
   look?: Look;
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-  const cam = cameraFor(v.player, pack.w, pack.h);
+  const view = v.view ?? FIELD_VIEW;
+  const cam = cameraFor(v.player, pack.w, pack.h, view);
   ctx.save();
   ctx.translate(-(cam.x | 0), -(cam.y | 0));
 
@@ -41,7 +46,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     // 마스크 지형 — 육지·특화 수역이 격자에 들어 있다 (t = 구름 그림자·글린트 연출)
     // 뷰포트 컬링 — 카메라에 보이는 칸만 찍는다(병합 바다 105k셀 대응, 오픈월드 Phase 3)
     drawMaskTerrain(ctx, pack.map, true, v.t,
-      { x: cam.x, y: cam.y, w: FIELD_W, h: FIELD_H });
+      { x: cam.x, y: cam.y, w: view.w, h: view.h });
   } else {
     // rect 지형 (village) — 초지 바탕 + 물 조각
     const g = pack.ground!;
@@ -95,25 +100,25 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 
   // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = vignette(ctx);
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.fillStyle = vignette(ctx, view.w * SCALE, view.h * SCALE);
+  ctx.fillRect(0, 0, view.w * SCALE, view.h * SCALE);
 
   ctx.restore();
 }
 
-// 비네팅 그라데이션 — 치수 고정이라 ctx당 1회 생성 후 재사용 (매 틱 재생성 해소).
-// CanvasGradient는 ctx에 귀속되므로 ctx 키 WeakMap에 둔다.
-const vignetteCache = new WeakMap<object, CanvasGradient>();
+// 비네팅 그라데이션 — 캔버스 크기가 같으면 ctx당 1회 생성 후 재사용 (매 틱 재생성 해소).
+// CanvasGradient는 ctx에 귀속되므로 ctx 키 WeakMap에 두고, 캔버스 크기가 바뀌면 다시 만든다.
+const vignetteCache = new WeakMap<object, { w: number; h: number; gradient: CanvasGradient }>();
 
-export function vignette(ctx: Ctx): CanvasGradient {
+export function vignette(ctx: Ctx, w = FIELD_VIEW.w * SCALE, h = FIELD_VIEW.h * SCALE): CanvasGradient {
   const hit = vignetteCache.get(ctx);
-  if (hit) return hit;
+  if (hit && hit.w === w && hit.h === h) return hit.gradient;
   const vg = ctx.createRadialGradient(
-    CANVAS_W / 2, CANVAS_H * 0.42, CANVAS_H * 0.38,
-    CANVAS_W / 2, CANVAS_H / 2, CANVAS_W * 0.62,
+    w / 2, h * 0.42, h * 0.38,
+    w / 2, h / 2, w * 0.62,
   );
   vg.addColorStop(0, 'rgba(4,9,18,0)');
   vg.addColorStop(1, 'rgba(4,9,18,0.34)');
-  vignetteCache.set(ctx, vg);
+  vignetteCache.set(ctx, { w, h, gradient: vg });
   return vg;
 }

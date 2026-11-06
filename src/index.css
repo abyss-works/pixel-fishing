@@ -10,6 +10,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
+/* 모바일 배치 조건 — 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */
+@custom-variant mobile (@media (orientation: portrait) and (max-width: 599px));
+
 /* Tailwind 토큰 — 색 값의 근원은 아래 :root 변수 하나뿐, 여기선 참조/스케일 조정만.
    간격 토큰(구 --sp-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다 (p-1~4 = 4/8/12/16px). */
 @theme {
@@ -332,4 +335,20 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   [data-rarity='rare'] { --rarity-color: var(--c-rare); }
   [data-rarity='epic'] { --rarity-color: var(--c-epic); }
   [data-rarity='legendary'] { --rarity-color: var(--c-legend); }
+
+  /* 거친 포인터(터치)의 누르는 영역 — 누를 수 있는 요소의 누르는 영역을 보이는 크기는 그대로 둔 채 44px 이상으로 넓힌다.
+     보이지 않는 ::after가 요소 가운데에서 max(요소 크기, 44px)로 펼쳐지며 요소의 일부로 눌린다.
+     clip-path로 모서리를 깎은 요소는 깎인 바깥을 누를 수 없다. */
+  @media (pointer: coarse) {
+    button, [role='button'] { position: relative; }
+    button::after, [role='button']::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
 }
