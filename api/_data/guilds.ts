@@ -12,7 +12,7 @@ import {
   removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
 import type { RenameError } from '../../src/game/rules/guild.js';
-import type { GuildActor, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
+import type { GuildActor, GuildJoinVia, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
 import { goldDebit } from './save.js';
 
@@ -332,11 +332,13 @@ export type JoinOutcome =
   | { ok: false; error: 'bad-code' | 'already-in-guild' | 'guild-full' | 'guild-closed' };
 
 /**
- * 고유 코드로 들어온다. 가입 방식에 따라 바로 들어가거나(전에 떠났던 길드면 같은 행을 되살린다) 가입 신청을 넣는다.
+ * 고유 코드로 들어온다. 가입 방식과 경로(코드, 초대 링크)에 따라 바로 들어가거나(전에 떠났던 길드면 같은 행을 되살린다)
+ * 가입 신청을 넣는다. 승인 가입 길드도 링크로 오면 바로 들어간다.
  * 신청은 한 사람에 하나라 다른 길드에 넣어 둔 신청은 이 신청으로 바뀐다. 들어가면 내 신청은 지운다.
  * 신청이면 알림에 쓸 길드장의 uid, 길드 이름, 신청한 사람의 닉네임을 함께 돌려준다.
  */
-export async function joinByCode(withTransaction: Tx, uid: string, code: string, nowISO: string): Promise<JoinOutcome> {
+export async function joinByCode(withTransaction: Tx, uid: string, code: string, nowISO: string, via: GuildJoinVia = 'code'):
+  Promise<JoinOutcome> {
   return withTransaction(async tx => {
     const { rows: [g] } = await tx.execute<{ id: string; name: string; join_mode: GuildJoinMode }>(sql`
       select id::text as id, name, join_mode from public.guilds where code = ${code}`);
@@ -344,7 +346,7 @@ export async function joinByCode(withTransaction: Tx, uid: string, code: string,
     const members = await lockMembers(tx, g.id);
     if (!members) return { ok: false, error: 'bad-code' };
     if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
-    const outcome = joinOutcome(g.join_mode, members.length);
+    const outcome = joinOutcome(g.join_mode, members.length, via);
     if (outcome === 'closed') return { ok: false, error: 'guild-closed' };
     if (outcome === 'guild-full') return { ok: false, error: 'guild-full' };
     if (outcome === 'request') {

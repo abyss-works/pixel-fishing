@@ -13,6 +13,7 @@ import {
 import { commitAction } from './commit.js';
 import { versionUpdate } from './save.js';
 import { newState } from '../../src/game/rules/logic.js';
+import { GUILD_MAX_MEMBERS } from '../../src/game/rules/guild.js';
 
 let testDb: TestDatabase;
 let client: Client;
@@ -117,6 +118,23 @@ describe('guilds', () => {
     expect(await guildIdOf(database.db, b)).toBeNull();
     expect(await myJoinRequest(database.db, b, LATER)).toBeNull();
     expect(await decideJoinRequest(tx(), leader, g.id, b, true, LATER)).toEqual({ ok: false, error: 'no-request' });
+  });
+
+  it('링크로 오면 승인 가입 길드에도 바로 들어오고, 닫힘과 인원 가득은 링크로도 받지 않는다', async () => {
+    const leader = await user();
+    const g = await make(leader);
+    const a = await user();
+    expect(await joinByCode(tx(), a, g.code, NOW, 'link')).toEqual({ ok: true, id: g.id, result: 'joined' });
+    expect(await guildIdOf(database.db, a)).toBe(g.id);
+    expect(await myJoinRequest(database.db, a, NOW)).toBeNull();
+    const pending = await user();
+    await joinByCode(tx(), pending, g.code, NOW);
+    expect(await myJoinRequest(database.db, pending, NOW)).not.toBeNull();
+    await setJoinSettings(database.db, leader, g.id, { joinMode: 'closed' });
+    expect(await joinByCode(tx(), pending, g.code, NOW, 'link')).toEqual({ ok: false, error: 'guild-closed' });
+    const full = await guildWith(GUILD_MAX_MEMBERS - 1);
+    await setJoinSettings(database.db, full.leader, full.id, { joinMode: 'approval' });
+    expect(await joinByCode(tx(), await user(), full.code, NOW, 'link')).toEqual({ ok: false, error: 'guild-full' });
   });
 
   it('신청은 한 사람에 하나라 새 신청이 이전 신청을 바꾸고, 7일이 지나면 사라지며, 스스로 거둘 수 있다', async () => {
