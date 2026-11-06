@@ -3,10 +3,11 @@ import { boatNameOf } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import { BASE_PACKS } from '../../../../game/world';
 import type { BaseId, FurnitureId } from '../../../../game/world';
-import { renderBaseBackdrop } from '../../../../game/rendering/canvas/scenes/base.js';
+import { BASE_EDGE_COLORS, renderBaseBackdrop } from '../../../../game/rendering/canvas/scenes/base.js';
 import { BASE_CANVAS_W, BASE_CANVAS_H } from '../../../../game/rendering/pixel/common.js';
 import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
+import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import NightOverlay from '../../../ui/hud/NightOverlay';
 import Button from '../../../ui/Button';
 import Panel from '../../../ui/Panel';
@@ -48,6 +49,7 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 export default function BaseMenu({ base, game, onFacility }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const covered = useCanvasCover();
+  const mobile = useMobileLayout();
   const pack = BASE_PACKS[base];
   const info = { rod: game.rod, boatName: boatNameOf(game.boat, '배 없음') };
 
@@ -55,11 +57,42 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
     if (covered) return;
     const ctx = canvasRef.current?.getContext('2d');
     if (ctx) renderBaseBackdrop(ctx, base);
-  }, [base, covered]);
+  }, [base, covered, mobile]);
 
   const name = base === 'home' ? '집' : '항구';
-  return (
-    <GameFrame>
+  const menu = (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-[6%]">
+      <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
+      <div className="flex flex-wrap items-start justify-center gap-3">
+        {SECTIONS.map(section => {
+          const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
+          if (items.length === 0) return null;
+          return (
+            <Panel key={section} title={section}>
+              <div className="flex gap-2">
+                {items.map(f => {
+                  const label = f.label(info);
+                  const [title, sub] = label.split(' · ');
+                  return (
+                    <Button key={f.id} type="button" aria-label={label} data-facility={f.id}
+                            onClick={() => onFacility?.(f.id)}
+                            className="flex w-[clamp(84px,12vw,128px)] flex-col items-center gap-1 px-1.5 py-2">
+                      <span className="h-14 w-full"><CardIcon base={base} facility={f} boat={game.boat} /></span>
+                      <span className="pf-accent text-sm text-gold">{title}</span>
+                      {sub && <span className="text-xs text-text-dim">{sub}</span>}
+                    </Button>
+                  );
+                })}
+              </div>
+            </Panel>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const scene = (
+    <>
       {covered ? (
         <div className="block w-full h-full bg-bg" aria-label={`${name}(덮개)`} />
       ) : (
@@ -67,34 +100,19 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
                 className="block w-full h-full [image-rendering:pixelated] bg-bg" aria-label={name} />
       )}
       <NightOverlay />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-[6%]">
-        <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
-        <div className="flex flex-wrap items-start justify-center gap-3">
-          {SECTIONS.map(section => {
-            const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
-            if (items.length === 0) return null;
-            return (
-              <Panel key={section} title={section}>
-                <div className="flex gap-2">
-                  {items.map(f => {
-                    const label = f.label(info);
-                    const [title, sub] = label.split(' · ');
-                    return (
-                      <Button key={f.id} type="button" aria-label={label} data-facility={f.id}
-                              onClick={() => onFacility?.(f.id)}
-                              className="flex w-[clamp(84px,12vw,128px)] flex-col items-center gap-1 px-1.5 py-2">
-                        <span className="h-14 w-full"><CardIcon base={base} facility={f} boat={game.boat} /></span>
-                        <span className="pf-accent text-sm text-gold">{title}</span>
-                        {sub && <span className="text-xs text-text-dim">{sub}</span>}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </Panel>
-            );
-          })}
-        </div>
-      </div>
+    </>
+  );
+
+  // 모바일은 그림을 스테이지 폭에 맞춰 세로 가운데에 두므로, 시설 카드는 그림이 아니라 스테이지 전체 위에 놓는다
+  return mobile ? (
+    <>
+      <GameFrame fill={BASE_EDGE_COLORS[base]}>{scene}</GameFrame>
+      {menu}
+    </>
+  ) : (
+    <GameFrame>
+      {scene}
+      {menu}
     </GameFrame>
   );
 }

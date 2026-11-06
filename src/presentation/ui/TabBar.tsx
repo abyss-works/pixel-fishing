@@ -11,7 +11,7 @@ export interface TabDef<K extends string> {
 
 interface TabBarProps<K extends string> {
   tabs: TabDef<K>[];
-  activeKey: K;
+  activeKey: K | null;
   onSelect: (key: K) => void;
   className?: string;
 }

@@ -57,7 +57,9 @@ import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
 import { josa } from '../../ui/format';
+import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
+import { useMobileLayout } from '../../layouts/useMobileLayout';
 
 interface GameViewProps {
   game: GameState;
@@ -89,6 +91,9 @@ const GUILD_OFF = ['guild'] as const;
 export default function GameView(props: GameViewProps) {
   const { game, scene } = props;
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
+  const mobile = useMobileLayout();
+  /** 모바일 시트 — 처음에는 닫혀 있다 */
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -206,7 +211,7 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden max-[820px]:flex-col">
+    <div className={cx('flex w-screen overflow-hidden', mobile ? 'h-dvh flex-col' : 'h-screen max-[820px]:flex-col')}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
@@ -292,6 +297,7 @@ export default function GameView(props: GameViewProps) {
       <GameTabs
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
+        sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
         game={game} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} uid={props.uid} onAuthChanged={props.onAuthChanged}

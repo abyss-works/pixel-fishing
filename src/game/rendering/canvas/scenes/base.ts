@@ -64,6 +64,16 @@ const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
   },
 };
 
+/** 배경 그림의 맨 위 줄과 맨 아래 줄 색 — 세로 화면에서 그림 위아래 남는 자리를 같은 색으로 채운다.
+ *  위 BACKDROPS의 첫 바탕(하늘/벽)과 마지막 바탕(바닥)과 같은 값이다 */
+export const BASE_EDGE_COLORS: Record<BaseId, { top: string; bottom: string }> = {
+  home: { top: '#6d4c41', bottom: '#8d6e63' },
+  harbor: { top: '#8ecae6', bottom: '#8d6e63' },
+  manila: { top: '#8ecae6', bottom: '#8d6e63' },
+  colombo: { top: '#a3c6d9', bottom: '#8d6e63' },
+  toamasina: { top: '#9bb7c9', bottom: '#8d6e63' },
+};
+
 /** 거점 배경만 그린다 — 가구와 라벨 없이 배경 위에 다른 표현을 얹을 때 쓴다 */
 export function renderBaseBackdrop(ctx: Ctx, id: BaseId) {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
