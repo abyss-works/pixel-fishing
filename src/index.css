@@ -333,4 +333,20 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   [data-rarity='rare'] { --rarity-color: var(--c-rare); }
   [data-rarity='epic'] { --rarity-color: var(--c-epic); }
   [data-rarity='legendary'] { --rarity-color: var(--c-legend); }
+
+  /* 거친 포인터(터치)의 누르는 영역 — 누를 수 있는 요소의 누르는 영역을 보이는 크기는 그대로 둔 채 44px 이상으로 넓힌다.
+     보이지 않는 ::after가 요소 가운데에서 max(요소 크기, 44px)로 펼쳐지며 요소의 일부로 눌린다.
+     clip-path로 모서리를 깎은 요소는 깎인 바깥을 누를 수 없다. */
+  @media (pointer: coarse) {
+    button, [role='button'] { position: relative; }
+    button::after, [role='button']::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
 }
