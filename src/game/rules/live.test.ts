@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
+import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, movedAtOf, nextGlide, parseClientMessage } from './live';
 
 describe('parseClientMessage', () => {
   it('낚싯줄을 드리웠으면 찌 위치를 함께 받고, 형식이 틀린 찌 위치는 메시지째 버린다', () => {
@@ -105,5 +105,41 @@ describe('chatRate', () => {
       window = r.window;
     }
     expect(chatRate(window, 5).ok).toBe(false);
+  });
+});
+
+describe('formatIdle', () => {
+  it('1시간 미만은 mm:ss, 1시간 이상은 h:mm:ss로 쓴다', () => {
+    expect(formatIdle(0)).toBe('00:00');
+    expect(formatIdle(999)).toBe('00:00');
+    expect(formatIdle(1000)).toBe('00:01');
+    expect(formatIdle(59_999)).toBe('00:59');
+    expect(formatIdle(600_000)).toBe('10:00');
+    expect(formatIdle(3_599_999)).toBe('59:59');
+    expect(formatIdle(3_600_000)).toBe('1:00:00');
+    expect(formatIdle(36_000_000 + 125_000)).toBe('10:02:05');
+  });
+
+  it('음수와 유한하지 않은 값은 00:00으로 쓴다', () => {
+    expect(formatIdle(-5000)).toBe('00:00');
+    expect(formatIdle(Number.NaN)).toBe('00:00');
+  });
+});
+
+describe('movedAtOf', () => {
+  const spot = { region: 'sea', x: 1, y: 2 };
+  it('처음 본 위치와 바뀐 위치는 지금을, 같은 위치는 이전 시각을 돌려준다', () => {
+    expect(movedAtOf(null, 0, spot, 500)).toBe(500);
+    expect(movedAtOf(spot, 100, { ...spot }, 500)).toBe(100);
+    expect(movedAtOf(spot, 100, { ...spot, x: 2 }, 500)).toBe(500);
+    expect(movedAtOf(spot, 100, { ...spot, y: 3 }, 500)).toBe(500);
+    expect(movedAtOf(spot, 100, { ...spot, region: 'deep' }, 500)).toBe(500);
+  });
+});
+
+describe('방치 시간 필드', () => {
+  it('move의 idleMs는 받지 않는다(서버가 정한다)', () => {
+    expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":false,"idleMs":5}'))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: false });
   });
 });

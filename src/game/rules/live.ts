@@ -17,12 +17,12 @@ export type ClientMessage =
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look }
+export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 마지막 이동 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드)
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
-  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look }
+  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
@@ -138,4 +138,24 @@ export function nextGlide(prev: Glide | null, to: { x: number; y: number }, now:
   const from = glidePosition(prev, now);
   if (Math.hypot(target.x - from.x, target.y - from.y) > SNAP_DISTANCE) return { from: target, to: target, at: now };
   return { from, to: target, at: now };
+}
+
+/** 방치 시간 판정에 쓰는 위치 */
+export interface Spot { region: string; x: number; y: number }
+
+/**
+ * 마지막으로 위치가 바뀐 시각. 처음 본 위치이거나 지역·좌표가 바뀌었으면 now, 같으면 이전 시각이다.
+ * 서버(다른 플레이어)와 클라이언트(내 캐릭터)가 같은 판정을 쓴다.
+ */
+export function movedAtOf(prev: Spot | null, prevAt: number, next: Spot, now: number): number {
+  return prev && prev.region === next.region && prev.x === next.x && prev.y === next.y ? prevAt : now;
+}
+
+/** 방치 시간 표시. 1시간 미만은 `mm:ss`, 1시간 이상은 `h:mm:ss`다 */
+export function formatIdle(ms: number): string {
+  const total = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
+  const h = Math.floor(total / 3600);
+  const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
