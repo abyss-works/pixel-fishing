@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
@@ -41,7 +41,7 @@ import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
-import { useChat, useLive } from '../../../features/live/service/useLive';
+import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
 import AwayCard from '../overlays/away/AwayCard';
 import AwayReportModal from '../overlays/away/AwayReportModal';
@@ -130,6 +130,11 @@ export default function GameView(props: GameViewProps) {
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
+  // 미니맵의 길드원 점 — 지금 길드원(떠난 선원과 나 제외) 가운데 같은 바다에 접속한 사람
+  const guildMates = useMemo(() => {
+    const ids = new Set((guild?.members ?? []).filter(m => m.leftAt === null && m.uid !== chat.you).map(m => m.uid));
+    return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
+  }, [guild, region, chat.you]);
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
     setActionPanel(null);
@@ -218,6 +223,7 @@ export default function GameView(props: GameViewProps) {
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
                    } : undefined}
                    you={chat.you}
+                   guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
                    onOpenStats={openStats} onOpenMap={onOpenMap}

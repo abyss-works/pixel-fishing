@@ -23,6 +23,8 @@ interface HudLayoutProps {
   covered: boolean;
   onOpenStats: () => void;
   onOpenMap: () => void;
+  /** 미니맵에 그릴 같은 바다의 길드원 위치 */
+  guildMates?: () => readonly { x: number; y: number }[];
   /** 오른쪽 열 맨 위에 쌓을 알림(방치 결과 카드, 바다의 흔적 카드 등) */
   notice?: ReactNode;
   /** 미니맵 바로 위 칩 줄에서 활성 미끼 앞에 놓을 칩(바다의 접속 칩 등) */
@@ -44,7 +46,7 @@ interface HudLayoutProps {
 // 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(chips와 활성 미끼), 미니맵(바다에서만).
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
 // 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 40px 폭) 왼쪽에 붙인다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates }: HudLayoutProps) {
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   const messageFilter = useMessageFilter();
@@ -75,7 +77,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
         {scene.kind === 'region' && (
           <div className="w-full pointer-events-auto">
             <Minimap def={REGION_PACKS[scene.id]} boat={game.boat}
-                     covered={covered} onOpenMap={onOpenMap} />
+                     covered={covered} onOpenMap={onOpenMap} mates={guildMates} />
           </div>
         )}
       </div>

@@ -24,9 +24,12 @@ export function minimapView(pack: RegionPack, player: Point): Rect {
 }
 
 /** schools = 이 지역의 현재 어군(세션 배치 날짜 기준) — 어군은 미니맵에만 그린다 */
+// 길드원 점 색 — 메시지 창 길드 채팅 본문색(--c-guild)과 같은 값. 캔버스는 CSS 변수를 못 읽는다
+const GUILD_DOT = '#d9b3ff';
+
 export function renderWorldMap(
   ctx: Ctx, pack: RegionPack, schools: School[], player: Point, boat: number,
-  opts: { t?: number; view?: Rect; zoneName?: string | null } = {},
+  opts: { t?: number; view?: Rect; zoneName?: string | null; mates?: readonly Point[] } = {},
 ) {
   // 캔버스 배면 크기 = 팩 크기와 무관하게 호출자가 정한다(병합 바다는 축소 배면으로 메모리 절감).
   // view가 있으면 그 사각형만(현재 위치 기준 crop — 전체 지구 조망은 세계지도 모달 소관).
@@ -55,6 +58,12 @@ export function renderWorldMap(
   }
   // 미니맵은 축소판이라 잠금 라벨("배 N단계")을 생략한다 — 필드(drawSchools 기본값)와의 차이
   drawSchools(ctx, schools, boat, opts.t ?? 0, false, z);
+
+  // 길드원 — 길드 채팅과 같은 보라 점(어두운 테두리). 내 점보다 작게, 내 점 아래에 그린다
+  for (const m of opts.mates ?? []) {
+    R(ctx, m.x - 5 * z, m.y - 5 * z, 10 * z, 10 * z, '#0a1526');
+    R(ctx, m.x - 4 * z, m.y - 4 * z, 8 * z, 8 * z, GUILD_DOT);
+  }
 
   // 점멸 점 — 표시 크기 일정 유지(zoom 보정)
   const blink = (Math.sin((opts.t ?? 0) * 6) + 1) / 2 > 0.35;

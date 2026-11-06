@@ -5,7 +5,7 @@ import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
-import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
+import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, matesInRegion, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
 import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
@@ -125,6 +125,11 @@ export function liveFrame(region: string, now: number): {
   });
   const mine = state.you === null ? null : said.get(state.you) ?? null;
   return { others, bubble: speechOf(bubbleOf(mine, myTypingAt, now)) };
+}
+
+/** 그 바다에 접속한 길드원의 위치 — 미니맵이 그릴 때마다 부른다 */
+export function guildMatesIn(region: string, uids: ReadonlySet<string>): { uid: string; x: number; y: number }[] {
+  return matesInRegion(state, region, uids);
 }
 
 /**
