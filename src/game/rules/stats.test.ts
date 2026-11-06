@@ -139,6 +139,11 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writin
     expect(autoPenaltyHelpText()).not.toMatch(/\d/);
   });
 
+  it('문장마다 줄을 바꾼다', () => {
+    expect(powerHelpText().split('\n')).toHaveLength(2);
+    expect(autoPenaltyHelpText().split('\n')).toHaveLength(2);
+  });
+
   it('파워는 해역별 요구 차이를, 페널티는 방치의 결과를 사실로 알린다', () => {
     expect(powerHelpText()).toContain('요구하는 파워가 달라서');
     expect(autoPenaltyHelpText()).toContain('희귀한 어종이 잘 걸리지 않아요');

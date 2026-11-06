@@ -69,7 +69,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
           <CostBox>
             <CostLine have={game.gold} delta={-next.price}
                       requirement={{
-                        label: <Tip text="명성은 줄지 않아요. 이만큼 있어야 살 수 있어요.">명성</Tip>,
+                        label: <Tip text={'명성은 줄지 않아요.\n이만큼 있어야 살 수 있어요.'}>명성</Tip>,
                         need: next.fameReq, have: game.fame,
                       }} />
           </CostBox>

@@ -121,7 +121,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex: fullDex }));
     const buttons = await screen.findAllByRole('button', { name: '수주' });
     await waitFor(() => expect(buttons[0]).not.toBeDisabled());
-    expect(tipOfButton(buttons[0])).toBe('수주한 뒤에 잡은 물고기부터 세요. 물고기는 가방에 남아요.');
+    expect(tipOfButton(buttons[0])).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
   });
 
   it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 납품할 수 있다', async () => {
@@ -227,7 +227,7 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
-    expect(tipOf(await screen.findByText('도전권'))).toMatch(/흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
+    expect(tipOf(await screen.findByText('도전권'))).toMatch(/흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });

@@ -52,15 +52,15 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
         <RodStatLine label="바 시간">{axes.sweep.value.toFixed(2)}초</RodStatLine>
         <RodStatLine label="입질 최소 대기"><StatValue stat={effectiveBite.min} unit="초" /></RodStatLine>
         <RodStatLine label="입질 최대 대기"><StatValue stat={effectiveBite.max} unit="초" /></RodStatLine>
-        <RodStatLine label={<Tip text="노란 영역이 바 폭에서 차지하는 크기예요. 가운데 빨간 영역도 포함해요. 요구 파워를 넘을수록 넓어져요.">GOOD 영역</Tip>}>
+        <RodStatLine label={<Tip text={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n요구 파워를 넘을수록 넓어져요.'}>GOOD 영역</Tip>}>
           {goodText(row)}
         </RodStatLine>
       </ul>
       <ul className="flex flex-col">
-        <RodStatLine label={<Tip text={`가운데에 열리는 빨간 영역이에요. 파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`}>PERFECT 영역</Tip>}>
+        <RodStatLine label={<Tip text={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`}>PERFECT 영역</Tip>}>
           {perfectText(row)}
         </RodStatLine>
-        <RodStatLine label={<Tip text={`해역 요구 파워를 넘을수록 직접 낚을 때 희귀한 물고기가 더 잘 걸려요. 초과 ${MANUAL_POWER_BONUS.step}마다 ×${MANUAL_POWER_BONUS.perStep}씩, 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`}>수동 확률 보정</Tip>}>
+        <RodStatLine label={<Tip text={`해역 요구 파워를 넘을수록 직접 낚을 때 희귀한 물고기가 더 잘 걸려요.\n초과 ${MANUAL_POWER_BONUS.step}마다 ×${MANUAL_POWER_BONUS.perStep}씩, 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`}>수동 확률 보정</Tip>}>
           ×{manualBonus.value.toFixed(1)}
         </RodStatLine>
         <RodStatLine label={<Tip text={autoPenaltyHelpText()}>방치 낚시 페널티</Tip>}>
