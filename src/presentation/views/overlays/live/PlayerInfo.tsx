@@ -60,7 +60,7 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
   const [reported, setReported] = useState(false);
 
   if (loading) return <Note>정보를 불러오는 중이에요.</Note>;
-  if (failed || !profile) return <Note tone="warn">정보를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>;
+  if (failed || !profile) return <Note tone="warn">정보를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>;
 
   const name = profile.nickname ?? target.nick;
   const relation = friends.groups ? friendRelation(friends.groups, target.uid) : null;

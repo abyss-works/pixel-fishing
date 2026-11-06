@@ -49,7 +49,7 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose}>
         <div className="flex flex-col gap-3">
-          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>
+          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
             : !view ? <Note>초대를 불러오는 중이에요.</Note>
             : view.state === 'bad' ? (
               <>

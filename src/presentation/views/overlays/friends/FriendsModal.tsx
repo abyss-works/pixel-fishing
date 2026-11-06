@@ -55,7 +55,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
@@ -85,7 +85,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
                          setRemoving(null);
                          void run({ op: 'remove', uid: target.uid }, () => setToast(`${nameOf(target)} 님과 친구를 끊었어요.`));
                        }}>
-          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요? 다시 친구가 되려면 요청을 새로 보내야 해요.</p>
+          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요?<br />다시 친구가 되려면 요청을 새로 보내야 해요.</p>
         </ConfirmDialog>
       )}
     </Modal>
@@ -131,7 +131,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
         </table>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
-          {pending ?? <Note>아직 친구가 없어요. 요청 탭에서 닉네임으로 요청해 보세요.</Note>}
+          {pending ?? <Note>아직 친구가 없어요.<br />요청 탭에서 닉네임으로 요청해 보세요.</Note>}
         </div>
       )}
     </Inset>
