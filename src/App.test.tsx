@@ -65,6 +65,9 @@ function clickFurniture(id: string) {
 }
 
 const clickTab = (label: string | RegExp) => fireEvent.click(screen.getByRole('button', { name: label }));
+/** 설정 탭이 창을 여는 줄 버튼 — 사이드바 탭과 이름이 같을 수 있어 눌림 상태(aria-pressed)를 가진 쪽을 고른다 */
+const openerButton = (name: string) =>
+  screen.getAllByRole('button', { name }).find(b => b.hasAttribute('aria-pressed'))!;
 
 beforeEach(() => {
   localStorage.clear();
@@ -662,47 +665,58 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(hud()).toContain('가방 1 (');
   });
 
-  it('설정 탭은 계정 → 화면 → 알림 → 데이터 → 개발자에게 → 패치노트 순서다', () => {
+  it('설정 탭은 창을 여는 줄 버튼 넷을 설정, 코드 입력, 개발자에게, 패치노트 순서로 둔다', () => {
     render(<App />);
     clickTab('설정');
-    const titles = [...document.querySelectorAll('h4')].map(h => h.textContent);
-    expect(titles).toEqual(['계정', '화면', '알림', '데이터', '개발자에게', '패치노트']);
+    expect(openerButton('코드 입력').parentElement).toHaveTextContent(/^설정코드 입력개발자에게패치노트$/);
   });
 
-  it('알림을 지원하지 않는 브라우저에서는 조우 알림을 켤 수 없고 이유만 보인다', () => {
+  it('연 창이 떠 있는 동안 그 버튼은 눌린 모양이고, 닫으면 돌아온다', () => {
     render(<App />);
     clickTab('설정');
-    expect(screen.getByText('이 브라우저는 알림을 지원하지 않아요')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '알림 켜기' })).toBeNull();
+    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(openerButton('설정'));
+    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'true');
+    expect(openerButton('코드 입력')).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('조우 알림 켜기는 브라우저 권한을 묻고, 허용되면 켜짐으로 바뀐다', async () => {
+  it('알림을 지원하지 않는 브라우저에서는 두 알림 토글이 흐려져 켤 수 없다', () => {
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(openerButton('설정'));
+    expect(screen.getByRole('button', { name: '네임드 조우' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '업데이트' })).toBeDisabled();
+  });
+
+  it('알림 켜기는 브라우저 권한을 묻고, 허용되면 그 알림만 켜짐으로 바뀐다', async () => {
     const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
     vi.stubGlobal('Notification', { permission: 'default', requestPermission });
     try {
       render(<App />);
       clickTab('설정');
-      fireEvent.click(screen.getByRole('button', { name: '알림 켜기' }));
-      expect(await screen.findByText('켜짐 · 다른 화면을 볼 때 알려 줘요')).toBeInTheDocument();
+      fireEvent.click(openerButton('설정'));
+      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'true'));
       expect(requestPermission).toHaveBeenCalledTimes(1);
-      fireEvent.click(screen.getByRole('button', { name: '알림 끄기' }));
-      expect(screen.getByText('꺼짐')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '네임드 조우' })).toHaveAttribute('aria-pressed', 'false');
+      expect(localStorage.getItem('pf-update-alert')).toBe('on');
+      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
+      expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'false');
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('화면 설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남고 요약에 보인다', () => {
+  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
     render(<App />);
     clickTab('설정');
-    expect(screen.getByText('v1 · legacy')).toBeInTheDocument(); // 요약 줄
-    fireEvent.click(screen.getByRole('button', { name: '화면 설정' }));
-    expect(screen.getByRole('dialog', { name: '화면' })).toBeInTheDocument();
+    fireEvent.click(openerButton('설정'));
+    expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^v1/ })).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByRole('radio', { name: /^v2/ }));
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.getByText('v2 · beta')).toBeInTheDocument();
   });
 
   it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(소유자 전용)에 있다', () => {
@@ -842,8 +856,8 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     seed({});
     render(<App />);
     clickTab('설정');
-    fireEvent.click(screen.getByText('편지 쓰기'));
-    expect(screen.getByText('개발자에게 편지')).toBeInTheDocument();
+    fireEvent.click(openerButton('개발자에게'));
+    expect(screen.getByRole('dialog', { name: '개발자에게' })).toBeInTheDocument();
     // 빈 글은 못 보낸다
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
   });
@@ -852,7 +866,7 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     seed({});
     render(<App />);
     clickTab('설정');
-    fireEvent.click(screen.getByText('편지 쓰기'));
+    fireEvent.click(openerButton('개발자에게'));
     // 보내기는 primary가 아니다 — 전폭(full)이면 버튼행 안에서 닫기를 밀고 줄바꿈시킨다
     expect(screen.getByRole('button', { name: '보내기' })).not.toHaveClass('primary');
   });
@@ -1299,6 +1313,7 @@ describe('패치노트 (설정 탭)', () => {
   it('설정 탭에 버전별 아코디언 패치노트 — 범주 뱃지 포함', () => {
     render(<App />);
     clickTab('설정');
+    fireEvent.click(openerButton('패치노트'));
     expect(screen.getByText(/방치 낚시가 좋아졌어요/)).toBeInTheDocument();
     expect(screen.getByText(/클라우드 저장이 생겼어요/)).toBeInTheDocument();
     expect(screen.getAllByText('UI').length).toBeGreaterThan(0); // 범주 뱃지
@@ -1594,6 +1609,7 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     seed({ fame: 120 });
     render(<App />);
     clickTab('설정');
+    fireEvent.click(openerButton('패치노트'));
     fireEvent.click(screen.getByRole('button', { name: '이번 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
