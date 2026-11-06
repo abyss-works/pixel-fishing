@@ -15,6 +15,7 @@ import AccountModal from '../../../overlays/account/AccountModal';
 import CodeModal from '../../../overlays/codes/CodeModal';
 import LetterModal from '../../../overlays/letter/LetterModal';
 import PatchNotesModal from '../../../overlays/patchnotes/PatchNotesModal';
+import Tip from '../../../../ui/Tip';
 import SettingsModal from '../../../overlays/settings/SettingsModal';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 
@@ -73,7 +74,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       <div className="flex items-center gap-1.5 text-2xs text-text-dim opacity-70 mt-auto pt-2">
         v{APP_VERSION}
         <Divider vertical />
-        <span className="pf-accent" title="배포 식별자 (커밋 SHA)">{BUILD_LABEL}</span>
+        <Tip text="배포 식별자 (커밋 SHA)" className="pf-accent">{BUILD_LABEL}</Tip>
       </div>
     </div>
   );

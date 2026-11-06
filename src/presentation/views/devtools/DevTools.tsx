@@ -19,6 +19,7 @@ import IconButton from '../../ui/IconButton';
 import PillButton from '../../ui/PillButton';
 import PixelIcon from '../../ui/PixelIcon';
 import Frame from '../../ui/Frame';
+import Tip from '../../ui/Tip';
 import Gated from '../../ui/Gated';
 import LinkButton from '../../ui/LinkButton';
 import Note from '../../ui/Note';
@@ -121,12 +122,14 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
   return (
     <>
-      <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open} title="개발 도구 (F9)"
-             onClick={() => setOpen(o => !o)}
-             className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
-               open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
-        <PixelIcon glyph="key" size={20} />
-      </Frame>
+      <Tip wraps text="개발 도구 (F9)">
+        <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open}
+               onClick={() => setOpen(o => !o)}
+               className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
+                 open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
+          <PixelIcon glyph="key" size={20} />
+        </Frame>
+      </Tip>
 
       {open && (
         <Frame role="dialog" aria-label="개발 도구"

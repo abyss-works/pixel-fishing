@@ -20,6 +20,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
+import Tip from '../../../ui/Tip';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { RarityText } from '../../../ui/fish/RarityTag';
@@ -182,9 +183,9 @@ function SellPanel({ game, onSell, onClose, busy }: {
               <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                 <td>
                   {locked ? (
-                    <span className="text-text-dim cursor-default" title="잠금은 가방 탭에서 풀 수 있어요">
+                    <Tip plain text="잠금은 가방 탭에서 풀 수 있어요" className="text-text-dim">
                       <PixelIcon glyph="lock" size={13} />
-                    </span>
+                    </Tip>
                   ) : (
                     <IconButton glyph={glyph} size={13}
                               tone={on > 0 ? 'gold' : 'dim'}
