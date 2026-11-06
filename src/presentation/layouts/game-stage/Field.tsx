@@ -115,8 +115,9 @@ export default function Field({
     return {
       region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
       line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
+      look: game.look,
     };
-  }, [engine, region]);
+  }, [engine, region, game.look]);
   useLivePosition(readPosition);
   useEffect(() => {
     engine.setLiveSource(now => liveFrame(region, now));

@@ -191,14 +191,14 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           if (isBinary) return;
           const msg = parseClientMessage(data.toString());
           if (msg?.t === 'move') {
-            const { region, x, y, dir, line, bob } = msg;
+            const { region, x, y, dir, line, bob, look } = msg;
             const zone = msg.zone ?? null;
             if (!conn.presence) {
-              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}) };
+              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
               broadcast(ws, { t: 'join', presence: conn.presence });
             } else {
-              Object.assign(conn.presence, { region, zone, x, y, dir, line, bob });
-              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...(bob ? { bob } : {}) });
+              Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
+              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
             }
             conn.positionDirty = true;
             if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);

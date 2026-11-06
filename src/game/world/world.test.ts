@@ -544,7 +544,7 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   });
   it('시설 순서 — 집과 항구의 메뉴 구성', () => {
     const ids = (id: keyof typeof BASE_PACKS) => BASE_PACKS[id].furniture.map(f => f.id);
-    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'exit']);
+    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'wardrobe', 'exit']);
     const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'ferry', 'exit'];
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);

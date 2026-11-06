@@ -40,7 +40,7 @@ function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture;
 const SECTIONS = ['정보', '상점', '이동'] as const;
 const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
   rank: '정보', bounty: '정보',
-  rod: '상점', boat: '상점', shop: '상점', sell: '상점',
+  rod: '상점', boat: '상점', shop: '상점', sell: '상점', wardrobe: '상점',
   travel: '이동', ferry: '이동', exit: '이동',
 };
 

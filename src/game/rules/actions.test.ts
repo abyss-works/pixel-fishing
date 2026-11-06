@@ -661,3 +661,48 @@ describe('seeTutorial', () => {
     expect(applyAction(seed(), { type: 'seeTutorial', id: 3 }, deps())).toEqual({ ok: false, error: 'bad-request' });
   });
 });
+
+describe('옷장 액션', () => {
+  it('changeClothes: 웃옷·바지 번호만 바꾸고 모자는 유지한다', () => {
+    const before = seed({ hats: ['cap-red'], look: { shirt: 0, pants: 0, hat: 'cap-red' } });
+    const out = applyAction(before, { type: 'changeClothes', shirt: 6, pants: 1 }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.look).toEqual({ shirt: 6, pants: 1, hat: 'cap-red' });
+    expect(out.state.gold).toBe(before.gold);
+  });
+
+  it('changeClothes: 범위 밖 번호는 거부하고 상태를 바꾸지 않는다', () => {
+    expect(applyAction(seed(), { type: 'changeClothes', shirt: 12, pants: 0 }, deps())).toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'changeClothes', shirt: 0, pants: 'x' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('buyHat: 골드를 가격만큼 빼고 가진 모자에 더한다 (쓰지는 않는다)', () => {
+    const out = applyAction(seed({ gold: 120_000 }), { type: 'buyHat', hat: 'cap-yellow' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(20_000);
+    expect(out.state.hats).toEqual(['cap-yellow']);
+    expect(out.state.look.hat).toBeNull();
+    expect(out.events).toEqual([{ type: 'buyHat', payload: { hat: 'cap-yellow', cost: 100_000 } }]);
+  });
+
+  it('buyHat: 골드 부족·이미 보유·없는 모자는 거부한다', () => {
+    expect(applyAction(seed({ gold: 49_999 }), { type: 'buyHat', hat: 'cap-red' }, deps())).toEqual({ ok: false, error: 'not-enough-gold' });
+    expect(applyAction(seed({ gold: 1e9, hats: ['cap-red'] }), { type: 'buyHat', hat: 'cap-red' }, deps())).toEqual({ ok: false, error: 'hat-owned' });
+    expect(applyAction(seed({ gold: 1e9 }), { type: 'buyHat', hat: 'x' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('wearHat: 가진 모자를 쓰고 null이면 벗는다', () => {
+    const owned = seed({ hats: ['cap-black'] });
+    const worn = applyAction(owned, { type: 'wearHat', hat: 'cap-black' }, deps());
+    if (!worn.ok) throw new Error(worn.error);
+    expect(worn.state.look.hat).toBe('cap-black');
+    const off = applyAction(worn.state, { type: 'wearHat', hat: null }, deps());
+    if (!off.ok) throw new Error(off.error);
+    expect(off.state.look.hat).toBeNull();
+  });
+
+  it('wearHat: 갖지 않은 모자와 없는 id는 거부한다', () => {
+    expect(applyAction(seed(), { type: 'wearHat', hat: 'cap-black' }, deps())).toEqual({ ok: false, error: 'hat-not-owned' });
+    expect(applyAction(seed(), { type: 'wearHat', hat: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+});

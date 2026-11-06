@@ -26,7 +26,7 @@ export default function TooltipBubble({ anchor, className, children }: {
   return createPortal(
     <div ref={ref} role="tooltip"
          className={cx('fixed z-20 w-max max-w-[280px] px-2 py-1.5 rounded-sm border border-line bg-bg shadow-panel',
-           'text-xs leading-[1.6] text-text-dim pointer-events-none animate-fade-in', className)}
+           'text-xs leading-[1.6] text-text-dim whitespace-pre-line pointer-events-none animate-fade-in', className)}
          // 크기를 재기 전 한 번은 보이지 않게 요소 자리에 둔다
          style={pos ? { left: pos.x, top: pos.y } : { left: anchor?.left ?? 0, top: anchor?.bottom ?? 0, visibility: 'hidden' }}>
       {children}

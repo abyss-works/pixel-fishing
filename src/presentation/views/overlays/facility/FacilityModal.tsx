@@ -10,6 +10,7 @@ import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { BaseId } from '../../../../game/content/places';
 import { isBountyPort } from '../../../../game/content/bounties';
+import { hatById } from '../../../../game/content/wardrobe';
 import BountyPanel from '../bounty/BountyPanel';
 import Button from '../../../ui/Button';
 import CostLine from '../../../ui/CostLine';
@@ -24,9 +25,10 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import BoatPanel from './BoatPanel';
 import RodPanel from './RodPanel';
+import WardrobePanel from '../wardrobe/WardrobePanel';
 import ShopPanel from './ShopPanel';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
-export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | null;
+export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | 'wardrobe' | null;
 
 interface Props {
   panel: Exclude<ActionPanel, null>;
@@ -44,11 +46,13 @@ interface Props {
 /** 수배판 창 높이: 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
     좁은 화면에서는 내용 높이를 따른다 */
 const BOUNTY_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
+/** 옷장 창 높이: 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px로 고정한다. 좁은 화면에서는 내용 높이를 따른다 */
+const WARDROBE_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
 // 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
-// 수배판은 탭이 있는 창이라 680 폭에 높이를 고정한다.
+// 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
 export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid }: Props) {
   const [busy, setBusy] = useState(false);
@@ -63,8 +67,8 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
-    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty'}
-           className={panel === 'bounty' ? BOUNTY_HEIGHT : undefined} onClose={onClose}>
+    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty' || panel === 'wardrobe'}
+           className={panel === 'bounty' ? BOUNTY_HEIGHT : panel === 'wardrobe' ? WARDROBE_HEIGHT : undefined} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -92,6 +96,18 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
         <ShopPanel game={game} onClose={onClose} busy={busy}
           onBuy={(baitId, count) => run({ type: 'buyBait', bait: baitId, count }, () => {
             setToast('미끼를 구매했어요! 가방 탭의 아이템에서 켤 수 있어요.', 'gold');
+          })} />
+      )}
+      {panel === 'wardrobe' && (
+        <WardrobePanel game={game} busy={busy} onClose={onClose}
+          onChangeClothes={(shirt, pants) => run({ type: 'changeClothes', shirt, pants }, () => {
+            setToast('옷을 갈아입었어요.');
+          })}
+          onBuyHat={hatId => run({ type: 'buyHat', hat: hatId }, () => {
+            setToast(`${josa(hatById(hatId)?.name ?? '', '을/를')} 샀어요! 이제 쓸 수 있어요.`, 'gold');
+          })}
+          onWearHat={hatId => run({ type: 'wearHat', hat: hatId }, () => {
+            setToast(hatId === null ? '모자를 벗었어요.' : `${josa(hatById(hatId)?.name ?? '', '을/를')} 썼어요.`);
           })} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (

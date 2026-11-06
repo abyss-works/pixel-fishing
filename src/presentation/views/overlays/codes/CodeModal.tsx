@@ -5,7 +5,7 @@ import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
-import Note from '../../../ui/Note';
+import Tip from '../../../ui/Tip';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
 import { fmtGold } from '../../../ui/format';
@@ -73,13 +73,15 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
     });
 
   return (
-    <Modal title="코드 입력" onClose={onClose}>
-      <SectionTitle>쿠폰</SectionTitle>
-      <Note size="xs" className="my-1">공지나 이벤트로 받은 쿠폰 코드를 넣으면 골드를 받아요. 코드마다 한 번만 쓸 수 있어요.</Note>
+    <Modal title="코드 입력" narrow onClose={onClose}>
+      <SectionTitle>
+        <Tip text={'공지나 이벤트로 받은 쿠폰 코드를 넣으면 골드를 받아요.\n코드마다 한 번만 쓸 수 있어요.'}>쿠폰</Tip>
+      </SectionTitle>
       <CodeField label="쿠폰 코드" placeholder="예) 출항준비" submit={redeemCoupon} />
 
-      <SectionTitle>지원 코드</SectionTitle>
-      <Note size="xs" className="my-1">운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요. 한 번만 쓸 수 있어요.</Note>
+      <SectionTitle>
+        <Tip text={'운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요.\n한 번만 쓸 수 있어요.'}>지원 코드</Tip>
+      </SectionTitle>
       <CodeField label="지원 코드" placeholder="받은 코드를 붙여 넣기" submit={claimRelief} />
     </Modal>
   );

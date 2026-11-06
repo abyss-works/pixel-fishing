@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
+import type { Look } from '../../../game/content/wardrobe';
 import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
@@ -113,15 +114,15 @@ const speechOf = (b: Bubble | null): Speech => b ? (b.kind === 'chat' ? b.text :
  * 내 말풍선은 서버가 돌려준 내 월드 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
  */
 export function liveFrame(region: string, now: number): {
-  others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech }[];
+  others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech; look?: Look }[];
   bubble: Speech;
 } {
   const wall = Date.now();
   const others = othersInRegion(state, region).map(o => {
-    const { uid, x, y, nick, line, bob } = o.presence;
+    const { uid, x, y, nick, line, bob, look } = o.presence;
     const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
     const bubble = speechOf(bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now));
-    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble };
+    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble, ...(look ? { look } : {}) };
   });
   const mine = state.you === null ? null : said.get(state.you) ?? null;
   return { others, bubble: speechOf(bubbleOf(mine, myTypingAt, now)) };

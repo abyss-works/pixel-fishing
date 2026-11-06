@@ -3,23 +3,26 @@
 //
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 
+import { safeLook } from '../content/wardrobe.js';
+import type { Look } from '../content/wardrobe.js';
+
 export type Dir = 0 | 1 | 2 | 3;
 /** 찌가 떠 있는 자리(어군 위치) — 낚싯줄을 드리웠을 때만 보낸다 */
 export interface Bob { x: number; y: number }
 
 export type ClientMessage =
-  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치
+  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치, look: 외형(처음과 바뀐 때만)
   | { t: 'stop' }
   | { t: 'chat'; text: string; room?: 'guild' } // room이 없으면 월드 채팅, guild면 내 길드 채팅
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
+export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look }
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
-  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
+  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
@@ -69,6 +72,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return {
         t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line,
         ...(isBob(o.bob) ? { bob: { x: o.bob.x, y: o.bob.y } } : {}),
+        // 외형은 범위를 검사하고, 맞지 않으면 기본 외형으로 바꿔 전한다
+        ...(o.look !== undefined ? { look: safeLook(o.look) } : {}),
       };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };

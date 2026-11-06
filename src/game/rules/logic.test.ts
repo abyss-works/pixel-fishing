@@ -878,6 +878,24 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(mig({ v: 8, tutorials: ['village', 'nope', 3, 'sea'] } as never).tutorials).toEqual(['village', 'sea']);
   });
 
+  it('migrate: look·hats 부재 → 기본 외형과 빈 목록', () => {
+    const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
+    expect(st.look).toEqual({ shirt: 0, pants: 0, hat: null });
+    expect(st.hats).toEqual([]);
+  });
+
+  it('migrate: look·hats는 읽어 살리고 모르는 모자 id와 중복은 버린다', () => {
+    const st = mig({ v: 8, look: { shirt: 3, pants: 4, hat: 'cap-red' }, hats: ['cap-red', 'nope', 3, 'cap-red', 'cap-blue'] } as never);
+    expect(st.look).toEqual({ shirt: 3, pants: 4, hat: 'cap-red' });
+    expect(st.hats).toEqual(['cap-red', 'cap-blue']);
+  });
+
+  it('migrate: 범위 밖 외형은 기본 외형이고, 갖지 않은 모자는 벗긴다', () => {
+    expect(mig({ v: 8, look: { shirt: 99, pants: 0, hat: null } } as never).look).toEqual({ shirt: 0, pants: 0, hat: null });
+    expect(mig({ v: 8, look: { shirt: 2, pants: 2, hat: 'cap-red' }, hats: [] } as never).look)
+      .toEqual({ shirt: 2, pants: 2, hat: null });
+  });
+
   it('migrate: items/activeBait 부재 → 기본값으로 채워진다 (마이그레이션 스텝 없음)', () => {
     const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.items).toEqual({});
