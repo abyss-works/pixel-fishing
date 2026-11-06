@@ -16,6 +16,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.17.1',
+    date: '2026-11-06',
+    summary: '모바일 탭과 자동 잠금을 고쳤어요',
+    notes: [
+      { tag: 'UI', text: '모바일에서 열린 가방이나 도감 탭을 다시 누르면 PC처럼 보기가 바뀌어요.' },
+      { tag: 'UI', text: '도감과 가방의 지역 줄에 생기던 작은 스크롤을 없앴어요.' },
+      { tag: '기타', text: '자동 잠금을 처음 눌렀을 때 정리가 끝나지 않던 문제를 고쳤어요.' },
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-11-06',
     summary: '모바일에서도 편하게 즐기고, 옷장이 생겼어요',

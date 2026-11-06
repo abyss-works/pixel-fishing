@@ -6,7 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
-import { DEX_VIEWS, TAB_ORDER, type DexView, type TabKey } from './tabs';
+import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -76,10 +76,10 @@ export default function GameTabs(props: GameTabsProps) {
     setActiveTab(tab);
   };
 
-  // 모바일은 탭을 누르면 시트가 열리고, 열린 시트에서 같은 탭을 다시 누르면 닫힌다(보기 순환 대신)
+  // 모바일은 탭을 누르면 시트가 열린다. 열린 시트에서 같은 탭을 다시 누르면 보기가 있는 탭은 보기를 순환하고, 없는 탭은 닫힌다
   const onTab = (tab: TabKey) => {
     if (!mobile) { select(tab); return; }
-    const next = pressSheetTab({ open: props.sheetOpen, active: activeTab }, tab);
+    const next = pressSheetTab({ open: props.sheetOpen, active: activeTab }, tab, tabHasViews);
     props.onSheetOpenChange(next.open);
     if (next.select) select(tab);
   };

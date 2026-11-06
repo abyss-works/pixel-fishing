@@ -4,7 +4,7 @@
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, sellSelected, setLocked, tryBuyBoat, tryUpgrade,
+  redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, usableBait, nextDexRec, baitCost, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
@@ -48,6 +48,7 @@ export type GameAction =
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
   | { type: 'setLocked'; uids: string[]; locked: boolean }
+  | { type: 'autoLock' }                        // 자동 잠금 — 계획은 서버가 현재 가방으로 계산한다
   | { type: 'travel'; to: LocationRef }
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
@@ -73,7 +74,7 @@ export type GameAction =
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  setLocked: true, travel: true, sendLetter: true, redeemCoupon: true,
+  setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
@@ -477,6 +478,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         result: { type: 'none' }, events: [],
       };
     }
+    case 'autoLock':
+      return { ok: true, state: applyAutoLock(state), result: { type: 'none' }, events: [] };
     case 'redeemCoupon': {
       if (typeof action.code !== 'string') return { ok: false, error: 'bad-request' };
       const code = action.code.trim();
