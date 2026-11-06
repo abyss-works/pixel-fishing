@@ -53,7 +53,7 @@ export function fameEv(spotId: SpotId, o: DrawOptions): number {
   return den > 0 ? num / den : 0;
 }
 
-/** 이 수역의 실효 등급 예산 — 오버라이드 있으면 그 값, 없으면 글로벌 표(drawRows의 정본 사용).
+/** 이 수역의 실효 등급 예산 — 수역 덮어쓰기 또는 지역 단계 프리셋의 만분율 가중치(drawRows의 정본 사용).
  *  부재 등급은 행 자체가 없어 누락된다(재균등은 확률에 흡수됨). */
 export function effectiveBudgets(spotId: SpotId): Partial<Record<RarityId, number>> {
   const out: Partial<Record<RarityId, number>> = {};
@@ -68,7 +68,7 @@ export interface SpotBalance {
   name: string;
   powerReq: number;
   boatTier: number;
-  /** 수역 등급 예산 오버라이드(spots.rarityWeight) — null이면 글로벌 표 */
+  /** 수역 등급 가중치 덮어쓰기(희귀·영웅·전설 만분율) — null이면 지역 단계 프리셋 */
   override: Partial<Record<RarityId, number>> | null;
   /** 실효 예산(오버라이드 반영, 부재 등급은 키 없음) */
   budgets: Partial<Record<RarityId, number>>;

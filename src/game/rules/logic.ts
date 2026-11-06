@@ -10,7 +10,8 @@ import {
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
-import { rarityWeightOf, spotById } from '../content/spots.js';
+import { spotById } from '../content/spots.js';
+import { rarityWeightOf, stableRarityShare } from '../content/rarityWeights.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef, RegionId } from '../content/places.js';
 import { FISH } from '../content/fish.js';
@@ -37,7 +38,8 @@ import type { FirstCatch } from './firstCatch.js';
 export { JUDGMENT_MULT };
 export { RARITY, RARITY_ORDER } from '../content/rarity.js';
 export type { Rarity, RarityId } from '../content/rarity.js';
-export { SPOTS, powerReqOf, rarityWeightOf } from '../content/spots.js';
+export { SPOTS, powerReqOf } from '../content/spots.js';
+export { rarityWeightOf } from '../content/rarityWeights.js';
 export type { Spot, SpotId } from '../content/spots.js';
 export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
@@ -146,7 +148,7 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
 
 // 추첨 — 모든 판정이 가중치 추첨(pickWeighted)이다. 캐치 한 번의 순서:
 //   ① 네임드 조우(namedWeightsOf) → ② 등급(rarityDrawWeights) → ③ 어종(fishDrawWeight) → 크기 → ④ 폼(mutationWeightsOf)
-//   등급 가중치는 해역의 **절대치**다(spots.rarityWeight, 없는 등급은 전역 RARITY.weight). 분모는 그 해역에
+//   등급 가중치는 해역의 **절대치**다(수역 덮어쓰기, 없으면 지역 단계 프리셋 — 만분율, 일반은 나머지). 분모는 그 해역에
 //   있는 등급 가중치의 합이라 해역마다 다르다. 일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·
 //   해역 게이트·수동 보정)은 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
 //   열람용으로 등급×어종을 한 줄로 펼친 값은 drawRows·goldEV가 쓴다.
@@ -314,10 +316,8 @@ export function rarityShareOf(spotId: SpotId, rarity: RarityId): number {
   return rarityWeightOf(spotId, rarity) / total;
 }
 
-/** 전역 기본 등급 확률 — 전역 등급 가중치 / 전역 가중치 합 */
-export function globalRarityShare(rarity: RarityId): number {
-  return RARITY[rarity].weight / RARITY_ORDER.reduce((sum, r) => sum + RARITY[r].weight, 0);
-}
+/** 전역 기본 등급 확률 — 안정화 프리셋 기준 */
+export const globalRarityShare = (rarity: RarityId): number => stableRarityShare(rarity);
 
 /** 수역 추첨 모델 열람 — 관리자 대시보드 단일 출처(rollFish와 같은 산식, 다이얼 기본 중립).
  *  등급 실질확률이 어종 수와 무관하게 설계 가중치 비율과 일치함을 보여주는 게 절반의 가치다. */

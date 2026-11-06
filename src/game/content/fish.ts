@@ -203,7 +203,7 @@ export const FISH: readonly Fish[] = [
       lore: '더 짙은 녹음 속에서 울었다는 개체. 울음소리만 전해진다.' } },
   // ── 인도양 (향신료의 바다 · 따뜻한 연안) — 2026-08-27 관리자 시뮬 확정분 반영:
   //    만새기·꽁치 weight 2(해당 수역 흔한 어종 대표), 마카라 17,500 / 눈다랑어 3,400 /
-  //    고래상어 3,800. 등급 예산 ×2 상향은 수역 데이터 rarityWeight가 단일 출처. ──
+  //    고래상어 3,800. 등급 가중치는 수역 데이터의 rarityWeight 덮어쓰기가 단일 출처. ──
   { id: 'ribbonfish', name: '만새기',     spot: 'indian', rarity: 'common',    price: 29,   color: '#b0bec5', shape: 'ribbon',
     lore: '칼 같은 몸으로 파도를 가르며 떼로 돈다.',
     variant: { name: '은광 만새기', color: '#eceff1',
