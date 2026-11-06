@@ -5,6 +5,7 @@ import { baitById } from '../../../game/content/baits';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
 import type { FilterChannel, MessageFilter } from '../../../features/display/model/messageFilter';
+import { setMinimapVisible, useMinimapVisible } from '../../../features/display/service/minimapVisible';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
 import type { MessageChannel } from '../../ui/hud/messageFeed';
@@ -12,6 +13,7 @@ import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
 import ResourceBar from '../../ui/hud/ResourceBar';
 import TimeBadge from '../../ui/hud/TimeBadge';
+import PixelIcon from '../../ui/PixelIcon';
 import Tip from '../../ui/Tip';
 import { useMobileLayout } from '../useMobileLayout';
 
@@ -63,6 +65,8 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
   const mobile = useMobileLayout();
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
+  const minimapVisible = useMinimapVisible();
+  const hasMinimap = scene.kind === 'region';
 
   return (
     <>
@@ -75,7 +79,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
                         flex flex-col items-end gap-2 pointer-events-none
                         mobile:static mobile:w-[156px]">
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
-          {(chips || activeBait) && (
+          {(chips || activeBait || (hasMinimap && !minimapVisible)) && (
             <div className="flex items-center justify-end gap-1.5 pointer-events-auto">
               {chips}
               {activeBait && (
@@ -89,12 +93,20 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
                   </HudChip>
                 </Tip>
               )}
+              {hasMinimap && !minimapVisible && (
+                <Tip wraps className="flex" text="미니맵 보이기">
+                  <HudChip aria-label="미니맵 보이기" onClick={() => setMinimapVisible(true)}>
+                    <PixelIcon glyph="plus" size={10} />
+                  </HudChip>
+                </Tip>
+              )}
             </div>
           )}
-          {scene.kind === 'region' && (
+          {scene.kind === 'region' && minimapVisible && (
             <div className="w-full pointer-events-auto">
               <Minimap def={REGION_PACKS[scene.id]} boat={game.boat}
-                       covered={covered} onOpenMap={onOpenMap} mates={guildMates} />
+                       covered={covered} onOpenMap={onOpenMap} mates={guildMates}
+                       onHide={() => setMinimapVisible(false)} />
             </div>
           )}
         </div>
