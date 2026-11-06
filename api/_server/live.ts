@@ -9,7 +9,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import {
   CHAT_RATE_WINDOW_MS, CHAT_RECENT, chatRate, chatText,
   LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
-  parseClientMessage,
+  movedAtOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, Presence, ServerMessage } from '../../src/game/rules/live.js';
 
@@ -79,6 +79,8 @@ interface Conn {
   user: LiveUser;
   /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
   presence: Presence | null;
+  /** 마지막으로 위치가 바뀐 서버 시각. 첫 위치를 받기 전에는 0이다 */
+  movedAt: number;
   /** 이 사용자가 차단한 사람 — 그 사람의 채팅을 이 연결에 보내지 않는다 */
   blocked: Set<string>;
   /** 지금 속한 길드 — 이 길드의 채팅을 주고받는다 */
@@ -179,7 +181,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         }
         const now = Date.now();
         const conn: Conn = {
-          user, presence: null, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
+          user, presence: null, movedAt: 0, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
           positionSavedAt: null, positionDirty: false,
         };
         conns.set(ws, conn);
@@ -193,12 +195,14 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           if (msg?.t === 'move') {
             const { region, x, y, dir, line, bob, look } = msg;
             const zone = msg.zone ?? null;
+            conn.movedAt = movedAtOf(conn.presence, conn.movedAt, { region, x, y }, at);
+            const idleMs = at - conn.movedAt;
             if (!conn.presence) {
               conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
-              broadcast(ws, { t: 'join', presence: conn.presence });
+              broadcast(ws, { t: 'join', presence: { ...conn.presence, idleMs } });
             } else {
               Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
-              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
+              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, idleMs, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
             }
             conn.positionDirty = true;
             if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
@@ -213,7 +217,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         });
         ws.on('close', () => drop(ws, conn));
         ws.on('error', () => { ws.terminate(); });
-        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [c.presence] : []));
+        const sentAt = Date.now();
+        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [{ ...c.presence, idleMs: sentAt - c.movedAt }] : []));
         send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
       });
     }).catch((err: unknown) => {

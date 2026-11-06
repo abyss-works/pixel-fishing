@@ -29,7 +29,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
         <b className="text-base text-epic truncate"><Tip text={poster}>{found && name ? name : '???'}</Tip></b>
         {!done && ticketMins !== null && (
           <span className="text-xs text-text-dim whitespace-nowrap">
-            <Tip text="흔적이 남아 있어요. 이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.">도전권</Tip>
+            <Tip text={'흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.'}>도전권</Tip>
             {' '}<span className="pf-accent text-text">{fmtMinutes(ticketMins)}</span>
           </span>
         )}

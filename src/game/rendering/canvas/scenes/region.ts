@@ -5,7 +5,7 @@
 import { R, SCALE } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
-import { drawBoat, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawIdle, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
 import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
@@ -27,6 +27,8 @@ export interface FieldView extends GearView {
   others?: OtherShipView[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
+  /** 내 머리 위 방치 시간 문자열 — 없으면 그리지 않는다 */
+  idle?: string | null;
   /** 카메라 시야 크기(월드 픽셀) — 없으면 PC 시야. 캔버스는 이 크기의 SCALE배다 */
   view?: ViewSize;
   /** 내 외형 — 없으면 기본 외형 */
@@ -96,6 +98,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.look);
   else drawPerson(ctx, v.player.x, v.player.y, v.look);
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
+  drawIdle(ctx, v.player.x, v.player.y - 24, v.idle ?? null);
   drawTimingBar(ctx, v);
 
   // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)

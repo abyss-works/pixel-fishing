@@ -74,7 +74,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
           <span className="pf-accent tracking-widest text-gold">{guild.code}</span>
           <span className="truncate text-xs text-text-dim">{url.replace(/^https?:\/\//, '')}</span>
           <Button size="sm" onClick={() => { void copy(guild.code, '길드 코드'); }}>코드 복사</Button>
-          <Tip wraps text="권유 문구와 링크를 함께 복사해요. 메신저에 붙이면 길드 미리보기가 떠요.">
+          <Tip wraps text={'권유 문구와 링크를 함께 복사해요.\n메신저에 붙이면 길드 미리보기가 떠요.'}>
             <Button size="sm" onClick={() => { void copy(inviteShareText(guild.pitch, url), '초대 링크'); }}>링크 복사</Button>
           </Tip>
         </Inset>

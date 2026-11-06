@@ -212,10 +212,10 @@ export function powerZones(state: GameState, spotId: SpotId): PowerZone {
 // 보여주고, 손으로 적은 수치는 밸런스를 바꾸는 순간 옛값으로 남는다(HelpPanel 선례).
 
 export function powerHelpText(): string {
-  return '강해질수록 입질이 빨라지고, 해역 요구 파워를 넘을수록 GOOD 영역과 PERFECT 영역이 넓어져요. '
+  return '강해질수록 입질이 빨라지고, 해역 요구 파워를 넘을수록 GOOD 영역과 PERFECT 영역이 넓어져요.\n'
     + '다만 해역마다 요구하는 파워가 달라서, 같은 낚싯대라도 해역마다 효과가 달라요.';
 }
 
 export function autoPenaltyHelpText(): string {
-  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요. 낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.';
+  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요.\n낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.';
 }

@@ -35,10 +35,10 @@ type Phase = 'intro' | 'run' | 'won' | 'lost';
 type Flash = 'hit' | 'miss' | 'idle' | null;
 type Escape = Exclude<Flash, 'hit' | null>;
 const ESCAPE_TEXT: Record<Escape, { flash: string; lost: string }> = {
-  miss: { flash: '빗나갔어요. 그림자가 멀어져요.', lost: '놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.' },
+  miss: { flash: '빗나갔어요. 그림자가 멀어져요.', lost: '놓쳤어요.\n흔적이 사라졌으니 다시 조우해야 해요.' },
   idle: {
     flash: '챔질하지 않는 사이 그림자가 멀어져요.',
-    lost: '챔질하지 않는 사이 놓쳤어요. 흔적이 사라졌으니 다시 조우해야 해요.',
+    lost: '챔질하지 않는 사이 놓쳤어요.\n흔적이 사라졌으니 다시 조우해야 해요.',
   },
 };
 
@@ -147,7 +147,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
             <span className="text-text-dim italic text-xs">{sighting}</span>
             <span>그림자가 돌아선다.</span>
             {hp < maxHp && <span className="text-text-dim text-xs">지난 결투에서 입힌 상처가 아직 아물지 않았다.</span>}
-            <span className="text-text-dim text-xs">조우하면 끝날 때까지 창을 닫을 수 없어요. 놓치면 흔적이 사라져요.</span>
+            <span className="text-text-dim text-xs">조우하면 끝날 때까지 창을 닫을 수 없어요.<br />놓치면 흔적이 사라져요.</span>
             <Button variant="primary" full onClick={() => setPhase('run')}>조우</Button>
           </>
         )}
@@ -196,7 +196,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
         )}
         {phase === 'lost' && (
           <>
-            <span>{ESCAPE_TEXT[lostBy].lost}</span>
+            <span className="whitespace-pre-line">{ESCAPE_TEXT[lostBy].lost}</span>
             <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}
