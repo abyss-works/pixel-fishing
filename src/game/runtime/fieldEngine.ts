@@ -33,7 +33,7 @@ export type FieldDispatchResult =
   | { status: 'rejected'; error: RejectReason };
 
 /** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어와 내 머리 위 말풍선 */
-export interface LiveFrame { others: OtherShipView[]; bubble: Speech }
+export interface LiveFrame { others: OtherShipView[]; bubble: Speech; idle: string | null }
 
 export interface FieldSnapshot {
   phase: FishingPhase;
@@ -322,7 +322,7 @@ export class GameFieldEngine {
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
       view: this.view,
-      ...(this.liveSource?.(now) ?? { others: [], bubble: null }),
+      ...(this.liveSource?.(now) ?? { others: [], bubble: null, idle: null }),
     });
     return true;
   }
