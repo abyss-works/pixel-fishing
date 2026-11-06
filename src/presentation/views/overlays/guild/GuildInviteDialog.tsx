@@ -27,16 +27,14 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = invite.settled && (account === null || !loading);
-  const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }) : null;
+  const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }, 'link') : null;
 
   const confirm = async () => {
     setBusy(true);
     try {
-      const r = await act({ op: 'join', code });
+      const r = await act({ op: 'join', code, via: 'link' });
       if (!r.ok) { setError(GUILD_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
-      setToast(r.result === 'requested'
-        ? `${invite.preview?.name ?? ''} 길드에 가입을 신청했어요. 길드장이 승인하면 들어가요.`
-        : `${invite.preview?.name ?? ''} 길드에 들어갔어요.`);
+      setToast(`${invite.preview?.name ?? ''} 길드에 들어갔어요.`);
       onClose();
     } catch {
       setError('길드 요청을 보내지 못했어요. 연결을 확인해 주세요.');
@@ -49,17 +47,17 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose}>
         <div className="flex flex-col gap-3">
-          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>
+          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
             : !view ? <Note>초대를 불러오는 중이에요.</Note>
             : view.state === 'bad' ? (
               <>
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full onClick={onClose}>확인</Button>
               </>
             ) : view.state === 'guest' ? (
               <>
                 <GuildInviteSummary preview={invite.preview} view={null} busy={busy} onConfirm={() => {}} />
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
               </>
             ) : (

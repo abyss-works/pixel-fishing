@@ -28,6 +28,7 @@ import type { GlyphId } from '../PixelIcon';
 // **골드·명성은 줄임 표기(fmtCompact)** — 값이 커져도 칸 폭이 거의 그대로다. 단위 G는 이름 줄이 대신한다.
 // **가방은 "수량 (비율%)"** — 채울수록 주황·빨강으로 바뀌어 팔 때를 알린다.
 // **자리는 스테이지(사이드바를 뺀 화면 영역) 위쪽 가운데**다. 스테이지가 이 바의 기준 상자다.
+// 모바일 배치에서는 화면 틀의 머리 줄 왼쪽 칸을 채우고(오른쪽 끝은 메뉴 버튼), 여섯 칸을 세 칸씩 두 줄로 둔다.
 // **칸은 처음부터 모두 그린다** — 서버 값(오늘 의뢰)이 아직 없으면 자리를 지키고 0을 보인다.
 // 늦게 도착한 칸이 끼어들며 바 전체가 늘어나지 않게 하려는 것이다.
 const TONE = { gold: 'text-gold', orange: 'text-orange', danger: 'text-danger' } as const;
@@ -39,10 +40,10 @@ function Stat({ glyph, label, tone = 'gold', children }: {
     <span className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
       {/* 끝의 공백은 의도적이다 — 두 행이 붙어 textContent가 "골드60"이 되면 HUD를
           문자열로 읽는 테스트(app.test의 hud())가 값을 못 찾는다. 지우지 말 것. */}
-      <span className="flex items-center gap-1 text-sm leading-none text-text-dim">
+      <span className="flex items-center gap-1 text-sm mobile:text-[10px] leading-none text-text-dim">
         <PixelIcon glyph={glyph} size={12} />{label}{' '}
       </span>
-      <span className={cx('text-lg leading-none pf-accent', TONE[tone])}>{children}</span>
+      <span className={cx('text-lg mobile:text-[11px] leading-none pf-accent', TONE[tone])}>{children}</span>
     </span>
   );
 }
@@ -77,13 +78,16 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
   ];
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-(--z-overlay) max-w-[calc(100%-24px)]
-                    pf-glass border-2 border-line pf-notch pf-bevel px-[18px] py-[9px]">
+                    pf-glass border-2 border-line pf-notch pf-bevel px-[18px] py-[9px]
+                    mobile:static mobile:col-start-1 mobile:row-start-1 mobile:m-1 mobile:min-w-0 mobile:translate-x-0
+                    mobile:max-w-none mobile:px-2 mobile:py-1">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label="스탯창 열기" onClick={onOpen}
-              className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125">
+              className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125
+                         mobile:grid mobile:grid-cols-3 mobile:gap-x-3.5 mobile:gap-y-2">
         {stats.map((stat, i) => (
           <Fragment key={stat.key}>
-            {i > 0 && <Divider vertical />}
+            {i > 0 && <Divider vertical className="mobile:hidden" />}
             {stat}
           </Fragment>
         ))}

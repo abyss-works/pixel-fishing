@@ -7,6 +7,7 @@ import Note from '../../ui/Note';
 import PixelIcon from '../../ui/PixelIcon';
 import Frame from '../../ui/Frame';
 import Slider from '../../ui/Slider';
+import Tip from '../../ui/Tip';
 
 // 게임 시각 고정 — 오프라인 개발 모드(로컬 게이트웨이) 전용. 서버는 자기 시각으로 판정한다.
 export default function TimeControl() {
@@ -59,12 +60,9 @@ export default function TimeControl() {
       <div className="flex items-center gap-2 text-xs text-text-dim">
         <span className="shrink-0 w-10">자정</span>
         <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-surface-2 border border-line">
-          <div className="h-full bg-accent/50" style={{ width: `${DAY_START_MIN}%` }}
-               title="밤 (게임 0~4시)" />
-          <div className="h-full bg-gold/30" style={{ width: `${NIGHT_START_MIN - DAY_START_MIN}%` }}
-               title="낮 (게임 4~20시)" />
-          <div className="h-full bg-accent/50" style={{ width: `${100 - NIGHT_START_MIN}%` }}
-               title="밤 (게임 20~24시)" />
+          <Tip plain text="밤 (게임 0~4시)" className="block h-full bg-accent/50" style={{ width: `${DAY_START_MIN}%` }}>{null}</Tip>
+          <Tip plain text="낮 (게임 4~20시)" className="block h-full bg-gold/30" style={{ width: `${NIGHT_START_MIN - DAY_START_MIN}%` }}>{null}</Tip>
+          <Tip plain text="밤 (게임 20~24시)" className="block h-full bg-accent/50" style={{ width: `${100 - NIGHT_START_MIN}%` }}>{null}</Tip>
         </div>
         <span className="shrink-0 w-10 text-right">다음 자정</span>
       </div>

@@ -17,6 +17,7 @@ import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js'
 import { zoneById } from '../content/zones.js';
 import type { BaseId } from '../content/places.js';
 import { artifactById } from '../content/artifacts.js';
+import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
 import {
   upgradeCost, bountyDailyCap, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
@@ -52,6 +53,8 @@ export type RejectReason =
   | 'material-missing' // 유물 교환 재료 미보유 — 네임드 토벌로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
   | 'ticket-expired' // 도전권 기간 만료 — 다시 조우하면 받을 수 있다
+  | 'hat-owned' // 이미 가진 모자를 다시 사려 했다
+  | 'hat-not-owned' // 갖지 않은 모자를 쓰려 했다
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
@@ -84,6 +87,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
   'ticket-expired': '흔적이 사라졌어요. 다시 조우하면 새로 남아요.',
+  'hat-owned': '이미 가진 모자예요.',
+  'hat-not-owned': '아직 가지지 않은 모자예요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
@@ -101,6 +106,28 @@ export function canExhibit(state: GameState, uid: string, slot: number | null, b
   if (!Number.isInteger(slot) || slot < 0 || slot >= EXHIBIT_SLOTS) return no('bad-request');
   if (!state.bag.some(i => i.uid === uid)) return no('bad-request');
   return state.exhibit[slot] ? no('slot-taken') : OK;
+}
+
+/** 옷 바꾸기 — 웃옷·바지 번호가 각 팔레트 안의 정수여야 한다 */
+export function canChangeClothes(shirt: unknown, pants: unknown): RuleCheck {
+  const inRange = (n: unknown, len: number) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < len;
+  return inRange(shirt, SHIRT_COLORS.length) && inRange(pants, PANTS_COLORS.length) ? OK : no('bad-request');
+}
+
+/** 모자 사기 — 있는 모자, 아직 없는 모자, 골드가 가격 이상 */
+export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
+  const h = hatById(hat);
+  if (!h) return no('bad-request');
+  if (state.hats.includes(h.id)) return no('hat-owned');
+  return state.gold >= h.price ? OK : no('not-enough-gold');
+}
+
+/** 모자 쓰기 — null은 벗기이며 언제나 된다. 아니면 가진 모자여야 한다 */
+export function canWearHat(state: GameState, hat: unknown): RuleCheck {
+  if (hat === null) return OK;
+  const h = hatById(hat);
+  if (!h) return no('bad-request');
+  return state.hats.includes(h.id) ? OK : no('hat-not-owned');
 }
 
 /** 낚싯대 강화 — 골드만 본다 (상한 없음, 무한 골드 싱크) */

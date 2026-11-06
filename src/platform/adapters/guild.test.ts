@@ -21,6 +21,26 @@ describe('guildAction — 보너스 기부', () => {
     });
   });
 
+  it('POST /api/guild-memberships { code }는 링크로 온 요청에만 via를 싣는다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 'g1', result: 'joined' }), { status: 201 }));
+    await guildAction({ op: 'join', code: 'ABCD2345' });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/guild-memberships', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'ABCD2345' }),
+    });
+    await guildAction({ op: 'join', code: 'ABCD2345', via: 'link' });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/guild-memberships', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'ABCD2345', via: 'link' }),
+    });
+  });
+
+  it('PUT /api/guilds/:id/name { name }', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: '새바다', gold: 0 }), { status: 200 }));
+    await expect(guildAction({ op: 'rename', guildId: 'g1', name: '새바다' })).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/guilds/g1/name', {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '새바다' }),
+    });
+  });
+
   it('거부는 서버 오류 코드로 돌려준다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'not-enough-gold' }), { status: 409 }));
     await expect(guildAction({ op: 'donate', guildId: 'g1', bonus: 'bag', amount: 1 }))

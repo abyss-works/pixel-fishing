@@ -32,14 +32,14 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
   const sel = rows.find(r => r.id === picked) ?? rows[0];
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
+    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll">
       <Inset className="shrink-0 px-3 py-4">
         <div className="grid grid-cols-5 gap-3" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}
         </div>
       </Inset>
       {sel && (
-        <div className="grid grid-cols-2 gap-3 shrink-0">
+        <div className="grid grid-cols-2 gap-3 shrink-0 mobile:grid-cols-1">
           <Inset className="p-3 flex flex-col gap-2">
             <section aria-label={`${sel.name} 효과`} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-2 pb-1">
@@ -91,7 +91,7 @@ const GLYPH: Record<GuildBonusId, GlyphId> = { sell: 'coin', bag: 'fish', named:
 function Branch({ row, active, onPick }: { row: BonusRow; active: boolean; onPick: () => void }) {
   return (
     <div className={cx('flex flex-col items-center min-w-0', row.locked && 'opacity-45')}>
-      <Tip wraps text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
+      <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
       <Frame as="button" type="button" onClick={row.locked ? undefined : onPick} aria-disabled={row.locked || undefined}
              aria-pressed={active} aria-label={`${row.name} 고르기`}
              className={cx('w-full h-14 px-1 flex flex-col items-center justify-center gap-1 text-xs',

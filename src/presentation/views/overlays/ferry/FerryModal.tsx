@@ -20,7 +20,7 @@ export default function FerryModal({ game, from, onPick, onClose }: {
   return (
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="여객선 · 빠른 이동" onClose={onClose}>
-        <Note className="my-0">다른 항구로 바로 건너가요. 그 항구가 있는 바다에 들어설 수 있는 배가 있어야 해요.</Note>
+        <Note className="my-0">다른 항구로 바로 건너가요.<br />그 항구가 있는 바다에 들어설 수 있는 배가 있어야 해요.</Note>
         <div className="flex flex-col gap-2">
           {fastTravelTargets(game, from).map(t => {
             const name = BASE_PACKS[t.port].name;

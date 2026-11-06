@@ -1,4 +1,4 @@
-// 길드 함수 — 내 길드 조회, 만들기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임,
+// 길드 함수 — 내 길드 조회, 만들기, 이름 바꾸기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임,
 // 보너스 기부 (Node 런타임)
 // 계정 유저만 쓴다(게스트 제외). 권한과 인원 상한은 저장 모듈이 길드 행을 잠근 뒤 길드 규칙으로 판정한다.
 //   GET    /api/guilds/me                  → { guild, request }       내 길드, 길드원(접속 여부·기여 포함), 고유 코드와 가입 방식,
@@ -7,8 +7,10 @@
 //   POST   /api/guilds { name }            → 201 { id }               만들기. 만든 사람이 길드장이다
 //   PATCH  /api/guilds/:id { joinMode?, pitch? }
 //                                          → { joinMode, pitch }      가입 방식과 권유 문구 바꾸기(길드장)
-//   POST   /api/guild-memberships { code } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
-//                                                                       고유 코드로 들어오기. 승인 가입 길드면 가입 신청이 된다
+//   PUT    /api/guilds/:id/name { name }   → { name, gold }           이름 바꾸기(길드장). 길드장의 골드를 내고 하루(게임 날짜)에 한 번이다.
+//                                                                       gold는 바꾼 뒤 내 골드다
+//   POST   /api/guild-memberships { code, via? } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
+//                                                                       고유 코드로 들어오기. 승인 가입 길드면 가입 신청이 된다. via가 'link'(초대 링크의 확인 창)이면 승인 가입 길드도 바로 들어간다
 //   DELETE /api/guild-requests/me          → { result: 'cancelled' }  내 가입 신청 거두기
 //   POST   /api/guilds/:id/requests/:uid/approval
 //                                          → 201 { result: 'approved' } 가입 신청 승인(길드장)
@@ -27,11 +29,11 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import {
   cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, handOver, joinByCode, myGuild, myJoinRequest, removeMember,
-  setJoinSettings,
+  renameGuild, setJoinSettings,
 } from './_data/guilds.js';
 import { notifyUser, presenceOf } from './_server/livePresence.js';
 import {
-  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, validDonationAmount,
+  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, parseJoinVia, validDonationAmount,
 } from '../src/game/rules/guild.js';
 import type { GuildBonusId, GuildJoinMode } from '../src/game/rules/guild.js';
 import { ApiError, toApiError } from './errors.js';
@@ -50,7 +52,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUS: Record<string, number> = {
   'already-in-guild': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409, 'guild-closed': 409,
   'not-leader': 403, 'not-member': 404, 'bad-code': 404, 'no-request': 404, self: 400,
-  'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403,
+  'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403, 'renamed-today': 409,
 };
 const refuse = (error: string) => new ApiError(STATUS[error] ?? 400, error);
 
@@ -144,10 +146,23 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     res.status(200).json({ joinMode: r.joinMode, pitch: r.pitch });
   });
 
+  const rename = handle(['PUT'], async (req, res, uid) => {
+    const id = uuidParam(req, 'id');
+    const raw = bodyField(req, 'name');
+    const name = typeof raw === 'string' ? raw.trim() : raw;
+    if (!checkGuildName(name).ok) throw new ApiError(400, 'bad-name');
+    const r = await run('db-write', () => renameGuild(database().withTransaction, uid, id, name as string, new Date().toISOString()));
+    if (!r.ok) throw refuse(r.error);
+    res.status(200).json({ name: r.name, gold: r.gold });
+  });
+
   const join = handle(['POST'], async (req, res, uid) => {
     const code = normalizeGuildCode(bodyField(req, 'code'));
     if (!code) throw new ApiError(400, 'bad-code');
-    const r = await run('db-write', () => joinByCode(database().withTransaction, uid, code, new Date().toISOString()));
+    // via는 초대 링크의 확인 창에서 온 요청에만 붙는다. 링크의 내용이 곧 고유 코드라 코드를 아는 사람이 via를 붙여도
+    // 링크를 받은 사람과 얻는 것이 같으므로 서버는 이 표시를 그대로 받는다
+    const via = parseJoinVia(bodyField(req, 'via'));
+    const r = await run('db-write', () => joinByCode(database().withTransaction, uid, code, new Date().toISOString(), via));
     if (!r.ok) throw refuse(r.error);
     if (r.result === 'joined') {
       changed(uid, r.id);
@@ -214,6 +229,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     '/api/guilds/:id/requests/:uid': reject,
     '/api/guilds/:id/members/:uid': member,
     '/api/guilds/:id/leader': leader,
+    '/api/guilds/:id/name': rename,
     '/api/guild-memberships': join,
     '/api/guild-requests/me': cancel,
   };

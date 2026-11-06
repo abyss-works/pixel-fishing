@@ -46,6 +46,14 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x, f.y, f.w, 8, '#a1887f');
     R(ctx, f.x + f.w / 2 - 3, f.y + 8, 6, 8, '#ffd54f');
   },
+  // 집: 옷장 — 양문 장롱 + 손잡이
+  wardrobe: (ctx, f) => {
+    R(ctx, f.x, f.y, f.w, f.h, '#5d4037');
+    R(ctx, f.x + 2, f.y + 2, f.w - 4, f.h - 4, '#8d6e63');
+    R(ctx, f.x + f.w / 2 - 1, f.y + 2, 2, f.h - 4, '#4e342e');
+    R(ctx, f.x + f.w / 2 - 5, f.y + f.h / 2, 2, 5, '#ffd54f');
+    R(ctx, f.x + f.w / 2 + 3, f.y + f.h / 2, 2, 5, '#ffd54f');
+  },
   // 집: 문(마을로)
   door: (ctx, f) => {
     R(ctx, f.x, f.y, f.w, f.h, '#4e342e');

@@ -20,7 +20,7 @@ export default function NewsStep({ news }: { news: PatchNote }) {
         </div>
         <p className="text-sm">{news.summary}</p>
       </Frame>
-      <div className="pf-scroll overflow-y-auto max-h-[42vh] pr-1 flex flex-col gap-3">
+      <div className="pf-scroll pf-vscroll max-h-[42vh] pr-1 flex flex-col gap-3">
         {groups.map(({ tag, items }) => (
           <section key={tag} className="flex flex-col gap-1">
             <NoteTag tag={tag} className="self-start" />

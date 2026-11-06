@@ -21,3 +21,14 @@ export const Default: Story = {
     </DataTable>
   ),
 };
+
+export const FixedColumns: Story = {
+  render: () => (
+    <DataTable cols={[null, '4rem', '5rem']} nameMin="8rem">
+      <thead><tr><th>어종</th><th>가격</th><th>잡은 수</th></tr></thead>
+      <tbody>
+        <tr><td>붕어</td><td>6G</td><td>12마리</td></tr>
+      </tbody>
+    </DataTable>
+  ),
+};

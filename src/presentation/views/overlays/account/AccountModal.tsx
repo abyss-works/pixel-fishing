@@ -93,7 +93,7 @@ export default function AccountModal({
   });
 
   const signOut = async () => {
-    if (!(await confirm({ title: '로그아웃', body: '로그아웃할까요? 이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
+    if (!(await confirm({ title: '로그아웃', body: '로그아웃할까요?\n이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
     await signOutAccount();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
@@ -134,23 +134,23 @@ export default function AccountModal({
       await navigator.clipboard.writeText(value);
       setToast('내 ID를 복사했어요. 문의하실 때 함께 보내 주세요.');
     } catch {
-      void notice({ title: '직접 복사', body: '복사가 막혀 있어요. 아래 값을 직접 복사해 주세요.', value });
+      void notice({ title: '직접 복사', body: '복사가 막혀 있어요.\n아래 값을 직접 복사해 주세요.', value });
     }
   };
 
   return (
-    <Modal title="계정 관리" onClose={onClose}>
+    <Modal title="계정 관리" narrow onClose={onClose}>
       {syncLabel && (
         <div className={cx('text-xs mb-2', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
           {syncLabel}
         </div>
       )}
-      {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요. 화면 확인용이에요.</Note>}
+      {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
 
       {account ? (
         <>
           <Note className={offline ? 'mt-2' : 'mt-0'}>
-            <b className="text-gold">{account}</b>(으)로 로그인했어요. 진행은 이 계정에 저장돼요.
+            <b className="text-gold">{account}</b>(으)로 로그인했어요.<br />진행은 이 계정에 저장돼요.
           </Note>
           <div className="flex flex-col gap-2 mt-2">
             <Button disabled={offline} onClick={signOut}>로그아웃</Button>
@@ -159,7 +159,8 @@ export default function AccountModal({
       ) : (
         <>
           <Note className="mt-0">
-            이메일과 비밀번호를 입력해 주세요. 처음이면 계정이 만들어지고 지금 진행이 그대로 이어져요.
+            이메일과 비밀번호를 입력해 주세요.<br />
+            처음이면 계정이 만들어지고 지금 진행이 그대로 이어져요.<br />
             이미 가입한 이메일이면 그 계정으로 로그인해요.
           </Note>
 
@@ -198,7 +199,7 @@ export default function AccountModal({
                   onClick={() => void submitNick()}>변경</Button>
         </div>
       </Frame>
-      <Note>닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요. 나중에 랭킹에 표시될 이름이에요.</Note>
+      <Note>닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요.<br />나중에 랭킹에 표시될 이름이에요.</Note>
 
       {/* 내 정보 — **문의 대응용이다.** 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
           화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다. */}
@@ -215,7 +216,7 @@ export default function AccountModal({
         가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
 
       <SectionTitle>계정 삭제</SectionTitle>
-      <Note>계정과 모든 진행을 지워요. 삭제한 뒤에는 되돌릴 수 없어요.</Note>
+      <Note>계정과 모든 진행을 지워요.<br />삭제한 뒤에는 되돌릴 수 없어요.</Note>
       <div className="flex gap-2 mt-2">
         <Button variant="ghost" size="sm" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
       </div>

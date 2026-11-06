@@ -18,6 +18,7 @@ const MARK: Record<LogEntry['kind'], { glyph: GlyphId; tone: string }> = {
   named: { glyph: 'flag', tone: 'text-epic border-[#9a4d8f] bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
   donate: { glyph: 'coin', tone: 'text-gold' },
   'bonus-up': { glyph: 'upload', tone: 'text-gold border-gold-dark' },
+  rename: { glyph: 'book', tone: 'text-text' },
 };
 
 const TONE: Record<NonNullable<LogPart['tone']>, string> = {
@@ -32,7 +33,7 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
 export default function GuildLogbookTab({ logbook, me }: { logbook: readonly GuildLogItem[]; me: string }) {
   const days = logbookDays(logbook, me);
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
+    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-4 pt-3 pb-4">
       {days.length === 0 && <Note className="my-0">아직 기록이 없어요.</Note>}
       {days.map((d, i) => (
         <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>

@@ -11,19 +11,19 @@ describe('실패 분류', () => {
     }
   });
 
-  it('구조(이사 코드)는 "진행이 저장 안 된 실패"에만 — 서버 권위 전제', () => {
-    // 저장이 안 된 것들 → 구조
+  it('저장 실패 안내(unsaved)는 "진행이 저장 안 된 실패"에만 — 서버 권위 전제', () => {
+    // 저장이 안 된 것들 → 새로고침 안내 창
     for (const kind of ['network', 'unauthorized', 'server'] as const) {
-      expect(POLICY[kind].rescue, kind).toBe(true);
+      expect(POLICY[kind].modal, kind).toBe('unsaved');
     }
     // outdated: 진행은 서버에 안전 — 새로고침 안내만
-    expect(POLICY.outdated.rescue).toBe(false);
     expect(POLICY.outdated.modal).toBe('update');
     // replaced: 다른 창이 활성 창이 됐다 — 진행은 서버에 안전, 이 창을 막고 새로고침으로 되찾는다
-    expect(POLICY.replaced.rescue).toBe(false);
     expect(POLICY.replaced.modal).toBe('replaced');
     // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
-    expect(POLICY.bug.rescue).toBe(false);
+    expect(POLICY.bug.modal).toBeUndefined();
+    expect(POLICY.restricted.modal).toBeUndefined();
+    expect(POLICY['rate-limited'].modal).toBeUndefined();
   });
 
   it('asAppError: 알 수 없는 예외는 bug로 정규화되고 원인이 보존된다', () => {

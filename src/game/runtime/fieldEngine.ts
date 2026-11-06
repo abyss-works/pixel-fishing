@@ -5,7 +5,7 @@ import { zoneOfSpot, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
 import type { ActionResult, GameAction } from '../rules/actions';
 import type { RejectReason } from '../rules/rules';
-import { nextPhase, phaseDurationMs } from '../rules/fishing';
+import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
 import { CAST_RANGE } from '../rules/balance';
@@ -17,6 +17,8 @@ import {
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
+import { FIELD_VIEW } from '../world/fieldView.js';
+import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
@@ -31,7 +33,7 @@ export type FieldDispatchResult =
   | { status: 'rejected'; error: RejectReason };
 
 /** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어와 내 머리 위 말풍선 */
-export interface LiveFrame { others: OtherShipView[]; bubble: Speech }
+export interface LiveFrame { others: OtherShipView[]; bubble: Speech; idle: string | null }
 
 export interface FieldSnapshot {
   phase: FishingPhase;
@@ -81,7 +83,11 @@ export class GameFieldEngine {
   private lastSpot: SpotId | null = null;
   private readonly tracker = new ZoneTracker();
   private readonly keys = new Set<string>();
+  /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
+  private padDir: Point | null = null;
   private biteStart = 0;
+  /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
+  private resultAt: number | null = null;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
   /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
@@ -94,6 +100,8 @@ export class GameFieldEngine {
   private schools: School[];
   /** 같은 바다의 다른 플레이어와 내 말풍선 — 실시간 채널이 프레임마다 보간한 위치와 함께 돌려준다 */
   private liveSource: ((now: number) => LiveFrame) | null = null;
+  /** 카메라 시야 크기 — 모바일은 스테이지 비율로 호스트가 정해 준다 */
+  private view: ViewSize = FIELD_VIEW;
 
   constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
@@ -115,6 +123,11 @@ export class GameFieldEngine {
     this.callbacks = callbacks;
   }
 
+  /** 카메라 시야 크기 — 캔버스 크기와 짝이다 */
+  setView(view: ViewSize): void {
+    this.view = view;
+  }
+
   /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
   setFishArt(style: FishArtStyle): void {
     this.fishArt = style;
@@ -123,6 +136,11 @@ export class GameFieldEngine {
   /** 지금 내 위치(복사본) */
   getPosition(): Point {
     return { x: this.pos.x, y: this.pos.y };
+  }
+
+  /** 이번 던짐의 첫 결과 시각 — 방치 시간의 시작. 줄을 거두면 null */
+  getResultAt(): number | null {
+    return this.resultAt;
   }
 
   /** 찌가 떠 있는 자리 — 낚싯줄을 드리운 동안 던진 어군의 위치. 드리우지 않았으면 null */
@@ -179,6 +197,16 @@ export class GameFieldEngine {
     return true;
   }
 
+  /** 원 패드의 이동 방향 — 키 이동처럼 낚시를 접고 움직이며, (0, 0)이나 null이면 멈춘다 */
+  setMoveDirection(dir: Point | null): void {
+    const moving = dir !== null && (dir.x !== 0 || dir.y !== 0);
+    this.padDir = moving ? dir : null;
+    if (moving && this.snapshot.phase !== 'idle') {
+      this.cancelFishing();
+      this.callbacks.onEvent({ type: 'movement-cancelled' });
+    }
+  }
+
   releaseKey(code: string): void {
     this.keys.delete(code);
   }
@@ -205,6 +233,7 @@ export class GameFieldEngine {
     this.stopFrame();
     this.clearPhaseTimers();
     this.keys.clear();
+    this.padDir = null;
     this.listeners.clear();
   }
 
@@ -232,10 +261,13 @@ export class GameFieldEngine {
     }
 
     let movedFrom: Point | null = null;
-    if ((dx || dy) && this.snapshot.phase === 'idle') {
+    // 키 이동은 방향 부호(대각선 포함)로, 원 패드는 끄는 각도 그대로의 단위 벡터로 움직인다
+    const pad = this.padDir;
+    if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(this.def, this.pos, Math.sign(dx), Math.sign(dy), dt, speed);
+      const next = movePlayer(
+        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();
@@ -286,6 +318,7 @@ export class GameFieldEngine {
       phase: this.snapshot.phase,
       school: this.school,
       boat: this.game.boat,
+      look: this.game.look,
       biteT: this.snapshot.phase === 'bite'
         ? (Date.now() - this.biteStart) / 1000 / axes.sweep.value : null,
       zone: zones ? zones.yellow / 100 : 0,
@@ -295,7 +328,8 @@ export class GameFieldEngine {
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
-      ...(this.liveSource?.(now) ?? { others: [], bubble: null }),
+      view: this.view,
+      ...(this.liveSource?.(now) ?? { others: [], bubble: null, idle: null }),
     });
     return true;
   }
@@ -339,6 +373,7 @@ export class GameFieldEngine {
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
     if (phase === 'catch') this.catchStart = Date.now();
+    this.resultAt = resultAtOf(this.resultAt, phase, Date.now());
     this.snapshot = { phase, fishId, catchInfo };
     this.publish();
     this.schedulePhaseTimers();

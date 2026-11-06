@@ -25,6 +25,28 @@ const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...
 const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = false): FishInstance =>
   ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
+describe('catch — 첫 경험 보장', () => {
+  it('5번째 캐치는 그 수역의 영웅 어종이고 도감·명성은 일반 캐치와 같다', () => {
+    const out = applyAction(seed({ firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
+    if (!out.ok) throw new Error('catch failed');
+    const caught = FISH.find(f => f.id === (out.result as { fishId: string }).fishId)!;
+    expect(caught).toMatchObject({ rarity: 'epic', spot: 'pond' });
+    expect(out.state.fame).toBe(40);
+    expect(out.state.firstCatch).toMatchObject({ n: 5, epic: false, legend: true });
+  });
+
+  it('첫 캐치에서 전설 번호를 정하고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
+    const first = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
+    if (!first.ok) throw new Error('catch failed');
+    expect(first.state.firstCatch).toMatchObject({ n: 1, legendAt: 15 });
+    const ended = { n: 0, legendAt: 0, epic: false, legend: false };
+    const out = applyAction(seed({ firstCatch: ended }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error('catch failed');
+    expect(out.state.firstCatch).toEqual(ended);
+  });
+});
+
 describe('catch', () => {
   it('추첨·기록·이벤트 — rng=0이면 풀 첫 어종 + 변이 확정 (기존 목킹 계약)', () => {
     const out = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
@@ -659,5 +681,50 @@ describe('seeTutorial', () => {
   it('모르는 튜토리얼은 거부한다', () => {
     expect(applyAction(seed(), { type: 'seeTutorial', id: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed(), { type: 'seeTutorial', id: 3 }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+});
+
+describe('옷장 액션', () => {
+  it('changeClothes: 웃옷·바지 번호만 바꾸고 모자는 유지한다', () => {
+    const before = seed({ hats: ['cap-red'], look: { shirt: 0, pants: 0, hat: 'cap-red' } });
+    const out = applyAction(before, { type: 'changeClothes', shirt: 6, pants: 1 }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.look).toEqual({ shirt: 6, pants: 1, hat: 'cap-red' });
+    expect(out.state.gold).toBe(before.gold);
+  });
+
+  it('changeClothes: 범위 밖 번호는 거부하고 상태를 바꾸지 않는다', () => {
+    expect(applyAction(seed(), { type: 'changeClothes', shirt: 12, pants: 0 }, deps())).toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'changeClothes', shirt: 0, pants: 'x' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('buyHat: 골드를 가격만큼 빼고 가진 모자에 더한다 (쓰지는 않는다)', () => {
+    const out = applyAction(seed({ gold: 120_000 }), { type: 'buyHat', hat: 'cap-yellow' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(20_000);
+    expect(out.state.hats).toEqual(['cap-yellow']);
+    expect(out.state.look.hat).toBeNull();
+    expect(out.events).toEqual([{ type: 'buyHat', payload: { hat: 'cap-yellow', cost: 100_000 } }]);
+  });
+
+  it('buyHat: 골드 부족·이미 보유·없는 모자는 거부한다', () => {
+    expect(applyAction(seed({ gold: 49_999 }), { type: 'buyHat', hat: 'cap-red' }, deps())).toEqual({ ok: false, error: 'not-enough-gold' });
+    expect(applyAction(seed({ gold: 1e9, hats: ['cap-red'] }), { type: 'buyHat', hat: 'cap-red' }, deps())).toEqual({ ok: false, error: 'hat-owned' });
+    expect(applyAction(seed({ gold: 1e9 }), { type: 'buyHat', hat: 'x' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('wearHat: 가진 모자를 쓰고 null이면 벗는다', () => {
+    const owned = seed({ hats: ['cap-black'] });
+    const worn = applyAction(owned, { type: 'wearHat', hat: 'cap-black' }, deps());
+    if (!worn.ok) throw new Error(worn.error);
+    expect(worn.state.look.hat).toBe('cap-black');
+    const off = applyAction(worn.state, { type: 'wearHat', hat: null }, deps());
+    if (!off.ok) throw new Error(off.error);
+    expect(off.state.look.hat).toBeNull();
+  });
+
+  it('wearHat: 갖지 않은 모자와 없는 id는 거부한다', () => {
+    expect(applyAction(seed(), { type: 'wearHat', hat: 'cap-black' }, deps())).toEqual({ ok: false, error: 'hat-not-owned' });
+    expect(applyAction(seed(), { type: 'wearHat', hat: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
   });
 });

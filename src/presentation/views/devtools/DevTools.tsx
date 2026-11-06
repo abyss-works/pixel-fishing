@@ -19,6 +19,7 @@ import IconButton from '../../ui/IconButton';
 import PillButton from '../../ui/PillButton';
 import PixelIcon from '../../ui/PixelIcon';
 import Frame from '../../ui/Frame';
+import Tip from '../../ui/Tip';
 import Gated from '../../ui/Gated';
 import LinkButton from '../../ui/LinkButton';
 import Note from '../../ui/Note';
@@ -121,12 +122,14 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
   return (
     <>
-      <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open} title="개발 도구 (F9)"
-             onClick={() => setOpen(o => !o)}
-             className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
-               open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
-        <PixelIcon glyph="key" size={20} />
-      </Frame>
+      <Tip wraps text="개발 도구 (F9)">
+        <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open}
+               onClick={() => setOpen(o => !o)}
+               className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
+                 open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
+          <PixelIcon glyph="key" size={20} />
+        </Frame>
+      </Tip>
 
       {open && (
         <Frame role="dialog" aria-label="개발 도구"
@@ -146,7 +149,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
           </div>
 
           {/* 본문 — 남는 높이를 모두 쓰고 안에서만 스크롤한다 */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+          <div className="flex-1 min-h-0 pf-scroll-panel overflow-y-auto px-3 py-3 flex flex-col gap-3">
             {restricted && <Note tone="warn" className="my-0">{RESTRICTED_NOTE}</Note>}
             {section !== 'ops' && (
             <Gated open={!restricted} overlay={RESTRICTED_NOTE}>
@@ -223,7 +226,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
           {/* 실행 기록 — 높이 고정. 비어 있어도 자리를 지켜 틀이 흔들리지 않는다 */}
           <div className="h-36 shrink-0 border-t border-line px-3 py-2 flex flex-col gap-1">
             <span className="text-xs text-text-dim">실행 기록 · 서버 명령은 스테이징·로컬 서버에서만 동작한다</span>
-            <ul className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5" aria-label="실행 기록">
+            <ul className="flex-1 min-h-0 pf-scroll-panel overflow-y-auto flex flex-col gap-0.5" aria-label="실행 기록">
               {tools.log.map(entry => (
                 <li key={entry.id} className={cx('flex items-start gap-1.5', entry.ok ? 'text-text' : 'text-danger')}>
                   <PixelIcon glyph={entry.ok ? 'checkOn' : 'checkOff'} size={12} className="mt-1 shrink-0" />

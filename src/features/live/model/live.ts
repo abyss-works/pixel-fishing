@@ -1,5 +1,6 @@
+import type { Look } from '../../../game/content/wardrobe';
 import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage } from '../../../game/rules/live';
-import { LIVE_STALE_MS } from '../../../game/rules/live';
+import { formatIdle, LIVE_STALE_MS } from '../../../game/rules/live';
 
 // 실시간 채널의 다른 플레이어 상태와 내 위치 송신 판정 — 표시용이라 게임 상태와 섞지 않는다.
 
@@ -9,7 +10,12 @@ export interface OtherPlayer {
   moving: boolean;
   /** 마지막으로 위치를 받은 시각 */
   lastAt: number;
+  /** 방치 시간을 세기 시작한 시각(내 시계, Date.now 기준). 서버가 경과 시간을 싣지 않았으면 null */
+  idleSince: number | null;
 }
+
+// 서버가 보낸 경과 시간을 받은 시각의 내 시계로 옮긴다. 두 시계를 직접 맞추지 않으므로 시계 차이가 끼지 않고 전송 지연만 남는다
+const idleSinceFrom = (idleMs: number | undefined, now: number): number | null => idleMs === undefined ? null : now - idleMs;
 
 /** 서버가 채팅을 거부한 이유 */
 export type ChatError = Extract<ServerMessage, { t: 'error' }>['code'];
@@ -39,7 +45,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
     case 'hello':
       return {
         you: msg.you,
-        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now }])),
+        others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now, idleSince: idleSinceFrom(p.idleMs, now) }])),
         chat: msg.recentChat.slice(-CHAT_KEEP),
         guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
         chatError: null,
@@ -57,13 +63,13 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       return { ...state, chatError: msg.code };
     case 'join':
       if (msg.presence.uid === state.you) return state;
-      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now } } };
+      return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now, idleSince: idleSinceFrom(msg.presence.idleMs, now) } } };
     case 'move': {
       const prev = state.others[msg.uid];
       if (!prev) return state;
-      const { region, zone, x, y, dir, line, bob } = msg;
+      const { region, zone, x, y, dir, line, bob, look } = msg;
       return { ...state, others: { ...state.others,
-        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob }, moving: true, lastAt: now } } };
+        [msg.uid]: { presence: { ...prev.presence, region, zone: zone ?? null, x, y, dir, line, bob, ...(look ? { look } : {}) }, moving: true, lastAt: now, idleSince: idleSinceFrom(msg.idleMs, now) } } };
     }
     case 'stop': {
       const prev = state.others[msg.uid];
@@ -91,6 +97,13 @@ export function isStale(o: OtherPlayer, now: number): boolean {
   return o.moving && now - o.lastAt > LIVE_STALE_MS;
 }
 
+/** 그 바다에 접속해 있는 길드원의 위치 — 미니맵 표시용. 받은 좌표 그대로다(보간하지 않는다) */
+export function matesInRegion(state: LiveState, region: string, uids: ReadonlySet<string>): { uid: string; x: number; y: number }[] {
+  return othersInRegion(state, region)
+    .filter(o => uids.has(o.presence.uid))
+    .map(o => ({ uid: o.presence.uid, x: o.presence.x, y: o.presence.y }));
+}
+
 /** 그 바다에 있는 다른 플레이어 — 이름 순 */
 export function othersInRegion(state: LiveState, region: string): OtherPlayer[] {
   return Object.values(state.others)
@@ -101,8 +114,10 @@ export function othersInRegion(state: LiveState, region: string): OtherPlayer[] 
 /** 마지막으로 보낸 내 위치 */
 export interface SentPosition extends MyPosition { stopped: boolean }
 
-/** 내 위치. bob은 낚싯줄을 드리운 동안의 찌 위치이고, 드리우지 않았으면 null이다 */
-export interface MyPosition { region: string; zone: string | null; x: number; y: number; line: boolean; bob: Bob | null }
+/** 내 위치와 외형. idleMs는 이번 던짐의 첫 결과 뒤 지난 시간이고, 결과 전이거나 줄이 없으면 없다. bob은 낚싯줄을 드리운 동안의 찌 위치이고, 드리우지 않았으면 null이다 */
+export interface MyPosition { region: string; zone: string | null; x: number; y: number; line: boolean; bob: Bob | null; look: Look; idleMs?: number }
+
+const sameLook = (a: Look, b: Look) => a.shirt === b.shirt && a.pants === b.pants && a.hat === b.hat;
 
 const dirOf = (dx: number, dy: number): Dir =>
   Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 1 : 3) : (dy >= 0 ? 2 : 0);
@@ -113,12 +128,14 @@ const dirOf = (dx: number, dy: number): Dir =>
  * @returns 보낼 메시지와 그 뒤의 '마지막으로 보낸 위치'. 보낼 것이 없으면 메시지는 null이다
  */
 export function nextPositionMessage(last: SentPosition | null, cur: MyPosition): { msg: ClientMessage | null; sent: SentPosition | null } {
-  const changed = !last || last.region !== cur.region || last.zone !== cur.zone || last.x !== cur.x || last.y !== cur.y
-    || last.line !== cur.line || last.bob?.x !== cur.bob?.x || last.bob?.y !== cur.bob?.y;
+  const changed = !last || (last.idleMs === undefined) !== (cur.idleMs === undefined) || last.region !== cur.region || last.zone !== cur.zone || last.x !== cur.x || last.y !== cur.y
+    || last.line !== cur.line || last.bob?.x !== cur.bob?.x || last.bob?.y !== cur.bob?.y || !sameLook(last.look, cur.look);
   if (changed) {
     const dir = last ? dirOf(cur.x - last.x, cur.y - last.y) : 2;
-    const { bob, ...pos } = cur;
-    return { msg: { t: 'move', ...pos, dir, ...(bob ? { bob } : {}) }, sent: { ...cur, stopped: false } };
+    const { bob, look, idleMs, ...pos } = cur;
+    // 외형은 처음과 바뀐 때만 싣는다
+    const lookChanged = !last || !sameLook(last.look, look);
+    return { msg: { t: 'move', ...pos, dir, ...(bob ? { bob } : {}), ...(idleMs !== undefined ? { idleMs } : {}), ...(lookChanged ? { look } : {}) }, sent: { ...cur, stopped: false } };
   }
   if (!last.stopped) return { msg: { t: 'stop' }, sent: { ...last, stopped: true } };
   return { msg: null, sent: last };
@@ -140,4 +157,9 @@ export function bubbleOf(said: { text: string; at: number } | null, typingAt: nu
   if (said && now - said.at < BUBBLE_MS) return { kind: 'chat', text: said.text };
   if (typingAt !== null && now - typingAt < TYPING_MS) return { kind: 'typing' };
   return null;
+}
+
+/** 머리 위에 그릴 방치 시간. 세기 시작한 시각을 모르면 null이다 */
+export function idleLabel(since: number | null, now: number): string | null {
+  return since === null ? null : formatIdle(now - since);
 }

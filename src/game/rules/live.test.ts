@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
+import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, idleSinceOf, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
 
 describe('parseClientMessage', () => {
   it('낚싯줄을 드리웠으면 찌 위치를 함께 받고, 형식이 틀린 찌 위치는 메시지째 버린다', () => {
@@ -8,6 +8,17 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true,"bob":{"x":"a","y":1}}')).toBeNull();
     expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true,"bob":null}'))
       .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
+  });
+
+  it('move의 외형은 검사해서 싣고, 잘못된 값은 기본 외형으로 바꾼다', () => {
+    const base = '"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":false';
+    expect(parseClientMessage(`{${base},"look":{"shirt":3,"pants":4,"hat":"cap-red","x":1}}`))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: false, look: { shirt: 3, pants: 4, hat: 'cap-red' } });
+    for (const look of ['{"shirt":12,"pants":0,"hat":null}', '{"shirt":0,"pants":0,"hat":"cap-x"}', '"bad"', '5', 'null']) {
+      expect(parseClientMessage(`{${base},"look":${look}}`), look)
+        .toMatchObject({ t: 'move', look: { shirt: 0, pants: 0, hat: null } });
+    }
+    expect(parseClientMessage(`{${base}}`)).not.toHaveProperty('look');
   });
 
   it('정상 메시지는 필요한 필드만 남긴다', () => {
@@ -94,5 +105,58 @@ describe('chatRate', () => {
       window = r.window;
     }
     expect(chatRate(window, 5).ok).toBe(false);
+  });
+});
+
+describe('formatIdle', () => {
+  it('1시간 미만은 mm:ss, 1시간 이상은 h:mm:ss로 쓴다', () => {
+    expect(formatIdle(0)).toBe('00:00');
+    expect(formatIdle(999)).toBe('00:00');
+    expect(formatIdle(1000)).toBe('00:01');
+    expect(formatIdle(59_999)).toBe('00:59');
+    expect(formatIdle(600_000)).toBe('10:00');
+    expect(formatIdle(3_599_999)).toBe('59:59');
+    expect(formatIdle(3_600_000)).toBe('1:00:00');
+    expect(formatIdle(36_000_000 + 125_000)).toBe('10:02:05');
+  });
+
+  it('음수와 유한하지 않은 값은 00:00으로 쓴다', () => {
+    expect(formatIdle(-5000)).toBe('00:00');
+    expect(formatIdle(Number.NaN)).toBe('00:00');
+  });
+});
+
+describe('idleSinceOf', () => {
+  const spot = { region: 'sea', x: 1, y: 2 };
+  const held = { spot, since: 100 };
+  it('낚싯줄이 없으면 센 적이 있어도 null이다', () => {
+    expect(idleSinceOf(held, spot, false, 50, 500)).toBeNull();
+    expect(idleSinceOf(null, spot, false, undefined, 500)).toBeNull();
+  });
+  it('낚싯줄이 있고 첫 결과 경과가 실려 오면 지금에서 경과를 뺀 시각부터 센다', () => {
+    expect(idleSinceOf(null, spot, true, 300, 500)).toBe(200);
+    expect(idleSinceOf({ spot, since: null }, spot, true, 0, 500)).toBe(500);
+  });
+  it('첫 결과 경과가 없으면 센 적이 없다', () => {
+    expect(idleSinceOf(null, spot, true, undefined, 500)).toBeNull();
+  });
+  it('같은 자리에서 이어지는 던짐은 시작 시각을 유지한다', () => {
+    expect(idleSinceOf(held, { ...spot }, true, 300, 500)).toBe(100);
+    expect(idleSinceOf(held, spot, true, undefined, 500)).toBe(100);
+  });
+  it('위치나 지역이 바뀌면 새로 센다', () => {
+    expect(idleSinceOf(held, { ...spot, x: 2 }, true, undefined, 500)).toBeNull();
+    expect(idleSinceOf(held, { ...spot, region: 'deep' }, true, 40, 500)).toBe(460);
+  });
+});
+
+describe('방치 시간 필드', () => {
+  it('move의 idleMs는 0 이상의 유한한 수만 받는다', () => {
+    const base = '{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true';
+    expect(parseClientMessage(`${base},"idleMs":5}`))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true, idleMs: 5 });
+    expect(parseClientMessage(`${base},"idleMs":-1}`)).toBeNull();
+    expect(parseClientMessage(`${base},"idleMs":"5"}`)).toBeNull();
+    expect(parseClientMessage(`${base}}`)).toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
   });
 });

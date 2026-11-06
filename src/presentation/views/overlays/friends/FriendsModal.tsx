@@ -9,7 +9,8 @@ import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
@@ -18,7 +19,7 @@ import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import BlockList from './BlockList';
-import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
+import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
 // 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
@@ -28,7 +29,7 @@ import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
 /** 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다 */
 const FIXED_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
-const PLACE_HELP = '접속 중이면 지금 있는 해역이에요. 접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
+const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
 
 type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
@@ -55,7 +56,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
@@ -85,7 +86,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
                          setRemoving(null);
                          void run({ op: 'remove', uid: target.uid }, () => setToast(`${nameOf(target)} 님과 친구를 끊었어요.`));
                        }}>
-          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요? 다시 친구가 되려면 요청을 새로 보내야 해요.</p>
+          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요?<br />다시 친구가 되려면 요청을 새로 보내야 해요.</p>
         </ConfirmDialog>
       )}
     </Modal>
@@ -98,10 +99,9 @@ function FriendTable({ friends, pending, busy, onRemove }: {
 }) {
   const nowMs = Date.parse(useNow());
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <TableBox className="flex-1 min-h-0 px-3 pb-2">
       {friends && friends.length > 0 ? (
-        <table className={SOCIAL_TABLE}>
-          <colgroup><col /><col className="w-[150px]" /><col className="w-16" /></colgroup>
+        <DataTable cols={[null, '150px', '4rem']} nameMin="8rem">
           <thead>
             <tr className={SOCIAL_HEAD.row}>
               <th className={SOCIAL_HEAD.left}>이름</th>
@@ -128,13 +128,13 @@ function FriendTable({ friends, pending, busy, onRemove }: {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
-          {pending ?? <Note>아직 친구가 없어요. 요청 탭에서 닉네임으로 요청해 보세요.</Note>}
+          {pending ?? <Note>아직 친구가 없어요.<br />요청 탭에서 닉네임으로 요청해 보세요.</Note>}
         </div>
       )}
-    </Inset>
+    </TableBox>
   );
 }
 
@@ -166,7 +166,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
+    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
@@ -209,10 +209,9 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <Inset className="pf-scroll-panel h-[138px] overflow-y-auto px-3 py-1">
+      <TableBox className="h-[138px] px-3 py-1">
         {rows && rows.length > 0 ? (
-          <table className={SOCIAL_TABLE}>
-            <colgroup><col /><col className="w-[132px]" /></colgroup>
+          <DataTable cols={[null, '132px']} nameMin="8rem">
             <tbody>
               {rows.map((f, i) => (
                 <tr key={f.uid}>
@@ -221,13 +220,13 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         ) : (
           <div className="flex h-full items-center justify-center text-center">
             {pending ?? <Note size="xs" className="my-0">{empty}</Note>}
           </div>
         )}
-      </Inset>
+      </TableBox>
     </section>
   );
 }

@@ -42,8 +42,6 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [loading, setLoading] = useState(api.auth.isConfigured);
   // 진행을 막는 모달 — 낡은 탭(서버 426)이나 다른 창의 접속(서버 423). 값이 있으면 GameView가 그 모달로 전체를 덮는다
   const [blocker, setBlocker] = useState<BlockingModal | null>(null);
-  const gameRef = useRef(game);
-  useEffect(() => { gameRef.current = game; }, [game]);
 
   // 레거시 이관 환영 안내 (R18b) — 오프라인 모드에서도 표시돼야 하므로 부트스트랩과 분리
   useEffect(() => {
@@ -52,39 +50,15 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }, []);
 
   // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 에러 처리의 정책 표가 내리고,
-  // 이 훅은 그 결정을 화면에 반영만 한다. 실패 에피소드당 1회만 알린다(복구되면 리셋).
-  const alertedRef = useRef(false);
-  const rescueRef = useRef<(headline: string) => void>(() => {});
+  // 이 훅은 그 결정을 화면에 반영만 한다.
   useEffect(() => subscribeFailure((err: AppError) => {
-    const policy = POLICY[err.kind];
-    const modal = policy.modal;
-    if (modal) {
-      setBlocker(current => current ?? modal);
-      // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
-      if (modal === 'update') alertUpdate();
-    }
-    if (!policy.rescue) return;
-    setSync(api.auth.isConfigured ? 'error' : 'off');
-    if (alertedRef.current) return;
-    alertedRef.current = true;
-    rescueRef.current(policy.message);
+    const modal = POLICY[err.kind].modal;
+    if (!modal) return;
+    setBlocker(current => current ?? modal);
+    // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
+    if (modal === 'update') alertUpdate();
+    if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
   }), []);
-
-  // 진행 상황을 이사 코드로 만들어 복사해 주고 복구를 안내한다 (저장되지 않은 실패에서만)
-  // 저장 데이터 import는 소유자 전용이며 일반 사용자에게 노출하지 않는다.
-  const rescueAlert = async (headline: string) => {
-    const code = api.storage.saveCode(gameRef.current);
-    const guide = `${headline}\n\n만약을 위해 지금까지의 진행 상황을 코드로 만들어 뒀어요.\n\n게임을 새로고침해 다시 접속해 주세요.\n같은 문제가 반복되면 아래 코드를 개발자에게 보내 주세요.`;
-    try {
-      await navigator.clipboard.writeText(code);
-      window.alert(`${guide}\n\n(이사 코드는 클립보드에 복사되어 있어요)`);
-    } catch {
-      window.alert(guide);
-      window.prompt('이사 코드예요. 복사해서 보관해 주세요.', code);
-    }
-  };
-
-  useEffect(() => { rescueRef.current = h => void rescueAlert(h); });
 
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
@@ -96,7 +70,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         settleForcedEncounter(r.result);
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
-        if (api.auth.isConfigured) { setSync('on'); alertedRef.current = false; }
+        if (api.auth.isConfigured) setSync('on');
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
@@ -112,7 +86,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
   // 세션 시작과 계정 교체마다 보내고, 응답이 올 때까지 플레이를 열지 않는다.
   // **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가 없고, fail()을 거치면
-  // rescue 안내라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  // 저장 실패 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
   const boot = (): Promise<void> =>
     Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).then(() => {}, () => { /* 무음 */ });
 

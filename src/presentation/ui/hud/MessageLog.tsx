@@ -4,10 +4,14 @@ import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
 import ToggleChip from '../ToggleChip';
+import PixelIcon from '../PixelIcon';
+import Tip from '../Tip';
+import HudButton from './HudButton';
 import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './messageFeed';
 import type { MessageChannel, Msg } from './messageFeed';
 
 // 메시지 창 — 스테이지 왼쪽 아래의 채팅창형 기록. 폭은 400px(좁은 스테이지에서는 58%)이다.
+// 모바일 배치에서는 화면 틀의 채팅 영역(아래 탭 줄 바로 위, 폭 전체)에 놓인다.
 // 높이는 기록 수와 무관하게 항상 정해진 줄 수만큼이다. 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
 // 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 사용자가 위로 올려 읽는 중이 아니면 언제나 맨 아래(최신)를 보인다. 기록이 앞쪽에 끼어들어도(접속 직후 받은
@@ -22,6 +26,8 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
+// 접기: onFold가 있으면 채널 토글 줄 왼쪽 끝에 접기 버튼을 둔다. 접힌 입력 줄의 펼치기 버튼과 같은 세로줄이라
+// 열고 닫는 자리가 같다. folded면 토글 줄과 기록을 숨기고 footer만 남긴다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
 
@@ -35,6 +41,12 @@ const GLASS_ON = cx(
   'group-has-[input:focus]:border-line group-has-[input:focus]:bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)]',
   'group-has-[input:focus]:backdrop-blur-[4px]',
   'group-has-[input:focus]:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
+);
+
+/** 터치 화면은 마우스를 올릴 수 없으므로 모바일 배치에서는 활성 모양을 늘 유지한다 */
+const GLASS_ALWAYS = cx(
+  'mobile:border-line mobile:bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] mobile:backdrop-blur-[4px]',
+  'mobile:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
 );
 
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
@@ -51,7 +63,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [] }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -66,6 +78,12 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   channels?: readonly MessageChannel[];
   /** 토글은 보이되 쓸 수 없는 채널(흐림) — 길드에 들어가 있지 않을 때의 길드 */
   disabledChannels?: readonly MessageChannel[];
+  /** 한 번에 보이는 글줄 수 */
+  lines?: number;
+  /** 접힘 — 토글 줄과 기록을 숨기고 footer만 남긴다 */
+  folded?: boolean;
+  /** 접기 버튼을 눌렀다. 없으면 접기 버튼을 그리지 않는다 */
+  onFold?: () => void;
 }) {
   const fixed = channels !== undefined;
   const listed = channels ?? channelsOf(log);
@@ -94,9 +112,20 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   };
 
   return (
-    <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none">
-      {toggles && (
-        <div className="pointer-events-auto self-start flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
+    <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
+                    mobile:static mobile:col-span-2 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
+                    mobile:border-t mobile:border-line">
+      {!folded && (toggles || onFold) && (
+        <div className="pointer-events-none flex items-center gap-1.5">
+        {onFold && (
+          <Tip wraps text="접기" className="pointer-events-auto flex">
+            <HudButton aria-label="메시지 창 접기" onPointerDown={e => e.preventDefault()} onClick={onFold}>
+              <PixelIcon glyph="minus" size={12} />
+            </HudButton>
+          </Tip>
+        )}
+        {toggles && (
+        <div className="pointer-events-auto flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
           {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => {
             const disabled = disabledChannels.includes(c);
             const on = !disabled && isChannelShown(filter, c);
@@ -114,16 +143,18 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
             );
           })}
         </div>
+        )}
+        </div>
       )}
-      <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
+      {!folded && <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
-             'flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text',
-             'transition-[background-color,border-color] duration-150', GLASS_ON)}
-           style={{ height: `calc(${MESSAGE_VISIBLE_LINES * LINE_EM}em + 0.5rem + 4px)` }}>
+             'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',
+             'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
+           style={{ height: `calc(${lines * LINE_EM}em + 0.5rem + 4px)` }}>
         {shown.map(m => (
           <Line key={`${m.channel}-${m.id}`} m={m} mine={you != null && m.from?.uid === you} onPick={onPick} />
         ))}
-      </div>
+      </div>}
       {footer && <div className="pointer-events-auto">{footer}</div>}
     </div>
   );

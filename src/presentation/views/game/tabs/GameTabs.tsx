@@ -19,6 +19,8 @@ import SettingsTab from './settings/SettingsTab';
 import { BAG_SECTIONS, setBagLayout, setBagSection, useBagView } from './bag/bagView';
 import type { BagSection } from './bag/bagView';
 import Sidebar from '../../../layouts/sidebar';
+import { pressSheetTab } from '../../../layouts/sidebar/sheet';
+import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import type { Notify } from '../../../ui/hud/messageFeed';
 
 interface GameTabsProps {
@@ -35,6 +37,9 @@ interface GameTabsProps {
   onRename: (name: string) => Promise<null | RejectReason>;
   uid: string | null;
   onAuthChanged: () => Promise<void>;
+  /** 모바일 시트가 열려 있는가와 그 변경 — 열림은 HUD 배치도 따르므로 화면 조립이 소유한다 */
+  sheetOpen: boolean;
+  onSheetOpenChange: (open: boolean) => void;
 }
 
 const BAG_SECTION_LABEL: Record<BagSection, string> = { fish: '물고기', items: '아이템', artifacts: '유물' };
@@ -49,6 +54,7 @@ export default function GameTabs(props: GameTabsProps) {
   const [dexView, setDexView] = useState<DexView>('base');
   const [dexZone, setDexZone] = useState<ZoneId>(defaultZoneOfRegion(props.region));
   const { layout, section } = useBagView();
+  const mobile = useMobileLayout();
 
   const tabs = [
     { key: 'region' as const, label: '지역' },
@@ -68,6 +74,14 @@ export default function GameTabs(props: GameTabsProps) {
       setBagSection(BAG_SECTIONS[(BAG_SECTIONS.indexOf(section) + 1) % BAG_SECTIONS.length]);
     }
     setActiveTab(tab);
+  };
+
+  // 모바일은 탭을 누르면 시트가 열리고, 열린 시트에서 같은 탭을 다시 누르면 닫힌다(보기 순환 대신)
+  const onTab = (tab: TabKey) => {
+    if (!mobile) { select(tab); return; }
+    const next = pressSheetTab({ open: props.sheetOpen, active: activeTab }, tab);
+    props.onSheetOpenChange(next.open);
+    if (next.select) select(tab);
   };
 
   // 도감 지역 서브탭 순서 — 네임드는 수배가 있는 존만 서브탭에 있다(selectNamedDex).
@@ -99,7 +113,8 @@ export default function GameTabs(props: GameTabsProps) {
   });
 
   return (
-    <Sidebar tabs={tabs} activeKey={activeTab} onSelect={select}>
+    <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
+             sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
       {activeTab === 'bag' && <BagTab game={game} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}

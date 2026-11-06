@@ -35,10 +35,10 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
 
   if (preview.kind === 'max') {
     return (
-      <ModalCard title="조선소" onClose={onClose}>
+      <ModalCard title="조선소" onClose={onClose} className="mobile:shrink-0">
         <TwoColumn>
           {ladder}
-          <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요. 모든 해역에 나갈 수 있어요.</Note>
+          <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요.<br />모든 해역에 나갈 수 있어요.</Note>
         </TwoColumn>
       </ModalCard>
     );
@@ -46,7 +46,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
   const { next, openedSpot, currentName, currentSpeed, currentBagCap, check } = preview;
 
   return (
-    <ModalCard title="조선소" onClose={onClose}>
+    <ModalCard title="조선소" onClose={onClose} className="mobile:shrink-0">
       <TwoColumn>
         {ladder}
         <div className="flex flex-col gap-3 min-w-0">
@@ -69,7 +69,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
           <CostBox>
             <CostLine have={game.gold} delta={-next.price}
                       requirement={{
-                        label: <Tip text="명성은 줄지 않아요. 이만큼 있어야 살 수 있어요.">명성</Tip>,
+                        label: <Tip text={'명성은 줄지 않아요.\n이만큼 있어야 살 수 있어요.'}>명성</Tip>,
                         need: next.fameReq, have: game.fame,
                       }} />
           </CostBox>

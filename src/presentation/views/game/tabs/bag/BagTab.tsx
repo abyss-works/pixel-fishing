@@ -19,6 +19,7 @@ import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
 import IconButton from '../../../../ui/IconButton';
 import PillButton from '../../../../ui/PillButton';
+import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
@@ -78,26 +79,28 @@ function ItemSection({ game, dispatch, setToast }: {
             <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
               <span className="w-3 h-3 rounded-full border border-line justify-self-center"
                     style={{ backgroundColor: bait.color }} />
-              <span className="truncate" title={`${bait.desc} ${baitEffectLine(bait)}`}>{bait.name}</span>
+              <Tip text={`${bait.desc} ${baitEffectLine(bait)}`} className="block truncate">{bait.name}</Tip>
               <span className="pf-accent text-text-dim text-right">×{count}</span>
-              <PillButton
-                type="button"
-                active={active}
-                disabled={!active && count <= 0}
-                aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
-                title={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
-                onClick={() => activate(active ? null : bait.id)}
-                className="justify-self-end">
-                <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
-                {active ? '사용 중' : '활성'}
-              </PillButton>
+              <Tip wraps text={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
+                   className="justify-self-end">
+                <PillButton
+                  type="button"
+                  active={active}
+                  disabled={!active && count <= 0}
+                  aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
+                  onClick={() => activate(active ? null : bait.id)}>
+                  <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
+                  {active ? '사용 중' : '활성'}
+                </PillButton>
+              </Tip>
             </div>
           );
         })}
       </Frame>
       <Note>
         미끼를 켜면 {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고,
-        방치 낚시에는 쓰이지 않아요. 미끼는 콜롬보항의 향료전에서 살 수 있어요.
+        방치 낚시에는 쓰이지 않아요.<br />
+        미끼는 콜롬보항의 향료전에서 살 수 있어요.
       </Note>
     </div>
   );
@@ -113,7 +116,7 @@ function ArtifactSection({ game }: { game: GameState }) {
         유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
       </PageTitle>
       {owned.length === 0 ? (
-        <Note>아직 유물이 없어요. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
+        <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
           <Frame divided>
@@ -130,7 +133,7 @@ function ArtifactSection({ game }: { game: GameState }) {
               </div>
             ))}
           </Frame>
-          <Note>유물은 가지고만 있어도 효과가 계속돼요. 교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
+          <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
       )}
     </div>
@@ -165,10 +168,11 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
               <span className="pf-accent text-text-dim text-right">
                 {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
-              <PillButton aria-label={`${name} 회수`} title="가방으로 되돌려요"
-                          onClick={() => onWithdraw(inst, name)}>
-                회수
-              </PillButton>
+              <Tip wraps text="가방으로 되돌려요">
+                <PillButton aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
+                  회수
+                </PillButton>
+              </Tip>
             </div>
           );
         })}
@@ -266,13 +270,12 @@ export default function BagTab({ game, dispatch, setToast }: {
               <span className="text-text-dim">/{cap}</span>마리)
             </PageTitle>
             {bagCount > 0 && (
-              <PillButton
-                aria-label="자동 잠금"
-                title="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요"
-                onClick={autoLock}>
-                <PixelIcon glyph="lockOpen" size={12} />
-                자동 잠금
-              </PillButton>
+              <Tip wraps text="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
+                <PillButton aria-label="자동 잠금" onClick={autoLock}>
+                  <PixelIcon glyph="lockOpen" size={12} />
+                  자동 잠금
+                </PillButton>
+              </Tip>
             )}
           </div>
           {lockConfirm && (
@@ -280,7 +283,8 @@ export default function BagTab({ game, dispatch, setToast }: {
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
-                  나머지는 잠금이 풀려요. 직접 잠근 물고기도 가장 크지 않으면 풀려요.
+                  나머지는 잠금이 풀려요.<br />
+                  직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
                 <p className="text-sm">
                   잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
@@ -292,7 +296,7 @@ export default function BagTab({ game, dispatch, setToast }: {
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
-            <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
+            <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
           ) : (
             <>
               <Frame divided>
@@ -351,10 +355,12 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </Frame>
               <Note>
-                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요. 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.
-                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.
-                {' '}{EXHIBIT_UI_ENABLED && '별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요. '}
-                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
+                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요.<br />
+                판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
+                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
+                {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
+                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
+                목록은 등급이 높은 순으로 정렬돼요.
                 <HelpHint text="펼친 개체 줄의 금색 왕관은 같은 형태에서 가장 큰 개체, 보라 반짝이는 돌연변이 개체예요." />
               </Note>
             </>

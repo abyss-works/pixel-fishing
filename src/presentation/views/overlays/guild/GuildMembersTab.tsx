@@ -8,7 +8,8 @@ import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 import Frame from '../../../ui/Frame';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Tip, { TipList } from '../../../ui/Tip';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
@@ -28,14 +29,13 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask }: Guil
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
-        <table className="w-full table-fixed border-collapse text-sm">
-          <colgroup><col /><col className="w-16" /><col className="w-20" /><col className="w-28" /><col className="w-8" /></colgroup>
+      <TableBox className="flex-1 min-h-0 px-3 pb-2">
+        <DataTable cols={[null, '4rem', '5rem', '7rem', '2rem']} nameMin="11rem">
           <thead>
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text={<TipList rows={dailyContributionRows()} note="하루 상한이에요. 한국 시간 새벽 4시에 새로 세요." />}>오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows()} note={'하루 상한이에요.\n한국 시간 새벽 4시에 새로 세요.'} />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>
@@ -55,8 +55,8 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask }: Guil
               );
             })}
           </tbody>
-        </table>
-      </Inset>
+        </DataTable>
+      </TableBox>
       <div className="h-8 shrink-0 flex items-center justify-end">
         <Button size="sm" variant="ghost" disabled={busy} onClick={leave}>길드 떠나기</Button>
       </div>

@@ -3,23 +3,26 @@
 //
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 
+import { safeLook } from '../content/wardrobe.js';
+import type { Look } from '../content/wardrobe.js';
+
 export type Dir = 0 | 1 | 2 | 3;
 /** 찌가 떠 있는 자리(어군 위치) — 낚싯줄을 드리웠을 때만 보낸다 */
 export interface Bob { x: number; y: number }
 
 export type ClientMessage =
-  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치
+  | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치, look: 외형(처음과 바뀐 때만), idleMs: 이번 던짐의 첫 결과가 나온 뒤 지난 시간(첫 결과 뒤에만)
   | { t: 'stop' }
   | { t: 'chat'; text: string; room?: 'guild' } // room이 없으면 월드 채팅, guild면 내 길드 채팅
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
+export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 낚시 중인 사람의 첫 결과 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드. 없으면 세지 않는다)
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
   | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
-  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob }
+  | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
@@ -66,9 +69,13 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       if (!isRegion(o.region) || !isCoord(o.x) || !isCoord(o.y) || !isDir(o.dir) || typeof o.line !== 'boolean') return null;
       if (o.zone !== undefined && o.zone !== null && !isRegion(o.zone)) return null;
       if (o.bob !== undefined && o.bob !== null && !isBob(o.bob)) return null;
+      if (o.idleMs !== undefined && !(isCoord(o.idleMs) && o.idleMs >= 0)) return null;
       return {
         t: 'move', region: o.region, ...(o.zone !== undefined ? { zone: o.zone } : {}), x: o.x, y: o.y, dir: o.dir, line: o.line,
         ...(isBob(o.bob) ? { bob: { x: o.bob.x, y: o.bob.y } } : {}),
+        // 외형은 범위를 검사하고, 맞지 않으면 기본 외형으로 바꿔 전한다
+        ...(o.look !== undefined ? { look: safeLook(o.look) } : {}),
+        ...(o.idleMs !== undefined ? { idleMs: o.idleMs } : {}),
       };
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
@@ -133,4 +140,30 @@ export function nextGlide(prev: Glide | null, to: { x: number; y: number }, now:
   const from = glidePosition(prev, now);
   if (Math.hypot(target.x - from.x, target.y - from.y) > SNAP_DISTANCE) return { from: target, to: target, at: now };
   return { from, to: target, at: now };
+}
+
+/** 방치 시간 판정에 쓰는 위치 */
+export interface Spot { region: string; x: number; y: number }
+
+/**
+ * 방치 시간을 세기 시작한 시각. 낚싯줄이 없으면 null이다. 줄이 있고 같은 자리에서 이어지면 이전 시작 시각을 유지한다.
+ * 처음이거나 지역·좌표가 바뀌었으면 보고받은 첫 결과 경과(reportedMs)를 지금에서 뺀 시각이고, 보고가 없으면 null이다.
+ * @param prev 이전에 본 위치와 시작 시각(없으면 null)
+ * @param reportedMs 그 던짐의 첫 결과가 나온 뒤 지난 시간(클라이언트가 move에 싣는 선택 필드)
+ */
+export function idleSinceOf(
+  prev: { spot: Spot; since: number | null } | null, next: Spot, line: boolean, reportedMs: number | undefined, now: number,
+): number | null {
+  if (!line) return null;
+  const same = prev && prev.spot.region === next.region && prev.spot.x === next.x && prev.spot.y === next.y;
+  return (same ? prev.since : null) ?? (reportedMs === undefined ? null : now - reportedMs);
+}
+
+/** 방치 시간 표시. 1시간 미만은 `mm:ss`, 1시간 이상은 `h:mm:ss`다 */
+export function formatIdle(ms: number): string {
+  const total = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
+  const h = Math.floor(total / 3600);
+  const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }

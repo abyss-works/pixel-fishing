@@ -1,11 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
+import type { Look } from '../../../game/content/wardrobe';
 import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
-import { applyLiveMessage, bubbleOf, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
+import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
 import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
@@ -27,6 +28,8 @@ const said = new Map<string, { text: string; at: number }>();
 const typingAt = new Map<string, number>();
 /** 내가 입력 중 표시를 켠 시각 — 서버는 내 입력 중 소식을 나에게 돌려주지 않으므로 보낼 때 기록한다 */
 let myTypingAt: number | null = null;
+/** 내 방치 시간을 세기 시작한 시각 — 위치를 읽는 송신 주기마다 갱신한다(Date.now 기준). 세지 않으면 null */
+let myIdleSince: number | null = null;
 /** 친구 알림 구독자 — 화면 상태가 아니라 한 번 일어나는 일이라 상태에 넣지 않고 바로 넘긴다 */
 type FriendEvent = Extract<ServerMessage, { t: 'friend' }>;
 const friendListeners = new Set<(e: FriendEvent) => void>();
@@ -62,6 +65,7 @@ function reset(): void {
   state = EMPTY_LIVE;
   glides.clear();
   myTypingAt = null;
+  myIdleSince = null;
   notify();
 }
 
@@ -113,18 +117,28 @@ const speechOf = (b: Bubble | null): Speech => b ? (b.kind === 'chat' ? b.text :
  * 내 말풍선은 서버가 돌려준 내 월드 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
  */
 export function liveFrame(region: string, now: number): {
-  others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech }[];
+  others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech; idle: string | null; look?: Look }[];
   bubble: Speech;
+  /** 내 머리 위에 그릴 방치 시간. 말풍선이 떠 있거나 낚시 중이 아니거나 첫 결과 전이면 null */
+  idle: string | null;
 } {
   const wall = Date.now();
   const others = othersInRegion(state, region).map(o => {
-    const { uid, x, y, nick, line, bob } = o.presence;
+    const { uid, x, y, nick, line, bob, look } = o.presence;
     const pos = glidePosition(glides.get(uid) ?? nextGlide(null, { x, y }, now), now);
     const bubble = speechOf(bubbleOf(said.get(uid) ?? null, typingAt.get(uid) ?? null, now));
-    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble };
+    // 말풍선이 떠 있는 동안에는 방치 시간을 그리지 않는다
+    const idle = bubble === null ? idleLabel(o.idleSince, wall) : null;
+    return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble, idle, ...(look ? { look } : {}) };
   });
   const mine = state.you === null ? null : said.get(state.you) ?? null;
-  return { others, bubble: speechOf(bubbleOf(mine, myTypingAt, now)) };
+  const bubble = speechOf(bubbleOf(mine, myTypingAt, now));
+  return { others, bubble, idle: bubble === null ? idleLabel(myIdleSince, wall) : null };
+}
+
+/** 그 바다에 접속한 길드원의 위치 — 미니맵이 그릴 때마다 부른다 */
+export function guildMatesIn(region: string, uids: ReadonlySet<string>): { uid: string; x: number; y: number }[] {
+  return matesInRegion(state, region, uids);
 }
 
 /**
@@ -136,9 +150,11 @@ export function useLivePosition(read: () => MyPosition): void {
     let last: SentPosition | null = null;
     let seenHello = helloCount;
     const timer = setInterval(() => {
+      const cur = read();
+      myIdleSince = cur.idleMs === undefined ? null : Date.now() - cur.idleMs;
       if (!conn) return;
       if (document.hidden || seenHello !== helloCount) { last = null; seenHello = helloCount; if (document.hidden) return; }
-      const next = nextPositionMessage(last, read());
+      const next = nextPositionMessage(last, cur);
       last = next.sent;
       if (next.msg) conn.send(next.msg);
     }, LIVE_MOVE_MS);

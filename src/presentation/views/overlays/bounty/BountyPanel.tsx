@@ -34,7 +34,7 @@ import type { MessageTone, Notify } from '../../../ui/hud/messageFeed';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 
-const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.';
+const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요.\n서버에 연결된 뒤 다시 해 주세요.';
 
 /** 고정 정보 줄: 구역, 오늘 남은 클리어(일반 의뢰, 네임드 토벌). 스냅샷이 오기 전에는 값 자리에 -를 둔다 */
 function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: {
@@ -142,7 +142,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         activeKey={screen}
         onSelect={setScreen}
       />
-      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pf-scroll">
+      <div className="flex flex-col gap-2 flex-1 min-h-0 pf-vscroll pf-scroll">
       {screen === 'quests' ? (
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
           <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0">

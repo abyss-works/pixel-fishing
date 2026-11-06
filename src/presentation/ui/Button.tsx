@@ -9,13 +9,16 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'md' | 'sm';
   /** 전폭 블록 — 좌우로 채운다 (variant와 무관) */
   full?: boolean;
+  /** 이 버튼이 연 창이 떠 있는 동안의 눌린 모양 */
+  pressed?: boolean;
 }
 
 // 픽셀 베벨 버튼 — variant로 위계 구분 (확정=primary, 보조=ghost)
-export default function Button({ variant = 'default', size = 'md', full, className, ...props }: ButtonProps) {
+export default function Button({ variant = 'default', size = 'md', full, pressed, className, ...props }: ButtonProps) {
   return (
     <button
-      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-sm', full && 'full', className)}
+      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-sm', full && 'full', pressed && 'pressed', className)}
+      aria-pressed={pressed}
       {...props}
     />
   );

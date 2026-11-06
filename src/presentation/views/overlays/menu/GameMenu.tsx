@@ -14,6 +14,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 // 접힌 상태에서는 알릴 것이 하나라도 있으면 버튼 모서리에 빨간 점을 찍는다.
 // 입구마다 보이는 조건은 그대로다: 길드와 소셜은 계정 유저만, 우편함은 클라우드 모드에서만 연다.
 // 열 수 있는 입구가 하나도 없으면 버튼도 그리지 않는다.
+// 모바일 배치에서는 화면 틀의 머리 줄 오른쪽 끝 칸에 놓이고, 펼친 줄은 버튼 아래로 게임 영역 위에 겹쳐 뜬다.
 
 interface Entry {
   key: string;
@@ -79,7 +80,8 @@ export default function GameMenu({ account, onGuild, onFriends, onMailbox, setTo
   const alert = entries.some(e => e.count > 0);
 
   return (
-    <div ref={root} className="absolute right-3 top-3 z-(--z-overlay) flex flex-col items-end gap-1">
+    <div ref={root} className="absolute right-3 top-3 z-(--z-overlay) flex flex-col items-end gap-1
+                               mobile:relative mobile:right-auto mobile:top-auto mobile:col-start-2 mobile:row-start-1 mobile:mr-1">
       <Frame as="button" type="button" onClick={() => setOpen(v => !v)}
              aria-expanded={open} aria-haspopup="menu"
              aria-label={`메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`}
@@ -88,7 +90,7 @@ export default function GameMenu({ account, onGuild, onFriends, onMailbox, setTo
         {alert && !open && <span className="absolute right-1 top-1 size-[7px] bg-danger" aria-hidden="true" />}
       </Frame>
       {open && (
-        <MenuList className="min-w-[150px] p-1" items={entries.map(e => ({
+        <MenuList className="min-w-[150px] p-1 mobile:absolute mobile:right-0 mobile:top-full mobile:mt-1" items={entries.map(e => ({
           key: e.key,
           label: e.count > 0 ? e.countLabel(e.count) : e.label,
           onSelect: () => { setOpen(false); e.onOpen(); },

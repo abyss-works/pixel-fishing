@@ -18,6 +18,15 @@ const DAY = '2026-12-31T23:40:00Z';   // 낮(분 40), 게임 날짜 2027-01-01
 const NIGHT = '2026-12-31T23:55:00Z'; // 밤(분 55), 같은 게임 날짜
 const NEXT_DAY = '2027-01-01T19:30:00Z'; // KST 04:30 → 게임 날짜 2027-01-02
 
+describe('천장 기준 — 운 나쁜 하위 20% 구제', () => {
+  it('어종 천장 전 미획득 확률 e^-K가 20%다', () => {
+    expect(Math.exp(-SPECIES_PITY_K)).toBeCloseTo(0.2, 10);
+  });
+  it('네임드 조우 천장은 기본 조우 확률 1/1000에서 1,609캐치다', () => {
+    expect(NAMED_PITY_CATCHES).toBe(1609);
+  });
+});
+
 describe('어종 천장 — 누적', () => {
   it('이번 캐치에서 각 어종 일반 폼이 나올 확률을 더한다', () => {
     const p = accrueSpeciesPity({}, 'pond', { phase: 'day' }, 0.75);

@@ -4,14 +4,14 @@ import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, requestRows, splitMembers,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
   ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
-    requests: [],
+    requests: [], renamedAt: null,
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -65,12 +65,12 @@ describe('길드 화면 모델', () => {
     const g = { ...guild('leader', members), name: '심해' };
     expect(memberConfirm(g, members[1], 'handover')).toEqual({
       title: '길드장 넘기기', label: '넘기기', op: { op: 'handover', guildId: 'g', uid: 'A' },
-      text: 'A 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.',
+      text: 'A 님에게 길드장을 넘길까요?\n나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.',
       done: 'A 님에게 길드장을 넘겼어요.',
     });
     expect(memberConfirm(g, members[1], 'kick')).toEqual({
       title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: 'g', uid: 'A' },
-      text: 'A 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.',
+      text: 'A 님을 길드에서 내보낼까요?\n쌓은 기여와 기록은 길드에 남아요.',
       done: 'A 님을 내보냈어요.',
     });
   });
@@ -78,12 +78,12 @@ describe('길드 화면 모델', () => {
   it('떠나기 확인 창 — 길드원은 떠나기, 혼자 남은 길드장은 해산, 다른 길드원이 있는 길드장은 창이 없다', () => {
     expect(leaveConfirm(guild('member', members), 'A')).toEqual({
       title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: 'g', uid: 'A' },
-      text: '심해 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.',
+      text: '심해 길드를 떠날까요?\n쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.',
       done: '심해 길드를 떠났어요.',
     });
     expect(leaveConfirm(guild('leader', [members[0]]), 'L')).toEqual({
       title: '길드 해산', label: '해산', op: { op: 'remove', guildId: 'g', uid: 'L' },
-      text: '혼자 남은 길드라 떠나면 심해 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?',
+      text: '혼자 남은 길드라 떠나면 심해 길드가 없어지고 길드 채팅도 지워져요.\n떠날까요?',
       done: '심해 길드를 해산했어요.',
     });
     expect(leaveConfirm(guild('leader', members), 'L')).toBeNull();
@@ -91,7 +91,7 @@ describe('길드 화면 모델', () => {
 
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
-      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted']) {
+      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today']) {
       expect(GUILD_ERROR_TEXT[code]).toBeTruthy();
     }
   });
@@ -113,6 +113,7 @@ describe('길드 성장 화면 모델', () => {
   it('기여 안내는 명성 하루 상한을 담는다', () => {
     // 하루 상한은 오늘 기여 도움말이 맡으므로 레벨 도움말에는 넣지 않는다
     expect(GUILD_LEVEL_HELP).toContain('길드 스킬');
+    expect(GUILD_LEVEL_HELP.split('\n')).toHaveLength(2);
     expect(GUILD_LEVEL_HELP).not.toMatch(/1,000|500/);
   });
 
@@ -177,6 +178,34 @@ describe('항해일지', () => {
   });
 });
 
+describe('길드 이름 바꾸기 화면 모델', () => {
+  const now = '2026-11-06T03:00:00.000Z';
+
+  it('바꿀 수 있으면 버튼이 열리고 이유가 없다', () => {
+    expect(renameButtonState(null, now, 100_000)).toEqual({ disabled: false, reason: null });
+  });
+
+  it('오늘 이미 바꿨으면 막고 다시 바꿀 수 있는 시각을 알린다', () => {
+    const s = renameButtonState(now, now, 5_000_000);
+    expect(s.disabled).toBe(true);
+    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n한국 시간 새벽 4시 이후에 다시 바꿀 수 있어요.');
+  });
+
+  it('골드가 모자라면 막고 필요한 골드를 알린다', () => {
+    expect(renameButtonState(null, now, 99_999)).toEqual({ disabled: true, reason: '골드가 모자라요.\n이름을 바꾸려면 100,000G가 필요해요.' });
+  });
+});
+
+describe('길드 이름 바꾸기 항해일지', () => {
+  it('새 이름을 강조한 문장이다. 받침 ㄹ로 끝나는 이름은 로를 쓴다', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    const entry = (detail: string) => logbookDays([{ id: 1, kind: 'rename', uid: 'u', nick: '가람', detail, value: null, at }], 'me')[0].items[0];
+    expect(entry('먼바다').parts).toEqual([{ text: '길드 이름을 ' }, { text: '먼바다', tone: 'skill' }, { text: '로 바꿨어요.' }]);
+    expect(entry('불꽃').parts.at(-1)).toEqual({ text: '으로 바꿨어요.' });
+    expect(entry('먼바다').quiet).toBe(false);
+  });
+});
+
 describe('길드 보너스 화면 모델', () => {
   const item = (over: Partial<GuildBonusItem>): GuildBonusItem => ({ id: 'sell', unlock: 1, rank: 0, cap: 0, pool: 0,
     next: null, effect: 0, nextEffect: 0.02, mine: 0, ...over });
@@ -231,28 +260,35 @@ describe('초대 확인 창', () => {
   const viewer = { account: true, guild: null as string | null };
 
   it('없는 코드는 찾지 못했다고 알리고 확인만 둔다', () => {
-    expect(inviteDialogView(null, viewer)).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null });
+    expect(inviteDialogView(null, viewer, 'link')).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null });
   });
 
   it('게스트는 계정이 있어야 한다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: false, guild: null })).toMatchObject({ state: 'guest', action: null,
-      text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.' });
+    expect(inviteDialogView(preview(), { account: false, guild: null }, 'link')).toMatchObject({ state: 'guest', action: null,
+      text: '길드는 계정이 있어야 들어갈 수 있어요.\n계정을 만들거나 로그인하면 이 창이 다시 떠요.' });
   });
 
   it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' })).toMatchObject({ state: 'member', action: null,
-      text: '이미 다른 길드(심해조합)에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.' });
-    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' })).toMatchObject({ state: 'member', action: null,
+    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' }, 'link')).toMatchObject({ state: 'member', action: null,
+      text: '이미 다른 길드(심해조합)에 있어요.\n지금 길드를 떠난 뒤에 들어갈 수 있어요.' });
+    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' }, 'link')).toMatchObject({ state: 'member', action: null,
       text: '이미 새벽선단 길드에 있어요.' });
   });
 
   it('가입 방식과 인원에 따라 들어가기, 가입 신청, 받지 않음이다', () => {
-    expect(inviteDialogView(preview(), viewer)).toEqual({ state: 'open', action: { label: '들어가기' },
+    expect(inviteDialogView(preview(), viewer, 'code')).toEqual({ state: 'open', action: { label: '들어가기' },
       text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
-    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer)).toEqual({ state: 'approval', action: { label: '가입 신청' },
-      text: '길드장이 승인하면 들어가요. 신청은 7일 동안 남아요.' });
-    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer)).toEqual({ state: 'closed', action: null,
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'code')).toEqual({ state: 'approval', action: { label: '가입 신청' },
+      text: '길드장이 승인하면 들어가요.\n신청은 7일 동안 남아요.' });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'code')).toEqual({ state: 'closed', action: null,
       text: '이 길드는 지금 새 길드원을 받지 않아요.' });
-    expect(inviteDialogView(preview({ members: 10 }), viewer)).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+    expect(inviteDialogView(preview({ members: 10 }), viewer, 'code')).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+  });
+
+  it('초대 링크로 오면 승인 가입 길드도 들어가기이고, 닫힘과 인원 가득은 그대로 받지 않는다', () => {
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'link')).toEqual({ state: 'open', action: { label: '들어가기' },
+      text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'link')).toMatchObject({ state: 'closed', action: null });
+    expect(inviteDialogView(preview({ joinMode: 'approval', members: 10 }), viewer, 'link')).toMatchObject({ state: 'full', action: null });
   });
 });

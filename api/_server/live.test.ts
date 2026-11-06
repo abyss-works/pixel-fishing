@@ -133,6 +133,55 @@ describe('실시간 채널 서버', () => {
     expect(a.messages).toEqual([]);
   });
 
+  it('방치 시간은 첫 결과 경과가 실린 move부터 센다. 줄을 거두거나 위치가 바뀌면 지우고, join과 hello에도 싣는다', async () => {
+    const { url } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    const at = (x: number, line: boolean, idleMs?: number) =>
+      JSON.stringify({ t: 'move', region: 'sea', x, y: 4, dir: 1, line, ...(idleMs === undefined ? {} : { idleMs }) });
+    a.ws.send(at(3, false));
+    expect(await b.next()).not.toHaveProperty('presence.idleMs');
+    a.ws.send(at(3, true)); // 던졌지만 첫 결과 전
+    expect(await b.next()).not.toHaveProperty('idleMs');
+    a.ws.send(at(3, true, 5000)); // 첫 결과가 5초 전에 나왔다
+    const first = await b.next() as { idleMs: number };
+    expect(first.idleMs).toBeGreaterThanOrEqual(5000);
+    expect(first.idleMs).toBeLessThan(6000);
+    await new Promise(r => setTimeout(r, 120));
+    a.ws.send(at(3, true, 0)); // 같은 던짐에서 다시 보내도 처음 시각을 유지한다
+    const kept = await b.next() as { idleMs: number };
+    expect(kept.idleMs).toBeGreaterThanOrEqual(5100);
+    const c = connect(url, 'u3');
+    const hello = await c.next() as Extract<ServerMessage, { t: 'hello' }>;
+    expect(hello.others[0].idleMs).toBeGreaterThanOrEqual(5100);
+    expect(hello.others[0].idleMs).toBeLessThan(7000);
+    a.ws.send(at(3, false)); // 줄을 거두면 지운다
+    expect(await b.next()).not.toHaveProperty('idleMs');
+    a.ws.send(at(3, true)); // 다시 던진 뒤 첫 결과 전에는 세지 않는다
+    expect(await b.next()).not.toHaveProperty('idleMs');
+    a.ws.send(at(3, true, 1000));
+    expect((await b.next() as { idleMs: number }).idleMs).toBeGreaterThanOrEqual(1000);
+    a.ws.send(at(4, true)); // 위치가 바뀌면 지운다
+    expect(await b.next()).not.toHaveProperty('idleMs');
+  });
+
+  it('외형은 검사해 전하고, 외형이 없는 move는 직전 외형을 유지한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+    const look = { shirt: 3, pants: 4, hat: 'cap-red' };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 1, dir: 1, line: false, look }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', look } });
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 2, y: 1, dir: 1, line: false }));
+    expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 2, y: 1, dir: 1, line: false });
+    expect(live.presenceOf('u1')?.look).toEqual(look);
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 2, y: 1, dir: 1, line: false, look: { shirt: 99, pants: 0, hat: null } }));
+    expect(await b.next()).toMatchObject({ t: 'move', look: { shirt: 0, pants: 0, hat: null } });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 0, pants: 0, hat: null });
+  });
+
   it('나중에 연결한 사람은 hello로 위치를 보낸 사람만 받고, 끊기면 leave가 간다', async () => {
     const { url, live } = await start();
     const a = connect(url, 'u1');

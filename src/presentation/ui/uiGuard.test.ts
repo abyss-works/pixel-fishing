@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest';
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>;
+/** 게임 화면 전체(표현·기능·앱 진입). 관리자 화면은 따로 정한다 */
+const appSources = Object.entries(import.meta.glob('../../**/*.{ts,tsx}', {
+  query: '?raw', import: 'default', eager: true,
+}) as Record<string, string>)
+  .filter(([key]) => !/\.(?:test|stories)\.tsx?$/.test(key) && !/\/admin\//.test(key));
 
 /** glob 키 → presentation 기준 경로. 이 파일과 같은 폴더(ui)는 './X', 나머지는 '../views/X'로 온다 */
 const rel = (key: string) => (key.startsWith('./') ? `ui/${key.slice(2)}` : key.replace(/^\.\.\//, ''));
@@ -24,6 +29,7 @@ const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /<select\b/, use: 'Select' },
   { pattern: /<textarea\b/, use: 'TextArea' },
   { pattern: /<label\b/, use: 'Field(이름표·입력·도움말·오류 묶음)' },
+  { pattern: /<table\b/, use: 'DataTable(담는 칸은 TableBox)' },
 ];
 
 /** 브라우저 기본 대화상자 — 게임 화면은 useDialogs(ConfirmDialog·InputDialog·NoticeDialog)를 쓴다. 예외 없음 */
@@ -58,7 +64,12 @@ describe('UI 시스템 가드', () => {
   });
 
   it('브라우저 기본 대화상자를 쓰지 않는다 — 확인·입력·알림은 useDialogs', () => {
-    expect(screens.filter(f => SYSTEM_DIALOG.test(f.src)).map(f => f.path)).toEqual([]);
+    expect(appSources.filter(([, src]) => SYSTEM_DIALOG.test(src)).map(([key]) => key)).toEqual([]);
+  });
+
+  it('기능·앱 진입 코드도 입력 요소를 직접 그리지 않는다', () => {
+    const raw = /<(?:input|textarea|select)/;
+    expect(appSources.filter(([key, src]) => !/\/presentation\//.test(key) && raw.test(src)).map(([key]) => key)).toEqual([]);
   });
 
   it('제목은 제목 컴포넌트와 창·상자 title로 쓴다 — 예외 목록의 자리만 태그를 직접 쓴다', () => {

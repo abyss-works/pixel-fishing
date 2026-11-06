@@ -3,10 +3,11 @@ import type {
 } from '../../../platform/api';
 import type { ServerMessage } from '../../../game/rules/live';
 import {
-  DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, guildDailyContributionCaps, guildLinkPath,
-  handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome,
+  DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST, guildDailyContributionCaps,
+  guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
-import type { GuildBonusId, GuildJoinMode } from '../../../game/rules/guild';
+import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
+import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
 import { namedById } from '../../../game/content/named';
@@ -53,10 +54,10 @@ export function memberConfirm(guild: GuildInfo, target: GuildMemberItem, action:
   const name = memberName(target);
   return action === 'handover'
     ? { title: '길드장 넘기기', label: '넘기기', op: { op: 'handover', guildId: guild.id, uid: target.uid },
-      text: `${name} 님에게 길드장을 넘길까요? 나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
+      text: `${name} 님에게 길드장을 넘길까요?\n나는 길드원이 되고, 되돌리려면 새 길드장이 다시 넘겨야 해요.`,
       done: `${name} 님에게 길드장을 넘겼어요.` }
     : { title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: guild.id, uid: target.uid },
-      text: `${name} 님을 길드에서 내보낼까요? 쌓은 기여와 기록은 길드에 남아요.`,
+      text: `${name} 님을 길드에서 내보낼까요?\n쌓은 기여와 기록은 길드에 남아요.`,
       done: `${name} 님을 내보냈어요.` };
 }
 
@@ -67,10 +68,10 @@ export function leaveConfirm(guild: GuildInfo, me: string): GuildConfirm | null 
   const op: GuildOp = { op: 'remove', guildId: guild.id, uid: me };
   return outcome === 'dissolve'
     ? { title: '길드 해산', label: '해산', op,
-      text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요. 떠날까요?`,
+      text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요.\n떠날까요?`,
       done: `${guild.name} 길드를 해산했어요.` }
     : { title: '길드 떠나기', label: '떠나기', op,
-      text: `${guild.name} 길드를 떠날까요? 쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.`,
+      text: `${guild.name} 길드를 떠날까요?\n쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.`,
       done: `${guild.name} 길드를 떠났어요.` };
 }
 
@@ -115,23 +116,25 @@ export interface InviteDialogView {
 /**
  * 초대 확인 창이 보일 것. preview가 null이면 없는 코드다.
  * @param viewer account는 계정 유저인지, guild는 지금 속한 길드 이름(없으면 null)
+ * @param via 초대 링크로 열었는가(link), 코드를 직접 넣어 찾았는가(code). 링크로 오면 승인 가입도 바로 들어간다
  */
-export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null }): InviteDialogView {
-  if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null };
+export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null },
+  via: GuildJoinVia): InviteDialogView {
+  if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null };
   if (!viewer.account) {
-    return { state: 'guest', text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.', action: null };
+    return { state: 'guest', text: '길드는 계정이 있어야 들어갈 수 있어요.\n계정을 만들거나 로그인하면 이 창이 다시 떠요.', action: null };
   }
   if (viewer.guild !== null) {
     return { state: 'member', action: null, text: viewer.guild === preview.name
       ? `이미 ${preview.name} 길드에 있어요.`
-      : `이미 다른 길드(${viewer.guild})에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.` };
+      : `이미 다른 길드(${viewer.guild})에 있어요.\n지금 길드를 떠난 뒤에 들어갈 수 있어요.` };
   }
-  const outcome = joinOutcome(preview.joinMode, preview.members);
+  const outcome = joinOutcome(preview.joinMode, preview.members, via);
   if (outcome === 'closed') return { state: 'closed', text: '이 길드는 지금 새 길드원을 받지 않아요.', action: null };
   if (outcome === 'guild-full') return { state: 'full', text: '길드 인원이 가득 찼어요.', action: null };
   return outcome === 'join'
     ? { state: 'open', text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.', action: { label: '들어가기' } }
-    : { state: 'approval', text: `길드장이 승인하면 들어가요. 신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_400_000}일 동안 남아요.`, action: { label: '가입 신청' } };
+    : { state: 'approval', text: `길드장이 승인하면 들어가요.\n신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_400_000}일 동안 남아요.`, action: { label: '가입 신청' } };
 }
 
 /** 실시간 길드 알림 한 줄 — 가입 신청 도착(길드장), 승인과 거절(신청한 사람) */
@@ -162,7 +165,27 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',
   'bad-amount': '기부할 골드를 1 이상의 정수로 입력해 주세요.',
   restricted: '이용이 제한된 계정은 기부할 수 없어요.',
+  'same-name': '지금 쓰는 이름과 같아요.',
+  'renamed-today': '오늘은 이미 이름을 바꿨어요.',
 };
+
+// ── 이름 바꾸기 ──────────────────────────────────────────────
+
+/** 이름 바꾸기 창의 비용 한 줄 */
+export const GUILD_RENAME_COST_TEXT = `이름을 바꾸면 ${num(GUILD_RENAME_COST)}G가 들어요.`;
+
+/** 관리 탭 이름 바꾸기 버튼의 상태 — 막혔으면 그 이유(툴팁). gold는 내 골드다 */
+export function renameButtonState(lastRenamedAt: string | null, nowISO: string, gold: number):
+  { disabled: boolean; reason: string | null } {
+  const block = renameBlock({ lastRenamedAt, nowISO, gold });
+  if (block === 'renamed-today') {
+    return { disabled: true, reason: `${GUILD_ERROR_TEXT['renamed-today']}\n${GAME_DAY_RESET_TEXT} 이후에 다시 바꿀 수 있어요.` };
+  }
+  if (block === 'not-enough-gold') {
+    return { disabled: true, reason: `${GUILD_ERROR_TEXT['not-enough-gold']}\n이름을 바꾸려면 ${num(GUILD_RENAME_COST)}G가 필요해요.` };
+  }
+  return { disabled: false, reason: null };
+}
 
 // ── 성장과 항해일지 ──────────────────────────────────────────────
 
@@ -178,7 +201,7 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 }
 
 /** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
-export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요. '
+export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
   + '레벨이 오르면 길드 스킬이 하나씩 열리고, 스킬마다 올릴 수 있는 단계 상한도 올라가요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한 */
@@ -322,6 +345,10 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
     case 'donate':
       return [who, { text: ' 님이 ' }, { text: skillName(log.detail), tone: 'skill' }, { text: '에 ' },
         { text: `${num(log.value ?? 0)}G`, tone: 'num' }, { text: '를 기부했어요.' }];
+    case 'rename': {
+      const name = log.detail ?? '';
+      return [{ text: '길드 이름을 ' }, { text: name, tone: 'skill' }, { text: `${josa(name, '으로/로')} 바꿨어요.` }];
+    }
     case 'bonus-up': {
       const skill = skillName(log.detail);
       return [{ text: '길드 스킬 ' }, { text: skill, tone: 'skill' }, { text: `${josa(skill, '이/가')} ` },
