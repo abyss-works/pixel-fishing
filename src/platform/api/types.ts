@@ -118,7 +118,7 @@ export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest |
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 export type GuildOp =
   | { op: 'create'; name: string }
-  | { op: 'join'; code: string }
+  | { op: 'join'; code: string; via?: 'link' }
   | { op: 'rename'; guildId: string; name: string }
   | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
   | { op: 'approve'; guildId: string; uid: string }

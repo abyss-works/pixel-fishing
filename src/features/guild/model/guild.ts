@@ -6,7 +6,7 @@ import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST, guildDailyContributionCaps,
   guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
-import type { GuildBonusId, GuildJoinMode } from '../../../game/rules/guild';
+import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
@@ -116,8 +116,10 @@ export interface InviteDialogView {
 /**
  * 초대 확인 창이 보일 것. preview가 null이면 없는 코드다.
  * @param viewer account는 계정 유저인지, guild는 지금 속한 길드 이름(없으면 null)
+ * @param via 초대 링크로 열었는가(link), 코드를 직접 넣어 찾았는가(code). 링크로 오면 승인 가입도 바로 들어간다
  */
-export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null }): InviteDialogView {
+export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null },
+  via: GuildJoinVia): InviteDialogView {
   if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null };
   if (!viewer.account) {
     return { state: 'guest', text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.', action: null };
@@ -127,7 +129,7 @@ export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { a
       ? `이미 ${preview.name} 길드에 있어요.`
       : `이미 다른 길드(${viewer.guild})에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.` };
   }
-  const outcome = joinOutcome(preview.joinMode, preview.members);
+  const outcome = joinOutcome(preview.joinMode, preview.members, via);
   if (outcome === 'closed') return { state: 'closed', text: '이 길드는 지금 새 길드원을 받지 않아요.', action: null };
   if (outcome === 'guild-full') return { state: 'full', text: '길드 인원이 가득 찼어요.', action: null };
   return outcome === 'join'

@@ -27,16 +27,14 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = invite.settled && (account === null || !loading);
-  const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }) : null;
+  const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }, 'link') : null;
 
   const confirm = async () => {
     setBusy(true);
     try {
-      const r = await act({ op: 'join', code });
+      const r = await act({ op: 'join', code, via: 'link' });
       if (!r.ok) { setError(GUILD_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
-      setToast(r.result === 'requested'
-        ? `${invite.preview?.name ?? ''} 길드에 가입을 신청했어요. 길드장이 승인하면 들어가요.`
-        : `${invite.preview?.name ?? ''} 길드에 들어갔어요.`);
+      setToast(`${invite.preview?.name ?? ''} 길드에 들어갔어요.`);
       onClose();
     } catch {
       setError('길드 요청을 보내지 못했어요. 연결을 확인해 주세요.');

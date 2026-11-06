@@ -259,28 +259,35 @@ describe('초대 확인 창', () => {
   const viewer = { account: true, guild: null as string | null };
 
   it('없는 코드는 찾지 못했다고 알리고 확인만 둔다', () => {
-    expect(inviteDialogView(null, viewer)).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null });
+    expect(inviteDialogView(null, viewer, 'link')).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요. 링크가 맞는지 확인해 주세요.', action: null });
   });
 
   it('게스트는 계정이 있어야 한다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: false, guild: null })).toMatchObject({ state: 'guest', action: null,
+    expect(inviteDialogView(preview(), { account: false, guild: null }, 'link')).toMatchObject({ state: 'guest', action: null,
       text: '길드는 계정이 있어야 들어갈 수 있어요. 계정을 만들거나 로그인하면 이 창이 다시 떠요.' });
   });
 
   it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' })).toMatchObject({ state: 'member', action: null,
+    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' }, 'link')).toMatchObject({ state: 'member', action: null,
       text: '이미 다른 길드(심해조합)에 있어요. 지금 길드를 떠난 뒤에 들어갈 수 있어요.' });
-    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' })).toMatchObject({ state: 'member', action: null,
+    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' }, 'link')).toMatchObject({ state: 'member', action: null,
       text: '이미 새벽선단 길드에 있어요.' });
   });
 
   it('가입 방식과 인원에 따라 들어가기, 가입 신청, 받지 않음이다', () => {
-    expect(inviteDialogView(preview(), viewer)).toEqual({ state: 'open', action: { label: '들어가기' },
+    expect(inviteDialogView(preview(), viewer, 'code')).toEqual({ state: 'open', action: { label: '들어가기' },
       text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
-    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer)).toEqual({ state: 'approval', action: { label: '가입 신청' },
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'code')).toEqual({ state: 'approval', action: { label: '가입 신청' },
       text: '길드장이 승인하면 들어가요. 신청은 7일 동안 남아요.' });
-    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer)).toEqual({ state: 'closed', action: null,
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'code')).toEqual({ state: 'closed', action: null,
       text: '이 길드는 지금 새 길드원을 받지 않아요.' });
-    expect(inviteDialogView(preview({ members: 10 }), viewer)).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+    expect(inviteDialogView(preview({ members: 10 }), viewer, 'code')).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+  });
+
+  it('초대 링크로 오면 승인 가입 길드도 들어가기이고, 닫힘과 인원 가득은 그대로 받지 않는다', () => {
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'link')).toEqual({ state: 'open', action: { label: '들어가기' },
+      text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'link')).toMatchObject({ state: 'closed', action: null });
+    expect(inviteDialogView(preview({ joinMode: 'approval', members: 10 }), viewer, 'link')).toMatchObject({ state: 'full', action: null });
   });
 });

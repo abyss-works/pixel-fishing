@@ -35,7 +35,7 @@ function request(op: GuildOp): [string, RequestInit] {
   switch (op.op) {
     case 'create': return ['/api/guilds', json('POST', { name: op.name })];
     case 'rename': return [`${guild(op.guildId)}/name`, json('PUT', { name: op.name })];
-    case 'join': return ['/api/guild-memberships', json('POST', { code: op.code })];
+    case 'join': return ['/api/guild-memberships', json('POST', op.via ? { code: op.code, via: op.via } : { code: op.code })];
     case 'settings': {
       const body: Record<string, unknown> = {};
       if (op.joinMode !== undefined) body.joinMode = op.joinMode;
