@@ -2,12 +2,16 @@
 export {
   flashTitle,
   getEncounterAlertEnabled,
+  getUpdateAlertEnabled,
   isPageHidden,
   notificationPermission,
   requestNotificationPermission,
   resetEncounterAlert,
+  resetUpdateAlert,
   setEncounterAlertEnabled,
+  setUpdateAlertEnabled,
   showNotification,
   subscribeEncounterAlert,
+  subscribeUpdateAlert,
 } from '../adapters/attention';
 export type { NotificationPermissionState } from '../adapters/attention';

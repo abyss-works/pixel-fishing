@@ -1,16 +1,16 @@
 import {
-  flashTitle, getEncounterAlertEnabled, isPageHidden, notificationPermission, showNotification,
+  flashTitle, getUpdateAlertEnabled, isPageHidden, notificationPermission, showNotification,
 } from '../../../platform/api/attention';
 import { shouldAlertEncounter } from '../../bounty/model/encounterAlert';
 
 // 업데이트 알림 — 방치 중 새 버전이 나와 진행이 멈췄음을 다른 화면을 보는 플레이어에게 알린다.
-// 네임드 조우 알림과 같은 규칙과 같은 설정(알림 켜기)을 쓴다.
+// 네임드 조우 알림과 같은 규칙을 쓰고, 켜고 끄는 설정은 업데이트 알림 전용 값을 읽는다.
 
 /** 업데이트 안내 창이 처음 뜰 때 부른다 */
 export function alertUpdate(): void {
   const plan = shouldAlertEncounter({
     pageHidden: isPageHidden(),
-    enabled: getEncounterAlertEnabled(),
+    enabled: getUpdateAlertEnabled(),
     permission: notificationPermission(),
   });
   if (plan.flash) flashTitle('업데이트');

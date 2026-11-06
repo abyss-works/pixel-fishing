@@ -139,7 +139,7 @@ export default function AccountModal({
   };
 
   return (
-    <Modal title="계정 관리" onClose={onClose}>
+    <Modal title="계정 관리" narrow onClose={onClose}>
       {syncLabel && (
         <div className={cx('text-xs mb-2', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
           {syncLabel}
