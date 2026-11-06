@@ -113,7 +113,7 @@ describe('BountyPanel', () => {
     await waitFor(() => expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('1/1'));
     const buttons = screen.getAllByRole('button', { name: '수주' });
     for (const button of buttons) expect(button).toBeDisabled();
-    expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.');
+    expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
   });
 
   it('수주할 수 있으면 수주 버튼의 툴팁은 세는 기준을 알린다', async () => {
