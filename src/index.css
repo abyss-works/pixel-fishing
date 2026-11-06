@@ -148,6 +148,12 @@ body {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+/* 모바일 배치에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
+   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 배치 판정(MOBILE_QUERY)과 같다. */
+@media (orientation: portrait) and (max-width: 599px) {
+  html { touch-action: manipulation; }
+  input:not([type='checkbox'], [type='radio'], [type='range']), textarea, select { font-size: 16px; }
+}
 /* 문단·목록은 마지막 줄에 한 어절만 남지 않게 줄 길이를 고르게 맞춘다 */
 p, li { text-wrap: pretty; }
 
@@ -284,6 +290,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     font-weight: bold;
     border-bottom-color: var(--c-gold);
     background: linear-gradient(180deg, rgba(255, 213, 79, 0.1), transparent);
+  }
+
+  /* 세로 스크롤 칸 — 목록과 창 본문이 쓰는 공용 방식. overflow-y만 auto로 두면 overflow-x도 auto로 계산되어
+     안쪽이 몇 px만 넘쳐도 가로로 밀린다. 가로는 잘라 세로로만 스크롤하고, 끝에 닿아도 바깥으로 스크롤이 번지지 않게 한다.
+     표를 담는 가로 스크롤 칸이나 ScrollRow처럼 가로 스크롤이 목적인 칸에는 쓰지 않는다. */
+  .pf-vscroll {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.

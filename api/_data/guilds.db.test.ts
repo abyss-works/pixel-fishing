@@ -8,11 +8,12 @@ import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
   cancelJoinRequest, createGuild, decideJoinRequest, deleteUserGuild, donateToBonus, guildIdOf, guildPreview, handOver, joinByCode,
-  myGuild, myJoinRequest, removeMember, setJoinSettings,
+  myGuild, myJoinRequest, removeMember, renameGuild, setJoinSettings,
 } from './guilds.js';
 import { commitAction } from './commit.js';
 import { versionUpdate } from './save.js';
 import { newState } from '../../src/game/rules/logic.js';
+import { GUILD_MAX_MEMBERS } from '../../src/game/rules/guild.js';
 
 let testDb: TestDatabase;
 let client: Client;
@@ -117,6 +118,23 @@ describe('guilds', () => {
     expect(await guildIdOf(database.db, b)).toBeNull();
     expect(await myJoinRequest(database.db, b, LATER)).toBeNull();
     expect(await decideJoinRequest(tx(), leader, g.id, b, true, LATER)).toEqual({ ok: false, error: 'no-request' });
+  });
+
+  it('링크로 오면 승인 가입 길드에도 바로 들어오고, 닫힘과 인원 가득은 링크로도 받지 않는다', async () => {
+    const leader = await user();
+    const g = await make(leader);
+    const a = await user();
+    expect(await joinByCode(tx(), a, g.code, NOW, 'link')).toEqual({ ok: true, id: g.id, result: 'joined' });
+    expect(await guildIdOf(database.db, a)).toBe(g.id);
+    expect(await myJoinRequest(database.db, a, NOW)).toBeNull();
+    const pending = await user();
+    await joinByCode(tx(), pending, g.code, NOW);
+    expect(await myJoinRequest(database.db, pending, NOW)).not.toBeNull();
+    await setJoinSettings(database.db, leader, g.id, { joinMode: 'closed' });
+    expect(await joinByCode(tx(), pending, g.code, NOW, 'link')).toEqual({ ok: false, error: 'guild-closed' });
+    const full = await guildWith(GUILD_MAX_MEMBERS - 1);
+    await setJoinSettings(database.db, full.leader, full.id, { joinMode: 'approval' });
+    expect(await joinByCode(tx(), await user(), full.code, NOW, 'link')).toEqual({ ok: false, error: 'guild-full' });
   });
 
   it('신청은 한 사람에 하나라 새 신청이 이전 신청을 바꾸고, 7일이 지나면 사라지며, 스스로 거둘 수 있다', async () => {
@@ -377,5 +395,87 @@ describe('길드 보너스 기부', () => {
     const view = (await myGuild(database.db, g.leader, NOW))!;
     expect(view.bonuses[0]).toMatchObject({ rank: 2, pool: 0 });
     expect(view.donors).toEqual([{ uid: null, nick: null, gold: 150_000 }]);
+  });
+});
+
+describe('길드 이름 바꾸기', () => {
+  const save = (uid: string, gold: number, opts: { restricted?: boolean } = {}) => client.query(
+    `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, restricted) values ($1, '{}', $2, 0, 0, 1, 2, $3)`,
+    [uid, gold, opts.restricted ?? false]);
+  const saveOf = async (uid: string) => {
+    const { rows: [r] } = await client.query<{ gold: string; version: number }>(
+      'select gold, version from public.saves_current where user_id = $1', [uid]);
+    return { gold: Number(r.gold), version: Number(r.version) };
+  };
+  const nameOf = async (id: string) => (await client.query<{ name: string }>('select name from public.guilds where id = $1', [id])).rows[0].name;
+  const renameLogs = async (guildId: string) => (await client.query<{ user_id: string; detail: string }>(
+    `select user_id::text, detail from public.guild_logs where guild_id = $1 and kind = 'rename' order by id`, [guildId]))
+    .rows.map(r => [r.user_id, r.detail]);
+  /** 길드장의 저장 골드를 정해 둔 길드 */
+  async function rich(gold = 300_000, name = `r${seq++}`) {
+    const g = await guildWith(1);
+    await client.query('update public.guilds set name = $2 where id = $1', [g.id, name]);
+    await save(g.leader, gold);
+    return g;
+  }
+
+  it('바꾸면 골드 10만을 빼고 저장 버전을 올리며, 이름과 마지막 변경 시각을 바꾸고 항해일지에 새 이름을 남긴다', async () => {
+    const g = await rich();
+    expect(await renameGuild(tx(), g.leader, g.id, '새바다', NOW)).toEqual({ ok: true, name: '새바다', gold: 200_000 });
+    expect(await saveOf(g.leader)).toEqual({ gold: 200_000, version: 3 });
+    expect(await nameOf(g.id)).toBe('새바다');
+    expect(await renameLogs(g.id)).toEqual([[g.leader, '새바다']]);
+    const view = await myGuild(database.db, g.leader, NOW);
+    expect(view).toMatchObject({ name: '새바다', renamedAt: NOW });
+    expect(view?.logbook[0]).toMatchObject({ kind: 'rename', uid: g.leader, detail: '새바다' });
+  });
+
+  it('길드장이 아닌 길드원, 길드원이 아닌 사람, 없는 길드는 거부하고 아무것도 바꾸지 않는다', async () => {
+    const g = await rich();
+    const outsider = await user();
+    await save(g.members[0], 500_000);
+    expect(await renameGuild(tx(), g.members[0], g.id, '새바다', NOW)).toEqual({ ok: false, error: 'not-leader' });
+    expect(await renameGuild(tx(), outsider, g.id, '새바다', NOW)).toEqual({ ok: false, error: 'not-member' });
+    expect(await renameGuild(tx(), g.leader, randomUUID(), '새바다', NOW)).toEqual({ ok: false, error: 'not-member' });
+    expect(await saveOf(g.members[0])).toEqual({ gold: 500_000, version: 2 });
+    expect(await saveOf(g.leader)).toEqual({ gold: 300_000, version: 2 });
+    expect(await renameLogs(g.id)).toEqual([]);
+  });
+
+  it('이름 규칙 위반, 지금 이름과 같은 이름, 다른 길드가 쓰는 이름(대소문자 무시)은 거부한다. 대소문자만 바꾸는 것은 된다', async () => {
+    const other = await rich(0, 'Taken');
+    const g = await rich(300_000, 'MySea');
+    expect(await renameGuild(tx(), g.leader, g.id, '가 나', NOW)).toEqual({ ok: false, error: 'bad-name' });
+    expect(await renameGuild(tx(), g.leader, g.id, 'MySea', NOW)).toEqual({ ok: false, error: 'same-name' });
+    expect(await renameGuild(tx(), g.leader, g.id, 'taken', NOW)).toEqual({ ok: false, error: 'name-taken' });
+    expect(other.id).not.toBe(g.id);
+    expect(await saveOf(g.leader)).toEqual({ gold: 300_000, version: 2 });
+    expect(await renameGuild(tx(), g.leader, g.id, 'mysea', NOW)).toMatchObject({ ok: true, name: 'mysea' });
+  });
+
+  it('같은 게임 날짜(한국 시간 새벽 4시 경계)에는 한 번만 바꾸고, 다음 게임 날짜에는 다시 바꾼다', async () => {
+    const g = await rich();
+    // 2026-11-05T03:00Z = 11월 5일 12:00 KST. 다음 게임 날짜는 11월 6일 04:00 KST = 11월 5일 19:00Z
+    expect(await renameGuild(tx(), g.leader, g.id, '일번', NOW)).toMatchObject({ ok: true });
+    expect(await renameGuild(tx(), g.leader, g.id, '이번', '2026-11-05T18:59:00.000Z')).toEqual({ ok: false, error: 'renamed-today' });
+    expect(await nameOf(g.id)).toBe('일번');
+    expect(await saveOf(g.leader)).toEqual({ gold: 200_000, version: 3 });
+    expect(await renameGuild(tx(), g.leader, g.id, '이번', '2026-11-05T19:00:00.000Z')).toEqual({ ok: true, name: '이번', gold: 100_000 });
+    expect(await renameLogs(g.id)).toEqual([[g.leader, '일번'], [g.leader, '이번']]);
+  });
+
+  it('골드가 정확히 10만이면 바꾸고 0이 되며, 모자라거나 저장이 없거나 제재 계정이면 거부한다', async () => {
+    const exact = await rich(100_000);
+    expect(await renameGuild(tx(), exact.leader, exact.id, '딱맞게', NOW)).toEqual({ ok: true, name: '딱맞게', gold: 0 });
+    const poor = await rich(99_999);
+    expect(await renameGuild(tx(), poor.leader, poor.id, '가난', NOW)).toEqual({ ok: false, error: 'not-enough-gold' });
+    expect(await saveOf(poor.leader)).toEqual({ gold: 99_999, version: 2 });
+    const unsaved = await guildWith(0);
+    expect(await renameGuild(tx(), unsaved.leader, unsaved.id, '무저장', NOW)).toEqual({ ok: false, error: 'not-enough-gold' });
+    const banned = await guildWith(0);
+    await save(banned.leader, 500_000, { restricted: true });
+    expect(await renameGuild(tx(), banned.leader, banned.id, '제재', NOW)).toEqual({ ok: false, error: 'restricted' });
+    expect(await saveOf(banned.leader)).toEqual({ gold: 500_000, version: 2 });
+    expect(await renameLogs(poor.id)).toEqual([]);
   });
 });

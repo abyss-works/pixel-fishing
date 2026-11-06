@@ -36,7 +36,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
   const [nameError, setNameError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const invite = useGuildInvite(code);
-  const view = code && invite.settled ? inviteDialogView(invite.preview, { account: true, guild: null }) : null;
+  const view = code && invite.settled ? inviteDialogView(invite.preview, { account: true, guild: null }, 'code') : null;
 
   const onFind = (e: FormEvent) => {
     e.preventDefault();

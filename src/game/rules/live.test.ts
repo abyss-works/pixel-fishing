@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, LIVE_MOVE_MS, movedAtOf, nextGlide, parseClientMessage } from './live';
+import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, idleSinceOf, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
 
 describe('parseClientMessage', () => {
   it('낚싯줄을 드리웠으면 찌 위치를 함께 받고, 형식이 틀린 찌 위치는 메시지째 버린다', () => {
@@ -126,20 +126,37 @@ describe('formatIdle', () => {
   });
 });
 
-describe('movedAtOf', () => {
+describe('idleSinceOf', () => {
   const spot = { region: 'sea', x: 1, y: 2 };
-  it('처음 본 위치와 바뀐 위치는 지금을, 같은 위치는 이전 시각을 돌려준다', () => {
-    expect(movedAtOf(null, 0, spot, 500)).toBe(500);
-    expect(movedAtOf(spot, 100, { ...spot }, 500)).toBe(100);
-    expect(movedAtOf(spot, 100, { ...spot, x: 2 }, 500)).toBe(500);
-    expect(movedAtOf(spot, 100, { ...spot, y: 3 }, 500)).toBe(500);
-    expect(movedAtOf(spot, 100, { ...spot, region: 'deep' }, 500)).toBe(500);
+  const held = { spot, since: 100 };
+  it('낚싯줄이 없으면 센 적이 있어도 null이다', () => {
+    expect(idleSinceOf(held, spot, false, 50, 500)).toBeNull();
+    expect(idleSinceOf(null, spot, false, undefined, 500)).toBeNull();
+  });
+  it('낚싯줄이 있고 첫 결과 경과가 실려 오면 지금에서 경과를 뺀 시각부터 센다', () => {
+    expect(idleSinceOf(null, spot, true, 300, 500)).toBe(200);
+    expect(idleSinceOf({ spot, since: null }, spot, true, 0, 500)).toBe(500);
+  });
+  it('첫 결과 경과가 없으면 센 적이 없다', () => {
+    expect(idleSinceOf(null, spot, true, undefined, 500)).toBeNull();
+  });
+  it('같은 자리에서 이어지는 던짐은 시작 시각을 유지한다', () => {
+    expect(idleSinceOf(held, { ...spot }, true, 300, 500)).toBe(100);
+    expect(idleSinceOf(held, spot, true, undefined, 500)).toBe(100);
+  });
+  it('위치나 지역이 바뀌면 새로 센다', () => {
+    expect(idleSinceOf(held, { ...spot, x: 2 }, true, undefined, 500)).toBeNull();
+    expect(idleSinceOf(held, { ...spot, region: 'deep' }, true, 40, 500)).toBe(460);
   });
 });
 
 describe('방치 시간 필드', () => {
-  it('move의 idleMs는 받지 않는다(서버가 정한다)', () => {
-    expect(parseClientMessage('{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":false,"idleMs":5}'))
-      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: false });
+  it('move의 idleMs는 0 이상의 유한한 수만 받는다', () => {
+    const base = '{"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":true';
+    expect(parseClientMessage(`${base},"idleMs":5}`))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true, idleMs: 5 });
+    expect(parseClientMessage(`${base},"idleMs":-1}`)).toBeNull();
+    expect(parseClientMessage(`${base},"idleMs":"5"}`)).toBeNull();
+    expect(parseClientMessage(`${base}}`)).toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
   });
 });

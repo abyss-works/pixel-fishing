@@ -85,7 +85,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
             </span>
           </Inset>
           <TabBar tabs={TABS} activeKey={tab} onSelect={setTab} />
-          <div className="pf-scroll-panel flex flex-col flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
+          <div className="pf-scroll-panel flex flex-col flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
             {tab === 'summary' && (
               <SummaryTab game={game} summary={summary} row={selected}
                           here={here !== null && rows[spotIndex].spot.id === here} />

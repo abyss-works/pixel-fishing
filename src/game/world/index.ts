@@ -54,6 +54,12 @@ export const MANILA_FURNITURE = MANILA_BASE.furniture;
 export const COLOMBO_FURNITURE = COLOMBO_BASE.furniture;
 export const TOAMASINA_FURNITURE = TOAMASINA_BASE.furniture;
 
+/** 승선 — 거점에서 필드로 나갈 때 나타나는 지역·자리·안내. 승선 시설과 여객선 빠른 이동이 같은 자리를 쓴다 */
+export function boardingOf(base: BaseId): { region: RegionId; at: Point | undefined; msg: string } {
+  const pack = BASE_PACKS[base];
+  return { region: pack.region, at: pack.exitAt, msg: pack.exitMsg };
+}
+
 export function furnitureAt(base: BaseId, x: number, y: number): Furniture | null {
   for (const f of BASE_PACKS[base].furniture) if (inRect(x, y, f)) return f;
   return null;

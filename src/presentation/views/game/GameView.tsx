@@ -7,7 +7,7 @@ import type { RejectReason } from '../../../game/rules/rules';
 import { when } from '../../../shared/lib/when';
 import { selectEncounter } from '../../../features/bounty/model/challenge';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
-import { BASE_PACKS, REGION_PACKS } from '../../../game/world';
+import { BASE_PACKS, REGION_PACKS, boardingOf } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { BaseId, RegionId } from '../../../game/content/places';
 import { zoneById } from '../../../game/content/zones';
@@ -17,12 +17,15 @@ import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
 import { FILTER_CHANNELS } from '../../../features/display/model/messageFilter';
+import { useMessageFilter } from '../../../features/display/service/messageFilter';
+import { useMessageFold } from '../../../features/display/service/messageFold';
 import BaseMenu from './base-menu/BaseMenu';
 import GameTabs from './tabs/GameTabs';
 import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
+import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
 import { useDialogs } from '../../ui/useDialogs';
@@ -60,6 +63,7 @@ import { josa } from '../../ui/format';
 import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
+import { useBlockZoom } from '../../layouts/useBlockZoom';
 
 interface GameViewProps {
   game: GameState;
@@ -68,6 +72,8 @@ interface GameViewProps {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  /** 서버에 알리지 않고 화면의 장소만 바꾼다 */
+  onPlace: (scene: SceneRef, entryPos?: Point) => void;
   onWarmup: () => void;
   log: Msg[];
   syncLabel: string | null;
@@ -92,6 +98,7 @@ export default function GameView(props: GameViewProps) {
   const { game, scene } = props;
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const mobile = useMobileLayout();
+  useBlockZoom();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** 모바일 채팅 입력 줄 — 메시지 창 기록 칸을 누르면 열린다 */
@@ -106,6 +113,8 @@ export default function GameView(props: GameViewProps) {
   const [guildOpen, setGuildOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [ferryOpen, setFerryOpen] = useState(false);
+  /** 진행 중인 빠른 이동 — 떠나는 항구와 가는 항구 */
+  const [trip, setTrip] = useState<{ from: BaseId; to: BaseId } | null>(null);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
@@ -136,6 +145,10 @@ export default function GameView(props: GameViewProps) {
   const log = chat.enabled
     ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
     : props.log;
+  const messageFilter = useMessageFilter();
+  // 메시지 창 접기 — 채팅을 쓰지 않는 환경에서는 입력 줄이 없어 펼칠 수 없으므로 접지 않는다
+  const fold = useMessageFold(scene.kind === 'base', log, messageFilter.filter);
+  const folded = chat.enabled && fold.folded;
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -145,11 +158,10 @@ export default function GameView(props: GameViewProps) {
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
 
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
+
   const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
-    setActionPanel(null);
-    setStatsOpen(false);
-    setRankingOpen(false);
-    setTracking(null);
+    resetPanels();
     props.onScene(nextScene, message, entryPos);
   };
 
@@ -158,6 +170,7 @@ export default function GameView(props: GameViewProps) {
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
+    const boarding = boardingOf(scene.id);
     switch (id) {
       case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty': case 'wardrobe':
         setActionPanel(panel => panel === id ? null : id);
@@ -167,7 +180,7 @@ export default function GameView(props: GameViewProps) {
         setRankingOpen(true);
         return;
       case 'exit':
-        go({ kind: 'region', id: pack.region }, pack.exitMsg, pack.exitAt);
+        go({ kind: 'region', id: boarding.region }, boarding.msg, boarding.at);
         return;
       case 'travel': {
         // 여객선은 다른 지역으로 위치를 통째로 옮기므로 확인을 받는다
@@ -188,14 +201,38 @@ export default function GameView(props: GameViewProps) {
     }
   };
 
-  // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 그 항구로 옮긴다
+  // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
     const name = BASE_PACKS[port].name;
     void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
 지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
       confirmLabel: `${name}에 가기` })
-      .then(ok => { if (ok) go({ kind: 'base', id: port }, `여객선을 타고 ${name}에 도착했어요. 시설을 눌러 정비해 보세요.`); });
+      .then(ok => { if (ok && scene.kind === 'base') setTrip({ from: scene.id, to: port }); });
+  };
+
+  // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
+  const ferrySurface = () => {
+    if (!trip) return;
+    const b = boardingOf(trip.from);
+    resetPanels();
+    props.onPlace({ kind: 'region', id: b.region }, b.at);
+  };
+  // 전환 2단계 — 도착 항구의 승선 자리로 옮기고 서버에 알린다. 실패하면 떠난 항구에 남는다
+  const ferryMove = async () => {
+    if (!trip) return;
+    const b = boardingOf(trip.to);
+    let result: DispatchResult | null = null;
+    try {
+      result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
+    } catch { /* 인프라 실패는 오류 정책이 알린다 */ }
+    if (result?.status === 'ok') {
+      props.onPlace({ kind: 'region', id: b.region }, b.at);
+      props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
+      return;
+    }
+    if (result?.status === 'rejected') props.setToast(REJECT_TEXT[result.error], 'warn');
+    props.onPlace({ kind: 'base', id: trip.from });
   };
 
   const openStats = () => setStatsOpen(open => !open);
@@ -215,7 +252,7 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className={cx('flex w-screen overflow-hidden', mobile ? 'h-dvh flex-col' : 'h-screen max-[820px]:flex-col')}>
+    <div className={cx('fixed inset-0 flex overflow-hidden overscroll-none', mobile ? 'flex-col' : 'max-[820px]:flex-col')}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
@@ -228,9 +265,13 @@ export default function GameView(props: GameViewProps) {
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? (
                      <ChatBar inGuild={guild !== null} guest={props.account === null}
-                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined} />
+                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined}
+                              folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping}
+                              onOpen={() => setChatOpen(true)} />
                    ) : null}
-                   sheetOpen={sheetOpen} onStatusSlot={setStatusSlot}
+                   filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
+                   folded={folded} onFold={chat.enabled ? fold.toggle : undefined}
+                   onStatusSlot={setStatusSlot}
                    onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
@@ -272,7 +313,7 @@ export default function GameView(props: GameViewProps) {
                   onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                   onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
-        {guildOpen && <GuildModal setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
+        {guildOpen && <GuildModal gold={game.gold} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
@@ -293,6 +334,7 @@ export default function GameView(props: GameViewProps) {
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
         )}
 
+        {trip && <FerryVeil onSurface={ferrySurface} onMove={ferryMove} onDone={() => setTrip(null)} />}
         {ferryOpen && scene.kind === 'base' && (
           <FerryModal game={game} from={scene.id} onPick={pickPort} onClose={() => setFerryOpen(false)} />
         )}

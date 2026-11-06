@@ -4,6 +4,9 @@ import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
 import ToggleChip from '../ToggleChip';
+import PixelIcon from '../PixelIcon';
+import Tip from '../Tip';
+import HudButton from './HudButton';
 import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './messageFeed';
 import type { MessageChannel, Msg } from './messageFeed';
 
@@ -22,6 +25,7 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
+// 접기: onFold가 있으면 채널 토글 줄 오른쪽 끝에 접기 버튼을 둔다. folded면 토글 줄과 기록을 숨기고 footer만 남긴다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
 
@@ -57,7 +61,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, onActivate }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, onActivate, folded = false, onFold }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -76,6 +80,10 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   lines?: number;
   /** 기록 칸을 눌렀다(글줄의 이름 버튼을 누른 경우는 제외). 모바일에서 입력 줄을 여는 데 쓴다 */
   onActivate?: () => void;
+  /** 접힘 — 토글 줄과 기록을 숨기고 footer만 남긴다 */
+  folded?: boolean;
+  /** 접기 버튼을 눌렀다. 없으면 접기 버튼을 그리지 않는다 */
+  onFold?: () => void;
 }) {
   const fixed = channels !== undefined;
   const listed = channels ?? channelsOf(log);
@@ -106,8 +114,10 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   return (
     <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
                     mobile:static mobile:w-full">
-      {toggles && (
-        <div className="pointer-events-auto self-start flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
+      {!folded && (toggles || onFold) && (
+        <div className="pointer-events-none flex items-center justify-between gap-1.5">
+        {toggles ? (
+        <div className="pointer-events-auto flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
           {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => {
             const disabled = disabledChannels.includes(c);
             const on = !disabled && isChannelShown(filter, c);
@@ -125,17 +135,26 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
             );
           })}
         </div>
+        ) : <span />}
+        {onFold && (
+          <Tip wraps text="접기" className="pointer-events-auto flex">
+            <HudButton aria-label="메시지 창 접기" onPointerDown={e => e.preventDefault()} onClick={onFold}>
+              <PixelIcon glyph="minus" size={12} />
+            </HudButton>
+          </Tip>
+        )}
+        </div>
       )}
-      <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
+      {!folded && <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
            onClick={e => { if (!(e.target as HTMLElement).closest('button')) onActivate?.(); }}
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
-             'flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text mobile:touch-pan-y',
+             'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',
              'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
            style={{ height: `calc(${lines * LINE_EM}em + 0.5rem + 4px)` }}>
         {shown.map(m => (
           <Line key={`${m.channel}-${m.id}`} m={m} mine={you != null && m.from?.uid === you} onPick={onPick} />
         ))}
-      </div>
+      </div>}
       {footer && <div className="pointer-events-auto">{footer}</div>}
     </div>
   );
