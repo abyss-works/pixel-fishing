@@ -4,14 +4,14 @@ import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, requestRows, splitMembers,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
   ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
-    requests: [],
+    requests: [], renamedAt: null,
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -91,7 +91,7 @@ describe('길드 화면 모델', () => {
 
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
-      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted']) {
+      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today']) {
       expect(GUILD_ERROR_TEXT[code]).toBeTruthy();
     }
   });
@@ -174,6 +174,34 @@ describe('항해일지', () => {
         { text: '150,000G', tone: 'num' }, { text: '를 기부했어요.' }],
       [{ text: '길드 스킬 ' }, { text: '희귀 어종 확률', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
     ]);
+  });
+});
+
+describe('길드 이름 바꾸기 화면 모델', () => {
+  const now = '2026-11-06T03:00:00.000Z';
+
+  it('바꿀 수 있으면 버튼이 열리고 이유가 없다', () => {
+    expect(renameButtonState(null, now, 100_000)).toEqual({ disabled: false, reason: null });
+  });
+
+  it('오늘 이미 바꿨으면 막고 다시 바꿀 수 있는 시각을 알린다', () => {
+    const s = renameButtonState(now, now, 5_000_000);
+    expect(s.disabled).toBe(true);
+    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n한국 시간 새벽 4시 이후에 다시 바꿀 수 있어요.');
+  });
+
+  it('골드가 모자라면 막고 필요한 골드를 알린다', () => {
+    expect(renameButtonState(null, now, 99_999)).toEqual({ disabled: true, reason: '골드가 모자라요.\n이름을 바꾸려면 100,000G가 필요해요.' });
+  });
+});
+
+describe('길드 이름 바꾸기 항해일지', () => {
+  it('새 이름을 강조한 문장이다. 받침 ㄹ로 끝나는 이름은 로를 쓴다', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    const entry = (detail: string) => logbookDays([{ id: 1, kind: 'rename', uid: 'u', nick: '가람', detail, value: null, at }], 'me')[0].items[0];
+    expect(entry('먼바다').parts).toEqual([{ text: '길드 이름을 ' }, { text: '먼바다', tone: 'skill' }, { text: '로 바꿨어요.' }]);
+    expect(entry('불꽃').parts.at(-1)).toEqual({ text: '으로 바꿨어요.' });
+    expect(entry('먼바다').quiet).toBe(false);
   });
 });
 

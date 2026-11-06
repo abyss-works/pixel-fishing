@@ -21,6 +21,14 @@ describe('guildAction — 보너스 기부', () => {
     });
   });
 
+  it('PUT /api/guilds/:id/name { name }', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: '새바다', gold: 0 }), { status: 200 }));
+    await expect(guildAction({ op: 'rename', guildId: 'g1', name: '새바다' })).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/guilds/g1/name', {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '새바다' }),
+    });
+  });
+
   it('거부는 서버 오류 코드로 돌려준다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'not-enough-gold' }), { status: 409 }));
     await expect(guildAction({ op: 'donate', guildId: 'g1', bonus: 'bag', amount: 1 }))

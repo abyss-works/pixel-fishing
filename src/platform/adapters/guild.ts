@@ -34,6 +34,7 @@ function request(op: GuildOp): [string, RequestInit] {
   const guild = (id: string) => `/api/guilds/${encodeURIComponent(id)}`;
   switch (op.op) {
     case 'create': return ['/api/guilds', json('POST', { name: op.name })];
+    case 'rename': return [`${guild(op.guildId)}/name`, json('PUT', { name: op.name })];
     case 'join': return ['/api/guild-memberships', json('POST', { code: op.code })];
     case 'settings': {
       const body: Record<string, unknown> = {};
