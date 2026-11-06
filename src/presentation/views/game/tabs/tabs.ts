@@ -15,6 +15,9 @@ export const DEX_VIEWS: readonly DexView[] = ['base', 'variant', 'named'];
  *  계약 테스트가 두 순서의 일치를 검증한다. */
 export const TAB_ORDER: readonly TabKey[] = ['region', 'bag', 'dex', 'help', 'settings'];
 
+/** 같은 탭 재선택으로 보기를 순환하는 탭 — 가방(물고기·아이템·유물)과 도감(일반·돌연변이·네임드) */
+export const tabHasViews = (tab: TabKey): boolean => tab === 'bag' || tab === 'dex';
+
 // 키보드 축은 둘이다:
 //   숫자    = 메뉴 탭 **선택**. 메뉴 탭 이동은 숫자키(와 클릭)로만 한다.
 //             같은 탭을 한 번 더 고르면 그 탭의 보기가 순환된다
