@@ -26,7 +26,8 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
 // footer는 창 아래(입력 줄 등)에 놓는다.
-// 접기: onFold가 있으면 채널 토글 줄 오른쪽 끝에 접기 버튼을 둔다. folded면 토글 줄과 기록을 숨기고 footer만 남긴다.
+// 접기: onFold가 있으면 채널 토글 줄 왼쪽 끝에 접기 버튼을 둔다. 접힌 입력 줄의 펼치기 버튼과 같은 세로줄이라
+// 열고 닫는 자리가 같다. folded면 토글 줄과 기록을 숨기고 footer만 남긴다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
 
@@ -115,8 +116,15 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
                     mobile:static mobile:col-span-2 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
                     mobile:border-t mobile:border-line">
       {!folded && (toggles || onFold) && (
-        <div className="pointer-events-none flex items-center justify-between gap-1.5">
-        {toggles ? (
+        <div className="pointer-events-none flex items-center gap-1.5">
+        {onFold && (
+          <Tip wraps text="접기" className="pointer-events-auto flex">
+            <HudButton aria-label="메시지 창 접기" onPointerDown={e => e.preventDefault()} onClick={onFold}>
+              <PixelIcon glyph="minus" size={12} />
+            </HudButton>
+          </Tip>
+        )}
+        {toggles && (
         <div className="pointer-events-auto flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
           {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => {
             const disabled = disabledChannels.includes(c);
@@ -135,13 +143,6 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
             );
           })}
         </div>
-        ) : <span />}
-        {onFold && (
-          <Tip wraps text="접기" className="pointer-events-auto flex">
-            <HudButton aria-label="메시지 창 접기" onPointerDown={e => e.preventDefault()} onClick={onFold}>
-              <PixelIcon glyph="minus" size={12} />
-            </HudButton>
-          </Tip>
         )}
         </div>
       )}
