@@ -1,7 +1,7 @@
 // 천장 순수 규칙 — 운이 오래 빗나간 플레이어에게 결과를 보장한다. 진척은 화면에 보이지 않는다.
 //  - 어종 천장: 어종마다 일반 폼을 처음 잡을 때까지만 작동한다. 캐치마다 그 어종 일반 폼이 나올 확률을
 //    쌓고(확률 질량), 합이 K에 닿으면 그 어종을 확정한다. 방치·수동·미끼·시간대가 확률에 그대로 들어가므로
-//    어떤 플레이 방식이든 천장 전 미획득 확률이 e^−K 이하로 묶인다. 초기화하지 않는다.
+//    어떤 플레이 방식이든 천장 전 미획득 확률이 e^−K(하위 20%) 이하로 묶인다. 초기화하지 않는다.
 //  - 네임드 조우 천장: 조우 후보가 있는 캐치의 빗나감을 세고, 하루(게임 날짜)의 천장 번째 캐치에서 조우를 확정한다.
 //    결투에 실패하면 그날 다음 천장을 절반으로 줄인다(두 번까지). 게임 날짜가 바뀌면 모두 초기화한다.
 //  - 네임드 상처: 그날 실패한 결투에서 맞힌 히트를 네임드별로 쌓아 다음 조우의 결투 체력에서 뺀다(상한 있음).
@@ -13,11 +13,13 @@ import type { DrawOptions, FormId } from './logic.js';
 import { gameDayOf } from './time.js';
 import type { DayPhase } from './time.js';
 import type { SpotId } from '../content/spots.js';
-import { NAMED_DUEL_WOUND_CAP } from './balance.js';
+import { NAMED_DUEL_WOUND_CAP, NAMED_ENCOUNTER_WEIGHTS } from './balance.js';
 import type { BountyQuest } from '../content/bounties.js';
 
-/** 어종 천장 상수 — 기대 시행의 3배(운 나쁜 하위 5%를 자른다) */
-export const SPECIES_PITY_K = 3;
+/** 천장이 구제하는 운 나쁜 하위 비율 — 어종 천장과 네임드 조우 천장이 같은 기준을 쓴다 */
+export const PITY_RESCUE_SHARE = 0.2;
+/** 어종 천장 상수 — 기대 시행의 ln(1/0.2)≈1.61배(e^−K = 하위 20%) */
+export const SPECIES_PITY_K = Math.log(1 / PITY_RESCUE_SHARE);
 /** 끝난 어종 표시 — 일반 폼을 가졌으므로 더 쌓지 않는다 */
 export const PITY_DONE = -1;
 /** 어종 → 누적 확률 질량(또는 PITY_DONE) */
@@ -62,8 +64,9 @@ export function settleSpeciesPity(pity: SpeciesPity, fishId: string, form: FormI
   return form === 'normal' ? { ...pity, [fishId]: PITY_DONE } : pity;
 }
 
-/** 네임드 조우 천장 상수 — 조우 확률 1/1000에서 운 나쁜 하위 20%를 자르는 캐치 수 */
-export const NAMED_PITY_CATCHES = 1609;
+/** 네임드 조우 천장 상수 — 기본 조우 확률의 기대 시행에 K를 곱한 캐치 수(1/1000에서 1,609, 하위 20%) */
+const NAMED_EXPECTED_CATCHES = (NAMED_ENCOUNTER_WEIGHTS.named + NAMED_ENCOUNTER_WEIGHTS.none) / NAMED_ENCOUNTER_WEIGHTS.named;
+export const NAMED_PITY_CATCHES = Math.round(NAMED_EXPECTED_CATCHES * SPECIES_PITY_K);
 /** 결투 실패로 천장을 줄이는 최대 횟수 */
 export const NAMED_PITY_MAX_RELIEF = 2;
 
