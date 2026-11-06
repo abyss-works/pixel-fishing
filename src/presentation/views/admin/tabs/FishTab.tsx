@@ -1,9 +1,8 @@
 import { Fragment, useMemo, useState } from 'react';
 import { FISH, RARITY, SPOTS } from '../../../../game/rules/logic';
-import type { RarityId } from '../../../../game/rules/logic';
 import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight,
+  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
   selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws,
   SIM_AXES, stepPercent,
 } from '../../../../features/admin/model/fishSimulation';
@@ -47,7 +46,7 @@ function Delta({ prev, cur }: { prev: number | null; cur: number }) {
 }
 
 export default function FishTab() {
-  const [sbBudgets, setSbBudgets] = useState<Record<string, Partial<Record<RarityId, number>>>>({});
+  const [sbBudgets, setSbBudgets] = useState<SimOverrides['budgets']>({});
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
   const sim = useMemo<SimOverrides>(
@@ -131,7 +130,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   evs: AxisEvs;
   prevEvs: AxisEvs | null;
   sim: SimOverrides;
-  setBudgets: React.Dispatch<React.SetStateAction<Record<string, Partial<Record<RarityId, number>>>>>;
+  setBudgets: React.Dispatch<React.SetStateAction<SimOverrides['budgets']>>;
   setWeights: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>;
   setPrice: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }) {
@@ -283,7 +282,11 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                         {firstOfGrade && (
                           <div className="flex items-center gap-1">
                             {RARITY[f.rarity].name}
-                            <TextInput compact type="number" min={0}
+                            {f.rarity === 'common' ? (
+                              <span className="w-14 text-right tabular-nums" aria-label={`${spot.name} 일반 가중치(계산값)`}>
+                                {selectSpotBudgets(spot.id, sim)[f.rarity]}
+                              </span>
+                            ) : <TextInput compact type="number" min={0}
                                    placeholder={String(selectBaseRarityWeight(spot.id, f.rarity))}
                                    value={sim.budgets[bid]?.[f.rarity] ?? ''}
                                    aria-label={`${spot.name} ${f.rarity} 예산`}
@@ -296,7 +299,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                                      if (!Number.isFinite(n) || n < 0) return p;
                                      return { ...p, [bid]: { ...cur, [f.rarity]: n } };
                                    })}
-                                   className="w-14" />
+                                   className="w-14" />}
                           </div>
                         )}
                       </td>

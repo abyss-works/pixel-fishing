@@ -16,12 +16,10 @@ export const RARITY_PRESETS = {
   stable:   { rare: 2000, epic: 500, legendary: 100 },
 } as const satisfies Record<string, RarityPermyriad>;
 
-export type RarityPresetStage = keyof typeof RARITY_PRESETS;
-
-export const presetOfStage = (stage: RarityPresetStage): RarityPermyriad => RARITY_PRESETS[stage];
+type RarityPresetStage = keyof typeof RARITY_PRESETS;
 
 /** 지역 위치(0부터)와 지역 수로 프리셋 단계를 정한다 — 0=최신, 1=한 단계 이전, 2 이상=안정화 */
-export function presetStageOf(zoneIndex: number, zoneCount: number): RarityPresetStage {
+function presetStageOf(zoneIndex: number, zoneCount: number): RarityPresetStage {
   const behind = zoneCount - 1 - zoneIndex;
   return behind <= 0 ? 'latest' : behind === 1 ? 'previous' : 'stable';
 }
@@ -32,13 +30,15 @@ const fillCommon = (p: RarityPermyriad): Record<RarityId, number> =>
 function presetOfSpot(spotId: SpotId): RarityPermyriad {
   const zone = topZoneOfSpot(spotId);
   const idx = zone ? ZONE_IDS.indexOf(zone) : -1;
-  return presetOfStage(idx < 0 ? 'stable' : presetStageOf(idx, ZONE_IDS.length));
+  if (idx < 0) throw new Error(`수역 ${spotId}의 소속 지역을 지역 목록에서 찾을 수 없습니다`);
+  return RARITY_PRESETS[presetStageOf(idx, ZONE_IDS.length)];
 }
 
 /** 수역의 등급 가중치 전체(합 10000) — 덮어쓰기 → 지역 단계 프리셋 순 */
 export function rarityWeightsOf(spotId: SpotId): Record<RarityId, number> {
   const spot = SPOTS.find(s => s.id === spotId);
-  return fillCommon(spot?.rarityWeight ?? presetOfSpot(spotId));
+  if (!spot) throw new Error(`알 수 없는 수역: ${spotId}`);
+  return fillCommon(spot.rarityWeight ?? presetOfSpot(spotId));
 }
 
 /** 수역별 등급 가중치 — rollFish·drawRows의 단일 출처 */
