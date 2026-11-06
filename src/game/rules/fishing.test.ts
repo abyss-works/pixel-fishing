@@ -61,7 +61,7 @@ describe('R8/R9/R11: 획득 결정', () => {
   const rareRate = (j: Judgment, rod: number, n = 20000) => {
     let rare = 0;
     for (let i = 0; i < n; i++) {
-      if (RARITY[resolveCatch('pond', j, rod).rarity].weight < RARITY.common.weight) rare++;
+      if (RARITY[resolveCatch('pond', j, rod).rarity].order > RARITY.common.order) rare++;
     }
     return rare / n;
   };

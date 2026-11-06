@@ -60,12 +60,12 @@ describe('전체 리포트 조립', () => {
 
   it('오버라이드 수역 표기 — 배리어 리프는 실효 예산에 epic이 아예 없다(재균등 흡수)', () => {
     const reef = rows.find(r => r.id === 'barrierreef')!;
-    expect(reef.override).toEqual({ common: 74, rare: 23, legendary: 3 });
+    expect(reef.override).toEqual({ rare: 2300, epic: 0, legendary: 300 });
     expect('epic' in reef.budgets).toBe(false);
-    expect(reef.budgets.common).toBe(74);
+    expect(reef.budgets.common).toBe(7400);
     const plain = rows.find(r => r.id === 'pond')!;
-    expect(plain.override).toBeNull();           // 글로벌 표 사용
-    expect(plain.budgets.legendary).toBe(1);     // drawRows 행에서 역산된 글로벌 값
+    expect(plain.override).toBeNull();           // 프리셋 사용
+    expect(plain.budgets.legendary).toBe(100);   // drawRows 행에서 역산된 프리셋 값
   });
 
   it('진행 사다리 정합 — boatTier/powerReq가 SPOTS 등록 순서를 따르고 지역 내 완만·지역 간 급등 형태', () => {
