@@ -36,7 +36,7 @@ function sourceText(row: BonusRow): string {
 // 받는 효과가 없는 갈래도 자리를 지켜 예시마다 표 모양이 같다. 출처를 얻는 방법은 출처 열 머리의 툴팁이다.
 export default function BonusTab({ rows }: { rows: BonusRow[] }) {
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
       <table className="w-full table-fixed border-collapse text-sm">
         <colgroup><col /><col className="w-[150px]" /></colgroup>
         <thead>

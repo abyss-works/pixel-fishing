@@ -29,7 +29,7 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
     <div className="flex flex-col gap-3">
       <SubTabs items={zoneTabs.map(tab => ({ key: tab.zone, label: tab.name, sub: `${tab.ok}/${tab.total} 충족` }))}
                activeKey={zone} onSelect={onZone} />
-      <Inset className="pf-scroll-panel h-[140px] shrink-0 overflow-y-auto px-3 pb-2">
+      <Inset className="pf-scroll-panel h-[140px] shrink-0 pf-vscroll px-3 pb-2">
         <table className="w-full table-fixed border-collapse text-sm" aria-label="해역">
           <colgroup><col /><col className="w-[90px]" /><col className="w-[90px]" /></colgroup>
           <thead>

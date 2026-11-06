@@ -39,10 +39,10 @@ function Stat({ glyph, label, tone = 'gold', children }: {
     <span className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
       {/* 끝의 공백은 의도적이다 — 두 행이 붙어 textContent가 "골드60"이 되면 HUD를
           문자열로 읽는 테스트(app.test의 hud())가 값을 못 찾는다. 지우지 말 것. */}
-      <span className="flex items-center gap-1 text-sm leading-none text-text-dim">
+      <span className="flex items-center gap-1 text-sm mobile:text-[10px] leading-none text-text-dim">
         <PixelIcon glyph={glyph} size={12} />{label}{' '}
       </span>
-      <span className={cx('text-lg leading-none pf-accent', TONE[tone])}>{children}</span>
+      <span className={cx('text-lg mobile:text-[11px] leading-none pf-accent', TONE[tone])}>{children}</span>
     </span>
   );
 }
@@ -78,7 +78,7 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-(--z-overlay) max-w-[calc(100%-24px)]
                     pf-glass border-2 border-line pf-notch pf-bevel px-[18px] py-[9px]
-                    mobile:top-2 mobile:left-2 mobile:translate-x-0 mobile:max-w-[calc(100%-72px)] mobile:px-3">
+                    mobile:top-2 mobile:left-2 mobile:translate-x-0 mobile:max-w-[calc(100%-72px)] mobile:px-2 mobile:py-1">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label="스탯창 열기" onClick={onOpen}
               className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125

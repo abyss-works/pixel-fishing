@@ -33,7 +33,7 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
 export default function GuildLogbookTab({ logbook, me }: { logbook: readonly GuildLogItem[]; me: string }) {
   const days = logbookDays(logbook, me);
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
+    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-4 pt-3 pb-4">
       {days.length === 0 && <Note className="my-0">아직 기록이 없어요.</Note>}
       {days.map((d, i) => (
         <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>

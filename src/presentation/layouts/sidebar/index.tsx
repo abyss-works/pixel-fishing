@@ -39,7 +39,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
                  onPointerCancel={() => { dragFrom.current = null; }}>
               <span className="block w-10 h-1 bg-line" />
             </div>
-            <div className="pf-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-2">
+            <div className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
               {children}
             </div>
           </section>
@@ -55,7 +55,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
     <aside className={cx('w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line',
                          'max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t')}>
       <TabBar tabs={tabs} activeKey={activeKey} onSelect={onSelect} />
-      <div className="pf-scroll flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+      <div className="pf-scroll flex-1 pf-vscroll p-3 flex flex-col gap-2">
         {children}
       </div>
     </aside>

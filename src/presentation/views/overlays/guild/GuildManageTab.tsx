@@ -103,7 +103,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
 
       <section aria-label="가입 신청" className="flex flex-col gap-1.5 flex-1 min-h-0">
         <Subheading className="mb-0 text-xs">가입 신청</Subheading>
-        <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+        <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
           {guild.joinMode !== 'approval' && rows.length === 0 ? (
             <p className="m-0 py-6 text-center text-sm text-text-dim">
               {guild.joinMode === 'open' ? '자유 가입이라 신청 없이 바로 들어와요.' : '닫혀 있어 새 신청을 받지 않아요.'}

@@ -28,7 +28,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask }: Guil
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+      <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup><col /><col className="w-16" /><col className="w-20" /><col className="w-28" /><col className="w-8" /></colgroup>
           <thead>

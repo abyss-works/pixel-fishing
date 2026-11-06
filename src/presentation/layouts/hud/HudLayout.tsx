@@ -4,7 +4,7 @@ import type { SceneRef } from '../../../game/world';
 import { baitById } from '../../../game/content/baits';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
-import { useMessageFilter } from '../../../features/display/service/messageFilter';
+import type { FilterChannel, MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
 import type { MessageChannel } from '../../ui/hud/messageFeed';
@@ -41,8 +41,12 @@ interface HudLayoutProps {
   /** 메시지 창에 늘 보일 채널 토글과 그중 쓸 수 없는 채널 */
   channels?: readonly MessageChannel[];
   disabledChannels?: readonly MessageChannel[];
-  /** 모바일 시트가 열려 있는가 — 메시지 창이 시트 위로 올라가고 세 줄만 보인다 */
-  sheetOpen?: boolean;
+  /** 메시지 창에서 보이는 채널과 토글 */
+  filter: MessageFilter;
+  onToggleFilter: (channel: FilterChannel, present: readonly FilterChannel[]) => void;
+  /** 메시지 창이 접혀 있는가와 접기 버튼. 접기를 쓰지 않으면 비운다 */
+  folded?: boolean;
+  onFold?: () => void;
   /** 모바일에서 메시지 창 기록 칸을 눌렀다(입력 줄을 연다) */
   onActivateLog?: () => void;
   /** 모바일에서 낚시 상태 띠가 들어갈 자리를 알린다 */
@@ -53,22 +57,20 @@ interface HudLayoutProps {
 // 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(chips와 활성 미끼), 미니맵(바다에서만).
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
 // 모바일 배치에서는 아래 가운데의 같은 한 줄기에 쌓는다 — 아래에서부터 메시지 창(가로 폭 전체, 고정 높이), 오른쪽의 칩과
-// 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠. 시트가 열리면 이 줄기 전체가 시트 위로 올라가고 메시지 창은 세 줄이 된다.
+// 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠. 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 // 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 40px 폭) 왼쪽에 붙인다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, sheetOpen = false, onActivateLog, onStatusSlot }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onActivateLog, onStatusSlot }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
-  const messageFilter = useMessageFilter();
 
   return (
     <>
       <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
       {scene.kind === 'base' && <TimeBadge className="top-5 right-[58px]" />}
-      <div className={cx('contents mobile:absolute mobile:inset-x-2 mobile:z-(--z-overlay) mobile:flex mobile:flex-col',
-                         'mobile:items-end mobile:gap-2 mobile:pointer-events-none',
-                         sheetOpen ? 'mobile:bottom-[calc(50dvh+8px)]' : 'mobile:bottom-2')}>
-        {mobile && <div ref={onStatusSlot} className="w-full flex justify-center" />}
+      <div className="contents mobile:absolute mobile:inset-x-2 mobile:bottom-2 mobile:z-(--z-overlay) mobile:flex mobile:flex-col
+                      mobile:items-end mobile:gap-2 mobile:pointer-events-none">
+        {mobile && <div ref={onStatusSlot} className="w-full flex justify-center empty:hidden" />}
         <div className="absolute right-3 bottom-3 z-(--z-overlay) w-[clamp(156px,32.5%,292px)]
                         flex flex-col items-end gap-2 pointer-events-none
                         mobile:static mobile:w-[156px]">
@@ -97,9 +99,9 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           )}
         </div>
         <MessageLog log={log} footer={logFooter} onPick={onPickLine} you={you}
-                    filter={messageFilter.filter} onToggle={messageFilter.toggle}
+                    filter={filter} onToggle={onToggleFilter} folded={folded} onFold={onFold}
                     channels={channels} disabledChannels={disabledChannels}
-                    lines={mobile ? (sheetOpen ? 3 : 6) : undefined} onActivate={mobile ? onActivateLog : undefined} />
+                    lines={mobile ? 6 : undefined} onActivate={mobile ? onActivateLog : undefined} />
       </div>
       {badge}
     </>

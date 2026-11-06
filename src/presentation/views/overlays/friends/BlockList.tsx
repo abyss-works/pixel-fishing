@@ -28,7 +28,7 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
     }
   };
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
       {Array.isArray(blocks) && blocks.length > 0 ? (
         <table className={SOCIAL_TABLE}>
           <colgroup><col /><col className="w-16" /></colgroup>

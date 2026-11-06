@@ -42,7 +42,7 @@ export default function NamedDetail({ quest, game, onClose }: {
         </TitledCell>
 
         <TitledCell title="전해 오는 이야기" className="row-span-2 max-[640px]:row-span-1">
-          <Inset className="pf-scroll-panel flex-1 min-h-64 max-h-[min(62vh,560px)] overflow-y-auto px-5 py-4">
+          <Inset className="pf-scroll-panel flex-1 min-h-64 max-h-[min(62vh,560px)] pf-vscroll px-5 py-4">
             {d.chronicle ? (
               <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
                 {d.chronicle.map((p, idx) => (

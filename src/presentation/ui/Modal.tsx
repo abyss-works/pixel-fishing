@@ -25,7 +25,7 @@ interface ModalProps {
 }
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
-// 모바일 배치에서는 폭 단계 대신 화면 폭에서 좌우 16px을 뺀 폭을 쓰고, 높이 상한을 넘으면 창 안에서 세로로 스크롤한다.
+// 모바일 배치에서는 폭 단계 대신 화면 폭에서 좌우 24px을 뺀 폭을 쓰고(바깥을 눌러 닫을 자리), 높이 상한(위아래 24px)을 넘으면 창 안에서 세로로 스크롤한다.
 export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
@@ -36,12 +36,12 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
     : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';
   const box = layer === 'app'
-    ? cx('relative bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] overflow-y-auto',
+    ? cx('relative bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] pf-vscroll pf-scroll-panel',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
-        'mobile:w-[calc(100%-32px)] mobile:max-w-none mobile:max-h-[calc(100dvh-32px)]')
-    : cx('max-h-[calc(100%-32px)] flex flex-col overflow-y-auto',
+        'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
+    : cx('max-h-[calc(100%-32px)] flex flex-col pf-vscroll pf-scroll-panel',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
-        'mobile:w-[calc(100%-32px)]');
+        'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]');
   return (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
          onClick={closable ? onClose : undefined}>

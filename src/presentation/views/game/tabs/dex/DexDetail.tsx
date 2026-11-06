@@ -86,7 +86,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
                   {/* 표 머리와 순위 다섯 줄 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className="pf-scroll-panel max-h-[178px] overflow-y-auto px-1">
+                  <div className="pf-scroll-panel max-h-[178px] pf-vscroll px-1">
                     <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                   </div>
                   {meOutside && (
