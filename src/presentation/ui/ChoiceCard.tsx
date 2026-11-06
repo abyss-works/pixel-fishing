@@ -40,7 +40,7 @@ export default function ChoiceCard({ selected, onSelect, preview, label, sub, ba
           <span className={cx('ml-auto text-2xs px-1 rounded-sm border', BADGE_CLS[badge])}>{badge}</span>
         )}
       </div>
-      <p className="text-xs leading-[1.6] text-text-dim">{description}</p>
+      <p className="text-xs leading-[1.6] text-text-dim whitespace-pre-line">{description}</p>
     </button>
   );
 }
