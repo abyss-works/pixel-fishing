@@ -8,6 +8,7 @@ import {
   GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
   GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, donationOutcome, guildBonusLevels,
   guildEffectsOf, validDonationAmount,
+  GUILD_RENAME_COST, renameBlock, renameOutcome,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -264,5 +265,58 @@ describe('길드 성장 — 기여', () => {
   it('기여의 하루는 게임 날짜다(한국 시간 새벽 4시 경계)', () => {
     expect(contributionDayOf('2026-11-05T18:59:59Z')).toBe('2026-11-05'); // KST 03:59
     expect(contributionDayOf('2026-11-05T19:00:00Z')).toBe('2026-11-06'); // KST 04:00
+  });
+});
+
+describe('길드 이름 바꾸기', () => {
+  const leader = { uid: 'a', role: 'leader' as const };
+  const member = { uid: 'b', role: 'member' as const };
+  const base = { current: '심해선단', next: '새바다', taken: false, lastRenamedAt: null, nowISO: '2026-11-06T03:00:00.000Z', gold: 100_000 };
+
+  it('비용은 10만 골드다', () => {
+    expect(GUILD_RENAME_COST).toBe(100_000);
+  });
+
+  it('길드장이 조건을 갖추면 바꿀 수 있다', () => {
+    expect(renameOutcome(leader, base)).toEqual({ ok: true });
+  });
+
+  it('길드장이 아니면 거절한다', () => {
+    expect(renameOutcome(member, base)).toEqual({ ok: false, error: 'not-leader' });
+  });
+
+  it('이름 규칙에 맞지 않으면 bad-name이다', () => {
+    expect(renameOutcome(leader, { ...base, next: '가 나' })).toEqual({ ok: false, error: 'bad-name' });
+    expect(renameOutcome(leader, { ...base, next: 3 })).toEqual({ ok: false, error: 'bad-name' });
+  });
+
+  it('지금 이름과 같으면 거절하고, 대소문자만 바꾸는 것은 허용한다', () => {
+    expect(renameOutcome(leader, { ...base, next: '심해선단' })).toEqual({ ok: false, error: 'same-name' });
+    expect(renameOutcome(leader, { ...base, current: 'Deep', next: 'deep' })).toEqual({ ok: true });
+  });
+
+  it('다른 길드가 쓰는 이름이면 name-taken이다', () => {
+    expect(renameOutcome(leader, { ...base, taken: true })).toEqual({ ok: false, error: 'name-taken' });
+  });
+
+  it('같은 게임 날짜(한국 시간 새벽 4시 경계)에 이미 바꿨으면 거절한다', () => {
+    // 11월 6일 04:00 KST = 11월 5일 19:00Z
+    const nowISO = '2026-11-06T18:59:00.000Z';
+    expect(renameOutcome(leader, { ...base, nowISO, lastRenamedAt: '2026-11-05T19:00:00.000Z' }))
+      .toEqual({ ok: false, error: 'renamed-today' });
+    expect(renameOutcome(leader, { ...base, nowISO: '2026-11-06T19:00:00.000Z', lastRenamedAt: '2026-11-06T18:59:00.000Z' }))
+      .toEqual({ ok: true });
+  });
+
+  it('골드가 모자라면 거절하고, 정확히 10만이면 된다', () => {
+    expect(renameOutcome(leader, { ...base, gold: 99_999 })).toEqual({ ok: false, error: 'not-enough-gold' });
+    expect(renameOutcome(leader, { ...base, gold: 100_000 })).toEqual({ ok: true });
+  });
+
+  it('화면용 막힘 사유는 오늘 바꿨음을 골드 부족보다 먼저 알린다', () => {
+    const nowISO = '2026-11-06T03:00:00.000Z';
+    expect(renameBlock({ lastRenamedAt: null, nowISO, gold: 0 })).toBe('not-enough-gold');
+    expect(renameBlock({ lastRenamedAt: nowISO, nowISO, gold: 0 })).toBe('renamed-today');
+    expect(renameBlock({ lastRenamedAt: null, nowISO, gold: 100_000 })).toBeNull();
   });
 });

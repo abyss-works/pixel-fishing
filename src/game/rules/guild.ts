@@ -124,12 +124,44 @@ export function handoverOutcome(actor: GuildActor, targetUid: string): 'ok' | 's
   return actor.uid === targetUid ? 'self' : 'ok';
 }
 
+// ── 이름 바꾸기 ──────────────────────────────────────────
+// 길드장만, 길드장의 골드를 내고, 하루(게임 날짜, 한국 시간 새벽 4시 경계)에 한 번 바꾼다.
+
+/** 이름을 바꾸는 비용(길드장의 골드) */
+export const GUILD_RENAME_COST = 100_000;
+
+export type RenameError = 'not-leader' | 'bad-name' | 'same-name' | 'name-taken' | 'renamed-today' | 'not-enough-gold';
+
+/** 지금 이름을 바꿀 수 없는 사유. 같은 게임 날짜에 이미 바꿨는지를 골드 부족보다 먼저 본다. 바꿀 수 있으면 null */
+export function renameBlock(v: { lastRenamedAt: string | null; nowISO: string; gold: number }):
+  'renamed-today' | 'not-enough-gold' | null {
+  if (v.lastRenamedAt !== null && gameDayOf(v.lastRenamedAt) === gameDayOf(v.nowISO)) return 'renamed-today';
+  return v.gold < GUILD_RENAME_COST ? 'not-enough-gold' : null;
+}
+
+/**
+ * 이름 바꾸기 판정. 지금 이름과 글자까지 같을 때만 same-name이라 대소문자만 바꾸는 것은 된다.
+ * @param taken 다른 길드가 대소문자를 무시하고 같은 이름을 쓰고 있는가(저장소가 확인한다)
+ * @param lastRenamedAt 마지막으로 이름을 바꾼 시각. 바꾼 적이 없으면 null
+ * @param gold 길드장이 가진 골드
+ */
+export function renameOutcome(actor: GuildActor, v: {
+  current: string; next: unknown; taken: boolean; lastRenamedAt: string | null; nowISO: string; gold: number;
+}): { ok: true } | { ok: false; error: RenameError } {
+  if (actor.role !== 'leader') return { ok: false, error: 'not-leader' };
+  if (!checkGuildName(v.next).ok) return { ok: false, error: 'bad-name' };
+  if (v.next === v.current) return { ok: false, error: 'same-name' };
+  if (v.taken) return { ok: false, error: 'name-taken' };
+  const block = renameBlock(v);
+  return block ? { ok: false, error: block } : { ok: true };
+}
+
 // ── 성장 ──────────────────────────────────────────────
 // 기여도는 길드원이 얻은 명성(하루 상한)과 의뢰 클리어(상한과 별개)로 쌓이고, 누적 기여도가 레벨을 정한다.
 // 떠난 선원의 기여도 길드에 남는다.
 
-/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌, 보너스 기부, 보너스 단계 상승 */
-export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up';
+/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌, 보너스 기부, 보너스 단계 상승, 이름 바꾸기 */
+export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up' | 'rename';
 
 /** 길드원 한 사람이 하루(게임 날짜)에 명성으로 쌓을 수 있는 기여 */
 export const GUILD_DAILY_FAME_CAP = 2_000;
