@@ -19,6 +19,15 @@ export function nextPhase(p: ActivePhase): ActivePhase {
   }
 }
 
+/**
+ * 이번 던짐의 첫 결과 시각. 줄을 거두면(idle) 지우고, 처음 catch 단계에 든 시각을 첫 결과로 잡아
+ * 재캐스트로 wait에 돌아와도 유지한다.
+ */
+export function resultAtOf(prev: number | null, phase: FishingPhase, now: number): number | null {
+  if (phase === 'idle') return null;
+  return prev ?? (phase === 'catch' ? now : null);
+}
+
 // 각 단계의 지속 시간(ms). wait만 낚싯대 스탯 범위 내 랜덤.
 // catch는 등급으로 분기 — 전설은 이펙트(회전+버스트)를 다 보여주려고 조금 더 길다.
 export function phaseDurationMs(
