@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { loadMessageFold, saveMessageFold } from '../../../platform/api/messageFold';
 import { foldInitial, isFolded, messageFoldReducer, parseSeaFolded, scanPosts, serializeSeaFolded } from '../model/messageFold';
 import type { FilterChannel, MessageFilter } from '../model/messageFilter';
@@ -15,7 +15,8 @@ export function useMessageFold(inBase: boolean, log: readonly { at: number; chan
   useEffect(() => { saveMessageFold(serializeSeaFolded(state.sea)); }, [state.sea]);
 
   // 접속 전의 기록은 새 글이 아니므로 기준 시각은 처음 그린 때다
-  const since = useRef(Date.now());
+  const [mountedAt] = useState(() => Date.now());
+  const since = useRef(mountedAt);
   useEffect(() => {
     const scan = scanPosts(log, filter, since.current);
     since.current = scan.since;
