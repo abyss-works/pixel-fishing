@@ -230,7 +230,7 @@ export default function GameView(props: GameViewProps) {
                      <ChatBar inGuild={guild !== null} guest={props.account === null}
                               open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined} />
                    ) : null}
-                   sheetOpen={sheetOpen} onStatusSlot={setStatusSlot}
+                   onStatusSlot={setStatusSlot}
                    onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
