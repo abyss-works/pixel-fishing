@@ -60,6 +60,7 @@ import { josa } from '../../ui/format';
 import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
+import { useBlockZoom } from '../../layouts/useBlockZoom';
 
 interface GameViewProps {
   game: GameState;
@@ -92,6 +93,7 @@ export default function GameView(props: GameViewProps) {
   const { game, scene } = props;
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const mobile = useMobileLayout();
+  useBlockZoom();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** 모바일 채팅 입력 줄 — 메시지 창 기록 칸을 누르면 열린다 */

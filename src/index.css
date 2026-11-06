@@ -148,6 +148,12 @@ body {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+/* 모바일 배치에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
+   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 배치 판정(MOBILE_QUERY)과 같다. */
+@media (orientation: portrait) and (max-width: 599px) {
+  html { touch-action: manipulation; }
+  input:not([type='checkbox'], [type='radio'], [type='range']), textarea, select { font-size: 16px; }
+}
 /* 문단·목록은 마지막 줄에 한 어절만 남지 않게 줄 길이를 고르게 맞춘다 */
 p, li { text-wrap: pretty; }
 
