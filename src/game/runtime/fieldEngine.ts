@@ -286,6 +286,7 @@ export class GameFieldEngine {
       phase: this.snapshot.phase,
       school: this.school,
       boat: this.game.boat,
+      look: this.game.look,
       biteT: this.snapshot.phase === 'bite'
         ? (Date.now() - this.biteStart) / 1000 / axes.sweep.value : null,
       zone: zones ? zones.yellow / 100 : 0,

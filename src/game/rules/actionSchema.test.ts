@@ -57,4 +57,12 @@ describe('parseAction', () => {
   it('스키마 키 집합이 리듀서 유니온과 일치한다 — 드리프트 방지', () => {
     expect([...ACTION_SCHEMA_TYPES].sort()).toEqual([...ACTION_TYPES].sort());
   });
+
+  it('옷장 액션은 형식이 맞아야 통과한다 — 값의 범위는 리듀서가 본다', () => {
+    expect(parseAction({ type: 'changeClothes', shirt: 1, pants: 2 })).toEqual({ type: 'changeClothes', shirt: 1, pants: 2 });
+    expect(parseAction({ type: 'buyHat', hat: 'cap-red' })).toEqual({ type: 'buyHat', hat: 'cap-red' });
+    expect(parseAction({ type: 'wearHat', hat: null })).toEqual({ type: 'wearHat', hat: null });
+    expect(parseAction({ type: 'buyHat' })).toBeNull();
+    expect(parseAction({ type: 'wearHat' })).toBeNull();
+  });
 });

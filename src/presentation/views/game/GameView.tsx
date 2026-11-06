@@ -150,7 +150,7 @@ export default function GameView(props: GameViewProps) {
     if (scene.kind !== 'base') return;
     const pack = BASE_PACKS[scene.id];
     switch (id) {
-      case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty':
+      case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty': case 'wardrobe':
         setActionPanel(panel => panel === id ? null : id);
         return;
       case 'rank':

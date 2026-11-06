@@ -13,6 +13,7 @@ import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../..
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import type { GearView } from '../../pixel/sprites/overlays.js';
+import type { Look } from '../../../content/wardrobe.js';
 
 /** React 상태 → 캔버스 경계 뷰모델 — 게임 필드가 프레임마다 채워 보낸다.
     phase는 문자열로 받는다 — 렌더러는 게임 규칙 타입(FishingPhase)을 모른다 (계층 절단).
@@ -24,6 +25,8 @@ export interface FieldView extends GearView {
   others?: OtherShipView[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
+  /** 내 외형 — 없으면 기본 외형 */
+  look?: Look;
 }
 
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
@@ -85,8 +88,8 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);
   if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
-  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t);
-  else drawPerson(ctx, v.player.x, v.player.y);
+  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.look);
+  else drawPerson(ctx, v.player.x, v.player.y, v.look);
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
   drawTimingBar(ctx, v);
 

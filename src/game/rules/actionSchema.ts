@@ -42,6 +42,9 @@ const schemas = {
   buyBait: z.object({ type: z.literal('buyBait'), bait: z.unknown(), count: z.unknown().optional() }),
   setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
   seeTutorial: z.object({ type: z.literal('seeTutorial'), id: z.string() }),
+  changeClothes: z.object({ type: z.literal('changeClothes'), shirt: z.unknown(), pants: z.unknown() }),
+  buyHat: z.object({ type: z.literal('buyHat'), hat: z.unknown() }),
+  wearHat: z.object({ type: z.literal('wearHat'), hat: z.unknown() }),
   boot: z.object({ type: z.literal('boot'), buildId: z.unknown().optional() }),
   setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
   acceptQuest: z.object({ type: z.literal('acceptQuest'), questId: z.string(), port: z.string() }),
@@ -64,7 +67,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.buyBait, schemas.setActiveBait,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.exhibit, schemas.resolveChallenge,
-  schemas.import, schemas.seeTutorial,
+  schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);
 
 /** 미검증 body → GameAction. 실패는 null (호출자가 400 bad-action으로). */

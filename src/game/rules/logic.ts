@@ -26,6 +26,8 @@ import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { TutorialId } from '../content/tutorials.js';
+import { DEFAULT_LOOK, hatById, safeLook } from '../content/wardrobe.js';
+import type { Look } from '../content/wardrobe.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
@@ -101,6 +103,10 @@ export interface GameState {
   namedPity: NamedPity;
   /** 본 튜토리얼 — 트리거마다 한 번만 뜨게 한다. 세이브 v8에 접어서 도입(없으면 빈 목록) */
   tutorials: TutorialId[];
+  /** 캐릭터 외형 — 웃옷·바지 팔레트 번호와 쓴 모자. 세이브 v8에 접어서 도입(없으면 기본 외형) */
+  look: Look;
+  /** 가진 모자 id — 쓴 모자(look.hat)는 이 목록에 있다. 없으면 빈 목록 */
+  hats: string[];
 }
 
 export interface RodStats {
@@ -379,6 +385,8 @@ export function newState(): GameState {
     pity: {},
     namedPity: { day: '', misses: 0, fails: 0, wounds: {} },
     tutorials: [],
+    look: DEFAULT_LOOK,
+    hats: [],
   };
 }
 
@@ -857,6 +865,8 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     v++;
   }
   // 최종 위생 처리 — 손상된 필드는 기본값으로
+  const hats = safeHats(s.hats);
+  const look = safeLook(s.look);
   return {
     ...base,
     gold: typeof s.gold === 'number' ? s.gold : 0,
@@ -875,7 +885,15 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     pity: safePity(s.pity),
     namedPity: safeNamedPity(s.namedPity),
     tutorials: Array.isArray(s.tutorials) ? s.tutorials.filter(isTutorialId) : [],
+    look: look.hat === null || hats.includes(look.hat) ? look : { ...look, hat: null },
+    hats,
   };
+}
+
+/** 가진 모자 위생 — 있는 모자 id만 처음 나온 순서로 한 번씩 살린다 */
+function safeHats(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((h): h is string => hatById(h) !== undefined))];
 }
 
 // ---------- 아이템 (스택형 — 세이브 v8 접기) ----------

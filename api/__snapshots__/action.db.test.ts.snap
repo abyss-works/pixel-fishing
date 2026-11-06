@@ -54,10 +54,16 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -92,10 +98,16 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -138,10 +150,16 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -218,10 +236,16 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -256,10 +280,16 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -349,10 +379,16 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -387,10 +423,16 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 30,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -582,10 +624,16 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -620,10 +668,16 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -812,10 +866,16 @@ exports[`개발 명령 > 로컬 오리진의 상태 명령은 허용된다 1`] =
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -850,10 +910,16 @@ exports[`개발 명령 > 로컬 오리진의 상태 명령은 허용된다 1`] =
           "coupons": [],
           "fame": 0,
           "gold": 1000,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -912,10 +978,16 @@ exports[`개발 명령 > 소유자가 아니고 로컬 오리진도 아니면 �
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -977,10 +1049,16 @@ exports[`개발 명령 > 운영 배포는 로컬 오리진이어도 거부한다
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -1077,10 +1155,16 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -1115,10 +1199,16 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -1191,10 +1281,16 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -1229,10 +1325,16 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -1270,10 +1372,16 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -2090,10 +2198,16 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -2135,10 +2249,16 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -2995,10 +3115,16 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3040,10 +3166,16 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3190,10 +3322,16 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3236,10 +3374,16 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3393,10 +3537,16 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3439,10 +3589,16 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3673,10 +3829,16 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3718,10 +3880,16 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3896,10 +4064,16 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
           "exhibit": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3933,10 +4107,16 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -3978,10 +4158,16 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -4074,10 +4260,16 @@ exports[`낚시 > 잠긴 수역은 거부한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4202,10 +4394,16 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -4248,10 +4446,16 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -4382,10 +4586,16 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -4427,10 +4637,16 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
           "coupons": [],
           "fame": 5,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -4523,10 +4739,16 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4597,10 +4819,16 @@ exports[`닉네임 > 바꾸기 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4635,10 +4863,16 @@ exports[`닉네임 > 바꾸기 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4697,10 +4931,16 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4762,10 +5002,16 @@ exports[`상점·이동 > 골드가 모자란 강화는 거부한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4837,10 +5083,16 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4875,10 +5127,16 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 99950,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4921,12 +5179,18 @@ exports[`상점·이동 > 미끼 구매와 장착 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 9400,
+          "hats": [],
           "items": {
             "bait-rare": 3,
           },
           "location": {
             "id": "colombo",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -4999,12 +5263,18 @@ exports[`상점·이동 > 미끼 구매와 장착 1`] = `
           "activeBait": "bait-rare",
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {
             "bait-rare": 3,
           },
           "location": {
             "id": "colombo",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5039,12 +5309,18 @@ exports[`상점·이동 > 미끼 구매와 장착 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 9400,
+          "hats": [],
           "items": {
             "bait-rare": 3,
           },
           "location": {
             "id": "colombo",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5113,10 +5389,16 @@ exports[`상점·이동 > 배 구매 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5151,10 +5433,16 @@ exports[`상점·이동 > 배 구매 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5222,10 +5510,16 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "ocean",
             "kind": "region",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5262,10 +5556,16 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "ocean",
             "kind": "region",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5326,10 +5626,16 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5391,10 +5697,16 @@ exports[`요청 경계 > 직전 액션과 간격이 너무 짧으면 429다 1`] 
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5456,10 +5768,16 @@ exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5521,10 +5839,16 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5619,10 +5943,16 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5680,10 +6010,16 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
         "exhibit": [],
         "fame": 77,
         "gold": 4321,
+        "hats": [],
         "items": {},
         "location": {
           "id": "home",
           "kind": "base",
+        },
+        "look": {
+          "hat": null,
+          "pants": 0,
+          "shirt": 0,
         },
         "namedPity": {
           "day": "",
@@ -5829,10 +6165,16 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5867,10 +6209,16 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
           "coupons": [],
           "fame": 20,
           "gold": 500,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5939,10 +6287,16 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -5977,10 +6331,16 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6052,10 +6412,16 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
           "coupons": [
             "DYN-ON",
           ],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6092,10 +6458,16 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
           ],
           "fame": 0,
           "gold": 777,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6174,10 +6546,16 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
           "coupons": [
             "출항준비",
           ],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6214,10 +6592,16 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
           ],
           "fame": 0,
           "gold": 300,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6318,10 +6702,16 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "activeBait": null,
             "artifacts": [],
             "coupons": [],
+            "hats": [],
             "items": {},
             "location": {
               "id": "home",
               "kind": "base",
+            },
+            "look": {
+              "hat": null,
+              "pants": 0,
+              "shirt": 0,
             },
             "namedPity": {
               "day": "",
@@ -6356,10 +6746,16 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "coupons": [],
             "fame": 100,
             "gold": 5000,
+            "hats": [],
             "items": {},
             "location": {
               "id": "home",
               "kind": "base",
+            },
+            "look": {
+              "hat": null,
+              "pants": 0,
+              "shirt": 0,
             },
             "namedPity": {
               "day": "",
@@ -6425,10 +6821,16 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "activeBait": null,
             "artifacts": [],
             "coupons": [],
+            "hats": [],
             "items": {},
             "location": {
               "id": "home",
               "kind": "base",
+            },
+            "look": {
+              "hat": null,
+              "pants": 0,
+              "shirt": 0,
             },
             "namedPity": {
               "day": "",
@@ -6507,10 +6909,16 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6545,10 +6953,16 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6638,10 +7052,16 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6676,10 +7096,16 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -6769,10 +7195,16 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -6809,10 +7241,16 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "2030-03-04",
@@ -6888,10 +7326,16 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7035,10 +7479,16 @@ exports[`현상금 > 배정되지 않은 의뢰 수주는 거부한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "harbor",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7209,10 +7659,16 @@ exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "harbor",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7247,10 +7703,16 @@ exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행
           "coupons": [],
           "fame": 1500,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "harbor",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7398,10 +7860,16 @@ exports[`현상금 > 오늘 이미 클리어했으면 거부한다 1`] = `
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "harbor",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7472,10 +7940,16 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7554,10 +8028,16 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
           "activeBait": null,
           "artifacts": [],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7592,10 +8072,16 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
           "coupons": [],
           "fame": 0,
           "gold": 20000,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7665,10 +8151,16 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
             "abyss-angler",
           ],
           "coupons": [],
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",
@@ -7705,10 +8197,16 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
           "coupons": [],
           "fame": 0,
           "gold": 0,
+          "hats": [],
           "items": {},
           "location": {
             "id": "home",
             "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
           },
           "namedPity": {
             "day": "",

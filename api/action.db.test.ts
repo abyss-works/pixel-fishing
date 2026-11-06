@@ -788,3 +788,33 @@ describe('항구 빠른 이동', () => {
     expect(await locationOf(uid)).toEqual({ kind: 'base', id: 'manila' });
   });
 });
+
+describe('옷장', () => {
+  const saved = async (uid: string) => {
+    const { rows } = await env.client.query('select gold, data from public.saves_current where user_id = $1', [uid]);
+    return { gold: Number(rows[0].gold), look: rows[0].data.look, hats: rows[0].data.hats };
+  };
+
+  it('모자 구매, 착용, 옷 바꾸기가 저장에 남는다', async () => {
+    const uid = await seed({ state: { gold: 120_000 } });
+    const buy = await callAction(userToken(uid), { type: 'buyHat', hat: 'cap-red' });
+    expect(buy.status).toBe(200);
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const wear = await callAction(userToken(uid), { type: 'wearHat', hat: 'cap-red' });
+    expect(wear.status).toBe(200);
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const clothes = await callAction(userToken(uid), { type: 'changeClothes', shirt: 6, pants: 1 });
+    expect(clothes.status).toBe(200);
+    expect(await saved(uid)).toEqual({ gold: 70_000, look: { shirt: 6, pants: 1, hat: 'cap-red' }, hats: ['cap-red'] });
+  });
+
+  it('골드가 모자라거나 갖지 않은 모자는 거부하고 저장을 바꾸지 않는다', async () => {
+    const uid = await seed({ state: { gold: 49_999 } });
+    expect((await callAction(userToken(uid), { type: 'buyHat', hat: 'cap-red' })).body).toMatchObject({ error: 'not-enough-gold' });
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    expect((await callAction(userToken(uid), { type: 'wearHat', hat: 'cap-red' })).body).toMatchObject({ error: 'hat-not-owned' });
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    expect((await callAction(userToken(uid), { type: 'changeClothes', shirt: 12, pants: 0 })).status).toBe(422);
+    expect((await saved(uid)).gold).toBe(49_999);
+  });
+});

@@ -10,6 +10,17 @@ describe('parseClientMessage', () => {
       .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
   });
 
+  it('move의 외형은 검사해서 싣고, 잘못된 값은 기본 외형으로 바꾼다', () => {
+    const base = '"t":"move","region":"sea","x":1,"y":2,"dir":1,"line":false';
+    expect(parseClientMessage(`{${base},"look":{"shirt":3,"pants":4,"hat":"cap-red","x":1}}`))
+      .toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: false, look: { shirt: 3, pants: 4, hat: 'cap-red' } });
+    for (const look of ['{"shirt":12,"pants":0,"hat":null}', '{"shirt":0,"pants":0,"hat":"cap-x"}', '"bad"', '5', 'null']) {
+      expect(parseClientMessage(`{${base},"look":${look}}`), look)
+        .toMatchObject({ t: 'move', look: { shirt: 0, pants: 0, hat: null } });
+    }
+    expect(parseClientMessage(`{${base}}`)).not.toHaveProperty('look');
+  });
+
   it('정상 메시지는 필요한 필드만 남긴다', () => {
     expect(parseClientMessage('{"t":"move","region":"sea","x":1.5,"y":-2,"dir":3,"line":true,"extra":1}'))
       .toEqual({ t: 'move', region: 'sea', x: 1.5, y: -2, dir: 3, line: true });

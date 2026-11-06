@@ -23,7 +23,8 @@ import { artifactById, artifactOfZone } from '../content/artifacts.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canEnterBase, canFish, canUpgradeRod, encounterQuests } from './rules.js';
+import { canBuyBoat, canBuyHat, canChangeClothes, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
+import { hatById } from '../content/wardrobe.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -56,6 +57,9 @@ export type GameAction =
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
+  | { type: 'changeClothes'; shirt: unknown; pants: unknown } // 옷 바꾸기 — 웃옷·바지 팔레트 번호, 비용 없음
+  | { type: 'buyHat'; hat: unknown }               // 모자 사기 — 골드 소모, 가진 모자에 더한다
+  | { type: 'wearHat'; hat: unknown }               // 모자 쓰기 — null이면 벗는다
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
@@ -71,7 +75,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
-  seeTutorial: true,
+  seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -559,6 +563,39 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (!isTutorialId(action.id)) return { ok: false, error: 'bad-request' };
       if (state.tutorials.includes(action.id)) return { ok: true, state, result: { type: 'none' }, events: [] };
       return { ok: true, state: { ...state, tutorials: [...state.tutorials, action.id] }, result: { type: 'none' }, events: [] };
+    }
+    case 'changeClothes': {
+      // 옷장은 집에서만 열리는 것을 화면이 보장한다. 업그레이드·배 구매처럼 서버는 위치를 따로 검사하지 않는다.
+      const check = canChangeClothes(action.shirt, action.pants);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const shirt = action.shirt as number, pants = action.pants as number;
+      if (state.look.shirt === shirt && state.look.pants === pants) {
+        return { ok: true, state, result: { type: 'none' }, events: [] };
+      }
+      return {
+        ok: true, state: { ...state, look: { ...state.look, shirt, pants } },
+        result: { type: 'none' }, events: [],
+      };
+    }
+    case 'buyHat': {
+      const check = canBuyHat(state, action.hat);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const hat = hatById(action.hat)!;
+      return {
+        ok: true, state: { ...state, gold: state.gold - hat.price, hats: [...state.hats, hat.id] },
+        result: { type: 'none' },
+        events: [{ type: 'buyHat', payload: { hat: hat.id, cost: hat.price } }],
+      };
+    }
+    case 'wearHat': {
+      const check = canWearHat(state, action.hat);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const hat = action.hat as string | null;
+      if (state.look.hat === hat) return { ok: true, state, result: { type: 'none' }, events: [] };
+      return {
+        ok: true, state: { ...state, look: { ...state.look, hat } },
+        result: { type: 'none' }, events: [],
+      };
     }
     case 'boot': {
       // 접속(부팅) 기록 — sendLetter와 같은 "상태가 아닌 이벤트" 계열. 편지(events)와 마찬가지로
