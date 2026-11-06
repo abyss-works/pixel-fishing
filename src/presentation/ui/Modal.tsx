@@ -36,10 +36,10 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
     : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';
   const box = layer === 'app'
-    ? cx('relative bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] overflow-y-auto overscroll-contain pf-scroll-panel',
+    ? cx('relative bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] pf-vscroll pf-scroll-panel',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
         'mobile:w-[calc(100%-32px)] mobile:max-w-none mobile:max-h-[calc(100dvh-32px)]')
-    : cx('max-h-[calc(100%-32px)] flex flex-col overflow-y-auto overscroll-contain pf-scroll-panel',
+    : cx('max-h-[calc(100%-32px)] flex flex-col pf-vscroll pf-scroll-panel',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-32px)]');
   return (

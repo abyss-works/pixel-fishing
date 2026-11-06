@@ -91,7 +91,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   return (
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <Frame className={cx(LORE_H, 'shrink-0 overflow-y-auto pf-scroll-panel p-2 flex flex-col justify-start gap-0.5')}>
+      <Frame className={cx(LORE_H, 'shrink-0 pf-vscroll pf-scroll-panel p-2 flex flex-col justify-start gap-0.5')}>
         <h3 className="text-sm text-gold pf-accent truncate">
           {parentZone && <span className="text-text-dim">{parentZone.name} &gt; </span>}
           {zone.name}
@@ -111,7 +111,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             <span className="text-2xs text-text-dim">도감 {focusedDex.caught}/{focusedDex.total}</span>
           )}
         </SectionTitle>
-        <Frame className={cx(SLOT_H, 'overflow-y-auto pf-scroll-panel p-0 flex flex-col')}>
+        <Frame className={cx(SLOT_H, 'pf-vscroll pf-scroll-panel p-0 flex flex-col')}>
           {focused ? (
             /* ── 사거리 내 어군 상세 ── */
             <div className="flex flex-col flex-1">
@@ -199,7 +199,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
       {/* 팁·조작 — 최상위 존 기준(하위 존은 부모 폴백). 항목 수가 가변(3~4개)이라 한
           컨테이너에 묶어 높이 고정. 이 아래는 아무것도 없으므로 이 컨테이너가 길어질 일도,
           위 섹션을 밀어낼 일도 없다 */}
-      <div className={cx(FOOT_H, 'shrink-0 overflow-y-auto pf-scroll-panel flex flex-col gap-2')}>
+      <div className={cx(FOOT_H, 'shrink-0 pf-vscroll pf-scroll-panel flex flex-col gap-2')}>
         {nextBoat && (
           <Frame className="p-2 flex flex-col gap-0.5 text-xs">
             <span className="text-gold">다음 배 · {nextBoat.name}</span>

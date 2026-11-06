@@ -56,7 +56,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
       <ModalCard title="우편함" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {/* 표 머리 한 줄과 우편 다섯 줄 높이 */}
-          <Inset className="pf-scroll-panel h-[212px] overflow-y-auto px-3 pb-2">
+          <Inset className="pf-scroll-panel h-[212px] pf-vscroll px-3 pb-2">
             {mails && mails.length > 0 ? (
               <table className="w-full table-fixed border-collapse text-sm" aria-label="받은 우편">
                 <colgroup><col className="w-5" /><col /><col className="w-[120px]" /><col className="w-20" /></colgroup>
@@ -105,7 +105,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <b className="text-gold truncate">{selected.title}</b>
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
-                <p className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable] whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
+                <p className="pf-scroll-panel flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable] whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
                 <div className="h-9 shrink-0 flex items-center justify-between gap-2 border-t border-line pt-1.5">
                   {selected.gold > 0 && (
                     <>

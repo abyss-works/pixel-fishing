@@ -292,6 +292,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     background: linear-gradient(180deg, rgba(255, 213, 79, 0.1), transparent);
   }
 
+  /* 세로 스크롤 칸 — 목록과 창 본문이 쓰는 공용 방식. overflow-y만 auto로 두면 overflow-x도 auto로 계산되어
+     안쪽이 몇 px만 넘쳐도 가로로 밀린다. 가로는 잘라 세로로만 스크롤하고, 끝에 닿아도 바깥으로 스크롤이 번지지 않게 한다.
+     표를 담는 가로 스크롤 칸이나 ScrollRow처럼 가로 스크롤이 목적인 칸에는 쓰지 않는다. */
+  .pf-vscroll {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   /* 사이드바 콘텐츠 — 스크롤은 되지만 막대는 숨긴다.
      384px 폭에 OS 기본 스크롤바가 얹히면 픽셀 화면 옆에서 튀고, 탭을 옮길 때마다
      막대가 생겼다 사라지며 콘텐츠 폭이 흔들린다(레이아웃 점프). 휠·드래그·키보드는 그대로. */

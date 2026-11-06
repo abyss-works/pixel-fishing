@@ -25,7 +25,7 @@ import { cx } from '../../../ui/cx';
 import { NOTCH_SM } from '../../../ui/notch';
 import Tip from '../../../ui/Tip';
 import HudButton from '../../../ui/hud/HudButton';
-import HudInput, { HUD_INPUT_BOX } from '../../../ui/hud/HudInput';
+import HudInput from '../../../ui/hud/HudInput';
 import PixelIcon from '../../../ui/PixelIcon';
 
 const GUEST_TEXT = '채팅은 계정을 만든 뒤 쓸 수 있어요. 계정 관리에서 계정을 만들어 주세요.';
@@ -113,11 +113,9 @@ export default function ChatBar({ inGuild = false, guest = false, open = true, o
       <div className="flex items-center gap-1.5 text-xs">
         {unfold}
         {!guest && onOpen && (
-          <button type="button" onClick={onOpen}
-                  className={cx(HUD_INPUT_BOX, 'cursor-pointer text-left text-text-dim',
-                    'border-line bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] backdrop-blur-[4px]')}>
+          <HudButton onClick={onOpen} className="min-w-0 flex-1 justify-start text-text-dim">
             {room === 'guild' ? 'Enter로 길드 채팅' : 'Enter로 채팅'}
-          </button>
+          </HudButton>
         )}
       </div>
     );

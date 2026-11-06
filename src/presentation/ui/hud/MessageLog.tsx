@@ -148,7 +148,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
       {!folded && <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
            onClick={e => { if (!(e.target as HTMLElement).closest('button')) onActivate?.(); }}
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
-             'flex flex-col [&>:first-child]:mt-auto overflow-y-auto overscroll-contain select-text mobile:touch-pan-y',
+             'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',
              'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
            style={{ height: `calc(${lines * LINE_EM}em + 0.5rem + 4px)` }}>
         {shown.map(m => (

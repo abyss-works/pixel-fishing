@@ -37,7 +37,7 @@ export default function BoatTab({ game, summary, row, zones }: {
           <span className="pf-accent shrink-0">{fmtNum(bag.count)} / {fmtNum(bag.cap)} <span className="text-text-dim">({bag.percent}%)</span></span>
         </div>
       </Inset>
-      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+      <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup><col /><col className="w-[110px]" /><col className="w-[140px]" /></colgroup>
           <thead>

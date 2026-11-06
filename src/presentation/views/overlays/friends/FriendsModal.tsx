@@ -98,7 +98,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
 }) {
   const nowMs = Date.parse(useNow());
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
       {friends && friends.length > 0 ? (
         <table className={SOCIAL_TABLE}>
           <colgroup><col /><col className="w-[150px]" /><col className="w-16" /></colgroup>
@@ -166,7 +166,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
+    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
@@ -209,7 +209,7 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <Inset className="pf-scroll-panel h-[138px] overflow-y-auto px-3 py-1">
+      <Inset className="pf-scroll-panel h-[138px] pf-vscroll px-3 py-1">
         {rows && rows.length > 0 ? (
           <table className={SOCIAL_TABLE}>
             <colgroup><col /><col className="w-[132px]" /></colgroup>

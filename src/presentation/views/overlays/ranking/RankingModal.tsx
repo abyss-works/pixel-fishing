@@ -48,7 +48,7 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
   const mine = data ? pinnedMyRank(data) : null;
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+      <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-3 pb-2">
         {listed ? (
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup><col className="w-14" /><col /><col className="w-[110px]" /></colgroup>

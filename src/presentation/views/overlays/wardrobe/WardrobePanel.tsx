@@ -56,7 +56,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
       />
       {screen === 'clothes' ? (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pf-scroll">
+          <div className="flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pf-scroll">
             <div>
               <Subheading>프리셋</Subheading>
               <div className="grid grid-cols-6 gap-2">
@@ -83,7 +83,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="grid grid-cols-5 gap-2 flex-1 min-h-0 content-start overflow-y-auto pf-scroll">
+          <div className="grid grid-cols-5 gap-2 flex-1 min-h-0 content-start pf-vscroll pf-scroll">
             {HATS.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;
