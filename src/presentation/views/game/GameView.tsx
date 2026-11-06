@@ -94,6 +94,10 @@ export default function GameView(props: GameViewProps) {
   const mobile = useMobileLayout();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** 모바일 채팅 입력 줄 — 메시지 창 기록 칸을 누르면 열린다 */
+  const [chatOpen, setChatOpen] = useState(false);
+  /** 모바일 낚시 상태 띠가 들어갈 HUD 자리 */
+  const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -218,11 +222,16 @@ export default function GameView(props: GameViewProps) {
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
-                 initialPos={props.entryPos ?? undefined} />
+                 initialPos={props.entryPos ?? undefined} statusSlot={statusSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
-                   logFooter={chat.enabled ? <ChatBar inGuild={guild !== null} guest={props.account === null} /> : null}
+                   logFooter={chat.enabled ? (
+                     <ChatBar inGuild={guild !== null} guest={props.account === null}
+                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined} />
+                   ) : null}
+                   sheetOpen={sheetOpen} onStatusSlot={setStatusSlot}
+                   onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });

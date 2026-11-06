@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
 import { boatGateText, nextBoatText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
@@ -16,10 +17,12 @@ import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngi
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
+import { cx } from '../../ui/cx';
 import { GameFieldEngine } from '../../../game/runtime/fieldEngine';
 import { getSpotState } from '../../../game/world/currentSpot';
 import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
 import GameFrame from './GameFrame';
+import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
 import HudPanel from '../../ui/hud/HudPanel';
@@ -41,6 +44,8 @@ interface Props {
   initialPos?: Point;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
   paused?: boolean;
+  /** 모바일에서 낚시 상태 띠를 넣을 HUD 자리 — 없으면 프레임 아래 가운데에 둔다 */
+  statusSlot?: HTMLElement | null;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: number): void {
@@ -95,8 +100,9 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused,
+  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused, statusSlot,
 }: Props) {
+  const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
   const schools = useSchools(region);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
@@ -155,6 +161,14 @@ export default function Field({
 
   useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
 
+  const inSlot = mobile && statusSlot != null;
+  const statusBand = snapshot.phase === 'idle' ? null : (
+    <HudPanel className={cx('z-(--z-overlay) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
+      inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
+      {STATUS[snapshot.phase]}
+    </HudPanel>
+  );
+
   return (
     <GameFrame>
       {covered ? (
@@ -173,11 +187,7 @@ export default function Field({
           {snapshot.phase === 'catch' && fish ? (
             <CatchCard fish={fish} info={snapshot.catchInfo} />
           ) : (
-            <HudPanel className="absolute left-1/2 -translate-x-1/2 bottom-3 z-(--z-overlay)
-                                 max-w-[min(480px,calc(100%-24px))] px-3.5 py-1.5 whitespace-pre-line
-                                 text-sm text-center text-text pointer-events-none animate-overlay-in">
-              {STATUS[snapshot.phase]}
-            </HudPanel>
+            inSlot ? createPortal(statusBand, statusSlot) : statusBand
           )}
         </div>
       )}
