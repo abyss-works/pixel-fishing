@@ -98,7 +98,7 @@ function EventCatalog() {
       </div>
       {/* 리듀서에서 상태만 바꾸고 이벤트 없는 액션들 — "왜 로그에 없나"의 답 */}
       <Note size="2xs" className="my-0 px-3 pb-2">
-        setLocked, travel, setActiveBait는 이벤트를 남기지 않아요.
+        setLocked, autoLock, travel, setActiveBait는 이벤트를 남기지 않아요.
         travel은 첫 방문만 visit으로 남고, setActiveBait는 이미 활성인 미끼를 다시 고르면 기록하지 않아요.
       </Note>
     </Cell>
