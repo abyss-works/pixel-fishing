@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
+import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
 import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, isStale, matesInRegion, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
@@ -46,14 +47,15 @@ describe('applyLiveMessage', () => {
 });
 
 describe('nextPositionMessage', () => {
-  const at = (x: number, y: number, line = false, bob: { x: number; y: number } | null = null) => ({ region: 'sea', zone: null, x, y, line, bob });
+  const at = (x: number, y: number, line = false, bob: { x: number; y: number } | null = null) => ({ region: 'sea', zone: null, x, y, line, bob, look: DEFAULT_LOOK });
 
   it('처음과 바뀐 위치는 move, 그대로면 stop 한 번, 그 뒤로는 보내지 않는다', () => {
     let r = nextPositionMessage(null, at(0, 0));
-    expect(r.msg).toEqual({ t: 'move', region: 'sea', zone: null, x: 0, y: 0, dir: 2, line: false });
+    expect(r.msg).toEqual({ t: 'move', region: 'sea', zone: null, x: 0, y: 0, dir: 2, line: false, look: DEFAULT_LOOK });
     expect(r.msg).not.toHaveProperty('bob');
     r = nextPositionMessage(r.sent, at(3, 0));
     expect(r.msg).toMatchObject({ t: 'move', x: 3, dir: 1 });
+    expect(r.msg).not.toHaveProperty('look'); // 외형은 처음과 바뀐 때만 싣는다
     r = nextPositionMessage(r.sent, at(3, 0));
     expect(r.msg).toEqual({ t: 'stop' });
     r = nextPositionMessage(r.sent, at(3, 0));
@@ -71,6 +73,28 @@ describe('nextPositionMessage', () => {
     expect(cast.msg).toMatchObject({ t: 'move', line: true, bob: { x: 30, y: 8 } });
     const still = nextPositionMessage(cast.sent, at(1, 1, true, { x: 30, y: 8 })).sent;
     expect(nextPositionMessage(still, at(1, 1, true, { x: 60, y: 8 })).msg).toMatchObject({ t: 'move', bob: { x: 60, y: 8 } });
+  });
+});
+
+describe('외형 송신과 반영', () => {
+  const pos = { region: 'sea', zone: null, x: 1, y: 1, line: false, bob: null };
+  const red = { shirt: 1, pants: 2, hat: 'cap-red' };
+
+  it('외형이 바뀌면 제자리에서도 move에 새 외형을 싣는다', () => {
+    const still = nextPositionMessage(nextPositionMessage(null, { ...pos, look: DEFAULT_LOOK }).sent, { ...pos, look: DEFAULT_LOOK }).sent;
+    expect(nextPositionMessage(still, { ...pos, look: red }).msg).toMatchObject({ t: 'move', look: red });
+  });
+
+  it('다시 연결되어 처음부터 보내면 외형도 다시 싣는다', () => {
+    expect(nextPositionMessage(null, { ...pos, look: red }).msg).toMatchObject({ t: 'move', look: red });
+  });
+
+  it('move의 외형을 반영하고, 외형이 없는 move는 직전 외형을 유지한다', () => {
+    let s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [{ ...p('a', '가'), look: DEFAULT_LOOK }], recentChat: [] }, 0);
+    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 1, y: 1, dir: 0, line: false, look: red }, 1);
+    expect(s.others.a.presence.look).toEqual(red);
+    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'sea', x: 2, y: 1, dir: 0, line: false }, 2);
+    expect(s.others.a.presence.look).toEqual(red);
   });
 });
 
