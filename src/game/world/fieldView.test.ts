@@ -18,6 +18,11 @@ describe('mobileFieldView', () => {
     expect(mobileFieldView(400, 800).h).toBeGreaterThan(mobileFieldView(400, 600).h);
   });
 
+  it('게임 영역이 채팅 펼침이나 키보드로 줄면 시야 높이도 그 비율로 줄고, 폭은 그대로다', () => {
+    expect(mobileFieldView(390, 522)).toEqual({ w: 252, h: 337 }); // 채팅 접힘: 522/390*252 = 337.2
+    expect(mobileFieldView(390, 322)).toEqual({ w: 252, h: 208 }); // 키보드와 채팅 펼침: 322/390*252 = 208.07
+  });
+
   it('스테이지 크기를 아직 모르면(0) PC 시야를 돌려준다', () => {
     expect(mobileFieldView(0, 0)).toEqual(FIELD_VIEW);
     expect(mobileFieldView(390, 0)).toEqual(FIELD_VIEW);

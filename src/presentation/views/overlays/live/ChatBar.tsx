@@ -8,13 +8,11 @@
 // 입력 줄 앞의 방 버튼이나 입력 중 Tab으로 보낼 곳(월드·길드)을 바꾼다. 길드 방이면 버튼 글자가 길드색이다.
 // 길드가 없으면 버튼은 흐리게 꺼지고 언제나 월드로 보낸다. 버튼의 설명과 꺼진 이유는 게임 툴팁으로 보인다.
 // 게스트는 채팅을 보낼 수 없어 입력 칸 대신 흐린 안내 칸을 두고, 계정을 만드는 곳을 툴팁으로 알린다.
-// 모바일에서는 메시지 창 기록 칸을 눌러야 입력 줄이 열린다(open). 열리면 입력 칸에 포커스를 주어 키보드가 뜨고,
-// 입력 칸을 벗어나면(키보드를 닫거나 바깥을 누르면) onLeave로 닫는다. 보내도 입력 줄에 머문다.
 // 메시지 창이 접히면(folded) 입력 줄 왼쪽 끝에 펼치기 버튼을 둔다. 새 글이 있으면(unread) 버튼에 골드 네모 점을 찍는다.
-// 접힌 모바일에서 입력 줄이 닫혀 있으면 입력 줄 자리에 한 줄 칸을 두고, 누르면 입력 줄을 연다(onOpen). 게스트는 펼치기 버튼만 남는다.
+// 게스트는 펼치기 버튼만 남는다. 모바일도 PC와 같은 입력 줄이며, 입력 칸을 누르면 키보드가 뜬다.
 // 입력 칸에 포커스가 들어오고 빠지는 것은 onTyping으로 알린다.
 // 입력 줄의 열림과 보낼 방은 채팅 입력 상태머신(chatInputReducer)이 정한다. 입력 중 Tab은 포커스를 옮기지 않는다.
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
@@ -45,20 +43,14 @@ const NO_GUILD_TIP = '길드에 들어가면 길드 채팅을 쓸 수 있어요.
 const GUEST_ROOM_TIP = '채팅은 계정을 만든 뒤 쓸 수 있어요.';
 const GUEST_BLOCKED = { text: '채팅은 계정을 만든 뒤 쓸 수 있어요', reason: '설정 탭의 계정 관리에서 계정을 만들 수 있어요.' };
 
-export default function ChatBar({ inGuild = false, guest = false, open = true, onLeave, folded = false, unread = false, onUnfold, onOpen, onTyping }: {
+export default function ChatBar({ inGuild = false, guest = false, folded = false, unread = false, onUnfold, onTyping }: {
   inGuild?: boolean; guest?: boolean;
-  /** 입력 줄을 보이는가. PC는 늘 보인다 */
-  open?: boolean;
-  /** 입력 칸을 벗어났다(모바일에서 입력 줄을 닫는다) */
-  onLeave?: () => void;
   /** 메시지 창이 접혀 있는가 */
   folded?: boolean;
   /** 접힌 동안 새 글이 왔다 */
   unread?: boolean;
   /** 펼치기 버튼을 눌렀다 */
   onUnfold?: () => void;
-  /** 접힌 모바일의 한 줄 칸을 눌렀다(입력 줄을 연다) */
-  onOpen?: () => void;
   /** 입력 칸에 포커스가 들어오거나 빠졌다 */
   onTyping?: (on: boolean) => void;
 }) {
@@ -94,35 +86,19 @@ export default function ChatBar({ inGuild = false, guest = false, open = true, o
     }
     if (e.key === 'Escape') e.currentTarget.blur();
   };
-  useEffect(() => { if (open && onLeave) inputRef.current?.focus(); }, [open, onLeave]);
   const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : null;
   const usable = inGuild && !guest;
 
   const unfold = folded && onUnfold && (
     <Tip wraps text="펼치기" className="flex">
-      <HudButton aria-label="메시지 창 펼치기" className="relative"
-                 onPointerDown={e => { if (onLeave) e.preventDefault(); }} onClick={onUnfold}>
+      <HudButton aria-label="메시지 창 펼치기" className="relative" onClick={onUnfold}>
         <PixelIcon glyph="plus" size={12} />
         {unread && <span className="absolute top-0.5 right-0.5 size-1.5 bg-gold" aria-hidden="true" />}
       </HudButton>
     </Tip>
   );
-  if (!open) {
-    if (!folded) return null;
-    return (
-      <div className="flex items-center gap-1.5 text-xs">
-        {unfold}
-        {!guest && onOpen && (
-          <HudButton onClick={onOpen} className="min-w-0 flex-1 justify-start text-text-dim">
-            {room === 'guild' ? 'Enter로 길드 채팅' : 'Enter로 채팅'}
-          </HudButton>
-        )}
-      </div>
-    );
-  }
   return (
-    <div className="relative text-xs"
-         onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onLeave?.(); }}>
+    <div className="relative text-xs">
       {status && (
         <p role="status"
            className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 truncate text-danger',
@@ -135,7 +111,6 @@ export default function ChatBar({ inGuild = false, guest = false, open = true, o
         {!(folded && guest) && <Tip wraps text={guest ? GUEST_ROOM_TIP : inGuild ? ROOM_TIP : NO_GUILD_TIP} className="flex">
           <HudButton active={room === 'guild'} disabled={!usable} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                      className={cx(room === 'guild' && 'text-guild', !usable && 'pointer-events-none')}
-                     onPointerDown={e => { if (onLeave) e.preventDefault(); }}
                      onClick={() => dispatch({ type: 'toggleRoom', inGuild })}>{ROOM_LABEL[room]}</HudButton>
         </Tip>}
         {folded && guest ? null : guest ? (
