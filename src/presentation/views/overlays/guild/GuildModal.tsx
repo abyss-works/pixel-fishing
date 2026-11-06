@@ -74,7 +74,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
       ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
       : (
         <div className="flex h-40 items-center justify-center">
-          {failed ? <Note tone="warn">길드 정보를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>
+          {failed ? <Note tone="warn">길드 정보를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
             : <Note>길드 정보를 불러오는 중이에요.</Note>}
         </div>
       );
@@ -92,7 +92,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
                          setConfirm(null);
                          void run(c.op).then(error => setToast(error ?? c.done, error ? 'warn' : 'info'));
                        }}>
-          <p className="text-sm">{confirm.text}</p>
+          <p className="text-sm whitespace-pre-line">{confirm.text}</p>
         </ConfirmDialog>
       )}
     </Modal>

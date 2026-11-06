@@ -28,7 +28,7 @@ import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
 /** 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다 */
 const FIXED_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
-const PLACE_HELP = '접속 중이면 지금 있는 해역이에요. 접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
+const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
 
 type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
@@ -55,7 +55,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
@@ -85,7 +85,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
                          setRemoving(null);
                          void run({ op: 'remove', uid: target.uid }, () => setToast(`${nameOf(target)} 님과 친구를 끊었어요.`));
                        }}>
-          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요? 다시 친구가 되려면 요청을 새로 보내야 해요.</p>
+          <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요?<br />다시 친구가 되려면 요청을 새로 보내야 해요.</p>
         </ConfirmDialog>
       )}
     </Modal>
@@ -131,7 +131,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
         </table>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
-          {pending ?? <Note>아직 친구가 없어요. 요청 탭에서 닉네임으로 요청해 보세요.</Note>}
+          {pending ?? <Note>아직 친구가 없어요.<br />요청 탭에서 닉네임으로 요청해 보세요.</Note>}
         </div>
       )}
     </Inset>

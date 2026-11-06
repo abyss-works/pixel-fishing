@@ -49,17 +49,17 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose}>
         <div className="flex flex-col gap-3">
-          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>
+          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
             : !view ? <Note>초대를 불러오는 중이에요.</Note>
             : view.state === 'bad' ? (
               <>
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full onClick={onClose}>확인</Button>
               </>
             ) : view.state === 'guest' ? (
               <>
                 <GuildInviteSummary preview={invite.preview} view={null} busy={busy} onConfirm={() => {}} />
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
               </>
             ) : (

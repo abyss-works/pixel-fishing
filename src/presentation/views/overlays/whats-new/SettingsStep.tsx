@@ -39,7 +39,7 @@ export function PromptChoices({ prompt, describeInTip = false }: { prompt: Setti
 export default function SettingsStep({ prompts }: { prompts: readonly SettingPrompt[] }) {
   return (
     <div className="flex flex-col gap-3">
-      <Note size="xs" className="my-0">이번 업데이트로 고를 수 있는 설정이 생겼어요. 고르는 즉시 적용돼요.</Note>
+      <Note size="xs" className="my-0">이번 업데이트로 고를 수 있는 설정이 생겼어요.<br />고르는 즉시 적용돼요.</Note>
       {prompts.map(p => <PromptChoices key={p.id} prompt={p} />)}
     </div>
   );

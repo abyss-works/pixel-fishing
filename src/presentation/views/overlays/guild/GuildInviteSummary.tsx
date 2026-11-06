@@ -23,10 +23,10 @@ export default function GuildInviteSummary({ preview, view, busy, onConfirm }: {
             <dt className="text-text-dim">가입 방식</dt><dd className="m-0 text-right">{GUILD_JOIN_MODE_TEXT[preview.joinMode].name}</dd>
           </dl>
         ) : (
-          <p className="m-0 text-center text-text-dim">{view ? view.text : '길드 코드를 넣고 찾기를 누르면 길드가 보여요.'}</p>
+          <p className="m-0 text-center text-text-dim whitespace-pre-line">{view ? view.text : '길드 코드를 넣고 찾기를 누르면 길드가 보여요.'}</p>
         )}
       </Inset>
-      {preview && view && <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>}
+      {preview && view && <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>}
       {preview && view && (
         <Button full variant={view.action ? 'primary' : 'default'} disabled={busy || !view.action} onClick={onConfirm}>
           {view.action?.label ?? (view.state === 'closed' ? '받지 않음' : '들어가기')}

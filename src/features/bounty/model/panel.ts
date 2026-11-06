@@ -77,9 +77,9 @@ const CLEARED_NOTICE: Record<BountyKind, string> = {
   named: `오늘 네임드 토벌은 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
 };
 /** 이 판의 다른 난이도 칸이 왜 막혔는지 — 네임드는 구역마다 한 칸이라 일반 의뢰만 해당한다 */
-const ONE_AT_A_TIME_NOTICE = '일반 의뢰는 한 번에 하나만 수주할 수 있어요. 진행 중인 의뢰를 먼저 마쳐 주세요.';
+const ONE_AT_A_TIME_NOTICE = '일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.';
 const elsewhereNotice = (kind: BountyKind, held: BountyQuest): string =>
-  `${zoneById(held.zone)?.shortName ?? held.zone}에서 수주한 ${KIND_SUBJECT[kind]} 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.`;
+  `${zoneById(held.zone)?.shortName ?? held.zone}에서 수주한 ${KIND_SUBJECT[kind]} 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.`;
 
 /** 오늘 의뢰판의 데이터·조건·진행 상태를 모은다. */
 export function selectBountyPanelData({

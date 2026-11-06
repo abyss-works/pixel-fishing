@@ -137,7 +137,7 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     expect(d.canTakeNamed).toBe(true);
     expect(d.offers.easy?.id).toBe(held.id);
     expect(d.isAccepted(held.id)).toBe(true);
-    expect(d.notice.general).toBe('일반 의뢰는 한 번에 하나만 수주할 수 있어요. 진행 중인 의뢰를 먼저 마쳐 주세요.');
+    expect(d.notice.general).toBe('일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.');
   });
 
   it('진행 중인 일반 의뢰가 오늘의 의뢰와 달라도(날이 바뀐 뒤) 그 칸에 그대로 보인다 — 마친 의뢰를 받을 수 있어야 한다', () => {
@@ -152,7 +152,7 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     const held = dailyQuestFor('seasia', 'hard', uid, day)!;
     const d = data(snap({ progress: [{ questId: held.id, progress: 0 }] }), 'harbor');
     expect(d.canTake).toBe(false);
-    expect(d.notice.general).toBe('동남아에서 수주한 일반 의뢰가 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.');
+    expect(d.notice.general).toBe('동남아에서 수주한 일반 의뢰가 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
     expect(d.offers.hard?.zone).toBe('pacific');
   });
 
@@ -160,7 +160,7 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     const held = dailyQuestFor('seasia', 'named', uid, day)!;
     const d = data(snap({ progress: [{ questId: held.id, progress: 0 }] }), 'harbor');
     expect(d.canTakeNamed).toBe(false);
-    expect(d.notice.named).toBe('동남아에서 수주한 네임드 토벌이 있어요. 그 구역의 수배판에서 먼저 마쳐 주세요.');
+    expect(d.notice.named).toBe('동남아에서 수주한 네임드 토벌이 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
   });
 
   it('한도와 진행 중이 함께 걸리면 한도 안내가 먼저다', () => {

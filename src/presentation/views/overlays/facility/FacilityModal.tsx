@@ -145,7 +145,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   if (rows.length === 0) {
     return (
       <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}>
-        <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
+        <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
       </ModalCard>
     );
   }
@@ -154,7 +154,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
     <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}
       footer={<>
         {lockedCount > 0 && (
-          <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요. 잠금은 가방 탭에서 풀 수 있어요.</Note>
+          <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요.<br />잠금은 가방 탭에서 풀 수 있어요.</Note>
         )}
         <CostLine have={game.gold} delta={total} />
       </>}
