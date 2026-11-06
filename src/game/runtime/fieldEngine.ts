@@ -83,6 +83,8 @@ export class GameFieldEngine {
   private lastSpot: SpotId | null = null;
   private readonly tracker = new ZoneTracker();
   private readonly keys = new Set<string>();
+  /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
+  private padDir: Point | null = null;
   private biteStart = 0;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
@@ -188,6 +190,16 @@ export class GameFieldEngine {
     return true;
   }
 
+  /** 원 패드의 이동 방향 — 키 이동처럼 낚시를 접고 움직이며, (0, 0)이나 null이면 멈춘다 */
+  setMoveDirection(dir: Point | null): void {
+    const moving = dir !== null && (dir.x !== 0 || dir.y !== 0);
+    this.padDir = moving ? dir : null;
+    if (moving && this.snapshot.phase !== 'idle') {
+      this.cancelFishing();
+      this.callbacks.onEvent({ type: 'movement-cancelled' });
+    }
+  }
+
   releaseKey(code: string): void {
     this.keys.delete(code);
   }
@@ -214,6 +226,7 @@ export class GameFieldEngine {
     this.stopFrame();
     this.clearPhaseTimers();
     this.keys.clear();
+    this.padDir = null;
     this.listeners.clear();
   }
 
@@ -241,10 +254,13 @@ export class GameFieldEngine {
     }
 
     let movedFrom: Point | null = null;
-    if ((dx || dy) && this.snapshot.phase === 'idle') {
+    // 키 이동은 방향 부호(대각선 포함)로, 원 패드는 끄는 각도 그대로의 단위 벡터로 움직인다
+    const pad = this.padDir;
+    if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(this.def, this.pos, Math.sign(dx), Math.sign(dy), dt, speed);
+      const next = movePlayer(
+        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();

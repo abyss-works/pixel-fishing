@@ -1,3 +1,4 @@
+import type { PointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
@@ -14,6 +15,8 @@ import { alertEncounter } from '../../../features/bounty/service/encounterAlert'
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
+import { isTap, movePad, startPad } from '../../../game/runtime/movePad';
+import type { Pad } from '../../../game/runtime/movePad';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
@@ -23,6 +26,7 @@ import { getSpotState } from '../../../game/world/currentSpot';
 import { SCALE } from '../../../game/rendering/pixel/common.js';
 import { FIELD_VIEW, mobileFieldView } from '../../../game/world/fieldView.js';
 import GameFrame from './GameFrame';
+import MovePad from './MovePad';
 import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
@@ -174,6 +178,36 @@ export default function Field({
 
   useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
 
+  // 모바일 스테이지 입력 — 누른 자리에서 10px를 넘게 끌면 원 패드로 이동, 그 안에서 떼면 짧게 누르기(클릭과 같은 상호작용)
+  const [pad, setPad] = useState<Pad | null>(null);
+  const gesture = useRef<{ id: number; pad: Pad } | null>(null);
+  const pointAt = (e: PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const onPadDown = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (gesture.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    gesture.current = { id: e.pointerId, pad: startPad(pointAt(e)) };
+  };
+  const onPadMove = (e: PointerEvent<HTMLCanvasElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    const next = movePad(g.pad, pointAt(e));
+    if (next === g.pad) return;
+    g.pad = next;
+    engine.setMoveDirection(next.dir);
+    setPad(next);
+  };
+  const onPadEnd = (e: PointerEvent<HTMLCanvasElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    gesture.current = null;
+    engine.setMoveDirection(null);
+    setPad(null);
+    if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
+  };
+
   const inSlot = mobile && statusSlot != null;
   const statusBand = snapshot.phase === 'idle' ? null : (
     <HudPanel className={cx('z-(--z-overlay) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
@@ -191,9 +225,12 @@ export default function Field({
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
                 aria-label={region === 'village' ? '마을' : '바다'}
-                onClick={() => engine.action()} />
+                onClick={mobile ? undefined : () => engine.action()}
+                onPointerDown={mobile ? onPadDown : undefined} onPointerMove={mobile ? onPadMove : undefined}
+                onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}
       <NightOverlay />
+      {pad?.active && <MovePad pad={pad} />}
       {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
