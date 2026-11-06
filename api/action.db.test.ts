@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES, bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
+import { FISH } from '../src/game/content/fish.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
@@ -644,6 +645,34 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
       expect((await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 })).status)
         .toBe(200);
     });
+  });
+});
+
+describe('첫 경험 보장', () => {
+  const stateOf = (out: Awaited<ReturnType<typeof run>>) => (out.db.saves_current[0] as { data: GameState }).data;
+
+  it('5번째 캐치는 그 수역의 영웅 어종이고 보장 진척이 저장된다', async () => {
+    const out = await run({ state: { firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } } },
+      { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'epic', spot: 'pond' });
+    expect(stateOf(out).firstCatch).toMatchObject({ n: 5, legendAt: 12, epic: false, legend: true });
+  });
+
+  it('첫 캐치에서 서버가 전설 번호를 10~20 사이로 정해 저장한다', async () => {
+    const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const fc = stateOf(out).firstCatch;
+    expect(fc.n).toBe(1);
+    expect(fc.legendAt).toBeGreaterThanOrEqual(10);
+    expect(fc.legendAt).toBeLessThanOrEqual(20);
+  });
+
+  it('정해진 번호의 캐치는 그 수역의 전설 어종이고 보장이 끝난다', async () => {
+    const out = await run({ state: { firstCatch: { n: 11, legendAt: 12, epic: false, legend: true } } },
+      { type: 'catch', spot: 'river', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'legendary', spot: 'river' });
+    expect(stateOf(out).firstCatch).toEqual({ n: 0, legendAt: 0, epic: false, legend: false });
   });
 });
 

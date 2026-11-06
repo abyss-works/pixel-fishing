@@ -656,7 +656,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const scalars = takeItem(base, bait?.id ?? '');
   return {
     ok: true,
-    state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame, pity: drawn.pity },
+    state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
     events,
     writes: {

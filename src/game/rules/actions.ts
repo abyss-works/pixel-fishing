@@ -14,6 +14,8 @@ import {
   accrueSpeciesPity, clearDuelWound, drawNamedEncounter, recordDuelFailure, resolveSpeciesPity, settleSpeciesPity, speciesPityCandidates,
 } from './pity.js';
 import type { SpeciesPity } from './pity.js';
+import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
+import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost, manualPowerBonus } from './power.js';
 import { SPOTS, rarityWeightOf } from '../content/spots.js';
 import { baitById } from '../content/baits.js';
@@ -120,16 +122,16 @@ export interface StatePatch {
    *  연속 액션이 역순 도착해도 골드·가방이 과거값에 고착되지 않는 장치다. */
   baseVersion: number;
   /** bag/exhibit/dex와 어종 천장 진척을 뺀 나머지 — 통째 교체 (액션당 수백B).
-   *  어종 천장 진척은 화면에 쓰지 않고 서버 blob에만 있으면 되므로 보내지 않는다(클라는 이전 값을 유지).
+   *  어종 천장과 첫 경험 보장 진척은 화면에 쓰지 않고 서버 blob에만 있으면 되므로 보내지 않는다(클라는 이전 값을 유지).
    *  네임드 천장 상태는 조우 창이 그날의 상처(결투 체력 감소)를 그려야 해서 보낸다 */
-  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex' | 'pity'>;
+  scalars: Omit<GameState, 'v' | 'bag' | 'exhibit' | 'dex' | 'pity' | 'firstCatch'>;
   /** bag/exhibit/dex 변경분 — diffWrites가 뽑은 것과 동일한 형태 */
   writes: StateWrites;
 }
 
 /** 풀 상태에서 스칼라 분리 — 서버 응답용. bag/exhibit/dex는 writes로 간다 */
 export function pickScalars(state: GameState): StatePatch['scalars'] {
-  const { v: _v, bag: _b, exhibit: _e, dex: _d, pity: _p, ...rest } = state;
+  const { v: _v, bag: _b, exhibit: _e, dex: _d, pity: _p, firstCatch: _f, ...rest } = state;
   return rest;
 }
 
@@ -309,26 +311,33 @@ export function rollCatchFish(
   return rollFish(spot, o.rareMult, rng, o.commonMult, o);
 }
 
-/** 캐치의 어종 결정 — 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼), 없으면 통상 추첨.
+/** 캐치의 어종 결정 — 첫 경험 보장 대상이 있으면 그 어종, 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼),
+ *  없으면 통상 추첨. 보장 캐치는 폼·크기 롤이 일반 캐치와 같고, 어종 천장의 누적과 정산도 그대로 거친다.
+ *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 → 보장 번호 롤 순서).
  *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
  *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)와 길드 효과만 호출자가 공급한다.
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 감소(commonCut)와 돌연변이 확률 퍼센트포인트. 천장 누적도
  *  같은 다이얼·폼 확률을 써서 실제 확률을 쌓는다. */
 export function drawCatch(
-  state: Pick<GameState, 'pity' | 'artifacts'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
+  state: Pick<GameState, 'pity' | 'artifacts' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS,
-): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; byCeiling: boolean } {
+): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
   const phaseOpts = guild.rare > 0 ? { ...basePhaseOpts, commonCut: guild.rare } : basePhaseOpts;
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
-  const fish = target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
+  const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
+  const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
+  const pityFixed = !guaranteed && target !== undefined;
   const forms = withVariantPoints(mutationWeightsOf(state, spot), guild.mutation);
-  const extras = rollCatchExtras(fish, rng, target ? { normal: 1, variant: 0 } : forms);
+  const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
-  return { fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form), byCeiling: target !== undefined };
+  return {
+    fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
+    firstCatch: settleFirstCatch(state.firstCatch, guaranteed, rng), byCeiling: pityFixed,
+  };
 }
 
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
@@ -389,7 +398,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
           fish: gone.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
       }
-      const next = { ...takeItem(release(caught, overflow), bait?.id ?? ''), pity: drawn.pity, namedPity: named.pity };
+      const next = { ...takeItem(release(caught, overflow), bait?.id ?? ''), pity: drawn.pity, firstCatch: drawn.firstCatch, namedPity: named.pity };
       return {
         ok: true,
         state: next,
