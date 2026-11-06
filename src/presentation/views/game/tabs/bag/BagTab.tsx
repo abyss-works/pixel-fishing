@@ -221,8 +221,8 @@ export default function BagTab({ game, dispatch, setToast }: {
     });
 
   // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
-  // 같은 어종×폼의 나머지 잠금은 풀리므로 누르면 먼저 확인 창을 띄운다. 적용은 기존 setLocked 두 번
-  // (잠금 → 해제 순서라 중간에 실패해도 최대 개체는 먼저 보호된다). 변할 게 없으면 요청 없이 안내만.
+  // 같은 어종×폼의 나머지 잠금은 풀리므로 누르면 먼저 확인 창을 띄운다. 적용은 autoLock 액션 한 번이고
+  // 서버가 현재 가방으로 계획을 다시 계산한다. 변할 게 없으면 요청 없이 안내만.
   const autoLock = () => {
     if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
       setToast('정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.');
@@ -233,16 +233,11 @@ export default function BagTab({ game, dispatch, setToast }: {
   const applyAutoLock = () => {
     const { lock, unlock } = autoLockPlan;
     setLockConfirm(false);
-    const unlockStep = () => {
-      if (unlock.length === 0) { setToast(`가장 큰 물고기 ${lock.length}마리를 잠갔어요.`); return; }
-      when(dispatch({ type: 'setLocked', uids: unlock, locked: false }), r => {
-        if (r.status !== 'ok') return;
-        setToast(`가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`);
-      });
-    };
-    if (lock.length === 0) { unlockStep(); return; }
-    when(dispatch({ type: 'setLocked', uids: lock, locked: true }), r => {
-      if (r.status === 'ok') unlockStep();
+    when(dispatch({ type: 'autoLock' }), r => {
+      if (r.status !== 'ok') return;
+      setToast(unlock.length === 0
+        ? `가장 큰 물고기 ${lock.length}마리를 잠갔어요.`
+        : `가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`);
     });
   };
 

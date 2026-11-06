@@ -44,6 +44,7 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'sell', uids: 'a' })).toBeNull();
     expect(parseAction({ type: 'setLocked', uids: [], locked: true })?.type).toBe('setLocked');
     expect(parseAction({ type: 'setLocked', uids: [] })).toBeNull();
+    expect(parseAction({ type: 'autoLock' })?.type).toBe('autoLock');
     expect(parseAction({ type: 'sendLetter', text: 'hi' })?.type).toBe('sendLetter');
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
   });

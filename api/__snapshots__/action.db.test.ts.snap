@@ -6238,6 +6238,158 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
 }
 `;
 
+exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제를 함께 적용한다 1`] = `
+{
+  "db": {
+    "bounty_accepts": [],
+    "bounty_clears": [],
+    "bounty_licenses": [],
+    "bounty_progress": [],
+    "bounty_tickets": [],
+    "events": [],
+    "fish_instances": [
+      {
+        "caught_at": "2026-01-01T00:00:00.000Z",
+        "fish_id": "carp",
+        "form": "normal",
+        "judgment": "good",
+        "locked": false,
+        "size": 10,
+        "slot": null,
+        "spot": "pond",
+        "uid": "<uuid>",
+        "user_id": "<user>",
+      },
+      {
+        "caught_at": "2026-01-01T00:00:00.000Z",
+        "fish_id": "carp",
+        "form": "normal",
+        "judgment": "good",
+        "locked": true,
+        "size": 30,
+        "slot": null,
+        "spot": "pond",
+        "uid": "<uuid>",
+        "user_id": "<user>",
+      },
+    ],
+    "letters": [],
+    "profiles": [
+      {
+        "nickname": "user-00000087",
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+    ],
+    "records": [],
+    "reliefs": [],
+    "saves": [],
+    "saves_current": [
+      {
+        "active_client": null,
+        "boat": 0,
+        "data": {
+          "activeBait": null,
+          "artifacts": [],
+          "coupons": [],
+          "firstCatch": {
+            "epic": true,
+            "legend": true,
+            "legendAt": 0,
+            "n": 0,
+          },
+          "hats": [],
+          "items": {},
+          "location": {
+            "id": "home",
+            "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
+          },
+          "namedPity": {
+            "day": "",
+            "fails": 0,
+            "misses": 0,
+            "wounds": {},
+          },
+          "pity": {},
+          "tutorials": [],
+          "v": 8,
+          "visited": [],
+        },
+        "fame": "0",
+        "gold": "0",
+        "last_catch_at": null,
+        "restricted": false,
+        "rod": 1,
+        "updated_at": "<now>",
+        "user_id": "<user>",
+        "version": "3",
+      },
+    ],
+  },
+  "res": {
+    "body": {
+      "patch": {
+        "baseVersion": 2,
+        "scalars": {
+          "activeBait": null,
+          "artifacts": [],
+          "boat": 0,
+          "coupons": [],
+          "fame": 0,
+          "gold": 0,
+          "hats": [],
+          "items": {},
+          "location": {
+            "id": "home",
+            "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
+          },
+          "namedPity": {
+            "day": "",
+            "fails": 0,
+            "misses": 0,
+            "wounds": {},
+          },
+          "rod": 1,
+          "tutorials": [],
+          "visited": [],
+        },
+        "version": 3,
+        "writes": {
+          "instancesAdded": [],
+          "instancesLocked": [
+            {
+              "locked": false,
+              "uid": "<uuid>",
+            },
+            {
+              "locked": true,
+              "uid": "<uuid>",
+            },
+          ],
+          "instancesMoved": [],
+          "instancesRemoved": [],
+          "records": [],
+        },
+      },
+      "result": {
+        "type": "none",
+      },
+    },
+    "status": 200,
+  },
+}
+`;
+
 exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩한다 1`] = `
 {
   "db": {

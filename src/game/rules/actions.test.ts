@@ -271,6 +271,18 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.events).toEqual([]);
   });
 
+  it('autoLock — 서버 상태 기준 계획을 한 액션으로 적용한다 (이벤트 없음)', () => {
+    const bag = [
+      { ...mkInst('a', 'carp'), size: 10, locked: true },
+      { ...mkInst('b', 'carp'), size: 30 },
+    ];
+    const out = applyAction(seed({ bag }), { type: 'autoLock' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag.map(i => i.locked)).toEqual([false, true]);
+    expect(out.writes.instancesLocked.map(w => w.uid).sort()).toEqual(['a', 'b']);
+    expect(out.events).toEqual([]);
+  });
+
   it('boot — 상태 무변경, 접속 흔적 한 행 (buildId는 잘라서 남긴다)', () => {
     const s = seed({ gold: 42 });
     const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps());
