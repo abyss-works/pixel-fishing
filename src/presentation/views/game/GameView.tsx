@@ -17,6 +17,8 @@ import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
 import HudLayout from '../../layouts/hud/HudLayout';
 import { FILTER_CHANNELS } from '../../../features/display/model/messageFilter';
+import { useMessageFilter } from '../../../features/display/service/messageFilter';
+import { useMessageFold } from '../../../features/display/service/messageFold';
 import BaseMenu from './base-menu/BaseMenu';
 import GameTabs from './tabs/GameTabs';
 import { DEFAULT_TAB } from './tabs/tabs';
@@ -138,6 +140,10 @@ export default function GameView(props: GameViewProps) {
   const log = chat.enabled
     ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
     : props.log;
+  const messageFilter = useMessageFilter();
+  // 메시지 창 접기 — 채팅을 쓰지 않는 환경에서는 입력 줄이 없어 펼칠 수 없으므로 접지 않는다
+  const fold = useMessageFold(scene.kind === 'base', log, messageFilter.filter);
+  const folded = chat.enabled && fold.folded;
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -230,8 +236,12 @@ export default function GameView(props: GameViewProps) {
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? (
                      <ChatBar inGuild={guild !== null} guest={props.account === null}
-                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined} />
+                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined}
+                              folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping}
+                              onOpen={() => setChatOpen(true)} />
                    ) : null}
+                   filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
+                   folded={folded} onFold={chat.enabled ? fold.toggle : undefined}
                    onStatusSlot={setStatusSlot}
                    onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {

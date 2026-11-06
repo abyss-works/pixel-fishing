@@ -4,7 +4,7 @@ import type { SceneRef } from '../../../game/world';
 import { baitById } from '../../../game/content/baits';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
-import { useMessageFilter } from '../../../features/display/service/messageFilter';
+import type { FilterChannel, MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
 import type { MessageChannel } from '../../ui/hud/messageFeed';
@@ -41,6 +41,12 @@ interface HudLayoutProps {
   /** 메시지 창에 늘 보일 채널 토글과 그중 쓸 수 없는 채널 */
   channels?: readonly MessageChannel[];
   disabledChannels?: readonly MessageChannel[];
+  /** 메시지 창에서 보이는 채널과 토글 */
+  filter: MessageFilter;
+  onToggleFilter: (channel: FilterChannel, present: readonly FilterChannel[]) => void;
+  /** 메시지 창이 접혀 있는가와 접기 버튼. 접기를 쓰지 않으면 비운다 */
+  folded?: boolean;
+  onFold?: () => void;
   /** 모바일에서 메시지 창 기록 칸을 눌렀다(입력 줄을 연다) */
   onActivateLog?: () => void;
   /** 모바일에서 낚시 상태 띠가 들어갈 자리를 알린다 */
@@ -53,11 +59,10 @@ interface HudLayoutProps {
 // 모바일 배치에서는 아래 가운데의 같은 한 줄기에 쌓는다 — 아래에서부터 메시지 창(가로 폭 전체, 고정 높이), 오른쪽의 칩과
 // 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠. 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 // 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 40px 폭) 왼쪽에 붙인다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, onActivateLog, onStatusSlot }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onActivateLog, onStatusSlot }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
-  const messageFilter = useMessageFilter();
 
   return (
     <>
@@ -94,7 +99,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           )}
         </div>
         <MessageLog log={log} footer={logFooter} onPick={onPickLine} you={you}
-                    filter={messageFilter.filter} onToggle={messageFilter.toggle}
+                    filter={filter} onToggle={onToggleFilter} folded={folded} onFold={onFold}
                     channels={channels} disabledChannels={disabledChannels}
                     lines={mobile ? 6 : undefined} onActivate={mobile ? onActivateLog : undefined} />
       </div>

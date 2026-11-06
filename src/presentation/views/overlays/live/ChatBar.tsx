@@ -10,6 +10,9 @@
 // 게스트는 채팅을 보낼 수 없어 입력 칸 대신 흐린 안내 칸을 두고, 계정을 만드는 곳을 툴팁으로 알린다.
 // 모바일에서는 메시지 창 기록 칸을 눌러야 입력 줄이 열린다(open). 열리면 입력 칸에 포커스를 주어 키보드가 뜨고,
 // 입력 칸을 벗어나면(키보드를 닫거나 바깥을 누르면) onLeave로 닫는다. 보내도 입력 줄에 머문다.
+// 메시지 창이 접히면(folded) 입력 줄 왼쪽 끝에 펼치기 버튼을 둔다. 새 글이 있으면(unread) 버튼에 골드 네모 점을 찍는다.
+// 접힌 모바일에서 입력 줄이 닫혀 있으면 입력 줄 자리에 한 줄 칸을 두고, 누르면 입력 줄을 연다(onOpen). 게스트는 펼치기 버튼만 남는다.
+// 입력 칸에 포커스가 들어오고 빠지는 것은 onTyping으로 알린다.
 // 입력 줄의 열림과 보낼 방은 채팅 입력 상태머신(chatInputReducer)이 정한다. 입력 중 Tab은 포커스를 옮기지 않는다.
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
@@ -22,7 +25,8 @@ import { cx } from '../../../ui/cx';
 import { NOTCH_SM } from '../../../ui/notch';
 import Tip from '../../../ui/Tip';
 import HudButton from '../../../ui/hud/HudButton';
-import HudInput from '../../../ui/hud/HudInput';
+import HudInput, { HUD_INPUT_BOX } from '../../../ui/hud/HudInput';
+import PixelIcon from '../../../ui/PixelIcon';
 
 const GUEST_TEXT = '채팅은 계정을 만든 뒤 쓸 수 있어요. 계정 관리에서 계정을 만들어 주세요.';
 
@@ -41,12 +45,22 @@ const NO_GUILD_TIP = '길드에 들어가면 길드 채팅을 쓸 수 있어요.
 const GUEST_ROOM_TIP = '채팅은 계정을 만든 뒤 쓸 수 있어요.';
 const GUEST_BLOCKED = { text: '채팅은 계정을 만든 뒤 쓸 수 있어요', reason: '설정 탭의 계정 관리에서 계정을 만들 수 있어요.' };
 
-export default function ChatBar({ inGuild = false, guest = false, open = true, onLeave }: {
+export default function ChatBar({ inGuild = false, guest = false, open = true, onLeave, folded = false, unread = false, onUnfold, onOpen, onTyping }: {
   inGuild?: boolean; guest?: boolean;
   /** 입력 줄을 보이는가. PC는 늘 보인다 */
   open?: boolean;
   /** 입력 칸을 벗어났다(모바일에서 입력 줄을 닫는다) */
   onLeave?: () => void;
+  /** 메시지 창이 접혀 있는가 */
+  folded?: boolean;
+  /** 접힌 동안 새 글이 왔다 */
+  unread?: boolean;
+  /** 펼치기 버튼을 눌렀다 */
+  onUnfold?: () => void;
+  /** 접힌 모바일의 한 줄 칸을 눌렀다(입력 줄을 연다) */
+  onOpen?: () => void;
+  /** 입력 칸에 포커스가 들어오거나 빠졌다 */
+  onTyping?: (on: boolean) => void;
 }) {
   const chat = useChat();
   const [text, setText] = useState('');
@@ -84,7 +98,30 @@ export default function ChatBar({ inGuild = false, guest = false, open = true, o
   const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : null;
   const usable = inGuild && !guest;
 
-  if (!open) return null;
+  const unfold = folded && onUnfold && (
+    <Tip wraps text="펼치기" className="flex">
+      <HudButton aria-label="메시지 창 펼치기" className="relative"
+                 onPointerDown={e => { if (onLeave) e.preventDefault(); }} onClick={onUnfold}>
+        <PixelIcon glyph="plus" size={12} />
+        {unread && <span className="absolute top-0.5 right-0.5 size-1.5 bg-gold" aria-hidden="true" />}
+      </HudButton>
+    </Tip>
+  );
+  if (!open) {
+    if (!folded) return null;
+    return (
+      <div className="flex items-center gap-1.5 text-xs">
+        {unfold}
+        {!guest && onOpen && (
+          <button type="button" onClick={onOpen}
+                  className={cx(HUD_INPUT_BOX, 'cursor-pointer text-left text-text-dim',
+                    'border-line bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] backdrop-blur-[4px]')}>
+            {room === 'guild' ? 'Enter로 길드 채팅' : 'Enter로 채팅'}
+          </button>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="relative text-xs"
          onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onLeave?.(); }}>
@@ -96,19 +133,21 @@ export default function ChatBar({ inGuild = false, guest = false, open = true, o
         </p>
       )}
       <div className="flex items-center gap-1.5">
-        <Tip wraps text={guest ? GUEST_ROOM_TIP : inGuild ? ROOM_TIP : NO_GUILD_TIP} className="flex">
+        {unfold}
+        {!(folded && guest) && <Tip wraps text={guest ? GUEST_ROOM_TIP : inGuild ? ROOM_TIP : NO_GUILD_TIP} className="flex">
           <HudButton active={room === 'guild'} disabled={!usable} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                      className={cx(room === 'guild' && 'text-guild', !usable && 'pointer-events-none')}
                      onPointerDown={e => { if (onLeave) e.preventDefault(); }}
                      onClick={() => dispatch({ type: 'toggleRoom', inGuild })}>{ROOM_LABEL[room]}</HudButton>
-        </Tip>
-        {guest ? (
+        </Tip>}
+        {folded && guest ? null : guest ? (
           <HudInput blocked={GUEST_BLOCKED} />
         ) : (
           <HudInput ref={inputRef} aria-label="채팅 입력"
                     placeholder={room === 'guild' ? 'Enter로 길드 채팅' : 'Enter로 채팅'}
                     maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
-                    onFocus={() => dispatch({ type: 'open' })} onBlur={() => dispatch({ type: 'close' })}
+                    onFocus={() => { dispatch({ type: 'open' }); onTyping?.(true); }}
+                    onBlur={() => { dispatch({ type: 'close' }); onTyping?.(false); }}
                     onChange={e => { setText(e.target.value); clearChatError(); }} />
         )}
       </div>
