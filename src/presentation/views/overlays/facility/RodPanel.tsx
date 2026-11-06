@@ -36,7 +36,7 @@ export default function RodPanel({ game, onUpgrade, onClose, busy }: {
   }));
 
   return (
-    <ModalCard title="낚싯대 강화" onClose={onClose}>
+    <ModalCard title="낚싯대 강화" onClose={onClose} className="mobile:shrink-0">
       <TwoColumn>
         <ProgressLadder label="낚싯대 단계" steps={steps} />
         <div className="flex flex-col gap-3 min-w-0">
