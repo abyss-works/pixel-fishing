@@ -9,6 +9,7 @@ import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
+import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import DevTools from './presentation/views/devtools/DevTools';
 import EnvBadge from './presentation/views/devtools/EnvBadge';
@@ -67,7 +68,7 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
-        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
+        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>

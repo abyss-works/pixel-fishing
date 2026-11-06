@@ -36,15 +36,13 @@ export class AppError extends Error {
 }
 
 /** 화면 전체를 덮어 진행을 막는 모달 — 새로고침만이 출구다 */
-export type BlockingModal = 'update' | 'replaced';
+export type BlockingModal = 'update' | 'replaced' | 'unsaved';
 
 /** 종류별 대응 — 새 실패 종류 = 여기 행 하나. UI 문구를 각 지점에 흩지 않는다 */
 export interface FailureResponse {
-  /** 이사 코드를 만들어 복구를 안내한다 (진행이 저장되지 않은 실패) */
-  rescue: boolean;
   /** 전체를 덮는 모달 */
   modal?: BlockingModal;
-  /** 유저에게 보일 한 줄 (rescue 안내문의 머리글로도 쓰인다) */
+  /** 유저에게 보일 한 줄 */
   message: string;
   /** Sentry 보고 수준 — outdated는 정상 동작이라 warning */
   level: 'warning' | 'error';
@@ -52,41 +50,41 @@ export interface FailureResponse {
 
 export const POLICY: Record<FailureKind, FailureResponse> = {
   network: {
-    rescue: true, level: 'error',
+    modal: 'unsaved', level: 'error',
     message: '서버에 연결하지 못해 이번 행동이 저장되지 않았어요.',
   },
   unauthorized: {
-    rescue: true, level: 'error',
+    modal: 'unsaved', level: 'error',
     message: '로그인이 만료되어 저장되지 않았어요. 새로고침 후 다시 로그인해 주세요.',
   },
   outdated: {
     // 진행은 서버에 안전하다 — 구조 불필요, 새로고침만 안내
-    rescue: false, modal: 'update', level: 'warning',
+    modal: 'update', level: 'warning',
     message: '새 버전이 배포되었어요. 새로고침하면 이어서 플레이할 수 있어요.',
   },
   replaced: {
-    // 진행은 서버에 안전 — 구조 불필요. 새로고침하면 이 창이 다시 활성 창이 된다
-    rescue: false, modal: 'replaced', level: 'warning',
+    // 진행은 서버에 안전. 새로고침하면 이 창이 다시 활성 창이 된다
+    modal: 'replaced', level: 'warning',
     message: '다른 창에서 게임을 열었어요. 이 창에서 계속하려면 새로고침해 주세요.',
   },
   restricted: {
-    // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 구조 불필요, 문의 유도.
-    rescue: false, level: 'warning',
+    // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 문의 유도.
+    level: 'warning',
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
   },
   'rate-limited': {
     // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
-    rescue: false, level: 'warning',
+    level: 'warning',
     message: '너무 빠르게 연달아 시도하고 있어요. 잠시 후에 다시 해 주세요.',
   },
   server: {
-    rescue: true, level: 'error',
+    modal: 'unsaved', level: 'error',
     message: '서버에 문제가 생겨 이번 행동이 저장되지 않았어요.',
   },
   bug: {
-    // 구조 안 함: 서버 권위라 완료된 액션은 이미 저장돼 있다. 클라 버그로 잃을 진행이 없고,
+    // 안내 창 없음: 서버 권위라 완료된 액션은 이미 저장돼 있다. 클라 버그로 잃을 진행이 없고,
     // 렌더 예외면 ErrorBoundary 화면이 이미 떠 있어 경고창까지 겹치면 소음이다.
-    rescue: false, level: 'error',
+    level: 'error',
     message: '예상치 못한 문제가 생겼어요. 새로고침하면 이어서 플레이할 수 있어요.',
   },
 };
