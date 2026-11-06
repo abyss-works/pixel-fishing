@@ -5,7 +5,7 @@ const calls = vi.hoisted(() => ({ flash: [] as string[], notify: [] as string[] 
 
 vi.mock('../../../platform/api/attention', () => ({
   isPageHidden: () => env.hidden,
-  getEncounterAlertEnabled: () => env.enabled,
+  getUpdateAlertEnabled: () => env.enabled,
   notificationPermission: () => env.permission,
   flashTitle: (text: string) => { calls.flash.push(text); },
   showNotification: ({ tag }: { tag: string }) => { calls.notify.push(tag); },

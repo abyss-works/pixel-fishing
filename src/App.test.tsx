@@ -10,7 +10,7 @@ import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
-import { resetEncounterAlert } from './features/bounty/service/encounterAlert';
+import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
 import { TUTORIAL_IDS } from './game/content/tutorials';
@@ -73,6 +73,7 @@ beforeEach(() => {
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
   resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
+  resetUpdateAlert();
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetTutorialSession();

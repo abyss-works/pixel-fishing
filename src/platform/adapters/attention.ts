@@ -3,46 +3,86 @@
 // 알림 선호는 기기별 설정(localStorage)이라 세이브·서버 권위 대상이 아니다.
 
 export const ENCOUNTER_ALERT_KEY = 'pf-encounter-alert';
+export const UPDATE_ALERT_KEY = 'pf-update-alert';
 
 export type NotificationPermissionState = NotificationPermission | 'unsupported';
 
-/** 저장소에서 다시 읽는다 — 시작 시 한 번, 테스트에서 저장값 해석을 검증할 때 쓴다 */
-export function loadEncounterAlertEnabled(): boolean {
+function readKey(key: string): string | null {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem(ENCOUNTER_ALERT_KEY) === 'on';
+    return typeof localStorage === 'undefined' ? null : localStorage.getItem(key);
   } catch {
-    return false; // 저장소 접근이 막힌 환경
+    return null; // 저장소 접근이 막힌 환경
   }
 }
 
-let enabled = loadEncounterAlertEnabled();
-const listeners = new Set<() => void>();
+function writeKey(key: string, on: boolean): void {
+  try { localStorage.setItem(key, on ? 'on' : 'off'); } catch { /* 이번 세션에만 적용 */ }
+}
 
-function notify() {
+/** 저장소에서 다시 읽는다 — 시작 시 한 번, 테스트에서 저장값 해석을 검증할 때 쓴다 */
+export function loadEncounterAlertEnabled(): boolean {
+  return readKey(ENCOUNTER_ALERT_KEY) === 'on';
+}
+
+/** 업데이트 알림은 두 알림이 한 스위치였던 때의 선택을 이어받는다 — 자기 키가 없으면 네임드 키 값을 따른다 */
+export function loadUpdateAlertEnabled(): boolean {
+  return (readKey(UPDATE_ALERT_KEY) ?? readKey(ENCOUNTER_ALERT_KEY)) === 'on';
+}
+
+let encounterEnabled = loadEncounterAlertEnabled();
+let updateEnabled = loadUpdateAlertEnabled();
+const encounterListeners = new Set<() => void>();
+const updateListeners = new Set<() => void>();
+
+function notify(listeners: Set<() => void>) {
   for (const listener of listeners) listener();
 }
 
 export function getEncounterAlertEnabled(): boolean {
-  return enabled;
+  return encounterEnabled;
+}
+
+export function getUpdateAlertEnabled(): boolean {
+  return updateEnabled;
 }
 
 export function setEncounterAlertEnabled(next: boolean): void {
-  if (enabled === next) return;
-  enabled = next;
-  try { localStorage.setItem(ENCOUNTER_ALERT_KEY, next ? 'on' : 'off'); } catch { /* 이번 세션에만 적용 */ }
-  notify();
+  if (encounterEnabled === next) return;
+  // 업데이트 키가 아직 없으면 이어받은 값을 먼저 굳힌다. 안 그러면 다음 로드에서 바뀐 네임드 값을 따라간다
+  if (readKey(UPDATE_ALERT_KEY) === null) writeKey(UPDATE_ALERT_KEY, updateEnabled);
+  encounterEnabled = next;
+  writeKey(ENCOUNTER_ALERT_KEY, next);
+  notify(encounterListeners);
+}
+
+export function setUpdateAlertEnabled(next: boolean): void {
+  if (updateEnabled === next) return;
+  updateEnabled = next;
+  writeKey(UPDATE_ALERT_KEY, next);
+  notify(updateListeners);
 }
 
 export function subscribeEncounterAlert(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  encounterListeners.add(listener);
+  return () => { encounterListeners.delete(listener); };
+}
+
+export function subscribeUpdateAlert(listener: () => void): () => void {
+  updateListeners.add(listener);
+  return () => { updateListeners.delete(listener); };
 }
 
 /** 테스트 격리용 — 메모리 값을 기본으로 되돌린다(저장소는 건드리지 않는다) */
 export function resetEncounterAlert(): void {
-  if (!enabled) return;
-  enabled = false;
-  notify();
+  if (!encounterEnabled) return;
+  encounterEnabled = false;
+  notify(encounterListeners);
+}
+
+export function resetUpdateAlert(): void {
+  if (!updateEnabled) return;
+  updateEnabled = false;
+  notify(updateListeners);
 }
 
 const notificationApi = (): typeof Notification | undefined =>
