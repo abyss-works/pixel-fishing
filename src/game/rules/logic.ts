@@ -31,6 +31,8 @@ import type { Look } from '../content/wardrobe.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
+import { endedFirstCatch, firstCatchOfLegacy, newFirstCatch } from './firstCatch.js';
+import type { FirstCatch } from './firstCatch.js';
 
 export { JUDGMENT_MULT };
 export { RARITY, RARITY_ORDER } from '../content/rarity.js';
@@ -101,6 +103,8 @@ export interface GameState {
   pity: SpeciesPity;
   /** 네임드 조우 천장 진척 — 게임 날짜 단위. 화면에 보이지 않아 응답 스칼라에서 뺀다 */
   namedPity: NamedPity;
+  /** 새 계정 첫 경험 보장 진척. 화면에 보이지 않아 응답 스칼라에서 뺀다 */
+  firstCatch: FirstCatch;
   /** 본 튜토리얼 — 트리거마다 한 번만 뜨게 한다. 세이브 v8에 접어서 도입(없으면 빈 목록) */
   tutorials: TutorialId[];
   /** 캐릭터 외형 — 웃옷·바지 팔레트 번호와 쓴 모자. 세이브 v8에 접어서 도입(없으면 기본 외형) */
@@ -384,6 +388,7 @@ export function newState(): GameState {
     activeBait: null,
     pity: {},
     namedPity: { day: '', misses: 0, fails: 0, wounds: {} },
+    firstCatch: newFirstCatch(),
     tutorials: [],
     look: DEFAULT_LOOK,
     hats: [],
@@ -765,6 +770,20 @@ function safeNamedPity(v: unknown): NamedPity {
   return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
+/** 첫 경험 보장 위생 — 필드가 없거나 형태가 틀리면 이전 세이브 규칙(캐치가 있었으면 끝남)을 따른다 */
+function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstCatch {
+  const r = safeRecord<unknown>(v);
+  const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
+  if (int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean') {
+    return r.epic || r.legend
+      ? { n: r.n as number, legendAt: r.legendAt as number, epic: r.epic, legend: r.legend }
+      : endedFirstCatch();
+  }
+  const dexCatches = Object.values(dex).reduce((sum, forms) =>
+    sum + Object.values(forms).reduce((s, rec) => s + (rec?.count ?? 0), 0), 0);
+  return firstCatchOfLegacy(dexCatches, fame);
+}
+
 /** activeBait 위생 — 레지스트리에 있는 id만 살린다 (모르는 문자열은 없음 처리).
  *  보유량 검증은 여기서 하지 않는다 — "0개짜리 활성"은 합법 상태(효과 무음)다 */
 function safeActiveBait(v: unknown): string | null {
@@ -867,15 +886,17 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
   // 최종 위생 처리 — 손상된 필드는 기본값으로
   const hats = safeHats(s.hats);
   const look = safeLook(s.look);
+  const dex = safeDex(s.dex);
+  const fame = typeof s.fame === 'number' ? s.fame : 0;
   return {
     ...base,
     gold: typeof s.gold === 'number' ? s.gold : 0,
-    fame: typeof s.fame === 'number' ? s.fame : 0,
+    fame,
     boat: typeof s.boat === 'number' ? s.boat : 0,
     rod: typeof s.rod === 'number' ? s.rod : 1,
     bag: safeInstances(s.bag, uidGen),
     exhibit: safeExhibit(s.exhibit, uidGen),
-    dex: safeDex(s.dex),
+    dex,
     coupons: safeStrings(s.coupons),
     location: safeLocation(s.location),
     visited: safeStrings(s.visited) as RegionId[],
@@ -884,6 +905,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     activeBait: safeActiveBait(s.activeBait),
     pity: safePity(s.pity),
     namedPity: safeNamedPity(s.namedPity),
+    firstCatch: safeFirstCatch(s.firstCatch, dex, fame),
     tutorials: Array.isArray(s.tutorials) ? s.tutorials.filter(isTutorialId) : [],
     look: look.hat === null || hats.includes(look.hat) ? look : { ...look, hat: null },
     hats,
