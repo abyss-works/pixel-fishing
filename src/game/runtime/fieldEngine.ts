@@ -17,6 +17,8 @@ import {
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
+import { FIELD_VIEW } from '../world/fieldView.js';
+import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
@@ -94,6 +96,8 @@ export class GameFieldEngine {
   private schools: School[];
   /** 같은 바다의 다른 플레이어와 내 말풍선 — 실시간 채널이 프레임마다 보간한 위치와 함께 돌려준다 */
   private liveSource: ((now: number) => LiveFrame) | null = null;
+  /** 카메라 시야 크기 — 모바일은 스테이지 비율로 호스트가 정해 준다 */
+  private view: ViewSize = FIELD_VIEW;
 
   constructor(region: RegionId, game: GameState, schools: School[], initialPos?: Point) {
     this.def = REGION_PACKS[region];
@@ -113,6 +117,11 @@ export class GameFieldEngine {
     this.game = game;
     this.night = night;
     this.callbacks = callbacks;
+  }
+
+  /** 카메라 시야 크기 — 캔버스 크기와 짝이다 */
+  setView(view: ViewSize): void {
+    this.view = view;
   }
 
   /** 물고기 그래픽 스타일 — 필드의 물고기 연출(훅 점프)이 이 어댑터로 그린다 */
@@ -295,6 +304,7 @@ export class GameFieldEngine {
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
       fishArt: this.fishArt,
+      view: this.view,
       ...(this.liveSource?.(now) ?? { others: [], bubble: null }),
     });
     return true;

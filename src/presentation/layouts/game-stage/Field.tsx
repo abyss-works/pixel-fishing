@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
 import { boatGateText, nextBoatText } from '../../../game/content/boats';
@@ -20,7 +20,8 @@ import { useCanvasCover } from './canvasCover';
 import { cx } from '../../ui/cx';
 import { GameFieldEngine } from '../../../game/runtime/fieldEngine';
 import { getSpotState } from '../../../game/world/currentSpot';
-import { CANVAS_W, CANVAS_H } from '../../../game/rendering/pixel/common.js';
+import { SCALE } from '../../../game/rendering/pixel/common.js';
+import { FIELD_VIEW, mobileFieldView } from '../../../game/world/fieldView.js';
 import GameFrame from './GameFrame';
 import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
@@ -105,6 +106,7 @@ export default function Field({
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
   const schools = useSchools(region);
+  const observer = useRef<ResizeObserver | null>(null);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어와 내 말풍선을 엔진이 프레임마다 그린다
@@ -126,8 +128,19 @@ export default function Field({
   const fish: Fish | null = snapshot.fishId
     ? FISH.find(candidate => candidate.id === snapshot.fishId) ?? null
     : null;
+  // 모바일 시야 — 캔버스가 차지한 스테이지 크기에서 정한다. PC는 늘 PC 시야다
+  const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
+  const view = useMemo(
+    () => mobile && stageSize ? mobileFieldView(stageSize.w, stageSize.h) : FIELD_VIEW, [mobile, stageSize]);
+  useEffect(() => { engine.setView(view); }, [engine, view]);
   const attachCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     engine.attachCanvas(canvas);
+    observer.current?.disconnect();
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(([entry]) => {
+      setStageSize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.current.observe(canvas);
   }, [engine]);
 
   useEffect(() => {
@@ -157,7 +170,7 @@ export default function Field({
 
   useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
-  useEffect(() => () => engine.dispose(), [engine]);
+  useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 
   useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
 
@@ -174,7 +187,7 @@ export default function Field({
       {covered ? (
         <div className="block w-full h-full bg-bg" aria-label="게임 화면(덮개)" />
       ) : (
-        <canvas ref={attachCanvas} width={CANVAS_W} height={CANVAS_H}
+        <canvas ref={attachCanvas} width={view.w * SCALE} height={view.h * SCALE}
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
                 aria-label={region === 'village' ? '마을' : '바다'}
