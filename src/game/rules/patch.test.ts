@@ -21,13 +21,13 @@ const mkInst = (uid: string, fishId = 'carp', form: FormId = 'normal', locked = 
   ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
 /** 리듀서 → 델타 → 복원이 풀 상태와 같은지. 실패 원인은 규칙이 아니라 전송이어야 한다.
- *  어종 천장 진척(pity)은 화면에 쓰지 않아 보내지 않는다 — 클라는 이전 값을 그대로 둔다.
+ *  어종 천장 진척(pity)과 첫 경험 보장(firstCatch)은 화면에 쓰지 않아 보내지 않는다 — 클라는 이전 값을 그대로 둔다.
  *  네임드 천장 상태(namedPity)는 조우 창이 상처를 그려야 해서 보낸다 */
 const check = (prev: GameState, action: GameAction, over: Partial<ActionDeps> = {}): void => {
   const out = applyAction(prev, action, deps(over));
   if (!out.ok) throw new Error(`unexpected reject: ${out.error}`);
   const patch: StatePatch = { version: 2, baseVersion: 1, scalars: pickScalars(out.state), writes: out.writes };
-  expect(applyPatch(prev, patch)).toEqual({ ...out.state, pity: prev.pity });
+  expect(applyPatch(prev, patch)).toEqual({ ...out.state, pity: prev.pity, firstCatch: prev.firstCatch });
 };
 
 describe('patch 동등성 — 전 액션', () => {
@@ -138,7 +138,7 @@ describe('patch — 페이로드 축소 회귀 가드', () => {
     const full = JSON.stringify(out.state).length;
     const patch: StatePatch = { version: 2, baseVersion: 1, scalars: pickScalars(out.state), writes: out.writes };
     const delta = JSON.stringify(patch).length;
-    expect(applyPatch(prev, patch)).toEqual({ ...out.state, pity: prev.pity });
+    expect(applyPatch(prev, patch)).toEqual({ ...out.state, pity: prev.pity, firstCatch: prev.firstCatch });
     expect(delta).toBeLessThan(full / 10);
   });
 });
