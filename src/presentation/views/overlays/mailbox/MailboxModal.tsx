@@ -93,7 +93,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
             ) : (
               <div className="flex h-full items-center justify-center">
                 {loading ? <Note>우편을 불러오는 중이에요.</Note>
-                  : failed ? <Note tone="warn">우편을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Note>
+                  : failed ? <Note tone="warn">우편을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
                   : <Note>받은 우편이 없어요.</Note>}
               </div>
             )}

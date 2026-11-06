@@ -97,7 +97,8 @@ function ItemSection({ game, dispatch, setToast }: {
       </Frame>
       <Note>
         미끼를 켜면 {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고,
-        방치 낚시에는 쓰이지 않아요. 미끼는 콜롬보항의 향료전에서 살 수 있어요.
+        방치 낚시에는 쓰이지 않아요.<br />
+        미끼는 콜롬보항의 향료전에서 살 수 있어요.
       </Note>
     </div>
   );
@@ -113,7 +114,7 @@ function ArtifactSection({ game }: { game: GameState }) {
         유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
       </PageTitle>
       {owned.length === 0 ? (
-        <Note>아직 유물이 없어요. 네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
+        <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
           <Frame divided>
@@ -130,7 +131,7 @@ function ArtifactSection({ game }: { game: GameState }) {
               </div>
             ))}
           </Frame>
-          <Note>유물은 가지고만 있어도 효과가 계속돼요. 교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
+          <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
       )}
     </div>
@@ -280,7 +281,8 @@ export default function BagTab({ game, dispatch, setToast }: {
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
-                  나머지는 잠금이 풀려요. 직접 잠근 물고기도 가장 크지 않으면 풀려요.
+                  나머지는 잠금이 풀려요.<br />
+                  직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
                 <p className="text-sm">
                   잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
@@ -292,7 +294,7 @@ export default function BagTab({ game, dispatch, setToast }: {
           {layout === 'cards' ? (
             <BagCards bag={game.bag} game={game} />
           ) : rows.length === 0 ? (
-            <Note>가방이 비어 있어요. 어군을 찾아 낚시해 보세요.</Note>
+            <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
           ) : (
             <>
               <Frame divided>
@@ -351,10 +353,12 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </Frame>
               <Note>
-                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요. 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.
-                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.
-                {' '}{EXHIBIT_UI_ENABLED && '별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요. '}
-                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요. 목록은 등급이 높은 순으로 정렬돼요.
+                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요.<br />
+                판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
+                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
+                {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
+                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
+                목록은 등급이 높은 순으로 정렬돼요.
                 <HelpHint text="펼친 개체 줄의 금색 왕관은 같은 형태에서 가장 큰 개체, 보라 반짝이는 돌연변이 개체예요." />
               </Note>
             </>

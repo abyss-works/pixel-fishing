@@ -9,7 +9,7 @@ export default function Note({ tone = 'info', size = 'sm', className, children }
   tone?: 'info' | 'warn'; size?: keyof typeof SIZE; className?: string; children: ReactNode;
 }) {
   return (
-    <p className={cx(SIZE[size], !className?.includes('my-') && 'my-2',
+    <p className={cx(SIZE[size], 'whitespace-pre-line', !className?.includes('my-') && 'my-2',
                      tone === 'warn' ? 'text-danger' : 'text-text-dim', className)}>
       {children}
     </p>

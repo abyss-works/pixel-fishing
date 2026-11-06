@@ -35,7 +35,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask }: Guil
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text={<TipList rows={dailyContributionRows()} note="하루 상한이에요. 한국 시간 새벽 4시에 새로 세요." />}>오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows()} note={'하루 상한이에요.\n한국 시간 새벽 4시에 새로 세요.'} />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>
