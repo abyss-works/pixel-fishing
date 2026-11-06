@@ -39,7 +39,7 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
         </div>
       </Inset>
       {sel && (
-        <div className="grid grid-cols-2 gap-3 shrink-0">
+        <div className="grid grid-cols-2 gap-3 shrink-0 mobile:grid-cols-1">
           <Inset className="p-3 flex flex-col gap-2">
             <section aria-label={`${sel.name} 효과`} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-2 pb-1">
