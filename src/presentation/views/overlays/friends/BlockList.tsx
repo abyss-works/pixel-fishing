@@ -4,9 +4,10 @@ import type { ChatActionError } from '../../../../features/live/service/useChatM
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
-import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
+import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
 // 소셜 창의 차단 탭: 내가 차단한 사람 표와 행 끝의 해제. 차단은 플레이어 정보 창에서 한다.
 const ERROR_TEXT: Record<ChatActionError, string> = {
@@ -28,10 +29,9 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
     }
   };
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <TableBox className="flex-1 min-h-0 px-3 pb-2">
       {Array.isArray(blocks) && blocks.length > 0 ? (
-        <table className={SOCIAL_TABLE}>
-          <colgroup><col /><col className="w-16" /></colgroup>
+        <DataTable cols={[null, '4rem']} nameMin="8rem">
           <thead>
             <tr className={SOCIAL_HEAD.row}>
               <th className={SOCIAL_HEAD.left}>차단한 사람</th>
@@ -48,7 +48,7 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
           {blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note>
@@ -56,6 +56,6 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
             : <Note>차단한 사람이 없어요.<br />채팅 이름을 눌러 연 플레이어 정보에서 차단할 수 있어요.</Note>}
         </div>
       )}
-    </Inset>
+    </TableBox>
   );
 }

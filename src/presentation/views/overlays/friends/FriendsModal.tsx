@@ -9,7 +9,8 @@ import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
@@ -18,7 +19,7 @@ import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import BlockList from './BlockList';
-import { SOCIAL_CELL, SOCIAL_HEAD, SOCIAL_TABLE } from './socialTable';
+import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
 // 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
@@ -98,10 +99,9 @@ function FriendTable({ friends, pending, busy, onRemove }: {
 }) {
   const nowMs = Date.parse(useNow());
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+    <TableBox className="flex-1 min-h-0 px-3 pb-2">
       {friends && friends.length > 0 ? (
-        <table className={SOCIAL_TABLE}>
-          <colgroup><col /><col className="w-[150px]" /><col className="w-16" /></colgroup>
+        <DataTable cols={[null, '150px', '4rem']} nameMin="8rem">
           <thead>
             <tr className={SOCIAL_HEAD.row}>
               <th className={SOCIAL_HEAD.left}>이름</th>
@@ -128,13 +128,13 @@ function FriendTable({ friends, pending, busy, onRemove }: {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
           {pending ?? <Note>아직 친구가 없어요.<br />요청 탭에서 닉네임으로 요청해 보세요.</Note>}
         </div>
       )}
-    </Inset>
+    </TableBox>
   );
 }
 
@@ -209,10 +209,9 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <Inset className="pf-scroll-panel h-[138px] overflow-y-auto px-3 py-1">
+      <TableBox className="h-[138px] px-3 py-1">
         {rows && rows.length > 0 ? (
-          <table className={SOCIAL_TABLE}>
-            <colgroup><col /><col className="w-[132px]" /></colgroup>
+          <DataTable cols={[null, '132px']} nameMin="8rem">
             <tbody>
               {rows.map((f, i) => (
                 <tr key={f.uid}>
@@ -221,13 +220,13 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         ) : (
           <div className="flex h-full items-center justify-center text-center">
             {pending ?? <Note size="xs" className="my-0">{empty}</Note>}
           </div>
         )}
-      </Inset>
+      </TableBox>
     </section>
   );
 }

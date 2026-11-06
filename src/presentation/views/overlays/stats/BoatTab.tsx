@@ -6,6 +6,8 @@ import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import { StatValue } from './RodStatTable';
 
 const BAG_FILL = { normal: 'bg-gold', warn: 'bg-orange', danger: 'bg-danger' } as const;
@@ -37,9 +39,8 @@ export default function BoatTab({ game, summary, row, zones }: {
           <span className="pf-accent shrink-0">{fmtNum(bag.count)} / {fmtNum(bag.cap)} <span className="text-text-dim">({bag.percent}%)</span></span>
         </div>
       </Inset>
-      <Inset className="pf-scroll-panel flex-1 min-h-0 overflow-y-auto px-3 pb-2">
-        <table className="w-full table-fixed border-collapse text-sm">
-          <colgroup><col /><col className="w-[110px]" /><col className="w-[140px]" /></colgroup>
+      <TableBox className="flex-1 min-h-0 px-3 pb-2">
+        <DataTable cols={[null, '110px', '140px']} nameMin="8rem">
           <thead>
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className={cx(HEAD, 'pl-0 text-left')}>갈 수 있는 곳</th>
@@ -62,8 +63,8 @@ export default function BoatTab({ game, summary, row, zones }: {
               );
             })}
           </tbody>
-        </table>
-      </Inset>
+        </DataTable>
+      </TableBox>
     </div>
   );
 }

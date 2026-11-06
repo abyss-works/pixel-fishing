@@ -12,6 +12,8 @@ import { cx } from '../../../ui/cx';
 import { fmtGold } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import TableBox from '../../../ui/TableBox';
+import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
@@ -56,10 +58,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
       <ModalCard title="우편함" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {/* 표 머리 한 줄과 우편 다섯 줄 높이 */}
-          <Inset className="pf-scroll-panel h-[212px] overflow-y-auto px-3 pb-2">
+          <TableBox className="h-[212px] px-3 pb-2">
             {mails && mails.length > 0 ? (
-              <table className="w-full table-fixed border-collapse text-sm" aria-label="받은 우편">
-                <colgroup><col className="w-5" /><col /><col className="w-[120px]" /><col className="w-20" /></colgroup>
+              <DataTable cols={['1.25rem', null, '120px', '5rem']} nameMin="10rem" aria-label="받은 우편">
                 <thead>
                   <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
                     <th className={cx(HEAD, 'pl-0')} aria-label="상태" />
@@ -89,7 +90,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                     );
                   })}
                 </tbody>
-              </table>
+              </DataTable>
             ) : (
               <div className="flex h-full items-center justify-center">
                 {loading ? <Note>우편을 불러오는 중이에요.</Note>
@@ -97,7 +98,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   : <Note>받은 우편이 없어요.</Note>}
               </div>
             )}
-          </Inset>
+          </TableBox>
           <Inset className="h-[190px] px-3 pt-2.5 pb-2 flex flex-col gap-2">
             {selected ? (
               <>

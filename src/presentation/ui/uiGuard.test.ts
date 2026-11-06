@@ -24,6 +24,7 @@ const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /<select\b/, use: 'Select' },
   { pattern: /<textarea\b/, use: 'TextArea' },
   { pattern: /<label\b/, use: 'Field(이름표·입력·도움말·오류 묶음)' },
+  { pattern: /<table\b/, use: 'DataTable(담는 칸은 TableBox)' },
 ];
 
 /** 브라우저 기본 대화상자 — 게임 화면은 useDialogs(ConfirmDialog·InputDialog·NoticeDialog)를 쓴다. 예외 없음 */

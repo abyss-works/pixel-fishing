@@ -18,7 +18,7 @@ export default function RankList({ rows, me, valueLabel, format, className }: {
 }) {
   const meInList = rows.some(r => r.me);
   return (
-    <div className={className}>
+    <div className={cx('overflow-x-auto', className)}>
       <DataTable>
         <thead><tr><th>순위</th><th>닉네임</th><th>{valueLabel}</th></tr></thead>
         <tbody>
