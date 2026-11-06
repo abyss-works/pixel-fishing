@@ -14,6 +14,7 @@ export default function EnvBadge({ build }: { build: string }) {
   return (
     <div role="status" aria-label={`${label} 빌드 ${build}`}
          className={cx('absolute bottom-0.5 left-1/2 -translate-x-1/2 z-[4] pointer-events-none select-none',
+                       'mobile:row-start-2 mobile:row-end-3',
                        'flex pf-accent text-2xs whitespace-nowrap motion-safe:animate-pulse', NOTCH_SM)}>
       <span className={cx(CELL, 'text-danger')}>{label}</span>
       <span className={cx(CELL, 'border-l-0 text-text-dim')}>{build}</span>

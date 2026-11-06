@@ -19,6 +19,7 @@ interface SidebarProps<K extends string> {
 
 // 화면의 탭 콘텐츠를 담는 사이드 패널 레이아웃.
 // 모바일 배치에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
+// 시트는 게임 영역과 채팅 영역을 덮는다. 화면 키보드가 올라와 있는 동안(루트의 data-keyboard) 탭 줄은 숨는다.
 export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, sheetOpen = false, onSheetClose, children }: SidebarProps<K>) {
   const mobile = useMobileLayout();
   const dragFrom = useRef<number | null>(null);
@@ -44,7 +45,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
             </div>
           </section>
         )}
-        <aside className="shrink-0 w-full h-14 bg-surface border-t border-line">
+        <aside className="shrink-0 w-full h-14 bg-surface border-t border-line group-data-[keyboard]/root:hidden">
           <TabBar tabs={tabs} activeKey={sheetOpen ? activeKey : null} onSelect={onSelect} className="h-full border-b-0" />
         </aside>
       </>

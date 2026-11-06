@@ -23,7 +23,7 @@ export function useVisibleBox(): VisibleBox {
   const [box, setBox] = useState<VisibleBox>(NONE);
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!mobile || !vv) { setBox(NONE); return; }
+    if (!mobile || !vv) return;
     const update = () => {
       const next = visibleBox(window.innerHeight, vv.height, vv.offsetTop);
       setBox(prev => prev.top === next.top && prev.bottom === next.bottom ? prev : next);
@@ -33,5 +33,5 @@ export function useVisibleBox(): VisibleBox {
     vv.addEventListener('scroll', update);
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
   }, [mobile]);
-  return box;
+  return mobile ? box : NONE;
 }

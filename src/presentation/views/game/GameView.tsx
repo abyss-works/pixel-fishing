@@ -64,6 +64,7 @@ import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
+import { useVisibleBox } from '../../layouts/visibleBox';
 
 interface GameViewProps {
   game: GameState;
@@ -99,10 +100,10 @@ export default function GameView(props: GameViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const mobile = useMobileLayout();
   useBlockZoom();
+  /** 화면 키보드를 피한 영역 — 키보드가 올라오면 화면 틀이 그 위로 줄어 채팅 영역이 키보드 위에 붙는다 */
+  const visible = useVisibleBox();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
-  /** 모바일 채팅 입력 줄 — 메시지 창 기록 칸을 누르면 열린다 */
-  const [chatOpen, setChatOpen] = useState(false);
   /** 모바일 낚시 상태 띠가 들어갈 HUD 자리 */
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
@@ -252,7 +253,9 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className={cx('fixed inset-0 flex overflow-hidden overscroll-none', mobile ? 'flex-col' : 'max-[820px]:flex-col')}>
+    <div className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile ? 'flex-col' : 'max-[820px]:flex-col')}
+         style={visible.keyboard ? { top: visible.top, bottom: visible.bottom } : undefined}
+         data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
@@ -265,14 +268,11 @@ export default function GameView(props: GameViewProps) {
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? (
                      <ChatBar inGuild={guild !== null} guest={props.account === null}
-                              open={!mobile || chatOpen} onLeave={mobile ? () => setChatOpen(false) : undefined}
-                              folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping}
-                              onOpen={() => setChatOpen(true)} />
+                              folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping} />
                    ) : null}
                    filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
                    folded={folded} onFold={chat.enabled ? fold.toggle : undefined}
                    onStatusSlot={setStatusSlot}
-                   onActivateLog={chat.enabled && props.account !== null ? () => setChatOpen(true) : undefined}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });

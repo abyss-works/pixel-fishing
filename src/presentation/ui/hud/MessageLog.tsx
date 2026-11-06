@@ -11,6 +11,7 @@ import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './
 import type { MessageChannel, Msg } from './messageFeed';
 
 // 메시지 창 — 스테이지 왼쪽 아래의 채팅창형 기록. 폭은 400px(좁은 스테이지에서는 58%)이다.
+// 모바일 배치에서는 화면 틀의 채팅 영역(아래 탭 줄 바로 위, 폭 전체)에 놓인다.
 // 높이는 기록 수와 무관하게 항상 정해진 줄 수만큼이다. 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
 // 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 사용자가 위로 올려 읽는 중이 아니면 언제나 맨 아래(최신)를 보인다. 기록이 앞쪽에 끼어들어도(접속 직후 받은
@@ -41,7 +42,7 @@ const GLASS_ON = cx(
   'group-has-[input:focus]:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
 );
 
-/** 모바일은 마우스를 올릴 수 없으므로 활성 모양을 늘 유지한다 */
+/** 터치 화면은 마우스를 올릴 수 없으므로 모바일 배치에서는 활성 모양을 늘 유지한다 */
 const GLASS_ALWAYS = cx(
   'mobile:border-line mobile:bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] mobile:backdrop-blur-[4px]',
   'mobile:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
@@ -61,7 +62,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, onActivate, folded = false, onFold }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -78,8 +79,6 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   disabledChannels?: readonly MessageChannel[];
   /** 한 번에 보이는 글줄 수 */
   lines?: number;
-  /** 기록 칸을 눌렀다(글줄의 이름 버튼을 누른 경우는 제외). 모바일에서 입력 줄을 여는 데 쓴다 */
-  onActivate?: () => void;
   /** 접힘 — 토글 줄과 기록을 숨기고 footer만 남긴다 */
   folded?: boolean;
   /** 접기 버튼을 눌렀다. 없으면 접기 버튼을 그리지 않는다 */
@@ -113,7 +112,8 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
 
   return (
     <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
-                    mobile:static mobile:w-full">
+                    mobile:static mobile:col-span-2 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
+                    mobile:border-t mobile:border-line">
       {!folded && (toggles || onFold) && (
         <div className="pointer-events-none flex items-center justify-between gap-1.5">
         {toggles ? (
@@ -146,7 +146,6 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
         </div>
       )}
       {!folded && <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
-           onClick={e => { if (!(e.target as HTMLElement).closest('button')) onActivate?.(); }}
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
              'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',
              'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
