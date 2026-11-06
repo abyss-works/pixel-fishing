@@ -34,6 +34,7 @@ function setup() {
     game: newState(),
     setToast: vi.fn(),
     adoptAccount: vi.fn(async () => {}),
+    askNewPassword: vi.fn(async () => null),
   };
   const hook = renderHook(() => ({ account: useAccount(props), session: useSession() }), { wrapper });
   return { hook, props };
