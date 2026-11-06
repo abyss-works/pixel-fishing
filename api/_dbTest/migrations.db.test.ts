@@ -270,7 +270,7 @@ describe('테스트 데이터베이스', () => {
         await other.query(`insert into public.chat_messages (user_id, nick, text) values ($1, 'n', '월드')`, [uid]);
         await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, 'n', '길드', $2)`, [uid, g.id]);
         // 되돌리기는 최신부터 — 0028·0029·0031이 길드 표를 참조한다
-        for (const file of ['0031_guild_join.down.sql', '0029_guild_bonus.down.sql', '0028_guild_growth.down.sql', '0027_guilds.down.sql']) {
+        for (const file of ['0032_guild_rename.down.sql', '0031_guild_join.down.sql', '0029_guild_bonus.down.sql', '0028_guild_growth.down.sql', '0027_guilds.down.sql']) {
           await other.query(readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8'));
         }
         expect(await tables()).toEqual(['chat_messages']);
@@ -291,7 +291,7 @@ describe('테스트 데이터베이스', () => {
         const tables = async () => (await other.query<{ name: string }>(
           `select table_name as name from information_schema.tables where table_schema = 'public'
            and table_name like 'guild%' order by table_name`)).rows.map(r => r.name);
-        for (const file of ['0031_guild_join.down.sql', '0029_guild_bonus.down.sql', '0028_guild_growth.down.sql']) {
+        for (const file of ['0032_guild_rename.down.sql', '0031_guild_join.down.sql', '0029_guild_bonus.down.sql', '0028_guild_growth.down.sql']) {
           await other.query(readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8'));
         }
         expect(await tables()).toEqual(['guild_invites', 'guild_members', 'guilds']);
@@ -318,7 +318,7 @@ describe('테스트 데이터베이스', () => {
         const { rows: [g] } = await other.query<{ id: string }>(`insert into public.guilds (name, code) values ('심해', 'ABCDEFGH') returning id`);
         await other.query(`insert into public.guild_logs (guild_id, user_id, kind) values ($1, $2, 'join')`, [g.id, uid]);
         await other.query(`insert into public.guild_logs (guild_id, user_id, kind, detail, value) values ($1, $2, 'donate', 'sell', 100)`, [g.id, uid]);
-        for (const file of ['0031_guild_join.down.sql', '0029_guild_bonus.down.sql']) {
+        for (const file of ['0032_guild_rename.down.sql', '0031_guild_join.down.sql', '0029_guild_bonus.down.sql']) {
           await other.query(readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8'));
         }
         expect(await tables()).toEqual(['guild_contributions', 'guild_invites', 'guild_logs', 'guild_members', 'guilds']);
@@ -340,6 +340,7 @@ describe('테스트 데이터베이스', () => {
       const other = new Client({ connectionString: copy.url });
       await other.connect();
       try {
+        await other.query(migration('0032_guild_rename.down.sql'));
         await other.query(migration('0031_guild_join.down.sql'));
         const { rows: [a] } = await other.query<{ id: string }>(`insert into public.guilds (name) values ('심해') returning id`);
         const { rows: [b] } = await other.query<{ id: string }>(`insert into public.guilds (name) values ('먼바다') returning id`);
@@ -357,6 +358,37 @@ describe('테스트 데이터베이스', () => {
         const tables = (await other.query<{ t: string }>(`select table_name as t from information_schema.tables
           where table_schema = 'public' and table_name in ('guild_invites', 'guild_join_requests')`)).rows.map(r => r.t);
         expect(tables).toEqual(['guild_invites']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('길드 이름 바꾸기 (0032)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('길드에 마지막 이름 변경 시각 열을 더하고, 되돌리면 열과 이름 바꾸기 기록을 지우고 항해일지 종류를 0029로 되돌린다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@test.dev`]);
+        const { rows: [g] } = await other.query<{ id: string; renamed_at: string | null }>(
+          `insert into public.guilds (name, code) values ('심해', 'ABCDEFGH') returning id, renamed_at`);
+        expect(g.renamed_at).toBeNull();
+        await other.query(`insert into public.guild_logs (guild_id, user_id, kind) values ($1, $2, 'join')`, [g.id, uid]);
+        await other.query(`insert into public.guild_logs (guild_id, user_id, kind, detail) values ($1, $2, 'rename', '먼바다')`, [g.id, uid]);
+        await other.query(migration('0032_guild_rename.down.sql'));
+        const cols = (await other.query<{ c: string }>(`select column_name as c from information_schema.columns
+          where table_schema = 'public' and table_name = 'guilds' and column_name = 'renamed_at'`)).rows;
+        expect(cols).toEqual([]);
+        expect((await other.query('select kind from public.guild_logs')).rows).toEqual([{ kind: 'join' }]);
+        await expect(other.query(`insert into public.guild_logs (guild_id, user_id, kind) values ($1, $2, 'rename')`, [g.id, uid]))
+          .rejects.toThrow();
+        await other.query(migration('0032_guild_rename.sql'));
+        await other.query(`insert into public.guild_logs (guild_id, user_id, kind, detail) values ($1, $2, 'rename', '먼바다')`, [g.id, uid]);
       } finally {
         await other.end();
         await copy.drop();
