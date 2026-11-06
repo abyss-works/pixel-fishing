@@ -92,7 +92,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
                          setConfirm(null);
                          void run(c.op).then(error => setToast(error ?? c.done, error ? 'warn' : 'info'));
                        }}>
-          <p className="text-sm">{confirm.text}</p>
+          <p className="text-sm whitespace-pre-line">{confirm.text}</p>
         </ConfirmDialog>
       )}
     </Modal>

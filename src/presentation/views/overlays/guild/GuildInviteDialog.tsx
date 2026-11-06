@@ -53,13 +53,13 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
             : !view ? <Note>초대를 불러오는 중이에요.</Note>
             : view.state === 'bad' ? (
               <>
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full onClick={onClose}>확인</Button>
               </>
             ) : view.state === 'guest' ? (
               <>
                 <GuildInviteSummary preview={invite.preview} view={null} busy={busy} onConfirm={() => {}} />
-                <p className="m-0 text-sm text-text-dim" role="status">{view.text}</p>
+                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
                 <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
               </>
             ) : (
