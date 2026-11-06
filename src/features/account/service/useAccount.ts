@@ -11,12 +11,14 @@ import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudg
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
-export function useAccount({ game, setToast, adoptAccount }: {
+export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   game: GameState;
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
   setToast: (message: string, tone?: 'info' | 'gold' | 'warn') => void;
   /** useGame의 계정 교체 — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다 */
   adoptAccount: () => Promise<void>;
+  /** 재설정 링크로 돌아왔을 때 새 비밀번호를 묻는다. 취소하면 null */
+  askNewPassword: (minLength: number) => Promise<string | null>;
 }) {
   // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
@@ -61,12 +63,13 @@ export function useAccount({ game, setToast, adoptAccount }: {
       setToast('비밀번호를 바꾸지 못했어요. 재설정 링크가 만료됐거나 이미 쓰였어요. 재설정을 다시 요청해 주세요.', 'warn');
       return;
     }
-    const pw = window.prompt(`새 비밀번호를 입력해 주세요. (${MIN_PASSWORD_LENGTH}자 이상)`);
-    if (!pw) return;
-    if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
-    api.auth.applyNewPassword(pw).then(r => {
-      if (r.ok) setToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.');
-      else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
+    void askNewPassword(MIN_PASSWORD_LENGTH).then(pw => {
+      if (!pw) return;
+      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
+      return api.auth.applyNewPassword(pw).then(r => {
+        if (r.ok) setToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.');
+        else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
+      });
     });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 확인, setToast는 항상 최신 클로저가 필요 없다
   }, []);

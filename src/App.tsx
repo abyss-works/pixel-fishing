@@ -6,9 +6,11 @@ import { useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
+import { useDialogs } from './presentation/ui/useDialogs';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
+import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import DevTools from './presentation/views/devtools/DevTools';
 import EnvBadge from './presentation/views/devtools/EnvBadge';
@@ -31,7 +33,15 @@ function AppContent() {
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
   const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, adoptAccount, warmup, resync } = useGame({ setToast });
-  const { account, uid, onAuthChanged } = useAccount({ game, setToast, adoptAccount });
+  const { input, dialogs } = useDialogs();
+  const { account, uid, onAuthChanged } = useAccount({
+    game, setToast, adoptAccount,
+    askNewPassword: min => input({
+      title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
+${min}자 이상이어야 해요.`,
+      label: '새 비밀번호', secret: true, confirmLabel: '바꾸기',
+    }),
+  });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
   const [entryPos, setEntryPos] = useState<Point | null>(null);
@@ -67,12 +77,13 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
-        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
+        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
         <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
       </DevEnvContext.Provider>
+      {dialogs}
     </>
   );
 }

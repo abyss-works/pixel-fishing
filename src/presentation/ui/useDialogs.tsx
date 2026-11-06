@@ -7,7 +7,7 @@ import { TextNotice } from './NoticeBody';
 
 type Pending =
   | { kind: 'confirm'; layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
-  | { kind: 'input'; title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string; resolve: (v: string | null) => void }
+  | { kind: 'input'; title: string; body?: ReactNode; label: string; placeholder?: string; secret?: boolean; confirmLabel: string; resolve: (v: string | null) => void }
   | { kind: 'notice'; title: string; body: ReactNode; value?: string; resolve: () => void };
 
 /** 문자열 본문은 안내문 위계로 그린다(첫 줄 핵심 · 괄호 줄 참고 · 나머지 설명). 노드는 그대로 둔다 */
@@ -22,7 +22,7 @@ export function useDialogs() {
 
   const confirm = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string }) =>
     new Promise<boolean>(resolve => setPending({ kind: 'confirm', ...o, resolve }));
-  const input = (o: { title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string }) =>
+  const input = (o: { title: string; body?: ReactNode; label: string; placeholder?: string; secret?: boolean; confirmLabel: string }) =>
     new Promise<string | null>(resolve => setPending({ kind: 'input', ...o, resolve }));
   const notice = (o: { title: string; body: ReactNode; value?: string }) =>
     new Promise<void>(resolve => setPending({ kind: 'notice', ...o, resolve }));
@@ -35,7 +35,7 @@ export function useDialogs() {
         {bodyOf(pending.body)}
       </ConfirmDialog>
     ) : pending.kind === 'input' ? (
-      <InputDialog title={pending.title} body={pending.body === undefined ? undefined : bodyOf(pending.body)} label={pending.label} placeholder={pending.placeholder}
+      <InputDialog title={pending.title} body={pending.body === undefined ? undefined : bodyOf(pending.body)} label={pending.label} placeholder={pending.placeholder} secret={pending.secret}
                    confirmLabel={pending.confirmLabel}
                    onSubmit={v => { close(); pending.resolve(v); }}
                    onCancel={() => { close(); pending.resolve(null); }} />
