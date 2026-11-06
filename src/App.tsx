@@ -46,9 +46,13 @@ function AppContent() {
     setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
   }, [sync, game.location, last.settled, last.position]);
 
-  const go = (nextScene: SceneRef, message: string, position?: Point) => {
+  const place = (nextScene: SceneRef, position?: Point) => {
     setScene(nextScene);
     setEntryPos(position ?? null);
+  };
+
+  const go = (nextScene: SceneRef, message: string, position?: Point) => {
+    place(nextScene, position);
     setToast(message);
     dispatch({ type: 'travel', to: nextScene });
   };
@@ -60,7 +64,7 @@ function AppContent() {
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos}
-        dispatch={dispatch} setToast={setToast} onScene={go} onWarmup={warmup}
+        dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : loading ? <LoadingOverlay /> : null}
