@@ -13,6 +13,10 @@ describe('statusText', () => {
     expect(mobile.replace('화면을', '스페이스를')).toBe(statusText('wait', false));
   });
 
+  it('입질 안내는 문장마다 줄을 바꾼다', () => {
+    expect(statusText('bite', false)).toBe('지금 눌러 주세요.\n빨간 영역이면 PERFECT, 노란 영역이면 GOOD이에요.');
+  });
+
   it('입질과 끌어올림 안내는 모바일에서도 같다', () => {
     expect(statusText('bite', true)).toBe(statusText('bite', false));
     expect(statusText('catch', true)).toBe(statusText('catch', false));
