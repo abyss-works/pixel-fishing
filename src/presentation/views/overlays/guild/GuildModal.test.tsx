@@ -21,7 +21,7 @@ vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
 
 const at = '2026-11-05T00:00:00.000Z';
 const GUILD: GuildInfo = {
-  id: 'g1', name: '심해선단', createdAt: at, role: 'leader',
+  id: 'g1', name: '심해선단', createdAt: at, role: 'leader', renamedAt: null,
   code: 'ABCD2345', joinMode: 'approval', pitch: null,
   requests: [{ uid: 'R', nick: '바다거북', requestedAt: at }],
   members: [
@@ -50,7 +50,7 @@ describe('GuildModal', () => {
 
   it('길드가 없으면 이름으로 만든다', async () => {
     const toast = vi.fn();
-    render(<GuildModal setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('길드 이름'), { target: { value: ' 심해선단 ' } });
     fireEvent.click(screen.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('심해선단 길드를 만들었어요.'));
@@ -59,7 +59,7 @@ describe('GuildModal', () => {
 
   it('길드 코드로 찾으면 요약과 가입 방식에 맞는 버튼이 뜨고, 승인 가입이면 가입 신청을 보낸다. 없는 코드는 찾지 못했다고 알린다', async () => {
     const toast = vi.fn();
-    render(<GuildModal setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     expect(await screen.findByText('길드 코드는 8자리예요.')).toBeTruthy();
@@ -76,7 +76,7 @@ describe('GuildModal', () => {
 
   it('넣어 둔 가입 신청이 있으면 맨 위에 보이고 거둘 수 있다', async () => {
     s.request = { code: 'K7QX2MAB', name: '새벽선단', requestedAt: new Date().toISOString() };
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText(/길드에 가입을 신청했어요/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '신청 취소' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'cancelRequest' }));
@@ -84,7 +84,7 @@ describe('GuildModal', () => {
 
   it('길드장의 관리 탭: 처리할 신청 수를 탭에 붙이고, 가입 방식을 바꾸며, 신청을 승인하거나 거절한다', async () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /관리.*1건/ }));
     expect(screen.getByText('ABCD2345')).toBeTruthy();
     fireEvent.click(screen.getByRole('radio', { name: /자유 가입/ }));
@@ -98,7 +98,7 @@ describe('GuildModal', () => {
   it('길드장은 접힌 관리 메뉴를 보고, 다른 길드원이 있으면 떠나기를 누를 때 위임 안내를 받는다', async () => {
     s.guild = GUILD;
     const toast = vi.fn();
-    render(<GuildModal setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     // 떠난 선원은 길드원 표에 없다
     expect(screen.queryByText('다온')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '길드 떠나기' }));
@@ -116,7 +116,7 @@ describe('GuildModal', () => {
   it('길드원은 관리 동작과 관리 탭 없이 떠나기만 한다', () => {
     s.guild = { ...GUILD, role: 'member', requests: [] };
     s.you = 'M';
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.queryByRole('button', { name: /^관리/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /관리$/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '길드 떠나기' }));
@@ -126,7 +126,7 @@ describe('GuildModal', () => {
 
   it('길드원 표는 사람마다 오늘 기여, 누적 기여, 기부 합을 숫자로 보인다. 오늘 기여 머리의 툴팁은 하루 상한 목록이다', () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.mouseEnter(screen.getByText('오늘 기여'));
     const tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('네임드 토벌')).toBeTruthy();
@@ -142,7 +142,7 @@ describe('GuildModal', () => {
 
   it('창 제목은 길드 정보이고, 고정 정보 줄(길드 이름, 레벨, 진행, 인원)은 탭을 바꿔도 그대로 보인다. 레벨이 오르는 조건은 진행 막대의 툴팁이다', () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('길드 정보')).toBeTruthy();
     const stays = () => {
       expect(screen.getByText('심해선단')).toBeTruthy();
@@ -161,7 +161,7 @@ describe('GuildModal', () => {
 
   it('길드 스킬 탭: 열리지 않은 스킬은 고를 수 없고, 고른 스킬의 현재와 다음 단계 효과, 모인 골드를 보인다', () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     const tree = screen.getByRole('group', { name: '길드 스킬 트리' });
     expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).getAttribute('aria-disabled')).toBe('true');
@@ -180,7 +180,7 @@ describe('GuildModal', () => {
     s.guild = GUILD;
     const toast = vi.fn();
     const resync = vi.fn(async () => {});
-    render(<GuildModal setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     fireEvent.click(screen.getByRole('button', { name: '기부' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
@@ -203,7 +203,7 @@ describe('GuildModal', () => {
     s.act.mockResolvedValueOnce({ ok: false, error: 'not-enough-gold' });
     const toast = vi.fn();
     const resync = vi.fn(async () => {});
-    render(<GuildModal setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
     fireEvent.click(screen.getByRole('button', { name: '기부' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
@@ -215,7 +215,7 @@ describe('GuildModal', () => {
 
   it('항해일지는 한국 날짜 머리 아래에 시각과 강조한 이름, 전설 어종을 보인다', () => {
     s.guild = GUILD;
-    render(<GuildModal setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    render(<GuildModal gold={500_000} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
     const day = within(screen.getByRole('region', { name: '11월 5일' }));
     expect(day.getAllByText('09:00')).toHaveLength(2);
