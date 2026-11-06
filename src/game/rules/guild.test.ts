@@ -8,7 +8,7 @@ import {
   GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
   GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, donationOutcome, guildBonusLevels,
   guildEffectsOf, validDonationAmount,
-  GUILD_RENAME_COST, renameBlock, renameOutcome,
+  GUILD_RENAME_COST, parseJoinVia, renameBlock, renameOutcome,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -57,6 +57,21 @@ describe('가입 방식', () => {
     expect(joinOutcome('open', 3)).toBe('join');
     expect(joinOutcome('approval', 3)).toBe('request');
     expect(joinOutcome('closed', 3)).toBe('closed');
+  });
+
+  it('초대 링크로 오면 승인 가입도 바로 들어온다. 닫힘과 인원 가득은 링크로 와도 받지 않는다', () => {
+    expect(joinOutcome('approval', 3, 'link')).toBe('join');
+    expect(joinOutcome('open', 3, 'link')).toBe('join');
+    expect(joinOutcome('closed', 3, 'link')).toBe('closed');
+    expect(joinOutcome('approval', GUILD_MAX_MEMBERS, 'link')).toBe('guild-full');
+    expect(joinOutcome('approval', 3, 'code')).toBe('request');
+  });
+
+  it('가입 경로 입력은 link만 링크로 보고 나머지는 모두 코드로 본다', () => {
+    expect(parseJoinVia('link')).toBe('link');
+    expect(parseJoinVia('code')).toBe('code');
+    expect(parseJoinVia(undefined)).toBe('code');
+    expect(parseJoinVia(1)).toBe('code');
   });
 
   it('인원이 가득 차면 자유 가입과 승인 가입 모두 받지 않는다. 닫힘은 닫힘이 먼저다', () => {

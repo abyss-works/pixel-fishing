@@ -65,15 +65,25 @@ export function parseJoinMode(raw: unknown): GuildJoinMode | null {
   return (GUILD_JOIN_MODES as readonly unknown[]).includes(raw) ? raw as GuildJoinMode : null;
 }
 
+/** 들어오는 경로 — 코드를 직접 넣었는가(code), 초대 링크의 확인 창에서 왔는가(link) */
+export type GuildJoinVia = 'code' | 'link';
+
+/** 가입 요청의 경로 표시. link만 링크로 보고, 없거나 다른 값은 코드로 본다 */
+export function parseJoinVia(raw: unknown): GuildJoinVia {
+  return raw === 'link' ? 'link' : 'code';
+}
+
 /**
  * 코드나 링크로 들어오려는 사람에게 일어날 일. join은 바로 들어가고, request는 가입 신청이 된다.
  * 닫힌 길드는 인원과 무관하게 닫힘이고, 열린 길드는 인원이 가득 차면 받지 않는다.
+ * 승인 가입은 코드로 오면 신청이 되고, 링크로 오면 길드원이 직접 건넨 초대라서 바로 들어간다.
  * @param activeCount 지금 길드원 수
  */
-export function joinOutcome(mode: GuildJoinMode, activeCount: number): 'join' | 'request' | 'closed' | 'guild-full' {
+export function joinOutcome(mode: GuildJoinMode, activeCount: number, via: GuildJoinVia = 'code'):
+  'join' | 'request' | 'closed' | 'guild-full' {
   if (mode === 'closed') return 'closed';
   if (guildFull(activeCount)) return 'guild-full';
-  return mode === 'open' ? 'join' : 'request';
+  return mode === 'open' || via === 'link' ? 'join' : 'request';
 }
 
 /** 가입 신청이 남는 기간. 처리하지 않으면 사라진다 */
