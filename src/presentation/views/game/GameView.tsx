@@ -301,7 +301,7 @@ export default function GameView(props: GameViewProps) {
                   onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                   onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
-        {guildOpen && <GuildModal setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
+        {guildOpen && <GuildModal gold={game.gold} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />

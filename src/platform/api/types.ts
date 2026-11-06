@@ -93,6 +93,8 @@ export interface GuildJoinRequestItem { uid: string; nick: string | null; reques
 /** 내 길드 — members는 지금 길드원(길드장 먼저)과 떠난 선원(최근에 떠난 순). requests는 길드장에게만 차 있다 */
 export interface GuildInfo {
   id: string; name: string; createdAt: string; role: GuildRole;
+  /** 마지막으로 이름을 바꾼 시각. 바꾼 적이 없으면 null */
+  renamedAt: string | null;
   members: GuildMemberItem[];
   /** 바뀌지 않는 고유 코드(초대 링크와 코드 입력에 쓴다), 가입 방식, 초대 링크의 권유 문구(비었으면 null) */
   code: string;
@@ -116,7 +118,8 @@ export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest |
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 export type GuildOp =
   | { op: 'create'; name: string }
-  | { op: 'join'; code: string }
+  | { op: 'join'; code: string; via?: 'link' }
+  | { op: 'rename'; guildId: string; name: string }
   | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
   | { op: 'approve'; guildId: string; uid: string }
   | { op: 'reject'; guildId: string; uid: string }

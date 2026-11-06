@@ -18,6 +18,7 @@ const MARK: Record<LogEntry['kind'], { glyph: GlyphId; tone: string }> = {
   named: { glyph: 'flag', tone: 'text-epic border-[#9a4d8f] bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
   donate: { glyph: 'coin', tone: 'text-gold' },
   'bonus-up': { glyph: 'upload', tone: 'text-gold border-gold-dark' },
+  rename: { glyph: 'book', tone: 'text-text' },
 };
 
 const TONE: Record<NonNullable<LogPart['tone']>, string> = {

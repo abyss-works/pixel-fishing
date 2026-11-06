@@ -31,7 +31,9 @@ const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주�
     좁은 화면에서는 내용 높이를 따른다 */
 const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
 
-export default function GuildModal({ setToast, onGoldChanged, onClose }: {
+export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
+  /** 내 골드 — 이름 바꾸기 비용을 낼 수 있는지 보인다 */
+  gold: number;
   setToast: Notify;
   /** 기부로 골드가 바뀐 뒤 게임 상태를 다시 읽는다 */
   onGoldChanged: () => Promise<void> | void;
@@ -69,7 +71,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
 
   const inGuild = Boolean(guild && you);
   const body = guild && you
-    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} onGoldChanged={onGoldChanged} />
+    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} gold={gold} onGoldChanged={onGoldChanged} />
     : guild === null && !loading && !failed
       ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
       : (
@@ -102,7 +104,7 @@ export default function GuildModal({ setToast, onGoldChanged, onClose }: {
 type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
-function GuildView({ ask, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; onGoldChanged: () => Promise<void> | void }) {
+function GuildView({ ask, gold, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; gold: number; onGoldChanged: () => Promise<void> | void }) {
   const [tab, setTab] = useState<GuildTab>('members');
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -117,7 +119,7 @@ function GuildView({ ask, onGoldChanged, ...part }: GuildPartProps & { ask: Guil
         {tab === 'members' && <GuildMembersTab {...part} ask={ask} />}
         {tab === 'skills' && <GuildSkillsTab {...part} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
-        {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} />}
+        {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
       </div>
     </div>
   );

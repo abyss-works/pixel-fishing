@@ -4,14 +4,14 @@ import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, requestRows, splitMembers,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
   ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
-    requests: [],
+    requests: [], renamedAt: null,
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -91,7 +91,7 @@ describe('길드 화면 모델', () => {
 
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
-      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted']) {
+      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today']) {
       expect(GUILD_ERROR_TEXT[code]).toBeTruthy();
     }
   });
@@ -178,6 +178,34 @@ describe('항해일지', () => {
   });
 });
 
+describe('길드 이름 바꾸기 화면 모델', () => {
+  const now = '2026-11-06T03:00:00.000Z';
+
+  it('바꿀 수 있으면 버튼이 열리고 이유가 없다', () => {
+    expect(renameButtonState(null, now, 100_000)).toEqual({ disabled: false, reason: null });
+  });
+
+  it('오늘 이미 바꿨으면 막고 다시 바꿀 수 있는 시각을 알린다', () => {
+    const s = renameButtonState(now, now, 5_000_000);
+    expect(s.disabled).toBe(true);
+    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n한국 시간 새벽 4시 이후에 다시 바꿀 수 있어요.');
+  });
+
+  it('골드가 모자라면 막고 필요한 골드를 알린다', () => {
+    expect(renameButtonState(null, now, 99_999)).toEqual({ disabled: true, reason: '골드가 모자라요.\n이름을 바꾸려면 100,000G가 필요해요.' });
+  });
+});
+
+describe('길드 이름 바꾸기 항해일지', () => {
+  it('새 이름을 강조한 문장이다. 받침 ㄹ로 끝나는 이름은 로를 쓴다', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    const entry = (detail: string) => logbookDays([{ id: 1, kind: 'rename', uid: 'u', nick: '가람', detail, value: null, at }], 'me')[0].items[0];
+    expect(entry('먼바다').parts).toEqual([{ text: '길드 이름을 ' }, { text: '먼바다', tone: 'skill' }, { text: '로 바꿨어요.' }]);
+    expect(entry('불꽃').parts.at(-1)).toEqual({ text: '으로 바꿨어요.' });
+    expect(entry('먼바다').quiet).toBe(false);
+  });
+});
+
 describe('길드 보너스 화면 모델', () => {
   const item = (over: Partial<GuildBonusItem>): GuildBonusItem => ({ id: 'sell', unlock: 1, rank: 0, cap: 0, pool: 0,
     next: null, effect: 0, nextEffect: 0.02, mine: 0, ...over });
@@ -232,28 +260,35 @@ describe('초대 확인 창', () => {
   const viewer = { account: true, guild: null as string | null };
 
   it('없는 코드는 찾지 못했다고 알리고 확인만 둔다', () => {
-    expect(inviteDialogView(null, viewer)).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null });
+    expect(inviteDialogView(null, viewer, 'link')).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null });
   });
 
   it('게스트는 계정이 있어야 한다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: false, guild: null })).toMatchObject({ state: 'guest', action: null,
+    expect(inviteDialogView(preview(), { account: false, guild: null }, 'link')).toMatchObject({ state: 'guest', action: null,
       text: '길드는 계정이 있어야 들어갈 수 있어요.\n계정을 만들거나 로그인하면 이 창이 다시 떠요.' });
   });
 
   it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {
-    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' })).toMatchObject({ state: 'member', action: null,
+    expect(inviteDialogView(preview(), { account: true, guild: '심해조합' }, 'link')).toMatchObject({ state: 'member', action: null,
       text: '이미 다른 길드(심해조합)에 있어요.\n지금 길드를 떠난 뒤에 들어갈 수 있어요.' });
-    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' })).toMatchObject({ state: 'member', action: null,
+    expect(inviteDialogView(preview(), { account: true, guild: '새벽선단' }, 'link')).toMatchObject({ state: 'member', action: null,
       text: '이미 새벽선단 길드에 있어요.' });
   });
 
   it('가입 방식과 인원에 따라 들어가기, 가입 신청, 받지 않음이다', () => {
-    expect(inviteDialogView(preview(), viewer)).toEqual({ state: 'open', action: { label: '들어가기' },
+    expect(inviteDialogView(preview(), viewer, 'code')).toEqual({ state: 'open', action: { label: '들어가기' },
       text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
-    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer)).toEqual({ state: 'approval', action: { label: '가입 신청' },
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'code')).toEqual({ state: 'approval', action: { label: '가입 신청' },
       text: '길드장이 승인하면 들어가요.\n신청은 7일 동안 남아요.' });
-    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer)).toEqual({ state: 'closed', action: null,
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'code')).toEqual({ state: 'closed', action: null,
       text: '이 길드는 지금 새 길드원을 받지 않아요.' });
-    expect(inviteDialogView(preview({ members: 10 }), viewer)).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+    expect(inviteDialogView(preview({ members: 10 }), viewer, 'code')).toEqual({ state: 'full', action: null, text: '길드 인원이 가득 찼어요.' });
+  });
+
+  it('초대 링크로 오면 승인 가입 길드도 들어가기이고, 닫힘과 인원 가득은 그대로 받지 않는다', () => {
+    expect(inviteDialogView(preview({ joinMode: 'approval' }), viewer, 'link')).toEqual({ state: 'open', action: { label: '들어가기' },
+      text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'link')).toMatchObject({ state: 'closed', action: null });
+    expect(inviteDialogView(preview({ joinMode: 'approval', members: 10 }), viewer, 'link')).toMatchObject({ state: 'full', action: null });
   });
 });
