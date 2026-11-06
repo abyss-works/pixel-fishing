@@ -91,6 +91,13 @@ export function isStale(o: OtherPlayer, now: number): boolean {
   return o.moving && now - o.lastAt > LIVE_STALE_MS;
 }
 
+/** 그 바다에 접속해 있는 길드원의 위치 — 미니맵 표시용. 받은 좌표 그대로다(보간하지 않는다) */
+export function matesInRegion(state: LiveState, region: string, uids: ReadonlySet<string>): { uid: string; x: number; y: number }[] {
+  return othersInRegion(state, region)
+    .filter(o => uids.has(o.presence.uid))
+    .map(o => ({ uid: o.presence.uid, x: o.presence.x, y: o.presence.y }));
+}
+
 /** 그 바다에 있는 다른 플레이어 — 이름 순 */
 export function othersInRegion(state: LiveState, region: string): OtherPlayer[] {
   return Object.values(state.others)

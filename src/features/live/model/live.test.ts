@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, isStale, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, isStale, matesInRegion, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -34,6 +34,14 @@ describe('applyLiveMessage', () => {
     const s = applyLiveMessage(EMPTY_LIVE,
       { t: 'hello', you: 'me', others: [p('a', '하늘'), p('b', '가람'), p('c', '나무', 'deep')], recentChat: [] }, 0);
     expect(othersInRegion(s, 'sea').map(o => o.presence.nick)).toEqual(['가람', '하늘']);
+  });
+
+  it('matesInRegion은 그 바다에 접속한 길드원의 위치만 준다', () => {
+    const s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', recentChat: [], others: [
+      { ...p('a', '하늘'), x: 10, y: 20 }, { ...p('b', '가람'), x: 30, y: 40 }, { ...p('c', '나무', 'deep'), x: 1, y: 1 },
+    ] }, 0);
+    expect(matesInRegion(s, 'sea', new Set(['a', 'c', 'zz']))).toEqual([{ uid: 'a', x: 10, y: 20 }]);
+    expect(matesInRegion(s, 'sea', new Set())).toEqual([]);
   });
 });
 
