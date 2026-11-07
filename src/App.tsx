@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LIVE_REGIONS, resumePoint } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { LocationRef } from './game/content/places';
-import { reportFailure, useGame } from './features/gameplay/service/useGame';
-import { REJECT_TEXT } from './game/rules/logic';
+import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
@@ -71,19 +70,11 @@ ${min}자 이상이어야 해요.`,
     const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
     setToast(message);
-    void (async () => {
-      try {
-        const result = await dispatch({ type: 'travel', to: nextScene });
-        if (result.status === 'rejected') {
-          back();
-          setToast(REJECT_TEXT[result.error], 'warn');
-        }
-      } catch (e) {
-        back();
-        const text = reportFailure(e);
-        if (text) setToast(text, 'warn');
-      }
-    })();
+    void settleAction(() => dispatch({ type: 'travel', to: nextScene })).then(settled => {
+      if (settled.ok) return;
+      back();
+      if (settled.notice) setToast(settled.notice, 'warn');
+    });
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와

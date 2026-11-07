@@ -37,7 +37,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
 import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
 import AccountModal from '../overlays/account/AccountModal';
-import { reportFailure } from '../../../features/gameplay/service/useGame';
+import { settleAction } from '../../../features/gameplay/service/useGame';
 import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
@@ -228,19 +228,13 @@ export default function GameView(props: GameViewProps) {
   const ferryMove = async () => {
     if (!trip) return;
     const b = boardingOf(trip.to);
-    let result: DispatchResult | null = null;
-    try {
-      result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
-    } catch (e) {
-      const text = reportFailure(e);
-      if (text) props.setToast(text, 'warn');
-    }
-    if (result?.status === 'ok') {
+    const settled = await settleAction(() => props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } }));
+    if (settled.ok) {
       props.onPlace({ kind: 'region', id: b.region }, b.at);
       props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
       return;
     }
-    if (result?.status === 'rejected') props.setToast(REJECT_TEXT[result.error], 'warn');
+    if (settled.notice) props.setToast(settled.notice, 'warn');
     props.onPlace({ kind: 'base', id: trip.from });
   };
 

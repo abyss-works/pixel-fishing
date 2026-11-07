@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import App from '../../../App';
 import Field from '../../layouts/game-stage/Field';
-import { resetKeyScopes } from '../../ui/hotkeys';
+import { resetKeyScopes, useKeyScope } from '../../ui/hotkeys';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { resetSpotState, getSpotState } from '../../../game/world/currentSpot';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
@@ -14,6 +14,7 @@ import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { MAX_BOAT, newState } from '../../../game/rules/logic';
 import { LocalGameGateway } from '../../../platform/adapters/localGameGateway';
 import { AppError } from '../../../core/errors';
+import { REJECT_TEXT } from '../../../game/rules/logic';
 import { BASE_PACKS, boardingOf } from '../../../game/world';
 import type { BaseId } from '../../../game/world';
 
@@ -136,7 +137,68 @@ describe('여객선 빠른 이동: 전환 중 조작 잠금', () => {
   });
 });
 
+// 앱 아래 층에 놓인 키 소비자 — 덮개가 키를 막으면 받지 못한다
+function KeyProbe({ onKey }: { onKey: (code: string) => void }) {
+  useKeyScope(e => { onKey(e.code); });
+  return null;
+}
+
+describe('여객선 빠른 이동: 입력은 덮개를 통과한다', () => {
+  for (const reduce of [false, true]) {
+    it(`전환 중에도 채팅, 메뉴 같은 키 소비자가 키를 받고 덮개가 포인터를 막지 않는다 (동작 줄이기 ${reduce ? '켜짐' : '꺼짐'})`, async () => {
+      stubMotion(reduce);
+      seedAt('toamasina');
+      const onKey = vi.fn();
+      render(<><KeyProbe onKey={onKey} /><App /></>);
+      await advance(0);
+      // 동작 줄이기에서는 응답이 올 때까지 전환이 이어지도록 이동 응답을 붙들어 둔다
+      if (reduce) vi.spyOn(LocalGameGateway.prototype, 'dispatch').mockImplementation(() => new Promise<never>(() => {}) as never);
+      await bookFerry('manila');
+      await advance(reduce ? 0 : 200);
+      press('Enter');
+      expect(onKey).toHaveBeenCalledWith('Enter');
+      const blockers = [...document.querySelectorAll('.fixed.inset-0')].filter(
+        el => el.getAttribute('aria-hidden') === 'true' && !el.classList.contains('pointer-events-none'));
+      expect(blockers).toEqual([]);
+      for (const veil of document.querySelectorAll('.bg-black[aria-hidden]')) {
+        expect(veil.classList.contains('pointer-events-none')).toBe(true);
+      }
+    });
+  }
+
+  it('밝아지는 단계에서도 게임 조작은 잠겨 있다', async () => {
+    stubMotion(false);
+    seedAt('toamasina');
+    render(<App />);
+    await advance(0);
+    await bookFerry('manila');
+    await advance(1250); // 암전을 지나 도착 자리로 옮긴 뒤 밝아지는 중
+    const arrived = pos();
+    expect(arrived).toEqual(boardingOf('manila').at);
+    press('ArrowRight');
+    await advance(100);
+    expect(pos()).toEqual(arrived);
+    await advance(2000);
+    press('ArrowRight');
+    await advance(200);
+    expect(pos()).not.toEqual(arrived); // 전환이 끝나면 풀린다
+  });
+});
+
 describe('여객선 빠른 이동: 거절과 실패', () => {
+  it('승선 이동이 규칙 거부 값을 받으면 장소를 되돌리고 거부 문구로 알린다', async () => {
+    stubMotion(false);
+    seedAt('toamasina');
+    render(<App />);
+    await advance(0);
+    vi.spyOn(LocalGameGateway.prototype, 'dispatch').mockImplementation(
+      () => ({ status: 'rejected', error: 'zone-locked' }) as never);
+    fireEvent.click(document.querySelector('[data-facility="exit"]')!);
+    await advance(100);
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
+    expect(screen.queryByText(REJECT_TEXT['zone-locked'])).not.toBeNull();
+  });
+
   it('이동 처리가 실패하면 떠난 항구에 남고 사유가 메시지 창에 보인다', async () => {
     stubMotion(false);
     seedAt('toamasina');
