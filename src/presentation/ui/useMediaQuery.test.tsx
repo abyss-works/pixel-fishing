@@ -49,8 +49,8 @@ describe('useMediaQuery', () => {
 });
 
 describe('useMobileLayout', () => {
-  it('세로 화면이고 폭이 600px 미만인 질의로 판정한다', () => {
-    expect(MOBILE_QUERY).toBe('(orientation: portrait) and (max-width: 599px)');
+  it('뷰포트 폭 질의로 판정하고 바뀌면 다시 판정한다', () => {
+    expect(MOBILE_QUERY).toBe('(width < 64rem)');
     const set = installMatchMedia({ [MOBILE_QUERY]: true });
     const { result } = renderHook(() => useMobileLayout());
     expect(result.current).toBe(true);

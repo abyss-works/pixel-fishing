@@ -10,8 +10,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
-/* 모바일 배치 조건 — 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */
-@custom-variant mobile (@media (orientation: portrait) and (max-width: 599px));
+/* 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃을 가르는 뷰포트 폭의 정본이다(1024px = 64rem, Tailwind lg와 같은 값).
+   뷰포트 폭이 이 값 미만이면 모바일 레이아웃, 이상이면 PC 레이아웃이다. 방향 조건은 쓰지 않는다.
+   아래 mobile 변형, 입력 칸 규칙, 화면 조립의 판정 훅(MOBILE_QUERY)이 모두 이 값에서 나온다(layoutBreakpoint.test가 묶는다).
+   컨테이너 쿼리는 레이아웃 판정에 쓰지 않고 컴포넌트 안의 밀도에만 쓴다. */
+@theme {
+  --breakpoint-pc: 64rem;
+}
+
+/* 모바일 레이아웃 변형 - 뷰포트 폭이 --breakpoint-pc 미만이다. 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */
+@custom-variant mobile (@media (width < theme(--breakpoint-pc)));
 
 /* 거점 메뉴 자리 부족 — 메뉴 영역(이름 붙은 size 컨테이너 basemenu)의 크기로 판정한다. 기기 판별이 아니라 영역 크기다.
    메뉴 영역은 PC 배치에서 프레임 중 메시지 창이 들어오는 아래 영역을 뺀 크기(스테이지의 --log-clear), 모바일 배치에서는 게임 영역(2행)이다.
@@ -160,9 +168,9 @@ body {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
-/* 모바일 배치에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
-   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 배치 판정(MOBILE_QUERY)과 같다. */
-@media (orientation: portrait) and (max-width: 599px) {
+/* 모바일 레이아웃에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
+   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 레이아웃 판정(MOBILE_QUERY)과 같다. */
+@media (width < theme(--breakpoint-pc)) {
   html { touch-action: manipulation; }
   input:not([type='checkbox'], [type='radio'], [type='range']), textarea, select { font-size: 16px; }
 }

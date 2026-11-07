@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { useLogHeight } from './useLogHeight';
+import { MOBILE_QUERY } from '../useMobileLayout';
 
 const originalRO = globalThis.ResizeObserver;
 const originalMM = window.matchMedia;
@@ -25,7 +26,7 @@ function stubObserver() {
 
 function setMobile(mobile: boolean) {
   window.matchMedia = ((query: string) => ({
-    matches: mobile && query.includes('orientation'), media: query,
+    matches: mobile && query === MOBILE_QUERY, media: query,
     addEventListener: () => {}, removeEventListener: () => {},
   })) as unknown as typeof window.matchMedia;
 }
