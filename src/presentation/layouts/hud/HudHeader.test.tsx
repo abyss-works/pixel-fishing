@@ -17,7 +17,7 @@ const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).par
 const css = readFileSync('src/index.css', 'utf-8');
 const zOf = (name: string) => Number(new RegExp(`--z-${name}:\\s*(\\d+)`).exec(css)![1]);
 
-describe('HudHeader 모바일 배치', () => {
+describe('HudHeader 모바일 레이아웃', () => {
   beforeEach(() => { layout.mobile = true; });
   afterEach(cleanup);
 
@@ -29,7 +29,7 @@ describe('HudHeader 모바일 배치', () => {
     expect(quest().contains(menuSlot())).toBe(false);
   });
 
-  it('모바일 배치에서는 한 행에 왼쪽부터 자원 바, 의뢰 현황, 메뉴 버튼이 첫째, 둘째, 셋째 열이다', () => {
+  it('모바일 레이아웃에서는 한 행에 왼쪽부터 자원 바, 의뢰 현황, 메뉴 버튼이 첫째, 둘째, 셋째 열이다', () => {
     header();
     for (const [el, col] of [[bar(), 1], [quest(), 2], [menuSlot(), 3]] as const) {
       expect(el.className).toContain(`mobile:col-start-${col}`);
@@ -90,7 +90,7 @@ describe('HudHeader 모바일 배치', () => {
   });
 });
 
-describe('HudHeader PC 배치 - 자원 바 | 의뢰 현황 | 메뉴 버튼 세 틀', () => {
+describe('HudHeader PC 레이아웃 - 자원 바 | 의뢰 현황 | 메뉴 버튼 세 틀', () => {
   beforeEach(() => { layout.mobile = false; });
   afterEach(cleanup);
 
@@ -110,11 +110,11 @@ describe('HudHeader PC 배치 - 자원 바 | 의뢰 현황 | 메뉴 버튼 세 �
     for (const cell of cells) expect(cell.className).toContain('flex-col');
   });
 
-  it('자원 바와 의뢰 현황은 같은 높이이고, 스테이지 폭 960px 미만에서는 함께 낮아진다', () => {
+  it('자원 바와 의뢰 현황은 같은 높이(60px)이고 스테이지 폭에 따라 줄어들지 않는다', () => {
     header();
     for (const el of [bar(), quest()]) {
       expect(el.className).toContain('h-15');
-      expect(el.className).toContain('@max-[960px]:h-10');
+      expect(el.className).not.toContain('@max-[960px]');
     }
   });
 

@@ -5,13 +5,12 @@ import HudMenuButton from './HudMenuButton';
 afterEach(cleanup);
 
 describe('메뉴 버튼', () => {
-  it('헤더의 다른 틀과 같은 높이의 정사각형이고, 스테이지 폭 960px 미만에서는 함께 낮아진다', () => {
+  it('헤더의 다른 틀과 같은 높이의 정사각형이고, 스테이지 폭에 따라 줄어들지 않는다', () => {
     render(<HudMenuButton aria-label="메뉴 열기" />);
     const cls = screen.getByRole('button').className;
     expect(cls).toContain('h-15');
     expect(cls).toContain('w-15');
-    expect(cls).toContain('@max-[960px]:h-10');
-    expect(cls).toContain('@max-[960px]:w-10');
+    expect(cls).not.toContain('@max-[960px]');
   });
 
   it('헤더의 다른 틀과 같은 반투명 바탕, 노치, 베벨 공용 클래스를 쓴다', () => {

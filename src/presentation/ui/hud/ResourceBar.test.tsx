@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import ResourceBar from './ResourceBar';
 
@@ -39,68 +39,18 @@ describe('자원 바', () => {
     expect(bagValue().className).toContain('text-danger');
   });
 
-  it('가방 개수가 네 자리면 비율은 스테이지 폭 380px 미만에서 생략하고 개수는 필수로 남긴다', () => {
+  it('가방 비율은 개수가 네 자리여도 생략하지 않는다 - PC 레이아웃에는 줄이거나 숨기는 단계가 없다', () => {
     const fish = (i: number) => ({ uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
       caughtAt: null, spot: null, judgment: null, locked: false });
-    const { rerender } = render(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 472 }, (_, i) => fish(i)) }} bagBonus={5} />);
-    expect(document.querySelector('[data-omittable]')!.className).not.toContain('hidden');
-    rerender(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 1000 }, (_, i) => fish(i)) }} bagBonus={5} />);
-    const omittable = document.querySelector('[data-omittable]')!;
-    expect(omittable.className).toContain('@max-[380px]:hidden');
-    expect(omittable.textContent).toMatch(/\(\d+%\)/);
-    expect(hud()).toContain('가방 1000');
+    render(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 1000 }, (_, i) => fish(i)) }} bagBonus={5} />);
+    expect(hud()).toContain('가방 1000 (33%)');
+    expect(document.querySelector('[data-omittable]')).toBeNull();
   });
 
-  it('높이는 의뢰 현황과 같고 스테이지 폭 960px 미만에서 함께 낮아진다', () => {
+  it('높이는 의뢰 현황과 같은 60px로 늘 같고 스테이지 폭에 따라 바뀌는 변형이 없다', () => {
     render(<ResourceBar game={newState()} />);
     const root = screen.getByRole('button', { name: '스탯창 열기' }).closest('div')!;
     expect(root.className).toContain('h-15');
-    expect(root.className).toContain('@max-[960px]:h-10');
-  });
-
-  describe('생략된 가방 비율의 툴팁', () => {
-    const fish = (i: number) => ({ uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
-      caughtAt: null, spot: null, judgment: null, locked: false });
-    const longBag = () => ({ ...newState(), boat: 3, bag: Array.from({ length: 1000 }, (_, i) => fish(i)) });
-    const cell = (label: string) => screen.getByText(label, { exact: false }).parentElement!.parentElement!;
-    const hideOmittable = () => {
-      const style = document.createElement('style');
-      style.textContent = '[data-omittable] { display: none; }';
-      document.head.appendChild(style);
-    };
-
-    it('비율이 보이는 동안에는 가방 칸에 올려도 툴팁을 열지 않는다', () => {
-      render(<ResourceBar game={longBag()} bagBonus={5} />);
-      fireEvent.mouseEnter(cell('가방'));
-      expect(screen.queryByRole('tooltip')).toBeNull();
-    });
-
-    it('비율이 숨겨지면 가방 칸에 올릴 때 개수, 상한, 비율을 툴팁으로 보인다', () => {
-      hideOmittable();
-      render(<ResourceBar game={longBag()} bagBonus={5} />);
-      fireEvent.mouseEnter(cell('가방'));
-      expect(screen.getByRole('tooltip')).toHaveTextContent('가방 1000/3000 (33%)');
-    });
-
-    it('툴팁은 가방 칸에만 걸린다 - 골드와 명성에 올려도 열리지 않는다', () => {
-      hideOmittable();
-      render(<ResourceBar game={longBag()} bagBonus={5} />);
-      fireEvent.mouseEnter(cell('골드'));
-      fireEvent.mouseEnter(cell('명성'));
-      expect(screen.queryByRole('tooltip')).toBeNull();
-    });
-
-    it('터치(거친 포인터)에서는 눌러도 툴팁을 열지 않고 스탯 창 열기만 실행한다', () => {
-      window.matchMedia = ((query: string) => ({
-        matches: query === '(pointer: coarse)', media: query,
-        addEventListener: () => {}, removeEventListener: () => {},
-      })) as unknown as typeof window.matchMedia;
-      hideOmittable();
-      const onOpen = vi.fn();
-      render(<ResourceBar game={longBag()} bagBonus={5} onOpen={onOpen} />);
-      fireEvent.click(screen.getByText('가방', { exact: false }));
-      expect(onOpen).toHaveBeenCalledOnce();
-      expect(screen.queryByRole('tooltip')).toBeNull();
-    });
+    expect(root.outerHTML).not.toMatch(/@(max|min)-\[|mobile:/);
   });
 });

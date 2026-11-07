@@ -71,15 +71,15 @@ describe('게임 메뉴', () => {
   });
 
 
-  it('PC 배치의 메뉴 버튼은 헤더 틀과 같은 높이의 정사각형(60px, 좁은 스테이지 40px)이다', async () => {
+  it('PC 레이아웃의 메뉴 버튼은 헤더 틀과 같은 높이의 정사각형(60px)이다', async () => {
     state.mails = [mail({ id: 1, gold: 100 })];
     wrap(<GameMenu account={null} {...handlers()} />);
     const cls = (await screen.findByRole('button', { name: /^메뉴 열기/ })).className;
     expect(cls).toContain('h-15');
-    expect(cls).toContain('@max-[960px]:h-10');
+    expect(cls).not.toContain('@max-[960px]');
   });
 
-  it('모바일 배치의 메뉴 버튼은 헤더 높이의 정사각형 버튼이다', async () => {
+  it('모바일 레이아웃의 메뉴 버튼은 헤더 높이의 정사각형 버튼이다', async () => {
     layout.mobile = true;
     state.mails = [mail({ id: 1, gold: 100 })];
     wrap(<GameMenu account={null} {...handlers()} />);

@@ -65,7 +65,7 @@ interface HudLayoutProps {
 // 모바일 배치에서는 헤더(자원 바, 의뢰 현황, 메뉴 버튼)가 맨 위 행, 메시지 창이 채팅 영역에 놓이고(각 컴포넌트가 자기 행을 정한다), 나머지는 게임 영역의
 // 아래 가운데 한 줄기에 쌓는다 — 아래에서부터 오른쪽의 칩과 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-// 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 60px 폭, 스테이지 960px 미만에서는 40px) 왼쪽에 붙인다. 모바일 배치에서는 메뉴 버튼이
+// 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 60px 폭) 왼쪽에 붙인다. 모바일 배치에서는 메뉴 버튼이
 // 헤더에 있고 거점 그림 안에 같은 시계가 있어 이 시계는 그리지 않는다.
 export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenQuests, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
   const mobile = useMobileLayout();
