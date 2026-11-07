@@ -5,6 +5,7 @@ import { R, label, UI, SCALE, W, H } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { FURNITURE_SPRITES } from '../../pixel/sprites/buildings.js';
 import type { BaseId, BaseInfo, BasePack } from '../../../world/types';
+import { facilityLabelText } from '../../../world/facilityLabel';
 
 const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
   // 집 실내 — 벽/바닥/창(마을 풍경)
@@ -85,7 +86,7 @@ export function renderBase(ctx: Ctx, pack: BasePack, info: BaseInfo) {
   renderBaseBackdrop(ctx, pack.id);
   for (const f of pack.furniture) {
     FURNITURE_SPRITES[f.sprite](ctx, f);
-    label(ctx, f.label(info), f.x + f.w / 2, f.y + f.labelDy, UI.gold, 8);
+    label(ctx, facilityLabelText(f.label(info)), f.x + f.w / 2, f.y + f.labelDy, UI.gold, 8);
   }
   label(ctx, pack.headline, W / 2, 14, UI.text, 10);
 }

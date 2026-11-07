@@ -10,13 +10,13 @@ const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-
 describe('거점 카드 메뉴', () => {
   it('집은 게시판·작업대·목공소·판매 궤짝·옷장·문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '작업대 · 낚싯대 Lv.1', '목공소 · 배 없음', '궤짝 · 판매', '옷장', '문 · 마을로']);
+    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장', '문 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
     render(<BaseMenu base="harbor" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '수배판 · 의뢰/토벌', '공방 · 낚싯대 Lv.1', '조선소 · 배 없음',
-      '어시장 · 판매', '마을 · 집으로', '여객선 · 빠른 이동', '승선 · 바다로']);
+    expect(names()).toEqual(['게시판 랭킹', '수배판 의뢰/토벌', '공방 낚싯대 Lv.1', '조선소 배 없음',
+      '어시장 판매', '마을 집으로', '여객선 빠른 이동', '승선 바다로']);
   });
 
   it('항구의 승선 카드는 내 배를, 마을 카드는 집을, 빠른 이동 카드는 여객선을 아이콘으로 쓴다', () => {
@@ -39,7 +39,7 @@ describe('거점 카드 메뉴', () => {
   it('카드를 누르면 그 시설을 알린다', () => {
     const onFacility = vi.fn();
     render(<BaseMenu base="home" game={newState()} onFacility={onFacility} />);
-    fireEvent.click(screen.getByRole('button', { name: '목공소 · 배 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '목공소 배 없음' }));
     expect(onFacility).toHaveBeenCalledWith('boat');
   });
 

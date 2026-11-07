@@ -71,10 +71,9 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
             <Panel key={section} title={section}>
               <div className="flex gap-2">
                 {items.map(f => {
-                  const label = f.label(info);
-                  const [title, sub] = label.split(' · ');
+                  const { title, sub } = f.label(info);
                   return (
-                    <Button key={f.id} type="button" aria-label={label} data-facility={f.id}
+                    <Button key={f.id} type="button" aria-label={sub ? `${title} ${sub}` : title} data-facility={f.id}
                             onClick={() => onFacility?.(f.id)}
                             className="flex w-[clamp(84px,12vw,128px)] flex-col items-center gap-1 px-1.5 py-2">
                       <span className="h-14 w-full"><CardIcon base={base} facility={f} boat={game.boat} /></span>
