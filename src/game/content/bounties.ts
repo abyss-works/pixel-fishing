@@ -142,3 +142,10 @@ export const isBountyPort = (port: string): port is BountyPort => port in BOUNTY
 /** 담당 해역 — 수주 항구가 아니면 undefined (고향·필드) */
 export const zoneOfPort = (port: string): BountyZone | undefined =>
   (BOUNTY_PORT_ZONE as Record<string, BountyZone>)[port];
+
+const PORT_OF_ZONE = new Map<BountyZone, BountyPort>(
+  (Object.keys(BOUNTY_PORT_ZONE) as BountyPort[]).map(port => [BOUNTY_PORT_ZONE[port], port]),
+);
+
+/** 해역의 수배 창구 항구 — zoneOfPort의 역. 창구가 없는 해역이면 undefined */
+export const portOfZone = (zone: BountyZone): BountyPort | undefined => PORT_OF_ZONE.get(zone);
