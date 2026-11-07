@@ -1,5 +1,5 @@
 import { artifactOfZone } from '../../../game/content/artifacts';
-import { BOUNTY_PORT_ZONE } from '../../../game/content/bounties';
+import { BOUNTY_PORT_ZONE, portOfZone } from '../../../game/content/bounties';
 import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../game/content/bounties';
 import type { RarityId } from '../../../game/content/rarity';
 import { bountyDailyCap } from '../../../game/rules/balance';
@@ -54,9 +54,9 @@ export interface QuestInfoData {
 
 const PORTS = Object.keys(BOUNTY_PORT_ZONE) as BountyPort[];
 const portName = (port: BountyPort): string => BASE_PACKS[port].name;
-// 구역 -> 항구 역방향 조회. 수배판이 없는 구역이면 항구 이름 없이 "수배판"만 보인다
+// 수배판이 없는 구역이면 항구 이름 없이 "수배판"만 보인다
 const finishAtOf = (zone: BountyZone): string => {
-  const port = PORTS.find(p => BOUNTY_PORT_ZONE[p] === zone);
+  const port = portOfZone(zone);
   return port ? `${portName(port)} 수배판` : '수배판';
 };
 
