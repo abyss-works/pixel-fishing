@@ -83,7 +83,7 @@ export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
 
   return (
     <Modal layer="stage" md={inGuild} onClose={onClose} className={inGuild ? FIXED_HEIGHT : undefined}>
-      <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} className={inGuild ? 'flex-1' : undefined}>
+      <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} fixed={inGuild}>
         {body}
       </ModalCard>
       {confirm && (

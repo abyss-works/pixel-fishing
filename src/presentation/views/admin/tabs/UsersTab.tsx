@@ -183,7 +183,7 @@ function UserDetail({ user, onClose, onCompose }: {
               </div>
             )}
             {!loading && !error && events.length > 0 && (
-              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line overflow-y-auto select-text">
+              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line pf-vscroll select-text">
                 {events.map((e, i) => (
                   <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
                                                fastGaps.has(i) && 'bg-danger/10')}>
@@ -231,7 +231,7 @@ function UserSessions({ user }: { user: AdminUserRow }) {
           <TabState loading={loading} error={error} empty={sessions.length === 0} emptyText="세션 기록이 없어요." />
         </div>
       ) : (
-        <div className="pf-scroll-panel max-h-[220px] overflow-y-auto px-1">
+        <div className="pf-scroll-panel max-h-[220px] pf-vscroll px-1">
           <DataTable>
             <thead>
               <tr><th className="text-left">시작</th><th className="text-left">끝</th><th className="text-right">길이</th></tr>

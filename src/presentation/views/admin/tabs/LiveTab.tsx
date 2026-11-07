@@ -47,7 +47,7 @@ export default function LiveTab() {
       {/* 접속 목록(좌)과 위치 분포(우) — xl 이상 좌우 분할 */}
       <CellGrid side>
         <Cell title={`접속 목록 (${board.rows.length})`} flush>
-          <div className="pf-scroll-panel max-h-[420px] overflow-y-auto px-1">
+          <div className="pf-scroll-panel max-h-[420px] pf-vscroll px-1">
             <DataTable>
               <thead>
                 <tr><th className="text-left">계정</th><th className="text-left">위치</th>

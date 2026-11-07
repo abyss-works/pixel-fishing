@@ -112,7 +112,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           })} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
-        <ModalCard title="수배판" onClose={onClose} className="flex-1">
+        <ModalCard title="수배판" onClose={onClose} fixed>
           <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
       )}
@@ -164,92 +164,87 @@ function SellPanel({ game, onSell, onClose, busy }: {
           판매 (+{fmtGold(total)})
         </Button>
       }>
-      {/* ── 어종 목록 — 내부 스크롤. 높이 = min(≈30행, 모달 가용 높이) ──
-          개수가 늘어도 확정 영역이 화면 밖으로 밀려나지 않게 목록만 굴린다(v0.6.4).
-          840px ≈ 행 30개(28px) — flex(min-h-0)가 먼저 작아지므로 작은 화면에선
-          가용 높이가 이긴다("둘 중 작은 값"). */}
-      <div className="pf-scroll overflow-auto overscroll-contain flex-1 min-h-0 max-h-[840px] pr-1">
-        <DataTable>
-          <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
-          <tbody>
-          {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm,
-                      selectedCount, allSelected, selectedSubtotal }) => {
-            const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
-            const on = selectedCount;
-            const allOn = allSelected;
-            const glyph = on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
-            const expanded = collapsed.has(key);
-            return [
-              <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
-                <td>
-                  {locked ? (
-                    <Tip plain text="잠금은 가방 탭에서 풀 수 있어요" className="text-text-dim">
-                      <PixelIcon glyph="lock" size={13} />
-                    </Tip>
-                  ) : (
-                    <IconButton glyph={glyph} size={13}
-                              tone={on > 0 ? 'gold' : 'dim'}
-                              className="p-0 leading-none"
-                              aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
-                              onClick={() => toggleRow(sellable.map(i => i.uid), allOn)} />
-                  )}
+      {/* 어종 목록 — 넘치면 카드 본문이 스크롤하고 확정 영역은 고정이다(공용 창 구조). */}
+      <DataTable>
+        <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
+        <tbody>
+        {rows.map(({ key, fish, name, items, sized, unsized, sellable, maxByForm,
+                    selectedCount, allSelected, selectedSubtotal }) => {
+          const locked = sellable.length === 0; // 이 종 개체가 전부 잠김
+          const on = selectedCount;
+          const allOn = allSelected;
+          const glyph = on === 0 ? 'checkOff' : allOn ? 'checkOn' : 'checkPartial';
+          const expanded = collapsed.has(key);
+          return [
+            <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
+              <td>
+                {locked ? (
+                  <Tip plain text="잠금은 가방 탭에서 풀 수 있어요" className="text-text-dim">
+                    <PixelIcon glyph="lock" size={13} />
+                  </Tip>
+                ) : (
+                  <IconButton glyph={glyph} size={13}
+                            tone={on > 0 ? 'gold' : 'dim'}
+                            className="p-0 leading-none"
+                            aria-label={`${name} 판매 ${allOn ? '해제' : '선택'}`}
+                            onClick={() => toggleRow(sellable.map(i => i.uid), allOn)} />
+                )}
+              </td>
+              <td>
+                <IconButton glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
+                            className="p-0 text-inherit gap-1"
+                            aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
+                            aria-expanded={expanded}
+                            onClick={() => toggleSellRow(key)}>
+                  {name}
+                </IconButton>
+              </td>
+              <td><RarityText rarity={fish.rarity} /></td>
+              <td className="pf-accent">
+                {on === items.length ? `×${items.length}` : `${on}/${items.length}`}
+              </td>
+              <td className="pf-accent">
+                {on > 0 && !locked ? fmtGold(selectedSubtotal) : '0G'}
+              </td>
+            </tr>,
+            expanded ? (
+              <tr key={`${key}-items`}>
+                <td colSpan={5} className="p-0 bg-bg">
+                  {sized.map(inst => (
+                    <InstanceLine key={inst.uid} inst={inst} fish={fish}
+                                  best={inst.size !== null && inst.size === maxByForm[inst.form]}
+                                  checked={!inst.locked && !excluded.has(inst.uid)}
+                                  onToggle={inst.locked ? undefined : () => toggleOne(inst.uid)}>
+                      <PixelIcon size={11}
+                                 className={!inst.locked && !excluded.has(inst.uid) ? 'text-gold' : 'text-text-dim'}
+                                 glyph={inst.locked ? 'lock'
+                                   : excluded.has(inst.uid) ? 'checkOff' : 'checkOn'} />
+                    </InstanceLine>
+                  ))}
+                  {/* 크기 미상은 묶음 단위로 고른다 — 구별할 정보가 없으니 개별 선택이 무의미하다 */}
+                  {unsized.map(g => {
+                    const on = g.selectedCount;
+                    const glyph = g.free.length === 0 ? 'lock'
+                      : on === 0 ? 'checkOff' : g.allSelected ? 'checkOn' : 'checkPartial';
+                    return (
+                      <UnsizedLine key={g.form} count={g.items.length} form={g.form}
+                                   locked={g.free.length === 0}
+                                   checked={on > 0}
+                                   onToggle={g.free.length === 0
+                                     ? undefined
+                                     : () => toggleRow(g.free.map(i => i.uid), g.allSelected)}>
+                        <PixelIcon size={11} glyph={glyph}
+                                   className={on > 0 ? 'text-gold' : 'text-text-dim'} />
+                      </UnsizedLine>
+                    );
+                  })}
                 </td>
-                <td>
-                  <IconButton glyph={expanded ? 'caretDown' : 'caretRight'} size={9}
-                              className="p-0 text-inherit gap-1"
-                              aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}
-                              aria-expanded={expanded}
-                              onClick={() => toggleSellRow(key)}>
-                    {name}
-                  </IconButton>
-                </td>
-                <td><RarityText rarity={fish.rarity} /></td>
-                <td className="pf-accent">
-                  {on === items.length ? `×${items.length}` : `${on}/${items.length}`}
-                </td>
-                <td className="pf-accent">
-                  {on > 0 && !locked ? fmtGold(selectedSubtotal) : '0G'}
-                </td>
-              </tr>,
-              expanded ? (
-                <tr key={`${key}-items`}>
-                  <td colSpan={5} className="p-0 bg-bg">
-                    {sized.map(inst => (
-                      <InstanceLine key={inst.uid} inst={inst} fish={fish}
-                                    best={inst.size !== null && inst.size === maxByForm[inst.form]}
-                                    checked={!inst.locked && !excluded.has(inst.uid)}
-                                    onToggle={inst.locked ? undefined : () => toggleOne(inst.uid)}>
-                        <PixelIcon size={11}
-                                   className={!inst.locked && !excluded.has(inst.uid) ? 'text-gold' : 'text-text-dim'}
-                                   glyph={inst.locked ? 'lock'
-                                     : excluded.has(inst.uid) ? 'checkOff' : 'checkOn'} />
-                      </InstanceLine>
-                    ))}
-                    {/* 크기 미상은 묶음 단위로 고른다 — 구별할 정보가 없으니 개별 선택이 무의미하다 */}
-                    {unsized.map(g => {
-                      const on = g.selectedCount;
-                      const glyph = g.free.length === 0 ? 'lock'
-                        : on === 0 ? 'checkOff' : g.allSelected ? 'checkOn' : 'checkPartial';
-                      return (
-                        <UnsizedLine key={g.form} count={g.items.length} form={g.form}
-                                     locked={g.free.length === 0}
-                                     checked={on > 0}
-                                     onToggle={g.free.length === 0
-                                       ? undefined
-                                       : () => toggleRow(g.free.map(i => i.uid), g.allSelected)}>
-                          <PixelIcon size={11} glyph={glyph}
-                                     className={on > 0 ? 'text-gold' : 'text-text-dim'} />
-                        </UnsizedLine>
-                      );
-                    })}
-                  </td>
-                </tr>
-              ) : null,
-            ];
-          })}
-          </tbody>
-        </DataTable>
-      </div>
+              </tr>
+            ) : null,
+          ];
+        })}
+        </tbody>
+      </DataTable>
     </ModalCard>
   );
 }

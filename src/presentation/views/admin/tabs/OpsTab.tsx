@@ -81,7 +81,7 @@ function EventCatalog() {
         이벤트 식별자는 게임 동작 기록을 따르고, 화면명은 이벤트 설명 카탈로그를 보여 줘요.
         admin으로 시작하는 유형은 이 대시보드의 관리 조치예요.
       </Note>
-      <div className="pf-scroll-panel max-h-[360px] overflow-y-auto px-1">
+      <div className="pf-scroll-panel max-h-[360px] pf-vscroll px-1">
         <DataTable>
           <thead>
             <tr><th className="text-left">type</th><th className="text-left">화면명</th></tr>

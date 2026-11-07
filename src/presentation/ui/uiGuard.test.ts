@@ -42,6 +42,28 @@ const RAW_HEADING_EXCEPTIONS = new Set([
   'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
 ]);
 
+/** 화면(views·layouts)의 overflow 직접 지정 — 세로 스크롤은 공용 스크롤 방식(pf-vscroll + pf-scroll-panel)이나 TableBox가 맡는다.
+ *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
+const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b/;
+const OVERFLOW_EXCEPTIONS = new Set([
+  'views/admin/tabs/AntiAbuseTab.tsx',
+  'views/admin/tabs/BountyFunnelSection.tsx',
+  'views/admin/tabs/ChatReportsSection.tsx',
+  'views/admin/tabs/FishTab.tsx',
+  'views/admin/tabs/LettersTab.tsx',
+  'views/admin/tabs/MailTab.tsx',
+  'views/admin/tabs/MetricsTab.tsx',
+  'views/admin/tabs/ProgressionTab.tsx',
+  'views/admin/tabs/UsersTab.tsx',
+  'views/game/tabs/region/VRegion.tsx',
+]);
+
+/** 막대를 숨기는 스크롤(pf-scroll) — 사이드바처럼 막대가 폭을 흔들면 안 되는 자리에만 쓴다. 창 안은 막대가 보이는 pf-scroll-panel */
+const HIDDEN_BAR = /(?<![\w-])pf-scroll(?![\w-])/;
+const HIDDEN_BAR_EXCEPTIONS = new Set([
+  'layouts/sidebar/index.tsx', // 384px 폭 사이드바 — 탭을 옮길 때 막대가 폭을 흔들지 않게 숨긴다
+]);
+
 describe('UI 시스템 가드', () => {
   it('화면은 기본 요소(틀·버튼·입력)를 직접 구현하지 않고 공용 UI를 쓴다', () => {
     const offenders: string[] = [];
@@ -79,5 +101,23 @@ describe('UI 시스템 가드', () => {
     }
     const dupes = [...owners].filter(([, paths]) => paths.length > 1).map(([name, paths]) => `${name}: ${paths.join(', ')}`);
     expect(dupes).toEqual([]);
+  });
+  it('화면은 overflow-auto·scroll을 직접 지정하지 않는다 — 예외 목록의 자리만 쓴다', () => {
+    const using = screens.filter(f => OVERFLOW_DIRECT.test(f.src)).map(f => f.path);
+    expect(using.filter(p => !OVERFLOW_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...OVERFLOW_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  });
+
+  it('창 안 스크롤은 막대가 보인다 — 막대를 숨기는 pf-scroll은 예외 목록의 자리만 쓴다', () => {
+    const using = screens.filter(f => HIDDEN_BAR.test(f.src)).map(f => f.path);
+    expect(using.filter(p => !HIDDEN_BAR_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...HIDDEN_BAR_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  });
+
+  it('스테이지 모달의 투명 래퍼는 스크롤하지 않는다 — 스크롤은 카드 본문이 맡는다', () => {
+    const modal = sources['./Modal.tsx'];
+    const stageBox = /layer === 'app'[\s\S]*?\n\s*:\s*cx\(([\s\S]*?)\);/.exec(modal)?.[1];
+    expect(stageBox).toBeDefined();
+    expect(stageBox).not.toMatch(/pf-vscroll|pf-scroll|overflow-(?:x-|y-)?(?:auto|scroll)/);
   });
 });

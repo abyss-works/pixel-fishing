@@ -36,7 +36,7 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
   const discountPct = Math.round(sel.discountRate * 100);
 
   return (
-    <ModalCard title="향료전" onClose={onClose} className="mobile:shrink-0">
+    <ModalCard title="향료전" onClose={onClose}>
       <TwoColumn>
         <Inset className="p-2">
           <div role="listbox" aria-label="미끼 목록" className="flex flex-col gap-1.5">

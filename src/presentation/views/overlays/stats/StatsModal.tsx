@@ -69,7 +69,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="스탯" onClose={onClose} className="flex-1">
+      <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-sm">
             <b className="max-w-40 truncate text-text">{nickname ?? '불러오는 중'}</b>

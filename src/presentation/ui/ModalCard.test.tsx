@@ -1,0 +1,53 @@
+// 창 카드 — 제목과 하단 버튼은 고정하고 본문 한 곳만 공용 스크롤 방식으로 스크롤한다.
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import Modal from './Modal';
+import ModalCard from './ModalCard';
+
+afterEach(cleanup);
+
+const scrollBody = () => screen.getByText('본문').parentElement as HTMLElement;
+
+describe('ModalCard', () => {
+  it('본문을 공용 스크롤 방식의 한 칸으로 감싸고 제목과 하단 버튼은 그 밖에 둔다', () => {
+    render(
+      <ModalCard title="창" onClose={() => {}} footer={<span>잔액</span>} confirm={<button>확정</button>}>
+        <p>본문</p>
+      </ModalCard>,
+    );
+    const body = scrollBody();
+    expect(body).toHaveClass('pf-vscroll', 'pf-scroll-panel');
+    expect(body).not.toHaveClass('pf-scroll');
+    expect(body).toContainElement(screen.getByText('본문'));
+    expect(body).not.toContainElement(screen.getByText('창'));
+    expect(body).not.toContainElement(screen.getByText('잔액'));
+    expect(body).not.toContainElement(screen.getByText('확정'));
+  });
+
+  it('본문이 스스로 스크롤하는 고정 높이 창(fixed)은 본문 칸을 스크롤 영역으로 만들지 않는다', () => {
+    render(
+      <ModalCard title="탭 창" onClose={() => {}} fixed>
+        <p>본문</p>
+      </ModalCard>,
+    );
+    const body = scrollBody();
+    expect(body).not.toHaveClass('pf-vscroll');
+    expect(body).not.toHaveClass('pf-scroll-panel');
+  });
+
+  it('스테이지 모달 래퍼는 배치만 맡고 스크롤 클래스를 갖지 않는다', () => {
+    render(
+      <Modal layer="stage" onClose={() => {}}>
+        <ModalCard title="창" onClose={() => {}}><p>본문</p></ModalCard>
+      </Modal>,
+    );
+    const wrapper = screen.getByRole('dialog');
+    expect(wrapper.className).not.toMatch(/pf-vscroll|pf-scroll|overflow-(?:x-|y-)?(?:auto|scroll)/);
+    expect(wrapper).toContainElement(scrollBody());
+  });
+
+  it('닫기 함수가 없으면 닫기 X를 그리지 않는다', () => {
+    render(<ModalCard title="조우"><p>본문</p></ModalCard>);
+    expect(screen.queryByRole('button', { name: /닫기/ })).toBeNull();
+  });
+});

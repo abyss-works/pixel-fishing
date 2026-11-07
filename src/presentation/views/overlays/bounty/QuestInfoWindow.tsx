@@ -62,7 +62,7 @@ export default function QuestInfoWindow({ info, onClose }: {
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="의뢰" onClose={onClose} className="flex-1">
+      <ModalCard title="의뢰" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
             <ClearsLeft first shortLabels leftAll={info.left?.general ?? null} leftNamed={info.left?.named ?? null}

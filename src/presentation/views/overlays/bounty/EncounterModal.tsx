@@ -20,7 +20,7 @@ import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
 import Modal from '../../../ui/Modal';
-import Panel from '../../../ui/Panel';
+import ModalCard from '../../../ui/ModalCard';
 import SlotGauge from '../../../ui/SlotGauge';
 import { josa } from '../../../ui/format';
 
@@ -137,8 +137,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   const center = duelZoneCenter(run.hits);
   return (
     <Modal layer="stage" onClose={onClose} closable={closable}>
-      <Panel title={phase === 'won' ? '토벌' : '조우'} onClose={closable ? onClose : undefined}
-             className="bg-surface text-center text-sm">
+      <ModalCard title={phase === 'won' ? '토벌' : '조우'} onClose={closable ? onClose : undefined}
+                 className="bg-surface text-center text-sm">
         <FishSprite fish={fish} preset="portrait" discovered={revealed} animate={revealed}
                     ariaLabel={revealed ? named.name : '그림자'}
                     className={cx('block mx-auto transition-transform', flash === 'hit' && 'translate-x-1')} />
@@ -200,7 +200,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
             <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}
-      </Panel>
+      </ModalCard>
     </Modal>
   );
 }

@@ -35,7 +35,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
 
   if (preview.kind === 'max') {
     return (
-      <ModalCard title="조선소" onClose={onClose} className="mobile:shrink-0">
+      <ModalCard title="조선소" onClose={onClose}>
         <TwoColumn>
           {ladder}
           <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요.<br />모든 해역에 나갈 수 있어요.</Note>
@@ -46,7 +46,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
   const { next, openedSpot, currentName, currentSpeed, currentBagCap, check } = preview;
 
   return (
-    <ModalCard title="조선소" onClose={onClose} className="mobile:shrink-0">
+    <ModalCard title="조선소" onClose={onClose}>
       <TwoColumn>
         {ladder}
         <div className="flex flex-col gap-3 min-w-0">

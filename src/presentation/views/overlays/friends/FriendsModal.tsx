@@ -60,7 +60,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
 
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="소셜" onClose={onClose} className="flex-1">
+      <ModalCard title="소셜" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <TabBar<SocialTab> activeKey={tab} onSelect={setTab} tabs={[
             { key: 'friends', label: groups ? `친구 ${groups.friends.length}` : '친구' },

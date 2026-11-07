@@ -32,7 +32,7 @@ export default function RankingModal({ onClose }: { onClose: () => void }) {
   const boards = { fame: useRankingBoard('fame'), dex: useRankingBoard('dex') };
   return (
     <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="랭킹" onClose={onClose} className="flex-1">
+      <ModalCard title="랭킹" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <TabBar<Board> activeKey={tab} onSelect={setTab} tabs={[{ key: 'fame', label: '명성' }, { key: 'dex', label: '도감' }]} />
           <RankingBoardView board={tab} {...boards[tab]} />
