@@ -71,6 +71,23 @@ export function clearsLeft(snapshot: BountySnapshot | null): { general: number; 
   };
 }
 
+/** 갈래마다 수주 중인 의뢰 하나 - 어느 구역의 것이든 같은 갈래의 새 수주를 막는다. 수주하면 진행 행이 생기므로 행의 존재가 곧 수주다 */
+export function heldQuests(snapshot: BountySnapshot | null): Record<BountyKind, BountyQuest | undefined> {
+  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
+  for (const row of snapshot?.progress ?? []) {
+    const held = bountyById(row.questId);
+    if (held) holding[bountyKindOf(held)] ??= held;
+  }
+  return holding;
+}
+
+/** 그 의뢰의 도전권(흔적) 남은 분(올림). 도전권이 없거나 시계를 아직 안 찍었으면(nowMs 0) null, 만료면 0 */
+export function ticketMinsFor(snapshot: BountySnapshot | null, questId: string, nowMs: number): number | null {
+  const issuedAt = snapshot?.tickets.find(ticket => ticket.questId === questId)?.issuedAt ?? null;
+  if (issuedAt === null || nowMs === 0) return null;
+  return Math.max(0, Math.ceil(ticketRemainingMs(issuedAt, nowMs) / 60_000));
+}
+
 const KIND_SUBJECT: Record<BountyKind, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const CLEARED_NOTICE: Record<BountyKind, string> = {
   general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
@@ -91,12 +108,7 @@ export function selectBountyPanelData({
   const left = clearsLeft(snapshot);
   const leftAll = left?.general ?? null;
   const leftNamed = left?.named ?? null;
-  // 갈래마다 수주 중인 의뢰 하나 — 어느 구역의 것이든 같은 갈래의 새 수주를 막는다
-  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
-  for (const row of snapshot?.progress ?? []) {
-    const held = bountyById(row.questId);
-    if (held) holding[bountyKindOf(held)] ??= held;
-  }
+  const holding = heldQuests(snapshot);
   const heldHere = (difficulty: BountyDifficulty): BountyQuest | undefined =>
     Object.values(holding).find(q => q?.zone === zone && q.difficulty === difficulty);
   const offers = Object.fromEntries(difficulties.map(difficulty => [
@@ -118,11 +130,7 @@ export function selectBountyPanelData({
   const basicConds = licenseConditions(game, zone, 'basic');
   const namedConds = licenseConditions(game, zone, 'named');
   const namedQuest = offers.named;
-  const ticketIssuedAt = namedQuest
-    ? snapshot?.tickets.find(ticket => ticket.questId === namedQuest.id)?.issuedAt ?? null
-    : null;
-  const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs) / 60_000));
+  const ticketMins = namedQuest ? ticketMinsFor(snapshot, namedQuest.id, nowMs) : null;
   const relic = artifactOfZone(zone);
 
   return {
