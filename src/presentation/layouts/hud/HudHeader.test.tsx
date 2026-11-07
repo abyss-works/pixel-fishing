@@ -8,7 +8,7 @@ const menu = <button type="button" aria-label="메뉴 열기">m</button>;
 const header = (left: { general: number; named: number } | null = { general: 1, named: 1 }, onOpenStats = () => {}, onOpenQuests = () => {}) =>
   render(<HudHeader game={newState()} clears={{ left, caps: { general: 1, named: 1 } }} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />);
 
-const bar = () => screen.getByRole('button', { name: '스탯창 열기' }).closest('div')!;
+const bar = () => screen.getByRole('button', { name: /^스탯창 열기/ }).closest('div')!;
 const quest = () => screen.getByRole('button', { name: /^의뢰 창 열기/ });
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
 const css = readFileSync('src/index.css', 'utf-8');
@@ -83,7 +83,7 @@ describe('HudHeader', () => {
   it('자원 바를 누르면 스탯 창을 연다', () => {
     const onOpenStats = vi.fn();
     header(undefined, onOpenStats);
-    fireEvent.click(screen.getByRole('button', { name: '스탯창 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
     expect(onOpenStats).toHaveBeenCalledTimes(1);
   });
 });

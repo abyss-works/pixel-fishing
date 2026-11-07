@@ -22,11 +22,11 @@ export default function QuestStatus({ general, named, generalCap, namedCap, onOp
                  aria-label={`의뢰 창 열기, 오늘 남은 클리어 일반 ${general ?? '-'} 네임드 ${named ?? '-'}`}
                  className="flex p-[7px] cursor-pointer transition hover:brightness-125 @max-[960px]:p-0.5 mobile:col-start-2 mobile:row-start-1 mobile:mx-1 mobile:my-1">
       <Inset tone="deep" className="flex flex-1 items-center justify-center gap-2.5 px-3 @max-[960px]:gap-1 @max-[960px]:px-1">
-        <Tip wraps plain text={`일반 의뢰 오늘 남은 클리어 ${fmtRatioTight(general, generalCap)}`}>
+        <Tip wraps plain hoverOnly text={`일반 의뢰 오늘 남은 클리어 ${fmtRatioTight(general, generalCap)}`}>
           <HudStat label="일반"><b className="font-bold">{general ?? 0}</b></HudStat>
         </Tip>
         <Divider vertical />
-        <Tip wraps plain text={`네임드 토벌 오늘 남은 클리어 ${fmtRatioTight(named, namedCap)}`}>
+        <Tip wraps plain hoverOnly text={`네임드 토벌 오늘 남은 클리어 ${fmtRatioTight(named, namedCap)}`}>
           <HudStat label="네임드" tone="epic" marker="diamond"><b className="font-bold">{named ?? 0}</b></HudStat>
         </Tip>
       </Inset>

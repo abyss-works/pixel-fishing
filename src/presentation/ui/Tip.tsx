@@ -13,8 +13,10 @@ import { useCoarsePointer } from './useMediaQuery';
 // 터치처럼 마우스를 올릴 수 없는 거친 포인터에서는 누르면 열고 다시 누르거나 바깥을 누르면 닫는다.
 // 버튼을 감싼 툴팁(wraps)은 비활성 버튼을 누를 때 연다: 비활성 버튼은 누르기를 받지 않아 감싼 자리가 받는다.
 // 켜진 버튼을 눌러도 설명을 띄워야 하면(스킬 머리처럼 누르기 동작과 설명이 함께 있을 때) pressOpens를 준다.
+// hoverOnly는 거친 포인터(터치)에서 어떤 경로로도 열지 않는다. 누르면 동작이 실행되는 요소 안의 칸(헤더의 자원 바 칸 등)에 쓴다 -
+// 감싼 칸의 여백을 눌러도 툴팁이 동작과 함께 열리지 않는다.
 // 버블은 HelpHint와 같은 TooltipBubble이다. 요소의 왼쪽 아래에서 펼치고, 화면 끝에 닿으면 안쪽으로 들어온다.
-export default function Tip({ text, plain, wraps, pressOpens, onlyIf, className, style, children }: {
+export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf, className, style, children }: {
   text: ReactNode;
   /** 밑줄 없이 감싼다(진행 막대 등) */
   plain?: boolean;
@@ -22,6 +24,8 @@ export default function Tip({ text, plain, wraps, pressOpens, onlyIf, className,
   wraps?: boolean;
   /** 감싼 요소를 눌러 동작하면서 설명도 함께 연다(거친 포인터). 켜진 버튼을 감싸도 설명이 뜨는 곳에 쓴다 */
   pressOpens?: boolean;
+  /** 거친 포인터(터치)에서는 열지 않는다. 마우스 호버와 키보드 포커스에서만 뜬다 */
+  hoverOnly?: boolean;
   /** 주어지면 이 판정이 참일 때만 설명을 연다(보이지 않는 내용을 대신 알리는 곳에 쓴다) */
   onlyIf?: () => boolean;
   className?: string;
@@ -34,7 +38,7 @@ export default function Tip({ text, plain, wraps, pressOpens, onlyIf, className,
 
   const coarse = useCoarsePointer();
 
-  const show = () => { if (!onlyIf || onlyIf()) setOpen({ anchor: anchorOf(ref.current) }); };
+  const show = () => { if (hoverOnly && coarse) return; if (!onlyIf || onlyIf()) setOpen({ anchor: anchorOf(ref.current) }); };
   const hide = () => setOpen(null);
 
   // 거친 포인터: 열려 있는 동안 대상 바깥을 누르면 닫는다

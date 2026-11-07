@@ -15,7 +15,7 @@ import type { HudStatTone } from './HudStat';
 //
 // **칸마다 [아이콘 | 값] 한 줄.** 이름 글자는 화면에 그리지 않는다. 읽는 이에게는 sr-only 이름, 눈으로 보는 이에게는
 // 칸에 마우스를 올릴 때 뜨는 툴팁이 이름을 알린다. 누르면 스탯 창이 열리는 요소라 터치에서는 툴팁을 띄우지 않는다
-// (Tip wraps가 누르기를 막는다). 칸의 모양은 HudStat이 정한다.
+// (Tip hoverOnly). 키보드와 화면 읽기는 버튼 접근성 이름("스탯창 열기, 골드 ..., 명성 ..., 가방 ...")이 같은 값을 준다. 칸의 모양은 HudStat이 정한다.
 //
 // **지역 이름은 뺐다**: 지역 탭 상단이 이미 그 지역을 제목으로 달고 있다. 같은 정보를 두
 // 곳에 두면 한쪽만 고쳐질 때 갈라진다.
@@ -49,12 +49,15 @@ const BAG_TONE: Record<BagLevel, HudStatTone> = { normal: 'gold', warn: 'orange'
 export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: GameState; bagBonus?: number; onOpen?: () => void }) {
   const bag = selectBagStatus(game, bagBonus);
   const named = (key: string, tip: ReactNode, cell: ReactNode) => (
-    <Tip key={key} wraps plain text={tip}>{cell}</Tip>
+    <Tip key={key} wraps plain hoverOnly text={tip}>{cell}</Tip>
   );
+  // 접근성 이름에 칸 값(정확한 값)을 싣는다 - 칸 툴팁은 마우스 호버에서만 뜨므로 키보드와 화면 읽기가 같은 정보를 이름으로 얻는다
+  const bagText = `${fmtRatio(bag.count, bag.cap)} (${bag.percent}%)`;
+  const summary = `골드 ${fmtNum(game.gold)}, 명성 ${fmtNum(game.fame)}, 가방 ${bagText}`;
   const stats = [
     named('gold', `골드 ${fmtNum(game.gold)}`, <HudStat glyph="coin" label="골드"><b className="font-bold">{fmtCompact3(game.gold)}</b></HudStat>),
     named('fame', `명성 ${fmtNum(game.fame)}`, <HudStat glyph="star" label="명성"><b className="font-bold">{fmtCompact3(game.fame)}</b></HudStat>),
-    named('bag', `가방 ${fmtRatio(bag.count, bag.cap)} (${bag.percent}%)`,
+    named('bag', `가방 ${bagText}`,
       <HudStat glyph="fish" label="가방" tone={BAG_TONE[bag.level]}>
         <b className="font-bold">{bag.count}</b>
         <span data-omittable className="@max-[440px]:hidden"> ({bag.percent}%)</span>
@@ -64,7 +67,7 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
     <HeaderFrame className="flex items-center px-[18px] @max-[960px]:px-2
                             mobile:col-start-1 mobile:row-start-1 mobile:ml-1 mobile:my-1 mobile:min-w-0">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
-      <button type="button" aria-label="스탯창 열기" onClick={onOpen}
+      <button type="button" aria-label={`스탯창 열기, ${summary}`} onClick={onOpen}
               className="hud flex items-stretch gap-[18px] cursor-pointer transition hover:brightness-125
                          @max-[960px]:gap-x-1.5 mobile:w-full mobile:justify-between">
         {stats.map((stat, i) => (

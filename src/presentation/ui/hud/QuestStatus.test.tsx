@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import QuestStatus from './QuestStatus';
 
+const originalMatchMedia = window.matchMedia;
 const button = () => screen.getByRole('button', { name: /^의뢰 창 열기/ });
 
 describe('의뢰 현황', () => {
-  afterEach(cleanup);
+  afterEach(() => { window.matchMedia = originalMatchMedia; cleanup(); });
 
   it('오늘 의뢰 라벨 없이 일반, 네임드 두 칸에 라벨 다음 값을 보인다', () => {
     render(<QuestStatus general={1} named={0} generalCap={1} namedCap={1} />);
@@ -79,6 +80,20 @@ describe('의뢰 현황', () => {
     expect(button()).toHaveAccessibleName('의뢰 창 열기, 오늘 남은 클리어 일반 - 네임드 -');
     fireEvent.mouseEnter(button().querySelector('.pf-accent')!.parentElement!.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('일반 의뢰 오늘 남은 클리어 -');
+  });
+
+  it('터치(거친 포인터)에서는 칸의 글자도 칸 여백도 눌러도 툴팁을 열지 않고 의뢰 창 열기만 실행한다', () => {
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)', media: query,
+      addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    const onOpen = vi.fn();
+    render(<QuestStatus general={1} named={1} generalCap={1} namedCap={1} onOpen={onOpen} />);
+    const cell = button().querySelector('.pf-accent')!.parentElement!.parentElement!;
+    fireEvent.click(cell);
+    fireEvent.click(button().querySelector('.pf-accent')!);
+    expect(onOpen).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   it('누르면 의뢰 창을 연다', () => {
