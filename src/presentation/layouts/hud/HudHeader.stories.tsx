@@ -57,7 +57,7 @@ export const BaseWithClock: Story = {
   decorators: [Story => (
     <>
       <Story />
-      <TimeBadge besideMenu />
+      <TimeBadge className="top-5 right-[58px] mobile:hidden" />
     </>
   )],
 };

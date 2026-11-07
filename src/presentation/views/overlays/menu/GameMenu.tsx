@@ -6,10 +6,12 @@ import { cx } from '../../../ui/cx';
 import MenuList from '../../../ui/MenuList';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import HudMenuButton from '../../../ui/hud/HudMenuButton';
+import MobileHudMenuButton from '../../../ui/hud/MobileHudMenuButton';
+import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
-// 게임 메뉴 — 메뉴 버튼(HudMenuButton) 하나. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
+// 게임 메뉴 — 햄버거 버튼 하나. PC 배치는 헤더 틀과 같은 높이의 메뉴 버튼(HudMenuButton, 스테이지 폭이 넓으면 60px, 960px 미만이면 40px), 모바일 배치는 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수를 붙인다.
 // 접힌 상태에서는 알릴 것이 하나라도 있으면 버튼 모서리에 빨간 점을 찍는다.
 // 입구마다 보이는 조건은 그대로다: 길드와 소셜은 계정 유저만, 우편함은 클라우드 모드에서만 연다.
@@ -33,6 +35,7 @@ export default function GameMenu({ account, onGuild, onFriends, onMailbox, setTo
   onMailbox: () => void;
   setToast: Notify;
 }) {
+  const mobile = useMobileLayout();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const guild = useGuild(account !== null);
@@ -78,12 +81,16 @@ export default function GameMenu({ account, onGuild, onFriends, onMailbox, setTo
   }
   if (entries.length === 0) return null;
   const alert = entries.some(e => e.count > 0);
+  const toggle = () => setOpen(v => !v);
+  const label = `메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`;
 
   return (
     <div ref={root} className="relative flex flex-col items-end gap-1">
-      <HudMenuButton open={open} alert={alert} onClick={() => setOpen(v => !v)}
-                     aria-expanded={open} aria-haspopup="menu"
-                     aria-label={`메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`} />
+      {mobile ? (
+        <MobileHudMenuButton open={open} alert={alert} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
+      ) : (
+        <HudMenuButton open={open} alert={alert} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
+      )}
       {open && (
         <MenuList className="min-w-[150px] p-1 mobile:absolute mobile:right-0 mobile:top-full mobile:mt-1" items={entries.map(e => ({
           key: e.key,

@@ -10,6 +10,6 @@ const meta: Meta<typeof QuestStatus> = {
 export default meta;
 type Story = StoryObj<typeof QuestStatus>;
 
-export const Typical: Story = { args: { general: 1, named: 1, generalCap: 1, namedCap: 1 } };
-export const Longest: Story = { args: { general: 10, named: 3, generalCap: 10, namedCap: 3 } };
-export const Done: Story = { args: { general: 0, named: 0, generalCap: 1, namedCap: 1 } };
+export const Typical: Story = { args: { general: 1, named: 1 } };
+export const Longest: Story = { args: { general: 10, named: 3 } };
+export const Done: Story = { args: { general: 0, named: 0 } };
