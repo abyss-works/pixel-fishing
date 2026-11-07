@@ -6,9 +6,9 @@ import HudHeader from './HudHeader';
 
 const menu = <button type="button" aria-label="메뉴 열기">m</button>;
 const header = (left: { general: number; named: number } | null = { general: 1, named: 1 }, onOpenStats = () => {}, onOpenQuests = () => {}) =>
-  render(<HudHeader game={newState()} left={left} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />);
+  render(<HudHeader game={newState()} clears={{ left, caps: { general: 1, named: 1 } }} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />);
 
-const bar = () => screen.getByRole('button', { name: '스탯창 열기' }).closest('div')!;
+const bar = () => screen.getByRole('button', { name: /^스탯창 열기/ }).closest('div')!;
 const quest = () => screen.getByRole('button', { name: /^의뢰 창 열기/ });
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
 const css = readFileSync('src/index.css', 'utf-8');
@@ -58,6 +58,14 @@ describe('HudHeader', () => {
     expect(quest().textContent).toBe('일반 0네임드 0');
   });
 
+  it('서버 값이 오기 전에는 화면 값은 0이지만 툴팁과 접근성 이름은 0이 아니라 -를 보인다', () => {
+    header(null);
+    expect(quest()).toHaveAccessibleName('의뢰 창 열기, 오늘 남은 클리어 일반 - 네임드 -');
+    fireEvent.mouseEnter(quest().querySelector('.pf-accent')!.parentElement!.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('일반 의뢰 오늘 남은 클리어 -');
+    expect(screen.getByRole('tooltip').textContent).not.toContain('0/1');
+  });
+
   it('서버 값이 있으면 일반, 네임드 순서로 보인다', () => {
     header({ general: 0, named: 1 });
     expect(quest().textContent).toBe('일반 0네임드 1');
@@ -75,7 +83,7 @@ describe('HudHeader', () => {
   it('자원 바를 누르면 스탯 창을 연다', () => {
     const onOpenStats = vi.fn();
     header(undefined, onOpenStats);
-    fireEvent.click(screen.getByRole('button', { name: '스탯창 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
     expect(onOpenStats).toHaveBeenCalledTimes(1);
   });
 });

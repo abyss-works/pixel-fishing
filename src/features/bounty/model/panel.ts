@@ -6,7 +6,7 @@ import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../.
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
+import { bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
@@ -62,14 +62,27 @@ export interface BountyPanelData {
   relicMats: number;
 }
 
-/** 오늘 남은 클리어 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
-export function clearsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
-  if (!snapshot) return null;
+/** 오늘 클리어 현황 - 남은 횟수와 한도를 한 곳에서 낸다(헤더, 의뢰 창, 수배판이 함께 쓴다).
+ *  남은 횟수는 스냅샷이 없으면(불러오는 중, 오프라인) 알 수 없으므로 null, 한도는 규칙이 정한 값이라 언제나 있다 */
+export interface ClearsStatus {
+  left: { general: number; named: number } | null;
+  caps: Record<BountyKind, number>;
+}
+
+export function clearsStatus(snapshot: BountySnapshot | null): ClearsStatus {
+  const caps = { general: bountyDailyCap('general'), named: bountyDailyCap('named') };
+  if (!snapshot) return { left: null, caps };
   return {
-    general: Math.max(0, bountyDailyCap('general') - snapshot.clearsToday.general),
-    named: Math.max(0, bountyDailyCap('named') - snapshot.clearsToday.named),
+    left: {
+      general: Math.max(0, caps.general - snapshot.clearsToday.general),
+      named: Math.max(0, caps.named - snapshot.clearsToday.named),
+    },
+    caps,
   };
 }
+
+/** 오늘 남은 클리어 횟수 - 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
+export const clearsLeft = (snapshot: BountySnapshot | null): ClearsStatus['left'] => clearsStatus(snapshot).left;
 
 /** 갈래마다 수주 중인 의뢰 하나 - 어느 구역의 것이든 같은 갈래의 새 수주를 막는다. 수주하면 진행 행이 생기므로 행의 존재가 곧 수주다 */
 export function heldQuests(snapshot: BountySnapshot | null): Record<BountyKind, BountyQuest | undefined> {
@@ -98,7 +111,7 @@ export function selectBountyPanelData({
   const zone = zoneOfPort(port)!;
   const who = uid ?? 'local';
   const difficulties: BountyDifficulty[] = ['easy', 'normal', 'hard', 'named'];
-  const left = clearsLeft(snapshot);
+  const { left, caps } = clearsStatus(snapshot);
   const leftAll = left?.general ?? null;
   const leftNamed = left?.named ?? null;
   const holding = heldQuests(snapshot);
@@ -130,8 +143,8 @@ export function selectBountyPanelData({
     zone,
     leftAll,
     leftNamed,
-    dailyCap: BOUNTY_DAILY_CAP,
-    namedDailyCap: BOUNTY_NAMED_DAILY_CAP,
+    dailyCap: caps.general,
+    namedDailyCap: caps.named,
     offers,
     progressOf,
     isAccepted,
