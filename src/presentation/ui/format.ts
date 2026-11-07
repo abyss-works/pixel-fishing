@@ -9,7 +9,7 @@ export function fmtSize(cm: number): string {
 }
 
 const COMPACT_UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const;
-/** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
+/** 요약 타일처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
  *  단위 아래는 버린다(가진 것보다 많아 보이지 않게). 정확한 값이 필요한 가격·잔액에는 쓰지 않는다. */
 export function fmtCompact(n: number): string {
   if (Math.abs(n) < 10_000) return fmtNum(n);
@@ -18,13 +18,13 @@ export function fmtCompact(n: number): string {
   const tenths = Math.trunc(n / (size / 10));
   return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)}${unit}`;
 }
-/** "수량 / 상한" 표기 - 자릿수 구분 쉼표를 쓰고 슬래시 앞뒤에 공백을 둔다. 스탯 창 가방 칸과 헤더 가방 툴팁이 함께 쓴다 */
+/** "수량 / 상한" 표기 - 자릿수 구분 쉼표를 쓰고 슬래시 앞뒤에 공백을 둔다. 읽기 쉬운 자리(스탯 창 요약, 툴팁)에 쓴다. */
 export const fmtRatio = (n: number, total: number): string => `${fmtNum(n)} / ${fmtNum(total)}`;
-/** 오늘 남은 클리어 "남은 수/한도" 표기 - 수배판, 의뢰 창, 헤더 의뢰 현황 툴팁이 함께 쓴다. 아직 모르면(null) - */
-export const fmtClearsLeft = (left: number | null, cap: number): string => (left === null ? '-' : `${left}/${cap}`);
+/** "수량/상한" 표기 - 쉼표와 공백 없이 붙여 쓴다. 폭이 좁은 줄(고정 정보 줄, 툴팁 속 짧은 값)에 쓴다. 아직 모르면(null) - */
+export const fmtRatioTight = (n: number | null, total: number): string => (n === null ? '-' : `${n}/${total}`);
 /** 헤더처럼 폭이 아주 좁은 자리의 줄임 표기 - 유효숫자 3자리. 999까지는 그대로, 1000부터 K, M, B, T 단위에 3자리까지 보인다
  *  (999K, 12.4K, 1.23M). 끝자리 0은 생략한다. 단위 아래는 버린다(가진 것보다 많아 보이지 않게).
- *  글자 수가 최대 5(3자리 + 소수점 + 단위)라 폭이 거의 흔들리지 않는다. 정확한 값은 호출부가 툴팁 등으로 따로 보인다.
+ *  글자 수는 보통 최대 5(99.9K, 1.99M: 3자리 + 소수점 + 단위)다. 음수는 부호 한 글자가 더 붙고, 1000T 이상은 자릿수가 늘어난다. 정확한 값은 호출부가 툴팁 등으로 따로 보인다.
  *  다른 화면의 줄임 표기(fmtCompact)는 이 규칙과 별개다. */
 export function fmtCompact3(n: number): string {
   const abs = Math.abs(n);

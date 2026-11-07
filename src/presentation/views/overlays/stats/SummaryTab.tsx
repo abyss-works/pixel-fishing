@@ -23,7 +23,7 @@ export default function SummaryTab({ game, summary, row, here }: {
       <div className="grid grid-cols-4 gap-2 max-[640px]:grid-cols-2">
         <StatsKpi label="명성" value={fmtNum(game.fame)} />
         <StatsKpi label="골드" value={fmtGold(game.gold)} />
-        <StatsKpi label={<Tip text="일반 폼으로 한 번이라도 낚은 어종">도감</Tip>} value={`${summary.dexFound} / ${summary.dexTotal}`} />
+        <StatsKpi label={<Tip text="일반 폼으로 한 번이라도 낚은 어종">도감</Tip>} value={fmtRatio(summary.dexFound, summary.dexTotal)} />
         <StatsKpi label="가방" value={fmtRatio(bag.count, bag.cap)} danger={bag.level === 'danger'} />
       </div>
       <Inset className="px-3 py-2.5 flex flex-col gap-2.5">
