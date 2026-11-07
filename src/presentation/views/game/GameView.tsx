@@ -37,6 +37,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
 import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
 import AccountModal from '../overlays/account/AccountModal';
+import { reportFailure } from '../../../features/gameplay/service/useGame';
 import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
@@ -71,6 +72,8 @@ interface GameViewProps {
   game: GameState;
   scene: SceneRef;
   entryPos: Point | null;
+  /** 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안의 이동을 Field에 알린다 */
+  placeSeq: number;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
@@ -228,7 +231,10 @@ export default function GameView(props: GameViewProps) {
     let result: DispatchResult | null = null;
     try {
       result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
-    } catch { /* 인프라 실패는 오류 정책이 알린다 */ }
+    } catch (e) {
+      const text = reportFailure(e);
+      if (text) props.setToast(text, 'warn');
+    }
     if (result?.status === 'ok') {
       props.onPlace({ kind: 'region', id: b.region }, b.at);
       props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
@@ -265,7 +271,8 @@ export default function GameView(props: GameViewProps) {
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
-                 initialPos={props.entryPos ?? undefined} statusSlot={statusSlot} />
+                 initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
+                 locked={trip !== null} statusSlot={statusSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}

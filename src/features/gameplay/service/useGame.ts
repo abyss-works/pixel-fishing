@@ -28,6 +28,16 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
   error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
+/**
+ * 호출부가 직접 잡은 인프라 실패를 오류 정책으로 보낸다. 정책이 전체 모달로 알리는 종류면 null,
+ * 모달이 없는 종류면 메시지 창에 보일 한 줄을 돌려준다.
+ */
+export function reportFailure(e: unknown): string | null {
+  const err = fail(e);
+  const policy = POLICY[err.kind];
+  return policy.modal ? null : policy.message;
+}
+
 export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [init] = useState(() => api.storage.loadLegacy());
   const gameGatewayRef = useRef<GameGateway>(null!);

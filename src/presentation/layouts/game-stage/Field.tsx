@@ -17,6 +17,7 @@ import type { DispatchResult, MaybePromise } from '../../../features/gameplay/se
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import { isTap, movePad, startPad } from '../../../game/runtime/movePad';
 import type { Pad } from '../../../game/runtime/movePad';
+import { REGION_PACKS } from '../../../game/world';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
@@ -42,6 +43,10 @@ interface Props {
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
   initialPos?: Point;
+  /** 장소 지정 순번 — 마운트 뒤에 바뀌면 같은 지역 안에서 플레이어를 initialPos(없으면 지역 출발점)로 옮긴다 */
+  placeSeq?: number;
+  /** 켜면 이동, 접안, 낚시 시작 같은 게임 조작이 멈춘다(여객선 전환 중). 화면 표시는 계속된다 */
+  locked?: boolean;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
   paused?: boolean;
   /** 모바일에서 낚시 상태 띠를 넣을 HUD 자리 — 없으면 프레임 아래 가운데에 둔다 */
@@ -100,7 +105,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused, statusSlot,
+  region, game, dispatch, setToast, onScene, onWarmup, initialPos, placeSeq, locked, paused, statusSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -168,6 +173,14 @@ export default function Field({
     document.addEventListener('keyup', onKeyUp);
     return () => document.removeEventListener('keyup', onKeyUp);
   }, [engine]);
+
+  const placedSeq = useRef(placeSeq);
+  useEffect(() => {
+    if (placedSeq.current === placeSeq) return;
+    placedSeq.current = placeSeq;
+    engine.placePlayer(initialPos ?? REGION_PACKS[region].spawn);
+  }, [engine, placeSeq, initialPos, region]);
+  useEffect(() => { engine.setControlLocked(locked === true); }, [engine, locked]);
 
   useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
