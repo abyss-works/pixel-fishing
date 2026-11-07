@@ -11,6 +11,7 @@ const GLYPHS: GlyphId[] = [
   'letter', 'key', 'ticket', 'download', 'upload', 'exit', 'close',
   'plus', 'minus',
   'compass', 'backpack', 'book', 'question', 'gear',
+  'square', 'diamond',
 ];
 
 const meta: Meta<typeof PixelIcon> = {

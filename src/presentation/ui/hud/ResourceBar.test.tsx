@@ -67,6 +67,11 @@ describe('자원 바', () => {
     const visible = cells.map(cell => [...cell.childNodes].filter(n => !(n as HTMLElement).classList?.contains('sr-only'))
       .map(n => n.textContent).join(''));
     expect(visible.join('')).not.toMatch(/골드|명성|가방/);
+    for (const cell of cells) {
+      const icon = cell.querySelector('svg')!.getAttribute('class')!;
+      expect(icon).toContain('size-3');
+      expect(icon).toContain('@min-[960px]:size-6');
+    }
     const value = cells[0].querySelector('.pf-accent')!.className;
     expect(value).toContain('text-[13px]');
     expect(value).toContain('@min-[960px]:text-[16px]');

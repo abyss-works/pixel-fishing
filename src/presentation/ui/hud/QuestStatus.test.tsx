@@ -54,10 +54,16 @@ describe('의뢰 현황', () => {
 
   it('일반과 네임드의 표지는 색과 함께 모양도 다르다(네모, 다이아몬드) - 색만으로 구분하지 않는다', () => {
     render(<QuestStatus general={1} named={1} generalCap={1} namedCap={1} />);
-    const shapes = [...button().querySelectorAll('[data-marker]')].map(m => m.getAttribute('data-marker'));
+    const markers = [...button().querySelectorAll('svg[data-glyph]')];
+    const shapes = markers.map(m => m.getAttribute('data-glyph'));
     expect(shapes).toEqual(['square', 'diamond']);
-    const rects = [...button().querySelectorAll('[data-marker]')].map(m => m.querySelectorAll('rect').length);
-    expect(rects[0]).not.toBe(rects[1]);
+    // 다이아몬드는 한 줄짜리 네모 하나가 아니라 여러 행이다(작은 크기에서 십자로 보이지 않는 12행)
+    expect(markers[0].querySelectorAll('rect')).toHaveLength(1);
+    expect(markers[1].querySelectorAll('rect')).toHaveLength(12);
+    for (const m of markers) {
+      expect(m.getAttribute('class')).toContain('size-3');
+      expect(m.getAttribute('class')).toContain('@min-[960px]:size-6');
+    }
   });
 
   it('값 글자는 스테이지 폭 960px 이상에서 16px로 커진다', () => {
