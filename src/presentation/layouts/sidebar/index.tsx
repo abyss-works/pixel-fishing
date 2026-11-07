@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
-import { cx } from '../../ui/cx';
 import { useMobileLayout } from '../useMobileLayout';
 import { isSheetDragClose } from './sheet';
 
@@ -53,8 +52,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
   }
 
   return (
-    <aside className={cx('w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line',
-                         'max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t')}>
+    <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line">
       <TabBar tabs={tabs} activeKey={activeKey} onSelect={onSelect} />
       <div className="pf-scroll flex-1 pf-vscroll p-3 flex flex-col gap-2">
         {children}

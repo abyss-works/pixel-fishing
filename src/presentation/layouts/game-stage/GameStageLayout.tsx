@@ -14,7 +14,7 @@ export default function GameStageLayout({ children }: { children: ReactNode }) {
     <div data-game-stage className={cx('relative min-w-0 overflow-hidden bg-bg [container-type:size]',
       mobile
         ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_auto_auto] grid-rows-[auto_minmax(0,1fr)_auto] touch-none select-none [-webkit-touch-callout:none]'
-        : 'flex-1 flex items-center justify-center [--frame-h:min(65vh,100cqh,calc(100cqw*9/16))] [--log-clear:max(0px,calc(var(--log-h)_+_12px_-_(100cqh_-_var(--frame-h))_/_2))] max-[820px]:flex-[1_1_55%]')}
+        : 'flex-1 flex items-center justify-center [--frame-h:min(65vh,100cqh,calc(100cqw*9/16))] [--log-clear:max(0px,calc(var(--log-h)_+_12px_-_(100cqh_-_var(--frame-h))_/_2))]')}
          onContextMenu={mobile ? e => e.preventDefault() : undefined}>
       {children}
     </div>

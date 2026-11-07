@@ -4,6 +4,9 @@ import { MOBILE_QUERY } from './useMobileLayout';
 
 // 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃은 뷰포트 폭 하나로 가른다. CSS 변형, CSS 규칙, JS 판정이 같은 정본 값에서 나온다.
 const css = readFileSync('src/index.css', 'utf-8');
+/** 화면 컴포넌트 소스(테스트, 스토리 제외) - 경로 -> 본문 */
+const sources = Object.entries(import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+  .filter(([key]) => !/\.(?:test|stories)\.tsx?$/.test(key));
 const REM_PX = 16;
 
 /** 정본 값(--breakpoint-pc)을 px로 읽는다 */
@@ -47,5 +50,15 @@ describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
     expect(evaluate(MOBILE_QUERY, 1024)).toBe(false);
     expect(evaluate(MOBILE_QUERY, 1280)).toBe(false);
     expect(evaluate(MOBILE_QUERY, 1920)).toBe(false);
+  });
+
+  it('뷰포트 폭 임의 값(max-[Npx], min-[Npx])으로 레이아웃을 가르지 않는다 - 모바일 레이아웃은 mobile: 변형 하나다', () => {
+    const offenders: string[] = [];
+    for (const [key, src] of sources) {
+      src.split('\n').forEach((line, i) => {
+        if (/(^|[^@\w-])(?:max|min)-\[\d+px\]:/.test(line)) offenders.push(`${key}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
