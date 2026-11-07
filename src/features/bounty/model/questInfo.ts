@@ -4,7 +4,7 @@ import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../g
 import type { RarityId } from '../../../game/content/rarity';
 import type { GameState } from '../../../game/rules/logic';
 import { BASE_PACKS } from '../../../game/world';
-import { clearsCaps, clearsLeft, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
+import { clearsStatus, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
 import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
@@ -94,8 +94,7 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
   }
 
   return {
-    left: clearsLeft(snapshot),
-    caps: clearsCaps(),
+    ...clearsStatus(snapshot),
     general,
     named,
     boardPorts: PORTS.map(portName),

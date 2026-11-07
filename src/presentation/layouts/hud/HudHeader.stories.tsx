@@ -39,16 +39,16 @@ const meta: Meta<typeof HudHeader> = {
 export default meta;
 type Story = StoryObj<typeof HudHeader>;
 
-export const Typical: Story = { args: { game: typical, left: { general: 1, named: 1 } } };
+export const Typical: Story = { args: { game: typical, clears: { left: { general: 1, named: 1 }, caps: { general: 1, named: 1 } } } };
 /** 골드와 명성 999.9K, 가방 472 (15%), 일반 10, 네임드 3 */
-export const Longest: Story = { args: { game: longest, bagBonus: 5, left: { general: 10, named: 3 } } };
-export const Loading: Story = { args: { game: typical, left: null } };
+export const Longest: Story = { args: { game: longest, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } } };
+export const Loading: Story = { args: { game: typical, clears: { left: null, caps: { general: 1, named: 1 } } } };
 /** 가방 2990 (99%), 골드와 명성 999.9K, 일반 10, 네임드 3. 스테이지 폭 440px 미만(360, 390)에서 비율은 생략되고 개수는 남는다. 가장 긴 값이 한 줄에 들어가는지 본다 */
-export const FourDigitBag: Story = { args: { game: fourDigitBag, bagBonus: 5, left: { general: 10, named: 3 } } };
+export const FourDigitBag: Story = { args: { game: fourDigitBag, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } } };
 
 /** 거점의 시계 칩. 1024x600에서 의뢰 현황, 메뉴 버튼과 겹치지 않아야 한다 */
 export const BaseWithClock: Story = {
-  args: { game: longest, bagBonus: 5, left: { general: 10, named: 3 } },
+  args: { game: longest, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } },
   decorators: [Story => (
     <>
       <Story />
@@ -61,7 +61,7 @@ export const BaseWithClock: Story = {
 export const MenuOpenOverCards: Story = {
   args: {
     game: typical,
-    left: { general: 1, named: 1 },
+    clears: { left: { general: 1, named: 1 }, caps: { general: 1, named: 1 } },
     menu: (
       <div className="relative flex flex-col items-end gap-1">
         <HudMenuButton open aria-label="메뉴 닫기" />

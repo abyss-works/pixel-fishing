@@ -67,6 +67,14 @@ describe('의뢰 현황', () => {
     expect(value).toContain('@min-[960px]:text-[16px]');
   });
 
+  it('아직 모르는 값(null)은 화면에 0, 접근성 이름과 툴팁에는 -다', () => {
+    render(<QuestStatus general={null} named={null} generalCap={1} namedCap={1} />);
+    expect(button().textContent).toBe('일반 0네임드 0');
+    expect(button()).toHaveAccessibleName('의뢰 창 열기, 오늘 남은 클리어 일반 - 네임드 -');
+    fireEvent.mouseEnter(button().querySelector('.pf-accent')!.parentElement!.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('일반 의뢰 오늘 남은 클리어 -');
+  });
+
   it('누르면 의뢰 창을 연다', () => {
     const onOpen = vi.fn();
     render(<QuestStatus general={1} named={1} generalCap={1} namedCap={1} onOpen={onOpen} />);

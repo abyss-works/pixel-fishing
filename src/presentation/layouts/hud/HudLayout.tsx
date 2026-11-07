@@ -14,7 +14,7 @@ import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
 import HudHeader from './HudHeader';
 import { useBounty } from '../../../features/bounty/service/useBounty';
-import { clearsLeft } from '../../../features/bounty/model/panel';
+import { clearsStatus } from '../../../features/bounty/model/panel';
 import TimeBadge from '../../ui/hud/TimeBadge';
 import PixelIcon from '../../ui/PixelIcon';
 import Tip from '../../ui/Tip';
@@ -79,7 +79,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
 
   return (
     <>
-      <HudHeader game={game} bagBonus={bagBonus} left={clearsLeft(snap)} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />
+      <HudHeader game={game} bagBonus={bagBonus} clears={clearsStatus(snap)} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />
       {scene.kind === 'base' && <TimeBadge besideMenu />}
       <div className="contents mobile:absolute mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2 mobile:bottom-2 mobile:z-(--z-overlay)
                       mobile:flex mobile:flex-col mobile:items-end mobile:gap-2 mobile:pointer-events-none">

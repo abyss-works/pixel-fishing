@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
 import { BOUNTIES, bountyById, dailyQuestFor } from '../../../game/content/bounties';
 import { newState } from '../../../game/rules/logic';
-import { clearsLeft, questLabel, selectBountyPanelData, selectNamedBountyCardData } from './panel';
+import { clearsLeft, clearsStatus, questLabel, selectBountyPanelData, selectNamedBountyCardData } from './panel';
 
 const clears = (general: number, named = 0) => ({ general, named });
 
@@ -167,5 +167,19 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     const held = dailyQuestFor('seasia', 'hard', uid, day)!;
     const d = data(snap({ clearsToday: clears(1, 0), progress: [{ questId: held.id, progress: 0 }] }));
     expect(d.notice.general).toContain('이미 마쳤어요');
+  });
+});
+
+describe('오늘 클리어 현황(남은 횟수와 한도)', () => {
+  it('남은 횟수와 한도를 한 번에 낸다 - 한도는 규칙이 정한 값이다', () => {
+    const status = clearsStatus({ clearsToday: clears(1, 0), progress: [], tickets: [] });
+    expect(status.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
+    expect(status.left).toEqual({ general: BOUNTY_DAILY_CAP - 1, named: BOUNTY_NAMED_DAILY_CAP });
+  });
+
+  it('스냅샷이 없으면 남은 횟수는 null이고 한도는 그대로다', () => {
+    const status = clearsStatus(null);
+    expect(status.left).toBeNull();
+    expect(status.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
   });
 });
