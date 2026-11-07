@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import { useTutorialTrigger } from '../../../../features/tutorial/service/tutorial';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
-import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import type { BountyKind, BountyPort } from '../../../../game/content/bounties.js';
 import { zoneById } from '../../../../game/content/zones.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
@@ -21,6 +20,7 @@ import { useEncounterAlertSetting } from '../../../../features/bounty/service/en
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
+import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
@@ -28,7 +28,6 @@ import Gated from '../../../ui/Gated';
 import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import TabBar from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
 import { fmtGold, josa } from '../../../ui/format';
 import type { MessageTone, Notify } from '../../../ui/hud/messageFeed';
 
@@ -40,21 +39,10 @@ const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수
 function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: {
   zoneName: string; leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
 }) {
-  const left = (n: number | null, cap: number) => (n === null ? '-' : `${n}/${cap}`);
   return (
     <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
       <b className="text-sm text-text">{zoneName}</b>
-      <span className="pl-3 border-l border-line text-text-dim">
-        <Tip text={<>보상을 받으면 클리어 1번이에요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
-      </span>
-      <span className="flex items-baseline gap-2">
-        <span className="text-text-dim">일반 의뢰</span>
-        <span className="pf-accent" aria-label="오늘 남은 일반 의뢰">{left(leftAll, dailyCap)}</span>
-      </span>
-      <span className="flex items-baseline gap-2 pl-3 border-l border-line">
-        <span className="text-text-dim">네임드 토벌</span>
-        <span className="pf-accent" aria-label="오늘 남은 네임드 토벌">{left(leftNamed, namedDailyCap)}</span>
-      </span>
+      <ClearsLeft leftAll={leftAll} leftNamed={leftNamed} dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
     </Inset>
   );
 }
