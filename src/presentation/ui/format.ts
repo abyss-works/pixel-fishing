@@ -18,6 +18,23 @@ export function fmtCompact(n: number): string {
   const tenths = Math.trunc(n / (size / 10));
   return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)}${unit}`;
 }
+/** 헤더처럼 폭이 아주 좁은 자리의 줄임 표기 - 유효숫자 3자리. 999까지는 그대로, 1000부터 K, M, B, T 단위에 3자리까지 보인다
+ *  (999K, 12.4K, 1.23M). 끝자리 0은 생략한다. 단위 아래는 버린다(가진 것보다 많아 보이지 않게).
+ *  글자 수가 최대 5(3자리 + 소수점 + 단위)라 폭이 거의 흔들리지 않는다. 정확한 값은 호출부가 툴팁 등으로 따로 보인다.
+ *  다른 화면의 줄임 표기(fmtCompact)는 이 규칙과 별개다. */
+export function fmtCompact3(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 1_000) return fmtNum(n);
+  const [size, unit] = COMPACT_UNITS.find(([s]) => abs >= s)!;
+  // 단위의 1/100로 먼저 나눠 정수로 버린다 - 부동소수 오차 없이 3자리를 자른다
+  const hundredths = Math.trunc(abs / (size / 100));
+  const whole = Math.trunc(hundredths / 100);
+  let fraction = '';
+  if (hundredths < 1_000) fraction = String(hundredths % 100).padStart(2, '0').replace(/0$/, '');
+  else if (hundredths < 10_000) fraction = String(Math.trunc((hundredths % 100) / 10));
+  if (fraction === '0') fraction = '';
+  return `${n < 0 ? '-' : ''}${whole}${fraction ? `.${fraction}` : ''}${unit}`;
+}
 /** 남은 시간 — 분 단위를 "1시간 52분"/"52분"으로. 0 이하는 "1분 미만" */
 export function fmtMinutes(min: number): string {
   if (min < 1) return '1분 미만';

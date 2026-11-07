@@ -21,7 +21,7 @@ describe('자원 바', () => {
 
   it('골드·명성은 단위 없이 줄임 표기다', () => {
     render(<ResourceBar game={{ ...newState(), gold: 1_534_000, fame: 12_345 }} />);
-    expect(hud()).toContain('골드 1.5M');
+    expect(hud()).toContain('골드 1.53M');
     expect(hud()).toContain('명성 12.3K');
   });
 
@@ -68,9 +68,9 @@ describe('자원 바', () => {
       .map(n => n.textContent).join(''));
     expect(visible.join('')).not.toMatch(/골드|명성|가방/);
     const value = cells[0].querySelector('.pf-accent')!.className;
-    expect(value).toContain('text-[11px]');
-    expect(value).toContain('@min-[380px]:text-[12px]');
+    expect(value).toContain('text-[13px]');
     expect(value).toContain('@min-[960px]:text-[14px]');
+    expect(value).not.toMatch(/text-\[1[012]px\]/);
   });
 
   it('360 폭의 가장 긴 값이 넘치지 않도록 칸 사이 간격과 안쪽 여백이 좁은 단계로 줄어든다', () => {
@@ -102,6 +102,19 @@ describe('자원 바', () => {
       fireEvent.mouseLeave(gold);
       fireEvent.mouseEnter(bag);
       expect(screen.getByRole('tooltip')).toHaveTextContent('가방 1000/3000 (33%)');
+    });
+
+    it('골드와 명성 칸 툴팁은 줄임 표기가 아닌 정확한 값을 쉼표로 보인다', () => {
+      render(<ResourceBar game={{ ...newState(), gold: 1_234_567, fame: 999_999 }} />);
+      expect(hud()).toContain('골드 1.23M');
+      expect(hud()).toContain('명성 999K');
+      const gold = cell('골드');
+      const fame = cell('명성');
+      fireEvent.mouseEnter(gold);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('골드 1,234,567');
+      fireEvent.mouseLeave(gold);
+      fireEvent.mouseEnter(fame);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('명성 999,999');
     });
 
     it('터치(거친 포인터)에서는 눌러도 툴팁을 열지 않고 스탯 창 열기만 실행한다', () => {
