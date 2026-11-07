@@ -74,16 +74,16 @@ describe('자원 바', () => {
       expect(icon).toContain('@min-[960px]:size-6');
     }
     const value = cells[0].querySelector('.pf-accent')!.className;
-    expect(value).toContain('text-[13px]');
+    expect(value).toContain('text-[12px]');
+    expect(value).toContain('@min-[380px]:text-[13px]');
     expect(value).toContain('@min-[960px]:text-[16px]');
-    expect(value).not.toMatch(/text-\[1[012]px\]/);
   });
 
   it('360 폭의 가장 긴 값이 넘치지 않도록 칸 사이 간격과 안쪽 여백이 좁은 단계로 줄어든다', () => {
     render(<ResourceBar game={newState()} />);
     const button = barButton();
-    expect(button.className).toContain('@max-[960px]:gap-x-1.5');
-    expect(button.closest('div')!.className).toContain('@max-[960px]:px-2');
+    expect(button.className).toContain('@max-[960px]:gap-x-1');
+    expect(button.closest('div')!.className).toContain('@max-[960px]:px-1.5');
   });
 
   it('높이는 의뢰 현황과 같고 스테이지 폭 960px 미만에서 함께 낮아진다', () => {

@@ -70,7 +70,8 @@ describe('의뢰 현황', () => {
   it('값 글자는 스테이지 폭 960px 이상에서 16px로 커진다', () => {
     render(<QuestStatus general={1} named={1} generalCap={1} namedCap={1} />);
     const value = button().querySelector('.pf-accent')!.className;
-    expect(value).toContain('text-[13px]');
+    expect(value).toContain('text-[12px]');
+    expect(value).toContain('@min-[380px]:text-[13px]');
     expect(value).toContain('@min-[960px]:text-[16px]');
   });
 

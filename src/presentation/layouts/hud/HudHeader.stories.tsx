@@ -46,6 +46,11 @@ export const Loading: Story = { args: { game: typical, clears: { left: null, cap
 /** 가방 2990 (99%), 골드와 명성 999.9K, 일반 10, 네임드 3. 스테이지 폭 440px 미만(360, 390)에서 비율은 생략되고 개수는 남는다. 가장 긴 값이 한 줄에 들어가는지 본다 */
 export const FourDigitBag: Story = { args: { game: fourDigitBag, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } } };
 
+/** 줄임 표기가 가장 길어지는 조합: 골드 99.9K, 명성 1.99M(각 5글자), 가방 2990, 일반 10, 네임드 3. 360 폭에서 한 줄에 들어가는지 본다 */
+export const FiveCharValues: Story = {
+  args: { game: { ...fourDigitBag, gold: 99_999, fame: 1_999_999 }, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 10, named: 3 } } },
+};
+
 /** 거점의 시계 칩. 1024x600에서 의뢰 현황, 메뉴 버튼과 겹치지 않아야 한다 */
 export const BaseWithClock: Story = {
   args: { game: longest, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } },
