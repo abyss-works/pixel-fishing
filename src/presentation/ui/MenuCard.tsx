@@ -1,7 +1,7 @@
-import { useRef } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Button from './Button';
 import Tip from './Tip';
+import { useOmitted } from './useOmitted';
 
 /** 글자의 렌더링 역할. required는 화면 용어의 필수, omittable은 생략이다. 역할을 정하지 않은 글자는 required다 */
 export type TextRole = 'required' | 'omittable';
@@ -38,7 +38,7 @@ const CARD_WIDTH = [
 ].join(' ');
 
 export default function MenuCard({ icon, title, sub, subRole = 'required', className, ...rest }: MenuCardProps) {
-  const subRef = useRef<HTMLSpanElement>(null);
+  const { ref: subRef, isOmitted } = useOmitted<HTMLSpanElement>();
   const omittable = !!sub && subRole === 'omittable';
   const card = (
     <Button type="button" aria-label={sub ? `${title} ${sub}` : title} {...rest}
@@ -52,6 +52,5 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', class
   );
   if (!omittable) return card;
   // 생략되어 보이지 않을 때만 툴팁으로 내용을 보인다. 감싼 칸이 같은 행의 카드 높이를 따르도록 flex로 둔다
-  const hidden = () => !!subRef.current && getComputedStyle(subRef.current).display === 'none';
-  return <Tip wraps className="flex" onlyIf={hidden} text={sub}>{card}</Tip>;
+  return <Tip wraps className="flex" onlyIf={isOmitted} text={sub}>{card}</Tip>;
 }

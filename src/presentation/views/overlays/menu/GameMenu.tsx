@@ -2,19 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
-import Frame from '../../../ui/Frame';
 import { cx } from '../../../ui/cx';
 import MenuList from '../../../ui/MenuList';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import HudMenuButton from '../../../ui/hud/HudMenuButton';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
-// 게임 메뉴 — 게임 영역 오른쪽 위의 햄버거 버튼 하나. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
+// 게임 메뉴 — 메뉴 버튼(HudMenuButton) 하나. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수를 붙인다.
 // 접힌 상태에서는 알릴 것이 하나라도 있으면 버튼 모서리에 빨간 점을 찍는다.
 // 입구마다 보이는 조건은 그대로다: 길드와 소셜은 계정 유저만, 우편함은 클라우드 모드에서만 연다.
 // 열 수 있는 입구가 하나도 없으면 버튼도 그리지 않는다.
-// 모바일 배치에서는 화면 틀의 머리 줄 오른쪽 끝 칸에 놓이고, 펼친 줄은 버튼 아래로 게임 영역 위에 겹쳐 뜬다.
+// 자리는 헤더(HudHeader)가 정한다. 모바일 배치에서는 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼 아래로 게임 영역 위에 겹쳐 뜬다.
 
 interface Entry {
   key: string;
@@ -80,15 +80,10 @@ export default function GameMenu({ account, onGuild, onFriends, onMailbox, setTo
   const alert = entries.some(e => e.count > 0);
 
   return (
-    <div ref={root} className="absolute right-3 top-3 z-(--z-overlay) flex flex-col items-end gap-1
-                               mobile:relative mobile:right-auto mobile:top-auto mobile:col-start-2 mobile:row-start-1 mobile:mr-1">
-      <Frame as="button" type="button" onClick={() => setOpen(v => !v)}
-             aria-expanded={open} aria-haspopup="menu"
-             aria-label={`메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`}
-             className={cx('relative p-2 cursor-pointer', open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
-        <PixelIcon glyph="menu" size={20} />
-        {alert && !open && <span className="absolute right-1 top-1 size-[7px] bg-danger" aria-hidden="true" />}
-      </Frame>
+    <div ref={root} className="relative flex flex-col items-end gap-1">
+      <HudMenuButton open={open} alert={alert} onClick={() => setOpen(v => !v)}
+                     aria-expanded={open} aria-haspopup="menu"
+                     aria-label={`메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`} />
       {open && (
         <MenuList className="min-w-[150px] p-1 mobile:absolute mobile:right-0 mobile:top-full mobile:mt-1" items={entries.map(e => ({
           key: e.key,

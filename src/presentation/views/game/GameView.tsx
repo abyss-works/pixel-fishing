@@ -291,7 +291,12 @@ export default function GameView(props: GameViewProps) {
                      </div>
                    ) : null}
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
-                   badge={props.badge} />
+                   badge={props.badge}
+                   menu={(
+                     <GameMenu account={props.account} setToast={props.setToast}
+                               onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
+                               onMailbox={() => setMailboxOpen(true)} />
+                   )} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
@@ -309,9 +314,6 @@ export default function GameView(props: GameViewProps) {
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
         )}
-        <GameMenu account={props.account} setToast={props.setToast}
-                  onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
-                  onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
         {guildOpen && <GuildModal gold={game.gold} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
