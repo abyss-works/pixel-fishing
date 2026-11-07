@@ -16,7 +16,7 @@ const BESIDE_MENU = 'top-[30px] right-[78px] mobile:hidden';
 
 export default function TimeBadge({ className, besideMenu }: {
   className?: string;
-  /** 거점 PC 배치에서 메뉴 버튼 왼쪽에 붙인다(모바일 레이아웃에서는 그리지 않는다). 위치는 헤더 틀 높이에서 나온다 */
+  /** 거점 PC 레이아웃에서 메뉴 버튼 왼쪽에 붙인다(모바일 레이아웃에서는 그리지 않는다). 위치는 헤더 틀 높이에서 나온다 */
   besideMenu?: boolean;
 }) {
   const { clock, dark } = useGameTime();

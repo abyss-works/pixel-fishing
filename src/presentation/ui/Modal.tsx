@@ -25,7 +25,7 @@ interface ModalProps {
 }
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
-// 모바일 배치에서는 폭 단계 대신 화면 폭에서 좌우 24px을 뺀 폭을 쓰고(바깥을 눌러 닫을 자리), 높이 상한(위아래 24px)을 넘으면 창 안에서 세로로 스크롤한다.
+// 모바일 레이아웃에서는 폭 단계 대신 화면 폭에서 좌우 24px을 뺀 폭을 쓰고(바깥을 눌러 닫을 자리), 높이 상한(위아래 24px)을 넘으면 창 안에서 세로로 스크롤한다.
 export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가

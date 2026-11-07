@@ -1,4 +1,4 @@
-// HUD 값 칸 스토리 - 아이콘 칸, 색 표지 칸, 톤. 이름은 화면 글자가 아니라 sr-only다. 값 글자는 스테이지 폭에 따라 12, 13px다(모바일 배치 전용). 도형 표지는 모양이 달라 색만으로 구분하지 않는다.
+// HUD 값 칸 스토리 - 아이콘 칸, 색 표지 칸, 톤. 이름은 화면 글자가 아니라 sr-only다. 값 글자는 스테이지 폭에 따라 12, 13px다(모바일 레이아웃 전용). 도형 표지는 모양이 달라 색만으로 구분하지 않는다.
 import type { Meta, StoryObj } from '@storybook/react';
 import MobileHudStat from './MobileHudStat';
 

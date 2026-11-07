@@ -11,7 +11,7 @@ import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './
 import type { MessageChannel, Msg } from './messageFeed';
 
 // 메시지 창 — 스테이지 왼쪽 아래의 채팅창형 기록. 폭은 400px(좁은 스테이지에서는 58%)이다.
-// 모바일 배치에서는 화면 틀의 채팅 영역(아래 탭 줄 바로 위, 폭 전체)에 놓인다.
+// 모바일 레이아웃에서는 화면 틀의 채팅 영역(아래 탭 줄 바로 위, 폭 전체)에 놓인다.
 // 높이는 기록 수와 무관하게 항상 정해진 줄 수만큼이다. 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
 // 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 사용자가 위로 올려 읽는 중이 아니면 언제나 맨 아래(최신)를 보인다. 기록이 앞쪽에 끼어들어도(접속 직후 받은
@@ -43,7 +43,7 @@ const GLASS_ON = cx(
   'group-has-[input:focus]:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
 );
 
-/** 터치 화면은 마우스를 올릴 수 없으므로 모바일 배치에서는 활성 모양을 늘 유지한다 */
+/** 터치 화면은 마우스를 올릴 수 없으므로 모바일 레이아웃에서는 활성 모양을 늘 유지한다 */
 const GLASS_ALWAYS = cx(
   'mobile:border-line mobile:bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] mobile:backdrop-blur-[4px]',
   'mobile:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',

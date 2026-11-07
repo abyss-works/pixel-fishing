@@ -8,7 +8,7 @@ import MobileHeaderFrame from './MobileHeaderFrame';
 import MobileHudStat from './MobileHudStat';
 import type { HudStatTone } from './MobileHudStat';
 
-// 모바일 배치의 헤더 자원 바. 골드, 명성, 가방 세 칸이다. PC 배치의 자원 바는 ResourceBar(예전 구성)다.
+// 모바일 레이아웃의 헤더 자원 바. 골드, 명성, 가방 세 칸이다. PC 레이아웃의 자원 바는 ResourceBar(예전 구성)다.
 // 배와 낚싯대는 스탯 창에서 본다. 의뢰 현황은 별도 틀(QuestStatus)이다.
 //
 // **칸마다 [아이콘 | 값] 한 줄.** 이름 글자는 화면에 그리지 않는다. 읽는 이에게는 sr-only 이름, 눈으로 보는 이에게는

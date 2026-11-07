@@ -196,7 +196,7 @@ describe('의뢰 창', () => {
     });
   });
 
-  it('창 높이는 고정이고(모바일 배치도 자동 높이로 풀지 않는다) 본문 안에서 스크롤한다', () => {
+  it('창 높이는 고정이고(모바일 레이아웃도 자동 높이로 풀지 않는다) 본문 안에서 스크롤한다', () => {
     open();
     expect(dialog().className).toMatch(/h-\[min\(\d+px,calc\(100%-32px\)\)\]/);
     expect(dialog().className).not.toContain('h-auto');

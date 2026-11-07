@@ -9,7 +9,7 @@ interface SidebarProps<K extends string> {
   tabs: TabDef<K>[];
   activeKey: K;
   onSelect: (key: K) => void;
-  /** 모바일 시트가 열려 있는가. 모바일 배치에서만 쓴다 */
+  /** 모바일 시트가 열려 있는가. 모바일 레이아웃에서만 쓴다 */
   sheetOpen?: boolean;
   /** 시트 머리를 끌어 내려 닫는다 */
   onSheetClose?: () => void;
@@ -17,7 +17,7 @@ interface SidebarProps<K extends string> {
 }
 
 // 화면의 탭 콘텐츠를 담는 사이드 패널 레이아웃.
-// 모바일 배치에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
+// 모바일 레이아웃에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
 // 시트는 게임 영역과 채팅 영역을 덮는다. 화면 키보드가 올라와 있는 동안(루트의 data-keyboard) 탭 줄은 숨는다.
 export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, sheetOpen = false, onSheetClose, children }: SidebarProps<K>) {
   const mobile = useMobileLayout();
