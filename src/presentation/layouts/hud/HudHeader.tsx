@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import QuestStatus from '../../ui/hud/QuestStatus';
 import ResourceBar from '../../ui/hud/ResourceBar';
+import { clearsCaps } from '../../../features/bounty/model/panel';
 
 /** 서버 값(오늘 남은 클리어)이 아직 없을 때 보이는 수 */
 const UNKNOWN = 0;
@@ -24,12 +25,14 @@ export default function HudHeader({ game, bagBonus = 0, left, onOpenStats, onOpe
   /** 메뉴 버튼(펼친 줄 포함). 열 입구가 없으면 아무것도 그리지 않는다 */
   menu: ReactNode;
 }) {
+  const caps = clearsCaps();
   return (
     <>
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-(--z-overlay) flex items-start gap-1.5
                       mobile:contents">
         <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
-        <QuestStatus general={left?.general ?? UNKNOWN} named={left?.named ?? UNKNOWN} onOpen={onOpenQuests} />
+        <QuestStatus general={left?.general ?? UNKNOWN} named={left?.named ?? UNKNOWN}
+                     generalCap={caps.general} namedCap={caps.named} onOpen={onOpenQuests} />
       </div>
       <div className="absolute right-3 top-3 z-(--z-card) empty:hidden
                       mobile:relative mobile:right-auto mobile:top-auto mobile:col-start-3 mobile:row-start-1 mobile:mr-1 mobile:my-1">

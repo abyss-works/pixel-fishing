@@ -62,6 +62,9 @@ export interface BountyPanelData {
   relicMats: number;
 }
 
+/** 오늘 클리어 한도 - 일반 의뢰와 네임드 토벌 */
+export const clearsCaps = (): Record<BountyKind, number> => ({ general: bountyDailyCap('general'), named: bountyDailyCap('named') });
+
 /** 오늘 남은 클리어 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
 export function clearsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
   if (!snapshot) return null;

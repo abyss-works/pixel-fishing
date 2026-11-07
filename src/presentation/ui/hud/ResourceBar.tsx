@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import Divider from '../Divider';
-import { fmtCompact3, fmtNum } from '../format';
+import { fmtCompact3, fmtNum, fmtRatio } from '../format';
 import Tip from '../Tip';
 import { selectBagStatus } from '../../../features/inventory/model/selectors';
 import type { BagLevel } from '../../../features/inventory/model/selectors';
@@ -29,14 +29,19 @@ import type { HudStatTone } from './HudStat';
 // 스테이지 폭이 960px 미만이면 간격을 줄이고 칸 사이 구분선을 감춘다.
 //
 // 렌더링 역할: 골드, 명성, 가방 개수는 필수다. 가방 비율은 스테이지 폭이 440px 미만일 때 생략하고 툴팁으로 넘긴다.
-// 기준값 계산(값 글자의 진행 폭은 픽셀 폰트에서 글자당 약 0.82em, 화면 확인 실측 213px 안쪽 폭에 21글자가 들어간 값에서 구한 추정):
+// 기준값 계산(값 글자의 진행 폭은 픽셀 폰트에서 글자당 약 0.82em, 화면 확인 실측 213px 안쪽 폭에 21글자가 들어간 값에서 구한 추정,
+// 이후 360 폭 최대 값에서 scrollWidth = clientWidth = 239로 확인):
 //  - 360 폭, 글자 13px: 가장 긴 값 골드 999K(4글자), 명성 999K(4), 가방 2990(4)은 12글자 x 0.82 x 13 = 128px,
-//    아이콘 3 x 12 + 아이콘 간격 3 x 2 + 칸 사이 2 x 6 = 54px로 182px다. 자원 바 안쪽 폭은 360 - (가장자리 4 + 의뢰 현황 틀 91 + 메뉴 버튼 44)
-//    - 틀 테두리 4 - 안쪽 여백 16 = 201px라 19px 여유가 남는다(의뢰 현황 틀은 일반 10, 네임드 3 두 칸: 6 + 2 + 2글자 x 0.82 x 13 = 29px씩).
-//    글자를 14px로 올리면 138 + 54 = 192px로 9px 여유라 13px로 정했다.
+//    아이콘 3 x 12 + 아이콘 간격 3 x 2 + 칸 사이 2 x 6 = 54px로 182px다. 자원 바 안쪽 폭은 360 - (가장자리 4 + 의뢰 현황 틀 99 + 메뉴 버튼 44)
+//    - 틀 테두리 4 - 안쪽 여백 16 = 193px라 11px 여유가 남는다(의뢰 현황 틀은 일반 10, 네임드 3 두 칸: 도형 10 + 간격 2 + 2글자 x 0.82 x 13 = 33px씩).
 //  - 비율을 함께 보이려면 4자리 가방과 비율(2990 (99%) 10글자)로 골드 4 + 명성 4 + 10 = 18글자 x 0.82 x 13 + 54 = 246px가 필요하다.
-//    안쪽 폭이 그만큼 되는 가장 좁은 스테이지는 약 406px라 여유를 두어 440px 미만에서 비율을 뺀다(360, 390 폭은 뺀다).
-//  - 960px 이상은 글자 14px, 아이콘 16px, 칸 사이 구분선이 있어 묶음이 약 440px로, 거점 시계 칩과 겹치지 않는 한도(HeaderFrame 주석) 안이다.
+//    안쪽 폭이 그만큼 되는 가장 좁은 스테이지는 약 414px라 여유를 두어 440px 미만에서 비율을 뺀다(360, 390 폭은 뺀다).
+//  - 960px 이상은 글자 16px, 아이콘 24px, 칸 사이 구분선이 있다. 가장 긴 값(비율 포함 18글자)은 18 x 0.82 x 16 = 236px에
+//    아이콘 3 x 24 + 아이콘 간격 6 + 칸 사이 (18 + 구분선 1 + 18) x 2 = 74px, 안쪽 여백 36 + 테두리 4로 428px다. 의뢰 현황 틀은
+//    (도형 15 + 간격 2 + 2글자 x 0.82 x 16 = 43px) x 2 + 구분선과 간격 21 + 안쪽 여백 24 + 틀 여백 14 + 테두리 4로 약 149px다.
+//    묶음은 428 + 6 + 149 = 583px로, 거점 시계 칩과 겹치지 않는 한도(HeaderFrame 주석의 585px, 스테이지 폭 960에서 647px)
+//    안이다. 스테이지 폭 960에서 묶음 오른쪽 끝은 480 + 292 = 772px, 시계 칩 왼쪽은 804px로 32px 여유이고, 1920 창(스테이지 약 1536px)에서는
+//    시계 칩 왼쪽이 1380px이라 여유가 훨씬 크다.
 
 /** 가방 경고 단계 → 글자색 (75% 이상 주황, 95% 이상 빨강 계열) */
 const BAG_TONE: Record<BagLevel, HudStatTone> = { normal: 'gold', warn: 'orange', danger: 'danger' };
@@ -49,7 +54,7 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
   const stats = [
     named('gold', `골드 ${fmtNum(game.gold)}`, <HudStat glyph="coin" label="골드"><b className="font-bold">{fmtCompact3(game.gold)}</b></HudStat>),
     named('fame', `명성 ${fmtNum(game.fame)}`, <HudStat glyph="star" label="명성"><b className="font-bold">{fmtCompact3(game.fame)}</b></HudStat>),
-    named('bag', `가방 ${bag.count}/${bag.cap} (${bag.percent}%)`,
+    named('bag', `가방 ${fmtRatio(bag.count, bag.cap)} (${bag.percent}%)`,
       <HudStat glyph="fish" label="가방" tone={BAG_TONE[bag.level]}>
         <b className="font-bold">{bag.count}</b>
         <span data-omittable className="@max-[440px]:hidden"> ({bag.percent}%)</span>

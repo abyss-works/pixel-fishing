@@ -2,10 +2,9 @@ import { artifactOfZone } from '../../../game/content/artifacts';
 import { BOUNTY_PORT_ZONE, portOfZone } from '../../../game/content/bounties';
 import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../game/content/bounties';
 import type { RarityId } from '../../../game/content/rarity';
-import { bountyDailyCap } from '../../../game/rules/balance';
 import type { GameState } from '../../../game/rules/logic';
 import { BASE_PACKS } from '../../../game/world';
-import { clearsLeft, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
+import { clearsCaps, clearsLeft, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
 import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
@@ -96,7 +95,7 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
 
   return {
     left: clearsLeft(snapshot),
-    caps: { general: bountyDailyCap('general'), named: bountyDailyCap('named') },
+    caps: clearsCaps(),
     general,
     named,
     boardPorts: PORTS.map(portName),

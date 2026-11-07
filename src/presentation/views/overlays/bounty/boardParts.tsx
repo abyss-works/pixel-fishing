@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
 import Tip from '../../../ui/Tip';
-import { fmtMinutes } from '../../../ui/format';
+import { fmtClearsLeft, fmtMinutes } from '../../../ui/format';
 
 // 수배판 카드(일반 의뢰, 네임드 토벌, 유물)가 함께 쓰는 조각.
 
@@ -53,7 +53,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, first,
   /** 값 이름을 헤더의 의뢰 현황처럼 "일반", "네임드"로 줄인다 */
   shortLabels?: boolean;
 }) {
-  const left = (n: number | null, cap: number) => (n === null ? '-' : `${n}/${cap}`);
+  const left = fmtClearsLeft;
   return (
     <>
       <span className={first ? 'text-text-dim' : 'pl-3 border-l border-line text-text-dim'}>

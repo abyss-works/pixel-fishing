@@ -69,7 +69,7 @@ describe('자원 바', () => {
     expect(visible.join('')).not.toMatch(/골드|명성|가방/);
     const value = cells[0].querySelector('.pf-accent')!.className;
     expect(value).toContain('text-[13px]');
-    expect(value).toContain('@min-[960px]:text-[14px]');
+    expect(value).toContain('@min-[960px]:text-[16px]');
     expect(value).not.toMatch(/text-\[1[012]px\]/);
   });
 
@@ -101,7 +101,7 @@ describe('자원 바', () => {
       expect(screen.getByRole('tooltip')).toHaveTextContent('골드');
       fireEvent.mouseLeave(gold);
       fireEvent.mouseEnter(bag);
-      expect(screen.getByRole('tooltip')).toHaveTextContent('가방 1000/3000 (33%)');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('가방 1,000 / 3,000 (33%)');
     });
 
     it('골드와 명성 칸 툴팁은 줄임 표기가 아닌 정확한 값을 쉼표로 보인다', () => {

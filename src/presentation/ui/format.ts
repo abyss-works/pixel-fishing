@@ -18,6 +18,10 @@ export function fmtCompact(n: number): string {
   const tenths = Math.trunc(n / (size / 10));
   return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)}${unit}`;
 }
+/** "수량 / 상한" 표기 - 자릿수 구분 쉼표를 쓰고 슬래시 앞뒤에 공백을 둔다. 스탯 창 가방 칸과 헤더 가방 툴팁이 함께 쓴다 */
+export const fmtRatio = (n: number, total: number): string => `${fmtNum(n)} / ${fmtNum(total)}`;
+/** 오늘 남은 클리어 "남은 수/한도" 표기 - 수배판, 의뢰 창, 헤더 의뢰 현황 툴팁이 함께 쓴다. 아직 모르면(null) - */
+export const fmtClearsLeft = (left: number | null, cap: number): string => (left === null ? '-' : `${left}/${cap}`);
 /** 헤더처럼 폭이 아주 좁은 자리의 줄임 표기 - 유효숫자 3자리. 999까지는 그대로, 1000부터 K, M, B, T 단위에 3자리까지 보인다
  *  (999K, 12.4K, 1.23M). 끝자리 0은 생략한다. 단위 아래는 버린다(가진 것보다 많아 보이지 않게).
  *  글자 수가 최대 5(3자리 + 소수점 + 단위)라 폭이 거의 흔들리지 않는다. 정확한 값은 호출부가 툴팁 등으로 따로 보인다.
