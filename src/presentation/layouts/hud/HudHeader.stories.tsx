@@ -43,7 +43,7 @@ export const Typical: Story = { args: { game: typical, left: { general: 1, named
 /** 골드와 명성 999.9K, 가방 472 (15%), 일반 10, 네임드 3 */
 export const Longest: Story = { args: { game: longest, bagBonus: 5, left: { general: 10, named: 3 } } };
 export const Loading: Story = { args: { game: typical, left: null } };
-/** 가방 2990 (99%), 골드와 명성 999.9K, 일반 10, 네임드 3. 360 폭에서 비율은 생략되고 개수는 남는다 */
+/** 가방 2990 (99%), 골드와 명성 999.9K, 일반 10, 네임드 3. 스테이지 폭 440px 미만(360, 390)에서 비율은 생략되고 개수는 남는다. 가장 긴 값이 한 줄에 들어가는지 본다 */
 export const FourDigitBag: Story = { args: { game: fourDigitBag, bagBonus: 5, left: { general: 10, named: 3 } } };
 
 /** 거점의 시계 칩. 1024x600에서 의뢰 현황, 메뉴 버튼과 겹치지 않아야 한다 */

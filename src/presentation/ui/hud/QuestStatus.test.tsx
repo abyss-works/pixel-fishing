@@ -30,6 +30,21 @@ describe('의뢰 현황', () => {
     expect(button()).toHaveAccessibleName('의뢰 창 열기, 오늘 남은 클리어 일반 1 네임드 0');
   });
 
+  it('한 칸은 [색 표지 | 값] 한 줄이고, 이름은 sr-only와 툴팁으로 알린다', () => {
+    render(<QuestStatus general={1} named={0} />);
+    const cells = [...button().querySelectorAll('.pf-accent')].map(v => v.parentElement!);
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.className).toContain('inline-flex');
+      expect(cell.className).not.toContain('flex-col');
+      expect(cell.querySelector('.sr-only')).not.toBeNull();
+    }
+    const visible = cells.flatMap(cell => [...cell.childNodes].filter(n => !(n as HTMLElement).classList?.contains('sr-only')));
+    expect(visible.map(n => n.textContent).join('')).not.toMatch(/일반|네임드/);
+    fireEvent.mouseEnter(cells[1].parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('네임드 토벌, 오늘 남은 클리어');
+  });
+
   it('누르면 의뢰 창을 연다', () => {
     const onOpen = vi.fn();
     render(<QuestStatus general={1} named={1} onOpen={onOpen} />);
