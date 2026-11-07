@@ -74,6 +74,15 @@ describe('거점 카드 메뉴', () => {
       expect(root!.className).toContain('[container:basemenu/size]');
     });
 
+    it('메뉴 영역은 메시지 창이 프레임 안으로 들어오는 아래 영역을 비운다', () => {
+      render(<BaseMenu base="harbor" game={newState()} />);
+      const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
+      expect(root.className).toContain('bottom-[var(--log-clear,0px)]');
+      // 모바일 배치에서는 격자의 게임 영역(2행) 안에만 놓여 채팅 영역과 겹치지 않는다
+      expect(root.className).toContain('mobile:row-start-2');
+      expect(root.className).toContain('mobile:row-end-3');
+    });
+
     it('내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다', () => {
       render(<BaseMenu base="colombo" game={newState()} />);
       const scroller = screen.getByRole('heading', { name: '정보' }).closest('.pf-vscroll')!;

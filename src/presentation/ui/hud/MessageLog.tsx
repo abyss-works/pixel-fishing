@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
@@ -63,7 +63,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold }: {
+export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold, rootRef }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
@@ -84,6 +84,8 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   folded?: boolean;
   /** 접기 버튼을 눌렀다. 없으면 접기 버튼을 그리지 않는다 */
   onFold?: () => void;
+  /** 창 맨 바깥 상자 — 화면 조립이 창 크기를 읽는다 */
+  rootRef?: Ref<HTMLDivElement>;
 }) {
   const fixed = channels !== undefined;
   const listed = channels ?? channelsOf(log);
@@ -112,7 +114,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   };
 
   return (
-    <div className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
+    <div ref={rootRef} className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
                     mobile:static mobile:col-span-2 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
                     mobile:border-t mobile:border-line">
       {!folded && (toggles || onFold) && (

@@ -8,6 +8,7 @@ import type { FilterChannel, MessageFilter } from '../../../features/display/mod
 import { setMinimapVisible, useMinimapVisible } from '../../../features/display/service/minimapVisible';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
+import { useLogHeight } from './useLogHeight';
 import type { MessageChannel } from '../../ui/hud/messageFeed';
 import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
@@ -56,13 +57,14 @@ interface HudLayoutProps {
 // 플레이 화면에서 공통으로 쓰는 자원 표시, 미니맵, 시스템 로그를 배치한다.
 // 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(chips와 활성 미끼), 미니맵(바다에서만).
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
-// 모바일 배치에서는 자원 바가 머리 줄, 메시지 창이 채팅 영역에 놓이고(각 컴포넌트가 자기 행을 정한다), 나머지는 게임 영역의
+// 모바일 배치에서는 자원 바가 헤더, 메시지 창이 채팅 영역에 놓이고(각 컴포넌트가 자기 행을 정한다), 나머지는 게임 영역의
 // 아래 가운데 한 줄기에 쌓는다 — 아래에서부터 오른쪽의 칩과 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 // 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 40px 폭) 왼쪽에 붙인다. 모바일 배치에서는 메뉴 버튼이
-// 머리 줄에 있고 거점 그림 안에 같은 시계가 있어 이 시계는 그리지 않는다.
+// 헤더에 있고 거점 그림 안에 같은 시계가 있어 이 시계는 그리지 않는다.
 export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot }: HudLayoutProps) {
   const mobile = useMobileLayout();
+  const logRef = useLogHeight();
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   const minimapVisible = useMinimapVisible();
@@ -111,7 +113,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           )}
         </div>
       </div>
-      <MessageLog log={log} footer={logFooter} onPick={onPickLine} you={you}
+      <MessageLog rootRef={logRef} log={log} footer={logFooter} onPick={onPickLine} you={you}
                   filter={filter} onToggle={onToggleFilter} folded={folded} onFold={onFold}
                   channels={channels} disabledChannels={disabledChannels}
                   lines={mobile ? 5 : undefined} />

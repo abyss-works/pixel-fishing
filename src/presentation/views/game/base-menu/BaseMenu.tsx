@@ -61,7 +61,7 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
 
   const name = base === 'home' ? '집' : '항구';
   const menu = (
-    <div className="absolute inset-x-0 top-0 bottom-0 [container:basemenu/size]">
+    <div className="absolute inset-x-0 top-0 bottom-[var(--log-clear,0px)] mobile:row-start-2 mobile:row-end-3 [container:basemenu/size]">
       {/* 내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다(필수 글자는 자르지도 숨기지도 않는다) */}
       <div className="absolute inset-0 flex flex-col pf-vscroll pf-scroll-hud [scrollbar-gutter:stable_both-edges] px-[6%]">
         <div className="my-auto flex flex-col items-center gap-3">
