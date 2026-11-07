@@ -53,6 +53,11 @@ const rec = (count: number, maxSize: number | null = null, first: string | null 
 const bagOf = (g: GameState) => g.bag.map(i => `${i.fishId}:${i.form}`);
 
 const hud = () => document.querySelector('.hud')!.textContent!;
+/** 배와 낚싯대 레벨은 자원 바에 없다. 스탯 창의 고정 정보 줄에서 읽는다 */
+const statsFixed = () => {
+  fireEvent.click(screen.getByRole('button', { name: '스탯창 열기' }));
+  return within(screen.getByText('스탯').closest<HTMLElement>('[role="dialog"]')!);
+};
 // idle에는 상태 바 자체를 렌더하지 않는다 → 요소 없음 = idle
 const phase = () =>
   (document.querySelector('.status-overlay') as HTMLElement | null)?.dataset.phase ?? 'idle';
@@ -197,7 +202,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     render(<App />);
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화 \(/));
-    expect(hud()).toContain('낚싯대 Lv.2');
+    expect(statsFixed().getByText('Lv.2')).toBeTruthy();
     expect(hud()).toMatch(/골드 0(?![\d.,])/);
   });
 
@@ -213,7 +218,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     render(<App />);
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화 \(/));
-    expect(hud()).toContain('낚싯대 Lv.51');
+    expect(statsFixed().getByText('Lv.51')).toBeTruthy();
   });
 });
 
@@ -744,9 +749,10 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
       JSON.stringify({ gold: 500, xp: 200, rod: 4, bag: [], caught: { tuna: 2 }, spot: 'sea' }));
     render(<App />);
     expect(hud()).toMatch(/골드 500(?![\d.,])/);
-    expect(hud()).toContain('낚싯대 Lv.4');
-    expect(hud()).toContain('조각배'); // v1 증정
     expect(hud()).toContain(`명성 ${RARITY.epic.fame * 2}`); // 참치 2마리 소급
+    const fixed = statsFixed();
+    expect(fixed.getByText('Lv.4')).toBeTruthy();
+    expect(fixed.getByText('조각배')).toBeTruthy(); // v1 증정
     expect(screen.getByText(/소급해 인정/)).toBeInTheDocument();
   });
 });

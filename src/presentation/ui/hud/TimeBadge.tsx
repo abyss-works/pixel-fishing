@@ -10,11 +10,19 @@ import HudChip from './HudChip';
 /** 해/달 전환 임계 — 어둠이 이 값 이상이면 달 (저녁 20시쯤부터) */
 const MOON_AT = 0.15;
 
-export default function TimeBadge({ className }: { className?: string }) {
+// 메뉴 버튼 왼쪽 자리: 오른쪽 = 가장자리 12 + 메뉴 버튼 폭 + 간격 6, 위 = 가장자리 12 + (헤더 틀 높이 - 칩 높이 24) / 2.
+// 헤더 틀 60px이면 right 78, top 30이고, 스테이지 폭 960px 미만의 40px이면 right 58, top 20이다.
+const BESIDE_MENU = 'top-[30px] right-[78px] @max-[960px]:top-5 @max-[960px]:right-[58px] mobile:hidden';
+
+export default function TimeBadge({ className, besideMenu }: {
+  className?: string;
+  /** 거점 PC 배치에서 메뉴 버튼 왼쪽에 붙인다(모바일 배치에서는 그리지 않는다). 위치는 헤더 틀 높이에서 나온다 */
+  besideMenu?: boolean;
+}) {
   const { clock, dark } = useGameTime();
   const night = dark >= MOON_AT;
   return (
-    <HudChip size="sm" className={cx('absolute z-(--z-overlay) pointer-events-none', className)}>
+    <HudChip size="sm" className={cx('absolute z-(--z-overlay) pointer-events-none', besideMenu && BESIDE_MENU, className)}>
       <PixelIcon glyph={night ? 'moon' : 'sun'} size={11}
                  className={night ? 'text-accent' : 'text-gold'} />
       <span className="pf-accent text-xs leading-none text-text">{clock}</span>
