@@ -4,6 +4,7 @@ import Button from '../../../ui/Button';
 import Modal from '../../../ui/Modal';
 import NoteTag from '../../../ui/NoteTag';
 import { reopenWhatsNew } from '../../../../features/announcements/service/whatsNew';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 패치노트 창 — 버전별 아코디언(기본은 전부 닫힘)에 노트마다 범주(UI/기능/기타) 뱃지를 단다.
 // 목록이 길어 스크롤 상자에 넣는다. 약 8줄(38px x 8)까지만 보이고 나머지는 휠로 본다.
@@ -14,7 +15,7 @@ export default function PatchNotesModal({ onClose }: { onClose: () => void }) {
       <div className="flex justify-end mb-2">
         <Button size="sm" onClick={() => { onClose(); reopenWhatsNew(); }}>이번 소식 다시 보기</Button>
       </div>
-      <div className="pf-scroll-panel pf-vscroll max-h-[304px] pr-2 [scrollbar-gutter:stable] flex flex-col gap-2">
+      <div className={`${SCROLL_Y} max-h-[304px] flex flex-col gap-2`}>
         {PATCH_NOTES.map(p => (
           <Accordion
             key={p.version}

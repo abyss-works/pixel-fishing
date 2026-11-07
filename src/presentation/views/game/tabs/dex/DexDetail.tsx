@@ -15,6 +15,7 @@ import { RarityText } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import { fmtGold, fmtSize } from '../../../../ui/format';
 import SizeDistributionChart from './SizeDistributionChart';
+import { SCROLL_Y } from '../../../../ui/scrollArea';
 
 // 도감 상세보기 — 이름 머리 아래 2×2 메인 그리드: 위 줄 표본(초상화·로어) | 크기 분포, 아래 줄 기록 | 크기 순위.
 // 칸은 패널을 겹치지 않고 표면을 파낸 오목한 칸(Inset)으로 나눠 다른 창의 노치·베벨 언어와 맞춘다.
@@ -86,7 +87,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
                   {/* 표 머리와 순위 다섯 줄 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className="pf-scroll-panel max-h-[178px] pf-vscroll px-1">
+                  <div className={`${SCROLL_Y} max-h-[178px] pl-1`}>
                     <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                   </div>
                   {meOutside && (

@@ -13,6 +13,7 @@ import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import { fmtGold } from '../../../ui/format';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 type Screen = 'clothes' | 'hats';
 
@@ -56,7 +57,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
       />
       {screen === 'clothes' ? (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pf-scroll-panel pr-2 [scrollbar-gutter:stable]">
+          <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
             <div>
               <Subheading>프리셋</Subheading>
               <div className="grid grid-cols-6 gap-2">
@@ -83,7 +84,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="grid grid-cols-5 gap-2 flex-1 min-h-0 content-start pf-vscroll pf-scroll-panel pr-2 [scrollbar-gutter:stable]">
+          <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start ${SCROLL_Y}`}>
             {HATS.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;

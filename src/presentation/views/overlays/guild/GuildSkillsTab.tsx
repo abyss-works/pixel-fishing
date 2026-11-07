@@ -17,6 +17,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import type { GuildPartProps, GuildRun } from './guildProps';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 길드 스킬 탭: 오목한 판 위의 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부 버튼).
 // 스킬 다섯이 가로로 놓이고 단계 1~5가 위에서 아래로 뻗는다. 이룬 단계는 금색으로 차고, 다음 단계는 모인 비율만큼 찬다.
@@ -32,7 +33,7 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
   const sel = rows.find(r => r.id === picked) ?? rows[0];
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll">
+    <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
       <Inset className="shrink-0 px-3 py-4">
         <div className="grid grid-cols-5 gap-3" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}

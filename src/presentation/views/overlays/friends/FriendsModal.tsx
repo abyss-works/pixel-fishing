@@ -20,6 +20,7 @@ import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
@@ -166,7 +167,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
+    <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}

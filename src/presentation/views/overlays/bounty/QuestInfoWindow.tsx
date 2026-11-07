@@ -10,6 +10,7 @@ import TabBar from '../../../ui/TabBar';
 import type { TabDef } from '../../../ui/TabBar';
 import { ClearsLeft } from './boardParts';
 import { EmptyInfoCard, GeneralInfoCard, NamedInfoCard } from './QuestInfoCards';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 의뢰 창의 화면 - 헤더의 의뢰 현황을 눌러 여는, 지금 수주 중인 의뢰를 보는 읽기 전용 창.
 // 제목 "의뢰" 아래 고정 정보 줄에 오늘 남은 클리어를 두고(수배판과 같은 조각, 값 이름은 헤더처럼 줄인다),
@@ -69,7 +70,7 @@ export default function QuestInfoWindow({ info, onClose }: {
                         dailyCap={info.caps.general} namedDailyCap={info.caps.named} />
           </Inset>
           <TabBar tabs={TABS} activeKey={tab} onSelect={setPicked} />
-          <div className="pf-scroll-panel flex flex-col flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
+          <div className={`flex flex-col flex-1 min-h-0 ${SCROLL_Y}`}>
             {body()}
           </div>
         </div>

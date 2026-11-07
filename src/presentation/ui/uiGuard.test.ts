@@ -2,6 +2,7 @@
 // 한 번만 쓰는 화면 조각은 그 화면 파일 안의 지역 컴포넌트로 만들 수 있다. 단 두 화면 이상에 같은 이름의
 // 지역 컴포넌트가 생기면 공용 UI로 올려야 한다. 예외 목록은 줄이기만 한다(새 예외를 더하지 않는다).
 import { describe, expect, it } from 'vitest';
+import { SCROLL_Y, SCROLL_Y_PADDED } from './scrollArea';
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
@@ -44,7 +45,7 @@ const RAW_HEADING_EXCEPTIONS = new Set([
 
 /** 화면(views·layouts)의 overflow 직접 지정 — 세로 스크롤은 공용 스크롤 방식(pf-vscroll + pf-scroll-panel)이나 TableBox가 맡는다.
  *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
-const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b/;
+const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|-y)?:(?:auto|scroll)\]/;
 const OVERFLOW_EXCEPTIONS = new Set([
   'views/admin/tabs/AntiAbuseTab.tsx',
   'views/admin/tabs/BountyFunnelSection.tsx',
@@ -62,6 +63,46 @@ const OVERFLOW_EXCEPTIONS = new Set([
 const HIDDEN_BAR = /(?<![\w-])pf-scroll(?![\w-])/;
 const HIDDEN_BAR_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx', // 384px 폭 사이드바 — 탭을 옮길 때 막대가 폭을 흔들지 않게 숨긴다
+]);
+
+/** 스크롤을 거는 모든 표기 — 공용 스크롤 클래스, overflow 유틸, arbitrary 표기(`[overflow-y:auto]`) */
+const SCROLL_CLASS = /pf-vscroll|pf-scroll|\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|-y)?:(?:auto|scroll)\]/;
+
+/** `<Modal ...>` 여는 태그 전체. 화살표 함수의 `=>`는 태그 끝으로 보지 않는다 */
+const MODAL_TAG = /<Modal\b(?:=>|[^>])*>/g;
+
+/** Modal 호출부 태그와, 그 태그가 쓰는 대문자 상수(FIXED_HEIGHT 등)의 문자열 값 중 스크롤을 거는 표기를 돌려준다 */
+function scrollInModalCallSites(src: string): string[] {
+  const found: string[] = [];
+  for (const tag of src.match(MODAL_TAG) ?? []) {
+    if (SCROLL_CLASS.test(tag)) found.push(tag);
+    for (const id of tag.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? []) {
+      const decl = new RegExp(`const ${id}\\s*=\\s*([^;]*);`).exec(src)?.[1];
+      if (decl && SCROLL_CLASS.test(decl)) found.push(`${id} = ${decl}`);
+    }
+  }
+  return found;
+}
+
+/** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
+const hasVscrollWithoutBar = (line: string) =>
+  /pf-vscroll/.test(line) && !/pf-scroll-panel|pf-scroll-hud|(?<![\w-])pf-scroll(?![\w-])/.test(line);
+
+/** 공용 상수(SCROLL_Y, SCROLL_Y_PADDED) 없이 pf-vscroll을 직접 쓰는 자리 — 세로 스크롤 칸은 공용 상수로 쓴다.
+ *  관리자와 개발 도구 화면은 이 규칙을 따로 정한다 */
+const VSCROLL_LITERAL_EXCEPTIONS = new Set([
+  'layouts/sidebar/index.tsx',         // 막대를 숨기는 사이드바
+  'views/game/base-menu/BaseMenu.tsx', // 호버 때만 막대가 보이는 HUD 스크롤(pf-scroll-hud)
+]);
+const isAdminOrDevtools = (path: string) => /^views\/(?:admin|devtools)\//.test(path);
+
+/** 세로 스크롤을 거는 줄이 막대 자리(scrollbar-gutter)를 확보하지 않는 자리 */
+const SCROLL_LINE = /pf-vscroll|\boverflow-(?:y-)?auto\b|\[overflow(?:-y)?:auto\]/;
+const GUTTER = /\[scrollbar-gutter:stable/;
+const GUTTER_EXCEPTIONS = new Set([
+  'ui/Modal.tsx',          // 앱 모달 박스 — 16px 안쪽 여백이 막대와 내용 사이를 띄운다
+  'ui/hud/MessageLog.tsx', // 캔버스 위 글줄 상자 — 호버 때만 보이는 HUD 막대
+  'layouts/sidebar/index.tsx',
 ]);
 
 describe('UI 시스템 가드', () => {
@@ -118,6 +159,69 @@ describe('UI 시스템 가드', () => {
     const modal = sources['./Modal.tsx'];
     const stageBox = /layer === 'app'[\s\S]*?\n\s*:\s*cx\(([\s\S]*?)\);/.exec(modal)?.[1];
     expect(stageBox).toBeDefined();
-    expect(stageBox).not.toMatch(/pf-vscroll|pf-scroll|overflow-(?:x-|y-)?(?:auto|scroll)/);
+    expect(stageBox).not.toMatch(SCROLL_CLASS);
+  });
+  it('Modal 호출부와 그 높이 상수는 스크롤을 걸지 않는다 — 스크롤은 카드 본문과 앱 모달 박스가 맡는다', () => {
+    const offenders = screens.flatMap(f => scrollInModalCallSites(f.src).map(x => `${f.path}: ${x}`));
+    expect(offenders).toEqual([]);
+  });
+
+  it('감지 함수: Modal 호출부의 className과 상수, arbitrary 표기를 잡는다', () => {
+    expect(scrollInModalCallSites(`<Modal layer="stage" className="pf-vscroll" onClose={() => {}}>`)).toHaveLength(1);
+    expect(scrollInModalCallSites(`<Modal className="overflow-y-auto">`)).toHaveLength(1);
+    expect(scrollInModalCallSites(`<Modal className="[overflow-y:auto]">`)).toHaveLength(1);
+    expect(scrollInModalCallSites(`const FIXED_HEIGHT = 'h-[480px] pf-scroll-panel';\n<Modal className={FIXED_HEIGHT} onClose={f}>`)).toHaveLength(1);
+    expect(scrollInModalCallSites(`const FIXED_HEIGHT = 'h-[480px]';\n<Modal className={FIXED_HEIGHT} onClose={() => go()}>`)).toEqual([]);
+  });
+
+  it('감지 함수: overflow 직접 지정의 arbitrary 표기도 잡는다', () => {
+    for (const cls of ['overflow-auto', 'overflow-x-scroll', '[overflow-y:auto]', '[overflow:scroll]', '[overflow-x:auto]']) {
+      expect(OVERFLOW_DIRECT.test(cls), cls).toBe(true);
+    }
+    expect(OVERFLOW_DIRECT.test('overflow-hidden')).toBe(false);
+  });
+
+  it('pf-vscroll은 막대 클래스와 함께 쓴다', () => {
+    const offenders: string[] = [];
+    for (const { path, src } of screens) {
+      src.split('\n').forEach((line, i) => { if (hasVscrollWithoutBar(line)) offenders.push(`${path}:${i + 1}`); });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('감지 함수: 막대 클래스 없는 pf-vscroll만 잡는다', () => {
+    expect(hasVscrollWithoutBar('<div className="pf-vscroll flex-1">')).toBe(true);
+    expect(hasVscrollWithoutBar('<div className="pf-vscroll pf-scroll-panel">')).toBe(false);
+    expect(hasVscrollWithoutBar('<div className="pf-vscroll pf-scroll-hud">')).toBe(false);
+    expect(hasVscrollWithoutBar('<div className="pf-scroll pf-vscroll">')).toBe(false);
+  });
+
+  it('화면의 세로 스크롤 칸은 공용 상수(SCROLL_Y)를 쓴다 — pf-vscroll 직접 지정은 예외 목록의 자리만', () => {
+    const using = screens.filter(f => !isAdminOrDevtools(f.path) && /pf-vscroll/.test(f.src)).map(f => f.path);
+    expect(using.filter(p => !VSCROLL_LITERAL_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...VSCROLL_LITERAL_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  });
+
+  it('공용 상수는 막대 자리와 내용 여백을 함께 준다', () => {
+    expect(SCROLL_Y).toMatch(/pf-vscroll/);
+    expect(SCROLL_Y).toMatch(/pf-scroll-panel/);
+    expect(SCROLL_Y).toMatch(/\[scrollbar-gutter:stable\]/);
+    expect(SCROLL_Y).toMatch(/\bpr-2\b/);
+    expect(SCROLL_Y_PADDED).toMatch(/\[scrollbar-gutter:stable\]/);
+    expect(SCROLL_Y_PADDED).not.toMatch(/\bpr-/);
+  });
+
+  it('세로로 스크롤하는 칸은 막대 자리를 늘 확보한다 — scrollbar-gutter 없는 줄은 예외 목록의 자리만', () => {
+    const offenders: string[] = [];
+    const targets = Object.entries(sources)
+      .map(([key, src]) => ({ path: rel(key), src }))
+      .filter(f => /^(views|layouts|ui)\//.test(f.path) && f.path.endsWith('.tsx') && !isTestFile(f.path)
+        && !isAdminOrDevtools(f.path) && !GUTTER_EXCEPTIONS.has(f.path));
+    for (const { path, src } of targets) {
+      src.split('\n').forEach((line, i) => {
+        if (SCROLL_LINE.test(line) && !GUTTER.test(line)) offenders.push(`${path}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
