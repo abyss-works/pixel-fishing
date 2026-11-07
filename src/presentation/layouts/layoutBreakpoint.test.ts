@@ -36,6 +36,10 @@ describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
   it('CSS의 mobile 변형과 입력 칸 규칙이 정본을 참조한다 - 같은 값을 따로 적지 않는다', () => {
     expect(css).toMatch(/@custom-variant mobile \(@media \(width < theme\(--breakpoint-pc\)\)\);/);
     expect(css).toMatch(/@media \(width < theme\(--breakpoint-pc\)\) \{\s*html \{ touch-action/);
+    // 입력 칸 16px 규칙도 같은 media 블록 안에 있다
+    const block = /@media \(width < theme\(--breakpoint-pc\)\) \{\s*html \{ touch-action[\s\S]*?\n\}/.exec(css);
+    expect(block, '정본 media 블록을 찾지 못했다').not.toBeNull();
+    expect(block![0]).toMatch(/font-size:\s*16px/);
   });
 
   it('방향 조건과 옛 600px 기준을 쓰지 않는다', () => {
