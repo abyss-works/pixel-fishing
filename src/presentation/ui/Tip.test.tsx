@@ -88,3 +88,16 @@ describe('Tip: 거친 포인터(터치)', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
+
+describe('Tip: 조건부 열기', () => {
+  it('onlyIf가 거짓이면 마우스를 올려도 열리지 않고, 참이면 열린다', () => {
+    setPointer(false);
+    let allowed = false;
+    render(<Tip text="설명" onlyIf={() => allowed}>대상</Tip>);
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    allowed = true;
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+  });
+});

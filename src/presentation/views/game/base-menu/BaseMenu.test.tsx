@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { newState } from '../../../../game/rules/logic';
+import { BASE_PACKS } from '../../../../game/world';
+import type { BaseId } from '../../../../game/world';
 import BaseMenu from './BaseMenu';
 
 afterEach(cleanup);
@@ -10,13 +12,13 @@ const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-
 describe('거점 카드 메뉴', () => {
   it('집은 게시판·작업대·목공소·판매 궤짝·옷장·문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '작업대 · 낚싯대 Lv.1', '목공소 · 배 없음', '궤짝 · 판매', '옷장', '문 · 마을로']);
+    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장', '문 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
     render(<BaseMenu base="harbor" game={newState()} />);
-    expect(names()).toEqual(['게시판 · 랭킹', '수배판 · 의뢰/토벌', '공방 · 낚싯대 Lv.1', '조선소 · 배 없음',
-      '어시장 · 판매', '마을 · 집으로', '여객선 · 빠른 이동', '승선 · 바다로']);
+    expect(names()).toEqual(['게시판 랭킹', '수배판 의뢰/토벌', '공방 낚싯대 Lv.1', '조선소 배 없음',
+      '어시장 판매', '마을 집으로', '여객선 빠른 이동', '승선 바다로']);
   });
 
   it('항구의 승선 카드는 내 배를, 마을 카드는 집을, 빠른 이동 카드는 여객선을 아이콘으로 쓴다', () => {
@@ -39,12 +41,60 @@ describe('거점 카드 메뉴', () => {
   it('카드를 누르면 그 시설을 알린다', () => {
     const onFacility = vi.fn();
     render(<BaseMenu base="home" game={newState()} onFacility={onFacility} />);
-    fireEvent.click(screen.getByRole('button', { name: '목공소 · 배 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '목공소 배 없음' }));
     expect(onFacility).toHaveBeenCalledWith('boat');
   });
 
   it('배경은 거점 이름으로 읽힌다', () => {
     render(<BaseMenu base="harbor" game={newState()} />);
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
+  });
+
+  describe('설명 줄 생략 가드', () => {
+    const bases = Object.keys(BASE_PACKS) as BaseId[];
+
+    it.each(bases)('%s 카드의 설명 줄은 모두 생략 역할이고, 제목 줄과 아이콘은 생략 대상이 아니다', base => {
+      render(<BaseMenu base={base} game={newState()} />);
+      for (const card of document.querySelectorAll('[data-facility]')) {
+        const id = card.getAttribute('data-facility')!;
+        const spans = [...card.querySelectorAll(':scope > span')];
+        const omittable = spans.filter(s => s.hasAttribute('data-omittable'));
+        const fixed = spans.filter(s => !s.hasAttribute('data-omittable'));
+        expect(fixed.length, id).toBe(2);
+        for (const el of fixed) expect(el.className, id).not.toContain('menu-compact:');
+        expect(omittable.length, id).toBeLessThanOrEqual(1);
+      }
+      expect(document.querySelectorAll('[data-omittable]').length).toBeGreaterThan(0);
+    });
+
+    it('메뉴 영역은 이름 붙은 size 컨테이너다', () => {
+      render(<BaseMenu base="harbor" game={newState()} />);
+      const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]');
+      expect(root).not.toBeNull();
+      expect(root!.className).toContain('[container:basemenu/size]');
+    });
+
+    it('메뉴 영역은 메시지 창이 프레임 안으로 들어오는 아래 영역을 비운다', () => {
+      render(<BaseMenu base="harbor" game={newState()} />);
+      const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
+      expect(root.className).toContain('bottom-[var(--log-clear,0px)]');
+      // 모바일 배치에서는 격자의 게임 영역(2행) 안에만 놓여 채팅 영역과 겹치지 않는다
+      expect(root.className).toContain('mobile:row-start-2');
+      expect(root.className).toContain('mobile:row-end-3');
+    });
+
+    it('내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다', () => {
+      render(<BaseMenu base="colombo" game={newState()} />);
+      const scroller = screen.getByRole('heading', { name: '정보' }).closest('.pf-vscroll')!;
+      expect(scroller).not.toBeNull();
+      // 캔버스 위 오버레이의 공용 스크롤 방식: 막대는 호버 때만 보이고, 막대 자리는 양쪽에 고정해 가운데 맞춤이 치우치지 않는다
+      for (const cls of ['pf-scroll-hud', '[scrollbar-gutter:stable_both-edges]']) expect(scroller.className).toContain(cls);
+      expect((scroller.firstElementChild as HTMLElement).className).toContain('my-auto');
+    });
+
+    it('설명이 없는 시설은 설명 줄을 그리지 않는다', () => {
+      render(<BaseMenu base="home" game={newState()} />);
+      expect(document.querySelector('[data-facility="wardrobe"] [data-omittable]')).toBeNull();
+    });
   });
 });

@@ -136,6 +136,9 @@ export type FurnitureSpriteId =
   | 'workbench' | 'chest' | 'wardrobe' | 'door'            // 집
   | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
 
+/** 시설 카드 라벨 — 제목과 선택 설명. 설명은 자리가 모자라면 생략될 수 있는 보조 정보다 */
+export interface FacilityLabel { title: string; sub?: string }
+
 /** 라벨의 동적 데이터(낚싯대 Lv·배 이름) 주입 */
 export interface BaseInfo { rod: number; boatName: string }
 
@@ -143,7 +146,7 @@ export interface BaseInfo { rod: number; boatName: string }
 export interface Furniture extends Rect {
   id: FurnitureId;
   sprite: FurnitureSpriteId;
-  label: (info: BaseInfo) => string;
+  label: (info: BaseInfo) => FacilityLabel;
   labelDy: number; // 라벨 y 오프셋 (rect.y 기준)
 }
 
