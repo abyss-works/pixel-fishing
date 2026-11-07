@@ -55,7 +55,7 @@ const bagOf = (g: GameState) => g.bag.map(i => `${i.fishId}:${i.form}`);
 const hud = () => document.querySelector('.hud')!.textContent!;
 /** 배와 낚싯대 레벨은 자원 바에 없다. 스탯 창의 고정 정보 줄에서 읽는다 */
 const statsFixed = () => {
-  fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
+  fireEvent.click(screen.getByRole('button', { name: '스탯창 열기' }));
   return within(screen.getByText('스탯').closest<HTMLElement>('[role="dialog"]')!);
 };
 // idle에는 상태 바 자체를 렌더하지 않는다 → 요소 없음 = idle
@@ -1422,7 +1422,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   it('클릭하면 요약 탭으로 열리고, 탭마다 배·낚싯대·보너스를 보여 주며 닫기로 닫힌다', () => {
     seed();
     render(<App />);
-    fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
     // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을에서는 요구 파워가 가장 높은 마을 강)
     const dialog = within(statsDialog());
@@ -1460,7 +1460,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
     render(<App />);
-    fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
+    fireEvent.click(screen.getByLabelText('스탯창 열기'));
     expect(screen.getByText('스탯')).toBeInTheDocument();
     expect(screen.getByRole('meter', { name: '파워' })).toBeInTheDocument();
     // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환

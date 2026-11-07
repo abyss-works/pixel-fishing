@@ -10,6 +10,9 @@ vi.mock('../../../../platform/api', async importOriginal => {
   return { ...mod, readMails: async () => state.mails };
 });
 
+const layout = vi.hoisted(() => ({ mobile: false }));
+vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
+
 import GameMenu from './GameMenu';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
@@ -24,7 +27,7 @@ function wrap(node: ReactNode) {
 
 const handlers = () => ({ onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
-afterEach(() => { cleanup(); state.mails = null; });
+afterEach(() => { cleanup(); state.mails = null; layout.mobile = false; });
 
 describe('게임 메뉴', () => {
   it('열 수 있는 입구가 하나도 없으면(로컬 모드, 게스트) 메뉴 버튼을 그리지 않는다', async () => {
@@ -65,6 +68,25 @@ describe('게임 메뉴', () => {
     fireEvent.click(items[0]);
     expect(h.onMailbox).toHaveBeenCalled();
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+  });
+
+
+  it('PC 배치의 메뉴 버튼은 헤더 틀과 같은 높이의 정사각형(60px, 좁은 스테이지 40px)이다', async () => {
+    state.mails = [mail({ id: 1, gold: 100 })];
+    wrap(<GameMenu account={null} {...handlers()} />);
+    const cls = (await screen.findByRole('button', { name: /^메뉴 열기/ })).className;
+    expect(cls).toContain('h-15');
+    expect(cls).toContain('@max-[960px]:h-10');
+  });
+
+  it('모바일 배치의 메뉴 버튼은 헤더 높이의 정사각형 버튼이다', async () => {
+    layout.mobile = true;
+    state.mails = [mail({ id: 1, gold: 100 })];
+    wrap(<GameMenu account={null} {...handlers()} />);
+    const cls = (await screen.findByRole('button', { name: /^메뉴 열기/ })).className;
+    expect(cls).toContain('h-10');
+    expect(cls).toContain('w-10');
+    expect(cls).not.toContain('h-15');
   });
 
 });
