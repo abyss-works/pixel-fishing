@@ -2,7 +2,9 @@
 // 2절(라이선스 표)의 수치 계약을 강제한다. 표가 여기서 깨지면 수배 UI와
 // 서버 판정이 조용히 틀린 값을 쓴다.
 import { describe, it, expect } from 'vitest';
-import { BOUNTIES, BOUNTY_LICENSE_FAME, bountyById, bountyKindOf, dailyQuestFor } from './bounties';
+import {
+  BOUNTIES, BOUNTY_LICENSE_FAME, BOUNTY_PORT_ZONE, bountyById, bountyKindOf, dailyQuestFor, portOfZone, zoneOfPort,
+} from './bounties';
 import { RARITY } from './rarity';
 
 // spec 3절 수량표 (EV 반올림)
@@ -78,6 +80,21 @@ describe('의뢰의 갈래', () => {
     expect(bountyKindOf(bountyById('pacific-named-megalodon')!)).toBe('named');
     for (const q of BOUNTIES.filter(row => row.difficulty !== 'named')) {
       expect(bountyKindOf(q), q.id).toBe('general');
+    }
+  });
+});
+
+describe('항구와 해역의 대응', () => {
+  it('해역마다 수배 창구 항구가 하나씩 있고 portOfZone과 zoneOfPort가 서로 역이다', () => {
+    for (const [port, zone] of Object.entries(BOUNTY_PORT_ZONE)) {
+      expect(zoneOfPort(port)).toBe(zone);
+      expect(portOfZone(zone)).toBe(port);
+    }
+  });
+
+  it('모든 의뢰 해역에 창구 항구가 있다', () => {
+    for (const zone of new Set(BOUNTIES.map(q => q.zone))) {
+      expect(portOfZone(zone), zone).toBeDefined();
     }
   });
 });

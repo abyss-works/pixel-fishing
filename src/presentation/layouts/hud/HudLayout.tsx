@@ -28,6 +28,7 @@ interface HudLayoutProps {
   log: Msg[];
   covered: boolean;
   onOpenStats: () => void;
+  onOpenQuests: () => void;
   onOpenMap: () => void;
   /** 미니맵에 그릴 같은 바다의 길드원 위치 */
   guildMates?: () => readonly { x: number; y: number }[];
@@ -66,7 +67,7 @@ interface HudLayoutProps {
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 // 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 60px 폭, 스테이지 960px 미만에서는 40px) 왼쪽에 붙인다. 모바일 배치에서는 메뉴 버튼이
 // 헤더에 있고 거점 그림 안에 같은 시계가 있어 이 시계는 그리지 않는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenQuests, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
   const mobile = useMobileLayout();
   // 오늘 남은 클리어 횟수(일반 의뢰, 네임드 토벌): 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면 null
   const { snap } = useBounty();
@@ -78,7 +79,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
 
   return (
     <>
-      <HudHeader game={game} bagBonus={bagBonus} left={clearsLeft(snap)} onOpenStats={onOpenStats} menu={menu} />
+      <HudHeader game={game} bagBonus={bagBonus} left={clearsLeft(snap)} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />
       {scene.kind === 'base' && <TimeBadge besideMenu />}
       <div className="contents mobile:absolute mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2 mobile:bottom-2 mobile:z-(--z-overlay)
                       mobile:flex mobile:flex-col mobile:items-end mobile:gap-2 mobile:pointer-events-none">

@@ -212,7 +212,7 @@ describe('BountyPanel', () => {
       expect.objectContaining({ type: 'exchangeArtifact', artifact: 'abyss-angler' })));
   });
 
-  it('흔적(도전권)이 있으면 네임드 카드 머리에 도전권 남은 시간만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
+  it('흔적이 있으면 네임드 카드 머리에 흔적 남은 시간만 보이고 도전 버튼은 없다 — 도전은 바다에서 치른다', async () => {
     mockSnap = {
       clearsToday: { general: 0, named: 0 }, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
@@ -227,7 +227,14 @@ describe('BountyPanel', () => {
     show(game({ fame: 1500, dex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
-    expect(tipOf(await screen.findByText('도전권'))).toMatch(/흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
+    const trace = tipOf(await screen.findByText('흔적'));
+    expect(trace).toMatch(/흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
+    // 도전권은 규칙 용어라 화면 문구에 쓰지 않는다 - 카드 본문과 툴팁(흔적, 이름) 모두
+    expect(trace).not.toContain('도전권');
+    expect(screen.queryByText('도전권')).toBeNull();
+    expect(document.body.textContent).not.toContain('도전권');
+    fireEvent.mouseLeave(screen.getByText('흔적'));
+    expect(tipOf(screen.getByText('???'))).not.toContain('도전권');
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });

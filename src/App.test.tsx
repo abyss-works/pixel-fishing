@@ -1401,6 +1401,20 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
   });
 });
 
+describe('의뢰 창 - 의뢰 현황 클릭 진입', () => {
+  it('받은 의뢰가 없어도 의뢰 현황을 누르면 의뢰 창이 열리고, 다시 누르면 닫힌다', () => {
+    seed();
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^의뢰 창 열기/ }));
+    const dialog = screen.getAllByRole('dialog').at(-1)!;
+    expect(within(dialog).getByText('의뢰')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '일반 의뢰' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '네임드 토벌' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^의뢰 창 열기/ }));
+    expect(screen.queryByRole('button', { name: '네임드 토벌' })).not.toBeInTheDocument();
+  });
+});
+
 describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   const statsDialog = () => screen.getAllByRole('dialog').at(-1)!;
   const openTab = (name: string) => fireEvent.click(within(statsDialog()).getByRole('button', { name }));

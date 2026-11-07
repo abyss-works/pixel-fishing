@@ -28,6 +28,7 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
 import GameMenu from '../overlays/menu/GameMenu';
@@ -108,6 +109,7 @@ export default function GameView(props: GameViewProps) {
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [questsOpen, setQuestsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -237,6 +239,7 @@ export default function GameView(props: GameViewProps) {
   };
 
   const openStats = () => setStatsOpen(open => !open);
+  const openQuests = () => setQuestsOpen(open => !open);
   // 승부 결과 확정 — 서버가 도감·진행도·도전권을 바꾼다. 실패는 감사만 남아 창을 그대로 둔다
   const resolveEncounter = (r: EncounterResult) => {
     if (!encounter) return;
@@ -281,7 +284,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenQuests={openQuests} onOpenMap={onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
@@ -309,6 +312,7 @@ export default function GameView(props: GameViewProps) {
                       region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
         )}
+        {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}

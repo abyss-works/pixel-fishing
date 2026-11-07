@@ -6,11 +6,11 @@ import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../.
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
-import { ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
 /** 일반 의뢰 난이도의 화면 이름 */
@@ -71,6 +71,16 @@ export function clearsLeft(snapshot: BountySnapshot | null): { general: number; 
   };
 }
 
+/** 갈래마다 수주 중인 의뢰 하나 - 어느 구역의 것이든 같은 갈래의 새 수주를 막는다. 수주하면 진행 행이 생기므로 행의 존재가 곧 수주다 */
+export function heldQuests(snapshot: BountySnapshot | null): Record<BountyKind, BountyQuest | undefined> {
+  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
+  for (const row of snapshot?.progress ?? []) {
+    const held = bountyById(row.questId);
+    if (held) holding[bountyKindOf(held)] ??= held;
+  }
+  return holding;
+}
+
 const KIND_SUBJECT: Record<BountyKind, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const CLEARED_NOTICE: Record<BountyKind, string> = {
   general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
@@ -91,12 +101,7 @@ export function selectBountyPanelData({
   const left = clearsLeft(snapshot);
   const leftAll = left?.general ?? null;
   const leftNamed = left?.named ?? null;
-  // 갈래마다 수주 중인 의뢰 하나 — 어느 구역의 것이든 같은 갈래의 새 수주를 막는다
-  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
-  for (const row of snapshot?.progress ?? []) {
-    const held = bountyById(row.questId);
-    if (held) holding[bountyKindOf(held)] ??= held;
-  }
+  const holding = heldQuests(snapshot);
   const heldHere = (difficulty: BountyDifficulty): BountyQuest | undefined =>
     Object.values(holding).find(q => q?.zone === zone && q.difficulty === difficulty);
   const offers = Object.fromEntries(difficulties.map(difficulty => [
@@ -118,11 +123,7 @@ export function selectBountyPanelData({
   const basicConds = licenseConditions(game, zone, 'basic');
   const namedConds = licenseConditions(game, zone, 'named');
   const namedQuest = offers.named;
-  const ticketIssuedAt = namedQuest
-    ? snapshot?.tickets.find(ticket => ticket.questId === namedQuest.id)?.issuedAt ?? null
-    : null;
-  const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs) / 60_000));
+  const ticketMins = namedQuest ? ticketMinsOf(snapshot, namedQuest.id, nowMs) : null;
   const relic = artifactOfZone(zone);
 
   return {
@@ -142,7 +143,7 @@ export function selectBountyPanelData({
     canTakeNamed: snapshot !== null && (leftNamed ?? 0) > 0 && !holding.named,
     notice: { general: noticeOf('general'), named: noticeOf('named') },
     ticketMins,
-    hasTicket: ticketMins !== null && ticketMins > 0,
+    hasTicket: ticketMins !== null,
     relic,
     relicOwned: relic ? game.artifacts.includes(relic.id) : false,
     relicMats: relic ? game.items[relic.materialId] ?? 0 : 0,

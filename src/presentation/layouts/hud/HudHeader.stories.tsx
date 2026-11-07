@@ -32,6 +32,7 @@ const meta: Meta<typeof HudHeader> = {
   )],
   args: {
     onOpenStats: () => {},
+    onOpenQuests: () => {},
     menu: <HudMenuButton alert aria-label="메뉴 열기, 새 알림 있음" />,
   },
 };

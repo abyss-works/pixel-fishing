@@ -5,8 +5,8 @@ import type { GameState } from '../../../game/rules/logic';
 import { DEBUG_ZONES } from '../../../game/rules/debug';
 import type { DebugCommandId } from '../../../game/rules/debug';
 import { minLevelOfPower } from '../../../game/rules/stats';
-import { BOUNTY_LICENSE_FAME, BOUNTY_PORT_ZONE, dailyQuestFor } from '../../../game/content/bounties';
-import type { BountyPort, BountyZone } from '../../../game/content/bounties';
+import { BOUNTY_LICENSE_FAME, dailyQuestFor, portOfZone } from '../../../game/content/bounties';
+import type { BountyZone } from '../../../game/content/bounties';
 import { SPOTS } from '../../../game/content/spots';
 import { topZoneOfSpot, zoneById } from '../../../game/content/zones';
 
@@ -25,9 +25,6 @@ export interface DevPreset {
 }
 
 export type PresetPlan = { ok: true; steps: PresetStep[] } | { ok: false; blocked: string };
-
-const portOfZone = (zone: BountyZone): BountyPort =>
-  (Object.keys(BOUNTY_PORT_ZONE) as BountyPort[]).find(port => BOUNTY_PORT_ZONE[port] === zone)!;
 
 /** 구역 수역 전부에서 낚을 수 있는 배·낚싯대 — 수역 표의 요구치가 정본이다 */
 function zoneGear(zone: BountyZone): { boat: number; rod: number } {
@@ -49,6 +46,7 @@ function namedReady(zone: BountyZone): DevPreset {
     hint: '클리어 기록·진행·흔적을 정리하고 라이선스 조건을 채운 뒤 네임드를 수주하고 강제 조우를 건다.',
     plan: ({ game, uid, day }) => {
       const port = portOfZone(zone);
+      if (!port) return { ok: false, blocked: `${area}에는 수배 창구가 없다.` };
       if (game.location.kind !== 'base' || game.location.id !== port) {
         return { ok: false, blocked: `${area} 항구 안에서 실행해야 한다 (수주는 수배판 위치를 요구한다).` };
       }

@@ -5,11 +5,11 @@ import { readFileSync } from 'node:fs';
 import HudHeader from './HudHeader';
 
 const menu = <button type="button" aria-label="메뉴 열기">m</button>;
-const header = (left: { general: number; named: number } | null = { general: 1, named: 1 }, onOpenStats = () => {}) =>
-  render(<HudHeader game={newState()} left={left} onOpenStats={onOpenStats} menu={menu} />);
+const header = (left: { general: number; named: number } | null = { general: 1, named: 1 }, onOpenStats = () => {}, onOpenQuests = () => {}) =>
+  render(<HudHeader game={newState()} left={left} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />);
 
 const bar = () => screen.getByRole('button', { name: '스탯창 열기' }).closest('div')!;
-const quest = () => screen.getByRole('group', { name: '오늘 남은 클리어 횟수' });
+const quest = () => screen.getByRole('button', { name: /^의뢰 창 열기/ });
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
 const css = readFileSync('src/index.css', 'utf-8');
 const zOf = (name: string) => Number(new RegExp(`--z-${name}:\\s*(\\d+)`).exec(css)![1]);
@@ -61,6 +61,15 @@ describe('HudHeader', () => {
   it('서버 값이 있으면 일반, 네임드 순서로 보인다', () => {
     header({ general: 0, named: 1 });
     expect(quest().textContent).toBe('일반 0네임드 1');
+  });
+
+  it('의뢰 현황을 누르면 의뢰 창을, 자원 바를 누르면 스탯 창을 연다 - 서로 다른 동작이다', () => {
+    const onOpenStats = vi.fn();
+    const onOpenQuests = vi.fn();
+    header(undefined, onOpenStats, onOpenQuests);
+    fireEvent.click(quest());
+    expect(onOpenQuests).toHaveBeenCalledTimes(1);
+    expect(onOpenStats).not.toHaveBeenCalled();
   });
 
   it('자원 바를 누르면 스탯 창을 연다', () => {
