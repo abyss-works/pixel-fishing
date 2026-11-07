@@ -28,7 +28,7 @@ import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 // 창 전체에 공통인 상태가 없어 고정 정보 줄은 두지 않는다. 창 자체는 스크롤하지 않고, 넘치는 내용은 탭 본문 안에서 굴린다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
 /** 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
+const FIXED_HEIGHT = 'h-[min(480px,calc(100%-32px))] mobile:h-auto';
 const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
 
 type SocialTab = 'friends' | 'requests' | 'blocks';

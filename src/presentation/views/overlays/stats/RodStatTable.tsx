@@ -47,7 +47,7 @@ function RodStatLine({ label, children }: { label: ReactNode; children: ReactNod
 export default function RodStatTable({ row }: { row: StatsSpotRow }) {
   const { axes, effectiveBite, manualBonus, autoBoost } = row.data;
   return (
-    <div className="grid grid-cols-2 gap-x-5 max-[640px]:grid-cols-1">
+    <div className="grid grid-cols-2 gap-x-5 mobile:grid-cols-1">
       <ul className="flex flex-col">
         <RodStatLine label="바 시간">{axes.sweep.value.toFixed(2)}초</RodStatLine>
         <RodStatLine label="입질 최소 대기"><StatValue stat={effectiveBite.min} unit="초" /></RodStatLine>

@@ -27,7 +27,7 @@ export default function NamedDetail({ quest, game, onClose }: {
       </header>
 
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,7fr)] grid-rows-[auto_1fr] gap-x-5 gap-y-4
-                      max-[640px]:grid-cols-1">
+                      mobile:grid-cols-1">
         <TitledCell title="표본">
           <Inset tone="light" className="flex flex-1 flex-col
                  bg-[linear-gradient(180deg,var(--c-surface-2),color-mix(in_oklab,var(--c-bg)_60%,var(--c-surface))_60%)]">
@@ -41,7 +41,7 @@ export default function NamedDetail({ quest, game, onClose }: {
           </Inset>
         </TitledCell>
 
-        <TitledCell title="전해 오는 이야기" className="row-span-2 max-[640px]:row-span-1">
+        <TitledCell title="전해 오는 이야기" className="row-span-2 mobile:row-span-1">
           <Inset className="pf-scroll-panel flex-1 min-h-64 max-h-[min(62vh,560px)] pf-vscroll px-5 py-4">
             {d.chronicle ? (
               <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
