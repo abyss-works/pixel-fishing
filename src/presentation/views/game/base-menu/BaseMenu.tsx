@@ -9,7 +9,7 @@ import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import NightOverlay from '../../../ui/hud/NightOverlay';
-import Button from '../../../ui/Button';
+import MenuCard from '../../../ui/MenuCard';
 import Panel from '../../../ui/Panel';
 import FacilityIcon from './FacilityIcon';
 import BoatSprite from '../../../ui/BoatSprite';
@@ -30,7 +30,7 @@ const drawHouse = (ctx: Parameters<typeof BUILDING_SPRITES.house.draw>[0]) => BU
 /** 카드 아이콘 — 승선은 지금 내 배, 마을행은 집, 나머지(빠른 이동 여객선 포함)는 가구 스프라이트 */
 function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture; boat: number }) {
   if (facility.id === 'exit' && base !== 'home' && boat > 0) {
-    return <span data-icon="boat" className="flex h-full items-center justify-center"><BoatSprite tier={boat} preset="row" /></span>;
+    return <span data-icon="boat" className="flex h-full items-center justify-center"><BoatSprite tier={boat} preset="row" className="max-w-full" /></span>;
   }
   if (facility.id === 'travel') return <span data-icon="house" className="block h-full p-1"><FacilityIcon rect={HOUSE_RECT} draw={drawHouse} /></span>;
   return <FacilityIcon rect={facility} draw={ctx => FURNITURE_SPRITES[facility.sprite](ctx, facility)} />;
@@ -61,31 +61,32 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
 
   const name = base === 'home' ? '집' : '항구';
   const menu = (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-[6%]">
-      <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
-      <div className="flex flex-wrap items-start justify-center gap-3">
-        {SECTIONS.map(section => {
-          const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
-          if (items.length === 0) return null;
-          return (
-            <Panel key={section} title={section}>
-              <div className="flex gap-2">
-                {items.map(f => {
-                  const { title, sub } = f.label(info);
-                  return (
-                    <Button key={f.id} type="button" aria-label={sub ? `${title} ${sub}` : title} data-facility={f.id}
-                            onClick={() => onFacility?.(f.id)}
-                            className="flex w-[clamp(84px,12vw,128px)] flex-col items-center gap-1 px-1.5 py-2">
-                      <span className="h-14 w-full"><CardIcon base={base} facility={f} boat={game.boat} /></span>
-                      <span className="pf-accent text-sm text-gold">{title}</span>
-                      {sub && <span className="text-xs text-text-dim">{sub}</span>}
-                    </Button>
-                  );
-                })}
-              </div>
-            </Panel>
-          );
-        })}
+    <div className="absolute inset-x-0 top-0 bottom-0 [container:basemenu/size]">
+      {/* 내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다(필수 글자는 자르지도 숨기지도 않는다) */}
+      <div className="absolute inset-0 flex flex-col pf-vscroll pf-scroll-hud [scrollbar-gutter:stable_both-edges] px-[6%]">
+        <div className="my-auto flex flex-col items-center gap-3">
+          <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
+          <div className="flex flex-wrap items-start justify-center gap-3">
+            {SECTIONS.map(section => {
+              const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
+              if (items.length === 0) return null;
+              return (
+                <Panel key={section} title={section}>
+                  <div className="flex gap-2">
+                    {items.map(f => {
+                      const { title, sub } = f.label(info);
+                      return (
+                        <MenuCard key={f.id} data-facility={f.id} onClick={() => onFacility?.(f.id)}
+                                  icon={<CardIcon base={base} facility={f} boat={game.boat} />}
+                                  title={title} sub={sub} subRole="omittable" />
+                      );
+                    })}
+                  </div>
+                </Panel>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
