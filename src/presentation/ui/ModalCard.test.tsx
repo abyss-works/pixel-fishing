@@ -50,4 +50,12 @@ describe('ModalCard', () => {
     render(<ModalCard title="조우"><p>본문</p></ModalCard>);
     expect(screen.queryByRole('button', { name: /닫기/ })).toBeNull();
   });
+  it('스테이지 모달은 className을 받지 않는다 — 높이는 height로 고른다(타입 검사)', () => {
+    render(
+      // @ts-expect-error 스테이지 모달의 투명 래퍼에는 스크롤 클래스가 들어갈 길이 없어야 한다
+      <Modal layer="stage" className="pf-vscroll" onClose={() => {}}><p>가</p></Modal>,
+    );
+    render(<Modal layer="stage" height={480} onClose={() => {}}><p>나</p></Modal>);
+    expect(screen.getAllByRole('dialog').at(-1)?.className).toMatch(/h-\[min\(480px/);
+  });
 });

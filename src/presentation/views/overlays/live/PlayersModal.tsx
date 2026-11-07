@@ -8,7 +8,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import { PlayerInfo } from './PlayerInfo';
-import { SCROLL_Y_PADDED } from '../../../ui/scrollArea';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 같은 바다 접속 목록. 680 폭에 탭이 없어 내용 높이를 따른다.
 // 위는 이 바다에 있는 다른 플레이어의 이름 칸 격자(3열, 세 줄 높이, 넘치면 칸 안에서 굴린다), 아래는 고른 사람의 정보 세 칸이다.
@@ -33,18 +33,20 @@ export default function PlayersModal({ region, account, setToast, onClose }: {
                 <span>접속한 플레이어</span><span className="pf-accent">{players.length}</span>
               </span>
               {/* 세 줄(32px 칸 셋, 사이 6px 둘, 위아래 8px) 높이 */}
-              <Inset className={`${SCROLL_Y_PADDED} h-[124px] p-2`}>
-                <div className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
-                  {players.map(p => {
-                    const on = p.uid === selected.uid;
-                    return (
-                      <Frame key={p.uid} as="button" type="button" aria-pressed={on} onClick={() => setPicked(p.uid)}
-                             className={cx('h-8 px-2.5 flex items-center text-xs text-left bg-surface-2 cursor-pointer min-w-0',
-                               on && 'border-gold text-gold font-bold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]')}>
-                        <span className="truncate">{p.nick}</span>
-                      </Frame>
-                    );
-                  })}
+              <Inset className="flex h-[124px] flex-col p-2">
+                <div className={`${SCROLL_Y} min-h-0 flex-1`}>
+                  <div className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
+                    {players.map(p => {
+                      const on = p.uid === selected.uid;
+                      return (
+                        <Frame key={p.uid} as="button" type="button" aria-pressed={on} onClick={() => setPicked(p.uid)}
+                               className={cx('h-8 px-2.5 flex items-center text-xs text-left bg-surface-2 cursor-pointer min-w-0',
+                                 on && 'border-gold text-gold font-bold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]')}>
+                          <span className="truncate">{p.nick}</span>
+                        </Frame>
+                      );
+                    })}
+                  </div>
                 </div>
               </Inset>
             </section>

@@ -15,7 +15,7 @@ export default function PatchNotesModal({ onClose }: { onClose: () => void }) {
       <div className="flex justify-end mb-2">
         <Button size="sm" onClick={() => { onClose(); reopenWhatsNew(); }}>이번 소식 다시 보기</Button>
       </div>
-      <div className={`${SCROLL_Y} max-h-[304px] flex flex-col gap-2`}>
+      <div className={`${SCROLL_Y} max-h-[312px] flex flex-col gap-2`}>
         {PATCH_NOTES.map(p => (
           <Accordion
             key={p.version}

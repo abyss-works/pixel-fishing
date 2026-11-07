@@ -9,7 +9,7 @@ import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { fmtGold } from '../../../../ui/format';
-import { SCROLL_Y_PADDED } from '../../../../ui/scrollArea';
+import { SCROLL_Y } from '../../../../ui/scrollArea';
 
 // 네임드 상세 — 일반 어종 상세와 같은 머리·메인 그리드·오목한 칸 언어. 오른쪽은 순위 대신 읽을거리(전승)이고
 // 왼쪽 두 칸(표본 · 기록) 높이를 한 칸으로 이어 받는다.
@@ -43,22 +43,24 @@ export default function NamedDetail({ quest, game, onClose }: {
         </TitledCell>
 
         <TitledCell title="전해 오는 이야기" className="row-span-2 mobile:row-span-1">
-          <Inset className={`${SCROLL_Y_PADDED} flex-1 min-h-64 max-h-[min(62vh,560px)] px-5 py-4`}>
-            {d.chronicle ? (
-              <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
-                {d.chronicle.map((p, idx) => (
-                  <p key={idx} className={idx === 0
-                    ? 'first-letter:float-left first-letter:mr-1.5 first-letter:text-3xl first-letter:leading-none first-letter:text-gold'
-                    : undefined}>
-                    {p}
-                  </p>
-                ))}
-              </article>
-            ) : (
-              <div className="flex h-full items-center justify-center text-center text-sm leading-[1.8] text-text-dim">
-                이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있어요.
-              </div>
-            )}
+          <Inset className="flex flex-1 min-h-64 max-h-[min(62vh,560px)] flex-col px-5 py-4">
+            <div className={`${SCROLL_Y} min-h-0 flex-1`}>
+              {d.chronicle ? (
+                <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
+                  {d.chronicle.map((p, idx) => (
+                    <p key={idx} className={idx === 0
+                      ? 'first-letter:float-left first-letter:mr-1.5 first-letter:text-3xl first-letter:leading-none first-letter:text-gold'
+                      : undefined}>
+                      {p}
+                    </p>
+                  ))}
+                </article>
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm leading-[1.8] text-text-dim">
+                  이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있어요.
+                </div>
+              )}
+            </div>
           </Inset>
         </TitledCell>
 

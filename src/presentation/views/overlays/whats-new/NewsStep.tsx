@@ -21,7 +21,7 @@ export default function NewsStep({ news }: { news: PatchNote }) {
         </div>
         <p className="text-sm">{news.summary}</p>
       </Frame>
-      <div className={`${SCROLL_Y} max-h-[42vh] flex flex-col gap-3`}>
+      <div className={`${SCROLL_Y} max-h-[calc(42vh+8px)] flex flex-col gap-3`}>
         {groups.map(({ tag, items }) => (
           <section key={tag} className="flex flex-col gap-1">
             <NoteTag tag={tag} className="self-start" />

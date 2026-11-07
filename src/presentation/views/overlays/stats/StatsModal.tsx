@@ -34,8 +34,6 @@ const TABS: TabDef<StatsTab>[] = [
   { key: 'rod', label: '낚싯대' },
   { key: 'bonus', label: '보너스' },
 ];
-/** 탭이 있는 창의 높이: 가장 긴 탭(낚싯대)이 들어가는 560px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] mobile:h-auto';
 
 interface Props {
   game: GameState;
@@ -69,7 +67,8 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
   };
 
   return (
-    <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
+    // 탭이 있는 창의 높이: 가장 긴 탭(낚싯대)이 들어가는 560px. 스테이지가 낮으면 위아래 16px을 남긴다
+    <Modal layer="stage" md height={560} onClose={onClose}>
       <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-sm">

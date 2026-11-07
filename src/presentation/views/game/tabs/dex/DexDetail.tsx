@@ -87,8 +87,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
                   {/* 표 머리와 순위 다섯 줄 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className={`${SCROLL_Y} max-h-[178px] pl-1`}>
-                    <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                  <div className={`${SCROLL_Y} max-h-[186px]`}>
+                    <div className="pl-1">
+                      <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                    </div>
                   </div>
                   {meOutside && (
                     <p className="mt-auto border-t border-line px-2 py-1.5 text-sm text-accent">

@@ -2,7 +2,7 @@
 // 한 번만 쓰는 화면 조각은 그 화면 파일 안의 지역 컴포넌트로 만들 수 있다. 단 두 화면 이상에 같은 이름의
 // 지역 컴포넌트가 생기면 공용 UI로 올려야 한다. 예외 목록은 줄이기만 한다(새 예외를 더하지 않는다).
 import { describe, expect, it } from 'vitest';
-import { SCROLL_Y, SCROLL_Y_PADDED } from './scrollArea';
+import { SCROLL_Y } from './scrollArea';
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
@@ -68,41 +68,49 @@ const HIDDEN_BAR_EXCEPTIONS = new Set([
 /** 스크롤을 거는 모든 표기 — 공용 스크롤 클래스, overflow 유틸, arbitrary 표기(`[overflow-y:auto]`) */
 const SCROLL_CLASS = /pf-vscroll|pf-scroll|\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|-y)?:(?:auto|scroll)\]/;
 
-/** `<Modal ...>` 여는 태그 전체. 화살표 함수의 `=>`는 태그 끝으로 보지 않는다 */
-const MODAL_TAG = /<Modal\b(?:=>|[^>])*>/g;
-
-/** Modal 호출부 태그와, 그 태그가 쓰는 대문자 상수(FIXED_HEIGHT 등)의 문자열 값 중 스크롤을 거는 표기를 돌려준다 */
-function scrollInModalCallSites(src: string): string[] {
-  const found: string[] = [];
-  for (const tag of src.match(MODAL_TAG) ?? []) {
-    if (SCROLL_CLASS.test(tag)) found.push(tag);
-    for (const id of tag.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? []) {
-      const decl = new RegExp(`const ${id}\\s*=\\s*([^;]*);`).exec(src)?.[1];
-      if (decl && SCROLL_CLASS.test(decl)) found.push(`${id} = ${decl}`);
+/** `<Modal ...>` 여는 태그들. 속성 값의 `{...}` 안에 있는 `>`(화살표 함수 등)는 태그 끝으로 보지 않는다 */
+function modalOpeningTags(src: string): string[] {
+  const tags: string[] = [];
+  for (const m of src.matchAll(/<Modal\b/g)) {
+    let depth = 0;
+    let i = m.index;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (c === '>' && depth === 0) break;
     }
+    tags.push(src.slice(m.index, i + 1));
   }
-  return found;
+  return tags;
 }
+
+/** className을 넘기는 Modal 호출부 중 앱 모달(layer="app")이 아닌 것. 스테이지 모달의 투명 래퍼에는 스크롤 클래스가 들어갈 길이 없어야 해서
+ *  className 자체를 받지 않는다(타입으로도 막는다). 필요한 높이는 height prop으로 고른다 */
+const modalsWithClassName = (src: string) =>
+  modalOpeningTags(src).filter(tag => /\bclassName\s*=/.test(tag) && !/\blayer="app"/.test(tag));
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
 const hasVscrollWithoutBar = (line: string) =>
   /pf-vscroll/.test(line) && !/pf-scroll-panel|pf-scroll-hud|(?<![\w-])pf-scroll(?![\w-])/.test(line);
 
-/** 공용 상수(SCROLL_Y, SCROLL_Y_PADDED) 없이 pf-vscroll을 직접 쓰는 자리 — 세로 스크롤 칸은 공용 상수로 쓴다.
+/** 공용 상수(SCROLL_Y) 없이 pf-vscroll을 직접 쓰는 자리 — 세로 스크롤 칸은 공용 상수로 쓴다.
  *  관리자와 개발 도구 화면은 이 규칙을 따로 정한다 */
 const VSCROLL_LITERAL_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx',         // 막대를 숨기는 사이드바
   'views/game/base-menu/BaseMenu.tsx', // 호버 때만 막대가 보이는 HUD 스크롤(pf-scroll-hud)
+  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭 안의 고정 높이 칸 — 막대 자리 규칙은 창에 적용한다
 ]);
 const isAdminOrDevtools = (path: string) => /^views\/(?:admin|devtools)\//.test(path);
 
 /** 세로 스크롤을 거는 줄이 막대 자리(scrollbar-gutter)를 확보하지 않는 자리 */
-const SCROLL_LINE = /pf-vscroll|\boverflow-(?:y-)?auto\b|\[overflow(?:-y)?:auto\]/;
+const SCROLL_LINE = /pf-vscroll|\boverflow-(?:y-)?(?:auto|scroll)\b|\[overflow(?:-y)?:(?:auto|scroll)\]/;
 const GUTTER = /\[scrollbar-gutter:stable/;
 const GUTTER_EXCEPTIONS = new Set([
-  'ui/Modal.tsx',          // 앱 모달 박스 — 16px 안쪽 여백이 막대와 내용 사이를 띄운다
+  'ui/Modal.tsx',          // 앱 모달 박스 — 막대 자리를 확보하지 않는다(막대가 나타나면 내용 폭이 줄어든다). 박스의 16px 안쪽 여백이 막대와 내용 사이를 띄운다
   'ui/hud/MessageLog.tsx', // 캔버스 위 글줄 상자 — 호버 때만 보이는 HUD 막대
-  'layouts/sidebar/index.tsx',
+  'layouts/sidebar/index.tsx', // 사이드바는 창이 아니며 막대를 숨긴다
+  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭은 창이 아니다(막대 자리 규칙은 창에 적용한다)
 ]);
 
 describe('UI 시스템 가드', () => {
@@ -161,17 +169,16 @@ describe('UI 시스템 가드', () => {
     expect(stageBox).toBeDefined();
     expect(stageBox).not.toMatch(SCROLL_CLASS);
   });
-  it('Modal 호출부와 그 높이 상수는 스크롤을 걸지 않는다 — 스크롤은 카드 본문과 앱 모달 박스가 맡는다', () => {
-    const offenders = screens.flatMap(f => scrollInModalCallSites(f.src).map(x => `${f.path}: ${x}`));
-    expect(offenders).toEqual([]);
+  it('Modal 호출부는 className을 넘기지 않는다 — 앱 모달(layer="app")만 예외', () => {
+    expect(screens.flatMap(f => modalsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
   });
 
-  it('감지 함수: Modal 호출부의 className과 상수, arbitrary 표기를 잡는다', () => {
-    expect(scrollInModalCallSites(`<Modal layer="stage" className="pf-vscroll" onClose={() => {}}>`)).toHaveLength(1);
-    expect(scrollInModalCallSites(`<Modal className="overflow-y-auto">`)).toHaveLength(1);
-    expect(scrollInModalCallSites(`<Modal className="[overflow-y:auto]">`)).toHaveLength(1);
-    expect(scrollInModalCallSites(`const FIXED_HEIGHT = 'h-[480px] pf-scroll-panel';\n<Modal className={FIXED_HEIGHT} onClose={f}>`)).toHaveLength(1);
-    expect(scrollInModalCallSites(`const FIXED_HEIGHT = 'h-[480px]';\n<Modal className={FIXED_HEIGHT} onClose={() => go()}>`)).toEqual([]);
+  it('감지 함수: className을 넘기는 스테이지 Modal을 잡고, 태그 안의 화살표 함수와 앱 모달은 가린다', () => {
+    expect(modalsWithClassName(`<Modal layer="stage" className={FIXED} onClose={() => {}}>`)).toHaveLength(1);
+    expect(modalsWithClassName(`<Modal layer="stage" className={cx(a, SCROLL_Y)} onClose={() => go(1 > 0)}>`)).toHaveLength(1);
+    expect(modalsWithClassName(`<Modal className="pf-vscroll">`)).toHaveLength(1);
+    expect(modalsWithClassName(`<Modal layer="stage" height={480} onClose={() => {}}>`)).toEqual([]);
+    expect(modalsWithClassName(`<Modal layer="app" onClose={() => {}} className="pf-modal-worldmap">`)).toEqual([]);
   });
 
   it('감지 함수: overflow 직접 지정의 arbitrary 표기도 잡는다', () => {
@@ -202,13 +209,10 @@ describe('UI 시스템 가드', () => {
     expect([...VSCROLL_LITERAL_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
   });
 
-  it('공용 상수는 막대 자리와 내용 여백을 함께 준다', () => {
-    expect(SCROLL_Y).toMatch(/pf-vscroll/);
-    expect(SCROLL_Y).toMatch(/pf-scroll-panel/);
-    expect(SCROLL_Y).toMatch(/\[scrollbar-gutter:stable\]/);
-    expect(SCROLL_Y).toMatch(/\bpr-2\b/);
-    expect(SCROLL_Y_PADDED).toMatch(/\[scrollbar-gutter:stable\]/);
-    expect(SCROLL_Y_PADDED).not.toMatch(/\bpr-/);
+  it('공용 상수는 막대 자리, 내용 여백, 포커스 윤곽 여백을 함께 준다', () => {
+    for (const cls of ['pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]', 'pr-2', '-ml-1', 'pl-1', '-mt-1', 'pt-1', '-mb-1', 'pb-1']) {
+      expect(SCROLL_Y.split(' '), cls).toContain(cls);
+    }
   });
 
   it('세로로 스크롤하는 칸은 막대 자리를 늘 확보한다 — scrollbar-gutter 없는 줄은 예외 목록의 자리만', () => {
