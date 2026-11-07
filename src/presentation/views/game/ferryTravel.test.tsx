@@ -13,6 +13,7 @@ import { APP_VERSION } from '../../../version';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { MAX_BOAT, newState } from '../../../game/rules/logic';
 import { LocalGameGateway } from '../../../platform/adapters/localGameGateway';
+import type { GameAction } from '../../../game/rules/actions';
 import { AppError } from '../../../core/errors';
 import { REJECT_TEXT } from '../../../game/rules/logic';
 import { BASE_PACKS, boardingOf } from '../../../game/world';
@@ -185,7 +186,75 @@ describe('여객선 빠른 이동: 입력은 덮개를 통과한다', () => {
   });
 });
 
+/** 이동 응답을 붙들어 두는 대역 — 호출한 travel 목적지를 기록하고 release로 첫 응답을 푼다 */
+function holdFirstTravel() {
+  const orig = LocalGameGateway.prototype.dispatch;
+  const travels: unknown[] = [];
+  let release: () => void = () => {};
+  vi.spyOn(LocalGameGateway.prototype, 'dispatch').mockImplementation(function (this: LocalGameGateway, a: GameAction) {
+    if (a.type === 'travel') {
+      travels.push(a.to);
+      if (travels.length === 1) return new Promise(res => { release = () => res(orig.call(this, a)); }) as never;
+    }
+    return orig.call(this, a);
+  } as never);
+  return { travels, release: () => release() };
+}
+
+describe('여객선 빠른 이동: 전환 중 거점의 이동 동작 잠금', () => {
+  it('동작 줄이기에서 응답을 기다리는 동안 이동 카드는 비활성이고 눌러도 travel이 나가지 않는다', async () => {
+    stubMotion(true);
+    seedAt('toamasina');
+    render(<App />);
+    await advance(0);
+    const held = holdFirstTravel();
+    await bookFerry('manila');
+    expect(held.travels).toHaveLength(1);
+    for (const id of ['exit', 'travel', 'ferry']) {
+      const card = document.querySelector(`[data-facility="${id}"]`)!;
+      expect(card).toBeDisabled();
+      fireEvent.click(card);
+    }
+    await advance(0);
+    expect(held.travels).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: BASE_PACKS.manila.name })).toBeNull(); // 빠른 이동 창이 열리지 않는다
+    // 이동이 아닌 시설과 메뉴는 그대로 열린다
+    expect(document.querySelector('[data-facility="sell"]')).not.toBeDisabled();
+    held.release();
+    await advance(100);
+    expect(held.travels).toHaveLength(1);
+    expect(pos()).toEqual(boardingOf('manila').at);
+  });
+
+  it('이동 실패로 거점에 돌아온 뒤 밝아지는 동안에도 이동 카드는 잠겨 있다', async () => {
+    stubMotion(false);
+    seedAt('toamasina');
+    render(<App />);
+    await advance(0);
+    vi.spyOn(LocalGameGateway.prototype, 'dispatch').mockImplementation(
+      () => Promise.reject(new AppError('rate-limited', 'action pacing rejected')) as never);
+    await bookFerry('manila');
+    await advance(950); // 암전 시작, 실패해 거점으로 돌아옴
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
+    expect(document.querySelector('[data-facility="exit"]')).toBeDisabled();
+    await advance(3000);
+    expect(document.querySelector('[data-facility="exit"]')).not.toBeDisabled();
+  });
+});
+
 describe('여객선 빠른 이동: 거절과 실패', () => {
+  it('ferryMove가 규칙 거부 값을 받으면 떠난 항구에 남고 거부 문구로 알린다', async () => {
+    stubMotion(false);
+    seedAt('toamasina');
+    render(<App />);
+    await advance(0);
+    vi.spyOn(LocalGameGateway.prototype, 'dispatch').mockImplementation(
+      () => ({ status: 'rejected', error: 'zone-locked' }) as never);
+    await bookFerry('manila');
+    await advance(3000);
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
+    expect(screen.queryByText(REJECT_TEXT['zone-locked'])).not.toBeNull();
+  });
   it('승선 이동이 규칙 거부 값을 받으면 장소를 되돌리고 거부 문구로 알린다', async () => {
     stubMotion(false);
     seedAt('toamasina');

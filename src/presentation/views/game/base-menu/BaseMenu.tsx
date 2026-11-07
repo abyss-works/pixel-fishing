@@ -21,6 +21,8 @@ interface Props {
   game: GameState;
   /** 카드 선택 — 패널 선택과 장면 이동은 호출부가 결정한다 */
   onFacility?: (id: FurnitureId) => void;
+  /** 켜면 이동 구역의 카드(마을행, 빠른 이동, 승선)를 비활성으로 둔다. 정보와 상점 카드는 그대로 눌린다 */
+  locked?: boolean;
 }
 
 // 집 아이콘(마을로 돌아가는 여객선 카드) — 마을 필드의 집 건물 스프라이트를 쓴다
@@ -46,7 +48,7 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 
 // 거점 카드 메뉴 — 거점 배경 위 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
 // 거점 Canvas 화면과 같은 속성을 받으며, 거점 데이터와 가구 스프라이트를 읽기만 한다.
-export default function BaseMenu({ base, game, onFacility }: Props) {
+export default function BaseMenu({ base, game, onFacility, locked }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const covered = useCanvasCover();
   const mobile = useMobileLayout();
@@ -77,6 +79,7 @@ export default function BaseMenu({ base, game, onFacility }: Props) {
                       const { title, sub } = f.label(info);
                       return (
                         <MenuCard key={f.id} data-facility={f.id} onClick={() => onFacility?.(f.id)}
+                                  disabled={locked === true && section === '이동'}
                                   icon={<CardIcon base={base} facility={f} boat={game.boat} />}
                                   title={title} sub={sub} subRole="omittable" />
                       );

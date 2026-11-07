@@ -175,6 +175,8 @@ export default function GameView(props: GameViewProps) {
 
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
+    // 빠른 이동 전환 중에는 거점의 이동 동작을 받지 않는다
+    if (trip && (id === 'exit' || id === 'travel' || id === 'ferry')) return;
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
@@ -210,11 +212,12 @@ export default function GameView(props: GameViewProps) {
   // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
+    if (trip) return;
     const name = BASE_PACKS[port].name;
     void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
 지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
       confirmLabel: `${name}에 가기` })
-      .then(ok => { if (ok && scene.kind === 'base') setTrip({ from: scene.id, to: port }); });
+      .then(ok => { if (ok && scene.kind === 'base') setTrip(current => current ?? { from: scene.id, to: port }); });
   };
 
   // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
@@ -261,7 +264,7 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}

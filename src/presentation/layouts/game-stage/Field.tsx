@@ -196,13 +196,13 @@ export default function Field({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const onPadDown = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (gesture.current) return;
+    if (locked || gesture.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     gesture.current = { id: e.pointerId, pad: startPad(pointAt(e)) };
   };
   const onPadMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const g = gesture.current;
-    if (!g || g.id !== e.pointerId) return;
+    if (locked || !g || g.id !== e.pointerId) return;
     const next = movePad(g.pad, pointAt(e));
     if (next === g.pad) return;
     g.pad = next;
@@ -240,7 +240,7 @@ export default function Field({
                 onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}
       <NightOverlay />
-      {pad?.active && <MovePad pad={pad} />}
+      {pad?.active && !locked && <MovePad pad={pad} />}
       {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
