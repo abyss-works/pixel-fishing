@@ -1,4 +1,4 @@
-// 의뢰 창 스토리 - 일반 의뢰 진행 중, 네임드 토벌 진행 중(흔적 남음), 받은 의뢰 없음, 읽는 중.
+// 의뢰 창 스토리 - 일반 의뢰 진행 중, 네임드 토벌 진행 중(흔적 남음, 네임드 탭이 처음 열린다), 받은 의뢰 없음, 읽는 중(스켈레톤).
 // 창 크기는 스토리가 뜬 화면 크기가 정한다. 확인 크기: 모바일 360x640, 390x844, PC 1024x600, 1920x1080.
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
@@ -42,7 +42,6 @@ export const GeneralInProgress: Story = {
 /** 네임드 토벌 탭. 도전권이 유효해 흔적 남은 시간이 보인다 */
 export const NamedInProgress: Story = {
   args: {
-    initialTab: 'named',
     info: infoOf(snapshot({
       clearsToday: { general: 1, named: 0 },
       progress: [{ questId: named.id, progress: 0 }],

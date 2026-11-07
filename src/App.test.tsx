@@ -1402,7 +1402,7 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
 });
 
 describe('의뢰 창 - 의뢰 현황 클릭 진입', () => {
-  it('받은 의뢰가 없어도 의뢰 현황을 누르면 의뢰 창이 열리고, 닫기로 닫힌다', () => {
+  it('받은 의뢰가 없어도 의뢰 현황을 누르면 의뢰 창이 열리고, 다시 누르면 닫힌다', () => {
     seed();
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^의뢰 창 열기/ }));

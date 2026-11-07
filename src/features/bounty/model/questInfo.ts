@@ -5,7 +5,8 @@ import type { RarityId } from '../../../game/content/rarity';
 import { bountyDailyCap } from '../../../game/rules/balance';
 import type { GameState } from '../../../game/rules/logic';
 import { BASE_PACKS } from '../../../game/world';
-import { clearsLeft, heldQuests, questLabel, selectNamedBountyCardData, ticketMinsFor } from './panel';
+import { clearsLeft, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
+import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
 // 현재 의뢰 정보 - 헤더의 의뢰 현황을 눌러 여는 창이 보이는 값. 수주 중인 의뢰(갈래마다 하나)의 이름, 목표, 진행도,
@@ -27,8 +28,6 @@ export interface QuestInfoNamed {
   quest: BountyQuest;
   /** 발견하기 전에는 ??? */
   title: string;
-  /** 수배서 문구 */
-  poster: string;
   /** 나타나는 곳 */
   haunt: string;
   count: number;
@@ -38,7 +37,7 @@ export interface QuestInfoNamed {
   reward: number;
   /** 구역 유물의 교환 재료 이름 */
   materialName: string | null;
-  /** 흔적(도전권)이 남아 있으면 남은 분, 아니면 null. 토벌을 마친 뒤에도 null */
+  /** 흔적이 남아 있으면 남은 분, 아니면 null. 토벌을 마친 뒤에도 null */
   traceMins: number | null;
   finishAt: string;
 }
@@ -55,9 +54,10 @@ export interface QuestInfoData {
 
 const PORTS = Object.keys(BOUNTY_PORT_ZONE) as BountyPort[];
 const portName = (port: BountyPort): string => BASE_PACKS[port].name;
+// 구역 -> 항구 역방향 조회. 수배판이 없는 구역이면 항구 이름 없이 "수배판"만 보인다
 const finishAtOf = (zone: BountyZone): string => {
-  const port = PORTS.find(p => BOUNTY_PORT_ZONE[p] === zone)!;
-  return `${portName(port)} 수배판`;
+  const port = PORTS.find(p => BOUNTY_PORT_ZONE[p] === zone);
+  return port ? `${portName(port)} 수배판` : '수배판';
 };
 
 export function selectQuestInfo({ game, snapshot, nowMs }: {
@@ -80,18 +80,16 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
   if (n) {
     const progress = progressOf(n);
     const card = selectNamedBountyCardData(game, n, progress);
-    const mins = card.done ? null : ticketMinsFor(snapshot, n.id, nowMs);
     named = {
       quest: n,
       title: card.found && card.name ? card.name : '???',
-      poster: card.poster,
       haunt: card.haunt,
       count: n.count,
       progress,
       done: card.done,
       reward: n.reward,
       materialName: artifactOfZone(n.zone)?.materialName ?? null,
-      traceMins: mins !== null && mins > 0 ? mins : null,
+      traceMins: card.done ? null : ticketMinsOf(snapshot, n.id, nowMs),
       finishAt: finishAtOf(n.zone),
     };
   }

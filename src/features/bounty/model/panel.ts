@@ -6,11 +6,11 @@ import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../.
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
-import { ticketRemainingMs } from '../../../game/rules/challenge';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
 /** 일반 의뢰 난이도의 화면 이름 */
@@ -81,13 +81,6 @@ export function heldQuests(snapshot: BountySnapshot | null): Record<BountyKind, 
   return holding;
 }
 
-/** 그 의뢰의 도전권(흔적) 남은 분(올림). 도전권이 없거나 시계를 아직 안 찍었으면(nowMs 0) null, 만료면 0 */
-export function ticketMinsFor(snapshot: BountySnapshot | null, questId: string, nowMs: number): number | null {
-  const issuedAt = snapshot?.tickets.find(ticket => ticket.questId === questId)?.issuedAt ?? null;
-  if (issuedAt === null || nowMs === 0) return null;
-  return Math.max(0, Math.ceil(ticketRemainingMs(issuedAt, nowMs) / 60_000));
-}
-
 const KIND_SUBJECT: Record<BountyKind, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const CLEARED_NOTICE: Record<BountyKind, string> = {
   general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
@@ -130,7 +123,7 @@ export function selectBountyPanelData({
   const basicConds = licenseConditions(game, zone, 'basic');
   const namedConds = licenseConditions(game, zone, 'named');
   const namedQuest = offers.named;
-  const ticketMins = namedQuest ? ticketMinsFor(snapshot, namedQuest.id, nowMs) : null;
+  const ticketMins = namedQuest ? ticketMinsOf(snapshot, namedQuest.id, nowMs) : null;
   const relic = artifactOfZone(zone);
 
   return {
@@ -150,7 +143,7 @@ export function selectBountyPanelData({
     canTakeNamed: snapshot !== null && (leftNamed ?? 0) > 0 && !holding.named,
     notice: { general: noticeOf('general'), named: noticeOf('named') },
     ticketMins,
-    hasTicket: ticketMins !== null && ticketMins > 0,
+    hasTicket: ticketMins !== null,
     relic,
     relicOwned: relic ? game.artifacts.includes(relic.id) : false,
     relicMats: relic ? game.items[relic.materialId] ?? 0 : 0,

@@ -57,7 +57,6 @@ describe('현재 의뢰 정보', () => {
     expect(hidden.title).toBe('???');
     expect(hidden).toMatchObject({ haunt: expect.any(String), reward: quest.reward, materialName: '돌이 된 이빨',
       finishAt: '부산항 수배판', done: false, count: quest.count, progress: 0 });
-    expect(hidden.poster.length).toBeGreaterThan(0);
 
     const game = newState();
     game.dex[quest.targetFish!] = { normal: { count: 1, maxSize: 10, first: null } };

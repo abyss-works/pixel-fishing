@@ -7,8 +7,8 @@ import { selectNamedBountyCardData } from '../../../../features/bounty/model/pan
 import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
 import Tip from '../../../ui/Tip';
-import { fmtGold, fmtMinutes } from '../../../ui/format';
-import { AcceptButton, BoardRows } from './boardParts';
+import { fmtGold } from '../../../ui/format';
+import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
 
 export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onAccept, onDeliver }: {
   game: GameState; quest: BountyQuest; canAccept: boolean;
@@ -16,7 +16,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   reason: string | null;
   busy: boolean;
   progress: number; accepted: boolean;
-  /** 흔적(도전권)이 남아 있으면 남은 분 */
+  /** 흔적이 남아 있으면 남은 분 */
   ticketMins: number | null;
   /** 토벌 보상으로 받는 교환 재료 이름 */
   materialName: string | null;
@@ -25,15 +25,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   const { name, poster, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
   return (
     <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
-      <div className="flex items-baseline justify-between gap-2 h-6">
-        <b className="text-base text-epic truncate"><Tip text={poster}>{found && name ? name : '???'}</Tip></b>
-        {!done && ticketMins !== null && (
-          <span className="text-xs text-text-dim whitespace-nowrap">
-            <Tip text={'흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.'}>도전권</Tip>
-            {' '}<span className="pf-accent text-text">{fmtMinutes(ticketMins)}</span>
-          </span>
-        )}
-      </div>
+      <NamedCardHead title={found && name ? name : '???'} titleTip={poster} traceMins={!done ? ticketMins : null} />
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: haunt },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
