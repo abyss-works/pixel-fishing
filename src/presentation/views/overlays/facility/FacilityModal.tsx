@@ -46,9 +46,9 @@ interface Props {
 
 /** 수배판 창 높이: 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
     좁은 화면에서는 내용 높이를 따른다 */
-const BOUNTY_HEIGHT = 'h-[min(480px,calc(100%-32px))] max-[640px]:h-auto';
+const BOUNTY_HEIGHT = 'h-[min(480px,calc(100%-32px))] mobile:h-auto';
 /** 옷장 창 높이: 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px로 고정한다. 좁은 화면에서는 내용 높이를 따른다 */
-const WARDROBE_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
+const WARDROBE_HEIGHT = 'h-[min(560px,calc(100%-32px))] mobile:h-auto';
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.

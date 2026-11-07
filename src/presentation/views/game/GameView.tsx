@@ -256,7 +256,7 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile ? 'flex-col' : 'max-[820px]:flex-col')}
+    <div className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
          style={visible.keyboard ? { top: visible.top, bottom: visible.bottom } : undefined}
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>

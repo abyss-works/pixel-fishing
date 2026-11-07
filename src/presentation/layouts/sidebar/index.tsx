@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
-import { cx } from '../../ui/cx';
 import { useMobileLayout } from '../useMobileLayout';
 import { isSheetDragClose } from './sheet';
 
@@ -10,7 +9,7 @@ interface SidebarProps<K extends string> {
   tabs: TabDef<K>[];
   activeKey: K;
   onSelect: (key: K) => void;
-  /** 모바일 시트가 열려 있는가. 모바일 배치에서만 쓴다 */
+  /** 모바일 시트가 열려 있는가. 모바일 레이아웃에서만 쓴다 */
   sheetOpen?: boolean;
   /** 시트 머리를 끌어 내려 닫는다 */
   onSheetClose?: () => void;
@@ -18,7 +17,7 @@ interface SidebarProps<K extends string> {
 }
 
 // 화면의 탭 콘텐츠를 담는 사이드 패널 레이아웃.
-// 모바일 배치에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
+// 모바일 레이아웃에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
 // 시트는 게임 영역과 채팅 영역을 덮는다. 화면 키보드가 올라와 있는 동안(루트의 data-keyboard) 탭 줄은 숨는다.
 export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, sheetOpen = false, onSheetClose, children }: SidebarProps<K>) {
   const mobile = useMobileLayout();
@@ -53,8 +52,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
   }
 
   return (
-    <aside className={cx('w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line',
-                         'max-[820px]:w-full max-[820px]:h-[45vh] max-[820px]:border-l-0 max-[820px]:border-t')}>
+    <aside className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line">
       <TabBar tabs={tabs} activeKey={activeKey} onSelect={onSelect} />
       <div className="pf-scroll flex-1 pf-vscroll p-3 flex flex-col gap-2">
         {children}

@@ -1,5 +1,5 @@
-// 헤더 스토리 - 보통 값, 가장 긴 값, 가방 네 자리, 거점 시계 칩, 펼친 메뉴. 배치(PC, 모바일)는 스토리가 뜬 화면 크기가 정한다.
-// 확인 크기: 모바일 360x640, 390x844, PC 1024x600, 1920x1080.
+// 헤더 스토리 - 보통 값, 가장 긴 값, 가방 네 자리, 거점 시계 칩, 펼친 메뉴. 레이아웃(PC, 모바일)은 스토리가 뜬 뷰포트 폭이 정한다.
+// 확인 크기: 모바일 360x780, PC 1280x720, 1920x1080.
 import type { Meta, StoryObj } from '@storybook/react';
 import { newState } from '../../../game/rules/logic';
 import type { FishInstance } from '../../../game/rules/logic';
@@ -51,13 +51,13 @@ export const FiveCharValues: Story = {
   args: { game: { ...fourDigitBag, gold: 99_999, fame: 1_999_999 }, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 10, named: 3 } } },
 };
 
-/** 거점의 시계 칩. 1024x600에서 의뢰 현황, 메뉴 버튼과 겹치지 않아야 한다 */
+/** 거점의 시계 칩. 1280x720에서 의뢰 현황, 메뉴 버튼과 겹치지 않아야 한다. 위치는 실제 앱과 같은 besideMenu 값이다 */
 export const BaseWithClock: Story = {
   args: { game: longest, bagBonus: 5, clears: { left: { general: 10, named: 3 }, caps: { general: 1, named: 1 } } },
   decorators: [Story => (
     <>
       <Story />
-      <TimeBadge className="top-5 right-[58px] mobile:hidden" />
+      <TimeBadge besideMenu />
     </>
   )],
 };

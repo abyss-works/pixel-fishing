@@ -11,12 +11,12 @@ import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
-// 게임 메뉴 — 햄버거 버튼 하나. PC 배치는 헤더 틀과 같은 높이의 메뉴 버튼(HudMenuButton, 스테이지 폭이 넓으면 60px, 960px 미만이면 40px), 모바일 배치는 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
+// 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 틀과 같은 높이(60px)의 메뉴 버튼(HudMenuButton), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 길드, 소셜, 우편함 줄이 펼쳐진다.
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수를 붙인다.
 // 접힌 상태에서는 알릴 것이 하나라도 있으면 버튼 모서리에 빨간 점을 찍는다.
 // 입구마다 보이는 조건은 그대로다: 길드와 소셜은 계정 유저만, 우편함은 클라우드 모드에서만 연다.
 // 열 수 있는 입구가 하나도 없으면 버튼도 그리지 않는다.
-// 자리는 헤더(HudHeader)가 정한다. 모바일 배치에서는 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼 아래로 게임 영역 위에 겹쳐 뜬다.
+// 자리는 헤더(HudHeader)가 정한다. 모바일 레이아웃에서는 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼 아래로 게임 영역 위에 겹쳐 뜬다.
 
 interface Entry {
   key: string;

@@ -10,12 +10,12 @@ import { useMobileLayout } from '../useMobileLayout';
 // 크기는 프레임이 결정하고 캔버스는 100% 채우기만 한다. 비율에서 높이를 파생하므로 왜곡·
 // 레터박스가 원천적으로 없고 클릭 좌표 변환이 단순 비례로 성립한다.
 //
-// 모바일 배치에서는 필드 프레임이 스테이지 격자의 게임 영역(2행)을 채운다(필드 시야가 게임 영역 비율로 정해진다).
+// 모바일 레이아웃에서는 필드 프레임이 스테이지 격자의 게임 영역(2행)을 채운다(필드 시야가 게임 영역 비율로 정해진다).
 // 거점처럼 16:9 그림을 쓰는 장면은 fill을 주어, 그림을 스테이지 폭에 맞춰 세로 가운데에 두고
 // 남는 위아래를 fill 색으로 채운다.
 export default function GameFrame({ children, fill }: {
   children: ReactNode;
-  /** 모바일 배치에서 그림 위아래 남는 자리를 채울 바탕색 */
+  /** 모바일 레이아웃에서 그림 위아래 남는 자리를 채울 바탕색 */
   fill?: { top: string; bottom: string };
 }) {
   const mobile = useMobileLayout();

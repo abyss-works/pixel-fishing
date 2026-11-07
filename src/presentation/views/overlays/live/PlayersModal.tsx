@@ -33,7 +33,7 @@ export default function PlayersModal({ region, account, setToast, onClose }: {
               </span>
               {/* 세 줄(32px 칸 셋, 사이 6px 둘, 위아래 8px) 높이 */}
               <Inset className="pf-scroll-panel h-[124px] pf-vscroll p-2">
-                <div className="grid grid-cols-3 gap-1.5 max-[640px]:grid-cols-2">
+                <div className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
                   {players.map(p => {
                     const on = p.uid === selected.uid;
                     return (

@@ -156,8 +156,8 @@ function ProfileCells({ name, online, view, layout, actions }: {
 }) {
   const { dex, boat, rod, artifacts } = view;
   return (
-    <div className={layout === 'grid' ? 'grid grid-cols-2 grid-rows-[auto_auto] gap-3 max-[640px]:grid-cols-1' : 'flex flex-col gap-3'}>
-      <Inset className={cx('px-3 py-2.5 flex flex-col gap-2 min-w-0', layout === 'grid' && 'row-span-2 max-[640px]:row-span-1')}>
+    <div className={layout === 'grid' ? 'grid grid-cols-2 grid-rows-[auto_auto] gap-3 mobile:grid-cols-1' : 'flex flex-col gap-3'}>
+      <Inset className={cx('px-3 py-2.5 flex flex-col gap-2 min-w-0', layout === 'grid' && 'row-span-2 mobile:row-span-1')}>
         <div className="flex items-center gap-2.5 min-h-8">
           {boat.tier > 0 && <BoatSprite tier={boat.tier} preset="row" />}
           {online && <span className="size-2 shrink-0 bg-accent" role="img" aria-label="접속 중" />}

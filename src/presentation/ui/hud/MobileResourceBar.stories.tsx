@@ -1,4 +1,4 @@
-// 모바일 자원 바 스토리 - 골드, 명성, 가방 세 칸. 모바일 배치(세로, 폭 600 미만) 전용이다. 스테이지 폭 380 미만 12px, 이상 13px, 440 미만에서 가방 비율 생략.
+// 모바일 자원 바 스토리 - 골드, 명성, 가방 세 칸. 모바일 레이아웃(뷰포트 폭 1024px 미만) 전용이다. 스테이지 폭 380 미만 12px, 이상 13px, 440 미만에서 가방 비율 생략.
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { newState } from '../../../game/rules/logic';

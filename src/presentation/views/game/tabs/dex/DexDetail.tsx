@@ -44,7 +44,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
       </header>
 
       {/* 메인 그리드 2×2 — 위 줄(표본 | 크기 분포), 아래 줄(기록 | 크기 순위). 같은 줄의 칸은 높이를 맞춘다 */}
-      <div className="grid grid-cols-2 gap-x-5 gap-y-4 max-[640px]:grid-cols-1">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 mobile:grid-cols-1">
         <TitledCell title="표본">
           <Inset tone="light" className="flex flex-1 flex-col
                  bg-[linear-gradient(180deg,var(--c-surface-2),color-mix(in_oklab,var(--c-bg)_40%,var(--c-surface))_85%)]">

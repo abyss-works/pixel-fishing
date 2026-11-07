@@ -17,7 +17,7 @@ export function visibleBox(layoutH: number, visibleH: number, visibleTop: number
   return { top: Math.max(0, visibleTop), bottom, keyboard: true };
 }
 
-/** 모바일 배치에서 화면 키보드를 피한 영역을 따라간다. PC 배치는 늘 여백이 없다 */
+/** 모바일 레이아웃에서 화면 키보드를 피한 영역을 따라간다. PC 레이아웃은 늘 여백이 없다 */
 export function useVisibleBox(): VisibleBox {
   const mobile = useMobileLayout();
   const [box, setBox] = useState<VisibleBox>(NONE);

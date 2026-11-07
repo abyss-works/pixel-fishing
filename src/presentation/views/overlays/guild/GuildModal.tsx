@@ -29,7 +29,7 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 /** 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
     좁은 화면에서는 내용 높이를 따른다 */
-const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
+const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] mobile:h-auto';
 
 export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
   /** 내 골드 — 이름 바꾸기 비용을 낼 수 있는지 보인다 */

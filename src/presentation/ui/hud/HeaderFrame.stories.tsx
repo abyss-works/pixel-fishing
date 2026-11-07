@@ -1,4 +1,4 @@
-// 헤더 틀 스토리 - 폭이 넓을 때 60px, 스테이지 폭이 960px 미만이면 40px. 정사각형은 메뉴 버튼의 틀이다.
+// 헤더 틀 스토리 - PC 레이아웃의 높이는 60px로 고정이다. 정사각형은 메뉴 버튼의 틀이다.
 import type { Meta, StoryObj } from '@storybook/react';
 import HeaderFrame from './HeaderFrame';
 

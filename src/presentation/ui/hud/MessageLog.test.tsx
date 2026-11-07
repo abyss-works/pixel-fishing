@@ -182,7 +182,7 @@ describe('메시지 창', () => {
     expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
   });
 
-  it('모바일 배치에서는 헤더 세 열을 가로지르는 3행(채팅 영역)을 차지한다', () => {
+  it('모바일 레이아웃에서는 헤더 세 열을 가로지르는 3행(채팅 영역)을 차지한다', () => {
     const { container } = render(<Filtered log={logOf(2)} />);
     const root = container.querySelector('[class*="mobile:col-span-"]')!;
     expect(root.className).toContain('mobile:col-span-3');

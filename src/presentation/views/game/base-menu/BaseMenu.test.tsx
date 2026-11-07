@@ -78,7 +78,7 @@ describe('거점 카드 메뉴', () => {
       render(<BaseMenu base="harbor" game={newState()} />);
       const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
       expect(root.className).toContain('bottom-[var(--log-clear,0px)]');
-      // 모바일 배치에서는 격자의 게임 영역(2행) 안에만 놓여 채팅 영역과 겹치지 않는다
+      // 모바일 레이아웃에서는 격자의 게임 영역(2행) 안에만 놓여 채팅 영역과 겹치지 않는다
       expect(root.className).toContain('mobile:row-start-2');
       expect(root.className).toContain('mobile:row-end-3');
     });

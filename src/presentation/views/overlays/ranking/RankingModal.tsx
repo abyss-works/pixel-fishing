@@ -23,7 +23,7 @@ const BOARDS: Record<Board, { valueLabel: string; format: (v: number) => string 
 };
 const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종 수예요.';
 /** 탭이 있는 창의 높이 520px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(520px,calc(100%-32px))] max-[640px]:h-auto';
+const FIXED_HEIGHT = 'h-[min(520px,calc(100%-32px))] mobile:h-auto';
 const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
 const nameOf = (nickname: string | null) => nickname ?? '이름 없음';
 

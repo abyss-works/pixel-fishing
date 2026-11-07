@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { useLogHeight } from './useLogHeight';
+import { MOBILE_QUERY } from '../useMobileLayout';
 
 const originalRO = globalThis.ResizeObserver;
 const originalMM = window.matchMedia;
@@ -25,7 +26,7 @@ function stubObserver() {
 
 function setMobile(mobile: boolean) {
   window.matchMedia = ((query: string) => ({
-    matches: mobile && query.includes('orientation'), media: query,
+    matches: mobile && query === MOBILE_QUERY, media: query,
     addEventListener: () => {}, removeEventListener: () => {},
   })) as unknown as typeof window.matchMedia;
 }
@@ -36,7 +37,7 @@ function Orphan() {
 }
 
 describe('useLogHeight', () => {
-  it('PC 배치에서는 창 높이를 스테이지의 --log-h로 알리고 사라지면 지운다', () => {
+  it('PC 레이아웃에서는 창 높이를 스테이지의 --log-h로 알리고 사라지면 지운다', () => {
     setMobile(false);
     stubObserver();
     Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 152 });
@@ -47,7 +48,7 @@ describe('useLogHeight', () => {
     expect(stage.style.getPropertyValue('--log-h')).toBe('');
   });
 
-  it('모바일 배치에서는 알리지 않는다', () => {
+  it('모바일 레이아웃에서는 알리지 않는다', () => {
     setMobile(true);
     stubObserver();
     Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 152 });
