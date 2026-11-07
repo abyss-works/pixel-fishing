@@ -4,9 +4,9 @@ import { MOBILE_QUERY } from './useMobileLayout';
 
 // 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃은 뷰포트 폭 하나로 가른다. CSS 변형, CSS 규칙, JS 판정이 같은 정본 값에서 나온다.
 const css = readFileSync('src/index.css', 'utf-8');
-/** 화면 컴포넌트 소스(테스트, 스토리 제외) - 경로 -> 본문 */
+/** 화면 컴포넌트 소스(테스트 제외) - 경로 -> 본문 */
 const sources = Object.entries(import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
-  .filter(([key]) => !/\.(?:test|stories)\.tsx?$/.test(key));
+  .filter(([key]) => !/\.test\.tsx?$/.test(key));
 const REM_PX = 16;
 
 /** 정본 값(--breakpoint-pc)을 px로 읽는다 */

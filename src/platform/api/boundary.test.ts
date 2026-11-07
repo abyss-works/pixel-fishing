@@ -73,8 +73,8 @@ function sourceOwner(path: string): string {
   return path.includes('/') ? path.split('/')[0] : 'src-root';
 }
 
-function isTestOrStory(path: string): boolean {
-  return /\.(?:test|stories)\.tsx?$/.test(path);
+function isTestFile(path: string): boolean {
+  return /\.test\.tsx?$/.test(path);
 }
 
 function importedSources(path: string, src: string): string[] {
@@ -124,7 +124,7 @@ describe('src 구조 경계', () => {
   it('기능 모듈에는 화면 컴포넌트를 두지 않는다', () => {
     const offenders = Object.keys(sources)
       .map(sourcePath)
-      .filter(path => path.startsWith('features/') && path.endsWith('.tsx') && !isTestOrStory(path));
+      .filter(path => path.startsWith('features/') && path.endsWith('.tsx') && !isTestFile(path));
     expect(offenders).toEqual([]);
   });
 
@@ -133,7 +133,7 @@ describe('src 구조 경계', () => {
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), src }))
       .filter(({ path, src }) => /^features\/[^/]+\/model\//.test(path)
-        && !isTestOrStory(path) && reactImport.test(src))
+        && !isTestFile(path) && reactImport.test(src))
       .map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
@@ -141,7 +141,7 @@ describe('src 구조 경계', () => {
   it('모듈 의존은 소유 책임의 안쪽 방향만 허용한다', () => {
     const offenders: string[] = [];
     for (const { path, target } of importedPaths()) {
-      if (isTestOrStory(path)) continue;
+      if (isTestFile(path)) continue;
       const from = sourceOwner(path);
       const to = sourceOwner(target);
       const edge = `${path} -> ${target}`;
@@ -155,7 +155,7 @@ describe('src 구조 경계', () => {
       .filter(({ path, target }) => {
         const isAdapter = target === 'platform/adapters' || target.startsWith('platform/adapters/');
         const isPlatform = path.startsWith('platform/api/') || path.startsWith('platform/adapters/');
-        return !isTestOrStory(path) && isAdapter && !isPlatform;
+        return !isTestFile(path) && isAdapter && !isPlatform;
       })
       .map(({ path, target }) => `${path} -> ${target}`);
     expect(offenders).toEqual([]);
@@ -165,7 +165,7 @@ describe('src 구조 경계', () => {
     const reactImport = /(?:from\s*|import\s*\()\s*["'](?:react|react-dom)(?:\/[^"']*)?["']/;
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), src }))
-      .filter(({ path, src }) => path.startsWith('game/') && !isTestOrStory(path) && reactImport.test(src))
+      .filter(({ path, src }) => path.startsWith('game/') && !isTestFile(path) && reactImport.test(src))
       .map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
@@ -188,7 +188,7 @@ describe('src 구조 경계', () => {
     const offenders: string[] = [];
     for (const [key, source] of Object.entries(sources)) {
       const path = sourcePath(key);
-      if ((!path.startsWith('game/rules/') && !path.startsWith('game/content/')) || isTestOrStory(path)) continue;
+      if ((!path.startsWith('game/rules/') && !path.startsWith('game/content/')) || isTestFile(path)) continue;
       let match: RegExpExecArray | null;
       while ((match = relativeImport.exec(source)) !== null) {
         if (!match[1].endsWith('.js')) offenders.push(`${path} -> ${match[1]}`);
@@ -201,7 +201,7 @@ describe('src 구조 경계', () => {
     const queryImport = /from\s*["']@tanstack\/react-query["']/;
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), src }))
-      .filter(({ path, src }) => !isTestOrStory(path) && queryImport.test(src)
+      .filter(({ path, src }) => !isTestFile(path) && queryImport.test(src)
         && !path.startsWith('core/')
         && !/^features\/[^/]+\/service\//.test(path))
       .map(({ path }) => path);
@@ -210,7 +210,7 @@ describe('src 구조 경계', () => {
 
   it('화면 계층은 platform API와 어댑터를 직접 호출하지 않는다', () => {
     const offenders = importedPaths()
-      .filter(({ path, target }) => !isTestOrStory(path)
+      .filter(({ path, target }) => !isTestFile(path)
         && path.startsWith('presentation/')
         && (target === 'platform/api' || target.startsWith('platform/api/')
           || target === 'platform/adapters' || target.startsWith('platform/adapters/')))
@@ -223,7 +223,7 @@ describe('src 구조 경계', () => {
     const direct = /\bv_[a-z0-9_]+\b|\.rpc\(/;
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), code: src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '') }))
-      .filter(({ path, code }) => !isTestOrStory(path) && direct.test(code))
+      .filter(({ path, code }) => !isTestFile(path) && direct.test(code))
       .map(({ path }) => path);
     expect(offenders).toEqual([]);
   });
@@ -233,7 +233,7 @@ describe('src 구조 경계', () => {
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: sourcePath(key), src }))
       .filter(({ path, src }) => {
-        if (isTestOrStory(path)) return false;
+        if (isTestFile(path)) return false;
         const match = directRead.exec(src);
         if (!match) return false;
         return !path.startsWith('platform/api/') && !path.startsWith('features/bounty/service/');

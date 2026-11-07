@@ -10,15 +10,14 @@ const sources = import.meta.glob('../**/*.{ts,tsx}', {
 const appSources = Object.entries(import.meta.glob('../../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>)
-  .filter(([key]) => !/\.(?:test|stories)\.tsx?$/.test(key) && !/\/admin\//.test(key));
+  .filter(([key]) => !/\.test\.tsx?$/.test(key) && !/\/admin\//.test(key));
 
 /** glob 키 → presentation 기준 경로. 이 파일과 같은 폴더(ui)는 './X', 나머지는 '../views/X'로 온다 */
 const rel = (key: string) => (key.startsWith('./') ? `ui/${key.slice(2)}` : key.replace(/^\.\.\//, ''));
-const keyOf = (path: string) => (path.startsWith('ui/') ? `./${path.slice(3)}` : `../${path}`);
-const isTestOrStory = (path: string) => /\.(?:test|stories)\.tsx?$/.test(path);
+const isTestFile = (path: string) => /\.test\.tsx?$/.test(path);
 const screens = Object.entries(sources)
   .map(([key, src]) => ({ path: rel(key), src }))
-  .filter(f => /^(views|layouts)\//.test(f.path) && f.path.endsWith('.tsx') && !isTestOrStory(f.path));
+  .filter(f => /^(views|layouts)\//.test(f.path) && f.path.endsWith('.tsx') && !isTestFile(f.path));
 
 /** 직접 구현 금지 — 화면에서 보이면 왼쪽 공용 UI를 쓴다 */
 const PRIMITIVES: { pattern: RegExp; use: string }[] = [
@@ -41,13 +40,6 @@ const RAW_HEADING = /<h[1-6][\s>]/;
 const RAW_HEADING_EXCEPTIONS = new Set([
   'views/devtools/DevTools.tsx',      // 떠 있는 창 머리 — 끌기 손잡이를 겸한다
   'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
-]);
-
-/** 이야기(스토리) 없이 둘 수 있는 공용 UI — 게임 상태가 있어야 그려지는 HUD와 저수준 캔버스뿐이다 */
-const STORY_EXCEPTIONS = new Set([
-  'ui/SpriteCanvas.tsx',
-  'ui/hud/CatchCard.tsx', 'ui/hud/NightOverlay.tsx',
-  'ui/hud/ResourceBar.tsx', 'ui/hud/TimeBadge.tsx',
 ]);
 
 describe('UI 시스템 가드', () => {
@@ -87,18 +79,5 @@ describe('UI 시스템 가드', () => {
     }
     const dupes = [...owners].filter(([, paths]) => paths.length > 1).map(([name, paths]) => `${name}: ${paths.join(', ')}`);
     expect(dupes).toEqual([]);
-  });
-
-  it('공용 UI 컴포넌트는 카탈로그(스토리)를 가진다', () => {
-    const components = Object.entries(sources)
-      .map(([key, src]) => ({ path: rel(key), src }))
-      .filter(f => /^ui\//.test(f.path) && f.path.endsWith('.tsx') && !isTestOrStory(f.path)
-        && /export default function [A-Z]/.test(f.src));
-    const missing = components
-      .filter(f => !sources[keyOf(f.path.replace(/\.tsx$/, '.stories.tsx'))])
-      .map(f => f.path);
-    expect(components.length).toBeGreaterThan(30); // 검사가 비어 있지 않은지
-    expect(missing.filter(p => !STORY_EXCEPTIONS.has(p))).toEqual([]);
-    expect([...STORY_EXCEPTIONS].filter(p => !missing.includes(p))).toEqual([]);
   });
 });
