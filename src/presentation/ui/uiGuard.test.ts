@@ -164,15 +164,25 @@ const nestedScrollCells = (src: string) => {
 
 /** 본문이 스크롤하는 ModalCard(fixed가 아닌 카드)의 본문 안에 있는 주 버튼(variant="primary", ConfirmButton) — 확정 버튼은 confirm 자리에 둔다.
  *  높이를 고정한 카드(fixed)는 본문이 스크롤하지 않고 탭 안의 동작 줄이 고정 영역에 있어 대상이 아니다 */
+const PRIMARY_BUTTON = /variant="primary"|^<ConfirmButton/;
+const primaryButtons = (body: string) => openingTags(body, '(?:Button|ConfirmButton)').filter(tag => PRIMARY_BUTTON.test(tag));
+/** 앱 모달(layer="stage"가 아닌 Modal)의 본문(children) 안 주 버튼. footer prop 안의 버튼은 본문이 아니다. bare 모달은 안의 ModalCard가 검사한다 */
+const primaryInAppModalBody = (src: string) =>
+  openingTagsAt(src, 'Modal').filter(t => !/\blayer="stage"/.test(t.tag) && !/\bbare\b/.test(t.tag))
+    .flatMap(t => primaryButtons(childrenOf(src, t, 'Modal')));
 const primaryInCardBody = (src: string) =>
-  openingTagsAt(src, 'ModalCard').filter(t => !/\bfixed\b/.test(t.tag)).flatMap(t => openingTags(childrenOf(src, t, 'ModalCard'), '(?:Button|ConfirmButton)')
-    .filter(tag => /variant="primary"|^<ConfirmButton/.test(tag)));
+  openingTagsAt(src, 'ModalCard').filter(t => !/\bfixed\b/.test(t.tag)).flatMap(t => primaryButtons(childrenOf(src, t, 'ModalCard')))
+    .concat(primaryInAppModalBody(src));
+/** 창 안에서 확정 버튼을 그리는 공용 요약(GuildInviteSummary)은 ModalCard를 가진 창에서 actionSlot으로 버튼을 내보내거나 버튼이 없는 요약(view={null})이어야 한다 */
+const summaryWithInlineAction = (src: string) =>
+  /<ModalCard\b/.test(src) ? openingTags(src, 'GuildInviteSummary').filter(tag => !/\bactionSlot\b|view=\{null\}/.test(tag)) : [];
 /** 높이를 정한 상자(Inset h-[..]) 안을 채우는 본문 칸 — 상자가 줄어들면 칸도 따라 줄어든다(줄이기만 한다) */
 const NESTED_SCROLL_EXCEPTIONS = new Set([
   'views/overlays/mailbox/MailboxModal.tsx', // 우편 본문 칸 — 190px 상세 상자 안
 ]);
 const PRIMARY_IN_BODY_EXCEPTIONS = new Set([
   'views/overlays/mailbox/MailboxModal.tsx', // 받기: 선택한 우편 상세 안의 동작이다. 창 전체의 확정이 아니다
+  'views/overlays/account/AccountModal.tsx', // 이메일로 계속: 로그인 폼의 제출 버튼이다. 본문 폼의 동작이다
 ]);
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
@@ -307,6 +317,15 @@ describe('UI 시스템 가드', () => {
     expect(primaryInCardBody(`<ModalCard title="가" confirm={<Button variant="primary">확</Button>}><p>본문</p></ModalCard>`)).toEqual([]);
     expect(primaryInCardBody(`<ModalCard title="가"><Button variant="primary" full>확</Button></ModalCard>`)).toHaveLength(1);
     expect(primaryInCardBody(`<ModalCard title="가"><ConfirmButton reason={null}>확</ConfirmButton></ModalCard>`)).toHaveLength(1);
+    expect(primaryInCardBody(`<Modal title="가" onClose={c}><p>본문</p><Button variant="primary" full>확</Button></Modal>`)).toHaveLength(1);
+    expect(primaryInCardBody(`<Modal title="가" onClose={c} footer={<Button variant="primary">확</Button>}><p>본문</p></Modal>`)).toEqual([]);
+    expect(primaryInCardBody(`<Modal layer="stage" onClose={c}><Button variant="primary">확</Button></Modal>`)).toEqual([]);
+  });
+  it('초대 창은 GuildInviteSummary의 확정 버튼을 actionSlot으로 카드 confirm 자리에 내보낸다', () => {
+    expect(screens.filter(f => summaryWithInlineAction(f.src).length > 0).map(f => f.path)).toEqual([]);
+    expect(summaryWithInlineAction(`<ModalCard title="가"><GuildInviteSummary preview={p} view={v} busy onConfirm={f} /></ModalCard>`)).toHaveLength(1);
+    expect(summaryWithInlineAction(`<ModalCard title="가"><GuildInviteSummary preview={p} view={v} busy onConfirm={f} actionSlot /></ModalCard>`)).toEqual([]);
+    expect(summaryWithInlineAction(`<GuildInviteSummary preview={p} view={v} busy onConfirm={f} />`)).toEqual([]);
   });
   it('ModalCard 호출부는 className을 넘기지 않는다 — 변형은 명시 prop으로 고른다', () => {
     expect(screens.flatMap(f => cardsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
@@ -374,11 +393,10 @@ describe('UI 시스템 가드', () => {
     }
   });
 
-  it('줄 수로 높이를 정하는 칸의 상수(SCROLL_Y_ROWS)는 아래쪽 바깥 여백으로 칸을 늘리지 않는다', () => {
+  it('줄 수로 높이를 정하는 칸의 상수(SCROLL_Y_ROWS)는 아래 여백을 두되 바깥 여백으로 되돌리지 않는다', () => {
     const cls = SCROLL_Y_ROWS.split(' ');
-    for (const c of ['pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]', 'pr-2', '-mt-1', 'pt-1']) expect(cls, c).toContain(c);
+    for (const c of ['pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]', 'pr-2', '-mt-1', 'pt-1', 'pb-1']) expect(cls, c).toContain(c);
     expect(cls).not.toContain('-mb-1');
-    expect(cls).not.toContain('pb-1');
     expect(SCROLL_Y.split(' ')).toContain('-mb-1');
   });
 

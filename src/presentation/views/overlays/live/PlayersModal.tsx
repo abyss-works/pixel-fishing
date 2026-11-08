@@ -32,9 +32,9 @@ export default function PlayersModal({ region, account, setToast, onClose }: {
               <span className="flex justify-between text-xs text-text-dim">
                 <span>접속한 플레이어</span><span className="pf-accent">{players.length}</span>
               </span>
-              {/* 세 줄(32px 칸 셋, 사이 6px 둘)에 위 여백 4px을 더한 높이 */}
-              <Inset className="flex flex-col p-2">
-                <div className={`${SCROLL_Y_ROWS} h-[112px]`}>
+              {/* 세 줄(32px 칸 셋, 사이 6px 둘)에 위아래 여백 4px씩을 더한 높이 */}
+              <Inset className="flex flex-col p-2 pb-1">
+                <div className={`${SCROLL_Y_ROWS} h-[116px]`}>
                   <div className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
                     {players.map(p => {
                       const on = p.uid === selected.uid;
