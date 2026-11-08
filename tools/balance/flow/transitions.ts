@@ -29,7 +29,7 @@ export function transitionGold(): TransitionRow[] {
     const toLevel = entryLevel(to.id);
     let upgradeGold = 0;
     for (let lv = entryLevel(from.id); lv < toLevel; lv++) upgradeGold += upgradeCost(lv);
-    const boats = BOATS.filter(b => b.tier > from.boatTier && b.tier <= to.boatTier);
+    const boats = BOATS.filter(b => b.tier > from.boatTier && b.tier <= to.boatTier).map(b => ({ ...b }));
     const boatGold = boats.reduce((s, b) => s + b.price, 0);
     const totalGold = upgradeGold + boatGold;
     return {

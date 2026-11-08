@@ -57,6 +57,17 @@ describe('전환 골드', () => {
   });
 });
 
+describe('전환 골드의 값 보존', () => {
+  it('덮어쓰기를 되돌린 뒤에도 계산 당시의 배 값을 담고 있다', () => {
+    const restore = applyOverride({ boats: { '1': { price: 3000, fameReq: 9 } } });
+    const r = row('sea');
+    restore();
+    expect(r.boats[0].price).toBe(3000);
+    expect(r.boats[0].fameReq).toBe(9);
+    expect(row('sea').boats[0].price).toBe(price(1));
+  });
+});
+
 describe('전환 소요', () => {
   const arrival = (spot: string, hours: number, w: [number, number, number]): Arrival =>
     ({ spot: spot as Arrival['spot'], day: 1, hours, waitGold: w[0], waitFame: w[1], waitBoth: w[2] });
