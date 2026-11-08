@@ -18,6 +18,7 @@ import {
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
   licenseConditions, zoneDexMissing, LICENSE_GRADES,
 } from './logic';
+import { WALK_SPEED } from './balance';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
 import { idleDialsOf } from './power';
@@ -275,8 +276,12 @@ describe('R15: 강화/구매 비용', () => {
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
     expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
   });
-  it('대양 트롤선(8단계): 가격 320,000 · 명성 200,000 · 속도 190 · 가방 4,000', () => {
-    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 190, bagCap: 4000 });
+  it('대양 트롤선(8단계): 가격 320,000 · 명성 200,000 · 속도 200 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 200, bagCap: 4000 });
+  });
+  it('이동 속도(px/s): 배 없음 100, 조각배 110부터 대양 트롤선 200까지', () => {
+    expect(WALK_SPEED).toBe(100);
+    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200]);
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
