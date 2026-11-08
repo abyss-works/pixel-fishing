@@ -12,11 +12,12 @@ import ProgressLadder from '../../../ui/ProgressLadder';
 import Tip from '../../../ui/Tip';
 import TwoColumn from '../../../ui/TwoColumn';
 import { fmtGold, fmtNum } from '../../../ui/format';
+import FacilityCard from './FacilityCard';
 import { CompareTable, ConfirmButton } from './facilityParts';
 
 // 조선소 — 배 구매(골드 차감, 명성 하한 검증). 왼쪽은 배 목록(그림, 이름, 속도, 가방)이고 오른쪽 끝에
 // 탄 배는 체크, 지금 배는 "타는 중", 다음 배는 가격, 그 뒤 배는 잠금과 필요 명성을 둔다.
-// 오른쪽은 다음 배의 머리와 현재와 구매 후 비교다. 잔액과 명성, 구매 버튼은 카드 하단 고정 자리(footer, confirm)에 둔다.
+// 오른쪽은 다음 배의 머리와 현재와 구매 후 비교다. 잔액과 명성, 구매 버튼의 자리는 FacilityCard가 폭에 따라 정한다.
 export default function BoatPanel({ game, onBuy, onClose, busy }: {
   game: GameState; onBuy: () => void; onClose: () => void; busy: boolean;
 }) {
@@ -46,8 +47,9 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
   const { next, openedSpot, currentName, currentSpeed, currentBagCap, check } = preview;
 
   return (
-    <ModalCard title="조선소" onClose={onClose}
-      footer={
+    <FacilityCard title="조선소" onClose={onClose}
+      list={ladder}
+      summary={
         <CostBox>
           <CostLine have={game.gold} delta={-next.price}
                     requirement={{
@@ -60,10 +62,8 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
         <ConfirmButton reason={check.ok ? null : REJECT_TEXT[check.reason]} disabled={!check.ok || busy} onClick={onBuy}>
           구매 (-{fmtGold(next.price)})
         </ConfirmButton>
-      }>
-      <TwoColumn>
-        {ladder}
-        <div className="flex flex-col gap-3 min-w-0">
+      }
+      detail={<>
           <HeroHeader sprite={<BoatSprite tier={next.tier} preset="hero" ariaLabel={next.name} />}
                        title={next.name}
                        tags={[
@@ -80,8 +80,6 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
                 delta: `+${fmtNum(next.bagCap - currentBagCap)}` },
               { label: '새 해역', next: openedSpot ? openedSpot.name : next.tier === 1 ? '태평양' : '없음' },
             ]} />
-        </div>
-      </TwoColumn>
-    </ModalCard>
+      </>} />
   );
 }
