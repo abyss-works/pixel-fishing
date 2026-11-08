@@ -12,7 +12,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
 import {
-  autoBoostForSpot, effectiveBite, manualBonusForSpot, minLevelOfPower,
+  autoBoostForSpot, effectiveBite, minLevelOfPower,
   moveSpeed, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
@@ -47,7 +47,6 @@ export function selectStatsModalData(
     requirementLevel: minLevelOfPower(requirement),
     effectiveBite: effectiveBite(game, spot.id),
     autoBoost: autoBoostForSpot(game, spot.id),
-    manualBonus: manualBonusForSpot(game, spot.id),
     powerZones: powerZones(game, spot.id),
     currentPower,
     underpowered: currentPower < requirement,
