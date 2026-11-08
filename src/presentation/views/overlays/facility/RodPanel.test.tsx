@@ -33,6 +33,13 @@ describe('낚싯대 강화', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent(/골드가 부족해요/);
   });
 
+  it('강화 버튼은 스크롤 본문 밖(하단 고정 자리)에 있다', () => {
+    show(3, upgradeCost(3));
+    const button = screen.getByRole('button', { name: `강화 (-${fmtGold(upgradeCost(3))})` });
+    expect(button.closest('.pf-vscroll')).toBeNull();
+    expect(button.closest('[role="dialog"]')).not.toBeNull();
+  });
+
   it('강화 버튼은 upgradeRod를 보낸다', () => {
     const { dispatch } = show(3, upgradeCost(3));
     fireEvent.click(screen.getByRole('button', { name: `강화 (-${fmtGold(upgradeCost(3))})` }));

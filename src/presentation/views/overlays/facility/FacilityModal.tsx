@@ -28,6 +28,7 @@ import BoatPanel from './BoatPanel';
 import RodPanel from './RodPanel';
 import WardrobePanel from '../wardrobe/WardrobePanel';
 import ShopPanel from './ShopPanel';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
 export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | 'wardrobe' | null;
 
@@ -43,12 +44,6 @@ interface Props {
   setToast: Notify;
   onClose: () => void;
 }
-
-/** 수배판 창 높이: 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
-    좁은 화면에서는 내용 높이를 따른다 */
-const BOUNTY_HEIGHT = 'h-[min(480px,calc(100%-32px))] mobile:h-auto';
-/** 옷장 창 높이: 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px로 고정한다. 좁은 화면에서는 내용 높이를 따른다 */
-const WARDROBE_HEIGHT = 'h-[min(560px,calc(100%-32px))] mobile:h-auto';
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
@@ -68,8 +63,10 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   };
 
   return (
+    // 높이: 수배판은 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px, 옷장은 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px로 고정한다.
+    // 좁은 화면에서는 내용 높이를 따른다.
     <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty' || panel === 'wardrobe'}
-           className={panel === 'bounty' ? BOUNTY_HEIGHT : panel === 'wardrobe' ? WARDROBE_HEIGHT : undefined} onClose={onClose}>
+           height={panel === 'bounty' ? 480 : panel === 'wardrobe' ? 560 : undefined} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
@@ -112,7 +109,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           })} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
-        <ModalCard title="수배판" onClose={onClose} className="flex-1">
+        <ModalCard title="수배판" onClose={onClose} fixed>
           <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
         </ModalCard>
       )}
@@ -152,7 +149,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   }
 
   return (
-    <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}
+    <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose} fixed
       footer={<>
         {lockedCount > 0 && (
           <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요.<br />잠금은 가방 탭에서 풀 수 있어요.</Note>
@@ -164,11 +161,8 @@ function SellPanel({ game, onSell, onClose, busy }: {
           판매 (+{fmtGold(total)})
         </Button>
       }>
-      {/* ── 어종 목록 — 내부 스크롤. 높이 = min(≈30행, 모달 가용 높이) ──
-          개수가 늘어도 확정 영역이 화면 밖으로 밀려나지 않게 목록만 굴린다(v0.6.4).
-          840px ≈ 행 30개(28px) — flex(min-h-0)가 먼저 작아지므로 작은 화면에선
-          가용 높이가 이긴다("둘 중 작은 값"). */}
-      <div className="pf-scroll overflow-auto overscroll-contain flex-1 min-h-0 max-h-[840px] pr-1">
+      {/* 어종 목록 — 확정 영역은 고정이고 이 칸만 세로로 스크롤한다. 높이는 모달 가용 높이와 행 서른 개 높이(840px, 위아래 여백 8px 포함 848px) 중 작은 값이다 */}
+      <div className={`${SCROLL_Y} flex-1 min-h-0 max-h-[848px]`}>
         <DataTable>
           <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
           <tbody>

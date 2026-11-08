@@ -20,7 +20,7 @@ import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
 import Modal from '../../../ui/Modal';
-import Panel from '../../../ui/Panel';
+import ModalCard from '../../../ui/ModalCard';
 import SlotGauge from '../../../ui/SlotGauge';
 import { josa } from '../../../ui/format';
 
@@ -135,10 +135,16 @@ export default function EncounterModal({ data, onResolve, onClose }: {
 
   const revealed = found || phase === 'won';
   const center = duelZoneCenter(run.hits);
+  // 단계마다 하나뿐인 주 버튼은 카드 하단 고정 자리에 둔다 — 본문이 넘쳐 스크롤해도 버튼은 화면 안에 남는다
+  const confirm = phase === 'intro' ? <Button variant="primary" full onClick={() => setPhase('run')}>조우</Button>
+    : phase === 'run' ? <Button variant="primary" full onClick={() => strikeRef.current()}>챔질</Button>
+    : phase === 'won' ? (
+      <Button variant="primary" full onClick={() => onResolve({ hits: run.hits, misses: run.misses, success: true })}>토벌</Button>
+    ) : <Button full onClick={onClose}>돌아가기</Button>;
   return (
     <Modal layer="stage" onClose={onClose} closable={closable}>
-      <Panel title={phase === 'won' ? '토벌' : '조우'} onClose={closable ? onClose : undefined}
-             className="bg-surface text-center text-sm">
+      <ModalCard title={phase === 'won' ? '토벌' : '조우'} onClose={closable ? onClose : undefined}
+                 centered confirm={confirm}>
         <FishSprite fish={fish} preset="portrait" discovered={revealed} animate={revealed}
                     ariaLabel={revealed ? named.name : '그림자'}
                     className={cx('block mx-auto transition-transform', flash === 'hit' && 'translate-x-1')} />
@@ -148,7 +154,6 @@ export default function EncounterModal({ data, onResolve, onClose }: {
             <span>그림자가 돌아선다.</span>
             {hp < maxHp && <span className="text-text-dim text-xs">지난 결투에서 입힌 상처가 아직 아물지 않았다.</span>}
             <span className="text-text-dim text-xs">조우하면 끝날 때까지 창을 닫을 수 없어요.<br />놓치면 흔적이 사라져요.</span>
-            <Button variant="primary" full onClick={() => setPhase('run')}>조우</Button>
           </>
         )}
         {phase === 'run' && (
@@ -180,7 +185,6 @@ export default function EncounterModal({ data, onResolve, onClose }: {
               {flash === 'hit' ? '명중' : flash ? ESCAPE_TEXT[flash].flash
                 : <span className="text-text-dim">커서가 금색 칸에 들어왔을 때 챔질해 주세요.</span>}
             </span>
-            <Button variant="primary" full onClick={() => strikeRef.current()}>챔질</Button>
           </>
         )}
         {phase === 'won' && (
@@ -188,19 +192,14 @@ export default function EncounterModal({ data, onResolve, onClose }: {
             <b className="pf-accent text-gold text-lg">{named.name}</b>
             <span>{josa(named.name, '이/가')} 수면 위로 떠올랐다.</span>
             <span className="text-text-dim text-xs">토벌을 눌러야 결과가 남아요.</span>
-            <Button variant="primary" full
-                    onClick={() => onResolve({ hits: run.hits, misses: run.misses, success: true })}>
-              토벌
-            </Button>
           </>
         )}
         {phase === 'lost' && (
           <>
             <span className="whitespace-pre-line">{ESCAPE_TEXT[lostBy].lost}</span>
-            <Button full onClick={onClose}>돌아가기</Button>
           </>
         )}
-      </Panel>
+      </ModalCard>
     </Modal>
   );
 }

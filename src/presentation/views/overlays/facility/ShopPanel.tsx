@@ -10,18 +10,17 @@ import Frame from '../../../ui/Frame';
 import HeroHeader from '../../../ui/HeroHeader';
 import Inset from '../../../ui/Inset';
 import ListRow from '../../../ui/ListRow';
-import ModalCard from '../../../ui/ModalCard';
 import NumberStepper from '../../../ui/NumberStepper';
 import PriceTag from '../../../ui/PriceTag';
 import Tip from '../../../ui/Tip';
-import TwoColumn from '../../../ui/TwoColumn';
 import { baitEffectLine } from '../../../ui/baitEffects';
 import { fmtGold } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
+import FacilityCard from './FacilityCard';
 import { CompareTable, ConfirmButton } from './facilityParts';
 
 // 미끼 상점(향료전) — 콜롬보항 전용. 왼쪽은 미끼 목록(색 칸, 이름, 노리는 등급, 보유, 1개 가격)이고 아무 행이나 고를 수 있다.
-// 오른쪽은 고른 미끼의 머리, 효과, 보유 비교, 수량, 합계와 잔액, 구매 버튼이다. 미끼 소모와 켜는 곳은 "효과"의 툴팁이다.
+// 오른쪽은 고른 미끼의 머리, 효과, 보유 비교, 수량이다. 합계와 잔액, 구매 버튼의 자리는 FacilityCard가 폭에 따라 정한다. 미끼 소모와 켜는 곳은 "효과"의 툴팁이다.
 // 가격은 실제 차감액과 같은 함수(baitCost)로 보이고, 할인이 있으면 정가에 취소선을 긋는다.
 // 활성 토글은 가방 탭 소관이다. 상점은 파는 곳만 맡는다.
 export default function ShopPanel({ game, onBuy, onClose, busy }: {
@@ -36,8 +35,8 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
   const discountPct = Math.round(sel.discountRate * 100);
 
   return (
-    <ModalCard title="향료전" onClose={onClose} className="mobile:shrink-0">
-      <TwoColumn>
+    <FacilityCard title="향료전" onClose={onClose}
+      list={
         <Inset className="p-2">
           <div role="listbox" aria-label="미끼 목록" className="flex flex-col gap-1.5">
             {rows.map(r => (
@@ -50,8 +49,23 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
             ))}
           </div>
         </Inset>
-
-        <div className="flex flex-col gap-3 min-w-0">
+      }
+      summary={
+        <CostBox>
+          <div className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="text-text-dim">합계</span>
+            <PriceTag list={sel.listTotal} price={sel.total} />
+          </div>
+          <CostLine have={game.gold} delta={-sel.total} />
+        </CostBox>
+      }
+      confirm={
+        <ConfirmButton reason={game.gold < sel.total ? REJECT_TEXT['not-enough-gold'] : null}
+                       disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
+          구매 (-{fmtGold(sel.total)})
+        </ConfirmButton>
+      }
+      detail={<>
           <HeroHeader sprite={<ColorSwatch color={sel.bait.color} big />}
                        title={sel.bait.name}
                        tags={[
@@ -75,19 +89,6 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
                            ariaLabel={sel.bait.name}
                            onChange={v => setQty(prev => ({ ...prev, [sel.bait.id]: normalizeBaitQuantity(v) }))} />
           </Frame>
-          <CostBox>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-text-dim">합계</span>
-              <PriceTag list={sel.listTotal} price={sel.total} />
-            </div>
-            <CostLine have={game.gold} delta={-sel.total} />
-          </CostBox>
-          <ConfirmButton reason={game.gold < sel.total ? REJECT_TEXT['not-enough-gold'] : null}
-                         disabled={!sel.canAfford} onClick={() => onBuy(sel.bait.id, sel.count)}>
-            구매 (-{fmtGold(sel.total)})
-          </ConfirmButton>
-        </div>
-      </TwoColumn>
-    </ModalCard>
+      </>} />
   );
 }

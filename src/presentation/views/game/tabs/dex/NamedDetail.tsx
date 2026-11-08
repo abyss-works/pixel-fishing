@@ -21,11 +21,12 @@ export default function NamedDetail({ quest, game, onClose }: {
   if (!d) return null;
   const zone = zoneById(d.zone)?.shortName ?? d.zone;
   return (
-    <Modal xl onClose={onClose}>
+    <Modal xl onClose={onClose} header={
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{d.name ?? '???'}</PageTitle>
         <span className="pf-accent ml-auto text-2xs text-text-dim">{zone}의 네임드</span>
       </header>
+    }>
 
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,7fr)] grid-rows-[auto_1fr] gap-x-5 gap-y-4
                       mobile:grid-cols-1">
@@ -43,18 +44,21 @@ export default function NamedDetail({ quest, game, onClose }: {
         </TitledCell>
 
         <TitledCell title="전해 오는 이야기" className="row-span-2 mobile:row-span-1">
-          <Inset className="pf-scroll-panel flex-1 min-h-64 max-h-[min(62vh,560px)] pf-vscroll px-5 py-4">
-            {d.chronicle ? (
-              <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
-                {d.chronicle.map((p, idx) => (
-                  <LoreParagraph key={idx}>{p}</LoreParagraph>
-                ))}
-              </article>
-            ) : (
-              <div className="flex h-full items-center justify-center text-center text-sm leading-[1.8] text-text-dim">
-                이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있어요.
-              </div>
-            )}
+          <Inset className="flex flex-1 min-h-64 flex-col px-5 py-4">
+            {/* 전승은 길어져도 칸 안에서 따로 스크롤하지 않는다 — 창 본문 한 칸이 스크롤한다 */}
+            <div className="flex-1">
+              {d.chronicle ? (
+                <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
+                  {d.chronicle.map((p, idx) => (
+                    <LoreParagraph key={idx}>{p}</LoreParagraph>
+                  ))}
+                </article>
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm leading-[1.8] text-text-dim">
+                  이 바다 사람들이 전해 온 이야기는<br />토벌한 뒤에 읽을 수 있어요.
+                </div>
+              )}
+            </div>
           </Inset>
         </TitledCell>
 

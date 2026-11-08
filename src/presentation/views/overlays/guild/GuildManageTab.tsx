@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { GUILD_JOIN_MODES, checkGuildName } from '../../../../game/rules/guild';
 import type { GuildJoinMode } from '../../../../game/rules/guild';
@@ -161,6 +161,7 @@ function RenameDialog({ guildId, current, busy, run, setToast, onGoldChanged, on
   onGoldChanged: () => Promise<void> | void; onClose: () => void;
 }) {
   const [name, setName] = useState('');
+  const formId = useId();
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const next = name.trim();
@@ -180,12 +181,12 @@ function RenameDialog({ guildId, current, busy, run, setToast, onGoldChanged, on
 
   return (
     <Modal layer="stage" onClose={onClose}>
-      <ModalCard title="길드 이름 바꾸기" onClose={onClose}>
-        <form className="flex flex-col gap-3" onSubmit={e => { void onSubmit(e); }}>
+      <ModalCard title="길드 이름 바꾸기" onClose={onClose}
+        confirm={<Button type="submit" form={formId} variant="primary" full disabled={busy}>바꾸기</Button>}>
+        <form id={formId} className="flex flex-col gap-3" onSubmit={e => { void onSubmit(e); }}>
           <TextInput value={name} maxLength={16} autoFocus onChange={e => setName(e.target.value)}
                      aria-label="새 길드 이름" placeholder={current} />
           <span className="text-2xs text-text-dim">{GUILD_RENAME_COST_TEXT}</span>
-          <Button type="submit" variant="primary" full disabled={busy}>바꾸기</Button>
         </form>
       </ModalCard>
     </Modal>

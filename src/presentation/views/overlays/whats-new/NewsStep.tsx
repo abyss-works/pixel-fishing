@@ -1,6 +1,7 @@
 import type { PatchNote } from '../../../../game/content/patchnotes';
 import NoteTag from '../../../ui/NoteTag';
 import Frame from '../../../ui/Frame';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 범주를 묶어 보여 주는 순서 — 새로 생긴 것 → 보이는 변화 → 수치 → 그 밖
 const TAG_ORDER = ['기능', 'UI', '밸런스', '기타'] as const;
@@ -12,7 +13,7 @@ export default function NewsStep({ news }: { news: PatchNote }) {
     .map(tag => ({ tag, items: news.notes.filter(n => n.tag === tag) }))
     .filter(g => g.items.length > 0);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 min-h-0">
       <Frame className="px-3 py-2 flex flex-col gap-0.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="pf-accent text-xl text-gold">v{news.version}</span>
@@ -20,7 +21,7 @@ export default function NewsStep({ news }: { news: PatchNote }) {
         </div>
         <p className="text-sm">{news.summary}</p>
       </Frame>
-      <div className="pf-scroll pf-vscroll max-h-[42vh] pr-1 flex flex-col gap-3">
+      <div className={`${SCROLL_Y} max-h-[calc(42vh+8px)] flex flex-col gap-3`}>
         {groups.map(({ tag, items }) => (
           <section key={tag} className="flex flex-col gap-1">
             <NoteTag tag={tag} className="self-start" />

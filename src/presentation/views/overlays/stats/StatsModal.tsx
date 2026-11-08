@@ -20,6 +20,7 @@ import BoatTab from './BoatTab';
 import BonusTab from './BonusTab';
 import RodTab from './RodTab';
 import SummaryTab from './SummaryTab';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 스탯창: 자원 바 클릭으로 여는 내 캐릭터 성능 화면. 680 폭에 높이를 고정하고, 탭은 요약, 배, 낚싯대, 보너스 넷이다.
 // 제목 아래 고정 정보 줄에는 어느 탭에서나 쓰는 상태(닉네임, 배, 낚싯대 레벨, 파워)를 둔다. 파워 규칙은 파워의 툴팁이다.
@@ -33,8 +34,6 @@ const TABS: TabDef<StatsTab>[] = [
   { key: 'rod', label: '낚싯대' },
   { key: 'bonus', label: '보너스' },
 ];
-/** 탭이 있는 창의 높이: 가장 긴 탭(낚싯대)이 들어가는 560px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] mobile:h-auto';
 
 interface Props {
   game: GameState;
@@ -68,8 +67,9 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
   };
 
   return (
-    <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="스탯" onClose={onClose} className="flex-1">
+    // 탭이 있는 창의 높이: 가장 긴 탭(낚싯대)이 들어가는 560px. 스테이지가 낮으면 위아래 16px을 남긴다
+    <Modal layer="stage" md height={560} onClose={onClose}>
+      <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-sm">
             <b className="max-w-40 truncate text-text">{nickname ?? '불러오는 중'}</b>
@@ -85,7 +85,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
             </span>
           </Inset>
           <TabBar tabs={TABS} activeKey={tab} onSelect={setTab} />
-          <div className="pf-scroll-panel flex flex-col flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
+          <div className={`flex flex-col flex-1 min-h-0 ${SCROLL_Y}`}>
             {tab === 'summary' && (
               <SummaryTab game={game} summary={summary} row={selected}
                           here={here !== null && rows[spotIndex].spot.id === here} />

@@ -10,6 +10,7 @@ import TabBar from '../../../ui/TabBar';
 import type { TabDef } from '../../../ui/TabBar';
 import { ClearsLeft } from './boardParts';
 import { EmptyInfoCard, GeneralInfoCard, NamedInfoCard } from './QuestInfoCards';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 의뢰 창의 화면 - 헤더의 의뢰 현황을 눌러 여는, 지금 수주 중인 의뢰를 보는 읽기 전용 창.
 // 제목 "의뢰" 아래 고정 정보 줄에 오늘 남은 클리어를 두고(수배판과 같은 조각, 값 이름은 헤더처럼 줄인다),
@@ -26,10 +27,6 @@ const TABS: TabDef<InfoTab>[] = [
 ];
 const EMPTY_SUBJECT: Record<InfoTab, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const OFFLINE_TEXT = '오프라인에서는 의뢰를 볼 수 없어요.\n서버에 연결된 뒤 다시 열어 주세요.';
-/** 탭이 있는 창의 높이는 고정이다(모바일 레이아웃도 같다). 더 긴 탭(네임드 토벌)이 들어가는 높이를 잡는다:
- *  창 제목과 여백 56 + 고정 정보 줄 40 + 탭 줄 44 + 카드(이름 줄 24, 줄 목록 5 x 26, 여백과 간격 약 50) 204 + 간격 12 x 3 = 380에
- *  여유를 더한 400px. 스테이지가 낮으면 위아래 16px을 남기고, 넘치는 내용은 본문 안에서 굴린다 */
-const FIXED_HEIGHT = 'h-[min(400px,calc(100%-32px))]';
 
 export default function QuestInfoWindow({ info, onClose }: {
   info: QuestInfoData & { status: QuestInfoStatus };
@@ -61,15 +58,18 @@ export default function QuestInfoWindow({ info, onClose }: {
   };
 
   return (
-    <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="의뢰" onClose={onClose} className="flex-1">
+    // 탭이 있는 창의 높이는 고정이다(모바일 레이아웃도 같다). 더 긴 탭(네임드 토벌)이 들어가는 높이를 잡는다:
+    // 창 제목과 여백 56 + 고정 정보 줄 40 + 탭 줄 44 + 카드(이름 줄 24, 줄 목록 5 x 26, 여백과 간격 약 50) 204 + 간격 12 x 3 = 380에
+    // 여유를 더한 400px. 스테이지가 낮으면 위아래 16px을 남기고, 넘치는 내용은 본문 안에서 굴린다
+    <Modal layer="stage" md height={400} onClose={onClose}>
+      <ModalCard title="의뢰" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
             <ClearsLeft first shortLabels leftAll={info.left?.general ?? null} leftNamed={info.left?.named ?? null}
                         dailyCap={info.caps.general} namedDailyCap={info.caps.named} />
           </Inset>
           <TabBar tabs={TABS} activeKey={tab} onSelect={setPicked} />
-          <div className="pf-scroll-panel flex flex-col flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
+          <div className={`flex flex-col flex-1 min-h-0 ${SCROLL_Y}`}>
             {body()}
           </div>
         </div>

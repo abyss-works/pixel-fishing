@@ -67,12 +67,13 @@ export default function TutorialModal({ seen, ready, dispatch }: {
   if (!current) return null;
   const t = TUTORIAL[current];
   return (
-    <Modal title={t.title} onClose={close}>
+    // 본문 마지막 Note의 아래 여백 8px과 합쳐 확정 버튼과의 간격이 12px이 되게 위 여백을 4px로 둔다
+    <Modal title={t.title} onClose={close}
+           footer={<Button variant="primary" full className="mt-1" onClick={close}>알겠어요</Button>}>
       <PixelList>
         {t.lines.map((line, i) => <li key={i}>{line}</li>)}
       </PixelList>
       <Note size="xs">더 궁금한 것은 <b>도움말</b> 탭에서 볼 수 있어요.</Note>
-      <Button variant="primary" full className="mt-3" onClick={close}>알겠어요</Button>
     </Modal>
   );
 }

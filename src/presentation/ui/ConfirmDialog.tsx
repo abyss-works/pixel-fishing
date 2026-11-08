@@ -14,12 +14,12 @@ export default function ConfirmDialog({ layer, title, confirmLabel, onConfirm, o
   onCancel: () => void;
   children: ReactNode;
 }) {
-  return (
-    <Modal layer={layer} onClose={onCancel}>
-      <ModalCard title={title} onClose={onCancel}
-        confirm={<Button variant="primary" full onClick={onConfirm}>{confirmLabel}</Button>}>
-        {children}
-      </ModalCard>
-    </Modal>
+  const card = (
+    <ModalCard title={title} onClose={onCancel}
+      confirm={<Button variant="primary" full onClick={onConfirm}>{confirmLabel}</Button>}>
+      {children}
+    </ModalCard>
   );
+  // 앱 레이어는 박스 안에 카드를 직접 둔다(bare) — 스크롤은 카드 본문 한 곳뿐이다
+  return layer === 'stage' ? <Modal layer="stage" onClose={onCancel}>{card}</Modal> : <Modal bare onClose={onCancel}>{card}</Modal>;
 }

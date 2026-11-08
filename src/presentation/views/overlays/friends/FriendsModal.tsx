@@ -20,6 +20,7 @@ import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
@@ -27,8 +28,6 @@ import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 // 닉네임을 치는 동안 앞부분이 같은 계정 유저를 입력 아래에 후보로 띄우고, 후보를 고르면 입력을 그 이름으로 채운다.
 // 창 전체에 공통인 상태가 없어 고정 정보 줄은 두지 않는다. 창 자체는 스크롤하지 않고, 넘치는 내용은 탭 본문 안에서 굴린다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
-/** 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(480px,calc(100%-32px))] mobile:h-auto';
 const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
 
 type SocialTab = 'friends' | 'requests' | 'blocks';
@@ -59,8 +58,9 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
     : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
-    <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="소셜" onClose={onClose} className="flex-1">
+    // 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
+    <Modal layer="stage" md height={480} onClose={onClose}>
+      <ModalCard title="소셜" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <TabBar<SocialTab> activeKey={tab} onSelect={setTab} tabs={[
             { key: 'friends', label: groups ? `친구 ${groups.friends.length}` : '친구' },
@@ -166,7 +166,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable]">
+    <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
