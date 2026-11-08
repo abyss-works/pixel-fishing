@@ -24,7 +24,7 @@ const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].
 
 describe('화면 층 - z 토큰 순서', () => {
   it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 전환 덮개, 툴팁 순서다', () => {
-    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'veil', 'tooltip', 'devtools'];
+    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'veil', 'tooltip', 'devtools'];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
     expect(values).toEqual([...values].sort((a, b) => a - b));
@@ -51,6 +51,14 @@ describe('화면 층 - z 토큰 순서', () => {
     expect(tokens['menu-row']).toBeLessThan(tokens['stage-modal']);
   });
 
+  it('잡기 이펙트는 획득 카드 위, 헤더의 펼친 메뉴 줄 위이고 창과 탭 메뉴 아래다', () => {
+    expect(tokens['catch-fx']).toBeGreaterThan(tokens['stage-card']);
+    expect(tokens['catch-fx']).toBeGreaterThan(tokens['chrome']);
+    expect(tokens['catch-fx']).toBeGreaterThan(tokens['menu-row']);
+    expect(tokens['catch-fx']).toBeLessThan(tokens['stage-modal']);
+    expect(tokens['catch-fx']).toBeLessThan(tokens['tabs']);
+  });
+
   it('채팅과 헤더는 스테이지 위 HUD보다 위다', () => {
     expect(tokens['chrome']).toBeGreaterThan(tokens['stage-card']);
     expect(tokens['stage-card']).toBeGreaterThan(tokens['stage-hud']);
@@ -71,6 +79,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['layouts/hud/HudLayout.tsx', '--z-stage-hud'],
     ['layouts/game-stage/MovePad.tsx', '--z-stage-hud'],
     ['ui/hud/CatchCard.tsx', '--z-stage-card'],
+    ['ui/hud/CatchCard.tsx', '--z-catch-fx'],
     ['ui/Modal.tsx', '--z-stage-modal'],
     ['ui/Modal.tsx', '--z-app-modal'],
     ['ui/Modal.tsx', '--z-blocker'],
