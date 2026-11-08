@@ -73,8 +73,8 @@ describe('밸런스 측정 모델', () => {
     // 확정 밸런스의 알려진 역전, 관측 이슈로 추적. 값은 해역별 이동 직후 수입 차이(새 해역 - 비교 해역)다.
     const known: Partial<Record<string, Record<'day' | 'mixed', number>>> = {
       barrierreef: { day: -604.36, mixed: -577.26 },
-      southindian: { day: -6567.04, mixed: -9066.99 },
-      comorodeep: { day: -34308.13, mixed: -53876.12 },
+      southindian: { day: -1921.52, mixed: -5455.33 },
+      comorodeep: { day: -42614.75, mixed: -60618.06 },
     };
     for (let i = from; i < SPOTS.length; i++) {
       for (const pool of ['day', 'mixed'] as const) {

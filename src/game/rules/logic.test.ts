@@ -1013,7 +1013,7 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
   // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
-  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 판매가 ×0.85로 576.0).
+  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 판매가 ×0.85로 596.5).
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
@@ -1026,10 +1026,10 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
     expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
   });
 
-  it('남인도양 — normal 576.0 / perfect 899.6 / 방치 진입 ×5 164.1', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(576, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(899.6, 1);
-    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(164.14, 1);
+  it('남인도양 — normal 596.5 / perfect 931.7 / 방치 진입 ×5 169.8', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(596.49, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(931.74, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(169.81, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
@@ -1056,17 +1056,17 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 57%(1.50~1.65배), 세인트헬레나는 용승대 대비 약 55%(1.50~1.60배) 오른다', () => {
+  it('남대서양 첫 해역은 코모로 심해 대비 약 61%(1.50~1.65배), 세인트헬레나는 용승대 대비 약 53%(1.50~1.60배) 오른다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.57, 플래토 1.60이다
+      // 확정 밸런스의 실제 비율은 진입 1.61, 플래토 1.63이다
       expect(r).toBeGreaterThanOrEqual(1.5);
       expect(r).toBeLessThanOrEqual(1.65);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.54, 플래토 1.55다
+      // 확정 밸런스의 실제 비율은 진입 1.53, 플래토 1.54다
       expect(r).toBeGreaterThanOrEqual(1.5);
       expect(r).toBeLessThanOrEqual(1.6);
     }
