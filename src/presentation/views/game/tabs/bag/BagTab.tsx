@@ -28,6 +28,7 @@ import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagLayout, toggleBagRow, useBagView } from './bagView';
 import type { BagLayout } from './bagView';
+import { selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines } from '../../../../ui/artifactEffects';
@@ -126,7 +127,7 @@ function ArtifactSection({ game }: { game: GameState }) {
                   <b className="text-gold">{a.name}</b>
                   <span className="text-xs"><RarityText rarity={a.grade} /></span>
                 </span>
-                {artifactEffectLines(a).map(line => (
+                {artifactEffectLines(a, selectArtifactLevel(game, a).level).map(line => (
                   <span key={line} className="text-accent text-xs">{line}</span>
                 ))}
                 <span className="text-text-dim italic text-xs">{a.lore}</span>

@@ -34,12 +34,15 @@ export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
  * 행동 결과에 따라 화면을 되돌려야 하는 호출부용 — 성공이 아니면 ok false와 알릴 한 줄을 돌려준다.
  * 규칙 거부는 거부 문구를, 인프라 실패는 오류 정책(보고와 구독자 통지)을 거친 뒤 모달이 없는 종류의 정책 문구를 준다.
  * 정책이 전체 모달로 알리는 종류면 notice는 null이다. 던지지 않는다.
+ * rejectText로 사유별 문구를 그 행동에 맞게 바꿀 수 있다(없는 사유는 공용 거부 문구).
  */
-export async function settleAction(run: () => MaybePromise<DispatchResult>): Promise<ActionSettled> {
+export async function settleAction(
+  run: () => MaybePromise<DispatchResult>, rejectText: Partial<Record<RejectReason, string>> = {},
+): Promise<ActionSettled> {
   try {
     const result = await run();
     if (result.status === 'ok') return { ok: true };
-    return { ok: false, notice: REJECT_TEXT[result.error] };
+    return { ok: false, notice: rejectText[result.error] ?? REJECT_TEXT[result.error] };
   } catch (e) {
     const policy = POLICY[fail(e).kind];
     return { ok: false, notice: policy.modal ? null : policy.message };

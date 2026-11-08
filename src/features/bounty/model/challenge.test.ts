@@ -9,6 +9,14 @@ const QUEST = 'pacific-named-megalodon';
 const NOW = '2027-01-01T03:00:00Z';
 
 describe('selectEncounter', () => {
+  it('해구의 이빨은 레벨이 오를수록 가속 배수를 더 줄인다', () => {
+    const scale = (level: number) => selectEncounter(
+      seed({ artifacts: ['abyss-angler'], artifactLevels: { 'abyss-angler': level } }), QUEST, NOW)!.speedupScale;
+    expect(scale(1)).toBeCloseTo(0.9, 10);
+    expect(scale(3)).toBeCloseTo(0.85, 10);
+    expect(scale(5)).toBeCloseTo(0.8, 10);
+  });
+
   it('가속 배수는 유물이 없으면 1이다', () => {
     expect(selectEncounter(seed(), QUEST, NOW)?.speedupScale).toBe(1);
   });

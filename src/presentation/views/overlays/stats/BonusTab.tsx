@@ -20,7 +20,7 @@ const HEAD = 'h-[30px] font-normal border-b border-line';
 /** 효과 문장 — 유물·미끼·길드 보너스의 기존 문장 함수에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
-    case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect) ?? '';
+    case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level) ?? '';
     case 'bait': return baitEffectLine(row.source.bait);
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
   }

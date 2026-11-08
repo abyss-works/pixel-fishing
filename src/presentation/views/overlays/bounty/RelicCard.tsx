@@ -9,9 +9,11 @@ import { RarityText } from '../../../ui/fish/RarityTag';
 import { artifactEffectLines } from '../../../ui/artifactEffects';
 import { BoardRows } from './boardParts';
 
-export default function RelicCard({ artifact, owned, materialCount, busy, onExchange }: {
+export default function RelicCard({ artifact, owned, level, materialCount, busy, onExchange }: {
   artifact: Artifact;
   owned: boolean;
+  /** 효과 문장에 쓸 레벨 - 갖지 않았으면 1 */
+  level: number;
   materialCount: number;
   busy: boolean;
   onExchange: () => void;
@@ -24,7 +26,7 @@ export default function RelicCard({ artifact, owned, materialCount, busy, onExch
       </div>
       <BoardRows rows={[
         { key: 'grade', label: '등급', value: <><RarityText rarity={artifact.grade} /> 유물</> },
-        ...artifactEffectLines(artifact).map((line, i) => ({
+        ...artifactEffectLines(artifact, level).map((line, i) => ({
           key: `effect-${i}`, label: i === 0 ? '효과' : '', value: <span className="text-accent">{line}</span>,
         })),
         { key: 'material', label: <Tip text="교환 재료는 네임드 토벌 보상으로 받아요.">교환 재료</Tip>,

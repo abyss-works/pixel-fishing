@@ -72,22 +72,22 @@ describe('의뢰 이름 — 토스트·안내에 쓰는 사람이 읽는 이름'
 describe('오늘 남은 클리어 횟수', () => {
   it('일반 의뢰와 네임드 토벌을 따로 센다', () => {
     const snapshot = { clearsToday: clears(1, 0), progress: [], tickets: [] };
-    expect(clearsLeft(snapshot)).toEqual({
+    expect(clearsLeft(newState(), snapshot)).toEqual({
       general: BOUNTY_DAILY_CAP - 1, named: BOUNTY_NAMED_DAILY_CAP,
     });
   });
 
   it('수주만으로는 줄지 않는다 — 진행 중인 의뢰가 있어도 클리어가 0이면 한도가 그대로다', () => {
     const snapshot = { clearsToday: clears(0), progress: [{ questId: 'pacific-easy-common', progress: 3 }], tickets: [] };
-    expect(clearsLeft(snapshot)).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
+    expect(clearsLeft(newState(), snapshot)).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
   });
 
   it('한도를 넘겨 기록돼도 음수로 보이지 않는다', () => {
-    expect(clearsLeft({ clearsToday: clears(5, 5), progress: [], tickets: [] })).toEqual({ general: 0, named: 0 });
+    expect(clearsLeft(newState(), { clearsToday: clears(5, 5), progress: [], tickets: [] })).toEqual({ general: 0, named: 0 });
   });
 
   it('스냅샷이 없으면(불러오는 중·오프라인) null — 0으로 보이지 않게', () => {
-    expect(clearsLeft(null)).toBeNull();
+    expect(clearsLeft(newState(), null)).toBeNull();
   });
 });
 
@@ -172,14 +172,51 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
 
 describe('오늘 클리어 현황(남은 횟수와 한도)', () => {
   it('남은 횟수와 한도를 한 번에 낸다 - 한도는 규칙이 정한 값이다', () => {
-    const status = clearsStatus({ clearsToday: clears(1, 0), progress: [], tickets: [] });
+    const status = clearsStatus(newState(), { clearsToday: clears(1, 0), progress: [], tickets: [] });
     expect(status.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
     expect(status.left).toEqual({ general: BOUNTY_DAILY_CAP - 1, named: BOUNTY_NAMED_DAILY_CAP });
   });
 
   it('스냅샷이 없으면 남은 횟수는 null이고 한도는 그대로다', () => {
-    const status = clearsStatus(null);
+    const status = clearsStatus(newState(), null);
     expect(status.left).toBeNull();
     expect(status.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
+  });
+});
+
+describe('마미 와타의 거울이 넓히는 네임드 토벌 한도', () => {
+  const mirror = { ...newState(), artifacts: ['mami-wata-mirror'] };
+  const done = { clearsToday: clears(0, BOUNTY_NAMED_DAILY_CAP), progress: [], tickets: [] };
+
+  it('거울이 있으면 네임드 한도가 1 늘고 일반 의뢰 한도는 그대로다', () => {
+    const status = clearsStatus(mirror, done);
+    expect(status.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP + 1 });
+    expect(status.left).toEqual({ general: BOUNTY_DAILY_CAP, named: 1 });
+  });
+
+  it('거울이 없으면 같은 기록에서 네임드 남은 횟수가 0이다', () => {
+    expect(clearsStatus(newState(), done).left).toEqual({ general: BOUNTY_DAILY_CAP, named: 0 });
+  });
+
+  it('의뢰판 데이터의 남은 횟수와 수주 가능 여부, 한도가 거울을 따른다', () => {
+    const data = selectBountyPanelData({
+      game: mirror, port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: Date.parse('2026-10-13T00:01:00.000Z'), snapshot: done,
+    });
+    expect(data.leftNamed).toBe(1);
+    expect(data.namedDailyCap).toBe(BOUNTY_NAMED_DAILY_CAP + 1);
+    expect(data.canTakeNamed).toBe(true);
+    expect(data.notice.named).toBeNull();
+  });
+
+  it('네임드 보상은 거울이 있으면 30% 줄어든 값으로 낸다', () => {
+    const base = selectBountyPanelData({
+      game: newState(), port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
+    });
+    const cut = selectBountyPanelData({
+      game: mirror, port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
+    });
+    const reward = base.offers.named!.reward;
+    expect(base.namedReward).toBe(reward);
+    expect(cut.namedReward).toBe(Math.floor(reward * 0.7));
   });
 });
