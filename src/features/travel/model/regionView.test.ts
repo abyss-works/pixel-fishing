@@ -47,9 +47,9 @@ describe('지역 탭 파생 데이터', () => {
   });
 
   it('배가 모자라면 배 부족, 파워가 모자라면 파워 부족, 둘 다 되면 낚시 가능이다', () => {
-    const junk = { ...newState(), boat: 3, rod: 10 }; // 파워 55
+    const junk = { ...newState(), boat: 3, rod: 9 }; // 파워 50
     expect(selectSpotStatus({ ...junk, boat: 0 }, 'coron')).toEqual({ kind: 'boat', boatName: '정크선' });
-    expect(selectSpotStatus(junk, 'coron')).toEqual({ kind: 'power', power: 55, req: 60 });
+    expect(selectSpotStatus(junk, 'coron')).toEqual({ kind: 'power', power: 50, req: 55 });
     expect(selectSpotStatus(junk, 'dragonhole')).toEqual({ kind: 'ok' });
   });
 
@@ -59,9 +59,9 @@ describe('지역 탭 파생 데이터', () => {
   });
 
   it('사거리 내 어군의 상태와 도감 진행(잡은 종/전체)을 준다', () => {
-    const game = { ...newState(), boat: 3, rod: 10 };
+    const game = { ...newState(), boat: 3, rod: 9 };
     const view = selectRegionViewData(game, 'world', [], 'coron', 'coron', null);
-    expect(view.focusedStatus).toEqual({ kind: 'power', power: 55, req: 60 });
+    expect(view.focusedStatus).toEqual({ kind: 'power', power: 50, req: 55 });
     expect(view.focusedDex).toEqual({ caught: 0, total: view.focusedFishes.length });
     expect(selectRegionViewData(game, 'world', [], 'seasia', null, null).focusedStatus).toBeNull();
   });
@@ -75,9 +75,9 @@ describe('지역 탭 파생 데이터', () => {
   it('가까운 어군마다 상태를 붙인다', () => {
     const schools: School[] = [{ id: 'c', spot: 'coron', x: 0, y: 0 }];
     const view = selectRegionViewData(
-      { ...newState(), boat: 3, rod: 10 }, 'world', schools, null, null, { x: 0, y: 0 });
+      { ...newState(), boat: 3, rod: 9 }, 'world', schools, null, null, { x: 0, y: 0 });
     expect(view.nearby[0].spot.id).toBe('coron');
-    expect(view.nearby[0].status).toEqual({ kind: 'power', power: 55, req: 60 });
+    expect(view.nearby[0].status).toEqual({ kind: 'power', power: 50, req: 55 });
   });
 
   it('등급 분포는 해역의 등급 확률을 전역 확률과 비교한다 — 가중치 절대치가 아니다', () => {
