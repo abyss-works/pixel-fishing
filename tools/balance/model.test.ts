@@ -67,13 +67,10 @@ describe('밸런스 측정 모델', () => {
     expect(rodSpec(spot, lv).biteMax).toBe(rodStats(lv).biteMax);
   });
 
-  it('이동 직후 수입: 태평양 이후 해역으로 옮기면 낮 풀과 낮밤 혼합 모두 같은 레벨의 가장 좋은 이전 해역 이상이다', () => {
-    const from = SPOTS.findIndex(s => s.id === 'deep');
-    // 출시 지역 가격 조정 반영 전: 현행 가격에서 인도양은 이전 해역(배리어 리프)보다 낮다.
-    // 가격 조정이 들어간 dev를 병합한 뒤 이 예외를 제거한다.
-    const PRICE_LADDER_PENDING = ['indian'];
+  it('이동 직후 수입: 태평양부터 남대서양까지 옮기면 낮 풀과 낮밤 혼합 모두 같은 레벨의 가장 좋은 이전 해역 이상이다', () => {
+    const from = SPOTS.findIndex(s => s.id === 'sea');
+    expect(SPOTS.map(s => s.id)).toEqual(expect.arrayContaining(['comorodeep', 'benguela', 'sthelena']));
     for (let i = from; i < SPOTS.length; i++) {
-      if (PRICE_LADDER_PENDING.includes(SPOTS[i].id)) continue;
       for (const pool of ['day', 'mixed'] as const) {
         const g = moveGap(i, pool);
         expect(g.diff, `${SPOTS[i].id} ${pool}`).toBeGreaterThanOrEqual(0);
