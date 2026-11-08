@@ -2,8 +2,8 @@
   "id": "world",
   "geo": "src/game/world/geo/land-50m.geo.json",
   "cell": { "w": 8, "h": 11 },
-  "grid": { "cols": 488, "rows": 232 },
-  "window": { "lonMin": 35, "latMax": 44, "lonMax": 157, "latMin": -36 },
+  "grid": { "cols": 688, "rows": 232 },
+  "window": { "lonMin": -15, "latMax": 44, "lonMax": 157, "latMin": -36 },
 
   "globalGrid": { "origin": { "lon": -180, "lat": 85.0344827586207 }, "cellsPerDeg": { "lon": 4, "lat": 2.9 } },
   "_note_globalGrid": "게임 픽셀 좌표의 원점은 항해 창이 아니라 이 전지구 고정 원점(서북 모서리)이다. 해상도는 열당 0.25°(경도 4열/°)와 행당 1/2.9°(위도 2.9행/°)로 고정해 창을 넓히거나 줄여도 같은 경위도가 같은 좌표를 갖는다. 원점 위도는 지금 창의 북단(44N)에서 119행 북쪽(85N 이상)이고, 원점 경도는 -180이다. 창의 서북 모서리는 원점에서 열 860칸, 행 119칸 떨어진다. 창(window)과 grid를 바꿀 때 서북 모서리가 원점에서 정수 칸 떨어지고 해상도가 같아야 생성기가 통과시킨다.",
@@ -25,11 +25,14 @@
     { "ch": "s", "name": "남인도양", "lon": 63, "lat": -27, "rx": 5.0, "ry": 3.6 },
     { "ch": "s", "name": "남인도양", "lon": 78, "lat": -30, "rx": 4.4, "ry": 3.2 },
     { "ch": "c", "name": "코모로 심해", "lon": 43.2, "lat": -13.6, "rx": 1.9, "ry": 1.5 },
+    { "ch": "b", "name": "남대서양 용승대", "lon": 11.5, "lat": -23.5, "rx": 4.0, "ry": 5.0 },
+    { "ch": "h", "name": "세인트헬레나", "lon": -5.7, "lat": -15.95, "rx": 2.4, "ry": 2.0 },
 
     { "ch": "4", "name": "태평양 라벨", "lon": 152, "lat": 26,   "rx": 0.45, "ry": 0.5 },
     { "ch": "5", "name": "동남아 라벨", "lon": 112, "lat": 9,   "rx": 0.45, "ry": 0.5 },
     { "ch": "6", "name": "인도양 라벨", "lon": 66,  "lat": -10, "rx": 0.45, "ry": 0.5 },
-    { "ch": "7", "name": "마다가스카르 라벨", "lon": 40.5, "lat": -24.5, "rx": 0.45, "ry": 0.5 }
+    { "ch": "7", "name": "마다가스카르 라벨", "lon": 40.5, "lat": -24.5, "rx": 0.45, "ry": 0.5 },
+    { "ch": "8", "name": "남대서양 라벨", "lon": -8, "lat": -29, "rx": 0.45, "ry": 0.5 }
   ],
 
   "openZones": [
@@ -37,7 +40,9 @@
     { "ch": "1", "lonMin": 117,  "lonMax": 157, "latMin": 19,  "latMax": 44 },
     { "ch": "2", "lonMin": 98.5, "lonMax": 117, "latMin": 19,  "latMax": 44 },
     { "ch": "3", "lonMin": 50.5, "lonMax": 98.5, "latMin": -36, "latMax": 26 },
-    { "ch": "m", "lonMin": 35,   "lonMax": 50.5, "latMin": -36, "latMax": 26 }
+    { "ch": "m", "lonMin": 20,   "lonMax": 50.5, "latMin": -36, "latMax": 26 },
+    { "ch": "a", "lonMin": -15,  "lonMax": 20,   "latMin": -36, "latMax": 0 },
+    { "ch": "L", "lonMin": -15,  "lonMax": 12,   "latMin": 0,   "latMax": 1 }
   ],
 
   "anchors": {
@@ -74,6 +79,10 @@
     "school_mz_1": { "lon": 40.8, "lat": -19.5, "terrain": "water" },
     "school_mz_2": { "lon": 38.8, "lat": -22.5, "terrain": "water" },
     "school_cd_1": { "lon": 42.6, "lat": -13.3, "terrain": "water" },
-    "school_cd_2": { "lon": 43.9, "lat": -14.2, "terrain": "water" }
+    "school_cd_2": { "lon": 43.9, "lat": -14.2, "terrain": "water" },
+
+    "walvisbay":  { "lon": 14.5,  "lat": -22.95, "dx": 0, "dy": 0, "terrain": "land" },
+    "w_dock":     { "lon": 13.0,  "lat": -22.95, "terrain": "water" },
+    "w_spawn":    { "lon": 12.0,  "lat": -23.2, "terrain": "water" }
   }
 }

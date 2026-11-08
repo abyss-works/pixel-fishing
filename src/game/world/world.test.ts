@@ -409,17 +409,17 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
     expect(earthAt2(20, 0)?.land ?? earthAt2(20, 0)?.water, '아프리카 해안은 정의돼 있다').toBeDefined();
   });
 
-  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 122°×80°)', () => {
+  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 172°×80°)', () => {
     const win = implementedRect();
-    expect(win.w).toBeGreaterThanOrEqual(1948);
-    expect(win.w).toBeLessThanOrEqual(1956);
+    expect(win.w).toBeGreaterThanOrEqual(2744);
+    expect(win.w).toBeLessThanOrEqual(2760);
     expect(win.h).toBeGreaterThanOrEqual(1274);
     expect(win.h).toBeLessThanOrEqual(1282);
   });
 
   it('worldToEarth — 항구 앵커가 구현 영역 안에 뜬다', () => {
     const win = implementedRect();
-    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina]) {
+    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina, WORLD_ANCHORS.walvisbay]) {
       const e = worldToEarth(a.x, a.y);
       expect(e.x, `lon anchor ${a.x}`).toBeGreaterThanOrEqual(win.x);
       expect(e.x).toBeLessThanOrEqual(win.x + win.w);

@@ -59,10 +59,10 @@ describe('격자 배치(창)', () => {
 });
 
 describe('대양 좌표계', () => {
-  it('창의 서북 모서리는 원점에서 정수 칸 떨어져 있고 경위도 35E 44N이다', () => {
-    expect(WORLD.bounds).toEqual({ x: 860 * 8, y: 119 * 11, w: 488 * 8, h: 232 * 11 });
+  it('창의 서북 모서리는 원점에서 정수 칸 떨어져 있고 경위도 15W 44N이다', () => {
+    expect(WORLD.bounds).toEqual({ x: 660 * 8, y: 119 * 11, w: 688 * 8, h: 232 * 11 });
     const nw = gameToLonLat(WORLD.bounds.x, WORLD.bounds.y);
-    expect(nw.lon).toBeCloseTo(35, 9);
+    expect(nw.lon).toBeCloseTo(-15, 9);
     expect(nw.lat).toBeCloseTo(44, 9);
   });
 
@@ -133,6 +133,7 @@ describe('대양 좌표계', () => {
 
   it('지도 전체 칸 인덱스는 전지구 격자 안에 있다', () => {
     const last = cellIndex(WORLD_MAP, WORLD_MAP.cols - 1, WORLD_MAP.rows - 1);
-    expect(last).toBe((119 + 231) * 1440 + 860 + 487);
+    expect(last).toBe((119 + 231) * 1440 + 660 + 687);
   });
 });
+
