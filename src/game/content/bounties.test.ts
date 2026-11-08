@@ -18,7 +18,7 @@ const COUNTS: Record<string, Record<string, number>> = {
 const REWARDS: Record<string, Record<string, number>> = {
   pacific: { easy: 20000, normal: 40000, hard: 85000, named: 150000 },
   seasia: { easy: 70000, normal: 150000, hard: 300000, named: 550000 },
-  indian: { easy: 150000, normal: 300000, hard: 600000, named: 1000000 },
+  indian: { easy: 150000, normal: 300000, hard: 650000, named: 1500000 },
   madagascar: { easy: 350000, normal: 750000, hard: 1500000, named: 3000000 },
   southatlantic: { easy: 950000, normal: 2000000, hard: 4000000, named: 7500000 },
 };
