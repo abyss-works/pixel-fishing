@@ -33,6 +33,7 @@ import { recordSession } from '../_data/activity.js';
 import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
+import { staleClient } from './clientBuild.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -104,6 +105,7 @@ applyKeepAlive(server);
 // 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
 const live = attachLive(server, {
   origin,
+  stale: staleClient,
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;

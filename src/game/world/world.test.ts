@@ -12,10 +12,10 @@ import {
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, WORLD_W, WORLD_H, schoolsOf, generateWorldSchools,
+  WORLD, WORLD_SPAWN, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
-import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
+import { ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
 import { EARTH_MAP, worldToEarth, implementedRect } from '../../presentation/views/overlays/world-map/atlas';
 
 // 대양 어군은 날짜 시드 배치다 — 팩 공통 검증은 고정 날짜 하나로, 도달 가능성은 여러 날로 본다
@@ -23,19 +23,23 @@ const TEST_DAY = '2026-10-18';
 const SCHOOL_DAYS = ['2026-10-18', '2026-10-19', '2026-10-20', '2026-12-31', '2027-03-01'];
 const schoolsFor = (pack: RegionPack): School[] => schoolsOf(pack.id, TEST_DAY);
 
-// 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
+// 게임 좌표계 — 전지구 고정 원점(경도 -180, 위도 85.0344827586207) 기준, 경도 32px/°, 위도 31.9px/°
+const ORIGIN_LAT = 85.0344827586207;
 const worldAt = (lon: number, lat: number): [number, number] => [
-  Math.round((lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W),
-  Math.round((WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H),
+  Math.round((lon + 180) * 32),
+  Math.round((ORIGIN_LAT - lat) * 31.9),
 ];
 
 // 시작점에서 BFS — 군집·트리거마다 도달 가능한 칸이 있는지 검증
 function reachabilityCheck(pack: RegionPack) {
   const STEP = 4;
-  const cols = Math.ceil(pack.w / STEP), rows = Math.ceil(pack.h / STEP);
+  // 탐색 격자는 이동 영역(bounds)의 서북 모서리에서 시작한다
+  const b = pack.bounds;
+  const cols = Math.ceil(b.w / STEP), rows = Math.ceil(b.h / STEP);
   const key = (cx: number, cy: number) => cy * cols + cx;
   const visited = new Uint8Array(cols * rows);
-  const queue: [number, number][] = [[Math.round(pack.spawn.x / STEP), Math.round(pack.spawn.y / STEP)]];
+  const toX = (cx: number) => b.x + cx * STEP, toY = (cy: number) => b.y + cy * STEP;
+  const queue: [number, number][] = [[Math.round((pack.spawn.x - b.x) / STEP), Math.round((pack.spawn.y - b.y) / STEP)]];
   visited[key(queue[0][0], queue[0][1])] = 1;
   while (queue.length) {
     const [cx, cy] = queue.shift()!;
@@ -43,26 +47,26 @@ function reachabilityCheck(pack: RegionPack) {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
       if (visited[key(nx, ny)]) continue;
-      if (!canMove(pack, nx * STEP, ny * STEP)) continue;
+      if (!canMove(pack, toX(nx), toY(ny))) continue;
       visited[key(nx, ny)] = 1;
       queue.push([nx, ny]);
     }
   }
   const reachableNear = (s: School) => {
     const r = Math.ceil(CAST_RANGE / STEP);
-    const scx = Math.round(s.x / STEP), scy = Math.round(s.y / STEP);
+    const scx = Math.round((s.x - b.x) / STEP), scy = Math.round((s.y - b.y) / STEP);
     for (let cx = scx - r; cx <= scx + r; cx++) {
       for (let cy = scy - r; cy <= scy + r; cy++) {
         if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) continue;
-        if (Math.hypot(cx * STEP - s.x, cy * STEP - s.y) > CAST_RANGE) continue;
+        if (Math.hypot(toX(cx) - s.x, toY(cy) - s.y) > CAST_RANGE) continue;
         if (visited[key(cx, cy)]) return true;
       }
     }
     return false;
   };
   const reachedRect = (r: { x: number; y: number; w: number; h: number }) => {
-    for (let cx = Math.floor(r.x / STEP); cx <= Math.floor((r.x + r.w - 1) / STEP); cx++) {
-      for (let cy = Math.floor(r.y / STEP); cy <= Math.floor((r.y + r.h - 1) / STEP); cy++) {
+    for (let cx = Math.floor((r.x - b.x) / STEP); cx <= Math.floor((r.x + r.w - 1 - b.x) / STEP); cx++) {
+      for (let cy = Math.floor((r.y - b.y) / STEP); cy <= Math.floor((r.y + r.h - 1 - b.y) / STEP); cy++) {
         if (visited[key(cx, cy)]) return true;
       }
     }
@@ -227,7 +231,7 @@ describe('대양(병합) R4: 충돌 (항해)', () => {
     expect(canMove(WORLD, ...worldAt(134, -25)), '호주').toBe(false);
     expect(canMove(WORLD, ...worldAt(77.5, 8.5)), '인도 남단').toBe(false);
     expect(canMove(WORLD, -5, 100)).toBe(false);
-    expect(canMove(WORLD, 100, WORLD_H - 3)).toBe(false);
+    expect(canMove(WORLD, WORLD.bounds.x + 100, WORLD.bounds.y + WORLD.bounds.h - 3)).toBe(false);
   });
 
   it('수역 판정 — 군집이 모여 있는 곳의 존이 곧 수역이다 (존 계층 모델)', () => {
@@ -429,8 +433,8 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
       const e = worldToEarth(x, y);
       const lon = -180 + e.x / (EARTH_MAP.cols * EARTH_MAP.cellW) * 360;
       const lat = 85 - e.y / (EARTH_MAP.rows * EARTH_MAP.cellH) * 170;
-      const wx = (lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W;
-      const wy = (WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H;
+      const wx = (lon + 180) * 32;
+      const wy = (ORIGIN_LAT - lat) * 31.9;
       return [wx, wy];
     };
     const [rx, ry] = roundTrip(WORLD_SPAWN.x, WORLD_SPAWN.y);

@@ -10,8 +10,8 @@
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
 // 4/5/6/7 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
 import type { MapCellDef, Point, Rect, RegionPack } from '../types';
-import { compileMap } from '../mask';
-import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW } from './generated/world.mask';
+import { compileMap, mapBounds } from '../mask';
+import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW, GRID_OFFSET, GLOBAL_COLS } from './generated/world.mask';
 
 const A = ANCHORS;
 
@@ -39,9 +39,10 @@ export const WORLD_LEGEND: Record<string, MapCellDef> = {
   '.': { water: true, style: 'sea' }, // 구역 밖 잉여 물(내륙해 등) — 통행만, 낚시·구역 아님
 };
 
-export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS);
-export const WORLD_W = WORLD_MAP.cols * CELL_W;
-export const WORLD_H = WORLD_MAP.rows * CELL_H;
+export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS,
+  { colOffset: GRID_OFFSET.col, rowOffset: GRID_OFFSET.row, globalCols: GLOBAL_COLS });
+/** 항해 창이 차지하는 게임 좌표 영역 — 이 밖은 이동할 수 없다 */
+export const WORLD_BOUNDS = mapBounds(WORLD_MAP);
 
 export const HARBOR: Rect = { ...A.harbor, w: 36, h: 28 };      // 항구 외관(한반도 남동 해안)
 export const HARBOR_DOCK: Rect = { ...A.dock, w: 20, h: 17 };   // 접안 트리거(물 위)
@@ -70,8 +71,7 @@ export const WORLD: RegionPack = {
     tips: [],
     controls: [],
   },
-  w: WORLD_W,
-  h: WORLD_H,
+  bounds: WORLD_BOUNDS,
   geoWindow: WINDOW,
   movement: 'sail',
   map: WORLD_MAP,

@@ -54,9 +54,9 @@ export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates }
         <div className="w-full h-full border border-line rounded-sm bg-bg" aria-hidden="true" />
       ) : (
         <canvas ref={canvasRef}
-                width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
-                height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
-                                   * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
+                width={Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)}
+                height={Math.round(Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)
+                                   * Math.min(MINIMAP_VIEW_H, def.bounds.h) / Math.min(MINIMAP_VIEW_W, def.bounds.w))}
                 className="w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
                 aria-label="미니맵"
                 onClick={() => onOpenMap?.()} />

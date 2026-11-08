@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LIVE_REGIONS, resumePoint } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { LocationRef } from './game/content/places';
-import { useGame } from './features/gameplay/service/useGame';
+import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
@@ -45,6 +45,8 @@ ${min}자 이상이어야 해요.`,
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
   const [entryPos, setEntryPos] = useState<Point | null>(null);
+  // 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안에서 같은 좌표로 다시 옮기는 경우도 Field가 알아챈다
+  const [placeSeq, setPlaceSeq] = useState(0);
   // 접속 복원 — 저장된 장소로 옮기고, 바다면 마지막 위치를 읽은 뒤 그 자리에서 시작한다(갈 수 없는 자리면 출발점)
   const last = useLastPosition();
   const restored = useRef(false);
@@ -59,12 +61,20 @@ ${min}자 이상이어야 해요.`,
   const place = (nextScene: SceneRef, position?: Point) => {
     setScene(nextScene);
     setEntryPos(position ?? null);
+    setPlaceSeq(seq => seq + 1);
   };
 
+  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다
   const go = (nextScene: SceneRef, message: string, position?: Point) => {
+    const from = { scene, entryPos };
+    const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
     setToast(message);
-    dispatch({ type: 'travel', to: nextScene });
+    void settleAction(() => dispatch({ type: 'travel', to: nextScene })).then(settled => {
+      if (settled.ok) return;
+      back();
+      if (settled.notice) setToast(settled.notice, 'warn');
+    });
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
@@ -73,7 +83,7 @@ ${min}자 이상이어야 해요.`,
   return (
     <>
       <GameView
-        game={game} scene={scene} entryPos={entryPos}
+        game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync}
         account={account} uid={uid} nickname={nickname}
