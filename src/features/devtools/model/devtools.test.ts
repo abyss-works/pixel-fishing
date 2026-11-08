@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BOUNTY_ZONES, dailyQuestFor } from '../../../game/content/bounties';
+import { BOATS } from '../../../game/content/boats';
 import { DEBUG_COMMAND_IDS } from '../../../game/rules/debug';
 import { DEV_COMMANDS, devZoneOptions, parseDevArgs } from './commands';
 import { DEV_PRESETS, planPreset } from './presets';
@@ -45,7 +46,7 @@ describe('프리셋', () => {
       { kind: 'debug', command: 'bounty.resetToday', args: {} },
       { kind: 'debug', command: 'bounty.clearProgress', args: {} },
       { kind: 'debug', command: 'bounty.clearTickets', args: {} },
-      { kind: 'debug', command: 'stats.set', args: { fame: 100000, boat: 7, rod: expect.any(Number) } },
+      { kind: 'debug', command: 'stats.set', args: { fame: BOATS[6].fameReq, boat: 7, rod: expect.any(Number) } },
       { kind: 'debug', command: 'dex.completeZone', args: { zone: 'madagascar' } },
       { kind: 'action', action: { type: 'acceptQuest', questId: quest.id, port: 'toamasina' } },
       { kind: 'armEncounter' },
