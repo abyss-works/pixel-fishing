@@ -148,7 +148,7 @@
      스테이지 위 HUD(stage-hud, stage-card) < 채팅과 헤더(chrome) < 헤더의 펼친 메뉴 줄(menu-row)
      < 창(stage-modal, app-modal < 닫을 수 없는 창 blocker) < 탭 줄과 시트(tabs) < 전환 덮개(veil) < 툴팁(tooltip) < 개발 도구(devtools).
      닫을 수 없는 창은 창 층 안에서 다른 창보다 위이면서 탭 줄보다 아래다.
-     컴포넌트는 숫자를 직접 쓰지 않고 이 토큰만 쓴다(layerOrder.test가 막는다) */
+     컴포넌트는 숫자를 직접 쓰지 않고 이 토큰만 쓴다(층 순서 가드 테스트가 막는다) */
   --z-stage-hud: 5;
   --z-stage-card: 6;
   --z-chrome: 10;

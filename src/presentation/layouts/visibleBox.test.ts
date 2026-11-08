@@ -41,4 +41,12 @@ describe('keyboardStyle', () => {
     expect(style).toEqual({ '--keyboard-h': '250px', '--keyboard-top': '40px' });
     expect(style).not.toHaveProperty('transform');
   });
+
+  it('넘기는 값은 사용자 정의 변수뿐이라 게임 영역의 크기와 위치를 직접 바꾸지 않는다', () => {
+    for (const box of [visibleBox(844, 554, 0), visibleBox(844, 554, 40), visibleBox(844, 554, 226)]) {
+      const style = keyboardStyle(box) ?? {};
+      expect(Object.keys(style).length).toBeGreaterThan(0);
+      expect(Object.keys(style).every(key => key.startsWith('--keyboard-'))).toBe(true);
+    }
+  });
 });

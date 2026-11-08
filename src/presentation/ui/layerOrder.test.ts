@@ -91,14 +91,30 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(src('layouts/game-stage/FerryVeil.tsx')).toContain('createPortal');
   });
 
-  it('창 종류별 소속 - 닫을 수 없는 앱 창만 창 층 자리로 옮기고, 스테이지 창(결투 창)은 닫을 수 없어도 스테이지 안에 둔다', () => {
+  it('앱 창은 공용 창 컴포넌트가 정한 자리로 포털하고, 스테이지 창은 닫을 수 없어도 제자리(스테이지 안)에 둔다', () => {
     const modal = src('ui/Modal.tsx');
-    expect(modal).toContain("layer === 'app' && windowHost ? createPortal(modal, windowHost) : modal");
+    expect(modal).toContain('useWindowHost()');
+    expect(modal).toContain("if (layer !== 'app') return modal;");
+    expect(modal).toContain('createPortal(modal, windowHost)');
     expect(src('views/overlays/bounty/EncounterModal.tsx')).toMatch(/layer="stage"/);
+  });
+
+  it('닫을 수 없는 앱 창(새 버전 안내, 세션 교체 안내, 저장 안 됨 안내)은 스테이지 창이 아니다', () => {
     for (const path of ['views/overlays/update/UpdateModal.tsx', 'views/overlays/update/SessionReplacedModal.tsx', 'views/overlays/update/UnsavedModal.tsx']) {
       expect(src(path)).toContain('closable={false}');
       expect(src(path)).not.toContain('layer="stage"');
     }
+  });
+
+  it('창의 층 값은 공용 창 컴포넌트만 정한다 - 개별 창은 층 토큰을 쓰지 않는다', () => {
+    const windowTokens = /--z-(?:app-modal|stage-modal|blocker)\b/;
+    const offenders = sources.filter(f => windowTokens.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual(['ui/Modal.tsx']);
+  });
+
+  it('창 층 위에 따로 놓인 층은 시트뿐이고, 시트가 창 자리를 제공한다', () => {
+    const slotUsers = sources.filter(f => /<WindowSlot\b/.test(f.src)).map(f => f.path);
+    expect(slotUsers).toEqual(['layouts/sidebar/index.tsx']);
   });
 
   it('탭 줄은 PC 레이아웃과 모바일 레이아웃 모두 창 위 층 토큰을 쓴다 - 탭 줄과 시트가 각각 자기 층을 갖는다', () => {
@@ -132,5 +148,20 @@ describe('화면 층 - 스타일 파일', () => {
     expect(css).not.toMatch(/z-index\s*:/);
     const outside = css.replace(/--z-[a-z-]+:\s*\d+;/g, '');
     expect(outside).not.toMatch(/--z-/);
+  });
+});
+
+describe('화면 층 - 키보드가 올라와도 게임 영역 크기는 바뀌지 않는다', () => {
+  it('게임 화면 루트는 키보드 변수만 받고 높이와 위치를 키보드에 맞춰 바꾸지 않는다', () => {
+    const view = src('views/game/GameView.tsx');
+    expect(view).toContain('style={keyboardStyle(visible)}');
+    expect(view.match(/\bvisible\.(?:top|bottom)\b/g) ?? []).toEqual([]);
+    expect(css).not.toMatch(/data-keyboard[^{]*\{[^}]*(?:height|inset|top|bottom|padding|margin)\s*:/);
+  });
+
+  it('PC 레이아웃과 모바일 레이아웃의 탭 줄은 키보드 동안 숨기되(invisible) 자리는 그대로 둔다', () => {
+    const sidebar = src('layouts/sidebar/index.tsx');
+    expect(sidebar).toContain('group-data-[keyboard]/root:invisible');
+    expect(sidebar).not.toMatch(/group-data-\[keyboard\]\/root:(?!invisible)/);
   });
 });
