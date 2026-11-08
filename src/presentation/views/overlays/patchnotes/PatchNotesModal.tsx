@@ -11,7 +11,7 @@ import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 // 이번 소식 다시 보기는 이 창을 닫고 소식 창을 연다. 소식 창의 "다시 보지 않기" 체크도 거기서 바꾼다.
 export default function PatchNotesModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal title="패치노트" narrow onClose={onClose}>
+    <Modal title="패치노트" narrow fill onClose={onClose}>
       <div className="flex justify-end mb-2">
         <Button size="sm" onClick={() => { onClose(); reopenWhatsNew(); }}>이번 소식 다시 보기</Button>
       </div>

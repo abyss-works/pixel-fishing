@@ -44,7 +44,7 @@ export default function WhatsNewModal({ game, ready }: {
   const nextStep = w.steps[w.index + 1];
 
   return (
-    <Modal title={STEP_TITLE[w.step]} onClose={w.close} footer={
+    <Modal title={STEP_TITLE[w.step]} fill onClose={w.close} footer={
       <div className="border-t border-line mt-3 pt-3 flex flex-col gap-2">
         {w.step === 'news' && (
           <CheckToggle checked={w.dismiss} onChange={w.setDismiss} label="이번 소식 다시 보지 않기" />
