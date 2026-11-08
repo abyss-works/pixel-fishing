@@ -13,7 +13,7 @@ import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
   REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer,
-  nearestSchoolInRange, zoneOf,
+  nearestSchoolInRange, zoneOf, closedSeaBlock,
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
@@ -294,8 +294,10 @@ export class GameFieldEngine {
     if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(
-        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
+      const dirX = pad ? pad.x : Math.sign(dx), dirY = pad ? pad.y : Math.sign(dy);
+      const closed = closedSeaBlock(this.def, this.pos, dirX, dirY, dt, speed);
+      if (closed) this.callbacks.onEvent({ type: 'zone-blocked', message: closed });
+      const next = movePlayer(this.def, this.pos, dirX, dirY, dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();

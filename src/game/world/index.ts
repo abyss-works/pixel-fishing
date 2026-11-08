@@ -20,7 +20,7 @@ import { WALVISBAY_BASE } from './bases/walvisbay';
 
 export * from './types';
 export {
-  ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
+  ZoneTracker, canMove, zoneOf, inClosedSea, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';

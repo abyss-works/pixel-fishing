@@ -249,6 +249,9 @@ const DATA: Zone[] = [
 
 export const ZONES: readonly Zone[] = DATA;
 
+/** 아직 열지 않은 바다에 들어서려 할 때의 안내문 — 구역 게이트 안내와 같은 토스트로 나간다 */
+export const CLOSED_SEA_MSG = '아직 열리지 않은 바다라 들어설 수 없어요.';
+
 /** 최상위 존 순서의 단일 출처 — 도감 서브탭·Tab 순환(등록 순서 = 마을→태평양→동남아→인도양).
  *  하위 존은 순환 대상이 아니다 — 로어는 셀 구역(하위 존)으로 자연 승격된다. */
 export const ZONE_IDS: ZoneId[] = DATA.filter(z => !z.parent).map(z => z.id);

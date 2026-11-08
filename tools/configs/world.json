@@ -35,6 +35,14 @@
     { "ch": "8", "name": "남대서양 라벨", "lon": -8, "lat": -29, "rx": 0.45, "ry": 0.5 }
   ],
 
+  "_note_closed": "N = 아직 열지 않은 바다(적도 북쪽 대서양과 지중해). 실제 바다로 그리되 통행할 수 없다. openZones는 맨물만 칠하므로 N 항목은 다른 구역 뒤에 둔다. 북대서양 구역을 열 때 이 문자를 구역 문자로 바꾼다.",
+  "_note_islands": "벤더 지형(land-50m)에 칸 단위로 잡히지 않는 작은 섬을 칸 하나로 찍는다: 세인트헬레나, 울릉도, 독도.",
+  "islands": [
+    { "name": "세인트헬레나", "lon": -5.7, "lat": -15.95 },
+    { "name": "울릉도", "lon": 130.87, "lat": 37.5 },
+    { "name": "독도", "lon": 131.87, "lat": 37.24 }
+  ],
+
   "openZones": [
     { "ch": "2", "lonMin": 98.5, "lonMax": 157, "latMin": -36, "latMax": 19 },
     { "ch": "1", "lonMin": 117,  "lonMax": 157, "latMin": 19,  "latMax": 44 },
@@ -42,7 +50,7 @@
     { "ch": "3", "lonMin": 50.5, "lonMax": 98.5, "latMin": -36, "latMax": 26 },
     { "ch": "m", "lonMin": 20,   "lonMax": 50.5, "latMin": -36, "latMax": 26 },
     { "ch": "a", "lonMin": -15,  "lonMax": 20,   "latMin": -36, "latMax": 0 },
-    { "ch": "L", "lonMin": -15,  "lonMax": 12,   "latMin": 0,   "latMax": 1 }
+    { "ch": "N", "lonMin": -15,  "lonMax": 36,   "latMin": 0,   "latMax": 44 }
   ],
 
   "anchors": {

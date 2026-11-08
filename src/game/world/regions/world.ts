@@ -5,7 +5,7 @@
 // 어군은 고정 앵커가 아니라 날짜 시드로 절차 배치한다(schoolsOf) — 생성 데이터의 school_* 앵커는
 // 더 이상 읽지 않는다.
 //
-// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르 a=남대서양 열린 바다). 경계 통과
+// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르 a=남대서양 열린 바다 N=아직 열지 않은 바다). 경계 통과
 // 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
 // 4/5/6/7/8 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
@@ -39,6 +39,7 @@ export const WORLD_LEGEND: Record<string, MapCellDef> = {
   '6': { water: true, style: 'sea', zone: 'indian', label: '인도양' },
   '7': { water: true, style: 'sea', zone: 'madagascar', label: '마다가스카르' },
   '8': { water: true, style: 'sea', zone: 'southatlantic', label: '남대서양' },
+  N: { water: true, style: 'sea', closed: true },  // 아직 열지 않은 바다(적도 북쪽 대서양·지중해) — 통행 불가
   L: { land: true },
   '.': { water: true, style: 'sea' }, // 구역 밖 잉여 물(내륙해 등) — 통행만, 낚시·구역 아님
 };
