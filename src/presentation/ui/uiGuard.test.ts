@@ -60,8 +60,11 @@ const OVERFLOW_EXCEPTIONS = new Set([
   'views/admin/tabs/ChatReportsSection.tsx',
   'views/admin/tabs/FishTab.tsx',
   'views/admin/tabs/LettersTab.tsx',
+  'views/admin/tabs/LiveTab.tsx',
   'views/admin/tabs/MailTab.tsx',
   'views/admin/tabs/MetricsTab.tsx',
+  'views/admin/tabs/OpsTab.tsx',
+  'views/admin/tabs/OverviewTab.tsx',
   'views/admin/tabs/ProgressionTab.tsx',
   'views/admin/tabs/UsersTab.tsx',
   'views/game/tabs/region/VRegion.tsx',
@@ -78,7 +81,11 @@ const SCROLL_CLASS = new RegExp(`pf-vscroll|pf-scroll|${OVERFLOW_DIRECT.source}`
 
 /** `<이름 ...>` 여는 태그들. 속성 값의 `{...}` 안에 있는 `>`(화살표 함수 등)는 태그 끝으로 보지 않는다 */
 function openingTags(src: string, name: string): string[] {
-  const tags: string[] = [];
+  return openingTagsAt(src, name).map(t => t.tag);
+}
+/** 여는 태그와 그 끝 위치. name은 정규식 조각이다 */
+function openingTagsAt(src: string, name: string): { tag: string; end: number }[] {
+  const tags: { tag: string; end: number }[] = [];
   for (const m of src.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
     let depth = 0;
     let i = m.index;
@@ -88,7 +95,7 @@ function openingTags(src: string, name: string): string[] {
       else if (c === '}') depth--;
       else if (c === '>' && depth === 0) break;
     }
-    tags.push(src.slice(m.index, i + 1));
+    tags.push({ tag: src.slice(m.index, i + 1), end: i + 1 });
   }
   return tags;
 }
@@ -113,14 +120,55 @@ const modalsWithClassName = (src: string) =>
 /** className을 넘기는 ModalCard 호출부. 카드는 className을 받지 않아(스크롤 클래스가 카드에 걸리는 길을 막는다) 변형은 명시 prop으로 고른다 */
 const cardsWithClassName = (src: string) => openingTags(src, 'ModalCard').filter(hasOwnClassName);
 
-/** 줄 수로 높이를 정하는 칸(h, max-h)에 높이가 정해지지 않은 칸용 상수(SCROLL_Y)를 쓴 줄 — 줄 수로 정하는 칸은 SCROLL_Y_ROWS를 쓴다 */
-/** 앱 모달(layer="stage"가 아닌 Modal)의 첫 자식이 제목 요소(header, PageTitle)인 호출부 — 제목은 title이나 header prop으로 넘겨 스크롤 칸 밖에 둔다 */
-const appModalsWithTitleChild = (src: string) =>
-  openingTags(src, 'Modal')
-    .filter(tag => !/\blayer="stage"/.test(tag))
-    .filter(tag => /^\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<(?:header|PageTitle)\b/.test(src.slice(src.indexOf(tag) + tag.length)));
+/** 여는 태그 뒤부터 짝이 되는 닫는 태그 앞까지의 본문(같은 이름이 겹쳐 쓰이지 않는다고 본다) */
+const childrenOf = (src: string, { end }: { end: number }, name: string) => {
+  const close = src.indexOf(`</${name}>`, end);
+  return src.slice(end, close < 0 ? undefined : close);
+};
+const ANY_TAG = '[A-Za-z][\\w.]*';
 
-const sizedWithFlexibleScroll = (line: string) => /\$\{SCROLL_Y\}/.test(line) && /(?<![\w-])(?:max-)?h-\[/.test(line);
+/** 앱 모달(layer="stage"가 아닌 Modal)의 본문에 제목 요소(header, PageTitle)가 있는 호출부. 다른 요소로 감싸도 잡는다.
+ *  제목은 title이나 header prop으로 넘겨 스크롤 칸 밖에 둔다 */
+const appModalsWithTitleChild = (src: string) =>
+  openingTagsAt(src, 'Modal')
+    .filter(t => !/\blayer="stage"/.test(t.tag))
+    .filter(t => /<(?:header|PageTitle)\b/.test(childrenOf(src, t, 'Modal')))
+    .map(t => t.tag);
+
+/** 높이를 정하는 클래스(h-[..], h-24, h-full, max-h-.. 등). min-h와 flex-1은 높이를 정하지 않는다 */
+const HEIGHT_CLASS_RE = /(?<![\w-])(?:max-)?h-(?:\[|\d|px|full|screen|dvh|svh|lh|min|max|fit)/;
+
+/** 줄 수로 높이를 정한 칸에 높이를 정하지 않은 칸용 상수(SCROLL_Y)를 쓴 태그 — 줄 수로 정하는 칸은 SCROLL_Y_ROWS를 쓴다.
+ *  태그가 여러 줄이어도, 대괄호 없는 높이 클래스여도 잡는다 */
+const sizedWithFlexibleScroll = (src: string) =>
+  openingTags(src, ANY_TAG).filter(tag => /\$\{SCROLL_Y\}/.test(tag) && HEIGHT_CLASS_RE.test(tag));
+
+/** 스크롤 칸으로 보는 태그: 공용 상수, TableBox, pf-vscroll */
+const SCROLL_CELL_RE = /\$\{SCROLL_Y\}|^<TableBox\b|pf-vscroll/;
+
+/** 스크롤 칸을 본문에 겹쳐 둔 태그. 본문이 스크롤하는 창(앱 모달, 높이를 고정하지 않은 ModalCard)의 본문 안에
+ *  높이를 정하지 않은 스크롤 칸(flex-1, 높이 없음)이 있으면 스크롤이 겹친다. 높이를 정한 칸(줄 수 고정 칸)은 줄어드는 쪽이 먼저라 허용한다 */
+const nestedScrollCells = (src: string) => {
+  const hosts = [
+    ...openingTagsAt(src, 'Modal').filter(t => !/\blayer="stage"/.test(t.tag) && !/\bbare\b/.test(t.tag)).map(t => ({ ...t, name: 'Modal' })),
+    ...openingTagsAt(src, 'ModalCard').filter(t => !/\bfixed\b/.test(t.tag)).map(t => ({ ...t, name: 'ModalCard' })),
+  ];
+  return hosts.flatMap(h => openingTags(childrenOf(src, h, h.name), ANY_TAG)
+    .filter(tag => SCROLL_CELL_RE.test(tag) && !/SCROLL_Y_ROWS/.test(tag) && !HEIGHT_CLASS_RE.test(tag)));
+};
+
+/** 본문이 스크롤하는 ModalCard(fixed가 아닌 카드)의 본문 안에 있는 주 버튼(variant="primary", ConfirmButton) — 확정 버튼은 confirm 자리에 둔다.
+ *  높이를 고정한 카드(fixed)는 본문이 스크롤하지 않고 탭 안의 동작 줄이 고정 영역에 있어 대상이 아니다 */
+const primaryInCardBody = (src: string) =>
+  openingTagsAt(src, 'ModalCard').filter(t => !/\bfixed\b/.test(t.tag)).flatMap(t => openingTags(childrenOf(src, t, 'ModalCard'), '(?:Button|ConfirmButton)')
+    .filter(tag => /variant="primary"|^<ConfirmButton/.test(tag)));
+/** 높이를 정한 상자(Inset h-[..]) 안을 채우는 본문 칸 — 상자가 줄어들면 칸도 따라 줄어든다(줄이기만 한다) */
+const NESTED_SCROLL_EXCEPTIONS = new Set([
+  'views/overlays/mailbox/MailboxModal.tsx', // 우편 본문 칸 — 190px 상세 상자 안
+]);
+const PRIMARY_IN_BODY_EXCEPTIONS = new Set([
+  'views/overlays/mailbox/MailboxModal.tsx', // 받기: 선택한 우편 상세 안의 동작이다. 창 전체의 확정이 아니다
+]);
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
 const hasVscrollWithoutBar = (line: string) =>
@@ -228,19 +276,32 @@ describe('UI 시스템 가드', () => {
       expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] mobile:h-auto')).toBe(false);
     });
   });
-  it('앱 모달의 제목 요소는 본문 자식이 아니라 title이나 header prop이다 — 제목이 본문과 함께 스크롤하지 않는다', () => {
+  it('앱 모달의 제목 요소는 본문 자식이 아니라 title이나 header prop이다 — 감싼 제목도 잡는다', () => {
     expect(screens.flatMap(f => appModalsWithTitleChild(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
-    expect(appModalsWithTitleChild(`<Modal xl onClose={c}>\n  {/* 설명 */}\n  <header className="a">`)).toHaveLength(1);
-    expect(appModalsWithTitleChild(`<Modal onClose={c}><PageTitle>가</PageTitle>`)).toHaveLength(1);
-    expect(appModalsWithTitleChild(`<Modal xl onClose={c} header={<header>가</header>}><p>본문</p>`)).toEqual([]);
-    expect(appModalsWithTitleChild(`<Modal layer="stage" onClose={c}><header>가</header>`)).toEqual([]);
+    expect(appModalsWithTitleChild(`<Modal xl onClose={c}>\n  {/* 설명 */}\n  <header className="a">가</header></Modal>`)).toHaveLength(1);
+    expect(appModalsWithTitleChild(`<Modal onClose={c}><div className="a"><PageTitle>가</PageTitle></div></Modal>`)).toHaveLength(1);
+    expect(appModalsWithTitleChild(`<Modal xl onClose={c} header={<header>가</header>}><p>본문</p></Modal>`)).toEqual([]);
+    expect(appModalsWithTitleChild(`<Modal layer="stage" onClose={c}><header>가</header></Modal>`)).toEqual([]);
   });
-  it('앱 모달 안에는 크기를 정하지 않은 스크롤 칸(SCROLL_Y)을 겹치지 않는다 — 본문 한 칸만 스크롤한다', () => {
-    const nested = (src: string) => openingTags(src, 'Modal').some(tag => !/\blayer="stage"/.test(tag)) && /\$\{SCROLL_Y\}/.test(src);
-    expect(screens.filter(f => nested(f.src)).map(f => f.path)).toEqual([]);
-    expect(nested('<Modal onClose={c}><div className={`${SCROLL_Y} flex-1`}>')).toBe(true);
-    expect(nested('<Modal layer="stage" onClose={c}><div className={`${SCROLL_Y} flex-1`}>')).toBe(false);
-    expect(nested('<Modal onClose={c}><div className={`${SCROLL_Y_ROWS} max-h-[9px]`}>')).toBe(false);
+  it('본문이 스크롤하는 창 안에는 높이를 정하지 않은 스크롤 칸을 겹치지 않는다 — 앱 모달과 높이를 고정하지 않은 ModalCard', () => {
+    expect(screens.filter(f => !NESTED_SCROLL_EXCEPTIONS.has(f.path)).flatMap(f => nestedScrollCells(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect([...NESTED_SCROLL_EXCEPTIONS].filter(p => nestedScrollCells(screens.find(f => f.path === p)?.src ?? '').length === 0)).toEqual([]);
+    const cell = '<div className={`${SCROLL_Y} flex-1`}>';
+    expect(nestedScrollCells(`<Modal onClose={c}>${cell}</div></Modal>`)).toHaveLength(1);
+    expect(nestedScrollCells(`<ModalCard title="가">${cell}</div></ModalCard>`)).toHaveLength(1);
+    expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="flex-1 min-h-0">x</TableBox></ModalCard>`)).toHaveLength(1);
+    expect(nestedScrollCells(`<ModalCard title="가" fixed>${cell}</div></ModalCard>`)).toEqual([]);
+    expect(nestedScrollCells(`<Modal layer="stage" onClose={c}>${cell}</div></Modal>`)).toEqual([]);
+    expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="h-[138px] shrink">x</TableBox></ModalCard>`)).toEqual([]);
+    expect(nestedScrollCells('<Modal onClose={c}><div className={`${SCROLL_Y_ROWS} max-h-[9px]`}></div></Modal>')).toEqual([]);
+  });
+  it('확정 버튼은 ModalCard의 confirm 자리에 둔다 — 본문 안의 primary 버튼은 예외 목록의 자리만', () => {
+    const using = screens.filter(f => primaryInCardBody(f.src).length > 0).map(f => f.path);
+    expect(using.filter(p => !PRIMARY_IN_BODY_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...PRIMARY_IN_BODY_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+    expect(primaryInCardBody(`<ModalCard title="가" confirm={<Button variant="primary">확</Button>}><p>본문</p></ModalCard>`)).toEqual([]);
+    expect(primaryInCardBody(`<ModalCard title="가"><Button variant="primary" full>확</Button></ModalCard>`)).toHaveLength(1);
+    expect(primaryInCardBody(`<ModalCard title="가"><ConfirmButton reason={null}>확</ConfirmButton></ModalCard>`)).toHaveLength(1);
   });
   it('ModalCard 호출부는 className을 넘기지 않는다 — 변형은 명시 prop으로 고른다', () => {
     expect(screens.flatMap(f => cardsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
@@ -254,14 +315,12 @@ describe('UI 시스템 가드', () => {
     expect(OVERFLOW_DIRECT.test(`style={{ overflow: 'hidden' }}`)).toBe(false);
   });
   it('줄 수로 높이를 정하는 칸은 SCROLL_Y_ROWS를 쓴다 — 높이를 정한 줄에 SCROLL_Y를 쓰지 않는다', () => {
-    const offenders: string[] = [];
-    for (const { path, src } of screenFiles) {
-      src.split('\n').forEach((line, i) => { if (sizedWithFlexibleScroll(line)) offenders.push(`${path}:${i + 1}`); });
-    }
-    expect(offenders).toEqual([]);
-    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} max-h-[186px]`}>')).toBe(true);
-    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y_ROWS} max-h-[186px]`}>')).toBe(false);
-    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} min-h-0 flex-1`}>')).toBe(false);
+    expect(screenFiles.flatMap(f => sizedWithFlexibleScroll(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} max-h-[186px]`}>')).toHaveLength(1);
+    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} max-h-48`}>')).toHaveLength(1);
+    expect(sizedWithFlexibleScroll('<div\n  className={cx(\n    `${SCROLL_Y}`,\n    "h-24",\n  )}>')).toHaveLength(1);
+    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y_ROWS} max-h-[186px]`}>')).toEqual([]);
+    expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} min-h-0 flex-1`}>')).toEqual([]);
   });
   it('Modal 호출부는 className을 넘기지 않는다 — 앱 모달(layer="app")만 예외', () => {
     expect(screens.flatMap(f => modalsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
