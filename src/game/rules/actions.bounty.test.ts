@@ -276,6 +276,12 @@ describe('rollNamedEncounter', () => {
       .toBe('madagascar-named-elder-sixgill');
   });
 
+  it('아다마스토르는 용승대에서만 조우한다 — 세인트헬레나에서는 돌지 않는다', () => {
+    const q = 'southatlantic-named-adamastor';
+    expect(rollNamedEncounter([q], 'sthelena', () => 0)).toBeNull();
+    expect(rollNamedEncounter([q], 'benguela', () => 0)?.id).toBe(q);
+  });
+
   it('게이트 명중이면 그 해역 의뢰를 돌려준다', () => {
     const q = rollNamedEncounter(['pacific-named-megalodon'], 'sea', () => 0);
     expect(q?.id).toBe('pacific-named-megalodon');
@@ -416,6 +422,15 @@ describe('resolveChallenge', () => {
     expect(applyAction(ready(), act({ questId: q, hits: 7 }), madaDeps()))
       .toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()).ok).toBe(true);
+  });
+
+  it('아다마스토르(체력 9)는 8히트 성공 주장을 거부하고 9히트를 받는다', () => {
+    const q = 'southatlantic-named-adamastor';
+    const saDeps = () => deps({ ...dyn,
+      bounty: ctx({ active: [q], tickets: [{ questId: q, issuedAt: '2026-10-09T00:30:00.000Z' }] }) });
+    expect(applyAction(ready(), act({ questId: q, hits: 8 }), saDeps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(ready(), act({ questId: q, hits: 9 }), saDeps()).ok).toBe(true);
   });
 
   it('성공하면 도감에 오르고 감사 이벤트를 남긴다', () => {
