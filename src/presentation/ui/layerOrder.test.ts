@@ -83,6 +83,24 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(src(path)).toContain(token);
   });
 
+  it('화면 전환 덮개는 화면 전체(fixed)를 덮고 스테이지 안에 갇히지 않게 창 층 자리로 포털한다', () => {
+    for (const path of ['layouts/game-stage/FerryVeil.tsx', 'views/overlays/update/LoadingOverlay.tsx']) {
+      expect(src(path)).toContain('fixed inset-0');
+      expect(src(path)).not.toContain('absolute inset-0');
+    }
+    expect(src('layouts/game-stage/FerryVeil.tsx')).toContain('createPortal');
+  });
+
+  it('창 종류별 소속 - 닫을 수 없는 앱 창만 창 층 자리로 옮기고, 스테이지 창(결투 창)은 닫을 수 없어도 스테이지 안에 둔다', () => {
+    const modal = src('ui/Modal.tsx');
+    expect(modal).toContain("layer === 'app' && windowHost ? createPortal(modal, windowHost) : modal");
+    expect(src('views/overlays/bounty/EncounterModal.tsx')).toMatch(/layer="stage"/);
+    for (const path of ['views/overlays/update/UpdateModal.tsx', 'views/overlays/update/SessionReplacedModal.tsx', 'views/overlays/update/UnsavedModal.tsx']) {
+      expect(src(path)).toContain('closable={false}');
+      expect(src(path)).not.toContain('layer="stage"');
+    }
+  });
+
   it('탭 줄은 PC 레이아웃과 모바일 레이아웃 모두 창 위 층 토큰을 쓴다 - 탭 줄과 시트가 각각 자기 층을 갖는다', () => {
     const sidebar = src('layouts/sidebar/index.tsx');
     expect(sidebar.match(/z-\(--z-tabs\)/g)?.length).toBeGreaterThanOrEqual(3);
