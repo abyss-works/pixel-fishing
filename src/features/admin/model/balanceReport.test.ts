@@ -7,7 +7,7 @@ import { goldEV } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
 
 describe('보상 축 정의', () => {
-  it('5축 — 수동 3(무판정/GOOD/PERFECT) + 방치 2(최소/최대 페널티)', () => {
+  it('5축 — 수동 3(무판정/GOOD/PERFECT) + 방치 2(플래토/진입)', () => {
     expect(EV_AXES.map(a => a.key)).toEqual(['normal', 'good', 'perfect', 'idleBest', 'idleWorst']);
     // 다이얼 매핑 — 판정은 ÷rareMult, 방치는 ×commonMult (rollFish common축 산식)
     const byKey = Object.fromEntries(EV_AXES.map(a => [a.key, (s: SpotId) => ({ ...a.options(s) })])) as Record<string, (s: SpotId) => { commonMult?: number; rareMult?: number }>;

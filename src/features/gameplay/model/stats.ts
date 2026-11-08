@@ -154,7 +154,7 @@ export interface BonusRow {
 /**
  * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 켜 둔 미끼, 길드 보너스(1단계 이상).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
- * 낚싯대 파워에서 오는 효과(수동 보정·GOOD·PERFECT)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
+ * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
 export function selectActiveBonuses(game: GameState, guild: { level: number; effects: GuildEffects } | null = null): BonusRow[] {
   const out: BonusRow[] = [];

@@ -146,7 +146,7 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
 //   ① 네임드 조우(namedWeightsOf) → ② 등급(rarityDrawWeights) → ③ 어종(fishDrawWeight) → 크기 → ④ 폼(mutationWeightsOf)
 //   등급 가중치는 해역의 **절대치**다(수역 덮어쓰기, 없으면 지역 단계 프리셋 — 만분율, 일반은 나머지). 분모는 그 해역에
 //   있는 등급 가중치의 합이라 해역마다 다르다. 일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·
-//   해역 게이트·수동 보정)은 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
+//   해역 게이트)는 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
 //   열람용으로 등급×어종을 한 줄로 펼친 값은 drawRows·goldEV가 쓴다.
 
 /** 추첨 시뮬레이션 옵션 — 미지정 필드는 현행 규칙값. 관리자 샌드박스 전용 오버라이드 포함. */
