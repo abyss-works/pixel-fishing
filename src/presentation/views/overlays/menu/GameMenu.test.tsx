@@ -10,6 +10,15 @@ vi.mock('../../../../platform/api', async importOriginal => {
   return { ...mod, readMails: async () => state.mails };
 });
 
+const bounty = vi.hoisted(() => ({ snap: null as null | { clearsToday: { general: number; named: number } } }));
+vi.mock('../../../../features/bounty/service/useBounty', () => ({
+  useBounty: () => ({ snap: bounty.snap, loaded: true, refresh: () => {} }),
+}));
+vi.mock('../../../../features/bounty/model/panel', async importOriginal => {
+  const mod = await importOriginal<typeof import('../../../../features/bounty/model/panel')>();
+  return { ...mod, clearsStatus: () => ({ left: bounty.snap ? { general: bounty.snap.clearsToday.general, named: bounty.snap.clearsToday.named } : null, caps: { general: 0, named: 0 } }) };
+});
+
 const layout = vi.hoisted(() => ({ mobile: false }));
 vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 
@@ -25,17 +34,16 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-const handlers = () => ({ onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
+const handlers = () => ({ onQuests: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
-afterEach(() => { cleanup(); state.mails = null; layout.mobile = false; });
+afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
 
 describe('게임 메뉴', () => {
-  it('열 수 있는 입구가 하나도 없으면(로컬 모드, 게스트) 메뉴 버튼을 그리지 않는다', async () => {
+  it('길드, 소셜, 우편함을 열 수 없어도(로컬 모드, 게스트) 의뢰 때문에 메뉴 버튼은 늘 있다', async () => {
     const h = handlers();
     wrap(<GameMenu account={null} {...h} />);
-    await waitFor(() => expect(screen.queryByRole('button', { name: /메뉴/ })).not.toBeInTheDocument());
-    await new Promise(r => setTimeout(r, 0));
-    expect(screen.queryByRole('button', { name: /메뉴/ })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
+    await waitFor(() => expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['의뢰']));
     expect(h.setToast).not.toHaveBeenCalled();
   });
 
@@ -63,9 +71,9 @@ describe('게임 메뉴', () => {
     wrap(<GameMenu account={null} {...h} />);
     fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(i => i.textContent)).toEqual(['우편함2']);
-    expect(items[0]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
-    fireEvent.click(items[0]);
+    expect(items.map(i => i.textContent)).toEqual(['의뢰', '우편함2']);
+    expect(items[1]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
+    fireEvent.click(items[1]);
     expect(h.onMailbox).toHaveBeenCalled();
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
   });
@@ -89,4 +97,46 @@ describe('게임 메뉴', () => {
     expect(cls).not.toContain('h-15');
   });
 
+  describe('의뢰 줄', () => {
+    it('맨 위 줄이고 누르면 의뢰 창을 열며 메뉴를 접는다', async () => {
+      state.mails = [mail({ id: 1, gold: 100 })];
+      const h = handlers();
+      wrap(<GameMenu account={null} {...h} />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      const items = screen.getAllByRole('menuitem');
+      expect(items[0]).toHaveTextContent('의뢰');
+      fireEvent.click(items[0]);
+      expect(h.onQuests).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    });
+
+    it('오늘 남은 클리어가 있으면 일반(노랑), 네임드(보라) 순서로 배지를 붙이고, 0이면 그 배지는 그리지 않는다', async () => {
+      bounty.snap = { clearsToday: { general: 4, named: 3 } };
+      const h = handlers();
+      wrap(<GameMenu account={null} {...h} />);
+      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
+      const row = screen.getAllByRole('menuitem')[0];
+      expect(row).toHaveAccessibleName('의뢰, 오늘 남은 클리어 일반 4 네임드 3');
+      const badges = [...row.querySelectorAll('[data-badge]')];
+      expect(badges.map(b => [b.getAttribute('data-badge'), b.textContent])).toEqual([['gold', '4'], ['epic', '3']]);
+    });
+
+    it('남은 클리어를 모르면 의뢰 줄에 배지가 없다', async () => {
+      bounty.snap = null;
+      wrap(<GameMenu account={null} {...handlers()} />);
+      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
+      const row = screen.getAllByRole('menuitem')[0];
+      expect(row.querySelector('[data-badge]')).toBeNull();
+      expect(row).toHaveAccessibleName('의뢰');
+    });
+
+    it('의뢰 배지는 메뉴 버튼의 알림 점을 켜지 않는다 - 점은 소셜, 우편함 같은 새 알림만 따른다', async () => {
+      bounty.snap = { clearsToday: { general: 4, named: 3 } };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      const button = await screen.findByRole('button', { name: '메뉴 열기' });
+      expect(button.textContent).toBe('');
+      expect(button.querySelector('.bg-danger')).toBeNull();
+      expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
+    });
+  });
 });
