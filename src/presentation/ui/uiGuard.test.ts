@@ -466,11 +466,23 @@ describe('UI 시스템 가드', () => {
     const stale = [...allowed].flatMap(([path, rules]) => rules.map(r => `${path} ${r.line}`)).filter(k => !used.has(k));
     return { offenders, stale };
   };
-  /** 버튼과 버튼 계열 컴포넌트 안에서 inButton 없이 쓴 AdjustedAmount */
+  /**
+   * 버튼과 버튼 계열 컴포넌트(`<button>`, `Button`, `*Button`, `as="button"`인 `Frame`) 안에서 inButton 없이 쓴 AdjustedAmount.
+   * inButton={false}는 통과시키지 않는다.
+   * 한계: 같은 블록 안에 `<AdjustedAmount` 태그가 직접 적힌 경우만 잡는다. 금액 요소를 변수나 prop으로 만들어 버튼에 넘기는 경우,
+   * 같은 이름의 여는 태그가 겹쳐 중첩된 호출(가장 가까운 닫는 태그에서 끊긴다), `as="button"` 앞에 `=>`가 든 속성이 오는 Frame은 잡지 못한다.
+   * 검사 범위를 .ts까지 넓혀 금액 표기 검사가 문자열 조립 파일(방치 결과 문구)에도 닿으므로, 그 줄은 허용 줄 목록에 사유와 함께 둔다.
+   */
   const adjustedInButtonWithoutFlag = (src: string): string[] => {
     const out: string[] = [];
-    for (const block of src.matchAll(/<(button|(?:[A-Z]\w*)?Button)\b[\s\S]*?<\/\1>/g)) {
-      for (const tag of block[0].matchAll(/<AdjustedAmount\b[^>]*>/g)) if (!/\binButton\b/.test(tag[0])) out.push(tag[0]);
+    const blocks = [
+      ...src.matchAll(/<(button|(?:[A-Z]\w*)?Button)\b[\s\S]*?<\/\1>/g),
+      ...src.matchAll(/<((?:[A-Z]\w*)?Frame)\b(?=[^>]*\bas=["']button["'])[\s\S]*?<\/\1>/g),
+    ];
+    for (const block of blocks) {
+      for (const tag of block[0].matchAll(/<AdjustedAmount\b[^>]*>/g)) {
+        if (!/\binButton\b(?!\s*=\s*\{\s*false\s*\})/.test(tag[0])) out.push(tag[0]);
+      }
     }
     return out;
   };
@@ -522,6 +534,10 @@ describe('UI 시스템 가드', () => {
     expect(SALE_TOTAL_IN_GOLD.test('<AdjustedAmount amount={total} />')).toBe(false);
     expect(adjustedInButtonWithoutFlag('<Button onClick={go}>판매 <AdjustedAmount amount={a} /></Button>')).toHaveLength(1);
     expect(adjustedInButtonWithoutFlag('<button>판매 <AdjustedAmount amount={a} inButton /></button>')).toEqual([]);
+    expect(adjustedInButtonWithoutFlag('<Frame as="button" onClick={go}><AdjustedAmount amount={a} /></Frame>')).toHaveLength(1);
+    expect(adjustedInButtonWithoutFlag('<Frame as="button"><AdjustedAmount amount={a} inButton /></Frame>')).toEqual([]);
+    expect(adjustedInButtonWithoutFlag('<Frame><AdjustedAmount amount={a} /></Frame>')).toEqual([]);
+    expect(adjustedInButtonWithoutFlag('<button><AdjustedAmount amount={a} inButton={false} /></button>')).toHaveLength(1);
     expect(adjustedInButtonWithoutFlag('<Note><AdjustedAmount amount={a} /></Note>')).toEqual([]);
   });
 });
