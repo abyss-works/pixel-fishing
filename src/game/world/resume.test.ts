@@ -4,7 +4,7 @@ import { REGION_PACKS, canMove, resumePoint } from './index';
 
 const world = REGION_PACKS.world;
 const openWater = (() => {
-  for (let y = 50; y < world.h; y += 7) for (let x = 50; x < world.w; x += 7) {
+  for (let y = world.bounds.y + 50; y < world.bounds.y + world.bounds.h; y += 7) for (let x = world.bounds.x + 50; x < world.bounds.x + world.bounds.w; x += 7) {
     if (canMove(world, x, y) && !world.triggers.some(t => x >= t.rect.x && x < t.rect.x + t.rect.w && y >= t.rect.y && y < t.rect.y + t.rect.h)) return { x, y };
   }
   throw new Error('no open water');
@@ -24,7 +24,7 @@ describe('재접속 시작점', () => {
     expect(resumePoint('world', { region: 'world', x: -10, y: -10 })).toBeNull();
     expect(resumePoint('world', { region: 'world', x: Number.NaN, y: 10 })).toBeNull();
     const land = (() => {
-      for (let y = 10; y < world.h; y += 5) for (let x = 10; x < world.w; x += 5) if (!canMove(world, x, y)) return { x, y };
+      for (let y = world.bounds.y + 10; y < world.bounds.y + world.bounds.h; y += 5) for (let x = world.bounds.x + 10; x < world.bounds.x + world.bounds.w; x += 5) if (!canMove(world, x, y)) return { x, y };
       throw new Error('no land');
     })();
     expect(resumePoint('world', { region: 'world', ...land })).toBeNull();

@@ -20,7 +20,7 @@ writeFileSync(geoPath, JSON.stringify({
   ],
 }));
 
-const GLOBAL = { origin: { lon: -180, lat: 85.03448275862069 }, cellsPerDeg: { lon: 4, lat: 2.9 } };
+const GLOBAL = { origin: { lon: -180, lat: 85.0344827586207 }, cellsPerDeg: { lon: 4, lat: 2.9 } };
 const ANCHORS = {
   isle: { lon: 121, lat: 11, terrain: 'land' },
   open: { lon: 100.5, lat: 3.2, terrain: 'water' },

@@ -38,7 +38,8 @@ export interface FieldView extends GearView {
 export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   const view = v.view ?? FIELD_VIEW;
-  const cam = cameraFor(v.player, pack.w, pack.h, view);
+  const cam = cameraFor(v.player, pack.bounds, view);
+  const b = pack.bounds;
   ctx.save();
   ctx.translate(-(cam.x | 0), -(cam.y | 0));
 
@@ -52,22 +53,22 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   } else {
     // rect 지형 (village) — 초지 바탕 + 물 조각
     const g = pack.ground!;
-    R(ctx, 0, 0, pack.w, pack.h, g.color);
-    for (let i = 0; i < 80; i++) R(ctx, (i * 97) % pack.w, (i * 61) % pack.h, 2, 2, g.dot);
+    R(ctx, b.x, b.y, b.w, b.h, g.color);
+    for (let i = 0; i < 80; i++) R(ctx, b.x + (i * 97) % b.w, b.y + (i * 61) % b.h, 2, 2, g.dot);
     for (const t of pack.terrain!) if (t.kind === 'water') drawWater(ctx, t);
   }
 
   // 물결 — 열린 바다는 지도 전체, 내륙 수역은 조각 위를 순환
   if (openSea) {
     for (let i = 0; i < pack.waveCount; i++) {
-      const wx = (i * 89 + Math.sin(v.t * 0.8 + i) * 8 + pack.w) % pack.w;
-      const wy = (i * 53) % pack.h;
+      const wx = b.x + (i * 89 + Math.sin(v.t * 0.8 + i) * 8 + b.w) % b.w;
+      const wy = b.y + (i * 53) % b.h;
       R(ctx, wx, wy, 7, 1, 'rgba(255,255,255,0.16)');
     }
   } else {
     const waters = pack.terrain!.filter(t => t.kind === 'water');
     for (let i = 0; i < pack.waveCount && waters.length; i++) {
-      const wx = (i * 83 + Math.sin(v.t + i) * 6 + pack.w) % pack.w;
+      const wx = b.x + (i * 83 + Math.sin(v.t + i) * 6 + b.w) % b.w;
       const body = waters[i % waters.length].rect;
       R(ctx, Math.max(body.x, Math.min(wx, body.x + body.w - 8)),
         body.y + 6 + (i * 7) % Math.max(body.h - 10, 1), 8, 1, 'rgba(255,255,255,0.25)');

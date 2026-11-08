@@ -30,23 +30,31 @@ describe('mobileFieldView', () => {
 });
 
 describe('cameraFor', () => {
-  const world = { w: 1000, h: 800 };
+  const world = { x: 0, y: 0, w: 1000, h: 800 };
 
   it('플레이어를 시야 가운데에 둔다', () => {
-    expect(cameraFor({ x: 500, y: 400 }, world.w, world.h, { w: 252, h: 452 })).toEqual({ x: 374, y: 174 });
+    expect(cameraFor({ x: 500, y: 400 }, world, { w: 252, h: 452 })).toEqual({ x: 374, y: 174 });
   });
 
   it('월드 경계에서 멈춘다', () => {
     const view = { w: 252, h: 452 };
-    expect(cameraFor({ x: 0, y: 0 }, world.w, world.h, view)).toEqual({ x: 0, y: 0 });
-    expect(cameraFor({ x: 1000, y: 800 }, world.w, world.h, view)).toEqual({ x: 748, y: 348 });
+    expect(cameraFor({ x: 0, y: 0 }, world, view)).toEqual({ x: 0, y: 0 });
+    expect(cameraFor({ x: 1000, y: 800 }, world, view)).toEqual({ x: 748, y: 348 });
   });
 
   it('시야가 월드보다 크면 0에 둔다', () => {
-    expect(cameraFor({ x: 50, y: 50 }, 100, 100, { w: 252, h: 452 })).toEqual({ x: 0, y: 0 });
+    expect(cameraFor({ x: 50, y: 50 }, { x: 0, y: 0, w: 100, h: 100 }, { w: 252, h: 452 })).toEqual({ x: 0, y: 0 });
+  });
+
+  it('원점에서 떨어진 영역에서는 그 영역의 경계에서 멈춘다', () => {
+    const area = { x: 9000, y: 1300, w: 1000, h: 800 };
+    const view = { w: 252, h: 452 };
+    expect(cameraFor({ x: 0, y: 0 }, area, view)).toEqual({ x: 9000, y: 1300 });
+    expect(cameraFor({ x: 20000, y: 9000 }, area, view)).toEqual({ x: 9748, y: 1648 });
+    expect(cameraFor({ x: 9500, y: 1700 }, area, view)).toEqual({ x: 9374, y: 1474 });
   });
 
   it('PC 시야로는 기존 448x252 기준과 같다', () => {
-    expect(cameraFor({ x: 500, y: 400 }, world.w, world.h, FIELD_VIEW)).toEqual({ x: 276, y: 274 });
+    expect(cameraFor({ x: 500, y: 400 }, world, FIELD_VIEW)).toEqual({ x: 276, y: 274 });
   });
 });
