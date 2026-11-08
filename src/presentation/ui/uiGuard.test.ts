@@ -224,7 +224,7 @@ describe('UI 시스템 가드', () => {
   });
 
   it('기능·앱 진입 코드도 입력 요소를 직접 그리지 않는다', () => {
-    const raw = /<(?:input|textarea|select)/;
+    const raw = /<(?:input|textarea|select)b/;
     expect(appSources.filter(([key, src]) => !/\/presentation\//.test(key) && raw.test(src)).map(([key]) => key)).toEqual([]);
   });
 
@@ -411,5 +411,36 @@ describe('UI 시스템 가드', () => {
       });
     }
     expect(offenders).toEqual([]);
+  });
+
+  // 보정 금액 — 보정이 붙는 금액(Stat)은 AdjustedAmount로만 보인다
+  const ADJUSTED_SCREENS = [
+    'views/game/tabs/dex/NamedDetail.tsx',
+    'views/overlays/bounty/NamedCard.tsx',
+    'views/overlays/bounty/QuestInfoCards.tsx',
+    'views/overlays/facility/FacilityModal.tsx',
+  ];
+  /** 보정 금액을 .value로 꺼내 쓰는 자리 — 실제로 받은 금액을 알리는 메시지만 허용한다 */
+  const ADJUSTED_VALUE_EXCEPTIONS = new Set(['views/overlays/bounty/BountyPanel.tsx']);
+
+  it('보정이 붙는 금액을 쓰는 화면은 AdjustedAmount로 그린다', () => {
+    const missing = ADJUSTED_SCREENS.filter(path => {
+      const file = screens.find(f => f.path === path);
+      return !file || !/<AdjustedAmount\b/.test(file.src);
+    });
+    expect(missing).toEqual([]);
+  });
+
+  it('화면은 보정 금액의 value·base를 꺼내 금액 표기에 직접 쓰지 않는다 — 예외 목록의 자리만', () => {
+    const offenders = screens
+      .filter(f => /fmtGold\([^()]*\.(value|base)\b/.test(f.src) && !ADJUSTED_VALUE_EXCEPTIONS.has(f.path))
+      .map(f => f.path);
+    expect(offenders).toEqual([]);
+    const using = screens.filter(f => ADJUSTED_VALUE_EXCEPTIONS.has(f.path) && /fmtGold\([^()]*\.(value|base)\b/.test(f.src)).map(f => f.path);
+    expect([...ADJUSTED_VALUE_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  });
+
+  it('화면은 취소선으로 금액을 직접 그리지 않는다 — 정가·보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
+    expect(screens.filter(f => /<s[\s>]|line-through/.test(f.src)).map(f => f.path)).toEqual([]);
   });
 });

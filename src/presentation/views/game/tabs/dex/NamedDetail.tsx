@@ -2,6 +2,7 @@ import type { BountyQuest } from '../../../../../game/content/bounties';
 import { zoneById } from '../../../../../game/content/zones';
 import type { GameState } from '../../../../../game/rules/logic';
 import { selectNamedDetail } from '../../../../../features/dex/model/catalog';
+import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import Modal from '../../../../ui/Modal';
 import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
@@ -9,7 +10,6 @@ import LoreParagraph from '../../../../ui/LoreParagraph';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import { fmtGold } from '../../../../ui/format';
 
 // 네임드 상세 — 일반 어종 상세와 같은 머리·메인 그리드·오목한 칸 언어. 오른쪽은 순위 대신 읽을거리(전승)이고
 // 왼쪽 두 칸(표본 · 기록) 높이를 한 칸으로 이어 받는다.
@@ -66,7 +66,7 @@ export default function NamedDetail({ quest, game, onClose }: {
           <Inset divided className="flex-1">
             <KeyValueRow label="출현 구역" value={zone} />
             <KeyValueRow label="결투 체력" value={<span className="pf-accent">{d.hp}</span>} />
-            <KeyValueRow label="토벌 보상" value={<span className="pf-accent text-gold">{fmtGold(d.reward)}</span>} />
+            <KeyValueRow label="토벌 보상" value={<AdjustedAmount amount={d.reward} className="text-gold" />} />
             <KeyValueRow label="처음 토벌한 날" value={d.firstCaught ?? (d.found ? '알 수 없음' : '—')} />
             {d.trace && <KeyValueRow label="흔적" value={<span className="italic text-text-dim">{d.trace}</span>} />}
           </Inset>

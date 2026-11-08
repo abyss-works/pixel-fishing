@@ -4,10 +4,10 @@
 import type { GameState } from '../../../../game/rules/logic.js';
 import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { selectNamedBountyCardData } from '../../../../features/bounty/model/panel';
+import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
 import Tip from '../../../ui/Tip';
-import { fmtGold } from '../../../ui/format';
 import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
 
 export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onAccept, onDeliver }: {
@@ -30,7 +30,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
         { key: 'haunt', label: '나타나는 곳', value: haunt },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
           value: <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span> },
-        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(reward)}</span> },
+        { key: 'reward', label: '보상', value: <AdjustedAmount amount={reward} className="text-gold" /> },
         ...(materialName ? [{ key: 'material', label: '교환 재료', value: materialName }] : []),
       ]} />
       <div className="mt-auto">

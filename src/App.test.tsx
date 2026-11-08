@@ -121,7 +121,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('판매 (+60G)')); // 기본 전부 체크
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' })); // 기본 전부 체크
     expect(hud()).toMatch(/골드 60(?![\d.,])/);
     expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
@@ -132,7 +132,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
-    expect(screen.getByText('판매 (+6G)')).toBeInTheDocument(); // 붕어만
+    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매 \(/));
     expect(hud()).toMatch(/골드 6(?![\d.,])/);
     expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
@@ -163,7 +163,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     clickFurniture('sell');
 
     // 기본은 전부 선택 — 두 마리분
-    expect(screen.getByText('판매 (+60G)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+60G)' })).toBeInTheDocument();
 
     // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
@@ -172,7 +172,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
-    expect(screen.getByText('판매 (+30G)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+30G)' })).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
     fireEvent.click(screen.getByText(/^판매 \(/));
@@ -956,7 +956,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
-    expect(screen.getByText(/판매 \(\+6G\)/)).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
+    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
     fireEvent.click(screen.getByText(/^판매 \(/));
     expect(hud()).toMatch(/골드 6(?![\d.,])/);
@@ -1206,9 +1206,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    expect(screen.getByText(/판매 \(\+90G\)/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+90G)' })).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
-    fireEvent.click(screen.getByText(/판매 \(\+60G\)/));                // 변이만
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' }));                // 변이만
     expect(hud()).toMatch(/골드 60(?![\d.,])/);
   });
 
@@ -1271,7 +1271,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
-    fireEvent.click(screen.getByText(/판매 \(\+30G\)/)); // 작은 놈 1마리만
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' })); // 작은 놈 1마리만
     expect(hud()).toMatch(/골드 30(?![\d.,])/);
     expect(hud()).toContain('가방 1 /');
   });
@@ -1282,7 +1282,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
-    fireEvent.click(screen.getByText(/판매 \(\+30G\)/));
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' }));
     expect(hud()).toMatch(/골드 30(?![\d.,])/);
     expect(hud()).toContain('가방 0 /');
   });

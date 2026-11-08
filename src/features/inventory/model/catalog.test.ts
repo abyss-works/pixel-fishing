@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FISH, newState } from '../../../game/rules/logic';
+import { FISH, newState, saleBonusOf, sellSelected } from '../../../game/rules/logic';
 import type { FishInstance } from '../../../game/rules/logic';
 import { selectBagCatalog, selectSalePreview } from './catalog';
 
@@ -37,9 +37,27 @@ describe('가방 파생 데이터', () => {
 
     expect(preview.soldUids).toEqual(['sell']);
     expect(preview.lockedCount).toBe(1);
-    expect(preview.total).toBeGreaterThan(0);
+    expect(preview.total.value).toBeGreaterThan(0);
     expect(preview.rows.find(row => row.key === fish.id)).toMatchObject({
-      selectedCount: 0, allSelected: false, selectedSubtotal: 0,
+      selectedCount: 0, allSelected: false, selectedSubtotal: { base: 0, mods: [], value: 0 },
     });
+  });
+
+  it('길드 판매가 보너스는 판매 총액에 한 번 반올림해 더하고 서버 판매 결과와 같다', () => {
+    const [fish, other] = FISH;
+    const bag = [instance('a', fish.id), instance('b', other.id)];
+    const state = { ...newState(), gold: 0, bag };
+
+    const none = selectSalePreview(bag, new Set());
+    expect(none.total).toEqual({ base: none.total.base, mods: [], value: none.total.base });
+
+    const bonus = 0.06;
+    const preview = selectSalePreview(bag, new Set(), bonus);
+    expect(preview.total.base).toBe(none.total.base);
+    expect(preview.total.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(none.total.base, bonus) }]);
+    expect(preview.total.value).toBe(sellSelected(state, preview.soldUids, bonus).gold);
+    for (const row of preview.rows) {
+      expect(row.selectedSubtotal.value).toBe(row.selectedSubtotal.base + saleBonusOf(row.selectedSubtotal.base, bonus));
+    }
   });
 });
