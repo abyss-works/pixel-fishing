@@ -330,7 +330,7 @@ export const FISH: readonly Fish[] = [
     variant: { name: '백금 노랑꼬리방어', color: '#cfd8dc',
       lore: '푸른 등이 백금빛으로 번쩍이는 거체. 쫓기던 멸치 떼가 흩어진 자리에서 보인다.' } },
   { id: 'toothfish',   name: '파타고니아이빨고기', spot: 'benguela', rarity: 'legendary', price: 200000, color: '#3e4f5c', shape: 'ancient',
-    lore: '아주 차갑고 깊은 물에서 오래 사는 큰 물고기다. 이빨고기라는 이름과 달리 이빨보다 눈이 먼저 보인다.',
+    lore: '아주 차갑고 깊은 물에서 오래 사는 큰 물고기다. 긴 줄을 바닥까지 내려야 겨우 한 마리가 걸린다.',
     variant: { name: '태고의 이빨고기', color: '#25343f',
       lore: '용승대의 물이 차가워지기 전부터 있었다고 전해지는 개체. 올라온 뒤에도 물 냄새가 가시지 않는다.' } },
   // ── 1-5 남대서양 · 세인트헬레나 (특수 — 멀리 떨어진 화산섬의 따뜻하고 맑은 암초) ──
@@ -347,7 +347,7 @@ export const FISH: readonly Fish[] = [
     variant: { name: '흑 아폴로자리돔', color: '#243b55',
       lore: '짙은 남색으로 바래 물속에서는 그림자로만 보인다.' } },
   { id: 'ascensionangel', name: '어센션엔젤피시', spot: 'sthelena', rarity: 'rare', price: 8700, color: '#e8c04a', shape: 'round',
-    lore: '어센션섬 둘레의 암초에서 건져 올린 엔젤피시다. 높은 몸을 세우고 천천히 헤엄친다.',
+    lore: '북서쪽 어센션섬의 이름을 단 엔젤피시다. 높은 몸을 세우고 세인트헬레나 암초 사이를 천천히 헤엄친다.',
     variant: { name: '백옥 어센션엔젤피시', color: '#f2efe6',
       lore: '노란빛이 모두 빠진 개체. 어둑한 바위 밑에서 홀로 하얗다.' } },
   { id: 'wahoo',       name: '와후',        spot: 'sthelena', rarity: 'epic',      price: 39000, color: '#3f7fa0', shape: 'slim',
@@ -457,5 +457,5 @@ export const FISH: readonly Fish[] = [
   { id: 'bigeye',      name: '큰눈매퉁이',   spot: 'sthelena', rarity: 'legendary', price: 420000, color: '#c24a3c', shape: 'round', night: true,
     lore: '눈이 몸에 비해 지나치게 큰 붉은 물고기다. 어둠 속에서 눈만 둥글게 빛난다.',
     variant: { name: '심연의 큰눈매퉁이', color: '#6d2a24',
-      lore: '불빛이 닿지 않는 깊이에서 올라온 개체. 눈이 빛나는 것을 본 사람은 말이 없다.' } },
+      lore: '불빛이 닿지 않는 깊이에서 올라온 개체. 건져 올린 뒤에도 눈이 한동안 어둠 쪽으로 돌아가 있다.' } },
 ];

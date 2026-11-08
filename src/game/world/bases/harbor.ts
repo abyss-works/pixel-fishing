@@ -6,7 +6,7 @@ export const HARBOR_BASE: BasePack = {
   id: 'harbor',
   name: '부산항',
   region: 'world',
-  headline: '부산항 — 시설을 눌러 정비해 보세요',
+  headline: '부산항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   exitAt: { ...WORLD_SPAWN }, // 출항 = 팩 spawn(고향 항구 앞) — 고향 항구는 팩 spawn과 같은 자리
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔어요.' },

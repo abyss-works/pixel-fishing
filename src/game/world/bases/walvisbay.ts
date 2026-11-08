@@ -6,7 +6,7 @@ export const WALVISBAY_BASE: BasePack = {
   id: 'walvisbay',
   name: '월비스베이항',
   region: 'world',
-  headline: '월비스베이항 — 시설을 눌러 정비해 보세요',
+  headline: '월비스베이항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 용승대의 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
   exitAt: { ...WALVISBAY_SPAWN },
