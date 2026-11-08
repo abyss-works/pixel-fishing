@@ -7,8 +7,9 @@ import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../.
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
-import { artifactLevelOf, dailyClearCap, namedRewardOf } from '../../../game/rules/artifactLevel';
+import { artifactLevelOf, dailyClearCap, namedRewardStat } from '../../../game/rules/artifactLevel';
 import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
+import type { Stat } from '../../../game/rules/stats';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
@@ -35,10 +36,10 @@ export interface BountyPanelInput {
   snapshot: BountySnapshot | null;
 }
 
-/** 네임드 토벌 항목 하나 - 의뢰, 보상 감소를 적용한 골드, 남은 도전권 분, 토벌 보상으로 받는 유물 */
+/** 네임드 토벌 항목 하나 - 의뢰, 보상 감소 내역을 담은 골드, 남은 도전권 분, 토벌 보상으로 받는 유물 */
 export interface NamedOffer {
   quest: BountyQuest;
-  reward: number;
+  reward: Stat;
   ticketMins: number | null;
   relic: Artifact | undefined;
 }
@@ -144,7 +145,7 @@ export function selectBountyPanelData({
   ])) as BountyPanelData['offers'];
   const namedOffers: NamedOffer[] = offeredQuestsFor(zone, 'named', who, day).map(quest => ({
     quest,
-    reward: namedRewardOf(game, quest.reward),
+    reward: namedRewardStat(game, quest.reward),
     ticketMins: ticketMinsOf(snapshot, quest.id, nowMs),
     relic: artifactOfNamed(quest.targetFish ?? ''),
   }));
@@ -199,8 +200,8 @@ export interface NamedBountyCardData {
   done: boolean;
   /** 나타나는 곳 — 출현 수역이 정해진 네임드는 그 수역, 아니면 해역 이름 */
   haunt: string;
-  /** 토벌 골드 보상 - 보유 유물의 보상 감소를 적용한 값 */
-  reward: number;
+  /** 토벌 골드 보상 - 원본, 보유 유물의 보상 감소, 받는 값의 내역 */
+  reward: Stat;
 }
 
 /** 네임드 카드의 공개 이름·스프라이트·완료 여부·나타나는 곳을 계산한다. */
@@ -214,7 +215,7 @@ export function selectNamedBountyCardData(
     fish: named ? namedFishOf(named) : null,
     found: quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false,
     done: progress >= quest.count,
-    reward: namedRewardOf(game, quest.reward),
+    reward: namedRewardStat(game, quest.reward),
     haunt: (named?.spot ? spotById(named.spot)?.name : undefined) ?? zoneById(quest.zone)?.shortName ?? quest.zone,
   };
 }

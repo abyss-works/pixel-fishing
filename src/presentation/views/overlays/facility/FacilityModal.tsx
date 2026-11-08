@@ -17,6 +17,7 @@ import CostLine from '../../../ui/CostLine';
 import IconButton from '../../../ui/IconButton';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
+import AdjustedAmount from '../../../ui/AdjustedAmount';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -39,6 +40,8 @@ interface Props {
   base?: BaseId;
   /** 일일 의뢰 해시 대상 — 없으면 로컬 고정값 */
   uid?: string | null;
+  /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
+  sellBonus: number;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
@@ -50,7 +53,7 @@ interface Props {
 // 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -68,7 +71,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty' || panel === 'wardrobe'}
            height={panel === 'bounty' ? 480 : panel === 'wardrobe' ? 560 : undefined} onClose={onClose}>
       {panel === 'sell' && (
-        <SellPanel game={game} onClose={onClose} busy={busy}
+        <SellPanel game={game} sellBonus={sellBonus} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
             setToast(`물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었어요!`, 'gold');
@@ -121,13 +124,13 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
 // 선택의 원자 단위는 **개체(uid)**다: 행 체크는 그 행 전부를 켜고 끄는 단축일 뿐이고,
 // 줄을 펼치면 개체 하나씩 고를 수 있다. 같은 종이라도 큰 놈만 남기는 게 이 화면의 목적.
 // 잠근 **개체**는 개별로 선택 불가(가방 탭에서 해제) — 같은 종 안에서도 섞일 수 있다.
-function SellPanel({ game, onSell, onClose, busy }: {
-  game: GameState; onSell: (uids: string[]) => void; onClose: () => void; busy: boolean;
+function SellPanel({ game, sellBonus, onSell, onClose, busy }: {
+  game: GameState; sellBonus: number; onSell: (uids: string[]) => void; onClose: () => void; busy: boolean;
 }) {
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // uid 단위
   const { collapsed } = useSellView(); // 판매 패널 펼침 — 기본 닫힘(가방과 동일), 가방 탭과 별개 저장소
   const { rows, soldUids, total, lockedCount } = useMemo(
-    () => selectSalePreview(game.bag, excluded), [game.bag, excluded],
+    () => selectSalePreview(game.bag, excluded, sellBonus), [game.bag, excluded, sellBonus],
   );
 
   const flip = (set: Set<string>, keys: string[], on: boolean) => {
@@ -154,11 +157,11 @@ function SellPanel({ game, onSell, onClose, busy }: {
         {lockedCount > 0 && (
           <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요.<br />잠금은 가방 탭에서 풀 수 있어요.</Note>
         )}
-        <CostLine have={game.gold} delta={total} />
+        <CostLine have={game.gold} delta={total.value} />
       </>}
       confirm={
-        <Button variant="primary" disabled={total === 0 || busy} onClick={() => onSell(soldUids)}>
-          판매 (+{fmtGold(total)})
+        <Button variant="primary" disabled={total.value === 0 || busy} onClick={() => onSell(soldUids)}>
+          판매 (+<AdjustedAmount amount={total} inButton />)
         </Button>
       }>
       {/* 어종 목록 — 확정 영역은 고정이고 이 칸만 세로로 스크롤한다. 높이는 모달 가용 높이와 행 서른 개 높이(840px, 위아래 여백 8px 포함 848px) 중 작은 값이다 */}

@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); resetKeyScopes(); });
 describe('조선소', () => {
   it('구매 버튼은 스크롤 본문 밖에 있고 buyBoat를 보낸다', () => {
     const dispatch = vi.fn(() => ({ status: 'ok' as const, state: { ...newState(), boat: 1 }, result: { type: 'none' as const } }));
-    render(<FacilityModal panel="boat" game={{ ...newState(), gold: 1_000_000, fame: 1_000_000 }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
+    render(<FacilityModal sellBonus={0} panel="boat" game={{ ...newState(), gold: 1_000_000, fame: 1_000_000 }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
     const button = screen.getByRole('button', { name: /^구매 \(-/ });
     expect(button.closest('.pf-vscroll')).toBeNull();
     fireEvent.click(button);

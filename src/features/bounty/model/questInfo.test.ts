@@ -55,7 +55,7 @@ describe('현재 의뢰 정보', () => {
     const snapshot = snap({ progress: [{ questId: quest.id, progress: 0 }] });
     const hidden = info(snapshot).named!;
     expect(hidden.title).toBe('???');
-    expect(hidden).toMatchObject({ haunt: expect.any(String), reward: quest.reward, materialName: '돌이 된 이빨',
+    expect(hidden).toMatchObject({ haunt: expect.any(String), reward: { base: quest.reward, mods: [], value: quest.reward }, materialName: '돌이 된 이빨',
       finishAt: '부산항 수배판', done: false, count: quest.count, progress: 0 });
 
     const game = newState();

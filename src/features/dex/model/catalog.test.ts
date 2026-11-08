@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOUNTIES } from '../../../game/content/bounties';
 import { FISH, newState } from '../../../game/rules/logic';
 import { topZoneOfSpot } from '../../../game/content/zones';
+import { selectNamedBountyCardData } from '../../bounty/model/panel';
 import { selectDexDetailData, selectDexGrid, selectNamedDetail, selectNamedDex } from './catalog';
 
 describe('도감 조회 데이터', () => {
@@ -61,7 +62,15 @@ describe('네임드 상세', () => {
     expect(d.found).toBe(false);
     expect([d.name, d.lore, d.trace, d.chronicle, d.firstCaught]).toEqual([null, null, null, null, null]);
     expect(d.hp).toBeGreaterThan(0);
-    expect(d.reward).toBe(quest.reward);
+    expect(d.reward).toEqual({ base: quest.reward, mods: [], value: quest.reward });
+  });
+
+  it('보상은 수배판 네임드 카드와 같은 내역이다(거울 페널티 포함)', () => {
+    const game = { ...newState(), artifacts: ['mami-wata-mirror'] };
+    const detail = selectNamedDetail(game, quest)!;
+    expect(detail.reward).toEqual(selectNamedBountyCardData(game, quest, 0).reward);
+    expect(detail.reward.value).toBeLessThan(quest.reward);
+    expect(detail.reward.mods.map(mod => mod.label)).toEqual(['마미 와타의 거울']);
   });
 
   it('토벌한 뒤에는 이름·로어·흔적·전승과 처음 토벌한 날을 공개한다', () => {

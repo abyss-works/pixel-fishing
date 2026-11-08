@@ -228,8 +228,12 @@ describe('마미 와타의 거울이 넓히는 네임드 토벌 한도', () => {
       game: mirror, port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
     });
     const reward = base.namedOffers[0].quest.reward;
-    expect(base.namedOffers[0].reward).toBe(reward);
-    expect(cut.namedOffers[0].reward).toBe(Math.floor(reward * 0.7));
+    expect(base.namedOffers[0].reward).toEqual({ base: reward, mods: [], value: reward });
+    expect(cut.namedOffers[0].reward.value).toBe(Math.floor(reward * 0.7));
+    expect(cut.namedOffers[0].reward.base).toBe(reward);
+    expect(cut.namedOffers[0].reward.mods).toEqual([
+      expect.objectContaining({ label: '마미 와타의 거울', delta: cut.namedOffers[0].reward.value - reward }),
+    ]);
   });
 });
 

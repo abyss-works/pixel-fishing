@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
+import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold, fmtSize, josa } from '../../../../ui/format';
@@ -199,16 +200,18 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, dispatch, setToast }: {
+export default function BagTab({ game, sellBonus, dispatch, setToast }: {
   game: GameState;
+  /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
+  sellBonus: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
-    count: bagCount, cap, full: bagFull, sellableValue: total,
+    count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game);
+  } = selectBagOverview(game, sellBonus);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
@@ -368,7 +371,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </Frame>
               <Note>
-                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요.<br />
+                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
                 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
                 자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
                 {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}

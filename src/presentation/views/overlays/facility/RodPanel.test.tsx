@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); resetKeyScopes(); });
 
 const show = (rod: number, gold: number) => {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } }));
-  render(<FacilityModal panel="rod" game={{ ...newState(), rod, gold }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
+  render(<FacilityModal sellBonus={0} panel="rod" game={{ ...newState(), rod, gold }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
   return { dispatch };
 };
 

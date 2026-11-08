@@ -7,6 +7,7 @@ import type { Artifact, ArtifactEffects } from '../content/artifacts.js';
 import type { BountyKind } from '../content/bounties.js';
 import { MUTATION_WEIGHTS, bountyDailyCap } from './balance.js';
 import type { GameState } from './logic.js';
+import type { Stat, StatMod } from './stats.js';
 
 /** 유물 레벨을 읽는 데 필요한 상태 */
 export type ArtifactHolder = Pick<GameState, 'artifacts' | 'artifactLevels'>;
@@ -80,9 +81,25 @@ export function dailyClearCap(state: ArtifactHolder, kind: BountyKind): number {
   return kind === 'named' ? namedDailyCap(state) : bountyDailyCap(kind);
 }
 
-/** 네임드 토벌로 받는 골드 — 보유 전설 유물의 보상 감소를 적용한다. 교환 재료 수에는 영향이 없다 */
+/**
+ * 네임드 토벌로 받는 골드의 내역 — 원본(base), 보유 전설 유물마다의 감소(mods, 유물 이름), 받는 값(value).
+ * 교환 재료 수에는 영향이 없다. 감소가 여럿이면 올림 차이는 마지막 유물의 증감이 맡아 증감의 합이 항상 value - base다.
+ */
+export function namedRewardStat(state: ArtifactHolder, reward: number): Stat {
+  const owned = ARTIFACTS.filter(a => state.artifacts.includes(a.id) && (a.system?.namedRewardCut ?? 0) > 0);
+  const cut = owned.reduce((sum, a) => sum + (a.system?.namedRewardCut ?? 0), 0);
+  const value = Math.floor(clean(reward * (1 - Math.min(1, cut))));
+  const mods: StatMod[] = owned.map(a => ({
+    id: `relic-${a.id}`, label: a.name, delta: -Math.round(clean(reward * (a.system?.namedRewardCut ?? 0))),
+  }));
+  if (mods.length > 0) {
+    const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+    mods[mods.length - 1].delta = value - reward - rest;
+  }
+  return { base: reward, mods, value };
+}
+
+/** 네임드 토벌로 받는 골드 — 보유 전설 유물의 보상 감소를 적용한 값 */
 export function namedRewardOf(state: ArtifactHolder, reward: number): number {
-  const cut = ARTIFACTS.reduce((sum, a) =>
-    state.artifacts.includes(a.id) ? sum + (a.system?.namedRewardCut ?? 0) : sum, 0);
-  return Math.floor(clean(reward * (1 - Math.min(1, cut))));
+  return namedRewardStat(state, reward).value;
 }
