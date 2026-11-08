@@ -756,7 +756,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   });
 
   it('모든 거점 위치는 보존된다 — 콜롬보 상점의 구매처 검증에 필요', () => {
-    for (const id of ['home', 'harbor', 'manila', 'colombo'] as const) {
+    for (const id of ['home', 'harbor', 'manila', 'colombo', 'toamasina', 'walvisbay'] as const) {
       expect(mig({ v: 8, location: { kind: 'base', id } }).location)
         .toEqual({ kind: 'base', id });
     }

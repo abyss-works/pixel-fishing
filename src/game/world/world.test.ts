@@ -10,7 +10,7 @@ import type { MapCellDef, RegionPack, School } from './index';
 import {
   REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
-  TOAMASINA_FURNITURE,
+  TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   WORLD, WORLD_SPAWN, WORLD_W, WORLD_H, schoolsOf, generateWorldSchools,
 } from './index';
@@ -536,6 +536,9 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     for (const f of TOAMASINA_FURNITURE) {
       expect(furnitureAt('toamasina', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
+    for (const f of WALVISBAY_FURNITURE) {
+      expect(furnitureAt('walvisbay', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
+    }
   });
   it('여객선은 항구에만 있다', () => {
     expect(HARBOR_FURNITURE.some(f => f.id === 'travel')).toBe(true);
@@ -549,6 +552,7 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
+    expect(ids('walvisbay')).toEqual(port);
     // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
     expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'ferry', 'exit']);
   });

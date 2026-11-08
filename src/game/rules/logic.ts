@@ -801,7 +801,7 @@ function safeLocation(v: unknown): LocationRef {
     if (l.kind === 'region') return { kind: 'region', id: l.id as RegionId };
     if (l.kind === 'base'
         && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo'
-          || l.id === 'toamasina')) {
+          || l.id === 'toamasina' || l.id === 'walvisbay')) {
       return { kind: 'base', id: l.id };
     }
   }
