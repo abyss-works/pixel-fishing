@@ -103,3 +103,43 @@ describe('밸런스 측정 모델', () => {
     }
   });
 });
+
+describe('파워 미달 페널티', () => {
+  const spot = 'sea' as const;
+
+  it('진입 레벨 이상은 페널티가 없다', () => {
+    const spec = rodSpec(spot, entryLevel(spot));
+    expect(spec.gateMult).toBe(1);
+    expect(spec.biteExtra).toBe(0);
+  });
+
+  it('미달 레벨마다 일반 가중치 배수가 2배가 되고 4레벨부터 16배 상한이다', () => {
+    const entry = entryLevel(spot);
+    expect(rodSpec(spot, entry - 1).gateMult).toBe(2);
+    expect(rodSpec(spot, entry - 2).gateMult).toBe(4);
+    expect(rodSpec(spot, entry - 4).gateMult).toBe(16);
+    expect(rodSpec(spot, entry - 4).biteExtra).toBe(5);
+  });
+
+  it('미달이면 존이 없고 수동 축은 무판정만 가능하다', () => {
+    const spec = rodSpec(spot, entryLevel(spot) - 1);
+    expect(spec.yellow).toBe(0);
+    expect(axisAvailable(spec, 'good')).toBe(false);
+  });
+
+  it('미달 다이얼은 방치 배수에 페널티를 곱하고 수동 축에는 일반 가중치로 얹는다', () => {
+    const spec = rodSpec(spot, entryLevel(spot) - 2);
+    expect(axisOptions(spec, 'idle')).toEqual({ commonMult: spec.idleBoost * 4 });
+    expect(axisOptions(spec, 'normal')).toEqual({ rareMult: 1, commonMult: 4 });
+  });
+
+  it('미달이 깊을수록 시간당 골드가 줄고 일반 비율이 늘며 사이클이 길어진다', () => {
+    const entry = entryLevel(spot);
+    const at = (d: number) => rates(spot, entry - d, 'idle');
+    for (let d = 1; d <= 4; d++) {
+      expect(at(d).goldPerHour, `-${d}`).toBeLessThan(at(d - 1).goldPerHour);
+      expect(at(d).rarity.common, `-${d}`).toBeGreaterThan(at(d - 1).rarity.common);
+      expect(at(d).catchesPerHour, `-${d}`).toBeLessThan(at(d - 1).catchesPerHour);
+    }
+  });
+});
