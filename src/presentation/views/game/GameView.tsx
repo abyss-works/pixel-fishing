@@ -37,6 +37,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
 import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
 import AccountModal from '../overlays/account/AccountModal';
+import { settleAction } from '../../../features/gameplay/service/useGame';
 import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
@@ -71,6 +72,8 @@ interface GameViewProps {
   game: GameState;
   scene: SceneRef;
   entryPos: Point | null;
+  /** 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안의 이동을 Field에 알린다 */
+  placeSeq: number;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
@@ -172,6 +175,8 @@ export default function GameView(props: GameViewProps) {
 
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
+    // 빠른 이동 전환 중에는 거점의 이동 동작을 받지 않는다
+    if (trip && (id === 'exit' || id === 'travel' || id === 'ferry')) return;
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
@@ -207,11 +212,12 @@ export default function GameView(props: GameViewProps) {
   // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
+    if (trip) return;
     const name = BASE_PACKS[port].name;
     void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
 지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
       confirmLabel: `${name}에 가기` })
-      .then(ok => { if (ok && scene.kind === 'base') setTrip({ from: scene.id, to: port }); });
+      .then(ok => { if (ok && scene.kind === 'base') setTrip(current => current ?? { from: scene.id, to: port }); });
   };
 
   // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
@@ -225,16 +231,13 @@ export default function GameView(props: GameViewProps) {
   const ferryMove = async () => {
     if (!trip) return;
     const b = boardingOf(trip.to);
-    let result: DispatchResult | null = null;
-    try {
-      result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
-    } catch { /* 인프라 실패는 오류 정책이 알린다 */ }
-    if (result?.status === 'ok') {
+    const settled = await settleAction(() => props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } }));
+    if (settled.ok) {
       props.onPlace({ kind: 'region', id: b.region }, b.at);
       props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
       return;
     }
-    if (result?.status === 'rejected') props.setToast(REJECT_TEXT[result.error], 'warn');
+    if (settled.notice) props.setToast(settled.notice, 'warn');
     props.onPlace({ kind: 'base', id: trip.from });
   };
 
@@ -261,11 +264,12 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
-                 initialPos={props.entryPos ?? undefined} statusSlot={statusSlot} />
+                 initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
+                 locked={trip !== null} statusSlot={statusSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}

@@ -16,10 +16,11 @@ export const MINIMAP_VIEW_W = 1344, MINIMAP_VIEW_H = 756;
 
 /** 플레이어 중심 미니맵 시야 — 지도 경계 clamp. 팩이 시야보다 작으면 팩 전체. */
 export function minimapView(pack: RegionPack, player: Point): Rect {
-  const w = Math.min(MINIMAP_VIEW_W, pack.w);
-  const h = Math.min(MINIMAP_VIEW_H, pack.h);
-  const x = Math.max(0, Math.min(player.x - w / 2, pack.w - w));
-  const y = Math.max(0, Math.min(player.y - h / 2, pack.h - h));
+  const b = pack.bounds;
+  const w = Math.min(MINIMAP_VIEW_W, b.w);
+  const h = Math.min(MINIMAP_VIEW_H, b.h);
+  const x = Math.max(b.x, Math.min(player.x - w / 2, b.x + b.w - w));
+  const y = Math.max(b.y, Math.min(player.y - h / 2, b.y + b.h - h));
   return { x, y, w, h };
 }
 
@@ -33,7 +34,7 @@ export function renderWorldMap(
 ) {
   // 캔버스 배면 크기 = 팩 크기와 무관하게 호출자가 정한다(병합 바다는 축소 배면으로 메모리 절감).
   // view가 있으면 그 사각형만(현재 위치 기준 crop — 전체 지구 조망은 세계지도 모달 소관).
-  const view = opts.view ?? { x: 0, y: 0, w: pack.w, h: pack.h };
+  const view = opts.view ?? pack.bounds;
   const s = ctx.canvas.width / view.w;
   ctx.setTransform(s, 0, 0, s, -view.x * s, -view.y * s);
   // 지도가 커질수록 pack 좌표 마커는 화면에서 쪼그라든다 — 표시 크기 보정(1/s)
@@ -44,7 +45,7 @@ export function renderWorldMap(
     drawMaskTerrain(ctx, pack.map, false, undefined, view);
   } else {
     const g = pack.ground!;
-    R(ctx, 0, 0, pack.w, pack.h, g.mapColor);
+    R(ctx, pack.bounds.x, pack.bounds.y, pack.bounds.w, pack.bounds.h, g.mapColor);
     for (const t of pack.terrain!) {
       if (t.kind === 'water') drawWaterFill(ctx, t.style, t.rect);
       else if (t.kind === 'deck') R(ctx, t.rect.x, t.rect.y, t.rect.w, t.rect.h, '#8d6e63');

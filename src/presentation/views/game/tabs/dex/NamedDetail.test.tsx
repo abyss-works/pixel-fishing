@@ -25,4 +25,12 @@ describe('네임드 상세', () => {
     for (const p of named.chronicle) expect(screen.getByText(p)).toBeInTheDocument();
     expect(screen.getByText('2026-10-18')).toBeInTheDocument();
   });
+  it('전승의 모든 문단이 첫 글자 강조를 가진다', () => {
+    const game = newState();
+    game.dex[named.id] = { normal: { count: 1, maxSize: null, first: '2026-10-18' } };
+    render(<NamedDetail quest={quest} game={game} onClose={() => {}} />);
+    for (const p of named.chronicle) {
+      expect(screen.getByText(p).className).toContain('first-letter:text-gold');
+    }
+  });
 });

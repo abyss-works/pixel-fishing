@@ -5,6 +5,7 @@ import { selectNamedDetail } from '../../../../../features/dex/model/catalog';
 import Modal from '../../../../ui/Modal';
 import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
+import LoreParagraph from '../../../../ui/LoreParagraph';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
@@ -36,9 +37,9 @@ export default function NamedDetail({ quest, game, onClose }: {
               <FishSprite fish={d.fish} preset="portrait" discovered={d.found} animate={d.found}
                           ariaLabel={d.name ?? '미확인 네임드'} className="block" />
             </div>
-            <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">
-              {d.lore ?? '…수배서에만 그림자로 남은 존재다. 토벌하면 정체가 드러난다.'}
-            </p>
+            {d.lore
+              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{d.lore}</LoreParagraph>
+              : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…수배서에만 그림자로 남은 존재다. 토벌하면 정체가 드러난다.</p>}
           </Inset>
         </TitledCell>
 
@@ -49,11 +50,7 @@ export default function NamedDetail({ quest, game, onClose }: {
               {d.chronicle ? (
                 <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
                   {d.chronicle.map((p, idx) => (
-                    <p key={idx} className={idx === 0
-                      ? 'first-letter:float-left first-letter:mr-1.5 first-letter:text-3xl first-letter:leading-none first-letter:text-gold'
-                      : undefined}>
-                      {p}
-                    </p>
+                    <LoreParagraph key={idx}>{p}</LoreParagraph>
                   ))}
                 </article>
               ) : (

@@ -41,6 +41,7 @@ import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
+import { staleClient } from './_server/clientBuild.js';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
@@ -64,15 +65,6 @@ import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
 
-// 배포 식별자 — vite가 클라 번들에 박는 값과 같은 출처(이미지 빌드 인자 BUILD_ID).
-const BUILD_ID = process.env.BUILD_ID ?? 'dev';
-
-/** 낡은 탭 판정 — 운영(DEPLOY_ENV=production)은 릴리즈 버전, 그 밖의 배포는 배포 식별자를 대조한다 */
-function staleClient(headers: IncomingMessage['headers']): boolean {
-  return process.env.DEPLOY_ENV === 'production'
-    ? headers['x-client-version'] !== APP_VERSION
-    : headers['x-build-id'] !== BUILD_ID;
-}
 // 창 식별자 형식 — 클라이언트는 crypto.randomUUID()를 쓴다
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
@@ -233,7 +225,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 개발·스테이징 배포는 버전을 올리지 않고 규칙을 바꾸므로 배포 식별자로 가른다.
   // 인증/리듀서보다 먼저: 새 서버의 결과를 낡은 번들이 해석 못 해 깨지는 것을 원천 차단하고,
   // 클라이언트는 업데이트 모달(새로고침 안내)을 띄운다. 헤더 부재 = 기능 도입 전 구버전 → 동일 처리.
-  if (staleClient(req.headers)) {
+  if (staleClient({ build: req.headers['x-build-id'], version: req.headers['x-client-version'] })) {
     throw new ApiError(426, 'version-mismatch', { body: { server: APP_VERSION } });
   }
 

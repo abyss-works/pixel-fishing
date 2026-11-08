@@ -17,11 +17,11 @@ import { FULL_VIEW, toScreen } from './mapView';
 import type { MapView } from './mapView';
 import { WINDOW as EARTH_WINDOW, COLS as E_COLS, ROWS as E_ROWS, CELL_W as E_CW, CELL_H as E_CH,
   MASK_ROWS as EARTH_MASK_ROWS } from '../../../../game/world/regions/generated/earth.mask';
-import { WINDOW as WORLD_WINDOW, COLS as W_COLS, ROWS as W_ROWS, CELL_W as W_CW, CELL_H as W_CH,
-  ANCHORS as WORLD_ANCHORS } from '../../../../game/world/regions/generated/world.mask';
+import { ANCHORS as WORLD_ANCHORS } from '../../../../game/world/regions/generated/world.mask';
+import { WORLD_BOUNDS } from '../../../../game/world/regions/world';
+import { gameToLonLat } from '../../../../game/world/geo';
 
 const EARTH_W = E_COLS * E_CW, EARTH_H = E_ROWS * E_CH;
-const WORLD_W = W_COLS * W_CW, WORLD_H = W_ROWS * W_CH;
 
 /** 전지구 컴파일 마스크 — world와 같은 legend(문자 체계를 extends로 상속받았다) */
 export const EARTH_MAP: CompiledMap = compileMap(E_CW, E_CH, WORLD_LEGEND, EARTH_MASK_ROWS);
@@ -32,21 +32,20 @@ export const EARTH_MAP: CompiledMap = compileMap(E_CW, E_CH, WORLD_LEGEND, EARTH
 export const ATLAS_W = 1280;
 export const ATLAS_H = Math.round(ATLAS_W * EARTH_H / EARTH_W);
 
-/** world 팩 좌표 → earth 지도 px (두 마스크가 같은 래스터라이즈 규약이라 경위도가 다리다 —
+/** 게임 좌표 → earth 지도 px (두 마스크가 같은 래스터라이즈 규약이라 경위도가 다리다 —
  *  변환은 모두 선형). */
 export function worldToEarth(x: number, y: number): Point {
-  const lon = WORLD_WINDOW.lonMin + x / WORLD_W * (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin);
-  const lat = WORLD_WINDOW.latMax - y / WORLD_H * (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin);
+  const { lon, lat } = gameToLonLat(x, y);
   return {
     x: (lon - EARTH_WINDOW.lonMin) / (EARTH_WINDOW.lonMax - EARTH_WINDOW.lonMin) * EARTH_W,
     y: (EARTH_WINDOW.latMax - lat) / (EARTH_WINDOW.latMax - EARTH_WINDOW.latMin) * EARTH_H,
   };
 }
 
-/** 구현 영역(구 월드 데이터 window)의 earth px 사각형 — 컬러/흑백 경계의 단일 근원 */
+/** 구현 영역(항해 창)의 earth px 사각형 — 컬러/흑백 경계의 단일 근원 */
 export function implementedRect(): Rect {
-  const a = worldToEarth(0, 0);
-  const b = worldToEarth(WORLD_W, WORLD_H);
+  const a = worldToEarth(WORLD_BOUNDS.x, WORLD_BOUNDS.y);
+  const b = worldToEarth(WORLD_BOUNDS.x + WORLD_BOUNDS.w, WORLD_BOUNDS.y + WORLD_BOUNDS.h);
   return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
 }
 

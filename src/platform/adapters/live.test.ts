@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectLive, LIVE_RETRY_MAX_MS, LIVE_RETRY_MIN_MS } from './live';
-import { LIVE_CLOSE_REPLACED, LIVE_PING_MS } from '../../game/rules/live';
+import { connectLive, liveUrl, LIVE_RETRY_MAX_MS, LIVE_RETRY_MIN_MS } from './live';
+import { LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_PING_MS } from '../../game/rules/live';
+import { BUILD_ID } from '../../buildId';
+import { APP_VERSION } from '../../version';
+import { subscribeFailure } from '../../core/errors';
+import type { AppError } from '../../core/errors';
 
 class FakeSocket {
   static all: FakeSocket[] = [];
@@ -66,6 +70,25 @@ describe('connectLive', () => {
     conn.close();
     vi.advanceTimersByTime(LIVE_RETRY_MAX_MS * 2);
     expect(FakeSocket.all).toHaveLength(2);
+  });
+
+  it('연결 주소에 빌드 식별자와 릴리즈 버전을 싣는다', () => {
+    const url = new URL(liveUrl());
+    expect(url.pathname).toBe('/api/live');
+    expect(url.searchParams.get('build')).toBe(BUILD_ID);
+    expect(url.searchParams.get('version')).toBe(APP_VERSION);
+  });
+
+  it('서버가 낡은 빌드로 닫으면 다시 연결하지 않고 HTTP 426과 같은 새로고침 안내를 띄운다', () => {
+    const failures: AppError[] = [];
+    const off = subscribeFailure(e => failures.push(e));
+    connect();
+    last().drop(LIVE_CLOSE_OUTDATED);
+    vi.advanceTimersByTime(LIVE_RETRY_MAX_MS * 2);
+    off();
+    expect(FakeSocket.all).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].kind).toBe('outdated');
   });
 
   it('send는 연결돼 있을 때만 보낸다', () => {

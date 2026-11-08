@@ -8,7 +8,7 @@ import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   CHAT_RATE_WINDOW_MS, CHAT_RECENT, chatRate, chatText,
-  LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
+  LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
   idleSinceOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, Presence, ServerMessage } from '../../src/game/rules/live.js';
@@ -33,6 +33,8 @@ export interface LiveOptions {
   authenticate: (req: IncomingMessage) => Promise<LiveUser | null>;
   /** 허용하는 `Origin` 헤더 값(서비스 주소의 origin) */
   origin: string;
+  /** 클라이언트 빌드가 서버와 다른지. 연결 주소의 `build`와 `version` 값을 받는다(보내지 않았으면 undefined) */
+  stale: (client: { build: string | undefined; version: string | undefined }) => boolean;
   /** 서버 ping과 무응답 정리 주기. 기본값은 접속 확인 주기다 */
   sweepMs?: number;
   /** 받은 메시지가 없을 때 연결을 끊기까지의 시간 */
@@ -119,6 +121,13 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   // 계정별 최근 채팅 시각. 다시 연결해도 창이 이어지도록 연결이 아니라 계정에 둔다
   const chatTimes = new Map<string, number[]>();
 
+  // 업그레이드를 받아 소켓을 연다. 잘못된 프레임 같은 소켓 오류가 서버를 죽이지 않도록 모든 연결에 같은 오류 처리를 단다
+  const accept = (req: IncomingMessage, socket: Duplex, head: Buffer, onOpen: (ws: WebSocket) => void) => {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('error', () => { ws.terminate(); });
+      onOpen(ws);
+    });
+  };
   const send = (ws: WebSocket, msg: ServerMessage) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
   const broadcast = (from: WebSocket, msg: ServerMessage) => {
     const data = JSON.stringify(msg);
@@ -169,13 +178,20 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
     if (req.headers.origin !== opts.origin) { reject(socket, 403); return; }
+    // 낡은 빌드는 연결을 받지 않는다. 브라우저는 업그레이드 응답의 상태 코드를 읽을 수 없어 연결을 연 뒤 종료 코드로 알린다.
+    // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
+    const query = new URL(req.url ?? '/', 'http://x').searchParams;
+    if (opts.stale({ build: query.get('build') ?? undefined, version: query.get('version') ?? undefined })) {
+      accept(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
+      return;
+    }
     opts.authenticate(req).then(async (user) => {
       if (!user) { reject(socket, 401); return; }
       const [recentChat, blocked, guild] = await Promise.all([
         opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
       ]);
       const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
-      wss.handleUpgrade(req, socket, head, (ws) => {
+      accept(req, socket, head, (ws) => {
         // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
         for (const [other, c] of conns) {
           if (c.user.uid !== user.uid) continue;
@@ -219,7 +235,6 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           }
         });
         ws.on('close', () => drop(ws, conn));
-        ws.on('error', () => { ws.terminate(); });
         const sentAt = Date.now();
         const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
         send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });

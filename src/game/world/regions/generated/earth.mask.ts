@@ -5,6 +5,12 @@ export const CELL_W = 8;
 export const CELL_H = 11;
 export const WINDOW: { lonMin: number; lonMax: number; latMin: number; latMax: number } =
   { lonMin: -180, lonMax: 180, latMin: -85, latMax: 85 };
+// 게임 픽셀 좌표계 — 원점(서북 모서리)의 경위도, 열·행당 해상도, 창의 서북 모서리가 원점에서 떨어진 칸 수,
+// 전지구 격자의 열 수(칸 인덱스 = 행 * GLOBAL_COLS + 열). 앵커는 이 좌표계의 픽셀이다.
+export const ORIGIN: { lon: number; lat: number } = { lon: -180, lat: 85 };
+export const CELLS_PER_DEG: { lon: number; lat: number } = { lon: 2, lat: 1.4529411764705882 };
+export const GRID_OFFSET: { col: number; row: number } = { col: 0, row: 0 };
+export const GLOBAL_COLS = 720;
 export const COLS = 720;
 export const ROWS = 247;
 export const MASK_ROWS: string[] = [
