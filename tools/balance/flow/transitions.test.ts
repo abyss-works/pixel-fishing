@@ -92,14 +92,15 @@ describe('전환 보고', () => {
   it('연속 방치와 네 유형의 전환 소요를 모두 담는다', () => {
     expect(report.rows).toHaveLength(SPOTS.length - 1);
     expect(report.continuous).toHaveLength(SPOTS.length - 1);
-    expect(report.types.map(t => t.type.id)).toEqual(['h16', 'h8', 'h4', 'h2']);
+    expect(report.types.map(t => t.type.id)).toEqual(['h16', 'h8', 'h4-75', 'h2', 'h1']);
     expect(report.types.every(t => t.complete)).toBe(true);
   });
 
   it('낚는 시간이 짧은 유형일수록 도착 일차가 같거나 늦다', () => {
     const last = (id: string) => report.types.find(t => t.type.id === id)!.steps.at(-1)!.day;
-    expect(last('h2')).toBeGreaterThanOrEqual(last('h4'));
-    expect(last('h4')).toBeGreaterThanOrEqual(last('h8'));
+    expect(last('h1')).toBeGreaterThanOrEqual(last('h2'));
+    expect(last('h2')).toBeGreaterThanOrEqual(last('h4-75'));
+    expect(last('h4-75')).toBeGreaterThanOrEqual(last('h8'));
     expect(last('h8')).toBeGreaterThanOrEqual(last('h16'));
   });
 

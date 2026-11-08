@@ -11,7 +11,7 @@ import { planBounties } from './bounty';
 import { axisOf, playTypes, simulate, sleepFishSeconds } from './progress';
 import type { FlowAxis, PlayType } from './progress';
 
-export interface DaysOptions { axis: FlowAxis; loss4h: number; maxDays: number }
+export interface DaysOptions { axis: FlowAxis; loss4h: number | null; maxDays: number; bagCapAwake?: boolean }
 
 export interface ArrivalDays {
   type: PlayType;
@@ -26,7 +26,7 @@ export interface ArrivalDays {
 /** 유형마다 의뢰 안 함, 모두 수행 순서로 해역별 도착 일차를 낸다 */
 export function arrivalDays(o: DaysOptions): ArrivalDays[] {
   return playTypes(o.loss4h).flatMap(type => [false, true].map(bounty => {
-    const r = simulate({ type, axis: o.axis, bounty, maxDays: o.maxDays });
+    const r = simulate({ type, axis: o.axis, bounty, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake });
     return {
       type, bounty, complete: r.complete, bountyGold: r.bountyGold,
       days: SPOTS.map((s, i) => ({ spot: s.id, day: r.arrivals[i]?.day ?? null })),

@@ -15,7 +15,7 @@ describe('도착 일수', () => {
 
   it('네 유형을 의뢰 안 함, 모두 수행 순서로 낸다', () => {
     expect(rows.map(r => `${r.type.id}:${r.bounty}`)).toEqual([
-      'h16:false', 'h16:true', 'h8:false', 'h8:true', 'h4:false', 'h4:true', 'h2:false', 'h2:true',
+      'h16:false', 'h16:true', 'h8:false', 'h8:true', 'h4-75:false', 'h4-75:true', 'h2:false', 'h2:true', 'h1:false', 'h1:true',
     ]);
     expect(rows.every(r => r.complete)).toBe(true);
   });
@@ -29,21 +29,22 @@ describe('도착 일수', () => {
   });
 
   it('의뢰와 토벌을 수행하면 마지막 해역에 더 빨리 도착한다', () => {
-    for (const t of ['h16', 'h8', 'h4', 'h2']) {
+    for (const t of ['h16', 'h8', 'h4-75', 'h2', 'h1']) {
       expect(pick(t, true).days.at(-1)!.day!, t).toBeLessThanOrEqual(pick(t, false).days.at(-1)!.day!);
     }
-    expect(pick('h4', true).days.at(-1)!.day!).toBeLessThan(pick('h4', false).days.at(-1)!.day!);
+    expect(pick('h4-75', true).days.at(-1)!.day!).toBeLessThan(pick('h4-75', false).days.at(-1)!.day!);
   });
 
   it('낚는 시간이 짧을수록 늦게 도착한다', () => {
     const end = (t: string) => pick(t, false).days.at(-1)!.day!;
     expect(end('h16')).toBeLessThanOrEqual(end('h8'));
-    expect(end('h8')).toBeLessThanOrEqual(end('h4'));
-    expect(end('h4')).toBeLessThanOrEqual(end('h2'));
+    expect(end('h8')).toBeLessThanOrEqual(end('h4-75'));
+    expect(end('h4-75')).toBeLessThanOrEqual(end('h2'));
+    expect(end('h2')).toBeLessThanOrEqual(end('h1'));
   });
 
   it('최대 일수 안에 못 닿은 해역은 null이고 완료가 아니다', () => {
-    const short = arrivalDays({ ...o, maxDays: 3 }).find(r => r.type.id === 'h2' && !r.bounty)!;
+    const short = arrivalDays({ ...o, maxDays: 3 }).find(r => r.type.id === 'h1' && !r.bounty)!;
     expect(short.complete).toBe(false);
     expect(short.days.at(-1)!.day).toBeNull();
     expect(short.days[0].day).toBe(1);
@@ -57,7 +58,7 @@ describe('마지막 해역 레벨업 일수', () => {
   const l0 = entryLevel(last), l4 = l0 + 4;
 
   it('마지막 해역 진입 레벨과 +4를 유형과 수행 여부마다 낸다', () => {
-    expect(rows).toHaveLength(2 * 2 * 4);
+    expect(rows).toHaveLength(2 * 2 * 5);
     expect(new Set(rows.map(r => r.level))).toEqual(new Set([l0, l4]));
   });
 
@@ -76,7 +77,7 @@ describe('마지막 해역 레벨업 일수', () => {
   });
 
   it('의뢰와 토벌을 수행하면 일수가 줄고 보상 비중이 있다', () => {
-    for (const t of ['h16', 'h8', 'h4', 'h2']) {
+    for (const t of ['h16', 'h8', 'h4-75', 'h2', 'h1']) {
       for (const l of [l0, l4]) {
         expect(pick(t, true, l).days, `${t} ${l}`).toBeLessThan(pick(t, false, l).days);
         expect(pick(t, true, l).bountyShare, `${t} ${l}`).toBeGreaterThan(0);
@@ -86,8 +87,8 @@ describe('마지막 해역 레벨업 일수', () => {
   });
 
   it('낚는 시간이 짧을수록 일수가 늘고 +4 레벨이 더 오래 걸린다', () => {
-    expect(pick('h2', false, l0).days).toBeGreaterThan(pick('h4', false, l0).days);
-    expect(pick('h4', false, l0).days).toBeGreaterThan(pick('h8', false, l0).days);
+    expect(pick('h2', false, l0).days).toBeGreaterThan(pick('h4-75', false, l0).days);
+    expect(pick('h4-75', false, l0).days).toBeGreaterThan(pick('h8', false, l0).days);
     expect(pick('h8', false, l4).days).toBeGreaterThan(pick('h8', false, l0).days);
   });
 });

@@ -15,7 +15,7 @@ import { licenseHeld, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
 
 export interface PlayType {
-  id: 'h16' | 'h8' | 'h4' | 'h2' | 'always';
+  id: 'h16' | 'h8' | `h4-${number}` | 'h2' | 'h1' | 'always';
   label: string;
   /** 깨어서 실제로 낚는 시간(하루, 시간) */
   awakeHours: number;
@@ -23,20 +23,27 @@ export interface PlayType {
   sleepHours: number;
 }
 
-/** 4시간 유형에서 접속해 있어도 실제로 낚지 못하는 비율(%) 기본값 */
+/** 기준 유저의 낚지 못하는 비율(%) — 4시간 유형에서 접속해 있어도 실제로 낚지 못하는 몫. 근거 있는 값이 없는 가정이다 */
 export const DEFAULT_LOSS4H = 25;
+
+/** 비율을 주지 않았을 때 함께 내는 낚지 못하는 비율(%) — 낚시 100%, 75%, 50% */
+export const LOSS4H_SET: readonly number[] = [0, 25, 50];
 
 /** 하루 내내 쉬지 않고 낚는 가정 — 연속 방치 소요 시간을 잴 때 쓴다 */
 export const ALWAYS_ON: PlayType = { id: 'always', label: '연속 방치', awakeHours: 24, sleepHours: 0 };
 
-/** 하루 접속 시간 가정 네 가지 */
-export function playTypes(loss4h: number = DEFAULT_LOSS4H): PlayType[] {
-  if (!Number.isFinite(loss4h) || loss4h < 0 || loss4h > 100) throw new Error('낚지 못하는 비율은 0에서 100 사이여야 합니다');
+/** 하루 접속 시간 가정. 4시간 유형은 낚지 못하는 비율마다 하나이고, 비율을 생략하면 100%, 75%, 50% 세 가지다 */
+export function playTypes(loss4h: number | null = null): PlayType[] {
+  const losses = loss4h === null ? LOSS4H_SET : [loss4h];
+  for (const l of losses) {
+    if (!Number.isFinite(l) || l < 0 || l > 100) throw new Error('낚지 못하는 비율은 0에서 100 사이여야 합니다');
+  }
   return [
     { id: 'h16', label: '16시간', awakeHours: 8, sleepHours: 8 },
     { id: 'h8', label: '8시간', awakeHours: 8, sleepHours: 0 },
-    { id: 'h4', label: `4시간(낚시 ${100 - loss4h}%)`, awakeHours: 4 * (1 - loss4h / 100), sleepHours: 0 },
+    ...losses.map(l => ({ id: `h4-${100 - l}` as const, label: `4시간(낚시 ${100 - l}%)`, awakeHours: 4 * (1 - l / 100), sleepHours: 0 })),
     { id: 'h2', label: '2시간', awakeHours: 2, sleepHours: 0 },
+    { id: 'h1', label: '1시간', awakeHours: 1, sleepHours: 0 },
   ];
 }
 

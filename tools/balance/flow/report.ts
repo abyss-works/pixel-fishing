@@ -7,7 +7,6 @@ import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } f
 import { entryLevel } from '../model';
 import { applyOverride, loadOverride } from './override';
 import type { FlowOverride } from './override';
-import { DEFAULT_LOSS4H } from './progress';
 import type { FlowAxis } from './progress';
 import { transitionReport } from './transitions';
 import type { TransitionReport } from './transitions';
@@ -25,11 +24,14 @@ export interface FlowOptions {
   commands: Command[];
   override: string | null;
   json: boolean;
-  loss4h: number;
+  /** 4시간 유형의 낚지 못하는 비율(%). null이면 0, 25, 50을 모두 낸다 */
+  loss4h: number | null;
   /** 전설 보장 번호. null이면 제품 범위의 처음, 가운데, 끝 번호를 모두 낸다 */
   legendAt: number | null;
   axis: FlowAxis;
   maxDays: number;
+  /** 깨어 있는 동안에도 가방 한도를 적용한다 */
+  bagCapAwake: boolean;
   help: boolean;
 }
 
@@ -46,15 +48,16 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워를 덮어쓰는 JSON. 형식은
                      {"boats":{"2":{"price":2500,"fameReq":800}},"spots":{"sea":{"powerReq":35}}}
   --json             표 대신 JSON으로 낸다
-  --loss4h <N>       4시간 유형에서 접속해 있어도 낚지 못하는 비율(%). 기본 ${DEFAULT_LOSS4H}
+  --loss4h <N>       4시간 유형에서 접속해 있어도 낚지 못하는 비율(%). 근거 있는 값이 없어 생략하면 0, 25, 50(낚시 100%, 75%, 50%)을 모두 낸다
   --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
   --axis <idle|manual>  깨어 있는 동안의 낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정)
   --max-days <N>     시뮬레이션 최대 일수. 기본 365
+  --bag-cap-awake    깨어 있는 동안에도 가방 한도를 적용한다(하루 깨어 있는 동안 팔지 않는 하한). 기본은 적용하지 않는다
   --help             이 도움말
 `;
 
 const VALUE_FLAGS = ['--override', '--loss4h', '--legend-at', '--axis', '--max-days'] as const;
-const BOOL_FLAGS = ['--json', '--help'] as const;
+const BOOL_FLAGS = ['--json', '--help', '--bag-cap-awake'] as const;
 
 function numberOf(flag: string, raw: string): number {
   const v = Number(raw);
@@ -64,14 +67,14 @@ function numberOf(flag: string, raw: string): number {
 
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
-    commands: [], override: null, json: false, loss4h: DEFAULT_LOSS4H, legendAt: null, axis: 'idle', maxDays: 365, help: false,
+    commands: [], override: null, json: false, loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
   };
   let command: Command | null = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
       if ((BOOL_FLAGS as readonly string[]).includes(a)) {
-        if (a === '--json') o.json = true; else o.help = true;
+        if (a === '--json') o.json = true; else if (a === '--help') o.help = true; else o.bagCapAwake = true;
         continue;
       }
       if (!(VALUE_FLAGS as readonly string[]).includes(a)) throw new Error(`알 수 없는 옵션입니다: ${a} (--help 참고)`);
@@ -98,7 +101,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
 }
 
 export interface FlowResult {
-  options: { axis: FlowAxis; loss4h: number; legendAt: number | null; maxDays: number; override: FlowOverride | null };
+  options: { axis: FlowAxis; loss4h: number | null; legendAt: number | null; maxDays: number; bagCapAwake: boolean; override: FlowOverride | null };
   transition?: TransitionReport;
   days?: { arrival: ArrivalDays[]; levelUp: LevelUp[] };
   opening?: OpeningResult[];
@@ -113,8 +116,8 @@ export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
   const restore = override ? applyOverride(override) : () => {};
   try {
-    const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, override } };
-    const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays };
+    const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override } };
+    const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake };
     if (o.commands.includes('transition')) res.transition = transitionReport(sim);
     if (o.commands.includes('days')) res.days = { arrival: arrivalDays(sim), levelUp: levelUpDays(sim) };
     if (o.commands.includes('opening')) {
@@ -252,7 +255,7 @@ function exceptionText(e: NonNullable<FlowResult['exception']>, axis: FlowAxis):
 export function renderText(r: FlowResult): string {
   const o = r.options;
   const lines = [
-    `# 플레이 흐름 시뮬레이션 — 낚시 방식 ${AXIS_LABEL[o.axis]}, 4시간 유형 낚지 못하는 비율 ${o.loss4h}%, 최대 ${o.maxDays}일`,
+    `# 플레이 흐름 시뮬레이션 — 낚시 방식 ${AXIS_LABEL[o.axis]}, 4시간 유형 낚지 못하는 비율 ${o.loss4h === null ? '0%, 25%, 50%' : `${o.loss4h}%`}, 최대 ${o.maxDays}일`,
     o.override ? `덮어쓰기: ${JSON.stringify(o.override)}` : '덮어쓰기: 없음',
   ];
   if (r.transition) lines.push(...transitionText(r.transition, o.axis));

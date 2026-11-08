@@ -10,16 +10,22 @@ const type = (id: string): PlayType => TYPES.find(t => t.id === id)!;
 const last = <T>(xs: T[]) => xs[xs.length - 1];
 
 describe('플레이 유형', () => {
-  it('네 유형이 16, 8, 4, 2시간이고 16시간만 잠든 동안 낚는다', () => {
-    expect(TYPES.map(t => t.id)).toEqual(['h16', 'h8', 'h4', 'h2']);
-    expect(TYPES.map(t => t.awakeHours)).toEqual([8, 8, 3, 2]);
-    expect(TYPES.map(t => t.sleepHours)).toEqual([8, 0, 0, 0]);
+  it('유형이 16, 8, 4, 2, 1시간이고 16시간만 잠든 동안 낚는다', () => {
+    expect(TYPES.map(t => t.id)).toEqual(['h16', 'h8', 'h4-75', 'h2', 'h1']);
+    expect(TYPES.map(t => t.awakeHours)).toEqual([8, 8, 3, 2, 1]);
+    expect(TYPES.map(t => t.sleepHours)).toEqual([8, 0, 0, 0, 0]);
+  });
+
+  it('낚지 못하는 비율을 생략하면 4시간 유형을 낚시 100%, 75%, 50% 세 가지로 낸다', () => {
+    const all = playTypes();
+    expect(all.map(t => t.id)).toEqual(['h16', 'h8', 'h4-100', 'h4-75', 'h4-50', 'h2', 'h1']);
+    expect(all.filter(t => t.id.startsWith('h4')).map(t => t.awakeHours)).toEqual([4, 3, 2]);
   });
 
   it('4시간 유형은 낚지 못하는 비율만큼 실제 낚시 시간이 준다', () => {
-    expect(playTypes(0).find(t => t.id === 'h4')!.awakeHours).toBe(4);
-    expect(playTypes(50).find(t => t.id === 'h4')!.awakeHours).toBe(2);
-    expect(playTypes(100).find(t => t.id === 'h4')!.awakeHours).toBe(0);
+    expect(playTypes(0).find(t => t.id === 'h4-100')!.awakeHours).toBe(4);
+    expect(playTypes(50).find(t => t.id === 'h4-50')!.awakeHours).toBe(2);
+    expect(playTypes(100).find(t => t.id === 'h4-0')!.awakeHours).toBe(0);
   });
 
   it('범위 밖 비율은 거부한다', () => {
@@ -96,14 +102,14 @@ describe('진행 시뮬레이션', () => {
 
   it('낚는 시간이 짧은 유형일수록 늦게 끝난다', () => {
     const end = (id: string) => last(simulate({ type: type(id), axis: 'idle', bounty: false, maxDays: 365 }).arrivals).day;
-    const days = ['h16', 'h8', 'h4', 'h2'].map(end);
+    const days = ['h16', 'h8', 'h4-75', 'h2', 'h1'].map(end);
     for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThanOrEqual(days[i - 1]);
-    expect(days[3]).toBeGreaterThan(days[0]);
+    expect(days[4]).toBeGreaterThan(days[0]);
   });
 
   it('의뢰와 토벌을 수행하면 어느 해역에도 더 늦게 도착하지 않고 마지막은 더 빠르다', () => {
-    const off = simulate({ type: type('h4'), axis: 'idle', bounty: false, maxDays: 365 });
-    const on = simulate({ type: type('h4'), axis: 'idle', bounty: true, maxDays: 365 });
+    const off = simulate({ type: type('h4-75'), axis: 'idle', bounty: false, maxDays: 365 });
+    const on = simulate({ type: type('h4-75'), axis: 'idle', bounty: true, maxDays: 365 });
     expect(on.complete).toBe(true);
     for (let i = 0; i < off.arrivals.length; i++) expect(on.arrivals[i].day, SPOTS[i].id).toBeLessThanOrEqual(off.arrivals[i].day);
     expect(last(on.arrivals).day).toBeLessThan(last(off.arrivals).day);

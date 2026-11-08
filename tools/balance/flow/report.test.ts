@@ -12,13 +12,13 @@ describe('명령 인자', () => {
   it('인자가 없으면 네 명령 전부와 기본값이다', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception'], override: null, json: false,
-      loss4h: 25, legendAt: null, axis: 'idle', maxDays: 365, help: false,
+      loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
     });
   });
 
   it('명령 하나와 옵션을 읽는다', () => {
-    const o = parseArgs(['days', '--override', 'a.json', '--json', '--loss4h', '50', '--legend-at', '12', '--axis', 'manual', '--max-days', '90']);
-    expect(o).toMatchObject({ commands: ['days'], override: 'a.json', json: true, loss4h: 50, legendAt: 12, axis: 'manual', maxDays: 90 });
+    const o = parseArgs(['days', '--override', 'a.json', '--json', '--loss4h', '50', '--legend-at', '12', '--axis', 'manual', '--max-days', '90', '--bag-cap-awake']);
+    expect(o).toMatchObject({ commands: ['days'], override: 'a.json', json: true, loss4h: 50, legendAt: 12, axis: 'manual', maxDays: 90, bagCapAwake: true });
   });
 
   it('--help를 알아본다', () => {
@@ -36,7 +36,7 @@ describe('명령 인자', () => {
   });
 
   it('도움말이 모든 명령과 옵션을 설명한다', () => {
-    for (const w of ['transition', 'days', 'opening', 'exception', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--help']) {
+    for (const w of ['transition', 'days', 'opening', 'exception', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help']) {
       expect(HELP).toContain(w);
     }
   });
@@ -47,8 +47,16 @@ describe('실행과 출력', () => {
     const text = renderText(runFlow(base({ commands: ['transition'] })));
     expect(text).toContain('전환 골드와 비중');
     expect(text).toContain('### 4시간(낚시 75%)');
+    expect(text).toContain('### 4시간(낚시 100%)');
+    expect(text).toContain('### 4시간(낚시 50%)');
+    expect(text).toContain('### 1시간');
     expect(text).toContain('### 16시간');
     expect(text).toContain('강화 비중');
+  });
+
+  it('깨어 있는 동안 가방 한도 옵션은 일수 출력을 바꾼다', () => {
+    const o = base({ commands: ['days'], loss4h: 25 });
+    expect(renderText(runFlow({ ...o, bagCapAwake: true }))).not.toBe(renderText(runFlow(o)));
   });
 
   it('같은 명령을 두 번 실행하면 출력이 바이트까지 같다', () => {
