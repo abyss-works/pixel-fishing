@@ -36,14 +36,14 @@ export default function DexNamedView({ game, sub, onSub }: {
         activeKey={data.zone}
         onSelect={onSub}
       />
-      {/* 네임드는 해역별 1칸 — 너비 꽉 채우는 정사각형 대형 카드 1장 */}
+      {/* 네임드는 해역별 1칸 — 너비 꽉 채우는 가로 3 세로 2 비율 카드 1장 */}
       <div className="flex flex-col gap-2 mt-2">
         {data.quests.map(({ quest: q, found: ok, fish, displayName }) => {
           return (
             <div key={q.id} role="button" tabIndex={0} aria-label={`${ok ? (displayName ?? q.targetFish) : '미확인 네임드'} 상세 보기`}
                  onClick={() => setDetail(q)}
                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(q); } }}
-                 className={cx(RARITY_CARD, 'p-4 w-full aspect-square flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
+                 className={cx(RARITY_CARD, 'p-4 w-full aspect-[3/2] flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
                             ariaLabel={ok && displayName ? displayName : '미확인 네임드'} className="block mx-auto" />
