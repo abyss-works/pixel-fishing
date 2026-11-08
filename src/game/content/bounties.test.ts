@@ -13,13 +13,13 @@ const COUNTS: Record<string, Record<string, number>> = {
   normal: { common: 500, rare: 20, epic: 5, legendary: 1 },
   hard: { common: 1000, rare: 40, epic: 10, legendary: 2 },
 };
-// spec 5절 보상표 (스케일링 규칙: 난이도 ≈ 판매가 평균 15배, 네임드 = 어려움 5배)
+// 보상표 (구역 대표 방치 EV의 쉬움 1시간, 보통 2시간, 어려움 4시간, 네임드 8시간어치)
 const REWARDS: Record<string, Record<string, number>> = {
-  pacific: { easy: 20000, normal: 40000, hard: 80000, named: 400000 },
-  seasia: { easy: 80000, normal: 150000, hard: 300000, named: 1500000 },
-  indian: { easy: 150000, normal: 350000, hard: 700000, named: 3500000 },
-  madagascar: { easy: 225000, normal: 500000, hard: 1000000, named: 5000000 },
-  southatlantic: { easy: 300000, normal: 675000, hard: 1350000, named: 6750000 },
+  pacific: { easy: 20000, normal: 40000, hard: 85000, named: 150000 },
+  seasia: { easy: 65000, normal: 150000, hard: 250000, named: 550000 },
+  indian: { easy: 200000, normal: 350000, hard: 700000, named: 1500000 },
+  madagascar: { easy: 400000, normal: 800000, hard: 1500000, named: 3000000 },
+  southatlantic: { easy: 950000, normal: 2000000, hard: 4000000, named: 8000000 },
 };
 
 describe('bounties 데이터 계약', () => {
@@ -78,7 +78,7 @@ describe('남대서양 현상금', () => {
     expect(BOUNTY_PORT_ZONE.walvisbay).toBe('southatlantic');
     const named = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
     expect(named.map(q => q.targetFish)).toEqual(['adamastor']);
-    expect(named[0].reward).toBe(6750000);
+    expect(named[0].reward).toBe(8000000);
   });
 });
 
