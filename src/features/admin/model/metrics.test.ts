@@ -89,6 +89,8 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
     expect(eventSummary('adminResetLink', { adminId, expiresAt: '2026-11-05T01:00:00.000Z' }))
       .toBe('관리자 abcdef01 · 11-05 10:00까지');
     expect(EVENT_LABELS.adminRestrict).toBe('관리자 제재');
+    expect(EVENT_LABELS.levelUpArtifact).toBe('유물 강화');
+    expect(eventSummary('levelUpArtifact', { artifact: 'wreck-compass', level: 3 })).toBe('wreck-compass Lv.3');
     expect(EVENT_LABELS.adminUnrestrict).toBe('관리자 제재 해제');
     expect(EVENT_LABELS.adminResetLink).toBe('재설정 링크 발급');
   });

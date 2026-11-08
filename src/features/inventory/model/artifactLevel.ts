@@ -13,11 +13,10 @@ export interface ArtifactLevelView {
   hasLevel: boolean;
   /** 보유 레벨. 갖지 않았으면 0, 전설 유물은 1 */
   level: number;
-  maxLevel: number;
   /** 지금 레벨의 효과 - 갖지 않았으면 Lv1 기준(교환하면 받는 효과) */
   effects: ArtifactEffects;
   /** 교환 재료와 보유 수 - 강화에도 같은 재료를 쓴다 */
-  material: { id: string; name: string; have: number };
+  material: { name: string; have: number };
   /** 다음 레벨 - 강화할 수 있는 레벨 유물만 있다(재료가 모자라도 보인다) */
   next: { level: number; cost: number; effects: ArtifactEffects } | null;
 }
@@ -28,9 +27,9 @@ export function selectArtifactLevel(game: Pick<GameState, 'artifacts' | 'artifac
   const level = artifactLevelOf(game, artifact.id);
   const have = game.items[artifact.materialId] ?? 0;
   const base = {
-    artifact, hasLevel, level, maxLevel: ARTIFACT_MAX_LEVEL,
+    artifact, hasLevel, level,
     effects: artifactEffectsAt(artifact, Math.max(1, level)),
-    material: { id: artifact.materialId, name: artifact.materialName, have },
+    material: { name: artifact.materialName, have },
   };
   if (level === 0) return { ...base, status: 'unowned', next: null };
   if (!hasLevel) return { ...base, status: 'legendary', next: null };
@@ -46,7 +45,6 @@ export function selectArtifactLevel(game: Pick<GameState, 'artifacts' | 'artifac
 export const LEVEL_UP_TEXT = {
   button: '강화',
   maxButton: '최고 레벨',
-  levelLabel: '레벨',
   materialLabel: '필요한 재료',
   materialTip: '교환 재료는 네임드 토벌 보상으로 받아요. 강화에도 같은 재료를 써요.',
   /** 강화를 보낼 수 없는 상태별 거부 문구 */

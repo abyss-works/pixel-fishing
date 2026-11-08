@@ -27,7 +27,7 @@ describe('유물 레벨 보기 데이터', () => {
     const v = selectArtifactLevel(seed({ artifacts: ['wreck-compass'], items: { 'mat-wreck-compass': 0 } }), art('wreck-compass'));
     expect(v.level).toBe(1);
     expect(v.status).toBe('short');
-    expect(v.material).toEqual({ id: 'mat-wreck-compass', name: '이끼 낀 나침반', have: 0 });
+    expect(v.material).toEqual({ name: '이끼 낀 나침반', have: 0 });
     expect(v.next?.level).toBe(2);
     expect(v.next?.cost).toBe(artifactLevelCost(2));
     expect(v.next?.effects.sail).toBeCloseTo(0.125, 10);
