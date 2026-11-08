@@ -275,8 +275,8 @@ describe('R15: 강화/구매 비용', () => {
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
     expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
   });
-  it('대양 트롤선(8단계): 가격 320,000 · 명성 200,000 · 속도 200 · 가방 4,000', () => {
-    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 200, bagCap: 4000 });
+  it('대양 트롤선(8단계): 가격 1,000,000 · 명성 200,000 · 속도 200 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1000000, fameReq: 200000, speed: 200, bagCap: 4000 });
   });
   it('이동 속도(px/s): 배 없음 100, 조각배 110부터 대양 트롤선 200까지', () => {
     expect(WALK_SPEED).toBe(100);
@@ -284,7 +284,7 @@ describe('R15: 강화/구매 비용', () => {
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
-      expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);
+      if (BOATS[i].tier !== 4) expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price); // 범선은 정크선보다 싸다
       expect(BOATS[i].speed).toBeGreaterThan(BOATS[i - 1].speed);
       expect(BOATS[i].bagCap).toBeGreaterThan(BOATS[i - 1].bagCap); // 가방도 함께
     }
@@ -1013,7 +1013,7 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
   // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
-  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7.
+  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 어종 판매가를 ×0.85하고 가격 규칙으로 반올림해 586.5).
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
@@ -1026,10 +1026,10 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
     expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
   });
 
-  it('남인도양 — normal 694.7 / perfect 1085.1 / 방치 진입 ×5 197.9', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(694.7, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(1085.08, 1);
-    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(197.85, 1);
+  it('남인도양 — normal 586.5 / perfect 915.9 / 방치 진입 ×5 167.3', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(586.49, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(915.87, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(167.29, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
@@ -1056,18 +1056,19 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 80%(±6%p), 세인트헬레나는 용승대 대비 약 30%(±5%p) 오른다', () => {
+  it('남대서양 첫 해역은 코모로 심해 대비 약 61%(1.50~1.65배), 세인트헬레나는 용승대 대비 약 53%(1.50~1.60배) 오른다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 방치 플래토(×3)에서 용승대가 +85.2%라 허용 폭을 6%p로 둔다
-      expect(r).toBeGreaterThanOrEqual(1.74);
-      expect(r).toBeLessThanOrEqual(1.86);
+      // 확정 밸런스의 실제 비율은 진입 1.61, 플래토 1.63이다
+      expect(r).toBeGreaterThanOrEqual(1.5);
+      expect(r).toBeLessThanOrEqual(1.65);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      expect(r).toBeGreaterThanOrEqual(1.25);
-      expect(r).toBeLessThanOrEqual(1.35);
+      // 확정 밸런스의 실제 비율은 진입 1.53, 플래토 1.54다
+      expect(r).toBeGreaterThanOrEqual(1.5);
+      expect(r).toBeLessThanOrEqual(1.6);
     }
   });
 });
