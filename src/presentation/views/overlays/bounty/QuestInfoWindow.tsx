@@ -12,7 +12,7 @@ import { ClearsLeft } from './boardParts';
 import { EmptyInfoCard, GeneralInfoCard, NamedInfoCard } from './QuestInfoCards';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
-// 의뢰 창의 화면 - 헤더의 의뢰 현황을 눌러 여는, 지금 수주 중인 의뢰를 보는 읽기 전용 창.
+// 의뢰 창의 화면 - 메뉴 줄의 의뢰를 눌러 여는, 지금 수주 중인 의뢰를 보는 읽기 전용 창.
 // 제목 "의뢰" 아래 고정 정보 줄에 오늘 남은 클리어를 두고(수배판과 같은 조각, 값 이름은 헤더처럼 줄인다),
 // 일반 의뢰와 네임드 토벌 두 탭에서 카드 한 장씩 본다.
 // 수주한 의뢰가 없어도 열리고, 빈 카드가 수배판이 있는 항구를 안내한다. 수주와 납품은 수배판에서 한다.

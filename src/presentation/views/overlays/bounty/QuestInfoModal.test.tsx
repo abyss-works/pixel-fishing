@@ -38,7 +38,7 @@ describe('의뢰 창', () => {
     const fixed = screen.getByText('오늘 남은 클리어').closest('[class*="h-10"]')!;
     expect(within(fixed as HTMLElement).getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('1/1');
     expect(within(fixed as HTMLElement).getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('0/1');
-    // 값 이름은 헤더의 의뢰 현황처럼 줄인다. 탭 이름은 그대로다
+    // 값 이름은 메뉴 줄의 의뢰 배지처럼 줄인다. 탭 이름은 그대로다
     expect((fixed as HTMLElement).textContent).toContain('일반');
     expect((fixed as HTMLElement).textContent).not.toContain('일반 의뢰');
     expect((fixed as HTMLElement).textContent).not.toContain('네임드 토벌');

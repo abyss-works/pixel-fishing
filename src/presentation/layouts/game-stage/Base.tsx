@@ -9,7 +9,6 @@ import { W, H, BASE_CANVAS_W, BASE_CANVAS_H } from '../../../game/rendering/pixe
 import { useCanvasCover } from './canvasCover';
 import GameFrame from './GameFrame';
 import NightOverlay from '../../ui/hud/NightOverlay';
-import TimeBadge from '../../ui/hud/TimeBadge';
 
 
 interface Props {
@@ -62,7 +61,6 @@ export default function Base({ base, game, onFacility }: Props) {
                   aria-label={base === 'home' ? '집' : '항구'} onClick={onClick} />
         )}
         <NightOverlay />
-        <TimeBadge className="top-2 right-2" />
       </GameFrame>
     </>
   );

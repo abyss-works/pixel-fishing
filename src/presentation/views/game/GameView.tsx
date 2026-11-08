@@ -288,7 +288,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenQuests={openQuests} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
