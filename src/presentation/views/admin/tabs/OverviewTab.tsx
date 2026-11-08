@@ -108,7 +108,7 @@ export default function OverviewTab() {
       {/* 왼쪽 피드(1fr) / 오른쪽 위험 신호(고정폭) — xl 미만에서는 세로로 쌓는다 */}
       <CellGrid side>
         <Cell title="최근 이벤트 피드" flush>
-          <div className="pf-scroll-panel max-h-[420px] pf-vscroll px-1">
+          <div className="pf-scroll-panel max-h-[420px] overflow-y-auto px-1">
             <DataTable>
               <thead>
                 <tr><th className="text-left">시각</th><th className="text-left">유형</th>

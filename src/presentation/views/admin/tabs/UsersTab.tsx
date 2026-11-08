@@ -231,7 +231,7 @@ function UserSessions({ user }: { user: AdminUserRow }) {
           <TabState loading={loading} error={error} empty={sessions.length === 0} emptyText="세션 기록이 없어요." />
         </div>
       ) : (
-        <div className="pf-scroll-panel max-h-[220px] pf-vscroll px-1">
+        <div className="pf-scroll-panel max-h-[220px] overflow-y-auto px-1">
           <DataTable>
             <thead>
               <tr><th className="text-left">시작</th><th className="text-left">끝</th><th className="text-right">길이</th></tr>
