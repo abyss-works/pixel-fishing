@@ -1,5 +1,5 @@
-// 개발 도구 프리셋 — 어려운 조건을 한 번에 만드는 명령 묶음. 수배 구역마다 표에서 만든다.
-// 수주는 실제 acceptQuest 액션으로 보내 일일 의뢰 해시·라이선스 판정을 그대로 통과시킨다.
+// 개발 도구 프리셋 — 어려운 조건을 한 번에 만드는 명령 묶음. 네임드 직전 프리셋은 네임드 의뢰마다, 교환 직전 프리셋은 유물마다 표에서 만든다.
+// 수주는 실제 acceptQuest 액션으로 보내 라이선스·하루 한도 판정을 그대로 통과시킨다. 네임드는 해시로 뽑지 않고 그 의뢰를 그대로 수주한다.
 import type { GameAction } from '../../../game/rules/actions';
 import type { GameState } from '../../../game/rules/logic';
 import type { DebugCommandId } from '../../../game/rules/debug';
@@ -18,7 +18,7 @@ export type PresetStep =
   | { kind: 'action'; action: GameAction }
   | { kind: 'armEncounter' };
 
-export interface PresetContext { game: GameState; uid: string; day: string }
+export interface PresetContext { game: GameState }
 
 export interface DevPreset {
   id: string;

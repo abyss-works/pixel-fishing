@@ -142,7 +142,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </Gated>
       ) : screen === 'named' ? (
         <>
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           <div className={CARD_ROW}>
             {namedOffers.map(({ quest, reward, ticketMins, relic }) => (

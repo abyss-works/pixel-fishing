@@ -23,13 +23,15 @@ describe('개발 도구 명령 목록', () => {
     const stats = DEV_COMMANDS.find(c => c.id === 'stats.set')!;
     expect(parseDevArgs(stats, { gold: '1000.9', fame: '' })).toEqual({ ok: true, args: { gold: 1000 } });
     expect(parseDevArgs(stats, { gold: '많이' })).toEqual({ ok: false });
+    const grant = DEV_COMMANDS.find(c => c.id === 'bounty.grantMaterial')!;
+    expect(parseDevArgs(grant, { artifact: 'wreck-compass', count: '12' })).toEqual({ ok: true, args: { artifact: 'wreck-compass', count: 12 } });
     const dex = DEV_COMMANDS.find(c => c.id === 'dex.completeZone')!;
     expect(parseDevArgs(dex, { zone: 'indian' })).toEqual({ ok: true, args: { zone: 'indian' } });
   });
 });
 
 describe('프리셋', () => {
-  const ctx = (game: GameState) => ({ game, uid: 'u1', day: '2026-10-16' });
+  const ctx = (game: GameState) => ({ game });
 
   it('네임드마다 네임드 직전 프리셋이 있다 — 구역당 하나가 아니다', () => {
     const named = BOUNTIES.filter(q => q.difficulty === 'named');

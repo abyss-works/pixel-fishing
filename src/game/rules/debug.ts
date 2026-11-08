@@ -71,7 +71,9 @@ export function reduceDebug(
     }
     case 'bounty.grantMaterial': {
       const art = typeof args.artifact === 'string' ? artifactById(args.artifact) : undefined;
-      return art ? addItem(state, art.materialId, 1) : null;
+      const count = args.count === undefined ? 1 : args.count; // 개수를 주지 않으면 1개
+      if (!art || typeof count !== 'number' || !Number.isInteger(count) || count <= 0) return null;
+      return addItem(state, art.materialId, count);
     }
     default:
       return null;

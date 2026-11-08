@@ -55,8 +55,11 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   },
   {
     id: 'bounty.grantMaterial', group: 'bounty', label: '교환 재료 지급',
-    hint: '고른 유물의 교환 재료 1개.',
-    params: [{ key: 'artifact', label: '유물', kind: 'select', options: devArtifactOptions }],
+    hint: '고른 유물의 교환 재료를 고른 개수만큼 준다. 개수를 비우면 1개.',
+    params: [
+      { key: 'artifact', label: '유물', kind: 'select', options: devArtifactOptions },
+      { key: 'count', label: '개수', kind: 'int' },
+    ],
   },
   {
     id: 'bounty.expireTickets', group: 'bounty', label: '흔적 만료',

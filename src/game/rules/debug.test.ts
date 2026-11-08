@@ -87,6 +87,16 @@ describe('bounty.grantMaterial', () => {
     expect(Object.keys(out.state.items)).toHaveLength(1);
   });
 
+  it('고른 개수만큼 주고 이미 가진 재료에 더한다', () => {
+    const out = debug(seed({ items: { 'mat-wreck-compass': 2 } }), 'bounty.grantMaterial', { artifact: 'wreck-compass', count: 5 });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.items[artifactById('wreck-compass')!.materialId]).toBe(7);
+  });
+
+  it.each([0, -1, 1.5, '3', null])('개수가 양의 정수가 아니면(%s) bad-request', count => {
+    expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'wreck-compass', count })).toEqual({ ok: false, error: 'bad-request' });
+  });
+
   it('없는 유물이나 유물 인자가 없으면 bad-request', () => {
     expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'nope' })).toEqual({ ok: false, error: 'bad-request' });
     expect(debug(seed(), 'bounty.grantMaterial', { zone: 'indian' })).toEqual({ ok: false, error: 'bad-request' });
