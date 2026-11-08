@@ -1097,6 +1097,11 @@ export function sellableValue(state: GameState): number {
     .reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
+/** 판매 총액에 더하는 길드 판매가 보너스 금액 — 총액에 비율을 곱해 한 번 반올림한다. 화면 미리보기도 이 값을 쓴다 */
+export function saleBonusOf(base: number, bonus: number): number {
+  return Math.round(base * bonus);
+}
+
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 // bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
@@ -1107,7 +1112,7 @@ export function sellSelected(state: GameState, uids: readonly string[], bonus = 
   const base = sold.reduce((s, i) => s + priceOfInstance(i), 0);
   return {
     ...state,
-    gold: state.gold + base + Math.round(base * bonus),
+    gold: state.gold + base + saleBonusOf(base, bonus),
     bag: state.bag.filter(i => !soldUids.has(i.uid)),
   };
 }
