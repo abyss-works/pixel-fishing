@@ -18,7 +18,7 @@ describe('AdjustedAmount', () => {
       <AdjustedAmount amount={{ base: 1000, mods: [{ id: 'relic', label: '마미 와타의 거울', delta: -300 }], value: 700 }} />,
     );
     expect(container.querySelector('s')?.textContent).toBe('1,000G');
-    expect(container.textContent).toBe('1,000G700G');
+    expect(container.textContent).toBe('기본 금액 1,000G, 마미 와타의 거울 −300G, 합계 700G1,000G700G');
     fireEvent.mouseEnter(screen.getByText('700G'));
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('기본 금액1,000G');
@@ -28,7 +28,8 @@ describe('AdjustedAmount', () => {
 
   it('접근성 이름에 기본 금액, 사유별 증감, 합계가 읽힌다', () => {
     render(<AdjustedAmount amount={{ base: 1000, mods: [{ id: 'relic', label: '마미 와타의 거울', delta: -300 }], value: 700 }} />);
-    expect(screen.getByLabelText('기본 금액 1,000G, 마미 와타의 거울 −300G, 합계 700G')).toBeInTheDocument();
+    expect(screen.getByText('기본 금액 1,000G, 마미 와타의 거울 −300G, 합계 700G')).toHaveClass('sr-only');
+    expect(screen.getByText('700G')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('버튼 안(inButton)에서는 포커스 칸이 없고 호버로만 열린다', () => {

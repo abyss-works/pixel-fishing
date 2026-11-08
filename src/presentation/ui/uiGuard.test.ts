@@ -427,18 +427,53 @@ describe('UI 시스템 가드', () => {
     'views/overlays/facility/FacilityModal.tsx',
     'views/game/tabs/bag/BagTab.tsx',
   ];
-  /** 보정 금액을 .value·.base로 꺼내 금액 표기에 쓰는 자리 - 실제로 받은 금액을 알리는 메시지만 허용한다 */
-  const ADJUSTED_VALUE_EXCEPTIONS = new Set(['views/overlays/bounty/BountyPanel.tsx']);
-  /** 보정이 없는 일반 의뢰 보상(원본 숫자)을 그리는 자리 - 네임드 보상은 여기서 그리지 않는다 */
-  const RAW_REWARD_EXCEPTIONS = new Set([
-    'views/overlays/bounty/BountyCard.tsx',
-    'views/overlays/bounty/BountyPanel.tsx',
-    'views/overlays/bounty/QuestInfoCards.tsx',
+  /** 허용 줄 - 파일마다 허용하는 줄의 모양과 사유. 파일 단위가 아니라 줄 단위로 가리고, 쓰이지 않는 허용은 지운다 */
+  type Allowed = Map<string, { line: RegExp; why: string }[]>;
+  const VALUE_IN_GOLD = /fmtGold\([^()]*\.(?:value|base)\b/;
+  const VALUE_ALLOWED: Allowed = new Map([
+    ['views/overlays/bounty/BountyPanel.tsx', [
+      { line: /fmtGold\(reward\.value\)/, why: '네임드 토벌 보상 수령 메시지는 실제로 받은 금액(보정 합계)을 알린다' },
+    ]],
+    ['views/overlays/away/awayText.ts', [
+      { line: /fmtGold\(s\.released\.value\)/, why: '방치 결과의 놓아준 가치 합은 보정이 없는 숫자 필드다' },
+    ]],
   ]);
-  const VALUE_IN_GOLD = /fmtGold\([^()]*\b(?:reward|total|sellable|subtotal)\.(?:value|base)\b/;
-  const RAW_REWARD_IN_GOLD = /fmtGold\([^()]*\breward\b(?!\.(value|base)\b)/;
+  const RAW_REWARD_IN_GOLD = /fmtGold\([^()]*\breward\b(?!\.(?:value|base)\b)/;
+  const RAW_REWARD_ALLOWED: Allowed = new Map([
+    ['views/overlays/bounty/BountyCard.tsx', [
+      { line: /fmtGold\(quest\.reward\)/, why: '일반 의뢰 카드는 보정이 없는 원본 보상이다' },
+    ]],
+    ['views/overlays/bounty/BountyPanel.tsx', [
+      { line: /fmtGold\(q\.reward\)/, why: '일반 의뢰 완료 메시지는 보정이 없는 원본 보상이다' },
+    ]],
+    ['views/overlays/bounty/QuestInfoCards.tsx', [
+      { line: /fmtGold\(info\.reward\)/, why: '일반 의뢰 카드는 보정이 없는 원본 보상이다' },
+    ]],
+  ]);
   /** 판매 합계·판매 가능 금액 이름을 그대로 금액 표기에 넘기는 모양 */
   const SALE_TOTAL_IN_GOLD = /fmtGold\(\s*(?:preview\.)?(?:total|sellable|sellableValue)\s*\)/;
+  /** 패턴에 걸리는 줄 중 허용 줄이 아닌 것(경로:줄)과, 한 번도 쓰이지 않은 허용(경로) */
+  const offendingLines = (files: { path: string; src: string }[], pattern: RegExp, allowed: Allowed) => {
+    const offenders: string[] = [];
+    const used = new Set<string>();
+    for (const f of files) {
+      f.src.split('\n').forEach((line, i) => {
+        if (!pattern.test(line)) return;
+        const rule = allowed.get(f.path)?.find(r => r.line.test(line));
+        if (rule) used.add(`${f.path} ${rule.line}`); else offenders.push(`${f.path}:${i + 1}`);
+      });
+    }
+    const stale = [...allowed].flatMap(([path, rules]) => rules.map(r => `${path} ${r.line}`)).filter(k => !used.has(k));
+    return { offenders, stale };
+  };
+  /** 버튼과 버튼 계열 컴포넌트 안에서 inButton 없이 쓴 AdjustedAmount */
+  const adjustedInButtonWithoutFlag = (src: string): string[] => {
+    const out: string[] = [];
+    for (const block of src.matchAll(/<(button|(?:[A-Z]\w*)?Button)\b[\s\S]*?<\/\1>/g)) {
+      for (const tag of block[0].matchAll(/<AdjustedAmount\b[^>]*>/g)) if (!/\binButton\b/.test(tag[0])) out.push(tag[0]);
+    }
+    return out;
+  };
 
   it('보정이 붙는 금액을 쓰는 화면은 AdjustedAmount로 그린다', () => {
     const missing = ADJUSTED_SCREENS.filter(path => {
@@ -448,38 +483,45 @@ describe('UI 시스템 가드', () => {
     expect(missing).toEqual([]);
   });
 
-  it('보정 금액의 value·base를 꺼내 금액 표기에 직접 쓰지 않는다 - 예외 목록의 자리만', () => {
-    expect(checked.filter(f => VALUE_IN_GOLD.test(f.src) && !ADJUSTED_VALUE_EXCEPTIONS.has(f.path)).map(f => f.path)).toEqual([]);
-    const using = checked.filter(f => ADJUSTED_VALUE_EXCEPTIONS.has(f.path) && VALUE_IN_GOLD.test(f.src)).map(f => f.path);
-    expect([...ADJUSTED_VALUE_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  it('금액 표기에 .value·.base를 꺼내 쓰지 않는다 - 허용 줄만', () => {
+    expect(offendingLines(checked, VALUE_IN_GOLD, VALUE_ALLOWED)).toEqual({ offenders: [], stale: [] });
   });
 
-  it('원본 보상(reward)을 금액 표기에 직접 쓰지 않는다 - 보정이 없는 일반 의뢰 자리만', () => {
-    expect(checked.filter(f => RAW_REWARD_IN_GOLD.test(f.src) && !RAW_REWARD_EXCEPTIONS.has(f.path)).map(f => f.path)).toEqual([]);
-    const using = checked.filter(f => RAW_REWARD_EXCEPTIONS.has(f.path) && RAW_REWARD_IN_GOLD.test(f.src)).map(f => f.path);
-    expect([...RAW_REWARD_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  it('원본 보상(reward)을 금액 표기에 직접 쓰지 않는다 - 보정이 없는 일반 의뢰 줄만', () => {
+    expect(offendingLines(checked, RAW_REWARD_IN_GOLD, RAW_REWARD_ALLOWED)).toEqual({ offenders: [], stale: [] });
   });
 
   it('의뢰 정보 창의 네임드 카드는 보상을 금액 표기로 직접 그리지 않는다', () => {
     const src = presentationFiles.find(f => f.path === 'views/overlays/bounty/QuestInfoCards.tsx')!.src;
-    const named = src.slice(src.indexOf('export function NamedInfoCard'), src.indexOf('export function EmptyInfoCard'));
-    expect(named).not.toMatch(/fmtGold\(/);
+    const from = src.indexOf('export function NamedInfoCard');
+    const to = src.indexOf('export function EmptyInfoCard');
+    expect(from).toBeGreaterThanOrEqual(0);
+    expect(to).toBeGreaterThan(from);
+    expect(src.slice(from, to)).not.toMatch(/fmtGold\(/);
   });
 
   it('판매 합계와 판매 가능 금액은 금액 표기로 직접 그리지 않는다', () => {
     expect(checked.filter(f => SALE_TOTAL_IN_GOLD.test(f.src)).map(f => f.path)).toEqual([]);
   });
 
+  it('버튼 안의 AdjustedAmount는 inButton을 준다 - 버튼 안에 포커스 칸과 터치 툴팁을 두지 않는다', () => {
+    expect(checked.filter(f => adjustedInButtonWithoutFlag(f.src).length > 0).map(f => f.path)).toEqual([]);
+    expect(presentationFiles.some(f => /<Button\b[\s\S]*?<AdjustedAmount\b[^>]*\binButton\b/.test(f.src))).toBe(true);
+  });
+
   it('취소선으로 금액을 직접 그리지 않는다 - 정가와 보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
     expect(checked.filter(f => /<s[\s>]|line-through/.test(f.src)).map(f => f.path)).toEqual([]);
   });
 
-  it('감지 함수: value 꺼내기, 원본 보상, 판매 합계 표기를 잡고 AdjustedAmount는 가린다', () => {
-    expect(VALUE_IN_GOLD.test('{fmtGold(reward.value)}')).toBe(true);
+  it('감지 함수: value 꺼내기, 원본 보상, 판매 합계 표기, 버튼 안 AdjustedAmount를 잡고 올바른 표기는 가린다', () => {
+    expect(VALUE_IN_GOLD.test('{fmtGold(x.value)}')).toBe(true);
     expect(RAW_REWARD_IN_GOLD.test('{fmtGold(quest.reward)}')).toBe(true);
     expect(RAW_REWARD_IN_GOLD.test('{fmtGold(reward.value)}')).toBe(false);
     expect(SALE_TOTAL_IN_GOLD.test('{fmtGold(total)}')).toBe(true);
     expect(SALE_TOTAL_IN_GOLD.test('{fmtGold(preview.sellable)}')).toBe(true);
     expect(SALE_TOTAL_IN_GOLD.test('<AdjustedAmount amount={total} />')).toBe(false);
+    expect(adjustedInButtonWithoutFlag('<Button onClick={go}>판매 <AdjustedAmount amount={a} /></Button>')).toHaveLength(1);
+    expect(adjustedInButtonWithoutFlag('<button>판매 <AdjustedAmount amount={a} inButton /></button>')).toEqual([]);
+    expect(adjustedInButtonWithoutFlag('<Note><AdjustedAmount amount={a} /></Note>')).toEqual([]);
   });
 });

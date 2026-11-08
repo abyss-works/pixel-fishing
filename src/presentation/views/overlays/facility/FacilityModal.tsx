@@ -41,7 +41,7 @@ interface Props {
   /** 일일 의뢰 해시 대상 — 없으면 로컬 고정값 */
   uid?: string | null;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
-  sellBonus?: number;
+  sellBonus: number;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
@@ -53,7 +53,7 @@ interface Props {
 // 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus = 0 }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;

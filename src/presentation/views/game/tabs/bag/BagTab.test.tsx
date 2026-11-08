@@ -3,7 +3,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView } from './bagView';
-import { newState } from '../../../../../game/rules/logic';
+import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
+import { fmtGold } from '../../../../ui/format';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 
 afterEach(cleanup);
@@ -47,5 +48,24 @@ describe.skipIf(!EXHIBIT_UI_ENABLED)('BagTab — 전시대', () => {
     fireEvent.click(screen.getByRole('button', { name: /진열$/ }));
     expect(dispatch).not.toHaveBeenCalled();
     expect(setToast).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('BagTab - 판매 가능 금액', () => {
+  const owned = (): GameState => game({ bag: [inst('a'), inst('b')] });
+
+  it('길드 판매가 보너스가 없으면 금액 하나만 보인다', () => {
+    render(<BagTab sellBonus={0} game={owned()} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const base = sellableValue(owned());
+    expect(screen.getAllByText(fmtGold(base)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/판매가 보너스/)).not.toBeInTheDocument();
+  });
+
+  it('길드 판매가 보너스가 있으면 기본 금액, 증감, 합계 내역을 판매 화면과 같은 값으로 보인다', () => {
+    const g = owned();
+    const base = sellableValue(g);
+    const bonus = saleBonusOf(base, 0.5);
+    render(<BagTab sellBonus={0.5} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByText(`기본 금액 ${fmtGold(base)}, 판매가 보너스 +${fmtGold(bonus)}, 합계 ${fmtGold(base + bonus)}`)).toBeInTheDocument();
   });
 });

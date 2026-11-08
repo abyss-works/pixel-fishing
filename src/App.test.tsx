@@ -235,7 +235,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
       return r;
     });
     return open
-      ? <FacilityModal panel="boat" game={g} dispatch={dispatch}
+      ? <FacilityModal sellBonus={0} panel="boat" game={g} dispatch={dispatch}
                        setToast={toastFn} onClose={() => setOpen(false)} />
       : <p>모달 닫힘</p>;
   }
