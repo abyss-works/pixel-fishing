@@ -54,7 +54,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               <ArrowButton dir={-1} tone="solid" aria-label="이전 형태"
                            onClick={() => setI((i - 1 + forms.length) % forms.length)} />
               <FishSprite fish={fish} preset="portrait" form={form.form} discovered={known} animate={known}
-                          ariaLabel={known ? fish.name : '미확인 변종'} className="block" />
+                          ariaLabel={known ? fish.name : '미확인 변종'}
+                          className="block min-w-0 shrink h-auto [image-rendering:pixelated]" />
               <ArrowButton dir={1} tone="solid" aria-label="다음 형태"
                            onClick={() => setI((i + 1) % forms.length)} />
             </div>

@@ -225,6 +225,13 @@ describe('UI 시스템 가드', () => {
     expect(appModalsWithTitleChild(`<Modal xl onClose={c} header={<header>가</header>}><p>본문</p>`)).toEqual([]);
     expect(appModalsWithTitleChild(`<Modal layer="stage" onClose={c}><header>가</header>`)).toEqual([]);
   });
+  it('앱 모달 안에는 크기를 정하지 않은 스크롤 칸(SCROLL_Y)을 겹치지 않는다 — 본문 한 칸만 스크롤한다', () => {
+    const nested = (src: string) => openingTags(src, 'Modal').some(tag => !/\blayer="stage"/.test(tag)) && /\$\{SCROLL_Y\}/.test(src);
+    expect(screens.filter(f => nested(f.src)).map(f => f.path)).toEqual([]);
+    expect(nested('<Modal onClose={c}><div className={`${SCROLL_Y} flex-1`}>')).toBe(true);
+    expect(nested('<Modal layer="stage" onClose={c}><div className={`${SCROLL_Y} flex-1`}>')).toBe(false);
+    expect(nested('<Modal onClose={c}><div className={`${SCROLL_Y_ROWS} max-h-[9px]`}>')).toBe(false);
+  });
   it('ModalCard 호출부는 className을 넘기지 않는다 — 변형은 명시 prop으로 고른다', () => {
     expect(screens.flatMap(f => cardsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     expect(cardsWithClassName(`<ModalCard title="가" className="overflow-auto">`)).toHaveLength(1);

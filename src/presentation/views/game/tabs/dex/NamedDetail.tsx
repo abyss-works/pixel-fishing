@@ -9,7 +9,6 @@ import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { fmtGold } from '../../../../ui/format';
-import { SCROLL_Y } from '../../../../ui/scrollArea';
 
 // 네임드 상세 — 일반 어종 상세와 같은 머리·메인 그리드·오목한 칸 언어. 오른쪽은 순위 대신 읽을거리(전승)이고
 // 왼쪽 두 칸(표본 · 기록) 높이를 한 칸으로 이어 받는다.
@@ -44,8 +43,9 @@ export default function NamedDetail({ quest, game, onClose }: {
         </TitledCell>
 
         <TitledCell title="전해 오는 이야기" className="row-span-2 mobile:row-span-1">
-          <Inset className="flex flex-1 min-h-64 max-h-[min(62vh,560px)] flex-col px-5 py-4">
-            <div className={`${SCROLL_Y} min-h-0 flex-1`}>
+          <Inset className="flex flex-1 min-h-64 flex-col px-5 py-4">
+            {/* 전승은 길어져도 칸 안에서 따로 스크롤하지 않는다 — 창 본문 한 칸이 스크롤한다 */}
+            <div className="flex-1">
               {d.chronicle ? (
                 <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
                   {d.chronicle.map((p, idx) => (
