@@ -147,7 +147,7 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writin
 });
 
 describe('해역 요구 파워', () => {
-  it('인도양 이후 해역은 약 2레벨 간격으로 요구 파워가 오른다', () => {
+  it('인도양 이후 해역은 15 간격(약 3레벨)으로 요구 파워가 오른다', () => {
     expect(powerReqOf('indian')).toBe(75);       // Lv14
     expect(powerReqOf('southindian')).toBe(90);  // Lv17
     expect(powerReqOf('mozstrait')).toBe(105);   // Lv20

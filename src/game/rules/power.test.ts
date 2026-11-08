@@ -1,6 +1,6 @@
 // 방치 배수 표 — 해역 요구 파워 대비 낚싯대 레벨 차(파워 5당 1)로 정한다.
 import { describe, expect, it } from 'vitest';
-import { SPOTS } from '../content/spots';
+import { SPOTS, powerReqOf } from '../content/spots';
 import { topZoneOfSpot } from '../content/zones';
 import { newState, rodStats } from './logic';
 import { catchDrawOptions } from './actions';
@@ -66,7 +66,7 @@ describe('삭제된 보정은 판정에 영향이 없다', () => {
   });
 
   it('방치 판정은 해역 배수 표를 쓴다', () => {
-    expect(catchDrawOptions('auto', 35, 'sea', 1, phase).commonMult).toBe(5);
+    expect(catchDrawOptions('auto', 30, 'sea', 1, phase).commonMult).toBe(5);
     expect(catchDrawOptions('auto', 55, 'sea', 2, phase).commonMult).toBe(6);
     expect(catchDrawOptions('auto', 10, 'pond', 1, phase).commonMult).toBe(10);
   });
@@ -84,7 +84,7 @@ describe('삭제된 보정은 판정에 영향이 없다', () => {
   it('파워 미달은 입질 대기가 늘어난다(유지)', () => {
     const st = newState();
     const b = effectiveBite(st, 'coron');
-    expect(rodPower(st)).toBeLessThan(60);
+    expect(rodPower(st)).toBeLessThan(powerReqOf('coron'));
     expect(b.min.value).toBeCloseTo(rodStats(1).biteMin + powerZones(st, 'coron').biteExtra, 10);
   });
 });

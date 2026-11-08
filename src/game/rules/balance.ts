@@ -37,7 +37,7 @@ export const ROD = {
   sweep: 1.4,                       // 타이밍 바 시간(초) — 레벨 무관 고정
   // 강화 비용: costPowerFrom 레벨까지는 round(costBase × costGrowth^(lv-1)),
   // 그 뒤로는 costPowerFrom 레벨 비용 × (lv / costPowerFrom)^costPowerExp.
-  // 경계는 인도양 최소 요구 파워를 채우는 Lv16 직전이다. 동남아까지는 지수로 가파르게 두고,
+  // 경계는 Lv15다. Lv15까지는 지수로 가파르게 두고,
   // 그 뒤로는 직전 대비 배율이 레벨마다 줄어 강화 간격이 완만하게 늘어난다.
   costBase: 50,
   costGrowth: 1.7,
