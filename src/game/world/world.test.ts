@@ -375,6 +375,15 @@ describe('남대서양 지도', () => {
     }
   });
 
+  it('홍해는 열지 않은 바다에 들지 않는다 — 수에즈만과 아카바만 입구 포함', () => {
+    for (const [lon, lat, name] of [[38, 20, '홍해 중부'], [33.5, 28, '수에즈만'], [34.5, 27.3, '아카바만 입구'], [38.5, 23, '홍해 북부']] as const) {
+      const [x, y] = worldAt(lon, lat);
+      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
+      expect(inClosedSea(WORLD, x, y), name).toBe(false);
+    }
+    expect(inClosedSea(WORLD, ...worldAt(30, 34)), '동지중해').toBe(true);
+  });
+
   it('적도를 북쪽으로 넘으려 하면 안내문과 함께 막힌다', () => {
     // 남대서양 쪽 가장자리(적도 바로 남쪽)에서 북쪽으로 한 걸음
     const [x, y] = worldAt(-8, -0.3);
@@ -401,6 +410,15 @@ describe('남대서양 지도', () => {
     expect(cellDefAt(EARTH_MAP, x, y)?.closed, '지중해').toBe(true);
     const [x2, y2] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 + 10) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
     expect(cellDefAt(EARTH_MAP, x2, y2)?.closed ?? false, '남대서양').toBe(false);
+  });
+});
+
+describe('세계지도(earth) — 작은 섬', () => {
+  it('세인트헬레나, 울릉도, 독도가 최소 한 칸 육지로 보인다', () => {
+    for (const [name, lon, lat] of [['세인트헬레나', -5.7, -15.95], ['울릉도', 130.87, 37.5], ['독도', 131.87, 37.24]] as const) {
+      const [x, y] = earthPx(lon, lat);
+      expect(cellDefAt(EARTH_MAP, x, y)?.land, name).toBe(true);
+    }
   });
 });
 

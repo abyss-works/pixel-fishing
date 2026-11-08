@@ -7,7 +7,7 @@
 //
 // 설정 스키마:
 //   id            산출 식별자(헤더/로그용)
-//   extends       (선택) 부모 설정 — zones·openZones를 물려받는다
+//   extends       (선택) 부모 설정 — zones·openZones·islands를 물려받는다
 //                 (부모 먼저 → 자식이 나중 = 자식 스탬프 우선). anchors는 상속하지 않는다 —
 //                 지형 검증은 각 설정의 해상도에서 성립하는 값이라 재사용하면 오탐난다.
 //   geo           벤더 링 배열 JSON 입력
@@ -46,7 +46,7 @@ const cfg = src.startsWith('{') ? JSON.parse(src) : readJson(src);
 if (cfg.extends) {
   if (src.startsWith('{')) { console.error('[inline] extends는 파일 설정에서만 지원한다'); process.exit(2); }
   const base = readJson(cfg.extends);
-  for (const key of ['zones', 'openZones']) {
+  for (const key of ['zones', 'openZones', 'islands']) {
     cfg[key] = [...(base[key] ?? []), ...(cfg[key] ?? [])];
   }
 }

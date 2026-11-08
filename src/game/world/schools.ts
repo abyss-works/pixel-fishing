@@ -72,7 +72,7 @@ function candidatesByZone(): Map<ZoneId, number[]> {
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const nc = c + dx, nr = r + dy;
       const def = defAt(nc, nr);
-      if (!def?.water) continue;
+      if (!def?.water || def.closed) continue;
       const nidx = nr * cols + nc;
       if (reachable[nidx]) continue;
       reachable[nidx] = 1;
