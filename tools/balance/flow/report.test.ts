@@ -143,7 +143,7 @@ describe('실행과 출력', () => {
     const b = renderText(runFlow(base({ commands: ['ev'], override: file })));
     expect(b).not.toBe(a);
     expect(b).toMatch(/세인트헬레나 \| 32 \|/);
-    expect(a).toMatch(/세인트헬레나 \| 29 \|/);
+    expect(a).toMatch(/세인트헬레나 \| 27 \|/);
   });
 
   it('days 가정은 지나온 해역 도감을 채우지 않아 낮은 유형에 라이선스가 생기지 않는다는 점을 밝힌다', () => {

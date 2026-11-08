@@ -104,7 +104,7 @@ describe('보상의 EV 시간 환산', () => {
 describe('덮어쓰기 반영', () => {
   it('해역 요구 파워를 바꾸면 EV와 환산이 그 값으로 다시 계산된다', () => {
     const base = evReport();
-    const restore = applyOverride({ spots: { sthelena: { powerReq: 165 } } });
+    const restore = applyOverride({ spots: { sthelena: { powerReq: 155 } } });
     let changed;
     try { changed = evReport(); } finally { restore(); }
     const pick = (r: ReturnType<typeof evReport>) => r.spots.find(s => s.spot === 'sthelena')!;

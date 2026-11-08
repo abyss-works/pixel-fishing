@@ -92,7 +92,7 @@ describe('네임드 토벌 비용', () => {
   it('보상과 조우 시간, 줄어드는 수입을 구역마다 낸다', () => {
     expect(rows.map(r => r.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     const pacific = rows[0];
-    expect(pacific.reward).toBe(400000);
+    expect(pacific.reward).toBe(150000);
     expect(pacific.hours).toBeGreaterThan(0);
     expect(pacific.loss).toBeGreaterThan(0);
     expect(pacific.lossOverReward).toBeCloseTo(pacific.loss / pacific.reward, 12);

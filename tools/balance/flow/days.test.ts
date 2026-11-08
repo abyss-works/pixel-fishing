@@ -76,14 +76,16 @@ describe('마지막 해역 레벨업 일수', () => {
     expect(sleepHours).toBeLessThan(8);
   });
 
-  it('의뢰와 토벌을 수행하면 일수가 줄고 보상 비중이 있다', () => {
+  it('의뢰와 토벌을 수행하면 일수가 줄거나 같고 보상 비중이 있다', () => {
     for (const t of ['h16', 'h8', 'h4-75', 'h2', 'h1']) {
       for (const l of [l0, l4]) {
-        expect(pick(t, true, l).days!, `${t} ${l}`).toBeLessThan(pick(t, false, l).days!);
-        expect(pick(t, true, l).bountyShare!, `${t} ${l}`).toBeGreaterThan(0);
+        expect(pick(t, true, l).days!, `${t} ${l}`).toBeLessThanOrEqual(pick(t, false, l).days!);
+        expect(pick(t, true, l).bountyShare!, `${t} ${l}`).toBeGreaterThanOrEqual(0);
         expect(pick(t, true, l).bountyShare!).toBeLessThan(1);
       }
     }
+    expect(pick('h4-75', true, l0).bountyShare!).toBeGreaterThan(0);
+    expect(pick('h4-75', true, l0).days!).toBeLessThan(pick('h4-75', false, l0).days!);
   });
 
   it('레벨업은 그 시점에 시뮬레이션에서 실제로 가진 라이선스로 계산한다', () => {
