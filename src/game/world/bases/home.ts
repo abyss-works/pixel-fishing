@@ -6,7 +6,7 @@ export const HOME: BasePack = {
   id: 'home',
   name: '집',
   region: 'village',
-  headline: '나의 집 — 가구를 눌러 정비해 보세요',
+  headline: '나의 집에서 가구를 눌러 정비해 보세요.',
   exitMsg: '마을이에요. 물가 어군에서 낚시해 보세요.',
   furniture: [
     { id: 'rank', x: 84,  y: 30,  w: 40, h: 30, sprite: 'board',

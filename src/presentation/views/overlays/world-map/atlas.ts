@@ -54,6 +54,7 @@ const HARBORS: { name: string; anchor: { x: number; y: number } }[] = [
   { name: '마닐라항', anchor: WORLD_ANCHORS.manila },
   { name: '콜롬보항', anchor: WORLD_ANCHORS.colombo },
   { name: '투아마시나항', anchor: WORLD_ANCHORS.toamasina },
+  { name: '월비스베이항', anchor: WORLD_ANCHORS.walvisbay },
 ];
 
 /** 지구 전체 1회 렌더 — 호출자가 오프스크린 캔버스에 캐시한다(모달 열림당 1회).

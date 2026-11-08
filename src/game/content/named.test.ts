@@ -24,14 +24,21 @@ describe('named 데이터 계약', () => {
     for (const n of NAMED) {
       expect(n.zones.length).toBeGreaterThan(0);
       for (const z of n.zones) {
-        expect(['pacific', 'seasia', 'indian', 'madagascar']).toContain(z);
+        expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']).toContain(z);
       }
     }
   });
 
   it('결투 체력은 태평양 5에서 구역마다 1씩 늘어난다 — 뒤 구역 네임드일수록 어렵다', () => {
     expect(Object.fromEntries(NAMED.map(n => [n.zones[0], n.hp])))
-      .toEqual({ pacific: 5, seasia: 6, indian: 7, madagascar: 8 });
+      .toEqual({ pacific: 5, seasia: 6, indian: 7, madagascar: 8, southatlantic: 9 });
+  });
+
+  it('네임드는 5마리이고 아다마스토르는 용승대에서만 나온다', () => {
+    expect(NAMED).toHaveLength(5);
+    const a = namedById('adamastor')!;
+    expect(a.zones).toEqual(['southatlantic']);
+    expect(a.spot).toBe('benguela');
   });
 
   it('출현 수역(spot)이 있으면 그 수역은 출현 해역 안에 있다', () => {

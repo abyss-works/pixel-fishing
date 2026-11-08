@@ -15,7 +15,7 @@ export const REGION_ORDER = ['village', 'ocean', 'seasia', 'indian', 'world'] as
 
 /** 거점 → 소속 지역(state.location.kind==='base'일 때의 표기용) */
 export const BASE_TO_REGION: Record<string, string> = {
-  home: 'village', harbor: 'world', manila: 'world', colombo: 'world', toamasina: 'world',
+  home: 'village', harbor: 'world', manila: 'world', colombo: 'world', toamasina: 'world', walvisbay: 'world',
 };
 
 /** LocationRef(kind:id) → 지역 id. 미지 값은 undefined — 호출부에서 '—' 처리 */

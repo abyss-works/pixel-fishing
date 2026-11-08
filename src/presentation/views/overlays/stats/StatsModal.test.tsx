@@ -36,7 +36,7 @@ describe('StatsModal(스탯창)', () => {
   });
 
   it('낚싯대 탭에서 해역 행을 고르면 그 해역 기준의 수치를 보인다', () => {
-    show(game({ boat: 7, rod: 7 }));
+    show(game({ boat: 8, rod: 7 }));
     fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
     const table = screen.getByRole('table', { name: '해역' });
     const [first, second] = within(table).getAllByRole('row').slice(1);

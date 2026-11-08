@@ -14,8 +14,9 @@ import type { RegionId } from './places.js';
 import { boatGateText } from './boats.js';
 
 export type ZoneId =
-  | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar'                   // 최상위 존
-  | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian' | 'comorodeep'; // 하위 존 (id = 스팟 id)
+  | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic'  // 최상위 존
+  | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian' | 'comorodeep' // 하위 존 (id = 스팟 id)
+  | 'benguela' | 'sthelena';
 
 /** 씬 지역 — 최상위 존만 명시한다. 하위 존은 부모 체인으로 파생(zoneGroup). */
 type TopGroup = Extract<RegionId, 'village' | 'world'>;
@@ -182,6 +183,7 @@ const DATA: Zone[] = [
       '해협과 코모로 심해 모두 열려 있어요. 코모로 심해는 요구 파워가 더 높아서 더 강한 낚싯대가 있어야 제대로 낚을 수 있어요.',
       '투아마시나항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
       '섬 동쪽 물길을 따라 돌아가면 인도양이에요.',
+      `희망봉 서쪽 바다(남대서양)는 ${boatGateText(8)}이 있어야 건널 수 있어요.`,
     ],
     controls: [
       '항해: 방향키 또는 WASD',
@@ -202,9 +204,53 @@ const DATA: Zone[] = [
     lore: '섬들 사이로 바닥이 갑자기 꺼진다. 이 아래의 물은 아주 오래전부터 바뀐 적이 없다고 한다. 여기서 그물에 걸려 올라오는 것들은 하나같이 지금 바다의 물고기와 생김새가 다르다. 어부들은 함께 딸려 올라온 깨진 골판을 포구에 걸어 두고, 그 주인이 무엇인지는 묻지 않는다.',
     spots: ['comorodeep'],
   },
+  {
+    id: 'southatlantic',
+    name: '남대서양',
+    shortName: '남대서양',
+    group: 'world',
+    tagline: '공기가 달라지는 서쪽 바다',
+    lore: '희망봉을 돌아 북서로 오르면 바다 냄새가 달라진다. 아프리카 서안의 차가운 물과 멀리 떨어진 화산섬의 맑은 물이 한 장의 해도에 놓여 있다. 월비스베이항 어부들은 안개 낀 아침이면 말수를 줄이고, 뱃사람들은 이 바다가 이상하게 조용하다고만 말한다. 무슨 일이 있었다는 이야기는 아직 없다.',
+    tips: [
+      '용승대와 세인트헬레나 모두 열려 있어요. 세인트헬레나는 요구 파워가 더 높아서 더 강한 낚싯대가 있어야 제대로 낚을 수 있어요.',
+      '월비스베이항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
+      '희망봉을 돌아 동쪽으로 가면 마다가스카르예요.',
+    ],
+    controls: [
+      '항해: 방향키 또는 WASD',
+      '낚시: 어군 위에서 스페이스(또는 화면 누르기)',
+    ],
+    // 최상위 스팟 없음 — 열린 바다는 통행 전용이다.
+    spots: [],
+    entryBoat: 8,
+    get gateMsg(): string {
+      return `${boatGateText(8)}이 있어야 남대서양에 들어설 수 있어요.`;
+    },
+  },
+  {
+    id: 'benguela',
+    parent: 'southatlantic',
+    name: '남대서양 용승대',
+    shortName: '용승대',
+    tagline: '차가운 물이 솟는 안개의 해안',
+    lore: '벵겔라 해류가 바닥의 차가운 물을 끌어올려 아프리카 서안의 바다는 한여름에도 서늘하다. 안개가 낀 날이면 남방긴수염고래가 해안 가까이 모여든다. 뭍에는 신이 분노해 만든 땅이라 불리는 해안이 있고, 포르투갈 선원들은 그곳을 지옥의 문이라 불렀다. 월비스베이항 어부들은 그 해안의 난파선 쪽으로 배를 대지 않는다.',
+    spots: ['benguela'],
+  },
+  {
+    id: 'sthelena',
+    parent: 'southatlantic',
+    name: '세인트헬레나',
+    shortName: '세인트헬레나',
+    tagline: '바다 한가운데 떨어진 화산섬',
+    lore: '대서양 중앙 해령에서 동쪽으로 한참 떨어진 화산섬이다. 한때 유배지였던 섬에는 사람이 심은 숲이 남아 있고, 둘레의 암초는 따뜻하고 맑다. 가까운 뭍이 멀어서 이 물의 물고기들은 오랫동안 다른 바다와 섞이지 않았다. 어부들은 섬이 보이기 전에 물빛이 먼저 달라지는 것을 안다.',
+    spots: ['sthelena'],
+  },
 ];
 
 export const ZONES: readonly Zone[] = DATA;
+
+/** 아직 열지 않은 바다에 들어서려 할 때의 안내문 — 구역 게이트 안내와 같은 토스트로 나간다 */
+export const CLOSED_SEA_MSG = '아직 열리지 않은 바다라 들어설 수 없어요.';
 
 /** 최상위 존 순서의 단일 출처 — 도감 서브탭·Tab 순환(등록 순서 = 마을→태평양→동남아→인도양).
  *  하위 존은 순환 대상이 아니다 — 로어는 셀 구역(하위 존)으로 자연 승격된다. */

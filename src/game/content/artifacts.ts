@@ -49,6 +49,10 @@ export const ARTIFACTS: readonly Artifact[] = [
     materialId: 'mat-elder-scale', materialName: '깨진 골판',
     lore: '코모로 심해 바닥에서 떨어져 나온 골판 조각이다. 오래된 것이 아직 살아 있는 바다의 것이라, 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
     effects: { mutationWeight: { variant: 1, normal: 2 } } },
+  { id: 'mami-wata-mirror', name: '마미 와타의 거울', zone: 'southatlantic', grade: 'rare',
+    materialId: 'mat-clouded-mirror', materialName: '흐려진 손거울',
+    lore: '월비스베이항 부두 끝 말뚝에 걸어 두던 손거울이다. 어부들은 물의 여인 마미 와타의 이름을 따 이 거울을 그렇게 불렀고, 거울이 흐려 보이는 쪽의 물을 피해 뱃길을 곧게 잡으면 돌아오는 시간이 짧아졌다고 한다.',
+    effects: { sail: 0.14 } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

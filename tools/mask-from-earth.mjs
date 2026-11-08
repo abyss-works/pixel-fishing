@@ -7,7 +7,7 @@
 //
 // 설정 스키마:
 //   id            산출 식별자(헤더/로그용)
-//   extends       (선택) 부모 설정 — zones·openZones를 물려받는다
+//   extends       (선택) 부모 설정 — zones·openZones·islands를 물려받는다
 //                 (부모 먼저 → 자식이 나중 = 자식 스탬프 우선). anchors는 상속하지 않는다 —
 //                 지형 검증은 각 설정의 해상도에서 성립하는 값이라 재사용하면 오탐난다.
 //   geo           벤더 링 배열 JSON 입력
@@ -22,6 +22,8 @@
 //                 게임 픽셀 좌표의 원점(서북 모서리)과 해상도를 창과 무관하게 고정한다. 창의 서북 모서리는
 //                 원점에서 정수 칸 떨어져야 하고, 창의 해상도는 cellsPerDeg와 같아야 한다 — 아니면 생성 중단.
 //                 없으면 창의 서북 모서리가 원점이다(오프셋 0).
+//   islands[]     { name, lon, lat }  벤더 데이터에 칸 단위로 잡히지 않는 작은 섬 — 경위도가 속한 칸 하나를 육지로 찍는다
+//                 (섬은 칸 한 개가 최소 단위다). 특화 수역 스탬프 전에 찍으므로 수역 타원이 섬을 둘러싼다.
 //   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water' }
 //                 경위도 → 원점 기준 게임 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
@@ -44,12 +46,12 @@ const cfg = src.startsWith('{') ? JSON.parse(src) : readJson(src);
 if (cfg.extends) {
   if (src.startsWith('{')) { console.error('[inline] extends는 파일 설정에서만 지원한다'); process.exit(2); }
   const base = readJson(cfg.extends);
-  for (const key of ['zones', 'openZones']) {
+  for (const key of ['zones', 'openZones', 'islands']) {
     cfg[key] = [...(base[key] ?? []), ...(cfg[key] ?? [])];
   }
 }
 
-const { id = '(inline)', geo, zones = [], openZones = [], anchors = {} } = cfg;
+const { id = '(inline)', geo, zones = [], openZones = [], islands = [], anchors = {} } = cfg;
 const cellW = cfg.cell?.w ?? 8;
 const cellH = cfg.cell?.h ?? 11;
 const cols = cfg.grid?.cols;
@@ -149,6 +151,19 @@ for (const ring of rings) {
   }
 }
 
+// --- 1.5. 작은 섬 스탬프 (칸 하나) ---
+const islandCells = [];
+for (const isl of islands) {
+  if (typeof isl.lon !== 'number' || typeof isl.lat !== 'number') {
+    console.error(`[${id}] 잘못된 island: ${JSON.stringify(isl)}`);
+    process.exit(2);
+  }
+  const c = Math.floor(colOf(isl.lon)), r = Math.floor(rowOf(isl.lat));
+  if (c < 0 || r < 0 || c >= cols || r >= rows) { warns.push(`island '${isl.name ?? ''}' 가 격자 밖이다`); continue; }
+  if (ch[r][c] !== LAND) { ch[r][c] = LAND; landCells++; }
+  islandCells.push({ name: isl.name ?? '', c, r });
+}
+
 // --- 2. 특화 수역 스탬프 (육지 우선, 나중 항목 우선) ---
 for (const z of zones) {
   if (!z.ch || z.ch === LAND || typeof z.lon !== 'number' || typeof z.lat !== 'number' ||
@@ -229,6 +244,9 @@ const ratio = (pxPerDegLat / pxPerDegLon) / idealRatio;
 
 console.error(`[${id}] 격자 ${cols}x${rows}셀(${W}x${H}px) · 창 lon ${win.lonMin}..${win.lonMax} lat ${win.latMin}..${win.latMax} · 육지 ${landCells}칸`);
 console.error(`[${id}] 종횡비 px/°경=${pxPerDegLon.toFixed(1)} px/°위=${pxPerDegLat.toFixed(1)} · 위도 ${midLat}° 기준 이상비 대비 ${(ratio * 100).toFixed(0)}%${Math.abs(ratio - 1) > 0.12 ? '  ⚠ 12% 초과 권장 이탈' : ''}`);
+for (const i of islandCells) {
+  console.error(`[${id}] 섬 ${i.name} = 격자 (열 ${i.c}, 행 ${i.r}), 게임 좌표 (${(i.c + offCol) * cellW},${(i.r + offRow) * cellH})`);
+}
 for (const [name, p] of Object.entries(projected)) {
   console.error(`[${id}] 앵커 ${name} = (${p.x},${p.y})${anchors[name].terrain ? `[${anchors[name].terrain}]` : ''}`);
 }

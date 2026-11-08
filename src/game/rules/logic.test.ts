@@ -20,6 +20,7 @@ import {
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
+import { idleDialsOf } from './power';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -41,8 +42,18 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(MAX_BOAT).toBe(8);
+  });
+
+  it('남대서양: 해역마다 낮 6종(일반 3·희귀·영웅·전설), 전체 어종 102종(낮 78·밤 24)', () => {
+    expect(FISH).toHaveLength(102);
+    expect(FISH.filter(f => !f.night)).toHaveLength(78);
+    for (const spot of ['benguela', 'sthelena']) {
+      const day = FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
+      expect(day, spot).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
+    }
   });
 
   it('R12: 등급 명성', () => {
@@ -62,10 +73,10 @@ describe('R11: 추첨', () => {
 });
 
 describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
-  it('밤 어종 20종 (night 플래그)', () => {
+  it('밤 어종 24종 (night 플래그)', () => {
     const nights = FISH.filter(f => f.night);
-    expect(nights.length).toBe(20);
-    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설
+    expect(nights.length).toBe(24);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설
     const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
     expect(bySpot('sea')).toEqual(['legendary']);
     expect(bySpot('deep')).toEqual(['legendary']);
@@ -76,6 +87,8 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
     expect(bySpot('southindian')).toEqual(['epic', 'legendary', 'rare']);
     expect(bySpot('mozstrait')).toEqual(['epic', 'legendary', 'rare']);
     expect(bySpot('comorodeep')).toEqual(['epic', 'legendary', 'rare']);
+    expect(bySpot('benguela')).toEqual(['legendary', 'rare']);
+    expect(bySpot('sthelena')).toEqual(['epic', 'legendary']);
   });
 
   it('낮 풀 = night 어종 제외 — 밤 추가가 낮 분포를 안 흔든다', () => {
@@ -156,7 +169,7 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
     // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(392.6, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(349.0, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
@@ -260,7 +273,10 @@ describe('R15: 강화/구매 비용', () => {
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
-    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000]);
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
+  });
+  it('대양 트롤선(8단계): 가격 320,000 · 명성 200,000 · 속도 190 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 190, bagCap: 4000 });
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
@@ -741,7 +757,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   });
 
   it('모든 거점 위치는 보존된다 — 콜롬보 상점의 구매처 검증에 필요', () => {
-    for (const id of ['home', 'harbor', 'manila', 'colombo'] as const) {
+    for (const id of ['home', 'harbor', 'manila', 'colombo', 'toamasina', 'walvisbay'] as const) {
       expect(mig({ v: 8, location: { kind: 'base', id } }).location)
         .toEqual({ kind: 'base', id });
     }
@@ -979,31 +995,63 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 시뮬 JSON의 simEV를 그대로 앵커로 고정한다 — 등급 예산 ×2 + 만새기/꽁치 weight 2 +
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
-  // 등급 가중치 만분율 전환(인도양 일반 8150·희귀 1400·영웅 400·전설 50 등) 반영 — 인도양 430.7 / 남인도양 550.5.
+  // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
+  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7.
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
     idleEntry: { commonMult: 5 },
   } as const;
 
-  it('인도양 — normal 430.7 / perfect 707.4 / 방치 진입 ×5 122.9', () => {
-    expect(goldEV('indian', dials.normal)).toBeCloseTo(430.73, 1);
-    expect(goldEV('indian', dials.perfect)).toBeCloseTo(707.36, 1);
-    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(122.92, 1);
+  it('인도양 — normal 491.1 / perfect 762.8 / 방치 진입 ×5 145.3', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(491.09, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(762.77, 1);
+    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
   });
 
-  it('남인도양 — normal 550.5 / perfect 872.8 / 방치 진입 ×5 158.2', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(550.45, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(872.83, 1);
-    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(158.19, 1);
+  it('남인도양 — normal 694.7 / perfect 1085.1 / 방치 진입 ×5 197.9', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(694.7, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(1085.08, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(197.85, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
     const rows = drawRows('indian', {}).filter(r => r.fish.rarity === 'common');
     const share = Object.fromEntries(rows.map(r => [r.fish.id, r.fishPct]));
-    // 일반 가중치 8150 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(4075/10000 = 40.75%)
-    expect(share.horsejack).toBeCloseTo(40.75, 3);
-    expect(share.ribbonfish).toBeCloseTo(20.375, 3);
+    // 일반 가중치 7400 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(3700/10000 = 37.00%)
+    expect(share.horsejack).toBeCloseTo(37, 3);
+    expect(share.ribbonfish).toBeCloseTo(18.5, 3);
+  });
+});
+
+describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)', () => {
+  const idle = (spot: Parameters<typeof goldEV>[0]) => {
+    const d = idleDialsOf(spot);
+    return [d.entry, d.plateau].map(m => goldEV(spot, { commonMult: m }));
+  };
+
+  it('해역 순서대로 줄어드는 곳이 없다', () => {
+    for (let i = 1; i < SPOTS.length; i++) {
+      const [aEntry, aPlateau] = idle(SPOTS[i - 1].id);
+      const [bEntry, bPlateau] = idle(SPOTS[i].id);
+      expect(bEntry, `${SPOTS[i].id} 진입`).toBeGreaterThan(aEntry);
+      expect(bPlateau, `${SPOTS[i].id} 플래토`).toBeGreaterThan(aPlateau);
+    }
+  });
+
+  it('남대서양 첫 해역은 코모로 심해 대비 약 80%(±6%p), 세인트헬레나는 용승대 대비 약 30%(±5%p) 오른다', () => {
+    const [cEntry, cPlateau] = idle('comorodeep');
+    const [bEntry, bPlateau] = idle('benguela');
+    const [hEntry, hPlateau] = idle('sthelena');
+    for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
+      // 방치 플래토(×3)에서 용승대가 +85.2%라 허용 폭을 6%p로 둔다
+      expect(r).toBeGreaterThanOrEqual(1.74);
+      expect(r).toBeLessThanOrEqual(1.86);
+    }
+    for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
+      expect(r).toBeGreaterThanOrEqual(1.25);
+      expect(r).toBeLessThanOrEqual(1.35);
+    }
   });
 });
 
@@ -1026,7 +1074,9 @@ describe('가중치 추첨', () => {
 
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(50 / 10000, 10);
+    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(60 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(20 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });

@@ -120,3 +120,38 @@ describe('GameFieldEngine 위치 재설정', () => {
     engine.dispose();
   });
 });
+
+describe('GameFieldEngine 막힘 안내', () => {
+  const ORIGIN_LAT = 85.0344827586207;
+  const at = (lon: number, lat: number) => ({ x: (lon + 180) * 32, y: (ORIGIN_LAT - lat) * 31.9 });
+  const blocked = (events: FieldEvent[]) => events.filter(e => e.type === 'zone-blocked');
+
+  /** 키를 누른 채 프레임을 여러 번 돌린다 */
+  function push(code: string, lon: number, lat: number, frames: number) {
+    const s = setup();
+    s.engine.placePlayer(at(lon, lat));
+    s.frame(1000, 950);
+    s.engine.handleKeyDown(code, noop);
+    for (let i = 0; i < frames; i++) s.frame(1050 + i * 50, 1000 + i * 50);
+    return s;
+  }
+
+  it('배 단계가 모자라 구역 게이트에 막혀도 키를 누르고 있는 동안 안내는 한 번이다', () => {
+    const { events } = push('ArrowDown', 130, 19.25, 20); // 19N 아래는 동남아(배 3단계)
+    expect(blocked(events)).toHaveLength(1);
+  });
+
+  it('열지 않은 바다에 닿은 채 키를 눌러도 안내는 한 번이다', () => {
+    const { events } = push('ArrowUp', -8, -0.4, 20);
+    expect(blocked(events)).toHaveLength(1);
+  });
+
+  it('경계에서 떨어졌다 다시 닿으면 안내를 다시 한다', () => {
+    const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
+    engine.releaseKey('ArrowUp');
+    frame(3000, 2950); // 입력이 없는 프레임
+    engine.handleKeyDown('ArrowUp', noop);
+    for (let i = 0; i < 10; i++) frame(3050 + i * 50, 3000 + i * 50);
+    expect(blocked(events)).toHaveLength(2);
+  });
+});

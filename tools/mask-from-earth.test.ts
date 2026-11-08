@@ -131,3 +131,30 @@ describe('마스크 생성기 전지구 원점', () => {
     expect(p.anchors.isle.x).toBe(Math.round((121 - 35) * 32));
   });
 });
+
+describe('islands — 작은 섬 한 칸', () => {
+  const win = { lonMin: 55, lonMax: 75, latMin: 24, latMax: 44 };
+  const run = (islands: object[], zones: object[] = []) => {
+    const cfg = { id: 'isl', geo: geoPath, cell: { w: 8, h: 11 }, grid: { cols: 80, rows: 58 }, window: win,
+      globalGrid: GLOBAL, islands, zones };
+    const out = join(tmp, 'isl.ts');
+    const r = spawnSync(process.execPath, ['tools/mask-from-earth.mjs', JSON.stringify(cfg), '--out', out],
+      { encoding: 'utf8' });
+    return { status: r.status, rows: parse(out).rows };
+  };
+  const rowAt = (rows: string[], lat: number) => rows[Math.floor((44 - lat) * 2.9)];
+  const colAt = (lon: number) => Math.floor((lon - 55) * 4);
+
+  it('경위도가 속한 칸 하나만 육지로 찍는다', () => {
+    const r = run([{ name: '섬', lon: 60.1, lat: 40.2 }]);
+    expect(r.status).toBe(0);
+    expect(rowAt(r.rows, 40.2)[colAt(60.1)]).toBe('L');
+    expect(r.rows.join('').split('L').length - 1).toBe(1);
+  });
+
+  it('수역 타원이 섬을 덮지 않고 둘러싼다', () => {
+    const r = run([{ name: '섬', lon: 60.1, lat: 40.2 }], [{ ch: 'h', name: '해역', lon: 60.1, lat: 40.2, rx: 1, ry: 1 }]);
+    expect(rowAt(r.rows, 40.2)[colAt(60.1)]).toBe('L');
+    expect(rowAt(r.rows, 40.2)[colAt(60.1) + 1]).toBe('h');
+  });
+});

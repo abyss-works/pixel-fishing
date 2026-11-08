@@ -16,15 +16,17 @@ import { HARBOR_BASE } from './bases/harbor';
 import { MANILA_BASE } from './bases/manila';
 import { COLOMBO_BASE } from './bases/colombo';
 import { TOAMASINA_BASE } from './bases/toamasina';
+import { WALVISBAY_BASE } from './bases/walvisbay';
 
 export * from './types';
 export {
-  ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
+  ZoneTracker, canMove, zoneOf, inClosedSea, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange, inRect, entryPoint,
 } from './engine';
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
 export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_BOUNDS,
-  HARBOR_DOCK, MANILA_DOCK, COLOMBO_DOCK, MANILA_SPAWN, COLOMBO_SPAWN } from './regions/world';
+  HARBOR_DOCK, MANILA_DOCK, COLOMBO_DOCK, TOAMASINA_DOCK, WALVISBAY_DOCK,
+  MANILA_SPAWN, COLOMBO_SPAWN, TOAMASINA_SPAWN, WALVISBAY_SPAWN } from './regions/world';
 export { schoolsOf, generateWorldSchools, SCHOOL_MIN_GAP } from './schools';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
@@ -45,6 +47,7 @@ export const BASE_PACKS: Record<BaseId, BasePack> = {
   manila: MANILA_BASE,
   colombo: COLOMBO_BASE,
   toamasina: TOAMASINA_BASE,
+  walvisbay: WALVISBAY_BASE,
 };
 
 // 기존 경로 호환 (app.test 등)
@@ -53,6 +56,7 @@ export const HARBOR_FURNITURE = HARBOR_BASE.furniture;
 export const MANILA_FURNITURE = MANILA_BASE.furniture;
 export const COLOMBO_FURNITURE = COLOMBO_BASE.furniture;
 export const TOAMASINA_FURNITURE = TOAMASINA_BASE.furniture;
+export const WALVISBAY_FURNITURE = WALVISBAY_BASE.furniture;
 
 /** 승선 — 거점에서 필드로 나갈 때 나타나는 지역·자리·안내. 승선 시설과 여객선 빠른 이동이 같은 자리를 쓴다 */
 export function boardingOf(base: BaseId): { region: RegionId; at: Point | undefined; msg: string } {

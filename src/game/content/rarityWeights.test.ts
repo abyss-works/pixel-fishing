@@ -21,11 +21,26 @@ describe('등급 가중치 프리셋', () => {
   it('덮어쓰기 해역은 명시한 값을 쓴다', () => {
     expect(rarityWeightsOf('coron')).toEqual({ common: 7000, rare: 2000, epic: 900, legendary: 100 });
     expect(rarityWeightsOf('barrierreef')).toEqual({ common: 7400, rare: 2300, epic: 0, legendary: 300 });
-    expect(rarityWeightsOf('indian')).toEqual({ common: 8150, rare: 1400, epic: 400, legendary: 50 });
-    expect(rarityWeightsOf('southindian')).toEqual({ common: 7650, rare: 1500, epic: 800, legendary: 50 });
-    expect(rarityWeightsOf('mozstrait')).toEqual({ common: 7670, rare: 1500, epic: 800, legendary: 30 });
-    expect(rarityWeightsOf('comorodeep')).toEqual({ common: 7670, rare: 1500, epic: 800, legendary: 30 });
     expect(rarityWeightOf('coron', 'common')).toBe(7000);
+  });
+
+  it('덮어쓰기가 남는 해역은 코론 침선 지대와 그레이트 배리어 리프뿐이다', () => {
+    expect(SPOTS.filter(s => s.rarityWeight).map(s => s.id)).toEqual(['coron', 'barrierreef']);
+  });
+
+  it('인도양 지역은 안정화, 마다가스카르 지역은 한 단계 이전, 남대서양은 최신 프리셋을 쓴다', () => {
+    const stable = { common: 7400, rare: 2000, epic: 500, legendary: 100 };
+    const previous = { common: 7540, rare: 2000, epic: 400, legendary: 60 };
+    expect(rarityWeightsOf('indian')).toEqual(stable);
+    expect(rarityWeightsOf('southindian')).toEqual(stable);
+    expect(rarityWeightsOf('mozstrait')).toEqual(previous);
+    expect(rarityWeightsOf('comorodeep')).toEqual(previous);
+  });
+
+  it('남대서양 두 해역은 덮어쓰기 없이 최신 지역 프리셋을 쓴다', () => {
+    const latest = { common: 7680, rare: 2000, epic: 300, legendary: 20 };
+    expect(rarityWeightsOf('benguela')).toEqual(latest);
+    expect(rarityWeightsOf('sthelena')).toEqual(latest);
   });
 
   it('전역 기본 확률은 안정화 프리셋이다', () => {
@@ -55,7 +70,7 @@ describe('등급 가중치 프리셋', () => {
   });
 
   it('지역 순서는 지역 정의 순서다', () => {
-    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar']);
+    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     expect(topZoneOfSpot('pond')).toBe('village');
   });
 });

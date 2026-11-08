@@ -12,7 +12,7 @@ describe('artifacts 데이터 계약', () => {
     const zones = ARTIFACTS.map(a => a.zone);
     expect(new Set(zones).size).toBe(zones.length);
     for (const a of ARTIFACTS) {
-      expect(['pacific', 'seasia', 'indian', 'madagascar']).toContain(a.zone);
+      expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']).toContain(a.zone);
     }
   });
 
@@ -21,6 +21,14 @@ describe('artifacts 데이터 계약', () => {
       const decisive = a.effects.mutationWeight !== undefined || a.effects.duelSpeedupCut !== undefined;
       expect(a.grade).toBe(decisive ? 'epic' : 'rare');
     }
+  });
+
+  it('유물은 5개이고 남대서양 유물은 항해 속도 +14%의 희귀 유물이다', () => {
+    expect(ARTIFACTS).toHaveLength(5);
+    const a = artifactOfZone('southatlantic')!;
+    expect(a).toMatchObject({
+      name: '마미 와타의 거울', grade: 'rare', materialName: '흐려진 손거울', effects: { sail: 0.14 },
+    });
   });
 
   it('네임드 의뢰가 있는 해역마다 유물이 있다', () => {
