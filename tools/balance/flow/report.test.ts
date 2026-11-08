@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
 import { HELP, parseArgs, renderText, runFlow } from './report';
 import type { FlowOptions } from './report';
+
+const dirs: string[] = [];
+afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+const makeDir = () => { const d = mkdtempSync(join(tmpdir(), 'flow-report-')); dirs.push(d); return d; };
 
 const base = (over: Partial<FlowOptions> = {}): FlowOptions => ({ ...parseArgs([]), ...over });
 
@@ -86,7 +90,7 @@ describe('실행과 출력', () => {
   });
 
   it('덮어쓴 해역 요구 파워가 표 라벨에도 덮어쓴 값으로 나온다', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flow-report-'));
+    const dir = makeDir();
     const file = join(dir, 'o.json');
     writeFileSync(file, JSON.stringify({ spots: { sthelena: { powerReq: 165 } } }), 'utf-8');
     const text = renderText(runFlow(base({ commands: ['transition', 'exception'], override: file })));
@@ -136,7 +140,7 @@ describe('실행과 출력', () => {
   });
 
   it('ev 출력은 덮어쓴 해역 요구 파워를 반영한다', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flow-report-'));
+    const dir = makeDir();
     const file = join(dir, 'o.json');
     writeFileSync(file, JSON.stringify({ spots: { sthelena: { powerReq: 165 } } }), 'utf-8');
     const a = renderText(runFlow(base({ commands: ['ev'] })));
@@ -146,10 +150,20 @@ describe('실행과 출력', () => {
     expect(a).toMatch(/세인트헬레나 \| 27 \|/);
   });
 
-  it('days 가정은 지나온 해역 도감을 채우지 않아 낮은 유형에 라이선스가 생기지 않는다는 점을 밝힌다', () => {
+  it('days 가정은 도감을 채우지 않아 유형마다 못 쓰는 라이선스가 있다는 점을 실제 결과에서 만들어 밝힌다', () => {
     const text = renderText(runFlow(base({ commands: ['days'] })));
     expect(text).toContain('지나온 해역으로 돌아가 도감을 채우지 않는다');
-    expect(text).toContain('4시간 이하 유형은 남대서양과 마다가스카르 라이선스가 생기지 않는다');
+    expect(text).not.toContain('4시간 이하 유형은');
+    const d = runFlow(base({ commands: ['days'] })).days!;
+    const level = Math.min(...d.levelUp.map(r => r.level));
+    const rows = d.levelUp.filter(r => r.bounty && r.level === level);
+    const all = new Set(rows.flatMap(r => r.licenses));
+    for (const r of rows) {
+      const miss = [...all].filter(l => !r.licenses.includes(l));
+      const line = `${r.type.label}: ${miss.join(', ')}`;
+      if (miss.length) expect(text).toContain(line);
+    }
+    expect(rows.some(r => [...all].some(l => !r.licenses.includes(l)))).toBe(true);
   });
 
   it('가방 가정 문구는 16시간의 깨어 있는 시간과 짧은 유형까지 아우른다', () => {
@@ -171,7 +185,7 @@ describe('실행과 출력', () => {
   });
 
   it('덮어쓰기는 실행 중에만 적용되고 끝나면 원래 값으로 돌아온다', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flow-report-'));
+    const dir = makeDir();
     const file = join(dir, 'o.json');
     writeFileSync(file, JSON.stringify({ boats: { [String(BOATS[0].tier)]: { price: 5000 } } }), 'utf-8');
     const o = base({ commands: ['transition'] });

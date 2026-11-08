@@ -76,16 +76,21 @@ describe('마지막 해역 레벨업 일수', () => {
     expect(sleepHours).toBeLessThan(8);
   });
 
-  it('의뢰와 토벌을 수행하면 일수가 줄거나 같고 보상 비중이 있다', () => {
+  it('의뢰와 토벌을 수행하면 일수가 줄고 보상 비중이 있다. 단 짧은 유형의 +4 레벨은 의뢰 보상이 강화비를 줄이지 못해 같다', () => {
+    const same = (t: string, l: number) => ['h2', 'h1'].includes(t) && l === l4;
     for (const t of ['h16', 'h8', 'h4-75', 'h2', 'h1']) {
       for (const l of [l0, l4]) {
-        expect(pick(t, true, l).days!, `${t} ${l}`).toBeLessThanOrEqual(pick(t, false, l).days!);
-        expect(pick(t, true, l).bountyShare!, `${t} ${l}`).toBeGreaterThanOrEqual(0);
-        expect(pick(t, true, l).bountyShare!).toBeLessThan(1);
+        const on = pick(t, true, l), off = pick(t, false, l);
+        if (same(t, l)) {
+          expect(on.days!, `${t} ${l}`).toBe(off.days!);
+          expect(on.bountyShare!, `${t} ${l}`).toBe(0);
+        } else {
+          expect(on.days!, `${t} ${l}`).toBeLessThan(off.days!);
+          expect(on.bountyShare!, `${t} ${l}`).toBeGreaterThan(0);
+        }
+        expect(on.bountyShare!).toBeLessThan(1);
       }
     }
-    expect(pick('h4-75', true, l0).bountyShare!).toBeGreaterThan(0);
-    expect(pick('h4-75', true, l0).days!).toBeLessThan(pick('h4-75', false, l0).days!);
   });
 
   it('레벨업은 그 시점에 시뮬레이션에서 실제로 가진 라이선스로 계산한다', () => {

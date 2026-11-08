@@ -166,7 +166,15 @@ const LOSS_ASSUMPTION = (o: FlowResult['options']) =>
 const SLEEP_ASSUMPTION = '16시간 유형은 잠든 동안 방치로 낚는다. 가방이 차면 골드만 멈추고 명성과 도감은 잠든 시간 내내 쌓인다';
 const BASIC_ASSUMPTION = '판매는 즉시이고 이동, 판매 왕복, 미끼, 유물, 쿠폰은 넣지 않는다. 방치 사이클은 모델 사이클이다';
 
-function assumptionText(command: Command, o: FlowResult['options']): string {
+/** 마지막 해역 진입 레벨에서 유형별로 못 쓰는 라이선스(다른 유형이 가진 것 중) */
+function missingLicenseText(d: NonNullable<FlowResult['days']>): string {
+  const rows = d.levelUp.filter(r => r.bounty && r.level === Math.min(...d.levelUp.map(x => x.level)));
+  const all = new Set(rows.flatMap(r => r.licenses));
+  const parts = rows.map(r => [r.type.label, [...all].filter(l => !r.licenses.includes(l))] as const).filter(([, miss]) => miss.length > 0);
+  return parts.length ? `. 그래서 마지막 해역 진입 레벨에서 못 쓰는 라이선스가 유형마다 있다(${parts.map(([label, miss]) => `${label}: ${miss.join(', ')}`).join(' / ')})` : '';
+}
+
+function assumptionText(command: Command, o: FlowResult['options'], days?: FlowResult['days']): string {
   const lines: string[] = [BASIC_ASSUMPTION];
   if (command === 'transition') {
     lines.push(LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION, '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', '도착 일차는 의뢰와 토벌을 하지 않는 경우다');
@@ -174,7 +182,7 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
     lines.push(
       LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION,
       '의뢰 라이선스는 그 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
-      '지나온 해역으로 돌아가 도감을 채우지 않는다. 그래서 4시간 이하 유형은 남대서양과 마다가스카르 라이선스가 생기지 않는다',
+      `지나온 해역으로 돌아가 도감을 채우지 않는다${days ? missingLicenseText(days) : ''}`,
       '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보 중 끝낼 수 있는 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
       '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
       '레벨업은 낚싯대가 그 레벨에 처음 닿은 시점에 시뮬레이션이 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다',
@@ -353,7 +361,7 @@ export function renderText(r: FlowResult): string {
     o.override ? `덮어쓰기: ${JSON.stringify(o.override)}` : '덮어쓰기: 없음',
   ];
   if (r.transition) lines.push(...transitionText(r.transition, o), assumptionText('transition', o));
-  if (r.days) lines.push(...daysText(r.days), assumptionText('days', o));
+  if (r.days) lines.push(...daysText(r.days), assumptionText('days', o, r.days));
   if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
   if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
   if (r.ev) lines.push(...evText(r.ev, o), assumptionText('ev', o));

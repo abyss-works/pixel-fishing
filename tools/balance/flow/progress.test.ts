@@ -79,18 +79,18 @@ describe('기본 상수 회귀', () => {
   const days = (id: string, bounty = false) =>
     simulate({ type: type(id), axis: 'idle', bounty, maxDays: 365 }).arrivals.map(a => a.day);
 
-  it('연속 방치로 마지막 해역까지 약 62시간 걸린다', () => {
+  it('스냅샷: 연속 방치로 마지막 해역까지 약 62시간 걸린다', () => {
     const hours = last(simulate({ type: ALWAYS_ON, axis: 'idle', bounty: false, maxDays: 365 }).arrivals).hours;
     expect(hours).toBeGreaterThan(61);
     expect(hours).toBeLessThan(64);
   });
 
-  it('의뢰 없이 4시간(75%)과 2시간 유형의 해역별 도착 일차가 고정돼 있다', () => {
+  it('스냅샷: 의뢰 없이 4시간(75%)과 2시간 유형의 해역별 도착 일차(밸런스가 바뀌면 갱신)', () => {
     expect(days('h4-75')).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 3, 5, 8, 16, 21]);
     expect(days('h2')).toEqual([1, 1, 1, 1, 1, 1, 1, 2, 4, 7, 12, 24, 32]);
   });
 
-  it('의뢰를 수행하면 4시간(75%) 유형이 마지막 해역에 15일째 닿는다', () => {
+  it('스냅샷: 의뢰를 수행하면 4시간(75%) 유형이 마지막 해역에 15일째 닿는다', () => {
     expect(last(days('h4-75', true))).toBe(15);
   });
 });

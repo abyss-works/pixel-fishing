@@ -6,7 +6,8 @@
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
-import { capOfBoat, mutationWeightsOf, variantShare } from '../../../src/game/rules/logic';
+import { capOfBoat, mutationWeightsOf, newState, variantShare } from '../../../src/game/rules/logic';
+import { canBuyBoat } from '../../../src/game/rules/rules';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { axisAvailable, rates, rodSpec } from '../model';
@@ -114,6 +115,9 @@ const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
 
 const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 
+/** 배 구매 가능 여부 — 제품 규칙 함수의 판정 */
+const boatBuyable = (boat: number, gold: number, fame: number) => canBuyBoat({ ...newState(), boat, gold, fame }).ok;
+
 export function simulate(opts: SimOptions): SimResult {
   let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
@@ -174,7 +178,7 @@ export function simulate(opts: SimOptions): SimResult {
       while (bought) {
         bought = false;
         const need = next.boatTier > boat ? nextBoat(boat) : undefined;
-        if (need && gold >= need.price && fame >= need.fameReq) { gold -= need.price; boat = need.tier; bought = true; }
+        if (need && boatBuyable(boat, gold, fame)) { gold -= need.price; boat = need.tier; bought = true; }
         if (powerOfLevel(level) < (next.powerReq ?? 0) && gold >= upgradeCost(level)) { gold -= upgradeCost(level); level += 1; bought = true; }
       }
       if (opens(next, boat, level)) {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
@@ -65,5 +65,6 @@ describe('밸런스 덮어쓰기', () => {
     expect(loadOverride(ok)).toEqual({ boats: { '1': { price: 5 } } });
     expect(() => loadOverride(join(dir, 'none.json'))).toThrow(/읽을 수 없습니다/);
     expect(() => loadOverride(bad)).toThrow(/JSON/);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

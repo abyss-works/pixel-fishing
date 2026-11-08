@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BOUNTIES } from '../../../src/game/content/bounties';
 import { SPOTS } from '../../../src/game/content/spots';
 import { entryLevel, rates } from '../model';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
@@ -92,7 +93,7 @@ describe('네임드 토벌 비용', () => {
   it('보상과 조우 시간, 줄어드는 수입을 구역마다 낸다', () => {
     expect(rows.map(r => r.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     const pacific = rows[0];
-    expect(pacific.reward).toBe(150000);
+    expect(pacific.reward).toBe(BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!.reward);
     expect(pacific.hours).toBeGreaterThan(0);
     expect(pacific.loss).toBeGreaterThan(0);
     expect(pacific.lossOverReward).toBeCloseTo(pacific.loss / pacific.reward, 12);
