@@ -6,10 +6,12 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 import { attachLive } from './live.js';
 import type { LiveOptions, LiveServer } from './live.js';
-import { CHAT_RATE_MAX, CHAT_RECENT, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH } from '../../src/game/rules/live.js';
+import { CHAT_RATE_MAX, CHAT_RECENT, LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH } from '../../src/game/rules/live.js';
 import type { ChatLine, ServerMessage } from '../../src/game/rules/live.js';
 
 const ORIGIN = 'https://game.test';
+// 시험 서버가 받아들이는 클라이언트 빌드 식별자
+const BUILD = 'test-build';
 let cleanup: (() => Promise<void>) | null = null;
 
 afterEach(async () => { await cleanup?.(); cleanup = null; });
@@ -42,13 +44,14 @@ interface ChatFake {
 /** 기록된 접속 세션 — 시각은 ISO 문자열이다 */
 interface SessionRecord { uid: string; startedAt: string; endedAt: string }
 
-async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
+async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; urlFor: (build: string | null) => string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
   const server = createServer();
   const chat: ChatFake = { lines: [], restricted: new Set(), blocks: new Map(), guilds: new Map(), guildLines: new Map() };
   let seq = 0;
   const sessions: SessionRecord[] = [];
   const live = attachLive(server, {
     origin: ORIGIN,
+    stale: ({ build }) => build !== BUILD,
     authenticate: async (req) => {
       const cookie = req.headers.cookie;
       if (!cookie) return null;
@@ -76,7 +79,9 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; l
   });
   await listen(server);
   cleanup = async () => { live.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); };
-  return { url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}`, live, chat, sessions };
+  const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}`;
+  const urlFor = (build: string | null) => (build === null ? base : `${base}?build=${build}&version=0.0.0`);
+  return { url: urlFor(BUILD), urlFor, live, chat, sessions };
 }
 
 interface Client { ws: WebSocket; messages: ServerMessage[]; next: () => Promise<ServerMessage>; closed: Promise<number> }
@@ -110,6 +115,32 @@ describe('실시간 채널 서버', () => {
     const { url } = await start();
     expect(await rejected(url, null)).toBe(401);
     expect(await rejected(url, 'u1', 'https://evil.test')).toBe(403);
+  });
+
+  it('클라이언트 빌드가 서버와 다르면 연결을 받지 않고 낡은 빌드 코드로 닫는다', async () => {
+    const { urlFor, live, sessions } = await start();
+    const ok = connect(urlFor(BUILD), 'u1');
+    await ok.next();
+    const old = connect(urlFor('old-build'), 'u2');
+    expect(await old.closed).toBe(LIVE_CLOSE_OUTDATED);
+    // 받지 않았으므로 hello도 접속 목록도 세션 기록도 없고, 다른 연결에는 아무것도 가지 않는다
+    expect(old.messages).toEqual([]);
+    expect(live.online().map(o => o.uid)).toEqual(['u1']);
+    expect(sessions).toEqual([]);
+    expect(ok.messages).toEqual([]);
+  });
+
+  it('빌드 식별자를 보내지 않은 연결도 낡은 빌드로 본다', async () => {
+    const { urlFor } = await start();
+    const old = connect(urlFor(null), 'u1');
+    expect(await old.closed).toBe(LIVE_CLOSE_OUTDATED);
+    expect(old.messages).toEqual([]);
+  });
+
+  it('빌드 검사는 인증보다 먼저다 — 세션이 없는 낡은 빌드도 낡은 빌드 코드로 닫힌다', async () => {
+    const { urlFor } = await start();
+    const old = connect(urlFor('old-build'), null);
+    expect(await old.closed).toBe(LIVE_CLOSE_OUTDATED);
   });
 
   it('연결하면 hello에 자기 id를 받는다', async () => {

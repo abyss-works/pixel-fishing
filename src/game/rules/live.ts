@@ -47,6 +47,8 @@ export const LIVE_MAX_LENGTH = 1024;
 export const LIVE_CLOSE_RESTART = 1012;
 /** 같은 계정의 새 연결이 들어와 이전 연결을 닫는 종료 코드. 닫힌 쪽은 다시 연결하지 않는다 */
 export const LIVE_CLOSE_REPLACED = 4000;
+/** 클라이언트 빌드가 서버와 달라 연결을 받지 않고 닫는 종료 코드. 닫힌 쪽은 다시 연결하지 않고 새로고침을 안내한다 */
+export const LIVE_CLOSE_OUTDATED = 4001;
 
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isBob = (v: unknown): v is Bob =>
