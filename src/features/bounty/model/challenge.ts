@@ -1,8 +1,8 @@
-import { ARTIFACTS } from '../../../game/content/artifacts';
 import { bountyById } from '../../../game/content/bounties';
 import type { BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import type { NamedFish } from '../../../game/content/named';
+import { duelSpeedupScale } from '../../../game/rules/artifactLevel';
 import { duelHpOf } from '../../../game/rules/challenge';
 import { formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
@@ -26,13 +26,6 @@ export interface EncounterData {
   speedupScale: number;
 }
 
-/** 보유 유물이 결투 가속에 거는 배수 — 유물마다 (1 − 감소율)을 곱한다 */
-function relicSpeedupScale(game: GameState): number {
-  const owned = new Set(game.artifacts);
-  return ARTIFACTS.reduce((scale, a) =>
-    owned.has(a.id) ? scale * (1 - (a.effects.duelSpeedupCut ?? 0)) : scale, 1);
-}
-
 /** 추적할 네임드 의뢰의 조우 창 데이터. 네임드 의뢰가 아니면 null. nowIso는 그날의 상처를 가리는 시각이다 */
 export function selectEncounter(game: GameState, questId: string, nowIso: string): EncounterData | null {
   const quest = bountyById(questId);
@@ -46,6 +39,6 @@ export function selectEncounter(game: GameState, questId: string, nowIso: string
     sweepMs: rodAxes(game).sweep.value * 1000,
     hp: duelHpOf(quest.id, game.namedPity, nowIso) ?? named.hp,
     maxHp: named.hp,
-    speedupScale: (named.duelSpeedup ?? 1) * relicSpeedupScale(game),
+    speedupScale: (named.duelSpeedup ?? 1) * duelSpeedupScale(game),
   };
 }

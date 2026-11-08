@@ -1,4 +1,5 @@
 import { artifactOfZone } from '../../../game/content/artifacts';
+import { namedRewardOf } from '../../../game/rules/artifactLevel';
 import { BOUNTY_PORT_ZONE, portOfZone } from '../../../game/content/bounties';
 import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../game/content/bounties';
 import type { RarityId } from '../../../game/content/rarity';
@@ -86,7 +87,7 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
       count: n.count,
       progress,
       done: card.done,
-      reward: n.reward,
+      reward: namedRewardOf(game, n.reward),
       materialName: artifactOfZone(n.zone)?.materialName ?? null,
       traceMins: card.done ? null : ticketMinsOf(snapshot, n.id, nowMs),
       finishAt: finishAtOf(n.zone),
@@ -94,7 +95,7 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
   }
 
   return {
-    ...clearsStatus(snapshot),
+    ...clearsStatus(game, snapshot),
     general,
     named,
     boardPorts: PORTS.map(portName),

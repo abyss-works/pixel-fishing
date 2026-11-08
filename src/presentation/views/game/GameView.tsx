@@ -301,7 +301,7 @@ export default function GameView(props: GameViewProps) {
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge}
                    menu={(
-                     <GameMenu account={props.account} setToast={props.setToast} onQuests={openQuests}
+                     <GameMenu game={game} account={props.account} setToast={props.setToast} onQuests={openQuests}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />
@@ -324,7 +324,7 @@ export default function GameView(props: GameViewProps) {
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
         )}
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
-        {guildOpen && <GuildModal gold={game.gold} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
+        {guildOpen && <GuildModal gold={game.gold} artifacts={game} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />

@@ -14,22 +14,43 @@ export interface ArtifactEffects {
   duelSpeedupCut?: number;
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
-  /** 폼 가중치 — 해역·전역 폼 가중치를 이 값으로 대체한다 (예: 일반 2 : 돌연변이 1) */
+  /** 폼 가중치 — 전역 기본 가중치(돌연변이 1 : 일반 3) 기준 Lv1 값이다. 돌연변이 가중치가 기본보다 올린 몫(여기서는 +25%)이
+   *  레벨 계수로 커진다. 이 유물을 가지면 해역의 폼 가중치 오버라이드는 무시하고, 전역 기본 가중치의 돌연변이 쪽에 그 비율을 곱해 쓴다 */
   mutationWeight?: Record<FormId, number>;
 }
+
+/** 전설 유물의 고정 효과 — 레벨이 없고 보너스와 페널티가 함께 적용된다 */
+export interface ArtifactSystemEffects {
+  /** 네임드 토벌 하루 상한 가산 (예: 1 = +1회) */
+  namedCapBonus: number;
+  /** 네임드 토벌 골드 보상 감소율 — 골드에만 붙고 교환 재료 수는 그대로다 (예: 0.3 = 30% 감소) */
+  namedRewardCut: number;
+}
+
+/** 유물 최고 레벨 — 희귀와 영웅 유물이 Lv1에서 여기까지 오른다 */
+export const ARTIFACT_MAX_LEVEL = 5;
+/** 레벨 계수 — 인덱스 0이 Lv1. Lv1 효과(또는 효과가 더해 주는 몫)에 곱한다 */
+export const ARTIFACT_LEVEL_COEF: readonly number[] = [1, 1.25, 1.5, 1.75, 2];
+/** 그 레벨로 올릴 때 드는 교환 재료 수 (Lv2부터 1, 2, 4, 8) */
+export const artifactLevelCost = (toLevel: number): number => 2 ** (toLevel - 2);
 
 export interface Artifact {
   id: string;
   name: string;
   zone: BountyZone;
-  /** 유물 급 — 희귀가 기본이고, 낚시·결투 결과를 바꾸는 유물은 영웅이다 (일반은 평범해서 제외) */
+  /** 유물 급 — 희귀가 기본이고, 낚시·결투 결과를 바꾸는 유물은 영웅, 시스템을 바꾸는 유물은 전설이다 (일반은 두지 않는다) */
   grade: RarityId;
   /** 교환 재료 — items 축 id/이름. 네임드 토벌 시 1개 지급, 교환 시 1개 소모 */
   materialId: string;
   materialName: string;
   lore: string;
   effects: ArtifactEffects;
+  /** 전설 유물의 고정 효과 — 전설만 둔다 */
+  system?: ArtifactSystemEffects;
 }
+
+/** 레벨이 있는 유물인가 — 희귀와 영웅만 레벨이 있고 전설은 효과가 고정이다 */
+export const artifactHasLevel = (a: Pick<Artifact, 'grade'>): boolean => a.grade !== 'legendary';
 
 export const ARTIFACTS: readonly Artifact[] = [
   // id는 세이브의 소유 목록·재료 스택이 참조하므로 개명 전 값을 유지한다
@@ -48,11 +69,11 @@ export const ARTIFACTS: readonly Artifact[] = [
   { id: 'elder-scale', name: '코모로의 골판', zone: 'madagascar', grade: 'epic',
     materialId: 'mat-elder-scale', materialName: '깨진 골판',
     lore: '코모로 심해 바닥에서 떨어져 나온 골판 조각이다. 오래된 것이 아직 살아 있는 바다의 것이라, 지닌 자의 그물에는 남들과 다른 개체가 더 자주 걸린다.',
-    effects: { mutationWeight: { variant: 1, normal: 2 } } },
-  { id: 'mami-wata-mirror', name: '마미 와타의 거울', zone: 'southatlantic', grade: 'rare',
+    effects: { mutationWeight: { variant: 1.25, normal: 3 } } },
+  { id: 'mami-wata-mirror', name: '마미 와타의 거울', zone: 'southatlantic', grade: 'legendary',
     materialId: 'mat-clouded-mirror', materialName: '흐려진 손거울',
-    lore: '월비스베이항 부두 끝 말뚝에 걸어 두던 손거울이다. 어부들은 물의 여인 마미 와타의 이름을 따 이 거울을 그렇게 불렀고, 거울이 흐려 보이는 쪽의 물을 피해 뱃길을 곧게 잡으면 돌아오는 시간이 짧아졌다고 한다.',
-    effects: { sail: 0.14 } },
+    lore: '이 손거울을 월비스베이항 어부들은 물의 여인 마미 와타의 거울이라 부른다. 거울을 뱃머리에 건 배는 같은 날 거울에 비친 물길을 따라 다시 나간다. 그 배의 선주는 수배판에서 받은 값을 조금 떼어 뱃전 너머로 던진다.',
+    effects: {}, system: { namedCapBonus: 1, namedRewardCut: 0.3 } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

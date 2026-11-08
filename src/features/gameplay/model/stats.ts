@@ -7,6 +7,7 @@ import { baitById } from '../../../game/content/baits';
 import type { Bait } from '../../../game/content/baits';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
+import { artifactEffectsAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
@@ -139,7 +140,8 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 };
 
 export type BonusSource =
-  | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects }
+  /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
+  | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects; level: number }
   | { kind: 'bait'; bait: Bait }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number };
@@ -158,12 +160,13 @@ export interface BonusRow {
  */
 export function selectActiveBonuses(game: GameState, guild: { level: number; effects: GuildEffects } | null = null): BonusRow[] {
   const out: BonusRow[] = [];
-  const owned = new Set(game.artifacts);
   for (const artifact of ARTIFACTS) {
-    if (!owned.has(artifact.id)) continue;
-    for (const effect of Object.keys(artifact.effects) as (keyof ArtifactEffects)[]) {
-      if (artifact.effects[effect] === undefined) continue;
-      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect }, manualOnly: false });
+    const level = artifactLevelOf(game, artifact.id);
+    if (level === 0) continue;
+    const effects = artifactEffectsAt(artifact, level);
+    for (const effect of Object.keys(effects) as (keyof ArtifactEffects)[]) {
+      if (effects[effect] === undefined) continue;
+      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level }, manualOnly: false });
     }
   }
   const bait = baitById(game.activeBait);

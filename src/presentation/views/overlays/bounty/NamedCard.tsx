@@ -22,7 +22,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   materialName: string | null;
   onAccept: () => void; onDeliver: () => void;
 }) {
-  const { name, poster, found, done, haunt } = selectNamedBountyCardData(game, quest, progress);
+  const { name, poster, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
   return (
     <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
       <NamedCardHead title={found && name ? name : '???'} titleTip={poster} traceMins={!done ? ticketMins : null} />
@@ -30,7 +30,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
         { key: 'haunt', label: '나타나는 곳', value: haunt },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
           value: <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span> },
-        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(quest.reward)}</span> },
+        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(reward)}</span> },
         ...(materialName ? [{ key: 'material', label: '교환 재료', value: materialName }] : []),
       ]} />
       <div className="mt-auto">

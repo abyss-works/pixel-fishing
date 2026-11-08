@@ -22,6 +22,9 @@ import { bountyById } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
+import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
+import { artifactEffectsAt, artifactLevelOf, variantBoostOf } from './artifactLevel.js';
+import type { ArtifactHolder } from './artifactLevel.js';
 import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
 import { isTutorialId } from '../content/tutorials.js';
@@ -93,6 +96,9 @@ export interface GameState {
   /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
    *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
   artifacts: string[];
+  /** 유물 레벨 — 유물 id → 레벨(2~5). 레벨이 있는 유물(희귀, 영웅)만 두고, 맵이 없거나 값이 없으면 Lv1로 읽는다.
+   *  세이브 버전을 올리지 않고 위생 처리의 기본값 채움으로 이관한다 */
+  artifactLevels?: Record<string, number>;
   /** 아이템 보유량(스택형) — id(미끼 데이터 등) → 개수. 물고기 개체성(uid)이 없는 소모품
    *  축이다. 아이템 종류가 늘어도 키 하나(레지스트리 행)면 된다 — 세이브 v8에 접어서 도입
    *  (없는 필드는 위생 처리에서 기본값으로 자가 치유 — migrate 주석 참조). */
@@ -481,10 +487,10 @@ export function withVariantPoints(weights: Record<FormId, number>, points: numbe
 }
 
 /** 폼 가중치 — 유물 효과 → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다 */
-export function mutationWeightsOf(state: Pick<GameState, 'artifacts'>, spot: SpotId): Record<FormId, number> {
-  const owned = new Set(state.artifacts);
-  const relic = ARTIFACTS.find(a => owned.has(a.id) && a.effects.mutationWeight)?.effects.mutationWeight;
-  return relic ?? { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+export function mutationWeightsOf(state: ArtifactHolder, spot: SpotId): Record<FormId, number> {
+  const boost = variantBoostOf(state);
+  if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
+  return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
 
 // ---------- 개체 (세이브 v8) ----------
@@ -732,6 +738,21 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
 const safeStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
+// 유물 레벨 위생 — 보유한 레벨 유물만, 정수로 접어 1~최고 레벨에 가둔다. Lv1은 기본값이라 행을 접는다
+// 올린 유물이 없으면 필드를 두지 않는다(없음과 같은 뜻이라 세이브가 쓰레기로 쌓이지 않는다)
+function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Record<string, number> } {
+  const out: Record<string, number> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+  for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
+    const art = artifactById(id);
+    if (!art || !artifactHasLevel(art) || !owned.includes(id)) continue;
+    if (typeof raw !== 'number' || !Number.isInteger(raw)) continue;
+    const level = Math.min(ARTIFACT_MAX_LEVEL, Math.max(1, raw));
+    if (level > 1) out[id] = level;
+  }
+  return Object.keys(out).length > 0 ? { artifactLevels: out } : {};
+}
+
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다. **모르는 키는 버리지 않는다**
 // (safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
 function safeItems(v: unknown): Record<string, number> {
@@ -895,6 +916,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     location: safeLocation(s.location),
     visited: safeStrings(s.visited) as RegionId[],
     artifacts: safeStrings(s.artifacts),
+    ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
     activeBait: safeActiveBait(s.activeBait),
     pity: safePity(s.pity),
@@ -929,29 +951,30 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
 }
 
 /** 미끼 할인율 — 가진 유물 중 가장 큰 할인(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
-export function baitDiscount(state: Pick<GameState, 'artifacts'>): number {
-  const owned = new Set(state.artifacts);
-  return ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
+export function baitDiscount(state: ArtifactHolder): number {
+  return ARTIFACTS.reduce((m, a) => {
+    const level = artifactLevelOf(state, a.id);
+    return level > 0 ? Math.max(m, artifactEffectsAt(a, level).baitDiscount ?? 0) : m;
+  }, 0);
 }
 
 /** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
  *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
-export function baitCost(state: Pick<GameState, 'artifacts'>, price: number, count: number): number {
+export function baitCost(state: ArtifactHolder, price: number, count: number): number {
   return Math.floor(price * count * (1 - baitDiscount(state)));
 }
 
-/** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).
+/** 아이템 차감 — 기본 1개(미끼는 한 번에 한 개만 소모), 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).
  *  0에 도달하면 행을 접는다(보유 부재와 동의어라 세이브가 쓰레기로 쌓이지 않는다).
  *  activeBait는 지우지 않는다 — 효과는 usableBait가 무음 처리한다 */
-export function takeItem(state: GameState, itemId: string): GameState {
+export function takeItem(state: GameState, itemId: string, count = 1): GameState {
   const cur = state.items[itemId] ?? 0;
-  if (cur <= 0) return state;
-  if (cur - 1 <= 0) {
+  if (cur < count || cur <= 0) return state;
+  if (cur - count <= 0) {
     const { [itemId]: _gone, ...rest } = state.items;
     return { ...state, items: rest };
   }
-  return { ...state, items: { ...state.items, [itemId]: cur - 1 } };
+  return { ...state, items: { ...state.items, [itemId]: cur - count } };
 }
 
 // ---------- 상태 변경 ----------

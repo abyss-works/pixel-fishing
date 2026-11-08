@@ -101,6 +101,17 @@ describe('받는 보너스', () => {
       .toEqual([['duel', 'abyss-angler', 'duelSpeedupCut'], ['move', 'wreck-compass', 'sail']]);
   });
 
+  it('유물 보너스 줄에 보유 레벨이 붙는다 - 맵에 없으면 Lv1', () => {
+    const g = game({ artifacts: ['abyss-angler', 'wreck-compass'], artifactLevels: { 'wreck-compass': 4 } });
+    const levels = selectActiveBonuses(g).flatMap(b => b.source.kind === 'relic' ? [[b.source.artifact.id, b.source.level]] : []);
+    expect(levels).toEqual([['abyss-angler', 1], ['wreck-compass', 4]]);
+  });
+
+  it('효과가 없는 전설 유물은 보너스 줄을 내지 않는다', () => {
+    const g = game({ artifacts: ['mami-wata-mirror'] });
+    expect(selectActiveBonuses(g).filter(b => b.source.kind === 'relic')).toEqual([]);
+  });
+
   it('켜 둔 미끼는 낚시 갈래의 직접 낚을 때만 효과다', () => {
     const g = game({ activeBait: 'bait-rare' });
     const bait = selectActiveBonuses(g).find(b => b.source.kind === 'bait');

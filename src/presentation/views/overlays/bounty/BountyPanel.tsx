@@ -95,7 +95,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const {
     zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, ticketMins, hasTicket,
-    relic, relicOwned, relicMats,
+    relic, relicOwned, relicLevel, relicMats, namedReward,
   } = data;
 
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
@@ -155,7 +155,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `${josa(questLabel(namedQuest), '을/를')} 수주했어요.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 보상으로 ${fmtGold(namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
+                `토벌 보상으로 ${fmtGold(namedReward ?? namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
           )}
         </Gated>
         </div>
@@ -176,7 +176,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </>
       ) : (
         relic && (
-          <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
+          <RelicCard key={relic.id} artifact={relic} owned={relicOwned} level={relicLevel}
             materialCount={relicMats} busy={busy}
             onExchange={() => run(
               { type: 'exchangeArtifact', artifact: relic.id },

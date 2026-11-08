@@ -21,14 +21,15 @@ import { rarityWeightOf } from '../content/rarityWeights.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
-import { artifactById, artifactOfZone } from '../content/artifacts.js';
+import { artifactById, artifactLevelCost, artifactOfZone } from '../content/artifacts.js';
+import { artifactLevelOf, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import {
-  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
+  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
@@ -66,6 +67,7 @@ export type GameAction =
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
+  | { type: 'levelUpArtifact'; artifact: string } // 유물 레벨업 — 그 유물의 교환 재료를 레벨별 수만큼 쓰고 레벨을 하나 올린다
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
@@ -77,7 +79,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
-  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
+  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
@@ -318,7 +320,7 @@ export function rollCatchFish(
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 감소(commonCut)와 돌연변이 확률 퍼센트포인트. 천장 누적도
  *  같은 다이얼·폼 확률을 써서 실제 확률을 쌓는다. */
 export function drawCatch(
-  state: Pick<GameState, 'pity' | 'artifacts' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
+  state: Pick<GameState, 'pity' | 'artifacts' | 'artifactLevels' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
@@ -663,10 +665,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const quest = bountyById(action.questId)!;
       const mat = quest.difficulty === 'named' ? artifactOfZone(quest.zone) : undefined;
       const rich = mat ? addItem(state, mat.materialId, 1) : state;
+      // 네임드 토벌 골드만 보유 유물(전설)의 보상 감소를 받는다 — 재료 수는 그대로다
+      const reward = quest.difficulty === 'named' ? namedRewardOf(state, quest.reward) : quest.reward;
       return {
-        ok: true, state: { ...rich, gold: rich.gold + quest.reward },
+        ok: true, state: { ...rich, gold: rich.gold + reward },
         result: { type: 'none' },
-        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward: quest.reward } }],
+        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward } }],
       };
     }
     case 'resolveChallenge': {
@@ -733,6 +737,20 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ok: true, state: { ...spent, artifacts: [...spent.artifacts, art.id] },
         result: { type: 'none' },
         events: [{ type: 'exchangeArtifact', payload: { artifact: art.id } }],
+      };
+    }
+    case 'levelUpArtifact': {
+      // 유물 레벨업 — 다음 레벨 비용만큼 그 유물의 교환 재료를 쓰고 레벨을 하나 올린다.
+      if (typeof action.artifact !== 'string') return { ok: false, error: 'bad-request' };
+      const check = canLevelUpArtifact(state, action.artifact);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const art = artifactById(action.artifact)!;
+      const level = artifactLevelOf(state, art.id) + 1;
+      const spent = takeItem(state, art.materialId, artifactLevelCost(level));
+      return {
+        ok: true, state: { ...spent, artifactLevels: { ...spent.artifactLevels, [art.id]: level } },
+        result: { type: 'none' },
+        events: [{ type: 'levelUpArtifact', payload: { artifact: art.id, level } }],
       };
     }
     default:
