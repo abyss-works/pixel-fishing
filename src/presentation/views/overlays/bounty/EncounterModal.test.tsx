@@ -122,6 +122,19 @@ describe('EncounterModal', () => {
       expect(onClose).not.toHaveBeenCalled();
     });
 
+    it('놓쳐서 탈락하면 다시 닫을 수 있는 창 층이 되고 탭 줄과 바깥 누름이 닫는다', () => {
+      const { onClose } = show();
+      enter();
+      act(() => { vi.advanceTimersByTime(8000); });
+      expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
+      expect(backdrop().className).toContain('z-(--z-stage-modal)');
+      expect(backdrop().className).not.toContain('z-(--z-blocker)');
+      expect(closeOpenWindows()).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      fireEvent.click(backdrop());
+      expect(onClose).toHaveBeenCalledTimes(2);
+    });
+
     it('이긴 뒤 토벌을 누르기 전에도 닫을 수 없는 창 층이고 탭 줄과 바깥 누름이 닫지 못한다', () => {
       const { onClose } = show();
       enter();
