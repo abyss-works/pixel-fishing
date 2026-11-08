@@ -418,7 +418,7 @@ export const variantDiscovered = (state: GameState, fishId: string): boolean =>
 
 /** 도감에 오른 종 수 (거점 라벨) */
 export const dexSpeciesCount = (state: GameState): number =>
-  Object.keys(state.dex).filter(id => speciesCount(state, id) > 0).length;
+  Object.keys(state.dex).filter(id => FISH.some(f => f.id === id) && speciesCount(state, id) > 0).length;
 
 // ---------- 월척(크기)·변이  ----------
 // 신규 어종/등급 로직 없이 기존 어종 데이터(price)에서 크기 분포를 유도하는 저비용 콘텐츠.
