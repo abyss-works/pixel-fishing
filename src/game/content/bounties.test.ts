@@ -13,7 +13,7 @@ const COUNTS: Record<string, Record<string, number>> = {
   normal: { common: 500, rare: 20, epic: 5, legendary: 1 },
   hard: { common: 1000, rare: 40, epic: 10, legendary: 2 },
 };
-// spec 5절 보상표 (스케일링 규칙: 난이도 ≈ 판매가 평균 15배, 네임드 = 어려움 5배)
+// 보상표 (구역 대표 방치 EV의 쉬움 1시간, 보통 2시간, 어려움 4시간, 네임드 8시간어치)
 const REWARDS: Record<string, Record<string, number>> = {
   pacific: { easy: 20000, normal: 40000, hard: 85000, named: 150000 },
   seasia: { easy: 65000, normal: 150000, hard: 250000, named: 550000 },
