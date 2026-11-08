@@ -15,7 +15,7 @@ export interface ArtifactEffects {
   /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
   baitDiscount?: number;
   /** 폼 가중치 — 전역 기본 가중치(돌연변이 1 : 일반 3) 기준 Lv1 값이다. 돌연변이 가중치가 기본보다 올린 몫(여기서는 +25%)이
-   *  레벨 계수로 커지고, 적용할 때는 그 비율을 해역·전역 폼 가중치의 돌연변이 쪽에 곱한다 */
+   *  레벨 계수로 커진다. 이 유물을 가지면 해역의 폼 가중치 오버라이드는 무시하고, 전역 기본 가중치의 돌연변이 쪽에 그 비율을 곱해 쓴다 */
   mutationWeight?: Record<FormId, number>;
 }
 
@@ -72,7 +72,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     effects: { mutationWeight: { variant: 1.25, normal: 3 } } },
   { id: 'mami-wata-mirror', name: '마미 와타의 거울', zone: 'southatlantic', grade: 'legendary',
     materialId: 'mat-clouded-mirror', materialName: '흐려진 손거울',
-    lore: '월비스베이항 부두 끝 말뚝에 걸어 두던 손거울이다. 어부들은 물의 여인 마미 와타의 이름을 따 이 거울을 그렇게 불렀고, 거울이 흐려 보이는 쪽의 물을 피해 뱃길을 곧게 잡으면 돌아오는 시간이 짧아졌다고 한다.',
+    lore: '이 손거울을 월비스베이항 어부들은 물의 여인 마미 와타의 거울이라 부른다. 거울을 뱃머리에 건 배는 같은 날 거울에 비친 물길을 따라 다시 나간다. 그 배의 선주는 수배판에서 받은 값을 조금 떼어 뱃전 너머로 던진다.',
     effects: {}, system: { namedCapBonus: 1, namedRewardCut: 0.3 } },
 ];
 

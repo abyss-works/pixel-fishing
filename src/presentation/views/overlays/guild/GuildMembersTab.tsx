@@ -3,6 +3,7 @@ import {
   GUILD_ERROR_TEXT, dailyContributionRows, leaveConfirm, memberActions, memberConfirm, memberRows, splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
+import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
@@ -16,7 +17,7 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 길드원 탭: 길드원 표(접속 점, 이름, 오늘 기여, 누적 기여, 기부)와 맨 아래 한 줄(떠나기). 길드 코드와 초대 링크는 관리 탭에 있다.
 // 길드장에게는 다른 길드원 행 끝에 관리 버튼이 있고, 누르면 행 아래로 넘기기와 내보내기가 펼쳐진다.
 // 관리 칸은 역할과 무관하게 같은 크기로 두어, 길드장이든 길드원이든 표의 크기가 같다.
-export default function GuildMembersTab({ guild, me, busy, setToast, ask }: GuildPartProps & { ask: GuildAsk }) {
+export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifacts }: GuildPartProps & { ask: GuildAsk; artifacts: ArtifactHolder }) {
   /** 관리 메뉴를 펼친 길드원 */
   const [menu, setMenu] = useState<string | null>(null);
   const active = splitMembers(guild.members).active;
@@ -35,7 +36,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask }: Guil
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text={<TipList rows={dailyContributionRows()} note={'하루 상한이에요.\n한국 시간 새벽 4시에 새로 세요.'} />}>오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows(artifacts)} note={'하루 상한이에요.\n한국 시간 새벽 4시에 새로 세요.'} />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>
