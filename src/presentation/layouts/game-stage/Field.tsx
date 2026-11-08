@@ -220,7 +220,7 @@ export default function Field({
 
   const inSlot = mobile && statusSlot != null;
   const statusBand = snapshot.phase === 'idle' ? null : (
-    <HudPanel className={cx('z-(--z-overlay) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
+    <HudPanel className={cx('z-(--z-stage-hud) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
       inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
       {statusText(snapshot.phase, mobile)}
     </HudPanel>

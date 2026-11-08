@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
 import FerryVeil from './FerryVeil';
+import { windowHostRef } from '../../ui/windowLayer';
 
 function stubMotion(reduce: boolean) {
   window.matchMedia = ((query: string) => ({
@@ -45,5 +46,23 @@ describe('FerryVeil 이동 1회 보장', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(onMove).toHaveBeenCalledTimes(1);
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('FerryVeil 화면 전체 덮개', () => {
+  it('창 층 자리가 있으면 거기에 화면 전체(fixed)로 그려 탭 줄과 사이드바까지 덮는다', () => {
+    stubMotion(false);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const release = windowHostRef(host);
+    const { container } = render(<div data-testid="stage"><FerryVeil onSurface={vi.fn()} onMove={() => Promise.resolve()} onDone={vi.fn()} /></div>);
+    const veil = host.querySelector('[aria-hidden]') as HTMLElement;
+    expect(veil).not.toBeNull();
+    expect(container).not.toContainElement(veil);
+    expect(veil.className).toContain('fixed inset-0');
+    expect(veil.className).toContain('z-(--z-veil)');
+    expect(veil.className).toContain('pointer-events-none');
+    act(() => release?.());
+    host.remove();
   });
 });

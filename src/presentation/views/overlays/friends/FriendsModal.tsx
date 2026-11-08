@@ -173,7 +173,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
                    onChange={e => { setNickname(e.target.value); setError(null); }} aria-label="친구 닉네임" placeholder="닉네임" />
         <Button type="submit" variant="primary">요청</Button>
         {(suggestions.length > 0 || error) && (
-          <div className="absolute left-0 right-0 top-full z-10 mt-1 bg-surface">
+          <div className="absolute left-0 right-0 top-full z-1 mt-1 bg-surface">
             {suggestions.length > 0 ? (
               <SelectList label="닉네임 후보" items={suggestions} keyOf={p => p.uid} selectedKey=""
                           onSelect={key => { setNickname(suggestions.find(p => p.uid === key)?.nickname ?? nickname); setError(null); }}

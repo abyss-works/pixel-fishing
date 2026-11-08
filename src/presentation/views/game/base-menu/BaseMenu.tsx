@@ -47,6 +47,7 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 };
 
 // 거점 카드 메뉴 — 거점 배경 위 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
+// 메뉴 영역은 PC 레이아웃에서 16:9 프레임 전체, 모바일 레이아웃에서 헤더 아래부터 탭 줄 위까지(게임 영역)다.
 // 거점 Canvas 화면과 같은 속성을 받으며, 거점 데이터와 가구 스프라이트를 읽기만 한다.
 export default function BaseMenu({ base, game, onFacility, locked }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -63,9 +64,9 @@ export default function BaseMenu({ base, game, onFacility, locked }: Props) {
 
   const name = base === 'home' ? '집' : '항구';
   const menu = (
-    <div className="absolute inset-x-0 top-0 bottom-[var(--log-clear,0px)] mobile:row-start-2 mobile:row-end-3 [container:basemenu/size]">
-      {/* 내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다(필수 글자는 자르지도 숨기지도 않는다) */}
-      <div className="absolute inset-0 flex flex-col pf-vscroll pf-scroll-hud [scrollbar-gutter:stable_both-edges] px-[6%]">
+    <div className="absolute inset-0 mobile:row-start-2 mobile:row-end-3 [container:basemenu/size]">
+      {/* 채팅은 카드 위를 덮으므로 메뉴는 채팅 자리를 비우지 않는다. 세로로 스크롤하지 않고, 영역이 낮으면 카드가 줄어든다(MenuCard) */}
+      <div className="absolute inset-0 flex flex-col px-[6%]">
         <div className="my-auto flex flex-col items-center gap-3">
           <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
           <div className="flex flex-wrap items-start justify-center gap-3">

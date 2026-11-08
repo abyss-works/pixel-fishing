@@ -32,7 +32,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   const { sparks, sparkDist, halo } = r;
   return (
     <div data-rarity={fish.rarity}
-         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-(--z-card)
+         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-(--z-stage-card)
                     pointer-events-none animate-catch-pop">
       {/* 이펙트 레이어 — 캔버스가 아니라 카드 위에 그린다 (카드가 캔버스 중앙을 덮어 캔버스 파티클은 안 보였음).
           패널의 노치가 잘라 내지 않도록 패널 바깥 층에 둔다 */}

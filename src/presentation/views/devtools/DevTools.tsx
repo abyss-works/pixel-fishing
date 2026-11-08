@@ -125,7 +125,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
       <Tip wraps text="개발 도구 (F9)">
         <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open}
                onClick={() => setOpen(o => !o)}
-               className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
+               className={cx('fixed right-3 bottom-3 z-(--z-devtools) p-2 cursor-pointer',
                  open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
           <PixelIcon glyph="key" size={20} />
         </Frame>
@@ -133,7 +133,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
       {open && (
         <Frame role="dialog" aria-label="개발 도구"
-               className="fixed z-[60] bg-bg flex flex-col text-sm"
+               className="fixed z-(--z-devtools) bg-bg flex flex-col text-sm"
                style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}>
           {/* 머리줄 — 끌어서 옮긴다 */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-line cursor-move select-none touch-none"

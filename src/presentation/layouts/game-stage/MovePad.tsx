@@ -7,7 +7,7 @@ export default function MovePad({ pad }: { pad: Pad }) {
   const ringLeft = pad.origin.x - PAD_RING_PX / 2;
   const ringTop = pad.origin.y - PAD_RING_PX / 2;
   return (
-    <div aria-hidden="true" className="absolute z-(--z-overlay) pointer-events-none rounded-full border-2 border-line
+    <div aria-hidden="true" className="absolute z-(--z-stage-hud) pointer-events-none rounded-full border-2 border-line
                                        bg-[color-mix(in_oklab,var(--c-bg)_45%,transparent)]"
          style={{ left: ringLeft, top: ringTop, width: PAD_RING_PX, height: PAD_RING_PX }}>
       <div className="absolute rounded-full border-2 border-gold-dark bg-[color-mix(in_oklab,var(--c-gold)_70%,transparent)]"
