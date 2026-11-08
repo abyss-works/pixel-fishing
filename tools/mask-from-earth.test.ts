@@ -66,6 +66,26 @@ describe('마스크 생성기 전지구 원점', () => {
   // 서쪽 끝을 40E로 줄이고 남쪽을 넓힌 다른 창 — 해상도는 같다
   const b = generate('win-b', { lonMin: 40, lonMax: 157, latMin: 44 - 244 / 2.9, latMax: 44 }, 468, 244);
 
+  // 북단이 10행 남쪽인 창 — 행 오프셋이 달라도 같은 결과여야 한다
+  const northB = 44 - 10 / 2.9;
+  const d = generate('win-c', { lonMin: 35, lonMax: 157, latMin: northB - 232 / 2.9, latMax: northB }, 488, 232);
+
+  it('북단이 다른 창도 생성되고 행 오프셋이 그만큼 늘어난다', () => {
+    expect(d.status, d.stderr).toBe(0);
+    expect(parse(d.out).offset).toEqual({ col: (35 + 180) * 4, row: 129 });
+  });
+
+  it('북단이 다른 창에서도 같은 경위도는 같은 게임 좌표이고 같은 칸은 같은 인덱스다', () => {
+    const pa = parse(a.out), pd = parse(d.out);
+    expect(pd.anchors).toEqual(pa.anchors);
+    const la = landSet(pa), ld = landSet(pd);
+    // 두 창이 겹치는 행(전지구 행 129 이상, 창 a 기준 10행부터)만 비교한다
+    const overlap = (set: Set<number>) => [...set].filter(i => Math.floor(i / pa.globalCols) >= 129
+      && Math.floor(i / pa.globalCols) < 119 + 232).sort((x, y) => x - y);
+    expect(overlap(ld)).toEqual(overlap(la));
+    expect(overlap(la).length).toBeGreaterThan(0);
+  });
+
   it('두 창 모두 생성된다', () => {
     expect(a.stderr).not.toMatch(/오류/);
     expect(a.status).toBe(0);

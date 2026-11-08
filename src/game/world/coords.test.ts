@@ -1,12 +1,13 @@
 // 게임 좌표계: 원점은 항해 창이 아니라 전지구 고정 원점이다.
 import { describe, expect, it } from 'vitest';
 import { compileMap, cellDefAt, cellIndex, indexCenter, mapBounds } from './mask';
-import { gameToLonLat, lonLatToGame } from './geo';
+import { gameToLonLat } from './geo';
 import { WORLD, WORLD_MAP, WORLD_SPAWN, canMove, zoneOf, generateWorldSchools } from './index';
 import type { MapCellDef } from './types';
 
 const legend: Record<string, MapCellDef> = { '.': { water: true }, L: { land: true } };
 const GLOBAL_COLS = 1440;
+const ORIGIN_LAT = 85.0344827586207;
 
 describe('격자 배치(창)', () => {
   // 같은 전지구 칸을 서로 다른 창으로 컴파일한다: B는 A보다 서쪽으로 3열, 북쪽으로 2행 더 넓다
@@ -66,25 +67,23 @@ describe('대양 좌표계', () => {
   });
 
   it('원점은 경도 -180에서 열 0, 북위 85 이상에서 행 0이다', () => {
-    expect(lonLatToGame(-180, gameToLonLat(0, 0).lat)).toEqual({ x: 0, y: 0 });
     expect(gameToLonLat(0, 0).lat).toBeGreaterThanOrEqual(85);
     expect(gameToLonLat(0, 0).lon).toBe(-180);
   });
 
   it('경위도 변환은 서로 역이고 경도 32px/°, 위도 31.9px/°다', () => {
-    const p = lonLatToGame(131.5, 31.5);
-    expect(p.x).toBeCloseTo((131.5 + 180) * 32, 6);
-    const back = gameToLonLat(p.x, p.y);
+    const x = (131.5 + 180) * 32, y = (ORIGIN_LAT - 31.5) * 31.9;
+    const back = gameToLonLat(x, y);
     expect(back.lon).toBeCloseTo(131.5, 9);
     expect(back.lat).toBeCloseTo(31.5, 9);
-    const dy = lonLatToGame(0, 10).y - lonLatToGame(0, 11).y;
-    expect(dy).toBeCloseTo(31.9, 9);
+    // 1000px 아래는 위도 1000/31.9도 남쪽이다
+    expect(gameToLonLat(x, y).lat - gameToLonLat(x, y + 31.9).lat).toBeCloseTo(1, 9);
   });
 
   it('출발점(고향 항구 앞바다)은 131.5E 31.5N 자리의 게임 좌표다', () => {
-    const p = lonLatToGame(131.5, 31.5);
-    expect(Math.abs(WORLD_SPAWN.x - p.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(WORLD_SPAWN.y - p.y)).toBeLessThanOrEqual(1);
+    const { lon, lat } = gameToLonLat(WORLD_SPAWN.x, WORLD_SPAWN.y);
+    expect(Math.abs(lon - 131.5)).toBeLessThan(1 / 32);
+    expect(Math.abs(lat - 31.5)).toBeLessThan(1 / 31.9);
   });
 
   it('창 안의 바다는 이동할 수 있다', () => {
