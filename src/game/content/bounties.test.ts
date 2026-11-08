@@ -19,6 +19,7 @@ const REWARDS: Record<string, Record<string, number>> = {
   seasia: { easy: 80000, normal: 150000, hard: 300000, named: 1500000 },
   indian: { easy: 150000, normal: 350000, hard: 700000, named: 3500000 },
   madagascar: { easy: 225000, normal: 500000, hard: 1000000, named: 5000000 },
+  southatlantic: { easy: 300000, normal: 675000, hard: 1350000, named: 6750000 },
 };
 
 describe('bounties 데이터 계약', () => {
@@ -53,7 +54,7 @@ describe('bounties 데이터 계약', () => {
   });
 
   it('라이선스 명성이 spec 2절 표와 일치한다', () => {
-    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 20000, indian: 80000, madagascar: 300000 });
+    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 20000, indian: 80000, madagascar: 300000, southatlantic: 600000 });
   });
 
   it('등급 키는 실재 등급만 쓴다', () => {
@@ -72,6 +73,16 @@ describe('bounties 데이터 계약', () => {
     const q = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-10');
     expect(q?.zone).toBe('pacific');
     expect(q?.difficulty).toBe('easy');
+  });
+});
+
+describe('남대서양 현상금', () => {
+  it('의뢰 구역 5개, 수배 창구는 월비스베이항, 네임드는 아다마스토르 하나다', () => {
+    expect(new Set(BOUNTIES.map(q => q.zone)).size).toBe(5);
+    expect(BOUNTY_PORT_ZONE.walvisbay).toBe('southatlantic');
+    const named = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
+    expect(named.map(q => q.targetFish)).toEqual(['adamastor']);
+    expect(named[0].reward).toBe(6750000);
   });
 });
 

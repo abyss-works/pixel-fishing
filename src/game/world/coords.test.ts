@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { compileMap, cellDefAt, cellIndex, indexCenter, mapBounds } from './mask';
 import { gameToLonLat } from './geo';
 import { WORLD, WORLD_MAP, WORLD_SPAWN, canMove, zoneOf, generateWorldSchools } from './index';
+import { ANCHORS } from './regions/generated/world.mask';
 import type { MapCellDef } from './types';
 
 const legend: Record<string, MapCellDef> = { '.': { water: true }, L: { land: true } };
@@ -59,10 +60,10 @@ describe('격자 배치(창)', () => {
 });
 
 describe('대양 좌표계', () => {
-  it('창의 서북 모서리는 원점에서 정수 칸 떨어져 있고 경위도 35E 44N이다', () => {
-    expect(WORLD.bounds).toEqual({ x: 860 * 8, y: 119 * 11, w: 488 * 8, h: 232 * 11 });
+  it('창의 서북 모서리는 원점에서 정수 칸 떨어져 있고 경위도 15W 44N이다', () => {
+    expect(WORLD.bounds).toEqual({ x: 660 * 8, y: 119 * 11, w: 688 * 8, h: 232 * 11 });
     const nw = gameToLonLat(WORLD.bounds.x, WORLD.bounds.y);
-    expect(nw.lon).toBeCloseTo(35, 9);
+    expect(nw.lon).toBeCloseTo(-15, 9);
     expect(nw.lat).toBeCloseTo(44, 9);
   });
 
@@ -133,6 +134,36 @@ describe('대양 좌표계', () => {
 
   it('지도 전체 칸 인덱스는 전지구 격자 안에 있다', () => {
     const last = cellIndex(WORLD_MAP, WORLD_MAP.cols - 1, WORLD_MAP.rows - 1);
-    expect(last).toBe((119 + 231) * 1440 + 860 + 487);
+    expect(last).toBe((119 + 231) * 1440 + 660 + 687);
+  });
+});
+
+// 창을 서쪽으로 넓혀도(서단 35E에서 15W) 기존 지점의 게임 좌표와 칸 인덱스는 바뀌지 않는다
+describe('창 확장 뒤 좌표 불변', () => {
+  const before: Record<string, { x: number; y: number }> = {
+    harbor: { x: 9876, y: 1581 }, dock: { x: 9893, y: 1622 }, spawn: { x: 9968, y: 1708 },
+    manila: { x: 9629, y: 2183 }, m_dock: { x: 9566, y: 2218 }, m_spawn: { x: 9530, y: 2260 },
+    colombo: { x: 8338, y: 2489 }, c_dock: { x: 8275, y: 2492 }, c_spawn: { x: 8230, y: 2540 },
+    toamasina: { x: 7319, y: 3296 }, t_dock: { x: 7352, y: 3293 }, t_spawn: { x: 7370, y: 3331 },
+  };
+
+  it.each(Object.entries(before))('앵커 %s의 게임 좌표가 같다', (name, p) => {
+    expect(ANCHORS[name]).toEqual(p);
+  });
+
+  it('출발점의 칸 인덱스가 같다 (열 1246, 행 155)', () => {
+    expect(WORLD_SPAWN).toEqual(before.spawn);
+    const c = Math.floor(WORLD_SPAWN.x / 8) - WORLD_MAP.colOffset;
+    const r = Math.floor(WORLD_SPAWN.y / 11) - WORLD_MAP.rowOffset;
+    expect(cellIndex(WORLD_MAP, c, r)).toBe(155 * 1440 + 1246);
+  });
+
+  it('남대서양 앵커도 같은 경위도 투영식을 따른다', () => {
+    const px = (lon: number, lat: number) => ({
+      x: Math.round((lon + 180) * 32), y: Math.round((ORIGIN_LAT - lat) * 31.9),
+    });
+    expect(ANCHORS.walvisbay).toEqual(px(14.5, -22.95));
+    expect(ANCHORS.w_dock).toEqual(px(13, -22.95));
+    expect(ANCHORS.w_spawn).toEqual(px(12, -23.2));
   });
 });

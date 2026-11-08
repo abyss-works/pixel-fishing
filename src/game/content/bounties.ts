@@ -4,7 +4,7 @@
 // 네임드 보상은 2026-10-17 기존의 10배다(구역 전설 수집·하루 1회 상한이 게이트).
 import type { RarityId } from './rarity.js';
 
-export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar';
+export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic';
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
@@ -38,6 +38,7 @@ export const BOUNTY_LICENSE_FAME: Record<BountyZone, number> = {
   seasia: 20000,
   indian: 80000,
   madagascar: 300000,
+  southatlantic: 600000,
 };
 
 const Q = (
@@ -102,6 +103,19 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('madagascar', 'hard', 'epic', null, 10, 1000000),
   Q('madagascar', 'hard', 'legendary', null, 2, 1000000),
   Q('madagascar', 'named', null, 'elder-sixgill', 1, 5000000),
+  // 1-5 남대서양 — 쉬움 300000 · 보통 675000 · 어려움 1350000 · 네임드 6750000
+  Q('southatlantic', 'easy', 'common', null, 250, 300000),
+  Q('southatlantic', 'easy', 'rare', null, 10, 300000),
+  Q('southatlantic', 'easy', 'epic', null, 2, 300000),
+  Q('southatlantic', 'normal', 'common', null, 500, 675000),
+  Q('southatlantic', 'normal', 'rare', null, 20, 675000),
+  Q('southatlantic', 'normal', 'epic', null, 5, 675000),
+  Q('southatlantic', 'normal', 'legendary', null, 1, 675000),
+  Q('southatlantic', 'hard', 'common', null, 1000, 1350000),
+  Q('southatlantic', 'hard', 'rare', null, 40, 1350000),
+  Q('southatlantic', 'hard', 'epic', null, 10, 1350000),
+  Q('southatlantic', 'hard', 'legendary', null, 2, 1350000),
+  Q('southatlantic', 'named', null, 'adamastor', 1, 6750000),
 ];
 
 /** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */
@@ -132,6 +146,7 @@ export const BOUNTY_PORT_ZONE = {
   manila: 'seasia',
   colombo: 'indian',
   toamasina: 'madagascar',
+  walvisbay: 'southatlantic',
 } as const satisfies Record<string, BountyZone>;
 
 export type BountyPort = keyof typeof BOUNTY_PORT_ZONE;

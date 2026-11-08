@@ -108,7 +108,7 @@ function paintGrid(
     let key = -1;
     for (let c = c0; c <= c1 + 1; c++) {
       const code = c <= c1 ? map.codes[r * map.cols + c] : -2;
-      const mono = rowMono || monoCol(c);
+      const mono = rowMono || monoCol(c) || (!!tone && !!map.palette[code]?.closed);
       const k = code * 2 + (mono ? 1 : 0);
       if (k === key) continue;
       if (key >= 0) {
@@ -136,7 +136,7 @@ function paintGrid(
     for (let c = c0; c <= c1; c++) {
       const def = at(c, r);
       const x = c * sw, y = r * sh;
-      const mono = monoRow(r) || monoCol(c);
+      const mono = monoRow(r) || monoCol(c) || (!!tone && !!def?.closed);
       const landFill = mono ? MONO_LAND_HI : LAND_HI;
       const sandFill = mono ? MONO_SAND : SAND;
 

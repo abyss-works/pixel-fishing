@@ -13,7 +13,7 @@ import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
   REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer,
-  nearestSchoolInRange, zoneOf,
+  nearestSchoolInRange, zoneOf, closedSeaBlock,
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
@@ -82,6 +82,8 @@ export class GameFieldEngine {
   private readonly pos: Point;
   private lastSpot: SpotId | null = null;
   private readonly tracker = new ZoneTracker();
+  /** 직전 프레임이 구역 경계에 막혔고 안내를 이미 냈다 */
+  private blockNotified = false;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
@@ -267,6 +269,7 @@ export class GameFieldEngine {
   private initializePositionState(): void {
     const zone = zoneOf(this.def, this.pos.x, this.pos.y) ?? null;
     this.tracker.init(zone);
+    this.blockNotified = false;
     this.refreshNearby();
     setZone(this.lastSpot ? zoneOfSpot(this.lastSpot) ?? null : (zone ? topZoneOf(zone) : null));
     setPlayerPos({ x: this.pos.x, y: this.pos.y });
@@ -289,13 +292,15 @@ export class GameFieldEngine {
     }
 
     let movedFrom: Point | null = null;
+    let closedMessage: string | null = null;
     // 키 이동은 방향 부호(대각선 포함)로, 원 패드는 끄는 각도 그대로의 단위 벡터로 움직인다
     const pad = this.padDir;
     if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(
-        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
+      const dirX = pad ? pad.x : Math.sign(dx), dirY = pad ? pad.y : Math.sign(dy);
+      closedMessage = closedSeaBlock(this.def, this.pos, dirX, dirY, dt, speed);
+      const next = movePlayer(this.def, this.pos, dirX, dirY, dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();
@@ -310,10 +315,17 @@ export class GameFieldEngine {
         this.pos.y = movedFrom.y;
         setPlayerPos({ x: this.pos.x, y: this.pos.y });
       }
-      if (step.blocked) this.callbacks.onEvent({ type: 'zone-blocked', message: step.blocked });
     } else if (step.enteredTop) {
       this.callbacks.onEvent({ type: 'zone-entered', zone: step.enteredTop });
     }
+
+    // 막힌 시도는 경계에 닿는 순간 한 번만 알린다 — 막힌 채 키를 누르고 있는 동안은 프레임마다 반복하지 않고,
+    // 막히지 않은 프레임이 한 번 지나가면(떨어졌다 다시 닿을 때) 다시 알린다.
+    const blockedMessage = closedMessage ?? (step.revert ? step.blocked : null);
+    if (blockedMessage && !this.blockNotified) {
+      this.callbacks.onEvent({ type: 'zone-blocked', message: blockedMessage });
+    }
+    this.blockNotified = blockedMessage !== null;
 
     const focusZone = this.lastSpot ? zoneOfSpot(this.lastSpot) : null;
     setZone(focusZone ?? (zone ? topZoneOf(zone) : null));
