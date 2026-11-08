@@ -162,7 +162,7 @@ export const FISH: readonly Fish[] = [
       lore: '이마의 혹이 은빛으로 빛나는 거체.' } },
   { id: 'tigershark', name: '범상어',     spot: 'coron', rarity: 'epic',      price: 1100, color: '#607d8b', shape: 'shark',
     lore: '침선 사이를 순찰한다. 줄무늬가 보였다는 건 이미 가까이 왔다는 뜻.',
-    variant: { name: '황범 상어', color: '#ffb300',
+    variant: { name: '황범상어', color: '#ffb300',
       lore: '줄무늬가 금빛으로 물든 개체. 목격자가 유독 적다.' } },
   { id: 'ironreefking', name: '철산호의 왕', spot: 'coron', rarity: 'legendary', price: 5000, color: '#a0522d', shape: 'ancient',
     lore: '백 년 전 군함이 산호가 되기까지, 그 위에 왕좌를 얹은 자가 있다.',
