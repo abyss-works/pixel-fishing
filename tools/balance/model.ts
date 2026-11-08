@@ -129,7 +129,7 @@ export function moveGap(index: number, pool: Pool): MoveGap & { diff: number } {
 }
 
 /** 같은 해역, 같은 레벨에서 PERFECT 다이얼의 시간당 골드 ÷ 방치의 시간당 골드(낮밤 혼합).
- *  빨간 존이 열리지 않은 레벨에서도 PERFECT 다이얼을 그대로 적용한 상한 값이다. */
+ *  빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한 값이므로 실제 PERFECT 수입의 상한이다. */
 export function perfectOverIdle(spot: SpotId, level: number): number {
   return rates(spot, level, 'perfect').goldPerHour / rates(spot, level, 'idle').goldPerHour;
 }

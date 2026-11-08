@@ -156,7 +156,7 @@ if (show('move')) {
 // ── PERFECT 이상치 ──
 if (show('perfect')) {
   console.log(`
-## PERFECT 이상치 — PERFECT 다이얼의 G/h ÷ 방치 G/h (낮밤 혼합, 빨간 존이 열리지 않은 스펙도 다이얼을 적용한 상한). 10배를 넘으면 이상치`);
+## PERFECT 이상치 — PERFECT 다이얼의 G/h ÷ 방치 G/h (낮밤 혼합, 빨간 존 유무와 관계없이 PERFECT 다이얼을 적용한 상한 값). 10배를 넘으면 이상치`);
   let max = { v: 0, name: '' };
   for (const s of SPOTS) {
     const cells = [0, SPEC_MARGIN].map(m => {
