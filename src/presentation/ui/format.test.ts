@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -118,5 +118,13 @@ describe('fmtRatio, fmtRatioTight - 수량과 상한 표기', () => {
     expect(fmtRatioTight(1, 1)).toBe('1/1');
     expect(fmtRatioTight(0, 10)).toBe('0/10');
     expect(fmtRatioTight(null, 1)).toBe('-');
+  });
+});
+
+describe('fmtLevel — 레벨 표기', () => {
+  it('Lv. 뒤에 숫자를 붙인다', () => {
+    expect(fmtLevel(0)).toBe('Lv.0');
+    expect(fmtLevel(8)).toBe('Lv.8');
+    expect(fmtLevel(99)).toBe('Lv.99');
   });
 });

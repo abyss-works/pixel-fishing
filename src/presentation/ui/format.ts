@@ -55,3 +55,6 @@ export function josa(word: string, pair: '이/가' | '을/를'): string {
   const [withBatchim, without] = pair.split('/');
   return `${word}${batchim ? withBatchim : without}`;
 }
+
+/** 레벨 표기 - 낚싯대 레벨, 배 티어처럼 단계를 한 칸에 쓰는 곳 */
+export const fmtLevel = (n: number): string => `Lv.${n}`;
