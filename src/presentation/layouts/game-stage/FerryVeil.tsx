@@ -16,30 +16,45 @@ export default function FerryVeil(props: FerryVeilProps) {
   const latest = useRef(props);
   useEffect(() => { latest.current = props; });
 
+  // 이동 한 번의 진행 상태는 인스턴스에 두어, 효과가 다시 실행돼도 onSurface, onMove, onDone이 각각 한 번만 불린다.
+  const trip = useRef({ started: false, start: 0, moving: false, settledAt: null as number | null, done: false });
+  const mounted = useRef(false);
+
   useEffect(() => {
-    let alive = true;
+    mounted.current = true;
+    const t = trip.current;
     let frame = 0;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      void latest.current.onMove().then(() => { if (alive) latest.current.onDone(); });
-      return () => { alive = false; };
-    }
-    const start = performance.now();
-    let settledAt: number | null = null;
-    let moving = false;
-    latest.current.onSurface();
-    const tick = () => {
-      const elapsed = performance.now() - start;
-      if (!moving && elapsed >= FERRY_MOVE_AT_MS) {
-        moving = true;
-        void latest.current.onMove().then(() => { settledAt = performance.now() - start; });
-      }
-      const f = ferryFrame(elapsed, settledAt);
-      if (f.phase === 'done') { latest.current.onDone(); return; }
-      setVeil(f.veil);
-      frame = requestAnimationFrame(tick);
+    const finish = () => {
+      if (t.done || !mounted.current) return;
+      t.done = true;
+      latest.current.onDone();
     };
-    frame = requestAnimationFrame(tick);
-    return () => { alive = false; cancelAnimationFrame(frame); };
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!t.started) {
+      t.started = true;
+      t.start = performance.now();
+      if (reduced) {
+        t.moving = true;
+        void latest.current.onMove().then(finish);
+      } else {
+        latest.current.onSurface();
+      }
+    }
+    if (!reduced) {
+      const tick = () => {
+        const elapsed = performance.now() - t.start;
+        if (!t.moving && elapsed >= FERRY_MOVE_AT_MS) {
+          t.moving = true;
+          void latest.current.onMove().then(() => { t.settledAt = performance.now() - t.start; });
+        }
+        const f = ferryFrame(elapsed, t.settledAt);
+        if (f.phase === 'done') { finish(); return; }
+        setVeil(f.veil);
+        frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    }
+    return () => { mounted.current = false; cancelAnimationFrame(frame); };
   }, []);
 
   return (
