@@ -24,6 +24,12 @@ describe('미끼 상점', () => {
     expect(screen.getByRole('button', { name: `구매 (-${fmtGold(BAITS[0].price)})` })).toBeInTheDocument();
   });
 
+  it('구매 버튼은 스크롤 본문 밖(하단 고정 자리)에 있다', () => {
+    show();
+    const button = screen.getByRole('button', { name: `구매 (-${fmtGold(BAITS[0].price)})` });
+    expect(button.closest('.pf-vscroll')).toBeNull();
+  });
+
   it('할인 유물이 있으면 정가에 취소선을 긋고 할인가와 할인율을 보인다', () => {
     const { game } = show(['varuna-scale']);
     const rare = BAITS[1];

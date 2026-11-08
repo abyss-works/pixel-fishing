@@ -42,7 +42,7 @@ export function CompareTable({ heads, rows }: { heads: [ReactNode, ReactNode]; r
   );
 }
 
-/** 확정 버튼 — 상세 열 맨 아래 전폭. 누를 수 없는 이유가 있으면 버튼의 툴팁으로 보인다 */
+/** 확정 버튼 — 카드의 확정 자리(confirm)에 두는 전폭 버튼. 누를 수 없는 이유가 있으면 버튼의 툴팁으로 보인다 */
 export function ConfirmButton({ reason, disabled, onClick, children }: {
   reason: string | null; disabled: boolean; onClick: () => void; children: ReactNode;
 }) {

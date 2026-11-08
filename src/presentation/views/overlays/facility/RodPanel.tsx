@@ -21,7 +21,8 @@ const secDelta = (d: number): string | undefined =>
   Math.abs(d) < 0.05 ? undefined : `${d < 0 ? '-' : '+'}${Math.abs(d).toFixed(1)}초`;
 
 // 낚싯대 강화 (상한 없음). 왼쪽은 단계 목록(레벨, 입질 대기, 파워, 가격)이고 다음 단계가 확정 대상이다.
-// 오른쪽은 다음 단계의 머리, 현재와 강화 후 비교, 잔액, 강화 버튼이다. 강화 규칙 설명은 비교 표 머리의 툴팁이다.
+// 오른쪽은 다음 단계의 머리와 현재와 강화 후 비교다. 강화 규칙 설명은 비교 표 머리의 툴팁이다.
+// 잔액과 강화 버튼은 카드 하단 고정 자리(footer, confirm)에 둔다. 본문이 스크롤해도 버튼은 화면 안에 남는다.
 export default function RodPanel({ game, onUpgrade, onClose, busy }: {
   game: GameState; onUpgrade: () => void; onClose: () => void; busy: boolean;
 }) {
@@ -36,7 +37,14 @@ export default function RodPanel({ game, onUpgrade, onClose, busy }: {
   }));
 
   return (
-    <ModalCard title="낚싯대 강화" onClose={onClose}>
+    <ModalCard title="낚싯대 강화" onClose={onClose}
+      footer={<CostBox><CostLine have={game.gold} delta={-cost} /></CostBox>}
+      confirm={
+        <ConfirmButton reason={canUpgrade.ok ? null : REJECT_TEXT[canUpgrade.reason]}
+                       disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
+          강화 (-{fmtGold(cost)})
+        </ConfirmButton>
+      }>
       <TwoColumn>
         <ProgressLadder label="낚싯대 단계" steps={steps} />
         <div className="flex flex-col gap-3 min-w-0">
@@ -52,13 +60,6 @@ export default function RodPanel({ game, onUpgrade, onClose, busy }: {
               { label: <Tip text={<>해역 요구 파워를 넘을수록 GOOD과 PERFECT 영역이 넓어져요.<br />해역별 충족은 스탯 창에서 볼 수 있어요.</>}>파워</Tip>,
                 value: fmtNum(power.current), next: fmtNum(power.next), delta: `+${fmtNum(power.next - power.current)}` },
             ]} />
-          <CostBox>
-            <CostLine have={game.gold} delta={-cost} />
-          </CostBox>
-          <ConfirmButton reason={canUpgrade.ok ? null : REJECT_TEXT[canUpgrade.reason]}
-                         disabled={!canUpgrade.ok || busy} onClick={onUpgrade}>
-            강화 (-{fmtGold(cost)})
-          </ConfirmButton>
         </div>
       </TwoColumn>
     </ModalCard>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
@@ -140,6 +140,7 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
   onGoldChanged: () => Promise<void> | void; onClose: () => void;
 }) {
   const [amount, setAmount] = useState('');
+  const formId = useId();
   const add = (step: number) => setAmount(String((Number(amount) || 0) + step));
   const onDonate = async (e: FormEvent) => {
     e.preventDefault();
@@ -162,8 +163,9 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
 
   return (
     <Modal layer="stage" onClose={onClose}>
-      <ModalCard title={`${row.name} 기부`} onClose={onClose}>
-        <form className="flex flex-col gap-3" onSubmit={e => { void onDonate(e); }}>
+      <ModalCard title={`${row.name} 기부`} onClose={onClose}
+        confirm={<Button type="submit" form={formId} variant="primary" full disabled={busy}>기부</Button>}>
+        <form id={formId} className="flex flex-col gap-3" onSubmit={e => { void onDonate(e); }}>
           <Inset className="p-3 flex flex-col gap-2">
             <div className="flex gap-2">
               {DONATION_STEPS.map(step => (
@@ -176,7 +178,6 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
                        onChange={e => setAmount(e.target.value)} aria-label={`${row.name} 기부 골드`} />
           </Inset>
           <span className="text-2xs text-text-dim">기부한 골드는 돌려받지 않아요.</span>
-          <Button type="submit" variant="primary" full disabled={busy}>기부</Button>
         </form>
       </ModalCard>
     </Modal>

@@ -50,6 +50,18 @@ describe('ModalCard', () => {
     render(<ModalCard title="조우"><p>본문</p></ModalCard>);
     expect(screen.queryByRole('button', { name: /닫기/ })).toBeNull();
   });
+  it('카드는 className을 받지 않는다 — 스크롤 클래스가 카드 자체에 걸리는 길을 타입으로 막는다', () => {
+    render(
+      // @ts-expect-error 카드에는 className이 없다. 변형은 centered 같은 명시 prop으로 고른다
+      <ModalCard title="창" className="overflow-y-auto"><p>본문</p></ModalCard>,
+    );
+    const card = screen.getByText('창').parentElement as HTMLElement;
+    expect(card.className).not.toMatch(/overflow|pf-vscroll/);
+  });
+  it('centered는 본문 글줄을 가운데 맞춘다', () => {
+    render(<ModalCard title="조우" centered><p>본문</p></ModalCard>);
+    expect(screen.getByText('조우').parentElement).toHaveClass('text-center', 'text-sm');
+  });
   it('스테이지 모달은 className을 받지 않는다 — 높이는 height로 고른다(타입 검사)', () => {
     render(
       // @ts-expect-error 스테이지 모달의 투명 래퍼에는 스크롤 클래스가 들어갈 길이 없어야 한다
