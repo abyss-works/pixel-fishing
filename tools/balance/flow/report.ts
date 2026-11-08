@@ -5,6 +5,8 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { zoneById } from '../../../src/game/content/zones';
 import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
 import { entryLevel } from '../model';
+import { gateRows } from '../gates';
+import type { GateRow } from '../gates';
 import { applyOverride, loadOverride } from './override';
 import type { FlowOverride } from './override';
 import type { FlowAxis } from './progress';
@@ -19,8 +21,10 @@ import type { EvReport } from './ev';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev';
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates';
+/** 명령을 생략하면 내는 지표 명령 — gates는 판정 명령이라 이름을 줄 때만 실행한다 */
 export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
+const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates'];
 
 export interface FlowOptions {
   commands: Command[];
@@ -37,8 +41,8 @@ export interface FlowOptions {
   help: boolean;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev] [옵션]
-명령을 생략하면 다섯 가지를 모두 낸다.
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates] [옵션]
+명령을 생략하면 gates를 뺀 다섯 가지를 모두 낸다.
 
 명령
   transition  해역 전환: 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 연속 방치 소요, 배 명성 대기, 유형별 도착 일차
@@ -46,10 +50,12 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
   ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다
+  gates       게이트 검사: 새 해역 진입 레벨의 방치 수입이 같은 레벨로 낚을 수 있는 이전 해역의 가장 좋은 값 이상인지 전환마다 판정(통과, 위반, 예외). 위반이 하나라도 있으면 종료 코드 1
 
 옵션
-  --override <파일>  배 가격, 명성 요구치, 해역 요구 파워를 덮어쓰는 JSON. 형식은
-                     {"boats":{"2":{"price":2500,"fameReq":800}},"spots":{"sea":{"powerReq":35}}}
+  --override <파일>  배 가격, 명성 요구치, 해역 요구 파워, 해역 어종 가격 배율을 덮어쓰는 JSON. 형식은
+                     {"boats":{"2":{"price":2500,"fameReq":800}},"spots":{"sea":{"powerReq":35,"priceMult":0.85}}}
+                     priceMult는 그 해역 어종 판매가에 곱하고 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
   --json             표 대신 JSON으로 낸다
   --loss4h <N>       4시간 유형에서 접속해 있어도 낚지 못하는 비율(%). 근거 있는 값이 없어 생략하면 0, 25, 50(낚시 100%, 75%, 50%)을 모두 낸다
   --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
@@ -95,7 +101,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       }
       continue;
     }
-    if (!(COMMANDS as readonly string[]).includes(a)) throw new Error(`알 수 없는 명령입니다: ${a} (--help 참고)`);
+    if (!(NAMED_COMMANDS as readonly string[]).includes(a)) throw new Error(`알 수 없는 명령입니다: ${a} (--help 참고)`);
     if (command) throw new Error('명령은 하나만 고를 수 있습니다');
     command = a as Command;
   }
@@ -114,6 +120,7 @@ export interface FlowResult {
   days?: DaysReport;
   opening?: OpeningResult[];
   ev?: EvReport;
+  gates?: GateRow[];
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -135,6 +142,7 @@ export function runFlow(o: FlowOptions): FlowResult {
       res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
     }
     if (o.commands.includes('ev')) res.ev = evReport();
+    if (o.commands.includes('gates')) res.gates = gateRows();
     if (o.commands.includes('exception')) {
       res.exception = {
         income: incomeByOffset(o.axis), earlyEntry: earlyEntry(o.axis), returnTrips: returnTrips(o.axis), huntCost: huntCost(o.axis),
@@ -353,6 +361,21 @@ function exceptionText(e: NonNullable<FlowResult['exception']>, o: FlowResult['o
   return out;
 }
 
+function gatesText(rows: GateRow[]): string[] {
+  const poolLabel = { day: '낮 풀', mixed: '낮밤 혼합' } as const;
+  const out: string[] = ['\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)'];
+  out.push(table(
+    ['전환', '풀', '비교 해역', '이동 전 수입(G/h)', '이동 직후 수입(G/h)', '차이', '판정'],
+    rows.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), r.verdict]),
+  ));
+  const count = (v: GateRow['verdict']) => rows.filter(r => r.verdict === v).length;
+  out.push(`\n통과 ${count('통과')}, 예외 ${count('예외')}, 위반 ${count('위반')}`);
+  return out;
+}
+
+/** 위반이 하나라도 있으면 true — gates 명령의 종료 코드 판정 */
+export const hasViolation = (r: FlowResult): boolean => (r.gates ?? []).some(g => g.verdict === '위반');
+
 /** 결과를 사람이 읽는 표로 바꾼다 */
 export function renderText(r: FlowResult): string {
   const o = r.options;
@@ -365,5 +388,20 @@ export function renderText(r: FlowResult): string {
   if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
   if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
   if (r.ev) lines.push(...evText(r.ev, o), assumptionText('ev', o));
+  if (r.gates) lines.push(...gatesText(r.gates));
   return lines.join('\n');
+}
+
+export interface CliResult { stdout: string; stderr: string; exitCode: number }
+
+/** 명령줄 인자를 실행해 출력과 종료 코드를 돌려준다. 오류와 게이트 위반은 종료 코드 1이다 */
+export function runCli(argv: readonly string[]): CliResult {
+  try {
+    const options = parseArgs(argv);
+    if (options.help) return { stdout: HELP, stderr: '', exitCode: 0 };
+    const result = runFlow(options);
+    return { stdout: options.json ? JSON.stringify(result, null, 2) : renderText(result), stderr: '', exitCode: hasViolation(result) ? 1 : 0 };
+  } catch (e) {
+    return { stdout: '', stderr: `오류: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+  }
 }
