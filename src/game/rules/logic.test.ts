@@ -168,7 +168,7 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
     // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(392.6, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(349.0, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
@@ -994,31 +994,59 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 시뮬 JSON의 simEV를 그대로 앵커로 고정한다 — 등급 예산 ×2 + 만새기/꽁치 weight 2 +
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
-  // 등급 가중치 만분율 전환(인도양 일반 8150·희귀 1400·영웅 400·전설 50 등) 반영 — 인도양 430.7 / 남인도양 550.5.
+  // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
+  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7.
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
     idleWorst: { commonMult: 10 },
   } as const;
 
-  it('인도양 — normal 430.7 / perfect 707.4 / 방치×10 76.8', () => {
-    expect(goldEV('indian', dials.normal)).toBeCloseTo(430.73, 1);
-    expect(goldEV('indian', dials.perfect)).toBeCloseTo(707.36, 1);
-    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(76.76, 1);
+  it('인도양 — normal 491.1 / perfect 762.8 / 방치×10 88.9', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(491.09, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(762.77, 1);
+    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(88.89, 1);
   });
 
-  it('남인도양 — normal 550.5 / perfect 872.8 / 방치×10 96.0', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(550.45, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(872.83, 1);
-    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(96.01, 1);
+  it('남인도양 — normal 694.7 / perfect 1085.1 / 방치×10 116.8', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(694.7, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(1085.08, 1);
+    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(116.78, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
     const rows = drawRows('indian', {}).filter(r => r.fish.rarity === 'common');
     const share = Object.fromEntries(rows.map(r => [r.fish.id, r.fishPct]));
-    // 일반 가중치 8150 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(4075/10000 = 40.75%)
-    expect(share.horsejack).toBeCloseTo(40.75, 3);
-    expect(share.ribbonfish).toBeCloseTo(20.375, 3);
+    // 일반 가중치 7400 안에서 가중치 합 4(1+2+1) — 전갱이가 절반(3700/10000 = 37.00%)
+    expect(share.horsejack).toBeCloseTo(37, 3);
+    expect(share.ribbonfish).toBeCloseTo(18.5, 3);
+  });
+});
+
+describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 ×10·×4)', () => {
+  const idle = (spot: Parameters<typeof goldEV>[0]) => [10, 4].map(m => goldEV(spot, { commonMult: m }));
+
+  it('해역 순서대로 줄어드는 곳이 없다', () => {
+    for (let i = 1; i < SPOTS.length; i++) {
+      const [a10, a4] = idle(SPOTS[i - 1].id);
+      const [b10, b4] = idle(SPOTS[i].id);
+      expect(b10, `${SPOTS[i].id} ×10`).toBeGreaterThan(a10);
+      expect(b4, `${SPOTS[i].id} ×4`).toBeGreaterThan(a4);
+    }
+  });
+
+  it('남대서양 첫 해역은 코모로 심해 대비 약 80%, 세인트헬레나는 용승대 대비 약 30% 오른다 (±5%p)', () => {
+    const [c10, c4] = idle('comorodeep');
+    const [b10, b4] = idle('benguela');
+    const [h10, h4] = idle('sthelena');
+    for (const r of [b10 / c10, b4 / c4]) {
+      expect(r).toBeGreaterThanOrEqual(1.75);
+      expect(r).toBeLessThanOrEqual(1.85);
+    }
+    for (const r of [h10 / b10, h4 / b4]) {
+      expect(r).toBeGreaterThanOrEqual(1.25);
+      expect(r).toBeLessThanOrEqual(1.35);
+    }
   });
 });
 
@@ -1041,7 +1069,9 @@ describe('가중치 추첨', () => {
 
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(50 / 10000, 10);
+    expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(60 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(20 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });

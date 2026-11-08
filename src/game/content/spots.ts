@@ -31,19 +31,15 @@ const DATA = [
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
   // 여러 해역을 한 번에 탐험하는 느낌).
   { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
-    powerReq: 85,   // Lv16 환산 (10+(16-1)*5)
-    rarityWeight: { rare: 1400, epic: 400, legendary: 50 } },
+    powerReq: 85 }, // Lv16 환산 (10+(16-1)*5)
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
-    powerReq: 95,   // Lv18 환산 (10+(18-1)*5)
-    rarityWeight: { rare: 1500, epic: 800, legendary: 50 } },
+    powerReq: 95 }, // Lv18 환산 (10+(18-1)*5)
   // 1-4 마다가스카르 — 일반 연안(모잠비크 해협) + 특화 심해(코모로 심해). 두 수역 모두 tier7 한 척으로
-  // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 가중치는 두 수역이 같다.
+  // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 가중치 덮어쓰기가 없어 지역 단계 프리셋을 따른다.
   { id: 'mozstrait',   name: '모잠비크 해협', boatTier: 7, region: 'madagascar',
-    powerReq: 105,  // Lv20 환산
-    rarityWeight: { rare: 1500, epic: 800, legendary: 30 } },
+    powerReq: 105 }, // Lv20 환산
   { id: 'comorodeep',  name: '코모로 심해',   boatTier: 7, region: 'madagascar',
-    powerReq: 115,  // Lv22 환산
-    rarityWeight: { rare: 1500, epic: 800, legendary: 30 } },
+    powerReq: 115 }, // Lv22 환산
   // 1-5 남대서양 — 특수 해역 둘(일반 연안 없음). 두 해역 모두 tier8 한 척으로 연다.
   // 등급 가중치 덮어쓰기가 없어 최신 지역 프리셋을 따른다.
   { id: 'benguela',    name: '남대서양 용승대', boatTier: 8, region: 'southatlantic',
