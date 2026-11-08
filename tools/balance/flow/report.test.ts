@@ -85,6 +85,55 @@ describe('실행과 출력', () => {
     for (const w of ['도착 일차', '수행 안 함', '모두 수행', '레벨업']) expect(text).toContain(w);
   });
 
+  it('덮어쓴 해역 요구 파워가 표 라벨에도 덮어쓴 값으로 나온다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flow-report-'));
+    const file = join(dir, 'o.json');
+    writeFileSync(file, JSON.stringify({ spots: { sthelena: { powerReq: 165 } } }), 'utf-8');
+    const text = renderText(runFlow(base({ commands: ['transition', 'exception'], override: file })));
+    expect(text).toContain('Lv32(165)');
+    expect(text).not.toContain('Lv29(150)');
+    expect(text).toContain('세인트헬레나(32)');
+    expect(text).not.toContain('세인트헬레나(29)');
+  });
+
+  it('유형별 전환 표에는 연속 방치 값 열이 없고 연속 방치 표에만 있다', () => {
+    const text = renderText(runFlow(base({ commands: ['transition'], loss4h: 25 })));
+    const start = text.indexOf('### 4시간(낚시 75%)');
+    const section = text.slice(start, text.indexOf('###', start + 4) === -1 ? undefined : text.indexOf('###', start + 4));
+    for (const w of ['연속 방치 소요', '기다린 것', '명성 대기']) expect(section).not.toContain(w);
+    expect(section).toContain('도착 일차');
+    const continuous = text.slice(text.indexOf('## 해역 전환 — 연속 방치 소요'), start);
+    for (const w of ['연속 방치 소요', '기다린 것', '명성 대기']) expect(continuous).toContain(w);
+  });
+
+  it('4시간 유형은 기본으로 낚시 100%, 75%, 50%를 함께 내고 비율을 주면 그 값 하나만 낸다', () => {
+    const all = renderText(runFlow(base({ commands: ['transition'] })));
+    for (const w of ['### 4시간(낚시 100%)', '### 4시간(낚시 75%)', '### 4시간(낚시 50%)']) expect(all).toContain(w);
+    const one = renderText(runFlow(base({ commands: ['transition'], loss4h: 40 })));
+    expect(one).toContain('### 4시간(낚시 60%)');
+    expect(one).not.toContain('### 4시간(낚시 75%)');
+  });
+
+  it('각 명령 출력은 그 표가 기대는 가정을 가정: 으로 밝힌다', () => {
+    const t = (c: 'transition' | 'days' | 'opening' | 'exception') => renderText(runFlow(base({ commands: [c] })));
+    const want: Record<string, string[]> = {
+      transition: ['가정:', '낚지 못하는 비율', '8시간 유형은 깨어 있는 동안 가방이 차지 않는다고 가정(사용자 확인 대기)', '잠든 동안'],
+      days: ['가정:', '0.5', '어종 천장', '결투', '레벨업', '라이선스', '골드 보상만'],
+      opening: ['가정:', '낚는 시간만'],
+      exception: ['가정:', '줄 끊김', '결투'],
+    };
+    for (const [c, words] of Object.entries(want)) {
+      const text = t(c as 'days');
+      for (const w of words) expect(text, `${c} ${w}`).toContain(w);
+    }
+  });
+
+  it('가방 한도 옵션을 켜면 가정 문구가 바뀐다', () => {
+    const text = renderText(runFlow(base({ commands: ['transition'], bagCapAwake: true })));
+    expect(text).not.toContain('사용자 확인 대기');
+    expect(text).toContain('가방 한도를 적용');
+  });
+
   it('JSON 출력은 선택한 명령의 데이터만 담는다', () => {
     const r = runFlow(base({ commands: ['opening'], json: true }));
     expect(Object.keys(r).sort()).toEqual(['opening', 'options']);

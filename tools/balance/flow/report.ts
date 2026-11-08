@@ -100,8 +100,13 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
   return o;
 }
 
+export interface SpotInfo { id: SpotId; name: string; powerReq: number; entryLevel: number }
+
 export interface FlowResult {
-  options: { axis: FlowAxis; loss4h: number | null; legendAt: number | null; maxDays: number; bagCapAwake: boolean; override: FlowOverride | null };
+  options: { axis: FlowAxis; loss4h: number | null; legendAt: number | null; maxDays: number; bagCapAwake: boolean; override: FlowOverride | null;
+    /** 계산 당시의 해역 표시 값 — 덮어쓰기를 되돌린 뒤에도 표 라벨이 덮어쓴 값으로 나오게 담아 둔다 */
+    spots: SpotInfo[];
+  };
   transition?: TransitionReport;
   days?: DaysReport;
   opening?: OpeningResult[];
@@ -116,7 +121,8 @@ export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
   const restore = override ? applyOverride(override) : () => {};
   try {
-    const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override } };
+    const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override,
+      spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
     const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake };
     if (o.commands.includes('transition')) res.transition = transitionReport(sim);
     if (o.commands.includes('days')) res.days = daysReport(sim);
@@ -147,31 +153,68 @@ function table(headers: string[], rows: (string | number)[][]): string {
   return [`| ${headers.join(' | ')} |`, `|${headers.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.join(' | ')} |`)].join('\n');
 }
 
-function transitionText(t: TransitionReport, axis: FlowAxis): string[] {
+const BAG_ASSUMPTION = (o: FlowResult['options']) => o.bagCapAwake
+  ? '깨어 있는 동안에도 가방 한도를 적용한다(하루 깨어 있는 동안 한 번도 팔지 않는 하한 계산). 가방이 차면 골드만 멈추고 명성과 도감은 쌓인다'
+  : '8시간 유형은 깨어 있는 동안 가방이 차지 않는다고 가정(사용자 확인 대기). 깨어 있는 동안은 자주 판다고 보고 가방 한도를 보지 않는다(--bag-cap-awake로 한도 적용 비교)';
+const LOSS_ASSUMPTION = (o: FlowResult['options']) =>
+  `4시간 유형의 낚지 못하는 비율은 근거 있는 값이 없는 가정이다${o.loss4h === null ? '. 낚시 100%, 75%, 50%를 함께 낸다' : `. 이번에는 ${o.loss4h}%만 낸다`}`;
+const SLEEP_ASSUMPTION = '16시간 유형은 잠든 동안 방치로 낚는다. 가방이 차면 골드만 멈추고 명성과 도감은 잠든 시간 내내 쌓인다';
+const BASIC_ASSUMPTION = '판매는 즉시이고 이동, 판매 왕복, 미끼, 유물, 쿠폰은 넣지 않는다. 방치 사이클은 모델 사이클이다';
+
+function assumptionText(command: Command, o: FlowResult['options']): string {
+  const lines: string[] = [BASIC_ASSUMPTION];
+  if (command === 'transition') {
+    lines.push(LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION, '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', '도착 일차는 의뢰와 토벌을 하지 않는 경우다');
+  } else if (command === 'days') {
+    lines.push(
+      LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION,
+      '의뢰 라이선스는 그 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
+      '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
+      '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
+      '레벨업은 낚싯대가 그 레벨에 처음 닿은 시점에 시뮬레이션이 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다',
+    );
+  } else if (command === 'opening') {
+    lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
+  } else {
+    lines.push(
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다`,
+      '파워 미달 해역의 줄 끊김(미끼만 훔쳐먹는 안내)은 사이클에 넣지 않는다',
+      '조기 진입은 같은 배로 열리는 이전 해역과, 토벌 비용은 천장을 넣은 기대 캐치 수와 비교한다. 네임드 결투는 항상 이긴다',
+    );
+  }
+  return ['\n가정:', ...lines.map(l => `- ${l}`)].join('\n');
+}
+
+function transitionText(t: TransitionReport, o: FlowResult['options']): string[] {
+  const info = new Map(o.spots.map(x => [x.id, x]));
   const out: string[] = [];
   out.push('\n## 해역 전환 — 전환 골드와 비중 (다음 해역 진입 레벨까지 강화비 + 새 배 가격)');
   out.push(table(
     ['전환', '진입 Lv(요구 파워)', '새 배(가격 / 명성 요구치)', '강화 골드', '배 골드', '전환 골드', '강화 비중', '배 비중'],
     t.rows.map(r => [
-      `${nameOf(r.from)} → ${nameOf(r.to)}`, `Lv${r.toLevel}(${SPOTS.find(s => s.id === r.to)!.powerReq ?? 0})`,
+      `${nameOf(r.from)} → ${nameOf(r.to)}`, `Lv${r.toLevel}(${info.get(r.to)!.powerReq})`,
       r.boats.length ? r.boats.map(b => `${b.name}(${n0(b.price)} / ${n0(b.fameReq)})`).join(' + ') : '없음',
       n0(r.upgradeGold), n0(r.boatGold), n0(r.totalGold), pct1(r.upgradeShare), pct1(r.boatShare),
     ]),
   ));
+  out.push(`\n## 해역 전환 — 연속 방치 소요 (쉬지 않고 낚을 때, 낚시 방식 ${AXIS_LABEL[o.axis]})${t.continuousComplete ? '' : ' — 최대 일수 안에 끝나지 않음'}`);
+  out.push(table(
+    ['전환', '연속 방치 소요', '누적', '기다린 것(골드 · 명성 · 둘 다)', '명성 대기 ÷ 골드 대기'],
+    t.continuous.map(c => [
+      `${nameOf(c.row.from)} → ${nameOf(c.row.to)}`, hrs(c.hours), hrs(c.cumulativeHours),
+      `${hrs(c.waitGold)} · ${hrs(c.waitFame)} · ${hrs(c.waitBoth)}`, c.fameOverGold === null ? '—' : `${c.fameOverGold.toFixed(2)}배`,
+    ]),
+  ));
   for (const type of t.types) {
-    out.push(`\n### ${type.type.label} — 낚시 방식 ${AXIS_LABEL[axis]}${type.complete ? '' : ' (최대 일수 안에 끝나지 않음)'}`);
+    out.push(`\n### ${type.type.label} — 낚시 방식 ${AXIS_LABEL[o.axis]}${type.complete ? '' : ' (최대 일수 안에 끝나지 않음)'}`);
     out.push(table(
-      ['전환', '연속 방치 소요', '누적', '도착 일차', '소요 일수', '기다린 것(골드 · 명성 · 둘 다)', '명성 대기 ÷ 골드 대기'],
-      type.steps.map((s, i) => {
-        const c = t.continuous[i];
-        return [
-          `${nameOf(c.row.from)} → ${nameOf(c.row.to)}`, hrs(c.hours), hrs(c.cumulativeHours), `${s.day}일째`, `${s.days}일`,
-          `${hrs(c.waitGold)} · ${hrs(c.waitFame)} · ${hrs(c.waitBoth)}`, c.fameOverGold === null ? '—' : `${c.fameOverGold.toFixed(2)}배`,
-        ];
+      ['전환', '도착 일차', '소요 일수'],
+      type.steps.map(s => {
+        const from = SPOTS[SPOTS.findIndex(x => x.id === s.to) - 1].id;
+        return [`${nameOf(from)} → ${nameOf(s.to)}`, `${s.day}일째`, `${s.days}일`];
       }),
     ));
   }
-  if (!t.continuousComplete) out.push('\n(연속 방치 시뮬레이션이 최대 일수 안에 끝나지 않았다)');
   return out;
 }
 
@@ -225,13 +268,15 @@ function openingText(rows: OpeningResult[]): string[] {
   return out;
 }
 
-function exceptionText(e: NonNullable<FlowResult['exception']>, axis: FlowAxis): string[] {
+function exceptionText(e: NonNullable<FlowResult['exception']>, o: FlowResult['options']): string[] {
+  const axis = o.axis;
+  const info = new Map(o.spots.map(x => [x.id, x]));
   const out: string[] = [];
   const grid = (title: string, cell: (c: NonNullable<IncomeRow['cells'][number]>) => string) => {
     out.push(`\n### ${title}`);
     out.push(table(
       ['해역(진입 Lv)', ...OFFSETS.map(o => (o > 0 ? `+${o}` : String(o)))],
-      e.income.map(r => [`${nameOf(r.spot)}(${entryLevel(r.spot)})`, ...r.cells.map(c => (c ? cell(c) : '—'))]),
+      e.income.map(r => [`${nameOf(r.spot)}(${info.get(r.spot)!.entryLevel})`, ...r.cells.map(c => (c ? cell(c) : '—'))]),
     ));
   };
   out.push(`\n## 진입 레벨 대비 수입 — 진입 레벨 -4부터 +4까지, 낚시 방식 ${AXIS_LABEL[axis]}, 낮밤 혼합`);
@@ -263,9 +308,9 @@ export function renderText(r: FlowResult): string {
     `# 플레이 흐름 시뮬레이션 — 낚시 방식 ${AXIS_LABEL[o.axis]}, 4시간 유형 낚지 못하는 비율 ${o.loss4h === null ? '0%, 25%, 50%' : `${o.loss4h}%`}, 최대 ${o.maxDays}일`,
     o.override ? `덮어쓰기: ${JSON.stringify(o.override)}` : '덮어쓰기: 없음',
   ];
-  if (r.transition) lines.push(...transitionText(r.transition, o.axis));
-  if (r.days) lines.push(...daysText(r.days));
-  if (r.opening) lines.push(...openingText(r.opening));
-  if (r.exception) lines.push(...exceptionText(r.exception, o.axis));
+  if (r.transition) lines.push(...transitionText(r.transition, o), assumptionText('transition', o));
+  if (r.days) lines.push(...daysText(r.days), assumptionText('days', o));
+  if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
+  if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
   return lines.join('\n');
 }
