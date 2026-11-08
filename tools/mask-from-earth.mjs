@@ -17,11 +17,13 @@
 //   zones[]       { ch, name, lon, lat, rx, ry }  타원 특화 수역(육지 우선, 나중 항목 우선)
 //   openZones[]   { ch, lonMin, lonMax, latMin, latMax }  열린 바다 구역 — **맨물('.'=기본 물)만**
 //                 지정 문자로 바꾼다(오픈월드 구역 경계 인코딩용). 배열 순서 = 나중 항목 우선,
-//                 특화 수역·육지는 절대 덮지 않는다. ch가 'L'이면 맨물을 육지로 바꿔 통행 불가 띠를 만든다.
+//                 특화 수역·육지는 절대 덮지 않는다.
 //   globalGrid    (선택) 전지구 고정 격자 { origin: { lon, lat }, cellsPerDeg: { lon, lat } }
 //                 게임 픽셀 좌표의 원점(서북 모서리)과 해상도를 창과 무관하게 고정한다. 창의 서북 모서리는
 //                 원점에서 정수 칸 떨어져야 하고, 창의 해상도는 cellsPerDeg와 같아야 한다 — 아니면 생성 중단.
 //                 없으면 창의 서북 모서리가 원점이다(오프셋 0).
+//   islands[]     { name, lon, lat }  벤더 데이터에 칸 단위로 잡히지 않는 작은 섬 — 경위도가 속한 칸 하나를 육지로 찍는다
+//                 (섬은 칸 한 개가 최소 단위다). 특화 수역 스탬프 전에 찍으므로 수역 타원이 섬을 둘러싼다.
 //   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water' }
 //                 경위도 → 원점 기준 게임 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
@@ -49,7 +51,7 @@ if (cfg.extends) {
   }
 }
 
-const { id = '(inline)', geo, zones = [], openZones = [], anchors = {} } = cfg;
+const { id = '(inline)', geo, zones = [], openZones = [], islands = [], anchors = {} } = cfg;
 const cellW = cfg.cell?.w ?? 8;
 const cellH = cfg.cell?.h ?? 11;
 const cols = cfg.grid?.cols;
@@ -149,6 +151,19 @@ for (const ring of rings) {
   }
 }
 
+// --- 1.5. 작은 섬 스탬프 (칸 하나) ---
+const islandCells = [];
+for (const isl of islands) {
+  if (typeof isl.lon !== 'number' || typeof isl.lat !== 'number') {
+    console.error(`[${id}] 잘못된 island: ${JSON.stringify(isl)}`);
+    process.exit(2);
+  }
+  const c = Math.floor(colOf(isl.lon)), r = Math.floor(rowOf(isl.lat));
+  if (c < 0 || r < 0 || c >= cols || r >= rows) { warns.push(`island '${isl.name ?? ''}' 가 격자 밖이다`); continue; }
+  if (ch[r][c] !== LAND) { ch[r][c] = LAND; landCells++; }
+  islandCells.push({ name: isl.name ?? '', c, r });
+}
+
 // --- 2. 특화 수역 스탬프 (육지 우선, 나중 항목 우선) ---
 for (const z of zones) {
   if (!z.ch || z.ch === LAND || typeof z.lon !== 'number' || typeof z.lat !== 'number' ||
@@ -176,7 +191,7 @@ for (const z of zones) {
 // --- 2.5. 열린 바다 구역 스탬프 (맨물만 — 육지·특화 수역 보존, 나중 항목 우선) ---
 const OZ = '.'; // 스탬프 대상 = 아무 정의도 안 받은 기본 물
 for (const oz of openZones) {
-  if (!oz.ch || oz.ch === OZ ||
+  if (!oz.ch || oz.ch === OZ || oz.ch === LAND ||
       ![oz.lonMin, oz.lonMax, oz.latMin, oz.latMax].every(v => typeof v === 'number')) {
     console.error(`[${id}] 잘못된 openZone: ${JSON.stringify(oz)}`);
     process.exit(2);
@@ -229,6 +244,9 @@ const ratio = (pxPerDegLat / pxPerDegLon) / idealRatio;
 
 console.error(`[${id}] 격자 ${cols}x${rows}셀(${W}x${H}px) · 창 lon ${win.lonMin}..${win.lonMax} lat ${win.latMin}..${win.latMax} · 육지 ${landCells}칸`);
 console.error(`[${id}] 종횡비 px/°경=${pxPerDegLon.toFixed(1)} px/°위=${pxPerDegLat.toFixed(1)} · 위도 ${midLat}° 기준 이상비 대비 ${(ratio * 100).toFixed(0)}%${Math.abs(ratio - 1) > 0.12 ? '  ⚠ 12% 초과 권장 이탈' : ''}`);
+for (const i of islandCells) {
+  console.error(`[${id}] 섬 ${i.name} = 격자 (열 ${i.c}, 행 ${i.r}), 게임 좌표 (${(i.c + offCol) * cellW},${(i.r + offRow) * cellH})`);
+}
 for (const [name, p] of Object.entries(projected)) {
   console.error(`[${id}] 앵커 ${name} = (${p.x},${p.y})${anchors[name].terrain ? `[${anchors[name].terrain}]` : ''}`);
 }

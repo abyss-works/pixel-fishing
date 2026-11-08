@@ -132,12 +132,12 @@ describe('마스크 생성기 전지구 원점', () => {
   });
 });
 
-describe('openZones의 육지 문자 — 통행 불가 띠', () => {
+describe('islands — 작은 섬 한 칸', () => {
   const win = { lonMin: 55, lonMax: 75, latMin: 24, latMax: 44 };
-  const run = (openZones: object[]) => {
-    const cfg = { id: 'wall', geo: geoPath, cell: { w: 8, h: 11 }, grid: { cols: 80, rows: 58 }, window: win,
-      globalGrid: GLOBAL, openZones };
-    const out = join(tmp, 'wall.ts');
+  const run = (islands: object[], zones: object[] = []) => {
+    const cfg = { id: 'isl', geo: geoPath, cell: { w: 8, h: 11 }, grid: { cols: 80, rows: 58 }, window: win,
+      globalGrid: GLOBAL, islands, zones };
+    const out = join(tmp, 'isl.ts');
     const r = spawnSync(process.execPath, ['tools/mask-from-earth.mjs', JSON.stringify(cfg), '--out', out],
       { encoding: 'utf8' });
     return { status: r.status, rows: parse(out).rows };
@@ -145,25 +145,16 @@ describe('openZones의 육지 문자 — 통행 불가 띠', () => {
   const rowAt = (rows: string[], lat: number) => rows[Math.floor((44 - lat) * 2.9)];
   const colAt = (lon: number) => Math.floor((lon - 55) * 4);
 
-  it('맨물만 육지로 바꾸고 기존 육지와 구역 문자는 그대로 둔다', () => {
-    const r = run([
-      { ch: 'a', lonMin: 55, lonMax: 65, latMin: 24, latMax: 34 },
-      { ch: 'L', lonMin: 55, lonMax: 75, latMin: 34, latMax: 35 },
-    ]);
+  it('경위도가 속한 칸 하나만 육지로 찍는다', () => {
+    const r = run([{ name: '섬', lon: 60.1, lat: 40.2 }]);
     expect(r.status).toBe(0);
-    const wall = rowAt(r.rows, 34.5);
-    expect(wall[colAt(56)]).toBe('L');
-    expect(wall[colAt(73)]).toBe('L');
-    expect(rowAt(r.rows, 28)[colAt(56)]).toBe('a');
-    expect(rowAt(r.rows, 40)[colAt(56)]).toBe('.');
+    expect(rowAt(r.rows, 40.2)[colAt(60.1)]).toBe('L');
+    expect(r.rows.join('').split('L').length - 1).toBe(1);
   });
 
-  it('앞서 칠한 구역 문자는 육지 띠가 덮지 않는다', () => {
-    const r = run([
-      { ch: 'a', lonMin: 55, lonMax: 65, latMin: 24, latMax: 35 },
-      { ch: 'L', lonMin: 55, lonMax: 75, latMin: 34, latMax: 35 },
-    ]);
-    expect(rowAt(r.rows, 34.5)[colAt(56)]).toBe('a');
-    expect(rowAt(r.rows, 34.5)[colAt(73)]).toBe('L');
+  it('수역 타원이 섬을 덮지 않고 둘러싼다', () => {
+    const r = run([{ name: '섬', lon: 60.1, lat: 40.2 }], [{ ch: 'h', name: '해역', lon: 60.1, lat: 40.2, rx: 1, ry: 1 }]);
+    expect(rowAt(r.rows, 40.2)[colAt(60.1)]).toBe('L');
+    expect(rowAt(r.rows, 40.2)[colAt(60.1) + 1]).toBe('h');
   });
 });
