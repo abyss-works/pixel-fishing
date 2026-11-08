@@ -11,8 +11,8 @@ export const RARITY_TOTAL = 10000;
 export type RarityPermyriad = Record<Exclude<RarityId, 'common'>, number>;
 
 export const RARITY_PRESETS = {
-  latest:   { rare: 2000, epic: 300, legendary: 20 },
-  previous: { rare: 2000, epic: 400, legendary: 60 },
+  latest:   { rare: 2000, epic: 300, legendary: 10 },
+  previous: { rare: 2000, epic: 400, legendary: 55 },
   stable:   { rare: 2000, epic: 500, legendary: 100 },
 } as const satisfies Record<string, RarityPermyriad>;
 

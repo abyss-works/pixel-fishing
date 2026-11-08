@@ -8,8 +8,8 @@ import { RARITY_ORDER } from './rarity.js';
 
 describe('등급 가중치 프리셋', () => {
   it('프리셋 값', () => {
-    expect(RARITY_PRESETS.latest).toEqual({ rare: 2000, epic: 300, legendary: 20 });
-    expect(RARITY_PRESETS.previous).toEqual({ rare: 2000, epic: 400, legendary: 60 });
+    expect(RARITY_PRESETS.latest).toEqual({ rare: 2000, epic: 300, legendary: 10 });
+    expect(RARITY_PRESETS.previous).toEqual({ rare: 2000, epic: 400, legendary: 55 });
     expect(RARITY_PRESETS.stable).toEqual({ rare: 2000, epic: 500, legendary: 100 });
   });
 
@@ -30,7 +30,7 @@ describe('등급 가중치 프리셋', () => {
 
   it('인도양 지역은 안정화, 마다가스카르 지역은 한 단계 이전, 남대서양은 최신 프리셋을 쓴다', () => {
     const stable = { common: 7400, rare: 2000, epic: 500, legendary: 100 };
-    const previous = { common: 7540, rare: 2000, epic: 400, legendary: 60 };
+    const previous = { common: 7545, rare: 2000, epic: 400, legendary: 55 };
     expect(rarityWeightsOf('indian')).toEqual(stable);
     expect(rarityWeightsOf('southindian')).toEqual(stable);
     expect(rarityWeightsOf('mozstrait')).toEqual(previous);
@@ -38,7 +38,7 @@ describe('등급 가중치 프리셋', () => {
   });
 
   it('남대서양 두 해역은 덮어쓰기 없이 최신 지역 프리셋을 쓴다', () => {
-    const latest = { common: 7680, rare: 2000, epic: 300, legendary: 20 };
+    const latest = { common: 7690, rare: 2000, epic: 300, legendary: 10 };
     expect(rarityWeightsOf('benguela')).toEqual(latest);
     expect(rarityWeightsOf('sthelena')).toEqual(latest);
   });
@@ -87,12 +87,12 @@ describe('지역 단계에 따른 프리셋 선택', () => {
 
   it('소속 지역이 가장 최근 지역이면 최신 프리셋을 쓴다', async () => {
     const m = await load(['village']);
-    expect(m.rarityWeightsOf('pond')).toEqual({ common: 7680, rare: 2000, epic: 300, legendary: 20 });
+    expect(m.rarityWeightsOf('pond')).toEqual({ common: 7690, rare: 2000, epic: 300, legendary: 10 });
   });
 
   it('소속 지역이 한 단계 이전이면 한 단계 이전 프리셋을 쓴다', async () => {
     const m = await load(['village', 'pacific']);
-    expect(m.rarityWeightsOf('pond')).toEqual({ common: 7540, rare: 2000, epic: 400, legendary: 60 });
+    expect(m.rarityWeightsOf('pond')).toEqual({ common: 7545, rare: 2000, epic: 400, legendary: 55 });
   });
 
   it('두 단계 이상 이전이면 안정화 프리셋을 쓴다', async () => {

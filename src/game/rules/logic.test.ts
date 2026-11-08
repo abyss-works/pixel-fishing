@@ -13,7 +13,7 @@ import {
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
   namedWeightsOf, namedEncounterShare, variantShare,
-  makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
+  makeInstance, instanceFish, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
   licenseConditions, zoneDexMissing, LICENSE_GRADES,
@@ -48,13 +48,12 @@ describe('데이터 무결성', () => {
     expect(MAX_BOAT).toBe(8);
   });
 
-  it('남대서양: 해역마다 낮 6종(일반 3·희귀·영웅·전설), 전체 어종 102종(낮 78·밤 24)', () => {
-    expect(FISH).toHaveLength(102);
-    expect(FISH.filter(f => !f.night)).toHaveLength(78);
-    for (const spot of ['benguela', 'sthelena']) {
-      const day = FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
-      expect(day, spot).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
-    }
+  it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
+    expect(FISH).toHaveLength(103);
+    expect(FISH.filter(f => !f.night)).toHaveLength(79);
+    const dayOf = (spot: string) => FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
+    expect(dayOf('benguela')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
+    expect(dayOf('sthelena')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
   });
 
   it('R12: 등급 명성', () => {
@@ -906,6 +905,19 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(mig({ v: 8, tutorials: ['village', 'nope', 3, 'sea'] } as never).tutorials).toEqual(['village', 'sea']);
   });
 
+  it('migrate: 없어진 어종 id의 기록은 오류 없이 살아 있고, 판매가·어종 조회·도감 종 수에서는 빠진다', () => {
+    const inst = { uid: 'a', fishId: 'toothfish', form: 'normal', size: 1, caughtAt: null, spot: null, judgment: null, locked: false };
+    const st = mig({
+      v: 8, bag: [inst], dex: { toothfish: { normal: { count: 2, maxSize: 3, first: 'x' } } },
+      pity: { darktoothfish: 3 },
+    } as never);
+    expect(st.bag).toHaveLength(1);
+    expect(instanceFish(st.bag[0])).toBeUndefined();
+    expect(priceOfInstance(st.bag[0])).toBe(0);
+    expect(instanceName(st.bag[0])).toBe('toothfish');
+    expect(dexSpeciesCount(st)).toBe(0);
+  });
+
   it('migrate: look·hats 부재 → 기본 외형과 빈 목록', () => {
     const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.look).toEqual({ shirt: 0, pants: 0, hat: null });
@@ -1080,8 +1092,8 @@ describe('가중치 추첨', () => {
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(60 / 10000, 10);
-    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(20 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(55 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(10 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });
