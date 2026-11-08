@@ -30,11 +30,12 @@ export default function FacilityCard({ title, onClose, list, detail, summary, co
       </ModalCard>
     );
   }
-  // 목록 칸은 오른쪽으로 14px 내어 막대를 열 사이 틈에 둔다. 상세 칸은 카드 본문과 같이 8px 내어 막대를 카드 안쪽 가장자리에 둔다.
+  // 열 사이 틈은 18px이다. 목록 칸은 오른쪽으로 14px 내어 막대를 틈에 두고, 상세 칸은 왼쪽 4px 여백과 합쳐 두 칸이 겹치지 않는다.
+  // 상세 칸은 카드 본문과 같이 오른쪽으로 8px 내어 막대를 카드 안쪽 가장자리에 둔다.
   // 확정 영역은 상세 칸의 내용 폭(막대와 여백을 뺀 6px 좁은 폭)에 맞춘다.
   return (
     <ModalCard title={title} onClose={onClose} fixed>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-[18px] flex-1 min-h-0">
         <div className={`${SCROLL_Y} -mr-3.5 min-h-0`}>{list}</div>
         <div className="flex flex-col gap-3 min-w-0 min-h-0">
           <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-3 [&>*]:shrink-0`}>{detail}</div>

@@ -8,8 +8,9 @@ import { SCROLL_Y } from './scrollArea';
 // 확정 영역은 윗선으로 가른다. 안에는 잔액 줄·사유처럼 확정 직전에 읽을 것을 두며 confirm(primary 전폭)이 맨 아래에 온다.
 // 닫기는 X 하나뿐이다. 카드는 className을 받지 않는다 — 스크롤 클래스가 카드 자체에 걸리는 길을 구조로 막고, 필요한 변형은 명시 prop으로 둔다.
 // 스크롤 칸은 공용 세로 스크롤 칸(SCROLL_Y)이고, 오른쪽만 카드 안쪽 여백(p-2) 8px 안으로 더 내어 막대가 카드 안쪽 가장자리에 놓인다.
-// 본문 안 요소는 줄어들지 않고 넘치면 스크롤한다.
-const SCROLL_BODY = `${SCROLL_Y} -mr-2 [&>*]:shrink-0`;
+// 본문은 세로 flex다. 줄 수로 높이를 정한 칸(h와 min-h를 가진 스크롤 칸)은 창이 낮으면 남는 높이에 맞춰 먼저 줄어들고,
+// 그 밖의 요소는 내용 높이 밑으로 줄지 않아 칸이 최소 높이에 닿은 뒤에야 본문이 스크롤한다.
+const SCROLL_BODY = `${SCROLL_Y} -mr-2`;
 
 export default function ModalCard({ title, footer, confirm, onClose, fixed, centered, children }: {
   title: string;

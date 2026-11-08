@@ -205,11 +205,11 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
   label: string; rows: FriendItem[] | null; pending: ReactNode; empty: string; actions: (f: FriendItem) => ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-1.5 shrink-0" aria-label={label}>
+    <section className="flex flex-col gap-1.5 min-h-0" aria-label={label}>
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <TableBox className="h-[138px] px-3 py-1">
+      <TableBox className="h-[138px] min-h-16 shrink px-3 py-1">
         {rows && rows.length > 0 ? (
           <DataTable cols={[null, '132px']} nameMin="8rem">
             <tbody>

@@ -28,7 +28,7 @@ import BoatPanel from './BoatPanel';
 import RodPanel from './RodPanel';
 import WardrobePanel from '../wardrobe/WardrobePanel';
 import ShopPanel from './ShopPanel';
-import TableBox from '../../../ui/TableBox';
+import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
 export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | 'wardrobe' | null;
 
@@ -149,7 +149,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
   }
 
   return (
-    <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose}
+    <ModalCard title={`판매: 가방 (${game.bag.length}마리)`} onClose={onClose} fixed
       footer={<>
         {lockedCount > 0 && (
           <Note className="my-0">잠근 개체 {lockedCount}마리는 팔리지 않아요.<br />잠금은 가방 탭에서 풀 수 있어요.</Note>
@@ -161,8 +161,8 @@ function SellPanel({ game, onSell, onClose, busy }: {
           판매 (+{fmtGold(total)})
         </Button>
       }>
-      {/* 어종 목록 — 세로는 카드 본문이 스크롤하고 확정 영역은 고정이다(공용 창 구조). 표가 폭을 넘으면 표만 가로로 스크롤한다. */}
-      <TableBox className="px-3 pt-1 pb-2">
+      {/* 어종 목록 — 확정 영역은 고정이고 이 칸만 세로로 스크롤한다. 높이는 모달 가용 높이와 행 서른 개 높이(840px) 중 작은 값이다 */}
+      <div className={`${SCROLL_Y_ROWS} flex-1 min-h-0 max-h-[840px]`}>
         <DataTable>
           <thead><tr><th>판매</th><th>어종</th><th>등급</th><th>수량</th><th>소계</th></tr></thead>
           <tbody>
@@ -243,7 +243,7 @@ function SellPanel({ game, onSell, onClose, busy }: {
           })}
           </tbody>
         </DataTable>
-      </TableBox>
+      </div>
     </ModalCard>
   );
 }
