@@ -79,18 +79,23 @@ export function rodAxes(state: GameState): RodAxes {
 }
 
 /** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
- *  미달이면 powerZones의 biteExtra만큼 늘어난다.
+ *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소는 그 합계에 비율로 걸린다.
  */
 export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
   const pz = powerZones(state, spotId);
-  if (pz.biteExtra > 0) {
-    return {
-      min: stat(st.biteMin, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
-      max: stat(st.biteMax, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
-    };
-  }
-  return { min: stat(st.biteMin), max: stat(st.biteMax) };
+  const side = (base: number): Stat => {
+    const mods: StatMod[] = pz.biteExtra > 0 ? [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }] : [];
+    const total = base + pz.biteExtra;
+    for (const a of ARTIFACTS) {
+      const level = artifactLevelOf(state, a.id);
+      if (level === 0) continue;
+      const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
+      if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
+    }
+    return stat(base, mods);
+  };
+  return { min: side(st.biteMin), max: side(st.biteMax) };
 }
 
 // 방치(auto) 판정의 일반 등급 가중치 배수 — 해역 요구 파워 대비 레벨 차로 정한다(power.relativeIdleBoost).

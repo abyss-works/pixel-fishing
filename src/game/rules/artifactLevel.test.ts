@@ -4,7 +4,7 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState, baitCost, mutationWeightsOf, variantShare, migrate } from './logic';
 import type { GameState } from './logic';
-import { moveSpeed } from './stats';
+import { moveSpeed, effectiveBite } from './stats';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
@@ -254,5 +254,31 @@ describe('마미 와타의 거울, 전설, 효과 고정', () => {
     const mirror = seed({ ...base, artifacts: ['mami-wata-mirror'] });
     expect(canAcceptQuest(mirror, q, 'harbor', once)).toEqual({ ok: true });
     expect(canAcceptQuest(mirror, q, 'harbor', twice)).toEqual({ ok: false, reason: 'daily-cleared' });
+  });
+});
+
+describe('바깥섬의 봉돌, 입질 대기', () => {
+  const sinker = art('outer-isle-sinker');
+
+  it('입질 대기 감소는 Lv1 10%에 레벨 계수를 곱해 10, 12.5, 15, 17.5, 20%다', () => {
+    const cuts = [1, 2, 3, 4, 5].map(l => artifactEffectsAt(sinker, l).biteWaitCut);
+    expect(cuts).toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
+    expect(artifactHasLevel(sinker)).toBe(true);
+  });
+
+  it('유효 입질 대기는 최소와 최대 모두 감소율만큼 줄고 기여 내역에 유물이 남는다', () => {
+    const plain = effectiveBite(seed({ rod: 29 }), 'sthelena');
+    const withRelic = effectiveBite(seed({ rod: 29, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
+    expect(withRelic.max.value).toBeCloseTo(plain.max.value * 0.9, 10);
+    expect(withRelic.min.mods.some(m => m.id === 'relic-outer-isle-sinker' && m.label === '바깥섬의 봉돌')).toBe(true);
+    expect(plain.min.mods.some(m => m.id.startsWith('relic-'))).toBe(false);
+  });
+
+  it('파워 미달의 추가 대기에도 감소율이 걸린다', () => {
+    const plain = effectiveBite(seed({ rod: 1 }), 'sthelena');
+    const withRelic = effectiveBite(seed({ rod: 1, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    expect(plain.min.mods.some(m => m.id === 'power')).toBe(true);
+    expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
   });
 });

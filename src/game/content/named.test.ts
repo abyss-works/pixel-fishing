@@ -30,15 +30,29 @@ describe('named 데이터 계약', () => {
   });
 
   it('결투 체력은 태평양 5에서 구역마다 1씩 늘어난다 — 뒤 구역 네임드일수록 어렵다', () => {
-    expect(Object.fromEntries(NAMED.map(n => [n.zones[0], n.hp])))
-      .toEqual({ pacific: 5, seasia: 6, indian: 7, madagascar: 8, southatlantic: 9 });
+    const hpByZone: Record<string, number[]> = {};
+    for (const n of NAMED) (hpByZone[n.zones[0]] ??= []).push(n.hp);
+    expect(hpByZone).toEqual({
+      pacific: [5], seasia: [6], indian: [7], madagascar: [8], southatlantic: [9, 9],
+    });
   });
 
-  it('네임드는 5마리이고 아다마스토르는 용승대에서만 나온다', () => {
-    expect(NAMED).toHaveLength(5);
+  it('네임드는 6마리이고 아다마스토르는 용승대에서만 나온다', () => {
+    expect(NAMED).toHaveLength(6);
     const a = namedById('adamastor')!;
     expect(a.zones).toEqual(['southatlantic']);
     expect(a.spot).toBe('benguela');
+  });
+
+  it('야스코니우스는 세인트헬레나에서만 나오는 둥근형이고 결투 체력과 가속은 아다마스토르와 같다', () => {
+    const j = namedById('jasconius')!;
+    const a = namedById('adamastor')!;
+    expect(j.name).toBe('야스코니우스');
+    expect(j.zones).toEqual(['southatlantic']);
+    expect(j.spot).toBe('sthelena');
+    expect(j.shape).toBe('round');
+    expect(j.hp).toBe(a.hp);
+    expect(j.duelSpeedup).toBe(a.duelSpeedup);
   });
 
   it('출현 수역(spot)이 있으면 그 수역은 출현 해역 안에 있다', () => {

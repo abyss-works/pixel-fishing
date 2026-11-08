@@ -91,7 +91,7 @@ ${min}자 이상이어야 해요.`,
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} uid={uid} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} />
       </DevEnvContext.Provider>
       {dialogs}
     </>

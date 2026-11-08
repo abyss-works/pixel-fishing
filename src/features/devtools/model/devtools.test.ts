@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { ARTIFACTS } from '../../../game/content/artifacts';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { BOUNTY_ZONES, dailyQuestFor } from '../../../game/content/bounties';
+import { BOUNTIES, BOUNTY_ZONES, offeredQuestsFor } from '../../../game/content/bounties';
 import { DEBUG_COMMAND_IDS } from '../../../game/rules/debug';
 import { DEV_COMMANDS, devZoneOptions, parseDevArgs } from './commands';
 import { DEV_PRESETS, planPreset } from './presets';
@@ -22,25 +23,38 @@ describe('개발 도구 명령 목록', () => {
     const stats = DEV_COMMANDS.find(c => c.id === 'stats.set')!;
     expect(parseDevArgs(stats, { gold: '1000.9', fame: '' })).toEqual({ ok: true, args: { gold: 1000 } });
     expect(parseDevArgs(stats, { gold: '많이' })).toEqual({ ok: false });
+    const grant = DEV_COMMANDS.find(c => c.id === 'bounty.grantMaterial')!;
+    expect(parseDevArgs(grant, { artifact: 'wreck-compass', count: '12' })).toEqual({ ok: true, args: { artifact: 'wreck-compass', count: 12 } });
     const dex = DEV_COMMANDS.find(c => c.id === 'dex.completeZone')!;
     expect(parseDevArgs(dex, { zone: 'indian' })).toEqual({ ok: true, args: { zone: 'indian' } });
   });
 });
 
 describe('프리셋', () => {
-  const ctx = (game: GameState) => ({ game, uid: 'u1', day: '2026-10-16' });
+  const ctx = (game: GameState) => ({ game });
 
-  it('수배 구역마다 네임드 직전 프리셋이 있다', () => {
-    for (const zone of BOUNTY_ZONES) {
-      expect(DEV_PRESETS.some(p => p.id === `named-ready:${zone}`)).toBe(true);
-    }
+  it('네임드마다 네임드 직전 프리셋이 있다 — 구역당 하나가 아니다', () => {
+    const named = BOUNTIES.filter(q => q.difficulty === 'named');
+    expect(DEV_PRESETS.filter(p => p.id.startsWith('named-ready:')).map(p => p.id))
+      .toEqual(named.map(q => `named-ready:${q.id}`));
+    expect(named.map(q => q.zone).filter(z => z === 'southatlantic')).toHaveLength(2);
+    for (const zone of BOUNTY_ZONES) expect(named.some(q => q.zone === zone), zone).toBe(true);
+  });
+
+  it('유물마다 교환 직전 프리셋이 있고 그 유물의 재료를 준다', () => {
+    expect(DEV_PRESETS.filter(p => p.id.startsWith('relic-ready:')).map(p => p.id))
+      .toEqual(ARTIFACTS.map(a => `relic-ready:${a.id}`));
+    const sinker = DEV_PRESETS.find(p => p.id === 'relic-ready:outer-isle-sinker')!;
+    expect(planPreset(sinker, ctx(seed()))).toEqual({
+      ok: true, steps: [{ kind: 'debug', command: 'bounty.grantMaterial', args: { artifact: 'outer-isle-sinker' } }],
+    });
   });
 
   it('네임드 직전 — 정리 → 라이선스 조건 → 실제 수주 → 강제 조우 대기 순서다', () => {
     const atPort = seed({ location: { kind: 'base', id: 'toamasina' } });
-    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:madagascar')!, ctx(atPort));
+    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:madagascar-named-elder-sixgill')!, ctx(atPort));
     if (!plan.ok) throw new Error(plan.blocked);
-    const quest = dailyQuestFor('madagascar', 'named', 'u1', '2026-10-16')!;
+    const quest = offeredQuestsFor('madagascar', 'named', 'u1', '2026-10-16')[0];
     expect(plan.steps).toEqual([
       { kind: 'debug', command: 'bounty.resetToday', args: {} },
       { kind: 'debug', command: 'bounty.clearProgress', args: {} },
@@ -52,15 +66,22 @@ describe('프리셋', () => {
     ]);
   });
 
+  it.each(['adamastor', 'jasconius'])('네임드가 둘인 구역은 %s 프리셋이 그 네임드를 수주한다', named => {
+    const atPort = seed({ location: { kind: 'base', id: 'walvisbay' } });
+    const plan = planPreset(DEV_PRESETS.find(p => p.id === `named-ready:southatlantic-named-${named}`)!, ctx(atPort));
+    if (!plan.ok) throw new Error(plan.blocked);
+    expect(plan.steps).toContainEqual({ kind: 'action', action: { type: 'acceptQuest', questId: `southatlantic-named-${named}`, port: 'walvisbay' } });
+  });
+
   it('배·낚싯대·명성은 낮출 때만 올리고 이미 높으면 유지한다', () => {
     const strong = seed({ location: { kind: 'base', id: 'harbor' }, fame: 999999, boat: 9, rod: 99 });
-    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:pacific')!, ctx(strong));
+    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:pacific-named-megalodon')!, ctx(strong));
     if (!plan.ok) throw new Error(plan.blocked);
     expect(plan.steps[3]).toEqual({ kind: 'debug', command: 'stats.set', args: { fame: 999999, boat: 9, rod: 99 } });
   });
 
   it('그 구역 항구 밖이면 실행하지 않고 어디서 하라고 알려 준다 — 수주는 수배판 위치를 요구한다', () => {
-    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:madagascar')!, ctx(seed()));
+    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:madagascar-named-elder-sixgill')!, ctx(seed()));
     expect(plan).toEqual({ ok: false, blocked: '마다가스카르 항구 안에서 실행해야 한다 (수주는 수배판 위치를 요구한다).' });
   });
 });
