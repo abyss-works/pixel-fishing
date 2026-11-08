@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MailItem } from '../../../../platform/api';
+import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../../game/rules/balance';
 
 const state = vi.hoisted(() => ({ mails: null as MailItem[] | null }));
 vi.mock('../../../../platform/api', async importOriginal => {
@@ -14,10 +15,6 @@ const bounty = vi.hoisted(() => ({ snap: null as null | { clearsToday: { general
 vi.mock('../../../../features/bounty/service/useBounty', () => ({
   useBounty: () => ({ snap: bounty.snap, loaded: true, refresh: () => {} }),
 }));
-vi.mock('../../../../features/bounty/model/panel', async importOriginal => {
-  const mod = await importOriginal<typeof import('../../../../features/bounty/model/panel')>();
-  return { ...mod, clearsStatus: () => ({ left: bounty.snap ? { general: bounty.snap.clearsToday.general, named: bounty.snap.clearsToday.named } : null, caps: { general: 0, named: 0 } }) };
-});
 
 const layout = vi.hoisted(() => ({ mobile: false }));
 vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
@@ -110,15 +107,34 @@ describe('게임 메뉴', () => {
       expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
-    it('오늘 남은 클리어가 있으면 일반(노랑), 네임드(보라) 순서로 배지를 붙이고, 0이면 그 배지는 그리지 않는다', async () => {
-      bounty.snap = { clearsToday: { general: 4, named: 3 } };
-      const h = handlers();
-      wrap(<GameMenu account={null} {...h} />);
+    // 실제 clearsStatus와 규칙의 하루 상한을 쓴다: 남은 횟수 = 상한 - 오늘 클리어 수
+    const badgesOf = (row: HTMLElement) =>
+      [...row.querySelectorAll('[data-badge]')].map(b => [b.getAttribute('data-badge'), b.textContent]);
+    const openRow = async () => {
       fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
-      const row = screen.getAllByRole('menuitem')[0];
-      expect(row).toHaveAccessibleName('의뢰, 오늘 남은 클리어 일반 4 네임드 3');
-      const badges = [...row.querySelectorAll('[data-badge]')];
-      expect(badges.map(b => [b.getAttribute('data-badge'), b.textContent])).toEqual([['gold', '4'], ['epic', '3']]);
+      return screen.getAllByRole('menuitem')[0];
+    };
+
+    it('오늘 클리어가 0이면 상한만큼 남아 일반(노랑), 네임드(보라) 순서로 배지가 붙는다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 } };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      const row = await openRow();
+      expect(badgesOf(row)).toEqual([['gold', String(BOUNTY_DAILY_CAP)], ['epic', String(BOUNTY_NAMED_DAILY_CAP)]]);
+      expect(row).toHaveAccessibleName(`의뢰, 오늘 남은 클리어 일반 ${BOUNTY_DAILY_CAP} 네임드 ${BOUNTY_NAMED_DAILY_CAP}`);
+    });
+
+    it('한 종류를 상한까지 클리어하면 그 배지만 사라진다', async () => {
+      bounty.snap = { clearsToday: { general: BOUNTY_DAILY_CAP, named: 0 } };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      expect(badgesOf(await openRow())).toEqual([['epic', String(BOUNTY_NAMED_DAILY_CAP)]]);
+    });
+
+    it('둘 다 상한까지 클리어하면(상한 1이면 클리어 1) 배지가 없다', async () => {
+      bounty.snap = { clearsToday: { general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP } };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      const row = await openRow();
+      expect(badgesOf(row)).toEqual([]);
+      expect(row).toHaveAccessibleName('의뢰');
     });
 
     it('남은 클리어를 모르면 의뢰 줄에 배지가 없다', async () => {
@@ -131,7 +147,7 @@ describe('게임 메뉴', () => {
     });
 
     it('의뢰 배지는 메뉴 버튼의 알림 점을 켜지 않는다 - 점은 소셜, 우편함 같은 새 알림만 따른다', async () => {
-      bounty.snap = { clearsToday: { general: 4, named: 3 } };
+      bounty.snap = { clearsToday: { general: 0, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
       expect(button.textContent).toBe('');

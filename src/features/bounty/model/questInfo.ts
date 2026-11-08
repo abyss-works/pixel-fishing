@@ -8,7 +8,7 @@ import { clearsStatus, heldQuests, questLabel, selectNamedBountyCardData } from 
 import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
-// 현재 의뢰 정보 - 헤더의 의뢰 현황을 눌러 여는 창이 보이는 값. 수주 중인 의뢰(갈래마다 하나)의 이름, 목표, 진행도,
+// 현재 의뢰 정보 - 메뉴 줄의 의뢰를 눌러 여는 창이 보이는 값. 수주 중인 의뢰(갈래마다 하나)의 이름, 목표, 진행도,
 // 보상, 교환 재료, 흔적 남은 시간, 마치는 곳을 모은다. 규칙(남은 시간, 한도)은 규칙 함수가 정한 값을 그대로 쓴다.
 
 export interface QuestInfoGeneral {

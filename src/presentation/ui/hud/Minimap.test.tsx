@@ -14,7 +14,6 @@ vi.mock('../../views/overlays/world-map/worldmap.js', () => ({
   minimapView: () => ({ x: 0, y: 0, w: 100, h: 100 }),
   renderWorldMap: draw,
 }));
-// 자체 타이머로 커밋하는 배지 — 재렌더 계수에 섞이지 않게 뺀다.
 
 describe('Minimap', () => {
   beforeEach(() => {

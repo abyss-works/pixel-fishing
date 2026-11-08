@@ -54,7 +54,7 @@ const bagOf = (g: GameState) => g.bag.map(i => `${i.fishId}:${i.form}`);
 
 /** 가방 수량은 자원 바 화면에 쓰지 않고 버튼의 접근성 이름에 싣는다. 화면 글자와 접근성 이름을 함께 읽는다 */
 const hud = () => `${document.querySelector('.hud')!.textContent!} | ${document.querySelector('.hud')!.getAttribute('aria-label')!}`;
-/** 배와 낚싯대 레벨은 자원 바에 없다. 스탯 창의 고정 정보 줄에서 읽는다 */
+/** 스탯 창의 고정 정보 줄을 연다(배 이름과 낚싯대 레벨은 거기서도 읽는다) */
 const statsFixed = () => {
   fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
   return within(screen.getByText('스탯').closest<HTMLElement>('[role="dialog"]')!);

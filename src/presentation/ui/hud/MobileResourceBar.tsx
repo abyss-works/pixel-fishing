@@ -25,8 +25,8 @@ import { resourceText } from './resourceText';
 // 1행 폭 계산. 값 글자의 진행 폭은 픽셀 폰트에서 글자당 약 0.82em이다(추정. 이전 한 줄 칸에서 4글자 조합 360 폭의 scrollWidth = clientWidth로 확인).
 // 가장 긴 값은 골드 99.9K 또는 1.99M(5글자), 명성 같은 5글자, 배 Lv.8(4글자), 낚싯대 Lv.99(5글자)다.
 //  - 360 폭, 12px: 19글자 x 0.82 x 12 = 187px에 아이콘 4 x 12 + 아이콘 간격 4 x 2 + 칸 사이 3 x 4 = 68px를 더해 255px다.
-//    자원 바 안쪽 폭은 360 - (가장자리 4 + 메뉴 버튼 자리 44) - 틀 테두리 4 - 안쪽 여백 12 = 296px라 41px 여유가 남는다.
-//  - 380 폭, 13px: 203 + 68 = 271px, 안쪽 폭 316px로 45px 여유가 남는다.
+//    자원 바 안쪽 폭은 360 - (가장자리 4 + 두 틀 사이 4 + 메뉴 버튼 40 + 가장자리 4) - 틀 테두리 4 - 안쪽 여백 12 = 292px라 37px 여유가 남는다.
+//  - 380 폭, 13px: 203 + 68 = 271px, 안쪽 폭 312px로 41px 여유가 남는다.
 
 export default function MobileResourceBar({ game, bagBonus = 0, onOpen }: { game: GameState; bagBonus?: number; onOpen?: () => void }) {
   const bag = selectBagStatus(game, bagBonus);

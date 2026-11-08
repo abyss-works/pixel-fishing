@@ -27,12 +27,19 @@ describe('HudHeader 모바일 레이아웃', () => {
     expect(screen.queryByRole('button', { name: /^의뢰 창 열기/ })).not.toBeInTheDocument();
   });
 
-  it('한 행에 왼쪽부터 자원 바, 메뉴 버튼이 첫째, 셋째 열이다', () => {
+  it('한 행에 왼쪽부터 자원 바, 메뉴 버튼이 첫째, 둘째 열이다', () => {
     header();
-    for (const [el, col] of [[bar(), 1], [menuSlot(), 3]] as const) {
+    for (const [el, col] of [[bar(), 1], [menuSlot(), 2]] as const) {
       expect(el.className).toContain(`mobile:col-start-${col}`);
       expect(el.className).toContain('mobile:row-start-1');
     }
+  });
+
+  it('두 틀 사이에 4px 간격이 있다 - 자원 바 왼쪽, 메뉴 버튼 양쪽에 4px 여백을 두고 비어 있는 열은 없다', () => {
+    header();
+    expect(bar().className).toContain('mobile:ml-1');
+    expect(bar().className).not.toMatch(/mobile:mr-/);
+    expect(menuSlot().className).toContain('mobile:mx-1');
   });
 
   it('메뉴 버튼 자리는 자원 바 높이의 세로 가운데에 맞춘다', () => {

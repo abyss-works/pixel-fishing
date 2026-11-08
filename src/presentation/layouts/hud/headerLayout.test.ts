@@ -27,25 +27,9 @@ describe('헤더 구성', () => {
 });
 
 describe('미니맵 위 칩 줄', () => {
-  const layout = code(read('layouts/hud/HudLayout.tsx'));
-  const at = (needle: string) => {
-    const i = layout.indexOf(needle);
-    expect(i, `${needle}를 찾지 못했다`).toBeGreaterThanOrEqual(0);
-    return i;
-  };
-
-  it('순서는 접속 칩, 미끼 칩, 시계, 지도 버튼이다 - 표시 상태를 바꾸는 버튼이 줄 끝이다', () => {
-    const order = [at('{chips}'), at('aria-label="활성 미끼"'), at('<TimeBadge />'), at('aria-label="미니맵 보이기"')];
-    expect(order).toEqual([...order].sort((a, b) => a - b));
-  });
-
+  // 칩 줄의 항목 순서와 조건 없이 그려지는 것은 HudLayout.test가 렌더링 결과로 검증한다
   it('시계는 칩 줄에서만 그린다 - 미니맵 안과 거점 그림 안, 메뉴 버튼 옆에는 두지 않는다', () => {
     const users = sourceFiles(root).filter(path => /<TimeBadge\b/.test(readFileSync(path, 'utf-8')));
     expect(users.map(path => path.replace(/\\/g, '/'))).toEqual(['src/presentation/layouts/hud/HudLayout.tsx']);
-  });
-
-  it('칩 줄은 미니맵을 숨겨도, 활성 미끼가 없어도 시계를 위해 늘 그린다', () => {
-    const before = layout.slice(0, at('<TimeBadge />'));
-    expect(before).not.toMatch(/\(chips \|\| activeBait/);
   });
 });

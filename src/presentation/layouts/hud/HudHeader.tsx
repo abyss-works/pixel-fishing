@@ -14,7 +14,7 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, menu }: {
   game: GameState;
   bagBonus?: number;
   onOpenStats: () => void;
-  /** 메뉴 버튼(펼친 줄 포함). 열 입구가 없으면 아무것도 그리지 않는다 */
+  /** 메뉴 버튼(펼친 줄 포함) */
   menu: ReactNode;
 }) {
   const mobile = useMobileLayout();
@@ -27,8 +27,8 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, menu }: {
           <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
         </div>
       )}
-      <div className="absolute right-3 top-3 z-(--z-card) empty:hidden
-                      mobile:relative mobile:right-auto mobile:top-auto mobile:col-start-3 mobile:row-start-1 mobile:mr-1 mobile:my-1 mobile:self-center">
+      <div className="absolute right-3 top-3 z-(--z-card)
+                      mobile:relative mobile:right-auto mobile:top-auto mobile:col-start-2 mobile:row-start-1 mobile:mx-1 mobile:my-1 mobile:self-center">
         {menu}
       </div>
     </>
