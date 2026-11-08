@@ -30,6 +30,19 @@ describe('재접속 시작점', () => {
     expect(resumePoint('world', { region: 'world', ...land })).toBeNull();
   });
 
+  it('창 밖 좌표(원점이 창이던 시절의 기록 포함)는 출발점(null)이다', () => {
+    // 옛 좌표계의 부산항 앞바다 자리 — 새 좌표계에서는 창 서쪽 밖이다
+    expect(resumePoint('world', { region: 'world', x: 3088, y: 399 })).toBeNull();
+    const { x, y, w, h } = world.bounds;
+    expect(resumePoint('world', { region: 'world', x: x + w + 50, y: y + h / 2 })).toBeNull();
+    expect(resumePoint('world', { region: 'world', x: x + w / 2, y: y - 50 })).toBeNull();
+  });
+
+  it('출발점(부산항 앞바다)은 갈 수 있는 자리이고 그 좌표에서 재개한다', () => {
+    const { x, y } = world.spawn;
+    expect(resumePoint('world', { region: 'world', x, y })).toEqual({ x, y });
+  });
+
   it('이동 트리거 위의 자리는 다시 접속하자마자 이동하지 않도록 출발점(null)이다', () => {
     const pack = REGION_PACKS.village;
     const trig = pack.triggers[0];
