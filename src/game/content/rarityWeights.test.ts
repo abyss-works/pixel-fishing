@@ -28,6 +28,12 @@ describe('등급 가중치 프리셋', () => {
     expect(rarityWeightOf('coron', 'common')).toBe(7000);
   });
 
+  it('남대서양 두 해역은 덮어쓰기 없이 최신 지역 프리셋을 쓴다', () => {
+    const latest = { common: 7680, rare: 2000, epic: 300, legendary: 20 };
+    expect(rarityWeightsOf('benguela')).toEqual(latest);
+    expect(rarityWeightsOf('sthelena')).toEqual(latest);
+  });
+
   it('전역 기본 확률은 안정화 프리셋이다', () => {
     expect(stableRarityShare('common')).toBeCloseTo(0.74, 10);
     expect(stableRarityShare('legendary')).toBeCloseTo(0.01, 10);
@@ -55,7 +61,7 @@ describe('등급 가중치 프리셋', () => {
   });
 
   it('지역 순서는 지역 정의 순서다', () => {
-    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar']);
+    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     expect(topZoneOfSpot('pond')).toBe('village');
   });
 });

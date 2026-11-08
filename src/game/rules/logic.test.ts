@@ -41,9 +41,18 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
     expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(MAX_BOAT).toBe(8);
+  });
+
+  it('남대서양: 해역마다 낮 6종(일반 3·희귀·영웅·전설), 전체 어종 102종(낮 78·밤 24)', () => {
+    expect(FISH).toHaveLength(102);
+    expect(FISH.filter(f => !f.night)).toHaveLength(78);
+    for (const spot of ['benguela', 'sthelena']) {
+      const day = FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
+      expect(day, spot).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
+    }
   });
 
   it('R12: 등급 명성', () => {
@@ -63,10 +72,10 @@ describe('R11: 추첨', () => {
 });
 
 describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
-  it('밤 어종 20종 (night 플래그)', () => {
+  it('밤 어종 24종 (night 플래그)', () => {
     const nights = FISH.filter(f => f.night);
-    expect(nights.length).toBe(20);
-    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설
+    expect(nights.length).toBe(24);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설
     const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
     expect(bySpot('sea')).toEqual(['legendary']);
     expect(bySpot('deep')).toEqual(['legendary']);
@@ -77,6 +86,8 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
     expect(bySpot('southindian')).toEqual(['epic', 'legendary', 'rare']);
     expect(bySpot('mozstrait')).toEqual(['epic', 'legendary', 'rare']);
     expect(bySpot('comorodeep')).toEqual(['epic', 'legendary', 'rare']);
+    expect(bySpot('benguela')).toEqual(['legendary', 'rare']);
+    expect(bySpot('sthelena')).toEqual(['epic', 'legendary']);
   });
 
   it('낮 풀 = night 어종 제외 — 밤 추가가 낮 분포를 안 흔든다', () => {

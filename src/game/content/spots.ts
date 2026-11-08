@@ -44,6 +44,12 @@ const DATA = [
   { id: 'comorodeep',  name: '코모로 심해',   boatTier: 7, region: 'madagascar',
     powerReq: 115,  // Lv22 환산
     rarityWeight: { rare: 1500, epic: 800, legendary: 30 } },
+  // 1-5 남대서양 — 특수 해역 둘(일반 연안 없음). 두 해역 모두 tier8 한 척으로 연다.
+  // 등급 가중치 덮어쓰기가 없어 최신 지역 프리셋을 따른다.
+  { id: 'benguela',    name: '남대서양 용승대', boatTier: 8, region: 'southatlantic',
+    powerReq: 125 }, // Lv24 환산
+  { id: 'sthelena',    name: '세인트헬레나',     boatTier: 8, region: 'southatlantic',
+    powerReq: 135 }, // Lv26 환산
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];
