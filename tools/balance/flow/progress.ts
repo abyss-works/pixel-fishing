@@ -1,7 +1,7 @@
 // 진행 시뮬레이션 — 새 계정이 열린 가장 뒤 해역에서 낚고, 다음 해역에 필요한 배와 강화를 살 수 있으면 바로 사서 옮긴다.
 // 플레이 유형마다 하루에 낚는 시간이 다르고, 선택하면 하루 의뢰와 네임드 토벌을 더한다.
 // 가정: 판매는 즉시이고 이동·판매 왕복·미끼·유물·쿠폰은 없다. 명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다.
-//       깨어 있는 시간에는 가방 한도를 보지 않고(자주 판다), 잠든 시간은 방치로 가방이 찰 때까지만 센다.
+//       깨어 있는 시간에는 기본으로 가방 한도를 보지 않고(자주 판다, 옵션으로 적용), 잠든 시간은 방치로 가방이 차면 골드만 멈춘다(명성과 도감은 계속 쌓인다).
 //       게임 날짜 경계(04:00)는 하루의 시작으로 보고, 하루 안의 순서는 의뢰, 일반 낚시, 잠든 낚시다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
@@ -45,6 +45,11 @@ export function sleepFishSeconds(boat: number, catchesPerHour: number, sleepSec:
   return Math.min(sleepSec, capOfBoat(boat) / catchesPerHour * 3600);
 }
 
+/** 잠든 동안의 집계 — 가방이 차면 골드는 멈추고, 명성과 도감은 잠든 시간 내내 쌓인다(가방이 넘쳐도 명성과 도감은 오른다) */
+export function sleepAccrual(boat: number, catchesPerHour: number, sleepSec: number): { goldSec: number; sec: number } {
+  return { goldSec: sleepFishSeconds(boat, catchesPerHour, sleepSec), sec: sleepSec };
+}
+
 /** 깨어 있는 동안의 낚시 방식 — 방치 또는 수동 */
 export type FlowAxis = 'idle' | 'manual';
 
@@ -55,6 +60,8 @@ export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
 export interface SimOptions {
   type: PlayType;
   axis: FlowAxis;
+  /** 깨어 있는 동안에도 가방 한도를 적용하는가 — 하루 깨어 있는 동안 한 번도 팔지 않는 하한 계산. 기본은 적용하지 않는다 */
+  bagCapAwake?: boolean;
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   maxDays: number;
@@ -88,7 +95,7 @@ const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
 const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 
 export function simulate(opts: SimOptions): SimResult {
-  let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0;
+  let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
   const arrivals: Arrival[] = [{ spot: SPOTS[0].id, day: 1, hours: 0, waitGold: 0, waitFame: 0, waitBoth: 0 }];
   const dex: DexLog = new Map();
@@ -114,11 +121,19 @@ export function simulate(opts: SimOptions): SimResult {
     }
   };
 
-  const accrue = (spots: SpotId[], axis: Axis | null, sec: number) => {
-    for (const spot of spots) {
-      const r = rateAt(spot, axis ?? axisAt(spot, level));
-      const h = sec / 3600 / spots.length;
-      gold += r.goldPerHour * h; fame += r.famePerHour * h;
+  /** 낚은 수입을 더한다. 명성과 도감은 sec 전체, 골드는 goldSec만큼(잠든 동안 가방이 찬 뒤 제외)과 깨어 있는 동안의 가방 한도 안에서 더한다 */
+  const accrue = (spots: SpotId[], axis: Axis | null, sec: number, goldSec = sec, awake = false) => {
+    const rs = spots.map(spot => ({ spot, r: rateAt(spot, axis ?? axisAt(spot, level)) }));
+    const h = sec / 3600 / spots.length;
+    let goldFrac = goldSec / sec;
+    if (awake && opts.bagCapAwake) {
+      const total = rs.reduce((t, x) => t + x.r.catchesPerHour * h, 0);
+      const room = Math.max(0, capOfBoat(boat) - bagUsed);
+      goldFrac = total > 0 ? Math.min(1, room / total) : 1;
+      bagUsed += Math.min(room, total);
+    }
+    for (const { spot, r } of rs) {
+      gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
       track(spot, r, r.catchesPerHour * h);
     }
     fishSec += sec;
@@ -153,7 +168,7 @@ export function simulate(opts: SimOptions): SimResult {
   const fishFor = (spots: SpotId[] | null, axis: Axis | null, seconds: number) => {
     for (let left = seconds; left > 1e-9 && idx < LAST;) {
       const dt = Math.min(STEP_SEC, left);
-      accrue(spots ?? [SPOTS[idx].id], axis, dt);
+      accrue(spots ?? [SPOTS[idx].id], axis, dt, dt, true);
       left -= dt;
       settle(dt);
     }
@@ -167,6 +182,7 @@ export function simulate(opts: SimOptions): SimResult {
 
   for (; day <= opts.maxDays && idx < LAST; day++) {
     settle(0);
+    bagUsed = 0;
     let awake = opts.type.awakeHours * 3600;
     if (opts.bounty && idx < LAST) {
       const spot = SPOTS[idx].id;
@@ -180,7 +196,8 @@ export function simulate(opts: SimOptions): SimResult {
     const sleep = opts.type.sleepHours * 3600;
     if (sleep > 0 && idx < LAST) {
       const spot = SPOTS[idx].id;
-      accrue([spot], 'idle', sleepFishSeconds(boat, rateAt(spot, 'idle').catchesPerHour, sleep));
+      const z = sleepAccrual(boat, rateAt(spot, 'idle').catchesPerHour, sleep);
+      accrue([spot], 'idle', z.sec, z.goldSec);
     }
   }
   return { arrivals, complete: idx >= LAST, bountyGold };

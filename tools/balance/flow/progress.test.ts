@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
 import { SPOTS } from '../../../src/game/content/spots';
 import { applyOverride } from './override';
-import { DEFAULT_LOSS4H, ALWAYS_ON, playTypes, simulate, sleepFishSeconds } from './progress';
+import { DEFAULT_LOSS4H, ALWAYS_ON, playTypes, simulate, sleepAccrual, sleepFishSeconds } from './progress';
 import type { PlayType } from './progress';
 
 const TYPES = playTypes(DEFAULT_LOSS4H);
@@ -37,6 +37,34 @@ describe('잠든 동안의 낚시', () => {
 
   it('가방이 넉넉하면 잠든 시간 전체다', () => {
     expect(sleepFishSeconds(8, 100, 3600)).toBe(3600);
+  });
+});
+
+describe('잠든 동안의 수입 집계', () => {
+  it('가방이 차면 골드는 멈추지만 명성과 도감은 잠든 시간 내내 쌓인다', () => {
+    const a = sleepAccrual(8, 800, 8 * 3600);
+    expect(a.goldSec).toBeCloseTo(4000 / 800 * 3600, 6);
+    expect(a.sec).toBe(8 * 3600);
+    expect(a.goldSec).toBeLessThan(a.sec);
+  });
+
+  it('가방이 넉넉하면 골드도 잠든 시간 전체다', () => {
+    expect(sleepAccrual(8, 100, 3600)).toEqual({ goldSec: 3600, sec: 3600 });
+  });
+});
+
+describe('깨어 있는 동안 가방 한도', () => {
+  const end = (bagCapAwake: boolean) =>
+    last(simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365, bagCapAwake }).arrivals).day;
+
+  it('한도를 적용하면 8시간 유형이 더 늦게 끝난다', () => {
+    expect(end(true)).toBeGreaterThan(end(false));
+  });
+
+  it('한도를 적용하지 않은 결과는 옵션을 생략한 결과와 같다', () => {
+    const a = simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365 });
+    const b = simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365, bagCapAwake: false });
+    expect(b).toEqual(a);
   });
 });
 
