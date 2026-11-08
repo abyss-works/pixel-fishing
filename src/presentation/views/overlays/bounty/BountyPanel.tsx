@@ -48,13 +48,13 @@ function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: 
   );
 }
 
-/** 라이선스 조건 목록 — 닫힌 게이트 위에 덮는다. 충족한 조건은 줄을 긋는다 */
+/** 라이선스 미달 조건 목록 — 닫힌 게이트 위에 덮는다 */
 function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
   return (
     <ul>
       {conds.map(c => (
-        <li key={c.key} className={c.ok ? 'line-through text-text-dim' : ''}>
-          <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
+        <li key={c.key}>
+          <PixelIcon glyph="checkOff" size={11} /> {c.label}
         </li>
       ))}
     </ul>

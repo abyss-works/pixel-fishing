@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { BOUNTY_LICENSE_FAME, dailyQuestFor } from '../../../game/content/bounties';
+import { BOUNTY_ZONES, dailyQuestFor } from '../../../game/content/bounties';
 import { DEBUG_COMMAND_IDS } from '../../../game/rules/debug';
 import { DEV_COMMANDS, devZoneOptions, parseDevArgs } from './commands';
 import { DEV_PRESETS, planPreset } from './presets';
@@ -14,7 +14,7 @@ describe('개발 도구 명령 목록', () => {
   });
 
   it('구역 선택지는 수배 구역 표에서 나온다', () => {
-    expect(devZoneOptions().map(o => o.value)).toEqual(Object.keys(BOUNTY_LICENSE_FAME));
+    expect(devZoneOptions().map(o => o.value)).toEqual(BOUNTY_ZONES);
     expect(devZoneOptions()[0].label).toBe('태평양');
   });
 
@@ -31,7 +31,7 @@ describe('프리셋', () => {
   const ctx = (game: GameState) => ({ game, uid: 'u1', day: '2026-10-16' });
 
   it('수배 구역마다 네임드 직전 프리셋이 있다', () => {
-    for (const zone of Object.keys(BOUNTY_LICENSE_FAME)) {
+    for (const zone of BOUNTY_ZONES) {
       expect(DEV_PRESETS.some(p => p.id === `named-ready:${zone}`)).toBe(true);
     }
   });
@@ -45,7 +45,7 @@ describe('프리셋', () => {
       { kind: 'debug', command: 'bounty.resetToday', args: {} },
       { kind: 'debug', command: 'bounty.clearProgress', args: {} },
       { kind: 'debug', command: 'bounty.clearTickets', args: {} },
-      { kind: 'debug', command: 'stats.set', args: expect.objectContaining({ fame: BOUNTY_LICENSE_FAME.madagascar }) },
+      { kind: 'debug', command: 'stats.set', args: { fame: 100000, boat: 7, rod: expect.any(Number) } },
       { kind: 'debug', command: 'dex.completeZone', args: { zone: 'madagascar' } },
       { kind: 'action', action: { type: 'acceptQuest', questId: quest.id, port: 'toamasina' } },
       { kind: 'armEncounter' },

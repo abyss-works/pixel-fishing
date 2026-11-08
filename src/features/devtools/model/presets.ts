@@ -5,7 +5,8 @@ import type { GameState } from '../../../game/rules/logic';
 import { DEBUG_ZONES } from '../../../game/rules/debug';
 import type { DebugCommandId } from '../../../game/rules/debug';
 import { minLevelOfPower } from '../../../game/rules/stats';
-import { BOUNTY_LICENSE_FAME, dailyQuestFor, portOfZone } from '../../../game/content/bounties';
+import { boatAt } from '../../../game/content/boats';
+import { dailyQuestFor, portOfZone } from '../../../game/content/bounties';
 import type { BountyZone } from '../../../game/content/bounties';
 import { SPOTS } from '../../../game/content/spots';
 import { topZoneOfSpot, zoneById } from '../../../game/content/zones';
@@ -43,7 +44,7 @@ function namedReady(zone: BountyZone): DevPreset {
   return {
     id: `named-ready:${zone}`,
     label: `${area} 네임드 직전`,
-    hint: '클리어 기록·진행·흔적을 정리하고 라이선스 조건을 채운 뒤 네임드를 수주하고 강제 조우를 건다.',
+    hint: '클리어 기록·진행·흔적을 정리하고 도감을 채운 뒤 네임드를 수주하고 강제 조우를 건다.',
     plan: ({ game, uid, day }) => {
       const port = portOfZone(zone);
       if (!port) return { ok: false, blocked: `${area}에는 수배 창구가 없다.` };
@@ -60,7 +61,7 @@ function namedReady(zone: BountyZone): DevPreset {
           debugStep('bounty.clearProgress'),
           debugStep('bounty.clearTickets'),
           debugStep('stats.set', {
-            fame: Math.max(game.fame, BOUNTY_LICENSE_FAME[zone]),
+            fame: Math.max(game.fame, boatAt(gear.boat)?.fameReq ?? 0),
             boat: Math.max(game.boat, gear.boat),
             rod: Math.max(game.rod, gear.rod),
           }),

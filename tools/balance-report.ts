@@ -9,8 +9,7 @@ import type { SpotId } from '../src/game/content/spots';
 import { BOATS } from '../src/game/content/boats';
 import { FISH } from '../src/game/content/fish';
 import { RARITY, RARITY_ORDER } from '../src/game/content/rarity';
-import { BOUNTIES, BOUNTY_LICENSE_FAME } from '../src/game/content/bounties';
-import type { BountyZone } from '../src/game/content/bounties';
+import { BOUNTIES, BOUNTY_ZONES } from '../src/game/content/bounties';
 import { BAITS } from '../src/game/content/baits';
 import { drawRows, mutationWeightsOf, namedEncounterShare, rarityWeightOf, variantShare } from '../src/game/rules/logic';
 import { BAIT_WEIGHT_MULT, upgradeCost } from '../src/game/rules/balance';
@@ -205,10 +204,8 @@ if (show('journey')) {
 // ── 명성 문턱 ──
 if (show('fame')) {
   console.log('\n## 명성 문턱까지 누적 시간 — 가진 명성으로 열리는 최고 해역(최소 스펙)에서 쌓는다고 가정');
-  const BOUNTY_ZONES = Object.keys(BOUNTY_LICENSE_FAME) as BountyZone[];
   const gates = [
     ...BOATS.filter(b => b.fameReq > 0).map(b => ({ name: `${b.name}(배${b.tier})`, fame: b.fameReq })),
-    ...BOUNTY_ZONES.map(z => ({ name: `라이선스 ${z}`, fame: BOUNTY_LICENSE_FAME[z] })),
   ].sort((x, y) => x.fame - y.fame);
   const bestSpot = (fame: number) => {
     const tier = Math.max(0, ...BOATS.filter(b => b.fameReq <= fame).map(b => b.tier));
@@ -339,7 +336,6 @@ if (show('dex')) {
 // ── 도전 ──
 if (show('bounty')) {
   console.log('\n## 도전 — 의뢰 수행 시간과 보상 비율(보상 ÷ 같은 시간 판매 수입), 네임드 조우 시간');
-  const BOUNTY_ZONES = Object.keys(BOUNTY_LICENSE_FAME) as BountyZone[];
   for (const z of BOUNTY_ZONES) {
     const spots = spotsOfZone(z);
     const avg = (f: (s: SpotId) => number) => spots.reduce((s, sp) => s + f(sp.id), 0) / spots.length;

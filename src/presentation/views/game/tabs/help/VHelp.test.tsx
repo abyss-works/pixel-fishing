@@ -15,6 +15,12 @@ describe('VHelp 바운티 헌팅', () => {
     expect(text()).not.toContain('수주권');
   });
 
+  it('수배판은 그 구역의 어종을 도감에 모두 채우면 열린다고 안내하고 명성 조건은 말하지 않는다', () => {
+    const t = text();
+    expect(t).toContain('그 구역의 어종을 도감에 모두 채우면 의뢰가 열려요.');
+    expect(t).not.toContain('명성이 기준에 이르고');
+  });
+
   it('갈래마다 하나씩 수주하고 하루 클리어 횟수가 있으며 메뉴 줄의 의뢰 배지로 남은 횟수를 본다고 안내한다', () => {
     const t = text();
     expect(t).toContain('일반 의뢰와 네임드 토벌은 구역에 상관없이 각각 하나씩만 수주할 수 있어요.');
