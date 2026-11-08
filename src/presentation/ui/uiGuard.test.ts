@@ -80,4 +80,14 @@ describe('UI 시스템 가드', () => {
     const dupes = [...owners].filter(([, paths]) => paths.length > 1).map(([name, paths]) => `${name}: ${paths.join(', ')}`);
     expect(dupes).toEqual([]);
   });
+
+  it('로어 문단은 LoreParagraph로 그린다 - 첫 글자 강조(first-letter)는 그 컴포넌트만 정한다', () => {
+    const LORE_VIEWS = ['views/game/tabs/dex/DexDetail.tsx', 'views/game/tabs/dex/NamedDetail.tsx'];
+    const src = (path: string) => screens.find(f => f.path === path)?.src ?? '';
+    for (const path of LORE_VIEWS) {
+      expect(src(path), path).toMatch(/<LoreParagraph\b/);
+      expect(src(path), path).not.toMatch(/<p\b[^>]*>\s*\{[^}]*(?:\.lore|chronicle)/);
+    }
+    expect(screens.filter(f => /first-letter:/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
 });

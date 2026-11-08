@@ -9,6 +9,7 @@ import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
 import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
+import LoreParagraph from '../../../../ui/LoreParagraph';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityText } from '../../../../ui/fish/RarityTag';
@@ -56,9 +57,9 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               <ArrowButton dir={1} tone="solid" aria-label="다음 형태"
                            onClick={() => setI((i + 1) % forms.length)} />
             </div>
-            <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">
-              {known ? form.lore : '…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.'}
-            </p>
+            {known
+              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
+              : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
           </Inset>
         </TitledCell>
 
