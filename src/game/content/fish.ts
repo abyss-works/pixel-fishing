@@ -463,9 +463,3 @@ export const FISH: readonly Fish[] = [
     variant: { name: '심연의 큰눈홍치', color: '#6d2a24',
       lore: '불빛이 닿지 않는 깊이에서 올라온 개체. 건져 올린 뒤에도 눈이 한동안 어둠 쪽으로 돌아가 있다.' } },
 ];
-
-/** 어종을 교체하면서 없앤 id — 저장된 도감·가방·전시 기록을 잇는 후속 어종 id */
-export const RETIRED_FISH_IDS: Readonly<Record<string, string>> = {
-  toothfish: 'orangeroughy',
-  darktoothfish: 'kalunga',
-};

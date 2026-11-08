@@ -298,15 +298,6 @@ const SPECS: Spec[] = [
       e.swap('y', 'l', (x, y) => x < 14 && y === 8);
       e.stretch(11, 2);
     } },
-  // 메기 틀. 수염을 이빨로 바꾸고 몸을 키운다.
-  { id: 'toothfish', base: '#3e4f5c', variant: '#25343f', from: 'catfish',
-    roles: { '#34495b': 'd', '#546e7a': 'b', '#9da9a5': 'l', '#d4d6c7': 'a' },
-    edit: e => {
-      e.swap('a', 'w', x => x < 8);
-      e.dots([[11, 6], [11, 7], [11, 8], [11, 9]], 'k');
-      e.dots([[14, 7], [16, 8], [13, 8], [17, 6]], 'k');
-      e.stretch(12, 2);
-    } },
   // 만다린 틀. 머리에 청록 띠를 둔다.
   { id: 'sthwrasse', base: '#d98f4e', variant: '#f1ece4', from: 'mandarin', accent: { a: '#3fb7b0' },
     roles: { '#695b5e': 'd', '#a1887f': 'b', '#cdb9a8': 'l', '#3c3643': 'k' },
@@ -376,15 +367,6 @@ const SPECS: Spec[] = [
     ventral: [{ t0: 0.55, t1: 0.8, h: 1, rays: 'k' }],
     eye: { t: 0.1, dy: 2, size: 2 }, gill: [0.3], mouth: 1,
     paint: scales('k', 0.3, 0.7, 0.4, 0.85) },
-  // 매개변수 방식: 어둡고 머리가 큰 이빨고기. 반사광 한 칸짜리 눈, 아가미 없음, 점 무늬.
-  { id: 'darktoothfish', base: '#1b2631', variant: '#0b1118',
-    x0: 2, x1: 21, yc: 7, top: 3, bot: 3, snout: 0.6, head: 0.42, ped: 0.25, tf: 0.66,
-    tail: { kind: 'square', len: 4, spread: 2, edge: 'l', rays: 'k' },
-    dorsal: [{ t0: 0.35, t1: 0.55, h: 2, tip: 'l' }, { t0: 0.6, t1: 0.8, h: 1, rays: 'k' }],
-    ventral: [{ t0: 0.6, t1: 0.8, h: 1, rays: 'k' }],
-    eye: { t: 0.1, dy: 1 }, mouth: 2, pect: { len: 3, dy: 1 },
-    paint: layers(stripes(6, 0.3, 0.7, 'k', 0.5, 0.85), spotsAt([[11, -1], [12, -1], [9, 1]], 7, 'k')),
-    extra: (set, s) => { for (const dx of [1, 3, 5]) set(s.x0 + dx, s.yc + 3, 'w'); } },
   // 네임드 아다마스토르: 아귀 틀을 넓혀 곶 같은 머리를 만들고 돌기를 입 앞까지 휘게 늘린다.
   { id: 'adamastor', base: '#4d5560', from: 'anglerfish',
     roles: { '#5d4037': 'b', '#3a2a2d': 'd', '#a38c78': 'l', '#00e5ff': 'a' },

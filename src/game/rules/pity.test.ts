@@ -60,6 +60,8 @@ describe('어종 천장 — 확정', () => {
     expect(speciesPityCandidates(pity, 'pond', 'day')).toEqual(['goldcarp', 'goldfish']);
     expect(speciesPityCandidates({ moonveil: 9 }, 'sea', 'day')).toEqual([]);
     expect(speciesPityCandidates({ moonveil: 9 }, 'sea', 'night')).toEqual(['moonveil']);
+    expect(speciesPityCandidates({ toothfish: 9, darktoothfish: 9 }, 'benguela', 'day')).toEqual([]);
+    expect(speciesPityCandidates({ toothfish: 9, darktoothfish: 9 }, 'benguela', 'night')).toEqual([]);
   });
 
   it('이미 일반 폼을 가진 후보는 끝 표시하고, 남은 첫 후보를 확정한다', () => {

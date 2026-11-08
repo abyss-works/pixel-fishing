@@ -13,7 +13,7 @@ import {
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
   namedWeightsOf, namedEncounterShare, variantShare,
-  makeInstance, priceOfInstance, instanceName, dexRecord, speciesCount,
+  makeInstance, instanceFish, priceOfInstance, instanceName, dexRecord, speciesCount,
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
   licenseConditions, zoneDexMissing, LICENSE_GRADES,
@@ -905,29 +905,17 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(mig({ v: 8, tutorials: ['village', 'nope', 3, 'sea'] } as never).tutorials).toEqual(['village', 'sea']);
   });
 
-  it('migrate: 교체로 사라진 어종 id의 가방·전시·도감 기록을 후속 어종으로 잇는다', () => {
-    const inst = (uid: string, fishId: string) => ({ uid, fishId, form: 'normal', size: 1, caughtAt: null, spot: null, judgment: null, locked: false });
+  it('migrate: 없어진 어종 id의 기록은 오류 없이 살아 있고, 판매가·어종 조회·도감 종 수에서는 빠진다', () => {
+    const inst = { uid: 'a', fishId: 'toothfish', form: 'normal', size: 1, caughtAt: null, spot: null, judgment: null, locked: false };
     const st = mig({
-      v: 8, bag: [inst('a', 'toothfish'), inst('b', 'carp')], exhibit: [inst('c', 'darktoothfish')],
-      dex: { toothfish: { normal: { count: 2, maxSize: 3, first: 'x' } }, carp: { normal: { count: 1, maxSize: 1, first: 'y' } } },
+      v: 8, bag: [inst], dex: { toothfish: { normal: { count: 2, maxSize: 3, first: 'x' } } },
+      pity: { darktoothfish: 3 },
     } as never);
-    expect(st.bag.map(i => i.fishId)).toEqual(['orangeroughy', 'carp']);
-    expect(st.exhibit.map(i => i.fishId)).toEqual(['kalunga']);
-    expect(st.dex.orangeroughy?.normal?.count).toBe(2);
-    expect(st.dex.toothfish).toBeUndefined();
-    expect(st.dex.carp).toBeDefined();
-  });
-
-  it('migrate: 후속 어종 기록이 이미 있으면 도감 기록을 합친다', () => {
-    const st = mig({
-      v: 8, bag: [],
-      dex: {
-        toothfish: { normal: { count: 2, maxSize: 3, first: 'a' } },
-        orangeroughy: { normal: { count: 1, maxSize: 5, first: 'b' }, variant: { count: 1, maxSize: 2, first: 'c' } },
-      },
-    } as never);
-    expect(st.dex.orangeroughy?.normal).toEqual({ count: 3, maxSize: 5, first: 'a' });
-    expect(st.dex.orangeroughy?.variant?.count).toBe(1);
+    expect(st.bag).toHaveLength(1);
+    expect(instanceFish(st.bag[0])).toBeUndefined();
+    expect(priceOfInstance(st.bag[0])).toBe(0);
+    expect(instanceName(st.bag[0])).toBe('toothfish');
+    expect(dexSpeciesCount(st)).toBe(0);
   });
 
   it('migrate: look·hats 부재 → 기본 외형과 빈 목록', () => {
