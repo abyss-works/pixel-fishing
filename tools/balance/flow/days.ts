@@ -42,7 +42,7 @@ export interface LevelUp {
   upgradeGold: number;
   /** 하루 골드 — 낚시, 의뢰와 토벌, 잠든 동안 낚시의 합 */
   dailyGold: number;
-  /** 하루 골드 중 의뢰·토벌 보상(납품한 물고기 판매가를 뺀 값)의 비중 */
+  /** 하루 골드 중 의뢰·토벌 보상의 비중 */
   bountyShare: number;
   days: number;
 }

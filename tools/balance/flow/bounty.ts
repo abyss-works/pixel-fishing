@@ -1,7 +1,7 @@
 // 하루 의뢰·토벌 계획 — 제품 데이터(의뢰 행, 라이선스 등급, 네임드 조우 확률과 천장)를 그대로 읽고 기댓값으로 계산한다.
 // 가정: 라이선스는 구역 도감(일반 폼) 완성 확률이 LICENSE_PROB를 넘는 날부터 쓴다. 어종 천장은 넣지 않는다.
 //       의뢰 수행 중에는 그 구역의 낚을 수 있는 해역을 같은 시간씩 낚고, 항구 이동 시간은 넣지 않는다.
-//       네임드 결투는 항상 이긴다. 납품한 물고기는 팔지 못한다.
+//       네임드 결투는 항상 이긴다. 일반 의뢰는 물고기를 건네지 않고 골드 보상만 받으므로, 낚은 물고기는 모두 판다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { FISH } from '../../../src/game/content/fish';
@@ -10,7 +10,7 @@ import type { BountyDifficulty, BountyTier, BountyZone } from '../../../src/game
 import { LICENSE_GRADES, namedEncounterCandidates, namedEncounterShare } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { powerOfLevel } from '../../../src/game/rules/stats';
-import { VARIANT_EV, zoneOf } from '../model';
+import { zoneOf } from '../model';
 import type { Rates } from '../model';
 
 /** 구역 도감을 모두 모았을 확률이 이 값을 넘으면 라이선스를 쓴다 */
@@ -57,7 +57,7 @@ export interface Activity {
   seconds: number;
   /** 낚는 해역 — 같은 시간씩 낚는다 */
   spots: SpotId[];
-  /** 보상에서 납품한 물고기 판매가를 뺀 골드 */
+  /** 의뢰 보상 골드 */
   lump: number;
   /** 같은 시간을 지금 해역에서 낚는 경우와 비교한 골드 이득 */
   gain: number;
@@ -98,12 +98,9 @@ function generalPlan(input: PlanInput, seconds: number): Activity | null {
         const perHour = avgOf(spots, s => input.rateAt(s).rows.filter(r => r.fish.rarity === q.grade).reduce((a, r) => a + r.prob, 0) * input.rateAt(s).catchesPerHour);
         if (perHour <= 0) continue;
         const hours = q.count / perHour;
-        const gradeProb = avgOf(spots, s => input.rateAt(s).rows.filter(r => r.fish.rarity === q.grade).reduce((a, r) => a + r.prob, 0));
-        const gradePrice = avgOf(spots, s => input.rateAt(s).rows.filter(r => r.fish.rarity === q.grade).reduce((a, r) => a + r.prob * r.fish.price, 0)) / gradeProb;
-        const net = q.reward - q.count * gradePrice * VARIANT_EV;
-        const g = net + (zoneGold - input.current.goldPerHour) * hours;
+        const g = q.reward + (zoneGold - input.current.goldPerHour) * hours;
         if (hours * 3600 > seconds || g <= 0) continue;
-        gain += g / options.length; secs += hours * 3600 / options.length; lump += net / options.length;
+        gain += g / options.length; secs += hours * 3600 / options.length; lump += q.reward / options.length;
       }
       if (gain > 0 && (!best || gain > best.gain)) best = { kind: 'general', zone, difficulty, seconds: secs, spots, lump, gain };
     }

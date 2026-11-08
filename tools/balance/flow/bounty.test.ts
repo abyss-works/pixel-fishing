@@ -90,6 +90,13 @@ describe('하루 의뢰 계획', () => {
     expect(named.seconds).toBeLessThan(3 * 3600);
   });
 
+  it('일반 의뢰는 물고기를 건네지 않으므로 보상을 그대로 더한다', () => {
+    const general = planBounties({ ...base, seconds: 1e9 }).find(a => a.kind === 'general')!;
+    const rewards = BOUNTIES.filter(q => q.zone === general.zone && q.difficulty === general.difficulty).map(q => q.reward);
+    expect(new Set(rewards).size).toBe(1);
+    expect(general.lump).toBeCloseTo(rewards[0], 6);
+  });
+
   it('시간이 모자라면 계획이 없다', () => {
     expect(planBounties({ ...base, seconds: 60 })).toEqual([]);
   });
