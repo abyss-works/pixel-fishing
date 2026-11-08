@@ -31,7 +31,7 @@ const worldAt = (lon: number, lat: number): [number, number] => [
 ];
 
 // 시작점에서 BFS — 군집·트리거마다 도달 가능한 칸이 있는지 검증
-function reachabilityCheck(pack: RegionPack) {
+function reachabilityCheck(pack: RegionPack, start: { x: number; y: number } = pack.spawn) {
   const STEP = 4;
   // 탐색 격자는 이동 영역(bounds)의 서북 모서리에서 시작한다
   const b = pack.bounds;
@@ -39,7 +39,7 @@ function reachabilityCheck(pack: RegionPack) {
   const key = (cx: number, cy: number) => cy * cols + cx;
   const visited = new Uint8Array(cols * rows);
   const toX = (cx: number) => b.x + cx * STEP, toY = (cy: number) => b.y + cy * STEP;
-  const queue: [number, number][] = [[Math.round((pack.spawn.x - b.x) / STEP), Math.round((pack.spawn.y - b.y) / STEP)]];
+  const queue: [number, number][] = [[Math.round((start.x - b.x) / STEP), Math.round((start.y - b.y) / STEP)]];
   visited[key(queue[0][0], queue[0][1])] = 1;
   while (queue.length) {
     const [cx, cy] = queue.shift()!;
@@ -72,7 +72,11 @@ function reachabilityCheck(pack: RegionPack) {
     }
     return false;
   };
-  return { reachableNear, reachedRect };
+  const reachedPoint = (p: { x: number; y: number }) => {
+    const cx = Math.round((p.x - b.x) / STEP), cy = Math.round((p.y - b.y) / STEP);
+    return cx >= 0 && cy >= 0 && cx < cols && cy < rows && visited[key(cx, cy)] === 1;
+  };
+  return { reachableNear, reachedRect, reachedPoint };
 }
 
 // ============ 공통 무결성 — 모든 지역 팩 자동 검증 (R4b) ============
@@ -261,6 +265,15 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     expect(zoneOf(WORLD, ...worldAt(43.2, -13.6)), '코모로 심해').toBe('comorodeep');
   });
 
+  it('희망봉 경도(20E)를 사이에 두고 마다가스카르/남대서양 구역이 나뉜다', () => {
+    expect(zoneOf(WORLD, ...worldAt(21, -35.5)), '20E 동쪽').toBe('madagascar');
+    expect(zoneOf(WORLD, ...worldAt(19, -35.5)), '20E 서쪽').toBe('southatlantic');
+    expect(zoneOf(WORLD, ...worldAt(0, -20)), '남대서양 열린 바다').toBe('southatlantic');
+    expect(zoneOf(WORLD, ...worldAt(11.5, -23.5)), '벵겔라 앞바다').toBe('benguela');
+    expect(zoneOf(WORLD, ...worldAt(-5.7, -15.95)), '세인트헬레나').toBe('sthelena');
+    expect(zoneOf(WORLD, ...worldAt(-8, -29)), '남대서양 라벨 문자').toBe('southatlantic');
+  });
+
   it('구역 밖 물(내륙해 잉여)은 zone도 spot도 없다', () => {
     // 카스피 해 남부(창 안에 걸치는 대표 내륙수) — 통행은 가능해도 구역·낚시 대상이 아니다
     const at = worldAt(51, 39);
@@ -292,8 +305,77 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     expect(zoneById('seasia')!.entryBoat).toBe(3);
     expect(zoneById('indian')!.entryBoat).toBe(5);
     expect(zoneById('madagascar')!.entryBoat).toBe(7);
+    expect(zoneById('southatlantic')!.entryBoat).toBe(8);
     for (const z of ZONES) {
       for (const sid of z.spots) expect(zoneOfSpot(sid)).toBe(z.id);
+    }
+  });
+});
+
+describe('남대서양 지도', () => {
+  const walvis = BASE_PACKS.walvisbay.exitAt!;
+
+  it('월비스베이항 출항 지점과 접안 자리는 용승대 위다', () => {
+    expect(zoneOf(WORLD, walvis.x, walvis.y)).toBe('benguela');
+    const dock = WORLD.triggers.find(t => t.action === 'base' && t.base === 'walvisbay')!;
+    expect(zoneOf(WORLD, dock.rect.x + dock.rect.w / 2, dock.rect.y + dock.rect.h / 2)).toBe('benguela');
+  });
+
+  it('월비스베이항 건물은 육지 위이고 접안 트리거는 물 위다', () => {
+    const b = WORLD.buildings.find(bd => bd.rect.x === WORLD_ANCHORS.walvisbay.x)!;
+    expect(b).toBeDefined();
+    expect(WORLD.labels.some(l => l.text === '월비스베이항')).toBe(true);
+    expect(canMove(WORLD, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2), '건물 안').toBe(false);
+    const dock = WORLD.triggers.find(t => t.action === 'base' && t.base === 'walvisbay')!;
+    expect(canMove(WORLD, dock.rect.x + dock.rect.w / 2, dock.rect.y + dock.rect.h / 2)).toBe(true);
+  });
+
+  it('월비스베이항 출항 지점에서 모든 구역의 어군·접안 트리거에 닿는다 (희망봉 통과 포함)', () => {
+    const { reachableNear, reachedRect, reachedPoint } = reachabilityCheck(WORLD, walvis);
+    expect(reachedPoint(WORLD_SPAWN), '고향 항구 앞바다(희망봉을 돌아 인도양, 태평양)').toBe(true);
+    for (const trig of WORLD.triggers) {
+      expect(reachedRect(trig.rect), `${trig.action} 트리거로 가는 길이 막혀 있음`).toBe(true);
+    }
+    for (const day of SCHOOL_DAYS) {
+      for (const s of generateWorldSchools(day)) {
+        expect(reachableNear(s), `${day} ${s.id}에 닿을 자리가 없음`).toBe(true);
+      }
+    }
+  });
+
+  it('희망봉 남쪽 바다를 지나 마다가스카르 구역과 남대서양 구역이 이어진다', () => {
+    const { reachedPoint } = reachabilityCheck(WORLD, walvis);
+    expect(reachedPoint({ x: worldAt(21, -35.5)[0], y: worldAt(21, -35.5)[1] }), '20E 동쪽').toBe(true);
+    expect(reachedPoint({ x: worldAt(19, -35.5)[0], y: worldAt(19, -35.5)[1] }), '20E 서쪽').toBe(true);
+  });
+
+  it('용승대와 세인트헬레나 어군은 자기 하위 존 위에 있다', () => {
+    for (const day of SCHOOL_DAYS) {
+      const schools = generateWorldSchools(day);
+      for (const spot of ['benguela', 'sthelena'] as const) {
+        const mine = schools.filter(s => s.spot === spot);
+        expect(mine.length, `${day} ${spot} 어군 수`).toBeGreaterThanOrEqual(1);
+        for (const s of mine) expect(zoneOf(WORLD, s.x, s.y), `${day} ${s.id}`).toBe(spot);
+      }
+    }
+  });
+
+  it('적도 북쪽 대서양과 지중해는 통행 불가이고 어디에서도 닿지 않는다', () => {
+    // 적도 선: 아프리카 서안(약 9E)에서 서단까지 육지 띠가 막는다
+    for (const lon of [-14, -10, -5, 0, 5, 8]) {
+      expect(canMove(WORLD, ...worldAt(lon, 0.5)), `적도 띠 ${lon}E`).toBe(false);
+    }
+    // 띠 북쪽의 바다는 어느 구역에도 속하지 않는다
+    for (const [lon, lat, name] of [[-14, 8, '시에라리온 앞바다'], [-10, 33, '모로코 앞바다'], [0, 4, '기니만'], [10, 38, '지중해']] as const) {
+      expect(zoneOf(WORLD, ...worldAt(lon, lat)), name).toBeUndefined();
+    }
+    const fromSpawn = reachabilityCheck(WORLD);
+    const fromWalvis = reachabilityCheck(WORLD, walvis);
+    for (const [lon, lat, name] of [[-14, 8, '시에라리온 앞바다'], [-10, 33, '모로코 앞바다'], [0, 4, '기니만'], [10, 38, '지중해'], [-10, 43, '비스케이만']] as const) {
+      const p = { x: worldAt(lon, lat)[0], y: worldAt(lon, lat)[1] };
+      expect(canMove(WORLD, p.x, p.y), `${name}은 물 칸이다`).toBe(true);
+      expect(fromSpawn.reachedPoint(p), `고향에서 ${name}`).toBe(false);
+      expect(fromWalvis.reachedPoint(p), `월비스베이에서 ${name}`).toBe(false);
     }
   });
 });
