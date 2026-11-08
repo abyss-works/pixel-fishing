@@ -6,7 +6,7 @@ import { useOpenWindow } from './openWindows';
 import PageTitle from './PageTitle';
 import CloseButton from './CloseButton';
 import { SCROLL_Y } from './scrollArea';
-import { useWindowHost } from './windowLayer';
+import { useInWindowSlot, useWindowHost } from './windowLayer';
 
 /** 스테이지 창의 고정 높이(px). 탭 창처럼 높이가 변하지 않는 창이 고른다. 스테이지 높이에서 위아래 16px을 뺀 값을 넘지 않는다 */
 export type ModalHeight = 400 | 480 | 520 | 560;
@@ -60,7 +60,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
   useKeyBlocker(closable ? onClose : undefined);
-  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창은 그대로 남는다(openWindows)
+  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창은 그대로 남는다
   useOpenWindow(closable ? onClose : undefined);
   // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 창이 떠 있어도 눌린다.
   // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)도 창 층이다. 같은 층 안에서 다른 창보다 위(blocker)이며 탭 줄 아래다.
@@ -75,8 +75,10 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     : cx('max-h-[calc(100%-32px)] flex flex-col',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && HEIGHT_CLASS[height]);
-  // 앱 모달은 게임 화면의 창 층 자리에 그린다(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)
+  // 앱 모달은 자기를 연 층 바로 위에 쌓인다. 창을 연 층이 정한 자리(useWindowHost)에 포털하므로 창마다 층 값을 따로 정하지 않는다.
+  // 기본은 게임 화면의 창 층 자리(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)이고, 시트처럼 창 층 위에 따로 놓인 층 안에서 연 창은 그 층의 자리에 그려진다.
   const windowHost = useWindowHost();
+  const inSlot = useInWindowSlot();
   const modal = (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
          onClick={closable ? onClose : undefined}>
@@ -97,5 +99,8 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
       </div>
     </div>
   );
-  return layer === 'app' && windowHost ? createPortal(modal, windowHost) : modal;
+  if (layer !== 'app') return modal;
+  if (windowHost) return createPortal(modal, windowHost);
+  // 층의 자리가 아직 만들어지지 않은 첫 렌더에는 그리지 않는다(제자리에 그렸다가 옮기면 창 안의 상태가 사라진다)
+  return inSlot ? null : modal;
 }

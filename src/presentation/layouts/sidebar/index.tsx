@@ -4,6 +4,7 @@ import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
 import { useMobileLayout } from '../useMobileLayout';
 import { closeOpenWindows } from '../../ui/openWindows';
+import WindowSlot from '../../ui/WindowSlot';
 import { isSheetDragClose } from './sheet';
 
 interface SidebarProps<K extends string> {
@@ -33,19 +34,22 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
         {sheetOpen && (
           <section aria-label="탭 내용"
                    className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line">
-            {/* 시트 머리 — 아래로 끌면 닫힌다 */}
-            <div role="presentation" className="shrink-0 h-6 flex items-center justify-center touch-none"
-                 onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
-                 onPointerUp={e => {
-                   if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
-                   dragFrom.current = null;
-                 }}
-                 onPointerCancel={() => { dragFrom.current = null; }}>
-              <span className="block w-10 h-1 bg-line" />
-            </div>
-            <div className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
-              {children}
-            </div>
+            {/* 시트 안에서 연 창은 창 층이 아니라 시트 바로 위에 쌓인다(WindowSlot) */}
+            <WindowSlot>
+              {/* 시트 머리 — 아래로 끌면 닫힌다 */}
+              <div role="presentation" className="shrink-0 h-6 flex items-center justify-center touch-none"
+                   onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+                   onPointerUp={e => {
+                     if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
+                     dragFrom.current = null;
+                   }}
+                   onPointerCancel={() => { dragFrom.current = null; }}>
+                <span className="block w-10 h-1 bg-line" />
+              </div>
+              <div className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
+                {children}
+              </div>
+            </WindowSlot>
           </section>
         )}
         <aside className="relative z-(--z-tabs) shrink-0 w-full h-14 bg-surface border-t border-line group-data-[keyboard]/root:invisible">
