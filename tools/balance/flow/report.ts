@@ -45,7 +45,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   days        플레이 유형(16, 8, 4, 2, 1시간)별 해역 도착 일차와 마지막 해역 레벨업 일수. 일반 의뢰와 네임드 토벌 수행 여부별
   opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
-  ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 후보 두 가지, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 필요 보상. 항상 방치 기준이다
+  ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다
 
 옵션
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워를 덮어쓰는 JSON. 형식은
@@ -182,9 +182,9 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
   } else if (command === 'ev') {
     lines.push(
       '방치 EV는 낮밤 혼합 방치 수입(G/h)이다. --axis와 관계없이 방치 기준이다. 의뢰와 토벌은 방치 EV에 종속된 보너스로 본다',
-      '구역 대표 EV 후보는 두 가지다: 구역 마지막 해역의 딱렙 EV, 구역 해역 딱렙 EV의 평균. 어느 쪽을 기준으로 삼을지는 정해지지 않았다',
-      '목표는 일반 의뢰 쉬움 0.5시간, 보통 1시간, 어려움 2시간, 네임드 토벌 4시간에서 8시간이다',
-      '필요 보상은 목표 시간 곱하기 대표 EV를 앞 두 자리 유효숫자로 맞춘 값이다. 보상용 반올림 규칙이 따로 없어 어종 가격의 규칙을 준용했다(미확인)',
+      '구역 대표 방치 EV는 그 구역 마지막 해역의 딱렙 EV다',
+      '목표는 일반 의뢰 쉬움 1시간, 보통 2시간, 어려움 4시간, 네임드 토벌 8시간어치다',
+      '새 보상은 목표 시간 곱하기 대표 EV를 앞자리가 5나 10 단위로 떨어지게 자릿수 반올림한 값이다. 해석: 정수 자릿수가 n(3 이상)이면 5 x 10^(n-2) 단위로 맞춘다(첫 두 자리가 5의 배수). 첫 두 자리가 1로 시작하면 간격이 넓어 134,000은 150,000이 된다',
       '다음 해역 진입 직전 레벨은 다음 해역 딱렙의 한 칸 아래이고, 마지막 해역은 딱렙에 여유 레벨을 더한 값이다',
     );
   } else if (command === 'opening') {
@@ -283,7 +283,7 @@ function openingText(rows: OpeningResult[]): string[] {
 }
 
 const DIFFICULTY_LABEL = { easy: '쉬움', normal: '보통', hard: '어려움', named: '네임드 토벌' } as const;
-const signed = (x: number) => (x === 0 ? '0' : `${x > 0 ? '+' : ''}${x.toFixed(1)}`);
+const signed = (x: number) => (Math.abs(x) < 0.05 ? '0' : `${x > 0 ? '+' : ''}${x.toFixed(1)}`);
 
 function evText(ev: EvReport, o: FlowResult['options']): string[] {
   const zoneName = (z: string) => zoneById(z as never)?.shortName ?? z;
@@ -296,24 +296,19 @@ function evText(ev: EvReport, o: FlowResult['options']): string[] {
       `${s.preNextLevel}${s.preNextIsMargin ? '(여유 레벨)' : ''}`, n0(s.preNextEv),
     ]),
   ));
-  out.push('\n## 구역 대표 방치 EV — 후보 두 가지');
+  out.push('\n## 구역 대표 방치 EV — 구역 마지막 해역의 딱렙 EV');
+  out.push(table(['구역', '대표 EV(G/h)'], ev.zones.map(z => [zoneName(z.zone), n0(z.ev)])));
+  out.push('\n## 의뢰·토벌 보상의 EV 시간 환산 — 지금 보상이 구역 대표 EV 몇 시간어치인가, 목표와의 차이');
   out.push(table(
-    ['구역', '후보 1: 마지막 해역 딱렙', '후보 2: 구역 해역 딱렙 평균'],
-    ev.zones.map(z => [zoneName(z.zone), n0(z.lastEntryEv), n0(z.meanEntryEv)]),
+    ['구역', '구분', '지금 보상', 'EV 시간', '목표(시간)', '차이(시간)'],
+    ev.rewards.map(r => [zoneName(r.zone), DIFFICULTY_LABEL[r.difficulty], n0(r.reward), r.hours.toFixed(1), r.targetHours, signed(r.gap)]),
   ));
-  out.push('\n## 의뢰·토벌 보상의 EV 시간 환산 — 현재 보상이 구역 대표 EV 몇 시간어치인가, 목표와의 차이, 목표에 맞추려면 필요한 보상');
+  out.push('\n## 새 보상 — 목표 시간 x 구역 대표 EV를 5나 10 단위 자릿수로 반올림');
   out.push(table(
-    ['구역', '구분', '현재 보상', 'EV 시간(후보 1)', 'EV 시간(후보 2)', '목표(시간)', '차이(후보 1)', '차이(후보 2)', '필요 보상(후보 1)', '필요 보상(후보 2)'],
-    ev.rewards.map(r => {
-      const range = (a: [number, number]) => (a[0] === a[1] ? n0(a[0]) : `${n0(a[0])} ~ ${n0(a[1])}`);
-      return [
-        zoneName(r.zone), DIFFICULTY_LABEL[r.difficulty], n0(r.reward), r.hours.last.toFixed(1), r.hours.mean.toFixed(1),
-        r.target[0] === r.target[1] ? r.target[0] : `${r.target[0]} ~ ${r.target[1]}`,
-        signed(r.gap.last), signed(r.gap.mean), range(r.needed.last), range(r.needed.mean),
-      ];
-    }),
+    ['구역', '구분', '지금 보상', '새 보상', '변화율'],
+    ev.rewards.map(r => [zoneName(r.zone), DIFFICULTY_LABEL[r.difficulty], n0(r.reward), n0(r.next), `${r.change > 0 ? '+' : ''}${(r.change * 100).toFixed(0)}%`]),
   ));
-  out.push(`\n차이는 목표 범위 안이면 0, 밖이면 가까운 끝과의 시간 차다(양수는 보상이 목표보다 크다). 덮어쓰기: ${o.override ? '있음' : '없음'}`);
+  out.push(`\n차이의 양수는 지금 보상이 목표보다 크다는 뜻이다. 덮어쓰기: ${o.override ? '있음' : '없음'}`);
   return out;
 }
 

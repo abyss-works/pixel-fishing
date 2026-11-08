@@ -128,9 +128,11 @@ describe('실행과 출력', () => {
     }
   });
 
-  it('ev 출력은 해역별 EV, 구역 대표 후보, 보상의 EV 시간 환산과 가정을 담는다', () => {
+  it('ev 출력은 해역별 EV, 구역 대표 EV, 보상의 EV 시간 환산과 가정을 담는다', () => {
     const text = renderText(runFlow(base({ commands: ['ev'] })));
-    for (const w of ['방치 EV', '구역 대표', '마지막 해역 딱렙', '구역 해역 딱렙 평균', 'EV 시간', '목표', '필요 보상', '네임드', '가정:', '앞 두 자리']) expect(text, w).toContain(w);
+    expect(text).not.toContain('구역 해역 딱렙 평균');
+    expect(text).not.toContain('후보 2');
+    for (const w of ['방치 EV', '구역 대표', '마지막 해역의 딱렙', 'EV 시간', '목표', '새 보상', '변화율', '네임드', '가정:', '5의 배수']) expect(text, w).toContain(w);
   });
 
   it('ev 출력은 덮어쓴 해역 요구 파워를 반영한다', () => {
