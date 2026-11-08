@@ -33,7 +33,7 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
           <ProgressMeter progress={progress} count={quest.count} />
         ) : <div className="h-3.5" aria-hidden="true" />}
         {done
-          ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>납품</Button>
+          ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>완료</Button>
           : accepted
             ? <Button full disabled>진행 중</Button>
             : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept}
