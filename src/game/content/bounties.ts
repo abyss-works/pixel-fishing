@@ -69,7 +69,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('seasia', 'hard', 'epic', null, 10, 300000),
   Q('seasia', 'hard', 'legendary', null, 2, 300000),
   Q('seasia', 'named', null, 'leviathan', 1, 550000),
-  // 1-3 인도양 — 쉬움 150000 · 보통 300000 · 어려움 650000 · 네임드 1500000
+  // 1-3 인도양 — 쉬움 150000 · 보통 300000 · 어려움 600000 · 네임드 1000000
   Q('indian', 'easy', 'common', null, 250, 150000),
   Q('indian', 'easy', 'rare', null, 10, 150000),
   Q('indian', 'easy', 'epic', null, 2, 150000),
@@ -77,11 +77,11 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'normal', 'rare', null, 20, 300000),
   Q('indian', 'normal', 'epic', null, 5, 300000),
   Q('indian', 'normal', 'legendary', null, 1, 300000),
-  Q('indian', 'hard', 'common', null, 1000, 650000),
-  Q('indian', 'hard', 'rare', null, 40, 650000),
-  Q('indian', 'hard', 'epic', null, 10, 650000),
-  Q('indian', 'hard', 'legendary', null, 2, 650000),
-  Q('indian', 'named', null, 'ananta', 1, 1500000),
+  Q('indian', 'hard', 'common', null, 1000, 600000),
+  Q('indian', 'hard', 'rare', null, 40, 600000),
+  Q('indian', 'hard', 'epic', null, 10, 600000),
+  Q('indian', 'hard', 'legendary', null, 2, 600000),
+  Q('indian', 'named', null, 'ananta', 1, 1000000),
   // 1-4 마다가스카르 — 쉬움 350000 · 보통 750000 · 어려움 1500000 · 네임드 3000000
   Q('madagascar', 'easy', 'common', null, 250, 350000),
   Q('madagascar', 'easy', 'rare', null, 10, 350000),
