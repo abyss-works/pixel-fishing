@@ -2,7 +2,7 @@
 //
 // 가정(측정치가 아닌 근사):
 //   - 낮밤 혼합 — 하루 중 밤 비율(게임 20~4시)만큼 밤 풀로 추첨한다.
-//   - 처리량 = 입질 평균 대기(낚싯대 레벨 곡선) + 판정 시간(수동은 바의 절반, 방치는 끝까지) + 획득 연출.
+//   - 처리량 = 입질 평균 대기(낚싯대 레벨 곡선, 파워 미달이면 추가 초) + 판정 시간(수동은 바의 절반, 방치는 끝까지) + 획득 연출.
 //   - 수동 판정은 고른 판정을 늘 성공한다고 본다. 존이 없는 판정(빨간 존이 안 열린 PERFECT)은 측정하지 않는다.
 //   - 이동·판매 왕복·가방 한도·미끼·유물은 넣지 않는다(미끼는 경제 지표에서 따로 본다). 돌연변이 기댓값은 넣는다.
 import { SPOTS } from '../../src/game/content/spots';
@@ -55,9 +55,14 @@ export interface RodSpec {
   biteMin: number; biteMax: number; sweep: number;
   yellow: number; red: number;
   idleBoost: number;
+  /** 파워 미달 페널티 — 일반 가중치 배수(미달이 아니면 1) */
+  gateMult: number;
+  /** 파워 미달 페널티 — 입질 대기에 더하는 초(미달이 아니면 0) */
+  biteExtra: number;
 }
 
-/** 해역에서 이 레벨 낚싯대의 스펙 — 입질 대기는 낚싯대 레벨 곡선 그대로다(파워 초과로 줄지 않는다) */
+/** 해역에서 이 레벨 낚싯대의 스펙 — 입질 대기는 낚싯대 레벨 곡선 그대로다(파워 초과로 줄지 않는다).
+ *  파워가 해역 요구에 못 미치면 일반 가중치 배수와 입질 대기 추가 초가 붙는다 */
 export function rodSpec(spot: SpotId, level: number): RodSpec {
   const st = rodStats(level);
   const power = powerOfLevel(level);
@@ -68,6 +73,7 @@ export function rodSpec(spot: SpotId, level: number): RodSpec {
     biteMin: st.biteMin, biteMax: st.biteMax, sweep: st.sweep,
     yellow: z.yellow, red: z.red,
     idleBoost: relativeIdleBoost(power, spot),
+    gateMult: z.mult, biteExtra: z.biteExtra,
   };
 }
 
@@ -75,10 +81,13 @@ export function rodSpec(spot: SpotId, level: number): RodSpec {
 export const axisAvailable = (spec: RodSpec, axis: Axis): boolean =>
   axis === 'perfect' ? spec.red > 0 : axis === 'good' ? spec.yellow > 0 : true;
 
-/** 축의 추첨 다이얼 — 리듀서와 같은 계산(수동 = 판정 배수, 방치 = 해역 요구 파워 대비 방치 배수) */
+/** 축의 추첨 다이얼 — 리듀서와 같은 계산(수동 = 판정 배수, 방치 = 해역 요구 파워 대비 방치 배수).
+ *  파워 미달 배수는 일반 가중치에 곱해진다. 미달이 아니면 수동 축은 판정 배수만 담는다 */
 export function axisOptions(spec: RodSpec, axis: Axis): DrawOptions {
-  if (axis === 'idle') return { commonMult: spec.idleBoost };
-  return { rareMult: JUDGMENT_MULT[axis] };
+  if (axis === 'idle') return { commonMult: spec.idleBoost * spec.gateMult };
+  return spec.gateMult === 1
+    ? { rareMult: JUDGMENT_MULT[axis] }
+    : { rareMult: JUDGMENT_MULT[axis], commonMult: spec.gateMult };
 }
 
 export interface Rates {
@@ -91,7 +100,7 @@ export interface Rates {
 export function rates(spot: SpotId, level: number, axis: Axis, extra: DrawOptions = {}, pool: Pool = 'mixed'): Rates {
   const spec = rodSpec(spot, level);
   const reaction = axis === 'idle' ? spec.sweep : spec.sweep / 2;
-  const sec = (spec.biteMin + spec.biteMax) / 2 + reaction + CATCH_MS / 1000;
+  const sec = (spec.biteMin + spec.biteMax) / 2 + spec.biteExtra + reaction + CATCH_MS / 1000;
   const rows = mixedRows(spot, { ...axisOptions(spec, axis), ...extra }, pool);
   const cph = 3600 / sec;
   const rarity: Record<string, number> = {};
