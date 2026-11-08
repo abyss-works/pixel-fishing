@@ -11,7 +11,7 @@ const base = (over: Partial<FlowOptions> = {}): FlowOptions => ({ ...parseArgs([
 describe('명령 인자', () => {
   it('인자가 없으면 네 명령 전부와 기본값이다', () => {
     expect(parseArgs([])).toEqual({
-      commands: ['transition', 'days', 'opening', 'exception'], override: null, json: false,
+      commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
     });
   });
@@ -36,7 +36,7 @@ describe('명령 인자', () => {
   });
 
   it('도움말이 모든 명령과 옵션을 설명한다', () => {
-    for (const w of ['transition', 'days', 'opening', 'exception', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help']) {
+    for (const w of ['transition', 'days', 'opening', 'exception', 'ev', '1시간', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help']) {
       expect(HELP).toContain(w);
     }
   });
@@ -117,7 +117,7 @@ describe('실행과 출력', () => {
   it('각 명령 출력은 그 표가 기대는 가정을 가정: 으로 밝힌다', () => {
     const t = (c: 'transition' | 'days' | 'opening' | 'exception') => renderText(runFlow(base({ commands: [c] })));
     const want: Record<string, string[]> = {
-      transition: ['가정:', '낚지 못하는 비율', '8시간 유형은 깨어 있는 동안 가방이 차지 않는다고 가정(사용자 확인 대기)', '잠든 동안'],
+      transition: ['가정:', '낚지 못하는 비율', '8시간 유형은 사용자 확인 대기', '잠든 동안'],
       days: ['가정:', '0.5', '어종 천장', '결투', '레벨업', '라이선스', '골드 보상만'],
       opening: ['가정:', '낚는 시간만'],
       exception: ['가정:', '줄 끊김', '결투'],
@@ -126,6 +126,34 @@ describe('실행과 출력', () => {
       const text = t(c as 'days');
       for (const w of words) expect(text, `${c} ${w}`).toContain(w);
     }
+  });
+
+  it('ev 출력은 해역별 EV, 구역 대표 후보, 보상의 EV 시간 환산과 가정을 담는다', () => {
+    const text = renderText(runFlow(base({ commands: ['ev'] })));
+    for (const w of ['방치 EV', '구역 대표', '마지막 해역 딱렙', '구역 해역 딱렙 평균', 'EV 시간', '목표', '필요 보상', '네임드', '가정:', '앞 두 자리']) expect(text, w).toContain(w);
+  });
+
+  it('ev 출력은 덮어쓴 해역 요구 파워를 반영한다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flow-report-'));
+    const file = join(dir, 'o.json');
+    writeFileSync(file, JSON.stringify({ spots: { sthelena: { powerReq: 165 } } }), 'utf-8');
+    const a = renderText(runFlow(base({ commands: ['ev'] })));
+    const b = renderText(runFlow(base({ commands: ['ev'], override: file })));
+    expect(b).not.toBe(a);
+    expect(b).toMatch(/세인트헬레나 \| 32 \|/);
+    expect(a).toMatch(/세인트헬레나 \| 29 \|/);
+  });
+
+  it('days 가정은 지나온 해역 도감을 채우지 않아 낮은 유형에 라이선스가 생기지 않는다는 점을 밝힌다', () => {
+    const text = renderText(runFlow(base({ commands: ['days'] })));
+    expect(text).toContain('지나온 해역으로 돌아가 도감을 채우지 않는다');
+    expect(text).toContain('4시간 이하 유형은 남대서양과 마다가스카르 라이선스가 생기지 않는다');
+  });
+
+  it('가방 가정 문구는 16시간의 깨어 있는 시간과 짧은 유형까지 아우른다', () => {
+    const text = renderText(runFlow(base({ commands: ['transition'] })));
+    expect(text).toContain('16시간 유형의 깨어 있는 시간');
+    expect(text).toContain('짧은 유형');
   });
 
   it('가방 한도 옵션을 켜면 가정 문구가 바뀐다', () => {

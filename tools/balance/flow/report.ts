@@ -14,11 +14,13 @@ import { daysReport } from './days';
 import type { DaysReport } from './days';
 import { OPENING_TARGET_SEC, simulateOpening } from './opening';
 import type { Judgment, OpeningResult } from './opening';
+import { evReport } from './ev';
+import type { EvReport } from './ev';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception';
-export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception'];
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev';
+export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
 
 export interface FlowOptions {
   commands: Command[];
@@ -35,14 +37,15 @@ export interface FlowOptions {
   help: boolean;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception] [옵션]
-명령을 생략하면 네 가지를 모두 낸다.
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev] [옵션]
+명령을 생략하면 다섯 가지를 모두 낸다.
 
 명령
   transition  해역 전환: 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 연속 방치 소요, 배 명성 대기, 유형별 도착 일차
-  days        플레이 유형(16, 8, 4, 2시간)별 해역 도착 일차와 마지막 해역 레벨업 일수. 일반 의뢰와 네임드 토벌 수행 여부별
+  days        플레이 유형(16, 8, 4, 2, 1시간)별 해역 도착 일차와 마지막 해역 레벨업 일수. 일반 의뢰와 네임드 토벌 수행 여부별
   opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
+  ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 후보 두 가지, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 필요 보상. 항상 방치 기준이다
 
 옵션
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워를 덮어쓰는 JSON. 형식은
@@ -110,6 +113,7 @@ export interface FlowResult {
   transition?: TransitionReport;
   days?: DaysReport;
   opening?: OpeningResult[];
+  ev?: EvReport;
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -130,6 +134,7 @@ export function runFlow(o: FlowOptions): FlowResult {
       const judgments: Judgment[] = ['normal', 'good'];
       res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
     }
+    if (o.commands.includes('ev')) res.ev = evReport();
     if (o.commands.includes('exception')) {
       res.exception = {
         income: incomeByOffset(o.axis), earlyEntry: earlyEntry(o.axis), returnTrips: returnTrips(o.axis), huntCost: huntCost(o.axis),
@@ -155,7 +160,7 @@ function table(headers: string[], rows: (string | number)[][]): string {
 
 const BAG_ASSUMPTION = (o: FlowResult['options']) => o.bagCapAwake
   ? '깨어 있는 동안에도 가방 한도를 적용한다(하루 깨어 있는 동안 한 번도 팔지 않는 하한 계산). 가방이 차면 골드만 멈추고 명성과 도감은 쌓인다'
-  : '8시간 유형은 깨어 있는 동안 가방이 차지 않는다고 가정(사용자 확인 대기). 깨어 있는 동안은 자주 판다고 보고 가방 한도를 보지 않는다(--bag-cap-awake로 한도 적용 비교)';
+  : '16시간 유형의 깨어 있는 시간과 짧은 유형(8시간 이하)은 깨어 있는 동안 가방이 차지 않는다고 가정한다(8시간 유형은 사용자 확인 대기). 깨어 있는 동안은 자주 판다고 보고 가방 한도를 보지 않는다(--bag-cap-awake로 한도 적용 비교)';
 const LOSS_ASSUMPTION = (o: FlowResult['options']) =>
   `4시간 유형의 낚지 못하는 비율은 근거 있는 값이 없는 가정이다${o.loss4h === null ? '. 낚시 100%, 75%, 50%를 함께 낸다' : `. 이번에는 ${o.loss4h}%만 낸다`}`;
 const SLEEP_ASSUMPTION = '16시간 유형은 잠든 동안 방치로 낚는다. 가방이 차면 골드만 멈추고 명성과 도감은 잠든 시간 내내 쌓인다';
@@ -169,9 +174,18 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
     lines.push(
       LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION,
       '의뢰 라이선스는 그 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
-      '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
+      '지나온 해역으로 돌아가 도감을 채우지 않는다. 그래서 4시간 이하 유형은 남대서양과 마다가스카르 라이선스가 생기지 않는다',
+      '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보 중 끝낼 수 있는 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
       '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
       '레벨업은 낚싯대가 그 레벨에 처음 닿은 시점에 시뮬레이션이 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다',
+    );
+  } else if (command === 'ev') {
+    lines.push(
+      '방치 EV는 낮밤 혼합 방치 수입(G/h)이다. --axis와 관계없이 방치 기준이다. 의뢰와 토벌은 방치 EV에 종속된 보너스로 본다',
+      '구역 대표 EV 후보는 두 가지다: 구역 마지막 해역의 딱렙 EV, 구역 해역 딱렙 EV의 평균. 어느 쪽을 기준으로 삼을지는 정해지지 않았다',
+      '목표는 일반 의뢰 쉬움 0.5시간, 보통 1시간, 어려움 2시간, 네임드 토벌 4시간에서 8시간이다',
+      '필요 보상은 목표 시간 곱하기 대표 EV를 앞 두 자리 유효숫자로 맞춘 값이다. 보상용 반올림 규칙이 따로 없어 어종 가격의 규칙을 준용했다(미확인)',
+      '다음 해역 진입 직전 레벨은 다음 해역 딱렙의 한 칸 아래이고, 마지막 해역은 딱렙에 여유 레벨을 더한 값이다',
     );
   } else if (command === 'opening') {
     lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
@@ -268,6 +282,41 @@ function openingText(rows: OpeningResult[]): string[] {
   return out;
 }
 
+const DIFFICULTY_LABEL = { easy: '쉬움', normal: '보통', hard: '어려움', named: '네임드 토벌' } as const;
+const signed = (x: number) => (x === 0 ? '0' : `${x > 0 ? '+' : ''}${x.toFixed(1)}`);
+
+function evText(ev: EvReport, o: FlowResult['options']): string[] {
+  const zoneName = (z: string) => zoneById(z as never)?.shortName ?? z;
+  const out: string[] = [];
+  out.push('\n## 방치 EV — 해역별 시간당 기대 골드(낮밤 혼합)');
+  out.push(table(
+    ['구역', '해역', '딱렙 Lv', 'EV(딱렙)', '다음 진입 직전 Lv', 'EV(다음 진입 직전)'],
+    ev.spots.map(s => [
+      zoneName(s.zone), nameOf(s.spot), s.entryLevel, n0(s.entryEv),
+      `${s.preNextLevel}${s.preNextIsMargin ? '(여유 레벨)' : ''}`, n0(s.preNextEv),
+    ]),
+  ));
+  out.push('\n## 구역 대표 방치 EV — 후보 두 가지');
+  out.push(table(
+    ['구역', '후보 1: 마지막 해역 딱렙', '후보 2: 구역 해역 딱렙 평균'],
+    ev.zones.map(z => [zoneName(z.zone), n0(z.lastEntryEv), n0(z.meanEntryEv)]),
+  ));
+  out.push('\n## 의뢰·토벌 보상의 EV 시간 환산 — 현재 보상이 구역 대표 EV 몇 시간어치인가, 목표와의 차이, 목표에 맞추려면 필요한 보상');
+  out.push(table(
+    ['구역', '구분', '현재 보상', 'EV 시간(후보 1)', 'EV 시간(후보 2)', '목표(시간)', '차이(후보 1)', '차이(후보 2)', '필요 보상(후보 1)', '필요 보상(후보 2)'],
+    ev.rewards.map(r => {
+      const range = (a: [number, number]) => (a[0] === a[1] ? n0(a[0]) : `${n0(a[0])} ~ ${n0(a[1])}`);
+      return [
+        zoneName(r.zone), DIFFICULTY_LABEL[r.difficulty], n0(r.reward), r.hours.last.toFixed(1), r.hours.mean.toFixed(1),
+        r.target[0] === r.target[1] ? r.target[0] : `${r.target[0]} ~ ${r.target[1]}`,
+        signed(r.gap.last), signed(r.gap.mean), range(r.needed.last), range(r.needed.mean),
+      ];
+    }),
+  ));
+  out.push(`\n차이는 목표 범위 안이면 0, 밖이면 가까운 끝과의 시간 차다(양수는 보상이 목표보다 크다). 덮어쓰기: ${o.override ? '있음' : '없음'}`);
+  return out;
+}
+
 function exceptionText(e: NonNullable<FlowResult['exception']>, o: FlowResult['options']): string[] {
   const axis = o.axis;
   const info = new Map(o.spots.map(x => [x.id, x]));
@@ -312,5 +361,6 @@ export function renderText(r: FlowResult): string {
   if (r.days) lines.push(...daysText(r.days), assumptionText('days', o));
   if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
   if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
+  if (r.ev) lines.push(...evText(r.ev, o), assumptionText('ev', o));
   return lines.join('\n');
 }
