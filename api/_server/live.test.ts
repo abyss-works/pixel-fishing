@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
+import { connect as tcpConnect } from 'node:net';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
@@ -128,6 +129,25 @@ describe('실시간 채널 서버', () => {
     expect(live.online().map(o => o.uid)).toEqual(['u1']);
     expect(sessions).toEqual([]);
     expect(ok.messages).toEqual([]);
+  });
+
+  it('낡은 빌드 연결이 잘못된 프레임을 보내도 서버는 죽지 않고 그 연결만 끊는다', async () => {
+    const { url } = await start();
+    const { port } = new URL(url);
+    const request = ['GET /api/live?build=old HTTP/1.1', 'Host: x', `Origin: ${ORIGIN}`, 'Upgrade: websocket',
+      'Connection: Upgrade', 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==', 'Sec-WebSocket-Version: 13', '', ''].join('\r\n');
+    // RSV1 비트가 켜진 프레임 — 수신기가 프로토콜 오류를 낸다
+    const bad = Buffer.from([0xc1, 0x01, 0x41]);
+    const ended = new Promise<void>((resolve) => {
+      const s = tcpConnect(Number(port), '127.0.0.1', () => { s.write(Buffer.concat([Buffer.from(request), bad])); });
+      s.on('data', () => {});
+      s.on('error', () => resolve());
+      s.on('close', () => resolve());
+    });
+    await ended;
+    // 서버가 살아 있고 새 연결을 받는다
+    const ok = connect(url, 'u1');
+    expect((await ok.next()).t).toBe('hello');
   });
 
   it('빌드 식별자를 보내지 않은 연결도 낡은 빌드로 본다', async () => {

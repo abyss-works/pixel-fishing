@@ -121,6 +121,13 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   // 계정별 최근 채팅 시각. 다시 연결해도 창이 이어지도록 연결이 아니라 계정에 둔다
   const chatTimes = new Map<string, number[]>();
 
+  // 업그레이드를 받아 소켓을 연다. 잘못된 프레임 같은 소켓 오류가 서버를 죽이지 않도록 모든 연결에 같은 오류 처리를 단다
+  const accept = (req: IncomingMessage, socket: Duplex, head: Buffer, onOpen: (ws: WebSocket) => void) => {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('error', () => { ws.terminate(); });
+      onOpen(ws);
+    });
+  };
   const send = (ws: WebSocket, msg: ServerMessage) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
   const broadcast = (from: WebSocket, msg: ServerMessage) => {
     const data = JSON.stringify(msg);
@@ -175,7 +182,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
     const query = new URL(req.url ?? '/', 'http://x').searchParams;
     if (opts.stale({ build: query.get('build') ?? undefined, version: query.get('version') ?? undefined })) {
-      wss.handleUpgrade(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
+      accept(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
       return;
     }
     opts.authenticate(req).then(async (user) => {
@@ -184,7 +191,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
       ]);
       const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
-      wss.handleUpgrade(req, socket, head, (ws) => {
+      accept(req, socket, head, (ws) => {
         // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
         for (const [other, c] of conns) {
           if (c.user.uid !== user.uid) continue;
@@ -228,7 +235,6 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           }
         });
         ws.on('close', () => drop(ws, conn));
-        ws.on('error', () => { ws.terminate(); });
         const sentAt = Date.now();
         const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
         send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
