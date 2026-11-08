@@ -131,3 +131,39 @@ describe('마스크 생성기 전지구 원점', () => {
     expect(p.anchors.isle.x).toBe(Math.round((121 - 35) * 32));
   });
 });
+
+describe('openZones의 육지 문자 — 통행 불가 띠', () => {
+  const win = { lonMin: 55, lonMax: 75, latMin: 24, latMax: 44 };
+  const run = (openZones: object[]) => {
+    const cfg = { id: 'wall', geo: geoPath, cell: { w: 8, h: 11 }, grid: { cols: 80, rows: 58 }, window: win,
+      globalGrid: GLOBAL, openZones };
+    const out = join(tmp, 'wall.ts');
+    const r = spawnSync(process.execPath, ['tools/mask-from-earth.mjs', JSON.stringify(cfg), '--out', out],
+      { encoding: 'utf8' });
+    return { status: r.status, rows: parse(out).rows };
+  };
+  const rowAt = (rows: string[], lat: number) => rows[Math.floor((44 - lat) * 2.9)];
+  const colAt = (lon: number) => Math.floor((lon - 55) * 4);
+
+  it('맨물만 육지로 바꾸고 기존 육지와 구역 문자는 그대로 둔다', () => {
+    const r = run([
+      { ch: 'a', lonMin: 55, lonMax: 65, latMin: 24, latMax: 34 },
+      { ch: 'L', lonMin: 55, lonMax: 75, latMin: 34, latMax: 35 },
+    ]);
+    expect(r.status).toBe(0);
+    const wall = rowAt(r.rows, 34.5);
+    expect(wall[colAt(56)]).toBe('L');
+    expect(wall[colAt(73)]).toBe('L');
+    expect(rowAt(r.rows, 28)[colAt(56)]).toBe('a');
+    expect(rowAt(r.rows, 40)[colAt(56)]).toBe('.');
+  });
+
+  it('앞서 칠한 구역 문자는 육지 띠가 덮지 않는다', () => {
+    const r = run([
+      { ch: 'a', lonMin: 55, lonMax: 65, latMin: 24, latMax: 35 },
+      { ch: 'L', lonMin: 55, lonMax: 75, latMin: 34, latMax: 35 },
+    ]);
+    expect(rowAt(r.rows, 34.5)[colAt(56)]).toBe('a');
+    expect(rowAt(r.rows, 34.5)[colAt(73)]).toBe('L');
+  });
+});

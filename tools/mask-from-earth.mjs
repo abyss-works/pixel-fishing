@@ -17,7 +17,7 @@
 //   zones[]       { ch, name, lon, lat, rx, ry }  타원 특화 수역(육지 우선, 나중 항목 우선)
 //   openZones[]   { ch, lonMin, lonMax, latMin, latMax }  열린 바다 구역 — **맨물('.'=기본 물)만**
 //                 지정 문자로 바꾼다(오픈월드 구역 경계 인코딩용). 배열 순서 = 나중 항목 우선,
-//                 특화 수역·육지는 절대 덮지 않는다.
+//                 특화 수역·육지는 절대 덮지 않는다. ch가 'L'이면 맨물을 육지로 바꿔 통행 불가 띠를 만든다.
 //   globalGrid    (선택) 전지구 고정 격자 { origin: { lon, lat }, cellsPerDeg: { lon, lat } }
 //                 게임 픽셀 좌표의 원점(서북 모서리)과 해상도를 창과 무관하게 고정한다. 창의 서북 모서리는
 //                 원점에서 정수 칸 떨어져야 하고, 창의 해상도는 cellsPerDeg와 같아야 한다 — 아니면 생성 중단.
@@ -176,7 +176,7 @@ for (const z of zones) {
 // --- 2.5. 열린 바다 구역 스탬프 (맨물만 — 육지·특화 수역 보존, 나중 항목 우선) ---
 const OZ = '.'; // 스탬프 대상 = 아무 정의도 안 받은 기본 물
 for (const oz of openZones) {
-  if (!oz.ch || oz.ch === OZ || oz.ch === LAND ||
+  if (!oz.ch || oz.ch === OZ ||
       ![oz.lonMin, oz.lonMax, oz.latMin, oz.latMax].every(v => typeof v === 'number')) {
     console.error(`[${id}] 잘못된 openZone: ${JSON.stringify(oz)}`);
     process.exit(2);
