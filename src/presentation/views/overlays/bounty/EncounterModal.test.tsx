@@ -37,7 +37,7 @@ const waitForZone = (inside = true) => {
 describe('EncounterModal', () => {
   it('들어가며 — 목격담과 그림자, 이름은 부르지 않는다. 조우를 눌러야 바가 돈다', () => {
     show();
-    expect(screen.getByText(/같은 그림자를 보고했다/)).toBeInTheDocument();
+    expect(screen.getByText(/같은 날 같은 그림자를 보았다/)).toBeInTheDocument();
     expect(screen.getByText('그림자가 돌아선다.')).toBeInTheDocument();
     expect(screen.queryByText('메갈로돈')).toBeNull();
     expect(screen.queryByRole('button', { name: '챔질' })).toBeNull();

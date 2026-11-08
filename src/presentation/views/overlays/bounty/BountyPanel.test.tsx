@@ -183,7 +183,7 @@ describe('BountyPanel', () => {
   it('네임드 화면 — 이름은 ???, 수배서 전용 문구는 이름의 툴팁, 나타나는 곳과 보상과 교환 재료를 줄로 보인다', async () => {
     show(game({ fame: 1500, dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(tipOf(screen.getByText('???'))).toMatch(/걷어 올린 그물은/);
+    expect(tipOf(screen.getByText('???'))).toMatch(/반달 모양의 이빨 자국/);
     expect(screen.getByText('나타나는 곳')).toBeInTheDocument();
     expect(screen.getByText(/400,000G/)).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
