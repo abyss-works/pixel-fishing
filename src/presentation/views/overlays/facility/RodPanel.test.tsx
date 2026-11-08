@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); resetKeyScopes(); });
 
 const show = (rod: number, gold: number) => {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } }));
-  render(<FacilityModal panel="rod" game={{ ...newState(), rod, gold }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
+  render(<FacilityModal sellBonus={0} panel="rod" game={{ ...newState(), rod, gold }} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
   return { dispatch };
 };
 
@@ -31,6 +31,13 @@ describe('낚싯대 강화', () => {
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent(/골드가 부족해요/);
+  });
+
+  it('강화 버튼은 스크롤 본문 밖(하단 고정 자리)에 있다', () => {
+    show(3, upgradeCost(3));
+    const button = screen.getByRole('button', { name: `강화 (-${fmtGold(upgradeCost(3))})` });
+    expect(button.closest('.pf-vscroll')).toBeNull();
+    expect(button.closest('[role="dialog"]')).not.toBeNull();
   });
 
   it('강화 버튼은 upgradeRod를 보낸다', () => {

@@ -13,7 +13,7 @@ import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
   REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer,
-  nearestSchoolInRange, zoneOf,
+  nearestSchoolInRange, zoneOf, closedSeaBlock,
 } from '../world';
 import type { Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
@@ -82,9 +82,13 @@ export class GameFieldEngine {
   private readonly pos: Point;
   private lastSpot: SpotId | null = null;
   private readonly tracker = new ZoneTracker();
+  /** 직전 프레임이 구역 경계에 막혔고 안내를 이미 냈다 */
+  private blockNotified = false;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
+  /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
+  private controlLocked = false;
   private biteStart = 0;
   /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
   private resultAt: number | null = null;
@@ -180,6 +184,28 @@ export class GameFieldEngine {
     this.frameId = requestAnimationFrame(frame);
   }
 
+  /**
+   * 조작 잠금 — 켜면 눌린 키와 패드 방향을 비우고, 잠금 중에는 이동, 트리거 판정(onScene), 낚시 시작을 하지 않는다.
+   * 렌더와 다른 플레이어 표시 같은 프레임 루프의 나머지는 계속 돈다.
+   */
+  setControlLocked(locked: boolean): void {
+    this.controlLocked = locked;
+    if (!locked) return;
+    this.keys.clear();
+    this.padDir = null;
+  }
+
+  /**
+   * 플레이어를 지정한 좌표로 옮긴다 — 낚시 중이면 줄을 거두고, 구역 추적과 사거리 어군을 새 자리 기준으로 다시 잡는다.
+   * 도착 자리가 트리거 안이어도 별도 처리 없이 생성 시 시작 위치와 같게 다음 프레임에 트리거를 판정한다.
+   */
+  placePlayer(pos: Point): void {
+    if (this.snapshot.phase !== 'idle') this.cancelFishing();
+    this.pos.x = pos.x;
+    this.pos.y = pos.y;
+    this.initializePositionState();
+  }
+
   handleKeyDown(code: string, preventDefault: () => void): boolean {
     if (code === 'Space') {
       preventDefault();
@@ -189,6 +215,7 @@ export class GameFieldEngine {
     if (!MOVE_KEYS[code]) return false;
 
     preventDefault();
+    if (this.controlLocked) return true;
     if (this.snapshot.phase !== 'idle') {
       this.cancelFishing();
       this.callbacks.onEvent({ type: 'movement-cancelled' });
@@ -199,6 +226,7 @@ export class GameFieldEngine {
 
   /** 원 패드의 이동 방향 — 키 이동처럼 낚시를 접고 움직이며, (0, 0)이나 null이면 멈춘다 */
   setMoveDirection(dir: Point | null): void {
+    if (this.controlLocked) return;
     const moving = dir !== null && (dir.x !== 0 || dir.y !== 0);
     this.padDir = moving ? dir : null;
     if (moving && this.snapshot.phase !== 'idle') {
@@ -217,6 +245,7 @@ export class GameFieldEngine {
   }
 
   action(): void {
+    if (this.controlLocked) return;
     if (this.snapshot.phase === 'bite') {
       const school = this.school;
       if (!school) return;
@@ -240,6 +269,7 @@ export class GameFieldEngine {
   private initializePositionState(): void {
     const zone = zoneOf(this.def, this.pos.x, this.pos.y) ?? null;
     this.tracker.init(zone);
+    this.blockNotified = false;
     this.refreshNearby();
     setZone(this.lastSpot ? zoneOfSpot(this.lastSpot) ?? null : (zone ? topZoneOf(zone) : null));
     setPlayerPos({ x: this.pos.x, y: this.pos.y });
@@ -254,6 +284,7 @@ export class GameFieldEngine {
 
   private updateFrame(ctx: CanvasRenderingContext2D, now: number, last: number): boolean {
     const dt = Math.min((now - last) / 1000, 0.05);
+    if (this.controlLocked) return this.renderFrame(ctx, now);
     let dx = 0, dy = 0;
     for (const key of this.keys) {
       const direction = MOVE_KEYS[key];
@@ -261,13 +292,15 @@ export class GameFieldEngine {
     }
 
     let movedFrom: Point | null = null;
+    let closedMessage: string | null = null;
     // 키 이동은 방향 부호(대각선 포함)로, 원 패드는 끄는 각도 그대로의 단위 벡터로 움직인다
     const pad = this.padDir;
     if ((dx || dy || pad) && this.snapshot.phase === 'idle') {
       const speed = moveSpeed(this.game, this.def.movement, this.night).value;
       movedFrom = { ...this.pos };
-      const next = movePlayer(
-        this.def, this.pos, pad ? pad.x : Math.sign(dx), pad ? pad.y : Math.sign(dy), dt, speed);
+      const dirX = pad ? pad.x : Math.sign(dx), dirY = pad ? pad.y : Math.sign(dy);
+      closedMessage = closedSeaBlock(this.def, this.pos, dirX, dirY, dt, speed);
+      const next = movePlayer(this.def, this.pos, dirX, dirY, dt, speed);
       this.pos.x = next.x;
       this.pos.y = next.y;
       this.refreshNearby();
@@ -282,10 +315,17 @@ export class GameFieldEngine {
         this.pos.y = movedFrom.y;
         setPlayerPos({ x: this.pos.x, y: this.pos.y });
       }
-      if (step.blocked) this.callbacks.onEvent({ type: 'zone-blocked', message: step.blocked });
     } else if (step.enteredTop) {
       this.callbacks.onEvent({ type: 'zone-entered', zone: step.enteredTop });
     }
+
+    // 막힌 시도는 경계에 닿는 순간 한 번만 알린다 — 막힌 채 키를 누르고 있는 동안은 프레임마다 반복하지 않고,
+    // 막히지 않은 프레임이 한 번 지나가면(떨어졌다 다시 닿을 때) 다시 알린다.
+    const blockedMessage = closedMessage ?? (step.revert ? step.blocked : null);
+    if (blockedMessage && !this.blockNotified) {
+      this.callbacks.onEvent({ type: 'zone-blocked', message: blockedMessage });
+    }
+    this.blockNotified = blockedMessage !== null;
 
     const focusZone = this.lastSpot ? zoneOfSpot(this.lastSpot) : null;
     setZone(focusZone ?? (zone ? topZoneOf(zone) : null));
@@ -310,6 +350,10 @@ export class GameFieldEngine {
       }
     }
 
+    return this.renderFrame(ctx, now);
+  }
+
+  private renderFrame(ctx: CanvasRenderingContext2D, now: number): boolean {
     const axes = rodAxes(this.game);
     const zones = this.school ? powerZones(this.game, this.school.spot) : null;
     renderRegion(ctx, this.def, {

@@ -17,6 +17,7 @@ import type { DispatchResult, MaybePromise } from '../../../features/gameplay/se
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import { isTap, movePad, startPad } from '../../../game/runtime/movePad';
 import type { Pad } from '../../../game/runtime/movePad';
+import { REGION_PACKS } from '../../../game/world';
 import type { Point, RegionId, SceneRef } from '../../../game/world';
 import { zoneById } from '../../../game/content/zones';
 import { useCanvasCover } from './canvasCover';
@@ -42,6 +43,10 @@ interface Props {
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
   initialPos?: Point;
+  /** 장소 지정 순번 — 마운트 뒤에 바뀌면 같은 지역 안에서 플레이어를 initialPos(없으면 지역 출발점)로 옮긴다 */
+  placeSeq?: number;
+  /** 켜면 이동, 접안, 낚시 시작 같은 게임 조작이 멈춘다(여객선 전환 중). 화면 표시는 계속된다 */
+  locked?: boolean;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
   paused?: boolean;
   /** 모바일에서 낚시 상태 띠를 넣을 HUD 자리 — 없으면 프레임 아래 가운데에 둔다 */
@@ -100,7 +105,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, paused, statusSlot,
+  region, game, dispatch, setToast, onScene, onWarmup, initialPos, placeSeq, locked, paused, statusSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -169,6 +174,14 @@ export default function Field({
     return () => document.removeEventListener('keyup', onKeyUp);
   }, [engine]);
 
+  const placedSeq = useRef(placeSeq);
+  useEffect(() => {
+    if (placedSeq.current === placeSeq) return;
+    placedSeq.current = placeSeq;
+    engine.placePlayer(initialPos ?? REGION_PACKS[region].spawn);
+  }, [engine, placeSeq, initialPos, region]);
+  useEffect(() => { engine.setControlLocked(locked === true); }, [engine, locked]);
+
   useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
@@ -183,13 +196,13 @@ export default function Field({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const onPadDown = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (gesture.current) return;
+    if (locked || gesture.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     gesture.current = { id: e.pointerId, pad: startPad(pointAt(e)) };
   };
   const onPadMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const g = gesture.current;
-    if (!g || g.id !== e.pointerId) return;
+    if (locked || !g || g.id !== e.pointerId) return;
     const next = movePad(g.pad, pointAt(e));
     if (next === g.pad) return;
     g.pad = next;
@@ -207,7 +220,7 @@ export default function Field({
 
   const inSlot = mobile && statusSlot != null;
   const statusBand = snapshot.phase === 'idle' ? null : (
-    <HudPanel className={cx('z-(--z-overlay) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
+    <HudPanel className={cx('z-(--z-stage-hud) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
       inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
       {statusText(snapshot.phase, mobile)}
     </HudPanel>
@@ -227,7 +240,7 @@ export default function Field({
                 onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}
       <NightOverlay />
-      {pad?.active && <MovePad pad={pad} />}
+      {pad?.active && !locked && <MovePad pad={pad} />}
       {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">

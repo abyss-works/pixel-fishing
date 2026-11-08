@@ -13,7 +13,7 @@ export default function NoticeDialog({ title, body, value, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <Modal onClose={onClose}>
+    <Modal bare onClose={onClose}>
       <ModalCard title={title} onClose={onClose}
         confirm={<Button variant="primary" full onClick={onClose}>확인</Button>}>
         {typeof body === 'string' ? <div className="text-sm leading-relaxed whitespace-pre-line">{body}</div> : body}

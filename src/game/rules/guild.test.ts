@@ -154,7 +154,11 @@ describe('길드장 위임', () => {
 
 describe('하루 기여 상한', () => {
   it('명성 기여 상한과, 의뢰 갈래마다 하루 클리어 횟수만큼의 클리어 기여', () => {
-    expect(guildDailyContributionCaps()).toEqual({ fame: 2_000, general: 500, named: 1_000 });
+    expect(guildDailyContributionCaps({ artifacts: [] })).toEqual({ fame: 2_000, general: 500, named: 1_000 });
+  });
+
+  it('마미 와타의 거울을 가지면 네임드 토벌 기여 상한이 거울의 가산만큼 늘고 일반 의뢰는 그대로다', () => {
+    expect(guildDailyContributionCaps({ artifacts: ['mami-wata-mirror'] })).toEqual({ fame: 2_000, general: 500, named: 2_000 });
   });
 });
 

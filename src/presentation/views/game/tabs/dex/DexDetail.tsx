@@ -9,12 +9,14 @@ import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
 import TitledCell from '../../../../ui/TitledCell';
 import Inset from '../../../../ui/Inset';
+import LoreParagraph from '../../../../ui/LoreParagraph';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityText } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import { fmtGold, fmtSize } from '../../../../ui/format';
 import SizeDistributionChart from './SizeDistributionChart';
+import { SCROLL_Y_ROWS } from '../../../../ui/scrollArea';
 
 // 도감 상세보기 — 이름 머리 아래 2×2 메인 그리드: 위 줄 표본(초상화·로어) | 크기 분포, 아래 줄 기록 | 크기 순위.
 // 칸은 패널을 겹치지 않고 표면을 파낸 오목한 칸(Inset)으로 나눠 다른 창의 노치·베벨 언어와 맞춘다.
@@ -33,8 +35,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   const meOutside = ranking.data?.me && !ranking.data.top.some(r => r.me) ? ranking.data.me : null;
 
   return (
-    <Modal xl onClose={onClose}>
-      {/* 미발견 폼도 같은 구조로 렌더(값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지 */}
+    <Modal xl onClose={onClose} header={
+      // 미발견 폼도 같은 구조로 렌더(값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지. 제목 줄은 스크롤 칸 밖에 고정한다
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{known ? form.name : '???'}</PageTitle>
         <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
@@ -42,9 +44,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           {form.form === 'variant' ? '돌연변이' : '기본형'} {i + 1}/{forms.length}
         </span>
       </header>
+    }>
 
       {/* 메인 그리드 2×2 — 위 줄(표본 | 크기 분포), 아래 줄(기록 | 크기 순위). 같은 줄의 칸은 높이를 맞춘다 */}
-      <div className="grid grid-cols-2 gap-x-5 gap-y-4 max-[640px]:grid-cols-1">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 mobile:grid-cols-1">
         <TitledCell title="표본">
           <Inset tone="light" className="flex flex-1 flex-col
                  bg-[linear-gradient(180deg,var(--c-surface-2),color-mix(in_oklab,var(--c-bg)_40%,var(--c-surface))_85%)]">
@@ -52,13 +55,14 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               <ArrowButton dir={-1} tone="solid" aria-label="이전 형태"
                            onClick={() => setI((i - 1 + forms.length) % forms.length)} />
               <FishSprite fish={fish} preset="portrait" form={form.form} discovered={known} animate={known}
-                          ariaLabel={known ? fish.name : '미확인 변종'} className="block" />
+                          ariaLabel={known ? fish.name : '미확인 변종'}
+                          className="block min-w-0 shrink h-auto [image-rendering:pixelated]" />
               <ArrowButton dir={1} tone="solid" aria-label="다음 형태"
                            onClick={() => setI((i + 1) % forms.length)} />
             </div>
-            <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">
-              {known ? form.lore : '…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.'}
-            </p>
+            {known
+              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
+              : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
           </Inset>
         </TitledCell>
 
@@ -85,9 +89,11 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
             <Inset className="flex flex-1 flex-col">
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
-                  {/* 표 머리와 순위 다섯 줄 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className="pf-scroll-panel max-h-[178px] pf-vscroll px-1">
-                    <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                  {/* 표 머리(28px)와 순위 다섯 줄(28.5px씩)에 위 여백 4px을 더한 높이 — 그 아래는 칸 안에서 스크롤한다 */}
+                  <div className={`${SCROLL_Y_ROWS} max-h-[min(174.5px,40dvh)]`}>
+                    <div className="pl-1">
+                      <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                    </div>
                   </div>
                   {meOutside && (
                     <p className="mt-auto border-t border-line px-2 py-1.5 text-sm text-accent">

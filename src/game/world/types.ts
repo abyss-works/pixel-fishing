@@ -74,6 +74,8 @@ export interface MapCellDef {
   /** 소속 구역 — 셀은 zone만 안다. 스팟은 존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다.
    *  미지정 = 구역 밖 물(통행만) */
   zone?: ZoneId;
+  /** 아직 열지 않은 바다 — 실제 바다로 그리되 들어설 수 없다(통행 불가, 시도하면 안내). 북대서양 구역을 열 때 구역 문자로 바꾼다 */
+  closed?: boolean;
   /** 수역 표기명 — 같은 def 셀 군집의 상단 중앙에 자동 라벨로 뜬다 (하드코딩 금지) */
   label?: string;
 }
@@ -83,6 +85,13 @@ export interface MapCellDef {
 export interface CompiledMap {
   cellW: number; cellH: number;
   cols: number; rows: number;
+  /** 이 격자(창)의 서북 모서리가 게임 좌표 원점에서 떨어진 칸 수. 게임 좌표의 원점은 창이 아니라
+   *  전지구 고정 원점이라 창을 넓히거나 줄여도 같은 경위도는 같은 좌표를 갖는다 */
+  colOffset: number; rowOffset: number;
+  /** 전지구 격자의 열 수 — 칸 인덱스(행 * globalCols + 열)의 기준. 창과 무관한 상수다 */
+  globalCols: number;
+  /** 격자 서북 모서리의 게임 좌표 = 칸 오프셋 * 셀 크기 */
+  originX: number; originY: number;
   codes: Uint8Array;
   palette: (MapCellDef | undefined)[];
 }
@@ -102,8 +111,8 @@ export interface RegionPack {
   /** 이 지역의 거점 (base 트리거가 진입시키는 곳) */
   base: BaseId;
   info: RegionLore;
-  w: number;
-  h: number;
+  /** 이 지역에서 이동할 수 있는 게임 좌표 영역. 항해 지역은 지형 격자(창)의 자리이고 원점이 아닐 수 있다 */
+  bounds: Rect;
   /** 지리 창(경위도) — 실지형 파이프라인(config → generated 마스크)이 심는다.
    *  이 값으로 px↔m 스케일을 파생한다(1° 위도 ≈ 111,320m). walk 지역(마을)은 없음. */
   geoWindow?: { lonMin: number; lonMax: number; latMin: number; latMax: number };
@@ -136,6 +145,9 @@ export type FurnitureSpriteId =
   | 'workbench' | 'chest' | 'wardrobe' | 'door'            // 집
   | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
 
+/** 시설 카드 라벨 — 제목과 선택 설명. 설명은 자리가 모자라면 생략될 수 있는 보조 정보다 */
+export interface FacilityLabel { title: string; sub?: string }
+
 /** 라벨의 동적 데이터(낚싯대 Lv·배 이름) 주입 */
 export interface BaseInfo { rod: number; boatName: string }
 
@@ -143,7 +155,7 @@ export interface BaseInfo { rod: number; boatName: string }
 export interface Furniture extends Rect {
   id: FurnitureId;
   sprite: FurnitureSpriteId;
-  label: (info: BaseInfo) => string;
+  label: (info: BaseInfo) => FacilityLabel;
   labelDy: number; // 라벨 y 오프셋 (rect.y 기준)
 }
 

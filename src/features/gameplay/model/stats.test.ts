@@ -59,7 +59,7 @@ describe('스탯 해역 목록', () => {
   it('지역 탭은 바다 지역마다 충족 수를 세고, 마을은 지금 마을에 있을 때만 넣는다', () => {
     const rows = selectStatsSpotRows(game({ boat: 1, rod: 3 }), 'sail');
     const atSea = selectStatsZoneTabs(rows, 'pacific');
-    expect(atSea.map(tab => tab.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar']);
+    expect(atSea.map(tab => tab.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     expect(atSea[0]).toMatchObject({ zone: 'pacific', ok: 0, total: 2 });
 
     const inVillage = selectStatsZoneTabs(rows, 'village');
@@ -99,6 +99,17 @@ describe('받는 보너스', () => {
     const relics = selectActiveBonuses(g).filter(b => b.source.kind === 'relic');
     expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.effect]))
       .toEqual([['duel', 'abyss-angler', 'duelSpeedupCut'], ['move', 'wreck-compass', 'sail']]);
+  });
+
+  it('유물 보너스 줄에 보유 레벨이 붙는다 - 맵에 없으면 Lv1', () => {
+    const g = game({ artifacts: ['abyss-angler', 'wreck-compass'], artifactLevels: { 'wreck-compass': 4 } });
+    const levels = selectActiveBonuses(g).flatMap(b => b.source.kind === 'relic' ? [[b.source.artifact.id, b.source.level]] : []);
+    expect(levels).toEqual([['abyss-angler', 1], ['wreck-compass', 4]]);
+  });
+
+  it('효과가 없는 전설 유물은 보너스 줄을 내지 않는다', () => {
+    const g = game({ artifacts: ['mami-wata-mirror'] });
+    expect(selectActiveBonuses(g).filter(b => b.source.kind === 'relic')).toEqual([]);
   });
 
   it('켜 둔 미끼는 낚시 갈래의 직접 낚을 때만 효과다', () => {

@@ -7,6 +7,7 @@ import {
   guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
+import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { FISH } from '../../../game/content/fish';
 import { bountyById } from '../../../game/content/bounties';
@@ -204,9 +205,9 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
   + '레벨이 오르면 길드 스킬이 하나씩 열리고, 스킬마다 올릴 수 있는 단계 상한도 올라가요.';
 
-/** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한 */
-export function dailyContributionRows(): { label: string; value: string }[] {
-  const caps = guildDailyContributionCaps();
+/** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한. 네임드 토벌은 보유 유물의 가산을 반영한다 */
+export function dailyContributionRows(holder: ArtifactHolder): { label: string; value: string }[] {
+  const caps = guildDailyContributionCaps(holder);
   return [
     { label: '명성', value: num(caps.fame) },
     { label: '일반 의뢰', value: num(caps.general) },

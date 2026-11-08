@@ -2,20 +2,21 @@
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
-import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
+import { ZONES, topZoneOf, zoneById, zoneOfSpot, CLOSED_SEA_MSG } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
 import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
   REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
-  entryPoint, furnitureAt, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
-  TOAMASINA_FURNITURE,
+  entryPoint, furnitureAt, inClosedSea, closedSeaBlock, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
+  TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, WORLD_W, WORLD_H, schoolsOf, generateWorldSchools,
+  WORLD, WORLD_SPAWN, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
-import { WINDOW as WORLD_WINDOW, ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
+import { cellDefAt } from './mask';
+import { ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
 import { EARTH_MAP, worldToEarth, implementedRect } from '../../presentation/views/overlays/world-map/atlas';
 
 // 대양 어군은 날짜 시드 배치다 — 팩 공통 검증은 고정 날짜 하나로, 도달 가능성은 여러 날로 본다
@@ -23,19 +24,23 @@ const TEST_DAY = '2026-10-18';
 const SCHOOL_DAYS = ['2026-10-18', '2026-10-19', '2026-10-20', '2026-12-31', '2027-03-01'];
 const schoolsFor = (pack: RegionPack): School[] => schoolsOf(pack.id, TEST_DAY);
 
-// 지형 파이프라인 스케일 — world.mask 기준 (32px/°)
+// 게임 좌표계 — 전지구 고정 원점(경도 -180, 위도 85.0344827586207) 기준, 경도 32px/°, 위도 31.9px/°
+const ORIGIN_LAT = 85.0344827586207;
 const worldAt = (lon: number, lat: number): [number, number] => [
-  Math.round((lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W),
-  Math.round((WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H),
+  Math.round((lon + 180) * 32),
+  Math.round((ORIGIN_LAT - lat) * 31.9),
 ];
 
 // 시작점에서 BFS — 군집·트리거마다 도달 가능한 칸이 있는지 검증
-function reachabilityCheck(pack: RegionPack) {
+function reachabilityCheck(pack: RegionPack, start: { x: number; y: number } = pack.spawn) {
   const STEP = 4;
-  const cols = Math.ceil(pack.w / STEP), rows = Math.ceil(pack.h / STEP);
+  // 탐색 격자는 이동 영역(bounds)의 서북 모서리에서 시작한다
+  const b = pack.bounds;
+  const cols = Math.ceil(b.w / STEP), rows = Math.ceil(b.h / STEP);
   const key = (cx: number, cy: number) => cy * cols + cx;
   const visited = new Uint8Array(cols * rows);
-  const queue: [number, number][] = [[Math.round(pack.spawn.x / STEP), Math.round(pack.spawn.y / STEP)]];
+  const toX = (cx: number) => b.x + cx * STEP, toY = (cy: number) => b.y + cy * STEP;
+  const queue: [number, number][] = [[Math.round((start.x - b.x) / STEP), Math.round((start.y - b.y) / STEP)]];
   visited[key(queue[0][0], queue[0][1])] = 1;
   while (queue.length) {
     const [cx, cy] = queue.shift()!;
@@ -43,32 +48,36 @@ function reachabilityCheck(pack: RegionPack) {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
       if (visited[key(nx, ny)]) continue;
-      if (!canMove(pack, nx * STEP, ny * STEP)) continue;
+      if (!canMove(pack, toX(nx), toY(ny))) continue;
       visited[key(nx, ny)] = 1;
       queue.push([nx, ny]);
     }
   }
   const reachableNear = (s: School) => {
     const r = Math.ceil(CAST_RANGE / STEP);
-    const scx = Math.round(s.x / STEP), scy = Math.round(s.y / STEP);
+    const scx = Math.round((s.x - b.x) / STEP), scy = Math.round((s.y - b.y) / STEP);
     for (let cx = scx - r; cx <= scx + r; cx++) {
       for (let cy = scy - r; cy <= scy + r; cy++) {
         if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) continue;
-        if (Math.hypot(cx * STEP - s.x, cy * STEP - s.y) > CAST_RANGE) continue;
+        if (Math.hypot(toX(cx) - s.x, toY(cy) - s.y) > CAST_RANGE) continue;
         if (visited[key(cx, cy)]) return true;
       }
     }
     return false;
   };
   const reachedRect = (r: { x: number; y: number; w: number; h: number }) => {
-    for (let cx = Math.floor(r.x / STEP); cx <= Math.floor((r.x + r.w - 1) / STEP); cx++) {
-      for (let cy = Math.floor(r.y / STEP); cy <= Math.floor((r.y + r.h - 1) / STEP); cy++) {
+    for (let cx = Math.floor((r.x - b.x) / STEP); cx <= Math.floor((r.x + r.w - 1 - b.x) / STEP); cx++) {
+      for (let cy = Math.floor((r.y - b.y) / STEP); cy <= Math.floor((r.y + r.h - 1 - b.y) / STEP); cy++) {
         if (visited[key(cx, cy)]) return true;
       }
     }
     return false;
   };
-  return { reachableNear, reachedRect };
+  const reachedPoint = (p: { x: number; y: number }) => {
+    const cx = Math.round((p.x - b.x) / STEP), cy = Math.round((p.y - b.y) / STEP);
+    return cx >= 0 && cy >= 0 && cx < cols && cy < rows && visited[key(cx, cy)] === 1;
+  };
+  return { reachableNear, reachedRect, reachedPoint };
 }
 
 // ============ 공통 무결성 — 모든 지역 팩 자동 검증 (R4b) ============
@@ -227,7 +236,7 @@ describe('대양(병합) R4: 충돌 (항해)', () => {
     expect(canMove(WORLD, ...worldAt(134, -25)), '호주').toBe(false);
     expect(canMove(WORLD, ...worldAt(77.5, 8.5)), '인도 남단').toBe(false);
     expect(canMove(WORLD, -5, 100)).toBe(false);
-    expect(canMove(WORLD, 100, WORLD_H - 3)).toBe(false);
+    expect(canMove(WORLD, WORLD.bounds.x + 100, WORLD.bounds.y + WORLD.bounds.h - 3)).toBe(false);
   });
 
   it('수역 판정 — 군집이 모여 있는 곳의 존이 곧 수역이다 (존 계층 모델)', () => {
@@ -255,6 +264,15 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     expect(zoneOf(WORLD, ...worldAt(51.5, -20)), '섬 동쪽 바다').toBe('indian');
     expect(zoneOf(WORLD, ...worldAt(40.5, -20)), '모잠비크 해협').toBe('madagascar');
     expect(zoneOf(WORLD, ...worldAt(43.2, -13.6)), '코모로 심해').toBe('comorodeep');
+  });
+
+  it('희망봉 경도(20E)를 사이에 두고 마다가스카르/남대서양 구역이 나뉜다', () => {
+    expect(zoneOf(WORLD, ...worldAt(21, -35.5)), '20E 동쪽').toBe('madagascar');
+    expect(zoneOf(WORLD, ...worldAt(19, -35.5)), '20E 서쪽').toBe('southatlantic');
+    expect(zoneOf(WORLD, ...worldAt(0, -20)), '남대서양 열린 바다').toBe('southatlantic');
+    expect(zoneOf(WORLD, ...worldAt(11.5, -23.5)), '벵겔라 앞바다').toBe('benguela');
+    expect(zoneOf(WORLD, ...worldAt(-5.2, -15.95)), '세인트헬레나').toBe('sthelena');
+    expect(zoneOf(WORLD, ...worldAt(-8, -29)), '남대서양 라벨 문자').toBe('southatlantic');
   });
 
   it('구역 밖 물(내륙해 잉여)은 zone도 spot도 없다', () => {
@@ -288,8 +306,169 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
     expect(zoneById('seasia')!.entryBoat).toBe(3);
     expect(zoneById('indian')!.entryBoat).toBe(5);
     expect(zoneById('madagascar')!.entryBoat).toBe(7);
+    expect(zoneById('southatlantic')!.entryBoat).toBe(8);
     for (const z of ZONES) {
       for (const sid of z.spots) expect(zoneOfSpot(sid)).toBe(z.id);
+    }
+  });
+});
+
+describe('남대서양 지도', () => {
+  const walvis = BASE_PACKS.walvisbay.exitAt!;
+
+  it('월비스베이항 출항 지점과 접안 자리는 용승대 위다', () => {
+    expect(zoneOf(WORLD, walvis.x, walvis.y)).toBe('benguela');
+    const dock = WORLD.triggers.find(t => t.action === 'base' && t.base === 'walvisbay')!;
+    expect(zoneOf(WORLD, dock.rect.x + dock.rect.w / 2, dock.rect.y + dock.rect.h / 2)).toBe('benguela');
+  });
+
+  it('월비스베이항 건물은 육지 위이고 접안 트리거는 물 위다', () => {
+    const b = WORLD.buildings.find(bd => bd.rect.x === WORLD_ANCHORS.walvisbay.x)!;
+    expect(b).toBeDefined();
+    expect(WORLD.labels.some(l => l.text === '월비스베이항')).toBe(true);
+    expect(canMove(WORLD, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2), '건물 안').toBe(false);
+    const dock = WORLD.triggers.find(t => t.action === 'base' && t.base === 'walvisbay')!;
+    expect(canMove(WORLD, dock.rect.x + dock.rect.w / 2, dock.rect.y + dock.rect.h / 2)).toBe(true);
+  });
+
+  it('월비스베이항 출항 지점에서 모든 구역의 어군·접안 트리거에 닿는다 (희망봉 통과 포함)', () => {
+    const { reachableNear, reachedRect, reachedPoint } = reachabilityCheck(WORLD, walvis);
+    expect(reachedPoint(WORLD_SPAWN), '고향 항구 앞바다(희망봉을 돌아 인도양, 태평양)').toBe(true);
+    for (const trig of WORLD.triggers) {
+      expect(reachedRect(trig.rect), `${trig.action} 트리거로 가는 길이 막혀 있음`).toBe(true);
+    }
+    for (const day of SCHOOL_DAYS) {
+      for (const s of generateWorldSchools(day)) {
+        expect(reachableNear(s), `${day} ${s.id}에 닿을 자리가 없음`).toBe(true);
+      }
+    }
+  });
+
+  it('희망봉 남쪽 바다를 지나 마다가스카르 구역과 남대서양 구역이 이어진다', () => {
+    const { reachedPoint } = reachabilityCheck(WORLD, walvis);
+    expect(reachedPoint({ x: worldAt(21, -35.5)[0], y: worldAt(21, -35.5)[1] }), '20E 동쪽').toBe(true);
+    expect(reachedPoint({ x: worldAt(19, -35.5)[0], y: worldAt(19, -35.5)[1] }), '20E 서쪽').toBe(true);
+  });
+
+  it('용승대와 세인트헬레나 어군은 자기 하위 존 위에 있다', () => {
+    for (const day of SCHOOL_DAYS) {
+      const schools = generateWorldSchools(day);
+      for (const spot of ['benguela', 'sthelena'] as const) {
+        const mine = schools.filter(s => s.spot === spot);
+        expect(mine.length, `${day} ${spot} 어군 수`).toBeGreaterThanOrEqual(1);
+        for (const s of mine) expect(zoneOf(WORLD, s.x, s.y), `${day} ${s.id}`).toBe(spot);
+      }
+    }
+  });
+
+  const CLOSED_SPOTS = [
+    [-14, 8, '시에라리온 앞바다'], [0, 4, '기니만'], [-10, 33, '모로코 앞바다'], [10, 38, '지중해'], [-10, 43, '비스케이만'],
+  ] as const;
+
+  it('적도 북쪽 대서양과 지중해는 실제 바다지만 아직 열지 않은 바다라 들어설 수 없다', () => {
+    for (const [lon, lat, name] of CLOSED_SPOTS) {
+      const [x, y] = worldAt(lon, lat);
+      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물로 그려진다`).toBe(true);
+      expect(inClosedSea(WORLD, x, y), name).toBe(true);
+      expect(canMove(WORLD, x, y), name).toBe(false);
+      expect(zoneOf(WORLD, x, y), name).toBeUndefined();
+    }
+  });
+
+  it('홍해는 열지 않은 바다에 들지 않는다 — 수에즈만과 아카바만 입구 포함', () => {
+    for (const [lon, lat, name] of [[38, 20, '홍해 중부'], [33.5, 28, '수에즈만'], [34.5, 27.3, '아카바만 입구'], [38.5, 23, '홍해 북부']] as const) {
+      const [x, y] = worldAt(lon, lat);
+      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
+      expect(inClosedSea(WORLD, x, y), name).toBe(false);
+    }
+    expect(inClosedSea(WORLD, ...worldAt(30, 34)), '동지중해').toBe(true);
+  });
+
+  it('적도를 북쪽으로 넘으려 하면 안내문과 함께 막힌다', () => {
+    // 남대서양 쪽 가장자리(적도 바로 남쪽)에서 북쪽으로 한 걸음
+    const [x, y] = worldAt(-8, -0.3);
+    expect(canMove(WORLD, x, y)).toBe(true);
+    expect(zoneOf(WORLD, x, y)).toBe('southatlantic');
+    expect(closedSeaBlock(WORLD, { x, y }, 0, -1, 0.05, 190)).toBe(CLOSED_SEA_MSG);
+    expect(closedSeaBlock(WORLD, { x, y }, 0, 1, 0.05, 190)).toBeNull();
+    const north = movePlayer(WORLD, { x, y }, 0, -1, 1, 190);
+    expect(inClosedSea(WORLD, north.x, north.y)).toBe(false);
+  });
+
+  it('열지 않은 바다는 어디에서도 닿지 않고 어군과 구역도 없다', () => {
+    const fromSpawn = reachabilityCheck(WORLD);
+    const fromWalvis = reachabilityCheck(WORLD, walvis);
+    for (const [lon, lat, name] of CLOSED_SPOTS) {
+      const p = { x: worldAt(lon, lat)[0], y: worldAt(lon, lat)[1] };
+      expect(fromSpawn.reachedPoint(p), `고향에서 ${name}`).toBe(false);
+      expect(fromWalvis.reachedPoint(p), `월비스베이에서 ${name}`).toBe(false);
+    }
+  });
+
+  it('세계지도 earth 마스크에도 열지 않은 바다가 찍혀 있다', () => {
+    const [x, y] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 - 38) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
+    expect(cellDefAt(EARTH_MAP, x, y)?.closed, '지중해').toBe(true);
+    const [x2, y2] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 + 10) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
+    expect(cellDefAt(EARTH_MAP, x2, y2)?.closed ?? false, '남대서양').toBe(false);
+  });
+});
+
+describe('세계지도(earth) — 작은 섬', () => {
+  it('세인트헬레나, 울릉도, 독도가 최소 한 칸 육지로 보인다', () => {
+    for (const [name, lon, lat] of [['세인트헬레나', -5.7, -15.95], ['울릉도', 130.87, 37.5], ['독도', 131.87, 37.24]] as const) {
+      const [x, y] = earthPx(lon, lat);
+      expect(cellDefAt(EARTH_MAP, x, y)?.land, name).toBe(true);
+    }
+  });
+});
+
+describe('작은 섬 — 세인트헬레나, 울릉도, 독도', () => {
+  const ISLANDS = [
+    { name: '세인트헬레나', lon: -5.7, lat: -15.95, col: 37, row: 173 },
+    { name: '울릉도', lon: 130.87, lat: 37.5, col: 583, row: 18 },
+    { name: '독도', lon: 131.87, lat: 37.24, col: 587, row: 19 },
+  ];
+  const cellCenter = (col: number, row: number) => ({ x: (col + 660) * 8 + 4, y: (row + 119) * 11 + 5 });
+  const { cellW, cellH } = WORLD.map!;
+
+  it.each(ISLANDS)('$name은 한 칸짜리 육지이고 둘레는 바다다', ({ lon, lat, col, row }) => {
+    const [x, y] = worldAt(lon, lat);
+    expect(Math.floor(x / 8) - 660).toBe(col);
+    expect(Math.floor(y / 11) - 119).toBe(row);
+    const c = cellCenter(col, row);
+    expect(canMove(WORLD, c.x, c.y)).toBe(false);
+    expect(cellDefAt(WORLD.map!, c.x, c.y)?.land).toBe(true);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      expect(canMove(WORLD, c.x + dx * cellW, c.y + dy * cellH), `이웃 (${dx},${dy})`).toBe(true);
+    }
+  });
+
+  it('세인트헬레나 해역 타원이 섬을 둘러싼다', () => {
+    const c = cellCenter(37, 173);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      expect(zoneOf(WORLD, c.x + dx * cellW, c.y + dy * cellH)).toBe('sthelena');
+    }
+  });
+
+  it('섬이 있어도 고향 항구 출항 지점에서 섬 둘레 바다까지 닿고 접안과 어군 배치가 막히지 않는다', () => {
+    const { reachedPoint } = reachabilityCheck(WORLD);
+    const fromWalvis = reachabilityCheck(WORLD, BASE_PACKS.walvisbay.exitAt!);
+    for (const { col, row } of ISLANDS) {
+      const c = cellCenter(col, row);
+      const side = { x: c.x + cellW, y: c.y };
+      expect(reachedPoint(side), '고향 출항 지점에서 섬 옆 바다').toBe(true);
+      expect(fromWalvis.reachedPoint(side), '월비스베이 출항 지점에서 섬 옆 바다').toBe(true);
+    }
+    expect(canMove(WORLD, WORLD_SPAWN.x, WORLD_SPAWN.y)).toBe(true);
+    const home = WORLD.triggers.find(t => t.action === 'base' && t.base === 'harbor')!;
+    expect(reachedPoint({ x: home.rect.x + home.rect.w / 2, y: home.rect.y + home.rect.h / 2 })).toBe(true);
+    for (const day of SCHOOL_DAYS) {
+      for (const s of generateWorldSchools(day)) {
+        for (const { col, row } of ISLANDS) {
+          const c = cellCenter(col, row);
+          expect(Math.hypot(s.x - c.x, s.y - c.y), `${day} ${s.id}`).toBeGreaterThan(cellW * 1.5);
+        }
+      }
     }
   });
 });
@@ -405,17 +584,17 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
     expect(earthAt2(20, 0)?.land ?? earthAt2(20, 0)?.water, '아프리카 해안은 정의돼 있다').toBeDefined();
   });
 
-  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 122°×80°)', () => {
+  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 172°×80°)', () => {
     const win = implementedRect();
-    expect(win.w).toBeGreaterThanOrEqual(1948);
-    expect(win.w).toBeLessThanOrEqual(1956);
+    expect(win.w).toBeGreaterThanOrEqual(2744);
+    expect(win.w).toBeLessThanOrEqual(2760);
     expect(win.h).toBeGreaterThanOrEqual(1274);
     expect(win.h).toBeLessThanOrEqual(1282);
   });
 
   it('worldToEarth — 항구 앵커가 구현 영역 안에 뜬다', () => {
     const win = implementedRect();
-    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina]) {
+    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina, WORLD_ANCHORS.walvisbay]) {
       const e = worldToEarth(a.x, a.y);
       expect(e.x, `lon anchor ${a.x}`).toBeGreaterThanOrEqual(win.x);
       expect(e.x).toBeLessThanOrEqual(win.x + win.w);
@@ -429,8 +608,8 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
       const e = worldToEarth(x, y);
       const lon = -180 + e.x / (EARTH_MAP.cols * EARTH_MAP.cellW) * 360;
       const lat = 85 - e.y / (EARTH_MAP.rows * EARTH_MAP.cellH) * 170;
-      const wx = (lon - WORLD_WINDOW.lonMin) / (WORLD_WINDOW.lonMax - WORLD_WINDOW.lonMin) * WORLD_W;
-      const wy = (WORLD_WINDOW.latMax - lat) / (WORLD_WINDOW.latMax - WORLD_WINDOW.latMin) * WORLD_H;
+      const wx = (lon + 180) * 32;
+      const wy = (ORIGIN_LAT - lat) * 31.9;
       return [wx, wy];
     };
     const [rx, ry] = roundTrip(WORLD_SPAWN.x, WORLD_SPAWN.y);
@@ -536,6 +715,9 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     for (const f of TOAMASINA_FURNITURE) {
       expect(furnitureAt('toamasina', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
+    for (const f of WALVISBAY_FURNITURE) {
+      expect(furnitureAt('walvisbay', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
+    }
   });
   it('여객선은 항구에만 있다', () => {
     expect(HARBOR_FURNITURE.some(f => f.id === 'travel')).toBe(true);
@@ -549,6 +731,7 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
+    expect(ids('walvisbay')).toEqual(port);
     // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
     expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'ferry', 'exit']);
   });

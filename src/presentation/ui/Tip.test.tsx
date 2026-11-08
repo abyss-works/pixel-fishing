@@ -88,3 +88,40 @@ describe('Tip: 거친 포인터(터치)', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
+
+describe('Tip: 조건부 열기', () => {
+  it('onlyIf가 거짓이면 마우스를 올려도 열리지 않고, 참이면 열린다', () => {
+    setPointer(false);
+    let allowed = false;
+    render(<Tip text="설명" onlyIf={() => allowed}>대상</Tip>);
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    allowed = true;
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+  });
+});
+
+describe('Tip: hoverOnly', () => {
+  it('마우스에서는 호버로 열린다', () => {
+    setPointer(false);
+    render(<Tip hoverOnly text="설명">대상</Tip>);
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+  });
+
+  it('거친 포인터에서는 감싼 칸 자체를 눌러도 열리지 않는다', () => {
+    setPointer(true);
+    render(<Tip hoverOnly wraps text="설명"><span>대상</span></Tip>);
+    fireEvent.click(screen.getByText('대상').parentElement!);
+    fireEvent.click(screen.getByText('대상'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('hoverOnly가 아니면 거친 포인터에서 감싼 칸 자체를 누르면 열린다(차이 확인)', () => {
+    setPointer(true);
+    render(<Tip wraps text="설명"><span>대상</span></Tip>);
+    fireEvent.click(screen.getByText('대상').parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+  });
+});

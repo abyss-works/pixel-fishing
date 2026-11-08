@@ -91,6 +91,7 @@ export const EVENT_LABELS: Record<string, string> = {
   acceptQuest: '의뢰 수주',
   deliverBounty: '납품·토벌',
   exchangeArtifact: '유물 교환',
+  levelUpArtifact: '유물 강화',
   ticket: '도전권 획득',
   resolveChallenge: '네임드 도전',
   adminSet: '관리자 스탯 수정',
@@ -133,6 +134,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'letter': return `"${s(pay.text).slice(0, 60)}"`;
     case 'buyBait': return `${s(pay.bait)} ×${String(pay.count ?? '?')} −${fmtNum(Number(pay.cost ?? 0))}G`;
     case 'exchangeArtifact': return `${s(pay.artifact)} 교환`;
+    case 'levelUpArtifact': return `${s(pay.artifact)} Lv.${String(pay.level ?? '?')}`;
     case 'ticket': return `${s(pay.questId)} 도전권`;
     case 'resolveChallenge': return `${s(pay.questId)} ${pay.success === true ? '성공' : '실패'}`;
     case 'setActiveBait': return `${s(pay.bait)} 활성`;

@@ -9,11 +9,10 @@
 //
 // 순수 곡선(rodStats·boatSpeed)은 게임 규칙 계산에 둔다: AdminPanel 가상 레벨 표와
 // 시설 미리보기(rod+1)는 레벨만으로 계산한다.
-import { autoCommonBoost } from './fishing.js';
-import { relativeIdleBoost, manualPowerBonus, MANUAL_POWER_BONUS } from './power.js';
+import { relativeIdleBoost } from './power.js';
 import { boatSpeed, rodStats } from './logic.js';
 import type { GameState } from './logic.js';
-import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance.js';
+import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
 import { spotById, powerReqOf } from '../content/spots.js';
 
@@ -41,16 +40,17 @@ export type Movement = 'walk' | 'sail';
 export const NIGHT_SPEED_FACTOR = 0.85;
 
 import { ARTIFACTS } from '../content/artifacts.js';
+import { artifactEffectsAt, artifactLevelOf } from './artifactLevel.js';
 
 // 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배·유물과 무관한 고정값이고
 // 유물 속도 보너스는 항해에만 붙는다. 보너스는 레지스트리에서 파생된다 — 새 유물은 행만 추가하면 배선된다.
 export function moveSpeed(state: GameState, movement: Movement, night = false): Stat {
   const base = movement === 'walk' ? WALK_SPEED : boatSpeed(state);
-  const owned = new Set(state.artifacts);
   const mods: StatMod[] = [];
   for (const a of ARTIFACTS) {
-    if (!owned.has(a.id)) continue;
-    const bonus = movement === 'sail' ? (a.effects.sail ?? 0) : 0;
+    const level = artifactLevelOf(state, a.id);
+    if (level === 0) continue;
+    const bonus = movement === 'sail' ? (artifactEffectsAt(a, level).sail ?? 0) : 0;
     if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
   }
   if (night) mods.push({
@@ -78,64 +78,32 @@ export function rodAxes(state: GameState): RodAxes {
   };
 }
 
-/** 현재 해역 대비 유효 입질 대기 — 상대치. 초과 시 더 빠르고 미달 시 느리다.
- *  진입 파워 대비로 보간: 진입에서 base, 10배 파워에서 30% 빠름. 미달은 powerZones의 biteExtra를 그대로 쓴다.
+/** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
+ *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소는 그 합계에 비율로 걸린다.
  */
 export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
-  const spot = spotById(spotId);
-  const entry = powerReqOf(spotId);
-  const power = rodPower(state);
-  const baseMin = st.biteMin, baseMax = st.biteMax;
-
-  if (power >= entry && entry > 0) {
-    const upper = entry * 10;
-    const t = Math.min(1, Math.max(0, (power - entry) / (upper - entry)));
-    const factor = 1 - 0.3 * t; // 최대 30% 단축
-    const minVal = baseMin * factor;
-    const maxVal = baseMax * factor;
-    return {
-      min: stat(baseMin, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: minVal - baseMin }]),
-      max: stat(baseMax, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: maxVal - baseMax }]),
-    };
-  }
-  // 미달: 기존 biteExtra 그대로 가산
   const pz = powerZones(state, spotId);
-  if (pz.biteExtra > 0) {
-    return {
-      min: stat(baseMin, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
-      max: stat(baseMax, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
-    };
-  }
-  return { min: stat(baseMin), max: stat(baseMax) };
+  const side = (base: number): Stat => {
+    const mods: StatMod[] = pz.biteExtra > 0 ? [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }] : [];
+    const total = base + pz.biteExtra;
+    for (const a of ARTIFACTS) {
+      const level = artifactLevelOf(state, a.id);
+      if (level === 0) continue;
+      const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
+      if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
+    }
+    return stat(base, mods);
+  };
+  return { min: side(st.biteMin), max: side(st.biteMax) };
 }
 
-// 방치(auto) 판정의 일반 등급 가중치 배수 — 강화할수록 수동에 가까워진다(×10 → ×4 수렴).
-// 계산 자체는 fishing.autoCommonBoost가 정본(서버 리듀서도 같은 함수를 쓴다) — 여기는 내역 조립.
-// 절대치 버전 (레거시, 테스트 호환). 새 코드는 spot 상대치인 autoBoostForSpot을 쓴다.
-export function autoBoost(state: GameState): Stat {
-  const value = autoCommonBoost(state.rod);
-  return stat(AUTO_COMMON_BOOST.from, [
-    { id: 'rod', label: `낚싯대 Lv.${state.rod}`, delta: value - AUTO_COMMON_BOOST.from },
-  ]);
-}
-
+// 방치(auto) 판정의 일반 등급 가중치 배수 — 해역 요구 파워 대비 레벨 차로 정한다(power.relativeIdleBoost).
+// 서버 리듀서도 같은 함수를 쓴다 — 여기는 스탯창용 내역 조립.
 export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
-  const entry = powerReqOf(spotId);
-  const base = AUTO_COMMON_BOOST.from;
-  const value = entry > 0
-    ? relativeIdleBoost(rodPower(state), entry)
-    : autoCommonBoost(state.rod);
-  const label = entry > 0 ? `${spotById(spotId)!.name} 대비` : `낚싯대 Lv.${state.rod}`;
-  return stat(base, [{ id: 'power', label, delta: value - base }]);
-}
-
-// 수동 파워 보정의 수역 조립 — 스탯창 표시용 내역(코어는 power.manualPowerBonus, 리듀서도 공유).
-export function manualBonusForSpot(state: GameState, spotId: SpotId): Stat {
-  const value = manualPowerBonus(rodPower(state), powerReqOf(spotId));
-  return stat(MANUAL_POWER_BONUS.base, [
-    { id: 'power', label: '해역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
-  ]);
+  const entryValue = relativeIdleBoost(powerReqOf(spotId), spotId);
+  const value = relativeIdleBoost(rodPower(state), spotId);
+  return stat(entryValue, [{ id: 'power', label: `${spotById(spotId)!.name} 대비`, delta: value - entryValue }]);
 }
 
 // 파워 수치화 — 해역 게이트가 레벨 단위 하드코딩이 아니라 이 숫자 하나를 보게 한다
@@ -150,15 +118,15 @@ export function rodPower(state: GameState): number {
 //   초과 50 → 빨간 20 + 노란 40 / 초과 100 → 20 + 80. 빨간 존은 초과 30%p부터 개방 —
 //   PERFECT 판정(일반 가중치 ÷2).
 // 미달(파워 < 요구량): 존 자체가 없고, 투트랙 페널티 —
-//   ① 확률: 일반 가중치 ×2^(⌊부족/10⌋+1) — 급격 스케일링, 캡 없음
-//   ② 시간: 입질 대기 +부족/5초
+//   ① 확률: 일반 가중치 ×min(16, 2^k), k = ⌈부족/5⌉ — 부족 낚싯대 레벨 1단계마다 2배, 4레벨 이상은 ×16
+//   ② 시간: 입질 대기 +부족/4초 — 상한 없음
 export interface PowerZone {
   power: number;      // 내 파워
   req: number;        // 수역 요구량 (0 = 제한 없음)
   yellow: number;     // 노란(PERFECT) 존 폭 % — 미달이면 0
   red: number;        // 빨간(PERFECT) 존 폭 % — 상한 20, 기본 0
-  mult: number;       // 일반 가중치 배수 — 초과 시 1, 미달 시 지수 페널티(2^…)
-  biteExtra: number;  // 입질 대기 추가 초 — 미달 시 부족/5, 초과 시 0
+  mult: number;       // 일반 가중치 배수 — 초과 시 1, 미달 시 부족 레벨 수의 지수 페널티(상한 있음)
+  biteExtra: number;  // 입질 대기 추가 초 — 미달 시 부족/4, 초과 시 0
 }
 
 const RED_MIN_EXCESS = 30; // 빨간 존이 열리는 최소 초과(%p)
@@ -169,8 +137,8 @@ const RED_CAP = 20;        // 빨간 존 폭 상한(%p)
 export const POWER_RULES = {
   redMinExcess: RED_MIN_EXCESS,
   redCap: RED_CAP,
-  shortStep: 10, // 미달 페널티 구간(파워 10당 배수 2배)
-  shortCap: 16,  // 미달 확률 페널티 상한 — 무캡 지수는 통제 불가라 상한을 둔다
+  shortStep: 5,  // 미달 페널티 구간 — 낚싯대 1레벨(파워 5)당 배수 2배, 부족은 올림으로 센다
+  shortCap: 16,  // 미달 확률 페널티 상한(4레벨 이상 부족)
   biteDiv: 4,    // 입질 추가 초 = 부족 파워 / 이 값
   lineCutMs: 2000, // 미달 수역 — 던진 뒤 이 시간이 지나면 물고기가 바늘을 끊어먹는다
 } as const;
@@ -196,7 +164,7 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
   const short = req - power;
   return {
     yellow: 0, red: 0,
-    mult: Math.min(POWER_RULES.shortCap, 2 ** (Math.floor(short / POWER_RULES.shortStep) + 1)),
+    mult: Math.min(POWER_RULES.shortCap, 2 ** Math.ceil(short / POWER_RULES.shortStep)),
     biteExtra: short / POWER_RULES.biteDiv,
   };
 }

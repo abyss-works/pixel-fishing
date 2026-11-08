@@ -9,13 +9,18 @@ import { NAMED } from '../named';
 
 const NATIVE = [32, 16];
 
+// 원화 PNG가 아직 없어 몸 형태 기본 격자로 그려지는 어종
+// 원화 PNG 없이 손 수정 격자로만 두는 네임드
+const HAND_MADE = new Set(['jasconius']);
+const SHAPE_ONLY = new Set(['orangeroughy', 'kianda', 'kalunga']);
+
 describe('원화 격자 (생성 파일)', () => {
   it('모든 어종에 일반·변이 격자가 있고 네임드에 일반 격자가 있다', () => {
-    for (const f of FISH) {
+    for (const f of FISH.filter(x => !SHAPE_ONLY.has(x.id))) {
       expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'normal')], f.id).toBeDefined();
       expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'variant')], f.id).toBeDefined();
     }
-    for (const n of NAMED) expect(FISH_SPRITES_GENERATED[n.id], n.id).toBeDefined();
+    for (const n of NAMED.filter(x => !HAND_MADE.has(x.id))) expect(FISH_SPRITES_GENERATED[n.id], n.id).toBeDefined();
   });
 
   it('격자는 전부 32×16이고 무결성 오류가 없으며 팔레트는 고정 hex다', () => {
@@ -53,11 +58,22 @@ describe('형태 격자 (초안 생성기)', () => {
 
 describe('종별 수정 격자', () => {
   it('등록된 수정 격자는 모두 실제 키이고 무결성 오류가 없다', () => {
-    const ids = new Set(FISH.map(f => f.id));
+    const ids = new Set([...FISH.map(f => f.id), ...NAMED.map(n => n.id)]);
     for (const [key, s] of Object.entries(FISH_SPRITES)) {
       expect(ids.has(key.replace(/\.variant$/, '')), key).toBe(true);
       expect(validateSprite(s!), key).toEqual([]);
     }
+  });
+});
+
+describe('손 수정 네임드 격자', () => {
+  it('야스코니우스는 손 수정 격자가 도감 초상으로 해석되고 다른 네임드와 그림이 다르다', () => {
+    const j = NAMED.find(n => n.id === 'jasconius')!;
+    expect(FISH_SPRITES.jasconius).toBeDefined();
+    expect(fishSprite(j)).toBe(FISH_SPRITES.jasconius);
+    expect([fishSprite(j).w, fishSprite(j).h]).toEqual(NATIVE);
+    const grids = NAMED.map(n => fishSprite(n).frames[0].join('|'));
+    expect(new Set(grids).size).toBe(grids.length);
   });
 });
 

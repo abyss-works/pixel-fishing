@@ -22,7 +22,7 @@ export default function InputDialog({ title, body, label, placeholder, secret, c
 }) {
   const [value, setValue] = useState('');
   return (
-    <Modal onClose={onCancel}>
+    <Modal bare onClose={onCancel}>
       <ModalCard title={title} onClose={onCancel}
         confirm={<Button variant="primary" full disabled={!value.trim()} onClick={() => onSubmit(value)}>{confirmLabel}</Button>}>
         {body && <div className="text-sm leading-relaxed whitespace-pre-line">{body}</div>}

@@ -28,6 +28,7 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
 import GameMenu from '../overlays/menu/GameMenu';
@@ -36,6 +37,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
 import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
 import AccountModal from '../overlays/account/AccountModal';
+import { settleAction } from '../../../features/gameplay/service/useGame';
 import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
@@ -64,12 +66,15 @@ import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
-import { useVisibleBox } from '../../layouts/visibleBox';
+import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
+import { windowHostRef } from '../../ui/windowLayer';
 
 interface GameViewProps {
   game: GameState;
   scene: SceneRef;
   entryPos: Point | null;
+  /** 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안의 이동을 Field에 알린다 */
+  placeSeq: number;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
@@ -100,7 +105,7 @@ export default function GameView(props: GameViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const mobile = useMobileLayout();
   useBlockZoom();
-  /** 화면 키보드를 피한 영역 — 키보드가 올라오면 화면 틀이 그 위로 줄어 채팅 영역이 키보드 위에 붙는다 */
+  /** 화면 키보드 높이 — 키보드는 게임 영역 아래를 덮을 뿐 스테이지 크기를 바꾸지 않는다. 채팅만 키보드 위에 붙는다(--keyboard-h) */
   const visible = useVisibleBox();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -108,6 +113,7 @@ export default function GameView(props: GameViewProps) {
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [questsOpen, setQuestsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -170,6 +176,8 @@ export default function GameView(props: GameViewProps) {
 
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
+    // 빠른 이동 전환 중에는 거점의 이동 동작을 받지 않는다
+    if (trip && (id === 'exit' || id === 'travel' || id === 'ferry')) return;
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
@@ -205,11 +213,12 @@ export default function GameView(props: GameViewProps) {
   // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
+    if (trip) return;
     const name = BASE_PACKS[port].name;
     void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
 지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
       confirmLabel: `${name}에 가기` })
-      .then(ok => { if (ok && scene.kind === 'base') setTrip({ from: scene.id, to: port }); });
+      .then(ok => { if (ok && scene.kind === 'base') setTrip(current => current ?? { from: scene.id, to: port }); });
   };
 
   // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
@@ -223,20 +232,18 @@ export default function GameView(props: GameViewProps) {
   const ferryMove = async () => {
     if (!trip) return;
     const b = boardingOf(trip.to);
-    let result: DispatchResult | null = null;
-    try {
-      result = await props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } });
-    } catch { /* 인프라 실패는 오류 정책이 알린다 */ }
-    if (result?.status === 'ok') {
+    const settled = await settleAction(() => props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } }));
+    if (settled.ok) {
       props.onPlace({ kind: 'region', id: b.region }, b.at);
       props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
       return;
     }
-    if (result?.status === 'rejected') props.setToast(REJECT_TEXT[result.error], 'warn');
+    if (settled.notice) props.setToast(settled.notice, 'warn');
     props.onPlace({ kind: 'base', id: trip.from });
   };
 
   const openStats = () => setStatsOpen(open => !open);
+  const openQuests = () => setQuestsOpen(open => !open);
   // 승부 결과 확정 — 서버가 도감·진행도·도전권을 바꾼다. 실패는 감사만 남아 창을 그대로 둔다
   const resolveEncounter = (r: EncounterResult) => {
     if (!encounter) return;
@@ -253,16 +260,17 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile ? 'flex-col' : 'max-[820px]:flex-col')}
-         style={visible.keyboard ? { top: visible.top, bottom: visible.bottom } : undefined}
+    <div ref={windowHostRef} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
+         style={keyboardStyle(visible)}
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
-                 initialPos={props.entryPos ?? undefined} statusSlot={statusSlot} />
+                 initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
+                 locked={trip !== null} statusSlot={statusSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
@@ -291,7 +299,12 @@ export default function GameView(props: GameViewProps) {
                      </div>
                    ) : null}
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
-                   badge={props.badge} />
+                   badge={props.badge}
+                   menu={(
+                     <GameMenu game={game} account={props.account} setToast={props.setToast} onQuests={openQuests}
+                               onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
+                               onMailbox={() => setMailboxOpen(true)} />
+                   )} />
         {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
@@ -304,16 +317,14 @@ export default function GameView(props: GameViewProps) {
                       region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
         )}
+        {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
         )}
-        <GameMenu account={props.account} setToast={props.setToast}
-                  onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
-                  onMailbox={() => setMailboxOpen(true)} />
         {friendsOpen && <FriendsModal setToast={props.setToast} onClose={() => setFriendsOpen(false)} />}
-        {guildOpen && <GuildModal gold={game.gold} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
+        {guildOpen && <GuildModal gold={game.gold} artifacts={game} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
@@ -341,6 +352,7 @@ export default function GameView(props: GameViewProps) {
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
+                         sellBonus={guildBonus?.effects.sell ?? 0}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
       </GameStageLayout>
@@ -349,7 +361,7 @@ export default function GameView(props: GameViewProps) {
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
-        game={game} dispatch={props.dispatch} setToast={props.setToast}
+        game={game} sellBonus={guildBonus?.effects.sell ?? 0} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} uid={props.uid} onAuthChanged={props.onAuthChanged}
         nickname={props.nickname} onRename={props.onRename}

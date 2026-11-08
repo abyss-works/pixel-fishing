@@ -10,8 +10,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
-/* 모바일 배치 조건 — 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */
-@custom-variant mobile (@media (orientation: portrait) and (max-width: 599px));
+/* 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃을 가르는 뷰포트 폭의 정본이다(1024px = 64rem, Tailwind lg와 같은 값).
+   뷰포트 폭이 이 값 미만이면 모바일 레이아웃, 이상이면 PC 레이아웃이다. 방향 조건은 쓰지 않는다.
+   아래 mobile 변형, 입력 칸 규칙, 화면 조립의 판정 훅(MOBILE_QUERY)이 모두 이 값에서 나온다(layoutBreakpoint.test가 묶는다).
+   컨테이너 쿼리는 레이아웃 판정에 쓰지 않고 컴포넌트 안의 밀도에만 쓴다. */
+@theme {
+  --breakpoint-pc: 64rem;
+}
+
+/* 모바일 레이아웃 변형 - 뷰포트 폭이 --breakpoint-pc 미만이다. 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */
+@custom-variant mobile (@media (width < theme(--breakpoint-pc)));
+
+/* 거점 메뉴 자리 부족 — 메뉴 영역(이름 붙은 size 컨테이너 basemenu)의 크기로 판정한다. 기기 판별이 아니라 영역 크기다.
+   메뉴 영역은 PC 레이아웃에서 16:9 프레임 전체, 모바일 레이아웃에서는 게임 영역(2행)이다. 채팅은 카드 위를 덮으므로 영역에서 채팅 높이를 빼지 않는다.
+   카드 폭은 메뉴 영역 폭에서 정해지고(MenuCard), 설명 줄이 들어가려면 카드 안쪽 폭(카드 폭 - 12px)이 설명 줄 최장 문구(약 76px) 이상이어야 한다.
+   폭 판정: 카드 폭이 88px 이상이면 설명이 들어간다. 카드 폭이 영역 폭의 14.6% - 15px일 때 영역 폭 약 710px부터다.
+   높이 판정: 구역이 두 줄로 놓일 때 헤더 문구와 간격 36 + 구역 2줄 + 줄 간격 12이다. 구역 한 줄은 카드 높이 + 50.5(구역 여백·제목·간격),
+   카드 높이는 아이콘 + 42.4(테두리·여백·간격·제목 줄)에 설명 줄이 있으면 20.3이 더해진다.
+   카드 폭이 최대 128px일 때 아이콘이 56px이라 설명 포함 필요 높이는 약 387px이므로 400px 미만에서 설명을 뺀다. */
+@custom-variant menu-compact {
+  @container basemenu (width < 710px) { @slot; }
+  @container basemenu (height < 400px) { @slot; }
+}
 
 /* Tailwind 토큰 — 색 값의 근원은 아래 :root 변수 하나뿐, 여기선 참조/스케일 조정만.
    간격 토큰(구 --sp-N)은 Tailwind 기본 스케일과 정확히 일치해 걷어냈다 (p-1~4 = 4/8/12/16px). */
@@ -124,11 +144,23 @@
   --bevel-lo: rgba(255, 255, 255, 0.08);
   --bevel-hi: rgba(0, 0, 0, 0.45);
 
-  /* z 레이어 — 오버레이(5) < 획득 카드(6) < 정비 모달(7) < 앱 모달(10) */
-  --z-overlay: 5;
-  --z-card: 6;
-  --z-stage-modal: 7;
-  --z-app-modal: 10;
+  /* z 레이어 - 화면 층 순서를 값으로 옮긴 것이다. 아래에서 위로:
+     스테이지 위 HUD(stage-hud, stage-card) < 채팅과 헤더(chrome) < 헤더의 펼친 메뉴 줄(menu-row)
+     < 창(stage-modal, app-modal < 닫을 수 없는 창 blocker) < 탭 줄과 시트(tabs) < 전환 덮개(veil) < 툴팁(tooltip) < 개발 도구(devtools).
+     닫을 수 없는 창은 창 층 안에서 다른 창보다 위이면서 탭 줄보다 아래다.
+     컴포넌트는 숫자를 직접 쓰지 않고 이 토큰만 쓴다(층 순서 가드 테스트가 막는다) */
+  --z-stage-hud: 5;
+  --z-stage-card: 6;
+  --z-chrome: 10;
+  --z-menu-row: 11;
+  --z-catch-fx: 12;
+  --z-stage-modal: 20;
+  --z-app-modal: 21;
+  --z-blocker: 22;
+  --z-tabs: 30;
+  --z-veil: 35;
+  --z-tooltip: 50;
+  --z-devtools: 60;
 }
 
 /* 전역 리셋 금지 — margin/padding/box-sizing 리셋은 Tailwind preflight가 이미 한다.
@@ -148,9 +180,9 @@ body {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
-/* 모바일 배치에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
-   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 배치 판정(MOBILE_QUERY)과 같다. */
-@media (orientation: portrait) and (max-width: 599px) {
+/* 모바일 레이아웃에서는 화면이 확대되지 않는다. 두 번 눌러 확대를 끄고, iOS Safari가 글자 16px 미만 입력 칸에서 화면을 자동 확대하지 않도록
+   입력 칸 글자를 16px로 둔다. 레이어 밖 선언이라 @layer utilities의 글자 크기 유틸보다 우선한다. 조건은 모바일 레이아웃 판정(MOBILE_QUERY)과 같다. */
+@media (width < theme(--breakpoint-pc)) {
   html { touch-action: manipulation; }
   input:not([type='checkbox'], [type='radio'], [type='range']), textarea, select { font-size: 16px; }
 }

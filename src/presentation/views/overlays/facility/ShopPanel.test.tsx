@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); resetKeyScopes(); });
 const show = (artifacts: string[] = []) => {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } }));
   const game = { ...newState(), gold: 100_000, artifacts };
-  render(<FacilityModal panel="shop" game={game} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
+  render(<FacilityModal sellBonus={0} panel="shop" game={game} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
   return { dispatch, game };
 };
 
@@ -22,6 +22,12 @@ describe('미끼 상점', () => {
     show();
     expect(screen.queryByLabelText(/^정가/)).toBeNull();
     expect(screen.getByRole('button', { name: `구매 (-${fmtGold(BAITS[0].price)})` })).toBeInTheDocument();
+  });
+
+  it('구매 버튼은 스크롤 본문 밖(하단 고정 자리)에 있다', () => {
+    show();
+    const button = screen.getByRole('button', { name: `구매 (-${fmtGold(BAITS[0].price)})` });
+    expect(button.closest('.pf-vscroll')).toBeNull();
   });
 
   it('할인 유물이 있으면 정가에 취소선을 긋고 할인가와 할인율을 보인다', () => {

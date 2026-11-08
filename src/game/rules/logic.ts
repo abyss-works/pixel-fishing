@@ -10,7 +10,8 @@ import {
 } from './balance.js';
 import { RARITY, RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
-import { rarityWeightOf, spotById } from '../content/spots.js';
+import { spotById } from '../content/spots.js';
+import { rarityWeightOf, stableRarityShare } from '../content/rarityWeights.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef, RegionId } from '../content/places.js';
 import { FISH } from '../content/fish.js';
@@ -18,10 +19,12 @@ import type { Fish, FormId } from '../content/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
-import { BOUNTY_LICENSE_FAME } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
+import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
+import { artifactEffectsAt, artifactLevelOf, variantBoostOf } from './artifactLevel.js';
+import type { ArtifactHolder } from './artifactLevel.js';
 import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
 import { isTutorialId } from '../content/tutorials.js';
@@ -37,7 +40,8 @@ import type { FirstCatch } from './firstCatch.js';
 export { JUDGMENT_MULT };
 export { RARITY, RARITY_ORDER } from '../content/rarity.js';
 export type { Rarity, RarityId } from '../content/rarity.js';
-export { SPOTS, powerReqOf, rarityWeightOf } from '../content/spots.js';
+export { SPOTS, powerReqOf } from '../content/spots.js';
+export { rarityWeightOf } from '../content/rarityWeights.js';
 export type { Spot, SpotId } from '../content/spots.js';
 export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
@@ -92,6 +96,9 @@ export interface GameState {
   /** 획득한 아티팩트 id — **슬롯도 장착도 없다.** 한 번 얻으면 영구 적용이라 소유 목록이면 끝.
    *  v8 시점엔 필드만 파둔다(전시대 `exhibit`와 같은 방식) — 이관을 한 번으로 끝내기 위해. */
   artifacts: string[];
+  /** 유물 레벨 — 유물 id → 레벨(2~5). 레벨이 있는 유물(희귀, 영웅)만 두고, 맵이 없거나 값이 없으면 Lv1로 읽는다.
+   *  세이브 버전을 올리지 않고 위생 처리의 기본값 채움으로 이관한다 */
+  artifactLevels?: Record<string, number>;
   /** 아이템 보유량(스택형) — id(미끼 데이터 등) → 개수. 물고기 개체성(uid)이 없는 소모품
    *  축이다. 아이템 종류가 늘어도 키 하나(레지스트리 행)면 된다 — 세이브 v8에 접어서 도입
    *  (없는 필드는 위생 처리에서 기본값으로 자가 치유 — migrate 주석 참조). */
@@ -119,12 +126,8 @@ export interface RodStats {
   sweep: number;   // 타이밍 바 커서가 끝까지 가는 시간(초) = 챔질 가능 시간
 }
 
-// 방치 부스트 절대치 곡선 t(fishing.autoCommonBoost): 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD.curveK)
 // ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
 // 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
-export function rodCurveT(level: number): number {
-  return 1 - 1 / (1 + ROD.curveK * (level - 1));
-}
 
 // 낚싯대 = 무한 강화. 입질 대기는 레벨마다 같은 비율로 줄어든다(상한 없음).
 export function rodStats(level: number): RodStats {
@@ -146,9 +149,9 @@ export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
 
 // 추첨 — 모든 판정이 가중치 추첨(pickWeighted)이다. 캐치 한 번의 순서:
 //   ① 네임드 조우(namedWeightsOf) → ② 등급(rarityDrawWeights) → ③ 어종(fishDrawWeight) → 크기 → ④ 폼(mutationWeightsOf)
-//   등급 가중치는 해역의 **절대치**다(spots.rarityWeight, 없는 등급은 전역 RARITY.weight). 분모는 그 해역에
+//   등급 가중치는 해역의 **절대치**다(수역 덮어쓰기, 없으면 지역 단계 프리셋 — 만분율, 일반은 나머지). 분모는 그 해역에
 //   있는 등급 가중치의 합이라 해역마다 다르다. 일반 다이얼(commonMult ÷ rareMult — 판정 배수·방치 부스트·
-//   해역 게이트·수동 보정)은 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
+//   해역 게이트)는 일반 등급 가중치에만 곱한다. 어종 가중치는 같은 등급 안의 배분이다(기본 1).
 //   열람용으로 등급×어종을 한 줄로 펼친 값은 drawRows·goldEV가 쓴다.
 
 /** 추첨 시뮬레이션 옵션 — 미지정 필드는 현행 규칙값. 관리자 샌드박스 전용 오버라이드 포함. */
@@ -240,8 +243,8 @@ export function zoneDexMissing(
     .map(f => f.id);
 }
 
-/** 라이선스 조건 2종 — 명성 + 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
-export interface LicenseCondition { key: 'fame' | 'dex'; label: string; ok: boolean }
+/** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
+export interface LicenseCondition { key: 'dex'; label: string; ok: boolean }
 /** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
  *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
 export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
@@ -257,7 +260,6 @@ export function licenseConditions(
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
   const left = missing > 0 ? ` · 남은 ${missing}종` : '';
   return [
-    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone].toLocaleString('ko-KR')} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
     { key: 'dex', label: (tier === 'named'
       ? `${area} 모든 어종 수집(밤 어종 포함)`
       : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },
@@ -314,10 +316,8 @@ export function rarityShareOf(spotId: SpotId, rarity: RarityId): number {
   return rarityWeightOf(spotId, rarity) / total;
 }
 
-/** 전역 기본 등급 확률 — 전역 등급 가중치 / 전역 가중치 합 */
-export function globalRarityShare(rarity: RarityId): number {
-  return RARITY[rarity].weight / RARITY_ORDER.reduce((sum, r) => sum + RARITY[r].weight, 0);
-}
+/** 전역 기본 등급 확률 — 안정화 프리셋 기준 */
+export const globalRarityShare = (rarity: RarityId): number => stableRarityShare(rarity);
 
 /** 수역 추첨 모델 열람 — 관리자 대시보드 단일 출처(rollFish와 같은 산식, 다이얼 기본 중립).
  *  등급 실질확률이 어종 수와 무관하게 설계 가중치 비율과 일치함을 보여주는 게 절반의 가치다. */
@@ -418,7 +418,7 @@ export const variantDiscovered = (state: GameState, fishId: string): boolean =>
 
 /** 도감에 오른 종 수 (거점 라벨) */
 export const dexSpeciesCount = (state: GameState): number =>
-  Object.keys(state.dex).filter(id => speciesCount(state, id) > 0).length;
+  Object.keys(state.dex).filter(id => FISH.some(f => f.id === id) && speciesCount(state, id) > 0).length;
 
 // ---------- 월척(크기)·변이  ----------
 // 신규 어종/등급 로직 없이 기존 어종 데이터(price)에서 크기 분포를 유도하는 저비용 콘텐츠.
@@ -487,10 +487,10 @@ export function withVariantPoints(weights: Record<FormId, number>, points: numbe
 }
 
 /** 폼 가중치 — 유물 효과 → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다 */
-export function mutationWeightsOf(state: Pick<GameState, 'artifacts'>, spot: SpotId): Record<FormId, number> {
-  const owned = new Set(state.artifacts);
-  const relic = ARTIFACTS.find(a => owned.has(a.id) && a.effects.mutationWeight)?.effects.mutationWeight;
-  return relic ?? { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+export function mutationWeightsOf(state: ArtifactHolder, spot: SpotId): Record<FormId, number> {
+  const boost = variantBoostOf(state);
+  if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
+  return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
 
 // ---------- 개체 (세이브 v8) ----------
@@ -738,6 +738,21 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
 const safeStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
+// 유물 레벨 위생 — 보유한 레벨 유물만, 정수로 접어 1~최고 레벨에 가둔다. Lv1은 기본값이라 행을 접는다
+// 올린 유물이 없으면 필드를 두지 않는다(없음과 같은 뜻이라 세이브가 쓰레기로 쌓이지 않는다)
+function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Record<string, number> } {
+  const out: Record<string, number> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+  for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
+    const art = artifactById(id);
+    if (!art || !artifactHasLevel(art) || !owned.includes(id)) continue;
+    if (typeof raw !== 'number' || !Number.isInteger(raw)) continue;
+    const level = Math.min(ARTIFACT_MAX_LEVEL, Math.max(1, raw));
+    if (level > 1) out[id] = level;
+  }
+  return Object.keys(out).length > 0 ? { artifactLevels: out } : {};
+}
+
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다. **모르는 키는 버리지 않는다**
 // (safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
 function safeItems(v: unknown): Record<string, number> {
@@ -801,7 +816,7 @@ function safeLocation(v: unknown): LocationRef {
     if (l.kind === 'region') return { kind: 'region', id: l.id as RegionId };
     if (l.kind === 'base'
         && (l.id === 'home' || l.id === 'harbor' || l.id === 'manila' || l.id === 'colombo'
-          || l.id === 'toamasina')) {
+          || l.id === 'toamasina' || l.id === 'walvisbay')) {
       return { kind: 'base', id: l.id };
     }
   }
@@ -901,6 +916,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     location: safeLocation(s.location),
     visited: safeStrings(s.visited) as RegionId[],
     artifacts: safeStrings(s.artifacts),
+    ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
     activeBait: safeActiveBait(s.activeBait),
     pity: safePity(s.pity),
@@ -935,29 +951,30 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
 }
 
 /** 미끼 할인율 — 가진 유물 중 가장 큰 할인(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
-export function baitDiscount(state: Pick<GameState, 'artifacts'>): number {
-  const owned = new Set(state.artifacts);
-  return ARTIFACTS.reduce((m, a) =>
-    owned.has(a.id) ? Math.max(m, a.effects.baitDiscount ?? 0) : m, 0);
+export function baitDiscount(state: ArtifactHolder): number {
+  return ARTIFACTS.reduce((m, a) => {
+    const level = artifactLevelOf(state, a.id);
+    return level > 0 ? Math.max(m, artifactEffectsAt(a, level).baitDiscount ?? 0) : m;
+  }, 0);
 }
 
 /** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
  *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
-export function baitCost(state: Pick<GameState, 'artifacts'>, price: number, count: number): number {
+export function baitCost(state: ArtifactHolder, price: number, count: number): number {
   return Math.floor(price * count * (1 - baitDiscount(state)));
 }
 
-/** 아이템 차감 — 항상 정확히 1개(미끼는 한 번에 한 개만 소모). 없으면 무변환(위 방어).
+/** 아이템 차감 — 기본 1개(미끼는 한 번에 한 개만 소모), 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).
  *  0에 도달하면 행을 접는다(보유 부재와 동의어라 세이브가 쓰레기로 쌓이지 않는다).
  *  activeBait는 지우지 않는다 — 효과는 usableBait가 무음 처리한다 */
-export function takeItem(state: GameState, itemId: string): GameState {
+export function takeItem(state: GameState, itemId: string, count = 1): GameState {
   const cur = state.items[itemId] ?? 0;
-  if (cur <= 0) return state;
-  if (cur - 1 <= 0) {
+  if (cur < count || cur <= 0) return state;
+  if (cur - count <= 0) {
     const { [itemId]: _gone, ...rest } = state.items;
     return { ...state, items: rest };
   }
-  return { ...state, items: { ...state.items, [itemId]: cur - 1 } };
+  return { ...state, items: { ...state.items, [itemId]: cur - count } };
 }
 
 // ---------- 상태 변경 ----------
@@ -1080,6 +1097,11 @@ export function sellableValue(state: GameState): number {
     .reduce((s, i) => s + priceOfInstance(i), 0);
 }
 
+/** 판매 총액에 더하는 길드 판매가 보너스 금액 — 총액에 비율을 곱해 한 번 반올림한다. 화면 미리보기도 이 값을 쓴다 */
+export function saleBonusOf(base: number, bonus: number): number {
+  return Math.round(base * bonus);
+}
+
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 // bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
@@ -1090,7 +1112,7 @@ export function sellSelected(state: GameState, uids: readonly string[], bonus = 
   const base = sold.reduce((s, i) => s + priceOfInstance(i), 0);
   return {
     ...state,
-    gold: state.gold + base + Math.round(base * bonus),
+    gold: state.gold + base + saleBonusOf(base, bonus),
     bag: state.bag.filter(i => !soldUids.has(i.uid)),
   };
 }

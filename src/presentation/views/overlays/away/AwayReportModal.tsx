@@ -46,7 +46,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
           <span className="text-xs text-text-dim">{awayPeriodText(report)}{spot ? `, ${spot}` : ''}</span>
         </div>
 
-        <div className="grid grid-cols-4 gap-1.5 max-[520px]:grid-cols-2">
+        <div className="grid grid-cols-4 gap-1.5 mobile:grid-cols-2">
           <KpiTile label="잡은 물고기" value={fmtNum(report.catches)} hint={`시간당 ${rate(report.perHour.catches)}`} />
           <KpiTile label="가치" value={fmtCompact(report.value)} hint={`시간당 ${rate(report.perHour.value)}`} />
           <KpiTile label="명성" value={`+${fmtCompact(report.fame)}`} hint={`시간당 ${rate(report.perHour.fame)}`} />

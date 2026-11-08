@@ -37,7 +37,7 @@ const TUTORIAL: Record<TutorialId, { title: string; lines: ReactNode[] }> = {
     title: '일반 의뢰',
     lines: [
       <><b>수주</b>한 뒤에 그 구역에서 잡은 물고기만 세요.<br />수주하기 전에 잡은 물고기는 세지 않아요.</>,
-      <>잡은 물고기는 가방에 그대로 남아요.<br />수만큼 잡았으면 수배판에서 <b>납품</b>을 눌러 골드를 받아요.</>,
+      <>잡은 물고기는 가방에 그대로 남아요.<br />수만큼 잡았으면 수배판에서 <b>완료</b>를 눌러 골드를 받아요.</>,
       <>하루에 {BOUNTY_DAILY_CAP}번 클리어할 수 있어요.<br />의뢰는 {GAME_DAY_RESET_TEXT}에 바뀌고,
         조건을 채우지 못한 의뢰는 그때 사라져요.</>,
     ],
@@ -67,12 +67,13 @@ export default function TutorialModal({ seen, ready, dispatch }: {
   if (!current) return null;
   const t = TUTORIAL[current];
   return (
-    <Modal title={t.title} onClose={close}>
+    // 본문 마지막 Note의 아래 여백 8px과 합쳐 확정 버튼과의 간격이 12px이 되게 위 여백을 4px로 둔다
+    <Modal title={t.title} onClose={close}
+           footer={<Button variant="primary" full className="mt-1" onClick={close}>알겠어요</Button>}>
       <PixelList>
         {t.lines.map((line, i) => <li key={i}>{line}</li>)}
       </PixelList>
       <Note size="xs">더 궁금한 것은 <b>도움말</b> 탭에서 볼 수 있어요.</Note>
-      <Button variant="primary" full className="mt-3" onClick={close}>알겠어요</Button>
     </Modal>
   );
 }

@@ -2,7 +2,7 @@
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOUNTIES, bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
+import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { FISH } from '../src/game/content/fish.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
@@ -60,7 +60,7 @@ function zoneDex(zone: BountyZone, tier: keyof typeof LICENSE_GRADES): GameState
   return dex;
 }
 
-const at = (id: 'home' | 'harbor' | 'colombo'): GameState['location'] => ({ kind: 'base', id });
+const at = (id: 'home' | 'harbor' | 'colombo' | 'walvisbay'): GameState['location'] => ({ kind: 'base', id });
 
 describe('요청 경계', () => {
   it('GET은 204 워밍 응답이다', async () => {
@@ -166,7 +166,7 @@ describe('낚시', () => {
 
   it('강제 조우를 허용받은 캐치는 진행 중인 네임드의 도전권을 발급한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
-    const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+    const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true },
@@ -176,7 +176,7 @@ describe('낚시', () => {
 
   it('강제 조우가 허용되지 않으면 통상 캐치로 처리한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
-    const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+    const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
@@ -276,7 +276,7 @@ describe('닉네임', () => {
 });
 
 describe('현상금', () => {
-  const pacificState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
 
   it('오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다', async () => {
     const uid = await seed({ state: pacificState() });
@@ -322,7 +322,7 @@ describe('현상금', () => {
 
   async function namedSetup(issuedAgoMs: number) {
     const uid = await seed({ state: { boat: 1 } });
-    const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+    const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     await env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
@@ -432,10 +432,10 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
   // NOW(2030-03-04 KST 14:06)가 속한 게임 날짜는 그날 KST 04:00에 시작했다
   const DAY_START = '2030-03-03T19:00:00.000Z';
   const BEFORE_START = '2030-03-03T18:59:59.999Z';
-  const pacificState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
-  const namedState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'named'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const namedState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const offered = (uid: string, difficulty: 'easy' | 'normal' | 'hard' | 'named', day = TODAY_KST) =>
-    dailyQuestFor('pacific', difficulty, uid, day)!;
+    offeredQuestsFor('pacific', difficulty, uid, day)[0];
   const accept = (uid: string, questId: string) =>
     callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'harbor' });
   const deliver = (uid: string, questId: string) => callAction(userToken(uid), { type: 'deliverBounty', questId });
@@ -696,7 +696,7 @@ describe('천장', () => {
 
   it('네임드 천장에 닿은 캐치는 도전권을 발급하고 빗나감 수를 되돌린다', async () => {
     const uid = await seed({ state: { boat: 1, namedPity: { day: TODAY_KST, misses: NAMED_PITY_CATCHES - 1, fails: 0, wounds: {} } } });
-    const named = dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+    const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
@@ -856,5 +856,83 @@ describe('자동 잠금', () => {
     const out = await callAction(userToken(uid), { type: 'autoLock' });
     expect(out.status).toBe(200);
     expect(await snapshotOf(uid, out)).toMatchSnapshot();
+  });
+});
+
+describe('유물 레벨과 마미 와타의 거울', () => {
+  const namedState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
+  const offeredNamed = (uid: string) => offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
+  const accept = (uid: string, questId: string) =>
+    callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'harbor' });
+  const clearRow = (uid: string) =>
+    env.client.query('insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values ($1, $2, $3, $4)',
+      [uid, 'named', 'pacific-named-megalodon', NOW]);
+  const stateRowOf = async (uid: string) =>
+    ((await dumpUser(env.client, uid)).saves_current as { gold: string; data: { items?: Record<string, number>; artifactLevels?: unknown } }[])[0];
+
+  it('재료를 써서 유물 레벨을 올리고 레벨 맵을 blob에 남긴다', async () => {
+    const uid = await seed({ state: { artifacts: ['wreck-compass'], items: { 'mat-wreck-compass': 3 } } });
+    expect((await callAction(userToken(uid), { type: 'levelUpArtifact', artifact: 'wreck-compass' })).status).toBe(200);
+    const data = (await stateRowOf(uid)).data;
+    expect(data.artifactLevels).toEqual({ 'wreck-compass': 2 });
+    expect(data.items).toEqual({ 'mat-wreck-compass': 2 });
+  });
+
+  it('재료가 모자라면 레벨업을 거부한다', async () => {
+    const uid = await seed({ state: { artifacts: ['wreck-compass'], items: {} } });
+    expect(await callAction(userToken(uid), { type: 'levelUpArtifact', artifact: 'wreck-compass' }))
+      .toMatchObject({ status: 422, body: { error: 'material-missing' } });
+  });
+
+  it('거울을 가지면 네임드 토벌 골드가 30% 줄고 교환 재료 수는 그대로다', async () => {
+    const quest = bountyById('pacific-named-megalodon')!;
+    const uid = await seed({ state: { artifacts: ['mami-wata-mirror'] } });
+    await env.client.query(`insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at, updated_at)
+      values ($1, $2, $3, 1, $4, $4)`, [uid, quest.zone, quest.id, NOW]);
+    expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })).status).toBe(200);
+    const row = await stateRowOf(uid);
+    expect(row.gold).toBe(String(Math.floor(quest.reward * 0.7)));
+    expect(Object.values(row.data.items ?? {})).toEqual([1]);
+  });
+
+  it('거울이 없으면 네임드 클리어 한 번으로 그날 수주가 막힌다', async () => {
+    const uid = await seed({ state: namedState() });
+    await clearRow(uid);
+    expect(await accept(uid, offeredNamed(uid).id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+
+  it('거울을 가지면 네임드 클리어가 한 번이어도 수주하고 두 번이면 막힌다', async () => {
+    const uid = await seed({ state: { ...namedState(), artifacts: ['mami-wata-mirror'] } });
+    await clearRow(uid);
+    expect((await accept(uid, offeredNamed(uid).id)).status).toBe(200);
+    await env.client.query('delete from public.bounty_progress where user_id = $1', [uid]);
+    await clearRow(uid);
+    vi.setSystemTime(Date.parse(NOW) + 3000);
+    expect(await accept(uid, offeredNamed(uid).id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+});
+
+describe('네임드가 둘인 구역의 수주', () => {
+  const southState = (): Partial<GameState> => ({ dex: zoneDex('southatlantic', 'named'), location: at('walvisbay') });
+  const accept = (uid: string, questId: string) =>
+    callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'walvisbay' });
+
+  it.each(['southatlantic-named-adamastor', 'southatlantic-named-jasconius'])(
+    '제공된 네임드 항목 %s를 어느 쪽이든 수주한다', async questId => {
+      const uid = await seed({ state: southState() });
+      expect((await accept(uid, questId)).status).toBe(200);
+    });
+
+  it('하루 한도는 구역 전체로 센다 — 아다마스토르를 클리어한 날에는 야스코니우스 수주도 거부한다', async () => {
+    const uid = await seed({ state: southState() });
+    await env.client.query('insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values ($1, $2, $3, $4)',
+      [uid, 'named', 'southatlantic-named-adamastor', NOW]);
+    expect(await accept(uid, 'southatlantic-named-jasconius')).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+
+  it('다른 구역의 항구에서 낸 남대서양 네임드 수주는 거부한다', async () => {
+    const uid = await seed({ state: southState() });
+    const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'harbor' });
+    expect(res.status).toBe(422);
   });
 });

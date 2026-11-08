@@ -4,7 +4,10 @@
 // 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
 import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import type { Stat } from '../../../game/rules/stats';
+import { saleProceeds } from './catalog';
 import { BAITS } from '../../../game/content/baits';
+import { boatNameOf } from '../../../game/content/boats';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
 
@@ -27,16 +30,17 @@ export function selectBagStatus(game: GameState, bagBonus = 0): BagStatus {
 }
 
 export interface BagOverview extends BagStatus {
-  sellableValue: number;
+  /** 판매로 받는 금액 - 잠기지 않은 개체의 기본가 합에 길드 판매가 보너스를 더한 내역 */
+  sellable: Stat;
   /** 자동 잠금 계획 — 어종×폼별 최대만 잠그고 나머지 잠금은 푼다 */
   autoLock: { lock: string[]; unlock: string[] };
 }
 
 /** 가방 탭의 수량·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
-export function selectBagOverview(game: GameState): BagOverview {
+export function selectBagOverview(game: GameState, sellBonus: number): BagOverview {
   return {
     ...selectBagStatus(game),
-    sellableValue: sellableValue(game),
+    sellable: saleProceeds(sellableValue(game), sellBonus),
     autoLock: autoLockPlan(game.bag),
   };
 }
@@ -50,4 +54,9 @@ export function selectBaitInventory(items: Readonly<Record<string, number>>) {
 export function selectOwnedArtifacts(game: Pick<GameState, 'artifacts'>): Artifact[] {
   const owned = new Set(game.artifacts);
   return ARTIFACTS.filter(a => owned.has(a.id));
+}
+
+/** 헤더 자원 바의 배와 낚싯대 - 배는 티어와 이름(맨발은 티어 0, 없음), 낚싯대는 레벨 */
+export function selectGearSummary(game: Pick<GameState, 'boat' | 'rod'>) {
+  return { boatTier: game.boat, boatName: boatNameOf(game.boat), rodLevel: game.rod };
 }

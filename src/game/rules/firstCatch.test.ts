@@ -64,7 +64,7 @@ describe('drawCatch 보장', () => {
   const base = { pity: {}, artifacts: [] as string[] };
   const phaseOpts = { phase: 'day' as const };
   const draw = (fc: FirstCatch, spot: 'pond' | 'barrierreef' = 'pond') =>
-    drawCatch({ ...base, firstCatch: fc }, spot, 'auto', 10, 10, 1, rngOf(0.1), phaseOpts, () => false);
+    drawCatch({ ...base, firstCatch: fc }, spot, 'auto', 10, 1, rngOf(0.1), phaseOpts, () => false);
 
   it('5번째 캐치는 영웅 어종, 결과의 보장 상태는 영웅 몫을 닫는다', () => {
     const d = draw(at(4));

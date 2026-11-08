@@ -5,13 +5,13 @@
 // 어군은 고정 앵커가 아니라 날짜 시드로 절차 배치한다(schoolsOf) — 생성 데이터의 school_* 앵커는
 // 더 이상 읽지 않는다.
 //
-// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르). 경계 통과
+// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르 a=남대서양 열린 바다 N=아직 열지 않은 바다). 경계 통과
 // 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
-// 4/5/6/7 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
+// 4/5/6/7/8 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
 import type { MapCellDef, Point, Rect, RegionPack } from '../types';
-import { compileMap } from '../mask';
-import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW } from './generated/world.mask';
+import { compileMap, mapBounds } from '../mask';
+import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW, GRID_OFFSET, GLOBAL_COLS } from './generated/world.mask';
 
 const A = ANCHORS;
 
@@ -19,29 +19,35 @@ const A = ANCHORS;
 // 존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다). 캐스팅 판정은 학교(schools)가 담당.
 // 월드와 지구 마스크는 같은 문자 체계를 쓴다 — 세계지도도 이 범례로 지구 마스크를 컴파일한다.
 // 하위 존 문자(t/d/w/r/s/c)는 이제 하위 존의 범위다 — 셀 zone이 하위 존을 가리키고
-// 스팟은 그 존에 배치된 어군이다. '4'/'5'/'6'/'7' = 최상위 존 라벨 전용 문자(물이지만 통행만).
+// 스팟은 그 존에 배치된 어군이다. '4'/'5'/'6'/'7'/'8' = 최상위 존 라벨 전용 문자(물이지만 통행만).
 export const WORLD_LEGEND: Record<string, MapCellDef> = {
   '1': { water: true, style: 'sea', zone: 'pacific' },
   '2': { water: true, style: 'sea', zone: 'seasia' },           // 열린 바다 통행 전용 — 최상위 스팟 없음
   '3': { water: true, style: 'sea', zone: 'indian' },
   m: { water: true, style: 'sea', zone: 'madagascar' },
+  a: { water: true, style: 'sea', zone: 'southatlantic' },       // 열린 바다 통행 전용 — 최상위 스팟 없음
   t: { water: true, style: 'deep', zone: 'deep', label: '마리아나 해구' },
   d: { water: true, style: 'deep', zone: 'dragonhole', label: '드래곤 홀' },
   w: { water: true, style: 'wreck', zone: 'coron', label: '코론 침선 지대' },
   r: { water: true, style: 'coral', zone: 'barrierreef', label: '그레이트 배리어 리프' },
   s: { water: true, style: 'deep', zone: 'southindian', label: '남인도양' },
   c: { water: true, style: 'deep', zone: 'comorodeep', label: '코모로 심해' },
+  b: { water: true, style: 'wreck', zone: 'benguela', label: '남대서양 용승대' },
+  h: { water: true, style: 'coral', zone: 'sthelena', label: '세인트헬레나' },
   '4': { water: true, style: 'sea', zone: 'pacific', label: '태평양' },
   '5': { water: true, style: 'sea', zone: 'seasia', label: '동남아&오세아니아' },
   '6': { water: true, style: 'sea', zone: 'indian', label: '인도양' },
   '7': { water: true, style: 'sea', zone: 'madagascar', label: '마다가스카르' },
+  '8': { water: true, style: 'sea', zone: 'southatlantic', label: '남대서양' },
+  N: { water: true, style: 'sea', closed: true },  // 아직 열지 않은 바다(적도 북쪽 대서양·지중해) — 통행 불가
   L: { land: true },
   '.': { water: true, style: 'sea' }, // 구역 밖 잉여 물(내륙해 등) — 통행만, 낚시·구역 아님
 };
 
-export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS);
-export const WORLD_W = WORLD_MAP.cols * CELL_W;
-export const WORLD_H = WORLD_MAP.rows * CELL_H;
+export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS,
+  { colOffset: GRID_OFFSET.col, rowOffset: GRID_OFFSET.row, globalCols: GLOBAL_COLS });
+/** 항해 창이 차지하는 게임 좌표 영역 — 이 밖은 이동할 수 없다 */
+export const WORLD_BOUNDS = mapBounds(WORLD_MAP);
 
 export const HARBOR: Rect = { ...A.harbor, w: 36, h: 28 };      // 항구 외관(한반도 남동 해안)
 export const HARBOR_DOCK: Rect = { ...A.dock, w: 20, h: 17 };   // 접안 트리거(물 위)
@@ -59,6 +65,10 @@ export const TOAMASINA: Rect = { ...A.toamasina, w: 40, h: 41 }; // 투아마시
 export const TOAMASINA_DOCK: Rect = { ...A.t_dock, w: 16, h: 15 };
 export const TOAMASINA_SPAWN: Point = A.t_spawn;
 
+export const WALVISBAY: Rect = { ...A.walvisbay, w: 40, h: 41 };   // 월비스베이항 외관(나미비아 서해안)
+export const WALVISBAY_DOCK: Rect = { ...A.w_dock, w: 16, h: 15 };
+export const WALVISBAY_SPAWN: Point = A.w_spawn;
+
 export const WORLD: RegionPack = {
   id: 'world',
   name: '대양',
@@ -70,13 +80,12 @@ export const WORLD: RegionPack = {
     tips: [],
     controls: [],
   },
-  w: WORLD_W,
-  h: WORLD_H,
+  bounds: WORLD_BOUNDS,
   geoWindow: WINDOW,
   movement: 'sail',
   map: WORLD_MAP,
   decks: [
-    // 접안 부두 ×4 — 시각용 통행판(sail이라 충돌엔 무영향). 구 3지역의 부두 공식을 계승.
+    // 접안 부두 ×5 — 시각용 통행판(sail이라 충돌엔 무영향). 구 3지역의 부두 공식을 계승.
     { rect: { x: HARBOR_DOCK.x + 2, y: HARBOR.y + HARBOR.h, w: HARBOR_DOCK.w - 4, h: 22 },
       style: 'pier' },
     { rect: { x: MANILA_DOCK.x + MANILA_DOCK.w - 4, y: MANILA_DOCK.y + 3,
@@ -86,6 +95,9 @@ export const WORLD: RegionPack = {
     // 투아마시나는 동해안이라 부두가 항구 동쪽(물)으로 뻗는다 — 항구 외관에서 접안 트리거까지.
     { rect: { x: TOAMASINA.x + TOAMASINA.w - 4, y: TOAMASINA_DOCK.y + 3,
               w: Math.max(6, TOAMASINA_DOCK.x - TOAMASINA.x - TOAMASINA.w + 8), h: 8 }, style: 'pier' },
+    // 월비스베이는 서해안이라 부두가 항구 서쪽(물)의 접안 트리거에서 항구 외관까지 뻗는다.
+    { rect: { x: WALVISBAY_DOCK.x + WALVISBAY_DOCK.w - 4, y: WALVISBAY_DOCK.y + 3,
+              w: Math.max(6, WALVISBAY.x - WALVISBAY_DOCK.x - WALVISBAY_DOCK.w + 8), h: 8 }, style: 'pier' },
   ],
   waveCount: 480, // 열린 바다 지도 전체 순환 — 면적 비례(2배 확대 대응. 뷰포트 밖은 캔버스가 클리핑)
   buildings: [
@@ -93,11 +105,12 @@ export const WORLD: RegionPack = {
     { rect: MANILA, sprite: 'harbor' },
     { rect: COLOMBO, sprite: 'harbor' },
     { rect: TOAMASINA, sprite: 'harbor' },
+    { rect: WALVISBAY, sprite: 'harbor' },
   ],
   decorations: [],
   spawn: WORLD_SPAWN,
   // travel 트리거 없음 — 구역 경계 게이트(Field zoneOf 전이 판정)가 대체한다.
-  // 접안 트리거만 4개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
+  // 접안 트리거만 5개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
   triggers: [
     { rect: HARBOR_DOCK, action: 'base', base: 'harbor',
       msg: '부산항에 접안했어요. 시설을 눌러 정비해 보세요.' },
@@ -107,11 +120,14 @@ export const WORLD: RegionPack = {
       msg: '콜롬보항에 접안했어요. 시설을 눌러 정비해 보세요.' },
     { rect: TOAMASINA_DOCK, action: 'base', base: 'toamasina',
       msg: '투아마시나항에 접안했어요. 시설을 눌러 정비해 보세요.' },
+    { rect: WALVISBAY_DOCK, action: 'base', base: 'walvisbay',
+      msg: '월비스베이항에 접안했어요. 시설을 눌러 정비해 보세요.' },
   ],
   labels: [
     { text: '부산항', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
     { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
     { text: '콜롬보항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
     { text: '투아마시나항', x: TOAMASINA.x + TOAMASINA.w / 2, y: TOAMASINA.y + 2, color: 'gold', size: 8 },
+    { text: '월비스베이항', x: WALVISBAY.x + WALVISBAY.w / 2, y: WALVISBAY.y + 2, color: 'gold', size: 8 },
   ],
 };

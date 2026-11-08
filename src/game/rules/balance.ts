@@ -17,7 +17,7 @@ export const CATCH_MS_BY_RARITY: Partial<Record<RarityId, number>> = {
 export const CAST_RANGE = 40;
 
 // 이동 속도(px/s)
-export const WALK_SPEED = 80; // 마을 도보 (배는 data의 배별 speed). 유물 보정은 항해에만 붙는다
+export const WALK_SPEED = 100; // 마을 도보 (배는 data의 배별 speed). 유물 보정은 항해에만 붙는다
 
 // 판정별 배수 — 수동 어드밴티지의 핵심. **일반 가중치를 이 값으로 나눈다**(희귀 데이터 불변,
 // 단일 추첨에서 "희귀 ×배수"와 동치 — rollFish 주석). perfect = 빨간 존, good = 노란 존.
@@ -27,23 +27,17 @@ export const JUDGMENT_MULT = {
   normal: 1,
 } as const;
 
-// 방치(auto) 판정: 일반 등급 가중치를 이만큼 곱해서 추첨 — 희귀 이상이 수동의 1/10 수준
-// 낚싯대 곡선(t, ROD.curveK)에 따라 from → to로 완화 (강화할수록 방치 효율도 개선)
-export const AUTO_COMMON_BOOST = { from: 10, to: 4 } as const;
-
 // 낚싯대 — 무한 강화.
 // 입질 대기: Lv1의 최소·최대 대기에 레벨마다 biteDecay를 곱한다(곱연산 단축, 레벨마다 체감).
-// 방치 부스트의 절대치 버전(fishing.autoCommonBoost)만 점근 곡선 t = 1 - 1/(1 + curveK*(lv-1))을 쓴다.
 // ⚠️ 구 zone(레벨당 PERFECT 존 확대)은 폐기 — 존은 수역 파워 게이트 초과 보너스로 이관(stats.powerZones)
 export const ROD = {
-  curveK: 0.15,
   biteMin: 4,                       // Lv1 입질 최소 대기(초)
   biteMax: 8,                       // Lv1 입질 최대 대기(초)
   biteDecay: 0.94,                  // 레벨마다 입질 대기에 곱하는 값(6% 단축)
   sweep: 1.4,                       // 타이밍 바 시간(초) — 레벨 무관 고정
   // 강화 비용: costPowerFrom 레벨까지는 round(costBase × costGrowth^(lv-1)),
   // 그 뒤로는 costPowerFrom 레벨 비용 × (lv / costPowerFrom)^costPowerExp.
-  // 경계는 인도양 최소 요구 파워를 채우는 Lv16 직전이다. 동남아까지는 지수로 가파르게 두고,
+  // 경계는 Lv15다. Lv15까지는 지수로 가파르게 두고,
   // 그 뒤로는 직전 대비 배율이 레벨마다 줄어 강화 간격이 완만하게 늘어난다.
   costBase: 50,
   costGrowth: 1.7,

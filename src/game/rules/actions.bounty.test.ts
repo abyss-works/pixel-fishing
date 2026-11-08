@@ -7,9 +7,9 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState } from './logic';
 import type { GameState } from './logic';
-import { matchBountyCatch, rollNamedEncounter } from './logic';
+import { LICENSE_GRADES, matchBountyCatch, rollNamedEncounter, zoneDexMissing } from './logic';
 import type { BountyCtx } from './rules';
-import { BOUNTIES } from '../content/bounties';
+import { BOUNTIES, bountyById } from '../content/bounties';
 import { gameDayOf } from './time';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -44,23 +44,23 @@ const ctx = (over: Partial<BountyCtx> = {}): BountyCtx => ({
 const cleared = (general: number, named = 0): BountyCtx['clearsToday'] => ({ general, named });
 
 describe('acceptQuest', () => {
-  // 수주 조건은 상태에서 직접 본다 — 도감 완성 태평양 + 명성 1500이 기본값
-  const ready = { ...harbor, fame: 1500, dex: pacificDex };
+  // 수주 조건은 상태에서 직접 본다 — 도감 완성 태평양이 기본값
+  const ready = { ...harbor, dex: pacificDex };
 
   it('없는 의뢰는 bad-request', () => {
     const out = applyAction(seed({ ...ready }), { type: 'acceptQuest', questId: 'nope', port: 'harbor' }, deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('명성 미달이면 not-enough-fame', () => {
-    const out = applyAction(seed({ ...harbor, fame: 100, dex: pacificDex }),
+  it('명성이 0이어도 도감만 채우면 수주할 수 있다', () => {
+    const out = applyAction(seed({ ...harbor, fame: 0, dex: pacificDex }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
-    expect(out).toEqual({ ok: false, error: 'not-enough-fame' });
+    expect(out.ok).toBe(true);
   });
 
   it('일반 등급만 모았으면 기본 라이선스도 dex-incomplete — 전설 제외 전부(희귀·영웅 포함)가 조건이다', () => {
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificCommonDex }),
+    const out = applyAction(seed({ ...harbor, dex: pacificCommonDex }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
@@ -68,17 +68,24 @@ describe('acceptQuest', () => {
 
   it('돌연변이 폼만 잡은 어종은 도감 조건에 세지 않는다', () => {
     const variantOnly = { ...pacificDex, tuna: { variant: rec(1) } };
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: variantOnly }),
+    const out = applyAction(seed({ ...harbor, dex: variantOnly }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
   it('도감 미완이면 dex-incomplete', () => {
-    const out = applyAction(seed({ ...harbor, fame: 1500 }),
+    const out = applyAction(seed({ ...harbor }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
+  });
+
+  it('다른 구역 의뢰는 이 항구에서 수주할 수 없다 — 그 구역 항구에서만 수주한다', () => {
+    const out = applyAction(seed({ ...harbor, dex: pacificDex }),
+      { type: 'acceptQuest', questId: 'seasia-easy-common', port: 'harbor' },
+      deps({ bounty: ctx() }));
+    expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 
   it('일반 의뢰는 하루 1회 클리어 — 오늘 이미 클리어했으면 daily-cleared', () => {
@@ -90,14 +97,24 @@ describe('acceptQuest', () => {
 
   it('네임드도 하루 1회 클리어 — 오늘 이미 보상을 받았으면 daily-cleared', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    const full = seed({ ...harbor, fame: 1500, dex: pacificFullDex });
+    const full = seed({ ...harbor, dex: pacificFullDex });
     expect(applyAction(full, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
+      .toEqual({ ok: false, error: 'daily-cleared' });
+  });
+
+  it('하루 한도는 구역 전체로 센다 — 아다마스토르를 클리어한 날에는 같은 구역의 야스코니우스도 daily-cleared', () => {
+    const dex: GameState['dex'] = {};
+    for (const id of zoneDexMissing(newState(), 'southatlantic', LICENSE_GRADES.named)) dex[id] = { normal: rec(1) };
+    const state = seed({ location: { kind: 'base', id: 'walvisbay' }, dex });
+    const act = { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'walvisbay' } as const;
+    expect(applyAction(state, act, deps({ bounty: ctx() })).ok).toBe(true);
+    expect(applyAction(state, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
       .toEqual({ ok: false, error: 'daily-cleared' });
   });
 
   it('한 갈래의 클리어는 다른 갈래의 한도를 먹지 않는다 — 일반을 클리어해도 네임드를 수주할 수 있다', () => {
     const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), named,
+    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), named,
       deps({ bounty: ctx({ clearsToday: cleared(1, 0) }) }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
@@ -154,7 +171,7 @@ describe('acceptQuest', () => {
   });
 
   it('네임드는 한 번에 하나 — 진행 중인 네임드가 있으면 다른 구역 네임드도 quest-active', () => {
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }),
+    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }),
       { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
       deps({ bounty: ctx({ active: ['seasia-named-leviathan'] }) }));
     expect(out).toEqual({ ok: false, error: 'quest-active' });
@@ -162,7 +179,7 @@ describe('acceptQuest', () => {
 
   it('진행 중인 갈래가 다르면 막지 않는다 — 일반 의뢰를 진행해도 네임드를 수주할 수 있고 그 반대도 같다', () => {
     const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    expect(applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), named,
+    expect(applyAction(seed({ ...harbor, dex: pacificFullDex }), named,
       deps({ bounty: ctx({ active: ['pacific-easy-common'] }) })).ok).toBe(true);
     expect(applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
@@ -180,7 +197,7 @@ describe('acceptQuest', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     expect(applyAction(seed({ ...ready }), act, deps({ bounty: ctx() })))
       .toEqual({ ok: false, error: 'dex-incomplete' });
-    const out = applyAction(seed({ ...harbor, fame: 1500, dex: pacificFullDex }), act,
+    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), act,
       deps({ bounty: ctx() }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([{ type: 'acceptQuest',
@@ -220,8 +237,34 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
       deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(400000);
+    expect(out.state.gold).toBe(150000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
+  });
+
+  it('남대서양은 네임드마다 자기 교환 재료가 따라오고 보상은 같다', () => {
+    const toss = (questId: string) => {
+      const out = applyAction(seed({ gold: 0 }), { type: 'deliverBounty', questId },
+        deps({ bounty: ctx({ complete: [questId] }) }));
+      if (!out.ok) throw new Error(out.error);
+      return out.state;
+    };
+    const mirror = toss('southatlantic-named-adamastor');
+    expect(mirror.gold).toBe(bountyById('southatlantic-named-adamastor')!.reward);
+    expect(mirror.items).toEqual({ 'mat-clouded-mirror': 1 });
+    const sinker = toss('southatlantic-named-jasconius');
+    expect(sinker.gold).toBe(bountyById('southatlantic-named-jasconius')!.reward);
+    expect(sinker.items).toEqual({ 'mat-scorched-sinker': 1 });
+    expect(sinker.gold).toBe(mirror.gold);
+  });
+});
+
+describe('exchangeArtifact 바깥섬의 봉돌', () => {
+  it('그을린 봉돌 1개를 바깥섬의 봉돌 1개로 바꾼다', () => {
+    const out = applyAction(seed({ items: { 'mat-scorched-sinker': 1 } }),
+      { type: 'exchangeArtifact', artifact: 'outer-isle-sinker' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.artifacts).toEqual(['outer-isle-sinker']);
+    expect(out.state.items['mat-scorched-sinker']).toBeUndefined();
   });
 });
 
@@ -274,6 +317,18 @@ describe('rollNamedEncounter', () => {
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'mozstrait', () => 0)).toBeNull();
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'comorodeep', () => 0)?.id)
       .toBe('madagascar-named-elder-sixgill');
+  });
+
+  it('야스코니우스는 세인트헬레나에서만 조우한다 — 용승대에서는 돌지 않는다', () => {
+    const q = 'southatlantic-named-jasconius';
+    expect(rollNamedEncounter([q], 'benguela', () => 0)).toBeNull();
+    expect(rollNamedEncounter([q], 'sthelena', () => 0)?.id).toBe(q);
+  });
+
+  it('아다마스토르는 용승대에서만 조우한다 — 세인트헬레나에서는 돌지 않는다', () => {
+    const q = 'southatlantic-named-adamastor';
+    expect(rollNamedEncounter([q], 'sthelena', () => 0)).toBeNull();
+    expect(rollNamedEncounter([q], 'benguela', () => 0)?.id).toBe(q);
   });
 
   it('게이트 명중이면 그 해역 의뢰를 돌려준다', () => {
@@ -416,6 +471,15 @@ describe('resolveChallenge', () => {
     expect(applyAction(ready(), act({ questId: q, hits: 7 }), madaDeps()))
       .toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(ready(), act({ questId: q, hits: 8 }), madaDeps()).ok).toBe(true);
+  });
+
+  it('아다마스토르(체력 9)는 8히트 성공 주장을 거부하고 9히트를 받는다', () => {
+    const q = 'southatlantic-named-adamastor';
+    const saDeps = () => deps({ ...dyn,
+      bounty: ctx({ active: [q], tickets: [{ questId: q, issuedAt: '2026-10-09T00:30:00.000Z' }] }) });
+    expect(applyAction(ready(), act({ questId: q, hits: 8 }), saDeps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(ready(), act({ questId: q, hits: 9 }), saDeps()).ok).toBe(true);
   });
 
   it('성공하면 도감에 오르고 감사 이벤트를 남긴다', () => {

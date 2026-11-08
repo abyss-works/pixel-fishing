@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
+import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
@@ -27,13 +28,12 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
-/** 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
-    좁은 화면에서는 내용 높이를 따른다 */
-const FIXED_HEIGHT = 'h-[min(560px,calc(100%-32px))] max-[640px]:h-auto';
 
-export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
+export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, onClose }: {
   /** 내 골드 — 이름 바꾸기 비용을 낼 수 있는지 보인다 */
   gold: number;
+  /** 보유 유물 - 오늘 기여 상한이 네임드 토벌 하루 횟수 가산을 반영한다 */
+  artifacts: ArtifactHolder;
   setToast: Notify;
   /** 기부로 골드가 바뀐 뒤 게임 상태를 다시 읽는다 */
   onGoldChanged: () => Promise<void> | void;
@@ -71,7 +71,7 @@ export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
 
   const inGuild = Boolean(guild && you);
   const body = guild && you
-    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} gold={gold} onGoldChanged={onGoldChanged} />
+    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
     : guild === null && !loading && !failed
       ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
       : (
@@ -82,8 +82,10 @@ export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
       );
 
   return (
-    <Modal layer="stage" md={inGuild} onClose={onClose} className={inGuild ? FIXED_HEIGHT : undefined}>
-      <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} className={inGuild ? 'flex-1' : undefined}>
+    // 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
+    // 좁은 화면에서는 내용 높이를 따른다
+    <Modal layer="stage" md={inGuild} height={inGuild ? 560 : undefined} onClose={onClose}>
+      <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} fixed={inGuild}>
         {body}
       </ModalCard>
       {confirm && (
@@ -104,7 +106,7 @@ export default function GuildModal({ gold, setToast, onGoldChanged, onClose }: {
 type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
-function GuildView({ ask, gold, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; gold: number; onGoldChanged: () => Promise<void> | void }) {
+function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void }) {
   const [tab, setTab] = useState<GuildTab>('members');
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -116,7 +118,7 @@ function GuildView({ ask, gold, onGoldChanged, ...part }: GuildPartProps & { ask
         ...(part.guild.role === 'leader' ? [{ key: 'manage' as const, label: '관리', count: part.guild.requests.length }] : []),
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
-        {tab === 'members' && <GuildMembersTab {...part} ask={ask} />}
+        {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
         {tab === 'skills' && <GuildSkillsTab {...part} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
         {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}

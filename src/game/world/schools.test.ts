@@ -44,7 +44,7 @@ describe('generateWorldSchools — 결정성', () => {
 describe('generateWorldSchools — 개수', () => {
   it('일반 해역은 7~8개, 특수 해역은 1~2개이고 동남아 열린 바다에는 어군이 없다', () => {
     expect(GENERAL).toEqual(['sea', 'indian', 'mozstrait']);
-    expect(SPECIAL).toEqual(['deep', 'dragonhole', 'coron', 'barrierreef', 'southindian', 'comorodeep']);
+    expect(SPECIAL).toEqual(['deep', 'dragonhole', 'coron', 'barrierreef', 'southindian', 'comorodeep', 'benguela', 'sthelena']);
     for (const day of DAYS) {
       const groups = bySpot(generateWorldSchools(day));
       for (const spot of GENERAL) {

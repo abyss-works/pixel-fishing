@@ -11,7 +11,7 @@ function readyAtHarbor(): GameState {
   for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.named)) {
     dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
   }
-  return { ...newState(), fame: 1500, dex, location: { kind: 'base', id: 'harbor' } };
+  return { ...newState(), dex, location: { kind: 'base', id: 'harbor' } };
 }
 
 describe('LocalGameGateway 바운티 헌팅', () => {

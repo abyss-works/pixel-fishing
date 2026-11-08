@@ -7,12 +7,13 @@ import { baitById } from '../../../game/content/baits';
 import type { Bait } from '../../../game/content/baits';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
+import { artifactEffectsAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
 import {
-  autoBoostForSpot, effectiveBite, manualBonusForSpot, minLevelOfPower,
+  autoBoostForSpot, effectiveBite, minLevelOfPower,
   moveSpeed, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
@@ -47,7 +48,6 @@ export function selectStatsModalData(
     requirementLevel: minLevelOfPower(requirement),
     effectiveBite: effectiveBite(game, spot.id),
     autoBoost: autoBoostForSpot(game, spot.id),
-    manualBonus: manualBonusForSpot(game, spot.id),
     powerZones: powerZones(game, spot.id),
     currentPower,
     underpowered: currentPower < requirement,
@@ -131,7 +131,7 @@ export type BonusCategory = 'move' | 'fish' | 'duel' | 'shop';
 export const BONUS_CATEGORIES: readonly BonusCategory[] = ['move', 'fish', 'duel', 'shop'];
 
 const EFFECT_CATEGORY: Record<keyof ArtifactEffects, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop',
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop', biteWaitCut: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */
@@ -140,7 +140,8 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 };
 
 export type BonusSource =
-  | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects }
+  /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
+  | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects; level: number }
   | { kind: 'bait'; bait: Bait }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number };
@@ -155,16 +156,17 @@ export interface BonusRow {
 /**
  * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 켜 둔 미끼, 길드 보너스(1단계 이상).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
- * 낚싯대 파워에서 오는 효과(수동 보정·GOOD·PERFECT)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
+ * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
 export function selectActiveBonuses(game: GameState, guild: { level: number; effects: GuildEffects } | null = null): BonusRow[] {
   const out: BonusRow[] = [];
-  const owned = new Set(game.artifacts);
   for (const artifact of ARTIFACTS) {
-    if (!owned.has(artifact.id)) continue;
-    for (const effect of Object.keys(artifact.effects) as (keyof ArtifactEffects)[]) {
-      if (artifact.effects[effect] === undefined) continue;
-      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect }, manualOnly: false });
+    const level = artifactLevelOf(game, artifact.id);
+    if (level === 0) continue;
+    const effects = artifactEffectsAt(artifact, level);
+    for (const effect of Object.keys(effects) as (keyof ArtifactEffects)[]) {
+      if (effects[effect] === undefined) continue;
+      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level }, manualOnly: false });
     }
   }
   const bait = baitById(game.activeBait);

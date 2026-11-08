@@ -2,7 +2,7 @@
 // 적용하는지와 리듀서가 주입된 효과로 판정하는지 확인한다. 효과가 없으면 모든 판정이 길드 없이와 같다.
 import { describe, expect, it } from 'vitest';
 import {
-  bagCapacity, capOfBoat, fishDrawShares, makeInstance, mutationWeightsOf, namedWeightsOf, newState, sellSelected,
+  bagCapacity, capOfBoat, fishDrawShares, makeInstance, mutationWeightsOf, namedWeightsOf, newState, saleBonusOf, sellSelected,
   variantShare, withVariantPoints, FISH,
 } from './logic';
 import type { FishInstance, GameState } from './logic';
@@ -11,7 +11,6 @@ import type { ActionDeps } from './actions';
 import { NO_GUILD_EFFECTS, guildEffectsOf } from './guild';
 import type { GuildEffects } from './guild';
 import { BOUNTIES } from '../content/bounties';
-import { SPOTS } from '../content/spots';
 import type { BountyCtx } from './rules';
 import { powerZones, rodPower } from './stats';
 
@@ -30,6 +29,14 @@ describe('받는 규칙 — 효과 값 하나를 한 지점에서 더한다', ()
     const base = sellSelected(st, ['a', 'b']).gold;
     expect(sellSelected(st, ['a', 'b'], 0.06).gold).toBe(base + Math.round(base * 0.06));
     expect(sellSelected(st, ['a', 'b'], 0).gold).toBe(base);
+  });
+
+  it('판매가 증가분은 판매 총액에서 한 번 반올림한 값이고 판매 결과와 같다', () => {
+    const st: GameState = { ...newState(), gold: 0, bag: [inst('a'), inst('b')] };
+    const base = sellSelected(st, ['a', 'b']).gold;
+    expect(saleBonusOf(base, 0.06)).toBe(Math.round(base * 0.06));
+    expect(saleBonusOf(base, 0)).toBe(0);
+    expect(sellSelected(st, ['a', 'b'], 0.06).gold).toBe(base + saleBonusOf(base, 0.06));
   });
 
   it('배의 가방 칸에 가방 비율만큼 더한다. 래칫(이미 든 개체 수)은 그대로다', () => {
@@ -101,8 +108,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
 
   it('희귀 어종 보너스는 방치 캐치에서도 일반 등급 가중치를 줄인다', () => {
     const st = newState();
-    const entry = SPOTS.find(s => s.id === 'pond')?.powerReq ?? 0;
-    const o = catchDrawOptions('auto', rodPower(st), entry, powerZones(st, 'pond').mult, { phase: 'day' });
+    const o = catchDrawOptions('auto', rodPower(st), 'pond', powerZones(st, 'pond').mult, { phase: 'day' });
     const commonOf = (cut: number) => fishDrawShares('pond', { ...o, commonCut: cut })
       .filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
     const r = (commonOf(0) + commonOf(0.1)) / 2; // 일반 등급 경계 사이 — 일반 등급이 먼저 놓인다

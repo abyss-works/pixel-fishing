@@ -3,7 +3,7 @@
 // 지도 셀 판정은 각 영역의 설정값을 따른다.
 import type { Point, Rect, RegionPack, School, TriggerDef } from './types';
 import { cellDefAt } from './mask';
-import { zoneById, topZoneOf } from '../content/zones';
+import { zoneById, topZoneOf, CLOSED_SEA_MSG } from '../content/zones';
 import type { ZoneId } from '../content/zones';
 import { nextBoatText } from '../content/boats';
 // 반경은 호출자가 준다 — 기본값용 상수(CAST_RANGE, 밸런스 규칙 소관)를 여기서
@@ -15,10 +15,13 @@ export const inRect = (x: number, y: number, r: Rect): boolean =>
 const MARGIN = 4; // 지도 경계 여유
 
 export function canMove(pack: RegionPack, x: number, y: number): boolean {
-  if (x < MARGIN || y < MARGIN || x >= pack.w - MARGIN || y >= pack.h - MARGIN) return false;
+  // 창 밖 좌표는 이동할 수 없는 칸이다
+  const b = pack.bounds;
+  if (x < b.x + MARGIN || y < b.y + MARGIN || x >= b.x + b.w - MARGIN || y >= b.y + b.h - MARGIN) return false;
   for (const b of pack.buildings) if (inRect(x, y, b.rect)) return false;
   if (pack.map) { // 마스크 지형(항해) — 육지만 장애물
-    return !cellDefAt(pack.map, x, y)?.land;
+    const def = cellDefAt(pack.map, x, y);
+    return !def?.land && !def?.closed;
   }
   if (pack.movement === 'walk') {
     for (const t of pack.terrain!) if (t.kind === 'deck' && inRect(x, y, t.rect)) return true;
@@ -28,6 +31,22 @@ export function canMove(pack: RegionPack, x: number, y: number): boolean {
   // sail rect 지형(레거시): 대륙만 장애물
   for (const t of pack.terrain!) if (t.kind === 'land' && inRect(x, y, t.rect)) return false;
   return true;
+}
+
+/** 아직 열지 않은 바다 위인가 — 창 밖과 달리 실제 바다라 안내가 필요하다 */
+export function inClosedSea(pack: RegionPack, x: number, y: number): boolean {
+  return !!pack.map && !!cellDefAt(pack.map, x, y)?.closed;
+}
+
+/** 이번 이동이 아직 열지 않은 바다로 들어서려는가 — 맞으면 안내문, 아니면 null.
+ *  movePlayer와 같은 축별 목표 좌표로 판정한다. */
+export function closedSeaBlock(
+  pack: RegionPack, pos: Point, dirX: number, dirY: number, dt: number, speed: number,
+): string | null {
+  const nx = pos.x + dirX * speed * dt;
+  const ny = pos.y + dirY * speed * dt;
+  return inClosedSea(pack, nx, ny) || inClosedSea(pack, nx, pos.y) || inClosedSea(pack, pos.x, ny)
+    ? CLOSED_SEA_MSG : null;
 }
 
 // 구역 판정 — 마스크면 셀의 zone, walk 지역(마을)은 단일 구역. 모르면 undefined(구역 밖 물).
@@ -126,19 +145,21 @@ export function entryPoint(pack: RegionPack, trig: TriggerDef, from: Point): Poi
   const edge = trig.entry.edge;
   const horiz = edge === 'top' || edge === 'bottom';
   const m = MARGIN + 2;
-  const max = horiz ? pack.w - m : pack.h - m;
-  const clamp = (v: number) => Math.min(Math.max(v, m), max);
+  const b = pack.bounds;
+  const min = horiz ? b.x + m : b.y + m;
+  const max = horiz ? b.x + b.w - m : b.y + b.h - m;
+  const clamp = (v: number) => Math.min(Math.max(v, min), max);
   const primary = clamp(horiz ? from.x : from.y);
   // 가장자리에서 inset만큼 안쪽, 정렬축은 보존한 좌표
   const at = (p: number, inset: number): Point => {
-    if (edge === 'top') return { x: p, y: m + inset };
-    if (edge === 'bottom') return { x: p, y: pack.h - m - inset };
-    if (edge === 'left') return { x: m + inset, y: p };
-    return { x: pack.w - m - inset, y: p };
+    if (edge === 'top') return { x: p, y: b.y + m + inset };
+    if (edge === 'bottom') return { x: p, y: b.y + b.h - m - inset };
+    if (edge === 'left') return { x: b.x + m + inset, y: p };
+    return { x: b.x + b.w - m - inset, y: p };
   };
   for (const inset of ENTRY_INSETS) {
     for (let off = 0; ; off += 2) {
-      if (primary + off > max && primary - off < m) break;
+      if (primary + off > max && primary - off < min) break;
       for (const o of off === 0 ? [0] : [off, -off]) {
         const cand = at(primary + o, inset);
         if (!canMove(pack, cand.x, cand.y)) continue;          // 육지 위 입장 금지

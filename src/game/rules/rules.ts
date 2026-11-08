@@ -16,10 +16,11 @@ import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
 import { zoneById } from '../content/zones.js';
 import type { BaseId } from '../content/places.js';
-import { artifactById } from '../content/artifacts.js';
+import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
+import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
 import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
 import {
-  upgradeCost, bountyDailyCap, CHALLENGE_MISS_LIMIT,
+  upgradeCost, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
 } from './balance.js';
 import {
@@ -175,7 +176,7 @@ export function fastTravelTargets(state: GameState, from: BaseId): FastTravelTar
 }
 
 /** 서버 주입 수배 진실 — 오늘 클리어 횟수·완료·진행 목록은 DB가 들고 있다.
- *  라이선스 조건(명성·도감)은 상태에서 직접 본다 — 취득 절차가 없어 행이 없다.
+ *  라이선스 조건(도감)은 상태에서 직접 본다 — 취득 절차가 없어 행이 없다.
  *  하루 경계(KST 04:00) 집계와 의뢰 만료를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
   clearsToday: Record<BountyKind, number>; // 오늘 클리어(보상 수령)한 횟수 — 갈래별
@@ -198,16 +199,18 @@ export function canAcceptQuest(
   const q = bountyById(questId);
   if (!q) return no('bad-request');
   if (!isBountyPort(port)) return no('bad-request'); // 고향(home)에는 수배 창구가 없다
+  // 의뢰는 그 구역 항구의 수배판에서만 수주한다
+  if (zoneOfPort(port) !== q.zone) return no('bad-request');
   // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   // 라이선스 조건 직검 — 취득 절차 없이 조건 충족이면 열린다
   for (const c of licenseConditions(state, q.zone, LICENSE_TIER_OF[q.difficulty])) {
-    if (!c.ok) return no(c.key === 'fame' ? 'not-enough-fame' : 'dex-incomplete');
+    if (!c.ok) return no('dex-incomplete');
   }
   if (!ctx) return no('no-license');
   const kind = bountyKindOf(q);
   // 한도가 먼저다 — 진행 중인 의뢰를 마쳐도 오늘 몫이 없으면 수주할 수 없다
-  if (ctx.clearsToday[kind] >= bountyDailyCap(kind)) return no('daily-cleared');
+  if (ctx.clearsToday[kind] >= dailyClearCap(state, kind)) return no('daily-cleared');
   const holding = ctx.active.some(id => {
     const held = bountyById(id);
     return held !== undefined && bountyKindOf(held) === kind;
@@ -259,5 +262,18 @@ export function canExchangeArtifact(
   const art = artifactById(artifactId);
   if (!art) return no('bad-request');
   if ((state.items[art.materialId] ?? 0) < 1) return no('material-missing');
+  return OK;
+}
+
+/** 유물 레벨업 — 보유한 레벨 유물만, 최고 레벨 아래에서, 다음 레벨 비용만큼 그 교환 재료가 있어야 한다.
+ *  갖지 않은 유물, 전설 유물, 최고 레벨 유물은 화면이 보내지 않는 요청이라 bad-request다 */
+export function canLevelUpArtifact(
+  state: GameState, artifactId: string,
+): RuleCheck {
+  const art = artifactById(artifactId);
+  if (!art || !artifactHasLevel(art)) return no('bad-request');
+  const level = artifactLevelOf(state, art.id);
+  if (level === 0 || level >= ARTIFACT_MAX_LEVEL) return no('bad-request');
+  if ((state.items[art.materialId] ?? 0) < artifactLevelCost(level + 1)) return no('material-missing');
   return OK;
 }

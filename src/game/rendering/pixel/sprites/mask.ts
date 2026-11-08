@@ -48,10 +48,34 @@ function seaTones(style: keyof typeof WATER_STYLE) {
   return g;
 }
 
-/** view = 카메라 뷰포트(월드 px) — 병합 바다처럼 격자가 큰 지형은 보이는 칸만 찍는다
+/** view = 카메라 뷰포트(게임 좌표) — 병합 바다처럼 격자가 큰 지형은 보이는 칸만 찍는다
  *  (오픈월드 Phase 3: 전체 순회는 26k셀 × 프레임이라 컬링 필수). 미지정 = 전체(미니맵).
- *  tone = 컬러 영역(월드 px) — 이 사각형 **밖**은 흑백 톤(세계지도의 미개척 연출). 미지정 = 전부 컬러. */
+ *  tone = 컬러 영역(게임 좌표) — 이 사각형 **밖**은 흑백 톤(세계지도의 미개척 연출). 미지정 = 전부 컬러.
+ *  격자는 원점에서 떨어진 자리에 놓이므로 칸은 격자 서북 모서리 기준으로 찍고 좌표만 옮긴다. */
 export function drawMaskTerrain(
+  ctx: Ctx, map: CompiledMap, detail: boolean, t?: number, view?: Rect, tone?: Rect,
+) {
+  const shift = (r: Rect | undefined): Rect | undefined =>
+    r && { x: r.x - map.originX, y: r.y - map.originY, w: r.w, h: r.h };
+  ctx.save();
+  ctx.translate(map.originX, map.originY);
+  paintGrid(ctx, map, detail, t, shift(view), shift(tone));
+  ctx.restore();
+  if (!detail) return;
+
+  // 수역 라벨 자동 배치 (label 파생 — 위치는 격자가 결정. 전체 순회라 캐시 필수)
+  let anchors = LABEL_CACHE.get(map);
+  if (!anchors) {
+    anchors = zoneLabelAnchors(map);
+    LABEL_CACHE.set(map, anchors);
+  }
+  for (const a of anchors) {
+    label(ctx, a.text, a.x, a.y - 6, FAINT, 9);
+  }
+}
+
+/** 격자 좌표계(서북 모서리가 원점)에서 칸을 찍는다 — view와 tone도 격자 좌표다 */
+function paintGrid(
   ctx: Ctx, map: CompiledMap, detail: boolean, t?: number, view?: Rect, tone?: Rect,
 ) {
   const sw = map.cellW, sh = map.cellH;
@@ -84,7 +108,7 @@ export function drawMaskTerrain(
     let key = -1;
     for (let c = c0; c <= c1 + 1; c++) {
       const code = c <= c1 ? map.codes[r * map.cols + c] : -2;
-      const mono = rowMono || monoCol(c);
+      const mono = rowMono || monoCol(c) || (!!tone && !!map.palette[code]?.closed);
       const k = code * 2 + (mono ? 1 : 0);
       if (k === key) continue;
       if (key >= 0) {
@@ -112,7 +136,7 @@ export function drawMaskTerrain(
     for (let c = c0; c <= c1; c++) {
       const def = at(c, r);
       const x = c * sw, y = r * sh;
-      const mono = monoRow(r) || monoCol(c);
+      const mono = monoRow(r) || monoCol(c) || (!!tone && !!def?.closed);
       const landFill = mono ? MONO_LAND_HI : LAND_HI;
       const sandFill = mono ? MONO_SAND : SAND;
 
@@ -161,15 +185,5 @@ export function drawMaskTerrain(
       const gy = (i * 89 + t * 7) % H;
       if (Math.sin(t * 3 + i * 1.7) > 0.2) R(ctx, gx | 0, gy | 0, 2, 1, 'rgba(255,255,255,0.28)');
     }
-  }
-
-  // 4패스 — 수역 라벨 자동 배치 (label 파생 — 위치는 격자가 결정. 전체 순회라 캐시 필수)
-  let anchors = LABEL_CACHE.get(map);
-  if (!anchors) {
-    anchors = zoneLabelAnchors(map);
-    LABEL_CACHE.set(map, anchors);
-  }
-  for (const a of anchors) {
-    label(ctx, a.text, a.x, a.y - 6, FAINT, 9);
   }
 }

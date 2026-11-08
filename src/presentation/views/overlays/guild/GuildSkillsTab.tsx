@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
@@ -17,6 +17,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import type { GuildPartProps, GuildRun } from './guildProps';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 길드 스킬 탭: 오목한 판 위의 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부 버튼).
 // 스킬 다섯이 가로로 놓이고 단계 1~5가 위에서 아래로 뻗는다. 이룬 단계는 금색으로 차고, 다음 단계는 모인 비율만큼 찬다.
@@ -32,7 +33,7 @@ export default function GuildSkillsTab({ guild, busy, run, setToast, onGoldChang
   const sel = rows.find(r => r.id === picked) ?? rows[0];
 
   return (
-    <div className="pf-scroll-panel flex flex-col gap-3 flex-1 min-h-0 pf-vscroll">
+    <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
       <Inset className="shrink-0 px-3 py-4">
         <div className="grid grid-cols-5 gap-3" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => <Branch key={row.id} row={row} active={row.id === picked} onPick={() => setPicked(row.id)} />)}
@@ -139,6 +140,7 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
   onGoldChanged: () => Promise<void> | void; onClose: () => void;
 }) {
   const [amount, setAmount] = useState('');
+  const formId = useId();
   const add = (step: number) => setAmount(String((Number(amount) || 0) + step));
   const onDonate = async (e: FormEvent) => {
     e.preventDefault();
@@ -161,8 +163,9 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
 
   return (
     <Modal layer="stage" onClose={onClose}>
-      <ModalCard title={`${row.name} 기부`} onClose={onClose}>
-        <form className="flex flex-col gap-3" onSubmit={e => { void onDonate(e); }}>
+      <ModalCard title={`${row.name} 기부`} onClose={onClose}
+        confirm={<Button type="submit" form={formId} variant="primary" full disabled={busy}>기부</Button>}>
+        <form id={formId} className="flex flex-col gap-3" onSubmit={e => { void onDonate(e); }}>
           <Inset className="p-3 flex flex-col gap-2">
             <div className="flex gap-2">
               {DONATION_STEPS.map(step => (
@@ -175,7 +178,6 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
                        onChange={e => setAmount(e.target.value)} aria-label={`${row.name} 기부 골드`} />
           </Inset>
           <span className="text-2xs text-text-dim">기부한 골드는 돌려받지 않아요.</span>
-          <Button type="submit" variant="primary" full disabled={busy}>기부</Button>
         </form>
       </ModalCard>
     </Modal>

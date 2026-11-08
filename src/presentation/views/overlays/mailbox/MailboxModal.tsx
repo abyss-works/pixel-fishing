@@ -18,6 +18,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 우편함 창. 게임 스테이지 안에 뜨고, 680 폭에 탭이 없어 내용 높이를 따른다.
 // 위는 우편 표(아이콘, 제목, 받은 날, 골드)로 표 머리와 다섯 줄 높이이고 넘치면 칸 안에서 굴린다. 아래는 고른 우편의 본문 칸이다.
@@ -106,7 +107,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <b className="text-gold truncate">{selected.title}</b>
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
-                <p className="pf-scroll-panel flex-1 min-h-0 pf-vscroll pr-2 [scrollbar-gutter:stable] whitespace-pre-line text-sm leading-relaxed">{selected.body}</p>
+                <p className={`${SCROLL_Y} flex-1 min-h-0 whitespace-pre-line text-sm leading-relaxed`}>{selected.body}</p>
                 <div className="h-9 shrink-0 flex items-center justify-between gap-2 border-t border-line pt-1.5">
                   {selected.gold > 0 && (
                     <>

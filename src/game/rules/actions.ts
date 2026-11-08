@@ -16,19 +16,20 @@ import {
 import type { SpeciesPity } from './pity.js';
 import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
-import { relativeIdleBoost, manualPowerBonus } from './power.js';
-import { SPOTS, rarityWeightOf } from '../content/spots.js';
+import { relativeIdleBoost } from './power.js';
+import { rarityWeightOf } from '../content/rarityWeights.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
-import { artifactById, artifactOfZone } from '../content/artifacts.js';
+import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
+import { artifactLevelOf, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import {
-  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canExhibit, canResolveChallenge,
+  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
 import { powerZones, rodPower } from './stats.js';
@@ -66,6 +67,7 @@ export type GameAction =
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
+  | { type: 'levelUpArtifact'; artifact: string } // 유물 레벨업 — 그 유물의 교환 재료를 레벨별 수만큼 쓰고 레벨을 하나 올린다
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
@@ -77,7 +79,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   buyBait: true, setActiveBait: true, boot: true, import: true,
-  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, exhibit: true, resolveChallenge: true,
+  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
@@ -288,27 +290,25 @@ export function prepareCatchDraw(
   return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
 }
 
-/** 추첨 다이얼 — auto는 상대 페널티 스케일링, 수동은 판정 배수 × 파워 보정.
+/** 추첨 다이얼 — auto는 해역 요구 파워 대비 방치 배수, 수동은 판정 배수.
  *  추첨(rollCatchFish)과 천장 누적(accrueSpeciesPity)이 같은 다이얼을 쓴다. */
 export function catchDrawOptions(
-  judgment: Judgment, power: number, entry: number,
+  judgment: Judgment, power: number, spot: SpotId,
   pzMult: number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): DrawOptions & { phase: DayPhase; rareMult: number; commonMult: number } {
   if (judgment === 'auto') {
-    // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링
-    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, entry) * pzMult };
+    // auto는 해역 요구 파워 대비 레벨 차의 방치 배수 표로 스케일링
+    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, spot) * pzMult };
   }
-  // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
-  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — 파워 계산).
-  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), commonMult: pzMult };
+  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment], commonMult: pzMult };
 }
 
 /** 추첨 실행 — 호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
 export function rollCatchFish(
-  spot: SpotId, judgment: Judgment, power: number, entry: number,
+  spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): Fish {
-  const o = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  const o = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   return rollFish(spot, o.rareMult, rng, o.commonMult, o);
 }
 
@@ -320,7 +320,7 @@ export function rollCatchFish(
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 감소(commonCut)와 돌연변이 확률 퍼센트포인트. 천장 누적도
  *  같은 다이얼·폼 확률을 써서 실제 확률을 쌓는다. */
 export function drawCatch(
-  state: Pick<GameState, 'pity' | 'artifacts' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
+  state: Pick<GameState, 'pity' | 'artifacts' | 'artifactLevels' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
@@ -329,11 +329,11 @@ export function drawCatch(
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
-  const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
+  const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
   const forms = withVariantPoints(mutationWeightsOf(state, spot), guild.mutation);
   const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
-  const opts = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
@@ -364,8 +364,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
-      const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts,
+      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
@@ -664,12 +663,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };
       const quest = bountyById(action.questId)!;
-      const mat = quest.difficulty === 'named' ? artifactOfZone(quest.zone) : undefined;
+      const mat = quest.difficulty === 'named' ? artifactOfNamed(quest.targetFish ?? '') : undefined;
       const rich = mat ? addItem(state, mat.materialId, 1) : state;
+      // 네임드 토벌 골드만 보유 유물(전설)의 보상 감소를 받는다 — 재료 수는 그대로다
+      const reward = quest.difficulty === 'named' ? namedRewardOf(state, quest.reward) : quest.reward;
       return {
-        ok: true, state: { ...rich, gold: rich.gold + quest.reward },
+        ok: true, state: { ...rich, gold: rich.gold + reward },
         result: { type: 'none' },
-        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward: quest.reward } }],
+        events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward } }],
       };
     }
     case 'resolveChallenge': {
@@ -736,6 +737,20 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ok: true, state: { ...spent, artifacts: [...spent.artifacts, art.id] },
         result: { type: 'none' },
         events: [{ type: 'exchangeArtifact', payload: { artifact: art.id } }],
+      };
+    }
+    case 'levelUpArtifact': {
+      // 유물 레벨업 — 다음 레벨 비용만큼 그 유물의 교환 재료를 쓰고 레벨을 하나 올린다.
+      if (typeof action.artifact !== 'string') return { ok: false, error: 'bad-request' };
+      const check = canLevelUpArtifact(state, action.artifact);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const art = artifactById(action.artifact)!;
+      const level = artifactLevelOf(state, art.id) + 1;
+      const spent = takeItem(state, art.materialId, artifactLevelCost(level));
+      return {
+        ok: true, state: { ...spent, artifactLevels: { ...spent.artifactLevels, [art.id]: level } },
+        result: { type: 'none' },
+        events: [{ type: 'levelUpArtifact', payload: { artifact: art.id, level } }],
       };
     }
     default:

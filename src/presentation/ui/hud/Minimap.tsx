@@ -6,7 +6,6 @@ import { getSpotState, subscribeSpotState } from '../../../game/world/currentSpo
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import IconButton from '../IconButton';
 import Tip from '../Tip';
-import TimeBadge from './TimeBadge';
 
 // 미니맵 — 자기 캔버스를 소유하고 변경될 때만 그린다 (메인 rAF와 분리).
 // 위치·구역·어군은 전역 스토어를 **직접 구독**한다: 좌표가 바뀌어도 React를 다시 그리지 않고
@@ -54,14 +53,13 @@ export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates }
         <div className="w-full h-full border border-line rounded-sm bg-bg" aria-hidden="true" />
       ) : (
         <canvas ref={canvasRef}
-                width={Math.min(MINIMAP_VIEW_W, def.w, 912)}
-                height={Math.round(Math.min(MINIMAP_VIEW_W, def.w, 912)
-                                   * Math.min(MINIMAP_VIEW_H, def.h) / Math.min(MINIMAP_VIEW_W, def.w))}
+                width={Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)}
+                height={Math.round(Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)
+                                   * Math.min(MINIMAP_VIEW_H, def.bounds.h) / Math.min(MINIMAP_VIEW_W, def.bounds.w))}
                 className="w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
                 aria-label="미니맵"
                 onClick={() => onOpenMap?.()} />
       )}
-      <TimeBadge className="top-1.5 left-1.5" />
       {onHide && (
         <Tip wraps text="미니맵 숨기기" className="absolute top-1.5 right-1.5 flex">
           <IconButton glyph="minus" size={12} aria-label="미니맵 숨기기" onClick={onHide}

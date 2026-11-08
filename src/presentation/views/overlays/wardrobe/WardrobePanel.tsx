@@ -13,6 +13,7 @@ import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import { fmtGold } from '../../../ui/format';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 type Screen = 'clothes' | 'hats';
 
@@ -36,7 +37,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
   const caption = screen === 'hats' ? '써 본 모습' : changed ? '고른 모습' : '지금 입은 모습';
 
   return (
-    <ModalCard title="옷장" onClose={onClose} className="flex-1">
+    <ModalCard title="옷장" onClose={onClose} fixed>
       <Inset className="flex items-center gap-4 h-[108px] px-3 shrink-0">
         <PersonSprite look={preview} scale={4} ariaLabel="확대한 미리보기" />
         <PersonSprite look={preview} scale={2} onBoat ariaLabel="배 위 미리보기" />
@@ -56,7 +57,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
       />
       {screen === 'clothes' ? (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="flex flex-col gap-3 flex-1 min-h-0 pf-vscroll pf-scroll">
+          <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
             <div>
               <Subheading>프리셋</Subheading>
               <div className="grid grid-cols-6 gap-2">
@@ -83,7 +84,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className="grid grid-cols-5 gap-2 flex-1 min-h-0 content-start pf-vscroll pf-scroll">
+          <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start ${SCROLL_Y}`}>
             {HATS.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;

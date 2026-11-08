@@ -6,7 +6,8 @@ import { checkNickname } from './nickname.js';
 import type { RuleCheck } from './rules.js';
 import { gameDayOf } from './time.js';
 import { bountyKindOf } from '../content/bounties.js';
-import { bountyDailyCap } from './balance.js';
+import { dailyClearCap } from './artifactLevel.js';
+import type { ArtifactHolder } from './artifactLevel.js';
 import type { BountyQuest } from '../content/bounties.js';
 
 export type GuildRole = 'leader' | 'member';
@@ -178,12 +179,13 @@ export const GUILD_DAILY_FAME_CAP = 2_000;
 /** 의뢰 클리어 한 번의 기여 — 명성 기여의 하루 상한과 별개다 */
 const CLEAR_CONTRIBUTION = { general: 500, named: 1_000 } as const;
 
-/** 길드원 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한: 명성, 일반 의뢰 클리어, 네임드 토벌 */
-export function guildDailyContributionCaps(): { fame: number; general: number; named: number } {
+/** 길드원 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한: 명성, 일반 의뢰 클리어, 네임드 토벌.
+ *  네임드 토벌 횟수 상한은 보유 유물(마미 와타의 거울)의 가산을 반영한다 */
+export function guildDailyContributionCaps(state: ArtifactHolder): { fame: number; general: number; named: number } {
   return {
     fame: GUILD_DAILY_FAME_CAP,
-    general: CLEAR_CONTRIBUTION.general * bountyDailyCap('general'),
-    named: CLEAR_CONTRIBUTION.named * bountyDailyCap('named'),
+    general: CLEAR_CONTRIBUTION.general * dailyClearCap(state, 'general'),
+    named: CLEAR_CONTRIBUTION.named * dailyClearCap(state, 'named'),
   };
 }
 /** 레벨마다 필요한 누적 기여도 — 인덱스 0이 Lv1이다 */

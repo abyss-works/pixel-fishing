@@ -10,7 +10,6 @@ import { useDevTools } from '../../../features/devtools/service/useDevTools';
 import {
   armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
 } from '../../../features/bounty/service/forceEncounter';
-import { gameDay } from '../../../features/bounty/service/queryKeys';
 import { setCanvasCover, useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useKeyScope } from '../../ui/hotkeys';
 import { cx } from '../../ui/cx';
@@ -60,12 +59,11 @@ const viewport = (): Size2 => ({ width: window.innerWidth, height: window.innerH
 // 정보 조회용 대시보드 이동만 남긴다.
 const RESTRICTED_NOTE = '운영 서버다 — 여기서는 대시보드 조회만 열 수 있다. 개발 도구는 스테이징·로컬에서 쓴다.';
 
-export default function DevTools({ game, dispatch, setToast, account, uid }: {
+export default function DevTools({ game, dispatch, setToast, account }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   account: string | null;
-  uid: string | null;
 }) {
   const visible = canSeeDevTools(account);
   const { restricted } = useDevEnv();
@@ -125,7 +123,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
       <Tip wraps text="개발 도구 (F9)">
         <Frame as="button" type="button" aria-label="개발 도구" aria-pressed={open}
                onClick={() => setOpen(o => !o)}
-               className={cx('fixed right-3 bottom-3 z-[60] p-2 cursor-pointer',
+               className={cx('fixed right-3 bottom-3 z-(--z-devtools) p-2 cursor-pointer',
                  open ? 'text-gold' : 'text-text-dim hover:text-gold')}>
           <PixelIcon glyph="key" size={20} />
         </Frame>
@@ -133,7 +131,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
 
       {open && (
         <Frame role="dialog" aria-label="개발 도구"
-               className="fixed z-[60] bg-bg flex flex-col text-sm"
+               className="fixed z-(--z-devtools) bg-bg flex flex-col text-sm"
                style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}>
           {/* 머리줄 — 끌어서 옮긴다 */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-line cursor-move select-none touch-none"
@@ -149,7 +147,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
           </div>
 
           {/* 본문 — 남는 높이를 모두 쓰고 안에서만 스크롤한다 */}
-          <div className="flex-1 min-h-0 pf-scroll-panel overflow-y-auto px-3 py-3 flex flex-col gap-3">
+          <div className="flex-1 min-h-0 pf-scroll-panel pf-vscroll px-3 py-3 flex flex-col gap-3">
             {restricted && <Note tone="warn" className="my-0">{RESTRICTED_NOTE}</Note>}
             {section !== 'ops' && (
             <Gated open={!restricted} overlay={RESTRICTED_NOTE}>
@@ -157,7 +155,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
                 {section === 'presets' && DEV_PRESETS.map(preset => (
                   <div key={preset.id} className="flex flex-col gap-1">
                     <Button full disabled={tools.busy}
-                            onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: gameDay() })}>
+                            onClick={() => void tools.runPreset(preset, { game })}>
                       {preset.label}
                     </Button>
                     <span className="text-xs text-text-dim">{preset.hint}</span>
@@ -226,7 +224,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
           {/* 실행 기록 — 높이 고정. 비어 있어도 자리를 지켜 틀이 흔들리지 않는다 */}
           <div className="h-36 shrink-0 border-t border-line px-3 py-2 flex flex-col gap-1">
             <span className="text-xs text-text-dim">실행 기록 · 서버 명령은 스테이징·로컬 서버에서만 동작한다</span>
-            <ul className="flex-1 min-h-0 pf-scroll-panel overflow-y-auto flex flex-col gap-0.5" aria-label="실행 기록">
+            <ul className="flex-1 min-h-0 pf-scroll-panel pf-vscroll flex flex-col gap-0.5" aria-label="실행 기록">
               {tools.log.map(entry => (
                 <li key={entry.id} className={cx('flex items-start gap-1.5', entry.ok ? 'text-text' : 'text-danger')}>
                   <PixelIcon glyph={entry.ok ? 'checkOn' : 'checkOff'} size={12} className="mt-1 shrink-0" />

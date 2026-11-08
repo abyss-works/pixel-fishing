@@ -6,6 +6,8 @@ import { ZONE_IDS, subtreeSpots, topZoneOfSpot } from '../../../game/content/zon
 import type { ZoneId } from '../../../game/content/zones';
 import { FISH, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile } from '../../../game/rules/logic';
 import type { Fish, FormId, GameState } from '../../../game/rules/logic';
+import { namedRewardStat } from '../../../game/rules/artifactLevel';
+import type { Stat } from '../../../game/rules/stats';
 
 export interface DexFishEntry {
   fish: Fish;
@@ -116,7 +118,8 @@ export interface NamedDetailData {
   name: string | null;
   zone: ZoneId;
   hp: number;
-  reward: number;
+  /** 수배판과 같은 보상 내역 - 보유 유물의 보상 감소를 포함한다 */
+  reward: Stat;
   /** 처음 토벌한 날 — 기록이 없거나 토벌 전이면 null */
   firstCaught: string | null;
   /** 도감 로어·흔적·전승은 토벌한 뒤에만 공개한다 */
@@ -137,7 +140,7 @@ export function selectNamedDetail(game: GameState, quest: BountyQuest): NamedDet
     name: found ? named.name : null,
     zone: quest.zone,
     hp: named.hp,
-    reward: quest.reward,
+    reward: namedRewardStat(game, quest.reward),
     firstCaught: found ? dexRecord(game, named.id, 'normal')?.first ?? null : null,
     lore: found ? named.lore : null,
     trace: found ? named.trace : null,

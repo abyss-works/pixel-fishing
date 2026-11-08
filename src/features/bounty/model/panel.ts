@@ -1,16 +1,19 @@
-import { artifactOfZone } from '../../../game/content/artifacts';
+import { artifactOfNamed, artifactsOfZone } from '../../../game/content/artifacts';
 import {
-  bountyById, bountyKindOf, dailyQuestFor, zoneOfPort,
+  bountyById, bountyKindOf, offeredQuestsFor, zoneOfPort,
 } from '../../../game/content/bounties';
+import type { Artifact } from '../../../game/content/artifacts';
 import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
-import { ticketRemainingMs } from '../../../game/rules/challenge';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, bountyDailyCap } from '../../../game/rules/balance';
+import { artifactLevelOf, dailyClearCap, namedRewardStat } from '../../../game/rules/artifactLevel';
+import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
+import type { Stat } from '../../../game/rules/stats';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
 /** 일반 의뢰 난이도의 화면 이름 */
@@ -33,6 +36,22 @@ export interface BountyPanelInput {
   snapshot: BountySnapshot | null;
 }
 
+/** 네임드 토벌 항목 하나 - 의뢰, 보상 감소 내역을 담은 골드, 남은 도전권 분, 토벌 보상으로 받는 유물 */
+export interface NamedOffer {
+  quest: BountyQuest;
+  reward: Stat;
+  ticketMins: number | null;
+  relic: Artifact | undefined;
+}
+
+/** 유물 탭의 카드 하나 - 갖지 않았으면 레벨은 1(교환하면 받는 레벨) */
+export interface RelicEntry {
+  artifact: Artifact;
+  owned: boolean;
+  level: number;
+  mats: number;
+}
+
 export interface BountyPanelData {
   zone: NonNullable<ReturnType<typeof zoneOfPort>>;
   /** 오늘 남은 클리어 횟수 — 일반 의뢰. 스냅샷이 없으면 null */
@@ -43,7 +62,9 @@ export interface BountyPanelData {
   namedDailyCap: number;
   /** 난이도 칸에 보일 의뢰 — 그 칸에서 수주 중인 의뢰가 있으면 오늘의 의뢰 대신 그것이다.
    *  날이 바뀐 뒤에도 조건을 채운 의뢰를 마칠 수 있어야 한다 */
-  offers: Record<BountyDifficulty, BountyQuest | undefined>;
+  offers: Record<Exclude<BountyDifficulty, 'named'>, BountyQuest | undefined>;
+  /** 네임드 토벌 항목 - 구역의 네임드마다 하나씩 */
+  namedOffers: NamedOffer[];
   progressOf: (questId: string) => number;
   /** 수주 중인가 — 수주하면 진행 행(진행도 0)이 생기므로 행의 존재가 곧 수주다 */
   isAccepted: (questId: string) => boolean;
@@ -55,20 +76,40 @@ export interface BountyPanelData {
   canTakeNamed: boolean;
   /** 수주 버튼이 갈래 단위로 막힌 이유 — 한도를 다 썼거나 다른 구역에서 수주 중일 때만 있다 */
   notice: Record<BountyKind, string | null>;
-  ticketMins: number | null;
-  hasTicket: boolean;
-  relic: ReturnType<typeof artifactOfZone>;
-  relicOwned: boolean;
-  relicMats: number;
+  /** 유물 탭의 카드 - 구역의 유물마다 하나씩 */
+  relics: RelicEntry[];
 }
 
-/** 오늘 남은 클리어 횟수 — 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
-export function clearsLeft(snapshot: BountySnapshot | null): { general: number; named: number } | null {
-  if (!snapshot) return null;
+/** 오늘 클리어 현황 - 남은 횟수와 한도를 한 곳에서 낸다(헤더, 의뢰 창, 수배판이 함께 쓴다).
+ *  한도는 보유 유물이 넓힌 값이다. 남은 횟수는 스냅샷이 없으면(불러오는 중, 오프라인) 알 수 없으므로 null, 한도는 규칙이 정한 값이라 언제나 있다 */
+export interface ClearsStatus {
+  left: { general: number; named: number } | null;
+  caps: Record<BountyKind, number>;
+}
+
+export function clearsStatus(game: ArtifactHolder, snapshot: BountySnapshot | null): ClearsStatus {
+  const caps = { general: dailyClearCap(game, 'general'), named: dailyClearCap(game, 'named') };
+  if (!snapshot) return { left: null, caps };
   return {
-    general: Math.max(0, bountyDailyCap('general') - snapshot.clearsToday.general),
-    named: Math.max(0, bountyDailyCap('named') - snapshot.clearsToday.named),
+    left: {
+      general: Math.max(0, caps.general - snapshot.clearsToday.general),
+      named: Math.max(0, caps.named - snapshot.clearsToday.named),
+    },
+    caps,
   };
+}
+
+/** 오늘 남은 클리어 횟수 - 일반 의뢰와 네임드 토벌. 스냅샷이 없으면 알 수 없으므로 null */
+export const clearsLeft = (game: ArtifactHolder, snapshot: BountySnapshot | null): ClearsStatus['left'] => clearsStatus(game, snapshot).left;
+
+/** 갈래마다 수주 중인 의뢰 하나 - 어느 구역의 것이든 같은 갈래의 새 수주를 막는다. 수주하면 진행 행이 생기므로 행의 존재가 곧 수주다 */
+export function heldQuests(snapshot: BountySnapshot | null): Record<BountyKind, BountyQuest | undefined> {
+  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
+  for (const row of snapshot?.progress ?? []) {
+    const held = bountyById(row.questId);
+    if (held) holding[bountyKindOf(held)] ??= held;
+  }
+  return holding;
 }
 
 const KIND_SUBJECT: Record<BountyKind, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
@@ -76,8 +117,13 @@ const CLEARED_NOTICE: Record<BountyKind, string> = {
   general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
   named: `오늘 네임드 토벌은 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
 };
-/** 이 판의 다른 난이도 칸이 왜 막혔는지 — 네임드는 구역마다 한 칸이라 일반 의뢰만 해당한다 */
-const ONE_AT_A_TIME_NOTICE = '일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.';
+/** 같은 구역의 네임드 하나를 수주 중일 때 다른 네임드 카드의 수주 버튼이 막힌 이유 */
+export const NAMED_ONE_AT_A_TIME_NOTICE = '네임드 토벌은 한 번에 하나만 수주할 수 있어요.\n진행 중인 네임드 토벌을 먼저 마쳐 주세요.';
+/** 이 판의 다른 칸이 왜 막혔는지 — 일반 의뢰는 난이도 칸끼리, 네임드 토벌은 같은 구역의 네임드 카드끼리 한 번에 하나만 수주한다 */
+const ONE_AT_A_TIME_NOTICE: Record<BountyKind, string> = {
+  general: '일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.',
+  named: NAMED_ONE_AT_A_TIME_NOTICE,
+};
 const elsewhereNotice = (kind: BountyKind, held: BountyQuest): string =>
   `${zoneById(held.zone)?.shortName ?? held.zone}에서 수주한 ${KIND_SUBJECT[kind]} 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.`;
 
@@ -87,29 +133,30 @@ export function selectBountyPanelData({
 }: BountyPanelInput): BountyPanelData {
   const zone = zoneOfPort(port)!;
   const who = uid ?? 'local';
-  const difficulties: BountyDifficulty[] = ['easy', 'normal', 'hard', 'named'];
-  const left = clearsLeft(snapshot);
+  const difficulties = ['easy', 'normal', 'hard'] as const;
+  const { left, caps } = clearsStatus(game, snapshot);
   const leftAll = left?.general ?? null;
   const leftNamed = left?.named ?? null;
-  // 갈래마다 수주 중인 의뢰 하나 — 어느 구역의 것이든 같은 갈래의 새 수주를 막는다
-  const holding: Record<BountyKind, BountyQuest | undefined> = { general: undefined, named: undefined };
-  for (const row of snapshot?.progress ?? []) {
-    const held = bountyById(row.questId);
-    if (held) holding[bountyKindOf(held)] ??= held;
-  }
+  const holding = heldQuests(snapshot);
   const heldHere = (difficulty: BountyDifficulty): BountyQuest | undefined =>
     Object.values(holding).find(q => q?.zone === zone && q.difficulty === difficulty);
   const offers = Object.fromEntries(difficulties.map(difficulty => [
-    difficulty, heldHere(difficulty) ?? dailyQuestFor(zone, difficulty, who, day),
-  ])) as Record<BountyDifficulty, BountyQuest | undefined>;
-  const shown = new Set(Object.values(offers).map(q => q?.id));
+    difficulty, heldHere(difficulty) ?? offeredQuestsFor(zone, difficulty, who, day)[0],
+  ])) as BountyPanelData['offers'];
+  const namedOffers: NamedOffer[] = offeredQuestsFor(zone, 'named', who, day).map(quest => ({
+    quest,
+    reward: namedRewardStat(game, quest.reward),
+    ticketMins: ticketMinsOf(snapshot, quest.id, nowMs),
+    relic: artifactOfNamed(quest.targetFish ?? ''),
+  }));
+  const shown = new Set([...Object.values(offers).map(q => q?.id), ...namedOffers.map(o => o.quest.id)]);
   const noticeOf = (kind: BountyKind): string | null => {
     if (left === null) return null;
     if (left[kind] <= 0) return CLEARED_NOTICE[kind];
     const held = holding[kind];
     if (!held) return null;
     if (!shown.has(held.id)) return elsewhereNotice(kind, held);
-    return kind === 'general' ? ONE_AT_A_TIME_NOTICE : null;
+    return ONE_AT_A_TIME_NOTICE[kind];
   };
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;
@@ -117,21 +164,21 @@ export function selectBountyPanelData({
     snapshot?.progress.some(row => row.questId === questId) ?? false;
   const basicConds = licenseConditions(game, zone, 'basic');
   const namedConds = licenseConditions(game, zone, 'named');
-  const namedQuest = offers.named;
-  const ticketIssuedAt = namedQuest
-    ? snapshot?.tickets.find(ticket => ticket.questId === namedQuest.id)?.issuedAt ?? null
-    : null;
-  const ticketMins = ticketIssuedAt === null || nowMs === 0 ? null
-    : Math.max(0, Math.ceil(ticketRemainingMs(ticketIssuedAt, nowMs) / 60_000));
-  const relic = artifactOfZone(zone);
+  const relics: RelicEntry[] = artifactsOfZone(zone).map(artifact => ({
+    artifact,
+    owned: game.artifacts.includes(artifact.id),
+    level: Math.max(1, artifactLevelOf(game, artifact.id)),
+    mats: game.items[artifact.materialId] ?? 0,
+  }));
 
   return {
     zone,
     leftAll,
     leftNamed,
-    dailyCap: BOUNTY_DAILY_CAP,
-    namedDailyCap: BOUNTY_NAMED_DAILY_CAP,
+    dailyCap: caps.general,
+    namedDailyCap: caps.named,
     offers,
+    namedOffers,
     progressOf,
     isAccepted,
     basicConds,
@@ -141,11 +188,7 @@ export function selectBountyPanelData({
     canTake: snapshot !== null && (leftAll ?? 0) > 0 && !holding.general,
     canTakeNamed: snapshot !== null && (leftNamed ?? 0) > 0 && !holding.named,
     notice: { general: noticeOf('general'), named: noticeOf('named') },
-    ticketMins,
-    hasTicket: ticketMins !== null && ticketMins > 0,
-    relic,
-    relicOwned: relic ? game.artifacts.includes(relic.id) : false,
-    relicMats: relic ? game.items[relic.materialId] ?? 0 : 0,
+    relics,
   };
 }
 
@@ -157,6 +200,8 @@ export interface NamedBountyCardData {
   done: boolean;
   /** 나타나는 곳 — 출현 수역이 정해진 네임드는 그 수역, 아니면 해역 이름 */
   haunt: string;
+  /** 토벌 골드 보상 - 원본, 보유 유물의 보상 감소, 받는 값의 내역 */
+  reward: Stat;
 }
 
 /** 네임드 카드의 공개 이름·스프라이트·완료 여부·나타나는 곳을 계산한다. */
@@ -170,6 +215,7 @@ export function selectNamedBountyCardData(
     fish: named ? namedFishOf(named) : null,
     found: quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false,
     done: progress >= quest.count,
+    reward: namedRewardStat(game, quest.reward),
     haunt: (named?.spot ? spotById(named.spot)?.name : undefined) ?? zoneById(quest.zone)?.shortName ?? quest.zone,
   };
 }

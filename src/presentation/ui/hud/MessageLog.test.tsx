@@ -181,4 +181,26 @@ describe('메시지 창', () => {
     expect(onPick).toHaveBeenCalledWith(chat);
     expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
   });
+
+  it('모바일 레이아웃에서는 격자 행을 차지하지 않고 채팅 묶음 안에서 폭 전체를 쓴다', () => {
+    const { container } = render(<Filtered log={logOf(2)} />);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain('mobile:relative');
+    // PC 레이아웃의 왼쪽과 아래 12px 오프셋이 모바일 레이아웃에서 풀려야 채팅 묶음의 8px 안쪽 여백에 맞는다
+    expect(root.className).toContain('mobile:left-auto');
+    expect(root.className).toContain('mobile:bottom-auto');
+    expect(root.className).toContain('mobile:w-full');
+    // 채팅은 채팅과 헤더 층이다(PC 레이아웃과 모바일 레이아웃 모두)
+    expect(root.className).toContain('z-(--z-chrome)');
+    expect(root.className).not.toMatch(/row-start|col-span/);
+  });
+
+  it('PC 레이아웃의 기록 상자는 평소 테두리가 투명하고 호버와 입력 때만 바탕을 보인다', () => {
+    render(<Filtered log={logOf(2)} />);
+    const cls = screen.getByRole('log').className;
+    expect(cls).toContain('border-transparent');
+    expect(cls).toContain('hover:bg-');
+    expect(cls).toContain('group-has-[input:focus]:bg-');
+  });
+
 });

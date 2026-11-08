@@ -22,8 +22,6 @@ const BOARDS: Record<Board, { valueLabel: string; format: (v: number) => string 
   dex: { valueLabel: '발견 어종', format: v => `${fmtNum(v)}종` },
 };
 const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종 수예요.';
-/** 탭이 있는 창의 높이 520px. 스테이지가 낮으면 위아래 16px을 남긴다 */
-const FIXED_HEIGHT = 'h-[min(520px,calc(100%-32px))] max-[640px]:h-auto';
 const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
 const nameOf = (nickname: string | null) => nickname ?? '이름 없음';
 
@@ -31,8 +29,9 @@ export default function RankingModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Board>('fame');
   const boards = { fame: useRankingBoard('fame'), dex: useRankingBoard('dex') };
   return (
-    <Modal layer="stage" md onClose={onClose} className={FIXED_HEIGHT}>
-      <ModalCard title="랭킹" onClose={onClose} className="flex-1">
+    // 탭이 있는 창의 높이 520px. 스테이지가 낮으면 위아래 16px을 남긴다
+    <Modal layer="stage" md height={520} onClose={onClose}>
+      <ModalCard title="랭킹" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <TabBar<Board> activeKey={tab} onSelect={setTab} tabs={[{ key: 'fame', label: '명성' }, { key: 'dex', label: '도감' }]} />
           <RankingBoardView board={tab} {...boards[tab]} />

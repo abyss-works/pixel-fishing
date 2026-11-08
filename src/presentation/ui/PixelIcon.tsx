@@ -187,7 +187,7 @@ export default function PixelIcon({ glyph, size = 12, className }: {
   ));
   return (
     <svg viewBox="0 0 12 12" width={size} height={size} shapeRendering="crispEdges"
-         aria-hidden="true" className={cx('inline-block align-[-1px]', className)}>
+         aria-hidden="true" data-glyph={glyph} className={cx('inline-block align-[-1px]', className)}>
       {holes ? (
         <>
           <defs>

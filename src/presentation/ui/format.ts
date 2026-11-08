@@ -9,7 +9,7 @@ export function fmtSize(cm: number): string {
 }
 
 const COMPACT_UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const;
-/** HUD처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
+/** 요약 타일처럼 폭이 고정된 자리의 줄임 표기 — 9,999까지는 그대로, 그 위는 K·M·B·T에 소수 한 자리(.0은 생략).
  *  단위 아래는 버린다(가진 것보다 많아 보이지 않게). 정확한 값이 필요한 가격·잔액에는 쓰지 않는다. */
 export function fmtCompact(n: number): string {
   if (Math.abs(n) < 10_000) return fmtNum(n);
@@ -17,6 +17,27 @@ export function fmtCompact(n: number): string {
   // 단위의 1/10로 먼저 나눈다 — 정수끼리 나눠야 2.3M이 부동소수 오차로 2.2M이 되지 않는다
   const tenths = Math.trunc(n / (size / 10));
   return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)}${unit}`;
+}
+/** "수량 / 상한" 표기 - 자릿수 구분 쉼표를 쓰고 슬래시 앞뒤에 공백을 둔다. 읽기 쉬운 자리(스탯 창 요약, 툴팁)에 쓴다. */
+export const fmtRatio = (n: number, total: number): string => `${fmtNum(n)} / ${fmtNum(total)}`;
+/** "수량/상한" 표기 - 쉼표와 공백 없이 붙여 쓴다. 폭이 좁은 줄(고정 정보 줄, 툴팁 속 짧은 값)에 쓴다. 아직 모르면(null) - */
+export const fmtRatioTight = (n: number | null, total: number): string => (n === null ? '-' : `${n}/${total}`);
+/** 헤더처럼 폭이 아주 좁은 자리의 줄임 표기 - 유효숫자 3자리. 999까지는 그대로, 1000부터 K, M, B, T 단위에 3자리까지 보인다
+ *  (999K, 12.4K, 1.23M). 끝자리 0은 생략한다. 단위 아래는 버린다(가진 것보다 많아 보이지 않게).
+ *  글자 수는 보통 최대 5(99.9K, 1.99M: 3자리 + 소수점 + 단위)다. 음수는 부호 한 글자가 더 붙고, 1000T 이상은 자릿수가 늘어난다. 정확한 값은 호출부가 툴팁 등으로 따로 보인다.
+ *  다른 화면의 줄임 표기(fmtCompact)는 이 규칙과 별개다. */
+export function fmtCompact3(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 1_000) return fmtNum(n);
+  const [size, unit] = COMPACT_UNITS.find(([s]) => abs >= s)!;
+  // 단위의 1/100로 먼저 나눠 정수로 버린다 - 부동소수 오차 없이 3자리를 자른다
+  const hundredths = Math.trunc(abs / (size / 100));
+  const whole = Math.trunc(hundredths / 100);
+  let fraction = '';
+  if (hundredths < 1_000) fraction = String(hundredths % 100).padStart(2, '0').replace(/0$/, '');
+  else if (hundredths < 10_000) fraction = String(Math.trunc((hundredths % 100) / 10));
+  if (fraction === '0') fraction = '';
+  return `${n < 0 ? '-' : ''}${whole}${fraction ? `.${fraction}` : ''}${unit}`;
 }
 /** 남은 시간 — 분 단위를 "1시간 52분"/"52분"으로. 0 이하는 "1분 미만" */
 export function fmtMinutes(min: number): string {
@@ -34,3 +55,9 @@ export function josa(word: string, pair: '이/가' | '을/를'): string {
   const [withBatchim, without] = pair.split('/');
   return `${word}${batchim ? withBatchim : without}`;
 }
+
+/** 레벨 표기 - 낚싯대 레벨, 배 티어처럼 단계를 한 칸에 쓰는 곳 */
+export const fmtLevel = (n: number): string => `Lv.${n}`;
+
+/** 소수 둘째 자리까지 보이고 끝의 0은 뺀다(10, 12.5, 31.25). 효과 비율처럼 레벨마다 자리가 달라지는 값에 쓴다 */
+export const fmtDecimal2 = (n: number): string => String(Number(n.toFixed(2)));

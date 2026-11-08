@@ -52,7 +52,13 @@ const rec = (count: number, maxSize: number | null = null, first: string | null 
 /** 가방 개체의 종·폼만 뽑아 비교 (uid는 매번 달라 직접 비교 불가) */
 const bagOf = (g: GameState) => g.bag.map(i => `${i.fishId}:${i.form}`);
 
-const hud = () => document.querySelector('.hud')!.textContent!;
+/** 가방 수량은 자원 바 화면에 쓰지 않고 버튼의 접근성 이름에 싣는다. 화면 글자와 접근성 이름을 함께 읽는다 */
+const hud = () => `${document.querySelector('.hud')!.textContent!} | ${document.querySelector('.hud')!.getAttribute('aria-label')!}`;
+/** 스탯 창의 고정 정보 줄을 연다(배 이름과 낚싯대 레벨은 거기서도 읽는다) */
+const statsFixed = () => {
+  fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
+  return within(screen.getByText('스탯').closest<HTMLElement>('[role="dialog"]')!);
+};
 // idle에는 상태 바 자체를 렌더하지 않는다 → 요소 없음 = idle
 const phase = () =>
   (document.querySelector('.status-overlay') as HTMLElement | null)?.dataset.phase ?? 'idle';
@@ -115,9 +121,9 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('판매 (+60G)')); // 기본 전부 체크
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' })); // 기본 전부 체크
     expect(hud()).toMatch(/골드 60(?![\d.,])/);
-    expect(hud()).toContain('가방 0 (');
+    expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
   });
 
@@ -126,10 +132,10 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
-    expect(screen.getByText('판매 (+6G)')).toBeInTheDocument(); // 붕어만
+    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매 \(/));
     expect(hud()).toMatch(/골드 6(?![\d.,])/);
-    expect(hud()).toContain('가방 1 ('); // 잉어는 남는다
+    expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
   });
 
   it('전부 체크 해제하면 판매 버튼 비활성', () => {
@@ -157,7 +163,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     clickFurniture('sell');
 
     // 기본은 전부 선택 — 두 마리분
-    expect(screen.getByText('판매 (+60G)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+60G)' })).toBeInTheDocument();
 
     // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
@@ -166,12 +172,12 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
-    expect(screen.getByText('판매 (+30G)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+30G)' })).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
     fireEvent.click(screen.getByText(/^판매 \(/));
     expect(hud()).toMatch(/골드 30(?![\d.,])/);
-    expect(hud()).toContain('가방 1 (');
+    expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
     // 가방 목록은 **기본 전부 닫힘**(사용자 지시) — 행을 펼쳐야 개체가 보인다
@@ -197,7 +203,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     render(<App />);
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화 \(/));
-    expect(hud()).toContain('낚싯대 Lv.2');
+    expect(statsFixed().getByText('Lv.2')).toBeTruthy();
     expect(hud()).toMatch(/골드 0(?![\d.,])/);
   });
 
@@ -213,7 +219,7 @@ describe('R2: 작업대(낚싯대 강화) → 인라인 패널', () => {
     render(<App />);
     clickFurniture('rod');
     fireEvent.click(screen.getByText(/^강화 \(/));
-    expect(hud()).toContain('낚싯대 Lv.51');
+    expect(statsFixed().getByText('Lv.51')).toBeTruthy();
   });
 });
 
@@ -229,7 +235,7 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
       return r;
     });
     return open
-      ? <FacilityModal panel="boat" game={g} dispatch={dispatch}
+      ? <FacilityModal sellBonus={0} panel="boat" game={g} dispatch={dispatch}
                        setToast={toastFn} onClose={() => setOpen(false)} />
       : <p>모달 닫힘</p>;
   }
@@ -662,7 +668,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     seed({ bag: [inst('carp')], gold: 10 });
     render(<App />);
     expect(hud()).toMatch(/골드 10(?![\d.,])/);
-    expect(hud()).toContain('가방 1 (');
+    expect(hud()).toContain('가방 1 /');
   });
 
   it('설정 탭은 창을 여는 줄 버튼 넷을 설정, 코드 입력, 개발자에게, 패치노트 순서로 둔다', () => {
@@ -744,9 +750,10 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
       JSON.stringify({ gold: 500, xp: 200, rod: 4, bag: [], caught: { tuna: 2 }, spot: 'sea' }));
     render(<App />);
     expect(hud()).toMatch(/골드 500(?![\d.,])/);
-    expect(hud()).toContain('낚싯대 Lv.4');
-    expect(hud()).toContain('조각배'); // v1 증정
     expect(hud()).toContain(`명성 ${RARITY.epic.fame * 2}`); // 참치 2마리 소급
+    const fixed = statsFixed();
+    expect(fixed.getByText('Lv.4')).toBeTruthy();
+    expect(fixed.getByText('조각배')).toBeTruthy(); // v1 증정
     expect(screen.getByText(/소급해 인정/)).toBeInTheDocument();
   });
 });
@@ -799,7 +806,7 @@ describe('R22: 도움말 탭', () => {
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
-    for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '납품', '네임드 토벌', '흔적', '추적', '조우', '유물',
+    for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
       '미끼', 'Esc', '물고기 그래픽', '다시 보지 않기', '닉네임', '도움말 마지막 갱신']) {
       expect(help, topic).toContain(topic);
     }
@@ -949,11 +956,11 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
-    expect(screen.getByText(/판매 \(\+6G\)/)).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
+    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
     fireEvent.click(screen.getByText(/^판매 \(/));
     expect(hud()).toMatch(/골드 6(?![\d.,])/);
-    expect(hud()).toContain('가방 2 ('); // 잠긴 잉어 2마리는 가방에 남는다
+    expect(hud()).toContain('가방 2 /'); // 잠긴 잉어 2마리는 가방에 남는다
   });
 
   it('행 안 개체는 큰 놈부터 — 잡은 순서와 무관하고 크기 미상은 맨 뒤', () => {
@@ -1199,9 +1206,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    expect(screen.getByText(/판매 \(\+90G\)/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '판매 (+90G)' })).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
-    fireEvent.click(screen.getByText(/판매 \(\+60G\)/));                // 변이만
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' }));                // 변이만
     expect(hud()).toMatch(/골드 60(?![\d.,])/);
   });
 
@@ -1264,9 +1271,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
-    fireEvent.click(screen.getByText(/판매 \(\+30G\)/)); // 작은 놈 1마리만
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' })); // 작은 놈 1마리만
     expect(hud()).toMatch(/골드 30(?![\d.,])/);
-    expect(hud()).toContain('가방 1 (');
+    expect(hud()).toContain('가방 1 /');
   });
 
   it('잠금 해제하면 다시 판매 대상', () => {
@@ -1275,9 +1282,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
-    fireEvent.click(screen.getByText(/판매 \(\+30G\)/));
+    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' }));
     expect(hud()).toMatch(/골드 30(?![\d.,])/);
-    expect(hud()).toContain('가방 0 (');
+    expect(hud()).toContain('가방 0 /');
   });
 
   it('자동 잠금 — 확인 뒤 어종×폼별 가장 큰 1마리만 잠그고 나머지 잠금은 푼다', () => {
@@ -1342,9 +1349,9 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.getByText('개발 도구')).toBeInTheDocument();
-    expect(screen.getByText('태평양 네임드 직전')).toBeInTheDocument();
+    expect(screen.getByText('메갈로돈 네임드 직전')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'F9' });
-    expect(screen.queryByText('태평양 네임드 직전')).not.toBeInTheDocument();
+    expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '운영' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
@@ -1389,9 +1396,27 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '태평양 네임드 직전' }));
+    fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('태평양 항구 안에서 실행해야 한다');
     window.history.replaceState({}, '', '/');
+  });
+});
+
+describe('의뢰 창 - 메뉴 줄의 의뢰 진입', () => {
+  const pressQuests = () => {
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^의뢰/ }));
+  };
+  it('받은 의뢰가 없어도 메뉴 줄의 의뢰를 누르면 의뢰 창이 열리고, 다시 누르면 닫힌다', () => {
+    seed();
+    render(<App />);
+    pressQuests();
+    const dialog = screen.getAllByRole('dialog').at(-1)!;
+    expect(within(dialog).getByText('의뢰')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '일반 의뢰' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '네임드 토벌' })).toBeInTheDocument();
+    pressQuests();
+    expect(screen.queryByRole('button', { name: '네임드 토벌' })).not.toBeInTheDocument();
   });
 });
 
@@ -1402,7 +1427,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   it('클릭하면 요약 탭으로 열리고, 탭마다 배·낚싯대·보너스를 보여 주며 닫기로 닫힌다', () => {
     seed();
     render(<App />);
-    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
     // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을에서는 요구 파워가 가장 높은 마을 강)
     const dialog = within(statsDialog());
@@ -1440,7 +1465,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
     render(<App />);
-    fireEvent.click(screen.getByLabelText('스탯창 열기'));
+    fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument();
     expect(screen.getByRole('meter', { name: '파워' })).toBeInTheDocument();
     // 집 문 → 마을 이동(go) — 모달이 열린 채로 씬 전환

@@ -1,7 +1,7 @@
 {
   "name": "pixel-fishing",
   "private": true,
-  "version": "0.17.1",
+  "version": "0.18.0",
   "type": "module",
   "packageManager": "pnpm@11.28.3",
   "scripts": {
@@ -15,9 +15,8 @@
     "test": "vitest run",
     "test:db": "vitest run --config vitest.db.config.ts",
     "balance": "tsx tools/balance-report.ts",
-    "mail:send": "tsx tools/mail-send.ts",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "balance:flow": "tsx tools/balance-flow.ts",
+    "mail:send": "tsx tools/mail-send.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",
@@ -34,8 +33,6 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@storybook/react": "^10.6.1",
-    "@storybook/react-vite": "^10.6.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -48,20 +45,12 @@
     "@vitejs/plugin-react": "^6.0.4",
     "drizzle-kit": "0.31.11",
     "jsdom": "^30.0.1",
-    "msw": "^2.15.0",
-    "msw-storybook-addon": "^3.0.3",
     "oxlint": "^1.75.0",
-    "storybook": "^10.6.1",
     "tailwindcss": "^4.3.3",
     "testcontainers": "12.2.1",
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.11"
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
   }
 }

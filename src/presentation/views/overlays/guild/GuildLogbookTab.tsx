@@ -6,6 +6,7 @@ import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import Subheading from '../../../ui/Subheading';
 import type { GlyphId } from '../../../ui/PixelIcon';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 항해일지 탭: 한국 날짜마다 금색 날짜 머리를 두고, 기록은 세로 줄로 잇는다.
 // 기록마다 종류를 알리는 픽셀 표식과 한국 시각을 붙이고, 이름과 전설, 네임드, 길드 스킬은 색과 굵기로 세운다.
@@ -33,19 +34,21 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
 export default function GuildLogbookTab({ logbook, me }: { logbook: readonly GuildLogItem[]; me: string }) {
   const days = logbookDays(logbook, me);
   return (
-    <Inset className="pf-scroll-panel flex-1 min-h-0 pf-vscroll px-4 pt-3 pb-4">
-      {days.length === 0 && <Note className="my-0">아직 기록이 없어요.</Note>}
-      {days.map((d, i) => (
-        <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>
-          <Subheading className="flex items-center gap-3 mb-2 pf-accent text-xs font-normal text-gold
-                                 after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark after:to-transparent after:opacity-60">
-            {d.day}
-          </Subheading>
-          <ul className="m-0 ml-[11px] pl-[22px] list-none border-l-2 border-line/80">
-            {d.items.map(item => <LogLine key={item.id} item={item} />)}
-          </ul>
-        </section>
-      ))}
+    <Inset className="flex flex-1 min-h-0 flex-col px-4 pt-3 pb-4">
+      <div className={`${SCROLL_Y} min-h-0 flex-1`}>
+        {days.length === 0 && <Note className="my-0">아직 기록이 없어요.</Note>}
+        {days.map((d, i) => (
+          <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>
+            <Subheading className="flex items-center gap-3 mb-2 pf-accent text-xs font-normal text-gold
+                                   after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark after:to-transparent after:opacity-60">
+              {d.day}
+            </Subheading>
+            <ul className="m-0 ml-[11px] pl-[22px] list-none border-l-2 border-line/80">
+              {d.items.map(item => <LogLine key={item.id} item={item} />)}
+            </ul>
+          </section>
+        ))}
+      </div>
     </Inset>
   );
 }

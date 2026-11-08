@@ -7,7 +7,7 @@ import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
-import { AcceptButton } from './boardParts';
+import { AcceptButton, ProgressMeter } from './boardParts';
 
 export default function BountyCard({ quest, progress, accepted, canAccept, reason, busy, onAccept, onDeliver }: {
   quest: BountyQuest;
@@ -22,7 +22,6 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
   onDeliver: () => void;
 }) {
   const done = progress >= quest.count;
-  const shown = Math.min(progress, quest.count);
   return (
     <Frame className="bg-surface-2 p-3 flex flex-col gap-2 h-full text-sm">
       <b className="text-xs text-text-dim">{DIFFICULTY_NAME[quest.difficulty as keyof typeof DIFFICULTY_NAME]}</b>
@@ -31,17 +30,10 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
       <span className="pf-accent text-gold text-xl">{fmtGold(quest.reward)}</span>
       <div className="mt-auto flex flex-col gap-1.5">
         {accepted ? (
-          <div className="flex items-center gap-2 h-3.5">
-            <span className="block flex-1 h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
-                  aria-label="진행" aria-valuemin={0} aria-valuemax={quest.count} aria-valuenow={shown}>
-              <span className="block h-full bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
-                    style={{ width: `${(shown / quest.count) * 100}%` }} />
-            </span>
-            <span className="pf-accent text-2xs">{shown}/{quest.count}</span>
-          </div>
+          <ProgressMeter progress={progress} count={quest.count} />
         ) : <div className="h-3.5" aria-hidden="true" />}
         {done
-          ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>납품</Button>
+          ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>완료</Button>
           : accepted
             ? <Button full disabled>진행 중</Button>
             : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept}

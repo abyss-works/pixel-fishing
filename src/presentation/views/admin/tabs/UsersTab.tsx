@@ -183,7 +183,7 @@ function UserDetail({ user, onClose, onCompose }: {
               </div>
             )}
             {!loading && !error && events.length > 0 && (
-              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line overflow-y-auto select-text">
+              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line pf-vscroll select-text">
                 {events.map((e, i) => (
                   <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
                                                fastGaps.has(i) && 'bg-danger/10')}>

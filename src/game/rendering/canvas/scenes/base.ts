@@ -5,6 +5,7 @@ import { R, label, UI, SCALE, W, H } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { FURNITURE_SPRITES } from '../../pixel/sprites/buildings.js';
 import type { BaseId, BaseInfo, BasePack } from '../../../world/types';
+import { facilityLabelText } from '../../../world/facilityLabel';
 
 const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
   // 집 실내 — 벽/바닥/창(마을 풍경)
@@ -62,6 +63,18 @@ const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
     for (let i = 0; i < W; i += 26) R(ctx, i, 124, 1, 56, '#795548');
     R(ctx, 0, 124, W, 2, '#a1887f');
   },
+  // 월비스베이항 부두 — 같은 구조에 안개 낀 회색 하늘과 차가운 대서양 물 톤을 입힌 판
+  walvisbay: ctx => {
+    R(ctx, 0, 0, W, 96, '#b4c1c9');
+    R(ctx, 24, 24, 44, 5, 'rgba(255,255,255,0.7)'); R(ctx, 190, 16, 52, 5, 'rgba(255,255,255,0.65)');
+    R(ctx, 110, 40, 60, 6, 'rgba(255,255,255,0.45)');
+    R(ctx, 0, 96, W, 28, '#3a6478');
+    R(ctx, 0, 96, W, 1, 'rgba(255,255,255,0.45)');
+    for (let i = 0; i < 8; i++) R(ctx, 10 + i * 40, 104 + (i % 3) * 5, 12, 1, 'rgba(255,255,255,0.3)');
+    R(ctx, 0, 124, W, 56, '#8d6e63');
+    for (let i = 0; i < W; i += 26) R(ctx, i, 124, 1, 56, '#795548');
+    R(ctx, 0, 124, W, 2, '#a1887f');
+  },
 };
 
 /** 배경 그림의 맨 위 줄과 맨 아래 줄 색 — 세로 화면에서 그림 위아래 남는 자리를 같은 색으로 채운다.
@@ -72,6 +85,7 @@ export const BASE_EDGE_COLORS: Record<BaseId, { top: string; bottom: string }> =
   manila: { top: '#8ecae6', bottom: '#8d6e63' },
   colombo: { top: '#a3c6d9', bottom: '#8d6e63' },
   toamasina: { top: '#9bb7c9', bottom: '#8d6e63' },
+  walvisbay: { top: '#b4c1c9', bottom: '#8d6e63' },
 };
 
 /** 거점 배경만 그린다 — 가구와 라벨 없이 배경 위에 다른 표현을 얹을 때 쓴다 */
@@ -85,7 +99,7 @@ export function renderBase(ctx: Ctx, pack: BasePack, info: BaseInfo) {
   renderBaseBackdrop(ctx, pack.id);
   for (const f of pack.furniture) {
     FURNITURE_SPRITES[f.sprite](ctx, f);
-    label(ctx, f.label(info), f.x + f.w / 2, f.y + f.labelDy, UI.gold, 8);
+    label(ctx, facilityLabelText(f.label(info)), f.x + f.w / 2, f.y + f.labelDy, UI.gold, 8);
   }
   label(ctx, pack.headline, W / 2, 14, UI.text, 10);
 }

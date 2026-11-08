@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
+import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold, fmtSize, josa } from '../../../../ui/format';
@@ -28,10 +29,13 @@ import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagLayout, toggleBagRow, useBagView } from './bagView';
 import type { BagLayout } from './bagView';
+import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines } from '../../../../ui/artifactEffects';
 import Frame from '../../../../ui/Frame';
+import PressRow from '../../../../ui/PressRow';
+import ArtifactDetail from './ArtifactDetail';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다(사용자 결정 2026-10-15). 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -106,10 +110,16 @@ function ItemSection({ game, dispatch, setToast }: {
   );
 }
 
-/** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라(슬롯·장착 없음) 조작은 없다.
+/** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라 슬롯·장착은 없고, 줄을 누르면 유물 상세 창이 열려 강화한다.
  *  얻는 곳(수배판 유물 탭)은 미보유 목록 대신 안내 한 줄로 알린다 — 수배판이 교환 카드를 이미 보여 준다. */
-function ArtifactSection({ game }: { game: GameState }) {
+function ArtifactSection({ game, dispatch, setToast }: {
+  game: GameState;
+  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
+  setToast: Notify;
+}) {
   const owned = selectOwnedArtifacts(game);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = owned.find(a => a.id === openId);
   return (
     <div className="flex flex-col gap-1">
       <PageTitle>
@@ -120,21 +130,30 @@ function ArtifactSection({ game }: { game: GameState }) {
       ) : (
         <>
           <Frame divided>
-            {owned.map(a => (
-              <div key={a.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
-                <span className="flex items-baseline justify-between gap-2">
-                  <b className="text-gold">{a.name}</b>
-                  <span className="text-xs"><RarityText rarity={a.grade} /></span>
-                </span>
-                {artifactEffectLines(a).map(line => (
-                  <span key={line} className="text-accent text-xs">{line}</span>
-                ))}
-                <span className="text-text-dim italic text-xs">{a.lore}</span>
-              </div>
-            ))}
+            {owned.map(a => {
+              const { level, hasLevel } = selectArtifactLevel(game, a);
+              return (
+                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <b className="text-gold">{a.name}</b>
+                    <span className="flex items-baseline gap-2 text-xs">
+                      {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
+                      <RarityText rarity={a.grade} />
+                    </span>
+                  </span>
+                  {artifactEffectLines(a, level).map(line => (
+                    <span key={line} className="text-accent text-xs">{line}</span>
+                  ))}
+                  <span className="text-text-dim italic text-xs">{a.lore}</span>
+                </PressRow>
+              );
+            })}
           </Frame>
           <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
+      )}
+      {opened && (
+        <ArtifactDetail artifact={opened} game={game} dispatch={dispatch} setToast={setToast} onClose={() => setOpenId(null)} />
       )}
     </div>
   );
@@ -181,16 +200,18 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, dispatch, setToast }: {
+export default function BagTab({ game, sellBonus, dispatch, setToast }: {
   game: GameState;
+  /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
+  sellBonus: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
-    count: bagCount, cap, full: bagFull, sellableValue: total,
+    count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game);
+  } = selectBagOverview(game, sellBonus);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
@@ -246,7 +267,7 @@ export default function BagTab({ game, dispatch, setToast }: {
       {section === 'items' ? (
         <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : section === 'artifacts' ? (
-        <ArtifactSection game={game} />
+        <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
         <>
           {/* 물고기 서브탭 — 목록 / 카드. 카드뷰는 물고기 목록의 렌더링만 바꾼다 */}
@@ -350,7 +371,7 @@ export default function BagTab({ game, dispatch, setToast }: {
                 })}
               </Frame>
               <Note>
-                판매 가능 금액은 <span className="pf-accent">{fmtGold(total)}</span>이에요.<br />
+                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
                 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
                 자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
                 {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}

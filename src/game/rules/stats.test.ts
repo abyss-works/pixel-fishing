@@ -2,9 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
 import { powerReqOf } from '../content/spots';
-import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance';
-import { autoBoost, autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
-import { manualPowerBonus, relativeIdleBoost } from './power';
+import { WALK_SPEED } from './balance';
+import { autoBoostForSpot, autoPenaltyHelpText, minLevelOfPower, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 
 type G = ReturnType<typeof newState>;
 const s = (over: Partial<G> = {}): G => ({ ...newState(), ...over });
@@ -54,20 +53,17 @@ describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {
   });
 });
 
-describe('방치 부스트 — 내역이 기여를 설명한다', () => {
-  it('Lv1은 기본값(×10)이고 낚싯대 기여는 0', () => {
-    const b = autoBoost(s());
-    expect(b.base).toBe(AUTO_COMMON_BOOST.from);
-    expect(b.value).toBe(AUTO_COMMON_BOOST.from);
-    expect(b.mods[0].delta).toBe(0);
-  });
-
-  it('강화할수록 to(×4) 방향으로 단조 감소, 상한을 넘지 않는다', () => {
-    const a = autoBoost(s({ rod: 10 })).value;
-    const b = autoBoost(s({ rod: 100 })).value;
-    expect(a).toBeLessThan(AUTO_COMMON_BOOST.from);
-    expect(b).toBeLessThan(a);
-    expect(b).toBeGreaterThan(AUTO_COMMON_BOOST.to);
+describe('방치 배수 — 내역이 기여를 설명한다', () => {
+  it('진입 배수가 기본이고 레벨 차 기여가 그 위에 얹힌다', () => {
+    const entryLv = minLevelOfPower(powerReqOf('sea'));
+    const at = autoBoostForSpot(s({ rod: entryLv }), 'sea');
+    expect(at.base).toBe(5);
+    expect(at.value).toBe(5);
+    expect(at.mods[0].delta).toBe(0);
+    const far = autoBoostForSpot(s({ rod: entryLv + 10 }), 'sea');
+    expect(far.base).toBe(5);
+    expect(far.value).toBe(3);
+    expect(far.mods[0].delta).toBe(-2);
   });
 });
 
@@ -115,11 +111,15 @@ describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 �
     expect(cap.red).toBe(20);
   });
 
-  it('미달 — 존 0, 일반 가중치 지수 페널티(2^(부족÷10+1), 상한 ×16), 입질 +부족/4초', () => {
-    const near = zonesFor(38, 40); // 부족 2
-    expect(near).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.5 });
-    const mid = zonesFor(32, 60); // 부족 28
-    expect(mid).toMatchObject({ mult: 8, biteExtra: 7 });
+  it('미달 — 존 0, 일반 가중치 ×min(16, 2^k) (k = ⌈부족/5⌉, 낚싯대 레벨 단위), 입질 +부족/4초', () => {
+    expect(zonesFor(38, 40)).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.5 }); // 부족 2 → 1레벨
+    expect(zonesFor(35, 40).mult).toBe(2);   // 부족 5 (경계) → 1레벨
+    expect(zonesFor(34, 40).mult).toBe(4);   // 부족 6 → 2레벨
+    expect(zonesFor(30, 40).mult).toBe(4);   // 부족 10 (경계) → 2레벨
+    expect(zonesFor(29, 40).mult).toBe(8);   // 부족 11 → 3레벨
+    expect(zonesFor(25, 40).mult).toBe(8);   // 부족 15 (경계) → 3레벨
+    expect(zonesFor(24, 40).mult).toBe(16);  // 부족 16 → 4레벨
+    expect(zonesFor(32, 60)).toMatchObject({ mult: 16, biteExtra: 7 }); // 부족 28 → 상한
     const far = zonesFor(1, 60); // 부족 59 → 상한 ×16
     expect(far.mult).toBe(16);
     expect(far.biteExtra).toBe(14.75);
@@ -150,32 +150,11 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writin
   });
 });
 
-describe('파워 계단 스케일링 (game/power.ts)', () => {
-  it('수동 보정 — 초과 5당 ×0.1, 최대 ×2.0, 미달은 무보정', () => {
-    expect(manualPowerBonus(10, 10)).toBe(1.0);   // 진입 = 무보정
-    expect(manualPowerBonus(14, 10)).toBe(1.0);   // 5 미만은 같은 칸
-    expect(manualPowerBonus(15, 10)).toBe(1.1);   // 첫 단계
-    expect(manualPowerBonus(40, 10)).toBe(1.6);
-    expect(manualPowerBonus(60, 10)).toBe(2.0);   // 10단계 = 상한
-    expect(manualPowerBonus(200, 10)).toBe(2.0);  // 넘쳐도 상한 유지
-    expect(manualPowerBonus(5, 20)).toBe(1.0);    // 미달 — 페널티 축(powerZones) 소관
-  });
-
-  it('방치 완화 — 기존 계약 그대로(진입 ×10, 초과 5당 −1, 하한 ×4)', () => {
-    expect(relativeIdleBoost(40, 40)).toBe(AUTO_COMMON_BOOST.from);
-    expect(relativeIdleBoost(43, 40)).toBe(AUTO_COMMON_BOOST.from);
-    expect(relativeIdleBoost(45, 40)).toBe(9);
-    expect(relativeIdleBoost(65, 40)).toBe(5);
-    expect(relativeIdleBoost(70, 40)).toBe(AUTO_COMMON_BOOST.to);
-    expect(relativeIdleBoost(10, 40)).toBe(AUTO_COMMON_BOOST.from); // 미달도 완화 아님
-  });
-});
-
 describe('해역 요구 파워', () => {
-  it('인도양 이후 해역은 약 2레벨 간격으로 요구 파워가 오른다', () => {
-    expect(powerReqOf('indian')).toBe(85);       // Lv16
+  it('인도양 이후 해역은 정해진 레벨 간격으로 요구 파워가 오른다', () => {
+    expect(powerReqOf('indian')).toBe(80);       // Lv15
     expect(powerReqOf('southindian')).toBe(95);  // Lv18
     expect(powerReqOf('mozstrait')).toBe(105);   // Lv20
-    expect(powerReqOf('comorodeep')).toBe(115);  // Lv22
+    expect(powerReqOf('comorodeep')).toBe(120);  // Lv23
   });
 });

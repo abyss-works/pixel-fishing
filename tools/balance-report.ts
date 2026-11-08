@@ -1,6 +1,6 @@
 // 밸런스 측정 CLI — 원칙 문서(밸런스)의 측정 지표를 제품 규칙 그대로 계산해 표로 찍는다.
 // 사용: pnpm balance [섹션 ...] [--runs N] [--seed N]
-//   섹션: ev rod income growth journey fame monotonic economy dex bounty live (생략하면 live 외 전부)
+//   섹션: ev rod income idle move perfect growth journey fame monotonic economy dex bounty live (생략하면 live 외 전부)
 //   live는 DATABASE_URL(운영·스테이징 DB 직접 연결)이 있을 때만 읽기 전용으로 조회한다.
 //   dex는 몬테카를로(기본 400회, 시드 고정이라 결과가 재현된다).
 // 모델 가정은 측정 모델 모듈의 머리 주석에 있다.
@@ -9,15 +9,14 @@ import type { SpotId } from '../src/game/content/spots';
 import { BOATS } from '../src/game/content/boats';
 import { FISH } from '../src/game/content/fish';
 import { RARITY, RARITY_ORDER } from '../src/game/content/rarity';
-import { BOUNTIES, BOUNTY_LICENSE_FAME } from '../src/game/content/bounties';
-import type { BountyZone } from '../src/game/content/bounties';
+import { BOUNTIES, BOUNTY_ZONES } from '../src/game/content/bounties';
 import { BAITS } from '../src/game/content/baits';
 import { drawRows, mutationWeightsOf, namedEncounterShare, rarityWeightOf, variantShare } from '../src/game/rules/logic';
 import { BAIT_WEIGHT_MULT, upgradeCost } from '../src/game/rules/balance';
 import { DELTA_AXES, EV_AXES, buildBalanceReport } from '../src/features/admin/model/balanceReport';
 import {
   AXES, AXIS_LABEL, SPEC_MARGIN, VARIANT_EV, ZONE_ORDER, axisAvailable, entryLevel, headroom, inversions,
-  rates, rng, rodSpec, spotsOfZone, zoneOf,
+  moveGap, perfectOverIdle, rates, rng, rodSpec, spotsOfZone, zoneOf,
 } from './balance/model';
 import type { Axis } from './balance/model';
 import { simulateJourney } from './balance/journey';
@@ -29,7 +28,7 @@ const flag = (name: string, fallback: number) => {
   const i = args.indexOf(name);
   return i >= 0 ? Number(args[i + 1]) : fallback;
 };
-const SECTIONS = ['ev', 'rod', 'income', 'growth', 'journey', 'fame', 'monotonic', 'economy', 'dex', 'bounty', 'live'] as const;
+const SECTIONS = ['ev', 'rod', 'income', 'idle', 'move', 'perfect', 'growth', 'journey', 'fame', 'monotonic', 'economy', 'dex', 'bounty', 'live'] as const;
 const picked = SECTIONS.filter(s => args.includes(s));
 const show = (s: typeof SECTIONS[number]) => (picked.length === 0 ? s !== 'live' : picked.includes(s));
 const RUNS = flag('--runs', 400);
@@ -63,7 +62,7 @@ const byPlay = (f: (play: Play) => string) => PLAYS.map(p => `${PLAY_LABEL[p]} $
 // ── 기대값 (관리자 대시보드 어종·해역 탭과 같은 계산 — 낮 풀, 기본 판매가, 고정 다이얼) ──
 if (show('ev')) {
   console.log('\n## 기대값 — 캐치당 골드·명성 (대시보드와 같은 계산: 낮 풀, 돌연변이 제외, 고정 다이얼)');
-  console.log('해역 | 골드 무판정·GOOD·PERFECT·방치×4·방치×10 | 명성 같은 순 | 직전 대비 | 사다리 GOOD·PERFECT | 방치 폭 | 방치평균 vs 전 해역 | 등급 예산');
+  console.log('해역 | 골드 무판정·GOOD·PERFECT·방치 플래토·방치 진입 | 명성 같은 순 | 직전 대비 | 사다리 GOOD·PERFECT | 방치 폭 | 방치평균 vs 전 해역 | 등급 예산');
   const report = buildBalanceReport();
   const deltas = DELTA_AXES;
   report.forEach(r => {
@@ -78,7 +77,7 @@ if (show('ev')) {
   console.log('\n### 실질 등급 비율 (낮 풀, 일반/희귀/영웅/전설)');
   for (const s of SPOTS) {
     const line = EV_AXES.map(a => {
-      const rows = drawRows(s.id, a.options);
+      const rows = drawRows(s.id, a.options(s.id));
       const total = rows.reduce((t, x) => t + x.fishPct, 0);
       return `${a.short} ${RARITY_ORDER.map(k => n1(rows.filter(x => x.fish.rarity === k).reduce((t, x) => t + x.fishPct, 0) / total * 100)).join('/')}`;
     }).join(' · ');
@@ -89,12 +88,12 @@ if (show('ev')) {
 // ── 낚싯대 스펙 ──
 if (show('rod')) {
   console.log(`\n## 낚싯대 스펙 — 진입 레벨(최소)과 +${SPEC_MARGIN}(여유)`);
-  console.log('해역 | 스펙 | Lv·파워 | 입질 최소~최대(초) | 바(초) | 노란·빨간 존 | 수동 보정 | 방치 배수');
+  console.log('해역 | 스펙 | Lv·파워 | 입질 최소~최대(초) | 바(초) | 노란·빨간 존 | 방치 배수');
   for (const s of SPOTS) {
     for (const m of [0, SPEC_MARGIN]) {
       const x = rodSpec(s.id, entryLevel(s.id) + m);
       console.log(`${s.name} | ${m ? '여유' : '최소'} | ${x.level}·${x.power} | ${n1(x.biteMin)}~${n1(x.biteMax)} | ${x.sweep.toFixed(2)}`
-        + ` | ${x.yellow}%·${x.red}% | ×${x.manualBonus.toFixed(1)} | ×${x.idleBoost}`);
+        + ` | ${x.yellow}%·${x.red}% | ×${x.idleBoost}`);
     }
   }
 }
@@ -122,6 +121,51 @@ if (show('income')) {
     const ratio = (p: Play) => `×${(rate(b, playAxis(b, p)).goldPerHour / rate(a, playAxis(a, p)).goldPerHour).toFixed(2)}`;
     console.log(`${ZONE_ORDER[i - 1]} → ${ZONE_ORDER[i]}: ${byPlay(ratio)} (${firsts[i - 1].name} → ${firsts[i].name})`);
   }
+}
+
+// ── 방치 진입·플래토 ──
+if (show('idle')) {
+  console.log(`
+## 방치 기대값 — 진입 레벨(최소 스펙)과 플래토(진입 +${SPEC_MARGIN}, 여유 스펙)의 실제 방치 배수`);
+  console.log('해역 | Lv(진입·플래토) | 방치 배수(진입·플래토) | 캐치당 G 낮 풀(진입·플래토) | G/h 낮 풀(진입·플래토) | G/h 낮밤 혼합(진입·플래토)');
+  for (const s of SPOTS) {
+    const lv = [entryLevel(s.id), entryLevel(s.id) + SPEC_MARGIN];
+    const at = (pool: 'day' | 'mixed') => lv.map(l => rates(s.id, l, 'idle', {}, pool));
+    const day = at('day'), mix = at('mixed');
+    console.log(`${s.name} | ${lv.join('·')} | ×${lv.map(l => rodSpec(s.id, l).idleBoost).join('·×')}`
+      + ` | ${day.map(r => n1(r.goldPerHour / r.catchesPerHour)).join('·')} | ${day.map(r => n0(r.goldPerHour)).join('·')} | ${mix.map(r => n0(r.goldPerHour)).join('·')}`);
+  }
+}
+
+// ── 이동 직후 수입 ──
+if (show('move')) {
+  console.log('\n## 이동 직후 수입 — 새 해역 진입 레벨의 방치 G/h를, 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교');
+  console.log('새 해역 | 비교 해역 | 낮 풀 차(비율) | 낮밤 혼합 차(비율)');
+  let worst = { day: Infinity, mixed: Infinity };
+  SPOTS.forEach((s, i) => {
+    if (i === 0) return;
+    const d = moveGap(i, 'day'), m = moveGap(i, 'mixed');
+    const fmt = (g: ReturnType<typeof moveGap>) => (g.from ? `${n0(g.diff)} (${pct(g.ratio - 1)})` : '—');
+    console.log(`${s.name} | ${d.from ? nameOf(d.from) : '—'} | ${fmt(d)} | ${fmt(m)}`);
+    if (d.from) { worst.day = Math.min(worst.day, d.ratio - 1); worst.mixed = Math.min(worst.mixed, m.ratio - 1); }
+  });
+  console.log(`최악값: 낮 풀 ${pct(worst.day)} · 낮밤 혼합 ${pct(worst.mixed)} (0 미만이면 이동 직후 수입이 줄어드는 해역이 있다)`);
+}
+
+// ── PERFECT 이상치 ──
+if (show('perfect')) {
+  console.log(`
+## PERFECT 이상치 — PERFECT 다이얼의 G/h ÷ 방치 G/h (낮밤 혼합, 빨간 존 유무와 관계없이 PERFECT 다이얼을 적용한 상한 값). 10배를 넘으면 이상치`);
+  let max = { v: 0, name: '' };
+  for (const s of SPOTS) {
+    const cells = [0, SPEC_MARGIN].map(m => {
+      const v = perfectOverIdle(s.id, entryLevel(s.id) + m);
+      if (v > max.v) max = { v, name: `${s.name} ${m ? `+${m}` : '최소'}` };
+      return `×${v.toFixed(2)}`;
+    });
+    console.log(`${s.name}: 최소 ${cells[0]} · 여유 ${cells[1]}`);
+  }
+  console.log(`최대: ×${max.v.toFixed(2)} (${max.name}) — ${max.v > 10 ? '이상치 있음' : '10배 이하'}`);
 }
 
 // ── 다음 해역 진입 비용 ──
@@ -160,10 +204,8 @@ if (show('journey')) {
 // ── 명성 문턱 ──
 if (show('fame')) {
   console.log('\n## 명성 문턱까지 누적 시간 — 가진 명성으로 열리는 최고 해역(최소 스펙)에서 쌓는다고 가정');
-  const BOUNTY_ZONES = Object.keys(BOUNTY_LICENSE_FAME) as BountyZone[];
   const gates = [
     ...BOATS.filter(b => b.fameReq > 0).map(b => ({ name: `${b.name}(배${b.tier})`, fame: b.fameReq })),
-    ...BOUNTY_ZONES.map(z => ({ name: `라이선스 ${z}`, fame: BOUNTY_LICENSE_FAME[z] })),
   ].sort((x, y) => x.fame - y.fame);
   const bestSpot = (fame: number) => {
     const tier = Math.max(0, ...BOATS.filter(b => b.fameReq <= fame).map(b => b.tier));
@@ -294,7 +336,6 @@ if (show('dex')) {
 // ── 도전 ──
 if (show('bounty')) {
   console.log('\n## 도전 — 의뢰 수행 시간과 보상 비율(보상 ÷ 같은 시간 판매 수입), 네임드 조우 시간');
-  const BOUNTY_ZONES = Object.keys(BOUNTY_LICENSE_FAME) as BountyZone[];
   for (const z of BOUNTY_ZONES) {
     const spots = spotsOfZone(z);
     const avg = (f: (s: SpotId) => number) => spots.reduce((s, sp) => s + f(sp.id), 0) / spots.length;

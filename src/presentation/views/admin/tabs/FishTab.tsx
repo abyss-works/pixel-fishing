@@ -1,9 +1,8 @@
 import { Fragment, useMemo, useState } from 'react';
 import { FISH, RARITY, SPOTS } from '../../../../game/rules/logic';
-import type { RarityId } from '../../../../game/rules/logic';
 import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight,
+  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
   selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws,
   SIM_AXES, stepPercent,
 } from '../../../../features/admin/model/fishSimulation';
@@ -47,7 +46,7 @@ function Delta({ prev, cur }: { prev: number | null; cur: number }) {
 }
 
 export default function FishTab() {
-  const [sbBudgets, setSbBudgets] = useState<Record<string, Partial<Record<RarityId, number>>>>({});
+  const [sbBudgets, setSbBudgets] = useState<SimOverrides['budgets']>({});
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
   const sim = useMemo<SimOverrides>(
@@ -131,7 +130,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   evs: AxisEvs;
   prevEvs: AxisEvs | null;
   sim: SimOverrides;
-  setBudgets: React.Dispatch<React.SetStateAction<Record<string, Partial<Record<RarityId, number>>>>>;
+  setBudgets: React.Dispatch<React.SetStateAction<SimOverrides['budgets']>>;
   setWeights: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>;
   setPrice: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }) {
@@ -205,7 +204,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
         <Inset className="grid grid-cols-1 gap-3 p-2 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start">
           {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV|직전|지역내] ──
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
-              폭 하나 — 마지막 방치 행(×10)에 한 번만 표기하고 ×4에는 붙이지 않는다. */}
+              폭 하나 — 마지막 방치 행(진입)에 한 번만 표기하고 플래토에는 붙이지 않는다. */}
           <div className="overflow-x-auto">
             <DataTable>
               <thead>
@@ -222,7 +221,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                   const pv = prevEvs ? prevEvs[a.key] : null;
                   // 그룹 전환점 — 수동→방치 경계에 소제목 행을 놓아 "같은 선상이 아님"을 표시
                   const groupDivider = ai === 3;
-                  // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(×10 행에만).
+                  // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(진입 행에만).
                   let inRegion: string | null = null;
                   if (a.group === 'manual' && ai > 0) {
                     const prevKey = SIM_AXES[ai - 1].key;
@@ -243,7 +242,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                       <tr key={a.key} className={ai % 2 ? '' : 'bg-surface/40'}>
                         <th scope="row"
                             className={cx('whitespace-nowrap text-left', a.group === 'manual' && ai === 0 ? 'text-gold' : '')}>
-                          {a.label}
+                          {a.group === 'idle' ? `${a.label} ×${a.mult(spot.id).commonMult}` : a.label}
                         </th>
                         <td className="pf-accent whitespace-nowrap text-gold">{v.toFixed(1)}G</td>
                         <td><Delta prev={pv} cur={v} /></td>
@@ -283,7 +282,11 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                         {firstOfGrade && (
                           <div className="flex items-center gap-1">
                             {RARITY[f.rarity].name}
-                            <TextInput compact type="number" min={0}
+                            {f.rarity === 'common' ? (
+                              <span className="w-14 text-right tabular-nums" aria-label={`${spot.name} 일반 가중치(계산값)`}>
+                                {selectSpotBudgets(spot.id, sim)[f.rarity]}
+                              </span>
+                            ) : <TextInput compact type="number" min={0}
                                    placeholder={String(selectBaseRarityWeight(spot.id, f.rarity))}
                                    value={sim.budgets[bid]?.[f.rarity] ?? ''}
                                    aria-label={`${spot.name} ${f.rarity} 예산`}
@@ -296,7 +299,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                                      if (!Number.isFinite(n) || n < 0) return p;
                                      return { ...p, [bid]: { ...cur, [f.rarity]: n } };
                                    })}
-                                   className="w-14" />
+                                   className="w-14" />}
                           </div>
                         )}
                       </td>

@@ -1,43 +1,27 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
-import type { BountySnapshot } from '../../../features/bounty/model/types';
 import ResourceBar from './ResourceBar';
 
-let snap: BountySnapshot | null = null;
-vi.mock('../../../features/bounty/service/useBounty', () => ({
-  useBounty: () => ({ snap, loaded: snap !== null, refresh: () => {} }),
-}));
-
-const hud = () => screen.getByRole('button', { name: '스탯창 열기' }).textContent ?? '';
+const barButton = () => screen.getByRole('button', { name: /^스탯창 열기/ });
+const hud = () => barButton().textContent ?? '';
+const fish = (i: number) => ({ uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
+  caughtAt: null, spot: null, judgment: null, locked: false });
 
 describe('자원 바', () => {
-  beforeEach(() => { snap = null; });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); document.head.querySelectorAll('style').forEach(e => e.remove()); });
 
-  it('오늘 의뢰 칸은 서버 값이 오기 전에도 자리를 지키고 0을 보인다', () => {
+  it('골드, 명성, 배, 낚싯대, 가방 다섯 칸이 이 순서로 있고 의뢰 현황은 없다', () => {
     render(<ResourceBar game={newState()} />);
-    expect(hud()).toContain('오늘 의뢰');
-    expect(hud()).toContain('일반0네임드0');
-    expect(hud()).not.toMatch(/[–—]/);
+    expect(hud()).toMatch(/^골드 .+명성 .+배 .+낚싯대 .+가방 .+$/);
+    expect(hud()).not.toContain('일반');
+    expect(hud()).not.toContain('네임드');
+    expect(hud()).not.toContain('오늘 의뢰');
   });
 
-  it('서버 값이 있으면 오늘 남은 클리어를 일반 · 네임드 이름을 붙여 그 순서로 나란히 보인다', () => {
-    snap = { clearsToday: { general: 1, named: 0 }, progress: [], tickets: [] };
+  it('칸 사이는 세로 구분선으로 가른다 - 다섯 칸에 구분선 넷', () => {
     render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 일반0네임드1$/);
-  });
-
-  it('수주만으로는 남은 클리어가 줄지 않는다 — 진행 중인 의뢰가 있어도 클리어 0이면 그대로다', () => {
-    snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-common', progress: 3 }], tickets: [] };
-    render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 일반1네임드1$/);
-  });
-
-  it('두 갈래를 모두 클리어했으면 0 · 0이다', () => {
-    snap = { clearsToday: { general: 1, named: 1 }, progress: [], tickets: [] };
-    render(<ResourceBar game={newState()} />);
-    expect(hud()).toMatch(/오늘 의뢰 일반0네임드0$/);
+    expect(barButton().querySelectorAll('.w-px')).toHaveLength(4);
   });
 
   it('골드·명성은 단위 없이 줄임 표기다', () => {
@@ -46,17 +30,39 @@ describe('자원 바', () => {
     expect(hud()).toContain('명성 12.3K');
   });
 
-  it('가방은 수량과 채움 비율을 보이고, 75% 이상이면 주황·95% 이상이면 빨강 계열이다', () => {
-    const fish = (i: number) => ({ uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
-      caughtAt: null, spot: null, judgment: null, locked: false });
-    const bagValue = () => screen.getByText('가방', { exact: false }).parentElement!.lastElementChild!;
-    const { rerender } = render(<ResourceBar game={{ ...newState(), boat: 0, bag: [] }} />);
-    expect(hud()).toContain('가방 0 (0%)');
-    expect(bagValue().className).toContain('text-gold');
-    rerender(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 45 }, (_, i) => fish(i)) }} />);
-    expect(hud()).toContain('가방 45 (75%)');
-    expect(bagValue().className).toContain('text-orange');
-    rerender(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 57 }, (_, i) => fish(i)) }} />);
-    expect(bagValue().className).toContain('text-danger');
+  it('배 칸은 배 이름, 낚싯대 칸은 Lv.<레벨>이다', () => {
+    render(<ResourceBar game={{ ...newState(), boat: 3, rod: 12 }} />);
+    expect(hud()).toContain('배 정크선');
+    expect(hud()).toContain('낚싯대 Lv.12');
+  });
+
+  it('가방 칸은 게이지와 백분율만 보이고 수량은 화면에 쓰지 않는다', () => {
+    render(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 250 }, (_, i) => fish(i)) }} />);
+    expect(hud()).toContain('가방 50%');
+    expect(hud()).not.toMatch(/250|\//);
+    expect(barButton().querySelector('[data-gauge]')).not.toBeNull();
+  });
+
+  it('가방 백분율은 내림 정수이고 75%에서도 그대로 보인다', () => {
+    render(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 45 }, (_, i) => fish(i)) }} />);
+    expect(hud()).toContain('가방 75%');
+  });
+
+  it('가방이 가득 차도(100% 이상) 게이지 채움은 칸을 넘지 않는다', () => {
+    render(<ResourceBar game={{ ...newState(), boat: 0, bag: Array.from({ length: 70 }, (_, i) => fish(i)) }} />);
+    const fill = barButton().querySelector('[data-gauge] > span') as HTMLElement;
+    expect(fill.style.width).toBe('100%');
+  });
+
+  it('가방 칸에 마우스를 올리면 수량이 툴팁으로 뜨고, 접근성 이름에도 같은 값이 있다', () => {
+    render(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 1000 }, (_, i) => fish(i)) }} bagBonus={5} />);
+    fireEvent.mouseEnter(screen.getByText('가방', { exact: false }).parentElement!.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('가방 1,000 / 3,000 (33%)');
+    expect(barButton()).toHaveAccessibleName(expect.stringContaining('가방 1,000 / 3,000 (33%)'));
+  });
+
+  it('스테이지 폭에 따라 바뀌는 변형이 없다 - PC 자원 바는 늘 같은 크기다', () => {
+    render(<ResourceBar game={newState()} />);
+    expect(barButton().closest('div')!.outerHTML).not.toMatch(/@(max|min)-\[|mobile:/);
   });
 });
