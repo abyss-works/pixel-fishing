@@ -13,6 +13,7 @@ import {
 import {
   ARTIFACTS, ARTIFACT_MAX_LEVEL, ARTIFACT_LEVEL_COEF, artifactLevelCost, artifactHasLevel, artifactById,
 } from '../content/artifacts';
+import { bountyById } from '../content/bounties';
 import { parseAction } from './actionSchema';
 
 const deps = (): ActionDeps => {
@@ -197,7 +198,7 @@ describe('세이브', () => {
   });
 });
 
-describe('마미 와타의 거울 — 전설, 효과 고정', () => {
+describe('마미 와타의 거울, 전설, 효과 고정', () => {
   const mirror = art('mami-wata-mirror');
 
   it('전설 등급이고 항해 보너스가 없다', () => {
@@ -235,8 +236,9 @@ describe('마미 와타의 거울 — 전설, 효과 고정', () => {
     const plain = applyAction(seed(), { type: 'deliverBounty', questId: q }, { ...deps(), bounty });
     const withMirror = applyAction(seed({ artifacts: ['mami-wata-mirror'] }), { type: 'deliverBounty', questId: q }, { ...deps(), bounty });
     if (!plain.ok || !withMirror.ok) throw new Error('rejected');
-    expect(plain.state.gold).toBe(400000);
-    expect(withMirror.state.gold).toBe(280000);
+    const reward = bountyById(q)!.reward;
+    expect(plain.state.gold).toBe(reward);
+    expect(withMirror.state.gold).toBe(Math.floor(reward * 0.7));
     expect(withMirror.state.items['mat-abyss-lantern']).toBe(1);
     expect(plain.state.items['mat-abyss-lantern']).toBe(1);
   });
