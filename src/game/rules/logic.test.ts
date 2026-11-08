@@ -1080,8 +1080,8 @@ describe('가중치 추첨', () => {
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(60 / 10000, 10);
-    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(20 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(55 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(10 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });
