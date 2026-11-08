@@ -14,6 +14,10 @@ describe('visibleBox', () => {
     expect(visibleBox(844, 554, 40)).toEqual({ top: 40, bottom: 250, keyboard: true });
   });
 
+  it('보이는 영역이 많이 밀려 아래 여백이 작아도 높이가 줄었으면 키보드로 본다', () => {
+    expect(visibleBox(844, 554, 226)).toEqual({ top: 226, bottom: 64, keyboard: true });
+  });
+
   it('주소 줄 정도의 작은 높이 변화는 키보드로 보지 않는다', () => {
     expect(visibleBox(844, 790, 0)).toEqual({ top: 0, bottom: 0, keyboard: false });
   });
@@ -28,11 +32,13 @@ describe('keyboardStyle', () => {
     expect(keyboardStyle(visibleBox(844, 844, 0))).toBeUndefined();
   });
 
-  it('보이는 영역이 밀리지 않았으면 키보드 높이만 넘기고 위치는 옮기지 않는다', () => {
-    expect(keyboardStyle(visibleBox(844, 554, 0))).toEqual({ '--keyboard-h': '290px' });
+  it('보이는 영역이 밀리지 않았으면 키보드 높이를 넘기고 밀린 길이는 0이다', () => {
+    expect(keyboardStyle(visibleBox(844, 554, 0))).toEqual({ '--keyboard-h': '290px', '--keyboard-top': '0px' });
   });
 
-  it('보이는 영역이 위로 밀렸으면 루트를 그만큼 내리고 키보드가 덮는 길이도 그만큼 늘린다', () => {
-    expect(keyboardStyle(visibleBox(844, 554, 40))).toEqual({ '--keyboard-h': '290px', transform: 'translateY(40px)' });
+  it('보이는 영역이 위로 밀렸으면 밀린 길이를 따로 넘기고 루트에 위치 변환을 주지 않는다', () => {
+    const style = keyboardStyle(visibleBox(844, 554, 40));
+    expect(style).toEqual({ '--keyboard-h': '250px', '--keyboard-top': '40px' });
+    expect(style).not.toHaveProperty('transform');
   });
 });

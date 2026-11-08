@@ -35,6 +35,15 @@ describe('HudHeader 모바일 레이아웃', () => {
     }
   });
 
+  it('키보드로 보이는 영역이 밀리면 두 틀이 밀린 길이만큼 아래로 비켜선다 - 위치 변환이 아니라 상대 위치 오프셋이다', () => {
+    header();
+    for (const el of [bar(), menuSlot()]) {
+      expect(el.className).toContain('mobile:relative');
+      expect(el.className).toContain('mobile:top-[var(--keyboard-top,0px)]');
+      expect(el.className).not.toMatch(/translate|transform/);
+    }
+  });
+
   it('두 틀 사이에 4px 간격이 있다 - 자원 바 왼쪽, 메뉴 버튼 양쪽에 4px 여백을 두고 비어 있는 열은 없다', () => {
     header();
     expect(bar().className).toContain('mobile:ml-1');
