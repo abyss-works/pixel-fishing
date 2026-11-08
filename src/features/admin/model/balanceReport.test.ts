@@ -4,17 +4,21 @@
 import { describe, it, expect } from 'vitest';
 import { buildBalanceReport, goldEv, fameEv, EV_AXES } from './balanceReport';
 import { goldEV } from '../../../game/rules/logic';
+import type { SpotId } from '../../../game/content/spots';
 
 describe('보상 축 정의', () => {
   it('5축 — 수동 3(무판정/GOOD/PERFECT) + 방치 2(최소/최대 페널티)', () => {
     expect(EV_AXES.map(a => a.key)).toEqual(['normal', 'good', 'perfect', 'idleBest', 'idleWorst']);
     // 다이얼 매핑 — 판정은 ÷rareMult, 방치는 ×commonMult (rollFish common축 산식)
-    const byKey = Object.fromEntries(EV_AXES.map(a => [a.key, a.options]));
-    expect(byKey.normal).toEqual({});
-    expect(byKey.good.rareMult).toBe(1.6);
-    expect(byKey.perfect.rareMult).toBe(2.0);
-    expect(byKey.idleBest.commonMult).toBe(4);   // 파워 여유 충분 상한
-    expect(byKey.idleWorst.commonMult).toBe(10); // 진입 경계 기본값
+    const byKey = Object.fromEntries(EV_AXES.map(a => [a.key, (s: SpotId) => ({ ...a.options(s) })])) as Record<string, (s: SpotId) => { commonMult?: number; rareMult?: number }>;
+    expect(byKey.normal('sea')).toEqual({});
+    expect(byKey.good('sea').rareMult).toBe(1.6);
+    expect(byKey.perfect('sea').rareMult).toBe(2.0);
+    // 방치 플래토(하한)와 방치 진입(레벨 차 0)의 배수 — 마을 해역은 현행 표, 그 밖은 새 표
+    expect(byKey.idleBest('sea').commonMult).toBe(3);
+    expect(byKey.idleWorst('sea').commonMult).toBe(5);
+    expect(byKey.idleBest('pond').commonMult).toBe(4);
+    expect(byKey.idleWorst('pond').commonMult).toBe(10);
   });
 });
 
@@ -26,16 +30,16 @@ describe('EV 산식 — goldEV 동치 앵커', () => {
       .toBeCloseTo(goldEV('barrierreef', { commonMult: 10 }), 9);
   });
 
-  it('축 간 단조성 — 무판정 < GOOD < PERFECT, 방치 최대 ≤ 방치 최소', () => {
+  it('축 간 단조성 — 무판정 < GOOD < PERFECT, 방치 진입 < 방치 플래토', () => {
     for (const s of ['pond', 'deep', 'barrierreef'] as const) {
       const n = goldEv(s, {});
       const g = goldEv(s, { rareMult: 1.6 });
       const p = goldEv(s, { rareMult: 2 });
-      const b4 = goldEv(s, { commonMult: 4 });
-      const b10 = goldEv(s, { commonMult: 10 });
+      const plateau = goldEv(s, EV_AXES.find(a => a.key === 'idleBest')!.options(s));
+      const entry = goldEv(s, EV_AXES.find(a => a.key === 'idleWorst')!.options(s));
       expect(n).toBeLessThan(g);
       expect(g).toBeLessThan(p);
-      expect(b10).toBeLessThan(b4);
+      expect(entry).toBeLessThan(plateau);
       void n;
     }
   });

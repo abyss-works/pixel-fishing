@@ -63,7 +63,7 @@ const byPlay = (f: (play: Play) => string) => PLAYS.map(p => `${PLAY_LABEL[p]} $
 // ── 기대값 (관리자 대시보드 어종·해역 탭과 같은 계산 — 낮 풀, 기본 판매가, 고정 다이얼) ──
 if (show('ev')) {
   console.log('\n## 기대값 — 캐치당 골드·명성 (대시보드와 같은 계산: 낮 풀, 돌연변이 제외, 고정 다이얼)');
-  console.log('해역 | 골드 무판정·GOOD·PERFECT·방치×4·방치×10 | 명성 같은 순 | 직전 대비 | 사다리 GOOD·PERFECT | 방치 폭 | 방치평균 vs 전 해역 | 등급 예산');
+  console.log('해역 | 골드 무판정·GOOD·PERFECT·방치 플래토·방치 진입 | 명성 같은 순 | 직전 대비 | 사다리 GOOD·PERFECT | 방치 폭 | 방치평균 vs 전 해역 | 등급 예산');
   const report = buildBalanceReport();
   const deltas = DELTA_AXES;
   report.forEach(r => {
@@ -78,7 +78,7 @@ if (show('ev')) {
   console.log('\n### 실질 등급 비율 (낮 풀, 일반/희귀/영웅/전설)');
   for (const s of SPOTS) {
     const line = EV_AXES.map(a => {
-      const rows = drawRows(s.id, a.options);
+      const rows = drawRows(s.id, a.options(s.id));
       const total = rows.reduce((t, x) => t + x.fishPct, 0);
       return `${a.short} ${RARITY_ORDER.map(k => n1(rows.filter(x => x.fish.rarity === k).reduce((t, x) => t + x.fishPct, 0) / total * 100)).join('/')}`;
     }).join(' · ');

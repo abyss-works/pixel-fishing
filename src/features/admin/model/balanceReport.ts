@@ -3,13 +3,15 @@
 //
 // **보상 통계 축 5종** — 판정 다이얼은 전부 common 축(rareMult=일반 예산 ÷ / commonMult=일반 예산 ×):
 //   노 어드밴티지(스페이스 1회, 존 밖) · GOOD(÷1.6) · PERFECT(÷2) — 수동 3축
-//   방치·최소 페널티(파워 여유 충분, commonMult ×4) · 방치·최대 페널티(진입 직후, ×10) — 자동 2축
+//   방치 플래토(방치 배수가 하한에 닿은 레벨) · 방치 진입(요구 파워를 처음 채운 레벨) — 자동 2축
+//   배수는 해역마다 다르다(태평양 이후 해역 3과 5, 마을 해역 4와 10 — power.idleDialsOf)
 // 축이 아니라 **조건 계층**인 것(여기에 나오지 않는다): 수동 파워 초과 보정(최대 ×2 실현치),
 // 미달 수역 페널티(×16 캡+입질 가산), 미끼(특정 등급 예산 ×2), 밤/아티팩트(미구현).
 // 이들은 파워 레벨·보유 아이템에 따라 달라져서 축으로 두면 표가 상태 의존이 된다.
 import { RARITY, SPOTS, drawRows } from '../../../game/rules/logic';
 import type { DrawOptions, RarityId } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
+import { idleDialsOf } from '../../../game/rules/power';
 
 export type EvAxisKey = 'normal' | 'good' | 'perfect' | 'idleBest' | 'idleWorst';
 
@@ -18,20 +20,20 @@ export interface EvAxisDef {
   label: string;
   short: string;
   hint: string;
-  options: DrawOptions;
+  options: (spot: SpotId) => DrawOptions;
 }
 
 export const EV_AXES: readonly EvAxisDef[] = [
   { key: 'normal', label: '노 어드밴티지', short: '무판정', hint: '수동 낚시 — 타이밍 바를 존 밖에서 끊는다(스페이스꾹). 다이얼 없음.',
-    options: {} },
+    options: () => ({}) },
   { key: 'good', label: 'GOOD', short: 'GOOD', hint: '노란 존 — 일반 예산 ÷1.6.',
-    options: { rareMult: 1.6 } },
+    options: () => ({ rareMult: 1.6 }) },
   { key: 'perfect', label: 'PERFECT', short: 'PERFECT', hint: '빨간 존 — 일반 예산 ÷2.0.',
-    options: { rareMult: 2.0 } },
-  { key: 'idleBest', label: '방치·최소 페널티', short: '방치↓', hint: '방치 판정, 파워 여유 충분(요구+30 이상) — 일반 예산 ×4.',
-    options: { commonMult: 4 } },
-  { key: 'idleWorst', label: '방치·최대 페널티', short: '방치↑', hint: '방치 판정, 요구 파워 경계 — 일반 예산 ×10.',
-    options: { commonMult: 10 } },
+    options: () => ({ rareMult: 2.0 }) },
+  { key: 'idleBest', label: '방치 플래토', short: '방치↓', hint: '방치 판정, 방치 배수가 하한에 닿은 레벨 — 일반 예산 × 하한 배수.',
+    options: spot => ({ commonMult: idleDialsOf(spot).plateau }) },
+  { key: 'idleWorst', label: '방치 진입', short: '방치↑', hint: '방치 판정, 요구 파워를 처음 채운 레벨 — 일반 예산 × 진입 배수.',
+    options: spot => ({ commonMult: idleDialsOf(spot).entry }) },
 ];
 
 /** 단일 수역×단일 축의 골드 EV — drawRows 행열의 확률 가중합(goldEV와 동치, 다이얼 반영 버전) */
@@ -99,7 +101,7 @@ export const DELTA_AXES: readonly DeltaAxisDef[] = [
     compute: (c) => c.gold.good - c.gold.normal },
   { key: 'perfectBonus', label: 'PERFECT+', hint: '노 어드밴티지 → PERFECT 증가분.',
     compute: (c) => c.gold.perfect - c.gold.normal },
-  { key: 'idleGap', label: '방치 간격', hint: '완전 방치 최소(×4)와 최대(×10) 페널티의 차 — 파워 여유에 따른 방치 소득 폭.',
+  { key: 'idleGap', label: '방치 간격', hint: '방치 플래토와 방치 진입의 차 — 파워 여유에 따른 방치 소득 폭.',
     compute: (c) => c.gold.idleBest - c.gold.idleWorst },
   // compute는 buildBalanceReport가 전체 평균을 계산해 주입한다
 ] as DeltaAxisDef[];
@@ -110,9 +112,9 @@ export function buildBalanceReport(): SpotBalance[] {
   for (const spot of SPOTS) {
     const id = spot.id;
     const gold = Object.fromEntries(
-      EV_AXES.map(a => [a.key, goldEv(id, a.options)])) as Record<EvAxisKey, number>;
+      EV_AXES.map(a => [a.key, goldEv(id, a.options(id))])) as Record<EvAxisKey, number>;
     const fame = Object.fromEntries(
-      EV_AXES.map(a => [a.key, fameEv(id, a.options)])) as Record<EvAxisKey, number>;
+      EV_AXES.map(a => [a.key, fameEv(id, a.options(id))])) as Record<EvAxisKey, number>;
     const prev = out[out.length - 1];
     out.push({
       id, name: spot.name, powerReq: spot.powerReq ?? 0, boatTier: spot.boatTier,

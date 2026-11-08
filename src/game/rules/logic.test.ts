@@ -983,19 +983,19 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
-    idleWorst: { commonMult: 10 },
+    idleEntry: { commonMult: 5 },
   } as const;
 
-  it('인도양 — normal 430.7 / perfect 707.4 / 방치×10 76.8', () => {
+  it('인도양 — normal 430.7 / perfect 707.4 / 방치 진입 ×5 122.9', () => {
     expect(goldEV('indian', dials.normal)).toBeCloseTo(430.73, 1);
     expect(goldEV('indian', dials.perfect)).toBeCloseTo(707.36, 1);
-    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(76.76, 1);
+    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(122.92, 1);
   });
 
-  it('남인도양 — normal 550.5 / perfect 872.8 / 방치×10 96.0', () => {
+  it('남인도양 — normal 550.5 / perfect 872.8 / 방치 진입 ×5 158.2', () => {
     expect(goldEV('southindian', dials.normal)).toBeCloseTo(550.45, 1);
     expect(goldEV('southindian', dials.perfect)).toBeCloseTo(872.83, 1);
-    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(96.01, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(158.19, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {

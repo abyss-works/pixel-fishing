@@ -16,8 +16,17 @@ export const IDLE_BOOST_STEPS = {
   world: [5, 5, 4, 4, 3],
 } as const;
 
+const stepsOf = (spot: SpotId): readonly number[] =>
+  topZoneOfSpot(spot) === 'village' ? IDLE_BOOST_STEPS.village : IDLE_BOOST_STEPS.world;
+
+/** 방치 두 축의 배수 — 진입(레벨 차 0)과 플래토(하한). 측정과 관리자 화면의 고정 다이얼이 쓴다 */
+export function idleDialsOf(spot: SpotId): { entry: number; plateau: number } {
+  const steps = stepsOf(spot);
+  return { entry: steps[0], plateau: steps[steps.length - 1] };
+}
+
 export function relativeIdleBoost(power: number, spot: SpotId): number {
-  const steps = topZoneOfSpot(spot) === 'village' ? IDLE_BOOST_STEPS.village : IDLE_BOOST_STEPS.world;
+  const steps = stepsOf(spot);
   const levels = Math.max(0, Math.floor((power - powerReqOf(spot)) / POWER_PER_LEVEL));
   return steps[Math.min(levels, steps.length - 1)];
 }

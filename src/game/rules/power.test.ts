@@ -6,7 +6,7 @@ import { newState, rodStats } from './logic';
 import { catchDrawOptions } from './actions';
 import { effectiveBite, powerZones, rodPower } from './stats';
 import { JUDGMENT_MULT } from './balance';
-import { relativeIdleBoost } from './power';
+import { idleDialsOf, relativeIdleBoost } from './power';
 
 describe('방치 배수 — 태평양 이후 해역', () => {
   const req = 35; // 태평양
@@ -86,5 +86,18 @@ describe('삭제된 보정은 판정에 영향이 없다', () => {
     const b = effectiveBite(st, 'coron');
     expect(rodPower(st)).toBeLessThan(60);
     expect(b.min.value).toBeCloseTo(rodStats(1).biteMin + powerZones(st, 'coron').biteExtra, 10);
+  });
+});
+
+describe('방치 두 축의 배수(진입, 플래토)', () => {
+  it('태평양 이후 해역은 5와 3, 마을 해역은 10과 4다', () => {
+    expect(idleDialsOf('sea')).toEqual({ entry: 5, plateau: 3 });
+    expect(idleDialsOf('comorodeep')).toEqual({ entry: 5, plateau: 3 });
+    expect(idleDialsOf('pond')).toEqual({ entry: 10, plateau: 4 });
+    expect(idleDialsOf('river')).toEqual({ entry: 10, plateau: 4 });
+  });
+
+  it('진입 배수는 요구 파워 정각의 방치 배수와 같다', () => {
+    for (const s of SPOTS) expect(idleDialsOf(s.id).entry).toBe(relativeIdleBoost(s.powerReq ?? 0, s.id));
   });
 });
