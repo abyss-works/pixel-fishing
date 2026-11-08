@@ -21,11 +21,12 @@ export default function NamedDetail({ quest, game, onClose }: {
   if (!d) return null;
   const zone = zoneById(d.zone)?.shortName ?? d.zone;
   return (
-    <Modal xl onClose={onClose}>
+    <Modal xl onClose={onClose} header={
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{d.name ?? '???'}</PageTitle>
         <span className="pf-accent ml-auto text-2xs text-text-dim">{zone}의 네임드</span>
       </header>
+    }>
 
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,7fr)] grid-rows-[auto_1fr] gap-x-5 gap-y-4
                       mobile:grid-cols-1">

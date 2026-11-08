@@ -34,8 +34,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   const meOutside = ranking.data?.me && !ranking.data.top.some(r => r.me) ? ranking.data.me : null;
 
   return (
-    <Modal xl onClose={onClose}>
-      {/* 미발견 폼도 같은 구조로 렌더(값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지 */}
+    <Modal xl onClose={onClose} header={
+      // 미발견 폼도 같은 구조로 렌더(값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지. 제목 줄은 스크롤 칸 밖에 고정한다
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{known ? form.name : '???'}</PageTitle>
         <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
@@ -43,6 +43,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           {form.form === 'variant' ? '돌연변이' : '기본형'} {i + 1}/{forms.length}
         </span>
       </header>
+    }>
 
       {/* 메인 그리드 2×2 — 위 줄(표본 | 크기 분포), 아래 줄(기록 | 크기 순위). 같은 줄의 칸은 높이를 맞춘다 */}
       <div className="grid grid-cols-2 gap-x-5 gap-y-4 mobile:grid-cols-1">
@@ -87,7 +88,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
                   {/* 표 머리(28px)와 순위 다섯 줄(28.5px씩)에 위 여백 4px을 더한 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className={`${SCROLL_Y_ROWS} max-h-[174.5px]`}>
+                  <div className={`${SCROLL_Y_ROWS} max-h-[min(174.5px,40dvh)]`}>
                     <div className="pl-1">
                       <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                     </div>

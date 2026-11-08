@@ -16,7 +16,8 @@ const HEIGHT_CLASS: Record<ModalHeight, string> = {
 
 // 앱 모달의 본문 칸 — 박스가 넘치면 제목은 두고 이 칸만 스크롤한다. 오른쪽 음수 여백 14px은 막대 자리(6px)와 내용 사이 여백(8px)을
 // 박스의 안쪽 여백(16px) 쪽으로 내어 내용 폭을 그대로 두고 막대를 박스 안쪽 가장자리에 놓는다.
-const APP_BODY = `${SCROLL_Y} -mr-3.5 flex-auto min-h-0`;
+// 본문 칸은 세로 flex라서, 줄 수로 높이를 정한 스크롤 칸(max-h)이 직계 자식이면 남는 높이에 맞춰 줄어든다.
+const APP_BODY = `${SCROLL_Y} -mr-3.5 flex-auto min-h-0 flex flex-col`;
 
 interface ModalBase {
   title?: string;
@@ -39,15 +40,16 @@ interface ModalBase {
 // 스테이지 모달의 투명 래퍼는 배치만 맡는다. 그래서 스테이지는 className을 받지 않고(타입으로 막는다),
 // 필요한 높이만 height로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
 type ModalProps = ModalBase & (
-  | { layer: 'stage'; height?: ModalHeight; className?: never }
-  | { layer?: 'app'; className?: string; height?: never }
+  | { layer: 'stage'; height?: ModalHeight; className?: never; header?: never; footer?: never }
+  | { layer?: 'app'; className?: string; height?: never; header?: ReactNode; footer?: ReactNode }
 );
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
 // 모바일 레이아웃에서는 폭 단계 대신 화면 폭에서 좌우 24px을 뺀 폭을 쓰고(바깥을 눌러 닫을 자리), 높이 상한(위아래 24px)을 넘으면 창 안에서 세로로 스크롤한다.
 // 스크롤은 보이는 틀 안에서만 하고 제목은 고정이다: 앱 모달은 박스 안의 본문 한 칸(공용 세로 스크롤 칸)이 스크롤하고,
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
-export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height }: ModalProps) {
+// 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
+export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height, header, footer }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
@@ -71,7 +73,9 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
         {/* 앱 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
         {layer === 'app' && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
         {title && <PageTitle className={cx('mb-2', layer === 'app' && 'pr-6')}>{title}</PageTitle>}
+        {layer === 'app' && header && <div className="shrink-0">{header}</div>}
         {layer === 'app' ? <div className={APP_BODY}>{children}</div> : children}
+        {layer === 'app' && footer && <div className="shrink-0">{footer}</div>}
       </div>
     </div>
   );

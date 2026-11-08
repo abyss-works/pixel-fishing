@@ -114,6 +114,12 @@ const modalsWithClassName = (src: string) =>
 const cardsWithClassName = (src: string) => openingTags(src, 'ModalCard').filter(hasOwnClassName);
 
 /** 줄 수로 높이를 정하는 칸(h, max-h)에 높이가 정해지지 않은 칸용 상수(SCROLL_Y)를 쓴 줄 — 줄 수로 정하는 칸은 SCROLL_Y_ROWS를 쓴다 */
+/** 앱 모달(layer="stage"가 아닌 Modal)의 첫 자식이 제목 요소(header, PageTitle)인 호출부 — 제목은 title이나 header prop으로 넘겨 스크롤 칸 밖에 둔다 */
+const appModalsWithTitleChild = (src: string) =>
+  openingTags(src, 'Modal')
+    .filter(tag => !/\blayer="stage"/.test(tag))
+    .filter(tag => /^\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<(?:header|PageTitle)\b/.test(src.slice(src.indexOf(tag) + tag.length)));
+
 const sizedWithFlexibleScroll = (line: string) => /\$\{SCROLL_Y\}/.test(line) && /(?<![\w-])(?:max-)?h-\[/.test(line);
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
@@ -211,6 +217,13 @@ describe('UI 시스템 가드', () => {
       expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] pf-vscroll')).toBe(true);
       expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] mobile:h-auto')).toBe(false);
     });
+  });
+  it('앱 모달의 제목 요소는 본문 자식이 아니라 title이나 header prop이다 — 제목이 본문과 함께 스크롤하지 않는다', () => {
+    expect(screens.flatMap(f => appModalsWithTitleChild(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect(appModalsWithTitleChild(`<Modal xl onClose={c}>\n  {/* 설명 */}\n  <header className="a">`)).toHaveLength(1);
+    expect(appModalsWithTitleChild(`<Modal onClose={c}><PageTitle>가</PageTitle>`)).toHaveLength(1);
+    expect(appModalsWithTitleChild(`<Modal xl onClose={c} header={<header>가</header>}><p>본문</p>`)).toEqual([]);
+    expect(appModalsWithTitleChild(`<Modal layer="stage" onClose={c}><header>가</header>`)).toEqual([]);
   });
   it('ModalCard 호출부는 className을 넘기지 않는다 — 변형은 명시 prop으로 고른다', () => {
     expect(screens.flatMap(f => cardsWithClassName(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);

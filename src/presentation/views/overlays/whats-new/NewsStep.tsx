@@ -13,7 +13,7 @@ export default function NewsStep({ news }: { news: PatchNote }) {
     .map(tag => ({ tag, items: news.notes.filter(n => n.tag === tag) }))
     .filter(g => g.items.length > 0);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 min-h-0">
       <Frame className="px-3 py-2 flex flex-col gap-0.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="pf-accent text-xl text-gold">v{news.version}</span>

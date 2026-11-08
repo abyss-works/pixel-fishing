@@ -136,8 +136,8 @@ export default function WorldMapModal({ world, onClose }: {
   }, [atlas]);
 
   return (
-    <Modal layer="app" onClose={onClose} className="pf-modal-worldmap">
-      <PageTitle className="mb-2 pr-6">세계지도</PageTitle>
+    <Modal layer="app" onClose={onClose} className="pf-modal-worldmap"
+           header={<PageTitle className="mb-2 pr-6">세계지도</PageTitle>}>
       <div className="relative">
         <canvas ref={canvasRef} width={w} height={h}
                 className={cx('block w-full h-auto border border-line rounded-sm bg-bg touch-none',

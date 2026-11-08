@@ -71,6 +71,14 @@ describe('ModalCard', () => {
     expect(body).not.toContainElement(screen.getByText('설정'));
     expect(box).toContainElement(body);
   });
+  it('앱 모달의 header와 footer는 스크롤 칸 밖에 고정된다', () => {
+    render(<Modal onClose={() => {}} header={<h4>제목줄</h4>} footer={<button>확인</button>}><p>내용</p></Modal>);
+    const body = screen.getByText('내용').parentElement as HTMLElement;
+    expect(body).toHaveClass('pf-vscroll');
+    expect(body).not.toContainElement(screen.getByText('제목줄'));
+    expect(body).not.toContainElement(screen.getByRole('button', { name: '확인' }));
+    expect(screen.getByRole('dialog')).toContainElement(screen.getByText('제목줄'));
+  });
   it('스테이지 모달은 className을 받지 않는다 — 높이는 height로 고른다(타입 검사)', () => {
     render(
       // @ts-expect-error 스테이지 모달의 투명 래퍼에는 스크롤 클래스가 들어갈 길이 없어야 한다
