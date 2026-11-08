@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { artifactById } from '../../game/content/artifacts';
-import { artifactEffectLine, artifactEffectLines, artifactSystemLines } from './artifactEffects';
+import {
+  artifactEffectKeys, artifactEffectLabel, artifactEffectLine, artifactEffectLines, artifactEffectValue, artifactSystemLines,
+} from './artifactEffects';
 
 const art = (id: string) => artifactById(id)!;
 
@@ -17,5 +19,22 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLines(mirror, 1)).toEqual([]);
     expect(artifactSystemLines(mirror)).toEqual({ bonus: '네임드 토벌 하루 +1번', penalty: '네임드 토벌 골드 −30%' });
     expect(artifactSystemLines(art('wreck-compass'))).toEqual({ bonus: null, penalty: null });
+  });
+
+  it('효과 값은 소수 둘째 자리까지 보이고 끝의 0은 뺀다', () => {
+    expect(artifactEffectLine(art('wreck-compass'), 'sail', 2)).toBe('항해 속도 +12.5%');
+    expect(artifactEffectLine(art('varuna-scale'), 'baitDiscount', 2)).toBe('미끼값 −31.25%');
+    expect(artifactEffectValue(art('varuna-scale'), 'baitDiscount', 5)).toBe('−50%');
+  });
+
+  it('효과가 없으면 값도 문장도 없다', () => {
+    expect(artifactEffectValue(art('wreck-compass'), 'baitDiscount', 1)).toBeNull();
+    expect(artifactEffectKeys(art('wreck-compass'))).toEqual(['sail']);
+    expect(artifactEffectKeys(art('mami-wata-mirror'))).toEqual([]);
+  });
+
+  it('효과 이름은 문장의 앞부분과 같다', () => {
+    expect(artifactEffectLabel('duelSpeedupCut')).toBe('네임드 결투 가속');
+    expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 1)).toBe(`${artifactEffectLabel('duelSpeedupCut')} −10%`);
   });
 });
