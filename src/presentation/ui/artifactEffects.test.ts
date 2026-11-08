@@ -27,6 +27,12 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectValue(art('varuna-scale'), 'baitDiscount', 5)).toBe('−50%');
   });
 
+  it('코모로의 골판은 돌연변이 가중치 증가율로 쓰고 확률로 환산하지 않는다', () => {
+    expect(artifactEffectLine(art('elder-scale'), 'mutationWeight', 1)).toBe('돌연변이 가중치 +25%');
+    expect(artifactEffectValue(art('elder-scale'), 'mutationWeight', 2)).toBe('+31.25%');
+    expect(artifactEffectValue(art('elder-scale'), 'mutationWeight', 5)).toBe('+50%');
+  });
+
   it('효과가 없으면 값도 문장도 없다', () => {
     expect(artifactEffectValue(art('wreck-compass'), 'baitDiscount', 1)).toBeNull();
     expect(artifactEffectKeys(art('wreck-compass'))).toEqual(['sail']);

@@ -27,10 +27,10 @@ export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode,
   return (
     <TableBox className="shrink-0 px-3 pt-1 pb-2">
       <DataTable cols={showNext ? cols : cols.slice(0, 2)} nameMin={mobile ? '0px' : '6rem'}
-                 className="pf-table [&_th]:h-[30px] [&_th]:text-2xs [&_th]:text-right [&_td]:h-7 [&_td]:text-right
+                 className={`pf-table [&_th]:h-[30px] [&_th]:text-2xs [&_th]:text-right [&_td]:h-7 [&_td]:text-right
                             [&_td]:whitespace-nowrap [&_td]:border-b-0 [&_tbody_tr+tr_td]:border-t [&_tbody_tr+tr_td]:border-line/60
-                            [&_th:first-child]:text-left [&_td:first-child]:text-left [&_td:first-child]:whitespace-normal [&_th:first-child]:pl-0 [&_td:first-child]:pl-0
-                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
+                            [&_th:first-child]:text-left [&_td:first-child]:text-left [&_th:first-child]:pl-0 [&_td:first-child]:pl-0
+                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 ${mobile ? '[&_td:first-child]:whitespace-normal' : ''}`}>
         <thead><tr><th aria-label="항목" /><th>{heads[0]}</th>{showNext && <th>{heads[1]}</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (

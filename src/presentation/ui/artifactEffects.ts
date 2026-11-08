@@ -1,6 +1,6 @@
 import type { Artifact, ArtifactEffects } from '../../game/content/artifacts';
 import { artifactEffectsAt } from '../../game/rules/artifactLevel';
-import { variantShare } from '../../game/rules/logic';
+import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import { fmtDecimal2 } from './format';
 
 const EFFECT_ORDER: readonly (keyof ArtifactEffects)[] = ['sail', 'duelSpeedupCut', 'baitDiscount', 'mutationWeight'];
@@ -9,7 +9,7 @@ const EFFECT_LABEL: Record<keyof ArtifactEffects, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
   baitDiscount: '미끼값',
-  mutationWeight: '돌연변이 확률',
+  mutationWeight: '돌연변이 가중치',
 };
 
 /** 유물 효과 한 가지의 이름 - 효과 문장의 앞부분과 비교 표의 행 이름이 함께 쓴다 */
@@ -22,7 +22,7 @@ export function artifactEffectValue(a: Artifact, effect: keyof ArtifactEffects, 
     case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
     case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? `−${fmtDecimal2(e.duelSpeedupCut! * 100)}%` : null;
     case 'baitDiscount': return (e.baitDiscount ?? 0) > 0 ? `−${fmtDecimal2(e.baitDiscount! * 100)}%` : null;
-    case 'mutationWeight': return e.mutationWeight !== undefined ? `${fmtDecimal2(variantShare(e.mutationWeight) * 100)}%` : null;
+    case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
   }
 }
 
