@@ -190,7 +190,8 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(tipOf(screen.getByText('???'))).toMatch(/반달 모양의 이빨 자국/);
     expect(screen.getByText('나타나는 곳')).toBeInTheDocument();
-    expect(screen.getByText(/400,000G/)).toBeInTheDocument();
+    const reward = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!.reward;
+    expect(screen.getByText(new RegExp(`${reward.toLocaleString('en-US')}G`))).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
   });
 
