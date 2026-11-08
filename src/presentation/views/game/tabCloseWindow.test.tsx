@@ -121,7 +121,7 @@ describe('탭 줄은 창 위 층이다', () => {
     expect(screen.getByRole('button', { name: '도움말' })).toHaveClass('active');
   });
 
-  it('닫을 수 없는 창이 떠 있으면 시설 창도 닫히지 않고 탭도 바뀌지 않는다', async () => {
+  it('닫을 수 없는 창이 떠 있으면 그 창은 그대로 두고 탭을 연다', async () => {
     stubMotion(false);
     seedAt('home');
     render(<><App /><Modal layer="stage" closable={false} title="진행 중" onClose={() => {}}>결과 전송 전</Modal></>);
@@ -129,7 +129,9 @@ describe('탭 줄은 창 위 층이다', () => {
     fireEvent.click(document.querySelector('[data-facility="rod"]')!);
     expect(screen.getAllByRole('dialog').length).toBe(2);
     fireEvent.click(screen.getByRole('button', { name: '도움말' }));
-    expect(screen.getAllByRole('dialog').length).toBe(2);
-    expect(screen.getByRole('button', { name: '도움말' })).not.toHaveClass('active');
+    // 닫을 수 있는 시설 창은 닫히고, 닫을 수 없는 창은 남으며, 탭은 열린다
+    expect(screen.getAllByRole('dialog').length).toBe(1);
+    expect(screen.getByRole('dialog', { name: '진행 중' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '도움말' })).toHaveClass('active');
   });
 });

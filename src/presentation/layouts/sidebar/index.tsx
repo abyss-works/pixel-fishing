@@ -24,8 +24,8 @@ interface SidebarProps<K extends string> {
 export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, sheetOpen = false, onSheetClose, children }: SidebarProps<K>) {
   const mobile = useMobileLayout();
   const dragFrom = useRef<number | null>(null);
-  // 탭 줄은 창 위 층이다. 누르면 떠 있던 창을 모두 닫고 그 탭을 연다. 닫을 수 없는 창이 있으면 누름을 무시한다
-  const press = (key: K) => { if (closeOpenWindows()) onSelect(key); };
+  // 탭 줄은 창 위 층이다. 누르면 닫을 수 있는 창은 닫고 그 탭을 연다. 닫을 수 없는 창은 그대로 두고 탭을 연다
+  const press = (key: K) => { closeOpenWindows(); onSelect(key); };
 
   if (mobile) {
     return (

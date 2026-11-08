@@ -108,16 +108,16 @@ describe('EncounterModal', () => {
     it('들어가며에서는 닫을 수 있는 창 층이고 탭 줄을 누르면 닫는다', () => {
       const { onClose } = show();
       expect(backdrop().className).toContain('z-(--z-stage-modal)');
-      expect(closeOpenWindows()).toBe(true);
+      closeOpenWindows();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('승부가 시작되면 닫을 수 없는 창 층이고 탭 줄을 눌러도 닫히지 않는다', () => {
+    it('승부가 시작되면 닫을 수 없는 창이라 탭 줄을 눌러도 닫히지 않는다', () => {
       const { onClose } = show();
       enter();
       expect(backdrop().className).toContain('z-(--z-blocker)');
       expect(backdrop().className).not.toContain('z-(--z-stage-modal)');
-      expect(closeOpenWindows()).toBe(false);
+      closeOpenWindows();
       fireEvent.click(backdrop());
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -129,7 +129,7 @@ describe('EncounterModal', () => {
       expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
       expect(backdrop().className).toContain('z-(--z-stage-modal)');
       expect(backdrop().className).not.toContain('z-(--z-blocker)');
-      expect(closeOpenWindows()).toBe(true);
+      closeOpenWindows();
       expect(onClose).toHaveBeenCalledTimes(1);
       fireEvent.click(backdrop());
       expect(onClose).toHaveBeenCalledTimes(2);
@@ -140,8 +140,16 @@ describe('EncounterModal', () => {
       enter();
       win();
       expect(backdrop().className).toContain('z-(--z-blocker)');
-      expect(closeOpenWindows()).toBe(false);
+      closeOpenWindows();
       fireEvent.click(backdrop());
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('승부 중에도 결투 창은 스테이지 창 자리(스테이지 안)에 남는다', () => {
+      const { onClose } = show();
+      enter();
+      closeOpenWindows();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(onClose).not.toHaveBeenCalled();
     });
   });

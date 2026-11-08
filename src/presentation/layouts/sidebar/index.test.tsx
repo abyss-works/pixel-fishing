@@ -32,7 +32,7 @@ describe.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('S
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['stage', 'app'] as const)('닫을 수 없는 %s 창이 떠 있으면 탭 누름은 아무것도 닫거나 열지 않는다', layer => {
+  it.each(['stage', 'app'] as const)('닫을 수 없는 %s 창이 떠 있으면 창은 그대로 두고 탭을 연다', layer => {
     layout.mobile = mobile;
     const onSelect = vi.fn();
     const onClose = vi.fn();
@@ -43,9 +43,9 @@ describe.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('S
       <Modal layer="stage" onClose={onOther}>다른 창</Modal>
     </>);
     fireEvent.click(screen.getByRole('button', { name: '나' }));
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith('b');
     expect(onClose).not.toHaveBeenCalled();
-    expect(onOther).not.toHaveBeenCalled();
+    expect(onOther).toHaveBeenCalledTimes(1);
   });
 
   it('창이 없으면 탭 선택만 동작한다', () => {
@@ -56,7 +56,7 @@ describe.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('S
     expect(onSelect).toHaveBeenCalledWith('b');
   });
 
-  it('창이 닫히고 나면 등록이 사라져 다음 탭 누름을 막지 않는다', () => {
+  it('창이 닫히고 나면 등록이 사라져 다음 탭 누름에 영향을 주지 않는다', () => {
     layout.mobile = mobile;
     const onSelect = vi.fn();
     const { rerender } = render(<><Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar><Modal closable={false} onClose={() => {}}>본문</Modal></>);
