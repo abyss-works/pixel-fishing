@@ -62,6 +62,15 @@ describe('ModalCard', () => {
     render(<ModalCard title="조우" centered><p>본문</p></ModalCard>);
     expect(screen.getByText('조우').parentElement).toHaveClass('text-center', 'text-sm');
   });
+  it('앱 모달은 제목을 고정하고 본문 한 칸만 공용 스크롤 방식으로 스크롤한다', () => {
+    render(<Modal title="설정" onClose={() => {}}><p>내용</p></Modal>);
+    const box = screen.getByRole('dialog');
+    const body = screen.getByText('내용').parentElement as HTMLElement;
+    expect(box.className).not.toMatch(/pf-vscroll|pf-scroll|overflow/);
+    expect(body).toHaveClass('pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]');
+    expect(body).not.toContainElement(screen.getByText('설정'));
+    expect(box).toContainElement(body);
+  });
   it('스테이지 모달은 className을 받지 않는다 — 높이는 height로 고른다(타입 검사)', () => {
     render(
       // @ts-expect-error 스테이지 모달의 투명 래퍼에는 스크롤 클래스가 들어갈 길이 없어야 한다

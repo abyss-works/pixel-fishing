@@ -3,6 +3,7 @@ import { cx } from './cx';
 import { useKeyBlocker } from './hotkeys';
 import PageTitle from './PageTitle';
 import CloseButton from './CloseButton';
+import { SCROLL_Y } from './scrollArea';
 
 /** 스테이지 창의 고정 높이(px). 탭 창처럼 높이가 변하지 않는 창이 고른다. 스테이지 높이에서 위아래 16px을 뺀 값을 넘지 않는다 */
 export type ModalHeight = 400 | 480 | 520 | 560;
@@ -12,6 +13,10 @@ const HEIGHT_CLASS: Record<ModalHeight, string> = {
   520: 'h-[min(520px,calc(100%-32px))] mobile:h-auto',
   560: 'h-[min(560px,calc(100%-32px))] mobile:h-auto',
 };
+
+// 앱 모달의 본문 칸 — 박스가 넘치면 제목은 두고 이 칸만 스크롤한다. 오른쪽 음수 여백 14px은 막대 자리(6px)와 내용 사이 여백(8px)을
+// 박스의 안쪽 여백(16px) 쪽으로 내어 내용 폭을 그대로 두고 막대를 박스 안쪽 가장자리에 놓는다.
+const APP_BODY = `${SCROLL_Y} -mr-3.5 flex-auto min-h-0`;
 
 interface ModalBase {
   title?: string;
@@ -40,7 +45,8 @@ type ModalProps = ModalBase & (
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
 // 모바일 레이아웃에서는 폭 단계 대신 화면 폭에서 좌우 24px을 뺀 폭을 쓰고(바깥을 눌러 닫을 자리), 높이 상한(위아래 24px)을 넘으면 창 안에서 세로로 스크롤한다.
-// 스크롤은 보이는 틀 안에서만 한다: 앱 모달은 틀(박스)이 스크롤하고, 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
+// 스크롤은 보이는 틀 안에서만 하고 제목은 고정이다: 앱 모달은 박스 안의 본문 한 칸(공용 세로 스크롤 칸)이 스크롤하고,
+// 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
@@ -51,7 +57,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
     : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';
   const box = layer === 'app'
-    ? cx('relative bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh] pf-vscroll pf-scroll-panel',
+    ? cx('relative flex flex-col bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
         'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
     : cx('max-h-[calc(100%-32px)] flex flex-col',
@@ -65,7 +71,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
         {/* 앱 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
         {layer === 'app' && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
         {title && <PageTitle className={cx('mb-2', layer === 'app' && 'pr-6')}>{title}</PageTitle>}
-        {children}
+        {layer === 'app' ? <div className={APP_BODY}>{children}</div> : children}
       </div>
     </div>
   );
