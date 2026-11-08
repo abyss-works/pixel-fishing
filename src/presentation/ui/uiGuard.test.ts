@@ -142,6 +142,11 @@ const HEIGHT_CLASS_RE = /(?<![\w-])(?:max-)?h-(?:\[|\d|px|full|screen|dvh|svh|lh
  *  태그가 여러 줄이어도, 대괄호 없는 높이 클래스여도 잡는다 */
 const sizedWithFlexibleScroll = (src: string) =>
   openingTags(src, ANY_TAG).filter(tag => /\$\{SCROLL_Y\}/.test(tag) && HEIGHT_CLASS_RE.test(tag));
+/** 줄 수가 아니라 화면 높이 같은 여유 상한(max-h)만 두는 칸 — 내용이 낮으면 내용 높이로 커지므로 SCROLL_Y를 쓴다(줄이기만 한다) */
+const SAFETY_CAP_EXCEPTIONS = new Set([
+  'views/overlays/facility/FacilityModal.tsx',   // 판매 목록: 행 서른 개 상한
+  'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 화면 높이 42% 상한
+]);
 
 /** 스크롤 칸으로 보는 태그: 공용 상수, TableBox, pf-vscroll */
 const SCROLL_CELL_RE = /\$\{SCROLL_Y\}|^<TableBox\b|pf-vscroll/;
@@ -315,7 +320,8 @@ describe('UI 시스템 가드', () => {
     expect(OVERFLOW_DIRECT.test(`style={{ overflow: 'hidden' }}`)).toBe(false);
   });
   it('줄 수로 높이를 정하는 칸은 SCROLL_Y_ROWS를 쓴다 — 높이를 정한 줄에 SCROLL_Y를 쓰지 않는다', () => {
-    expect(screenFiles.flatMap(f => sizedWithFlexibleScroll(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect(screenFiles.filter(f => !SAFETY_CAP_EXCEPTIONS.has(f.path)).flatMap(f => sizedWithFlexibleScroll(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect([...SAFETY_CAP_EXCEPTIONS].filter(p => sizedWithFlexibleScroll(screenFiles.find(f => f.path === p)?.src ?? '').length === 0)).toEqual([]);
     expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} max-h-[186px]`}>')).toHaveLength(1);
     expect(sizedWithFlexibleScroll('<div className={`${SCROLL_Y} max-h-48`}>')).toHaveLength(1);
     expect(sizedWithFlexibleScroll('<div\n  className={cx(\n    `${SCROLL_Y}`,\n    "h-24",\n  )}>')).toHaveLength(1);
@@ -370,8 +376,9 @@ describe('UI 시스템 가드', () => {
 
   it('줄 수로 높이를 정하는 칸의 상수(SCROLL_Y_ROWS)는 아래쪽 바깥 여백으로 칸을 늘리지 않는다', () => {
     const cls = SCROLL_Y_ROWS.split(' ');
-    for (const c of ['pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]', 'pr-2', '-mt-1', 'pt-1', 'pb-1']) expect(cls, c).toContain(c);
+    for (const c of ['pf-vscroll', 'pf-scroll-panel', '[scrollbar-gutter:stable]', 'pr-2', '-mt-1', 'pt-1']) expect(cls, c).toContain(c);
     expect(cls).not.toContain('-mb-1');
+    expect(cls).not.toContain('pb-1');
     expect(SCROLL_Y.split(' ')).toContain('-mb-1');
   });
 

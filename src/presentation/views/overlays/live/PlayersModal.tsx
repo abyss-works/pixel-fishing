@@ -27,14 +27,14 @@ export default function PlayersModal({ region, account, setToast, onClose }: {
     <Modal layer="stage" md onClose={onClose}>
       <ModalCard title="이 바다의 플레이어" onClose={onClose}>
         {selected ? (
-          <div className="flex flex-col gap-3 min-h-0">
-            <section className="flex flex-col gap-1.5 min-h-0" aria-label="접속한 플레이어">
+          <div className="flex flex-col gap-3">
+            <section className="flex flex-col gap-1.5" aria-label="접속한 플레이어">
               <span className="flex justify-between text-xs text-text-dim">
                 <span>접속한 플레이어</span><span className="pf-accent">{players.length}</span>
               </span>
-              {/* 세 줄(32px 칸 셋, 사이 6px 둘)에 위 여백 4px을 더한 높이. 창이 낮으면 줄어든다 */}
-              <Inset className="flex min-h-0 shrink flex-col p-2 pb-1">
-                <div className={`${SCROLL_Y_ROWS} h-[112px] min-h-12 shrink`}>
+              {/* 세 줄(32px 칸 셋, 사이 6px 둘)에 위 여백 4px을 더한 높이 */}
+              <Inset className="flex flex-col p-2">
+                <div className={`${SCROLL_Y_ROWS} h-[112px]`}>
                   <div className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
                     {players.map(p => {
                       const on = p.uid === selected.uid;

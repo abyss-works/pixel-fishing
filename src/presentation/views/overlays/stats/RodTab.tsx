@@ -28,10 +28,10 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
     onSelect(spotIndex);
   };
   return (
-    <div className="flex flex-col gap-3 min-h-0">
+    <div className="flex flex-col gap-3">
       <SubTabs items={zoneTabs.map(tab => ({ key: tab.zone, label: tab.name, sub: `${tab.ok}/${tab.total} 충족` }))}
                activeKey={zone} onSelect={onZone} />
-      <TableBox className="h-[140px] min-h-16 shrink px-3 pb-2">
+      <TableBox className="h-[140px] shrink-0 px-3 pb-2">
         <DataTable cols={[null, '90px', '90px']} nameMin="8rem" aria-label="해역">
           <thead>
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">

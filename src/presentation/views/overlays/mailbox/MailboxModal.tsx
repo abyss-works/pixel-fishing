@@ -57,9 +57,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   return (
     <Modal layer="stage" md onClose={onClose}>
       <ModalCard title="우편함" onClose={onClose}>
-        <div className="flex flex-col gap-3 min-h-0">
-          {/* 표 머리 한 줄과 우편 다섯 줄 높이. 창이 낮으면 두 칸이 최소 높이까지 줄어든다 */}
-          <TableBox className="h-[212px] min-h-24 shrink px-3 pb-2">
+        <div className="flex flex-col gap-3">
+          {/* 표 머리 한 줄과 우편 다섯 줄 높이 */}
+          <TableBox className="h-[212px] px-3 pb-2">
             {mails && mails.length > 0 ? (
               <DataTable cols={['1.25rem', null, '120px', '5rem']} nameMin="10rem" aria-label="받은 우편">
                 <thead>
@@ -100,7 +100,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
               </div>
             )}
           </TableBox>
-          <Inset className="h-[190px] min-h-32 shrink px-3 pt-2.5 pb-2 flex flex-col gap-2">
+          <Inset className="h-[190px] px-3 pt-2.5 pb-2 flex flex-col gap-2">
             {selected ? (
               <>
                 <div className="flex items-baseline justify-between gap-3">
