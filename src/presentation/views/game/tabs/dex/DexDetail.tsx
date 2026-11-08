@@ -15,7 +15,7 @@ import { RarityText } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import { fmtGold, fmtSize } from '../../../../ui/format';
 import SizeDistributionChart from './SizeDistributionChart';
-import { SCROLL_Y } from '../../../../ui/scrollArea';
+import { SCROLL_Y_ROWS } from '../../../../ui/scrollArea';
 
 // 도감 상세보기 — 이름 머리 아래 2×2 메인 그리드: 위 줄 표본(초상화·로어) | 크기 분포, 아래 줄 기록 | 크기 순위.
 // 칸은 패널을 겹치지 않고 표면을 파낸 오목한 칸(Inset)으로 나눠 다른 창의 노치·베벨 언어와 맞춘다.
@@ -86,8 +86,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
             <Inset className="flex flex-1 flex-col">
               {ranking.data && ranking.data.top.length > 0 ? (
                 <>
-                  {/* 표 머리와 순위 다섯 줄 높이 — 그 아래는 칸 안에서 스크롤한다 */}
-                  <div className={`${SCROLL_Y} max-h-[186px]`}>
+                  {/* 표 머리(28px)와 순위 다섯 줄(28.5px씩)에 위 여백 4px을 더한 높이 — 그 아래는 칸 안에서 스크롤한다 */}
+                  <div className={`${SCROLL_Y_ROWS} max-h-[174.5px]`}>
                     <div className="pl-1">
                       <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                     </div>
