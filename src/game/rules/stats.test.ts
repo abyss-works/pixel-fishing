@@ -111,11 +111,15 @@ describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 �
     expect(cap.red).toBe(20);
   });
 
-  it('미달 — 존 0, 일반 가중치 지수 페널티(2^(부족÷10+1), 상한 ×16), 입질 +부족/4초', () => {
-    const near = zonesFor(38, 40); // 부족 2
-    expect(near).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.5 });
-    const mid = zonesFor(32, 60); // 부족 28
-    expect(mid).toMatchObject({ mult: 8, biteExtra: 7 });
+  it('미달 — 존 0, 일반 가중치 ×min(16, 2^k) (k = ⌈부족/5⌉, 낚싯대 레벨 단위), 입질 +부족/4초', () => {
+    expect(zonesFor(38, 40)).toMatchObject({ yellow: 0, red: 0, mult: 2, biteExtra: 0.5 }); // 부족 2 → 1레벨
+    expect(zonesFor(35, 40).mult).toBe(2);   // 부족 5 (경계) → 1레벨
+    expect(zonesFor(34, 40).mult).toBe(4);   // 부족 6 → 2레벨
+    expect(zonesFor(30, 40).mult).toBe(4);   // 부족 10 (경계) → 2레벨
+    expect(zonesFor(29, 40).mult).toBe(8);   // 부족 11 → 3레벨
+    expect(zonesFor(25, 40).mult).toBe(8);   // 부족 15 (경계) → 3레벨
+    expect(zonesFor(24, 40).mult).toBe(16);  // 부족 16 → 4레벨
+    expect(zonesFor(32, 60)).toMatchObject({ mult: 16, biteExtra: 7 }); // 부족 28 → 상한
     const far = zonesFor(1, 60); // 부족 59 → 상한 ×16
     expect(far.mult).toBe(16);
     expect(far.biteExtra).toBe(14.75);

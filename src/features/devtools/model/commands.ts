@@ -24,7 +24,7 @@ export interface DevCommand {
   params: DevParam[];
 }
 
-/** 수배 구역 선택지 — 라이선스 명성 표의 구역을 구역 짧은 이름으로 */
+/** 수배 구역 선택지 — 수배 구역을 구역 짧은 이름으로 */
 export const devZoneOptions = (): DevOption[] =>
   DEBUG_ZONES.map(zone => ({ value: zone, label: zoneById(zone)?.shortName ?? zone }));
 

@@ -1,10 +1,11 @@
 // 바운티 헌팅 의뢰 템플릿 — 해역별 의뢰 행을 추가해 확장한다.
 // 어종 목록은 어종 데이터의 id를 참조한다(복제 금지). 수량과 보상 수치는 이 데이터가 정본이다.
-// 보상 스케일링 규칙: 난이도 보상 ≈ 그 난이도 의뢰들 판매가 평균의 15배(2026-10-17 하루 1회로 줄이며 5배 상향),
-// 네임드 보상은 2026-10-17 기존의 10배다(구역 전설 수집·하루 1회 상한이 게이트).
+// 보상 규칙: 구역 대표 방치 EV(구역 마지막 해역 딱렙)의 쉬움 1시간, 보통 2시간, 어려움 4시간,
+// 네임드 8시간어치이며 5나 10 단위로 반올림한다. 값은 밸런스 도구로 산출한다.
 import type { RarityId } from './rarity.js';
 
 export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic';
+export const BOUNTY_ZONES: readonly BountyZone[] = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'];
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
@@ -32,15 +33,6 @@ export interface BountyQuest {
   reward: number;  // 납품 보상 골드 (spec 5절 보상표)
 }
 
-// spec 2절 — 라이선스 명성 (검증만, 차감 없음)
-export const BOUNTY_LICENSE_FAME: Record<BountyZone, number> = {
-  pacific: 1500,
-  seasia: 20000,
-  indian: 80000,
-  madagascar: 300000,
-  southatlantic: 600000,
-};
-
 const Q = (
   zone: BountyZone, difficulty: BountyDifficulty,
   grade: RarityId | null, targetFish: string | null,
@@ -51,7 +43,7 @@ const Q = (
 });
 
 export const BOUNTIES: readonly BountyQuest[] = [
-  // 1-1 태평양 — 쉬움 20000 · 보통 40000 · 어려움 80000 · 네임드 400000
+  // 1-1 태평양 — 쉬움 20000 · 보통 40000 · 어려움 85000 · 네임드 150000
   Q('pacific', 'easy', 'common', null, 250, 20000),
   Q('pacific', 'easy', 'rare', null, 10, 20000),
   Q('pacific', 'easy', 'epic', null, 2, 20000),
@@ -59,28 +51,28 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('pacific', 'normal', 'rare', null, 20, 40000),
   Q('pacific', 'normal', 'epic', null, 5, 40000),
   Q('pacific', 'normal', 'legendary', null, 1, 40000),
-  Q('pacific', 'hard', 'common', null, 1000, 80000),
-  Q('pacific', 'hard', 'rare', null, 40, 80000),
-  Q('pacific', 'hard', 'epic', null, 10, 80000),
-  Q('pacific', 'hard', 'legendary', null, 2, 80000),
-  Q('pacific', 'named', null, 'megalodon', 1, 400000),
-  // 1-2 동남아 — 쉬움 80000 · 보통 150000 · 어려움 300000 · 네임드 1500000
-  Q('seasia', 'easy', 'common', null, 250, 80000),
-  Q('seasia', 'easy', 'rare', null, 10, 80000),
-  Q('seasia', 'easy', 'epic', null, 2, 80000),
+  Q('pacific', 'hard', 'common', null, 1000, 85000),
+  Q('pacific', 'hard', 'rare', null, 40, 85000),
+  Q('pacific', 'hard', 'epic', null, 10, 85000),
+  Q('pacific', 'hard', 'legendary', null, 2, 85000),
+  Q('pacific', 'named', null, 'megalodon', 1, 150000),
+  // 1-2 동남아 — 쉬움 65000 · 보통 150000 · 어려움 250000 · 네임드 550000
+  Q('seasia', 'easy', 'common', null, 250, 65000),
+  Q('seasia', 'easy', 'rare', null, 10, 65000),
+  Q('seasia', 'easy', 'epic', null, 2, 65000),
   Q('seasia', 'normal', 'common', null, 500, 150000),
   Q('seasia', 'normal', 'rare', null, 20, 150000),
   Q('seasia', 'normal', 'epic', null, 5, 150000),
   Q('seasia', 'normal', 'legendary', null, 1, 150000),
-  Q('seasia', 'hard', 'common', null, 1000, 300000),
-  Q('seasia', 'hard', 'rare', null, 40, 300000),
-  Q('seasia', 'hard', 'epic', null, 10, 300000),
-  Q('seasia', 'hard', 'legendary', null, 2, 300000),
-  Q('seasia', 'named', null, 'leviathan', 1, 1500000),
-  // 1-3 인도양 — 쉬움 150000 · 보통 350000 · 어려움 700000 · 네임드 3500000
-  Q('indian', 'easy', 'common', null, 250, 150000),
-  Q('indian', 'easy', 'rare', null, 10, 150000),
-  Q('indian', 'easy', 'epic', null, 2, 150000),
+  Q('seasia', 'hard', 'common', null, 1000, 250000),
+  Q('seasia', 'hard', 'rare', null, 40, 250000),
+  Q('seasia', 'hard', 'epic', null, 10, 250000),
+  Q('seasia', 'hard', 'legendary', null, 2, 250000),
+  Q('seasia', 'named', null, 'leviathan', 1, 550000),
+  // 1-3 인도양 — 쉬움 200000 · 보통 350000 · 어려움 700000 · 네임드 1500000
+  Q('indian', 'easy', 'common', null, 250, 200000),
+  Q('indian', 'easy', 'rare', null, 10, 200000),
+  Q('indian', 'easy', 'epic', null, 2, 200000),
   Q('indian', 'normal', 'common', null, 500, 350000),
   Q('indian', 'normal', 'rare', null, 20, 350000),
   Q('indian', 'normal', 'epic', null, 5, 350000),
@@ -89,33 +81,33 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('indian', 'hard', 'rare', null, 40, 700000),
   Q('indian', 'hard', 'epic', null, 10, 700000),
   Q('indian', 'hard', 'legendary', null, 2, 700000),
-  Q('indian', 'named', null, 'ananta', 1, 3500000),
-  // 1-4 마다가스카르 — 쉬움 225000 · 보통 500000 · 어려움 1000000 · 네임드 5000000
-  Q('madagascar', 'easy', 'common', null, 250, 225000),
-  Q('madagascar', 'easy', 'rare', null, 10, 225000),
-  Q('madagascar', 'easy', 'epic', null, 2, 225000),
-  Q('madagascar', 'normal', 'common', null, 500, 500000),
-  Q('madagascar', 'normal', 'rare', null, 20, 500000),
-  Q('madagascar', 'normal', 'epic', null, 5, 500000),
-  Q('madagascar', 'normal', 'legendary', null, 1, 500000),
-  Q('madagascar', 'hard', 'common', null, 1000, 1000000),
-  Q('madagascar', 'hard', 'rare', null, 40, 1000000),
-  Q('madagascar', 'hard', 'epic', null, 10, 1000000),
-  Q('madagascar', 'hard', 'legendary', null, 2, 1000000),
-  Q('madagascar', 'named', null, 'elder-sixgill', 1, 5000000),
-  // 1-5 남대서양 — 쉬움 300000 · 보통 675000 · 어려움 1350000 · 네임드 6750000
-  Q('southatlantic', 'easy', 'common', null, 250, 300000),
-  Q('southatlantic', 'easy', 'rare', null, 10, 300000),
-  Q('southatlantic', 'easy', 'epic', null, 2, 300000),
-  Q('southatlantic', 'normal', 'common', null, 500, 675000),
-  Q('southatlantic', 'normal', 'rare', null, 20, 675000),
-  Q('southatlantic', 'normal', 'epic', null, 5, 675000),
-  Q('southatlantic', 'normal', 'legendary', null, 1, 675000),
-  Q('southatlantic', 'hard', 'common', null, 1000, 1350000),
-  Q('southatlantic', 'hard', 'rare', null, 40, 1350000),
-  Q('southatlantic', 'hard', 'epic', null, 10, 1350000),
-  Q('southatlantic', 'hard', 'legendary', null, 2, 1350000),
-  Q('southatlantic', 'named', null, 'adamastor', 1, 6750000),
+  Q('indian', 'named', null, 'ananta', 1, 1500000),
+  // 1-4 마다가스카르 — 쉬움 400000 · 보통 800000 · 어려움 1500000 · 네임드 3000000
+  Q('madagascar', 'easy', 'common', null, 250, 400000),
+  Q('madagascar', 'easy', 'rare', null, 10, 400000),
+  Q('madagascar', 'easy', 'epic', null, 2, 400000),
+  Q('madagascar', 'normal', 'common', null, 500, 800000),
+  Q('madagascar', 'normal', 'rare', null, 20, 800000),
+  Q('madagascar', 'normal', 'epic', null, 5, 800000),
+  Q('madagascar', 'normal', 'legendary', null, 1, 800000),
+  Q('madagascar', 'hard', 'common', null, 1000, 1500000),
+  Q('madagascar', 'hard', 'rare', null, 40, 1500000),
+  Q('madagascar', 'hard', 'epic', null, 10, 1500000),
+  Q('madagascar', 'hard', 'legendary', null, 2, 1500000),
+  Q('madagascar', 'named', null, 'elder-sixgill', 1, 3000000),
+  // 1-5 남대서양 — 쉬움 950000 · 보통 2000000 · 어려움 4000000 · 네임드 8000000
+  Q('southatlantic', 'easy', 'common', null, 250, 950000),
+  Q('southatlantic', 'easy', 'rare', null, 10, 950000),
+  Q('southatlantic', 'easy', 'epic', null, 2, 950000),
+  Q('southatlantic', 'normal', 'common', null, 500, 2000000),
+  Q('southatlantic', 'normal', 'rare', null, 20, 2000000),
+  Q('southatlantic', 'normal', 'epic', null, 5, 2000000),
+  Q('southatlantic', 'normal', 'legendary', null, 1, 2000000),
+  Q('southatlantic', 'hard', 'common', null, 1000, 4000000),
+  Q('southatlantic', 'hard', 'rare', null, 40, 4000000),
+  Q('southatlantic', 'hard', 'epic', null, 10, 4000000),
+  Q('southatlantic', 'hard', 'legendary', null, 2, 4000000),
+  Q('southatlantic', 'named', null, 'adamastor', 1, 8000000),
 ];
 
 /** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */

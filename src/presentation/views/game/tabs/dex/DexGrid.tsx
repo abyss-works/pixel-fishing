@@ -6,7 +6,7 @@ import { selectDexGrid } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import { RarityText, RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
+import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold } from '../../../../ui/format';
@@ -58,7 +58,7 @@ export default function DexGrid({ game, view, sub, onSub }: {
                     {ok ? (
                       <>
                         <b>{name}</b><br />
-                        <RarityText rarity={f.rarity} /> · <span className="pf-accent">{fmtGold(price)}</span><br />
+                        <span className="pf-accent">{fmtGold(price)}</span><br />
                         <span className="text-text-dim text-xs">
                           {count}마리 잡음
                         </span>

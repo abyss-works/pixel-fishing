@@ -1,4 +1,4 @@
-// 수배판 — 바운티 헌팅의 수주·납품·보상 UI (항구 전용, 마을의 집 제외).
+// 수배판 — 바운티 헌팅의 수주·의뢰 완료·보상 UI (항구 전용, 마을의 집 제외).
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
@@ -48,13 +48,13 @@ function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: 
   );
 }
 
-/** 라이선스 조건 목록 — 닫힌 게이트 위에 덮는다. 충족한 조건은 줄을 긋는다 */
+/** 라이선스 미달 조건 목록 — 닫힌 게이트 위에 덮는다 */
 function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
   return (
     <ul>
       {conds.map(c => (
-        <li key={c.key} className={c.ok ? 'line-through text-text-dim' : ''}>
-          <PixelIcon glyph={c.ok ? 'checkOn' : 'checkOff'} size={11} /> {c.label}
+        <li key={c.key}>
+          <PixelIcon glyph="checkOff" size={11} /> {c.label}
         </li>
       ))}
     </ul>
@@ -112,7 +112,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
+          `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
     );
   };
 
