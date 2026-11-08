@@ -39,7 +39,7 @@ describe('가방 파생 데이터', () => {
     expect(preview.lockedCount).toBe(1);
     expect(preview.total.value).toBeGreaterThan(0);
     expect(preview.rows.find(row => row.key === fish.id)).toMatchObject({
-      selectedCount: 0, allSelected: false, selectedSubtotal: { base: 0, mods: [], value: 0 },
+      selectedCount: 0, allSelected: false, selectedSubtotal: 0,
     });
   });
 
@@ -56,8 +56,6 @@ describe('가방 파생 데이터', () => {
     expect(preview.total.base).toBe(none.total.base);
     expect(preview.total.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(none.total.base, bonus) }]);
     expect(preview.total.value).toBe(sellSelected(state, preview.soldUids, bonus).gold);
-    for (const row of preview.rows) {
-      expect(row.selectedSubtotal.value).toBe(row.selectedSubtotal.base + saleBonusOf(row.selectedSubtotal.base, bonus));
-    }
+    expect(preview.rows.reduce((sum, row) => sum + row.selectedSubtotal, 0)).toBe(preview.total.base);
   });
 });

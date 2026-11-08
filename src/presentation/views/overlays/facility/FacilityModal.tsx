@@ -205,7 +205,7 @@ function SellPanel({ game, sellBonus, onSell, onClose, busy }: {
                   {on === items.length ? `×${items.length}` : `${on}/${items.length}`}
                 </td>
                 <td className="pf-accent">
-                  {on > 0 && !locked ? <AdjustedAmount amount={selectedSubtotal} /> : '0G'}
+                  {on > 0 && !locked ? fmtGold(selectedSubtotal) : '0G'}
                 </td>
               </tr>,
               expanded ? (

@@ -67,7 +67,8 @@ export interface SaleRow extends BagRow {
   selected: FishInstance[];
   selectedCount: number;
   allSelected: boolean;
-  selectedSubtotal: Stat;
+  /** 선택한 개체의 기본가 합 - 길드 보너스는 총액에서 한 번 더하므로 행에는 반영하지 않는다 */
+  selectedSubtotal: number;
   unsized: Array<BagRow['unsized'][number] & {
     free: FishInstance[];
     selectedCount: number;
@@ -115,7 +116,7 @@ export function selectSalePreview(
       selected,
       selectedCount: selected.length,
       allSelected: sellable.length > 0 && selected.length === sellable.length,
-      selectedSubtotal: saleProceeds(sumPrice(selected), sellBonus),
+      selectedSubtotal: sumPrice(selected),
       unsized,
     };
   });
@@ -123,7 +124,7 @@ export function selectSalePreview(
   return {
     rows,
     soldUids,
-    total: saleProceeds(rows.reduce((total, row) => total + sumPrice(row.selected), 0), sellBonus),
+    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus),
     lockedCount: bag.filter(instance => instance.locked).length,
   };
 }
