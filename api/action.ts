@@ -172,12 +172,13 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
  * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
+ * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
  * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
  * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
-  'setNickname', 'deliverBounty', 'exchangeArtifact', 'claimMail', 'seeTutorial',
+  'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
 ]);
 

@@ -858,3 +858,56 @@ describe('자동 잠금', () => {
     expect(await snapshotOf(uid, out)).toMatchSnapshot();
   });
 });
+
+describe('유물 레벨과 마미 와타의 거울', () => {
+  const namedState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
+  const offeredNamed = (uid: string) => dailyQuestFor('pacific', 'named', uid, TODAY_KST)!;
+  const accept = (uid: string, questId: string) =>
+    callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'harbor' });
+  const clearRow = (uid: string) =>
+    env.client.query('insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values ($1, $2, $3, $4)',
+      [uid, 'named', 'pacific-named-megalodon', NOW]);
+  const stateRowOf = async (uid: string) =>
+    ((await dumpUser(env.client, uid)).saves_current as { gold: string; data: { items?: Record<string, number>; artifactLevels?: unknown } }[])[0];
+
+  it('재료를 써서 유물 레벨을 올리고 레벨 맵을 blob에 남긴다', async () => {
+    const uid = await seed({ state: { artifacts: ['wreck-compass'], items: { 'mat-wreck-compass': 3 } } });
+    expect((await callAction(userToken(uid), { type: 'levelUpArtifact', artifact: 'wreck-compass' })).status).toBe(200);
+    const data = (await stateRowOf(uid)).data;
+    expect(data.artifactLevels).toEqual({ 'wreck-compass': 2 });
+    expect(data.items).toEqual({ 'mat-wreck-compass': 2 });
+  });
+
+  it('재료가 모자라면 레벨업을 거부한다', async () => {
+    const uid = await seed({ state: { artifacts: ['wreck-compass'], items: {} } });
+    expect(await callAction(userToken(uid), { type: 'levelUpArtifact', artifact: 'wreck-compass' }))
+      .toMatchObject({ status: 422, body: { error: 'material-missing' } });
+  });
+
+  it('거울을 가지면 네임드 토벌 골드가 30% 줄고 교환 재료 수는 그대로다', async () => {
+    const quest = bountyById('pacific-named-megalodon')!;
+    const uid = await seed({ state: { artifacts: ['mami-wata-mirror'] } });
+    await env.client.query(`insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at, updated_at)
+      values ($1, $2, $3, 1, $4, $4)`, [uid, quest.zone, quest.id, NOW]);
+    expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })).status).toBe(200);
+    const row = await stateRowOf(uid);
+    expect(row.gold).toBe(String(Math.floor(quest.reward * 0.7)));
+    expect(Object.values(row.data.items ?? {})).toEqual([1]);
+  });
+
+  it('거울이 없으면 네임드 클리어 한 번으로 그날 수주가 막힌다', async () => {
+    const uid = await seed({ state: namedState() });
+    await clearRow(uid);
+    expect(await accept(uid, offeredNamed(uid).id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+
+  it('거울을 가지면 네임드 클리어가 한 번이어도 수주하고 두 번이면 막힌다', async () => {
+    const uid = await seed({ state: { ...namedState(), artifacts: ['mami-wata-mirror'] } });
+    await clearRow(uid);
+    expect((await accept(uid, offeredNamed(uid).id)).status).toBe(200);
+    await env.client.query('delete from public.bounty_progress where user_id = $1', [uid]);
+    await clearRow(uid);
+    vi.setSystemTime(Date.parse(NOW) + 3000);
+    expect(await accept(uid, offeredNamed(uid).id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+});

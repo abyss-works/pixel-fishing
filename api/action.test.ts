@@ -92,6 +92,7 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
     expect(SKIP_DETAIL.has('deliverBounty')).toBe(true);
     expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
+    expect(SKIP_DETAIL.has('levelUpArtifact')).toBe(true); // 레벨 맵과 재료도 blob이라 같은 기준
     expect(SKIP_DETAIL.has('boot')).toBe(true);
     // 옷장 액션은 골드와 blob(외형·가진 모자)만 바꾼다
     for (const t of ['changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
