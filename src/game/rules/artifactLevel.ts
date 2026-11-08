@@ -37,6 +37,7 @@ export function artifactEffectsAt(art: Artifact, level: number): ArtifactEffects
   if (e.sail !== undefined) out.sail = clean(e.sail * k);
   if (e.duelSpeedupCut !== undefined) out.duelSpeedupCut = clean(e.duelSpeedupCut * k);
   if (e.baitDiscount !== undefined) out.baitDiscount = clean(e.baitDiscount * k);
+  if (e.biteWaitCut !== undefined) out.biteWaitCut = clean(e.biteWaitCut * k);
   if (e.mutationWeight !== undefined) {
     const boost = e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1;
     out.mutationWeight = {
