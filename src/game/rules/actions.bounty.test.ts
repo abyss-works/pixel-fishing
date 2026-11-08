@@ -9,7 +9,7 @@ import { newState } from './logic';
 import type { GameState } from './logic';
 import { LICENSE_GRADES, matchBountyCatch, rollNamedEncounter, zoneDexMissing } from './logic';
 import type { BountyCtx } from './rules';
-import { BOUNTIES } from '../content/bounties';
+import { BOUNTIES, bountyById } from '../content/bounties';
 import { gameDayOf } from './time';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -249,11 +249,12 @@ describe('deliverBounty', () => {
       return out.state;
     };
     const mirror = toss('southatlantic-named-adamastor');
-    expect(mirror.gold).toBe(8000000);
+    expect(mirror.gold).toBe(bountyById('southatlantic-named-adamastor')!.reward);
     expect(mirror.items).toEqual({ 'mat-clouded-mirror': 1 });
     const sinker = toss('southatlantic-named-jasconius');
-    expect(sinker.gold).toBe(8000000);
+    expect(sinker.gold).toBe(bountyById('southatlantic-named-jasconius')!.reward);
     expect(sinker.items).toEqual({ 'mat-scorched-sinker': 1 });
+    expect(sinker.gold).toBe(mirror.gold);
   });
 });
 
