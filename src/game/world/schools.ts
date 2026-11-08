@@ -9,6 +9,7 @@ import type { RegionId, Rect, School } from './types';
 import { WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
 import { cellIndex, indexCenter, localCell } from './mask';
+import { canMove } from './engine';
 
 /** 해역별 어군 개수 범위 — 일반 해역(최상위 존의 스팟)과 특수 해역(하위 존의 스팟) */
 export const GENERAL_SCHOOLS = { min: 7, max: 8 } as const;
@@ -49,7 +50,7 @@ function mulberry32(seed: number): () => number {
 // ---------- 후보 칸 — 날짜와 무관한 지형 파생(1회 계산) ----------
 
 /** 존별 후보 칸 인덱스(전지구 격자 기준 — 창이 바뀌어도 같은 칸은 같은 인덱스). 조건: 그 존의 물 칸 · 스폰에서 바다로 닿음 ·
- *  8방향 이웃에 육지 없음 · 항구 앞 여유 밖 · 건물 밖 */
+ *  8방향 이웃에 육지 없음 · 항구 앞 여유 밖 · 건물 밖 · 통행 가능 */
 let candidateCache: Map<ZoneId, number[]> | null = null;
 
 function candidatesByZone(): Map<ZoneId, number[]> {
@@ -104,7 +105,7 @@ function candidatesByZone(): Map<ZoneId, number[]> {
       if (!def?.water || !def.zone || !reachable[local] || nearLand(c, r)) continue;
       const idx = cellIndex(map, c, r);
       const { x, y } = indexCenter(map, idx);
-      if (nearHarbor(x, y)) continue;
+      if (nearHarbor(x, y) || !canMove(WORLD, x, y)) continue; // 창 가장자리 여유(동단 열)는 통행 불가
       let list = out.get(def.zone);
       if (!list) out.set(def.zone, list = []);
       list.push(idx);
