@@ -24,9 +24,19 @@ describe('Modal 층', () => {
     for (const t of other) expect(backdropOf().className).not.toContain(t);
   });
 
-  it('창의 바탕은 앱과 스테이지 모두 반투명 어두운 바탕으로 아래를 덮는다', () => {
-    render(<Modal layer="stage" onClose={() => {}}>본문</Modal>);
-    expect(backdropOf().className).toContain('absolute inset-0');
+  it.each([
+    ['app', 'fixed inset-0'],
+    ['stage', 'absolute inset-0'],
+  ] as const)('%s 창의 바탕은 화면을 덮는 위치와 반투명 어두운 배경을 갖는다', (layer, cover) => {
+    render(<Modal layer={layer} onClose={() => {}}>본문</Modal>);
+    const cls = backdropOf().className;
+    expect(cls).toContain(cover);
+    const tint = cls.match(/\bbg-\[rgba\((\d+),(\d+),(\d+),(0?\.\d+)\)\]/);
+    expect(tint).not.toBeNull();
+    const [, r, g, b, alpha] = tint!;
+    expect(Math.max(Number(r), Number(g), Number(b))).toBeLessThan(40);
+    expect(Number(alpha)).toBeGreaterThan(0.4);
+    expect(Number(alpha)).toBeLessThan(1);
   });
 });
 

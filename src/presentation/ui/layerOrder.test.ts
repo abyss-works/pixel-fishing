@@ -2,7 +2,7 @@
 // 화면 층 가드 - 층 순서를 z 토큰 값과 각 층의 구성 요소 사용에 묶는다.
 // 아래부터 스테이지 위 HUD, 채팅과 헤더, 창(닫을 수 없는 창이 창 층 맨 위), 탭 메뉴(탭 줄과 시트), 화면 전환 덮개, 툴팁이다. 레이아웃 높이나 겹침은 jsdom이 계산하지 못하므로
 // 여기서는 토큰 값의 순서, 숫자 직접 사용 금지, 층별 요소가 자기 토큰을 쓰는지, 카드 메뉴가 채팅 높이를 쓰지 않는지만 본다.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/index.css', 'utf-8');
@@ -159,9 +159,36 @@ describe('화면 층 - 키보드가 올라와도 게임 영역 크기는 바뀌�
     expect(css).not.toMatch(/data-keyboard[^{]*\{[^}]*(?:height|inset|top|bottom|padding|margin)\s*:/);
   });
 
-  it('PC 레이아웃과 모바일 레이아웃의 탭 줄은 키보드 동안 숨기되(invisible) 자리는 그대로 둔다', () => {
+  it('모바일 레이아웃의 탭 줄은 키보드 동안 숨기되(invisible) 자리는 그대로 둔다', () => {
     const sidebar = src('layouts/sidebar/index.tsx');
-    expect(sidebar).toContain('group-data-[keyboard]/root:invisible');
+    const asides = sidebar.match(/<aside\b[^>]*>/g) ?? [];
+    const mobileAside = asides.find(a => a.includes('group-data-[keyboard]/root:invisible'));
+    expect(mobileAside).toBeDefined();
     expect(sidebar).not.toMatch(/group-data-\[keyboard\]\/root:(?!invisible)/);
+  });
+
+  it('키보드 변수와 변형을 쓰는 파일은 허용 목록뿐이고, 소비처는 bottom, top 오프셋이나 invisible만 쓴다', () => {
+    const uses = /--keyboard-(?:h|top)\b|data-\[keyboard\]|\bdata-keyboard\b/;
+    const stripComments = (code: string) => code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]);
+    const users = walk('src')
+      .filter(p => /\.(?:ts|tsx|css)$/.test(p) && !/\.test\.tsx?$/.test(p))
+      .filter(p => uses.test(stripComments(readFileSync(p, 'utf-8'))))
+      .sort();
+    const definers = ['src/presentation/layouts/visibleBox.ts', 'src/presentation/views/game/GameView.tsx'];
+    const consumers = [
+      'src/presentation/layouts/hud/HudHeader.tsx',
+      'src/presentation/layouts/hud/HudLayout.tsx',
+      'src/presentation/layouts/sidebar/index.tsx',
+      'src/presentation/ui/hud/MobileResourceBar.tsx',
+    ];
+    expect(users).toEqual([...definers, ...consumers].sort());
+    const allowed = /^(?:[\w-]+:)*(?:(?:bottom|top)-\[[^\]]*var\(--keyboard-(?:h|top)[^\]]*\]|group-data-\[keyboard\]\/root:invisible)$/;
+    for (const path of consumers) {
+      const tokens = stripComments(readFileSync(path, 'utf-8')).match(/[^\s"'`{}]*(?:--keyboard-(?:h|top)\b|data-\[keyboard\])[^\s"'`{}]*/g) ?? [];
+      expect(tokens.length).toBeGreaterThan(0);
+      expect(tokens.filter(t => !allowed.test(t)), path).toEqual([]);
+    }
   });
 });
