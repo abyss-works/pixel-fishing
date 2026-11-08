@@ -32,6 +32,7 @@ describe('ArtifactDetail - 상태별 화면', () => {
     expect(screen.getByText('+10%')).toBeInTheDocument();
     expect(screen.getByText('+12.5%')).toBeInTheDocument();
     const cost = within(screen.getByRole('group', { name: '필요한 재료' }));
+    expect(cost.getByText('필요한 재료')).toBeVisible();
     expect(cost.getByText(COMPASS.materialName)).toBeInTheDocument();
     expect(cost.getByText('3')).toBeInTheDocument();
     expect(cost.getByText('2')).not.toHaveClass('text-danger');

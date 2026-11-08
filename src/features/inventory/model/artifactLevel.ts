@@ -48,9 +48,7 @@ export const LEVEL_UP_TEXT = {
   maxButton: '최고 레벨',
   levelLabel: '레벨',
   materialLabel: '필요한 재료',
-  legendaryValue: '없음',
   materialTip: '교환 재료는 네임드 토벌 보상으로 받아요. 강화에도 같은 재료를 써요.',
-  legendaryTip: '전설 유물은 레벨이 없어요. 가지고만 있어도 효과가 계속돼요.',
   /** 강화를 보낼 수 없는 상태별 거부 문구 */
   notice: {
     unowned: '아직 가지지 않은 유물이에요. 먼저 교환해 주세요.',

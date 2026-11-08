@@ -14,6 +14,7 @@ import KeyValueRow from '../../../../ui/KeyValueRow';
 import LoreParagraph from '../../../../ui/LoreParagraph';
 import Modal from '../../../../ui/Modal';
 import PageTitle from '../../../../ui/PageTitle';
+import Subheading from '../../../../ui/Subheading';
 import Tip from '../../../../ui/Tip';
 import { RarityText } from '../../../../ui/fish/RarityTag';
 import type { Notify } from '../../../../ui/hud/messageFeed';
@@ -98,6 +99,7 @@ function Footer({ view, busy, onLevelUp }: { view: ArtifactLevelView; busy: bool
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-line pt-2">
       <div role="group" aria-label={LEVEL_UP_TEXT.materialLabel}>
+        <Subheading>{LEVEL_UP_TEXT.materialLabel}</Subheading>
         <CostBox>
           <CostLine have={material.have} delta={-next!.cost} format={fmtNum}
                     label={<Tip text={LEVEL_UP_TEXT.materialTip}>{material.name}</Tip>} />
