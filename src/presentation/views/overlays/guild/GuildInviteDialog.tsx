@@ -7,7 +7,7 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
-import GuildInviteSummary from './GuildInviteSummary';
+import GuildInviteSummary, { GuildInviteAction } from './GuildInviteSummary';
 
 // 초대 링크 확인 창 — 초대 링크(/g/코드)로 열린 게임이 상태를 불러온 뒤 띄운다. 400 폭.
 // 위는 길드 요약, 아래는 상태마다 다른 안내 한 줄과 버튼이다. 링크를 연 것만으로는 가입하지 않고, 버튼을 눌러야 들어가거나 신청한다.
@@ -43,25 +43,27 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     }
   };
 
+  // 주 버튼은 카드의 확정 자리(하단 고정)에 둔다
+  const action = invite.failed || !view ? undefined
+    : view.state === 'bad' ? <Button full onClick={onClose}>확인</Button>
+    : view.state === 'guest' ? <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
+    : invite.preview ? <GuildInviteAction view={view} busy={busy} onConfirm={() => { void confirm(); }} /> : undefined;
+
   return (
     <Modal layer="stage" onClose={onClose}>
-      <ModalCard title="길드 초대" onClose={onClose}>
+      <ModalCard title="길드 초대" onClose={onClose} confirm={action}>
         <div className="flex flex-col gap-3">
           {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
             : !view ? <Note>초대를 불러오는 중이에요.</Note>
             : view.state === 'bad' ? (
-              <>
-                <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
-                <Button full onClick={onClose}>확인</Button>
-              </>
+              <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
             ) : view.state === 'guest' ? (
               <>
                 <GuildInviteSummary preview={invite.preview} view={null} busy={busy} onConfirm={() => {}} />
                 <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
-                <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
               </>
             ) : (
-              <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void confirm(); }} />
+              <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void confirm(); }} actionSlot />
             )}
           {error && <Note tone="warn">{error}</Note>}
         </div>
