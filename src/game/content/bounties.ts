@@ -3,12 +3,9 @@
 // 보상 스케일링 규칙: 난이도 보상 ≈ 그 난이도 의뢰들 판매가 평균의 15배(2026-10-17 하루 1회로 줄이며 5배 상향),
 // 네임드 보상은 2026-10-17 기존의 10배다(구역 전설 수집·하루 1회 상한이 게이트).
 import type { RarityId } from './rarity.js';
-import { BOATS } from './boats.js';
-import type { Boat } from './boats.js';
-import { subtreeSpots } from './zones.js';
 
 export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic';
-const BOUNTY_ZONES: readonly BountyZone[] = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'];
+export const BOUNTY_ZONES: readonly BountyZone[] = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'];
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
@@ -35,21 +32,6 @@ export interface BountyQuest {
   count: number;   // 납품 수량 (spec 3절 수량표)
   reward: number;  // 납품 보상 골드 (spec 5절 보상표)
 }
-
-/** 라이선스 명성 문턱 배수 — 구역 진입 배 명성 요구치에 곱한다 */
-export const LICENSE_FAME_MULT = 3;
-
-/** 구역 진입 배 — 그 구역의 첫 해역을 여는 배. 그 배의 명성 요구치가 0이면(태평양)
- *  명성 요구치가 0보다 큰 첫 배를 기준으로 한다 */
-function licenseBaseBoat(zone: BountyZone): Boat {
-  const entry = Math.min(...subtreeSpots(zone).map(s => s.boatTier));
-  return BOATS.find(b => b.tier >= entry && b.fameReq > 0)!;
-}
-
-// spec 2절 — 라이선스 명성 (검증만, 차감 없음). 구역 진입 배의 명성 요구치에서 계산한다
-export const BOUNTY_LICENSE_FAME = Object.fromEntries(
-  BOUNTY_ZONES.map(zone => [zone, licenseBaseBoat(zone).fameReq * LICENSE_FAME_MULT]),
-) as Record<BountyZone, number>;
 
 const Q = (
   zone: BountyZone, difficulty: BountyDifficulty,

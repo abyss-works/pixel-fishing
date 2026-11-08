@@ -19,7 +19,6 @@ import type { Fish, FormId } from '../content/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
-import { BOUNTY_LICENSE_FAME } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
@@ -238,8 +237,8 @@ export function zoneDexMissing(
     .map(f => f.id);
 }
 
-/** 라이선스 조건 2종 — 명성 + 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
-export interface LicenseCondition { key: 'fame' | 'dex'; label: string; ok: boolean }
+/** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
+export interface LicenseCondition { key: 'dex'; label: string; ok: boolean }
 /** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
  *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
 export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
@@ -255,7 +254,6 @@ export function licenseConditions(
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
   const left = missing > 0 ? ` · 남은 ${missing}종` : '';
   return [
-    { key: 'fame', label: `명성 ${BOUNTY_LICENSE_FAME[zone].toLocaleString('ko-KR')} 달성`, ok: state.fame >= BOUNTY_LICENSE_FAME[zone] },
     { key: 'dex', label: (tier === 'named'
       ? `${area} 모든 어종 수집(밤 어종 포함)`
       : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },

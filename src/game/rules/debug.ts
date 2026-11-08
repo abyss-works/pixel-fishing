@@ -8,7 +8,7 @@ import {
   applyRelief, LICENSE_GRADES, MAX_BOAT, addItem, nextDexRec, zoneDexMissing,
 } from './logic.js';
 import type { GameState } from './logic.js';
-import { BOUNTY_LICENSE_FAME } from '../content/bounties.js';
+import { BOUNTY_ZONES } from '../content/bounties.js';
 import type { BountyZone } from '../content/bounties.js';
 import { artifactOfZone } from '../content/artifacts.js';
 
@@ -26,8 +26,8 @@ export const DEBUG_COMMAND_IDS: readonly DebugCommandId[] = [...STATE_COMMANDS, 
 export const isDebugTableCommand = (command: string): command is DebugTableCommand =>
   (DEBUG_TABLE_COMMANDS as readonly string[]).includes(command);
 
-/** 수배 구역 목록 — 라이선스 명성 표가 정본이다 */
-export const DEBUG_ZONES = Object.keys(BOUNTY_LICENSE_FAME) as BountyZone[];
+/** 수배 구역 목록 */
+export const DEBUG_ZONES: readonly BountyZone[] = BOUNTY_ZONES;
 
 const zoneArg = (args: Record<string, unknown>): BountyZone | null =>
   DEBUG_ZONES.includes(args.zone as BountyZone) ? args.zone as BountyZone : null;

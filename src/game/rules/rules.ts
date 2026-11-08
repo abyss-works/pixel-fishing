@@ -175,7 +175,7 @@ export function fastTravelTargets(state: GameState, from: BaseId): FastTravelTar
 }
 
 /** 서버 주입 수배 진실 — 오늘 클리어 횟수·완료·진행 목록은 DB가 들고 있다.
- *  라이선스 조건(명성·도감)은 상태에서 직접 본다 — 취득 절차가 없어 행이 없다.
+ *  라이선스 조건(도감)은 상태에서 직접 본다 — 취득 절차가 없어 행이 없다.
  *  하루 경계(KST 04:00) 집계와 의뢰 만료를 서버가 끝낸 값만 들어온다. */
 export interface BountyCtx {
   clearsToday: Record<BountyKind, number>; // 오늘 클리어(보상 수령)한 횟수 — 갈래별
@@ -198,11 +198,13 @@ export function canAcceptQuest(
   const q = bountyById(questId);
   if (!q) return no('bad-request');
   if (!isBountyPort(port)) return no('bad-request'); // 고향(home)에는 수배 창구가 없다
+  // 의뢰는 그 구역 항구의 수배판에서만 수주한다
+  if (zoneOfPort(port) !== q.zone) return no('bad-request');
   // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   // 라이선스 조건 직검 — 취득 절차 없이 조건 충족이면 열린다
   for (const c of licenseConditions(state, q.zone, LICENSE_TIER_OF[q.difficulty])) {
-    if (!c.ok) return no(c.key === 'fame' ? 'not-enough-fame' : 'dex-incomplete');
+    if (!c.ok) return no('dex-incomplete');
   }
   if (!ctx) return no('no-license');
   const kind = bountyKindOf(q);
