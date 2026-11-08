@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
-import { BOUNTIES, bountyById, dailyQuestFor } from '../../../game/content/bounties';
+import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../../../game/content/bounties';
 import { newState } from '../../../game/rules/logic';
-import { clearsLeft, clearsStatus, questLabel, selectBountyPanelData, selectNamedBountyCardData } from './panel';
+import { NAMED_ONE_AT_A_TIME_NOTICE, clearsLeft, clearsStatus, questLabel, selectBountyPanelData, selectNamedBountyCardData } from './panel';
 
 const clears = (general: number, named = 0) => ({ general, named });
 
@@ -12,7 +12,7 @@ describe('의뢰 화면 데이터', () => {
     const day = '2026-10-13';
     const uid = 'player-1';
     const quest = dailyQuestFor('pacific', 'easy', uid, day)!;
-    const namedQuest = dailyQuestFor('pacific', 'named', uid, day)!;
+    const namedQuest = offeredQuestsFor('pacific', 'named', uid, day)[0];
     const snapshot = {
       clearsToday: clears(1, 1),
       progress: [{ questId: quest.id, progress: 3 }],
@@ -29,7 +29,7 @@ describe('의뢰 화면 데이터', () => {
     expect(data.leftAll).toBe(0);
     expect(data.leftNamed).toBe(0);
     expect(data.progressOf(quest.id)).toBe(3);
-    expect(data.ticketMins).toBeGreaterThan(0);
+    expect(data.namedOffers[0].ticketMins).toBeGreaterThan(0);
   });
 
   it('수주한 의뢰는 진행도가 0이어도 진행 중이다 — 진행 행이 수주의 표시다', () => {
@@ -140,6 +140,18 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     expect(d.notice.general).toBe('일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.');
   });
 
+  it('같은 구역의 네임드 하나를 수주 중이면 네임드 수주가 막히고 한 번에 하나만 수주한다고 안내한다', () => {
+    const [adamastor] = offeredQuestsFor('southatlantic', 'named', uid, day);
+    const d = selectBountyPanelData({
+      game, port: 'walvisbay', uid, day, nowMs, snapshot: snap({ progress: [{ questId: adamastor.id, progress: 0 }] }),
+    });
+    expect(d.namedOffers.map(o => o.quest.id)).toContain('southatlantic-named-jasconius');
+    expect(d.canTakeNamed).toBe(false);
+    expect(d.isAccepted(adamastor.id)).toBe(true);
+    expect(d.notice.named).toBe(NAMED_ONE_AT_A_TIME_NOTICE);
+    expect(d.notice.general).toBeNull();
+  });
+
   it('진행 중인 일반 의뢰가 오늘의 의뢰와 달라도(날이 바뀐 뒤) 그 칸에 그대로 보인다 — 마친 의뢰를 받을 수 있어야 한다', () => {
     const today = dailyQuestFor('pacific', 'normal', uid, day)!;
     const old = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'normal' && q.id !== today.id)!;
@@ -157,7 +169,7 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
   });
 
   it('다른 구역에서 수주한 네임드 토벌이 진행 중이면 막히고 이유를 안내한다', () => {
-    const held = dailyQuestFor('seasia', 'named', uid, day)!;
+    const held = offeredQuestsFor('seasia', 'named', uid, day)[0];
     const d = data(snap({ progress: [{ questId: held.id, progress: 0 }] }), 'harbor');
     expect(d.canTakeNamed).toBe(false);
     expect(d.notice.named).toBe('동남아에서 수주한 네임드 토벌이 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
@@ -215,8 +227,39 @@ describe('마미 와타의 거울이 넓히는 네임드 토벌 한도', () => {
     const cut = selectBountyPanelData({
       game: mirror, port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
     });
-    const reward = base.offers.named!.reward;
-    expect(base.namedReward).toBe(reward);
-    expect(cut.namedReward).toBe(Math.floor(reward * 0.7));
+    const reward = base.namedOffers[0].quest.reward;
+    expect(base.namedOffers[0].reward).toBe(reward);
+    expect(cut.namedOffers[0].reward).toBe(Math.floor(reward * 0.7));
+  });
+});
+
+describe('네임드가 둘인 구역의 의뢰판', () => {
+  const input = { game: newState(), port: 'walvisbay' as const, uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null };
+
+  it('남대서양은 네임드 항목 둘을 모두 내고 항목마다 유물이 짝지어진다', () => {
+    const data = selectBountyPanelData(input);
+    expect(data.namedOffers.map(o => o.quest.targetFish)).toEqual(['adamastor', 'jasconius']);
+    expect(data.namedOffers.map(o => o.relic?.namedId)).toEqual(['adamastor', 'jasconius']);
+    expect(data.namedOffers[1].relic?.id).toBe('outer-isle-sinker');
+  });
+
+  it('유물 탭은 구역의 유물을 모두 낸다', () => {
+    const data = selectBountyPanelData(input);
+    expect(data.relics.map(r => r.artifact.namedId)).toEqual(['adamastor', 'jasconius']);
+  });
+
+  it('네임드가 하나인 구역은 항목이 하나다', () => {
+    const data = selectBountyPanelData({ ...input, port: 'harbor' });
+    expect(data.namedOffers).toHaveLength(1);
+    expect(data.relics).toHaveLength(1);
+  });
+
+  it('항목마다 도전권 잔여를 따로 낸다', () => {
+    const data = selectBountyPanelData({
+      ...input, nowMs: Date.parse('2026-10-13T00:01:00.000Z'),
+      snapshot: { clearsToday: clears(0), progress: [], tickets: [{ questId: 'southatlantic-named-jasconius', issuedAt: '2026-10-13T00:00:00.000Z' }] },
+    });
+    expect(data.namedOffers[0].ticketMins).toBeNull();
+    expect(data.namedOffers[1].ticketMins).toBeGreaterThan(0);
   });
 });

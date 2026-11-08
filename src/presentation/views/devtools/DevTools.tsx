@@ -10,7 +10,6 @@ import { useDevTools } from '../../../features/devtools/service/useDevTools';
 import {
   armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
 } from '../../../features/bounty/service/forceEncounter';
-import { gameDay } from '../../../features/bounty/service/queryKeys';
 import { setCanvasCover, useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useKeyScope } from '../../ui/hotkeys';
 import { cx } from '../../ui/cx';
@@ -60,12 +59,11 @@ const viewport = (): Size2 => ({ width: window.innerWidth, height: window.innerH
 // 정보 조회용 대시보드 이동만 남긴다.
 const RESTRICTED_NOTE = '운영 서버다 — 여기서는 대시보드 조회만 열 수 있다. 개발 도구는 스테이징·로컬에서 쓴다.';
 
-export default function DevTools({ game, dispatch, setToast, account, uid }: {
+export default function DevTools({ game, dispatch, setToast, account }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   account: string | null;
-  uid: string | null;
 }) {
   const visible = canSeeDevTools(account);
   const { restricted } = useDevEnv();
@@ -157,7 +155,7 @@ export default function DevTools({ game, dispatch, setToast, account, uid }: {
                 {section === 'presets' && DEV_PRESETS.map(preset => (
                   <div key={preset.id} className="flex flex-col gap-1">
                     <Button full disabled={tools.busy}
-                            onClick={() => void tools.runPreset(preset, { game, uid: uid ?? 'local', day: gameDay() })}>
+                            onClick={() => void tools.runPreset(preset, { game })}>
                       {preset.label}
                     </Button>
                     <span className="text-xs text-text-dim">{preset.hint}</span>

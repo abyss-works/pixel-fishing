@@ -19,20 +19,20 @@ const DATA = [
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 40 }, // Lv7
   // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(어군은 특화에만 둔다)
   { id: 'dragonhole',  name: '드래곤 홀',         boatTier: 3, region: 'seasia', powerReq: 50 }, // Lv9
-  { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 55,
+  { id: 'coron',       name: '코론 침선 지대',    boatTier: 3, region: 'seasia', powerReq: 60, // Lv11
     rarityWeight: { rare: 2000, epic: 900, legendary: 100 } },
-  { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 60,
+  { id: 'barrierreef', name: '그레이트 배리어 리프', boatTier: 3, region: 'seasia', powerReq: 70, // Lv13
     rarityWeight: { rare: 2300, epic: 0, legendary: 300 } }, // 영웅 어종 없음
   // 1-3 인도양 — 지역당 수역 2개 원칙(일반 연안 + 특화) 복귀. powerReq는 낚싯대 Lv를
-  // powerOfLevel로 환산한 파워다. 인도양 Lv14, 남인도양 Lv17, 모잠비크 해협 Lv20, 코모로 심해 Lv23.
+  // powerOfLevel로 환산한 파워다. 인도양 Lv15, 남인도양 Lv18, 모잠비크 해협 Lv20, 코모로 심해 Lv23.
   // 배 게이트: 사용자 확정(2026-08-27) — 1-2 동남아를 **건너뛰고** 인도양으로 넘어가려면
   // tier5(증기선)가 필요하다. 즉 1-2의 말라카 트리거는 requiredBoat 4에서 5로 올라야 하고,
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
   // 여러 해역을 한 번에 탐험하는 느낌).
   { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
-    powerReq: 75 }, // Lv14 환산 (10+(14-1)*5)
+    powerReq: 80 }, // Lv15 환산 (10+(15-1)*5)
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
-    powerReq: 90 }, // Lv17 환산 (10+(17-1)*5)
+    powerReq: 95 }, // Lv18 환산 (10+(18-1)*5)
   // 1-4 마다가스카르 — 일반 연안(모잠비크 해협) + 특화 심해(코모로 심해). 두 수역 모두 tier7 한 척으로
   // 연다(수역 간 EV 격차가 작아 두 번째 배를 두지 않았다). 등급 가중치 덮어쓰기가 없어 지역 단계 프리셋을 따른다.
   { id: 'mozstrait',   name: '모잠비크 해협', boatTier: 7, region: 'madagascar',
@@ -42,9 +42,9 @@ const DATA = [
   // 1-5 남대서양 — 특수 해역 둘(일반 연안 없음). 두 해역 모두 tier8 한 척으로 연다.
   // 등급 가중치 덮어쓰기가 없어 최신 지역 프리셋을 따른다.
   { id: 'benguela',    name: '남대서양 용승대', boatTier: 8, region: 'southatlantic',
-    powerReq: 135 }, // Lv26 환산
+    powerReq: 130 }, // Lv25 환산
   { id: 'sthelena',    name: '세인트헬레나',     boatTier: 8, region: 'southatlantic',
-    powerReq: 150 }, // Lv29 환산
+    powerReq: 140 }, // Lv27 환산
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

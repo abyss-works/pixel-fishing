@@ -56,46 +56,46 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('pacific', 'hard', 'epic', null, 10, 85000),
   Q('pacific', 'hard', 'legendary', null, 2, 85000),
   Q('pacific', 'named', null, 'megalodon', 1, 150000),
-  // 1-2 동남아 — 쉬움 65000 · 보통 150000 · 어려움 250000 · 네임드 550000
-  Q('seasia', 'easy', 'common', null, 250, 65000),
-  Q('seasia', 'easy', 'rare', null, 10, 65000),
-  Q('seasia', 'easy', 'epic', null, 2, 65000),
+  // 1-2 동남아 — 쉬움 70000 · 보통 150000 · 어려움 300000 · 네임드 550000
+  Q('seasia', 'easy', 'common', null, 250, 70000),
+  Q('seasia', 'easy', 'rare', null, 10, 70000),
+  Q('seasia', 'easy', 'epic', null, 2, 70000),
   Q('seasia', 'normal', 'common', null, 500, 150000),
   Q('seasia', 'normal', 'rare', null, 20, 150000),
   Q('seasia', 'normal', 'epic', null, 5, 150000),
   Q('seasia', 'normal', 'legendary', null, 1, 150000),
-  Q('seasia', 'hard', 'common', null, 1000, 250000),
-  Q('seasia', 'hard', 'rare', null, 40, 250000),
-  Q('seasia', 'hard', 'epic', null, 10, 250000),
-  Q('seasia', 'hard', 'legendary', null, 2, 250000),
+  Q('seasia', 'hard', 'common', null, 1000, 300000),
+  Q('seasia', 'hard', 'rare', null, 40, 300000),
+  Q('seasia', 'hard', 'epic', null, 10, 300000),
+  Q('seasia', 'hard', 'legendary', null, 2, 300000),
   Q('seasia', 'named', null, 'leviathan', 1, 550000),
-  // 1-3 인도양 — 쉬움 200000 · 보통 350000 · 어려움 700000 · 네임드 1500000
-  Q('indian', 'easy', 'common', null, 250, 200000),
-  Q('indian', 'easy', 'rare', null, 10, 200000),
-  Q('indian', 'easy', 'epic', null, 2, 200000),
-  Q('indian', 'normal', 'common', null, 500, 350000),
-  Q('indian', 'normal', 'rare', null, 20, 350000),
-  Q('indian', 'normal', 'epic', null, 5, 350000),
-  Q('indian', 'normal', 'legendary', null, 1, 350000),
-  Q('indian', 'hard', 'common', null, 1000, 700000),
-  Q('indian', 'hard', 'rare', null, 40, 700000),
-  Q('indian', 'hard', 'epic', null, 10, 700000),
-  Q('indian', 'hard', 'legendary', null, 2, 700000),
-  Q('indian', 'named', null, 'ananta', 1, 1500000),
-  // 1-4 마다가스카르 — 쉬움 400000 · 보통 800000 · 어려움 1500000 · 네임드 3000000
-  Q('madagascar', 'easy', 'common', null, 250, 400000),
-  Q('madagascar', 'easy', 'rare', null, 10, 400000),
-  Q('madagascar', 'easy', 'epic', null, 2, 400000),
-  Q('madagascar', 'normal', 'common', null, 500, 800000),
-  Q('madagascar', 'normal', 'rare', null, 20, 800000),
-  Q('madagascar', 'normal', 'epic', null, 5, 800000),
-  Q('madagascar', 'normal', 'legendary', null, 1, 800000),
+  // 1-3 인도양 — 쉬움 150000 · 보통 300000 · 어려움 600000 · 네임드 1000000
+  Q('indian', 'easy', 'common', null, 250, 150000),
+  Q('indian', 'easy', 'rare', null, 10, 150000),
+  Q('indian', 'easy', 'epic', null, 2, 150000),
+  Q('indian', 'normal', 'common', null, 500, 300000),
+  Q('indian', 'normal', 'rare', null, 20, 300000),
+  Q('indian', 'normal', 'epic', null, 5, 300000),
+  Q('indian', 'normal', 'legendary', null, 1, 300000),
+  Q('indian', 'hard', 'common', null, 1000, 600000),
+  Q('indian', 'hard', 'rare', null, 40, 600000),
+  Q('indian', 'hard', 'epic', null, 10, 600000),
+  Q('indian', 'hard', 'legendary', null, 2, 600000),
+  Q('indian', 'named', null, 'ananta', 1, 1000000),
+  // 1-4 마다가스카르 — 쉬움 350000 · 보통 750000 · 어려움 1500000 · 네임드 3000000
+  Q('madagascar', 'easy', 'common', null, 250, 350000),
+  Q('madagascar', 'easy', 'rare', null, 10, 350000),
+  Q('madagascar', 'easy', 'epic', null, 2, 350000),
+  Q('madagascar', 'normal', 'common', null, 500, 750000),
+  Q('madagascar', 'normal', 'rare', null, 20, 750000),
+  Q('madagascar', 'normal', 'epic', null, 5, 750000),
+  Q('madagascar', 'normal', 'legendary', null, 1, 750000),
   Q('madagascar', 'hard', 'common', null, 1000, 1500000),
   Q('madagascar', 'hard', 'rare', null, 40, 1500000),
   Q('madagascar', 'hard', 'epic', null, 10, 1500000),
   Q('madagascar', 'hard', 'legendary', null, 2, 1500000),
   Q('madagascar', 'named', null, 'elder-sixgill', 1, 3000000),
-  // 1-5 남대서양 — 쉬움 950000 · 보통 2000000 · 어려움 4000000 · 네임드 8000000
+  // 1-5 남대서양 — 쉬움 950000 · 보통 2000000 · 어려움 4000000 · 네임드 7500000
   Q('southatlantic', 'easy', 'common', null, 250, 950000),
   Q('southatlantic', 'easy', 'rare', null, 10, 950000),
   Q('southatlantic', 'easy', 'epic', null, 2, 950000),
@@ -107,7 +107,8 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('southatlantic', 'hard', 'rare', null, 40, 4000000),
   Q('southatlantic', 'hard', 'epic', null, 10, 4000000),
   Q('southatlantic', 'hard', 'legendary', null, 2, 4000000),
-  Q('southatlantic', 'named', null, 'adamastor', 1, 8000000),
+  Q('southatlantic', 'named', null, 'adamastor', 1, 7500000),
+  Q('southatlantic', 'named', null, 'jasconius', 1, 7500000),
 ];
 
 /** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */
@@ -119,10 +120,10 @@ const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 /** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
 export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);
 
-/** 일일 의뢰 — 사람·날짜·해역·난이도당 1행. 해시 결정이라 DB 저장 없이
+/** 일일 의뢰 — 일반 난이도의 사람·날짜·해역·난이도당 1행. 네임드는 해시로 뽑지 않는다(offeredQuestsFor). 해시 결정이라 DB 저장 없이
  *  클라·서버가 같은 값을 뽑는다. 난이도 내에서는 동일 확률이다. */
 export function dailyQuestFor(
-  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+  zone: BountyZone, difficulty: Exclude<BountyDifficulty, 'named'>, uid: string, day: string,
 ): BountyQuest | undefined {
   const pool = BOUNTIES.filter(q => q.zone === zone && q.difficulty === difficulty);
   if (pool.length === 0) return undefined;
@@ -131,6 +132,20 @@ export function dailyQuestFor(
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return pool[h % pool.length];
 }
+
+/** 수배판에 내는 의뢰 — 일반 난이도는 일일 의뢰 한 건이고, 네임드는 구역의 네임드마다 한 항목을 모두 낸다.
+ *  네임드가 둘인 구역(남대서양)은 두 항목을 내고 플레이어가 그 안에서 고른다 */
+export function offeredQuestsFor(
+  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+): BountyQuest[] {
+  if (difficulty === 'named') return BOUNTIES.filter(q => q.zone === zone && q.difficulty === 'named');
+  const daily = dailyQuestFor(zone, difficulty, uid, day);
+  return daily ? [daily] : [];
+}
+
+/** 그날 그 사람에게 수배판이 낸 의뢰인가 — 수주 검증이 쓰는 단일 판정 */
+export const isQuestOffered = (quest: BountyQuest, uid: string, day: string): boolean =>
+  offeredQuestsFor(quest.zone, quest.difficulty, uid, day).some(q => q.id === quest.id);
 
 /** 수배 창구가 있는 항구 → 담당 해역. 고향(home)은 없다 (spec 4절) */
 export const BOUNTY_PORT_ZONE = {

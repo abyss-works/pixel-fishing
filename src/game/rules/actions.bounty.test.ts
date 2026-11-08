@@ -7,9 +7,9 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState } from './logic';
 import type { GameState } from './logic';
-import { matchBountyCatch, rollNamedEncounter } from './logic';
+import { LICENSE_GRADES, matchBountyCatch, rollNamedEncounter, zoneDexMissing } from './logic';
 import type { BountyCtx } from './rules';
-import { BOUNTIES } from '../content/bounties';
+import { BOUNTIES, bountyById } from '../content/bounties';
 import { gameDayOf } from './time';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -99,6 +99,16 @@ describe('acceptQuest', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     const full = seed({ ...harbor, dex: pacificFullDex });
     expect(applyAction(full, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
+      .toEqual({ ok: false, error: 'daily-cleared' });
+  });
+
+  it('하루 한도는 구역 전체로 센다 — 아다마스토르를 클리어한 날에는 같은 구역의 야스코니우스도 daily-cleared', () => {
+    const dex: GameState['dex'] = {};
+    for (const id of zoneDexMissing(newState(), 'southatlantic', LICENSE_GRADES.named)) dex[id] = { normal: rec(1) };
+    const state = seed({ location: { kind: 'base', id: 'walvisbay' }, dex });
+    const act = { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'walvisbay' } as const;
+    expect(applyAction(state, act, deps({ bounty: ctx() })).ok).toBe(true);
+    expect(applyAction(state, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
       .toEqual({ ok: false, error: 'daily-cleared' });
   });
 
@@ -230,6 +240,32 @@ describe('deliverBounty', () => {
     expect(out.state.gold).toBe(150000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
   });
+
+  it('남대서양은 네임드마다 자기 교환 재료가 따라오고 보상은 같다', () => {
+    const toss = (questId: string) => {
+      const out = applyAction(seed({ gold: 0 }), { type: 'deliverBounty', questId },
+        deps({ bounty: ctx({ complete: [questId] }) }));
+      if (!out.ok) throw new Error(out.error);
+      return out.state;
+    };
+    const mirror = toss('southatlantic-named-adamastor');
+    expect(mirror.gold).toBe(bountyById('southatlantic-named-adamastor')!.reward);
+    expect(mirror.items).toEqual({ 'mat-clouded-mirror': 1 });
+    const sinker = toss('southatlantic-named-jasconius');
+    expect(sinker.gold).toBe(bountyById('southatlantic-named-jasconius')!.reward);
+    expect(sinker.items).toEqual({ 'mat-scorched-sinker': 1 });
+    expect(sinker.gold).toBe(mirror.gold);
+  });
+});
+
+describe('exchangeArtifact 바깥섬의 봉돌', () => {
+  it('그을린 봉돌 1개를 바깥섬의 봉돌 1개로 바꾼다', () => {
+    const out = applyAction(seed({ items: { 'mat-scorched-sinker': 1 } }),
+      { type: 'exchangeArtifact', artifact: 'outer-isle-sinker' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.artifacts).toEqual(['outer-isle-sinker']);
+    expect(out.state.items['mat-scorched-sinker']).toBeUndefined();
+  });
 });
 
 describe('exchangeArtifact', () => {
@@ -281,6 +317,12 @@ describe('rollNamedEncounter', () => {
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'mozstrait', () => 0)).toBeNull();
     expect(rollNamedEncounter(['madagascar-named-elder-sixgill'], 'comorodeep', () => 0)?.id)
       .toBe('madagascar-named-elder-sixgill');
+  });
+
+  it('야스코니우스는 세인트헬레나에서만 조우한다 — 용승대에서는 돌지 않는다', () => {
+    const q = 'southatlantic-named-jasconius';
+    expect(rollNamedEncounter([q], 'benguela', () => 0)).toBeNull();
+    expect(rollNamedEncounter([q], 'sthelena', () => 0)?.id).toBe(q);
   });
 
   it('아다마스토르는 용승대에서만 조우한다 — 세인트헬레나에서는 돌지 않는다', () => {

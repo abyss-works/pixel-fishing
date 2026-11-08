@@ -1349,9 +1349,9 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.getByText('개발 도구')).toBeInTheDocument();
-    expect(screen.getByText('태평양 네임드 직전')).toBeInTheDocument();
+    expect(screen.getByText('메갈로돈 네임드 직전')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'F9' });
-    expect(screen.queryByText('태평양 네임드 직전')).not.toBeInTheDocument();
+    expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '운영' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
@@ -1396,7 +1396,7 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '태평양 네임드 직전' }));
+    fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('태평양 항구 안에서 실행해야 한다');
     window.history.replaceState({}, '', '/');
   });
