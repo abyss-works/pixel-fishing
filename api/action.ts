@@ -22,7 +22,7 @@ import {
   takeItem, matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
-import { bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
+import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
@@ -417,8 +417,7 @@ async function route(req: Req, res: Res): Promise<void> {
     // 리듀서는 uid를 몰라 서버가 여기서 잠근다.
     if (action.type === 'acceptQuest') {
       const quest = bountyById(action.questId);
-      const offered = quest && dailyQuestFor(quest.zone, quest.difficulty, uid, gameDayOf(requestISO));
-      if (!offered || offered.id !== action.questId) {
+      if (!quest || !isQuestOffered(quest, uid, gameDayOf(requestISO))) {
         throw new ApiError(422, 'bad-request');
       }
     }

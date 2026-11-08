@@ -94,8 +94,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
     zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
-    basicOpen, namedOpen, canTake, canTakeNamed, notice, ticketMins, hasTicket,
-    relic, relicOwned, relicLevel, relicMats, namedReward,
+    basicOpen, namedOpen, canTake, canTakeNamed, notice, namedOffers, relics,
   } = data;
 
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
@@ -115,8 +114,6 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
     );
   };
-
-  const namedQuest = offers.named;
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -144,19 +141,21 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <>
         <div className="flex-1 min-h-0 flex flex-col">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
-          {namedQuest && (
-            <NamedCard key={namedQuest.id} game={game} quest={namedQuest}
-              canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
-              progress={progressOf(namedQuest.id)} accepted={isAccepted(namedQuest.id)}
-              ticketMins={hasTicket ? ticketMins : null}
-              materialName={relic?.materialName ?? null}
-              onAccept={() => run(
-                { type: 'acceptQuest', questId: namedQuest.id, port },
-                `${josa(questLabel(namedQuest), '을/를')} 수주했어요.`)}
-              onDeliver={() => run(
-                { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 보상으로 ${fmtGold(namedReward ?? namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
-          )}
+          <div className="grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0">
+            {namedOffers.map(({ quest, reward, ticketMins, relic }) => (
+              <NamedCard key={quest.id} game={game} quest={quest}
+                canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
+                progress={progressOf(quest.id)} accepted={isAccepted(quest.id)}
+                ticketMins={ticketMins}
+                materialName={relic?.materialName ?? null}
+                onAccept={() => run(
+                  { type: 'acceptQuest', questId: quest.id, port },
+                  `${josa(questLabel(quest), '을/를')} 수주했어요.`)}
+                onDeliver={() => run(
+                  { type: 'deliverBounty', questId: quest.id },
+                  `토벌 보상으로 ${fmtGold(reward)}와 교환 재료를 받았어요!`, 'gold')} />
+            ))}
+          </div>
         </Gated>
         </div>
         {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
@@ -175,13 +174,15 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
         </>
       ) : (
-        relic && (
-          <RelicCard key={relic.id} artifact={relic} owned={relicOwned} level={relicLevel}
-            materialCount={relicMats} busy={busy}
-            onExchange={() => run(
-              { type: 'exchangeArtifact', artifact: relic.id },
-              `${josa(relic.name, '을/를')} 손에 넣었어요!`, 'gold')} />
-        )
+        <div className="grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0">
+          {relics.map(({ artifact, owned, level, mats }) => (
+            <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
+              materialCount={mats} busy={busy}
+              onExchange={() => run(
+                { type: 'exchangeArtifact', artifact: artifact.id },
+                `${josa(artifact.name, '을/를')} 손에 넣었어요!`, 'gold')} />
+          ))}
+        </div>
       )}
       </div>
     </div>

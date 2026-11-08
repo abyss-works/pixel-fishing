@@ -52,6 +52,13 @@ describe('프리셋', () => {
     ]);
   });
 
+  it('네임드가 둘인 구역은 첫 네임드 항목을 수주한다', () => {
+    const atPort = seed({ location: { kind: 'base', id: 'walvisbay' } });
+    const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:southatlantic')!, ctx(atPort));
+    if (!plan.ok) throw new Error(plan.blocked);
+    expect(plan.steps).toContainEqual({ kind: 'action', action: { type: 'acceptQuest', questId: 'southatlantic-named-adamastor', port: 'walvisbay' } });
+  });
+
   it('배·낚싯대·명성은 낮출 때만 올리고 이미 높으면 유지한다', () => {
     const strong = seed({ location: { kind: 'base', id: 'harbor' }, fame: 999999, boat: 9, rod: 99 });
     const plan = planPreset(DEV_PRESETS.find(p => p.id === 'named-ready:pacific')!, ctx(strong));

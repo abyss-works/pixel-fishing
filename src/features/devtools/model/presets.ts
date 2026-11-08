@@ -6,7 +6,7 @@ import { DEBUG_ZONES } from '../../../game/rules/debug';
 import type { DebugCommandId } from '../../../game/rules/debug';
 import { minLevelOfPower } from '../../../game/rules/stats';
 import { boatAt } from '../../../game/content/boats';
-import { dailyQuestFor, portOfZone } from '../../../game/content/bounties';
+import { offeredQuestsFor, portOfZone } from '../../../game/content/bounties';
 import type { BountyZone } from '../../../game/content/bounties';
 import { SPOTS } from '../../../game/content/spots';
 import { topZoneOfSpot, zoneById } from '../../../game/content/zones';
@@ -51,7 +51,7 @@ function namedReady(zone: BountyZone): DevPreset {
       if (game.location.kind !== 'base' || game.location.id !== port) {
         return { ok: false, blocked: `${area} 항구 안에서 실행해야 한다 (수주는 수배판 위치를 요구한다).` };
       }
-      const quest = dailyQuestFor(zone, 'named', uid, day);
+      const quest = offeredQuestsFor(zone, 'named', uid, day)[0];
       if (!quest) return { ok: false, blocked: `${area}에는 네임드 의뢰가 없다.` };
       const gear = zoneGear(zone);
       return {

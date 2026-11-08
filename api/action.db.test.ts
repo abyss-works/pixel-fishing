@@ -60,7 +60,7 @@ function zoneDex(zone: BountyZone, tier: keyof typeof LICENSE_GRADES): GameState
   return dex;
 }
 
-const at = (id: 'home' | 'harbor' | 'colombo'): GameState['location'] => ({ kind: 'base', id });
+const at = (id: 'home' | 'harbor' | 'colombo' | 'walvisbay'): GameState['location'] => ({ kind: 'base', id });
 
 describe('요청 경계', () => {
   it('GET은 204 워밍 응답이다', async () => {
@@ -909,5 +909,23 @@ describe('유물 레벨과 마미 와타의 거울', () => {
     await clearRow(uid);
     vi.setSystemTime(Date.parse(NOW) + 3000);
     expect(await accept(uid, offeredNamed(uid).id)).toMatchObject({ status: 422, body: { error: 'daily-cleared' } });
+  });
+});
+
+describe('네임드가 둘인 구역의 수주', () => {
+  const southState = (): Partial<GameState> => ({ dex: zoneDex('southatlantic', 'named'), location: at('walvisbay') });
+  const accept = (uid: string, questId: string) =>
+    callAction(userToken(uid), { type: 'acceptQuest', questId, port: 'walvisbay' });
+
+  it.each(['southatlantic-named-adamastor', 'southatlantic-named-jasconius'])(
+    '제공된 네임드 항목 %s를 어느 쪽이든 수주한다', async questId => {
+      const uid = await seed({ state: southState() });
+      expect((await accept(uid, questId)).status).toBe(200);
+    });
+
+  it('다른 구역의 항구에서 낸 남대서양 네임드 수주는 거부한다', async () => {
+    const uid = await seed({ state: southState() });
+    const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'harbor' });
+    expect(res.status).toBe(422);
   });
 });

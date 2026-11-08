@@ -29,7 +29,7 @@ describe('의뢰 화면 데이터', () => {
     expect(data.leftAll).toBe(0);
     expect(data.leftNamed).toBe(0);
     expect(data.progressOf(quest.id)).toBe(3);
-    expect(data.ticketMins).toBeGreaterThan(0);
+    expect(data.namedOffers[0].ticketMins).toBeGreaterThan(0);
   });
 
   it('수주한 의뢰는 진행도가 0이어도 진행 중이다 — 진행 행이 수주의 표시다', () => {
@@ -215,8 +215,39 @@ describe('마미 와타의 거울이 넓히는 네임드 토벌 한도', () => {
     const cut = selectBountyPanelData({
       game: mirror, port: 'harbor', uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
     });
-    const reward = base.offers.named!.reward;
-    expect(base.namedReward).toBe(reward);
-    expect(cut.namedReward).toBe(Math.floor(reward * 0.7));
+    const reward = base.namedOffers[0].quest.reward;
+    expect(base.namedOffers[0].reward).toBe(reward);
+    expect(cut.namedOffers[0].reward).toBe(Math.floor(reward * 0.7));
+  });
+});
+
+describe('네임드가 둘인 구역의 의뢰판', () => {
+  const input = { game: newState(), port: 'walvisbay' as const, uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null };
+
+  it('남대서양은 네임드 항목 둘을 모두 내고 항목마다 유물이 짝지어진다', () => {
+    const data = selectBountyPanelData(input);
+    expect(data.namedOffers.map(o => o.quest.targetFish)).toEqual(['adamastor', 'jasconius']);
+    expect(data.namedOffers.map(o => o.relic?.namedId)).toEqual(['adamastor', 'jasconius']);
+    expect(data.namedOffers[1].relic?.id).toBe('outer-isle-sinker');
+  });
+
+  it('유물 탭은 구역의 유물을 모두 낸다', () => {
+    const data = selectBountyPanelData(input);
+    expect(data.relics.map(r => r.artifact.namedId)).toEqual(['adamastor', 'jasconius']);
+  });
+
+  it('네임드가 하나인 구역은 항목이 하나다', () => {
+    const data = selectBountyPanelData({ ...input, port: 'harbor' });
+    expect(data.namedOffers).toHaveLength(1);
+    expect(data.relics).toHaveLength(1);
+  });
+
+  it('항목마다 도전권 잔여를 따로 낸다', () => {
+    const data = selectBountyPanelData({
+      ...input, nowMs: Date.parse('2026-10-13T00:01:00.000Z'),
+      snapshot: { clearsToday: clears(0), progress: [], tickets: [{ questId: 'southatlantic-named-jasconius', issuedAt: '2026-10-13T00:00:00.000Z' }] },
+    });
+    expect(data.namedOffers[0].ticketMins).toBeNull();
+    expect(data.namedOffers[1].ticketMins).toBeGreaterThan(0);
   });
 });
