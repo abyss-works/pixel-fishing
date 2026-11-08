@@ -2,8 +2,8 @@
 // useGame이 통째 game을 내려주는 동안은 호출부(useMemo 등)가 이 함수들로 파생값을
 // 읽고, 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 import { describe, it, expect } from 'vitest';
-import { selectBagStatus, selectBaitInventory, selectOwnedArtifacts, selectGearSummary } from './selectors';
-import { newState } from '../../../game/rules/logic';
+import { selectBagOverview, selectBagStatus, selectBaitInventory, selectOwnedArtifacts, selectGearSummary } from './selectors';
+import { newState, saleBonusOf, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAITS } from '../../../game/content/baits';
 
@@ -78,5 +78,20 @@ describe('selectGearSummary - 헤더 자원 바의 배와 낚싯대', () => {
 
   it('배가 없으면(맨발) 티어 0과 없음을 돌려준다', () => {
     expect(selectGearSummary(seed({ boat: 0, rod: 1 }))).toEqual({ boatTier: 0, boatName: '없음', rodLevel: 1 });
+  });
+});
+
+describe('selectBagOverview - 판매 가능 금액', () => {
+  it('판매 가능 금액은 판매 화면과 같은 길드 판매가 보너스 내역이다', () => {
+    const game: GameState = {
+      ...newState(),
+      bag: [{ uid: 'a', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false }],
+    };
+    const base = sellableValue(game);
+    expect(selectBagOverview(game, 0).sellable).toEqual({ base, mods: [], value: base });
+    const bonus = 0.3;
+    const sellable = selectBagOverview(game, bonus).sellable;
+    expect(sellable.value).toBe(base + saleBonusOf(base, bonus));
+    expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
   });
 });

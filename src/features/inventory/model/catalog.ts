@@ -95,7 +95,7 @@ export function saleProceeds(base: number, sellBonus: number): Stat {
 
 /** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이다. */
 export function selectSalePreview(
-  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus = 0,
+  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number,
 ): SalePreview {
   const rows = groupInstances(bag).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);

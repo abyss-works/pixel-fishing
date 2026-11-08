@@ -161,7 +161,7 @@ function SellPanel({ game, sellBonus, onSell, onClose, busy }: {
       </>}
       confirm={
         <Button variant="primary" disabled={total.value === 0 || busy} onClick={() => onSell(soldUids)}>
-          판매 (+<AdjustedAmount amount={total} />)
+          판매 (+<AdjustedAmount amount={total} inButton />)
         </Button>
       }>
       {/* 어종 목록 — 확정 영역은 고정이고 이 칸만 세로로 스크롤한다. 높이는 모달 가용 높이와 행 서른 개 높이(840px, 위아래 여백 8px 포함 848px) 중 작은 값이다 */}

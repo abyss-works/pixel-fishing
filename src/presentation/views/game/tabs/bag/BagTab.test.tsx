@@ -16,7 +16,7 @@ const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...
 function show(g: GameState) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } }));
   const setToast = vi.fn();
-  render(<BagTab game={g} dispatch={dispatch} setToast={setToast} />);
+  render(<BagTab sellBonus={0} game={g} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 

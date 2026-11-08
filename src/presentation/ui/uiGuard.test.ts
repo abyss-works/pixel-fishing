@@ -224,8 +224,8 @@ describe('UI 시스템 가드', () => {
   });
 
   it('기능·앱 진입 코드도 입력 요소를 직접 그리지 않는다', () => {
-    const raw = /<(?:input|textarea|select)b/;
-    expect(appSources.filter(([key, src]) => !/\/presentation\//.test(key) && raw.test(src)).map(([key]) => key)).toEqual([]);
+    const raw = /<(?:input|textarea|select)\b/;
+    expect(appSources.filter(([key, src]) => key.startsWith('../../') && raw.test(src)).map(([key]) => key)).toEqual([]);
   });
 
   it('제목은 제목 컴포넌트와 창·상자 title로 쓴다 — 예외 목록의 자리만 태그를 직접 쓴다', () => {
@@ -413,34 +413,73 @@ describe('UI 시스템 가드', () => {
     expect(offenders).toEqual([]);
   });
 
-  // 보정 금액 — 보정이 붙는 금액(Stat)은 AdjustedAmount로만 보인다
+  // 보정 금액 — 보정이 붙는 금액(Stat)은 AdjustedAmount로만 보인다. 검사 범위는 presentation 전체(ui 포함)다
+  const presentationFiles = Object.entries(sources)
+    .map(([key, src]) => ({ path: rel(key), src }))
+    .filter(f => !isTestFile(f.path));
+  /** 금액 표기를 정의하는 공용 UI - 아래 직접 표기 검사에서 뺀다 */
+  const AMOUNT_DEFINERS = new Set(['ui/AdjustedAmount.tsx', 'ui/PriceTag.tsx']);
+  const checked = presentationFiles.filter(f => !AMOUNT_DEFINERS.has(f.path));
   const ADJUSTED_SCREENS = [
     'views/game/tabs/dex/NamedDetail.tsx',
     'views/overlays/bounty/NamedCard.tsx',
     'views/overlays/bounty/QuestInfoCards.tsx',
     'views/overlays/facility/FacilityModal.tsx',
+    'views/game/tabs/bag/BagTab.tsx',
   ];
-  /** 보정 금액을 .value로 꺼내 쓰는 자리 — 실제로 받은 금액을 알리는 메시지만 허용한다 */
+  /** 보정 금액을 .value·.base로 꺼내 금액 표기에 쓰는 자리 - 실제로 받은 금액을 알리는 메시지만 허용한다 */
   const ADJUSTED_VALUE_EXCEPTIONS = new Set(['views/overlays/bounty/BountyPanel.tsx']);
+  /** 보정이 없는 일반 의뢰 보상(원본 숫자)을 그리는 자리 - 네임드 보상은 여기서 그리지 않는다 */
+  const RAW_REWARD_EXCEPTIONS = new Set([
+    'views/overlays/bounty/BountyCard.tsx',
+    'views/overlays/bounty/BountyPanel.tsx',
+    'views/overlays/bounty/QuestInfoCards.tsx',
+  ]);
+  const VALUE_IN_GOLD = /fmtGold\([^()]*\b(?:reward|total|sellable|subtotal)\.(?:value|base)\b/;
+  const RAW_REWARD_IN_GOLD = /fmtGold\([^()]*\breward\b(?!\.(value|base)\b)/;
+  /** 판매 합계·판매 가능 금액 이름을 그대로 금액 표기에 넘기는 모양 */
+  const SALE_TOTAL_IN_GOLD = /fmtGold\(\s*(?:preview\.)?(?:total|sellable|sellableValue)\s*\)/;
 
   it('보정이 붙는 금액을 쓰는 화면은 AdjustedAmount로 그린다', () => {
     const missing = ADJUSTED_SCREENS.filter(path => {
-      const file = screens.find(f => f.path === path);
+      const file = presentationFiles.find(f => f.path === path);
       return !file || !/<AdjustedAmount\b/.test(file.src);
     });
     expect(missing).toEqual([]);
   });
 
-  it('화면은 보정 금액의 value·base를 꺼내 금액 표기에 직접 쓰지 않는다 — 예외 목록의 자리만', () => {
-    const offenders = screens
-      .filter(f => /fmtGold\([^()]*\.(value|base)\b/.test(f.src) && !ADJUSTED_VALUE_EXCEPTIONS.has(f.path))
-      .map(f => f.path);
-    expect(offenders).toEqual([]);
-    const using = screens.filter(f => ADJUSTED_VALUE_EXCEPTIONS.has(f.path) && /fmtGold\([^()]*\.(value|base)\b/.test(f.src)).map(f => f.path);
+  it('보정 금액의 value·base를 꺼내 금액 표기에 직접 쓰지 않는다 - 예외 목록의 자리만', () => {
+    expect(checked.filter(f => VALUE_IN_GOLD.test(f.src) && !ADJUSTED_VALUE_EXCEPTIONS.has(f.path)).map(f => f.path)).toEqual([]);
+    const using = checked.filter(f => ADJUSTED_VALUE_EXCEPTIONS.has(f.path) && VALUE_IN_GOLD.test(f.src)).map(f => f.path);
     expect([...ADJUSTED_VALUE_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
   });
 
-  it('화면은 취소선으로 금액을 직접 그리지 않는다 — 정가·보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
-    expect(screens.filter(f => /<s[\s>]|line-through/.test(f.src)).map(f => f.path)).toEqual([]);
+  it('원본 보상(reward)을 금액 표기에 직접 쓰지 않는다 - 보정이 없는 일반 의뢰 자리만', () => {
+    expect(checked.filter(f => RAW_REWARD_IN_GOLD.test(f.src) && !RAW_REWARD_EXCEPTIONS.has(f.path)).map(f => f.path)).toEqual([]);
+    const using = checked.filter(f => RAW_REWARD_EXCEPTIONS.has(f.path) && RAW_REWARD_IN_GOLD.test(f.src)).map(f => f.path);
+    expect([...RAW_REWARD_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+  });
+
+  it('의뢰 정보 창의 네임드 카드는 보상을 금액 표기로 직접 그리지 않는다', () => {
+    const src = presentationFiles.find(f => f.path === 'views/overlays/bounty/QuestInfoCards.tsx')!.src;
+    const named = src.slice(src.indexOf('export function NamedInfoCard'), src.indexOf('export function EmptyInfoCard'));
+    expect(named).not.toMatch(/fmtGold\(/);
+  });
+
+  it('판매 합계와 판매 가능 금액은 금액 표기로 직접 그리지 않는다', () => {
+    expect(checked.filter(f => SALE_TOTAL_IN_GOLD.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('취소선으로 금액을 직접 그리지 않는다 - 정가와 보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
+    expect(checked.filter(f => /<s[\s>]|line-through/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('감지 함수: value 꺼내기, 원본 보상, 판매 합계 표기를 잡고 AdjustedAmount는 가린다', () => {
+    expect(VALUE_IN_GOLD.test('{fmtGold(reward.value)}')).toBe(true);
+    expect(RAW_REWARD_IN_GOLD.test('{fmtGold(quest.reward)}')).toBe(true);
+    expect(RAW_REWARD_IN_GOLD.test('{fmtGold(reward.value)}')).toBe(false);
+    expect(SALE_TOTAL_IN_GOLD.test('{fmtGold(total)}')).toBe(true);
+    expect(SALE_TOTAL_IN_GOLD.test('{fmtGold(preview.sellable)}')).toBe(true);
+    expect(SALE_TOTAL_IN_GOLD.test('<AdjustedAmount amount={total} />')).toBe(false);
   });
 });

@@ -22,8 +22,22 @@ describe('AdjustedAmount', () => {
     fireEvent.mouseEnter(screen.getByText('700G'));
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('기본 금액1,000G');
-    expect(tip).toHaveTextContent('마미 와타의 거울-300G');
+    expect(tip).toHaveTextContent('마미 와타의 거울−300G');
     expect(tip).toHaveTextContent('합계700G');
+  });
+
+  it('접근성 이름에 기본 금액, 사유별 증감, 합계가 읽힌다', () => {
+    render(<AdjustedAmount amount={{ base: 1000, mods: [{ id: 'relic', label: '마미 와타의 거울', delta: -300 }], value: 700 }} />);
+    expect(screen.getByLabelText('기본 금액 1,000G, 마미 와타의 거울 −300G, 합계 700G')).toBeInTheDocument();
+  });
+
+  it('버튼 안(inButton)에서는 포커스 칸이 없고 호버로만 열린다', () => {
+    const amount = { base: 1000, mods: [{ id: 'g', label: '판매가 보너스', delta: 60 }], value: 1060 };
+    render(<button type="button">판매 (+<AdjustedAmount amount={amount} inButton />)</button>);
+    expect(document.querySelector('[tabindex]')).toBeNull();
+    expect(screen.getByRole('button', { name: /^판매 \(\+기본 금액 1,000G, 판매가 보너스 \+60G, 합계 1,060G\)$/ })).toBeInTheDocument();
+    fireEvent.mouseEnter(document.querySelector('button span span')!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('합계1,060G');
   });
 
   it('증가분은 + 부호로 보인다', () => {

@@ -33,7 +33,7 @@ describe('가방 파생 데이터', () => {
       instance('sell', other.id),
     ];
 
-    const preview = selectSalePreview(bag, new Set(['keep']));
+    const preview = selectSalePreview(bag, new Set(['keep']), 0);
 
     expect(preview.soldUids).toEqual(['sell']);
     expect(preview.lockedCount).toBe(1);
@@ -48,7 +48,7 @@ describe('가방 파생 데이터', () => {
     const bag = [instance('a', fish.id), instance('b', other.id)];
     const state = { ...newState(), gold: 0, bag };
 
-    const none = selectSalePreview(bag, new Set());
+    const none = selectSalePreview(bag, new Set(), 0);
     expect(none.total).toEqual({ base: none.total.base, mods: [], value: none.total.base });
 
     const bonus = 0.06;
