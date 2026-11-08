@@ -1,6 +1,7 @@
 // @vitest-environment node
 // 원화 화풍 측정의 계약: 지표 정의와 합격 판정을 작은 합성 격자로 고정한다.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   CANDIDATE_IDS, buildCriteria, gridFromRows, judgeSet, judgeSprite, measure, percentile, readSpriteDir,
@@ -108,5 +109,22 @@ describe('판정', () => {
     const base = measure(ref[0].grid);
     const same = Array.from({ length: 16 }, () => ({ ...base, gill: 1 as const, eye: '2' }));
     expect(judgeSet(same, criteria).length).toBeGreaterThan(0);
+  });
+
+  it('후보 원화 전부(일반과 변이)가 기준 범위에 든다', () => {
+    const png = resolve(__dirname, 'png/fish');
+    const bad: string[] = [];
+    const ms = [];
+    for (const id of CANDIDATE_IDS) {
+      for (const form of ['', '.variant']) {
+        const file = resolve(png, `${id}${form}.png`);
+        try { readFileSync(file); } catch { continue; }
+        const m = measure(readSpriteDir(png, new Set(), [id + form])[0].grid);
+        if (form === '') ms.push(m);
+        for (const f of judgeSprite(m, criteria)) bad.push(`${id}${form}: ${f}`);
+      }
+    }
+    expect(bad).toEqual([]);
+    expect(judgeSet(ms, criteria)).toEqual([]);
   });
 });
