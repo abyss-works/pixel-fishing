@@ -42,7 +42,7 @@ const round: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 1 * s, cy + 1 * s, 4 * s, s, 'rgba(255,255,255,0.35)');
 };
 
-// 어뢰형(은어/고등어/연어/무지개송어/참치) — 갈래꼬리 + 작은 등지느러미
+// 어뢰형(은어/고등어/연어/무지개 송어/참치) — 갈래꼬리 + 작은 등지느러미
 const slim: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 6 * s, cy - 2 * s, 11 * s, 4 * s, color);
   R(ctx, cx - 7 * s, cy - 1 * s, 1 * s, 2 * s, color);
@@ -66,7 +66,7 @@ const predator: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 4 * s, cy - 1 * s, s, s, '#000');
 };
 
-// 화려한 관상어(금붕어/황금잉어) — 층진 부채꼬리
+// 화려한 관상어(금붕어/황금 잉어) — 층진 부채꼬리
 const flowing: Draw = (ctx, cx, cy, s, color, detail) => {
   R(ctx, cx - 4 * s, cy - 3 * s, 8 * s, 6 * s, color);
   R(ctx, cx - 5 * s, cy - 1 * s, 1 * s, 2 * s, color);
