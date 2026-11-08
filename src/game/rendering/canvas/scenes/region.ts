@@ -110,6 +110,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 }
 
 // 비네팅 그라데이션 — 캔버스 크기가 같으면 ctx당 1회 생성 후 재사용 (매 틱 재생성 해소).
+// 바깥 반지름은 긴 변 기준 — 세로로 긴 시야에서 안쪽 반지름(0.38h)을 넘지 않으면 그라데이션이 뒤집힌다.
 // CanvasGradient는 ctx에 귀속되므로 ctx 키 WeakMap에 두고, 캔버스 크기가 바뀌면 다시 만든다.
 const vignetteCache = new WeakMap<object, { w: number; h: number; gradient: CanvasGradient }>();
 
@@ -118,7 +119,7 @@ export function vignette(ctx: Ctx, w = FIELD_VIEW.w * SCALE, h = FIELD_VIEW.h * 
   if (hit && hit.w === w && hit.h === h) return hit.gradient;
   const vg = ctx.createRadialGradient(
     w / 2, h * 0.42, h * 0.38,
-    w / 2, h / 2, w * 0.62,
+    w / 2, h / 2, Math.max(w, h) * 0.62,
   );
   vg.addColorStop(0, 'rgba(4,9,18,0)');
   vg.addColorStop(1, 'rgba(4,9,18,0.34)');
