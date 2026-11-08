@@ -14,7 +14,7 @@ import { spotById } from '../content/spots.js';
 import { rarityWeightOf, stableRarityShare } from '../content/rarityWeights.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef, RegionId } from '../content/places.js';
-import { FISH } from '../content/fish.js';
+import { FISH, RETIRED_FISH_IDS } from '../content/fish.js';
 import type { Fish, FormId } from '../content/fish.js';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
@@ -809,7 +809,7 @@ function safeInstance(raw: unknown, uid: () => string): FishInstance | null {
   if (typeof i.fishId !== 'string') return null;
   return {
     uid: typeof i.uid === 'string' && i.uid ? i.uid : uid(),
-    fishId: i.fishId,
+    fishId: RETIRED_FISH_IDS[i.fishId] ?? i.fishId,
     form: i.form === 'variant' ? 'variant' : 'normal',
     size: typeof i.size === 'number' ? i.size : null,
     caughtAt: typeof i.caughtAt === 'string' ? i.caughtAt : null,
@@ -846,18 +846,26 @@ function safeExhibit(v: unknown, uid: () => string): FishInstance[] {
 // (미래 폼이 붙은 세이브를 구 코드가 열었다가 되돌아와도 기록이 날아가지 않게)
 function safeDex(v: unknown): GameState['dex'] {
   const out: GameState['dex'] = {};
-  for (const [id, forms] of Object.entries(safeRecord<unknown>(v))) {
+  for (const [rawId, forms] of Object.entries(safeRecord<unknown>(v))) {
     if (typeof forms !== 'object' || forms === null) continue;
-    const kept: Partial<Record<FormId, FormRecord>> = {};
+    const id = RETIRED_FISH_IDS[rawId] ?? rawId;
+    const kept: Partial<Record<FormId, FormRecord>> = out[id] ?? {};
     for (const [form, rec] of Object.entries(forms as Record<string, unknown>)) {
       if (typeof rec !== 'object' || rec === null) continue;
       const r = rec as Partial<FormRecord>;
       if (typeof r.count !== 'number' || r.count <= 0) continue;
-      kept[form as FormId] = {
+      const next: FormRecord = {
         count: r.count,
         maxSize: typeof r.maxSize === 'number' ? r.maxSize : null,
         first: typeof r.first === 'string' ? r.first : null,
       };
+      const prev = kept[form as FormId];
+      // 교체된 어종의 기록이 후속 어종 기록과 겹치면 합친다
+      kept[form as FormId] = prev ? {
+        count: prev.count + next.count,
+        maxSize: prev.maxSize === null ? next.maxSize : next.maxSize === null ? prev.maxSize : Math.max(prev.maxSize, next.maxSize),
+        first: prev.first === null ? next.first : next.first === null ? prev.first : prev.first < next.first ? prev.first : next.first,
+      } : next;
     }
     if (Object.keys(kept).length > 0) out[id] = kept;
   }

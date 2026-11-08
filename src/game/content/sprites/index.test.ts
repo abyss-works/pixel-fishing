@@ -4,14 +4,17 @@ import {
   FISH_SHAPE_SPRITES, FISH_SPRITES, FISH_SPRITES_GENERATED, OUTLINE_DARK, SILHOUETTE,
 } from './index';
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
-import { FISH } from '../fish';
+import { FISH, RETIRED_FISH_IDS } from '../fish';
 import { NAMED } from '../named';
 
 const NATIVE = [32, 16];
 
+// 원화 PNG가 아직 없어 몸 형태 기본 격자로 그려지는 어종
+const SHAPE_ONLY = new Set(['orangeroughy', 'kianda', 'kalunga']);
+
 describe('원화 격자 (생성 파일)', () => {
   it('모든 어종에 일반·변이 격자가 있고 네임드에 일반 격자가 있다', () => {
-    for (const f of FISH) {
+    for (const f of FISH.filter(x => !SHAPE_ONLY.has(x.id))) {
       expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'normal')], f.id).toBeDefined();
       expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'variant')], f.id).toBeDefined();
     }
@@ -27,7 +30,7 @@ describe('원화 격자 (생성 파일)', () => {
   });
 
   it('생성 격자의 키는 실제 어종·네임드 id다 — 고아 파일을 막는다', () => {
-    const ids = new Set([...FISH.map(f => f.id), ...NAMED.map(n => n.id)]);
+    const ids = new Set([...FISH.map(f => f.id), ...NAMED.map(n => n.id), ...Object.keys(RETIRED_FISH_IDS)]);
     for (const key of Object.keys(FISH_SPRITES_GENERATED)) {
       expect(ids.has(key.replace(/\.variant$/, '')), key).toBe(true);
     }

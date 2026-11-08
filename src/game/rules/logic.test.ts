@@ -48,13 +48,12 @@ describe('데이터 무결성', () => {
     expect(MAX_BOAT).toBe(8);
   });
 
-  it('남대서양: 해역마다 낮 6종(일반 3·희귀·영웅·전설), 전체 어종 102종(낮 78·밤 24)', () => {
-    expect(FISH).toHaveLength(102);
-    expect(FISH.filter(f => !f.night)).toHaveLength(78);
-    for (const spot of ['benguela', 'sthelena']) {
-      const day = FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
-      expect(day, spot).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
-    }
+  it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
+    expect(FISH).toHaveLength(103);
+    expect(FISH.filter(f => !f.night)).toHaveLength(79);
+    const dayOf = (spot: string) => FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
+    expect(dayOf('benguela')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
+    expect(dayOf('sthelena')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
   });
 
   it('R12: 등급 명성', () => {
@@ -904,6 +903,31 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
   it('migrate: tutorials 부재 → 빈 목록, 모르는 튜토리얼 id는 버린다', () => {
     expect(mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] }).tutorials).toEqual([]);
     expect(mig({ v: 8, tutorials: ['village', 'nope', 3, 'sea'] } as never).tutorials).toEqual(['village', 'sea']);
+  });
+
+  it('migrate: 교체로 사라진 어종 id의 가방·전시·도감 기록을 후속 어종으로 잇는다', () => {
+    const inst = (uid: string, fishId: string) => ({ uid, fishId, form: 'normal', size: 1, caughtAt: null, spot: null, judgment: null, locked: false });
+    const st = mig({
+      v: 8, bag: [inst('a', 'toothfish'), inst('b', 'carp')], exhibit: [inst('c', 'darktoothfish')],
+      dex: { toothfish: { normal: { count: 2, maxSize: 3, first: 'x' } }, carp: { normal: { count: 1, maxSize: 1, first: 'y' } } },
+    } as never);
+    expect(st.bag.map(i => i.fishId)).toEqual(['orangeroughy', 'carp']);
+    expect(st.exhibit.map(i => i.fishId)).toEqual(['kalunga']);
+    expect(st.dex.orangeroughy?.normal?.count).toBe(2);
+    expect(st.dex.toothfish).toBeUndefined();
+    expect(st.dex.carp).toBeDefined();
+  });
+
+  it('migrate: 후속 어종 기록이 이미 있으면 도감 기록을 합친다', () => {
+    const st = mig({
+      v: 8, bag: [],
+      dex: {
+        toothfish: { normal: { count: 2, maxSize: 3, first: 'a' } },
+        orangeroughy: { normal: { count: 1, maxSize: 5, first: 'b' }, variant: { count: 1, maxSize: 2, first: 'c' } },
+      },
+    } as never);
+    expect(st.dex.orangeroughy?.normal).toEqual({ count: 3, maxSize: 5, first: 'a' });
+    expect(st.dex.orangeroughy?.variant?.count).toBe(1);
   });
 
   it('migrate: look·hats 부재 → 기본 외형과 빈 목록', () => {
