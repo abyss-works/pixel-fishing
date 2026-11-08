@@ -5,13 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { LocalGameGateway } from './localGameGateway';
 import { LICENSE_GRADES, newState, zoneDexMissing } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
+import { BOUNTY_LICENSE_FAME } from '../../game/content/bounties';
 
 function readyAtHarbor(): GameState {
   const dex: GameState['dex'] = {};
   for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.named)) {
     dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
   }
-  return { ...newState(), fame: 1500, dex, location: { kind: 'base', id: 'harbor' } };
+  return { ...newState(), fame: BOUNTY_LICENSE_FAME.pacific, dex, location: { kind: 'base', id: 'harbor' } };
 }
 
 describe('LocalGameGateway 바운티 헌팅', () => {

@@ -6,6 +6,8 @@ import {
   BOUNTIES, BOUNTY_LICENSE_FAME, BOUNTY_PORT_ZONE, bountyById, bountyKindOf, dailyQuestFor, portOfZone, zoneOfPort,
 } from './bounties';
 import { RARITY } from './rarity';
+import { BOATS } from './boats';
+import { subtreeSpots } from './zones';
 
 // spec 3절 수량표 (EV 반올림)
 const COUNTS: Record<string, Record<string, number>> = {
@@ -54,7 +56,16 @@ describe('bounties 데이터 계약', () => {
   });
 
   it('라이선스 명성이 spec 2절 표와 일치한다', () => {
-    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 1500, seasia: 20000, indian: 80000, madagascar: 300000, southatlantic: 600000 });
+    expect(BOUNTY_LICENSE_FAME).toEqual({ pacific: 3000, seasia: 10500, indian: 72000, madagascar: 300000, southatlantic: 600000 });
+  });
+
+  it('라이선스 명성은 구역 진입 배 명성 요구치의 3배다 — 진입 배는 구역 첫 해역을 여는 배', () => {
+    for (const zone of Object.keys(BOUNTY_LICENSE_FAME) as (keyof typeof BOUNTY_LICENSE_FAME)[]) {
+      const entryTier = Math.min(...subtreeSpots(zone).map(s => s.boatTier));
+      // 진입 배의 명성 요구치가 0이면(태평양) 명성 요구치가 0보다 큰 첫 배가 기준이다
+      const base = BOATS.find(b => b.tier >= entryTier && b.fameReq > 0)!;
+      expect(BOUNTY_LICENSE_FAME[zone], zone).toBe(base.fameReq * 3);
+    }
   });
 
   it('등급 키는 실재 등급만 쓴다', () => {
