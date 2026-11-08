@@ -124,14 +124,14 @@ describe('BountyPanel', () => {
     expect(tipOfButton(buttons[0])).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
   });
 
-  it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 납품할 수 있다', async () => {
+  it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 완료할 수 있다', async () => {
     const today = dailyQuestFor('pacific', 'normal', 'test-uid', gameDay())!;
     const old = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'normal' && q.id !== today.id)!;
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: old.id, progress: old.count }], tickets: [] };
     const g = game({ dex: fullDex });
     const dispatch = vi.fn(okDispatch(g));
     show(g, dispatch);
-    fireEvent.click(await screen.findByRole('button', { name: '납품' }));
+    fireEvent.click(await screen.findByRole('button', { name: '완료' }));
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'deliverBounty', questId: old.id }));
   });
 
@@ -190,7 +190,8 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     expect(tipOf(screen.getByText('???'))).toMatch(/반달 모양의 이빨 자국/);
     expect(screen.getByText('나타나는 곳')).toBeInTheDocument();
-    expect(screen.getByText(/400,000G/)).toBeInTheDocument();
+    const reward = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!.reward;
+    expect(screen.getByText(new RegExp(`${reward.toLocaleString('en-US')}G`))).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
   });
 

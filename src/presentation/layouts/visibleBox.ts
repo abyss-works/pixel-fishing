@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useMobileLayout } from './useMobileLayout';
 
-/** 화면 틀이 차지할 영역 — 레이아웃 뷰포트 안에서 위와 아래에서 비울 길이(px)와 키보드 여부 */
+/** 화면 틀이 차지할 영역 — 레이아웃 뷰포트 안에서 위와 아래에서 비울 길이(px)와 키보드 여부.
+ *  top은 보이는 영역이 위로 밀린 길이, bottom은 레이아웃 뷰포트 아래쪽에서 키보드가 덮는 길이다 */
 export interface VisibleBox { top: number; bottom: number; keyboard: boolean }
 
 /** 이보다 작은 높이 변화(주소 줄 등)는 키보드로 보지 않는다 */
@@ -12,9 +14,18 @@ const NONE: VisibleBox = { top: 0, bottom: 0, keyboard: false };
 /** 화면 키보드가 올라오면 보이는 영역(visual viewport)만 레이아웃 뷰포트보다 작아진다.
  *  보이는 영역의 높이와 위쪽 오프셋으로, 화면 틀이 비워야 할 위아래 길이를 정한다. */
 export function visibleBox(layoutH: number, visibleH: number, visibleTop: number): VisibleBox {
-  const bottom = layoutH - visibleH - visibleTop;
-  if (bottom < KEYBOARD_MIN_PX) return NONE;
-  return { top: Math.max(0, visibleTop), bottom, keyboard: true };
+  if (layoutH - visibleH < KEYBOARD_MIN_PX) return NONE;
+  const top = Math.max(0, visibleTop);
+  return { top, bottom: Math.max(0, layoutH - visibleH - top), keyboard: true };
+}
+
+/** 게임 화면 루트가 키보드 동안 받는 스타일. 루트에는 위치 변환을 주지 않는다 - 변환은 루트 안에서 fixed로 그리는 창의
+ *  기준 상자가 되어, 화면이 입력 칸을 보이려고 보이는 영역을 밀어도 창이 따라 밀려 상쇄되기 때문이다.
+ *  채팅 묶음이 키보드 위에 붙도록 키보드가 덮는 길이(--keyboard-h)와, 헤더가 보이는 영역 위로 벗어나지 않도록
+ *  보이는 영역이 밀린 길이(--keyboard-top)만 넘긴다. 헤더가 이 길이만큼 아래로 비켜선다. */
+export function keyboardStyle(box: VisibleBox): CSSProperties | undefined {
+  if (!box.keyboard) return undefined;
+  return { '--keyboard-h': `${box.bottom}px`, '--keyboard-top': `${box.top}px` } as CSSProperties;
 }
 
 /** 모바일 레이아웃에서 화면 키보드를 피한 영역을 따라간다. PC 레이아웃은 늘 여백이 없다 */

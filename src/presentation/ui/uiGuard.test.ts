@@ -193,7 +193,6 @@ const hasVscrollWithoutBar = (line: string) =>
  *  관리자와 개발 도구 화면은 이 규칙을 따로 정한다 */
 const VSCROLL_LITERAL_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx',         // 막대를 숨기는 사이드바
-  'views/game/base-menu/BaseMenu.tsx', // 호버 때만 막대가 보이는 HUD 스크롤(pf-scroll-hud)
   'views/game/tabs/region/VRegion.tsx', // 사이드바 탭 안의 고정 높이 칸 — 막대 자리 규칙은 창에 적용한다
 ]);
 const isAdminOrDevtools = (path: string) => /^views\/(?:admin|devtools)\//.test(path);

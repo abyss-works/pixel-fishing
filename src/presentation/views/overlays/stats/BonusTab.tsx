@@ -40,7 +40,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
     <TableBox className="flex-1 min-h-0 px-3 pb-2">
       <DataTable cols={[null, '150px']} nameMin="10rem">
         <thead>
-          <tr className="sticky top-0 z-[1] bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
+          <tr className="sticky top-0 z-1 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
             <th className={cx(HEAD, 'text-left')}>받는 효과</th>
             <th className={cx(HEAD, 'text-right')}>
               <Tip text={<span className="flex flex-col gap-0.5">{SOURCE_HELP.map(line => <span key={line}>{line}</span>)}</span>}>출처</Tip>

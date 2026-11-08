@@ -35,6 +35,15 @@ describe('HudHeader 모바일 레이아웃', () => {
     }
   });
 
+  it('키보드로 보이는 영역이 밀리면 두 틀이 밀린 길이만큼 아래로 비켜선다 - 위치 변환이 아니라 상대 위치 오프셋이다', () => {
+    header();
+    for (const el of [bar(), menuSlot()]) {
+      expect(el.className).toContain('mobile:relative');
+      expect(el.className).toContain('mobile:top-[var(--keyboard-top,0px)]');
+      expect(el.className).not.toMatch(/translate|transform/);
+    }
+  });
+
   it('두 틀 사이에 4px 간격이 있다 - 자원 바 왼쪽, 메뉴 버튼 양쪽에 4px 여백을 두고 비어 있는 열은 없다', () => {
     header();
     expect(bar().className).toContain('mobile:ml-1');
@@ -47,10 +56,12 @@ describe('HudHeader 모바일 레이아웃', () => {
     expect(menuSlot().className).toContain('mobile:self-center');
   });
 
-  it('메뉴 버튼 자리는 펼친 줄이 게임 영역의 카드 묶음(overlay) 위에 오도록 한 단 높은 층이다', () => {
+  it('헤더는 채팅과 같은 층(chrome)이라 스테이지 위 HUD의 카드 묶음 위에 놓인다', () => {
     header();
-    expect(zOf('card')).toBeGreaterThan(zOf('overlay'));
-    expect(menuSlot().className).toContain('z-(--z-card)');
+    expect(zOf('chrome')).toBeGreaterThan(zOf('stage-card'));
+    // 펼친 줄은 DOM 순서가 아니라 층 토큰으로 채팅(chrome) 위에 온다
+    expect(zOf('menu-row')).toBeGreaterThan(zOf('chrome'));
+    expect(menuSlot().className).toContain('z-(--z-menu-row)');
   });
 
   it('자원 바를 누르면 스탯 창을 연다', () => {
@@ -91,6 +102,6 @@ describe('HudHeader PC 레이아웃 - 자원 바 | 메뉴 버튼 두 틀', () =>
   it('메뉴 버튼 자리는 오른쪽 위 모서리(12px 여백)이고 펼친 줄이 카드 묶음 위에 오는 층이다', () => {
     header();
     expect(menuSlot().className).toContain('absolute right-3 top-3');
-    expect(menuSlot().className).toContain('z-(--z-card)');
+    expect(menuSlot().className).toContain('z-(--z-menu-row)');
   });
 });

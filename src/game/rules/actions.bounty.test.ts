@@ -227,7 +227,7 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
       deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(400000);
+    expect(out.state.gold).toBe(150000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
   });
 });

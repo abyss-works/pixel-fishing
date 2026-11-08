@@ -74,22 +74,21 @@ describe('거점 카드 메뉴', () => {
       expect(root!.className).toContain('[container:basemenu/size]');
     });
 
-    it('메뉴 영역은 메시지 창이 프레임 안으로 들어오는 아래 영역을 비운다', () => {
+    it('메뉴 영역은 채팅 자리를 비우지 않고 프레임 전체를 쓴다 - 모바일은 게임 영역(2행) 전체다', () => {
       render(<BaseMenu base="harbor" game={newState()} />);
       const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
-      expect(root.className).toContain('bottom-[var(--log-clear,0px)]');
-      // 모바일 레이아웃에서는 격자의 게임 영역(2행) 안에만 놓여 채팅 영역과 겹치지 않는다
+      expect(root.className).toContain('absolute inset-0');
+      expect(root.className).not.toContain('--log-clear');
       expect(root.className).toContain('mobile:row-start-2');
       expect(root.className).toContain('mobile:row-end-3');
     });
 
-    it('내용이 영역보다 크면 가운데 맞춤을 풀고 세로로 스크롤한다', () => {
+    it('메뉴 영역은 세로로 스크롤하지 않고 내용을 가운데에 둔다 - 모자라면 카드가 줄어든다', () => {
       render(<BaseMenu base="colombo" game={newState()} />);
-      const scroller = screen.getByRole('heading', { name: '정보' }).closest('.pf-vscroll')!;
-      expect(scroller).not.toBeNull();
-      // 캔버스 위 오버레이의 공용 스크롤 방식: 막대는 호버 때만 보이고, 막대 자리는 양쪽에 고정해 가운데 맞춤이 치우치지 않는다
-      for (const cls of ['pf-scroll-hud', '[scrollbar-gutter:stable_both-edges]']) expect(scroller.className).toContain(cls);
-      expect((scroller.firstElementChild as HTMLElement).className).toContain('my-auto');
+      const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
+      expect(root.querySelector('.pf-vscroll, .pf-scroll-hud')).toBeNull();
+      const content = screen.getByRole('heading', { name: '정보' }).closest('.my-auto')!;
+      expect(content).not.toBeNull();
     });
 
     it('설명이 없는 시설은 설명 줄을 그리지 않는다', () => {
