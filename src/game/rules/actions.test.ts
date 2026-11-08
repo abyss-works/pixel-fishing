@@ -73,7 +73,7 @@ describe('catch', () => {
   });
 
   it('파워 게이트 — 미달 수역의 상위 판정 주장은 강등된다 (개체·이벤트 모두 확정값)', () => {
-    // deep 요구 파워 60 — Lv1(P1)은 미달. 배는 2단계(수역 자체는 열려 있다)
+    // deep 요구 파워 40 — Lv1(P1)은 미달. 배는 2단계(수역 자체는 열려 있다)
     const out = applyAction(seed({ boat: 2 }), { type: 'catch', spot: 'deep', judgment: 'good' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('normal');
