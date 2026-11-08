@@ -6,7 +6,7 @@ import type { ActionDeps } from './actions';
 import { licenseConditions, newState, zoneDexMissing } from './logic';
 import type { GameState } from './logic';
 import { DEBUG_COMMAND_IDS, DEBUG_TABLE_COMMANDS } from './debug';
-import { artifactOfZone } from '../content/artifacts';
+import { artifactById } from '../content/artifacts';
 
 const deps: ActionDeps = {
   rng: () => 0, today: '2026-10-16', now: '2026-10-16T03:00:00.000Z', newUid: () => 'uid-1',
@@ -74,9 +74,21 @@ describe('dex.completeZone', () => {
 });
 
 describe('bounty.grantMaterial', () => {
-  it('구역 유물의 교환 재료를 1개 준다', () => {
-    const out = debug(seed(), 'bounty.grantMaterial', { zone: 'indian' });
+  it('고른 유물의 교환 재료를 1개 준다', () => {
+    const out = debug(seed(), 'bounty.grantMaterial', { artifact: 'wreck-compass' });
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.items[artifactOfZone('indian')!.materialId]).toBe(1);
+    expect(out.state.items[artifactById('wreck-compass')!.materialId]).toBe(1);
+  });
+
+  it('같은 구역의 두 번째 유물(바깥섬의 봉돌) 재료도 받을 수 있다', () => {
+    const out = debug(seed(), 'bounty.grantMaterial', { artifact: 'outer-isle-sinker' });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.items[artifactById('outer-isle-sinker')!.materialId]).toBe(1);
+    expect(Object.keys(out.state.items)).toHaveLength(1);
+  });
+
+  it('없는 유물이나 유물 인자가 없으면 bad-request', () => {
+    expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'nope' })).toEqual({ ok: false, error: 'bad-request' });
+    expect(debug(seed(), 'bounty.grantMaterial', { zone: 'indian' })).toEqual({ ok: false, error: 'bad-request' });
   });
 });

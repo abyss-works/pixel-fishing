@@ -31,7 +31,7 @@ describe('개발 도구 운영 가드', () => {
   it('운영이면 다른 묶음의 조작은 흐림 처리 뒤에 숨는다', () => {
     show('production');
     fireEvent.click(screen.getByRole('button', { name: '프리셋' }));
-    expect(screen.getByRole('button', { name: '태평양 네임드 직전', hidden: true }).closest('[aria-hidden]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: '메갈로돈 네임드 직전', hidden: true }).closest('[aria-hidden]')).not.toBeNull();
   });
 
   it('알 수 없는 환경도 운영처럼 막는다', () => {
@@ -42,6 +42,6 @@ describe('개발 도구 운영 가드', () => {
   it('스테이징이면 프리셋부터 열리고 막지 않는다', () => {
     show('preview');
     expect(screen.queryByText(/운영 서버다/)).toBeNull();
-    expect(screen.getByRole('button', { name: '태평양 네임드 직전' }).closest('[aria-hidden]')).toBeNull();
+    expect(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }).closest('[aria-hidden]')).toBeNull();
   });
 });

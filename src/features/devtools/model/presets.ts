@@ -2,12 +2,14 @@
 // 수주는 실제 acceptQuest 액션으로 보내 일일 의뢰 해시·라이선스 판정을 그대로 통과시킨다.
 import type { GameAction } from '../../../game/rules/actions';
 import type { GameState } from '../../../game/rules/logic';
-import { DEBUG_ZONES } from '../../../game/rules/debug';
 import type { DebugCommandId } from '../../../game/rules/debug';
 import { minLevelOfPower } from '../../../game/rules/stats';
 import { boatAt } from '../../../game/content/boats';
-import { offeredQuestsFor, portOfZone } from '../../../game/content/bounties';
-import type { BountyZone } from '../../../game/content/bounties';
+import type { Artifact } from '../../../game/content/artifacts';
+import { ARTIFACTS } from '../../../game/content/artifacts';
+import { BOUNTIES, portOfZone } from '../../../game/content/bounties';
+import type { BountyQuest, BountyZone } from '../../../game/content/bounties';
+import { namedById } from '../../../game/content/named';
 import { SPOTS } from '../../../game/content/spots';
 import { topZoneOfSpot, zoneById } from '../../../game/content/zones';
 
@@ -39,20 +41,20 @@ function zoneGear(zone: BountyZone): { boat: number; rod: number } {
 const debugStep = (command: DebugCommandId, args: Record<string, unknown> = {}): PresetStep =>
   ({ kind: 'debug', command, args });
 
-function namedReady(zone: BountyZone): DevPreset {
+function namedReady(quest: BountyQuest): DevPreset {
+  const zone = quest.zone;
   const area = zoneById(zone)?.shortName ?? zone;
+  const name = namedById(quest.targetFish ?? '')?.name ?? quest.id;
   return {
-    id: `named-ready:${zone}`,
-    label: `${area} 네임드 직전`,
+    id: `named-ready:${quest.id}`,
+    label: `${name} 네임드 직전`,
     hint: '클리어 기록·진행·흔적을 정리하고 도감을 채운 뒤 네임드를 수주하고 강제 조우를 건다.',
-    plan: ({ game, uid, day }) => {
+    plan: ({ game }) => {
       const port = portOfZone(zone);
       if (!port) return { ok: false, blocked: `${area}에는 수배 창구가 없다.` };
       if (game.location.kind !== 'base' || game.location.id !== port) {
         return { ok: false, blocked: `${area} 항구 안에서 실행해야 한다 (수주는 수배판 위치를 요구한다).` };
       }
-      const quest = offeredQuestsFor(zone, 'named', uid, day)[0];
-      if (!quest) return { ok: false, blocked: `${area}에는 네임드 의뢰가 없다.` };
       const gear = zoneGear(zone);
       return {
         ok: true,
@@ -74,19 +76,18 @@ function namedReady(zone: BountyZone): DevPreset {
   };
 }
 
-function relicReady(zone: BountyZone): DevPreset {
-  const area = zoneById(zone)?.shortName ?? zone;
+function relicReady(artifact: Artifact): DevPreset {
   return {
-    id: `relic-ready:${zone}`,
-    label: `${area} 유물 교환 직전`,
-    hint: '구역 유물의 교환 재료를 1개 준다.',
-    plan: () => ({ ok: true, steps: [debugStep('bounty.grantMaterial', { zone })] }),
+    id: `relic-ready:${artifact.id}`,
+    label: `${artifact.name} 교환 직전`,
+    hint: '유물의 교환 재료를 1개 준다.',
+    plan: () => ({ ok: true, steps: [debugStep('bounty.grantMaterial', { artifact: artifact.id })] }),
   };
 }
 
 export const DEV_PRESETS: readonly DevPreset[] = [
-  ...DEBUG_ZONES.map(namedReady),
-  ...DEBUG_ZONES.map(relicReady),
+  ...BOUNTIES.filter(q => q.difficulty === 'named').map(namedReady),
+  ...ARTIFACTS.map(relicReady),
 ];
 
 export const planPreset = (preset: DevPreset, ctx: PresetContext): PresetPlan => preset.plan(ctx);

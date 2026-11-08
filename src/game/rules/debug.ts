@@ -10,7 +10,7 @@ import {
 import type { GameState } from './logic.js';
 import { BOUNTY_ZONES } from '../content/bounties.js';
 import type { BountyZone } from '../content/bounties.js';
-import { artifactOfZone } from '../content/artifacts.js';
+import { artifactById } from '../content/artifacts.js';
 
 /** 상태를 바꾸는 명령 */
 const STATE_COMMANDS = ['stats.set', 'dex.completeZone', 'bounty.grantMaterial'] as const;
@@ -70,8 +70,7 @@ export function reduceDebug(
       return zone ? completeZoneDex(state, zone, today) : null;
     }
     case 'bounty.grantMaterial': {
-      const zone = zoneArg(args);
-      const art = zone ? artifactOfZone(zone) : undefined;
+      const art = typeof args.artifact === 'string' ? artifactById(args.artifact) : undefined;
       return art ? addItem(state, art.materialId, 1) : null;
     }
     default:

@@ -66,6 +66,11 @@ describe('bounties 데이터 계약', () => {
     expect(a?.id).toBe(b?.id);
   });
 
+  it('일일 의뢰는 네임드를 해시로 뽑지 않는다 — 네임드 난이도는 받지 않는다', () => {
+    // @ts-expect-error 네임드는 offeredQuestsFor가 구역의 네임드마다 낸다
+    dailyQuestFor('pacific', 'named', 'uid-1', '2026-10-09');
+  });
+
   it('일일 의뢰 — 날짜가 바뀌면 바뀔 수 있고 pool 안에 있다', () => {
     const q = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-10');
     expect(q?.zone).toBe('pacific');

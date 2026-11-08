@@ -7,7 +7,7 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState } from './logic';
 import type { GameState } from './logic';
-import { matchBountyCatch, rollNamedEncounter } from './logic';
+import { LICENSE_GRADES, matchBountyCatch, rollNamedEncounter, zoneDexMissing } from './logic';
 import type { BountyCtx } from './rules';
 import { BOUNTIES } from '../content/bounties';
 import { gameDayOf } from './time';
@@ -99,6 +99,16 @@ describe('acceptQuest', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
     const full = seed({ ...harbor, dex: pacificFullDex });
     expect(applyAction(full, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
+      .toEqual({ ok: false, error: 'daily-cleared' });
+  });
+
+  it('하루 한도는 구역 전체로 센다 — 아다마스토르를 클리어한 날에는 같은 구역의 야스코니우스도 daily-cleared', () => {
+    const dex: GameState['dex'] = {};
+    for (const id of zoneDexMissing(newState(), 'southatlantic', LICENSE_GRADES.named)) dex[id] = { normal: rec(1) };
+    const state = seed({ location: { kind: 'base', id: 'walvisbay' }, dex });
+    const act = { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'walvisbay' } as const;
+    expect(applyAction(state, act, deps({ bounty: ctx() })).ok).toBe(true);
+    expect(applyAction(state, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
       .toEqual({ ok: false, error: 'daily-cleared' });
   });
 
@@ -312,12 +322,6 @@ describe('rollNamedEncounter', () => {
     const q = 'southatlantic-named-jasconius';
     expect(rollNamedEncounter([q], 'benguela', () => 0)).toBeNull();
     expect(rollNamedEncounter([q], 'sthelena', () => 0)?.id).toBe(q);
-  });
-
-  it('두 남대서양 의뢰를 함께 수주해도 수역에 맞는 쪽만 조우한다', () => {
-    const both = ['southatlantic-named-adamastor', 'southatlantic-named-jasconius'];
-    expect(rollNamedEncounter(both, 'benguela', () => 0)?.id).toBe(both[0]);
-    expect(rollNamedEncounter(both, 'sthelena', () => 0)?.id).toBe(both[1]);
   });
 
   it('아다마스토르는 용승대에서만 조우한다 — 세인트헬레나에서는 돌지 않는다', () => {

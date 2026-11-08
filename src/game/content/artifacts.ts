@@ -96,7 +96,3 @@ export const artifactOfNamed = (namedId: string): Artifact | undefined =>
 /** 해역의 유물 목록 — 그 해역 네임드의 유물이 레지스트리 순서로 나온다 */
 export const artifactsOfZone = (zone: BountyZone): Artifact[] =>
   ARTIFACTS.filter(a => a.zone === zone);
-
-/** 해역의 첫 유물 — 네임드가 하나인 해역에서는 그 해역의 유물이다. 네임드가 둘 이상인 해역은 artifactOfNamed를 쓴다 */
-export const artifactOfZone = (zone: BountyZone): Artifact | undefined =>
-  ARTIFACTS.find(a => a.zone === zone);

@@ -3,6 +3,7 @@
 // 허용 판정은 서버가 맡는다. 선택지는 기존 콘텐츠 표에서 만든다(복제 금지).
 import { DEBUG_ZONES } from '../../../game/rules/debug';
 import type { DebugCommandId } from '../../../game/rules/debug';
+import { ARTIFACTS } from '../../../game/content/artifacts';
 import { zoneById } from '../../../game/content/zones';
 import { selectAdminBoatOptions } from '../../admin/model/stats';
 
@@ -28,6 +29,10 @@ export interface DevCommand {
 export const devZoneOptions = (): DevOption[] =>
   DEBUG_ZONES.map(zone => ({ value: zone, label: zoneById(zone)?.shortName ?? zone }));
 
+/** 유물 선택지 — 유물 이름과 소속 구역 */
+export const devArtifactOptions = (): DevOption[] =>
+  ARTIFACTS.map(a => ({ value: a.id, label: `${a.name} (${zoneById(a.zone)?.shortName ?? a.zone})` }));
+
 const boatOptions = (): DevOption[] =>
   selectAdminBoatOptions().map(b => ({ value: String(b.tier), label: `${b.tier} · ${b.name}` }));
 
@@ -50,7 +55,8 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   },
   {
     id: 'bounty.grantMaterial', group: 'bounty', label: '교환 재료 지급',
-    hint: '구역 유물의 교환 재료 1개.', params: [zoneParam],
+    hint: '고른 유물의 교환 재료 1개.',
+    params: [{ key: 'artifact', label: '유물', kind: 'select', options: devArtifactOptions }],
   },
   {
     id: 'bounty.expireTickets', group: 'bounty', label: '흔적 만료',

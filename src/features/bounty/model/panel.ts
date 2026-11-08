@@ -1,6 +1,6 @@
 import { artifactOfNamed, artifactsOfZone } from '../../../game/content/artifacts';
 import {
-  bountyById, bountyKindOf, dailyQuestFor, offeredQuestsFor, zoneOfPort,
+  bountyById, bountyKindOf, offeredQuestsFor, zoneOfPort,
 } from '../../../game/content/bounties';
 import type { Artifact } from '../../../game/content/artifacts';
 import type { BountyDifficulty, BountyKind, BountyPort, BountyQuest } from '../../../game/content/bounties';
@@ -116,8 +116,13 @@ const CLEARED_NOTICE: Record<BountyKind, string> = {
   general: `오늘 일반 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
   named: `오늘 네임드 토벌은 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
 };
-/** 이 판의 다른 난이도 칸이 왜 막혔는지 — 네임드는 구역마다 한 칸이라 일반 의뢰만 해당한다 */
-const ONE_AT_A_TIME_NOTICE = '일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.';
+/** 같은 구역의 네임드 하나를 수주 중일 때 다른 네임드 카드의 수주 버튼이 막힌 이유 */
+export const NAMED_ONE_AT_A_TIME_NOTICE = '네임드 토벌은 한 번에 하나만 수주할 수 있어요.\n진행 중인 네임드 토벌을 먼저 마쳐 주세요.';
+/** 이 판의 다른 칸이 왜 막혔는지 — 일반 의뢰는 난이도 칸끼리, 네임드 토벌은 같은 구역의 네임드 카드끼리 한 번에 하나만 수주한다 */
+const ONE_AT_A_TIME_NOTICE: Record<BountyKind, string> = {
+  general: '일반 의뢰는 한 번에 하나만 수주할 수 있어요.\n진행 중인 의뢰를 먼저 마쳐 주세요.',
+  named: NAMED_ONE_AT_A_TIME_NOTICE,
+};
 const elsewhereNotice = (kind: BountyKind, held: BountyQuest): string =>
   `${zoneById(held.zone)?.shortName ?? held.zone}에서 수주한 ${KIND_SUBJECT[kind]} 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.`;
 
@@ -135,7 +140,7 @@ export function selectBountyPanelData({
   const heldHere = (difficulty: BountyDifficulty): BountyQuest | undefined =>
     Object.values(holding).find(q => q?.zone === zone && q.difficulty === difficulty);
   const offers = Object.fromEntries(difficulties.map(difficulty => [
-    difficulty, heldHere(difficulty) ?? dailyQuestFor(zone, difficulty, who, day),
+    difficulty, heldHere(difficulty) ?? offeredQuestsFor(zone, difficulty, who, day)[0],
   ])) as BountyPanelData['offers'];
   const namedOffers: NamedOffer[] = offeredQuestsFor(zone, 'named', who, day).map(quest => ({
     quest,
@@ -150,7 +155,7 @@ export function selectBountyPanelData({
     const held = holding[kind];
     if (!held) return null;
     if (!shown.has(held.id)) return elsewhereNotice(kind, held);
-    return kind === 'general' ? ONE_AT_A_TIME_NOTICE : null;
+    return ONE_AT_A_TIME_NOTICE[kind];
   };
   const progressOf = (questId: string): number =>
     snapshot?.progress.find(row => row.questId === questId)?.progress ?? 0;

@@ -120,10 +120,10 @@ const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 /** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
 export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);
 
-/** 일일 의뢰 — 사람·날짜·해역·난이도당 1행. 해시 결정이라 DB 저장 없이
+/** 일일 의뢰 — 일반 난이도의 사람·날짜·해역·난이도당 1행. 네임드는 해시로 뽑지 않는다(offeredQuestsFor). 해시 결정이라 DB 저장 없이
  *  클라·서버가 같은 값을 뽑는다. 난이도 내에서는 동일 확률이다. */
 export function dailyQuestFor(
-  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+  zone: BountyZone, difficulty: Exclude<BountyDifficulty, 'named'>, uid: string, day: string,
 ): BountyQuest | undefined {
   const pool = BOUNTIES.filter(q => q.zone === zone && q.difficulty === difficulty);
   if (pool.length === 0) return undefined;

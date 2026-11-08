@@ -1,6 +1,6 @@
-// 유물 레지스트리 무결성 — 지역별 1개·재료 id 유일·문장 무수치가 계약이다.
+// 유물 레지스트리 무결성 — 네임드마다 1개·재료 id 유일·문장 무수치가 계약이다.
 import { describe, it, expect } from 'vitest';
-import { ARTIFACTS, artifactById, artifactOfNamed, artifactOfZone, artifactsOfZone } from './artifacts';
+import { ARTIFACTS, artifactById, artifactOfNamed, artifactsOfZone } from './artifacts';
 import { NAMED, namedById } from './named';
 import { BOUNTIES } from './bounties';
 
@@ -51,10 +51,9 @@ describe('artifacts 데이터 계약', () => {
     }
   });
 
-  it('해역의 유물 목록은 그 해역 네임드의 유물이고 artifactOfZone은 첫 유물이다', () => {
+  it('해역의 유물 목록은 그 해역 네임드의 유물이다', () => {
     expect(artifactsOfZone('southatlantic').map(a => a.namedId)).toEqual(['adamastor', 'jasconius']);
     expect(artifactsOfZone('pacific')).toHaveLength(1);
-    expect(artifactOfZone('southatlantic')).toBe(artifactsOfZone('southatlantic')[0]);
   });
 
   it('로어에 손으로 적은 수치가 없다', () => {

@@ -34,6 +34,9 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
 
+/** 네임드 탭과 유물 탭의 카드 줄 - PC는 가로로 같은 폭, 모바일 레이아웃은 한 열로 쌓아 값 칸이 잘리지 않게 한다 */
+const CARD_ROW = 'grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0 mobile:grid-flow-row mobile:auto-cols-auto mobile:flex-none';
+
 const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요.\n서버에 연결된 뒤 다시 해 주세요.';
 
 /** 고정 정보 줄: 구역, 오늘 남은 클리어(일반 의뢰, 네임드 토벌). 스냅샷이 오기 전에는 값 자리에 -를 둔다 */
@@ -141,7 +144,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <>
         <div className="flex-1 min-h-0 flex flex-col">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
-          <div className="grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0">
+          <div className={CARD_ROW}>
             {namedOffers.map(({ quest, reward, ticketMins, relic }) => (
               <NamedCard key={quest.id} game={game} quest={quest}
                 canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
@@ -174,7 +177,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
         </>
       ) : (
-        <div className="grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0">
+        <div className={CARD_ROW}>
           {relics.map(({ artifact, owned, level, mats }) => (
             <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
               materialCount={mats} busy={busy}
