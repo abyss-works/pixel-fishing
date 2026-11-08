@@ -18,19 +18,19 @@ export interface CompareRow {
 }
 
 /** 현재와 확정 후 비교 표 — 이름, 현재, 확정 후 세 열. 열 머리와 이름에 규칙 설명 툴팁을 달 수 있다.
- *  값 열 폭은 PC 레이아웃에서 7rem, 9rem으로 고정이고 모바일 레이아웃에서는 칸 폭의 비율이라 좁은 창에도 가로 스크롤 없이 들어간다.
+ *  값 열 폭은 PC 레이아웃에서 7rem, 9rem으로 고정이고 모바일 레이아웃에서는 칸 폭의 비율이라 좁은 창에도 가로 스크롤 없이 들어간다(모바일은 표의 최소 폭을 풀어 비율이 담은 칸 폭만 따르고, 값 칸도 줄을 바꾼다).
  *  이름이 길면 이름 칸에서 줄을 바꾼다. heads가 하나면 확정 후 열 없이 현재 열만 보인다(더 바꿀 수 없는 최고 단계). */
 export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode, ReactNode]; rows: CompareRow[] }) {
   const showNext = heads.length > 1;
   const mobile = useMobileLayout();
-  const cols = mobile ? [null, '28%', '36%'] : [null, '7rem', '9rem'];
+  const cols = mobile ? [null, '30%', '40%'] : [null, '7rem', '9rem'];
   return (
     <TableBox className="shrink-0 px-3 pt-1 pb-2">
       <DataTable cols={showNext ? cols : cols.slice(0, 2)} nameMin={mobile ? '0px' : '6rem'}
                  className={`pf-table [&_th]:h-[30px] [&_th]:text-2xs [&_th]:text-right [&_td]:h-7 [&_td]:text-right
                             [&_td]:whitespace-nowrap [&_td]:border-b-0 [&_tbody_tr+tr_td]:border-t [&_tbody_tr+tr_td]:border-line/60
                             [&_th:first-child]:text-left [&_td:first-child]:text-left [&_th:first-child]:pl-0 [&_td:first-child]:pl-0
-                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 ${mobile ? '[&_td:first-child]:whitespace-normal' : ''}`}>
+                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 ${mobile ? 'min-w-0! [&_td]:whitespace-normal [&_td]:break-keep [&_th]:break-keep' : ''}`}>
         <thead><tr><th aria-label="항목" /><th>{heads[0]}</th>{showNext && <th>{heads[1]}</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
