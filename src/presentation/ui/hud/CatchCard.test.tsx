@@ -29,4 +29,13 @@ describe('획득 카드', () => {
     expect(tag).toHaveClass('bg-gold');
     expect(tag.className).not.toMatch(/rotate|rounded/);
   });
+
+  it('이펙트 층은 카드의 쌓임 맥락 밖에서 카드와 형제로 놓여 채팅과 헤더 위 이펙트 층 토큰을 쓴다', () => {
+    const { container } = render(<CatchCard fish={FISH.find(f => RARITY[f.rarity].sparks > 0)!} info={info()} />);
+    const fx = container.querySelector('[data-catch-fx]')!;
+    expect(fx.className).toContain('z-(--z-catch-fx)');
+    expect(fx.closest('[class*="z-(--z-stage-card)"]')).toBeNull();
+    expect(fx.closest('.animate-catch-pop')).toBeNull();
+    expect(fx.parentElement).toBe(container.querySelector('.animate-catch-pop')!.parentElement);
+  });
 });
