@@ -97,6 +97,18 @@ describe('하루 의뢰 계획', () => {
     expect(general.lump).toBeCloseTo(rewards[0], 6);
   });
 
+  it('끝낼 수 없는 후보는 평균에 0으로 넣지 않고 끝낼 수 있는 후보 중에서 고른다', () => {
+    let partial = 0;
+    for (const seconds of [600, 1200, 1800, 3600, 7200, 14400]) {
+      const general = planBounties({ ...base, seconds }).find(a => a.kind === 'general');
+      if (!general) continue;
+      const options = BOUNTIES.filter(q => q.zone === general.zone && q.difficulty === general.difficulty);
+      expect(general.lump, `${seconds}초 ${general.zone} ${general.difficulty}`).toBeCloseTo(options[0].reward, 6);
+      if (general.seconds < 7200) partial++;
+    }
+    expect(partial).toBeGreaterThan(0);
+  });
+
   it('시간이 모자라면 계획이 없다', () => {
     expect(planBounties({ ...base, seconds: 60 })).toEqual([]);
   });

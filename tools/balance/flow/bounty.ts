@@ -96,15 +96,18 @@ function generalPlan(input: PlanInput, seconds: number): Activity | null {
     for (const difficulty of ['easy', 'normal', 'hard'] as const) {
       const options = BOUNTIES.filter(q => q.zone === zone && q.difficulty === difficulty);
       if (options.length === 0) continue;
-      let gain = 0, secs = 0, lump = 0;
+      let gain = 0, secs = 0, lump = 0, taken = 0;
       for (const q of options) {
         const perHour = avgOf(spots, s => input.rateAt(s).rows.filter(r => r.fish.rarity === q.grade).reduce((a, r) => a + r.prob, 0) * input.rateAt(s).catchesPerHour);
         if (perHour <= 0) continue;
         const hours = q.count / perHour;
         const g = q.reward + (zoneGold - input.current.goldPerHour) * hours;
         if (hours * 3600 > seconds || g <= 0) continue;
-        gain += g / options.length; secs += hours * 3600 / options.length; lump += q.reward / options.length;
+        gain += g; secs += hours * 3600; lump += q.reward; taken++;
       }
+      // 그날 받은 의뢰가 끝낼 수 없는 후보면 하지 않으므로, 끝낼 수 있는 후보 중에서 평균을 낸다
+      if (taken === 0) continue;
+      gain /= taken; secs /= taken; lump /= taken;
       if (gain > 0 && (!best || gain > best.gain)) best = { kind: 'general', zone, difficulty, seconds: secs, spots, lump, gain };
     }
   }
