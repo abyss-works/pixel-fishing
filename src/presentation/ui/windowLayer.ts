@@ -5,11 +5,18 @@ import { useSyncExternalStore } from 'react';
 let host: HTMLElement | null = null;
 const listeners = new Set<() => void>();
 
-/** 게임 화면 루트가 마운트와 언마운트 때 부른다 */
-export function setWindowHost(el: HTMLElement | null) {
+function setHost(el: HTMLElement | null) {
   if (host === el) return;
   host = el;
   listeners.forEach(l => l());
+}
+
+/** 게임 화면 루트의 콜백 ref. 마운트 때 자리를 등록하고, 해제 때는 그 자리가 아직 자기 요소일 때만 비운다.
+ *  새 루트가 먼저 등록된 뒤 이전 루트가 해제되어도 새 자리가 지워지지 않는다. */
+export function windowHostRef(el: HTMLElement | null) {
+  if (!el) return;
+  setHost(el);
+  return () => { if (host === el) setHost(null); };
 }
 
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };

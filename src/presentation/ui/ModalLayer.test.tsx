@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import Modal from './Modal';
 import { resetKeyScopes } from './hotkeys';
 import { resetOpenWindows } from './openWindows';
-import { setWindowHost } from './windowLayer';
+import { windowHostRef } from './windowLayer';
 
 afterEach(() => { cleanup(); resetOpenWindows(); resetKeyScopes(); });
 
@@ -32,11 +32,11 @@ describe('Modal 창 층 자리', () => {
   it('창 층 자리가 있으면 앱 모달은 호출한 곳이 바깥이어도 그 자리 안에 그려진다', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
-    act(() => setWindowHost(host));
+    const release = windowHostRef(host);
     render(<div data-testid="outside"><Modal onClose={() => {}}>본문</Modal></div>);
     expect(host).toContainElement(screen.getByRole('dialog'));
     expect(screen.getByTestId('outside')).not.toContainElement(screen.getByRole('dialog'));
-    act(() => setWindowHost(null));
+    act(() => release?.());
     host.remove();
   });
 
@@ -48,10 +48,10 @@ describe('Modal 창 층 자리', () => {
   it('스테이지 창은 스테이지 안에 그리고 창 층 자리로 옮기지 않는다', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
-    act(() => setWindowHost(host));
+    const release = windowHostRef(host);
     render(<div data-testid="outside"><Modal layer="stage" onClose={() => {}}>본문</Modal></div>);
     expect(screen.getByTestId('outside')).toContainElement(screen.getByRole('dialog'));
-    act(() => setWindowHost(null));
+    act(() => release?.());
     host.remove();
   });
 });

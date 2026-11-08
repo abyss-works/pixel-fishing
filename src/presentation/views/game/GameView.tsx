@@ -67,7 +67,7 @@ import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
 import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
-import { setWindowHost } from '../../ui/windowLayer';
+import { windowHostRef } from '../../ui/windowLayer';
 
 interface GameViewProps {
   game: GameState;
@@ -260,7 +260,7 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div ref={setWindowHost} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
+    <div ref={windowHostRef} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
          style={keyboardStyle(visible)}
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
