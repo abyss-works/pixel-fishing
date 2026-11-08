@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
 import { SPOTS } from '../../../src/game/content/spots';
+import { entryLevel } from '../model';
 import { applyOverride } from './override';
 import { DEFAULT_LOSS4H, ALWAYS_ON, playTypes, simulate, sleepAccrual, sleepFishSeconds } from './progress';
 import type { PlayType } from './progress';
@@ -71,6 +72,36 @@ describe('깨어 있는 동안 가방 한도', () => {
     const a = simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365 });
     const b = simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365, bagCapAwake: false });
     expect(b).toEqual(a);
+  });
+});
+
+describe('레벨별 보유 라이선스', () => {
+  const lastSpot = SPOTS[SPOTS.length - 1].id;
+  const l0 = entryLevel(lastSpot);
+
+  it('마지막 해역에 닿은 뒤 정한 레벨까지 강화하며 레벨마다 기록한다', () => {
+    const r = simulate({ type: type('h4-75'), axis: 'idle', bounty: true, maxDays: 365, growTo: l0 + 4 });
+    expect(r.marks.map(m => m.level)).toEqual([l0, l0 + 1, l0 + 2, l0 + 3, l0 + 4]);
+    expect(r.marks[0].day).toBe(last(r.arrivals).day);
+    for (let i = 1; i < r.marks.length; i++) expect(r.marks[i].day).toBeGreaterThanOrEqual(r.marks[i - 1].day);
+  });
+
+  it('4시간 유형은 세인트헬레나 도착 시 남대서양 네임드 라이선스가 없고 이후 늘어나기만 한다', () => {
+    const r = simulate({ type: type('h4-75'), axis: 'idle', bounty: true, maxDays: 365, growTo: l0 + 4 });
+    expect(r.marks[0].licenses).not.toContain('southatlantic:named');
+    expect(r.marks[0].licenses).toContain('indian:기본');
+    for (const l of r.marks[0].licenses) expect(r.marks.at(-1)!.licenses).toContain(l);
+  });
+
+  it('의뢰를 수행하지 않으면 라이선스 기록이 비어 있고, growTo를 주지 않으면 기록이 없다', () => {
+    expect(simulate({ type: type('h8'), axis: 'idle', bounty: false, maxDays: 365, growTo: l0 }).marks[0].licenses).toEqual([]);
+    expect(simulate({ type: type('h8'), axis: 'idle', bounty: true, maxDays: 365 }).marks).toEqual([]);
+  });
+
+  it('growTo는 도착 기록을 바꾸지 않는다', () => {
+    const a = simulate({ type: type('h8'), axis: 'idle', bounty: true, maxDays: 365 });
+    const b = simulate({ type: type('h8'), axis: 'idle', bounty: true, maxDays: 365, growTo: l0 + 4 });
+    expect(b.arrivals).toEqual(a.arrivals);
   });
 });
 

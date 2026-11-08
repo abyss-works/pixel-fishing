@@ -26,6 +26,9 @@ export function dexCompletion(dex: DexLog, zone: BountyZone, tier: BountyTier): 
   return fish.reduce((p, f) => p * (1 - Math.exp(dex.get(f.id) ?? 0)), 1);
 }
 
+/** 라이선스 표기 — 구역과 등급 */
+export const licenseKey = (zone: BountyZone, tier: BountyTier): string => `${zone}:${tier === 'basic' ? '기본' : '네임드'}`;
+
 export const licenseHeld = (dex: DexLog, zone: BountyZone, tier: BountyTier): boolean =>
   dexCompletion(dex, zone, tier) > LICENSE_PROB;
 

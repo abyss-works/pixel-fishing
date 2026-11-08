@@ -11,7 +11,8 @@ import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { axisAvailable, rates, rodSpec } from '../model';
 import type { Axis, Rates } from '../model';
-import { licenseHeld, planBounties } from './bounty';
+import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
+import { licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
 
 export interface PlayType {
@@ -72,6 +73,16 @@ export interface SimOptions {
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   maxDays: number;
+  /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
+  growTo?: number;
+}
+
+/** 마지막 해역에서 낚싯대가 이 레벨에 닿은 시점의 상태 */
+export interface LevelMark {
+  level: number;
+  day: number;
+  /** 그 시점에 쓸 수 있는 의뢰 라이선스(`구역:기본|네임드`). 의뢰를 수행하지 않는 시뮬레이션은 비어 있다 */
+  licenses: string[];
 }
 
 export interface Arrival {
@@ -90,6 +101,8 @@ export interface SimResult {
   complete: boolean;
   /** 의뢰와 토벌로 번 골드의 합 */
   bountyGold: number;
+  /** growTo를 준 경우 마지막 해역 도착 이후 레벨별 기록 */
+  marks: LevelMark[];
 }
 
 const STEP_SEC = 60;
@@ -104,6 +117,9 @@ const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 export function simulate(opts: SimOptions): SimResult {
   let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
+  const marks: LevelMark[] = [];
+  const growTo = opts.growTo ?? 0;
+  const finished = () => idx >= LAST && level >= growTo;
   const arrivals: Arrival[] = [{ spot: SPOTS[0].id, day: 1, hours: 0, waitGold: 0, waitFame: 0, waitBoth: 0 }];
   const dex: DexLog = new Map();
   const cache = new Map<string, Rates>();
@@ -146,6 +162,10 @@ export function simulate(opts: SimOptions): SimResult {
     fishSec += sec;
   };
 
+  const licensesNow = (): string[] => !opts.bounty ? [] : BOUNTY_ZONES.flatMap(zone =>
+    (['basic', 'named'] as const).filter(tier => licenseHeld(dex, zone, tier)).map(tier => licenseKey(zone, tier)));
+  const mark = () => { if (growTo > 0) marks.push({ level, day, licenses: licensesNow() }); };
+
   /** 필요한 배와 강화를 사고 열린 해역으로 옮긴다. 못 옮겼으면 무엇이 모자랐는지 dt초를 센다 */
   const settle = (dt: number) => {
     while (idx < LAST) {
@@ -161,6 +181,7 @@ export function simulate(opts: SimOptions): SimResult {
         idx += 1;
         arrivals.push({ spot: next.id, day, hours: fishSec / 3600, waitGold: waitGold / 3600, waitFame: waitFame / 3600, waitBoth: waitBoth / 3600 });
         waitGold = waitFame = waitBoth = 0;
+        if (idx >= LAST) mark();
         continue;
       }
       const boatLeft = boat < next.boatTier ? nextBoat(boat) : undefined;
@@ -170,10 +191,11 @@ export function simulate(opts: SimOptions): SimResult {
       if (goldShort && fameShort) waitBoth += dt; else if (fameShort) waitFame += dt; else waitGold += dt;
       return;
     }
+    while (level < growTo && gold >= upgradeCost(level)) { gold -= upgradeCost(level); level += 1; mark(); }
   };
 
   const fishFor = (spots: SpotId[] | null, axis: Axis | null, seconds: number) => {
-    for (let left = seconds; left > 1e-9 && idx < LAST;) {
+    for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
       accrue(spots ?? [SPOTS[idx].id], axis, dt, dt, true);
       left -= dt;
@@ -187,11 +209,11 @@ export function simulate(opts: SimOptions): SimResult {
     settle(0);
   };
 
-  for (; day <= opts.maxDays && idx < LAST; day++) {
+  for (; day <= opts.maxDays && !finished(); day++) {
     settle(0);
     bagUsed = 0;
     let awake = opts.type.awakeHours * 3600;
-    if (opts.bounty && idx < LAST) {
+    if (opts.bounty && !finished()) {
       const spot = SPOTS[idx].id;
       const plan = planBounties({
         player: { boat, level }, current: rateAt(spot), rateAt: s => rateAt(s),
@@ -199,13 +221,13 @@ export function simulate(opts: SimOptions): SimResult {
       });
       for (const a of plan) { runActivity(a); awake -= a.seconds; }
     }
-    if (idx < LAST) fishFor(null, null, awake);
+    if (!finished()) fishFor(null, null, awake);
     const sleep = opts.type.sleepHours * 3600;
-    if (sleep > 0 && idx < LAST) {
+    if (sleep > 0 && !finished()) {
       const spot = SPOTS[idx].id;
       const z = sleepAccrual(boat, rateAt(spot, 'idle').catchesPerHour, sleep);
       accrue([spot], 'idle', z.sec, z.goldSec);
     }
   }
-  return { arrivals, complete: idx >= LAST, bountyGold };
+  return { arrivals, complete: idx >= LAST, bountyGold, marks };
 }

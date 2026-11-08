@@ -4,7 +4,7 @@ import { capOfBoat } from '../../../src/game/rules/logic';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { BOATS } from '../../../src/game/content/boats';
 import { entryLevel, rates } from '../model';
-import { arrivalDays, levelUpDays } from './days';
+import { arrivalDays, levelUpDays, steadyDaily } from './days';
 
 const o = { axis: 'idle' as const, loss4h: 25, maxDays: 365 };
 const last = SPOTS[SPOTS.length - 1].id;
@@ -64,7 +64,7 @@ describe('마지막 해역 레벨업 일수', () => {
 
   it('의뢰 없이 8시간이면 강화비를 하루 낚시 8시간 수입으로 나눈 값이다', () => {
     const r = pick('h8', false, l0);
-    expect(r.days).toBeCloseTo(upgradeCost(l0) / (8 * rates(last, l0, 'idle').goldPerHour), 9);
+    expect(r.days!).toBeCloseTo(upgradeCost(l0) / (8 * rates(last, l0, 'idle').goldPerHour), 9);
     expect(r.bountyShare).toBe(0);
   });
 
@@ -79,16 +79,36 @@ describe('마지막 해역 레벨업 일수', () => {
   it('의뢰와 토벌을 수행하면 일수가 줄고 보상 비중이 있다', () => {
     for (const t of ['h16', 'h8', 'h4-75', 'h2', 'h1']) {
       for (const l of [l0, l4]) {
-        expect(pick(t, true, l).days, `${t} ${l}`).toBeLessThan(pick(t, false, l).days);
-        expect(pick(t, true, l).bountyShare, `${t} ${l}`).toBeGreaterThan(0);
-        expect(pick(t, true, l).bountyShare).toBeLessThan(1);
+        expect(pick(t, true, l).days!, `${t} ${l}`).toBeLessThan(pick(t, false, l).days!);
+        expect(pick(t, true, l).bountyShare!, `${t} ${l}`).toBeGreaterThan(0);
+        expect(pick(t, true, l).bountyShare!).toBeLessThan(1);
       }
     }
   });
 
+  it('레벨업은 그 시점에 시뮬레이션에서 실제로 가진 라이선스로 계산한다', () => {
+    const r = pick('h4-75', true, l0);
+    expect(r.licenses).not.toContain('southatlantic:named');
+    expect(r.licenses.length).toBeGreaterThan(0);
+    expect(pick('h4-75', false, l0).licenses).toEqual([]);
+    expect(pick('h4-75', true, l4).licenses.length).toBeGreaterThanOrEqual(r.licenses.length);
+  });
+
+  it('모든 라이선스를 가정한 값보다 일수가 길다', () => {
+    const real = pick('h4-75', true, l0);
+    const all = steadyDaily({ level: l0, type: real.type, licensed: () => true, axis: 'idle', bagCapAwake: false });
+    expect(real.dailyGold!).toBeLessThan(all.dailyGold);
+    expect(real.days!).toBeGreaterThan(real.upgradeGold / all.dailyGold);
+  });
+
+  it('깨어 있는 동안 가방 한도를 적용하면 의뢰 없는 일수가 늘어난다', () => {
+    const capped = levelUpDays({ ...o, bagCapAwake: true }).find(x => x.type.id === 'h8' && !x.bounty && x.level === l0)!;
+    expect(capped.days!).toBeGreaterThan(pick('h8', false, l0).days!);
+  });
+
   it('낚는 시간이 짧을수록 일수가 늘고 +4 레벨이 더 오래 걸린다', () => {
-    expect(pick('h2', false, l0).days).toBeGreaterThan(pick('h4-75', false, l0).days);
-    expect(pick('h4-75', false, l0).days).toBeGreaterThan(pick('h8', false, l0).days);
-    expect(pick('h8', false, l4).days).toBeGreaterThan(pick('h8', false, l0).days);
+    expect(pick('h2', false, l0).days!).toBeGreaterThan(pick('h4-75', false, l0).days!);
+    expect(pick('h4-75', false, l0).days!).toBeGreaterThan(pick('h8', false, l0).days!);
+    expect(pick('h8', false, l4).days!).toBeGreaterThan(pick('h8', false, l0).days!);
   });
 });

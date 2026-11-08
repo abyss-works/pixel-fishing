@@ -10,8 +10,8 @@ import type { FlowOverride } from './override';
 import type { FlowAxis } from './progress';
 import { transitionReport } from './transitions';
 import type { TransitionReport } from './transitions';
-import { arrivalDays, levelUpDays } from './days';
-import type { ArrivalDays, LevelUp } from './days';
+import { daysReport } from './days';
+import type { DaysReport } from './days';
 import { OPENING_TARGET_SEC, simulateOpening } from './opening';
 import type { Judgment, OpeningResult } from './opening';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
@@ -103,7 +103,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
 export interface FlowResult {
   options: { axis: FlowAxis; loss4h: number | null; legendAt: number | null; maxDays: number; bagCapAwake: boolean; override: FlowOverride | null };
   transition?: TransitionReport;
-  days?: { arrival: ArrivalDays[]; levelUp: LevelUp[] };
+  days?: DaysReport;
   opening?: OpeningResult[];
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
@@ -119,7 +119,7 @@ export function runFlow(o: FlowOptions): FlowResult {
     const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override } };
     const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake };
     if (o.commands.includes('transition')) res.transition = transitionReport(sim);
-    if (o.commands.includes('days')) res.days = { arrival: arrivalDays(sim), levelUp: levelUpDays(sim) };
+    if (o.commands.includes('days')) res.days = daysReport(sim);
     if (o.commands.includes('opening')) {
       const judgments: Judgment[] = ['normal', 'good'];
       res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
@@ -191,8 +191,13 @@ function daysText(d: NonNullable<FlowResult['days']>): string[] {
     const rows = d.levelUp.filter(r => r.level === level);
     out.push(`\n## 마지막 해역 레벨업 — Lv${level}에서 Lv${level + 1}로 (강화 ${n0(rows[0].upgradeGold)}G)`);
     out.push(table(
-      ['유형', '의뢰·토벌', '하루 골드', '보상 비중', '소요 일수'],
-      rows.map(r => [r.type.label, r.bounty ? '모두 수행' : '수행 안 함', n0(r.dailyGold), pct0(r.bountyShare), `${r.days.toFixed(1)}일`]),
+      ['유형', '의뢰·토벌', '레벨 도달', '쓰는 라이선스', '하루 골드', '보상 비중', '소요 일수'],
+      rows.map(r => [
+        r.type.label, r.bounty ? '모두 수행' : '수행 안 함', r.day === null ? '—' : `${r.day}일째`,
+        r.bounty ? (r.licenses.join(', ') || '없음') : '—',
+        r.dailyGold === null ? '미도달' : n0(r.dailyGold), r.bountyShare === null ? '—' : pct0(r.bountyShare),
+        r.days === null ? '미도달' : `${r.days.toFixed(1)}일`,
+      ]),
     ));
   }
   return out;
