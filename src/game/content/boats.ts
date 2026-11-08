@@ -25,14 +25,14 @@ export interface Boat {
 }
 
 export const BOATS: readonly Boat[] = [
-  { tier: 1, name: '조각배',   price: 300,    fameReq: 0,     speed: 85,  bagCap: 140 },  // 1-1 태평양
-  { tier: 2, name: '돛단배',   price: 2000,   fameReq: 1000,  speed: 100, bagCap: 300 }, // 1-1 마리아나 해구
-  { tier: 3, name: '정크선',   price: 6000,   fameReq: 3500,  speed: 115, bagCap: 500 },  // 1-2 동남아 진입
-  { tier: 4, name: '범선',     price: 15000,  fameReq: 11000, speed: 130, bagCap: 1000 }, // 1-2 새 해역 없음 — 가방 확장(정크선의 두 배)
-  { tier: 5, name: '증기선',   price: 32000,  fameReq: 24000, speed: 145, bagCap: 1500 }, // 1-3 인도양 — 동남아 건너뛰기
-  { tier: 6, name: '대양선',   price: 70000,  fameReq: 50000, speed: 160, bagCap: 2000 }, // 1-3 남인도양
-  { tier: 7, name: '원양어선', price: 150000, fameReq: 100000, speed: 175, bagCap: 3000 }, // 1-4 마다가스카르(두 수역 공통)
-  { tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 190, bagCap: 4000 }, // 1-5 남대서양(두 해역 공통)
+  { tier: 1, name: '조각배',   price: 300,    fameReq: 0,     speed: 110,  bagCap: 140 },  // 1-1 태평양
+  { tier: 2, name: '돛단배',   price: 2000,   fameReq: 1000,  speed: 120, bagCap: 300 }, // 1-1 마리아나 해구
+  { tier: 3, name: '정크선',   price: 6000,   fameReq: 3500,  speed: 130, bagCap: 500 },  // 1-2 동남아 진입
+  { tier: 4, name: '범선',     price: 15000,  fameReq: 11000, speed: 140, bagCap: 1000 }, // 1-2 새 해역 없음 — 가방 확장(정크선의 두 배)
+  { tier: 5, name: '증기선',   price: 32000,  fameReq: 24000, speed: 150, bagCap: 1500 }, // 1-3 인도양 — 동남아 건너뛰기
+  { tier: 6, name: '대양선',   price: 70000,  fameReq: 50000, speed: 165, bagCap: 2000 }, // 1-3 남인도양
+  { tier: 7, name: '원양어선', price: 150000, fameReq: 100000, speed: 180, bagCap: 3000 }, // 1-4 마다가스카르(두 수역 공통)
+  { tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 200, bagCap: 4000 }, // 1-5 남대서양(두 해역 공통)
 ];
 // 배 ↔ 지역 매핑("몇 번째 지역의 몇 번째 배") — 지역당 2개 규칙 유지:
 //   1-1 = t1/t2 · 1-2 = t3/t4 · 1-3 = t5/t6(tier4 흡수로 한 칸 당김) ·
