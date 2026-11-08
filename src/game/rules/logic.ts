@@ -384,7 +384,6 @@ export function newState(): GameState {
     location: { kind: 'base', id: 'home' },
     visited: [],
     artifacts: [],
-    artifactLevels: {},
     items: {},
     activeBait: null,
     pity: {},
@@ -740,9 +739,10 @@ const safeStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
 // 유물 레벨 위생 — 보유한 레벨 유물만, 정수로 접어 1~최고 레벨에 가둔다. Lv1은 기본값이라 행을 접는다
-function safeArtifactLevels(v: unknown, owned: string[]): Record<string, number> {
+// 올린 유물이 없으면 필드를 두지 않는다(없음과 같은 뜻이라 세이브가 쓰레기로 쌓이지 않는다)
+function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Record<string, number> } {
   const out: Record<string, number> = {};
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
   for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
     const art = artifactById(id);
     if (!art || !artifactHasLevel(art) || !owned.includes(id)) continue;
@@ -750,7 +750,7 @@ function safeArtifactLevels(v: unknown, owned: string[]): Record<string, number>
     const level = Math.min(ARTIFACT_MAX_LEVEL, Math.max(1, raw));
     if (level > 1) out[id] = level;
   }
-  return out;
+  return Object.keys(out).length > 0 ? { artifactLevels: out } : {};
 }
 
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다. **모르는 키는 버리지 않는다**
@@ -916,7 +916,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     location: safeLocation(s.location),
     visited: safeStrings(s.visited) as RegionId[],
     artifacts: safeStrings(s.artifacts),
-    artifactLevels: safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
+    ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
     activeBait: safeActiveBait(s.activeBait),
     pity: safePity(s.pity),

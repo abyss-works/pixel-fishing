@@ -172,15 +172,15 @@ describe('levelUpArtifact 액션', () => {
 });
 
 describe('세이브', () => {
-  it('newState는 빈 레벨 맵을 가진다', () => {
-    expect(newState().artifactLevels).toEqual({});
+  it('newState는 레벨 맵을 두지 않는다 — 올린 유물이 없으면 필드가 없다', () => {
+    expect(newState().artifactLevels).toBeUndefined();
   });
 
   it('레벨 필드가 없는 기존 세이브는 맵이 비고 보유 유물은 Lv1로 읽힌다(v 그대로)', () => {
     const raw = { ...newState(), artifacts: ['wreck-compass'], artifactLevels: undefined };
     const s = migrate(raw);
     expect(s.v).toBe(8);
-    expect(s.artifactLevels).toEqual({});
+    expect(s.artifactLevels).toBeUndefined();
     expect(artifactLevelOf(s, 'wreck-compass')).toBe(1);
   });
 
@@ -192,7 +192,8 @@ describe('세이브', () => {
     expect(migrate(raw).artifactLevels).toEqual({ 'wreck-compass': 3 });
     const bad = migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 9 } });
     expect(bad.artifactLevels).toEqual({ 'wreck-compass': 5 });
-    expect(migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: 'x' }).artifactLevels).toEqual({});
+    expect(migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: 'x' }).artifactLevels).toBeUndefined();
+    expect(migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 1 } }).artifactLevels).toBeUndefined();
   });
 });
 
