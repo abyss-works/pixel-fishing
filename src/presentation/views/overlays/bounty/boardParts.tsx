@@ -50,7 +50,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, first,
   leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
   /** 줄 맨 앞이면 이름 왼쪽에 구분선을 두지 않는다 */
   first?: boolean;
-  /** 값 이름을 헤더의 의뢰 현황처럼 "일반", "네임드"로 줄인다 */
+  /** 값 이름을 메뉴 줄의 의뢰 배지처럼 "일반", "네임드"로 줄인다 */
   shortLabels?: boolean;
 }) {
   const left = fmtRatioTight;

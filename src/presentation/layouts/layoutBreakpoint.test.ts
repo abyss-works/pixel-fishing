@@ -68,7 +68,7 @@ describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
   });
 
   it('PC 헤더 구성요소에는 스테이지 폭 변형(@max-, @min-)과 모바일 변형(mobile:)이 없다 - PC 헤더는 늘 같은 크기다', () => {
-    const pcHeader = ['ResourceBar', 'QuestStatus', 'HudStat', 'HeaderFrame', 'HudMenuButton']
+    const pcHeader = ['ResourceBar', 'BagMeter', 'HudStat', 'HeaderFrame', 'HudMenuButton']
       .map(name => sources.find(([key]) => key.endsWith(`/ui/hud/${name}.tsx`)));
     for (const entry of pcHeader) expect(entry, '소스를 찾지 못했다').toBeDefined();
     for (const [key, src] of pcHeader as [string, string][]) {

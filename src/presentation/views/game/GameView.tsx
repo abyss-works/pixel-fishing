@@ -288,7 +288,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenQuests={openQuests} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenMap={onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
@@ -300,7 +300,7 @@ export default function GameView(props: GameViewProps) {
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge}
                    menu={(
-                     <GameMenu account={props.account} setToast={props.setToast}
+                     <GameMenu account={props.account} setToast={props.setToast} onQuests={openQuests}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />

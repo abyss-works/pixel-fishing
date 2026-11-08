@@ -5,6 +5,7 @@
 import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BAITS } from '../../../game/content/baits';
+import { boatNameOf } from '../../../game/content/boats';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
 
@@ -50,4 +51,9 @@ export function selectBaitInventory(items: Readonly<Record<string, number>>) {
 export function selectOwnedArtifacts(game: Pick<GameState, 'artifacts'>): Artifact[] {
   const owned = new Set(game.artifacts);
   return ARTIFACTS.filter(a => owned.has(a.id));
+}
+
+/** 헤더 자원 바의 배와 낚싯대 - 배는 티어와 이름(맨발은 티어 0, 없음), 낚싯대는 레벨 */
+export function selectGearSummary(game: Pick<GameState, 'boat' | 'rod'>) {
+  return { boatTier: game.boat, boatName: boatNameOf(game.boat), rodLevel: game.rod };
 }

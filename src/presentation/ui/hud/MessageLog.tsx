@@ -115,7 +115,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
 
   return (
     <div ref={rootRef} className="group absolute left-3 bottom-3 z-(--z-overlay) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
-                    mobile:static mobile:col-span-3 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
+                    mobile:static mobile:col-span-2 mobile:row-start-3 mobile:w-full mobile:p-2 mobile:bg-surface
                     mobile:border-t mobile:border-line">
       {!folded && (toggles || onFold) && (
         <div className="pointer-events-none flex items-center gap-1.5">

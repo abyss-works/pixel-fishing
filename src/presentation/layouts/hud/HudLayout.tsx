@@ -13,8 +13,6 @@ import type { MessageChannel } from '../../ui/hud/messageFeed';
 import HudChip from '../../ui/hud/HudChip';
 import Minimap from '../../ui/hud/Minimap';
 import HudHeader from './HudHeader';
-import { useBounty } from '../../../features/bounty/service/useBounty';
-import { clearsStatus } from '../../../features/bounty/model/panel';
 import TimeBadge from '../../ui/hud/TimeBadge';
 import PixelIcon from '../../ui/PixelIcon';
 import Tip from '../../ui/Tip';
@@ -28,7 +26,6 @@ interface HudLayoutProps {
   log: Msg[];
   covered: boolean;
   onOpenStats: () => void;
-  onOpenQuests: () => void;
   onOpenMap: () => void;
   /** 미니맵에 그릴 같은 바다의 길드원 위치 */
   guildMates?: () => readonly { x: number; y: number }[];
@@ -60,17 +57,14 @@ interface HudLayoutProps {
 }
 
 // 플레이 화면에서 공통으로 쓰는 자원 표시, 미니맵, 시스템 로그를 배치한다.
-// 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(chips와 활성 미끼), 미니맵(바다에서만).
+// 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(접속 칩, 활성 미끼 칩, 시계, 지도 버튼 순서), 미니맵(바다에서만).
+// 시계는 바다와 거점이 같은 자리이고, 미니맵을 숨겨도 남는다. 표시 상태를 바꾸는 지도 버튼은 정보 항목 뒤 줄 끝에 둔다.
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
-// 모바일 레이아웃에서는 헤더(자원 바, 의뢰 현황, 메뉴 버튼)가 맨 위 행, 메시지 창이 채팅 영역에 놓이고(각 컴포넌트가 자기 행을 정한다), 나머지는 게임 영역의
+// 모바일 레이아웃에서는 헤더(자원 바, 메뉴 버튼)가 맨 위 행, 메시지 창이 채팅 영역에 놓이고(각 컴포넌트가 자기 행을 정한다), 나머지는 게임 영역의
 // 아래 가운데 한 줄기에 쌓는다 — 아래에서부터 오른쪽의 칩과 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-// 거점에는 미니맵이 없어 게임 시계를 오른쪽 위 메뉴 버튼(12px 여백, 60px 폭) 왼쪽에 붙인다. 모바일 레이아웃에서는 메뉴 버튼이
-// 헤더에 있고 거점 그림 안에 같은 시계가 있어 이 시계는 그리지 않는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenQuests, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
   const mobile = useMobileLayout();
-  // 오늘 남은 클리어 횟수(일반 의뢰, 네임드 토벌): 서버(DB)가 진실이다. 불러오는 중이거나 오프라인이면 null
-  const { snap } = useBounty();
   const logRef = useLogHeight();
   const activeBait = baitById(game.activeBait);
   const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
@@ -79,8 +73,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
 
   return (
     <>
-      <HudHeader game={game} bagBonus={bagBonus} clears={clearsStatus(snap)} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />
-      {scene.kind === 'base' && <TimeBadge besideMenu />}
+      <HudHeader game={game} bagBonus={bagBonus} onOpenStats={onOpenStats} menu={menu} />
       <div className="contents mobile:absolute mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2 mobile:bottom-2 mobile:z-(--z-overlay)
                       mobile:flex mobile:flex-col mobile:items-end mobile:gap-2 mobile:pointer-events-none">
         {mobile && <div ref={onStatusSlot} className="w-full flex justify-center empty:hidden" />}
@@ -88,29 +81,28 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
                         flex flex-col items-end gap-2 pointer-events-none
                         mobile:static mobile:w-[156px]">
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
-          {(chips || activeBait || (hasMinimap && !minimapVisible)) && (
-            <div className="flex items-center justify-end gap-1.5 pointer-events-auto">
-              {chips}
-              {activeBait && (
-                <Tip plain className="flex" text={`${activeBait.name} ${baitLeft}개 남음`}>
-                  <HudChip aria-label="활성 미끼">
-                    <span className="size-2.5 shrink-0" style={{ backgroundColor: activeBait.color }} />
-                    <span className="sr-only">{activeBait.name}</span>
-                    <span className={cx('pf-accent leading-none', baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
-                      {baitLeft}
-                    </span>
-                  </HudChip>
-                </Tip>
-              )}
-              {hasMinimap && !minimapVisible && (
-                <Tip wraps className="flex" text="미니맵 보이기">
-                  <HudChip aria-label="미니맵 보이기" onClick={() => setMinimapVisible(true)}>
-                    <PixelIcon glyph="plus" size={10} />
-                  </HudChip>
-                </Tip>
-              )}
-            </div>
-          )}
+          <div className="flex items-center justify-end gap-1.5 pointer-events-auto">
+            {chips}
+            {activeBait && (
+              <Tip plain className="flex" text={`${activeBait.name} ${baitLeft}개 남음`}>
+                <HudChip aria-label="활성 미끼">
+                  <span className="size-2.5 shrink-0" style={{ backgroundColor: activeBait.color }} />
+                  <span className="sr-only">{activeBait.name}</span>
+                  <span className={cx('pf-accent leading-none', baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
+                    {baitLeft}
+                  </span>
+                </HudChip>
+              </Tip>
+            )}
+            <TimeBadge />
+            {hasMinimap && !minimapVisible && (
+              <Tip wraps className="flex" text="미니맵 보이기">
+                <HudChip aria-label="미니맵 보이기" onClick={() => setMinimapVisible(true)}>
+                  <PixelIcon glyph="plus" size={10} />
+                </HudChip>
+              </Tip>
+            )}
+          </div>
           {scene.kind === 'region' && minimapVisible && (
             <div className="w-full pointer-events-auto">
               <Minimap def={REGION_PACKS[scene.id]} boat={game.boat}

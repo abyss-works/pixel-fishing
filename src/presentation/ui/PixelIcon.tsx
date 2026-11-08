@@ -13,19 +13,11 @@ export type GlyphId =
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
-  | 'crown' | 'sparkle' | 'menu'
-  | 'square' | 'diamond';
+  | 'crown' | 'sparkle' | 'menu';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 메뉴 — 가로 막대 셋 (햄버거)
   menu: { cells: [[1, 2, 10, 2], [1, 5, 10, 2], [1, 8, 10, 2]] },
-  // 표지 도형 - 목록과 값 칸의 갈래 표지. 색만으로 구분하지 않도록 모양이 다르다.
-  // 네모는 10x10, 다이아몬드는 12행(2, 4, 6, 8, 10, 12, 12, 10, 8, 6, 4, 2칸)이라 작은 크기에서도 십자가 아니라 마름모로 읽힌다
-  square: { cells: [[1, 1, 10, 10]] },
-  diamond: {
-    cells: [[5, 0, 2, 1], [4, 1, 4, 1], [3, 2, 6, 1], [2, 3, 8, 1], [1, 4, 10, 1], [0, 5, 12, 1],
-            [0, 6, 12, 1], [1, 7, 10, 1], [2, 8, 8, 1], [3, 9, 6, 1], [4, 10, 4, 1], [5, 11, 2, 1]],
-  },
   // 왕관 — 뾰족 셋 + 띠 + 받침, 가운데 보석 자리 구멍 (가장 큰 개체)
   crown: {
     cells: [[1, 2, 2, 2], [5, 1, 2, 2], [9, 2, 2, 2], [1, 4, 10, 3], [2, 7, 8, 2], [1, 9, 10, 2]],

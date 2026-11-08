@@ -9,11 +9,10 @@ vi.mock('../useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 import HudHeader from './HudHeader';
 
 const menu = <button type="button" aria-label="메뉴 열기">m</button>;
-const header = (left: { general: number; named: number } | null = { general: 1, named: 1 }, onOpenStats = () => {}, onOpenQuests = () => {}) =>
-  render(<HudHeader game={newState()} clears={{ left, caps: { general: 1, named: 1 } }} onOpenStats={onOpenStats} onOpenQuests={onOpenQuests} menu={menu} />);
+const header = (onOpenStats = () => {}) =>
+  render(<HudHeader game={newState()} onOpenStats={onOpenStats} menu={menu} />);
 
 const bar = () => screen.getByRole('button', { name: /^스탯창 열기/ }).closest('div')!;
-const quest = () => screen.getByRole('button', { name: /^의뢰 창 열기/ });
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
 const css = readFileSync('src/index.css', 'utf-8');
 const zOf = (name: string) => Number(new RegExp(`--z-${name}:\\s*(\\d+)`).exec(css)![1]);
@@ -22,27 +21,30 @@ describe('HudHeader 모바일 레이아웃', () => {
   beforeEach(() => { layout.mobile = true; });
   afterEach(cleanup);
 
-  it('자원 바, 의뢰 현황, 메뉴 버튼 세 덩어리는 서로 안에 들어가지 않는 별도 틀이다', () => {
+  it('자원 바와 메뉴 버튼은 서로 안에 들어가지 않는 별도 틀이고 의뢰 현황은 없다', () => {
     header();
-    expect(bar().contains(quest())).toBe(false);
-    expect(quest().contains(bar())).toBe(false);
     expect(bar().contains(menuSlot())).toBe(false);
-    expect(quest().contains(menuSlot())).toBe(false);
+    expect(screen.queryByRole('button', { name: /^의뢰 창 열기/ })).not.toBeInTheDocument();
   });
 
-  it('모바일 레이아웃에서는 한 행에 왼쪽부터 자원 바, 의뢰 현황, 메뉴 버튼이 첫째, 둘째, 셋째 열이다', () => {
+  it('한 행에 왼쪽부터 자원 바, 메뉴 버튼이 첫째, 둘째 열이다', () => {
     header();
-    for (const [el, col] of [[bar(), 1], [quest(), 2], [menuSlot(), 3]] as const) {
+    for (const [el, col] of [[bar(), 1], [menuSlot(), 2]] as const) {
       expect(el.className).toContain(`mobile:col-start-${col}`);
       expect(el.className).toContain('mobile:row-start-1');
     }
   });
 
-  it('자원 바와 의뢰 현황은 같은 높이(40px)다', () => {
+  it('두 틀 사이에 4px 간격이 있다 - 자원 바 왼쪽, 메뉴 버튼 양쪽에 4px 여백을 두고 비어 있는 열은 없다', () => {
     header();
-    for (const el of [bar(), quest()]) {
-      expect(el.className).toContain('h-10');
-    }
+    expect(bar().className).toContain('mobile:ml-1');
+    expect(bar().className).not.toMatch(/mobile:mr-/);
+    expect(menuSlot().className).toContain('mobile:mx-1');
+  });
+
+  it('메뉴 버튼 자리는 자원 바 높이의 세로 가운데에 맞춘다', () => {
+    header();
+    expect(menuSlot().className).toContain('mobile:self-center');
   });
 
   it('메뉴 버튼 자리는 펼친 줄이 게임 영역의 카드 묶음(overlay) 위에 오도록 한 단 높은 층이다', () => {
@@ -51,89 +53,39 @@ describe('HudHeader 모바일 레이아웃', () => {
     expect(menuSlot().className).toContain('z-(--z-card)');
   });
 
-  it('배와 낚싯대는 헤더에 보이지 않는다', () => {
-    header(null);
-    expect(screen.queryByText(/낚싯대|배/, { selector: 'span' })).not.toBeInTheDocument();
-  });
-
-  it('서버 값이 오기 전에도 의뢰 현황은 자리를 지키고 0을 보인다', () => {
-    header(null);
-    expect(quest().textContent).toBe('일반 0네임드 0');
-  });
-
-  it('서버 값이 오기 전에는 화면 값은 0이지만 툴팁과 접근성 이름은 0이 아니라 -를 보인다', () => {
-    header(null);
-    expect(quest()).toHaveAccessibleName('의뢰 창 열기, 오늘 남은 클리어 일반 - 네임드 -');
-    fireEvent.mouseEnter(quest().querySelector('.pf-accent')!.parentElement!.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('일반 의뢰 오늘 남은 클리어 -');
-    expect(screen.getByRole('tooltip').textContent).not.toContain('0/1');
-  });
-
-  it('서버 값이 있으면 일반, 네임드 순서로 보인다', () => {
-    header({ general: 0, named: 1 });
-    expect(quest().textContent).toBe('일반 0네임드 1');
-  });
-
-  it('의뢰 현황을 누르면 의뢰 창을, 자원 바를 누르면 스탯 창을 연다 - 서로 다른 동작이다', () => {
-    const onOpenStats = vi.fn();
-    const onOpenQuests = vi.fn();
-    header(undefined, onOpenStats, onOpenQuests);
-    fireEvent.click(quest());
-    expect(onOpenQuests).toHaveBeenCalledTimes(1);
-    expect(onOpenStats).not.toHaveBeenCalled();
-  });
-
   it('자원 바를 누르면 스탯 창을 연다', () => {
     const onOpenStats = vi.fn();
-    header(undefined, onOpenStats);
+    header(onOpenStats);
     fireEvent.click(screen.getByRole('button', { name: /^스탯창 열기/ }));
     expect(onOpenStats).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('HudHeader PC 레이아웃 - 자원 바 | 의뢰 현황 | 메뉴 버튼 세 틀', () => {
+describe('HudHeader PC 레이아웃 - 자원 바 | 메뉴 버튼 두 틀', () => {
   beforeEach(() => { layout.mobile = false; });
   afterEach(cleanup);
 
-  it('세 덩어리는 서로 안에 들어가지 않는 별도 틀이다', () => {
+  it('두 덩어리는 서로 안에 들어가지 않는 별도 틀이고 의뢰 현황은 없다', () => {
     header();
-    expect(bar().contains(quest())).toBe(false);
-    expect(quest().contains(bar())).toBe(false);
     expect(bar().contains(menuSlot())).toBe(false);
+    expect(screen.queryByRole('button', { name: /^의뢰 창 열기/ })).not.toBeInTheDocument();
   });
 
-  it('자원 바는 골드, 명성, 가방 세 칸이고 라벨 위 값 아래 두 행이다 - 배와 낚싯대는 없다', () => {
+  it('자원 바는 골드, 명성, 배, 낚싯대, 가방 다섯 칸이다', () => {
     header();
-    const text = screen.getByRole('button', { name: '스탯창 열기' }).textContent!;
-    expect(text).toMatch(/^골드 .+명성 .+가방 .+$/);
-    expect(text).not.toMatch(/배|낚싯대/);
-    const cells = [...screen.getByRole('button', { name: '스탯창 열기' }).querySelectorAll('.pf-accent')].map(v => v.parentElement!);
+    const text = screen.getByRole('button', { name: /^스탯창 열기/ }).textContent!;
+    expect(text).toMatch(/^골드 .+명성 .+배 .+낚싯대 .+가방 .+$/);
+    expect(text).not.toMatch(/일반|네임드/);
+    const cells = [...screen.getByRole('button', { name: /^스탯창 열기/ }).querySelectorAll('.pf-accent')]
+      .filter(v => v.className.includes('text-lg')).map(v => v.parentElement!);
+    expect(cells).toHaveLength(5);
     for (const cell of cells) expect(cell.className).toContain('flex-col');
   });
 
-  it('자원 바와 의뢰 현황은 같은 높이(60px)이고 스테이지 폭에 따라 줄어들지 않는다', () => {
+  it('자원 바는 60px이고 스테이지 폭에 따라 줄어들지 않는다', () => {
     header();
-    for (const el of [bar(), quest()]) {
-      expect(el.className).toContain('h-15');
-      expect(el.className).not.toContain('@max-[960px]');
-    }
-  });
-
-  it('의뢰 현황은 라벨 위 값 아래이고 누르면 의뢰 창, 자원 바를 누르면 스탯 창이 열린다', () => {
-    const onOpenStats = vi.fn();
-    const onOpenQuests = vi.fn();
-    header({ general: 1, named: 0 }, onOpenStats, onOpenQuests);
-    expect(quest().textContent).toBe('일반 1네임드 0');
-    fireEvent.click(quest());
-    expect(onOpenQuests).toHaveBeenCalledTimes(1);
-    expect(onOpenStats).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '스탯창 열기' }));
-    expect(onOpenStats).toHaveBeenCalledTimes(1);
-  });
-
-  it('서버 값이 오기 전에도 의뢰 현황은 0을 보인다', () => {
-    header(null);
-    expect(quest().textContent).toBe('일반 0네임드 0');
+    expect(bar().className).toContain('h-15');
+    expect(bar().className).not.toContain('@max-[960px]');
   });
 
   it('메뉴 버튼 자리는 오른쪽 위 모서리(12px 여백)이고 펼친 줄이 카드 묶음 위에 오는 층이다', () => {
