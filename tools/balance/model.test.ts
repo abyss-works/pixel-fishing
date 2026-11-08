@@ -7,6 +7,7 @@ import {
   SPEC_MARGIN, axisAvailable, axisOptions, entryLevel, headroom, inversions, moveGap, perfectOverIdle, rates, rodSpec,
 } from './model';
 import { simulateJourney } from './journey';
+import { GATE_FROM_SPOT, GATE_POOLS, KNOWN_INVERSIONS, gateRows } from './gates';
 
 describe('밸런스 측정 모델', () => {
   it('이웃 역전은 뒤가 앞보다 작은 쌍만 잡는다', () => {
@@ -68,21 +69,14 @@ describe('밸런스 측정 모델', () => {
   });
 
   it('이동 직후 수입: 태평양부터 남대서양까지 옮기면 낮 풀과 낮밤 혼합 모두 같은 레벨의 가장 좋은 이전 해역 이상이다(알려진 역전 제외)', () => {
-    const from = SPOTS.findIndex(s => s.id === 'sea');
     expect(SPOTS.map(s => s.id)).toEqual(expect.arrayContaining(['comorodeep', 'benguela', 'sthelena']));
-    // 확정 밸런스의 알려진 역전, 관측 이슈로 추적. 값은 해역별 이동 직후 수입 차이(새 해역 - 비교 해역)다.
-    const known: Partial<Record<string, Record<'day' | 'mixed', number>>> = {
-      barrierreef: { day: -604.36, mixed: -577.26 },
-      southindian: { day: -3989.26, mixed: -6374.33 },
-      comorodeep: { day: -42614.75, mixed: -60618.06 },
-    };
-    for (let i = from; i < SPOTS.length; i++) {
-      for (const pool of ['day', 'mixed'] as const) {
-        const g = moveGap(i, pool);
-        const expected = known[SPOTS[i].id]?.[pool];
-        if (expected === undefined) expect(g.diff, `${SPOTS[i].id} ${pool}`).toBeGreaterThanOrEqual(0);
-        else expect(g.diff, `${SPOTS[i].id} ${pool}`).toBeCloseTo(expected, 0);
-      }
+    const rows = gateRows();
+    expect(rows.length).toBe((SPOTS.length - SPOTS.findIndex(s => s.id === GATE_FROM_SPOT)) * GATE_POOLS.length);
+    for (const r of rows) {
+      const where = `${r.spot} ${r.pool}`;
+      expect(r.verdict, where).not.toBe('위반');
+      if (r.verdict === '통과') expect(r.diff, where).toBeGreaterThanOrEqual(0);
+      else expect(r.diff, where).toBeCloseTo(KNOWN_INVERSIONS[r.spot]![r.pool], 0);
     }
   });
 
