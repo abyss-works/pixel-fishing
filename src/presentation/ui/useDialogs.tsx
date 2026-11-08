@@ -19,7 +19,6 @@ const bodyOf = (body: ReactNode) => (typeof body === 'string' ? <TextNotice text
 export function useDialogs() {
   const [pending, setPending] = useState<Pending | null>(null);
   const close = () => setPending(null);
-
   const confirm = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string }) =>
     new Promise<boolean>(resolve => setPending({ kind: 'confirm', ...o, resolve }));
   const input = (o: { title: string; body?: ReactNode; label: string; placeholder?: string; secret?: boolean; confirmLabel: string }) =>

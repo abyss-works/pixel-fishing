@@ -1,4 +1,4 @@
-// 수배판 — 바운티 헌팅의 수주·납품·보상 UI (항구 전용, 마을의 집 제외).
+// 수배판 — 바운티 헌팅의 수주·의뢰 완료·보상 UI (항구 전용, 마을의 집 제외).
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
@@ -95,7 +95,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const {
     zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, ticketMins, hasTicket,
-    relic, relicOwned, relicMats,
+    relic, relicOwned, relicLevel, relicMats, namedReward,
   } = data;
 
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
@@ -112,7 +112,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `납품했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
+          `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
     );
   };
 
@@ -155,7 +155,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 `${josa(questLabel(namedQuest), '을/를')} 수주했어요.`)}
               onDeliver={() => run(
                 { type: 'deliverBounty', questId: namedQuest.id },
-                `토벌 보상으로 ${fmtGold(namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
+                `토벌 보상으로 ${fmtGold(namedReward ?? namedQuest.reward)}와 교환 재료를 받았어요!`, 'gold')} />
           )}
         </Gated>
         </div>
@@ -176,7 +176,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </>
       ) : (
         relic && (
-          <RelicCard key={relic.id} artifact={relic} owned={relicOwned}
+          <RelicCard key={relic.id} artifact={relic} owned={relicOwned} level={relicLevel}
             materialCount={relicMats} busy={busy}
             onExchange={() => run(
               { type: 'exchangeArtifact', artifact: relic.id },

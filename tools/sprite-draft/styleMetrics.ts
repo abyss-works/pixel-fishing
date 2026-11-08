@@ -6,8 +6,8 @@ import { decodePng } from './pngDecode';
 
 /** 남대서양에서 새로 만든 어종. 기준 집합에서 빠지고 검사 대상이 된다. */
 export const CANDIDATE_IDS = [
-  'capeanchovy', 'capejack', 'capehake', 'snoek', 'kingfish', 'toothfish', 'sthwrasse', 'sthpuffer',
-  'apollodamsel', 'ascensionangel', 'wahoo', 'galapagosshark', 'nighthake', 'darktoothfish', 'eolgedom', 'bigeye',
+  'capeanchovy', 'capejack', 'capehake', 'snoek', 'kingfish', 'sthwrasse', 'sthpuffer',
+  'apollodamsel', 'ascensionangel', 'wahoo', 'galapagosshark', 'nighthake', 'eolgedom', 'bigeye',
   'adamastor',
 ];
 

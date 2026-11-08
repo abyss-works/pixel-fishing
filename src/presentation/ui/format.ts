@@ -58,3 +58,6 @@ export function josa(word: string, pair: '이/가' | '을/를'): string {
 
 /** 레벨 표기 - 낚싯대 레벨, 배 티어처럼 단계를 한 칸에 쓰는 곳 */
 export const fmtLevel = (n: number): string => `Lv.${n}`;
+
+/** 소수 둘째 자리까지 보이고 끝의 0은 뺀다(10, 12.5, 31.25). 효과 비율처럼 레벨마다 자리가 달라지는 값에 쓴다 */
+export const fmtDecimal2 = (n: number): string => String(Number(n.toFixed(2)));

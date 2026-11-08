@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtDecimal2, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -126,5 +126,20 @@ describe('fmtLevel — 레벨 표기', () => {
     expect(fmtLevel(0)).toBe('Lv.0');
     expect(fmtLevel(8)).toBe('Lv.8');
     expect(fmtLevel(99)).toBe('Lv.99');
+  });
+});
+
+describe('fmtDecimal2 - 소수 둘째 자리까지, 끝의 0은 뺀다', () => {
+  it('정수와 한 자리, 두 자리 값은 필요한 만큼만 보인다', () => {
+    expect(fmtDecimal2(10)).toBe('10');
+    expect(fmtDecimal2(12.5)).toBe('12.5');
+    expect(fmtDecimal2(31.25)).toBe('31.25');
+    expect(fmtDecimal2(0)).toBe('0');
+  });
+  it('셋째 자리부터는 반올림하고 부동소수 오차를 걷는다', () => {
+    expect(fmtDecimal2(0.1125 * 100)).toBe('11.25');
+    expect(fmtDecimal2(0.3 * 100)).toBe('30');
+    expect(fmtDecimal2(12.345)).toBe('12.35');
+    expect(fmtDecimal2(12.004)).toBe('12');
   });
 });

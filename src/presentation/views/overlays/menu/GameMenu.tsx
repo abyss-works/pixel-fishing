@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useGuild } from '../../../../features/guild/service/useGuild';
+import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import { clearsStatus } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { menuKeys, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
@@ -34,7 +35,9 @@ interface Entry {
   onOpen: () => void;
 }
 
-export default function GameMenu({ account, onQuests, onGuild, onFriends, onMailbox, setToast }: {
+export default function GameMenu({ game, account, onQuests, onGuild, onFriends, onMailbox, setToast }: {
+  /** 남은 클리어 횟수의 한도를 정하는 보유 유물 상태 */
+  game: ArtifactHolder;
   account: string | null;
   onQuests: () => void;
   onGuild: () => void;
@@ -49,7 +52,7 @@ export default function GameMenu({ account, onQuests, onGuild, onFriends, onMail
   const friends = useFriends(account !== null);
   const mailbox = useMailbox();
   const { snap } = useBounty();
-  const clearsLeft = clearsStatus(snap).left;
+  const clearsLeft = clearsStatus(game, snap).left;
   const { mails, takeLoginNotice } = mailbox;
 
   // 접속한 계정의 첫 조회에서 받지 않은 우편이 있으면 한 번 안내만 띄운다(열어 보는 것은 플레이어가 한다)

@@ -16,18 +16,19 @@ describe('artifacts 데이터 계약', () => {
     }
   });
 
-  it('등급 — 낚시·결투 결과를 바꾸는 유물(변이 확률·결투 가속)만 영웅, 나머지는 희귀', () => {
+  it('등급 — 시스템 효과(고정 보너스·페널티)는 전설, 낚시·결투 결과를 바꾸는 유물(변이 확률·결투 가속)은 영웅, 나머지는 희귀', () => {
     for (const a of ARTIFACTS) {
       const decisive = a.effects.mutationWeight !== undefined || a.effects.duelSpeedupCut !== undefined;
-      expect(a.grade).toBe(decisive ? 'epic' : 'rare');
+      expect(a.grade).toBe(a.system ? 'legendary' : decisive ? 'epic' : 'rare');
     }
   });
 
-  it('유물은 5개이고 남대서양 유물은 항해 속도 +14%의 희귀 유물이다', () => {
+  it('유물은 5개이고 남대서양 유물은 효과가 고정인 전설 유물이다', () => {
     expect(ARTIFACTS).toHaveLength(5);
     const a = artifactOfZone('southatlantic')!;
     expect(a).toMatchObject({
-      name: '마미 와타의 거울', grade: 'rare', materialName: '흐려진 손거울', effects: { sail: 0.14 },
+      name: '마미 와타의 거울', grade: 'legendary', materialName: '흐려진 손거울',
+      effects: {}, system: { namedCapBonus: 1, namedRewardCut: 0.3 },
     });
   });
 
