@@ -1,9 +1,8 @@
 // 낚시 상태머신 순수 모듈 — 전이/판정/획득 규칙
 import { describe, it, expect } from 'vitest';
-import { nextPhase, resultAtOf, phaseDurationMs, resolveCatch, autoCommonBoost } from './fishing';
-import { judgeTiming, rodStats, RARITY } from './logic';
-import type { Judgment } from './logic';
-import { AUTO_COMMON_BOOST, CATCH_MS, CATCH_MS_LEGENDARY } from './balance';
+import { nextPhase, resultAtOf, phaseDurationMs } from './fishing';
+import { judgeTiming, rodStats } from './logic';
+import { CATCH_MS, CATCH_MS_LEGENDARY } from './balance';
 
 describe('R6: 전이 표 (캐스팅 연출 단계 없음 — 던지면 바로 대기)', () => {
   it('wait → bite → catch(방치) → wait(재캐스트) 순환', () => {
@@ -48,40 +47,6 @@ describe('R6b: 챔질 판정 (커서 위치 → 이중 존)', () => {
     expect(at(0.5 - 0.09, 0.24, 0.20)).toBe('perfect');
     expect(at(0.5 + 0.125, 0.24, 0.20)).toBe('normal');    // 둘 다 밖
     expect(at(0.5, 0.24)).toBe('good');                 // 빨간 없으면 perfect 불가
-  });
-});
-
-describe('R8/R9/R11: 획득 결정', () => {
-  it('전 판정이 해당 수역 풀에서 추첨된다', () => {
-    expect(resolveCatch('pond', 'normal', 1, () => 0).spot).toBe('pond');
-    expect(resolveCatch('sea', 'perfect', 1, () => 0.999).spot).toBe('sea');
-    expect(resolveCatch('deep', 'auto', 1, () => 0.5).spot).toBe('deep');
-  });
-
-  const rareRate = (j: Judgment, rod: number, n = 20000) => {
-    let rare = 0;
-    for (let i = 0; i < n; i++) {
-      if (RARITY[resolveCatch('pond', j, rod).rarity].order > RARITY.common.order) rare++;
-    }
-    return rare / n;
-  };
-
-  it('희귀 이상 확률: perfect > good > normal ≫ auto (통계적)', () => {
-    const perfect = rareRate('perfect', 1);
-    const good = rareRate('good', 1);
-    const normal = rareRate('normal', 1);
-    const auto = rareRate('auto', 1);
-    expect(perfect).toBeGreaterThan(good + 0.02); // 일반 ÷2 vs ÷1.6
-    expect(good).toBeGreaterThan(normal + 0.02);
-    expect(auto).toBeLessThan(normal / 5); // 방치 ≈ 수동의 1/10 수준
-    expect(auto).toBeGreaterThan(0.005);   // 그래도 희귀가 뜨긴 한다
-  });
-
-  it('R9b: 낚싯대가 좋을수록 방치 페널티가 완화된다 (10배 → 4배 수렴)', () => {
-    expect(autoCommonBoost(1)).toBe(AUTO_COMMON_BOOST.from);
-    expect(autoCommonBoost(50)).toBeLessThan(AUTO_COMMON_BOOST.from);
-    expect(autoCommonBoost(100000)).toBeGreaterThan(AUTO_COMMON_BOOST.to);
-    expect(rareRate('auto', 50)).toBeGreaterThan(rareRate('auto', 1));
   });
 });
 

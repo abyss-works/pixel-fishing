@@ -121,12 +121,8 @@ export interface RodStats {
   sweep: number;   // 타이밍 바 커서가 끝까지 가는 시간(초) = 챔질 가능 시간
 }
 
-// 방치 부스트 절대치 곡선 t(fishing.autoCommonBoost): 레벨 1 → 0, 레벨 ∞ → 1 (계수는 balance.ROD.curveK)
 // ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
 // 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
-export function rodCurveT(level: number): number {
-  return 1 - 1 / (1 + ROD.curveK * (level - 1));
-}
 
 // 낚싯대 = 무한 강화. 입질 대기는 레벨마다 같은 비율로 줄어든다(상한 없음).
 export function rodStats(level: number): RodStats {

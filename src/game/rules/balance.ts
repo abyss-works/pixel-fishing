@@ -27,16 +27,10 @@ export const JUDGMENT_MULT = {
   normal: 1,
 } as const;
 
-// 방치(auto) 판정: 일반 등급 가중치를 이만큼 곱해서 추첨 — 희귀 이상이 수동의 1/10 수준
-// 낚싯대 곡선(t, ROD.curveK)에 따라 from → to로 완화 (강화할수록 방치 효율도 개선)
-export const AUTO_COMMON_BOOST = { from: 10, to: 4 } as const;
-
 // 낚싯대 — 무한 강화.
 // 입질 대기: Lv1의 최소·최대 대기에 레벨마다 biteDecay를 곱한다(곱연산 단축, 레벨마다 체감).
-// 방치 부스트의 절대치 버전(fishing.autoCommonBoost)만 점근 곡선 t = 1 - 1/(1 + curveK*(lv-1))을 쓴다.
 // ⚠️ 구 zone(레벨당 PERFECT 존 확대)은 폐기 — 존은 수역 파워 게이트 초과 보너스로 이관(stats.powerZones)
 export const ROD = {
-  curveK: 0.15,
   biteMin: 4,                       // Lv1 입질 최소 대기(초)
   biteMax: 8,                       // Lv1 입질 최대 대기(초)
   biteDecay: 0.94,                  // 레벨마다 입질 대기에 곱하는 값(6% 단축)

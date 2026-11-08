@@ -11,7 +11,6 @@ import type { ActionDeps } from './actions';
 import { NO_GUILD_EFFECTS, guildEffectsOf } from './guild';
 import type { GuildEffects } from './guild';
 import { BOUNTIES } from '../content/bounties';
-import { SPOTS } from '../content/spots';
 import type { BountyCtx } from './rules';
 import { powerZones, rodPower } from './stats';
 
@@ -101,8 +100,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
 
   it('희귀 어종 보너스는 방치 캐치에서도 일반 등급 가중치를 줄인다', () => {
     const st = newState();
-    const entry = SPOTS.find(s => s.id === 'pond')?.powerReq ?? 0;
-    const o = catchDrawOptions('auto', rodPower(st), entry, powerZones(st, 'pond').mult, { phase: 'day' });
+    const o = catchDrawOptions('auto', rodPower(st), 'pond', powerZones(st, 'pond').mult, { phase: 'day' });
     const commonOf = (cut: number) => fishDrawShares('pond', { ...o, commonCut: cut })
       .filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
     const r = (commonOf(0) + commonOf(0.1)) / 2; // 일반 등급 경계 사이 — 일반 등급이 먼저 놓인다

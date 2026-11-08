@@ -16,8 +16,7 @@ import {
 import type { SpeciesPity } from './pity.js';
 import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
-import { relativeIdleBoost, manualPowerBonus } from './power.js';
-import { SPOTS } from '../content/spots.js';
+import { relativeIdleBoost } from './power.js';
 import { rarityWeightOf } from '../content/rarityWeights.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
@@ -289,27 +288,25 @@ export function prepareCatchDraw(
   return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
 }
 
-/** 추첨 다이얼 — auto는 상대 페널티 스케일링, 수동은 판정 배수 × 파워 보정.
+/** 추첨 다이얼 — auto는 해역 요구 파워 대비 방치 배수, 수동은 판정 배수.
  *  추첨(rollCatchFish)과 천장 누적(accrueSpeciesPity)이 같은 다이얼을 쓴다. */
 export function catchDrawOptions(
-  judgment: Judgment, power: number, entry: number,
+  judgment: Judgment, power: number, spot: SpotId,
   pzMult: number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): DrawOptions & { phase: DayPhase; rareMult: number; commonMult: number } {
   if (judgment === 'auto') {
-    // auto는 파워 기준 상대 페널티(진입×10 상한, 10→4)로 스케일링
-    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, entry) * pzMult };
+    // auto는 해역 요구 파워 대비 레벨 차의 방치 배수 표로 스케일링
+    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, spot) * pzMult };
   }
-  // 수동 보정 — 초과 5당 ×0.1, 최대 ×2.0. rollFish 산식상 일반 가중치를
-  // 그만큼 나누는 것과 동치다(방치 페널티 완화의 거울 축 — 파워 계산).
-  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment] * manualPowerBonus(power, entry), commonMult: pzMult };
+  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment], commonMult: pzMult };
 }
 
 /** 추첨 실행 — 호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
 export function rollCatchFish(
-  spot: SpotId, judgment: Judgment, power: number, entry: number,
+  spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): Fish {
-  const o = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  const o = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   return rollFish(spot, o.rareMult, rng, o.commonMult, o);
 }
 
@@ -321,7 +318,7 @@ export function rollCatchFish(
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 감소(commonCut)와 돌연변이 확률 퍼센트포인트. 천장 누적도
  *  같은 다이얼·폼 확률을 써서 실제 확률을 쌓는다. */
 export function drawCatch(
-  state: Pick<GameState, 'pity' | 'artifacts' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number, entry: number,
+  state: Pick<GameState, 'pity' | 'artifacts' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
@@ -330,11 +327,11 @@ export function drawCatch(
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
-  const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, entry, pzMult, rng, phaseOpts);
+  const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
   const forms = withVariantPoints(mutationWeightsOf(state, spot), guild.mutation);
   const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
-  const opts = catchDrawOptions(judgment, power, entry, pzMult, phaseOpts);
+  const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
@@ -365,8 +362,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
-      const entry = SPOTS.find(s => s.id === action.spot)?.powerReq ?? 0;
-      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), entry, pz.mult, deps.rng, phaseOpts,
+      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
