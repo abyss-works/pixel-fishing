@@ -59,7 +59,7 @@ describe('스탯 해역 목록', () => {
   it('지역 탭은 바다 지역마다 충족 수를 세고, 마을은 지금 마을에 있을 때만 넣는다', () => {
     const rows = selectStatsSpotRows(game({ boat: 1, rod: 3 }), 'sail');
     const atSea = selectStatsZoneTabs(rows, 'pacific');
-    expect(atSea.map(tab => tab.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar']);
+    expect(atSea.map(tab => tab.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
     expect(atSea[0]).toMatchObject({ zone: 'pacific', ok: 0, total: 2 });
 
     const inVillage = selectStatsZoneTabs(rows, 'village');

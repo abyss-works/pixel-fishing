@@ -26,7 +26,7 @@ describe('현재 의뢰 정보', () => {
     expect(data.named).toBeNull();
     expect(data.left).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
     expect(data.caps).toEqual({ general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP });
-    expect(data.boardPorts).toEqual(['부산항', '마닐라항', '콜롬보항', '투아마시나항']);
+    expect(data.boardPorts).toEqual(['부산항', '마닐라항', '콜롬보항', '투아마시나항', '월비스베이항']);
   });
 
   it('수주한 일반 의뢰는 이름, 목표, 진행도, 보상, 마치는 곳을 가진다', () => {

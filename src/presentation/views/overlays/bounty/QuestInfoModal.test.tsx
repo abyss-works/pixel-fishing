@@ -50,10 +50,10 @@ describe('의뢰 창', () => {
   it('받은 의뢰가 없어도 열리고, 빈 카드가 수배판이 있는 항구를 안내한다', () => {
     open();
     expect(screen.getByText('수주한 일반 의뢰가 없어요.')).toBeInTheDocument();
-    expect(dialog()).toHaveTextContent('수배판은 부산항, 마닐라항, 콜롬보항, 투아마시나항에 있어요.');
+    expect(dialog()).toHaveTextContent('수배판은 부산항, 마닐라항, 콜롬보항, 투아마시나항, 월비스베이항에 있어요.');
     fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
     expect(screen.getByText('수주한 네임드 토벌이 없어요.')).toBeInTheDocument();
-    expect(dialog()).toHaveTextContent('수배판은 부산항, 마닐라항, 콜롬보항, 투아마시나항에 있어요.');
+    expect(dialog()).toHaveTextContent('수배판은 부산항, 마닐라항, 콜롬보항, 투아마시나항, 월비스베이항에 있어요.');
   });
 
   it('탭은 한 장씩 보인다 - 일반 의뢰가 먼저고, 네임드 토벌 탭을 누르면 바뀐다', () => {

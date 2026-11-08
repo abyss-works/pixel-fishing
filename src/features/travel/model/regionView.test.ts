@@ -69,7 +69,7 @@ describe('지역 탭 파생 데이터', () => {
   it('다음 배는 지금 배의 바로 다음 단계이고, 마지막 배면 null이다', () => {
     const next = selectRegionViewData({ ...newState(), boat: 3 }, 'world', [], null, null, null).nextBoat;
     expect(next?.name).toBe('범선');
-    expect(selectRegionViewData({ ...newState(), boat: 7 }, 'world', [], null, null, null).nextBoat).toBeNull();
+    expect(selectRegionViewData({ ...newState(), boat: 8 }, 'world', [], null, null, null).nextBoat).toBeNull();
   });
 
   it('가까운 어군마다 상태를 붙인다', () => {
@@ -81,8 +81,9 @@ describe('지역 탭 파생 데이터', () => {
   });
 
   it('등급 분포는 해역의 등급 확률을 전역 확률과 비교한다 — 가중치 절대치가 아니다', () => {
-    expect(selectGradeLevel('indian', 'rare')).toBe('low');        // 14% < 20%
-    expect(selectGradeLevel('indian', 'legendary')).toBe('low');   // 0.5% < 1%
+    expect(selectGradeLevel('mozstrait', 'epic')).toBe('low');      // 한 단계 이전 프리셋 4% < 5%
+    expect(selectGradeLevel('mozstrait', 'legendary')).toBe('low'); // 0.6% < 1%
+    expect(selectGradeLevel('indian', 'legendary')).toBe('mid');    // 안정화 프리셋 1% = 1%
     expect(selectGradeLevel('coron', 'epic')).toBe('high');        // 9% > 5%
     expect(selectGradeLevel('coron', 'rare')).toBe('mid');         // 20% = 20%
     expect(selectGradeLevel('barrierreef', 'rare')).toBe('high');  // 23% > 20%

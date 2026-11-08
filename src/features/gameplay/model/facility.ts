@@ -56,7 +56,7 @@ export type LadderState = 'done' | 'current' | 'next' | 'locked';
 
 export interface BoatLadderRow { boat: Boat; state: LadderState; openedSpot: Spot | undefined }
 
-/** 배 6단계 사다리 — 가진 배는 done, 현재 배는 current, 바로 다음은 next, 그 뒤는 locked.
+/** 배 사다리 — 가진 배는 done, 현재 배는 current, 바로 다음은 next, 그 뒤는 locked.
  *  맨발(0)은 사다리에 없다 — 첫 행이 next가 된다. */
 export function selectBoatLadder(game: GameState): BoatLadderRow[] {
   return BOATS.map(boat => ({

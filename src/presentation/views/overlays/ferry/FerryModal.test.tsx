@@ -9,7 +9,7 @@ describe('여객선 빠른 이동 창', () => {
   it('지금 있는 항구를 뺀 항구를 바다 이름과 함께 늘어놓는다', () => {
     render(<FerryModal game={{ ...newState(), boat: 9 }} from="manila" onPick={() => {}} onClose={() => {}} />);
     expect(screen.getAllByRole('button', { name: /항$/ }).map(b => b.getAttribute('aria-label')))
-      .toEqual(['부산항', '콜롬보항', '투아마시나항']);
+      .toEqual(['부산항', '콜롬보항', '투아마시나항', '월비스베이항']);
     expect(screen.getByRole('button', { name: '부산항' })).toHaveTextContent('태평양');
     expect(screen.queryByRole('button', { name: '마닐라항' })).toBeNull();
   });
