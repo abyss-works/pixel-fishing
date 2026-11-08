@@ -112,15 +112,15 @@ export function rodPower(state: GameState): number {
 //   초과 50 → 빨간 20 + 노란 40 / 초과 100 → 20 + 80. 빨간 존은 초과 30%p부터 개방 —
 //   PERFECT 판정(일반 가중치 ÷2).
 // 미달(파워 < 요구량): 존 자체가 없고, 투트랙 페널티 —
-//   ① 확률: 일반 가중치 ×2^(⌊부족/10⌋+1) — 급격 스케일링, 캡 없음
-//   ② 시간: 입질 대기 +부족/5초
+//   ① 확률: 일반 가중치 ×min(16, 2^k), k = ⌈부족/5⌉ — 부족 낚싯대 레벨 1단계마다 2배, 4레벨 이상은 ×16
+//   ② 시간: 입질 대기 +부족/4초 — 상한 없음
 export interface PowerZone {
   power: number;      // 내 파워
   req: number;        // 수역 요구량 (0 = 제한 없음)
   yellow: number;     // 노란(PERFECT) 존 폭 % — 미달이면 0
   red: number;        // 빨간(PERFECT) 존 폭 % — 상한 20, 기본 0
-  mult: number;       // 일반 가중치 배수 — 초과 시 1, 미달 시 지수 페널티(2^…)
-  biteExtra: number;  // 입질 대기 추가 초 — 미달 시 부족/5, 초과 시 0
+  mult: number;       // 일반 가중치 배수 — 초과 시 1, 미달 시 부족 레벨 수의 지수 페널티(상한 있음)
+  biteExtra: number;  // 입질 대기 추가 초 — 미달 시 부족/4, 초과 시 0
 }
 
 const RED_MIN_EXCESS = 30; // 빨간 존이 열리는 최소 초과(%p)
@@ -131,8 +131,8 @@ const RED_CAP = 20;        // 빨간 존 폭 상한(%p)
 export const POWER_RULES = {
   redMinExcess: RED_MIN_EXCESS,
   redCap: RED_CAP,
-  shortStep: 10, // 미달 페널티 구간(파워 10당 배수 2배)
-  shortCap: 16,  // 미달 확률 페널티 상한 — 무캡 지수는 통제 불가라 상한을 둔다
+  shortStep: 5,  // 미달 페널티 구간 — 낚싯대 1레벨(파워 5)당 배수 2배, 부족은 올림으로 센다
+  shortCap: 16,  // 미달 확률 페널티 상한(4레벨 이상 부족)
   biteDiv: 4,    // 입질 추가 초 = 부족 파워 / 이 값
   lineCutMs: 2000, // 미달 수역 — 던진 뒤 이 시간이 지나면 물고기가 바늘을 끊어먹는다
 } as const;
@@ -158,7 +158,7 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
   const short = req - power;
   return {
     yellow: 0, red: 0,
-    mult: Math.min(POWER_RULES.shortCap, 2 ** (Math.floor(short / POWER_RULES.shortStep) + 1)),
+    mult: Math.min(POWER_RULES.shortCap, 2 ** Math.ceil(short / POWER_RULES.shortStep)),
     biteExtra: short / POWER_RULES.biteDiv,
   };
 }

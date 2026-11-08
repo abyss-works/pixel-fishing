@@ -2,7 +2,7 @@
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOUNTIES, bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
+import { BOUNTIES, BOUNTY_LICENSE_FAME, bountyById, dailyQuestFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { FISH } from '../src/game/content/fish.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
@@ -276,7 +276,7 @@ describe('닉네임', () => {
 });
 
 describe('현상금', () => {
-  const pacificState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ fame: BOUNTY_LICENSE_FAME.pacific, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
 
   it('오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다', async () => {
     const uid = await seed({ state: pacificState() });
@@ -432,8 +432,8 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
   // NOW(2030-03-04 KST 14:06)가 속한 게임 날짜는 그날 KST 04:00에 시작했다
   const DAY_START = '2030-03-03T19:00:00.000Z';
   const BEFORE_START = '2030-03-03T18:59:59.999Z';
-  const pacificState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
-  const namedState = (): Partial<GameState> => ({ fame: 1500, dex: zoneDex('pacific', 'named'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ fame: BOUNTY_LICENSE_FAME.pacific, dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const namedState = (): Partial<GameState> => ({ fame: BOUNTY_LICENSE_FAME.pacific, dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const offered = (uid: string, difficulty: 'easy' | 'normal' | 'hard' | 'named', day = TODAY_KST) =>
     dailyQuestFor('pacific', difficulty, uid, day)!;
   const accept = (uid: string, questId: string) =>
