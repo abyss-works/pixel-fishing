@@ -8,6 +8,7 @@ import type { ZoneId } from '../content/zones';
 import type { RegionId, Rect, School } from './types';
 import { WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
+import { cellIndex, indexCenter, localCell } from './mask';
 
 /** 해역별 어군 개수 범위 — 일반 해역(최상위 존의 스팟)과 특수 해역(하위 존의 스팟) */
 export const GENERAL_SCHOOLS = { min: 7, max: 8 } as const;
@@ -47,21 +48,22 @@ function mulberry32(seed: number): () => number {
 
 // ---------- 후보 칸 — 날짜와 무관한 지형 파생(1회 계산) ----------
 
-/** 존별 후보 칸 인덱스(r*cols+c). 조건: 그 존의 물 칸 · 스폰에서 바다로 닿음 ·
+/** 존별 후보 칸 인덱스(전지구 격자 기준 — 창이 바뀌어도 같은 칸은 같은 인덱스). 조건: 그 존의 물 칸 · 스폰에서 바다로 닿음 ·
  *  8방향 이웃에 육지 없음 · 항구 앞 여유 밖 · 건물 밖 */
 let candidateCache: Map<ZoneId, number[]> | null = null;
 
 function candidatesByZone(): Map<ZoneId, number[]> {
   if (candidateCache) return candidateCache;
   const map = WORLD_MAP;
-  const { cols, rows, cellW, cellH } = map;
+  const { cols, rows } = map;
   const defAt = (c: number, r: number) =>
     c < 0 || r < 0 || c >= cols || r >= rows ? undefined : map.palette[map.codes[r * cols + c]];
 
   // 스폰에서 4방향 BFS — 물 칸만 통과. 내륙 호수처럼 바다와 끊긴 물을 제외한다.
   const reachable = new Uint8Array(cols * rows);
-  const start = [Math.floor(WORLD.spawn.x / cellW), Math.floor(WORLD.spawn.y / cellH)] as const;
-  const queue: number[] = [start[1] * cols + start[0]];
+  const start = localCell(map, WORLD.spawn.x, WORLD.spawn.y);
+  if (!start) throw Error('출발점이 항해 창 밖이다');
+  const queue: number[] = [start.r * cols + start.c];
   reachable[queue[0]] = 1;
   for (let head = 0; head < queue.length; head++) {
     const idx = queue[head];
@@ -97,10 +99,11 @@ function candidatesByZone(): Map<ZoneId, number[]> {
   const out = new Map<ZoneId, number[]>();
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      const def = map.palette[map.codes[idx]];
-      if (!def?.water || !def.zone || !reachable[idx] || nearLand(c, r)) continue;
-      const { x, y } = cellCenter(idx);
+      const local = r * cols + c;
+      const def = map.palette[map.codes[local]];
+      if (!def?.water || !def.zone || !reachable[local] || nearLand(c, r)) continue;
+      const idx = cellIndex(map, c, r);
+      const { x, y } = indexCenter(map, idx);
       if (nearHarbor(x, y)) continue;
       let list = out.get(def.zone);
       if (!list) out.set(def.zone, list = []);
@@ -109,13 +112,6 @@ function candidatesByZone(): Map<ZoneId, number[]> {
   }
   candidateCache = out;
   return out;
-}
-
-/** 칸 중앙 좌표 — 세로는 11px라 반 칸을 내림해 정수 좌표를 유지한다 */
-function cellCenter(idx: number): { x: number; y: number } {
-  const { cols, cellW, cellH } = WORLD_MAP;
-  const c = idx % cols, r = (idx - c) / cols;
-  return { x: c * cellW + Math.floor(cellW / 2), y: r * cellH + Math.floor(cellH / 2) };
 }
 
 // ---------- 생성 ----------
@@ -150,7 +146,7 @@ export function generateWorldSchools(day: string): School[] {
     let n = 0;
     for (const idx of pool) {
       if (n >= count) break;
-      const { x, y } = cellCenter(idx);
+      const { x, y } = indexCenter(WORLD_MAP, idx);
       if (placed.some(s => Math.hypot(s.x - x, s.y - y) < SCHOOL_MIN_GAP)) continue;
       placed.push({ id: `${spot}-${++n}`, spot, x, y });
     }

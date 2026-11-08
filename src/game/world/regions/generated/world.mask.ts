@@ -5,6 +5,12 @@ export const CELL_W = 8;
 export const CELL_H = 11;
 export const WINDOW: { lonMin: number; lonMax: number; latMin: number; latMax: number } =
   { lonMin: 35, lonMax: 157, latMin: -36, latMax: 44 };
+// 게임 픽셀 좌표계 — 원점(서북 모서리)의 경위도, 열·행당 해상도, 창의 서북 모서리가 원점에서 떨어진 칸 수,
+// 전지구 격자의 열 수(칸 인덱스 = 행 * GLOBAL_COLS + 열). 앵커는 이 좌표계의 픽셀이다.
+export const ORIGIN: { lon: number; lat: number } = { lon: -180, lat: 85.0344827586207 };
+export const CELLS_PER_DEG: { lon: number; lat: number } = { lon: 4, lat: 2.9 };
+export const GRID_OFFSET: { col: number; row: number } = { col: 860, row: 119 };
+export const GLOBAL_COLS = 1440;
 export const COLS = 488;
 export const ROWS = 232;
 export const MASK_ROWS: string[] = [
@@ -242,35 +248,35 @@ export const MASK_ROWS: string[] = [
   'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333322222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222LLLLLL22222LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL222222222222222222222222222',
 ];
 export const ANCHORS: Record<string, { x: number; y: number }> = {
-  harbor: { x: 2996, y: 272 },
-  dock: { x: 3013, y: 313 },
-  spawn: { x: 3088, y: 399 },
-  school_sea_1: { x: 3152, y: 399 },
-  school_sea_2: { x: 3248, y: 542 },
-  school_sea_3: { x: 3760, y: 750 },
-  school_deep_1: { x: 3514, y: 708 },
-  school_deep_2: { x: 3565, y: 746 },
-  manila: { x: 2749, y: 874 },
-  m_dock: { x: 2686, y: 909 },
-  m_spawn: { x: 2650, y: 951 },
-  school_dh_1: { x: 2448, y: 842 },
-  school_dh_2: { x: 2467, y: 874 },
-  school_cw_1: { x: 2714, y: 1008 },
-  school_cw_2: { x: 2733, y: 1043 },
-  school_br_1: { x: 3520, y: 1799 },
-  school_br_2: { x: 3635, y: 2010 },
-  colombo: { x: 1458, y: 1180 },
-  c_dock: { x: 1395, y: 1183 },
-  c_spawn: { x: 1350, y: 1231 },
-  school_i_1: { x: 864, y: 1021 },
-  school_i_2: { x: 1024, y: 1196 },
-  school_s_1: { x: 880, y: 2233 },
-  school_s_2: { x: 1328, y: 2322 },
-  toamasina: { x: 439, y: 1987 },
-  t_dock: { x: 472, y: 1984 },
-  t_spawn: { x: 490, y: 2022 },
-  school_mz_1: { x: 186, y: 2026 },
-  school_mz_2: { x: 122, y: 2121 },
-  school_cd_1: { x: 243, y: 1828 },
-  school_cd_2: { x: 285, y: 1857 },
+  harbor: { x: 9876, y: 1581 },
+  dock: { x: 9893, y: 1622 },
+  spawn: { x: 9968, y: 1708 },
+  school_sea_1: { x: 10032, y: 1708 },
+  school_sea_2: { x: 10128, y: 1851 },
+  school_sea_3: { x: 10640, y: 2059 },
+  school_deep_1: { x: 10394, y: 2017 },
+  school_deep_2: { x: 10445, y: 2055 },
+  manila: { x: 9629, y: 2183 },
+  m_dock: { x: 9566, y: 2218 },
+  m_spawn: { x: 9530, y: 2260 },
+  school_dh_1: { x: 9328, y: 2151 },
+  school_dh_2: { x: 9347, y: 2183 },
+  school_cw_1: { x: 9594, y: 2317 },
+  school_cw_2: { x: 9613, y: 2352 },
+  school_br_1: { x: 10400, y: 3108 },
+  school_br_2: { x: 10515, y: 3319 },
+  colombo: { x: 8338, y: 2489 },
+  c_dock: { x: 8275, y: 2492 },
+  c_spawn: { x: 8230, y: 2540 },
+  school_i_1: { x: 7744, y: 2330 },
+  school_i_2: { x: 7904, y: 2505 },
+  school_s_1: { x: 7760, y: 3542 },
+  school_s_2: { x: 8208, y: 3631 },
+  toamasina: { x: 7319, y: 3296 },
+  t_dock: { x: 7352, y: 3293 },
+  t_spawn: { x: 7370, y: 3331 },
+  school_mz_1: { x: 7066, y: 3335 },
+  school_mz_2: { x: 7002, y: 3430 },
+  school_cd_1: { x: 7123, y: 3137 },
+  school_cd_2: { x: 7165, y: 3166 },
 };

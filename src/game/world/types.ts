@@ -83,6 +83,13 @@ export interface MapCellDef {
 export interface CompiledMap {
   cellW: number; cellH: number;
   cols: number; rows: number;
+  /** 이 격자(창)의 서북 모서리가 게임 좌표 원점에서 떨어진 칸 수. 게임 좌표의 원점은 창이 아니라
+   *  전지구 고정 원점이라 창을 넓히거나 줄여도 같은 경위도는 같은 좌표를 갖는다 */
+  colOffset: number; rowOffset: number;
+  /** 전지구 격자의 열 수 — 칸 인덱스(행 * globalCols + 열)의 기준. 창과 무관한 상수다 */
+  globalCols: number;
+  /** 격자 서북 모서리의 게임 좌표 = 칸 오프셋 * 셀 크기 */
+  originX: number; originY: number;
   codes: Uint8Array;
   palette: (MapCellDef | undefined)[];
 }
@@ -102,8 +109,8 @@ export interface RegionPack {
   /** 이 지역의 거점 (base 트리거가 진입시키는 곳) */
   base: BaseId;
   info: RegionLore;
-  w: number;
-  h: number;
+  /** 이 지역에서 이동할 수 있는 게임 좌표 영역. 항해 지역은 지형 격자(창)의 자리이고 원점이 아닐 수 있다 */
+  bounds: Rect;
   /** 지리 창(경위도) — 실지형 파이프라인(config → generated 마스크)이 심는다.
    *  이 값으로 px↔m 스케일을 파생한다(1° 위도 ≈ 111,320m). walk 지역(마을)은 없음. */
   geoWindow?: { lonMin: number; lonMax: number; latMin: number; latMax: number };

@@ -18,8 +18,12 @@
 //   openZones[]   { ch, lonMin, lonMax, latMin, latMax }  열린 바다 구역 — **맨물('.'=기본 물)만**
 //                 지정 문자로 바꾼다(오픈월드 구역 경계 인코딩용). 배열 순서 = 나중 항목 우선,
 //                 특화 수역·육지는 절대 덮지 않는다.
+//   globalGrid    (선택) 전지구 고정 격자 { origin: { lon, lat }, cellsPerDeg: { lon, lat } }
+//                 게임 픽셀 좌표의 원점(서북 모서리)과 해상도를 창과 무관하게 고정한다. 창의 서북 모서리는
+//                 원점에서 정수 칸 떨어져야 하고, 창의 해상도는 cellsPerDeg와 같아야 한다 — 아니면 생성 중단.
+//                 없으면 창의 서북 모서리가 원점이다(오프셋 0).
 //   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water' }
-//                 경위도 → 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
+//                 경위도 → 원점 기준 게임 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
 // 철칙: 이 도구와 configs가 지형의 단일 근원이다. 런타임은 generated 모듈만 읽고
 // 손으로 좌표를 찍지 않는다. 앵커를 하드코딩하지 않는다.
@@ -59,9 +63,38 @@ if (!geo || !cols || !rows || !win ||
 
 const LAND = 'L';
 const W = cols * cellW, H = rows * cellH;
-const dLon = (win.lonMax - win.lonMin) / cols; // °/열
-const dLat = (win.latMax - win.latMin) / rows; // °/행
 const warns = [];
+
+// --- 0. 좌표계: 전지구 고정 원점 + 창의 칸 오프셋 ---
+// globalGrid가 없으면 창의 서북 모서리가 원점이고 해상도는 창에서 파생한다(오프셋 0).
+const gg = cfg.globalGrid;
+const cpd = gg ? gg.cellsPerDeg : { lon: cols / (win.lonMax - win.lonMin), lat: rows / (win.latMax - win.latMin) };
+const origin = gg ? gg.origin : { lon: win.lonMin, lat: win.latMax };
+if (gg && ![cpd.lon, cpd.lat, origin.lon, origin.lat].every(v => typeof v === 'number')) {
+  console.error(`[${id}] 설정 누락: globalGrid.origin.lon/lat, globalGrid.cellsPerDeg.lon/lat`);
+  process.exit(2);
+}
+const dLon = gg ? 1 / cpd.lon : (win.lonMax - win.lonMin) / cols; // °/열
+const dLat = gg ? 1 / cpd.lat : (win.latMax - win.latMin) / rows; // °/행
+const near = (a, b) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b));
+if (!near(cols / (win.lonMax - win.lonMin), cpd.lon) || !near(rows / (win.latMax - win.latMin), cpd.lat)) {
+  console.error(`[${id}] 창의 격자 해상도(${cols / (win.lonMax - win.lonMin)}열/°, ${rows / (win.latMax - win.latMin)}행/°)가 전지구 격자(${cpd.lon}열/°, ${cpd.lat}행/°)와 다르다`);
+  process.exit(2);
+}
+const offColF = (win.lonMin - origin.lon) * cpd.lon;
+const offRowF = (origin.lat - win.latMax) * cpd.lat;
+if (offColF < -1e-6 || offRowF < -1e-6 || Math.abs(offColF - Math.round(offColF)) > 1e-6 ||
+    Math.abs(offRowF - Math.round(offRowF)) > 1e-6) {
+  console.error(`[${id}] 창의 서북 모서리가 원점에서 정수 칸 떨어진 자리가 아니다 (열 ${offColF}, 행 ${offRowF})`);
+  process.exit(2);
+}
+const offCol = Math.round(offColF), offRow = Math.round(offRowF);
+const globalCols = gg ? Math.round(360 * cpd.lon) : cols;
+// 경위도 ↔ 창 안 (열, 행) 실수 좌표. 원점 기준이라 창이 바뀌어도 같은 경위도는 같은 전지구 칸에 떨어진다.
+const colOf = lon => (lon - origin.lon) / dLon - offCol;
+const rowOf = lat => (origin.lat - lat) / dLat - offRow;
+const lonAt = c => origin.lon + (offCol + c) * dLon; // 열 c 서쪽 가장자리
+const latAt = r => origin.lat - (offRow + r) * dLat; // 행 r 북쪽 가장자리
 
 // --- 1. 육지 래스터 (짝수-홀수 레이캐스팅, 셀 중심 판정) ---
 const landData = readJson(geo);
@@ -101,16 +134,16 @@ for (const ring of rings) {
     if (lo < lo0) lo0 = lo; if (lo > lo1) lo1 = lo;
     if (la < la0) la0 = la; if (la > la1) la1 = la;
   }
-  const c0 = Math.max(0, Math.floor((lo0 - win.lonMin) / dLon));
-  const c1 = Math.min(cols - 1, Math.ceil((lo1 - win.lonMin) / dLon));
-  const r0 = Math.max(0, Math.floor((win.latMax - la1) / dLat));
-  const r1 = Math.min(rows - 1, Math.ceil((win.latMax - la0) / dLat));
+  const c0 = Math.max(0, Math.floor(colOf(lo0)));
+  const c1 = Math.min(cols - 1, Math.ceil(colOf(lo1)));
+  const r0 = Math.max(0, Math.floor(rowOf(la1)));
+  const r1 = Math.min(rows - 1, Math.ceil(rowOf(la0)));
   if (c0 > c1 || r0 > r1) continue;
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
       if (ch[r][c] === LAND) continue;
-      const lon = win.lonMin + (c + 0.5) * dLon;
-      const lat = win.latMax - (r + 0.5) * dLat;
+      const lon = lonAt(c + 0.5);
+      const lat = latAt(r + 0.5);
       if (pointInRing(lon, lat, ring)) { ch[r][c] = LAND; landCells++; }
     }
   }
@@ -125,15 +158,15 @@ for (const z of zones) {
   }
   let n = 0;
   const rc = Math.ceil(z.ry / dLat), cc = Math.ceil(z.rx / dLon);
-  const zr0 = Math.max(0, Math.round((win.latMax - z.lat) / dLat) - rc);
-  const zr1 = Math.min(rows - 1, Math.round((win.latMax - z.lat) / dLat) + rc);
-  const zc0 = Math.max(0, Math.round((z.lon - win.lonMin) / dLon) - cc);
-  const zc1 = Math.min(cols - 1, Math.round((z.lon - win.lonMin) / dLon) + cc);
+  const zr0 = Math.max(0, Math.round(rowOf(z.lat)) - rc);
+  const zr1 = Math.min(rows - 1, Math.round(rowOf(z.lat)) + rc);
+  const zc0 = Math.max(0, Math.round(colOf(z.lon)) - cc);
+  const zc1 = Math.min(cols - 1, Math.round(colOf(z.lon)) + cc);
   for (let r = zr0; r <= zr1; r++) {
     for (let c = zc0; c <= zc1; c++) {
       if (ch[r][c] === LAND) continue;
-      const dLo = (win.lonMin + (c + 0.5) * dLon - z.lon) / z.rx;
-      const dLa = (z.lat - (win.latMax - (r + 0.5) * dLat)) / z.ry;
+      const dLo = (lonAt(c + 0.5) - z.lon) / z.rx;
+      const dLa = (z.lat - latAt(r + 0.5)) / z.ry;
       if (dLo * dLo + dLa * dLa <= 1) { ch[r][c] = z.ch; n++; }
     }
   }
@@ -149,10 +182,10 @@ for (const oz of openZones) {
     process.exit(2);
   }
   let n = 0;
-  const c0 = Math.max(0, Math.ceil((oz.lonMin - win.lonMin) / dLon - 0.5));
-  const c1 = Math.min(cols - 1, Math.floor((oz.lonMax - win.lonMin) / dLon - 0.5));
-  const r0 = Math.max(0, Math.ceil((win.latMax - oz.latMax) / dLat - 0.5));
-  const r1 = Math.min(rows - 1, Math.floor((win.latMax - oz.latMin) / dLat - 0.5));
+  const c0 = Math.max(0, Math.ceil(colOf(oz.lonMin) - 0.5));
+  const c1 = Math.min(cols - 1, Math.floor(colOf(oz.lonMax) - 0.5));
+  const r0 = Math.max(0, Math.ceil(rowOf(oz.latMax) - 0.5));
+  const r1 = Math.min(rows - 1, Math.floor(rowOf(oz.latMin) - 0.5));
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
       if (ch[r][c] !== OZ) continue; // 육지·특화 수역·선찍은 구역 보존
@@ -164,8 +197,8 @@ for (const oz of openZones) {
 
 // --- 3. 앵커 투영 + 지형 검증 (하드코딩 좌표의 대체재 — 경위도가 단일 근원) ---
 const project = a => ({
-  x: Math.round(((a.lon - win.lonMin) / (win.lonMax - win.lonMin)) * W + (a.dx ?? 0)),
-  y: Math.round(((win.latMax - a.lat) / (win.latMax - win.latMin)) * H + (a.dy ?? 0)),
+  x: Math.round((a.lon - origin.lon) * cpd.lon * cellW + (a.dx ?? 0)),
+  y: Math.round((origin.lat - a.lat) * cpd.lat * cellH + (a.dy ?? 0)),
 });
 const errors = [];
 const projected = {};
@@ -175,7 +208,7 @@ for (const [name, a] of Object.entries(anchors)) {
   }
   const p = project(a);
   projected[name] = p;
-  const cc = Math.floor(p.x / cellW), rr = Math.floor(p.y / cellH);
+  const cc = Math.floor(p.x / cellW) - offCol, rr = Math.floor(p.y / cellH) - offRow;
   if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) {
     errors.push(`앵커 ${name}: (${p.x},${p.y}) 가 격자 밖`); continue;
   }
@@ -224,6 +257,12 @@ export const CELL_W = ${cellW};
 export const CELL_H = ${cellH};
 export const WINDOW: { lonMin: number; lonMax: number; latMin: number; latMax: number } =
   { lonMin: ${win.lonMin}, lonMax: ${win.lonMax}, latMin: ${win.latMin}, latMax: ${win.latMax} };
+// 게임 픽셀 좌표계 — 원점(서북 모서리)의 경위도, 열·행당 해상도, 창의 서북 모서리가 원점에서 떨어진 칸 수,
+// 전지구 격자의 열 수(칸 인덱스 = 행 * GLOBAL_COLS + 열). 앵커는 이 좌표계의 픽셀이다.
+export const ORIGIN: { lon: number; lat: number } = { lon: ${origin.lon}, lat: ${origin.lat} };
+export const CELLS_PER_DEG: { lon: number; lat: number } = { lon: ${cpd.lon}, lat: ${cpd.lat} };
+export const GRID_OFFSET: { col: number; row: number } = { col: ${offCol}, row: ${offRow} };
+export const GLOBAL_COLS = ${globalCols};
 export const COLS = ${cols};
 export const ROWS = ${rows};
 export const MASK_ROWS: string[] = [
