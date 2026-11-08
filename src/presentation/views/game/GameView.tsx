@@ -352,6 +352,7 @@ export default function GameView(props: GameViewProps) {
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
+                         sellBonus={guildBonus?.effects.sell ?? 0}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
       </GameStageLayout>
@@ -360,7 +361,7 @@ export default function GameView(props: GameViewProps) {
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
-        game={game} dispatch={props.dispatch} setToast={props.setToast}
+        game={game} sellBonus={guildBonus?.effects.sell ?? 0} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} uid={props.uid} onAuthChanged={props.onAuthChanged}
         nickname={props.nickname} onRename={props.onRename}

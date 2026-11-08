@@ -1,7 +1,9 @@
-import { formName, speciesDiscovered } from '../../../game/rules/logic';
+import { formName, saleBonusOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import { FISH, SPOTS } from '../../../game/rules/logic';
 import { rarityRank } from '../../../game/content/rarity';
+import type { Stat } from '../../../game/rules/stats';
+import { GUILD_BONUS_NAME } from '../../guild/model/guild';
 import type { BagRow } from './bagRows';
 import { groupInstances, sumPrice } from './bagRows';
 
@@ -65,6 +67,7 @@ export interface SaleRow extends BagRow {
   selected: FishInstance[];
   selectedCount: number;
   allSelected: boolean;
+  /** 선택한 개체의 기본가 합 - 길드 보너스는 총액에서 한 번 더하므로 행에는 반영하지 않는다 */
   selectedSubtotal: number;
   unsized: Array<BagRow['unsized'][number] & {
     free: FishInstance[];
@@ -76,13 +79,23 @@ export interface SaleRow extends BagRow {
 export interface SalePreview {
   rows: SaleRow[];
   soldUids: string[];
-  total: number;
+  total: Stat;
   lockedCount: number;
 }
 
-/** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. */
+/** 기본 판매액에 길드 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다. */
+export function saleProceeds(base: number, sellBonus: number): Stat {
+  const delta = saleBonusOf(base, sellBonus);
+  return {
+    base,
+    mods: delta === 0 ? [] : [{ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta }],
+    value: base + delta,
+  };
+}
+
+/** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이다. */
 export function selectSalePreview(
-  bag: readonly FishInstance[], excluded: ReadonlySet<string>,
+  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number,
 ): SalePreview {
   const rows = groupInstances(bag).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);
@@ -111,7 +124,7 @@ export function selectSalePreview(
   return {
     rows,
     soldUids,
-    total: rows.reduce((total, row) => total + row.selectedSubtotal, 0),
+    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus),
     lockedCount: bag.filter(instance => instance.locked).length,
   };
 }

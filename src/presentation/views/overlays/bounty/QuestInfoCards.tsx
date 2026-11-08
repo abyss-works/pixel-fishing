@@ -4,6 +4,7 @@
 // 수배서 문구는 수배판에서만 읽히므로 여기에 두지 않는다.
 import type { ReactNode } from 'react';
 import type { QuestInfoGeneral, QuestInfoNamed } from '../../../../features/bounty/model/questInfo';
+import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Frame from '../../../ui/Frame';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
@@ -32,7 +33,7 @@ export function NamedInfoCard({ info }: { info: QuestInfoNamed }) {
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: info.haunt },
         { key: 'progress', label: '진행', value: <span className="pf-accent">{info.progress}/{info.count}</span> },
-        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(info.reward)}</span> },
+        { key: 'reward', label: '보상', value: <AdjustedAmount amount={info.reward} className="text-gold" /> },
         ...(info.materialName ? [{ key: 'material', label: '교환 재료', value: info.materialName }] : []),
         { key: 'finish', label: '마치는 곳', value: info.finishAt },
       ]} />

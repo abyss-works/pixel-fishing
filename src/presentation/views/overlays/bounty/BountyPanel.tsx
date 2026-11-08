@@ -156,7 +156,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                   `${josa(questLabel(quest), '을/를')} 수주했어요.`)}
                 onDeliver={() => run(
                   { type: 'deliverBounty', questId: quest.id },
-                  `토벌 보상으로 ${fmtGold(reward)}와 교환 재료를 받았어요!`, 'gold')} />
+                  `토벌 보상으로 ${fmtGold(reward.value)}와 교환 재료를 받았어요!`, 'gold')} />
             ))}
           </div>
         </Gated>

@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); resetKeyScopes(); });
 const show = (artifacts: string[] = []) => {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } }));
   const game = { ...newState(), gold: 100_000, artifacts };
-  render(<FacilityModal panel="shop" game={game} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
+  render(<FacilityModal sellBonus={0} panel="shop" game={game} dispatch={dispatch} setToast={() => {}} onClose={() => {}} />);
   return { dispatch, game };
 };
 

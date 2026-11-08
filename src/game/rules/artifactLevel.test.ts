@@ -8,7 +8,7 @@ import { moveSpeed, effectiveBite } from './stats';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
-  artifactEffectsAt, artifactLevelOf, duelSpeedupScale, namedDailyCap, namedRewardOf, dailyClearCap,
+  artifactEffectsAt, artifactLevelOf, duelSpeedupScale, namedDailyCap, namedRewardOf, namedRewardStat, dailyClearCap,
 } from './artifactLevel';
 import {
   ARTIFACTS, ARTIFACT_MAX_LEVEL, ARTIFACT_LEVEL_COEF, artifactLevelCost, artifactHasLevel, artifactById,
@@ -219,6 +219,18 @@ describe('마미 와타의 거울, 전설, 효과 고정', () => {
     const has = seed({ artifacts: ['mami-wata-mirror'] });
     expect(namedRewardOf(has, 1000)).toBe(700);
     expect(namedRewardOf(has, 1000) * 2).toBe(1400);
+  });
+
+  it('토벌 골드 내역은 원본, 유물 이름의 증감, 합계를 돌려주고 합계가 namedRewardOf와 같다', () => {
+    expect(namedRewardStat(seed(), 1000)).toEqual({ base: 1000, mods: [], value: 1000 });
+    const has = seed({ artifacts: ['mami-wata-mirror'] });
+    const stat = namedRewardStat(has, 1000);
+    expect(stat).toEqual({
+      base: 1000, mods: [{ id: 'relic-mami-wata-mirror', label: '마미 와타의 거울', delta: -300 }], value: 700,
+    });
+    expect(stat.value).toBe(namedRewardOf(has, 1000));
+    const odd = namedRewardStat(has, 1234);
+    expect(odd.base + odd.mods.reduce((sum, mod) => sum + mod.delta, 0)).toBe(odd.value);
   });
 
   it('일반 의뢰 보상에는 페널티가 붙지 않는다', () => {

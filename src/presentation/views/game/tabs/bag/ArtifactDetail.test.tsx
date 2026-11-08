@@ -83,7 +83,7 @@ describe('BagTab 유물 보기 - 상세 창 열기', () => {
   it('줄에 Lv.N과 지금 레벨의 효과가 보이고, 누르면 상세 창이 열린다', () => {
     const g = owning(3, 0);
     setBagSection('artifacts');
-    render(<BagTab game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    render(<BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
     expect(screen.getByText('Lv.3')).toBeInTheDocument();
     expect(screen.getByText('항해 속도 +15%')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('BagTab 유물 보기 - 상세 창 열기', () => {
 
   it('전설 유물 줄에는 레벨이 없다', () => {
     setBagSection('artifacts');
-    render(<BagTab game={game({ artifacts: [MIRROR.id] })} dispatch={vi.fn()} setToast={vi.fn()} />);
+    render(<BagTab sellBonus={0} game={game({ artifacts: [MIRROR.id] })} dispatch={vi.fn()} setToast={vi.fn()} />);
     expect(screen.getByText(MIRROR.name)).toBeInTheDocument();
     expect(screen.queryByText(/Lv\./)).not.toBeInTheDocument();
   });

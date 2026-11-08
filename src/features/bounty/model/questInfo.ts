@@ -1,9 +1,9 @@
 import { artifactOfNamed } from '../../../game/content/artifacts';
-import { namedRewardOf } from '../../../game/rules/artifactLevel';
 import { BOUNTY_PORT_ZONE, portOfZone } from '../../../game/content/bounties';
 import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../game/content/bounties';
 import type { RarityId } from '../../../game/content/rarity';
 import type { GameState } from '../../../game/rules/logic';
+import type { Stat } from '../../../game/rules/stats';
 import { BASE_PACKS } from '../../../game/world';
 import { clearsStatus, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
 import { ticketMinsOf } from './ticket';
@@ -34,7 +34,8 @@ export interface QuestInfoNamed {
   progress: number;
   /** 토벌을 마쳤고 보상만 남았다 */
   done: boolean;
-  reward: number;
+  /** 보상 감소를 적용한 내역 */
+  reward: Stat;
   /** 구역 유물의 교환 재료 이름 */
   materialName: string | null;
   /** 흔적이 남아 있으면 남은 분, 아니면 null. 토벌을 마친 뒤에도 null */
@@ -87,7 +88,7 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
       count: n.count,
       progress,
       done: card.done,
-      reward: namedRewardOf(game, n.reward),
+      reward: card.reward,
       materialName: artifactOfNamed(n.targetFish ?? '')?.materialName ?? null,
       traceMins: card.done ? null : ticketMinsOf(snapshot, n.id, nowMs),
       finishAt: finishAtOf(n.zone),

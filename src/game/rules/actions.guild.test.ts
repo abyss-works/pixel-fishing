@@ -2,7 +2,7 @@
 // 적용하는지와 리듀서가 주입된 효과로 판정하는지 확인한다. 효과가 없으면 모든 판정이 길드 없이와 같다.
 import { describe, expect, it } from 'vitest';
 import {
-  bagCapacity, capOfBoat, fishDrawShares, makeInstance, mutationWeightsOf, namedWeightsOf, newState, sellSelected,
+  bagCapacity, capOfBoat, fishDrawShares, makeInstance, mutationWeightsOf, namedWeightsOf, newState, saleBonusOf, sellSelected,
   variantShare, withVariantPoints, FISH,
 } from './logic';
 import type { FishInstance, GameState } from './logic';
@@ -29,6 +29,14 @@ describe('받는 규칙 — 효과 값 하나를 한 지점에서 더한다', ()
     const base = sellSelected(st, ['a', 'b']).gold;
     expect(sellSelected(st, ['a', 'b'], 0.06).gold).toBe(base + Math.round(base * 0.06));
     expect(sellSelected(st, ['a', 'b'], 0).gold).toBe(base);
+  });
+
+  it('판매가 증가분은 판매 총액에서 한 번 반올림한 값이고 판매 결과와 같다', () => {
+    const st: GameState = { ...newState(), gold: 0, bag: [inst('a'), inst('b')] };
+    const base = sellSelected(st, ['a', 'b']).gold;
+    expect(saleBonusOf(base, 0.06)).toBe(Math.round(base * 0.06));
+    expect(saleBonusOf(base, 0)).toBe(0);
+    expect(sellSelected(st, ['a', 'b'], 0.06).gold).toBe(base + saleBonusOf(base, 0.06));
   });
 
   it('배의 가방 칸에 가방 비율만큼 더한다. 래칫(이미 든 개체 수)은 그대로다', () => {
