@@ -3,21 +3,23 @@
 //   **수동 3축과 방치 2축은 같은 선상이 아니다**(사용자 지적):
 //   GOOD      지역내Δ = (GOOD − 무판정) / 무판정 × 100        [이전 축 대비 %]
 //   PERFECT           = (PERFECT − GOOD) / GOOD × 100        [〃]
-//   방치(×4·×10)는 개별 Δ를 붙이지 않고 — 폭 하나만: (×4 − ×10) / ×10 × 100
-//   [여유 확보 시 방치 소득 개선률 — 마지막 방치 행(×10)에 한 번 표기]
+//   방치(플래토·진입)는 개별 Δ를 붙이지 않고 — 폭 하나만: (플래토 − 진입) / 진입 × 100
+//   [여유 확보 시 방치 소득 개선률 — 마지막 방치 행(진입)에 한 번 표기]
 //   각 축 Δ직전 = 위 해역 같은 축 대비 %                     [해역 사다리]
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import FishTab from './FishTab';
 import { SPOTS, drawRows } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
+import { idleDialsOf } from '../../../../game/rules/power';
 
+// 방치 두 축의 배수는 해역마다 다르다(마을 해역은 현행 표, 그 밖은 새 표)
 const AXES = [
-  { key: 'normal', mult: {} },
-  { key: 'good', mult: { rareMult: 1.6 } },
-  { key: 'perfect', mult: { rareMult: 2.0 } },
-  { key: 'idleBest', mult: { commonMult: 4 } },
-  { key: 'idleWorst', mult: { commonMult: 10 } },
+  { key: 'normal', mult: () => ({}) },
+  { key: 'good', mult: () => ({ rareMult: 1.6 }) },
+  { key: 'perfect', mult: () => ({ rareMult: 2.0 }) },
+  { key: 'idleBest', mult: (id: SpotId) => ({ commonMult: idleDialsOf(id).plateau }) },
+  { key: 'idleWorst', mult: (id: SpotId) => ({ commonMult: idleDialsOf(id).entry }) },
 ] as const;
 
 function evOf(id: SpotId, o: Record<string, unknown>): number {
@@ -33,7 +35,7 @@ describe('기대값 띠 — 지역 내 Δ 공식 고정', () => {
     for (const spot of SPOTS) {
       const id = spot.id as SpotId;
       const e = Object.fromEntries(AXES.map(a =>
-        [a.key, evOf(id, a.mult)])) as Record<string, number>;
+        [a.key, evOf(id, a.mult(id))])) as Record<string, number>;
       const body = document.body.textContent ?? '';
 
       // GOOD: 무판정 대비 %
@@ -42,7 +44,7 @@ describe('기대값 띠 — 지역 내 Δ 공식 고정', () => {
       // PERFECT: GOOD 대비 %
       const pfPct = Math.round((e.perfect - e.good) / Math.abs(e.good) * 100);
       expect(body).toMatch(new RegExp(`[+-]${Math.abs(pfPct)}%`));
-      // 방치 폭 — ×4 기준 개선률(%), "폭" 라벨로 한 번만 표기
+      // 방치 폭 — 플래토 기준 개선률(%), "폭" 라벨로 한 번만 표기
       const spanPct = Math.round((e.idleBest - e.idleWorst) / Math.abs(e.idleWorst) * 100);
       expect(body).toMatch(new RegExp(`폭 \\+?${spanPct}%`));
     }

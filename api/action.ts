@@ -37,7 +37,6 @@ import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
-import { SPOTS } from '../src/game/content/spots.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
@@ -588,12 +587,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const now = new Date().toISOString();
   const { judgment, bait, phaseOpts } = prepareCatchDraw(base, spot, judgmentIn, now, pz);
   const today = todayKST();
-  const entry = SPOTS.find(s => s.id === spot)?.powerReq ?? 0;
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), entry, pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));

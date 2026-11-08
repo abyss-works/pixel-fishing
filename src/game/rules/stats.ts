@@ -9,11 +9,10 @@
 //
 // 순수 곡선(rodStats·boatSpeed)은 게임 규칙 계산에 둔다: AdminPanel 가상 레벨 표와
 // 시설 미리보기(rod+1)는 레벨만으로 계산한다.
-import { autoCommonBoost } from './fishing.js';
-import { relativeIdleBoost, manualPowerBonus, MANUAL_POWER_BONUS } from './power.js';
+import { relativeIdleBoost } from './power.js';
 import { boatSpeed, rodStats } from './logic.js';
 import type { GameState } from './logic.js';
-import { AUTO_COMMON_BOOST, WALK_SPEED } from './balance.js';
+import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
 import { spotById, powerReqOf } from '../content/spots.js';
 
@@ -78,64 +77,27 @@ export function rodAxes(state: GameState): RodAxes {
   };
 }
 
-/** 현재 해역 대비 유효 입질 대기 — 상대치. 초과 시 더 빠르고 미달 시 느리다.
- *  진입 파워 대비로 보간: 진입에서 base, 10배 파워에서 30% 빠름. 미달은 powerZones의 biteExtra를 그대로 쓴다.
+/** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
+ *  미달이면 powerZones의 biteExtra만큼 늘어난다.
  */
 export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
-  const spot = spotById(spotId);
-  const entry = powerReqOf(spotId);
-  const power = rodPower(state);
-  const baseMin = st.biteMin, baseMax = st.biteMax;
-
-  if (power >= entry && entry > 0) {
-    const upper = entry * 10;
-    const t = Math.min(1, Math.max(0, (power - entry) / (upper - entry)));
-    const factor = 1 - 0.3 * t; // 최대 30% 단축
-    const minVal = baseMin * factor;
-    const maxVal = baseMax * factor;
-    return {
-      min: stat(baseMin, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: minVal - baseMin }]),
-      max: stat(baseMax, [{ id: 'power', label: `${spot!.name} 파워 보정`, delta: maxVal - baseMax }]),
-    };
-  }
-  // 미달: 기존 biteExtra 그대로 가산
   const pz = powerZones(state, spotId);
   if (pz.biteExtra > 0) {
     return {
-      min: stat(baseMin, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
-      max: stat(baseMax, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
+      min: stat(st.biteMin, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
+      max: stat(st.biteMax, [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }]),
     };
   }
-  return { min: stat(baseMin), max: stat(baseMax) };
+  return { min: stat(st.biteMin), max: stat(st.biteMax) };
 }
 
-// 방치(auto) 판정의 일반 등급 가중치 배수 — 강화할수록 수동에 가까워진다(×10 → ×4 수렴).
-// 계산 자체는 fishing.autoCommonBoost가 정본(서버 리듀서도 같은 함수를 쓴다) — 여기는 내역 조립.
-// 절대치 버전 (레거시, 테스트 호환). 새 코드는 spot 상대치인 autoBoostForSpot을 쓴다.
-export function autoBoost(state: GameState): Stat {
-  const value = autoCommonBoost(state.rod);
-  return stat(AUTO_COMMON_BOOST.from, [
-    { id: 'rod', label: `낚싯대 Lv.${state.rod}`, delta: value - AUTO_COMMON_BOOST.from },
-  ]);
-}
-
+// 방치(auto) 판정의 일반 등급 가중치 배수 — 해역 요구 파워 대비 레벨 차로 정한다(power.relativeIdleBoost).
+// 서버 리듀서도 같은 함수를 쓴다 — 여기는 스탯창용 내역 조립.
 export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
-  const entry = powerReqOf(spotId);
-  const base = AUTO_COMMON_BOOST.from;
-  const value = entry > 0
-    ? relativeIdleBoost(rodPower(state), entry)
-    : autoCommonBoost(state.rod);
-  const label = entry > 0 ? `${spotById(spotId)!.name} 대비` : `낚싯대 Lv.${state.rod}`;
-  return stat(base, [{ id: 'power', label, delta: value - base }]);
-}
-
-// 수동 파워 보정의 수역 조립 — 스탯창 표시용 내역(코어는 power.manualPowerBonus, 리듀서도 공유).
-export function manualBonusForSpot(state: GameState, spotId: SpotId): Stat {
-  const value = manualPowerBonus(rodPower(state), powerReqOf(spotId));
-  return stat(MANUAL_POWER_BONUS.base, [
-    { id: 'power', label: '해역 요구 대비 초과', delta: value - MANUAL_POWER_BONUS.base },
-  ]);
+  const entryValue = relativeIdleBoost(powerReqOf(spotId), spotId);
+  const value = relativeIdleBoost(rodPower(state), spotId);
+  return stat(entryValue, [{ id: 'power', label: `${spotById(spotId)!.name} 대비`, delta: value - entryValue }]);
 }
 
 // 파워 수치화 — 해역 게이트가 레벨 단위 하드코딩이 아니라 이 숫자 하나를 보게 한다

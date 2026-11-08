@@ -2,7 +2,7 @@
 //
 // 가정(측정치가 아닌 근사):
 //   - 낮밤 혼합 — 하루 중 밤 비율(게임 20~4시)만큼 밤 풀로 추첨한다.
-//   - 처리량 = 입질 평균 대기(파워 초과 보정 포함) + 판정 시간(수동은 바의 절반, 방치는 끝까지) + 획득 연출.
+//   - 처리량 = 입질 평균 대기(낚싯대 레벨 곡선) + 판정 시간(수동은 바의 절반, 방치는 끝까지) + 획득 연출.
 //   - 수동 판정은 고른 판정을 늘 성공한다고 본다. 존이 없는 판정(빨간 존이 안 열린 PERFECT)은 측정하지 않는다.
 //   - 이동·판매 왕복·가방 한도·미끼·유물은 넣지 않는다(미끼는 경제 지표에서 따로 본다). 돌연변이 기댓값은 넣는다.
 import { SPOTS } from '../../src/game/content/spots';
@@ -14,15 +14,15 @@ import { topZoneOfSpot } from '../../src/game/content/zones';
 import { drawRows, rodStats } from '../../src/game/rules/logic';
 import type { DrawOptions } from '../../src/game/rules/logic';
 import { minLevelOfPower, powerOfLevel, zonesFor } from '../../src/game/rules/stats';
-import { manualPowerBonus, relativeIdleBoost } from '../../src/game/rules/power';
+import { relativeIdleBoost } from '../../src/game/rules/power';
 import { CATCH_MS, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
 import { variantShare } from '../../src/game/rules/logic';
 import { DAY_START_MIN, NIGHT_START_MIN } from '../../src/game/rules/time';
 
 export const NIGHT_SHARE = 1 - (NIGHT_START_MIN - DAY_START_MIN) / 60;
 export const VARIANT_EV = 1 + variantShare() * (VARIANT_PRICE_MULT - 1);
-/** 여유 스펙 — 진입 레벨에서 몇 레벨 위를 함께 재는가 */
-export const SPEC_MARGIN = 6;
+/** 여유 스펙 — 진입 레벨에서 몇 레벨 위를 함께 재는가. 태평양 이후 해역에서 방치 배수가 하한에 닿는 레벨 차다 */
+export const SPEC_MARGIN = 4;
 
 export type Axis = 'normal' | 'good' | 'perfect' | 'idle';
 /** 방치가 기준 축이므로 먼저 둔다 */
@@ -31,10 +31,15 @@ export const AXIS_LABEL: Record<Axis, string> = { normal: '무판정', good: 'GO
 
 export interface Row { fish: Fish; prob: number }
 
+/** 추첨 풀 — 낮 풀만 또는 하루 중 시간 비율로 섞은 낮밤 혼합 */
+export type Pool = 'day' | 'mixed';
+
 /** 해역의 개체 확률 — 낮/밤 풀을 하루 중 시간 비율로 섞고 시간대마다 가중치 합으로 정규화한다 */
-export function mixedRows(spot: SpotId, o: DrawOptions = {}): Row[] {
+export function mixedRows(spot: SpotId, o: DrawOptions = {}, pool: Pool = 'mixed'): Row[] {
   const p = new Map<string, number>();
-  for (const [phase, w] of [['day', 1 - NIGHT_SHARE], ['night', NIGHT_SHARE]] as const) {
+  const night = pool === 'day' ? 0 : NIGHT_SHARE;
+  for (const [phase, w] of [['day', 1 - night], ['night', night]] as const) {
+    if (w === 0) continue;
     const rows = drawRows(spot, { ...o, phase });
     const total = rows.reduce((s, r) => s + r.fishPct, 0);
     for (const r of rows) p.set(r.fish.id, (p.get(r.fish.id) ?? 0) + w * r.fishPct / total);
@@ -49,23 +54,20 @@ export interface RodSpec {
   level: number; power: number;
   biteMin: number; biteMax: number; sweep: number;
   yellow: number; red: number;
-  manualBonus: number; idleBoost: number;
+  idleBoost: number;
 }
 
-/** 해역에서 이 레벨 낚싯대의 스펙 — 입질은 파워 초과 보정(진입에서 0, 진입 10배에서 30% 단축)을 넣는다 */
+/** 해역에서 이 레벨 낚싯대의 스펙 — 입질 대기는 낚싯대 레벨 곡선 그대로다(파워 초과로 줄지 않는다) */
 export function rodSpec(spot: SpotId, level: number): RodSpec {
   const st = rodStats(level);
   const power = powerOfLevel(level);
   const entry = spotOf(spot).powerReq ?? 0;
-  const t = entry > 0 && power >= entry ? Math.min(1, (power - entry) / (entry * 9)) : 0;
-  const factor = 1 - 0.3 * t;
   const z = zonesFor(power, entry);
   return {
     level, power,
-    biteMin: st.biteMin * factor, biteMax: st.biteMax * factor, sweep: st.sweep,
+    biteMin: st.biteMin, biteMax: st.biteMax, sweep: st.sweep,
     yellow: z.yellow, red: z.red,
-    manualBonus: manualPowerBonus(power, entry),
-    idleBoost: entry > 0 ? relativeIdleBoost(power, entry) : 10,
+    idleBoost: relativeIdleBoost(power, spot),
   };
 }
 
@@ -73,10 +75,10 @@ export function rodSpec(spot: SpotId, level: number): RodSpec {
 export const axisAvailable = (spec: RodSpec, axis: Axis): boolean =>
   axis === 'perfect' ? spec.red > 0 : axis === 'good' ? spec.yellow > 0 : true;
 
-/** 축의 추첨 다이얼 — 리듀서와 같은 계산(수동 = 판정 배수 × 파워 보정, 방치 = 상대 페널티) */
+/** 축의 추첨 다이얼 — 리듀서와 같은 계산(수동 = 판정 배수, 방치 = 해역 요구 파워 대비 방치 배수) */
 export function axisOptions(spec: RodSpec, axis: Axis): DrawOptions {
   if (axis === 'idle') return { commonMult: spec.idleBoost };
-  return { rareMult: JUDGMENT_MULT[axis] * spec.manualBonus };
+  return { rareMult: JUDGMENT_MULT[axis] };
 }
 
 export interface Rates {
@@ -86,11 +88,11 @@ export interface Rates {
   rarity: Record<string, number>;
 }
 
-export function rates(spot: SpotId, level: number, axis: Axis, extra: DrawOptions = {}): Rates {
+export function rates(spot: SpotId, level: number, axis: Axis, extra: DrawOptions = {}, pool: Pool = 'mixed'): Rates {
   const spec = rodSpec(spot, level);
   const reaction = axis === 'idle' ? spec.sweep : spec.sweep / 2;
   const sec = (spec.biteMin + spec.biteMax) / 2 + reaction + CATCH_MS / 1000;
-  const rows = mixedRows(spot, { ...axisOptions(spec, axis), ...extra });
+  const rows = mixedRows(spot, { ...axisOptions(spec, axis), ...extra }, pool);
   const cph = 3600 / sec;
   const rarity: Record<string, number> = {};
   for (const r of rows) rarity[r.fish.rarity] = (rarity[r.fish.rarity] ?? 0) + r.prob;
@@ -99,6 +101,37 @@ export function rates(spot: SpotId, level: number, axis: Axis, extra: DrawOption
     goldPerHour: rows.reduce((s, r) => s + r.prob * r.fish.price, 0) * VARIANT_EV * cph,
     famePerHour: rows.reduce((s, r) => s + r.prob * RARITY[r.fish.rarity].fame, 0) * cph,
   };
+}
+
+export interface MoveGap {
+  /** 새 해역의 진입 레벨에서의 방치 시간당 골드 */
+  gold: number;
+  /** 같은 레벨로 낚을 수 있는 이전 해역 중 방치 시간당 골드가 가장 높은 해역과 그 값. 없으면 undefined */
+  from: SpotId | undefined; fromGold: number;
+  /** 새 해역 ÷ 비교 해역. 비교 해역이 없으면 Infinity */
+  ratio: number;
+}
+
+/** 이동 직후 수입 — 새 해역 진입 레벨에서 그 해역의 방치 시간당 골드를, 같은 레벨로 낚을 수 있는(요구 파워를 채운) 이전 해역 중 가장 높은 값과 비교한다.
+ *  `gold`는 새 해역 값, 차는 `gold - fromGold`다(0 이상이어야 한다). */
+export function moveGap(index: number, pool: Pool): MoveGap & { diff: number } {
+  const here = SPOTS[index].id;
+  const level = entryLevel(here);
+  const power = powerOfLevel(level);
+  const gold = rates(here, level, 'idle', {}, pool).goldPerHour;
+  let from: SpotId | undefined, fromGold = 0;
+  for (const prev of SPOTS.slice(0, index)) {
+    if ((prev.powerReq ?? 0) > power) continue;
+    const g = rates(prev.id, level, 'idle', {}, pool).goldPerHour;
+    if (g > fromGold) { from = prev.id; fromGold = g; }
+  }
+  return { gold, from, fromGold, ratio: fromGold > 0 ? gold / fromGold : Infinity, diff: gold - fromGold };
+}
+
+/** 같은 해역, 같은 레벨에서 PERFECT 다이얼의 시간당 골드 ÷ 방치의 시간당 골드(낮밤 혼합).
+ *  빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한 값이므로 실제 PERFECT 수입의 상한이다. */
+export function perfectOverIdle(spot: SpotId, level: number): number {
+  return rates(spot, level, 'perfect').goldPerHour / rates(spot, level, 'idle').goldPerHour;
 }
 
 /** 해역의 상위 지역 — 도감·완화 판단의 묶음 단위 */

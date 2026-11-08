@@ -204,7 +204,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
         <Inset className="grid grid-cols-1 gap-3 p-2 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start">
           {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV|직전|지역내] ──
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
-              폭 하나 — 마지막 방치 행(×10)에 한 번만 표기하고 ×4에는 붙이지 않는다. */}
+              폭 하나 — 마지막 방치 행(진입)에 한 번만 표기하고 플래토에는 붙이지 않는다. */}
           <div className="overflow-x-auto">
             <DataTable>
               <thead>
@@ -221,7 +221,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                   const pv = prevEvs ? prevEvs[a.key] : null;
                   // 그룹 전환점 — 수동→방치 경계에 소제목 행을 놓아 "같은 선상이 아님"을 표시
                   const groupDivider = ai === 3;
-                  // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(×10 행에만).
+                  // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(진입 행에만).
                   let inRegion: string | null = null;
                   if (a.group === 'manual' && ai > 0) {
                     const prevKey = SIM_AXES[ai - 1].key;
@@ -242,7 +242,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                       <tr key={a.key} className={ai % 2 ? '' : 'bg-surface/40'}>
                         <th scope="row"
                             className={cx('whitespace-nowrap text-left', a.group === 'manual' && ai === 0 ? 'text-gold' : '')}>
-                          {a.label}
+                          {a.group === 'idle' ? `${a.label} ×${a.mult(spot.id).commonMult}` : a.label}
                         </th>
                         <td className="pf-accent whitespace-nowrap text-gold">{v.toFixed(1)}G</td>
                         <td><Delta prev={pv} cur={v} /></td>

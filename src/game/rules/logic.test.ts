@@ -20,6 +20,7 @@ import {
 } from './logic';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
+import { idleDialsOf } from './power';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -999,19 +1000,19 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
-    idleWorst: { commonMult: 10 },
+    idleEntry: { commonMult: 5 },
   } as const;
 
-  it('인도양 — normal 491.1 / perfect 762.8 / 방치×10 88.9', () => {
+  it('인도양 — normal 491.1 / perfect 762.8 / 방치 진입 ×5 145.3', () => {
     expect(goldEV('indian', dials.normal)).toBeCloseTo(491.09, 1);
     expect(goldEV('indian', dials.perfect)).toBeCloseTo(762.77, 1);
-    expect(goldEV('indian', dials.idleWorst)).toBeCloseTo(88.89, 1);
+    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
   });
 
-  it('남인도양 — normal 694.7 / perfect 1085.1 / 방치×10 116.8', () => {
+  it('남인도양 — normal 694.7 / perfect 1085.1 / 방치 진입 ×5 197.9', () => {
     expect(goldEV('southindian', dials.normal)).toBeCloseTo(694.7, 1);
     expect(goldEV('southindian', dials.perfect)).toBeCloseTo(1085.08, 1);
-    expect(goldEV('southindian', dials.idleWorst)).toBeCloseTo(116.78, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(197.85, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
@@ -1023,27 +1024,31 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   });
 });
 
-describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 ×10·×4)', () => {
-  const idle = (spot: Parameters<typeof goldEV>[0]) => [10, 4].map(m => goldEV(spot, { commonMult: m }));
+describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)', () => {
+  const idle = (spot: Parameters<typeof goldEV>[0]) => {
+    const d = idleDialsOf(spot);
+    return [d.entry, d.plateau].map(m => goldEV(spot, { commonMult: m }));
+  };
 
   it('해역 순서대로 줄어드는 곳이 없다', () => {
     for (let i = 1; i < SPOTS.length; i++) {
-      const [a10, a4] = idle(SPOTS[i - 1].id);
-      const [b10, b4] = idle(SPOTS[i].id);
-      expect(b10, `${SPOTS[i].id} ×10`).toBeGreaterThan(a10);
-      expect(b4, `${SPOTS[i].id} ×4`).toBeGreaterThan(a4);
+      const [aEntry, aPlateau] = idle(SPOTS[i - 1].id);
+      const [bEntry, bPlateau] = idle(SPOTS[i].id);
+      expect(bEntry, `${SPOTS[i].id} 진입`).toBeGreaterThan(aEntry);
+      expect(bPlateau, `${SPOTS[i].id} 플래토`).toBeGreaterThan(aPlateau);
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 80%, 세인트헬레나는 용승대 대비 약 30% 오른다 (±5%p)', () => {
-    const [c10, c4] = idle('comorodeep');
-    const [b10, b4] = idle('benguela');
-    const [h10, h4] = idle('sthelena');
-    for (const r of [b10 / c10, b4 / c4]) {
-      expect(r).toBeGreaterThanOrEqual(1.75);
-      expect(r).toBeLessThanOrEqual(1.85);
+  it('남대서양 첫 해역은 코모로 심해 대비 약 80%(±6%p), 세인트헬레나는 용승대 대비 약 30%(±5%p) 오른다', () => {
+    const [cEntry, cPlateau] = idle('comorodeep');
+    const [bEntry, bPlateau] = idle('benguela');
+    const [hEntry, hPlateau] = idle('sthelena');
+    for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
+      // 방치 플래토(×3)에서 용승대가 +85.2%라 허용 폭을 6%p로 둔다
+      expect(r).toBeGreaterThanOrEqual(1.74);
+      expect(r).toBeLessThanOrEqual(1.86);
     }
-    for (const r of [h10 / b10, h4 / b4]) {
+    for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
       expect(r).toBeGreaterThanOrEqual(1.25);
       expect(r).toBeLessThanOrEqual(1.35);
     }

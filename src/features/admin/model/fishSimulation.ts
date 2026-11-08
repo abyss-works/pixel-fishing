@@ -4,6 +4,7 @@ import type { RarityPermyriad } from '../../../game/content/rarityWeights';
 import { RARITY_TOTAL } from '../../../game/content/rarityWeights';
 import type { Fish } from '../../../game/content/fish';
 import type { SpotId } from '../../../game/content/spots';
+import { idleDialsOf } from '../../../game/rules/power';
 import type { Spot } from '../../../game/content/spots';
 
 export interface SimOverrides {
@@ -13,14 +14,15 @@ export interface SimOverrides {
   price: Record<string, number>;
 }
 
+/** 축의 추첨 다이얼. 방치 두 축의 배수는 해역마다 다르다(power.idleDialsOf) */
 export const SIM_AXES = [
-  { key: 'normal', label: '무판정', mult: {}, group: 'manual' },
-  { key: 'good', label: 'GOOD', mult: { rareMult: 1.6 }, group: 'manual' },
-  { key: 'perfect', label: 'PERFECT', mult: { rareMult: 2.0 }, group: 'manual' },
-  { key: 'idleBest', label: '방치×4', mult: { commonMult: 4 }, group: 'idle' },
-  { key: 'idleWorst', label: '방치×10', mult: { commonMult: 10 }, group: 'idle' },
+  { key: 'normal', label: '무판정', mult: (): DrawOptions => ({}), group: 'manual' },
+  { key: 'good', label: 'GOOD', mult: (): DrawOptions => ({ rareMult: 1.6 }), group: 'manual' },
+  { key: 'perfect', label: 'PERFECT', mult: (): DrawOptions => ({ rareMult: 2.0 }), group: 'manual' },
+  { key: 'idleBest', label: '방치 플래토', mult: (spot: SpotId): DrawOptions => ({ commonMult: idleDialsOf(spot).plateau }), group: 'idle' },
+  { key: 'idleWorst', label: '방치 진입', mult: (spot: SpotId): DrawOptions => ({ commonMult: idleDialsOf(spot).entry }), group: 'idle' },
 ] as const satisfies readonly {
-  key: string; label: string; mult: DrawOptions; group: 'manual' | 'idle';
+  key: string; label: string; mult: (spot: SpotId) => DrawOptions; group: 'manual' | 'idle';
 }[];
 
 export type AxisKey = typeof SIM_AXES[number]['key'];
@@ -40,7 +42,7 @@ export function selectSpotBudgets(spot: SpotId, sim: SimOverrides): Record<Rarit
 export function selectSpotAxisEvs(spot: SpotId, sim: SimOverrides): AxisEvs {
   return Object.fromEntries(SIM_AXES.map(axis => {
     const rows = drawRows(spot, {
-      ...axis.mult,
+      ...axis.mult(spot),
       budgets: selectSpotBudgets(spot, sim),
       fishWeights: sim.fishWeights[spot],
     });

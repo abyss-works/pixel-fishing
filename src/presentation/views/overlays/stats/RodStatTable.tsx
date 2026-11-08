@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Stat } from '../../../../game/rules/stats';
 import { POWER_RULES, autoPenaltyHelpText } from '../../../../game/rules/stats';
-import { MANUAL_POWER_BONUS } from '../../../../game/rules/power';
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
 import Tip from '../../../ui/Tip';
@@ -45,7 +44,7 @@ function RodStatLine({ label, children }: { label: ReactNode; children: ReactNod
 }
 
 export default function RodStatTable({ row }: { row: StatsSpotRow }) {
-  const { axes, effectiveBite, manualBonus, autoBoost } = row.data;
+  const { axes, effectiveBite, autoBoost } = row.data;
   return (
     <div className="grid grid-cols-2 gap-x-5 mobile:grid-cols-1">
       <ul className="flex flex-col">
@@ -59,9 +58,6 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
       <ul className="flex flex-col">
         <RodStatLine label={<Tip text={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`}>PERFECT 영역</Tip>}>
           {perfectText(row)}
-        </RodStatLine>
-        <RodStatLine label={<Tip text={`해역 요구 파워를 넘을수록 직접 낚을 때 희귀한 물고기가 더 잘 걸려요.\n초과 ${MANUAL_POWER_BONUS.step}마다 ×${MANUAL_POWER_BONUS.perStep}씩, 최대 ×${MANUAL_POWER_BONUS.max.toFixed(1)}까지 올라요.`}>수동 확률 보정</Tip>}>
-          ×{manualBonus.value.toFixed(1)}
         </RodStatLine>
         <RodStatLine label={<Tip text={autoPenaltyHelpText()}>방치 낚시 페널티</Tip>}>
           <StatValue stat={autoBoost} unit="" prefix="×" />
