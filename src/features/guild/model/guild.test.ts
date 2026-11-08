@@ -156,7 +156,7 @@ describe('항해일지', () => {
       ['11월 4일', [[1, '10:12']]],
     ]);
     expect(days[0].items[0].parts).toEqual([
-      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 황금잉어', tone: 'legend' }, { text: '를 낚았어요!' },
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 황금 잉어', tone: 'legend' }, { text: '를 낚았어요!' },
     ]);
     expect(days[1].items[0]).toMatchObject({ kind: 'leave', quiet: true,
       parts: [{ text: '이름 없음', tone: 'nick' }, { text: ' 님이 길드를 떠났어요.' }] });

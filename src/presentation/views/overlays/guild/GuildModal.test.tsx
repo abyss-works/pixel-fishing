@@ -219,7 +219,7 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
     const day = within(screen.getByRole('region', { name: '11월 5일' }));
     expect(day.getAllByText('09:00')).toHaveLength(2);
-    expect(day.getByText('전설 황금잉어')).toBeTruthy();
+    expect(day.getByText('전설 황금 잉어')).toBeTruthy();
     expect(day.getByText('나루')).toBeTruthy();
   });
 });
