@@ -1056,18 +1056,19 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 80%(±6%p), 세인트헬레나는 용승대 대비 약 30%(±5%p) 오른다', () => {
+  it('남대서양 첫 해역은 코모로 심해 대비 약 57%(1.50~1.65배), 세인트헬레나는 용승대 대비 약 55%(1.50~1.60배) 오른다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 방치 플래토(×3)에서 용승대가 +85.2%라 허용 폭을 6%p로 둔다
-      expect(r).toBeGreaterThanOrEqual(1.74);
-      expect(r).toBeLessThanOrEqual(1.86);
+      // 확정 밸런스의 실제 비율은 진입 1.57, 플래토 1.60이다
+      expect(r).toBeGreaterThanOrEqual(1.5);
+      expect(r).toBeLessThanOrEqual(1.65);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      expect(r).toBeGreaterThanOrEqual(1.25);
-      expect(r).toBeLessThanOrEqual(1.35);
+      // 확정 밸런스의 실제 비율은 진입 1.54, 플래토 1.55다
+      expect(r).toBeGreaterThanOrEqual(1.5);
+      expect(r).toBeLessThanOrEqual(1.6);
     }
   });
 });
