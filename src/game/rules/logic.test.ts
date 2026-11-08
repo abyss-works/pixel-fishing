@@ -554,9 +554,9 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(at({ variant: 1, normal: 2 })).toBe('variant'); // 0.3×3 = 0.9 < 1
   });
 
-  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판이면 2 : 1', () => {
+  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판 Lv1이면 돌연변이 가중치 +25%', () => {
     expect(mutationWeightsOf(newState(), 'pond')).toEqual({ normal: 3, variant: 1 });
-    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 2, variant: 1 });
+    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 3, variant: 1.25 });
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
@@ -1092,7 +1092,7 @@ describe('가중치 추첨', () => {
       pond.mutationWeight = { variant: 2 };
       pond.namedWeight = { named: 9 };
       expect(mutationWeightsOf(newState(), 'pond')).toEqual({ variant: 2, normal: 3 });
-      expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1, normal: 2 });
+      expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1.25, normal: 3 });
       expect(namedWeightsOf('pond')).toEqual({ named: 9, none: 999 });
       expect(namedWeightsOf('river')).toEqual({ named: 1, none: 999 });
     } finally {
