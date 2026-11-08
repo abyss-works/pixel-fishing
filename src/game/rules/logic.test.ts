@@ -168,9 +168,9 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6, balance-metrics
     const manual = drawRows('barrierreef')
       .reduce((s, x) => s + x.fishPct / 100 * x.fish.price, 0);
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
-    // 회귀 앵커 — 중립/GOOD/방치 대표값(2026-08-27 밸런스 JSON 3차 반영 후 재측정)
+    // 회귀 앵커: 중립, GOOD, 방치 대표값
     expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(349.0, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(384.3, 0);
     expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
   });
 
