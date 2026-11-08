@@ -3,7 +3,8 @@
 // 서버 판정이 조용히 틀린 값을 쓴다.
 import { describe, it, expect } from 'vitest';
 import {
-  BOUNTIES, BOUNTY_PORT_ZONE, bountyById, bountyKindOf, dailyQuestFor, portOfZone, zoneOfPort,
+  BOUNTIES, BOUNTY_PORT_ZONE, bountyById, bountyKindOf, dailyQuestFor, isQuestOffered, offeredQuestsFor,
+  portOfZone, zoneOfPort,
 } from './bounties';
 import { RARITY } from './rarity';
 
@@ -65,6 +66,11 @@ describe('bounties 데이터 계약', () => {
     expect(a?.id).toBe(b?.id);
   });
 
+  it('일일 의뢰는 네임드를 해시로 뽑지 않는다 — 네임드 난이도는 받지 않는다', () => {
+    // @ts-expect-error 네임드는 offeredQuestsFor가 구역의 네임드마다 낸다
+    dailyQuestFor('pacific', 'named', 'uid-1', '2026-10-09');
+  });
+
   it('일일 의뢰 — 날짜가 바뀌면 바뀔 수 있고 pool 안에 있다', () => {
     const q = dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-10');
     expect(q?.zone).toBe('pacific');
@@ -73,12 +79,39 @@ describe('bounties 데이터 계약', () => {
 });
 
 describe('남대서양 현상금', () => {
-  it('의뢰 구역 5개, 수배 창구는 월비스베이항, 네임드는 아다마스토르 하나다', () => {
+  it('의뢰 구역 5개, 수배 창구는 월비스베이항, 네임드는 아다마스토르와 야스코니우스 둘이다', () => {
     expect(new Set(BOUNTIES.map(q => q.zone)).size).toBe(5);
     expect(BOUNTY_PORT_ZONE.walvisbay).toBe('southatlantic');
     const named = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
-    expect(named.map(q => q.targetFish)).toEqual(['adamastor']);
-    expect(named[0].reward).toBe(7500000);
+    expect(named.map(q => q.targetFish)).toEqual(['adamastor', 'jasconius']);
+    expect(named.map(q => q.reward)).toEqual([7500000, 7500000]);
+  });
+});
+
+describe('수배판에 내는 의뢰', () => {
+  it('네임드가 둘인 구역은 네임드마다 한 항목을 모두 낸다', () => {
+    const ids = offeredQuestsFor('southatlantic', 'named', 'uid-1', '2026-10-09').map(q => q.id);
+    expect(ids).toEqual(['southatlantic-named-adamastor', 'southatlantic-named-jasconius']);
+  });
+
+  it('네임드가 하나인 구역과 일반 난이도는 일일 의뢰 한 건을 낸다', () => {
+    expect(offeredQuestsFor('pacific', 'named', 'uid-1', '2026-10-09').map(q => q.id))
+      .toEqual(['pacific-named-megalodon']);
+    expect(offeredQuestsFor('pacific', 'easy', 'uid-1', '2026-10-09'))
+      .toEqual([dailyQuestFor('pacific', 'easy', 'uid-1', '2026-10-09')]);
+  });
+
+  it('isQuestOffered는 그날 그 사람에게 낸 의뢰만 참이다', () => {
+    const day = '2026-10-09';
+    for (const uid of ['a', 'b', 'c', 'd']) {
+      expect(isQuestOffered(bountyById('southatlantic-named-adamastor')!, uid, day)).toBe(true);
+      expect(isQuestOffered(bountyById('southatlantic-named-jasconius')!, uid, day)).toBe(true);
+      expect(isQuestOffered(bountyById('pacific-named-megalodon')!, uid, day)).toBe(true);
+    }
+    const easy = dailyQuestFor('pacific', 'easy', 'a', day)!;
+    const other = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'easy' && q.id !== easy.id)!;
+    expect(isQuestOffered(easy, 'a', day)).toBe(true);
+    expect(isQuestOffered(other, 'a', day)).toBe(false);
   });
 });
 

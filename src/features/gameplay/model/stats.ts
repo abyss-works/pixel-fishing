@@ -131,7 +131,7 @@ export type BonusCategory = 'move' | 'fish' | 'duel' | 'shop';
 export const BONUS_CATEGORIES: readonly BonusCategory[] = ['move', 'fish', 'duel', 'shop'];
 
 const EFFECT_CATEGORY: Record<keyof ArtifactEffects, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop',
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop', biteWaitCut: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */

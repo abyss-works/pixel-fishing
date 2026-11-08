@@ -21,7 +21,7 @@ import { rarityWeightOf } from '../content/rarityWeights.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
-import { artifactById, artifactLevelCost, artifactOfZone } from '../content/artifacts.js';
+import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
 import { artifactLevelOf, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
@@ -663,7 +663,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const check = canDeliverBounty(action.questId, deps.bounty ?? undefined);
       if (!check.ok) return { ok: false, error: check.reason };
       const quest = bountyById(action.questId)!;
-      const mat = quest.difficulty === 'named' ? artifactOfZone(quest.zone) : undefined;
+      const mat = quest.difficulty === 'named' ? artifactOfNamed(quest.targetFish ?? '') : undefined;
       const rich = mat ? addItem(state, mat.materialId, 1) : state;
       // 네임드 토벌 골드만 보유 유물(전설)의 보상 감소를 받는다 — 재료 수는 그대로다
       const reward = quest.difficulty === 'named' ? namedRewardOf(state, quest.reward) : quest.reward;

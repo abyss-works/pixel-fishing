@@ -108,6 +108,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('southatlantic', 'hard', 'epic', null, 10, 4000000),
   Q('southatlantic', 'hard', 'legendary', null, 2, 4000000),
   Q('southatlantic', 'named', null, 'adamastor', 1, 7500000),
+  Q('southatlantic', 'named', null, 'jasconius', 1, 7500000),
 ];
 
 /** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */
@@ -119,10 +120,10 @@ const BOUNTY_BY_ID = new Map(BOUNTIES.map(q => [q.id, q]));
 /** id → 의뢰 행. 없는 id는 undefined (수주·납품 검증의 단일 출처) */
 export const bountyById = (id: string): BountyQuest | undefined => BOUNTY_BY_ID.get(id);
 
-/** 일일 의뢰 — 사람·날짜·해역·난이도당 1행. 해시 결정이라 DB 저장 없이
+/** 일일 의뢰 — 일반 난이도의 사람·날짜·해역·난이도당 1행. 네임드는 해시로 뽑지 않는다(offeredQuestsFor). 해시 결정이라 DB 저장 없이
  *  클라·서버가 같은 값을 뽑는다. 난이도 내에서는 동일 확률이다. */
 export function dailyQuestFor(
-  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+  zone: BountyZone, difficulty: Exclude<BountyDifficulty, 'named'>, uid: string, day: string,
 ): BountyQuest | undefined {
   const pool = BOUNTIES.filter(q => q.zone === zone && q.difficulty === difficulty);
   if (pool.length === 0) return undefined;
@@ -131,6 +132,20 @@ export function dailyQuestFor(
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return pool[h % pool.length];
 }
+
+/** 수배판에 내는 의뢰 — 일반 난이도는 일일 의뢰 한 건이고, 네임드는 구역의 네임드마다 한 항목을 모두 낸다.
+ *  네임드가 둘인 구역(남대서양)은 두 항목을 내고 플레이어가 그 안에서 고른다 */
+export function offeredQuestsFor(
+  zone: BountyZone, difficulty: BountyDifficulty, uid: string, day: string,
+): BountyQuest[] {
+  if (difficulty === 'named') return BOUNTIES.filter(q => q.zone === zone && q.difficulty === 'named');
+  const daily = dailyQuestFor(zone, difficulty, uid, day);
+  return daily ? [daily] : [];
+}
+
+/** 그날 그 사람에게 수배판이 낸 의뢰인가 — 수주 검증이 쓰는 단일 판정 */
+export const isQuestOffered = (quest: BountyQuest, uid: string, day: string): boolean =>
+  offeredQuestsFor(quest.zone, quest.difficulty, uid, day).some(q => q.id === quest.id);
 
 /** 수배 창구가 있는 항구 → 담당 해역. 고향(home)은 없다 (spec 4절) */
 export const BOUNTY_PORT_ZONE = {
