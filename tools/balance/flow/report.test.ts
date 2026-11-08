@@ -234,8 +234,21 @@ describe('gates 명령', () => {
     expect(runCli(['gates']).exitCode).toBe(0);
   });
 
+  it('반례: 예외 해역이 알려진 값보다 나빠지면(남인도양, 코모로 심해 배율 0.3) 위반이고 종료 코드 1이다', () => {
+    const file = join(makeDir(), 'worse.json');
+    writeFileSync(file, JSON.stringify({ spots: { southindian: { priceMult: 0.3 }, comorodeep: { priceMult: 0.3 } } }), 'utf-8');
+    const r = runCli(['gates', '--override', file]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toMatch(/남인도양 \| 낮 풀 .*위반/);
+  });
+
   it('JSON 출력도 위반이 있으면 종료 코드 1이고, 오류는 종료 코드 1과 stderr다', () => {
     expect(runCli(['gates', '--json']).exitCode).toBe(0);
+    const file = join(makeDir(), 'low-json.json');
+    writeFileSync(file, JSON.stringify({ spots: { mozstrait: { priceMult: 0.1 } } }), 'utf-8');
+    const bad2 = runCli(['gates', '--json', '--override', file]);
+    expect(bad2.exitCode).toBe(1);
+    expect(JSON.parse(bad2.stdout).gates.some((g: { verdict: string }) => g.verdict === '위반')).toBe(true);
     const bad = runCli(['gates', '--override', join(tmpdir(), 'no-such-flow-override.json')]);
     expect(bad.exitCode).toBe(1);
     expect(bad.stderr).toContain('오류:');

@@ -4,9 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
 import { SPOTS } from '../../../src/game/content/spots';
-import { entryLevel } from '../model';
 import { FISH } from '../../../src/game/content/fish';
-import { rates } from '../model';
+import { entryLevel, rates } from '../model';
 import { applyOverride, ladderPrice, loadOverride, parseOverride } from './override';
 
 const boat = (tier: number) => BOATS.find(b => b.tier === tier)!;

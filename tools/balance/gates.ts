@@ -17,7 +17,20 @@ export const KNOWN_INVERSIONS: Partial<Record<SpotId, Record<Pool, number>>> = {
   comorodeep: { day: -42614.75, mixed: -60618.06 },
 };
 
-export type GateVerdict = '통과' | '위반' | '예외';
+/** 알려진 역전과 같다고 보는 차이 허용 오차(골드/시간). 목록 값은 소수 둘째 자리까지 적는다 */
+export const GATE_TOLERANCE = 0.5;
+
+/** 통과: 목록에 없고 차이 0 이상. 예외: 목록에 있고 알려진 값과 같음. 개선: 목록에 있고 알려진 값보다 좋아짐(목록 갱신 필요).
+ *  위반: 목록에 없는데 차이가 0 미만이거나, 목록에 있는데 알려진 값보다 나빠짐 */
+export type GateVerdict = '통과' | '예외' | '개선' | '위반';
+
+/** (해역, 풀) 하나의 판정 */
+export function judgeGate(spot: SpotId, pool: Pool, diff: number): GateVerdict {
+  const known = KNOWN_INVERSIONS[spot]?.[pool];
+  if (known === undefined) return diff >= 0 ? '통과' : '위반';
+  if (Math.abs(diff - known) < GATE_TOLERANCE) return '예외';
+  return diff > known ? '개선' : '위반';
+}
 
 export interface GateRow {
   spot: SpotId;
@@ -40,7 +53,7 @@ export function gateRows(): GateRow[] {
     const spot = SPOTS[i].id;
     for (const pool of GATE_POOLS) {
       const g = moveGap(i, pool);
-      const verdict: GateVerdict = g.diff >= 0 ? '통과' : KNOWN_INVERSIONS[spot] ? '예외' : '위반';
+      const verdict = judgeGate(spot, pool, g.diff);
       rows.push({ spot, pool, from: g.from, before: g.fromGold, after: g.gold, diff: g.diff, verdict });
     }
   }

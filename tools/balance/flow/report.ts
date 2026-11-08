@@ -366,10 +366,10 @@ function gatesText(rows: GateRow[]): string[] {
   const out: string[] = ['\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)'];
   out.push(table(
     ['전환', '풀', '비교 해역', '이동 전 수입(G/h)', '이동 직후 수입(G/h)', '차이', '판정'],
-    rows.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), r.verdict]),
+    rows.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), r.verdict === '개선' ? '개선(예외 목록 갱신 필요)' : r.verdict]),
   ));
   const count = (v: GateRow['verdict']) => rows.filter(r => r.verdict === v).length;
-  out.push(`\n통과 ${count('통과')}, 예외 ${count('예외')}, 위반 ${count('위반')}`);
+  out.push(`\n통과 ${count('통과')}, 예외 ${count('예외')}, 개선 ${count('개선')}, 위반 ${count('위반')}`);
   return out;
 }
 

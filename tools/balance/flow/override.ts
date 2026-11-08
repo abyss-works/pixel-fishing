@@ -64,7 +64,7 @@ export function parseOverride(raw: unknown): FlowOverride {
   return out;
 }
 
-/** 어종 가격 사다리 — 일반 등급은 정수, 희귀 이상은 한 자리 수면 정수, 두 자리 수면 5 단위, 세 자리 이상이면 앞 두 자리 유효숫자.
+/** 어종 가격 사다리(목표 기대값을 모르므로 가장 가까운 값으로만 맞춘다. 425는 430) — 일반 등급은 정수, 희귀 이상은 한 자리 수면 정수, 두 자리 수면 5 단위, 세 자리 이상이면 앞 두 자리 유효숫자.
  *  모두 가장 가까운 값으로 맞춘다 */
 export function ladderPrice(price: number, rarity: RarityId): number {
   if (rarity === 'common' || price < 10) return Math.round(price);

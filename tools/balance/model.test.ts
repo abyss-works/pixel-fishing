@@ -7,7 +7,7 @@ import {
   SPEC_MARGIN, axisAvailable, axisOptions, entryLevel, headroom, inversions, moveGap, perfectOverIdle, rates, rodSpec,
 } from './model';
 import { simulateJourney } from './journey';
-import { GATE_FROM_SPOT, GATE_POOLS, KNOWN_INVERSIONS, gateRows } from './gates';
+import { GATE_FROM_SPOT, GATE_POOLS, gateRows } from './gates';
 
 describe('밸런스 측정 모델', () => {
   it('이웃 역전은 뒤가 앞보다 작은 쌍만 잡는다', () => {
@@ -72,12 +72,8 @@ describe('밸런스 측정 모델', () => {
     expect(SPOTS.map(s => s.id)).toEqual(expect.arrayContaining(['comorodeep', 'benguela', 'sthelena']));
     const rows = gateRows();
     expect(rows.length).toBe((SPOTS.length - SPOTS.findIndex(s => s.id === GATE_FROM_SPOT)) * GATE_POOLS.length);
-    for (const r of rows) {
-      const where = `${r.spot} ${r.pool}`;
-      expect(r.verdict, where).not.toBe('위반');
-      if (r.verdict === '통과') expect(r.diff, where).toBeGreaterThanOrEqual(0);
-      else expect(r.diff, where).toBeCloseTo(KNOWN_INVERSIONS[r.spot]![r.pool], 0);
-    }
+    // 개선은 예외 목록이 낡았다는 뜻이므로 위반과 함께 실패로 본다
+    for (const r of rows) expect(['통과', '예외'], `${r.spot} ${r.pool}: ${r.verdict}`).toContain(r.verdict);
   });
 
   it('이동 직후 비교 대상은 같은 레벨로 낚을 수 있는 이전 해역뿐이다', () => {
