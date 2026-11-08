@@ -60,18 +60,14 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
   useKeyBlocker(closable ? onClose : undefined);
-  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창이 있으면 탭 누름이 막힌다(openWindows)
+  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창은 그대로 남는다(openWindows)
   useOpenWindow(closable ? onClose : undefined);
   // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 창이 떠 있어도 눌린다.
-  // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)은 진행을 막는 창이라 앱과 스테이지 모두 blocker 층이다.
-  // 이 층은 탭 줄과 시트까지 덮고 떠 있는 동안 탭 누름도 막힌다. 스테이지는 자체 쌓임 맥락이라 그 안에서는 탭 줄을 덮을 수 없으므로,
-  // 스테이지 창도 닫을 수 없는 동안에는 화면 전체(fixed)를 덮는 바탕을 게임 화면의 창 층 자리에 그린다.
-  const blocking = !closable;
-  const backdrop = blocking
-    ? cx('fixed inset-0 z-(--z-blocker)', layer === 'app' ? 'bg-[rgba(4,9,18,0.7)]' : 'bg-[rgba(4,9,18,0.6)]')
-    : layer === 'app'
-      ? 'fixed inset-0 bg-[rgba(4,9,18,0.7)] z-(--z-app-modal)'
-      : 'absolute inset-0 bg-[rgba(4,9,18,0.6)] z-(--z-stage-modal)';
+  // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)도 창 층이다. 같은 층 안에서 다른 창보다 위(blocker)이며 탭 줄 아래다.
+  // 스테이지 창은 닫을 수 없는 동안에도 스테이지 안에 그린다.
+  const backdrop = layer === 'app'
+    ? cx('fixed inset-0 bg-[rgba(4,9,18,0.7)]', closable ? 'z-(--z-app-modal)' : 'z-(--z-blocker)')
+    : cx('absolute inset-0 bg-[rgba(4,9,18,0.6)]', closable ? 'z-(--z-stage-modal)' : 'z-(--z-blocker)');
   const box = layer === 'app'
     ? cx('relative flex flex-col bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
@@ -79,7 +75,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     : cx('max-h-[calc(100%-32px)] flex flex-col',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && HEIGHT_CLASS[height]);
-  // 앱 모달과 닫을 수 없는 창은 게임 화면의 창 층 자리에 그린다(호출한 곳이 게임 화면 바깥이어도 같은 쌓임 맥락에서 탭 줄과 겹친다)
+  // 앱 모달은 게임 화면의 창 층 자리에 그린다(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)
   const windowHost = useWindowHost();
   const modal = (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
@@ -101,5 +97,5 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
       </div>
     </div>
   );
-  return (layer === 'app' || blocking) && windowHost ? createPortal(modal, windowHost) : modal;
+  return layer === 'app' && windowHost ? createPortal(modal, windowHost) : modal;
 }

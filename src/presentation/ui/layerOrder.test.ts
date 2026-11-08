@@ -1,6 +1,6 @@
 /// <reference types="node" />
 // 화면 층 가드 - 층 순서를 z 토큰 값과 각 층의 구성 요소 사용에 묶는다.
-// 아래부터 스테이지 위 HUD, 채팅과 헤더, 창, 탭 줄과 시트, 닫을 수 없는 창, 전환 덮개, 툴팁이다. 레이아웃 높이나 겹침은 jsdom이 계산하지 못하므로
+// 아래부터 스테이지 위 HUD, 채팅과 헤더, 창(닫을 수 없는 창이 창 층 맨 위), 탭 메뉴(탭 줄과 시트), 화면 전환 덮개, 툴팁이다. 레이아웃 높이나 겹침은 jsdom이 계산하지 못하므로
 // 여기서는 토큰 값의 순서, 숫자 직접 사용 금지, 층별 요소가 자기 토큰을 쓰는지, 카드 메뉴가 채팅 높이를 쓰지 않는지만 본다.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -23,8 +23,8 @@ const src = (path: string) => {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 탭 줄과 시트, 닫을 수 없는 창, 전환 덮개, 툴팁 순서다', () => {
-    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'stage-modal', 'app-modal', 'tabs', 'blocker', 'veil', 'tooltip', 'devtools'];
+  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 전환 덮개, 툴팁 순서다', () => {
+    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'veil', 'tooltip', 'devtools'];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
     expect(values).toEqual([...values].sort((a, b) => a - b));
@@ -38,11 +38,11 @@ describe('화면 층 - z 토큰 순서', () => {
     expect(tokens['tabs']).toBeGreaterThan(tokens['app-modal']);
   });
 
-  it('닫을 수 없는 창은 탭 줄과 시트보다 위이고 그 위에는 전환 덮개와 툴팁만 있다', () => {
-    expect(tokens['blocker']).toBeGreaterThan(tokens['tabs']);
+  it('닫을 수 없는 창은 다른 창보다 위이고 탭 줄보다 아래다 - 탭 줄 위에는 전환 덮개와 툴팁만 있다', () => {
     expect(tokens['blocker']).toBeGreaterThan(tokens['stage-modal']);
     expect(tokens['blocker']).toBeGreaterThan(tokens['app-modal']);
-    expect(tokens['veil']).toBeGreaterThan(tokens['blocker']);
+    expect(tokens['blocker']).toBeLessThan(tokens['tabs']);
+    expect(tokens['veil']).toBeGreaterThan(tokens['tabs']);
     expect(tokens['tooltip']).toBeGreaterThan(tokens['veil']);
   });
 
