@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { awayReportDue, awayTips, awayWindow, summarizeAway } from './away';
 import type { AwayEvent } from './away';
-import { BOATS, FISH, RARITY, newState } from './logic';
+import { BOATS, FISH, MAX_BOAT, RARITY, newState } from './logic';
 
 const T0 = '2026-11-05T00:00:00.000Z';
 const at = (min: number) => new Date(Date.parse(T0) + min * 60_000).toISOString();
@@ -116,7 +116,7 @@ describe('awayTips', () => {
 
   it('가방이 찼으면 찬 시각을 담아 판매를 권한다', () => {
     const s = { ...summarizeAway([], W), bagFullAfterMs: 92 * 60_000 };
-    expect(awayTips(s, state(0, 7))).toEqual([{ kind: 'sell', fullAfterMs: 92 * 60_000 }]);
+    expect(awayTips(s, state(0, MAX_BOAT))).toEqual([{ kind: 'sell', fullAfterMs: 92 * 60_000 }]);
   });
 
   it('다음 배의 명성 조건까지 남은 양과 지금 속도의 예상 시간을 준다', () => {

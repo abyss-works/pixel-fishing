@@ -42,7 +42,8 @@ describe('데이터 무결성', () => {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
     expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(MAX_BOAT).toBe(8);
   });
 
   it('R12: 등급 명성', () => {
@@ -260,7 +261,10 @@ describe('R15: 강화/구매 비용', () => {
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
-    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000]);
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
+  });
+  it('대양 트롤선(8단계): 가격 320,000 · 명성 200,000 · 속도 190 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 320000, fameReq: 200000, speed: 190, bagCap: 4000 });
   });
   it('배 가격은 단조 증가', () => {
     for (let i = 1; i < BOATS.length; i++) {
