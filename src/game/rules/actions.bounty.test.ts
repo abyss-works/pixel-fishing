@@ -254,6 +254,7 @@ describe('deliverBounty', () => {
     const sinker = toss('southatlantic-named-jasconius');
     expect(sinker.gold).toBe(bountyById('southatlantic-named-jasconius')!.reward);
     expect(sinker.items).toEqual({ 'mat-scorched-sinker': 1 });
+    expect(sinker.gold).toBe(mirror.gold);
   });
 });
 

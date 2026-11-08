@@ -1013,7 +1013,7 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3 확정분(2차 JSON).
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
   // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
-  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 판매가 ×0.85로 596.5).
+  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 어종 판매가를 ×0.85하고 가격 규칙으로 반올림해 586.5).
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
@@ -1026,10 +1026,10 @@ describe('인도양 밸런스 확정 (2026-08-27 관리자 시뮬 반영 — EV 
     expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
   });
 
-  it('남인도양 — normal 596.5 / perfect 931.7 / 방치 진입 ×5 169.8', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(596.49, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(931.74, 1);
-    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(169.81, 1);
+  it('남인도양 — normal 586.5 / perfect 915.9 / 방치 진입 ×5 167.3', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(586.49, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(915.87, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(167.29, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
