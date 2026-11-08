@@ -58,7 +58,7 @@ export default function FerryVeil(props: FerryVeilProps) {
   }, []);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-(--z-app-modal) bg-black"
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-(--z-veil) bg-black"
          style={{ opacity: veil }} />
   );
 }

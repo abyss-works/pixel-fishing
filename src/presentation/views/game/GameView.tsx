@@ -66,7 +66,8 @@ import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
-import { useVisibleBox } from '../../layouts/visibleBox';
+import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
+import { setWindowHost } from '../../ui/windowLayer';
 
 interface GameViewProps {
   game: GameState;
@@ -104,7 +105,7 @@ export default function GameView(props: GameViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>(DEFAULT_TAB);
   const mobile = useMobileLayout();
   useBlockZoom();
-  /** 화면 키보드를 피한 영역 — 키보드가 올라오면 화면 틀이 그 위로 줄어 채팅 영역이 키보드 위에 붙는다 */
+  /** 화면 키보드 높이 — 키보드는 게임 영역 아래를 덮을 뿐 스테이지 크기를 바꾸지 않는다. 채팅만 키보드 위에 붙는다(--keyboard-h) */
   const visible = useVisibleBox();
   /** 모바일 시트 — 처음에는 닫혀 있다 */
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -259,8 +260,8 @@ export default function GameView(props: GameViewProps) {
   const onOpenMap = () => setWorldMapOpen(true);
 
   return (
-    <div className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
-         style={visible.keyboard ? { top: visible.top, bottom: visible.bottom } : undefined}
+    <div ref={setWindowHost} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
+         style={keyboardStyle(visible)}
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (

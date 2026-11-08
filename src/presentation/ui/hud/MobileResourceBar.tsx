@@ -42,7 +42,7 @@ export default function MobileResourceBar({ game, bagBonus = 0, onOpen }: { game
   ];
   return (
     <MobileHeaderFrame className="flex items-center px-1.5 py-1
-                            mobile:col-start-1 mobile:row-start-1 mobile:ml-1 mobile:my-1 mobile:min-w-0">
+                            mobile:relative mobile:z-(--z-chrome) mobile:col-start-1 mobile:row-start-1 mobile:ml-1 mobile:my-1 mobile:min-w-0">
       {/* 자원 바 클릭 = 스탯창. .hud 클래스는 스타일이 아니라 querySelector 테스트 훅이므로 유지 */}
       <button type="button" aria-label={`스탯창 열기, ${text.summary}`} onClick={onOpen}
               className="hud flex w-full flex-col gap-1 cursor-pointer transition hover:brightness-125">

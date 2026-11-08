@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from './cx';
 import { useKeyBlocker } from './hotkeys';
+import { useOpenWindow } from './openWindows';
 import PageTitle from './PageTitle';
 import CloseButton from './CloseButton';
 import { SCROLL_Y } from './scrollArea';
+import { useWindowHost } from './windowLayer';
 
 /** 스테이지 창의 고정 높이(px). 탭 창처럼 높이가 변하지 않는 창이 고른다. 스테이지 높이에서 위아래 16px을 뺀 값을 넘지 않는다 */
 export type ModalHeight = 400 | 480 | 520 | 560;
@@ -57,9 +60,13 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
   useKeyBlocker(closable ? onClose : undefined);
+  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창이 있으면 탭 누름이 막힌다(openWindows)
+  useOpenWindow(closable ? onClose : undefined);
+  // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 창이 떠 있어도 눌린다.
+  // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)은 진행을 막는 창이라 앱과 스테이지 모두 blocker 층이고, 떠 있는 동안 탭 누름도 막힌다.
   const backdrop = layer === 'app'
-    ? 'fixed inset-0 z-(--z-app-modal) bg-[rgba(4,9,18,0.7)]'
-    : 'absolute inset-0 z-(--z-stage-modal) bg-[rgba(4,9,18,0.6)]';
+    ? cx('fixed inset-0 bg-[rgba(4,9,18,0.7)]', closable ? 'z-(--z-app-modal)' : 'z-(--z-blocker)')
+    : cx('absolute inset-0 bg-[rgba(4,9,18,0.6)]', closable ? 'z-(--z-stage-modal)' : 'z-(--z-blocker)');
   const box = layer === 'app'
     ? cx('relative flex flex-col bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
@@ -67,7 +74,9 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     : cx('max-h-[calc(100%-32px)] flex flex-col',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && HEIGHT_CLASS[height]);
-  return (
+  // 앱 모달은 게임 화면의 창 층 자리에 그린다(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)
+  const windowHost = useWindowHost();
+  const modal = (
     <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
          onClick={closable ? onClose : undefined}>
       <div className={cx(box, className)} onClick={e => e.stopPropagation()}
@@ -87,4 +96,5 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
       </div>
     </div>
   );
+  return layer === 'app' && windowHost ? createPortal(modal, windowHost) : modal;
 }
