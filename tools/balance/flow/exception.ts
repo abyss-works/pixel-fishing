@@ -7,18 +7,13 @@ import type { BountyZone } from '../../../src/game/content/bounties';
 import { namedEncounterCandidates, namedEncounterShare } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { powerOfLevel } from '../../../src/game/rules/stats';
-import { axisAvailable, entryLevel, rates, rodSpec, SPEC_MARGIN } from '../model';
-import type { Axis } from '../model';
+import { entryLevel, rates, SPEC_MARGIN } from '../model';
 import { accessibleSpots, expectedEncounterCatches } from './bounty';
-
-export type FlowAxis = 'idle' | 'manual';
+import { axisOf } from './progress';
+import type { FlowAxis } from './progress';
 
 export const OFFSETS = [-4, -3, -2, -1, 0, 1, 2, 3, 4] as const;
 const MAX_SHORT = 4;
-
-/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다 */
-const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
-  flow === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
 
 export interface IncomeCell {
   level: number;

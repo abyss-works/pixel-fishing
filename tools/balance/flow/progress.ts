@@ -45,10 +45,16 @@ export function sleepFishSeconds(boat: number, catchesPerHour: number, sleepSec:
   return Math.min(sleepSec, capOfBoat(boat) / catchesPerHour * 3600);
 }
 
+/** 깨어 있는 동안의 낚시 방식 — 방치 또는 수동 */
+export type FlowAxis = 'idle' | 'manual';
+
+/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다 */
+export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
+  flow === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
+
 export interface SimOptions {
   type: PlayType;
-  /** 깨어 있는 동안의 낚시 방식 — 방치 또는 수동(GOOD) */
-  axis: 'idle' | 'manual';
+  axis: FlowAxis;
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   maxDays: number;
@@ -89,8 +95,7 @@ export function simulate(opts: SimOptions): SimResult {
   const cache = new Map<string, Rates>();
   const normalShare = new Map<SpotId, number>();
 
-  const axisAt = (spot: SpotId, lv: number): Axis =>
-    opts.axis === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, lv), 'good') ? 'good' : 'normal';
+  const axisAt = (spot: SpotId, lv: number): Axis => axisOf(opts.axis, spot, lv);
   const rateAt = (spot: SpotId, axis: Axis = axisAt(spot, level)): Rates => {
     const key = `${spot}:${level}:${axis}`;
     let r = cache.get(key);
