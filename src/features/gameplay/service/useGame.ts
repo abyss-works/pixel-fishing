@@ -4,7 +4,7 @@ import { api, when } from '../../../platform/api';
 import type { GameGateway, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
-import { newState } from '../../../game/rules/logic';
+import { newState, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import type { BlockingModal } from '../../../core/errors';
@@ -27,6 +27,24 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
   on: '클라우드 저장 켜짐',
   error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
+
+export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
+
+/**
+ * 행동 결과에 따라 화면을 되돌려야 하는 호출부용 — 성공이 아니면 ok false와 알릴 한 줄을 돌려준다.
+ * 규칙 거부는 거부 문구를, 인프라 실패는 오류 정책(보고와 구독자 통지)을 거친 뒤 모달이 없는 종류의 정책 문구를 준다.
+ * 정책이 전체 모달로 알리는 종류면 notice는 null이다. 던지지 않는다.
+ */
+export async function settleAction(run: () => MaybePromise<DispatchResult>): Promise<ActionSettled> {
+  try {
+    const result = await run();
+    if (result.status === 'ok') return { ok: true };
+    return { ok: false, notice: REJECT_TEXT[result.error] };
+  } catch (e) {
+    const policy = POLICY[fail(e).kind];
+    return { ok: false, notice: policy.modal ? null : policy.message };
+  }
+}
 
 export function useGame({ setToast }: { setToast: (m: string) => void }) {
   const [init] = useState(() => api.storage.loadLegacy());
@@ -61,7 +79,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }), []);
 
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
-      인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음) */
+      인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).
+      결과에 따라 화면을 되돌려야 하는 호출부만 settleAction으로 감싸 쓴다 */
   const client = useQueryClient();
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
     when(gameGatewayRef.current.dispatch(withForcedEncounter(action)), r => {
