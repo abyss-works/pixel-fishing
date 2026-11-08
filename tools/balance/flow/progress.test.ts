@@ -75,6 +75,26 @@ describe('깨어 있는 동안 가방 한도', () => {
   });
 });
 
+describe('기본 상수 회귀', () => {
+  const days = (id: string, bounty = false) =>
+    simulate({ type: type(id), axis: 'idle', bounty, maxDays: 365 }).arrivals.map(a => a.day);
+
+  it('연속 방치로 마지막 해역까지 약 90시간 걸린다', () => {
+    const hours = last(simulate({ type: ALWAYS_ON, axis: 'idle', bounty: false, maxDays: 365 }).arrivals).hours;
+    expect(hours).toBeGreaterThan(89);
+    expect(hours).toBeLessThan(92);
+  });
+
+  it('의뢰 없이 4시간(75%)과 2시간 유형의 해역별 도착 일차가 고정돼 있다', () => {
+    expect(days('h4-75')).toEqual([1, 1, 1, 1, 1, 1, 1, 3, 5, 9, 10, 19, 31]);
+    expect(days('h2')).toEqual([1, 1, 1, 1, 1, 1, 1, 4, 7, 13, 15, 28, 46]);
+  });
+
+  it('의뢰를 수행하면 4시간(75%) 유형이 마지막 해역에 15일째 닿는다', () => {
+    expect(last(days('h4-75', true))).toBe(15);
+  });
+});
+
 describe('레벨별 보유 라이선스', () => {
   const lastSpot = SPOTS[SPOTS.length - 1].id;
   const l0 = entryLevel(lastSpot);
