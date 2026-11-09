@@ -72,9 +72,16 @@ function go(delta: 1 | -1) {
   update({ ...session, index });
 }
 
+const currentNews = () => PATCH_NOTES.find(n => n.version === APP_VERSION) ?? null;
+
+/** 현재 버전의 패치노트 항목이 있는지 — 없으면(내부 변경만 있는 버전) 다시 볼 소식도 없다 */
+export function hasCurrentNews(): boolean {
+  return currentNews() !== null;
+}
+
 /** 설정 탭의 "이번 소식 다시 보기" — 본 기록과 무관하게 현재 버전 소식만 연다 */
 export function reopenWhatsNew(): boolean {
-  const news = PATCH_NOTES.find(n => n.version === APP_VERSION) ?? null;
+  const news = currentNews();
   if (!news) return false;
   const dismiss = getAnnouncements().dismissedVersion === APP_VERSION;
   update({ ...session, steps: ['news'], index: 0, news, prompts: [], dismiss });
