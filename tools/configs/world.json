@@ -55,18 +55,14 @@
   ],
 
   "anchors": {
-    "harbor":        { "lon": 129.18, "lat": 35.02, "dx": -18, "dy": -14, "terrain": "land" },
-    "dock":          { "lon": 129.16, "lat": 34.2,  "terrain": "water" },
-    "spawn":         { "lon": 131.5,  "lat": 31.5,  "terrain": "water" },
+    "harbor":        { "lon": 128.469, "lat": 35.034, "facing": "south" },
     "school_sea_1":  { "lon": 133.5, "lat": 31.5, "terrain": "water" },
     "school_sea_2":  { "lon": 136.5, "lat": 27,   "terrain": "water" },
     "school_sea_3":  { "lon": 152.5, "lat": 20.5, "terrain": "water" },
     "school_deep_1": { "lon": 144.8, "lat": 21.8, "terrain": "water" },
     "school_deep_2": { "lon": 146.4, "lat": 20.6, "terrain": "water" },
 
-    "manila":        { "lon": 120.9,  "lat": 16.6,  "terrain": "land" },
-    "m_dock":        { "lon": 118.95, "lat": 15.5,  "terrain": "water" },
-    "m_spawn":       { "lon": 117.8,  "lat": 14.2,  "terrain": "water" },
+    "manila":        { "lon": 120.5,   "lat": 16.79,  "facing": "west" },
     "school_dh_1":   { "lon": 111.5,  "lat": 17.6,  "terrain": "water" },
     "school_dh_2":   { "lon": 112.1,  "lat": 16.6,  "terrain": "water" },
     "school_cw_1":   { "lon": 119.8,  "lat": 12.4,  "terrain": "water" },
@@ -74,24 +70,18 @@
     "school_br_1":   { "lon": 145.0,  "lat": -12.4, "terrain": "water" },
     "school_br_2":   { "lon": 148.6,  "lat": -19.0, "terrain": "water" },
 
-    "colombo":    { "lon": 79.95, "lat": 7.4, "dx": 20, "dy": 12, "terrain": "land" },
-    "c_dock":     { "lon": 78.6,  "lat": 6.9,   "terrain": "water" },
-    "c_spawn":    { "lon": 77.2,  "lat": 5.4,   "terrain": "water" },
+    "colombo":       { "lon": 80.0,    "lat": 6.508,  "facing": "west" },
     "school_i_1": { "lon": 62.0,  "lat": 12.0,  "terrain": "water" },
     "school_i_2": { "lon": 67.0,  "lat": 6.5,   "terrain": "water" },
     "school_s_1": { "lon": 62.5,  "lat": -26.0, "terrain": "water" },
     "school_s_2": { "lon": 76.5,  "lat": -28.8, "terrain": "water" },
 
-    "toamasina":  { "lon": 49.4,  "lat": -18.1, "dx": -22, "dy": 6, "terrain": "land" },
-    "t_dock":     { "lon": 49.75, "lat": -18.2, "terrain": "water" },
-    "t_spawn":    { "lon": 50.3,  "lat": -19.4, "terrain": "water" },
+    "toamasina":     { "lon": 48.75,   "lat": -19.918, "facing": "east" },
     "school_mz_1": { "lon": 40.8, "lat": -19.5, "terrain": "water" },
     "school_mz_2": { "lon": 38.8, "lat": -22.5, "terrain": "water" },
     "school_cd_1": { "lon": 42.6, "lat": -13.3, "terrain": "water" },
     "school_cd_2": { "lon": 43.9, "lat": -14.2, "terrain": "water" },
 
-    "walvisbay":  { "lon": 14.5,  "lat": -22.95, "dx": 0, "dy": 0, "terrain": "land" },
-    "w_dock":     { "lon": 13.0,  "lat": -22.95, "terrain": "water" },
-    "w_spawn":    { "lon": 12.0,  "lat": -23.2, "terrain": "water" }
+    "walvisbay":     { "lon": 14.5,    "lat": -23.586, "facing": "west" }
   }
 }

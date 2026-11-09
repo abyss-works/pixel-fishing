@@ -1,6 +1,6 @@
 // 거점: 부산항 (고향 항구 — 병합 바다 태평양). 가구 배열의 순서가 거점 메뉴의 순서다.
 import type { BasePack } from '../types';
-import { WORLD_SPAWN } from '../regions/world';
+import { HARBORS } from '../regions/world';
 
 export const HARBOR_BASE: BasePack = {
   id: 'harbor',
@@ -8,7 +8,7 @@ export const HARBOR_BASE: BasePack = {
   region: 'world',
   headline: '부산항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
-  exitAt: { ...WORLD_SPAWN }, // 출항 = 팩 spawn(고향 항구 앞) — 고향 항구는 팩 spawn과 같은 자리
+  exitAt: { ...HARBORS.harbor.departure }, // 고향 항구의 출항 자리 — 팩 spawn과 같은 자리
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔어요.' },
   furniture: [
     { id: 'rank',   x: 36,  y: 58,  w: 40, h: 30, sprite: 'board',

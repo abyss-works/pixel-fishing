@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { compileMap, cellDefAt, cellIndex, indexCenter, mapBounds } from './mask';
 import { gameToLonLat } from './geo';
-import { WORLD, WORLD_MAP, WORLD_SPAWN, canMove, zoneOf, generateWorldSchools } from './index';
+import { WORLD, WORLD_MAP, WORLD_SPAWN, HARBORS, canMove, zoneOf, generateWorldSchools } from './index';
 import { ANCHORS } from './regions/generated/world.mask';
 import type { MapCellDef } from './types';
 
@@ -81,10 +81,9 @@ describe('대양 좌표계', () => {
     expect(gameToLonLat(x, y).lat - gameToLonLat(x, y + 31.9).lat).toBeCloseTo(1, 9);
   });
 
-  it('출발점(고향 항구 앞바다)은 131.5E 31.5N 자리의 게임 좌표다', () => {
-    const { lon, lat } = gameToLonLat(WORLD_SPAWN.x, WORLD_SPAWN.y);
-    expect(Math.abs(lon - 131.5)).toBeLessThan(1 / 32);
-    expect(Math.abs(lat - 31.5)).toBeLessThan(1 / 31.9);
+  it('출발점은 고향 항구의 출항 자리다', () => {
+    expect(WORLD_SPAWN).toEqual(HARBORS.harbor.departure);
+    expect(WORLD.spawn).toEqual(WORLD_SPAWN);
   });
 
   it('창 안의 바다는 이동할 수 있다', () => {
@@ -140,30 +139,11 @@ describe('대양 좌표계', () => {
 
 // 창을 서쪽으로 넓혀도(서단 35E에서 15W) 기존 지점의 게임 좌표와 칸 인덱스는 바뀌지 않는다
 describe('창 확장 뒤 좌표 불변', () => {
-  const before: Record<string, { x: number; y: number }> = {
-    harbor: { x: 9876, y: 1581 }, dock: { x: 9893, y: 1622 }, spawn: { x: 9968, y: 1708 },
-    manila: { x: 9629, y: 2183 }, m_dock: { x: 9566, y: 2218 }, m_spawn: { x: 9530, y: 2260 },
-    colombo: { x: 8338, y: 2489 }, c_dock: { x: 8275, y: 2492 }, c_spawn: { x: 8230, y: 2540 },
-    toamasina: { x: 7319, y: 3296 }, t_dock: { x: 7352, y: 3293 }, t_spawn: { x: 7370, y: 3331 },
-  };
-
-  it.each(Object.entries(before))('앵커 %s의 게임 좌표가 같다', (name, p) => {
-    expect(ANCHORS[name]).toEqual(p);
-  });
-
-  it('출발점의 칸 인덱스가 같다 (열 1246, 행 155)', () => {
-    expect(WORLD_SPAWN).toEqual(before.spawn);
-    const c = Math.floor(WORLD_SPAWN.x / 8) - WORLD_MAP.colOffset;
-    const r = Math.floor(WORLD_SPAWN.y / 11) - WORLD_MAP.rowOffset;
-    expect(cellIndex(WORLD_MAP, c, r)).toBe(155 * 1440 + 1246);
-  });
-
   it('남대서양 앵커도 같은 경위도 투영식을 따른다', () => {
     const px = (lon: number, lat: number) => ({
       x: Math.round((lon + 180) * 32), y: Math.round((ORIGIN_LAT - lat) * 31.9),
     });
-    expect(ANCHORS.walvisbay).toEqual(px(14.5, -22.95));
-    expect(ANCHORS.w_dock).toEqual(px(13, -22.95));
-    expect(ANCHORS.w_spawn).toEqual(px(12, -23.2));
+    expect(ANCHORS.walvisbay).toMatchObject(px(14.5, -23.586));
+    expect(ANCHORS.harbor).toMatchObject(px(128.469, 35.034));
   });
 });

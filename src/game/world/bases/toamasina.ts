@@ -1,6 +1,6 @@
 // 거점: 투아마시나항 (병합 바다 마다가스카르) — 항구 공통 배치에 수배판을 둔다. 미끼 상점은 없다(콜롬보 단일 판매).
 import type { BasePack } from '../types';
-import { TOAMASINA_SPAWN } from '../regions/world';
+import { HARBORS } from '../regions/world';
 
 export const TOAMASINA_BASE: BasePack = {
   id: 'toamasina',
@@ -9,7 +9,7 @@ export const TOAMASINA_BASE: BasePack = {
   headline: '투아마시나항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 해협의 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
-  exitAt: { ...TOAMASINA_SPAWN },
+  exitAt: { ...HARBORS.toamasina.departure },
   travel: { to: 'village', msg: '여객선을 타고 마을로 돌아왔어요.' },
   furniture: [
     { id: 'rank',   x: 36,  y: 58,  w: 40, h: 30, sprite: 'board',
