@@ -16,6 +16,8 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "balance": "tsx tools/balance-report.ts",
     "balance:flow": "tsx tools/balance-flow.ts",
+    "load:accounts": "tsx tools/load/accounts-cli.ts",
+    "load:run": "tsx tools/load/run.ts",
     "mail:send": "tsx tools/mail-send.ts"
   },
   "dependencies": {

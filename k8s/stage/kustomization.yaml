@@ -39,6 +39,21 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
         value: https://pixel-fishing-preview.abyssworks.dev
+  # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
+  - target:
+      kind: Deployment
+      name: pixel-fishing
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 400m
+  - target:
+      kind: Cluster
+      name: pixel-fishing-db
+    patch: |-
+      - op: add
+        path: /spec/resources/limits/cpu
+        value: 400m
   - target:
       kind: CronJob
     patch: |-
