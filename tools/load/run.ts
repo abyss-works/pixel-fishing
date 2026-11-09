@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { assertSecretPath, parseAccountsFile, repoRootOf, usableAccounts } from './accounts';
+import { assertSecretPath, parseAccountsFile, usableAccounts } from './accounts';
 import { MoveClock } from './clock';
 import { guardedFetch } from './http';
 import { parseOptions } from './options';
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2));
   mkdirSync(opts.out, { recursive: true });
   // 단계 중 가장 큰 인원만큼 준비된 계정이 있어야 시작한다. 실행 중에는 로그인 요청을 보내지 않는다
-  assertSecretPath(opts.accounts, repoRootOf());
+  assertSecretPath(opts.accounts);
   const accounts = usableAccounts(parseAccountsFile(readFileSync(opts.accounts, 'utf8')), opts.target, Math.max(...opts.steps));
 
   let stats = new StepStats();
@@ -147,6 +147,7 @@ async function main(): Promise<void> {
       stopped ??= await wait(60_000, () => pending === 0);
       stats.markHold();
       stopped ??= await wait(opts.stepSeconds * 1000);
+      for (const p of players) p.settleDowntime();
       const connected = players.filter(p => p.online).length;
       run.steps.push(toStepResult(stats, { players: step, connected, endReason: stopped ?? 'completed' }));
       write();

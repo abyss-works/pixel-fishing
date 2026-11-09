@@ -18,6 +18,7 @@ import { nextPositionMessage } from '../../src/features/live/model/live';
 import type { MyPosition, SentPosition } from '../../src/features/live/model/live';
 import type { SpotId } from '../../src/game/content/spots';
 import type { MoveClock } from './clock';
+import { Downtime } from './downtime';
 import { guardedFetch } from './http';
 import { nextRetryMs, RETRY_MIN_MS } from './plan';
 import type { StepStats } from './recorder';
@@ -64,6 +65,7 @@ export class Player {
   private last: SentPosition | null = null;
   private resultAt: number | null = null;
   private chatOff = false;
+  private readonly down = new Downtime();
   private timers: ReturnType<typeof setInterval>[] = [];
 
   private readonly world: World;
@@ -76,6 +78,11 @@ export class Player {
   }
 
   get online(): boolean { return this.connected; }
+
+  /** 끊겨 있는 동안 쌓인 시간을 지금 단계에 더한다. 단계가 끝날 때 부른다 */
+  settleDowntime(): void {
+    this.world.stats().downMs += this.down.take(Date.now());
+  }
 
   /** 접속해서 hello까지 받으면 낚시를 시작하고 true를 돌려준다. 실패하면 false다 */
   async join(): Promise<boolean> {
@@ -157,18 +164,18 @@ export class Player {
   private async keepChannel(firstClosed: Promise<number>): Promise<void> {
     let code = await firstClosed;
     for (;;) {
-      const downSince = Date.now();
+      this.down.begin(Date.now());
       let retryMs = RETRY_MIN_MS;
       for (;;) {
-        if (code === LIVE_CLOSE_OUTDATED) { this.world.fatal('version-mismatch'); return; }
-        if (code === LIVE_CLOSE_REPLACED) return;
+        if (code === LIVE_CLOSE_OUTDATED) { this.settleDowntime(); this.world.fatal('version-mismatch'); return; }
+        if (code === LIVE_CLOSE_REPLACED) { this.settleDowntime(); return; }
         await this.sleep(retryMs);
         retryMs = nextRetryMs(retryMs);
         try {
           const channel = await this.openChannel();
           const stats = this.world.stats();
           stats.reconnects++;
-          stats.downMs += Date.now() - downSince;
+          stats.downMs += this.down.end(Date.now());
           code = await channel.closed;
           break;
         } catch (e) {

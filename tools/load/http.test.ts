@@ -4,8 +4,21 @@ import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import { guardedFetch } from './http';
 
+// 앞에 식별자 문자가 없는 fetch( 호출. globalThis.fetch(와 window.fetch(도 잡는다
+const RAW_FETCH = /(?<![\w$])fetch\(/;
+
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; });
+
+describe('소스 스캔 패턴', () => {
+  it.each(['fetch(url)', 'await globalThis.fetch(url)', 'window.fetch(url)'])('%s를 잡는다', (code) => {
+    expect(code).toMatch(RAW_FETCH);
+  });
+
+  it('guardedFetch(와 주석 속 단어는 잡지 않는다', () => {
+    expect('guardedFetch(url)').not.toMatch(RAW_FETCH);
+  });
+});
 
 describe('guardedFetch', () => {
   it('리다이렉트를 따라가지 않고 실패한다', async () => {
@@ -25,7 +38,7 @@ describe('guardedFetch', () => {
   it('도구 코드는 fetch를 http 모듈을 거쳐서만 부른다', () => {
     const files = readdirSync(import.meta.dirname).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'http.ts');
     for (const f of files) {
-      expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).not.toMatch(/(?<![\w.])fetch\(/);
+      expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).not.toMatch(RAW_FETCH);
     }
   });
 });

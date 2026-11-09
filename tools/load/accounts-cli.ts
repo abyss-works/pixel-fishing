@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import {
-  assertSecretPath, LIMITED_WAIT_MS, parseAccountsFile, repoRootOf, signInAnonymous, SIGNUP_INTERVAL_MS, signupsNeeded,
+  assertSecretPath, estimateSignupSeconds, LIMITED_WAIT_MS, parseAccountsFile, signInAnonymous, signupDelayMs, signupsNeeded,
 } from './accounts';
 import type { AccountsFile } from './accounts';
 import { parseTarget } from './plan';
@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   const count = Number(values.count);
   if (!Number.isInteger(count) || count < 1) throw new Error('--count는 양의 정수여야 합니다');
   const target = parseTarget(values.target);
-  assertSecretPath(values.out, repoRootOf());
+  assertSecretPath(values.out);
 
   const file: AccountsFile = existsSync(values.out)
     ? parseAccountsFile(readFileSync(values.out, 'utf8'))
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   if (file.target !== target) throw new Error(`기존 파일의 대상(${file.target})이 --target과 다릅니다`);
 
   const need = signupsNeeded(file.accounts.length, count);
-  console.info(`계정 ${file.accounts.length}개 보유, ${need}개 더 만듭니다(약 ${Math.ceil((need * SIGNUP_INTERVAL_MS) / 1000)}초).`);
+  console.info(`계정 ${file.accounts.length}개 보유, ${need}개 더 만듭니다(대기만 약 ${Math.ceil(estimateSignupSeconds(need))}초).`);
   for (let made = 0; made < need;) {
     const { status, cookie } = await signInAnonymous(target);
     if (status === 429) { await delay(LIMITED_WAIT_MS); continue; }
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     file.accounts.push({ cookie });
     writeFileSync(values.out, `${JSON.stringify(file)}\n`, { encoding: 'utf8', mode: 0o600 });
     made++;
-    if (made < need) await delay(SIGNUP_INTERVAL_MS);
+    if (made < need) await delay(signupDelayMs(made));
   }
   console.info(`완료: 계정 ${file.accounts.length}개`);
 }
