@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
-import { HELP, parseArgs, renderText, runFlow } from './report';
+import { HELP, parseArgs, renderText, runCli, runFlow } from './report';
 import type { FlowOptions } from './report';
 
 const dirs: string[] = [];
@@ -202,5 +202,55 @@ describe('실행과 출력', () => {
     const price = BOATS[0].price;
     expect(() => runFlow(base({ commands: ['transition'], override: join(tmpdir(), 'no-such-flow-override.json') }))).toThrow(/읽을 수 없습니다/);
     expect(BOATS[0].price).toBe(price);
+  });
+});
+
+describe('gates 명령', () => {
+  it('gates는 명령 생략 때의 기본 실행에 들어가지 않고 이름으로만 고른다', () => {
+    expect(parseArgs([]).commands).not.toContain('gates');
+    expect(parseArgs(['gates', '--override', 'a.json']).commands).toEqual(['gates']);
+    expect(HELP).toContain('gates');
+  });
+
+  it('덮어쓰기 없이 현재 값에서 통과하고, 예외 목록의 전환은 예외로 나오며, 종료 코드는 0이다', () => {
+    const r = runCli(['gates']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(r.stdout).not.toMatch(/\| 위반 \|/);
+    expect(r.stdout).toContain('위반 0');
+    expect(r.stdout).toContain('이동 전 수입');
+    expect(r.stdout).toContain('이동 직후 수입');
+    expect(r.stdout).toMatch(/남인도양.*예외/);
+    expect(r.stdout).toMatch(/통과/);
+  });
+
+  it('반례: 해역 하나의 어종 가격 배율을 크게 낮추면 그 전환이 위반이고 종료 코드는 1이다', () => {
+    const dir = makeDir();
+    const file = join(dir, 'low.json');
+    writeFileSync(file, JSON.stringify({ spots: { mozstrait: { priceMult: 0.1 } } }), 'utf-8');
+    const r = runCli(['gates', '--override', file]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toMatch(/모잠비크.*위반/);
+    expect(runCli(['gates']).exitCode).toBe(0);
+  });
+
+  it('반례: 예외 해역이 알려진 값보다 나빠지면(남인도양, 코모로 심해 배율 0.3) 위반이고 종료 코드 1이다', () => {
+    const file = join(makeDir(), 'worse.json');
+    writeFileSync(file, JSON.stringify({ spots: { southindian: { priceMult: 0.3 }, comorodeep: { priceMult: 0.3 } } }), 'utf-8');
+    const r = runCli(['gates', '--override', file]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toMatch(/남인도양 \| 낮 풀 .*위반/);
+  });
+
+  it('JSON 출력도 위반이 있으면 종료 코드 1이고, 오류는 종료 코드 1과 stderr다', () => {
+    expect(runCli(['gates', '--json']).exitCode).toBe(0);
+    const file = join(makeDir(), 'low-json.json');
+    writeFileSync(file, JSON.stringify({ spots: { mozstrait: { priceMult: 0.1 } } }), 'utf-8');
+    const bad2 = runCli(['gates', '--json', '--override', file]);
+    expect(bad2.exitCode).toBe(1);
+    expect(JSON.parse(bad2.stdout).gates.some((g: { verdict: string }) => g.verdict === '위반')).toBe(true);
+    const bad = runCli(['gates', '--override', join(tmpdir(), 'no-such-flow-override.json')]);
+    expect(bad.exitCode).toBe(1);
+    expect(bad.stderr).toContain('오류:');
   });
 });
