@@ -31,6 +31,17 @@ import { V_SPAWN, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
 
+// 업데이트 소식 창은 현재 버전의 패치노트 항목이 있다고 가정해 검증한다. 실제 노트의 현재 버전 항목에 의존하지 않는다.
+vi.mock('./game/content/patchnotes', async importActual => {
+  const actual = await importActual<typeof import('./game/content/patchnotes')>();
+  const { APP_VERSION: version } = await import('./version');
+  const current = {
+    version, date: '2026-01-01', summary: '테스트 요약',
+    notes: [{ tag: '기능' as const, text: '테스트용 소식 항목이에요.' }],
+  };
+  return { ...actual, PATCH_NOTES: [current, ...actual.PATCH_NOTES.filter(n => n.version !== version)] };
+});
+
 const SAVE_KEY = 'pixel-fishing-save';
 
 // 튜토리얼 창도 접속 시 떠서 키를 막는다 — 튜토리얼 자체를 다루는 케이스 밖에서는 모두 본 것으로 시작한다

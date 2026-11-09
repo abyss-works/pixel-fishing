@@ -56,6 +56,10 @@ describe('소식 창 단계 계획', () => {
     expect(planWhatsNew({ news: null, prompts: [], fresh: false })).toEqual([]);
   });
 
+  it('현재 버전 소식이 없고 새 질문만 남으면 설정 단계만 보여준다', () => {
+    expect(planWhatsNew({ news: null, prompts: SETTING_PROMPTS, fresh: false })).toEqual(['settings']);
+  });
+
   it('처음 시작한 플레이어에게는 열지 않는다 — 기본 설정으로 시작한다', () => {
     expect(planWhatsNew({ news: note('0.10.0'), prompts, fresh: true })).toEqual([]);
   });
