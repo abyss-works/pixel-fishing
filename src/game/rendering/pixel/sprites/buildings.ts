@@ -28,6 +28,9 @@ export const BUILDING_SPRITES: Record<BuildingSpriteId, BuildingSprite> = {
       P(0, 6, 22, 6, '#b71c1c');
       P(26, 2, 3, 22, '#546e7a');
       P(26, 2, 10, 2, '#546e7a');
+      // 부두 받침 — 동·서향 부두는 오른쪽 가장자리 가운데, 남향 부두는 아래 가장자리 가운데에 붙는다
+      P(29, 10, 7, 8, '#8d6e63');
+      P(14, 24, 8, 4, '#8d6e63');
     },
   },
 };
