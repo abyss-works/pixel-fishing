@@ -1641,12 +1641,12 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION, answered: ['fish-art'] });
   });
 
-  it('설정 탭에서 이번 소식을 다시 볼 수 있다', () => {
+  it('설정 탭에서 최근 소식을 다시 볼 수 있다', () => {
     seed({ fame: 120 });
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('패치노트'));
-    fireEvent.click(screen.getByRole('button', { name: '이번 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
     const check = screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' });

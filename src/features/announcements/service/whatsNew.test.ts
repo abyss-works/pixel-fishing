@@ -1,11 +1,12 @@
 // 현재 버전의 패치노트 항목이 없는 릴리즈(내부 변경만 있는 버전)에서는 업데이트 소식 단계가 열리지 않는다.
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { markPromptsAnswered, resetAnnouncements } from '../../../platform/api/announcements';
+import { getAnnouncements, markPromptsAnswered, resetAnnouncements, setDismissedVersion } from '../../../platform/api/announcements';
 import { APP_VERSION } from '../../../version';
 import { SETTING_PROMPTS } from '../model/whatsNew';
-import { hasCurrentNews, reopenWhatsNew, resetWhatsNewSession, useWhatsNew } from './whatsNew';
+import { reopenWhatsNew, resetWhatsNewSession, useWhatsNew } from './whatsNew';
 
+const note = (version: string) => ({ version, date: '2026-01-01', summary: '요약', notes: [] as [] });
 const patchNotes = vi.hoisted(() => [] as { version: string; date: string; summary: string; notes: [] }[]);
 vi.mock('../../../game/content/patchnotes', () => ({ PATCH_NOTES: patchNotes }));
 
@@ -33,7 +34,7 @@ describe('현재 버전 항목이 없는 릴리즈의 업데이트 소식', () =
     expect(result.current.news).toBeNull();
   });
 
-  it('이번 소식 다시 보기는 열 항목이 없어 열지 않는다', () => {
+  it('다시 보기는 열 항목이 하나도 없으면 열지 않는다', () => {
     const { result } = renderHook(() => useWhatsNew(veteran, false));
     let opened = true;
     act(() => { opened = reopenWhatsNew(); });
@@ -41,18 +42,50 @@ describe('현재 버전 항목이 없는 릴리즈의 업데이트 소식', () =
     expect(result.current.steps).toEqual([]);
     expect(result.current.open).toBe(false);
   });
+});
 
-  it('현재 버전 항목이 없으면 이번 소식이 없다고 판정한다', () => {
-    expect(hasCurrentNews()).toBe(false);
+describe('최근 소식 다시 보기', () => {
+  beforeEach(() => {
+    patchNotes.length = 0;
+    localStorage.clear();
+    resetAnnouncements();
+    resetWhatsNewSession();
+  });
+  afterEach(cleanup);
+
+  it('현재 버전 항목이 없으면 항목이 있는 가장 최근 버전의 소식을 연다', () => {
+    patchNotes.push(note('0.0.2'), note('0.0.1'));
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    let opened = false;
+    act(() => { opened = reopenWhatsNew(); });
+    expect(opened).toBe(true);
+    expect(result.current.steps).toEqual(['news']);
+    expect(result.current.news?.version).toBe('0.0.2');
   });
 
-  it('현재 버전 항목이 있으면 이번 소식이 있다고 판정한다', () => {
-    patchNotes.push({ version: APP_VERSION, date: '2026-01-01', summary: '요약', notes: [] });
-    expect(hasCurrentNews()).toBe(true);
+  it('현재 버전 항목이 있으면 그 소식을 연다', () => {
+    patchNotes.push(note(APP_VERSION), note('0.0.1'));
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.news?.version).toBe(APP_VERSION);
   });
 
-  it('다른 버전 항목만 있으면 이번 소식이 없다고 판정한다', () => {
-    patchNotes.push({ version: '0.0.1', date: '2026-01-01', summary: '요약', notes: [] });
-    expect(hasCurrentNews()).toBe(false);
+  it('다시 보기로 연 소식의 다시 보지 않기는 그 소식의 버전으로 남는다', () => {
+    patchNotes.push(note('0.0.1'));
+    setDismissedVersion(APP_VERSION);
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.dismiss).toBe(false);
+    act(() => { result.current.setDismiss(true); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().dismissedVersion).toBe('0.0.1');
+  });
+
+  it('그 소식을 이미 다시 보지 않기로 했으면 체크된 채로 열린다', () => {
+    patchNotes.push(note('0.0.1'));
+    setDismissedVersion('0.0.1');
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.dismiss).toBe(true);
   });
 });

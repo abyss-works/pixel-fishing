@@ -20,7 +20,7 @@ interface Session {
   index: number;
   news: PatchNote | null;
   prompts: readonly SettingPrompt[];
-  /** "이번 소식 다시 보지 않기" 체크 — 이미 다시 보지 않기로 한 소식을 다시 열면 체크된 채로 시작한다 */
+  /** "다시 보지 않기" 체크 — 이미 다시 보지 않기로 한 소식을 다시 열면 체크된 채로 시작한다 */
   dismiss: boolean;
 }
 
@@ -56,7 +56,7 @@ function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
 /** 창 닫기 — 소식은 체크대로 남기고, 보여준 질문은 답한 것으로 남긴다(고른 값은 이미 적용돼 있다) */
 function close() {
   const shown = session.steps;
-  if (shown.includes('news')) setDismissedVersion(session.dismiss ? APP_VERSION : null);
+  if (shown.includes('news')) setDismissedVersion(session.dismiss && session.news ? session.news.version : null);
   if (shown.includes('settings')) markPromptsAnswered(session.prompts.map(p => p.id));
   update({ ...session, steps: [], index: 0 });
 }
@@ -72,18 +72,15 @@ function go(delta: 1 | -1) {
   update({ ...session, index });
 }
 
-const currentNews = () => PATCH_NOTES.find(n => n.version === APP_VERSION) ?? null;
-
-/** 현재 버전의 패치노트 항목이 있는지 — 없으면(내부 변경만 있는 버전) 다시 볼 소식도 없다 */
-export function hasCurrentNews(): boolean {
-  return currentNews() !== null;
-}
-
-/** 설정 탭의 "이번 소식 다시 보기" — 본 기록과 무관하게 현재 버전 소식만 연다 */
+/**
+ * 패치노트 창의 "최근 소식 다시 보기" — 본 기록과 무관하게 항목이 있는 가장 최근 버전의 소식을 연다.
+ * 노트는 최신 버전이 앞에 놓인다. 항목이 하나도 없으면 열지 않는다.
+ * 다시 보지 않기 기록은 열린 소식의 버전을 기준으로 남아, 현재 버전 항목이 없을 때도 접속 팝업과 어긋나지 않는다.
+ */
 export function reopenWhatsNew(): boolean {
-  const news = currentNews();
+  const news = PATCH_NOTES[0] ?? null;
   if (!news) return false;
-  const dismiss = getAnnouncements().dismissedVersion === APP_VERSION;
+  const dismiss = getAnnouncements().dismissedVersion === news.version;
   update({ ...session, steps: ['news'], index: 0, news, prompts: [], dismiss });
   return true;
 }
