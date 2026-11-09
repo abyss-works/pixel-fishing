@@ -41,7 +41,8 @@ export type TerrainPiece =
   | { kind: 'deck'; rect: Rect; style: DeckStyleId };   // 물 위 통행로(다리/부두)
 
 export type BuildingSpriteId = 'house' | 'harbor';
-export interface Building { rect: Rect; sprite: BuildingSpriteId }
+/** flip = 그림을 좌우로 뒤집어 그린다(회전하지 않는다) */
+export interface Building { rect: Rect; sprite: BuildingSpriteId; flip?: boolean }
 
 // 트리거 — 전환 목적지·안내문·게이트까지 데이터. 새 지역/항로 = 행 추가 (게임 필드 무수정)
 export type Edge = 'top' | 'bottom' | 'left' | 'right';
