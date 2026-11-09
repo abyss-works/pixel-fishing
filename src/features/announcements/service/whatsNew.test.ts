@@ -1,4 +1,5 @@
-// 현재 버전의 패치노트 항목이 없는 릴리즈(내부 변경만 있는 버전)에서는 업데이트 소식 단계가 열리지 않는다.
+// 업데이트 소식 서비스 — 현재 버전의 패치노트 항목이 없는 릴리즈(내부 변경만 있는 버전)에서는 접속 시 소식 단계가 열리지 않고,
+// 최근 소식 다시 보기는 항목이 있는 가장 최근 버전의 소식을 열며 다시 보지 않기 기록은 그 소식의 버전으로 남는다.
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAnnouncements, markPromptsAnswered, resetAnnouncements, setDismissedVersion } from '../../../platform/api/announcements';
@@ -63,6 +64,13 @@ describe('최근 소식 다시 보기', () => {
     expect(result.current.news?.version).toBe('0.0.2');
   });
 
+  it('배열 순서가 섞여 있어도 가장 높은 버전을 열고, 현재 버전보다 높은 항목은 열지 않는다', () => {
+    patchNotes.push(note('0.0.1'), note('99.0.0'), note('0.0.3'), note('0.0.2'));
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.news?.version).toBe('0.0.3');
+  });
+
   it('현재 버전 항목이 있으면 그 소식을 연다', () => {
     patchNotes.push(note(APP_VERSION), note('0.0.1'));
     const { result } = renderHook(() => useWhatsNew(veteran, false));
@@ -85,6 +93,17 @@ describe('최근 소식 다시 보기', () => {
     patchNotes.push(note('0.0.1'));
     setDismissedVersion('0.0.1');
     const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.dismiss).toBe(true);
+  });
+
+  it('체크하고 닫은 소식을 다시 열면 체크된 채로 시작한다', () => {
+    patchNotes.push(note('0.0.1'));
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    act(() => { result.current.setDismiss(true); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().dismissedVersion).toBe('0.0.1');
     act(() => { reopenWhatsNew(); });
     expect(result.current.dismiss).toBe(true);
   });

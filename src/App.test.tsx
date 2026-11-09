@@ -818,7 +818,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '다시 보지 않기', '닉네임', '도움말 마지막 갱신']) {
+      '미끼', 'Esc', '물고기 그래픽', '띄우지 않기', '닉네임', '도움말 마지막 갱신']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말
@@ -1624,7 +1624,7 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     unseen();
     seed({ fame: 120 });
     const { unmount } = render(<App />);
-    fireEvent.click(screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
     fireEvent.click(screen.getByLabelText('닫기'));
     expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
     unmount();
@@ -1649,11 +1649,30 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
-    const check = screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' });
+    const check = screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' });
     expect(check).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(check);
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     expect(stored()).toMatchObject({ dismissedVersion: null });
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+  });
+
+  it('다시 보기로 연 소식의 체크를 해제했다 다시 체크하고 닫으면, 다시 열 때 체크된 채로 시작한다', () => {
+    seed({ fame: 120 });
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(stored()).toMatchObject({ dismissedVersion: null });
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    expect(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' })).toHaveAttribute('aria-checked', 'true');
   });
 });

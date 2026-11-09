@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isFreshPlayer, newsFor, pendingPrompts, planWhatsNew, SETTING_PROMPTS } from './whatsNew';
+import { isFreshPlayer, latestNewsAtOrBelow, newsFor, pendingPrompts, planWhatsNew, SETTING_PROMPTS } from './whatsNew';
 import type { PatchNote } from '../../../game/content/patchnotes';
 import { newState } from '../../../game/rules/logic';
 
@@ -15,6 +15,27 @@ describe('이번 버전 소식', () => {
   it('이 버전을 다시 보지 않기로 했거나 현재 버전 노트가 없으면 없다', () => {
     expect(newsFor(NOTES, '0.10.0', '0.10.0')).toBeNull();
     expect(newsFor(NOTES, '0.11.0', null)).toBeNull();
+  });
+});
+
+describe('가장 최근 소식', () => {
+  it('배열 순서와 무관하게 현재 버전 이하에서 가장 높은 버전이다', () => {
+    const notes = [note('0.9.0'), note('0.10.1'), note('0.10.0'), note('0.2.0')];
+    expect(latestNewsAtOrBelow(notes, '0.10.1')?.version).toBe('0.10.1');
+    expect(latestNewsAtOrBelow(notes, '0.10.5')?.version).toBe('0.10.1');
+  });
+
+  it('숫자로 비교한다 — 0.10.0은 0.9.0보다 높다', () => {
+    expect(latestNewsAtOrBelow([note('0.9.0'), note('0.10.0')], '1.0.0')?.version).toBe('0.10.0');
+  });
+
+  it('현재 버전보다 높은 항목은 고르지 않는다', () => {
+    expect(latestNewsAtOrBelow([note('0.11.0'), note('0.9.0')], '0.10.0')?.version).toBe('0.9.0');
+    expect(latestNewsAtOrBelow([note('0.11.0')], '0.10.0')).toBeNull();
+  });
+
+  it('항목이 없으면 없다', () => {
+    expect(latestNewsAtOrBelow([], '0.10.0')).toBeNull();
   });
 });
 
