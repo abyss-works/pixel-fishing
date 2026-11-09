@@ -21,6 +21,25 @@ describe('toStepResult', () => {
     expect(r.generatorCpu).toEqual({ avg: null, max: null });
   });
 
+  it('처리량은 유지 구간의 액션만 유지 시간으로 나눈다', () => {
+    const s = new StepStats();
+    for (let i = 0; i < 30; i++) s.recordAction('200', 5);
+    s.markHold(s.startedAt + 20_000);
+    for (let i = 0; i < 40; i++) s.recordAction('200', 5);
+    const r = toStepResult(s, { players: 5, connected: 5, endReason: 'completed', now: s.startedAt + 30_000 });
+    expect(r.actions.total).toBe(70);
+    expect(r.actions.perSec).toBe(4);
+  });
+
+  it('재연결 횟수와 끊긴 시간을 담는다', () => {
+    const s = new StepStats();
+    s.reconnects = 2;
+    s.downMs = 3500;
+    const r = toStepResult(s, { players: 1, connected: 1, endReason: 'completed' });
+    expect(r.connect.reconnects).toBe(2);
+    expect(r.connect.downSeconds).toBe(3.5);
+  });
+
   it('초당 처리량은 경과 시간으로 나눈다', () => {
     const s = new StepStats();
     for (let i = 0; i < 50; i++) s.recordAction('200', 5);

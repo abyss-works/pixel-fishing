@@ -31,7 +31,7 @@ export function renderMarkdown(run: RunResult): string {
     `- 끝 사유: ${REASON_TEXT[run.endReason]}`,
     `- 채팅: ${run.chatNote}`, '',
     '지연은 모두 ms이고, p50 / p95 / p99 순서다.', '',
-    '| 단계 | 연결 | 성공률 | 연결 시간 | 액션/s | 액션 시간 | 오류율 | 전달 지연 | 받은 메시지 | probe p50 / p95 | probe 실패 | 발생기 CPU 평균 / 최대 | 끝 사유 |',
+    '| 단계 | 연결 | 성공률 | 연결 시간 | 액션/s(유지 구간) | 액션 시간 | 오류율 | 전달 지연 | 받은 메시지 | probe p50 / p95 | probe 실패 | 발생기 CPU 평균 / 최대 | 끝 사유 |',
     '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
   ];
   for (const s of run.steps) {
@@ -41,7 +41,7 @@ export function renderMarkdown(run: RunResult): string {
   }
   for (const s of run.steps) {
     lines.push('', `## 단계 ${s.players}`, '',
-      `- 유지 시간: ${s.seconds}초, 연결 끊김: ${s.connect.disconnects}`,
+      `- 유지 시간: ${s.seconds}초, 연결 끊김: ${s.connect.disconnects}, 재연결: ${s.connect.reconnects}, 끊긴 시간: ${s.connect.downSeconds.toFixed(1)}초`,
       `- 액션 상태 코드: ${Object.entries(s.actions.status).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}`,
       `- 채팅: 보냄 ${s.chat.sent}, 게스트 거부 ${s.chat.guestRejected}, 전달 지연 ${trio(s.chat.ms)}`);
     if (s.metrics.length > 0) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseOptions } from './options';
 import { PROD_HOST } from './plan';
 
-const base = ['--target', 'https://stage.example.dev', '--out', 'out', '--build-id', 'abc'];
+const base = ['--target', 'https://stage.example.dev', '--out', 'out', '--build-id', 'abc', '--accounts', 'acc.json'];
 
 describe('parseOptions', () => {
   it('기본값을 채운다', () => {
@@ -18,16 +18,20 @@ describe('parseOptions', () => {
   });
 
   it('target은 필수이고 기본값이 없다', () => {
-    expect(() => parseOptions(['--out', 'out', '--build-id', 'abc'])).toThrow(/--target/);
+    expect(() => parseOptions(['--out', 'out', '--build-id', 'abc', '--accounts', 'a'])).toThrow(/--target/);
   });
 
   it('out과 build-id는 필수다', () => {
-    expect(() => parseOptions(['--target', 'https://stage.example.dev', '--build-id', 'abc'])).toThrow(/--out/);
-    expect(() => parseOptions(['--target', 'https://stage.example.dev', '--out', 'out'])).toThrow(/--build-id/);
+    expect(() => parseOptions(['--target', 'https://stage.example.dev', '--build-id', 'abc', '--accounts', 'a'])).toThrow(/--out/);
+    expect(() => parseOptions(['--target', 'https://stage.example.dev', '--out', 'out', '--accounts', 'a'])).toThrow(/--build-id/);
+  });
+
+  it('accounts는 필수다', () => {
+    expect(() => parseOptions(['--target', 'https://stage.example.dev', '--out', 'out', '--build-id', 'abc'])).toThrow(/--accounts/);
   });
 
   it('운영 도메인 target은 거부한다', () => {
-    expect(() => parseOptions(['--target', `https://${PROD_HOST}`, '--out', 'out', '--build-id', 'abc'])).toThrow(/운영/);
+    expect(() => parseOptions(['--target', `https://${PROD_HOST}`, '--out', 'out', '--build-id', 'abc', '--accounts', 'a'])).toThrow(/운영/);
   });
 
   it('probe는 운영 도메인을 허용한다', () => {

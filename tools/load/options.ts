@@ -14,6 +14,8 @@ export interface Options {
   metricsCmd: string | null;
   limits: AbortLimits;
   out: string;
+  /** 미리 만든 익명 세션 파일 */
+  accounts: string;
   buildId: string;
   clientVersion: string;
 }
@@ -37,7 +39,7 @@ export function parseOptions(argv: string[]): Options {
       target: { type: 'string' }, steps: { type: 'string' }, 'step-seconds': { type: 'string' },
       'chat-rate': { type: 'string' }, 'idle-ratio': { type: 'string' }, probe: { type: 'string' },
       'metrics-cmd': { type: 'string' }, 'abort-error-rate': { type: 'string' }, 'abort-probe-ms': { type: 'string' },
-      out: { type: 'string' }, 'build-id': { type: 'string' }, 'client-version': { type: 'string' },
+      out: { type: 'string' }, 'build-id': { type: 'string' }, accounts: { type: 'string' }, 'client-version': { type: 'string' },
     },
     strict: true,
   });
@@ -55,6 +57,7 @@ export function parseOptions(argv: string[]): Options {
       probeMs: number(values['abort-probe-ms'], '--abort-probe-ms', DEFAULT_LIMITS.probeMs, 1),
     },
     out: required(values.out, '--out'),
+    accounts: required(values.accounts, '--accounts'),
     buildId: required(values['build-id'], '--build-id'),
     clientVersion: values['client-version'] ?? APP_VERSION,
   };

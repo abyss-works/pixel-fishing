@@ -1,23 +1,27 @@
 // 부하 실행 진입점 — 단계마다 가상 플레이어를 늘리며 유지하고, 측정값을 모아 결과 파일로 쓴다.
-// 사용: pnpm load:run --target <origin> --build-id <커밋 SHA> --out <폴더> [--steps 10,25,50] [--step-seconds 120] ...
+// 사용: 먼저 pnpm load:accounts로 계정을 준비한 뒤
+//   pnpm load:run --target <origin> --build-id <커밋 SHA> --accounts <세션 파일> --out <폴더> [--steps 10,25,50] [--step-seconds 120] ...
 // 운영 도메인은 부하 대상으로 받지 않는다. 감시용 --probe에만 허용한다.
 import { exec } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { assertSecretPath, parseAccountsFile, repoRootOf, usableAccounts } from './accounts';
 import { MoveClock } from './clock';
+import { guardedFetch } from './http';
 import { parseOptions } from './options';
 import type { Options } from './options';
-import { abortReason } from './plan';
+import { abortReason, exitCodeOf } from './plan';
 import { Player } from './player';
 import { StepStats, toStepResult } from './recorder';
 import type { EndReason } from './recorder';
 import { renderMarkdown } from './report';
 import type { RunResult } from './report';
 
-// 새 계정을 만드는 속도의 상한(초당). 인증 경로의 요청 제한을 넘지 않게 한다
-const SIGNUPS_PER_SEC = 5;
+// 새 플레이어를 접속시키는 속도(초당). 로그인은 미리 만든 세션을 쓰므로 인증 한도와 무관하다.
+// 단계를 올릴 때 접속이 한꺼번에 몰리지 않게 하는 값이다
+const JOINS_PER_SEC = 5;
 const PROBE_EVERY_MS = 5000;
 const PROBE_TIMEOUT_MS = 5000;
 const METRICS_EVERY_MS = 10_000;
@@ -58,6 +62,9 @@ function runShell(cmd: string): Promise<string> {
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2));
   mkdirSync(opts.out, { recursive: true });
+  // 단계 중 가장 큰 인원만큼 준비된 계정이 있어야 시작한다. 실행 중에는 로그인 요청을 보내지 않는다
+  assertSecretPath(opts.accounts, repoRootOf());
+  const accounts = usableAccounts(parseAccountsFile(readFileSync(opts.accounts, 'utf8')), opts.target, Math.max(...opts.steps));
 
   let stats = new StepStats();
   let fatal: EndReason | null = null;
@@ -82,7 +89,7 @@ async function main(): Promise<void> {
   // 부하와 별개의 감시 요청. 5초에 한 번, 가벼운 GET만 보낸다
   const probeTimer = opts.probe ? setInterval(() => {
     const started = performance.now();
-    fetch(`${opts.probe}/api/action`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }).then(
+    guardedFetch(`${opts.probe}/api/action`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }).then(
       (res) => {
         stats.probeMs.push(performance.now() - started);
         if (res.status !== 204) stats.probeFailures++;
@@ -130,14 +137,15 @@ async function main(): Promise<void> {
       const joining: Promise<boolean>[] = [];
       let stopped: EndReason | null = null;
       while (players.length < step && !stopped) {
-        const player = new Player(world);
+        const player = new Player(world, (accounts[players.length] as { cookie: string }).cookie);
         players.push(player);
         joining.push(player.join());
-        stopped = await wait(1000 / SIGNUPS_PER_SEC);
+        stopped = await wait(1000 / JOINS_PER_SEC);
       }
       let pending = joining.length;
       for (const j of joining) void j.then(() => { pending--; });
       stopped ??= await wait(60_000, () => pending === 0);
+      stats.markHold();
       stopped ??= await wait(opts.stepSeconds * 1000);
       const connected = players.filter(p => p.online).length;
       run.steps.push(toStepResult(stats, { players: step, connected, endReason: stopped ?? 'completed' }));
@@ -151,7 +159,7 @@ async function main(): Promise<void> {
   run.endReason = endReason;
   write();
   console.info(`끝 사유: ${endReason}. 결과: ${join(opts.out, 'result.md')}`);
-  process.exit(0);
+  process.exit(exitCodeOf(endReason));
 }
 
 /** 중단해야 하는 이유. 없으면 null */

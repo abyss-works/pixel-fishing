@@ -1,4 +1,5 @@
 // 부하 실행의 입력 검증과 중단 판정. 네트워크를 쓰지 않는 순수 함수만 둔다.
+import type { EndReason } from './recorder';
 import { percentile } from './stats';
 
 /** 운영 도메인. 부하 대상으로는 거부하고, 감시용 probe에만 허용한다 */
@@ -50,3 +51,14 @@ export function abortReason(
   }
   return null;
 }
+
+/** 완료만 정상 종료다. 중단한 실행은 호출한 쪽이 알 수 있게 0이 아닌 코드로 끝낸다 */
+export const exitCodeOf = (reason: EndReason): number => (reason === 'completed' ? 0 : 2);
+
+// 실시간 채널 재연결 대기의 처음 값과 상한. 브라우저 어댑터의 같은 이름 상수와 같은 값이다.
+// 어댑터는 브라우저 환경(import.meta.env)에 묶여 있어 Node에서 불러올 수 없다.
+export const RETRY_MIN_MS = 1000;
+export const RETRY_MAX_MS = 30_000;
+
+/** 재연결 대기. 실제 클라이언트처럼 두 배씩 늘리고 상한에서 멈춘다 */
+export const nextRetryMs = (ms: number): number => Math.min(ms * 2, RETRY_MAX_MS);

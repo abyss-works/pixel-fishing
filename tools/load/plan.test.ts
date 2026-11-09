@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abortReason, DEFAULT_LIMITS, parseSteps, parseTarget, PROD_HOST } from './plan';
+import { abortReason, DEFAULT_LIMITS, exitCodeOf, nextRetryMs, parseSteps, parseTarget, PROD_HOST } from './plan';
 
 describe('parseTarget', () => {
   it('origin만 돌려준다', () => {
@@ -71,5 +71,20 @@ describe('abortReason', () => {
 
   it('두 조건이 함께 넘으면 오류율을 먼저 알린다', () => {
     expect(abortReason({ actions: 100, errors: 50, probeMs: [9000, 9000, 9000] }, DEFAULT_LIMITS)).toBe('error-rate');
+  });
+});
+
+describe('exitCodeOf', () => {
+  it('완료만 0이다', () => {
+    expect(exitCodeOf('completed')).toBe(0);
+    for (const r of ['error-rate', 'probe', 'version-mismatch', 'interrupted'] as const) expect(exitCodeOf(r)).not.toBe(0);
+  });
+});
+
+describe('nextRetryMs', () => {
+  it('두 배씩 늘고 상한에서 멈춘다', () => {
+    expect(nextRetryMs(1000)).toBe(2000);
+    expect(nextRetryMs(20_000)).toBe(30_000);
+    expect(nextRetryMs(30_000)).toBe(30_000);
   });
 });

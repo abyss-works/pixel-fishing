@@ -1,5 +1,5 @@
 // 가상 플레이어 한 명 — 실제 클라이언트와 같은 형식과 간격으로 서버와 주고받는다.
-//   접속: 익명 로그인 → 상태·프로필 읽기 → boot 액션 → 실시간 채널 연결(hello까지)
+//   접속: 준비된 익명 세션으로 상태·프로필·마지막 위치 읽기 → boot 액션 → 실시간 채널 연결(hello까지). 끊기면 백오프로 다시 연결
 //   위치: 100ms마다 실제 클라이언트의 송신 판정(nextPositionMessage)으로 보낸다. 줄을 드리운 채 가만히 있으면 거의 보내지 않는다
 //   낚시: 던지기(GET 워밍) → 입질 대기 → 판정 → catch 액션 → 획득 표시 시간 → 재캐스트. 일정 시간마다 줄을 거두고 다른 어군으로 옮긴다
 //   채팅: 분당 chat-rate회. 게스트라 서버가 거부하면 그 플레이어는 보내기를 멈춘다
@@ -11,13 +11,15 @@ import { V_SCHOOLS, V_SPAWN } from '../../src/game/world/regions/village';
 import { FISH, judgeTiming, newState } from '../../src/game/rules/logic';
 import { effectiveBite, powerZones, rodAxes } from '../../src/game/rules/stats';
 import { phaseDurationMs } from '../../src/game/rules/fishing';
-import { LIVE_MOVE_MS, LIVE_PATH, LIVE_PING_MS } from '../../src/game/rules/live';
+import { LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_MOVE_MS, LIVE_PATH, LIVE_PING_MS } from '../../src/game/rules/live';
 import type { ClientMessage, ServerMessage } from '../../src/game/rules/live';
 import { CAST_RANGE, WALK_SPEED } from '../../src/game/rules/balance';
 import { nextPositionMessage } from '../../src/features/live/model/live';
 import type { MyPosition, SentPosition } from '../../src/features/live/model/live';
 import type { SpotId } from '../../src/game/content/spots';
 import type { MoveClock } from './clock';
+import { guardedFetch } from './http';
+import { nextRetryMs, RETRY_MIN_MS } from './plan';
 import type { StepStats } from './recorder';
 
 export interface World {
@@ -41,6 +43,8 @@ const STAY_MS = [60_000, 120_000] as const;
 // 규칙 거부나 오류 뒤 다시 던지기까지의 시간
 const RECAST_MS = 1000;
 
+interface Channel { helloMs: number; closed: Promise<number> }
+
 type CatchBody = { result?: { fishId?: string } } | null;
 
 const between = (min: number, max: number): number => min + Math.random() * (max - min);
@@ -51,7 +55,7 @@ export class Player {
   private readonly abort = new AbortController();
   private readonly clientId = crypto.randomUUID();
   private readonly idle: boolean;
-  private cookie = '';
+  private readonly cookie: string;
   private uid = '';
   private ws: WebSocket | null = null;
   private connected = false;
@@ -64,8 +68,10 @@ export class Player {
 
   private readonly world: World;
 
-  constructor(world: World) {
+  /** cookie: 미리 만들어 둔 익명 계정의 세션. 실행 중에는 로그인 요청을 보내지 않는다 */
+  constructor(world: World, cookie: string) {
     this.world = world;
+    this.cookie = cookie;
     this.idle = Math.random() < world.idleRatio;
   }
 
@@ -75,18 +81,19 @@ export class Player {
   async join(): Promise<boolean> {
     const stats = this.world.stats();
     stats.connectAttempts++;
+    let channel: Channel;
     try {
-      await this.signIn();
-      await Promise.all([this.get('/api/me?q=state'), this.get('/api/me?q=profile')]);
+      await Promise.all([this.get('/api/me?q=state'), this.get('/api/me?q=profile'), this.get('/api/me/position')]);
       await this.post({ type: 'boot', buildId: this.world.buildId });
-      const ms = await this.openChannel();
+      channel = await this.openChannel();
       stats.connectOk++;
-      stats.connectMs.add(ms);
+      stats.connectMs.add(channel.helloMs);
     } catch {
       this.stop();
       return false;
     }
     void this.play();
+    this.keepChannel(channel.closed).catch(() => { /* 중단 */ });
     return true;
   }
 
@@ -99,25 +106,16 @@ export class Player {
 
   // ---------- 접속 ----------
 
-  private async signIn(): Promise<void> {
-    const res = await fetch(`${this.world.origin}/api/auth/sign-in/anonymous`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: this.world.origin },
-      body: '{}',
-      signal: AbortSignal.timeout(ACTION_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`익명 로그인 실패 ${res.status}`);
-    this.cookie = res.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
-    await res.body?.cancel();
-  }
-
   private async get(path: string): Promise<void> {
-    const res = await fetch(`${this.world.origin}${path}`, { headers: { cookie: this.cookie }, signal: AbortSignal.timeout(ACTION_TIMEOUT_MS) });
+    const res = await guardedFetch(`${this.world.origin}${path}`, { headers: { cookie: this.cookie }, signal: AbortSignal.timeout(ACTION_TIMEOUT_MS) });
     await res.body?.cancel();
   }
 
-  /** 실시간 채널을 열고 hello를 받을 때까지 걸린 시간(ms)을 돌려준다 */
-  private openChannel(): Promise<number> {
+  /**
+   * 실시간 채널을 열고 hello를 받으면 돌려준다. hello 전에 닫히면 종료 코드를 담아 던진다.
+   * closed는 연결이 닫힐 때 그 종료 코드로 정해진다
+   */
+  private openChannel(): Promise<Channel> {
     const { origin, buildId, clientVersion } = this.world;
     const query = new URLSearchParams({ build: buildId, version: clientVersion });
     const url = `${origin.replace(/^http/, 'ws')}${LIVE_PATH}?${query}`;
@@ -125,6 +123,8 @@ export class Player {
       const started = performance.now();
       const ws = new WebSocket(url, { headers: { cookie: this.cookie, origin }, handshakeTimeout: HELLO_TIMEOUT_MS });
       this.ws = ws;
+      let onClosed: (code: number) => void = () => {};
+      const closed = new Promise<number>((r) => { onClosed = r; });
       const timeout = setTimeout(() => { reject(new Error('hello 시간 초과')); ws.terminate(); }, HELLO_TIMEOUT_MS);
       ws.on('message', (data) => {
         const msg = this.parse(data.toString());
@@ -133,7 +133,9 @@ export class Player {
           clearTimeout(timeout);
           this.uid = msg.you;
           this.connected = true;
-          resolve(performance.now() - started);
+          // 재연결 뒤에는 현재 위치를 처음부터 다시 보낸다(실제 클라이언트가 hello마다 하는 일)
+          this.last = null;
+          resolve({ helloMs: performance.now() - started, closed });
         }
         this.receive(msg);
       });
@@ -142,10 +144,38 @@ export class Player {
         clearTimeout(timeout);
         if (this.connected && !this.abort.signal.aborted) this.world.stats().disconnects++;
         this.connected = false;
-        this.stop();
-        reject(new Error(`연결 종료 ${code}`));
+        reject(Object.assign(new Error(`연결 종료 ${code}`), { code }));
+        onClosed(code);
       });
     });
+  }
+
+  /**
+   * 채널이 닫히면 실제 클라이언트처럼 대기를 두 배씩 늘려 가며 다시 연결한다. 그동안 HTTP 낚시는 계속한다.
+   * 낡은 빌드로 닫히면 HTTP 426처럼 실행을 멈추게 하고, 같은 계정의 다른 연결이 가져간 경우(4000)는 다시 붙지 않는다
+   */
+  private async keepChannel(firstClosed: Promise<number>): Promise<void> {
+    let code = await firstClosed;
+    for (;;) {
+      const downSince = Date.now();
+      let retryMs = RETRY_MIN_MS;
+      for (;;) {
+        if (code === LIVE_CLOSE_OUTDATED) { this.world.fatal('version-mismatch'); return; }
+        if (code === LIVE_CLOSE_REPLACED) return;
+        await this.sleep(retryMs);
+        retryMs = nextRetryMs(retryMs);
+        try {
+          const channel = await this.openChannel();
+          const stats = this.world.stats();
+          stats.reconnects++;
+          stats.downMs += Date.now() - downSince;
+          code = await channel.closed;
+          break;
+        } catch (e) {
+          code = (e as { code?: number }).code ?? 0;
+        }
+      }
+    }
   }
 
   // ---------- 받기 ----------
@@ -210,7 +240,7 @@ export class Player {
     let label: string;
     let body: CatchBody = null;
     try {
-      const res = await fetch(`${this.world.origin}/api/action`, {
+      const res = await guardedFetch(`${this.world.origin}/api/action`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json', cookie: this.cookie, origin: this.world.origin,
@@ -272,7 +302,7 @@ export class Player {
     this.spot = school.spot;
     this.pos = { ...this.pos, line: true, bob: { x: school.x, y: school.y } };
     // 던지는 순간의 워밍 핑. 결과는 쓰지 않는다
-    fetch(`${this.world.origin}/api/action`, { signal: AbortSignal.timeout(ACTION_TIMEOUT_MS) })
+    guardedFetch(`${this.world.origin}/api/action`, { signal: AbortSignal.timeout(ACTION_TIMEOUT_MS) })
       .then(r => r.body?.cancel(), () => { /* 워밍 실패는 무시 */ });
   }
 
