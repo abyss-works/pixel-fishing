@@ -4,10 +4,10 @@ import type { Point, Rect } from './types';
 
 export type SeaFacing = 'north' | 'south' | 'east' | 'west';
 
-export const HARBOR_BUILDING_SIZE = { w: 36, h: 28 };
-export const DOCK_LENGTH = 16;
-export const DOCK_WIDTH = 8;
-export const BERTH_SIZE = 16;
+const HARBOR_BUILDING_SIZE = { w: 36, h: 28 };
+const DOCK_LENGTH = 16;
+const DOCK_WIDTH = 8;
+const BERTH_SIZE = 16;
 /** 접안 자리 중심에서 바다 방향으로 출항 자리까지의 거리 */
 export const DEPARTURE_DIST = 24;
 
@@ -24,9 +24,13 @@ export interface HarborPlacement {
   flip: boolean;
 }
 
-const SEA_VECTOR: Record<SeaFacing, Point> = {
+export const SEA_VECTOR: Record<SeaFacing, Point> = {
   north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
 };
+
+export function isSeaFacing(v: unknown): v is SeaFacing {
+  return typeof v === 'string' && v in SEA_VECTOR;
+}
 
 const around = (c: Point, w: number, h: number): Rect => ({ x: c.x - w / 2, y: c.y - h / 2, w, h });
 

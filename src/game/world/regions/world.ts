@@ -11,7 +11,8 @@
 // 4/5/6/7/8 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
 import type { BaseId, MapCellDef, Point, RegionPack } from '../types';
 import { placeHarbor } from '../harborPlacement';
-import type { HarborPlacement, SeaFacing } from '../harborPlacement';
+import { isSeaFacing } from '../harborPlacement';
+import type { HarborPlacement } from '../harborPlacement';
 import { compileMap, mapBounds } from '../mask';
 import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW, GRID_OFFSET, GLOBAL_COLS } from './generated/world.mask';
 
@@ -52,15 +53,11 @@ export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS,
 export const WORLD_BOUNDS = mapBounds(WORLD_MAP);
 
 // 항구 5곳 — 기준점(경위도 앵커)과 바다 방향만 설정에 있고 나머지는 placeHarbor가 계산한다.
-const SEA_FACINGS: readonly string[] = ['north', 'south', 'east', 'west'];
 function harborAt(name: string): HarborPlacement {
   const a = A[name];
-  if (!a || !SEA_FACINGS.includes(a.facing ?? '')) throw Error(`항구 앵커 ${name}: 위치 또는 바다 방향이 없다`);
-  return placeHarbor(a, a.facing as SeaFacing);
+  if (!a || !isSeaFacing(a.facing)) throw Error(`항구 앵커 ${name}: 위치 또는 바다 방향이 없다`);
+  return placeHarbor(a, a.facing);
 }
-const HARBOR_NAMES: Record<string, string> = {
-  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항',
-};
 /** 거점 id별 항구 배치 — 거점 id는 앵커 이름과 같다 */
 export const HARBORS = {
   harbor: harborAt('harbor'),       // 부산항(한반도 남동 해안)
@@ -68,7 +65,12 @@ export const HARBORS = {
   colombo: harborAt('colombo'),     // 콜롬보항(스리랑카 서해안)
   toamasina: harborAt('toamasina'), // 투아마시나항(마다가스카르 동해안)
   walvisbay: harborAt('walvisbay'), // 월비스베이항(나미비아 서해안)
+} satisfies Partial<Record<BaseId, HarborPlacement>>;
+type HarborId = keyof typeof HARBORS;
+const HARBOR_NAMES: Record<HarborId, string> = {
+  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항',
 };
+const HARBOR_IDS = Object.keys(HARBORS) as HarborId[];
 /** 고향 항구의 출항 자리가 새 게임과 되돌림의 기본 위치다 */
 export const WORLD_SPAWN: Point = HARBORS.harbor.departure;
 
@@ -95,12 +97,12 @@ export const WORLD: RegionPack = {
   spawn: WORLD_SPAWN,
   // travel 트리거 없음 — 구역 경계 게이트(Field zoneOf 전이 판정)가 대체한다.
   // 접안 트리거만 항구마다 하나 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
-  triggers: Object.entries(HARBORS).map(([base, h]) => ({
-    rect: h.berth, action: 'base' as const, base: base as BaseId,
-    msg: `${HARBOR_NAMES[base as BaseId]}에 접안했어요. 시설을 눌러 정비해 보세요.`,
+  triggers: HARBOR_IDS.map(base => ({
+    rect: HARBORS[base].berth, action: 'base' as const, base,
+    msg: `${HARBOR_NAMES[base]}에 접안했어요. 시설을 눌러 정비해 보세요.`,
   })),
-  labels: Object.entries(HARBORS).map(([base, h]) => ({
-    text: HARBOR_NAMES[base as BaseId], x: h.building.x + h.building.w / 2, y: h.building.y + 2,
-    color: 'gold' as const, size: 8,
+  labels: HARBOR_IDS.map(base => ({
+    text: HARBOR_NAMES[base], x: HARBORS[base].building.x + HARBORS[base].building.w / 2,
+    y: HARBORS[base].building.y + 2, color: 'gold' as const, size: 8,
   })),
 };

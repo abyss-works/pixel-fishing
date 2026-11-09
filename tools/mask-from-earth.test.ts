@@ -158,3 +158,25 @@ describe('islands — 작은 섬 한 칸', () => {
     expect(rowAt(r.rows, 40.2)[colAt(60.1) + 1]).toBe('h');
   });
 });
+
+describe('앵커 facing 검증', () => {
+  const withFacing = (facing: string) => {
+    const cfg = { id: 'facing', geo: geoPath, cell: { w: 8, h: 11 }, grid: { cols: 488, rows: 232 },
+      window: { lonMin: 35, lonMax: 157, latMin: -36, latMax: 44 }, globalGrid: GLOBAL,
+      anchors: { port: { lon: 100.5, lat: 3.2, facing } } };
+    return spawnSync(process.execPath, ['tools/mask-from-earth.mjs', JSON.stringify(cfg), '--out', join(tmp, 'facing.ts')],
+      { encoding: 'utf8' });
+  };
+
+  it('올바른 facing은 앵커에 실려 나간다', () => {
+    expect(withFacing('west').status).toBe(0);
+    expect(readFileSync(join(tmp, 'facing.ts'), 'utf8')).toContain("port: { x: ");
+    expect(readFileSync(join(tmp, 'facing.ts'), 'utf8')).toContain("facing: 'west'");
+  });
+
+  it('틀린 facing은 이유를 적고 실패한다', () => {
+    const r = withFacing('up');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('facing은 north, south, east, west 중 하나');
+  });
+});

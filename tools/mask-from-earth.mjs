@@ -221,6 +221,9 @@ for (const [name, a] of Object.entries(anchors)) {
   if (typeof a.lon !== 'number' || typeof a.lat !== 'number') {
     errors.push(`앵커 ${name}: lon/lat 숫자 필요`); continue;
   }
+  if (a.facing !== undefined && !['north', 'south', 'east', 'west'].includes(a.facing)) {
+    errors.push(`앵커 ${name}: facing은 north, south, east, west 중 하나여야 한다 (받은 값: ${JSON.stringify(a.facing)})`); continue;
+  }
   const p = project(a);
   projected[name] = a.facing ? { ...p, facing: a.facing } : p;
   const cc = Math.floor(p.x / cellW) - offCol, rr = Math.floor(p.y / cellH) - offRow;

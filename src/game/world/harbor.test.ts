@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { BASE_PACKS, WORLD } from './index';
 import { HARBORS } from './regions/world';
-import { DEPARTURE_DIST } from './harborPlacement';
+import { DEPARTURE_DIST, SEA_VECTOR } from './harborPlacement';
 import { cellDefAt } from './mask';
 import type { Rect } from './types';
 
@@ -21,12 +21,12 @@ const overlap = (a: Rect, b: Rect) =>
 const gap = (a: Rect, b: Rect) => Math.hypot(
   Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0), Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0));
 const center = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
-const SEA_VECTOR = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] } as const;
+const EXPECTED_FACING = { harbor: 'south', manila: 'west', colombo: 'west', toamasina: 'east', walvisbay: 'west' };
 
 describe.each(Object.entries(HARBORS))('항구 %s 배치', (id, h) => {
   it('건물은 전부 육지이고 기준점에서 바다 반대쪽에 있다', () => {
     expect(fraction(h.building, isLand)).toBe(1);
-    const [ux, uy] = SEA_VECTOR[h.facing];
+    const { x: ux, y: uy } = SEA_VECTOR[h.facing];
     const b = center(h.building);
     expect((b.x - h.anchor.x) * ux + (b.y - h.anchor.y) * uy).toBeLessThan(0);
   });
@@ -34,6 +34,20 @@ describe.each(Object.entries(HARBORS))('항구 %s 배치', (id, h) => {
   it('부두는 건물에 빈칸도 겹침도 없이 맞닿는다', () => {
     expect(gap(h.building, h.dock)).toBe(0);
     expect(overlap(h.building, h.dock)).toBe(0);
+  });
+
+  it('부두는 건물의 바다 쪽 가장자리에 붙고 접안 자리는 부두 끝에 있다', () => {
+    const { x: ux, y: uy } = SEA_VECTOR[h.facing];
+    const edge = (r: Rect) => ux !== 0 ? (ux > 0 ? r.x + r.w : r.x) : (uy > 0 ? r.y + r.h : r.y);
+    const start = (r: Rect) => ux !== 0 ? (ux > 0 ? r.x : r.x + r.w) : (uy > 0 ? r.y : r.y + r.h);
+    expect(start(h.dock)).toBe(edge(h.building));
+    expect(start(h.berth)).toBe(edge(h.dock));
+    expect(edge(h.building)).toBe(ux !== 0 ? h.anchor.x : h.anchor.y);
+  });
+
+  it('바다 방향과 그림 반전이 정해진 값이다 — 서향만 뒤집는다', () => {
+    expect(h.facing).toBe(EXPECTED_FACING[id as keyof typeof EXPECTED_FACING]);
+    expect(h.flip).toBe(h.facing === 'west');
   });
 
   it('접안 자리는 전부 물이고 부두 끝에 맞닿으며 부두와 겹치지 않는다', () => {
@@ -44,6 +58,9 @@ describe.each(Object.entries(HARBORS))('항구 %s 배치', (id, h) => {
 
   it('출항 자리는 물 위이고 접안 자리 밖이며 접안 중심에서 공통 거리만큼 떨어져 있다', () => {
     expect(isWater(h.departure.x, h.departure.y)).toBe(true);
+    const { x: ux, y: uy } = SEA_VECTOR[h.facing];
+    const b = center(h.berth);
+    expect((h.departure.x - b.x) * ux + (h.departure.y - b.y) * uy).toBeGreaterThan(0);
     const c = center(h.berth);
     expect(Math.hypot(h.departure.x - c.x, h.departure.y - c.y)).toBe(DEPARTURE_DIST);
     expect(overlap(h.berth, { ...h.departure, w: 1, h: 1 })).toBe(0);
