@@ -169,8 +169,7 @@ describe('낚시', () => {
     const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
-    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true },
-      { origin: LOCAL_ORIGIN });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
 
@@ -179,6 +178,7 @@ describe('낚시', () => {
     const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
+    process.env.DEPLOY_ENV = 'preview';
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
@@ -370,23 +370,24 @@ describe('이사 코드 가져오기', () => {
 });
 
 describe('개발 명령', () => {
-  it('로컬 오리진의 상태 명령은 허용된다', async () => {
-    expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } }, { origin: LOCAL_ORIGIN }))
+  it('로컬 환경의 상태 명령은 허용된다', async () => {
+    expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } }))
       .toMatchSnapshot();
   });
 
-  it('소유자가 아니고 로컬 오리진도 아니면 거부한다', async () => {
+  it('스테이징에서 소유자가 아니면 거부한다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
     expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } })).toMatchSnapshot();
   });
 
-  it('운영 배포는 로컬 오리진이어도 거부한다', async () => {
+  it('운영 배포는 거부한다', async () => {
     process.env.DEPLOY_ENV = 'production';
-    expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } }, { origin: LOCAL_ORIGIN }))
+    expect(await run({ state: {} }, { type: 'debug', command: 'stats.set', args: { gold: 1000 } }))
       .toMatchSnapshot();
   });
 
   it('도감 채우기 명령은 도감 행을 쓴다', async () => {
-    expect(await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } }, { origin: LOCAL_ORIGIN }))
+    expect(await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } }))
       .toMatchSnapshot();
   });
 
@@ -398,11 +399,11 @@ describe('개발 명령', () => {
       await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
         values ($1, 'general', 'pacific-easy-common', $2), ($1, 'general', 'pacific-easy-rare', '2030-03-01T00:00:00Z')`, [u, NOW]);
     }
-    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.expireTickets' }, { origin: LOCAL_ORIGIN });
+    const near = await callAction(userToken(uid), { type: 'debug', command: 'bounty.expireTickets' });
     vi.setSystemTime(Date.parse(NOW) + 2000);
-    const reset = await callAction(userToken(uid), { type: 'debug', command: 'bounty.resetToday' }, { origin: LOCAL_ORIGIN });
+    const reset = await callAction(userToken(uid), { type: 'debug', command: 'bounty.resetToday' });
     vi.setSystemTime(Date.parse(NOW) + 4000);
-    const clear = await callAction(userToken(uid), { type: 'debug', command: 'bounty.clearTickets' }, { origin: LOCAL_ORIGIN });
+    const clear = await callAction(userToken(uid), { type: 'debug', command: 'bounty.clearTickets' });
     expect({
       near: normalize(near, uid), reset: normalize(reset, uid), ...(await snapshotOf(uid, clear)),
       other: await dumpUser(env.client, other),
@@ -988,5 +989,69 @@ describe('이사 코드 가져오기 접근 판정', () => {
         expect(verdict(await importAs(role, LOCAL_ORIGIN))).toEqual([403, 'import-disabled']);
       }
     }
+  });
+});
+
+describe('개발 명령 허용 판정', () => {
+  const debugVerdict = (res: { status: number; body: unknown }) => [res.status, (res.body as { error?: string }).error ?? 'ok'];
+  let seq = 0;
+  // 소유자 이메일은 서버 설정이다. 호출마다 새 계정이 필요하므로 소유자 이메일도 호출마다 바꾼다
+  const seedRole = async (role: 'owner' | 'guest', state: object) => {
+    const email = `debug-${role}-${seq++}@example.com`;
+    process.env.IMPORT_OWNER_EMAIL = role === 'owner' ? email : 'debug-owner@example.com';
+    return seed({ state, email });
+  };
+  afterEach(() => { delete process.env.IMPORT_OWNER_EMAIL; });
+  const debugAs = async (role: 'owner' | 'guest', origin?: string) => {
+    const uid = await seedRole(role, {});
+    return callAction(userToken(uid), { type: 'debug', command: 'stats.set', args: { gold: 1000 } }, { origin });
+  };
+  // 강제 조우가 받아들여지면 진행 중인 네임드의 도전권이 발급된다
+  const ticketsAfterForcedCatch = async (role: 'owner' | 'guest', origin?: string) => {
+    const uid = await seedRole(role, { boat: 1 });
+    const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW]);
+    await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true }, { origin });
+    const tickets = await env.client.query('select count(*)::int as n from public.bounty_tickets where user_id = $1', [uid]);
+    return tickets.rows[0].n as number;
+  };
+  const ORIGINS = [undefined, LOCAL_ORIGIN, 'http://127.0.0.1', 'https://evil.example'];
+
+  it('스테이징에서 Origin을 로컬로 속인 비소유자의 개발 명령은 거부한다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('guest', origin))).toEqual([422, 'debug-forbidden']);
+  });
+
+  it('스테이징에서 소유자는 Origin과 무관하게 개발 명령을 쓴다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('owner', origin))).toEqual([200, 'ok']);
+  });
+
+  it('운영은 소유자도 Origin과 무관하게 개발 명령을 거부한다', async () => {
+    process.env.DEPLOY_ENV = 'production';
+    for (const role of ['owner', 'guest'] as const) {
+      for (const origin of ORIGINS) expect(debugVerdict(await debugAs(role, origin))).toEqual([422, 'debug-forbidden']);
+    }
+  });
+
+  it('로컬 명시 값은 Origin과 무관하게 모두 허용한다', async () => {
+    process.env.DEPLOY_ENV = 'local';
+    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('guest', origin))).toEqual([200, 'ok']);
+  });
+
+  it('환경 값이 없거나 모르는 값이면 로컬 Origin이어도 거부한다', async () => {
+    for (const value of [undefined, 'development']) {
+      if (value === undefined) delete process.env.DEPLOY_ENV; else process.env.DEPLOY_ENV = value;
+      for (const role of ['owner', 'guest'] as const) {
+        expect(debugVerdict(await debugAs(role, LOCAL_ORIGIN))).toEqual([422, 'debug-forbidden']);
+      }
+    }
+  });
+
+  it('스테이징에서 Origin을 속인 비소유자의 강제 조우는 통상 캐치로 처리한다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    expect(await ticketsAfterForcedCatch('guest', LOCAL_ORIGIN)).toBe(0);
+    expect(await ticketsAfterForcedCatch('owner', undefined)).toBe(1);
   });
 });
