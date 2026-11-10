@@ -49,6 +49,29 @@ export function newsFor(
   return notes.find(n => n.version === appVersion) ?? null;
 }
 
+const versionParts = (version: string) => version.split('.').map(Number);
+
+/** 점으로 나눈 숫자 비교 — 앞이 크면 양수, 같으면 0 */
+function compareVersions(a: string, b: string): number {
+  const pa = versionParts(a);
+  const pb = versionParts(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/** 다시 보기로 열 소식 — 현재 버전 이하의 항목 가운데 가장 높은 버전. 노트 배열의 순서에 기대지 않는다 */
+export function latestNewsAtOrBelow(notes: readonly PatchNote[], appVersion: string): PatchNote | null {
+  let latest: PatchNote | null = null;
+  for (const n of notes) {
+    if (compareVersions(n.version, appVersion) > 0) continue;
+    if (!latest || compareVersions(n.version, latest.version) > 0) latest = n;
+  }
+  return latest;
+}
+
 export function pendingPrompts(
   prompts: readonly SettingPrompt[], answered: ReadonlySet<string>,
 ): SettingPrompt[] {

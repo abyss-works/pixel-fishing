@@ -32,7 +32,7 @@ function StepTrail({ steps, index }: { steps: readonly WhatsNewStep[]; index: nu
 }
 
 // 업데이트 소식 창 — 접속 후 세이브가 준비되면 이번 버전 소식과 새 설정을 차례로 보여 준다.
-// 소식은 "이번 소식 다시 보지 않기"를 체크하고 닫아야 더 뜨지 않는다. 고른 설정은 이미 적용돼 있다.
+// 소식은 "접속할 때 이 소식 띄우지 않기"를 체크하고 닫아야 더 뜨지 않는다. 고른 설정은 이미 적용돼 있다.
 export default function WhatsNewModal({ game, ready }: {
   game: Pick<GameState, 'fame' | 'dex'>;
   /** 세이브가 준비됐는지 — 준비 전의 빈 상태로 "처음 시작"을 판정하지 않게 */
@@ -47,7 +47,7 @@ export default function WhatsNewModal({ game, ready }: {
     <Modal title={STEP_TITLE[w.step]} fill onClose={w.close} footer={
       <div className="border-t border-line mt-3 pt-3 flex flex-col gap-2">
         {w.step === 'news' && (
-          <CheckToggle checked={w.dismiss} onChange={w.setDismiss} label="이번 소식 다시 보지 않기" />
+          <CheckToggle checked={w.dismiss} onChange={w.setDismiss} label="접속할 때 이 소식 띄우지 않기" />
         )}
         <div className="flex gap-2">
           {w.index > 0 && <Button variant="ghost" onClick={w.back}>이전</Button>}

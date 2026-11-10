@@ -78,15 +78,31 @@ import { ApiError, toApiError } from './errors.js';
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-// 이사 코드 import는 소유자 계정만 허용한다.
+// 소유자 계정 판정 — 이사 코드 불러오기와 소유자 전용 개발 명령이 쓴다.
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
-// 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
+// 소유자 메일의 출처는 서버 env가 정본이고, 없거나 비어 있으면 폴백 상수를 쓴다.
 // 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
 // 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
 // 늘어나는 대가라 하지 않는다.
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
 export function importOwnerEmail(): string {
-  return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
+  return process.env.IMPORT_OWNER_EMAIL || OWNER_EMAIL_FALLBACK;
+}
+/** 계정 이메일이 없거나 비어 있으면 소유자가 아니다 */
+export function isImportOwner(email: string | null | undefined, ownerEmail: string): boolean {
+  const mine = email?.toLowerCase();
+  return !!mine && mine === ownerEmail.toLowerCase();
+}
+
+// 이사 코드 import 허용 판정 — 요청 헤더를 읽지 않고 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다.
+// 정책 표(이 함수가 유일한 지점): production은 소유자도 거부, preview는 소유자만,
+// local은 모두 허용, 설정이 없거나 모르는 값은 거부한다. 운영 허용·차단은 이 분기의 한 줄을 바꾼다.
+export function importVerdict({ deployEnv, owner }: {
+  deployEnv: string | undefined; owner: boolean;
+}): 'ok' | 'import-owner-only' | 'import-disabled' {
+  if (deployEnv === 'local') return 'ok';
+  if (deployEnv === 'preview') return owner ? 'ok' : 'import-owner-only';
+  return 'import-disabled';
 }
 
 // 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
@@ -282,8 +298,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
   // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
   const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.origin ?? ''));
-  const isOwner = async (): Promise<boolean> =>
-    (user.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
+  const isOwner = async (): Promise<boolean> => isImportOwner(user.email, importOwnerEmail());
   const debugAllowed = async (): Promise<boolean> => {
     const deployEnv = process.env.DEPLOY_ENV;
     if (deployEnv === 'production') return false;
@@ -291,9 +306,10 @@ async function route(req: Req, res: Res): Promise<void> {
   };
 
   // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다.
-  // 운영에서도 소유자 계정만, 로컬 오리진은 개발 편의상 연다.
-  if (action.type === 'import' && !localOrigin && !await isOwner()) {
-    throw new ApiError(403, 'import-owner-only');
+  // 판정은 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
+  if (action.type === 'import') {
+    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    if (verdict !== 'ok') throw new ApiError(403, verdict);
   }
 
   // 개발 도구 명령 — 운영 배포는 전부 거부한다. 스테이징·로컬은 소유자·로컬 오리진만.

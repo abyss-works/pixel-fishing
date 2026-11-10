@@ -49,7 +49,7 @@ export async function startActionEnv(): Promise<ActionEnv> {
   process.env.RESEND_API_KEY = 'test-only-resend-key';
   process.env.MAIL_FROM = 'test <no-reply@example.test>';
   process.env.DATABASE_URL = db.url;
-  delete process.env.DEPLOY_ENV;
+  process.env.DEPLOY_ENV = 'local';
   delete process.env.SENTRY_DSN;
 
   const client = new Client({ connectionString: db.url });

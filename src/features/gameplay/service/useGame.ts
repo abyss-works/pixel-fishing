@@ -132,7 +132,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔어요.');
       } else if (init.legacy) {
-        // 구세대(localStorage) 브리지도 import 액션이므로 소유자 게이트를 적용한다.
+        // 구세대(localStorage) 브리지도 import 액션이므로 서버의 불러오기 허용 판정을 따른다(운영은 전면 거부).
         // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.
         try {
           await dispatch({ type: 'import', save: init.game });
