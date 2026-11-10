@@ -89,6 +89,17 @@ export function importOwnerEmail(): string {
   return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
 }
 
+// 이사 코드 import 허용 판정 — 요청 헤더를 읽지 않고 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다.
+// 정책 표(이 함수가 유일한 지점): production은 소유자도 거부, preview는 소유자만,
+// local은 모두 허용, 설정이 없거나 모르는 값은 거부한다. 운영 허용·차단은 이 분기의 한 줄을 바꾼다.
+export function importVerdict({ deployEnv, owner }: {
+  deployEnv: string | undefined; owner: boolean;
+}): 'ok' | 'import-owner-only' | 'import-disabled' {
+  if (deployEnv === 'local') return 'ok';
+  if (deployEnv === 'preview') return owner ? 'ok' : 'import-owner-only';
+  return 'import-disabled';
+}
+
 // 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
 // 스테이징·로컬 서버에서는 소유자 계정이거나 로컬 오리진일 때만 연다.
 export function debugTriggerAllowed({ deployEnv, localOrigin, owner }: {
@@ -291,9 +302,10 @@ async function route(req: Req, res: Res): Promise<void> {
   };
 
   // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다.
-  // 운영에서도 소유자 계정만, 로컬 오리진은 개발 편의상 연다.
-  if (action.type === 'import' && !localOrigin && !await isOwner()) {
-    throw new ApiError(403, 'import-owner-only');
+  // 판정은 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
+  if (action.type === 'import') {
+    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    if (verdict !== 'ok') throw new ApiError(403, verdict);
   }
 
   // 개발 도구 명령 — 운영 배포는 전부 거부한다. 스테이징·로컬은 소유자·로컬 오리진만.
