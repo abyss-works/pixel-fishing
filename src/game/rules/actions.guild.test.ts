@@ -59,7 +59,7 @@ describe('받는 규칙 — 효과 값 하나를 한 지점에서 더한다', ()
   });
 
   it('일반 등급 가중치에서 희귀 비율만큼 한 번 뺀다', () => {
-    const shares = (cut: number) => fishDrawShares('pond', { commonCut: cut });
+    const shares = (cut: number) => fishDrawShares('pond', { weightEffects: { common: -cut } });
     const commonOf = (cut: number) => shares(cut).filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
     const c = commonOf(0);
     // 일반 가중치 c를 (1 − 0.1)배로 — 비율로 c' = 0.9c / (0.9c + (1 − c))
@@ -109,7 +109,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
   it('희귀 어종 보너스는 방치 캐치에서도 일반 등급 가중치를 줄인다', () => {
     const st = newState();
     const o = catchDrawOptions('auto', rodPower(st), 'pond', powerZones(st, 'pond').mult, { phase: 'day' });
-    const commonOf = (cut: number) => fishDrawShares('pond', { ...o, commonCut: cut })
+    const commonOf = (cut: number) => fishDrawShares('pond', { ...o, weightEffects: { common: -cut } })
       .filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
     const r = (commonOf(0) + commonOf(0.1)) / 2; // 일반 등급 경계 사이 — 일반 등급이 먼저 놓인다
     const rarityOf = (guild?: GuildEffects) => {

@@ -164,8 +164,14 @@ export interface DrawOptions {
   /** 시간대 — 기본 'day'(밤 전용 어종 제외). 'night'면 낮+밤 전부(합류).
    *  미지정 호출 전부가 day라 기존 낮 어종만 있는 지금은 분포 불변(night 어종 추가 후 안전망). */
   phase?: DayPhase;
-  /** 일반 등급 가중치를 줄이는 비율(길드 희귀 어종 보너스). 다이얼을 적용한 일반 가중치에 (1 − commonCut)을 한 번 곱한다 */
-  commonCut?: number;
+  /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
+   *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
+  weightEffects?: Partial<Record<RarityId, number>>;
+}
+
+/** 등급 가중치 효과를 더한 옵션 — 같은 등급의 효과는 합쳐진다. 효과를 거는 유일한 길이다 */
+export function addGradeEffect<T extends DrawOptions>(o: T, rarity: RarityId, amount: number): T {
+  return { ...o, weightEffects: { ...o.weightEffects, [rarity]: (o.weightEffects?.[rarity] ?? 0) + amount } };
 }
 
 /** 수역 어종 풀 — 시간대 필터. 낮에는 night 어종이 아예 풀에서 빠진다(등급 분포 불변),
@@ -283,12 +289,13 @@ function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
   return pool.map(f => (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / (fwSum.get(f.rarity) ?? 1)));
 }
 
-/** 등급 단계의 가중치 — 풀에 있는 등급만, 등급 예산 × 일반 다이얼. rollFish와 drawWeights가 공유한다 */
+/** 등급 단계의 가중치 — 풀에 있는 등급만, 등급 예산 × 일반 다이얼 × (1 + 그 등급의 효과 합).
+ *  보너스 효과를 합쳐 적용하는 유일한 지점이다. rollFish와 drawWeights가 공유한다 */
 function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [RarityId, number][] {
   const present = new Set(pool.map(f => f.rarity));
   return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
     (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
-      * (r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) * (1 - (o.commonCut ?? 0)) : 1)]);
+      * ((r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1) * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
 }
 
 /** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치. 기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT */

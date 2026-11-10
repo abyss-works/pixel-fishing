@@ -30,10 +30,10 @@ describe('prepareCatchDraw', () => {
     const s = seed({ items: { [COMMON]: 3 }, activeBait: COMMON });
     const auto = prepareCatchDraw(s, 'pond', 'auto', DAY, pz());
     expect(auto.bait).toBeUndefined();
-    expect(auto.phaseOpts.budgets).toBeUndefined();
+    expect(auto.phaseOpts.weightEffects).toBeUndefined();
     const manual = prepareCatchDraw(s, 'pond', 'perfect', DAY, pz());
     expect(manual.bait?.id).toBe(COMMON);
-    expect(Object.keys(manual.phaseOpts.budgets ?? {})).toHaveLength(1);
+    expect(manual.phaseOpts.weightEffects).toEqual({ common: 1 });
   });
 
   it('서버 시각으로 시간대를 가른다', () => {
