@@ -39,6 +39,9 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
         value: https://pixel-fishing-preview.abyssworks.dev
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: preview
   # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
   - target:
       kind: Deployment
@@ -65,6 +68,6 @@ patches:
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-4981765
+    newTag: dev-bc8b299
   - name: ghcr.io/abyss-works/pixel-fishing-admin
-    newTag: dev-4981765
+    newTag: dev-bc8b299
