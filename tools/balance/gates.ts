@@ -1,5 +1,6 @@
-// 이동 직후 수입 게이트 — 새 해역 진입 레벨의 방치 수입이 같은 레벨로 낚을 수 있는 이전 해역 중 가장 좋은 값 이상이어야 한다.
-// 판정과 알려진 역전 목록의 단일 원천이다. 게이트 테스트와 흐름 도구의 gates 명령이 함께 쓴다.
+// 게이트 판정 — 이동 직후 수입(새 해역 진입 레벨의 방치 수입이 같은 레벨로 낚을 수 있는 이전 해역 중 가장 좋은 값 이상),
+// PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 전환 시간의 목표 판정(범위와 순서).
+// 판정 함수와 알려진 예외 목록의 단일 원천이다. 게이트 테스트와 흐름 도구의 gates 명령이 함께 쓴다.
 import { SPOTS } from '../../src/game/content/spots';
 import type { SpotId } from '../../src/game/content/spots';
 import { moveGap } from './model';
@@ -58,4 +59,89 @@ export function gateRows(): GateRow[] {
     }
   }
   return rows;
+}
+
+// ── 기준을 넘는 정도로 판정하는 게이트 ──
+// 값은 소수 둘째 자리로 맞춰 비교한다(표에 찍히는 정밀도). 기준 안이면 0이고, 알려진 예외는 그 값의 초과 정도와 비교한다.
+
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/** 기준을 넘은 정도(excess, 안이면 0)를 알려진 값의 초과 정도와 견줘 판정한다 */
+function judgeExcess(excess: number, knownExcess: number | undefined): GateVerdict {
+  const ex = Math.max(0, round2(excess));
+  if (knownExcess === undefined) return ex === 0 ? '통과' : '위반';
+  const known = Math.max(0, round2(knownExcess));
+  if (ex === known) return '예외';
+  return ex < known ? '개선' : '위반';
+}
+
+/** PERFECT 이상치 — 같은 해역, 같은 낚싯대 스펙에서 PERFECT의 시간당 골드가 방치의 이 배수를 넘지 않는다 */
+export const PERFECT_LIMIT = 10;
+
+export const judgePerfect = (ratio: number): GateVerdict => judgeExcess(round2(ratio) - PERFECT_LIMIT, undefined);
+
+/** 배 명성 대기 ÷ 골드 대기 상한 — 리프 이후 배를 사는 전환에 적용하고 하한은 두지 않는다 */
+export const FAME_RATIO_LIMIT = 1.3;
+
+/** 알려진 예외: 전환 도착 해역별 비율의 현재 값 */
+export const KNOWN_FAME_RATIO: Partial<Record<SpotId, number>> = {
+  southindian: 1.33,
+};
+
+/** ratio는 명성 대기 ÷ 골드 대기이고, 골드 대기가 0이라 정해지지 않으면 null이다(이때 명성 대기가 있으면 위반) */
+export function judgeFameRatio(spot: SpotId, ratio: number | null, fameWait = 0): GateVerdict {
+  if (ratio === null) return fameWait > 0 ? '위반' : '통과';
+  const known = KNOWN_FAME_RATIO[spot];
+  return judgeExcess(round2(ratio) - FAME_RATIO_LIMIT, known === undefined ? undefined : round2(known) - FAME_RATIO_LIMIT);
+}
+
+/** 최초 10분 도달 — 새 계정이 수동 낚시로 첫 바다 해역에 닿는 목표 시간(초) */
+export const OPENING_LIMIT_SEC = 600;
+
+/** seconds는 도착 시간이고, 닿지 못했으면 null이다 */
+export const judgeOpening = (seconds: number | null): GateVerdict =>
+  judgeExcess(seconds === null ? Number.POSITIVE_INFINITY : seconds - OPENING_LIMIT_SEC, undefined);
+
+// ── 전환 시간의 목표 판정 ──
+
+/** 목표 판정을 시작하는 전환의 출발 해역 — 이 해역에서 나가는 전환부터 센다. 이 앞의 전환은 시간만 관측한다 */
+export const TIME_GATE_FROM_SPOT: SpotId = 'barrierreef';
+
+/** 지역 진입 전환의 목표 범위(시간). 키는 들어가는 지역(최상위 존)이다. 같은 지역 안의 전환은 목표 식이 정해지지 않아 범위를 판정하지 않는다 */
+export const REGION_ENTRY_TARGET = {
+  indian: [3, 4],
+  madagascar: [9, 10],
+  southatlantic: [25, 27],
+} as const satisfies Record<string, readonly [number, number]>;
+
+/** 알려진 예외: 도착 해역별 지역 진입 전환 시간의 현재 값(시간) */
+export const KNOWN_TIME_RANGE: Partial<Record<SpotId, number>> = {
+  indian: 1.27,
+  mozstrait: 5.97,
+  benguela: 22.85,
+};
+
+/** 알려진 예외: 도착 해역별 전환 시간이 직전 전환보다 줄어든 폭의 현재 값(시간) */
+export const KNOWN_TIME_ORDER: Partial<Record<SpotId, number>> = {
+  sthelena: 6.98,
+};
+
+/** 범위에서 벗어난 정도. 아래쪽은 음수, 위쪽은 양수, 안은 0 */
+const signedOutside = (hours: number, [lo, hi]: readonly [number, number]) => (hours < lo ? hours - lo : hours > hi ? hours - hi : 0);
+
+/** 알려진 예외는 범위 안에 들어오거나 같은 쪽에서 범위에 가까워지면 개선, 같은 쪽에서 멀어지거나 반대쪽으로 벗어나면 위반이다 */
+export function judgeTimeRange(spot: SpotId, range: readonly [number, number], hours: number): GateVerdict {
+  const now = round2(signedOutside(round2(hours), range));
+  const knownHours = KNOWN_TIME_RANGE[spot];
+  if (knownHours === undefined) return judgeExcess(Math.abs(now), undefined);
+  const known = round2(signedOutside(round2(knownHours), range));
+  if (now === known) return '예외';
+  if (now === 0) return '개선';
+  if (Math.sign(now) !== Math.sign(known)) return '위반';
+  return Math.abs(now) < Math.abs(known) ? '개선' : '위반';
+}
+
+/** 전환 시간은 진행 순서로 줄어들지 않아야 한다. prev는 직전 전환의 시간이다 */
+export function judgeTimeOrder(spot: SpotId, hours: number, prev: number): GateVerdict {
+  return judgeExcess(round2(prev) - round2(hours), KNOWN_TIME_ORDER[spot]);
 }
