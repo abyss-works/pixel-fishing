@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState } from '../rules/logic';
 import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
 import { GameFieldEngine } from './fieldEngine';
@@ -155,4 +155,97 @@ describe('GameFieldEngine 막힘 안내', () => {
     for (let i = 0; i < 10; i++) frame(3050 + i * 50, 3000 + i * 50);
     expect(blocked(events)).toHaveLength(2);
   });
+});
+
+/** 타이머를 직접 굴리는 시계. 숨은 탭처럼 발화 시각을 다음 1초 경계로 미루는 모드를 가진다 */
+function simClock(alignToSecond: boolean) {
+  let now = 1_000_000_000_000;
+  let seq = 0;
+  const timers = new Map<number, { due: number; fn: () => void }>();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(now);
+  vi.stubGlobal('setTimeout', (fn: () => void, ms = 0) => {
+    const target = now + ms;
+    const due = alignToSecond ? Math.ceil(target / 1000) * 1000 : target;
+    seq += 1;
+    timers.set(seq, { due, fn });
+    return seq;
+  });
+  vi.stubGlobal('clearTimeout', (id: number) => { timers.delete(id); });
+  const origin = now;
+  return {
+    origin,
+    runUntil(end: number) {
+      for (;;) {
+        let nextId = -1;
+        let nextDue = Infinity;
+        for (const [id, t] of timers) if (t.due < nextDue) { nextDue = t.due; nextId = id; }
+        if (nextId < 0 || nextDue > end) break;
+        const t = timers.get(nextId)!;
+        timers.delete(nextId);
+        now = nextDue;
+        vi.setSystemTime(now);
+        t.fn();
+      }
+      now = end;
+      vi.setSystemTime(now);
+    },
+  };
+}
+
+describe('GameFieldEngine 방치 사이클 시간', () => {
+  const RAND = 0.5;
+  const catchTimes: number[] = [];
+
+  function runIdle(rod: number, alignToSecond: boolean, cycles: number): number[] {
+    catchTimes.length = 0;
+    vi.spyOn(Math, 'random').mockReturnValue(RAND);
+    const clock = simClock(alignToSecond);
+    const game = { ...newState(), rod };
+    const engine = new GameFieldEngine('world', game, []);
+    engine.updateContext(game, false, {
+      dispatch: () => {
+        catchTimes.push(Date.now());
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'carp', uid: 'u', info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+    });
+    (engine as unknown as { school: unknown }).school = { id: 's', spot: 'pond', x: 0, y: 0 };
+    (engine as unknown as { transition(p: string): void }).transition('wait');
+    clock.runUntil(clock.origin + 60_000 * cycles);
+    engine.dispose();
+    return catchTimes.slice();
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const modelCycleMs = (rod: number) => (6 * Math.pow(0.94, rod - 1) + 1.4 + 2.0) * 1000;
+
+  for (const rod of [25, 28, 30]) {
+    it(`숨은 탭에서도 Lv${rod} 방치 사이클이 모델 시간과 같다`, () => {
+      const times = runIdle(rod, true, 1);
+      const gaps = times.slice(1).map((t, i) => t - times[i]);
+      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      expect(gaps.length).toBeGreaterThan(8);
+      // 1초 정렬은 요청 시각만 최대 1초 흔들 뿐이어서 평균 간격은 모델과 같다
+      expect(Math.abs(mean - modelCycleMs(rod))).toBeLessThan(60);
+      // 서버 하한(획득 표시 + 입질 최소 대기)보다 짧아지지 않는다
+      const floor = 2000 + 4000 * Math.pow(0.94, rod - 1);
+      for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(floor);
+    });
+
+    it(`포그라운드 Lv${rod} 방치 사이클은 모델 시간과 같다`, () => {
+      const times = runIdle(rod, false, 1);
+      const gaps = times.slice(1).map((t, i) => t - times[i]);
+      for (const gap of gaps) expect(Math.abs(gap - modelCycleMs(rod))).toBeLessThan(5);
+    });
+  }
 });
