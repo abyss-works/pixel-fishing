@@ -78,15 +78,20 @@ import { ApiError, toApiError } from './errors.js';
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-// 이사 코드 import는 소유자 계정만 허용한다.
+// 소유자 계정 판정 — 이사 코드 불러오기와 소유자 전용 개발 명령이 쓴다.
 // 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
-// 출처는 서버 env가 정본이다. env가 없으면 폴백으로 동작해 배포가 깨지지 않는다.
+// 소유자 메일의 출처는 서버 env가 정본이고, 없거나 비어 있으면 폴백 상수를 쓴다.
 // 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
 // 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
 // 늘어나는 대가라 하지 않는다.
 export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
 export function importOwnerEmail(): string {
-  return process.env.IMPORT_OWNER_EMAIL ?? OWNER_EMAIL_FALLBACK;
+  return process.env.IMPORT_OWNER_EMAIL || OWNER_EMAIL_FALLBACK;
+}
+/** 계정 이메일이 없거나 비어 있으면 소유자가 아니다 */
+export function isImportOwner(email: string | null | undefined, ownerEmail: string): boolean {
+  const mine = email?.toLowerCase();
+  return !!mine && mine === ownerEmail.toLowerCase();
 }
 
 // 이사 코드 import 허용 판정 — 요청 헤더를 읽지 않고 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다.
@@ -293,8 +298,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
   // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
   const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.origin ?? ''));
-  const isOwner = async (): Promise<boolean> =>
-    (user.email?.toLowerCase() ?? '') === importOwnerEmail().toLowerCase();
+  const isOwner = async (): Promise<boolean> => isImportOwner(user.email, importOwnerEmail());
   const debugAllowed = async (): Promise<boolean> => {
     const deployEnv = process.env.DEPLOY_ENV;
     if (deployEnv === 'production') return false;
