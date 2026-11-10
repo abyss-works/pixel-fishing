@@ -126,11 +126,19 @@ export const KNOWN_TIME_ORDER: Partial<Record<SpotId, number>> = {
   sthelena: 6.98,
 };
 
-const outsideBy = (hours: number, [lo, hi]: readonly [number, number]) => (hours < lo ? lo - hours : hours > hi ? hours - hi : 0);
+/** 범위에서 벗어난 정도. 아래쪽은 음수, 위쪽은 양수, 안은 0 */
+const signedOutside = (hours: number, [lo, hi]: readonly [number, number]) => (hours < lo ? hours - lo : hours > hi ? hours - hi : 0);
 
+/** 알려진 예외는 범위 안에 들어오거나 같은 쪽에서 범위에 가까워지면 개선, 같은 쪽에서 멀어지거나 반대쪽으로 벗어나면 위반이다 */
 export function judgeTimeRange(spot: SpotId, range: readonly [number, number], hours: number): GateVerdict {
-  const known = KNOWN_TIME_RANGE[spot];
-  return judgeExcess(outsideBy(round2(hours), range), known === undefined ? undefined : outsideBy(round2(known), range));
+  const now = round2(signedOutside(round2(hours), range));
+  const knownHours = KNOWN_TIME_RANGE[spot];
+  if (knownHours === undefined) return judgeExcess(Math.abs(now), undefined);
+  const known = round2(signedOutside(round2(knownHours), range));
+  if (now === known) return '예외';
+  if (now === 0) return '개선';
+  if (Math.sign(now) !== Math.sign(known)) return '위반';
+  return Math.abs(now) < Math.abs(known) ? '개선' : '위반';
 }
 
 /** 전환 시간은 진행 순서로 줄어들지 않아야 한다. prev는 직전 전환의 시간이다 */

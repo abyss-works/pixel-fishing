@@ -106,6 +106,15 @@ describe('전환 시간 범위 판정', () => {
     expect(judgeTimeRange('x' as never, [3, 4], 4.5)).toBe('위반');
   });
 
+  it('알려진 값 1.27시간(아래쪽): 2.50과 3.50은 개선, 1.00은 위반, 반대쪽 5.00도 위반이다', () => {
+    expect(KNOWN_TIME_RANGE.indian).toBe(1.27);
+    expect(judgeTimeRange('indian', [3, 4], 2.5)).toBe('개선');
+    expect(judgeTimeRange('indian', [3, 4], 3.5)).toBe('개선');
+    expect(judgeTimeRange('indian', [3, 4], 1.0)).toBe('위반');
+    expect(judgeTimeRange('indian', [3, 4], 5.0)).toBe('위반');
+    expect(judgeTimeRange('indian', [3, 4], 1.27)).toBe('예외');
+  });
+
   it('목록의 전환은 알려진 값과 같으면 예외, 범위에 가까워지면 개선, 멀어지면 위반이다', () => {
     const known = KNOWN_TIME_RANGE.indian!;
     expect(known).toBeLessThan(3);
