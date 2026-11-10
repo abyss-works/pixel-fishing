@@ -30,6 +30,7 @@ describe('PATCH_NOTES 데이터', () => {
   });
 
   it('태그는 기능, UI, 밸런스, 수정, 기타 다섯 개 안에 있다', () => {
+    expect(NOTE_TAGS).toEqual(['기능', 'UI', '밸런스', '수정', '기타']);
     for (const p of PATCH_NOTES) {
       for (const n of p.notes) expect(NOTE_TAGS, `${p.version} ${n.text}`).toContain(n.tag);
     }
