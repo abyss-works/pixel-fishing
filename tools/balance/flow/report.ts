@@ -5,8 +5,10 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { zoneById } from '../../../src/game/content/zones';
 import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
 import { entryLevel } from '../model';
-import { gateRows } from '../gates';
-import type { GateRow } from '../gates';
+import { FAME_RATIO_LIMIT, OPENING_LIMIT_SEC, PERFECT_LIMIT } from '../gates';
+import type { GateVerdict } from '../gates';
+import { gatesReport, verdictCounts, verdictList } from './gateReport';
+import type { GatesReport } from './gateReport';
 import { applyOverride, loadOverride } from './override';
 import type { FlowOverride } from './override';
 import { DAY_HOURS } from './progress';
@@ -57,7 +59,8 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다
   dist        분포: 같은 규칙과 상수로 캐치마다 뽑는 몬테카를로. 최초 10분(영웅 보장, 전설 보장, 첫 바다 해역 도착 시각)과 해역 전환 시간의 p10, 중앙값, p90, 평균을 해석 기댓값과 함께 낸다. p90이 운이 나쁜(느린) 쪽이다
   travel      이동 시간 관측: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 잰다. 다른 명령의 시간에 넣지 않는다
-  gates       게이트 검사: 새 해역 진입 레벨의 방치 수입이 같은 레벨로 낚을 수 있는 이전 해역의 가장 좋은 값 이상인지 전환마다 판정(통과, 위반, 예외). 위반이 하나라도 있으면 종료 코드 1
+  gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
+              같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다
 
 옵션
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워, 해역 어종 가격 배율을 덮어쓰는 JSON. 형식은
@@ -134,7 +137,7 @@ export interface FlowResult {
   days?: DaysReport;
   opening?: OpeningResult[];
   ev?: EvReport;
-  gates?: GateRow[];
+  gates?: GatesReport;
   dist?: { opening: OpeningDist[]; transition: TransitionDist[] };
   travel?: { rows: TravelRow[]; sampleDays: number };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
@@ -166,7 +169,7 @@ export function runFlow(o: FlowOptions): FlowResult {
     }
     if (o.commands.includes('travel')) res.travel = { rows: travelRows(), sampleDays: TRAVEL_SAMPLE_DAYS };
     if (o.commands.includes('ev')) res.ev = evReport();
-    if (o.commands.includes('gates')) res.gates = gateRows();
+    if (o.commands.includes('gates')) res.gates = gatesReport({ maxDays: o.maxDays, legendAts: legendCandidates(o.legendAt) });
     if (o.commands.includes('exception')) {
       res.exception = {
         income: incomeByOffset(o.axis), earlyEntry: earlyEntry(o.axis), returnTrips: returnTrips(o.axis), huntCost: huntCost(o.axis),
@@ -432,20 +435,59 @@ function travelText(t: NonNullable<FlowResult['travel']>): string[] {
   return out;
 }
 
-function gatesText(rows: GateRow[]): string[] {
+function gatesText(g: GatesReport): string[] {
   const poolLabel = { day: '낮 풀', mixed: '낮밤 혼합' } as const;
+  const count = (verdicts: GateVerdict[]) => {
+    const c = (v: GateVerdict) => verdicts.filter(x => x === v).length;
+    return `통과 ${c('통과')}, 예외 ${c('예외')}, 개선 ${c('개선')}, 위반 ${c('위반')}`;
+  };
+  const show = (v: GateVerdict) => (v === '개선' ? '개선(예외 목록 갱신 필요)' : v);
+  const dash = (v: GateVerdict | null) => (v === null ? '—' : show(v));
   const out: string[] = ['\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)'];
   out.push(table(
     ['전환', '풀', '비교 해역', '이동 전 수입(G/h)', '이동 직후 수입(G/h)', '차이', '판정'],
-    rows.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), r.verdict === '개선' ? '개선(예외 목록 갱신 필요)' : r.verdict]),
+    g.move.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), show(r.verdict)]),
   ));
-  const count = (v: GateRow['verdict']) => rows.filter(r => r.verdict === v).length;
-  out.push(`\n통과 ${count('통과')}, 예외 ${count('예외')}, 개선 ${count('개선')}, 위반 ${count('위반')}`);
+  out.push(`\n${count(g.move.map(r => r.verdict))}`);
+
+  out.push(`\n## 게이트 검사 — PERFECT 이상치 (같은 해역, 같은 낚싯대 스펙에서 PERFECT ÷ 방치 시간당 골드, 낮밤 혼합. ${PERFECT_LIMIT}배를 넘으면 위반)`);
+  out.push(table(
+    ['해역', '스펙', '레벨', 'PERFECT ÷ 방치', '판정'],
+    g.perfect.map(r => [nameOf(r.spot), r.margin ? `여유(+${r.margin})` : '최소', r.level, `${r.ratio.toFixed(2)}배`, show(r.verdict)]),
+  ));
+  out.push(`\n${count(g.perfect.map(r => r.verdict))}`);
+
+  out.push(`\n## 게이트 검사 — 배 명성 대기 ÷ 골드 대기 (리프 이후 배를 사는 전환, ${FAME_RATIO_LIMIT}배 이하, 하한 없음)`);
+  out.push(table(
+    ['전환', '골드 대기', '명성 대기', '명성 대기 ÷ 골드 대기', '판정'],
+    g.fame.map(r => [`${nameOf(r.from)} → ${nameOf(r.to)}`, h2(r.goldWait), h2(r.fameWait), r.ratio === null ? '—' : `${r.ratio.toFixed(2)}배`, show(r.verdict)]),
+  ));
+  out.push(`\n${count(g.fame.map(r => r.verdict))}`);
+
+  out.push(`\n## 게이트 검사 — 최초 10분 도달 (새 계정이 수동 낚시로 ${OPENING_LIMIT_SEC / 60}분 안에 ${nameOf(SPOTS.find(s => s.boatTier >= 1)!.id)}에 닿는다. 전설 보장 번호 후보 중 가장 느린 값)`);
+  out.push(table(
+    ['판정 방식', '가장 느린 보장 번호', '도착 시간', '캐치 수', '판정'],
+    g.opening.map(r => [r.judgment === 'good' ? 'GOOD' : '무판정', `전설 ${r.legendAt}번째`, r.seconds === null ? '미도착' : minutes(r.seconds), r.catches ?? '—', show(r.verdict)]),
+  ));
+  out.push(`\n${count(g.opening.map(r => r.verdict))}`);
+
+  out.push('\n## 전환 시간의 목표 판정 (직전 해역에서 방치로 낚을 때의 실질 낚시 시간. 범위는 지역 진입 전환만, 순서는 리프 이후의 전환 전부)');
+  const kind = { observe: '관측', entry: '지역 진입', inner: '지역 안' } as const;
+  out.push(table(
+    ['전환', '구분', '전환 시간', '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
+    g.time.map(r => [
+      `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], h2(r.hours), d1(r.days),
+      r.kind === 'observe' ? '—' : r.range ? `${r.range[0]}~${r.range[1]}시간` : '범위 없음', dash(r.rangeVerdict),
+      r.prevHours === null ? '—' : h2(r.prevHours), dash(r.orderVerdict), r.powerGap, r.entryPowerGap ?? '—',
+    ]),
+  ));
+  out.push(`\n${count(g.time.flatMap(r => [r.rangeVerdict, r.orderVerdict]).filter((v): v is GateVerdict => v !== null))}`);
+  out.push(`\n전체 — ${count(verdictList(g))}`);
   return out;
 }
 
 /** 위반이 하나라도 있으면 true — gates 명령의 종료 코드 판정 */
-export const hasViolation = (r: FlowResult): boolean => (r.gates ?? []).some(g => g.verdict === '위반');
+export const hasViolation = (r: FlowResult): boolean => r.gates !== undefined && verdictCounts(r.gates)['위반'] > 0;
 
 /** 결과를 사람이 읽는 표로 바꾼다 */
 export function renderText(r: FlowResult): string {

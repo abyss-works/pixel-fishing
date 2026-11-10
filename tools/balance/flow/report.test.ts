@@ -206,6 +206,25 @@ describe('gates 명령', () => {
     expect(r.stdout).toMatch(/통과/);
   });
 
+  it('게이트 네 가지와 전환 시간 판정을 모두 낸다', () => {
+    const text = runCli(['gates']).stdout;
+    for (const w of ['이동 직후 수입', 'PERFECT 이상치', '배 명성 대기 ÷ 골드 대기', '최초 10분 도달', '전환 시간의 목표 판정', '요구 파워 간격', '순서']) {
+      expect(text, w).toContain(w);
+    }
+    expect(text).toMatch(/전체 — 통과 \d+, 예외 \d+, 개선 0, 위반 0/);
+  });
+
+  it('전환 시간 판정 표: 지역 진입 전환은 범위와 판정, 지역 안 전환은 범위 없이 파워 간격, 리프까지는 판정 없이 시간만 낸다', () => {
+    const all = runCli(['gates']).stdout;
+    const text = all.slice(all.indexOf('## 전환 시간의 목표 판정'));
+    const row = (to: string) => text.split(String.fromCharCode(10)).find(l => l.startsWith('| ') && l.includes(`→ ${to} |`) && l.includes('시간'))!;
+    expect(row('인도양')).toMatch(/3~4시간.*예외/);
+    expect(row('남인도양')).toContain('범위 없음');
+    expect(row('남인도양')).toMatch(/\| 15 \| 10 \|/);
+    expect(row('마리아나 해구')).toContain('관측');
+    expect(row('마리아나 해구')).not.toMatch(/통과|예외|위반/);
+  });
+
   it('반례: 해역 하나의 어종 가격 배율을 크게 낮추면 그 전환이 위반이고 종료 코드는 1이다', () => {
     const dir = makeDir();
     const file = join(dir, 'low.json');
@@ -230,7 +249,7 @@ describe('gates 명령', () => {
     writeFileSync(file, JSON.stringify({ spots: { mozstrait: { priceMult: 0.1 } } }), 'utf-8');
     const bad2 = runCli(['gates', '--json', '--override', file]);
     expect(bad2.exitCode).toBe(1);
-    expect(JSON.parse(bad2.stdout).gates.some((g: { verdict: string }) => g.verdict === '위반')).toBe(true);
+    expect(JSON.parse(bad2.stdout).gates.move.some((g: { verdict: string }) => g.verdict === '위반')).toBe(true);
     const bad = runCli(['gates', '--override', join(tmpdir(), 'no-such-flow-override.json')]);
     expect(bad.exitCode).toBe(1);
     expect(bad.stderr).toContain('오류:');
