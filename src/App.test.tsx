@@ -31,6 +31,17 @@ import { V_SPAWN, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
 
+// 업데이트 소식 창은 현재 버전의 패치노트 항목이 있다고 가정해 검증한다. 실제 노트의 현재 버전 항목에 의존하지 않는다.
+vi.mock('./game/content/patchnotes', async importActual => {
+  const actual = await importActual<typeof import('./game/content/patchnotes')>();
+  const { APP_VERSION: version } = await import('./version');
+  const current = {
+    version, date: '2026-01-01', summary: '테스트 요약',
+    notes: [{ tag: '기능' as const, text: '테스트용 소식 항목이에요.' }],
+  };
+  return { ...actual, PATCH_NOTES: [current, ...actual.PATCH_NOTES.filter(n => n.version !== version)] };
+});
+
 const SAVE_KEY = 'pixel-fishing-save';
 
 // 튜토리얼 창도 접속 시 떠서 키를 막는다 — 튜토리얼 자체를 다루는 케이스 밖에서는 모두 본 것으로 시작한다
@@ -807,7 +818,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '다시 보지 않기', '닉네임', '도움말 마지막 갱신']) {
+      '미끼', 'Esc', '물고기 그래픽', '띄우지 않기', '닉네임', '도움말 마지막 갱신']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말
@@ -1613,7 +1624,7 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     unseen();
     seed({ fame: 120 });
     const { unmount } = render(<App />);
-    fireEvent.click(screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
     fireEvent.click(screen.getByLabelText('닫기'));
     expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
     unmount();
@@ -1630,19 +1641,38 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION, answered: ['fish-art'] });
   });
 
-  it('설정 탭에서 이번 소식을 다시 볼 수 있다', () => {
+  it('설정 탭에서 최근 소식을 다시 볼 수 있다', () => {
     seed({ fame: 120 });
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('패치노트'));
-    fireEvent.click(screen.getByRole('button', { name: '이번 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
-    const check = screen.getByRole('checkbox', { name: '이번 소식 다시 보지 않기' });
+    const check = screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' });
     expect(check).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(check);
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     expect(stored()).toMatchObject({ dismissedVersion: null });
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+  });
+
+  it('다시 보기로 연 소식의 체크를 해제했다 다시 체크하고 닫으면, 다시 열 때 체크된 채로 시작한다', () => {
+    seed({ fame: 120 });
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(stored()).toMatchObject({ dismissedVersion: null });
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
+    fireEvent.click(openerButton('패치노트'));
+    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
+    expect(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' })).toHaveAttribute('aria-checked', 'true');
   });
 });

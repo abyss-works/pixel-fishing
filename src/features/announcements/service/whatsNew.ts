@@ -7,7 +7,7 @@ import {
   getAnnouncements, markPromptsAnswered, setDismissedVersion,
 } from '../../../platform/api/announcements';
 import {
-  SETTING_PROMPTS, isFreshPlayer, newsFor, pendingPrompts, planWhatsNew,
+  SETTING_PROMPTS, isFreshPlayer, latestNewsAtOrBelow, newsFor, pendingPrompts, planWhatsNew,
 } from '../model/whatsNew';
 import type { SettingPrompt, WhatsNewStep } from '../model/whatsNew';
 
@@ -20,7 +20,7 @@ interface Session {
   index: number;
   news: PatchNote | null;
   prompts: readonly SettingPrompt[];
-  /** "이번 소식 다시 보지 않기" 체크 — 이미 다시 보지 않기로 한 소식을 다시 열면 체크된 채로 시작한다 */
+  /** "다시 보지 않기" 체크 — 이미 다시 보지 않기로 한 소식을 다시 열면 체크된 채로 시작한다 */
   dismiss: boolean;
 }
 
@@ -56,7 +56,7 @@ function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
 /** 창 닫기 — 소식은 체크대로 남기고, 보여준 질문은 답한 것으로 남긴다(고른 값은 이미 적용돼 있다) */
 function close() {
   const shown = session.steps;
-  if (shown.includes('news')) setDismissedVersion(session.dismiss ? APP_VERSION : null);
+  if (shown.includes('news')) setDismissedVersion(session.dismiss && session.news ? session.news.version : null);
   if (shown.includes('settings')) markPromptsAnswered(session.prompts.map(p => p.id));
   update({ ...session, steps: [], index: 0 });
 }
@@ -72,11 +72,15 @@ function go(delta: 1 | -1) {
   update({ ...session, index });
 }
 
-/** 설정 탭의 "이번 소식 다시 보기" — 본 기록과 무관하게 현재 버전 소식만 연다 */
+/**
+ * 패치노트 창의 "최근 소식 다시 보기" — 본 기록과 무관하게 항목이 있는 가장 최근 버전의 소식을 연다.
+ * 현재 버전 이하의 항목 가운데 가장 높은 버전을 고르며 배열 순서에 기대지 않는다. 항목이 없으면 열지 않는다.
+ * 다시 보지 않기 기록은 열린 소식의 버전을 기준으로 남아, 현재 버전 항목이 없을 때도 접속 팝업과 어긋나지 않는다.
+ */
 export function reopenWhatsNew(): boolean {
-  const news = PATCH_NOTES.find(n => n.version === APP_VERSION) ?? null;
+  const news = latestNewsAtOrBelow(PATCH_NOTES, APP_VERSION);
   if (!news) return false;
-  const dismiss = getAnnouncements().dismissedVersion === APP_VERSION;
+  const dismiss = getAnnouncements().dismissedVersion === news.version;
   update({ ...session, steps: ['news'], index: 0, news, prompts: [], dismiss });
   return true;
 }
