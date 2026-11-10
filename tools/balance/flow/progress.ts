@@ -15,6 +15,7 @@ import type { Axis, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
+import type { Sampler } from './sample';
 
 export interface PlayType {
   id: 'h16' | 'h8' | `h4-${number}` | 'h2' | 'h1' | 'always';
@@ -74,6 +75,8 @@ export interface SimOptions {
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   maxDays: number;
+  /** 주면 낚은 수입을 기댓값 대신 캐치마다 뽑은 표본으로 센다(몬테카를로). 생략하면 기댓값 경로다 */
+  sampler?: Sampler;
   /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
   growTo?: number;
 }
@@ -160,8 +163,14 @@ export function simulate(opts: SimOptions): SimResult {
       bagUsed += Math.min(room, total);
     }
     for (const { spot, r } of rs) {
-      gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
-      track(spot, r, r.catchesPerHour * h);
+      if (opts.sampler) {
+        const v = opts.sampler.accrue(r, h * 3600);
+        gold += v.gold * goldFrac; fame += v.fame;
+        track(spot, r, v.catches);
+      } else {
+        gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
+        track(spot, r, r.catchesPerHour * h);
+      }
     }
     fishSec += sec;
   };
