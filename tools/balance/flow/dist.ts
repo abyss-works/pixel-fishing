@@ -7,7 +7,7 @@ import { FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/gam
 import { rng } from '../model';
 import { simulateOpening, OPENING_TARGET_SEC } from './opening';
 import type { Judgment } from './opening';
-import { ALWAYS_ON, simulate } from './progress';
+import { simulate } from './progress';
 import type { FlowAxis } from './progress';
 import { createSampler, summarize } from './sample';
 import type { Dist } from './sample';
@@ -58,16 +58,14 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
 }
 
 export interface TransitionDistOptions {
-  trials: number; seed: number; axis: FlowAxis; maxDays: number; bagCapAwake: boolean;
-  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중. 생략하면 0 */
-  travelShare?: number;
+  trials: number; seed: number; axis: FlowAxis; maxDays: number;
 }
 
 export interface TransitionDist {
   from: SpotId; to: SpotId;
-  /** 쉬지 않고 낚을 때 이 전환에 걸린 시간(시간)의 분포 */
+  /** 이 전환에 걸린 실질 낚시 시간(시간)의 분포 */
   hours: Dist | null;
-  /** 해석 기댓값(transition 명령의 연속 방치 소요, 시간). 최대 일수 안에 닿지 못했으면 null */
+  /** 해석 기댓값(transition 명령의 전환 시간, 시간). 최대 일수 안에 닿지 못했으면 null */
   analyticHours: number | null;
   /** 처음부터 이 전환까지 누적 시간(시간)의 분포와 해석 기댓값 */
   cumulative: Dist | null;
@@ -76,7 +74,7 @@ export interface TransitionDist {
 
 export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   checkTrials(o.trials);
-  const base = { type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare };
+  const base = { axis: o.axis, bounty: false, maxDays: o.maxDays };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
   const hours: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);

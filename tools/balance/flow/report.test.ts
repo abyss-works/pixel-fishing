@@ -13,18 +13,29 @@ const makeDir = () => { const d = mkdtempSync(join(tmpdir(), 'flow-report-')); d
 
 const base = (over: Partial<FlowOptions> = {}): FlowOptions => ({ ...parseArgs([]), ...over });
 
+describe('없앤 옵션', () => {
+  it('유형, 손실, 가방, 이동 보정 옵션은 사용법 오류다', () => {
+    for (const flag of ['--loss4h', '--bag-cap-awake', '--travel-share']) {
+      const r = runCli(flag === '--bag-cap-awake' ? [flag] : [flag, '10']);
+      expect(r.exitCode, flag).toBe(1);
+      expect(r.stderr, flag).toContain('알 수 없는 옵션');
+      expect(HELP).not.toContain(flag);
+    }
+  });
+});
+
 describe('명령 인자', () => {
   it('인자가 없으면 네 명령 전부와 기본값이다', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
-      loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
-      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, travelShare: null,
+      legendAt: null, axis: 'idle', maxDays: 365, help: false,
+      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
     });
   });
 
   it('명령 하나와 옵션을 읽는다', () => {
-    const o = parseArgs(['days', '--override', 'a.json', '--json', '--loss4h', '50', '--legend-at', '12', '--axis', 'manual', '--max-days', '90', '--bag-cap-awake']);
-    expect(o).toMatchObject({ commands: ['days'], override: 'a.json', json: true, loss4h: 50, legendAt: 12, axis: 'manual', maxDays: 90, bagCapAwake: true });
+    const o = parseArgs(['days', '--override', 'a.json', '--json', '--legend-at', '12', '--axis', 'manual', '--max-days', '90']);
+    expect(o).toMatchObject({ commands: ['days'], override: 'a.json', json: true, legendAt: 12, axis: 'manual', maxDays: 90 });
   });
 
   it('--help를 알아본다', () => {
@@ -36,33 +47,32 @@ describe('명령 인자', () => {
     expect(() => parseArgs(['--nothing'])).toThrow(/옵션/);
     expect(() => parseArgs(['days', '--override'])).toThrow(/값/);
     expect(() => parseArgs(['--axis', 'fast'])).toThrow(/idle/);
-    expect(() => parseArgs(['--loss4h', 'x'])).toThrow(/숫자/);
+    expect(() => parseArgs(['--legend-at', 'x'])).toThrow(/숫자/);
     expect(() => parseArgs(['--max-days', '0'])).toThrow(/1 이상/);
     expect(() => parseArgs(['days', 'opening'])).toThrow(/하나/);
   });
 
   it('도움말이 모든 명령과 옵션을 설명한다', () => {
-    for (const w of ['transition', 'days', 'opening', 'exception', 'ev', '1시간', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help', 'dist', 'travel', '--seed', '--trials', '--travel-share']) {
+    for (const w of ['transition', 'days', 'opening', 'exception', 'ev', '--override', '--json', '--legend-at', '--axis', '--max-days', '--help', 'dist', 'travel', '--seed', '--trials']) {
       expect(HELP).toContain(w);
     }
   });
 });
 
 describe('실행과 출력', () => {
-  it('전환 출력은 전환 골드 비중 표와 유형별 표를 담는다', () => {
+  it('전환 출력은 전환 골드 비중 표와 전환 시간 표를 담고 유형별 표는 없다', () => {
     const text = renderText(runFlow(base({ commands: ['transition'] })));
-    expect(text).toContain('전환 골드와 비중');
-    expect(text).toContain('### 4시간(낚시 75%)');
-    expect(text).toContain('### 4시간(낚시 100%)');
-    expect(text).toContain('### 4시간(낚시 50%)');
-    expect(text).toContain('### 1시간');
-    expect(text).toContain('### 16시간');
-    expect(text).toContain('강화 비중');
+    for (const w of ['전환 골드와 비중', '강화 비중', '전환 시간', '일수(÷8)']) expect(text).toContain(w);
+    expect(text).not.toContain('###');
+    expect(text).not.toMatch(/유형|일째|낚시 (100|75|50)%/);
   });
 
-  it('깨어 있는 동안 가방 한도 옵션은 일수 출력을 바꾼다', () => {
-    const o = base({ commands: ['days'], loss4h: 25 });
-    expect(renderText(runFlow({ ...o, bagCapAwake: true }))).not.toBe(renderText(runFlow(o)));
+  it('전환 시간 표의 일수는 전환 시간 ÷ 8 하나다', () => {
+    const t = runFlow(base({ commands: ['transition'] })).transition!;
+    const text = renderText(runFlow(base({ commands: ['transition'] })));
+    for (const x of t.timings) {
+      expect(text).toContain(`${x.hours.toFixed(2)}시간 | ${(x.hours / 8).toFixed(1)}일`);
+    }
   });
 
   it('같은 명령을 두 번 실행하면 출력이 바이트까지 같다', () => {
@@ -86,9 +96,17 @@ describe('실행과 출력', () => {
     for (const w of ['진입 레벨 대비 수입', '조기 진입', '낮은 지역으로 돌아옴', '네임드 토벌 비용', '-4', '+4']) expect(text).toContain(w);
   });
 
-  it('일수 출력은 의뢰 수행 여부별 도착 일차와 레벨업 일수를 담는다', () => {
+  it('일수 출력은 의뢰 수행 여부별 누적 실질 낚시 시간과 8시간 환산 일수, 레벨업 시간을 담는다', () => {
     const text = renderText(runFlow(base({ commands: ['days'] })));
-    for (const w of ['도착 일차', '수행 안 함', '모두 수행', '레벨업']) expect(text).toContain(w);
+    for (const w of ['누적 도달', '수행 안 함', '모두 수행', '레벨업', '시간 (', '일)']) expect(text).toContain(w);
+    expect(text).not.toMatch(/일째|유형|낚시 (100|75|50)%/);
+  });
+
+  it('환산 일수 예: 12시간은 1.5일, 40시간은 5.0일이고 16시간과 4시간 기준 열은 없다', () => {
+    const text = renderText(runFlow(base({ commands: ['transition', 'days'] })));
+    expect(text).not.toMatch(/16시간 기준|4시간 기준|낚시 75%|낚시 100%|낚시 50%/);
+    expect((12 / 8).toFixed(1)).toBe('1.5');
+    expect((40 / 8).toFixed(1)).toBe('5.0');
   });
 
   it('덮어쓴 해역 요구 파워가 표 라벨에도 덮어쓴 값으로 나온다', () => {
@@ -102,28 +120,10 @@ describe('실행과 출력', () => {
     expect(text).not.toContain('세인트헬레나(29)');
   });
 
-  it('유형별 전환 표에는 연속 방치 값 열이 없고 연속 방치 표에만 있다', () => {
-    const text = renderText(runFlow(base({ commands: ['transition'], loss4h: 25 })));
-    const start = text.indexOf('### 4시간(낚시 75%)');
-    const section = text.slice(start, text.indexOf('###', start + 4) === -1 ? undefined : text.indexOf('###', start + 4));
-    for (const w of ['연속 방치 소요', '기다린 것', '명성 대기']) expect(section).not.toContain(w);
-    expect(section).toContain('도착 일차');
-    const continuous = text.slice(text.indexOf('## 해역 전환 — 연속 방치 소요'), start);
-    for (const w of ['연속 방치 소요', '기다린 것', '명성 대기']) expect(continuous).toContain(w);
-  });
-
-  it('4시간 유형은 기본으로 낚시 100%, 75%, 50%를 함께 내고 비율을 주면 그 값 하나만 낸다', () => {
-    const all = renderText(runFlow(base({ commands: ['transition'] })));
-    for (const w of ['### 4시간(낚시 100%)', '### 4시간(낚시 75%)', '### 4시간(낚시 50%)']) expect(all).toContain(w);
-    const one = renderText(runFlow(base({ commands: ['transition'], loss4h: 40 })));
-    expect(one).toContain('### 4시간(낚시 60%)');
-    expect(one).not.toContain('### 4시간(낚시 75%)');
-  });
-
   it('각 명령 출력은 그 표가 기대는 가정을 가정: 으로 밝힌다', () => {
     const t = (c: 'transition' | 'days' | 'opening' | 'exception') => renderText(runFlow(base({ commands: [c] })));
     const want: Record<string, string[]> = {
-      transition: ['가정:', '낚지 못하는 비율', '8시간 유형은 사용자 확인 대기', '잠든 동안'],
+      transition: ['가정:', '실질 낚시 시간', '÷ 8', '명성을 기다리는 동안'],
       days: ['가정:', '0.5', '어종 천장', '결투', '레벨업', '라이선스', '골드 보상만'],
       opening: ['가정:', '낚는 시간만'],
       exception: ['가정:', '줄 끊김', '결투'],
@@ -152,32 +152,12 @@ describe('실행과 출력', () => {
     expect(a).toMatch(/세인트헬레나 \| 27 \|/);
   });
 
-  it('days 가정은 도감을 채우지 않아 유형마다 못 쓰는 라이선스가 있다는 점을 실제 결과에서 만들어 밝힌다', () => {
-    const text = renderText(runFlow(base({ commands: ['days'] })));
-    expect(text).toContain('지나온 해역으로 돌아가 도감을 채우지 않는다');
-    expect(text).not.toContain('4시간 이하 유형은');
-    const d = runFlow(base({ commands: ['days'] })).days!;
-    const level = Math.min(...d.levelUp.map(r => r.level));
-    const rows = d.levelUp.filter(r => r.bounty && r.level === level);
-    const all = new Set(rows.flatMap(r => r.licenses));
-    for (const r of rows) {
-      const miss = [...all].filter(l => !r.licenses.includes(l));
-      const line = `${r.type.label}: ${miss.join(', ')}`;
-      if (miss.length) expect(text).toContain(line);
+  it('유형, 손실, 가방, 잠 가정 문구는 어느 명령의 출력에도 없다', () => {
+    const text = renderText(runFlow(base({ commands: ['transition', 'days', 'opening', 'exception', 'ev'] })));
+    for (const w of ['유형', '낚지 못하는 비율', '잠든', '가방 한도', '사용자 확인 대기', '--bag-cap-awake', '--loss4h', '--travel-share']) {
+      expect(text, w).not.toContain(w);
     }
-    expect(rows.some(r => [...all].some(l => !r.licenses.includes(l)))).toBe(true);
-  });
-
-  it('가방 가정 문구는 16시간의 깨어 있는 시간과 짧은 유형까지 아우른다', () => {
-    const text = renderText(runFlow(base({ commands: ['transition'] })));
-    expect(text).toContain('16시간 유형의 깨어 있는 시간');
-    expect(text).toContain('짧은 유형');
-  });
-
-  it('가방 한도 옵션을 켜면 가정 문구가 바뀐다', () => {
-    const text = renderText(runFlow(base({ commands: ['transition'], bagCapAwake: true })));
-    expect(text).not.toContain('사용자 확인 대기');
-    expect(text).toContain('가방 한도를 적용');
+    expect(text).toContain('지나온 해역으로 돌아가 도감을 채우지 않는다');
   });
 
   it('JSON 출력은 선택한 명령의 데이터만 담는다', () => {
@@ -261,7 +241,7 @@ describe('분포와 이동 명령', () => {
   const small = (over: Partial<FlowOptions> = {}) => base({ trials: 8, ...over });
 
   it('분포 인자를 읽는다', () => {
-    expect(parseArgs(['dist', '--seed', '5', '--trials', '50', '--travel-share', '2'])).toMatchObject({ commands: ['dist'], seed: 5, trials: 50, travelShare: 2 });
+    expect(parseArgs(['dist', '--seed', '5', '--trials', '50'])).toMatchObject({ commands: ['dist'], seed: 5, trials: 50 });
     expect(parseArgs(['travel']).commands).toEqual(['travel']);
   });
 
@@ -274,8 +254,6 @@ describe('분포와 이동 명령', () => {
     expect(() => parseArgs(['--trials', '0'])).toThrow(/1 이상/);
     expect(() => parseArgs(['--trials', '2.5'])).toThrow(/정수/);
     expect(() => parseArgs(['--seed', '1.5'])).toThrow(/정수/);
-    expect(() => parseArgs(['--travel-share', '100'])).toThrow(/0 이상 100 미만/);
-    expect(() => parseArgs(['--travel-share', '-1'])).toThrow(/0 이상 100 미만/);
   });
 
   it('분포 출력은 시드와 시도 횟수, 느린 쪽의 뜻, 두 분포 표를 담는다', () => {
@@ -293,41 +271,21 @@ describe('분포와 이동 명령', () => {
     expect(renderText(runFlow({ ...o, seed: 4 }))).not.toBe(renderText(a));
   });
 
-  it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중과 일괄 보정에 쓸 수 있는 값을 담는다', () => {
+  it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중을 담고 관측 전용임을 밝힌다', () => {
     const text = renderText(runFlow(base({ commands: ['travel'] })));
-    for (const w of ['이동 시간 측정', '거리', '속도', '왕복', '비중', '5%', '일괄 보정', '가정:', '마을 연못', '세인트헬레나']) expect(text, w).toContain(w);
+    for (const w of ['이동 시간 측정', '거리', '속도', '왕복', '비중', '5%', '관측 전용', '가정:', '마을 연못', '세인트헬레나']) expect(text, w).toContain(w);
+    expect(text).not.toContain('일괄 보정');
   });
 
-  it('기본 출력은 이동 시간을 넣지 않고 실행 때 잰 최대 비중과 옵션을 밝힌다', () => {
-    const d = renderText(runFlow(base({ commands: ['transition'] })));
-    expect(d).toMatch(/이동 시간: 넣지 않음\. 측정 비중은 해역별 최대 0\.79%\(travel 명령\)이며 --travel-share로 넣을 수 있다/);
-    expect(runFlow(base({ commands: ['transition'] })).options.travel).toMatchObject({ share: 0, source: 'none' });
-  });
-
-  it('기본 출력은 이동 시간 줄을 빼면 --travel-share 0과 같고 개발 브랜치의 수치와 같다', () => {
-    const strip = (t: string) => t.split('\n').filter(l => !l.includes('이동 시간:')).join('\n');
-    const o = base({ commands: ['transition', 'days', 'dist'], trials: 4 });
-    expect(strip(renderText(runFlow(o)))).toBe(strip(renderText(runFlow({ ...o, travelShare: 0 }))));
+  it('다른 명령의 출력에는 이동 시간 줄이 없고 시간은 이동을 넣지 않은 값이다', () => {
     const t = renderText(runFlow(base({ commands: ['transition'] })));
-    for (const row of ['| 인도양 → 남인도양 | 4.9h | 7.8h | 0분 · 1.2h · 3.7h | 1.33배 |', '| 남대서양 용승대 → 세인트헬레나 | 16h | 62h | 16h · 0분 · 0분 | 0.00배 |']) {
-      expect(t).toContain(row);
-    }
-  });
-
-  it('이동 시간을 0으로 지정하면 지정 문구가, 양수로 지정하면 포함 문구와 직접 지정이 나온다', () => {
-    expect(renderText(runFlow(base({ commands: ['transition'], travelShare: 0 })))).toContain('이동 시간: 넣지 않음(--travel-share 0)');
-    const given = renderText(runFlow(base({ commands: ['days'], travelShare: 2 })));
-    expect(given).toContain('이동 시간: 포함');
-    expect(given).toContain('직접 지정');
-    expect(given).not.toBe(renderText(runFlow(base({ commands: ['days'] }))));
-  });
-
-  it('보정이 적용되지 않는 명령은 이동 시간을 넣지 않는다고 밝힌다', () => {
-    expect(renderText(runFlow(base({ commands: ['opening'] })))).toContain('이동 시간: 넣지 않음(이 명령에는 적용하지 않는다)');
+    expect(t).not.toContain('이동 시간');
+    expect(t).toContain('| 인도양 → 남인도양 | 4.93시간');
+    expect(t).toContain('| 남대서양 용승대 → 세인트헬레나 | 15.87시간');
   });
 
   it('분포 명령은 최대 일수가 짧아 끝내지 못해도 죽지 않고 미도달을 밝힌다', () => {
-    const r = runCli(['dist', '--max-days', '1', '--trials', '40', '--travel-share', '3']);
+    const r = runCli(['dist', '--max-days', '1', '--trials', '40']);
     expect(r.stderr).toBe('');
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('미도달');

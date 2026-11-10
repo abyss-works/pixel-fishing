@@ -70,7 +70,3 @@ export function travelRows(days: number = TRAVEL_SAMPLE_DAYS): TravelRow[] {
     };
   });
 }
-
-/** 일괄 보정에 쓸 수 있는 비중 — 해역별 비중의 최댓값. 모든 해역에 같이 적용하면 비중이 작은 해역은 과보정된다.
- *  가방 채움을 진입 레벨의 방치 속도로 고정해 쟀으므로 레벨이 오른 뒤 채움이 빨라지는 효과는 들어 있지 않다 */
-export const travelShareDefault = (rows: readonly TravelRow[]): number => Math.max(0, ...rows.map(r => r.share));
