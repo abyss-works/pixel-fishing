@@ -14,7 +14,7 @@ export function parseTierClass(cls: string): TierClassInfo {
   const bounds = [...new Set([...cls.matchAll(/@max-\[(\d+)px\]/g)].map(m => Number(m[1])))].sort((a, b) => a - b);
   const gap = /\[--hdr-gap:(\d+)px\]/.exec(cls);
   if (bounds.length !== 2 || !gap) {
-    throw new Error('헤더 단계 클래스에서 경계 두 개와 기본 칸 간격을 읽지 못했습니다. 단계 정의의 형식이 바뀌었는지 확인하세요.');
+    throw new Error('헤더 단계 클래스에서 경계 두 개와 기본 칸 간격을 읽지 못했습니다. 단계 정의의 형식이 바뀐 것으로 보입니다.');
   }
   return { tight: bounds[0], wide: bounds[1], baseGap: Number(gap[1]) };
 }
@@ -57,20 +57,19 @@ export interface Measure {
   viewportWidth: number;
   /** 뷰포트 폭에서 사이드바 폭을 뺀 값 */
   stageWidth: number;
-  scrollWidth: number;
-  clientWidth: number;
   tier: { rows: boolean; gap: number };
   /** 헤더 행의 바깥 여백(px) */
   inset: number;
   stage: Rect;
-  bar: Rect | null;
-  menu: Rect | null;
+  sidebar: Rect;
+  bar: Rect;
+  menu: Rect;
   clipped: ClippedText[];
   clickables: Clickable[];
 }
 
 export const CHECKS = [
-  ['overflow', '가로 넘침'], ['overlap', '겹침'], ['inStage', '스테이지 안'], ['gap', '간격'],
+  ['viewport', '뷰포트 안'], ['overlap', '겹침'], ['inStage', '스테이지 안'], ['gap', '간격'],
   ['center', '세로 중심'], ['clip', '글자 잘림'], ['tier', '단계'],
 ] as const;
 export type CheckId = typeof CHECKS[number][0];
@@ -93,27 +92,25 @@ const EDGE_EPS = 0.5;
 const round = (n: number) => Math.round(n * 10) / 10;
 const pass: Check = { ok: true, detail: '' };
 const fail = (detail: string): Check => ({ ok: false, detail });
-const missing = fail('자원 바 또는 메뉴 버튼을 찾지 못했습니다');
 const fmtRect = (r: Rect) => `x${round(r.x)}~${round(r.x + r.width)} y${round(r.y)}~${round(r.y + r.height)}`;
 
-export function judgeCase(m: Measure, ctx: { bounds: TierBounds; baseGap: number }): CaseResult {
+export function judgeCase(m: Measure, info: TierClassInfo): CaseResult {
   const { bar, menu } = m;
-  const both = bar && menu ? { bar, menu } : null;
-  const gap = both ? both.menu.x - (both.bar.x + both.bar.width) : 0;
-  const tier = observedTier(m.tier, ctx.baseGap);
-  const want = expectedTier(m.stageWidth, ctx.bounds);
+  const gap = menu.x - (bar.x + bar.width);
+  const centerDiff = Math.abs(menu.y + menu.height / 2 - (bar.y + bar.height / 2));
+  const tier = observedTier(m.tier, info.baseGap);
+  const want = expectedTier(m.stageWidth, info);
   const inside = (r: Rect) => r.x >= m.stage.x - EDGE_EPS && r.x + r.width <= m.stage.x + m.stage.width + EDGE_EPS
     && r.y >= m.stage.y - EDGE_EPS && r.y + r.height <= m.stage.y + m.stage.height + EDGE_EPS;
+  const inViewport = (r: Rect) => r.x >= -EDGE_EPS && r.x + r.width <= m.viewportWidth + EDGE_EPS;
   const checks: Record<CheckId, Check> = {
-    overflow: m.scrollWidth <= m.clientWidth ? pass : fail(`scrollWidth ${m.scrollWidth} > clientWidth ${m.clientWidth}`),
-    overlap: !both ? missing : rectsOverlap(both.bar, both.menu)
-      ? fail(`자원 바 ${fmtRect(both.bar)}와 메뉴 버튼 ${fmtRect(both.menu)}가 겹칩니다`) : pass,
-    inStage: !both ? missing : inside(both.bar) && inside(both.menu) ? pass
-      : fail(`스테이지 ${fmtRect(m.stage)} 밖: 자원 바 ${fmtRect(both.bar)}, 메뉴 버튼 ${fmtRect(both.menu)}`),
-    gap: !both ? missing : gap >= m.inset - GAP_TOLERANCE ? pass
-      : fail(`간격 ${round(gap)}px < 바깥 여백 ${m.inset}px`),
-    center: !both ? missing : Math.abs(both.menu.y + both.menu.height / 2 - (both.bar.y + both.bar.height / 2)) <= CENTER_TOLERANCE ? pass
-      : fail(`세로 중심 차 ${round(Math.abs(both.menu.y + both.menu.height / 2 - (both.bar.y + both.bar.height / 2)))}px`),
+    viewport: inViewport(m.stage) && inViewport(m.sidebar) ? pass
+      : fail(`뷰포트 폭 ${m.viewportWidth} 밖: 스테이지 ${fmtRect(m.stage)}, 사이드바 ${fmtRect(m.sidebar)}`),
+    overlap: rectsOverlap(bar, menu) ? fail(`자원 바 ${fmtRect(bar)}와 메뉴 버튼 ${fmtRect(menu)}가 겹칩니다`) : pass,
+    inStage: inside(bar) && inside(menu) ? pass
+      : fail(`스테이지 ${fmtRect(m.stage)} 밖: 자원 바 ${fmtRect(bar)}, 메뉴 버튼 ${fmtRect(menu)}`),
+    gap: gap >= m.inset - GAP_TOLERANCE ? pass : fail(`간격 ${round(gap)}px < 바깥 여백 ${m.inset}px`),
+    center: centerDiff <= CENTER_TOLERANCE ? pass : fail(`세로 중심 차 ${round(centerDiff)}px`),
     clip: m.clipped.length === 0 ? pass
       : fail(m.clipped.map(c => `"${c.text}" ${c.scrollWidth} > ${c.clientWidth}`).join(', ')),
     tier: tier === want ? pass : fail(`스테이지 ${m.stageWidth}px의 기대 단계는 ${TIER_LABEL[want]}, 실제는 ${TIER_LABEL[tier]}`),

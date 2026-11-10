@@ -49,12 +49,12 @@ describe('findOverlaps', () => {
 
 /** 스테이지 772(기본 단계)에서 문제가 없는 측정값 */
 const good = (): Measure => ({
-  viewportWidth: 1156, stageWidth: 772, scrollWidth: 1156, clientWidth: 1156,
+  viewportWidth: 1156, stageWidth: 772,
   tier: { rows: false, gap: 18 }, inset: 12,
-  stage: r(0, 0, 772, 800), bar: r(100, 12, 500, 60), menu: r(612, 12, 60, 60),
+  stage: r(0, 0, 772, 800), sidebar: r(772, 0, 384, 800), bar: r(100, 12, 500, 60), menu: r(612, 12, 60, 60),
   clipped: [], clickables: [],
 });
-const ctx = { bounds: BOUNDS, baseGap: 18 };
+const ctx = { ...BOUNDS, baseGap: 18 };
 
 describe('judgeCase', () => {
   it('문제가 없으면 모든 항목이 통과다', () => {
@@ -64,9 +64,10 @@ describe('judgeCase', () => {
     expect(c.observations).toEqual([]);
   });
 
-  it('가로 넘침은 위반이다', () => {
-    const c = judgeCase({ ...good(), scrollWidth: 1200 }, ctx);
-    expect(c.checks.overflow.ok).toBe(false);
+  it('사이드바가 뷰포트 밖으로 나가면 위반이다', () => {
+    const c = judgeCase({ ...good(), sidebar: r(800, 0, 384, 800) }, ctx);
+    expect(c.checks.viewport.ok).toBe(false);
+    expect(judgeCase({ ...good(), stage: r(-20, 0, 772, 800) }, ctx).checks.viewport.ok).toBe(false);
   });
 
   it('자원 바와 메뉴 버튼이 겹치면 위반이다', () => {
@@ -104,13 +105,6 @@ describe('judgeCase', () => {
     expect(c.checks.tier.ok).toBe(false);
   });
 
-  it('자원 바나 메뉴 버튼을 찾지 못하면 관련 항목이 위반이다', () => {
-    const c = judgeCase({ ...good(), bar: null }, ctx);
-    expect(c.checks.overlap.ok).toBe(false);
-    expect(c.checks.inStage.ok).toBe(false);
-    expect(c.checks.gap.ok).toBe(false);
-    expect(c.checks.center.ok).toBe(false);
-  });
 
   it('누를 수 있는 요소끼리 겹친 것은 관측이고 위반이 아니다', () => {
     const m = { ...good(), clickables: [
@@ -125,7 +119,7 @@ describe('judgeCase', () => {
 describe('summarize', () => {
   it('위반 항목 수와 관측 수를 센다', () => {
     const ok = judgeCase(good(), ctx);
-    const bad = judgeCase({ ...good(), scrollWidth: 1300, menu: r(590, 12, 60, 60) }, ctx);
+    const bad = judgeCase({ ...good(), sidebar: r(800, 0, 384, 800), menu: r(590, 12, 60, 60) }, ctx);
     expect(summarize([{ width: 1156, state: '초기', result: ok }]).violations).toBe(0);
     expect(summarize([{ width: 1156, state: '초기', result: ok }, { width: 900, state: '최장', result: bad }]).violations).toBe(3);
   });
@@ -133,10 +127,10 @@ describe('summarize', () => {
 
 describe('formatReport', () => {
   it('표에 폭, 상태, 항목별 결과를 쓰고 위반 상세를 붙인다', () => {
-    const bad = judgeCase({ ...good(), scrollWidth: 1300 }, ctx);
+    const bad = judgeCase({ ...good(), sidebar: r(800, 0, 384, 800) }, ctx);
     const text = formatReport([{ width: 1156, state: '최장', result: bad }]);
     expect(text).toContain('1156');
     expect(text).toContain('위반 1건');
-    expect(text).toContain('폭 1156 / 최장 / 가로 넘침');
+    expect(text).toContain('폭 1156 / 최장 / 뷰포트 안');
   });
 });
