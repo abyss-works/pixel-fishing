@@ -96,9 +96,12 @@ export class GameFieldEngine {
   /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
   private controlLocked = false;
   private biteStart = 0;
-  /** 현재 단계가 시작된 기준 시각(Date.now). 타이머로 넘어온 단계는 발화 시각이 아니라 이전 단계의 목표 시각이다 */
+  /**
+   * 현재 단계가 시작된 기준 시각(Date.now). 타이머로 넘어온 단계는 발화 시각이 아니라 이전 단계의 목표 시각이다.
+   * 획득 단계는 서버 결과가 도착한 시각이다
+   */
   private phaseStartAt = 0;
-  /** 타이머가 넘기는 다음 단계의 기준 시각. 사용자 입력이나 줄 거두기로 바뀌는 단계에서는 null */
+  /** 타이머가 넘기는 다음 단계의 기준 시각 = max(목표 시각, 발화 시각 - 1000ms). 사용자 입력이나 줄 거두기로 바뀌는 단계에서는 null */
   private chainStartAt: number | null = null;
   /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
   private resultAt: number | null = null;
@@ -427,7 +430,11 @@ export class GameFieldEngine {
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
     if (phase === 'catch') this.catchStart = Date.now();
-    if (phase !== this.snapshot.phase) {
+    const resultArrived = phase === 'catch' && this.snapshot.fishId === null && fishId !== null;
+    if (resultArrived) {
+      // 획득 카운트다운은 서버 결과가 도착한 시각부터 센다
+      this.phaseStartAt = Date.now();
+    } else if (phase !== this.snapshot.phase) {
       this.phaseStartAt = this.chainStartAt ?? Date.now();
     }
     this.chainStartAt = null;

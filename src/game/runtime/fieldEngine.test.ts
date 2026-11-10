@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState } from '../rules/logic';
+import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
@@ -175,7 +176,12 @@ function simClock(alignToSecond: boolean) {
   const origin = now;
   return {
     origin,
-    runUntil(end: number) {
+    /** 정렬 없이 정확한 시각에 깨는 타이머 — 네트워크 지연을 흉내 낸다 */
+    exactTimer(fn: () => void, ms: number) {
+      seq += 1;
+      timers.set(seq, { due: now + ms, fn });
+    },
+    async runUntil(end: number) {
       for (;;) {
         let nextId = -1;
         let nextDue = Infinity;
@@ -186,6 +192,7 @@ function simClock(alignToSecond: boolean) {
         now = nextDue;
         vi.setSystemTime(now);
         t.fn();
+        for (let i = 0; i < 5; i += 1) await Promise.resolve();
       }
       now = end;
       vi.setSystemTime(now);
@@ -195,30 +202,63 @@ function simClock(alignToSecond: boolean) {
 
 describe('GameFieldEngine 방치 사이클 시간', () => {
   const RAND = 0.5;
-  const catchTimes: number[] = [];
+  const WINDOW_MINUTES = 1;
 
-  function runIdle(rod: number, alignToSecond: boolean, cycles: number): number[] {
-    catchTimes.length = 0;
-    vi.spyOn(Math, 'random').mockReturnValue(RAND);
+  /**
+   * 요청이 서버에 닿는 시간(업링크)과 응답이 돌아오는 시간을 흉내 내고, 서버 하한(catchTooSoon)을 서버 처리 시각으로 판정한다.
+   * spikeMs가 null이면 지연이 없다. 숫자면 세 번에 한 번 업링크가 spikeMs만큼 더 걸린다.
+   */
+  async function runIdle(rod: number, alignToSecond: boolean, spikeMs: number | null, rand = RAND) {
+    vi.spyOn(Math, 'random').mockReturnValue(rand);
     const clock = simClock(alignToSecond);
     const game = { ...newState(), rod };
     const engine = new GameFieldEngine('world', game, []);
+    const serverTimes: number[] = [];
+    let lastServerAt: string | null = null;
+    let rejected = 0;
+    let pending = false;
+    let overlapped = 0;
+    let requestIndex = 0;
     engine.updateContext(game, false, {
       dispatch: () => {
-        catchTimes.push(Date.now());
-        return {
-          status: 'ok',
-          result: { type: 'catch', fishId: 'carp', uid: 'u', info: { form: 'normal' }, released: [] },
-        } as never;
+        if (pending) overlapped += 1;
+        pending = true;
+        const index = requestIndex;
+        requestIndex += 1;
+        const uplinkMs = spikeMs === null ? 0 : 50 + (index % 3 === 1 ? spikeMs : 0);
+        const downlinkMs = spikeMs === null ? 0 : 50;
+        return new Promise(resolve => {
+          clock.exactTimer(() => {
+            const serverAt = new Date(Date.now()).toISOString();
+            if (catchTooSoon(game, 'pond', lastServerAt, serverAt)) {
+              rejected += 1;
+              clock.exactTimer(() => {
+                pending = false;
+                resolve({ status: 'rejected', error: 'too-fast' } as never);
+              }, downlinkMs);
+              return;
+            }
+            lastServerAt = serverAt;
+            serverTimes.push(Date.now());
+            clock.exactTimer(() => {
+              pending = false;
+              resolve({
+                status: 'ok',
+                result: { type: 'catch', fishId: 'carp', uid: 'u', info: { form: 'normal' }, released: [] },
+              } as never);
+            }, downlinkMs);
+          }, uplinkMs);
+        });
       },
       onEvent: noop,
       onScene: noop,
     });
     (engine as unknown as { school: unknown }).school = { id: 's', spot: 'pond', x: 0, y: 0 };
     (engine as unknown as { transition(p: string): void }).transition('wait');
-    clock.runUntil(clock.origin + 60_000 * cycles);
+    await clock.runUntil(clock.origin + 60_000 * WINDOW_MINUTES);
     engine.dispose();
-    return catchTimes.slice();
+    const gaps = serverTimes.slice(1).map((t, i) => t - serverTimes[i]);
+    return { gaps, rejected, overlapped };
   }
 
   afterEach(() => {
@@ -230,22 +270,30 @@ describe('GameFieldEngine 방치 사이클 시간', () => {
   const modelCycleMs = (rod: number) => (6 * Math.pow(0.94, rod - 1) + 1.4 + 2.0) * 1000;
 
   for (const rod of [25, 28, 30]) {
-    it(`숨은 탭에서도 Lv${rod} 방치 사이클이 모델 시간과 같다`, () => {
-      const times = runIdle(rod, true, 1);
-      const gaps = times.slice(1).map((t, i) => t - times[i]);
+    it(`숨은 탭에서도 Lv${rod} 방치 사이클이 모델 시간에 1초 미만만 더해진다`, async () => {
+      const { gaps, rejected } = await runIdle(rod, true, null);
       const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
       expect(gaps.length).toBeGreaterThan(8);
-      // 1초 정렬은 요청 시각만 최대 1초 흔들 뿐이어서 평균 간격은 모델과 같다
-      expect(Math.abs(mean - modelCycleMs(rod))).toBeLessThan(60);
-      // 서버 하한(획득 표시 + 입질 최소 대기)보다 짧아지지 않는다
-      const floor = 2000 + 4000 * Math.pow(0.94, rod - 1);
-      for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(floor);
+      expect(rejected).toBe(0);
+      // 챔질 요청은 1초 정렬로 늦게 나가고 획득 카운트다운은 결과 도착부터 세므로, 모델보다 1초 미만으로 길 뿐 누적되지 않는다
+      expect(mean).toBeGreaterThan(modelCycleMs(rod) - 60);
+      expect(mean).toBeLessThan(modelCycleMs(rod) + 700);
     });
 
-    it(`포그라운드 Lv${rod} 방치 사이클은 모델 시간과 같다`, () => {
-      const times = runIdle(rod, false, 1);
-      const gaps = times.slice(1).map((t, i) => t - times[i]);
+    it(`포그라운드 Lv${rod} 방치 사이클은 모델 시간과 같다`, async () => {
+      const { gaps } = await runIdle(rod, false, null);
       for (const gap of gaps) expect(Math.abs(gap - modelCycleMs(rod))).toBeLessThan(5);
     });
+  }
+
+  for (const spike of [0, 900, 2000, 2600]) {
+    for (const hidden of [false, true]) {
+      it(`세 번에 한 번 업링크 +${spike}ms ${hidden ? '숨은 탭' : '포그라운드'}에서 서버 하한 거절이 없고 응답 전에 재캐스트하지 않는다`, async () => {
+        const { gaps, rejected, overlapped } = await runIdle(25, hidden, spike, 0);
+        expect(gaps.length).toBeGreaterThan(3);
+        expect(rejected).toBe(0);
+        expect(overlapped).toBe(0);
+      });
+    }
   }
 });
