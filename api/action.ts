@@ -593,7 +593,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[1],
   guild: GuildEffects): Promise<ApplyOutcome> {
   const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
@@ -601,7 +601,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
   const now = new Date().toISOString();
-  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, spot, judgmentIn, now, pz);
+  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);

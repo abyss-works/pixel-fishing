@@ -7,7 +7,7 @@ import Inset from '../../../ui/Inset';
 import Tip from '../../../ui/Tip';
 import PowerMeter from './PowerMeter';
 import { FitText } from './RodStatTable';
-import { POWERED_NOTE, UNDERPOWERED_NOTE, goodText } from './statsText';
+import { POWERED_NOTE, UNDERPOWERED_NOTE, goodText, idleText } from './statsText';
 
 // 요약 탭: 명성, 골드, 도감, 가방 네 칸과, 고른 해역의 칸(이름과 적합도, 파워 막대, 핵심 수치 셋).
 // 파워 충족 안내는 적합도의 툴팁이다.
@@ -36,7 +36,7 @@ export default function SummaryTab({ game, summary, row, here }: {
         <div className="grid grid-cols-3">
           <SummaryFigure label="입질 대기">{data.effectiveBite.min.value.toFixed(1)}~{data.effectiveBite.max.value.toFixed(1)}초</SummaryFigure>
           <SummaryFigure label="GOOD 영역">{goodText(row)}</SummaryFigure>
-          <SummaryFigure label="방치 낚시">×{data.autoBoost.value.toFixed(1)}</SummaryFigure>
+          <SummaryFigure label="방치 낚시">{idleText(data.idle)}</SummaryFigure>
         </div>
       </Inset>
     </div>

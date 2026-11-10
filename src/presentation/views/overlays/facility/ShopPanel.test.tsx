@@ -35,7 +35,7 @@ describe('미끼 상점', () => {
     const rare = BAITS[1];
     fireEvent.click(screen.getByRole('option', { name: new RegExp(rare.name) }));
     expect(screen.getAllByLabelText(`정가 ${fmtGold(rare.price)}`).length).toBeGreaterThan(0);
-    expect(screen.getByText(/할인/)).toBeInTheDocument();
+    expect(screen.getByText(/미끼값/)).toBeInTheDocument();
     const unit = baitCost(game, rare.price, 1);
     expect(screen.getByRole('button', { name: `구매 (-${fmtGold(unit)})` })).toBeInTheDocument();
   });

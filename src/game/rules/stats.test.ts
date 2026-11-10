@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
 import { powerReqOf } from '../content/spots';
 import { WALK_SPEED } from './balance';
-import { autoBoostForSpot, autoPenaltyHelpText, minLevelOfPower, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
+import { autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 
 type G = ReturnType<typeof newState>;
 const s = (over: Partial<G> = {}): G => ({ ...newState(), ...over });
@@ -50,20 +50,6 @@ describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {
       rodAxes(s()).biteMin.value,
     );
     expect(rodAxes(s({ rod: 50 })).biteMax.value).toBeLessThan(8);
-  });
-});
-
-describe('방치 배수 — 내역이 기여를 설명한다', () => {
-  it('진입 배수가 기본이고 레벨 차 기여가 그 위에 얹힌다', () => {
-    const entryLv = minLevelOfPower(powerReqOf('sea'));
-    const at = autoBoostForSpot(s({ rod: entryLv }), 'sea');
-    expect(at.base).toBe(5);
-    expect(at.value).toBe(5);
-    expect(at.mods[0].delta).toBe(0);
-    const far = autoBoostForSpot(s({ rod: entryLv + 10 }), 'sea');
-    expect(far.base).toBe(5);
-    expect(far.value).toBe(3);
-    expect(far.mods[0].delta).toBe(-2);
   });
 });
 
@@ -134,14 +120,14 @@ describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 �
 });
 
 describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writing-voice.md)', () => {
-  it('두 문장 모두 숫자를 쓰지 않는다 — 수치는 행이 보여준다', () => {
+  it('도움말 문장 모두 숫자를 쓰지 않는다 — 수치는 행이 보여준다', () => {
     expect(powerHelpText()).not.toMatch(/\d/);
     expect(autoPenaltyHelpText()).not.toMatch(/\d/);
   });
 
   it('문장마다 줄을 바꾼다', () => {
     expect(powerHelpText().split('\n')).toHaveLength(2);
-    expect(autoPenaltyHelpText().split('\n')).toHaveLength(2);
+    expect(autoPenaltyHelpText().split('\n')).toHaveLength(3);
   });
 
   it('파워는 해역별 요구 차이를, 페널티는 방치의 결과를 사실로 알린다', () => {

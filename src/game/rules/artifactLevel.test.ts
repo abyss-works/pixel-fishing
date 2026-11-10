@@ -2,13 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
-import { newState, baitCost, mutationWeightsOf, variantShare, migrate } from './logic';
+import { newState, baitCost, baitDiscount, mutationWeightsOf, variantShare, migrate } from './logic';
 import type { GameState } from './logic';
 import { moveSpeed, effectiveBite } from './stats';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
-  artifactEffectsAt, artifactLevelOf, duelSpeedupScale, namedDailyCap, namedRewardOf, namedRewardStat, dailyClearCap,
+  artifactEffectsAt, artifactLevelOf, duelSpeedupScale, scaleAfterCuts, sumArtifactEffect, variantBoostOf, namedDailyCap, namedRewardOf, namedRewardStat, dailyClearCap,
 } from './artifactLevel';
 import {
   ARTIFACTS, ARTIFACT_MAX_LEVEL, ARTIFACT_LEVEL_COEF, artifactLevelCost, artifactHasLevel, artifactById,
@@ -292,5 +292,27 @@ describe('바깥섬의 봉돌, 입질 대기', () => {
     const withRelic = effectiveBite(seed({ rod: 1, artifacts: ['outer-isle-sinker'] }), 'sthelena');
     expect(plain.min.mods.some(m => m.id === 'power')).toBe(true);
     expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
+  });
+});
+
+// 보너스 효과의 합산 — 같은 종류의 유물 효과는 더해 한 번 적용한다
+describe('유물 효과 — 같은 종류는 합한 뒤 한 번 적용한다', () => {
+  it('결투 가속: 감소율을 더해 (1 − 합), 합이 1을 넘어도 0 아래로 내려가지 않는다', () => {
+    expect(scaleAfterCuts([])).toBe(1);
+    expect(scaleAfterCuts([0.1])).toBeCloseTo(0.9, 12);
+    expect(scaleAfterCuts([0.1, 0.2])).toBeCloseTo(0.7, 12); // 곱이면 0.72
+    expect(scaleAfterCuts([0.6, 0.5])).toBe(0);
+  });
+  it('보유 유물의 효과를 모두 더한다', () => {
+    const s = seed({ artifacts: ['wreck-compass', 'varuna-scale'] });
+    expect(sumArtifactEffect(s, e => e.sail)).toBeCloseTo(0.1, 12);
+    expect(sumArtifactEffect(s, e => (e.sail ?? 0) + (e.baitDiscount ?? 0))).toBeCloseTo(0.35, 12);
+    expect(sumArtifactEffect(seed(), e => e.sail)).toBe(0);
+  });
+  it('미끼 할인과 돌연변이 증가율은 유물이 하나라 값이 그대로다', () => {
+    expect(baitDiscount(seed({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 5 } }))).toBeCloseTo(0.5, 12);
+    expect(variantBoostOf(seed({ artifacts: ['elder-scale'], artifactLevels: { 'elder-scale': 5 } }))).toBeCloseTo(0.5, 12);
+    expect(baitDiscount(seed())).toBe(0);
+    expect(variantBoostOf(seed())).toBe(0);
   });
 });

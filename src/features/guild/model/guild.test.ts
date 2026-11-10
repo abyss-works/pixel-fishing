@@ -224,11 +224,11 @@ describe('길드 보너스 화면 모델', () => {
     expect(bonusEffectValue('mutation', 0.03)).toBe('+3%p');
   });
 
-  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 어종 가중치를 줄인다', () => {
+  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 등급 가중치를 줄인다', () => {
     expect(bonusEffectText('sell', 0.06)).toBe('판매가 +6%');
     expect(bonusEffectText('bag', 0.2)).toBe('가방 용량 +20%');
     expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 +5%');
-    expect(bonusEffectText('rare', 0.04)).toBe('일반 어종 가중치 −4%');
+    expect(bonusEffectText('rare', 0.04)).toBe('일반 등급 가중치 −4%');
     expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 확률 +3%p');
   });
 

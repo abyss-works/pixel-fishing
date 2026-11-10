@@ -231,14 +231,14 @@ export const GUILD_BONUS_TIP: Record<GuildBonusId, string> = {
 
 const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
 
-/** 효과 값 하나: 비율은 %, 돌연변이는 확률에 더하는 %p, 희귀 어종은 일반 어종 가중치를 줄이므로 − */
+/** 효과 값 하나: 비율은 %, 돌연변이는 확률에 더하는 %p, 희귀 어종은 일반 등급 가중치를 줄이므로 − */
 export function bonusEffectValue(id: GuildBonusId, value: number): string {
   if (id === 'rare') return `−${pct(value)}`;
   return id === 'mutation' ? `+${pct(value)}p` : `+${pct(value)}`;
 }
 
 const EFFECT_LABEL: Record<GuildBonusId, string> = {
-  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 어종 가중치', mutation: '돌연변이 확률',
+  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 등급 가중치', mutation: '돌연변이 확률',
 };
 
 /** 효과 문장: 무엇이 얼마나 바뀌는지 */
