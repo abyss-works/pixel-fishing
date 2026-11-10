@@ -81,16 +81,16 @@ export interface TransitionReport {
   types: TypeSteps[];
 }
 
-export interface TransitionOptions { axis: 'idle' | 'manual'; loss4h: number | null; maxDays: number; bagCapAwake?: boolean }
+export interface TransitionOptions { axis: 'idle' | 'manual'; loss4h: number | null; maxDays: number; bagCapAwake?: boolean; travelShare?: number }
 
 export function transitionReport(o: TransitionOptions): TransitionReport {
-  const continuous = simulate({ type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake });
+  const continuous = simulate({ type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare });
   return {
     rows: transitionGold(),
     continuous: transitionTimings(continuous.arrivals),
     continuousComplete: continuous.complete,
     types: playTypes(o.loss4h).map(type => {
-      const r = simulate({ type, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake });
+      const r = simulate({ type, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare });
       let prev = 1;
       return {
         type, complete: r.complete,

@@ -59,6 +59,8 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
 
 export interface TransitionDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number; bagCapAwake: boolean;
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중. 생략하면 0 */
+  travelShare?: number;
 }
 
 export interface TransitionDist {
@@ -71,7 +73,7 @@ export interface TransitionDist {
 
 export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   checkTrials(o.trials);
-  const base = { type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake };
+  const base = { type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
   const hours: number[][] = analytic.map(() => []);
