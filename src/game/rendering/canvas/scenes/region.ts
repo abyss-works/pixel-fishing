@@ -86,7 +86,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   }
 
   // 건물 → 장식 → 라벨 → 지역 연출
-  for (const b of pack.buildings) BUILDING_SPRITES[b.sprite].draw(ctx, b.rect);
+  for (const b of pack.buildings) BUILDING_SPRITES[b.sprite].draw(ctx, b.rect, b.flip);
   for (const d of pack.decorations) drawTree(ctx, d.x, d.y);
   for (const l of pack.labels) drawLabel(ctx, l);
   pack.flavor?.(ctx, v.t);

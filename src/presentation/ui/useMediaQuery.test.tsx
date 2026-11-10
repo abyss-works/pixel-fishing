@@ -50,7 +50,7 @@ describe('useMediaQuery', () => {
 
 describe('useMobileLayout', () => {
   it('뷰포트 폭 질의로 판정하고 바뀌면 다시 판정한다', () => {
-    expect(MOBILE_QUERY).toBe('(width < 64rem)');
+    expect(MOBILE_QUERY).toBe('(width < 48rem)');
     const set = installMatchMedia({ [MOBILE_QUERY]: true });
     const { result } = renderHook(() => useMobileLayout());
     expect(result.current).toBe(true);

@@ -1,13 +1,13 @@
 // 해역 전환 — 다음 해역으로 옮기는 데 드는 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 그 비중,
-// 연속 방치로 걸린 시간, 배 명성을 기다린 시간, 플레이 유형별 도착 일차를 낸다.
+// 직전 해역에서 방치로 낚아 걸린 실질 낚시 시간, 배 명성을 기다린 시간, 8시간 환산 일수를 낸다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
 import type { Boat } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel } from '../model';
-import { ALWAYS_ON, playTypes, simulate } from './progress';
-import type { Arrival, PlayType } from './progress';
+import { fishingDays, simulate } from './progress';
+import type { Arrival } from './progress';
 
 export interface TransitionRow {
   from: SpotId; to: SpotId;
@@ -43,9 +43,12 @@ export function transitionGold(): TransitionRow[] {
 
 export interface TransitionTiming {
   row: TransitionRow;
-  /** 직전 해역 도착부터 이번 도착까지 연속으로 낚은 시간(시간) */
+  /** 직전 해역 도착부터 이번 도착까지 낚은 실질 낚시 시간(시간) */
   hours: number;
   cumulativeHours: number;
+  /** 8시간 환산 일수 */
+  days: number;
+  cumulativeDays: number;
   /** 기다린 시간(시간) — 골드만, 명성만, 둘 다 모자란 시간 */
   waitGold: number; waitFame: number; waitBoth: number;
   /** 골드가 막은 시간(골드만 + 둘 다)과 배 명성이 막은 시간(명성만 + 둘 다) */
@@ -61,41 +64,22 @@ export function transitionTimings(arrivals: Arrival[]): TransitionTiming[] {
     const goldWait = a.waitGold + a.waitBoth, fameWait = a.waitFame + a.waitBoth;
     return {
       row: rows[i], hours: a.hours - arrivals[i].hours, cumulativeHours: a.hours,
+      days: fishingDays(a.hours - arrivals[i].hours), cumulativeDays: fishingDays(a.hours),
       waitGold: a.waitGold, waitFame: a.waitFame, waitBoth: a.waitBoth,
       goldWait, fameWait, fameOverGold: goldWait > 0 ? fameWait / goldWait : null,
     };
   });
 }
 
-export interface TypeSteps {
-  type: PlayType;
-  complete: boolean;
-  /** 해역마다 도착한 날과 직전 해역에서 보낸 일수 */
-  steps: { to: SpotId; day: number; days: number }[];
-}
-
 export interface TransitionReport {
   rows: TransitionRow[];
-  continuous: TransitionTiming[];
-  continuousComplete: boolean;
-  types: TypeSteps[];
+  timings: TransitionTiming[];
+  complete: boolean;
 }
 
-export interface TransitionOptions { axis: 'idle' | 'manual'; loss4h: number | null; maxDays: number; bagCapAwake?: boolean }
+export interface TransitionOptions { axis: 'idle' | 'manual'; maxDays: number }
 
 export function transitionReport(o: TransitionOptions): TransitionReport {
-  const continuous = simulate({ type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake });
-  return {
-    rows: transitionGold(),
-    continuous: transitionTimings(continuous.arrivals),
-    continuousComplete: continuous.complete,
-    types: playTypes(o.loss4h).map(type => {
-      const r = simulate({ type, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake });
-      let prev = 1;
-      return {
-        type, complete: r.complete,
-        steps: r.arrivals.slice(1).map(a => { const s = { to: a.spot, day: a.day, days: a.day - prev }; prev = a.day; return s; }),
-      };
-    }),
-  };
+  const r = simulate({ axis: o.axis, bounty: false, maxDays: o.maxDays });
+  return { rows: transitionGold(), timings: transitionTimings(r.arrivals), complete: r.complete };
 }

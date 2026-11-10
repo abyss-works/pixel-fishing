@@ -10,12 +10,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 
-/* 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃을 가르는 뷰포트 폭의 정본이다(1024px = 64rem, Tailwind lg와 같은 값).
+/* 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃을 가르는 뷰포트 폭의 정본이다(768px = 48rem, Tailwind md와 같은 값).
    뷰포트 폭이 이 값 미만이면 모바일 레이아웃, 이상이면 PC 레이아웃이다. 방향 조건은 쓰지 않는다.
    아래 mobile 변형, 입력 칸 규칙, 화면 조립의 판정 훅(MOBILE_QUERY)이 모두 이 값에서 나온다(layoutBreakpoint.test가 묶는다).
    컨테이너 쿼리는 레이아웃 판정에 쓰지 않고 컴포넌트 안의 밀도에만 쓴다. */
 @theme {
-  --breakpoint-pc: 64rem;
+  --breakpoint-pc: 48rem;
 }
 
 /* 모바일 레이아웃 변형 - 뷰포트 폭이 --breakpoint-pc 미만이다. 화면 조립의 판정 훅(MOBILE_QUERY)과 같은 조건이다 */

@@ -1,12 +1,11 @@
 // 진행 시뮬레이션 — 새 계정이 열린 가장 뒤 해역에서 낚고, 다음 해역에 필요한 배와 강화를 살 수 있으면 바로 사서 옮긴다.
-// 플레이 유형마다 하루에 낚는 시간이 다르고, 선택하면 하루 의뢰와 네임드 토벌을 더한다.
-// 가정: 판매는 즉시이고 이동·판매 왕복·미끼·유물·쿠폰은 없다. 명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다.
-//       깨어 있는 시간에는 기본으로 가방 한도를 보지 않고(자주 판다, 옵션으로 적용), 잠든 시간은 방치로 가방이 차면 골드만 멈춘다(명성과 도감은 계속 쌓인다).
-//       게임 날짜 경계(04:00)는 하루의 시작으로 보고, 하루 안의 순서는 의뢰, 일반 낚시, 잠든 낚시다.
+// 모든 시간은 실질 낚시 시간이다. 선택하면 하루 의뢰와 네임드 토벌을 더한다.
+// 가정: 판매는 즉시이고 미끼·유물·쿠폰은 없다. 이동, 창 조작, 가방 한도는 넣지 않는다(낚은 물고기는 모두 판매 수입이다). 명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다.
+//       하루는 실질 낚시 8시간이고, 하루 안의 순서는 의뢰, 일반 낚시다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
-import { capOfBoat, mutationWeightsOf, newState, variantShare } from '../../../src/game/rules/logic';
+import { mutationWeightsOf, newState, variantShare } from '../../../src/game/rules/logic';
 import { canBuyBoat } from '../../../src/game/rules/rules';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
@@ -15,51 +14,15 @@ import type { Axis, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
+import type { Sampler } from './sample';
 
-export interface PlayType {
-  id: 'h16' | 'h8' | `h4-${number}` | 'h2' | 'h1' | 'always';
-  label: string;
-  /** 깨어서 실제로 낚는 시간(하루, 시간) */
-  awakeHours: number;
-  /** 잠든 동안 방치로 낚는 시간(하루, 시간). 가방이 차면 멈춘다 */
-  sleepHours: number;
-}
+/** 일수 환산 기준 — 실질 낚시 시간을 이 값으로 나눈 것이 일수다. 환산 기준은 이 하나다 */
+export const DAY_HOURS = 8;
 
-/** 기준 유저의 낚지 못하는 비율(%) — 4시간 유형에서 접속해 있어도 실제로 낚지 못하는 몫. 근거 있는 값이 없는 가정이다 */
-export const DEFAULT_LOSS4H = 25;
+/** 실질 낚시 시간(시간)을 일수로 환산한다 */
+export const fishingDays = (hours: number): number => hours / DAY_HOURS;
 
-/** 비율을 주지 않았을 때 함께 내는 낚지 못하는 비율(%) — 낚시 100%, 75%, 50% */
-export const LOSS4H_SET: readonly number[] = [0, 25, 50];
-
-/** 하루 내내 쉬지 않고 낚는 가정 — 연속 방치 소요 시간을 잴 때 쓴다 */
-export const ALWAYS_ON: PlayType = { id: 'always', label: '연속 방치', awakeHours: 24, sleepHours: 0 };
-
-/** 하루 접속 시간 가정. 4시간 유형은 낚지 못하는 비율마다 하나이고, 비율을 생략하면 100%, 75%, 50% 세 가지다 */
-export function playTypes(loss4h: number | null = null): PlayType[] {
-  const losses = loss4h === null ? LOSS4H_SET : [loss4h];
-  for (const l of losses) {
-    if (!Number.isFinite(l) || l < 0 || l > 100) throw new Error('낚지 못하는 비율은 0에서 100 사이여야 합니다');
-  }
-  return [
-    { id: 'h16', label: '16시간', awakeHours: 8, sleepHours: 8 },
-    { id: 'h8', label: '8시간', awakeHours: 8, sleepHours: 0 },
-    ...losses.map(l => ({ id: `h4-${100 - l}` as const, label: `4시간(낚시 ${100 - l}%)`, awakeHours: 4 * (1 - l / 100), sleepHours: 0 })),
-    { id: 'h2', label: '2시간', awakeHours: 2, sleepHours: 0 },
-    { id: 'h1', label: '1시간', awakeHours: 1, sleepHours: 0 },
-  ];
-}
-
-/** 잠든 동안 수입으로 세는 시간(초) — 시간당 캐치 수로 가방이 차는 시간까지만이다 */
-export function sleepFishSeconds(boat: number, catchesPerHour: number, sleepSec: number): number {
-  return Math.min(sleepSec, capOfBoat(boat) / catchesPerHour * 3600);
-}
-
-/** 잠든 동안의 집계 — 가방이 차면 골드는 멈추고, 명성과 도감은 잠든 시간 내내 쌓인다(가방이 넘쳐도 명성과 도감은 오른다) */
-export function sleepAccrual(boat: number, catchesPerHour: number, sleepSec: number): { goldSec: number; sec: number } {
-  return { goldSec: sleepFishSeconds(boat, catchesPerHour, sleepSec), sec: sleepSec };
-}
-
-/** 깨어 있는 동안의 낚시 방식 — 방치 또는 수동 */
+/** 낚시 방식 — 방치 또는 수동 */
 export type FlowAxis = 'idle' | 'manual';
 
 /** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다 */
@@ -67,13 +30,13 @@ export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
   flow === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
 
 export interface SimOptions {
-  type: PlayType;
   axis: FlowAxis;
-  /** 깨어 있는 동안에도 가방 한도를 적용하는가 — 하루 깨어 있는 동안 한 번도 팔지 않는 하한 계산. 기본은 적용하지 않는다 */
-  bagCapAwake?: boolean;
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
+  /** 시뮬레이션 최대 일수(하루는 실질 낚시 DAY_HOURS시간) */
   maxDays: number;
+  /** 주면 낚은 수입을 기댓값 대신 캐치마다 뽑은 표본으로 센다(몬테카를로). 생략하면 기댓값 경로다 */
+  sampler?: Sampler;
   /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
   growTo?: number;
 }
@@ -81,15 +44,14 @@ export interface SimOptions {
 /** 마지막 해역에서 낚싯대가 이 레벨에 닿은 시점의 상태 */
 export interface LevelMark {
   level: number;
-  day: number;
+  /** 그 시점까지 누적 실질 낚시 시간(시간) */
+  hours: number;
   /** 그 시점에 쓸 수 있는 의뢰 라이선스(`구역:기본|네임드`). 의뢰를 수행하지 않는 시뮬레이션은 비어 있다 */
   licenses: string[];
 }
 
 export interface Arrival {
   spot: SpotId;
-  /** 도착한 날(첫날이 1) */
-  day: number;
   /** 도착까지 누적 낚시 시간(시간) */
   hours: number;
   /** 직전 도착 이후 기다린 낚시 시간(시간) — 골드만, 명성만, 둘 다 모자란 시간 */
@@ -119,12 +81,12 @@ const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 const boatBuyable = (boat: number, gold: number, fame: number) => canBuyBoat({ ...newState(), boat, gold, fame }).ok;
 
 export function simulate(opts: SimOptions): SimResult {
-  let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
+  let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, fishSec = 0, bountyGold = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
   const marks: LevelMark[] = [];
   const growTo = opts.growTo ?? 0;
   const finished = () => idx >= LAST && level >= growTo;
-  const arrivals: Arrival[] = [{ spot: SPOTS[0].id, day: 1, hours: 0, waitGold: 0, waitFame: 0, waitBoth: 0 }];
+  const arrivals: Arrival[] = [{ spot: SPOTS[0].id, hours: 0, waitGold: 0, waitFame: 0, waitBoth: 0 }];
   const dex: DexLog = new Map();
   const cache = new Map<string, Rates>();
   const normalShare = new Map<SpotId, number>();
@@ -148,27 +110,26 @@ export function simulate(opts: SimOptions): SimResult {
     }
   };
 
-  /** 낚은 수입을 더한다. 명성과 도감은 sec 전체, 골드는 goldSec만큼(잠든 동안 가방이 찬 뒤 제외)과 깨어 있는 동안의 가방 한도 안에서 더한다 */
-  const accrue = (spots: SpotId[], axis: Axis | null, sec: number, goldSec = sec, awake = false) => {
-    const rs = spots.map(spot => ({ spot, r: rateAt(spot, axis ?? axisAt(spot, level)) }));
+  /** 낚은 수입을 더한다. 낚은 물고기는 모두 판매 수입이다 */
+  const accrue = (spots: SpotId[], axis: Axis | null, sec: number) => {
     const h = sec / 3600 / spots.length;
-    let goldFrac = goldSec / sec;
-    if (awake && opts.bagCapAwake) {
-      const total = rs.reduce((t, x) => t + x.r.catchesPerHour * h, 0);
-      const room = Math.max(0, capOfBoat(boat) - bagUsed);
-      goldFrac = total > 0 ? Math.min(1, room / total) : 1;
-      bagUsed += Math.min(room, total);
-    }
-    for (const { spot, r } of rs) {
-      gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
-      track(spot, r, r.catchesPerHour * h);
+    for (const spot of spots) {
+      const r = rateAt(spot, axis ?? axisAt(spot, level));
+      if (opts.sampler) {
+        const v = opts.sampler.accrue(r, h * 3600);
+        gold += v.gold; fame += v.fame;
+        track(spot, r, v.catches);
+      } else {
+        gold += r.goldPerHour * h; fame += r.famePerHour * h;
+        track(spot, r, r.catchesPerHour * h);
+      }
     }
     fishSec += sec;
   };
 
   const licensesNow = (): string[] => !opts.bounty ? [] : BOUNTY_ZONES.flatMap(zone =>
     (['basic', 'named'] as const).filter(tier => licenseHeld(dex, zone, tier)).map(tier => licenseKey(zone, tier)));
-  const mark = () => { if (growTo > 0) marks.push({ level, day, licenses: licensesNow() }); };
+  const mark = () => { if (growTo > 0) marks.push({ level, hours: fishSec / 3600, licenses: licensesNow() }); };
 
   /** 필요한 배와 강화를 사고 열린 해역으로 옮긴다. 못 옮겼으면 무엇이 모자랐는지 dt초를 센다 */
   const settle = (dt: number) => {
@@ -183,7 +144,7 @@ export function simulate(opts: SimOptions): SimResult {
       }
       if (opens(next, boat, level)) {
         idx += 1;
-        arrivals.push({ spot: next.id, day, hours: fishSec / 3600, waitGold: waitGold / 3600, waitFame: waitFame / 3600, waitBoth: waitBoth / 3600 });
+        arrivals.push({ spot: next.id, hours: fishSec / 3600, waitGold: waitGold / 3600, waitFame: waitFame / 3600, waitBoth: waitBoth / 3600 });
         waitGold = waitFame = waitBoth = 0;
         if (idx >= LAST) mark();
         continue;
@@ -201,7 +162,7 @@ export function simulate(opts: SimOptions): SimResult {
   const fishFor = (spots: SpotId[] | null, axis: Axis | null, seconds: number) => {
     for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
-      accrue(spots ?? [SPOTS[idx].id], axis, dt, dt, true);
+      accrue(spots ?? [SPOTS[idx].id], axis, dt);
       left -= dt;
       settle(dt);
     }
@@ -213,25 +174,18 @@ export function simulate(opts: SimOptions): SimResult {
     settle(0);
   };
 
-  for (; day <= opts.maxDays && !finished(); day++) {
+  for (let day = 1; day <= opts.maxDays && !finished(); day++) {
     settle(0);
-    bagUsed = 0;
-    let awake = opts.type.awakeHours * 3600;
+    let left = DAY_HOURS * 3600;
     if (opts.bounty && !finished()) {
       const spot = SPOTS[idx].id;
       const plan = planBounties({
         player: { boat, level }, current: rateAt(spot), rateAt: s => rateAt(s),
-        licensed: (zone, tier) => licenseHeld(dex, zone, tier), seconds: awake,
+        licensed: (zone, tier) => licenseHeld(dex, zone, tier), seconds: left,
       });
-      for (const a of plan) { runActivity(a); awake -= a.seconds; }
+      for (const a of plan) { runActivity(a); left -= a.seconds; }
     }
-    if (!finished()) fishFor(null, null, awake);
-    const sleep = opts.type.sleepHours * 3600;
-    if (sleep > 0 && !finished()) {
-      const spot = SPOTS[idx].id;
-      const z = sleepAccrual(boat, rateAt(spot, 'idle').catchesPerHour, sleep);
-      accrue([spot], 'idle', z.sec, z.goldSec);
-    }
+    if (!finished()) fishFor(null, null, left);
   }
   return { arrivals, complete: idx >= LAST, bountyGold, marks };
 }

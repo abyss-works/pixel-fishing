@@ -94,24 +94,28 @@ export function isImportOwner(email: string | null | undefined, ownerEmail: stri
   return !!mine && mine === ownerEmail.toLowerCase();
 }
 
-// 이사 코드 import 허용 판정 — 요청 헤더를 읽지 않고 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다.
-// 정책 표(이 함수가 유일한 지점): production은 소유자도 거부, preview는 소유자만,
-// local은 모두 허용, 설정이 없거나 모르는 값은 거부한다. 운영 허용·차단은 이 분기의 한 줄을 바꾼다.
-export function importVerdict({ deployEnv, owner }: {
+// 개발 명령 계열(이사 코드 import, debug 명령, 강제 조우)의 허용 판정 — 요청 헤더를 읽지 않고
+// 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다. 정책 표(이 함수가 유일한 지점): production은 소유자도 거부,
+// preview는 소유자만, local은 모두 허용, 설정이 없거나 모르는 값은 거부한다.
+function devGateVerdict({ deployEnv, owner }: {
   deployEnv: string | undefined; owner: boolean;
-}): 'ok' | 'import-owner-only' | 'import-disabled' {
+}): 'ok' | 'owner-only' | 'disabled' {
   if (deployEnv === 'local') return 'ok';
-  if (deployEnv === 'preview') return owner ? 'ok' : 'import-owner-only';
-  return 'import-disabled';
+  if (deployEnv === 'preview') return owner ? 'ok' : 'owner-only';
+  return 'disabled';
 }
 
-// 테스트용 트리거(강제 조우 등) 허용 판정 — 운영 배포는 어떤 경우에도 막는다.
-// 스테이징·로컬 서버에서는 소유자 계정이거나 로컬 오리진일 때만 연다.
-export function debugTriggerAllowed({ deployEnv, localOrigin, owner }: {
-  deployEnv: string | undefined; localOrigin: boolean; owner: boolean;
-}): boolean {
-  if (deployEnv === 'production') return false;
-  return localOrigin || owner;
+/** 이사 코드 import 허용 판정. 거부 사유는 응답 코드로 돌려준다 */
+export function importVerdict(args: {
+  deployEnv: string | undefined; owner: boolean;
+}): 'ok' | 'import-owner-only' | 'import-disabled' {
+  const verdict = devGateVerdict(args);
+  return verdict === 'ok' ? 'ok' : verdict === 'owner-only' ? 'import-owner-only' : 'import-disabled';
+}
+
+/** debug 명령과 강제 조우의 허용 판정 */
+export function debugTriggerAllowed(args: { deployEnv: string | undefined; owner: boolean }): boolean {
+  return devGateVerdict(args) === 'ok';
 }
 
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
@@ -295,24 +299,18 @@ async function route(req: Req, res: Res): Promise<void> {
   const guildEffects = loaded.guild ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks) : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
-  // 호출자 판정 — 로컬 오리진(vite dev가 실제로 이 함수를 치는 빌드)과 소유자 계정.
-  // 오프라인 dev(LocalGameGateway)는 애초에 이 함수에 도달하지 않는다.
-  const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.origin ?? ''));
+  // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
   const isOwner = async (): Promise<boolean> => isImportOwner(user.email, importOwnerEmail());
-  const debugAllowed = async (): Promise<boolean> => {
-    const deployEnv = process.env.DEPLOY_ENV;
-    if (deployEnv === 'production') return false;
-    return debugTriggerAllowed({ deployEnv, localOrigin, owner: localOrigin || await isOwner() });
-  };
+  const debugAllowed = async (): Promise<boolean> =>
+    debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
 
-  // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있었다.
-  // 판정은 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
+  // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있다.
   if (action.type === 'import') {
     const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
     if (verdict !== 'ok') throw new ApiError(403, verdict);
   }
 
-  // 개발 도구 명령 — 운영 배포는 전부 거부한다. 스테이징·로컬은 소유자·로컬 오리진만.
+  // 개발 도구 명령 — 스테이징은 소유자만, 로컬은 모두, 그 밖은 거부한다.
   // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
   if (action.type === 'debug' && !await debugAllowed()) {
     throw new ApiError(422, 'debug-forbidden');
@@ -593,7 +591,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[2],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[1],
   guild: GuildEffects): Promise<ApplyOutcome> {
   const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
@@ -601,7 +599,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
   const now = new Date().toISOString();
-  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, spot, judgmentIn, now, pz);
+  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);

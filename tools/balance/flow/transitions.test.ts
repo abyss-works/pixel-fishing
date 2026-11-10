@@ -70,7 +70,7 @@ describe('전환 골드의 값 보존', () => {
 
 describe('전환 소요', () => {
   const arrival = (spot: string, hours: number, w: [number, number, number]): Arrival =>
-    ({ spot: spot as Arrival['spot'], day: 1, hours, waitGold: w[0], waitFame: w[1], waitBoth: w[2] });
+    ({ spot: spot as Arrival['spot'], hours, waitGold: w[0], waitFame: w[1], waitBoth: w[2] });
 
   it('도착 시각 차이가 소요 시간이고 명성 대기에는 둘 다 모자란 시간이 든다', () => {
     const t = transitionTimings([
@@ -87,27 +87,22 @@ describe('전환 소요', () => {
 });
 
 describe('전환 보고', () => {
-  const report = transitionReport({ axis: 'idle', loss4h: 25, maxDays: 365 });
+  const report = transitionReport({ axis: 'idle', maxDays: 365 });
 
-  it('연속 방치와 네 유형의 전환 소요를 모두 담는다', () => {
+  it('전환마다 전환 시간과 8시간 환산 일수를 담는다', () => {
     expect(report.rows).toHaveLength(SPOTS.length - 1);
-    expect(report.continuous).toHaveLength(SPOTS.length - 1);
-    expect(report.types.map(t => t.type.id)).toEqual(['h16', 'h8', 'h4-75', 'h2', 'h1']);
-    expect(report.types.every(t => t.complete)).toBe(true);
+    expect(report.timings).toHaveLength(SPOTS.length - 1);
+    expect(report.complete).toBe(true);
   });
 
-  it('낚는 시간이 짧은 유형일수록 도착 일차가 같거나 늦다', () => {
-    const last = (id: string) => report.types.find(t => t.type.id === id)!.steps.at(-1)!.day;
-    expect(last('h1')).toBeGreaterThanOrEqual(last('h2'));
-    expect(last('h2')).toBeGreaterThanOrEqual(last('h4-75'));
-    expect(last('h4-75')).toBeGreaterThanOrEqual(last('h8'));
-    expect(last('h8')).toBeGreaterThanOrEqual(last('h16'));
-  });
-
-  it('유형별 소요 일수는 도착 일차 차이다', () => {
-    for (const t of report.types) {
-      let prev = 1;
-      for (const s of t.steps) { expect(s.days).toBe(s.day - prev); prev = s.day; }
+  it('일수는 전환 시간 ÷ 8이고 누적도 같은 기준이다', () => {
+    for (const t of report.timings) {
+      expect(t.days).toBeCloseTo(t.hours / 8, 12);
+      expect(t.cumulativeDays).toBeCloseTo(t.cumulativeHours / 8, 12);
     }
+  });
+
+  it('전환 시간의 합은 마지막 누적 시간이다', () => {
+    expect(report.timings.reduce((s, t) => s + t.hours, 0)).toBeCloseTo(report.timings.at(-1)!.cumulativeHours, 9);
   });
 });

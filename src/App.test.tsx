@@ -19,7 +19,7 @@ import { APP_VERSION } from './version';
 import { PATCH_NOTES } from './game/content/patchnotes';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
-import { BAIT_WEIGHT_MULT, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
+import { BAIT_WEIGHT_BONUS, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
 import { WALK_BAG_CAP } from './game/content/boats';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
@@ -801,7 +801,7 @@ describe('R22: 도움말 탭', () => {
     expect(help).toContain(`${BOATS[BOATS.length - 1].bagCap}마리`);
     expect(help).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);  // 월척 기준
     expect(help).toContain(`${VARIANT_PRICE_MULT}배 가격`);   // 변이 판매가
-    expect(help).toContain(`비중이 ${BAIT_WEIGHT_MULT}배가 돼요`); // 미끼 효과 배수
+    expect(help).toContain(`가중치가 ${BAIT_WEIGHT_BONUS * 100}% 늘어요`); // 미끼 효과 보너스
   });
 
   it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {

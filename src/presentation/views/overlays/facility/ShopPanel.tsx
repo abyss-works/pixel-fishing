@@ -13,6 +13,7 @@ import ListRow from '../../../ui/ListRow';
 import NumberStepper from '../../../ui/NumberStepper';
 import PriceTag from '../../../ui/PriceTag';
 import Tip from '../../../ui/Tip';
+import { artifactEffectLabel, fmtCutPercent } from '../../../ui/artifactEffects';
 import { baitEffectLine } from '../../../ui/baitEffects';
 import { fmtGold } from '../../../ui/format';
 import { RarityText } from '../../../ui/fish/RarityTag';
@@ -32,7 +33,6 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
   const rows = useMemo(() => selectBaitShopRows(game, qty, busy), [game, qty, busy]);
   const [selectedId, setSelectedId] = useState(() => rows[0].bait.id);
   const sel = rows.find(r => r.bait.id === selectedId) ?? rows[0];
-  const discountPct = Math.round(sel.discountRate * 100);
 
   return (
     <FacilityCard title="향료전" onClose={onClose}
@@ -71,13 +71,13 @@ export default function ShopPanel({ game, onBuy, onClose, busy }: {
                        tags={[
                          <><RarityText rarity={sel.bait.targetRarity} /> 미끼</>,
                          <>보유 <span className="pf-accent">{sel.owned}</span>개</>,
-                         ...(discountPct > 0 ? [<>할인 <span className="pf-accent">{discountPct}%</span></>] : []),
+                         ...(sel.discountRate > 0 ? [<>{artifactEffectLabel('baitDiscount')} <span className="pf-accent">{fmtCutPercent(sel.discountRate)}</span></>] : []),
                        ]} />
           <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
             <span className="text-2xs text-text-dim">
               <Tip text={<>직접 낚아 올릴 때마다 하나씩 줄어요. 방치 낚시에는 쓰이지 않아요.<br />가방 탭의 아이템에서 켜요. 한 번에 하나만 켜져요.</>}>효과</Tip>
             </span>
-            <span className="text-xs">{sel.bait.desc} {baitEffectLine(sel.bait)}</span>
+            <span className="text-xs">{sel.bait.desc}<br />{baitEffectLine(sel.bait)}</span>
           </Inset>
           <CompareTable heads={['현재', '구매 후']} rows={[
             { label: '보유', value: `${sel.owned}개`, next: `${sel.owned + sel.count}개`, delta: `+${sel.count}` },

@@ -24,7 +24,7 @@
 //                 없으면 창의 서북 모서리가 원점이다(오프셋 0).
 //   islands[]     { name, lon, lat }  벤더 데이터에 칸 단위로 잡히지 않는 작은 섬 — 경위도가 속한 칸 하나를 육지로 찍는다
 //                 (섬은 칸 한 개가 최소 단위다). 특화 수역 스탬프 전에 찍으므로 수역 타원이 섬을 둘러싼다.
-//   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water' }
+//   anchors{}     이름 → { lon, lat, dx?, dy?, terrain?: 'land'|'water', facing? }
 //                 경위도 → 원점 기준 게임 픽셀 선형 투영 후 dx/dy(px) 오프셋. terrain 검증 실패 시 생성 중단.
 //
 // 철칙: 이 도구와 configs가 지형의 단일 근원이다. 런타임은 generated 모듈만 읽고
@@ -221,8 +221,11 @@ for (const [name, a] of Object.entries(anchors)) {
   if (typeof a.lon !== 'number' || typeof a.lat !== 'number') {
     errors.push(`앵커 ${name}: lon/lat 숫자 필요`); continue;
   }
+  if (a.facing !== undefined && !['north', 'south', 'east', 'west'].includes(a.facing)) {
+    errors.push(`앵커 ${name}: facing은 north, south, east, west 중 하나여야 한다 (받은 값: ${JSON.stringify(a.facing)})`); continue;
+  }
   const p = project(a);
-  projected[name] = p;
+  projected[name] = a.facing ? { ...p, facing: a.facing } : p;
   const cc = Math.floor(p.x / cellW) - offCol, rr = Math.floor(p.y / cellH) - offRow;
   if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) {
     errors.push(`앵커 ${name}: (${p.x},${p.y}) 가 격자 밖`); continue;
@@ -264,7 +267,7 @@ if (errors.length) {
 // --- 5. 내보내기 ---
 const rowsTs = ch.map(r => `  '${r.join('')}',`).join('\n');
 const anchorsTs = Object.entries(projected)
-  .map(([name, p]) => `  ${safeIdent(name)}: { x: ${p.x}, y: ${p.y} },`)
+  .map(([name, p]) => `  ${safeIdent(name)}: { x: ${p.x}, y: ${p.y}${p.facing ? `, facing: '${p.facing}'` : ''} },`)
   .join('\n');
 
 const relCfg = src.startsWith('{') ? '(inline)' : src.replaceAll('\\', '/');
@@ -286,7 +289,7 @@ export const ROWS = ${rows};
 export const MASK_ROWS: string[] = [
 ${rowsTs}
 ];
-export const ANCHORS: Record<string, { x: number; y: number }> = {
+export const ANCHORS: Record<string, { x: number; y: number; facing?: string }> = {
 ${anchorsTs}
 };
 `;

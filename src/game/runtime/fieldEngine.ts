@@ -60,6 +60,12 @@ export interface FieldCallbacks {
   onWarmup?: () => void;
 }
 
+/**
+ * 타이머가 목표 시각보다 늦게 깨어났을 때 다음 단계 기준 시각이 거슬러 올라갈 수 있는 한도(ms).
+ * 숨은 탭의 1초 정렬 지연은 이 안에 들고, 멈춘 탭이 깨어나 단계를 연달아 넘기는 것은 막는다.
+ */
+const MAX_CATCH_UP_MS = 1000;
+
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1],
   ArrowDown: [0, 1], KeyS: [0, 1],
@@ -90,6 +96,13 @@ export class GameFieldEngine {
   /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
   private controlLocked = false;
   private biteStart = 0;
+  /**
+   * 현재 단계가 시작된 기준 시각(Date.now). 타이머로 넘어온 단계는 발화 시각이 아니라 이전 단계의 목표 시각이다.
+   * 획득 단계는 서버 결과가 도착한 시각이다
+   */
+  private phaseStartAt = 0;
+  /** 타이머가 넘기는 다음 단계의 기준 시각 = max(목표 시각, 발화 시각 - 1000ms). 사용자 입력이나 줄 거두기로 바뀌는 단계에서는 null */
+  private chainStartAt: number | null = null;
   /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
   private resultAt: number | null = null;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
@@ -417,6 +430,14 @@ export class GameFieldEngine {
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
     if (phase === 'catch') this.catchStart = Date.now();
+    const resultArrived = phase === 'catch' && this.snapshot.fishId === null && fishId !== null;
+    if (resultArrived) {
+      // 획득 카운트다운은 서버 결과가 도착한 시각부터 센다
+      this.phaseStartAt = Date.now();
+    } else if (phase !== this.snapshot.phase) {
+      this.phaseStartAt = this.chainStartAt ?? Date.now();
+    }
+    this.chainStartAt = null;
     this.resultAt = resultAtOf(this.resultAt, phase, Date.now());
     this.snapshot = { phase, fishId, catchInfo };
     this.publish();
@@ -431,7 +452,7 @@ export class GameFieldEngine {
     this.clearPhaseTimers();
     const phase = this.snapshot.phase;
     if (phase === 'idle' || (phase === 'catch' && !this.snapshot.fishId)) return;
-    if (phase === 'bite') this.biteStart = Date.now();
+    if (phase === 'bite') this.biteStart = this.phaseStartAt;
 
     const school = this.school;
     let ms: number;
@@ -446,15 +467,18 @@ export class GameFieldEngine {
       ms = phaseDurationMs(phase, this.game.rod, undefined, fish?.rarity);
     }
 
+    // 숨은 탭은 타이머를 늦게 깨우므로, 단계 길이는 시작 기준 절대 시각에서 남은 만큼으로 잡는다
+    const dueAt = this.phaseStartAt + ms;
     this.phaseTimer = setTimeout(() => {
       this.phaseTimer = null;
+      this.chainStartAt = Math.max(dueAt, Date.now() - MAX_CATCH_UP_MS);
       if (phase === 'bite') { this.hookFish('auto'); return; }
       if (phase === 'catch') {
         this.transition(nextPhase(phase), null, null);
         return;
       }
       this.transition(nextPhase(phase));
-    }, ms);
+    }, Math.max(0, dueAt - Date.now()));
 
     if (phase === 'wait' && school && powerZones(this.game, school.spot).mult > 1) {
       this.lineCutTimer = setTimeout(() => {

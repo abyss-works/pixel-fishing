@@ -13,6 +13,9 @@ const EFFECT_LABEL: Record<keyof ArtifactEffects, string> = {
   biteWaitCut: '입질 대기',
 };
 
+/** 줄어드는 효과의 값 문자열(`−N%`) - 유물 효과 줄과 상점의 미끼값 표시가 같은 반올림을 쓴다 */
+export const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
+
 /** 유물 효과 한 가지의 이름 - 효과 문장의 앞부분과 비교 표의 행 이름이 함께 쓴다 */
 export const artifactEffectLabel = (effect: keyof ArtifactEffects): string => EFFECT_LABEL[effect];
 
@@ -21,9 +24,9 @@ export function artifactEffectValue(a: Artifact, effect: keyof ArtifactEffects, 
   const e = artifactEffectsAt(a, level);
   switch (effect) {
     case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
-    case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? `−${fmtDecimal2(e.duelSpeedupCut! * 100)}%` : null;
-    case 'baitDiscount': return (e.baitDiscount ?? 0) > 0 ? `−${fmtDecimal2(e.baitDiscount! * 100)}%` : null;
-    case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? `−${fmtDecimal2(e.biteWaitCut! * 100)}%` : null;
+    case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(e.duelSpeedupCut!) : null;
+    case 'baitDiscount': return (e.baitDiscount ?? 0) > 0 ? fmtCutPercent(e.baitDiscount!) : null;
+    case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
     case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
   }
 }

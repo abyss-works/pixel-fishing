@@ -17,7 +17,6 @@ import type { SpeciesPity } from './pity.js';
 import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
-import { rarityWeightOf } from '../content/rarityWeights.js';
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
@@ -36,8 +35,8 @@ import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
-import { rollFish } from './logic.js';
-import { BAIT_WEIGHT_MULT, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
+import { addGradeEffect, rollFish } from './logic.js';
+import { BAIT_WEIGHT_BONUS, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
 import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
@@ -273,21 +272,31 @@ export interface CatchDraw {
   phaseOpts: DrawOptions & { phase: DayPhase };
 }
 export function prepareCatchDraw(
-  state: GameState, spot: SpotId, claimed: Judgment, now: string, pz: PowerZone,
+  state: GameState, claimed: Judgment, now: string, pz: PowerZone,
 ): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
   // 미끼 — 방치(auto)에는 소모·효과 없다. 수동 판정은 낚아올리는 순간 확정되므로
-  // 소모도 이 지점에서 1회가 자연스럽다. 효과 = targetRarity 어종 가중치 ×2.
+  // 소모도 이 지점에서 1회가 자연스럽다. 효과 = targetRarity 등급 가중치 +100%(다른 효과와 합산).
   const bait = judgment === 'auto' ? undefined : usableBait(state);
-  const drawOpts: DrawOptions = bait
-    ? { budgets: { [bait.targetRarity]: rarityWeightOf(spot, bait.targetRarity) * BAIT_WEIGHT_MULT } }
-    : {};
+  const drawOpts: DrawOptions = bait ? addGradeEffect({}, bait.targetRarity, BAIT_WEIGHT_BONUS) : {};
   // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
   const phase: DayPhase = isNight(now) ? 'night' : 'day';
   return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
+}
+
+/** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
+ *  judgment는 나누는 판정 배수(수동: JUDGMENT_MULT, 방치: 1), idle은 방치 배수(수동: 1), penalty는 파워 미달 페널티,
+ *  total은 실제 곱해지는 값 idle × penalty ÷ judgment다. 표시는 이 값을 읽어 실제 적용값과 맞춘다. */
+export interface CommonWeightMultiplier { judgment: number; idle: number; penalty: number; total: number }
+export function commonWeightMultiplier(
+  judgment: Judgment, power: number, spot: SpotId, pzMult: number,
+): CommonWeightMultiplier {
+  const divisor = judgment === 'auto' ? 1 : JUDGMENT_MULT[judgment];
+  const idle = judgment === 'auto' ? relativeIdleBoost(power, spot) : 1;
+  return { judgment: divisor, idle, penalty: pzMult, total: idle * pzMult / divisor };
 }
 
 /** 추첨 다이얼 — auto는 해역 요구 파워 대비 방치 배수, 수동은 판정 배수.
@@ -296,11 +305,8 @@ export function catchDrawOptions(
   judgment: Judgment, power: number, spot: SpotId,
   pzMult: number, phaseOpts: DrawOptions & { phase: DayPhase },
 ): DrawOptions & { phase: DayPhase; rareMult: number; commonMult: number } {
-  if (judgment === 'auto') {
-    // auto는 해역 요구 파워 대비 레벨 차의 방치 배수 표로 스케일링
-    return { ...phaseOpts, rareMult: 1, commonMult: relativeIdleBoost(power, spot) * pzMult };
-  }
-  return { ...phaseOpts, rareMult: JUDGMENT_MULT[judgment], commonMult: pzMult };
+  const m = commonWeightMultiplier(judgment, power, spot, pzMult);
+  return { ...phaseOpts, rareMult: m.judgment, commonMult: m.idle * m.penalty };
 }
 
 /** 추첨 실행 — 호출 순서 고정: 추첨 → 부가 롤 (구 클라와 동일한 rng 소비 순서). */
@@ -317,14 +323,14 @@ export function rollCatchFish(
  *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 → 보장 번호 롤 순서).
  *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
  *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)와 길드 효과만 호출자가 공급한다.
- *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 감소(commonCut)와 돌연변이 확률 퍼센트포인트. 천장 누적도
+ *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 효과(−합, 미끼 등 같은 등급 효과와 합산)와 돌연변이 확률 퍼센트포인트. 천장 누적도
  *  같은 다이얼·폼 확률을 써서 실제 확률을 쌓는다. */
 export function drawCatch(
   state: Pick<GameState, 'pity' | 'artifacts' | 'artifactLevels' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
-  const phaseOpts = guild.rare > 0 ? { ...basePhaseOpts, commonCut: guild.rare } : basePhaseOpts;
+  const phaseOpts = guild.rare > 0 ? addGradeEffect(basePhaseOpts, 'common', -guild.rare) : basePhaseOpts;
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
@@ -361,7 +367,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
-      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
+      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,

@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
 import { SPOTS } from '../../../src/game/content/spots';
-import { entryLevel } from '../model';
-import { applyOverride, loadOverride, parseOverride } from './override';
+import { FISH } from '../../../src/game/content/fish';
+import { entryLevel, rates } from '../model';
+import { applyOverride, ladderPrice, loadOverride, parseOverride } from './override';
 
 const boat = (tier: number) => BOATS.find(b => b.tier === tier)!;
 const spot = (id: string) => SPOTS.find(s => s.id === id)!;
@@ -66,5 +67,50 @@ describe('밸런스 덮어쓰기', () => {
     expect(() => loadOverride(join(dir, 'none.json'))).toThrow(/읽을 수 없습니다/);
     expect(() => loadOverride(bad)).toThrow(/JSON/);
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('어종 가격 배율 덮어쓰기', () => {
+  let restore: (() => void) | null = null;
+  afterEach(() => { restore?.(); restore = null; });
+  const fishOf = (id: string) => FISH.filter(f => f.spot === id);
+
+  it('가격 사다리: 일반은 정수, 희귀 이상은 두 자리 수면 5 단위, 세 자리 이상이면 앞 두 자리 유효숫자로 가장 가까운 값이다', () => {
+    expect(ladderPrice(5.1, 'common')).toBe(5);
+    expect(ladderPrice(25.4, 'rare')).toBe(25);
+    expect(ladderPrice(27.6, 'epic')).toBe(30);
+    expect(ladderPrice(102, 'epic')).toBe(100);
+    expect(ladderPrice(425, 'legendary')).toBe(430);
+    expect(ladderPrice(12340, 'legendary')).toBe(12000);
+    expect(ladderPrice(7.4, 'rare')).toBe(7);
+  });
+
+  it('priceMult는 그 해역 어종의 판매가만 배율과 가격 사다리로 바꾸고 복원 함수로 되돌린다', () => {
+    const before = FISH.map(f => f.price);
+    restore = applyOverride({ spots: { sea: { priceMult: 0.85 } } });
+    for (const f of fishOf('sea')) {
+      const base = before[FISH.indexOf(f)];
+      expect(f.price, f.id).toBe(ladderPrice(base * 0.85, f.rarity));
+    }
+    FISH.forEach((f, i) => { if (f.spot !== 'sea') expect(f.price, f.id).toBe(before[i]); });
+    restore();
+    restore = null;
+    expect(FISH.map(f => f.price)).toEqual(before);
+  });
+
+  it('배율이 들어간 판매가는 시간당 골드 계산에 반영된다', () => {
+    const level = 20;
+    const base = rates('sea', level, 'idle').goldPerHour;
+    restore = applyOverride({ spots: { sea: { priceMult: 0.5 } } });
+    const half = rates('sea', level, 'idle').goldPerHour;
+    expect(half).toBeLessThan(base * 0.55);
+    expect(half).toBeGreaterThan(base * 0.45);
+  });
+
+  it('priceMult는 0 이하나 숫자가 아닌 값을 거부하고 powerReq와 함께 쓸 수 있다', () => {
+    expect(() => parseOverride({ spots: { sea: { priceMult: 0 } } })).toThrow(/0보다/);
+    expect(() => parseOverride({ spots: { sea: { priceMult: '1' } } })).toThrow(/숫자/);
+    const o = { spots: { sea: { powerReq: 30, priceMult: 0.9 } } };
+    expect(parseOverride(o)).toEqual(o);
   });
 });
