@@ -1,7 +1,7 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { FISH } from '../src/game/content/fish.js';
@@ -33,7 +33,7 @@ beforeEach(() => {
   return () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    delete process.env.DEPLOY_ENV;
+    process.env.DEPLOY_ENV = 'local';
   };
 });
 
@@ -359,10 +359,12 @@ describe('이사 코드 가져오기', () => {
     dex: { carp: { normal: { count: 1, maxSize: 30, first: '2026-01-01' } } } };
 
   it('소유자가 아니면 403이다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
     expect(await run({ state: {}, email: 'someone@example.com' }, { type: 'import', save })).toMatchSnapshot();
   });
 
   it('소유자는 상태를 통째로 바꾸고 전체 상태를 돌려받는다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
     expect(await run({ state: { bag: [fish('crucian')] }, email: OWNER }, { type: 'import', save })).toMatchSnapshot();
   });
 });
@@ -934,5 +936,57 @@ describe('네임드가 둘인 구역의 수주', () => {
     const uid = await seed({ state: southState() });
     const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: 'southatlantic-named-jasconius', port: 'harbor' });
     expect(res.status).toBe(422);
+  });
+});
+
+describe('이사 코드 가져오기 접근 판정', () => {
+  const save = { ...newState(), gold: 4321 };
+  const ORIGINS = [undefined, LOCAL_ORIGIN, 'http://127.0.0.1', 'https://evil.example'];
+  let seq = 0;
+  // 소유자 이메일은 서버 설정이다. 호출마다 새 계정이 필요하므로 소유자 이메일도 호출마다 바꾼다
+  const importAs = async (role: 'owner' | 'guest', origin?: string) => {
+    const email = `gate-${role}-${seq++}@example.com`;
+    process.env.IMPORT_OWNER_EMAIL = role === 'owner' ? email : 'gate-owner@example.com';
+    const uid = await seed({ state: {}, email });
+    return callAction(userToken(uid), { type: 'import', save }, { origin });
+  };
+  const verdict = (res: { status: number; body: unknown }) => [res.status, (res.body as { error?: string }).error ?? 'ok'];
+  afterEach(() => { delete process.env.IMPORT_OWNER_EMAIL; });
+
+  it('운영은 소유자도 비소유자도 Origin과 무관하게 거부한다', async () => {
+    process.env.DEPLOY_ENV = 'production';
+    for (const role of ['owner', 'guest'] as const) {
+      for (const origin of ORIGINS) expect(verdict(await importAs(role, origin))).toEqual([403, 'import-disabled']);
+    }
+  });
+
+  it('스테이징은 소유자만 허용하고 Origin을 속여도 비소유자는 거부한다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    for (const origin of ORIGINS) {
+      expect(verdict(await importAs('owner', origin))).toEqual([200, 'ok']);
+      expect(verdict(await importAs('guest', origin))).toEqual([403, 'import-owner-only']);
+    }
+  });
+
+  it('로컬 명시 값은 Origin과 무관하게 허용한다', async () => {
+    process.env.DEPLOY_ENV = 'local';
+    for (const origin of ORIGINS) expect(verdict(await importAs('guest', origin))).toEqual([200, 'ok']);
+  });
+
+  it('소유자 이메일 설정이 비어 있어도 게스트는 소유자가 아니다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    const uid = await seed({ state: {}, email: null });
+    process.env.IMPORT_OWNER_EMAIL = '';
+    const res = await callAction(userToken(uid), { type: 'import', save });
+    expect(verdict(res)).toEqual([403, 'import-owner-only']);
+  });
+
+  it('환경 값이 없거나 모르는 값이면 거부한다', async () => {
+    for (const env of [undefined, 'development']) {
+      if (env === undefined) delete process.env.DEPLOY_ENV; else process.env.DEPLOY_ENV = env;
+      for (const role of ['owner', 'guest'] as const) {
+        expect(verdict(await importAs(role, LOCAL_ORIGIN))).toEqual([403, 'import-disabled']);
+      }
+    }
   });
 });

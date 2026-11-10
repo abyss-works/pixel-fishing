@@ -90,8 +90,26 @@ export function axisOptions(spec: RodSpec, axis: Axis): DrawOptions {
     : { rareMult: JUDGMENT_MULT[axis], commonMult: spec.gateMult };
 }
 
+/** 한 번의 캐치에 드는 시간의 구성 — 입질 대기는 [biteMin, biteMax] 균등이고 나머지는 고정 초다 */
+export interface Cycle { biteMin: number; biteMax: number; biteExtra: number; reaction: number }
+
+/** 낚싯대 스펙과 축의 캐치 주기 — 반응 시간은 방치가 바 끝까지, 수동은 절반이다 */
+export function cycleOf(spec: RodSpec, axis: Axis): Cycle {
+  return {
+    biteMin: spec.biteMin, biteMax: spec.biteMax, biteExtra: spec.biteExtra,
+    reaction: axis === 'idle' ? spec.sweep : spec.sweep / 2,
+  };
+}
+
+/** 캐치 한 번의 평균 시간(초) — 획득 연출을 더한다 */
+export const meanCycleSec = (c: Cycle): number => (c.biteMin + c.biteMax) / 2 + c.biteExtra + c.reaction + CATCH_MS / 1000;
+
+/** 캐치 한 번의 시간(초)을 입질 대기 균등 표본 u(0 이상 1 미만)로 계산한다 */
+export const cycleSecAt = (c: Cycle, u: number): number => c.biteMin + u * (c.biteMax - c.biteMin) + c.biteExtra + c.reaction + CATCH_MS / 1000;
+
 export interface Rates {
   rows: Row[];
+  cycle: Cycle;
   catchesPerHour: number; goldPerHour: number; famePerHour: number;
   /** 등급별 출현 비율 */
   rarity: Record<string, number>;
@@ -99,14 +117,14 @@ export interface Rates {
 
 export function rates(spot: SpotId, level: number, axis: Axis, extra: DrawOptions = {}, pool: Pool = 'mixed'): Rates {
   const spec = rodSpec(spot, level);
-  const reaction = axis === 'idle' ? spec.sweep : spec.sweep / 2;
-  const sec = (spec.biteMin + spec.biteMax) / 2 + spec.biteExtra + reaction + CATCH_MS / 1000;
+  const cycle = cycleOf(spec, axis);
+  const sec = meanCycleSec(cycle);
   const rows = mixedRows(spot, { ...axisOptions(spec, axis), ...extra }, pool);
   const cph = 3600 / sec;
   const rarity: Record<string, number> = {};
   for (const r of rows) rarity[r.fish.rarity] = (rarity[r.fish.rarity] ?? 0) + r.prob;
   return {
-    rows, catchesPerHour: cph, rarity,
+    rows, cycle, catchesPerHour: cph, rarity,
     goldPerHour: rows.reduce((s, r) => s + r.prob * r.fish.price, 0) * VARIANT_EV * cph,
     famePerHour: rows.reduce((s, r) => s + r.prob * RARITY[r.fish.rarity].fame, 0) * cph,
   };

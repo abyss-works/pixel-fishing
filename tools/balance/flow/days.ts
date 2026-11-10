@@ -14,7 +14,7 @@ import type { PlanInput } from './bounty';
 import { axisOf, playTypes, simulate, sleepFishSeconds } from './progress';
 import type { FlowAxis, PlayType } from './progress';
 
-export interface DaysOptions { axis: FlowAxis; loss4h: number | null; maxDays: number; bagCapAwake?: boolean }
+export interface DaysOptions { axis: FlowAxis; loss4h: number | null; maxDays: number; bagCapAwake?: boolean; travelShare?: number }
 
 export interface ArrivalDays {
   type: PlayType;
@@ -52,6 +52,8 @@ export interface SteadyInput {
   licensed: PlanInput['licensed'] | null;
   axis: FlowAxis;
   bagCapAwake: boolean;
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중. 생략하면 0 */
+  travelShare?: number;
 }
 
 /** 마지막 해역에서 이 레벨로 하루를 보낼 때의 골드(정상 상태) */
@@ -71,14 +73,15 @@ export function steadyDaily(i: SteadyInput): { dailyGold: number; bountyShare: n
   const mean = (spots: SpotId[], f: (r: Rates) => number) => spots.reduce((s, sp) => s + f(rateAt(sp)), 0) / spots.length;
   const actSec = plan.reduce((s, a) => s + a.seconds, 0);
   const lump = plan.reduce((s, a) => s + a.lump, 0);
+  const move = 1 - (i.travelShare ?? 0);
   const fishGold = plan.reduce((s, a) => s + mean(a.spots, r => r.goldPerHour) * a.seconds / 3600, 0)
     + rateAt(last).goldPerHour * (awake - actSec) / 3600;
   const catches = plan.reduce((s, a) => s + mean(a.spots, r => r.catchesPerHour) * a.seconds / 3600, 0)
     + rateAt(last).catchesPerHour * (awake - actSec) / 3600;
   // 가방 한도를 적용하면 깨어 있는 동안 한 번도 팔지 않아 가방이 찬 뒤의 캐치는 골드가 되지 않는다
-  const bagFrac = i.bagCapAwake && catches > 0 ? Math.min(1, capOfBoat(MAX_BOAT) / catches) : 1;
+  const bagFrac = i.bagCapAwake && catches > 0 ? Math.min(1, capOfBoat(MAX_BOAT) / (catches * move)) : 1;
   const sleepSec = sleepFishSeconds(MAX_BOAT, idle.catchesPerHour, i.type.sleepHours * 3600);
-  const dailyGold = fishGold * bagFrac + lump + idle.goldPerHour * sleepSec / 3600;
+  const dailyGold = fishGold * move * bagFrac + lump + idle.goldPerHour * sleepSec / 3600;
   return { dailyGold, bountyShare: lump / dailyGold };
 }
 
@@ -90,7 +93,7 @@ export function daysReport(o: DaysOptions): DaysReport {
   for (const type of playTypes(o.loss4h)) {
     for (const bounty of [false, true]) {
       const r = simulate({
-        type, axis: o.axis, bounty, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, growTo: bounty ? levels[1] : undefined,
+        type, axis: o.axis, bounty, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare, growTo: bounty ? levels[1] : undefined,
       });
       arrival.push({
         type, bounty, complete: r.complete, bountyGold: r.bountyGold,
@@ -105,7 +108,7 @@ export function daysReport(o: DaysOptions): DaysReport {
         }
         const held = new Set(mark?.licenses ?? []);
         const s = steadyDaily({
-          level, type, axis: o.axis, bagCapAwake: o.bagCapAwake ?? false,
+          level, type, axis: o.axis, bagCapAwake: o.bagCapAwake ?? false, travelShare: o.travelShare,
           licensed: bounty ? (zone, tier) => held.has(licenseKey(zone, tier)) : null,
         });
         levelUp.push({

@@ -1,6 +1,6 @@
 // 테스트용 트리거 허용 판정 — 운영 배포는 어떤 경우에도 막고, 스테이징·로컬은 소유자·로컬 오리진만 연다.
 import { describe, it, expect } from 'vitest';
-import { debugTablePlan, debugTriggerAllowed } from './action.js';
+import { debugTablePlan, debugTriggerAllowed, importVerdict } from './action.js';
 import { gameDayStartISO } from '../src/game/rules/time.js';
 
 describe('debugTriggerAllowed', () => {
@@ -38,5 +38,28 @@ describe('debugTablePlan', () => {
   it('도전권·진행 정리는 본인 행 전체를 지운다', () => {
     expect(debugTablePlan('bounty.clearTickets', now)).toEqual({ table: 'bounty_tickets', op: 'delete' });
     expect(debugTablePlan('bounty.clearProgress', now)).toEqual({ table: 'bounty_progress', op: 'delete' });
+  });
+});
+
+describe('importVerdict', () => {
+  it('운영은 소유자도 거부한다', () => {
+    expect(importVerdict({ deployEnv: 'production', owner: true })).toBe('import-disabled');
+    expect(importVerdict({ deployEnv: 'production', owner: false })).toBe('import-disabled');
+  });
+
+  it('스테이징은 소유자만 통과시킨다', () => {
+    expect(importVerdict({ deployEnv: 'preview', owner: true })).toBe('ok');
+    expect(importVerdict({ deployEnv: 'preview', owner: false })).toBe('import-owner-only');
+  });
+
+  it('로컬 명시 값만 모두에게 연다', () => {
+    expect(importVerdict({ deployEnv: 'local', owner: false })).toBe('ok');
+  });
+
+  it('환경 값이 없거나 모르는 값이면 소유자도 거부한다', () => {
+    for (const deployEnv of [undefined, '', 'development', 'Production', 'staging']) {
+      expect(importVerdict({ deployEnv, owner: true })).toBe('import-disabled');
+      expect(importVerdict({ deployEnv, owner: false })).toBe('import-disabled');
+    }
   });
 });

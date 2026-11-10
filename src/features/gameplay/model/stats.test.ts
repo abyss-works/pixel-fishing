@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../game/content/spots';
+import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import {
@@ -33,6 +34,34 @@ describe('플레이 스탯 화면 데이터', () => {
     expect(data.spot).toBe(SPOTS[0]);
     expect(data.underpowered).toBe(data.currentPower < data.requirement);
     expect(data.axes.sweep.value).toBeGreaterThan(0);
+  });
+});
+
+describe('방치 낚시 배수 표시', () => {
+  const idleOf = (g: GameState, id: string) => selectStatsModalData(g, 'sail', indexOf(id)).idle;
+  const applied = (g: GameState, id: string) => {
+    const d = selectStatsModalData(g, 'sail', indexOf(id));
+    return commonWeightMultiplier('auto', d.currentPower, d.spot.id, d.powerZones.mult).total;
+  };
+
+  it('파워가 모자란 해역은 표시값이 적용값(배수 x 페널티)과 같고, 페널티를 따로 싣는다', () => {
+    const g = game({ boat: 5, rod: 3 });
+    const idle = idleOf(g, 'sea');
+    expect(idle.penalty).toBeGreaterThan(1);
+    expect(idle.applied).toBe(applied(g, 'sea'));
+    expect(idle.applied).toBe(idle.current * idle.penalty);
+  });
+
+  it('파워가 충분한 해역은 페널티 1이고 표시값이 적용값과 같다', () => {
+    const g = game({ boat: 5, rod: 18 });
+    const idle = idleOf(g, 'sea');
+    expect(idle.penalty).toBe(1);
+    expect(idle.applied).toBe(applied(g, 'sea'));
+  });
+
+  it('요구 파워에서의 배수를 함께 싣는다', () => {
+    const idle = idleOf(game({ boat: 5, rod: 3 }), 'sea');
+    expect(idle.required).toBe(commonWeightMultiplier('auto', 30, 'sea', 1).idle);
   });
 });
 

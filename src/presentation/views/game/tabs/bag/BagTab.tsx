@@ -83,7 +83,8 @@ function ItemSection({ game, dispatch, setToast }: {
             <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
               <span className="w-3 h-3 rounded-full border border-line justify-self-center"
                     style={{ backgroundColor: bait.color }} />
-              <Tip text={`${bait.desc} ${baitEffectLine(bait)}`} className="block truncate">{bait.name}</Tip>
+              <Tip text={`${bait.desc}
+${baitEffectLine(bait)}`} className="block truncate">{bait.name}</Tip>
               <span className="pf-accent text-text-dim text-right">×{count}</span>
               <Tip wraps text={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
                    className="justify-self-end">

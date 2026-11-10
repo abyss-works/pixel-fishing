@@ -1,6 +1,6 @@
 // 진행 시뮬레이션 — 새 계정이 열린 가장 뒤 해역에서 낚고, 다음 해역에 필요한 배와 강화를 살 수 있으면 바로 사서 옮긴다.
 // 플레이 유형마다 하루에 낚는 시간이 다르고, 선택하면 하루 의뢰와 네임드 토벌을 더한다.
-// 가정: 판매는 즉시이고 이동·판매 왕복·미끼·유물·쿠폰은 없다. 명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다.
+// 가정: 판매는 즉시이고 미끼·유물·쿠폰은 없다. 판매 왕복 이동은 travelShare를 줄 때만 낚시 시간의 일정 비중으로 넣는다(기본은 없다). 명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다.
 //       깨어 있는 시간에는 기본으로 가방 한도를 보지 않고(자주 판다, 옵션으로 적용), 잠든 시간은 방치로 가방이 차면 골드만 멈춘다(명성과 도감은 계속 쌓인다).
 //       게임 날짜 경계(04:00)는 하루의 시작으로 보고, 하루 안의 순서는 의뢰, 일반 낚시, 잠든 낚시다.
 import { SPOTS } from '../../../src/game/content/spots';
@@ -15,6 +15,7 @@ import type { Axis, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
+import type { Sampler } from './sample';
 
 export interface PlayType {
   id: 'h16' | 'h8' | `h4-${number}` | 'h2' | 'h1' | 'always';
@@ -74,6 +75,10 @@ export interface SimOptions {
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   maxDays: number;
+  /** 주면 낚은 수입을 기댓값 대신 캐치마다 뽑은 표본으로 센다(몬테카를로). 생략하면 기댓값 경로다 */
+  sampler?: Sampler;
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(0 이상 1 미만). 그만큼은 수입 없이 시간만 흐른다. 생략하면 0 */
+  travelShare?: number;
   /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
   growTo?: number;
 }
@@ -119,6 +124,8 @@ const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 const boatBuyable = (boat: number, gold: number, fame: number) => canBuyBoat({ ...newState(), boat, gold, fame }).ok;
 
 export function simulate(opts: SimOptions): SimResult {
+  const travel = opts.travelShare ?? 0;
+  if (!(travel >= 0 && travel < 1)) throw new Error('이동 비중은 0 이상 1 미만이어야 합니다');
   let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
   const marks: LevelMark[] = [];
@@ -160,8 +167,14 @@ export function simulate(opts: SimOptions): SimResult {
       bagUsed += Math.min(room, total);
     }
     for (const { spot, r } of rs) {
-      gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
-      track(spot, r, r.catchesPerHour * h);
+      if (opts.sampler) {
+        const v = opts.sampler.accrue(r, h * 3600);
+        gold += v.gold * goldFrac; fame += v.fame;
+        track(spot, r, v.catches);
+      } else {
+        gold += r.goldPerHour * h * goldFrac; fame += r.famePerHour * h;
+        track(spot, r, r.catchesPerHour * h);
+      }
     }
     fishSec += sec;
   };
@@ -201,7 +214,8 @@ export function simulate(opts: SimOptions): SimResult {
   const fishFor = (spots: SpotId[] | null, axis: Axis | null, seconds: number) => {
     for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
-      accrue(spots ?? [SPOTS[idx].id], axis, dt, dt, true);
+      accrue(spots ?? [SPOTS[idx].id], axis, dt * (1 - travel), dt * (1 - travel), true);
+      fishSec += dt * travel;
       left -= dt;
       settle(dt);
     }

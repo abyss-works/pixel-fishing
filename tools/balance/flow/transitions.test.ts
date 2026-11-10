@@ -111,3 +111,11 @@ describe('전환 보고', () => {
     }
   });
 });
+
+describe('이동 보정', () => {
+  it('이동 비중을 주면 연속 방치 소요가 1 ÷ (1 − 비중)배로 는다', () => {
+    const base = transitionReport({ axis: 'idle', loss4h: 25, maxDays: 365 }).continuous.at(-1)!.cumulativeHours;
+    const moved = transitionReport({ axis: 'idle', loss4h: 25, maxDays: 365, travelShare: 0.1 }).continuous.at(-1)!.cumulativeHours;
+    expect(moved / base).toBeCloseTo(1 / 0.9, 2);
+  });
+});
