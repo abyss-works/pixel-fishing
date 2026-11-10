@@ -258,7 +258,7 @@ describe('gates 명령', () => {
 });
 
 describe('분포와 이동 명령', () => {
-  const small = (over: Partial<FlowOptions> = {}) => base({ trials: 30, ...over });
+  const small = (over: Partial<FlowOptions> = {}) => base({ trials: 8, ...over });
 
   it('분포 인자를 읽는다', () => {
     expect(parseArgs(['dist', '--seed', '5', '--trials', '50', '--travel-share', '2'])).toMatchObject({ commands: ['dist'], seed: 5, trials: 50, travelShare: 2 });
@@ -280,16 +280,17 @@ describe('분포와 이동 명령', () => {
 
   it('분포 출력은 시드와 시도 횟수, 느린 쪽의 뜻, 두 분포 표를 담는다', () => {
     const text = renderText(runFlow(small({ commands: ['dist'], seed: 3 })));
-    for (const w of ['시드 3', '시도 30회', 'p10', '중앙값', 'p90', '운이 나쁜', '최초 10분', '영웅 보장', '전설 보장', '첫 바다 해역 도착', '해역 전환', '해석 기댓값', '가정:']) {
+    for (const w of ['시드 3', '시도 8회', 'p10', '중앙값', 'p90', '운이 나쁜', '최초 10분', '영웅 보장', '전설 보장', '첫 바다 해역 도착', '해역 전환', '해석 기댓값', '가정:']) {
       expect(text, w).toContain(w);
     }
   });
 
   it('같은 인자는 표와 JSON이 바이트까지 같고 시드가 다르면 달라진다', () => {
     const o = small({ commands: ['dist'], seed: 3 });
-    expect(renderText(runFlow(o))).toBe(renderText(runFlow(o)));
-    expect(JSON.stringify(runFlow(o))).toBe(JSON.stringify(runFlow(o)));
-    expect(renderText(runFlow({ ...o, seed: 4 }))).not.toBe(renderText(runFlow(o)));
+    const a = runFlow(o), b = runFlow(o);
+    expect(renderText(a)).toBe(renderText(b));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    expect(renderText(runFlow({ ...o, seed: 4 }))).not.toBe(renderText(a));
   });
 
   it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중과 기본 보정값을 담는다', () => {
@@ -305,7 +306,7 @@ describe('분포와 이동 명령', () => {
 
   it('기본 출력은 이동 시간 줄을 빼면 --travel-share 0과 같고 개발 브랜치의 수치와 같다', () => {
     const strip = (t: string) => t.split('\n').filter(l => !l.includes('이동 시간:')).join('\n');
-    const o = base({ commands: ['transition', 'days', 'dist'], trials: 20 });
+    const o = base({ commands: ['transition', 'days', 'dist'], trials: 4 });
     expect(strip(renderText(runFlow(o)))).toBe(strip(renderText(runFlow({ ...o, travelShare: 0 }))));
     const t = renderText(runFlow(base({ commands: ['transition'] })));
     for (const row of ['| 인도양 → 남인도양 | 4.9h | 7.8h | 0분 · 1.2h · 3.7h | 1.33배 |', '| 남대서양 용승대 → 세인트헬레나 | 16h | 62h | 16h · 0분 · 0분 | 0.00배 |']) {

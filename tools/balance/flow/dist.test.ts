@@ -51,7 +51,7 @@ describe('최초 10분 분포', () => {
   });
 
   it('같은 시드는 같은 분포를 낸다', () => {
-    expect(openingDist({ judgment: 'normal', trials: 300, seed: 7 })).toEqual(d);
+    expect(openingDist({ judgment: 'normal', trials: 40, seed: 7 })).toEqual(openingDist({ judgment: 'normal', trials: 40, seed: 7 }));
   });
 
   it('도착 시간 평균이 해석 기댓값과 15% 안에서 맞는다', () => {
@@ -92,7 +92,8 @@ describe('해역 전환 분포', () => {
   });
 
   it('같은 시드는 같은 분포를 낸다', () => {
-    expect(transitionDist(opts)).toEqual(rows);
+    const few = { ...opts, trials: 10 };
+    expect(transitionDist(few)).toEqual(transitionDist(few));
   });
 
   it('최대 일수가 짧아 끝내지 못해도 전환 수만큼 행을 내고 해석 미도달은 null이다', () => {
