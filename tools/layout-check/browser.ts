@@ -1,6 +1,6 @@
 // 브라우저 구동 경계 - Chrome 기동, DevTools 프로토콜 호출, 개발 서버 기동과 종료를 이 파일에만 모은다.
 // 새 패키지 없이 설치된 Chrome을 헤드리스로 띄우고 Node 내장 WebSocket으로 프로토콜을 직접 호출한다.
-// 호출마다 제한 시간을 두고, 닫기는 프로세스 트리를 종료한다.
+// 호출마다 제한 시간을 두고, 닫기는 프로세스 트리를 종료한다. 띄운 자원은 모두 등록해 두었다가 closeAll이 한꺼번에 정리한다.
 import { spawn, spawnSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -10,6 +10,21 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 export const sleep = (ms: number) => new Promise<void>(ok => setTimeout(ok, ms));
+
+/** 띄운 Chrome과 개발 서버의 닫기 함수. 정상 종료, 오류, 중단 신호 어느 경로에서도 closeAll로 정리한다 */
+const live = new Set<() => Promise<void>>();
+
+/** 등록된 자원을 모두 닫는다. 하나가 실패해도 나머지를 닫고, 실패는 경고로만 남긴다 */
+export async function closeAll(): Promise<void> {
+  for (const close of [...live]) {
+    live.delete(close);
+    try {
+      await close();
+    } catch (e) {
+      console.warn(`정리에 실패했습니다: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+}
 
 const SEND_TIMEOUT_MS = 20_000;
 const SERVER_START_TIMEOUT_MS = 60_000;
@@ -30,7 +45,7 @@ export function findChrome(): string {
   const candidates = chromeCandidates(process.platform, process.env);
   const found = candidates.find(p => existsSync(p));
   if (!found) {
-    throw new Error(`Chrome 실행 파일을 찾지 못했습니다. 환경변수 CHROME_PATH에 경로를 지정하세요. 확인한 경로: ${candidates.join(', ')}`);
+    throw new Error(`Chrome 실행 파일을 찾지 못했습니다. 환경변수 CHROME_PATH로 경로를 줄 수 있습니다. 찾아본 경로: ${candidates.join(', ')}`);
   }
   return found;
 }
@@ -51,28 +66,26 @@ const freePort = (): Promise<number> => new Promise((ok, fail) => {
   });
 });
 
-/** 제품 저장소 루트에서 Vite 개발 서버를 빈 포트에 띄운다. close는 서버 프로세스 트리를 종료한다 */
-export async function startDevServer(root: string): Promise<{ origin: string; close: () => void }> {
+/** 제품 저장소 루트에서 Vite 개발 서버를 빈 포트에 띄운다. 클라우드 모드를 끄는 환경변수를 서버에 명시해 환경 파일의 값이 이기지 못하게 한다 */
+export async function startDevServer(root: string): Promise<{ origin: string }> {
   const port = await freePort();
   const viteBin = join(dirname(createRequire(join(root, 'package.json')).resolve('vite/package.json')), 'bin', 'vite.js');
   const child = spawn(process.execPath, [viteBin, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
-    cwd: root, stdio: 'ignore', detached: process.platform !== 'win32',
+    cwd: root, stdio: 'ignore', detached: process.platform !== 'win32', env: { ...process.env, VITE_CLOUD: '0' },
   });
+  let spawnError: Error | null = null;
+  child.once('error', e => { spawnError = e; });
   const origin = `http://127.0.0.1:${port}`;
-  const close = () => killTree(child);
-  try {
-    const deadline = Date.now() + SERVER_START_TIMEOUT_MS;
-    for (;;) {
-      if (child.exitCode !== null) throw new Error('개발 서버가 시작 중에 종료됐습니다.');
-      if (Date.now() > deadline) throw new Error('개발 서버가 시간 안에 응답하지 않았습니다.');
-      if (await fetch(origin).then(r => r.ok, () => false)) break;
-      await sleep(300);
-    }
-  } catch (e) {
-    close();
-    throw e;
+  live.add(async () => killTree(child));
+  const deadline = Date.now() + SERVER_START_TIMEOUT_MS;
+  for (;;) {
+    if (spawnError) throw new Error(`개발 서버를 실행하지 못했습니다: ${(spawnError as Error).message}`);
+    if (child.exitCode !== null) throw new Error('개발 서버가 시작 중에 종료됐습니다.');
+    if (Date.now() > deadline) throw new Error('개발 서버가 시간 안에 응답하지 않았습니다.');
+    if (await fetch(origin).then(r => r.ok, () => false)) break;
+    await sleep(300);
   }
-  return { origin, close };
+  return { origin };
 }
 
 type Pending = { ok: (v: unknown) => void; fail: (e: Error) => void };
@@ -123,19 +136,31 @@ export interface Chrome {
 export async function launchChrome(): Promise<Chrome> {
   const chrome = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'pf-layout-check-'));
-  const child = spawn(chrome, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank',
-  ], { stdio: 'ignore', detached: process.platform !== 'win32' });
+  let child: ChildProcess | null = null;
+  let spawnError: Error | null = null;
+  // 임시 프로필 삭제가 실패해도 종료 처리와 판정 결과를 바꾸지 않는다
   const cleanup = async () => {
-    killTree(child);
+    if (child) killTree(child);
     await sleep(300);
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (e) {
+      console.warn(`임시 프로필을 지우지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
+  live.add(cleanup);
   try {
+    // 실행할 수 없는 파일은 spawn이 바로 던지기도 하고 error 이벤트로 알리기도 한다
+    child = spawn(chrome, [
+      '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+      '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank',
+    ], { stdio: 'ignore', detached: process.platform !== 'win32' });
+    const started = child;
+    started.once('error', e => { spawnError = e; });
     const portFile = join(profile, 'DevToolsActivePort');
-    for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
-    if (!existsSync(portFile)) throw new Error(`Chrome을 시작하지 못했습니다: ${chrome}`);
+    for (let i = 0; i < 100 && !existsSync(portFile) && !spawnError && started.exitCode === null; i++) await sleep(100);
+    if (spawnError) throw new Error(`Chrome을 실행하지 못했습니다: ${chrome} (${(spawnError as Error).message})`);
+    if (!existsSync(portFile)) throw new Error(`Chrome이 시작되지 않았습니다: ${chrome}`);
     const [port, path] = readFileSync(portFile, 'utf8').trim().split(/\r?\n/);
     const browser = await connect(`ws://127.0.0.1:${port}${path}`);
     return {
@@ -164,10 +189,11 @@ export async function launchChrome(): Promise<Chrome> {
           await browser.send('Target.disposeBrowserContext', { browserContextId }).catch(() => {});
         }
       },
-      async close() { browser.close(); await cleanup(); },
+      async close() { browser.close(); live.delete(cleanup); await cleanup(); },
     };
   } catch (e) {
+    live.delete(cleanup);
     await cleanup();
-    throw e;
+    throw e instanceof Error && e.message.startsWith('spawn ') ? new Error(`Chrome을 실행하지 못했습니다: ${chrome} (${e.message})`) : e;
   }
 }

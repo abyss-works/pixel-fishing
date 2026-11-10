@@ -118,7 +118,13 @@ export function judgeCase(m: Measure, info: TierClassInfo): CaseResult {
   return { stageWidth: m.stageWidth, tier, expectedTier: want, checks, observations: findOverlaps(m.clickables) };
 }
 
-export interface Row { width: number; state: string; result: CaseResult }
+export interface Row {
+  width: number;
+  state: string;
+  /** 자원 바에 화면으로 나온 글자 */
+  shown?: string;
+  result: CaseResult;
+}
 
 export function summarize(rows: readonly Row[]): { violations: number; observations: number } {
   return {
