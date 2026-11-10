@@ -5,7 +5,7 @@ import { R } from '../common.js';
 import type { Ctx } from '../common.js';
 import type { BuildingSpriteId, Furniture, FurnitureSpriteId, Rect } from '../../../world/types';
 
-interface BuildingSprite { draw: (ctx: Ctx, r: Rect) => void; mapColor?: string }
+interface BuildingSprite { draw: (ctx: Ctx, r: Rect, flip?: boolean) => void; mapColor?: string }
 
 export const BUILDING_SPRITES: Record<BuildingSpriteId, BuildingSprite> = {
   // 마을 집 외관 — 붉은 지붕 + 문 + 창
@@ -18,13 +18,19 @@ export const BUILDING_SPRITES: Record<BuildingSpriteId, BuildingSprite> = {
       R(ctx, r.x + 8, r.y + 24, 12, 12, '#a5d8ff');
     },
   },
-  // 항구 외관 — 붉은 지붕 창고 + 크레인 (접안 부두는 지형 deck 조각)
+  // 항구 외관 — 붉은 지붕 창고 + 크레인, 36×28 사각형 기준의 정면 그림 한 장 (접안 부두는 지형 deck 조각).
+  // 크레인이 부두(바다) 쪽에 오도록 flip이면 좌우만 뒤집는다.
   harbor: {
-    draw: (ctx, r) => {
-      R(ctx, r.x + 2, r.y + 10, 18, 14, '#a1887f');
-      R(ctx, r.x, r.y + 6, 22, 6, '#b71c1c');
-      R(ctx, r.x + 26, r.y + 2, 3, 22, '#546e7a');
-      R(ctx, r.x + 26, r.y + 2, 12, 2, '#546e7a');
+    draw: (ctx, r, flip) => {
+      const P = (x: number, y: number, w: number, h: number, c: string) =>
+        R(ctx, flip ? r.x + r.w - x - w : r.x + x, r.y + y, w, h, c);
+      P(2, 10, 18, 14, '#a1887f');
+      P(0, 6, 22, 6, '#b71c1c');
+      P(26, 2, 3, 22, '#546e7a');
+      P(26, 2, 10, 2, '#546e7a');
+      // 부두 받침 — 동·서향 부두는 오른쪽 가장자리 가운데, 남향 부두는 아래 가장자리 가운데에 붙는다
+      P(29, 10, 7, 8, '#8d6e63');
+      P(14, 24, 8, 4, '#8d6e63');
     },
   },
 };

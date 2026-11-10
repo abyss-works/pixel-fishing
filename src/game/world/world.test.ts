@@ -12,7 +12,7 @@ import {
   entryPoint, furnitureAt, inClosedSea, closedSeaBlock, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, schoolsOf, generateWorldSchools,
+  WORLD, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
 import { cellDefAt } from './mask';
@@ -323,7 +323,7 @@ describe('남대서양 지도', () => {
   });
 
   it('월비스베이항 건물은 육지 위이고 접안 트리거는 물 위다', () => {
-    const b = WORLD.buildings.find(bd => bd.rect.x === WORLD_ANCHORS.walvisbay.x)!;
+    const b = WORLD.buildings.find(bd => bd.rect === HARBORS.walvisbay.building)!;
     expect(b).toBeDefined();
     expect(WORLD.labels.some(l => l.text === '월비스베이항')).toBe(true);
     expect(canMove(WORLD, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2), '건물 안').toBe(false);

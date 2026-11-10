@@ -9,7 +9,10 @@
 // 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
 // 4/5/6/7/8 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
-import type { MapCellDef, Point, Rect, RegionPack } from '../types';
+import type { BaseId, MapCellDef, Point, RegionPack } from '../types';
+import { placeHarbor } from '../harborPlacement';
+import { isSeaFacing } from '../harborPlacement';
+import type { HarborPlacement } from '../harborPlacement';
 import { compileMap, mapBounds } from '../mask';
 import { CELL_W, CELL_H, MASK_ROWS, ANCHORS, WINDOW, GRID_OFFSET, GLOBAL_COLS } from './generated/world.mask';
 
@@ -49,25 +52,27 @@ export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS,
 /** 항해 창이 차지하는 게임 좌표 영역 — 이 밖은 이동할 수 없다 */
 export const WORLD_BOUNDS = mapBounds(WORLD_MAP);
 
-export const HARBOR: Rect = { ...A.harbor, w: 36, h: 28 };      // 항구 외관(한반도 남동 해안)
-export const HARBOR_DOCK: Rect = { ...A.dock, w: 20, h: 17 };   // 접안 트리거(물 위)
-export const WORLD_SPAWN: Point = A.spawn;
-
-export const MANILA: Rect = { ...A.manila, w: 40, h: 41 };      // 마닐라항 외관(루손 서해안)
-export const MANILA_DOCK: Rect = { ...A.m_dock, w: 16, h: 15 };
-export const MANILA_SPAWN: Point = A.m_spawn;
-
-export const COLOMBO: Rect = { ...A.colombo, w: 40, h: 41 };    // 콜롬보항 외관(스리랑카 서해안)
-export const COLOMBO_DOCK: Rect = { ...A.c_dock, w: 16, h: 15 };
-export const COLOMBO_SPAWN: Point = A.c_spawn;
-
-export const TOAMASINA: Rect = { ...A.toamasina, w: 40, h: 41 }; // 투아마시나항 외관(마다가스카르 동해안)
-export const TOAMASINA_DOCK: Rect = { ...A.t_dock, w: 16, h: 15 };
-export const TOAMASINA_SPAWN: Point = A.t_spawn;
-
-export const WALVISBAY: Rect = { ...A.walvisbay, w: 40, h: 41 };   // 월비스베이항 외관(나미비아 서해안)
-export const WALVISBAY_DOCK: Rect = { ...A.w_dock, w: 16, h: 15 };
-export const WALVISBAY_SPAWN: Point = A.w_spawn;
+// 항구 5곳 — 기준점(경위도 앵커)과 바다 방향만 설정에 있고 나머지는 placeHarbor가 계산한다.
+function harborAt(name: string): HarborPlacement {
+  const a = A[name];
+  if (!a || !isSeaFacing(a.facing)) throw Error(`항구 앵커 ${name}: 위치 또는 바다 방향이 없다`);
+  return placeHarbor(a, a.facing);
+}
+/** 거점 id별 항구 배치 — 거점 id는 앵커 이름과 같다 */
+export const HARBORS = {
+  harbor: harborAt('harbor'),       // 부산항(한반도 남동 해안)
+  manila: harborAt('manila'),       // 마닐라항(루손 서해안)
+  colombo: harborAt('colombo'),     // 콜롬보항(스리랑카 서해안)
+  toamasina: harborAt('toamasina'), // 투아마시나항(마다가스카르 동해안)
+  walvisbay: harborAt('walvisbay'), // 월비스베이항(나미비아 서해안)
+} satisfies Partial<Record<BaseId, HarborPlacement>>;
+type HarborId = keyof typeof HARBORS;
+const HARBOR_NAMES: Record<HarborId, string> = {
+  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항',
+};
+const HARBOR_IDS = Object.keys(HARBORS) as HarborId[];
+/** 고향 항구의 출항 자리가 새 게임과 되돌림의 기본 위치다 */
+export const WORLD_SPAWN: Point = HARBORS.harbor.departure;
 
 export const WORLD: RegionPack = {
   id: 'world',
@@ -84,50 +89,20 @@ export const WORLD: RegionPack = {
   geoWindow: WINDOW,
   movement: 'sail',
   map: WORLD_MAP,
-  decks: [
-    // 접안 부두 ×5 — 시각용 통행판(sail이라 충돌엔 무영향). 구 3지역의 부두 공식을 계승.
-    { rect: { x: HARBOR_DOCK.x + 2, y: HARBOR.y + HARBOR.h, w: HARBOR_DOCK.w - 4, h: 22 },
-      style: 'pier' },
-    { rect: { x: MANILA_DOCK.x + MANILA_DOCK.w - 4, y: MANILA_DOCK.y + 3,
-              w: Math.max(6, MANILA.x - MANILA_DOCK.x - MANILA_DOCK.w + 8), h: 8 }, style: 'pier' },
-    { rect: { x: COLOMBO_DOCK.x + COLOMBO_DOCK.w - 4, y: COLOMBO_DOCK.y + 3,
-              w: Math.max(6, COLOMBO.x - COLOMBO_DOCK.x - COLOMBO_DOCK.w + 8), h: 8 }, style: 'pier' },
-    // 투아마시나는 동해안이라 부두가 항구 동쪽(물)으로 뻗는다 — 항구 외관에서 접안 트리거까지.
-    { rect: { x: TOAMASINA.x + TOAMASINA.w - 4, y: TOAMASINA_DOCK.y + 3,
-              w: Math.max(6, TOAMASINA_DOCK.x - TOAMASINA.x - TOAMASINA.w + 8), h: 8 }, style: 'pier' },
-    // 월비스베이는 서해안이라 부두가 항구 서쪽(물)의 접안 트리거에서 항구 외관까지 뻗는다.
-    { rect: { x: WALVISBAY_DOCK.x + WALVISBAY_DOCK.w - 4, y: WALVISBAY_DOCK.y + 3,
-              w: Math.max(6, WALVISBAY.x - WALVISBAY_DOCK.x - WALVISBAY_DOCK.w + 8), h: 8 }, style: 'pier' },
-  ],
+  // 접안 부두 — 시각용 통행판(sail이라 충돌엔 무영향)
+  decks: Object.values(HARBORS).map(h => ({ rect: h.dock, style: 'pier' as const })),
   waveCount: 480, // 열린 바다 지도 전체 순환 — 면적 비례(2배 확대 대응. 뷰포트 밖은 캔버스가 클리핑)
-  buildings: [
-    { rect: HARBOR, sprite: 'harbor' },
-    { rect: MANILA, sprite: 'harbor' },
-    { rect: COLOMBO, sprite: 'harbor' },
-    { rect: TOAMASINA, sprite: 'harbor' },
-    { rect: WALVISBAY, sprite: 'harbor' },
-  ],
+  buildings: Object.values(HARBORS).map(h => ({ rect: h.building, sprite: 'harbor' as const, flip: h.flip })),
   decorations: [],
   spawn: WORLD_SPAWN,
   // travel 트리거 없음 — 구역 경계 게이트(Field zoneOf 전이 판정)가 대체한다.
-  // 접안 트리거만 5개 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
-  triggers: [
-    { rect: HARBOR_DOCK, action: 'base', base: 'harbor',
-      msg: '부산항에 접안했어요. 시설을 눌러 정비해 보세요.' },
-    { rect: MANILA_DOCK, action: 'base', base: 'manila',
-      msg: '마닐라항에 접안했어요. 시설을 눌러 정비해 보세요.' },
-    { rect: COLOMBO_DOCK, action: 'base', base: 'colombo',
-      msg: '콜롬보항에 접안했어요. 시설을 눌러 정비해 보세요.' },
-    { rect: TOAMASINA_DOCK, action: 'base', base: 'toamasina',
-      msg: '투아마시나항에 접안했어요. 시설을 눌러 정비해 보세요.' },
-    { rect: WALVISBAY_DOCK, action: 'base', base: 'walvisbay',
-      msg: '월비스베이항에 접안했어요. 시설을 눌러 정비해 보세요.' },
-  ],
-  labels: [
-    { text: '부산항', x: HARBOR.x + HARBOR.w / 2, y: HARBOR.y + 2, color: 'gold', size: 8 },
-    { text: '마닐라항', x: MANILA.x + MANILA.w / 2, y: MANILA.y + 2, color: 'gold', size: 8 },
-    { text: '콜롬보항', x: COLOMBO.x + COLOMBO.w / 2, y: COLOMBO.y + 2, color: 'gold', size: 8 },
-    { text: '투아마시나항', x: TOAMASINA.x + TOAMASINA.w / 2, y: TOAMASINA.y + 2, color: 'gold', size: 8 },
-    { text: '월비스베이항', x: WALVISBAY.x + WALVISBAY.w / 2, y: WALVISBAY.y + 2, color: 'gold', size: 8 },
-  ],
+  // 접안 트리거만 항구마다 하나 — trig.base로 거점을 지정한다(팩 base는 고향 항구가 기본값).
+  triggers: HARBOR_IDS.map(base => ({
+    rect: HARBORS[base].berth, action: 'base' as const, base,
+    msg: `${HARBOR_NAMES[base]}에 접안했어요. 시설을 눌러 정비해 보세요.`,
+  })),
+  labels: HARBOR_IDS.map(base => ({
+    text: HARBOR_NAMES[base], x: HARBORS[base].building.x + HARBORS[base].building.w / 2,
+    y: HARBORS[base].building.y + 2, color: 'gold' as const, size: 8,
+  })),
 };

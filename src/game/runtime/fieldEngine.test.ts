@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState } from '../rules/logic';
-import { HARBOR_DOCK, WORLD_SPAWN } from '../world/regions/world';
+import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
 
@@ -8,7 +8,8 @@ vi.mock('../rendering/canvas/scenes/region.js', () => ({ renderRegion: vi.fn() }
 
 const ctx = {} as CanvasRenderingContext2D;
 const noop = () => {};
-const dockCenter = { x: HARBOR_DOCK.x + HARBOR_DOCK.w / 2, y: HARBOR_DOCK.y + HARBOR_DOCK.h / 2 };
+const berth = HARBORS.harbor.berth;
+const dockCenter = { x: berth.x + berth.w / 2, y: berth.y + berth.h / 2 };
 
 function setup() {
   const engine = new GameFieldEngine('world', newState(), []);
