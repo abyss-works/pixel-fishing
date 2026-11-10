@@ -119,3 +119,17 @@ describe('마지막 해역 레벨업 일수', () => {
     expect(pick('h8', false, l4).days!).toBeGreaterThan(pick('h8', false, l0).days!);
   });
 });
+
+describe('이동 보정', () => {
+  const real = levelUpDays(o).find(x => x.type.id === 'h8' && !x.bounty)!;
+
+  it('이동 비중만큼 깨어 있는 낚시 골드가 준다', () => {
+    const at = (travelShare: number) => steadyDaily({ level: real.level, type: real.type, licensed: null, axis: 'idle', bagCapAwake: false, travelShare });
+    expect(at(0.1).dailyGold / at(0).dailyGold).toBeCloseTo(0.9, 9);
+  });
+
+  it('이동 비중을 주면 레벨업 일수가 늘어난다', () => {
+    const moved = levelUpDays({ ...o, travelShare: 0.1 }).find(x => x.type.id === 'h8' && !x.bounty && x.level === real.level)!;
+    expect(moved.days! / real.days!).toBeCloseTo(1 / 0.9, 2);
+  });
+});

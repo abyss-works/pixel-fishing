@@ -13,7 +13,8 @@ import { fishPool } from '../../../src/game/rules/logic';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { VARIANT_EV, axisAvailable, entryLevel, rates, rodSpec } from '../model';
-import type { Axis } from '../model';
+import type { Axis, Rates } from '../model';
+import type { Sampler } from './sample';
 
 /** 최초 시작 후 바다에 닿아야 하는 목표 시간(초) */
 export const OPENING_TARGET_SEC = 600;
@@ -23,8 +24,10 @@ export type Judgment = 'normal' | 'good';
 
 export interface OpeningOptions {
   judgment: Judgment;
-  /** 전설 보장이 나올 캐치 번호. null이면 첫 경험 보장이 없는 비교용이다 */
-  legendAt: number | null;
+  /** 전설 보장이 나올 캐치 번호. null이면 첫 경험 보장이 없는 비교용이고, 'draw'면 제품 규칙대로 표본 난수가 번호를 정한다(sampler 필요) */
+  legendAt: number | 'draw' | null;
+  /** 주면 캐치마다 시간, 어종, 돌연변이를 뽑는다(몬테카를로). 생략하면 기댓값 경로다 */
+  sampler?: Sampler;
 }
 
 export interface OpeningStep {
@@ -45,37 +48,58 @@ export interface OpeningResult {
 const MAX_CATCHES = 2000;
 
 export function simulateOpening(o: OpeningOptions): OpeningResult {
-  if (o.legendAt !== null && (!Number.isInteger(o.legendAt) || o.legendAt < FIRST_CATCH_LEGEND_MIN || o.legendAt > FIRST_CATCH_LEGEND_MAX)) {
+  if (o.legendAt === 'draw' && !o.sampler) throw new Error('전설 번호를 뽑으려면 표본 추출기가 필요합니다');
+  if (typeof o.legendAt === 'number' && (!Number.isInteger(o.legendAt) || o.legendAt < FIRST_CATCH_LEGEND_MIN || o.legendAt > FIRST_CATCH_LEGEND_MAX)) {
     throw new Error(`전설 보장 번호는 ${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX} 사이 정수여야 합니다`);
   }
   const target = SPOTS.find(s => s.boatTier >= 1)!;
   const targetLevel = entryLevel(target.id);
   const boatToBuy = BOATS.find(b => b.tier === target.boatTier)!;
-  let fc = o.legendAt === null ? endedFirstCatch() : { ...newFirstCatch(), legendAt: o.legendAt };
+  const sampler = o.sampler;
+  const noRng = () => 0;
+  let fc = o.legendAt === null ? endedFirstCatch() : o.legendAt === 'draw' ? newFirstCatch() : { ...newFirstCatch(), legendAt: o.legendAt };
   let gold = 0, fame = 0, level = 1, boat = 0, sec = 0, n = 0;
   let spot = SPOTS[0];
   const steps: OpeningStep[] = [];
+  let arrival: OpeningResult['arrival'] = null;
   const log = (kind: OpeningStep['kind'], detail: string) => steps.push({ kind, detail, catches: n, seconds: sec });
 
   const axisOf = (id: SpotId, lv: number): Axis =>
     o.judgment === 'good' && axisAvailable(rodSpec(id, lv), 'good') ? 'good' : 'normal';
 
+  const cache = new Map<string, Rates>();
+  const rateAt = (id: SpotId, lv: number): Rates => {
+    const axis = axisOf(id, lv);
+    const key = `${id}:${lv}:${axis}`;
+    let r = cache.get(key);
+    if (!r) { r = rates(id, lv, axis); cache.set(key, r); }
+    return r;
+  };
+
   while (n < MAX_CATCHES) {
-    const r = rates(spot.id, level, axisOf(spot.id, level));
-    sec += 3600 / r.catchesPerHour;
+    const r = rateAt(spot.id, level);
+    sec += sampler ? sampler.cycleSec(r) : 3600 / r.catchesPerHour;
     n += 1;
-    // 보장 대상이면 해역 풀의 해당 등급 평균 판매가를, 아니면 통상 기댓값을 번다
-    const guaranteed = firstCatchTarget(fc, spot.id, 'day', () => 0);
+    // 보장 대상이면 해역 풀의 해당 등급 평균 판매가(표본이면 뽑힌 어종의 판매가)를, 아니면 통상 기댓값(표본이면 뽑힌 캐치)을 번다
+    const guaranteed = firstCatchTarget(fc, spot.id, 'day', sampler?.rng ?? noRng);
     if (guaranteed) {
-      const pool = fishPool(spot.id, 'day').filter(f => f.rarity === guaranteed.rarity);
-      gold += pool.reduce((s, f) => s + f.price, 0) / pool.length * VARIANT_EV;
-      fame += RARITY[guaranteed.rarity].fame;
+      if (sampler) {
+        const c = sampler.valueOf(guaranteed);
+        gold += c.gold; fame += c.fame;
+      } else {
+        const pool = fishPool(spot.id, 'day').filter(f => f.rarity === guaranteed.rarity);
+        gold += pool.reduce((s, f) => s + f.price, 0) / pool.length * VARIANT_EV;
+        fame += RARITY[guaranteed.rarity].fame;
+      }
       log('guarantee', guaranteed.rarity);
+    } else if (sampler) {
+      const c = sampler.catchOf(r);
+      gold += c.gold; fame += c.fame;
     } else {
       gold += r.goldPerHour / r.catchesPerHour;
       fame += r.famePerHour / r.catchesPerHour;
     }
-    fc = settleFirstCatch(fc, guaranteed, () => 0);
+    fc = settleFirstCatch(fc, guaranteed, sampler?.rng ?? noRng);
 
     while (level < targetLevel && gold >= upgradeCost(level)) {
       gold -= upgradeCost(level); level += 1;
@@ -91,7 +115,9 @@ export function simulateOpening(o: OpeningOptions): OpeningResult {
       spot = best;
       log(best.id === target.id ? 'arrive' : 'move', best.id);
     }
-    if (spot.id === target.id) return { options: o, target: target.id, steps, arrival: { catches: n, seconds: sec } };
+    if (spot.id === target.id && !arrival) arrival = { catches: n, seconds: sec };
+    // 기댓값 경로는 도착하면 끝낸다. 표본 경로는 보장이 남았으면 그 해역에서 더 낚아 보장 캐치의 시각을 잰다
+    if (arrival && (!sampler || (!fc.epic && !fc.legend))) break;
   }
-  return { options: o, target: target.id, steps, arrival: null };
+  return { options: o, target: target.id, steps, arrival };
 }
