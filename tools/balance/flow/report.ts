@@ -18,13 +18,19 @@ import { OPENING_TARGET_SEC, simulateOpening } from './opening';
 import type { Judgment, OpeningResult } from './opening';
 import { evReport } from './ev';
 import type { EvReport } from './ev';
+import { DEFAULT_SEED, DEFAULT_TRIALS, openingDist, transitionDist } from './dist';
+import type { OpeningDist, TransitionDist } from './dist';
+import { TRAVEL_MATERIAL, TRAVEL_SAMPLE_DAYS, travelRows, travelShareDefault } from './travel';
+import type { TravelRow } from './travel';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates';
-/** 명령을 생략하면 내는 지표 명령 — gates는 판정 명령이라 이름을 줄 때만 실행한다 */
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel';
+/** 명령을 생략하면 내는 지표 명령 — gates(판정), dist(몬테카를로), travel(이동 측정)은 이름을 줄 때만 실행한다 */
 export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
-const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates'];
+const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel'];
+/** 이동 보정이 소요 시간에 적용되는 명령 */
+const TRAVEL_COMMANDS: readonly Command[] = ['transition', 'days', 'dist'];
 
 export interface FlowOptions {
   commands: Command[];
@@ -39,10 +45,15 @@ export interface FlowOptions {
   /** 깨어 있는 동안에도 가방 한도를 적용한다 */
   bagCapAwake: boolean;
   help: boolean;
+  /** dist의 난수 시드와 시도 횟수 */
+  seed: number;
+  trials: number;
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(%). null이면 travel 명령의 측정값 */
+  travelShare: number | null;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates] [옵션]
-명령을 생략하면 gates를 뺀 다섯 가지를 모두 낸다.
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel] [옵션]
+명령을 생략하면 gates, dist, travel을 뺀 다섯 가지를 모두 낸다.
 
 명령
   transition  해역 전환: 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 연속 방치 소요, 배 명성 대기, 유형별 도착 일차
@@ -50,6 +61,8 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
   ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다
+  dist        분포: 같은 규칙과 상수로 캐치마다 뽑는 몬테카를로. 최초 10분(영웅 보장, 전설 보장, 첫 바다 해역 도착 시각)과 해역 전환 소요(쉬지 않고 낚을 때)의 p10, 중앙값, p90, 평균을 해석 기댓값과 함께 낸다. p90이 운이 나쁜(느린) 쪽이다
+  travel      이동 시간 측정: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 재고, 일괄 보정의 기본값(해역별 최댓값)과 5% 기준 판정을 낸다
   gates       게이트 검사: 새 해역 진입 레벨의 방치 수입이 같은 레벨로 낚을 수 있는 이전 해역의 가장 좋은 값 이상인지 전환마다 판정(통과, 위반, 예외). 위반이 하나라도 있으면 종료 코드 1
 
 옵션
@@ -62,10 +75,14 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --axis <idle|manual>  깨어 있는 동안의 낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정)
   --max-days <N>     시뮬레이션 최대 일수. 기본 365
   --bag-cap-awake    깨어 있는 동안에도 가방 한도를 적용한다(하루 깨어 있는 동안 팔지 않는 하한). 기본은 적용하지 않는다
+  --seed <N>         dist의 난수 시드(정수). 기본 ${DEFAULT_SEED}. 같은 시드, 시도 횟수, 인자의 출력은 항상 같다
+  --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
+  --travel-share <N> 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(%, 0 이상 100 미만). transition, days, dist의 소요 시간에 일괄 적용한다.
+                     생략하면 travel 명령이 재는 해역별 비중의 최댓값이고, 0이면 이동 시간을 넣지 않는다
   --help             이 도움말
 `;
 
-const VALUE_FLAGS = ['--override', '--loss4h', '--legend-at', '--axis', '--max-days'] as const;
+const VALUE_FLAGS = ['--override', '--loss4h', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--travel-share'] as const;
 const BOOL_FLAGS = ['--json', '--help', '--bag-cap-awake'] as const;
 
 function numberOf(flag: string, raw: string): number {
@@ -77,6 +94,7 @@ function numberOf(flag: string, raw: string): number {
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
     commands: [], override: null, json: false, loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
+    seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, travelShare: null,
   };
   let command: Command | null = null;
   for (let i = 0; i < argv.length; i++) {
@@ -92,7 +110,16 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       if (a === '--override') o.override = raw;
       else if (a === '--loss4h') o.loss4h = numberOf(a, raw);
       else if (a === '--legend-at') o.legendAt = numberOf(a, raw);
-      else if (a === '--max-days') {
+      else if (a === '--seed') {
+        o.seed = numberOf(a, raw);
+        if (!Number.isInteger(o.seed)) throw new Error('--seed는 정수여야 합니다');
+      } else if (a === '--trials') {
+        o.trials = numberOf(a, raw);
+        if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('--trials는 1 이상의 정수여야 합니다');
+      } else if (a === '--travel-share') {
+        o.travelShare = numberOf(a, raw);
+        if (o.travelShare < 0 || o.travelShare >= 100) throw new Error('--travel-share는 0 이상 100 미만이어야 합니다(%)');
+      } else if (a === '--max-days') {
         o.maxDays = numberOf(a, raw);
         if (!Number.isInteger(o.maxDays) || o.maxDays < 1) throw new Error('--max-days는 1 이상의 정수여야 합니다');
       } else {
@@ -109,10 +136,14 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
   return o;
 }
 
+/** 이동 보정 — share는 깨어 있는 낚시 시간 중 왕복의 비중(0 이상 1 미만)이다. unused는 이 실행의 명령에 보정이 적용되지 않는다는 뜻이다 */
+export interface TravelSetting { share: number; source: 'measured' | 'given' | 'unused' }
+
 export interface SpotInfo { id: SpotId; name: string; powerReq: number; entryLevel: number }
 
 export interface FlowResult {
   options: { axis: FlowAxis; loss4h: number | null; legendAt: number | null; maxDays: number; bagCapAwake: boolean; override: FlowOverride | null;
+    seed: number; trials: number; travel: TravelSetting;
     /** 계산 당시의 해역 표시 값 — 덮어쓰기를 되돌린 뒤에도 표 라벨이 덮어쓴 값으로 나오게 담아 둔다 */
     spots: SpotInfo[];
   };
@@ -121,6 +152,8 @@ export interface FlowResult {
   opening?: OpeningResult[];
   ev?: EvReport;
   gates?: GateRow[];
+  dist?: { opening: OpeningDist[]; transition: TransitionDist[] };
+  travel?: { rows: TravelRow[]; sampleDays: number; default: number };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -132,15 +165,26 @@ export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
   const restore = override ? applyOverride(override) : () => {};
   try {
+    const rows = o.commands.includes('travel') || (o.travelShare === null && o.commands.some(c => TRAVEL_COMMANDS.includes(c))) ? travelRows() : null;
+    const travel: TravelSetting = !o.commands.some(c => TRAVEL_COMMANDS.includes(c)) ? { share: 0, source: 'unused' }
+      : o.travelShare !== null ? { share: o.travelShare / 100, source: 'given' } : { share: travelShareDefault(rows!), source: 'measured' };
     const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override,
+      seed: o.seed, trials: o.trials, travel,
       spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
-    const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake };
+    const sim = { axis: o.axis, loss4h: o.loss4h, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: travel.share };
     if (o.commands.includes('transition')) res.transition = transitionReport(sim);
     if (o.commands.includes('days')) res.days = daysReport(sim);
     if (o.commands.includes('opening')) {
       const judgments: Judgment[] = ['normal', 'good'];
       res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
     }
+    if (o.commands.includes('dist')) {
+      res.dist = {
+        opening: (['normal', 'good'] as const).map(judgment => openingDist({ judgment, trials: o.trials, seed: o.seed })),
+        transition: transitionDist({ trials: o.trials, seed: o.seed, ...sim }),
+      };
+    }
+    if (o.commands.includes('travel')) res.travel = { rows: rows!, sampleDays: TRAVEL_SAMPLE_DAYS, default: travelShareDefault(rows!) };
     if (o.commands.includes('ev')) res.ev = evReport();
     if (o.commands.includes('gates')) res.gates = gateRows();
     if (o.commands.includes('exception')) {
@@ -172,7 +216,14 @@ const BAG_ASSUMPTION = (o: FlowResult['options']) => o.bagCapAwake
 const LOSS_ASSUMPTION = (o: FlowResult['options']) =>
   `4시간 유형의 낚지 못하는 비율은 근거 있는 값이 없는 가정이다${o.loss4h === null ? '. 낚시 100%, 75%, 50%를 함께 낸다' : `. 이번에는 ${o.loss4h}%만 낸다`}`;
 const SLEEP_ASSUMPTION = '16시간 유형은 잠든 동안 방치로 낚는다. 가방이 차면 골드만 멈추고 명성과 도감은 잠든 시간 내내 쌓인다';
-const BASIC_ASSUMPTION = '판매는 즉시이고 이동, 판매 왕복, 미끼, 유물, 쿠폰은 넣지 않는다. 방치 사이클은 모델 사이클이다';
+const BASIC_ASSUMPTION = '판매는 즉시이고 미끼, 유물, 쿠폰은 넣지 않는다. 방치 사이클은 모델 사이클이다';
+
+/** 이동 시간을 넣었는지와 넣은 방식 — 머리말과 가정에 같은 문장을 쓴다 */
+function travelStatement(t: TravelSetting): string {
+  if (t.source === 'unused') return '넣지 않는다(이 명령에는 적용하지 않는다)';
+  if (t.share === 0) return '넣지 않는다(--travel-share 0)';
+  return `포함 — 깨어 있는 낚시 시간의 ${(t.share * 100).toFixed(2)}%를 판매 왕복에 쓴다(${t.source === 'measured' ? '측정값, travel 명령의 해역별 비중 최댓값' : '직접 지정'}). 해역 전환과 일수의 소요 시간과 dist의 해역 전환에 일괄 적용하고, 잠든 시간과 opening, exception, ev, gates에는 적용하지 않는다`;
+}
 
 /** 마지막 해역 진입 레벨에서 유형별로 못 쓰는 라이선스(다른 유형이 가진 것 중) */
 function missingLicenseText(d: NonNullable<FlowResult['days']>): string {
@@ -184,6 +235,7 @@ function missingLicenseText(d: NonNullable<FlowResult['days']>): string {
 
 function assumptionText(command: Command, o: FlowResult['options'], days?: FlowResult['days']): string {
   const lines: string[] = [BASIC_ASSUMPTION];
+  lines.push(`이동 시간: ${travelStatement(TRAVEL_COMMANDS.includes(command) ? o.travel : { share: 0, source: 'unused' })}`);
   if (command === 'transition') {
     lines.push(LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION, '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', '도착 일차는 의뢰와 토벌을 하지 않는 경우다');
   } else if (command === 'days') {
@@ -194,6 +246,20 @@ function assumptionText(command: Command, o: FlowResult['options'], days?: FlowR
       '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보 중 끝낼 수 있는 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
       '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
       '레벨업은 낚싯대가 그 레벨에 처음 닿은 시점에 시뮬레이션이 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다',
+    );
+  } else if (command === 'dist') {
+    lines.push(
+      '해석적 기댓값 경로와 같은 확률, 판매가, 캐치 주기, 첫 경험 보장 규칙을 캐치마다 뽑는다. 입질 대기는 범위 균등이고 어종은 낮밤 혼합 확률, 돌연변이는 전역 확률이다. 기댓값 경로에 없는 pity, 미끼, 유물은 넣지 않는다',
+      `난수는 시드 고정 mulberry32이고 시도마다 같은 흐름을 이어 쓴다. 같은 시드(${o.seed}), 시도 횟수(${o.trials}), 인자의 출력은 항상 같다`,
+      'p10은 빠른 쪽(운이 좋은 10%의 경계), p90은 느린 쪽(운이 나쁜 10%의 경계)이다',
+      '최초 10분: 전설 보장 번호는 제품 규칙대로 시도마다 10에서 20 사이로 뽑는다. 도착 뒤에도 보장이 남으면 그 해역에서 더 낚아 보장 시각을 재고, 10분 안에 못 닿은 시도도 도착 시간에 넣는다. 해석 기댓값은 전설 보장이 가운데 번호일 때의 값이다',
+      '해역 전환: 쉬지 않고 낚는 연속 방치를 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 소요를 모은다. 골드와 명성이 모두 필요한 앞 해역은 늦은 쪽이 시간을 정해 표본 평균이 해석 기댓값보다 크다',
+    );
+  } else if (command === 'travel') {
+    lines.push(
+      '왕복은 가방이 찰 때마다 한 번이다: 가방이 찰 때까지 낚고, 판매 창구가 있는 거점(마을은 집 안 상자, 대양은 그 구역 항구)으로 이동해 팔고, 어군으로 돌아온다',
+      `거리는 거점 출입 자리(집 문, 항구 출항 자리)에서 그 해역 어군까지의 직선거리이고 어군 위치는 2026-01-01부터 ${TRAVEL_SAMPLE_DAYS}일의 날짜 시드 배치 평균이다. 속도는 마을은 도보, 대양은 그 해역을 여는 배다`,
+      '가방 채움은 해역 진입 레벨의 방치 속도로 본다. 육지를 도는 우회, 접안과 거점 안 이동, 판매 창 조작 시간은 넣지 않으므로 비중은 하한이다. 5% 한도까지 여유 열은 이런 미반영 시간이 왕복마다 이만큼 더해져도 비중이 5%를 넘지 않는 한도다',
     );
   } else if (command === 'ev') {
     lines.push(
@@ -361,6 +427,53 @@ function exceptionText(e: NonNullable<FlowResult['exception']>, o: FlowResult['o
   return out;
 }
 
+const minutes = (sec: number) => `${(sec / 60).toFixed(1)}분`;
+
+function distText(d: NonNullable<FlowResult['dist']>): string[] {
+  const out: string[] = [];
+  out.push('\n## 분포 — 최초 10분 (수동 낚시로 첫 바다 해역에 닿기까지, 낚는 시간만 센 값). p10은 빠른 쪽, p90은 느린(운이 나쁜) 쪽');
+  const rows: string[][] = [];
+  for (const x of d.opening) {
+    const label = x.judgment === 'good' ? 'GOOD' : '무판정';
+    for (const [name, dist] of [['영웅 보장', x.epic], ['전설 보장', x.legend], ['첫 바다 해역 도착', x.arrival]] as const) {
+      rows.push(dist ? [label, name, minutes(dist.p10), minutes(dist.p50), minutes(dist.p90), minutes(dist.mean), String(dist.missing)] : [label, name, '—', '—', '—', '—', String(x.trials)]);
+    }
+  }
+  out.push(table(['판정', '지표', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '못 끝냄(횟수)'], rows));
+  for (const x of d.opening) {
+    out.push(`- ${x.judgment === 'good' ? 'GOOD' : '무판정'}: 목표 ${OPENING_TARGET_SEC / 60}분 안에 도착한 비율 ${pct1(x.within10)}, 해석 기댓값 ${Number.isFinite(x.analytic) ? minutes(x.analytic) : '미도착'}(전설 보장 가운데 번호)`);
+  }
+  out.push('\n## 분포 — 해역 전환 소요 (쉬지 않고 낚을 때). p10은 빠른 쪽, p90은 느린(운이 나쁜) 쪽');
+  out.push(table(
+    ['전환', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '해석 기댓값', '평균 ÷ 기댓값', '못 끝냄(횟수)'],
+    d.transition.map(t => [
+      `${nameOf(t.from)} → ${nameOf(t.to)}`,
+      ...(t.hours ? [hrs(t.hours.p10), hrs(t.hours.p50), hrs(t.hours.p90), hrs(t.hours.mean)] : ['—', '—', '—', '—']),
+      hrs(t.analyticHours), t.hours && t.analyticHours > 0 ? `${(t.hours.mean / t.analyticHours).toFixed(2)}배` : '—', String(t.hours?.missing ?? '—'),
+    ]),
+  ));
+  return out;
+}
+
+function travelText(t: NonNullable<FlowResult['travel']>): string[] {
+  const out: string[] = [];
+  out.push('\n## 이동 시간 측정 — 판매 왕복이 낚시 시간에서 차지하는 비중');
+  out.push(table(
+    ['해역', '거점', '평균 거리(px)', '최장 거리(px)', '속도(px/s)', '가방', '가방 채움', '왕복', '비중', '5% 한도까지 여유(초/왕복)'],
+    t.rows.map(r => [
+      nameOf(r.spot), r.base, n0(r.distance), n0(r.distanceMax), r.speed, r.bagCap, hrs(r.fillSec / 3600),
+      `${r.tripSec.toFixed(1)}초`, `${(r.share * 100).toFixed(2)}%`, n0(r.headroomSec),
+    ]),
+  ));
+  const top = t.rows.reduce((a, b) => (b.share > a.share ? b : a));
+  const material = t.rows.filter(r => r.share >= TRAVEL_MATERIAL);
+  out.push(`\n해역별 비중의 최댓값은 ${nameOf(top.spot)}의 ${(top.share * 100).toFixed(2)}%다. ${material.length === 0
+    ? `모든 해역이 ${TRAVEL_MATERIAL * 100}% 미만이므로 해역별 계산 대신 일괄 보정을 쓴다`
+    : `${material.map(r => nameOf(r.spot)).join(', ')}이(가) ${TRAVEL_MATERIAL * 100}% 이상이므로 해역별 계산이 필요하다`}.`);
+  out.push(`일괄 보정 기본값: ${(t.default * 100).toFixed(2)}% (--travel-share로 바꾼다)`);
+  return out;
+}
+
 function gatesText(rows: GateRow[]): string[] {
   const poolLabel = { day: '낮 풀', mixed: '낮밤 혼합' } as const;
   const out: string[] = ['\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)'];
@@ -382,12 +495,16 @@ export function renderText(r: FlowResult): string {
   const lines = [
     `# 플레이 흐름 시뮬레이션 — 낚시 방식 ${AXIS_LABEL[o.axis]}, 4시간 유형 낚지 못하는 비율 ${o.loss4h === null ? '0%, 25%, 50%' : `${o.loss4h}%`}, 최대 ${o.maxDays}일`,
     o.override ? `덮어쓰기: ${JSON.stringify(o.override)}` : '덮어쓰기: 없음',
+    `이동 시간: ${travelStatement(o.travel)}`,
   ];
+  if (r.dist) lines.push(`난수: 시드 ${o.seed}, 시도 ${o.trials}회`);
   if (r.transition) lines.push(...transitionText(r.transition, o), assumptionText('transition', o));
   if (r.days) lines.push(...daysText(r.days), assumptionText('days', o, r.days));
   if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
   if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
   if (r.ev) lines.push(...evText(r.ev, o), assumptionText('ev', o));
+  if (r.dist) lines.push(...distText(r.dist), assumptionText('dist', o));
+  if (r.travel) lines.push(...travelText(r.travel), assumptionText('travel', o));
   if (r.gates) lines.push(...gatesText(r.gates));
   return lines.join('\n');
 }

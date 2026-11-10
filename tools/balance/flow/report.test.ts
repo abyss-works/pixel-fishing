@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
 import { HELP, parseArgs, renderText, runCli, runFlow } from './report';
 import type { FlowOptions } from './report';
+import { DEFAULT_SEED, DEFAULT_TRIALS } from './dist';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -17,6 +18,7 @@ describe('명령 인자', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       loss4h: null, legendAt: null, axis: 'idle', maxDays: 365, bagCapAwake: false, help: false,
+      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, travelShare: null,
     });
   });
 
@@ -40,7 +42,7 @@ describe('명령 인자', () => {
   });
 
   it('도움말이 모든 명령과 옵션을 설명한다', () => {
-    for (const w of ['transition', 'days', 'opening', 'exception', 'ev', '1시간', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help']) {
+    for (const w of ['transition', 'days', 'opening', 'exception', 'ev', '1시간', '--override', '--json', '--loss4h', '--legend-at', '--axis', '--max-days', '--bag-cap-awake', '--help', 'dist', 'travel', '--seed', '--trials', '--travel-share']) {
       expect(HELP).toContain(w);
     }
   });
@@ -252,5 +254,63 @@ describe('gates 명령', () => {
     const bad = runCli(['gates', '--override', join(tmpdir(), 'no-such-flow-override.json')]);
     expect(bad.exitCode).toBe(1);
     expect(bad.stderr).toContain('오류:');
+  });
+});
+
+describe('분포와 이동 명령', () => {
+  const small = (over: Partial<FlowOptions> = {}) => base({ trials: 30, ...over });
+
+  it('분포 인자를 읽는다', () => {
+    expect(parseArgs(['dist', '--seed', '5', '--trials', '50', '--travel-share', '2'])).toMatchObject({ commands: ['dist'], seed: 5, trials: 50, travelShare: 2 });
+    expect(parseArgs(['travel']).commands).toEqual(['travel']);
+  });
+
+  it('명령을 생략해도 분포와 이동 측정은 내지 않는다', () => {
+    expect(parseArgs([]).commands).not.toContain('dist');
+    expect(parseArgs([]).commands).not.toContain('travel');
+  });
+
+  it('잘못된 분포 인자를 거부한다', () => {
+    expect(() => parseArgs(['--trials', '0'])).toThrow(/1 이상/);
+    expect(() => parseArgs(['--trials', '2.5'])).toThrow(/정수/);
+    expect(() => parseArgs(['--seed', '1.5'])).toThrow(/정수/);
+    expect(() => parseArgs(['--travel-share', '100'])).toThrow(/0 이상 100 미만/);
+    expect(() => parseArgs(['--travel-share', '-1'])).toThrow(/0 이상 100 미만/);
+  });
+
+  it('분포 출력은 시드와 시도 횟수, 느린 쪽의 뜻, 두 분포 표를 담는다', () => {
+    const text = renderText(runFlow(small({ commands: ['dist'], seed: 3 })));
+    for (const w of ['시드 3', '시도 30회', 'p10', '중앙값', 'p90', '운이 나쁜', '최초 10분', '영웅 보장', '전설 보장', '첫 바다 해역 도착', '해역 전환', '해석 기댓값', '가정:']) {
+      expect(text, w).toContain(w);
+    }
+  });
+
+  it('같은 인자는 표와 JSON이 바이트까지 같고 시드가 다르면 달라진다', () => {
+    const o = small({ commands: ['dist'], seed: 3 });
+    expect(renderText(runFlow(o))).toBe(renderText(runFlow(o)));
+    expect(JSON.stringify(runFlow(o))).toBe(JSON.stringify(runFlow(o)));
+    expect(renderText(runFlow({ ...o, seed: 4 }))).not.toBe(renderText(runFlow(o)));
+  });
+
+  it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중과 기본 보정값을 담는다', () => {
+    const text = renderText(runFlow(base({ commands: ['travel'] })));
+    for (const w of ['이동 시간 측정', '거리', '속도', '왕복', '비중', '5%', '일괄 보정', '가정:', '마을 연못', '세인트헬레나']) expect(text, w).toContain(w);
+  });
+
+  it('기본 출력은 이동 시간을 측정값으로 포함한다고 밝히고 0을 주면 넣지 않는다고 밝힌다', () => {
+    const d = renderText(runFlow(base({ commands: ['transition'] })));
+    expect(d).toContain('이동 시간: 포함');
+    expect(d).toContain('측정값');
+    const zero = renderText(runFlow(base({ commands: ['transition'], travelShare: 0 })));
+    expect(zero).toContain('이동 시간: 넣지 않는다');
+    expect(zero).not.toBe(d);
+  });
+
+  it('이동 보정을 직접 지정하면 지정값이라고 밝힌다', () => {
+    expect(renderText(runFlow(base({ commands: ['days'], travelShare: 2 })))).toContain('직접 지정');
+  });
+
+  it('보정이 적용되지 않는 명령은 이동 시간을 넣지 않는다고 밝힌다', () => {
+    expect(renderText(runFlow(base({ commands: ['opening'] })))).toContain('이동 시간: 넣지 않는다');
   });
 });
