@@ -225,6 +225,15 @@ describe('gates 명령', () => {
     expect(row('마리아나 해구')).not.toMatch(/통과|예외|위반/);
   });
 
+  it('반례: 최대 일수 안에 끝나지 않으면 닿지 못한 전환을 위반으로 내고 종료 코드는 1이다', () => {
+    const r = runCli(['gates', '--max-days', '7']);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toContain('최대 일수 안에 닿지 못한 전환');
+    expect(r.stdout).toMatch(/남대서양 용승대 → 세인트헬레나 \| 지역 안 \| 닿지 못함 .*위반/);
+    expect(r.stdout).toMatch(/위반 [1-9]/);
+    expect(runCli(['gates']).exitCode).toBe(0);
+  });
+
   it('반례: 해역 하나의 어종 가격 배율을 크게 낮추면 그 전환이 위반이고 종료 코드는 1이다', () => {
     const dir = makeDir();
     const file = join(dir, 'low.json');

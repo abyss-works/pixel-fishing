@@ -17,8 +17,8 @@ export interface PerfectRow { spot: SpotId; margin: number; level: number; ratio
 
 export interface FameRow {
   from: SpotId; to: SpotId;
-  /** 골드가 막은 시간과 배 명성이 막은 시간(시간) */
-  goldWait: number; fameWait: number;
+  /** 골드가 막은 시간과 배 명성이 막은 시간(시간). 최대 일수 안에 닿지 못한 전환은 null이고 위반이다 */
+  goldWait: number | null; fameWait: number | null;
   /** 명성 대기 ÷ 골드 대기. 골드 대기가 0이면 null */
   ratio: number | null;
   verdict: GateVerdict;
@@ -38,8 +38,8 @@ export type TimeKind = 'observe' | 'entry' | 'inner';
 export interface TimeRow {
   from: SpotId; to: SpotId;
   kind: TimeKind;
-  /** 전환 시간(실질 낚시 시간)과 8시간 환산 일수 */
-  hours: number; days: number;
+  /** 전환 시간(실질 낚시 시간)과 8시간 환산 일수. 최대 일수 안에 닿지 못한 전환은 null이다 */
+  hours: number | null; days: number | null;
   /** 목표 범위(시간)와 범위 판정. 지역 진입 전환에만 있다 */
   range: readonly [number, number] | null;
   rangeVerdict: GateVerdict | null;
@@ -85,7 +85,7 @@ function openingRows(legendAts: number[]): OpeningGateRow[] {
 }
 
 function timeAndFame(maxDays: number): { time: TimeRow[]; fame: FameRow[] } {
-  const { timings } = transitionReport({ axis: 'idle', maxDays });
+  const { rows, timings } = transitionReport({ axis: 'idle', maxDays });
   const start = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
   const gap = (from: SpotId, to: SpotId) => powerReq(to) - powerReq(from);
   const entryGapOf = (to: SpotId): number | null => {
@@ -94,20 +94,24 @@ function timeAndFame(maxDays: number): { time: TimeRow[]; fame: FameRow[] } {
     return i > 0 ? gap(SPOTS[i - 1].id, SPOTS[i].id) : null;
   };
   const time: TimeRow[] = [], fame: FameRow[] = [];
-  timings.forEach((t, i) => {
-    const { from, to } = t.row;
+  rows.forEach(({ from, to, boats }, i) => {
+    const t = timings[i] as (typeof timings)[number] | undefined;
     const judged = i >= start;
     const entry = topZoneOfSpot(from) !== topZoneOfSpot(to);
     const target = entry ? (REGION_ENTRY_TARGET as Record<string, readonly [number, number]>)[topZoneOfSpot(to) ?? ''] ?? null : null;
-    const prev = judged && i > start ? timings[i - 1].hours : null;
+    const prev = judged && i > start ? timings[i - 1]?.hours ?? null : null;
+    // 닿지 못한 전환은 판정에서 빼지 않고 위반으로 낸다
+    const range = !judged || !target ? null : t ? judgeTimeRange(to, target, t.hours) : '위반';
+    const order = !judged || i === start ? null : t && prev !== null ? judgeTimeOrder(to, t.hours, prev) : '위반';
     time.push({
-      from, to, kind: !judged ? 'observe' : entry ? 'entry' : 'inner', hours: t.hours, days: t.days,
-      range: judged ? target : null, rangeVerdict: judged && target ? judgeTimeRange(to, target, t.hours) : null,
-      prevHours: prev, orderVerdict: prev === null ? null : judgeTimeOrder(to, t.hours, prev),
+      from, to, kind: !judged ? 'observe' : entry ? 'entry' : 'inner', hours: t?.hours ?? null, days: t?.days ?? null,
+      range: judged ? target : null, rangeVerdict: range, prevHours: prev, orderVerdict: order,
       powerGap: gap(from, to), entryPowerGap: judged && !entry ? entryGapOf(to) : null,
     });
-    if (judged && t.row.boats.length > 0) {
-      fame.push({ from, to, goldWait: t.goldWait, fameWait: t.fameWait, ratio: t.fameOverGold, verdict: judgeFameRatio(to, t.fameOverGold, t.fameWait) });
+    if (judged && boats.length > 0) {
+      fame.push(t
+        ? { from, to, goldWait: t.goldWait, fameWait: t.fameWait, ratio: t.fameOverGold, verdict: judgeFameRatio(to, t.fameOverGold, t.fameWait) }
+        : { from, to, goldWait: null, fameWait: null, ratio: null, verdict: '위반' });
     }
   });
   return { time, fame };

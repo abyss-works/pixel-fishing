@@ -460,7 +460,10 @@ function gatesText(g: GatesReport): string[] {
   out.push(`\n## 게이트 검사 — 배 명성 대기 ÷ 골드 대기 (리프 이후 배를 사는 전환, ${FAME_RATIO_LIMIT}배 이하, 하한 없음)`);
   out.push(table(
     ['전환', '골드 대기', '명성 대기', '명성 대기 ÷ 골드 대기', '판정'],
-    g.fame.map(r => [`${nameOf(r.from)} → ${nameOf(r.to)}`, h2(r.goldWait), h2(r.fameWait), r.ratio === null ? '—' : `${r.ratio.toFixed(2)}배`, show(r.verdict)]),
+    g.fame.map(r => [
+      `${nameOf(r.from)} → ${nameOf(r.to)}`, r.goldWait === null ? '닿지 못함' : h2(r.goldWait), r.fameWait === null ? '닿지 못함' : h2(r.fameWait),
+      r.ratio === null ? '—' : `${r.ratio.toFixed(2)}배`, show(r.verdict),
+    ]),
   ));
   out.push(`\n${count(g.fame.map(r => r.verdict))}`);
 
@@ -476,12 +479,14 @@ function gatesText(g: GatesReport): string[] {
   out.push(table(
     ['전환', '구분', '전환 시간', '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
     g.time.map(r => [
-      `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], h2(r.hours), d1(r.days),
+      `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], r.hours === null ? '닿지 못함' : h2(r.hours), r.days === null ? '—' : d1(r.days),
       r.kind === 'observe' ? '—' : r.range ? `${r.range[0]}~${r.range[1]}시간` : '범위 없음', dash(r.rangeVerdict),
       r.prevHours === null ? '—' : h2(r.prevHours), dash(r.orderVerdict), r.powerGap, r.entryPowerGap ?? '—',
     ]),
   ));
   out.push(`\n${count(g.time.flatMap(r => [r.rangeVerdict, r.orderVerdict]).filter((v): v is GateVerdict => v !== null))}`);
+  const unreached = g.time.filter(r => r.hours === null).map(r => `${nameOf(r.from)} → ${nameOf(r.to)}`);
+  if (unreached.length) out.push(`\n최대 일수 안에 닿지 못한 전환(판정 가능한 항목은 위반): ${unreached.join(', ')}`);
   out.push(`\n전체 — ${count(verdictList(g))}`);
   return out;
 }

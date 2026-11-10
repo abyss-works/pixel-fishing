@@ -35,6 +35,39 @@ describe('게이트 보고', () => {
     expect(rows.find(r => r.to === 'southindian')!.ratio).toBeCloseTo(1.33, 2);
   });
 
+  it('배를 사는 전환만 명성 비율을 판정한다: 배가 없는 전환은 행이 없다', () => {
+    const to = gatesReport(opts).fame.map(r => r.to);
+    expect(to).toEqual(['indian', 'southindian', 'mozstrait', 'benguela']);
+    for (const noBoat of ['comorodeep', 'sthelena', 'coron']) expect(to).not.toContain(noBoat);
+  });
+
+  describe('시뮬레이션이 끝나지 않을 때', () => {
+    const short = gatesReport({ ...opts, maxDays: 7 });
+
+    it('닿지 못한 전환은 판정에서 빠지지 않고 위반이며 닿은 전환은 그대로다', () => {
+      expect(short.time).toHaveLength(SPOTS.length - 1);
+      const last = short.time.at(-1)!;
+      expect(last.to).toBe('sthelena');
+      expect(last.hours).toBeNull();
+      expect(last.days).toBeNull();
+      expect(last.orderVerdict).toBe('위반');
+      expect(short.time.find(r => r.to === 'indian')!.hours).not.toBeNull();
+    });
+
+    it('닿지 못한 지역 진입 전환은 범위 판정이, 배를 사는 전환은 명성 비율 판정이 위반이다', () => {
+      const t = gatesReport({ ...opts, maxDays: 3 });
+      const benguela = t.time.find(r => r.to === 'benguela')!;
+      expect(benguela.hours).toBeNull();
+      expect(benguela.rangeVerdict).toBe('위반');
+      expect(t.fame.find(r => r.to === 'benguela')).toMatchObject({ ratio: null, goldWait: null, verdict: '위반' });
+      expect(t.fame.map(r => r.to)).toEqual(['indian', 'southindian', 'mozstrait', 'benguela']);
+    });
+
+    it('집계의 위반이 0보다 크다', () => {
+      expect(verdictCounts(short)['위반']).toBeGreaterThan(0);
+    });
+  });
+
   it('최초 10분 도달은 판정마다 보장 번호 후보 중 가장 느린 값으로 재고 현재 값은 통과다', () => {
     const rows = gatesReport(opts).opening;
     expect(rows.map(r => r.judgment)).toEqual(['normal', 'good']);
@@ -54,7 +87,7 @@ describe('게이트 보고', () => {
         expect(r.kind).toBe('observe');
         expect(r.rangeVerdict).toBeNull();
         expect(r.orderVerdict).toBeNull();
-        expect(r.hours).toBeGreaterThanOrEqual(0);
+        expect(r.hours!).toBeGreaterThanOrEqual(0);
       }
     });
 
@@ -94,14 +127,14 @@ describe('게이트 보고', () => {
     });
 
     it('일수는 전환 시간 ÷ 8이다', () => {
-      for (const r of rows) expect(r.days).toBeCloseTo(r.hours / 8, 12);
+      for (const r of rows) expect(r.days).toBeCloseTo(r.hours! / 8, 12);
     });
   });
 
   it('반례: 인도양 진입 전환이 지금보다 더 빨라지면 범위 판정이 위반이다', () => {
     restore = applyOverride({ spots: { barrierreef: { priceMult: 3 } } });
     const r = gatesReport(opts).time.find(x => x.to === 'indian')!;
-    expect(r.hours).toBeLessThan(1.27);
+    expect(r.hours!).toBeLessThan(1.27);
     expect(r.rangeVerdict).toBe('위반');
   });
 });
