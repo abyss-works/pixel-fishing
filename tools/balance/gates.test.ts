@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyOverride } from './flow/override';
-import { GATE_FROM_SPOT, GATE_POOLS, KNOWN_INVERSIONS, gateRows, judgeGate } from './gates';
+import {
+  FAME_RATIO_LIMIT, GATE_FROM_SPOT, GATE_POOLS, KNOWN_FAME_RATIO, KNOWN_INVERSIONS, KNOWN_TIME_ORDER, KNOWN_TIME_RANGE, PERFECT_LIMIT,
+  REGION_ENTRY_TARGET, gateRows, judgeFameRatio, judgeGate, judgeOpening, judgePerfect, judgeTimeOrder, judgeTimeRange,
+} from './gates';
 
 const keyOf = (r: { spot: string; pool: string }) => `${r.spot} ${r.pool}`;
 
@@ -52,5 +55,89 @@ describe('이동 직후 수입 게이트', () => {
     restore = applyOverride({ spots: { southindian: { priceMult: 0.3 }, comorodeep: { priceMult: 0.3 } } });
     const rows = gateRows();
     expect(rows.find(r => r.spot === 'southindian' && r.pool === 'day')!.verdict).toBe('위반');
+  });
+});
+
+describe('PERFECT 이상치 판정', () => {
+  it('방치의 10배까지는 통과하고 넘으면 위반이다', () => {
+    expect(PERFECT_LIMIT).toBe(10);
+    expect(judgePerfect(7.37)).toBe('통과');
+    expect(judgePerfect(10)).toBe('통과');
+    expect(judgePerfect(10.01)).toBe('위반');
+  });
+});
+
+describe('배 명성 대기 ÷ 골드 대기 판정', () => {
+  it('1.3배 이하는 하한 없이 통과한다', () => {
+    expect(FAME_RATIO_LIMIT).toBe(1.3);
+    expect(judgeFameRatio('indian', 1.3)).toBe('통과');
+    expect(judgeFameRatio('indian', 1.01)).toBe('통과');
+    expect(judgeFameRatio('indian', 0)).toBe('통과');
+  });
+
+  it('1.3배를 넘으면 목록에 없는 전환은 위반이다', () => {
+    expect(judgeFameRatio('indian', 1.33)).toBe('위반');
+  });
+
+  it('목록의 전환은 알려진 값과 같으면 예외, 좋아지면 개선, 나빠지면 위반이다', () => {
+    expect(KNOWN_FAME_RATIO.southindian).toBe(1.33);
+    expect(judgeFameRatio('southindian', 1.33)).toBe('예외');
+    expect(judgeFameRatio('southindian', 1.3)).toBe('개선');
+    expect(judgeFameRatio('southindian', 1.12)).toBe('개선');
+    expect(judgeFameRatio('southindian', 1.4)).toBe('위반');
+  });
+
+  it('골드 대기가 없어 비율이 정해지지 않는 전환은 명성 대기가 없으면 통과, 있으면 위반이다', () => {
+    expect(judgeFameRatio('indian', null, 0)).toBe('통과');
+    expect(judgeFameRatio('indian', null, 1)).toBe('위반');
+  });
+});
+
+describe('전환 시간 범위 판정', () => {
+  it('지역 진입 전환의 목표는 인도양 3~4, 모잠비크 9~10, 용승대 25~27시간이다', () => {
+    expect(REGION_ENTRY_TARGET).toEqual({ indian: [3, 4], madagascar: [9, 10], southatlantic: [25, 27] });
+  });
+
+  it('범위 안은 통과, 밖은 위반이다(경계 포함)', () => {
+    expect(judgeTimeRange('x' as never, [3, 4], 3.5)).toBe('통과');
+    expect(judgeTimeRange('x' as never, [3, 4], 3)).toBe('통과');
+    expect(judgeTimeRange('x' as never, [3, 4], 4)).toBe('통과');
+    expect(judgeTimeRange('x' as never, [3, 4], 1.3)).toBe('위반');
+    expect(judgeTimeRange('x' as never, [3, 4], 4.5)).toBe('위반');
+  });
+
+  it('목록의 전환은 알려진 값과 같으면 예외, 범위에 가까워지면 개선, 멀어지면 위반이다', () => {
+    const known = KNOWN_TIME_RANGE.indian!;
+    expect(known).toBeLessThan(3);
+    expect(judgeTimeRange('indian', [3, 4], known)).toBe('예외');
+    expect(judgeTimeRange('indian', [3, 4], known + 0.5)).toBe('개선');
+    expect(judgeTimeRange('indian', [3, 4], 3.5)).toBe('개선');
+    expect(judgeTimeRange('indian', [3, 4], known - 0.5)).toBe('위반');
+  });
+});
+
+describe('전환 시간 순서 판정', () => {
+  it('직전보다 줄지 않으면 통과하고 줄면 위반이다', () => {
+    expect(judgeTimeOrder('x' as never, 16, 23)).toBe('위반');
+    expect(judgeTimeOrder('x' as never, 23, 23)).toBe('통과');
+    expect(judgeTimeOrder('x' as never, 25, 23)).toBe('통과');
+  });
+
+  it('목록의 전환은 줄어든 폭이 알려진 값과 같으면 예외이고 폭이 작아지면 개선, 커지면 위반이다', () => {
+    const known = KNOWN_TIME_ORDER.sthelena!;
+    expect(known).toBeGreaterThan(0);
+    expect(judgeTimeOrder('sthelena', 23 - known, 23)).toBe('예외');
+    expect(judgeTimeOrder('sthelena', 23 - known + 1, 23)).toBe('개선');
+    expect(judgeTimeOrder('sthelena', 23, 23)).toBe('개선');
+    expect(judgeTimeOrder('sthelena', 23 - known - 1, 23)).toBe('위반');
+  });
+});
+
+describe('최초 10분 도달 판정', () => {
+  it('600초 이하는 통과하고 넘으면 위반이다', () => {
+    expect(judgeOpening(599)).toBe('통과');
+    expect(judgeOpening(600)).toBe('통과');
+    expect(judgeOpening(601)).toBe('위반');
+    expect(judgeOpening(null)).toBe('위반');
   });
 });
