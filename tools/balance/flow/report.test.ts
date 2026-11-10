@@ -293,7 +293,7 @@ describe('분포와 이동 명령', () => {
     expect(renderText(runFlow({ ...o, seed: 4 }))).not.toBe(renderText(a));
   });
 
-  it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중과 기본 보정값을 담는다', () => {
+  it('이동 측정 출력은 해역별 거리, 속도, 왕복, 비중과 일괄 보정에 쓸 수 있는 값을 담는다', () => {
     const text = renderText(runFlow(base({ commands: ['travel'] })));
     for (const w of ['이동 시간 측정', '거리', '속도', '왕복', '비중', '5%', '일괄 보정', '가정:', '마을 연못', '세인트헬레나']) expect(text, w).toContain(w);
   });

@@ -55,7 +55,7 @@ describe('최초 10분 분포', () => {
   });
 
   it('도착 시간 평균이 해석 기댓값과 15% 안에서 맞는다', () => {
-    expect(Math.abs(d.arrival!.mean / d.analytic - 1)).toBeLessThan(0.15);
+    expect(Math.abs(d.arrival!.mean! / d.analytic - 1)).toBeLessThan(0.15);
   });
 
   it('시도 횟수가 1보다 작으면 거부한다', () => {

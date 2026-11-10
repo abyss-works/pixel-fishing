@@ -49,7 +49,7 @@ export interface FlowOptions {
   /** dist의 난수 시드와 시도 횟수 */
   seed: number;
   trials: number;
-  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(%). null이면 travel 명령의 측정값 */
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(%). null이면 지정하지 않은 것으로 이동 시간을 넣지 않는다 */
   travelShare: number | null;
 }
 
@@ -239,7 +239,7 @@ function missingLicenseText(d: NonNullable<FlowResult['days']>): string {
 
 function assumptionText(command: Command, o: FlowResult['options'], days?: FlowResult['days']): string {
   const lines: string[] = [BASIC_ASSUMPTION];
-  lines.push(`이동 시간: ${travelStatement(TRAVEL_COMMANDS.includes(command) ? o.travel : { share: 0, source: 'unused' })}`);
+  lines.push(`이동 시간: ${travelStatement(TRAVEL_COMMANDS.includes(command) ? o.travel : { share: 0, source: 'unused', measuredMax: null })}`);
   if (command === 'transition') {
     lines.push(LOSS_ASSUMPTION(o), BAG_ASSUMPTION(o), SLEEP_ASSUMPTION, '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', '도착 일차는 의뢰와 토벌을 하지 않는 경우다');
   } else if (command === 'days') {
@@ -257,7 +257,7 @@ function assumptionText(command: Command, o: FlowResult['options'], days?: FlowR
       `난수는 시드 고정 mulberry32이고 시도마다 같은 흐름을 이어 쓴다. 같은 시드(${o.seed}), 시도 횟수(${o.trials}), 인자의 출력은 항상 같다`,
       'p10은 빠른 쪽(운이 좋은 10%의 경계), p90은 느린 쪽(운이 나쁜 10%의 경계)이다',
       '최초 10분: 전설 보장 번호는 제품 규칙대로 시도마다 10에서 20 사이로 뽑는다. 도착 뒤에도 보장이 남으면 그 해역에서 더 낚아 보장 시각을 재고, 10분 안에 못 닿은 시도도 도착 시간에 넣는다. 해석 기댓값은 전설 보장이 가운데 번호일 때의 값이다',
-      '해역 전환: 쉬지 않고 낚는 연속 방치를 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 소요를 모은다. 앞 해역은 전환 소요가 짧아, 캐치 가격이 한쪽으로 치우쳐 고가 어종으로 문턱을 넘은 초과분이 다음 전환으로 넘어가는 효과와 1분 단위 문턱 판정의 영향이 커서 개별 전환의 표본 평균이 기댓값과 벌어진다. 누적 시간으로 보면 일치한다',
+      '해역 전환: 쉬지 않고 낚는 연속 방치를 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 소요를 모은다. 앞 해역은 전환 소요가 짧아, 캐치 가격이 한쪽으로 치우쳐 고가 어종으로 문턱을 넘은 초과분이 다음 전환으로 넘어가는 효과와 1분 단위 문턱 판정의 영향이 커서 개별 전환의 표본 평균이 기댓값과 벌어진다. 누적 소요가 긴 남인도양 이후 해역은 누적 시간으로 보면 기댓값과 일치하지만, 앞 해역은 누적으로도 표본 평균이 기댓값보다 크다',
     );
   } else if (command === 'travel') {
     lines.push(
@@ -482,9 +482,9 @@ function travelText(t: NonNullable<FlowResult['travel']>): string[] {
   const top = t.rows.reduce((a, b) => (b.share > a.share ? b : a));
   const material = t.rows.filter(r => r.share >= TRAVEL_MATERIAL);
   out.push(`\n해역별 비중의 최댓값은 ${nameOf(top.spot)}의 ${(top.share * 100).toFixed(2)}%다. ${material.length === 0
-    ? `모든 해역이 ${TRAVEL_MATERIAL * 100}% 미만이므로 해역별 계산 대신 일괄 보정을 쓴다`
+    ? `모든 해역이 ${TRAVEL_MATERIAL * 100}% 미만이므로 해역별 계산은 필요하지 않고 일괄 보정으로 충분하다`
     : `${material.map(r => nameOf(r.spot)).join(', ')}이(가) ${TRAVEL_MATERIAL * 100}% 이상이므로 해역별 계산이 필요하다`}.`);
-  out.push(`일괄 보정에 쓸 수 있는 값(해역별 최댓값): ${(t.max * 100).toFixed(2)}%. 기본은 넣지 않으며 --travel-share로 넣는다`);
+  out.push(`일괄 보정에 쓸 수 있는 값(해역별 최댓값): ${(t.max * 100).toFixed(2)}%. 이 값을 넣으려면 --travel-share로 지정한다(지정하지 않으면 넣지 않는다)`);
   return out;
 }
 
