@@ -27,8 +27,8 @@ export interface OpeningDist {
   seed: number;
   /** 영웅 보장, 전설 보장, 첫 바다 해역 도착까지 걸린 낚는 시간(초)의 분포. 못 끝낸 시도는 missing이다 */
   epic: Dist | null; legend: Dist | null; arrival: Dist | null;
-  /** 목표 시간(10분) 안에 도착한 시도의 비율 */
-  within10: number;
+  /** 목표 시간(10분) 안에 도착한 시도의 비율. 못 끝낸 시도가 있으면 null */
+  within10: number | null;
   /** 해석 기댓값 — 전설 보장이 범위 가운데 번호일 때의 도착 시간(초). 못 닿으면 null */
   analytic: number;
 }
@@ -52,7 +52,7 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
     judgment: o.judgment, trials: o.trials, seed: o.seed,
     epic: summarize(epic, o.trials - epic.length), legend: summarize(legend, o.trials - legend.length),
     arrival: summarize(arrival, o.trials - arrival.length),
-    within10: arrival.filter(s => s <= OPENING_TARGET_SEC).length / o.trials,
+    within10: arrival.length < o.trials ? null : arrival.filter(s => s <= OPENING_TARGET_SEC).length / o.trials,
     analytic: simulateOpening({ judgment: o.judgment, legendAt: mid }).arrival?.seconds ?? Number.NaN,
   };
 }
@@ -67,8 +67,11 @@ export interface TransitionDist {
   from: SpotId; to: SpotId;
   /** 쉬지 않고 낚을 때 이 전환에 걸린 시간(시간)의 분포 */
   hours: Dist | null;
-  /** 해석 기댓값(transition 명령의 연속 방치 소요, 시간) */
-  analyticHours: number;
+  /** 해석 기댓값(transition 명령의 연속 방치 소요, 시간). 최대 일수 안에 닿지 못했으면 null */
+  analyticHours: number | null;
+  /** 처음부터 이 전환까지 누적 시간(시간)의 분포와 해석 기댓값 */
+  cumulative: Dist | null;
+  analyticCumulative: number | null;
 }
 
 export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
@@ -76,15 +79,20 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   const base = { type: ALWAYS_ON, axis: o.axis, bounty: false, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, travelShare: o.travelShare };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
-  const hours: number[][] = analytic.map(() => []);
+  const hours: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
+  const cumulative: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
   for (let i = 0; i < o.trials; i++) {
-    transitionTimings(simulate({ ...base, sampler: createSampler(stream) }).arrivals).forEach((t, k) => hours[k].push(t.hours));
+    transitionTimings(simulate({ ...base, sampler: createSampler(stream) }).arrivals).forEach((t, k) => {
+      hours[k].push(t.hours);
+      cumulative[k].push(t.cumulativeHours);
+    });
   }
-  return analytic.map((a, k) => ({
-    from: a.row.from, to: a.row.to,
-    hours: summarize(hours[k], o.trials - hours[k].length), analyticHours: a.hours,
+  return SPOTS.slice(1).map((to, k) => ({
+    from: SPOTS[k].id, to: to.id,
+    hours: summarize(hours[k], o.trials - hours[k].length), analyticHours: analytic[k]?.hours ?? null,
+    cumulative: summarize(cumulative[k], o.trials - cumulative[k].length), analyticCumulative: analytic[k]?.cumulativeHours ?? null,
   }));
 }
 
-/** 해역 id 순서 확인용 — 전환 수는 해역 수보다 하나 적다 */
-export const TRANSITION_COUNT = SPOTS.length - 1;
+/** 전환 수는 해역 수보다 하나 적다 */
+const TRANSITION_COUNT = SPOTS.length - 1;

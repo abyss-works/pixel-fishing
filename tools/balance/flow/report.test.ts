@@ -297,20 +297,42 @@ describe('분포와 이동 명령', () => {
     for (const w of ['이동 시간 측정', '거리', '속도', '왕복', '비중', '5%', '일괄 보정', '가정:', '마을 연못', '세인트헬레나']) expect(text, w).toContain(w);
   });
 
-  it('기본 출력은 이동 시간을 측정값으로 포함한다고 밝히고 0을 주면 넣지 않는다고 밝힌다', () => {
+  it('기본 출력은 이동 시간을 넣지 않고 실행 때 잰 최대 비중과 옵션을 밝힌다', () => {
     const d = renderText(runFlow(base({ commands: ['transition'] })));
-    expect(d).toContain('이동 시간: 포함');
-    expect(d).toContain('측정값');
-    const zero = renderText(runFlow(base({ commands: ['transition'], travelShare: 0 })));
-    expect(zero).toContain('이동 시간: 넣지 않는다');
-    expect(zero).not.toBe(d);
+    expect(d).toMatch(/이동 시간: 넣지 않음\. 측정 비중은 해역별 최대 0\.79%\(travel 명령\)이며 --travel-share로 넣을 수 있다/);
+    expect(runFlow(base({ commands: ['transition'] })).options.travel).toMatchObject({ share: 0, source: 'none' });
   });
 
-  it('이동 보정을 직접 지정하면 지정값이라고 밝힌다', () => {
-    expect(renderText(runFlow(base({ commands: ['days'], travelShare: 2 })))).toContain('직접 지정');
+  it('기본 출력은 이동 시간 줄을 빼면 --travel-share 0과 같고 개발 브랜치의 수치와 같다', () => {
+    const strip = (t: string) => t.split('\n').filter(l => !l.includes('이동 시간:')).join('\n');
+    const o = base({ commands: ['transition', 'days', 'dist'], trials: 20 });
+    expect(strip(renderText(runFlow(o)))).toBe(strip(renderText(runFlow({ ...o, travelShare: 0 }))));
+    const t = renderText(runFlow(base({ commands: ['transition'] })));
+    for (const row of ['| 인도양 → 남인도양 | 4.9h | 7.8h | 0분 · 1.2h · 3.7h | 1.33배 |', '| 남대서양 용승대 → 세인트헬레나 | 16h | 62h | 16h · 0분 · 0분 | 0.00배 |']) {
+      expect(t).toContain(row);
+    }
+  });
+
+  it('이동 시간을 0으로 지정하면 지정 문구가, 양수로 지정하면 포함 문구와 직접 지정이 나온다', () => {
+    expect(renderText(runFlow(base({ commands: ['transition'], travelShare: 0 })))).toContain('이동 시간: 넣지 않음(--travel-share 0)');
+    const given = renderText(runFlow(base({ commands: ['days'], travelShare: 2 })));
+    expect(given).toContain('이동 시간: 포함');
+    expect(given).toContain('직접 지정');
+    expect(given).not.toBe(renderText(runFlow(base({ commands: ['days'] }))));
   });
 
   it('보정이 적용되지 않는 명령은 이동 시간을 넣지 않는다고 밝힌다', () => {
-    expect(renderText(runFlow(base({ commands: ['opening'] })))).toContain('이동 시간: 넣지 않는다');
+    expect(renderText(runFlow(base({ commands: ['opening'] })))).toContain('이동 시간: 넣지 않음(이 명령에는 적용하지 않는다)');
+  });
+
+  it('분포 명령은 최대 일수가 짧아 끝내지 못해도 죽지 않고 미도달을 밝힌다', () => {
+    const r = runCli(['dist', '--max-days', '1', '--trials', '40', '--travel-share', '3']);
+    expect(r.stderr).toBe('');
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('미도달');
+  });
+
+  it('해석 기댓값이 항상 같은 전환 분포 표에 누적 행이 있다', () => {
+    expect(renderText(runFlow(small({ commands: ['dist'] })))).toContain('누적');
   });
 });

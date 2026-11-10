@@ -1,5 +1,5 @@
 // 플레이 흐름 시뮬레이션 명령의 인자 해석, 실행, 출력.
-// 계산은 각 지표 모듈이 하고 여기서는 모아서 표로 찍는다. 같은 인자의 출력은 항상 같다(난수와 시각을 쓰지 않는다).
+// 계산은 각 지표 모듈이 하고 여기서는 모아서 표로 찍는다. 같은 인자의 출력은 항상 같다(시각을 쓰지 않고 난수는 시드를 고정한다).
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { zoneById } from '../../../src/game/content/zones';
@@ -20,7 +20,8 @@ import { evReport } from './ev';
 import type { EvReport } from './ev';
 import { DEFAULT_SEED, DEFAULT_TRIALS, openingDist, transitionDist } from './dist';
 import type { OpeningDist, TransitionDist } from './dist';
-import { TRAVEL_MATERIAL, TRAVEL_SAMPLE_DAYS, travelRows, travelShareDefault } from './travel';
+import type { Dist } from './sample';
+import { TRAVEL_MATERIAL, TRAVEL_SAMPLE_DAYS, TRAVEL_SAMPLE_START, travelRows, travelShareDefault } from './travel';
 import type { TravelRow } from './travel';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
@@ -78,7 +79,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --seed <N>         dist의 난수 시드(정수). 기본 ${DEFAULT_SEED}. 같은 시드, 시도 횟수, 인자의 출력은 항상 같다
   --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
   --travel-share <N> 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(%, 0 이상 100 미만). transition, days, dist의 소요 시간에 일괄 적용한다.
-                     생략하면 travel 명령이 재는 해역별 비중의 최댓값이고, 0이면 이동 시간을 넣지 않는다
+                     생략하면 이동 시간을 넣지 않는다(0과 같다). travel 명령이 재는 해역별 비중의 최댓값이 참고값이다
   --help             이 도움말
 `;
 
@@ -136,8 +137,9 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
   return o;
 }
 
-/** 이동 보정 — share는 깨어 있는 낚시 시간 중 왕복의 비중(0 이상 1 미만)이다. unused는 이 실행의 명령에 보정이 적용되지 않는다는 뜻이다 */
-export interface TravelSetting { share: number; source: 'measured' | 'given' | 'unused' }
+/** 이동 보정 — share는 깨어 있는 낚시 시간 중 왕복의 비중(0 이상 1 미만)이다. none은 지정하지 않아 넣지 않음, given은 직접 지정,
+ *  unused는 이 실행의 명령에 보정이 적용되지 않는다는 뜻이다. measuredMax는 실행 때 잰 해역별 최대 비중(재지 않았으면 null)이다 */
+export interface TravelSetting { share: number; source: 'none' | 'given' | 'unused'; measuredMax: number | null }
 
 export interface SpotInfo { id: SpotId; name: string; powerReq: number; entryLevel: number }
 
@@ -153,7 +155,7 @@ export interface FlowResult {
   ev?: EvReport;
   gates?: GateRow[];
   dist?: { opening: OpeningDist[]; transition: TransitionDist[] };
-  travel?: { rows: TravelRow[]; sampleDays: number; default: number };
+  travel?: { rows: TravelRow[]; sampleDays: number; max: number };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -165,9 +167,10 @@ export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
   const restore = override ? applyOverride(override) : () => {};
   try {
-    const rows = o.commands.includes('travel') || (o.travelShare === null && o.commands.some(c => TRAVEL_COMMANDS.includes(c))) ? travelRows() : null;
-    const travel: TravelSetting = !o.commands.some(c => TRAVEL_COMMANDS.includes(c)) ? { share: 0, source: 'unused' }
-      : o.travelShare !== null ? { share: o.travelShare / 100, source: 'given' } : { share: travelShareDefault(rows!), source: 'measured' };
+    const rows = o.commands.includes('travel') || o.commands.some(c => TRAVEL_COMMANDS.includes(c)) ? travelRows() : null;
+    const measuredMax = rows ? travelShareDefault(rows) : null;
+    const travel: TravelSetting = !o.commands.some(c => TRAVEL_COMMANDS.includes(c)) ? { share: 0, source: 'unused', measuredMax }
+      : o.travelShare !== null ? { share: o.travelShare / 100, source: 'given', measuredMax } : { share: 0, source: 'none', measuredMax };
     const res: FlowResult = { options: { axis: o.axis, loss4h: o.loss4h, legendAt: o.legendAt, maxDays: o.maxDays, bagCapAwake: o.bagCapAwake, override,
       seed: o.seed, trials: o.trials, travel,
       spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
@@ -184,7 +187,7 @@ export function runFlow(o: FlowOptions): FlowResult {
         transition: transitionDist({ trials: o.trials, seed: o.seed, ...sim }),
       };
     }
-    if (o.commands.includes('travel')) res.travel = { rows: rows!, sampleDays: TRAVEL_SAMPLE_DAYS, default: travelShareDefault(rows!) };
+    if (o.commands.includes('travel')) res.travel = { rows: rows!, sampleDays: TRAVEL_SAMPLE_DAYS, max: travelShareDefault(rows!) };
     if (o.commands.includes('ev')) res.ev = evReport();
     if (o.commands.includes('gates')) res.gates = gateRows();
     if (o.commands.includes('exception')) {
@@ -220,9 +223,10 @@ const BASIC_ASSUMPTION = '판매는 즉시이고 미끼, 유물, 쿠폰은 넣�
 
 /** 이동 시간을 넣었는지와 넣은 방식 — 머리말과 가정에 같은 문장을 쓴다 */
 function travelStatement(t: TravelSetting): string {
-  if (t.source === 'unused') return '넣지 않는다(이 명령에는 적용하지 않는다)';
-  if (t.share === 0) return '넣지 않는다(--travel-share 0)';
-  return `포함 — 깨어 있는 낚시 시간의 ${(t.share * 100).toFixed(2)}%를 판매 왕복에 쓴다(${t.source === 'measured' ? '측정값, travel 명령의 해역별 비중 최댓값' : '직접 지정'}). 해역 전환과 일수의 소요 시간과 dist의 해역 전환에 일괄 적용하고, 잠든 시간과 opening, exception, ev, gates에는 적용하지 않는다`;
+  if (t.source === 'unused') return '넣지 않음(이 명령에는 적용하지 않는다)';
+  if (t.source === 'none') return `넣지 않음. 측정 비중은 해역별 최대 ${((t.measuredMax ?? 0) * 100).toFixed(2)}%(travel 명령)이며 --travel-share로 넣을 수 있다`;
+  if (t.share === 0) return '넣지 않음(--travel-share 0)';
+  return `포함 — 깨어 있는 낚시 시간의 ${(t.share * 100).toFixed(2)}%를 판매 왕복에 쓴다(직접 지정). 해역 전환과 일수의 소요 시간과 dist의 해역 전환에 일괄 적용하고, 잠든 시간과 opening, exception, ev, gates에는 적용하지 않는다`;
 }
 
 /** 마지막 해역 진입 레벨에서 유형별로 못 쓰는 라이선스(다른 유형이 가진 것 중) */
@@ -253,13 +257,14 @@ function assumptionText(command: Command, o: FlowResult['options'], days?: FlowR
       `난수는 시드 고정 mulberry32이고 시도마다 같은 흐름을 이어 쓴다. 같은 시드(${o.seed}), 시도 횟수(${o.trials}), 인자의 출력은 항상 같다`,
       'p10은 빠른 쪽(운이 좋은 10%의 경계), p90은 느린 쪽(운이 나쁜 10%의 경계)이다',
       '최초 10분: 전설 보장 번호는 제품 규칙대로 시도마다 10에서 20 사이로 뽑는다. 도착 뒤에도 보장이 남으면 그 해역에서 더 낚아 보장 시각을 재고, 10분 안에 못 닿은 시도도 도착 시간에 넣는다. 해석 기댓값은 전설 보장이 가운데 번호일 때의 값이다',
-      '해역 전환: 쉬지 않고 낚는 연속 방치를 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 소요를 모은다. 골드와 명성이 모두 필요한 앞 해역은 늦은 쪽이 시간을 정해 표본 평균이 해석 기댓값보다 크다',
+      '해역 전환: 쉬지 않고 낚는 연속 방치를 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 소요를 모은다. 앞 해역은 전환 소요가 짧아, 캐치 가격이 한쪽으로 치우쳐 고가 어종으로 문턱을 넘은 초과분이 다음 전환으로 넘어가는 효과와 1분 단위 문턱 판정의 영향이 커서 개별 전환의 표본 평균이 기댓값과 벌어진다. 누적 시간으로 보면 일치한다',
     );
   } else if (command === 'travel') {
     lines.push(
       '왕복은 가방이 찰 때마다 한 번이다: 가방이 찰 때까지 낚고, 판매 창구가 있는 거점(마을은 집 안 상자, 대양은 그 구역 항구)으로 이동해 팔고, 어군으로 돌아온다',
-      `거리는 거점 출입 자리(집 문, 항구 출항 자리)에서 그 해역 어군까지의 직선거리이고 어군 위치는 2026-01-01부터 ${TRAVEL_SAMPLE_DAYS}일의 날짜 시드 배치 평균이다. 속도는 마을은 도보, 대양은 그 해역을 여는 배다`,
-      '가방 채움은 해역 진입 레벨의 방치 속도로 본다. 육지를 도는 우회, 접안과 거점 안 이동, 판매 창 조작 시간은 넣지 않으므로 비중은 하한이다. 5% 한도까지 여유 열은 이런 미반영 시간이 왕복마다 이만큼 더해져도 비중이 5%를 넘지 않는 한도다',
+      `거리는 거점 출입 자리(집 문, 항구 출항 자리)에서 그 해역 어군까지의 직선거리이고 어군 위치는 ${TRAVEL_SAMPLE_START}부터 ${TRAVEL_SAMPLE_DAYS}일의 날짜 시드 배치 평균이다. 속도는 마을은 도보, 대양은 그 해역을 여는 배다`,
+      `5% 기준은 근거 있는 값이 없는 가정이다(${TRAVEL_MATERIAL * 100}%)`,
+      '가방 채움은 해역 진입 레벨의 방치 속도로 본다. 레벨이 오른 뒤 채움이 빨라지는 효과는 넣지 않는다. 육지를 도는 우회, 접안과 거점 안 이동, 판매 창 조작 시간은 넣지 않으므로 비중은 하한이다. 5% 한도까지 여유 열은 이런 미반영 시간이 왕복마다 이만큼 더해져도 비중이 5%를 넘지 않는 한도다',
     );
   } else if (command === 'ev') {
     lines.push(
@@ -429,6 +434,13 @@ function exceptionText(e: NonNullable<FlowResult['exception']>, o: FlowResult['o
 
 const minutes = (sec: number) => `${(sec / 60).toFixed(1)}분`;
 
+/** 분포 요약을 표 칸 네 개(p10, 중앙값, p90, 평균)로 — 끝나지 않은 값은 미도달, 평균이 없으면 — */
+function distCells(d: Dist | null, fmt: (x: number) => string): string[] {
+  if (!d) return ['—', '—', '—', '—'];
+  const f = (x: number) => (Number.isFinite(x) ? fmt(x) : '미도달');
+  return [f(d.p10), f(d.p50), f(d.p90), d.mean === null ? '—' : fmt(d.mean)];
+}
+
 function distText(d: NonNullable<FlowResult['dist']>): string[] {
   const out: string[] = [];
   out.push('\n## 분포 — 최초 10분 (수동 낚시로 첫 바다 해역에 닿기까지, 낚는 시간만 센 값). p10은 빠른 쪽, p90은 느린(운이 나쁜) 쪽');
@@ -436,22 +448,24 @@ function distText(d: NonNullable<FlowResult['dist']>): string[] {
   for (const x of d.opening) {
     const label = x.judgment === 'good' ? 'GOOD' : '무판정';
     for (const [name, dist] of [['영웅 보장', x.epic], ['전설 보장', x.legend], ['첫 바다 해역 도착', x.arrival]] as const) {
-      rows.push(dist ? [label, name, minutes(dist.p10), minutes(dist.p50), minutes(dist.p90), minutes(dist.mean), String(dist.missing)] : [label, name, '—', '—', '—', '—', String(x.trials)]);
+      rows.push([label, name, ...distCells(dist, minutes), String(dist ? dist.missing : x.trials)]);
     }
   }
   out.push(table(['판정', '지표', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '못 끝냄(횟수)'], rows));
   for (const x of d.opening) {
-    out.push(`- ${x.judgment === 'good' ? 'GOOD' : '무판정'}: 목표 ${OPENING_TARGET_SEC / 60}분 안에 도착한 비율 ${pct1(x.within10)}, 해석 기댓값 ${Number.isFinite(x.analytic) ? minutes(x.analytic) : '미도착'}(전설 보장 가운데 번호)`);
+    out.push(`- ${x.judgment === 'good' ? 'GOOD' : '무판정'}: 목표 ${OPENING_TARGET_SEC / 60}분 안에 도착한 비율 ${x.within10 === null ? '—(못 끝낸 시도가 있다)' : pct1(x.within10)}, 해석 기댓값 ${Number.isFinite(x.analytic) ? minutes(x.analytic) : '미도달'}(전설 보장 가운데 번호)`);
   }
+  const ratio = (mean: number | null | undefined, analytic: number | null) =>
+    mean !== null && mean !== undefined && analytic !== null && analytic > 0 ? `${(mean / analytic).toFixed(2)}배` : '—';
+  const header = ['전환', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '해석 기댓값', '평균 ÷ 기댓값', '못 끝냄(횟수)'];
+  const transitionRows = (pick: (t: TransitionDist) => Dist | null, analytic: (t: TransitionDist) => number | null) => d.transition.map(t => {
+    const dist = pick(t), a = analytic(t);
+    return [`${nameOf(t.from)} → ${nameOf(t.to)}`, ...distCells(dist, hrs), a === null ? '미도달' : hrs(a), ratio(dist?.mean, a), String(dist ? dist.missing : '—')];
+  });
   out.push('\n## 분포 — 해역 전환 소요 (쉬지 않고 낚을 때). p10은 빠른 쪽, p90은 느린(운이 나쁜) 쪽');
-  out.push(table(
-    ['전환', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '해석 기댓값', '평균 ÷ 기댓값', '못 끝냄(횟수)'],
-    d.transition.map(t => [
-      `${nameOf(t.from)} → ${nameOf(t.to)}`,
-      ...(t.hours ? [hrs(t.hours.p10), hrs(t.hours.p50), hrs(t.hours.p90), hrs(t.hours.mean)] : ['—', '—', '—', '—']),
-      hrs(t.analyticHours), t.hours && t.analyticHours > 0 ? `${(t.hours.mean / t.analyticHours).toFixed(2)}배` : '—', String(t.hours?.missing ?? '—'),
-    ]),
-  ));
+  out.push(table(header, transitionRows(t => t.hours, t => t.analyticHours)));
+  out.push('\n## 분포 — 해역 전환 누적 소요 (처음부터 그 해역에 닿기까지, 누적 평균 ÷ 누적 기댓값)');
+  out.push(table(['도착 해역', ...header.slice(1)], transitionRows(t => t.cumulative, t => t.analyticCumulative).map(r => [r[0].split(' → ')[1], ...r.slice(1)])));
   return out;
 }
 
@@ -470,7 +484,7 @@ function travelText(t: NonNullable<FlowResult['travel']>): string[] {
   out.push(`\n해역별 비중의 최댓값은 ${nameOf(top.spot)}의 ${(top.share * 100).toFixed(2)}%다. ${material.length === 0
     ? `모든 해역이 ${TRAVEL_MATERIAL * 100}% 미만이므로 해역별 계산 대신 일괄 보정을 쓴다`
     : `${material.map(r => nameOf(r.spot)).join(', ')}이(가) ${TRAVEL_MATERIAL * 100}% 이상이므로 해역별 계산이 필요하다`}.`);
-  out.push(`일괄 보정 기본값: ${(t.default * 100).toFixed(2)}% (--travel-share로 바꾼다)`);
+  out.push(`일괄 보정에 쓸 수 있는 값(해역별 최댓값): ${(t.max * 100).toFixed(2)}%. 기본은 넣지 않으며 --travel-share로 넣는다`);
   return out;
 }
 

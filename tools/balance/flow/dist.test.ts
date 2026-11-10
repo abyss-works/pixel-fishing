@@ -13,11 +13,6 @@ describe('표본 추출 진행 시뮬레이션', () => {
     expect(run(5)).not.toEqual(run(6));
   });
 
-  it('표본 없이 돌리면 기댓값 경로 그대로다', () => {
-    const a = simulate({ type: ALWAYS_ON, axis: 'idle', bounty: false, maxDays: 365 });
-    const b = simulate({ type: ALWAYS_ON, axis: 'idle', bounty: false, maxDays: 365, sampler: undefined });
-    expect(a.arrivals).toEqual(b.arrivals);
-  });
 });
 
 describe('최초 10분 표본', () => {
@@ -80,16 +75,37 @@ describe('해역 전환 분포', () => {
     }
   });
 
-  // 앞 해역은 골드와 명성 중 늦은 쪽이 시간을 정하는 최댓값 구조라 표본 평균이 기댓값보다 크다. 뒤 해역은 한쪽이 시간을 정해 5% 안에서 맞는다
+  // 앞 해역은 전환 소요가 짧아 캐치 가격의 치우침(고가 어종으로 문턱을 넘은 초과분이 다음 전환으로 넘어감)과 1분 단위 문턱 판정의 영향이 크다. 뒤 해역은 5% 안에서 맞는다
   it('남인도양 이후 해역에서 표본 평균이 해석 기댓값과 5% 안에서 맞는다', () => {
     const analytic = transitionTimings(simulate({ type: ALWAYS_ON, axis: 'idle', bounty: false, maxDays: 365 }).arrivals);
     for (const i of [7, 8, 9, 10]) {
       expect(rows[i].analyticHours).toBe(analytic[i].hours);
-      expect(Math.abs(rows[i].hours!.mean / rows[i].analyticHours - 1), `${rows[i].to}`).toBeLessThan(0.05);
+      expect(Math.abs(rows[i].hours!.mean! / rows[i].analyticHours! - 1), `${rows[i].to}`).toBeLessThan(0.05);
+    }
+  });
+
+  it('누적 시간의 표본 평균이 해석 기댓값과 2% 안에서 맞는다', () => {
+    for (const i of [7, 8, 9, 10, 11]) {
+      const r = rows[i];
+      expect(Math.abs(r.cumulative!.mean! / r.analyticCumulative! - 1), `${r.to}`).toBeLessThan(0.02);
     }
   });
 
   it('같은 시드는 같은 분포를 낸다', () => {
     expect(transitionDist(opts)).toEqual(rows);
+  });
+
+  it('최대 일수가 짧아 끝내지 못해도 전환 수만큼 행을 내고 해석 미도달은 null이다', () => {
+    const short = transitionDist({ ...opts, trials: 40, maxDays: 1, travelShare: 0.03 });
+    expect(short).toHaveLength(12);
+    expect(short.some(r => r.analyticHours === null)).toBe(true);
+    for (const r of short) {
+      if (r.analyticHours === null) expect(r.analyticCumulative).toBeNull();
+      if (r.hours && r.hours.missing > 0) {
+        expect(r.hours.mean).toBeNull();
+        expect(r.hours.n + r.hours.missing).toBe(40);
+      }
+    }
+    expect(short.at(-1)!.hours?.missing ?? 40).toBeGreaterThan(0);
   });
 });

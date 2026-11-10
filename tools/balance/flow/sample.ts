@@ -63,17 +63,22 @@ export function createSampler(rng: () => number): Sampler {
 export function percentile(sorted: readonly number[], p: number): number {
   const pos = p * (sorted.length - 1);
   const lo = Math.floor(pos), hi = Math.ceil(pos);
+  // 끝나지 않은 값(무한대)이 보간 구간에 걸리면 그 백분위도 끝나지 않은 것이다
+  if (sorted[hi] === Number.POSITIVE_INFINITY) return pos === lo ? sorted[lo] : Number.POSITIVE_INFINITY;
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
-export interface Dist { n: number; missing: number; mean: number; p10: number; p50: number; p90: number }
+/** n은 끝낸 시도 수, missing은 시간 안에 끝나지 못한 시도 수다. 끝내지 못한 시도가 있으면 mean은 null이고,
+ *  백분위는 못 끝낸 시도를 가장 느린 쪽에 넣어 계산하므로 무한대(끝나지 않음)일 수 있다 */
+export interface Dist { n: number; missing: number; mean: number | null; p10: number; p50: number; p90: number }
 
-/** 값의 분포 요약. missing은 시간 안에 끝나지 못해 값이 없는 횟수다. 값이 없으면 null */
+/** 값의 분포 요약. 끝낸 값이 하나도 없으면 null */
 export function summarize(values: readonly number[], missing = 0): Dist | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
+  const all = [...sorted, ...Array<number>(missing).fill(Number.POSITIVE_INFINITY)];
   return {
-    n: sorted.length, missing, mean: sorted.reduce((s, v) => s + v, 0) / sorted.length,
-    p10: percentile(sorted, 0.1), p50: percentile(sorted, 0.5), p90: percentile(sorted, 0.9),
+    n: sorted.length, missing, mean: missing > 0 ? null : sorted.reduce((s, v) => s + v, 0) / sorted.length,
+    p10: percentile(all, 0.1), p50: percentile(all, 0.5), p90: percentile(all, 0.9),
   };
 }

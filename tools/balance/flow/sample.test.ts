@@ -79,9 +79,22 @@ describe('분포 요약', () => {
     expect(percentile(v, 0.9)).toBeCloseTo(4.6, 9);
   });
 
-  it('요약은 정렬하지 않은 값도 받고 평균과 p10, 중앙값, p90, 못 끝낸 횟수를 낸다', () => {
-    const d = summarize([5, 1, 3, 2, 4], 2);
-    expect(d).toEqual({ n: 5, missing: 2, mean: 3, p10: 1.4, p50: 3, p90: 4.6 });
+  it('요약은 정렬하지 않은 값도 받고 평균과 p10, 중앙값, p90을 낸다', () => {
+    expect(summarize([5, 1, 3, 2, 4])).toEqual({ n: 5, missing: 0, mean: 3, p10: 1.4, p50: 3, p90: 4.6 });
+  });
+
+  it('못 끝낸 시도가 있으면 평균을 내지 않고 백분위는 못 끝낸 시도를 가장 느린 쪽에 넣어 계산한다', () => {
+    const d = summarize([5, 1, 3, 2, 4], 2)!;
+    expect(d.mean).toBeNull();
+    expect(d.n).toBe(5);
+    expect(d.missing).toBe(2);
+    expect(d.p10).toBeCloseTo(1.6, 9);
+    expect(d.p50).toBe(4);
+    expect(d.p90).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('못 끝낸 시도가 절반을 넘으면 중앙값도 끝나지 않은 것으로 낸다', () => {
+    expect(summarize([1, 2], 3)!.p50).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('값이 하나여도 요약하고 빈 입력은 null이다', () => {

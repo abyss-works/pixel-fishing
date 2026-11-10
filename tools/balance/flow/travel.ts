@@ -3,11 +3,12 @@
 //   그래서 가방이 찰 때까지 낚고 → 거점으로 이동 → 판매 → 어군으로 돌아오는 것을 한 번의 왕복으로 본다. 왕복은 가방이 찰 때마다 한 번이다.
 // 거리는 거점의 출입 자리(마을 집 문, 항구 출항 자리)에서 그 해역 어군까지의 직선거리이고, 어군 위치는 날짜 시드로 배치된 날들의 평균이다.
 // 가정(규칙에서 읽을 수 없는 값): 육지를 도는 우회, 접안과 거점 안 이동, 판매 창 조작 시간은 넣지 않는다. 가방 채움은 해역 진입 레벨의 방치 속도로 본다.
-//   직선거리는 하한이므로 비중도 하한이다. headroomSec은 이런 미반영 시간이 왕복당 이만큼 더해져도 비중이 TRAVEL_MATERIAL을 넘지 않는 한도다.
+//   직선거리는 하한이므로 비중도 하한이다. 이동 비중 5% 기준(TRAVEL_MATERIAL)은 근거 있는 값이 없는 가정이다. headroomSec은 이런 미반영 시간이 왕복당 이만큼 더해져도 비중이 TRAVEL_MATERIAL을 넘지 않는 한도다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
-import { portOfZone } from '../../../src/game/content/bounties';
+import { BOUNTY_ZONES, portOfZone } from '../../../src/game/content/bounties';
+import type { BountyZone } from '../../../src/game/content/bounties';
 import { topZoneOfSpot } from '../../../src/game/content/zones';
 import { WALK_SPEED } from '../../../src/game/rules/balance';
 import { capOfBoat } from '../../../src/game/rules/logic';
@@ -15,11 +16,12 @@ import { BASE_PACKS, HARBORS, V_DOOR, generateWorldSchools, schoolsOf } from '..
 import type { Point } from '../../../src/game/world';
 import { entryLevel, rates } from '../model';
 
-/** 이동 시간이 낚시 시간의 이 비중 이상이면 보정 방식을 해역별 계산으로 바꿀 만큼 크다고 본다 */
+/** 이동 시간이 낚시 시간의 이 비중 이상이면 보정 방식을 해역별 계산으로 바꿀 만큼 크다고 본다. 근거 있는 값이 없는 가정이다 */
 export const TRAVEL_MATERIAL = 0.05;
 
-/** 어군 배치를 재는 날 수의 기본값 — 2026-01-01부터 이 일수만큼 */
+/** 어군 배치를 재는 날 수의 기본값 — 시작일부터 이 일수만큼 */
 export const TRAVEL_SAMPLE_DAYS = 120;
+export const TRAVEL_SAMPLE_START = '2026-01-01';
 
 export interface TravelRow {
   spot: SpotId;
@@ -39,7 +41,7 @@ export interface TravelRow {
 }
 
 const dayStrings = (days: number): string[] =>
-  Array.from({ length: days }, (_, i) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10));
+  Array.from({ length: days }, (_, i) => new Date(Date.parse(TRAVEL_SAMPLE_START) + i * 86_400_000).toISOString().slice(0, 10));
 
 const center = (r: { x: number; y: number; w: number; h: number }): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 
@@ -48,8 +50,10 @@ export function travelRows(days: number = TRAVEL_SAMPLE_DAYS): TravelRow[] {
   const world = dayStrings(days).map(generateWorldSchools);
   return SPOTS.map(spot => {
     const sea = spot.boatTier > 0;
-    const port = sea ? portOfZone(topZoneOfSpot(spot.id) as never) as keyof typeof HARBORS : null;
-    const origin = port ? HARBORS[port].departure : center(V_DOOR);
+    const zone = topZoneOfSpot(spot.id);
+    const port = sea ? (zone && (BOUNTY_ZONES as readonly string[]).includes(zone) ? portOfZone(zone as BountyZone) : undefined) : null;
+    if (port === undefined || (port !== null && !(port in HARBORS))) throw new Error(`해역 ${spot.id}의 판매 항구를 찾을 수 없습니다`);
+    const origin = port ? HARBORS[port as keyof typeof HARBORS].departure : center(V_DOOR);
     const base = BASE_PACKS[port ?? 'home'].name;
     const schools = sea ? world.flat() : schoolsOf('village', '');
     const d = schools.filter(s => s.spot === spot.id).map(s => Math.hypot(s.x - origin.x, s.y - origin.y));
@@ -67,5 +71,6 @@ export function travelRows(days: number = TRAVEL_SAMPLE_DAYS): TravelRow[] {
   });
 }
 
-/** 일괄 보정에 쓰는 기본 비중 — 해역별 비중의 최댓값(가장 큰 해역 기준으로 잡아 어느 해역에서도 이동을 과소평가하지 않는다) */
+/** 일괄 보정에 쓸 수 있는 비중 — 해역별 비중의 최댓값. 모든 해역에 같이 적용하면 비중이 작은 해역은 과보정된다.
+ *  가방 채움을 진입 레벨의 방치 속도로 고정해 쟀으므로 레벨이 오른 뒤 채움이 빨라지는 효과는 들어 있지 않다 */
 export const travelShareDefault = (rows: readonly TravelRow[]): number => Math.max(0, ...rows.map(r => r.share));
