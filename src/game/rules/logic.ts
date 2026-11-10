@@ -23,9 +23,8 @@ import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js
 import { baitById } from '../content/baits.js';
 import type { Bait } from '../content/baits.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
-import { artifactEffectsAt, artifactLevelOf, variantBoostOf } from './artifactLevel.js';
+import { sumArtifactEffect, variantBoostOf } from './artifactLevel.js';
 import type { ArtifactHolder } from './artifactLevel.js';
-import { ARTIFACTS } from '../content/artifacts.js';
 import { namedById } from '../content/named.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { TutorialId } from '../content/tutorials.js';
@@ -950,12 +949,9 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
 }
 
-/** 미끼 할인율 — 가진 유물 중 가장 큰 할인(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
+/** 미끼 할인율 — 보유 유물의 할인을 더한 합(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
 export function baitDiscount(state: ArtifactHolder): number {
-  return ARTIFACTS.reduce((m, a) => {
-    const level = artifactLevelOf(state, a.id);
-    return level > 0 ? Math.max(m, artifactEffectsAt(a, level).baitDiscount ?? 0) : m;
-  }, 0);
+  return Math.min(1, sumArtifactEffect(state, e => e.baitDiscount));
 }
 
 /** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
