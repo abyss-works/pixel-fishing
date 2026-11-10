@@ -64,6 +64,13 @@ describe('HudHeader 모바일 레이아웃', () => {
     expect(menuSlot().className).toContain('z-(--z-menu-row)');
   });
 
+  it('헤더 행의 단계 변수와 PC 헤더 행 격자를 쓰지 않는다 - 모바일 레이아웃 헤더는 스테이지 격자의 첫 행 그대로다', () => {
+    const { container } = header();
+    expect(container.innerHTML).not.toContain('--hdr-');
+    expect(container.innerHTML).not.toContain('grid-cols-[1fr_auto_1fr]');
+    expect(container.querySelector('.absolute')).toBeNull();
+  });
+
   it('자원 바를 누르면 스탯 창을 연다', () => {
     const onOpenStats = vi.fn();
     header(onOpenStats);
@@ -93,15 +100,48 @@ describe('HudHeader PC 레이아웃 - 자원 바 | 메뉴 버튼 두 틀', () =>
     for (const cell of cells) expect(cell.className).toContain('flex-col');
   });
 
-  it('자원 바는 60px이고 스테이지 폭에 따라 줄어들지 않는다', () => {
+  const row = () => bar().parentElement!.parentElement!;
+  const barSlot = () => bar().parentElement!;
+
+  it('자원 바와 메뉴 버튼은 절대 위치가 아니라 같은 헤더 행의 형제다', () => {
     header();
-    expect(bar().className).toContain('h-15');
-    expect(bar().className).not.toContain('@max-[960px]');
+    expect(barSlot().parentElement).toBe(row());
+    expect(menuSlot().parentElement).toBe(row());
+    for (const el of [barSlot(), menuSlot(), row().firstElementChild!]) expect(el.className.split(' ')).not.toContain('absolute');
+    expect(menuSlot().className.split(' ')).not.toContain('right-3');
   });
 
-  it('메뉴 버튼 자리는 오른쪽 위 모서리(12px 여백)이고 펼친 줄이 카드 묶음 위에 오는 층이다', () => {
+  it('헤더 행은 스테이지 위쪽 전체 폭의 세 열 격자(1fr auto 1fr)이고, 자원 바는 가운데 열, 메뉴 버튼은 오른쪽 열의 끝이다', () => {
     header();
-    expect(menuSlot().className).toContain('absolute right-3 top-3');
+    const cls = row().className.split(' ');
+    for (const c of ['absolute', 'inset-x-0', 'top-0', 'grid', 'grid-cols-[1fr_auto_1fr]', 'items-center']) expect(cls).toContain(c);
+    expect(barSlot().className).toContain('col-start-2');
+    expect(menuSlot().className).toContain('col-start-3');
+    expect(menuSlot().className).toContain('justify-self-end');
+  });
+
+  it('헤더 행의 바깥 여백은 단계 변수를 읽고, 행이 비어 있는 곳은 필드 입력을 가리지 않는다', () => {
+    header();
+    expect(row().className).toContain('px-(--hdr-inset)');
+    expect(row().className).toContain('pt-(--hdr-inset)');
+    expect(row().className).toContain('pointer-events-none');
+    expect(barSlot().className).toContain('pointer-events-auto');
+    expect(menuSlot().className).toContain('pointer-events-auto');
+  });
+
+  it('단계 변수는 헤더 행이 단계마다 한 번만 정한다 - 기본 값과 간격 축소, 두 행에서 바뀌는 값', () => {
+    header();
+    const cls = row().className;
+    for (const base of ['--hdr-gap:18px', '--hdr-pad:18px', '--hdr-gauge:88px', '--hdr-bar-h:60px', '--hdr-menu:60px', '--hdr-inset:12px']) expect(cls).toContain(base);
+    for (const gap of ['--hdr-gap:8px', '--hdr-pad:12px', '--hdr-gauge:48px']) expect(cls).toContain(`@max-[772px]:[${gap}]`);
+    for (const rows of ['--hdr-menu:40px', '--hdr-inset:8px', '--hdr-wide:none', '--hdr-rows:flex']) expect(cls).toContain(`@max-[640px]:[${rows}]`);
+    // 간격 축소 단계는 라벨과 글자 크기를 바꾸지 않는다
+    expect(cls).not.toMatch(/@max-\[772px\]:\[--hdr-(?!gap|pad:|gauge)/);
+  });
+
+  it('메뉴 버튼 자리는 펼친 줄이 카드 묶음과 채팅 위에 오는 층이다', () => {
+    header();
     expect(menuSlot().className).toContain('z-(--z-menu-row)');
+    expect(barSlot().className).toContain('z-(--z-chrome)');
   });
 });

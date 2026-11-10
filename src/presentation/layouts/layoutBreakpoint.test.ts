@@ -24,13 +24,14 @@ function evaluate(query: string, viewportPx: number): boolean {
   return viewportPx < Number(m![1]) * REM_PX;
 }
 
-describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
-  it('정본은 1024px(64rem)다', () => {
-    expect(canonicalPx()).toBe(1024);
+describe('레이아웃 판정 기준(뷰포트 폭 768px)', () => {
+  it('정본은 768px(48rem)이고 Tailwind md와 같다', () => {
+    expect(canonicalPx()).toBe(768);
+    expect(css).not.toMatch(/--breakpoint-md\s*:/);
   });
 
   it('JS 판정(MOBILE_QUERY)이 정본과 같은 값이다', () => {
-    expect(MOBILE_QUERY).toBe('(width < 64rem)');
+    expect(MOBILE_QUERY).toBe('(width < 48rem)');
     expect(MOBILE_QUERY).toBe(`(width < ${canonicalPx() / REM_PX}rem)`);
   });
 
@@ -49,9 +50,10 @@ describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
     expect(MOBILE_QUERY).not.toContain('orientation');
   });
 
-  it('경계: 1023은 모바일 레이아웃, 1024는 PC 레이아웃이다', () => {
+  it('경계: 767은 모바일 레이아웃, 768은 PC 레이아웃이다', () => {
     expect(evaluate(MOBILE_QUERY, 360)).toBe(true);
-    expect(evaluate(MOBILE_QUERY, 1023)).toBe(true);
+    expect(evaluate(MOBILE_QUERY, 767)).toBe(true);
+    expect(evaluate(MOBILE_QUERY, 768)).toBe(false);
     expect(evaluate(MOBILE_QUERY, 1024)).toBe(false);
     expect(evaluate(MOBILE_QUERY, 1280)).toBe(false);
     expect(evaluate(MOBILE_QUERY, 1920)).toBe(false);
@@ -67,14 +69,41 @@ describe('레이아웃 판정 기준(뷰포트 폭 1024px)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('PC 헤더 구성요소에는 스테이지 폭 변형(@max-, @min-)과 모바일 변형(mobile:)이 없다 - PC 헤더는 늘 같은 크기다', () => {
+  it('레이아웃 경계를 1024px 리터럴이나 lg: 변형으로 적지 않는다 - 정본(--breakpoint-pc)만 쓴다', () => {
+    const offenders: string[] = [];
+    for (const [key, src] of sources) {
+      if (key.includes('/views/admin/')) continue; // 관리자 대시보드는 열 수 밀도만 정한다
+      src.split('\n').forEach((line, i) => {
+        if (/(^|[^\w-])(?:max-)?lg:/.test(line) || /1024|64rem/.test(line)) offenders.push(`${key}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+    expect(css).not.toMatch(/1024px|64rem/);
+  });
+
+  it('PC 헤더 구성요소는 단계 경계를 모른다 - 스테이지 폭 변형은 단계 파일(headerTier)에만 있다', () => {
     const pcHeader = ['ResourceBar', 'BagMeter', 'HudStat', 'HeaderFrame', 'HudMenuButton']
       .map(name => sources.find(([key]) => key.endsWith(`/ui/hud/${name}.tsx`)));
     for (const entry of pcHeader) expect(entry, '소스를 찾지 못했다').toBeDefined();
     for (const [key, src] of pcHeader as [string, string][]) {
       const code = src.split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
-      expect(code, key).not.toMatch(/@(?:max|min)-\[/);
+      expect(code, key).not.toMatch(/@max-\[/);
       expect(code, key).not.toMatch(/\bmobile:/);
     }
+  });
+
+  it('헤더 단계 경계(772px, 640px)는 한 곳(headerTier)에서만 정의한다', () => {
+    const tier = sources.find(([key]) => key.endsWith('/ui/hud/headerTier.ts'));
+    expect(tier, '단계 파일을 찾지 못했다').toBeDefined();
+    expect(tier![1]).toMatch(/@max-\[772px\]/);
+    expect(tier![1]).toMatch(/@max-\[640px\]/);
+    const offenders: string[] = [];
+    for (const [key, src] of sources) {
+      if (key.endsWith('/ui/hud/headerTier.ts')) continue;
+      src.split('\n').forEach((line, i) => {
+        if (/(?:max|min)-\[(?:772|640)px\]/.test(line)) offenders.push(`${key}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
