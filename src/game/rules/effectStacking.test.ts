@@ -41,7 +41,7 @@ const close = (a: Record<RarityId, number>, b: Record<RarityId, number>) => {
 /** 실제 캐치 경로 — 미끼는 prepareCatchDraw, 길드는 drawCatch가 얹는다. drawCatch가 쌓은 천장 값을 돌려준다 */
 const catchPath = (judgment: 'perfect' | 'auto' | 'normal', baitId: string | null, guildRare: number, pzMult = 1) => {
   const s = seed(baitId ? { items: { [baitId]: 1 }, activeBait: baitId } : {});
-  const prep = prepareCatchDraw(s, SPOT, judgment, DAY, pz({ mult: pzMult }));
+  const prep = prepareCatchDraw(s, judgment, DAY, pz({ mult: pzMult }));
   const d = drawCatch(
     { ...s, firstCatch: endedFirstCatch() }, SPOT, prep.judgment, 100, pzMult, () => 0.5, prep.phaseOpts, () => false,
     { ...NO_GUILD_EFFECTS, rare: guildRare },

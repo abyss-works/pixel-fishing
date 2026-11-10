@@ -19,10 +19,6 @@ type IdleMultiplier = StatsSpotRow['data']['idle'];
 /** 방치 낚시 배수의 표시값 - 추첨이 실제로 곱하는 값이다 */
 export const idleText = (idle: IdleMultiplier): string => fmtMult(idle.applied);
 
-/** 방치 낚시 이름의 툴팁 - 규칙 서술에 파워 미달 보충 한 줄을 더한다 */
-export const withUnderpowerLine = (help: string): string => `${help}
-요구치에 못 미치면 그 차이가 더 커져요.`;
-
 /** 방치 배수의 내역 목록 - 파워가 요구치와 같으면 null이다(내역이 없다) */
 export function idleRows(row: StatsSpotRow): { label: string; value: string }[] | null {
   const { idle, currentPower, requirement } = row.data;

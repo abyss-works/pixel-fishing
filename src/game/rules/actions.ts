@@ -272,7 +272,7 @@ export interface CatchDraw {
   phaseOpts: DrawOptions & { phase: DayPhase };
 }
 export function prepareCatchDraw(
-  state: GameState, _spot: SpotId, claimed: Judgment, now: string, pz: PowerZone,
+  state: GameState, claimed: Judgment, now: string, pz: PowerZone,
 ): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
@@ -367,7 +367,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
-      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.spot, action.judgment, deps.now, pz);
+      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,

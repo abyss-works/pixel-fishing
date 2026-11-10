@@ -9,12 +9,11 @@
 //
 // 순수 곡선(rodStats·boatSpeed)은 게임 규칙 계산에 둔다: AdminPanel 가상 레벨 표와
 // 시설 미리보기(rod+1)는 레벨만으로 계산한다.
-import { relativeIdleBoost } from './power.js';
 import { boatSpeed, rodStats } from './logic.js';
 import type { GameState } from './logic.js';
 import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
-import { spotById, powerReqOf } from '../content/spots.js';
+import { powerReqOf } from '../content/spots.js';
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
@@ -98,14 +97,6 @@ export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; ma
   return { min: side(st.biteMin), max: side(st.biteMax) };
 }
 
-// 방치(auto) 판정의 일반 등급 가중치 배수 — 해역 요구 파워 대비 레벨 차로 정한다(power.relativeIdleBoost).
-// 서버 리듀서도 같은 함수를 쓴다 — 여기는 스탯창용 내역 조립.
-export function autoBoostForSpot(state: GameState, spotId: SpotId): Stat {
-  const entryValue = relativeIdleBoost(powerReqOf(spotId), spotId);
-  const value = relativeIdleBoost(rodPower(state), spotId);
-  return stat(entryValue, [{ id: 'power', label: `${spotById(spotId)!.name} 대비`, delta: value - entryValue }]);
-}
-
 // 파워 수치화 — 해역 게이트가 레벨 단위 하드코딩이 아니라 이 숫자 하나를 보게 한다
 // (roadmap 2.1 "데이터 테이블 하나" 원칙). 레벨당 5씩 단조 증가(단순 선형).
 export function rodPower(state: GameState): number {
@@ -185,5 +176,7 @@ export function powerHelpText(): string {
 }
 
 export function autoPenaltyHelpText(): string {
-  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요.\n낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.';
+  return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요.\n'
+    + '낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.\n'
+    + '요구치에 못 미치면 그 차이가 더 커져요.';
 }

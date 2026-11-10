@@ -16,28 +16,28 @@ const pz = (over: Partial<PowerZone> = {}): PowerZone =>
 
 describe('prepareCatchDraw', () => {
   it('red 미개방에서 perfect는 yellow가 있으면 good, 없으면 normal으로 강등', () => {
-    expect(prepareCatchDraw(seed(), 'pond', 'perfect', DAY, pz({ red: 0, yellow: 10 })).judgment).toBe('good');
-    expect(prepareCatchDraw(seed(), 'pond', 'perfect', DAY, pz({ red: 0, yellow: 0 })).judgment).toBe('normal');
-    expect(prepareCatchDraw(seed(), 'pond', 'perfect', DAY, pz({ red: 5 })).judgment).toBe('perfect');
+    expect(prepareCatchDraw(seed(), 'perfect', DAY, pz({ red: 0, yellow: 10 })).judgment).toBe('good');
+    expect(prepareCatchDraw(seed(), 'perfect', DAY, pz({ red: 0, yellow: 0 })).judgment).toBe('normal');
+    expect(prepareCatchDraw(seed(), 'perfect', DAY, pz({ red: 5 })).judgment).toBe('perfect');
   });
 
   it('yellow 미개방에서 good은 normal으로 강등', () => {
-    expect(prepareCatchDraw(seed(), 'pond', 'good', DAY, pz({ yellow: 0 })).judgment).toBe('normal');
-    expect(prepareCatchDraw(seed(), 'pond', 'good', DAY, pz({ yellow: 10 })).judgment).toBe('good');
+    expect(prepareCatchDraw(seed(), 'good', DAY, pz({ yellow: 0 })).judgment).toBe('normal');
+    expect(prepareCatchDraw(seed(), 'good', DAY, pz({ yellow: 10 })).judgment).toBe('good');
   });
 
   it('auto에는 미끼 소모·효과가 없고, 수동에는 보유 미끼가 붙는다', () => {
     const s = seed({ items: { [COMMON]: 3 }, activeBait: COMMON });
-    const auto = prepareCatchDraw(s, 'pond', 'auto', DAY, pz());
+    const auto = prepareCatchDraw(s, 'auto', DAY, pz());
     expect(auto.bait).toBeUndefined();
     expect(auto.phaseOpts.weightEffects).toBeUndefined();
-    const manual = prepareCatchDraw(s, 'pond', 'perfect', DAY, pz());
+    const manual = prepareCatchDraw(s, 'perfect', DAY, pz());
     expect(manual.bait?.id).toBe(COMMON);
     expect(manual.phaseOpts.weightEffects).toEqual({ common: 1 });
   });
 
   it('서버 시각으로 시간대를 가른다', () => {
-    expect(prepareCatchDraw(seed(), 'pond', 'normal', NIGHT, pz()).phaseOpts.phase).toBe('night');
-    expect(prepareCatchDraw(seed(), 'pond', 'normal', DAY, pz()).phaseOpts.phase).toBe('day');
+    expect(prepareCatchDraw(seed(), 'normal', NIGHT, pz()).phaseOpts.phase).toBe('night');
+    expect(prepareCatchDraw(seed(), 'normal', DAY, pz()).phaseOpts.phase).toBe('day');
   });
 });

@@ -4,7 +4,7 @@ import { POWER_RULES, autoPenaltyHelpText } from '../../../../game/rules/stats';
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
 import Tip, { TipList } from '../../../ui/Tip';
-import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText, withUnderpowerLine } from './statsText';
+import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 
 // 낚싯대 수치: 고른 해역 기준의 유효 스탯을 두 열 목록으로 보인다. 입질 대기와 방치 페널티는 해역 대비 상대치이고,
 // 보정이 있으면 값의 툴팁으로 내역을 본다. 바 시간(sweep)만 레벨과 파워에 무관한 절대치다.
@@ -60,7 +60,7 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
         <RodStatLine label={<Tip text={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`}>PERFECT 영역</Tip>}>
           {perfectText(row)}
         </RodStatLine>
-        <RodStatLine label={<Tip text={withUnderpowerLine(autoPenaltyHelpText())}>방치 낚시 페널티</Tip>}>
+        <RodStatLine label={<Tip text={autoPenaltyHelpText()}>방치 낚시 페널티</Tip>}>
           {idleDetail ? <Tip text={<TipList rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
         </RodStatLine>
       </ul>
