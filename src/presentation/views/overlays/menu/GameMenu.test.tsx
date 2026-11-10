@@ -77,12 +77,21 @@ describe('게임 메뉴', () => {
   });
 
 
-  it('PC 레이아웃의 메뉴 버튼은 헤더 틀과 같은 높이의 정사각형(60px)이다', async () => {
+  it('PC 레이아웃의 메뉴 버튼은 헤더 단계가 크기를 정하는 정사각형이다', async () => {
     state.mails = [mail({ id: 1, gold: 100 })];
     wrap(<GameMenu account={null} {...handlers()} />);
     const cls = (await screen.findByRole('button', { name: /^메뉴 열기/ })).className;
-    expect(cls).toContain('h-15');
-    expect(cls).not.toContain('@max-[960px]');
+    expect(cls).toContain('h-(--hdr-menu)');
+    expect(cls).toContain('w-(--hdr-menu)');
+  });
+
+  it.each([['PC', false], ['모바일', true]])('%s 레이아웃의 펼친 메뉴 줄은 메뉴 버튼의 오른쪽 아래에 떠서 헤더 행의 높이를 바꾸지 않는다', async (_name, mobile) => {
+    layout.mobile = mobile;
+    state.mails = [mail({ id: 1, gold: 100 })];
+    wrap(<GameMenu account={null} {...handlers()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+    const list = screen.getAllByRole('menuitem')[0].closest('[role="menu"]')!;
+    for (const cls of ['absolute', 'right-0', 'top-full']) expect(list.className.split(' ')).toContain(cls);
   });
 
   it('모바일 레이아웃의 메뉴 버튼은 헤더 높이의 정사각형 버튼이다', async () => {
