@@ -364,6 +364,7 @@ describe('이사 코드 가져오기', () => {
   });
 
   it('소유자는 상태를 통째로 바꾸고 전체 상태를 돌려받는다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
     expect(await run({ state: { bag: [fish('crucian')] }, email: OWNER }, { type: 'import', save })).toMatchSnapshot();
   });
 });
@@ -970,6 +971,14 @@ describe('이사 코드 가져오기 접근 판정', () => {
   it('로컬 명시 값은 Origin과 무관하게 허용한다', async () => {
     process.env.DEPLOY_ENV = 'local';
     for (const origin of ORIGINS) expect(verdict(await importAs('guest', origin))).toEqual([200, 'ok']);
+  });
+
+  it('소유자 이메일 설정이 비어 있어도 게스트는 소유자가 아니다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    const uid = await seed({ state: {}, email: null });
+    process.env.IMPORT_OWNER_EMAIL = '';
+    const res = await callAction(userToken(uid), { type: 'import', save });
+    expect(verdict(res)).toEqual([403, 'import-owner-only']);
   });
 
   it('환경 값이 없거나 모르는 값이면 거부한다', async () => {
