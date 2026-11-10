@@ -7,13 +7,14 @@ import { baitById } from '../../../game/content/baits';
 import type { Bait } from '../../../game/content/baits';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
+import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { artifactEffectsAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
 import {
-  autoBoostForSpot, effectiveBite, minLevelOfPower,
+  effectiveBite, minLevelOfPower,
   moveSpeed, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
@@ -39,6 +40,9 @@ export function selectStatsModalData(
   const spot = SPOTS[spotIndex];
   const requirement = spot.powerReq ?? 0;
   const currentPower = rodPower(game);
+  const zones = powerZones(game, spot.id);
+  // 방치 낚시 배수: 표시값(applied)은 추첨이 실제로 곱하는 값 그대로다. required는 요구 파워에서의 배수.
+  const now = commonWeightMultiplier('auto', currentPower, spot.id, zones.mult);
   return {
     speed: moveSpeed(game, movement),
     axes: rodAxes(game),
@@ -47,8 +51,13 @@ export function selectStatsModalData(
     requirement,
     requirementLevel: minLevelOfPower(requirement),
     effectiveBite: effectiveBite(game, spot.id),
-    autoBoost: autoBoostForSpot(game, spot.id),
-    powerZones: powerZones(game, spot.id),
+    idle: {
+      required: commonWeightMultiplier('auto', requirement, spot.id, 1).idle,
+      current: now.idle,
+      penalty: now.penalty,
+      applied: now.total,
+    },
+    powerZones: zones,
     currentPower,
     underpowered: currentPower < requirement,
   };
