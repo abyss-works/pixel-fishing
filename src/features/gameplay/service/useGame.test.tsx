@@ -4,12 +4,16 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GameAction } from '../../../game/rules/actions';
+import { AppError } from '../../../core/errors';
 
 const gw = vi.hoisted(() => ({
   bootResolve: null as null | (() => void),
   actions: [] as string[],
   loads: 0,
   loadGold: 0,
+  legacy: false,
+  cloudEmpty: false,
+  importError: null as unknown,
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -23,12 +27,13 @@ vi.mock('../../../platform/api', async () => {
     when,
     api: {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
-      storage: { loadLegacy: () => ({ game: fresh(), notice: null, legacy: false }), saveCode: () => '' },
+      storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; return { ...fresh(), gold: gw.loadGold }; },
+        load: async () => { gw.loads++; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold }; },
         getNickname: async () => 'nick',
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
+          if (action.type === 'import' && gw.importError) throw gw.importError;
           if (action.type !== 'boot') return ok(action);
           return new Promise(resolve => { gw.bootResolve = () => resolve(ok(action)); });
         },
@@ -47,7 +52,10 @@ function setup() {
   return renderHook(() => useGame({ setToast: () => {} }), { wrapper });
 }
 
-afterEach(() => { cleanup(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0; });
+afterEach(() => {
+  cleanup(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null;
+});
 
 describe('부트스트랩', () => {
   it('boot 응답이 오기 전까지 불러오는 중이고 동기화를 켜지 않는다', async () => {
@@ -75,6 +83,27 @@ describe('부트스트랩', () => {
     await act(async () => { gw.bootResolve!(); await adopted; });
     expect(hook.result.current.loading).toBe(false);
     expect(gw.actions).toEqual(['boot', 'boot']);
+  });
+});
+
+describe('레거시 로컬 세이브 브리지', () => {
+  it('서버가 import를 거부(restricted)해도 세션은 정상 시작하고 로컬 저장은 지우지 않는다', async () => {
+    gw.legacy = true; gw.cloudEmpty = true;
+    gw.importError = new AppError('restricted', 'forbidden (import-disabled)', { action: 'import' });
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.sync).toBe('on');
+    expect(gw.actions).toEqual(['import', 'boot']);
+  });
+
+  it('restricted가 아닌 실패는 삼키지 않는다', async () => {
+    gw.legacy = true; gw.cloudEmpty = true;
+    gw.importError = new AppError('server', 'boom');
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(gw.actions).toEqual(['import']);
   });
 });
 
