@@ -41,12 +41,23 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
   },
 ];
 
-/** 현재 버전 소식 — 그 버전 노트가 있고 이 기기에서 "다시 보지 않기"를 하지 않았을 때만 */
+/** 공개 항목만 남긴 버전: 공개 항목이 없으면 화면에 나오지 않는 버전이라 null */
+function publicEntry(p: PatchNote): PatchNote | null {
+  const notes = p.notes.filter(n => n.visible !== false);
+  return notes.length > 0 ? { ...p, notes } : null;
+}
+
+/** 화면에 나오는 버전 목록: 공개 항목이 있는 버전만, 각 버전은 공개 항목만 담는다. 소식 창, 다시 보기, 패치노트 목록이 모두 이 판정을 쓴다 */
+export function publicEntries(notes: readonly PatchNote[]): PatchNote[] {
+  return notes.flatMap(p => publicEntry(p) ?? []);
+}
+
+/** 현재 버전 소식: 그 버전에 공개 항목이 있고 이 기기에서 "다시 보지 않기"를 하지 않았을 때만 */
 export function newsFor(
   notes: readonly PatchNote[], appVersion: string, dismissed: string | null,
 ): PatchNote | null {
   if (dismissed === appVersion) return null;
-  return notes.find(n => n.version === appVersion) ?? null;
+  return publicEntries(notes).find(n => n.version === appVersion) ?? null;
 }
 
 const versionParts = (version: string) => version.split('.').map(Number);
@@ -62,10 +73,10 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** 다시 보기로 열 소식 — 현재 버전 이하의 항목 가운데 가장 높은 버전. 노트 배열의 순서에 기대지 않는다 */
+/** 다시 보기로 열 소식: 현재 버전 이하에서 공개 항목이 있는 가장 높은 버전. 노트 배열의 순서에 기대지 않는다 */
 export function latestNewsAtOrBelow(notes: readonly PatchNote[], appVersion: string): PatchNote | null {
   let latest: PatchNote | null = null;
-  for (const n of notes) {
+  for (const n of publicEntries(notes)) {
     if (compareVersions(n.version, appVersion) > 0) continue;
     if (!latest || compareVersions(n.version, latest.version) > 0) latest = n;
   }

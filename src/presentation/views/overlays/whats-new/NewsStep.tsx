@@ -1,15 +1,13 @@
+import { NOTE_TAGS } from '../../../../game/content/patchnotes';
 import type { PatchNote } from '../../../../game/content/patchnotes';
 import NoteTag from '../../../ui/NoteTag';
 import Frame from '../../../ui/Frame';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
-// 범주를 묶어 보여 주는 순서 — 새로 생긴 것 → 보이는 변화 → 수치 → 그 밖
-const TAG_ORDER = ['기능', 'UI', '밸런스', '기타'] as const;
-
 // 이번 버전 소식 — 머리(버전·날짜·한 줄 요약)를 먼저 세우고, 범주별로 묶어 훑게 한다.
 // 노트가 길어도 창이 화면을 넘지 않게 목록만 스크롤한다.
 export default function NewsStep({ news }: { news: PatchNote }) {
-  const groups = TAG_ORDER
+  const groups = NOTE_TAGS
     .map(tag => ({ tag, items: news.notes.filter(n => n.tag === tag) }))
     .filter(g => g.items.length > 0);
   return (
