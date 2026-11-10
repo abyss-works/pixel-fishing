@@ -37,6 +37,8 @@ spec:
                   key: fqdn-uri
             - name: BETTER_AUTH_URL
               value: https://pixel-fishing.abyssworks.dev
+            - name: DEPLOY_ENV
+              value: production
           ports:
             - containerPort: 3000
           resources:

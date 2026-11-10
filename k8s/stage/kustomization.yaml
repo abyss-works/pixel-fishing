@@ -39,6 +39,9 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
         value: https://pixel-fishing-preview.abyssworks.dev
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: preview
   - target:
       kind: CronJob
     patch: |-
