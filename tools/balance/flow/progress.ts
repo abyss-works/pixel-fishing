@@ -77,6 +77,8 @@ export interface SimOptions {
   maxDays: number;
   /** 주면 낚은 수입을 기댓값 대신 캐치마다 뽑은 표본으로 센다(몬테카를로). 생략하면 기댓값 경로다 */
   sampler?: Sampler;
+  /** 깨어 있는 낚시 시간 중 판매 왕복에 쓰는 비중(0 이상 1 미만). 그만큼은 수입 없이 시간만 흐른다. 생략하면 0 */
+  travelShare?: number;
   /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
   growTo?: number;
 }
@@ -122,6 +124,8 @@ const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 const boatBuyable = (boat: number, gold: number, fame: number) => canBuyBoat({ ...newState(), boat, gold, fame }).ok;
 
 export function simulate(opts: SimOptions): SimResult {
+  const travel = opts.travelShare ?? 0;
+  if (!(travel >= 0 && travel < 1)) throw new Error('이동 비중은 0 이상 1 미만이어야 합니다');
   let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, day = 1, fishSec = 0, bountyGold = 0, bagUsed = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
   const marks: LevelMark[] = [];
@@ -210,7 +214,8 @@ export function simulate(opts: SimOptions): SimResult {
   const fishFor = (spots: SpotId[] | null, axis: Axis | null, seconds: number) => {
     for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
-      accrue(spots ?? [SPOTS[idx].id], axis, dt, dt, true);
+      accrue(spots ?? [SPOTS[idx].id], axis, dt * (1 - travel), dt * (1 - travel), true);
+      fishSec += dt * travel;
       left -= dt;
       settle(dt);
     }
