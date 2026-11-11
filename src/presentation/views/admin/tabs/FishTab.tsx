@@ -20,8 +20,7 @@ import TitledCell from '../../../ui/TitledCell';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
 
-// 시뮬레이션 구역 — **수역 단위 통합 대시보드**. 한 칸 안에 편집과 통계가 같이 산다(사용자 지시:
-// 어종별 데이터와 통계치를 분리하지 마라 — 수치를 조절하면 그 자리에서 즉시 읽히게).
+// 시뮬레이션 구역 — **수역 단위 통합 대시보드**. 한 칸 안에 편집과 통계가 같이 산다. 어종별 데이터와 통계치를 나누지 않아 수치를 조절하면 그 자리에서 즉시 읽힌다.
 //
 //   [칸 제목] 해역명 · 요구 파워 · 배 단계 + 접기 토글, 오버라이드가 있을 때 수역 초기화 버튼
 //   [왼쪽]   축별 EV 요약 띠(5축 + 지역 내 Δ + Δ직전) — 좁은 화면에서는 위에 놓인다
@@ -31,7 +30,7 @@ import { cx } from '../../../ui/cx';
 
 const SPOT_KEY = 'admin-spots-open';
 
-/** Δ 셀 — **비율(%)이 본체**다(사용자 지시: 절대치는 꼭 필요한 곳만). prev=null은 '—' */
+/** Δ 셀 — **비율(%)이 본체**다(절대치는 꼭 필요한 곳만). prev=null은 '—' */
 function Delta({ prev, cur }: { prev: number | null; cur: number }) {
   if (prev === null || !Number.isFinite(prev)) return <span className="text-text-dim">—</span>;
   const { diff, percent, unchanged } = selectDeltaValues(prev, cur);

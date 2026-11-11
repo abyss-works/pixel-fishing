@@ -1,6 +1,6 @@
 // 낚시 상태머신 — 순수 모듈 
 // React/타이머 의존 없음: 게임 필드는 여기 함수들을 타이머·입력에 연결하는 어댑터다.
-// P2 서버 권위 전환 시 서버가 이 모듈을 그대로 import해 같은 규칙으로 판정한다.
+// 포획 판정은 서버가 맡고, 이 모듈은 필드 엔진이 쓰는 낚시 단계 전이만 다룬다.
 import { rodStats } from './logic.js';
 import type { RarityId } from './logic.js';
 import { CATCH_MS, CATCH_MS_BY_RARITY } from './balance.js';

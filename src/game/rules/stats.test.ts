@@ -66,7 +66,7 @@ describe('파워 수치화 — 레벨당 5씩 단조 증가 (선형)', () => {
   });
 });
 
-describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 페널티 (사용자 확정 2026-08-25)', () => {
+describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 페널티', () => {
   it('초과 — 총 보너스 = min(100, 초과+10)% (기본 10%), 초과 30 미만은 빨간 없음, mult=1', () => {
     const z = zonesFor(43, 40); // 초과 3 → 총 13
     expect(z.mult).toBe(1);
@@ -119,7 +119,7 @@ describe('해역 파워 게이트 — 선형 존 보너스 + 투트랙 미달 �
   });
 });
 
-describe('도움말 문장 — 담백한 정보 제공형, 수치 금지 (writing-voice.md)', () => {
+describe('도움말 문장 — 담백한 정보 제공형, 수치 금지', () => {
   it('도움말 문장 모두 숫자를 쓰지 않는다 — 수치는 행이 보여준다', () => {
     expect(powerHelpText()).not.toMatch(/\d/);
     expect(autoPenaltyHelpText()).not.toMatch(/\d/);

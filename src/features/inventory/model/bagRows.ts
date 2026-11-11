@@ -21,7 +21,7 @@ export interface BagRow {
   /** 크기 미상(v0.4.0 이관) — **묶어서 한 줄**. 폼별로 값이 다르니 폼으로만 가른다 */
   unsized: { form: FormId; items: FishInstance[] }[];
   /** **폼별** 최대 크기 — 개체 줄의 `최대` 배지 기준.
-   *  변이는 "종만 같고 다른 개체"라 최대 기록도 폼별 독립이다(rarity-design 7절, 도감도 같다).
+   *  변이는 "종만 같고 다른 개체"라 최대 기록도 폼별 독립이다(도감도 같다).
    *  종 단위로 재면 일반 42cm가 있을 때 변이 중 가장 큰 놈이 배지를 못 받는다 — 남길지
    *  판단하는 기준이 폼별인데 표시가 종 단위면 어긋난다. */
   maxByForm: Partial<Record<FormId, number>>;
@@ -69,7 +69,7 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
       .sort((a, b) => (a.form === 'variant' ? 0 : 1) - (b.form === 'variant' ? 0 : 1));
     row.subtotal = sumPrice(row.items);
   }
-  // 행 순서 — **등급 내림차순이 최상위 축**(사용자 지시 2026-08-27: 가격 말고 등급을 큰 축으로),
+  // 행 순서 — **등급 내림차순이 최상위 축**(가격이 아니라 등급을 큰 축으로 둔다),
   // 동률이면 소계(가치 합) 내림, 그다음 id로 안정화. 도감의 오름차순과 일부러 다르다 —
   // 가방은 "지금 뭘 들고 있나" 화면이라 값진 짐이 맨 위에 있어야 스크롤 없이 눈에 닿는다.
   return [...rows.values()].sort((a, b) =>

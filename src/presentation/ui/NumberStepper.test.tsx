@@ -1,4 +1,4 @@
-// 숫자 스테퍼 — 버튼과 **직접 타이핑** 두 경로 모두 검증(사용자 지시: "숫자 입력할 수 있게").
+// 숫자 스테퍼 — 버튼과 **직접 타이핑** 두 경로 모두 검증.
 // 타이핑 경계 사례들: 미완성 draft가 clamp에 짓눌리지 않기 / blur 확정 / 비숫자 원복 / min·max.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';

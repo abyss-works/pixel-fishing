@@ -20,7 +20,7 @@ export function drawPerson(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_
   R(ctx, x - 2, y - 3, 4, 3, PANTS_COLORS[look.pants]);
 }
 
-// 필드의 배는 단계와 무관한 작은 쪽배다 — 단계별 배 스프라이트는 조선소 화면에서만 쓴다(사용자 결정).
+// 필드의 배는 단계와 무관한 작은 쪽배다 — 단계별 배 스프라이트는 조선소 화면에서만 쓴다.
 export function drawBoat(ctx: Ctx, x: number, y: number, t: number, look: Look = DEFAULT_LOOK) {
   const rock = Math.sin(t * 2.2) * 1;
   R(ctx, x - 9, y - 2 + rock, 18, 5, '#8d6e63');

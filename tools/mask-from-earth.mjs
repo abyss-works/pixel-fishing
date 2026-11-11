@@ -103,7 +103,7 @@ const landData = readJson(geo);
 // 퇴화 링 필터 — 벤더 데이터(world-atlas land-50m)에는 전 경도를 가로지르는 수평 밴드 조각이
 // 섞여 있다(예: lon -180..180, lat -16.54..-16.49, 4점). 이런 링은 한 행 전체를 육지로
 // 오염시킨다 — 셀 중심이 밴드에 걸리면 바다가 통째로 막혀 지역이 분단된다. 실지형에
-// "경도 90° 이상 × 위도 0.1° 이하" 모양은 없다. (2026-08-28 병합 바다 2배 확대 때 발견)
+// "경도 90° 이상 × 위도 0.1° 이하" 모양은 없다.
 const rings = [];
 for (const ring of landData.rings) {
   let lo0 = Infinity, lo1 = -Infinity, la0 = Infinity, la1 = -Infinity;

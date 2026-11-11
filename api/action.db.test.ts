@@ -1013,7 +1013,8 @@ describe('개발 명령 허용 판정', () => {
     const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
-    await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true }, { origin });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true }, { origin });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     const tickets = await env.client.query('select count(*)::int as n from public.bounty_tickets where user_id = $1', [uid]);
     return tickets.rows[0].n as number;
   };
@@ -1052,7 +1053,7 @@ describe('개발 명령 허용 판정', () => {
 
   it('스테이징에서 Origin을 속인 비소유자의 강제 조우는 통상 캐치로 처리한다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    expect(await ticketsAfterForcedCatch('guest', LOCAL_ORIGIN)).toBe(0);
+    for (const origin of ORIGINS) expect(await ticketsAfterForcedCatch('guest', origin)).toBe(0);
     expect(await ticketsAfterForcedCatch('owner', undefined)).toBe(1);
   });
 });
