@@ -19,5 +19,5 @@ export const STACK_OMIT_CLASS = 'pc:@max-[464px]:hidden';
 /** 16:9 그림 프레임 - 스테이지 전체로 넓히고 그림 위아래 남는 자리를 바탕색(--fill-top, --fill-bottom)으로 채운다(GameFrame fill) */
 export const STACK_FRAME_FILL_CLASS = 'pc:@max-[464px]:absolute pc:@max-[464px]:inset-0 pc:@max-[464px]:w-auto pc:@max-[464px]:aspect-auto pc:@max-[464px]:bg-[linear-gradient(var(--fill-top)_50%,var(--fill-bottom)_50%)]';
 
-/** 거점 카드 메뉴 - PC 레이아웃의 헤더가 스테이지 위에 겹치므로 헤더 아래부터 시작한다. 두 행 단계 헤더(바깥 여백 8px + 자원 바 약 48px)보다 조금 크게 잡는다 */
-export const STACK_MENU_CLASS = 'pc:@max-[464px]:top-16';
+/** 거점 카드 메뉴 - PC 레이아웃의 헤더가 스테이지 위에 겹치므로 위아래 같은 여백을 두어 카드가 스테이지 세로 가운데에 놓이게 한다. 여백은 두 행 단계 헤더(바깥 여백 8px + 자원 바 약 48px)보다 조금 크게 잡는다 */
+export const STACK_MENU_CLASS = 'pc:@max-[464px]:inset-y-16';

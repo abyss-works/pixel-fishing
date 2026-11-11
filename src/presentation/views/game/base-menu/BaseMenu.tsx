@@ -50,7 +50,7 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 
 // 거점 카드 메뉴 — 거점 배경 위 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
 // 메뉴 영역은 PC 레이아웃 한 행 단계에서 16:9 프레임 전체, 모바일 레이아웃에서 헤더 아래부터 탭 줄 위까지(게임 영역)다.
-// PC 레이아웃의 쌓기 단계(stackTier)에서는 모바일과 같이 스테이지 전체에서 헤더가 겹친 위쪽을 뺀 영역이고 카드는 그 세로 가운데에 놓인다.
+// PC 레이아웃의 쌓기 단계(stackTier)에서는 모바일과 같이 스테이지 전체이고, 헤더에 가리지 않도록 위아래 같은 여백을 둔 영역의 세로 가운데(곧 스테이지의 세로 가운데)에 카드가 놓인다.
 // 거점 Canvas 화면과 같은 속성을 받으며, 거점 데이터와 가구 스프라이트를 읽기만 한다.
 export default function BaseMenu({ base, game, onFacility, locked }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
