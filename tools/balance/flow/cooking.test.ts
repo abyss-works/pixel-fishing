@@ -9,7 +9,7 @@ import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '.
 import type { CookEffects } from '../../../src/game/content/cooking';
 import { FISH } from '../../../src/game/content/fish';
 import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
+import { capOfBoat, compareBlandness, priceOf } from '../../../src/game/rules/logic';
 import {
   BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, effectOf, evictionOrder, fillBag, frontmostSpots, recipeRows, recipesCovered, windowRows,
 } from './cooking';
@@ -240,9 +240,12 @@ describe('집 기운 얻기 공급', () => {
       const prices = order.filter(s => s.grade === g).map(s => s.price);
       expect(prices).toEqual([...prices].sort((a, b) => a - b));
     }
-    const rare = order.filter(s => s.grade === 'rare');
-    const cheapVariant = rare.findIndex(s => s.variant), costlyNormal = rare.length - 1 - [...rare].reverse().findIndex(s => !s.variant);
-    expect(cheapVariant).toBeLessThan(costlyNormal);
+    // 고정 어종: 같은 등급 안에서 가장 싼 어종과 가장 비싼 어종. 아래 전제가 깨지면 이 검사의 의미가 없어 먼저 확인한다
+    const rareFish = [...FISH].filter(f => f.rarity === 'rare').sort((a, b) => a.price - b.price);
+    const cheap = rareFish[0], costly = rareFish[rareFish.length - 1];
+    expect(priceOf(cheap, 'variant')).toBeLessThan(priceOf(costly, 'normal'));
+    const at = (fishId: string, variant: boolean) => order.findIndex(s => s.fishId === fishId && s.variant === variant);
+    expect(at(cheap.id, true)).toBeLessThan(at(costly.id, false));
   });
 
   it('상한 안에서는 아무것도 놓아주지 않는다', () => {
@@ -273,13 +276,13 @@ describe('집 기운 얻기 공급', () => {
   });
 
   it('기본 선택에서 빠지는 해역은 그 배로 갈 수 있는 해역 중 해역 순서로 가장 앞선 둘이다', () => {
-    for (const boat of [0, 3, 5, 8]) {
-      const state = { ...newState(), boat };
-      const reach = SPOTS.filter(s => canFishSpot(state, s.id)).map(s => s.id);
-      expect(frontmostSpots(boat)).toEqual(reach.slice(-2));
-    }
-    expect(frontmostSpots(8)).toEqual(['benguela', 'sthelena']);
+    expect(frontmostSpots(0)).toEqual(['pond', 'river']);
+    expect(frontmostSpots(1)).toEqual(['river', 'sea']);
+    expect(frontmostSpots(3)).toEqual(['coron', 'barrierreef']);
     expect(frontmostSpots(5)).toEqual(['barrierreef', 'indian']);
+    expect(frontmostSpots(6)).toEqual(['indian', 'southindian']);
+    expect(frontmostSpots(7)).toEqual(['mozstrait', 'comorodeep']);
+    expect(frontmostSpots(8)).toEqual(['benguela', 'sthelena']);
   });
 
   it('요리 해금 배 단계 이상의 배 단계마다 그 배로 갈 수 있는 해역을 낸다', () => {

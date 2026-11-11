@@ -15,7 +15,7 @@ import { NO_EFFECT, checkEffect, dexRows, effectRates, spotsAt, variantEv } from
 import type { DexTimes, Effect } from './effects';
 import { DAY_HOURS, axisOf } from './progress';
 import type { FlowAxis, RatePlan } from './progress';
-import { entryLevel, rates, rng, spotOf } from '../model';
+import { entryLevel, rates, rng } from '../model';
 import type { Axis, Pool } from '../model';
 
 const HOUR_MS = 3_600_000;
@@ -250,7 +250,8 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
   return { released, releasedGold, kept, keptGold };
 }
 
-/** 기운 얻기 기본 선택에서 빠지는 해역 — 그 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역과 그 직전 해역 */
+/** 기운 얻기 기본 선택에서 빠지는 해역 — 그 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역과 그 직전 해역.
+ *  게임 규칙 모듈에 해역 기본 선택 함수가 생기면 그 호출로 바꾼다 */
 export function frontmostSpots(boat: number): SpotId[] {
   const state = { ...newState(), boat };
   return SPOTS.filter(s => canFishSpot(state, s.id)).slice(-2).map(s => s.id);
@@ -327,9 +328,6 @@ export function recipesCovered(supply: Record<RarityId, number>, recipe: Recipe)
 
 // ── 효과 계획 ──
 
-/** 효과가 걸리기 시작하는 배 단계의 기본값 — 인도양을 여는 배(증기선) */
-export const DEFAULT_FROM_BOAT = spotOf('indian').boatTier;
-
 export interface PlanOptions {
   effect: Effect;
   /** 이 배 단계 이상일 때만 효과가 걸린다. 기본은 인도양을 여는 배 */
@@ -342,7 +340,7 @@ export interface PlanOptions {
 /** 진행 시뮬레이션에 넣는 효과 계획 — 시작 배 단계 이후에 효과를 걸고, 레시피를 주면 재료 판매 손실을 비용으로 넣는다 */
 export function effectPlan(o: PlanOptions): RatePlan {
   checkEffect(o.effect);
-  const fromBoat = o.fromBoat ?? DEFAULT_FROM_BOAT;
+  const fromBoat = o.fromBoat ?? COOKING_UNLOCK_BOAT;
   const costs = new Map<string, MaterialLoss>();
   const loss = (spot: SpotId, level: number): MaterialLoss => {
     const key = `${spot}:${level}`;

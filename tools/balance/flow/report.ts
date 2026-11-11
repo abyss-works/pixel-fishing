@@ -33,7 +33,8 @@ import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
-import { BAIT_WINDOW_MIN, DEFAULT_FROM_BOAT, LUNCH_HOURS, RECIPES, bagSupplyRows, baitEffect, effectPlan, recipeRows, recipesCovered, windowRows } from './cooking';
+import { COOKING_UNLOCK_BOAT } from '../../../src/game/content/cooking';
+import { BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, bagSupplyRows, baitEffect, effectPlan, recipeRows, recipesCovered, windowRows } from './cooking';
 import type { BagSupplyRow, RecipeRow, WindowRow } from './cooking';
 
 export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window' | 'recipes';
@@ -118,7 +119,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --from-boat <N>    transition, days, gates: 효과가 걸리기 시작하는 배 단계(0 이상 정수). 기본은 인도양을 여는 배(증기선)
   --with-cost        transition, days, gates: --recipe의 재료로 쓴 물고기의 판매 손실을 하루(실질 낚시 8시간) 한 번의 비용으로 넣는다. 재료가 나오지 않는 해역은 만들 수 없어 효과도 비용도 없다
   --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
-  --recipe <id>      recipes: 그 레시피만(quick, shimmer, mutant, trace, mixed, mutantBait). effects, window: 그 레시피의 효과를 효과 옵션에 채운다
+  --recipe <id>      recipes: 그 레시피만(${RECIPES.map(r => r.id).join(', ')}). effects, window: 그 레시피의 효과를 효과 옵션에 채운다
   --hours <N>        recipes: 가방을 비우고 판매 없이 낚는 시간(시간). 기본 ${LUNCH_HOURS}
   --seed, --trials   effects, window의 도감 완성 시간에도 쓴다
   --help             이 도움말
@@ -291,7 +292,7 @@ export function runFlow(o: FlowOptions): FlowResult {
   const restore = override ? applyOverride(override) : () => {};
   try {
     const planOn = PLAN_COMMANDS.some(c => o.commands.includes(c) && o.commands.length === 1) && (o.recipe !== null || (Object.keys(o.effect) as (keyof Effect)[]).some(k => o.effect[k] !== 0));
-    const fromBoat = o.fromBoat ?? DEFAULT_FROM_BOAT;
+    const fromBoat = o.fromBoat ?? COOKING_UNLOCK_BOAT;
     const recipe = o.recipe === null ? undefined : RECIPES.find(r => r.id === o.recipe);
     const plan: RatePlan | undefined = planOn ? effectPlan({ effect: o.effect, fromBoat, recipe: o.withCost ? recipe : undefined }) : undefined;
     const res: FlowResult = { options: { axis: o.axis, legendAt: o.legendAt, maxDays: o.maxDays, override,
