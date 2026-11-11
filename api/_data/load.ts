@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { guildRanksJson, guildTotal } from './guilds.js';
 import type { GuildBonusId } from '../../src/game/rules/guild.js';
-import { at, textArray } from './json.js';
+import { at, jsonParam, textArray } from './json.js';
 
 export type StateRow = {
   data: unknown; version: number; gold: number; fame: number; boat: number; rod: number;
@@ -114,19 +114,27 @@ export async function ownedNormalForms(db: Executor, uid: string, fishIds: reado
 
 export type VictimRow = { uid: string; fish_id: string; form: string; size: number | null };
 
+/** 방생 순서의 개체 판매가 — 어종 x 폼 판매가표(게임 계층이 낸 행)를 조인하는 입력 */
+export type EvictionPriceRow = { fishId: string; form: string; price: number };
+
 /**
  * 가방이 가득 찼을 때의 방생 후보 — 묶음마다 잠기지 않은 가방 개체 중 가장 덜 특별한 1마리.
  * 첫 묶음은 등록되지 않은 어종(fish_id가 known에 없음), 나머지는 groups의 어종 목록 순서다.
- * 정렬은 폼(normal < variant), 크기(null 먼저), uid 오름차순이다.
+ * 정렬은 판매가, 크기(null 먼저), uid 오름차순이다. 판매가는 prices(어종 x 폼)를 조인해 얻고,
+ * 표에 없는 개체(삭제된 어종)의 판매가는 0이다.
  */
 export async function evictionCandidates(db: Executor, uid: string, known: readonly string[],
-  groups: readonly (readonly string[])[]): Promise<(VictimRow | null)[]> {
-  const pick = (g: number, filter: ReturnType<typeof sql>) => sql`(select ${g}::int as g, uid, fish_id, form, size
-    from public.fish_instances where user_id = ${uid} and slot is null and locked = false and ${filter}
-    order by form asc, size asc nulls first, uid asc limit 1)`;
+  groups: readonly (readonly string[])[], prices: readonly EvictionPriceRow[]): Promise<(VictimRow | null)[]> {
+  const priceTable = jsonParam(prices.map(p => ({ fish_id: p.fishId, form: p.form, price: p.price })));
+  const pick = (g: number, filter: ReturnType<typeof sql>) => sql`(select ${g}::int as g, i.uid, i.fish_id, i.form, i.size
+    from public.fish_instances i
+    left join json_to_recordset(${priceTable}) as p(fish_id text, form text, price double precision)
+      on p.fish_id = i.fish_id and p.form = i.form
+    where i.user_id = ${uid} and i.slot is null and i.locked = false and ${filter}
+    order by coalesce(p.price, 0) asc, i.size asc nulls first, i.uid asc limit 1)`;
   const parts = [
-    pick(0, sql`fish_id <> all(${textArray(known)})`),
-    ...groups.map((ids, i) => pick(i + 1, sql`fish_id = any(${textArray(ids)})`)),
+    pick(0, sql`i.fish_id <> all(${textArray(known)})`),
+    ...groups.map((ids, i) => pick(i + 1, sql`i.fish_id = any(${textArray(ids)})`)),
   ];
   const { rows } = await db.execute<VictimRow & { g: number }>(sql.join(parts, sql` union all `));
   return parts.map((_, g) => {

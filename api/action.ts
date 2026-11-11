@@ -18,7 +18,7 @@ import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
   takeItem, matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
@@ -630,11 +630,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
-    // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이
-    // 비교자와 일치함은 FormId 2종 전제 — exhaustiveness 검증이 깨지면 이 분기를 확인한다.
+    // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. 묶음 안 정렬(판매가, 크기, uid)의
+    // 판매가는 게임 계층의 evictionPriceRows를 조인한 값이라 비교자(compareBlandness)와 같은 기준이다.
     // 조회 실패를 빈 칸으로 취급하면 엉뚱한 놈을 방생한다 — 조용히 넘기지 않는다
     const victims = await step('db-read', { uid, action: 'catch' }, () => evictionCandidates(db, uid,
-      FISH.map(f => f.id), RARITY_ORDER.map(r => FISH.filter(f => f.rarity === r).map(f => f.id))));
+      FISH.map(f => f.id), RARITY_ORDER.map(r => FISH.filter(f => f.rarity === r).map(f => f.id)), evictionPriceRows()));
     const tops: (FishInstance | null)[] = victims.map(t => t ? {
       uid: t.uid, fishId: t.fish_id, form: t.form as FishInstance['form'],
       size: t.size, caughtAt: null, spot: null, judgment: null, locked: false,

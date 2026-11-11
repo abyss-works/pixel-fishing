@@ -3,7 +3,8 @@
 // 비교자·등급우선순위·도감헬퍼가 단일 근원(게임 로직)임을 잠그는 것이 목적이다.
 import { describe, it, expect } from 'vitest';
 import {
-  FISH, RARITY_ORDER, capOfBoat, compareBlandness, nextDexRec, overflowUids, pickEvict,
+  FISH, RARITY_ORDER, capOfBoat, compareBlandness, evictionPriceRows, nextDexRec, overflowUids, pickEvict,
+  priceOf,
 } from './logic';
 import type { FishInstance, FormId } from './logic';
 
@@ -87,5 +88,54 @@ describe('피해자 선정 동등성', () => {
     // FormId 유니온에 멤버가 추가되면 여기서 컴파일이 깨진다. 그게 신호다.
     const exhaustive: Record<FormId, true> = { normal: true, variant: true };
     expect(Object.keys(exhaustive)).toHaveLength(2);
+  });
+});
+
+describe('가방 초과 방생 순서 (등급 -> 개체 판매가 -> 크기 -> uid)', () => {
+  it('같은 등급에서는 싼 어종이 먼저 나간다', () => {
+    const cheap = mk('a', 'minnow', 'normal', 99);  // 일반, 4
+    const dear = mk('b', 'catfish', 'normal', 1);   // 일반, 9
+    expect(compareBlandness(cheap, dear)).toBeLessThan(0);
+    expect(overflowUids([dear, cheap], 1)).toEqual(['a']);
+  });
+
+  it('비싼 폼(변이)은 같은 어종 일반보다 늦고, 더 싼 다른 어종 변이보다는 늦지 않을 수 있다', () => {
+    const minnowVariant = mk('a', 'minnow', 'variant', 5);  // 4 x 변이 배수 = 8
+    const crucian = mk('b', 'crucian', 'normal', 50);       // 6
+    const catfish = mk('c', 'catfish', 'normal', 50);       // 9
+    expect(priceOf(FISH.find(f => f.id === 'minnow')!, 'variant')).toBe(8);
+    expect(overflowUids([minnowVariant, crucian, catfish], 0)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('같은 판매가면 작은 개체가 먼저, 그다음 uid', () => {
+    const small = mk('z', 'crucian', 'normal', 3);
+    const big = mk('a', 'crucian', 'normal', 30);
+    const twinA = mk('a2', 'crucian', 'normal', 3);
+    expect(overflowUids([big, small, twinA], 0)).toEqual(['a2', 'z', 'a']);
+  });
+
+  it('등급이 판매가보다 먼저다', () => {
+    const rareCheap = mk('r', 'carp', 'normal', 1);      // 희귀 30
+    const commonDear = mk('c', 'crucian', 'variant', 99); // 일반 12
+    expect(overflowUids([rareCheap, commonDear], 1)).toEqual(['c']);
+  });
+
+  it('pickEvict와 overflowUids가 같은 개체를 고른다', () => {
+    const bag = [mk('a', 'minnow', 'variant', 5), mk('b', 'crucian', 'normal', 50),
+      mk('c', 'catfish', 'normal', 1), mk('d', 'carp', 'normal', 1)];
+    const fresh = mk('new', 'catfish', 'variant', 7);
+    const pick = pickEvict(tierTops(bag), fresh);
+    expect(pick).toEqual({ evictUid: 'b', evictNew: false });
+    expect(overflowUids([...bag, fresh], bag.length)).toEqual(['b']);
+  });
+
+  it('evictionPriceRows는 모든 어종 x 폼의 판매가를 priceOf와 같게 낸다', () => {
+    const rows = evictionPriceRows();
+    expect(rows).toHaveLength(FISH.length * 2);
+    for (const f of FISH) {
+      for (const form of ['normal', 'variant'] as const) {
+        expect(rows).toContainEqual({ fishId: f.id, rarity: f.rarity, form, price: priceOf(f, form) });
+      }
+    }
   });
 });
