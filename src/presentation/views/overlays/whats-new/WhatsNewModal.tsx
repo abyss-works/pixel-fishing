@@ -58,7 +58,7 @@ export default function WhatsNewModal({ game, ready }: {
       </div>
     }>
       <StepTrail steps={w.steps} index={w.index} />
-      {w.step === 'news' && w.news && <NewsStep news={w.news} />}
+      {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
       {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
     </Modal>
   );

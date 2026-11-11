@@ -29,13 +29,13 @@ describe('현재 버전 항목이 없는 릴리즈의 업데이트 소식', () =
     markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
     const { result } = renderHook(() => useWhatsNew(veteran, true));
     expect(result.current.open).toBe(false);
-    expect(result.current.news).toBeNull();
+    expect(result.current.news).toEqual([]);
   });
 
   it('답하지 않은 새 질문이 있으면 설정 단계만 연다', () => {
     const { result } = renderHook(() => useWhatsNew(veteran, true));
     expect(result.current.steps).toEqual(['settings']);
-    expect(result.current.news).toBeNull();
+    expect(result.current.news).toEqual([]);
   });
 
   it('다시 보기는 열 항목이 하나도 없으면 열지 않는다', () => {
@@ -64,21 +64,21 @@ describe('최근 소식 다시 보기', () => {
     act(() => { opened = reopenWhatsNew(); });
     expect(opened).toBe(true);
     expect(result.current.steps).toEqual(['news']);
-    expect(result.current.news?.version).toBe('0.0.2');
+    expect(result.current.news.map(n => n.version)).toEqual(['0.0.2']);
   });
 
   it('배열 순서가 섞여 있어도 가장 높은 버전을 열고, 현재 버전보다 높은 항목은 열지 않는다', () => {
     patchNotes.push(note('0.0.1'), note('99.0.0'), note('0.0.3'), note('0.0.2'));
     const { result } = renderHook(() => useWhatsNew(veteran, false));
     act(() => { reopenWhatsNew(); });
-    expect(result.current.news?.version).toBe('0.0.3');
+    expect(result.current.news.map(n => n.version)).toEqual(['0.0.3']);
   });
 
   it('현재 버전 항목이 있으면 그 소식을 연다', () => {
     patchNotes.push(note(APP_VERSION), note('0.0.1'));
     const { result } = renderHook(() => useWhatsNew(veteran, false));
     act(() => { reopenWhatsNew(); });
-    expect(result.current.news?.version).toBe(APP_VERSION);
+    expect(result.current.news.map(n => n.version)).toEqual([APP_VERSION]);
   });
 
   it('다시 보기로 연 소식의 다시 보지 않기는 그 소식의 버전으로 남는다', () => {
@@ -109,5 +109,55 @@ describe('최근 소식 다시 보기', () => {
     expect(getAnnouncements().dismissedVersion).toBe('0.0.1');
     act(() => { reopenWhatsNew(); });
     expect(result.current.dismiss).toBe(true);
+  });
+});
+
+describe('마지막으로 본 버전 뒤의 소식', () => {
+  beforeEach(() => {
+    patchNotes.length = 0;
+    localStorage.clear();
+    resetAnnouncements();
+    resetWhatsNewSession();
+  });
+  afterEach(cleanup);
+
+  it('접속하면 본 버전 뒤부터 현재 버전까지 노트가 있는 버전을 최신 순으로 한 번에 연다', () => {
+    patchNotes.push(note('0.0.1'), note(APP_VERSION), note('0.0.2'));
+    setDismissedVersion('0.0.1');
+    markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    expect(result.current.steps).toEqual(['news']);
+    expect(result.current.news.map(n => n.version)).toEqual([APP_VERSION, '0.0.2']);
+  });
+
+  it('체크하고 닫으면 가장 높은 버전까지 본 것으로 남는다', () => {
+    patchNotes.push(note(APP_VERSION), note('0.0.2'));
+    setDismissedVersion('0.0.1');
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    act(() => { result.current.setDismiss(true); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().dismissedVersion).toBe(APP_VERSION);
+  });
+
+  it('체크하지 않고 닫으면 본 버전을 그대로 두어 다음 접속에 같은 소식이 다시 뜬다', () => {
+    patchNotes.push(note(APP_VERSION), note('0.0.2'));
+    setDismissedVersion('0.0.1');
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().dismissedVersion).toBe('0.0.1');
+    resetWhatsNewSession();
+    const again = renderHook(() => useWhatsNew(veteran, true));
+    expect(again.result.current.news.map(n => n.version)).toEqual([APP_VERSION, '0.0.2']);
+  });
+
+  it('다시 보기에서 체크를 풀고 닫으면 본 기록을 비워 그 소식이 다시 뜨게 한다', () => {
+    patchNotes.push(note('0.0.2'), note('0.0.1'));
+    setDismissedVersion('0.0.2');
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    expect(result.current.dismiss).toBe(true);
+    act(() => { result.current.setDismiss(false); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().dismissedVersion).toBeNull();
   });
 });

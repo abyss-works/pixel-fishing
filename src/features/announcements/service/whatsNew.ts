@@ -7,7 +7,7 @@ import {
   getAnnouncements, markPromptsAnswered, setDismissedVersion,
 } from '../../../platform/api/announcements';
 import {
-  SETTING_PROMPTS, isFreshPlayer, latestNewsAtOrBelow, newsFor, pendingPrompts, planWhatsNew,
+  SETTING_PROMPTS, isFreshPlayer, latestNewsAtOrBelow, pendingPrompts, planWhatsNew, unseenNews,
 } from '../model/whatsNew';
 import type { SettingPrompt, WhatsNewStep } from '../model/whatsNew';
 
@@ -18,13 +18,14 @@ interface Session {
   evaluated: boolean;
   steps: readonly WhatsNewStep[];
   index: number;
-  news: PatchNote | null;
+  /** 보일 소식, 최신 순 */
+  news: readonly PatchNote[];
   prompts: readonly SettingPrompt[];
   /** "다시 보지 않기" 체크 — 이미 다시 보지 않기로 한 소식을 다시 열면 체크된 채로 시작한다 */
   dismiss: boolean;
 }
 
-const CLOSED: Session = { evaluated: false, steps: [], index: 0, news: null, prompts: [], dismiss: false };
+const CLOSED: Session = { evaluated: false, steps: [], index: 0, news: [], prompts: [], dismiss: false };
 let session: Session = CLOSED;
 const listeners = new Set<() => void>();
 
@@ -42,7 +43,7 @@ const getSession = () => session;
 function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
   if (session.evaluated) return;
   const record = getAnnouncements();
-  const news = newsFor(PATCH_NOTES, APP_VERSION, record.dismissedVersion);
+  const news = unseenNews(PATCH_NOTES, APP_VERSION, record.dismissedVersion);
   const prompts = pendingPrompts(SETTING_PROMPTS, new Set(record.answered));
   const fresh = isFreshPlayer(game);
   if (fresh) {
@@ -53,10 +54,23 @@ function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
   update({ evaluated: true, steps, index: 0, news, prompts, dismiss: false });
 }
 
+/**
+ * 소식을 닫을 때의 본 버전 기록. 체크하면 보인 가장 높은 버전까지 본 것으로 남긴다.
+ * 체크하지 않으면 그대로 둬서 다음 접속에 같은 소식이 다시 뜬다. 이미 본 것으로 기록된 소식을 다시 보기로 열어 체크를 풀었다면
+ * 본 기록을 비워 그 소식이 다시 뜨게 한다.
+ */
+function settleNews() {
+  const shown = session.news;
+  if (shown.length === 0) return;
+  if (session.dismiss) { setDismissedVersion(shown[0].version); return; }
+  const oldest = shown[shown.length - 1].version;
+  if (getAnnouncements().dismissedVersion === oldest) setDismissedVersion(null);
+}
+
 /** 창 닫기 — 소식은 체크대로 남기고, 보여준 질문은 답한 것으로 남긴다(고른 값은 이미 적용돼 있다) */
 function close() {
   const shown = session.steps;
-  if (shown.includes('news')) setDismissedVersion(session.dismiss && session.news ? session.news.version : null);
+  if (shown.includes('news')) settleNews();
   if (shown.includes('settings')) markPromptsAnswered(session.prompts.map(p => p.id));
   update({ ...session, steps: [], index: 0 });
 }
@@ -81,7 +95,7 @@ export function reopenWhatsNew(): boolean {
   const news = latestNewsAtOrBelow(PATCH_NOTES, APP_VERSION);
   if (!news) return false;
   const dismiss = getAnnouncements().dismissedVersion === news.version;
-  update({ ...session, steps: ['news'], index: 0, news, prompts: [], dismiss });
+  update({ ...session, steps: ['news'], index: 0, news: [news], prompts: [], dismiss });
   return true;
 }
 

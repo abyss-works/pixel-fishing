@@ -1,6 +1,6 @@
 // 업데이트 소식 창 — 무엇을 어떤 순서로 보여줄지 정하는 순수 규칙과 새 설정 질문 목록.
 // 창은 최대 두 단계다: ① 이번 버전 소식(패치노트) ② 이번에 생긴 설정 고르기.
-// 소식은 "다시 보지 않기"를 체크하고 닫을 때까지 접속마다 뜨고, 질문은 질문마다 한 번이다.
+// 소식은 마지막으로 본 버전 뒤의 버전을 모두 한 창에 보이고, "다시 보지 않기"를 체크하고 닫을 때까지 접속마다 뜨고, 질문은 질문마다 한 번이다.
 // 처음 시작한 플레이어에게는 열지 않는다 —
 // 바뀐 점이 없는 사람에게 "바뀐 점"을 보여줄 이유가 없고, 설정은 기본값으로 시작한다.
 import type { PatchNote } from '../../../game/content/patchnotes';
@@ -41,14 +41,6 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
   },
 ];
 
-/** 현재 버전 소식: 패치노트에 그 버전이 있고 이 기기에서 "다시 보지 않기"를 하지 않았을 때만 */
-export function newsFor(
-  notes: readonly PatchNote[], appVersion: string, dismissed: string | null,
-): PatchNote | null {
-  if (dismissed === appVersion) return null;
-  return notes.find(n => n.version === appVersion) ?? null;
-}
-
 const versionParts = (version: string) => version.split('.').map(Number);
 
 /** 점으로 나눈 숫자 비교 — 앞이 크면 양수, 같으면 0 */
@@ -60,6 +52,19 @@ function compareVersions(a: string, b: string): number {
     if (diff !== 0) return diff;
   }
   return 0;
+}
+
+/**
+ * 접속 때 띄울 소식: 마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전 전부, 최신 순.
+ * 본 기록이 없으면 현재 버전 노트 하나만 본다. 노트 배열의 순서에 기대지 않는다
+ */
+export function unseenNews(
+  notes: readonly PatchNote[], appVersion: string, seen: string | null,
+): PatchNote[] {
+  return notes
+    .filter(n => compareVersions(n.version, appVersion) <= 0
+      && (seen === null ? n.version === appVersion : compareVersions(n.version, seen) > 0))
+    .sort((a, b) => compareVersions(b.version, a.version));
 }
 
 /** 다시 보기로 열 소식: 현재 버전 이하에서 가장 높은 버전. 노트 배열의 순서에 기대지 않는다 */
@@ -85,13 +90,13 @@ export function isFreshPlayer(game: Pick<GameState, 'fame' | 'dex'>): boolean {
 
 /** 이번 세션에 보여줄 단계 */
 export function planWhatsNew({ news, prompts, fresh }: {
-  news: PatchNote | null;
+  news: readonly PatchNote[];
   prompts: readonly SettingPrompt[];
   fresh: boolean;
 }): WhatsNewStep[] {
   if (fresh) return [];
   const steps: WhatsNewStep[] = [];
-  if (news) steps.push('news');
+  if (news.length > 0) steps.push('news');
   if (prompts.length > 0) steps.push('settings');
   return steps;
 }

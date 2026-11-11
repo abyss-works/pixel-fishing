@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isFreshPlayer, latestNewsAtOrBelow, newsFor, pendingPrompts, planWhatsNew, SETTING_PROMPTS,
+  isFreshPlayer, latestNewsAtOrBelow, pendingPrompts, planWhatsNew, SETTING_PROMPTS, unseenNews,
 } from './whatsNew';
 import type { PatchNote } from '../../../game/content/patchnotes';
 import { newState } from '../../../game/rules/logic';
@@ -10,15 +10,30 @@ const note = (version: string): PatchNote => ({
 });
 const NOTES = [note('0.10.0'), note('0.9.0')];
 
-describe('이번 버전 소식', () => {
-  it('현재 버전의 노트가 있고 "다시 보지 않기"를 하지 않았으면 그 노트다', () => {
-    expect(newsFor(NOTES, '0.10.0', '0.9.0')?.version).toBe('0.10.0');
-    expect(newsFor(NOTES, '0.10.0', null)?.version).toBe('0.10.0');
+describe('아직 보지 않은 소식', () => {
+  it('마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전을 최신 순으로 모두 돌려준다', () => {
+    const notes = [note('0.9.0'), note('0.10.2'), note('0.10.0'), note('0.10.1')];
+    expect(unseenNews(notes, '0.10.2', '0.9.0').map(n => n.version)).toEqual(['0.10.2', '0.10.1', '0.10.0']);
   });
 
-  it('이 버전을 다시 보지 않기로 했거나 현재 버전 노트가 없으면 없다', () => {
-    expect(newsFor(NOTES, '0.10.0', '0.10.0')).toBeNull();
-    expect(newsFor(NOTES, '0.11.0', null)).toBeNull();
+  it('현재 버전보다 높은 노트와 본 버전 이하의 노트는 넣지 않는다', () => {
+    const notes = [note('0.11.0'), note('0.10.0'), note('0.9.0')];
+    expect(unseenNews(notes, '0.10.0', '0.9.0').map(n => n.version)).toEqual(['0.10.0']);
+  });
+
+  it('현재 버전 노트가 없어도 그 사이 버전이 있으면 보인다', () => {
+    expect(unseenNews([note('0.10.1'), note('0.9.0')], '0.10.3', '0.9.0').map(n => n.version)).toEqual(['0.10.1']);
+  });
+
+  it('현재 버전을 이미 봤거나 사이에 노트가 없으면 비어 있다', () => {
+    expect(unseenNews(NOTES, '0.10.0', '0.10.0')).toEqual([]);
+    expect(unseenNews(NOTES, '0.11.0', '0.10.0')).toEqual([]);
+    expect(unseenNews([], '0.10.0', null)).toEqual([]);
+  });
+
+  it('본 기록이 없으면 현재 버전 노트 하나만 돌려준다', () => {
+    expect(unseenNews(NOTES, '0.10.0', null).map(n => n.version)).toEqual(['0.10.0']);
+    expect(unseenNews(NOTES, '0.11.0', null)).toEqual([]);
   });
 });
 
@@ -70,22 +85,22 @@ describe('소식 창 단계 계획', () => {
   const prompts = SETTING_PROMPTS;
 
   it('소식과 미답 질문이 있으면 소식 → 새 설정 순서다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts, fresh: false })).toEqual(['news', 'settings']);
+    expect(planWhatsNew({ news: [note('0.10.0')], prompts, fresh: false })).toEqual(['news', 'settings']);
   });
 
   it('소식만 남았으면 소식 한 단계다 — 질문은 한 번만 묻는다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts: [], fresh: false })).toEqual(['news']);
+    expect(planWhatsNew({ news: [note('0.10.0')], prompts: [], fresh: false })).toEqual(['news']);
   });
 
   it('보여줄 것이 없으면 열지 않는다', () => {
-    expect(planWhatsNew({ news: null, prompts: [], fresh: false })).toEqual([]);
+    expect(planWhatsNew({ news: [], prompts: [], fresh: false })).toEqual([]);
   });
 
   it('현재 버전 소식이 없고 새 질문만 남으면 설정 단계만 보여준다', () => {
-    expect(planWhatsNew({ news: null, prompts: SETTING_PROMPTS, fresh: false })).toEqual(['settings']);
+    expect(planWhatsNew({ news: [], prompts: SETTING_PROMPTS, fresh: false })).toEqual(['settings']);
   });
 
   it('처음 시작한 플레이어에게는 열지 않는다 — 기본 설정으로 시작한다', () => {
-    expect(planWhatsNew({ news: note('0.10.0'), prompts, fresh: true })).toEqual([]);
+    expect(planWhatsNew({ news: [note('0.10.0')], prompts, fresh: true })).toEqual([]);
   });
 });
