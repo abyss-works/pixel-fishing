@@ -19,7 +19,7 @@ import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logi
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
-  takeItem, matchBountyCatch,
+  matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
@@ -56,7 +56,7 @@ import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNo
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
-import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
+import { blobInput, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
@@ -70,7 +70,7 @@ const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 /** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
 function scalarState(row: StateRow): GameState {
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
 }
 import { reportServerIssue } from './observability.js';
@@ -160,7 +160,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
       { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
   }
   // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold), fame: Number(row.fame),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
@@ -598,15 +598,15 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[1],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[0],
   guild: GuildEffects): Promise<ApplyOutcome> {
-  const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
   const now = new Date().toISOString();
-  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, judgmentIn, now, pz);
+  const { judgment, phaseOpts } = prepareCatchDraw(judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
@@ -657,17 +657,15 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
-    ...(bait ? { bait: bait.id } : {}),
     ...(drawn.byCeiling ? { pity: true } : {}),
   } }];
   if (overflow.length > 0) {
     events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
       fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
-  const scalars = takeItem(base, bait?.id ?? '');
   return {
     ok: true,
-    state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
+    state: { ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
     events,
     writes: {

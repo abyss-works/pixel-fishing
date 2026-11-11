@@ -116,7 +116,7 @@ export function retention(db: Executor): Promise<unknown[]> {
     group by f.cohort`, sql`t.cohort desc`);
 }
 
-/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장 */
+/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장. buyBait는 액션이 없어진 뒤로 새 이벤트가 없고 과거 이력만 센다 */
 export function economy(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*) filter (where type = 'sell')::int as sells,
@@ -146,7 +146,7 @@ export function bountyFunnel(db: Executor, days: number): Promise<unknown[]> {
     group by day`);
 }
 
-/** 캐치 품질 일계. 캐치 수, PERFECT 수, 미끼 사용 수, 평균 크기 */
+/** 캐치 품질 일계. 캐치 수, PERFECT 수, 이벤트 payload에 미끼가 실린 캐치 수(미끼 소모가 없어진 뒤로는 새로 늘지 않는다), 평균 크기 */
 export function catchQuality(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*)::int as catches,

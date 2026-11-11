@@ -14,6 +14,17 @@ export function stateRow(state: GameState) {
   return { gold, fame, boat, rod, data: rest };
 }
 
+/** 저장 blob의 버전이 없는 구 행이 가정하는 버전. 스칼라 열이 분리된 뒤부터 blob에는 항상 버전이 들어간다 */
+const UNVERSIONED_BLOB = 8;
+
+/**
+ * saves_current 행의 blob → migrate 입력. blob이 가진 버전을 그대로 따른다.
+ * 버전을 고정해 넣으면 이미 이관된 세이브가 이관 링크를 다시 지나 영수증과 조리 상태가 사라진다.
+ */
+export function blobInput(data: unknown): object {
+  return { v: UNVERSIONED_BLOB, ...(data as object) };
+}
+
 /** 개체 → DB 행 */
 export function instRow(uid: string, i: FishInstance, slot: number | null) {
   return {

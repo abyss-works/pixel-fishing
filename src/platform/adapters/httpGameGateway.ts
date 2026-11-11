@@ -38,7 +38,7 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
     };
   }
   const c = cur as Record<string, unknown>;
-  return migrate({ ...(c.data as object), v: 8, gold: Number(c.gold), fame: Number(c.fame),
+  return migrate({ v: 8, ...(c.data as object), gold: Number(c.gold), fame: Number(c.fame),
     boat: c.boat, rod: c.rod, bag, exhibit, dex });
 }
 
