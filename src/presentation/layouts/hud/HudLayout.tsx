@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { SceneRef } from '../../../game/world';
-import { baitById } from '../../../game/content/baits';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
 import type { FilterChannel, MessageFilter } from '../../../features/display/model/messageFilter';
@@ -57,7 +56,7 @@ interface HudLayoutProps {
 }
 
 // 플레이 화면에서 공통으로 쓰는 자원 표시, 미니맵, 시스템 로그를 배치한다.
-// 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(접속 칩, 활성 미끼 칩, 시계, 지도 버튼 순서), 미니맵(바다에서만).
+// 오른쪽 아래는 한 줄기로 쌓는다 — 위에서부터 알림(notice), 칩 한 줄(접속 칩, 시계, 지도 버튼 순서), 미니맵(바다에서만).
 // 시계는 바다와 거점이 같은 자리이고, 미니맵을 숨겨도 남는다. 표시 상태를 바꾸는 지도 버튼은 정보 항목 뒤 줄 끝에 둔다.
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
 // 모바일 레이아웃에서는 헤더(자원 바, 메뉴 버튼)가 맨 위 행이고, 나머지는 게임 영역 아래쪽 위에 겹치는 한 줄기에 쌓는다 —
@@ -71,8 +70,6 @@ interface HudLayoutProps {
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu }: HudLayoutProps) {
   const mobile = useMobileLayout();
-  const activeBait = baitById(game.activeBait);
-  const baitLeft = activeBait ? game.items[activeBait.id] ?? 0 : null;
   const minimapVisible = useMinimapVisible();
   const hasMinimap = scene.kind === 'region';
 
@@ -89,17 +86,6 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
           <div className="flex pc:flex-wrap items-center justify-end gap-1.5 pointer-events-auto">
             {chips}
-            {activeBait && (
-              <Tip plain className="flex" text={`${activeBait.name} ${baitLeft}개 남음`}>
-                <HudChip aria-label="활성 미끼">
-                  <span className="size-2.5 shrink-0" style={{ backgroundColor: activeBait.color }} />
-                  <span className="sr-only">{activeBait.name}</span>
-                  <span className={cx('pf-accent leading-none', baitLeft === 0 ? 'text-text-dim' : 'text-gold')}>
-                    {baitLeft}
-                  </span>
-                </HudChip>
-              </Tip>
-            )}
             <TimeBadge />
             {hasMinimap && !minimapVisible && (
               <Tip wraps className="flex" text="미니맵 보이기">

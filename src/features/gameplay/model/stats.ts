@@ -3,8 +3,6 @@ import type { Spot, SpotId } from '../../../game/content/spots';
 import type { RegionId } from '../../../game/content/places';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact, ArtifactEffects } from '../../../game/content/artifacts';
-import { baitById } from '../../../game/content/baits';
-import type { Bait } from '../../../game/content/baits';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
@@ -144,7 +142,7 @@ export type ArtifactEffectKey = keyof ArtifactEffects | 'extraCookChance';
 
 // 요리 추가 완성은 도시락과 미끼 요리가 낚시를 돕는 효과를 늘리므로 낚시 갈래에 둔다
 const EFFECT_CATEGORY: Record<ArtifactEffectKey, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop', biteWaitCut: 'fish', extraCookChance: 'fish',
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', biteWaitCut: 'fish', extraCookChance: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */
@@ -155,7 +153,6 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
   | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number }
-  | { kind: 'bait'; bait: Bait }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number };
 
@@ -167,7 +164,7 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 켜 둔 미끼, 길드 보너스(1단계 이상).
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 길드 보너스(1단계 이상).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
  * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
@@ -185,8 +182,6 @@ export function selectActiveBonuses(game: GameState, guild: { level: number; eff
       out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level }, manualOnly: false });
     }
   }
-  const bait = baitById(game.activeBait);
-  if (bait) out.push({ category: 'fish', source: { kind: 'bait', bait }, manualOnly: true });
   if (guild) {
     for (const bonus of GUILD_BONUS_IDS) {
       const value = guild.effects[bonus];

@@ -148,12 +148,6 @@ describe('받는 보너스', () => {
     expect(selectActiveBonuses(g).filter(b => b.source.kind === 'relic')).toEqual([]);
   });
 
-  it('켜 둔 미끼는 낚시 갈래의 직접 낚을 때만 효과다', () => {
-    const g = game({ activeBait: 'bait-rare' });
-    const bait = selectActiveBonuses(g).find(b => b.source.kind === 'bait');
-    expect(bait).toMatchObject({ category: 'fish', manualOnly: true });
-  });
-
   it('길드 보너스는 1단계 이상인 효과만 "길드 Lv.N" 출처로 갈래를 붙여 모은다', () => {
     const effects = { sell: 0.04, bag: 0.08, named: 0, rare: 0.02, mutation: 0.01 };
     const guild = selectActiveBonuses(game({}), { level: 5, effects }).filter(b => b.source.kind === 'guild');

@@ -181,7 +181,7 @@ export default function GameView(props: GameViewProps) {
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
-      case 'sell': case 'rod': case 'boat': case 'shop': case 'bounty': case 'wardrobe':
+      case 'sell': case 'rod': case 'boat': case 'bounty': case 'wardrobe':
         setActionPanel(panel => panel === id ? null : id);
         return;
       case 'rank':

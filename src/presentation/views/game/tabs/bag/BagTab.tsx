@@ -4,13 +4,11 @@ import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold, fmtSize, josa } from '../../../../ui/format';
-import { baitBoostText, baitEffectLine } from '../../../../ui/baitEffects';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
-import { selectBagOverview, selectBaitInventory } from '../../../../../features/inventory/model/selectors';
+import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
-import type { Bait } from '../../../../../game/content/baits';
 import { when } from '../../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { cx } from '../../../../ui/cx';
@@ -58,55 +56,13 @@ export const EXHIBIT_UI_ENABLED = false;
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
 // 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
 const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
-const ITEM_ROW = 'grid grid-cols-[16px_1fr_40px_88px] items-center gap-2';
 
-/** 아이템 서브탭 — 미끼 목록. 활성은 4중 1(setActiveBait 리듀서가 배타성·보유 검증) */
-function ItemSection({ game, dispatch, setToast }: {
-  game: GameState;
-  dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: Notify;
-}) {
-  // 보유량 순서는 레지스트리(BAITS) 순서다 — 세이브 items는 맵이라 삽입 순서가 유의미 없음
-  const rows = useMemo(() => selectBaitInventory(game.items), [game.items]);
-  const activate = (bait: string | null) =>
-    when(dispatch({ type: 'setActiveBait', bait }), r => {
-      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
-    });
-
+/** 아이템 섹션 - 가진 아이템 목록 자리. 요리와 기운 아이템은 부엌 단위가 채운다 */
+function ItemSection() {
   return (
     <div className="flex flex-col gap-1">
-      <Subheading>미끼</Subheading>
-      <Frame divided>
-        {rows.map(({ bait, count }: { bait: Bait; count: number }) => {
-          const active = game.activeBait === bait.id;
-          return (
-            <div key={bait.id} className={cx(ITEM_ROW, 'px-1 py-1.5 text-sm', active && 'bg-surface-2')}>
-              <span className="w-3 h-3 rounded-full border border-line justify-self-center"
-                    style={{ backgroundColor: bait.color }} />
-              <Tip text={`${bait.desc}
-${baitEffectLine(bait)}`} className="block truncate">{bait.name}</Tip>
-              <span className="pf-accent text-text-dim text-right">×{count}</span>
-              <Tip wraps text={active ? '한 번 더 누르면 꺼져요' : count <= 0 ? '가지고 있는 미끼가 없어요' : baitEffectLine(bait)}
-                   className="justify-self-end">
-                <PillButton
-                  type="button"
-                  active={active}
-                  disabled={!active && count <= 0}
-                  aria-label={`${bait.name} ${active ? '비활성화' : '활성화'}`}
-                  onClick={() => activate(active ? null : bait.id)}>
-                  <PixelIcon glyph={active ? 'checkOn' : 'checkOff'} size={11} />
-                  {active ? '사용 중' : '활성'}
-                </PillButton>
-              </Tip>
-            </div>
-          );
-        })}
-      </Frame>
-      <Note>
-        미끼를 켜면 {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고,
-        방치 낚시에는 쓰이지 않아요.<br />
-        미끼는 콜롬보항의 향료전에서 살 수 있어요.
-      </Note>
+      <PageTitle>아이템</PageTitle>
+      <Note>가진 아이템이 없어요.</Note>
     </div>
   );
 }
@@ -266,7 +222,7 @@ export default function BagTab({ game, sellBonus, dispatch, setToast }: {
   return (
     <div>
       {section === 'items' ? (
-        <ItemSection game={game} dispatch={dispatch} setToast={setToast} />
+        <ItemSection />
       ) : section === 'artifacts' ? (
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (

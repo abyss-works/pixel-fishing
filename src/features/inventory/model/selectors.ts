@@ -6,7 +6,6 @@ import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/lo
 import type { GameState } from '../../../game/rules/logic';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
-import { BAITS } from '../../../game/content/baits';
 import { boatNameOf } from '../../../game/content/boats';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
@@ -43,11 +42,6 @@ export function selectBagOverview(game: GameState, sellBonus: number): BagOvervi
     sellable: saleProceeds(sellableValue(game), sellBonus),
     autoLock: autoLockPlan(game.bag),
   };
-}
-
-/** 아이템 탭의 미끼 목록과 보유량을 레지스트리 순서로 만든다. */
-export function selectBaitInventory(items: Readonly<Record<string, number>>) {
-  return BAITS.map(bait => ({ bait, count: items[bait.id] ?? 0 }));
 }
 
 /** 보유 유물 — 레지스트리(ARTIFACTS) 순서. 세이브의 소유 목록 순서는 획득 순이라 표시 기준으로 쓰지 않는다 */

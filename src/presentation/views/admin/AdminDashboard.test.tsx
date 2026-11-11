@@ -42,7 +42,7 @@ describe('관리자 대시보드 페이지', () => {
   });
 
   it('신규 게임 상태와 무관한 확정 데이터 뷰다', () => {
-    expect(newState().v).toBe(8);
+    expect(newState().v).toBe(9);
   });
 });
 

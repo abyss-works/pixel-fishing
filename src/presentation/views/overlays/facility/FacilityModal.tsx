@@ -28,10 +28,9 @@ import { RarityText } from '../../../ui/fish/RarityTag';
 import BoatPanel from './BoatPanel';
 import RodPanel from './RodPanel';
 import WardrobePanel from '../wardrobe/WardrobePanel';
-import ShopPanel from './ShopPanel';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 /** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
-export type ActionPanel = 'sell' | 'rod' | 'boat' | 'shop' | 'bounty' | 'wardrobe' | null;
+export type ActionPanel = 'sell' | 'rod' | 'boat' | 'bounty' | 'wardrobe' | null;
 
 interface Props {
   panel: Exclude<ActionPanel, null>;
@@ -50,7 +49,7 @@ interface Props {
 
 // 정비 상호작용(판매/강화/배)은 게임 스테이지 위 모달로 띄운다 — 정비 중에는 이동하지
 // 않으므로 화면을 점유해도 자연스럽고, 사이드바 탭 흐름을 방해하지 않는다.
-// 목록형 시설(낚싯대 강화, 조선소, 상점)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
+// 목록형 시설(낚싯대 강화, 조선소)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
 export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus }: Props) {
@@ -68,7 +67,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   return (
     // 높이: 수배판은 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px, 옷장은 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px로 고정한다.
     // 좁은 화면에서는 내용 높이를 따른다.
-    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'shop'} md={panel === 'bounty' || panel === 'wardrobe'}
+    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat'} md={panel === 'bounty' || panel === 'wardrobe'}
            height={panel === 'bounty' ? 480 : panel === 'wardrobe' ? 560 : undefined} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} sellBonus={sellBonus} onClose={onClose} busy={busy}
@@ -91,12 +90,6 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
             setToast(r.state.boat === 1
               ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
               : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`, 'gold');
-          })} />
-      )}
-      {panel === 'shop' && (
-        <ShopPanel game={game} onClose={onClose} busy={busy}
-          onBuy={(baitId, count) => run({ type: 'buyBait', bait: baitId, count }, () => {
-            setToast('미끼를 구매했어요! 가방 탭의 아이템에서 켤 수 있어요.', 'gold');
           })} />
       )}
       {panel === 'wardrobe' && (

@@ -6,7 +6,6 @@ import { GAME_DAY_RESET_TEXT } from '../../../../../game/rules/time';
 import { TICKET_EXPIRY_TEXT } from '../../../../../game/rules/challenge';
 import { variantShare } from '../../../../../game/rules/logic';
 import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
-import { baitBoostText } from '../../../../ui/baitEffects';
 import Accordion from '../../../../ui/Accordion';
 import Note from '../../../../ui/Note';
 import PixelList from '../../../../ui/PixelList';
@@ -207,8 +206,7 @@ export default function VHelp() {
               깊은 바다일수록 유리해요. 끝은 없고, 오를수록 폭이 줄어들 뿐이에요.</li>
             <li><b>배</b>: 골드와 명성 조건을 채우면 살 수 있어요. 더 먼 구역이 열리고,
               항해도 빨라지고, <b>가방</b>도 넓어져요.</li>
-            <li><b>미끼</b>: 콜롬보항의 <b>향료전</b>에서 사요. 가방의 아이템에서 하나를 켜 두면{' '}
-              {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고, 방치 낚시에는 쓰이지 않아요.</li>
+            <li><b>미끼</b>: 골드로 사지 않고 집 부엌에서 생명의 기운으로 만들어요.</li>
             <li>막혔다면 물고기를 팔아 골드를 모으고, 많이 잡아 명성을 쌓으면 돼요.</li>
           </PixelList>
         </Topic>

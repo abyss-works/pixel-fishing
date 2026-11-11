@@ -4,19 +4,18 @@ import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import type { ArtifactEffectKey } from '../../features/gameplay/model/stats';
 import { fmtDecimal2 } from './format';
 
-const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'baitDiscount', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
+const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
 
 const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
-  baitDiscount: '미끼값',
   mutationWeight: '돌연변이 가중치',
   biteWaitCut: '입질 대기',
   extraCookChance: '요리 추가 완성',
 };
 
-/** 줄어드는 효과의 값 문자열(`−N%`) - 유물 효과 줄과 상점의 미끼값 표시가 같은 반올림을 쓴다 */
-export const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
+/** 줄어드는 효과의 값 문자열(`−N%`) */
+const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
 
 /** 유물 효과 한 가지의 이름 - 효과 문장의 앞부분과 비교 표의 행 이름이 함께 쓴다 */
 export const artifactEffectLabel = (effect: ArtifactEffectKey): string => EFFECT_LABEL[effect];
@@ -27,7 +26,6 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
   switch (effect) {
     case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
     case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(e.duelSpeedupCut!) : null;
-    case 'baitDiscount': return (e.baitDiscount ?? 0) > 0 ? fmtCutPercent(e.baitDiscount!) : null;
     case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
