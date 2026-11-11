@@ -297,7 +297,7 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
           // 존 계층화 — 셀의 zone이 유효한 존 id인지만 확인 (spot은 셀에 없음)
           expect(z, `(${c},${r}) 알 수 없는 zone ${def.zone}`).toBeDefined();
         }
-        // spot은 셀에 없음 — 어군 오브젝트로 분리됨 (zone-tree 모델)
+        // spot은 셀에 없음 — 어군 오브젝트로 분리됨
       }
     }
   });

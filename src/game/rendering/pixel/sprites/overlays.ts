@@ -30,7 +30,7 @@ export interface GearView {
 
 /** zoom = 마커 크기 보정(1 기본). 미니맵처럼 pack 좌표를 축소 그리는 캔버스에서 지도가 커지면
  *  마커가 화면에서 쪼그라들므로, renderWorldMap이 1/s를 넣어 **표시 크기를 일정하게** 유지한다.
- *  어군은 어종과 무관한 검은 점 마커다(어종 스프라이트는 쓰지 않는다 — 사용자 결정). view가 있으면
+ *  어군은 어종과 무관한 검은 점 마커다(어종 스프라이트는 쓰지 않는다). view가 있으면
  *  입질 중인 어군만 찌 쪽으로 좁게 몬다. */
 export function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number,
                             lockLabel = true, zoom = 1, view?: GearView) {

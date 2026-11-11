@@ -55,7 +55,7 @@ export function upgradeCost(level: number): number {
 }
 
 // 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (서버 액션 처리기).
-// 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정 (refactor-design 3.3)
+// 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정
 export const SNAPSHOT_EVERY = 50;
 
 // 미끼 효과 — 활성 중인 미끼의 targetRarity 등급 가중치 +100%. 같은 등급 가중치에 걸리는 다른 보너스 효과와
@@ -79,7 +79,7 @@ export const EXHIBIT_SLOTS = 3;
 // 바운티 헌팅 일일 클리어 상한 — 수주가 아니라 클리어(수배판에서 보상을 받은 납품·토벌)를 센다.
 // 일반 의뢰는 전 구역 통합, 네임드 토벌은 전역에서 따로 센다. 항구별 상한은 없다.
 // 두 갈래 모두 한 번에 하나만 수주할 수 있다. 하루는 KST 04:00에 바뀐다(게임 날짜) — 서버가 판단한다.
-export const BOUNTY_DAILY_CAP = 1; // 일반 의뢰 하루 1회(2026-10-17, 3회 → 1회 · 보상 5배)
+export const BOUNTY_DAILY_CAP = 1; // 일반 의뢰 하루 1회
 export const BOUNTY_NAMED_DAILY_CAP = 1;
 
 /** 갈래의 하루 클리어 상한 */

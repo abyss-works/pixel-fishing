@@ -1,5 +1,5 @@
 // 사용자용 패치노트: 게임 내 설정 탭에 표시된다.
-// 작성 규칙은 관리 저장소의 패치노트 작성 스킬(pf-patchnote)을 따른다. PATCH_NOTES는 체인지로그의 공개 항목에서 생성되므로 직접 고치지 않는다.
+// PATCH_NOTES는 체인지로그의 공개 항목에서 생성되므로 직접 고치지 않는다.
 // 태그는 화면에 묶어 보이는 순서대로 나열한다.
 export const NOTE_TAGS = ['기능', 'UI', '밸런스', '수정', '기타'] as const;
 export type NoteTag = typeof NOTE_TAGS[number];
