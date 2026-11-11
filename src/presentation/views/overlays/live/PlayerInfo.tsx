@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { GUEST_LOCK_TEXT, guestLock } from '../../../../features/display/model/menuLock';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
@@ -15,6 +16,7 @@ import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import Locked from '../../../ui/Locked';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
@@ -34,11 +36,10 @@ export interface PlayerTarget {
 }
 
 const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
-  guest: '계정을 만든 뒤 쓸 수 있어요.',
+  guest: GUEST_LOCK_TEXT,
   missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
-const GUEST_REASON = '친구 요청과 차단은 계정을 만든 뒤 쓸 수 있어요.';
 const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종';
 
 export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }: {
@@ -106,14 +107,15 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
     : relation === 'incoming' ? <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('accept')}>친구 수락</Button>
     : friends.groups && <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('request')}>친구 요청</Button>
   );
-  const actions = self ? null : account === null ? (
+  const lock = guestLock('player', account === null);
+  const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
-      <Tip wraps text={GUEST_REASON} className="flex-1 block">
-        <Button variant="primary" full disabled className="pointer-events-none">친구 요청</Button>
-      </Tip>
-      <Tip wraps text={GUEST_REASON}>
-        <Button disabled className="pointer-events-none">차단</Button>
-      </Tip>
+      <Locked lines={lock} className="flex-1 block">
+        <Button variant="primary" full disabled>친구 요청</Button>
+      </Locked>
+      <Locked lines={lock}>
+        <Button disabled>차단</Button>
+      </Locked>
     </div>
   ) : (
     <div className="flex flex-wrap items-center gap-2">

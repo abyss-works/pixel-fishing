@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GUEST_LOCK_TEXT } from '../../../../features/display/model/menuLock';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import Button from '../../../ui/Button';
@@ -11,7 +12,7 @@ import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
 // 소셜 창의 차단 탭: 내가 차단한 사람 표와 행 끝의 해제. 차단은 플레이어 정보 창에서 한다.
 const ERROR_TEXT: Record<ChatActionError, string> = {
-  guest: '계정을 만든 뒤 쓸 수 있어요.',
+  guest: GUEST_LOCK_TEXT,
   missing: '대상을 찾을 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };

@@ -12,6 +12,7 @@ import {
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
+import { guestLock } from '../../../../features/display/model/menuLock';
 import Button from '../../../ui/Button';
 import Field from '../../../ui/Field';
 import Modal from '../../../ui/Modal';
@@ -23,6 +24,7 @@ import { maskUid } from './maskUid';
 import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
 import { cx } from '../../../ui/cx';
 import Frame from '../../../ui/Frame';
+import Locked from '../../../ui/Locked';
 import type { Notify } from '../../../ui/hud/messageFeed';
 
 // 계정 관리 모달 — 연동 폼·닉네임·내 정보(ID)·로그아웃을 한 곳에 모은다.
@@ -112,7 +114,10 @@ export default function AccountModal({
     window.location.reload(); // 재부팅 = 새 익명 세션으로 처음부터 시작
   });
 
+  // 게스트는 닉네임을 바꿀 수 없다. 로컬 모드는 계정을 연결할 곳이 없어 잠그지 않는다
+  const nickLock = guestLock('nickname', account === null && !offline);
   const submitNick = async () => {
+    if (nickLock) return;
     if (!checkNickname(draft).ok) {
       setToast('닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요. 한글·영문·숫자와 -_만 쓸 수 있어요.', 'warn');
       return;
@@ -137,6 +142,18 @@ export default function AccountModal({
       void notice({ title: '직접 복사', body: '복사가 막혀 있어요.\n아래 값을 직접 복사해 주세요.', value });
     }
   };
+
+  const nickRow = (
+    <div className="flex items-center gap-2 px-2 py-1">
+      <TextInput aria-label="새 닉네임" className="flex-1 min-w-0"
+                 value={draft} maxLength={16} disabled={nickBusy || nickLock !== null}
+                 onChange={e => setDraft(e.target.value)}
+                 onKeyDown={e => { if (e.key === 'Enter') void submitNick(); }}
+                 placeholder="새 닉네임" />
+      <Button size="sm" className="shrink-0" disabled={nickBusy || nickLock !== null || draft.length === 0}
+              onClick={() => void submitNick()}>변경</Button>
+    </div>
+  );
 
   return (
     <Modal title="계정 관리" narrow onClose={onClose}>
@@ -189,15 +206,7 @@ export default function AccountModal({
           <span className="text-text-dim shrink-0">현재</span>
           <span className="truncate" aria-label="현재 닉네임">{nickname ?? '불러오는 중…'}</span>
         </div>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <TextInput aria-label="새 닉네임" className="flex-1 min-w-0"
-                     value={draft} maxLength={16} disabled={nickBusy}
-                     onChange={e => setDraft(e.target.value)}
-                     onKeyDown={e => { if (e.key === 'Enter') void submitNick(); }}
-                     placeholder="새 닉네임" />
-          <Button size="sm" className="shrink-0" disabled={nickBusy || draft.length === 0}
-                  onClick={() => void submitNick()}>변경</Button>
-        </div>
+        {nickLock ? <Locked lines={nickLock} label="닉네임 변경">{nickRow}</Locked> : nickRow}
       </Frame>
       <Note>닉네임은 한글 1~8자·영문 2~16자(가중치)까지 쓸 수 있어요.<br />나중에 랭킹에 표시될 이름이에요.</Note>
 
