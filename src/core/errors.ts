@@ -13,6 +13,8 @@ export type FailureKind =
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
   | 'replaced'      // 423 — 같은 계정이 다른 창에서 접속해 이 창이 활성 창이 아니다
   | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
+  | 'guest-village-only' // 403 — 게스트가 마을 밖으로 나가려 함
+  | 'account-only'  // 403 — 게스트에게 열리지 않은 기능
   | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)
   | 'server'        // 5xx
   | 'bug';          // 예상 못 한 예외
@@ -71,6 +73,16 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 문의 유도.
     level: 'warning',
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
+  },
+  'guest-village-only': {
+    // 게스트의 바다 이동·낚시 거부 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
+    level: 'warning',
+    message: '계정을 연결한 뒤에 바다로 나갈 수 있어요. 설정 탭의 계정 관리에서 연결해 주세요.',
+  },
+  'account-only': {
+    // 게스트에게 열리지 않은 기능 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
+    level: 'warning',
+    message: '계정을 연결한 뒤에 쓸 수 있어요. 설정 탭의 계정 관리에서 연결해 주세요.',
   },
   'rate-limited': {
     // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.

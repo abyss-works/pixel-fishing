@@ -31,11 +31,11 @@ describe('랭킹 읽기 함수', () => {
   // 명성: A 300(먼저 도달), B 300, C 100, D 0(제외), E 500 제재(제외)
   let a: string, b: string, c: string;
   beforeAll(async () => {
-    a = await seedUser(env.client, { uid: testUid(101), nickname: '가', state: { fame: 300, dex: dex(2, '2026-01-02T00:00:00Z') }, updatedAt: '2026-01-01T00:00:00.000Z' });
-    b = await seedUser(env.client, { uid: testUid(102), nickname: '나', state: { fame: 300, dex: dex(5) }, updatedAt: '2026-01-05T00:00:00.000Z' });
-    c = await seedUser(env.client, { uid: testUid(103), nickname: '다', state: { fame: 100, dex: dex(2, '2026-01-01T00:00:00Z') } });
-    await seedUser(env.client, { uid: testUid(104), nickname: '라', state: { fame: 0 } });
-    await seedUser(env.client, { uid: testUid(105), nickname: '마', state: { fame: 500, dex: dex(5) }, restricted: true });
+    a = await seedUser(env.client, { uid: testUid(101), email: 'r101@example.test', nickname: '가', state: { fame: 300, dex: dex(2, '2026-01-02T00:00:00Z') }, updatedAt: '2026-01-01T00:00:00.000Z' });
+    b = await seedUser(env.client, { uid: testUid(102), email: 'r102@example.test', nickname: '나', state: { fame: 300, dex: dex(5) }, updatedAt: '2026-01-05T00:00:00.000Z' });
+    c = await seedUser(env.client, { uid: testUid(103), email: 'r103@example.test', nickname: '다', state: { fame: 100, dex: dex(2, '2026-01-01T00:00:00Z') } });
+    await seedUser(env.client, { uid: testUid(104), email: 'r104@example.test', nickname: '라', state: { fame: 0 } });
+    await seedUser(env.client, { uid: testUid(105), email: 'r105@example.test', nickname: '마', state: { fame: 500, dex: dex(5) }, restricted: true });
     await env.client.query(`update public.records set max_size = 50 where user_id = $1 and fish_id = 'carp'`, [b]);
     await env.client.query(`update public.records set max_size = 50 where user_id = $1 and fish_id = 'crucian'`, [a]);
     await env.client.query(`update public.records set max_size = 40 where user_id = $1 and fish_id = 'crucian'`, [c]);

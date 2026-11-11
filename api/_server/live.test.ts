@@ -390,6 +390,21 @@ describe('실시간 채널 채팅', () => {
     expect(saved).toEqual([{ x: 1 }, { x: 2 }]);
   });
 
+  it('게스트의 위치는 간격이 지나도, 연결이 끊겨도 마지막 위치로 저장하지 않는다', async () => {
+    const saved: unknown[] = [];
+    const { url, sessions } = await start({ positionSaveMs: 0, savePosition: (_uid, pos) => { saved.push(pos); } });
+    const g = connect(url, 'guest:g1');
+    await g.next();
+    g.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 3, y: 4, dir: 1, line: false }));
+    g.ws.send(JSON.stringify({ t: 'chat', text: '안녕' }));
+    expect(await g.next()).toEqual({ t: 'error', code: 'chat-guest' });
+    expect(saved).toEqual([]);
+    g.ws.close();
+    await g.closed;
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+    expect(saved).toEqual([]);
+  });
+
   it('위치를 보내지 않은 연결은 끝나도 마지막 위치를 쓰지 않는다', async () => {
     const saved: unknown[] = [];
     const { url, sessions } = await start({ savePosition: (_uid, pos) => { saved.push(pos); } });
@@ -550,5 +565,41 @@ describe('실시간 채널 길드 채팅', () => {
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [], recentGuildChat: [line(1, 'u1')] });
     const c = connect(url, 'u4');
     expect(await c.next()).toEqual({ t: 'hello', you: 'u4', others: [], recentChat: [] });
+  });
+
+  it('게스트의 위치와 닉네임은 다른 연결에 보내지 않는다 — join, move, stop, leave 모두 없다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    await a.next();
+    const g = connect(url, 'guest:g1');
+    await g.next();
+    g.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 3, y: 4, dir: 1, line: false }));
+    g.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 5, y: 4, dir: 1, line: true }));
+    g.ws.send('{"t":"stop"}');
+    // 계정 연결의 첫 위치가 도착하는 시점에는 앞선 게스트의 메시지가 이미 처리됐다
+    const b = connect(url, 'u2');
+    await b.next();
+    b.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 1, y: 1, dir: 1, line: false }));
+    expect((await a.next()).t).toBe('join');
+    expect(a.messages).toEqual([]);
+    expect(live.presenceOf('g1')).toBeNull();
+    g.ws.close();
+    await g.closed;
+    b.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 2, y: 1, dir: 1, line: false }));
+    expect(await a.next()).toMatchObject({ t: 'move', uid: 'u2' });
+    expect(a.messages).toEqual([]);
+  });
+
+  it('접속한 게스트는 새로 들어온 연결의 hello others에 들어가지 않는다', async () => {
+    const { url } = await start();
+    const g = connect(url, 'guest:g1');
+    await g.next();
+    g.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 3, y: 4, dir: 1, line: false }));
+    // 같은 연결의 메시지는 순서대로 처리되므로 채팅 거부 응답이 오면 앞선 move는 처리된 뒤다
+    g.ws.send(JSON.stringify({ t: 'chat', text: '안녕' }));
+    expect(await g.next()).toEqual({ t: 'error', code: 'chat-guest' });
+    const a = connect(url, 'u1');
+    const hello = await a.next();
+    expect(hello).toMatchObject({ t: 'hello', you: 'u1', others: [] });
   });
 });

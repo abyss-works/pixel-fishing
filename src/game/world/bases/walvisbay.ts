@@ -1,11 +1,12 @@
 // 거점: 월비스베이항 (병합 바다 남대서양 용승대) — 항구 공통 배치에 수배판을 둔다. 미끼 상점은 없다(콜롬보 단일 판매).
 import type { BasePack } from '../types';
+import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
 
 export const WALVISBAY_BASE: BasePack = {
   id: 'walvisbay',
   name: '월비스베이항',
-  region: 'world',
+  region: BASE_REGION.walvisbay,
   headline: '월비스베이항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 용승대의 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다

@@ -45,7 +45,7 @@ async function memberOf(req: Req): Promise<string> {
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
   const session = await sessionOf(req.headers);
   if (!session) throw new ApiError(401, 'unauthorized');
-  if (session.email === null) throw new ApiError(403, 'guest');
+  if (session.email === null) throw new ApiError(403, 'account-only');
   return session.id;
 }
 
