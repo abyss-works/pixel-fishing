@@ -94,7 +94,7 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect):
 const levelOf = (spot: SpotId, margin: number): number => entryLevel(spot) + margin;
 
 /** 여유를 더한 레벨이 1 이상인 해역만 잰다 — 음수 여유에서 레벨이 없는 해역은 건너뛴다. 해역 순번은 전체 목록 기준이다 */
-const spotsAt = (margin: number): { s: (typeof SPOTS)[number]; i: number }[] =>
+export const spotsAt = (margin: number): { s: (typeof SPOTS)[number]; i: number }[] =>
   SPOTS.map((s, i) => ({ s, i })).filter(({ s }) => levelOf(s.id, margin) >= 1);
 
 // ── 1. 효과를 넣은 수입 ──
@@ -178,13 +178,15 @@ export interface DexRow {
 
 export interface DexOptions {
   axis: FlowAxis; effect: Effect; margin: number; trials: number; seed: number;
+  /** 주면 효과를 이 분 동안만 걸고 이후는 효과 없이 낚는다(시간 제한 효과). 생략하면 효과가 끝까지 이어진다 */
+  windowMinutes?: number;
 }
 
 /** 효과가 있는 앞 구간 — 그 구간 동안만 이 확률과 속도로 낚고 이후는 기본 확률과 속도로 낚는다 */
 export interface DexWindow { minutes: number; rows: readonly Row[]; share: number; catchesPerHour: number }
 
 /** 한 해역의 도감 완성 시간 몬테카를로 — 캐치마다 어종과 폼을 뽑아 다섯 조건의 완성 캐치 수를 센다.
- *  window를 주면 처음 minutes분(기대 캐치 수를 시도마다 확률 반올림한 개수)은 window의 확률로 낚고 이후는 기본 확률로 낚는다 */
+ *  window를 주면 처음 minutes분(기대 캐치 수를 반올림한 개수)은 window의 확률로 낚고 이후는 기본 확률로 낚는다. 난수를 소비하는 순서가 window 유무와 같아 같은 시드면 두 결과가 짝지어진다 */
 export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: number, trials: number, rand: () => number, window?: DexWindow): DexTimes {
   const n = rows.length;
   const legend = rows.map(r => r.fish.rarity === 'legendary');
@@ -198,14 +200,13 @@ export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: nu
   const windowProb = window ? new Map(window.rows.map(r => [r.fish.id, r.prob])) : null;
   const wcum = window ? cumOf(rows.map(r => windowProb!.get(r.fish.id) ?? 0)) : cum;
   const wtotal = wcum[n - 1] ?? 0;
-  const windowExpected = window ? window.catchesPerHour * window.minutes / 60 : 0;
+  const windowCatches = window ? Math.round(window.catchesPerHour * window.minutes / 60) : 0;
   const reachable = n > 0 && rows.every(r => r.prob > 0);
   const out = { noLegend: [] as number[], all: [] as number[], variant: [] as number[], grade: [[], []] as number[][] };
   if (reachable) {
     for (let t = 0; t < trials; t++) {
       const normal = new Uint8Array(n), variant = new Uint8Array(n);
       let nNormal = 0, nVariant = 0, nNoLegend = 0, catches = 0;
-      const windowCatches = window ? Math.floor(windowExpected) + (rand() < windowExpected - Math.floor(windowExpected) ? 1 : 0) : 0;
       const gradeHave = [0, 0];
       const tGrade = gradeNeed.map(need => (need === 0 || share <= 0 ? Number.POSITIVE_INFINITY : -1));
       let tNo = needNoLegend === 0 ? 0 : -1, tAll = -1, tVar = share > 0 ? -1 : Number.POSITIVE_INFINITY;
@@ -244,16 +245,18 @@ export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: nu
 export function dexRows(o: DexOptions): DexRow[] {
   checkEffect(o.effect);
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
+  if (o.windowMinutes !== undefined && !(o.windowMinutes > 0)) throw new Error('효과 창 길이는 0보다 커야 합니다(분)');
   return spotsAt(o.margin).map(({ s, i }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
-    const run = (e: Effect): DexTimes => {
-      const r = effectRates(s.id, level, axis, e);
-      return dexTimes(r.rows, r.variantShare, r.catchesPerHour, o.trials, rng(o.seed + i));
-    };
-    const rows = effectRates(s.id, level, axis, NO_EFFECT).rows;
+    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
+    const run = (window?: DexWindow): DexTimes => dexTimes(base.rows, base.variantShare, base.catchesPerHour, o.trials, rng(o.seed + i), window);
+    const rows = base.rows;
     return {
       spot: s.id, level, species: rows.length, epic: rows.filter(r => r.fish.rarity === 'epic').length, legendary: rows.filter(r => r.fish.rarity === 'legendary').length,
-      base: run(NO_EFFECT), with: run(o.effect),
+      base: run(),
+      with: o.windowMinutes === undefined
+        ? dexTimes(now.rows, now.variantShare, now.catchesPerHour, o.trials, rng(o.seed + i))
+        : run({ minutes: o.windowMinutes, rows: now.rows, share: now.variantShare, catchesPerHour: now.catchesPerHour }),
     };
   });
 }

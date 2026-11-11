@@ -32,11 +32,15 @@ import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
+import { BAIT_WINDOW_MIN, baitEffect, windowRows } from './cooking';
+import type { WindowRow } from './cooking';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects';
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window';
 /** 명령을 생략하면 내는 지표 명령 — gates(판정), dist(몬테카를로), travel(이동 측정)은 이름을 줄 때만 실행한다 */
 export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
-const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects'];
+const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects', 'window'];
+/** 효과 옵션을 받는 명령 */
+const EFFECT_COMMANDS: readonly Command[] = ['effects', 'window'];
 
 export interface FlowOptions {
   commands: Command[];
@@ -54,9 +58,11 @@ export interface FlowOptions {
   effect: Effect;
   margin: number;
   units: Record<RarityId, number>;
+  /** window의 효과 창 길이(분) */
+  windowMinutes: number;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects] [옵션]
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects|window] [옵션]
 명령을 생략하면 gates, dist, travel, effects를 뺀 다섯 가지를 모두 낸다.
 
 명령
@@ -68,6 +74,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   dist        분포: 같은 규칙과 상수로 캐치마다 뽑는 몬테카를로. 최초 10분(영웅 보장, 전설 보장, 첫 바다 해역 도착 시각)과 해역 전환 시간의 p10, 중앙값, p90, 평균을 해석 기댓값과 함께 낸다. p90이 운이 나쁜(느린) 쪽이다
   travel      이동 시간 관측: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 잰다. 다른 명령의 시간에 넣지 않는다
   effects     요리 효과: 효과를 넣었을 때 해역별 수입(골드·명성 변화, 네임드 조우), 도감 완성 시간(몬테카를로), 낚시 1시간 분해 재료 공급을 효과 없음과 견준다. 효과는 아래 옵션으로 준다. 수동 낚시(미끼 슬롯)는 --axis manual로 잰다
+  window      시간 제한 효과의 창: 구매 미끼 같은 효과를 한 번 쓰는 창(기본 ${BAIT_WINDOW_MIN}분) 안의 등급별 기대 캐치 수와 골드, 명성 증가, 창 하나가 도감 완성 시간을 줄이는 양. 수동 GOOD이 기본이다
   gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
               같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다
 
@@ -91,15 +98,17 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
   --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 설계 초안 값이다
-  --seed, --trials   effects의 도감 완성 시간에도 쓴다
+  --bait <rare|epic|legendary>  effects, window: 구매 미끼 효과를 효과 옵션에 채운다(희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%. 설계 초안 값)
+  --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
+  --seed, --trials   effects, window의 도감 완성 시간에도 쓴다
   --help             이 도움말
 `;
 
 /** 낚싯대 여유의 하한(진입 레벨보다 낮게 재는 최대 레벨 수) */
 const MIN_MARGIN_ABS = 4;
 
-const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units'] as const;
-const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', ...EFFECT_FLAGS] as const;
+const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units', '--bait'] as const;
+const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', ...EFFECT_FLAGS] as const;
 const BOOL_FLAGS = ['--json', '--help'] as const;
 
 function numberOf(flag: string, raw: string): number {
@@ -111,9 +120,10 @@ function numberOf(flag: string, raw: string): number {
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
     commands: [], override: null, json: false, legendAt: null, axis: 'idle', maxDays: 365, help: false,
-    seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS },
+    seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
   };
   const given: string[] = [];
+  let axisGiven = false, bait: string | null = null;
   let command: Command | null = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -127,7 +137,8 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       if (raw === undefined || raw.startsWith('--')) throw new Error(`${a}에는 값이 필요합니다`);
       if ((EFFECT_FLAGS as readonly string[]).includes(a)) {
         given.push(a);
-        if (a === '--units') {
+        if (a === '--bait') bait = raw;
+        else if (a === '--units') {
           const parts = raw.split(',').map(x => numberOf(a, x));
           if (parts.length !== RARITY_ORDER.length || parts.some(x => x < 0)) throw new Error('--units에는 등급 수만큼 0 이상 숫자를 쉼표로 줘야 합니다');
           RARITY_ORDER.forEach((g, k) => { o.units[g] = parts[k]; });
@@ -147,7 +158,11 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         }
         continue;
       }
-      if (a === '--override') o.override = raw;
+      if (a === '--window') {
+        given.push(a);
+        o.windowMinutes = numberOf(a, raw);
+        if (!(o.windowMinutes > 0)) throw new Error('--window는 0보다 커야 합니다(분)');
+      } else if (a === '--override') o.override = raw;
       else if (a === '--legend-at') o.legendAt = numberOf(a, raw);
       else if (a === '--seed') {
         o.seed = numberOf(a, raw);
@@ -161,6 +176,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       } else {
         if (raw !== 'idle' && raw !== 'manual') throw new Error('--axis는 idle 또는 manual이어야 합니다');
         o.axis = raw;
+        axisGiven = true;
       }
       continue;
     }
@@ -168,7 +184,13 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     if (command) throw new Error('명령은 하나만 고를 수 있습니다');
     command = a as Command;
   }
-  if (given.length && command !== 'effects') throw new Error(`${given[0]}은 effects 명령에서만 쓸 수 있습니다`);
+  if (given.includes('--window') && command !== 'window') throw new Error('--window는 window 명령에서만 쓸 수 있습니다');
+  if (given.length && !(command && EFFECT_COMMANDS.includes(command))) throw new Error(`${given[0]}은 ${EFFECT_COMMANDS.join(', ')} 명령에서만 쓸 수 있습니다`);
+  if (bait !== null) {
+    const b = baitEffect(bait);
+    for (const k of Object.keys(b) as (keyof Effect)[]) if (b[k] !== 0) o.effect[k] = b[k];
+  }
+  if (command === 'window' && !axisGiven) o.axis = 'manual';
   checkEffect(o.effect);
   o.commands = command ? [command] : [...COMMANDS];
   return o;
@@ -190,6 +212,7 @@ export interface FlowResult {
   dist?: { opening: OpeningDist[]; transition: TransitionDist[] };
   travel?: { rows: TravelRow[]; sampleDays: number };
   effects?: EffectsReport;
+  window?: { effect: Effect; minutes: number; margin: number; trials: number; seed: number; rows: WindowRow[] };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -226,6 +249,12 @@ export function runFlow(o: FlowOptions): FlowResult {
         dex: dexRows({ axis: o.axis, effect: o.effect, margin: o.margin, trials: o.trials, seed: o.seed }),
         supply: supplyRows({ axis: o.axis, effect: o.effect, margin: o.margin, units: o.units }),
         early: earlyRows({ axis: o.axis, effect: o.effect, margin: o.margin }),
+      };
+    }
+    if (o.commands.includes('window')) {
+      res.window = {
+        effect: o.effect, minutes: o.windowMinutes, margin: o.margin, trials: o.trials, seed: o.seed,
+        rows: windowRows({ axis: o.axis, effect: o.effect, margin: o.margin, minutes: o.windowMinutes, trials: o.trials, seed: o.seed }),
       };
     }
     if (o.commands.includes('ev')) res.ev = evReport();
@@ -301,6 +330,13 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 용량과 왕복 시간을 쓰고, 가방 채움 시간은 같은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다. 입질 대기 단축도 채움 시간을 줄여 이 값에 든다',
       '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부, 영웅 도감 전부, 전설 도감 전부 다섯 조건을 센다. 어종 천장은 넣지 않는다',
       '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 설계 초안 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
+    );
+  } else if (command === 'window') {
+    lines.push(
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 창 안은 효과를 넣고 창 밖은 효과 없음이다. 효과는 제품의 등급 가중치 효과 합산과 폼 가중치 경로로 적용한다`,
+      '창 안의 기대 캐치 수는 그 조건의 캐치 속도 x 창 길이 x 등급 비율이고, 골드와 명성 증가는 효과 없음 대비 시간당 차이 x 창 길이다',
+      '도감 단축은 한 해역에서만 낚을 때 창 하나를 먼저 쓰고 이후 효과 없이 낚는 평균 시간이 효과 없이 낚는 평균 시간보다 줄어든 양이다. 창 안의 캐치 수는 기대 캐치 수를 반올림하고, 같은 시드로 효과 없음과 짝지어 견준다. 어종 천장은 넣지 않는다',
+      '미끼 가격과 사람의 판정 실력은 넣지 않는다',
     );
   } else if (command === 'opening') {
     lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
@@ -561,14 +597,18 @@ function gatesText(g: GatesReport): string[] {
 
 const signPct = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
 
-function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
-  const x = e.effect;
-  const label = [
+function effectLabel(x: Effect): string {
+  return [
     x.bite ? `입질 대기 -${(x.bite * 100).toFixed(0)}%` : '', x.rare ? `희귀 이상 가중 +${(x.rare * 100).toFixed(0)}%` : '',
     x.epic ? `영웅 이상 가중 +${(x.epic * 100).toFixed(0)}%` : '', x.legendary ? `전설 가중 +${(x.legendary * 100).toFixed(0)}%` : '',
     x.variant ? `돌연변이 가중치 +${(x.variant * 100).toFixed(0)}%` : '', x.size ? `크기 ${x.size > 0 ? '+' : ''}${(x.size * 100).toFixed(0)}%` : '',
     x.move ? `이동 속도 ${x.move > 0 ? '+' : ''}${(x.move * 100).toFixed(0)}%` : '', x.named ? `네임드 조우 +${(x.named * 100).toFixed(0)}%` : '',
   ].filter(Boolean).join(', ') || '효과 없음';
+}
+
+function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
+  const x = e.effect;
+  const label = effectLabel(x);
   const info = new Map(o.spots.map(s => [s.id, s]));
   const lv = (spot: SpotId, level: number) => `Lv${level}(요구 ${info.get(spot)!.powerReq})`;
   const out: string[] = [`\n# 요리 효과 — ${label}, 낚싯대는 해역 진입 레벨 ${e.margin >= 0 ? '+' : ''}${e.margin}`];
@@ -619,6 +659,37 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   return out;
 }
 
+const dexCellMean = (d: DexTimes[keyof DexTimes]) => (!d ? '끝나지 않음' : d.mean === null ? `p90 ${hrs(d.p90)}(끝내지 못한 시도 ${d.missing})` : hrs(d.mean));
+const minutesOf = (hours: number) => `${Math.round(Math.abs(hours) * 60)}분`;
+
+function windowText(w: NonNullable<FlowResult['window']>, o: FlowResult['options']): string[] {
+  const info = new Map(o.spots.map(s => [s.id, s]));
+  const lv = (r: WindowRow) => `Lv${r.level}(요구 ${info.get(r.spot)!.powerReq})`;
+  const out: string[] = [`\n# 시간 제한 효과 창 - ${effectLabel(w.effect)}, 창 ${w.minutes}분, 낚싯대는 해역 진입 레벨 ${w.margin >= 0 ? '+' : ''}${w.margin}`];
+  out.push(`\n## 창 안 기대 캐치 수 (${w.minutes}분, 효과 없음 -> 효과) 와 수입 증가`);
+  out.push(table(
+    ['해역', '낚싯대', '전체', ...RARITY_ORDER.map(g => RARITY[g].name), '골드 증가', '명성 증가'],
+    w.rows.map(r => [
+      nameOf(r.spot), lv(r), `${r.totalBase.toFixed(1)} -> ${r.totalWith.toFixed(1)}`,
+      ...RARITY_ORDER.map(g => `${r.catches[g].base.toFixed(2)} -> ${r.catches[g].with.toFixed(2)}`),
+      n0(r.goldGain), n0(r.fameGain),
+    ]),
+  ));
+  out.push(`\n## 창 하나가 도감 완성 시간을 줄이는 양 (한 해역에서 낚을 때 평균 실질 낚시 시간, 몬테카를로 시드 ${w.seed}, ${w.trials}회. 효과 없음 -> 창 하나 사용, 단축)`);
+  const cell = (r: WindowRow, k: keyof WindowRow['saved']) => {
+    const s = r.saved[k];
+    return `${dexCellMean(r.dex.base[k])} -> ${dexCellMean(r.dex.with[k])}${s === null ? '' : `(${s >= 0 ? '-' : '+'}${minutesOf(s)})`}`;
+  };
+  out.push(table(
+    ['해역', '낚싯대', '영웅 도감 전부', '전설 도감 전부', '일반 폼(전설 제외)', '일반 폼 전부', '돌연변이 폼 전부'],
+    w.rows.map(r => [
+      nameOf(r.spot), lv(r), r.epicSpecies ? cell(r, 'epic') : '없음', r.legendarySpecies ? cell(r, 'legendary') : '없음',
+      cell(r, 'noLegend'), cell(r, 'all'), cell(r, 'variant'),
+    ]),
+  ));
+  return out;
+}
+
 /** 위반이 하나라도 있으면 true — gates 명령의 종료 코드 판정 */
 export const hasViolation = (r: FlowResult): boolean => r.gates !== undefined && verdictCounts(r.gates)['위반'] > 0;
 
@@ -638,6 +709,7 @@ export function renderText(r: FlowResult): string {
   if (r.dist) lines.push(...distText(r.dist), assumptionText('dist', o));
   if (r.travel) lines.push(...travelText(r.travel), assumptionText('travel', o));
   if (r.effects) lines.push(...effectsText(r.effects, o), assumptionText('effects', o));
+  if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o));
   if (r.gates) lines.push(...gatesText(r.gates));
   return lines.join('\n');
 }

@@ -30,7 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30,
     });
   });
 
@@ -407,5 +407,43 @@ describe('effects 명령', () => {
     expect(j.effects.effect.bite).toBe(0.1);
     expect(j.effects.income.length).toBe(j.effects.dex.length);
     expect(j.effects.supply.length).toBe(j.effects.dex.length);
+  });
+});
+
+describe('window 명령', () => {
+  it('수동 GOOD이 기본이고 창은 30분이다', () => {
+    const o = parseArgs(['window', '--rare', '20']);
+    expect(o.commands).toEqual(['window']);
+    expect(o.axis).toBe('manual');
+    expect(o.windowMinutes).toBe(30);
+    expect(parseArgs(['window', '--axis', 'idle']).axis).toBe('idle');
+    expect(parseArgs(['window', '--window', '45']).windowMinutes).toBe(45);
+  });
+
+  it('구매 미끼 이름이 효과 옵션을 채운다', () => {
+    expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
+    expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.4, 12);
+    expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.6, 12);
+    expect(() => parseArgs(['window', '--bait', 'common'])).toThrow(/미끼/);
+  });
+
+  it('--window는 window 명령에서만, 0보다 커야 한다', () => {
+    expect(() => parseArgs(['effects', '--window', '30'])).toThrow(/window 명령/);
+    expect(() => parseArgs(['window', '--window', '0'])).toThrow(/0보다/);
+  });
+
+  it('창 안 캐치 수와 도감 단축 표를 낸다', () => {
+    const r = runCli(['window', '--bait', 'epic', '--trials', '5']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('## 창 안 기대 캐치 수');
+    expect(r.stdout).toContain('## 창 하나가 도감 완성 시간을 줄이는 양');
+    expect(r.stdout).toContain('영웅 이상 가중 +40%');
+    expect(r.stdout).toContain('창 30분');
+  });
+
+  it('JSON은 같은 시드에서 같다', () => {
+    const a = runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout;
+    expect(a).toBe(runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout);
+    expect(JSON.parse(a).window.rows.length).toBeGreaterThan(0);
   });
 });
