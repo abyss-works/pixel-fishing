@@ -63,7 +63,7 @@ interface HudLayoutProps {
 // 모바일 레이아웃에서는 헤더(자원 바, 메뉴 버튼)가 맨 위 행이고, 나머지는 게임 영역 아래쪽 위에 겹치는 한 줄기에 쌓는다 —
 // 아래에서부터 메시지 창(폭 전체), 그 위 오른쪽의 칩과 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠.
 // PC 레이아웃도 스테이지 폭이 쌓기 단계(464 미만, stackTier)이면 같은 줄기로 쌓는다. 낚시 상태 띠는 줄기로 옮기지 않고 프레임 아래 가운데에 둔다.
-// 칩 줄은 열 폭에 다 들어가지 않으면 줄을 나눈다(순서는 그대로).
+// PC 레이아웃의 칩 줄은 열 폭에 다 들어가지 않으면 줄을 나눈다(순서는 그대로). 모바일 레이아웃은 한 줄이다.
 // 메시지 창이 줄기의 마지막 자식이라 펼치거나 입력해 높이가 늘면 칩과 미니맵이 그 바로 위로 따라 올라가고, 스테이지 크기는 그대로다.
 // 줄기의 층은 요소마다 따로 정한다 - 낚시 상태 띠, 알림, 칩, 미니맵은 스테이지 위 HUD 층(stage-hud), 메시지 창만 채팅 층(chrome)이다.
 // 헤더의 펼친 메뉴 줄이 메시지 창 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
@@ -87,7 +87,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
                            'flex flex-col items-end gap-2 pointer-events-none',
                            'mobile:relative mobile:right-auto mobile:bottom-auto mobile:w-[156px]', STACK_COLUMN_CLASS)}>
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
-          <div className="flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto">
+          <div className="flex pc:flex-wrap items-center justify-end gap-1.5 pointer-events-auto">
             {chips}
             {activeBait && (
               <Tip plain className="flex" text={`${activeBait.name} ${baitLeft}개 남음`}>
