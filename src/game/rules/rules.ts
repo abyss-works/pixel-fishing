@@ -14,7 +14,8 @@ import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
-import { zoneById } from '../content/zones.js';
+import { ZONES, zoneById } from '../content/zones.js';
+import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
 import type { BaseId } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
@@ -70,6 +71,13 @@ export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
 const OK: RuleCheck = { ok: true };
 const no = (reason: RejectReason): RuleCheck => ({ ok: false, reason });
 
+/** 요리가 열리는 구역의 짧은 이름 — 해금 배 단계로 구역 데이터에서 찾는다 */
+const COOKING_ZONE_NAME: string = (() => {
+  const zone = ZONES.find(z => !z.parent && z.entryBoat === COOKING_UNLOCK_BOAT);
+  if (!zone) throw new Error('요리 해금 배 단계로 들어서는 구역이 없어요.');
+  return zone.shortName;
+})();
+
 /** 유저에게 보일 문구의 단일 근원 — Record라 새 사유를 추가하면 누락이 컴파일 에러가 된다 */
 export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-enough-gold': '골드가 부족해요.',
@@ -94,9 +102,9 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'hat-not-owned': '아직 가지지 않은 모자예요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
-  'item-not-owned': '가방에 없는 아이템이에요.',
-  'not-at-home': '집 부엌에서만 할 수 있어요.',
-  'cooking-locked': '인도양 항로가 열리면 부엌을 쓸 수 있어요.',
+  'item-not-owned': '가방에 이 요리가 없어요.',
+  'not-at-home': '집에서만 할 수 있어요.',
+  'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
   'not-enough-energy': '생명의 기운이 부족해요.',
   'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
