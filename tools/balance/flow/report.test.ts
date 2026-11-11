@@ -30,7 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9,
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, bounty: false, fromBoat: null, withCost: false,
     });
   });
 
@@ -354,6 +354,7 @@ describe('effects 명령', () => {
   it('효과 옵션은 effects 명령에서만 쓸 수 있고 범위를 벗어나면 오류다', () => {
     expect(() => parseArgs(['--bite', '10'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['ev', '--bite', '10'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
     expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
     expect(() => parseArgs(['effects', '--epic', '-5'])).toThrow(/영웅/);
@@ -477,5 +478,68 @@ describe('recipes 명령', () => {
     const a = runCli(['recipes', '--trials', '2', '--json']).stdout;
     expect(a).toBe(runCli(['recipes', '--trials', '2', '--json']).stdout);
     expect(JSON.parse(a).recipes.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('효과를 넣은 transition, days, gates', () => {
+  it('효과 옵션과 새 옵션을 읽는다', () => {
+    const o = parseArgs(['transition', '--bite', '10', '--bounty', '--from-boat', '3', '--recipe', 'quick', '--with-cost']);
+    expect(o).toMatchObject({ commands: ['transition'], bounty: true, fromBoat: 3, recipe: 'quick', withCost: true });
+    expect(o.effect.bite).toBeCloseTo(0.1, 12);
+    expect(parseArgs(['gates', '--rare', '10']).commands).toEqual(['gates']);
+    expect(parseArgs(['days', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
+  });
+
+  it('옵션이 허용되지 않는 명령이나 값은 오류다', () => {
+    expect(() => parseArgs(['days', '--bounty'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--from-boat', '2'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--with-cost', '--recipe', 'quick'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['transition', '--with-cost'])).toThrow(/--recipe/);
+    expect(() => parseArgs(['transition', '--from-boat', '-1'])).toThrow(/0 이상/);
+    expect(() => parseArgs(['transition', '--from-boat', '1.5'])).toThrow(/정수/);
+  });
+
+  it('효과를 주지 않으면 지금까지와 같은 출력이다(효과 없음 열이 없다)', () => {
+    const t = runCli(['transition']).stdout;
+    expect(t).not.toContain('효과 없음 전환 시간');
+    expect(t).toContain('의뢰와 토벌은 하지 않는 경우다');
+    expect(runCli(['transition', '--json']).stdout).toContain('"plan": null');
+  });
+
+  it('transition은 효과를 넣은 전환 시간과 효과 없음 값, 차이를 낸다', () => {
+    const r = runCli(['transition', '--bite', '10', '--from-boat', '0']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 입질 대기 -10%(관측용)');
+    expect(r.stdout).toContain('효과 없음 전환 시간');
+    expect(r.stdout).toContain('누적 차이');
+    expect(runCli(['transition', '--bite', '10', '--bounty']).stdout).toContain('의뢰와 토벌을 매일 수행하는 경우다');
+  });
+
+  it('days는 효과 없음 값과 차이를 낸다', () => {
+    const r = runCli(['days', '--rare', '10']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음');
+    expect(r.stdout).toContain('효과 없음 소요 시간');
+  });
+
+  it('gates는 효과를 넣으면 이동 직후 수입과 전환 시간만 내고 위반이 있어도 종료 코드는 0이다', () => {
+    const r = runCli(['gates', '--rare', '20', '--from-boat', '0']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음 차이');
+    expect(r.stdout).toContain('효과 없음 전환 시간');
+    expect(r.stdout).not.toContain('PERFECT 이상치');
+    expect(r.stdout).not.toContain('최초 10분 도달');
+    expect(r.stdout).toContain('관측용');
+  });
+
+  it('gates를 효과 없이 내면 PERFECT 이상치와 최초 10분을 그대로 낸다', () => {
+    const r = runCli(['gates']);
+    expect(r.stdout).toContain('PERFECT 이상치');
+    expect(r.stdout).toContain('최초 10분 도달');
+  });
+
+  it('재료 비용을 넣으면 가정에 밝힌다', () => {
+    const r = runCli(['transition', '--recipe', 'quick', '--with-cost']);
+    expect(r.stdout).toContain('재료 판매 손실을 하루 한 번 비용으로 넣음');
   });
 });

@@ -23,7 +23,7 @@ import type { DrawOptions } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng } from '../model';
-import type { Axis, Rates, Row } from '../model';
+import type { Axis, Pool, Rates, Row } from '../model';
 import { expectedEncounterCatches } from './bounty';
 import { axisOf } from './progress';
 import type { FlowAxis } from './progress';
@@ -71,11 +71,11 @@ export function variantShareOf(spot: SpotId, boost: number): number {
 }
 
 /** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 이상, 영웅 이상, 전설 가중은 등급별로 합산해 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
-export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect): EffectRates {
+export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, pool: Pool = 'mixed'): EffectRates {
   let extra: DrawOptions = {};
   const boost = gradeBoostOf(e);
   for (const g of RARITY_ORDER) if (boost[g] !== 0) extra = addGradeEffect(extra, g, boost[g]);
-  const base = rates(spot, level, axis, extra);
+  const base = rates(spot, level, axis, extra, pool);
   const cycle = {
     ...base.cycle,
     biteMin: base.cycle.biteMin * (1 - e.bite), biteMax: base.cycle.biteMax * (1 - e.bite), biteExtra: base.cycle.biteExtra * (1 - e.bite),

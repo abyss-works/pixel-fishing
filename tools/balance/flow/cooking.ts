@@ -10,9 +10,10 @@ import { capOfBoat, compareBlandness } from '../../../src/game/rules/logic';
 import type { FishInstance } from '../../../src/game/rules/logic';
 import { NO_EFFECT, checkEffect, dexRows, effectRates, spotsAt, variantEv } from './effects';
 import type { DexTimes, Effect } from './effects';
-import { axisOf } from './progress';
-import type { FlowAxis } from './progress';
-import { entryLevel, rng } from '../model';
+import { DAY_HOURS, axisOf } from './progress';
+import type { FlowAxis, RatePlan } from './progress';
+import { entryLevel, rates, rng, spotOf } from '../model';
+import type { Axis, Pool } from '../model';
 
 /** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
 export const BAIT_WINDOW_MIN = 30;
@@ -131,6 +132,32 @@ export interface RecipeRow {
   net: number | null; ratio: number | null;
 }
 
+export interface MaterialLoss {
+  /** 재료로 쓴 물고기를 팔았다면 얻었을 골드 */
+  loss: number;
+  /** 그 해역 낚시로만 모을 때 걸리는 실질 낚시 시간(시간) */
+  collect: number;
+  /** 필요한 등급이 모두 나오는가 */
+  feasible: boolean;
+}
+
+/** 한 해역, 한 레벨에서 레시피 재료를 그 해역 낚시로만 모을 때의 판매 손실과 모으는 시간.
+ *  손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다 */
+export function materialLoss(recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis): MaterialLoss {
+  const gather = effectRates(spot, level, axisOf(axis, spot, level), NO_EFFECT);
+  let loss = 0, collect = 0, feasible = true;
+  for (const g of RARITY_ORDER) {
+    const need = recipe.cost[g] ?? 0;
+    if (need === 0) continue;
+    const rows = gather.rows.filter(r => r.fish.rarity === g);
+    const share = rows.reduce((a, r) => a + r.prob, 0);
+    if (share === 0) { feasible = false; continue; }
+    loss += need * rows.reduce((a, r) => a + r.prob * r.fish.price, 0) / share * variantEv(gather.variantShare);
+    collect = Math.max(collect, need / (share * gather.catchesPerHour));
+  }
+  return { loss, collect, feasible };
+}
+
 export interface RecipeOptions {
   /** 재료를 모으는 낚시 방식 */
   axis: FlowAxis; margin: number;
@@ -145,19 +172,9 @@ export function recipeRows(o: RecipeOptions): RecipeRow[] {
   for (const r of recipes) checkEffect(r.effect);
   return recipes.flatMap(recipe => spotsAt(o.margin).map(({ s }) => {
     const level = entryLevel(s.id) + o.margin;
-    const gather = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);
+    const { loss, collect, feasible } = materialLoss(recipe, s.id, level, o.axis);
     const useAxis = axisOf(recipe.axis, s.id, level);
     const use = effectRates(s.id, level, useAxis, NO_EFFECT), now = effectRates(s.id, level, useAxis, recipe.effect);
-    let loss = 0, collect = 0, feasible = true;
-    for (const g of RARITY_ORDER) {
-      const need = recipe.cost[g] ?? 0;
-      if (need === 0) continue;
-      const rows = gather.rows.filter(r => r.fish.rarity === g);
-      const share = rows.reduce((a, r) => a + r.prob, 0);
-      if (share === 0) { feasible = false; continue; }
-      loss += need * rows.reduce((a, r) => a + r.prob * r.fish.price, 0) / share * variantEv(gather.variantShare);
-      collect = Math.max(collect, need / (share * gather.catchesPerHour));
-    }
     const gain = (now.goldPerHour - use.goldPerHour) * recipe.hours;
     return {
       recipe: recipe.id, spot: s.id, level, collectHours: feasible ? collect : null, loss, gain, gainFame: (now.famePerHour - use.famePerHour) * recipe.hours,
@@ -261,4 +278,37 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
 /** 기운으로 레시피를 몇 개 만들 수 있는가 — 필요한 등급 중 가장 모자란 등급이 정한다. 요구가 없으면 무한대 */
 export function recipesCovered(supply: Record<RarityId, number>, recipe: Recipe): number {
   return RARITY_ORDER.reduce((m, g) => ((recipe.cost[g] ?? 0) > 0 ? Math.min(m, supply[g] / recipe.cost[g]!) : m), Number.POSITIVE_INFINITY);
+}
+
+// ── 효과 계획 ──
+
+/** 효과가 걸리기 시작하는 배 단계의 기본값 — 인도양을 여는 배(증기선) */
+export const DEFAULT_FROM_BOAT = spotOf('indian').boatTier;
+
+export interface PlanOptions {
+  effect: Effect;
+  /** 이 배 단계 이상일 때만 효과가 걸린다. 기본은 인도양을 여는 배 */
+  fromBoat?: number;
+  /** 주면 하루(실질 낚시 8시간)에 한 번 이 레시피를 만든다고 보고 재료의 판매 손실을 시간당 비용으로 센다.
+   *  그 해역에서 재료가 나오지 않으면 만들 수 없어 효과도 비용도 없다 */
+  recipe?: Recipe;
+}
+
+/** 진행 시뮬레이션에 넣는 효과 계획 — 시작 배 단계 이후에 효과를 걸고, 레시피를 주면 재료 판매 손실을 비용으로 넣는다 */
+export function effectPlan(o: PlanOptions): RatePlan {
+  checkEffect(o.effect);
+  const fromBoat = o.fromBoat ?? DEFAULT_FROM_BOAT;
+  const costs = new Map<string, MaterialLoss>();
+  const loss = (spot: SpotId, level: number): MaterialLoss => {
+    const key = `${spot}:${level}`;
+    let m = costs.get(key);
+    if (!m) { m = materialLoss(o.recipe!, spot, level, 'idle'); costs.set(key, m); }
+    return m;
+  };
+  const active = (spot: SpotId, level: number, boat: number) => boat >= fromBoat && (!o.recipe || loss(spot, level).feasible);
+  return {
+    rateFor: (spot: SpotId, level: number, axis: Axis, boat: number, pool: Pool = 'mixed') =>
+      active(spot, level, boat) ? effectRates(spot, level, axis, o.effect, pool) : rates(spot, level, axis, {}, pool),
+    costPerHour: (spot, level, _axis, boat) => (o.recipe && active(spot, level, boat) ? loss(spot, level).loss / DAY_HOURS : 0),
+  };
 }

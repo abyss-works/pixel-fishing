@@ -4,7 +4,7 @@
 import { SPOTS } from '../../src/game/content/spots';
 import type { SpotId } from '../../src/game/content/spots';
 import { moveGap } from './model';
-import type { Pool } from './model';
+import type { Pool, Rates } from './model';
 
 /** 게이트를 보기 시작하는 해역 — 이 해역으로 옮기는 전환부터 마지막 해역까지 센다 */
 export const GATE_FROM_SPOT: SpotId = 'sea';
@@ -46,14 +46,14 @@ export interface GateRow {
   verdict: GateVerdict;
 }
 
-/** 시작 해역부터 마지막 해역까지 전환마다, 풀(낮, 낮밤 혼합)마다 한 줄 */
-export function gateRows(): GateRow[] {
+/** 시작 해역부터 마지막 해역까지 전환마다, 풀(낮, 낮밤 혼합)마다 한 줄. rateOf를 주면 그 수입 계산으로 잰다 */
+export function gateRows(rateOf?: (spot: SpotId, level: number, pool: Pool, boat: number) => Rates): GateRow[] {
   const start = SPOTS.findIndex(s => s.id === GATE_FROM_SPOT);
   const rows: GateRow[] = [];
   for (let i = start; i < SPOTS.length; i++) {
     const spot = SPOTS[i].id;
     for (const pool of GATE_POOLS) {
-      const g = moveGap(i, pool);
+      const g = moveGap(i, pool, rateOf);
       const verdict = judgeGate(spot, pool, g.diff);
       rows.push({ spot, pool, from: g.from, before: g.fromGold, after: g.gold, diff: g.diff, verdict });
     }
