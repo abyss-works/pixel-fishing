@@ -108,7 +108,7 @@ describe('먹기와 쓰기', () => {
   it('서버가 거부하면 거부 문구를 경고로 알린다', async () => {
     const { setToast } = show(game({ items: own }), false, { status: 'rejected', error: 'item-not-owned' });
     fireEvent.click(screen.getByRole('button', { name: '메이스 미끼 쓰기' }));
-    await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 없는 아이템이에요.', 'warn'));
+    await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
 });
 

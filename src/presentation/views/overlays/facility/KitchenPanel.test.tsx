@@ -154,7 +154,7 @@ describe('도시락 탭과 미끼 탭', () => {
     show(seed({ items: energy(1000), location: { kind: 'region', id: 'village' } }));
     const button = screen.getByRole('button', { name: '조리 시작' });
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집 부엌에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집에서만 할 수 있어요.');
   });
 
   it('진주 상인의 저울이 있으면 추가 완성 확률을 요리 추가 완성 +N%p로 보이고 없으면 줄이 없다', () => {
@@ -224,7 +224,7 @@ describe('기운 얻기 탭', () => {
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집 부엌에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집에서만 할 수 있어요.');
   });
 
   it('잠근 개체가 있으면 확정 영역에 안내가 보이고 되돌릴 수 없다는 안내는 늘 보인다', () => {
