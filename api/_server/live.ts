@@ -1,5 +1,6 @@
 // 실시간 채널 — 게임 서버의 HTTP 업그레이드를 받아 WebSocket 연결을 관리한다.
 // 채널은 전체 하나이고 상태는 이 프로세스 메모리에만 있다. 서버 파드가 하나라는 전제다.
+// 게스트(계정을 연결하지 않은 익명 계정)는 다른 접속자와 격리한다. 게스트의 위치와 닉네임은 어떤 연결에도 보내지 않고, 접속 상태 조회에도 내놓지 않는다.
 // 표시용 채널이라 게임 상태를 바꾸지 않는다. 채팅은 저장한 뒤 보내고, 수신자가 차단한 사람의 채팅은 그 수신자에게 보내지 않는다.
 // 채팅 방은 월드(전체)와 길드 둘이다. 길드 채팅은 같은 길드의 접속한 길드원에게만 가고, 길이·도배·제재·차단 규칙은 월드와 같다.
 // 연결이 끝나면(정상 종료, 무응답 정리, 같은 계정의 새 연결로 교체, 서버 종료) 그 연결을 접속 세션으로 기록한다.
@@ -129,7 +130,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     });
   };
   const send = (ws: WebSocket, msg: ServerMessage) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
-  const broadcast = (from: WebSocket, msg: ServerMessage) => {
+  // 위치와 입력 중 표시처럼 보낸 연결 말고 모두에게 보이는 메시지. 보낸 사람이 게스트면 아무에게도 보내지 않는다
+  const broadcast = (from: WebSocket, sender: LiveUser, msg: ServerMessage) => {
+    if (sender.guest) return;
     const data = JSON.stringify(msg);
     for (const ws of conns.keys()) if (ws !== from && ws.readyState === WebSocket.OPEN) ws.send(data);
   };
@@ -172,7 +175,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     if (conns.get(ws) !== conn) return;
     conns.delete(ws);
     recordEnd(conn);
-    if (conn.presence) broadcast(ws, { t: 'leave', uid: conn.user.uid });
+    if (conn.presence) broadcast(ws, conn.user, { t: 'leave', uid: conn.user.uid });
   };
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -218,25 +221,25 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             const idle = idleField(conn.idleSince, at);
             if (!conn.presence) {
               conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
-              broadcast(ws, { t: 'join', presence: { ...conn.presence, ...idle } });
+              broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
             } else {
               Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
-              broadcast(ws, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
+              broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
             }
             conn.positionDirty = true;
             if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
           } else if (msg?.t === 'stop' && conn.presence) {
-            broadcast(ws, { t: 'stop', uid: user.uid });
+            broadcast(ws, user, { t: 'stop', uid: user.uid });
           } else if (msg?.t === 'chat') {
             onChat(ws, conn, msg.text, msg.room).catch((err: unknown) => { console.error('[live] chat save failed', err); });
-          } else if (msg?.t === 'typing' && !user.guest) {
-            // 입력 중 표시 — 채팅을 쓸 수 있는 계정만 알린다. 저장하지 않는다
-            broadcast(ws, { t: 'typing', uid: user.uid, on: msg.on });
+          } else if (msg?.t === 'typing') {
+            // 입력 중 표시 — 저장하지 않는다
+            broadcast(ws, user, { t: 'typing', uid: user.uid, on: msg.on });
           }
         });
         ws.on('close', () => drop(ws, conn));
         const sentAt = Date.now();
-        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
+        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
         send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
       });
     }).catch((err: unknown) => {
@@ -258,7 +261,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
 
   return {
     presenceOf(uid) {
-      for (const c of conns.values()) if (c.user.uid === uid) return c.presence;
+      for (const c of conns.values()) if (c.user.uid === uid) return c.user.guest ? null : c.presence;
       return null;
     },
     online() {
