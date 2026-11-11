@@ -20,6 +20,8 @@ export const HOME: BasePack = {
       label: () => ({ title: '궤짝', sub: '판매' }), labelDy: -4 },
     { id: 'wardrobe', x: 252, y: 40, w: 34, h: 46, sprite: 'wardrobe',
       label: () => ({ title: '옷장' }), labelDy: -4 },
+    { id: 'kitchen', x: 196, y: 38, w: 46, h: 40, sprite: 'kitchen',
+      label: () => ({ title: '부엌' }), labelDy: -4 },
     { id: 'exit', x: 272, y: 104, w: 34, h: 56, sprite: 'door',
       label: () => ({ title: '문', sub: '마을로' }), labelDy: -4 },
   ],
