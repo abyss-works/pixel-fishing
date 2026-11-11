@@ -1,6 +1,6 @@
-// 요리 순환 지표 — 시간 제한 효과의 창(구매 미끼 30분), 레시피 순손익, 가방 한도와 자동 기운 얻기를 넣은 기운 공급.
+// 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 30분), 레시피 순손익, 가방 한도와 자동 기운 얻기를 넣은 기운 공급.
 // 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서)은 불러 쓰고, 이 모듈이 갖는 값은 요리 설계 초안의 레시피와 미끼 수치뿐이다.
-// 설계 초안 값은 확정이 아니며, 명세가 바뀌면 이 표를 맞춘다.
+// 요리 명세의 값(레시피, 등급 미끼 효과, 지속)을 이 표에 옮겨 두었으므로 명세가 바뀌면 표를 맞춘다.
 import type { SpotId } from '../../../src/game/content/spots';
 import { FISH } from '../../../src/game/content/fish';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
@@ -18,7 +18,7 @@ import type { Axis, Pool } from '../model';
 /** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
 export const BAIT_WINDOW_MIN = 30;
 
-/** 구매 미끼의 효과(설계 초안). 희귀 미끼는 희귀 이상, 영웅 미끼는 영웅 이상, 전설 미끼는 전설 등급 가중치에 걸린다 */
+/** 등급 미끼의 효과(요리 명세). 희귀 미끼는 희귀 이상, 영웅 미끼는 영웅 이상, 전설 미끼는 전설 등급 가중치에 걸린다 */
 export const BAIT_EFFECTS = {
   rare: { ...NO_EFFECT, rare: 0.2 },
   epic: { ...NO_EFFECT, epic: 0.4 },
@@ -109,7 +109,7 @@ const lunch = (id: string, name: string, cost: Recipe['cost'], effect: Partial<E
 const baitFood = (id: string, name: string, cost: Recipe['cost'], effect: Partial<Effect>): Recipe =>
   ({ id, name, kind: 'bait', cost, effect: { ...NO_EFFECT, ...effect }, hours: BAIT_WINDOW_MIN / 60, axis: 'manual' });
 
-/** 요리 설계 초안의 레시피 중 효과 값이 정해진 것. 판정 칸 미끼는 값이 정해지지 않아 넣지 않는다 */
+/** 요리 명세의 레시피 중 효과 값이 정해진 것. 판정 칸 미끼는 값이 정해지지 않아 넣지 않는다 */
 export const RECIPES: readonly Recipe[] = [
   lunch('quick', '재촉 도시락', { common: 200 }, { bite: 0.1 }),
   lunch('shimmer', '윤슬 도시락', { common: 100, rare: 20 }, { rare: 0.1 }),
@@ -230,6 +230,8 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
 
 export interface BagSupplyOptions {
   axis: FlowAxis; margin: number;
+  /** 기운 얻기가 열리는 배 단계. 이 단계 미만 해역은 내지 않고, 가방 용량은 해역의 배와 이 단계 중 큰 쪽이다. 기본은 효과 시작 기본 배 단계 */
+  unlockBoat?: number;
   /** 가방을 비운 채 판매 없이 낚는 시간(시간) */
   hours: number;
   trials: number; seed: number;
@@ -244,14 +246,15 @@ export interface BagSupplyRow {
   kept: Record<RarityId, number>; keptGold: number;
 }
 
-/** 해역마다 가방을 비운 채 판매 없이 hours시간 낚을 때 자동 기운 얻기로 모이는 등급별 기운과 가방에 남는 개체를 낸다. 캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다 */
+/** 기운 얻기가 열린 뒤의 해역(해금 배 이상)마다 가방을 비운 채 판매 없이 hours시간 낚을 때 자동 기운 얻기로 모이는 등급별 기운과 가방에 남는 개체를 낸다. 캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다 */
 export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   if (!(o.hours > 0)) throw new Error('낚는 시간은 0보다 커야 합니다(시간)');
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
-  return spotsAt(o.margin).map(({ s, i }) => {
+  const unlock = o.unlockBoat ?? DEFAULT_FROM_BOAT;
+  return spotsAt(o.margin).filter(({ s }) => s.boatTier >= unlock).map(({ s, i }) => {
     const level = entryLevel(s.id) + o.margin;
     const r = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);
-    const cap = capOfBoat(s.boatTier), n = Math.round(r.catchesPerHour * o.hours);
+    const cap = capOfBoat(Math.max(s.boatTier, unlock)), n = Math.round(r.catchesPerHour * o.hours);
     let total = 0;
     const cum = r.rows.map(row => (total += row.prob));
     const rand = rng(o.seed + i);

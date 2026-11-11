@@ -8,14 +8,14 @@ import { axisOf } from './progress';
 import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
 import { capOfBoat } from '../../../src/game/rules/logic';
 import {
-  BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, evictionRanks, fillBag, recipeRows, recipesCovered, windowRows,
+  BAIT_EFFECTS, BAIT_WINDOW_MIN, DEFAULT_FROM_BOAT, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, evictionRanks, fillBag, recipeRows, recipesCovered, windowRows,
 } from './cooking';
 import type { Recipe } from './cooking';
 
 const fx = (e: Partial<Effect>): Effect => ({ ...NO_EFFECT, ...e });
 const last = SPOTS[SPOTS.length - 1].id;
 
-describe('구매 미끼 효과', () => {
+describe('등급 미끼 효과', () => {
   it('희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%이고 창은 30분이다', () => {
     expect(BAIT_EFFECTS).toEqual({ rare: fx({ rare: 0.2 }), epic: fx({ epic: 0.4 }), legendary: fx({ legendary: 0.6 }) });
     expect(BAIT_WINDOW_MIN).toBe(30);
@@ -230,7 +230,25 @@ describe('가방 한도와 자동 기운 얻기', () => {
     expect(fillBag([c('rare', 5, true)], 0).auto.rare).toBe(1);
   });
 
-  it('해역별 가방은 배 단계의 용량이고 낚은 수와 보관 수, 내보낸 수가 맞는다', () => {
+  it('기운 얻기가 열리기 전 해역은 내지 않는다', () => {
+    const rows = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 2, seed: 1 });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(SPOTS.find(s => s.id === r.spot)!.boatTier).toBeGreaterThanOrEqual(DEFAULT_FROM_BOAT);
+    expect(rows.map(r => r.spot)).not.toContain('pond');
+    expect(rows.map(r => r.spot)).not.toContain('barrierreef');
+    expect(rows.map(r => r.spot)).toContain('indian');
+  });
+
+  it('해금 배를 올리면 낮은 배 해역도 내고 가방 용량은 해역의 배와 해금 배 중 큰 쪽이다', () => {
+    const rows = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 1, seed: 1, unlockBoat: 0 });
+    expect(rows.map(r => r.spot)).toContain('pond');
+    const pond = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 1, seed: 1, unlockBoat: 3 }).find(r => r.spot === 'barrierreef')!;
+    expect(pond.cap).toBe(capOfBoat(3));
+    const low = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 1, seed: 1, unlockBoat: 5 });
+    expect(low[0].cap).toBe(capOfBoat(5));
+  });
+
+  it('해역별 가방은 그 해역의 배 단계 용량이고 낚은 수와 보관 수, 내보낸 수가 맞는다', () => {
     const rows = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 4, seed: 11 });
     for (const r of rows) {
       const spot = SPOTS.find(s => s.id === r.spot)!;

@@ -345,7 +345,7 @@ describe('등급 도감 완성 시간', () => {
     const withEpic = rows.filter(r => r.epic > 0 && r.base.epic && r.with.epic);
     expect(withEpic.length).toBeGreaterThanOrEqual(1);
     for (const r of withEpic) {
-      expect(r.with.epic.mean!).toBeLessThan(r.base.epic.mean!);
+      expect(r.with.epic!.mean!).toBeLessThan(r.base.epic!.mean!);
     }
   });
 });

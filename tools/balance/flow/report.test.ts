@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
@@ -421,7 +421,7 @@ describe('window 명령', () => {
     expect(parseArgs(['window', '--window', '45']).windowMinutes).toBe(45);
   });
 
-  it('구매 미끼 이름이 효과 옵션을 채운다', () => {
+  it('등급 미끼 이름이 효과 옵션을 채운다', () => {
     expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
     expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.4, 12);
     expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.6, 12);
@@ -487,7 +487,6 @@ describe('효과를 넣은 transition, days, gates', () => {
     expect(o).toMatchObject({ commands: ['transition'], bounty: true, fromBoat: 3, recipe: 'quick', withCost: true });
     expect(o.effect.bite).toBeCloseTo(0.1, 12);
     expect(parseArgs(['gates', '--rare', '10']).commands).toEqual(['gates']);
-    expect(parseArgs(['days', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
   });
 
   it('옵션이 허용되지 않는 명령이나 값은 오류다', () => {
@@ -497,6 +496,45 @@ describe('효과를 넣은 transition, days, gates', () => {
     expect(() => parseArgs(['transition', '--with-cost'])).toThrow(/--recipe/);
     expect(() => parseArgs(['transition', '--from-boat', '-1'])).toThrow(/0 이상/);
     expect(() => parseArgs(['transition', '--from-boat', '1.5'])).toThrow(/정수/);
+  });
+
+  it('효과를 주지 않은 transition 출력은 효과 옵션이 생기기 전 출력과 글자까지 같다', () => {
+    const golden = readFileSync(join(__dirname, 'fixtures', 'transition-default.txt'), 'utf-8');
+    expect(runCli(['transition']).stdout + '\n').toBe(golden);
+  });
+
+  it('미끼 슬롯 효과는 수동 캐치에만 걸려 transition, days, gates에서 거부한다', () => {
+    for (const cmd of ['transition', 'days', 'gates']) {
+      expect(() => parseArgs([cmd, '--bait', 'rare']), cmd).toThrow(/미끼 슬롯/);
+      expect(() => parseArgs([cmd, '--recipe', 'mutantBait']), cmd).toThrow(/미끼 슬롯/);
+    }
+  });
+
+  it('도시락 효과는 방치 캐치에만 걸려 수동 축과 함께 쓰면 거부한다', () => {
+    expect(() => parseArgs(['transition', '--bite', '10', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['days', '--recipe', 'quick', '--axis', 'manual'])).toThrow(/방치/);
+    expect(parseArgs(['transition', '--axis', 'manual']).axis).toBe('manual');
+    expect(parseArgs(['transition', '--bite', '10', '--axis', 'idle']).axis).toBe('idle');
+  });
+
+  it('effects와 window는 슬롯에 맞는 축을 기본으로 고르고 맞지 않는 축은 거부한다', () => {
+    expect(parseArgs(['effects', '--bait', 'rare']).axis).toBe('manual');
+    expect(parseArgs(['window', '--recipe', 'quick']).axis).toBe('idle');
+    expect(parseArgs(['window', '--bait', 'rare']).axis).toBe('manual');
+    expect(() => parseArgs(['effects', '--bait', 'rare', '--axis', 'idle'])).toThrow(/수동/);
+    expect(() => parseArgs(['effects', '--recipe', 'quick', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['window', '--recipe', 'mutantBait', '--axis', 'idle'])).toThrow(/수동/);
+    expect(parseArgs(['effects', '--bait', 'epic', '--axis', 'perfect']).axis).toBe('perfect');
+  });
+
+  it('의뢰만 수행하는 transition과 gates는 그 조건을 출력에 밝히고 gates는 종료 코드에 반영하지 않는다', () => {
+    const t = runCli(['transition', '--bounty']).stdout;
+    expect(t).toContain('의뢰와 토벌 모두 수행, 관측용');
+    expect(t).toContain('의뢰와 토벌을 매일 수행하는 경우다');
+    expect(t).not.toContain('의뢰와 토벌은 하지 않는 경우다');
+    const g = runCli(['gates', '--bounty']);
+    expect(g.stdout).toContain('의뢰와 토벌 모두 수행, 관측용');
+    expect(g.exitCode).toBe(0);
   });
 
   it('효과를 주지 않으면 지금까지와 같은 출력이다(효과 없음 열이 없다)', () => {
