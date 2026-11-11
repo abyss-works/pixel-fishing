@@ -32,7 +32,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-const handlers = () => ({ game: newState(), onQuests: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
+const handlers = () => ({ game: newState(), guest: false, onQuests: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
 afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
 
@@ -163,6 +163,62 @@ describe('게임 메뉴', () => {
       expect(button.textContent).toBe('');
       expect(button.querySelector('.bg-danger')).toBeNull();
       expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 네 줄이 모두 자리 그대로 잠긴다
+  describe('게스트 잠금', () => {
+    const guestMenu = async (h = handlers()) => {
+      wrap(<GameMenu account={null} {...h} guest />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      return h;
+    };
+
+    it('의뢰, 길드, 소셜, 우편함 줄이 순서대로 aria-disabled 잠긴 줄이고 자물쇠가 붙으며 title이 없다', async () => {
+      await guestMenu();
+      const items = screen.getAllByRole('menuitem');
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '길드', '소셜', '우편함']);
+      for (const item of items) {
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        expect(item.querySelector('[data-glyph="lock"]')).not.toBeNull();
+        expect(item.closest('[title]')).toBeNull();
+      }
+    });
+
+    it('줄을 누르거나 올리면 공용 툴팁이 열리고 창은 열리지 않으며 메뉴도 접히지 않는다', async () => {
+      const h = await guestMenu();
+      const items = screen.getAllByRole('menuitem');
+      for (const item of items) fireEvent.click(item);
+      expect(h.onQuests).not.toHaveBeenCalled();
+      expect(h.onGuild).not.toHaveBeenCalled();
+      expect(h.onFriends).not.toHaveBeenCalled();
+      expect(h.onMailbox).not.toHaveBeenCalled();
+      expect(screen.getAllByRole('menuitem')).toHaveLength(4);
+      fireEvent.mouseEnter(items[1].parentElement!);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    });
+
+    it('잠긴 줄에는 배지와 알림 점이 없고 접속 안내도 띄우지 않는다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 } };
+      state.mails = [mail({ id: 1, gold: 100 })];
+      const h = handlers();
+      wrap(<GameMenu account={null} {...h} guest />);
+      const button = await screen.findByRole('button', { name: '메뉴 열기' });
+      fireEvent.click(button);
+      expect(document.querySelector('[data-badge]')).toBeNull();
+      expect(screen.getByRole('menuitem', { name: '의뢰' })).toBeInTheDocument();
+      expect(h.setToast).not.toHaveBeenCalled();
+    });
+
+    it('잠금을 적용하지 않는 상태(계정 사용자, 로컬 모드)는 잠기지 않는다', async () => {
+      state.mails = [mail({ id: 1, gold: 100 })];
+      wrap(<GameMenu account="me@example.com" {...handlers()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      for (const item of screen.getAllByRole('menuitem')) expect(item).not.toHaveAttribute('aria-disabled');
+      cleanup();
+      wrap(<GameMenu account={null} {...handlers()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      for (const item of screen.getAllByRole('menuitem')) expect(item).not.toHaveAttribute('aria-disabled');
     });
   });
 });
