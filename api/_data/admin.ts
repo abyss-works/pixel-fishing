@@ -146,12 +146,12 @@ export function bountyFunnel(db: Executor, days: number): Promise<unknown[]> {
     group by day`);
 }
 
-/** 캐치 품질 일계. 캐치 수, PERFECT 수, 이벤트 payload에 미끼가 실린 캐치 수(미끼 소모가 없어진 뒤로는 새로 늘지 않는다), 평균 크기 */
+/** 캐치 품질 일계. 캐치 수, PERFECT 수, 이벤트 payload에 미끼 슬롯 또는 도시락 슬롯 요리 id가 실린 캐치 수, 평균 크기 */
 export function catchQuality(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*)::int as catches,
            count(*) filter (where payload->>'judgment' = 'perfect')::int as perfect,
-           count(*) filter (where payload->>'bait' is not null)::int as with_bait,
+           count(*) filter (where payload ? 'bait' or payload ? 'lunch')::int as with_bait,
            round(avg((payload->>'size')::numeric), 1) as avg_size
     from public.events
     where type = 'catch'
