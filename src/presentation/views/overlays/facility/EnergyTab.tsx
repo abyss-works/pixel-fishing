@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import {
@@ -44,7 +44,8 @@ export default function EnergyTab({ game, busy, act, setToast }: {
   const [popOpen, setPopOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const { collapsed } = useSellView(); // 어종 행 펼침 — 판매 창과 같은 표라 같은 저장소를 쓴다
-  const view = selectEnergyView(game, picks);
+  // 가방이 수천 마리여도 조리 시계가 다시 그릴 때마다 행을 새로 묶지 않는다
+  const view = useMemo(() => selectEnergyView(game, picks), [game, picks]);
   const reason = view.allowed.ok ? null : REJECT_TEXT[view.allowed.reason];
 
   const toggleRow = (uids: string[], allOn: boolean) => setPicks(p => pickEnergyUids(p, uids, !allOn));
