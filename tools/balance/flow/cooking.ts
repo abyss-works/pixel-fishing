@@ -1,12 +1,15 @@
-// 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 30분), 레시피 순손익, 가방 한도와 자동 기운 얻기를 넣은 기운 공급.
-// 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서)은 불러 쓰고, 이 모듈이 갖는 값은 요리 설계 초안의 레시피와 미끼 수치뿐이다.
-// 요리 명세의 값(레시피, 등급 미끼 효과, 지속)을 이 표에 옮겨 두었으므로 명세가 바뀌면 표를 맞춘다.
-import type { SpotId } from '../../../src/game/content/spots';
+// 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 30분), 레시피 순손익, 집 기운 얻기 공급.
+// 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서, 배 단계로 갈 수 있는 해역)과
+// 요리 콘텐츠(레시피 표, 기운 수량, 효과 값, 슬롯 지속)는 불러 쓰고, 이 모듈은 값을 갖지 않는다.
+import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
+import type { CookEffects, Recipe as CookRecipe } from '../../../src/game/content/cooking';
 import { FISH } from '../../../src/game/content/fish';
+import type { FormId } from '../../../src/game/content/fish';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
-import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { capOfBoat, compareBlandness } from '../../../src/game/rules/logic';
+import { SPOTS } from '../../../src/game/content/spots';
+import type { SpotId } from '../../../src/game/content/spots';
+import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
 import type { FishInstance } from '../../../src/game/rules/logic';
 import { NO_EFFECT, checkEffect, dexRows, effectRates, spotsAt, variantEv } from './effects';
 import type { DexTimes, Effect } from './effects';
@@ -15,15 +18,34 @@ import type { FlowAxis, RatePlan } from './progress';
 import { entryLevel, rates, rng, spotOf } from '../model';
 import type { Axis, Pool } from '../model';
 
-/** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
-export const BAIT_WINDOW_MIN = 30;
+const HOUR_MS = 3_600_000;
 
-/** 등급 미끼의 효과(요리 명세). 희귀 미끼는 희귀 이상, 영웅 미끼는 영웅 이상, 전설 미끼는 전설 등급 가중치에 걸린다 */
-export const BAIT_EFFECTS = {
-  rare: { ...NO_EFFECT, rare: 0.2 },
-  epic: { ...NO_EFFECT, epic: 0.4 },
-  legendary: { ...NO_EFFECT, legendary: 0.6 },
-} as const satisfies Record<string, Effect>;
+/** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
+export const BAIT_WINDOW_MIN = COOK_KIND_RULES.bait.slotMs / 60_000;
+
+/** 요리 콘텐츠의 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다.
+ *  판정 칸(영역 폭) 효과는 이 지표가 재지 않으므로 오류다 */
+export function effectOf(e: CookEffects): Effect {
+  if (e.judgeWidth !== undefined) throw new Error('판정 칸 효과는 이 도구가 재지 않습니다');
+  const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut ?? 0, variant: e.mutationWeight ?? 0, named: e.namedWeight ?? 0 };
+  const w = e.rarityWeight;
+  if (w) {
+    const from = RARITY_ORDER.findIndex(g => g === w.grades[0]);
+    const suffix = from >= 1 && w.grades.length === RARITY_ORDER.length - from && w.grades.every((g, k) => g === RARITY_ORDER[from + k]);
+    if (!suffix) throw new Error(`등급 가중이 희귀, 영웅, 전설부터 전설까지의 범위가 아닙니다: ${w.grades.join(', ')}`);
+    out[RARITY_ORDER[from] as 'rare' | 'epic' | 'legendary'] += w.bonus;
+  }
+  return out;
+}
+
+/** 등급 미끼의 효과 — 요리 콘텐츠의 희귀, 영웅, 전설 등급 미끼 레시피에서 불러온다 */
+export const BAIT_EFFECTS: Readonly<Record<'rare' | 'epic' | 'legendary', Effect>> = Object.fromEntries(
+  (['rare', 'epic', 'legendary'] as const).map(g => {
+    const r = COOK_RECIPES.find(x => x.id === `cook-bait-${g}`);
+    if (!r) throw new Error(`등급 미끼 레시피가 없습니다: ${g}`);
+    return [g, effectOf(r.effects)];
+  }),
+) as Record<'rare' | 'epic' | 'legendary', Effect>;
 
 export type BaitName = keyof typeof BAIT_EFFECTS;
 
@@ -89,11 +111,10 @@ export function windowRows(o: WindowOptions): WindowRow[] {
 // ── 레시피 순손익 ──
 
 /** 도시락 슬롯의 지속(시간) */
-export const LUNCH_HOURS = 9;
+export const LUNCH_HOURS = COOK_KIND_RULES.lunch.slotMs / HOUR_MS;
 
 export interface Recipe {
   id: string;
-  /** 가칭이다. 최종 이름은 따로 정한다 */
   name: string;
   kind: 'lunch' | 'bait';
   /** 기운 요구(등급별 개수) */
@@ -104,20 +125,14 @@ export interface Recipe {
   axis: FlowAxis;
 }
 
-const lunch = (id: string, name: string, cost: Recipe['cost'], effect: Partial<Effect>): Recipe =>
-  ({ id, name, kind: 'lunch', cost, effect: { ...NO_EFFECT, ...effect }, hours: LUNCH_HOURS, axis: 'idle' });
-const baitFood = (id: string, name: string, cost: Recipe['cost'], effect: Partial<Effect>): Recipe =>
-  ({ id, name, kind: 'bait', cost, effect: { ...NO_EFFECT, ...effect }, hours: BAIT_WINDOW_MIN / 60, axis: 'manual' });
+/** 요리 콘텐츠의 레시피를 도구의 레시피로 옮긴다. 지속은 종류별 슬롯 지속이다 */
+export const recipeOf = (r: CookRecipe): Recipe => ({
+  id: r.id, name: r.name, kind: r.kind, cost: { ...r.cost }, effect: effectOf(r.effects),
+  hours: COOK_KIND_RULES[r.kind].slotMs / HOUR_MS, axis: r.kind === 'lunch' ? 'idle' : 'manual',
+});
 
-/** 요리 명세의 레시피 중 효과 값이 정해진 것. 판정 칸 미끼는 값이 정해지지 않아 넣지 않는다 */
-export const RECIPES: readonly Recipe[] = [
-  lunch('quick', '재촉 도시락', { common: 200 }, { bite: 0.1 }),
-  lunch('shimmer', '윤슬 도시락', { common: 100, rare: 20 }, { rare: 0.1 }),
-  lunch('mutant', '아롱 도시락', { rare: 20, epic: 4 }, { variant: 0.5 }),
-  lunch('trace', '흔적 도시락', { epic: 8 }, { named: 0.5 }),
-  lunch('mixed', '모둠 도시락', { common: 50, rare: 5, epic: 1, legendary: 1 }, { bite: 0.05, rare: 0.05 }),
-  baitFood('mutantBait', '아롱 미끼', { epic: 4, legendary: 2 }, { variant: 1 }),
-];
+/** 요리 콘텐츠의 레시피 중 이 도구가 효과를 재는 것. 판정 칸(영역 폭) 효과 레시피는 재지 않아 뺀다 */
+export const RECIPES: readonly Recipe[] = COOK_RECIPES.filter(r => r.effects.judgeWidth === undefined).map(recipeOf);
 
 export interface RecipeRow {
   recipe: string;
@@ -183,54 +198,67 @@ export function recipeRows(o: RecipeOptions): RecipeRow[] {
   }));
 }
 
-// ── 가방 한도와 자동 기운 얻기를 넣은 기운 공급 ──
+// ── 집 기운 얻기 공급 ──
 
-/** 가방의 개체 한 칸 — 등급과 돌연변이 여부, 판매가. 내보내는 순서는 이 둘로 정해진다(크기는 순서의 마지막 기준이라 넣지 않는다) */
-export interface Bucket { grade: RarityId; variant: boolean; price: number }
+/** 가방의 개체 한 종류 — 어종과 폼. 폼은 일반과 돌연변이뿐이다. 내보내는 순서의 단위이고 크기는 순서의 마지막 기준이라 넣지 않는다 */
+export interface Bucket { fishId: string; variant: boolean }
 
-/** 내보내는 순서(가장 안 특별한 것이 먼저) — 개체 비교 함수를 그대로 불러, 등급마다 일반 폼과 돌연변이 폼의 대표 개체를 줄 세운다 */
-export function evictionRanks(): { grade: RarityId; variant: boolean }[] {
-  const proto = (grade: RarityId, variant: boolean): FishInstance => ({
-    uid: '', fishId: FISH.find(f => f.rarity === grade)!.id, form: variant ? 'variant' : 'normal', size: 0, caughtAt: null, spot: null, judgment: null, locked: false,
-  });
-  const all = RARITY_ORDER.flatMap(grade => [false, true].map(variant => ({ grade, variant })));
-  return all.sort((a, b) => compareBlandness(proto(a.grade, a.variant), proto(b.grade, b.variant)));
+/** 내보내는 순서의 한 칸 — 어종, 폼과 그 개체의 등급, 판매가 */
+export interface EvictSlot { fishId: string; grade: RarityId; variant: boolean; price: number }
+
+const FORMS: readonly FormId[] = ['normal', 'variant'];
+
+/** 내보내는 순서(가장 안 특별한 것이 먼저) — 어종마다 두 폼의 대표 개체를 게임의 개체 비교 함수로 줄 세운다 */
+export function evictionOrder(): EvictSlot[] {
+  const proto = (fishId: string, form: FormId): FishInstance => ({ uid: '', fishId, form, size: 0, caughtAt: null, spot: null, judgment: null, locked: false });
+  return FISH.flatMap(f => FORMS.map(form => ({ f, form })))
+    .sort((a, b) => compareBlandness(proto(a.f.id, a.form), proto(b.f.id, b.form)))
+    .map(({ f, form }) => ({ fishId: f.id, grade: f.rarity, variant: form === 'variant', price: priceOf(f, form) }));
 }
 
+const ORDER = evictionOrder();
+const slotKey = (fishId: string, variant: boolean) => `${fishId}:${variant ? 1 : 0}`;
+const SLOT_OF = new Map(ORDER.map((s, i) => [slotKey(s.fishId, s.variant), i] as const));
+
 export interface FillResult {
-  /** 가방이 차서 기운이 된 개체 수와 그 판매가 합, 가방에 남은 개체 수와 판매가 합 */
-  auto: Record<RarityId, number>; autoGold: number;
+  /** 가방이 차서 놓아준 개체 수와 그 판매가 합, 가방에 남은 개체 수와 판매가 합 */
+  released: Record<RarityId, number>; releasedGold: number;
   kept: Record<RarityId, number>; keptGold: number;
 }
 
 const zeroGrades = (): Record<RarityId, number> => ({ common: 0, rare: 0, epic: 0, legendary: 0 });
 
-/** 낚은 순서대로 가방에 넣고, 상한을 넘기면 가장 안 특별한 개체를 기운으로 바꾼다(새 개체도 후보다). 같은 칸의 판매가는 평균으로 센다 */
+/** 낚은 순서대로 가방에 넣고, 상한을 넘기면 가장 안 특별한 개체를 놓아준다(새 개체도 후보다). 기운 얻기는 집에서만 하므로 놓아준 개체는 기운이 되지 않는다 */
 export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
-  const ranks = evictionRanks();
-  const slot = new Array<number>(RARITY_ORDER.length * 2);
-  ranks.forEach((r, i) => { slot[RARITY_ORDER.indexOf(r.grade) * 2 + (r.variant ? 1 : 0)] = i; });
-  const count = new Array<number>(ranks.length).fill(0), sum = new Array<number>(ranks.length).fill(0);
-  const auto = zeroGrades();
-  let autoGold = 0, total = 0;
+  const count = new Array<number>(ORDER.length).fill(0);
+  const released = zeroGrades();
+  let releasedGold = 0, total = 0, low = ORDER.length;
   for (const c of catches) {
-    const i = slot[RARITY_ORDER.indexOf(c.grade) * 2 + (c.variant ? 1 : 0)];
-    count[i]++; sum[i] += c.price; total++;
+    const i = SLOT_OF.get(slotKey(c.fishId, c.variant));
+    if (i === undefined) throw new Error(`알 수 없는 어종입니다: ${c.fishId}`);
+    count[i]++; total++;
+    if (i < low) low = i;
     if (total > cap) {
-      const v = count.findIndex(n => n > 0);
-      const mean = sum[v] / count[v];
-      count[v]--; sum[v] -= mean; total--;
-      auto[ranks[v].grade]++; autoGold += mean;
+      while (count[low] === 0) low++;
+      count[low]--; total--;
+      released[ORDER[low].grade]++; releasedGold += ORDER[low].price;
     }
   }
   const kept = zeroGrades();
-  ranks.forEach((r, i) => { kept[r.grade] += count[i]; });
-  return { auto, autoGold, kept, keptGold: sum.reduce((a, b) => a + b, 0) };
+  let keptGold = 0;
+  ORDER.forEach((s, i) => { kept[s.grade] += count[i]; keptGold += count[i] * s.price; });
+  return { released, releasedGold, kept, keptGold };
+}
+
+/** 기운 얻기 기본 선택에서 빠지는 해역 — 그 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역과 그 직전 해역 */
+export function frontmostSpots(boat: number): SpotId[] {
+  const state = { ...newState(), boat };
+  return SPOTS.filter(s => canFishSpot(state, s.id)).slice(-2).map(s => s.id);
 }
 
 export interface BagSupplyOptions {
   axis: FlowAxis; margin: number;
-  /** 기운 얻기가 열리는 배 단계. 이 단계 미만 해역은 내지 않고, 가방 용량은 해역의 배와 이 단계 중 큰 쪽이다. 기본은 효과 시작 기본 배 단계 */
+  /** 집 기운 얻기가 열리는 배 단계. 이 단계 이상의 배 단계마다 낸다. 기본은 요리 콘텐츠의 해금 배 단계 */
   unlockBoat?: number;
   /** 가방을 비운 채 판매 없이 낚는 시간(시간) */
   hours: number;
@@ -238,43 +266,57 @@ export interface BagSupplyOptions {
 }
 
 export interface BagSupplyRow {
+  /** 플레이어의 배 단계 — 가방 용량과 기본 선택이 이 단계로 정해진다 */
+  boat: number;
   spot: SpotId; level: number;
-  /** 배 단계의 가방 용량과 그 시간 동안 낚은 개체 수 */
+  /** 가방 용량과 그 시간 동안 낚은 개체 수 */
   cap: number; catches: number;
-  /** 시도 평균 — 자동으로 기운이 된 개체 수와 판매가 합, 가방에 남은 개체 수와 판매가 합 */
-  auto: Record<RarityId, number>; autoGold: number;
+  /** 이 해역이 그 배 단계의 가장 앞선 두 해역이라 기본 선택에서 빠지는가 */
+  frontmost: boolean;
+  /** 시도 평균 — 가방에 남은 개체 수와 판매가 합, 가방이 차서 놓아준 개체 수와 판매가 합 */
   kept: Record<RarityId, number>; keptGold: number;
+  released: Record<RarityId, number>; releasedGold: number;
+  /** 가방에 남은 개체 가운데 해역 기본 선택대로 기운으로 바꾼 등급별 개수와 그 개체의 판매가 합. 가장 앞선 두 해역이면 모두 0이다 */
+  energy: Record<RarityId, number>; energyGold: number;
 }
 
-/** 기운 얻기가 열린 뒤의 해역(해금 배 이상)마다 가방을 비운 채 판매 없이 hours시간 낚을 때 자동 기운 얻기로 모이는 등급별 기운과 가방에 남는 개체를 낸다. 캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다 */
+/** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 개수를 낸다.
+ *  캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다. 가방 용량은 그 배 단계의 용량이고, 낚싯대는 그 해역의 진입 레벨(에 여유를 더한 값)이다 */
 export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   if (!(o.hours > 0)) throw new Error('낚는 시간은 0보다 커야 합니다(시간)');
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
-  const unlock = o.unlockBoat ?? DEFAULT_FROM_BOAT;
-  return spotsAt(o.margin).filter(({ s }) => s.boatTier >= unlock).map(({ s, i }) => {
-    const level = entryLevel(s.id) + o.margin;
-    const r = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);
-    const cap = capOfBoat(Math.max(s.boatTier, unlock)), n = Math.round(r.catchesPerHour * o.hours);
-    let total = 0;
-    const cum = r.rows.map(row => (total += row.prob));
-    const rand = rng(o.seed + i);
-    const auto = zeroGrades(), kept = zeroGrades();
-    let autoGold = 0, keptGold = 0;
-    function* draw(): Generator<Bucket> {
-      for (let k = 0; k < n; k++) {
-        const x = rand() * total;
-        let lo = 0, hi = cum.length - 1;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (x < cum[mid]) hi = mid; else lo = mid + 1; }
-        const fish = r.rows[lo].fish, variant = rand() < r.variantShare;
-        yield { grade: fish.rarity, variant, price: fish.price * (variant ? VARIANT_PRICE_MULT : 1) };
+  const unlock = o.unlockBoat ?? COOKING_UNLOCK_BOAT;
+  const stages = [...new Set(SPOTS.map(s => s.boatTier))].filter(b => b >= unlock).sort((a, b) => a - b);
+  return stages.flatMap(boat => {
+    const state = { ...newState(), boat }, front = new Set<SpotId>(frontmostSpots(boat));
+    return spotsAt(o.margin).filter(({ s }) => canFishSpot(state, s.id)).map(({ s, i }) => {
+      const level = entryLevel(s.id) + o.margin;
+      const r = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);
+      const cap = capOfBoat(boat), n = Math.round(r.catchesPerHour * o.hours);
+      let total = 0;
+      const cum = r.rows.map(row => (total += row.prob));
+      const rand = rng(o.seed + i);
+      const kept = zeroGrades(), released = zeroGrades();
+      let keptGold = 0, releasedGold = 0;
+      function* draw(): Generator<Bucket> {
+        for (let k = 0; k < n; k++) {
+          const x = rand() * total;
+          let lo = 0, hi = cum.length - 1;
+          while (lo < hi) { const mid = (lo + hi) >> 1; if (x < cum[mid]) hi = mid; else lo = mid + 1; }
+          yield { fishId: r.rows[lo].fish.id, variant: rand() < r.variantShare };
+        }
       }
-    }
-    for (let t = 0; t < o.trials; t++) {
-      const f = fillBag(draw(), cap);
-      for (const g of RARITY_ORDER) { auto[g] += f.auto[g] / o.trials; kept[g] += f.kept[g] / o.trials; }
-      autoGold += f.autoGold / o.trials; keptGold += f.keptGold / o.trials;
-    }
-    return { spot: s.id, level, cap, catches: n, auto, autoGold, kept, keptGold };
+      for (let t = 0; t < o.trials; t++) {
+        const f = fillBag(draw(), cap);
+        for (const g of RARITY_ORDER) { kept[g] += f.kept[g] / o.trials; released[g] += f.released[g] / o.trials; }
+        keptGold += f.keptGold / o.trials; releasedGold += f.releasedGold / o.trials;
+      }
+      const frontmost = front.has(s.id);
+      return {
+        boat, spot: s.id, level, cap, catches: n, frontmost, kept, keptGold, released, releasedGold,
+        energy: frontmost ? zeroGrades() : { ...kept }, energyGold: frontmost ? 0 : keptGold,
+      };
+    });
   });
 }
 

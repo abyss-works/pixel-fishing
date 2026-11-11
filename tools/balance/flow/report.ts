@@ -88,7 +88,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   travel      이동 시간 관측: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 잰다. 다른 명령의 시간에 넣지 않는다
   effects     요리 효과: 효과를 넣었을 때 해역별 수입(골드·명성 변화, 네임드 조우), 도감 완성 시간(몬테카를로), 낚시 1시간 분해 재료 공급을 효과 없음과 견준다. 효과는 아래 옵션으로 준다. 수동 낚시(미끼 슬롯)는 --axis manual로 잰다
   window      시간 제한 효과의 창: 등급 미끼 같은 미끼 슬롯 효과를 한 번 쓰는 창(기본 ${BAIT_WINDOW_MIN}분) 안의 등급별 기대 캐치 수와 골드, 명성 증가, 창 하나가 도감 완성 시간을 줄이는 양. 수동 GOOD이 기본이다
-  recipes     레시피 순손익: 재료로 쓴 물고기의 판매 손실 대 효과 지속 동안의 수입 증가(해역별), 가방 한도와 자동 기운 얻기를 넣은 하루 기운 공급과 자동 기운으로 만들 수 있는 레시피 수. 재료는 --axis 방식(기본 방치)으로 그 해역에서만 모은다
+  recipes     레시피 순손익: 재료로 쓴 물고기의 판매 손실 대 효과 지속 동안의 수입 증가(해역별), 집 기운 얻기 공급(가장 앞선 두 해역보다 앞 해역에서 낚아 가방에 남은 개체를 해역 기본 선택대로 기운으로 바꾼 등급별 개수)과 그 기운으로 만들 수 있는 레시피 수. 재료는 --axis 방식(기본 방치)으로 그 해역에서만 모은다
   gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
               같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다.
               효과 옵션을 주면 이동 직후 수입(낮 풀, 낮밤 혼합)과 전환 시간만 효과를 넣어 관측하고(효과 없음 값을 함께 낸다) 종료 코드는 판정에 따르지 않는다
@@ -435,9 +435,11 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       '효과 지속 동안의 수입 증가는 효과 없음 대비 시간당 골드(명성) 차이 x 지속이다. 도시락은 방치로, 미끼 요리는 수동 GOOD(파워 미달 해역은 무판정)로 지속 시간 내내 낚는다고 본다. 도시락은 하루 낚시가 지속보다 짧아도 지속 전체를 낚는다고 센 상한이다',
       '골드로 환산되지 않는 효과(네임드 조우, 돌연변이 도감 단축)는 순손익에 들지 않는다. 돌연변이 가중은 판매가 기댓값만 올린다',
       '재료를 모으는 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다. 나오지 않는 등급이 필요한 해역은 모을 수 없다',
-      '가방 공급은 기운 얻기가 열리는 배(증기선) 이상의 해역만 낸다. 그 해역에서 플레이어가 가진 배(해금 배 이상)의 가방 용량으로, 가방을 비우고 판매 없이 정해진 시간 낚는 한 번의 낚시다.',
-      '가방이 넘치면 제품의 개체 비교 순서(등급, 돌연변이 여부)대로 가장 안 특별한 개체가 기운이 된다. 크기는 순서의 마지막 기준이라 넣지 않고 같은 칸의 판매가는 평균이다. 시드 고정 몬테카를로이고 시도 평균이다',
-      '자동 기운으로 만들 수 있는 개수는 필요한 등급 중 가장 모자란 등급이 정한다. 직접 기운 얻기(가방에 남은 개체)는 넣지 않는다',
+      '집 기운 얻기 공급은 기운 얻기가 열리는 배 단계 이상의 배 단계마다, 그 배로 갈 수 있는 해역에서 그 배 단계의 가방 용량으로 가방을 비우고 판매 없이 정해진 시간 낚은 한 번의 낚시다. 낚싯대는 그 해역의 진입 레벨이다',
+      '가방이 넘치면 제품의 개체 비교 순서(등급, 개체 판매가, 크기)대로 가장 안 특별한 개체를 놓아준다. 놓아준 개체는 기운이 되지 않는다. 크기는 순서의 마지막 기준이라 넣지 않는다. 시드 고정 몬테카를로이고 시도 평균이다',
+      '가방에 남은 개체 가운데 해역 기본 선택(요리 명세 3.3)대로 기운으로 바꾼 개수가 공급이다. 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역과 직전 해역의 어종은 기본 선택에서 빠져 공급이 0이다. 플레이어가 기본 선택을 덮어쓰는 경우는 넣지 않는다',
+      '집 기운으로 만들 수 있는 개수는 필요한 등급 중 가장 모자란 등급이 정한다',
+      '판정 칸 효과 레시피는 효과 값이 정해지지 않아 레시피 표에 넣지 않는다',
     );
   } else if (command === 'opening') {
     lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
@@ -837,7 +839,7 @@ function recipesText(w: NonNullable<FlowResult['recipes']>, o: FlowResult['optio
   const ids = [...new Set(w.rows.map(r => r.recipe))];
   for (const id of ids) {
     const recipe = RECIPES.find(r => r.id === id)!;
-    out.push(`\n## ${recipe.name}(가칭, ${id}) — 기운 ${cost(recipe.cost)}, ${recipe.kind === 'lunch' ? '도시락' : '미끼 요리'} ${recipe.hours >= 1 ? `${recipe.hours}시간` : `${recipe.hours * 60}분`}, 효과 ${effectLabel(recipe.effect)}`);
+    out.push(`\n## ${recipe.name}(${id}) — 기운 ${cost(recipe.cost)}, ${recipe.kind === 'lunch' ? '도시락' : '미끼 요리'} ${recipe.hours >= 1 ? `${recipe.hours}시간` : `${recipe.hours * 60}분`}, 효과 ${effectLabel(recipe.effect)}`);
     out.push(table(
       ['해역', '낚싯대', '재료 모으는 시간', '판매 손실(G)', '수입 증가(G)', '명성 증가', '순손익(G)', '증가 ÷ 손실'],
       w.rows.filter(r => r.recipe === id).map(r => [
@@ -846,19 +848,19 @@ function recipesText(w: NonNullable<FlowResult['recipes']>, o: FlowResult['optio
       ]),
     ));
   }
-  out.push(`\n## 가방 한도와 자동 기운 얻기 — 가방을 비우고 판매 없이 ${w.hours}시간 낚을 때(몬테카를로 시드 ${w.seed}, ${w.trials}회 평균)`);
+  out.push(`\n## 집 기운 얻기 공급 — 배 단계마다 가방을 비우고 판매 없이 ${w.hours}시간 낚은 뒤 해역 기본 선택대로 기운으로 바꿀 때(몬테카를로 시드 ${w.seed}, ${w.trials}회 평균)`);
   out.push(table(
-    ['해역', '낚싯대', '가방', '낚은 수', ...RARITY_ORDER.map(g => `자동 ${RARITY[g].name} 기운`), '내보낸 개체 판매가', ...RARITY_ORDER.map(g => `남은 ${RARITY[g].name}`), '가방 판매가'],
+    ['배 단계', '해역', '낚싯대', '가방', '낚은 수', '기본 선택', ...RARITY_ORDER.map(g => `${RARITY[g].name} 기운`), '놓아준 개체', '놓아준 판매가', '기운이 된 개체 판매가'],
     w.bag.map(r => [
-      nameOf(r.spot), lv(r.spot, r.level), r.cap, r.catches, ...RARITY_ORDER.map(g => r.auto[g].toFixed(1)), n0(r.autoGold),
-      ...RARITY_ORDER.map(g => r.kept[g].toFixed(1)), n0(r.keptGold),
+      `${r.boat}단계`, nameOf(r.spot), lv(r.spot, r.level), r.cap, r.catches, r.frontmost ? '제외(가장 앞선 두 해역)' : '대상',
+      ...RARITY_ORDER.map(g => r.energy[g].toFixed(1)), RARITY_ORDER.reduce((a, g) => a + r.released[g], 0).toFixed(1), n0(r.releasedGold), n0(r.energyGold),
     ]),
   ));
   const shown = RECIPES.filter(r => ids.includes(r.id));
-  out.push(`\n## 자동 기운으로 만들 수 있는 레시피 수 (${w.hours}시간 한 번의 낚시)`);
+  out.push(`\n## 집 기운으로 만들 수 있는 레시피 수 (${w.hours}시간 한 번의 낚시)`);
   out.push(table(
-    ['해역', ...shown.map(r => r.name)],
-    w.bag.map(r => [nameOf(r.spot), ...shown.map(rc => recipesCovered(r.auto, rc).toFixed(1))]),
+    ['배 단계', '해역', ...shown.map(r => r.name)],
+    w.bag.map(r => [`${r.boat}단계`, nameOf(r.spot), ...shown.map(rc => recipesCovered(r.energy, rc).toFixed(1))]),
   ));
   return out;
 }

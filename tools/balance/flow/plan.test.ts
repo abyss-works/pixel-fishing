@@ -43,7 +43,7 @@ describe('효과 계획', () => {
   });
 
   it('레시피를 주면 재료 판매 손실을 8시간 낚시 하루에 한 번으로 나눠 시간당 비용으로 낸다', () => {
-    const quick = RECIPES.find(r => r.id === 'quick')!;
+    const quick = RECIPES.find(r => r.id === 'cook-lunch-bite')!;
     const plan = effectPlan({ effect: quick.effect, recipe: quick });
     const level = entryLevel(last);
     const m = materialLoss(quick, last, level, 'idle');
@@ -57,7 +57,7 @@ describe('효과 계획', () => {
   });
 
   it('재료가 나오지 않는 해역에서는 레시피를 만들 수 없어 효과도 비용도 없다', () => {
-    const mixed = RECIPES.find(r => r.id === 'mixed')!;
+    const mixed = RECIPES.find(r => r.id === 'cook-lunch-bundle')!;
     const spot = SPOTS.find(s => !materialLoss(mixed, s.id, entryLevel(s.id), 'idle').feasible)!;
     const plan = effectPlan({ effect: mixed.effect, recipe: mixed, fromBoat: 0 });
     const level = entryLevel(spot.id);
