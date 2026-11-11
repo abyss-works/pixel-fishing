@@ -85,6 +85,86 @@ describe('MenuCard', () => {
   });
 });
 
+describe('MenuCard 잠금', () => {
+  const lockedCard = (onClick = vi.fn()) => {
+    render(<MenuCard icon={null} title="옷장" lock={['계정을 연결하면 쓸 수 있어요.']} onClick={onClick} />);
+    return onClick;
+  };
+
+  it('잠금 카드에는 title 속성이 없고 자물쇠가 붙는다', () => {
+    const { container } = render(<MenuCard icon={null} title="옷장" lock={['안내']} />);
+    expect(container.querySelector('[title]')).toBeNull();
+    expect(container.querySelector('[data-glyph="lock"]')).not.toBeNull();
+    expect(screen.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('잠금 카드를 눌러도 onClick은 실행되지 않고 툴팁만 열린다(거친 포인터)', () => {
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)', media: query,
+      addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    const onClick = lockedCard();
+    fireEvent.click(screen.getByRole('button'));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+  });
+
+  it('잠금 카드를 눌러도 onClick이 실행되지 않는다(마우스)', () => {
+    const onClick = lockedCard();
+    fireEvent.click(screen.getByRole('button'));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('마우스를 올리거나 키보드로 포커스하면 툴팁이 열린다', () => {
+    lockedCard();
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByRole('button').parentElement!);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.focus(screen.getByRole('button'));
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+  });
+
+  it('잠금 사유가 접근성 설명으로 이어지고 이름은 그대로다', () => {
+    render(<MenuCard icon={null} title="부엌" lock={['첫째', '둘째']} />);
+    const card = screen.getByRole('button', { name: '부엌' });
+    expect(card).toHaveAccessibleDescription('첫째 둘째');
+  });
+
+  it('같은 안내 줄이 겹쳐도 key 중복 경고 없이 줄마다 보인다', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<MenuCard icon={null} title="부엌" lock={['같은 줄', '같은 줄']} />);
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    expect(screen.getByRole('tooltip').querySelectorAll('.block')).toHaveLength(2);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('설명 줄이 숨겨졌을 때 잠금 툴팁은 잠금 안내 아래에 설명도 보인다', () => {
+    const style = document.createElement('style');
+    style.textContent = '[data-omittable] { display: none; }';
+    document.head.appendChild(style);
+    render(<MenuCard icon={null} title="부엌" sub="준비 설명" subRole="omittable" lock={['잠금 안내']} />);
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
+    expect(lines).toEqual(['잠금 안내', '준비 설명']);
+  });
+
+  it('설명 줄이 보이는 동안 잠금 툴팁은 설명을 되풀이하지 않는다', () => {
+    render(<MenuCard icon={null} title="부엌" sub="준비 설명" subRole="omittable" lock={['잠금 안내']} />);
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
+    expect(lines).toEqual(['잠금 안내']);
+  });
+
+  it('안내 줄마다 줄을 나눠 보인다', () => {
+    render(<MenuCard icon={null} title="부엌" lock={['첫째', '둘째']} />);
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
+    expect(lines).toEqual(['첫째', '둘째']);
+  });
+});
+
 describe('menu-compact 변형 정의', () => {
   it('index.css가 basemenu 컨테이너 기준의 menu-compact 변형을 정의한다', () => {
     const block = css.match(/@custom-variant\s+menu-compact\s*\{([\s\S]*?)\n\}/);

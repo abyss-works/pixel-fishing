@@ -207,6 +207,9 @@ export default function GameView(props: GameViewProps) {
         setActionPanel(null);
         setFerryOpen(true);
         return;
+      case 'kitchen':
+        // 부엌 창은 아직 없다. 열린 뒤에도 누르면 아무 창도 열지 않는다
+        return;
     }
   };
 
@@ -265,7 +268,7 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={props.account === null} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}

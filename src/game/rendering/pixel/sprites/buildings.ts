@@ -60,6 +60,22 @@ export const FURNITURE_SPRITES: Record<FurnitureSpriteId, FurnitureDraw> = {
     R(ctx, f.x + f.w / 2 - 5, f.y + f.h / 2, 2, 5, '#ffd54f');
     R(ctx, f.x + f.w / 2 + 3, f.y + f.h / 2, 2, 5, '#ffd54f');
   },
+  // 집: 부엌 — 돌 아궁이 + 불 + 솥 + 굴뚝과 김
+  kitchen: (ctx, f) => {
+    R(ctx, f.x + f.w - 10, f.y, 6, 18, '#6d4c41');
+    R(ctx, f.x + f.w - 11, f.y - 2, 8, 3, '#4e342e');
+    R(ctx, f.x, f.y + 16, f.w, f.h - 16, '#546e7a');
+    R(ctx, f.x, f.y + 16, f.w, 4, '#90a4ae');
+    R(ctx, f.x + 8, f.y + 26, 16, 12, '#212121');
+    R(ctx, f.x + 11, f.y + 31, 4, 6, '#ff7043');
+    R(ctx, f.x + 16, f.y + 29, 4, 8, '#ffd54f');
+    R(ctx, f.x + 5, f.y + 8, 24, 9, '#37474f');
+    R(ctx, f.x + 3, f.y + 7, 28, 3, '#263238');
+    R(ctx, f.x + 1, f.y + 11, 4, 3, '#263238');
+    R(ctx, f.x + 29, f.y + 11, 4, 3, '#263238');
+    R(ctx, f.x + 12, f.y + 1, 2, 4, '#e0e0e0');
+    R(ctx, f.x + 18, f.y - 1, 2, 4, '#e0e0e0');
+  },
   // 집: 문(마을로)
   door: (ctx, f) => {
     R(ctx, f.x, f.y, f.w, f.h, '#4e342e');

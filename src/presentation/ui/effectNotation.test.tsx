@@ -1,7 +1,8 @@
 // 효과 표기 가드 - 보너스 효과는 +N%/−N%, 기본 규칙 배수는 N배로 쓰고, 화면의 숫자는 실제 적용값과 같다.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ARTIFACTS } from '../../game/content/artifacts';
+import type { Artifact } from '../../game/content/artifacts';
 import { BAITS } from '../../game/content/baits';
 import { selectStatsSpotRows } from '../../features/gameplay/model/stats';
 import { commonWeightMultiplier } from '../../game/rules/actions';
@@ -14,6 +15,11 @@ import { fmtMult } from './format';
 import RodStatTable from '../views/overlays/stats/RodStatTable';
 import SummaryTab from '../views/overlays/stats/SummaryTab';
 import ShopPanel from '../views/overlays/facility/ShopPanel';
+
+// 미끼값 효과를 가진 유물은 지금 콘텐츠에 없다. 효과 경로는 합성 유물을 보유 유물 표에 잠시 더해 검증한다
+const discountArtifact: Artifact = { ...ARTIFACTS.find(a => a.id === 'varuna-scale')!, id: 'test-bait-discount', effects: { baitDiscount: 0.25 }, cook: undefined };
+beforeAll(() => { (ARTIFACTS as Artifact[]).push(discountArtifact); });
+afterAll(() => { (ARTIFACTS as Artifact[]).splice((ARTIFACTS as Artifact[]).indexOf(discountArtifact), 1); });
 
 const game = (over: Partial<GameState>): GameState => ({ ...newState(), ...over });
 const rowOf = (g: GameState, id: string) => selectStatsSpotRows(g, 'sail').find(r => r.spot.id === id)!;
@@ -51,8 +57,8 @@ describe('효과 표기 가드', () => {
   });
 
   it('상점의 미끼값 태그는 유물 효과 줄과 같은 문자열을 낸다', () => {
-    const varuna = ARTIFACTS.find(a => a.id === 'varuna-scale')!;
-    for (const level of [1, 2, 5]) {
+    const varuna = discountArtifact;
+    for (const level of [1]) { // 합성 유물은 id 조회에 없어 레벨 맵이 닿지 않는다. 레벨별 문장은 효과 문장 테스트가 본다
       const g = game({ artifacts: [varuna.id], artifactLevels: { [varuna.id]: level } });
       cleanup();
       render(<ShopPanel game={g} onBuy={() => {}} onClose={() => {}} busy={false} />);

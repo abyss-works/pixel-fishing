@@ -130,6 +130,13 @@ describe('받는 보너스', () => {
       .toEqual([['duel', 'abyss-angler', 'duelSpeedupCut'], ['move', 'wreck-compass', 'sail']]);
   });
 
+  it('진주 상인의 저울은 요리 추가 완성 확률 줄을 낚시 갈래에 낸다', () => {
+    const g = game({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 2 } });
+    const rows = selectActiveBonuses(g).filter(b => b.source.kind === 'relic');
+    expect(rows.map(b => [b.category, b.source.kind === 'relic' && b.source.effect, b.source.kind === 'relic' && b.source.level]))
+      .toEqual([['fish', 'extraCookChance', 2]]);
+  });
+
   it('유물 보너스 줄에 보유 레벨이 붙는다 - 맵에 없으면 Lv1', () => {
     const g = game({ artifacts: ['abyss-angler', 'wreck-compass'], artifactLevels: { 'wreck-compass': 4 } });
     const levels = selectActiveBonuses(g).flatMap(b => b.source.kind === 'relic' ? [[b.source.artifact.id, b.source.level]] : []);
