@@ -3,7 +3,7 @@ import type { CookKind } from '../../../../game/content/cooking';
 import { RARITY } from '../../../../game/content/rarity';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
+import { recipeEffectNote, recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
 import { GradeName } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
@@ -17,12 +17,6 @@ import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
 import type { KitchenAct } from './kitchenParts';
 
 const MIN_MS = 60_000;
-
-// 효과 툴팁 — 종류마다 적용되는 낚시와 지속 시간이 다르다
-const EFFECT_TIP: Record<CookKind, string> = {
-  lunch: '방치 낚시에만 효과가 있어요.\n지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
-  bait: '챔질해서 낚을 때만 효과가 있어요.\n물고기를 낚아도 미끼가 줄지 않아요.\n지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
-};
 
 // 도시락 탭과 미끼 탭 — 왼쪽은 그 종류의 레시피 목록(이름, 1개에 드는 기운, 보유한 완성품)이고, 오른쪽은 고른 레시피의 효과,
 // 필요와 보유, 수량과 조리 시간이다. 조리 시작 버튼은 오른쪽 열 맨 아래에 고정한다.
@@ -67,7 +61,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
       <HeroHeader title={recipeLabel(view.recipe)}
                   tags={[`보유 ${view.owned}개`, `지속 시간 ${fmtMinutes(view.slotMs / MIN_MS)}`]} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
-        <Tip text={EFFECT_TIP[kind]} className="self-start text-xs text-text-dim">효과</Tip>
+        <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">효과</Tip>
         {view.effects.map(line => (
           <div key={line.label} className="flex items-center justify-between gap-2 text-xs">
             <span>{line.label}</span><span className="pf-accent text-accent">{line.value}</span>

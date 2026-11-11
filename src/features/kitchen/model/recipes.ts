@@ -27,6 +27,15 @@ export function recipeLabel(recipe: Recipe): string {
   return grade === null ? recipe.name : gradeName(recipe.name, RARITY[grade].name);
 }
 
+// 효과 설명 — 종류마다 적용되는 낚시와 지속 시간이 다르다. 칩 줄의 슬롯 칩과 부엌 창이 같은 문안을 쓴다
+const EFFECT_NOTE: Readonly<Record<CookKind, string>> = {
+  lunch: '방치 낚시에만 효과가 있어요.\n지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+  bait: '챔질해서 낚을 때만 효과가 있어요.\n물고기를 낚아도 미끼가 줄지 않아요.\n지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+};
+
+/** 그 종류의 효과 설명 — 줄마다 줄바꿈으로 나뉜다 */
+export const recipeEffectNote = (kind: CookKind): string => EFFECT_NOTE[kind];
+
 export interface RecipeEffectLine { label: string; value: string }
 
 /** 소수 둘째 자리까지, 끝의 0은 뺀다 */
