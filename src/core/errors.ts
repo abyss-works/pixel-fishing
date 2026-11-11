@@ -77,12 +77,12 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
   'guest-village-only': {
     // 게스트의 바다 이동·낚시 거부 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
     level: 'warning',
-    message: '계정을 만든 뒤에 바다로 나갈 수 있어요. 설정 탭의 계정 관리에서 계정을 만들 수 있어요.',
+    message: '계정을 연결한 뒤에 바다로 나갈 수 있어요. 설정 탭의 계정 관리에서 연결해 주세요.',
   },
   'account-only': {
     // 게스트에게 열리지 않은 기능 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
     level: 'warning',
-    message: '계정을 만든 뒤에 쓸 수 있어요. 설정 탭의 계정 관리에서 계정을 만들 수 있어요.',
+    message: '계정을 연결한 뒤에 쓸 수 있어요. 설정 탭의 계정 관리에서 연결해 주세요.',
   },
   'rate-limited': {
     // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
