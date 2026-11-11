@@ -37,6 +37,31 @@ describe('플레이 스탯 화면 데이터', () => {
   });
 });
 
+describe('입질 대기의 요리 출처', () => {
+  const T0 = '2026-11-12T00:00:00.000Z';
+  const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
+  const cookMod = (g: GameState, now: string) =>
+    selectStatsModalData(g, 'sail', 0, now).effectiveBite.min.mods.find(m => m.id === 'cook-lunch');
+
+  it('효과가 든 입질 단축 도시락은 입질 대기 보정 줄에 요리 이름을 출처로 낸다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    expect(cookMod(g, T0)).toMatchObject({ label: '가루디야' });
+    expect(cookMod(g, T0)!.delta).toBeLessThan(0);
+  });
+
+  it('끝난 슬롯이나 빈 슬롯은 보정 줄이 없다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    expect(cookMod(g, at(3_600_000))).toBeUndefined();
+    expect(cookMod(game({ boat: 5 }), T0)).toBeUndefined();
+  });
+
+  it('해역 행 목록도 같은 시각 기준으로 보정을 싣는다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    const row = selectStatsSpotRows(g, 'sail', T0)[0];
+    expect(row.data.effectiveBite.min.mods.some(m => m.id === 'cook-lunch')).toBe(true);
+  });
+});
+
 describe('방치 낚시 배수 표시', () => {
   const idleOf = (g: GameState, id: string) => selectStatsModalData(g, 'sail', indexOf(id)).idle;
   const applied = (g: GameState, id: string) => {
@@ -178,7 +203,7 @@ describe('받는 보너스', () => {
       expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 가중치 +50%']]);
     });
 
-    it('도시락은 방치 낚시에만, 미끼는 직접 낚을 때만 붙는다고 표시한다', () => {
+    it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: { id: 'cook-bait-mutation', endsAt: at(60_000) } } });
       const [lunch, bait] = slotRows(g);
       expect([lunch.autoOnly, lunch.manualOnly]).toEqual([true, false]);

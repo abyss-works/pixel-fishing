@@ -55,7 +55,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
   const [start] = useState(() => selectInitialStatsSpotIndex(region, here));
   const [spotIndex, setSpotIndex] = useState(start);
-  const rows = useMemo(() => selectStatsSpotRows(game, movement), [game, movement]);
+  const rows = useMemo(() => selectStatsSpotRows(game, movement, now), [game, movement, now]);
   const selected = rows[spotIndex];
   const [zone, setZone] = useState<ZoneId>(rows[start].zone);
   const zoneTabs = selectStatsZoneTabs(rows, rows[start].zone);

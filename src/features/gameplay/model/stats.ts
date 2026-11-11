@@ -9,6 +9,7 @@ import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
+import { slotEffects } from '../../../game/rules/cooking';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
@@ -37,16 +38,19 @@ export function selectInitialStatsSpotIndex(region: RegionId, current: SpotId | 
   return best;
 }
 
-/** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. */
+/** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */
 export function selectStatsModalData(
-  game: GameState, movement: Movement, spotIndex: number,
+  game: GameState, movement: Movement, spotIndex: number, now: string = new Date().toISOString(),
 ) {
   const spot = SPOTS[spotIndex];
   const requirement = spot.powerReq ?? 0;
   const currentPower = rodPower(game);
   const zones = powerZones(game, spot.id);
   // 방치 낚시 배수: 표시값(applied)은 추첨이 실제로 곱하는 값 그대로다. required는 요구 파워에서의 배수.
-  const now = commonWeightMultiplier('auto', currentPower, spot.id, zones.mult);
+  const idleMult = commonWeightMultiplier('auto', currentPower, spot.id, zones.mult);
+  const lunch = activeSlot(game, 'lunch', now);
+  // 도시락은 방치 사이클의 입질 대기를 줄인다. 출처 이름은 지금 효과가 든 도시락의 이름이다
+  const cook = { ...slotEffects(game, now, 'auto'), label: lunch?.label };
   return {
     speed: moveSpeed(game, movement),
     axes: rodAxes(game),
@@ -54,12 +58,12 @@ export function selectStatsModalData(
     spot,
     requirement,
     requirementLevel: minLevelOfPower(requirement),
-    effectiveBite: effectiveBite(game, spot.id),
+    effectiveBite: effectiveBite(game, spot.id, cook),
     idle: {
       required: commonWeightMultiplier('auto', requirement, spot.id, 1).idle,
-      current: now.idle,
-      penalty: now.penalty,
-      applied: now.total,
+      current: idleMult.idle,
+      penalty: idleMult.penalty,
+      applied: idleMult.total,
     },
     powerZones: zones,
     currentPower,
@@ -82,9 +86,11 @@ export interface StatsSpotRow {
 const zoneOf = (spot: Spot): ZoneId => topZoneOfSpot(spot.id) ?? 'village';
 
 /** 모든 해역의 적합도와 그 해역 기준 스탯 */
-export function selectStatsSpotRows(game: GameState, movement: Movement): StatsSpotRow[] {
+export function selectStatsSpotRows(
+  game: GameState, movement: Movement, now: string = new Date().toISOString(),
+): StatsSpotRow[] {
   return SPOTS.map((spot, spotIndex) => {
-    const data = selectStatsModalData(game, movement, spotIndex);
+    const data = selectStatsModalData(game, movement, spotIndex, now);
     const fit: SpotFit = spot.boatTier > game.boat ? 'boat' : data.underpowered ? 'power' : 'ok';
     return { spotIndex, spot, zone: zoneOf(spot), fit, data };
   });
