@@ -15,6 +15,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.18.5',
+    date: '2026-11-11',
+    summary: '집과 항구의 시설 카드 배치를 맞췄어요',
+    notes: [
+      { tag: 'UI', text: '집과 항구의 시설 카드가 화면 위 자원 바 바로 아래부터 놓여요. 화면 크기가 달라도 같은 자리에 보여요.' },
+    ],
+  },
+  {
     version: '0.18.4',
     date: '2026-11-11',
     summary: '좁은 창의 PC 화면 배치를 고쳤어요',
