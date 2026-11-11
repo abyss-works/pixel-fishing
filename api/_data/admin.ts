@@ -209,6 +209,12 @@ export function letters(db: Executor): Promise<unknown[]> {
     from public.letters l`, sql`t.created_at desc, t.id desc`);
 }
 
+/** 변경 기록. 최신 버전부터, 버전 안에서는 순번 순서다. 철회된 항목도 withdrawnAt을 달아 함께 준다 */
+export function changelog(db: Executor): Promise<unknown[]> {
+  return jsonRows(db, sql`select c.id, c.version, c.date, c.seq, c.tier, c.tag, c.text, c.withdrawn_at as "withdrawnAt"
+    from public.changelog_entries c`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
+}
+
 /** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */
 export function chatReports(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select r.id, r.user_id, r.message_id, r.target_id, r.lines, r.created_at
