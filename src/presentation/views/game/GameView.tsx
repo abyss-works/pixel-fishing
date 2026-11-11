@@ -31,6 +31,7 @@ import StatsModal from '../overlays/stats/StatsModal';
 import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
+import { isGuest } from '../../../features/account/service/accountActions';
 import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
@@ -136,6 +137,7 @@ export default function GameView(props: GameViewProps) {
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
+  const guest = isGuest(props.account);
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
@@ -268,7 +270,7 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={props.account === null} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={guest} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
@@ -278,7 +280,7 @@ export default function GameView(props: GameViewProps) {
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? (
-                     <ChatBar inGuild={guild !== null} guest={props.account === null}
+                     <ChatBar inGuild={guild !== null} guest={guest}
                               folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping} />
                    ) : null}
                    filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
@@ -304,7 +306,7 @@ export default function GameView(props: GameViewProps) {
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge}
                    menu={(
-                     <GameMenu game={game} account={props.account} live={chat.enabled} setToast={props.setToast} onQuests={openQuests}
+                     <GameMenu game={game} account={props.account} guest={guest} setToast={props.setToast} onQuests={openQuests}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />

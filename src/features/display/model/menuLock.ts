@@ -16,7 +16,7 @@ export type MenuLock =
 export const GUEST_LOCK_TEXT = '계정을 연결하면 쓸 수 있어요.';
 
 /** 게스트에게 닫힌 화면 기능. 메뉴 줄 넷과 채팅, 편지, 닉네임 변경, 플레이어 정보의 친구 요청과 차단, 차단 목록이다 */
-export type GuestFeature = MenuKey | 'chat' | 'letter' | 'nickname' | 'player' | 'blocks';
+export type GuestFeature = MenuKey | 'chat' | 'letter' | 'nickname' | 'player';
 
 // 게스트 규칙의 액션으로 판정되는 기능. 규칙 판정은 게스트 규칙 모듈이 하고 여기는 짝만 안다.
 const GUEST_FEATURE_ACTION: Partial<Record<GuestFeature, GameAction>> = {
@@ -26,8 +26,10 @@ const GUEST_FEATURE_ACTION: Partial<Record<GuestFeature, GameAction>> = {
   nickname: { type: 'setNickname', nickname: '' },
 };
 
-// 액션이 아니라 서버 함수로 닫히는 기능은 계정 전용이다(길드, 친구, 채팅 쓰기, 차단, 플레이어 정보의 동작).
-const GUEST_CLOSED_FEATURES: ReadonlySet<GuestFeature> = new Set(['guild', 'friends', 'chat', 'player', 'blocks']);
+// 게스트 규칙(guestActionVerdict)은 게임 액션만 판정한다. 길드, 친구, 채팅 쓰기, 플레이어 정보의 친구 요청과 차단은
+// 게임 액션이 아니라 서버 API 함수라 대응 액션이 없고, 서버가 각 함수에서 세션의 이메일이 없으면(게스트) 거부한다.
+// 그래서 지금은 이 클라이언트 목록이 필요하다. 서버가 이 거부를 규칙 모듈의 판정으로 옮기면 이 목록을 규칙 판정으로 바꾼다.
+const GUEST_CLOSED_FEATURES: ReadonlySet<GuestFeature> = new Set(['guild', 'friends', 'chat', 'player']);
 
 // 기능 이름과 이유를 더해야 하는 기능의 잠금 문안. 나머지는 공통 한 줄이다.
 const GUEST_LOCK_LINES: Partial<Record<GuestFeature, readonly string[]>> = {

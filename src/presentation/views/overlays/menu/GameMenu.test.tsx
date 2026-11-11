@@ -32,7 +32,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-const handlers = () => ({ game: newState(), live: false, onQuests: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
+const handlers = () => ({ game: newState(), guest: false, onQuests: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
 afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
 
@@ -169,7 +169,7 @@ describe('게임 메뉴', () => {
   // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 네 줄이 모두 자리 그대로 잠긴다
   describe('게스트 잠금', () => {
     const guestMenu = async (h = handlers()) => {
-      wrap(<GameMenu account={null} {...h} live />);
+      wrap(<GameMenu account={null} {...h} guest />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       return h;
     };
@@ -177,7 +177,7 @@ describe('게임 메뉴', () => {
     it('의뢰, 길드, 소셜, 우편함 줄이 순서대로 aria-disabled 잠긴 줄이고 자물쇠가 붙으며 title이 없다', async () => {
       await guestMenu();
       const items = screen.getAllByRole('menuitem');
-      expect(items.map(i => i.textContent)).toEqual(['의뢰', '길드', '소셜', '우편함']);
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '길드', '소셜', '우편함']);
       for (const item of items) {
         expect(item).toHaveAttribute('aria-disabled', 'true');
         expect(item.querySelector('[data-glyph="lock"]')).not.toBeNull();
@@ -202,7 +202,7 @@ describe('게임 메뉴', () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       state.mails = [mail({ id: 1, gold: 100 })];
       const h = handlers();
-      wrap(<GameMenu account={null} {...h} live />);
+      wrap(<GameMenu account={null} {...h} guest />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
       fireEvent.click(button);
       expect(document.querySelector('[data-badge]')).toBeNull();
@@ -210,9 +210,9 @@ describe('게임 메뉴', () => {
       expect(h.setToast).not.toHaveBeenCalled();
     });
 
-    it('계정을 연결한 사용자는 잠기지 않고, 게임 서버가 없는 로컬 모드의 게스트도 잠그지 않는다', async () => {
+    it('잠금을 적용하지 않는 상태(계정 사용자, 로컬 모드)는 잠기지 않는다', async () => {
       state.mails = [mail({ id: 1, gold: 100 })];
-      wrap(<GameMenu account="me@example.com" {...handlers()} live />);
+      wrap(<GameMenu account="me@example.com" {...handlers()} />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       for (const item of screen.getAllByRole('menuitem')) expect(item).not.toHaveAttribute('aria-disabled');
       cleanup();

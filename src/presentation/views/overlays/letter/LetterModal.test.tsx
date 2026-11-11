@@ -30,8 +30,13 @@ describe('LetterModal', () => {
     fireEvent.mouseEnter(group.parentElement!);
     const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
     expect(lines).toEqual(['편지는 계정을 연결하면 쓸 수 있어요.', '답장을 계정 이메일로 드리기 때문이에요.']);
+    fireEvent.mouseLeave(group.parentElement!);
     fireEvent.click(group);
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
+    fireEvent.mouseLeave(group.parentElement!);
+    const sendGroup = screen.getByRole('group', { name: '보내기' });
+    fireEvent.mouseEnter(sendGroup.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('편지는 계정을 연결하면 쓸 수 있어요.');
     expect(dispatch).not.toHaveBeenCalled();
   });
 });

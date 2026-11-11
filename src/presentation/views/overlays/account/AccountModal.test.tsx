@@ -6,6 +6,7 @@ const accounts = vi.hoisted(() => ({ configured: true }));
 vi.mock('../../../../features/account/service/accountActions', async importOriginal => ({
   ...await importOriginal<object>(),
   isAccountConfigured: () => accounts.configured,
+  isGuest: (account: string | null) => account === null && accounts.configured,
 }));
 
 import AccountModal from './AccountModal';

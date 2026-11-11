@@ -3,6 +3,7 @@ import type { GameState } from '../../../../game/rules/logic';
 import {
   deleteAccount,
   isAccountConfigured,
+  isGuest,
   requestAccountPasswordReset,
   saveGameCode,
   signInAccount,
@@ -114,8 +115,8 @@ export default function AccountModal({
     window.location.reload(); // 재부팅 = 새 익명 세션으로 처음부터 시작
   });
 
-  // 게스트는 닉네임을 바꿀 수 없다. 로컬 모드는 계정을 연결할 곳이 없어 잠그지 않는다
-  const nickLock = guestLock('nickname', account === null && !offline);
+  // 게스트는 닉네임을 바꿀 수 없다
+  const nickLock = guestLock('nickname', isGuest(account));
   const submitNick = async () => {
     if (nickLock) return;
     if (!checkNickname(draft).ok) {

@@ -64,9 +64,14 @@ export default function LetterModal({ dispatch, setToast, guest, onClose }: {
           {body.length} / {LETTER_MAX}
         </span>
         <span className="ml-auto flex gap-2">
-          <Button size="sm" disabled={guest || !body || over || busy} onClick={send}>
-            보내기
-          </Button>
+          {(() => {
+            const sendButton = (
+              <Button size="sm" disabled={guest || !body || over || busy} onClick={send}>
+                보내기
+              </Button>
+            );
+            return lock ? <Locked lines={lock} label="보내기">{sendButton}</Locked> : sendButton;
+          })()}
         </span>
       </div>
     </Modal>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock } from './menuLock';
 import type { GuestFeature } from './menuLock';
+import { POLICY } from '../../../core/errors';
 
 const base = { feature: '부엌', guestAllowed: true, progress: undefined };
 
@@ -65,7 +66,7 @@ describe('거점 카드의 진행 조건', () => {
 });
 
 describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
-  const closed: GuestFeature[] = ['quests', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player', 'blocks'];
+  const closed: GuestFeature[] = ['quests', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player'];
 
   it('게스트에게는 닫힌 기능마다 잠금 줄이 있고 계정을 연결한 사용자에게는 없다', () => {
     for (const feature of closed) {
@@ -75,7 +76,7 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
   });
 
   it('메뉴 줄, 플레이어 정보, 차단 목록, 닉네임은 공통 한 줄이다', () => {
-    for (const feature of ['quests', 'guild', 'friends', 'mailbox', 'player', 'blocks', 'nickname'] as const) {
+    for (const feature of ['quests', 'guild', 'friends', 'mailbox', 'player', 'nickname'] as const) {
       expect(guestLock(feature, true), feature).toEqual([GUEST_LOCK_TEXT]);
     }
   });
@@ -89,6 +90,10 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
 
   it('채팅 거부 안내는 채팅 잠금 줄을 한 줄로 잇는다', () => {
     expect(GUEST_CHAT_NOTICE).toBe('채팅은 계정을 연결하면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
+  });
+
+  it('계정 전용 거부 정책 문구는 공통 잠금 문장으로 시작한다', () => {
+    expect(POLICY['account-only'].message.startsWith(GUEST_LOCK_TEXT)).toBe(true);
   });
 
   it('잠금 문안에 만든 뒤 계열 표현이 없다', () => {

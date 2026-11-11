@@ -45,8 +45,8 @@ export default function Locked({ lines, role = 'group', label, badge = true, cla
             className="relative block w-full min-w-0 cursor-not-allowed focus-visible:outline-1 focus-visible:outline-gold">
         <span className="block w-full min-w-0 opacity-55 pointer-events-none">{children}</span>
         {badge && <LockBadge />}
+        <span id={reasonId} className="sr-only">{lines.join(' ')}</span>
       </span>
-      <span id={reasonId} className="sr-only">{lines.join(' ')}</span>
     </Tip>
   );
 }

@@ -13,6 +13,7 @@ const s = vi.hoisted(() => ({
   report: vi.fn(async () => null),
 }));
 
+vi.mock('../../../../features/account/service/accountActions', () => ({ isGuest: (account: string | null) => account === null }));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
   usePlayerProfile: () => ({ profile: {
     nickname: '갈치', boat: 2, rod: 7, fame: 12345, dexFish: ['crucian', 'minnow'], artifacts: ['abyss-angler'], account: true,
@@ -75,6 +76,7 @@ describe('PlayerInfo', () => {
     expect(container.querySelectorAll('[data-glyph="lock"]')).toHaveLength(2);
     expect(container.querySelector('[title]')).toBeNull();
     const groups = screen.getAllByRole('group');
+    expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['친구 요청', '차단']);
     fireEvent.mouseEnter(groups[0].parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
     fireEvent.mouseLeave(groups[0].parentElement!);

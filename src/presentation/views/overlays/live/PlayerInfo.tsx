@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { GUEST_LOCK_TEXT, guestLock } from '../../../../features/display/model/menuLock';
+import { isGuest } from '../../../../features/account/service/accountActions';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
@@ -107,13 +108,13 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
     : relation === 'incoming' ? <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('accept')}>친구 수락</Button>
     : friends.groups && <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('request')}>친구 요청</Button>
   );
-  const lock = guestLock('player', account === null);
+  const lock = guestLock('player', isGuest(account));
   const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
-      <Locked lines={lock} className="flex-1 block">
+      <Locked lines={lock} label="친구 요청" className="flex-1 block">
         <Button variant="primary" full disabled>친구 요청</Button>
       </Locked>
-      <Locked lines={lock}>
+      <Locked lines={lock} label="차단">
         <Button disabled>차단</Button>
       </Locked>
     </div>

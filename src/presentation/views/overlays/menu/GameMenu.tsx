@@ -22,7 +22,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수 배지를 붙인다. 의뢰 줄은 일반(노랑), 네임드(보라) 순으로 오늘 남은 클리어를 배지로 보인다.
 // 접힌 상태에서는 새 알림(소셜의 받은 요청, 우편함의 받지 않은 우편)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지는 점을 켜지 않는다.
 // 입구마다 보이는 조건: 의뢰는 늘 보이고, 길드와 소셜은 계정 유저만 열며, 우편함은 클라우드 모드에서만 보인다.
-// 게임 서버가 있는데 계정을 연결하지 않은 게스트에게는 네 줄이 모두 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다.
+// 게스트 잠금을 적용하는 게스트에게는 네 줄이 모두 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다.
 // 잠긴 줄에는 배지와 알림 점이 없다.
 // 자리는 헤더(HudHeader)가 정한다. 두 레이아웃 모두 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼의 오른쪽 아래에 붙어 게임 영역 위에 겹쳐 뜨므로 헤더 행의 높이를 바꾸지 않는다.
 
@@ -41,12 +41,12 @@ interface Entry {
   onOpen: () => void;
 }
 
-export default function GameMenu({ game, account, live, onQuests, onGuild, onFriends, onMailbox, setToast }: {
+export default function GameMenu({ game, account, guest, onQuests, onGuild, onFriends, onMailbox, setToast }: {
   /** 남은 클리어 횟수의 한도를 정하는 보유 유물 상태 */
   game: ArtifactHolder;
   account: string | null;
-  /** 게임 서버가 있는가. 없으면(로컬 모드) 계정을 연결할 곳이 없어 게스트 잠금을 두지 않는다 */
-  live: boolean;
+  /** 게스트 잠금을 적용하는가(isGuest) */
+  guest: boolean;
   onQuests: () => void;
   onGuild: () => void;
   onFriends: () => void;
@@ -54,7 +54,6 @@ export default function GameMenu({ game, account, live, onQuests, onGuild, onFri
   setToast: Notify;
 }) {
   const mobile = useMobileLayout();
-  const guest = account === null && live;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const guild = useGuild(account !== null);

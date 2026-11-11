@@ -50,6 +50,8 @@ describe('Locked', () => {
 
   it('메뉴 줄 역할로 쓰면 aria-disabled 메뉴 항목이 된다', () => {
     render(<Locked lines={['안내']} role="menuitem" label="길드"><span>길드</span></Locked>);
-    expect(screen.getByRole('menuitem', { name: '길드' })).toHaveAttribute('aria-disabled', 'true');
+    const item = screen.getByRole('menuitem', { name: '길드' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item.querySelector(`[id="${item.getAttribute('aria-describedby')}"]`)).toHaveTextContent('안내');
   });
 });
