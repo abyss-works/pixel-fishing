@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_FISH_ART_STYLE, FISH_ART_STYLES, fishArt, isFishArtStyle } from './index';
 import { drawFishSprite } from './v1Shapes';
 import { FISH } from '../../../content/fish';
-import { SILHOUETTE } from '../../../content/sprites';
+import { SILHOUETTE } from '../../../content/sprites/common';
 import type { Ctx } from '../common';
 
 /** fillRect 호출을 (색, 좌표, 크기)로 기록하는 컨텍스트 — jsdom에는 캔버스가 없다 */
