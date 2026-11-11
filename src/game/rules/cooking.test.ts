@@ -60,17 +60,17 @@ describe('해금', () => {
 });
 
 describe('기운 얻기 기본 선택', () => {
-  it('배 5는 가장 앞선 두 해역(그레이트 배리어 리프, 인도양)을 뺀다', () => {
-    expect(energyDefaultExcluded(5)).toEqual(['barrierreef', 'indian']);
+  it('배 5는 가장 앞선 해역(인도양) 하나만 뺀다', () => {
+    expect(energyDefaultExcluded(5)).toEqual(['indian']);
   });
-  it('배 6은 인도양과 남인도양, 배 7은 모잠비크 해협과 코모로 심해를 뺀다', () => {
-    expect(energyDefaultExcluded(6)).toEqual(['indian', 'southindian']);
-    expect(energyDefaultExcluded(7)).toEqual(['mozstrait', 'comorodeep']);
+  it('배 6은 남인도양, 배 7은 코모로 심해 하나만 뺀다', () => {
+    expect(energyDefaultExcluded(6)).toEqual(['southindian']);
+    expect(energyDefaultExcluded(7)).toEqual(['comorodeep']);
   });
   it('기본값은 제외 해역만 꺼짐이고 나머지는 켜짐이다', () => {
     const s = seed({ boat: 5 });
     expect(energyTargetOf(s, 'indian')).toBe(false);
-    expect(energyTargetOf(s, 'barrierreef')).toBe(false);
+    expect(energyTargetOf(s, 'barrierreef')).toBe(true);
     expect(energyTargetOf(s, 'coron')).toBe(true);
     expect(energyTargetOf(s, 'pond')).toBe(true);
   });
@@ -79,7 +79,8 @@ describe('기운 얻기 기본 선택', () => {
     expect(energyTargetOf(s, 'indian')).toBe(true);
     expect(energyTargetOf({ ...s, boat: 7 }, 'indian')).toBe(true);
     expect(energyTargetOf({ ...s, boat: 7 }, 'coron')).toBe(false);
-    expect(energyTargetOf({ ...s, boat: 7 }, 'mozstrait')).toBe(false);
+    expect(energyTargetOf({ ...s, boat: 7 }, 'comorodeep')).toBe(false);
+    expect(energyTargetOf({ ...s, boat: 7 }, 'mozstrait')).toBe(true);
     expect(energyTargetOf({ ...s, boat: 7 }, 'southindian')).toBe(true);
   });
 });
@@ -163,7 +164,7 @@ describe('extractEnergy', () => {
 
 describe('cook', () => {
   const R = recipeById('cook-lunch-rare')!; // 일반 100, 희귀 20
-  const lunchBite = recipeById('cook-lunch-bite')!; // 일반 200
+  const lunchBite = recipeById('cook-lunch-bite')!; // 일반 600
   const rich = (over: Partial<GameState> = {}) => seed({ items: energy(1000, 1000, 1000, 1000), ...over });
 
   it('기운을 그 자리에서 모두 차감하고 시작 시각을 서버 시각으로 남긴다', () => {
@@ -181,15 +182,15 @@ describe('cook', () => {
     expect(rejected(seed({ items: energy(100, 20) }), { type: 'cook', recipe: R.id, count: 2 })).toBe('not-enough-energy');
   });
   it('저울이 있으면 수량마다 추가 완성을 추첨해 bonus에 저장하고 기운은 더 쓰지 않는다', () => {
-    const s = rich({ artifacts: ['varuna-scale'] });
+    const s = rich({ artifacts: ['varuna-scale'], items: energy(2000) });
     const draws = [0.05, 0.5, 0.099];
     let i = 0;
     const out = ok(s, { type: 'cook', recipe: lunchBite.id, count: 3 }, deps({ rng: () => draws[i++] }));
     expect(out.state.cooking!.bonus).toEqual([true, false, true]);
-    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(1000 - 600);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(2000 - 1800);
   });
   it('저울이 없으면 추가 완성이 없다', () => {
-    const out = ok(rich(), { type: 'cook', recipe: lunchBite.id, count: 2 }, deps({ rng: () => 0 }));
+    const out = ok(rich({ items: energy(2000) }), { type: 'cook', recipe: lunchBite.id, count: 2 }, deps({ rng: () => 0 }));
     expect(out.state.cooking!.bonus).toEqual([false, false]);
   });
   it('집 밖은 not-at-home, 해금 전은 cooking-locked다', () => {
@@ -537,7 +538,7 @@ describe('energyTargetRows', () => {
     expect(rows.map(r => r.spot)).toEqual(SPOTS.filter(s => s.boatTier <= 5).map(s => s.id));
     const by = (id: string) => rows.find(r => r.spot === id)!;
     expect(by('indian')).toEqual({ spot: 'indian', on: true, isDefault: false, overridden: true });
-    expect(by('barrierreef')).toEqual({ spot: 'barrierreef', on: false, isDefault: true, overridden: false });
+    expect(by('barrierreef')).toEqual({ spot: 'barrierreef', on: true, isDefault: true, overridden: false });
     expect(by('coron')).toEqual({ spot: 'coron', on: false, isDefault: false, overridden: true });
     expect(by('pond')).toEqual({ spot: 'pond', on: true, isDefault: true, overridden: false });
   });

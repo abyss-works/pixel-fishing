@@ -276,10 +276,10 @@ describe('집 기운 얻기 공급', () => {
     expect(() => fillBag([c('nope')], 3)).toThrow(/어종/);
   });
 
-  it('기본 선택에서 빠지는 해역은 그 배로 갈 수 있는 해역 중 해역 순서로 가장 앞선 둘이다', () => {
+  it('기본 선택에서 빠지는 해역은 그 배로 갈 수 있는 해역 중 해역 순서로 가장 앞선 하나다', () => {
     for (const boat of [0, 1, 3, 5, 6, 7, 8]) {
       const reachable = SPOTS.filter(s => canFishSpot({ ...newState(), boat }, s.id)).map(s => s.id);
-      expect(energyDefaultExcluded(boat)).toEqual(reachable.slice(-2));
+      expect(energyDefaultExcluded(boat)).toEqual(reachable.slice(-1));
     }
   });
 
@@ -297,7 +297,7 @@ describe('집 기운 얻기 공급', () => {
     expect(bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 1, seed: 1, unlockBoat: 7 }).every(r => r.boat >= 7)).toBe(true);
   });
 
-  it('가장 앞선 두 해역 어종의 공급은 0이고 그보다 앞 해역은 가방에 남은 개체가 기운이 된다', () => {
+  it('가장 앞선 해역 어종의 공급은 0이고 그보다 앞 해역은 가방에 남은 개체가 기운이 된다', () => {
     const rows = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 3, seed: 5 });
     for (const r of rows) {
       expect(r.frontmost).toBe(energyDefaultExcluded(r.boat).includes(r.spot));
@@ -306,9 +306,9 @@ describe('집 기운 얻기 공급', () => {
     }
     expect(rows.some(r => r.frontmost)).toBe(true);
     expect(rows.some(r => !r.frontmost && sum(r.energy) > 0)).toBe(true);
-    const top = rows.filter(r => r.boat === 8 && ['benguela', 'sthelena'].includes(r.spot));
-    expect(top.length).toBe(2);
-    for (const r of top) expect(sum(r.energy)).toBe(0);
+    const at8 = (spot: string) => rows.find(r => r.boat === 8 && r.spot === spot)!;
+    expect(sum(at8('sthelena').energy)).toBe(0);
+    expect(sum(at8('benguela').energy)).toBeGreaterThan(0);
   });
 
   it('낚은 수, 남은 수, 놓아준 수가 맞고 해역의 개체만 낚는다', () => {
@@ -330,7 +330,7 @@ describe('집 기운 얻기 공급', () => {
 
   it('집 기운으로 만들 수 있는 개수는 가장 모자란 등급이 정한다', () => {
     const q = recipeBy('cook-lunch-bite'), m = recipeBy('cook-lunch-bundle');
-    const supply = { common: 400, rare: 10, epic: 2, legendary: 0.5 };
+    const supply = { common: 1200, rare: 10, epic: 2, legendary: 0.5 };
     expect(recipesCovered(supply, q)).toBeCloseTo(2, 12);
     expect(recipesCovered(supply, m)).toBeCloseTo(0.5, 12);
     expect(recipesCovered(supply, { ...q, cost: {} })).toBe(Number.POSITIVE_INFINITY);

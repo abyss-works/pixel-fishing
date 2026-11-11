@@ -100,23 +100,23 @@ describe('필요와 보유', () => {
 });
 
 describe('조리 가능 판정', () => {
-  const R = recipe('cook-lunch-bite'); // 일반 200
+  const R = recipe('cook-lunch-bite'); // 일반 600
 
   it('재료가 있고 집에 있으면 게임 규칙이 가능으로 판정한 값을 전한다', () => {
-    expect(selectRecipeView(seed({ items: energy(200) }), R, 1, T0).check).toEqual({ ok: true });
+    expect(selectRecipeView(seed({ items: energy(600) }), R, 1, T0).check).toEqual({ ok: true });
   });
 
   it('기운이 모자라면 규칙의 거부 사유를 전한다', () => {
-    expect(selectRecipeView(seed({ items: energy(199) }), R, 1, T0).check).toEqual({ ok: false, reason: 'not-enough-energy' });
+    expect(selectRecipeView(seed({ items: energy(599) }), R, 1, T0).check).toEqual({ ok: false, reason: 'not-enough-energy' });
   });
 
   it('이미 조리 중이면 거부 사유를 전한다', () => {
-    const game = seed({ items: energy(400), cooking: { recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 } });
+    const game = seed({ items: energy(1200), cooking: { recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 } });
     expect(selectRecipeView(game, R, 1, at(10 * MIN)).check).toEqual({ ok: false, reason: 'cooking-busy' });
   });
 
   it('집 밖이면 거부 사유를 전한다', () => {
-    const game = seed({ items: energy(400), location: { kind: 'region', id: 'village' } });
+    const game = seed({ items: energy(1200), location: { kind: 'region', id: 'village' } });
     expect(selectRecipeView(game, R, 1, T0).check).toEqual({ ok: false, reason: 'not-at-home' });
   });
 });

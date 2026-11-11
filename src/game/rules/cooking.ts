@@ -35,9 +35,9 @@ const isAtHome = (state: Pick<GameState, 'location'>): boolean =>
 
 // ---------- 기운 얻기 ----------
 
-/** 기운 얻기 기본 선택에서 빠지는 해역 — 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 두 해역 */
+/** 기운 얻기 기본 선택에서 빠지는 해역 — 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역 하나 */
 export function energyDefaultExcluded(boat: number): SpotId[] {
-  return SPOTS.filter(s => s.boatTier <= boat).slice(-2).map(s => s.id);
+  return SPOTS.filter(s => s.boatTier <= boat).slice(-1).map(s => s.id);
 }
 
 /** 그 해역의 기본 선택 — 제외 해역만 꺼짐 */

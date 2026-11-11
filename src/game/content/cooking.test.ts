@@ -52,15 +52,18 @@ describe('레시피 표', () => {
     }
   });
 
-  it('명세 4.2 표의 기운 요구와 같다(등급 미끼 수량은 열린 항목이라 제외)', () => {
+  it('명세 4.2 표의 기운 요구와 같다', () => {
     const cost = (id: string) => recipeById(id)!.cost;
-    expect(cost('cook-lunch-bite')).toEqual({ common: 200 });
+    expect(cost('cook-lunch-bite')).toEqual({ common: 600 });
     expect(cost('cook-lunch-rare')).toEqual({ common: 100, rare: 20 });
     expect(cost('cook-lunch-mutation')).toEqual({ rare: 20, epic: 4 });
     expect(cost('cook-lunch-named')).toEqual({ epic: 8 });
     expect(cost('cook-lunch-bundle')).toEqual({ common: 50, rare: 5, epic: 1, legendary: 1 });
     expect(cost('cook-bait-judge')).toEqual({ common: 50, rare: 5 });
-    expect(cost('cook-bait-mutation')).toEqual({ epic: 4, legendary: 2 });
+    expect(cost('cook-bait-mutation')).toEqual({ epic: 4, legendary: 1 });
+    expect(cost('cook-bait-rare')).toEqual({ common: 50, rare: 15 });
+    expect(cost('cook-bait-epic')).toEqual({ common: 50, epic: 5 });
+    expect(cost('cook-bait-legendary')).toEqual({ common: 50, legendary: 3 });
   });
 
   it('명세 5.2, 5.3 표의 효과 값과 같다', () => {

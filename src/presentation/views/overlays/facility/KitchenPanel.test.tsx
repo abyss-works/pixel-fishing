@@ -113,7 +113,7 @@ describe('도시락 탭과 미끼 탭', () => {
   });
 
   it('조리 시작은 고른 레시피와 수량으로 cook 액션을 보낸다', () => {
-    const { dispatch } = show(seed({ items: energy(1000) }));
+    const { dispatch } = show(seed({ items: energy(2000) }));
     fireEvent.click(screen.getByRole('button', { name: '가루디야 수량 증가' }));
     fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'cook', recipe: 'cook-lunch-bite', count: 2 });
@@ -168,7 +168,7 @@ describe('도시락 탭과 미끼 탭', () => {
 });
 
 describe('기운 얻기 탭', () => {
-  // 배 5의 기본값: 그레이트 배리어 리프와 인도양은 꺼짐, 그 앞 해역은 켜짐
+  // 배 5의 기본값: 가장 앞선 해역(인도양)만 꺼짐, 그 앞 해역은 켜짐
   const bag = () => [inst('a1', 'pond'), inst('a2', 'pond'), inst('b1', 'sea'), inst('c1', 'indian')];
   const open = (game = seed({ bag: bag() }), result?: { type: string; [k: string]: unknown }) => {
     const out = show(game, result);
@@ -182,7 +182,7 @@ describe('기운 얻기 탭', () => {
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['선택', '어종', '등급', '수량', '생명의 기운']);
   });
 
-  it('체크 기본값은 게임 규칙을 따른다 — 가장 앞선 두 해역의 어종은 꺼지고 그 앞 해역은 켜진다', () => {
+  it('체크 기본값은 게임 규칙을 따른다 — 가장 앞선 해역의 어종은 꺼지고 그 앞 해역은 켜진다', () => {
     open();
     expect(within(rowOf('pond')).getByText('+2')).toBeInTheDocument();
     expect(within(rowOf('sea')).getByText('+1')).toBeInTheDocument();
