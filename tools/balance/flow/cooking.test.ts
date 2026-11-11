@@ -6,12 +6,13 @@ import { NO_EFFECT, dexTimes, effectRates } from './effects';
 import type { Effect } from './effects';
 import { axisOf } from './progress';
 import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
-import type { CookEffects } from '../../../src/game/content/cooking';
+import { NO_COOK_EFFECTS, energyDefaultExcluded } from '../../../src/game/rules/cooking';
+import type { ActiveCookEffects } from '../../../src/game/rules/cooking';
 import { FISH } from '../../../src/game/content/fish';
 import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { capOfBoat, compareBlandness, priceOf } from '../../../src/game/rules/logic';
+import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
 import {
-  BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, effectOf, evictionOrder, fillBag, frontmostSpots, recipeRows, recipesCovered, windowRows,
+  BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, effectOf, effectOfRecipe, evictionOrder, fillBag, recipeRows, recipesCovered, windowRows,
 } from './cooking';
 
 const fx = (e: Partial<Effect>): Effect => ({ ...NO_EFFECT, ...e });
@@ -139,8 +140,7 @@ describe('레시피 표', () => {
 
   it('효과는 요리 콘텐츠의 효과 값을 매개변수로 옮긴 것이다', () => {
     for (const r of RECIPES) {
-      const e = COOK_RECIPES.find(x => x.id === r.id)!.effects;
-      expect(r.effect).toEqual(effectOf(e));
+      expect(r.effect).toEqual(effectOfRecipe(COOK_RECIPES.find(x => x.id === r.id)!));
     }
     expect(recipeBy('cook-lunch-bite').effect).toEqual(fx({ bite: COOK_RECIPES.find(x => x.id === 'cook-lunch-bite')!.effects.biteWaitCut }));
     expect(recipeBy('cook-lunch-mutation').effect.variant).toBe(COOK_RECIPES.find(x => x.id === 'cook-lunch-mutation')!.effects.mutationWeight);
@@ -157,10 +157,11 @@ describe('레시피 표', () => {
   });
 
   it('등급 가중은 그 등급부터 전설까지 거는 효과만 옮기고 그 밖은 오류다', () => {
-    expect(effectOf({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.3 } })).toEqual(fx({ epic: 0.3 }));
-    expect(() => effectOf({ rarityWeight: { grades: ['rare', 'legendary'], bonus: 0.3 } })).toThrow(/범위/);
-    expect(() => effectOf({ rarityWeight: { grades: ['common', 'rare', 'epic', 'legendary'], bonus: 0.3 } })).toThrow(/범위/);
-    expect(() => effectOf({ judgeWidth: 0 } as CookEffects)).toThrow(/판정 칸/);
+    const active = (o: Partial<ActiveCookEffects>): ActiveCookEffects => ({ ...NO_COOK_EFFECTS, ...o });
+    expect(effectOf(active({ rarityWeight: { epic: 0.3, legendary: 0.3 } }))).toEqual(fx({ epic: 0.3 }));
+    expect(() => effectOf(active({ rarityWeight: { rare: 0.3, legendary: 0.3 } }))).toThrow(/범위/);
+    expect(() => effectOf(active({ rarityWeight: { common: 0.3, rare: 0.3, epic: 0.3, legendary: 0.3 } }))).toThrow(/범위/);
+    expect(() => effectOf(active({ judgeWidth: 5 }))).toThrow(/판정 칸/);
   });
 });
 
@@ -276,13 +277,10 @@ describe('집 기운 얻기 공급', () => {
   });
 
   it('기본 선택에서 빠지는 해역은 그 배로 갈 수 있는 해역 중 해역 순서로 가장 앞선 둘이다', () => {
-    expect(frontmostSpots(0)).toEqual(['pond', 'river']);
-    expect(frontmostSpots(1)).toEqual(['river', 'sea']);
-    expect(frontmostSpots(3)).toEqual(['coron', 'barrierreef']);
-    expect(frontmostSpots(5)).toEqual(['barrierreef', 'indian']);
-    expect(frontmostSpots(6)).toEqual(['indian', 'southindian']);
-    expect(frontmostSpots(7)).toEqual(['mozstrait', 'comorodeep']);
-    expect(frontmostSpots(8)).toEqual(['benguela', 'sthelena']);
+    for (const boat of [0, 1, 3, 5, 6, 7, 8]) {
+      const reachable = SPOTS.filter(s => canFishSpot({ ...newState(), boat }, s.id)).map(s => s.id);
+      expect(energyDefaultExcluded(boat)).toEqual(reachable.slice(-2));
+    }
   });
 
   it('요리 해금 배 단계 이상의 배 단계마다 그 배로 갈 수 있는 해역을 낸다', () => {
@@ -302,7 +300,7 @@ describe('집 기운 얻기 공급', () => {
   it('가장 앞선 두 해역 어종의 공급은 0이고 그보다 앞 해역은 가방에 남은 개체가 기운이 된다', () => {
     const rows = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 3, seed: 5 });
     for (const r of rows) {
-      expect(r.frontmost).toBe(frontmostSpots(r.boat).includes(r.spot));
+      expect(r.frontmost).toBe(energyDefaultExcluded(r.boat).includes(r.spot));
       if (r.frontmost) { expect(sum(r.energy)).toBe(0); expect(r.energyGold).toBe(0); }
       else { expect(r.energy).toEqual(r.kept); expect(r.energyGold).toBe(r.keptGold); }
     }
