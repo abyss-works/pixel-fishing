@@ -5,7 +5,7 @@ import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import { BOUNTIES } from '../../../src/game/content/bounties';
 import { CATCH_MS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
 import { variantBoostOf } from '../../../src/game/rules/artifactLevel';
-import { mutationWeightsOf, namedEncounterCandidates, variantShare } from '../../../src/game/rules/logic';
+import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, variantShare } from '../../../src/game/rules/logic';
 import { entryLevel, meanCycleSec, rates, rng } from '../model';
 import type { Row } from '../model';
 import { FISH } from '../../../src/game/content/fish';
@@ -260,5 +260,80 @@ describe('분해 재료 공급', () => {
   it('여유 레벨을 주면 그 레벨로 잰다', () => {
     const [a] = supplyRows({ axis: 'idle', effect: NO_EFFECT, margin: 4, units: DEFAULT_UNITS });
     expect(a.level).toBe(entryLevel(SPOTS[0].id) + 4);
+  });
+});
+
+describe('등급 누적 가중', () => {
+  const chain = (e: Partial<Record<'rare' | 'epic' | 'legendary', number>>) => {
+    let o = {};
+    for (const g of ['rare', 'epic', 'legendary'] as const) o = addGradeEffect(o, g, (e.rare ?? 0) + (g !== 'rare' ? e.epic ?? 0 : 0) + (g === 'legendary' ? e.legendary ?? 0 : 0));
+    return o;
+  };
+
+  it('음수는 거부한다', () => {
+    expect(() => checkEffect(fx({ epic: -0.1 }))).toThrow(/영웅/);
+    expect(() => checkEffect(fx({ legendary: -0.1 }))).toThrow(/전설/);
+  });
+
+  it('영웅 이상 가중은 영웅과 전설에만 걸고 희귀 등급은 그대로 둔다', () => {
+    const s = lastSpot, level = levelOf(s);
+    const base = effectRates(s, level, 'idle', NO_EFFECT), now = effectRates(s, level, 'idle', fx({ epic: 0.5 }));
+    const expected = rates(s, level, 'idle', chain({ epic: 0.5 }));
+    expect(now.rarity.legendary).toBeCloseTo(expected.rarity.legendary, 12);
+    expect(now.rarity.legendary).toBeGreaterThan(base.rarity.legendary);
+    expect(now.rarity.epic / now.rarity.rare).toBeCloseTo(1.5 * base.rarity.epic / base.rarity.rare, 9);
+    expect(now.rarity.legendary / now.rarity.epic).toBeCloseTo(base.rarity.legendary / base.rarity.epic, 9);
+  });
+
+  it('전설 가중은 전설 확률만 키우고 영웅과 희귀 사이의 비는 그대로다', () => {
+    const s = lastSpot, level = levelOf(s);
+    const base = effectRates(s, level, 'idle', NO_EFFECT), now = effectRates(s, level, 'idle', fx({ legendary: 1 }));
+    expect(now.rarity.epic / now.rarity.rare).toBeCloseTo(base.rarity.epic / base.rarity.rare, 9);
+    expect(now.rarity.legendary / now.rarity.epic).toBeCloseTo(2 * base.rarity.legendary / base.rarity.epic, 9);
+  });
+
+  it('여러 옵션은 제품 규칙처럼 등급별로 합산한다', () => {
+    const s = lastSpot, level = levelOf(s);
+    const now = effectRates(s, level, 'idle', fx({ rare: 0.2, epic: 0.5, legendary: 1 }));
+    const expected = rates(s, level, 'idle', chain({ rare: 0.2, epic: 0.5, legendary: 1 }));
+    for (const g of RARITY_ORDER) expect(now.rarity[g] ?? 0).toBeCloseTo(expected.rarity[g] ?? 0, 12);
+    expect(now.goldPerHour).toBeCloseTo(expected.goldPerHour, 6);
+  });
+
+  it('수입 행이 등급별 캐치 비율의 전후를 낸다', () => {
+    for (const r of incomeRows({ axis: 'idle', effect: fx({ epic: 0.5 }), margin: 0 })) {
+      const base = effectRates(r.spot, r.level, 'idle', NO_EFFECT), now = effectRates(r.spot, r.level, 'idle', fx({ epic: 0.5 }));
+      for (const g of RARITY_ORDER) {
+        expect(r.grade[g].base).toBeCloseTo(base.rarity[g] ?? 0, 12);
+        expect(r.grade[g].with).toBeCloseTo(now.rarity[g] ?? 0, 12);
+      }
+    }
+  });
+});
+
+describe('등급 도감 완성 시간', () => {
+  const grade = (id: string, rarity: 'common' | 'epic' | 'legendary', prob: number): Row => ({ fish: { ...FISH[0], id, rarity }, prob });
+
+  it('한 어종의 두 폼이 반반이면 영웅 도감 평균이 쿠폰 수집 기댓값 3캐치다', () => {
+    const t = dexTimes([grade('a', 'epic', 1)], 0.5, 3600, 4000, rng(1));
+    expect(t.epic!.mean! * 3600).toBeCloseTo(3, 0);
+    expect(t.legendary).toBeNull();
+  });
+
+  it('그 등급 어종이 없으면 끝난 시도가 없다', () => {
+    const t = dexTimes([grade('a', 'common', 1)], 0.5, 3600, 10, rng(1));
+    expect(t.epic).toBeNull();
+    expect(t.legendary).toBeNull();
+  });
+
+  it('돌연변이가 없으면 등급 도감은 끝나지 않는다', () => {
+    expect(dexTimes([grade('a', 'legendary', 1)], 0, 3600, 10, rng(1)).legendary).toBeNull();
+  });
+
+  it('영웅 가중은 같은 시드에서 영웅 도감 시간을 줄인다', () => {
+    const rows = dexRows({ axis: 'idle', effect: fx({ epic: 1 }), margin: 0, trials: 20, seed: 7 });
+    for (const r of rows) {
+      if (r.epic > 0 && r.base.epic && r.with.epic) expect(r.with.epic.mean!).toBeLessThan(r.base.epic.mean!);
+    }
   });
 });
