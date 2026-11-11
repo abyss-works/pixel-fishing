@@ -15,7 +15,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
-import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
+import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
@@ -24,7 +24,7 @@ import {
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
-import { applyAction, drawCatch, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
+import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
@@ -452,17 +452,19 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
+  const now = new Date().toISOString();
   let out: ApplyOutcome;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, guildEffects);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
     out = applyAction(state, action, {
       rng: Math.random, today: todayKST(),
-      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+      now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
       bounty,
@@ -476,12 +478,20 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
-    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
-      Math.random, action.forceEncounter === true, guildEffects.named);
+    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
+      Math.random, action.forceEncounter === true, namedWeightBonus(catchBase, action.judgment, now, guildEffects));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
       if (out.result.type === 'catch') out.result.ticket = named.quest.id;
+    }
+  }
+
+  // 캐치 이벤트에 활성 슬롯 정보를 남긴다 — 리듀서 경로와 빠른 경로가 같은 값을 쓴다. 관리자 집계가 읽는다
+  if (action.type === 'catch' && out.ok) {
+    const slots = catchSlotInfo(scalarState(row), action.judgment, now);
+    if (slots.bait || slots.lunch) {
+      out = { ...out, events: out.events.map(e => e.type === 'catch' ? { ...e, payload: { ...e.payload, ...slots } } : e) };
     }
   }
 
@@ -569,6 +579,16 @@ async function route(req: Req, res: Res): Promise<void> {
   res.status(200).json({ patch, result: out.result });
 }
 
+/**
+ * 캐치에 걸린 슬롯 효과의 요리 id — 도시락 슬롯은 방치(auto) 캐치에, 미끼 슬롯은 수동 캐치에, 끝나는 시각 전일 때만 건다.
+ * 효과 값은 규칙 모듈(slotEffects)이 정하고, 여기서는 어느 슬롯의 어느 요리가 걸렸는지만 이벤트에 옮긴다.
+ */
+export function catchSlotInfo(state: Pick<GameState, 'slots'>, judgment: Judgment, now: string): { bait?: string; lunch?: string } {
+  const kind = judgment === 'auto' ? 'lunch' : 'bait';
+  const slot = state.slots[kind];
+  return slot !== null && Date.parse(now) < Date.parse(slot.endsAt) ? { [kind]: slot.id } : {};
+}
+
 /** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
 export function guildLogsOf(events: readonly GameEvent[]): { kind: GuildLogKind; detail: string }[] {
   return events.flatMap((e): { kind: GuildLogKind; detail: string }[] => {
@@ -598,21 +618,20 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[0],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
-  const now = new Date().toISOString();
-  const { judgment, phaseOpts } = prepareCatchDraw(judgmentIn, now, pz);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
