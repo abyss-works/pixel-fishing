@@ -94,6 +94,14 @@ describe('슬롯 효과와 캐치 이벤트', () => {
     });
   });
 
+  it('두 경로의 캐치 이벤트 payload가 같은 키를 가진다', async () => {
+    const keys = async (version: number, judgment: string, slots: GameState['slots']) =>
+      Object.keys(await catchPayload(slots, judgment, version)).filter(k => k !== 'pity').sort();
+    for (const [judgment, slots] of [['auto', lunch(FUTURE)], ['perfect', bait(FUTURE)]] as const) {
+      expect(await keys(2, judgment, slots)).toEqual(await keys(SNAPSHOT_EVERY - 1, judgment, slots));
+    }
+  });
+
   it('활성 도시락의 입질 단축이 캐치 간격 검사에 들어간다', async () => {
     const ago = (ms: number) => new Date(Date.parse(NOW) - ms).toISOString();
     const send = async (slots: GameState['slots']) => {

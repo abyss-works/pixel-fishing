@@ -21,6 +21,7 @@ import {
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
+import { appliedSlots } from '../src/game/rules/cooking.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -487,14 +488,6 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 캐치 이벤트에 활성 슬롯 정보를 남긴다 — 리듀서 경로와 빠른 경로가 같은 값을 쓴다. 관리자 집계가 읽는다
-  if (action.type === 'catch' && out.ok) {
-    const slots = catchSlotInfo(scalarState(row), action.judgment, now);
-    if (slots.bait || slots.lunch) {
-      out = { ...out, events: out.events.map(e => e.type === 'catch' ? { ...e, payload: { ...e.payload, ...slots } } : e) };
-    }
-  }
-
   // 확정 — 낙관 락 갱신과, 그것이 성공했을 때만 쓰는 행(개체·도감·수배·편지)을 한 문장으로 쓴다.
   // 읽은 version이 그대로가 아니면 아무것도 쓰지 않고 409를 돌려준다. 클라이언트(HttpGameGateway)가
   // 최신 상태 위에 1회 재시도한다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
@@ -577,16 +570,6 @@ async function route(req: Req, res: Res): Promise<void> {
     scalars: pickScalars(out.state), writes: out.writes,
   };
   res.status(200).json({ patch, result: out.result });
-}
-
-/**
- * 캐치에 걸린 슬롯 효과의 요리 id — 도시락 슬롯은 방치(auto) 캐치에, 미끼 슬롯은 수동 캐치에, 끝나는 시각 전일 때만 건다.
- * 효과 값은 규칙 모듈(slotEffects)이 정하고, 여기서는 어느 슬롯의 어느 요리가 걸렸는지만 이벤트에 옮긴다.
- */
-export function catchSlotInfo(state: Pick<GameState, 'slots'>, judgment: Judgment, now: string): { bait?: string; lunch?: string } {
-  const kind = judgment === 'auto' ? 'lunch' : 'bait';
-  const slot = state.slots[kind];
-  return slot !== null && Date.parse(now) < Date.parse(slot.endsAt) ? { [kind]: slot.id } : {};
 }
 
 /** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
@@ -677,6 +660,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
     ...(drawn.byCeiling ? { pity: true } : {}),
+    ...appliedSlots(base, now, judgmentIn),
   } }];
   if (overflow.length > 0) {
     events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
