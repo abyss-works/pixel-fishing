@@ -165,7 +165,12 @@ describe('ChatBar', () => {
 
     it('마우스를 올리거나 누르면 채팅 잠금 문안이 공용 툴팁으로 열린다', () => {
       render(<ChatBar guest />);
-      fireEvent.mouseEnter(screen.getByRole('group', { name: '채팅' }).parentElement!);
+      const wrap = screen.getByRole('group', { name: '채팅' }).parentElement!;
+      // 나타난 자리가 커서 아래여도 마우스가 움직이기 전에는 열리지 않는다(펼칠 때 기록을 가리지 않는다)
+      fireEvent.mouseEnter(wrap);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      fireEvent.mouseMove(document.body);
+      fireEvent.mouseEnter(wrap);
       const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
       expect(lines).toEqual(['채팅은 계정을 연결하면 쓸 수 있어요.', '계정 관리에서 계정을 연결해 주세요.']);
     });

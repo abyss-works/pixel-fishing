@@ -42,6 +42,21 @@ describe('Locked', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('hoverAfterMove면 마운트 뒤 입력이 있기 전의 호버로는 열지 않고, 마우스가 움직이거나 키를 누른 뒤에는 연다', () => {
+    render(<Locked lines={['안내']} hoverAfterMove><Button disabled>보내기</Button></Locked>);
+    const group = screen.getByRole('group');
+    fireEvent.mouseEnter(group.parentElement!);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseMove(document.body);
+    fireEvent.mouseEnter(group.parentElement!);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+  });
+
+  it('자물쇠는 모서리 바깥에 걸쳐 글자를 가리지 않는다', () => {
+    const { container } = render(<Locked lines={['안내']}><Button disabled>보내기</Button></Locked>);
+    expect(container.querySelector('[data-glyph="lock"]')!.getAttribute('class')).toContain('-top-1.5');
+  });
+
   it('잠금 이유가 접근성 설명으로 이어진다', () => {
     render(<Locked lines={['첫째', '둘째']}><Button disabled>차단</Button></Locked>);
     const group = screen.getByRole('group');

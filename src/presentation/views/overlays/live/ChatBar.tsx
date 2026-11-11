@@ -107,7 +107,7 @@ export default function ChatBar({ inGuild = false, guest = false, folded = false
       <div className="flex items-center gap-1.5">
         {unfold}
         {lock ? !folded && (
-          <Locked lines={lock} label="채팅" className="flex min-w-0 flex-1">
+          <Locked lines={lock} label="채팅" hoverAfterMove className="flex min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <HudButton disabled aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}>{ROOM_LABEL[room]}</HudButton>
               <HudInput disabled aria-label="채팅 입력" placeholder="Enter로 채팅" />
