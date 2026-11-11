@@ -30,6 +30,7 @@ import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
 import { isDebugTableCommand } from '../src/game/rules/debug.js';
+import { guestActionVerdict } from '../src/game/rules/guest.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
@@ -281,6 +282,12 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(400, 'bad-action');
   }
   let action = parsed;
+
+  // 게스트(계정을 연결하지 않은 익명 계정)는 허용 목록의 액션만 받는다. 상태를 읽기 전에 거른다.
+  if (user.email === null) {
+    const verdict = guestActionVerdict(action);
+    if (verdict !== 'ok') throw new ApiError(403, verdict);
+  }
 
   // 현재 상태 로드 — 프로필·저장 상태와, 필요한 액션이면 개체·도감·수배 행까지 한 번에 읽는다.
   // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.

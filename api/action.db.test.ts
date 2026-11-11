@@ -38,7 +38,8 @@ beforeEach(() => {
 });
 
 async function seed(opts: SeedOptions = {}): Promise<string> {
-  return seedUser(env.client, { uid: testUid(nextUid++), ...opts });
+  const uid = testUid(nextUid++);
+  return seedUser(env.client, { uid, email: `user-${nextUid}@example.test`, ...opts });
 }
 
 async function snapshotOf(uid: string, res: unknown) {

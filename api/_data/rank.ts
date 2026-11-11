@@ -1,6 +1,6 @@
 // 랭킹 읽기 — 공개해도 되는 값(닉네임·순위·값)만 돌려준다. uid와 이메일은 응답에 넣지 않는다.
 // 같은 값은 같은 순위(rank)이고, 같은 순위 안에서는 그 값에 먼저 도달한 사람이 위다.
-// 제재 계정은 모든 표에서 뺀다.
+// 제재 계정과 게스트(익명 계정)는 모든 표에서 뺀다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
@@ -32,14 +32,16 @@ async function rankBoard(db: Executor, eligible: SQL, uid: string | null, limit 
 
 /** 명성 순위 — 같은 명성이면 마지막 저장 시각이 이른 사람이 위 */
 export function fameBoard(db: Executor, uid: string | null): Promise<RankBoard> {
-  return rankBoard(db, sql`select user_id, fame::bigint as value, updated_at as reached
-    from public.saves_current where not restricted and fame > 0`, uid);
+  return rankBoard(db, sql`select s.user_id, s.fame::bigint as value, s.updated_at as reached
+    from public.saves_current s join auth.users u on u.id = s.user_id
+    where not s.restricted and not u.is_anonymous and s.fame > 0`, uid);
 }
 
 /** 도감 완성도 순위 — 일반 폼으로 낚은 어종 수. 같은 수면 마지막 새 어종을 먼저 낚은 사람이 위 */
 export function dexBoard(db: Executor, uid: string | null): Promise<RankBoard> {
   return rankBoard(db, sql`select r.user_id, count(*)::int as value, max(coalesce(r.first_caught, r.updated_at)) as reached
     from public.records r join public.saves_current s on s.user_id = r.user_id and not s.restricted
+    join auth.users u on u.id = r.user_id and not u.is_anonymous
     where r.form = 'normal' and r.count > 0
     group by r.user_id`, uid);
 }
@@ -48,6 +50,7 @@ export function dexBoard(db: Executor, uid: string | null): Promise<RankBoard> {
 export function speciesBoard(db: Executor, fishId: string, uid: string | null): Promise<RankBoard> {
   return rankBoard(db, sql`select r.user_id, max(r.max_size)::numeric as value, min(r.updated_at) as reached
     from public.records r join public.saves_current s on s.user_id = r.user_id and not s.restricted
+    join auth.users u on u.id = r.user_id and not u.is_anonymous
     where r.fish_id = ${fishId} and r.max_size is not null
     group by r.user_id`, uid, SPECIES_TOP);
 }
