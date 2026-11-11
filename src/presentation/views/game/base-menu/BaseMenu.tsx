@@ -48,9 +48,9 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
   travel: '이동', ferry: '이동', exit: '이동',
 };
 
-// 거점 카드 메뉴 — 거점 배경 위 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
+// 거점 카드 메뉴 — 거점 배경 위 위쪽부터(세로 가운데 정렬 없음), 가로는 가운데에 시설 카드를 거점 데이터의 가구 순서대로 늘어놓는다.
 // 메뉴 영역은 PC 레이아웃 한 행 단계에서 16:9 프레임 전체, 모바일 레이아웃에서 헤더 아래부터 탭 줄 위까지(게임 영역)다.
-// PC 레이아웃의 쌓기 단계(stackTier)에서는 모바일과 같이 스테이지 전체이고, 헤더에 가리지 않도록 위아래 같은 여백을 둔 영역의 세로 가운데(곧 스테이지의 세로 가운데)에 카드가 놓인다.
+// PC 레이아웃은 모든 폭 단계에서 영역 위쪽을 헤더 높이만큼 비워(STACK_MENU_CLASS) 모바일처럼 헤더 아래 위쪽부터 카드가 놓인다.
 // 거점 Canvas 화면과 같은 속성을 받으며, 거점 데이터와 가구 스프라이트를 읽기만 한다.
 export default function BaseMenu({ base, game, onFacility, locked }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,7 +70,7 @@ export default function BaseMenu({ base, game, onFacility, locked }: Props) {
     <div className={cx('absolute inset-0 [container:basemenu/size]', STACK_MENU_CLASS)}>
       {/* 채팅은 카드 위를 덮으므로 메뉴는 채팅 자리를 비우지 않는다. 세로로 스크롤하지 않고, 영역이 낮으면 카드가 줄어든다(MenuCard) */}
       <div className="absolute inset-0 flex flex-col px-[6%]">
-        <div className="my-auto flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3">
           <p className="pf-accent pf-glass px-2 py-0.5 text-sm text-text">{pack.headline}</p>
           <div className="flex flex-wrap items-start justify-center gap-3">
             {SECTIONS.map(section => {
