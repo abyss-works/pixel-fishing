@@ -1,11 +1,12 @@
 // 업데이트 소식 기록 — 기기별 표시 설정(localStorage 1키, JSON). 진행이 아니라 보는 방식이라
 // 세이브·서버 권위 대상이 아니다. 저장값이 없거나 깨졌으면 기본(기록 없음)으로 읽는다.
+// 저장할 때는 저장소에 있는 값 위에 덮어써서 이 모듈이 모르는 필드를 지우지 않는다.
 export const ANNOUNCEMENTS_KEY = 'pf-announcements';
 
 export interface AnnouncementsState {
-  /** "다시 보지 않기"로 닫은 소식의 앱 버전 — 이 버전 소식은 더 띄우지 않는다 */
+  /** 이전 형식의 "다시 보지 않기" 버전 — 읽기만 한다. 마지막으로 본 버전이 없을 때만 기준으로 쓴다 */
   dismissedVersion: string | null;
-  /** 소식 창이 보인 가장 높은 앱 버전 — 닫는 방식과 무관하게 남고, 다음 소식의 시작점이 된다 */
+  /** 소식 창이 보인 가장 높은 앱 버전 — 다음 소식은 이 버전 뒤부터 보인다 */
   lastSeenVersion: string | null;
   /** 답한(또는 창을 닫아 넘긴) 새 설정 질문 id */
   answered: readonly string[];
@@ -33,7 +34,12 @@ const listeners = new Set<() => void>();
 
 function commit(next: AnnouncementsState) {
   state = next;
-  try { localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(next)); } catch { /* 이번 세션에만 적용 */ }
+  try {
+    let stored: unknown = null;
+    try { stored = JSON.parse(localStorage.getItem(ANNOUNCEMENTS_KEY) ?? 'null'); } catch { /* 깨진 값은 새로 쓴다 */ }
+    const known = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify({ ...known, ...next }));
+  } catch { /* 이번 세션에만 적용 */ }
   for (const listener of listeners) listener();
 }
 
@@ -44,12 +50,6 @@ export function getAnnouncements(): AnnouncementsState {
 export function subscribeAnnouncements(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
-}
-
-/** 소식 "다시 보지 않기" — 버전을 남기면 그 버전 소식은 더 뜨지 않고, null이면 해제한다 */
-export function setDismissedVersion(version: string | null): void {
-  if (state.dismissedVersion === version) return;
-  commit({ ...state, dismissedVersion: version });
 }
 
 /** 소식 창이 보인 가장 높은 버전 — 값을 올릴지는 호출하는 쪽이 정한다 */

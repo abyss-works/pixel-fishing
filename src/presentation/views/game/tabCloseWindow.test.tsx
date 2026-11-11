@@ -9,7 +9,7 @@ import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { resetSpotState } from '../../../game/world/currentSpot';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
-import { markPromptsAnswered, resetAnnouncements, setDismissedVersion } from '../../../platform/adapters/announcements';
+import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from '../../../platform/adapters/announcements';
 import { APP_VERSION } from '../../../version';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { MAX_BOAT, newState } from '../../../game/rules/logic';
@@ -51,7 +51,7 @@ beforeEach(() => {
   resetWhatsNewSession();
   resetTutorialSession();
   resetAnnouncements();
-  setDismissedVersion(APP_VERSION);
+  setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();
   resetOpenWindows();

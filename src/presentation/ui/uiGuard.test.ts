@@ -145,7 +145,7 @@ const sizedWithFlexibleScroll = (src: string) =>
 /** 줄 수가 아니라 화면 높이 같은 여유 상한(max-h)만 두는 칸 — 내용이 낮으면 내용 높이로 커지므로 SCROLL_Y를 쓴다(줄이기만 한다) */
 const SAFETY_CAP_EXCEPTIONS = new Set([
   'views/overlays/facility/FacilityModal.tsx',   // 판매 목록: 행 서른 개 상한
-  'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 화면 높이 42% 상한
+  'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 버전 하나는 화면 높이 42%, 여러 버전은 56% 상한
 ]);
 
 /** 스크롤 칸으로 보는 태그: 공용 상수, TableBox, pf-vscroll */

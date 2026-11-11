@@ -1,6 +1,6 @@
 // 업데이트 소식 창 — 무엇을 어떤 순서로 보여줄지 정하는 순수 규칙과 새 설정 질문 목록.
-// 창은 최대 두 단계다: ① 이번 버전 소식(패치노트) ② 이번에 생긴 설정 고르기.
-// 소식은 마지막으로 본 버전 뒤의 버전을 모두 한 창에 보이고, "다시 보지 않기"를 체크하고 닫을 때까지 접속마다 뜨고, 질문은 질문마다 한 번이다.
+// 창은 최대 두 단계다: ① 아직 보지 않은 버전 소식(패치노트) ② 이번에 생긴 설정 고르기.
+// 소식은 마지막으로 본 버전 뒤의 버전을 모두 한 창에 한 번 보이고, 질문은 질문마다 한 번이다.
 // 처음 시작한 플레이어에게는 열지 않는다 —
 // 바뀐 점이 없는 사람에게 "바뀐 점"을 보여줄 이유가 없고, 설정은 기본값으로 시작한다.
 import type { PatchNote } from '../../../game/content/patchnotes';
@@ -44,7 +44,7 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
 const versionParts = (version: string) => version.split('.').map(Number);
 
 /** 점으로 나눈 숫자 비교 — 앞이 크면 양수, 같으면 0 */
-export function compareVersions(a: string, b: string): number {
+function compareVersions(a: string, b: string): number {
   const pa = versionParts(a);
   const pb = versionParts(b);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -55,26 +55,18 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /**
- * 접속 때 띄울 소식, 최신 순. 노트 배열의 순서에 기대지 않는다.
- * - 마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전 전부.
- * - 다시 보지 않기로 하지 않은 본 소식은 다시 뜬다: 다시 보지 않기 버전이 있으면 그 뒤의 본 버전 전부, 없으면 마지막 본 버전 하나.
- * - 마지막으로 본 버전 기록이 없는 기존 저장값은 다시 보지 않기 버전을 본 버전으로 쓴다. 둘 다 없으면 현재 버전 노트 하나만 본다.
+ * 접속 때 띄울 소식, 최신 순: 마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전 전부. 노트 배열의 순서에 기대지 않는다.
+ * 마지막으로 본 버전 기록이 없는 기존 저장값은 이전 형식의 다시 보지 않기 버전을 본 버전으로 쓴다.
+ * 둘 다 없으면 현재 버전 노트 하나만 본다.
  */
 export function unseenNews(
   notes: readonly PatchNote[], appVersion: string,
   record: { lastSeenVersion: string | null; dismissedVersion: string | null },
 ): PatchNote[] {
-  const { dismissedVersion } = record;
-  const seen = [record.lastSeenVersion, dismissedVersion].reduce<string | null>(
-    (top, v) => (v !== null && (top === null || compareVersions(v, top) > 0) ? v : top), null);
-  const unresolved = (version: string) => (dismissedVersion === null
-    ? version === seen
-    : compareVersions(version, dismissedVersion) > 0);
+  const seen = record.lastSeenVersion ?? record.dismissedVersion;
   return notes
     .filter(n => compareVersions(n.version, appVersion) <= 0
-      && (seen === null
-        ? n.version === appVersion
-        : compareVersions(n.version, seen) > 0 || unresolved(n.version)))
+      && (seen === null ? n.version === appVersion : compareVersions(n.version, seen) > 0))
     .sort((a, b) => compareVersions(b.version, a.version));
 }
 
