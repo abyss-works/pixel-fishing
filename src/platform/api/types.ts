@@ -227,6 +227,14 @@ export interface AdminLetterRow {
   /** 관리자가 처리 표시한 시각. 처리 전이면 null */
   handled_at: string | null;
 }
+/** 변경 기록 한 건. tier는 public(플레이어에게도 보이는 변경)과 admin(관리자만 보는 변경)이다 */
+export interface AdminChangelogRow {
+  id: string; version: string;
+  /** 그 버전을 올린 날(KST 날짜) */
+  date: string; seq: number; tier: 'public' | 'admin'; tag: string; text: string;
+  /** 체인지로그에서 사라지거나 다른 항목에 대체돼 철회로 표시된 시각. 평소 null */
+  withdrawnAt: string | null;
+}
 /** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
 export interface AdminChatReportRow {
   id: number; user_id: string; message_id: number; target_id: string;
@@ -319,6 +327,8 @@ export interface AdminApi {
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
+  /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
+  changelog(): Promise<AdminChangelogRow[]>;
   /** 채팅 신고 목록(최근 순) */
   chatReports(): Promise<AdminChatReportRow[]>;
   /** 최근 보낸 우편 */

@@ -10,7 +10,7 @@ describe('admin 계층 규약', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
       'spamFlags',
-      'recentEvents', 'userEvents', 'letters', 'chatReports', 'balanceLive', 'restrict', 'resetLink', 'letterHandled', 'deployHost', 'signIn', 'signOut'] as const) {
+      'recentEvents', 'userEvents', 'letters', 'changelog', 'chatReports', 'balanceLive', 'restrict', 'resetLink', 'letterHandled', 'deployHost', 'signIn', 'signOut'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }
@@ -25,6 +25,7 @@ describe('admin 계층 규약', () => {
     await expect(admin.users()).rejects.toThrow(/클라우드/);
     await expect(admin.dailyStats('2026-11-01', '2026-11-05')).rejects.toThrow(/클라우드/);
     await expect(admin.live()).rejects.toThrow(/클라우드/);
+    await expect(admin.changelog()).rejects.toThrow(/클라우드/);
     await expect(admin.balanceLive()).rejects.toThrow(/클라우드/);
     await expect(admin.balanceLive(3)).rejects.toThrow(/클라우드/);
   });

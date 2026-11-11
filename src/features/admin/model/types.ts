@@ -3,6 +3,7 @@ export type {
   AdminDailyStatsRow,
   AdminEconomyRow,
   AdminEventRow,
+  AdminChangelogRow,
   AdminLetterRow,
   AdminLive,
   AdminLiveConnection,
