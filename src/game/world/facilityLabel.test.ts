@@ -22,6 +22,8 @@ describe('거점 시설 라벨', () => {
   it('설명이 없는 라벨은 제목만 가진다', () => {
     const wardrobe = BASE_PACKS.home.furniture.find(f => f.id === 'wardrobe')!;
     expect(wardrobe.label({ rod: 1, boatName: '' })).toEqual({ title: '옷장' });
+    const kitchen = BASE_PACKS.home.furniture.find(f => f.id === 'kitchen')!;
+    expect(kitchen.label({ rod: 1, boatName: '' })).toEqual({ title: '부엌' });
   });
 
   it('한 줄 문자열은 제목과 설명을 공백으로 잇고 구분 문자를 쓰지 않는다', () => {

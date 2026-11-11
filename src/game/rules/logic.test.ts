@@ -970,10 +970,10 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
     expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
   });
 
-  it('baitCost — 유물 없으면 정가, 진주 상인의 저울이면 25% 감소(내림)', () => {
+  it('baitCost — 진주 상인의 저울은 미끼값을 깎지 않는다(정가)', () => {
     expect(baitCost({ artifacts: [] }, 200, 2)).toBe(400);
-    expect(baitCost({ artifacts: ['varuna-scale'] }, 200, 2)).toBe(300);
-    expect(baitCost({ artifacts: ['varuna-scale'] }, 25, 1)).toBe(18);
+    expect(baitCost({ artifacts: ['varuna-scale'] }, 200, 2)).toBe(400);
+    expect(baitCost({ artifacts: ['varuna-scale'] }, 25, 1)).toBe(25);
   });
 
   it('usableBait — 보유량 > 0인 유효 미끼만 행을 돌려준다 (오버레이·리듀서 단일 출처)', () => {

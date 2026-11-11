@@ -5,6 +5,7 @@
 // 때 등급 이름이 바뀌어도 세이브(items/activeBait 키)와 코드 신분증은 그대로다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버의 import 그래프에 포함된다.
 import type { RarityId } from './rarity.js';
+import { LEGACY_BAIT_REFUND } from './cooking.js';
 
 export type BaitTarget = RarityId;
 
@@ -23,13 +24,13 @@ export interface Bait {
 //   유지한 채 전 등급 ×2 상향으로 마무리했다. 관찰 후 조정 가능 — 미끼 데이터 단일 출처.
 const DATA: readonly Bait[] = [
   { id: 'bait-common', name: '일반 미끼', desc: '흔한 밀웜이에요.',
-    targetRarity: 'common', price: 25, color: '#9e9e9e' },
+    targetRarity: 'common', price: LEGACY_BAIT_REFUND['bait-common'], color: '#9e9e9e' },
   { id: 'bait-rare', name: '희귀 미끼', desc: '향을 입힌 떡밥이에요.',
-    targetRarity: 'rare', price: 200, color: '#42a5f5' },
+    targetRarity: 'rare', price: LEGACY_BAIT_REFUND['bait-rare'], color: '#42a5f5' },
   { id: 'bait-epic', name: '영웅 미끼', desc: '비싼 살토예요.',
-    targetRarity: 'epic', price: 1000, color: '#ba68c8' },
+    targetRarity: 'epic', price: LEGACY_BAIT_REFUND['bait-epic'], color: '#ba68c8' },
   { id: 'bait-legendary', name: '전설 미끼', desc: '특별히 만든 미끼예요.',
-    targetRarity: 'legendary', price: 2500, color: '#ffd54f' },
+    targetRarity: 'legendary', price: LEGACY_BAIT_REFUND['bait-legendary'], color: '#ffd54f' },
 ];
 
 export const BAITS: readonly Bait[] = DATA;
