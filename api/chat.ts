@@ -80,7 +80,7 @@ export const chatReportHandler: NodeHandler = handle(async (req, res) => {
 });
 
 /**
- * 차단하거나 푼다. 차단하면 두 사람 사이의 친구 관계와 요청도 지운다(차단 목록은 하나, `friends.md`).
+ * 차단하거나 푼다. 차단하면 두 사람 사이의 친구 관계와 요청도 지운다(차단 목록은 하나다).
  * 없는 계정을 차단하면 404다.
  */
 async function changeBlock(db: Executor, uid: string, target: string, op: 'block' | 'unblock'): Promise<void> {

@@ -3,9 +3,9 @@ import TooltipBubble from './TooltipBubble';
 import { anchorOf } from './tooltipPlacement';
 import type { Anchor } from './tooltipPlacement';
 
-// 호버 도움말 — 요소 옆에 붙는 작은 물음표 (사용자 지정 2026-08-24).
+// 호버 도움말 — 요소 옆에 붙는 작은 물음표.
 // 네이티브 title 툴팁이 아니라 **게임 스타일 버블**을 띄운다(브라우저 기본 툴팁은
-// 게임 톤과 어긋난다는 피드백). 문장은 호출자가 아니라 서비스/데이터가 갖는다
+// 게임 톤과 어긋난다). 문장은 호출자가 아니라 서비스/데이터가 갖는다
 // (stats.powerHelpText처럼) — UI에서 규칙 서술을 재작성하지 않는다.
 //
 // 구현: mouseenter/focus 시 rect를 재고 TooltipBubble(portal)을 띄운다. 모달 안에서도 안 잘리고,
@@ -20,7 +20,7 @@ export default function HelpHint({ text }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState<{ anchor: Anchor | null } | null>(null);
 
-  // 배치는 표준형: 앵커의 왼쪽 아래에서 오른쪽 아래로(중앙 정렬로 끌어오지 않는다, 사용자 지정)
+  // 배치는 표준형: 앵커의 왼쪽 아래에서 오른쪽 아래로(중앙 정렬로 끌어오지 않는다)
   const show = () => setOpen({ anchor: anchorOf(ref.current) });
   const hide = () => setOpen(null);
 

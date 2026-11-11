@@ -3,7 +3,7 @@ export {
   getAnnouncements,
   markPromptsAnswered,
   resetAnnouncements,
-  setDismissedVersion,
+  setLastSeenVersion,
   subscribeAnnouncements,
 } from '../adapters/announcements';
 export type { AnnouncementsState } from '../adapters/announcements';

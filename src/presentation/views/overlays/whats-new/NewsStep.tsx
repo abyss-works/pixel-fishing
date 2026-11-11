@@ -4,36 +4,59 @@ import NoteTag from '../../../ui/NoteTag';
 import Frame from '../../../ui/Frame';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
-// 이번 버전 소식 — 머리(버전·날짜·한 줄 요약)를 먼저 세우고, 범주별로 묶어 훑게 한다.
-// 노트가 길어도 창이 화면을 넘지 않게 목록만 스크롤한다.
-export default function NewsStep({ news }: { news: PatchNote }) {
-  const groups = NOTE_TAGS
-    .map(tag => ({ tag, items: news.notes.filter(n => n.tag === tag) }))
-    .filter(g => g.items.length > 0);
+function VersionHead({ note }: { note: PatchNote }) {
   return (
-    <div className="flex flex-col gap-3 min-h-0">
-      <Frame className="px-3 py-2 flex flex-col gap-0.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="pf-accent text-xl text-gold">v{news.version}</span>
-          <span className="pf-accent text-2xs text-text-dim">{news.date}</span>
-        </div>
-        <p className="text-sm">{news.summary}</p>
-      </Frame>
-      <div className={`${SCROLL_Y} max-h-[calc(42vh+8px)] flex flex-col gap-3`}>
-        {groups.map(({ tag, items }) => (
-          <section key={tag} className="flex flex-col gap-1">
-            <NoteTag tag={tag} className="self-start" />
-            <ul className="list-none flex flex-col gap-1.5">
-              {items.map((n, i) => (
-                <li key={i} className="flex gap-2 text-sm leading-[1.6]">
-                  <span aria-hidden className="mt-[0.6em] w-1 h-1 shrink-0 bg-text-dim" />
-                  <span>{n.text}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+    <Frame className="px-3 py-2 flex flex-col gap-0.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="pf-accent text-xl text-gold">v{note.version}</span>
+        <span className="pf-accent text-2xs text-text-dim">{note.date}</span>
       </div>
+      <p className="text-sm">{note.summary}</p>
+    </Frame>
+  );
+}
+
+function NoteGroups({ note }: { note: PatchNote }) {
+  const groups = NOTE_TAGS
+    .map(tag => ({ tag, items: note.notes.filter(n => n.tag === tag) }))
+    .filter(g => g.items.length > 0);
+  return groups.map(({ tag, items }) => (
+    <section key={tag} className="flex flex-col gap-1">
+      <NoteTag tag={tag} className="self-start" />
+      <ul className="list-none flex flex-col gap-1.5">
+        {items.map((n, i) => (
+          <li key={i} className="flex gap-2 text-sm leading-[1.6]">
+            <span aria-hidden className="mt-[0.6em] w-1 h-1 shrink-0 bg-text-dim" />
+            <span>{n.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ));
+}
+
+// 업데이트 소식 — 버전마다 머리(버전, 날짜, 한 줄 요약)를 먼저 세우고 범주별로 묶어 훑게 한다. 버전은 최신 순이다.
+// 버전이 하나면 머리는 고정하고 목록만 스크롤한다. 여럿이면 머리까지 한 스크롤 안에 이어 둔다.
+// 노트가 길어도 창이 화면을 넘지 않게 스크롤한다.
+export default function NewsStep({ news }: { news: readonly PatchNote[] }) {
+  if (news.length === 1) {
+    return (
+      <div className="flex flex-col gap-3 min-h-0">
+        <VersionHead note={news[0]} />
+        <div className={`${SCROLL_Y} max-h-[calc(42vh+8px)] flex flex-col gap-3`}>
+          <NoteGroups note={news[0]} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={`${SCROLL_Y} max-h-[calc(56vh+8px)] flex flex-col gap-4`}>
+      {news.map(note => (
+        <section key={note.version} aria-label={`v${note.version}`} className="flex flex-col gap-3">
+          <VersionHead note={note} />
+          <NoteGroups note={note} />
+        </section>
+      ))}
     </div>
   );
 }
