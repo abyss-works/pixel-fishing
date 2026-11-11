@@ -145,6 +145,42 @@ export const recipeOf = (r: CookRecipe): Recipe => ({
 /** 요리 콘텐츠의 레시피 중 이 도구가 효과를 재는 것. 판정 칸(영역 폭) 효과 레시피는 재지 않아 뺀다 */
 export const RECIPES: readonly Recipe[] = COOK_RECIPES.filter(r => r.effects.judgeWidth === undefined).map(recipeOf);
 
+/** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 개수. 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
+export type CostOverrides = Readonly<Record<string, Partial<Record<RarityId, number>>>>;
+
+/** 명령줄 `id=등급:개수,등급:개수` 한 덩어리를 읽는다. 등급은 common, rare, epic, legendary다 */
+export function parseCostSpec(spec: string): { id: string; cost: Partial<Record<RarityId, number>> } {
+  const usage = `--cost는 레시피id=등급:개수,등급:개수 형식이어야 합니다: ${spec}`;
+  const eq = spec.indexOf('=');
+  if (eq <= 0 || eq === spec.length - 1) throw new Error(usage);
+  const cost: Partial<Record<RarityId, number>> = {};
+  for (const part of spec.slice(eq + 1).split(',')) {
+    const [grade, count, ...rest] = part.split(':');
+    if (grade === undefined || count === undefined || rest.length > 0 || grade === '' || count.trim() === '') throw new Error(usage);
+    if (!(RARITY_ORDER as readonly string[]).includes(grade)) throw new Error(`알 수 없는 등급입니다: ${grade} (${RARITY_ORDER.join(', ')} 중 하나)`);
+    if (Object.hasOwn(cost, grade)) throw new Error(`--cost에 같은 등급이 두 번 있습니다: ${grade}`);
+    if (!/^\d+$/.test(count)) throw new Error(usage);
+    cost[grade as RarityId] = Number(count);
+  }
+  return { id: spec.slice(0, eq), cost };
+}
+
+/** 측정 입력만 바꿔 레시피의 기운 요구를 덮어쓴다. 콘텐츠 레시피는 바꾸지 않고 새 목록을 돌려준다 */
+export function withCostOverrides(recipes: readonly Recipe[], overrides: CostOverrides): Recipe[] {
+  for (const [id, cost] of Object.entries(overrides)) {
+    if (!recipes.some(r => r.id === id)) throw new Error(`알 수 없는 레시피입니다: ${id} (${recipes.map(r => r.id).join(', ')} 중 하나)`);
+    for (const [g, n] of Object.entries(cost)) {
+      if (!(RARITY_ORDER as readonly string[]).includes(g)) throw new Error(`알 수 없는 등급입니다: ${g} (${RARITY_ORDER.join(', ')} 중 하나)`);
+      if (!Number.isInteger(n) || (n as number) < 0) throw new Error(`기운 수량은 0 이상의 정수여야 합니다: ${id} ${g}:${n}`);
+    }
+    if (!Object.values(cost).some(n => (n as number) > 0)) throw new Error(`기운 수량이 모두 0입니다. 요구가 하나는 있어야 합니다: ${id}`);
+  }
+  return recipes.map(r => {
+    const o = overrides[r.id];
+    return o ? { ...r, cost: Object.fromEntries(RARITY_ORDER.filter(g => (o[g] ?? 0) > 0).map(g => [g, o[g]!])) } : r;
+  });
+}
+
 export interface RecipeRow {
   recipe: string;
   spot: SpotId; level: number;
@@ -261,6 +297,9 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
   return { released, releasedGold, kept, keptGold };
 }
 
+/** 집에 들르는 간격의 하한(시간) */
+export const MIN_VISIT_HOURS = 0.25;
+
 export interface BagSupplyOptions {
   axis: FlowAxis; margin: number;
   /** 집 기운 얻기가 열리는 배 단계. 이 단계 이상의 배 단계마다 낸다. 기본은 요리 콘텐츠의 해금 배 단계 */
@@ -268,6 +307,10 @@ export interface BagSupplyOptions {
   /** 가방을 비운 채 판매 없이 낚는 시간(시간) */
   hours: number;
   trials: number; seed: number;
+  /** 낚시 중 수동 낚시의 비율(0 이상 1 이하). 주면 axis 대신 방치와 수동을 이 비율로 섞는다. 생략하면 axis로만 낚는다 */
+  manualShare?: number;
+  /** 집에 들러 가방을 기운으로 바꾸고 비우는 간격(시간). 생략하면 낚는 시간 전체에 한 번 들른다 */
+  visitHours?: number;
 }
 
 export interface BagSupplyRow {
@@ -286,35 +329,61 @@ export interface BagSupplyRow {
 }
 
 /** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 개수를 낸다.
- *  캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다. 가방 용량은 그 배 단계의 용량이고, 낚싯대는 그 해역의 진입 레벨(에 여유를 더한 값)이다 */
+ *  캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다. 가방 용량은 그 배 단계의 용량이고, 낚싯대는 그 해역의 진입 레벨(에 여유를 더한 값)이다.
+ *  방문 간격마다 가방을 비우므로 한 구간이 가방 용량을 넘을 때만 개체를 놓아주고, 구간별 결과를 더한다 */
 export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   if (!(o.hours > 0)) throw new Error('낚는 시간은 0보다 커야 합니다(시간)');
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
+  if (o.manualShare !== undefined && !(o.manualShare >= 0 && o.manualShare <= 1)) throw new Error('수동 비율은 0 이상 1 이하여야 합니다');
+  if (o.visitHours !== undefined && !(o.visitHours >= MIN_VISIT_HOURS)) throw new Error(`방문 간격은 ${MIN_VISIT_HOURS}시간 이상이어야 합니다`);
   const unlock = o.unlockBoat ?? COOKING_UNLOCK_BOAT;
   const stages = [...new Set(SPOTS.map(s => s.boatTier))].filter(b => b >= unlock).sort((a, b) => a - b);
+  const visit = Math.min(o.visitHours ?? o.hours, o.hours);
+  const segments: number[] = [];
+  for (let left = o.hours; left > 1e-9; left -= visit) segments.push(Math.min(visit, left));
+  const modes: { axis: FlowAxis; share: number }[] = o.manualShare === undefined
+    ? [{ axis: o.axis, share: 1 }]
+    : [{ axis: 'idle' as const, share: 1 - o.manualShare }, { axis: 'manual' as const, share: o.manualShare }].filter(m => m.share > 0);
   return stages.flatMap(boat => {
     const state = { ...newState(), boat }, front = new Set<SpotId>(energyDefaultExcluded(boat));
     return spotsAt(o.margin).filter(({ s }) => canFishSpot(state, s.id)).map(({ s, i }) => {
       const level = entryLevel(s.id) + o.margin;
-      const r = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);
-      const cap = capOfBoat(boat), n = Math.round(r.catchesPerHour * o.hours);
-      let total = 0;
-      const cum = r.rows.map(row => (total += row.prob));
+      const sources = modes.map(m => {
+        const r = effectRates(s.id, level, axisOf(m.axis, s.id, level), NO_EFFECT);
+        let total = 0;
+        const cum = r.rows.map(row => (total += row.prob));
+        return { r, share: m.share, cum, total };
+      });
+      const cap = capOfBoat(boat);
+      // 반올림은 누적 기대값에 한 번만 하고 구간별 수는 그 차이로 정해 구간이 많아도 오차가 쌓이지 않는다
+      let elapsed = 0;
+      const upTo = (src: (typeof sources)[number], hours: number) => Math.round(src.r.catchesPerHour * hours * src.share);
+      const counts = segments.map(seg => {
+        const from = elapsed;
+        elapsed += seg;
+        return sources.map(src => upTo(src, elapsed) - upTo(src, from));
+      });
+      const n = counts.reduce((a, c) => a + c.reduce((x, y) => x + y, 0), 0);
       const rand = rng(o.seed + i);
       const kept = zeroGrades(), released = zeroGrades();
       let keptGold = 0, releasedGold = 0;
-      function* draw(): Generator<Bucket> {
-        for (let k = 0; k < n; k++) {
-          const x = rand() * total;
-          let lo = 0, hi = cum.length - 1;
-          while (lo < hi) { const mid = (lo + hi) >> 1; if (x < cum[mid]) hi = mid; else lo = mid + 1; }
-          yield { fishId: r.rows[lo].fish.id, variant: rand() < r.variantShare };
+      function* draw(segment: number[]): Generator<Bucket> {
+        for (let m = 0; m < sources.length; m++) {
+          const { r, total, cum } = sources[m];
+          for (let k = 0; k < segment[m]; k++) {
+            const x = rand() * total;
+            let lo = 0, hi = cum.length - 1;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (x < cum[mid]) hi = mid; else lo = mid + 1; }
+            yield { fishId: r.rows[lo].fish.id, variant: rand() < r.variantShare };
+          }
         }
       }
       for (let t = 0; t < o.trials; t++) {
-        const f = fillBag(draw(), cap);
-        for (const g of RARITY_ORDER) { kept[g] += f.kept[g] / o.trials; released[g] += f.released[g] / o.trials; }
-        keptGold += f.keptGold / o.trials; releasedGold += f.releasedGold / o.trials;
+        for (const segment of counts) {
+          const f = fillBag(draw(segment), cap);
+          for (const g of RARITY_ORDER) { kept[g] += f.kept[g] / o.trials; released[g] += f.released[g] / o.trials; }
+          keptGold += f.keptGold / o.trials; releasedGold += f.releasedGold / o.trials;
+        }
       }
       const frontmost = front.has(s.id);
       return {
