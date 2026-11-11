@@ -1012,7 +1012,8 @@ describe('개발 명령 허용 판정', () => {
     const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
-    await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true }, { origin });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true }, { origin });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     const tickets = await env.client.query('select count(*)::int as n from public.bounty_tickets where user_id = $1', [uid]);
     return tickets.rows[0].n as number;
   };
