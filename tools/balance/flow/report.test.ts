@@ -451,8 +451,8 @@ describe('window 명령', () => {
 
 describe('recipes 명령', () => {
   it('옵션을 읽고 효과 옵션은 받지 않는다', () => {
-    const o = parseArgs(['recipes', '--recipe', 'mixed', '--hours', '6', '--margin', '-2', '--axis', 'manual']);
-    expect(o).toMatchObject({ commands: ['recipes'], recipe: 'mixed', hours: 6, margin: -2, axis: 'manual' });
+    const o = parseArgs(['recipes', '--recipe', 'cook-lunch-bundle', '--hours', '6', '--margin', '-2', '--axis', 'manual']);
+    expect(o).toMatchObject({ commands: ['recipes'], recipe: 'cook-lunch-bundle', hours: 6, margin: -2, axis: 'manual' });
     expect(() => parseArgs(['recipes', '--bite', '10'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['recipes', '--recipe', 'nope'])).toThrow(/레시피/);
     expect(() => parseArgs(['recipes', '--hours', '0'])).toThrow(/0보다/);
@@ -460,18 +460,19 @@ describe('recipes 명령', () => {
   });
 
   it('effects와 window에서는 레시피의 효과를 효과 옵션에 채운다', () => {
-    expect(parseArgs(['effects', '--recipe', 'quick']).effect.bite).toBeCloseTo(0.1, 12);
-    expect(parseArgs(['window', '--recipe', 'mutantBait']).effect.variant).toBeCloseTo(1, 12);
-    expect(parseArgs(['effects', '--recipe', 'mixed']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
+    expect(parseArgs(['effects', '--recipe', 'cook-lunch-bite']).effect.bite).toBeCloseTo(0.1, 12);
+    expect(parseArgs(['window', '--recipe', 'cook-bait-mutation']).effect.variant).toBeCloseTo(1, 12);
+    expect(parseArgs(['effects', '--recipe', 'cook-lunch-bundle']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
   });
 
   it('레시피 순손익, 가방 공급, 만들 수 있는 개수 표를 낸다', () => {
-    const r = runCli(['recipes', '--recipe', 'quick', '--trials', '3']);
+    const r = runCli(['recipes', '--recipe', 'cook-lunch-bite', '--trials', '3']);
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain('## 재촉 도시락');
-    expect(r.stdout).toContain('## 가방 한도와 자동 기운 얻기');
-    expect(r.stdout).toContain('## 자동 기운으로 만들 수 있는 레시피 수');
-    expect(r.stdout).not.toContain('## 윤슬 도시락');
+    expect(r.stdout).toContain('## 가루디야(cook-lunch-bite)');
+    expect(r.stdout).toContain('## 집 기운 얻기 공급');
+    expect(r.stdout).toContain('## 집 기운으로 만들 수 있는 레시피 수');
+    expect(r.stdout).toContain('제외(가장 앞선 두 해역)');
+    expect(r.stdout).not.toContain('(cook-lunch-rare)');
   });
 
   it('JSON은 같은 시드에서 같다', () => {
@@ -483,8 +484,8 @@ describe('recipes 명령', () => {
 
 describe('효과를 넣은 transition, days, gates', () => {
   it('효과 옵션과 새 옵션을 읽는다', () => {
-    const o = parseArgs(['transition', '--bite', '10', '--bounty', '--from-boat', '3', '--recipe', 'quick', '--with-cost']);
-    expect(o).toMatchObject({ commands: ['transition'], bounty: true, fromBoat: 3, recipe: 'quick', withCost: true });
+    const o = parseArgs(['transition', '--bite', '10', '--bounty', '--from-boat', '3', '--recipe', 'cook-lunch-bite', '--with-cost']);
+    expect(o).toMatchObject({ commands: ['transition'], bounty: true, fromBoat: 3, recipe: 'cook-lunch-bite', withCost: true });
     expect(o.effect.bite).toBeCloseTo(0.1, 12);
     expect(parseArgs(['gates', '--rare', '10']).commands).toEqual(['gates']);
   });
@@ -492,7 +493,7 @@ describe('효과를 넣은 transition, days, gates', () => {
   it('옵션이 허용되지 않는 명령이나 값은 오류다', () => {
     expect(() => parseArgs(['days', '--bounty'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['effects', '--from-boat', '2'])).toThrow(/명령에서만/);
-    expect(() => parseArgs(['effects', '--with-cost', '--recipe', 'quick'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--with-cost', '--recipe', 'cook-lunch-bite'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['transition', '--with-cost'])).toThrow(/--recipe/);
     expect(() => parseArgs(['transition', '--from-boat', '-1'])).toThrow(/0 이상/);
     expect(() => parseArgs(['transition', '--from-boat', '1.5'])).toThrow(/정수/);
@@ -506,24 +507,24 @@ describe('효과를 넣은 transition, days, gates', () => {
   it('미끼 슬롯 효과는 수동 캐치에만 걸려 transition, days, gates에서 거부한다', () => {
     for (const cmd of ['transition', 'days', 'gates']) {
       expect(() => parseArgs([cmd, '--bait', 'rare']), cmd).toThrow(/미끼 슬롯/);
-      expect(() => parseArgs([cmd, '--recipe', 'mutantBait']), cmd).toThrow(/미끼 슬롯/);
+      expect(() => parseArgs([cmd, '--recipe', 'cook-bait-mutation']), cmd).toThrow(/미끼 슬롯/);
     }
   });
 
   it('도시락 효과는 방치 캐치에만 걸려 수동 축과 함께 쓰면 거부한다', () => {
     expect(() => parseArgs(['transition', '--bite', '10', '--axis', 'manual'])).toThrow(/방치/);
-    expect(() => parseArgs(['days', '--recipe', 'quick', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['days', '--recipe', 'cook-lunch-bite', '--axis', 'manual'])).toThrow(/방치/);
     expect(parseArgs(['transition', '--axis', 'manual']).axis).toBe('manual');
     expect(parseArgs(['transition', '--bite', '10', '--axis', 'idle']).axis).toBe('idle');
   });
 
   it('effects와 window는 슬롯에 맞는 축을 기본으로 고르고 맞지 않는 축은 거부한다', () => {
     expect(parseArgs(['effects', '--bait', 'rare']).axis).toBe('manual');
-    expect(parseArgs(['window', '--recipe', 'quick']).axis).toBe('idle');
+    expect(parseArgs(['window', '--recipe', 'cook-lunch-bite']).axis).toBe('idle');
     expect(parseArgs(['window', '--bait', 'rare']).axis).toBe('manual');
     expect(() => parseArgs(['effects', '--bait', 'rare', '--axis', 'idle'])).toThrow(/수동/);
-    expect(() => parseArgs(['effects', '--recipe', 'quick', '--axis', 'manual'])).toThrow(/방치/);
-    expect(() => parseArgs(['window', '--recipe', 'mutantBait', '--axis', 'idle'])).toThrow(/수동/);
+    expect(() => parseArgs(['effects', '--recipe', 'cook-lunch-bite', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['window', '--recipe', 'cook-bait-mutation', '--axis', 'idle'])).toThrow(/수동/);
     expect(parseArgs(['effects', '--bait', 'epic', '--axis', 'perfect']).axis).toBe('perfect');
   });
 
@@ -577,7 +578,7 @@ describe('효과를 넣은 transition, days, gates', () => {
   });
 
   it('재료 비용을 넣으면 가정에 밝힌다', () => {
-    const r = runCli(['transition', '--recipe', 'quick', '--with-cost']);
+    const r = runCli(['transition', '--recipe', 'cook-lunch-bite', '--with-cost']);
     expect(r.stdout).toContain('재료 판매 손실을 하루 한 번 비용으로 넣음');
   });
 });
