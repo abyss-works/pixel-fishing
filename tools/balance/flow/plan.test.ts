@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../src/game/content/spots';
 import { entryLevel, rates } from '../model';
-import { DEFAULT_FROM_BOAT, RECIPES, effectPlan, materialLoss } from './cooking';
+import { COOKING_UNLOCK_BOAT } from '../../../src/game/content/cooking';
+import { RECIPES, effectPlan, materialLoss } from './cooking';
 import { NO_EFFECT, effectRates } from './effects';
 import type { Effect } from './effects';
 import { daysReport } from './days';
@@ -17,13 +18,13 @@ const finalHours = (r: ReturnType<typeof simulate>) => r.arrivals[r.arrivals.len
 
 describe('효과 계획', () => {
   it('기본 시작 조건은 인도양을 여는 배 단계다', () => {
-    expect(DEFAULT_FROM_BOAT).toBe(SPOTS.find(s => s.id === 'indian')!.boatTier);
+    expect(COOKING_UNLOCK_BOAT).toBe(SPOTS.find(s => s.id === 'indian')!.boatTier);
   });
 
   it('시작 배 단계 미만이면 효과 없음과 같고 이상이면 효과를 넣은 수입이다', () => {
     const plan = effectPlan({ effect: fx({ bite: 0.1 }) });
     const level = entryLevel(last);
-    const before = plan.rateFor(last, level, 'idle', DEFAULT_FROM_BOAT - 1), after = plan.rateFor(last, level, 'idle', DEFAULT_FROM_BOAT);
+    const before = plan.rateFor(last, level, 'idle', COOKING_UNLOCK_BOAT - 1), after = plan.rateFor(last, level, 'idle', COOKING_UNLOCK_BOAT);
     expect(before.goldPerHour).toBeCloseTo(rates(last, level, 'idle').goldPerHour, 9);
     expect(after.goldPerHour).toBeCloseTo(effectRates(last, level, 'idle', fx({ bite: 0.1 })).goldPerHour, 9);
     expect(after.goldPerHour).toBeGreaterThan(before.goldPerHour);
@@ -43,13 +44,13 @@ describe('효과 계획', () => {
   });
 
   it('레시피를 주면 재료 판매 손실을 8시간 낚시 하루에 한 번으로 나눠 시간당 비용으로 낸다', () => {
-    const quick = RECIPES.find(r => r.id === 'quick')!;
+    const quick = RECIPES.find(r => r.id === 'cook-lunch-bite')!;
     const plan = effectPlan({ effect: quick.effect, recipe: quick });
     const level = entryLevel(last);
     const m = materialLoss(quick, last, level, 'idle');
     expect(m.feasible).toBe(true);
-    expect(plan.costPerHour(last, level, 'idle', DEFAULT_FROM_BOAT)).toBeCloseTo(m.loss / DAY_HOURS, 9);
-    expect(plan.costPerHour(last, level, 'idle', DEFAULT_FROM_BOAT - 1)).toBe(0);
+    expect(plan.costPerHour(last, level, 'idle', COOKING_UNLOCK_BOAT)).toBeCloseTo(m.loss / DAY_HOURS, 9);
+    expect(plan.costPerHour(last, level, 'idle', COOKING_UNLOCK_BOAT - 1)).toBe(0);
   });
 
   it('레시피 없이 쓰면 비용이 없다', () => {
@@ -57,7 +58,7 @@ describe('효과 계획', () => {
   });
 
   it('재료가 나오지 않는 해역에서는 레시피를 만들 수 없어 효과도 비용도 없다', () => {
-    const mixed = RECIPES.find(r => r.id === 'mixed')!;
+    const mixed = RECIPES.find(r => r.id === 'cook-lunch-bundle')!;
     const spot = SPOTS.find(s => !materialLoss(mixed, s.id, entryLevel(s.id), 'idle').feasible)!;
     const plan = effectPlan({ effect: mixed.effect, recipe: mixed, fromBoat: 0 });
     const level = entryLevel(spot.id);
@@ -79,7 +80,7 @@ describe('진행 시뮬레이션의 효과 계획', () => {
 
   it('효과가 시작 배 단계 이후에만 걸리면 그 이전 해역의 도착 시간은 그대로다', () => {
     const base = run().arrivals, now = run(effectPlan({ effect: fx({ bite: 0.1 }) })).arrivals;
-    const k = SPOTS.findIndex(s => s.boatTier >= DEFAULT_FROM_BOAT);
+    const k = SPOTS.findIndex(s => s.boatTier >= COOKING_UNLOCK_BOAT);
     for (let i = 0; i <= k; i++) expect(now[i].hours).toBeCloseTo(base[i].hours, 9);
     expect(now[now.length - 1].hours).toBeLessThan(base[base.length - 1].hours);
   });
