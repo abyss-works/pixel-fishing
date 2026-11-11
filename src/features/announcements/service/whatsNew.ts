@@ -4,10 +4,10 @@ import { PATCH_NOTES } from '../../../game/content/patchnotes';
 import type { PatchNote } from '../../../game/content/patchnotes';
 import type { GameState } from '../../../game/rules/logic';
 import {
-  getAnnouncements, markPromptsAnswered, setDismissedVersion,
+  getAnnouncements, markPromptsAnswered, setDismissedVersion, setLastSeenVersion,
 } from '../../../platform/api/announcements';
 import {
-  SETTING_PROMPTS, isFreshPlayer, latestNewsAtOrBelow, pendingPrompts, planWhatsNew, unseenNews,
+  SETTING_PROMPTS, compareVersions, isFreshPlayer, latestNewsAtOrBelow, pendingPrompts, planWhatsNew, unseenNews,
 } from '../model/whatsNew';
 import type { SettingPrompt, WhatsNewStep } from '../model/whatsNew';
 
@@ -43,11 +43,12 @@ const getSession = () => session;
 function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
   if (session.evaluated) return;
   const record = getAnnouncements();
-  const news = unseenNews(PATCH_NOTES, APP_VERSION, record.dismissedVersion);
+  const news = unseenNews(PATCH_NOTES, APP_VERSION, record);
   const prompts = pendingPrompts(SETTING_PROMPTS, new Set(record.answered));
   const fresh = isFreshPlayer(game);
   if (fresh) {
     setDismissedVersion(APP_VERSION);
+    setLastSeenVersion(APP_VERSION);
     markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
   }
   const steps = planWhatsNew({ news, prompts, fresh });
@@ -55,14 +56,17 @@ function evaluate(game: Pick<GameState, 'fame' | 'dex'>) {
 }
 
 /**
- * 소식을 닫을 때의 본 버전 기록. 체크하면 보인 가장 높은 버전까지 본 것으로 남긴다.
- * 체크하지 않으면 그대로 둬서 다음 접속에 같은 소식이 다시 뜬다. 이미 본 것으로 기록된 소식을 다시 보기로 열어 체크를 풀었다면
- * 본 기록을 비워 그 소식이 다시 뜨게 한다.
+ * 소식을 닫을 때의 본 버전 기록. 닫는 방식과 무관하게 보인 가장 높은 버전을 마지막으로 본 버전으로 남기되 낮추지 않는다.
+ * "다시 보지 않기"를 체크하면 그 버전까지 다시 뜨지 않게 남기고, 체크하지 않으면 그대로 둬서 다음 접속에 같은 소식이 다시 뜬다.
+ * 이미 다시 보지 않기로 한 소식을 다시 보기로 열어 체크를 풀었다면 그 기록을 비워 그 소식이 다시 뜨게 한다.
  */
 function settleNews() {
   const shown = session.news;
   if (shown.length === 0) return;
-  if (session.dismiss) { setDismissedVersion(shown[0].version); return; }
+  const top = shown[0].version;
+  const { lastSeenVersion } = getAnnouncements();
+  if (lastSeenVersion === null || compareVersions(top, lastSeenVersion) > 0) setLastSeenVersion(top);
+  if (session.dismiss) { setDismissedVersion(top); return; }
   const oldest = shown[shown.length - 1].version;
   if (getAnnouncements().dismissedVersion === oldest) setDismissedVersion(null);
 }

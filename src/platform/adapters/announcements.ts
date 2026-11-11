@@ -5,11 +5,13 @@ export const ANNOUNCEMENTS_KEY = 'pf-announcements';
 export interface AnnouncementsState {
   /** "다시 보지 않기"로 닫은 소식의 앱 버전 — 이 버전 소식은 더 띄우지 않는다 */
   dismissedVersion: string | null;
+  /** 소식 창이 보인 가장 높은 앱 버전 — 닫는 방식과 무관하게 남고, 다음 소식의 시작점이 된다 */
+  lastSeenVersion: string | null;
   /** 답한(또는 창을 닫아 넘긴) 새 설정 질문 id */
   answered: readonly string[];
 }
 
-const DEFAULT: AnnouncementsState = { dismissedVersion: null, answered: [] };
+const DEFAULT: AnnouncementsState = { dismissedVersion: null, lastSeenVersion: null, answered: [] };
 
 export function loadAnnouncements(): AnnouncementsState {
   try {
@@ -18,6 +20,7 @@ export function loadAnnouncements(): AnnouncementsState {
     const v = JSON.parse(raw) as Partial<AnnouncementsState>;
     return {
       dismissedVersion: typeof v.dismissedVersion === 'string' ? v.dismissedVersion : null,
+      lastSeenVersion: typeof v.lastSeenVersion === 'string' ? v.lastSeenVersion : null,
       answered: Array.isArray(v.answered) ? v.answered.filter((x): x is string => typeof x === 'string') : [],
     };
   } catch {
@@ -47,6 +50,12 @@ export function subscribeAnnouncements(listener: () => void): () => void {
 export function setDismissedVersion(version: string | null): void {
   if (state.dismissedVersion === version) return;
   commit({ ...state, dismissedVersion: version });
+}
+
+/** 소식 창이 보인 가장 높은 버전 — 값을 올릴지는 호출하는 쪽이 정한다 */
+export function setLastSeenVersion(version: string): void {
+  if (state.lastSeenVersion === version) return;
+  commit({ ...state, lastSeenVersion: version });
 }
 
 export function markPromptsAnswered(ids: readonly string[]): void {

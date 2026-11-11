@@ -2,7 +2,7 @@
 // 최근 소식 다시 보기는 항목이 있는 가장 최근 버전의 소식을 열며 다시 보지 않기 기록은 그 소식의 버전으로 남는다.
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAnnouncements, markPromptsAnswered, resetAnnouncements, setDismissedVersion } from '../../../platform/api/announcements';
+import { getAnnouncements, markPromptsAnswered, resetAnnouncements, setDismissedVersion, setLastSeenVersion } from '../../../platform/api/announcements';
 import { APP_VERSION } from '../../../version';
 import { SETTING_PROMPTS } from '../model/whatsNew';
 import { reopenWhatsNew, resetWhatsNewSession, useWhatsNew } from './whatsNew';
@@ -159,5 +159,47 @@ describe('마지막으로 본 버전 뒤의 소식', () => {
     act(() => { result.current.setDismiss(false); });
     act(() => { result.current.close(); });
     expect(getAnnouncements().dismissedVersion).toBeNull();
+  });
+
+  it('체크하지 않고 닫아도 보인 가장 높은 버전을 마지막으로 본 버전으로 남긴다', () => {
+    patchNotes.push(note(APP_VERSION), note('0.0.2'));
+    markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().lastSeenVersion).toBe(APP_VERSION);
+    expect(getAnnouncements().dismissedVersion).toBeNull();
+  });
+
+  it('체크하지 않고 닫은 플레이어는 다음 접속에 그 뒤의 새 버전과 마지막 본 소식을 함께 본다', () => {
+    patchNotes.push(note('0.0.2'), note('0.0.1'));
+    setLastSeenVersion('0.0.1');
+    markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    expect(result.current.news.map(n => n.version)).toEqual(['0.0.2', '0.0.1']);
+  });
+
+  it('다시 보기로 낮은 버전을 열어 닫아도 마지막으로 본 버전은 내려가지 않는다', () => {
+    patchNotes.push(note('0.0.2'), note('0.0.1'));
+    setLastSeenVersion('0.0.2');
+    const { result } = renderHook(() => useWhatsNew(veteran, false));
+    act(() => { reopenWhatsNew(); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().lastSeenVersion).toBe('0.0.2');
+  });
+
+  it('체크하고 닫으면 다시 보지 않기와 마지막으로 본 버전이 모두 보인 가장 높은 버전이 된다', () => {
+    patchNotes.push(note(APP_VERSION), note('0.0.2'));
+    const { result } = renderHook(() => useWhatsNew(veteran, true));
+    act(() => { result.current.setDismiss(true); });
+    act(() => { result.current.close(); });
+    expect(getAnnouncements().lastSeenVersion).toBe(APP_VERSION);
+    expect(getAnnouncements().dismissedVersion).toBe(APP_VERSION);
+  });
+
+  it('처음 시작한 플레이어는 현재 버전을 본 것으로 기록한다', () => {
+    patchNotes.push(note(APP_VERSION));
+    renderHook(() => useWhatsNew({ fame: 0, dex: {} }, true));
+    expect(getAnnouncements().lastSeenVersion).toBe(APP_VERSION);
+    expect(getAnnouncements().dismissedVersion).toBe(APP_VERSION);
   });
 });

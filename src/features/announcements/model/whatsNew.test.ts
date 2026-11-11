@@ -10,30 +10,51 @@ const note = (version: string): PatchNote => ({
 });
 const NOTES = [note('0.10.0'), note('0.9.0')];
 
+const rec = (lastSeenVersion: string | null, dismissedVersion: string | null = null) => ({ lastSeenVersion, dismissedVersion });
+
 describe('아직 보지 않은 소식', () => {
   it('마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전을 최신 순으로 모두 돌려준다', () => {
     const notes = [note('0.9.0'), note('0.10.2'), note('0.10.0'), note('0.10.1')];
-    expect(unseenNews(notes, '0.10.2', '0.9.0').map(n => n.version)).toEqual(['0.10.2', '0.10.1', '0.10.0']);
+    expect(unseenNews(notes, '0.10.2', rec('0.9.0', '0.9.0')).map(n => n.version)).toEqual(['0.10.2', '0.10.1', '0.10.0']);
   });
 
-  it('현재 버전보다 높은 노트와 본 버전 이하의 노트는 넣지 않는다', () => {
+  it('현재 버전보다 높은 노트와 다시 보지 않기로 한 본 버전 이하의 노트는 넣지 않는다', () => {
     const notes = [note('0.11.0'), note('0.10.0'), note('0.9.0')];
-    expect(unseenNews(notes, '0.10.0', '0.9.0').map(n => n.version)).toEqual(['0.10.0']);
+    expect(unseenNews(notes, '0.10.0', rec('0.9.0', '0.9.0')).map(n => n.version)).toEqual(['0.10.0']);
   });
 
   it('현재 버전 노트가 없어도 그 사이 버전이 있으면 보인다', () => {
-    expect(unseenNews([note('0.10.1'), note('0.9.0')], '0.10.3', '0.9.0').map(n => n.version)).toEqual(['0.10.1']);
+    expect(unseenNews([note('0.10.1'), note('0.9.0')], '0.10.3', rec('0.9.0', '0.9.0')).map(n => n.version)).toEqual(['0.10.1']);
   });
 
-  it('현재 버전을 이미 봤거나 사이에 노트가 없으면 비어 있다', () => {
-    expect(unseenNews(NOTES, '0.10.0', '0.10.0')).toEqual([]);
-    expect(unseenNews(NOTES, '0.11.0', '0.10.0')).toEqual([]);
-    expect(unseenNews([], '0.10.0', null)).toEqual([]);
+  it('현재 버전을 다시 보지 않기로 했거나 사이에 노트가 없으면 비어 있다', () => {
+    expect(unseenNews(NOTES, '0.10.0', rec('0.10.0', '0.10.0'))).toEqual([]);
+    expect(unseenNews(NOTES, '0.11.0', rec('0.10.0', '0.10.0'))).toEqual([]);
+    expect(unseenNews([], '0.10.0', rec(null))).toEqual([]);
   });
 
   it('본 기록이 없으면 현재 버전 노트 하나만 돌려준다', () => {
-    expect(unseenNews(NOTES, '0.10.0', null).map(n => n.version)).toEqual(['0.10.0']);
-    expect(unseenNews(NOTES, '0.11.0', null)).toEqual([]);
+    expect(unseenNews(NOTES, '0.10.0', rec(null)).map(n => n.version)).toEqual(['0.10.0']);
+    expect(unseenNews(NOTES, '0.11.0', rec(null))).toEqual([]);
+  });
+
+  it('체크하지 않고 닫은 플레이어도 마지막으로 본 버전 뒤의 버전을 모두 본다', () => {
+    const notes = [note('0.10.2'), note('0.10.1'), note('0.10.0')];
+    expect(unseenNews(notes, '0.10.2', rec('0.10.0')).map(n => n.version)).toEqual(['0.10.2', '0.10.1', '0.10.0']);
+  });
+
+  it('다시 보지 않기로 하지 않은 마지막 본 소식은 다시 뜬다', () => {
+    expect(unseenNews(NOTES, '0.10.0', rec('0.10.0')).map(n => n.version)).toEqual(['0.10.0']);
+  });
+
+  it('다시 보지 않기 기록 뒤에 본 소식은 그 기록 뒤부터 다시 뜬다', () => {
+    const notes = [note('0.10.2'), note('0.10.1'), note('0.10.0'), note('0.9.0')];
+    expect(unseenNews(notes, '0.10.2', rec('0.10.2', '0.10.0')).map(n => n.version)).toEqual(['0.10.2', '0.10.1']);
+  });
+
+  it('마지막으로 본 버전 기록이 없는 기존 저장값은 다시 보지 않기 버전을 본 버전으로 쓴다', () => {
+    const notes = [note('0.10.1'), note('0.10.0'), note('0.9.0')];
+    expect(unseenNews(notes, '0.10.1', rec(null, '0.9.0')).map(n => n.version)).toEqual(['0.10.1', '0.10.0']);
   });
 });
 

@@ -44,7 +44,7 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
 const versionParts = (version: string) => version.split('.').map(Number);
 
 /** 점으로 나눈 숫자 비교 — 앞이 크면 양수, 같으면 0 */
-function compareVersions(a: string, b: string): number {
+export function compareVersions(a: string, b: string): number {
   const pa = versionParts(a);
   const pb = versionParts(b);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -55,15 +55,26 @@ function compareVersions(a: string, b: string): number {
 }
 
 /**
- * 접속 때 띄울 소식: 마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전 전부, 최신 순.
- * 본 기록이 없으면 현재 버전 노트 하나만 본다. 노트 배열의 순서에 기대지 않는다
+ * 접속 때 띄울 소식, 최신 순. 노트 배열의 순서에 기대지 않는다.
+ * - 마지막으로 본 버전 뒤부터 현재 버전까지 노트가 있는 버전 전부.
+ * - 다시 보지 않기로 하지 않은 본 소식은 다시 뜬다: 다시 보지 않기 버전이 있으면 그 뒤의 본 버전 전부, 없으면 마지막 본 버전 하나.
+ * - 마지막으로 본 버전 기록이 없는 기존 저장값은 다시 보지 않기 버전을 본 버전으로 쓴다. 둘 다 없으면 현재 버전 노트 하나만 본다.
  */
 export function unseenNews(
-  notes: readonly PatchNote[], appVersion: string, seen: string | null,
+  notes: readonly PatchNote[], appVersion: string,
+  record: { lastSeenVersion: string | null; dismissedVersion: string | null },
 ): PatchNote[] {
+  const { dismissedVersion } = record;
+  const seen = [record.lastSeenVersion, dismissedVersion].reduce<string | null>(
+    (top, v) => (v !== null && (top === null || compareVersions(v, top) > 0) ? v : top), null);
+  const unresolved = (version: string) => (dismissedVersion === null
+    ? version === seen
+    : compareVersions(version, dismissedVersion) > 0);
   return notes
     .filter(n => compareVersions(n.version, appVersion) <= 0
-      && (seen === null ? n.version === appVersion : compareVersions(n.version, seen) > 0))
+      && (seen === null
+        ? n.version === appVersion
+        : compareVersions(n.version, seen) > 0 || unresolved(n.version)))
     .sort((a, b) => compareVersions(b.version, a.version));
 }
 
