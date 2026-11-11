@@ -207,6 +207,9 @@ export default function GameView(props: GameViewProps) {
         setActionPanel(null);
         setFerryOpen(true);
         return;
+      case 'kitchen':
+        // 부엌 창은 아직 없다. 열린 뒤에도 누르면 아무 창도 열지 않는다
+        return;
     }
   };
 

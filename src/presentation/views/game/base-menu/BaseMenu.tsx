@@ -7,7 +7,7 @@ import { BASE_EDGE_COLORS, renderBaseBackdrop } from '../../../../game/rendering
 import { BASE_CANVAS_W, BASE_CANVAS_H } from '../../../../game/rendering/pixel/common.js';
 import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
-import { facilityGuestAllowed, menuLock } from '../../../../features/display/model/menuLock';
+import { facilityGuestAllowed, facilityProgress, menuLock } from '../../../../features/display/model/menuLock';
 import { cx } from '../../../ui/cx';
 import { STACK_MENU_CLASS } from '../../../ui/hud/stackTier';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
@@ -43,9 +43,9 @@ function CardIcon({ base, facility, boat }: { base: BaseId; facility: Furniture;
   return <FacilityIcon rect={facility} draw={ctx => FURNITURE_SPRITES[facility.sprite](ctx, facility)} />;
 }
 
-/** 시설 구역 — 구역 순서대로 놓고, 구역 안의 카드는 거점 데이터의 가구 순서를 따른다. 부엌 가구는 콘텐츠에 들어오면 생활 구역에 놓인다 */
+/** 시설 구역 — 구역 순서대로 놓고, 구역 안의 카드는 거점 데이터의 가구 순서를 따른다 */
 const SECTIONS = ['정보', '상점', '생활', '이동'] as const;
-const SECTION_OF: Record<FurnitureId | 'kitchen', (typeof SECTIONS)[number]> = {
+const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
   rank: '정보', bounty: '정보',
   rod: '상점', boat: '상점', shop: '상점', sell: '상점',
   wardrobe: '생활', kitchen: '생활',
@@ -85,7 +85,8 @@ export default function BaseMenu({ base, game, onFacility, locked, guest = false
                   <div className="flex gap-2">
                     {items.map(f => {
                       const { title, sub } = f.label(info);
-                      const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed(f.id), feature: title });
+                      const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed(f.id), feature: title,
+                                           progress: facilityProgress(f.id, game.boat) });
                       return (
                         <MenuCard key={f.id} data-facility={f.id} onClick={() => onFacility?.(f.id)}
                                   disabled={locked === true && section === '이동'}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { COOKING_UNLOCK_BOAT } from '../../../../game/content/cooking';
 import { newState } from '../../../../game/rules/logic';
 import { BASE_PACKS } from '../../../../game/world';
 import type { BaseId } from '../../../../game/world';
@@ -11,9 +12,9 @@ afterEach(cleanup);
 const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-label'));
 
 describe('거점 카드 메뉴', () => {
-  it('집은 게시판·작업대·목공소·판매 궤짝·옷장·문 순서로 카드를 늘어놓는다', () => {
+  it('집은 게시판·작업대·목공소·판매 궤짝·옷장·부엌·문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장', '문 마을로']);
+    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장', '부엌', '문 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
@@ -29,11 +30,11 @@ describe('거점 카드 메뉴', () => {
     expect(document.querySelector('[data-facility="ferry"] canvas')).not.toBeNull();
   });
 
-  it('집의 옷장은 생활 구역에 놓인다', () => {
+  it('집의 옷장과 부엌은 생활 구역에 이 순서로 놓인다', () => {
     render(<BaseMenu base="home" game={newState()} />);
     expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['정보', '상점', '생활', '이동']);
     const living = [...screen.getByRole('heading', { name: '생활' }).parentElement!.querySelectorAll('[data-facility]')];
-    expect(living.map(el => el.getAttribute('data-facility'))).toEqual(['wardrobe']);
+    expect(living.map(el => el.getAttribute('data-facility'))).toEqual(['wardrobe', 'kitchen']);
   });
 
   describe('게스트 잠금', () => {
@@ -57,6 +58,37 @@ describe('거점 카드 메뉴', () => {
       unmount();
       render(<BaseMenu base="home" game={newState()} />);
       expect(document.querySelector('[data-facility="wardrobe"]')).not.toHaveAttribute('aria-disabled');
+    });
+  });
+
+  describe('부엌 잠금', () => {
+    const kitchen = () => document.querySelector('[data-facility="kitchen"]')!;
+    const tooltipOf = () => { fireEvent.mouseEnter(kitchen().parentElement!); return screen.getByRole('tooltip'); };
+
+    it('요리가 열리기 전 계정의 부엌은 지역 먼저 쓴 진행 조건 잠금이라 눌러도 시설을 알리지 않는다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={{ ...newState(), boat: COOKING_UNLOCK_BOAT - 1 }} onFacility={onFacility} />);
+      expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(kitchen());
+      expect(onFacility).not.toHaveBeenCalled();
+      expect(tooltipOf()).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    });
+
+    it('요리가 열린 뒤 계정의 부엌은 잠기지 않고 눌림을 알린다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} onFacility={onFacility} />);
+      expect(kitchen()).not.toHaveAttribute('aria-disabled');
+      fireEvent.click(kitchen());
+      expect(onFacility).toHaveBeenCalledWith('kitchen');
+    });
+
+    it('게스트의 부엌은 진행 조건을 채워도 안 채워도 게스트 잠금이다', () => {
+      for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
+        const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} guest />);
+        expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
+        expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+        unmount();
+      }
     });
   });
 
