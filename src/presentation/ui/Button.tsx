@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cx } from './cx';
 
 type Variant = 'default' | 'primary' | 'ghost';
@@ -11,6 +11,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   full?: boolean;
   /** 이 버튼이 연 창이 떠 있는 동안의 눌린 모양 */
   pressed?: boolean;
+  /** 팝오버가 연 버튼을 알아보게 넘긴다 */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 // 픽셀 베벨 버튼 — variant로 위계 구분 (확정=primary, 보조=ghost)
