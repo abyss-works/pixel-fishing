@@ -433,10 +433,10 @@ describe('상태 변경 (잡기/판매/강화)', () => {
   });
 
   it('가방 상한: 넘친 만큼만, 가장 안 특별한 것부터 놓아준다', () => {
-    // 등급 → 폼 → 크기 순으로 "덜 특별". 일부러 뒤섞어 넣는다
-    const bigCommon = mk('crucian', 'normal', 30);   // 일반, 큼
-    const smallCommon = mk('crucian', 'normal', 5);  // 일반, 작음 ← 가장 안 특별
-    const variant = mk('crucian', 'variant', 5);     // 변이 (같은 등급·크기면 변이가 더 특별)
+    // 등급 → 개체 판매가 → 크기 순으로 "덜 특별". 일부러 뒤섞어 넣는다
+    const bigCommon = mk('crucian', 'normal', 30);   // 일반 6, 큼
+    const smallCommon = mk('crucian', 'normal', 5);  // 일반 6, 작음 ← 가장 안 특별
+    const variant = mk('crucian', 'variant', 5);     // 일반 12 (변이라 같은 어종 일반보다 비쌈)
     const rare = mk('carp', 'normal', 5);            // 희귀
     const bag = [rare, variant, bigCommon, smallCommon];
     expect(overflowUids(bag, 3)).toEqual([smallCommon.uid]);
