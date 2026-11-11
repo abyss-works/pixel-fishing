@@ -6,7 +6,7 @@
 // 구현: "전체 어둠 + 플레이어 주변(화면 중앙) 조명"을 **한 오버레이**로 그린다.
 //  - 바탕 = 밤 하늘색(#0a1020) 전체를 어둠 a로
 //  - 중앙 = radial 구멍(투명) — 서 있는 곳은 덜 어둡다(조명)
-//  최대 어둠도 "아, 어둡네" 수준을 넘지 않게 상한(사용자: 너무 어둡게 말 것).
+//  최대 어둠도 "아, 어둡네" 수준을 넘지 않게 상한.
 import { useMemo } from 'react';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 

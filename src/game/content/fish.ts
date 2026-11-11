@@ -14,7 +14,7 @@ export type FishShape =
 // 고를 때 이 타입을 사용한다. 의존 방향은 UI에서 콘텐츠 데이터로 향한다.
 export type FormId = 'normal' | 'variant';
 
-// lore/variant는 v0.3.0 초안 — 나중에 다시 다듬어도 됨(직접 작성 확정)
+// lore/variant는 v0.3.0 초안
 // 변이는 "종만 같고 다른 개체" (v0.3.3): 이름/색/로어 독립, 등급/수역/형태/크기 분포는 종에 종속.
 export interface Fish {
   id: string;
@@ -168,7 +168,7 @@ export const FISH: readonly Fish[] = [
     lore: '백 년 전 군함이 산호가 되기까지, 그 위에 왕좌를 얹은 자가 있다.',
     variant: { name: '청동 철산호', color: '#cd7f32',
       lore: '백 년이 지나도록 청동빛으로 녹슬지 않는 개체. 잠수부들만 목격했다.' } },
-  // ── 그레이트 배리어 리프 (세계 최대 산호초 · 외해) — 가격: 사용자 밸런스 JSON 3차 ──
+  // ── 그레이트 배리어 리프 (세계 최대 산호초 · 외해) ──
   { id: 'clownfish',  name: '흰동가리',   spot: 'barrierreef', rarity: 'common',    price: 24,   color: '#ff7043', shape: 'tiny',
     lore: '말미잘과 함께 사는 주황빛 작은 물고기.',
     variant: { name: '백설 흰동가리', color: '#fafafa',

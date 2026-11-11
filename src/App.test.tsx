@@ -191,7 +191,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
-    // 가방 목록은 **기본 전부 닫힘**(사용자 지시) — 행을 펼쳐야 개체가 보인다
+    // 가방 목록은 **기본 전부 닫힘** — 행을 펼쳐야 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.queryByText('12.0cm')).not.toBeInTheDocument();
@@ -954,7 +954,7 @@ describe('탭은 씬과 무관하게 5개 고정', () => {
 });
 
 describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
-  // 가방 목록은 기본 전부 닫힘(사용자 지시) — 개체 줄을 보려면 종 행을 펼쳐야 한다
+  // 가방 목록은 기본 전부 닫힘 — 개체 줄을 보려면 종 행을 펼쳐야 한다
   const openRow = (name: string) =>
     fireEvent.click(screen.getByLabelText(`${name} 개체 펼치기`));
 
@@ -1266,7 +1266,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp', 'normal', 40)] });
     render(<App />);
     clickTab(/^가방/);
-    // 기본 닫힘 — 개체가 바로 보이지 않는다(사용자 지시: 대량 보유 스크롤 방지)
+    // 기본 닫힘 — 개체가 바로 보이지 않는다(대량 보유 시 스크롤 방지)
     expect(screen.queryByText('40.0cm')).not.toBeInTheDocument();
     openRow('잉어');
     expect(screen.getByText('40.0cm')).toBeInTheDocument();

@@ -69,7 +69,7 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
       .sort((a, b) => (a.form === 'variant' ? 0 : 1) - (b.form === 'variant' ? 0 : 1));
     row.subtotal = sumPrice(row.items);
   }
-  // 행 순서 — **등급 내림차순이 최상위 축**(사용자 지시 2026-08-27: 가격 말고 등급을 큰 축으로),
+  // 행 순서 — **등급 내림차순이 최상위 축**(가격이 아니라 등급을 큰 축으로 둔다),
   // 동률이면 소계(가치 합) 내림, 그다음 id로 안정화. 도감의 오름차순과 일부러 다르다 —
   // 가방은 "지금 뭘 들고 있나" 화면이라 값진 짐이 맨 위에 있어야 스크롤 없이 눈에 닿는다.
   return [...rows.values()].sort((a, b) =>

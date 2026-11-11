@@ -1,5 +1,5 @@
 // 세계지도(atlas) 렌더러 — 전지구 마스크(earth.mask)를 통째로 그리고, 구현 영역만 컬러로
-// 비춘다. 지구는 아직 만들지 않은 바다가 대부분이라는 걸 보여주는 화면(사용자 확정 2026-08-28):
+// 비춘다. 지구는 아직 만들지 않은 바다가 대부분이라는 걸 보여주는 화면이다:
 // 흑백 = 미개척, 컬러 = 지금 항해할 수 있는 세계.
 //
 // ⚠️ 이 모듈은 **동적 import 전용**이다 — earth 마스크(~178KB)가 들어있어 진입점 배럴에
@@ -26,7 +26,7 @@ const EARTH_W = E_COLS * E_CW, EARTH_H = E_ROWS * E_CH;
 /** 전지구 컴파일 마스크 — world와 같은 legend(문자 체계를 extends로 상속받았다) */
 export const EARTH_MAP: CompiledMap = compileMap(E_CW, E_CH, WORLD_LEGEND, EARTH_MASK_ROWS);
 
-// 화면 크기 — 지구(5760×2717)를 폭 1280에 맞춘다(세계지도 2배 확대 — 사용자 지시 2026-08-28).
+// 화면 크기 — 지구(5760×2717)를 폭 1280에 맞춘다(세계지도 2배 확대).
 // 배면만 커지고 모달 표시 폭은 .pf-modal-worldmap(전역 스타일, 레이어 밖)이 min(1280px, 96vw)로
 // 벌린다 — 1:1 픽셀 대응 화면에서 pixelated가 선명하다. Modal이 이 크기를 안다.
 export const ATLAS_W = 1280;
