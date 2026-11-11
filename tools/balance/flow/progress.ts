@@ -22,12 +22,15 @@ export const DAY_HOURS = 8;
 /** 실질 낚시 시간(시간)을 일수로 환산한다 */
 export const fishingDays = (hours: number): number => hours / DAY_HOURS;
 
-/** 낚시 방식 — 방치 또는 수동 */
-export type FlowAxis = 'idle' | 'manual';
+/** 낚시 방식 — 방치, 수동(GOOD), PERFECT. PERFECT는 효과 지표(effects, window)에서만 쓴다 */
+export type FlowAxis = 'idle' | 'manual' | 'perfect';
 
-/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다 */
-export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
-  flow === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
+/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다. PERFECT는 빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한다(PERFECT 이상치 게이트와 같은 상한 측정) */
+export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis => {
+  if (flow === 'idle') return 'idle';
+  if (flow === 'perfect') return 'perfect';
+  return axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
+};
 
 /** 수입 계산의 계획 — 배 단계마다 다른 수입 계산(효과를 넣는 조건 등)과 시간당 비용을 준다 */
 export interface RatePlan {

@@ -7,7 +7,7 @@ import type { Boat } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel } from '../model';
 import { fishingDays, simulate } from './progress';
-import type { Arrival, RatePlan } from './progress';
+import type { Arrival, FlowAxis, RatePlan } from './progress';
 
 export interface TransitionRow {
   from: SpotId; to: SpotId;
@@ -80,7 +80,7 @@ export interface TransitionReport {
 }
 
 export interface TransitionOptions {
-  axis: 'idle' | 'manual'; maxDays: number;
+  axis: FlowAxis; maxDays: number;
   /** 일반 의뢰와 네임드 토벌을 매일 수행하는가. 기본은 수행하지 않는다 */
   bounty?: boolean;
   /** 주면 이 계획으로 수입을 계산하고 효과 없는 값을 base로 함께 담는다 */

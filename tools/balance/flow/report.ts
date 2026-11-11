@@ -99,7 +99,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                      priceMult는 그 해역 어종 판매가에 곱하고 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
   --json             표 대신 JSON으로 낸다
   --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
-  --axis <idle|manual>  낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정)
+  --axis <idle|manual|perfect>  낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정). perfect는 effects, window에서만: 빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한 상한이고 effects는 방치 대비 비율 열을 더한다
   --max-days <N>     시뮬레이션 최대 일수(하루는 실질 낚시 ${DAY_HOURS}시간). 기본 365
   --seed <N>         dist의 난수 시드(정수). 기본 ${DEFAULT_SEED}. 같은 시드, 시도 횟수, 인자의 출력은 항상 같다
   --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
@@ -215,7 +215,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         o.maxDays = numberOf(a, raw);
         if (!Number.isInteger(o.maxDays) || o.maxDays < 1) throw new Error('--max-days는 1 이상의 정수여야 합니다');
       } else {
-        if (raw !== 'idle' && raw !== 'manual') throw new Error('--axis는 idle 또는 manual이어야 합니다');
+        if (raw !== 'idle' && raw !== 'manual' && raw !== 'perfect') throw new Error('--axis는 idle, manual, perfect 중 하나여야 합니다');
         o.axis = raw;
         axisGiven = true;
       }
@@ -238,6 +238,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     const b = baitEffect(bait);
     for (const k of Object.keys(b) as (keyof Effect)[]) if (b[k] !== 0) o.effect[k] = b[k];
   }
+  if (o.axis === 'perfect' && !(command === 'effects' || command === 'window')) throw new Error('--axis perfect는 effects, window 명령에서만 쓸 수 있습니다');
   if (o.withCost && o.recipe === null) throw new Error('--with-cost에는 --recipe가 필요합니다');
   if (command === 'window' && !axisGiven) o.axis = 'manual';
   checkEffect(o.effect);
@@ -344,7 +345,7 @@ const hrs = (x: number) => (x < 1 / 60 ? '0분' : x < 1 ? `${Math.round(x * 60)}
 const h2 = (x: number) => `${x.toFixed(2)}시간`;
 const d1 = (x: number) => `${x.toFixed(1)}일`;
 const nameOf = (spot: SpotId) => SPOTS.find(s => s.id === spot)!.name;
-const AXIS_LABEL: Record<FlowAxis, string> = { idle: '방치', manual: '수동 GOOD(파워 미달 해역은 무판정)' };
+const AXIS_LABEL: Record<FlowAxis, string> = { idle: '방치', manual: '수동 GOOD(파워 미달 해역은 무판정)', perfect: 'PERFECT 다이얼(빨간 존이 열렸는지와 관계없이 적용한 상한)' };
 
 function table(headers: string[], rows: (string | number)[][]): string {
   return [`| ${headers.join(' | ')} |`, `|${headers.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.join(' | ')} |`)].join('\n');
@@ -735,12 +736,15 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   const showTrip = e.income.some(r => r.tripChange !== null), showNamed = x.named !== 0;
   const incomeHead = ['해역', '낚싯대', '골드/h 기본', '골드/h 효과', '골드 변화', '명성/h 기본', '명성/h 효과', '명성 변화'];
   if (showTrip) incomeHead.push('판매 왕복 포함 골드 변화');
+  const showIdle = e.income.some(r => r.overIdle !== null);
+  if (showIdle) incomeHead.push('방치 대비 골드(기본 → 효과)');
   const boosted = RARITY_ORDER.filter(g => gradeBoostOf(x)[g] !== 0);
   for (const g of boosted) incomeHead.push(`${RARITY[g].name} 캐치 비율(기본 → 효과)`);
   if (showNamed) incomeHead.push('네임드 조우 기대(기본 → 효과)');
   out.push(table(incomeHead, e.income.map(r => {
     const row = [nameOf(r.spot), lv(r.spot, r.level), n0(r.goldBase), n0(r.goldWith), signPct(r.goldChange), n0(r.fameBase), n0(r.fameWith), signPct(r.fameChange)];
     if (showTrip) row.push(r.tripChange === null ? '—' : signPct(r.tripChange));
+    if (showIdle) row.push(r.overIdle ? `${r.overIdle.base.toFixed(2)}배 → ${r.overIdle.with.toFixed(2)}배` : '—');
     for (const g of boosted) row.push(`${(r.grade[g].base * 100).toFixed(2)}% → ${(r.grade[g].with * 100).toFixed(2)}%`);
     if (showNamed) row.push(r.named ? `${h2(r.named.hoursBase)} → ${h2(r.named.hoursWith)}` : '없음');
     return row;

@@ -117,6 +117,8 @@ export interface IncomeRow {
   tripChange: number | null;
   /** 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 값이 있다. 조우가 없는 해역은 null */
   named: NamedRow | null;
+  /** PERFECT 축일 때만 — 효과 없는 방치 시간당 골드 대비 PERFECT 시간당 골드(기본, 효과). 다른 축은 null */
+  overIdle: { base: number; with: number } | null;
 }
 
 export interface IncomeOptions {
@@ -148,6 +150,7 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
       const p = w.named / (w.named + w.none);
       return { share: p, hours: expectedEncounterCatches(p, NAMED_PITY_CATCHES) / r.catchesPerHour };
     };
+    const idleGold = o.axis === 'perfect' ? effectRates(s.id, level, 'idle', NO_EFFECT).goldPerHour : null;
     const encounters = namedEncounterCandidates(NAMED_QUEST_IDS, s.id).length > 0;
     const nb = perHour(base, 0), nw = perHour(now, o.effect.named);
     return {
@@ -156,6 +159,7 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
       goldBase: base.goldPerHour, goldWith: now.goldPerHour, goldChange: change(base.goldPerHour, now.goldPerHour),
       fameBase: base.famePerHour, fameWith: now.famePerHour, fameChange: change(base.famePerHour, now.famePerHour),
       tripChange,
+      overIdle: idleGold === null ? null : { base: base.goldPerHour / idleGold, with: now.goldPerHour / idleGold },
       named: encounters ? { shareBase: nb.share, shareWith: nw.share, hoursBase: nb.hours, hoursWith: nw.hours } : null,
     };
   });

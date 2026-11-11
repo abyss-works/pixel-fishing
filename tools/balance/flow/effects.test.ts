@@ -405,3 +405,25 @@ describe('조기 진입 비교', () => {
     expect(r.ratioWith).toBeCloseTo(g(r.spot, e) / g(r.altWith, e), 9);
   });
 });
+
+describe('PERFECT 축', () => {
+  it('빨간 존이 열렸는지와 관계없이 PERFECT 다이얼로 잰다', () => {
+    for (const s of SPOTS) for (const margin of [0, 4, 8]) expect(axisOf('perfect', s.id, entryLevel(s.id) + margin)).toBe('perfect');
+  });
+
+  it('수입 행에 효과 없음 방치 대비 비율을 담고 PERFECT 축이 아니면 담지 않는다', () => {
+    const rows = incomeRows({ axis: 'perfect', effect: fx({ rare: 0.2 }), margin: 4 });
+    for (const r of rows) {
+      const idle = effectRates(r.spot, r.level, 'idle', NO_EFFECT).goldPerHour;
+      expect(r.overIdle!.base).toBeCloseTo(r.goldBase / idle, 9);
+      expect(r.overIdle!.with).toBeCloseTo(r.goldWith / idle, 9);
+      expect(r.overIdle!.with).toBeGreaterThan(r.overIdle!.base);
+    }
+    for (const r of incomeRows({ axis: 'manual', effect: NO_EFFECT, margin: 0 })) expect(r.overIdle).toBeNull();
+  });
+
+  it('PERFECT 판정은 GOOD보다 같은 해역에서 시간당 골드가 크거나 같다', () => {
+    const p = incomeRows({ axis: 'perfect', effect: NO_EFFECT, margin: 4 }), g = incomeRows({ axis: 'manual', effect: NO_EFFECT, margin: 4 });
+    p.forEach((r, i) => expect(r.goldBase).toBeGreaterThanOrEqual(g[i].goldBase - 1e-9));
+  });
+});

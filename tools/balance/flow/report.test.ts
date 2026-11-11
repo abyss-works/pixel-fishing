@@ -543,3 +543,20 @@ describe('효과를 넣은 transition, days, gates', () => {
     expect(r.stdout).toContain('재료 판매 손실을 하루 한 번 비용으로 넣음');
   });
 });
+
+describe('--axis perfect', () => {
+  it('effects와 window에서만 받는다', () => {
+    expect(parseArgs(['effects', '--axis', 'perfect']).axis).toBe('perfect');
+    expect(parseArgs(['window', '--axis', 'perfect']).axis).toBe('perfect');
+    expect(() => parseArgs(['transition', '--axis', 'perfect'])).toThrow(/perfect/);
+    expect(() => parseArgs(['--axis', 'perfect'])).toThrow(/perfect/);
+    expect(() => parseArgs(['effects', '--axis', 'x'])).toThrow(/idle/);
+  });
+
+  it('PERFECT 축 effects는 방치 대비 비율 열을 낸다', () => {
+    const t = runCli(['effects', '--axis', 'perfect', '--bait', 'rare', '--trials', '2']).stdout;
+    expect(t).toContain('PERFECT 다이얼');
+    expect(t).toContain('방치 대비 골드(기본 → 효과)');
+    expect(runCli(['effects', '--axis', 'manual', '--trials', '2']).stdout).not.toContain('방치 대비 골드');
+  });
+});
