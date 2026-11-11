@@ -7,7 +7,7 @@ import type { Boat } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel } from '../model';
 import { fishingDays, simulate } from './progress';
-import type { Arrival } from './progress';
+import type { Arrival, FlowAxis, RatePlan } from './progress';
 
 export interface TransitionRow {
   from: SpotId; to: SpotId;
@@ -75,11 +75,22 @@ export interface TransitionReport {
   rows: TransitionRow[];
   timings: TransitionTiming[];
   complete: boolean;
+  /** 효과 계획을 줬을 때 효과 없는 같은 조건의 전환 시간 */
+  base?: TransitionTiming[];
 }
 
-export interface TransitionOptions { axis: 'idle' | 'manual'; maxDays: number }
+export interface TransitionOptions {
+  axis: FlowAxis; maxDays: number;
+  /** 일반 의뢰와 네임드 토벌을 매일 수행하는가. 기본은 수행하지 않는다 */
+  bounty?: boolean;
+  /** 주면 이 계획으로 수입을 계산하고 효과 없는 값을 base로 함께 담는다 */
+  plan?: RatePlan;
+}
 
 export function transitionReport(o: TransitionOptions): TransitionReport {
-  const r = simulate({ axis: o.axis, bounty: false, maxDays: o.maxDays });
-  return { rows: transitionGold(), timings: transitionTimings(r.arrivals), complete: r.complete };
+  const run = (plan?: RatePlan) => simulate({ axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, plan });
+  const r = run(o.plan);
+  const report: TransitionReport = { rows: transitionGold(), timings: transitionTimings(r.arrivals), complete: r.complete };
+  if (o.plan) report.base = transitionTimings(run().arrivals);
+  return report;
 }

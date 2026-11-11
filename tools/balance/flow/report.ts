@@ -12,7 +12,7 @@ import type { GatesReport } from './gateReport';
 import { applyOverride, loadOverride } from './override';
 import type { FlowOverride } from './override';
 import { DAY_HOURS } from './progress';
-import type { FlowAxis } from './progress';
+import type { FlowAxis, RatePlan } from './progress';
 import { transitionReport } from './transitions';
 import type { TransitionReport } from './transitions';
 import { daysReport } from './days';
@@ -28,15 +28,22 @@ import { TRAVEL_MATERIAL, TRAVEL_SAMPLE_DAYS, TRAVEL_SAMPLE_START, travelRows } 
 import type { TravelRow } from './travel';
 import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './exception';
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
+import { BOATS } from '../../../src/game/content/boats';
 import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
-import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
+import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
+import { BAIT_WINDOW_MIN, DEFAULT_FROM_BOAT, LUNCH_HOURS, RECIPES, bagSupplyRows, baitEffect, effectPlan, recipeRows, recipesCovered, windowRows } from './cooking';
+import type { BagSupplyRow, RecipeRow, WindowRow } from './cooking';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects';
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window' | 'recipes';
 /** 명령을 생략하면 내는 지표 명령 — gates(판정), dist(몬테카를로), travel(이동 측정)은 이름을 줄 때만 실행한다 */
 export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
-const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects'];
+const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects', 'window', 'recipes'];
+/** 효과 옵션을 받는 명령 */
+const EFFECT_COMMANDS: readonly Command[] = ['effects', 'window', 'transition', 'days', 'gates'];
+/** 효과를 넣은 진행 시뮬레이션(관측용)을 내는 명령 */
+const PLAN_COMMANDS: readonly Command[] = ['transition', 'days', 'gates'];
 
 export interface FlowOptions {
   commands: Command[];
@@ -54,22 +61,37 @@ export interface FlowOptions {
   effect: Effect;
   margin: number;
   units: Record<RarityId, number>;
+  /** window의 효과 창 길이(분) */
+  windowMinutes: number;
+  /** recipes의 레시피 거름(없으면 전부), effects와 window에서는 그 레시피의 효과를 효과 옵션에 채운다 */
+  recipe: string | null;
+  /** recipes의 가방 공급 시간(시간) */
+  hours: number;
+  /** transition, gates: 일반 의뢰와 네임드 토벌을 매일 수행하는 경우로 잰다 */
+  bounty: boolean;
+  /** transition, days, gates: 효과가 걸리기 시작하는 배 단계. null이면 인도양을 여는 배 */
+  fromBoat: number | null;
+  /** transition, days, gates: --recipe의 재료 판매 손실을 비용으로 넣는다 */
+  withCost: boolean;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects] [옵션]
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects|window|recipes] [옵션]
 명령을 생략하면 gates, dist, travel, effects를 뺀 다섯 가지를 모두 낸다.
 
 명령
-  transition  해역 전환: 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 전환 시간(실질 낚시 시간)과 8시간 환산 일수, 배 명성 대기
-  days        해역별 누적 실질 낚시 시간과 8시간 환산 일수, 마지막 해역 레벨업 시간. 일반 의뢰와 네임드 토벌 수행 여부별
+  transition  해역 전환(효과 옵션을 주면 효과를 넣은 관측값과 효과 없음 대비 차이를 함께 낸다): 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 전환 시간(실질 낚시 시간)과 8시간 환산 일수, 배 명성 대기
+  days        해역별 누적 실질 낚시 시간과 8시간 환산 일수, 마지막 해역 레벨업 시간. 일반 의뢰와 네임드 토벌 수행 여부별(효과 옵션을 주면 효과를 넣은 관측값과 효과 없음 대비 차이를 함께 낸다)
   opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
   ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다
   dist        분포: 같은 규칙과 상수로 캐치마다 뽑는 몬테카를로. 최초 10분(영웅 보장, 전설 보장, 첫 바다 해역 도착 시각)과 해역 전환 시간의 p10, 중앙값, p90, 평균을 해석 기댓값과 함께 낸다. p90이 운이 나쁜(느린) 쪽이다
   travel      이동 시간 관측: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 잰다. 다른 명령의 시간에 넣지 않는다
   effects     요리 효과: 효과를 넣었을 때 해역별 수입(골드·명성 변화, 네임드 조우), 도감 완성 시간(몬테카를로), 낚시 1시간 분해 재료 공급을 효과 없음과 견준다. 효과는 아래 옵션으로 준다. 수동 낚시(미끼 슬롯)는 --axis manual로 잰다
+  window      시간 제한 효과의 창: 등급 미끼 같은 미끼 슬롯 효과를 한 번 쓰는 창(기본 ${BAIT_WINDOW_MIN}분) 안의 등급별 기대 캐치 수와 골드, 명성 증가, 창 하나가 도감 완성 시간을 줄이는 양. 수동 GOOD이 기본이다
+  recipes     레시피 순손익: 재료로 쓴 물고기의 판매 손실 대 효과 지속 동안의 수입 증가(해역별), 가방 한도와 자동 기운 얻기를 넣은 하루 기운 공급과 자동 기운으로 만들 수 있는 레시피 수. 재료는 --axis 방식(기본 방치)으로 그 해역에서만 모은다
   gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
-              같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다
+              같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다.
+              효과 옵션을 주면 이동 직후 수입(낮 풀, 낮밤 혼합)과 전환 시간만 효과를 넣어 관측하고(효과 없음 값을 함께 낸다) 종료 코드는 판정에 따르지 않는다
 
 옵션
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워, 해역 어종 가격 배율을 덮어쓰는 JSON. 형식은
@@ -77,7 +99,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                      priceMult는 그 해역 어종 판매가에 곱하고 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
   --json             표 대신 JSON으로 낸다
   --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
-  --axis <idle|manual>  낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정)
+  --axis <idle|manual|perfect>  낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정). perfect는 effects, window에서만: 빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한 상한이고 effects는 방치 대비 비율 열을 더한다
   --max-days <N>     시뮬레이션 최대 일수(하루는 실질 낚시 ${DAY_HOURS}시간). 기본 365
   --seed <N>         dist의 난수 시드(정수). 기본 ${DEFAULT_SEED}. 같은 시드, 시도 횟수, 인자의 출력은 항상 같다
   --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
@@ -89,15 +111,32 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --size <N>         effects: 크기 증가 %(-100 초과). 판매가와 도감 완성 조건이 크기를 쓰지 않아 다른 값은 변하지 않는다. 기본 0
   --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 달라진다. 기본 0
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
-  --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(0 이상 정수). 기본 0, 여유 스펙은 4
-  --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 설계 초안 값이다
-  --seed, --trials   effects의 도감 완성 시간에도 쓴다
+  --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다
+  --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 명세에 등급 사이 환산 비율이 없어 재료 점수를 견주는 데만 쓰는 값이다
+  --bait <rare|epic|legendary>  effects, window: 등급 미끼(기운으로 제작하는 미끼 요리) 효과를 효과 옵션에 채운다. 수동 캐치에만 걸린다(희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%. 요리 명세 값)
+  --bounty           transition, gates: 일반 의뢰와 네임드 토벌을 매일 수행하는 경우로 잰다(생략하면 수행하지 않는 경우). days는 두 경우를 모두 낸다
+  --from-boat <N>    transition, days, gates: 효과가 걸리기 시작하는 배 단계(0 이상 정수). 기본은 인도양을 여는 배(증기선)
+  --with-cost        transition, days, gates: --recipe의 재료로 쓴 물고기의 판매 손실을 하루(실질 낚시 8시간) 한 번의 비용으로 넣는다. 재료가 나오지 않는 해역은 만들 수 없어 효과도 비용도 없다
+  --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
+  --recipe <id>      recipes: 그 레시피만(quick, shimmer, mutant, trace, mixed, mutantBait). effects, window: 그 레시피의 효과를 효과 옵션에 채운다
+  --hours <N>        recipes: 가방을 비우고 판매 없이 낚는 시간(시간). 기본 ${LUNCH_HOURS}
+  --seed, --trials   effects, window의 도감 완성 시간에도 쓴다
   --help             이 도움말
 `;
 
-const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units'] as const;
-const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', ...EFFECT_FLAGS] as const;
-const BOOL_FLAGS = ['--json', '--help'] as const;
+/** 낚싯대 여유의 하한(진입 레벨보다 낮게 재는 최대 레벨 수) */
+const MIN_MARGIN_ABS = 4;
+
+const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units', '--bait'] as const;
+const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', '--recipe', '--hours', '--from-boat', ...EFFECT_FLAGS] as const;
+
+/** 옵션을 받는 명령. 여기 없는 옵션은 모든 명령에서 쓸 수 있다 */
+const FLAG_COMMANDS: Record<string, readonly Command[]> = {
+  ...Object.fromEntries(EFFECT_FLAGS.map(f => [f, EFFECT_COMMANDS])),
+  '--margin': ['effects', 'window', 'recipes'], '--units': ['effects'], '--window': ['window'], '--hours': ['recipes'], '--recipe': ['recipes', 'effects', 'window', ...PLAN_COMMANDS],
+  '--bounty': ['transition', 'gates'], '--from-boat': PLAN_COMMANDS, '--with-cost': PLAN_COMMANDS,
+};
+const BOOL_FLAGS = ['--json', '--help', '--bounty', '--with-cost'] as const;
 
 function numberOf(flag: string, raw: string): number {
   const v = Number(raw);
@@ -108,15 +147,19 @@ function numberOf(flag: string, raw: string): number {
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
     commands: [], override: null, json: false, legendAt: null, axis: 'idle', maxDays: 365, help: false,
-    seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS },
+    seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
+    recipe: null, hours: LUNCH_HOURS, bounty: false, fromBoat: null, withCost: false,
   };
   const given: string[] = [];
+  let axisGiven = false, bait: string | null = null;
   let command: Command | null = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
       if ((BOOL_FLAGS as readonly string[]).includes(a)) {
-        if (a === '--json') o.json = true; else o.help = true;
+        if (a === '--json') o.json = true;
+        else if (a === '--help') o.help = true;
+        else { given.push(a); if (a === '--bounty') o.bounty = true; else o.withCost = true; }
         continue;
       }
       if (!(VALUE_FLAGS as readonly string[]).includes(a)) throw new Error(`알 수 없는 옵션입니다: ${a} (--help 참고)`);
@@ -124,13 +167,14 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       if (raw === undefined || raw.startsWith('--')) throw new Error(`${a}에는 값이 필요합니다`);
       if ((EFFECT_FLAGS as readonly string[]).includes(a)) {
         given.push(a);
-        if (a === '--units') {
+        if (a === '--bait') bait = raw;
+        else if (a === '--units') {
           const parts = raw.split(',').map(x => numberOf(a, x));
           if (parts.length !== RARITY_ORDER.length || parts.some(x => x < 0)) throw new Error('--units에는 등급 수만큼 0 이상 숫자를 쉼표로 줘야 합니다');
           RARITY_ORDER.forEach((g, k) => { o.units[g] = parts[k]; });
         } else if (a === '--margin') {
           o.margin = numberOf(a, raw);
-          if (!Number.isInteger(o.margin) || o.margin < 0) throw new Error('--margin은 0 이상의 정수여야 합니다');
+          if (!Number.isInteger(o.margin) || o.margin < -MIN_MARGIN_ABS) throw new Error(`--margin은 -${MIN_MARGIN_ABS} 이상의 정수여야 합니다`);
         } else {
           const v = numberOf(a, raw);
           if (a === '--bite') o.effect.bite = v / 100;
@@ -144,7 +188,22 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         }
         continue;
       }
-      if (a === '--override') o.override = raw;
+      if (a === '--window') {
+        given.push(a);
+        o.windowMinutes = numberOf(a, raw);
+        if (!(o.windowMinutes > 0)) throw new Error('--window는 0보다 커야 합니다(분)');
+      } else if (a === '--hours') {
+        given.push(a);
+        o.hours = numberOf(a, raw);
+        if (!(o.hours > 0)) throw new Error('--hours는 0보다 커야 합니다(시간)');
+      } else if (a === '--from-boat') {
+        given.push(a);
+        o.fromBoat = numberOf(a, raw);
+        if (!Number.isInteger(o.fromBoat) || o.fromBoat < 0) throw new Error('--from-boat는 0 이상의 정수여야 합니다');
+      } else if (a === '--recipe') {
+        given.push(a);
+        o.recipe = raw;
+      } else if (a === '--override') o.override = raw;
       else if (a === '--legend-at') o.legendAt = numberOf(a, raw);
       else if (a === '--seed') {
         o.seed = numberOf(a, raw);
@@ -156,8 +215,9 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         o.maxDays = numberOf(a, raw);
         if (!Number.isInteger(o.maxDays) || o.maxDays < 1) throw new Error('--max-days는 1 이상의 정수여야 합니다');
       } else {
-        if (raw !== 'idle' && raw !== 'manual') throw new Error('--axis는 idle 또는 manual이어야 합니다');
+        if (raw !== 'idle' && raw !== 'manual' && raw !== 'perfect') throw new Error('--axis는 idle, manual, perfect 중 하나여야 합니다');
         o.axis = raw;
+        axisGiven = true;
       }
       continue;
     }
@@ -165,7 +225,33 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     if (command) throw new Error('명령은 하나만 고를 수 있습니다');
     command = a as Command;
   }
-  if (given.length && command !== 'effects') throw new Error(`${given[0]}은 effects 명령에서만 쓸 수 있습니다`);
+  for (const f of given) {
+    const allowed = FLAG_COMMANDS[f];
+    if (!(command && allowed.includes(command))) throw new Error(`${f}은 ${allowed.join(', ')} 명령에서만 쓸 수 있습니다`);
+  }
+  if (o.recipe !== null) {
+    const recipe = RECIPES.find(r => r.id === o.recipe);
+    if (!recipe) throw new Error(`알 수 없는 레시피입니다: ${o.recipe} (${RECIPES.map(r => r.id).join(', ')} 중 하나)`);
+    if (command !== 'recipes') for (const k of Object.keys(recipe.effect) as (keyof Effect)[]) if (recipe.effect[k] !== 0) o.effect[k] = recipe.effect[k];
+  }
+  if (bait !== null) {
+    const b = baitEffect(bait);
+    for (const k of Object.keys(b) as (keyof Effect)[]) if (b[k] !== 0) o.effect[k] = b[k];
+  }
+  const recipeRow = o.recipe === null ? undefined : RECIPES.find(r => r.id === o.recipe);
+  const baitSlot = bait !== null || recipeRow?.kind === 'bait';
+  const lunchSlot = recipeRow?.kind === 'lunch' || (command !== null && PLAN_COMMANDS.includes(command) && given.some(f => EFFECT_FLAGS.includes(f as never)));
+  if (command !== null && PLAN_COMMANDS.includes(command)) {
+    if (baitSlot) throw new Error('미끼 슬롯 효과(--bait, 미끼 요리 레시피)는 수동 캐치에만 걸리고 transition, days, gates는 방치 기준이라 쓸 수 없습니다. window나 effects --axis manual을 쓰세요');
+    if (lunchSlot && o.axis !== 'idle') throw new Error('도시락 효과는 방치 캐치에만 걸리므로 --axis와 함께 쓸 수 없습니다(방치 기준)');
+  } else if (command === 'effects' || command === 'window') {
+    if (!axisGiven && (baitSlot || lunchSlot)) o.axis = baitSlot ? 'manual' : 'idle';
+    if (baitSlot && o.axis === 'idle') throw new Error('미끼 슬롯 효과는 수동 캐치에만 걸립니다. --axis manual 또는 perfect와 함께 쓰세요');
+    if (lunchSlot && o.axis !== 'idle') throw new Error('도시락 효과는 방치 캐치에만 걸립니다. --axis idle과 함께 쓰세요');
+  }
+  if (o.axis === 'perfect' && !(command === 'effects' || command === 'window')) throw new Error('--axis perfect는 effects, window 명령에서만 쓸 수 있습니다');
+  if (o.withCost && o.recipe === null) throw new Error('--with-cost에는 --recipe가 필요합니다');
+  if (command === 'window' && !axisGiven && !lunchSlot) o.axis = 'manual';
   checkEffect(o.effect);
   o.commands = command ? [command] : [...COMMANDS];
   return o;
@@ -176,6 +262,10 @@ export interface SpotInfo { id: SpotId; name: string; powerReq: number; entryLev
 export interface FlowResult {
   options: { axis: FlowAxis; legendAt: number | null; maxDays: number; override: FlowOverride | null;
     seed: number; trials: number;
+    /** transition, gates를 일반 의뢰와 네임드 토벌을 모두 수행하는 경우로 잰 결과인가 */
+    bounty: boolean;
+    /** 효과를 넣은 진행 시뮬레이션(transition, days, gates)일 때의 효과 설명 */
+    plan: { label: string; fromBoat: number; recipe: string | null; withCost: boolean; bounty: boolean } | null;
     /** 계산 당시의 해역 표시 값 — 덮어쓰기를 되돌린 뒤에도 표 라벨이 덮어쓴 값으로 나오게 담아 둔다 */
     spots: SpotInfo[];
   };
@@ -187,6 +277,8 @@ export interface FlowResult {
   dist?: { opening: OpeningDist[]; transition: TransitionDist[] };
   travel?: { rows: TravelRow[]; sampleDays: number };
   effects?: EffectsReport;
+  window?: { effect: Effect; minutes: number; margin: number; trials: number; seed: number; rows: WindowRow[] };
+  recipes?: { axis: FlowAxis; margin: number; hours: number; trials: number; seed: number; rows: RecipeRow[]; bag: BagSupplyRow[] };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -198,12 +290,18 @@ export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
   const restore = override ? applyOverride(override) : () => {};
   try {
+    const planOn = PLAN_COMMANDS.some(c => o.commands.includes(c) && o.commands.length === 1) && (o.recipe !== null || (Object.keys(o.effect) as (keyof Effect)[]).some(k => o.effect[k] !== 0));
+    const fromBoat = o.fromBoat ?? DEFAULT_FROM_BOAT;
+    const recipe = o.recipe === null ? undefined : RECIPES.find(r => r.id === o.recipe);
+    const plan: RatePlan | undefined = planOn ? effectPlan({ effect: o.effect, fromBoat, recipe: o.withCost ? recipe : undefined }) : undefined;
     const res: FlowResult = { options: { axis: o.axis, legendAt: o.legendAt, maxDays: o.maxDays, override,
       seed: o.seed, trials: o.trials,
+      bounty: o.bounty,
+      plan: planOn ? { label: effectLabel(o.effect), fromBoat, recipe: o.recipe, withCost: o.withCost, bounty: o.bounty } : null,
       spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
     const sim = { axis: o.axis, maxDays: o.maxDays };
-    if (o.commands.includes('transition')) res.transition = transitionReport(sim);
-    if (o.commands.includes('days')) res.days = daysReport(sim);
+    if (o.commands.includes('transition')) res.transition = transitionReport({ ...sim, bounty: o.bounty, plan });
+    if (o.commands.includes('days')) res.days = daysReport({ ...sim, plan });
     if (o.commands.includes('opening')) {
       const judgments: Judgment[] = ['normal', 'good'];
       res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
@@ -222,10 +320,25 @@ export function runFlow(o: FlowOptions): FlowResult {
         income: incomeRows({ axis: o.axis, effect: o.effect, margin: o.margin, trips }),
         dex: dexRows({ axis: o.axis, effect: o.effect, margin: o.margin, trials: o.trials, seed: o.seed }),
         supply: supplyRows({ axis: o.axis, effect: o.effect, margin: o.margin, units: o.units }),
+        early: earlyRows({ axis: o.axis, effect: o.effect, margin: o.margin }),
+      };
+    }
+    if (o.commands.includes('window')) {
+      res.window = {
+        effect: o.effect, minutes: o.windowMinutes, margin: o.margin, trials: o.trials, seed: o.seed,
+        rows: windowRows({ axis: o.axis, effect: o.effect, margin: o.margin, minutes: o.windowMinutes, trials: o.trials, seed: o.seed }),
+      };
+    }
+    if (o.commands.includes('recipes')) {
+      const recipes = o.recipe === null ? RECIPES : RECIPES.filter(r => r.id === o.recipe);
+      res.recipes = {
+        axis: o.axis, margin: o.margin, hours: o.hours, trials: o.trials, seed: o.seed,
+        rows: recipeRows({ axis: o.axis, margin: o.margin, recipes }),
+        bag: bagSupplyRows({ axis: o.axis, margin: o.margin, hours: o.hours, trials: o.trials, seed: o.seed }),
       };
     }
     if (o.commands.includes('ev')) res.ev = evReport();
-    if (o.commands.includes('gates')) res.gates = gatesReport({ maxDays: o.maxDays, legendAts: legendCandidates(o.legendAt) });
+    if (o.commands.includes('gates')) res.gates = gatesReport({ maxDays: o.maxDays, legendAts: legendCandidates(o.legendAt), bounty: o.bounty, plan });
     if (o.commands.includes('exception')) {
       res.exception = {
         income: incomeByOffset(o.axis), earlyEntry: earlyEntry(o.axis), returnTrips: returnTrips(o.axis), huntCost: huntCost(o.axis),
@@ -246,7 +359,7 @@ const hrs = (x: number) => (x < 1 / 60 ? '0분' : x < 1 ? `${Math.round(x * 60)}
 const h2 = (x: number) => `${x.toFixed(2)}시간`;
 const d1 = (x: number) => `${x.toFixed(1)}일`;
 const nameOf = (spot: SpotId) => SPOTS.find(s => s.id === spot)!.name;
-const AXIS_LABEL: Record<FlowAxis, string> = { idle: '방치', manual: '수동 GOOD(파워 미달 해역은 무판정)' };
+const AXIS_LABEL: Record<FlowAxis, string> = { idle: '방치', manual: '수동 GOOD(파워 미달 해역은 무판정)', perfect: 'PERFECT 다이얼(빨간 존이 열렸는지와 관계없이 적용한 상한)' };
 
 function table(headers: string[], rows: (string | number)[][]): string {
   return [`| ${headers.join(' | ')} |`, `|${headers.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.join(' | ')} |`)].join('\n');
@@ -254,10 +367,20 @@ function table(headers: string[], rows: (string | number)[][]): string {
 
 const BASIC_ASSUMPTION = `모든 시간은 실질 낚시 시간이다. 이동, 판매 왕복, 창 조작, 게임을 끈 시간, 접속해 있어도 낚지 못하는 시간은 넣지 않는다. 낚은 물고기는 모두 판매 수입이다. 판매는 즉시이고 미끼, 유물, 쿠폰은 넣지 않는다. 방치 사이클은 모델 사이클이다. 일수는 실질 낚시 시간 ÷ ${DAY_HOURS}이다`;
 
+/** 효과를 넣은 진행 시뮬레이션(관측용)의 가정 */
+function planAssumptions(): string[] {
+  return [
+    '효과는 도시락 슬롯 효과로 보고 방치 캐치에만 건다(미끼 슬롯 효과는 수동 캐치 30분 창에만 걸려 이 지표에 쓸 수 없다). 시작 배 단계 이상인 동안 그 해역의 모든 방치 캐치에 걸린다. 하루(실질 낚시 8시간)를 도시락 하나가 모두 덮는다고 본 상한이다. 그 이전 배 단계에서는 효과 없음이다',
+    '효과를 넣은 값은 관측용이다. 전환 시간 목표와 게이트 판정은 효과 없는 기준 플레이어에게 맞춘 것이므로 이 값으로 판정하지 않는다',
+    '재료 비용을 넣는 경우(--with-cost)는 레시피를 하루 한 번 만든다고 보고 재료로 쓴 물고기의 판매 손실을 그 해역의 방치 낚시 시간당 비용으로 센다. 그 해역에서 필요한 등급이 나오지 않으면 만들 수 없어 효과도 비용도 없다. 재료는 지금 낚는 해역에서만 모으고 이전 해역을 다시 도는 경우와 가방 한도는 넣지 않는다',
+  ];
+}
+
 function assumptionText(command: Command, o: FlowResult['options']): string {
   const lines: string[] = [BASIC_ASSUMPTION];
   if (command === 'transition') {
-    lines.push('새 계정이 직전 해역에서 낚아 전환 골드를 모으고 배 명성 하한을 채운 시점에 바로 옮긴다', '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', '의뢰와 토벌은 하지 않는 경우다');
+    lines.push('새 계정이 직전 해역에서 낚아 전환 골드를 모으고 배 명성 하한을 채운 시점에 바로 옮긴다', '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', o.bounty ? '의뢰와 토벌을 매일 수행하는 경우다' : '의뢰와 토벌은 하지 않는 경우다');
+    if (o.plan) lines.push(...planAssumptions());
   } else if (command === 'days') {
     lines.push(
       '의뢰 라이선스는 그 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
@@ -266,6 +389,7 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
       '레벨업은 낚싯대가 그 레벨에 처음 닿은 시점에 시뮬레이션이 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다',
     );
+    if (o.plan) lines.push(...planAssumptions());
   } else if (command === 'dist') {
     lines.push(
       '해석적 기댓값 경로와 같은 확률, 판매가, 캐치 주기, 첫 경험 보장 규칙을 캐치마다 뽑는다. 입질 대기는 범위 균등이고 어종은 낮밤 혼합 확률, 돌연변이는 전역 확률이다. 기댓값 경로에 없는 pity, 미끼, 유물은 넣지 않는다',
@@ -296,7 +420,24 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       '크기는 판매가와 도감 완성 조건에 쓰이지 않아 크기 배수는 이 지표에 영향이 없다. 도감에 최대 크기 기록은 있으나 제품 규칙 모듈에 완성 조건은 없다',
       '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 용량과 왕복 시간을 쓰고, 가방 채움 시간은 같은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다. 입질 대기 단축도 채움 시간을 줄여 이 값에 든다',
       '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부, 영웅 도감 전부, 전설 도감 전부 다섯 조건을 센다. 어종 천장은 넣지 않는다',
-      '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 설계 초안 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
+      '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 명세에 환산 비율이 없어 재료 점수를 견주는 데만 쓰는 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
+    );
+  } else if (command === 'window') {
+    lines.push(
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 창 안은 효과를 넣고 창 밖은 효과 없음이다. 효과는 제품의 등급 가중치 효과 합산과 폼 가중치 경로로 적용한다`,
+      '창 안의 기대 캐치 수는 그 조건의 캐치 속도 x 창 길이 x 등급 비율이고, 골드와 명성 증가는 효과 없음 대비 시간당 차이 x 창 길이다',
+      '도감 단축은 한 해역에서만 낚을 때 창 하나를 먼저 쓰고 이후 효과 없이 낚는 평균 시간이 효과 없이 낚는 평균 시간보다 줄어든 양이다. 창 안의 캐치 수는 기대 캐치 수를 반올림하고, 같은 시드로 효과 없음과 짝지어 견준다. 어종 천장은 넣지 않는다',
+      '등급 미끼의 제작 비용(기운)과 사람의 판정 실력은 넣지 않는다',
+    );
+  } else if (command === 'recipes') {
+    lines.push(
+      `재료는 ${AXIS_LABEL[o.axis]} 낚시로 그 해역에서만 모으고 이전 해역을 다시 도는 경우는 넣지 않는다. 순손익 표는 비교용으로 기운 얻기가 열리기 전 해역도 낸다. 물고기 한 마리가 그 등급 기운 한 개이고, 재료로 쓴 물고기는 팔지 못한다. 판매 손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)다`,
+      '효과 지속 동안의 수입 증가는 효과 없음 대비 시간당 골드(명성) 차이 x 지속이다. 도시락은 방치로, 미끼 요리는 수동 GOOD(파워 미달 해역은 무판정)로 지속 시간 내내 낚는다고 본다. 도시락은 하루 낚시가 지속보다 짧아도 지속 전체를 낚는다고 센 상한이다',
+      '골드로 환산되지 않는 효과(네임드 조우, 돌연변이 도감 단축)는 순손익에 들지 않는다. 돌연변이 가중은 판매가 기댓값만 올린다',
+      '재료를 모으는 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다. 나오지 않는 등급이 필요한 해역은 모을 수 없다',
+      '가방 공급은 기운 얻기가 열리는 배(증기선) 이상의 해역만 낸다. 그 해역에서 플레이어가 가진 배(해금 배 이상)의 가방 용량으로, 가방을 비우고 판매 없이 정해진 시간 낚는 한 번의 낚시다.',
+      '가방이 넘치면 제품의 개체 비교 순서(등급, 돌연변이 여부)대로 가장 안 특별한 개체가 기운이 된다. 크기는 순서의 마지막 기준이라 넣지 않고 같은 칸의 판매가는 평균이다. 시드 고정 몬테카를로이고 시도 평균이다',
+      '자동 기운으로 만들 수 있는 개수는 필요한 등급 중 가장 모자란 등급이 정한다. 직접 기운 얻기(가방에 남은 개체)는 넣지 않는다',
     );
   } else if (command === 'opening') {
     lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
@@ -309,6 +450,17 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
   }
   return ['\n가정:', ...lines.map(l => `- ${l}`)].join('\n');
 }
+
+/** 효과를 넣은 진행 시뮬레이션의 조건 한 줄 */
+function planNote(o: FlowResult['options']): string {
+  const p = o.plan;
+  if (!p) return '';
+  const boat = BOATS.find(b => b.tier === p.fromBoat)?.name;
+  return `효과 ${p.label}(관측용), 배 단계 ${p.fromBoat}${boat ? `(${boat})` : ''} 이상에서 걸림${p.recipe ? `, 레시피 ${p.recipe}${p.withCost ? '의 재료 판매 손실을 하루 한 번 비용으로 넣음' : ''}` : ''}, 의뢰와 토벌 ${p.bounty ? '모두 수행' : '수행 안 함'}`;
+}
+
+/** 효과 없음 대비 시간 차이 표기 — 음수가 빨라진 쪽이다 */
+const hoursDiff = (now: number | null, base: number | null) => (now === null || base === null ? '—' : `${now - base >= 0 ? '+' : ''}${(now - base).toFixed(2)}시간`);
 
 function transitionText(t: TransitionReport, o: FlowResult['options']): string[] {
   const info = new Map(o.spots.map(x => [x.id, x]));
@@ -323,23 +475,34 @@ function transitionText(t: TransitionReport, o: FlowResult['options']): string[]
     ]),
   ));
   out.push(`\n## 해역 전환 — 전환 시간 (직전 해역에서 방치로 낚을 때의 실질 낚시 시간, 낚시 방식 ${AXIS_LABEL[o.axis]})${t.complete ? '' : ' — 최대 일수 안에 끝나지 않음'}`);
+  const base = t.base;
+  if (o.plan) out.push(`\n(${planNote(o)})`);
+  else if (o.bounty) out.push('\n(의뢰와 토벌 모두 수행, 관측용)');
   out.push(table(
-    ['전환', '전환 시간', '일수(÷8)', '누적 시간', '누적 일수(÷8)', '기다린 것(골드 · 명성 · 둘 다)', '명성 대기 ÷ 골드 대기'],
-    t.timings.map(c => [
-      `${nameOf(c.row.from)} → ${nameOf(c.row.to)}`, h2(c.hours), d1(c.days), h2(c.cumulativeHours), d1(c.cumulativeDays),
+    ['전환', '전환 시간', ...(base ? ['효과 없음 전환 시간', '차이'] : []), '일수(÷8)', '누적 시간', ...(base ? ['효과 없음 누적 시간', '누적 차이'] : []), '누적 일수(÷8)', '기다린 것(골드 · 명성 · 둘 다)', '명성 대기 ÷ 골드 대기'],
+    t.timings.map((c, i) => [
+      `${nameOf(c.row.from)} → ${nameOf(c.row.to)}`, h2(c.hours), ...(base ? [base[i] ? h2(base[i].hours) : '—', hoursDiff(c.hours, base[i]?.hours ?? null)] : []),
+      d1(c.days), h2(c.cumulativeHours), ...(base ? [base[i] ? h2(base[i].cumulativeHours) : '—', hoursDiff(c.cumulativeHours, base[i]?.cumulativeHours ?? null)] : []), d1(c.cumulativeDays),
       `${hrs(c.waitGold)} · ${hrs(c.waitFame)} · ${hrs(c.waitBoth)}`, c.fameOverGold === null ? '—' : `${c.fameOverGold.toFixed(2)}배`,
     ]),
   ));
   return out;
 }
 
-function daysText(d: NonNullable<FlowResult['days']>): string[] {
+function daysText(d: NonNullable<FlowResult['days']>, o: FlowResult['options']): string[] {
   const out: string[] = [];
   const cell = (x: { hours: number | null; days: number | null }) => (x.hours === null ? '미도착' : `${h2(x.hours)} (${d1(x.days!)})`);
   out.push('\n## 해역별 누적 도달 — 새 계정이 해역에 처음 닿기까지의 누적 실질 낚시 시간과 8시간 환산 일수');
+  if (o.plan) out.push(`\n(${planNote(o)})`);
+  const baseArrival = d.base?.arrival;
+  const withBase = (r: DaysReport['arrival'][number], k: number, i: number) => {
+    const b = baseArrival?.[k]?.spots[i];
+    const now = r.spots[i];
+    return baseArrival ? `${cell(now)} / 효과 없음 ${b ? cell(b) : '—'} / ${hoursDiff(now.hours, b?.hours ?? null)}` : cell(now);
+  };
   out.push(table(
     ['해역', '의뢰·토벌 수행 안 함', '의뢰·토벌 모두 수행'],
-    SPOTS.map((s, i) => [s.name, ...d.arrival.map(r => cell(r.spots[i]))]),
+    SPOTS.map((s, i) => [s.name, ...d.arrival.map((r, k) => withBase(r, k, i))]),
   ));
   const incomplete = d.arrival.filter(r => !r.complete).map(r => (r.bounty ? '모두 수행' : '수행 안 함'));
   if (incomplete.length) out.push(`(최대 일수 안에 마지막 해역에 닿지 못한 경우: ${incomplete.join(', ')})`);
@@ -347,13 +510,17 @@ function daysText(d: NonNullable<FlowResult['days']>): string[] {
     const rows = d.levelUp.filter(r => r.level === level);
     out.push(`\n## 마지막 해역 레벨업 — Lv${level}에서 Lv${level + 1}로 (강화 ${n0(rows[0].upgradeGold)}G)`);
     out.push(table(
-      ['의뢰·토벌', '레벨 도달(누적 시간)', '쓰는 라이선스', '8시간 골드', '보상 비중', '소요 시간', '소요 일수(÷8)'],
-      rows.map(r => [
-        r.bounty ? '모두 수행' : '수행 안 함', r.reachedHours === null ? '—' : h2(r.reachedHours),
-        r.bounty ? (r.licenses.join(', ') || '없음') : '—',
-        r.dailyGold === null ? '미도달' : n0(r.dailyGold), r.bountyShare === null ? '—' : pct0(r.bountyShare),
-        r.hours === null ? '미도달' : h2(r.hours), r.days === null ? '미도달' : d1(r.days),
-      ]),
+      ['의뢰·토벌', '레벨 도달(누적 시간)', '쓰는 라이선스', '8시간 골드', '보상 비중', '소요 시간', '소요 일수(÷8)', ...(d.base ? ['효과 없음 소요 시간', '차이'] : [])],
+      rows.map(r => {
+        const b = d.base?.levelUp.find(x => x.bounty === r.bounty && x.level === r.level);
+        return [
+          r.bounty ? '모두 수행' : '수행 안 함', r.reachedHours === null ? '—' : h2(r.reachedHours),
+          r.bounty ? (r.licenses.join(', ') || '없음') : '—',
+          r.dailyGold === null ? '미도달' : n0(r.dailyGold), r.bountyShare === null ? '—' : pct0(r.bountyShare),
+          r.hours === null ? '미도달' : h2(r.hours), r.days === null ? '미도달' : d1(r.days),
+          ...(d.base ? [b?.hours == null ? '—' : h2(b.hours), hoursDiff(r.hours, b?.hours ?? null)] : []),
+        ];
+      }),
     ));
   }
   return out;
@@ -499,7 +666,7 @@ function travelText(t: NonNullable<FlowResult['travel']>): string[] {
   return out;
 }
 
-function gatesText(g: GatesReport): string[] {
+function gatesText(g: GatesReport, o: FlowResult['options']): string[] {
   const poolLabel = { day: '낮 풀', mixed: '낮밤 혼합' } as const;
   const count = (verdicts: GateVerdict[]) => {
     const c = (v: GateVerdict) => verdicts.filter(x => x === v).length;
@@ -507,19 +674,24 @@ function gatesText(g: GatesReport): string[] {
   };
   const show = (v: GateVerdict) => (v === '개선' ? '개선(예외 목록 갱신 필요)' : v);
   const dash = (v: GateVerdict | null) => (v === null ? '—' : show(v));
-  const out: string[] = ['\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)'];
+  const out: string[] = [];
+  if (!o.plan && o.bounty) out.push('\n(의뢰와 토벌 모두 수행, 관측용. 판정은 효과와 의뢰 없는 기준 플레이어에 맞춘 것이라 종료 코드에 반영하지 않는다)');
+  if (o.plan) out.push(`\n(${planNote(o)}. 판정은 효과를 넣은 관측값에 알려진 예외 목록을 적용한 참고이며 종료 코드에 반영하지 않는다)`);
+  out.push('\n## 게이트 검사 — 이동 직후 수입 (새 해역 진입 레벨의 방치 G/h를 같은 레벨로 낚을 수 있는 이전 해역 중 가장 높은 값과 비교)');
   out.push(table(
-    ['전환', '풀', '비교 해역', '이동 전 수입(G/h)', '이동 직후 수입(G/h)', '차이', '판정'],
-    g.move.map(r => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), show(r.verdict)]),
+    ['전환', '풀', '비교 해역', '이동 전 수입(G/h)', '이동 직후 수입(G/h)', '차이', ...(g.moveBase ? ['효과 없음 차이'] : []), '판정'],
+    g.move.map((r, i) => [nameOf(r.spot), poolLabel[r.pool], r.from ? nameOf(r.from) : '없음', n0(r.before), n0(r.after), n0(r.diff), ...(g.moveBase ? [n0(g.moveBase[i].diff)] : []), show(r.verdict)]),
   ));
   out.push(`\n${count(g.move.map(r => r.verdict))}`);
 
-  out.push(`\n## 게이트 검사 — PERFECT 이상치 (같은 해역, 같은 낚싯대 스펙에서 PERFECT ÷ 방치 시간당 골드, 낮밤 혼합. ${PERFECT_LIMIT}배를 넘으면 위반)`);
-  out.push(table(
-    ['해역', '스펙', '레벨', 'PERFECT ÷ 방치', '판정'],
-    g.perfect.map(r => [nameOf(r.spot), r.margin ? `여유(+${r.margin})` : '최소', r.level, `${r.ratio.toFixed(2)}배`, show(r.verdict)]),
-  ));
-  out.push(`\n${count(g.perfect.map(r => r.verdict))}`);
+  if (!g.moveBase) {
+    out.push(`\n## 게이트 검사 — PERFECT 이상치 (같은 해역, 같은 낚싯대 스펙에서 PERFECT ÷ 방치 시간당 골드, 낮밤 혼합. ${PERFECT_LIMIT}배를 넘으면 위반)`);
+    out.push(table(
+      ['해역', '스펙', '레벨', 'PERFECT ÷ 방치', '판정'],
+      g.perfect.map(r => [nameOf(r.spot), r.margin ? `여유(+${r.margin})` : '최소', r.level, `${r.ratio.toFixed(2)}배`, show(r.verdict)]),
+    ));
+    out.push(`\n${count(g.perfect.map(r => r.verdict))}`);
+  }
 
   out.push(`\n## 게이트 검사 — 배 명성 대기 ÷ 골드 대기 (리프 이후 배를 사는 전환, ${FAME_RATIO_LIMIT}배 이하, 하한 없음)`);
   out.push(table(
@@ -531,19 +703,23 @@ function gatesText(g: GatesReport): string[] {
   ));
   out.push(`\n${count(g.fame.map(r => r.verdict))}`);
 
-  out.push(`\n## 게이트 검사 — 최초 10분 도달 (새 계정이 수동 낚시로 ${OPENING_LIMIT_SEC / 60}분 안에 ${nameOf(SPOTS.find(s => s.boatTier >= 1)!.id)}에 닿는다. 전설 보장 번호 후보 중 가장 느린 값)`);
-  out.push(table(
-    ['판정 방식', '가장 느린 보장 번호', '도착 시간', '캐치 수', '판정'],
-    g.opening.map(r => [r.judgment === 'good' ? 'GOOD' : '무판정', `전설 ${r.legendAt}번째`, r.seconds === null ? '미도착' : minutes(r.seconds), r.catches ?? '—', show(r.verdict)]),
-  ));
-  out.push(`\n${count(g.opening.map(r => r.verdict))}`);
+  if (!g.moveBase) {
+    out.push(`\n## 게이트 검사 — 최초 10분 도달 (새 계정이 수동 낚시로 ${OPENING_LIMIT_SEC / 60}분 안에 ${nameOf(SPOTS.find(s => s.boatTier >= 1)!.id)}에 닿는다. 전설 보장 번호 후보 중 가장 느린 값)`);
+    out.push(table(
+      ['판정 방식', '가장 느린 보장 번호', '도착 시간', '캐치 수', '판정'],
+      g.opening.map(r => [r.judgment === 'good' ? 'GOOD' : '무판정', `전설 ${r.legendAt}번째`, r.seconds === null ? '미도착' : minutes(r.seconds), r.catches ?? '—', show(r.verdict)]),
+    ));
+    out.push(`\n${count(g.opening.map(r => r.verdict))}`);
+  }
 
   out.push('\n## 전환 시간의 목표 판정 (직전 해역에서 방치로 낚을 때의 실질 낚시 시간. 범위는 지역 진입 전환만, 순서는 리프 이후의 전환 전부)');
   const kind = { observe: '관측', entry: '지역 진입', inner: '지역 안' } as const;
   out.push(table(
-    ['전환', '구분', '전환 시간', '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
+    ['전환', '구분', '전환 시간', ...(g.moveBase ? ['효과 없음 전환 시간', '차이'] : []), '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
     g.time.map(r => [
-      `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], r.hours === null ? '닿지 못함' : h2(r.hours), r.days === null ? '—' : d1(r.days),
+      `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], r.hours === null ? '닿지 못함' : h2(r.hours),
+      ...(g.moveBase ? [r.baseHours == null ? '닿지 못함' : h2(r.baseHours), hoursDiff(r.hours, r.baseHours ?? null)] : []),
+      r.days === null ? '—' : d1(r.days),
       r.kind === 'observe' ? '—' : r.range ? `${r.range[0]}~${r.range[1]}시간` : '범위 없음', dash(r.rangeVerdict),
       r.prevHours === null ? '—' : h2(r.prevHours), dash(r.orderVerdict), r.powerGap, r.entryPowerGap ?? '—',
     ]),
@@ -557,28 +733,35 @@ function gatesText(g: GatesReport): string[] {
 
 const signPct = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
 
-function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
-  const x = e.effect;
-  const label = [
+function effectLabel(x: Effect): string {
+  return [
     x.bite ? `입질 대기 -${(x.bite * 100).toFixed(0)}%` : '', x.rare ? `희귀 이상 가중 +${(x.rare * 100).toFixed(0)}%` : '',
     x.epic ? `영웅 이상 가중 +${(x.epic * 100).toFixed(0)}%` : '', x.legendary ? `전설 가중 +${(x.legendary * 100).toFixed(0)}%` : '',
     x.variant ? `돌연변이 가중치 +${(x.variant * 100).toFixed(0)}%` : '', x.size ? `크기 ${x.size > 0 ? '+' : ''}${(x.size * 100).toFixed(0)}%` : '',
     x.move ? `이동 속도 ${x.move > 0 ? '+' : ''}${(x.move * 100).toFixed(0)}%` : '', x.named ? `네임드 조우 +${(x.named * 100).toFixed(0)}%` : '',
   ].filter(Boolean).join(', ') || '효과 없음';
+}
+
+function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
+  const x = e.effect;
+  const label = effectLabel(x);
   const info = new Map(o.spots.map(s => [s.id, s]));
   const lv = (spot: SpotId, level: number) => `Lv${level}(요구 ${info.get(spot)!.powerReq})`;
-  const out: string[] = [`\n# 요리 효과 — ${label}, 낚싯대는 해역 진입 레벨 +${e.margin}`];
+  const out: string[] = [`\n# 요리 효과 — ${label}, 낚싯대는 해역 진입 레벨 ${e.margin >= 0 ? '+' : ''}${e.margin}`];
 
   out.push('\n## 효과를 넣은 수입 (실질 낚시 시간당, 효과 없음 대비)');
   const showTrip = e.income.some(r => r.tripChange !== null), showNamed = x.named !== 0;
   const incomeHead = ['해역', '낚싯대', '골드/h 기본', '골드/h 효과', '골드 변화', '명성/h 기본', '명성/h 효과', '명성 변화'];
   if (showTrip) incomeHead.push('판매 왕복 포함 골드 변화');
+  const showIdle = e.income.some(r => r.overIdle !== null);
+  if (showIdle) incomeHead.push('방치 대비 골드(기본 → 효과)');
   const boosted = RARITY_ORDER.filter(g => gradeBoostOf(x)[g] !== 0);
   for (const g of boosted) incomeHead.push(`${RARITY[g].name} 캐치 비율(기본 → 효과)`);
   if (showNamed) incomeHead.push('네임드 조우 기대(기본 → 효과)');
   out.push(table(incomeHead, e.income.map(r => {
     const row = [nameOf(r.spot), lv(r.spot, r.level), n0(r.goldBase), n0(r.goldWith), signPct(r.goldChange), n0(r.fameBase), n0(r.fameWith), signPct(r.fameChange)];
     if (showTrip) row.push(r.tripChange === null ? '—' : signPct(r.tripChange));
+    if (showIdle) row.push(r.overIdle ? `${r.overIdle.base.toFixed(2)}배 → ${r.overIdle.with.toFixed(2)}배` : '—');
     for (const g of boosted) row.push(`${(r.grade[g].base * 100).toFixed(2)}% → ${(r.grade[g].with * 100).toFixed(2)}%`);
     if (showNamed) row.push(r.named ? `${h2(r.named.hoursBase)} → ${h2(r.named.hoursWith)}` : '없음');
     return row;
@@ -604,11 +787,86 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
       (r.score / r.gold * 1000).toFixed(1), n0(r.scoreWith), signPct(r.score === 0 ? 0 : r.scoreWith / r.score - 1), n0(r.goldWith),
     ]),
   ));
+
+  if (e.early.length) {
+    out.push('\n## 조기 진입 비교 (같은 배로 열리는 이전 해역 중 같은 레벨로 낚을 수 있는 가장 좋은 곳 대비 시간당 골드 비율, 효과를 넣을 때는 두 해역 모두에 효과를 건다)');
+    out.push(table(
+      ['들어간 해역', '낚싯대', '비교 해역(효과 없음)', '비율(효과 없음)', '비교 해역(효과)', '비율(효과)'],
+      e.early.map(r => [nameOf(r.spot), lv(r.spot, r.level), nameOf(r.alt), pct0(r.ratioBase), nameOf(r.altWith), pct0(r.ratioWith)]),
+    ));
+  }
+  return out;
+}
+
+const dexCellMean = (d: DexTimes[keyof DexTimes]) => (!d ? '끝나지 않음' : d.mean === null ? `p90 ${hrs(d.p90)}(끝내지 못한 시도 ${d.missing})` : hrs(d.mean));
+const minutesOf = (hours: number) => `${Math.round(Math.abs(hours) * 60)}분`;
+
+function windowText(w: NonNullable<FlowResult['window']>, o: FlowResult['options']): string[] {
+  const info = new Map(o.spots.map(s => [s.id, s]));
+  const lv = (r: WindowRow) => `Lv${r.level}(요구 ${info.get(r.spot)!.powerReq})`;
+  const out: string[] = [`\n# 시간 제한 효과 창 — ${effectLabel(w.effect)}, 창 ${w.minutes}분, 낚싯대는 해역 진입 레벨 ${w.margin >= 0 ? '+' : ''}${w.margin}`];
+  out.push(`\n## 창 안 기대 캐치 수 (${w.minutes}분, 효과 없음 → 효과)와 수입 증가`);
+  out.push(table(
+    ['해역', '낚싯대', '전체', ...RARITY_ORDER.map(g => RARITY[g].name), '골드 증가', '명성 증가'],
+    w.rows.map(r => [
+      nameOf(r.spot), lv(r), `${r.totalBase.toFixed(1)} → ${r.totalWith.toFixed(1)}`,
+      ...RARITY_ORDER.map(g => `${r.catches[g].base.toFixed(2)} → ${r.catches[g].with.toFixed(2)}`),
+      n0(r.goldGain), n0(r.fameGain),
+    ]),
+  ));
+  out.push(`\n## 창 하나가 도감 완성 시간을 줄이는 양 (한 해역에서 낚을 때 평균 실질 낚시 시간, 몬테카를로 시드 ${w.seed}, ${w.trials}회. 효과 없음 → 창 하나 사용, 단축)`);
+  const cell = (r: WindowRow, k: keyof WindowRow['saved']) => {
+    const s = r.saved[k];
+    return `${dexCellMean(r.dex.base[k])} → ${dexCellMean(r.dex.with[k])}${s === null ? '' : `(${s >= 0 ? '-' : '+'}${minutesOf(s)})`}`;
+  };
+  out.push(table(
+    ['해역', '낚싯대', '영웅 도감 전부', '전설 도감 전부', '일반 폼(전설 제외)', '일반 폼 전부', '돌연변이 폼 전부'],
+    w.rows.map(r => [
+      nameOf(r.spot), lv(r), r.epicSpecies ? cell(r, 'epic') : '없음', r.legendarySpecies ? cell(r, 'legendary') : '없음',
+      cell(r, 'noLegend'), cell(r, 'all'), cell(r, 'variant'),
+    ]),
+  ));
+  return out;
+}
+
+function recipesText(w: NonNullable<FlowResult['recipes']>, o: FlowResult['options']): string[] {
+  const info = new Map(o.spots.map(s => [s.id, s]));
+  const lv = (spot: SpotId, level: number) => `Lv${level}(요구 ${info.get(spot)!.powerReq})`;
+  const out: string[] = [`\n# 레시피 순손익과 기운 공급 — 재료 모으기 ${AXIS_LABEL[w.axis]}, 낚싯대는 해역 진입 레벨 ${w.margin >= 0 ? '+' : ''}${w.margin}`];
+  const cost = (c: (typeof RECIPES)[number]['cost']) => RARITY_ORDER.filter(g => c[g]).map(g => `${RARITY[g].name} ${c[g]}`).join(', ');
+  const ids = [...new Set(w.rows.map(r => r.recipe))];
+  for (const id of ids) {
+    const recipe = RECIPES.find(r => r.id === id)!;
+    out.push(`\n## ${recipe.name}(가칭, ${id}) — 기운 ${cost(recipe.cost)}, ${recipe.kind === 'lunch' ? '도시락' : '미끼 요리'} ${recipe.hours >= 1 ? `${recipe.hours}시간` : `${recipe.hours * 60}분`}, 효과 ${effectLabel(recipe.effect)}`);
+    out.push(table(
+      ['해역', '낚싯대', '재료 모으는 시간', '판매 손실(G)', '수입 증가(G)', '명성 증가', '순손익(G)', '증가 ÷ 손실'],
+      w.rows.filter(r => r.recipe === id).map(r => [
+        nameOf(r.spot), lv(r.spot, r.level), r.collectHours === null ? '모을 수 없음' : hrs(r.collectHours), n0(r.loss), n0(r.gain), n0(r.gainFame),
+        r.net === null ? '—' : (r.net >= 0 ? '+' : '') + n0(r.net), r.ratio === null ? '—' : `${r.ratio.toFixed(2)}배`,
+      ]),
+    ));
+  }
+  out.push(`\n## 가방 한도와 자동 기운 얻기 — 가방을 비우고 판매 없이 ${w.hours}시간 낚을 때(몬테카를로 시드 ${w.seed}, ${w.trials}회 평균)`);
+  out.push(table(
+    ['해역', '낚싯대', '가방', '낚은 수', ...RARITY_ORDER.map(g => `자동 ${RARITY[g].name} 기운`), '내보낸 개체 판매가', ...RARITY_ORDER.map(g => `남은 ${RARITY[g].name}`), '가방 판매가'],
+    w.bag.map(r => [
+      nameOf(r.spot), lv(r.spot, r.level), r.cap, r.catches, ...RARITY_ORDER.map(g => r.auto[g].toFixed(1)), n0(r.autoGold),
+      ...RARITY_ORDER.map(g => r.kept[g].toFixed(1)), n0(r.keptGold),
+    ]),
+  ));
+  const shown = RECIPES.filter(r => ids.includes(r.id));
+  out.push(`\n## 자동 기운으로 만들 수 있는 레시피 수 (${w.hours}시간 한 번의 낚시)`);
+  out.push(table(
+    ['해역', ...shown.map(r => r.name)],
+    w.bag.map(r => [nameOf(r.spot), ...shown.map(rc => recipesCovered(r.auto, rc).toFixed(1))]),
+  ));
   return out;
 }
 
 /** 위반이 하나라도 있으면 true — gates 명령의 종료 코드 판정 */
-export const hasViolation = (r: FlowResult): boolean => r.gates !== undefined && verdictCounts(r.gates)['위반'] > 0;
+/** 효과 관측과 의뢰 수행 관측의 gates는 기준 플레이어의 판정이 아니므로 종료 코드에 반영하지 않는다 */
+export const hasViolation = (r: FlowResult): boolean =>
+  r.gates !== undefined && r.gates.moveBase === undefined && !r.options.bounty && verdictCounts(r.gates)['위반'] > 0;
 
 /** 결과를 사람이 읽는 표로 바꾼다 */
 export function renderText(r: FlowResult): string {
@@ -619,14 +877,17 @@ export function renderText(r: FlowResult): string {
   ];
   if (r.dist) lines.push(`난수: 시드 ${o.seed}, 시도 ${o.trials}회`);
   if (r.transition) lines.push(...transitionText(r.transition, o), assumptionText('transition', o));
-  if (r.days) lines.push(...daysText(r.days), assumptionText('days', o));
+  if (r.days) lines.push(...daysText(r.days, o), assumptionText('days', o));
   if (r.opening) lines.push(...openingText(r.opening), assumptionText('opening', o));
   if (r.exception) lines.push(...exceptionText(r.exception, o), assumptionText('exception', o));
   if (r.ev) lines.push(...evText(r.ev, o), assumptionText('ev', o));
   if (r.dist) lines.push(...distText(r.dist), assumptionText('dist', o));
   if (r.travel) lines.push(...travelText(r.travel), assumptionText('travel', o));
   if (r.effects) lines.push(...effectsText(r.effects, o), assumptionText('effects', o));
-  if (r.gates) lines.push(...gatesText(r.gates));
+  if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o));
+  if (r.recipes) lines.push(...recipesText(r.recipes, o), assumptionText('recipes', o));
+  if (r.gates) lines.push(...gatesText(r.gates, o));
+  if (r.gates && o.plan) lines.push(['\n가정:', ...planAssumptions().map(l => `- ${l}`)].join('\n'));
   return lines.join('\n');
 }
 

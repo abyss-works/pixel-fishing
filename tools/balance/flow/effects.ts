@@ -21,8 +21,9 @@ import { MUTATION_WEIGHTS, VARIANT_PRICE_MULT } from '../../../src/game/rules/ba
 import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, namedWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import type { DrawOptions } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
+import { powerOfLevel } from '../../../src/game/rules/stats';
 import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng } from '../model';
-import type { Axis, Rates, Row } from '../model';
+import type { Axis, Pool, Rates, Row } from '../model';
 import { expectedEncounterCatches } from './bounty';
 import { axisOf } from './progress';
 import type { FlowAxis } from './progress';
@@ -60,7 +61,7 @@ export const DEX_CATCH_CAP = 2_000_000;
 
 export interface EffectRates extends Rates { variantShare: number }
 
-const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
+export const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
 
 /** 돌연변이 가중치 증가를 넣은 해역의 돌연변이 확률 — 제품의 폼 가중치와 같은 경로다.
  *  증가가 있으면 유물과 같이 전역 가중치의 돌연변이 쪽에 (1 + 증가)를 곱하고(해역 덮어쓰기는 무시), 없으면 제품의 해역 가중치를 그대로 쓴다 */
@@ -70,11 +71,11 @@ export function variantShareOf(spot: SpotId, boost: number): number {
 }
 
 /** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 이상, 영웅 이상, 전설 가중은 등급별로 합산해 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
-export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect): EffectRates {
+export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, pool: Pool = 'mixed'): EffectRates {
   let extra: DrawOptions = {};
   const boost = gradeBoostOf(e);
   for (const g of RARITY_ORDER) if (boost[g] !== 0) extra = addGradeEffect(extra, g, boost[g]);
-  const base = rates(spot, level, axis, extra);
+  const base = rates(spot, level, axis, extra, pool);
   const cycle = {
     ...base.cycle,
     biteMin: base.cycle.biteMin * (1 - e.bite), biteMax: base.cycle.biteMax * (1 - e.bite), biteExtra: base.cycle.biteExtra * (1 - e.bite),
@@ -91,6 +92,10 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect):
 
 /** 해역마다 재는 낚싯대 레벨 */
 const levelOf = (spot: SpotId, margin: number): number => entryLevel(spot) + margin;
+
+/** 여유를 더한 레벨이 1 이상인 해역만 잰다 — 음수 여유에서 레벨이 없는 해역은 건너뛴다. 해역 순번은 전체 목록 기준이다 */
+export const spotsAt = (margin: number): { s: (typeof SPOTS)[number]; i: number }[] =>
+  SPOTS.map((s, i) => ({ s, i })).filter(({ s }) => levelOf(s.id, margin) >= 1);
 
 // ── 1. 효과를 넣은 수입 ──
 
@@ -112,6 +117,8 @@ export interface IncomeRow {
   tripChange: number | null;
   /** 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 값이 있다. 조우가 없는 해역은 null */
   named: NamedRow | null;
+  /** PERFECT 축일 때만 — 효과 없는 방치 시간당 골드 대비 PERFECT 시간당 골드(기본, 효과). 다른 축은 null */
+  overIdle: { base: number; with: number } | null;
 }
 
 export interface IncomeOptions {
@@ -127,7 +134,7 @@ const change = (base: number, now: number): number => (base === 0 ? 0 : now / ba
 
 export function incomeRows(o: IncomeOptions): IncomeRow[] {
   checkEffect(o.effect);
-  return SPOTS.map(s => {
+  return spotsAt(o.margin).map(({ s }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
     const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
     const trip = o.trips?.get(s.id);
@@ -143,6 +150,7 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
       const p = w.named / (w.named + w.none);
       return { share: p, hours: expectedEncounterCatches(p, NAMED_PITY_CATCHES) / r.catchesPerHour };
     };
+    const idleGold = o.axis === 'perfect' ? effectRates(s.id, level, 'idle', NO_EFFECT).goldPerHour : null;
     const encounters = namedEncounterCandidates(NAMED_QUEST_IDS, s.id).length > 0;
     const nb = perHour(base, 0), nw = perHour(now, o.effect.named);
     return {
@@ -151,6 +159,7 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
       goldBase: base.goldPerHour, goldWith: now.goldPerHour, goldChange: change(base.goldPerHour, now.goldPerHour),
       fameBase: base.famePerHour, fameWith: now.famePerHour, fameChange: change(base.famePerHour, now.famePerHour),
       tripChange,
+      overIdle: idleGold === null ? null : { base: base.goldPerHour / idleGold, with: now.goldPerHour / idleGold },
       named: encounters ? { shareBase: nb.share, shareWith: nw.share, hoursBase: nb.hours, hoursWith: nw.hours } : null,
     };
   });
@@ -173,19 +182,29 @@ export interface DexRow {
 
 export interface DexOptions {
   axis: FlowAxis; effect: Effect; margin: number; trials: number; seed: number;
+  /** 주면 효과를 이 분 동안만 걸고 이후는 효과 없이 낚는다(시간 제한 효과). 생략하면 효과가 끝까지 이어진다 */
+  windowMinutes?: number;
 }
 
-/** 한 해역의 도감 완성 시간 몬테카를로 — 캐치마다 어종과 폼을 뽑아 다섯 조건의 완성 캐치 수를 센다 */
-export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: number, trials: number, rand: () => number): DexTimes {
+/** 효과가 있는 앞 구간 — 그 구간 동안만 이 확률과 속도로 낚고 이후는 기본 확률과 속도로 낚는다 */
+export interface DexWindow { minutes: number; rows: readonly Row[]; share: number; catchesPerHour: number }
+
+/** 한 해역의 도감 완성 시간 몬테카를로 — 캐치마다 어종과 폼을 뽑아 다섯 조건의 완성 캐치 수를 센다.
+ *  window를 주면 처음 minutes분(기대 캐치 수를 반올림한 개수)은 window의 확률로 낚고 이후는 기본 확률로 낚는다. 난수를 소비하는 순서가 window 유무와 같아 같은 시드면 두 결과가 짝지어진다 */
+export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: number, trials: number, rand: () => number, window?: DexWindow): DexTimes {
   const n = rows.length;
   const legend = rows.map(r => r.fish.rarity === 'legendary');
   const needNoLegend = legend.filter(l => !l).length;
   const GRADES = ['epic', 'legendary'] as const;
   const gradeOf = rows.map(r => GRADES.indexOf(r.fish.rarity as (typeof GRADES)[number]));
   const gradeNeed = GRADES.map((_, k) => 2 * gradeOf.filter(g => g === k).length);
-  let acc = 0;
-  const cum = rows.map(r => (acc += r.prob));
+  const cumOf = (probs: readonly number[]) => { let acc = 0; return probs.map(p => (acc += p)); };
+  const cum = cumOf(rows.map(r => r.prob));
   const total = cum[n - 1] ?? 0;
+  const windowProb = window ? new Map(window.rows.map(r => [r.fish.id, r.prob])) : null;
+  const wcum = window ? cumOf(rows.map(r => windowProb!.get(r.fish.id) ?? 0)) : cum;
+  const wtotal = wcum[n - 1] ?? 0;
+  const windowCatches = window ? Math.round(window.catchesPerHour * window.minutes / 60) : 0;
   const reachable = n > 0 && rows.every(r => r.prob > 0);
   const out = { noLegend: [] as number[], all: [] as number[], variant: [] as number[], grade: [[], []] as number[][] };
   if (reachable) {
@@ -197,10 +216,12 @@ export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: nu
       let tNo = needNoLegend === 0 ? 0 : -1, tAll = -1, tVar = share > 0 ? -1 : Number.POSITIVE_INFINITY;
       while ((tNo < 0 || tAll < 0 || tVar < 0 || tGrade[0] < 0 || tGrade[1] < 0) && catches < DEX_CATCH_CAP) {
         catches++;
-        const x = rand() * total;
+        const inWindow = catches <= windowCatches;
+        const c = inWindow ? wcum : cum;
+        const x = rand() * (inWindow ? wtotal : total);
         let lo = 0, hi = n - 1;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (x < cum[mid]) hi = mid; else lo = mid + 1; }
-        if (rand() < share) {
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (x < c[mid]) hi = mid; else lo = mid + 1; }
+        if (rand() < (inWindow ? window!.share : share)) {
           if (!variant[lo]) {
             variant[lo] = 1; nVariant++; if (nVariant === n) tVar = catches;
             if (gradeOf[lo] >= 0 && ++gradeHave[gradeOf[lo]] === gradeNeed[gradeOf[lo]]) tGrade[gradeOf[lo]] = catches;
@@ -212,11 +233,13 @@ export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: nu
           if (nNormal === n) tAll = catches;
         }
       }
-      const hours = (c: number) => c / catchesPerHour;
+      const hours = (k: number) => (window && k > windowCatches
+        ? window.minutes / 60 + (k - windowCatches) / catchesPerHour
+        : k / (window ? window.catchesPerHour : catchesPerHour));
       if (tNo >= 0) out.noLegend.push(hours(tNo));
       if (tAll >= 0) out.all.push(hours(tAll));
       if (tVar >= 0 && Number.isFinite(tVar)) out.variant.push(hours(tVar));
-      tGrade.forEach((c, k) => { if (c >= 0 && Number.isFinite(c)) out.grade[k].push(hours(c)); });
+      tGrade.forEach((k, g) => { if (k >= 0 && Number.isFinite(k)) out.grade[g].push(hours(k)); });
     }
   }
   const dist = (v: number[]) => summarize(v, trials - v.length);
@@ -226,16 +249,18 @@ export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: nu
 export function dexRows(o: DexOptions): DexRow[] {
   checkEffect(o.effect);
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
-  return SPOTS.map((s, i) => {
+  if (o.windowMinutes !== undefined && !(o.windowMinutes > 0)) throw new Error('효과 창 길이는 0보다 커야 합니다(분)');
+  return spotsAt(o.margin).map(({ s, i }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
-    const run = (e: Effect): DexTimes => {
-      const r = effectRates(s.id, level, axis, e);
-      return dexTimes(r.rows, r.variantShare, r.catchesPerHour, o.trials, rng(o.seed + i));
-    };
-    const rows = effectRates(s.id, level, axis, NO_EFFECT).rows;
+    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
+    const run = (window?: DexWindow): DexTimes => dexTimes(base.rows, base.variantShare, base.catchesPerHour, o.trials, rng(o.seed + i), window);
+    const rows = base.rows;
     return {
       spot: s.id, level, species: rows.length, epic: rows.filter(r => r.fish.rarity === 'epic').length, legendary: rows.filter(r => r.fish.rarity === 'legendary').length,
-      base: run(NO_EFFECT), with: run(o.effect),
+      base: run(),
+      with: o.windowMinutes === undefined
+        ? dexTimes(now.rows, now.variantShare, now.catchesPerHour, o.trials, rng(o.seed + i))
+        : run({ minutes: o.windowMinutes, rows: now.rows, share: now.variantShare, catchesPerHour: now.catchesPerHour }),
     };
   });
 }
@@ -260,7 +285,7 @@ export interface SupplyOptions {
 export function supplyRows(o: SupplyOptions): SupplyRow[] {
   checkEffect(o.effect);
   const scoreOf = (r: EffectRates) => RARITY_ORDER.reduce((s, g) => s + (r.rarity[g] ?? 0) * r.catchesPerHour * o.units[g], 0);
-  return SPOTS.map(s => {
+  return spotsAt(o.margin).map(({ s }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
     const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
     const counts = Object.fromEntries(RARITY_ORDER.map(g => [g, (base.rarity[g] ?? 0) * base.catchesPerHour])) as Record<RarityId, number>;
@@ -271,7 +296,46 @@ export function supplyRows(o: SupplyOptions): SupplyRow[] {
   });
 }
 
+// ── 4. 조기 진입 비교 ──
+
+export interface EarlyRow {
+  spot: SpotId; level: number;
+  /** 효과 없음일 때 같은 레벨로 낚을 수 있는 가장 좋은 이전 해역, 그 해역 대비 비율 */
+  alt: SpotId; ratioBase: number;
+  /** 효과를 넣었을 때의 가장 좋은 이전 해역과 그 해역 대비 비율(두 해역 모두 효과를 넣은 시간당 골드) */
+  altWith: SpotId; ratioWith: number;
+}
+
+export interface EarlyOptions { axis: FlowAxis; effect: Effect; margin: number }
+
+/** 조기 진입 — 진입 레벨에 못 미치는 낚싯대(여유가 음수)로 같은 배로 열리는 해역에 들어갈 때, 같은 레벨로 낚을 수 있는 이전 해역과 견준다.
+ *  효과를 넣은 값은 두 해역 모두에 효과를 걸고 그 값 중 가장 좋은 이전 해역과 비교한다 */
+export function earlyRows(o: EarlyOptions): EarlyRow[] {
+  checkEffect(o.effect);
+  if (o.margin >= 0) return [];
+  const out: EarlyRow[] = [];
+  for (const { s, i } of spotsAt(o.margin)) {
+    const level = levelOf(s.id, o.margin);
+    const gold = (spot: SpotId, e: Effect) => effectRates(spot, level, axisOf(o.axis, spot, level), e).goldPerHour;
+    const best = (e: Effect) => {
+      let alt: SpotId | undefined, g = 0;
+      for (const prev of SPOTS.slice(0, i)) {
+        if (prev.boatTier !== s.boatTier || (prev.powerReq ?? 0) > powerOfLevel(level)) continue;
+        const v = gold(prev.id, e);
+        if (v > g) { alt = prev.id; g = v; }
+      }
+      return alt === undefined ? null : { alt, g };
+    };
+    const base = best(NO_EFFECT), now = best(o.effect);
+    if (!base || !now) continue;
+    out.push({
+      spot: s.id, level, alt: base.alt, ratioBase: gold(s.id, NO_EFFECT) / base.g, altWith: now.alt, ratioWith: gold(s.id, o.effect) / now.g,
+    });
+  }
+  return out;
+}
+
 export interface EffectsReport {
   effect: Effect; units: Record<RarityId, number>; margin: number; trials: number; seed: number;
-  income: IncomeRow[]; dex: DexRow[]; supply: SupplyRow[];
+  income: IncomeRow[]; dex: DexRow[]; supply: SupplyRow[]; early: EarlyRow[];
 }

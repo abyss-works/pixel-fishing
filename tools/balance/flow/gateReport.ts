@@ -11,6 +11,7 @@ import {
 import type { GateRow, GateVerdict } from '../gates';
 import { simulateOpening } from './opening';
 import type { Judgment } from './opening';
+import type { RatePlan } from './progress';
 import { transitionReport } from './transitions';
 
 export interface PerfectRow { spot: SpotId; margin: number; level: number; ratio: number; verdict: GateVerdict }
@@ -49,6 +50,8 @@ export interface TimeRow {
   /** 이 전환의 요구 파워 간격과, 같은 지역 안의 전환이면 그 지역 진입 전환의 요구 파워 간격 */
   powerGap: number;
   entryPowerGap: number | null;
+  /** 효과 계획을 줬을 때 효과 없는 같은 조건의 전환 시간. 닿지 못했으면 null */
+  baseHours?: number | null;
 }
 
 export interface GatesReport {
@@ -57,12 +60,18 @@ export interface GatesReport {
   fame: FameRow[];
   opening: OpeningGateRow[];
   time: TimeRow[];
+  /** 효과 계획을 줬을 때 효과 없는 이동 직후 수입 */
+  moveBase?: GateRow[];
 }
 
 export interface GatesOptions {
   maxDays: number;
   /** 최초 10분 게이트가 보는 전설 보장 번호 후보. 후보 중 가장 느린 값으로 판정한다 */
   legendAts: number[];
+  /** 일반 의뢰와 네임드 토벌을 매일 수행하는가(전환 시간에만 영향). 기본은 수행하지 않는다 */
+  bounty?: boolean;
+  /** 주면 이동 직후 수입과 전환 시간을 이 계획으로 재고(관측용) 효과 없는 값을 함께 담는다. PERFECT 이상치와 최초 10분은 효과와 관계없어 내지 않는다 */
+  plan?: RatePlan;
 }
 
 const powerReq = (id: SpotId) => SPOTS.find(s => s.id === id)!.powerReq ?? 0;
@@ -84,8 +93,8 @@ function openingRows(legendAts: number[]): OpeningGateRow[] {
   });
 }
 
-function timeAndFame(maxDays: number): { time: TimeRow[]; fame: FameRow[] } {
-  const { rows, timings } = transitionReport({ axis: 'idle', maxDays });
+function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time: TimeRow[]; fame: FameRow[] } {
+  const { rows, timings, base } = transitionReport({ axis: 'idle', maxDays, bounty, plan });
   const start = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
   const gap = (from: SpotId, to: SpotId) => powerReq(to) - powerReq(from);
   const entryGapOf = (to: SpotId): number | null => {
@@ -107,6 +116,7 @@ function timeAndFame(maxDays: number): { time: TimeRow[]; fame: FameRow[] } {
       from, to, kind: !judged ? 'observe' : entry ? 'entry' : 'inner', hours: t?.hours ?? null, days: t?.days ?? null,
       range: judged ? target : null, rangeVerdict: range, prevHours: prev, orderVerdict: order,
       powerGap: gap(from, to), entryPowerGap: judged && !entry ? entryGapOf(to) : null,
+      ...(base ? { baseHours: base[i]?.hours ?? null } : {}),
     });
     if (judged && boats.length > 0) {
       fame.push(t
@@ -118,7 +128,11 @@ function timeAndFame(maxDays: number): { time: TimeRow[]; fame: FameRow[] } {
 }
 
 export function gatesReport(o: GatesOptions): GatesReport {
-  const { time, fame } = timeAndFame(o.maxDays);
+  const { time, fame } = timeAndFame(o.maxDays, o.bounty ?? false, o.plan);
+  if (o.plan) {
+    const plan = o.plan;
+    return { move: gateRows((spot, level, pool, boat) => plan.rateFor(spot, level, 'idle', boat, pool)), moveBase: gateRows(), perfect: [], fame, opening: [], time };
+  }
   return { move: gateRows(), perfect: perfectRows(), fame, opening: openingRows(o.legendAts), time };
 }
 

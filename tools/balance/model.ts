@@ -139,17 +139,21 @@ export interface MoveGap {
   ratio: number;
 }
 
-/** 이동 직후 수입 — 새 해역 진입 레벨에서 그 해역의 방치 시간당 골드를, 같은 레벨로 낚을 수 있는(요구 파워를 채운) 이전 해역 중 가장 높은 값과 비교한다.
+/** 이동 직후 수입 — rateOf를 주면 그 수입 계산(효과를 넣은 값 등)으로, 새 해역 진입 레벨에서 그 해역의 방치 시간당 골드를, 같은 레벨로 낚을 수 있는(요구 파워를 채운) 이전 해역 중 가장 높은 값과 비교한다.
  *  `gold`는 새 해역 값, 차는 `gold - fromGold`다(0 이상이어야 한다). */
-export function moveGap(index: number, pool: Pool): MoveGap & { diff: number } {
+export function moveGap(
+  index: number, pool: Pool,
+  rateOf: (spot: SpotId, level: number, pool: Pool, boat: number) => Rates = (spot, level, p) => rates(spot, level, 'idle', {}, p),
+): MoveGap & { diff: number } {
   const here = SPOTS[index].id;
   const level = entryLevel(here);
   const power = powerOfLevel(level);
-  const gold = rates(here, level, 'idle', {}, pool).goldPerHour;
+  const boat = SPOTS[index].boatTier;
+  const gold = rateOf(here, level, pool, boat).goldPerHour;
   let from: SpotId | undefined, fromGold = 0;
   for (const prev of SPOTS.slice(0, index)) {
     if ((prev.powerReq ?? 0) > power) continue;
-    const g = rates(prev.id, level, 'idle', {}, pool).goldPerHour;
+    const g = rateOf(prev.id, level, pool, boat).goldPerHour;
     if (g > fromGold) { from = prev.id; fromGold = g; }
   }
   return { gold, from, fromGold, ratio: fromGold > 0 ? gold / fromGold : Infinity, diff: gold - fromGold };
