@@ -191,15 +191,27 @@ export const NO_COOK_EFFECTS: ActiveCookEffects = {
   biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, judgeWidth: 0,
 };
 
+/** 그 캐치에 걸린 슬롯과 요리 id. 걸린 슬롯의 키만 둔다 */
+export interface AppliedSlots {
+  lunch?: string;
+  bait?: string;
+}
+
 /**
- * 그 캐치에 적용하는 슬롯 효과. 도시락 슬롯은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만 적용하고,
- * 끝나는 시각 전일 때만 적용한다. now는 서버 시각이다 — 클라이언트가 시각을 주장할 수 없다.
+ * 그 캐치에 걸리는 슬롯 — 슬롯 적용 범위의 단일 정의다. 도시락 슬롯은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만
+ * 걸리고, 끝나는 시각 전이며 콘텐츠에 있는 요리일 때만 걸린다. now는 서버 시각이다 — 클라이언트가 시각을 주장할 수 없다.
  */
+export function appliedSlots(state: Pick<GameState, 'slots'>, now: string, judgment: Judgment): AppliedSlots {
+  const kind = judgment === 'auto' ? 'lunch' : 'bait';
+  const slot = state.slots[kind];
+  if (slot === null || !(Date.parse(now) < Date.parse(slot.endsAt)) || recipeById(slot.id) === undefined) return {};
+  return { [kind]: slot.id };
+}
+
+/** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과를 합한다 */
 export function slotEffects(state: Pick<GameState, 'slots'>, now: string, judgment: Judgment): ActiveCookEffects {
-  const at = Date.parse(now);
-  const active = (judgment === 'auto' ? [state.slots.lunch] : [state.slots.bait])
-    .filter(slot => slot !== null && at < Date.parse(slot.endsAt))
-    .map(slot => recipeById(slot!.id))
+  const active = Object.values(appliedSlots(state, now, judgment))
+    .map(id => recipeById(id))
     .filter((r): r is Recipe => r !== undefined);
   const out: ActiveCookEffects = { ...NO_COOK_EFFECTS, rarityWeight: {} };
   for (const { effects: e } of active) {

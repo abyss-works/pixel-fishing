@@ -19,7 +19,7 @@ import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
   applyEnergyGain, canCook, canEat, canExtractEnergy, canUseCooking, energyDefaultExcluded, energyGain, settleCooking,
-  slotEffects, slotEndsAt, NO_COOK_EFFECTS,
+  appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
 import { ENERGY_ITEM_IDS, recipeById } from '../content/cooking.js';
@@ -419,6 +419,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew,
         ...(drawn.byCeiling ? { pity: true } : {}),
+        // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
+        ...appliedSlots(state, deps.now, action.judgment),
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
       if (overflow.length > 0) {

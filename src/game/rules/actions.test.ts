@@ -663,3 +663,30 @@ describe('옷장 액션', () => {
     expect(applyAction(seed(), { type: 'wearHat', hat: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
   });
 });
+
+describe('catch — 슬롯 효과 기록', () => {
+  const now = '2026-08-22T03:00:00.000Z';
+  const later = '2026-08-22T04:00:00.000Z';
+  const slots = (endsAt: string): GameState['slots'] => ({
+    lunch: { id: 'cook-lunch-bite', endsAt }, bait: { id: 'cook-bait-mutation', endsAt },
+  });
+
+  it('방치 캐치 이벤트에는 도시락, 수동 캐치 이벤트에는 미끼 id를 남긴다', () => {
+    const auto = applyAction(seed({ boat: 5, slots: slots(later) }), { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
+    if (!auto.ok) throw new Error(auto.error);
+    expect(auto.events[0].payload).toMatchObject({ lunch: 'cook-lunch-bite' });
+    expect(auto.events[0].payload).not.toHaveProperty('bait');
+    const manual = applyAction(seed({ boat: 5, slots: slots(later) }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!manual.ok) throw new Error(manual.error);
+    expect(manual.events[0].payload).toMatchObject({ bait: 'cook-bait-mutation' });
+    expect(manual.events[0].payload).not.toHaveProperty('lunch');
+  });
+  it('슬롯이 비었거나 끝났으면 키를 넣지 않는다', () => {
+    for (const s of [seed(), seed({ slots: slots(now) })]) {
+      const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
+      if (!out.ok) throw new Error(out.error);
+      expect(out.events[0].payload).not.toHaveProperty('lunch');
+      expect(out.events[0].payload).not.toHaveProperty('bait');
+    }
+  });
+});

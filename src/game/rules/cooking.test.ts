@@ -7,7 +7,7 @@ import type { FishInstance, GameState } from './logic';
 import { COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyGain, energyTargetOf, settleCooking, slotEffects,
+  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyGain, energyTargetOf, settleCooking, slotEffects, appliedSlots,
 } from './cooking';
 import { effectiveBite, powerZones } from './stats';
 import type { PowerZone } from './stats';
@@ -487,5 +487,35 @@ describe('캐치에 적용', () => {
     const lastCatch = at(T0, 10 * MIN);
     const now = at(lastCatch, gap);
     expect(catchTooSoon(ended, 'pond', lastCatch, now)).toBe(true);
+  });
+});
+
+describe('appliedSlots', () => {
+  const slot = (id: string, endsAt = at(T0, 60 * MIN)) => ({ id, endsAt });
+  const both = (endsAt?: string): GameState['slots'] => ({ lunch: slot('cook-lunch-bite', endsAt), bait: slot('cook-bait-mutation', endsAt) });
+
+  it('방치(auto)는 도시락만, 수동은 미끼만 돌려준다', () => {
+    const s = seed({ slots: both() });
+    expect(appliedSlots(s, T0, 'auto')).toEqual({ lunch: 'cook-lunch-bite' });
+    for (const j of ['perfect', 'good', 'normal'] as const) expect(appliedSlots(s, T0, j)).toEqual({ bait: 'cook-bait-mutation' });
+  });
+  it('슬롯이 비었거나 끝나는 시각 이후(같은 시각 포함)면 비어 있다', () => {
+    expect(appliedSlots(seed(), T0, 'auto')).toEqual({});
+    const s = seed({ slots: both() });
+    expect(appliedSlots(s, at(T0, 60 * MIN - 1), 'auto')).toEqual({ lunch: 'cook-lunch-bite' });
+    expect(appliedSlots(s, at(T0, 60 * MIN), 'auto')).toEqual({});
+    expect(appliedSlots(s, at(T0, 61 * MIN), 'normal')).toEqual({});
+  });
+  it('읽을 수 없는 시각이나 모르는 요리 id는 적용하지 않는다', () => {
+    expect(appliedSlots(seed({ slots: both('garbage') }), T0, 'auto')).toEqual({});
+    expect(appliedSlots(seed({ slots: both() }), 'garbage', 'auto')).toEqual({});
+    expect(appliedSlots(seed({ slots: { lunch: slot('nope'), bait: null } }), T0, 'auto')).toEqual({});
+  });
+  it('slotEffects와 같은 슬롯을 적용한다', () => {
+    const s = seed({ slots: both() });
+    for (const j of ['auto', 'good'] as const) {
+      const eff = slotEffects(s, T0, j);
+      expect(Object.keys(appliedSlots(s, T0, j)).length > 0).toBe(eff.biteWaitCut > 0 || eff.mutationWeight > 0);
+    }
   });
 });
