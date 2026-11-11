@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { newState } from '../../../../game/rules/logic';
 import { BASE_PACKS } from '../../../../game/world';
 import type { BaseId } from '../../../../game/world';
+import { STACK_MENU_CLASS } from '../../../ui/hud/stackTier';
 import BaseMenu from './BaseMenu';
 
 afterEach(cleanup);
@@ -74,13 +75,13 @@ describe('거점 카드 메뉴', () => {
       expect(root!.className).toContain('[container:basemenu/size]');
     });
 
-    it('메뉴 영역은 채팅 자리를 비우지 않고 프레임 전체를 쓴다 - 모바일은 게임 영역(2행) 전체다', () => {
+    it('메뉴 영역은 채팅 자리를 비우지 않고 프레임 전체를 쓴다 - 쌓기 단계는 헤더 아래부터다', () => {
       render(<BaseMenu base="harbor" game={newState()} />);
       const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
       expect(root.className).toContain('absolute inset-0');
       expect(root.className).not.toContain('--log-clear');
-      expect(root.className).toContain('mobile:row-start-2');
-      expect(root.className).toContain('mobile:row-end-3');
+      // 쌓기 단계와 모바일 레이아웃에서는 프레임이 스테이지 전체이고, 쌓기 단계는 겹친 헤더 아래부터 시작한다
+      expect(root.className).toContain(STACK_MENU_CLASS);
     });
 
     it('메뉴 영역은 세로로 스크롤하지 않고 내용을 가운데에 둔다 - 모자라면 카드가 줄어든다', () => {

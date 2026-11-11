@@ -7,12 +7,14 @@ import ToggleChip from '../ToggleChip';
 import PixelIcon from '../PixelIcon';
 import Tip from '../Tip';
 import HudButton from './HudButton';
+import { STACK_LOG_CLASS } from './stackTier';
 import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './messageFeed';
 import type { MessageChannel, Msg } from './messageFeed';
 
 // 메시지 창 — 스테이지 왼쪽 아래의 채팅창형 기록. 폭은 400px(좁은 스테이지에서는 58%)이다.
 // 모바일 레이아웃에서는 게임 영역 아래쪽 위에 겹쳐 뜨는 채팅 묶음(HudLayout) 안의 마지막 자식으로 놓이고 폭 전체를 쓴다.
 // 채팅은 스테이지 위 층이라 펼치거나 입력해도 스테이지를 밀어내지 않는다.
+// 쌓기 단계(스테이지 폭 464 미만, stackTier)에서는 모바일 레이아웃과 같이 줄기의 마지막 자식으로 폭 전체를 쓰고 5줄을 보인다.
 // 높이는 기록 수와 무관하게 항상 정해진 줄 수만큼이다. 보관된 기록 전체를 담고, 휠로 이전 메시지를 거슬러 본다.
 // 기록이 창보다 적으면 글줄을 창 아래쪽에 붙인다.
 // 사용자가 위로 올려 읽는 중이 아니면 언제나 맨 아래(최신)를 보인다. 기록이 앞쪽에 끼어들어도(접속 직후 받은
@@ -113,8 +115,8 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   };
 
   return (
-    <div className="group absolute left-3 bottom-3 z-(--z-chrome) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none
-                    mobile:relative mobile:left-auto mobile:bottom-auto mobile:w-full">
+    <div className={cx('group absolute left-3 bottom-3 z-(--z-chrome) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none',
+                       'mobile:relative mobile:left-auto mobile:bottom-auto mobile:w-full', STACK_LOG_CLASS)}>
       {!folded && (toggles || onFold) && (
         <div className="pointer-events-none flex items-center gap-1.5">
         {onFold && (
@@ -150,7 +152,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border-2 border-transparent px-2 py-1 text-sm',
              'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',
              'transition-[background-color,border-color] duration-150', GLASS_ON, GLASS_ALWAYS)}
-           style={{ height: `calc(${lines * LINE_EM}em + 0.5rem + 4px)` }}>
+           style={{ height: `calc(var(--log-lines, ${lines}) * ${LINE_EM}em + 0.5rem + 4px)` }}>
         {shown.map(m => (
           <Line key={`${m.channel}-${m.id}`} m={m} mine={you != null && m.from?.uid === you} onPick={onPick} />
         ))}

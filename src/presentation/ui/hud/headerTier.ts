@@ -12,3 +12,6 @@ export const HEADER_TIER_CLASS = [
   '@max-[772px]:[--hdr-gap:8px] @max-[772px]:[--hdr-pad:12px] @max-[772px]:[--hdr-gauge:48px]',
   '@max-[640px]:[--hdr-inset:8px] @max-[640px]:[--hdr-pad:6px] @max-[640px]:[--hdr-pad-y:4px] @max-[640px]:[--hdr-bar-h:auto] @max-[640px]:[--hdr-menu:40px] @max-[640px]:[--hdr-wide:none] @max-[640px]:[--hdr-rows:flex]',
 ].join(' ');
+
+// 헤더가 두 행 단계인 스테이지 폭(640 미만)에서 숨기는 글자의 클래스다. PC 레이아웃에만 적용한다. 숨기는 글자는 입력을 받지 않는 표시의 생략 글자(낚시 상태 띠의 판정 영역 설명)다.
+export const HEADER_ROWS_OMIT_CLASS = 'pc:@max-[640px]:hidden';
