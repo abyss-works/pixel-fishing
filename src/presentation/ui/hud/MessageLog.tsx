@@ -5,7 +5,7 @@ import type { MessageFilter } from '../../../features/display/model/messageFilte
 import { cx } from '../cx';
 import ToggleChip from '../ToggleChip';
 import PixelIcon from '../PixelIcon';
-import Tip from '../Tip';
+import Tip, { TipList } from '../Tip';
 import HudButton from './HudButton';
 import { STACK_LOG_CLASS } from './stackTier';
 import { CHANNEL_LABEL, MESSAGE_VISIBLE_LINES, channelsOf, isAtBottom } from './messageFeed';
@@ -52,6 +52,19 @@ const GLASS_ALWAYS = cx(
   'mobile:shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
 );
 
+/** 글줄 문구 — 툴팁을 단 대목이 문구 안에 있으면 그 대목만 툴팁으로 감싼다 */
+function LineText({ m }: { m: Msg }) {
+  const at = m.tip ? m.text.indexOf(m.tip.target) : -1;
+  if (!m.tip || at < 0) return <>{m.text}</>;
+  return (
+    <>
+      {m.text.slice(0, at)}
+      <Tip text={<TipList rows={m.tip.rows} />}>{m.tip.target}</Tip>
+      {m.text.slice(at + m.tip.target.length)}
+    </>
+  );
+}
+
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = cx('font-bold', mine ? 'text-gold' : 'text-accent');
   return (
@@ -61,7 +74,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
         ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}</button>
         : <b className={nameCls}>{m.author}</b>)}
       {m.author && ' '}
-      {m.text}
+      <LineText m={m} />
     </div>
   );
 }

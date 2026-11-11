@@ -88,6 +88,9 @@ export const EVENT_LABELS: Record<string, string> = {
   letter: '편지',
   buyBait: '미끼 구매',
   setActiveBait: '미끼 활성화',
+  extractEnergy: '기운 얻기',
+  cook: '조리 시작',
+  eat: '먹기와 쓰기',
   acceptQuest: '의뢰 수주',
   deliverBounty: '납품·토벌',
   exchangeArtifact: '유물 교환',
@@ -117,6 +120,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
         s(pay.judgment).toUpperCase(),
         pay.size !== undefined ? `${Number(pay.size).toFixed(1)}cm` : '',
         s(pay.spot) ? `@${s(pay.spot)}` : '',
+        pay.lunch ? `도시락:${s(pay.lunch)}` : '',
         pay.bait ? `미끼:${s(pay.bait)}` : '',
         pay.isNew === true ? 'NEW' : ''];
       return parts.filter(Boolean).join(' · ');
@@ -138,6 +142,16 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'ticket': return `${s(pay.questId)} 도전권`;
     case 'resolveChallenge': return `${s(pay.questId)} ${pay.success === true ? '성공' : '실패'}`;
     case 'setActiveBait': return `${s(pay.bait)} 활성`;
+    case 'extractEnergy': {
+      const energy = pay.energy !== null && typeof pay.energy === 'object' ? Object.values(pay.energy) : [];
+      const total = energy.reduce<number>((sum, n) => sum + (typeof n === 'number' ? n : 0), 0);
+      return `${Array.isArray(pay.uids) ? pay.uids.length : 0}마리 기운 ${total}개`;
+    }
+    case 'cook': {
+      const bonus = Number(pay.bonus ?? 0);
+      return `${s(pay.recipe)} ×${String(pay.count ?? '?')}${bonus > 0 ? ` (추가 완성 ${bonus})` : ''}`;
+    }
+    case 'eat': return `${s(pay.item)}${s(pay.replaced) ? ` (교체: ${s(pay.replaced)})` : ''}`;
     case 'debug': return `${s(pay.command)} ${JSON.stringify(pay.args ?? {})}`;
     case 'adminSet': return `골드=${fmtNum(Number(pay.gold ?? NaN))} 명성=${fmtNum(Number(pay.fame ?? NaN))}`;
     case 'import': return `골드 ${fmtNum(Number(pay.gold ?? 0))} · 명성 ${fmtNum(Number(pay.fame ?? 0))}`;

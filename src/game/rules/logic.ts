@@ -20,10 +20,9 @@ import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
-import { baitById } from '../content/baits.js';
-import type { Bait } from '../content/baits.js';
+import { COOK_STORAGE_CAP, LEGACY_BAIT_REFUND, recipeById } from '../content/cooking.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
-import { sumArtifactEffect, variantBoostOf } from './artifactLevel.js';
+import { variantBoostOf } from './artifactLevel.js';
 import type { ArtifactHolder } from './artifactLevel.js';
 import { namedById } from '../content/named.js';
 import { isTutorialId } from '../content/tutorials.js';
@@ -73,8 +72,25 @@ export interface FormRecord {
   first: string | null;     // 처음 잡은 날 YYYY-MM-DD
 }
 
+/** 조리 중인 것 — 완성 수는 startedAt과 서버 시각에서 파생하므로 저장하지 않는다 */
+export interface Cooking {
+  recipe: string;       // 레시피 id
+  count: number;        // 넣은 수량
+  bonus: boolean[];     // 수량별 추가 완성 여부 — 조리를 시작할 때 서버가 정한다
+  startedAt: string;    // 시작 시각(UTC ISO)
+}
+
+/** 슬롯에 들어간 요리 — 끝나는 시각(UTC ISO) 전까지 효과가 이어진다 */
+export interface SlotEffect { id: string; endsAt: string }
+
+/** 이관이 돌려준 이전 미끼 환불 영수증 — 안내를 닫으면 null로 지운다 */
+export interface BaitRefund {
+  gold: number;                  // 환불한 골드 합계
+  items: Record<string, number>; // 이전 미끼 id → 환불한 개수
+}
+
 export interface GameState {
-  v: 8;
+  v: 9;
   gold: number;
   fame: number; // 명성 — 무한 누적, 직접 상태 변화 없음, 구매 시 하한 검증용
   boat: number; // 0(없음, 마을 낚시만)~4
@@ -98,13 +114,19 @@ export interface GameState {
   /** 유물 레벨 — 유물 id → 레벨(2~5). 레벨이 있는 유물(희귀, 영웅)만 두고, 맵이 없거나 값이 없으면 Lv1로 읽는다.
    *  세이브 버전을 올리지 않고 위생 처리의 기본값 채움으로 이관한다 */
   artifactLevels?: Record<string, number>;
-  /** 아이템 보유량(스택형) — id(미끼 데이터 등) → 개수. 물고기 개체성(uid)이 없는 소모품
+  /** 아이템 보유량(스택형) — id(기운, 완성 요리 등) → 개수. 물고기 개체성(uid)이 없는 소모품
    *  축이다. 아이템 종류가 늘어도 키 하나(레지스트리 행)면 된다 — 세이브 v8에 접어서 도입
    *  (없는 필드는 위생 처리에서 기본값으로 자가 치유 — migrate 주석 참조). */
   items: Record<string, number>;
-  /** 활성화 중인 미끼 id — 4중 1(상호배척). null = 없음. 보유량이 0이 되면 효과만 무음
-   *  (자동 해제하지 않는다 — 보충하면 그대로 재개되는 게 유저 의도다) */
-  activeBait: string | null;
+  /** 조리 중인 것. 조리하지 않으면 null */
+  cooking: Cooking | null;
+  /** 도시락 슬롯과 미끼 슬롯 — 비어 있으면 null */
+  slots: { lunch: SlotEffect | null; bait: SlotEffect | null };
+  /** 기운 얻기 기본 선택의 해역별 덮어쓰기 — 해역 id → 기운 대상 여부. 덮어쓴 해역만 둔다.
+   *  모르는 해역 키는 버리지 않는다 */
+  energyTargets: Record<string, boolean>;
+  /** 미끼 환불 영수증 — v8→v9 이관이 환불한 것이 있을 때만 남기고, 안내를 닫으면 null */
+  baitRefund: BaitRefund | null;
   /** 어종 천장 진척 — 어종 → 누적 확률 질량(끝나면 -1). 화면에 보이지 않아 응답 스칼라에서 뺀다 */
   pity: SpeciesPity;
   /** 네임드 조우 천장 진척 — 게임 날짜 단위. 화면에 보이지 않아 응답 스칼라에서 뺀다 */
@@ -384,14 +406,17 @@ export function goldEV(
 
 export function newState(): GameState {
   return {
-    v: 8, gold: 0, fame: 0, boat: 0, rod: 1,
+    v: 9, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
     coupons: [],
     location: { kind: 'base', id: 'home' },
     visited: [],
     artifacts: [],
     items: {},
-    activeBait: null,
+    cooking: null,
+    slots: { lunch: null, bait: null },
+    energyTargets: {},
+    baitRefund: null,
     pity: {},
     namedPity: { day: '', misses: 0, fails: 0, wounds: {} },
     firstCatch: newFirstCatch(),
@@ -492,9 +517,10 @@ export function withVariantPoints(weights: Record<FormId, number>, points: numbe
   return { variant, normal: 1 - variant };
 }
 
-/** 폼 가중치 — 유물 효과 → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다 */
-export function mutationWeightsOf(state: ArtifactHolder, spot: SpotId): Record<FormId, number> {
-  const boost = variantBoostOf(state);
+/** 폼 가중치 — 보너스 효과(유물 + 요리 슬롯의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
+ *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects)이다. 유물과 슬롯의 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
+export function mutationWeightsOf(state: ArtifactHolder, spot: SpotId, slotBoost = 0): Record<FormId, number> {
+  const boost = variantBoostOf(state) + slotBoost;
   if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
   return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
@@ -739,6 +765,29 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
       variantCaught: undefined, variantMaxSize: undefined, variantFirstCaught: undefined,
     };
   },
+  // v8 → v9: 이전 미끼 환불. 보유 개수를 정가로 골드에 바꾸고 그 아이템 행과 activeBait를 지운다.
+  // 환불한 것이 있을 때만 영수증을 남긴다. 조리·슬롯·기운 덮어쓰기는 빈 상태로 시작한다.
+  // 한 번만 일어나야 하므로 버전을 올리는 링크로 둔다(v9 세이브는 이 링크를 다시 지나지 않는다).
+  8: s => {
+    const items = safeItems(s.items);
+    const refunded: Record<string, number> = {};
+    let refund = 0;
+    for (const [id, price] of Object.entries(LEGACY_BAIT_REFUND)) {
+      const n = items[id];
+      if (n === undefined) continue;
+      refunded[id] = n;
+      refund += n * price;
+      delete items[id];
+    }
+    const { activeBait: _activeBait, ...rest } = s;
+    return {
+      ...rest, v: 9,
+      gold: (typeof s.gold === 'number' ? s.gold : 0) + refund,
+      items,
+      cooking: null, slots: { lunch: null, bait: null }, energyTargets: {},
+      baitRefund: refund > 0 ? { gold: refund, items: refunded } : null,
+    };
+  },
 };
 
 const safeStrings = (v: unknown): string[] =>
@@ -805,11 +854,50 @@ function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstC
   return firstCatchOfLegacy(dexCatches, fame);
 }
 
-/** activeBait 위생 — 레지스트리에 있는 id만 살린다 (모르는 문자열은 없음 처리).
- *  보유량 검증은 여기서 하지 않는다 — "0개짜리 활성"은 합법 상태(효과 무음)다 */
-function safeActiveBait(v: unknown): string | null {
-  const b = baitById(v);
-  return typeof v === 'string' && b ? v : null;
+const isIsoTime = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+
+/** 조리 위생 — 레시피 id, 수량(1~보관함 상한), 수량과 같은 길이의 boolean 목록, ISO 시각이 모두 성립해야 살린다 */
+function safeCooking(v: unknown): Cooking | null {
+  const r = v as Partial<Cooking> | null;
+  if (typeof r !== 'object' || r === null || Array.isArray(r)) return null;
+  if (!recipeById(r.recipe)) return null;
+  if (typeof r.count !== 'number' || !Number.isInteger(r.count) || r.count < 1 || r.count > COOK_STORAGE_CAP) return null;
+  if (!Array.isArray(r.bonus) || r.bonus.length !== r.count || !r.bonus.every(b => typeof b === 'boolean')) return null;
+  if (!isIsoTime(r.startedAt)) return null;
+  return { recipe: r.recipe as string, count: r.count, bonus: [...r.bonus], startedAt: r.startedAt };
+}
+
+/** 슬롯 한 칸 위생 — 그 슬롯에 넣는 종류의 요리 id와 ISO 시각만 살린다 */
+function safeSlot(v: unknown, kind: 'lunch' | 'bait'): SlotEffect | null {
+  const r = v as Partial<SlotEffect> | null;
+  if (typeof r !== 'object' || r === null) return null;
+  if (recipeById(r.id)?.kind !== kind || !isIsoTime(r.endsAt)) return null;
+  return { id: r.id as string, endsAt: r.endsAt };
+}
+
+function safeSlots(v: unknown): GameState['slots'] {
+  const r = typeof v === 'object' && v !== null && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  return { lunch: safeSlot(r.lunch, 'lunch'), bait: safeSlot(r.bait, 'bait') };
+}
+
+/** 기운 얻기 해역 덮어쓰기 위생 — boolean 값만 살린다. 모르는 해역 키는 버리지 않는다(전방 호환) */
+function safeEnergyTargets(v: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
+  for (const [zone, on] of Object.entries(v)) if (typeof on === 'boolean') out[zone] = on;
+  return out;
+}
+
+/** 환불 영수증 위생 — 골드는 0 이상 정수, 항목은 이전 미끼 id의 양의 정수 개수만 살린다. 항목이 없으면 영수증이 아니다 */
+function safeBaitRefund(v: unknown): BaitRefund | null {
+  const r = v as Partial<BaitRefund> | null;
+  if (typeof r !== 'object' || r === null) return null;
+  if (typeof r.gold !== 'number' || !Number.isInteger(r.gold) || r.gold < 0) return null;
+  const items: Record<string, number> = {};
+  for (const [id, n] of Object.entries(safeRecord<unknown>(r.items))) {
+    if (Object.hasOwn(LEGACY_BAIT_REFUND, id) && typeof n === 'number' && Number.isInteger(n) && n > 0) items[id] = n;
+  }
+  return Object.keys(items).length > 0 ? { gold: r.gold, items } : null;
 }
 
 // 위치 위생 — 모르는 값이면 집으로. 지역 id 목록을 여기서 검사하지 않는 이유:
@@ -924,7 +1012,10 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     artifacts: safeStrings(s.artifacts),
     ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
-    activeBait: safeActiveBait(s.activeBait),
+    cooking: safeCooking(s.cooking),
+    slots: safeSlots(s.slots),
+    energyTargets: safeEnergyTargets(s.energyTargets),
+    baitRefund: safeBaitRefund(s.baitRefund),
     pity: safePity(s.pity),
     namedPity: safeNamedPity(s.namedPity),
     firstCatch: safeFirstCatch(s.firstCatch, dex, fame),
@@ -942,13 +1033,6 @@ function safeHats(raw: unknown): string[] {
 
 // ---------- 아이템 (스택형 — 세이브 v8 접기) ----------
 
-/** 활성 미끼 해석 — 유효 id && 보유량 > 0일 때만 행을 돌려준다. catch 리듀서와
- *  오버레이가 같은 함수를 쓴다(효과 무음 규칙의 단일 출처). */
-export function usableBait(state: Pick<GameState, 'activeBait' | 'items'>): Bait | undefined {
-  const b = baitById(state.activeBait);
-  return b ? ((state.items[b.id] ?? 0) > 0 ? b : undefined) : undefined;
-}
-
 /** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나) */
 export function addItem(state: GameState, itemId: string, n: number): GameState {
   if (!Number.isInteger(n) || n < 1) return state;
@@ -956,20 +1040,8 @@ export function addItem(state: GameState, itemId: string, n: number): GameState 
   return { ...state, items: { ...state.items, [itemId]: cur + n } };
 }
 
-/** 미끼 할인율 — 보유 유물의 할인을 더한 합(진주 상인의 저울). 상점의 정가·할인가 표시가 같은 값을 본다 */
-export function baitDiscount(state: ArtifactHolder): number {
-  return Math.min(1, sumArtifactEffect(state, e => e.baitDiscount));
-}
-
-/** 미끼 실구매가 — 유물 할인을 적용한 단일 출처.
- *  리듀서(buyBait)와 상점 미리보기(FacilityModal)가 같은 함수를 쓴다. */
-export function baitCost(state: ArtifactHolder, price: number, count: number): number {
-  return Math.floor(price * count * (1 - baitDiscount(state)));
-}
-
-/** 아이템 차감 — 기본 1개(미끼는 한 번에 한 개만 소모), 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).
- *  0에 도달하면 행을 접는다(보유 부재와 동의어라 세이브가 쓰레기로 쌓이지 않는다).
- *  activeBait는 지우지 않는다 — 효과는 usableBait가 무음 처리한다 */
+/** 아이템 차감 — 기본 1개, 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).
+ *  0에 도달하면 행을 접는다(보유 부재와 동의어라 세이브가 쓰레기로 쌓이지 않는다) */
 export function takeItem(state: GameState, itemId: string, count = 1): GameState {
   const cur = state.items[itemId] ?? 0;
   if (cur < count || cur <= 0) return state;

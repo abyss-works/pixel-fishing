@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
-import { facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock } from './menuLock';
+import { facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote } from './menuLock';
 import type { GuestFeature } from './menuLock';
 import { POLICY } from '../../../core/errors';
 
@@ -40,6 +40,31 @@ describe('메뉴 카드 잠금 사유', () => {
     const r = menuLock({ ...base, guest: false, progress: { met: false, boat: 4 } });
     expect(r.kind === 'progress' && r.lines).toHaveLength(1);
     expect(r.kind === 'progress' && r.lines[0]).toMatch(/^.+\(4단계\)(이|가) 되면 부엌을 쓸 수 있어요\.$/);
+  });
+});
+
+describe('진행 조건 문안의 어순', () => {
+  it('기능을 주제로 쓰면 첫 줄만 기능 이름이 앞에 온다', () => {
+    expect(progressLines('부엌', 5, 'topic')).toEqual([
+      '부엌은 인도양 항로가 열리면 쓸 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
+    expect(progressLines('옷장', 3, 'topic')[0]).toBe('옷장은 동남아 항로가 열리면 쓸 수 있어요.');
+  });
+});
+
+describe('진행 조건 문안의 서술부', () => {
+  it('구역 항로 조건 뒤에 호출부의 서술부를 붙이고 배 단계 줄을 더한다', () => {
+    expect(progressNote(5, '부엌에서 도시락과 미끼를 만들 수 있어요.')).toEqual([
+      '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
+  });
+
+  it('구역에 들어서는 배 단계가 아니면 배 단계 조건 한 줄이다', () => {
+    const lines = progressNote(4, '쓸 수 있어요.');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^.+\(4단계\)(이|가) 되면 쓸 수 있어요\.$/);
   });
 });
 

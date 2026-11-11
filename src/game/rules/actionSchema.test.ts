@@ -47,6 +47,25 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'autoLock' })?.type).toBe('autoLock');
     expect(parseAction({ type: 'sendLetter', text: 'hi' })?.type).toBe('sendLetter');
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
+    expect(parseAction({ type: 'dismissBaitRefund' })).toEqual({ type: 'dismissBaitRefund' });
+    expect(parseAction({ type: 'buyBait', bait: 'bait-rare' })).toBeNull();
+    expect(parseAction({ type: 'setActiveBait', bait: null })).toBeNull();
+  });
+
+  it('요리 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'extractEnergy', uids: ['a'] })).toEqual({ type: 'extractEnergy', uids: ['a'] });
+    expect(parseAction({ type: 'extractEnergy', uids: [1] })).toBeNull();
+    expect(parseAction({ type: 'extractEnergy' })).toBeNull();
+    expect(parseAction({ type: 'setEnergyTarget', spot: 'indian', on: false }))
+      .toEqual({ type: 'setEnergyTarget', spot: 'indian', on: false });
+    expect(parseAction({ type: 'setEnergyTarget', spot: 'indian', on: 'no' })).toBeNull();
+    expect(parseAction({ type: 'resetEnergyTargets' })).toEqual({ type: 'resetEnergyTargets' });
+    expect(parseAction({ type: 'cook', recipe: 'cook-lunch-bite', count: 2 }))
+      .toEqual({ type: 'cook', recipe: 'cook-lunch-bite', count: 2 });
+    expect(parseAction({ type: 'cook', recipe: 'cook-lunch-bite', count: 1.5 })).toBeNull();
+    expect(parseAction({ type: 'cook', recipe: 7, count: 1 })).toBeNull();
+    expect(parseAction({ type: 'eat', item: 'cook-lunch-bite' })).toEqual({ type: 'eat', item: 'cook-lunch-bite' });
+    expect(parseAction({ type: 'eat' })).toBeNull();
   });
 
   it('setNickname은 스키마를 통과한다 — 형태 검증은 리듀서 몫', () => {

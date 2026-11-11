@@ -12,8 +12,6 @@ export interface ArtifactEffects {
   sail?: number;
   /** 네임드 결투 가속 단위 감소율 — 가속 배수에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
   duelSpeedupCut?: number;
-  /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
-  baitDiscount?: number;
   /** 입질 대기 감소율 — 유효 입질 대기(최소·최대)에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
   biteWaitCut?: number;
   /** 폼 가중치 — 전역 기본 가중치(돌연변이 1 : 일반 3) 기준 Lv1 값이다. 돌연변이 가중치가 기본보다 올린 몫(여기서는 +25%)이
@@ -76,7 +74,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     effects: { sail: 0.1 } },
   { id: 'varuna-scale', namedId: 'ananta', name: '진주 상인의 저울', zone: 'indian', grade: 'rare',
     materialId: 'mat-varuna-weight', materialName: '녹슨 저울추',
-    lore: '진주를 달던 상인들이 대를 물려 쓴 저울이다. 사원의 등잔 아래에서 눈금을 맞춘 뒤로, 올려놓은 것마다 값이 가벼워졌다고 한다.',
+    lore: '진주 자루를 이 저울에 달아 묶으면, 다시 풀 때 가끔 한 알이 더 나왔다.',
     effects: {}, cook: { extraCookChance: 0.1 } },
   { id: 'elder-scale', namedId: 'elder-sixgill', name: '코모로의 골판', zone: 'madagascar', grade: 'epic',
     materialId: 'mat-elder-scale', materialName: '깨진 골판',

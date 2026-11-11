@@ -6,7 +6,7 @@ import { GAME_DAY_RESET_TEXT } from '../../../../../game/rules/time';
 import { TICKET_EXPIRY_TEXT } from '../../../../../game/rules/challenge';
 import { variantShare } from '../../../../../game/rules/logic';
 import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
-import { baitBoostText } from '../../../../ui/baitEffects';
+import { SLOT_SCOPE } from '../../../../../features/kitchen/model/recipes';
 import Accordion from '../../../../ui/Accordion';
 import Note from '../../../../ui/Note';
 import PixelList from '../../../../ui/PixelList';
@@ -28,7 +28,7 @@ import SectionTitle from '../../../../ui/SectionTitle';
 // 문체: 격식 있는 단어를 고르되 친근한 설명 톤. 수치는 balance에서 읽어 자동 싱크 —
 // 손으로 적으면 밸런스를 바꾸는 순간 도움말만 옛 숫자로 남는다.
 /** 화면 하단에 보이는 도움말 마지막 갱신일 — 내용을 고칠 때 함께 고친다 */
-const HELP_UPDATED = '2026-11-09';
+const HELP_UPDATED = '2026-11-12';
 
 function Topic({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
@@ -207,9 +207,22 @@ export default function VHelp() {
               깊은 바다일수록 유리해요. 끝은 없고, 오를수록 폭이 줄어들 뿐이에요.</li>
             <li><b>배</b>: 골드와 명성 조건을 채우면 살 수 있어요. 더 먼 구역이 열리고,
               항해도 빨라지고, <b>가방</b>도 넓어져요.</li>
-            <li><b>미끼</b>: 콜롬보항의 <b>향료전</b>에서 사요. 가방의 아이템에서 하나를 켜 두면{' '}
-              {baitBoostText('미끼에 적힌 등급의')} 직접 낚아 올릴 때마다 하나씩 줄고, 방치 낚시에는 쓰이지 않아요.</li>
+            <li><b>미끼</b>: 집 부엌에서 생명의 기운으로 요리해요. 챔질해서 낚을 때만 효과가 있어요.</li>
             <li>막혔다면 물고기를 팔아 골드를 모으고, 많이 잡아 명성을 쌓으면 돼요.</li>
+          </PixelList>
+        </Topic>
+
+        <Topic title="요리" hint="기운 얻기, 도시락, 미끼">
+          <PixelList>
+            <li><b>기운 얻기</b>: 집 부엌의 기운 얻기 탭에서 가방의 물고기를 생명의 기운으로 바꿔요.
+              물고기와 같은 등급의 기운을 얻어요. 기운을 얻은 물고기는 가방에서 사라지고,
+              도감과 명성은 그대로예요. 잠근 물고기와 전시대의 물고기는 바뀌지 않아요.</li>
+            <li><b>요리</b>: 도시락 탭과 미끼 탭에서 기운으로 요리해요. 다 될 때까지 시간이 걸리고,
+              게임을 꺼 둔 동안에도 요리는 이어져요.</li>
+            <li><b>먹기와 쓰기</b>: 가방의 아이템에서 도시락을 먹거나 미끼를 써요.
+              도시락은 {SLOT_SCOPE.lunch}, 미끼는 {SLOT_SCOPE.bait} 효과가 있어요.
+              효과는 정해진 시간 동안 이어지고, 낚시를 하지 않아도 시간은 흘러요.
+              새로 먹거나 쓰면 앞의 효과는 남은 시간과 함께 끝나요.</li>
           </PixelList>
         </Topic>
 

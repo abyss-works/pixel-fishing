@@ -1,12 +1,10 @@
-import { BAITS } from '../../../game/content/baits';
-import type { Bait } from '../../../game/content/baits';
 import { BOATS } from '../../../game/content/boats';
 import type { Boat } from '../../../game/content/boats';
 import { SPOTS } from '../../../game/content/spots';
 import type { Spot } from '../../../game/content/spots';
-import { MAX_BOAT, bagCapacity, baitCost, baitDiscount, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
+import { MAX_BOAT, bagCapacity, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { BAIT_BUY_MAX, upgradeCost } from '../../../game/rules/balance';
+import { upgradeCost } from '../../../game/rules/balance';
 import { powerOfLevel } from '../../../game/rules/stats';
 
 /** 낚싯대 강화 전후 수치와 구매 가능 판정을 계산한다. */
@@ -104,49 +102,4 @@ export function selectBoatPurchaseResult(tier: number): {
     boatName: BOATS[tier - 1].name,
     openedSpots: SPOTS.filter(spot => spot.boatTier === tier),
   };
-}
-
-/** 미끼별 초기 수량을 준비한다. */
-export function createBaitQuantities(): Record<string, number> {
-  return Object.fromEntries(BAITS.map(bait => [bait.id, 1]));
-}
-
-/** 상점 입력 수량을 액션 규칙의 요청 상한 안으로 정규화한다. */
-export function normalizeBaitQuantity(value: number): number {
-  return Math.min(BAIT_BUY_MAX, Math.max(1, Math.floor(value) || 1));
-}
-
-export interface BaitShopRow {
-  bait: Bait;
-  owned: number;
-  count: number;
-  /** 실제 차감액(할인 적용) — 리듀서와 같은 baitCost */
-  total: number;
-  /** 정가 합계 — 할인이 있으면 취소선으로 함께 보인다 */
-  listTotal: number;
-  /** 1개 할인가 */
-  unitPrice: number;
-  /** 할인율(0이면 할인 없음) */
-  discountRate: number;
-  canAfford: boolean;
-}
-
-/** 미끼 상점의 재고·수량·비용·구매 가능 여부를 만든다. */
-export function selectBaitShopRows(
-  game: GameState, quantities: Readonly<Record<string, number>>, busy: boolean,
-): BaitShopRow[] {
-  return BAITS.map(bait => {
-    const count = quantities[bait.id] ?? 1;
-    const total = baitCost(game, bait.price, count);
-    return {
-      bait,
-      owned: game.items[bait.id] ?? 0,
-      count,
-      total,
-      listTotal: bait.price * count,
-      unitPrice: baitCost(game, bait.price, 1),
-      discountRate: baitDiscount(game),
-      canAfford: game.gold >= total && !busy,
-    };
-  });
 }

@@ -13,9 +13,17 @@ export type GlyphId =
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
-  | 'crown' | 'sparkle' | 'menu';
+  | 'crown' | 'sparkle' | 'menu' | 'lunch' | 'bait';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
+  // 도시락 — 뚜껑과 몸통 사이 띠, 가운데 이음쇠 (도시락 슬롯)
+  lunch: {
+    cells: [[1, 3, 10, 1], [1, 4, 1, 7], [10, 4, 1, 7], [1, 10, 10, 1], [2, 1, 8, 2], [5, 5, 2, 4], [2, 7, 8, 1]],
+  },
+  // 미끼 — 낚싯줄에 걸린 바늘 (미끼 슬롯)
+  bait: {
+    cells: [[6, 0, 1, 6], [4, 1, 2, 1], [7, 1, 2, 1], [6, 6, 1, 3], [2, 7, 1, 2], [3, 9, 3, 1], [6, 9, 1, 1], [2, 6, 1, 1]],
+  },
   // 메뉴 — 가로 막대 셋 (햄버거)
   menu: { cells: [[1, 2, 10, 2], [1, 5, 10, 2], [1, 8, 10, 2]] },
   // 왕관 — 뾰족 셋 + 띠 + 받침, 가운데 보석 자리 구멍 (가장 큰 개체)

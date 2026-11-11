@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtDecimal2, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtDecimal2, fmtLevel, fmtPlusPoint, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -126,6 +126,14 @@ describe('fmtLevel — 레벨 표기', () => {
     expect(fmtLevel(0)).toBe('Lv.0');
     expect(fmtLevel(8)).toBe('Lv.8');
     expect(fmtLevel(99)).toBe('Lv.99');
+  });
+});
+
+describe('fmtPlusPoint - 확률에 더하는 값은 +N%p', () => {
+  it('앞에 +를 붙이고 둘째 자리까지만 보인다', () => {
+    expect(fmtPlusPoint(10)).toBe('+10%p');
+    expect(fmtPlusPoint(0.1125 * 100)).toBe('+11.25%p');
+    expect(fmtPlusPoint(12.345)).toBe('+12.35%p');
   });
 });
 

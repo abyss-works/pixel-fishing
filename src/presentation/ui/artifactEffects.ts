@@ -2,21 +2,20 @@ import type { Artifact } from '../../game/content/artifacts';
 import { artifactEffectsAt, artifactExtraCookChanceAt } from '../../game/rules/artifactLevel';
 import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import type { ArtifactEffectKey } from '../../features/gameplay/model/stats';
-import { fmtDecimal2 } from './format';
+import { fmtDecimal2, fmtPlusPoint } from './format';
 
-const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'baitDiscount', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
+const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
 
 const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
-  baitDiscount: '미끼값',
   mutationWeight: '돌연변이 가중치',
   biteWaitCut: '입질 대기',
   extraCookChance: '요리 추가 완성',
 };
 
-/** 줄어드는 효과의 값 문자열(`−N%`) - 유물 효과 줄과 상점의 미끼값 표시가 같은 반올림을 쓴다 */
-export const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
+/** 줄어드는 효과의 값 문자열(`−N%`) */
+const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
 
 /** 유물 효과 한 가지의 이름 - 효과 문장의 앞부분과 비교 표의 행 이름이 함께 쓴다 */
 export const artifactEffectLabel = (effect: ArtifactEffectKey): string => EFFECT_LABEL[effect];
@@ -27,11 +26,10 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
   switch (effect) {
     case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
     case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(e.duelSpeedupCut!) : null;
-    case 'baitDiscount': return (e.baitDiscount ?? 0) > 0 ? fmtCutPercent(e.baitDiscount!) : null;
     case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
-      return chance > 0 ? `${fmtDecimal2(chance * 100)}%` : null;
+      return chance > 0 ? fmtPlusPoint(chance * 100) : null; // 확률에 직접 더하는 효과는 %p
     }
     case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
   }
@@ -46,8 +44,6 @@ export function artifactEffectKeys(a: Artifact): (ArtifactEffectKey)[] {
 export function artifactEffectLine(a: Artifact, effect: ArtifactEffectKey, level: number): string | null {
   const value = artifactEffectValue(a, effect, level);
   if (value === null) return null;
-  // 요리 추가 완성은 확률이 문장 가운데 들어가는 꼴이다
-  if (effect === 'extraCookChance') return `요리할 때 ${value} 확률로 하나 더 완성`;
   return `${artifactEffectLabel(effect)} ${value}`;
 }
 

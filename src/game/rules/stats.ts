@@ -14,6 +14,8 @@ import type { GameState } from './logic.js';
 import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
 import { powerReqOf } from '../content/spots.js';
+import { NO_COOK_EFFECTS } from './cooking.js';
+import type { ActiveCookEffects } from './cooking.js';
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
@@ -77,9 +79,13 @@ export function rodAxes(state: GameState): RodAxes {
 }
 
 /** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
- *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소는 그 합계에 비율로 걸린다.
+ *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소와 요리(도시락)의 입질 대기 감소는
+ *  함께 더해져 그 합계에 비율로 걸린다. 요리 효과는 호출자가 slotEffects로 구해 넘긴다(방치 사이클에만 적용한다).
+ *  스탯창에 보일 출처 이름(label)은 호출자가 정한다.
  */
-export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
+export function effectiveBite(
+  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'biteWaitCut'> & { label?: string } = NO_COOK_EFFECTS,
+): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
   const pz = powerZones(state, spotId);
   const side = (base: number): Stat => {
@@ -91,6 +97,7 @@ export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; ma
       const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
       if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
     }
+    if (cook.biteWaitCut > 0) mods.push({ id: 'cook-lunch', label: cook.label ?? '', delta: -total * cook.biteWaitCut });
     return stat(base, mods);
   };
   return { min: side(st.biteMin), max: side(st.biteMax) };
@@ -159,10 +166,19 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
   };
 }
 
-export function powerZones(state: GameState, spotId: SpotId): PowerZone {
+/** 해역 파워 게이트의 존. 요리(미끼)의 판정 칸 효과는 이미 열린 GOOD, PERFECT 영역의 폭만 넓힌다 —
+ *  닫힌 영역(폭 0)을 새로 열지 않는다. 판정 강등(prepareCatchDraw)은 열림 여부만 보므로 이 폭에 영향받지 않는다 */
+export function powerZones(
+  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'judgeWidth'> = NO_COOK_EFFECTS,
+): PowerZone {
   const power = rodPower(state);
   const req = powerReqOf(spotId);
-  return { power, req, ...zonesFor(power, req) };
+  const z = zonesFor(power, req);
+  if (cook.judgeWidth > 0) {
+    if (z.yellow > 0) z.yellow = Math.min(100, z.yellow + cook.judgeWidth);
+    if (z.red > 0) z.red = Math.min(z.red + cook.judgeWidth, z.yellow);
+  }
+  return { power, req, ...z };
 }
 
 // 도움말 문장 — 스탯창 HelpHint가 띄운다. UI가 규칙 서술을 재작성하지 않게 서비스가 든다.

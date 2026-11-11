@@ -9,7 +9,7 @@ let msgSeq = 0;
 
 export function useMessageLog(initial: string[]) {
   const [log, setLog] = useState<Msg[]>(() => initial.map(t => createMessage(msgSeq++, t)));
-  const setToast: Notify = (text, tone) =>
-    setLog(l => appendMessage(l, createMessage(msgSeq++, text, { tone })));
+  const setToast: Notify = (text, tone, tip) =>
+    setLog(l => appendMessage(l, createMessage(msgSeq++, text, { tone, tip })));
   return { log, setToast };
 }

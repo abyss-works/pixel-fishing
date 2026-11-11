@@ -4,6 +4,7 @@ import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import TableBox from '../../../ui/TableBox';
 import Tip from '../../../ui/Tip';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 목록형 시설(낚싯대 강화, 조선소, 상점)의 오른쪽 상세 열이 함께 쓰는 조각.
 
@@ -57,4 +58,36 @@ export function ConfirmButton({ reason, disabled, onClick, children }: {
 }) {
   const button = <Button variant="primary" full disabled={disabled} onClick={onClick}>{children}</Button>;
   return reason ? <Tip wraps text={reason} className="block">{button}</Tip> : button;
+}
+
+/** 두 열 본문 — 왼쪽은 목록, 오른쪽은 상세와 그 아래 고정한 확정 영역(foot)이다. 높이를 고정한 카드 안에서 두 열의 본문이 각자 스크롤한다.
+ *  열 사이 틈은 18px이다. 목록 칸은 오른쪽으로 14px 내어 막대를 틈에 두고, 상세 칸은 왼쪽 4px 여백과 합쳐 두 칸이 겹치지 않는다.
+ *  상세 칸은 카드 본문과 같이 오른쪽으로 8px 내어 막대를 카드 안쪽 가장자리에 둔다.
+ *  확정 영역은 상세 칸의 내용 폭(막대와 여백을 뺀 6px 좁은 폭)에 맞춘다. 낚싯대, 조선소, 부엌 창이 쓴다. */
+export function FacilityColumns({ list, detail, foot }: { list: ReactNode; detail: ReactNode; foot: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-[18px] flex-1 min-h-0">
+      <div className={`${SCROLL_Y} -mr-3.5 min-h-0`}>{list}</div>
+      <div className="flex flex-col gap-3 min-w-0 min-h-0">
+        <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-3 [&>*]:shrink-0`}>{detail}</div>
+        <div className="flex flex-col gap-3 shrink-0 mr-1.5 [&>button]:w-full">{foot}</div>
+      </div>
+    </div>
+  );
+}
+
+/** 탭 본문 — 두 열로 나뉘는 폭(PC 레이아웃)에서는 FacilityColumns이고, 한 열로 쌓이는 폭(모바일 레이아웃)에서는 목록과 상세가 스크롤 칸 하나에 쌓이고
+ *  확정 영역(foot)은 그 아래에 고정한다. 어느 쪽이든 확정 영역은 스크롤 칸 밖에 있다. 탭이 있는 창(높이 고정)의 탭 안에서 쓴다. */
+export function FacilityTabBody({ list, detail, foot }: { list: ReactNode; detail: ReactNode; foot: ReactNode }) {
+  const mobile = useMobileLayout();
+  if (!mobile) return <FacilityColumns list={list} detail={detail} foot={foot} />;
+  return (
+    <>
+      <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-4 [&>*]:shrink-0`}>
+        {list}
+        {detail !== null && <div className="flex flex-col gap-3 min-w-0">{detail}</div>}
+      </div>
+      <div className="border-t border-line pt-2 flex flex-col gap-2 shrink-0">{foot}</div>
+    </>
+  );
 }

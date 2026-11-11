@@ -4,7 +4,6 @@ import {
   COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS,
   JUDGE_WIDTH_BONUS, LEGACY_BAIT_REFUND, RECIPES, recipeById,
 } from './cooking';
-import { BAITS } from './baits';
 import { ARTIFACTS } from './artifacts';
 import { RARITY_ORDER } from './rarity';
 import type { RarityId } from './rarity';
@@ -109,7 +108,6 @@ describe('등급 미끼', () => {
   it('새 미끼 id는 이전 미끼 id와 겹치지 않는다', () => {
     const legacy = Object.keys(LEGACY_BAIT_REFUND);
     for (const r of RECIPES) expect(legacy, r.id).not.toContain(r.id);
-    for (const b of BAITS) expect(RECIPES.some(r => r.id === b.id), b.id).toBe(false);
   });
 });
 

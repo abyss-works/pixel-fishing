@@ -15,16 +15,17 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
-import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
+import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
-  takeItem, matchBountyCatch,
+  matchBountyCatch,
 } from '../src/game/rules/logic.js';
+import { appliedSlots } from '../src/game/rules/cooking.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
-import { applyAction, drawCatch, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
+import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
@@ -56,7 +57,7 @@ import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNo
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
-import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
+import { blobInput, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
@@ -70,7 +71,7 @@ const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 /** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
 function scalarState(row: StateRow): GameState {
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
 }
 import { reportServerIssue } from './observability.js';
@@ -160,7 +161,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
       { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
   }
   // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold), fame: Number(row.fame),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
@@ -194,6 +195,8 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
+ * 요리(cook·eat)는 아이템 수량·조리 상태·슬롯이 모두 blob이라 가방 개체를 쓰지 않고, 기운 대상 설정과 환불 안내 닫기는 blob 스칼라만 바꾼다.
+ * extractEnergy는 가방 개체를 소비하므로 스킵하지 않는다.
  * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
  * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
@@ -201,6 +204,7 @@ export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
+  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -452,17 +456,19 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
+  const now = new Date().toISOString();
   let out: ApplyOutcome;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, guildEffects);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
     out = applyAction(state, action, {
       rng: Math.random, today: todayKST(),
-      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+      now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
       bounty,
@@ -476,8 +482,8 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
-    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
-      Math.random, action.forceEncounter === true, guildEffects.named);
+    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
+      Math.random, action.forceEncounter === true, namedWeightBonus(catchBase, action.judgment, now, guildEffects));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -598,21 +604,20 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[1],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects): Promise<ApplyOutcome> {
-  const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
-  const now = new Date().toISOString();
-  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, judgmentIn, now, pz);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
@@ -657,17 +662,16 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
-    ...(bait ? { bait: bait.id } : {}),
     ...(drawn.byCeiling ? { pity: true } : {}),
+    ...appliedSlots(base, now, judgmentIn),
   } }];
   if (overflow.length > 0) {
     events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
       fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
-  const scalars = takeItem(base, bait?.id ?? '');
   return {
     ok: true,
-    state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
+    state: { ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
     events,
     writes: {

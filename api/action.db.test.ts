@@ -220,14 +220,6 @@ describe('상점·이동', () => {
     expect(await run({ state: { gold: 300 } }, { type: 'buyBoat' })).toMatchSnapshot();
   });
 
-  it('미끼 구매와 장착', async () => {
-    const uid = await seed({ state: { gold: 10_000, location: at('colombo') } });
-    const buy = await callAction(userToken(uid), { type: 'buyBait', bait: 'bait-rare', count: 3 });
-    vi.setSystemTime(Date.parse(NOW) + 2000);
-    const equip = await callAction(userToken(uid), { type: 'setActiveBait', bait: 'bait-rare' });
-    expect({ buy: normalize(buy, uid), ...(await snapshotOf(uid, equip)) }).toMatchSnapshot();
-  });
-
   it('첫 방문 이동은 방문 이벤트를 남긴다', async () => {
     expect(await run({ state: { boat: 1 } }, { type: 'travel', to: { kind: 'region', id: 'ocean' } })).toMatchSnapshot();
   });
@@ -1055,5 +1047,97 @@ describe('개발 명령 허용 판정', () => {
     process.env.DEPLOY_ENV = 'preview';
     for (const origin of ORIGINS) expect(await ticketsAfterForcedCatch('guest', origin)).toBe(0);
     expect(await ticketsAfterForcedCatch('owner', undefined)).toBe(1);
+  });
+});
+
+describe('세이브 v9 — 이관과 환불 영수증', () => {
+  const LEGACY_ITEMS = { 'bait-common': 4, 'bait-rare': 2, 'energy-ginger': 3 };
+  const REFUND = 4 * 25 + 2 * 200;
+  const RECEIPT = { gold: REFUND, items: { 'bait-common': 4, 'bait-rare': 2 } };
+
+  const seedV8 = (email: string | null | undefined = undefined) => seed({
+    email,
+    state: { v: 8, gold: 1000, items: LEGACY_ITEMS, activeBait: 'bait-rare' } as unknown as Partial<GameState>,
+  });
+
+  /** 다음 액션이 페이싱에 걸리지 않게 직전 액션 시각을 과거로 돌린다 */
+  const rewind = (uid: string) =>
+    env.client.query(`update public.saves_current set updated_at = '2026-01-01T00:00:00Z' where user_id = $1`, [uid]);
+
+  const stored = async (uid: string) => {
+    const { rows } = await env.client.query<{ gold: string; data: Record<string, unknown> }>(
+      'select gold, data from public.saves_current where user_id = $1', [uid]);
+    return { gold: Number(rows[0].gold), data: rows[0].data };
+  };
+
+  it('v8 행은 처음 불러올 때 환불 골드와 영수증이 한 번만 생기고, 다시 불러도 늘지 않는다', async () => {
+    const uid = await seedV8();
+    expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+    const first = await stored(uid);
+    expect(first.gold).toBe(1000 + REFUND);
+    expect(first.data).toMatchObject({ v: 9, baitRefund: RECEIPT, items: { 'energy-ginger': 3 } });
+    expect(first.data).not.toHaveProperty('activeBait');
+    for (let i = 0; i < 2; i++) {
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+    }
+    expect(await stored(uid)).toEqual(first);
+  });
+
+  it('v9 행을 다시 불러도 조리, 슬롯, 기운 덮어쓰기, 영수증이 그대로다', async () => {
+    const extra = {
+      cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: '2030-03-04T04:00:00.000Z' },
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2030-03-04T09:00:00.000Z' }, bait: null },
+      energyTargets: { pond: false },
+      baitRefund: RECEIPT,
+    };
+    const uid = await seed({ state: { gold: 1500, items: { 'energy-ginger': 3 }, ...extra } });
+    for (let i = 0; i < 2; i++) {
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+      const now = await stored(uid);
+      expect(now.gold).toBe(1500);
+      expect(now.data).toMatchObject({ v: 9, ...extra, items: { 'energy-ginger': 3 } });
+    }
+  });
+
+  it('v9 행에서 캐치해도 영수증과 슬롯이 남고 골드가 다시 늘지 않는다', async () => {
+    const extra = { slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: '2030-03-04T09:00:00.000Z' } }, baitRefund: RECEIPT };
+    const uid = await seed({ state: { gold: 1500, ...extra } });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const now = await stored(uid);
+    expect(now.gold).toBe(1500);
+    expect(now.data).toMatchObject({ v: 9, ...extra });
+  });
+
+  it('dismissBaitRefund는 영수증만 지우고 골드는 그대로 둔다', async () => {
+    const uid = await seedV8();
+    const res = await callAction(userToken(uid), { type: 'dismissBaitRefund' });
+    expect(res.status).toBe(200);
+    const after = await stored(uid);
+    expect(after.gold).toBe(1000 + REFUND);
+    expect(after.data).toMatchObject({ v: 9, baitRefund: null });
+    await rewind(uid);
+    expect((await callAction(userToken(uid), { type: 'dismissBaitRefund' })).status).toBe(200);
+    expect(await stored(uid)).toEqual(after);
+  });
+
+  it('게스트도 dismissBaitRefund를 보낼 수 있다', async () => {
+    const uid = await seedV8(null);
+    const res = await callAction(userToken(uid), { type: 'dismissBaitRefund' });
+    expect(res.status).toBe(200);
+    const after = await stored(uid);
+    expect(after.gold).toBe(1000 + REFUND);
+    expect(after.data).toMatchObject({ baitRefund: null });
+  });
+
+  it('없어진 buyBait와 setActiveBait는 형식 오류로 거부한다', async () => {
+    const uid = await seed({ state: { gold: 10_000 } });
+    const buy = await callAction(userToken(uid), { type: 'buyBait', bait: 'bait-rare', count: 1 });
+    await rewind(uid);
+    const equip = await callAction(userToken(uid), { type: 'setActiveBait', bait: 'bait-rare' });
+    expect([buy.status, equip.status]).toEqual([400, 400]);
+    expect((await stored(uid)).gold).toBe(10_000);
   });
 });

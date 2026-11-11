@@ -10,9 +10,8 @@ import { BOATS } from '../src/game/content/boats';
 import { FISH } from '../src/game/content/fish';
 import { RARITY, RARITY_ORDER } from '../src/game/content/rarity';
 import { BOUNTIES, BOUNTY_ZONES } from '../src/game/content/bounties';
-import { BAITS } from '../src/game/content/baits';
-import { drawRows, mutationWeightsOf, namedEncounterShare, rarityWeightOf, variantShare } from '../src/game/rules/logic';
-import { BAIT_WEIGHT_MULT, upgradeCost } from '../src/game/rules/balance';
+import { drawRows, mutationWeightsOf, namedEncounterShare, variantShare } from '../src/game/rules/logic';
+import { upgradeCost } from '../src/game/rules/balance';
 import { DELTA_AXES, EV_AXES, buildBalanceReport } from '../src/features/admin/model/balanceReport';
 import {
   AXES, AXIS_LABEL, SPEC_MARGIN, VARIANT_EV, ZONE_ORDER, axisAvailable, entryLevel, headroom, inversions,
@@ -257,21 +256,6 @@ if (show('economy')) {
     const c = upgradeCost(entryLevel(s.id));
     return `${s.name} L${entryLevel(s.id)} ${n0(c)}G ${byPlay(p => hrs(c / rate(s.id, playAxis(s.id, p)).goldPerHour))}`;
   }).join('\n'));
-  const perCatch = (r: ReturnType<typeof rates>) => ({ g: r.goldPerHour / r.catchesPerHour, f: r.famePerHour / r.catchesPerHour });
-  for (const p of PLAYS) {
-    console.log(`\n### 미끼 손익 — ${PLAY_LABEL[p]} 최소 스펙, 캐치당 (판매가 증가 − 미끼값) · 명성 증가`);
-    for (const s of SPOTS) {
-      const b0 = perCatch(rate(s.id, playAxis(s.id, p)));
-      const line = BAITS.map(bait => {
-        const w = rarityWeightOf(s.id, bait.targetRarity);
-        if (w <= 0) return `${bait.name} —`;
-        const b1 = perCatch(rates(s.id, entryLevel(s.id), playAxis(s.id, p), { budgets: { [bait.targetRarity]: w * BAIT_WEIGHT_MULT } }));
-        const df = b1.f - b0.f;
-        return `${bait.name} ${n0(b1.g - b0.g - bait.price)}G·명성${df >= 0 ? '+' : ''}${n1(df)}`;
-      }).join(' · ');
-      console.log(`${s.name}: ${line}`);
-    }
-  }
   const last = SPOTS.at(-1)!;
   console.log('\n### 남는 골드 — 배를 모두 산 뒤의 소모처는 강화뿐');
   console.log(`마지막 배 구매(새 계정 진행): ${byPlay(p => {

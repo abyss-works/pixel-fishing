@@ -2,13 +2,15 @@
 // 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서, 배 단계로 갈 수 있는 해역)과
 // 요리 콘텐츠(레시피 표, 기운 수량, 효과 값, 슬롯 지속)는 불러 쓰고, 이 모듈은 값을 갖지 않는다.
 import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
-import type { CookEffects, Recipe as CookRecipe } from '../../../src/game/content/cooking';
+import type { Recipe as CookRecipe } from '../../../src/game/content/cooking';
 import { FISH } from '../../../src/game/content/fish';
 import type { FormId } from '../../../src/game/content/fish';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
+import { energyDefaultExcluded, slotEffects, slotEndsAt } from '../../../src/game/rules/cooking';
+import type { ActiveCookEffects } from '../../../src/game/rules/cooking';
 import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
 import type { FishInstance } from '../../../src/game/rules/logic';
 import { NO_EFFECT, checkEffect, dexRows, effectRates, spotsAt, variantEv } from './effects';
@@ -23,19 +25,28 @@ const HOUR_MS = 3_600_000;
 /** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
 export const BAIT_WINDOW_MIN = COOK_KIND_RULES.bait.slotMs / 60_000;
 
-/** 요리 콘텐츠의 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다.
+/** 게임이 합산한 슬롯 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다.
  *  판정 칸(영역 폭) 효과는 이 지표가 재지 않으므로 오류다 */
-export function effectOf(e: CookEffects): Effect {
-  if (e.judgeWidth !== undefined) throw new Error('판정 칸 효과는 이 도구가 재지 않습니다');
-  const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut ?? 0, variant: e.mutationWeight ?? 0, named: e.namedWeight ?? 0 };
-  const w = e.rarityWeight;
-  if (w) {
-    const from = RARITY_ORDER.findIndex(g => g === w.grades[0]);
-    const suffix = from >= 1 && w.grades.length === RARITY_ORDER.length - from && w.grades.every((g, k) => g === RARITY_ORDER[from + k]);
-    if (!suffix) throw new Error(`등급 가중이 희귀, 영웅, 전설부터 전설까지의 범위가 아닙니다: ${w.grades.join(', ')}`);
-    out[RARITY_ORDER[from] as 'rare' | 'epic' | 'legendary'] += w.bonus;
+export function effectOf(e: ActiveCookEffects): Effect {
+  if (e.judgeWidth !== 0) throw new Error('판정 칸 효과는 이 도구가 재지 않습니다');
+  const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut, variant: e.mutationWeight, named: e.namedWeight };
+  const grades = RARITY_ORDER.filter(g => e.rarityWeight[g] !== undefined);
+  if (grades.length > 0) {
+    const from = RARITY_ORDER.indexOf(grades[0]);
+    const bonus = e.rarityWeight[grades[0]]!;
+    const suffix = from >= 1 && grades.length === RARITY_ORDER.length - from && grades.every((g, k) => g === RARITY_ORDER[from + k] && e.rarityWeight[g] === bonus);
+    if (!suffix) throw new Error(`등급 가중이 희귀, 영웅, 전설부터 전설까지의 범위가 아닙니다: ${grades.join(', ')}`);
+    out[RARITY_ORDER[from] as 'rare' | 'epic' | 'legendary'] += bonus;
   }
   return out;
+}
+
+/** 요리 하나를 그 종류의 슬롯에 담았을 때 그 캐치에 걸리는 효과 — 게임의 슬롯 효과(slotEffects)를 그대로 불러 옮긴다.
+ *  도시락은 방치 판정, 미끼 요리는 수동 판정에 걸린다 */
+export function effectOfRecipe(r: CookRecipe): Effect {
+  const now = '2026-01-01T00:00:00.000Z';
+  const slots = { lunch: null, bait: null, [r.kind]: { id: r.id, endsAt: slotEndsAt(r, now) } };
+  return effectOf(slotEffects({ slots }, now, r.kind === 'lunch' ? 'auto' : 'normal'));
 }
 
 /** 등급 미끼의 효과 — 요리 콘텐츠의 희귀, 영웅, 전설 등급 미끼 레시피에서 불러온다 */
@@ -43,7 +54,7 @@ export const BAIT_EFFECTS: Readonly<Record<'rare' | 'epic' | 'legendary', Effect
   (['rare', 'epic', 'legendary'] as const).map(g => {
     const r = COOK_RECIPES.find(x => x.id === `cook-bait-${g}`);
     if (!r) throw new Error(`등급 미끼 레시피가 없습니다: ${g}`);
-    return [g, effectOf(r.effects)];
+    return [g, effectOfRecipe(r)];
   }),
 ) as Record<'rare' | 'epic' | 'legendary', Effect>;
 
@@ -127,7 +138,7 @@ export interface Recipe {
 
 /** 요리 콘텐츠의 레시피를 도구의 레시피로 옮긴다. 지속은 종류별 슬롯 지속이다 */
 export const recipeOf = (r: CookRecipe): Recipe => ({
-  id: r.id, name: r.name, kind: r.kind, cost: { ...r.cost }, effect: effectOf(r.effects),
+  id: r.id, name: r.name, kind: r.kind, cost: { ...r.cost }, effect: effectOfRecipe(r),
   hours: COOK_KIND_RULES[r.kind].slotMs / HOUR_MS, axis: r.kind === 'lunch' ? 'idle' : 'manual',
 });
 
@@ -250,13 +261,6 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
   return { released, releasedGold, kept, keptGold };
 }
 
-/** 기운 얻기 기본 선택에서 빠지는 해역 — 그 배 단계로 갈 수 있는 해역 중 해역 순서로 가장 앞선 해역과 그 직전 해역.
- *  게임 규칙 모듈에 해역 기본 선택 함수가 생기면 그 호출로 바꾼다 */
-export function frontmostSpots(boat: number): SpotId[] {
-  const state = { ...newState(), boat };
-  return SPOTS.filter(s => canFishSpot(state, s.id)).slice(-2).map(s => s.id);
-}
-
 export interface BagSupplyOptions {
   axis: FlowAxis; margin: number;
   /** 집 기운 얻기가 열리는 배 단계. 이 단계 이상의 배 단계마다 낸다. 기본은 요리 콘텐츠의 해금 배 단계 */
@@ -289,7 +293,7 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   const unlock = o.unlockBoat ?? COOKING_UNLOCK_BOAT;
   const stages = [...new Set(SPOTS.map(s => s.boatTier))].filter(b => b >= unlock).sort((a, b) => a - b);
   return stages.flatMap(boat => {
-    const state = { ...newState(), boat }, front = new Set<SpotId>(frontmostSpots(boat));
+    const state = { ...newState(), boat }, front = new Set<SpotId>(energyDefaultExcluded(boat));
     return spotsAt(o.margin).filter(({ s }) => canFishSpot(state, s.id)).map(({ s, i }) => {
       const level = entryLevel(s.id) + o.margin;
       const r = effectRates(s.id, level, axisOf(o.axis, s.id, level), NO_EFFECT);

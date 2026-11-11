@@ -35,6 +35,23 @@ describe('메시지 창', () => {
     expect(list.children).toHaveLength(20);
   });
 
+  it('툴팁을 단 대목에 마우스를 올리면 목록이 뜨고 글줄 문구는 그대로다', () => {
+    const tip = { target: '40', rows: [{ label: '생명의 기운(일반)', value: '+38' }, { label: '생명의 기운(희귀)', value: '+2' }] };
+    render(<MessageLog log={[createMessage(1, '생명의 기운 40개를 얻었어요!', { tone: 'gold', tip })]} />);
+    expect(screen.getByRole('log')).toHaveTextContent('생명의 기운 40개를 얻었어요!');
+    fireEvent.mouseEnter(screen.getByText('40'));
+    const bubble = screen.getByRole('tooltip');
+    expect(bubble).toHaveTextContent('생명의 기운(일반)');
+    expect(bubble).toHaveTextContent('+38');
+    expect(bubble).toHaveTextContent('생명의 기운(희귀)');
+  });
+
+  it('툴팁 대목이 글줄에 없으면 툴팁 없이 문구만 그린다', () => {
+    render(<MessageLog log={[createMessage(1, '다른 문구', { tip: { target: '40', rows: [] } })]} />);
+    expect(screen.getByRole('log')).toHaveTextContent('다른 문구');
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
   it('펼치기 버튼 없이 바로 기록을 보인다', () => {
     render(<MessageLog log={logOf(3)} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();

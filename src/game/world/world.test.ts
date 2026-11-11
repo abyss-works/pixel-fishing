@@ -732,8 +732,7 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
     expect(ids('walvisbay')).toEqual(port);
-    // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
-    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'ferry', 'exit']);
+    expect(ids('colombo')).toEqual(port);
   });
   it('같은 거점 안의 시설 영역은 서로 겹치지 않는다', () => {
     for (const pack of Object.values(BASE_PACKS)) {

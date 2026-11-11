@@ -15,6 +15,12 @@ describe('메시지 피드', () => {
     expect(createMessage(3, '태평양에 들어섰어요.', { tone: 'info' }).tone).toBe('info');
   });
 
+  it('글줄의 한 대목에 툴팁 목록을 달 수 있고 달지 않으면 없다', () => {
+    const tip = { target: '40', rows: [{ label: '생명의 기운(일반)', value: '+38' }] };
+    expect(createMessage(1, '생명의 기운 40개를 얻었어요!', { tip }).tip).toEqual(tip);
+    expect(createMessage(2, '항구에 닿았다.').tip).toBeUndefined();
+  });
+
   it('톤을 넘기지 않으면 문구와 무관하게 info다 — 문구로 톤을 추정하지 않는다', () => {
     for (const text of [REJECT_TEXT['not-enough-gold'], '전시 중에는 팔리지 않아요.', '참치 획득!']) {
       expect(createMessage(1, text).tone).toBe('info');

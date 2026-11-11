@@ -62,5 +62,8 @@ export const fmtLevel = (n: number): string => `Lv.${n}`;
 /** 소수 둘째 자리까지 보이고 끝의 0은 뺀다(10, 12.5, 31.25). 효과 비율처럼 레벨마다 자리가 달라지는 값에 쓴다 */
 export const fmtDecimal2 = (n: number): string => String(Number(n.toFixed(2)));
 
+/** 확률에 직접 더하는 값 `+N%p` - 소수 둘째 자리까지, 끝의 0은 뺀다. 유물 효과와 부엌 창이 같은 표기를 쓴다 */
+export const fmtPlusPoint = (n: number): string => `+${fmtDecimal2(n)}%p`;
+
 /** 기본 규칙 배수 `N배` - 정수면 소수점 없이, 아니면 필요한 자리만 쓴다 */
 export const fmtMult = (n: number): string => `${fmtDecimal2(n)}배`;

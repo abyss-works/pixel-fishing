@@ -8,7 +8,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockPlan, applyAutoLock, addItem, takeItem, usableBait, rarityWeightOf, baitCost,
+  autoLockPlan, applyAutoLock, addItem, takeItem, rarityWeightOf,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
@@ -22,6 +22,7 @@ import { WALK_SPEED } from './balance';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
 import { idleDialsOf } from './power';
+import { COOK_STORAGE_CAP, LEGACY_BAIT_REFUND } from '../content/cooking';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -666,7 +667,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급 + 개체화', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };
     const st = mig(legacy);
-    expect(st.v).toBe(8);
+    expect(st.v).toBe(9);
     expect(st.gold).toBe(777);
     expect(st.rod).toBe(5);
     expect(st.boat).toBe(1);
@@ -698,7 +699,7 @@ describe('R18b: 세이브 마이그레이션', () => {
       variantCaught: { crucian: 2 },
       variantMaxSize: { crucian: 30 }, variantFirstCaught: { crucian: '2026-08-10' },
     });
-    expect(st.v).toBe(8);
+    expect(st.v).toBe(9);
     expect(dexRecord(st, 'crucian', 'normal')).toEqual({ count: 3, maxSize: 21, first: '2026-08-01' });
     expect(dexRecord(st, 'crucian', 'variant')).toEqual({ count: 2, maxSize: 30, first: '2026-08-10' });
     expect(dexRecord(st, 'carp', 'normal')).toEqual({ count: 2, maxSize: null, first: null });
@@ -742,8 +743,8 @@ describe('R18b: 세이브 마이그레이션', () => {
   });
 
   it('구세이브에 없는 신규 필드는 기본값으로 채워진다 — v를 올리지 않는 근거', () => {
-    // migrate가 `{...newState(), …}`로 끝나므로 가산 필드는 마이그레이션 스텝 없이 자가 치유된다.
-    // 운영이 아직 v7이라 8→9 스텝을 만들면 아무도 안 거치는 링크가 된다.
+    // migrate가 `{...newState(), …}`로 끝나므로 환불처럼 한 번만 일어나야 하는 변환이 아닌 가산 필드는
+    // 마이그레이션 스텝 없이 자가 치유된다.
     const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.location).toEqual({ kind: 'base', id: 'home' });
     expect(st.visited).toEqual([]);
@@ -767,9 +768,9 @@ describe('R18b: 세이브 마이그레이션', () => {
     }
   });
 
-  it('v4 → v8: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
+  it('v4 → v9: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
     const st = mig({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
-    expect(st.v).toBe(8);
+    expect(st.v).toBe(9);
     expect('locked' in st).toBe(false);
     expect(st.gold).toBe(10);
   });
@@ -780,7 +781,7 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect(st.bag.map(i => [i.fishId, i.locked])).toEqual([['carp', true], ['crucian', false]]);
   });
 
-  it('v8 재적용은 무해 (멱등) — 개체 uid도 보존된다', () => {
+  it('이미 최신인 세이브의 재적용은 무해 (멱등) — 개체 uid도 보존된다', () => {
     const once = mig({ v: 7, caught: { carp: 1 }, bag: ['carp'], coupons: [], locked: [] });
     const twice = mig(JSON.parse(JSON.stringify(once)));
     expect(twice).toEqual(once);
@@ -812,6 +813,137 @@ describe('R18b: 세이브 마이그레이션', () => {
     expect(mig(null)).toEqual(newState());
     expect(mig('garbage')).toEqual(newState());
     expect(mig({ gold: 'hax' }).gold).toBe(0);
+  });
+});
+
+describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
+  const mig = (raw: unknown) => migrate(raw);
+  const START = '2026-11-12T00:00:00.000Z';
+  const END = '2026-11-12T09:00:00.000Z';
+
+  it('v8 → v9: 이전 미끼 개수를 정가로 골드에 더하고 아이템 행과 activeBait를 지운다', () => {
+    const st = mig({ v: 8, items: { 'bait-rare': 3, 'bait-epic': 1, x: 5 }, activeBait: 'bait-rare', gold: 10 });
+    expect(st.v).toBe(9);
+    expect(st.gold).toBe(10 + 3 * LEGACY_BAIT_REFUND['bait-rare'] + LEGACY_BAIT_REFUND['bait-epic']);
+    expect(st.gold).toBe(1610);
+    expect(st.items).toEqual({ x: 5 });
+    expect('activeBait' in st).toBe(false);
+    expect(st.baitRefund).toEqual({ gold: 1600, items: { 'bait-rare': 3, 'bait-epic': 1 } });
+    expect(st.cooking).toBeNull();
+    expect(st.slots).toEqual({ lunch: null, bait: null });
+    expect(st.energyTargets).toEqual({});
+  });
+
+  it('v8 → v9: 네 종류 모두 정가표대로 환불한다', () => {
+    const st = mig({ v: 8, gold: 0, items: { 'bait-common': 4, 'bait-rare': 1, 'bait-epic': 1, 'bait-legendary': 1 } });
+    expect(st.gold).toBe(4 * 25 + 200 + 1000 + 2500);
+    expect(st.baitRefund).toEqual({
+      gold: st.gold, items: { 'bait-common': 4, 'bait-rare': 1, 'bait-epic': 1, 'bait-legendary': 1 },
+    });
+    expect(st.items).toEqual({});
+  });
+
+  it('v8 → v9: 환불할 미끼가 없으면 영수증은 null이고 골드와 아이템은 그대로다', () => {
+    const st = mig({ v: 8, gold: 7, items: { x: 2 }, activeBait: 'bait-epic' });
+    expect(st.baitRefund).toBeNull();
+    expect(st.gold).toBe(7);
+    expect(st.items).toEqual({ x: 2 });
+    expect('activeBait' in st).toBe(false);
+  });
+
+  it('v8 → v9: 활성 미끼만 있고 보유가 0이어도 영수증은 없고 activeBait는 사라진다', () => {
+    const st = mig({ v: 8, gold: 0, items: { 'bait-rare': 0 }, activeBait: 'bait-rare' });
+    expect(st.baitRefund).toBeNull();
+    expect(st.gold).toBe(0);
+    expect('activeBait' in st).toBe(false);
+  });
+
+  it('v8 → v9: 깨진 개수와 비정수는 환불하지 않고, 골드 필드가 없어도 환불은 0에서 시작한다', () => {
+    const st = mig({ v: 8, items: { 'bait-rare': 1.5, 'bait-epic': -2, 'bait-common': 2 } });
+    expect(st.gold).toBe(50);
+    expect(st.baitRefund).toEqual({ gold: 50, items: { 'bait-common': 2 } });
+  });
+
+  it('v9 세이브를 다시 migrate해도 그대로다 (멱등) — 이미 받은 환불을 되풀이하지 않는다', () => {
+    const once = mig({ v: 8, items: { 'bait-rare': 3, x: 5 }, gold: 10 });
+    const twice = mig(JSON.parse(JSON.stringify(once)));
+    expect(twice).toEqual(once);
+    expect(twice.gold).toBe(610);
+    // v9 세이브에 같은 id의 아이템이 있어도 환불하지 않는다
+    const again = mig({ ...JSON.parse(JSON.stringify(once)), items: { 'bait-rare': 9 } });
+    expect(again.gold).toBe(610);
+    expect(again.items).toEqual({ 'bait-rare': 9 });
+  });
+
+  it('newState는 v9 기본 상태다', () => {
+    const s = newState();
+    expect(s).toMatchObject({ v: 9, cooking: null, slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
+    expect('activeBait' in s).toBe(false);
+  });
+
+  it('cooking 위생 — 유효한 조리는 그대로 살린다', () => {
+    const cooking = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+    expect(mig({ ...newState(), cooking }).cooking).toEqual(cooking);
+  });
+
+  it('cooking 위생 — 없는 레시피, 범위 밖 수량, 길이가 다른 bonus, 시각이 아닌 값은 조리 없음으로 접는다', () => {
+    const ok = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+    const bad: unknown[] = [
+      { ...ok, recipe: 'nope' }, { ...ok, recipe: 3 },
+      { ...ok, count: 0, bonus: [] }, { ...ok, count: 1.5 },
+      { ...ok, count: COOK_STORAGE_CAP + 1, bonus: new Array(COOK_STORAGE_CAP + 1).fill(false) },
+      { ...ok, bonus: [false] }, { ...ok, bonus: [false, 'x'] }, { ...ok, bonus: 'ff' },
+      { ...ok, startedAt: 'yesterday' }, { ...ok, startedAt: 5 },
+      'cooking', 7, [],
+    ];
+    for (const cooking of bad) expect(mig({ ...newState(), cooking }).cooking, JSON.stringify(cooking)).toBeNull();
+    expect(mig({ ...newState(), cooking: { ...ok, count: COOK_STORAGE_CAP, bonus: new Array(COOK_STORAGE_CAP).fill(false) } }).cooking)
+      .not.toBeNull();
+  });
+
+  it('slots 위생 — 슬롯 종류에 맞는 요리 id와 시각만 살린다', () => {
+    const st = mig({ ...newState(), slots: {
+      lunch: { id: 'cook-lunch-rare', endsAt: END }, bait: { id: 'cook-bait-epic', endsAt: END },
+    } });
+    expect(st.slots).toEqual({
+      lunch: { id: 'cook-lunch-rare', endsAt: END }, bait: { id: 'cook-bait-epic', endsAt: END },
+    });
+    // 종류가 어긋난 id(도시락 자리의 미끼 요리), 없는 id, 시각이 아닌 값
+    const crossed = mig({ ...newState(), slots: {
+      lunch: { id: 'cook-bait-epic', endsAt: END }, bait: { id: 'cook-lunch-rare', endsAt: END },
+    } });
+    expect(crossed.slots).toEqual({ lunch: null, bait: null });
+    const broken = mig({ ...newState(), slots: {
+      lunch: { id: 'nope', endsAt: END }, bait: { id: 'cook-bait-epic', endsAt: 'soon' },
+    } });
+    expect(broken.slots).toEqual({ lunch: null, bait: null });
+    for (const slots of [null, 3, 'x', [], { lunch: 'cook-lunch-rare' }]) {
+      expect(mig({ ...newState(), slots }).slots, JSON.stringify(slots)).toEqual({ lunch: null, bait: null });
+    }
+  });
+
+  it('energyTargets 위생 — boolean만 살리고 모르는 해역 키는 버리지 않는다', () => {
+    const st = mig({ ...newState(), energyTargets: { pond: true, sea: false, 'future-zone': true, bad: 1, worse: 'yes', nul: null } });
+    expect(st.energyTargets).toEqual({ pond: true, sea: false, 'future-zone': true });
+    for (const v of [null, 3, 'x', [true]]) expect(mig({ ...newState(), energyTargets: v }).energyTargets).toEqual({});
+  });
+
+  it('baitRefund 위생 — 모양이 맞는 영수증만 살리고 깨진 것은 null로 접는다', () => {
+    const good = { gold: 1600, items: { 'bait-rare': 3, 'bait-epic': 1 } };
+    expect(mig({ ...newState(), baitRefund: good }).baitRefund).toEqual(good);
+    for (const baitRefund of [
+      { gold: -1, items: { 'bait-rare': 1 } }, { gold: 1.5, items: { 'bait-rare': 1 } },
+      { gold: 10, items: 'x' }, { gold: 10, items: { 'bait-rare': 0 } }, { gold: 10, items: {} },
+      { gold: 'a', items: { 'bait-rare': 1 } }, null, 5, 'x',
+    ]) expect(mig({ ...newState(), baitRefund }).baitRefund, JSON.stringify(baitRefund)).toBeNull();
+    // 이전 미끼가 아닌 키와 깨진 개수는 걸러낸다
+    expect(mig({ ...newState(), baitRefund: { gold: 25, items: { 'bait-common': 1, junk: 2, 'bait-rare': 'x' } } }).baitRefund)
+      .toEqual({ gold: 25, items: { 'bait-common': 1 } });
+  });
+
+  it('모르는 아이템 키는 v8 → v9에서도 보존된다', () => {
+    const st = mig({ v: 8, items: { 'future-item': 3, 'energy-common': 2, 'bait-epic': 1 } });
+    expect(st.items).toEqual({ 'future-item': 3, 'energy-common': 2 });
   });
 });
 
@@ -895,10 +1027,8 @@ describe('라이선스 도감 조건 — 남은 어종 수', () => {
   });
 });
 
-describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치유)', () => {
+describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () => {
   const mig = (raw: unknown) => migrate(raw);
-  const usableOf = (items: Record<string, number>, active: string | null) =>
-    usableBait({ items, activeBait: active });
 
   it('migrate: tutorials 부재 → 빈 목록, 모르는 튜토리얼 id는 버린다', () => {
     expect(mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] }).tutorials).toEqual([]);
@@ -936,53 +1066,33 @@ describe('아이템 · 미끼 (세이브 v8 접기 — 가산 필드 자가 치�
       .toEqual({ shirt: 2, pants: 2, hat: null });
   });
 
-  it('migrate: items/activeBait 부재 → 기본값으로 채워진다 (마이그레이션 스텝 없음)', () => {
-    const st = mig({ v: 8, gold: 5, bag: [], dex: {}, coupons: [] });
+  it('migrate: items 부재 → 빈 맵으로 채워진다', () => {
+    const st = mig({ v: 9, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.items).toEqual({});
-    expect(st.activeBait).toBeNull();
-    expect(st.v).toBe(8); // 버전 접기 — 어느 링크도 새로 생기지 않는다
+    expect(st.v).toBe(9);
   });
 
   it('migrate: 깨진 items 행은 버리고, 모르는 키는 살린다, 0개 행은 접는다', () => {
     const st = mig({
-      v: 8,
-      items: { 'bait-common': 2, junk: -1, broken: 1.5, huge: 1e7, 'future-item': 0 },
+      v: 9,
+      items: { 'energy-common': 2, junk: -1, broken: 1.5, huge: 1e7, 'future-item': 0, 'future-kept': 4 },
     } as never);
-    expect(st.items).toEqual({ 'bait-common': 2 }); // future-item(모르는 id)은 살아야 하지만 0이라 접힘
+    expect(st.items).toEqual({ 'energy-common': 2, 'future-kept': 4 }); // future-item은 0이라 접힘
   });
 
-  it('migrate: activeBait는 레지스트리에 있는 id만 살린다 — 보유량 검증은 하지 않는다', () => {
-    expect(mig({ v: 8, activeBait: 'hax' }).activeBait).toBeNull();
-    expect(mig({ v: 8, activeBait: 'bait-epic', items: {} }).activeBait).toBe('bait-epic');
-    expect(mig({ v: 8, activeBait: 42 }).activeBait).toBeNull(); // 문자열만 유효
-  });
-
-  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어. 소진돼도 활성 유지', () => {
+  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어', () => {
     let st = newState();
-    st = addItem(st, 'bait-common', 3);
-    expect(st.items['bait-common']).toBe(3);
-    expect(addItem(st, 'bait-common', 0)).toBe(st); // 무효 수량은 무변환
-    st = takeItem(st, 'bait-common');
-    st = takeItem(st, 'bait-common');
-    st = takeItem(st, 'bait-common');
-    expect(st.items['bait-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
-    expect(takeItem(st, 'bait-common')).toBe(st);     // 더 떨어뜨리지 않는다
-    expect(usableOf(st.items, 'bait-common')).toBeUndefined(); // 효과 무음
+    st = addItem(st, 'energy-common', 3);
+    expect(st.items['energy-common']).toBe(3);
+    expect(addItem(st, 'energy-common', 0)).toBe(st); // 무효 수량은 무변환
+    st = takeItem(st, 'energy-common');
+    st = takeItem(st, 'energy-common');
+    st = takeItem(st, 'energy-common');
+    expect(st.items['energy-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
+    expect(takeItem(st, 'energy-common')).toBe(st);     // 더 떨어뜨리지 않는다
   });
 
-  it('baitCost — 진주 상인의 저울은 미끼값을 깎지 않는다(정가)', () => {
-    expect(baitCost({ artifacts: [] }, 200, 2)).toBe(400);
-    expect(baitCost({ artifacts: ['varuna-scale'] }, 200, 2)).toBe(400);
-    expect(baitCost({ artifacts: ['varuna-scale'] }, 25, 1)).toBe(25);
-  });
-
-  it('usableBait — 보유량 > 0인 유효 미끼만 행을 돌려준다 (오버레이·리듀서 단일 출처)', () => {
-    expect(usableOf({}, null)).toBeUndefined();
-    expect(usableOf({}, 'bait-rare')).toBeUndefined();
-    expect(usableOf({ 'bait-legendary': 1 }, 'bait-legendary')?.targetRarity).toBe('legendary');
-  });
-
-  it('미끼 효과 = 등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {
+  it('등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {
     // 대상: 잉어(rare). base 예산 합 T, baited 합 T+W → pct(W)=W/T vs pct'=2W/(T+W)
     for (const spotId of ['pond', 'sea', 'barrierreef'] as const) { // 오버라이드 수역 포함
       const pool = FISH.filter(f => f.spot === spotId);

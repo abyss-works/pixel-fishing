@@ -22,6 +22,7 @@ import Sidebar from '../../../layouts/sidebar';
 import { pressSheetTab } from '../../../layouts/sidebar/sheet';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import { isGuest } from '../../../../features/account/service/accountActions';
 
 interface GameTabsProps {
   /** 길드 판매가 보너스 비율 */
@@ -118,7 +119,7 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} sellBonus={props.sellBonus} dispatch={props.dispatch} setToast={props.setToast} />}
+      {activeTab === 'bag' && <BagTab game={game} guest={isGuest(props.account)} sellBonus={props.sellBonus} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
