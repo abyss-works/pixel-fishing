@@ -158,10 +158,9 @@ export function parseCostSpec(spec: string): { id: string; cost: Partial<Record<
     const [grade, count, ...rest] = part.split(':');
     if (grade === undefined || count === undefined || rest.length > 0 || grade === '' || count.trim() === '') throw new Error(usage);
     if (!(RARITY_ORDER as readonly string[]).includes(grade)) throw new Error(`알 수 없는 등급입니다: ${grade} (${RARITY_ORDER.join(', ')} 중 하나)`);
-    if (grade in cost) throw new Error(`--cost에 같은 등급이 두 번 있습니다: ${grade}`);
-    const n = Number(count);
-    if (!Number.isFinite(n)) throw new Error(usage);
-    cost[grade as RarityId] = n;
+    if (Object.hasOwn(cost, grade)) throw new Error(`--cost에 같은 등급이 두 번 있습니다: ${grade}`);
+    if (!/^\d+$/.test(count)) throw new Error(usage);
+    cost[grade as RarityId] = Number(count);
   }
   return { id: spec.slice(0, eq), cost };
 }
@@ -298,6 +297,9 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
   return { released, releasedGold, kept, keptGold };
 }
 
+/** 집에 들르는 간격의 하한(시간) */
+export const MIN_VISIT_HOURS = 0.25;
+
 export interface BagSupplyOptions {
   axis: FlowAxis; margin: number;
   /** 집 기운 얻기가 열리는 배 단계. 이 단계 이상의 배 단계마다 낸다. 기본은 요리 콘텐츠의 해금 배 단계 */
@@ -333,7 +335,7 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   if (!(o.hours > 0)) throw new Error('낚는 시간은 0보다 커야 합니다(시간)');
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
   if (o.manualShare !== undefined && !(o.manualShare >= 0 && o.manualShare <= 1)) throw new Error('수동 비율은 0 이상 1 이하여야 합니다');
-  if (o.visitHours !== undefined && !(o.visitHours > 0)) throw new Error('방문 간격은 0보다 커야 합니다(시간)');
+  if (o.visitHours !== undefined && !(o.visitHours >= MIN_VISIT_HOURS)) throw new Error(`방문 간격은 ${MIN_VISIT_HOURS}시간 이상이어야 합니다`);
   const unlock = o.unlockBoat ?? COOKING_UNLOCK_BOAT;
   const stages = [...new Set(SPOTS.map(s => s.boatTier))].filter(b => b >= unlock).sort((a, b) => a - b);
   const visit = Math.min(o.visitHours ?? o.hours, o.hours);
@@ -353,7 +355,14 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
         return { r, share: m.share, cum, total };
       });
       const cap = capOfBoat(boat);
-      const counts = segments.map(seg => sources.map(src => Math.round(src.r.catchesPerHour * seg * src.share)));
+      // 반올림은 누적 기대값에 한 번만 하고 구간별 수는 그 차이로 정해 구간이 많아도 오차가 쌓이지 않는다
+      let elapsed = 0;
+      const upTo = (src: (typeof sources)[number], hours: number) => Math.round(src.r.catchesPerHour * hours * src.share);
+      const counts = segments.map(seg => {
+        const from = elapsed;
+        elapsed += seg;
+        return sources.map(src => upTo(src, elapsed) - upTo(src, from));
+      });
       const n = counts.reduce((a, c) => a + c.reduce((x, y) => x + y, 0), 0);
       const rand = rng(o.seed + i);
       const kept = zeroGrades(), released = zeroGrades();

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../src/game/content/spots';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
-import { RECIPES, bagSupplyRows, parseCostSpec, recipeRows, recipesCovered, withCostOverrides } from './cooking';
+import { BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, bagSupplyRows, parseCostSpec, recipeRows, recipesCovered, windowRows, withCostOverrides } from './cooking';
+import { DEFAULT_SEED } from './dist';
+import { NO_EFFECT, effectRates } from './effects';
+import { axisOf } from './progress';
 import { parseArgs, runCli } from './report';
 
 const bait = RECIPES.find(r => r.id === 'cook-bait-epic')!;
@@ -54,7 +57,7 @@ describe('레시피 기운 수량 덮어쓰기', () => {
 
   it('명령줄 형식을 id와 등급별 수량으로 읽고 형식이 틀리면 오류다', () => {
     expect(parseCostSpec('cook-bait-epic=common:50,epic:4')).toEqual({ id: 'cook-bait-epic', cost: { common: 50, epic: 4 } });
-    for (const bad of ['', 'cook-bait-epic', 'cook-bait-epic=', 'cook-bait-epic=common', 'cook-bait-epic=common:x', '=common:1', 'cook-bait-epic=common:1,common:2']) {
+    for (const bad of ['', 'cook-bait-epic', 'cook-bait-epic=', 'cook-bait-epic=common', 'cook-bait-epic=common:x', 'cook-bait-epic=common:-1', 'cook-bait-epic=common:1.5', 'cook-bait-epic=common:1e1', '=common:1', 'cook-bait-epic=common:1,common:2']) {
       expect(() => parseCostSpec(bad), bad).toThrow(/--cost/);
     }
     expect(() => parseCostSpec('cook-bait-epic=mythic:1')).toThrow(/등급/);
@@ -97,9 +100,20 @@ describe('집 기운 얻기 공급 옵션', () => {
     for (const r of a) expect(grades(r.kept) + grades(r.released)).toBeCloseTo(r.catches, 5);
   });
 
+  it('구간이 많아도 낚은 수는 시간당 캐치 수 x 시간과 반올림 1 이내로 맞는다', () => {
+    const rows = bagSupplyRows({ ...bag, hours: 9, visitHours: 0.25, manualShare: 0.01 });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      const per = (axis: 'idle' | 'manual') => effectRates(r.spot, r.level, axisOf(axis, r.spot, r.level), NO_EFFECT).catchesPerHour;
+      expect(Math.abs(r.catches - 9 * (0.99 * per('idle') + 0.01 * per('manual')))).toBeLessThanOrEqual(1);
+    }
+    const plain = bagSupplyRows({ ...bag, hours: 9, visitHours: 0.25 });
+    for (const r of plain) expect(Math.abs(r.catches - 9 * effectRates(r.spot, r.level, axisOf('idle', r.spot, r.level), NO_EFFECT).catchesPerHour)).toBeLessThanOrEqual(0.5 + 1e-9);
+  });
+
   it('잘못된 수동 비율과 방문 간격은 오류다', () => {
     for (const m of [-0.1, 1.1, Number.NaN]) expect(() => bagSupplyRows({ ...bag, manualShare: m })).toThrow(/수동 비율/);
-    for (const v of [0, -1, Number.NaN]) expect(() => bagSupplyRows({ ...bag, visitHours: v })).toThrow(/방문 간격/);
+    for (const v of [0, -1, 0.1, Number.NaN]) expect(() => bagSupplyRows({ ...bag, visitHours: v })).toThrow(/방문 간격/);
   });
 });
 
@@ -122,7 +136,8 @@ describe('명령줄 옵션', () => {
     expect(parseArgs(['recipes'])).toMatchObject({ manualShare: null, visitHours: null, rodOffset: null, cost: {} });
     expect(() => parseArgs(['window', '--manual-share', '0.5'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['recipes', '--manual-share', '1.5'])).toThrow(/0 이상 1 이하/);
-    expect(() => parseArgs(['recipes', '--visit-hours', '0'])).toThrow(/0보다/);
+    expect(() => parseArgs(['recipes', '--visit-hours', '0'])).toThrow(/0.25/);
+    expect(() => parseArgs(['recipes', '--visit-hours', '0.1'])).toThrow(/0.25/);
     expect(() => parseArgs(['recipes', '--rod-offset', '-5'])).toThrow(/-4 이상/);
     expect(() => parseArgs(['recipes', '--rod-offset', '1.5'])).toThrow(/정수/);
   });
@@ -137,11 +152,40 @@ describe('명령줄 옵션', () => {
     expect(json.recipes.costOverrides).toEqual({ 'cook-bait-epic': { common: 50, epic: 4 } });
   });
 
-  it('옵션이 없으면 결과에 새 항목이 없다', () => {
+  it('옵션이 없으면 결과가 직접 계산한 값과 같고 새 항목이 없다', () => {
     const json = JSON.parse(runCli(['recipes', '--trials', '2', '--json']).stdout);
-    expect(Object.keys(json.recipes).sort()).toEqual(['axis', 'bag', 'hours', 'margin', 'rows', 'seed', 'trials']);
-    const w = JSON.parse(runCli(['window', '--bait', 'epic', '--trials', '2', '--json']).stdout);
-    expect(Object.keys(w.window).sort()).toEqual(['effect', 'margin', 'minutes', 'rows', 'seed', 'trials']);
+    const direct = { axis: 'idle', margin: 0, hours: LUNCH_HOURS, trials: 2, seed: DEFAULT_SEED, rows: recipeRows({ axis: 'idle', margin: 0 }), bag: bagSupplyRows({ axis: 'idle', margin: 0, hours: LUNCH_HOURS, trials: 2, seed: DEFAULT_SEED }) };
+    expect(json.recipes).toEqual(JSON.parse(JSON.stringify(direct)));
+    const w = JSON.parse(runCli(['window', '--bait', 'epic', '--trials', '2', '--json']).stdout).window;
+    const wd = { effect: BAIT_EFFECTS.epic, minutes: BAIT_WINDOW_MIN, margin: 0, trials: 2, seed: DEFAULT_SEED, rows: windowRows({ axis: 'manual', effect: BAIT_EFFECTS.epic, margin: 0, minutes: BAIT_WINDOW_MIN, trials: 2, seed: DEFAULT_SEED }) };
+    expect(w).toEqual(JSON.parse(JSON.stringify(wd)));
+    const text = runCli(['window', '--bait', 'epic', '--trials', '2']).stdout;
+    expect(text).toContain('등급 미끼의 제작 비용(기운)과 사람의 판정 실력은 넣지 않는다');
+    expect(text).not.toContain('재료 비용');
+  });
+
+  it('window의 재료 비용 순손익은 같은 입력의 recipes 순손익과 같다', () => {
+    const cost = 'cook-bait-epic=common:50,epic:4';
+    for (const extra of [[], ['--axis', 'manual']]) {
+      const w = JSON.parse(runCli(['window', '--recipe', 'cook-bait-epic', '--cost', cost, '--trials', '1', '--json', ...extra]).stdout).window.material;
+      const r = JSON.parse(runCli(['recipes', '--recipe', 'cook-bait-epic', '--cost', cost, '--trials', '1', '--json', ...extra]).stdout).recipes;
+      expect(w.axis).toBe(extra.length ? 'manual' : 'idle');
+      expect(w.rows.map((x: { spot: string; net: number | null; loss: number; gain: number; collectHours: number | null }) => [x.spot, x.net, x.loss, x.gain, x.collectHours]))
+        .toEqual(r.rows.map((x: { spot: string; net: number | null; loss: number; gain: number; collectHours: number | null }) => [x.spot, x.net, x.loss, x.gain, x.collectHours]));
+    }
+    const text = runCli(['window', '--recipe', 'cook-bait-epic', '--cost', cost, '--trials', '1']).stdout;
+    expect(text).toContain('방치');
+    expect(text).toContain('recipes와 같은 기준');
+    expect(text).not.toContain('등급 미끼의 제작 비용(기운)과 사람의 판정 실력은 넣지 않는다');
+  });
+
+  it('--manual-share와 --axis를 함께 주면 공급은 비율을 따르고 출력에 밝힌다', () => {
+    const text = runCli(['recipes', '--recipe', 'cook-bait-epic', '--trials', '1', '--axis', 'manual', '--manual-share', '0.5']).stdout;
+    expect(text).toContain('공급의 낚시 방식은 --axis가 아니라 이 비율로 정하고');
+  });
+
+  it('--cost의 레시피 id가 객체 기본 속성 이름이어도 중복이 아니라 없는 레시피다', () => {
+    expect(() => parseArgs(['recipes', '--cost', 'constructor=common:1'])).toThrow(/알 수 없는 레시피/);
   });
 
   it('--rod-offset은 공급 표의 낚싯대만 바꾸고 순손익 표는 --margin을 따른다', () => {

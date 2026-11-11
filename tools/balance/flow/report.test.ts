@@ -28,7 +28,7 @@ describe('명령 인자', () => {
   it('인자가 없으면 네 명령 전부와 기본값이다', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
-      legendAt: null, axis: 'idle', maxDays: 365, help: false,
+      legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
       effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
     });

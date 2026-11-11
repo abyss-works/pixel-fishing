@@ -34,7 +34,7 @@ import type { RarityId } from '../../../src/game/content/rarity';
 import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
 import { COOKING_UNLOCK_BOAT } from '../../../src/game/content/cooking';
-import { BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, bagSupplyRows, baitEffect, effectPlan, materialLoss, parseCostSpec, recipeRows, recipesCovered, windowRows, withCostOverrides } from './cooking';
+import { BAIT_WINDOW_MIN, LUNCH_HOURS, MIN_VISIT_HOURS, RECIPES, bagSupplyRows, baitEffect, effectPlan, parseCostSpec, recipeRows, recipesCovered, windowRows, withCostOverrides } from './cooking';
 import type { BagSupplyRow, CostOverrides, RecipeRow, WindowRow } from './cooking';
 
 export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window' | 'recipes';
@@ -53,6 +53,8 @@ export interface FlowOptions {
   /** 전설 보장 번호. null이면 제품 범위의 처음, 가운데, 끝 번호를 모두 낸다 */
   legendAt: number | null;
   axis: FlowAxis;
+  /** --axis를 직접 줬는가. window의 재료 모으기 방식이 recipes와 같은 규칙(줬으면 그 방식, 아니면 방치)을 따르게 한다 */
+  axisGiven: boolean;
   maxDays: number;
   help: boolean;
   /** dist의 난수 시드와 시도 횟수 */
@@ -158,7 +160,7 @@ function numberOf(flag: string, raw: string): number {
 
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
-    commands: [], override: null, json: false, legendAt: null, axis: 'idle', maxDays: 365, help: false,
+    commands: [], override: null, json: false, legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
     seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
     recipe: null, hours: LUNCH_HOURS, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
   };
@@ -211,7 +213,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       } else if (a === '--cost') {
         given.push(a);
         const { id, cost } = parseCostSpec(raw);
-        if (id in o.cost) throw new Error(`--cost에 같은 레시피가 두 번 있습니다: ${id}`);
+        if (Object.hasOwn(o.cost, id)) throw new Error(`--cost에 같은 레시피가 두 번 있습니다: ${id}`);
         o.cost[id] = cost;
       } else if (a === '--manual-share') {
         given.push(a);
@@ -220,7 +222,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       } else if (a === '--visit-hours') {
         given.push(a);
         o.visitHours = numberOf(a, raw);
-        if (!(o.visitHours > 0)) throw new Error('--visit-hours는 0보다 커야 합니다(시간)');
+        if (!(o.visitHours >= MIN_VISIT_HOURS)) throw new Error(`--visit-hours는 ${MIN_VISIT_HOURS} 이상이어야 합니다(시간)`);
       } else if (a === '--rod-offset') {
         given.push(a);
         o.rodOffset = numberOf(a, raw);
@@ -283,6 +285,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     if (lunchSlot && o.axis !== 'idle') throw new Error('도시락 효과는 방치 캐치에만 걸립니다. --axis idle과 함께 쓰세요');
   }
   if (o.axis === 'perfect' && !(command === 'effects' || command === 'window')) throw new Error('--axis perfect는 effects, window 명령에서만 쓸 수 있습니다');
+  o.axisGiven = axisGiven;
   if (o.withCost && o.recipe === null) throw new Error('--with-cost에는 --recipe가 필요합니다');
   if (command === 'window' && !axisGiven && !lunchSlot) o.axis = 'manual';
   checkEffect(o.effect);
@@ -313,7 +316,12 @@ export interface FlowResult {
   window?: {
     effect: Effect; minutes: number; margin: number; trials: number; seed: number; rows: WindowRow[];
     /** --recipe와 --cost를 준 경우: 덮어쓴 기운 수량으로 모은 재료의 판매 손실, 모으는 시간, 창의 골드 증가에서 뺀 순손익 */
-    material?: { recipe: string; cost: Partial<Record<RarityId, number>>; rows: { spot: SpotId; level: number; loss: number; collectHours: number | null; net: number | null }[] };
+    material?: {
+      recipe: string; cost: Partial<Record<RarityId, number>>;
+      /** 재료를 모으는 낚시 방식과 레시피의 효과 지속(시간). 순손익은 recipes와 같은 기준(그 레시피의 효과 x 슬롯 지속)이다 */
+      axis: FlowAxis; hours: number;
+      rows: { spot: SpotId; level: number; loss: number; collectHours: number | null; gain: number; net: number | null }[];
+    };
   };
   recipes?: {
     axis: FlowAxis; margin: number; hours: number; trials: number; seed: number; rows: RecipeRow[]; bag: BagSupplyRow[];
@@ -367,14 +375,13 @@ export function runFlow(o: FlowOptions): FlowResult {
     if (o.commands.includes('window')) {
       const rows = windowRows({ axis: o.axis, effect: o.effect, margin: o.margin, minutes: o.windowMinutes, trials: o.trials, seed: o.seed });
       res.window = { effect: o.effect, minutes: o.windowMinutes, margin: o.margin, trials: o.trials, seed: o.seed, rows };
-      const costed = withCostOverrides(RECIPES, o.cost).find(r => r.id === o.recipe && r.id in o.cost);
+      const costed = withCostOverrides(RECIPES, o.cost).find(r => r.id === o.recipe && Object.hasOwn(o.cost, r.id));
+      const gather: FlowAxis = o.axisGiven ? o.axis : 'idle';
       if (costed) {
         res.window.material = {
           recipe: costed.id, cost: costed.cost,
-          rows: rows.map(r => {
-            const m = materialLoss(costed, r.spot, r.level, o.axis);
-            return { spot: r.spot, level: r.level, loss: m.loss, collectHours: m.feasible ? m.collect : null, net: m.feasible ? r.goldGain - m.loss : null };
-          }),
+          axis: gather, hours: costed.hours,
+          rows: recipeRows({ axis: gather, margin: o.margin, recipes: [costed] }).map(r => ({ spot: r.spot, level: r.level, loss: r.loss, collectHours: r.collectHours, gain: r.gain, net: r.net })),
         };
       }
     }
@@ -431,7 +438,7 @@ function planAssumptions(): string[] {
   ];
 }
 
-function assumptionText(command: Command, o: FlowResult['options']): string {
+function assumptionText(command: Command, o: FlowResult['options'], windowMaterial = false): string {
   const lines: string[] = [BASIC_ASSUMPTION];
   if (command === 'transition') {
     lines.push('새 계정이 직전 해역에서 낚아 전환 골드를 모으고 배 명성 하한을 채운 시점에 바로 옮긴다', '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', o.bounty ? '의뢰와 토벌을 매일 수행하는 경우다' : '의뢰와 토벌은 하지 않는 경우다');
@@ -482,7 +489,14 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 창 안은 효과를 넣고 창 밖은 효과 없음이다. 효과는 제품의 등급 가중치 효과 합산과 폼 가중치 경로로 적용한다`,
       '창 안의 기대 캐치 수는 그 조건의 캐치 속도 x 창 길이 x 등급 비율이고, 골드와 명성 증가는 효과 없음 대비 시간당 차이 x 창 길이다',
       '도감 단축은 한 해역에서만 낚을 때 창 하나를 먼저 쓰고 이후 효과 없이 낚는 평균 시간이 효과 없이 낚는 평균 시간보다 줄어든 양이다. 창 안의 캐치 수는 기대 캐치 수를 반올림하고, 같은 시드로 효과 없음과 짝지어 견준다. 어종 천장은 넣지 않는다',
-      '등급 미끼의 제작 비용(기운)과 사람의 판정 실력은 넣지 않는다',
+      ...(windowMaterial
+        ? [
+          '재료 비용 표는 --cost로 덮어쓴 기운 수량의 재료를 그 해역 낚시로만 모으는 경우다.',
+          '재료 비용 표의 효과는 그 레시피의 효과와 슬롯 지속으로 재고 recipes의 순손익과 같은 기준이다.',
+          '재료를 모으는 낚시 방식은 --axis를 줬으면 그 방식이고 아니면 방치다.',
+          '사람의 판정 실력은 넣지 않는다.',
+        ]
+        : ['등급 미끼의 제작 비용(기운)과 사람의 판정 실력은 넣지 않는다']),
     );
   } else if (command === 'recipes') {
     lines.push(
@@ -872,10 +886,10 @@ function windowText(w: NonNullable<FlowResult['window']>, o: FlowResult['options
   ));
   if (w.material) {
     const m = w.material, c = RARITY_ORDER.filter(g => m.cost[g]).map(g => `${RARITY[g].name} ${m.cost[g]}`).join(', ');
-    out.push(`\n## 재료 비용 — ${m.recipe}의 덮어쓴 기운 ${c}를 ${AXIS_LABEL[o.axis]} 낚시로 그 해역에서 모을 때(순손익 = 창의 골드 증가 - 판매 손실)`);
+    out.push(`\n## 재료 비용 — ${m.recipe}의 덮어쓴 기운 ${c}를 ${AXIS_LABEL[m.axis]} 낚시로 그 해역에서 모을 때(효과 지속 ${m.hours >= 1 ? `${m.hours}시간` : `${m.hours * 60}분`}, 순손익 = 지속 동안의 골드 증가 - 판매 손실. recipes와 같은 기준)`);
     out.push(table(
-      ['해역', '낚싯대', '재료 모으는 시간', '판매 손실(G)', '순손익(G)'],
-      m.rows.map(r => [nameOf(r.spot), `Lv${r.level}(요구 ${info.get(r.spot)!.powerReq})`, r.collectHours === null ? '모을 수 없음' : hrs(r.collectHours), n0(r.loss), r.net === null ? '—' : (r.net >= 0 ? '+' : '') + n0(r.net)]),
+      ['해역', '낚싯대', '재료 모으는 시간', '판매 손실(G)', '수입 증가(G)', '순손익(G)'],
+      m.rows.map(r => [nameOf(r.spot), `Lv${r.level}(요구 ${info.get(r.spot)!.powerReq})`, r.collectHours === null ? '모을 수 없음' : hrs(r.collectHours), n0(r.loss), n0(r.gain), r.net === null ? '—' : (r.net >= 0 ? '+' : '') + n0(r.net)]),
     ));
   }
   out.push(`\n## 창 하나가 도감 완성 시간을 줄이는 양 (한 해역에서 낚을 때 평균 실질 낚시 시간, 몬테카를로 시드 ${w.seed}, ${w.trials}회. 효과 없음 → 창 하나 사용, 단축)`);
@@ -904,6 +918,7 @@ function recipesText(w: NonNullable<FlowResult['recipes']>, o: FlowResult['optio
     w.manualShare === undefined ? null : `수동 낚시 ${(w.manualShare * 100).toFixed(0)}%, 방치 ${((1 - w.manualShare) * 100).toFixed(0)}%(공급)`,
     w.visitHours === undefined ? null : `집에 ${w.visitHours}시간마다 들러 가방을 비움(구간이 가방 용량을 넘을 때만 놓아줌)`,
     w.rodOffset === undefined ? null : `공급의 낚싯대는 해역 진입 레벨 ${w.rodOffset >= 0 ? '+' : ''}${w.rodOffset}(순손익 표는 --margin)`,
+    w.manualShare === undefined ? null : `공급의 낚시 방식은 --axis가 아니라 이 비율로 정하고 순손익 표의 재료 모으기는 ${AXIS_LABEL[w.axis]}`,
   ].filter((x): x is string => x !== null);
   if (supplyNotes.length > 0) out.push(`\n측정 입력: ${supplyNotes.join(', ')}`);
   const ids = [...new Set(w.rows.map(r => r.recipe))];
@@ -956,7 +971,7 @@ export function renderText(r: FlowResult): string {
   if (r.dist) lines.push(...distText(r.dist), assumptionText('dist', o));
   if (r.travel) lines.push(...travelText(r.travel), assumptionText('travel', o));
   if (r.effects) lines.push(...effectsText(r.effects, o), assumptionText('effects', o));
-  if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o));
+  if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o, r.window.material !== undefined));
   if (r.recipes) lines.push(...recipesText(r.recipes, o), assumptionText('recipes', o));
   if (r.gates) lines.push(...gatesText(r.gates, o));
   if (r.gates && o.plan) lines.push(['\n가정:', ...planAssumptions().map(l => `- ${l}`)].join('\n'));
