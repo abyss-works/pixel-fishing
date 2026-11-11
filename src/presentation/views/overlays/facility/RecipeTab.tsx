@@ -12,7 +12,7 @@ import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
-import { fmtDecimal2, fmtMinutes } from '../../../ui/format';
+import { fmtMinutes, fmtPlusPoint } from '../../../ui/format';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
 import type { KitchenAct } from './kitchenParts';
 
@@ -78,7 +78,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="text-text-dim">수량</span>
           <NumberStepper value={view.count} min={view.maxCount === 0 ? 0 : 1} max={view.maxCount}
-                         disabled={view.maxCount === 0} onChange={setQty} ariaLabel={view.recipe.name} />
+                         disabled={view.maxCount === 0} onChange={setQty} ariaLabel={recipeLabel(view.recipe)} />
         </div>
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="text-text-dim">조리 시간</span>
@@ -87,7 +87,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
         {view.extraChance > 0 && (
           <div className="flex items-center justify-between gap-2 text-xs">
             <span className="text-text-dim">{artifactEffectLabel('extraCookChance')}</span>
-            <span className="pf-accent text-accent">+{fmtDecimal2(view.extraChance * 100)}%p</span>
+            <span className="pf-accent text-accent">{fmtPlusPoint(view.extraChance * 100)}</span>
           </div>
         )}
       </Inset>

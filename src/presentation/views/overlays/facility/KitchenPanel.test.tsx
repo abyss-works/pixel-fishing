@@ -67,11 +67,18 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(names).toEqual(['가루디야', '민 몰리', '생선 비리야니', '암불 티얄', '생선 탈리']);
   });
 
-  it('미끼 탭은 등급 미끼의 이름 뒤에 등급을 괄호로 붙이고 다른 미끼에는 붙이지 않는다', () => {
+  it('미끼 탭은 등급 미끼의 이름 뒤에 등급을 괄호로 붙이고 다른 미끼에는 붙이지 않는다. 판정 칸 값이 정해지기 전의 메이스 미끼는 숨긴다', () => {
     show(seed());
     fireEvent.click(tab('미끼'));
     const names = within(screen.getByRole('listbox', { name: '미끼 목록' })).getAllByRole('option').map(o => o.querySelector('b')?.textContent);
-    expect(names).toEqual(['메이스 미끼', '사프란 미끼', '롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)']);
+    expect(names).toEqual(['사프란 미끼', '롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)']);
+  });
+
+  it('수량 입력의 접근성 이름은 등급 괄호가 붙은 레시피 이름이다', () => {
+    show(seed());
+    fireEvent.click(tab('미끼'));
+    fireEvent.click(screen.getByRole('option', { name: /롱페퍼 미끼/ }));
+    expect(screen.getByRole('textbox', { name: '롱페퍼 미끼(희귀) 수량' })).toBeInTheDocument();
   });
 
   it('고른 레시피의 필요와 보유를 생명의 기운(등급) 이름으로 보이고 모자라는 칸은 위험색이다', () => {
@@ -90,7 +97,7 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(screen.getByText('입질 대기')).toBeInTheDocument();
     expect(screen.getByText('−10%')).toBeInTheDocument();
     fireEvent.mouseEnter(screen.getByText('효과'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('방치 낚시에만 효과가 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('방치로 낚을 때만 효과가 있어요.');
     fireEvent.mouseLeave(screen.getByText('효과'));
     fireEvent.click(tab('미끼'));
     fireEvent.mouseEnter(screen.getByText('효과'));
@@ -263,9 +270,10 @@ describe('해역별 기운 대상 팝오버', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1); // 창이 하나 더 뜨지 않는다
   });
 
-  it('톱니바퀴 버튼은 40px 정사각형이다', () => {
+  it('톱니바퀴 버튼은 확정 버튼과 같은 높이의 정사각형이다', () => {
     open();
-    expect(gear()).toHaveClass('size-10');
+    expect(gear()).toHaveClass('h-full', 'aspect-square');
+    expect(screen.getByRole('button', { name: /기운 얻기 \(/ })).not.toHaveClass('h-10');
   });
 
   it('배로 갈 수 있는 해역마다 켜짐과 꺼짐 칩을 가장 앞선 해역부터 보인다', () => {

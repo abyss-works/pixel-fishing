@@ -62,9 +62,11 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
 
   return (
     // 높이: 수배판은 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px, 옷장은 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px,
-    // 부엌은 정보 줄과 탭 아래 두 열이 들어가는 560px로 고정한다. 좁은 화면에서는 내용 높이를 따른다.
+    // 부엌은 정보 줄과 탭 아래 두 열이 들어가는 560px로 고정하고, 모바일 레이아웃에서도 탭과 상태에 상관없이 가용 높이로 고정한다.
+    // 수배판과 옷장은 모바일 레이아웃에서 내용 높이를 따른다.
     <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'kitchen'} md={panel === 'bounty' || panel === 'wardrobe'}
-           height={panel === 'bounty' ? 480 : panel === 'wardrobe' || panel === 'kitchen' ? 560 : undefined} onClose={onClose}>
+           height={panel === 'bounty' ? 480 : panel === 'wardrobe' || panel === 'kitchen' ? 560 : undefined}
+           mobileFixed={panel === 'kitchen'} onClose={onClose}>
       {panel === 'sell' && (
         <SellPanel game={game} sellBonus={sellBonus} onClose={onClose} busy={busy}
           onSell={uids => run({ type: 'sell', uids }, r => {

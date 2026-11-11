@@ -58,7 +58,7 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     render(<HudLayout {...props} scene={region} chips={chip}
                       game={unlocked({ lunch: null, bait: { id: 'cook-bait-judge', endsAt: HOUR_LATER } })} />);
     expect(kinds()).toEqual(['접속 칩', '미끼 칩', '시계']);
-    expect(screen.getByText('1:00')).toBeInTheDocument();
+    expect(screen.getByText('1시간')).toBeInTheDocument();
   });
 
   it('칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다', () => {

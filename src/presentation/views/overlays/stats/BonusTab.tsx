@@ -8,6 +8,7 @@ import DataTable from '../../../ui/DataTable';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLine } from '../../../ui/artifactEffects';
 import { bonusEffectText } from '../../../../features/guild/model/guild';
+import { SLOT_SCOPE } from '../../../../features/kitchen/model/recipes';
 
 const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '낚시', duel: '결투', shop: '상점' };
 const SOURCE_HELP = [
@@ -64,8 +65,8 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                   <tr key={`${sourceText(row)}-${effectText(row)}`}>
                     <td className={cx('h-[34px] border-t border-line/60', cell)}>
                       <span className="text-accent">{effectText(row)}</span>
-                      {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">직접 낚을 때만</span>}
-                      {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">방치 낚시에만</span>}
+                      {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
+                      {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
                     </td>
                     <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
                   </tr>

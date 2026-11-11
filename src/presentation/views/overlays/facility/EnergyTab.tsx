@@ -73,7 +73,7 @@ export default function EnergyTab({ game, busy, act, setToast }: {
   );
 
   const confirm = (
-    <Button variant="primary" full className="h-10 py-0" disabled={!view.allowed.ok || view.total === 0 || busy} onClick={extract}>
+    <Button variant="primary" full disabled={!view.allowed.ok || view.total === 0 || busy} onClick={extract}>
       기운 얻기 ({view.total}마리)
     </Button>
   );
@@ -95,7 +95,7 @@ export default function EnergyTab({ game, busy, act, setToast }: {
             <Tip wraps className="flex shrink-0"
                  text={view.hasOverride ? '해역별 기운 대상 고르기\n기본값과 다르게 고른 해역이 있어요.' : '해역별 기운 대상 고르기'}>
               <Button ref={gearRef} pressed={popOpen} aria-expanded={popOpen} aria-label="해역별 기운 대상 고르기"
-                      className="relative size-10 p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
+                      className="relative h-full aspect-square p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
                 <PixelIcon glyph="gear" size={14} />
                 {view.hasOverride && <span aria-hidden className="absolute top-[3px] right-[3px] size-1.5 bg-gold" />}
               </Button>

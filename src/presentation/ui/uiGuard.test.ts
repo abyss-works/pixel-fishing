@@ -275,14 +275,26 @@ describe('UI 시스템 가드', () => {
       const classes: string[] = [];
       for (const height of heights) {
         for (const width of widths) {
-          const props: ComponentProps<typeof Modal> = { layer: 'stage', height, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
-          render(createElement(Modal, props));
-          classes.push(screen.getByRole('dialog').className);
-          cleanup();
+          for (const mobileFixed of [false, true]) {
+            const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
+            render(createElement(Modal, props));
+            classes.push(screen.getByRole('dialog').className);
+            cleanup();
+          }
         }
       }
-      expect(classes).toHaveLength(heights.length * widths.length);
+      expect(classes).toHaveLength(heights.length * widths.length * 2);
       expect(classes.filter(c => SCROLL_CLASS.test(c))).toEqual([]);
+    });
+    it('모바일 고정 변형은 모바일 높이를 가용 높이로 정하고 내용 높이(mobile:h-auto)를 쓰지 않는다', () => {
+      for (const height of [480, 520, 560] as const) {
+        const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed: true, onClose: () => {}, children: createElement('p', null, '내용') };
+        render(createElement(Modal, props));
+        const cls = screen.getByRole('dialog').className;
+        cleanup();
+        expect(cls).toContain('mobile:h-[calc(100%-48px)]');
+        expect(cls).not.toContain('mobile:h-auto');
+      }
     });
     it('감지: 높이 상수에 스크롤 클래스가 섞이면 잡는다', () => {
       expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] overflow-y-auto')).toBe(true);

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../../game/content/cooking';
+import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, JUDGE_WIDTH_BONUS, RECIPES, recipeById } from '../../../game/content/cooking';
 import {
   recipeEffectLines, recipeGrade, recipeLabel, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
@@ -22,7 +22,12 @@ describe('종류별 레시피', () => {
   it('도시락 탭과 미끼 탭은 그 종류의 레시피를 콘텐츠 순서대로 낸다', () => {
     expect(recipesOfKind('lunch').map(r => r.id)).toEqual(RECIPES.filter(r => r.kind === 'lunch').map(r => r.id));
     expect(recipesOfKind('bait').every(r => r.kind === 'bait')).toBe(true);
-    expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length);
+  });
+
+  it('판정 칸 폭 값이 0인 동안 판정 칸 미끼는 목록에서 숨긴다', () => {
+    expect(JUDGE_WIDTH_BONUS).toBe(0);
+    expect(recipesOfKind('bait').map(r => r.id)).not.toContain('cook-bait-judge');
+    expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length - 1);
   });
 
   it('등급 미끼만 등급이 있고 그 등급은 효과가 가중하는 가장 낮은 등급이다', () => {

@@ -4,7 +4,7 @@ import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
-import { ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
+import { ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
 import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
@@ -107,10 +107,10 @@ export default function ItemSection({ game, guest, dispatch, setToast }: {
       <div className="flex flex-col gap-1">
         <PageTitle>아이템</PageTitle>
         <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
-        <Locked lines={view.lines} label="생명의 기운, 도시락, 미끼">
-          {['생명의 기운', '도시락', '미끼'].map(name => (
-            <div key={name} className="mb-2">
-              <Subheading>{name}</Subheading>
+        <Locked lines={view.lines} label={ITEM_GROUPS.map(g => g.title).join(', ')}>
+          {ITEM_GROUPS.map(g => (
+            <div key={g.key} className="mb-2">
+              <Subheading>{g.title}</Subheading>
               <Frame className="h-9" />
             </div>
           ))}
@@ -124,11 +124,11 @@ export default function ItemSection({ game, guest, dispatch, setToast }: {
       <PageTitle>아이템</PageTitle>
       {view.empty ? <Note>{NO_ITEMS_TEXT}</Note> : (
         <>
-          <ItemRows title="도시락" hint={ITEM_GROUP_HINT.lunch} rows={view.lunch} busy={busy} onEat={press} />
-          <ItemRows title="미끼" hint={ITEM_GROUP_HINT.bait} rows={view.bait} busy={busy} onEat={press} />
+          <ItemRows title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={view.lunch} busy={busy} onEat={press} />
+          <ItemRows title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={view.bait} busy={busy} onEat={press} />
           <div className="mb-2">
             <Subheading>
-              <Tip text={ITEM_GROUP_HINT.energy}>생명의 기운</Tip>
+              <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
             </Subheading>
             <Inset className="grid grid-cols-4 py-2">
               {view.energy.map((cell, i) => (

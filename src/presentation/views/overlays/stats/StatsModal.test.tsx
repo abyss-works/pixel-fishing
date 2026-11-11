@@ -33,7 +33,7 @@ describe('StatsModal(스탯창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
     const row = screen.getByText('입질 대기 −10%').closest('tr')!;
     expect(within(row).getByText('가루디야')).toBeTruthy();
-    expect(within(row).getByText('방치 낚시에만')).toBeTruthy();
+    expect(within(row).getByText('방치로 낚을 때만')).toBeTruthy();
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(3);
   });
 

@@ -42,6 +42,27 @@ describe('아이템 섹션 목록', () => {
   });
 });
 
+describe('묶음 순서', () => {
+  // 소제목은 모두 점선 툴팁이거나 글자이고, 섹션 본문에서 이 이름들이 나타나는 순서가 곧 묶음 순서다
+  const order = (container: HTMLElement): string[] => {
+    const text = container.textContent ?? '';
+    return ['도시락', '미끼', '생명의 기운'].map(n => [n, text.indexOf(n)] as const)
+      .filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]).map(([n]) => n);
+  };
+
+  it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운 순서로 같다', () => {
+    const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
+    const opened = render(<ItemSection game={game({ items: own })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const openedOrder = order(opened.container);
+    cleanup();
+    const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    // 잠금 상태의 빈 안내 문장에 도시락, 미끼 말이 앞서 나오므로 잠금 자리(그룹) 안에서만 센다
+    const group = within(locked.container).getByRole('group', { name: '도시락, 미끼, 생명의 기운' });
+    expect(order(group)).toEqual(['도시락', '미끼', '생명의 기운']);
+    expect(openedOrder).toEqual(['도시락', '미끼', '생명의 기운']);
+  });
+});
+
 describe('먹기와 쓰기', () => {
   const own = { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-judge': 1 };
 
@@ -100,13 +121,13 @@ describe('해금 전과 게스트', () => {
       '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
       '인도양 항로는 증기선(5단계)부터 열려요.',
     ]);
-    expect(screen.getByRole('group', { name: '생명의 기운, 도시락, 미끼' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
 
   it('게스트는 한 줄 빈 상태이고 잠금 줄이 게스트 잠금이다', () => {
     show(game(), true);
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
-    expect(screen.getByRole('group', { name: '생명의 기운, 도시락, 미끼' })).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
   });
 });

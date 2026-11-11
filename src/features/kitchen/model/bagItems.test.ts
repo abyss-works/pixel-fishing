@@ -64,7 +64,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
-    expect(v.lunch[0].note).toContain('방치 낚시에만 효과가 있어요.');
+    expect(v.lunch[0].note).toContain('방치로 낚을 때만 효과가 있어요.');
   });
 
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {

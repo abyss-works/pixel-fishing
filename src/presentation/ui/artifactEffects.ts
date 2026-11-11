@@ -2,7 +2,7 @@ import type { Artifact } from '../../game/content/artifacts';
 import { artifactEffectsAt, artifactExtraCookChanceAt } from '../../game/rules/artifactLevel';
 import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import type { ArtifactEffectKey } from '../../features/gameplay/model/stats';
-import { fmtDecimal2 } from './format';
+import { fmtDecimal2, fmtPlusPoint } from './format';
 
 const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
 
@@ -29,7 +29,7 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
     case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
-      return chance > 0 ? `+${fmtDecimal2(chance * 100)}%p` : null; // 확률에 직접 더하는 효과는 %p
+      return chance > 0 ? fmtPlusPoint(chance * 100) : null; // 확률에 직접 더하는 효과는 %p
     }
     case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
   }

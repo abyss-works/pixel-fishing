@@ -24,6 +24,12 @@ export const ITEM_GROUP_HINT = {
   lunch: '먹기를 누르면 도시락 슬롯에 들어가요.',
   bait: '쓰기를 누르면 미끼 슬롯에 들어가요.',
 } as const;
+/** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
+export const ITEM_GROUPS = [
+  { key: 'lunch', title: '도시락' },
+  { key: 'bait', title: '미끼' },
+  { key: 'energy', title: '생명의 기운' },
+] as const;
 const SWAP_WARNING = '지금 효과의 남은 시간은 사라져요.';
 
 /** 슬롯 종류별 동작 이름과 교체 확인 제목 */

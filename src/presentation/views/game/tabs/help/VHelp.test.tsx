@@ -5,6 +5,13 @@ import VHelp from './VHelp';
 
 afterEach(cleanup);
 
+describe('VHelp 미끼', () => {
+  it('미끼는 집 부엌에서 요리하고 챔질해서 낚을 때만 효과가 있다고 안내한다', () => {
+    const { container } = render(<VHelp />);
+    expect(container.textContent).toContain('집 부엌에서 생명의 기운으로 요리해요. 챔질해서 낚을 때만 효과가 있어요.');
+  });
+});
+
 describe('VHelp 바운티 헌팅', () => {
   const text = () => {
     const { container } = render(<VHelp />);

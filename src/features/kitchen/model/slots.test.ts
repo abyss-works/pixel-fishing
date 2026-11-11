@@ -4,7 +4,7 @@ import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
-import { activeSlot, fmtSlotClock, selectSlotChips } from './slots';
+import { activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectSlotChips } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
@@ -13,22 +13,30 @@ const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
 describe('슬롯 남은 시간 표기', () => {
-  it('시:분 꼴이고 분은 두 자리다', () => {
-    expect(fmtSlotClock(8 * HOUR + 12 * MIN)).toBe('8:12');
-    expect(fmtSlotClock(9 * HOUR)).toBe('9:00');
-    expect(fmtSlotClock(24 * MIN)).toBe('0:24');
-    expect(fmtSlotClock(5 * MIN)).toBe('0:05');
+  it('칩은 큰 단위 하나만 쓴다. 1시간 이상은 시간을 버리고 1시간 미만은 분을 올린다', () => {
+    expect(fmtSlotChipTime(8 * HOUR + 12 * MIN)).toBe('8시간');
+    expect(fmtSlotChipTime(9 * HOUR)).toBe('9시간');
+    expect(fmtSlotChipTime(HOUR + 59 * MIN)).toBe('1시간');
+    expect(fmtSlotChipTime(25 * MIN)).toBe('25분');
+    expect(fmtSlotChipTime(24 * MIN + 1)).toBe('25분');
   });
 
-  it('1분 안쪽 남은 시간은 올려서 0:00으로 보이지 않는다', () => {
-    expect(fmtSlotClock(1)).toBe('0:01');
-    expect(fmtSlotClock(30_000)).toBe('0:01');
-    expect(fmtSlotClock(8 * HOUR + 12 * MIN + 1)).toBe('8:13');
+  it('1분 안쪽 남은 시간은 올려서 0분으로 보이지 않고 60분은 1시간이다', () => {
+    expect(fmtSlotChipTime(1)).toBe('1분');
+    expect(fmtSlotChipTime(30_000)).toBe('1분');
+    expect(fmtSlotChipTime(59 * MIN + 30_000)).toBe('1시간');
   });
 
-  it('0 이하는 0:00이다', () => {
-    expect(fmtSlotClock(0)).toBe('0:00');
-    expect(fmtSlotClock(-5)).toBe('0:00');
+  it('툴팁 목록은 시간과 분을 모두 쓴다', () => {
+    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN)).toBe('8시간 12분');
+    expect(fmtSlotTimeLeft(9 * HOUR)).toBe('9시간');
+    expect(fmtSlotTimeLeft(25 * MIN)).toBe('25분');
+    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN + 1)).toBe('8시간 13분');
+  });
+
+  it('0 이하는 0분이다', () => {
+    expect(fmtSlotChipTime(0)).toBe('0분');
+    expect(fmtSlotTimeLeft(-5)).toBe('0분');
   });
 });
 
@@ -38,7 +46,9 @@ describe('슬롯의 지금 효과', () => {
     const s = activeSlot(game, 'lunch', T0)!;
     expect(s.label).toBe('가루디야');
     expect(s.remainingMs).toBe(8 * HOUR + 12 * MIN);
-    expect(s.clock).toBe('8:12');
+    expect(s.chipTime).toBe('8시간');
+    expect(s.timeLeft).toBe('8시간 12분');
+    expect(s.rows).toEqual([{ label: '입질 대기', value: '−10%' }, { label: '남은 시간', value: '8시간 12분' }]);
     expect(s.effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
   });
 
@@ -65,11 +75,14 @@ describe('슬롯 칩 표시 조건', () => {
     expect(chips.map(c => [c.key, c.state])).toEqual([['lunch', 'locked'], ['bait', 'locked']]);
     const lunch = chips[0];
     expect(lunch.state === 'locked' && lunch.lines).toEqual([
-      '인도양 항로가 열리면 도시락 슬롯을 쓸 수 있어요.',
+      '인도양 항로가 열리면 도시락을 먹을 수 있어요.',
       '인도양 항로는 증기선(5단계)부터 열려요.',
     ]);
     const bait = chips[1];
-    expect(bait.state === 'locked' && bait.lines[0]).toBe('인도양 항로가 열리면 미끼 슬롯을 쓸 수 있어요.');
+    expect(bait.state === 'locked' && bait.lines).toEqual([
+      '인도양 항로가 열리면 미끼를 쓸 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
   });
 
   it('게스트는 해금 전이어도 게스트 잠금이 먼저다', () => {
@@ -98,7 +111,7 @@ describe('슬롯 칩 표시 조건', () => {
   it('지금 효과의 설명은 그 슬롯 종류의 적용 낚시와 지속 안내를 담는다', () => {
     const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-judge', endsAt: at(HOUR) } } });
     const [lunch, bait] = selectSlotChips(game, T0, false);
-    expect(lunch.state === 'active' && lunch.note).toContain('방치 낚시에만 효과가 있어요.');
+    expect(lunch.state === 'active' && lunch.note).toContain('방치로 낚을 때만 효과가 있어요.');
     expect(bait.state === 'active' && bait.note).toContain('챔질해서 낚을 때만 효과가 있어요.');
   });
 });

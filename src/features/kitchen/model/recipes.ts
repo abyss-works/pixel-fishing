@@ -13,8 +13,11 @@ import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
-/** 그 종류의 레시피 — 콘텐츠 순서대로 */
-export const recipesOfKind = (kind: CookKind): Recipe[] => RECIPES.filter(r => r.kind === kind);
+/**
+ * 그 종류의 부엌 레시피 — 콘텐츠 순서대로. 판정 칸 폭 값이 정해지기 전(0)에는 효과가 없는 요리라 목록에서 숨긴다.
+ */
+export const recipesOfKind = (kind: CookKind): Recipe[] =>
+  RECIPES.filter(r => r.kind === kind && r.effects.judgeWidth !== 0);
 
 /** 등급 미끼의 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급. 미끼 요리 중 등급 가중이 없는 것과 도시락은 null이다 */
 export function recipeGrade(recipe: Recipe): RarityId | null {
@@ -27,10 +30,13 @@ export function recipeLabel(recipe: Recipe): string {
   return grade === null ? recipe.name : gradeName(recipe.name, RARITY[grade].name);
 }
 
+/** 그 종류의 효과가 걸리는 낚시 - 보너스 탭, 칩 툴팁, 부엌 창이 같은 표기를 쓴다 */
+export const SLOT_SCOPE: Readonly<Record<CookKind, string>> = { lunch: '방치로 낚을 때만', bait: '챔질해서 낚을 때만' };
+
 // 효과 설명 — 종류마다 적용되는 낚시와 지속 시간이 다르다. 칩 줄의 슬롯 칩과 부엌 창이 같은 문안을 쓴다
 const EFFECT_NOTE: Readonly<Record<CookKind, string>> = {
-  lunch: '방치 낚시에만 효과가 있어요.\n지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
-  bait: '챔질해서 낚을 때만 효과가 있어요.\n물고기를 낚아도 미끼가 줄지 않아요.\n지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+  lunch: `${SLOT_SCOPE.lunch} 효과가 있어요.\n지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.`,
+  bait: `${SLOT_SCOPE.bait} 효과가 있어요.\n물고기를 낚아도 미끼가 줄지 않아요.\n지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.`,
 };
 
 /** 그 종류의 효과 설명 — 줄마다 줄바꿈으로 나뉜다 */
