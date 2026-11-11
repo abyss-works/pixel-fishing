@@ -30,6 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
+      effect: { bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
     });
   });
 
@@ -321,5 +322,59 @@ describe('분포와 이동 명령', () => {
 
   it('해석 기댓값이 항상 같은 전환 분포 표에 누적 행이 있다', () => {
     expect(renderText(runFlow(small({ commands: ['dist'] })))).toContain('누적');
+  });
+});
+
+describe('effects 명령', () => {
+  it('효과 옵션을 퍼센트와 배수로 읽고 기본은 효과 없음이다', () => {
+    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 });
+    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
+    expect(o.commands).toEqual(['effects']);
+    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
+    expect(o.margin).toBe(4);
+    expect(o.units).toEqual({ common: 1, rare: 2, epic: 3, legendary: 4 });
+  });
+
+  it('명령을 생략하면 내지 않는다', () => {
+    expect(parseArgs([]).commands).not.toContain('effects');
+  });
+
+  it('효과 옵션은 effects 명령에서만 쓸 수 있고 범위를 벗어나면 오류다', () => {
+    expect(() => parseArgs(['--bite', '10'])).toThrow(/effects 명령/);
+    expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/effects 명령/);
+    expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
+    expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
+    expect(() => parseArgs(['effects', '--margin', '1.5'])).toThrow(/정수/);
+    expect(() => parseArgs(['effects', '--units', '1,5,25'])).toThrow(/등급 수/);
+    expect(() => parseArgs(['effects', '--bite', 'x'])).toThrow(/숫자/);
+  });
+
+  it('세 지표를 표로 내고 효과 없음이면 변화가 모두 0이다', () => {
+    const r = runCli(['effects', '--trials', '5']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음');
+    expect(r.stdout).toContain('## 효과를 넣은 수입');
+    expect(r.stdout).toContain('## 도감 완성 시간');
+    expect(r.stdout).toContain('## 재료 공급');
+    expect(r.stdout).not.toMatch(/\| [+-][1-9]\d*\.\d%/);
+  });
+
+  it('판매 왕복을 넣은 열은 항상 내고, 네임드 효과는 조우 열을 더한다', () => {
+    const t = runCli(['effects', '--move', '10', '--named', '10', '--trials', '3']).stdout;
+    expect(t).toContain('판매 왕복 포함 골드 변화');
+    expect(t).toContain('네임드 조우 기대');
+    expect(t).toContain('없음');
+    const plain = runCli(['effects', '--trials', '3']).stdout;
+    expect(plain).toContain('판매 왕복 포함 골드 변화');
+    expect(plain).not.toContain('네임드 조우 기대');
+  });
+
+  it('JSON은 효과와 세 지표를 담고 같은 시드는 같은 결과다', () => {
+    const a = runCli(['effects', '--bite', '10', '--trials', '5', '--json']).stdout;
+    expect(a).toBe(runCli(['effects', '--bite', '10', '--trials', '5', '--json']).stdout);
+    const j = JSON.parse(a);
+    expect(j.effects.effect.bite).toBe(0.1);
+    expect(j.effects.income.length).toBe(j.effects.dex.length);
+    expect(j.effects.supply.length).toBe(j.effects.dex.length);
   });
 });
