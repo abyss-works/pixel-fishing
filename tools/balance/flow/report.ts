@@ -32,13 +32,13 @@ import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
-import { BAIT_WINDOW_MIN, baitEffect, windowRows } from './cooking';
-import type { WindowRow } from './cooking';
+import { BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, bagSupplyRows, baitEffect, recipeRows, recipesCovered, windowRows } from './cooking';
+import type { BagSupplyRow, RecipeRow, WindowRow } from './cooking';
 
-export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window';
+export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects' | 'window' | 'recipes';
 /** 명령을 생략하면 내는 지표 명령 — gates(판정), dist(몬테카를로), travel(이동 측정)은 이름을 줄 때만 실행한다 */
 export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'exception', 'ev'];
-const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects', 'window'];
+const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects', 'window', 'recipes'];
 /** 효과 옵션을 받는 명령 */
 const EFFECT_COMMANDS: readonly Command[] = ['effects', 'window'];
 
@@ -60,9 +60,13 @@ export interface FlowOptions {
   units: Record<RarityId, number>;
   /** window의 효과 창 길이(분) */
   windowMinutes: number;
+  /** recipes의 레시피 거름(없으면 전부), effects와 window에서는 그 레시피의 효과를 효과 옵션에 채운다 */
+  recipe: string | null;
+  /** recipes의 가방 공급 시간(시간) */
+  hours: number;
 }
 
-export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects|window] [옵션]
+export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects|window|recipes] [옵션]
 명령을 생략하면 gates, dist, travel, effects를 뺀 다섯 가지를 모두 낸다.
 
 명령
@@ -75,6 +79,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   travel      이동 시간 관측: 가방이 차면 거점에 가서 팔고 돌아오는 왕복이 낚시 시간에서 차지하는 비중을 해역별로 잰다. 다른 명령의 시간에 넣지 않는다
   effects     요리 효과: 효과를 넣었을 때 해역별 수입(골드·명성 변화, 네임드 조우), 도감 완성 시간(몬테카를로), 낚시 1시간 분해 재료 공급을 효과 없음과 견준다. 효과는 아래 옵션으로 준다. 수동 낚시(미끼 슬롯)는 --axis manual로 잰다
   window      시간 제한 효과의 창: 구매 미끼 같은 효과를 한 번 쓰는 창(기본 ${BAIT_WINDOW_MIN}분) 안의 등급별 기대 캐치 수와 골드, 명성 증가, 창 하나가 도감 완성 시간을 줄이는 양. 수동 GOOD이 기본이다
+  recipes     레시피 순손익: 재료로 쓴 물고기의 판매 손실 대 효과 지속 동안의 수입 증가(해역별), 가방 한도와 자동 기운 얻기를 넣은 하루 기운 공급과 자동 기운으로 만들 수 있는 레시피 수. 재료는 --axis 방식(기본 방치)으로 그 해역에서만 모은다
   gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
               같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다
 
@@ -100,6 +105,8 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 설계 초안 값이다
   --bait <rare|epic|legendary>  effects, window: 구매 미끼 효과를 효과 옵션에 채운다(희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%. 설계 초안 값)
   --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
+  --recipe <id>      recipes: 그 레시피만(quick, shimmer, mutant, trace, mixed, mutantBait). effects, window: 그 레시피의 효과를 효과 옵션에 채운다
+  --hours <N>        recipes: 가방을 비우고 판매 없이 낚는 시간(시간). 기본 ${LUNCH_HOURS}
   --seed, --trials   effects, window의 도감 완성 시간에도 쓴다
   --help             이 도움말
 `;
@@ -108,7 +115,13 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
 const MIN_MARGIN_ABS = 4;
 
 const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units', '--bait'] as const;
-const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', ...EFFECT_FLAGS] as const;
+const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', '--recipe', '--hours', ...EFFECT_FLAGS] as const;
+
+/** 옵션을 받는 명령. 여기 없는 옵션은 모든 명령에서 쓸 수 있다 */
+const FLAG_COMMANDS: Record<string, readonly Command[]> = {
+  ...Object.fromEntries(EFFECT_FLAGS.map(f => [f, EFFECT_COMMANDS])),
+  '--margin': ['effects', 'window', 'recipes'], '--units': ['effects'], '--window': ['window'], '--hours': ['recipes'], '--recipe': ['recipes', 'effects', 'window'],
+};
 const BOOL_FLAGS = ['--json', '--help'] as const;
 
 function numberOf(flag: string, raw: string): number {
@@ -121,6 +134,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
     commands: [], override: null, json: false, legendAt: null, axis: 'idle', maxDays: 365, help: false,
     seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
+    recipe: null, hours: LUNCH_HOURS,
   };
   const given: string[] = [];
   let axisGiven = false, bait: string | null = null;
@@ -162,6 +176,13 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         given.push(a);
         o.windowMinutes = numberOf(a, raw);
         if (!(o.windowMinutes > 0)) throw new Error('--window는 0보다 커야 합니다(분)');
+      } else if (a === '--hours') {
+        given.push(a);
+        o.hours = numberOf(a, raw);
+        if (!(o.hours > 0)) throw new Error('--hours는 0보다 커야 합니다(시간)');
+      } else if (a === '--recipe') {
+        given.push(a);
+        o.recipe = raw;
       } else if (a === '--override') o.override = raw;
       else if (a === '--legend-at') o.legendAt = numberOf(a, raw);
       else if (a === '--seed') {
@@ -184,8 +205,15 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     if (command) throw new Error('명령은 하나만 고를 수 있습니다');
     command = a as Command;
   }
-  if (given.includes('--window') && command !== 'window') throw new Error('--window는 window 명령에서만 쓸 수 있습니다');
-  if (given.length && !(command && EFFECT_COMMANDS.includes(command))) throw new Error(`${given[0]}은 ${EFFECT_COMMANDS.join(', ')} 명령에서만 쓸 수 있습니다`);
+  for (const f of given) {
+    const allowed = FLAG_COMMANDS[f];
+    if (!(command && allowed.includes(command))) throw new Error(`${f}은 ${allowed.join(', ')} 명령에서만 쓸 수 있습니다`);
+  }
+  if (o.recipe !== null) {
+    const recipe = RECIPES.find(r => r.id === o.recipe);
+    if (!recipe) throw new Error(`알 수 없는 레시피입니다: ${o.recipe} (${RECIPES.map(r => r.id).join(', ')} 중 하나)`);
+    if (command !== 'recipes') for (const k of Object.keys(recipe.effect) as (keyof Effect)[]) if (recipe.effect[k] !== 0) o.effect[k] = recipe.effect[k];
+  }
   if (bait !== null) {
     const b = baitEffect(bait);
     for (const k of Object.keys(b) as (keyof Effect)[]) if (b[k] !== 0) o.effect[k] = b[k];
@@ -213,6 +241,7 @@ export interface FlowResult {
   travel?: { rows: TravelRow[]; sampleDays: number };
   effects?: EffectsReport;
   window?: { effect: Effect; minutes: number; margin: number; trials: number; seed: number; rows: WindowRow[] };
+  recipes?: { axis: FlowAxis; margin: number; hours: number; trials: number; seed: number; rows: RecipeRow[]; bag: BagSupplyRow[] };
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
@@ -255,6 +284,14 @@ export function runFlow(o: FlowOptions): FlowResult {
       res.window = {
         effect: o.effect, minutes: o.windowMinutes, margin: o.margin, trials: o.trials, seed: o.seed,
         rows: windowRows({ axis: o.axis, effect: o.effect, margin: o.margin, minutes: o.windowMinutes, trials: o.trials, seed: o.seed }),
+      };
+    }
+    if (o.commands.includes('recipes')) {
+      const recipes = o.recipe === null ? RECIPES : RECIPES.filter(r => r.id === o.recipe);
+      res.recipes = {
+        axis: o.axis, margin: o.margin, hours: o.hours, trials: o.trials, seed: o.seed,
+        rows: recipeRows({ axis: o.axis, margin: o.margin, recipes }),
+        bag: bagSupplyRows({ axis: o.axis, margin: o.margin, hours: o.hours, trials: o.trials, seed: o.seed }),
       };
     }
     if (o.commands.includes('ev')) res.ev = evReport();
@@ -337,6 +374,15 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
       '창 안의 기대 캐치 수는 그 조건의 캐치 속도 x 창 길이 x 등급 비율이고, 골드와 명성 증가는 효과 없음 대비 시간당 차이 x 창 길이다',
       '도감 단축은 한 해역에서만 낚을 때 창 하나를 먼저 쓰고 이후 효과 없이 낚는 평균 시간이 효과 없이 낚는 평균 시간보다 줄어든 양이다. 창 안의 캐치 수는 기대 캐치 수를 반올림하고, 같은 시드로 효과 없음과 짝지어 견준다. 어종 천장은 넣지 않는다',
       '미끼 가격과 사람의 판정 실력은 넣지 않는다',
+    );
+  } else if (command === 'recipes') {
+    lines.push(
+      `재료는 ${AXIS_LABEL[o.axis]} 낚시로 그 해역에서만 모은다. 물고기 한 마리가 그 등급 기운 한 개이고, 재료로 쓴 물고기는 팔지 못한다. 판매 손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)다`,
+      '효과 지속 동안의 수입 증가는 효과 없음 대비 시간당 골드(명성) 차이 x 지속이다. 도시락은 방치로, 미끼 요리는 수동 GOOD(파워 미달 해역은 무판정)로 지속 시간 내내 낚는다고 본다. 도시락은 하루 낚시가 지속보다 짧아도 지속 전체를 낚는다고 센 상한이다',
+      '골드로 환산되지 않는 효과(네임드 조우, 돌연변이 도감 단축)는 순손익에 들지 않는다. 돌연변이 가중은 판매가 기댓값만 올린다',
+      '재료를 모으는 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다. 나오지 않는 등급이 필요한 해역은 모을 수 없다',
+      '가방 공급은 가방을 비우고 판매 없이 정해진 시간 낚는 한 번의 낚시다. 용량은 그 해역을 여는 배의 가방이고, 넘치면 제품의 개체 비교 순서(등급, 돌연변이 여부)대로 가장 안 특별한 개체가 기운이 된다. 크기는 순서의 마지막 기준이라 넣지 않고 같은 칸의 판매가는 평균이다. 시드 고정 몬테카를로이고 시도 평균이다',
+      '자동 기운으로 만들 수 있는 개수는 필요한 등급 중 가장 모자란 등급이 정한다. 직접 기운 얻기(가방에 남은 개체)는 넣지 않는다',
     );
   } else if (command === 'opening') {
     lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
@@ -690,6 +736,40 @@ function windowText(w: NonNullable<FlowResult['window']>, o: FlowResult['options
   return out;
 }
 
+function recipesText(w: NonNullable<FlowResult['recipes']>, o: FlowResult['options']): string[] {
+  const info = new Map(o.spots.map(s => [s.id, s]));
+  const lv = (spot: SpotId, level: number) => `Lv${level}(요구 ${info.get(spot)!.powerReq})`;
+  const out: string[] = [`\n# 레시피 순손익과 기운 공급 - 재료 모으기 ${AXIS_LABEL[w.axis]}, 낚싯대는 해역 진입 레벨 ${w.margin >= 0 ? '+' : ''}${w.margin}`];
+  const cost = (c: (typeof RECIPES)[number]['cost']) => RARITY_ORDER.filter(g => c[g]).map(g => `${RARITY[g].name} ${c[g]}`).join(', ');
+  const ids = [...new Set(w.rows.map(r => r.recipe))];
+  for (const id of ids) {
+    const recipe = RECIPES.find(r => r.id === id)!;
+    out.push(`\n## ${recipe.name}(가칭, ${id}) - 기운 ${cost(recipe.cost)}, ${recipe.kind === 'lunch' ? '도시락' : '미끼 요리'} ${recipe.hours >= 1 ? `${recipe.hours}시간` : `${recipe.hours * 60}분`}, 효과 ${effectLabel(recipe.effect)}`);
+    out.push(table(
+      ['해역', '낚싯대', '재료 모으는 시간', '판매 손실(G)', '수입 증가(G)', '명성 증가', '순손익(G)', '증가 ÷ 손실'],
+      w.rows.filter(r => r.recipe === id).map(r => [
+        nameOf(r.spot), lv(r.spot, r.level), r.collectHours === null ? '모을 수 없음' : hrs(r.collectHours), n0(r.loss), n0(r.gain), n0(r.gainFame),
+        r.net === null ? '—' : (r.net >= 0 ? '+' : '') + n0(r.net), r.ratio === null ? '—' : `${r.ratio.toFixed(2)}배`,
+      ]),
+    ));
+  }
+  out.push(`\n## 가방 한도와 자동 기운 얻기 - 가방을 비우고 판매 없이 ${w.hours}시간 낚을 때(몬테카를로 시드 ${w.seed}, ${w.trials}회 평균)`);
+  out.push(table(
+    ['해역', '낚싯대', '가방', '낚은 수', ...RARITY_ORDER.map(g => `자동 ${RARITY[g].name} 기운`), '내보낸 개체 판매가', ...RARITY_ORDER.map(g => `남은 ${RARITY[g].name}`), '가방 판매가'],
+    w.bag.map(r => [
+      nameOf(r.spot), lv(r.spot, r.level), r.cap, r.catches, ...RARITY_ORDER.map(g => r.auto[g].toFixed(1)), n0(r.autoGold),
+      ...RARITY_ORDER.map(g => r.kept[g].toFixed(1)), n0(r.keptGold),
+    ]),
+  ));
+  const shown = RECIPES.filter(r => ids.includes(r.id));
+  out.push(`\n## 자동 기운으로 만들 수 있는 레시피 수 (${w.hours}시간 한 번의 낚시)`);
+  out.push(table(
+    ['해역', ...shown.map(r => r.name)],
+    w.bag.map(r => [nameOf(r.spot), ...shown.map(rc => recipesCovered(r.auto, rc).toFixed(1))]),
+  ));
+  return out;
+}
+
 /** 위반이 하나라도 있으면 true — gates 명령의 종료 코드 판정 */
 export const hasViolation = (r: FlowResult): boolean => r.gates !== undefined && verdictCounts(r.gates)['위반'] > 0;
 
@@ -710,6 +790,7 @@ export function renderText(r: FlowResult): string {
   if (r.travel) lines.push(...travelText(r.travel), assumptionText('travel', o));
   if (r.effects) lines.push(...effectsText(r.effects, o), assumptionText('effects', o));
   if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o));
+  if (r.recipes) lines.push(...recipesText(r.recipes, o), assumptionText('recipes', o));
   if (r.gates) lines.push(...gatesText(r.gates));
   return lines.join('\n');
 }

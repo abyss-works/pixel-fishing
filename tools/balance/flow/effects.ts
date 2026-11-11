@@ -61,7 +61,7 @@ export const DEX_CATCH_CAP = 2_000_000;
 
 export interface EffectRates extends Rates { variantShare: number }
 
-const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
+export const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
 
 /** 돌연변이 가중치 증가를 넣은 해역의 돌연변이 확률 — 제품의 폼 가중치와 같은 경로다.
  *  증가가 있으면 유물과 같이 전역 가중치의 돌연변이 쪽에 (1 + 증가)를 곱하고(해역 덮어쓰기는 무시), 없으면 제품의 해역 가중치를 그대로 쓴다 */

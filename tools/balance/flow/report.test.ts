@@ -30,7 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30,
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9,
     });
   });
 
@@ -445,5 +445,37 @@ describe('window 명령', () => {
     const a = runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout;
     expect(a).toBe(runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout);
     expect(JSON.parse(a).window.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('recipes 명령', () => {
+  it('옵션을 읽고 효과 옵션은 받지 않는다', () => {
+    const o = parseArgs(['recipes', '--recipe', 'mixed', '--hours', '6', '--margin', '-2', '--axis', 'manual']);
+    expect(o).toMatchObject({ commands: ['recipes'], recipe: 'mixed', hours: 6, margin: -2, axis: 'manual' });
+    expect(() => parseArgs(['recipes', '--bite', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['recipes', '--recipe', 'nope'])).toThrow(/레시피/);
+    expect(() => parseArgs(['recipes', '--hours', '0'])).toThrow(/0보다/);
+    expect(() => parseArgs(['effects', '--hours', '5'])).toThrow(/명령에서만/);
+  });
+
+  it('effects와 window에서는 레시피의 효과를 효과 옵션에 채운다', () => {
+    expect(parseArgs(['effects', '--recipe', 'quick']).effect.bite).toBeCloseTo(0.1, 12);
+    expect(parseArgs(['window', '--recipe', 'mutantBait']).effect.variant).toBeCloseTo(1, 12);
+    expect(parseArgs(['effects', '--recipe', 'mixed']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
+  });
+
+  it('레시피 순손익, 가방 공급, 만들 수 있는 개수 표를 낸다', () => {
+    const r = runCli(['recipes', '--recipe', 'quick', '--trials', '3']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('## 재촉 도시락');
+    expect(r.stdout).toContain('## 가방 한도와 자동 기운 얻기');
+    expect(r.stdout).toContain('## 자동 기운으로 만들 수 있는 레시피 수');
+    expect(r.stdout).not.toContain('## 윤슬 도시락');
+  });
+
+  it('JSON은 같은 시드에서 같다', () => {
+    const a = runCli(['recipes', '--trials', '2', '--json']).stdout;
+    expect(a).toBe(runCli(['recipes', '--trials', '2', '--json']).stdout);
+    expect(JSON.parse(a).recipes.rows.length).toBeGreaterThan(0);
   });
 });
