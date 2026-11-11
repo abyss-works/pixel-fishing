@@ -1051,7 +1051,7 @@ describe('개발 명령 허용 판정', () => {
 
   it('스테이징에서 Origin을 속인 비소유자의 강제 조우는 통상 캐치로 처리한다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    expect(await ticketsAfterForcedCatch('guest', LOCAL_ORIGIN)).toBe(0);
+    for (const origin of ORIGINS) expect(await ticketsAfterForcedCatch('guest', origin)).toBe(0);
     expect(await ticketsAfterForcedCatch('owner', undefined)).toBe(1);
   });
 });
