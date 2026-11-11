@@ -3,6 +3,7 @@ import { BOATS } from '../../../game/content/boats';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { ZONES } from '../../../game/content/zones';
 import type { GameAction } from '../../../game/rules/actions';
+import { cookingUnlocked } from '../../../game/rules/cooking';
 import { guestActionVerdict } from '../../../game/rules/guest';
 import type { FurnitureId } from '../../../game/world';
 import { josa } from '../../../shared/lib/josa';
@@ -55,12 +56,20 @@ export function guestLock(feature: GuestFeature, guest: boolean): readonly strin
  *  구역 진입 단계가 아니면 배 단계로만 쓴다. 기능 이름이 문장의 목적어(기본, 잠금 툴팁)인지
  *  주제(topic, 기능을 먼저 소개하는 안내)인지에 따라 첫 줄의 어순만 다르다 */
 export function progressLines(feature: string, boat: number, form: 'object' | 'topic' = 'object'): string[] {
+  return progressSentences(boat, condition => form === 'topic'
+    ? `${feature}${josa(feature, '은/는')} ${condition} 쓸 수 있어요.`
+    : `${condition} ${feature}${josa(feature, '을/를')} 쓸 수 있어요.`);
+}
+
+/** 진행 조건 뒤에 호출부가 쓴 서술부를 붙인 첫 줄과, 구역 항로 조건이면 그 항로가 열리는 배 단계 줄 */
+export function progressNote(boat: number, predicate: string): string[] {
+  return progressSentences(boat, condition => `${condition} ${predicate}`);
+}
+
+function progressSentences(boat: number, sentence: (condition: string) => string): string[] {
   const zone = ZONES.find(z => z.entryBoat === boat);
   const boatRow = BOATS.find(b => b.tier === boat);
   const boatText = boatRow ? `${boatRow.name}(${boat}단계)` : `${boat}단계`;
-  const sentence = (condition: string) => form === 'topic'
-    ? `${feature}${josa(feature, '은/는')} ${condition} 쓸 수 있어요.`
-    : `${condition} ${feature}${josa(feature, '을/를')} 쓸 수 있어요.`;
   if (!zone) return [sentence(`${boatText}${josa(boatText, '이/가')} 되면`)];
   const lane = `${zone.shortName} 항로`;
   return [
@@ -93,21 +102,17 @@ const GUEST_ACTION_OF: Partial<Record<FurnitureId, GameAction>> = {
   boat: { type: 'buyBoat' },
   sell: { type: 'sell', uids: [] },
   wardrobe: { type: 'changeClothes', shirt: 0, pants: 0 },
+  kitchen: { type: 'cook', recipe: '', count: 1 },
 };
-
-// 부엌은 요리 액션이 아직 없어 대표 액션을 못 짝지운다. 게스트 규칙은 열어 둔 액션 외에는 모두 계정 전용이고
-// 요리 액션은 열어 둔 목록에 없으므로 부엌은 게스트에게 닫는다. 요리 액션이 생기면 위 표의 짝으로 옮긴다.
-const GUEST_CLOSED: ReadonlySet<FurnitureId> = new Set(['kitchen']);
 
 /** 게스트가 그 카드의 기능을 쓸 수 있는가. 짝이 없는 카드는 게스트 규칙으로 잠그지 않는다 */
 export function facilityGuestAllowed(id: FurnitureId): boolean {
-  if (GUEST_CLOSED.has(id)) return false;
   const action = GUEST_ACTION_OF[id];
   return !action || guestActionVerdict(action) === 'ok';
 }
 
 /** 카드가 배 단계로 열리는 기능이면 그 조건. 없으면 진행 조건으로 잠그지 않는다 */
 export function facilityProgress(id: FurnitureId, boat: number): { met: boolean; boat: number } | undefined {
-  if (id === 'kitchen') return { met: boat >= COOKING_UNLOCK_BOAT, boat: COOKING_UNLOCK_BOAT };
+  if (id === 'kitchen') return { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT };
   return undefined;
 }
