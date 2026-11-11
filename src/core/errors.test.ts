@@ -29,6 +29,8 @@ describe('실패 분류', () => {
       expect(POLICY[kind].modal, kind).toBeUndefined();
       expect(POLICY[kind].message, kind).toContain('계정');
     }
+    expect(POLICY['guest-village-only'].message).toBe('계정을 연결하면 바다로 나갈 수 있어요. 계정 관리에서 연결해 주세요.');
+    expect(POLICY['account-only'].message).toBe('계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.');
   });
 
   it('asAppError: 알 수 없는 예외는 bug로 정규화되고 원인이 보존된다', () => {
