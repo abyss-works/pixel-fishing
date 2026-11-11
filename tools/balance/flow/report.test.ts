@@ -30,7 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
     });
   });
 
@@ -327,10 +327,10 @@ describe('분포와 이동 명령', () => {
 
 describe('effects 명령', () => {
   it('효과 옵션을 퍼센트와 배수로 읽고 기본은 효과 없음이다', () => {
-    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 });
-    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
+    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 });
+    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--epic', '50', '--legendary', '200', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
     expect(o.commands).toEqual(['effects']);
-    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
+    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, epic: 0.5, legendary: 2, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
     expect(o.margin).toBe(4);
     expect(o.units).toEqual({ common: 1, rare: 2, epic: 3, legendary: 4 });
   });
@@ -344,6 +344,8 @@ describe('effects 명령', () => {
     expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/effects 명령/);
     expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
     expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
+    expect(() => parseArgs(['effects', '--epic', '-5'])).toThrow(/영웅/);
+    expect(() => parseArgs(['effects', '--legendary', '-5'])).toThrow(/전설/);
     expect(() => parseArgs(['effects', '--margin', '1.5'])).toThrow(/정수/);
     expect(() => parseArgs(['effects', '--units', '1,5,25'])).toThrow(/등급 수/);
     expect(() => parseArgs(['effects', '--bite', 'x'])).toThrow(/숫자/);
@@ -367,6 +369,22 @@ describe('effects 명령', () => {
     const plain = runCli(['effects', '--trials', '3']).stdout;
     expect(plain).toContain('판매 왕복 포함 골드 변화');
     expect(plain).not.toContain('네임드 조우 기대');
+  });
+
+  it('등급 가중은 영향받는 등급의 캐치 비율 열을 더하고 도감 표는 영웅, 전설 열을 항상 낸다', () => {
+    const t = runCli(['effects', '--epic', '50', '--trials', '3']).stdout;
+    expect(t).toContain('영웅 이상 가중 +50%');
+    expect(t).toContain('영웅 캐치 비율');
+    expect(t).toContain('전설 캐치 비율');
+    expect(t).not.toContain('희귀 캐치 비율');
+    expect(t).toContain('영웅 도감 전부');
+    expect(t).toContain('전설 도감 전부');
+    const l = runCli(['effects', '--legendary', '100', '--trials', '3']).stdout;
+    expect(l).toContain('전설 가중 +100%');
+    expect(l).not.toContain('영웅 캐치 비율');
+    const plain = runCli(['effects', '--trials', '3']).stdout;
+    expect(plain).not.toContain('캐치 비율');
+    expect(plain).toContain('영웅 도감 전부');
   });
 
   it('JSON은 효과와 세 지표를 담고 같은 시드는 같은 결과다', () => {

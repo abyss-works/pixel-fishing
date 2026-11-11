@@ -30,7 +30,7 @@ import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './ex
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
-import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, incomeRows, supplyRows } from './effects';
+import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
 
 export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects';
@@ -83,6 +83,8 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
   --bite <N>         effects: 입질 대기 단축 %(0 이상 100 미만). 기본 0
   --rare <N>         effects: 희귀 이상 등급 가중치 증가 %(0 이상). 기본 0
+  --epic <N>         effects: 영웅 이상(영웅, 전설) 등급 가중치 증가 %(0 이상). 희귀에는 걸지 않는다. 기본 0
+  --legendary <N>    effects: 전설 등급 가중치 증가 %(0 이상). --rare, --epic과 등급별로 합산한다. 기본 0
   --variant <N>      effects: 돌연변이 가중치 증가 %(0 이상). 유물과 같은 경로로 돌연변이 가중치에 곱한다. 기본 0
   --size <N>         effects: 크기 증가 %(-100 초과). 판매가와 도감 완성 조건이 크기를 쓰지 않아 다른 값은 변하지 않는다. 기본 0
   --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 달라진다. 기본 0
@@ -93,7 +95,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --help             이 도움말
 `;
 
-const EFFECT_FLAGS = ['--bite', '--rare', '--variant', '--size', '--move', '--named', '--margin', '--units'] as const;
+const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units'] as const;
 const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', ...EFFECT_FLAGS] as const;
 const BOOL_FLAGS = ['--json', '--help'] as const;
 
@@ -133,6 +135,8 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
           const v = numberOf(a, raw);
           if (a === '--bite') o.effect.bite = v / 100;
           else if (a === '--rare') o.effect.rare = v / 100;
+          else if (a === '--epic') o.effect.epic = v / 100;
+          else if (a === '--legendary') o.effect.legendary = v / 100;
           else if (a === '--variant') o.effect.variant = v / 100;
           else if (a === '--size') o.effect.size = v / 100;
           else if (a === '--move') o.effect.move = v / 100;
@@ -288,10 +292,10 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
     );
   } else if (command === 'effects') {
     lines.push(
-      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 돌연변이 가중치 증가는 유물과 같은 경로의 폼 가중치다. 네임드 조우는 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상 가중은 제품의 등급 가중치 효과 합산에 더한다`,
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 돌연변이 가중치 증가는 유물과 같은 경로의 폼 가중치다. 네임드 조우는 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상, 영웅 이상, 전설 가중은 제품의 등급 가중치 효과 합산에 등급별로 더한다. 영웅, 전설 도감은 그 등급 어종의 일반 폼과 돌연변이 폼을 전부 모으는 시간이다`,
       '크기는 판매가와 도감 완성 조건에 쓰이지 않아 크기 배수는 이 지표에 영향이 없다. 도감에 최대 크기 기록은 있으나 제품 규칙 모듈에 완성 조건은 없다',
       '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 용량과 왕복 시간을 쓰고, 가방 채움 시간은 같은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다. 입질 대기 단축도 채움 시간을 줄여 이 값에 든다',
-      '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부 세 조건을 센다. 어종 천장은 넣지 않는다',
+      '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부, 영웅 도감 전부, 전설 도감 전부 다섯 조건을 센다. 어종 천장은 넣지 않는다',
       '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 설계 초안 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
     );
   } else if (command === 'opening') {
@@ -557,6 +561,7 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   const x = e.effect;
   const label = [
     x.bite ? `입질 대기 -${(x.bite * 100).toFixed(0)}%` : '', x.rare ? `희귀 이상 가중 +${(x.rare * 100).toFixed(0)}%` : '',
+    x.epic ? `영웅 이상 가중 +${(x.epic * 100).toFixed(0)}%` : '', x.legendary ? `전설 가중 +${(x.legendary * 100).toFixed(0)}%` : '',
     x.variant ? `돌연변이 가중치 +${(x.variant * 100).toFixed(0)}%` : '', x.size ? `크기 ${x.size > 0 ? '+' : ''}${(x.size * 100).toFixed(0)}%` : '',
     x.move ? `이동 속도 ${x.move > 0 ? '+' : ''}${(x.move * 100).toFixed(0)}%` : '', x.named ? `네임드 조우 +${(x.named * 100).toFixed(0)}%` : '',
   ].filter(Boolean).join(', ') || '효과 없음';
@@ -568,10 +573,13 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   const showTrip = e.income.some(r => r.tripChange !== null), showNamed = x.named !== 0;
   const incomeHead = ['해역', '낚싯대', '골드/h 기본', '골드/h 효과', '골드 변화', '명성/h 기본', '명성/h 효과', '명성 변화'];
   if (showTrip) incomeHead.push('판매 왕복 포함 골드 변화');
+  const boosted = RARITY_ORDER.filter(g => gradeBoostOf(x)[g] !== 0);
+  for (const g of boosted) incomeHead.push(`${RARITY[g].name} 캐치 비율(기본 → 효과)`);
   if (showNamed) incomeHead.push('네임드 조우 기대(기본 → 효과)');
   out.push(table(incomeHead, e.income.map(r => {
     const row = [nameOf(r.spot), lv(r.spot, r.level), n0(r.goldBase), n0(r.goldWith), signPct(r.goldChange), n0(r.fameBase), n0(r.fameWith), signPct(r.fameChange)];
     if (showTrip) row.push(r.tripChange === null ? '—' : signPct(r.tripChange));
+    for (const g of boosted) row.push(`${(r.grade[g].base * 100).toFixed(2)}% → ${(r.grade[g].with * 100).toFixed(2)}%`);
     if (showNamed) row.push(r.named ? `${h2(r.named.hoursBase)} → ${h2(r.named.hoursWith)}` : '없음');
     return row;
   })));
@@ -581,8 +589,11 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
     !d ? '끝나지 않음' : d.missing > 0 ? `p90 ${hrs(d.p90)}(끝내지 못한 시도 ${d.missing})` : `${hrs(d.mean!)} / ${hrs(d.p90)}`;
   const dexPair = (r: EffectsReport['dex'][number], k: keyof DexTimes) => `${dexCell(r.base[k])} → ${dexCell(r.with[k])}`;
   out.push(table(
-    ['해역', '낚싯대', '어종(전설)', '일반 폼(전설 제외)', '일반 폼 전부', '돌연변이 폼 전부'],
-    e.dex.map(r => [nameOf(r.spot), lv(r.spot, r.level), `${r.species}(${r.legendary})`, dexPair(r, 'noLegend'), dexPair(r, 'all'), dexPair(r, 'variant')]),
+    ['해역', '낚싯대', '어종(영웅, 전설)', '일반 폼(전설 제외)', '일반 폼 전부', '돌연변이 폼 전부', '영웅 도감 전부(일반+돌연변이)', '전설 도감 전부(일반+돌연변이)'],
+    e.dex.map(r => [
+      nameOf(r.spot), lv(r.spot, r.level), `${r.species}(${r.epic}, ${r.legendary})`, dexPair(r, 'noLegend'), dexPair(r, 'all'), dexPair(r, 'variant'),
+      r.epic ? dexPair(r, 'epic') : '없음', r.legendary ? dexPair(r, 'legendary') : '없음',
+    ]),
   ));
 
   out.push(`\n## 재료 공급 (낚시 1시간에 분해로 모이는 재료. 단위 ${RARITY_ORDER.map(g => `${RARITY[g].name} ${e.units[g]}`).join(', ')})`);
