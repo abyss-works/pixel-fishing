@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ARTIFACTS } from '../../../game/content/artifacts';
+import type { Artifact } from '../../../game/content/artifacts';
 import { BAITS } from '../../../game/content/baits';
 import { BOATS, MAX_BOAT, WALK_BAG_CAP, baitCost, newState, rodStats } from '../../../game/rules/logic';
 import { upgradeCost } from '../../../game/rules/balance';
@@ -9,6 +11,11 @@ import {
 } from './facility';
 
 describe('정비 화면 데이터', () => {
+  // 미끼값 효과를 가진 유물은 지금 콘텐츠에 없다. 할인 경로는 합성 유물을 보유 유물 표에 잠시 더해 검증한다
+  const discountArtifact: Artifact = { ...ARTIFACTS.find(a => a.id === 'varuna-scale')!, id: 'test-bait-discount', effects: { baitDiscount: 0.25 }, cook: undefined };
+  beforeAll(() => { (ARTIFACTS as Artifact[]).push(discountArtifact); });
+  afterAll(() => { (ARTIFACTS as Artifact[]).splice((ARTIFACTS as Artifact[]).indexOf(discountArtifact), 1); });
+
   it('낚싯대 강화의 현재·다음 스탯과 비용을 계산한다', () => {
     const game = newState();
     const preview = selectRodUpgradePreview(game);
@@ -86,7 +93,7 @@ describe('정비 화면 데이터', () => {
   });
 
   it('할인 유물이 있으면 정가와 할인가를 함께 준다 — 총액은 실제 차감액(baitCost)과 같다', () => {
-    const game = { ...newState(), gold: 100_000, artifacts: ['varuna-scale'] };
+    const game = { ...newState(), gold: 100_000, artifacts: [discountArtifact.id] };
     const quantities = createBaitQuantities();
     const bait = BAITS[1];
     quantities[bait.id] = 4;

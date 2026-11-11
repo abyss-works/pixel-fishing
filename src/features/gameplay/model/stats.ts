@@ -8,7 +8,7 @@ import type { Bait } from '../../../game/content/baits';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
-import { artifactEffectsAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
+import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
@@ -139,8 +139,12 @@ export function selectStatsSummary(game: GameState, bagBonus = 0): StatsSummary 
 export type BonusCategory = 'move' | 'fish' | 'duel' | 'shop';
 export const BONUS_CATEGORIES: readonly BonusCategory[] = ['move', 'fish', 'duel', 'shop'];
 
-const EFFECT_CATEGORY: Record<keyof ArtifactEffects, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop', biteWaitCut: 'fish',
+/** 유물 효과의 종류 - 효과 표와 보너스 줄이 함께 쓴다. 요리 효과(추가 완성 확률)는 유물의 요리 필드에서 온다 */
+export type ArtifactEffectKey = keyof ArtifactEffects | 'extraCookChance';
+
+// 요리 추가 완성은 도시락과 미끼 요리가 낚시를 돕는 효과를 늘리므로 낚시 갈래에 둔다
+const EFFECT_CATEGORY: Record<ArtifactEffectKey, BonusCategory> = {
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', baitDiscount: 'shop', biteWaitCut: 'fish', extraCookChance: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */
@@ -150,7 +154,7 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
-  | { kind: 'relic'; artifact: Artifact; effect: keyof ArtifactEffects; level: number }
+  | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number }
   | { kind: 'bait'; bait: Bait }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number };
@@ -176,6 +180,9 @@ export function selectActiveBonuses(game: GameState, guild: { level: number; eff
     for (const effect of Object.keys(effects) as (keyof ArtifactEffects)[]) {
       if (effects[effect] === undefined) continue;
       out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level }, manualOnly: false });
+    }
+    if (artifactExtraCookChanceAt(artifact, level) > 0) {
+      out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level }, manualOnly: false });
     }
   }
   const bait = baitById(game.activeBait);
