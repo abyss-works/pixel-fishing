@@ -18,7 +18,7 @@ import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
-  applyEnergyGain, canCook, canEat, canExtractEnergy, canUseCooking, energyDefaultExcluded, energyGain, settleCooking,
+  applyEnergyGain, canCook, canEat, canExtractEnergy, canUseCooking, energyGain, settleCooking,
   appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
@@ -64,7 +64,7 @@ export type GameAction =
   | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
   | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
   | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 집 거점에서 가방 개체를 등급별 기운으로 바꾼다
-  | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 기본값과 같으면 덮어쓰기를 지운다
+  | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
   | { type: 'eat'; item: string }                            // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
@@ -566,9 +566,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const check = canUseCooking(state);
       if (!check.ok) return { ok: false, error: check.reason };
       const spot: string = action.spot;
-      const isDefault = action.on === !(energyDefaultExcluded(state.boat) as string[]).includes(spot);
-      const { [spot]: _old, ...rest } = state.energyTargets;
-      const energyTargets = isDefault ? rest : { ...rest, [spot]: action.on };
+      // 고른 값은 기본값과 같아도 지우지 않는다 — 배 단계가 바뀌어도 고른 대로 남는다
+      const energyTargets = { ...state.energyTargets, [spot]: action.on };
       return { ok: true, state: { ...state, energyTargets }, result: { type: 'none' }, events: [] };
     }
     case 'resetEnergyTargets': {
@@ -600,11 +599,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 완성품을 먼저 정산한 뒤 하나를 꺼내 슬롯에 넣는다. 든 것이 있으면 이전 효과는 즉시 끝난다
       const settled = takeItem(settleCooking(state, deps.now), recipe.id);
       const endsAt = slotEndsAt(recipe, deps.now);
+      const prev = settled.slots[recipe.kind];
+      const replacedId = prev && Date.parse(deps.now) < Date.parse(prev.endsAt) ? prev.id : null;
       return {
         ok: true,
         state: { ...settled, slots: { ...settled.slots, [recipe.kind]: { id: recipe.id, endsAt } } },
         result: { type: 'none' },
-        events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: settled.slots[recipe.kind]?.id ?? null } }],
+        events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
       };
     }
     case 'dismissBaitRefund': {

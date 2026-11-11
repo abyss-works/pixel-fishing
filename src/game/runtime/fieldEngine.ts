@@ -267,12 +267,17 @@ export class GameFieldEngine {
       const school = this.school;
       if (!school) return;
       const elapsed = (Date.now() - this.biteStart) / 1000 / rodAxes(this.game).sweep.value;
-      const zones = powerZones(this.game, school.spot);
+      const zones = this.manualZones(school.spot);
       if (zones.yellow === 0) this.callbacks.onEvent({ type: 'line-cut' });
       this.hookFish(judgeTiming(elapsed, zones.yellow / 100, zones.red / 100));
       return;
     }
     if (this.snapshot.phase === 'idle') this.tryCast(false);
+  }
+
+  /** 수동 판정 바의 영역 — 미끼 슬롯의 판정 칸 폭이 걸린다. 방치 판정에는 쓰지 않는다 */
+  private manualZones(spot: SpotId): ReturnType<typeof powerZones> {
+    return powerZones(this.game, spot, slotEffects(this.game, new Date(Date.now()).toISOString(), 'normal'));
   }
 
   dispose(): void {
@@ -372,7 +377,7 @@ export class GameFieldEngine {
 
   private renderFrame(ctx: CanvasRenderingContext2D, now: number): boolean {
     const axes = rodAxes(this.game);
-    const zones = this.school ? powerZones(this.game, this.school.spot) : null;
+    const zones = this.school ? this.manualZones(this.school.spot) : null;
     renderRegion(ctx, this.def, {
       player: this.pos,
       schools: this.schools,

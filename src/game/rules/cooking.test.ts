@@ -7,9 +7,10 @@ import type { FishInstance, GameState } from './logic';
 import { COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyGain, energyTargetOf, settleCooking, slotEffects, appliedSlots,
+  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyTargetOf, settleCooking, slotEffects, appliedSlots,
 } from './cooking';
 import { effectiveBite, powerZones } from './stats';
+import { SPOTS } from '../content/spots';
 import type { PowerZone } from './stats';
 import { catchTooSoon } from './pacing';
 import { endedFirstCatch } from './firstCatch';
@@ -84,11 +85,13 @@ describe('기운 얻기 기본 선택', () => {
 });
 
 describe('setEnergyTarget와 resetEnergyTargets', () => {
-  it('기본값과 다르게 고르면 저장하고, 기본값과 같게 고르면 덮어쓰기를 지운다', () => {
+  it('고른 값은 기본값과 같아도 덮어쓰기로 남고, 배 단계가 올라도 그대로 유지된다', () => {
     const on = ok(seed(), { type: 'setEnergyTarget', spot: 'indian', on: true }).state;
     expect(on.energyTargets).toEqual({ indian: true });
-    const back = ok(on, { type: 'setEnergyTarget', spot: 'indian', on: false }).state;
-    expect(back.energyTargets).toEqual({});
+    const off = ok(on, { type: 'setEnergyTarget', spot: 'indian', on: false }).state;
+    expect(off.energyTargets).toEqual({ indian: false });
+    expect(energyTargetOf({ ...off, boat: 7 }, 'indian')).toBe(false);
+    expect(energyTargetOf({ ...off, boat: 7 }, 'southindian')).toBe(true);
   });
   it('다른 해역의 덮어쓰기와 모르는 해역 키를 건드리지 않는다', () => {
     const s = seed({ energyTargets: { coron: false, 'future-spot': true } });
@@ -284,6 +287,14 @@ describe('eat', () => {
     expect(b.state.slots.bait).toEqual({ id: bait.id, endsAt: at(T0, 30 * MIN) });
     expect(b.state.items[bait.id]).toBeUndefined();
     expect(a.events[0]).toMatchObject({ type: 'eat', payload: { item: lunch.id } });
+  });
+  it('감사 이벤트의 replaced는 이전 슬롯 효과가 끝나기 전일 때만 이전 id를 남긴다', () => {
+    const other = recipeById('cook-lunch-rare')!;
+    const s = seed({ items: { [other.id]: 1 }, slots: { lunch: { id: lunch.id, endsAt: at(T0, 60 * MIN) }, bait: null } });
+    expect(ok(s, { type: 'eat', item: other.id }, deps({ now: at(T0, 30 * MIN) })).events[0])
+      .toMatchObject({ payload: { replaced: lunch.id } });
+    expect(ok(s, { type: 'eat', item: other.id }, deps({ now: at(T0, 90 * MIN) })).events[0])
+      .toMatchObject({ payload: { replaced: null } });
   });
   it('끝나는 시각은 UTC ISO로 저장한다', () => {
     const out = ok(seed({ items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ now: '2026-11-12T08:30:15.123Z' }));
@@ -517,5 +528,17 @@ describe('appliedSlots', () => {
       const eff = slotEffects(s, T0, j);
       expect(Object.keys(appliedSlots(s, T0, j)).length > 0).toBe(eff.biteWaitCut > 0 || eff.mutationWeight > 0);
     }
+  });
+});
+
+describe('energyTargetRows', () => {
+  it('갈 수 있는 해역을 해역 순서로, 켜짐 여부와 기본값 여부와 덮어쓰기 여부와 함께 돌려준다', () => {
+    const rows = energyTargetRows(seed({ boat: 5, energyTargets: { indian: true, coron: false, 'future-spot': true } }));
+    expect(rows.map(r => r.spot)).toEqual(SPOTS.filter(s => s.boatTier <= 5).map(s => s.id));
+    const by = (id: string) => rows.find(r => r.spot === id)!;
+    expect(by('indian')).toEqual({ spot: 'indian', on: true, isDefault: false, overridden: true });
+    expect(by('barrierreef')).toEqual({ spot: 'barrierreef', on: false, isDefault: true, overridden: false });
+    expect(by('coron')).toEqual({ spot: 'coron', on: false, isDefault: false, overridden: true });
+    expect(by('pond')).toEqual({ spot: 'pond', on: true, isDefault: true, overridden: false });
   });
 });

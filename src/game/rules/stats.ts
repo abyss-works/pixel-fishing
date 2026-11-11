@@ -81,9 +81,10 @@ export function rodAxes(state: GameState): RodAxes {
 /** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
  *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소와 요리(도시락)의 입질 대기 감소는
  *  함께 더해져 그 합계에 비율로 걸린다. 요리 효과는 호출자가 slotEffects로 구해 넘긴다(방치 사이클에만 적용한다).
+ *  스탯창에 보일 출처 이름(label)은 호출자가 정한다.
  */
 export function effectiveBite(
-  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'biteWaitCut'> = NO_COOK_EFFECTS,
+  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'biteWaitCut'> & { label?: string } = NO_COOK_EFFECTS,
 ): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
   const pz = powerZones(state, spotId);
@@ -96,7 +97,7 @@ export function effectiveBite(
       const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
       if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
     }
-    if (cook.biteWaitCut > 0) mods.push({ id: 'cook-lunch', label: '도시락', delta: -total * cook.biteWaitCut });
+    if (cook.biteWaitCut > 0) mods.push({ id: 'cook-lunch', label: cook.label ?? '', delta: -total * cook.biteWaitCut });
     return stat(base, mods);
   };
   return { min: side(st.biteMin), max: side(st.biteMax) };

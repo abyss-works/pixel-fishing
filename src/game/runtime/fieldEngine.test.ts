@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { recipeById } from '../content/cooking';
 import { newState } from '../rules/logic';
 import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
@@ -343,5 +344,43 @@ describe('GameFieldEngine 도시락 입질 단축', () => {
   });
   it('수동 캐치 뒤의 대기에는 도시락 입질 단축을 넣지 않는다', () => {
     expect(secondWaitMs(true, 'normal')).toBe(secondWaitMs(false, 'normal'));
+  });
+});
+
+describe('GameFieldEngine 판정 칸 미끼', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  /** 입질 중 프레임을 그릴 때 렌더에 넘어간 GOOD 영역 폭(0~1) */
+  async function drawnZone(bait: boolean, phase: 'bite' | 'wait'): Promise<number> {
+    const { renderRegion } = await import('../rendering/canvas/scenes/region.js');
+    const mocked = vi.mocked(renderRegion);
+    mocked.mockClear();
+    const game = {
+      ...newState(), boat: 5, rod: 1,
+      slots: { lunch: null, bait: bait ? { id: 'cook-bait-judge', endsAt: new Date(Date.now() + 600_000).toISOString() } : null },
+    };
+    const engine = new GameFieldEngine('world', game, []);
+    engine.updateContext(game, false, { dispatch: () => ({ status: 'rejected', error: 'bad-request' }), onEvent: noop, onScene: noop });
+    const raw = engine as unknown as { school: unknown; transition(p: string): void; updateFrame(c: unknown, n: number, l: number): boolean };
+    raw.school = { id: 's', spot: 'pond', x: 0, y: 0 };
+    raw.transition(phase);
+    raw.updateFrame(ctx, 1000, 950);
+    const arg = mocked.mock.calls.at(-1)![2] as { zone: number };
+    engine.dispose();
+    return arg.zone;
+  }
+
+  it('수동 판정 바는 미끼 슬롯의 판정 칸 폭만큼 넓어진다', async () => {
+    // 콘텐츠의 판정 칸 값이 0일 수 있어 효과 값을 이 테스트 안에서만 8로 둔다
+    const recipe = recipeById('cook-bait-judge') as unknown as { effects: Record<string, unknown> };
+    const saved = recipe.effects;
+    recipe.effects = { judgeWidth: 8 };
+    try {
+      const base = await drawnZone(false, 'bite');
+      const wide = await drawnZone(true, 'bite');
+      expect(wide).toBeCloseTo(base + 0.08, 9);
+    } finally {
+      recipe.effects = saved;
+    }
   });
 });

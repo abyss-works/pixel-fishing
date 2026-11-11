@@ -40,11 +40,36 @@ export function energyDefaultExcluded(boat: number): SpotId[] {
   return SPOTS.filter(s => s.boatTier <= boat).slice(-2).map(s => s.id);
 }
 
+/** 그 해역의 기본 선택 — 제외 해역만 꺼짐 */
+const energyDefaultOf = (boat: number, spot: string): boolean =>
+  !(energyDefaultExcluded(boat) as string[]).includes(spot);
+
 /** 그 해역의 기운 대상 여부 — 덮어쓴 값이 있으면 그 값, 없으면 기본값(제외 해역만 꺼짐) */
 export function energyTargetOf(state: Pick<GameState, 'boat' | 'energyTargets'>, spot: string): boolean {
   const override = Object.hasOwn(state.energyTargets, spot) ? state.energyTargets[spot] : undefined;
   if (typeof override === 'boolean') return override;
-  return !(energyDefaultExcluded(state.boat) as string[]).includes(spot);
+  return energyDefaultOf(state.boat, spot);
+}
+
+export interface EnergyTargetRow {
+  spot: SpotId;
+  /** 지금 기운 대상인가 */
+  on: boolean;
+  /** 지금 값이 기본값과 같은가 */
+  isDefault: boolean;
+  /** 플레이어가 고른 값(덮어쓰기)이 저장돼 있는가 */
+  overridden: boolean;
+}
+
+/** 기운 얻기 해역 선택 목록 — 배 단계로 갈 수 있는 해역을 해역 순서로. 켜짐과 기본값 여부의 단일 정의다 */
+export function energyTargetRows(state: Pick<GameState, 'boat' | 'energyTargets'>): EnergyTargetRow[] {
+  return SPOTS.filter(s => s.boatTier <= state.boat).map(s => {
+    const on = energyTargetOf(state, s.id);
+    return {
+      spot: s.id, on, isDefault: on === energyDefaultOf(state.boat, s.id),
+      overridden: typeof state.energyTargets[s.id] === 'boolean' && Object.hasOwn(state.energyTargets, s.id),
+    };
+  });
 }
 
 /** 기운 얻기 판정 — 집 거점에서, 해금된 뒤에만 한다 */
