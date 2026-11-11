@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Button from './Button';
 import PixelIcon from './PixelIcon';
@@ -43,9 +44,13 @@ const CARD_WIDTH = [
 export default function MenuCard({ icon, title, sub, subRole = 'required', lock, className, onClick, ...rest }: MenuCardProps) {
   const { ref: subRef, isOmitted } = useOmitted<HTMLSpanElement>();
   const omittable = !!sub && subRole === 'omittable';
+  const lockReasonId = useId();
+  // 잠금 툴팁을 열 때 설명 줄이 숨겨져 있었는지. 숨겨졌다면 잠금 안내 아래에 설명도 함께 보인다
+  const [subHidden, setSubHidden] = useState(false);
   const card = (
     <Button type="button" aria-label={sub ? `${title} ${sub}` : title} {...rest}
             onClick={lock ? undefined : onClick} aria-disabled={lock ? true : undefined}
+            aria-describedby={lock ? lockReasonId : undefined}
             className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'opacity-55 cursor-not-allowed' : ''} ${className ?? ''}`}>
       {lock && <PixelIcon glyph="lock" size={14} className="absolute top-1 right-1 text-text" />}
       <span className="h-[clamp(24px,calc(var(--card)*0.44),56px)] w-full">{icon}</span>
@@ -56,8 +61,18 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
     </Button>
   );
   if (lock) {
-    const text = <>{lock.map(line => <span key={line} className="block">{line}</span>)}</>;
-    return <Tip wraps pressOpens className="flex" text={text}>{card}</Tip>;
+    const text = (
+      <>
+        {lock.map((line, i) => <span key={`${i}-${line}`} className="block">{line}</span>)}
+        {omittable && subHidden && <span className="block text-text-dim">{sub}</span>}
+      </>
+    );
+    // 판정은 툴팁을 여는 순간에 하므로 열기 전에 설명 줄의 숨김 여부를 읽어 둔다
+    const readSubHidden = () => { setSubHidden(isOmitted()); return true; };
+    return <Tip wraps pressOpens className="flex" onlyIf={readSubHidden} text={text}>
+      {card}
+      <span id={lockReasonId} className="sr-only">{lock.join(' ')}</span>
+    </Tip>;
   }
   if (!omittable) return card;
   // 생략되어 보이지 않을 때만 툴팁으로 내용을 보인다. 감싼 칸이 같은 행의 카드 높이를 따르도록 flex로 둔다
