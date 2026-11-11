@@ -11,7 +11,7 @@ import type { Row } from '../model';
 import { FISH } from '../../../src/game/content/fish';
 import { axisOf } from './progress';
 import {
-  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, effectRates, incomeRows, supplyRows, variantShareOf,
+  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, earlyRows, effectRates, incomeRows, supplyRows, variantShareOf,
 } from './effects';
 import type { Effect, TripTime } from './effects';
 
@@ -347,5 +347,61 @@ describe('등급 도감 완성 시간', () => {
     for (const r of withEpic) {
       expect(r.with.epic.mean!).toBeLessThan(r.base.epic.mean!);
     }
+  });
+});
+
+describe('진입 레벨보다 낮은 낚싯대(음수 여유)', () => {
+  it('레벨 1 미만이 되는 해역은 건너뛰고 나머지는 진입 레벨에 여유를 더한 레벨로 잰다', () => {
+    const rows = incomeRows({ axis: 'idle', effect: NO_EFFECT, margin: -4 });
+    expect(rows.map(r => r.spot)).toEqual(SPOTS.filter(s => entryLevel(s.id) - 4 >= 1).map(s => s.id));
+    for (const r of rows) expect(r.level).toBe(entryLevel(r.spot) - 4);
+    expect(rows.length).toBeLessThan(SPOTS.length);
+  });
+
+  it('도감과 재료 공급도 같은 해역 목록이다', () => {
+    const ids = incomeRows({ axis: 'idle', effect: NO_EFFECT, margin: -3 }).map(r => r.spot);
+    expect(dexRows({ axis: 'idle', effect: NO_EFFECT, margin: -3, trials: 1, seed: 1 }).map(r => r.spot)).toEqual(ids);
+    expect(supplyRows({ axis: 'idle', effect: NO_EFFECT, margin: -3, units: DEFAULT_UNITS }).map(r => r.spot)).toEqual(ids);
+  });
+
+  it('파워가 모자라면 제품의 파워 미달 규칙으로 수입이 줄어든다', () => {
+    const at = (margin: number) => incomeRows({ axis: 'idle', effect: NO_EFFECT, margin }).find(r => r.spot === 'indian')!;
+    expect(at(-2).goldBase).toBeLessThan(at(0).goldBase * 2);
+    expect(at(-2).level).toBe(entryLevel('indian') - 2);
+  });
+
+  it('같은 레벨 기준으로 같은 해역 결과는 여유 값과 레벨이 같으면 같다(시드 고정)', () => {
+    const a = dexRows({ axis: 'idle', effect: NO_EFFECT, margin: -1, trials: 3, seed: 5 });
+    const b = dexRows({ axis: 'idle', effect: NO_EFFECT, margin: -1, trials: 3, seed: 5 });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('조기 진입 비교', () => {
+  it('같은 배로 열리는 이전 해역이 있는 해역만, 같은 레벨로 낚을 수 있는 이전 해역과 견준다', () => {
+    const rows = earlyRows({ axis: 'idle', effect: fx({ rare: 0.1 }), margin: -2 });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      const here = SPOTS.find(s => s.id === r.spot)!, alt = SPOTS.find(s => s.id === r.alt)!;
+      expect(alt.boatTier).toBe(here.boatTier);
+      expect(SPOTS.indexOf(alt)).toBeLessThan(SPOTS.indexOf(here));
+      expect(r.level).toBe(entryLevel(r.spot) - 2);
+    }
+  });
+
+  it('효과 없음이면 효과를 넣은 비율과 기본 비율이 같다', () => {
+    for (const r of earlyRows({ axis: 'idle', effect: NO_EFFECT, margin: -1 })) expect(r.ratioWith).toBeCloseTo(r.ratioBase, 12);
+  });
+
+  it('여유가 0 이상이면 비교하지 않는다', () => {
+    expect(earlyRows({ axis: 'idle', effect: NO_EFFECT, margin: 0 })).toEqual([]);
+  });
+
+  it('비율은 효과를 넣은 두 해역의 시간당 골드로 계산한다', () => {
+    const e = fx({ bite: 0.1 });
+    const r = earlyRows({ axis: 'idle', effect: e, margin: -1 })[0];
+    const level = entryLevel(r.spot) - 1;
+    const g = (spot: SpotId, eff: Effect) => effectRates(spot, level, axisOf('idle', spot, level), eff).goldPerHour;
+    expect(r.ratioWith).toBeCloseTo(g(r.spot, e) / g(r.altWith, e), 9);
   });
 });

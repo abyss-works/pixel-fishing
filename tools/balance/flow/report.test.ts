@@ -339,14 +339,27 @@ describe('effects 명령', () => {
     expect(parseArgs([]).commands).not.toContain('effects');
   });
 
+  it('낚싯대 여유를 -4부터 받는다', () => {
+    expect(parseArgs(['effects', '--margin', '-4']).margin).toBe(-4);
+    expect(parseArgs(['effects', '--margin', '-1']).margin).toBe(-1);
+  });
+
+  it('음수 여유는 조기 진입 비교 표를 더하고 0 이상이면 내지 않는다', () => {
+    const t = runCli(['effects', '--margin', '-2', '--rare', '10', '--trials', '2']).stdout;
+    expect(t).toContain('## 조기 진입 비교');
+    expect(t).toContain('낚싯대는 해역 진입 레벨 -2');
+    expect(runCli(['effects', '--trials', '2']).stdout).not.toContain('## 조기 진입 비교');
+  });
+
   it('효과 옵션은 effects 명령에서만 쓸 수 있고 범위를 벗어나면 오류다', () => {
-    expect(() => parseArgs(['--bite', '10'])).toThrow(/effects 명령/);
-    expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/effects 명령/);
+    expect(() => parseArgs(['--bite', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/명령에서만/);
     expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
     expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
     expect(() => parseArgs(['effects', '--epic', '-5'])).toThrow(/영웅/);
     expect(() => parseArgs(['effects', '--legendary', '-5'])).toThrow(/전설/);
     expect(() => parseArgs(['effects', '--margin', '1.5'])).toThrow(/정수/);
+    expect(() => parseArgs(['effects', '--margin', '-5'])).toThrow(/-4/);
     expect(() => parseArgs(['effects', '--units', '1,5,25'])).toThrow(/등급 수/);
     expect(() => parseArgs(['effects', '--bite', 'x'])).toThrow(/숫자/);
   });

@@ -30,7 +30,7 @@ import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './ex
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
-import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
+import { DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, earlyRows, gradeBoostOf, incomeRows, supplyRows } from './effects';
 import type { DexTimes, Effect, EffectsReport } from './effects';
 
 export type Command = 'transition' | 'days' | 'opening' | 'exception' | 'ev' | 'gates' | 'dist' | 'travel' | 'effects';
@@ -89,11 +89,14 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --size <N>         effects: 크기 증가 %(-100 초과). 판매가와 도감 완성 조건이 크기를 쓰지 않아 다른 값은 변하지 않는다. 기본 0
   --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 달라진다. 기본 0
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
-  --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(0 이상 정수). 기본 0, 여유 스펙은 4
+  --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 설계 초안 값이다
   --seed, --trials   effects의 도감 완성 시간에도 쓴다
   --help             이 도움말
 `;
+
+/** 낚싯대 여유의 하한(진입 레벨보다 낮게 재는 최대 레벨 수) */
+const MIN_MARGIN_ABS = 4;
 
 const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units'] as const;
 const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', ...EFFECT_FLAGS] as const;
@@ -130,7 +133,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
           RARITY_ORDER.forEach((g, k) => { o.units[g] = parts[k]; });
         } else if (a === '--margin') {
           o.margin = numberOf(a, raw);
-          if (!Number.isInteger(o.margin) || o.margin < 0) throw new Error('--margin은 0 이상의 정수여야 합니다');
+          if (!Number.isInteger(o.margin) || o.margin < -MIN_MARGIN_ABS) throw new Error(`--margin은 -${MIN_MARGIN_ABS} 이상의 정수여야 합니다`);
         } else {
           const v = numberOf(a, raw);
           if (a === '--bite') o.effect.bite = v / 100;
@@ -222,6 +225,7 @@ export function runFlow(o: FlowOptions): FlowResult {
         income: incomeRows({ axis: o.axis, effect: o.effect, margin: o.margin, trips }),
         dex: dexRows({ axis: o.axis, effect: o.effect, margin: o.margin, trials: o.trials, seed: o.seed }),
         supply: supplyRows({ axis: o.axis, effect: o.effect, margin: o.margin, units: o.units }),
+        early: earlyRows({ axis: o.axis, effect: o.effect, margin: o.margin }),
       };
     }
     if (o.commands.includes('ev')) res.ev = evReport();
@@ -567,7 +571,7 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   ].filter(Boolean).join(', ') || '효과 없음';
   const info = new Map(o.spots.map(s => [s.id, s]));
   const lv = (spot: SpotId, level: number) => `Lv${level}(요구 ${info.get(spot)!.powerReq})`;
-  const out: string[] = [`\n# 요리 효과 — ${label}, 낚싯대는 해역 진입 레벨 +${e.margin}`];
+  const out: string[] = [`\n# 요리 효과 — ${label}, 낚싯대는 해역 진입 레벨 ${e.margin >= 0 ? '+' : ''}${e.margin}`];
 
   out.push('\n## 효과를 넣은 수입 (실질 낚시 시간당, 효과 없음 대비)');
   const showTrip = e.income.some(r => r.tripChange !== null), showNamed = x.named !== 0;
@@ -604,6 +608,14 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
       (r.score / r.gold * 1000).toFixed(1), n0(r.scoreWith), signPct(r.score === 0 ? 0 : r.scoreWith / r.score - 1), n0(r.goldWith),
     ]),
   ));
+
+  if (e.early.length) {
+    out.push('\n## 조기 진입 비교 (같은 배로 열리는 이전 해역 중 같은 레벨로 낚을 수 있는 가장 좋은 곳 대비 시간당 골드 비율, 효과를 넣을 때는 두 해역 모두에 효과를 건다)');
+    out.push(table(
+      ['들어간 해역', '낚싯대', '비교 해역(효과 없음)', '비율(효과 없음)', '비교 해역(효과)', '비율(효과)'],
+      e.early.map(r => [nameOf(r.spot), lv(r.spot, r.level), nameOf(r.alt), pct0(r.ratioBase), nameOf(r.altWith), pct0(r.ratioWith)]),
+    ));
+  }
   return out;
 }
 
