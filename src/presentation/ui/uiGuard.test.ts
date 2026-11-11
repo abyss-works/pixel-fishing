@@ -568,11 +568,16 @@ describe('UI 시스템 가드', () => {
     expect(src).not.toMatch(/<Modal\b|<ModalCard\b/);
   });
 
-  // 등급 괄호 표기 — 등급이 있는 대상의 이름은 이름 뒤에 등급을 괄호로 붙이고, 그 조립은 gradeName 하나가 한다
+  // 등급 괄호 표기 — 등급이 있는 대상의 이름은 이름 뒤에 등급을 괄호로 붙이고, 그 조립은 공용 gradeName(shared) 하나가 한다.
+  // 표현 계층과 기능 계층 모두 같은 함수를 쓴다
   const GRADE_IN_PARENS = /\(\$\{RARITY\[[^\]]+\]\.name\}\)/;
-  it('이름 뒤 괄호 등급 표기는 gradeName으로만 만든다', () => {
-    const offenders = presentationFiles.filter(f => f.path !== 'ui/gradeName.ts' && GRADE_IN_PARENS.test(f.src)).map(f => f.path);
+  const featureFiles = Object.entries(import.meta.glob('../../features/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+    .map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }))
+    .filter(f => !isTestFile(f.path));
+  it('이름 뒤 괄호 등급 표기는 공용 gradeName으로만 만든다', () => {
+    const offenders = [...presentationFiles, ...featureFiles].filter(f => GRADE_IN_PARENS.test(f.src)).map(f => f.path);
     expect(offenders).toEqual([]);
+    expect([...presentationFiles, ...featureFiles].some(f => /shared\/lib\/gradeName'/.test(f.src))).toBe(true);
     expect(GRADE_IN_PARENS.test('`${name}(${RARITY[grade].name})`')).toBe(true);
   });
 });

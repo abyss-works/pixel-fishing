@@ -3,6 +3,7 @@ import { COOKING_UNLOCK_BOAT, LEGACY_BAIT_REFUND } from '../../../game/content/c
 import { RARITY } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import type { BaitRefund } from '../../../game/rules/logic';
+import { gradeName } from '../../../shared/lib/gradeName';
 import { progressLines } from '../../display/model/menuLock';
 
 export interface BaitRefundRow {
@@ -27,7 +28,7 @@ const BAIT_ID_PREFIX = 'bait-';
 /** 이전 미끼 id의 표시 이름 - 환불표에는 이름이 없어 id가 가리키는 등급으로 "미끼(등급)" 꼴을 만든다 */
 function legacyBaitName(id: string): string {
   const grade = id.startsWith(BAIT_ID_PREFIX) ? id.slice(BAIT_ID_PREFIX.length) : '';
-  return Object.hasOwn(RARITY, grade) ? `미끼(${RARITY[grade as RarityId].name})` : '미끼';
+  return Object.hasOwn(RARITY, grade) ? gradeName('미끼', RARITY[grade as RarityId].name) : '미끼';
 }
 
 /**

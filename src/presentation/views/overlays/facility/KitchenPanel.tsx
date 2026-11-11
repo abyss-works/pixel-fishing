@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
-import { selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
+import { recipeLabel, selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import ModalCard from '../../../ui/ModalCard';
@@ -10,7 +10,6 @@ import Tip from '../../../ui/Tip';
 import { fmtMinutes } from '../../../ui/format';
 import EnergyTab from './EnergyTab';
 import RecipeTab from './RecipeTab';
-import { recipeLabel } from './kitchenParts';
 import type { KitchenAct } from './kitchenParts';
 
 type KitchenTab = 'lunch' | 'bait' | 'energy';

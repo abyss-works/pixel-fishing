@@ -9,6 +9,7 @@ import { canCook, cookingProgress, cookStorageUsed, settleCooking } from '../../
 import { extraCookChance } from '../../../game/rules/artifactLevel';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
+import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
@@ -18,6 +19,12 @@ export const recipesOfKind = (kind: CookKind): Recipe[] => RECIPES.filter(r => r
 /** 등급 미끼의 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급. 미끼 요리 중 등급 가중이 없는 것과 도시락은 null이다 */
 export function recipeGrade(recipe: Recipe): RarityId | null {
   return recipe.kind === 'bait' ? recipe.effects.rarityWeight?.grades[0] ?? null : null;
+}
+
+/** 화면에 쓰는 레시피 이름 — 등급 미끼는 이름 뒤에 등급을 괄호로 붙인다 */
+export function recipeLabel(recipe: Recipe): string {
+  const grade = recipeGrade(recipe);
+  return grade === null ? recipe.name : gradeName(recipe.name, RARITY[grade].name);
 }
 
 export interface RecipeEffectLine { label: string; value: string }

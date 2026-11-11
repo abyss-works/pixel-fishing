@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import {
-  ENERGY_NAME, clearSpotPicks, energyResultRows, pickEnergyUids, selectEnergyView,
+  ENERGY_NAME, clearSpotPicks, energyLabel, energyResultRows, pickEnergyUids, selectEnergyView,
 } from '../../../../features/kitchen/model/energy';
 import type { EnergyPicks } from '../../../../features/kitchen/model/energy';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
@@ -14,7 +14,6 @@ import Popover from '../../../ui/Popover';
 import ToggleChip from '../../../ui/ToggleChip';
 import Tip, { TipList } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
-import { gradeName } from '../../../ui/gradeName';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import FishPickTable from './FishPickTable';
 import { FacilityTabBody } from './facilityParts';
@@ -29,7 +28,7 @@ const POPOVER_TIP = [
 
 /** 얻는 기운을 등급마다 한 줄로 — 합계 툴팁과 결과 메시지 툴팁이 같은 목록을 쓴다 */
 const energyRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
-  energyResultRows(byGrade).map(({ grade, count }) => ({ label: gradeName(ENERGY_NAME, grade), value: `+${count}` }));
+  energyResultRows(byGrade).map(({ grade, count }) => ({ label: energyLabel(grade), value: `+${count}` }));
 
 // 기운 얻기 탭 — 판매 창과 같은 어종 표(FishPickTable)로 물고기를 골라 생명의 기운으로 바꾼다. 확정한 뒤에도 창은 열려 있고
 // 결과는 메시지 창에 한 줄로 남는다. 체크 기본값은 해역 기준이고 게임 규칙이 정한다. 해역별 켜짐과 꺼짐은 확정 버튼 왼쪽

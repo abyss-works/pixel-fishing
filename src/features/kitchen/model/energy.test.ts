@@ -4,7 +4,7 @@ import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
 import {
-  clearSpotPicks, energyResultRows, pickEnergyUids, selectEnergyView,
+  clearSpotPicks, energyLabel, energyResultRows, pickEnergyUids, selectEnergyView,
 } from './energy';
 
 const home = { kind: 'base', id: 'home' } as const;
@@ -120,5 +120,12 @@ describe('확정 가능 판정', () => {
 
   it('요리가 열리기 전이면 해금 거부 사유를 전한다', () => {
     expect(selectEnergyView(seed({ boat: 4 }), {}).allowed).toEqual({ ok: false, reason: 'cooking-locked' });
+  });
+});
+
+describe('기운의 화면 이름', () => {
+  it('이름 뒤에 등급을 괄호로 붙인다', () => {
+    expect(energyLabel('common')).toBe('생명의 기운(일반)');
+    expect(energyLabel('legendary')).toBe('생명의 기운(전설)');
   });
 });

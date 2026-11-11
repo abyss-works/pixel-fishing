@@ -5,7 +5,7 @@ import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../../game/content/cooking';
 import {
-  recipeEffectLines, recipeGrade, recipesOfKind, selectKitchenStatus, selectRecipeView,
+  recipeEffectLines, recipeGrade, recipeLabel, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -197,5 +197,17 @@ describe('조리 상태 줄', () => {
   it('보관함이 상한이면 가득이다', () => {
     const s = selectKitchenStatus(seed({ items: { [R.id]: COOK_STORAGE_CAP } }), T0);
     expect(s.full).toBe(true);
+  });
+});
+
+describe('레시피의 화면 이름', () => {
+  it('등급 미끼는 이름 뒤에 등급을 괄호로 붙인다', () => {
+    expect(recipeLabel(recipeById('cook-bait-rare')!)).toBe('롱페퍼 미끼(희귀)');
+    expect(recipeLabel(recipeById('cook-bait-legendary')!)).toBe('용연향 미끼(전설)');
+  });
+
+  it('등급이 없는 도시락과 미끼 요리는 이름 그대로다', () => {
+    expect(recipeLabel(recipeById('cook-lunch-bite')!)).toBe('가루디야');
+    expect(recipeLabel(recipeById('cook-bait-judge')!)).toBe('메이스 미끼');
   });
 });

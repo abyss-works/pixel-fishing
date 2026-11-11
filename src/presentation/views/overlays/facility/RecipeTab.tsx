@@ -3,7 +3,7 @@ import type { CookKind } from '../../../../game/content/cooking';
 import { RARITY } from '../../../../game/content/rarity';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
+import { recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
 import { GradeName } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
@@ -14,7 +14,6 @@ import Tip from '../../../ui/Tip';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
 import { fmtDecimal2, fmtMinutes } from '../../../ui/format';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
-import { recipeLabel } from './kitchenParts';
 import type { KitchenAct } from './kitchenParts';
 
 const MIN_MS = 60_000;

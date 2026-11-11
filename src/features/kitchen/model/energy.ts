@@ -1,7 +1,7 @@
 // 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
 // 체크 기본값과 확정 가능 여부는 게임 규칙(energyTargetOf, canExtractEnergy)이 정하고, 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 // 개체를 직접 고른 값(EnergyPicks)은 해역 기본값 위에 얹힌다. 화면이 들고 있는 선택 상태의 형식과 갱신 규칙이 여기 있다.
-import { RARITY_ORDER } from '../../../game/content/rarity';
+import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
@@ -9,11 +9,15 @@ import { energyDefaultExcluded, energyGain, energyTargetOf, canExtractEnergy } f
 import { instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
+import { gradeName } from '../../../shared/lib/gradeName';
 import { selectSalePreview } from '../../inventory/model/catalog';
 import type { SaleRow } from '../../inventory/model/catalog';
 
 /** 생명의 기운의 화면 이름 — 등급은 이름 뒤 괄호로 붙인다 */
 export const ENERGY_NAME = '생명의 기운';
+
+/** 그 등급 기운의 화면 이름 — 이름 뒤 괄호에 등급을 붙인다 */
+export const energyLabel = (grade: RarityId): string => gradeName(ENERGY_NAME, RARITY[grade].name);
 
 /** 개체를 직접 고른 값 — uid별 체크 여부. 없는 개체는 그 어종 해역의 기본값을 따른다 */
 export type EnergyPicks = Readonly<Record<string, boolean>>;
