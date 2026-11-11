@@ -320,6 +320,16 @@ describe('등급 도감 완성 시간', () => {
     expect(t.legendary).toBeNull();
   });
 
+  it('등급 열은 일반 폼, 전설 제외, 돌연변이 도감의 결과를 바꾸지 않는다', () => {
+    const a = dexTimes([grade('a', 'epic', 0.3), grade('b', 'legendary', 0.2), grade('c', 'common', 0.5)], 0.3, 3600, 100, rng(3));
+    const b = dexTimes([grade('a', 'common', 0.3), grade('b', 'legendary', 0.2), grade('c', 'common', 0.5)], 0.3, 3600, 100, rng(3));
+    expect(a.noLegend).toEqual(b.noLegend);
+    expect(a.all).toEqual(b.all);
+    expect(a.variant).toEqual(b.variant);
+    expect(a.epic).not.toBeNull();
+    expect(b.epic).toBeNull();
+  });
+
   it('그 등급 어종이 없으면 끝난 시도가 없다', () => {
     const t = dexTimes([grade('a', 'common', 1)], 0.5, 3600, 10, rng(1));
     expect(t.epic).toBeNull();
@@ -332,8 +342,10 @@ describe('등급 도감 완성 시간', () => {
 
   it('영웅 가중은 같은 시드에서 영웅 도감 시간을 줄인다', () => {
     const rows = dexRows({ axis: 'idle', effect: fx({ epic: 1 }), margin: 0, trials: 20, seed: 7 });
-    for (const r of rows) {
-      if (r.epic > 0 && r.base.epic && r.with.epic) expect(r.with.epic.mean!).toBeLessThan(r.base.epic.mean!);
+    const withEpic = rows.filter(r => r.epic > 0 && r.base.epic && r.with.epic);
+    expect(withEpic.length).toBeGreaterThanOrEqual(1);
+    for (const r of withEpic) {
+      expect(r.with.epic.mean!).toBeLessThan(r.base.epic.mean!);
     }
   });
 });

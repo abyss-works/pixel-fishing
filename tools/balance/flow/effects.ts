@@ -69,7 +69,7 @@ export function variantShareOf(spot: SpotId, boost: number): number {
   return variantShare(boost > 0 ? { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal } : weights);
 }
 
-/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 가중은 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
+/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 이상, 영웅 이상, 전설 가중은 등급별로 합산해 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
 export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect): EffectRates {
   let extra: DrawOptions = {};
   const boost = gradeBoostOf(e);
@@ -175,7 +175,7 @@ export interface DexOptions {
   axis: FlowAxis; effect: Effect; margin: number; trials: number; seed: number;
 }
 
-/** 한 해역의 도감 완성 시간 몬테카를로 — 캐치마다 어종과 폼을 뽑아 세 조건의 완성 캐치 수를 센다 */
+/** 한 해역의 도감 완성 시간 몬테카를로 — 캐치마다 어종과 폼을 뽑아 다섯 조건의 완성 캐치 수를 센다 */
 export function dexTimes(rows: readonly Row[], share: number, catchesPerHour: number, trials: number, rand: () => number): DexTimes {
   const n = rows.length;
   const legend = rows.map(r => r.fish.rarity === 'legendary');
