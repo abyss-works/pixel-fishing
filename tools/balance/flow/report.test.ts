@@ -471,7 +471,7 @@ describe('recipes 명령', () => {
     expect(r.stdout).toContain('## 가루디야(cook-lunch-bite)');
     expect(r.stdout).toContain('## 집 기운 얻기 공급');
     expect(r.stdout).toContain('## 집 기운으로 만들 수 있는 레시피 수');
-    expect(r.stdout).toContain('제외(가장 앞선 두 해역)');
+    expect(r.stdout).toContain('제외(가장 앞선 해역)');
     expect(r.stdout).not.toContain('(cook-lunch-rare)');
   });
 

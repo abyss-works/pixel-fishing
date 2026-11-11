@@ -15,23 +15,23 @@ const inst = (uid: string, spot: SpotId, locked = false, rarity?: string): FishI
   ({ uid, fishId: fishIn(spot, rarity).id, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
 describe('체크 기본값', () => {
-  // 배 5의 기본값: 가장 앞선 두 해역(그레이트 배리어 리프, 인도양)은 꺼짐, 그 앞 해역은 켜짐
+  // 배 5의 기본값: 가장 앞선 해역(인도양)만 꺼짐, 그 앞 해역(그레이트 배리어 리프 포함)은 켜짐
   const bag = [inst('a1', 'pond'), inst('a2', 'pond'), inst('b1', 'sea'), inst('c1', 'indian'), inst('d1', 'barrierreef')];
 
-  it('앞선 두 해역의 어종은 체크하지 않고 그 앞 해역의 어종은 체크한다', () => {
+  it('가장 앞선 해역의 어종은 체크하지 않고 그 앞 해역의 어종은 체크한다', () => {
     const view = selectEnergyView(seed({ bag }), {});
-    expect(view.uids.sort()).toEqual(['a1', 'a2', 'b1']);
-    expect(view.total).toBe(3);
+    expect(view.uids.sort()).toEqual(['a1', 'a2', 'b1', 'd1']);
+    expect(view.total).toBe(4);
   });
 
   it('덮어쓴 해역은 고른 값을 따르고 덮어쓰지 않은 해역은 기본값을 따른다', () => {
     const view = selectEnergyView(seed({ bag, energyTargets: { pond: false, indian: true } }), {});
-    expect(view.uids.sort()).toEqual(['b1', 'c1']);
+    expect(view.uids.sort()).toEqual(['b1', 'c1', 'd1']);
   });
 
   it('개체를 직접 고르면 해역 기본값 위에 얹힌다', () => {
     const view = selectEnergyView(seed({ bag }), { a1: false, c1: true });
-    expect(view.uids.sort()).toEqual(['a2', 'b1', 'c1']);
+    expect(view.uids.sort()).toEqual(['a2', 'b1', 'c1', 'd1']);
   });
 
   it('잠근 개체는 해역이 켜져 있어도 고르지 않고 안내 수에 센다', () => {

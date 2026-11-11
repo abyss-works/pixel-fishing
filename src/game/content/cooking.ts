@@ -79,14 +79,10 @@ export interface Recipe {
   effects: CookEffects;
 }
 
-// 등급 미끼의 기운 수량은 열린 항목이다. 아래 값은 릴리즈 전에 해역별 기운 공급을 잰 뒤 다시 정하는 임시값이다.
-const GRADE_BAIT_COMMON_COST = 50;
-const GRADE_BAIT_COST: Readonly<Record<'rare' | 'epic' | 'legendary', number>> = { rare: 10, epic: 2, legendary: 1 };
-
 export const RECIPES: readonly Recipe[] = [
   // 도시락 — 도시락 슬롯, 방치 캐치에 적용
   { id: 'cook-lunch-bite', name: '가루디야', kind: 'lunch',
-    cost: { common: 200 }, effects: { biteWaitCut: 0.1 } },
+    cost: { common: 600 }, effects: { biteWaitCut: 0.1 } },
   { id: 'cook-lunch-rare', name: '민 몰리', kind: 'lunch',
     cost: { common: 100, rare: 20 }, effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.1 } } },
   { id: 'cook-lunch-mutation', name: '생선 비리야니', kind: 'lunch',
@@ -100,15 +96,15 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'cook-bait-judge', name: '메이스 미끼', kind: 'bait',
     cost: { common: 50, rare: 5 }, effects: { judgeWidth: JUDGE_WIDTH_BONUS } },
   { id: 'cook-bait-mutation', name: '사프란 미끼', kind: 'bait',
-    cost: { epic: 4, legendary: 2 }, effects: { mutationWeight: 1 } },
+    cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1 } },
   { id: 'cook-bait-rare', name: '롱페퍼 미끼', kind: 'bait',
-    cost: { common: GRADE_BAIT_COMMON_COST, rare: GRADE_BAIT_COST.rare },
+    cost: { common: 50, rare: 15 },
     effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.2 } } },
   { id: 'cook-bait-epic', name: '큐베브 미끼', kind: 'bait',
-    cost: { common: GRADE_BAIT_COMMON_COST, epic: GRADE_BAIT_COST.epic },
+    cost: { common: 50, epic: 5 },
     effects: { rarityWeight: { grades: gradesFrom('epic'), bonus: 0.4 } } },
   { id: 'cook-bait-legendary', name: '용연향 미끼', kind: 'bait',
-    cost: { common: GRADE_BAIT_COMMON_COST, legendary: GRADE_BAIT_COST.legendary },
+    cost: { common: 50, legendary: 3 },
     effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.6 } } },
 ];
 

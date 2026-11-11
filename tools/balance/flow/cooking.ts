@@ -319,12 +319,12 @@ export interface BagSupplyRow {
   spot: SpotId; level: number;
   /** 가방 용량과 그 시간 동안 낚은 개체 수 */
   cap: number; catches: number;
-  /** 이 해역이 그 배 단계의 가장 앞선 두 해역이라 기본 선택에서 빠지는가 */
+  /** 이 해역이 그 배 단계의 가장 앞선 해역이라 기본 선택에서 빠지는가 */
   frontmost: boolean;
   /** 시도 평균 — 가방에 남은 개체 수와 판매가 합, 가방이 차서 놓아준 개체 수와 판매가 합 */
   kept: Record<RarityId, number>; keptGold: number;
   released: Record<RarityId, number>; releasedGold: number;
-  /** 가방에 남은 개체 가운데 해역 기본 선택대로 기운으로 바꾼 등급별 개수와 그 개체의 판매가 합. 가장 앞선 두 해역이면 모두 0이다 */
+  /** 가방에 남은 개체 가운데 해역 기본 선택대로 기운으로 바꾼 등급별 개수와 그 개체의 판매가 합. 가장 앞선 해역이면 모두 0이다 */
   energy: Record<RarityId, number>; energyGold: number;
 }
 

@@ -198,7 +198,7 @@ describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
   });
 
   it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
-    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 300 } });
+    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 900 } });
     render(<App />);
     clickFurniture('kitchen');
     fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
