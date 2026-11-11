@@ -2396,7 +2396,7 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "payload": {
           "fish": [
             {
-              "fishId": "crucian",
+              "fishId": "minnow",
               "form": "normal",
               "uid": "<uuid>",
             },
@@ -2425,6 +2425,18 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
       },
     ],
     "fish_instances": [
+      {
+        "caught_at": "2026-01-01T00:00:00.000Z",
+        "fish_id": "crucian",
+        "form": "normal",
+        "judgment": "good",
+        "locked": false,
+        "size": 10,
+        "slot": null,
+        "spot": "pond",
+        "uid": "<uuid>",
+        "user_id": "<user>",
+      },
       {
         "caught_at": "2026-01-01T00:00:00.000Z",
         "fish_id": "crucian",
@@ -2768,18 +2780,6 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "judgment": "good",
         "locked": false,
         "size": 68,
-        "slot": null,
-        "spot": "pond",
-        "uid": "<uuid>",
-        "user_id": "<user>",
-      },
-      {
-        "caught_at": "2026-01-01T00:00:00.000Z",
-        "fish_id": "minnow",
-        "form": "normal",
-        "judgment": "good",
-        "locked": false,
-        "size": 11,
         "slot": null,
         "spot": "pond",
         "uid": "<uuid>",
@@ -3299,7 +3299,7 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         },
         "released": [
           {
-            "name": "붕어",
+            "name": "피라미",
             "uid": "<uuid>",
           },
         ],

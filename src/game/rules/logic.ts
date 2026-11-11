@@ -1019,17 +1019,27 @@ export function addCatch(
 
 // ---------- 가방 용량 ----------
 // "가장 안 특별한" 순서 — 놓아줄 후보를 고르는 단일 기준.
-// 등급 → 폼(변이가 더 특별) → 크기 → uid(결정성). 크기 미상(이관 개체)은 가장 작은 것 취급:
-// 정보가 없는 개체를 붙들고 있을 이유가 없고, 기록은 어차피 records에 남는다.
+// 등급 → 개체 판매가(priceOfInstance) → 크기 → uid(결정성). 판매가가 폼 배수를 포함하므로
+// 비싼 폼(변이)은 같은 어종 일반보다 늦게 나가고, 더 싼 어종의 변이보다 일반이 늦을 수 있다.
+// 크기 미상(이관 개체)은 가장 작은 것 취급: 정보가 없는 개체를 붙들고 있을 이유가 없고,
+// 기록은 어차피 records에 남는다.
 const blandTuple = (i: FishInstance): [number, number, number, string] => {
   const fish = instanceFish(i);
   return [
     fish ? RARITY[fish.rarity].order : -1, // 삭제된 어종은 맨 먼저 (표시도 안 되는 개체)
-    i.form === 'variant' ? 1 : 0,
+    priceOfInstance(i),
     i.size ?? -1,
     i.uid,
   ];
 };
+
+/** 어종 x 폼 판매가표 — 서버가 SQL에서 compareBlandness와 같은 순서로 후보를 고르는 데 쓴다.
+ *  가격은 priceOf 그대로다. 서버는 이 표를 조인해 (판매가, 크기, uid) 순으로 정렬한다. */
+export function evictionPriceRows(): { fishId: string; rarity: Fish['rarity']; form: FormId; price: number }[] {
+  return FISH.flatMap(f => (Object.keys(MUTATION_WEIGHTS) as FormId[]).map(form => ({
+    fishId: f.id, rarity: f.rarity, form, price: priceOf(f, form),
+  })));
+}
 
 /** 개체 간 "안 특별함" 비교 — overflowUids 정렬과 서버 피해자 선정의 단일 근원.
  *  0 미만 = a가 더 먼저 놓아줄 후보. */
