@@ -192,7 +192,7 @@ export default function GameView(props: GameViewProps) {
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
-      case 'sell': case 'rod': case 'boat': case 'bounty': case 'wardrobe':
+      case 'sell': case 'rod': case 'boat': case 'bounty': case 'wardrobe': case 'kitchen':
         setActionPanel(panel => panel === id ? null : id);
         return;
       case 'rank':
@@ -217,9 +217,6 @@ export default function GameView(props: GameViewProps) {
       case 'ferry':
         setActionPanel(null);
         setFerryOpen(true);
-        return;
-      case 'kitchen':
-        // 부엌 창은 아직 없다. 열린 뒤에도 누르면 아무 창도 열지 않는다
         return;
     }
   };

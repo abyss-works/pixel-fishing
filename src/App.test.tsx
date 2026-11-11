@@ -21,6 +21,7 @@ import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
 import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
 import { WALK_BAG_CAP } from './game/content/boats';
+import { ENERGY_ITEM_IDS } from './game/content/cooking';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
@@ -164,6 +165,48 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument();
+  });
+});
+
+describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
+  it('부엌 카드를 누르면 부엌 창이 열리고 같은 카드를 다시 누르면 닫힌다', () => {
+    seed({ boat: 5 });
+    render(<App />);
+    clickFurniture('kitchen');
+    expect(screen.getByRole('heading', { name: '부엌' })).toBeInTheDocument();
+    clickFurniture('kitchen');
+    expect(screen.queryByRole('heading', { name: '부엌' })).not.toBeInTheDocument();
+  });
+
+  it('요리가 열리기 전에는 부엌 카드가 잠겨 창이 열리지 않는다', () => {
+    seed({ boat: 4 });
+    render(<App />);
+    clickFurniture('kitchen');
+    expect(screen.queryByRole('heading', { name: '부엌' })).not.toBeInTheDocument();
+  });
+
+  it('기운 얻기 확정은 가방의 물고기를 기운으로 바꾸고 창은 열린 채 결과가 메시지 창에 한 줄로 남는다', () => {
+    seed({ boat: 5, bag: [inst('carp'), inst('carp')] }); // 잉어: 마을 연못 어종, 배 5의 기본값은 켜짐
+    render(<App />);
+    clickFurniture('kitchen');
+    clickTab('기운 얻기');
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
+    expect(screen.getByRole('heading', { name: '부엌' })).toBeInTheDocument();
+    expect(screen.getByRole('log')).toHaveTextContent('생명의 기운 2개를 얻었어요!');
+    expect(hud()).toContain('가방 0 /');
+    expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
+  });
+
+  it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
+    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 300 } });
+    render(<App />);
+    clickFurniture('kitchen');
+    fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
+    const line = screen.getByText('조리 중').closest('div')!;
+    expect(within(line).getByText('가루디야')).toBeInTheDocument();
+    expect(within(line).getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '조리 시작' })).toBeDisabled(); // 이미 조리 중
+    expect(screen.getByText('보관함').closest('div')).toHaveTextContent('1/10');
   });
 });
 

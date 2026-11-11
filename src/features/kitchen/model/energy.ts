@@ -12,6 +12,9 @@ import type { RuleCheck } from '../../../game/rules/rules';
 import { selectSalePreview } from '../../inventory/model/catalog';
 import type { SaleRow } from '../../inventory/model/catalog';
 
+/** 생명의 기운의 화면 이름 — 등급은 이름 뒤 괄호로 붙인다 */
+export const ENERGY_NAME = '생명의 기운';
+
 /** 개체를 직접 고른 값 — uid별 체크 여부. 없는 개체는 그 어종 해역의 기본값을 따른다 */
 export type EnergyPicks = Readonly<Record<string, boolean>>;
 

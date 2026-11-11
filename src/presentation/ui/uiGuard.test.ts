@@ -540,4 +540,39 @@ describe('UI 시스템 가드', () => {
     expect(adjustedInButtonWithoutFlag('<button><AdjustedAmount amount={a} inButton={false} /></button>')).toHaveLength(1);
     expect(adjustedInButtonWithoutFlag('<Note><AdjustedAmount amount={a} /></Note>')).toEqual([]);
   });
+
+  // 어종 선택 표 — 판매 창과 부엌 창의 기운 얻기 탭은 같은 표를 쓴다. 한쪽만 고쳐져 갈라지는 길을 막는다
+  const FISH_PICK_SCREENS = ['views/overlays/facility/FacilityModal.tsx', 'views/overlays/facility/EnergyTab.tsx'];
+  it('판매 창과 기운 얻기 탭은 어종 선택 표를 공용 FishPickTable로 그린다 - 행과 개체 줄을 직접 그리지 않는다', () => {
+    for (const path of FISH_PICK_SCREENS) {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      expect(src, path).toMatch(/<FishPickTable\b/);
+      expect(src, path).not.toMatch(/<InstanceLine\b|<UnsizedLine\b/);
+    }
+  });
+
+  // 팝오버 — 버튼에 붙어 뜨는 작은 칸은 공용 Popover 하나다. 바깥 누르기 리스너를 화면이 직접 걸면 닫는 방법이 갈라진다
+  const OUTSIDE_PRESS = /addEventListener\(\s*['"](?:pointerdown|mousedown|touchstart)['"]/;
+  const OUTSIDE_PRESS_EXCEPTIONS = new Set([
+    'views/overlays/menu/GameMenu.tsx', // 게임 메뉴 드롭다운 - 공용 Popover 이전 구현이다(줄이기만 한다)
+  ]);
+  it('화면은 바깥 누르기 닫기를 직접 구현하지 않고 Popover를 쓴다 - 예외 목록의 자리만', () => {
+    const using = screenFiles.filter(f => OUTSIDE_PRESS.test(f.src)).map(f => f.path);
+    expect(using.filter(p => !OUTSIDE_PRESS_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...OUTSIDE_PRESS_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+    expect(OUTSIDE_PRESS.test(`document.addEventListener('pointerdown', onDown)`)).toBe(true);
+  });
+  it('부엌 창의 해역별 기운 대상은 Popover가 연다 - 창을 더 열지 않는다', () => {
+    const src = presentationFiles.find(f => f.path === 'views/overlays/facility/EnergyTab.tsx')?.src ?? '';
+    expect(src).toMatch(/<Popover\b/);
+    expect(src).not.toMatch(/<Modal\b|<ModalCard\b/);
+  });
+
+  // 등급 괄호 표기 — 등급이 있는 대상의 이름은 이름 뒤에 등급을 괄호로 붙이고, 그 조립은 gradeName 하나가 한다
+  const GRADE_IN_PARENS = /\(\$\{RARITY\[[^\]]+\]\.name\}\)/;
+  it('이름 뒤 괄호 등급 표기는 gradeName으로만 만든다', () => {
+    const offenders = presentationFiles.filter(f => f.path !== 'ui/gradeName.ts' && GRADE_IN_PARENS.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(GRADE_IN_PARENS.test('`${name}(${RARITY[grade].name})`')).toBe(true);
+  });
 });
