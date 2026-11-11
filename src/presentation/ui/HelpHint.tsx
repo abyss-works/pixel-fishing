@@ -5,7 +5,7 @@ import type { Anchor } from './tooltipPlacement';
 
 // 호버 도움말 — 요소 옆에 붙는 작은 물음표.
 // 네이티브 title 툴팁이 아니라 **게임 스타일 버블**을 띄운다(브라우저 기본 툴팁은
-// 게임 톤과 어긋난다는 피드백). 문장은 호출자가 아니라 서비스/데이터가 갖는다
+// 게임 톤과 어긋난다). 문장은 호출자가 아니라 서비스/데이터가 갖는다
 // (stats.powerHelpText처럼) — UI에서 규칙 서술을 재작성하지 않는다.
 //
 // 구현: mouseenter/focus 시 rect를 재고 TooltipBubble(portal)을 띄운다. 모달 안에서도 안 잘리고,

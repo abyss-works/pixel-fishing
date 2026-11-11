@@ -176,7 +176,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 기본은 전부 선택 — 두 마리분
     expect(screen.getByRole('button', { name: '판매 (+60G)' })).toBeInTheDocument();
 
-    // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
+    // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '이 형태 최대' })).toBeInTheDocument();
@@ -1186,7 +1186,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
   });
 
   it('최대 배지는 폼별 — 변이 중 가장 큰 놈도 배지를 받는다', () => {
-    // 변이는 "종만 같고 다른 개체"(rarity-design 7절) — 도감도 최대 크기를 폼별로 센다.
+    // 변이는 "종만 같고 다른 개체" — 도감도 최대 크기를 폼별로 센다.
     // 종 단위로 재면 일반 42cm 때문에 변이 30cm가 배지를 못 받아, 남길 판단 기준과 어긋난다.
     seed({ bag: [
       inst('carp', 'normal', 42), inst('carp', 'normal', 8),
