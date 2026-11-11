@@ -96,5 +96,8 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(SKIP_DETAIL.has('boot')).toBe(true);
     // 옷장 액션은 골드와 blob(외형·가진 모자)만 바꾼다
     for (const t of ['changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
+    // 요리와 기운 설정은 가방 개체를 쓰지 않아 스킵하고, 기운 얻기는 개체를 소비하므로 스킵하지 않는다
+    for (const t of ['cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund']) expect(SKIP_DETAIL.has(t), t).toBe(true);
+    expect(SKIP_DETAIL.has('extractEnergy')).toBe(false);
   });
 });
