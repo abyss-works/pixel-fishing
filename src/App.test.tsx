@@ -19,7 +19,7 @@ import { APP_VERSION } from './version';
 import { PATCH_NOTES } from './game/content/patchnotes';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
-import { BAIT_WEIGHT_BONUS, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
 import { WALK_BAG_CAP } from './game/content/boats';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
@@ -801,7 +801,6 @@ describe('R22: 도움말 탭', () => {
     expect(help).toContain(`${BOATS[BOATS.length - 1].bagCap}마리`);
     expect(help).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);  // 월척 기준
     expect(help).toContain(`${VARIANT_PRICE_MULT}배 가격`);   // 변이 판매가
-    expect(help).toContain(`가중치가 ${BAIT_WEIGHT_BONUS * 100}% 늘어요`); // 미끼 효과 보너스
   });
 
   it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {
@@ -1042,9 +1041,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(document.querySelector('button[aria-pressed]')).toBeNull();
   });
 
@@ -1485,42 +1484,13 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   });
 });
 
-describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
-  const COMMON = 'bait-common';
-
-  it('가방 탭은 섹션(물고기/아이템)으로 분리되고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
-    seed({ items: { [COMMON]: 2, 'bait-rare': 1 } });
-    render(<App />);
-    clickTab(/^가방/);
-    expect(screen.getByRole('heading', { name: /물고기 \(0\/60마리/ })).toBeInTheDocument(); // 맨발 기본 상한
-
-    // 아이템 섹션으로 전환해야 미끼가 보인다 (물고기와 한 스크롤을 쓰지 않는다) — 가방 탭 재클릭
-    clickTab(/가방\s*\(물고기\)/);
-    // 보유 없는 미끼는 애초에 누를 수 없다
-    expect(screen.getByLabelText('전설 미끼 활성화')).toBeDisabled();
-    // 일반 활성 → 사용 중 전환
-    fireEvent.click(screen.getByLabelText('일반 미끼 활성화'));
-    await waitFor(() => expect(screen.getByLabelText('일반 미끼 비활성화')).toBeInTheDocument());
-    // 다른 미끼로 교체하면 이전 것은 꺼진다 (4중 1)
-    fireEvent.click(screen.getByLabelText('희귀 미끼 활성화'));
-    await waitFor(() => expect(screen.getByLabelText('희귀 미끼 비활성화')).toBeInTheDocument());
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
-  });
-
-  it('스테이지 오버레이(GameView HUD 조합) — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
-    seed({ items: { [COMMON]: 7 }, activeBait: COMMON });
-    render(<App />);
-    const overlay = screen.getByLabelText('활성 미끼');
-    expect(overlay).toHaveTextContent('7');
-    cleanup();
-
-    seed({ items: {}, activeBait: COMMON });
-    render(<App />);
-    expect(screen.getByLabelText('활성 미끼')).toHaveTextContent('0');
-    cleanup();
-
+describe('아이템 — 가방 아이템 섹션', () => {
+  it('가방 아이템 섹션은 빈 안내를 보이고, 필드에 활성 미끼 오버레이가 없다', () => {
     seed({});
     render(<App />);
+    fireEvent.keyDown(document, { key: '2' });
+    fireEvent.keyDown(document, { key: '2' }); // 아이템
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
   });
 });
