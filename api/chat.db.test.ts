@@ -37,7 +37,7 @@ const report = (token: string | null, id: string) => call('report', 'POST', toke
 describe('차단·신고 함수', () => {
   it('세션이 없으면 401, 게스트는 403, 경로에 맞지 않는 메서드는 405다', async () => {
     expect(await blocks('GET', null)).toMatchObject({ status: 401 });
-    expect(await blocks('GET', userToken(GUEST))).toMatchObject({ status: 403, body: { error: 'guest' } });
+    expect(await blocks('GET', userToken(GUEST))).toMatchObject({ status: 403, body: { error: 'account-only' } });
     expect(await blocks('PUT', userToken(GUEST), RUDE)).toMatchObject({ status: 403 });
     expect(await blocks('DELETE', userToken(ME))).toMatchObject({ status: 405 });
     expect(await blocks('GET', userToken(ME), RUDE)).toMatchObject({ status: 405 });

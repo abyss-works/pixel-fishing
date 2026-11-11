@@ -3,6 +3,11 @@
 // 거점 id도 같은 계층에 둔다.
 export type BaseId = 'home' | 'harbor' | 'manila' | 'colombo' | 'toamasina' | 'walvisbay';
 
+/** 거점이 속한 지역 — 거점의 지역은 여기가 정본이다. 서버의 게스트 판정(마을 안인가)도 이 표를 읽는다 */
+export const BASE_REGION: Record<BaseId, RegionId> = {
+  home: 'village', harbor: 'world', manila: 'world', colombo: 'world', toamasina: 'world', walvisbay: 'world',
+};
+
 /** 씬 지역 id — 오픈월드에서 도달 가능한 지역은 마을과 병합 바다뿐이다.
  *  구세이브 location에 남은 구 지역 id(ocean/seasia/indian 등)는 **런타임 문자열**로만
  *  존재한다 — safeLocation이 무검증 통과시키고 App.sceneOf가 고향 항구로 접는다.

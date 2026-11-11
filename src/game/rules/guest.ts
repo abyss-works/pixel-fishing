@@ -3,6 +3,7 @@
 // 거부 사유는 코드로 돌려준다. 화면은 코드로 안내를 고른다.
 import type { GameAction } from './actions.js';
 import { spotById } from '../content/spots.js';
+import { BASE_REGION } from '../content/places.js';
 
 /**
  * ok: 통과.
@@ -16,10 +17,14 @@ const OPEN = new Set<GameAction['type']>(['boot', 'sell', 'upgradeRod', 'buyBoat
 // 개발 명령과 이사 코드는 서버의 환경과 소유자 판정이 따로 정한다
 const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'import']);
 
-/** 마을 안에서 닿는 곳: 마을 지역과 집 */
+/** 마을 안에서 닿는 곳: 마을 지역과 지역이 마을인 거점. 알 수 없는 값은 마을 밖으로 본다 */
 const inVillage = (to: unknown): boolean => {
   const t = to as { kind?: unknown; id?: unknown } | null | undefined;
-  return (t?.kind === 'region' && t.id === 'village') || (t?.kind === 'base' && t.id === 'home');
+  if (t?.kind === 'region') return t.id === 'village';
+  if (t?.kind === 'base' && typeof t.id === 'string' && Object.hasOwn(BASE_REGION, t.id)) {
+    return BASE_REGION[t.id as keyof typeof BASE_REGION] === 'village';
+  }
+  return false;
 };
 
 export function guestActionVerdict(action: GameAction): GuestVerdict {

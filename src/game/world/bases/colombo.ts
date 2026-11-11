@@ -1,12 +1,13 @@
 // 거점: 콜롬보항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
 // 향료전(shop 가구, 미끼 상점)은 미끼 구매처이며 이 항구 하나에만 있다.
 import type { BasePack } from '../types';
+import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
 
 export const COLOMBO_BASE: BasePack = {
   id: 'colombo',
   name: '콜롬보항',
-  region: 'world',
+  region: BASE_REGION.colombo,
   headline: '콜롬보항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 향신료의 바다에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다

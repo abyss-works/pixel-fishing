@@ -226,8 +226,11 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
               broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
             }
-            conn.positionDirty = true;
-            if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
+            // 게스트의 위치는 마지막 위치로 저장하지 않는다
+            if (!user.guest) {
+              conn.positionDirty = true;
+              if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
+            }
           } else if (msg?.t === 'stop' && conn.presence) {
             broadcast(ws, user, { t: 'stop', uid: user.uid });
           } else if (msg?.t === 'chat') {

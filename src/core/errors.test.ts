@@ -24,6 +24,11 @@ describe('실패 분류', () => {
     expect(POLICY.bug.modal).toBeUndefined();
     expect(POLICY.restricted.modal).toBeUndefined();
     expect(POLICY['rate-limited'].modal).toBeUndefined();
+    // 게스트 거부: 진행은 안전하고 모달 없이 계정 연결 안내만 보인다
+    for (const kind of ['guest-village-only', 'account-only'] as const) {
+      expect(POLICY[kind].modal, kind).toBeUndefined();
+      expect(POLICY[kind].message, kind).toContain('계정');
+    }
   });
 
   it('asAppError: 알 수 없는 예외는 bug로 정규화되고 원인이 보존된다', () => {

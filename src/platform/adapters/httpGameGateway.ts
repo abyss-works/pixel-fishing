@@ -129,8 +129,11 @@ export class HttpGameGateway implements GameGateway {
       return this.dispatch(action, true);
     }
     if (res.status === 422) return { status: 'rejected', error: HttpGameGateway.reason(body?.error) };
-    // 403 = 제재 계정(0008 restricted) 또는 권한 없는 요청(import 게이트) — 정책 표가 문구를 정한다
+    // 403 = 게스트 거부(코드로 구분) 또는 제재 계정(0008 restricted)이나 권한 없는 요청(import 게이트) — 정책 표가 문구를 정한다
     if (res.status === 403) {
+      if (body?.error === 'guest-village-only' || body?.error === 'account-only') {
+        throw new AppError(body.error, `guest rejected (${body.error})`, { action: action.type });
+      }
       throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
     }
     // 429 = 매크로 페이싱 게이트 — 액션은 적용되지 않았다. 정책 표가 문구를 정한다

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ACTION_TYPES } from './actions';
 import type { GameAction } from './actions';
 import { guestActionVerdict } from './guest';
+import { BASE_PACKS } from '../world';
 
 const catchAt = (spot: string) => ({ type: 'catch', spot, judgment: 'good' }) as GameAction;
 const travelTo = (kind: 'region' | 'base', id: string) => ({ type: 'travel', to: { kind, id } }) as GameAction;
@@ -55,10 +56,23 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'import', save: {} })).toBe('ok');
   });
 
-  it('모든 액션 종류가 허용 또는 거부로 분류돼 있다', () => {
+  it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
+    const open = ['boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'debug', 'import'];
+    const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {
+      // 장소나 수역이 없는 빈 액션은 마을 밖으로 보고 거부한다
       const verdict = guestActionVerdict({ type } as GameAction);
-      expect(['ok', 'account-only', 'guest-village-only']).toContain(verdict);
+      const expected = open.includes(type) ? 'ok' : villageOnly.includes(type) ? 'guest-village-only' : 'account-only';
+      expect(verdict, type).toBe(expected);
+    }
+    expect(ACTION_TYPES.filter(t => !open.includes(t) && !villageOnly.includes(t)).length).toBeGreaterThan(0);
+    for (const type of [...open, ...villageOnly]) expect(ACTION_TYPES, type).toContain(type);
+  });
+
+  it('마을 안으로 보는 거점은 거점 데이터의 지역이 마을인 곳이다', () => {
+    for (const [id, pack] of Object.entries(BASE_PACKS)) {
+      const expected = pack.region === 'village' ? 'ok' : 'guest-village-only';
+      expect(guestActionVerdict(travelTo('base', id)), id).toBe(expected);
     }
   });
 });

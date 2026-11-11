@@ -19,3 +19,14 @@ describe('HttpGameGateway의 import 거부', () => {
     expect((err as AppError).kind).toBe('restricted');
   });
 });
+
+describe('HttpGameGateway의 게스트 거부', () => {
+  it.each([['guest-village-only'], ['account-only']] as const)('403 %s는 같은 이름의 실패 종류로 던진다', async code => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: code }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    }));
+    const err = await new HttpGameGateway().dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe(code);
+  });
+});

@@ -1,11 +1,12 @@
 // 거점: 집 (마을) — 뷰 좌표 320×180 기준. 스프라이트는 픽셀 렌더링 FURNITURE_SPRITES가 그린다.
 // 가구 배열의 순서가 거점 메뉴의 순서다.
 import type { BasePack } from '../types';
+import { BASE_REGION } from '../../content/places';
 
 export const HOME: BasePack = {
   id: 'home',
   name: '집',
-  region: 'village',
+  region: BASE_REGION.home,
   headline: '나의 집에서 가구를 눌러 정비해 보세요.',
   exitMsg: '마을이에요. 물가 어군에서 낚시해 보세요.',
   furniture: [
