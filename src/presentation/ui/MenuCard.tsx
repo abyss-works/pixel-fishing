@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Button from './Button';
+import PixelIcon from './PixelIcon';
 import Tip from './Tip';
 import { useOmitted } from './useOmitted';
 
@@ -13,6 +14,8 @@ interface MenuCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 't
   sub?: string;
   /** sub의 역할. omittable이면 메뉴 영역이 좁거나 낮을 때 숨기고 마우스 호버와 키보드 포커스로 툴팁에 보인다 */
   subRole?: TextRole;
+  /** 잠금 안내 줄들. 주어지면 카드는 흐려지고 오른쪽 위에 자물쇠가 붙는다. 누르거나 호버하거나 포커스하면 이 줄들이 공용 툴팁으로 열리고 onClick은 실행되지 않는다 */
+  lock?: readonly string[];
 }
 
 // 메뉴 영역 카드 — 이름 붙은 size 컨테이너(basemenu) 안에서 쓴다. 폭과 아이콘 높이는 화면이 아니라 그 컨테이너 크기에서 정한다.
@@ -37,12 +40,14 @@ const CARD_WIDTH = [
   'menu-compact:[--card:clamp(54px,max(min(calc(14.6cqw-15px),calc((100cqh-240px)/0.88)),min(calc(22cqw-14px),calc((100cqh-345px)/1.32))),128px)]',
 ].join(' ');
 
-export default function MenuCard({ icon, title, sub, subRole = 'required', className, ...rest }: MenuCardProps) {
+export default function MenuCard({ icon, title, sub, subRole = 'required', lock, className, onClick, ...rest }: MenuCardProps) {
   const { ref: subRef, isOmitted } = useOmitted<HTMLSpanElement>();
   const omittable = !!sub && subRole === 'omittable';
   const card = (
     <Button type="button" aria-label={sub ? `${title} ${sub}` : title} {...rest}
-            className={`flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${className ?? ''}`}>
+            onClick={lock ? undefined : onClick} aria-disabled={lock ? true : undefined}
+            className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'opacity-55 cursor-not-allowed' : ''} ${className ?? ''}`}>
+      {lock && <PixelIcon glyph="lock" size={14} className="absolute top-1 right-1 text-text" />}
       <span className="h-[clamp(24px,calc(var(--card)*0.44),56px)] w-full">{icon}</span>
       <span className="pf-accent text-sm text-gold">{title}</span>
       {sub && (omittable
@@ -50,6 +55,10 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', class
         : <span className="text-xs text-text-dim">{sub}</span>)}
     </Button>
   );
+  if (lock) {
+    const text = <>{lock.map(line => <span key={line} className="block">{line}</span>)}</>;
+    return <Tip wraps pressOpens className="flex" text={text}>{card}</Tip>;
+  }
   if (!omittable) return card;
   // 생략되어 보이지 않을 때만 툴팁으로 내용을 보인다. 감싼 칸이 같은 행의 카드 높이를 따르도록 flex로 둔다
   return <Tip wraps className="flex" onlyIf={isOmitted} text={sub}>{card}</Tip>;

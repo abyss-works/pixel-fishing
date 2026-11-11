@@ -29,6 +29,37 @@ describe('거점 카드 메뉴', () => {
     expect(document.querySelector('[data-facility="ferry"] canvas')).not.toBeNull();
   });
 
+  it('집의 옷장은 생활 구역에 놓인다', () => {
+    render(<BaseMenu base="home" game={newState()} />);
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['정보', '상점', '생활', '이동']);
+    const living = [...screen.getByRole('heading', { name: '생활' }).parentElement!.querySelectorAll('[data-facility]')];
+    expect(living.map(el => el.getAttribute('data-facility'))).toEqual(['wardrobe']);
+  });
+
+  describe('게스트 잠금', () => {
+    it('게스트의 옷장은 잠금 카드라 눌러도 시설을 알리지 않고 툴팁이 열린다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={newState()} guest onFacility={onFacility} />);
+      const card = document.querySelector('[data-facility="wardrobe"]')!;
+      expect(card).toHaveAttribute('aria-disabled', 'true');
+      expect(card.closest('[title]')).toBeNull();
+      fireEvent.click(card);
+      expect(onFacility).not.toHaveBeenCalled();
+      fireEvent.mouseEnter(card.parentElement!);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    });
+
+    it('게스트에게 열린 카드와 계정의 옷장은 잠기지 않는다', () => {
+      const { unmount } = render(<BaseMenu base="home" game={newState()} guest />);
+      for (const id of ['rod', 'boat', 'sell', 'rank']) {
+        expect(document.querySelector(`[data-facility="${id}"]`)).not.toHaveAttribute('aria-disabled');
+      }
+      unmount();
+      render(<BaseMenu base="home" game={newState()} />);
+      expect(document.querySelector('[data-facility="wardrobe"]')).not.toHaveAttribute('aria-disabled');
+    });
+  });
+
   it('카드는 정보·상점·이동 구역으로 나뉜다', () => {
     render(<BaseMenu base="colombo" game={newState()} />);
     const section = (title: string) => [...screen.getByRole('heading', { name: title }).parentElement!
