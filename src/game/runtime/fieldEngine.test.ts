@@ -297,3 +297,51 @@ describe('GameFieldEngine 방치 사이클 시간', () => {
     }
   }
 });
+
+describe('GameFieldEngine 도시락 입질 단축', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  const okCatch = { status: 'ok', result: { type: 'catch', fishId: 'carp', uid: 'u', info: { form: 'normal' }, released: [] } } as never;
+
+  /** 첫 캐치를 judgment로 끝낸 뒤 이어지는 대기가 끝나기까지 걸리는 시간(ms)을 잰다 */
+  function secondWaitMs(lunch: boolean, judgment: 'auto' | 'normal'): number {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const t0 = Date.parse('2026-11-12T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = {
+      ...newState(), boat: 5, rod: 10,
+      slots: { lunch: lunch ? { id: 'cook-lunch-bite', endsAt: new Date(t0 + 9 * 3600_000).toISOString() } : null, bait: null },
+    };
+    const engine = new GameFieldEngine('world', game, []);
+    engine.updateContext(game, false, { dispatch: () => okCatch, onEvent: noop, onScene: noop });
+    const raw = engine as unknown as { school: unknown; transition(p: string): void };
+    raw.school = { id: 's', spot: 'pond', x: 0, y: 0 };
+    raw.transition('wait');
+    // 수동이면 입질 중에 눌러 첫 캐치를 수동으로 끝낸다. 방치면 타이머가 auto로 끝낸다
+    if (judgment === 'normal') {
+      let g = 0;
+      while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+      engine.action();
+    }
+    let guard = 0;
+    while (engine.getSnapshot().phase !== 'catch' && guard++ < 5000) vi.advanceTimersByTime(10);
+    guard = 0;
+    while (engine.getSnapshot().phase !== 'wait' && guard++ < 5000) vi.advanceTimersByTime(10);
+    const start = Date.now();
+    guard = 0;
+    while (engine.getSnapshot().phase === 'wait' && guard++ < 5000) vi.advanceTimersByTime(10);
+    engine.dispose();
+    return Date.now() - start;
+  }
+
+  it('방치 캐치 뒤의 대기는 도시락 입질 단축만큼 짧아진다', () => {
+    const base = secondWaitMs(false, 'auto');
+    const cut = secondWaitMs(true, 'auto');
+    expect(cut).toBeLessThan(base * 0.95);
+    expect(cut).toBeGreaterThan(base * 0.85);
+  });
+  it('수동 캐치 뒤의 대기에는 도시락 입질 단축을 넣지 않는다', () => {
+    expect(secondWaitMs(true, 'normal')).toBe(secondWaitMs(false, 'normal'));
+  });
+});
