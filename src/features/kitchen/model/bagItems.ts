@@ -10,13 +10,20 @@ import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
-import { recipeLabel } from './recipes';
+import { recipeEffectLines, recipeEffectNote, recipeLabel } from './recipes';
+import type { RecipeEffectLine } from './recipes';
 import { activeSlot } from './slots';
 import type { SlotKey } from './slots';
 
 const MIN_MS = 60_000;
 
 export const NO_ITEMS_TEXT = '가진 아이템이 없어요.';
+/** 묶음 소제목의 점선 툴팁 - 그 묶음이 무엇이고 어디서 얻고 쓰는지 */
+export const ITEM_GROUP_HINT = {
+  energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 부엌에서 할 수 있어요.',
+  lunch: '먹기를 누르면 도시락 슬롯에 들어가요.',
+  bait: '쓰기를 누르면 미끼 슬롯에 들어가요.',
+} as const;
 const SWAP_WARNING = '지금 효과의 남은 시간은 사라져요.';
 
 /** 슬롯 종류별 동작 이름과 교체 확인 제목 */
@@ -33,6 +40,9 @@ export interface ItemRow {
   count: number;
   slot: SlotKey;
   verb: '먹기' | '쓰기';
+  /** 효과 줄과 적용 낚시, 지속 안내 - 이름의 툴팁이 보인다 */
+  effects: RecipeEffectLine[];
+  note: string;
 }
 
 export type ItemSectionView =
@@ -51,7 +61,10 @@ export function selectItemSection(game: GameState, now: string, guest: boolean):
   }
   const items = settleCooking(game, now).items;
   const rows = (slot: SlotKey): ItemRow[] => RECIPES.filter(r => r.kind === slot && (items[r.id] ?? 0) > 0)
-    .map(recipe => ({ recipe, label: recipeLabel(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb }));
+    .map(recipe => ({
+      recipe, label: recipeLabel(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
+      effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
+    }));
   const energy = RARITY_ORDER.map((grade): EnergyCell => (
     { grade, label: energyLabel(grade), count: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');

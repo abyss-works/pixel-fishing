@@ -34,6 +34,7 @@ import { artifactEffectLines } from '../../../../ui/artifactEffects';
 import Frame from '../../../../ui/Frame';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
+import ItemSection from './ItemSection';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -56,16 +57,6 @@ export const EXHIBIT_UI_ENABLED = false;
 // 정렬 — **등급 내림차순 → 소계 내림차순**(bagRows; 목록·카드·판매 패널 공용).
 // 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
 const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
-
-/** 아이템 섹션 - 가진 아이템 목록 자리. 요리와 기운 아이템은 부엌 단위가 채운다 */
-function ItemSection() {
-  return (
-    <div className="flex flex-col gap-1">
-      <PageTitle>아이템</PageTitle>
-      <Note>가진 아이템이 없어요.</Note>
-    </div>
-  );
-}
 
 /** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라 슬롯·장착은 없고, 줄을 누르면 유물 상세 창이 열려 강화한다.
  *  얻는 곳(수배판 유물 탭)은 미보유 목록 대신 안내 한 줄로 알린다 — 수배판이 교환 카드를 이미 보여 준다. */
@@ -157,8 +148,10 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, sellBonus, dispatch, setToast }: {
+export default function BagTab({ game, guest = false, sellBonus, dispatch, setToast }: {
   game: GameState;
+  /** 계정을 연결하지 않아 요리가 닫힌 게스트인가 - 아이템 섹션의 잠금 사유를 정한다 */
+  guest?: boolean;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -222,7 +215,7 @@ export default function BagTab({ game, sellBonus, dispatch, setToast }: {
   return (
     <div>
       {section === 'items' ? (
-        <ItemSection />
+        <ItemSection game={game} guest={guest} dispatch={dispatch} setToast={setToast} />
       ) : section === 'artifacts' ? (
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (

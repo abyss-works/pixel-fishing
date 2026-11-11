@@ -580,4 +580,19 @@ describe('UI 시스템 가드', () => {
     expect([...presentationFiles, ...featureFiles].some(f => /shared\/lib\/gradeName'/.test(f.src))).toBe(true);
     expect(GRADE_IN_PARENS.test('`${name}(${RARITY[grade].name})`')).toBe(true);
   });
+  // 슬롯 화면 - 슬롯 효과의 시간, 지속, 교체 판정은 기능 모델이 정하고 화면은 그 결과만 그린다. 칩은 칩 자신만 포인터 이벤트를 받는다
+  const SLOT_SCREENS = ['ui/hud/SlotChips.tsx', 'views/game/tabs/bag/ItemSection.tsx'];
+  it('슬롯 화면은 슬롯의 끝나는 시각, 지속, 교체 판정을 다시 계산하지 않는다', () => {
+    for (const path of SLOT_SCREENS) {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      expect(src, path).not.toBe('');
+      expect(src, path).not.toMatch(/\bendsAt\b|\bslotMs\b|\bwaitMs\b|COOK_KIND_RULES|\.slots\b/);
+    }
+  });
+  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기가 칩 자신만 포인터 이벤트를 받게 한다', () => {
+    const chips = presentationFiles.find(f => f.path === 'ui/hud/SlotChips.tsx')!.src;
+    expect(chips).toMatch(/<HudChip\b/);
+    expect(chips).toMatch(/<Locked\b/);
+    expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
+  });
 });

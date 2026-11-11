@@ -60,6 +60,13 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
+  it('행은 이름의 툴팁에 쓸 효과 줄과 적용 낚시 안내를 갖는다', () => {
+    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, false);
+    if (v.state !== 'open') throw new Error('open이어야 해요');
+    expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
+    expect(v.lunch[0].note).toContain('방치 낚시에만 효과가 있어요.');
+  });
+
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {
     const game = seed({
       items: { 'cook-lunch-bite': 1 },
