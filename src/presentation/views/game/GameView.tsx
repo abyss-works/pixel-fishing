@@ -310,7 +310,7 @@ export default function GameView(props: GameViewProps) {
                      </div>
                    ) : null}
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
-                   badge={props.badge}
+                   badge={props.badge} guest={guest}
                    menu={(
                      <GameMenu game={game} account={props.account} guest={guest} setToast={props.setToast} onQuests={openQuests}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}

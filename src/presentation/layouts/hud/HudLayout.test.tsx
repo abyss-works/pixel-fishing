@@ -2,7 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
+import type { GameState } from '../../../game/rules/logic';
 import { resetMinimapVisible, setMinimapVisible } from '../../../features/display/service/minimapVisible';
 
 const layout = vi.hoisted(() => ({ mobile: false }));
@@ -10,7 +12,10 @@ vi.mock('../useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 vi.mock('../../ui/hud/MessageLog', () => ({ default: () => <div data-testid="log" /> }));
 vi.mock('../../ui/hud/Minimap', () => ({ default: () => <div data-testid="minimap" /> }));
 vi.mock('./HudHeader', () => ({ default: () => null }));
-vi.mock('../../../features/gameplay/service/useGameTime', () => ({ useGameTime: () => ({ clock: '12:00', dark: 0 }) }));
+const NOW = '2026-11-12T00:00:00.000Z';
+vi.mock('../../../features/gameplay/service/useGameTime', () => ({
+  useGameTime: () => ({ clock: '12:00', dark: 0 }), useNow: () => NOW,
+}));
 
 import HudLayout from './HudLayout';
 
@@ -27,35 +32,63 @@ const rowOf = () => screen.getByText('12:00').closest('div')!.parentElement!;
 const kinds = () => [...rowOf().children].map(el =>
   el.matches('[data-testid="presence"]') ? '접속 칩'
   : el.textContent === '12:00' ? '시계'
+  : el.querySelector('[data-glyph="lunch"]') ? '도시락 칩'
+  : el.querySelector('[data-glyph="bait"]') ? '미끼 칩'
   : el.querySelector('[aria-label="미니맵 보이기"]') ? '지도 버튼' : '?');
 
 afterEach(() => { cleanup(); resetMinimapVisible(); layout.mobile = false; });
 
+// 해금 전(newState)의 슬롯 칩은 잠금 칩 둘이다
+const unlocked = (slots: GameState['slots'] = { lunch: null, bait: null }): GameState =>
+  ({ ...newState(), boat: COOKING_UNLOCK_BOAT, slots });
+const HOUR_LATER = '2026-11-12T01:00:00.000Z';
+
 describe('HudLayout 미니맵 위 칩 줄', () => {
-  it('접속 칩, 시계, 지도 버튼이 같은 줄의 형제로 이 순서다', () => {
+  it('접속 칩, 도시락 칩, 미끼 칩, 시계, 지도 버튼이 같은 줄의 형제로 이 순서다', () => {
     setMinimapVisible(false);
     render(<HudLayout {...props} game={newState()} scene={region} chips={chip} />);
-    expect(kinds()).toEqual(['접속 칩', '시계', '지도 버튼']);
+    expect(kinds()).toEqual(['접속 칩', '도시락 칩', '미끼 칩', '시계', '지도 버튼']);
+  });
+
+  it('해금 뒤에는 효과가 든 슬롯의 칩만 남고 효과가 없는 슬롯의 칩은 숨는다', () => {
+    setMinimapVisible(true);
+    const { unmount } = render(<HudLayout {...props} game={unlocked()} scene={region} chips={chip} />);
+    expect(kinds()).toEqual(['접속 칩', '시계']);
+    unmount();
+    render(<HudLayout {...props} scene={region} chips={chip}
+                      game={unlocked({ lunch: null, bait: { id: 'cook-bait-judge', endsAt: HOUR_LATER } })} />);
+    expect(kinds()).toEqual(['접속 칩', '미끼 칩', '시계']);
+    expect(screen.getByText('1:00')).toBeInTheDocument();
+  });
+
+  it('칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다', () => {
+    setMinimapVisible(false);
+    render(<HudLayout {...props} game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
+                      scene={region} chips={chip} />);
+    expect(rowOf().className).toContain('pointer-events-none');
+    const slot = screen.getByLabelText(/^도시락 슬롯, 가루디야/);
+    expect(slot.className).toContain('pointer-events-auto');
+    expect(screen.getByText('12:00').closest('div')!.className).toContain('pointer-events-auto');
   });
 
   it('미니맵을 보이면 지도 버튼만 빠지고 나머지 순서는 같다', () => {
     setMinimapVisible(true);
-    render(<HudLayout {...props} game={newState()} scene={region} chips={chip} />);
+    render(<HudLayout {...props} game={unlocked()} scene={region} chips={chip} />);
     expect(kinds()).toEqual(['접속 칩', '시계']);
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
   });
 
   it('접속 칩과 미니맵이 없어도(거점) 시계는 조건 없이 그려진다', () => {
     render(<HudLayout {...props} game={newState()} scene={base} />);
-    expect(kinds()).toEqual(['시계']);
+    expect(kinds()).toEqual(['도시락 칩', '미끼 칩', '시계']);
   });
 
   it('미니맵을 숨긴 바다에서 접속 칩이 없으면 시계, 지도 버튼 순서다', () => {
     setMinimapVisible(false);
     render(<HudLayout {...props} game={newState()} scene={region} />);
-    expect(kinds()).toEqual(['시계', '지도 버튼']);
+    expect(kinds()).toEqual(['도시락 칩', '미끼 칩', '시계', '지도 버튼']);
     act(() => setMinimapVisible(true));
-    expect(kinds()).toEqual(['시계']);
+    expect(kinds()).toEqual(['도시락 칩', '미끼 칩', '시계']);
   });
 });
 
