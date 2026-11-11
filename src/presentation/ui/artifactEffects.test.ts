@@ -11,7 +11,7 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 1)).toBe('항해 속도 +10%');
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 5)).toBe('항해 속도 +20%');
     expect(artifactEffectLines(art('abyss-angler'), 5)).toEqual(['네임드 결투 가속 −20%']);
-    expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['요리할 때 20% 확률로 하나 더 완성']);
+    expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['요리 추가 완성 +20%p']);
   });
 
   it('전설 유물은 효과 줄이 없고 보너스와 페널티 줄이 따로 나온다', () => {
@@ -25,8 +25,8 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 2)).toBe('항해 속도 +12.5%');
     expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 2)).toBe('네임드 결투 가속 −12.5%');
     expect(artifactEffectValue(art('abyss-angler'), 'duelSpeedupCut', 5)).toBe('−20%');
-    expect(artifactEffectLine(art('varuna-scale'), 'extraCookChance', 2)).toBe('요리할 때 12.5% 확률로 하나 더 완성');
-    expect(artifactEffectValue(art('varuna-scale'), 'extraCookChance', 1)).toBe('10%');
+    expect(artifactEffectLine(art('varuna-scale'), 'extraCookChance', 2)).toBe('요리 추가 완성 +12.5%p');
+    expect(artifactEffectValue(art('varuna-scale'), 'extraCookChance', 1)).toBe('+10%p');
   });
 
   it('코모로의 골판은 돌연변이 가중치 증가율로 쓰고 확률로 환산하지 않는다', () => {

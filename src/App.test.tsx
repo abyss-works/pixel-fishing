@@ -1055,7 +1055,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '2' }); // 유물
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
-    expect(screen.getByText('요리할 때 10% 확률로 하나 더 완성')).toBeInTheDocument();
+    expect(screen.getByText('요리 추가 완성 +10%p')).toBeInTheDocument();
     expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
   });
 

@@ -29,7 +29,7 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
     case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
-      return chance > 0 ? `${fmtDecimal2(chance * 100)}%` : null;
+      return chance > 0 ? `+${fmtDecimal2(chance * 100)}%p` : null; // 확률에 직접 더하는 효과는 %p
     }
     case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
   }
@@ -44,8 +44,6 @@ export function artifactEffectKeys(a: Artifact): (ArtifactEffectKey)[] {
 export function artifactEffectLine(a: Artifact, effect: ArtifactEffectKey, level: number): string | null {
   const value = artifactEffectValue(a, effect, level);
   if (value === null) return null;
-  // 요리 추가 완성은 확률이 문장 가운데 들어가는 꼴이다
-  if (effect === 'extraCookChance') return `요리할 때 ${value} 확률로 하나 더 완성`;
   return `${artifactEffectLabel(effect)} ${value}`;
 }
 
