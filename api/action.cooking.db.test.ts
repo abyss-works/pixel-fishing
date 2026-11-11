@@ -162,7 +162,7 @@ describe('요리 액션', () => {
   });
 
   describe('해역별 덮어쓰기', () => {
-    it('기본값과 다른 값만 저장하고, 되돌리기는 모두 지운다. 위치는 제한하지 않는다', async () => {
+    it('고른 값은 기본값과 같아도 저장하고, 되돌리기는 모두 지운다. 위치는 제한하지 않는다', async () => {
       const uid = await seed({ state: { boat: BOAT, location: HARBOR } });
       const send = async (action: unknown) => { await rewind(uid); return callAction(userToken(uid), action); };
       expect((await send({ type: 'setEnergyTarget', spot: 'pond', on: false })).status).toBe(200);
@@ -170,7 +170,7 @@ describe('요리 액션', () => {
       await send({ type: 'setEnergyTarget', spot: 'river', on: false });
       expect((await stored(uid)).data.energyTargets).toEqual({ pond: false, river: false });
       await send({ type: 'setEnergyTarget', spot: 'pond', on: true });
-      expect((await stored(uid)).data.energyTargets).toEqual({ river: false });
+      expect((await stored(uid)).data.energyTargets).toEqual({ pond: true, river: false });
       expect((await send({ type: 'resetEnergyTargets' })).status).toBe(200);
       expect((await stored(uid)).data.energyTargets).toEqual({});
     });
