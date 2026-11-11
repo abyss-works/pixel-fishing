@@ -82,6 +82,26 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
       .toBe('골드 23.4억 · 명성 1억');
   });
 
+  it('catch — 걸린 도시락 슬롯은 미끼 슬롯 앞에 보인다', () => {
+    expect(eventSummary('catch', { fishId: 'carp', judgment: 'auto', spot: 'pond', lunch: 'cook-lunch-bite' }))
+      .toBe('carp · AUTO · @pond · 도시락:cook-lunch-bite');
+    expect(eventSummary('catch', { fishId: 'carp', judgment: 'good', spot: 'pond', lunch: 'cook-lunch-bite', bait: 'cook-bait-rare' }))
+      .toBe('carp · GOOD · @pond · 도시락:cook-lunch-bite · 미끼:cook-bait-rare');
+  });
+
+  it('요리 액션 — 기운 얻기, 조리, 먹기는 이름표와 한 줄 요약이 있다', () => {
+    expect(EVENT_LABELS.extractEnergy).toBe('기운 얻기');
+    expect(EVENT_LABELS.cook).toBe('조리 시작');
+    expect(EVENT_LABELS.eat).toBe('먹기와 쓰기');
+    expect(eventSummary('extractEnergy', { uids: ['a', 'b', 'c'], energy: { common: 2, rare: 1, epic: 0, legendary: 0 } }))
+      .toBe('3마리 기운 3개');
+    expect(eventSummary('cook', { recipe: 'cook-lunch-bite', count: 3, bonus: 1 })).toBe('cook-lunch-bite ×3 (추가 완성 1)');
+    expect(eventSummary('cook', { recipe: 'cook-lunch-bite', count: 3, bonus: 0 })).toBe('cook-lunch-bite ×3');
+    expect(eventSummary('eat', { item: 'cook-lunch-bite', endsAt: '2026-11-12T09:00:00.000Z', replaced: null })).toBe('cook-lunch-bite');
+    expect(eventSummary('eat', { item: 'cook-lunch-bite', endsAt: '2026-11-12T09:00:00.000Z', replaced: 'cook-lunch-rare' }))
+      .toBe('cook-lunch-bite (교체: cook-lunch-rare)');
+  });
+
   it('관리자 조치는 조치한 관리자 id 앞부분을 보인다', () => {
     const adminId = 'abcdef01-0000-0000-0000-000000000000';
     expect(eventSummary('adminRestrict', { adminId })).toBe('관리자 abcdef01');
