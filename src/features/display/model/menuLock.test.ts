@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
-import { facilityGuestAllowed, facilityProgress, GUEST_LOCK_TEXT, menuLock } from './menuLock';
+import { facilityGuestAllowed, facilityProgress, GUEST_LOCK_TEXT, menuLock, progressLines } from './menuLock';
 
 const base = { feature: '부엌', guestAllowed: true, progress: undefined };
 
@@ -38,6 +38,16 @@ describe('메뉴 카드 잠금 사유', () => {
     const r = menuLock({ ...base, guest: false, progress: { met: false, boat: 4 } });
     expect(r.kind === 'progress' && r.lines).toHaveLength(1);
     expect(r.kind === 'progress' && r.lines[0]).toMatch(/^.+\(4단계\)(이|가) 되면 부엌을 쓸 수 있어요\.$/);
+  });
+});
+
+describe('진행 조건 문안의 어순', () => {
+  it('기능을 주제로 쓰면 첫 줄만 기능 이름이 앞에 온다', () => {
+    expect(progressLines('부엌', 5, 'topic')).toEqual([
+      '부엌은 인도양 항로가 열리면 쓸 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
+    expect(progressLines('옷장', 3, 'topic')[0]).toBe('옷장은 동남아 항로가 열리면 쓸 수 있어요.');
   });
 });
 

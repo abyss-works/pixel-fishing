@@ -14,17 +14,20 @@ export type MenuLock =
 
 export const GUEST_LOCK_TEXT = '계정을 연결하면 쓸 수 있어요.';
 
-/** 진행 조건 잠금 문안 - 줄마다 따로 보인다. 구역에 들어서는 배 단계면 그 구역의 항로를 먼저 쓰고,
- *  구역 진입 단계가 아니면 배 단계로만 쓴다 */
-function progressLines(feature: string, boat: number): string[] {
+/** 진행 조건 문안 - 줄마다 따로 보인다. 구역에 들어서는 배 단계면 그 구역의 항로를 먼저 쓰고,
+ *  구역 진입 단계가 아니면 배 단계로만 쓴다. 기능 이름이 문장의 목적어(기본, 잠금 툴팁)인지
+ *  주제(topic, 기능을 먼저 소개하는 안내)인지에 따라 첫 줄의 어순만 다르다 */
+export function progressLines(feature: string, boat: number, form: 'object' | 'topic' = 'object'): string[] {
   const zone = ZONES.find(z => z.entryBoat === boat);
   const boatRow = BOATS.find(b => b.tier === boat);
   const boatText = boatRow ? `${boatRow.name}(${boat}단계)` : `${boat}단계`;
-  const use = `${feature}${josa(feature, '을/를')} 쓸 수 있어요.`;
-  if (!zone) return [`${boatText}${josa(boatText, '이/가')} 되면 ${use}`];
+  const sentence = (condition: string) => form === 'topic'
+    ? `${feature}${josa(feature, '은/는')} ${condition} 쓸 수 있어요.`
+    : `${condition} ${feature}${josa(feature, '을/를')} 쓸 수 있어요.`;
+  if (!zone) return [sentence(`${boatText}${josa(boatText, '이/가')} 되면`)];
   const lane = `${zone.shortName} 항로`;
   return [
-    `${lane}${josa(lane, '이/가')} 열리면 ${use}`,
+    sentence(`${lane}${josa(lane, '이/가')} 열리면`),
     `${lane}${josa(lane, '은/는')} ${boatText}부터 열려요.`,
   ];
 }

@@ -45,6 +45,9 @@ import { useFriendAlerts } from '../../../features/friends/service/useFriendAler
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
+import BaitRefundModal from '../overlays/bait-refund/BaitRefundModal';
+import { useBaitRefund } from '../../../features/inventory/service/baitRefund';
+import { useWhatsNewPending } from '../../../features/announcements/service/whatsNew';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
@@ -129,6 +132,12 @@ export default function GameView(props: GameViewProps) {
   // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
   useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
   useTutorialTrigger('sea', atSea);
+  // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 튜토리얼. 앞 창이 끝나야 다음 창이 뜬다
+  const saveReady = props.syncState === 'on' || props.syncState === 'off';
+  const whatsNewPending = useWhatsNewPending();
+  const baitRefund = useBaitRefund({
+    refund: game.baitRefund, boat: game.boat, ready: saveReady, suspended: whatsNewPending, dispatch: props.dispatch,
+  });
   useLive();
   const chat = useChat();
   /** 같은 바다 접속 목록 창 */
@@ -371,9 +380,9 @@ export default function GameView(props: GameViewProps) {
       />
 
       {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
-      <WhatsNewModal game={game} ready={props.syncState === 'on' || props.syncState === 'off'} />
-      <TutorialModal seen={game.tutorials} ready={props.syncState === 'on' || props.syncState === 'off'}
-                     dispatch={props.dispatch} />
+      <WhatsNewModal game={game} ready={saveReady} />
+      {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
+      <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending} dispatch={props.dispatch} />
       {props.blocker}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
     </div>

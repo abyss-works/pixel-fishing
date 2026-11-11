@@ -55,15 +55,17 @@ const TUTORIAL: Record<TutorialId, { title: string; lines: ReactNode[] }> = {
   },
 };
 
-// 튜토리얼 창 — 트리거마다 한 번 뜬다. 업데이트 소식 창이 끝난 뒤 차례로 뜨고, 닫으면 본 것으로 남는다.
-export default function TutorialModal({ seen, ready, dispatch }: {
+// 튜토리얼 창 — 트리거마다 한 번 뜬다. 업데이트 소식 창과 미끼 환불 안내가 끝난 뒤 차례로 뜨고, 닫으면 본 것으로 남는다.
+export default function TutorialModal({ seen, ready, after, dispatch }: {
   seen: readonly string[];
+  /** 먼저 뜰 다른 안내 창(미끼 환불 안내)이 남아 있으면 참 - 끝난 뒤에 띄운다 */
+  after: boolean;
   /** 세이브가 준비됐는지 — 준비 전의 빈 상태로 판정하지 않게 */
   ready: boolean;
   dispatch: (action: GameAction) => unknown;
 }) {
-  const suspended = useWhatsNewPending();
-  const { current, close } = useTutorial({ seen, ready, suspended, dispatch });
+  const whatsNewPending = useWhatsNewPending();
+  const { current, close } = useTutorial({ seen, ready, suspended: whatsNewPending || after, dispatch });
   if (!current) return null;
   const t = TUTORIAL[current];
   return (
