@@ -56,6 +56,12 @@ export type RejectReason =
   | 'hat-not-owned' // 갖지 않은 모자를 쓰려 했다
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
+  | 'item-not-owned' // 먹으려는 요리가 가방에 없다
+  | 'not-at-home' // 집 거점에서만 하는 동작(기운 얻기, 조리)을 집 밖에서 요청했다
+  | 'cooking-locked' // 요리 해금 배 단계 미달
+  | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
+  | 'cooking-busy' // 조리 중인 요리가 모두 완성되기 전에 새 조리를 시작하려 했다
+  | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
@@ -88,6 +94,12 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'hat-not-owned': '아직 가지지 않은 모자예요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
+  'item-not-owned': '가방에 없는 아이템이에요.',
+  'not-at-home': '집 부엌에서만 할 수 있어요.',
+  'cooking-locked': '인도양 항로가 열리면 부엌을 쓸 수 있어요.',
+  'not-enough-energy': '생명의 기운이 부족해요.',
+  'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
+  'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'bad-request': '처리할 수 없는 요청이에요.',
 };

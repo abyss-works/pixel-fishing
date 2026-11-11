@@ -54,6 +54,15 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });
 
+  it('기운 얻기, 해역별 덮어쓰기, 조리, 먹기는 계정 전용이다 — 열린 목록에 넣지 않는다', () => {
+    const cooking: GameAction[] = [
+      { type: 'extractEnergy', uids: [] }, { type: 'setEnergyTarget', spot: 'indian', on: true },
+      { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 },
+      { type: 'eat', item: 'cook-lunch-bite' },
+    ];
+    for (const action of cooking) expect(guestActionVerdict(action), action.type).toBe('account-only');
+  });
+
   it('개발 명령과 이사 코드는 이 판정이 다루지 않고 서버 환경과 소유자 판정에 맡긴다', () => {
     expect(guestActionVerdict({ type: 'debug', command: 'x' })).toBe('ok');
     expect(guestActionVerdict({ type: 'import', save: {} })).toBe('ok');

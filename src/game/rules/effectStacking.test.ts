@@ -45,7 +45,7 @@ const catchPath = (
   judgment: 'perfect' | 'auto' | 'normal', effects: Partial<Record<RarityId, number>>, guildRare: number, pzMult = 1,
 ) => {
   const s = seed();
-  const base = prepareCatchDraw(judgment, DAY, pz({ mult: pzMult }));
+  const base = prepareCatchDraw(newState(), judgment, DAY, pz({ mult: pzMult }));
   const prep: CatchDraw = Object.keys(effects).length > 0
     ? { ...base, phaseOpts: { ...base.phaseOpts, weightEffects: effects } } : base;
   const d = drawCatch(
