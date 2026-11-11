@@ -47,6 +47,9 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'autoLock' })?.type).toBe('autoLock');
     expect(parseAction({ type: 'sendLetter', text: 'hi' })?.type).toBe('sendLetter');
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
+    expect(parseAction({ type: 'dismissBaitRefund' })).toEqual({ type: 'dismissBaitRefund' });
+    expect(parseAction({ type: 'buyBait', bait: 'bait-rare' })).toBeNull();
+    expect(parseAction({ type: 'setActiveBait', bait: null })).toBeNull();
   });
 
   it('setNickname은 스키마를 통과한다 — 형태 검증은 리듀서 몫', () => {

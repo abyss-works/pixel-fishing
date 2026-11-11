@@ -1,5 +1,4 @@
 // 거점: 콜롬보항 (병합 바다 인도양) — 기존 항구 패턴을 따라 지역·문구만 조정했다.
-// 향료전(shop 가구, 미끼 상점)은 미끼 구매처이며 이 항구 하나에만 있다.
 import type { BasePack } from '../types';
 import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
@@ -24,9 +23,6 @@ export const COLOMBO_BASE: BasePack = {
       label: i => ({ title: '조선소', sub: i.boatName }), labelDy: -3 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
       label: () => ({ title: '어시장', sub: '판매' }), labelDy: -8 },
-    // 출항 시설(x272~306,y104~160)과 겹치지 않도록 상단에 둔다.
-    { id: 'shop',   x: 248, y: 54,  w: 40, h: 30, sprite: 'shop',
-      label: () => ({ title: '향료전', sub: '미끼' }), labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
       label: () => ({ title: '마을', sub: '집으로' }), labelDy: -2 },
     { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',

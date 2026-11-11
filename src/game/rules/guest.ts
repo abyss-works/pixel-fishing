@@ -12,8 +12,11 @@ import { BASE_REGION } from '../content/places.js';
  */
 export type GuestVerdict = 'ok' | 'account-only' | 'guest-village-only';
 
-// 조건 없이 통과하는 액션. 접속 기록(boot)은 게임에 들어오는 데 필요하고, 튜토리얼 기록과 잠금은 낚시와 판매 흐름의 일부다
-const OPEN = new Set<GameAction['type']>(['boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock']);
+// 조건 없이 통과하는 액션. 접속 기록(boot)은 게임에 들어오는 데 필요하고, 튜토리얼 기록과 잠금은 낚시와 판매 흐름의 일부다.
+// 미끼 환불 안내 닫기는 이관이 게스트의 골드에도 환불을 더했으므로 게스트도 영수증을 지울 수 있어야 한다
+const OPEN = new Set<GameAction['type']>([
+  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'dismissBaitRefund',
+]);
 // 개발 명령과 이사 코드는 서버의 환경과 소유자 판정이 따로 정한다
 const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'import']);
 

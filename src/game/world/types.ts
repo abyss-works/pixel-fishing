@@ -9,7 +9,7 @@ import type { ZoneId } from '../content/zones';
 // 전부 같은 타입을 쓴다 (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type { RegionId };
 export type { BaseId } from '../content/places';
-export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'exit' | 'travel' | 'ferry' | 'bounty' | 'rank' | 'wardrobe' | 'kitchen';
+export type FurnitureId = 'sell' | 'rod' | 'boat' | 'exit' | 'travel' | 'ferry' | 'bounty' | 'rank' | 'wardrobe' | 'kitchen';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
  *  저장 데이터에서도 사용하므로 의존 방향은 월드에서 게임 데이터로만 향한다.
@@ -144,7 +144,7 @@ export interface RegionPack {
 
 export type FurnitureSpriteId =
   | 'workbench' | 'chest' | 'wardrobe' | 'kitchen' | 'door' // 집
-  | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
+  | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'board'; // 항구
 
 /** 시설 카드 라벨 — 제목과 선택 설명. 설명은 자리가 모자라면 생략될 수 있는 보조 정보다 */
 export interface FacilityLabel { title: string; sub?: string }

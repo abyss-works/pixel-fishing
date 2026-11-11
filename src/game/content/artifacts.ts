@@ -12,8 +12,6 @@ export interface ArtifactEffects {
   sail?: number;
   /** 네임드 결투 가속 단위 감소율 — 가속 배수에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
   duelSpeedupCut?: number;
-  /** 미끼가 할인율 (예: 0.25 = 25% 감소) */
-  baitDiscount?: number;
   /** 입질 대기 감소율 — 유효 입질 대기(최소·최대)에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
   biteWaitCut?: number;
   /** 폼 가중치 — 전역 기본 가중치(돌연변이 1 : 일반 3) 기준 Lv1 값이다. 돌연변이 가중치가 기본보다 올린 몫(여기서는 +25%)이

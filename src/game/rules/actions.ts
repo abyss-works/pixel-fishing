@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, usableBait, nextDexRec, baitCost, mutationWeightsOf, withVariantPoints,
+  addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { FISH } from '../content/fish.js';
@@ -17,8 +17,6 @@ import type { SpeciesPity } from './pity.js';
 import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
-import { baitById } from '../content/baits.js';
-import type { Bait } from '../content/baits.js';
 import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
 import { artifactLevelOf, namedRewardOf } from './artifactLevel.js';
@@ -36,7 +34,7 @@ import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
 import { addGradeEffect, rollFish } from './logic.js';
-import { BAIT_WEIGHT_BONUS, BAIT_BUY_MAX, JUDGMENT_MULT } from './balance.js';
+import { JUDGMENT_MULT } from './balance.js';
 import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
@@ -55,8 +53,7 @@ export type GameAction =
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
   | { type: 'claimMail'; id: number }           // 우편 골드 받기 — 받을 금액은 서버가 우편 표에서 주입한다
   | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
-  | { type: 'buyBait'; bait: unknown; count?: unknown }      // 미끼 구매 — 골드 소모, 스택 적립
-  | { type: 'setActiveBait'; bait: unknown }                 // 활성화(4중 1) — null은 비활성
+  | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
@@ -77,7 +74,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
-  buyBait: true, setActiveBait: true, boot: true, import: true,
+  dismissBaitRefund: true, boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
 };
@@ -263,28 +260,21 @@ type ReduceOutcome =
   | { ok: true; state: GameState; result: ActionResult; events: GameEvent[] }
   | { ok: false; error: RejectReason };
 
-/** 추첨 준비 — 판정 강등·미끼·시간대를 한 곳에서 계산한다.
+/** 추첨 준비 — 판정 강등·시간대를 한 곳에서 계산한다.
  *  리듀서 catch와 서버 fast path가 공유하는 단일 진실원.
  *  pz는 호출자가 이미 계산한 값을 넘긴다 (재계산 없음). */
 export interface CatchDraw {
   judgment: Judgment;
-  bait: Bait | undefined;
   phaseOpts: DrawOptions & { phase: DayPhase };
 }
-export function prepareCatchDraw(
-  state: GameState, claimed: Judgment, now: string, pz: PowerZone,
-): CatchDraw {
+export function prepareCatchDraw(claimed: Judgment, now: string, pz: PowerZone): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-  // 미끼 — 방치(auto)에는 소모·효과 없다. 수동 판정은 낚아올리는 순간 확정되므로
-  // 소모도 이 지점에서 1회가 자연스럽다. 효과 = targetRarity 등급 가중치 +100%(다른 효과와 합산).
-  const bait = judgment === 'auto' ? undefined : usableBait(state);
-  const drawOpts: DrawOptions = bait ? addGradeEffect({}, bait.targetRarity, BAIT_WEIGHT_BONUS) : {};
   // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
   const phase: DayPhase = isNight(now) ? 'night' : 'day';
-  return { judgment, bait, phaseOpts: { ...drawOpts, phase } };
+  return { judgment, phaseOpts: { phase } };
 }
 
 /** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
@@ -367,7 +357,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 파워 게이트(서버 권위 백스톱)·미끼·시간대 — prepareCatchDraw가 단일 계산.
       const pz = powerZones(state, action.spot);
-      const { judgment, bait, phaseOpts } = prepareCatchDraw(state, action.judgment, deps.now, pz);
+      const { judgment, phaseOpts } = prepareCatchDraw(action.judgment, deps.now, pz);
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
@@ -394,8 +384,6 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew,
-        // 미끼 사용은 감사 흔적로 catch에 합친다 — 별도 이벤트면 스트림이 낚시 로그로 두 배가 된다
-        ...(bait ? { bait: bait.id } : {}),
         ...(drawn.byCeiling ? { pity: true } : {}),
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
@@ -404,7 +392,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
           fish: gone.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
       }
-      const next = { ...takeItem(release(caught, overflow), bait?.id ?? ''), pity: drawn.pity, firstCatch: drawn.firstCatch, namedPity: named.pity };
+      const next = { ...release(caught, overflow), pity: drawn.pity, firstCatch: drawn.firstCatch, namedPity: named.pity };
       return {
         ok: true,
         state: next,
@@ -520,51 +508,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold } }],
       };
     }
-    case 'buyBait': {
-      // 소모품 구매 — 규칙은 골드 검증 하나다. count는 1회 요청의 폭주 상한(BAIT_BUY_MAX)으로
-      // 클램프할 뿐, 스택 적립이라 여러 번 사면 충분하다. 가격은 미끼 데이터(단일 출처).
-      const bait = baitById(action.bait);
-      if (!bait) return { ok: false, error: 'bad-request' };
-      const raw = action.count ?? 1;
-      if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
-        return { ok: false, error: 'bad-request' };
-      }
-      // 상점 UI가 없는 위치에서 직접 액션을 보내도 구매되지 않게 서버가 위치를 재검증한다.
-      // 콜롬보항은 세이브 location에 남아 있으므로 별도 세션 상태가 필요 없다.
-      if (state.location.kind !== 'base' || state.location.id !== 'colombo') {
-        return { ok: false, error: 'shop-closed' };
-      }
-      const n = Math.min(raw, BAIT_BUY_MAX);
-      const cost = baitCost(state, bait.price, n);
-      if (!Number.isFinite(cost)) return { ok: false, error: 'bad-request' };
-      if (state.gold < cost) return { ok: false, error: 'not-enough-gold' };
-      return {
-        ok: true,
-        state: addItem({ ...state, gold: state.gold - cost }, bait.id, n),
-        result: { type: 'none' },
-        events: [{ type: 'buyBait', payload: { bait: bait.id, count: n, cost } }],
-      };
-    }
-    case 'setActiveBait': {
-      // 활성화는 **보유량이 있는 미끼만** 허용한다 — 없는 것을 골라도 효과가 무음인데
-      // UI가 "활성 중"이라고 읽히면 거짓말이다. 비활성(null)은 언제나 허용.
-      if (action.bait === null || action.bait === undefined) {
-        return { ok: true, state: state.activeBait === null ? state
-            : { ...state, activeBait: null }, result: { type: 'none' }, events: [] };
-      }
-      const bait = baitById(action.bait);
-      if (!bait) return { ok: false, error: 'bad-request' };
-      const owned = state.items[bait.id] ?? 0;
-      if (owned <= 0) return { ok: false, error: 'bait-not-owned' };
-      if (state.activeBait === bait.id) {
-        return { ok: true, state, result: { type: 'none' }, events: [] }; // 멱등 재활성
-      }
-      return {
-        ok: true,
-        state: { ...state, activeBait: bait.id },
-        result: { type: 'none' },
-        events: [{ type: 'setActiveBait', payload: { bait: bait.id } }],
-      };
+    case 'dismissBaitRefund': {
+      // 화면 안내만 닫는다 — 환불 골드는 이관이 이미 더했으므로 영수증 외에는 바꾸지 않는다
+      if (state.baitRefund === null) return { ok: true, state, result: { type: 'none' }, events: [] };
+      return { ok: true, state: { ...state, baitRefund: null }, result: { type: 'none' }, events: [] };
     }
     case 'setNickname': {
       // 형태 검증은 리듀서가 맡는다 (로컬 dev·서버 공통). 중복 검사는 DB가 있어야

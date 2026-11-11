@@ -58,19 +58,9 @@ export function upgradeCost(level: number): number {
 // 롤백 시 유실 창이 최대 이 주기 — 초기값, 볼륨 실측 후 조정
 export const SNAPSHOT_EVERY = 50;
 
-// 미끼 효과 — 활성 중인 미끼의 targetRarity 등급 가중치 +100%. 같은 등급 가중치에 걸리는 다른 보너스 효과와
-// 더해 (1 + 합)으로 한 번 적용한다(rarityDrawWeights). 전 수역 균일·방치 획득에는 무효.
-export const BAIT_WEIGHT_BONUS = 1;
-// 효과만 적용했을 때의 배수(1 + 효과) — 표시용. 추첨은 BAIT_WEIGHT_BONUS를 효과 합에 더해 쓴다.
-export const BAIT_WEIGHT_MULT = 1 + BAIT_WEIGHT_BONUS;
-
 // 밤 어종의 기본 어종 가중치 — 밤에 합류하는 밤 어종이 같은 등급의 낮 어종(기본 1)보다 이 배수만큼 잘 걸린다.
 // 등급 예산은 건드리지 않고 등급 안 배분만 바꾼다. 어종 데이터에 weight가 있으면 그 값이 우선한다.
 export const NIGHT_FISH_WEIGHT = 2;
-
-// buyBait 액션 1회당 구매 개수 상한 — 소모품 대량 판매의 왕복 폭주 방지용 상한일 뿐, 밸런스가
-// 아니다. 스택형 items라 여러 번 사면 충분하다.
-export const BAIT_BUY_MAX = 50;
 
 // 전시대 칸 수 — 고정. 확장(골드 구매)은 결정되지 않았다. 칸 번호는 exhibit 배열 인덱스다.
 export const EXHIBIT_SLOTS = 3;

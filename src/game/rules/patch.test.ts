@@ -34,7 +34,7 @@ describe('patch 동등성 — 전 액션', () => {
   it('catch — 추첨+개체+도감+명성', () => {
     check(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' });
   });
-  it('catch — 방치 판정 + 미끼 없음', () => {
+  it('catch — 방치 판정', () => {
     check(seed(), { type: 'catch', spot: 'river', judgment: 'auto' });
   });
   it('catch — 가방 가득 방생 1마리', () => {
@@ -58,14 +58,9 @@ describe('patch 동등성 — 전 액션', () => {
   it('travel — 위치+방문', () => {
     check(seed(), { type: 'travel', to: { kind: 'base', id: 'harbor' } });
   });
-  it('buyBait / setActiveBait — 아이템+활성', () => {
-    const base = seed({ gold: 1e6, location: { kind: 'base', id: 'colombo' } });
-    const out = applyAction(base, { type: 'buyBait', bait: 'bait-common', count: 2 }, deps());
-    if (!out.ok) throw new Error(out.error);
-    const patch: StatePatch = { version: 2, baseVersion: 1, scalars: pickScalars(out.state), writes: out.writes };
-    expect(applyPatch(base, patch)).toEqual(out.state);
-    check(out.state, { type: 'setActiveBait', bait: 'bait-common' });
-    check(out.state, { type: 'setActiveBait', bait: null });
+  it('dismissBaitRefund — 영수증 지우기(스칼라만)', () => {
+    check(seed({ baitRefund: { gold: 200, items: { 'bait-rare': 1 } } }), { type: 'dismissBaitRefund' });
+    check(seed(), { type: 'dismissBaitRefund' });
   });
   it('redeemCoupon — 골드+사용기록', () => {
     check(seed(), { type: 'redeemCoupon', code: '출항준비' });

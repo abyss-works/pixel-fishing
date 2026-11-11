@@ -40,8 +40,7 @@ const schemas = {
     command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
     args: z.record(z.string(), z.unknown()).optional(),
   }),
-  buyBait: z.object({ type: z.literal('buyBait'), bait: z.unknown(), count: z.unknown().optional() }),
-  setActiveBait: z.object({ type: z.literal('setActiveBait'), bait: z.unknown() }),
+  dismissBaitRefund: z.object({ type: z.literal('dismissBaitRefund') }),
   seeTutorial: z.object({ type: z.literal('seeTutorial'), id: z.string() }),
   changeClothes: z.object({ type: z.literal('changeClothes'), shirt: z.unknown(), pants: z.unknown() }),
   buyHat: z.object({ type: z.literal('buyHat'), hat: z.unknown() }),
@@ -66,7 +65,7 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.autoLock, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
-  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.buyBait, schemas.setActiveBait,
+  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.dismissBaitRefund,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,

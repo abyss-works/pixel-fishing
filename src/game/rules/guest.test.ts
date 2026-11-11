@@ -22,6 +22,10 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'autoLock' })).toBe('ok');
   });
 
+  it('미끼 환불 안내 닫기는 게스트에게도 열려 있다 — 이관이 게스트의 골드에도 환불을 더한다', () => {
+    expect(guestActionVerdict({ type: 'dismissBaitRefund' })).toBe('ok');
+  });
+
   it('바다로 나가는 이동과 마을 밖 낚시는 마을 전용 코드로 거부한다', () => {
     expect(guestActionVerdict(travelTo('region', 'world'))).toBe('guest-village-only');
     for (const base of ['harbor', 'manila', 'colombo', 'toamasina', 'walvisbay']) {
@@ -46,7 +50,6 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
-      { type: 'buyBait', bait: 'x' }, { type: 'setActiveBait', bait: null },
     ];
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });
@@ -57,7 +60,9 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
   });
 
   it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
-    const open = ['boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'debug', 'import'];
+    const open = [
+      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'dismissBaitRefund', 'debug', 'import',
+    ];
     const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {
       // 장소나 수역이 없는 빈 액션은 마을 밖으로 보고 거부한다

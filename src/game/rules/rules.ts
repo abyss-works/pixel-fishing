@@ -43,8 +43,6 @@ export type RejectReason =
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
   | 'mail-unavailable' // 받을 수 없는 우편 — 없거나 남의 것이거나 이미 받았다(서버가 구분 없이 답한다)
-  | 'bait-not-owned' // 활성화하려는 미끼를 보유하지 않았다 (구매 전 활성 시도)
-  | 'shop-closed' // 미끼 상점은 콜롬보항에서만 이용 가능
   | 'nickname-taken' // 이미 다른 유저가 쓰는 닉네임
   | 'no-license' // 바운티 헌팅 라이선스 미보유 — 구역 라이선스 없이 수주 불가
   | 'daily-cleared' // 그 갈래의 하루 클리어 한도 소진 — 클리어(보상 수령)를 센다
@@ -77,8 +75,6 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'coupon-used': '이미 사용한 쿠폰이에요.',
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
   'mail-unavailable': '이미 받았거나 받을 수 없는 우편이에요.',
-  'bait-not-owned': '가지고 있는 미끼가 없어요.',
-  'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
   'no-license': '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.',
   'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
@@ -201,7 +197,7 @@ export function canAcceptQuest(
   if (!isBountyPort(port)) return no('bad-request'); // 고향(home)에는 수배 창구가 없다
   // 의뢰는 그 구역 항구의 수배판에서만 수주한다
   if (zoneOfPort(port) !== q.zone) return no('bad-request');
-  // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
+  // 주장 항구와 실제 위치가 다르면 변조다
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   // 라이선스 조건 직검 — 취득 절차 없이 조건 충족이면 열린다
   for (const c of licenseConditions(state, q.zone, LICENSE_TIER_OF[q.difficulty])) {
@@ -255,7 +251,7 @@ export function canResolveChallenge(
 }
 
 /** 유물 교환 — 재료 보유만 본다. 이미 가진 유물은 거부가 아니라 멱등 수용으로,
- *  리듀서가 상태 그대로·이벤트 없이 돌려준다 (setActiveBait null 선례). */
+ *  리듀서가 상태 그대로·이벤트 없이 돌려준다. */
 export function canExchangeArtifact(
   state: GameState, artifactId: string,
 ): RuleCheck {
