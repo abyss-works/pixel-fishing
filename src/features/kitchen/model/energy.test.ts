@@ -103,6 +103,14 @@ describe('해역 칩', () => {
     expect(view.hasOverride).toBe(true);
   });
 
+  it('기본값과 같은 값으로 덮어쓴 해역도 덮어쓴 해역이다', () => {
+    const view = selectEnergyView(seed({ boat: 5, energyTargets: { indian: false, pond: true } }), {});
+    const byId = Object.fromEntries(view.spots.map(s => [s.id, s]));
+    expect(byId.indian).toMatchObject({ on: false, defaultOn: false, overridden: true });
+    expect(byId.pond).toMatchObject({ on: true, defaultOn: true, overridden: true });
+    expect(view.hasOverride).toBe(true);
+  });
+
   it('덮어쓴 해역이 없으면 되돌릴 것이 없다', () => {
     expect(selectEnergyView(seed(), {}).hasOverride).toBe(false);
   });

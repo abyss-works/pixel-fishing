@@ -5,7 +5,7 @@ import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
-import { energyDefaultExcluded, energyGain, energyTargetOf, canExtractEnergy } from '../../../game/rules/cooking';
+import { energyGain, energyTargetOf, energyTargetRows, canExtractEnergy } from '../../../game/rules/cooking';
 import { instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
@@ -62,12 +62,10 @@ export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyVie
   const excluded = new Set(game.bag.filter(i => !isChecked(game, picks, i)).map(i => i.uid));
   const { rows, soldUids, lockedCount } = selectSalePreview(game.bag, excluded, 0);
   const gain = energyGain(game, soldUids);
-  const defaultOff = energyDefaultExcluded(game.boat) as string[];
-  const spots = SPOTS.filter(s => s.boatTier <= game.boat).reverse().map((s): EnergySpotRow => ({
-    id: s.id, name: s.name,
-    on: energyTargetOf(game, s.id),
-    defaultOn: !defaultOff.includes(s.id),
-    overridden: Object.hasOwn(game.energyTargets, s.id),
+  // 해역 목록과 켜짐, 기본값 여부는 게임 규칙(energyTargetRows)이 정한다. 가장 앞선 해역부터 보인다
+  const spots = energyTargetRows(game).reverse().map((r): EnergySpotRow => ({
+    id: r.spot, name: SPOTS.find(s => s.id === r.spot)!.name,
+    on: r.on, defaultOn: r.isDefault ? r.on : !r.on, overridden: r.overridden,
   }));
   return {
     rows, uids: gain.uids, byGrade: gain.byGrade,
