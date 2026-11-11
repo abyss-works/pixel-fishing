@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { summarizeAway } from '../../../../game/rules/away';
 import type { AwayEvent } from '../../../../game/rules/away';
 import { BOATS, newState } from '../../../../game/rules/logic';
+import { STACK_OMIT_CLASS } from '../../../ui/hud/stackTier';
 import AwayCard from './AwayCard';
 import AwayReportModal from './AwayReportModal';
 import { awayLineText } from './awayText';
@@ -53,6 +54,24 @@ describe('알림 카드', () => {
     fireEvent.click(screen.getByRole('button', { name: '자세히' }));
     expect(onClose).toHaveBeenCalled();
     expect(onDetail).toHaveBeenCalled();
+  });
+});
+
+describe('알림 카드의 생략 줄', () => {
+  it('새 도감 줄과 가방 안내 줄은 쌓기 단계에서 숨기는 생략 글자로 표시된다', () => {
+    render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
+    const omitted = [...screen.getByRole('status').querySelectorAll('[data-omittable]')];
+    expect(omitted.map(el => el.textContent)).toEqual(['새 도감2', '1시간 32분 만에 가방이 차서 1마리를 놓아줬어요.']);
+    for (const el of omitted) expect(el.className).toContain(STACK_OMIT_CLASS);
+  });
+
+  it('비운 시간, 잡은 물고기, 명성 줄과 버튼은 생략하지 않는다', () => {
+    render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
+    const card = screen.getByRole('status');
+    for (const name of ['잡은 물고기', '명성']) {
+      expect(within(card).getByText(name).closest('li')!.hasAttribute('data-omittable')).toBe(false);
+    }
+    expect(within(card).getByRole('button', { name: '자세히' }).closest('[data-omittable]')).toBeNull();
   });
 });
 

@@ -28,11 +28,12 @@ import { SCALE } from '../../../game/rendering/pixel/common.js';
 import { FIELD_VIEW, mobileFieldView } from '../../../game/world/fieldView.js';
 import GameFrame from './GameFrame';
 import MovePad from './MovePad';
-import { statusText } from './statusText';
+import { statusParts } from './statusText';
 import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
 import HudPanel from '../../ui/hud/HudPanel';
+import { HEADER_ROWS_OMIT_CLASS } from '../../ui/hud/headerTier';
 import type { Notify } from '../../ui/hud/messageFeed';
 
 interface Props {
@@ -219,10 +220,13 @@ export default function Field({
   };
 
   const inSlot = mobile && statusSlot != null;
-  const statusBand = snapshot.phase === 'idle' ? null : (
+  const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
+  const statusBand = status && (
     <HudPanel className={cx('z-(--z-stage-hud) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
       inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
-      {statusText(snapshot.phase, mobile)}
+      {status.lead}
+      {/* 판정 영역 설명 줄은 입력을 받지 않는 띠의 생략 글자라 툴팁 없이 숨기기만 한다 */}
+      {status.judge && <span className={cx('block', HEADER_ROWS_OMIT_CLASS)}>{status.judge}</span>}
     </HudPanel>
   );
 

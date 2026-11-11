@@ -106,4 +106,37 @@ describe('레이아웃 판정 기준(뷰포트 폭 768px)', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('쌓기 단계 경계(464px)는 한 곳(stackTier)에서만 정의하고, 그 클래스는 모두 PC 레이아웃 접두사(pc:)를 단다', () => {
+    const tier = sources.find(([key]) => key.endsWith('/ui/hud/stackTier.ts'));
+    expect(tier, '단계 파일을 찾지 못했다').toBeDefined();
+    const classes = tier![1].match(/[\w:[\]()@%.,/-]*@max-\[464px\][^\s']*/g) ?? [];
+    expect(classes.length).toBeGreaterThan(0);
+    for (const c of classes) expect(c.startsWith('pc:@max-[464px]:'), c).toBe(true);
+    const offenders: string[] = [];
+    for (const [key, src] of sources) {
+      if (key.endsWith('/ui/hud/stackTier.ts')) continue;
+      src.split('\n').forEach((line, n) => {
+        if (/(?:max|min)-\[464px\]/.test(line)) offenders.push(`${key}:${n + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('쌓기 단계 클래스와 헤더 두 행 단계 생략 클래스는 상수로만 쓴다 - 화면 컴포넌트가 가져다 쓴다', () => {
+    const used = (suffix: string, name: string) => {
+      const entry = sources.find(([key]) => key.endsWith(suffix));
+      expect(entry, `${suffix} 소스를 찾지 못했다`).toBeDefined();
+      expect(entry![1], suffix).toContain(name);
+    };
+    used('/hud/HudLayout.tsx', 'STACK_TRUNK_CLASS');
+    used('/hud/HudLayout.tsx', 'STACK_COLUMN_CLASS');
+    used('/ui/hud/MessageLog.tsx', 'STACK_LOG_CLASS');
+    used('/game-stage/GameFrame.tsx', 'STACK_FRAME_FILL_CLASS');
+    used('/views/game/base-menu/BaseMenu.tsx', 'STACK_MENU_CLASS');
+    used('/ui/hud/HudRows.tsx', 'STACK_OMIT_CLASS');
+    used('/views/overlays/away/AwayCard.tsx', 'STACK_OMIT_CLASS');
+    used('/views/overlays/bounty/TraceCard.tsx', 'STACK_OMIT_CLASS');
+    used('/game-stage/Field.tsx', 'HEADER_ROWS_OMIT_CLASS');
+  });
 });
