@@ -19,6 +19,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
+  ['changelog', () => admin.changelog(), '/api/admin?q=changelog'],
   ['chatReports', () => admin.chatReports(), '/api/admin?q=chatReports'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
   ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],

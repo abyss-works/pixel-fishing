@@ -1,15 +1,18 @@
 // 운영 탭 — 환경 정체·권한 상태·이벤트 카탈로그가 칸으로 나뉘어 그려지는지 확인한다.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
+import { QueryProvider } from '../../../../core/QueryProvider';
 import OpsTab from './OpsTab';
+
+vi.mock('../../../../platform/api', () => ({ api: { admin: { deployHost: () => null, changelog: vi.fn(async () => []) } } }));
 
 afterEach(cleanup);
 
 const show = (access: AdminAccess) => render(
-  <AdminAuthCtx.Provider value={{ access, uid: null }}><OpsTab /></AdminAuthCtx.Provider>,
+  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
 );
 
 describe('운영 탭', () => {
@@ -26,6 +29,11 @@ describe('운영 탭', () => {
   it('관리자 세션이면 로컬 모드와 다른 문구를 보인다', () => {
     show('granted');
     expect(screen.getByText('관리자 세션')).toBeInTheDocument();
+  });
+
+  it('변경 기록 칸이 있다', () => {
+    show('granted');
+    expect(screen.getByText('변경 기록')).toBeInTheDocument();
   });
 
   it('이벤트 카탈로그는 이벤트 유형마다 한 줄이고, 이벤트를 남기지 않는 액션을 따로 적는다', () => {

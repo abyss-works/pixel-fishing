@@ -132,6 +132,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'spamFlags': return read.spamFlags;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
+    case 'changelog': return read.changelog;
     case 'chatReports': return read.chatReports;
     case 'mails': return db => recentSentMails(db);
     case 'dailyActive': { const days = daysOf(req); return db => read.dailyActive(db, days); }

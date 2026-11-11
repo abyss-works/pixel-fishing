@@ -1,7 +1,7 @@
 // 서버가 쓰는 표의 Drizzle 선언 — 쿼리 작성용이다. 표의 정본은 번호 SQL 마이그레이션이며,
 // 선언이 실제 표와 같은지는 스키마 테스트가 검사한다. RLS 정책·뷰·함수는 마이그레이션에만 있다.
 // 시각 열은 Date로 읽고 쓴다(timestamptz라 시간대와 무관하게 같은 시점이 저장된다).
-import { bigint, bigserial, boolean, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -71,6 +71,19 @@ export const letters = pgTable('letters', {
   text: text('text').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
   handledAt: at('handled_at'),
+});
+
+/** 관리자 변경 기록 — 체인지로그 생성 도구의 SQL이 쓰고 서버는 읽기만 한다 */
+export const changelogEntries = pgTable('changelog_entries', {
+  id: text('id').primaryKey(),
+  version: text('version').notNull(),
+  date: date('date', { mode: 'string' }).notNull(),
+  seq: integer('seq').notNull(),
+  tier: text('tier').notNull(),
+  tag: text('tag').notNull(),
+  text: text('text').notNull(),
+  withdrawnAt: at('withdrawn_at'),
+  syncedAt: at('synced_at').notNull().defaultNow(),
 });
 
 export const coupons = pgTable('coupons', {

@@ -44,6 +44,9 @@ export const readAdminLetters = () => Promise.all([
   api.admin.users(),
 ]);
 
+/** 변경 기록(최신 버전부터, 철회된 항목 포함) */
+export const readAdminChangelog = () => api.admin.changelog();
+
 export const readAdminChatReports = () => Promise.all([
   api.admin.chatReports(),
   api.admin.users(),

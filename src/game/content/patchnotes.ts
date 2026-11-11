@@ -1,5 +1,5 @@
 // 사용자용 패치노트: 게임 내 설정 탭에 표시된다.
-// 작성 규칙은 관리 저장소의 패치노트 작성 스킬(pf-patchnote)을 따른다. 플레이어가 체감하지 못하는 변경은 visible: false 항목으로 적는다.
+// 작성 규칙은 관리 저장소의 패치노트 작성 스킬(pf-patchnote)을 따른다. PATCH_NOTES는 체인지로그의 공개 항목에서 생성되므로 직접 고치지 않는다.
 // 태그는 화면에 묶어 보이는 순서대로 나열한다.
 export const NOTE_TAGS = ['기능', 'UI', '밸런스', '수정', '기타'] as const;
 export type NoteTag = typeof NOTE_TAGS[number];
@@ -7,12 +7,13 @@ export type NoteTag = typeof NOTE_TAGS[number];
 export interface PatchNote {
   version: string;
   date: string;
-  /** 아코디언 접힘 상태에서 보이는 한 줄 요약. 공개 항목이 있는 버전은 필수다 */
+  /** 아코디언 접힘 상태에서 보이는 한 줄 요약. 모든 버전에 필수다 */
   summary?: string;
-  /** visible을 생략하면 공개, false면 화면에 나오지 않는 비공개 항목이다 */
-  notes: { tag: NoteTag; text: string; visible?: boolean }[];
+  notes: { tag: NoteTag; text: string }[];
 }
 
+// changelog-generated:begin
+// 이 영역은 생성 도구가 쓴다. 직접 고치지 않는다.
 export const PATCH_NOTES: PatchNote[] = [
   {
     version: '0.18.5',
@@ -39,7 +40,6 @@ export const PATCH_NOTES: PatchNote[] = [
     summary: '방치 낚시가 느려지던 문제를 고쳤어요',
     notes: [
       { tag: '수정', text: '브라우저에서 다른 탭을 보는 동안 방치 낚시 한 번에 걸리는 시간이 원래보다 길어지던 문제를 고쳤어요.' },
-      { tag: '수정', text: '테스트 서버와 개발 환경에서 개발용 명령과 강제 조우를 허용하는 조건의 보안 문제를 고쳤어요. 서버의 배포 환경 설정과 운영자 계정인지로만 허용해요.', visible: false },
     ],
   },
   {
@@ -58,22 +58,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '수정', text: '스탯 창의 방치 낚시 배수가 실제로 적용되는 값과 다르게 보이던 문제를 고쳤어요.' },
       { tag: '수정', text: '모바일에서 스탯 창 보너스 탭의 표가 옆으로 넘치거나 글자가 잘리던 문제를 고쳤어요.' },
       { tag: '기타', text: '지난 버전의 패치노트 문구를 다듬었어요.' },
-      { tag: '기타', text: '밸런스 측정 도구의 측정 기준을 바꾸고 판정 항목을 더했어요.', visible: false },
-      { tag: '기타', text: '서버 부하를 시험하는 도구가 생겼어요.', visible: false },
-      { tag: '기타', text: '화면 너비마다 배치가 넘치지 않는지 검사하는 도구가 생겼어요.', visible: false },
-      { tag: '기타', text: '테스트 서버의 설정을 바꿨어요.', visible: false },
-    ],
-  },
-  {
-    version: '0.18.1',
-    date: '2026-11-10',
-    notes: [
-      { tag: 'UI', text: '설정 탭의 최근 소식 다시 보기가 공개 항목이 있는 가장 최근 버전의 소식을 열어요.', visible: false },
-      { tag: '수정', text: '보안 문제가 알려진 외부 구성 요소를 고친 판으로 바꿨어요.', visible: false },
-      { tag: '수정', text: '운영자 계정인지와 진행 불러오기를 허용할지를 서버의 배포 환경 설정으로만 정하도록 고쳤어요. 운영 서버에서는 진행 불러오기를 받지 않아요.', visible: false },
-      { tag: '기타', text: '패치노트에 공개 항목이 없는 버전도 출시할 수 있어요.', visible: false },
-      { tag: '기타', text: '운영 서버에 배포 환경 설정을 적어 두었어요.', visible: false },
-      { tag: '기타', text: '그 밖의 서버 설정 안내를 더했어요.', visible: false },
     ],
   },
   {
@@ -105,12 +89,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '수정', text: '어시장의 판매 버튼에 길드 판매가 보너스가 빠진 금액이 보이던 문제를 고쳤어요.' },
       { tag: '수정', text: '여객선으로 이동할 때 도착 위치가 어긋나거나 이동이 두 번 되던 문제를 고쳤어요.' },
       { tag: '수정', text: '그 밖의 작은 문제를 고쳤어요.' },
-      { tag: 'UI', text: '모바일 화면인지 가르는 기준을 화면 너비 하나로 맞췄어요.', visible: false },
-      { tag: '기타', text: '바다 위 위치를 정하는 기준점을 지구 전체에 하나로 고정했어요.', visible: false },
-      { tag: '기타', text: '실시간 연결을 맺을 때 게임 버전을 확인해요.', visible: false },
-      { tag: '기타', text: '쓰지 않는 화면 미리보기 도구를 없앴어요.', visible: false },
-      { tag: '기타', text: '밸런스 측정 도구의 측정 기준을 바꾸고 검사 항목을 더했어요.', visible: false },
-      { tag: '기타', text: '바다 지형을 만드는 도구로 작은 섬과 지나갈 수 없는 육지를 그릴 수 있어요.', visible: false },
     ],
   },
   {
@@ -143,7 +121,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '저장에 실패하면 새로고침을 안내하는 창이 떠요.' },
       { tag: 'UI', text: '모바일에서 화면이 확대되지 않게 했어요.' },
       { tag: 'UI', text: '그 밖의 표, 스크롤, 설명 창 모양과 화면 전환을 다듬었어요.' },
-      { tag: '기타', text: '옷장에서 색을 바꾸거나 모자를 살 때 서버가 읽는 데이터를 줄였어요.', visible: false },
     ],
   },
   {
@@ -164,15 +141,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '다시 접속하면 마지막으로 있던 바다의 자리에서 이어서 시작해요.' },
       { tag: 'UI', text: '게임 화면의 창과 알림, 채팅창 모양을 새로 정리했어요.' },
       { tag: 'UI', text: '길드, 소셜, 우편함을 오른쪽 위 메뉴에 모았어요.' },
-      { tag: '기능', text: '관리자 로그인이 생겼어요. 관리자 대시보드는 관리자 계정으로 로그인해야 열려요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에서 플레이어의 접속 기록과 재방문 집계를 볼 수 있어요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에서 계정을 제재하고 풀 수 있어요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에서 비밀번호 재설정 링크를 만들 수 있어요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에서 채팅 신고 목록을 볼 수 있어요.', visible: false },
-      { tag: 'UI', text: '관리자 대시보드의 편지 목록에 처리했는지 표시돼요.', visible: false },
-      { tag: '기타', text: '관리자 대시보드를 게임과 따로 배포해요.', visible: false },
-      { tag: '기타', text: '열어 둔 화면이 최신인지 가르는 기준을 출시 버전으로 바꿨어요.', visible: false },
-      { tag: '기타', text: '자동 검사와 배포 준비에 걸리는 시간을 줄였어요.', visible: false },
     ],
   },
   {
@@ -209,7 +177,6 @@ export const PATCH_NOTES: PatchNote[] = [
     summary: '로그인 문제를 고쳤어요',
     notes: [
       { tag: '수정', text: '계정에 로그인한 뒤 다른 창에서 접속했다는 안내가 뜨던 문제를 고쳤어요.' },
-      { tag: '기타', text: '테스트 서버의 주소를 바꿨어요.', visible: false },
     ],
   },
   {
@@ -221,21 +188,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '계정 관리 창에서 계정을 삭제할 수 있어요. 삭제한 계정과 진행 상황은 되돌릴 수 없어요.' },
       { tag: 'UI', text: '스탯 창을 요약, 배, 낚싯대, 보너스 탭으로 나눴어요. 해역마다 낚싯대 파워가 충분한지와 지금 받는 보너스를 볼 수 있어요.' },
       { tag: '기타', text: '게임을 창 하나에서만 플레이하도록 바꿨어요. 다른 창에서 접속하면 먼저 열린 창에 안내가 떠요.' },
-      { tag: '기능', text: '데이터베이스 백업이 생겼어요. 게임 데이터를 매일 따로 보관해요.', visible: false },
-      { tag: '기능', text: '테스트 서버가 생겼어요. 개발 중인 버전을 운영 서버에 올리기 전에 테스트 서버에서 확인해요.', visible: false },
-      { tag: '수정', text: '낚시와 관련된 보안 문제를 고쳤어요.', visible: false },
-      { tag: '기타', text: '로그인과 계정 인증을 새 방식으로 옮겼어요.', visible: false },
-      { tag: '기타', text: '게임 데이터베이스를 새 서버로 옮겼어요.', visible: false },
-      { tag: '기타', text: '이전 데이터베이스의 내용을 새 데이터베이스로 옮기는 도구를 더했어요.', visible: false },
-    ],
-  },
-  {
-    version: '0.14.1',
-    date: '2026-11-02',
-    notes: [
-      { tag: '기타', text: '게임 서버를 새 서버 환경으로 옮겼어요.', visible: false },
-      { tag: '기타', text: '새 버전을 출시하면 운영 서버에 올릴 게임 서버를 자동으로 만들어 두어요.', visible: false },
-      { tag: '기타', text: '그 밖의 서버 설정을 다듬었어요.', visible: false },
     ],
   },
   {
@@ -246,9 +198,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '게임 화면 오른쪽 위에 우편함이 생겼어요. 운영자가 보낸 우편을 여기서 받을 수 있어요.' },
       { tag: '기능', text: '우편에 골드가 붙어 올 수 있어요.' },
       { tag: '기능', text: '받지 않은 우편이 있으면 접속할 때 알려 줘요.' },
-      { tag: '기능', text: '관리자 대시보드에서 우편을 보낼 수 있어요. 보낸 우편도 다시 볼 수 있어요.', visible: false },
-      { tag: '기타', text: '골드 흐름 기록에 우편으로 받은 골드를 더했어요.', visible: false },
-      { tag: '기타', text: '우편을 보내는 운영 도구를 더했어요.', visible: false },
     ],
   },
   {
@@ -260,7 +209,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '밸런스', text: '높은 단계의 낚싯대 강화 비용을 낮췄어요.' },
       { tag: '밸런스', text: '남인도양, 모잠비크 해협, 코모로 심해에 필요한 파워를 조정했어요.' },
       { tag: '밸런스', text: '정크선의 가방 크기를 조정했어요. 이미 담아 둔 물고기는 그대로 남아요.' },
-      { tag: '기타', text: '해역에 필요한 파워와 배의 가방 크기를 확인하는 자동 검사를 더했어요.', visible: false },
     ],
   },
   {
@@ -291,8 +239,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '수배판에서 의뢰를 받을 수 없을 때 그 이유를 알려 줘요.' },
       { tag: '수정', text: '도움말과 안내 문구가 실제 규칙과 다르던 곳을 고쳤어요.' },
       { tag: '수정', text: '일부 해역 근처에서 지역 탭에 태평양이 보이던 문제를 고쳤어요.' },
-      { tag: '기타', text: '확률로 뽑는 추첨의 자동 검사를 보강했어요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
     ],
   },
   {
@@ -305,12 +251,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '일반 의뢰를 진행하는 동안에는 일반 의뢰를 더 수주할 수 없어요. 네임드 토벌도 마찬가지예요.' },
       { tag: '밸런스', text: '모든 네임드의 체력이 줄었어요.' },
       { tag: '밸런스', text: '해구의 이빨이 영웅 유물로 바뀌고, 효과를 조정했어요. 지니고 있으면 네임드와 결투할 때 네임드가 덜 빨라져요.' },
-      { tag: '기능', text: '빈 게스트 계정 정리가 생겼어요. 이메일 변경을 확인하는 중이거나 편지를 보낸 계정은 정리하지 않아요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에서 지금의 밸런스 지표를 볼 수 있어요.', visible: false },
-      { tag: 'UI', text: '관리자 대시보드의 탭을 다시 묶었어요.', visible: false },
-      { tag: '기타', text: '관리자 조회가 서버를 거치도록 바꿨어요.', visible: false },
-      { tag: '기타', text: '요청한 사용자를 확인하는 처리를 한곳으로 모았어요.', visible: false },
-      { tag: '기타', text: '게임 날짜가 바뀌는 기준을 한곳에서 계산하도록 맞췄어요.', visible: false },
     ],
   },
   {
@@ -325,7 +265,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '가방 목록에서 최대 크기 칸을 빼고 마릿수와 소계 칸을 넓혔어요.' },
       { tag: 'UI', text: '게임 안내 문구의 말투를 하나로 맞췄어요. 미끼 효과처럼 화면마다 다르게 적혀 있던 설명도 같은 말로 고쳤어요.' },
       { tag: '기타', text: '유물의 이름과 설명이 바뀌었어요. 효과는 그대로예요.' },
-      { tag: '기타', text: '메시지 창에 뜨는 알림의 종류를 메시지를 보내는 곳에서 정하도록 바꿨어요.', visible: false },
     ],
   },
   {
@@ -348,17 +287,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '안내 창에서 꼭 읽어야 할 문장과 참고 내용을 나눠 보여 줘요.' },
       { tag: '수정', text: '안내 창의 글이 단어 중간에서 줄이 바뀌던 문제를 고쳤어요.' },
       { tag: '수정', text: '예전 저장을 이어받은 직후 처음 낚은 물고기가 도감에 바로 반영되지 않던 문제를 고쳤어요.' },
-      { tag: '기타', text: '쓰지 않는 라이선스 조회와 저장 항목을 없앴어요.', visible: false },
-      { tag: '기타', text: '밸런스 측정 도구가 방치 낚시를 기준으로 재도록 바꿨어요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
-    ],
-  },
-  {
-    version: '0.10.5',
-    date: '2026-10-17',
-    notes: [
-      { tag: '기타', text: '행동 처리와 정기 보관 작업을 확인하는 자동 검사를 더했어요.', visible: false },
-      { tag: '기타', text: '실제 데이터베이스로 돌리는 자동 검사 환경을 만들었어요.', visible: false },
     ],
   },
   {
@@ -375,10 +303,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '메시지 창이 채팅창처럼 바뀌었어요. 이전 메시지를 거슬러 올라가 볼 수 있어요.' },
       { tag: 'UI', text: '창과 버튼, 입력칸, 아이콘의 모양을 게임 전체에서 하나로 맞췄어요.' },
       { tag: '수정', text: '접속 직후 남은 횟수가 늦게 보이거나 비어 보이던 문제를 고쳤어요.' },
-      { tag: '기능', text: '관리자 대시보드의 진행 탭에서 플레이어가 바운티 헌팅을 어느 단계까지 진행했는지 볼 수 있어요.', visible: false },
-      { tag: '기타', text: '화면을 공용 부품으로만 만들도록 지키는 자동 검사를 더했어요.', visible: false },
-      { tag: '기타', text: '밸런스 측정 도구가 생겼어요. 기대 골드 측정 도구를 대신해요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
     ],
   },
   {
@@ -388,7 +312,6 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       { tag: 'UI', text: '자동 잠금이 어종마다 일반과 돌연변이에서 가장 큰 물고기만 잠그고 나머지 잠금은 풀도록 바뀌었어요.' },
       { tag: 'UI', text: '자동 잠금을 누르기 전에 잠기고 풀리는 물고기 수를 먼저 보여 줘요.' },
-      { tag: '수정', text: '운영 버전에서는 개발 도구를 쓸 수 없도록 막았어요. 관리자 대시보드로 가는 기능만 남겼어요.', visible: false },
     ],
   },
   {
@@ -404,8 +327,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '밸런스', text: '해구의 이빨과 침선의 나침반의 항해 속도 효과를 조정했어요.' },
       { tag: '수정', text: '일반 의뢰를 받는 조건이 수배판 안내와 다르던 문제를 고쳤어요. 이제 그 구역에서 전설을 뺀 모든 어종을 모으면 받을 수 있어요.' },
       { tag: '수정', text: '미끼를 낱개로 살 때 할인 전 가격이 보이던 문제를 고쳤어요.' },
-      { tag: '기능', text: '개발 도구 패널이 생겼어요. 명령 목록과 미리 정해 둔 상태로 게임을 시험할 수 있어요.', visible: false },
-      { tag: 'UI', text: '운영 버전이 아니면 화면 위에 환경 표시가 떠요.', visible: false },
     ],
   },
   {
@@ -445,14 +366,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '창을 Esc 키로도 닫을 수 있어요.' },
       { tag: 'UI', text: '그 밖의 닫기 버튼, 금액 표기, 제목 서체를 화면 전체에서 맞췄어요.' },
       { tag: '밸런스', text: '마을에서 걷는 속도가 빨라졌어요.' },
-      { tag: '기타', text: '배가 움직이는 동안 미니맵 때문에 생기던 불필요한 화면 갱신을 없앴어요.', visible: false },
-      { tag: '기타', text: '화면 가장자리를 어둡게 하는 효과를 한 번 만들어 두고 다시 써요.', visible: false },
-      { tag: '기타', text: '게임 코드를 계층별로 다시 배치하고, 계층 사이 경계를 지키는 자동 검사를 더했어요.', visible: false },
-      { tag: '기타', text: '서버에서 정보를 받아 오는 방식을 바꿨어요. 관리자 조회를 먼저 옮겼어요.', visible: false },
-      { tag: '기타', text: '화면의 탭과 창, 버튼, 입력칸을 공용 부품과 디자인 기준값으로 맞췄어요.', visible: false },
-      { tag: '기타', text: '개발에 쓰는 패키지 관리 도구를 바꿨어요.', visible: false },
-      { tag: '기타', text: '화면 미리보기 도구를 들였어요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
     ],
   },
   {
@@ -466,20 +379,6 @@ export const PATCH_NOTES: PatchNote[] = [
     ],
   },
   {
-    version: '0.8.3',
-    date: '2026-10-07',
-    notes: [
-      { tag: '기능', text: '편지 보관이 생겼어요. 플레이어가 보낸 편지는 오래된 기록을 옮길 때도 지우지 않고 남겨요.', visible: false },
-      { tag: '기능', text: '관리자 대시보드에 편지 탭이 생겼어요.', visible: false },
-      { tag: '기능', text: '정기 보관 작업이 생겼어요. 오래된 행동 기록을 매일 별도 저장소로 옮겨요.', visible: false },
-      { tag: '수정', text: '서버가 받는 요청의 형식을 확인하도록 했어요.', visible: false },
-      { tag: '기타', text: '서버와 화면의 경계를 지키는 자동 검사를 보강했어요.', visible: false },
-      { tag: '기타', text: '운영자 이메일을 서버 설정에서 읽도록 바꿨어요.', visible: false },
-      { tag: '기타', text: '물고기를 뽑는 추첨을 한곳에서 하도록 합쳤어요.', visible: false },
-      { tag: '기타', text: '강화 비용을 밸런스 값과 같은 곳에서 관리하도록 옮겼어요.', visible: false },
-    ],
-  },
-  {
     version: '0.8.2',
     date: '2026-09-06',
     summary: '낮과 밤이 생겼어요',
@@ -487,8 +386,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '게임에 낮과 밤이 생겼어요. 밤에는 배가 느려져요.' },
       { tag: '기능', text: '밤에만 만날 수 있는 물고기가 생겼어요.' },
       { tag: 'UI', text: '미니맵 위에 해와 달이 떠서 지금이 낮인지 밤인지 알려 줘요.' },
-      { tag: '기능', text: '관리자 대시보드에서 게임 시간을 바꿔 시험할 수 있어요.', visible: false },
-      { tag: '기타', text: '게임 시간을 계산하는 부분을 따로 나눴어요.', visible: false },
     ],
   },
   {
@@ -509,16 +406,7 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '태평양, 동남아&오세아니아, 인도양이 하나의 바다로 이어졌어요.' },
       { tag: '기능', text: '바다가 구역으로 나뉘었어요. 지역 탭에서 지금 있는 구역의 이야기와 어군 정보, 등급 분포를 볼 수 있어요.' },
       { tag: '기능', text: '세계지도가 생겼어요. 미니맵을 누르면 열리고, 지금까지 열린 바다를 볼 수 있어요.' },
-      { tag: '기타', text: '서버와 화면의 경계를 지키는 자동 검사를 더했어요.', visible: false },
-      { tag: '기타', text: '데이터베이스가 한 번에 돌려주는 양에 상한을 정했어요.', visible: false },
-      { tag: '기타', text: '바다 지형을 만드는 설정 파일을 하나로 합쳤어요.', visible: false },
-      { tag: '기타', text: '그 밖의 내부 코드를 정리했어요.', visible: false },
     ],
-  },
-  {
-    version: '0.7.2',
-    date: '2026-09-06',
-    notes: [],
   },
   {
     version: '0.7.1',
@@ -530,7 +418,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '가방 탭이 물고기와 아이템으로 나뉘었어요. 물고기는 등급이 높은 순으로 보여요.' },
       { tag: 'UI', text: '가방의 물고기 목록을 어종마다 접어서 보여 줘요.' },
       { tag: 'UI', text: '상점에서 수량을 숫자로 직접 입력할 수 있어요.' },
-      { tag: '기능', text: '관리자 대시보드가 생겼어요. 운영자가 플레이 진행과 사용자, 지표를 탭마다 볼 수 있어요.', visible: false },
     ],
   },
   {
@@ -542,7 +429,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '목공소에 새 배가 생겼어요.' },
       { tag: 'UI', text: '일부 배의 이름이 바뀌었어요.' },
       { tag: '밸런스', text: '해역마다 낚시 밸런스를 조정했어요.' },
-      { tag: '기능', text: '관리자 화면에 밸런스 보고서와 어종 탭이 생겼어요.', visible: false },
     ],
   },
   {
@@ -565,13 +451,7 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '밸런스', text: '마리아나 해구와 코론 침선 지대의 영웅 등급 확률을 조정했어요.' },
       { tag: '밸런스', text: '그레이트 배리어 리프에서 전설 등급 물고기가 더 자주 낚이고, 전설 어종마다 나오는 비율이 같아졌어요.' },
       { tag: '밸런스', text: '돌연변이가 다시 더 자주 나와요.' },
-      { tag: '기타', text: '기대 골드 측정 도구를 더했어요.', visible: false },
     ],
-  },
-  {
-    version: '0.6.5',
-    date: '2026-08-26',
-    notes: [],
   },
   {
     version: '0.6.4',
@@ -587,7 +467,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '밸런스', text: '파워가 해역에 필요한 파워보다 높을수록 직접 챔질할 때 희귀한 물고기가 더 잘 낚여요.' },
       { tag: '밸런스', text: '낚싯대 강화 비용을 낮췄어요.' },
       { tag: '수정', text: '노란 영역과 빨간 영역이 겹쳐 계산되던 문제를 고쳤어요.' },
-      { tag: '기타', text: '파워 계산을 따로 나눴어요.', visible: false },
     ],
   },
   {
@@ -603,7 +482,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '밸런스', text: '타이밍 바의 속도가 낚싯대 레벨과 상관없이 같아졌어요.' },
       { tag: '밸런스', text: '파워가 모자란 해역에서 받는 불이익을 조정했어요.' },
       { tag: '밸런스', text: '방치 낚시의 불리함이 줄어드는 기준을 조정했어요.' },
-      { tag: '기타', text: '화면과 서버 사이의 연결을 한곳으로 정리했어요.', visible: false },
     ],
   },
   {
@@ -617,7 +495,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '자원 바를 누르면 스탯 창이 열려요. 내 장비의 성능을 항목별로 볼 수 있어요.' },
       { tag: '밸런스', text: '마리아나 해구, 드래곤 홀, 코론 침선 지대, 그레이트 배리어 리프에 필요한 파워가 생겼어요.' },
       { tag: '밸런스', text: '파워가 모자란 해역에서의 낚시를 조정했어요.' },
-      { tag: '기타', text: '스탯 계산을 따로 나눴어요.', visible: false },
     ],
   },
   {
@@ -627,7 +504,6 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       { tag: '기능', text: '설정 탭에서 지원 코드를 입력할 수 있어요.' },
       { tag: '기타', text: '설정 탭에서 이사 코드 내보내기와 불러오기를 없앴어요. 다른 기기에서는 같은 계정으로 로그인하면 진행이 이어져요.' },
-      { tag: '기타', text: '계정 제한을 담을 서버 저장 공간을 더했어요.', visible: false },
     ],
   },
   {
@@ -642,7 +518,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '바다 지형을 실제 지구의 해안선을 따라 다시 그렸어요.' },
       { tag: 'UI', text: '바다의 색과 물결, 구름 그림자를 새로 그렸어요.' },
       { tag: '밸런스', text: '찌를 던질 수 있는 거리가 늘었어요.' },
-      { tag: '기타', text: '실제 지구 지형으로 바다 지형을 만드는 도구를 더했어요.', visible: false },
     ],
   },
   {
@@ -665,7 +540,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '할 수 없는 행동은 무엇이 모자란지 알려 줘요.' },
       { tag: 'UI', text: '그 밖의 등급 테두리와 지역 탭의 어종 카드를 다듬었어요.' },
       { tag: '기타', text: '문제가 생기면 상황에 맞는 안내가 나오고, 진행을 잃지 않게 이사 코드를 자동으로 복사해 줘요.' },
-      { tag: '기타', text: '오류 수집 도구를 들였어요.', visible: false },
     ],
   },
   {
@@ -755,14 +629,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '도감에 상세 화면이 생겼어요. 잡은 물고기를 누르면 큰 그림과 이야기, 최대 크기, 처음 만난 날을 볼 수 있어요.' },
       { tag: 'UI', text: '도감에 돌연변이 보기가 생겼어요. 도감 탭을 한 번 더 누르면 일반과 돌연변이 보기가 바뀌어요.' },
       { tag: 'UI', text: '획득 카드에 크기와 월척, 처음 잡은 표시가 보여요.' },
-      { tag: '기타', text: '픽셀 그림을 그리는 부분을 따로 나눴어요.', visible: false },
-    ],
-  },
-  {
-    version: '0.2.3',
-    date: '2026-08-21',
-    notes: [
-      { tag: '기타', text: '쿠폰을 담을 서버 저장 공간을 더했어요.', visible: false },
     ],
   },
   {
@@ -771,15 +637,6 @@ export const PATCH_NOTES: PatchNote[] = [
     summary: '저장 오류를 고쳤어요',
     notes: [
       { tag: '수정', text: '일시적인 저장 오류를 고쳤어요.' },
-      { tag: '기타', text: '이전 데이터베이스 변경을 되돌리는 절차를 더했어요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
-    ],
-  },
-  {
-    version: '0.2.1',
-    date: '2026-08-21',
-    notes: [
-      { tag: '기타', text: '쓰지 않는 패키지 관리 파일을 지웠어요.', visible: false },
     ],
   },
   {
@@ -806,9 +663,6 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: 'UI', text: '글자가 선명해졌어요.' },
       { tag: 'UI', text: '좁은 화면에서는 위아래 배치로 바뀌어요.' },
       { tag: '기타', text: '여러 기기에서 번갈아 플레이해도 진행이 되돌아가지 않아요.' },
-      { tag: '수정', text: '진행은 서버를 거쳐서만 저장돼요. 게임 화면이 데이터베이스에 직접 쓰던 권한을 거뒀어요.', visible: false },
-      { tag: '기타', text: '게임 데이터와 공용 화면 요소를 따로 나눴어요.', visible: false },
-      { tag: '기타', text: '그 밖의 개발 환경을 정비했어요.', visible: false },
     ],
   },
   {
@@ -822,7 +676,7 @@ export const PATCH_NOTES: PatchNote[] = [
       { tag: '기능', text: '레벨이 명성으로 바뀌었어요. 명성은 끝없이 쌓이고, 배를 살 때 조건이 돼요.' },
       { tag: '기능', text: '이사 코드가 생겼어요. 이사 코드로 진행을 다른 브라우저나 기기로 옮길 수 있어요.' },
       { tag: '기능', text: '쿠폰이 생겼어요.' },
-      { tag: '기타', text: '코드를 올릴 때마다 테스트와 검사를 자동으로 돌려요.', visible: false },
     ],
   },
 ];
+// changelog-generated:end

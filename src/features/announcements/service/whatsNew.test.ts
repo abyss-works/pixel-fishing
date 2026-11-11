@@ -7,7 +7,7 @@ import { APP_VERSION } from '../../../version';
 import { SETTING_PROMPTS } from '../model/whatsNew';
 import { reopenWhatsNew, resetWhatsNewSession, useWhatsNew } from './whatsNew';
 
-type TestNote = { version: string; date: string; summary?: string; notes: { tag: '기능' | '기타'; text: string; visible?: boolean }[] };
+type TestNote = { version: string; date: string; summary?: string; notes: { tag: '기능' | '기타'; text: string }[] };
 const note = (version: string): TestNote => ({
   version, date: '2026-01-01', summary: '요약', notes: [{ tag: '기능', text: '공개 항목' }],
 });
@@ -109,27 +109,5 @@ describe('최근 소식 다시 보기', () => {
     expect(getAnnouncements().dismissedVersion).toBe('0.0.1');
     act(() => { reopenWhatsNew(); });
     expect(result.current.dismiss).toBe(true);
-  });
-});
-
-describe('비공개 항목만 있는 버전', () => {
-  beforeEach(() => {
-    patchNotes.length = 0;
-    localStorage.clear();
-    resetAnnouncements();
-    resetWhatsNewSession();
-  });
-  afterEach(cleanup);
-
-  it('현재 버전에 공개 항목이 없으면 소식 단계가 열리지 않고, 다시 보기는 공개 항목이 있는 이전 버전을 연다', () => {
-    patchNotes.push(
-      { version: APP_VERSION, date: '2026-01-01', notes: [{ tag: '기타', text: '비공개 항목', visible: false }] },
-      note('0.0.1'),
-    );
-    markPromptsAnswered(SETTING_PROMPTS.map(p => p.id));
-    const { result } = renderHook(() => useWhatsNew(veteran, true));
-    expect(result.current.open).toBe(false);
-    act(() => { reopenWhatsNew(); });
-    expect(result.current.news?.version).toBe('0.0.1');
   });
 });

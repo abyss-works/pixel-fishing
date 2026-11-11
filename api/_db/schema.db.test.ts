@@ -33,7 +33,7 @@ async function catalog(table: string): Promise<CatalogColumn[]> {
 // Drizzle 열 타입 → Postgres udt 이름
 const UDT: Record<string, string> = {
   PgUUID: 'uuid', PgText: 'text', PgInteger: 'int4', PgBigInt53: 'int8', PgReal: 'float4',
-  PgBoolean: 'bool', PgJsonb: 'jsonb', PgBigSerial53: 'int8',
+  PgBoolean: 'bool', PgDateString: 'date', PgJsonb: 'jsonb', PgBigSerial53: 'int8',
 };
 
 const udtOf = (c: { columnType: string; withTimezone?: boolean }): string =>
@@ -44,7 +44,7 @@ const tables: PgTable[] = Object.values(schema);
 describe('Drizzle 스키마', () => {
   it('서버가 쓰는 표를 모두 선언한다', () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
-      'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'coupons', 'events', 'fish_instances',
+      'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'changelog_entries', 'coupons', 'events', 'fish_instances',
       'letters', 'mails', 'profiles', 'records', 'reliefs', 'saves', 'saves_current',
     ]);
   });

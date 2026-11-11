@@ -10,6 +10,7 @@ import { readAdminDeployHost } from '../../../../features/admin/service/queries'
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
+import ChangelogSection from './ChangelogSection';
 
 export default function OpsTab() {
   const { access } = useAdminAuth();
@@ -53,6 +54,8 @@ export default function OpsTab() {
             데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름·인자)는 그 안에서만 다뤄요.
           </Note>
         </Cell>
+
+        <ChangelogSection />
 
         <EventCatalog />
       </CellGrid>
