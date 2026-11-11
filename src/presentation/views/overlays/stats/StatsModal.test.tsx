@@ -27,6 +27,16 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(4);
   });
 
+  it('보너스 탭은 효과가 든 슬롯의 효과를 요리 이름 출처와 적용 낚시와 함께 보인다', () => {
+    const endsAt = new Date(Date.now() + 3_600_000).toISOString();
+    show(game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt }, bait: null } }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+    const row = screen.getByText('입질 대기 −10%').closest('tr')!;
+    expect(within(row).getByText('가루디야')).toBeTruthy();
+    expect(within(row).getByText('방치 낚시에만')).toBeTruthy();
+    expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(3);
+  });
+
   it('배 탭은 지역마다 열린 해역 수와 남은 해역을 여는 배를 표로 보인다', () => {
     show(game({ boat: 1 }));
     fireEvent.click(screen.getByRole('button', { name: '배' }));

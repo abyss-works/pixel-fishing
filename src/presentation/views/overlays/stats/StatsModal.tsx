@@ -5,6 +5,7 @@ import { powerHelpText } from '../../../../game/rules/stats';
 import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
 import type { ZoneId } from '../../../../game/content/zones';
+import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { useSpotState } from '../../../../features/travel/service/useSpotState';
 import {
   selectActiveBonuses, selectInitialStatsSpotIndex, selectReachableZones,
@@ -48,6 +49,7 @@ interface Props {
 }
 
 export default function StatsModal({ game, movement, region, nickname, guild, onClose }: Props) {
+  const now = useNow();
   const { spot: here } = useSpotState();
   const [tab, setTab] = useState<StatsTab>('summary');
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
@@ -97,7 +99,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
               <RodTab rows={rows} zoneTabs={zoneTabs} zone={zone} selected={selected}
                       onZone={pickZone} onSelect={setSpotIndex} />
             )}
-            {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game, guild)} />}
+            {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game, guild, now)} />}
           </div>
         </div>
       </ModalCard>

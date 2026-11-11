@@ -16,17 +16,19 @@ const SOURCE_HELP = [
 ];
 const HEAD = 'h-[30px] font-normal border-b border-line';
 
-/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수에서 뽑는다 */
+/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯 효과 줄에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level) ?? '';
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
+    case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
   }
 }
 function sourceText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return row.source.artifact.name;
     case 'guild': return `길드 Lv.${row.source.level}`;
+    case 'slot': return row.source.label;
   }
 }
 
@@ -63,6 +65,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                     <td className={cx('h-[34px] border-t border-line/60', cell)}>
                       <span className="text-accent">{effectText(row)}</span>
                       {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">직접 낚을 때만</span>}
+                      {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">방치 낚시에만</span>}
                     </td>
                     <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
                   </tr>
