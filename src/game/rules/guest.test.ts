@@ -16,6 +16,9 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'sell', uids: [] })).toBe('ok');
     expect(guestActionVerdict({ type: 'upgradeRod' })).toBe('ok');
     expect(guestActionVerdict({ type: 'buyBoat' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'seeTutorial', id: 'x' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'setLocked', uids: [], locked: true })).toBe('ok');
+    expect(guestActionVerdict({ type: 'autoLock' })).toBe('ok');
   });
 
   it('바다로 나가는 이동과 마을 밖 낚시는 마을 전용 코드로 거부한다', () => {
@@ -43,7 +46,6 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
       { type: 'buyBait', bait: 'x' }, { type: 'setActiveBait', bait: null },
-      { type: 'setLocked', uids: [], locked: true }, { type: 'autoLock' }, { type: 'seeTutorial', id: 'x' },
     ];
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });
