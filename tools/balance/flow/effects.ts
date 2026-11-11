@@ -3,8 +3,8 @@
 // 효과는 여섯 가지 매개변수다. 기본값은 모두 효과 없음이다.
 //   bite: 입질 대기 단축 비율(0.1은 10% 단축). 대기 전체(파워 미달 가산 포함)에 (1 - bite)를 곱한다
 //   rare: 희귀 이상(희귀, 영웅, 전설) 등급 가중치 증가 비율. 등급마다 (1 + 합)을 한 번 곱하는 제품 규칙의 효과 합산에 더한다
-//   variant: 돌연변이 확률 배수. 확률에 곱하고 1에서 멈춘다
-//   size: 크기 배수. 판매가와 도감 완성 조건이 크기를 쓰지 않으므로 이 지표들에 영향이 없다
+//   variant: 돌연변이 가중치 증가 비율. 유물과 같은 경로로 전역 돌연변이 가중치에 (1 + 증가)를 곱한다
+//   size: 크기 증가 비율. 판매가와 도감 완성 조건이 크기를 쓰지 않으므로 이 지표들에 영향이 없다
 //   move: 이동 속도 증가 비율. 실질 낚시 시간 밖의 이동만 줄이므로 낚시 시간당 수입은 그대로이고, 판매 왕복을 넣은 수입에서만 달라진다
 //   named: 네임드 조우 가중치 증가 비율. 수입은 그대로이고 조우까지의 기대 시간만 달라진다
 // 가정: 수동 낚시(미끼 슬롯)는 같은 모델의 GOOD 판정 축으로 잰다. 도감 완성은 한 해역에서만 낚을 때의 시간이다.
@@ -14,12 +14,13 @@ import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
-import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { addGradeEffect, namedWeightsOf, variantShare } from '../../../src/game/rules/logic';
+import { BOUNTIES } from '../../../src/game/content/bounties';
+import { MUTATION_WEIGHTS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
+import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, namedWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import type { DrawOptions } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng } from '../model';
-import type { Axis, Pool, Rates, Row } from '../model';
+import type { Axis, Rates, Row } from '../model';
 import { expectedEncounterCatches } from './bounty';
 import { axisOf } from './progress';
 import type { FlowAxis } from './progress';
@@ -30,17 +31,15 @@ export interface Effect {
   bite: number; rare: number; variant: number; size: number; move: number; named: number;
 }
 
-export const NO_EFFECT: Effect = { bite: 0, rare: 0, variant: 1, size: 1, move: 0, named: 0 };
-
-export const isNoEffect = (e: Effect): boolean => (Object.keys(NO_EFFECT) as (keyof Effect)[]).every(k => e[k] === NO_EFFECT[k]);
+export const NO_EFFECT: Effect = { bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 };
 
 /** 효과 매개변수 검사 — 범위를 벗어나면 오류 */
 export function checkEffect(e: Effect): void {
   const bad = (msg: string) => { throw new Error(msg); };
   if (!(e.bite >= 0 && e.bite < 1)) bad('입질 대기 단축은 0 이상 100 미만(%)이어야 합니다');
   if (!(e.rare >= 0)) bad('희귀 이상 가중 증가는 0 이상(%)이어야 합니다');
-  if (!(e.variant > 0)) bad('돌연변이 확률 배수는 0보다 커야 합니다');
-  if (!(e.size > 0)) bad('크기 배수는 0보다 커야 합니다');
+  if (!(e.variant >= 0)) bad('돌연변이 가중치 증가는 0 이상(%)이어야 합니다');
+  if (!(e.size > -1)) bad('크기 증가는 -100 초과(%)여야 합니다');
   if (!(e.move > -1)) bad('이동 속도 증가는 -100 초과(%)여야 합니다');
   if (!(e.named >= 0)) bad('네임드 조우 증가는 0 이상(%)이어야 합니다');
 }
@@ -56,17 +55,24 @@ export interface EffectRates extends Rates { variantShare: number }
 
 const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
 
-/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 가중은 추첨 옵션에, 돌연변이 배수는 판매가 기댓값에 반영한다 */
-export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, pool: Pool = 'mixed'): EffectRates {
+/** 돌연변이 가중치 증가를 넣은 해역의 돌연변이 확률 — 제품의 폼 가중치와 같은 경로다.
+ *  증가가 있으면 유물과 같이 전역 가중치의 돌연변이 쪽에 (1 + 증가)를 곱하고(해역 덮어쓰기는 무시), 없으면 제품의 해역 가중치를 그대로 쓴다 */
+export function variantShareOf(spot: SpotId, boost: number): number {
+  const weights = mutationWeightsOf({ artifacts: [] }, spot);
+  return variantShare(boost > 0 ? { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal } : weights);
+}
+
+/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 가중은 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
+export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect): EffectRates {
   let extra: DrawOptions = {};
   if (e.rare !== 0) for (const g of GRADES_RARE_UP) extra = addGradeEffect(extra, g, e.rare);
-  const base = rates(spot, level, axis, extra, pool);
+  const base = rates(spot, level, axis, extra);
   const cycle = {
     ...base.cycle,
     biteMin: base.cycle.biteMin * (1 - e.bite), biteMax: base.cycle.biteMax * (1 - e.bite), biteExtra: base.cycle.biteExtra * (1 - e.bite),
   };
   const cph = 3600 / meanCycleSec(cycle);
-  const share = Math.min(1, variantShare() * e.variant);
+  const share = variantShareOf(spot, e.variant);
   const scale = cph / base.catchesPerHour;
   return {
     ...base, cycle, catchesPerHour: cph, variantShare: share,
@@ -80,11 +86,11 @@ const levelOf = (spot: SpotId, margin: number): number => entryLevel(spot) + mar
 
 // ── 1. 효과를 넣은 수입 ──
 
-/** 판매 왕복을 넣은 수입 계산에 쓰는 해역별 가방 채움 시간과 왕복 시간(초) */
-export interface TripTime { fillSec: number; tripSec: number }
+/** 판매 왕복을 넣은 수입 계산에 쓰는 해역별 가방 용량과 왕복 시간(초). 가방 채움 시간은 같은 레벨과 축의 캐치 속도로 계산한다 */
+export interface TripTime { bagCap: number; tripSec: number }
 
 export interface NamedRow {
-  /** 조우 확률(캐치당)과 천장을 넣은 기대 조우 시간(시간) */
+  /** 조우 확률(캐치당)과 천장을 넣은 기대 조우 시간(시간). 조우가 일어나는 해역에서만 낸다 */
   shareBase: number; shareWith: number; hoursBase: number; hoursWith: number;
 }
 
@@ -94,14 +100,18 @@ export interface IncomeRow {
   fameBase: number; fameWith: number; fameChange: number;
   /** 판매 왕복을 넣은 시간당 골드 변화. 왕복 시간을 주지 않았으면 null */
   tripChange: number | null;
-  named: NamedRow;
+  /** 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 값이 있다. 조우가 없는 해역은 null */
+  named: NamedRow | null;
 }
 
 export interface IncomeOptions {
   axis: FlowAxis; effect: Effect; margin: number;
-  /** 해역별 가방 채움과 왕복 시간 — 있으면 이동 속도 효과를 넣은 수입 변화를 함께 낸다 */
+  /** 해역별 가방 용량과 왕복 시간 — 있으면 판매 왕복을 넣은 수입 변화를 함께 낸다 */
   trips?: ReadonlyMap<SpotId, TripTime>;
 }
+
+/** 모든 네임드 의뢰를 수주했다고 보고 해역마다 조우 후보가 있는지 판정한다 */
+const NAMED_QUEST_IDS = BOUNTIES.filter(q => q.difficulty === 'named').map(q => q.id);
 
 const change = (base: number, now: number): number => (base === 0 ? 0 : now / base - 1);
 
@@ -113,23 +123,24 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
     const trip = o.trips?.get(s.id);
     let tripChange: number | null = null;
     if (trip) {
-      const fillWith = trip.fillSec * base.catchesPerHour / now.catchesPerHour;
+      const fillBase = trip.bagCap / base.catchesPerHour * 3600, fillWith = trip.bagCap / now.catchesPerHour * 3600;
       const tripWith = trip.tripSec / (1 + o.effect.move);
       const kept = (fill: number, t: number) => fill / (fill + t);
-      tripChange = change(base.goldPerHour * kept(trip.fillSec, trip.tripSec), now.goldPerHour * kept(fillWith, tripWith));
+      tripChange = change(base.goldPerHour * kept(fillBase, trip.tripSec), now.goldPerHour * kept(fillWith, tripWith));
     }
     const perHour = (r: EffectRates, bonus: number) => {
       const w = namedWeightsOf(s.id, bonus);
       const p = w.named / (w.named + w.none);
       return { share: p, hours: expectedEncounterCatches(p, NAMED_PITY_CATCHES) / r.catchesPerHour };
     };
+    const encounters = namedEncounterCandidates(NAMED_QUEST_IDS, s.id).length > 0;
     const nb = perHour(base, 0), nw = perHour(now, o.effect.named);
     return {
       spot: s.id, level,
       goldBase: base.goldPerHour, goldWith: now.goldPerHour, goldChange: change(base.goldPerHour, now.goldPerHour),
       fameBase: base.famePerHour, fameWith: now.famePerHour, fameChange: change(base.famePerHour, now.famePerHour),
       tripChange,
-      named: { shareBase: nb.share, shareWith: nw.share, hoursBase: nb.hours, hoursWith: nw.hours },
+      named: encounters ? { shareBase: nb.share, shareWith: nw.share, hoursBase: nb.hours, hoursWith: nw.hours } : null,
     };
   });
 }

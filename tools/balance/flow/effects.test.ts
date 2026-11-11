@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
-import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { variantShare } from '../../../src/game/rules/logic';
+import { BOUNTIES } from '../../../src/game/content/bounties';
+import { CATCH_MS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
+import { variantBoostOf } from '../../../src/game/rules/artifactLevel';
+import { mutationWeightsOf, namedEncounterCandidates, variantShare } from '../../../src/game/rules/logic';
 import { entryLevel, meanCycleSec, rates, rng } from '../model';
 import type { Row } from '../model';
 import { FISH } from '../../../src/game/content/fish';
 import { axisOf } from './progress';
 import {
-  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, effectRates, incomeRows, isNoEffect, supplyRows,
+  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, effectRates, incomeRows, supplyRows, variantShareOf,
 } from './effects';
 import type { Effect, TripTime } from './effects';
 
@@ -30,17 +32,11 @@ describe('효과 없음', () => {
     }
   });
 
-  it('기본값은 효과 없음으로 판정하고 하나라도 다르면 아니다', () => {
-    expect(isNoEffect(NO_EFFECT)).toBe(true);
-    expect(isNoEffect(fx({ rare: 0.1 }))).toBe(false);
-    expect(isNoEffect(fx({ variant: 2 }))).toBe(false);
-  });
-
   it('수입 변화는 모두 0이다', () => {
     for (const r of incomeRows({ axis: 'idle', effect: NO_EFFECT, margin: 0 })) {
       expect(r.goldChange).toBeCloseTo(0, 12);
       expect(r.fameChange).toBeCloseTo(0, 12);
-      expect(r.named.hoursWith).toBeCloseTo(r.named.hoursBase, 9);
+      if (r.named) expect(r.named.hoursWith).toBeCloseTo(r.named.hoursBase, 9);
     }
   });
 });
@@ -50,8 +46,8 @@ describe('매개변수 검사', () => {
     expect(() => checkEffect(fx({ bite: 1 }))).toThrow(/입질/);
     expect(() => checkEffect(fx({ bite: -0.1 }))).toThrow(/입질/);
     expect(() => checkEffect(fx({ rare: -0.1 }))).toThrow(/희귀/);
-    expect(() => checkEffect(fx({ variant: 0 }))).toThrow(/돌연변이/);
-    expect(() => checkEffect(fx({ size: 0 }))).toThrow(/크기/);
+    expect(() => checkEffect(fx({ variant: -0.1 }))).toThrow(/돌연변이/);
+    expect(() => checkEffect(fx({ size: -1 }))).toThrow(/크기/);
     expect(() => checkEffect(fx({ move: -1 }))).toThrow(/이동/);
     expect(() => checkEffect(fx({ named: -0.5 }))).toThrow(/네임드/);
     expect(() => incomeRows({ axis: 'idle', effect: fx({ bite: 2 }), margin: 0 })).toThrow(/입질/);
@@ -63,7 +59,7 @@ describe('입질 대기 단축', () => {
     const level = levelOf(lastSpot);
     const base = effectRates(lastSpot, level, 'idle', NO_EFFECT), now = effectRates(lastSpot, level, 'idle', fx({ bite: 0.2 }));
     const c = base.cycle;
-    const expected = (c.biteMin + c.biteMax) / 2 * 0.8 + c.biteExtra * 0.8 + c.reaction + 2;
+    const expected = (c.biteMin + c.biteMax) / 2 * 0.8 + c.biteExtra * 0.8 + c.reaction + CATCH_MS / 1000;
     expect(meanCycleSec(now.cycle)).toBeCloseTo(expected, 9);
     expect(now.catchesPerHour / base.catchesPerHour).toBeCloseTo(meanCycleSec(base.cycle) / meanCycleSec(now.cycle), 9);
     expect(now.goldPerHour / base.goldPerHour).toBeCloseTo(now.catchesPerHour / base.catchesPerHour, 9);
@@ -95,53 +91,77 @@ describe('희귀 이상 가중', () => {
   });
 });
 
-describe('돌연변이 확률 배수', () => {
-  it('판매가 기댓값만 변이 확률 배수만큼 달라지고 명성과 캐치 속도는 그대로다', () => {
+describe('돌연변이 가중치 증가', () => {
+  it('제품의 폼 가중치와 같은 경로다: 돌연변이 가중치를 올리는 유물의 폼 가중치와 같은 확률을 낸다', () => {
+    const holder = { artifacts: ['elder-scale'] };
+    const boost = variantBoostOf(holder);
+    expect(boost).toBeGreaterThan(0);
+    for (const s of SPOTS) expect(variantShareOf(s.id, boost)).toBeCloseTo(variantShare(mutationWeightsOf(holder, s.id)), 12);
+  });
+
+  it('증가가 없으면 제품의 해역 폼 가중치와 같다', () => {
+    for (const s of SPOTS) expect(variantShareOf(s.id, 0)).toBeCloseTo(variantShare(mutationWeightsOf({ artifacts: [] }, s.id)), 12);
+  });
+
+  it('판매가 기댓값만 달라지고 명성과 캐치 속도는 그대로다', () => {
     const level = levelOf(lastSpot);
-    const base = effectRates(lastSpot, level, 'idle', NO_EFFECT), now = effectRates(lastSpot, level, 'idle', fx({ variant: 2 }));
+    const base = effectRates(lastSpot, level, 'idle', NO_EFFECT), now = effectRates(lastSpot, level, 'idle', fx({ variant: 1 }));
     const ev = (share: number) => 1 + share * (VARIANT_PRICE_MULT - 1);
-    expect(now.variantShare).toBeCloseTo(2 * variantShare(), 12);
-    expect(now.goldPerHour / base.goldPerHour).toBeCloseTo(ev(2 * variantShare()) / ev(variantShare()), 9);
+    expect(now.variantShare).toBeGreaterThan(base.variantShare);
+    expect(now.goldPerHour / base.goldPerHour).toBeCloseTo(ev(now.variantShare) / ev(base.variantShare), 9);
     expect(now.famePerHour).toBeCloseTo(base.famePerHour, 9);
     expect(now.catchesPerHour).toBeCloseTo(base.catchesPerHour, 9);
   });
 
-  it('확률은 1에서 멈춘다', () => {
-    const r = effectRates(lastSpot, levelOf(lastSpot), 'idle', fx({ variant: 100 }));
-    expect(r.variantShare).toBe(1);
+  it('가중치 증가가 커도 확률은 1을 넘지 않는다', () => {
+    expect(effectRates(lastSpot, levelOf(lastSpot), 'idle', fx({ variant: 1e6 })).variantShare).toBeLessThan(1);
   });
 });
 
-describe('크기 배수와 이동 속도와 네임드 조우', () => {
-  it('크기 배수는 수입과 재료를 바꾸지 않는다', () => {
-    const rows = incomeRows({ axis: 'idle', effect: fx({ size: 3 }), margin: 0 });
+describe('크기 증가와 이동 속도와 네임드 조우', () => {
+  it('크기 증가는 수입과 재료를 바꾸지 않는다', () => {
+    const rows = incomeRows({ axis: 'idle', effect: fx({ size: 2 }), margin: 0 });
     for (const r of rows) expect(r.goldChange).toBeCloseTo(0, 12);
-    for (const r of supplyRows({ axis: 'idle', effect: fx({ size: 3 }), margin: 0, units: DEFAULT_UNITS })) expect(r.scoreWith).toBeCloseTo(r.score, 9);
+    for (const r of supplyRows({ axis: 'idle', effect: fx({ size: 2 }), margin: 0, units: DEFAULT_UNITS })) expect(r.scoreWith).toBeCloseTo(r.score, 9);
   });
 
   it('이동 속도는 낚시 시간당 수입을 바꾸지 않고 판매 왕복을 넣은 수입만 늘린다', () => {
-    const trips = new Map<SpotId, TripTime>(SPOTS.map(s => [s.id, { fillSec: 600, tripSec: 120 }]));
+    const trips = new Map<SpotId, TripTime>(SPOTS.map(s => [s.id, { bagCap: 10, tripSec: 120 }]));
     const rows = incomeRows({ axis: 'idle', effect: fx({ move: 0.5 }), margin: 0, trips });
     for (const r of rows) {
       expect(r.goldChange).toBeCloseTo(0, 12);
-      // 600 / (600 + 120) -> 600 / (600 + 80)
-      expect(r.tripChange).toBeCloseTo((600 / 680) / (600 / 720) - 1, 9);
+      const fill = 10 / effectRates(r.spot, r.level, 'idle', NO_EFFECT).catchesPerHour * 3600;
+      expect(r.tripChange).toBeCloseTo((fill / (fill + 80)) / (fill / (fill + 120)) - 1, 9);
     }
     expect(incomeRows({ axis: 'idle', effect: fx({ move: 0.5 }), margin: 0 })[0].tripChange).toBeNull();
   });
 
-  it('입질 대기 단축은 가방 채움 시간도 줄여 왕복을 넣은 수입 변화를 키운다', () => {
-    const trips = new Map<SpotId, TripTime>(SPOTS.map(s => [s.id, { fillSec: 600, tripSec: 120 }]));
+  it('이동 속도가 0이어도 입질 대기 단축은 가방 채움 시간을 줄여 왕복을 넣은 수입 변화를 낸다', () => {
+    const trips = new Map<SpotId, TripTime>(SPOTS.map(s => [s.id, { bagCap: 10, tripSec: 120 }]));
     const [a] = incomeRows({ axis: 'idle', effect: fx({ bite: 0.2 }), margin: 0, trips });
     expect(a.tripChange!).toBeGreaterThan(0);
     expect(a.tripChange!).toBeLessThan(a.goldChange);
+    for (const r of incomeRows({ axis: 'idle', effect: NO_EFFECT, margin: 0, trips })) expect(r.tripChange).toBeCloseTo(0, 12);
   });
 
-  it('네임드 조우는 수입을 바꾸지 않고 조우 기대 시간을 줄인다', () => {
-    for (const r of incomeRows({ axis: 'idle', effect: fx({ named: 0.5 }), margin: 0 })) {
+  it('가방 채움 시간은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다', () => {
+    const trips = new Map<SpotId, TripTime>(SPOTS.map(s => [s.id, { bagCap: 10, tripSec: 120 }]));
+    const at = (margin: number) => incomeRows({ axis: 'idle', effect: fx({ move: 0.5 }), margin, trips })[0].tripChange!;
+    expect(at(4)).not.toBeCloseTo(at(0), 6);
+  });
+
+  it('네임드 조우는 제품 규칙대로 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다', () => {
+    const ids = BOUNTIES.filter(q => q.difficulty === 'named').map(q => q.id);
+    const rows = incomeRows({ axis: 'idle', effect: fx({ named: 0.5 }), margin: 0 });
+    expect(rows.some(r => r.named === null)).toBe(true);
+    expect(rows.some(r => r.named !== null)).toBe(true);
+    for (const r of rows) {
       expect(r.goldChange).toBeCloseTo(0, 12);
-      expect(r.named.shareWith).toBeGreaterThan(r.named.shareBase);
-      expect(r.named.hoursWith).toBeLessThan(r.named.hoursBase);
+      expect(r.named !== null).toBe(namedEncounterCandidates(ids, r.spot).length > 0);
+      if (r.named) {
+        expect(r.named.shareWith).toBeGreaterThan(r.named.shareBase);
+        expect(r.named.hoursWith).toBeLessThan(r.named.hoursBase);
+      }
     }
   });
 });
@@ -199,12 +219,12 @@ describe('도감 완성 시간 몬테카를로', () => {
     }
   });
 
-  it('크기 배수는 도감 완성 시간을 바꾸지 않는다', () => {
-    for (const r of dexRows({ axis: 'idle', effect: fx({ size: 2 }), margin: 0, trials: 10, seed: 7 })) expect(r.with).toEqual(r.base);
+  it('크기 증가는 도감 완성 시간을 바꾸지 않는다', () => {
+    for (const r of dexRows({ axis: 'idle', effect: fx({ size: 1 }), margin: 0, trials: 10, seed: 7 })) expect(r.with).toEqual(r.base);
   });
 
-  it('돌연변이 확률 배수는 돌연변이 도감 시간을 줄인다', () => {
-    const rows = dexRows({ axis: 'idle', effect: fx({ variant: 2 }), margin: 0, trials: 40, seed: 7 });
+  it('돌연변이 가중치 증가는 돌연변이 도감 시간을 줄인다', () => {
+    const rows = dexRows({ axis: 'idle', effect: fx({ variant: 1 }), margin: 0, trials: 40, seed: 7 });
     const faster = rows.filter(r => r.with.variant!.mean! < r.base.variant!.mean!).length;
     expect(faster).toBeGreaterThan(rows.length / 2);
   });

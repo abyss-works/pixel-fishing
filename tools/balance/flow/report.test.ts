@@ -30,7 +30,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, variant: 1, size: 1, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
+      effect: { bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
     });
   });
 
@@ -327,10 +327,10 @@ describe('분포와 이동 명령', () => {
 
 describe('effects 명령', () => {
   it('효과 옵션을 퍼센트와 배수로 읽고 기본은 효과 없음이다', () => {
-    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, variant: 1, size: 1, move: 0, named: 0 });
-    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--variant', '2', '--size', '1.5', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
+    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, variant: 0, size: 0, move: 0, named: 0 });
+    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
     expect(o.commands).toEqual(['effects']);
-    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, variant: 2, size: 1.5, move: 0.1, named: 0.2 });
+    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
     expect(o.margin).toBe(4);
     expect(o.units).toEqual({ common: 1, rare: 2, epic: 3, legendary: 4 });
   });
@@ -343,7 +343,7 @@ describe('effects 명령', () => {
     expect(() => parseArgs(['--bite', '10'])).toThrow(/effects 명령/);
     expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/effects 명령/);
     expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
-    expect(() => parseArgs(['effects', '--variant', '0'])).toThrow(/돌연변이/);
+    expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
     expect(() => parseArgs(['effects', '--margin', '1.5'])).toThrow(/정수/);
     expect(() => parseArgs(['effects', '--units', '1,5,25'])).toThrow(/등급 수/);
     expect(() => parseArgs(['effects', '--bite', 'x'])).toThrow(/숫자/);
@@ -359,11 +359,14 @@ describe('effects 명령', () => {
     expect(r.stdout).not.toMatch(/\| [+-][1-9]\d*\.\d%/);
   });
 
-  it('이동 속도 효과는 판매 왕복을 넣은 열을, 네임드 효과는 조우 열을 더한다', () => {
+  it('판매 왕복을 넣은 열은 항상 내고, 네임드 효과는 조우 열을 더한다', () => {
     const t = runCli(['effects', '--move', '10', '--named', '10', '--trials', '3']).stdout;
     expect(t).toContain('판매 왕복 포함 골드 변화');
     expect(t).toContain('네임드 조우 기대');
-    expect(runCli(['effects', '--trials', '3']).stdout).not.toContain('판매 왕복 포함');
+    expect(t).toContain('없음');
+    const plain = runCli(['effects', '--trials', '3']).stdout;
+    expect(plain).toContain('판매 왕복 포함 골드 변화');
+    expect(plain).not.toContain('네임드 조우 기대');
   });
 
   it('JSON은 효과와 세 지표를 담고 같은 시드는 같은 결과다', () => {

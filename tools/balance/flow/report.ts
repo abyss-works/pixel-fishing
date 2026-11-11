@@ -83,10 +83,10 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --trials <N>       dist의 시도 횟수(1 이상 정수). 기본 ${DEFAULT_TRIALS}
   --bite <N>         effects: 입질 대기 단축 %(0 이상 100 미만). 기본 0
   --rare <N>         effects: 희귀 이상 등급 가중치 증가 %(0 이상). 기본 0
-  --variant <N>      effects: 돌연변이 확률 배수(0보다 큼, 확률은 1에서 멈춤). 기본 1
-  --size <N>         effects: 크기 배수(0보다 큼). 판매가와 도감 완성 조건이 크기를 쓰지 않아 다른 값은 변하지 않는다. 기본 1
-  --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 낸다. 기본 0
-  --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 기본 0
+  --variant <N>      effects: 돌연변이 가중치 증가 %(0 이상). 유물과 같은 경로로 돌연변이 가중치에 곱한다. 기본 0
+  --size <N>         effects: 크기 증가 %(-100 초과). 판매가와 도감 완성 조건이 크기를 쓰지 않아 다른 값은 변하지 않는다. 기본 0
+  --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 달라진다. 기본 0
+  --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
   --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(0 이상 정수). 기본 0, 여유 스펙은 4
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 설계 초안 값이다
   --seed, --trials   effects의 도감 완성 시간에도 쓴다
@@ -133,8 +133,8 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
           const v = numberOf(a, raw);
           if (a === '--bite') o.effect.bite = v / 100;
           else if (a === '--rare') o.effect.rare = v / 100;
-          else if (a === '--variant') o.effect.variant = v;
-          else if (a === '--size') o.effect.size = v;
+          else if (a === '--variant') o.effect.variant = v / 100;
+          else if (a === '--size') o.effect.size = v / 100;
           else if (a === '--move') o.effect.move = v / 100;
           else o.effect.named = v / 100;
         }
@@ -212,9 +212,7 @@ export function runFlow(o: FlowOptions): FlowResult {
     }
     if (o.commands.includes('travel')) res.travel = { rows: travelRows(), sampleDays: TRAVEL_SAMPLE_DAYS };
     if (o.commands.includes('effects')) {
-      const trips = o.effect.move !== 0
-        ? new Map(travelRows().map(t => [t.spot, { fillSec: t.fillSec, tripSec: t.tripSec }] as const))
-        : undefined;
+      const trips = new Map(travelRows().map(t => [t.spot, { bagCap: t.bagCap, tripSec: t.tripSec }] as const));
       res.effects = {
         effect: o.effect, units: o.units, margin: o.margin, trials: o.trials, seed: o.seed,
         income: incomeRows({ axis: o.axis, effect: o.effect, margin: o.margin, trips }),
@@ -290,9 +288,9 @@ function assumptionText(command: Command, o: FlowResult['options']): string {
     );
   } else if (command === 'effects') {
     lines.push(
-      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상 가중은 제품의 등급 가중치 효과 합산에 더한다`,
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 돌연변이 가중치 증가는 유물과 같은 경로의 폼 가중치다. 네임드 조우는 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상 가중은 제품의 등급 가중치 효과 합산에 더한다`,
       '크기는 판매가와 도감 완성 조건에 쓰이지 않아 크기 배수는 이 지표에 영향이 없다. 도감에 최대 크기 기록은 있으나 제품 규칙 모듈에 완성 조건은 없다',
-      '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 채움과 왕복 시간을 쓴다',
+      '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 용량과 왕복 시간을 쓰고, 가방 채움 시간은 같은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다. 입질 대기 단축도 채움 시간을 줄여 이 값에 든다',
       '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부 세 조건을 센다. 어종 천장은 넣지 않는다',
       '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 설계 초안 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
     );
@@ -559,7 +557,7 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   const x = e.effect;
   const label = [
     x.bite ? `입질 대기 -${(x.bite * 100).toFixed(0)}%` : '', x.rare ? `희귀 이상 가중 +${(x.rare * 100).toFixed(0)}%` : '',
-    x.variant !== 1 ? `돌연변이 확률 x${x.variant}` : '', x.size !== 1 ? `크기 x${x.size}` : '',
+    x.variant ? `돌연변이 가중치 +${(x.variant * 100).toFixed(0)}%` : '', x.size ? `크기 ${x.size > 0 ? '+' : ''}${(x.size * 100).toFixed(0)}%` : '',
     x.move ? `이동 속도 ${x.move > 0 ? '+' : ''}${(x.move * 100).toFixed(0)}%` : '', x.named ? `네임드 조우 +${(x.named * 100).toFixed(0)}%` : '',
   ].filter(Boolean).join(', ') || '효과 없음';
   const info = new Map(o.spots.map(s => [s.id, s]));
@@ -574,7 +572,7 @@ function effectsText(e: EffectsReport, o: FlowResult['options']): string[] {
   out.push(table(incomeHead, e.income.map(r => {
     const row = [nameOf(r.spot), lv(r.spot, r.level), n0(r.goldBase), n0(r.goldWith), signPct(r.goldChange), n0(r.fameBase), n0(r.fameWith), signPct(r.fameChange)];
     if (showTrip) row.push(r.tripChange === null ? '—' : signPct(r.tripChange));
-    if (showNamed) row.push(`${h2(r.named.hoursBase)} → ${h2(r.named.hoursWith)}`);
+    if (showNamed) row.push(r.named ? `${h2(r.named.hoursBase)} → ${h2(r.named.hoursWith)}` : '없음');
     return row;
   })));
 
