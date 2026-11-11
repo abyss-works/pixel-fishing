@@ -11,7 +11,7 @@ import GuildInviteSummary, { GuildInviteAction } from './GuildInviteSummary';
 
 // 초대 링크 확인 창 — 초대 링크(/g/코드)로 열린 게임이 상태를 불러온 뒤 띄운다. 400 폭.
 // 위는 길드 요약, 아래는 상태마다 다른 안내 한 줄과 버튼이다. 링크를 연 것만으로는 가입하지 않고, 버튼을 눌러야 들어가거나 신청한다.
-// 게스트에게는 계정을 만들거나 로그인하라고 알리고 계정 창을 열 수 있게 한다. 초대는 계정이 생길 때까지 남아 이 창이 다시 뜬다.
+// 게스트에게는 계정을 연결하거나 로그인하라고 알리고 계정 관리 창을 열 수 있게 한다. 초대는 계정이 연결될 때까지 남아 이 창이 다시 뜬다.
 export default function GuildInviteDialog({ code, account, onAccount, onClose, setToast }: {
   code: string;
   /** 계정 유저의 이메일. 게스트면 null */
@@ -46,7 +46,7 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   // 주 버튼은 카드의 확정 자리(하단 고정)에 둔다
   const action = invite.failed || !view ? undefined
     : view.state === 'bad' ? <Button full onClick={onClose}>확인</Button>
-    : view.state === 'guest' ? <Button full variant="primary" onClick={onAccount}>계정 만들기 또는 로그인</Button>
+    : view.state === 'guest' ? <Button full variant="primary" onClick={onAccount}>계정 관리</Button>
     : invite.preview ? <GuildInviteAction view={view} busy={busy} onConfirm={() => { void confirm(); }} /> : undefined;
 
   return (

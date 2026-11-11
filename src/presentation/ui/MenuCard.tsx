@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Button from './Button';
-import PixelIcon from './PixelIcon';
+import { LockBadge, LockLines } from './Locked';
 import Tip from './Tip';
 import { useOmitted } from './useOmitted';
 
@@ -52,7 +52,7 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
             onClick={lock ? undefined : onClick} aria-disabled={lock ? true : undefined}
             aria-describedby={lock ? lockReasonId : undefined}
             className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'opacity-55 cursor-not-allowed' : ''} ${className ?? ''}`}>
-      {lock && <PixelIcon glyph="lock" size={14} className="absolute top-1 right-1 text-text" />}
+      {lock && <LockBadge size={14} />}
       <span className="h-[clamp(24px,calc(var(--card)*0.44),56px)] w-full">{icon}</span>
       <span className="pf-accent text-sm text-gold">{title}</span>
       {sub && (omittable
@@ -63,7 +63,7 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
   if (lock) {
     const text = (
       <>
-        {lock.map((line, i) => <span key={`${i}-${line}`} className="block">{line}</span>)}
+        <LockLines lines={lock} />
         {omittable && subHidden && <span className="block text-text-dim">{sub}</span>}
       </>
     );

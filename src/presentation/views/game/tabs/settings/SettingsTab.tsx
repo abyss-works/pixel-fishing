@@ -3,6 +3,7 @@ import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import type { RejectReason } from '../../../../../game/rules/rules';
+import { isGuest } from '../../../../../features/account/service/accountActions';
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
 import Button from '../../../../ui/Button';
@@ -65,7 +66,7 @@ export default function SettingsTab({ game, dispatch, setToast, syncLabel, syncS
       )}
       {open === 'settings' && <SettingsModal setToast={setToast} onClose={close} />}
       {open === 'codes' && <CodeModal dispatch={dispatch} setToast={setToast} onClose={close} />}
-      {open === 'letter' && <LetterModal dispatch={dispatch} setToast={setToast} guest={!account} onClose={close} />}
+      {open === 'letter' && <LetterModal dispatch={dispatch} setToast={setToast} guest={isGuest(account)} onClose={close} />}
       {open === 'patch' && <PatchNotesModal onClose={close} />}
 
       {/* 버전(사람이 붙이는 이름)과 배포 식별자(커밋 SHA)를 같이 건다.

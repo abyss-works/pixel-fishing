@@ -123,7 +123,7 @@ export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { a
   via: GuildJoinVia): InviteDialogView {
   if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null };
   if (!viewer.account) {
-    return { state: 'guest', text: '길드는 계정이 있어야 들어갈 수 있어요.\n계정을 만들거나 로그인하면 이 창이 다시 떠요.', action: null };
+    return { state: 'guest', text: '길드는 계정을 연결하면 들어갈 수 있어요.\n계정을 연결하거나 로그인하면 이 창이 다시 떠요.', action: null };
   }
   if (viewer.guild !== null) {
     return { state: 'member', action: null, text: viewer.guild === preview.name
@@ -160,7 +160,7 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'not-member': '길드원을 찾지 못했어요. 창을 다시 열어 주세요.',
   'handover-first': '다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.',
   self: '자기 자신에게는 넘길 수 없어요.',
-  'account-only': '길드는 계정을 만든 뒤에 쓸 수 있어요.',
+  'account-only': '길드는 계정을 연결하면 쓸 수 있어요.',
   'not-enough-gold': '골드가 모자라요.',
   'bonus-locked': '아직 열리지 않은 길드 스킬이에요. 길드 레벨이 오르면 열려요.',
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',

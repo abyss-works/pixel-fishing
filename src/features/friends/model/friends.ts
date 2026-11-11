@@ -51,7 +51,7 @@ export function friendPlaceText(f: FriendItem, nowMs: number): string {
 export const FRIEND_ERROR_TEXT: Record<string, string> = {
   'not-found': '그 닉네임의 계정을 찾지 못했어요.',
   self: '자기 자신에게는 요청할 수 없어요.',
-  'account-only': '친구는 계정을 만든 뒤에 쓸 수 있어요.',
+  'account-only': '친구는 계정을 연결하면 쓸 수 있어요.',
   'bad-nickname': '닉네임을 입력해 주세요.',
 };
 
