@@ -68,6 +68,14 @@ const accountTable = {
     ...timestamps,
   },
 };
+// 세션 행에는 접속 IP와 브라우저 정보를 저장하지 않고 비워 둔다. 요청 수 제한은 요청에서 IP를 직접 읽으므로 이 값과 무관하다.
+const databaseHooks = {
+  session: {
+    create: {
+      before: async (session: Record<string, unknown>) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
+    },
+  },
+};
 const verificationTable = {
   modelName: 'auth.verifications',
   fields: { expiresAt: 'expires_at', ...timestamps },
@@ -96,6 +104,7 @@ export function createAuth(config: AuthConfig) {
     },
     account: accountTable,
     verification: verificationTable,
+    databaseHooks,
     advanced: { database: { generateId: 'uuid' } },
     plugins: [
       anonymous({
@@ -134,6 +143,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
     session: sessionTable,
     account: accountTable,
     verification: verificationTable,
+    databaseHooks,
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
   });
 }

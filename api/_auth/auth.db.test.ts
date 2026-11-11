@@ -29,10 +29,10 @@ beforeEach(() => {
 });
 
 /** 인증 경로에 JSON 본문을 보낸다. cookie가 있으면 세션 쿠키로 붙인다 */
-async function post(path: string, body: unknown, cookie?: string, admin = false): Promise<{ status: number; body: Record<string, unknown>; cookie: string }> {
+async function post(path: string, body: unknown, cookie?: string, admin = false, extraHeaders: Record<string, string> = {}): Promise<{ status: number; body: Record<string, unknown>; cookie: string }> {
   const res = await (admin ? handleAdmin : handle)(new Request(`${ORIGIN}${admin ? '/api/admin/auth' : '/api/auth'}${path}`, {
     method: 'POST',
-    headers: { origin: ORIGIN, 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+    headers: { origin: ORIGIN, 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...extraHeaders },
     body: JSON.stringify(body),
   }));
   const setCookies = res.headers.getSetCookie().map(c => c.split(';')[0]).filter(c => !c.endsWith('='));
@@ -174,5 +174,34 @@ describe('관리자 세션', () => {
     expect((await post('/sign-out', {}, gameCookie)).status).toBe(200);
     expect(await sessionOf({ cookie: gameCookie })).toBeNull();
     expect(await adminSessionUid({ cookie: second.cookie })).toBe(uid);
+  });
+});
+
+describe('세션의 접속 정보', () => {
+  // 요청이 IP와 브라우저 정보를 실어 와도 세션 행에는 남기지 않는다
+  const client = { 'x-forwarded-for': '203.0.113.7', 'user-agent': 'Mozilla/5.0 (test)' };
+  const sessionRows = async (uid: string) => (await env.client.query<{ ip_address: string | null; user_agent: string | null }>(
+    'select ip_address, user_agent from auth.sessions where user_id = $1', [uid])).rows;
+
+  it('게스트의 익명 로그인 세션에 IP와 브라우저 정보를 저장하지 않는다', async () => {
+    const res = await post('/sign-in/anonymous', {}, undefined, false, client);
+    const rows = await sessionRows((res.body.user as { id: string }).id);
+    expect(rows).toEqual([{ ip_address: null, user_agent: null }]);
+  });
+
+  it('계정 로그인 세션에도 저장하지 않는다', async () => {
+    const { uid, cookie } = await anonymousSession();
+    await post('/anonymous/upgrade', { email: 'no-ip@example.test', password: 'secret1' }, cookie);
+    await post('/sign-in/email', { email: 'no-ip@example.test', password: 'secret1' }, undefined, false, client);
+    const rows = await sessionRows(uid);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.every(r => r.ip_address === null && r.user_agent === null)).toBe(true);
+  });
+
+  it('관리자 로그인 세션에도 저장하지 않는다', async () => {
+    const { uid, cookie } = await anonymousSession();
+    await post('/anonymous/upgrade', { email: 'no-ip-admin@example.test', password: 'secret1' }, cookie);
+    await post('/sign-in/email', { email: 'no-ip-admin@example.test', password: 'secret1' }, undefined, true, client);
+    expect((await sessionRows(uid)).every(r => r.ip_address === null && r.user_agent === null)).toBe(true);
   });
 });
