@@ -1,5 +1,5 @@
 // 인증 구성. Better Auth 인스턴스를 만든다.
-// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀과 메일 발송기만 넘겨 같은 구성으로 쓸 수 있다.
+// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀, 메일 발송기, 구글 클라이언트만 넘겨 같은 구성으로 쓸 수 있다.
 // 표는 auth 스키마의 users·sessions·accounts·verifications이고 열 이름은 snake_case다.
 import { betterAuth } from 'better-auth';
 import { anonymous } from 'better-auth/plugins';
@@ -8,7 +8,8 @@ import bcrypt from 'bcryptjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { MailSender } from './mail.js';
-import { anonymousUpgrade } from './upgrade.js';
+import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, rejectIdTokenLink, validateGoogleLink } from './googleLink.js';
+import type { GoogleConfig } from './googleLink.js';
 
 export interface AuthConfig {
   pool: Pool;
@@ -16,6 +17,7 @@ export interface AuthConfig {
   /** 앱의 공개 주소. 예: https://pixel-fishing.abyssworks.dev */
   baseURL: string;
   mail: MailSender;
+  google: GoogleConfig;
 }
 
 export const MIN_PASSWORD_LENGTH = 6;
@@ -69,11 +71,9 @@ const accountTable = {
   },
 };
 // 세션 행에는 접속 IP와 브라우저 정보를 저장하지 않고 비워 둔다. 요청 수 제한은 요청에서 IP를 직접 읽으므로 이 값과 무관하다.
-const databaseHooks = {
-  session: {
-    create: {
-      before: async (session: Record<string, unknown>) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
-    },
+const sessionHooks = {
+  create: {
+    before: async (session: Record<string, unknown>) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
   },
 };
 const verificationTable = {
@@ -92,19 +92,33 @@ export function createAuth(config: AuthConfig) {
       minPasswordLength: MIN_PASSWORD_LENGTH,
       maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: bcryptPassword,
-      sendResetPassword: ({ user, url }) => config.mail.sendPasswordReset(user.email, url),
+      disableSignUp: true,
+      // 재설정은 비밀번호 수단이 없는 계정에 그것을 새로 만든다. 구글 연결로 지운 수단이 되살아나지 않게 수단이 남은 계정에만 보낸다.
+      sendResetPassword: async ({ user, url }) => {
+        const { rowCount } = await config.pool.query(
+          `select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [user.id]);
+        if (rowCount) await config.mail.sendPasswordReset(user.email, url);
+      },
       resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN,
       revokeSessionsOnPasswordReset: true,
     },
-    user: userTable,
+    user: { ...userTable, validateUserInfo: validateGoogleLink },
     session: {
       ...sessionTable,
       expiresIn: SESSION_EXPIRES_IN,
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
-    account: accountTable,
+    socialProviders: { google: googleProvider(config.google) },
+    account: { ...accountTable, accountLinking, updateAccountOnSignIn: false },
     verification: verificationTable,
-    databaseHooks,
+    databaseHooks: {
+      session: sessionHooks,
+      account: {
+        create: { before: dropOAuthTokens.create?.before, after: finishGoogleLink.create?.after },
+        update: dropOAuthTokens.update,
+      },
+    },
+    hooks: { before: rejectIdTokenLink },
     advanced: { database: { generateId: 'uuid' } },
     plugins: [
       anonymous({
@@ -113,7 +127,6 @@ export function createAuth(config: AuthConfig) {
         generateRandomEmail: () => `${randomUUID()}@${ANONYMOUS_EMAIL_DOMAIN}`,
         schema: { user: { fields: { isAnonymous: 'is_anonymous' } } },
       }),
-      anonymousUpgrade({ minPasswordLength: MIN_PASSWORD_LENGTH, maxPasswordLength: MAX_PASSWORD_LENGTH }),
     ],
   });
 }
@@ -129,8 +142,8 @@ export const adminSecret = (secret: string): string =>
   createHmac('sha256', secret).update('admin-session').digest('base64url');
 
 /**
- * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표에 이메일·비밀번호로 로그인하고 별도 쿠키의 세션을 받는다.
- * 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
+ * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표의 구글 계정으로 로그인하고 별도 쿠키의 세션을 받는다.
+ * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
  */
 export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
   return betterAuth({
@@ -138,12 +151,12 @@ export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
     secret: adminSecret(config.secret),
     baseURL: config.baseURL,
     basePath: '/api/admin/auth',
-    emailAndPassword: { enabled: true, disableSignUp: true, password: bcryptPassword },
     user: userTable,
     session: sessionTable,
-    account: accountTable,
+    socialProviders: { google: googleProvider(config.google) },
+    account: { ...accountTable, accountLinking, updateAccountOnSignIn: false },
     verification: verificationTable,
-    databaseHooks,
+    databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
   });
 }

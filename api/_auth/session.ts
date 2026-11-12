@@ -5,9 +5,17 @@ import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
 import { createAdminAuth, createAuth } from './auth.js';
 import type { AdminAuth, Auth } from './auth.js';
+import type { GoogleConfig } from './googleLink.js';
 import { resendSender } from './mail.js';
 
 let appAuthInstance: Auth | null = null;
+
+/** 구글 OAuth 클라이언트. 환경 변수가 하나라도 없으면 null이다 */
+function googleConfig(): GoogleConfig | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
 
 /** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */
 export function appAuth(): Auth {
@@ -16,9 +24,10 @@ export function appAuth(): Auth {
   const baseURL = process.env.BETTER_AUTH_URL;
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM;
-  if (!secret || !baseURL || !apiKey || !from) throw new ApiError(500, 'server-config');
+  const google = googleConfig();
+  if (!secret || !baseURL || !apiKey || !from || !google) throw new ApiError(500, 'server-config');
   appAuthInstance = createAuth({
-    pool: database().pool, secret, baseURL,
+    pool: database().pool, secret, baseURL, google,
     mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
   });
   return appAuthInstance;
@@ -48,8 +57,9 @@ export function adminAuth(): AdminAuth {
   if (adminAuthInstance) return adminAuthInstance;
   const secret = process.env.BETTER_AUTH_SECRET;
   const baseURL = process.env.BETTER_AUTH_URL;
-  if (!secret || !baseURL) throw new ApiError(500, 'server-config');
-  adminAuthInstance = createAdminAuth({ pool: database().pool, secret, baseURL });
+  const google = googleConfig();
+  if (!secret || !baseURL || !google) throw new ApiError(500, 'server-config');
+  adminAuthInstance = createAdminAuth({ pool: database().pool, secret, baseURL, google });
   return adminAuthInstance;
 }
 
