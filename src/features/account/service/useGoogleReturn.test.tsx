@@ -24,7 +24,7 @@ function setup(answer = true) {
   const props = {
     setToast: vi.fn(),
     askOverwrite: vi.fn(async () => answer),
-    showNotice: vi.fn(async () => {}),
+    showNotice: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
   };
   renderHook(() => useGoogleReturn(props));
   return props;
