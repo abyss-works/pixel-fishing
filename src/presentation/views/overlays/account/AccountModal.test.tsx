@@ -150,6 +150,18 @@ describe('로그인 방식별 구성', () => {
     expect(screen.getByRole('status')).toHaveTextContent('로그인 방식을 불러오고 있어요');
   });
 
+  it('읽는 동안은 이메일 계정의 연결 구역을 보이지 않게 그대로 두어 같은 높이를 차지하고 조작할 수 없다', () => {
+    open('old@example.com', null);
+    const status = screen.getByRole('status');
+    const hidden = status.querySelector('[aria-hidden="true"][inert]') as HTMLElement;
+    expect(hidden).not.toBeNull();
+    expect(hidden).toHaveClass('invisible');
+    expect(hidden).toHaveTextContent('연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.');
+    const button = hidden.querySelector('button') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.tabIndex).toBe(-1);
+  });
+
   it('게임 서버가 없는 로컬 모드에서는 연결 구역도 실패 안내도 보이지 않는다', () => {
     actions.configured = false;
     actions.failed = true;

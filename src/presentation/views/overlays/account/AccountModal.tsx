@@ -120,12 +120,13 @@ export default function AccountModal({
     </div>
   );
 
-  const connectSection = (
+  // placeholder면 자리만 차지하는 사본이다: 버튼을 쓸 수 없게 하고 포커스를 받지 못하게 한다
+  const connectSection = (placeholder = false) => (
     <div>
       <SectionTitle>구글 계정 연결</SectionTitle>
       <Note>구글 계정을 연결하면 다음부터는 구글 계정으로 로그인해요.</Note>
       <Note tone="warn">연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.</Note>
-      <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
+      <GoogleButton disabled={placeholder || busy || offline} tabIndex={placeholder ? -1 : undefined} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
     </div>
   );
 
@@ -178,19 +179,18 @@ export default function AccountModal({
           <Note className="mt-0">진행은 이 계정에 저장돼요.</Note>
           {/* 연결 구역은 로그인 수단을 읽는 동안 같은 구조의 스켈레톤이 자리를 잡아 레이아웃이 흔들리지 않게 한다.
               게임 서버가 없는 로컬 모드는 읽을 곳이 없어 연결 구역도 실패 안내도 두지 않는다 */}
-          {method === 'email' && connectSection}
+          {method === 'email' && connectSection()}
           {method === null && !offline && (failed ? (
             <div>
               <Note>로그인 방식을 불러오지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
               <Button full onClick={retry}>다시 시도</Button>
             </div>
           ) : (
-            <div role="status">
+            <div role="status" className="relative">
               <span className="sr-only">로그인 방식을 불러오고 있어요</span>
-              <Skeleton className="h-[33px]" />
-              <Skeleton className="h-5 my-2" />
-              <Skeleton className="h-5 my-2" />
-              <Skeleton className="h-10" />
+              {/* 실제 연결 구역을 보이지 않게 그대로 두어 폭과 관계없이 같은 높이를 차지한다. 그 위에 자리표시를 겹쳐 그린다 */}
+              <div className="invisible" aria-hidden="true" inert>{connectSection(true)}</div>
+              <Skeleton className="absolute inset-0" />
             </div>
           ))}
           <Button full className="mt-3" disabled={offline} onClick={signOut}>로그아웃</Button>
