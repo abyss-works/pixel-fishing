@@ -14,6 +14,7 @@ const gw = vi.hoisted(() => ({
   legacy: false,
   cloudEmpty: false,
   importError: null as unknown,
+  loadError: null as unknown,
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -29,7 +30,7 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold }; },
+        load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold }; },
         getNickname: async () => 'nick',
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -54,7 +55,7 @@ function setup() {
 
 afterEach(() => {
   cleanup(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null;
 });
 
 describe('부트스트랩', () => {
@@ -92,6 +93,24 @@ describe('부트스트랩', () => {
     await act(async () => { gw.bootResolve!(); await adopted; });
     expect(hook.result.current.loading).toBe(false);
     expect(gw.actions).toEqual(['boot', 'boot']);
+  });
+});
+
+describe('게스트 진행 판정과 읽기 실패', () => {
+  // 안내 창 없이 끝나는 실패 종류(제재, 요청 과다, 오류)도 판정이 끝나야 한다
+  it.each(['restricted', 'rate-limited', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
+    gw.loadError = new AppError(kind, 'read failed');
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.blocker).toBeNull();
+    expect(hook.result.current.guestProgress).toBe('some');
+  });
+
+  it('저장 읽기가 안내 창을 띄우는 실패(network)로 끝나도 진행이 있는 것으로 판정한다', async () => {
+    gw.loadError = new AppError('network', 'offline');
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.guestProgress).toBe('some');
   });
 });
 

@@ -156,7 +156,7 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   return {
     game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
-    guestProgress: guestProgress({ sync, blocked: blocker !== null || loading, game }),
+    guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });

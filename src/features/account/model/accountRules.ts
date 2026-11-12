@@ -31,12 +31,12 @@ export type GuestProgress = 'reading' | 'nothing' | 'some';
 
 /**
  * 세이브를 읽기 전의 상태는 기본값이라 낚은 수가 0으로 보이므로 읽은 뒤에만 판정한다.
- * sync는 세이브 연결 상태, blocked는 불러오는 중이거나 진행을 막는 창이 떠 있는지다.
- * 읽지 못했으면 진행이 있는 것으로 보아 확인을 거친다.
+ * sync는 세이브 연결 상태, loading은 불러오는 중인지, blocked는 진행을 막는 창이 떠 있는지다.
+ * 읽지 못했으면 진행이 있는 것으로 보아 확인을 거친다. 불러오기가 끝났는데도 연결이 켜지지 않았으면 읽기에 실패한 것이다.
  */
-export function guestProgress({ sync, blocked, game }: { sync: SyncState; blocked: boolean; game: GameState }): GuestProgress {
-  if (sync === 'connecting') return 'reading';
+export function guestProgress({ sync, loading, blocked, game }: { sync: SyncState; loading: boolean; blocked: boolean; game: GameState }): GuestProgress {
+  if (sync === 'connecting') return loading ? 'reading' : 'some';
   if (sync !== 'on') return 'some';
-  if (blocked) return 'reading';
+  if (loading || blocked) return 'reading';
   return guestHasNoProgress(game) ? 'nothing' : 'some';
 }
