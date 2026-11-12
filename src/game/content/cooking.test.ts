@@ -1,8 +1,8 @@
 // 요리 콘텐츠 — 레시피 표, 기운 아이템, 등급 미끼 재료, 해금 배 단계의 무결성.
 import { describe, it, expect } from 'vitest';
 import {
-  COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS,
-  LEGACY_BAIT_REFUND, RECIPES, recipeById,
+  COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL,
+  ENERGY_UNIT, LEGACY_BAIT_REFUND, RECIPES, formatEnergy, isEnergyAmount, recipeById, recipeCostStored, toStoredEnergy,
 } from './cooking';
 import { ARTIFACTS } from './artifacts';
 import { RARITY_ORDER } from './rarity';
@@ -41,13 +41,13 @@ describe('레시피 표', () => {
     }
   });
 
-  it('기운 요구는 양의 정수이고 등급 키가 유효하다', () => {
+  it('기운 요구는 소수 첫째 자리까지 허용하는 양수이고 등급 키가 유효하다', () => {
     for (const r of RECIPES) {
       const entries = Object.entries(r.cost);
       expect(entries.length, r.id).toBeGreaterThan(0);
       for (const [grade, n] of entries) {
         expect(RARITY_ORDER as string[], r.id).toContain(grade);
-        expect(Number.isInteger(n) && n > 0, `${r.id}.${grade}`).toBe(true);
+        expect(isEnergyAmount(n) && n > 0, `${r.id}.${grade}`).toBe(true);
       }
     }
   });
@@ -143,5 +143,44 @@ describe('해금, 조리 대기, 보관함, 슬롯', () => {
     expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 60 * MIN, slotMs: 9 * 60 * MIN });
     expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 15 * MIN, slotMs: 30 * MIN });
     expect(COOK_STORAGE_CAP).toBe(10);
+  });
+});
+
+describe('기운 단위', () => {
+  it('화면 단위 1은 저장 단위 10이고, 개체 하나의 산출은 화면 단위 1이다', () => {
+    expect(ENERGY_UNIT).toBe(10);
+    expect(ENERGY_PER_INDIVIDUAL).toBe(10);
+  });
+
+  it('화면 단위를 저장 단위 정수로 바꾼다 (부동소수 오차 없이)', () => {
+    expect(toStoredEnergy(600)).toBe(6000);
+    expect(toStoredEnergy(0.5)).toBe(5);
+    expect(toStoredEnergy(0.3)).toBe(3);
+    expect(toStoredEnergy(1.1)).toBe(11);
+    expect(toStoredEnergy(0)).toBe(0);
+  });
+
+  it('isEnergyAmount는 소수 첫째 자리까지의 유한한 0 이상만 받는다', () => {
+    for (const ok of [0, 1, 0.1, 0.3, 1.1, 2.7, 600, 1234.5]) expect(isEnergyAmount(ok), String(ok)).toBe(true);
+    for (const bad of [0.25, 0.05, 1.01, -1, -0.5, Number.NaN, Number.POSITIVE_INFINITY, '1', null, undefined]) {
+      expect(isEnergyAmount(bad), String(bad)).toBe(false);
+    }
+  });
+
+  it('레시피 비용을 저장 단위로 바꿔 돌려준다. 없는 등급은 0이다', () => {
+    const bundle = recipeById('cook-lunch-bundle')!;
+    expect(recipeCostStored(bundle, 'common')).toBe(500);
+    expect(recipeCostStored(bundle, 'legendary')).toBe(10);
+    expect(recipeCostStored(recipeById('cook-lunch-bite')!, 'rare')).toBe(0);
+  });
+
+  it('formatEnergy: 소수 첫째 자리가 0이면 정수, 아니면 소수 첫째 자리까지, 천 단위 쉼표', () => {
+    expect(formatEnergy(0)).toBe('0');
+    expect(formatEnergy(5)).toBe('0.5');
+    expect(formatEnergy(10)).toBe('1');
+    expect(formatEnergy(15)).toBe('1.5');
+    expect(formatEnergy(12340)).toBe('1,234');
+    expect(formatEnergy(12345)).toBe('1,234.5');
+    expect(formatEnergy(10_000_000)).toBe('1,000,000');
   });
 });

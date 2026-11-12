@@ -20,7 +20,7 @@ import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
-import { COOK_STORAGE_CAP, LEGACY_BAIT_REFUND, recipeById } from '../content/cooking.js';
+import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND, isEnergyItemId, recipeById } from '../content/cooking.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
 import { variantBoostOf } from './artifactLevel.js';
 import type { ArtifactHolder } from './artifactLevel.js';
@@ -90,7 +90,7 @@ export interface BaitRefund {
 }
 
 export interface GameState {
-  v: 9;
+  v: 10;
   gold: number;
   fame: number; // 명성 — 무한 누적, 직접 상태 변화 없음, 구매 시 하한 검증용
   boat: number; // 0(없음, 마을 낚시만)~4
@@ -406,7 +406,7 @@ export function goldEV(
 
 export function newState(): GameState {
   return {
-    v: 9, gold: 0, fame: 0, boat: 0, rod: 1,
+    v: 10, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
     coupons: [],
     location: { kind: 'base', id: 'home' },
@@ -788,6 +788,15 @@ const MIGRATIONS: Record<number, (s: AnySave, uid: () => string) => AnySave> = {
       baitRefund: refund > 0 ? { gold: refund, items: refunded } : null,
     };
   },
+  // v9 → v10: 기운 수량을 10분의 1 단위 정수로 옮긴다. 기운 키의 정수 수량에만 ENERGY_UNIT을 곱하고,
+  // 다른 키와 깨진 값은 건드리지 않는다(깨진 행은 최종 위생 처리가 버린다). 곱셈은 한 번만 일어나야 하므로 버전을 올리는 링크로 둔다.
+  9: s => {
+    const items: Record<string, unknown> = { ...safeRecord<unknown>(s.items) };
+    for (const [id, n] of Object.entries(items)) {
+      if (isEnergyItemId(id) && typeof n === 'number' && Number.isInteger(n)) items[id] = n * ENERGY_UNIT;
+    }
+    return { ...s, v: 10, items };
+  },
 };
 
 const safeStrings = (v: unknown): string[] =>
@@ -808,12 +817,15 @@ function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Rec
   return Object.keys(out).length > 0 ? { artifactLevels: out } : {};
 }
 
-// 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다. **모르는 키는 버리지 않는다**
-// (safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
+// 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다(기운은 저장 단위라 상한도 ENERGY_UNIT배).
+// **모르는 키는 버리지 않는다**(safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
+const ITEM_CAP = 1_000_000;
+
 function safeItems(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(safeRecord<number>(v))) {
-    if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000) out[id] = n;
+    const cap = isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP;
+    if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= cap) out[id] = n;
   }
   // 개수 0인 행은 저장하지 않는다 — 보유 부재와 동일한 의미라 세이브가 쓰레기로 쌓이지 않는다
   for (const [id, n] of Object.entries(out)) if (n === 0) delete out[id];

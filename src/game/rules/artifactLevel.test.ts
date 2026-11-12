@@ -183,7 +183,7 @@ describe('세이브', () => {
   it('레벨 필드가 없는 기존 세이브는 맵이 비고 보유 유물은 Lv1로 읽힌다(v 그대로)', () => {
     const raw = { ...newState(), artifacts: ['wreck-compass'], artifactLevels: undefined };
     const s = migrate(raw);
-    expect(s.v).toBe(9);
+    expect(s.v).toBe(10);
     expect(s.artifactLevels).toBeUndefined();
     expect(artifactLevelOf(s, 'wreck-compass')).toBe(1);
   });

@@ -22,7 +22,7 @@ import { WALK_SPEED } from './balance';
 import type { CatchExtras, FishInstance, FormId } from './logic';
 import { NIGHT_FISH_WEIGHT, upgradeCost } from './balance';
 import { idleDialsOf } from './power';
-import { COOK_STORAGE_CAP, LEGACY_BAIT_REFUND } from '../content/cooking';
+import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND } from '../content/cooking';
 
 // 개체 픽스처 — 캐치 문맥은 테스트마다 고정값이면 충분
 let uidSeq = 0;
@@ -667,7 +667,7 @@ describe('R18b: 세이브 마이그레이션', () => {
   it('v1 세이브(xp/spot 시절): 자산 보존 + 조각배 증정 + 도감에서 명성 소급 + 개체화', () => {
     const legacy = { gold: 777, xp: 340, rod: 5, bag: ['carp'], caught: { carp: 9 }, spot: 'sea' };
     const st = mig(legacy);
-    expect(st.v).toBe(9);
+    expect(st.v).toBe(10);
     expect(st.gold).toBe(777);
     expect(st.rod).toBe(5);
     expect(st.boat).toBe(1);
@@ -699,7 +699,7 @@ describe('R18b: 세이브 마이그레이션', () => {
       variantCaught: { crucian: 2 },
       variantMaxSize: { crucian: 30 }, variantFirstCaught: { crucian: '2026-08-10' },
     });
-    expect(st.v).toBe(9);
+    expect(st.v).toBe(10);
     expect(dexRecord(st, 'crucian', 'normal')).toEqual({ count: 3, maxSize: 21, first: '2026-08-01' });
     expect(dexRecord(st, 'crucian', 'variant')).toEqual({ count: 2, maxSize: 30, first: '2026-08-10' });
     expect(dexRecord(st, 'carp', 'normal')).toEqual({ count: 2, maxSize: null, first: null });
@@ -768,9 +768,9 @@ describe('R18b: 세이브 마이그레이션', () => {
     }
   });
 
-  it('v4 → v9: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
+  it('v4 → v10: 어종 잠금 목록은 개체 잠금으로 흡수되고 상태에서 사라진다', () => {
     const st = mig({ v: 4, fame: 0, gold: 10, caught: {}, bag: [], coupons: [] });
-    expect(st.v).toBe(9);
+    expect(st.v).toBe(10);
     expect('locked' in st).toBe(false);
     expect(st.gold).toBe(10);
   });
@@ -823,7 +823,7 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 
   it('v8 → v9: 이전 미끼 개수를 정가로 골드에 더하고 아이템 행과 activeBait를 지운다', () => {
     const st = mig({ v: 8, items: { 'bait-rare': 3, 'bait-epic': 1, x: 5 }, activeBait: 'bait-rare', gold: 10 });
-    expect(st.v).toBe(9);
+    expect(st.v).toBe(10);
     expect(st.gold).toBe(10 + 3 * LEGACY_BAIT_REFUND['bait-rare'] + LEGACY_BAIT_REFUND['bait-epic']);
     expect(st.gold).toBe(1610);
     expect(st.items).toEqual({ x: 5 });
@@ -875,9 +875,9 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
     expect(again.items).toEqual({ 'bait-rare': 9 });
   });
 
-  it('newState는 v9 기본 상태다', () => {
+  it('newState는 v10 기본 상태다', () => {
     const s = newState();
-    expect(s).toMatchObject({ v: 9, cooking: null, slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
+    expect(s).toMatchObject({ v: 10, cooking: null, slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
     expect('activeBait' in s).toBe(false);
   });
 
@@ -943,7 +943,7 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 
   it('모르는 아이템 키는 v8 → v9에서도 보존된다', () => {
     const st = mig({ v: 8, items: { 'future-item': 3, 'energy-common': 2, 'bait-epic': 1 } });
-    expect(st.items).toEqual({ 'future-item': 3, 'energy-common': 2 });
+    expect(st.items).toEqual({ 'future-item': 3, 'energy-common': 20 }); // v9 → v10이 기운만 10배로 옮긴다
   });
 });
 
@@ -1069,12 +1069,12 @@ describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () =
   it('migrate: items 부재 → 빈 맵으로 채워진다', () => {
     const st = mig({ v: 9, gold: 5, bag: [], dex: {}, coupons: [] });
     expect(st.items).toEqual({});
-    expect(st.v).toBe(9);
+    expect(st.v).toBe(10);
   });
 
   it('migrate: 깨진 items 행은 버리고, 모르는 키는 살린다, 0개 행은 접는다', () => {
     const st = mig({
-      v: 9,
+      v: 10,
       items: { 'energy-common': 2, junk: -1, broken: 1.5, huge: 1e7, 'future-item': 0, 'future-kept': 4 },
     } as never);
     expect(st.items).toEqual({ 'energy-common': 2, 'future-kept': 4 }); // future-item은 0이라 접힘
@@ -1228,5 +1228,70 @@ describe('가중치 추첨', () => {
     expect(variantShare()).toBeCloseTo(1 / 4, 10);
     expect(variantShare({ variant: 1, normal: 2 })).toBeCloseTo(1 / 3, 10);
     expect(namedEncounterShare('sea')).toBeCloseTo(1 / 1000, 10);
+  });
+});
+
+describe('세이브 v10 — 기운 수량을 10분의 1 단위로 옮기는 이관', () => {
+  const mig = (raw: unknown) => migrate(raw);
+  const E = ['energy-common', 'energy-rare', 'energy-epic', 'energy-legendary'];
+
+  it('v9 → v10: 기운 키의 수량에만 10을 곱하고 다른 키는 그대로 둔다', () => {
+    const st = mig({ v: 9, items: { 'energy-common': 7, 'energy-legendary': 1, 'cook-lunch-bite': 3, 'mat-x': 5, 'future-item': 4 } });
+    expect(st.v).toBe(10);
+    expect(st.items).toEqual({
+      'energy-common': 70, 'energy-legendary': 10, 'cook-lunch-bite': 3, 'mat-x': 5, 'future-item': 4,
+    });
+  });
+
+  it('기운이 없는 저장은 아이템이 그대로이고 버전만 오른다', () => {
+    const st = mig({ v: 9, items: { 'cook-lunch-bite': 2 } });
+    expect(st.v).toBe(10);
+    expect(st.items).toEqual({ 'cook-lunch-bite': 2 });
+  });
+
+  it('기운이 0인 행은 접힌 채로 남고 곱해도 0이다', () => {
+    expect(mig({ v: 9, items: { 'energy-common': 0, 'energy-rare': 2 } }).items).toEqual({ 'energy-rare': 20 });
+  });
+
+  it('화면 단위 상한 1,000,000은 저장 단위 10,000,000으로 유지되고 넘으면 행이 버려진다', () => {
+    const st = mig({ v: 9, items: { 'energy-common': 1_000_000, 'energy-rare': 1_000_001, 'cook-lunch-bite': 1_000_000 } });
+    expect(st.items).toEqual({ 'energy-common': 10_000_000, 'cook-lunch-bite': 1_000_000 });
+    expect(mig({ v: 10, items: { 'energy-common': 10_000_000, 'energy-rare': 10_000_001, 'cook-lunch-bite': 1_000_001 } }).items)
+      .toEqual({ 'energy-common': 10_000_000 });
+  });
+
+  it('깨진 수량(비정수, 음수, 문자열)은 곱하지 않고 위생 처리에서 버려진다', () => {
+    const st = mig({ v: 9, items: { 'energy-common': 1.5, 'energy-rare': -2, 'energy-epic': '3', 'energy-legendary': 4 } });
+    expect(st.items).toEqual({ 'energy-legendary': 40 });
+  });
+
+  it('items가 객체가 아니어도 빈 맵으로 접힌다', () => {
+    expect(mig({ v: 9, items: 'x' }).items).toEqual({});
+    expect(mig({ v: 9 }).items).toEqual({});
+  });
+
+  it('9 미만 버전에서 한 번에 올라와도 기운은 한 번만 10배가 된다', () => {
+    for (const v of [1, 4, 7, 8]) {
+      const st = mig({ v, items: { 'energy-common': 3, 'cook-lunch-bite': 1 } });
+      expect(st.items, `v${v}`).toEqual({ 'energy-common': 30, 'cook-lunch-bite': 1 });
+    }
+  });
+
+  it('이미 v10인 저장은 변화가 없고 다시 migrate해도 같다 (멱등)', () => {
+    const raw = { ...newState(), items: { 'energy-common': 15, 'cook-lunch-bite': 2 } };
+    const once = mig(JSON.parse(JSON.stringify(raw)));
+    expect(once.items).toEqual({ 'energy-common': 15, 'cook-lunch-bite': 2 });
+    expect(mig(JSON.parse(JSON.stringify(once)))).toEqual(once);
+  });
+
+  it('저장 버전이 미래 값이면 기운을 건드리지 않는다 (기존 동작 유지)', () => {
+    const st = mig({ v: 99, items: { 'energy-common': 3 } });
+    expect(st.items).toEqual({ 'energy-common': 3 });
+  });
+
+  it('이관 전후에 화면 단위로 본 기운 수가 같다', () => {
+    const before = { 'energy-common': 600, 'energy-rare': 20, 'energy-epic': 4, 'energy-legendary': 1 };
+    const st = mig({ v: 9, items: before });
+    for (const id of E) expect(st.items[id] / ENERGY_UNIT).toBe(before[id as keyof typeof before]);
   });
 });

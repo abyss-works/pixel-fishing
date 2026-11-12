@@ -25,6 +25,29 @@ export const ENERGY_ITEM_IDS: Readonly<Record<RarityId, string>> = {
   legendary: 'energy-legendary',
 };
 
+/** 기운의 저장·계산 단위 — 화면 단위 1은 저장 단위 ENERGY_UNIT이다. 저장과 계산은 이 단위의 정수로 하고 화면에서만 나눈다 */
+export const ENERGY_UNIT = 10;
+
+/** 개체 하나에서 얻는 기운(저장 단위) — 화면 단위 1 */
+export const ENERGY_PER_INDIVIDUAL = ENERGY_UNIT;
+
+/** 기운 아이템 id인가 */
+export const isEnergyItemId = (id: string): boolean => (Object.values(ENERGY_ITEM_IDS) as string[]).includes(id);
+
+/** 화면 단위 수량이 소수 첫째 자리까지로 적힌 0 이상의 유한한 수인가 — 저장 단위로 바꾸면 정수가 되는 값만 true */
+export const isEnergyAmount = (x: unknown): x is number =>
+  typeof x === 'number' && Number.isFinite(x) && x >= 0 && Math.abs(x * ENERGY_UNIT - Math.round(x * ENERGY_UNIT)) < 1e-9;
+
+/** 화면 단위 수량 → 저장 단위 정수. 소수 연산의 오차는 반올림으로 걷어 낸다 */
+export const toStoredEnergy = (amount: number): number => Math.round(amount * ENERGY_UNIT);
+
+/** 저장 단위 기운 → 화면 문자열. 소수 첫째 자리가 0이면 정수, 아니면 소수 첫째 자리까지, 정수부는 천 단위 쉼표 */
+export function formatEnergy(stored: number): string {
+  const whole = Math.trunc(stored / ENERGY_UNIT);
+  const tenth = Math.abs(stored % ENERGY_UNIT);
+  return `${whole.toLocaleString('ko-KR')}${tenth === 0 ? '' : `.${tenth}`}`;
+}
+
 // ---------- 종류별 규칙 ----------
 
 export type CookKind = 'lunch' | 'bait';
@@ -69,7 +92,7 @@ export interface Recipe {
   id: string;
   name: string;
   kind: CookKind;
-  /** 기운 요구 — 등급별 개수(1개를 만드는 데 드는 양) */
+  /** 기운 요구 — 등급별 수량(1개를 만드는 데 드는 양). 사람이 읽는 화면 단위로 적고 소수 첫째 자리까지 허용한다 */
   cost: Readonly<Partial<Record<RarityId, number>>>;
   effects: CookEffects;
 }
@@ -100,6 +123,9 @@ export const RECIPES: readonly Recipe[] = [
     cost: { common: 50, legendary: 3 },
     effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.6 } } },
 ];
+
+/** 그 레시피 1개의 등급별 기운 요구(저장 단위). 요구가 없는 등급은 0 */
+export const recipeCostStored = (recipe: Recipe, grade: RarityId): number => toStoredEnergy(recipe.cost[grade] ?? 0);
 
 /** id → 레시피. 없는 id와 문자열이 아닌 입력은 undefined */
 export const recipeById = (id: unknown): Recipe | undefined =>
