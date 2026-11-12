@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../../game/content/cooking';
+import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById, toStoredEnergy } from '../../../game/content/cooking';
 import {
   recipeEffectLines, recipeGrade, recipeLabel, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
@@ -13,8 +13,10 @@ const MIN = 60_000;
 const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const home = { kind: 'base', id: 'home' } as const;
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: 5, location: home, ...over });
+// 등급별 보유 기운 — 인자는 화면 단위이고 items에는 저장 단위로 넣는다
 const energy = (c = 0, r = 0, e = 0, l = 0): Record<string, number> => ({
-  [ENERGY_ITEM_IDS.common]: c, [ENERGY_ITEM_IDS.rare]: r, [ENERGY_ITEM_IDS.epic]: e, [ENERGY_ITEM_IDS.legendary]: l,
+  [ENERGY_ITEM_IDS.common]: toStoredEnergy(c), [ENERGY_ITEM_IDS.rare]: toStoredEnergy(r),
+  [ENERGY_ITEM_IDS.epic]: toStoredEnergy(e), [ENERGY_ITEM_IDS.legendary]: toStoredEnergy(l),
 });
 const recipe = (id: string) => recipeById(id)!;
 
@@ -66,14 +68,21 @@ describe('효과 줄', () => {
 });
 
 describe('필요와 보유', () => {
-  const R = recipe('cook-lunch-rare'); // 일반 100, 희귀 20
+  const R = recipe('cook-lunch-rare'); // 일반 100, 희귀 20 (저장 단위로는 1000, 200)
 
-  it('필요한 등급마다 필요(1개 요구 곱하기 수량)와 보유를 낸다', () => {
+  it('필요한 등급마다 필요(1개 요구 곱하기 수량)와 보유를 저장 단위로 낸다', () => {
     const v = selectRecipeView(seed({ items: energy(250, 30) }), R, 2, T0);
     expect(v.cost).toEqual([
-      { grade: 'common', need: 200, have: 250, short: false },
-      { grade: 'rare', need: 40, have: 30, short: true },
+      { grade: 'common', need: 2000, have: 2500, short: false },
+      { grade: 'rare', need: 400, have: 300, short: true },
     ]);
+  });
+
+  it('저장 단위 1(화면 단위 0.1)이 모자라도 부족으로 낸다', () => {
+    const v = selectRecipeView(seed({ items: energy(99.9, 20) }), R, 1, T0);
+    expect(v.cost[0]).toEqual({ grade: 'common', need: 1000, have: 999, short: true });
+    expect(v.unitCost[0]).toEqual({ grade: 'common', per: 1000, short: true });
+    expect(v.check).toEqual({ ok: false, reason: 'not-enough-energy' });
   });
 
   it('요구하지 않는 등급은 줄에 넣지 않는다', () => {
@@ -83,7 +92,7 @@ describe('필요와 보유', () => {
 
   it('1개를 만드는 데 드는 양을 목록용으로 함께 낸다', () => {
     const v = selectRecipeView(seed({ items: energy(100, 0) }), R, 3, T0);
-    expect(v.unitCost).toEqual([{ grade: 'common', per: 100, short: false }, { grade: 'rare', per: 20, short: true }]);
+    expect(v.unitCost).toEqual([{ grade: 'common', per: 1000, short: false }, { grade: 'rare', per: 200, short: true }]);
   });
 
   it('가진 완성품 수를 함께 낸다', () => {

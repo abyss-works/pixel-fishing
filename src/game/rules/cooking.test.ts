@@ -4,10 +4,12 @@ import { applyAction, drawCatch, namedWeightBonus, prepareCatchDraw } from './ac
 import type { ActionDeps, GameAction } from './actions';
 import { FISH, newState } from './logic';
 import type { FishInstance, GameState } from './logic';
-import { COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../content/cooking';
+import {
+  COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
+} from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyTargetOf, settleCooking, slotEffects, appliedSlots,
+  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, settleCooking, slotEffects, appliedSlots,
 } from './cooking';
 import { effectiveBite } from './stats';
 import { SPOTS } from '../content/spots';
@@ -32,9 +34,10 @@ const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boa
 const fishOf = (rarity: RarityId): string => FISH.find(f => f.rarity === rarity)!.id;
 const inst = (uid: string, fishId: string, locked = false): FishInstance =>
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked });
+// 등급별 보유 기운 — 인자는 화면 단위(소수 첫째 자리까지)이고, items에는 저장 단위로 넣는다
 const energy = (c = 0, r = 0, e = 0, l = 0): Record<string, number> => {
   const out: Record<string, number> = {};
-  const put = (id: string, n: number) => { if (n > 0) out[id] = n; };
+  const put = (id: string, n: number) => { if (n > 0) out[id] = toStoredEnergy(n); };
   put(ENERGY_ITEM_IDS.common, c); put(ENERGY_ITEM_IDS.rare, r); put(ENERGY_ITEM_IDS.epic, e); put(ENERGY_ITEM_IDS.legendary, l);
   return out;
 };
@@ -122,28 +125,34 @@ describe('energyGain', () => {
       inst('d', fishOf('epic'), true), inst('e', 'deleted-species'), inst('f', fishOf('legendary')),
     ] });
     const g = energyGain(s, ['a', 'b', 'c', 'd', 'e', 'f', 'f', 'ghost']);
-    expect(g.byGrade).toEqual({ common: 2, rare: 1, epic: 0, legendary: 1 });
+    expect(g.byGrade).toEqual({ common: 20, rare: 10, epic: 0, legendary: 10 }); // 저장 단위, 개체 하나에 화면 단위 1
     expect(g.uids.sort()).toEqual(['a', 'b', 'c', 'f']);
   });
   it('전시대 개체는 가방에 없으므로 대상이 아니다', () => {
     const s = seed({ bag: [], exhibit: [inst('x', fishOf('rare'))] });
     expect(energyGain(s, ['x']).uids).toEqual([]);
   });
+  it('개체 하나의 산출은 한 곳에 정의한 값(ENERGY_PER_INDIVIDUAL)이다. 잠금과 중복은 산출에서 빠진다', () => {
+    const s = seed({ bag: [inst('a', fishOf('epic')), inst('b', fishOf('epic'), true)] });
+    expect(energyGain(s, ['a', 'a', 'b']).byGrade.epic).toBe(ENERGY_PER_INDIVIDUAL);
+    expect(energyYield(3)).toBe(3 * ENERGY_PER_INDIVIDUAL);
+    expect(energyYield(0)).toBe(0);
+  });
 });
 
 describe('extractEnergy', () => {
   const bag = () => [inst('a', fishOf('common')), inst('b', fishOf('rare')), inst('c', fishOf('epic'), true)];
   it('개체가 사라지고 그 등급의 기운이 쌓인다. 도감, 명성, 골드는 그대로다', () => {
-    const s = seed({ bag: bag(), fame: 77, gold: 12, items: { [ENERGY_ITEM_IDS.common]: 3 },
+    const s = seed({ bag: bag(), fame: 77, gold: 12, items: { [ENERGY_ITEM_IDS.common]: 30 },
       dex: { [fishOf('common')]: { normal: { count: 4, maxSize: 30, first: '2026-11-01' } } } });
     const out = ok(s, { type: 'extractEnergy', uids: ['a', 'b', 'c'] });
     expect(out.state.bag.map(i => i.uid)).toEqual(['c']);
-    expect(out.state.items).toEqual({ [ENERGY_ITEM_IDS.common]: 4, [ENERGY_ITEM_IDS.rare]: 1 });
+    expect(out.state.items).toEqual({ [ENERGY_ITEM_IDS.common]: 40, [ENERGY_ITEM_IDS.rare]: 10 });
     expect(out.state.dex).toEqual(s.dex);
     expect(out.state.fame).toBe(77);
     expect(out.state.gold).toBe(12);
-    expect(out.result).toEqual({ type: 'extract', energy: { common: 1, rare: 1, epic: 0, legendary: 0 } });
-    expect(out.events[0]).toMatchObject({ type: 'extractEnergy', payload: { uids: ['a', 'b'] } });
+    expect(out.result).toEqual({ type: 'extract', energy: { common: 10, rare: 10, epic: 0, legendary: 0 } });
+    expect(out.events[0]).toMatchObject({ type: 'extractEnergy', payload: { uids: ['a', 'b'], energy: { common: 10, rare: 10, epic: 0, legendary: 0 } } });
   });
   it('잠근 개체만 고르면 아무것도 바뀌지 않는다', () => {
     const s = seed({ bag: bag() });
@@ -169,9 +178,9 @@ describe('cook', () => {
 
   it('기운을 그 자리에서 모두 차감하고 시작 시각을 서버 시각으로 남긴다', () => {
     const out = ok(rich(), { type: 'cook', recipe: R.id, count: 2 });
-    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(1000 - 200);
-    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(1000 - 40);
-    expect(out.state.items[ENERGY_ITEM_IDS.epic]).toBe(1000);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(1000 - 200));
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(1000 - 40));
+    expect(out.state.items[ENERGY_ITEM_IDS.epic]).toBe(toStoredEnergy(1000));
     expect(out.state.cooking).toEqual({ recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 });
     expect(out.events[0]).toMatchObject({ type: 'cook', payload: { recipe: R.id, count: 2 } });
   });
@@ -181,13 +190,19 @@ describe('cook', () => {
     expect(rejected(seed({ items: energy(100, 19) }), { type: 'cook', recipe: R.id, count: 1 })).toBe('not-enough-energy');
     expect(rejected(seed({ items: energy(100, 20) }), { type: 'cook', recipe: R.id, count: 2 })).toBe('not-enough-energy');
   });
+  it('저장 단위 1(화면 단위 0.1)이 모자라도 거부하고, 딱 맞으면 차감 뒤 소수 잔량이 정수로 남는다', () => {
+    expect(rejected(seed({ items: energy(99.9, 20) }), { type: 'cook', recipe: R.id, count: 1 })).toBe('not-enough-energy');
+    expect(rejected(seed({ items: energy(100, 19.9) }), { type: 'cook', recipe: R.id, count: 1 })).toBe('not-enough-energy');
+    const out = ok(seed({ items: energy(100.3, 20.1) }), { type: 'cook', recipe: R.id, count: 1 });
+    expect(out.state.items).toEqual({ [ENERGY_ITEM_IDS.common]: 3, [ENERGY_ITEM_IDS.rare]: 1 });
+  });
   it('저울이 있으면 수량마다 추가 완성을 추첨해 bonus에 저장하고 기운은 더 쓰지 않는다', () => {
     const s = rich({ artifacts: ['varuna-scale'], items: energy(2000) });
     const draws = [0.05, 0.5, 0.099];
     let i = 0;
     const out = ok(s, { type: 'cook', recipe: lunchBite.id, count: 3 }, deps({ rng: () => draws[i++] }));
     expect(out.state.cooking!.bonus).toEqual([true, false, true]);
-    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(2000 - 1800);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(2000 - 1800));
   });
   it('저울이 없으면 추가 완성이 없다', () => {
     const out = ok(rich({ items: energy(2000) }), { type: 'cook', recipe: lunchBite.id, count: 2 }, deps({ rng: () => 0 }));

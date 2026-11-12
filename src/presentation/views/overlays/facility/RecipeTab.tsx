@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatEnergy } from '../../../../game/content/cooking';
 import type { CookKind } from '../../../../game/content/cooking';
 import { RARITY } from '../../../../game/content/rarity';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
@@ -48,7 +49,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
                       <span className="flex flex-wrap gap-x-2 text-2xs text-text-dim">
                         {v.unitCost.map(c => (
                           <span key={c.grade} className={c.short ? 'text-danger' : undefined}>
-                            {RARITY[c.grade].name} <span className="pf-accent">{c.per}</span>
+                            {RARITY[c.grade].name} <span className="pf-accent">{formatEnergy(c.per)}</span>
                           </span>
                         ))}
                       </span>
@@ -74,8 +75,8 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
       <CompareTable heads={['필요', '보유']}
                     rows={view.cost.map(c => ({
                       label: <GradeName name={ENERGY_NAME} grade={c.grade} />,
-                      value: <span className={c.short ? 'text-danger' : 'text-text'}>{c.need}</span>,
-                      next: <span className={c.short ? 'text-danger' : 'text-accent'}>{c.have}</span>,
+                      value: <span className={c.short ? 'text-danger' : 'text-text'}>{formatEnergy(c.need)}</span>,
+                      next: <span className={c.short ? 'text-danger' : 'text-accent'}>{formatEnergy(c.have)}</span>,
                     }))} />
       <Inset className="px-3 py-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2 text-xs">

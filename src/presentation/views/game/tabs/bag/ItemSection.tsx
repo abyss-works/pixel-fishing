@@ -6,6 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../../features/gamep
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import { ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
 import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
+import { formatEnergy } from '../../../../../game/content/cooking';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import { RarityText } from '../../../../ui/fish/RarityTag';
@@ -131,10 +132,10 @@ export default function ItemSection({ game, guest, dispatch, setToast }: {
             </Subheading>
             <Inset className="grid grid-cols-4 py-2">
               {view.energy.map((cell, i) => (
-                <div key={cell.grade} role="group" aria-label={`${cell.label} ${cell.count}개`}
+                <div key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.count)}개`}
                      className={`flex flex-col items-center gap-0.5 ${i > 0 ? 'border-l border-line' : ''}`}>
                   <span className="text-xs" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-                  <span className="pf-accent text-base" aria-hidden="true">{cell.count.toLocaleString('ko-KR')}</span>
+                  <span className="pf-accent text-base" aria-hidden="true">{formatEnergy(cell.count)}</span>
                 </div>
               ))}
             </Inset>

@@ -22,7 +22,7 @@ import {
   appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
-import { ENERGY_ITEM_IDS, recipeById } from '../content/cooking.js';
+import { ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../content/cooking.js';
 import { RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
 import { spotById } from '../content/spots.js';
@@ -120,7 +120,7 @@ export type ActionResult =
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'mail'; gold: number }
-  /** energy = 이번 기운 얻기로 얻은 등급별 기운 개수 */
+  /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
@@ -581,7 +581,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const recipe = recipeById(action.recipe)!;
       // 조리가 끝난 앞 요리는 보관함으로 정산한 뒤 기운을 차감하고 새 조리를 시작한다. 시작 시각은 서버 시각이다
       let next = settleCooking(state, deps.now);
-      for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], (recipe.cost[r] ?? 0) * action.count);
+      for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], recipeCostStored(recipe, r) * action.count);
       // 추가 완성은 시작할 때 수량마다 추첨해 저장한다 — 추가분은 기운을 차감하지 않는다
       const chance = extraCookChance(state);
       const bonus = Array.from({ length: action.count }, () => deps.rng() < chance);
