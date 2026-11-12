@@ -94,7 +94,7 @@ export async function currentAccount(): Promise<string | null> {
  * 이메일 로그인 실패를 화면이 분기에 쓰는 코드로 가른다. 서버는 틀린 입력, 없는 계정, 구글을 연결해 이메일 로그인이 꺼진 계정을
  * 구분하지 않고 401로 돌려주므로 모두 인증 실패다. 요청이 서버에 닿지 못해 던져진 오류는 network다.
  */
-export function emailSignInFailure(e: AuthError | Error): AuthResult {
+export function classifyEmailSignInFailure(e: AuthError | Error): AuthResult {
   if (e instanceof Error) return { ok: false, msg: e.message, code: 'network' };
   const base = authErr(e);
   if (base.ok || base.code) return base;
@@ -106,9 +106,9 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (!authClient) return NOT_CLOUD;
   try {
     const { error } = await authClient.signIn.email({ email, password });
-    return error ? emailSignInFailure(error) : { ok: true };
+    return error ? classifyEmailSignInFailure(error) : { ok: true };
   } catch (e) {
-    return emailSignInFailure(e instanceof Error ? e : new Error(String(e)));
+    return classifyEmailSignInFailure(e instanceof Error ? e : new Error(String(e)));
   }
 }
 

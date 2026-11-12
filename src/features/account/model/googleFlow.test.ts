@@ -1,6 +1,6 @@
 // 구글 인증 복귀의 분기 — 어느 표지와 오류 코드에서 무엇을 보이고 어디로 이어지는가.
 import { describe, expect, it } from 'vitest';
-import { GOOGLE_TAG, OVERWRITE_COPY, emailSignInFailure, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
+import { GOOGLE_TAG, OVERWRITE_COPY, emailSignInFailureLines, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
 
 const back = (tag: string, error: string | null = null) => googleOutcome({ tag, error });
 const bodyOf = (o: ReturnType<typeof back>) => (o as { body: string }).body;
@@ -120,25 +120,25 @@ describe('덮어쓰기 확인 창 문구', () => {
 
 describe('이메일 로그인 실패 안내', () => {
   it('인증 실패는 새 계정을 만들 수 없다는 사실과 구글 버튼 안내를 세 줄로 알린다', () => {
-    expect(emailSignInFailure('invalid_credentials')).toEqual(
+    expect(emailSignInFailureLines('invalid_credentials')).toEqual(
       ['로그인하지 못했어요.', '이메일로는 새 계정을 만들 수 없어요.', '이메일 계정이 없거나 이미 구글 계정을 연결했다면 Google로 계속하기를 눌러 주세요.']);
   });
 
   it('요청 과다는 잠시 뒤 다시 시도하라고 알린다', () => {
-    expect(emailSignInFailure('over_email_send_rate_limit'))
+    expect(emailSignInFailureLines('over_email_send_rate_limit'))
       .toEqual(['로그인하지 못했어요.', '요청이 너무 잦아요.', '잠시 뒤 다시 시도해 주세요.']);
   });
 
   it('이메일 형식 오류는 두 줄이다', () => {
-    expect(emailSignInFailure('validation_failed')).toEqual(['로그인하지 못했어요.', '이메일 형식을 확인해 주세요.']);
+    expect(emailSignInFailureLines('validation_failed')).toEqual(['로그인하지 못했어요.', '이메일 형식을 확인해 주세요.']);
   });
 
   it('서버에 닿지 못한 실패는 연결 실패를 알린다', () => {
-    expect(emailSignInFailure('network'))
+    expect(emailSignInFailureLines('network'))
       .toEqual(['로그인하지 못했어요.', '서버에 연결하지 못했어요.', '잠시 뒤 다시 시도해 주세요.']);
   });
 
   it.each([undefined, '', 'unknown_code', 'weak_password'])('그 밖의 실패(%s)는 두 줄이다', code => {
-    expect(emailSignInFailure(code)).toEqual(['로그인하지 못했어요.', '잠시 뒤 다시 시도해 주세요.']);
+    expect(emailSignInFailureLines(code)).toEqual(['로그인하지 못했어요.', '잠시 뒤 다시 시도해 주세요.']);
   });
 });

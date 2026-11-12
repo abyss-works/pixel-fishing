@@ -59,7 +59,7 @@ export const SIGN_IN_FAILED_TEXT = SIGN_IN_FAILED_SENTENCES.join(' ');
 export const EMAIL_ACCOUNT_EXISTS_LEAD = '이 구글 계정과 주소가 같은 이메일 계정이 있어요.';
 
 /** 계정 관리의 이메일 로그인 폼 안에 문장마다 한 줄로 보이는 실패 안내. 결과 종류는 문구가 아니라 인증 어댑터가 돌려준 코드로 가른다 */
-export function emailSignInFailure(code: string | undefined): readonly string[] {
+export function emailSignInFailureLines(code: string | undefined): readonly string[] {
   const lead = '로그인하지 못했어요.';
   const retry = '잠시 뒤 다시 시도해 주세요.';
   switch (code) {

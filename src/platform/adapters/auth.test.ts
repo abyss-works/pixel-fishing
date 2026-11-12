@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isCloud, authClient, ensureSession,
   currentAccount, signInWithEmail, requestPasswordReset, applyNewPassword, startGoogleAuth, accountProviders,
-  googleReturnUrl, parseGoogleLanding, emailSignInFailure,
+  googleReturnUrl, parseGoogleLanding, classifyEmailSignInFailure,
 } from './auth';
 import { HttpGameGateway } from './httpGameGateway';
 
@@ -59,31 +59,31 @@ describe('구글 인증 복귀 주소', () => {
 
 describe('이메일 로그인 실패의 분류', () => {
   it('서버가 틀린 입력을 알리면 인증 실패 코드다', () => {
-    expect(emailSignInFailure({ status: 401, code: 'INVALID_EMAIL_OR_PASSWORD', message: 'x' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
+    expect(classifyEmailSignInFailure({ status: 401, code: 'INVALID_EMAIL_OR_PASSWORD', message: 'x' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
   });
 
   it('401은 본문에 코드가 없어도 인증 실패다', () => {
-    expect(emailSignInFailure({ status: 401, message: '' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
-    expect(emailSignInFailure({ status: 401 })).toMatchObject({ code: 'invalid_credentials' });
+    expect(classifyEmailSignInFailure({ status: 401, message: '' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
+    expect(classifyEmailSignInFailure({ status: 401 })).toMatchObject({ code: 'invalid_credentials' });
   });
 
   it('429는 요청 과다 코드다', () => {
-    expect(emailSignInFailure({ status: 429, message: 'Too many requests' })).toMatchObject({ code: 'over_email_send_rate_limit' });
+    expect(classifyEmailSignInFailure({ status: 429, message: 'Too many requests' })).toMatchObject({ code: 'over_email_send_rate_limit' });
   });
 
   it('이메일 형식 거부는 형식 오류 코드다', () => {
-    expect(emailSignInFailure({ status: 400, code: 'INVALID_EMAIL' })).toMatchObject({ code: 'validation_failed' });
+    expect(classifyEmailSignInFailure({ status: 400, code: 'INVALID_EMAIL' })).toMatchObject({ code: 'validation_failed' });
   });
 
   it('알 수 없는 코드와 JSON이 아닌 본문(상태만 있는 오류)은 코드 없는 실패다', () => {
     for (const e of [{ status: 400, code: 'SOMETHING_NEW' }, { status: 502, message: '' }, undefined]) {
-      const r = emailSignInFailure(e);
+      const r = classifyEmailSignInFailure(e);
       expect(r.ok).toBe(false);
       expect('code' in r ? r.code : undefined).toBeUndefined();
     }
   });
 
   it('요청이 서버에 닿지 못해 던져진 오류는 네트워크 코드다', () => {
-    expect(emailSignInFailure(new TypeError('Failed to fetch'))).toMatchObject({ ok: false, code: 'network' });
+    expect(classifyEmailSignInFailure(new TypeError('Failed to fetch'))).toMatchObject({ ok: false, code: 'network' });
   });
 });

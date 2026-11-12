@@ -8,7 +8,7 @@ import {
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
-import { emailSignInFailure, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
+import { emailSignInFailureLines, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { MIN_PASSWORD_LENGTH, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
@@ -89,7 +89,7 @@ export default function AccountModal({
       confirmLabel: '로그인',
     }))) return;
     const r = await signInAccount(email.trim(), pw);
-    if (!r.ok) { setSignInError(emailSignInFailure(r.code)); return; }
+    if (!r.ok) { setSignInError(emailSignInFailureLines(r.code)); return; }
     await onAuthChanged();
     onClose();
   });
