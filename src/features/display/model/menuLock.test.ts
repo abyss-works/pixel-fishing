@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
+import { REJECT_TEXT } from '../../../game/rules/rules';
 import { energyTabLock, facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote } from './menuLock';
 import type { GuestFeature } from './menuLock';
 import { POLICY } from '../../../core/errors';
@@ -137,6 +138,11 @@ describe('판매 창의 기운 얻기 탭 잠금', () => {
       kind: 'progress',
       lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
     });
+  });
+
+  it('해금 전 첫 줄은 규칙의 기운 얻기 거부 문구와 같다', () => {
+    const lock = energyTabLock(false, COOKING_UNLOCK_BOAT - 1);
+    expect(lock.kind === 'progress' && lock.lines[0]).toBe(REJECT_TEXT['energy-locked']);
   });
 
   it('계정이 해금했으면 잠기지 않는다', () => {

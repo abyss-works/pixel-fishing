@@ -3,6 +3,8 @@
 import type { BasePack } from '../types';
 import { BASE_REGION } from '../../content/places';
 
+const SALE_TITLE = '궤짝';
+
 export const HOME: BasePack = {
   id: 'home',
   name: '집',
@@ -17,7 +19,7 @@ export const HOME: BasePack = {
     { id: 'boat', x: 36,  y: 92,  w: 48, h: 30, sprite: 'shipyard',
       label: i => ({ title: '목공소', sub: i.boatName }), labelDy: -4 },
     { id: 'sell', x: 200, y: 94,  w: 44, h: 32, sprite: 'chest',
-      label: () => ({ title: '궤짝', sub: '판매' }), labelDy: -4 },
+      label: () => ({ title: SALE_TITLE, sub: '판매' }), windowTitle: SALE_TITLE, labelDy: -4 },
     { id: 'wardrobe', x: 252, y: 40, w: 34, h: 46, sprite: 'wardrobe',
       label: () => ({ title: '옷장', sub: '치장' }), labelDy: -4 },
     { id: 'kitchen', x: 196, y: 38, w: 46, h: 40, sprite: 'kitchen',

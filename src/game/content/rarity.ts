@@ -32,14 +32,14 @@ export const rarityRank = (r: RarityId): number => RARITY[r].order;
 
 export type DisplayGradeId = RarityId | 'special';
 
-export interface DisplayGrade { name: string; color: string }
+export interface DisplayGrade { name: string }
 
 export const DISPLAY_GRADE: Record<DisplayGradeId, DisplayGrade> = {
-  common: { name: RARITY.common.name, color: RARITY.common.color },
-  rare: { name: RARITY.rare.name, color: RARITY.rare.color },
-  epic: { name: RARITY.epic.name, color: RARITY.epic.color },
-  legendary: { name: RARITY.legendary.name, color: RARITY.legendary.color },
-  special: { name: '특수', color: '#69f0ae' },
+  common: { name: RARITY.common.name },
+  rare: { name: RARITY.rare.name },
+  epic: { name: RARITY.epic.name },
+  legendary: { name: RARITY.legendary.name },
+  special: { name: '특수' },
 };
 
 /** 표시 등급 오름차순 — 네 등급 뒤에 특수. 등급순으로 늘어놓는 목록은 이 순서를 따른다 */

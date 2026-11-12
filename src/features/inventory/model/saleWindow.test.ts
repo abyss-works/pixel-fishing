@@ -21,6 +21,8 @@ describe('판매 창 제목', () => {
   it('판매 시설이 있는 모든 거점의 제목은 그 거점 시설 카드의 이름과 같다', () => {
     for (const pack of Object.values(BASE_PACKS)) {
       const card = pack.furniture.find(f => f.id === 'sell')!;
+      expect(card.windowTitle, pack.id).toBeDefined();
+      expect(saleWindowTitle(pack.id), pack.id).toBe(card.windowTitle);
       expect(saleWindowTitle(pack.id), pack.id).toBe(card.label({ rod: 1, boatName: '' }).title);
     }
   });

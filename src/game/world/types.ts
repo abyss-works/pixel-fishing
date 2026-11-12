@@ -157,6 +157,8 @@ export interface Furniture extends Rect {
   id: FurnitureId;
   sprite: FurnitureSpriteId;
   label: (info: BaseInfo) => FacilityLabel;
+  /** 판매 시설이 여는 창의 제목 — 판매 시설(id 'sell')만 가지며 라벨의 제목과 같다 */
+  windowTitle?: string;
   labelDy: number; // 라벨 y 오프셋 (rect.y 기준)
 }
 

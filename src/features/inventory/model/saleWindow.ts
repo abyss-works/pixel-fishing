@@ -15,11 +15,10 @@ export const SALE_TABS: readonly { key: SaleWindowTab; label: string }[] = [
   { key: 'energy', label: '기운 얻기' },
 ];
 
-/** 창 제목 — 그 거점의 판매 시설 이름이다(집은 궤짝, 항구는 어시장). 시설 카드와 같은 이름을 거점 데이터에서 읽는다 */
+/** 창 제목 — 그 거점의 판매 시설 이름이다(집은 궤짝, 항구는 어시장). 거점 데이터의 판매 시설에서 읽고, 판매 시설이 없는 거점이면 탭 이름을 쓴다 */
 export function saleWindowTitle(base: BaseId): string {
   const card = BASE_PACKS[base].furniture.find(f => f.id === 'sell');
-  if (!card) throw new Error(`판매 시설이 없는 거점이에요: ${base}`);
-  return card.label({ rod: 0, boatName: '' }).title;
+  return card?.windowTitle ?? SALE_TABS[0].label;
 }
 
 /** 어종 표에서 잠긴 개체의 자물쇠에 붙는 툴팁 — 전부 잠긴 행과 일부만 잠긴 행의 개체 줄이 같은 문안을 쓴다 */

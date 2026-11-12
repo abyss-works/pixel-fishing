@@ -1,7 +1,7 @@
 // 가방 아이템 섹션 모델 — 생명의 기운 격자, 도시락과 미끼 행, 해금 전 잠금과 빈 상태, 먹기 계획과 교체 확인.
 // 먹을 수 있는지는 게임 규칙(canEat)이, 해금은 게임 규칙(cookingUnlocked)이, 게스트 잠금은 메뉴 잠금 모델이 정한다.
 // 보관함에 든 완성분은 조리가 끝난 분까지 센다(settleCooking). 이 모듈은 그 판정을 화면용 행으로 옮긴다.
-import { COOK_KIND_RULES, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../../game/content/cooking';
+import { COOK_KIND_RULES, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import type { Recipe } from '../../../game/content/cooking';
 import { RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
@@ -10,7 +10,7 @@ import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
-import { recipeEffectLines, recipeEffectNote, recipeLabel, recipeTitle } from './recipes';
+import { recipeEffectLines, recipeEffectNote, recipeLabel, recipesOfKind, recipeTitle } from './recipes';
 import type { RecipeTitle } from './recipes';
 import type { RecipeEffectLine } from './recipes';
 import { activeSlot } from './slots';
@@ -70,7 +70,7 @@ export function selectItemSection(game: GameState, now: string, guest: boolean):
     return { state: 'locked', empty, lines: lock.lines };
   }
   const items = settleCooking(game, now).items;
-  const rows = (slot: SlotKey): ItemRow[] => RECIPES.filter(r => r.kind === slot && (items[r.id] ?? 0) > 0)
+  const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot).filter(r => (items[r.id] ?? 0) > 0)
     .map(recipe => ({
       recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
       effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
