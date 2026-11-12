@@ -87,5 +87,5 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 
-  return { account, uid, onAuthChanged };
+  return { account, accountChecked, uid, onAuthChanged };
 }
