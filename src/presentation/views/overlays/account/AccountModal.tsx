@@ -9,7 +9,7 @@ import {
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
 import { emailSignInFailure, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
-import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
+import { MIN_PASSWORD_LENGTH, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
@@ -33,11 +33,13 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 // 이미 있는 이메일 계정의 로그인은 텍스트 링크가 같은 창 안에서 펼치는 폼으로 남기고, 이메일 계정은 구글 연결로 옮겨 간다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  setToast, onAuthChanged, onClose, account, syncLabel, syncState,
+  setToast, onAuthChanged, onClose, account, guestProgress, syncLabel, syncState,
 }: {
   setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null;
+  /** 이 기기의 게스트 진행. 버릴 진행이 없으면 이메일 계정 로그인 확인을 건너뛴다 */
+  guestProgress: GuestProgress;
   /** 저장 상태 문구(클라우드 켜짐, 미설정 등). 계정과 한 묶음이라 여기서 보여 준다 */
   syncLabel?: string | null; syncState?: string;
 }) {
@@ -65,11 +67,11 @@ export default function AccountModal({
     if (!r.ok) { setToast(googleStartFailedText, 'warn'); setBusy(false); }
   };
 
-  // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 확인을 받은 뒤에만 로그인한다.
+  // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 버릴 진행이 있으면 확인을 받은 뒤에만 로그인한다.
   const emailSignIn = () => run(async () => {
     setSignInError([]);
     if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`, 'warn'); return; }
-    if (!(await confirm({
+    if (guestProgress !== 'nothing' && !(await confirm({
       title: '이메일 계정으로 로그인',
       body: '이 이메일 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
       confirmLabel: '로그인',

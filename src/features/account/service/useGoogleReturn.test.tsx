@@ -20,15 +20,18 @@ vi.mock('../../../platform/api', () => ({
 
 import { useGoogleReturn } from './useGoogleReturn';
 
-function setup(answer = true) {
+import type { GuestProgress } from '../model/accountRules';
+
+function setup(answer = true, progress: GuestProgress = 'some') {
   const props = {
+    progress,
     setToast: vi.fn(),
     askOverwrite: vi.fn(async () => answer),
     showNotice: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
     reopenAccount: vi.fn(),
   };
-  renderHook(() => useGoogleReturn(props));
-  return props;
+  const view = renderHook((p: { progress: GuestProgress }) => useGoogleReturn({ ...props, progress: p.progress }), { initialProps: { progress } });
+  return Object.assign(props, { rerender: (next: GuestProgress) => view.rerender({ progress: next }) });
 }
 
 describe('구글 인증 복귀 처리', () => {
@@ -119,5 +122,66 @@ describe('구글 로그인 복귀의 성공', () => {
     const p = setup();
     expect(p.setToast).not.toHaveBeenCalled();
     expect(p.showNotice).not.toHaveBeenCalled();
+  });
+});
+
+describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
+  beforeEach(() => {
+    auth.isConfigured = true;
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.startGoogle.mockReset();
+    auth.startGoogle.mockResolvedValue({ ok: true });
+  });
+  afterEach(cleanup);
+
+  it('진행이 없으면 확인 없이 바로 구글 로그인을 시작한다', async () => {
+    const p = setup(false, 'nothing');
+    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledWith('sign-in', 'sign-in'));
+    expect(p.askOverwrite).not.toHaveBeenCalled();
+    expect(p.reopenAccount).not.toHaveBeenCalled();
+  });
+
+  it('진행이 있으면 확인을 묻는다', async () => {
+    const p = setup(true, 'some');
+    await waitFor(() => expect(p.askOverwrite).toHaveBeenCalledTimes(1));
+  });
+
+  it('상태를 읽는 동안은 결정하지 않고, 읽은 결과가 진행 없음이면 확인 없이 시작한다', async () => {
+    const p = setup(false, 'reading');
+    await new Promise(r => setTimeout(r, 20));
+    expect(p.askOverwrite).not.toHaveBeenCalled();
+    expect(auth.startGoogle).not.toHaveBeenCalled();
+    p.rerender('nothing');
+    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    expect(p.askOverwrite).not.toHaveBeenCalled();
+  });
+
+  it('상태를 읽는 동안 기다리다 진행이 있다고 읽히면 확인을 묻는다', async () => {
+    const p = setup(true, 'reading');
+    p.rerender('some');
+    await waitFor(() => expect(p.askOverwrite).toHaveBeenCalledTimes(1));
+  });
+
+  it('판정이 바뀌어도 한 번만 처리한다', async () => {
+    const p = setup(true, 'nothing');
+    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    p.rerender('some');
+    p.rerender('nothing');
+    await new Promise(r => setTimeout(r, 20));
+    expect(auth.startGoogle).toHaveBeenCalledTimes(1);
+    expect(p.askOverwrite).not.toHaveBeenCalled();
+  });
+
+  it('확인을 건너뛴 로그인을 시작하지 못하면 기존 실패 안내를 보인다', async () => {
+    auth.startGoogle.mockResolvedValue({ ok: false, msg: '실패' });
+    const p = setup(false, 'nothing');
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+  });
+
+  it('이메일 계정이나 다른 오류 코드는 진행 판정과 관계없이 지금처럼 처리한다', async () => {
+    auth.landing = { tag: 'link-email', error: 'account_already_linked_to_different_user' };
+    const p = setup(false, 'nothing');
+    await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
+    expect(auth.startGoogle).not.toHaveBeenCalled();
   });
 });

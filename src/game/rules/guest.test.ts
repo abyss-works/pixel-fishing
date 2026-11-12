@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ACTION_TYPES } from './actions';
 import type { GameAction } from './actions';
-import { guestActionVerdict } from './guest';
+import { guestActionVerdict, guestHasNoProgress } from './guest';
+import { newState } from './logic';
+import type { GameState } from './logic';
 import { BASE_PACKS } from '../world';
 
 const catchAt = (spot: string) => ({ type: 'catch', spot, judgment: 'good' }) as GameAction;
@@ -88,5 +90,31 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       const expected = pack.region === 'village' ? 'ok' : 'guest-village-only';
       expect(guestActionVerdict(travelTo('base', id)), id).toBe(expected);
     }
+  });
+});
+
+describe('버릴 진행이 없는 게스트 (guestHasNoProgress)', () => {
+  const withDex = (dex: GameState['dex']): GameState => ({ ...newState(), dex });
+
+  it('새 상태는 낚은 적이 없어 버릴 진행이 없다', () => {
+    expect(guestHasNoProgress(newState())).toBe(true);
+  });
+
+  it('한 마리라도 낚았으면 진행이 있다', () => {
+    expect(guestHasNoProgress(withDex({ carp: { normal: { count: 1, maxSize: null, first: '2026-01-01' } } }))).toBe(false);
+  });
+
+  it('여러 어종과 폼의 낚은 수를 합산한다 (변이 폼만 낚은 경우도 진행이다)', () => {
+    expect(guestHasNoProgress(withDex({ carp: { variant: { count: 1, maxSize: 3, first: '2026-01-01' } } }))).toBe(false);
+    expect(guestHasNoProgress(withDex({ carp: {}, trout: {} }))).toBe(true);
+  });
+
+  it('낚은 수가 0인 도감 행만 있으면 진행이 없다', () => {
+    expect(guestHasNoProgress(withDex({ carp: { normal: { count: 0, maxSize: null, first: null } } }))).toBe(true);
+  });
+
+  it('읽을 수 없는 낚은 수는 진행이 있는 것으로 본다', () => {
+    const odd = withDex({ carp: { normal: { count: Number.NaN, maxSize: null, first: null } } });
+    expect(guestHasNoProgress(odd)).toBe(false);
   });
 });

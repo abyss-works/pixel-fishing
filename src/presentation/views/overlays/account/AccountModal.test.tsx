@@ -22,6 +22,7 @@ vi.mock('../../../../features/account/service/useLoginMethod', () => ({
 }));
 
 import AccountModal from './AccountModal';
+import type { GuestProgress } from '../../../../features/account/model/accountRules';
 
 beforeEach(() => {
   actions.connectGoogle.mockReset();
@@ -34,12 +35,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const open = (account: string | null, method: typeof actions.method) => {
+const open = (account: string | null, method: typeof actions.method, guestProgress: GuestProgress = 'some') => {
   actions.method = method;
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} />);
+  render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} guestProgress={guestProgress} />);
   return { setToast, onAuthChanged, onClose };
 };
 
@@ -111,6 +112,29 @@ describe('게스트가 이메일 계정으로 로그인', () => {
     fireEvent.click(dialog.querySelector('[aria-label="닫기"]') as HTMLElement);
     await waitFor(() => expect(screen.queryByText('지금 게스트 진행은 사라져요.')).toBeNull());
     expect(actions.signInAccount).not.toHaveBeenCalled();
+  });
+
+  it('버릴 진행이 없는 게스트는 확인 없이 바로 로그인을 요청한다', async () => {
+    const { onAuthChanged, onClose } = open(null, 'guest', 'nothing');
+    fill();
+    await waitFor(() => expect(actions.signInAccount).toHaveBeenCalledWith('old@example.com', 'secret1'));
+    expect(screen.queryByText('지금 게스트 진행은 사라져요.')).toBeNull();
+    await waitFor(() => expect(onAuthChanged).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('세이브를 읽는 중이면 진행이 있는 것으로 보아 확인을 띄운다', async () => {
+    open(null, 'guest', 'reading');
+    fill();
+    expect(await screen.findByText('지금 게스트 진행은 사라져요.')).toBeInTheDocument();
+    expect(actions.signInAccount).not.toHaveBeenCalled();
+  });
+
+  it('확인을 건너뛴 로그인이 실패하면 폼 안의 실패 안내가 뜬다', async () => {
+    actions.signInAccount.mockResolvedValue({ ok: false, msg: 'x', code: 'invalid_credentials' });
+    open(null, 'guest', 'nothing');
+    fill();
+    expect(await screen.findByText('이메일로는 새 계정을 만들 수 없어요.')).toBeInTheDocument();
   });
 
   it('입력이 비어 있으면 확인 없이 경고한다', async () => {

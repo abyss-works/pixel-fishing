@@ -2,6 +2,7 @@
 // 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
 // 거부 사유는 코드로 돌려준다. 화면은 코드로 안내를 고른다.
 import type { GameAction } from './actions.js';
+import type { GameState } from './logic.js';
 import { spotById } from '../content/spots.js';
 import { BASE_REGION } from '../content/places.js';
 
@@ -35,4 +36,16 @@ export function guestActionVerdict(action: GameAction): GuestVerdict {
   if (action.type === 'travel') return inVillage(action.to) ? 'ok' : 'guest-village-only';
   if (action.type === 'catch') return spotById(action.spot)?.region === 'village' ? 'ok' : 'guest-village-only';
   return 'account-only';
+}
+
+/**
+ * 버릴 진행이 없는 게스트인가. 기준은 누적 낚은 수(도감의 모든 종과 폼의 낚은 수 합) 0이다.
+ * 합이 숫자로 읽히지 않으면 진행이 있는 것으로 본다.
+ */
+export function guestHasNoProgress(state: GameState): boolean {
+  let caught = 0;
+  for (const forms of Object.values(state.dex)) {
+    for (const record of Object.values(forms)) caught += record?.count ?? 0;
+  }
+  return caught === 0;
 }
