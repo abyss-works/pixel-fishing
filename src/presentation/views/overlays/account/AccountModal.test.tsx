@@ -162,6 +162,19 @@ describe('게스트가 이메일 계정으로 로그인', () => {
     await waitFor(() => expect(actions.signInAccount).toHaveBeenCalledTimes(1));
   });
 
+  it('다시 읽는 동안에는 폼을 접는 줄이 눌리지 않는다', async () => {
+    let finish: (progress: GuestProgress) => void = () => {};
+    actions.recheck.mockReturnValue(new Promise<GuestProgress>(resolve => { finish = resolve; }));
+    open(null, 'guest', 'nothing');
+    fill();
+    const toggle = screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' }) as HTMLButtonElement;
+    await waitFor(() => expect(toggle.disabled).toBe(true));
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('이메일')).not.toBeNull();
+    finish('nothing');
+    await waitFor(() => expect(actions.signInAccount).toHaveBeenCalledTimes(1));
+  });
+
   it('다시 읽는 사이 창을 닫으면 로그인하지 않는다', async () => {
     let finish: (progress: GuestProgress) => void = () => {};
     actions.recheck.mockReturnValue(new Promise<GuestProgress>(resolve => { finish = resolve; }));

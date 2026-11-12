@@ -186,7 +186,7 @@ export default function AccountModal({
           </Note>
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
           <div className="text-center">
-            <TextLinkButton open={formOpen} onClick={() => { setFormOpen(o => !o); setSignInError([]); }}>기존 이메일 계정으로 로그인</TextLinkButton>
+            <TextLinkButton open={formOpen} disabled={busy} onClick={() => { setFormOpen(o => !o); setSignInError([]); }}>기존 이메일 계정으로 로그인</TextLinkButton>
           </div>
           {formOpen && emailForm}
         </>
