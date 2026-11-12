@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Badge from './Badge';
 import Frame from './Frame';
 
-// 상세 머리 — 무엇이 되나/무엇을 사나. 큰 그림 + 이름 + 꼬리표(단계·해금·보유 등). 그림이 아직 없는 항목(요리)은 그림 없이 이름과 꼬리표만 둔다.
+// 상세 머리 — 무엇이 되나/무엇을 사나. 큰 그림 + 이름 + 꼬리표(단계·해금·보유 등). 그림이 없는 항목은 그림 없이 이름과 꼬리표만 둔다.
 // 정비 패널·상점처럼 2열 상세(TwoColumn)의 오른쪽 맨 위에 둔다.
 export default function HeroHeader({ sprite, title, tags }: { sprite?: ReactNode; title: string; tags: ReactNode[] }) {
   return (

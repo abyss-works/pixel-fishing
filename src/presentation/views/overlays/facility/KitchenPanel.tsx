@@ -4,6 +4,7 @@ import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { recipeLabel, selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import ModalCard from '../../../ui/ModalCard';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
@@ -34,7 +35,8 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
       <Inset className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2 text-sm shrink-0">
         {status.cooking ? (
           <>
-            <span><span className="text-text-dim">조리 중</span> <b>{recipeLabel(status.cooking.recipe)}</b>{' '}
+            <span><span className="text-text-dim">조리 중</span>{' '}
+              <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<b>{recipeLabel(status.cooking.recipe)}</b>{' '}
               <span className="pf-accent">{status.cooking.completed}/{status.cooking.count}</span></span>
             <span className="text-text-dim">다음 완성 <span className="pf-accent text-text">{fmtMinutes(status.cooking.nextInMin)}</span></span>
           </>

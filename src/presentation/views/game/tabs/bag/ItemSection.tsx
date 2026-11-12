@@ -16,7 +16,7 @@ import Locked from '../../../../ui/Locked';
 import Note from '../../../../ui/Note';
 import PageTitle from '../../../../ui/PageTitle';
 import PillButton from '../../../../ui/PillButton';
-import PixelIcon from '../../../../ui/PixelIcon';
+import ItemSprite from '../../../../ui/ItemSprite';
 import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import Subheading from '../../../../ui/Subheading';
 import Tip from '../../../../ui/Tip';
@@ -58,8 +58,7 @@ function ItemRows({ title, hint, rows, busy, onEat }: {
       <Frame divided>
         {rows.map(row => (
           <div key={row.recipe.id} className="grid grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1.5 text-sm">
-            <PixelIcon glyph={row.slot === 'lunch' ? 'lunch' : 'bait'} size={12}
-                       className={row.slot === 'lunch' ? 'text-gold' : 'text-accent'} />
+            <ItemSprite kind={row.slot} id={row.recipe.id} preset="row" />
             <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />} className="block justify-self-start truncate max-w-full">
               {row.label}
             </Tip>
