@@ -103,6 +103,8 @@ export async function signInWithEmail(email: string, password: string): Promise<
 
 /** 구글 인증에서 돌아온 주소를 알아보는 질의 이름 */
 export const GOOGLE_RETURN_PARAM = 'google';
+/** 이 기기의 이 탭에서 구글 인증을 시작했다는 표지를 담는 세션 저장소 키. 다른 곳에서 만든 복귀 주소를 처리하지 않기 위해서다 */
+const GOOGLE_FLOW_KEY = 'pf-google-flow';
 const GOOGLE_ENDPOINT = { link: '/link-social', 'sign-in': '/sign-in/social' } as const;
 
 /** 연결(link) 또는 확인 뒤 로그인(sign-in). 표지(tag)는 돌아온 주소에 실려 돌아온다 */
@@ -135,16 +137,23 @@ export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<
   });
   if (error) return authErr(error);
   if (!data?.url) return { ok: false, msg: '구글 인증 주소를 받지 못했어요.' };
+  sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);
   window.location.assign(data.url);
   return { ok: true };
 }
 
-/** 구글 인증에서 돌아왔는가. 부팅 때 한 번 읽고, 두 질의는 주소에서 바로 지운다(새로고침으로 다시 읽히지 않게) */
+/**
+ * 구글 인증에서 돌아왔는가. 부팅 때 한 번 읽고, 두 질의는 주소에서 바로 지운다(새로고침으로 다시 읽히지 않게).
+ * 이 기기에서 시작한 흐름(시작할 때 남긴 표지와 같은 표지)에만 반응하고, 아니면 질의만 지우고 무시한다.
+ */
 export function takeGoogleLanding(): { tag: string; error: string | null } | null {
   if (!authClient) return null;
   const landing = parseGoogleLanding(window.location.search);
   if (!landing) return null;
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${landing.rest}${window.location.hash}`);
+  const started = sessionStorage.getItem(GOOGLE_FLOW_KEY);
+  sessionStorage.removeItem(GOOGLE_FLOW_KEY);
+  if (started !== landing.tag) return null;
   return { tag: landing.tag, error: landing.error };
 }
 

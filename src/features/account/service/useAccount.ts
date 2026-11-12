@@ -6,8 +6,8 @@ import type { GameState } from '../../../game/rules/logic';
 import { setSessionUid, useSession } from './session';
 import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
-// 계정 상태 (v0.4.0) — 표시 이메일 · 로그인(계정 교체) 처리 ·
-// 비밀번호 재설정 착지 · 가입 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
+// 계정 상태 - 표시 이메일 · 이메일 계정 로그인(계정 교체) 처리 ·
+// 비밀번호 재설정 착지 · 계정 연결 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
@@ -39,10 +39,10 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     identifyUser(session.uid); // uid만 — PII 미전송
   }, [session.ready, session.uid]);
 
-  // 로그인/가입 직후 — 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
+  // 이메일 계정으로 로그인한 직후 - 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
   // 서버는 접속(boot)한 창을 계정의 활성 창으로 삼으므로, 교체한 계정에도 접속을 보내야 이 창의 액션이 거부되지 않는다.
-  // 승격(가입)은 uid 불변이라 스킵 — 갓 승격한 게스트는 서버가 아직 비어 있을 수 있어서
-  // 상태를 다시 읽으면 로컬 진행이 새 상태로 덮인다 (v0.4.0 구조 원칙: 가입 = 승격이지 이전이 아니다).
+  // uid가 그대로면(같은 계정의 표시 갱신) 서버 상태를 다시 읽지 않는다. 구글 연결과 구글 로그인은 인증 화면을 다녀오는 전체 페이지 이동이라
+  // 이 함수를 거치지 않고, 돌아온 부팅이 새 세션으로 계정과 진행을 읽는다.
   const onAuthChanged = async () => {
     setAccount(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();

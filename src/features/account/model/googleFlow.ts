@@ -22,7 +22,8 @@ export function loginMethodOf(account: string | null, providers: string[] | null
 }
 
 export type GoogleOutcome =
-  | { kind: 'toast'; text: string; tone: 'info' | 'warn' }
+  /** afterLoad가 참이면 새 계정의 진행을 불러온 뒤에 띄운다 */
+  | { kind: 'toast'; text: string; tone: 'info' | 'warn'; afterLoad?: boolean }
   /** 진행이 있는 다른 구글 계정으로 덮어쓸지 묻는다 */
   | { kind: 'overwrite' }
   | { kind: 'notice'; title: string; body: string };
@@ -41,15 +42,16 @@ export const OVERWRITE_COPY = {
 export const overwriteCanceledText = '연결하지 않았어요. 다른 구글 계정으로 연결해 보세요.';
 
 /** 구글 인증 화면을 열지 못했을 때의 알림 */
-export const googleStartFailedText = '구글 인증 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+export const googleStartFailedText = '구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 
-const FAIL_TITLE = '구글 계정을 연결하지 못했어요';
+const FAIL_TITLE = '구글 계정 연결';
 
 const NOTICE_BODY = {
-  linkedElsewhere: '이 구글 계정은 이미 다른 계정에 연결돼 있어요.\n다른 구글 계정으로 연결해 주세요.\n계속 연결되지 않으면 개발자에게 문의해 주세요.',
-  emailAccountExists: '이 구글 계정의 이메일로 만든 이메일 계정이 이미 있어요.\n그 이메일 계정으로 로그인한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
-  alreadyConnected: '이미 구글 계정이 연결된 계정이에요.\n다른 구글 계정은 더 연결할 수 없어요.',
+  linkedElsewhere: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
+  emailAccountExists: '이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.',
+  alreadyConnected: '고른 구글 계정은 연결하지 않았어요.\n이 계정에는 이미 다른 구글 계정이 연결돼 있어요.',
   signupDisabled: '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
+  unableToLink: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
 } as const;
 
 const notice = (body: string): GoogleOutcome => ({ kind: 'notice', title: FAIL_TITLE, body });
@@ -57,9 +59,10 @@ const notice = (body: string): GoogleOutcome => ({ kind: 'notice', title: FAIL_T
 /** 구글 인증에서 돌아온 결과를 화면 반응으로 바꾼다. 우리가 붙인 표지가 아니면 null이다 */
 export function googleOutcome({ tag, error }: { tag: string; error: string | null }): GoogleOutcome | null {
   if (tag !== GOOGLE_TAG.linkGuest && tag !== GOOGLE_TAG.linkEmail && tag !== GOOGLE_TAG.signIn) return null;
+  const signIn = tag === GOOGLE_TAG.signIn;
 
   if (!error) {
-    if (tag === GOOGLE_TAG.signIn) return { kind: 'toast', tone: 'info', text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' };
+    if (signIn) return { kind: 'toast', tone: 'info', afterLoad: true, text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' };
     return {
       kind: 'toast', tone: 'info',
       text: tag === GOOGLE_TAG.linkGuest
@@ -74,11 +77,17 @@ export function googleOutcome({ tag, error }: { tag: string; error: string | nul
   if (error === 'email_account_exists' || error === 'account_not_linked') return notice(NOTICE_BODY.emailAccountExists);
   if (error === 'google_already_connected') return notice(NOTICE_BODY.alreadyConnected);
   if (error === 'signup_disabled') return notice(NOTICE_BODY.signupDisabled);
+  if (error === 'unable_to_link_account') return notice(NOTICE_BODY.unableToLink);
 
+  // 구글 화면에서 취소하고 돌아온 경우와 원인을 모르는 실패를 나눈다
+  if (error === 'access_denied') {
+    return {
+      kind: 'toast', tone: 'info',
+      text: signIn ? '구글 계정으로 로그인하지 않았어요.' : '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.',
+    };
+  }
   return {
     kind: 'toast', tone: 'warn',
-    text: tag === GOOGLE_TAG.signIn
-      ? '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.'
-      : '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.',
+    text: signIn ? '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.' : '구글 계정을 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
   };
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GOOGLE_TAG, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
 
 const back = (tag: string, error: string | null = null) => googleOutcome({ tag, error });
+const bodyOf = (o: ReturnType<typeof back>) => (o as { body: string }).body;
 
 describe('로그인 방식', () => {
   it('이메일이 없는 계정은 게스트다', () => {
@@ -34,44 +35,61 @@ describe('구글 연결 복귀', () => {
     expect(back(GOOGLE_TAG.linkGuest, 'account_already_linked_to_different_user')).toEqual({ kind: 'overwrite' });
   });
 
-  it('이메일 계정이 같은 코드를 받으면 확인 없이 다른 구글 계정과 문의 안내를 보인다', () => {
-    const out = back(GOOGLE_TAG.linkEmail, 'account_already_linked_to_different_user');
-    expect(out).toMatchObject({ kind: 'notice' });
-    expect(out).not.toEqual({ kind: 'overwrite' });
+  it('이메일 계정이 같은 코드를 받으면 확인 없이 다른 구글 계정 안내와 문의 줄을 보인다', () => {
+    expect(back(GOOGLE_TAG.linkEmail, 'account_already_linked_to_different_user')).toEqual({
+      kind: 'notice', title: '구글 계정 연결',
+      body: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
+    });
   });
 
-  it.each(['email_account_exists', 'account_not_linked'])('%s는 이메일로 로그인한 뒤 계정 관리에서 연결하라는 안내다', code => {
-    const out = back(GOOGLE_TAG.linkGuest, code);
-    expect(out).toMatchObject({ kind: 'notice' });
-    expect((out as { body: string }).body).toContain('계정 관리');
+  it.each([GOOGLE_TAG.linkGuest, GOOGLE_TAG.linkEmail])('unable_to_link_account는 %s에서도 안내 창이다', tag => {
+    expect(back(tag, 'unable_to_link_account')).toEqual({
+      kind: 'notice', title: '구글 계정 연결',
+      body: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
+    });
+  });
+
+  it.each(['email_account_exists', 'account_not_linked'])('%s는 이메일 계정으로 로그인한 뒤 연결하라는 안내다', code => {
+    expect(bodyOf(back(GOOGLE_TAG.linkGuest, code))).toBe(
+      '이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.');
   });
 
   it('이미 구글을 연결한 계정이 다른 구글을 고르면 안내한다', () => {
-    expect(back(GOOGLE_TAG.linkEmail, 'google_already_connected')).toMatchObject({ kind: 'notice' });
+    expect(bodyOf(back(GOOGLE_TAG.linkEmail, 'google_already_connected'))).toBe(
+      '고른 구글 계정은 연결하지 않았어요.\n이 계정에는 이미 다른 구글 계정이 연결돼 있어요.');
   });
 
   it('연결한 적 없는 구글로 로그인을 시도한 코드도 안내한다', () => {
-    expect(back(GOOGLE_TAG.signIn, 'signup_disabled')).toMatchObject({ kind: 'notice' });
+    expect(bodyOf(back(GOOGLE_TAG.signIn, 'signup_disabled'))).toBe(
+      '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.');
   });
 
   it('코드마다 안내 본문이 서로 다르다', () => {
-    const codes = ['account_already_linked_to_different_user', 'email_account_exists', 'google_already_connected', 'signup_disabled'];
-    const bodies = codes.map(c => (back(GOOGLE_TAG.linkEmail, c) as { body: string }).body);
+    const codes = ['account_already_linked_to_different_user', 'email_account_exists', 'google_already_connected', 'signup_disabled', 'unable_to_link_account'];
+    const bodies = codes.map(c => bodyOf(back(GOOGLE_TAG.linkEmail, c)));
     expect(new Set(bodies).size).toBe(codes.length);
   });
 
-  it('알 수 없는 코드는 연결하지 않았다는 알림이다 (구글 화면에서 취소한 경우를 포함한다)', () => {
-    expect(back(GOOGLE_TAG.linkGuest, 'access_denied')).toEqual({ kind: 'toast', tone: 'warn', text: '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.' });
+  it('구글 화면에서 취소하고 돌아오면 정보 알림이다', () => {
+    expect(back(GOOGLE_TAG.linkGuest, 'access_denied')).toEqual({ kind: 'toast', tone: 'info', text: '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.' });
+  });
+
+  it('원인을 모르는 연결 실패는 경고 알림이다', () => {
+    expect(back(GOOGLE_TAG.linkEmail, 'internal_server_error')).toEqual({ kind: 'toast', tone: 'warn', text: '구글 계정을 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.' });
   });
 });
 
 describe('구글 로그인 복귀', () => {
-  it('성공하면 그 계정의 진행을 불러왔다는 알림이다', () => {
-    expect(back(GOOGLE_TAG.signIn)).toEqual({ kind: 'toast', tone: 'info', text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' });
+  it('성공 알림은 진행을 불러온 뒤에 띄운다', () => {
+    expect(back(GOOGLE_TAG.signIn)).toEqual({ kind: 'toast', tone: 'info', afterLoad: true, text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' });
   });
 
-  it('알 수 없는 코드는 로그인하지 못했다는 경고다', () => {
-    expect(back(GOOGLE_TAG.signIn, 'access_denied')).toMatchObject({ kind: 'toast', tone: 'warn' });
+  it('구글 화면에서 취소하면 로그인하지 않았다는 정보 알림이다', () => {
+    expect(back(GOOGLE_TAG.signIn, 'access_denied')).toEqual({ kind: 'toast', tone: 'info', text: '구글 계정으로 로그인하지 않았어요.' });
+  });
+
+  it('원인을 모르는 실패는 경고 알림이다', () => {
+    expect(back(GOOGLE_TAG.signIn, 'internal_server_error')).toEqual({ kind: 'toast', tone: 'warn', text: '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.' });
   });
 });
 
