@@ -1,6 +1,7 @@
 // 대상별 스프라이트 정의 — 격자 크기·안전 여백·표시 프리셋·팔레트 방식·상태 행·움직임을 한 곳에 둔다.
 // 생성 도구, 검사, 검수 시트, 에디터, 화면 컴포넌트가 이 정의를 함께 읽는다.
-// 새 대상은 SPRITE_TARGETS에 한 행을 더하고 원화 PNG 폴더를 두면 된다. 대상 종류 목록은 그 키에서 유도한다.
+// 새 대상은 SPRITE_TARGETS에 한 행을 더하고 원화 PNG 폴더를 둔다. 대상 종류 목록은 그 키에서 유도한다.
+// 이어서 모든 격자 규칙 테스트의 격자 표에 그 대상의 행을 더하고, 에디터용 대상 정의 스크립트를 생성기로 다시 만든다.
 
 export interface SpriteGrid { w: number; h: number }
 /** 표시 프리셋 — 캔버스 크기와 정수 배율 */
@@ -16,6 +17,8 @@ export interface SpriteLayout {
 export interface SpriteTarget {
   /** SPRITE_TARGETS의 키와 같다 */
   kind: string;
+  /** 생성 파일 머리 주석에서 id를 부르는 이름. 없으면 id */
+  idLabel?: string;
   /** 격자와 표시 배율. null이면 아직 정해지지 않은 대상이라 생성 도구가 거부한다 */
   layout: SpriteLayout | null;
   /** per-sprite: 원화마다 고유 팔레트(원화 PNG 색 그대로). shared: 대상 전체가 공용 팔레트를 쓰는 코드 생성 대상 */
@@ -39,6 +42,7 @@ const SHIP_PRESETS = gridPresets(GRID_32X16, { thumb: 1, row: 2, hero: 3 });
 export const SPRITE_TARGETS = {
   fish: {
     kind: 'fish',
+    idLabel: '어종 id',
     layout: {
       grid: GRID_32X16,
       margin: 2,

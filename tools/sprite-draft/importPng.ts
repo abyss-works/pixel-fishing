@@ -45,9 +45,6 @@ function convert(file: string): Converted {
   return { key: basename(file, '.png'), w, h, palette, rows };
 }
 
-/** 생성 파일 머리 주석에서 id를 부르는 이름. 없으면 id */
-const ID_LABEL: Record<string, string> = { fish: '어종 id' };
-
 export interface ImportResult { source: string; count: number; maxColors: number }
 
 /** `dir`의 `<id>.png`(상태에 variant가 있는 대상은 `<id>.variant.png`도)를 읽어 생성 파일 원문을 만든다. preview-*.png는 건너뛴다.
@@ -71,7 +68,7 @@ export function importTarget(target: SpriteTarget, dir: string): ImportResult {
     const rows = s.rows.map(r => `      '${r}',`).join('\n');
     return `  '${s.key}': {\n    w: ${s.w}, h: ${s.h},\n    palette: [${pal}],\n    frames: [[\n${rows}\n    ]],\n  },`;
   });
-  const id = ID_LABEL[target.kind] ?? 'id';
+  const id = target.idLabel ?? 'id';
   const keys = target.states.includes('variant') ? `키는 "<${id}>" 와 "<${id}>.variant".` : `키는 "<${id}>".`;
   const source = `// 생성 파일 — 손으로 고치지 않는다. 원화 PNG에서 다시 만들려면:
 //   pnpm exec tsx tools/sprite-draft/import-png.ts ${target.kind}

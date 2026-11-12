@@ -5,6 +5,7 @@ window.SPRITE_EDITOR_DATA = {
   "targets": {
     "fish": {
       "kind": "fish",
+      "idLabel": "어종 id",
       "layout": {
         "grid": {
           "w": 32,
