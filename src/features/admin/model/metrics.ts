@@ -1,6 +1,7 @@
 // 대시보드 순수 유틸 — 날짜 축·포맷·통계 변환. 뷰(Row)를 모른다 — 탭이 계산을 맡기 전
 // 한 번 거치는 결정론적 단계라 단위 테스트로 검증한다.
 // 서버의 todayKST와 같은 KST 하루 기준을 쓴다 — 전원 한국 친구 그룹.
+import { formatEnergy } from '../../../game/content/cooking';
 
 /** 오늘(KST) YYYY-MM-DD — 서버의 todayKST와 같은 공식 */
 export const todayKST = (): string =>
@@ -145,7 +146,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'extractEnergy': {
       const energy = pay.energy !== null && typeof pay.energy === 'object' ? Object.values(pay.energy) : [];
       const total = energy.reduce<number>((sum, n) => sum + (typeof n === 'number' ? n : 0), 0);
-      return `${Array.isArray(pay.uids) ? pay.uids.length : 0}마리 기운 ${total}개`;
+      return `${Array.isArray(pay.uids) ? pay.uids.length : 0}마리 기운 ${formatEnergy(total)}개`;
     }
     case 'cook': {
       const bonus = Number(pay.bonus ?? 0);
