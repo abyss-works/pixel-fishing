@@ -1,16 +1,21 @@
-// 검수 시트 CLI — 기준 원화 몇 종과 신규 원화(일반·변이)를 같은 배율로 나란히 놓은 PNG를 만든다.
-// 사용: npx tsx tools/sprite-draft/review-sheet.ts <out.png> [png 폴더]
-// 칸마다 어종 id를 아래에 적는다. 렌더 규칙은 제품과 같다(어두운 남색 1칸 외곽선, 물색 배경).
+// 검수 시트 CLI — 기준 원화 몇 종과 신규 원화를 같은 배율로 나란히 놓은 PNG를 만든다.
+// 사용: npx tsx tools/sprite-draft/review-sheet.ts <대상 종류> <out.png> --ref a,b,c --ids x,y [--dir png 폴더]
+// 기준 id(--ref)와 후보 id(--ids)는 인자로 받는다. 격자 크기와 배율은 대상 정의에서 읽고,
+// 상태에 variant가 있는 대상은 일반 행 아래에 변이 행을 둔다. 칸마다 id를 아래에 적는다.
+// 렌더 규칙은 제품과 같다(어두운 남색 1칸 외곽선, 물색 배경).
+// 물고기 기준 id 예: --ref carp,clownfish,blueshark,butterflyfish,goldfish,skipjack,hammerhead,flyingfish
+// (소형어, 상어, 다랑어, 관상어, 날치 등 생물군을 고르게 둔 기준 원화)
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
+import { OUTLINE_DARK } from '../../src/game/content/sprites/common';
+import { definedLayout, presetScales } from '../../src/game/content/sprites/targets';
 import { Bitmap } from './png';
-import { CANDIDATE_IDS, gridFromPng } from './styleMetrics';
+import { flagValue, idList, targetOf } from './cliArgs';
+import { pngDir } from './importPng';
+import { gridFromPng } from './styleMetrics';
 
-/** 화풍 비교용 기준 원화. 소형어·상어·다랑어·관상어·날치 등 생물군을 고르게 둔다. */
-const REFERENCE = ['carp', 'clownfish', 'blueshark', 'butterflyfish', 'goldfish', 'skipjack', 'hammerhead', 'flyingfish'];
-const COLS = 9, SCALE = 6, PAD = 1, LABEL_H = 14;
-const BG = '#2a3f63', OUTLINE = '#182540', TEXT = '#e8eef7';
+const COLS = 9, PAD = 1, LABEL_H = 14;
+const BG = '#2a3f63', OUTLINE = OUTLINE_DARK, TEXT = '#e8eef7';
 
 // 3×5 글꼴: 문자마다 15비트(행 우선, 위 왼쪽이 최상위)
 const FONT: Record<string, string> = {
@@ -32,19 +37,29 @@ function text(bmp: Bitmap, s: string, x: number, y: number): void {
   }
 }
 
-const [, , outArg, dirArg] = process.argv;
-if (!outArg) { console.error('usage: review-sheet.ts <out.png> [png dir]'); process.exit(1); }
-const dir = resolve(dirArg ?? join(dirname(fileURLToPath(import.meta.url)), 'png/fish'));
+const args = process.argv.slice(2);
+const [kindArg, outArg] = args;
+if (!outArg) { console.error('usage: review-sheet.ts <kind> <out.png> --ref a,b,c --ids x,y [--dir png dir]'); process.exit(1); }
+const target = targetOf(kindArg);
+if (target.palette !== 'per-sprite') throw new Error(`${target.kind}: PNG 원화가 없는 코드 생성 대상입니다`);
+const layout = definedLayout(target);
+const cellGrid = layout.grid;
+const scales = presetScales(layout);
+const SCALE = scales[scales.length - 1];
+const REFERENCE = idList(flagValue(args, '--ref'), '--ref');
+const CANDIDATES = idList(flagValue(args, '--ids'), '--ids');
+const dir = resolve(flagValue(args, '--dir') ?? pngDir(target.kind));
+const hasVariant = target.states.includes('variant');
 
 const chunk = <T>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, (i + 1) * n));
 const rows: { label: string; keys: (string | null)[] }[] = [];
 const variantOf = (id: string) => (existsSync(join(dir, `${id}.variant.png`)) ? `${id}.variant` : null);
-for (const group of [REFERENCE, ...chunk(CANDIDATE_IDS, COLS)]) {
+for (const group of [REFERENCE, ...chunk(CANDIDATES, COLS)]) {
   rows.push({ label: 'n', keys: group });
-  rows.push({ label: 'v', keys: group.map(variantOf) });
+  if (hasVariant) rows.push({ label: 'v', keys: group.map(variantOf) });
 }
 
-const cw = (32 + PAD * 2) * SCALE, ch = (16 + PAD * 2) * SCALE + LABEL_H;
+const cw = (cellGrid.w + PAD * 2) * SCALE, ch = (cellGrid.h + PAD * 2) * SCALE + LABEL_H;
 const bmp = new Bitmap(COLS * cw, rows.length * ch);
 bmp.fill(0, 0, bmp.w, bmp.h, BG);
 rows.forEach((row, ri) => row.keys.forEach((key, ci) => {
@@ -57,7 +72,7 @@ rows.forEach((row, ri) => row.keys.forEach((key, ci) => {
     if (c) bmp.fill(ox + x * SCALE, oy + y * SCALE, SCALE, SCALE, c);
     else if (op(x - 1, y) || op(x + 1, y) || op(x, y - 1) || op(x, y + 1)) bmp.fill(ox + x * SCALE, oy + y * SCALE, SCALE, SCALE, OUTLINE);
   }
-  if (row.label === 'n') text(bmp, key, ci * cw + 4, ri * ch + (16 + PAD * 2) * SCALE + 1);
+  if (row.label === 'n') text(bmp, key, ci * cw + 4, ri * ch + (cellGrid.h + PAD * 2) * SCALE + 1);
 }));
 writeFileSync(resolve(outArg), bmp.png());
 console.log(`${rows.length} 행 → ${resolve(outArg)}`);

@@ -1,21 +1,23 @@
 // 원화 화풍 검사 CLI — 기존 원화 집합의 지표 분포와 합격선을 출력하고, 후보 원화(일반·변이)를 판정한다.
-// 사용: npx tsx tools/sprite-draft/style-check.ts [png 폴더] [--ids a,b,c]
-// 기본 폴더는 tools/sprite-draft/png/fish, 기본 후보는 남대서양 신규 어종. 후보를 뺀 일반 폼 전부가 기준 집합이다.
+// 사용: npx tsx tools/sprite-draft/style-check.ts --ids a,b,c [png 폴더]
+// 물고기 전용 검사다. 후보 id는 인자로 받고, 후보를 뺀 일반 폼 전부가 기준 집합이다.
+// 기본 폴더는 tools/sprite-draft/png/fish.
 // 하나라도 탈락하면 종료 코드 1.
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
+import { flagValue, idList } from './cliArgs';
+import { pngDir } from './importPng';
 import {
-  CANDIDATE_IDS, LOWER_BOUND, RANGE_BOUND, UPPER_BOUND,
+  LOWER_BOUND, RANGE_BOUND, UPPER_BOUND,
   buildCriteria, judgeSet, judgeSprite, measure, readSpriteDir,
 } from './styleMetrics';
 import type { Metrics } from './styleMetrics';
 
 const args = process.argv.slice(2);
+const ids = idList(flagValue(args, '--ids'), '--ids');
 const idsIdx = args.indexOf('--ids');
-const ids = idsIdx >= 0 ? args[idsIdx + 1].split(',') : CANDIDATE_IDS;
 const dirArg = args.find((a, i) => !a.startsWith('--') && i !== idsIdx + 1);
-const dir = resolve(dirArg ?? join(dirname(fileURLToPath(import.meta.url)), 'png/fish'));
+const dir = resolve(dirArg ?? pngDir('fish'));
 
 const ref = readSpriteDir(dir, new Set(ids));
 const criteria = buildCriteria(ref.map(r => measure(r.grid)));

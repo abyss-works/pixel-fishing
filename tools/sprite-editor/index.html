@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>스프라이트 에디터</title>
 <!--
-  어종 스프라이트 에디터 — 브라우저에서 이 파일을 직접 연다(의존성·서버 없음).
-  격자를 그리고 팔레트 슬롯을 정한 뒤 "TS 내보내기"를 src/game/content/sprites/fishSprites.ts 에 붙여 넣는다.
-  원화 PNG(tools/sprite-draft/png/fish)를 고쳐 import-png로 다시 가져오는 쪽이 정석이고, 이 에디터는 격자만 손볼 때 쓴다.
+  스프라이트 에디터 — 브라우저에서 이 파일을 직접 연다(서버 없음, 같은 폴더의 생성된 대상 정의 스크립트를 불러온다).
+  대상 종류를 고르면 기본 격자 크기, 표시 프리셋 배율, 상태 미리보기, 내보내기 대상이 대상 정의에 따라 바뀐다.
+  대상 정의의 정본은 게임 콘텐츠의 대상별 스프라이트 정의이고, 불러오는 스크립트는 그 사본이다(정의가 바뀌면 에디터용 스크립트 생성기로 다시 만든다).
+  물고기는 격자를 그리고 팔레트 슬롯을 정한 뒤 "TS 내보내기"를 src/game/content/sprites/fishSprites.ts 에 붙여 넣는다.
+  그 밖의 대상은 "PNG 받기"로 받은 원화를 tools/sprite-draft/png/<대상>/ 에 두고 import-png로 가져온다.
+  원화 PNG를 고쳐 import-png로 다시 가져오는 쪽이 정석이고, 이 에디터는 격자만 손볼 때 쓴다.
   미리보기의 shade·윤곽·열 흔들기 계산은 제품 렌더러(shared/lib/color.ts, rendering/pixel/sprite.ts)와 같은 식이다.
   두 곳이 어긋나면 제품이 정본이다.
 -->
@@ -41,8 +44,12 @@
 <div class="row">
   <div class="panel">
     <div class="row" style="gap:8px; align-items:center">
-      <label>w <input id="w" type="number" min="4" max="64" value="32"></label>
-      <label>h <input id="h" type="number" min="4" max="64" value="16"></label>
+      <label>대상 <select id="kind"></select></label>
+      <span id="layoutHint" class="hint"></span>
+    </div>
+    <div class="row" style="gap:8px; align-items:center">
+      <label>w <input id="w" type="number" min="4" max="64"></label>
+      <label>h <input id="h" type="number" min="4" max="64"></label>
       <button id="resize">크기 적용</button>
       <button id="clear">비우기</button>
       <button id="flipH">좌우 반전</button>
@@ -58,12 +65,12 @@
       <button id="addHex">+ hex</button>
     </div>
     <label>기준색(일반) <input id="base" type="text" value="#c8a165" size="8"></label>
-    <label>기준색(변이) <input id="base2" type="text" value="#f5c542" size="8"></label>
+    <label id="base2Label">기준색(변이) <input id="base2" type="text" value="#f5c542" size="8"></label>
     <label>윤곽 <select id="outline">
       <option value="">없음(미발견)</option>
       <option value="dark" selected>어두운 윤곽</option>
     </select></label>
-    <label><input id="wobble" type="checkbox" checked> 열 흔들기 미리보기</label>
+    <label id="wobbleLabel"><input id="wobble" type="checkbox" checked> 열 흔들기 미리보기</label>
   </div>
   <div class="panel">
     <label>미리보기</label>
@@ -72,24 +79,28 @@
 </div>
 <div class="row" style="margin-top:16px">
   <div class="panel">
-    <label>TS 내보내기 — 어종 id <input id="fishId" type="text" value="carp" size="12"></label>
+    <label>내보내기 — id <input id="fishId" type="text" value="carp" size="12"></label>
     <textarea id="out" readonly></textarea>
     <button id="copy">복사</button>
+    <button id="savePng">PNG 받기</button>
   </div>
   <div class="panel">
     <label>가져오기 — PixelSprite 객체 리터럴을 붙여 넣는다 ({ w, h, palette, frames })</label>
-    <textarea id="in" placeholder="{ w: 32, h: 16, palette: [{ shade: 1 }, '#000'], frames: [[ '....', ... ]] }"></textarea>
+    <textarea id="in" placeholder="{ w: 가로, h: 세로, palette: [{ shade: 1 }, '#000'], frames: [[ '....', ... ]] }"></textarea>
     <button id="load">불러오기</button>
   </div>
 </div>
 
+<script src="targets.generated.js"></script>
 <script>
+const { outline: OUTLINE_DARK, silhouette: SILHOUETTE, targets: TARGETS } = window.SPRITE_EDITOR_DATA;
 const INDEX_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
 const CELL = 16;
-let W = 32, H = 16;
+let W = TARGETS.fish.layout.grid.w, H = TARGETS.fish.layout.grid.h;
 let cells = Array.from({ length: H }, () => Array(W).fill(null));
 let palette = [{ shade: 1 }, { shade: 0.7 }, { shade: 1.3 }, '#000'];
 let active = 0;
+let target = TARGETS.fish;
 
 // ── 제품과 같은 계산 ──
 function shade(hex, f) {
@@ -116,7 +127,6 @@ function wobble(t, scale) {
   }
   return out;
 }
-const OUTLINE_DARK = '#182540';
 function outlineCells(grid) {
   const opaque = (x, y) => x >= 0 && y >= 0 && x < W && y < H && grid[y][x] !== null;
   const out = [];
@@ -147,6 +157,11 @@ function drawGrid() {
   gctx.strokeStyle = 'rgba(255,255,255,0.08)';
   for (let x = 0; x <= W; x++) { gctx.beginPath(); gctx.moveTo(x * CELL + .5, 0); gctx.lineTo(x * CELL + .5, H * CELL); gctx.stroke(); }
   for (let y = 0; y <= H; y++) { gctx.beginPath(); gctx.moveTo(0, y * CELL + .5); gctx.lineTo(W * CELL, y * CELL + .5); gctx.stroke(); }
+  const m = target.layout ? target.layout.margin : 0;
+  if (m > 0) {
+    gctx.strokeStyle = 'rgba(255,90,90,0.6)';
+    gctx.strokeRect(m * CELL + .5, m * CELL + .5, (W - 2 * m) * CELL, (H - 2 * m) * CELL);
+  }
   gctx.strokeStyle = 'rgba(255,213,79,0.35)';
   gctx.beginPath(); gctx.moveTo(W / 2 * CELL + .5, 0); gctx.lineTo(W / 2 * CELL + .5, H * CELL); gctx.moveTo(0, H / 2 * CELL + .5); gctx.lineTo(W * CELL, H / 2 * CELL + .5); gctx.stroke();
 }
@@ -194,24 +209,27 @@ document.getElementById('addShade').addEventListener('click', () => { palette.pu
 document.getElementById('addHex').addEventListener('click', () => { palette.push('#ffffff'); active = palette.length - 1; refresh(); });
 
 // ── 미리보기 ──
-const PRESETS = [['thumb 1×', 1], ['icon 3×', 3], ['card 4×', 4], ['portrait 6×', 6]];
+// 상태 행 × 표시 프리셋. 상태가 쓰는 색: normal·default는 일반 기준색, variant는 변이 기준색, hidden은 실루엣(윤곽 없음).
+const STATE_LABEL = { normal: '일반', variant: '변이', hidden: '미발견', default: '기본' };
+const STATE_KEY = { normal: 'base', variant: 'base2', hidden: null, default: 'base' };
 const previews = document.getElementById('previews');
 function buildPreviews() {
   previews.innerHTML = '';
-  const forms = [['일반', 'base'], ['변이', 'base2'], ['미발견', null]];
-  for (const [fname, key] of forms) for (const [pname, scale] of PRESETS) {
+  // 배율이 미정인 대상은 값을 지어내지 않고 1×만 보인다.
+  const presets = target.layout ? Object.entries(target.layout.presets).sort((a, b) => a[1].scale - b[1].scale).map(([name, p]) => [`${name} ${p.scale}×`, p.scale]) : [['배율 미정 1×', 1]];
+  for (const state of target.states) for (const [pname, scale] of presets) {
     const fig = document.createElement('figure'); const c = document.createElement('canvas');
-    c.width = W * scale; c.height = H * scale; c.dataset.scale = scale; c.dataset.key = key ?? '';
-    const cap = document.createElement('figcaption'); cap.textContent = `${fname} · ${pname}`;
+    c.width = W * scale; c.height = H * scale; c.dataset.scale = scale; c.dataset.key = STATE_KEY[state] ?? '';
+    const cap = document.createElement('figcaption'); cap.textContent = `${STATE_LABEL[state] ?? state} · ${pname}`;
     fig.append(c, cap); previews.appendChild(fig);
   }
 }
 function paintPreviews(t) {
   const ring = document.getElementById('outline').value || undefined;
-  const wob = document.getElementById('wobble').checked;
+  const wob = target.motion === 'swim' && document.getElementById('wobble').checked;
   for (const c of previews.querySelectorAll('canvas')) {
     const scale = Number(c.dataset.scale), key = c.dataset.key;
-    const colors = key ? palette.map(s => colorOf(s, document.getElementById(key).value)) : palette.map(() => '#22314a');
+    const colors = key ? palette.map(s => colorOf(s, document.getElementById(key).value)) : palette.map(() => SILHOUETTE);
     const img = bake(colors, scale, key ? ring : undefined);
     const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height);
     if (!wob) { ctx.drawImage(img, 0, 0); continue; }
@@ -223,14 +241,39 @@ requestAnimationFrame(function loop(ms) { paintPreviews(ms / 1000); requestAnima
 
 // ── 내보내기 / 가져오기 ──
 function exportTs() {
-  const id = document.getElementById('fishId').value.trim() || 'fish';
+  const id = document.getElementById('fishId').value.trim() || target.kind;
+  const out = document.getElementById('out');
+  const isFish = target.kind === 'fish';
+  const viaPng = target.palette === 'per-sprite' && !isFish;
+  document.getElementById('savePng').style.display = viaPng ? '' : 'none';
+  document.getElementById('copy').style.display = isFish ? '' : 'none';
+  if (target.palette === 'shared') {
+    out.value = `${target.kind}은 공용 팔레트를 쓰는 코드 생성 대상이다.\ntools/sprite-draft/boats/ 의 생성기가 만들며, 이 에디터는 시안 확인용이다.`;
+    return;
+  }
+  if (!isFish) {
+    out.value = `원화 PNG를 tools/sprite-draft/png/${target.kind}/${id}.png 에 두고\npnpm exec tsx tools/sprite-draft/import-png.ts ${target.kind}\n를 실행한다.\n`
+      + (target.layout ? '' : '\n이 대상은 격자 크기가 아직 정해지지 않아 import-png가 거부한다.');
+    return;
+  }
   const pal = palette.map(s => (typeof s === 'string' ? JSON.stringify(s) : `{ shade: ${s.shade} }`)).join(', ');
   const rows = cells.map(row => `      '${row.map(c => (c === null ? '.' : INDEX_CHARS[c])).join('')}',`).join('\n');
-  document.getElementById('out').value =
+  out.value =
     `  ${id}: {\n    w: ${W}, h: ${H},\n    palette: [${pal}],\n    frames: [[\n${rows}\n    ]],\n  },`;
 }
 document.getElementById('copy').addEventListener('click', () => {
   navigator.clipboard?.writeText(document.getElementById('out').value).catch(() => document.getElementById('out').select());
+});
+document.getElementById('savePng').addEventListener('click', () => {
+  const id = document.getElementById('fishId').value.trim() || target.kind;
+  const base = document.getElementById('base').value;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  cells.forEach((row, y) => row.forEach((idx, x) => { if (idx === null) return; ctx.fillStyle = colorOf(palette[idx] ?? '#f0f', base); ctx.fillRect(x, y, 1, 1); }));
+  c.toBlob(blob => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${id}.png`; a.click();
+    URL.revokeObjectURL(a.href);
+  });
 });
 document.getElementById('load').addEventListener('click', () => {
   try {
@@ -252,9 +295,29 @@ document.getElementById('clear').addEventListener('click', () => { cells = cells
 document.getElementById('flipH').addEventListener('click', () => { cells = cells.map(r => r.slice().reverse()); refresh(); });
 for (const id of ['base', 'base2', 'outline', 'fishId']) document.getElementById(id).addEventListener('input', refresh);
 
+// ── 대상 종류 ──
+const kindSel = document.getElementById('kind');
+for (const kind of Object.keys(TARGETS)) kindSel.add(new Option(kind, kind));
+function selectKind(kind) {
+  target = TARGETS[kind];
+  const hint = document.getElementById('layoutHint');
+  if (target.layout) {
+    const nw = target.layout.grid.w, nh = target.layout.grid.h;
+    cells = Array.from({ length: nh }, (_, y) => Array.from({ length: nw }, (_, x) => cells[y]?.[x] ?? null));
+    W = nw; H = nh;
+    document.getElementById('w').value = W; document.getElementById('h').value = H;
+    hint.textContent = `격자 ${W}×${H}, 안전 여백 ${target.layout.margin}칸` + (target.layout.margin > 0 ? '(붉은 선 안쪽)' : '');
+  } else {
+    hint.textContent = '격자 크기와 배율이 아직 정해지지 않았습니다. 크기를 직접 정해 시험할 수 있습니다.';
+  }
+  document.getElementById('base2Label').style.display = target.states.includes('variant') ? '' : 'none';
+  document.getElementById('wobbleLabel').style.display = target.motion === 'swim' ? '' : 'none';
+  buildPreviews(); refresh();
+}
+kindSel.addEventListener('change', () => selectKind(kindSel.value));
+
 function refresh() { drawGrid(); drawSlots(); exportTs(); }
-document.getElementById('h').value = H;
-buildPreviews(); refresh();
+selectKind('fish');
 </script>
 </body>
 </html>

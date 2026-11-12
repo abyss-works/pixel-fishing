@@ -4,13 +4,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { decodePng } from './pngDecode';
 
-/** 남대서양에서 새로 만든 어종. 기준 집합에서 빠지고 검사 대상이 된다. */
-export const CANDIDATE_IDS = [
-  'capeanchovy', 'capejack', 'capehake', 'snoek', 'kingfish', 'sthwrasse', 'sthpuffer',
-  'apollodamsel', 'ascensionangel', 'wahoo', 'galapagosshark', 'nighthake', 'eolgedom', 'bigeye',
-  'adamastor',
-];
-
 export const EYE_DARK = '#0b1322';
 export const EYE_GLINT = '#f8fcff';
 
