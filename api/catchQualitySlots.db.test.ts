@@ -19,7 +19,7 @@ beforeAll(async () => {
     { judgment: 'perfect', size: 12 },
     { judgment: 'perfect', size: 14, bait: 'cook-bait-rare' },
     { judgment: 'auto', size: 16, lunch: 'cook-lunch-rare' },
-    { judgment: 'good', size: 18, bait: 'cook-bait-judge', lunch: 'cook-lunch-bite' },
+    { judgment: 'good', size: 18, bait: 'cook-bait-epic', lunch: 'cook-lunch-bite' },
     { judgment: 'good', size: 20, bait: 'worm' },
   ];
   for (const payload of payloads) {

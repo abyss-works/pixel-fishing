@@ -67,7 +67,7 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(names).toEqual(['가루디야', '민 몰리', '생선 비리야니', '암불 티얄', '생선 탈리']);
   });
 
-  it('미끼 탭은 등급 미끼의 이름 뒤에 등급을 괄호로 붙이고 다른 미끼에는 붙이지 않는다. 판정 칸 값이 정해지기 전의 메이스 미끼는 숨긴다', () => {
+  it('미끼 탭은 등급 미끼의 이름 뒤에 등급을 괄호로 붙이고 다른 미끼에는 붙이지 않는다', () => {
     show(seed());
     fireEvent.click(tab('미끼'));
     const names = within(screen.getByRole('listbox', { name: '미끼 목록' })).getAllByRole('option').map(o => o.querySelector('b')?.textContent);

@@ -208,12 +208,10 @@ export interface ActiveCookEffects {
   mutationWeight: number;
   /** 네임드 조우 가중치 증가율의 합 */
   namedWeight: number;
-  /** GOOD, PERFECT 영역 폭을 넓히는 값(타이밍 바 폭의 퍼센트포인트) */
-  judgeWidth: number;
 }
 
 export const NO_COOK_EFFECTS: ActiveCookEffects = {
-  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, judgeWidth: 0,
+  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0,
 };
 
 /** 그 캐치에 걸린 슬롯과 요리 id. 걸린 슬롯의 키만 둔다 */
@@ -243,7 +241,6 @@ export function slotEffects(state: Pick<GameState, 'slots'>, now: string, judgme
     out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0));
     out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0));
     out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0));
-    out.judgeWidth = clean(out.judgeWidth + (e.judgeWidth ?? 0));
     if (e.rarityWeight) {
       for (const g of e.rarityWeight.grades) {
         out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus);

@@ -166,18 +166,11 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
   };
 }
 
-/** 해역 파워 게이트의 존. 요리(미끼)의 판정 칸 효과는 이미 열린 GOOD, PERFECT 영역의 폭만 넓힌다 —
- *  닫힌 영역(폭 0)을 새로 열지 않는다. 판정 강등(prepareCatchDraw)은 열림 여부만 보므로 이 폭에 영향받지 않는다 */
-export function powerZones(
-  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'judgeWidth'> = NO_COOK_EFFECTS,
-): PowerZone {
+/** 해역 파워 게이트의 존 */
+export function powerZones(state: GameState, spotId: SpotId): PowerZone {
   const power = rodPower(state);
   const req = powerReqOf(spotId);
   const z = zonesFor(power, req);
-  if (cook.judgeWidth > 0) {
-    if (z.yellow > 0) z.yellow = Math.min(100, z.yellow + cook.judgeWidth);
-    if (z.red > 0) z.red = Math.min(z.red + cook.judgeWidth, z.yellow);
-  }
   return { power, req, ...z };
 }
 

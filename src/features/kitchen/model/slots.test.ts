@@ -53,7 +53,7 @@ describe('슬롯의 지금 효과', () => {
   });
 
   it('끝나는 시각이 지났거나 같은 슬롯은 효과가 없다', () => {
-    const slots = { lunch: { id: 'cook-lunch-bite', endsAt: at(0) }, bait: { id: 'cook-bait-judge', endsAt: at(-1) } };
+    const slots = { lunch: { id: 'cook-lunch-bite', endsAt: at(0) }, bait: { id: 'cook-bait-mutation', endsAt: at(-1) } };
     expect(activeSlot(seed({ slots }), 'lunch', T0)).toBeNull();
     expect(activeSlot(seed({ slots }), 'bait', T0)).toBeNull();
   });
@@ -91,11 +91,11 @@ describe('슬롯 칩 표시 조건', () => {
   });
 
   it('해금 뒤에는 효과가 든 슬롯의 칩만 낸다. 순서는 도시락, 미끼다', () => {
-    const both = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-judge', endsAt: at(MIN) } } });
+    const both = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-mutation', endsAt: at(MIN) } } });
     expect(selectSlotChips(both, T0, false).map(c => [c.key, c.state])).toEqual([['lunch', 'active'], ['bait', 'active']]);
     const lunchOnly = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null } });
     expect(selectSlotChips(lunchOnly, T0, false).map(c => c.key)).toEqual(['lunch']);
-    const baitOnly = seed({ slots: { lunch: null, bait: { id: 'cook-bait-judge', endsAt: at(HOUR) } } });
+    const baitOnly = seed({ slots: { lunch: null, bait: { id: 'cook-bait-mutation', endsAt: at(HOUR) } } });
     expect(selectSlotChips(baitOnly, T0, false).map(c => c.key)).toEqual(['bait']);
   });
 
@@ -109,7 +109,7 @@ describe('슬롯 칩 표시 조건', () => {
   });
 
   it('지금 효과의 설명은 그 슬롯 종류의 적용 낚시와 지속 안내를 담는다', () => {
-    const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-judge', endsAt: at(HOUR) } } });
+    const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-mutation', endsAt: at(HOUR) } } });
     const [lunch, bait] = selectSlotChips(game, T0, false);
     expect(lunch.state === 'active' && lunch.note).toContain('방치로 낚을 때만 효과가 있어요.');
     expect(bait.state === 'active' && bait.note).toContain('챔질해서 낚을 때만 효과가 있어요.');

@@ -123,10 +123,8 @@ describe('시간 제한 효과 창', () => {
 });
 
 describe('레시피 표', () => {
-  it('판정 칸 효과 레시피만 빼고 요리 콘텐츠의 레시피를 모두 같은 id로 불러온다', () => {
-    const measured = COOK_RECIPES.filter(r => r.effects.judgeWidth === undefined);
-    expect(RECIPES.map(r => r.id)).toEqual(measured.map(r => r.id));
-    expect(RECIPES.length).toBeLessThan(COOK_RECIPES.length);
+  it('요리 콘텐츠의 레시피를 모두 같은 id로 불러온다', () => {
+    expect(RECIPES.map(r => r.id)).toEqual(COOK_RECIPES.map(r => r.id));
   });
 
   it('이름, 종류, 기운 요구가 요리 콘텐츠와 같다', () => {
@@ -161,7 +159,6 @@ describe('레시피 표', () => {
     expect(effectOf(active({ rarityWeight: { epic: 0.3, legendary: 0.3 } }))).toEqual(fx({ epic: 0.3 }));
     expect(() => effectOf(active({ rarityWeight: { rare: 0.3, legendary: 0.3 } }))).toThrow(/범위/);
     expect(() => effectOf(active({ rarityWeight: { common: 0.3, rare: 0.3, epic: 0.3, legendary: 0.3 } }))).toThrow(/범위/);
-    expect(() => effectOf(active({ judgeWidth: 5 }))).toThrow(/판정 칸/);
   });
 });
 

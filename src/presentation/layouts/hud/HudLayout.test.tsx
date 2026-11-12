@@ -56,7 +56,7 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     expect(kinds()).toEqual(['접속 칩', '시계']);
     unmount();
     render(<HudLayout {...props} scene={region} chips={chip}
-                      game={unlocked({ lunch: null, bait: { id: 'cook-bait-judge', endsAt: HOUR_LATER } })} />);
+                      game={unlocked({ lunch: null, bait: { id: 'cook-bait-mutation', endsAt: HOUR_LATER } })} />);
     expect(kinds()).toEqual(['접속 칩', '미끼 칩', '시계']);
     expect(screen.getByText('1시간')).toBeInTheDocument();
   });

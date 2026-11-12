@@ -210,13 +210,10 @@ describe('받는 보너스', () => {
       expect([bait.autoOnly, bait.manualOnly]).toEqual([false, true]);
     });
 
-    it('끝났거나 비었거나 값이 0인 효과는 줄을 내지 않는다', () => {
+    it('끝났거나 빈 슬롯은 줄을 내지 않는다', () => {
       expect(slotRows(game({}))).toEqual([]);
       const ended = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(0) }, bait: null } });
       expect(slotRows(ended)).toEqual([]);
-      // 판정 칸 미끼는 영역 폭을 넓히는 값이 0이면 효과가 없다
-      const judge = game({ slots: { lunch: null, bait: { id: 'cook-bait-judge', endsAt: at(60_000) } } });
-      expect(slotRows(judge)).toEqual([]);
     });
 
     it('유물과 길드 보너스 줄은 그대로고 슬롯 줄이 그 뒤에 온다', () => {

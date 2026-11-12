@@ -49,14 +49,14 @@ describe('아이템 섹션: 열린 뒤', () => {
   });
 
   it('도시락과 미끼 행은 가진 것만 콘텐츠 순서로, 동작 이름과 슬롯을 갖는다', () => {
-    const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-rare': 4, 'cook-bait-judge': 3 } });
+    const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-rare': 4, 'cook-bait-epic': 3 } });
     const v = selectItemSection(game, T0, false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
       ['가루디야', 2, '먹기', 'lunch'], ['민 몰리', 1, '먹기', 'lunch'],
     ]);
     expect(v.bait.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['메이스 미끼', 3, '쓰기', 'bait'], ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'],
+      ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'], ['큐베브 미끼(영웅)', 3, '쓰기', 'bait'],
     ]);
   });
 
@@ -95,7 +95,7 @@ describe('아이템 섹션: 열린 뒤', () => {
 
 describe('먹기 계획과 교체 확인', () => {
   const lunch = { id: 'cook-lunch-bite', endsAt: at(8 * HOUR + 12 * MIN) };
-  const own = { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-judge': 1 };
+  const own = { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-epic': 1 };
 
   it('슬롯이 비어 있으면 확인 없이 바로 먹는다', () => {
     const plan = planEat(seed({ items: own }), 'cook-lunch-bite', T0);
@@ -123,11 +123,11 @@ describe('먹기 계획과 교체 확인', () => {
 
   it('미끼 슬롯은 미끼 바꾸기이고 쓰기다', () => {
     const bait = { id: 'cook-bait-rare', endsAt: at(24 * MIN) };
-    const plan = planEat(seed({ items: own, slots: { lunch: null, bait } }), 'cook-bait-judge', T0);
+    const plan = planEat(seed({ items: own, slots: { lunch: null, bait } }), 'cook-bait-epic', T0);
     expect(plan.slot).toBe('bait');
     expect(plan.confirm).toMatchObject({
       title: '미끼 바꾸기', confirmLabel: '쓰기',
-      current: { label: '롱페퍼 미끼(희귀)', minutes: 24 }, next: { label: '메이스 미끼', minutes: 30 },
+      current: { label: '롱페퍼 미끼(희귀)', minutes: 24 }, next: { label: '큐베브 미끼(영웅)', minutes: 30 },
     });
   });
 
