@@ -341,7 +341,7 @@ export default function GameView(props: GameViewProps) {
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
         )}
-        <GoogleReturn setToast={props.setToast} syncState={props.syncState} reopenAccount={() => setAccountOpen(true)} />
+        <GoogleReturn setToast={props.setToast} reopenAccount={() => setAccountOpen(true)} />
         {accountOpen && (
           <AccountModal setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account}
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />

@@ -6,7 +6,7 @@ import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
 import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
-import Locked from '../../../ui/Locked';
+import Locked, { LockIcon } from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -62,6 +62,7 @@ export default function MyInfoModal({ setToast, onClose, account, uid, nickname,
                  placeholder="새 닉네임" />
       <Button size="sm" className="shrink-0" disabled={nickBusy || nickLock !== null || draft.length === 0}
               onClick={() => void submitNick()}>변경</Button>
+      {nickLock && <LockIcon className="shrink-0" />}
     </div>
   );
 
@@ -73,7 +74,7 @@ export default function MyInfoModal({ setToast, onClose, account, uid, nickname,
           <span className="text-text-dim shrink-0">현재</span>
           <span className="truncate" aria-label="현재 닉네임">{nickname ?? '불러오는 중'}</span>
         </div>
-        {nickLock ? <Locked lines={nickLock} label="닉네임 변경">{nickRow}</Locked> : nickRow}
+        {nickLock ? <Locked lines={nickLock} label="닉네임 변경" badge={false}>{nickRow}</Locked> : nickRow}
       </Frame>
       <Note>{NICKNAME_RULE}<br />나중에 랭킹에 표시될 이름이에요.</Note>
 

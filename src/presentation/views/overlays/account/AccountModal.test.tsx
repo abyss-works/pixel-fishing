@@ -7,12 +7,13 @@ const actions = vi.hoisted(() => ({
   signInAccount: vi.fn(),
   method: 'guest' as 'guest' | 'email' | 'google' | null,
   failed: false,
+  configured: true,
   retry: vi.fn(),
 }));
 
 vi.mock('../../../../features/account/service/accountActions', async importOriginal => ({
   ...await importOriginal<object>(),
-  isAccountConfigured: () => true,
+  isAccountConfigured: () => actions.configured,
   connectGoogle: actions.connectGoogle,
   signInAccount: actions.signInAccount,
 }));
@@ -28,6 +29,7 @@ beforeEach(() => {
   actions.signInAccount.mockReset();
   actions.signInAccount.mockResolvedValue({ ok: true });
   actions.failed = false;
+  actions.configured = true;
   actions.retry.mockReset();
 });
 afterEach(cleanup);
@@ -142,15 +144,25 @@ describe('로그인 방식별 구성', () => {
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
   });
 
-  it('읽는 중에는 실패 안내를 보이지 않는다', () => {
+  it('읽는 중에는 실패 안내 없이 보조 기술에 알리는 상태 영역을 둔다', () => {
     open('old@example.com', null);
+    expect(screen.queryByText(/불러오지 못했어요/)).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('로그인 방식을 불러오고 있어요');
+  });
+
+  it('게임 서버가 없는 로컬 모드에서는 연결 구역도 실패 안내도 보이지 않는다', () => {
+    actions.configured = false;
+    actions.failed = true;
+    open('dev@localhost', null);
+    expect(screen.queryByRole('button', { name: '다시 시도' })).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByText(/불러오지 못했어요/)).toBeNull();
   });
 
   it('수단 조회가 실패하면 안내와 다시 시도 버튼을 보이고 누르면 다시 읽는다', () => {
     actions.failed = true;
     open('old@example.com', null);
-    expect(screen.getByText('로그인 방식을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.')).toBeInTheDocument();
+    expect(screen.getByText(/로그인 방식을 불러오지 못했어요\./).innerHTML).toBe('로그인 방식을 불러오지 못했어요.<br>잠시 뒤 다시 시도해 주세요.');
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(actions.retry).toHaveBeenCalledTimes(1);
   });

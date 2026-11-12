@@ -121,7 +121,7 @@ export default function AccountModal({
   );
 
   const connectSection = (
-    <div className="min-h-40">
+    <div>
       <SectionTitle>구글 계정 연결</SectionTitle>
       <Note>구글 계정을 연결하면 다음부터는 구글 계정으로 로그인해요.</Note>
       <Note tone="warn">연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.</Note>
@@ -176,18 +176,23 @@ export default function AccountModal({
       ) : (
         <>
           <Note className="mt-0">진행은 이 계정에 저장돼요.</Note>
-          {/* 연결 구역은 로그인 수단을 읽기 전에도 같은 높이의 자리를 잡아 레이아웃이 흔들리지 않게 한다 */}
+          {/* 연결 구역은 로그인 수단을 읽는 동안 같은 구조의 스켈레톤이 자리를 잡아 레이아웃이 흔들리지 않게 한다.
+              게임 서버가 없는 로컬 모드는 읽을 곳이 없어 연결 구역도 실패 안내도 두지 않는다 */}
           {method === 'email' && connectSection}
-          {method === null && (
-            <div className="min-h-40">
-              {failed ? (
-                <>
-                  <Note>로그인 방식을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</Note>
-                  <Button full onClick={retry}>다시 시도</Button>
-                </>
-              ) : <Skeleton className="h-40" />}
+          {method === null && !offline && (failed ? (
+            <div>
+              <Note>로그인 방식을 불러오지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+              <Button full onClick={retry}>다시 시도</Button>
             </div>
-          )}
+          ) : (
+            <div role="status">
+              <span className="sr-only">로그인 방식을 불러오고 있어요</span>
+              <Skeleton className="h-[33px]" />
+              <Skeleton className="h-5 my-2" />
+              <Skeleton className="h-5 my-2" />
+              <Skeleton className="h-10" />
+            </div>
+          ))}
           <Button full className="mt-3" disabled={offline} onClick={signOut}>로그아웃</Button>
         </>
       )}
