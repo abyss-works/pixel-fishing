@@ -2,7 +2,7 @@
 import { HttpGameGateway } from './httpGameGateway';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AuthApi, AuthResult } from '../api/types';
+import type { AccountLookup, AuthApi, AuthResult } from '../api/types';
 import {
   sessionUid,
   ensureSession,
@@ -24,12 +24,12 @@ class HttpAuth implements AuthApi {
   ensureSession(): Promise<string | null> {
     return ensureSession();
   }
-  currentAccount(): Promise<string | null> {
+  currentAccount(): Promise<AccountLookup> {
     return currentAccount();
   }
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
-    const [uid, email] = await Promise.all([sessionUid(), currentAccount()]);
-    return { uid, email };
+    const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
+    return { uid, email: lookup.status === 'account' ? lookup.email : null };
   }
   takePasswordResetLanding(): 'ready' | 'invalid' | null {
     return takePasswordResetLanding();

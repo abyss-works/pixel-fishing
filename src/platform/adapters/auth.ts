@@ -2,7 +2,7 @@
 // VITE_CLOUD가 '1'이 아니면 authClient = null → 게임은 로컬 저장만으로 정상 동작 (오프라인 모드).
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
-import type { AuthResult } from '../api/types';
+import type { AccountLookup, AuthResult } from '../api/types';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
 export const isCloud = import.meta.env.VITE_CLOUD === '1';
@@ -79,15 +79,15 @@ const authErr = (e: AuthError): AuthResult => {
 
 const NOT_CLOUD: AuthResult = { ok: false, msg: '클라우드가 설정되지 않았어요.' };
 
-// 로그인된 영구 계정의 이메일 (게스트/미설정이면 null). 게스트의 이메일은 서버가 만든 자리표시라 보이지 않는다
-export async function currentAccount(): Promise<string | null> {
+// 로그인된 영구 계정 확인. 게스트(미설정 포함)와 확인 실패를 구분한다. 게스트의 이메일은 서버가 만든 자리표시라 보이지 않는다
+export async function currentAccount(): Promise<AccountLookup> {
   let u: SessionUser | null;
   try {
     u = await sessionUser();
   } catch {
-    return null;
+    return { status: 'failed' };
   }
-  return u && !u.isAnonymous && u.email ? u.email : null;
+  return u && !u.isAnonymous && u.email ? { status: 'account', email: u.email } : { status: 'guest' };
 }
 
 /**

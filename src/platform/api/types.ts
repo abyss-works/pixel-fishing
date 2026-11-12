@@ -21,12 +21,16 @@ export interface GameGateway {
   warmup?(): void;
 }
 
+/** 세션 확인의 결과. 확인 실패(네트워크 오류, 요청 과다, 서버 오류)는 게스트와 구분한다 */
+export type AccountLookup = { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
+
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
 export interface AuthApi {
   isConfigured: boolean;
   ensureSession(): Promise<string | null>;
-  currentAccount(): Promise<string | null>;
+  /** 로그인된 영구 계정을 확인한다. 게스트와 확인 실패를 구분해 돌려준다 */
+  currentAccount(): Promise<AccountLookup>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
   /** 비밀번호 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크를 쓸 수 없다. 부팅 때 한 번 읽는다 */
   takePasswordResetLanding(): 'ready' | 'invalid' | null;

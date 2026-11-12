@@ -23,7 +23,7 @@ describe('클라우드 저장', () => {
   });
 
   it('계정 함수도 오프라인 모드에서 무해 (v0.4.0)', async () => {
-    expect(await currentAccount()).toBeNull();
+    expect(await currentAccount()).toEqual({ status: 'guest' });
     expect((await startGoogleAuth('link', 'link-guest')).ok).toBe(false);
     expect(await accountProviders()).toBeNull();
     expect((await signInWithEmail('a@b.c', '123456')).ok).toBe(false);

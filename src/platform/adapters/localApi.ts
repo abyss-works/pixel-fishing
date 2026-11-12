@@ -1,7 +1,7 @@
 // 로컬 API 구현 — 클라우드 미설정(dev·테스트) 전용
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
-import type { GameGateway, AuthApi, AuthResult } from '../api/types';
+import type { AccountLookup, GameGateway, AuthApi, AuthResult } from '../api/types';
 import type { AdminApi } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
 
@@ -14,8 +14,8 @@ class LocalAuth implements AuthApi {
   async ensureSession(): Promise<string | null> {
     return DEV_UID;
   }
-  async currentAccount(): Promise<string | null> {
-    return DEV_ACCOUNT;
+  async currentAccount(): Promise<AccountLookup> {
+    return { status: 'account', email: DEV_ACCOUNT };
   }
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     return { uid: DEV_UID, email: DEV_ACCOUNT };
