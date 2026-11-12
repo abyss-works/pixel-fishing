@@ -20,6 +20,8 @@ export const GOOGLE_LINK_ERRORS = {
   googleAlreadyConnected: 'google_already_connected',
   /** 라이브러리의 같은 이름 코드. 구글 계정이 다른 계정에 연결돼 있거나, 이메일 계정이 고른 구글의 주소를 다른 계정이 쓴다 */
   linkedToDifferentUser: 'account_already_linked_to_different_user',
+  /** 게스트의 구글 주소를 다른 구글을 이미 연결한 계정이 이메일로 쓴다. 라이브러리의 같은 이름 코드 */
+  unableToLink: 'unable_to_link_account',
 } as const;
 
 /** 구글 공급자 옵션. 연결한 적 없는 구글로는 가입하지 않고, 계정 선택 화면을 매번 띄운다 */
@@ -90,7 +92,9 @@ export const validateGoogleLink: ValidateUserInfo = async ({ user, source }, ctx
     const self = await adapter.findUserById(userId) as LinkedUser | null;
     // 구글을 연결하지 않은 이메일 계정만 이메일로 로그인해 연결할 수 있다
     const holderHasGoogle = holder.accounts.some(a => a.providerId === 'google');
-    return { error: self?.isAnonymous && !holderHasGoogle ? GOOGLE_LINK_ERRORS.emailAccountExists : GOOGLE_LINK_ERRORS.linkedToDifferentUser };
+    if (!self?.isAnonymous) return { error: GOOGLE_LINK_ERRORS.linkedToDifferentUser };
+    // 이메일로 로그인할 수 없는 계정의 주소라 이메일 로그인 안내도 덮어쓰기 확인도 맞지 않다
+    return { error: holderHasGoogle ? GOOGLE_LINK_ERRORS.unableToLink : GOOGLE_LINK_ERRORS.emailAccountExists };
   }
   verifiedEmail.set(ctx, email);
 };
@@ -104,10 +108,12 @@ const finishLink: AccountAfter = async (account, ctx) => {
   if (!email) return;
   const adapter = ctx.context.internalAdapter;
   const current = await getSessionFromCtx(ctx, { disableCookieCache: true, disableRefresh: true });
+  const user = await adapter.findUserById(account.userId) as (LinkedUser & { email: string; emailVerified: boolean }) | null;
+  const passwords = (await adapter.findAccounts(account.userId)).filter(a => a.providerId === 'credential');
+  // 마무리가 바꿀 것이 없으면 다른 세션을 끊지 않는다
+  if (!user || (!user.isAnonymous && user.email === email && user.emailVerified && passwords.length === 0)) return;
   const updated = await adapter.updateUser(account.userId, { email, emailVerified: true, isAnonymous: false });
-  for (const a of await adapter.findAccounts(account.userId)) {
-    if (a.providerId === 'credential') await adapter.deleteAccount(a.id);
-  }
+  for (const a of passwords) await adapter.deleteAccount(a.id);
   for (const s of await adapter.listSessions(account.userId)) {
     if (s.token !== current?.session.token) await adapter.deleteSession(s.token);
   }

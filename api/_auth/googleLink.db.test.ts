@@ -295,12 +295,12 @@ describe('가입 요청과 인증 요청 덮어쓰기', () => {
 });
 
 describe('연결 충돌의 세부', () => {
-  it('게스트가 고른 주소를 이미 구글을 연결한 계정이 쓰면 account_already_linked_to_different_user다', async () => {
+  it('게스트가 고른 주소를 다른 구글을 이미 연결한 계정이 쓰면 unable_to_link_account다', async () => {
     const owner = await guest();
     await link(owner.cookie, { sub: nextSub(), email: 'shared@gmail.test' });
     const g = await guest();
     const r = await link(g.cookie, { sub: nextSub(), email: 'Shared@Gmail.test' });
-    expect(r.error).toBe('account_already_linked_to_different_user');
+    expect(r.error).toBe('unable_to_link_account');
     expect((await userRow(g.uid)).is_anonymous).toBe(true);
   });
 
@@ -343,10 +343,14 @@ describe('연결 마무리의 재실행', () => {
     const who = { sub: nextSub(), email: 'twice@gmail.test' };
     const { uid, cookie } = await guest();
     const first = await link(cookie, who);
+    // 다른 기기에서 같은 구글로 로그인한 세션
+    const otherDevice = await signIn((await guest()).cookie, who);
+    expect(otherDevice.ok).toBe(true);
     const again = await link(first.cookie, who);
     expect(again.ok).toBe(true);
     expect(await userRow(uid)).toEqual({ email: 'twice@gmail.test', email_verified: true, is_anonymous: false });
     expect(await aliveSession(again.cookie)).toBe(true);
+    expect(await aliveSession(otherDevice.cookie)).toBe(true);
   });
 });
 
