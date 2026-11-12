@@ -75,7 +75,7 @@ describe('먹기와 쓰기', () => {
 
   it('슬롯이 비어 있으면 확인 없이 eat 액션을 보낸다', () => {
     const { dispatch } = show(game({ items: own }));
-    fireEvent.click(screen.getByRole('button', { name: '사프란 미끼 쓰기' }));
+    fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-mutation' });
     expect(screen.queryByText('미끼 바꾸기')).not.toBeInTheDocument();
   });
@@ -114,7 +114,7 @@ describe('먹기와 쓰기', () => {
 
   it('서버가 거부하면 거부 문구를 경고로 알린다', async () => {
     const { setToast } = show(game({ items: own }), false, { status: 'rejected', error: 'item-not-owned' });
-    fireEvent.click(screen.getByRole('button', { name: '사프란 미끼 쓰기' }));
+    fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
 });

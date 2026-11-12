@@ -196,3 +196,25 @@ describe('기운 단위', () => {
     expect(formatEnergy(Number.NEGATIVE_INFINITY)).toBe('0');
   });
 });
+
+describe('요리 설명', () => {
+  const DESCRIPTIONS: Record<string, string> = {
+    'cook-lunch-bite': '소금물에 끓인 다랑어 국물에서 짠 김이 피어오른다. 그릇을 다 비우기도 전에 찌가 먼저 가라앉는다.',
+    'cook-lunch-rare': '코코넛 밀크와 강황으로 끓인 국물에 생선 살이 잠긴다. 귀한 생선을 넣을수록 맛이 깊어진다.',
+    'cook-lunch-mutation': '솥을 봉한 반죽을 뜯어내면 향신료 냄새가 한꺼번에 퍼진다. 밝은 빛으로 따로 물들인 밥이 생선과 켜를 이룬다.',
+    'cook-lunch-named': '고라카 열매의 신맛이 바짝 졸인 다랑어 살 속까지 밴다. 콜롬보항 뱃사람들은 큰 그림자를 쫓아 오래 나가는 날 이 요리를 싣는다.',
+    'cook-lunch-bundle': '밥을 가운데 두고 생선 반찬을 작은 그릇에 나눠 둥근 쟁반에 차린 인도식 한 상이다. 그릇마다 양은 적어도 빠진 맛이 없다.',
+    'cook-bait-rare': '롱페퍼 이삭을 말려 빻아 반죽에 섞은 미끼다. 후추보다 이 열매가 비싸게 팔리던 때가 있었다.',
+    'cook-bait-epic': '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
+    'cook-bait-legendary': '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
+    'cook-bait-mutation': '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
+  };
+
+  it('모든 레시피에 설명이 있다', () => {
+    for (const r of RECIPES) expect(r.description.trim().length, r.id).toBeGreaterThan(0);
+  });
+
+  it('채택한 문안과 같다', () => {
+    expect(Object.fromEntries(RECIPES.map(r => [r.id, r.description]))).toEqual(DESCRIPTIONS);
+  });
+});

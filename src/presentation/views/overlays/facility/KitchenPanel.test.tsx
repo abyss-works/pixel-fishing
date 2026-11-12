@@ -69,11 +69,11 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(names).toEqual(['가루디야', '민 몰리', '생선 비리야니', '암불 티얄', '생선 탈리']);
   });
 
-  it('미끼 탭은 등급 미끼의 이름 뒤에 등급을 괄호로 붙이고 다른 미끼에는 붙이지 않는다', () => {
+  it('미끼 탭은 미끼의 이름 뒤에 표시 등급을 괄호로 붙이고 등급순에 특수를 뒤에 둔다', () => {
     show(seed());
     fireEvent.click(tab('미끼'));
     const names = within(screen.getByRole('listbox', { name: '미끼 목록' })).getAllByRole('option').map(o => o.querySelector('b')?.textContent);
-    expect(names).toEqual(['사프란 미끼', '롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)']);
+    expect(names).toEqual(['롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)', '사프란 미끼(특수)']);
   });
 
   it('수량 입력의 접근성 이름은 등급 괄호가 붙은 레시피 이름이다', () => {

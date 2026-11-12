@@ -3,9 +3,10 @@
 import { describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { DISPLAY_GRADE } from '../../../game/content/rarity';
 import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById, toStoredEnergy } from '../../../game/content/cooking';
 import {
-  recipeEffectLines, recipeGrade, recipeLabel, recipesOfKind, selectKitchenStatus, selectRecipeView,
+  recipeEffectLines, recipeGrade, recipeLabel, recipeTitle, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -26,15 +27,21 @@ describe('종류별 레시피', () => {
     expect(recipesOfKind('bait').every(r => r.kind === 'bait')).toBe(true);
   });
 
+  it('미끼 탭은 등급순으로 두고 특수 등급 미끼를 맨 뒤에 둔다. 순서는 데이터 순서가 아니다', () => {
+    expect(recipesOfKind('bait').map(r => r.id)).toEqual(
+      ['cook-bait-rare', 'cook-bait-epic', 'cook-bait-legendary', 'cook-bait-mutation']);
+    expect(recipesOfKind('bait')[0].id).toBe('cook-bait-rare'); // 미끼 탭의 기본 선택은 첫째다
+  });
+
   it('두 탭의 레시피를 합하면 모든 레시피다', () => {
     expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length);
   });
 
-  it('등급 미끼만 등급이 있고 그 등급은 효과가 가중하는 가장 낮은 등급이다', () => {
+  it('등급 미끼는 효과가 가중하는 가장 낮은 등급을, 돌연변이 가중 미끼는 특수를 표시 등급으로 가진다', () => {
     expect(recipeGrade(recipe('cook-bait-rare'))).toBe('rare');
     expect(recipeGrade(recipe('cook-bait-epic'))).toBe('epic');
     expect(recipeGrade(recipe('cook-bait-legendary'))).toBe('legendary');
-    expect(recipeGrade(recipe('cook-bait-mutation'))).toBeNull();
+    expect(recipeGrade(recipe('cook-bait-mutation'))).toBe('special');
     expect(recipeGrade(recipe('cook-lunch-rare'))).toBeNull(); // 도시락은 등급 가중이어도 등급 이름이 붙지 않는다
   });
 });
@@ -213,8 +220,21 @@ describe('레시피의 화면 이름', () => {
     expect(recipeLabel(recipeById('cook-bait-legendary')!)).toBe('용연향 미끼(전설)');
   });
 
-  it('등급이 없는 도시락과 미끼 요리는 이름 그대로다', () => {
+  it('특수 미끼는 이름 뒤에 특수를 괄호로 붙인다', () => {
+    expect(recipeLabel(recipeById('cook-bait-mutation')!)).toBe('사프란 미끼(특수)');
+  });
+
+  it('등급이 없는 도시락은 이름 그대로다', () => {
     expect(recipeLabel(recipeById('cook-lunch-bite')!)).toBe('가루디야');
-    expect(recipeLabel(recipeById('cook-bait-mutation')!)).toBe('사프란 미끼');
+  });
+
+  it('이름과 표시 등급을 나눠 돌려주고, 합친 문자열은 recipeLabel과 같다', () => {
+    expect(recipeTitle(recipeById('cook-bait-epic')!)).toEqual({ name: '큐베브 미끼', grade: 'epic' });
+    expect(recipeTitle(recipeById('cook-bait-mutation')!)).toEqual({ name: '사프란 미끼', grade: 'special' });
+    expect(recipeTitle(recipeById('cook-lunch-bite')!)).toEqual({ name: '가루디야', grade: null });
+    for (const r of RECIPES) {
+      const t = recipeTitle(r);
+      expect(recipeLabel(r), r.id).toBe(t.grade === null ? t.name : `${t.name}(${DISPLAY_GRADE[t.grade].name})`);
+    }
   });
 });

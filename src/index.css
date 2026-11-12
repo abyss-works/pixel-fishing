@@ -137,6 +137,7 @@
   --c-rare: #4fc3f7;
   --c-epic: #ba68c8;
   --c-legend: #ffd54f;
+  --c-special: #69f0ae; /* 특수 표시 등급 — 네 등급 밖의 표시용 등급색. 초록은 특수에만 쓴다 */
 
   /* 레이아웃 · 베벨 */
   --sidebar-w: 384px;
@@ -382,6 +383,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   [data-rarity='rare'] { --rarity-color: var(--c-rare); }
   [data-rarity='epic'] { --rarity-color: var(--c-epic); }
   [data-rarity='legendary'] { --rarity-color: var(--c-legend); }
+  [data-rarity='special'] { --rarity-color: var(--c-special); }
 
   /* 거친 포인터(터치)의 누르는 영역 — 누를 수 있는 요소의 누르는 영역을 보이는 크기는 그대로 둔 채 44px 이상으로 넓힌다.
      보이지 않는 ::after가 요소 가운데에서 max(요소 크기, 44px)로 펼쳐지며 요소의 일부로 눌린다.
