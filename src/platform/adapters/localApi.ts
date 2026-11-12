@@ -72,7 +72,8 @@ class LocalAdmin implements AdminApi {
   async access(): Promise<{ kind: 'local'; uid: null }> {
     return { kind: 'local', uid: null };
   }
-  signIn(_email: string, _password: string): Promise<never> { return rejected(); }
+  signIn(): Promise<never> { return rejected(); }
+  takeSignInReturn(): null { return null; }
   signOut(): Promise<never> { return rejected(); }
   users(): Promise<never[]> { return rejected(); }
   live(): Promise<never> { return rejected(); }

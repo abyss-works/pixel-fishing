@@ -45,6 +45,12 @@ export const overwriteCanceledText = '연결하지 않았어요. 다른 구글 �
 /** 구글 인증 화면을 열지 못했을 때의 알림 */
 export const googleStartFailedText = '구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 
+/** 구글 로그인에서 계정을 고르지 않고 돌아왔을 때의 알림 */
+export const SIGN_IN_CANCELED_TEXT = '구글 계정으로 로그인하지 않았어요.';
+
+/** 원인을 모르는 구글 로그인 실패의 알림 */
+export const SIGN_IN_FAILED_TEXT = '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+
 const FAIL_TITLE = '구글 계정 연결';
 
 const NOTICE_BODY = {
@@ -84,11 +90,11 @@ export function googleOutcome({ tag, error }: { tag: string; error: string | nul
   if (error === 'access_denied') {
     return {
       kind: 'toast', tone: 'info',
-      text: signIn ? '구글 계정으로 로그인하지 않았어요.' : '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.',
+      text: signIn ? SIGN_IN_CANCELED_TEXT : '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.',
     };
   }
   return {
     kind: 'toast', tone: 'warn',
-    text: signIn ? '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.' : '구글 계정을 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+    text: signIn ? SIGN_IN_FAILED_TEXT : '구글 계정을 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
   };
 }

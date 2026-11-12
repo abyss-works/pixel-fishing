@@ -314,8 +314,10 @@ export interface AdminApi {
   /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 false다 */
   isConfigured: boolean;
   access(): Promise<AdminAccessResult>;
-  /** 게임과 같은 계정으로 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
-  signIn(email: string, password: string): Promise<AuthResult>;
+  /** 구글 인증 화면으로 이동해 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
+  signIn(): Promise<AuthResult>;
+  /** 구글 로그인에서 돌아왔는가. 서버가 돌려준 결과 코드를 담고 오류가 없으면 error는 null이다. 이 탭에서 시작한 흐름이 아니면 null이다. 읽으면 주소에서 지운다 */
+  takeSignInReturn(): { error: string | null } | null;
   /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
   signOut(): Promise<void>;
   users(): Promise<AdminUserRow[]>;

@@ -5,18 +5,23 @@
 // 탭 골격을 그리지 않고 상태별 화면 하나(확인 중 · 로그인 · 권한 없음)만 보인다. 대시보드가 마운트되지 않으므로
 // 탭의 데이터 조회도 시작되지 않는다. 로컬 모드(클라우드 미설정)는 골격과 로컬 안내 배너를 그대로 보인다.
 import { useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Button from '../../ui/Button';
-import Field from '../../ui/Field';
+import GoogleButton from '../../ui/GoogleButton';
 import Inset from '../../ui/Inset';
 import Note from '../../ui/Note';
-import TextInput from '../../ui/TextInput';
 import { useAdminAccess } from '../../../features/admin/service/useAdminAccess';
 import { useAdminSession } from '../../../features/admin/service/useAdminSession';
+import { useAdminSignInReturn } from '../../../features/admin/service/useAdminSignInReturn';
 import { AdminAuthCtx, useAdminAuth } from '../../../features/admin/service/accessContext';
+
+const GOOGLE_LABEL = 'Google로 계속하기';
+const SIGN_IN_GUIDE = '게임에서 관리자 계정에 연결한 구글 계정으로 로그인해요.\n게임의 로그인 상태와는 따로 유지돼요.';
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const auth = useAdminAccess();
+  // 구글 로그인에서 돌아온 주소는 어느 결과든 마운트 때 한 번 읽어 지운다. 로그인 화면은 같은 읽기를 캐시에서 받는다
+  useAdminSignInReturn();
   return <AdminAuthCtx.Provider value={auth}>{children}</AdminAuthCtx.Provider>;
 }
 
@@ -28,7 +33,7 @@ export function AdminGate({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full items-center justify-center bg-surface p-4 text-text">
       <Inset tone="deep" className="flex w-full max-w-sm flex-col gap-3 px-5 py-5">
         <span className="pf-accent text-lg text-gold">관리자 대시보드</span>
-        {access === 'checking' && <Note size="xs" className="my-0">접근 권한을 확인하는 중…</Note>}
+        {access === 'checking' && <Note size="xs" className="my-0">접근 권한을 확인하고 있어요.</Note>}
         {access === 'signedOut' && <AdminSignIn />}
         {access === 'denied' && <AdminDenied uid={uid} />}
       </Inset>
@@ -36,36 +41,31 @@ export function AdminGate({ children }: { children: ReactNode }) {
   );
 }
 
-/** 관리자 로그인 — 게임과 같은 계정으로 관리자 세션을 연다 */
+/** 관리자 로그인 — 게임에서 관리자 계정에 연결한 구글 계정으로 관리자 세션을 연다 */
 function AdminSignIn() {
   const { signIn } = useAdminSession();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const returned = useAdminSignInReturn();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const [startError, setStartError] = useState<string | null>(null);
+  const start = async () => {
     setBusy(true);
-    setError(null);
-    const result = await signIn(email.trim(), password);
-    setBusy(false);
-    if (!result.ok) setError(result.msg);
+    setStartError(null);
+    const result = await signIn();
+    // 성공하면 구글 인증 화면으로 넘어가므로 버튼은 그대로 잠근다
+    if (!result.ok) {
+      setBusy(false);
+      setStartError(result.msg);
+    }
   };
+  const notice = startError ? { tone: 'warn' as const, text: startError } : returned;
   return (
-    <form className="flex flex-col gap-3" onSubmit={e => void submit(e)}>
-      <Note size="xs" className="my-0 leading-relaxed">
-        게임 계정의 이메일과 비밀번호로 로그인해요. 게임의 로그인 상태와는 따로 유지돼요.
-      </Note>
-      <Field label="이메일">
-        <TextInput type="email" autoComplete="email" value={email} disabled={busy}
-                   onChange={e => setEmail(e.target.value)} />
-      </Field>
-      <Field label="비밀번호" error={error}>
-        <TextInput type="password" autoComplete="current-password" value={password} disabled={busy}
-                   onChange={e => setPassword(e.target.value)} />
-      </Field>
-      <Button type="submit" variant="primary" full disabled={busy || !email.trim() || !password}>로그인</Button>
-    </form>
+    <>
+      <Note size="xs" className="my-0 leading-relaxed">{SIGN_IN_GUIDE}</Note>
+      {notice && <Note size="xs" tone={notice.tone} className="my-0 leading-relaxed">{notice.text}</Note>}
+      <div className="flex justify-center [&>button]:w-auto">
+        <GoogleButton disabled={busy} onClick={() => void start()}>{GOOGLE_LABEL}</GoogleButton>
+      </div>
+    </>
   );
 }
 
