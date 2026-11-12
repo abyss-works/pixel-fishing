@@ -1,4 +1,4 @@
-// 배 스프라이트 생성 CLI — 8단계 배를 대상 정의의 격자(src/game/content/sprites/targets.ts)로 칠해 생성 파일을 쓴다.
+// 배 스프라이트 생성 CLI — 8단계 배를 대상 정의의 격자로 칠해 생성 파일을 쓴다.
 // 사용: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts [sheet.png]
 // 뱃머리는 왼쪽(어종과 같은 방향). 흘수선은 13행, 그 아래 2행은 물에 잠긴 선체.
 // 팔레트는 8척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·

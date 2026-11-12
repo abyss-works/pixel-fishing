@@ -1,5 +1,5 @@
-// 에디터 페이지가 불러오는 대상 정의 스크립트의 원문. 에디터는 서버와 번들러 없이 file://로 열리므로
-// 대상 정의(src/game/content/sprites)를 직접 import하지 못한다. 정의를 이 스크립트로 옮겨 싣는다.
+// 에디터 페이지가 불러오는 대상 정의 스크립트의 원문. 에디터는 서버와 번들러 없이 열리므로
+// 대상 정의를 직접 import하지 못한다. 정의를 이 스크립트로 옮겨 싣는다.
 import { OUTLINE_DARK, SILHOUETTE } from '../../src/game/content/sprites/common';
 import { SPRITE_TARGETS } from '../../src/game/content/sprites/targets';
 

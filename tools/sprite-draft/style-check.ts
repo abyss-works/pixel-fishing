@@ -1,6 +1,6 @@
 // 원화 화풍 검사 CLI — 기존 원화 집합의 지표 분포와 합격선을 출력하고, 후보 원화(일반·변이)를 판정한다.
 // 사용: npx tsx tools/sprite-draft/style-check.ts --ids a,b,c [png 폴더]
-// 물고기 전용 검사다(SPRITES.md 2.1.3). 후보 id는 인자로 받고, 후보를 뺀 일반 폼 전부가 기준 집합이다.
+// 물고기 전용 검사다. 후보 id는 인자로 받고, 후보를 뺀 일반 폼 전부가 기준 집합이다.
 // 기본 폴더는 tools/sprite-draft/png/fish.
 // 하나라도 탈락하면 종료 코드 1.
 import { existsSync } from 'node:fs';

@@ -1,4 +1,4 @@
-// 장비 스프라이트 생성 CLI — 낚싯대 1종을 대상 정의의 격자(src/game/content/sprites/targets.ts)로 칠해 생성 파일을 쓴다.
+// 장비 스프라이트 생성 CLI — 낚싯대 1종을 대상 정의의 격자로 칠해 생성 파일을 쓴다.
 // 사용: pnpm exec tsx tools/sprite-draft/boats/generate-gear.ts [sheet.png]
 // 낚싯대는 레벨과 무관하게 한 그림이다(강화 화면 머리용). 손잡이는 왼쪽 아래, 초리는 오른쪽 위.
 import { writeFileSync } from 'node:fs';

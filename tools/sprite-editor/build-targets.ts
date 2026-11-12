@@ -1,4 +1,4 @@
-// 에디터용 대상 정의 스크립트(targets.generated.js)를 다시 쓴다.
+// 에디터용 대상 정의 스크립트를 다시 쓴다.
 // 사용: pnpm exec tsx tools/sprite-editor/build-targets.ts
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

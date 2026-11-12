@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { checkRows } from './commonRules';
 
-describe('공통 규칙 검사 (SPRITES.md 1.2)', () => {
+describe('공통 규칙 검사', () => {
   it('4방향으로 이어진 그림은 위반이 없다', () => {
     const rows = [
       '......',
