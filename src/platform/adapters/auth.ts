@@ -64,7 +64,7 @@ const AUTH_MSG: Record<string, string> = {
   weak_password: '비밀번호가 너무 짧아요. 6자 이상으로 입력해 주세요.',
   invalid_credentials: '이메일 또는 비밀번호가 틀렸어요.',
   validation_failed: '이메일 형식을 확인해 주세요.',
-  over_email_send_rate_limit: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.',
+  over_email_send_rate_limit: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
   invalid_token: '재설정 링크가 만료됐거나 이미 쓰였어요. 비밀번호 재설정을 다시 요청해 주세요.',
 };
 
@@ -90,11 +90,26 @@ export async function currentAccount(): Promise<string | null> {
   return u && !u.isAnonymous && u.email ? u.email : null;
 }
 
+/**
+ * 이메일 로그인 실패를 화면이 분기에 쓰는 코드로 가른다. 서버는 틀린 입력, 없는 계정, 구글을 연결해 이메일 로그인이 꺼진 계정을
+ * 구분하지 않고 401로 돌려주므로 모두 인증 실패다. 요청이 서버에 닿지 못해 던져진 오류는 network다.
+ */
+export function emailSignInFailure(e: AuthError | Error): AuthResult {
+  if (e instanceof Error) return { ok: false, msg: e.message, code: 'network' };
+  const base = authErr(e);
+  if (base.ok || base.code) return base;
+  return e?.status === 401 ? { ...base, code: 'invalid_credentials' } : base;
+}
+
 // 이미 있는 이메일 계정으로 로그인 — 현재 기기의 게스트 진행은 버려진다 (호출 전 UI가 확인을 받는다)
 export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
   if (!authClient) return NOT_CLOUD;
-  const { error } = await authClient.signIn.email({ email, password });
-  return error ? authErr(error) : { ok: true };
+  try {
+    const { error } = await authClient.signIn.email({ email, password });
+    return error ? emailSignInFailure(error) : { ok: true };
+  } catch (e) {
+    return emailSignInFailure(e instanceof Error ? e : new Error(String(e)));
+  }
 }
 
 // ---------- 구글 연결과 로그인 ----------

@@ -58,11 +58,25 @@ export const SIGN_IN_FAILED_TEXT = SIGN_IN_FAILED_SENTENCES.join(' ');
 /** 구글 계정과 주소가 같은 이메일 계정이 있다는 사실의 안내 첫 문장. 게임 안내와 관리자 로그인 화면이 함께 쓴다 */
 export const EMAIL_ACCOUNT_EXISTS_LEAD = '이 구글 계정과 주소가 같은 이메일 계정이 있어요.';
 
+/** 계정 관리의 이메일 로그인 폼 안에 문장마다 한 줄로 보이는 실패 안내. 결과 종류는 문구가 아니라 인증 어댑터가 돌려준 코드로 가른다 */
+export function emailSignInFailure(code: string | undefined): readonly string[] {
+  const lead = '로그인하지 못했어요.';
+  const retry = '잠시 뒤 다시 시도해 주세요.';
+  switch (code) {
+    case 'invalid_credentials':
+      return [lead, '이메일로는 새 계정을 만들 수 없어요.', `이메일 계정이 없거나 이미 구글 계정을 연결했다면 ${GOOGLE_BUTTON_LABEL}를 눌러 주세요.`];
+    case 'over_email_send_rate_limit': return [lead, '요청이 너무 잦아요.', retry];
+    case 'validation_failed': return [lead, '이메일 형식을 확인해 주세요.'];
+    case 'network': return [lead, '서버에 연결하지 못했어요.', retry];
+    default: return [lead, retry];
+  }
+}
+
 const FAIL_TITLE = '구글 계정 연결';
 
 const NOTICE_BODY = {
   linkedElsewhere: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
-  emailAccountExists: `${EMAIL_ACCOUNT_EXISTS_LEAD}\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.`,
+  emailAccountExists: `${EMAIL_ACCOUNT_EXISTS_LEAD}\n계정 관리의 기존 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.`,
   alreadyConnected: '고른 구글 계정은 연결하지 않았어요.\n이 계정에는 이미 다른 구글 계정이 연결돼 있어요.',
   signupDisabled: '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
   unableToLink: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',

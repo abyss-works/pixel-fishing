@@ -68,7 +68,7 @@ describe('게스트의 구글 연결', () => {
   it('이메일 폼은 접혀 있다가 텍스트 링크를 누르면 같은 창 안에서 펼쳐진다', () => {
     open(null, 'guest');
     expect(screen.queryByLabelText('이메일')).toBeNull();
-    const toggle = screen.getByRole('button', { name: '이메일 계정으로 로그인' });
+    const toggle = screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -79,7 +79,7 @@ describe('게스트의 구글 연결', () => {
 
 describe('게스트가 이메일 계정으로 로그인', () => {
   const fill = () => {
-    fireEvent.click(screen.getByRole('button', { name: '이메일 계정으로 로그인' }));
+    fireEvent.click(screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' }));
     fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'old@example.com' } });
     fireEvent.change(screen.getByLabelText(/^비밀번호/), { target: { value: 'secret1' } });
     fireEvent.click(screen.getByRole('button', { name: '로그인' }));
@@ -115,10 +115,87 @@ describe('게스트가 이메일 계정으로 로그인', () => {
 
   it('입력이 비어 있으면 확인 없이 경고한다', async () => {
     const { setToast } = open(null, 'guest');
-    fireEvent.click(screen.getByRole('button', { name: '이메일 계정으로 로그인' }));
+    fireEvent.click(screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' }));
     fireEvent.click(screen.getByRole('button', { name: '로그인' }));
     await waitFor(() => expect(setToast).toHaveBeenCalledWith('이메일과 6자 이상의 비밀번호를 입력해 주세요.', 'warn'));
     expect(actions.signInAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe('이메일 로그인 실패 안내', () => {
+  const fill = () => {
+    fireEvent.click(screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' }));
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'old@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^비밀번호/), { target: { value: 'secret1' } });
+  };
+  const submit = async () => {
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+    const dialog = (await screen.findByText('지금 게스트 진행은 사라져요.')).closest('[role="dialog"]') as HTMLElement;
+    fireEvent.click(dialog.querySelector('button.primary') as HTMLElement);
+  };
+  const FAIL = ['로그인하지 못했어요.', '이메일로는 새 계정을 만들 수 없어요.', '이메일 계정이 없거나 이미 구글 계정을 연결했다면 Google로 계속하기를 눌러 주세요.'];
+
+  it('폼에는 사전 안내 두 줄이 없다', () => {
+    open(null, 'guest');
+    fill();
+    expect(screen.queryByText(/이미 만든 이메일 계정으로만/)).toBeNull();
+  });
+
+  it('실패하면 알림 대신 폼 안의 상태 알림에 문장마다 한 줄로 알리고 원문 오류는 보이지 않는다', async () => {
+    actions.signInAccount.mockResolvedValue({ ok: false, msg: 'raw server (401)', code: 'invalid_credentials' });
+    const { setToast, onClose } = open(null, 'guest');
+    fill();
+    await submit();
+    const status = await screen.findByRole('status');
+    await waitFor(() => expect(Array.from(status.querySelectorAll('p')).map(p => p.textContent)).toEqual(FAIL));
+    expect(screen.queryByText(/raw server/)).toBeNull();
+    expect(setToast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('연속 두 번 실패하면 안내가 겹치지 않고 바뀐다', async () => {
+    actions.signInAccount.mockResolvedValueOnce({ ok: false, msg: 'x', code: 'invalid_credentials' });
+    actions.signInAccount.mockResolvedValueOnce({ ok: false, msg: 'x', code: 'over_email_send_rate_limit' });
+    open(null, 'guest');
+    fill();
+    await submit();
+    await screen.findByText('이메일로는 새 계정을 만들 수 없어요.');
+    await submit();
+    await screen.findByText('요청이 너무 잦아요.');
+    expect(screen.queryByText('이메일로는 새 계정을 만들 수 없어요.')).toBeNull();
+    expect(screen.getAllByText('로그인하지 못했어요.')).toHaveLength(1);
+  });
+
+  it('실패 뒤 성공하면 안내가 사라진다', async () => {
+    actions.signInAccount.mockResolvedValueOnce({ ok: false, msg: 'x', code: 'network' });
+    const { onClose } = open(null, 'guest');
+    fill();
+    await submit();
+    await screen.findByText('서버에 연결하지 못했어요.');
+    await submit();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(screen.queryByText('로그인하지 못했어요.')).toBeNull();
+  });
+
+  it('코드가 없는 실패는 두 줄이다', async () => {
+    actions.signInAccount.mockResolvedValue({ ok: false, msg: 'x' });
+    open(null, 'guest');
+    fill();
+    await submit();
+    await screen.findByText('잠시 뒤 다시 시도해 주세요.');
+    expect(screen.getAllByText(/./, { selector: '[role="status"] p' })).toHaveLength(2);
+  });
+
+  it('폼을 접으면 안내가 없다', async () => {
+    actions.signInAccount.mockResolvedValue({ ok: false, msg: 'x', code: 'validation_failed' });
+    open(null, 'guest');
+    fill();
+    await submit();
+    await screen.findByText('이메일 형식을 확인해 주세요.');
+    const toggle = screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(screen.queryByText('이메일 형식을 확인해 주세요.')).toBeNull();
   });
 });
 
@@ -126,7 +203,7 @@ describe('로그인 방식별 구성', () => {
   it('이메일 계정은 비밀번호 로그인이 지워진다는 안내와 구글 버튼을 보이고 이메일 폼은 없다', async () => {
     open('old@example.com', 'email');
     expect(screen.getByText('연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '이메일 계정으로 로그인' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '기존 이메일 계정으로 로그인' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
     await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledWith('email'));
   });

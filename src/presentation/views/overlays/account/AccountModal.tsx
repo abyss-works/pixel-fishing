@@ -8,7 +8,7 @@ import {
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
-import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
+import { emailSignInFailure, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
@@ -45,6 +45,8 @@ export default function AccountModal({
   const [pw, setPw] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 이메일 로그인 실패 안내. 문장마다 한 줄이며, 다시 시도하거나 폼을 접으면 지운다 */
+  const [signInError, setSignInError] = useState<readonly string[]>([]);
   const { confirm, input, dialogs } = useDialogs();
   const { method, failed, retry } = useLoginMethod(account);
   const guest = method === 'guest';
@@ -65,6 +67,7 @@ export default function AccountModal({
 
   // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 확인을 받은 뒤에만 로그인한다.
   const emailSignIn = () => run(async () => {
+    setSignInError([]);
     if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`, 'warn'); return; }
     if (!(await confirm({
       title: '이메일 계정으로 로그인',
@@ -72,7 +75,7 @@ export default function AccountModal({
       confirmLabel: '로그인',
     }))) return;
     const r = await signInAccount(email.trim(), pw);
-    if (!r.ok) { setToast(`로그인하지 못했어요. ${r.msg}`, 'warn'); return; }
+    if (!r.ok) { setSignInError(emailSignInFailure(r.code)); return; }
     await onAuthChanged();
     onClose();
   });
@@ -129,7 +132,6 @@ export default function AccountModal({
 
   const emailForm = (
     <div className="flex flex-col gap-2 mt-2">
-      <Note className="my-0">이미 만든 이메일 계정으로만 로그인할 수 있어요.<br />이메일 계정이 없다면 구글 계정을 연결해 주세요.</Note>
       <Field label="이메일">
         <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
                    disabled={offline} onChange={e => setEmail(e.target.value)} />
@@ -142,6 +144,9 @@ export default function AccountModal({
       <Button full className="mt-1" onClick={emailSignIn} disabled={busy || offline}>로그인</Button>
       <div>
         <Button variant="ghost" size="sm" onClick={reset} disabled={busy || offline}>비밀번호 재설정</Button>
+      </div>
+      <div role="status" className={cx('flex flex-col', signInError.length > 0 && 'mt-1')}>
+        {signInError.map(line => <Note key={line} tone="warn" className="my-0">{line}</Note>)}
       </div>
     </div>
   );
@@ -167,7 +172,7 @@ export default function AccountModal({
           </Note>
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
           <div className="text-center">
-            <TextLinkButton open={formOpen} onClick={() => setFormOpen(o => !o)}>이메일 계정으로 로그인</TextLinkButton>
+            <TextLinkButton open={formOpen} onClick={() => { setFormOpen(o => !o); setSignInError([]); }}>기존 이메일 계정으로 로그인</TextLinkButton>
           </div>
           {formOpen && emailForm}
         </>
