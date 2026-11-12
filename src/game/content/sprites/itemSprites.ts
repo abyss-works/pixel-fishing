@@ -8,14 +8,9 @@ import type { PixelSprite } from './types.js';
 
 export interface ItemSpriteArt { sprite: PixelSprite; colors: readonly string[] }
 
-const SOURCES: Readonly<Record<CookKind, Readonly<Record<string, PixelSprite>>>> = {
-  lunch: DISH_SPRITES_GENERATED,
-  bait: BAIT_SPRITES_GENERATED,
-};
-
 const ART: Readonly<Record<CookKind, ReadonlyMap<string, ItemSpriteArt>>> = {
-  lunch: toArt(SOURCES.lunch),
-  bait: toArt(SOURCES.bait),
+  lunch: toArt(DISH_SPRITES_GENERATED),
+  bait: toArt(BAIT_SPRITES_GENERATED),
 };
 
 function toArt(sprites: Readonly<Record<string, PixelSprite>>): Map<string, ItemSpriteArt> {

@@ -7,8 +7,8 @@ import { recipeEffectNote, recipeLabel, recipesOfKind, selectRecipeView } from '
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
 import { GradeName } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
-import ItemSprite from '../../../ui/ItemSprite';
 import Inset from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
@@ -60,7 +60,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
 
   const detail = (
     <>
-      <HeroHeader sprite={<ItemSprite kind={kind} id={view.recipe.id} preset="hero" />}
+      <HeroHeader sprite={<ItemSprite kind={kind} id={view.recipe.id} preset="hero" ariaLabel={recipeLabel(view.recipe)} />}
                   title={recipeLabel(view.recipe)}
                   tags={[`보유 ${view.owned}개`, `지속 시간 ${fmtMinutes(view.slotMs / MIN_MS)}`]} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
