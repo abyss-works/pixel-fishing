@@ -8,7 +8,7 @@ type Tone = 'info' | 'gold' | 'warn';
 // 로그인과 연결이 끝난 세션은 이미 새 계정이라, 부팅이 그 세션으로 계정과 진행을 읽는다. 여기서는 결과를 알리는 일만 한다.
 export function useGoogleReturn({ setToast, askOverwrite, showNotice, reopenAccount }: {
   setToast: (message: string, tone?: Tone) => void;
-  /** 진행이 있는 구글 계정으로 덮어쓸지 묻는다. 진행하면 true */
+  /** 이미 다른 계정에 연결된 구글 계정으로 로그인해 덮어쓸지 묻는다. 로그인하면 true */
   askOverwrite: () => Promise<boolean>;
   showNotice: (title: string, body: string) => Promise<void>;
   /** 덮어쓰기를 취소하고 게스트 그대로 계정 관리 창을 다시 연다 */

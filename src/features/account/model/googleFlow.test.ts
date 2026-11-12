@@ -1,6 +1,6 @@
 // 구글 인증 복귀의 분기 — 어느 표지와 오류 코드에서 무엇을 보이고 어디로 이어지는가.
 import { describe, expect, it } from 'vitest';
-import { GOOGLE_TAG, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
+import { GOOGLE_TAG, OVERWRITE_COPY, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
 
 const back = (tag: string, error: string | null = null) => googleOutcome({ tag, error });
 const bodyOf = (o: ReturnType<typeof back>) => (o as { body: string }).body;
@@ -102,5 +102,18 @@ describe('알 수 없는 표지', () => {
 describe('덮어쓰기 취소', () => {
   it('게스트로 남고 다른 구글 계정으로 연결할 수 있다는 알림이다', () => {
     expect(overwriteCanceledText).toBe('연결하지 않았어요. 다른 구글 계정으로 연결해 보세요.');
+  });
+});
+
+describe('덮어쓰기 확인 창 문구', () => {
+  it('이미 다른 계정에 연결된 구글 계정을 알리고 로그인을 묻는다', () => {
+    expect(OVERWRITE_COPY).toEqual({
+      title: '구글 계정으로 로그인',
+      body: '이 구글 계정은 다른 계정에서 쓰고 있어요.',
+      warn: '로그인을 누르면 그 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
+      back: '되돌아가기를 누르면 게스트로 남고, 다른 구글 계정으로 연결할 수 있어요.',
+      confirm: '로그인',
+      cancel: '되돌아가기',
+    });
   });
 });
