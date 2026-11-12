@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
+import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import type { SpotId } from '../../../game/content/spots';
 import {
   clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
@@ -35,11 +36,10 @@ describe('체크 기본값', () => {
     expect(view.uids.sort()).toEqual(['a2', 'b1', 'c1', 'd1']);
   });
 
-  it('잠근 개체는 해역이 켜져 있어도 고르지 않고 안내 수에 센다', () => {
+  it('잠근 개체는 해역이 켜져 있어도 고르지 않는다', () => {
     const locked = [inst('a1', 'pond', true), inst('a2', 'pond')];
     const view = selectEnergyView(seed({ bag: locked }), {});
     expect(view.uids).toEqual(['a2']);
-    expect(view.lockedCount).toBe(1);
   });
 
   it('가방이 비면 행도 고른 개체도 없다', () => {
@@ -72,6 +72,30 @@ describe('등급별 얻는 기운', () => {
     expect(energyResultRows({ common: 380, rare: 0, epic: 25, legendary: 0 })).toEqual([
       { grade: 'common', count: 380 }, { grade: 'epic', count: 25 },
     ]);
+  });
+});
+
+describe('비교 표', () => {
+  it('등급 순서로 네 줄이고 지금 보유와 기운을 얻은 뒤의 수(저장 단위)를 나란히 준다', () => {
+    const bag = [inst('a1', 'pond'), inst('a2', 'pond'), inst('b1', 'sea', false, 'rare')];
+    const game = seed({ bag, items: { [ENERGY_ITEM_IDS.common]: 35, [ENERGY_ITEM_IDS.epic]: 4 } });
+    const view = selectEnergyView(game, {});
+    expect(view.compare.map(r => [r.grade, r.label, r.current, r.after])).toEqual([
+      ['common', '생명의 기운(일반)', 35, 55], ['rare', '생명의 기운(희귀)', 0, 10],
+      ['epic', '생명의 기운(영웅)', 4, 4], ['legendary', '생명의 기운(전설)', 0, 0],
+    ]);
+  });
+
+  it('고른 개체가 없어도 네 줄은 그대로고 값만 같다', () => {
+    const view = selectEnergyView(seed({ items: { [ENERGY_ITEM_IDS.rare]: 7 } }), {});
+    expect(view.compare.map(r => [r.current, r.after])).toEqual([[0, 0], [7, 7], [0, 0], [0, 0]]);
+  });
+
+  it('얻은 뒤의 수는 지금 보유에 합계를 더한 값과 같다', () => {
+    const bag = [inst('a1', 'pond'), inst('c1', 'indian', false, 'legendary')];
+    const view = selectEnergyView(seed({ bag, boat: 7, energyTargets: { indian: true } }), {});
+    const gained = view.compare.reduce((sum, r) => sum + r.after - r.current, 0);
+    expect(gained).toBe(view.energyTotal);
   });
 });
 

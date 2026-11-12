@@ -144,7 +144,6 @@ const sizedWithFlexibleScroll = (src: string) =>
   openingTags(src, ANY_TAG).filter(tag => /\$\{SCROLL_Y\}/.test(tag) && HEIGHT_CLASS_RE.test(tag));
 /** 줄 수가 아니라 화면 높이 같은 여유 상한(max-h)만 두는 칸 — 내용이 낮으면 내용 높이로 커지므로 SCROLL_Y를 쓴다(줄이기만 한다) */
 const SAFETY_CAP_EXCEPTIONS = new Set([
-  'views/overlays/facility/FacilityModal.tsx',   // 판매 목록: 행 서른 개 상한
   'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 버전 하나는 화면 높이 42%, 여러 버전은 56% 상한
 ]);
 
@@ -442,7 +441,7 @@ describe('UI 시스템 가드', () => {
     'views/game/tabs/dex/NamedDetail.tsx',
     'views/overlays/bounty/NamedCard.tsx',
     'views/overlays/bounty/QuestInfoCards.tsx',
-    'views/overlays/facility/FacilityModal.tsx',
+    'views/overlays/facility/SellTab.tsx',
     'views/game/tabs/bag/BagTab.tsx',
   ];
   /** 허용 줄 - 파일마다 허용하는 줄의 모양과 사유. 파일 단위가 아니라 줄 단위로 가리고, 쓰이지 않는 허용은 지운다 */
@@ -559,9 +558,9 @@ describe('UI 시스템 가드', () => {
     expect(adjustedInButtonWithoutFlag('<Note><AdjustedAmount amount={a} /></Note>')).toEqual([]);
   });
 
-  // 어종 선택 표 — 판매 창과 부엌 창의 기운 얻기 탭은 같은 표를 쓴다. 한쪽만 고쳐져 갈라지는 길을 막는다
-  const FISH_PICK_SCREENS = ['views/overlays/facility/FacilityModal.tsx', 'views/overlays/facility/EnergyTab.tsx'];
-  it('판매 창과 기운 얻기 탭은 어종 선택 표를 공용 FishPickTable로 그린다 - 행과 개체 줄을 직접 그리지 않는다', () => {
+  // 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭은 같은 표를 쓴다. 한쪽만 고쳐져 갈라지는 길을 막는다
+  const FISH_PICK_SCREENS = ['views/overlays/facility/SellTab.tsx', 'views/overlays/facility/EnergyTab.tsx'];
+  it('판매 탭과 기운 얻기 탭은 어종 선택 표를 공용 FishPickTable로 그린다 - 행과 개체 줄을 직접 그리지 않는다', () => {
     for (const path of FISH_PICK_SCREENS) {
       const src = presentationFiles.find(f => f.path === path)?.src ?? '';
       expect(src, path).toMatch(/<FishPickTable\b/);
@@ -580,7 +579,7 @@ describe('UI 시스템 가드', () => {
     expect([...OUTSIDE_PRESS_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
     expect(OUTSIDE_PRESS.test(`document.addEventListener('pointerdown', onDown)`)).toBe(true);
   });
-  it('부엌 창의 해역별 기운 대상은 Popover가 연다 - 창을 더 열지 않는다', () => {
+  it('판매 창의 해역별 기운 대상은 Popover가 연다 - 창을 더 열지 않는다', () => {
     const src = presentationFiles.find(f => f.path === 'views/overlays/facility/EnergyTab.tsx')?.src ?? '';
     expect(src).toMatch(/<Popover\b/);
     expect(src).not.toMatch(/<Modal\b|<ModalCard\b/);

@@ -16,7 +16,7 @@ import Tip from '../../../ui/Tip';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
 import { fmtMinutes, fmtPlusPoint } from '../../../ui/format';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
-import type { KitchenAct } from './kitchenParts';
+import type { FacilityAct } from './facilityParts';
 
 const MIN_MS = 60_000;
 
@@ -28,7 +28,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
   game: GameState;
   now: string;
   busy: boolean;
-  act: KitchenAct;
+  act: FacilityAct;
 }) {
   const recipes = recipesOfKind(kind);
   const [pickedId, setPickedId] = useState(recipes[0].id);

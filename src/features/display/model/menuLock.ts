@@ -116,3 +116,10 @@ export function facilityProgress(id: FurnitureId, boat: number): { met: boolean;
   if (id === 'kitchen') return { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT };
   return undefined;
 }
+
+/** 판매 창의 기운 얻기 탭 잠금. 게스트 잠금이 먼저고, 해금 전이면 진행 조건 잠금이다. 판정은 게스트 규칙과 요리 해금 규칙이 하고 여기는 문안을 만든다 */
+export function energyTabLock(guest: boolean, boat: number): MenuLock {
+  if (guest && guestActionVerdict({ type: 'extractEnergy', uids: [] }) !== 'ok') return { kind: 'guest', lines: [GUEST_LOCK_TEXT] };
+  if (!cookingUnlocked(boat)) return { kind: 'progress', lines: progressNote(COOKING_UNLOCK_BOAT, '기운 얻기를 할 수 있어요.') };
+  return { kind: 'none' };
+}

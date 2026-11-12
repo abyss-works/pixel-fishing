@@ -1,10 +1,9 @@
-// 부엌 창 — 고정 정보 줄과 탭, 도시락과 미끼 탭의 레시피와 조리 시작, 기운 얻기 탭의 선택과 톱니바퀴 팝오버.
-// 조리 가능 여부와 기운 얻기 기본 선택은 게임 규칙의 판정이고, 이 테스트는 판정이 화면에 그대로 닿는지 본다.
+// 부엌 창 — 고정 정보 줄과 탭, 도시락과 미끼 탭의 레시피와 조리 시작.
+// 조리 가능 여부는 게임 규칙의 판정이고, 이 테스트는 판정이 화면에 그대로 닿는지 본다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { FISH, newState } from '../../../../game/rules/logic';
-import type { FishInstance, GameState } from '../../../../game/rules/logic';
-import type { SpotId } from '../../../../game/content/spots';
+import { newState } from '../../../../game/rules/logic';
+import type { GameState } from '../../../../game/rules/logic';
 import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
@@ -19,9 +18,7 @@ const energy = (c = 0, r = 0, e = 0, l = 0): Record<string, number> => ({
   [ENERGY_ITEM_IDS.epic]: toStoredEnergy(e), [ENERGY_ITEM_IDS.legendary]: toStoredEnergy(l),
 });
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: 5, location: home, ...over });
-const fishIn = (spot: SpotId) => FISH.find(f => f.spot === spot && f.rarity === 'common')!;
-const inst = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance =>
-  ({ uid, fishId: fishIn(spot).id, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
+
 
 function show(game: GameState, result: { type: string; [k: string]: unknown } = { type: 'none' }) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: result as never }));
@@ -34,16 +31,17 @@ const tab = (name: string) => screen.getByRole('button', { name });
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 describe('부엌 창 틀', () => {
-  it('제목 부엌 아래 고정 정보 줄과 탭 셋(도시락, 미끼, 기운 얻기)을 둔다', () => {
+  it('제목 부엌 아래 고정 정보 줄과 탭 둘(도시락, 미끼)만 둔다', () => {
     show(seed());
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('조리 중인 요리 없음')).toBeInTheDocument();
     expect(screen.getByText('보관함')).toBeInTheDocument();
     expect(screen.getByText(`0/${COOK_STORAGE_CAP}`)).toBeInTheDocument();
-    const tabs = ['도시락', '미끼', '기운 얻기'].map(tab);
+    const tabs = ['도시락', '미끼'].map(tab);
     expect(tabs[0]).toHaveClass('active');
     expect(tabs[0].compareDocumentPosition(tabs[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(tabs[1].compareDocumentPosition(tabs[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '기운 얻기' })).toBeNull();
+    expect(screen.getAllByRole('button').filter(b => b.closest('.pf-tabbar'))).toHaveLength(2);
   });
 
   it('조리 중이면 정보 줄에 레시피와 완성 수와 다음 완성까지 남은 시간이 보이고 탭을 옮겨도 그대로다', () => {
@@ -52,7 +50,7 @@ describe('부엌 창 틀', () => {
     expect(within(line).getByText('가루디야')).toBeInTheDocument();
     expect(within(line).getByText('1/3')).toBeInTheDocument();
     expect(screen.getByText('30분')).toBeInTheDocument();
-    fireEvent.click(tab('기운 얻기'));
+    fireEvent.click(tab('미끼'));
     expect(screen.getByText('1/3')).toBeInTheDocument();
   });
 
@@ -176,199 +174,5 @@ describe('도시락 탭과 미끼 탭', () => {
     show(seed({ items: energy(1000), artifacts: ['varuna-scale'] }));
     expect(screen.getByText('요리 추가 완성')).toBeInTheDocument();
     expect(screen.getByText('+10%p')).toBeInTheDocument();
-  });
-});
-
-describe('기운 얻기 탭', () => {
-  // 배 5의 기본값: 가장 앞선 해역(인도양)만 꺼짐, 그 앞 해역은 켜짐
-  const bag = () => [inst('a1', 'pond'), inst('a2', 'pond'), inst('b1', 'sea'), inst('c1', 'indian')];
-  const open = (game = seed({ bag: bag() }), result?: { type: string; [k: string]: unknown }) => {
-    const out = show(game, result);
-    fireEvent.click(tab('기운 얻기'));
-    return out;
-  };
-  const rowOf = (spot: SpotId) => screen.getByText(fishIn(spot).name).closest('tr')!;
-
-  it('판매 창과 같은 표(어종, 등급, 수량)에 체크 열과 생명의 기운 열을 둔다', () => {
-    open();
-    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['선택', '어종', '등급', '수량', '생명의 기운']);
-  });
-
-  it('체크 기본값은 게임 규칙을 따른다 — 가장 앞선 해역의 어종은 꺼지고 그 앞 해역은 켜진다', () => {
-    open();
-    expect(within(rowOf('pond')).getByText('+2')).toBeInTheDocument();
-    expect(within(rowOf('sea')).getByText('+1')).toBeInTheDocument();
-    expect(within(rowOf('indian')).getByText('0')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '기운 얻기 (3마리)' })).toBeEnabled();
-  });
-
-  it('확정 버튼은 고른 개체의 uid로 extractEnergy를 보내고 창은 그대로 열려 있다', () => {
-    const { dispatch, onClose } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 30, rare: 0, epic: 0, legendary: 0 } });
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'extractEnergy', uids: ['a1', 'a2', 'b1'] });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('결과는 메시지 창 한 줄로 알리고 등급별 목록 툴팁을 단다', () => {
-    const { setToast } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 380, rare: 20, epic: 0, legendary: 0 } });
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
-    expect(setToast).toHaveBeenCalledWith('생명의 기운 40개를 얻었어요!', 'gold', {
-      target: '40',
-      rows: [{ label: '생명의 기운(일반)', value: '+38' }, { label: '생명의 기운(희귀)', value: '+2' }],
-    });
-  });
-
-  it('결과의 기운이 소수 첫째 자리이면 소수로 알린다', () => {
-    const { setToast } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 15, rare: 5, epic: 0, legendary: 0 } });
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
-    expect(setToast).toHaveBeenCalledWith('생명의 기운 2개를 얻었어요!', 'gold', {
-      target: '2',
-      rows: [{ label: '생명의 기운(일반)', value: '+1.5' }, { label: '생명의 기운(희귀)', value: '+0.5' }],
-    });
-  });
-
-  it('행 체크를 해제하면 그 어종은 빠지고 개체 수가 버튼에 보인다', () => {
-    const { dispatch } = open();
-    fireEvent.click(screen.getByRole('button', { name: `${fishIn('pond').name} 기운 얻기 해제` }));
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (1마리)' }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'extractEnergy', uids: ['b1'] });
-  });
-
-  it('고른 것이 없으면 확정 버튼이 막힌다', () => {
-    open(seed({ bag: [inst('c1', 'indian')] }));
-    expect(screen.getByRole('button', { name: '기운 얻기 (0마리)' })).toBeDisabled();
-  });
-
-  it('판매 시설이 있는 거점 밖이면 확정이 막히고 게임 규칙의 거부 사유가 툴팁이다', () => {
-    open(seed({ bag: bag(), location: { kind: 'region', id: 'village' } }));
-    const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
-    expect(button).toBeDisabled();
-    fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
-  });
-
-  it('잠근 개체가 있으면 확정 영역에 안내가 보이고 되돌릴 수 없다는 안내는 늘 보인다', () => {
-    open(seed({ bag: [inst('a1', 'pond'), inst('a2', 'pond', { locked: true })] }));
-    expect(screen.getByText(/잠근 개체 1마리는 기운 얻기에서 빠져요/)).toBeVisible();
-    expect(screen.getByText(/기운을 얻은 물고기는 가방에서 사라져요/)).toBeInTheDocument();
-  });
-
-  it('잠근 개체가 없을 때도 안내 자리는 같은 높이로 두고 보이지 않게 한다', () => {
-    open();
-    const note = screen.getByText(/기운 얻기에서 빠져요/, { selector: 'p' });
-    expect(note).toHaveClass('invisible');
-  });
-
-  it('합계 줄의 툴팁은 등급별 목록이다', () => {
-    const rare = FISH.find(f => f.spot === 'pond' && f.rarity === 'rare')!;
-    open(seed({ bag: [inst('a1', 'pond'), { ...inst('a2', 'pond'), fishId: rare.id }] }));
-    fireEvent.mouseEnter(screen.getByText('+2', { selector: 'span.pf-accent' }));
-    const tip = screen.getByRole('tooltip');
-    expect(tip).toHaveTextContent('생명의 기운(일반)');
-    expect(tip).toHaveTextContent('생명의 기운(희귀)');
-  });
-});
-
-describe('해역별 기운 대상 팝오버', () => {
-  const bag = () => [inst('a1', 'pond'), inst('a2', 'pond'), inst('b1', 'sea')];
-  const open = (game = seed({ bag: bag() })) => {
-    const out = show(game);
-    fireEvent.click(tab('기운 얻기'));
-    return out;
-  };
-  const gear = () => screen.getByRole('button', { name: '해역별 기운 대상 고르기' });
-  const pop = () => screen.getByRole('group', { name: '해역별 기운 대상' });
-
-  it('톱니바퀴 버튼은 확정 버튼 왼쪽에 있고 누르면 그 버튼에 붙은 팝오버가 열린다', () => {
-    open();
-    const confirm = screen.getByRole('button', { name: /^기운 얻기 \(/ });
-    expect(gear().compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(gear()).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(gear());
-    expect(gear()).toHaveAttribute('aria-expanded', 'true');
-    expect(pop()).toBeInTheDocument();
-    expect(screen.getAllByRole('dialog')).toHaveLength(1); // 창이 하나 더 뜨지 않는다
-  });
-
-  it('톱니바퀴 버튼은 확정 버튼과 같은 높이의 정사각형이다', () => {
-    open();
-    expect(gear()).toHaveClass('h-full', 'aspect-square');
-    expect(screen.getByRole('button', { name: /기운 얻기 \(/ })).not.toHaveClass('h-10');
-  });
-
-  it('배로 갈 수 있는 해역마다 켜짐과 꺼짐 칩을 가장 앞선 해역부터 보인다', () => {
-    open();
-    fireEvent.click(gear());
-    const chips = within(pop()).getAllByRole('button').filter(b => b.hasAttribute('aria-pressed'));
-    expect(chips.map(c => c.getAttribute('aria-label'))[0]).toBe('인도양 기운 대상');
-    expect(within(pop()).getByRole('button', { name: '인도양 기운 대상' })).toHaveTextContent('꺼짐');
-    expect(within(pop()).getByRole('button', { name: '마을 연못 기운 대상' })).toHaveTextContent('켜짐');
-  });
-
-  it('칩을 누르면 setEnergyTarget을 보낸다', () => {
-    const { dispatch } = open();
-    fireEvent.click(gear());
-    fireEvent.click(within(pop()).getByRole('button', { name: '마을 연못 기운 대상' }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setEnergyTarget', spot: 'pond', on: false });
-  });
-
-  it('덮어쓴 해역이 없으면 되돌리기가 비활성이고 덮어쓴 해역이 있으면 켜진다', () => {
-    open();
-    fireEvent.click(gear());
-    expect(within(pop()).getByRole('button', { name: '기본값으로 되돌리기' })).toBeDisabled();
-    cleanup();
-    const { dispatch } = open(seed({ bag: bag(), energyTargets: { pond: false } }));
-    fireEvent.click(gear());
-    const reset = within(pop()).getByRole('button', { name: '기본값으로 되돌리기' });
-    expect(reset).toBeEnabled();
-    fireEvent.click(reset);
-    expect(dispatch).toHaveBeenCalledWith({ type: 'resetEnergyTargets' });
-  });
-
-  it('덮어쓴 해역에는 금색 점이 있고 점 툴팁은 기본값을 알린다', () => {
-    open(seed({ bag: bag(), energyTargets: { pond: false } }));
-    fireEvent.click(gear());
-    const row = within(pop()).getByText('마을 연못').closest('div')!;
-    const dot = row.querySelector('.bg-gold')!;
-    expect(dot).not.toBeNull();
-    fireEvent.mouseEnter(dot.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('기본값은 켜짐이에요.');
-    expect(within(pop()).getByText('인도양').closest('div')!.querySelector('.bg-gold')).toBeNull();
-  });
-
-  it('덮어쓴 해역이 있으면 톱니바퀴에 금색 점이 있고 툴팁이 한 줄 더한다', () => {
-    open();
-    expect(gear().querySelector('.bg-gold')).toBeNull();
-    cleanup();
-    open(seed({ bag: bag(), energyTargets: { pond: false } }));
-    expect(gear().querySelector('.bg-gold')).not.toBeNull();
-    fireEvent.mouseEnter(gear().parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('기본값과 다르게 고른 해역이 있어요.');
-  });
-
-  it('바깥을 누르거나 Esc를 누르면 팝오버만 닫히고 부엌 창은 열려 있다', () => {
-    const { onClose } = open();
-    fireEvent.click(gear());
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('group', { name: '해역별 기운 대상' })).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(gear());
-    fireEvent.pointerDown(screen.getByText('보관함'));
-    expect(screen.queryByRole('group', { name: '해역별 기운 대상' })).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('해역을 바꾸면 그 해역 행만 새 기본값을 따르고 다른 해역에서 직접 고른 체크는 남는다', () => {
-    open();
-    // 연못 어종과 바다 어종을 모두 직접 해제한다
-    fireEvent.click(screen.getByRole('button', { name: `${fishIn('pond').name} 기운 얻기 해제` }));
-    fireEvent.click(screen.getByRole('button', { name: `${fishIn('sea').name} 기운 얻기 해제` }));
-    expect(screen.getByRole('button', { name: '기운 얻기 (0마리)' })).toBeDisabled();
-    // 연못 해역 칩을 누른다 — 연못 행만 다시 정해져 켜짐 기본값을 따른다
-    fireEvent.click(gear());
-    fireEvent.click(within(pop()).getByRole('button', { name: '마을 연못 기운 대상' }));
-    expect(screen.getByRole('button', { name: '기운 얻기 (2마리)' })).toBeInTheDocument();
-    expect(within(screen.getByText(fishIn('sea').name).closest('tr')!).getByText('0')).toBeInTheDocument();
   });
 });

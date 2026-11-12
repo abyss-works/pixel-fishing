@@ -375,7 +375,7 @@ export default function GameView(props: GameViewProps) {
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
-                         sellBonus={guildBonus?.effects.sell ?? 0}
+                         sellBonus={guildBonus?.effects.sell ?? 0} guest={guest}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
       </GameStageLayout>

@@ -1,4 +1,4 @@
-// 어종 선택 표 — 판매 창과 부엌 창의 기운 얻기 탭이 함께 쓰는 표. 행 구성과 체크 동작은 이 표 하나가 맡는다.
+// 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭이 함께 쓰는 표. 행 구성과 체크 동작은 이 표 하나가 맡는다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { FISH } from '../../../../game/rules/logic';
@@ -60,6 +60,28 @@ describe('어종 선택 표', () => {
   it('전부 잠긴 행은 체크 버튼 대신 잠금 표시이고 선택할 수 없다', () => {
     show([inst('a', { locked: true })]);
     expect(screen.queryByRole('button', { name: new RegExp(`${fish.name} 선택`) })).toBeNull();
+  });
+
+  it('전부 잠긴 행의 자물쇠 툴팁은 잠근 개체를 고를 수 없다는 두 줄이다', () => {
+    const { container } = render(
+      <FishPickTable rows={selectSalePreview([inst('a', { locked: true })], new Set(), 0).rows} expanded={new Set()}
+                     action="선택" heads={{ check: '선택', value: '값' }} valueOf={() => ''} emptyValue="0"
+                     onToggleExpand={vi.fn()} onToggleRow={vi.fn()} onToggleOne={vi.fn()} />,
+    );
+    fireEvent.mouseEnter(container.querySelector('[data-glyph="lock"]')!.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('잠근 개체는 고를 수 없어요. 잠금은 가방 탭에서 풀 수 있어요.');
+  });
+
+  it('일부만 잠긴 행을 펼치면 잠긴 개체 줄의 자물쇠에도 같은 툴팁이 붙는다', () => {
+    const { container } = render(
+      <FishPickTable rows={selectSalePreview([inst('a'), inst('b', { locked: true })], new Set(), 0).rows} expanded={new Set([fish.id])}
+                     action="선택" heads={{ check: '선택', value: '값' }} valueOf={() => ''} emptyValue="0"
+                     onToggleExpand={vi.fn()} onToggleRow={vi.fn()} onToggleOne={vi.fn()} />,
+    );
+    const locks = container.querySelectorAll('[data-glyph="lock"]');
+    expect(locks).toHaveLength(1); // 행 체크는 잠그지 않은 개체가 있어 체크 모양이고, 자물쇠는 잠긴 개체 줄 하나뿐이다
+    fireEvent.mouseEnter(locks[0].parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('잠근 개체는 고를 수 없어요. 잠금은 가방 탭에서 풀 수 있어요.');
   });
 
   it('펼치면 개체 줄이 보이고 줄의 체크가 그 개체 하나를 넘긴다', () => {
