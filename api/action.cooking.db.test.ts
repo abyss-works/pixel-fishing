@@ -1,7 +1,7 @@
 // 액션 경로의 요리 — 실제 Postgres에서 슬롯 효과가 캐치 경로(빠른 경로, 리듀서 경로)에 같게 걸리는지,
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../src/game/content/cooking.js';
+import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -130,10 +130,10 @@ describe('요리 액션', () => {
       const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [common.uid, rare.uid, locked.uid, 'none', common.uid] });
       expect(res.status).toBe(200);
       expect((res.body as { result: unknown }).result).toEqual({
-        type: 'extract', energy: { common: 1, rare: 1, epic: 0, legendary: 0 },
+        type: 'extract', energy: { common: 10, rare: 10, epic: 0, legendary: 0 },
       });
       expect(await bagUids(uid)).toEqual([locked.uid]);
-      expect((await stored(uid)).data.items).toEqual({ [ENERGY.common]: 1, [ENERGY.rare]: 1 });
+      expect((await stored(uid)).data.items).toEqual({ [ENERGY.common]: 10, [ENERGY.rare]: 10 });
       expect((await eventsOf(uid)).map(e => e.type)).toEqual(['extractEnergy']);
     });
 
@@ -190,7 +190,9 @@ describe('요리 액션', () => {
     const lunchRecipe = recipeById(LUNCH);
     if (!lunchRecipe) throw new Error('레시피를 찾을 수 없다');
     const lunchCost = (count: number) => Object.fromEntries(
-      Object.entries(lunchRecipe.cost).map(([grade, amount]) => [ENERGY[grade as keyof typeof ENERGY], (amount ?? 0) * count]),
+      Object.keys(lunchRecipe.cost).map(grade => [
+        ENERGY[grade as keyof typeof ENERGY], recipeCostStored(lunchRecipe, grade as keyof typeof ENERGY) * count,
+      ]),
     );
 
     it('기운을 즉시 차감하고 서버 시각으로 시작한 조리 상태와 추첨을 저장한다', async () => {
