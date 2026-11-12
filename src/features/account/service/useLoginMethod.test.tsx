@@ -22,7 +22,7 @@ describe('로그인 방식 읽기', () => {
 
   it('구글이 붙은 계정은 읽는 동안 모르는 상태(실패 아님)이고 읽은 뒤 구글이 된다', async () => {
     auth.providers.mockResolvedValue(['google']);
-    const { result } = renderHook(() => useLoginMethod('a@gmail.com'));
+    const { result } = renderHook(() => useLoginMethod('a@gmail.test'));
     expect(result.current).toMatchObject({ method: null, failed: false });
     await waitFor(() => expect(result.current.method).toBe('google'));
   });

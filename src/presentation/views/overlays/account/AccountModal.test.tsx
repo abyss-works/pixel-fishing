@@ -132,7 +132,7 @@ describe('로그인 방식별 구성', () => {
   });
 
   it('구글 계정은 연결 구역과 구글 버튼이 없고 로그아웃과 약관 링크가 있다', () => {
-    open('me@gmail.com', 'google');
+    open('me@gmail.test', 'google');
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '이용약관' })).toBeInTheDocument();

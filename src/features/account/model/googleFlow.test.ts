@@ -12,7 +12,7 @@ describe('로그인 방식', () => {
   });
 
   it('구글이 붙은 계정은 구글, 구글이 없는 계정은 이메일이다', () => {
-    expect(loginMethodOf('a@gmail.com', ['google'])).toBe('google');
+    expect(loginMethodOf('a@gmail.test', ['google'])).toBe('google');
     expect(loginMethodOf('a@example.com', ['credential'])).toBe('email');
     expect(loginMethodOf('a@example.com', [])).toBe('email');
   });
