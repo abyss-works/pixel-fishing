@@ -31,7 +31,7 @@ import StatsModal from '../overlays/stats/StatsModal';
 import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
-import { useGuestBlockedNotice } from './useGuestBlockedNotice';
+import { createGuestBlockedNotice } from './guestBlockedNotice';
 import { isConfirmedGuest, isGuest } from '../../../features/account/service/accountActions';
 import type { GuestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
@@ -186,7 +186,7 @@ export default function GameView(props: GameViewProps) {
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
 
-  const onGuestBlocked = useGuestBlockedNotice({ accountOpen, openAccount: () => setAccountOpen(true), setToast: props.setToast });
+  const onGuestBlocked = createGuestBlockedNotice({ accountOpen, openAccount: () => setAccountOpen(true), setToast: props.setToast });
 
   const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
 

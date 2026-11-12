@@ -3,15 +3,15 @@ import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GUEST_VILLAGE_ONLY_TEXT } from '../../../features/gameplay/service/useGame';
 import { resetOpenWindows, useOpenWindow } from '../../ui/openWindows';
-import { useGuestBlockedNotice } from './useGuestBlockedNotice';
+import { createGuestBlockedNotice } from './guestBlockedNotice';
 
 afterEach(resetOpenWindows);
 
 function setup(accountOpen = false) {
   const setToast = vi.fn();
   const openAccount = vi.fn();
-  const view = renderHook(() => useGuestBlockedNotice({ accountOpen, openAccount, setToast }));
-  return { setToast, openAccount, notify: view.result.current };
+  const notify = createGuestBlockedNotice({ accountOpen, openAccount, setToast });
+  return { setToast, openAccount, notify };
 }
 
 describe('게스트 출항 차단 처리', () => {
