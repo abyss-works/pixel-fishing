@@ -9,6 +9,7 @@ const actions = vi.hoisted(() => ({
   failed: false,
   configured: true,
   retry: vi.fn(),
+  recheck: vi.fn(),
 }));
 
 vi.mock('../../../../features/account/service/accountActions', async importOriginal => ({
@@ -32,6 +33,8 @@ beforeEach(() => {
   actions.failed = false;
   actions.configured = true;
   actions.retry.mockReset();
+  actions.recheck.mockReset();
+  actions.recheck.mockResolvedValue('nothing');
 });
 afterEach(cleanup);
 
@@ -40,8 +43,9 @@ const open = (account: string | null, method: typeof actions.method, guestProgre
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} guestProgress={guestProgress} />);
-  return { setToast, onAuthChanged, onClose };
+  const view = render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account}
+                                    guestProgress={guestProgress} recheckGuestProgress={actions.recheck} />);
+  return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
 
 describe('게스트의 구글 연결', () => {
@@ -121,6 +125,54 @@ describe('게스트가 이메일 계정으로 로그인', () => {
     expect(screen.queryByText('지금 게스트 진행은 사라져요.')).toBeNull();
     await waitFor(() => expect(onAuthChanged).toHaveBeenCalledTimes(1));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('확인을 건너뛰기로 했어도 로그인을 요청하기 직전에 진행을 다시 읽는다', async () => {
+    open(null, 'guest', 'nothing');
+    fill();
+    await waitFor(() => expect(actions.signInAccount).toHaveBeenCalledTimes(1));
+    expect(actions.recheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('이미 진행이 있다고 판정했으면 다시 읽지 않고 확인을 띄운다', async () => {
+    open(null, 'guest', 'some');
+    fill();
+    await screen.findByText('지금 게스트 진행은 사라져요.');
+    expect(actions.recheck).not.toHaveBeenCalled();
+  });
+
+  it('다시 읽은 결과가 진행 있음이면 확인을 띄우고 확인하기 전에는 로그인하지 않는다', async () => {
+    actions.recheck.mockResolvedValue('some');
+    open(null, 'guest', 'nothing');
+    fill();
+    expect(await screen.findByText('지금 게스트 진행은 사라져요.')).toBeInTheDocument();
+    expect(actions.signInAccount).not.toHaveBeenCalled();
+  });
+
+  it('다시 읽는 동안 로그인 버튼은 눌리지 않고, 끝나면 건너뛰어 로그인한다', async () => {
+    let finish: (progress: GuestProgress) => void = () => {};
+    actions.recheck.mockReturnValue(new Promise<GuestProgress>(resolve => { finish = resolve; }));
+    open(null, 'guest', 'nothing');
+    fill();
+    const button = screen.getByRole('button', { name: '로그인' }) as HTMLButtonElement;
+    await waitFor(() => expect(button.disabled).toBe(true));
+    fireEvent.click(button);
+    expect(actions.recheck).toHaveBeenCalledTimes(1);
+    finish('nothing');
+    await waitFor(() => expect(actions.signInAccount).toHaveBeenCalledTimes(1));
+  });
+
+  it('다시 읽는 사이 창을 닫으면 로그인하지 않는다', async () => {
+    let finish: (progress: GuestProgress) => void = () => {};
+    actions.recheck.mockReturnValue(new Promise<GuestProgress>(resolve => { finish = resolve; }));
+    const { unmount, onAuthChanged } = open(null, 'guest', 'nothing');
+    fill();
+    await waitFor(() => expect(actions.recheck).toHaveBeenCalledTimes(1));
+    unmount();
+    finish('nothing');
+    await new Promise(r => setTimeout(r, 20));
+    expect(actions.signInAccount).not.toHaveBeenCalled();
+    expect(onAuthChanged).not.toHaveBeenCalled();
   });
 
   it('세이브를 읽는 중이면 진행이 있는 것으로 보아 확인을 띄운다', async () => {

@@ -12,6 +12,7 @@ import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
 import { guestProgress } from '../../account/model/accountRules';
+import { guestHasNoProgress } from '../../../game/rules/guest';
 import { setSchoolDay } from './schoolDay';
 import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
@@ -153,6 +154,13 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
+  // 서버 저장 상태를 읽어 채택한다. 게이트웨이의 캐시와 버전도 읽은 상태로 맞춰진다. 저장 상태가 없으면 null이고 읽기 실패는 던진다
+  const readSave = async (): Promise<GameState | null> => {
+    const saved = await gameGatewayRef.current.load();
+    if (saved) setGame(saved);
+    return saved;
+  };
+
   return {
     game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
@@ -186,8 +194,19 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
      * 새로 읽은 상태로 맞춰진다. 읽기에 실패하면 그대로 둔다 — 다음 액션의 응답이 버전 차이를 보고 다시 읽는다.
      */
     resync: async (): Promise<void> => {
-      const s = await Promise.resolve(gameGatewayRef.current.load()).catch(() => null);
-      if (s) setGame(s);
+      await readSave().catch(() => {});
+    },
+    /**
+     * 이 탭이 들고 있는 상태가 낡았을 수 있어, 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽고 버려질 진행이 있는지 판정한다.
+     * 저장 상태가 없으면 진행이 없는 것이고, 읽기에 실패하면 진행이 있는 것으로 본다.
+     */
+    recheckGuestProgress: async (): Promise<'nothing' | 'some'> => {
+      try {
+        const saved = await readSave();
+        return guestHasNoProgress(saved ?? newState()) ? 'nothing' : 'some';
+      } catch {
+        return 'some';
+      }
     },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),

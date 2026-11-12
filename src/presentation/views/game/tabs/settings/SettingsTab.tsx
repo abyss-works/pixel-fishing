@@ -26,11 +26,12 @@ type OpenWindow = 'account' | 'myInfo' | 'settings' | 'codes' | 'letter' | 'patc
 // 설정 탭 - 맨 위 계정 묶음(계정, 닉네임, 계정 관리, 내 정보), 옅은 가로선, 창을 여는 줄 버튼 넷
 // (설정, 코드 입력, 개발자에게, 패치노트), 맨 아래 버전 줄. 세부 값은 각 버튼이 여는 창에서 다룬다.
 // 연 창이 떠 있는 동안 그 창을 연 버튼은 눌린 모양이다. 이사 코드는 소유자 전용이라 개발 도구 패널에 있다.
-export default function SettingsTab({ dispatch, setToast, syncLabel, syncState, guestProgress, account, uid, onAuthChanged, nickname, onRename }: {
+export default function SettingsTab({ dispatch, setToast, syncLabel, syncState, guestProgress, recheckGuestProgress, account, uid, onAuthChanged, nickname, onRename }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   syncLabel: string | null; syncState: string;
   guestProgress: GuestProgress;
+  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null; uid: string | null; onAuthChanged: () => Promise<void>;
   nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
   }) {
@@ -64,7 +65,7 @@ export default function SettingsTab({ dispatch, setToast, syncLabel, syncState, 
           (주소 입력이 곧 진입이고, 유저에게 노출할 이유가 없다). */}
 
       {open === 'account' && (
-        <AccountModal setToast={setToast} onAuthChanged={onAuthChanged} account={account} guestProgress={guestProgress}
+        <AccountModal setToast={setToast} onAuthChanged={onAuthChanged} account={account} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
                       syncLabel={syncLabel} syncState={syncState} onClose={close} />
       )}
       {open === 'myInfo' && (

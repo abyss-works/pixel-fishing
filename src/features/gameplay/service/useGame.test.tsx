@@ -15,6 +15,7 @@ const gw = vi.hoisted(() => ({
   cloudEmpty: false,
   importError: null as unknown,
   loadError: null as unknown,
+  loadDex: {} as Record<string, unknown>,
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -30,7 +31,7 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold }; },
+        load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
         getNickname: async () => 'nick',
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -55,7 +56,7 @@ function setup() {
 
 afterEach(() => {
   cleanup(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadDex = {};
 });
 
 describe('부트스트랩', () => {
@@ -132,6 +133,40 @@ describe('레거시 로컬 세이브 브리지', () => {
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     expect(gw.actions).toEqual(['import']);
+  });
+});
+
+describe('게스트 진행 다시 읽기', () => {
+  async function booted() {
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    return hook;
+  }
+
+  it('서버 저장 상태를 다시 읽어 낚은 수가 0이면 진행 없음이다', async () => {
+    const hook = await booted();
+    const loads = gw.loads;
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
+    expect(gw.loads).toBe(loads + 1);
+  });
+
+  it('다시 읽은 상태에 낚은 기록이 있으면 이 탭이 들고 있던 상태가 비어 있어도 진행 있음이다', async () => {
+    const hook = await booted();
+    gw.loadDex = { carp: { normal: { count: 3, maxSize: 5, first: '2026-01-01' } } };
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
+  });
+
+  it('서버에 저장 상태가 없으면 진행 없음이다', async () => {
+    const hook = await booted();
+    gw.cloudEmpty = true;
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
+  });
+
+  it.each(['network', 'replaced', 'rate-limited', 'restricted'] as const)('다시 읽기가 %s로 실패하면 진행 있음이다', async kind => {
+    const hook = await booted();
+    gw.loadError = new AppError(kind, 'read failed');
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
   });
 });
 

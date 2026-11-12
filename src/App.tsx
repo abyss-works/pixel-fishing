@@ -32,7 +32,7 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, guestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
   const { input, dialogs } = useDialogs();
   const { account, accountChecked, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
@@ -85,7 +85,7 @@ ${min}자 이상이어야 해요.`,
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
-        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
+        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
         account={account} accountChecked={accountChecked} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
