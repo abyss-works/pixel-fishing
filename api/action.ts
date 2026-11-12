@@ -47,12 +47,12 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDelivery, debugFragment,
+  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDeliveryFragment, debugFragment, deliveryGate,
   expiredCleanup, ticketFragment,
 } from './_data/bounty.js';
-import { consumeRelief, findCoupon } from './_data/codes.js';
+import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
-import { COMMIT_GUARD, commitAction, runFollowUps } from './_data/commit.js';
+import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
@@ -376,8 +376,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
-  // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
+  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
+  // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
   const lastActionMs = Date.parse(String(row.updated_at ?? ''));
   if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
@@ -397,15 +397,21 @@ async function route(req: Req, res: Res): Promise<void> {
     dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
   }
 
-  // 지원 코드(reliefs 테이블) — **선소비 후적용**. active=true 조건부 UPDATE가 성공한 요청만
-  // 자산을 받는다(동시 수령 경합 원천 차단 — 코드당 1행이라 UPDATE 승자가 1개). 적용 직후
-  // 실패할 규칙이 없으므로 코드가 탈 일은 사실상 없다.
+  // 지원 코드 소비 — 다른 계정과 같은 행을 다투므로 읽기와 규칙 실행 뒤, 확정과 같은 트랜잭션에서 한다.
+  // 확정이 경합으로 실패하면 소비도 되돌려지고, 읽은 뒤 다른 요청이 먼저 소비했으면 확정하지 않고 거부한다.
+  let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
+
+  // 지원 코드(reliefs 테이블) — 여기서는 지급분을 읽기만 한다. 활성 코드를 조건부로 비활성화한 요청 하나만
+  // 확정되므로(코드당 1행) 동시 수령은 한 번만 지급된다.
   let relief: ActionDeps['relief'] = null;
   if (action.type === 'claimRelief' && typeof action.code === 'string') {
     const code = action.code.trim();
     if (code) {
-      const g = await step('db-write', { uid, action: action.type }, () => consumeRelief(db, code, uid));
-      if (g) relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+      const g = await step('db-read', { uid, action: action.type }, () => findRelief(db, code));
+      if (g) {
+        relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+        consumeCode = async tx => await consumeRelief(tx, code, uid) !== null;
+      }
     }
   }
 
@@ -432,6 +438,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 라이선스 소유·일일 카운트·진행도·도전권은 saves가 아니라 전용 테이블에 있다.
   // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
   let bounty: ActionDeps['bounty'] = null;
+  let deliveryRow: { gate: SQL; questId: string } | null = null; // 납품이 소비할 진행 행
   let expired: ReturnType<typeof expiredQuests> = []; // 이번 읽기에서 만료로 판정한 의뢰 — 응답 뒤에 정리한다
   if (wantsBounty) {
     const rows = loaded.bounty ?? { clears: [], progress: [], tickets: [] };
@@ -447,12 +454,9 @@ async function route(req: Req, res: Res): Promise<void> {
       }
     }
 
-    // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
-    // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
+    // 납품 — 완료한 진행 행이 있어야 확정하고, 진행 행은 확정 문장 안에서 지운다.
     if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
-      const questId = action.questId;
-      const consumed = await step('db-write', { uid, action: action.type }, () => consumeDelivery(db, uid, questId));
-      if (!consumed) bounty = { ...bounty, complete: [] };
+      deliveryRow = { gate: deliveryGate(uid, action.questId), questId: action.questId };
     }
   }
 
@@ -493,7 +497,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 확정 — 낙관 락 갱신과, 그것이 성공했을 때만 쓰는 행(개체·도감·수배·편지)을 한 문장으로 쓴다.
   // 읽은 version이 그대로가 아니면 아무것도 쓰지 않고 409를 돌려준다. 클라이언트(HttpGameGateway)가
-  // 최신 상태 위에 1회 재시도한다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
+  // 최신 상태 위에 1회 재시도한다. 납품은 소비할 진행 행이 이미 없으면 409가 아니라 422다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
   const nowISO = new Date().toISOString();
   // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다.
   const eventNow = nowISO;
@@ -508,6 +512,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(clearFragment(guard, uid, quest, nowISO));
   }
+  if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
     if (e.type !== 'ticket') return [];
@@ -529,12 +534,27 @@ async function route(req: Req, res: Res): Promise<void> {
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
-  const committed = await step('db-write', { uid, action: action.type },
-    () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO, {
-      ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
-      ...(action.type === 'boot' ? { activeClient: clientId } : {}),
-    }), fragments));
-  if (!committed) throw new ApiError(409, 'version-conflict');
+  const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
+    ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
+    ...(action.type === 'boot' ? { activeClient: clientId } : {}),
+  }, deliveryRow?.gate ?? null);
+  if (consumeCode) {
+    const consuming = consumeCode;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitConsumingCode(withTransaction, consuming, versionWrite, fragments));
+    if (result === 'unavailable') throw new ApiError(422, 'relief-invalid');
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else if (deliveryRow) {
+    const gate = deliveryRow.gate;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitGated(db, versionWrite, fragments, gate));
+    if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else {
+    const committed = await step('db-write', { uid, action: action.type },
+      () => commitAction(db, versionWrite, fragments));
+    if (!committed) throw new ApiError(409, 'version-conflict');
+  }
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

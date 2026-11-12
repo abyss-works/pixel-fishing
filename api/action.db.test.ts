@@ -484,7 +484,8 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     const uid = await seed({ state: {} });
     await progressRow(uid, quest.id, quest.count, NOW);
     const results = await Promise.all([deliver(uid, quest.id), deliver(uid, quest.id)]);
-    // 진 쪽은 진행 행 선소비에서 지거나(422) 직전 성공 액션과의 간격에서 걸린다(429)
+    // 진 쪽은 진행 행이 이미 없어 거부되거나(422) 직전 성공 액션과의 간격에서 걸린다(429).
+    // 확정 문장이 겹쳐 같은 버전을 읽은 쪽도 진행 행이 지워진 것을 다시 읽어 422를 받으므로 409는 나오지 않는다
     const statuses = results.map(r => r.status).sort();
     expect(statuses[0]).toBe(200);
     expect([422, 429]).toContain(statuses[1]);

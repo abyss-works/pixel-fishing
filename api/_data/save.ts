@@ -77,14 +77,16 @@ export function goldDebit(uid: string, gold: number): SQL {
   return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid}`;
 }
 
-/** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다 */
-export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}): SQL {
+/** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.
+ *  gate가 있으면 그 질의가 행을 돌려줄 때만 바뀐다 */
+export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}, gate: SQL | null = null): SQL {
   const r = stateRow(state);
   const lastCatch = marks.lastCatchAt === undefined ? sql`` : sql`, last_catch_at = ${at(marks.lastCatchAt)}`;
   const client = marks.activeClient === undefined ? sql`` : sql`, active_client = ${marks.activeClient}`;
+  const required = gate ? sql` and exists (${gate})` : sql``;
   return sql`update public.saves_current set gold = ${r.gold}, fame = ${r.fame}, boat = ${r.boat}, rod = ${r.rod},
     data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}${lastCatch}${client}
-    where user_id = ${uid} and version = ${readVersion} returning user_id`;
+    where user_id = ${uid} and version = ${readVersion}${required} returning user_id`;
 }
 
 /**
