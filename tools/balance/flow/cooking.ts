@@ -146,7 +146,7 @@ export const recipeOf = (r: CookRecipe): Recipe => ({
 /** 요리 콘텐츠의 레시피 */
 export const RECIPES: readonly Recipe[] = COOK_RECIPES.map(recipeOf);
 
-/** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 개수. 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
+/** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 기운 수량(화면 단위). 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
 export type CostOverrides = Readonly<Record<string, Partial<Record<RarityId, number>>>>;
 
 /** 명령줄 `id=등급:수량,등급:수량` 한 덩어리를 읽는다. 수량은 화면 단위로 소수 첫째 자리까지 쓴다(예: 0.5). 등급은 common, rare, epic, legendary다 */
@@ -337,7 +337,7 @@ export interface BagSupplyRow {
   energy: Record<RarityId, number>; energyGold: number;
 }
 
-/** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 개수를 낸다.
+/** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 기운(화면 단위)을 낸다.
  *  캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다. 가방 용량은 그 배 단계의 용량이고, 낚싯대는 그 해역의 진입 레벨(에 여유를 더한 값)이다.
  *  방문 간격마다 가방을 비우므로 한 구간이 가방 용량을 넘을 때만 개체를 놓아주고, 구간별 결과를 더한다 */
 export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {

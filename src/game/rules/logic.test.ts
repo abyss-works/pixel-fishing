@@ -1284,7 +1284,7 @@ describe('세이브 v10 — 기운 수량을 10분의 1 단위로 옮기는 이�
     expect(mig(JSON.parse(JSON.stringify(once)))).toEqual(once);
   });
 
-  it('저장 버전이 미래 값이면 기운을 건드리지 않는다 (기존 동작 유지)', () => {
+  it('저장 버전이 미래 값이면 기운을 건드리지 않는다', () => {
     const st = mig({ v: 99, items: { 'energy-common': 3 } });
     expect(st.items).toEqual({ 'energy-common': 3 });
   });

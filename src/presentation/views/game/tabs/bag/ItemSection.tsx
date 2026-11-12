@@ -132,10 +132,10 @@ export default function ItemSection({ game, guest, dispatch, setToast }: {
             </Subheading>
             <Inset className="grid grid-cols-4 py-2">
               {view.energy.map((cell, i) => (
-                <div key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.count)}개`}
+                <div key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
                      className={`flex flex-col items-center gap-0.5 ${i > 0 ? 'border-l border-line' : ''}`}>
                   <span className="text-xs" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-                  <span className="pf-accent text-base" aria-hidden="true">{formatEnergy(cell.count)}</span>
+                  <span className="pf-accent text-base" aria-hidden="true">{formatEnergy(cell.stored)}</span>
                 </div>
               ))}
             </Inset>
