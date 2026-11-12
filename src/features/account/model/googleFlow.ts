@@ -1,0 +1,81 @@
+// 구글 연결과 로그인의 분기. 구글 인증 화면을 다녀온 주소의 표지와 오류 코드를 보고
+// 무엇을 알리고 어디로 이어지는지 정한다. 화면은 이 판정을 그리기만 한다.
+
+/** 구글 인증을 시작할 때 복귀 주소에 싣는 표지. 시작한 사람이 누구였는지를 돌아온 뒤에도 알기 위해서다 */
+export const GOOGLE_TAG = {
+  linkGuest: 'link-guest',
+  linkEmail: 'link-email',
+  signIn: 'sign-in',
+} as const;
+
+/** 지금 계정의 로그인 방식 */
+export type LoginMethod = 'guest' | 'email' | 'google';
+
+/** 계정 이메일과 붙은 로그인 수단에서 로그인 방식을 정한다. 영구 계정의 수단을 읽지 못했으면 null이다 */
+export function loginMethodOf(account: string | null, providers: string[] | null): LoginMethod | null {
+  if (account === null) return 'guest';
+  if (providers === null) return null;
+  return providers.includes('google') ? 'google' : 'email';
+}
+
+export type GoogleOutcome =
+  | { kind: 'toast'; text: string; tone: 'info' | 'warn' }
+  /** 진행이 있는 다른 구글 계정으로 덮어쓸지 묻는다 */
+  | { kind: 'overwrite' }
+  | { kind: 'notice'; title: string; body: string };
+
+/** 덮어쓰기 확인 창의 문구 */
+export const OVERWRITE_COPY = {
+  title: '진행이 있는 구글 계정',
+  body: '이 구글 계정에는 이미 진행이 있어요.',
+  warn: '진행하기를 누르면 그 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
+  back: '되돌아가기를 누르면 게스트로 남고, 다른 구글 계정으로 연결할 수 있어요.',
+  confirm: '진행하기',
+  cancel: '되돌아가기',
+} as const;
+
+/** 덮어쓰기 확인에서 되돌아갔을 때의 알림 */
+export const overwriteCanceledText = '연결하지 않았어요. 다른 구글 계정으로 연결해 보세요.';
+
+/** 구글 인증 화면을 열지 못했을 때의 알림 */
+export const googleStartFailedText = '구글 인증 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+
+const FAIL_TITLE = '구글 계정을 연결하지 못했어요';
+
+const NOTICE_BODY = {
+  linkedElsewhere: '이 구글 계정은 이미 다른 계정에 연결돼 있어요.\n다른 구글 계정으로 연결해 주세요.\n계속 연결되지 않으면 개발자에게 문의해 주세요.',
+  emailAccountExists: '이 구글 계정의 이메일로 만든 이메일 계정이 이미 있어요.\n그 이메일 계정으로 로그인한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
+  alreadyConnected: '이미 구글 계정이 연결된 계정이에요.\n다른 구글 계정은 더 연결할 수 없어요.',
+  signupDisabled: '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
+} as const;
+
+const notice = (body: string): GoogleOutcome => ({ kind: 'notice', title: FAIL_TITLE, body });
+
+/** 구글 인증에서 돌아온 결과를 화면 반응으로 바꾼다. 우리가 붙인 표지가 아니면 null이다 */
+export function googleOutcome({ tag, error }: { tag: string; error: string | null }): GoogleOutcome | null {
+  if (tag !== GOOGLE_TAG.linkGuest && tag !== GOOGLE_TAG.linkEmail && tag !== GOOGLE_TAG.signIn) return null;
+
+  if (!error) {
+    if (tag === GOOGLE_TAG.signIn) return { kind: 'toast', tone: 'info', text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' };
+    return {
+      kind: 'toast', tone: 'info',
+      text: tag === GOOGLE_TAG.linkGuest
+        ? '구글 계정을 연결했어요. 진행은 이 계정에 저장돼요.'
+        : '구글 계정을 연결했어요. 다음부터는 구글 계정으로 로그인해 주세요.',
+    };
+  }
+
+  if (error === 'account_already_linked_to_different_user') {
+    return tag === GOOGLE_TAG.linkGuest ? { kind: 'overwrite' } : notice(NOTICE_BODY.linkedElsewhere);
+  }
+  if (error === 'email_account_exists' || error === 'account_not_linked') return notice(NOTICE_BODY.emailAccountExists);
+  if (error === 'google_already_connected') return notice(NOTICE_BODY.alreadyConnected);
+  if (error === 'signup_disabled') return notice(NOTICE_BODY.signupDisabled);
+
+  return {
+    kind: 'toast', tone: 'warn',
+    text: tag === GOOGLE_TAG.signIn
+      ? '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.'
+      : '구글 계정을 연결하지 않았어요. 계정 관리에서 다시 연결할 수 있어요.',
+  };
+}
