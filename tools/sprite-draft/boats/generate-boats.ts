@@ -1,4 +1,4 @@
-// 배 스프라이트 생성 CLI — 8단계 배를 32×16 격자로 칠해 생성 파일을 쓴다.
+// 배 스프라이트 생성 CLI — 8단계 배를 대상 정의의 격자(src/game/content/sprites/targets.ts)로 칠해 생성 파일을 쓴다.
 // 사용: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts [sheet.png]
 // 뱃머리는 왼쪽(어종과 같은 방향). 흘수선은 13행, 그 아래 2행은 물에 잠긴 선체.
 // 팔레트는 8척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
@@ -9,8 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { Grid } from './grid';
 import { outlineCells } from '../../../src/game/content/sprites/types';
 import { Bitmap } from '../png';
+import { SPRITE_TARGETS, definedLayout } from '../../../src/game/content/sprites/targets';
 
-const W = 32, H = 16, WL = 13; // 흘수선 행
+const { w: W, h: H } = definedLayout(SPRITE_TARGETS.boat).grid;
+const WL = 13; // 흘수선 행
 
 const PALETTE = [
   '#8d6e63', // 0 선체
@@ -189,7 +191,7 @@ ${b.rows.map(r => `      '${r}',`).join('\n')}
   },`);
 
 const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts
-// 배 8단계 스프라이트(32×16, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
+// 배 8단계 스프라이트(${W}×${H}, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
 import type { PixelSprite } from './types.js';
 
 export const BOAT_PALETTE: readonly string[] = ${JSON.stringify(PALETTE)};

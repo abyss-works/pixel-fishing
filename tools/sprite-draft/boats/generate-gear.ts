@@ -1,4 +1,4 @@
-// 장비 스프라이트 생성 CLI — 낚싯대 1종을 32×16 격자로 칠해 생성 파일을 쓴다.
+// 장비 스프라이트 생성 CLI — 낚싯대 1종을 대상 정의의 격자(src/game/content/sprites/targets.ts)로 칠해 생성 파일을 쓴다.
 // 사용: pnpm exec tsx tools/sprite-draft/boats/generate-gear.ts [sheet.png]
 // 낚싯대는 레벨과 무관하게 한 그림이다(강화 화면 머리용). 손잡이는 왼쪽 아래, 초리는 오른쪽 위.
 import { writeFileSync } from 'node:fs';
@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { Grid } from './grid';
 import { outlineCells } from '../../../src/game/content/sprites/types';
 import { Bitmap } from '../png';
+import { SPRITE_TARGETS, definedLayout } from '../../../src/game/content/sprites/targets';
 
-const W = 32, H = 16;
+const { w: W, h: H } = definedLayout(SPRITE_TARGETS.gear).grid;
 const PALETTE = ['#8d6e63', '#5d4037', '#b39b8f', '#4a5a63', '#8fa3ad', '#f4efe6', '#ffd54f'];
 const C = { rod: 0, rodD: 1, rodL: 2, reel: 3, reelL: 4, line: 5, lure: 6 };
 
@@ -31,7 +32,7 @@ function rod(g: Grid) {
 const g = new Grid(W, H); rod(g);
 const rows = g.rows();
 const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/boats/generate-gear.ts
-// 장비 스프라이트(32×16). 낚싯대는 레벨과 무관한 한 그림이다.
+// 장비 스프라이트(${W}×${H}). 낚싯대는 레벨과 무관한 한 그림이다.
 import type { PixelSprite } from './types.js';
 
 export const GEAR_PALETTE: readonly string[] = ${JSON.stringify(PALETTE)};

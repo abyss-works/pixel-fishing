@@ -1,4 +1,4 @@
-// 격자 페인터 프리미티브 — 32×16 인덱스 격자에 셀 단위로 칠한다. 배 스프라이트 생성 전용.
+// 격자 페인터 프리미티브 — 인덱스 격자에 셀 단위로 칠한다. 배 스프라이트 생성 전용.
 import { INDEX_CHARS, TRANSPARENT } from '../../../src/game/content/sprites/types';
 
 export class Grid {

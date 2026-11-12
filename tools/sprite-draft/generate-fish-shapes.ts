@@ -1,6 +1,6 @@
 // 초안 생성기 → 인덱스 격자 변환 CLI.
 // 사용: pnpm exec tsx tools/sprite-draft/generate-fish-shapes.ts
-// 14형태를 1× 배율로 32×16 기록 컨텍스트에 그리고, 쓰인 색을 팔레트 슬롯으로 환원해
+// 14형태를 1× 배율로 물고기 격자 크기의 기록 컨텍스트에 그리고, 쓰인 색을 팔레트 슬롯으로 환원해
 // src/game/content/sprites/fishShapes.generated.ts 를 다시 쓴다.
 // 색 환원 규칙: 기준색 → { shade: 1 }, shade(기준색, f) → { shade: f },
 // 흰색 알파 a 덧칠 → { shade: 1 + a } (몸 위에만 칠해지므로 동치), 그 밖의 고정 색은 문자열 그대로.
@@ -13,9 +13,11 @@ import { shade } from '../../src/shared/lib/color';
 import { INDEX_CHARS, TRANSPARENT } from '../../src/game/content/sprites/types';
 import type { PaletteSlot } from '../../src/game/content/sprites/types';
 import type { FishShape } from '../../src/game/content/fish';
+import { SPRITE_TARGETS, definedLayout } from '../../src/game/content/sprites/targets';
 
-// 종별 원화와 같은 32×16 격자, 초안 생성기는 1× 배율로 그린다
-const W = 32, H = 16, CX = 16, CY = 8, S = 1;
+// 종별 원화와 같은 물고기 격자, 초안 생성기는 1× 배율로 그린다
+const { w: W, h: H } = definedLayout(SPRITE_TARGETS.fish).grid;
+const CX = W / 2, CY = H / 2, S = 1;
 // 기준색 — 다른 어떤 고정 색과도 겹치지 않는 임의 값. 격자에는 슬롯만 남고 이 값은 사라진다.
 const BASE = '#6a8bc3';
 const SHADE_FACTORS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.15];
@@ -69,7 +71,7 @@ const entries = shapes.map(shape => {
 });
 
 const out = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/generate-fish-shapes.ts
-// 초안 생성기(절차 사각형)를 1× 배율로 32×16 격자에 옮긴 14형태 스프라이트.
+// 초안 생성기(절차 사각형)를 1× 배율로 ${W}×${H} 격자에 옮긴 14형태 스프라이트.
 // 종별 격자가 없는 어종(신규 어종 초안 단계)만 이 형태 격자를 쓴다 (fishSprite 해석 순서).
 import type { PixelSprite } from './types.js';
 import type { FishShape } from '../fish.js';
