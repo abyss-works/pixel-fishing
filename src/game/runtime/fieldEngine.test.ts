@@ -395,7 +395,7 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     expect(events.filter(event => event.type === 'guest-blocked')).toHaveLength(2);
   });
 
-  it('배가 없는 게스트는 기존 배 없음 안내만 받고 게스트 막힘은 알리지 않는다', () => {
+  it('배가 없는 게스트는 배 없음 안내만 받고 게스트 막힘은 알리지 않는다', () => {
     const { engine, onScene, events, frame } = village({ guest: true, boat: 0 });
     engine.handleKeyDown('ArrowDown', noop);
     frame(1000, 950);
@@ -403,7 +403,7 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     expect(events).toEqual([{ type: 'trigger-blocked', message: expect.stringContaining('배가 필요해요') }]);
   });
 
-  it('게스트가 아니면 지금처럼 바다로 나간다', () => {
+  it('게스트가 아니면 막히지 않고 바다로 나간다', () => {
     const { engine, onScene, events, frame } = village({ guest: false, boat: 1 });
     engine.handleKeyDown('ArrowDown', noop);
     frame(1000, 950);
