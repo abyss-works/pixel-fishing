@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { BAIT_SPRITES_GENERATED } from '../../src/game/content/sprites/baitSprites.generated';
 import { BOAT_SPRITES } from '../../src/game/content/sprites/boatSprites.generated';
+import { DISH_SPRITES_GENERATED } from '../../src/game/content/sprites/dishSprites.generated';
 import { FISH_SHAPE_SPRITES } from '../../src/game/content/sprites/fishShapes.generated';
 import { FISH_SPRITES_GENERATED } from '../../src/game/content/sprites/fishSprites.generated';
 import { FISH_SPRITES } from '../../src/game/content/sprites/fishSprites';
@@ -19,14 +21,14 @@ function tagged(prefix: string, sprites: Readonly<Record<string, PixelSprite | u
 
 /**
  * 대상별로 코드에 들어 있는 모든 격자. 대상 종류를 더하면 이 표에 행을 더해야 컴파일된다.
- * 요리·미끼·유물은 격자가 미정이라 아직 격자가 없다.
+ * 유물은 격자가 미정이라 아직 격자가 없다.
  */
 const GRIDS: Record<SpriteKind, Record<string, PixelSprite>> = {
   fish: { ...tagged('', FISH_SPRITES_GENERATED), ...tagged('hand:', FISH_SPRITES), ...tagged('shape:', FISH_SHAPE_SPRITES) },
   boat: tagged('tier', BOAT_SPRITES),
   gear: { rod: ROD_SPRITE },
-  dish: {},
-  bait: {},
+  dish: tagged('', DISH_SPRITES_GENERATED),
+  bait: tagged('', BAIT_SPRITES_GENERATED),
   artifact: {},
 };
 

@@ -1,6 +1,7 @@
 // 대상별 스프라이트 정의 — 격자 크기·안전 여백·표시 프리셋·팔레트 방식·상태 행·움직임을 한 곳에 둔다.
 // 생성 도구, 검사, 검수 시트, 에디터, 화면 컴포넌트가 이 정의를 함께 읽는다.
-// 새 대상은 SPRITE_TARGETS에 한 행을 더하고 원화 PNG 폴더를 둔다. 대상 종류 목록은 그 키에서 유도한다.
+// 새 대상은 SPRITE_TARGETS에 한 행을 더한다. PNG 원화를 쓰는 대상(palette가 per-sprite)은 원화 PNG 폴더도 둔다.
+// 대상 종류 목록은 그 키에서 유도한다.
 // 이어서 모든 격자 규칙 테스트의 격자 표에 그 대상의 행을 더하고, 에디터용 대상 정의 스크립트를 생성기로 다시 만든다.
 
 export interface SpriteGrid { w: number; h: number }
@@ -38,6 +39,9 @@ function gridPresets<K extends string>(grid: SpriteGrid, scales: Record<K, numbe
 
 const GRID_32X16: SpriteGrid = { w: 32, h: 16 };
 const SHIP_PRESETS = gridPresets(GRID_32X16, { thumb: 1, row: 2, hero: 3 });
+const GRID_16X16: SpriteGrid = { w: 16, h: 16 };
+// 요리·미끼: 한 줄로 나열하는 자리는 row(1배), 부엌 창 상세 머리는 hero(3배, 같은 자리의 배·낚싯대 그림과 높이가 같다).
+const ITEM_LAYOUT = { grid: GRID_16X16, margin: 2, presets: gridPresets(GRID_16X16, { row: 1, hero: 3 }) } satisfies SpriteLayout;
 
 export const SPRITE_TARGETS = {
   fish: {
@@ -72,10 +76,10 @@ export const SPRITE_TARGETS = {
     states: ['default'],
     motion: 'none',
   },
-  // 요리·미끼·유물: 정사각 격자를 쓰는 것까지만 정해졌고 크기와 배율은 미정이다. layout이 null인 동안
+  dish: { kind: 'dish', idLabel: '요리 id', layout: ITEM_LAYOUT, palette: 'per-sprite', states: ['default'], motion: 'none' },
+  bait: { kind: 'bait', idLabel: '요리 id', layout: ITEM_LAYOUT, palette: 'per-sprite', states: ['default'], motion: 'none' },
+  // 유물: 정사각 격자를 쓰는 것까지만 정해졌고 크기와 배율은 미정이다. layout이 null인 동안
   // 생성 도구가 이 대상을 거부하며, 값이 정해지면 layout을 채운다.
-  dish: { kind: 'dish', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
-  bait: { kind: 'bait', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
   artifact: { kind: 'artifact', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
 } as const satisfies Record<string, SpriteTarget>;
 

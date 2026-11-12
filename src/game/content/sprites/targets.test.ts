@@ -37,11 +37,21 @@ describe('대상별 스프라이트 정의', () => {
     }
   });
 
-  it('요리·미끼·유물은 격자와 배율이 미정이라 layout이 없고 definedLayout이 거부한다', () => {
-    for (const kind of ['dish', 'bait', 'artifact'] as const) {
-      expect(SPRITE_TARGETS[kind].layout).toBeNull();
-      expect(() => definedLayout(SPRITE_TARGETS[kind])).toThrow(kind);
+  it('요리·미끼는 16×16 격자, 안전 여백 2칸, 한 줄 1배와 상세 머리 3배 프리셋을 갖는다', () => {
+    for (const kind of ['dish', 'bait'] as const) {
+      const l = definedLayout(SPRITE_TARGETS[kind]);
+      expect(l.grid).toEqual({ w: 16, h: 16 });
+      expect(l.margin).toBe(2);
+      expect(l.presets).toEqual({
+        row: { w: 16, h: 16, scale: 1 },
+        hero: { w: 48, h: 48, scale: 3 },
+      });
     }
+  });
+
+  it('유물은 격자와 배율이 미정이라 layout이 없고 definedLayout이 거부한다', () => {
+    expect(SPRITE_TARGETS.artifact.layout).toBeNull();
+    expect(() => definedLayout(SPRITE_TARGETS.artifact)).toThrow('artifact');
   });
 
   it('움직임은 물고기만 갖고 상태 행은 대상마다 하나 이상이다', () => {
