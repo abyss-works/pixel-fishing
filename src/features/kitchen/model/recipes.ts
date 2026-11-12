@@ -82,6 +82,8 @@ export interface RecipeUnitCost { grade: RarityId; per: number; short: boolean }
 export interface RecipeView {
   recipe: Recipe;
   grade: DisplayGradeId | null;
+  /** 이름과 표시 등급 - 괄호만 등급색으로 칠하는 화면용 */
+  title: RecipeTitle;
   /** 가진 완성품 수 */
   owned: number;
   effects: RecipeEffectLine[];
@@ -111,7 +113,7 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
   const needed = RARITY_ORDER.filter(g => recipeCostStored(recipe, g) > 0);
   const rules = COOK_KIND_RULES[recipe.kind];
   return {
-    recipe, grade: recipeGrade(recipe), owned: settled.items[recipe.id] ?? 0,
+    recipe, grade: recipeGrade(recipe), title: recipeTitle(recipe), owned: settled.items[recipe.id] ?? 0,
     effects: recipeEffectLines(recipe),
     unitCost: needed.map(grade => {
       const per = recipeCostStored(recipe, grade);

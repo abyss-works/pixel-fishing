@@ -37,13 +37,14 @@ describe('대상별 스프라이트 정의', () => {
     }
   });
 
-  it('요리·미끼는 16×16 격자, 안전 여백 2칸, 한 줄 1배와 상세 머리 3배 프리셋을 갖는다', () => {
+  it('요리·미끼는 16×16 격자, 안전 여백 2칸, 한 줄 1배와 목록 2배와 상세 머리 3배 프리셋을 갖는다', () => {
     for (const kind of ['dish', 'bait'] as const) {
       const l = definedLayout(SPRITE_TARGETS[kind]);
       expect(l.grid).toEqual({ w: 16, h: 16 });
       expect(l.margin).toBe(2);
       expect(l.presets).toEqual({
         row: { w: 16, h: 16, scale: 1 },
+        list: { w: 32, h: 32, scale: 2 },
         hero: { w: 48, h: 48, scale: 3 },
       });
     }

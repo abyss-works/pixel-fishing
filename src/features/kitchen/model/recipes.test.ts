@@ -106,6 +106,16 @@ describe('필요와 보유', () => {
     const v = selectRecipeView(seed({ items: { [R.id]: 4 } }), R, 1, T0);
     expect(v.owned).toBe(4);
   });
+
+  it('이름과 표시 등급을 나눈 이름을 함께 낸다. 보유 줄과 상세 머리가 같은 이름을 쓴다', () => {
+    expect(selectRecipeView(seed(), recipe('cook-lunch-bite'), 1, T0).title).toEqual({ name: '가루디야', grade: null });
+    expect(selectRecipeView(seed(), recipe('cook-bait-mutation'), 1, T0).title).toEqual({ name: '사프란 미끼', grade: 'special' });
+  });
+
+  it('지속 시간은 그 종류의 슬롯 지속(ms)이다', () => {
+    expect(selectRecipeView(seed(), recipe('cook-lunch-bite'), 1, T0).slotMs).toBe(9 * 60 * MIN);
+    expect(selectRecipeView(seed(), recipe('cook-bait-rare'), 1, T0).slotMs).toBe(30 * MIN);
+  });
 });
 
 describe('조리 가능 판정', () => {

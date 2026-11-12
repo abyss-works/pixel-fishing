@@ -20,8 +20,11 @@ import type { FacilityAct } from './facilityParts';
 
 const MIN_MS = 60_000;
 
-// 도시락 탭과 미끼 탭 — 왼쪽은 그 종류의 레시피 목록(이름, 1개에 드는 기운, 보유한 완성품)이고, 오른쪽은 고른 레시피의 효과,
-// 필요와 보유, 수량과 조리 시간이다. 조리 시작 버튼은 오른쪽 열 맨 아래에 고정한다.
+const EFFECT_TITLE: Readonly<Record<CookKind, string>> = { lunch: '도시락 효과', bait: '미끼 효과' };
+
+// 도시락 탭과 미끼 탭 — 왼쪽은 그 종류의 레시피 목록(이름, 1개에 드는 기운, 보유한 완성품)이고, 오른쪽은 고른 레시피의 머리(그림, 이름, 설명),
+// 효과(마지막 줄이 지속 시간), 조리에 필요한 기운과 보유(맨 아래 줄이 보유한 완성 요리), 조리 수량과 조리 시간이다.
+// 조리 시작 버튼은 오른쪽 열 맨 아래에 고정한다.
 // 조리 중이어도 다른 레시피를 골라 볼 수 있고, 시작만 막힌다. 막힌 이유는 게임 규칙의 판정 사유 문구이며 버튼의 툴팁으로 보인다.
 export default function RecipeTab({ kind, game, now, busy, act }: {
   kind: CookKind;
@@ -41,11 +44,11 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
   const list = (
     <SelectList label={kind === 'lunch' ? '도시락 목록' : '미끼 목록'} items={views} keyOf={v => v.recipe.id}
                 selectedKey={picked.id} onSelect={id => { setPickedId(id); setQty(1); }}
-                renderItem={v => (
+                renderItem={(v, selected) => (
                   <>
-                    <ItemSprite kind={kind} id={v.recipe.id} preset="row" className="shrink-0" />
+                    <ItemSprite kind={kind} id={v.recipe.id} preset="list" className="shrink-0" />
                     <span className="flex flex-col gap-0.5 min-w-0 flex-1">
-                      <b className="truncate">{recipeLabel(v.recipe)}</b>
+                      <span className="truncate"><GradeName name={v.title.name} grade={v.title.grade} emphasized={selected} /></span>
                       <span className="flex flex-wrap gap-x-2 text-2xs text-text-dim">
                         {v.unitCost.map(c => (
                           <span key={c.grade} className={c.short ? 'text-danger' : undefined}>
@@ -62,31 +65,41 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
   const detail = (
     <>
       <HeroHeader sprite={<ItemSprite kind={kind} id={view.recipe.id} preset="hero" ariaLabel={recipeLabel(view.recipe)} />}
-                  title={recipeLabel(view.recipe)}
-                  tags={[`보유 ${view.owned}개`, `지속 시간 ${fmtMinutes(view.slotMs / MIN_MS)}`]} />
+                  title={<GradeName name={view.title.name} grade={view.title.grade} emphasized />}
+                  description={view.recipe.description} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
-        <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">효과</Tip>
+        <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">{EFFECT_TITLE[kind]}</Tip>
         {view.effects.map(line => (
           <div key={line.label} className="flex items-center justify-between gap-2 text-xs">
             <span>{line.label}</span><span className="pf-accent text-accent">{line.value}</span>
           </div>
         ))}
-      </Inset>
-      <CompareTable heads={['필요', '보유']}
-                    rows={view.cost.map(c => ({
-                      label: <GradeName name={ENERGY_NAME} grade={c.grade} />,
-                      value: <span className={c.short ? 'text-danger' : 'text-text'}>{formatEnergy(c.need)}</span>,
-                      next: <span className={c.short ? 'text-danger' : 'text-accent'}>{formatEnergy(c.have)}</span>,
-                    }))} />
-      <Inset className="px-3 py-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="text-text-dim">수량</span>
-          <NumberStepper value={view.count} min={view.maxCount === 0 ? 0 : 1} max={view.maxCount}
-                         disabled={view.maxCount === 0} onChange={setQty} ariaLabel={recipeLabel(view.recipe)} />
+          <span>지속 시간</span><span className="pf-accent">{fmtMinutes(view.slotMs / MIN_MS)}</span>
         </div>
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="text-text-dim">조리 시간</span>
-          <span className="pf-accent">{fmtMinutes(view.waitMs / MIN_MS)}</span>
+      </Inset>
+      <CompareTable heads={['조리에 필요', '보유']}
+                    rows={[
+                      ...view.cost.map(c => ({
+                        label: <span className="text-text"><GradeName name={ENERGY_NAME} grade={c.grade} /></span>,
+                        value: <span className={c.short ? 'text-danger' : 'text-text'}>{formatEnergy(c.need)}</span>,
+                        next: <span className={c.short ? 'text-danger' : 'text-accent'}>{formatEnergy(c.have)}</span>,
+                      })),
+                      // 맨 아래 줄 - 이 레시피로 만든 완성 요리의 보유 수. 조리에 필요한 칸은 비운다
+                      { label: <span className="text-text"><GradeName name={view.title.name} grade={view.title.grade} /></span>, next: <span className="text-text">{view.owned}</span> },
+                    ]} />
+      <Inset className="px-3 py-2 flex flex-col gap-2">
+        {/* 수량과 조리 시간은 한 줄에 둔다 - 상세 칸의 스크롤을 줄이고, 좁은 폭에서는 줄을 바꾼다 */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-text-dim">조리 수량</span>
+            <NumberStepper value={view.count} min={view.maxCount === 0 ? 0 : 1} max={view.maxCount}
+                           disabled={view.maxCount === 0} onChange={setQty} ariaLabel={recipeLabel(view.recipe)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-text-dim">조리 시간</span>
+            <span className="pf-accent">{fmtMinutes(view.waitMs / MIN_MS)}</span>
+          </div>
         </div>
         {view.extraChance > 0 && (
           <div className="flex items-center justify-between gap-2 text-xs">
