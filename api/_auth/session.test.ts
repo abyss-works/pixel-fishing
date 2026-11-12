@@ -18,6 +18,16 @@ afterEach(() => {
   }
 });
 
+describe('adminAuth', () => {
+  for (const name of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] as const) {
+    it(`${name}이 없으면 server-config로 실패한다`, async () => {
+      delete process.env[name];
+      const { adminAuth } = await import('./session.js');
+      expect(() => adminAuth()).toThrowError(expect.objectContaining({ status: 500, code: 'server-config' }));
+    });
+  }
+});
+
 describe('appAuth', () => {
   for (const name of REQUIRED) {
     it(`${name}이 없으면 server-config로 실패한다`, async () => {

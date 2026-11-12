@@ -1,5 +1,6 @@
 // 구글 로그인과 계정 연결의 구성. 공급자 옵션, 연결 전 검증, 연결 뒤 마무리, 토큰 비움 훅을 모아 인증 구성이 조립만 하게 한다.
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
+import type { GenericEndpointContext } from 'better-auth';
 import { setSessionCookie } from 'better-auth/cookies';
 import type { BetterAuthOptions } from 'better-auth';
 
@@ -30,6 +31,8 @@ export const googleProvider = ({ clientId, clientSecret }: GoogleConfig) => ({
   includeGrantedScopes: false,
   prompt: 'select_account' as const,
   disableImplicitSignUp: true,
+  // 요청 본문의 requestSignUp으로도 가입하지 않는다
+  disableSignUp: true,
 });
 
 /** 이메일이 같다는 이유로 자동 연결하지 않는다. 연결은 로그인한 사용자가 직접 한다 */
@@ -70,56 +73,83 @@ export const validateGoogleLink: ValidateUserInfo = async ({ user, source }, ctx
   const adapter = ctx.context.internalAdapter;
   const profile = source.oauth?.profile as { sub?: unknown } | undefined;
   const sub = typeof profile?.sub === 'string' ? profile.sub : '';
-  // 구글 계정을 이미 가진 사용자가 있으면 라이브러리가 연결 충돌로 알린다
-  if (await adapter.findAccountByKey({ providerId: 'google', accountId: sub })) return;
-
   const userId = String(user.id);
-  const mine = await adapter.findAccounts(userId);
-  if (mine.some(a => a.providerId === 'google')) return { error: GOOGLE_LINK_ERRORS.googleAlreadyConnected };
+
+  // 구글 계정을 다른 사용자가 가졌으면 라이브러리가 연결 충돌로 알린다
+  const owner = await adapter.findAccountByKey({ providerId: 'google', accountId: sub });
+  if (owner && owner.userId !== userId) return;
+  // 같은 구글을 이 사용자가 이미 가졌으면 마무리를 다시 하는 연결이다
+  if (!owner) {
+    const mine = await adapter.findAccounts(userId);
+    if (mine.some(a => a.providerId === 'google')) return { error: GOOGLE_LINK_ERRORS.googleAlreadyConnected };
+  }
 
   const email = String(user.email).toLowerCase();
-  const holder = await adapter.findUserByEmail(email);
+  const holder = await adapter.findUserByEmail(email, { includeAccounts: true });
   if (holder && holder.user.id !== userId) {
     const self = await adapter.findUserById(userId) as LinkedUser | null;
-    return { error: self?.isAnonymous ? GOOGLE_LINK_ERRORS.emailAccountExists : GOOGLE_LINK_ERRORS.linkedToDifferentUser };
+    // 구글을 연결하지 않은 이메일 계정만 이메일로 로그인해 연결할 수 있다
+    const holderHasGoogle = holder.accounts.some(a => a.providerId === 'google');
+    return { error: self?.isAnonymous && !holderHasGoogle ? GOOGLE_LINK_ERRORS.emailAccountExists : GOOGLE_LINK_ERRORS.linkedToDifferentUser };
   }
   verifiedEmail.set(ctx, email);
+};
+
+type AccountAfter = (account: { userId: string; providerId: string }, ctx: GenericEndpointContext | null) => Promise<void>;
+
+/** 같은 상태에서 몇 번을 돌려도 같은 결과가 되는 연결 마무리 */
+const finishLink: AccountAfter = async (account, ctx) => {
+  if (!ctx || account.providerId !== 'google') return;
+  const email = verifiedEmail.get(ctx);
+  if (!email) return;
+  const adapter = ctx.context.internalAdapter;
+  const current = await getSessionFromCtx(ctx, { disableCookieCache: true, disableRefresh: true });
+  const updated = await adapter.updateUser(account.userId, { email, emailVerified: true, isAnonymous: false });
+  for (const a of await adapter.findAccounts(account.userId)) {
+    if (a.providerId === 'credential') await adapter.deleteAccount(a.id);
+  }
+  for (const s of await adapter.listSessions(account.userId)) {
+    if (s.token !== current?.session.token) await adapter.deleteSession(s.token);
+  }
+  await ctx.context.adapter.deleteMany({
+    model: 'verification',
+    where: [{ field: 'value', value: account.userId }, { field: 'identifier', operator: 'starts_with', value: 'reset-password:' }],
+  });
+  // 쿠키 캐시에 남은 게스트 표시와 이전 이메일을 갱신한다
+  if (current && current.user.id === account.userId) await setSessionCookie(ctx, { session: current.session, user: updated });
 };
 
 /**
  * 구글 연결 뒤 사용자 행을 마무리한다. 이메일을 구글 주소로 바꾸고 게스트 표시를 내린다.
  * 비밀번호 수단이 있던 계정은 그것을 지우고, 연결한 세션만 남기고 다른 세션을 끊고, 아직 쓰지 않은 재설정 토큰을 지운다.
+ * 같은 구글을 다시 연결하는 요청(계정 갱신 경로)에서도 돌아, 마무리가 끝나지 않은 계정을 마저 마무리한다.
  */
 export const finishGoogleLink: NonNullable<Hooks['account']> = {
-  create: {
-    after: async (account, ctx) => {
-      if (!ctx || account.providerId !== 'google') return;
-      const adapter = ctx.context.internalAdapter;
-      const current = await getSessionFromCtx(ctx, { disableCookieCache: true, disableRefresh: true });
-      const email = verifiedEmail.get(ctx);
-      const updated = await adapter.updateUser(account.userId, {
-        ...(email ? { email } : {}), emailVerified: true, isAnonymous: false,
-      });
-      for (const a of await adapter.findAccounts(account.userId)) {
-        if (a.providerId === 'credential') await adapter.deleteAccount(a.id);
-      }
-      for (const s of await adapter.listSessions(account.userId)) {
-        if (s.token !== current?.session.token) await adapter.deleteSession(s.token);
-      }
-      await ctx.context.adapter.deleteMany({
-        model: 'verification',
-        where: [{ field: 'value', value: account.userId }, { field: 'identifier', operator: 'starts_with', value: 'reset-password:' }],
-      });
-      // 쿠키 캐시에 남은 게스트 표시와 이전 이메일을 갱신한다
-      if (current && current.user.id === account.userId) await setSessionCookie(ctx, { session: current.session, user: updated });
-    },
-  },
+  create: { after: finishLink },
+  update: { after: finishLink },
 };
 
-/** ID 토큰을 직접 보내는 연결은 연결 전 검증을 거치지 않으므로 받지 않는다 */
-export const rejectIdTokenLink = createAuthMiddleware(async ctx => {
-  if (ctx.path !== '/link-social') return;
-  if ((ctx.body as { idToken?: unknown } | undefined)?.idToken !== undefined) {
-    throw new APIError('BAD_REQUEST', { code: 'ID_TOKEN_LINK_NOT_ALLOWED', message: 'Linking with an id token is not allowed' });
+const OAUTH_START_PATHS = ['/link-social', '/sign-in/social'];
+
+const badRequest = (code: string, message: string) => new APIError('BAD_REQUEST', { code, message });
+
+/** 구글 인증 요청의 범위와 매개변수는 서버가 정한다. ID 토큰 연결은 받지 않는다. 비밀번호 수단이 없는 계정의 재설정 토큰은 거부한다 */
+export const guardAuthRequests = createAuthMiddleware(async ctx => {
+  const body = ctx.body as { scopes?: unknown; additionalParams?: unknown; idToken?: unknown; token?: unknown } | undefined;
+  if (OAUTH_START_PATHS.includes(ctx.path)) {
+    if (body?.scopes !== undefined || body?.additionalParams !== undefined) {
+      throw badRequest('OAUTH_REQUEST_OVERRIDE_NOT_ALLOWED', 'Scopes and additional parameters are fixed by the server');
+    }
+    if (ctx.path === '/link-social' && body?.idToken !== undefined) {
+      throw badRequest('ID_TOKEN_LINK_NOT_ALLOWED', 'Linking with an id token is not allowed');
+    }
+  }
+  if (ctx.path === '/reset-password') {
+    const token = body?.token ?? (ctx.query as { token?: unknown } | undefined)?.token;
+    if (typeof token !== 'string') return;
+    const found = await ctx.context.internalAdapter.findVerificationValue(`reset-password:${token}`);
+    if (found && !await ctx.context.internalAdapter.findCredentialAccount(found.value)) {
+      throw badRequest('INVALID_TOKEN', 'Invalid token');
+    }
   }
 });

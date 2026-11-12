@@ -110,9 +110,9 @@ describe('관리자 세션', () => {
   }
 
   /** 관리자 구글 로그인. 콜백까지 돌아오는 흐름을 한 번에 돌리고 최종 리디렉션과 쿠키를 돌려준다 */
-  async function adminGoogle(who: { sub: string; email: string }): Promise<{ ok: boolean; error: string | null; cookie: string; authUrl: URL }> {
+  async function adminGoogle(who: { sub: string; email: string }, extra: Record<string, unknown> = {}): Promise<{ ok: boolean; error: string | null; cookie: string; authUrl: URL }> {
     const code = googleCode(`admin-code-${seq++}`, who);
-    const begin = await post('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, errorCallbackURL: `${ORIGIN}/admin/?bad=1`, disableRedirect: true }, undefined, true);
+    const begin = await post('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, errorCallbackURL: `${ORIGIN}/admin/?bad=1`, disableRedirect: true, ...extra }, undefined, true);
     const authUrl = new URL(String(begin.body.url));
     const res = await handleAdmin(new Request(`${GOOGLE_ORIGIN}/callback/google?code=${code}&state=${authUrl.searchParams.get('state')}`, {
       redirect: 'manual', headers: { cookie: begin.cookie },
@@ -144,6 +144,32 @@ describe('관리자 세션', () => {
     expect(login.error).toBe('signup_disabled');
     expect(await adminSessionUid({ cookie: login.cookie })).toBeNull();
     expect((await env.client.query(`select 1 from auth.users where email = 'admin-unknown@gmail.test'`)).rows).toHaveLength(0);
+  });
+
+  it('본문에 requestSignUp을 실어도 사용자를 만들지 않는다', async () => {
+    const login = await adminGoogle({ sub: 'admin-forced', email: 'admin-forced@gmail.test' }, { requestSignUp: true });
+    expect(login.ok).toBe(false);
+    expect(login.error).toBe('signup_disabled');
+    expect((await env.client.query(`select 1 from auth.users where email = 'admin-forced@gmail.test'`)).rows).toHaveLength(0);
+  });
+
+  it('범위를 넓히거나 인증 요청 매개변수를 덮어쓰는 본문은 거부한다', async () => {
+    for (const extra of [{ scopes: ['profile'] }, { additionalParams: { prompt: 'none' } }]) {
+      const res = await adminPost('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, disableRedirect: true, ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+  });
+
+  it('관리자 세션으로는 구글 계정을 연결하지 못한다', async () => {
+    const { uid, sub } = await googleMember('admin-nolink@gmail.test');
+    const login = await adminGoogle({ sub, email: 'admin-nolink@gmail.test' });
+    const code = googleCode(`admin-link-${seq++}`, { sub: 'admin-other-google', email: 'admin-other@gmail.test' });
+    const begin = await adminPost('/link-social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, errorCallbackURL: `${ORIGIN}/admin/?bad=1`, disableRedirect: true }, login.cookie);
+    const state = begin.body.url ? new URL(String(begin.body.url)).searchParams.get('state') : null;
+    if (state) {
+      await handleAdmin(new Request(`${GOOGLE_ORIGIN}/callback/google?code=${code}&state=${state}`, { redirect: 'manual', headers: { cookie: [login.cookie, begin.cookie].join('; ') } }));
+    }
+    expect((await env.client.query(`select account_id from auth.accounts where user_id = $1`, [uid])).rows).toEqual([{ account_id: sub }]);
   });
 
   it('이메일 주소만 같은 계정으로는 로그인하지 않는다', async () => {

@@ -14,10 +14,11 @@ globalThis.fetch = (async (input, init) => {
   return realFetch(input, init);
 }) as typeof fetch;
 
-// 구글 토큰 교환 — 인가 코드별로 정해 둔 신원의 서명 없는 ID 토큰을 돌려준다. 콜백 경로는 ID 토큰을 해석만 한다.
-export const googleIdentities = new Map<string, { sub: string; email: string }>();
+// 구글 토큰 교환 — 인가 코드별로 정해 둔 신원의 서명 없는 ID 토큰을 돌려준다.
+export interface GoogleIdentity { sub: string; email: string; verified?: boolean }
+export const googleIdentities = new Map<string, GoogleIdentity>();
 /** 다음 구글 콜백에서 쓸 인가 코드와 그 코드가 가리키는 구글 계정을 등록한다 */
-export function googleCode(code: string, identity: { sub: string; email: string }): string {
+export function googleCode(code: string, identity: GoogleIdentity): string {
   googleIdentities.set(code, identity);
   return code;
 }
@@ -26,7 +27,7 @@ const googleTokenResponse = async (init?: RequestInit): Promise<Response> => {
   const code = new URLSearchParams(String(init?.body ?? '')).get('code') ?? '';
   const who = googleIdentities.get(code);
   if (!who) return new Response('{"error":"invalid_grant"}', { status: 400, headers: { 'content-type': 'application/json' } });
-  const idToken = `${b64({ alg: 'RS256' })}.${b64({ iss: 'https://accounts.google.com', aud: 'test', sub: who.sub, email: who.email, email_verified: true })}.sig`;
+  const idToken = `${b64({ alg: 'RS256' })}.${b64({ iss: 'https://accounts.google.com', aud: 'test', sub: who.sub, email: who.email, email_verified: who.verified ?? true })}.sig`;
   return new Response(JSON.stringify({
     access_token: `at-${code}`, refresh_token: `rt-${code}`, id_token: idToken, expires_in: 3600, token_type: 'Bearer',
     scope: 'openid https://www.googleapis.com/auth/userinfo.email',

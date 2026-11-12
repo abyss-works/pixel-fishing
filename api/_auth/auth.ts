@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { MailSender } from './mail.js';
-import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, rejectIdTokenLink, validateGoogleLink } from './googleLink.js';
+import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
 import type { GoogleConfig } from './googleLink.js';
 
 export interface AuthConfig {
@@ -93,7 +93,7 @@ export function createAuth(config: AuthConfig) {
       maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: bcryptPassword,
       disableSignUp: true,
-      // 재설정은 비밀번호 수단이 없는 계정에 그것을 새로 만든다. 구글 연결로 지운 수단이 되살아나지 않게 수단이 남은 계정에만 보낸다.
+      // 비밀번호 수단이 남은 계정에만 보낸다.
       sendResetPassword: async ({ user, url }) => {
         const { rowCount } = await config.pool.query(
           `select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [user.id]);
@@ -115,10 +115,10 @@ export function createAuth(config: AuthConfig) {
       session: sessionHooks,
       account: {
         create: { before: dropOAuthTokens.create?.before, after: finishGoogleLink.create?.after },
-        update: dropOAuthTokens.update,
+        update: { before: dropOAuthTokens.update?.before, after: finishGoogleLink.update?.after },
       },
     },
-    hooks: { before: rejectIdTokenLink },
+    hooks: { before: guardAuthRequests },
     advanced: { database: { generateId: 'uuid' } },
     plugins: [
       anonymous({
@@ -154,9 +154,11 @@ export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
     user: userTable,
     session: sessionTable,
     socialProviders: { google: googleProvider(config.google) },
-    account: { ...accountTable, accountLinking, updateAccountOnSignIn: false },
+    // 관리자 인증은 로그인만 한다. 계정 연결은 게임 인증에서만 한다
+    account: { ...accountTable, accountLinking: { ...accountLinking, enabled: false }, updateAccountOnSignIn: false },
     verification: verificationTable,
     databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
+    hooks: { before: guardAuthRequests },
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
   });
 }

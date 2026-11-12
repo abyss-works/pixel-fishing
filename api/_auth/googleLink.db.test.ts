@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 import { googleCode, sentMails } from '../_dbTest/serverShim.js';
+import type { GoogleIdentity } from '../_dbTest/serverShim.js';
 
 const ORIGIN = 'http://localhost:3000';
 
@@ -50,16 +51,16 @@ async function guest(): Promise<{ uid: string; cookie: string }> {
 }
 
 /** 구글 인증 화면을 거쳐 콜백에 돌아오는 흐름. start는 연결(link-social) 또는 로그인(sign-in/social)의 시작 경로다 */
-async function viaGoogle(start: '/link-social' | '/sign-in/social', cookie: string, who: { sub: string; email: string }) {
+async function viaGoogle(start: '/link-social' | '/sign-in/social', cookie: string, who: GoogleIdentity, extra: Record<string, unknown> = {}) {
   const code = googleCode(`code-${seq++}`, who);
-  const begin = await call('POST', start, { provider: 'google', callbackURL: `${ORIGIN}/?ok=1`, errorCallbackURL: `${ORIGIN}/?bad=1`, disableRedirect: true }, cookie);
+  const begin = await call('POST', start, { provider: 'google', callbackURL: `${ORIGIN}/?ok=1`, errorCallbackURL: `${ORIGIN}/?bad=1`, disableRedirect: true, ...extra }, cookie);
   const authUrl = new URL(String(begin.body.url));
   const back = await call('GET', `/callback/google?code=${code}&state=${authUrl.searchParams.get('state')}`, undefined, merge(cookie, begin.cookie));
   const location = new URL(back.location ?? ORIGIN);
   return { authUrl, status: back.status, ok: location.searchParams.has('ok'), error: location.searchParams.get('error'), cookie: merge(cookie, back.cookie), back };
 }
-const link = (cookie: string, who: { sub: string; email: string }) => viaGoogle('/link-social', cookie, who);
-const signIn = (cookie: string, who: { sub: string; email: string }) => viaGoogle('/sign-in/social', cookie, who);
+const link = (cookie: string, who: GoogleIdentity) => viaGoogle('/link-social', cookie, who);
+const signIn = (cookie: string, who: GoogleIdentity, extra?: Record<string, unknown>) => viaGoogle('/sign-in/social', cookie, who, extra);
 
 const userRow = async (uid: string) => (await env.client.query<{ email: string; email_verified: boolean; is_anonymous: boolean }>(
   'select email, email_verified, is_anonymous from auth.users where id = $1', [uid])).rows[0];
@@ -269,5 +270,94 @@ describe('이메일 계정의 구글 연결', () => {
     await call('POST', '/request-password-reset', { email: 'still-pw@example.test', redirectTo: `${ORIGIN}/` });
     expect(sentMails.map(m => m.to)).toEqual([['still-pw@example.test']]);
     expect(bcrypt.compareSync('secret1', (await env.client.query(`select password from auth.accounts where provider_id = 'credential' and account_id = (select id::text from auth.users where email = 'still-pw@example.test')`)).rows[0].password)).toBe(true);
+  });
+});
+
+describe('가입 요청과 인증 요청 덮어쓰기', () => {
+  it('본문에 requestSignUp을 실어도 연결한 적 없는 구글로는 사용자를 만들지 않는다', async () => {
+    const { cookie } = await guest();
+    const r = await signIn(cookie, { sub: nextSub(), email: 'forced@gmail.test' }, { requestSignUp: true });
+    expect(r.error).toBe('signup_disabled');
+    expect((await env.client.query(`select 1 from auth.users where email = 'forced@gmail.test'`)).rows).toHaveLength(0);
+  });
+
+  it('범위를 넓히거나 인증 요청 매개변수를 덮어쓰는 본문은 거부한다', async () => {
+    const { uid, cookie } = await guest();
+    for (const path of ['/link-social', '/sign-in/social']) {
+      for (const extra of [{ scopes: ['profile'] }, { additionalParams: { prompt: 'none' } }]) {
+        const res = await call('POST', path, { provider: 'google', callbackURL: `${ORIGIN}/`, disableRedirect: true, ...extra }, cookie);
+        expect(res.status, `${path} ${JSON.stringify(extra)}`).toBe(400);
+        expect(res.body.url).toBeUndefined();
+      }
+    }
+    expect(await accountRows(uid)).toEqual([]);
+  });
+});
+
+describe('연결 충돌의 세부', () => {
+  it('게스트가 고른 주소를 이미 구글을 연결한 계정이 쓰면 account_already_linked_to_different_user다', async () => {
+    const owner = await guest();
+    await link(owner.cookie, { sub: nextSub(), email: 'shared@gmail.test' });
+    const g = await guest();
+    const r = await link(g.cookie, { sub: nextSub(), email: 'Shared@Gmail.test' });
+    expect(r.error).toBe('account_already_linked_to_different_user');
+    expect((await userRow(g.uid)).is_anonymous).toBe(true);
+  });
+
+  it('구글이 확인하지 않은 주소는 unable_to_link_account로 거부하고 아무것도 바꾸지 않는다', async () => {
+    const { uid, cookie } = await guest();
+    const r = await link(cookie, { sub: nextSub(), email: 'unverified@gmail.test', verified: false });
+    expect(r.error).toBe('unable_to_link_account');
+    expect(await accountRows(uid)).toEqual([]);
+    expect((await userRow(uid)).is_anonymous).toBe(true);
+  });
+});
+
+describe('연결 마무리의 재실행', () => {
+  it('구글 계정 행만 있고 마무리가 안 된 게스트는 같은 구글을 다시 연결하면 마무리된다', async () => {
+    const who = { sub: nextSub(), email: 'half-guest@gmail.test' };
+    const { uid, cookie } = await guest();
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
+    expect((await userRow(uid)).is_anonymous).toBe(true);
+    const r = await link(cookie, who);
+    expect(r.ok).toBe(true);
+    expect(await userRow(uid)).toEqual({ email: 'half-guest@gmail.test', email_verified: true, is_anonymous: false });
+    expect(await accountRows(uid)).toHaveLength(1);
+  });
+
+  it('구글 계정 행과 비밀번호 수단이 함께 남은 이메일 계정도 다시 연결하면 비밀번호 수단과 다른 세션이 정리된다', async () => {
+    const who = { sub: nextSub(), email: 'half-member@gmail.test' };
+    const uid = await seedPasswordAccount(env.client, 'half-member@example.test', 'secret1');
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
+    const here = await call('POST', '/sign-in/email', { email: 'half-member@example.test', password: 'secret1' });
+    const other = await call('POST', '/sign-in/email', { email: 'half-member@example.test', password: 'secret1' });
+    const r = await link(here.cookie, who);
+    expect(r.ok).toBe(true);
+    expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
+    expect((await userRow(uid)).email).toBe('half-member@gmail.test');
+    expect(await aliveSession(here.cookie)).toBe(true);
+    expect(await aliveSession(other.cookie)).toBe(false);
+  });
+
+  it('마무리가 끝난 계정에 같은 구글을 다시 연결해도 결과가 같다', async () => {
+    const who = { sub: nextSub(), email: 'twice@gmail.test' };
+    const { uid, cookie } = await guest();
+    const first = await link(cookie, who);
+    const again = await link(first.cookie, who);
+    expect(again.ok).toBe(true);
+    expect(await userRow(uid)).toEqual({ email: 'twice@gmail.test', email_verified: true, is_anonymous: false });
+    expect(await aliveSession(again.cookie)).toBe(true);
+  });
+});
+
+describe('재설정 엔드포인트 가드', () => {
+  it('비밀번호 수단이 없는 계정의 재설정 토큰은 비밀번호 수단을 만들지 않고 거부한다', async () => {
+    const { uid, cookie } = await guest();
+    await link(cookie, { sub: nextSub(), email: 'no-pw@gmail.test' });
+    await env.client.query(`insert into auth.verifications (identifier, value, expires_at) values ('reset-password:raced-token', $1, now() + interval '1 hour')`, [uid]);
+    const res = await call('POST', '/reset-password', { newPassword: 'brand-new', token: 'raced-token' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_TOKEN');
+    expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
   });
 });

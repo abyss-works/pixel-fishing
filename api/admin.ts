@@ -190,7 +190,7 @@ async function resetLink({ withTransaction }: Database, raw: unknown, adminId: s
   const kind = await dbWrite(() => withTransaction(async tx => {
     const found = await accountKind(tx, userId);
     if (found !== 'member') return found;
-    // 재설정은 없는 비밀번호 수단을 새로 만든다. 수단이 없는 계정에는 토큰을 만들지 않는다
+    // 비밀번호 수단이 없는 계정에는 토큰을 만들지 않는다
     if (!await read.hasPasswordAccount(tx, userId)) return 'no-password' as const;
     await insertPasswordResetToken(tx, userId, token, expiresAt);
     await recordAdminAction(tx, userId, 'adminResetLink', adminId, { expiresAt });
