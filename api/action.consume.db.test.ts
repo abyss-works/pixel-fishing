@@ -1,12 +1,13 @@
 // 지원 코드와 납품 진행 행의 소비는 저장 확정이 성공할 때만 일어난다 — 실제 Postgres로 검사한다.
 // 읽기와 확정 사이의 경합은 확정 함수 경계에서 대체한다. 호출 직전에 훅이 끼어들어 저장 버전을 올리거나
 // 다른 요청을 끝까지 실행한다.
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES } from '../src/game/content/bounties.js';
 import { callAction, captureRealClock, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
-const hook: { beforeCommit: (() => Promise<void>) | null } = { beforeCommit: null };
+const hook: { beforeCommit: (() => Promise<void>) | null; failStatement: boolean } = { beforeCommit: null, failStatement: false };
 
 vi.mock('./_data/commit.js', async importOriginal => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -16,6 +17,11 @@ vi.mock('./_data/commit.js', async importOriginal => {
       const run = hook.beforeCommit;
       hook.beforeCommit = null;
       if (run) await run();
+      // 확정 문장이 실행 중에 오류로 끝나는 경우 — 소비 뒤에 확정이 던진다
+      if (hook.failStatement && name === 'commitConsumingCode') {
+        hook.failStatement = false;
+        args = [args[0], args[1], sql`update public.no_such_table set x = 1 returning x`, args[3]];
+      }
       return (fn as (...a: unknown[]) => unknown)(...args);
     }];
   }));
@@ -37,6 +43,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
   vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
   hook.beforeCommit = null;
+  hook.failStatement = false;
   return () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -101,6 +108,21 @@ describe('지원 코드 받기', () => {
     const retry = await claim(uid, 'CONSUME-1');
     expect(retry.status).toBe(200);
     expect(await reliefRow('CONSUME-1')).toEqual({ active: false, claimed_by: uid });
+    expect(await goldOf(uid)).toBe(RELIEF_GOLD);
+  });
+
+  it('확정 문장이 오류로 끝나면 500이고 소비가 되돌려져 코드를 다시 쓸 수 있다', async () => {
+    await insertRelief('CONSUME-5');
+    const uid = await seed();
+    hook.failStatement = true;
+    expect((await claim(uid, 'CONSUME-5')).status).toBe(500);
+    expect(await reliefRow('CONSUME-5')).toEqual({ active: true, claimed_by: null });
+    expect(await goldOf(uid)).toBe(0);
+    expect(await versionOf(uid)).toBe(2);
+
+    await env.client.query(`update public.saves_current set updated_at = '2026-01-01T00:00:00Z' where user_id = $1`, [uid]);
+    expect((await claim(uid, 'CONSUME-5')).status).toBe(200);
+    expect(await reliefRow('CONSUME-5')).toEqual({ active: false, claimed_by: uid });
     expect(await goldOf(uid)).toBe(RELIEF_GOLD);
   });
 

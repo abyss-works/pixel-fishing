@@ -1,7 +1,8 @@
 // 액션 확정 — 표의 소유 모듈이 만든 쓰기 조각을 한 문장으로 묶어 한 번에 실행한다.
 // 첫 조각은 낙관 락 갱신(upd)이고, 나머지 조각은 upd가 행을 바꿨을 때만 쓴다(guard).
 // 한 문장이라 전부 쓰이거나 전부 쓰이지 않는다. 이 모듈은 표를 직접 쓰지 않는다.
-// 확정 문장 안에 넣을 수 없는 소비(경합 요청과 행을 두고 다투는 쓰기)는 commitConsuming이 같은 트랜잭션으로 묶는다.
+// 같은 계정의 요청끼리만 다투는 한 번만 쓰는 행의 소비는 commitGated가 확정 문장 안에서 처리한다.
+// 다른 계정과 행을 두고 다투는 소비는 문장 안에서 줄 세울 수 없어 commitConsumingCode가 같은 트랜잭션으로 묶는다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
@@ -9,31 +10,47 @@ import type { Database, Executor } from '../_db/client.js';
 /** upd가 행을 바꿨는가 — 조각의 쓰기 조건 */
 export const COMMIT_GUARD: SQL = sql`exists (select 1 from upd)`;
 
-/** 확정 문장을 실행하고 낙관 락을 얻었는가(경합이면 false)를 돌려준다 */
-export async function commitAction(db: Executor, versionUpdate: SQL, fragments: readonly (SQL | null)[]): Promise<boolean> {
+function commitStatement(versionUpdate: SQL, fragments: readonly (SQL | null)[], extraSelect: SQL): SQL {
   const parts = fragments.filter((f): f is SQL => f !== null)
     .map((f, i) => sql`${sql.raw(`w${i}`)} as (${f})`);
-  const { rows } = await db.execute<{ n: number }>(sql`with upd as (${versionUpdate})${parts.length > 0 ? sql`, ${sql.join(parts, sql`, `)}` : sql``}
-    select count(*)::int as n from upd`);
+  return sql`with upd as (${versionUpdate})${parts.length > 0 ? sql`, ${sql.join(parts, sql`, `)}` : sql``}
+    select count(*)::int as n${extraSelect} from upd`;
+}
+
+/** 확정 문장을 실행하고 낙관 락을 얻었는가(경합이면 false)를 돌려준다 */
+export async function commitAction(db: Executor, versionUpdate: SQL, fragments: readonly (SQL | null)[]): Promise<boolean> {
+  const { rows } = await db.execute<{ n: number }>(commitStatement(versionUpdate, fragments, sql``));
   return rows[0].n > 0;
 }
 
-export type ConsumingCommit = 'committed' | 'conflict' | 'unavailable';
+export type CommitOutcome = 'committed' | 'conflict' | 'unavailable';
+
+/**
+ * 선행 행(gate)이 있을 때만 확정하는 문장을 실행한다. versionUpdate의 조건에 gate가 들어 있어야 하고,
+ * 소비하는 조각은 COMMIT_GUARD로 같은 문장에서 선행 행을 지운다. 행이 이미 없으면 아무것도 쓰지 않고 'unavailable',
+ * 행은 있는데 낙관 락이 어긋나면 아무것도 쓰지 않고 'conflict'다. 두 판정은 문장이 읽은 같은 스냅샷으로 가른다.
+ */
+export async function commitGated(db: Executor, versionUpdate: SQL, fragments: readonly (SQL | null)[], gate: SQL): Promise<CommitOutcome> {
+  const { rows } = await db.execute<{ n: number; gated: boolean }>(
+    commitStatement(versionUpdate, fragments, sql`, exists (${gate}) as gated`));
+  if (rows[0].n > 0) return 'committed';
+  return rows[0].gated ? 'conflict' : 'unavailable';
+}
 
 /** 확정 실패 때 소비를 함께 되돌리려고 트랜잭션을 중단시키는 표지 */
 class ConflictRollback extends Error {}
 
 /**
- * 한 번만 쓸 수 있는 행(코드, 진행 행)의 소비와 액션 확정을 한 트랜잭션에 묶는다.
+ * 다른 계정과 다투는 한 번만 쓸 수 있는 지원 코드의 소비와 액션 확정을 한 트랜잭션에 묶는다.
  * 소비를 먼저 실행해 행 잠금으로 경합 요청을 줄 세우고, 확정이 경합(낙관 락 실패)이면 소비까지 되돌린다.
  * consume이 false이면 이미 다른 요청이 소비한 것이라 아무것도 쓰지 않고 'unavailable'을 돌려준다.
  */
-export async function commitConsuming(
+export async function commitConsumingCode(
   withTransaction: Database['withTransaction'],
   consume: (tx: Executor) => Promise<boolean>,
   versionUpdate: SQL,
   fragments: readonly (SQL | null)[],
-): Promise<ConsumingCommit> {
+): Promise<CommitOutcome> {
   try {
     return await withTransaction(async tx => {
       if (!await consume(tx)) return 'unavailable';
