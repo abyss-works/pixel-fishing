@@ -102,7 +102,7 @@ export interface ActionDeps {
   now: string;           // ISO datetime — 개체의 caughtAt
   newUid: () => string;  // 개체 uid 생성기 (서버/로컬 = crypto.randomUUID, 테스트는 결정적 목)
   dynamicCoupon?: { gold: number; desc: string } | null;
-  /** 지원 코드 자산 — 서버가 reliefs 테이블을 선소비한 뒤 공급한다. 로컬 dev엔 항상 없다 */
+  /** 지원 코드 자산 — 서버가 코드를 조회해 지급분을 공급하고, 소비는 서버가 저장 확정과 함께 한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
@@ -522,7 +522,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'claimRelief': {
-      // 지원 코드 — 검증·소비는 서버(reliefs 선차감)가 하고 여기엔 결과 자산만 주입된다.
+      // 지원 코드 — 검증·소비는 서버가 저장 확정과 함께 하고 여기엔 결과 자산만 주입된다.
       // 로컬 dev(LocalGameGateway)엔 deps.relief가 항상 없다 — 오프라인 발급 불가가 의도다.
       if (!deps.relief) return { ok: false, error: 'relief-invalid' };
       return {

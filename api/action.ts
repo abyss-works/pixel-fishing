@@ -376,8 +376,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
-  // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
+  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
+  // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
   const lastActionMs = Date.parse(String(row.updated_at ?? ''));
   if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
