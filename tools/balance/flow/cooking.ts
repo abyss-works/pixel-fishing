@@ -1,7 +1,7 @@
 // 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 30분), 레시피 순손익, 집 기운 얻기 공급.
 // 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서, 배 단계로 갈 수 있는 해역)과
 // 요리 콘텐츠(레시피 표, 기운 수량, 효과 값, 슬롯 지속)는 불러 쓰고, 이 모듈은 값을 갖지 않는다.
-import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
+import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_PER_INDIVIDUAL, ENERGY_UNIT, RECIPES as COOK_RECIPES, isEnergyAmount } from '../../../src/game/content/cooking';
 import type { Recipe as CookRecipe } from '../../../src/game/content/cooking';
 import { FISH } from '../../../src/game/content/fish';
 import type { FormId } from '../../../src/game/content/fish';
@@ -21,6 +21,9 @@ import { entryLevel, rates, rng } from '../model';
 import type { Axis, Pool } from '../model';
 
 const HOUR_MS = 3_600_000;
+
+/** 개체 하나가 내는 기운(화면 단위) — 이 도구의 기운 수량(요구, 공급)은 모두 화면 단위다. 산출은 게임 콘텐츠가 정한다 */
+const ENERGY_PER_FISH = ENERGY_PER_INDIVIDUAL / ENERGY_UNIT;
 
 /** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
 export const BAIT_WINDOW_MIN = COOK_KIND_RULES.bait.slotMs / 60_000;
@@ -126,7 +129,7 @@ export interface Recipe {
   id: string;
   name: string;
   kind: 'lunch' | 'bait';
-  /** 기운 요구(등급별 개수) */
+  /** 기운 요구(등급별 수량, 화면 단위) */
   cost: Partial<Record<RarityId, number>>;
   effect: Effect;
   /** 효과 지속(시간)과 그 동안의 낚시 방식 — 도시락은 방치, 미끼 요리는 수동 */
@@ -143,12 +146,12 @@ export const recipeOf = (r: CookRecipe): Recipe => ({
 /** 요리 콘텐츠의 레시피 */
 export const RECIPES: readonly Recipe[] = COOK_RECIPES.map(recipeOf);
 
-/** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 개수. 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
+/** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 기운 수량(화면 단위). 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
 export type CostOverrides = Readonly<Record<string, Partial<Record<RarityId, number>>>>;
 
-/** 명령줄 `id=등급:개수,등급:개수` 한 덩어리를 읽는다. 등급은 common, rare, epic, legendary다 */
+/** 명령줄 `id=등급:수량,등급:수량` 한 덩어리를 읽는다. 수량은 화면 단위로 소수 첫째 자리까지 쓴다(예: 0.5). 등급은 common, rare, epic, legendary다 */
 export function parseCostSpec(spec: string): { id: string; cost: Partial<Record<RarityId, number>> } {
-  const usage = `--cost는 레시피id=등급:개수,등급:개수 형식이어야 합니다: ${spec}`;
+  const usage = `--cost는 레시피id=등급:수량,등급:수량 형식이고 수량은 소수 첫째 자리까지여야 합니다: ${spec}`;
   const eq = spec.indexOf('=');
   if (eq <= 0 || eq === spec.length - 1) throw new Error(usage);
   const cost: Partial<Record<RarityId, number>> = {};
@@ -157,7 +160,7 @@ export function parseCostSpec(spec: string): { id: string; cost: Partial<Record<
     if (grade === undefined || count === undefined || rest.length > 0 || grade === '' || count.trim() === '') throw new Error(usage);
     if (!(RARITY_ORDER as readonly string[]).includes(grade)) throw new Error(`알 수 없는 등급입니다: ${grade} (${RARITY_ORDER.join(', ')} 중 하나)`);
     if (Object.hasOwn(cost, grade)) throw new Error(`--cost에 같은 등급이 두 번 있습니다: ${grade}`);
-    if (!/^\d+$/.test(count)) throw new Error(usage);
+    if (!/^\d+(\.\d+)?$/.test(count) || !isEnergyAmount(Number(count))) throw new Error(usage);
     cost[grade as RarityId] = Number(count);
   }
   return { id: spec.slice(0, eq), cost };
@@ -169,7 +172,7 @@ export function withCostOverrides(recipes: readonly Recipe[], overrides: CostOve
     if (!recipes.some(r => r.id === id)) throw new Error(`알 수 없는 레시피입니다: ${id} (${recipes.map(r => r.id).join(', ')} 중 하나)`);
     for (const [g, n] of Object.entries(cost)) {
       if (!(RARITY_ORDER as readonly string[]).includes(g)) throw new Error(`알 수 없는 등급입니다: ${g} (${RARITY_ORDER.join(', ')} 중 하나)`);
-      if (!Number.isInteger(n) || (n as number) < 0) throw new Error(`기운 수량은 0 이상의 정수여야 합니다: ${id} ${g}:${n}`);
+      if (!isEnergyAmount(n)) throw new Error(`기운 수량은 소수 첫째 자리까지의 0 이상의 수여야 합니다: ${id} ${g}:${n}`);
     }
     if (!Object.values(cost).some(n => (n as number) > 0)) throw new Error(`기운 수량이 모두 0입니다. 요구가 하나는 있어야 합니다: ${id}`);
   }
@@ -202,12 +205,16 @@ export interface MaterialLoss {
 }
 
 /** 한 해역, 한 레벨에서 레시피 재료를 그 해역 낚시로만 모을 때의 판매 손실과 모으는 시간.
- *  손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다 */
-export function materialLoss(recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis): MaterialLoss {
+ *  손실은 등급별 필요 개체 수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다 */
+export const materialLoss = (recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis): MaterialLoss =>
+  materialLossFor(recipe, spot, level, axis, ENERGY_PER_FISH);
+
+/** 개체 하나가 내는 기운(화면 단위)을 받는 materialLoss. 레시피의 기운 요구를 이 값으로 나눠 필요한 개체 수를 구한다 */
+export function materialLossFor(recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis, energyPerFish: number): MaterialLoss {
   const gather = effectRates(spot, level, axisOf(axis, spot, level), NO_EFFECT);
   let loss = 0, collect = 0, feasible = true;
   for (const g of RARITY_ORDER) {
-    const need = recipe.cost[g] ?? 0;
+    const need = (recipe.cost[g] ?? 0) / energyPerFish;
     if (need === 0) continue;
     const rows = gather.rows.filter(r => r.fish.rarity === g);
     const share = rows.reduce((a, r) => a + r.prob, 0);
@@ -226,7 +233,7 @@ export interface RecipeOptions {
 }
 
 /** 레시피 순손익 — 재료로 쓴 물고기의 판매 손실과 효과 지속 동안의 수입 증가를 견준다.
- *  손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 재료는 그 해역에서만 모은다. 가방 한도는 넣지 않는다 */
+ *  손실은 등급별 필요 개체 수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 재료는 그 해역에서만 모은다. 가방 한도는 넣지 않는다 */
 export function recipeRows(o: RecipeOptions): RecipeRow[] {
   const recipes = o.recipes ?? RECIPES;
   for (const r of recipes) checkEffect(r.effect);
@@ -295,6 +302,10 @@ export function fillBag(catches: Iterable<Bucket>, cap: number): FillResult {
   return { released, releasedGold, kept, keptGold };
 }
 
+/** 등급별 개체 수가 내는 기운(화면 단위) */
+const energyOf = (individuals: Record<RarityId, number>): Record<RarityId, number> =>
+  Object.fromEntries(RARITY_ORDER.map(g => [g, individuals[g] * ENERGY_PER_FISH])) as Record<RarityId, number>;
+
 /** 집에 들르는 간격의 하한(시간) */
 export const MIN_VISIT_HOURS = 0.25;
 
@@ -322,11 +333,11 @@ export interface BagSupplyRow {
   /** 시도 평균 — 가방에 남은 개체 수와 판매가 합, 가방이 차서 놓아준 개체 수와 판매가 합 */
   kept: Record<RarityId, number>; keptGold: number;
   released: Record<RarityId, number>; releasedGold: number;
-  /** 가방에 남은 개체 가운데 해역 기본 선택대로 기운으로 바꾼 등급별 개수와 그 개체의 판매가 합. 가장 앞선 해역이면 모두 0이다 */
+  /** 가방에 남은 개체 가운데 해역 기본 선택대로 기운으로 바꾼 등급별 기운(화면 단위)과 그 개체의 판매가 합. 가장 앞선 해역이면 모두 0이다 */
   energy: Record<RarityId, number>; energyGold: number;
 }
 
-/** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 개수를 낸다.
+/** 집 기운 얻기가 열린 배 단계마다, 그 배로 갈 수 있는 해역에서 가방을 비운 채 판매 없이 hours시간 낚은 뒤 집에서 해역 기본 선택대로 기운으로 바꾼 등급별 기운(화면 단위)을 낸다.
  *  캐치마다 어종과 폼을 뽑는 몬테카를로이고 시드가 같으면 같다. 가방 용량은 그 배 단계의 용량이고, 낚싯대는 그 해역의 진입 레벨(에 여유를 더한 값)이다.
  *  방문 간격마다 가방을 비우므로 한 구간이 가방 용량을 넘을 때만 개체를 놓아주고, 구간별 결과를 더한다 */
 export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
@@ -386,13 +397,13 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
       const frontmost = front.has(s.id);
       return {
         boat, spot: s.id, level, cap, catches: n, frontmost, kept, keptGold, released, releasedGold,
-        energy: frontmost ? zeroGrades() : { ...kept }, energyGold: frontmost ? 0 : keptGold,
+        energy: frontmost ? zeroGrades() : energyOf(kept), energyGold: frontmost ? 0 : keptGold,
       };
     });
   });
 }
 
-/** 기운으로 레시피를 몇 개 만들 수 있는가 — 필요한 등급 중 가장 모자란 등급이 정한다. 요구가 없으면 무한대 */
+/** 기운(화면 단위)으로 레시피를 몇 개 만들 수 있는가 — 필요한 등급 중 가장 모자란 등급이 정한다. 요구가 없으면 무한대 */
 export function recipesCovered(supply: Record<RarityId, number>, recipe: Recipe): number {
   return RARITY_ORDER.reduce((m, g) => ((recipe.cost[g] ?? 0) > 0 ? Math.min(m, supply[g] / recipe.cost[g]!) : m), Number.POSITIVE_INFINITY);
 }

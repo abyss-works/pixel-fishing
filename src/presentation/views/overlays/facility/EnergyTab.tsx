@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
+import { formatEnergy } from '../../../../game/content/cooking';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import {
-  ENERGY_NAME, clearSpotPicks, energyLabel, energyResultRows, pickEnergyUids, selectEnergyView,
+  ENERGY_NAME, clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
 } from '../../../../features/kitchen/model/energy';
 import type { EnergyPicks } from '../../../../features/kitchen/model/energy';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
@@ -28,7 +29,7 @@ const POPOVER_TIP = [
 
 /** 얻는 기운을 등급마다 한 줄로 — 합계 툴팁과 결과 메시지 툴팁이 같은 목록을 쓴다 */
 const energyRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
-  energyResultRows(byGrade).map(({ grade, count }) => ({ label: energyLabel(grade), value: `+${count}` }));
+  energyResultRows(byGrade).map(({ grade, count }) => ({ label: energyLabel(grade), value: `+${formatEnergy(count)}` }));
 
 // 기운 얻기 탭 — 판매 창과 같은 어종 표(FishPickTable)로 물고기를 골라 생명의 기운으로 바꾼다. 확정한 뒤에도 창은 열려 있고
 // 결과는 메시지 창에 한 줄로 남는다. 체크 기본값은 해역 기준이고 게임 규칙이 정한다. 해역별 켜짐과 꺼짐은 확정 버튼 왼쪽
@@ -55,8 +56,8 @@ export default function EnergyTab({ game, busy, act, setToast }: {
 
   const extract = () => act({ type: 'extractEnergy', uids: view.uids }, r => {
     if (r.result.type !== 'extract') return;
-    const total = Object.values(r.result.energy).reduce((sum, n) => sum + n, 0);
-    setToast(`${ENERGY_NAME} ${total}개를 얻었어요!`, 'gold', { target: String(total), rows: energyRows(r.result.energy) });
+    const total = formatEnergy(energyTotal(r.result.energy));
+    setToast(`${ENERGY_NAME} ${total}개를 얻었어요!`, 'gold', { target: total, rows: energyRows(r.result.energy) });
   });
   const setTarget = (spot: (typeof view.spots)[number]) =>
     act({ type: 'setEnergyTarget', spot: spot.id, on: !spot.on }, () => setPicks(p => clearSpotPicks(p, game.bag, spot.id)));
@@ -69,12 +70,12 @@ export default function EnergyTab({ game, busy, act, setToast }: {
     <FishPickTable rows={view.rows} expanded={collapsed} onToggleExpand={toggleSellRow}
                    onToggleRow={toggleRow} onToggleOne={toggleOne}
                    action="기운 얻기" heads={{ check: '선택', value: ENERGY_NAME }}
-                   valueOf={row => `+${row.selectedCount}`} emptyValue="0" />
+                   valueOf={row => `+${formatEnergy(energyRowValue(row))}`} emptyValue="0" />
   );
 
   const confirm = (
-    <Button variant="primary" full disabled={!view.allowed.ok || view.total === 0 || busy} onClick={extract}>
-      기운 얻기 ({view.total}마리)
+    <Button variant="primary" full disabled={!view.allowed.ok || view.count === 0 || busy} onClick={extract}>
+      기운 얻기 ({view.count}마리)
     </Button>
   );
 
@@ -87,9 +88,9 @@ export default function EnergyTab({ game, busy, act, setToast }: {
             잠근 개체 {view.lockedCount}마리는 기운 얻기에서 빠져요.<br />잠금은 가방 탭에서 풀 수 있어요.
           </Note>
           <Note className="my-0">기운을 얻은 물고기는 가방에서 사라져요.<br />도감과 명성은 그대로 남아요.</Note>
-          <div className={cx('flex items-center justify-between text-sm', view.total === 0 && 'opacity-50')}>
+          <div className={cx('flex items-center justify-between text-sm', view.count === 0 && 'opacity-50')}>
             <span className="text-text-dim">{ENERGY_NAME}</span>
-            <Tip text={<TipList rows={energyRows(view.byGrade)} />} className="pf-accent text-xs">+{view.total}</Tip>
+            <Tip text={<TipList rows={energyRows(view.byGrade)} />} className="pf-accent text-xs">+{formatEnergy(view.energyTotal)}</Tip>
           </div>
           <div className="relative flex gap-2">
             <Tip wraps className="flex shrink-0"

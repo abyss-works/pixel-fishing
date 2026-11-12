@@ -1076,13 +1076,25 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
     expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
     const first = await stored(uid);
     expect(first.gold).toBe(1000 + REFUND);
-    expect(first.data).toMatchObject({ v: 9, baitRefund: RECEIPT, items: { 'energy-ginger': 3 } });
+    expect(first.data).toMatchObject({ v: 10, baitRefund: RECEIPT, items: { 'energy-ginger': 3 } });
     expect(first.data).not.toHaveProperty('activeBait');
     for (let i = 0; i < 2; i++) {
       await rewind(uid);
       expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
     }
     expect(await stored(uid)).toEqual(first);
+  });
+
+  it('v9 행의 기운은 처음 불러올 때 10분의 1 단위로 한 번만 옮겨지고 다른 아이템은 그대로다', async () => {
+    const uid = await seed({
+      state: { v: 9, gold: 1500, items: { 'energy-common': 7, 'energy-legendary': 1, 'cook-lunch-bite': 3 } } as unknown as Partial<GameState>,
+    });
+    for (let i = 0; i < 3; i++) {
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+      const now = await stored(uid);
+      expect(now.data).toMatchObject({ v: 10, items: { 'energy-common': 70, 'energy-legendary': 10, 'cook-lunch-bite': 3 } });
+    }
   });
 
   it('v9 행을 다시 불러도 조리, 슬롯, 기운 덮어쓰기, 영수증이 그대로다', async () => {
@@ -1098,7 +1110,7 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
       expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
       const now = await stored(uid);
       expect(now.gold).toBe(1500);
-      expect(now.data).toMatchObject({ v: 9, ...extra, items: { 'energy-ginger': 3 } });
+      expect(now.data).toMatchObject({ v: 10, ...extra, items: { 'energy-ginger': 3 } });
     }
   });
 
@@ -1109,7 +1121,7 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
     expect(res.status).toBe(200);
     const now = await stored(uid);
     expect(now.gold).toBe(1500);
-    expect(now.data).toMatchObject({ v: 9, ...extra });
+    expect(now.data).toMatchObject({ v: 10, ...extra });
   });
 
   it('dismissBaitRefund는 영수증만 지우고 골드는 그대로 둔다', async () => {
@@ -1118,7 +1130,7 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
     expect(res.status).toBe(200);
     const after = await stored(uid);
     expect(after.gold).toBe(1000 + REFUND);
-    expect(after.data).toMatchObject({ v: 9, baitRefund: null });
+    expect(after.data).toMatchObject({ v: 10, baitRefund: null });
     await rewind(uid);
     expect((await callAction(userToken(uid), { type: 'dismissBaitRefund' })).status).toBe(200);
     expect(await stored(uid)).toEqual(after);

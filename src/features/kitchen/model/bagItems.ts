@@ -38,7 +38,8 @@ const SLOT_TEXT: Readonly<Record<SlotKey, { verb: '먹기' | '쓰기'; swapTitle
   bait: { verb: '쓰기', swapTitle: '미끼 바꾸기' },
 };
 
-export interface EnergyCell { grade: RarityId; label: string; count: number }
+/** stored는 저장 단위 수량이다(화면 단위의 10배). 아이템 행의 count와 단위가 다르다 */
+export interface EnergyCell { grade: RarityId; label: string; stored: number }
 
 export interface ItemRow {
   recipe: Recipe;
@@ -72,10 +73,10 @@ export function selectItemSection(game: GameState, now: string, guest: boolean):
       effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
     }));
   const energy = RARITY_ORDER.map((grade): EnergyCell => (
-    { grade, label: energyLabel(grade), count: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
+    { grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
-  return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.count === 0) };
+  return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.stored === 0) };
 }
 
 /** 교체 확인 — 효과가 든 슬롯에 새로 넣을 때(같은 것을 다시 넣을 때도) 잃는 남은 시간을 보인다 */

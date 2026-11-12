@@ -5,7 +5,7 @@ import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
-import { energyGain, energyTargetOf, energyTargetRows, canExtractEnergy } from '../../../game/rules/cooking';
+import { energyGain, energyTargetOf, energyTargetRows, energyYield, canExtractEnergy } from '../../../game/rules/cooking';
 import { instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
@@ -38,9 +38,12 @@ export interface EnergyView {
   rows: SaleRow[];
   /** 기운으로 바꿀 개체 uid */
   uids: string[];
-  /** 등급별로 얻는 기운 개수 */
+  /** 등급별로 얻는 기운(저장 단위) */
   byGrade: Record<RarityId, number>;
-  total: number;
+  /** 얻는 기운의 합(저장 단위) */
+  energyTotal: number;
+  /** 기운으로 바꿀 개체 수 */
+  count: number;
   /** 잠겨서 기운 얻기에서 빠지는 개체 수 */
   lockedCount: number;
   /** 배로 갈 수 있는 해역, 가장 앞선 해역부터 */
@@ -69,7 +72,7 @@ export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyVie
   }));
   return {
     rows, uids: gain.uids, byGrade: gain.byGrade,
-    total: gain.uids.length, lockedCount, spots,
+    energyTotal: energyTotal(gain.byGrade), count: gain.uids.length, lockedCount, spots,
     hasOverride: spots.some(s => s.overridden),
     allowed: canExtractEnergy(game),
   };
@@ -86,7 +89,14 @@ export function clearSpotPicks(picks: EnergyPicks, bag: readonly FishInstance[],
   return Object.fromEntries(Object.entries(picks).filter(([uid]) => !gone.has(uid)));
 }
 
-/** 결과 한 줄 — 얻은 등급만 등급 순서로 */
+/** 등급별 기운(저장 단위)의 합 */
+export const energyTotal = (byGrade: Record<RarityId, number>): number =>
+  RARITY_ORDER.reduce((sum, g) => sum + byGrade[g], 0);
+
+/** 어종 행에서 고른 개체가 내는 기운(저장 단위) — 산출은 게임 규칙(energyYield)이 정한다 */
+export const energyRowValue = (row: SaleRow): number => energyYield(row.selectedCount);
+
+/** 결과 한 줄 — 얻은 등급만 등급 순서로. count는 저장 단위다 */
 export function energyResultRows(byGrade: Record<RarityId, number>): { grade: RarityId; count: number }[] {
   return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
 }

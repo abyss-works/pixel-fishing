@@ -345,7 +345,7 @@ describe('import', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(500);          // 기존 상태를 덮는다
     expect(out.state.rod).toBe(4);
-    expect(out.state.v).toBe(9);               // 마이그레이션 체인 통과
+    expect(out.state.v).toBe(10);              // 마이그레이션 체인 통과
     expect(out.state.fame).toBeGreaterThan(0); // v3→v4 명성 소급
     expect(out.events[0].type).toBe('import');
   });

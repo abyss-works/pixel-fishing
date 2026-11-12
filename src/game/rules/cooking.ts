@@ -3,7 +3,7 @@
 // 호출부(리듀서, 서버, 화면)는 이 모듈이 돌려준 판정과 값을 쓴다 — 규칙을 다시 조립하지 않는다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import {
-  COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, RECIPES, recipeById,
+  COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, recipeCostStored,
 } from '../content/cooking.js';
 import type { Recipe } from '../content/cooking.js';
 import { RARITY_ORDER } from '../content/rarity.js';
@@ -81,11 +81,14 @@ export function canExtractEnergy(state: Pick<GameState, 'boat' | 'location'>): R
 export interface EnergyGain {
   /** 기운이 되는 개체의 uid — 가방에 있고 잠기지 않았으며 콘텐츠에 있는 어종인 것만, 중복 없이 */
   uids: string[];
-  /** 등급별로 얻는 기운 개수. 등급은 개체의 어종 등급에서 정한다 */
+  /** 등급별로 얻는 기운(저장 단위). 등급은 개체의 어종 등급에서 정한다 */
   byGrade: Record<RarityId, number>;
 }
 
-/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 1개. 어종, 크기, 폼은 산출에 영향을 주지 않는다 */
+/** 개체 n마리에서 얻는 기운(저장 단위) — 개체 하나의 산출을 한 곳에서 정한다 */
+export const energyYield = (individuals: number): number => individuals * ENERGY_PER_INDIVIDUAL;
+
+/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield). 어종, 크기, 폼은 산출에 영향을 주지 않는다 */
 export function energyGain(state: Pick<GameState, 'bag'>, uids: readonly string[]): EnergyGain {
   const bag = new Map(state.bag.map(i => [i.uid, i]));
   const byGrade = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
@@ -94,7 +97,7 @@ export function energyGain(state: Pick<GameState, 'bag'>, uids: readonly string[
     const inst = bag.get(uid);
     const fish = inst ? instanceFish(inst) : undefined;
     if (!inst || inst.locked || !fish) continue;
-    byGrade[fish.rarity] += 1;
+    byGrade[fish.rarity] += energyYield(1);
     taken.push(uid);
   }
   return { uids: taken, byGrade };
@@ -177,7 +180,7 @@ export function canCook(state: GameState, recipeId: unknown, count: unknown, now
   if (count > COOK_STORAGE_CAP - cookStorageUsed(settled)) return no('storage-full');
   if (settled.cooking) return no('cooking-busy');
   for (const r of RARITY_ORDER) {
-    if ((settled.items[ENERGY_ITEM_IDS[r]] ?? 0) < (recipe.cost[r] ?? 0) * count) return no('not-enough-energy');
+    if ((settled.items[ENERGY_ITEM_IDS[r]] ?? 0) < recipeCostStored(recipe, r) * count) return no('not-enough-energy');
   }
   return OK;
 }

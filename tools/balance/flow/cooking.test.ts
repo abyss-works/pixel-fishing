@@ -5,14 +5,14 @@ import { entryLevel, rng } from '../model';
 import { NO_EFFECT, dexTimes, effectRates } from './effects';
 import type { Effect } from './effects';
 import { axisOf } from './progress';
-import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
+import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_PER_INDIVIDUAL, ENERGY_UNIT, RECIPES as COOK_RECIPES } from '../../../src/game/content/cooking';
 import { NO_COOK_EFFECTS, energyDefaultExcluded } from '../../../src/game/rules/cooking';
 import type { ActiveCookEffects } from '../../../src/game/rules/cooking';
 import { FISH } from '../../../src/game/content/fish';
 import { VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
 import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
 import {
-  BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, effectOf, effectOfRecipe, evictionOrder, fillBag, recipeRows, recipesCovered, windowRows,
+  BAIT_EFFECTS, BAIT_WINDOW_MIN, LUNCH_HOURS, RECIPES, baitEffect, bagSupplyRows, effectOf, effectOfRecipe, evictionOrder, fillBag, materialLossFor, recipeRows, recipesCovered, windowRows,
 } from './cooking';
 
 const fx = (e: Partial<Effect>): Effect => ({ ...NO_EFFECT, ...e });
@@ -164,7 +164,10 @@ describe('레시피 표', () => {
 
 describe('레시피 순손익', () => {
   const quick = recipeBy('cook-lunch-bite'), mixed = recipeBy('cook-lunch-bundle');
-  const need = (r: typeof quick, g: 'common') => r.cost[g]!;
+  /** 개체 하나가 내는 기운(화면 단위) */
+  const perFish = ENERGY_PER_INDIVIDUAL / ENERGY_UNIT;
+  /** 레시피가 요구하는 그 등급의 개체 수 */
+  const need = (r: typeof quick, g: 'common') => r.cost[g]! / perFish;
 
   it('재료로 쓴 물고기의 판매 손실은 등급별 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)다', () => {
     for (const r of recipeRows({ axis: 'idle', margin: 0, recipes: [quick] })) {
@@ -187,12 +190,22 @@ describe('레시피 순손익', () => {
   it('재료를 모으는 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다', () => {
     for (const r of recipeRows({ axis: 'idle', margin: 0, recipes: [mixed] })) {
       const base = effectRates(r.spot, r.level, 'idle', NO_EFFECT);
-      const perHour = (g: 'common' | 'rare' | 'epic' | 'legendary') => (base.rarity[g] ?? 0) * base.catchesPerHour;
+      const perHour = (g: 'common' | 'rare' | 'epic' | 'legendary') => (base.rarity[g] ?? 0) * base.catchesPerHour * perFish;
       const cost = mixed.cost;
       if (perHour('legendary') === 0 || perHour('epic') === 0) { expect(r.collectHours).toBeNull(); expect(r.net).toBeNull(); continue; }
       const expected = Math.max(...(Object.keys(cost) as (keyof typeof cost)[]).map(g => cost[g]! / perHour(g)));
       expect(r.collectHours).toBeCloseTo(expected, 9);
     }
+  });
+
+  it('개체 하나가 내는 기운이 달라지면 필요한 개체 수가 반비례로 늘어 손실과 모으는 시간이 그 배율만큼 달라진다', () => {
+    const spot = SPOTS[SPOTS.length - 1].id, level = entryLevel(spot);
+    const one = materialLossFor(mixed, spot, level, 'idle', 1), half = materialLossFor(mixed, spot, level, 'idle', 0.5);
+    expect(one.feasible).toBe(half.feasible);
+    expect(half.loss).toBeCloseTo(one.loss * 2, 9);
+    expect(half.collect).toBeCloseTo(one.collect * 2, 9);
+    const quickAt = materialLossFor(quick, spot, level, 'idle', 0.25);
+    expect(quickAt.loss).toBeCloseTo(materialLossFor(quick, spot, level, 'idle', 1).loss * 4, 9);
   });
 
   it('필요한 등급이 나오지 않는 해역은 모을 수 없다고 낸다', () => {

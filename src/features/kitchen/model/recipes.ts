@@ -1,7 +1,7 @@
 // 요리 탭 모델 — 레시피 표시값, 필요와 보유, 조리 가능 판정, 조리 상태 줄.
 // 조리 가능 여부는 게임 규칙(canCook)이, 보관함 수와 완성 수는 게임 규칙(cookStorageUsed, cookingProgress)이 정한다.
 // 이 모듈은 그 판정을 화면용 값으로 옮기고, 규칙의 매개변수(수량, 대기, 지속, 효과 값)는 콘텐츠 표에서 읽는다.
-import { COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES } from '../../../game/content/cooking';
+import { COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeCostStored } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
@@ -62,6 +62,7 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
   });
 }
 
+/** 기운 수량(per, need, have)은 모두 저장 단위다. 화면에서 formatEnergy로 바꾼다 */
 export interface RecipeCostRow { grade: RarityId; need: number; have: number; short: boolean }
 export interface RecipeUnitCost { grade: RarityId; per: number; short: boolean }
 
@@ -71,7 +72,7 @@ export interface RecipeView {
   /** 가진 완성품 수 */
   owned: number;
   effects: RecipeEffectLine[];
-  /** 1개를 만드는 데 드는 기운 — 목록 줄용. 모자라는 등급은 short */
+  /** 1개를 만드는 데 드는 기운(저장 단위) — 목록 줄용. 모자라는 등급은 short */
   unitCost: RecipeUnitCost[];
   /** 고른 수량만큼의 필요와 보유 */
   cost: RecipeCostRow[];
@@ -94,14 +95,17 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
   const maxCount = Math.max(0, COOK_STORAGE_CAP - cookStorageUsed(settled));
   const count = maxCount === 0 ? 0 : Math.min(maxCount, Math.max(1, Math.floor(requested)));
   const have = (grade: RarityId): number => settled.items[ENERGY_ITEM_IDS[grade]] ?? 0;
-  const needed = RARITY_ORDER.filter(g => (recipe.cost[g] ?? 0) > 0);
+  const needed = RARITY_ORDER.filter(g => recipeCostStored(recipe, g) > 0);
   const rules = COOK_KIND_RULES[recipe.kind];
   return {
     recipe, grade: recipeGrade(recipe), owned: settled.items[recipe.id] ?? 0,
     effects: recipeEffectLines(recipe),
-    unitCost: needed.map(grade => ({ grade, per: recipe.cost[grade]!, short: have(grade) < recipe.cost[grade]! })),
+    unitCost: needed.map(grade => {
+      const per = recipeCostStored(recipe, grade);
+      return { grade, per, short: have(grade) < per };
+    }),
     cost: needed.map(grade => {
-      const need = recipe.cost[grade]! * count;
+      const need = recipeCostStored(recipe, grade) * count;
       return { grade, need, have: have(grade), short: have(grade) < need };
     }),
     count, maxCount,

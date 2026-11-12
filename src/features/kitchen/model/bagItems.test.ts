@@ -42,7 +42,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     const v = selectItemSection(game, T0, false);
     expect(v.state).toBe('open');
     if (v.state !== 'open') return;
-    expect(v.energy.map(e => [e.grade, e.label, e.count])).toEqual([
+    expect(v.energy.map(e => [e.grade, e.label, e.stored])).toEqual([
       ['common', '생명의 기운(일반)', 38], ['rare', '생명의 기운(희귀)', 0],
       ['epic', '생명의 기운(영웅)', 2], ['legendary', '생명의 기운(전설)', 0],
     ]);

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { FISH, newState } from '../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS } from '../../../../game/content/cooking';
+import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import FacilityModal from './FacilityModal';
@@ -13,8 +13,10 @@ import FacilityModal from './FacilityModal';
 afterEach(() => { cleanup(); resetKeyScopes(); resetBagView(); });
 
 const home = { kind: 'base', id: 'home' } as const;
+// 등급별 보유 기운 — 인자는 화면 단위이고 items에는 저장 단위로 넣는다
 const energy = (c = 0, r = 0, e = 0, l = 0): Record<string, number> => ({
-  [ENERGY_ITEM_IDS.common]: c, [ENERGY_ITEM_IDS.rare]: r, [ENERGY_ITEM_IDS.epic]: e, [ENERGY_ITEM_IDS.legendary]: l,
+  [ENERGY_ITEM_IDS.common]: toStoredEnergy(c), [ENERGY_ITEM_IDS.rare]: toStoredEnergy(r),
+  [ENERGY_ITEM_IDS.epic]: toStoredEnergy(e), [ENERGY_ITEM_IDS.legendary]: toStoredEnergy(l),
 });
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: 5, location: home, ...over });
 const fishIn = (spot: SpotId) => FISH.find(f => f.spot === spot && f.rarity === 'common')!;
@@ -90,6 +92,16 @@ describe('도시락 탭과 미끼 탭', () => {
     const rare = screen.getByText('생명의 기운(희귀)').closest('tr')!;
     expect(within(rare).getByText('20')).toHaveClass('text-danger');
     expect(within(rare).getByText('5')).toHaveClass('text-danger');
+  });
+
+  it('보유가 소수 첫째 자리이면 소수로, 천 단위는 쉼표로 보이고, 목록의 단가는 정수로 보인다', () => {
+    show(seed({ items: energy(1234.5, 5.1) }));
+    fireEvent.click(screen.getByRole('option', { name: /민 몰리/ })); // 일반 100, 희귀 20
+    const common = screen.getByText('생명의 기운(일반)').closest('tr')!;
+    expect(within(common).getByText('1,234.5')).toBeInTheDocument();
+    const rare = screen.getByText('생명의 기운(희귀)').closest('tr')!;
+    expect(within(rare).getByText('5.1')).toBeInTheDocument();
+    expect(within(screen.getByRole('option', { name: /민 몰리/ })).getByText('100')).toBeInTheDocument();
   });
 
   it('효과는 이름 왼쪽 값 오른쪽으로 보이고 툴팁은 그 종류에 적용되는 낚시를 알린다', () => {
@@ -191,7 +203,7 @@ describe('기운 얻기 탭', () => {
   });
 
   it('확정 버튼은 고른 개체의 uid로 extractEnergy를 보내고 창은 그대로 열려 있다', () => {
-    const { dispatch, onClose } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 3, rare: 0, epic: 0, legendary: 0 } });
+    const { dispatch, onClose } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 30, rare: 0, epic: 0, legendary: 0 } });
     fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'extractEnergy', uids: ['a1', 'a2', 'b1'] });
     expect(onClose).not.toHaveBeenCalled();
@@ -199,11 +211,20 @@ describe('기운 얻기 탭', () => {
   });
 
   it('결과는 메시지 창 한 줄로 알리고 등급별 목록 툴팁을 단다', () => {
-    const { setToast } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 38, rare: 2, epic: 0, legendary: 0 } });
+    const { setToast } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 380, rare: 20, epic: 0, legendary: 0 } });
     fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
     expect(setToast).toHaveBeenCalledWith('생명의 기운 40개를 얻었어요!', 'gold', {
       target: '40',
       rows: [{ label: '생명의 기운(일반)', value: '+38' }, { label: '생명의 기운(희귀)', value: '+2' }],
+    });
+  });
+
+  it('결과의 기운이 소수 첫째 자리이면 소수로 알린다', () => {
+    const { setToast } = open(seed({ bag: bag() }), { type: 'extract', energy: { common: 15, rare: 5, epic: 0, legendary: 0 } });
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
+    expect(setToast).toHaveBeenCalledWith('생명의 기운 2개를 얻었어요!', 'gold', {
+      target: '2',
+      rows: [{ label: '생명의 기운(일반)', value: '+1.5' }, { label: '생명의 기운(희귀)', value: '+0.5' }],
     });
   });
 

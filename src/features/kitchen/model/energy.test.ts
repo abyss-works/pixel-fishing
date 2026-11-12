@@ -4,7 +4,7 @@ import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
 import {
-  clearSpotPicks, energyLabel, energyResultRows, pickEnergyUids, selectEnergyView,
+  clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
 } from './energy';
 
 const home = { kind: 'base', id: 'home' } as const;
@@ -21,7 +21,8 @@ describe('체크 기본값', () => {
   it('가장 앞선 해역의 어종은 체크하지 않고 그 앞 해역의 어종은 체크한다', () => {
     const view = selectEnergyView(seed({ bag }), {});
     expect(view.uids.sort()).toEqual(['a1', 'a2', 'b1', 'd1']);
-    expect(view.total).toBe(4);
+    expect(view.count).toBe(4);
+    expect(view.energyTotal).toBe(40);
   });
 
   it('덮어쓴 해역은 고른 값을 따르고 덮어쓰지 않은 해역은 기본값을 따른다', () => {
@@ -45,21 +46,31 @@ describe('체크 기본값', () => {
     const view = selectEnergyView(seed(), {});
     expect(view.rows).toEqual([]);
     expect(view.uids).toEqual([]);
-    expect(view.total).toBe(0);
+    expect(view.count).toBe(0);
+    expect(view.energyTotal).toBe(0);
   });
 });
 
 describe('등급별 얻는 기운', () => {
-  it('고른 개체의 어종 등급마다 기운 1개씩이다', () => {
+  it('고른 개체의 어종 등급마다 기운 화면 단위 1(저장 단위 10)씩이다', () => {
     const bag = [inst('c1', 'pond', false, 'common'), inst('c2', 'pond', false, 'common'), inst('r1', 'pond', false, 'rare')];
     const view = selectEnergyView(seed({ bag }), {});
-    expect(view.byGrade).toEqual({ common: 2, rare: 1, epic: 0, legendary: 0 });
-    expect(view.total).toBe(3);
+    expect(view.byGrade).toEqual({ common: 20, rare: 10, epic: 0, legendary: 0 });
+    expect(view.count).toBe(3);
+    expect(view.energyTotal).toBe(30);
+  });
+
+  it('합계는 등급별 기운(저장 단위)의 합이고, 어종 행의 값은 고른 개체 수에서 규칙이 정한 산출이다', () => {
+    expect(energyTotal({ common: 20, rare: 5, epic: 0, legendary: 10 })).toBe(35);
+    expect(energyTotal({ common: 0, rare: 0, epic: 0, legendary: 0 })).toBe(0);
+    const bag = [inst('c1', 'pond', false, 'common'), inst('c2', 'pond', false, 'common')];
+    const view = selectEnergyView(seed({ bag }), {});
+    expect(view.rows.map(energyRowValue)).toEqual([20]);
   });
 
   it('결과 줄은 얻은 등급만 등급 순서로 낸다', () => {
-    expect(energyResultRows({ common: 38, rare: 0, epic: 2, legendary: 0 })).toEqual([
-      { grade: 'common', count: 38 }, { grade: 'epic', count: 2 },
+    expect(energyResultRows({ common: 380, rare: 0, epic: 25, legendary: 0 })).toEqual([
+      { grade: 'common', count: 380 }, { grade: 'epic', count: 25 },
     ]);
   });
 });

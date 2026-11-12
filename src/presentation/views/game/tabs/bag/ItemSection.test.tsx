@@ -24,7 +24,7 @@ function show(g: GameState, guest = false, result: unknown = { status: 'ok', sta
 }
 
 describe('아이템 섹션 목록', () => {
-  const own = { 'cook-lunch-bite': 2, 'cook-bait-rare': 4, [ENERGY_ITEM_IDS.common]: 38, [ENERGY_ITEM_IDS.legendary]: 1 };
+  const own = { 'cook-lunch-bite': 2, 'cook-bait-rare': 4, [ENERGY_ITEM_IDS.common]: 380, [ENERGY_ITEM_IDS.legendary]: 10 };
 
   it('기운 네 칸의 수와 도시락, 미끼 행을 보인다', () => {
     show(game({ items: own }));
@@ -33,6 +33,13 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('group', { name: '생명의 기운(전설) 1개' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 쓰기' })).toBeInTheDocument();
+  });
+
+  it('기운 칸은 소수 첫째 자리가 0이면 정수로, 아니면 소수로, 천 단위는 쉼표로 쓴다(접근성 이름 포함)', () => {
+    show(game({ items: { [ENERGY_ITEM_IDS.common]: 12345, [ENERGY_ITEM_IDS.rare]: 15, [ENERGY_ITEM_IDS.epic]: 5 } }));
+    expect(screen.getByRole('group', { name: '생명의 기운(일반) 1,234.5개' })).toHaveTextContent('1,234.5');
+    expect(screen.getByRole('group', { name: '생명의 기운(희귀) 1.5개' })).toHaveTextContent('1.5');
+    expect(screen.getByRole('group', { name: '생명의 기운(영웅) 0.5개' })).toHaveTextContent('0.5');
   });
 
   it('가진 것이 없으면 안내 한 줄만 보인다', () => {
