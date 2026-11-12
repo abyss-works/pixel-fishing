@@ -50,9 +50,9 @@ import {
   acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDelivery, debugFragment,
   expiredCleanup, ticketFragment,
 } from './_data/bounty.js';
-import { consumeRelief, findCoupon } from './_data/codes.js';
+import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
-import { COMMIT_GUARD, commitAction, runFollowUps } from './_data/commit.js';
+import { COMMIT_GUARD, commitAction, commitConsuming, runFollowUps } from './_data/commit.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
@@ -397,15 +397,21 @@ async function route(req: Req, res: Res): Promise<void> {
     dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
   }
 
-  // 지원 코드(reliefs 테이블) — **선소비 후적용**. active=true 조건부 UPDATE가 성공한 요청만
-  // 자산을 받는다(동시 수령 경합 원천 차단 — 코드당 1행이라 UPDATE 승자가 1개). 적용 직후
-  // 실패할 규칙이 없으므로 코드가 탈 일은 사실상 없다.
+  // 한 번만 쓸 수 있는 행(지원 코드, 납품 진행 행)의 소비 — 읽기와 규칙 실행 뒤, 확정과 같은 트랜잭션에서 한다.
+  // 확정이 경합으로 실패하면 소비도 되돌려지고, 읽은 뒤 다른 요청이 먼저 소비했으면 확정하지 않고 거부한다.
+  let consume: { run: (tx: Executor) => Promise<boolean>; refusal: 'relief-invalid' | 'quest-incomplete' } | null = null;
+
+  // 지원 코드(reliefs 테이블) — 여기서는 지급분을 읽기만 한다. 활성 코드를 조건부로 비활성화한 요청 하나만
+  // 확정되므로(코드당 1행) 동시 수령은 한 번만 지급된다.
   let relief: ActionDeps['relief'] = null;
   if (action.type === 'claimRelief' && typeof action.code === 'string') {
     const code = action.code.trim();
     if (code) {
-      const g = await step('db-write', { uid, action: action.type }, () => consumeRelief(db, code, uid));
-      if (g) relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+      const g = await step('db-read', { uid, action: action.type }, () => findRelief(db, code));
+      if (g) {
+        relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+        consume = { run: async tx => await consumeRelief(tx, code, uid) !== null, refusal: 'relief-invalid' };
+      }
     }
   }
 
@@ -447,12 +453,10 @@ async function route(req: Req, res: Res): Promise<void> {
       }
     }
 
-    // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
-    // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
+    // 납품 — 완료한 진행 행은 확정과 같은 트랜잭션에서 지운다. 동시 납품 경합은 지운 쪽만 확정된다.
     if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
       const questId = action.questId;
-      const consumed = await step('db-write', { uid, action: action.type }, () => consumeDelivery(db, uid, questId));
-      if (!consumed) bounty = { ...bounty, complete: [] };
+      consume = { run: tx => consumeDelivery(tx, uid, questId), refusal: 'quest-incomplete' };
     }
   }
 
@@ -529,12 +533,21 @@ async function route(req: Req, res: Res): Promise<void> {
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
-  const committed = await step('db-write', { uid, action: action.type },
-    () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO, {
-      ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
-      ...(action.type === 'boot' ? { activeClient: clientId } : {}),
-    }), fragments));
-  if (!committed) throw new ApiError(409, 'version-conflict');
+  const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
+    ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
+    ...(action.type === 'boot' ? { activeClient: clientId } : {}),
+  });
+  if (consume) {
+    const consuming = consume;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitConsuming(withTransaction, consuming.run, versionWrite, fragments));
+    if (result === 'unavailable') throw new ApiError(422, consuming.refusal);
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else {
+    const committed = await step('db-write', { uid, action: action.type },
+      () => commitAction(db, versionWrite, fragments));
+    if (!committed) throw new ApiError(409, 'version-conflict');
+  }
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

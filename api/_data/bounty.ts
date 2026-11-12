@@ -9,7 +9,8 @@ import type { BountyQuest } from '../../src/game/content/bounties.js';
 import { bountyKindOf } from '../../src/game/content/bounties.js';
 import { at, jsonParam, textArray } from './json.js';
 
-/** 납품 선소비 — 진행 행을 먼저 지운다. 지운 요청만 납품에 성공한다. 지운 행이 있었는가를 돌려준다 */
+/** 납품 소비 — 진행 행을 지운다. 지운 요청만 납품에 성공한다. 지운 행이 있었는가를 돌려준다.
+ *  액션 확정과 같은 트랜잭션 안에서 부른다. 확정이 실패하면 함께 되돌려진다 */
 export async function consumeDelivery(db: Executor, uid: string, questId: string): Promise<boolean> {
   const { rows } = await db.execute(sql`delete from public.bounty_progress
     where user_id = ${uid} and quest_id = ${questId} returning quest_id`);
