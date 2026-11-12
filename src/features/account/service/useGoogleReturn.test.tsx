@@ -178,6 +178,19 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
 
+  it('확인을 건너뛴 로그인을 시작하다 던져도 기존 실패 안내를 보인다', async () => {
+    auth.startGoogle.mockRejectedValue(new Error('network'));
+    const p = setup(false, 'nothing');
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+    expect(p.setToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('확인에서 진행한 로그인을 시작하다 던져도 기존 실패 안내를 보인다', async () => {
+    auth.startGoogle.mockRejectedValue(new Error('network'));
+    const p = setup(true, 'some');
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+  });
+
   it('이메일 계정이나 다른 오류 코드는 진행 판정과 관계없이 지금처럼 처리한다', async () => {
     auth.landing = { tag: 'link-email', error: 'account_already_linked_to_different_user' };
     const p = setup(false, 'nothing');

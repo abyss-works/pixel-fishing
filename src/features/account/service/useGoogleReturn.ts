@@ -40,8 +40,8 @@ export function useGoogleReturn({ setToast, askOverwrite, showNotice, reopenAcco
     setOverwritePending(false);
     void (progress === 'nothing' ? Promise.resolve(true) : askOverwrite()).then(async proceed => {
       if (!proceed) { setToast(overwriteCanceledText, 'info'); reopenAccount(); return; }
-      const r = await api.auth.startGoogle('sign-in', GOOGLE_TAG.signIn);
-      if (!r.ok) setToast(googleStartFailedText, 'warn');
+      const started = await api.auth.startGoogle('sign-in', GOOGLE_TAG.signIn).then(r => r.ok, () => false);
+      if (!started) setToast(googleStartFailedText, 'warn');
     });
     // 콜백은 읽는 시점의 값이면 충분하다
     // oxlint-disable-next-line react-hooks/exhaustive-deps
