@@ -80,8 +80,8 @@ describe('구글 연결 복귀', () => {
 });
 
 describe('구글 로그인 복귀', () => {
-  it('성공 알림은 진행을 불러온 뒤에 띄운다', () => {
-    expect(back(GOOGLE_TAG.signIn)).toEqual({ kind: 'toast', tone: 'info', afterLoad: true, text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' });
+  it('성공은 따로 알리지 않는다 (부팅의 진행 불러오기 알림이 같은 사실을 알린다)', () => {
+    expect(back(GOOGLE_TAG.signIn)).toEqual({ kind: 'none' });
   });
 
   it('구글 화면에서 취소하면 로그인하지 않았다는 정보 알림이다', () => {

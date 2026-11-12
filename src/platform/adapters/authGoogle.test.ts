@@ -66,6 +66,16 @@ describe('구글 인증 시작', () => {
     expect(sessionStorage.getItem('pf-google-flow')).toBe('link-email');
   });
 
+  it('세션 저장소에 쓰지 못하면 이동하지 않고 실패로 알린다', async () => {
+    const auth = await load();
+    client.$fetch.mockResolvedValue({ data: { url: 'https://accounts.google.test/auth' }, error: null });
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
+    const r = await auth.startGoogleAuth('link', 'link-guest');
+    write.mockRestore();
+    expect(r.ok).toBe(false);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it('시작하지 못하면 표지를 남기지 않는다', async () => {
     const auth = await load();
     client.$fetch.mockResolvedValue({ data: null, error: { status: 500 } });
@@ -145,6 +155,15 @@ describe('복귀 주소 읽기', () => {
     sessionStorage.setItem('pf-google-flow', 'link-email');
     setLocation('?google=sign-in');
     expect(auth.takeGoogleLanding()).toBeNull();
+    expect(replace).toHaveBeenCalledWith(window.history.state, '', '/');
+  });
+
+  it('세션 저장소를 읽지 못하면 시작한 흐름이 아닌 것으로 보고 질의만 지운다', async () => {
+    const auth = await load();
+    setLocation('?google=link-guest');
+    const read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+    expect(auth.takeGoogleLanding()).toBeNull();
+    read.mockRestore();
     expect(replace).toHaveBeenCalledWith(window.history.state, '', '/');
   });
 

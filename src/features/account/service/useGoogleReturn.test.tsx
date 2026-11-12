@@ -20,16 +20,15 @@ vi.mock('../../../platform/api', () => ({
 
 import { useGoogleReturn } from './useGoogleReturn';
 
-function setup(answer = true, syncState = 'on') {
+function setup(answer = true) {
   const props = {
     setToast: vi.fn(),
     askOverwrite: vi.fn(async () => answer),
     showNotice: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
     reopenAccount: vi.fn(),
-    syncState,
   };
-  const hook = renderHook((p: typeof props) => useGoogleReturn(p), { initialProps: props });
-  return { ...props, rerenderWith: (syncNext: string) => hook.rerender({ ...props, syncState: syncNext }) };
+  renderHook(() => useGoogleReturn(props));
+  return props;
 }
 
 describe('구글 인증 복귀 처리', () => {
@@ -109,29 +108,16 @@ describe('구글 인증 복귀 처리', () => {
   });
 });
 
-describe('구글 로그인 복귀의 성공 알림', () => {
+describe('구글 로그인 복귀의 성공', () => {
   beforeEach(() => {
     auth.isConfigured = true;
     auth.landing = { tag: 'sign-in', error: null };
   });
   afterEach(cleanup);
 
-  it('진행을 불러오는 중에는 띄우지 않고 불러온 뒤에 띄운다', () => {
-    const p = setup(true, 'connecting');
+  it('따로 알리지 않는다 (부팅의 진행 불러오기 알림과 겹치지 않게)', () => {
+    const p = setup();
     expect(p.setToast).not.toHaveBeenCalled();
-    p.rerenderWith('on');
-    expect(p.setToast).toHaveBeenCalledWith('구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.', 'info');
-  });
-
-  it('이미 불러온 상태면 바로 띄운다', () => {
-    const p = setup(true, 'on');
-    expect(p.setToast).toHaveBeenCalledTimes(1);
-  });
-
-  it('불러오기가 실패하면 띄우지 않는다', () => {
-    const p = setup(true, 'connecting');
-    p.rerenderWith('error');
-    p.rerenderWith('on');
-    expect(p.setToast).not.toHaveBeenCalled();
+    expect(p.showNotice).not.toHaveBeenCalled();
   });
 });

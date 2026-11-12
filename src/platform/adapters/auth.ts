@@ -137,7 +137,12 @@ export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<
   });
   if (error) return authErr(error);
   if (!data?.url) return { ok: false, msg: '구글 인증 주소를 받지 못했어요.' };
-  sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);
+  // 세션 저장소를 쓸 수 없는 브라우저는 돌아왔을 때 이 기기의 흐름인지 알 수 없으므로 시작하지 않는다
+  try {
+    sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);
+  } catch {
+    return { ok: false, msg: '브라우저 저장소를 쓸 수 없어요.' };
+  }
   window.location.assign(data.url);
   return { ok: true };
 }
@@ -151,8 +156,13 @@ export function takeGoogleLanding(): { tag: string; error: string | null } | nul
   const landing = parseGoogleLanding(window.location.search);
   if (!landing) return null;
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${landing.rest}${window.location.hash}`);
-  const started = sessionStorage.getItem(GOOGLE_FLOW_KEY);
-  sessionStorage.removeItem(GOOGLE_FLOW_KEY);
+  let started: string | null = null;
+  try {
+    started = sessionStorage.getItem(GOOGLE_FLOW_KEY);
+    sessionStorage.removeItem(GOOGLE_FLOW_KEY);
+  } catch {
+    return null;
+  }
   if (started !== landing.tag) return null;
   return { tag: landing.tag, error: landing.error };
 }

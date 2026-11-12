@@ -22,8 +22,9 @@ export function loginMethodOf(account: string | null, providers: string[] | null
 }
 
 export type GoogleOutcome =
-  /** afterLoad가 참이면 새 계정의 진행을 불러온 뒤에 띄운다 */
-  | { kind: 'toast'; text: string; tone: 'info' | 'warn'; afterLoad?: boolean }
+  | { kind: 'toast'; text: string; tone: 'info' | 'warn' }
+  /** 알릴 것이 없다. 구글 로그인 성공은 부팅의 진행 불러오기 알림이 같은 사실을 알린다 */
+  | { kind: 'none' }
   /** 진행이 있는 다른 구글 계정으로 덮어쓸지 묻는다 */
   | { kind: 'overwrite' }
   | { kind: 'notice'; title: string; body: string };
@@ -62,7 +63,7 @@ export function googleOutcome({ tag, error }: { tag: string; error: string | nul
   const signIn = tag === GOOGLE_TAG.signIn;
 
   if (!error) {
-    if (signIn) return { kind: 'toast', tone: 'info', afterLoad: true, text: '구글 계정으로 로그인했어요. 그 계정의 진행을 불러왔어요.' };
+    if (signIn) return { kind: 'none' };
     return {
       kind: 'toast', tone: 'info',
       text: tag === GOOGLE_TAG.linkGuest
