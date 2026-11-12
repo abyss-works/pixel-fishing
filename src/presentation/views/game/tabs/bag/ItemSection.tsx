@@ -9,7 +9,7 @@ import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model
 import { formatEnergy } from '../../../../../game/content/cooking';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
-import { RarityText } from '../../../../ui/fish/RarityTag';
+import { GradeName, RarityText } from '../../../../ui/fish/RarityTag';
 import Frame from '../../../../ui/Frame';
 import { fmtMinutes } from '../../../../ui/format';
 import Inset from '../../../../ui/Inset';
@@ -61,7 +61,7 @@ function ItemRows({ title, hint, rows, busy, onEat }: {
           <div key={row.recipe.id} className="grid grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1.5 text-sm">
             <ItemSprite kind={row.slot} id={row.recipe.id} preset="row" />
             <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />} className="block justify-self-start truncate max-w-full">
-              {row.label}
+              <GradeName name={row.title.name} grade={row.title.grade} />
             </Tip>
             <span className="pf-accent text-text-dim whitespace-nowrap">×{row.count}</span>
             <PillButton aria-label={`${row.label} ${row.verb}`} disabled={busy} onClick={() => onEat(row)}>{row.verb}</PillButton>

@@ -28,7 +28,9 @@ export function recipesOfKind(kind: CookKind): Recipe[] {
 }
 
 /** 화면에 쓰는 레시피 이름을 이름과 표시 등급으로 나눈 값 — 괄호만 등급색으로 칠하는 화면이 쓴다. 등급이 없으면 grade는 null이다 */
-export function recipeTitle(recipe: Recipe): { name: string; grade: DisplayGradeId | null } {
+export interface RecipeTitle { name: string; grade: DisplayGradeId | null }
+
+export function recipeTitle(recipe: Recipe): RecipeTitle {
   return { name: recipe.name, grade: recipeGrade(recipe) };
 }
 

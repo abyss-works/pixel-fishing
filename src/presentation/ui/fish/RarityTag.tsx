@@ -1,15 +1,21 @@
-import { RARITY } from '../../../game/content/rarity';
-import type { RarityId } from '../../../game/content/rarity';
-import { gradeName } from '../../../shared/lib/gradeName';
+import { DISPLAY_GRADE, RARITY } from '../../../game/content/rarity';
+import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
 
 // 등급 텍스트 — data-rarity 속성으로 색 지정 (전역 스타일 [data-rarity] → --rarity-color)
 export function RarityText({ rarity }: { rarity: RarityId }) {
   return <span data-rarity={rarity} className="text-(--rarity-color)">{RARITY[rarity].name}</span>;
 }
 
-/** 등급이 있는 대상의 이름 — 이름 뒤 괄호 등급 표기 전체를 그 등급색으로 칠한다 */
-export function GradeName({ name, grade }: { name: string; grade: RarityId }) {
-  return <span data-rarity={grade} className="text-(--rarity-color)">{gradeName(name, RARITY[grade].name)}</span>;
+/** 이름과 등급의 기본 꼴 `이름(등급)` — 이름은 본문색, 괄호와 그 안의 등급 낱말만 등급색, 굵기는 보통이다.
+ *  등급이 없는 대상(grade가 null)은 이름만 쓴다. emphasized는 고른 대상의 강조(굵은 골드)이며 이름에만 걸리고 괄호의 등급색은 그대로다 */
+export function GradeName({ name, grade, emphasized = false }: { name: string; grade: DisplayGradeId | null; emphasized?: boolean }) {
+  const nameEl = <span className={emphasized ? 'font-bold text-gold' : undefined}>{name}</span>;
+  if (grade === null) return nameEl;
+  return (
+    <span>
+      {nameEl}<span data-rarity={grade} className="text-(--rarity-color)">({DISPLAY_GRADE[grade].name})</span>
+    </span>
+  );
 }
 
 // 미획득 도감 카드용 등급 점

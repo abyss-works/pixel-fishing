@@ -10,7 +10,8 @@ import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
-import { recipeEffectLines, recipeEffectNote, recipeLabel } from './recipes';
+import { recipeEffectLines, recipeEffectNote, recipeLabel, recipeTitle } from './recipes';
+import type { RecipeTitle } from './recipes';
 import type { RecipeEffectLine } from './recipes';
 import { activeSlot } from './slots';
 import type { SlotKey } from './slots';
@@ -44,6 +45,8 @@ export interface EnergyCell { grade: RarityId; label: string; stored: number }
 export interface ItemRow {
   recipe: Recipe;
   label: string;
+  /** 이름과 표시 등급 - 괄호만 등급색으로 칠하는 화면용. label은 같은 내용을 문자열로 합친 것이다 */
+  title: RecipeTitle;
   count: number;
   slot: SlotKey;
   verb: '먹기' | '쓰기';
@@ -69,7 +72,7 @@ export function selectItemSection(game: GameState, now: string, guest: boolean):
   const items = settleCooking(game, now).items;
   const rows = (slot: SlotKey): ItemRow[] => RECIPES.filter(r => r.kind === slot && (items[r.id] ?? 0) > 0)
     .map(recipe => ({
-      recipe, label: recipeLabel(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
+      recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
       effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
     }));
   const energy = RARITY_ORDER.map((grade): EnergyCell => (

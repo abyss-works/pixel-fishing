@@ -86,10 +86,10 @@ describe('도시락 탭과 미끼 탭', () => {
   it('고른 레시피의 필요와 보유를 생명의 기운(등급) 이름으로 보이고 모자라는 칸은 위험색이다', () => {
     show(seed({ items: energy(250, 5) }));
     fireEvent.click(screen.getByRole('option', { name: /민 몰리/ })); // 일반 100, 희귀 20
-    const common = screen.getByText('생명의 기운(일반)').closest('tr')!;
+    const common = screen.getByText('(일반)').closest('tr')!;
     expect(within(common).getByText('100')).not.toHaveClass('text-danger');
     expect(within(common).getByText('250')).toBeInTheDocument();
-    const rare = screen.getByText('생명의 기운(희귀)').closest('tr')!;
+    const rare = screen.getByText('(희귀)').closest('tr')!;
     expect(within(rare).getByText('20')).toHaveClass('text-danger');
     expect(within(rare).getByText('5')).toHaveClass('text-danger');
   });
@@ -97,9 +97,9 @@ describe('도시락 탭과 미끼 탭', () => {
   it('보유가 소수 첫째 자리이면 소수로, 천 단위는 쉼표로 보이고, 목록의 단가는 정수로 보인다', () => {
     show(seed({ items: energy(1234.5, 5.1) }));
     fireEvent.click(screen.getByRole('option', { name: /민 몰리/ })); // 일반 100, 희귀 20
-    const common = screen.getByText('생명의 기운(일반)').closest('tr')!;
+    const common = screen.getByText('(일반)').closest('tr')!;
     expect(within(common).getByText('1,234.5')).toBeInTheDocument();
-    const rare = screen.getByText('생명의 기운(희귀)').closest('tr')!;
+    const rare = screen.getByText('(희귀)').closest('tr')!;
     expect(within(rare).getByText('5.1')).toBeInTheDocument();
     expect(within(screen.getByRole('option', { name: /민 몰리/ })).getByText('100')).toBeInTheDocument();
   });
