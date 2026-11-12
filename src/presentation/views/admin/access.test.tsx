@@ -5,7 +5,7 @@ import { api } from '../../../platform/api';
 import { QueryProvider } from '../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../features/admin/service/accessContext';
 import type { AdminAuth } from '../../../features/admin/service/accessContext';
-import { AdminGate } from './access';
+import { AdminAuthProvider, AdminGate } from './access';
 
 // 테스트 빌드는 로컬 모드라 관리자 로그인이 꺼져 있다. 클라우드 빌드처럼 로그인 복귀 읽기를 켠다
 vi.mock('../../../features/admin/service/queries', async importOriginal => ({
@@ -148,5 +148,21 @@ describe('AdminGate', () => {
   it('로컬 모드는 대시보드 골격을 그린다', () => {
     renderGate({ access: 'local', uid: null });
     expect(screen.getByText('대시보드 본문')).toBeInTheDocument();
+  });
+});
+
+describe('AdminAuthProvider', () => {
+  it('성공으로 돌아와 곧바로 관리자로 확인돼도 마운트 때 복귀를 한 번 읽어 주소를 정리한다', async () => {
+    const take = vi.spyOn(api.admin, 'takeSignInReturn').mockReturnValue({ error: null });
+    vi.spyOn(api.admin, 'access').mockResolvedValue({ kind: 'granted', uid: UID });
+    render(
+      <QueryProvider>
+        <AdminAuthProvider>
+          <AdminGate><p>대시보드 본문</p></AdminGate>
+        </AdminAuthProvider>
+      </QueryProvider>,
+    );
+    expect(await screen.findByText('대시보드 본문')).toBeInTheDocument();
+    expect(take).toHaveBeenCalledTimes(1);
   });
 });

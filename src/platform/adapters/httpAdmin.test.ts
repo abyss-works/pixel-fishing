@@ -196,6 +196,51 @@ describe('HttpAdmin', () => {
       expect(admin.takeSignInReturn()).toEqual({ error: null });
     });
 
+    it('error가 비어 있으면 빈 코드로 돌려준다(오류 없음과 구분한다)', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in&error=');
+      expect(admin.takeSignInReturn()).toEqual({ error: '' });
+      expect(window.location.search).toBe('');
+    });
+
+    it('error_description도 함께 지우고 다른 질의와 해시는 보존한다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?tab=users&google=sign-in&error=access_denied&error_description=denied+by+user');
+      expect(admin.takeSignInReturn()).toEqual({ error: 'access_denied' });
+      expect(window.location.search).toBe('?tab=users');
+      expect(window.location.hash).toBe('#/admin/overview');
+    });
+
+    it('error_description만 붙은 복귀는 오류 없음이고 그 질의를 지운다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in&error_description=denied');
+      expect(admin.takeSignInReturn()).toEqual({ error: null });
+      expect(window.location.search).toBe('');
+    });
+
+    it('표지 질의 없이 열렸는데 이 탭의 세션 저장소 표지가 남아 있으면 표지를 지우고 무시한다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?tab=users');
+      expect(admin.takeSignInReturn()).toBeNull();
+      expect(sessionStorage.getItem('pf-admin-google-flow')).toBeNull();
+      expect(window.location.search).toBe('?tab=users');
+    });
+
+    it('세션 저장소를 읽거나 지우다 예외가 나도 안내 없이 무시한다', () => {
+      const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+      const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('denied'); });
+      try {
+        land('');
+        expect(admin.takeSignInReturn()).toBeNull();
+        land('?google=sign-in&error=signup_disabled');
+        expect(admin.takeSignInReturn()).toBeNull();
+        expect(window.location.search).toBe('');
+      } finally {
+        get.mockRestore();
+        remove.mockRestore();
+      }
+    });
+
     it('이 탭에서 시작하지 않았거나 표지가 없으면 질의만 지우고 무시한다', () => {
       land('?google=sign-in&error=signup_disabled');
       expect(admin.takeSignInReturn()).toBeNull();

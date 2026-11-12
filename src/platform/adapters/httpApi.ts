@@ -168,23 +168,30 @@ class HttpAdmin implements AdminApi {
     window.location.assign(data.url);
     return { ok: true };
   }
-  /** 돌아온 주소에서 표지와 오류 코드를 읽고 두 질의를 주소에서 지운다. 이 탭에서 시작한 흐름이 아니면 null이다 */
+  /**
+   * 돌아온 주소에서 표지와 오류 코드를 읽고 표지, 오류 코드, 오류 설명 질의를 주소에서 지운다.
+   * 이 탭에서 시작한 흐름이 아니면 null이다. 표지 질의 없이 열렸는데 이 탭의 세션 저장소 표지가 남아 있으면(구글 화면에서 뒤로 돌아온 경우) 표지만 지운다.
+   * error가 빈 문자열이면 빈 코드로 돌려준다.
+   */
   takeSignInReturn(): { error: string | null } | null {
     const params = new URLSearchParams(window.location.search);
-    if (params.get(ADMIN_GOOGLE_PARAM) !== ADMIN_GOOGLE_TAG) return null;
+    const returned = params.get(ADMIN_GOOGLE_PARAM) === ADMIN_GOOGLE_TAG;
     const error = params.get('error');
-    params.delete(ADMIN_GOOGLE_PARAM);
-    params.delete('error');
-    const rest = params.toString();
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    if (returned) {
+      params.delete(ADMIN_GOOGLE_PARAM);
+      params.delete('error');
+      params.delete('error_description');
+      const rest = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    }
+    let started = false;
     try {
-      const started = sessionStorage.getItem(ADMIN_GOOGLE_FLOW_KEY);
+      started = sessionStorage.getItem(ADMIN_GOOGLE_FLOW_KEY) === ADMIN_GOOGLE_TAG;
       sessionStorage.removeItem(ADMIN_GOOGLE_FLOW_KEY);
-      if (started !== ADMIN_GOOGLE_TAG) return null;
     } catch {
       return null;
     }
-    return { error: error || null };
+    return returned && started ? { error } : null;
   }
   async signOut(): Promise<void> {
     await postAdminAuth('sign-out', {});
