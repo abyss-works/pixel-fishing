@@ -1,5 +1,6 @@
 // 액션 엔드포인트 특성 테스트 하네스 — 요청 처리 함수를 실제 Postgres에 연결해 호출하고,
 // 응답과 사용자별 DB 상태를 정규화해 비교할 수 있게 한다. 요청 처리 함수는 DATABASE_URL로 테스트 데이터베이스에 닿는다.
+import bcrypt from 'bcryptjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
@@ -48,6 +49,8 @@ export async function startActionEnv(): Promise<ActionEnv> {
   process.env.BETTER_AUTH_URL = 'http://localhost:3000';
   process.env.RESEND_API_KEY = 'test-only-resend-key';
   process.env.MAIL_FROM = 'test <no-reply@example.test>';
+  process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
+  process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
   process.env.DATABASE_URL = db.url;
   process.env.DEPLOY_ENV = 'local';
   delete process.env.SENTRY_DSN;
@@ -139,6 +142,14 @@ export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<
       }
     }
   }
+  return uid;
+}
+
+/** 이메일과 비밀번호로 로그인하는 기존 계정을 인증 표에 직접 만든다. 구글을 연결하기 전의 이메일 계정이다 */
+export async function seedPasswordAccount(client: Client, email: string, password: string, uid: string = randomUUID()): Promise<string> {
+  await client.query('insert into auth.users (id, email, is_anonymous) values ($1, $2, false)', [uid, email]);
+  await client.query(`insert into auth.accounts (user_id, account_id, provider_id, password) values ($1::uuid, $1::text, 'credential', $2)`,
+    [uid, bcrypt.hashSync(password, 10)]);
   return uid;
 }
 

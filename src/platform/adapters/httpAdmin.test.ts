@@ -46,8 +46,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled), 관리자 로그인·로그아웃뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'signIn', 'signOut'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -128,19 +128,127 @@ describe('HttpAdmin', () => {
     expect(admin.isConfigured).toBe(true);
   });
 
-  it('관리자 로그인은 관리자 인증 경로에 이메일과 비밀번호를 보내고, 틀리면 안내 문구를 돌려준다', async () => {
+  describe('관리자 구글 로그인', () => {
     const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: 'u-1' } }), { status: 200 }));
-    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin/auth/sign-in/email', post({ email: 'a@example.test', password: 'pw' }));
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: 'INVALID_EMAIL_OR_PASSWORD' }), { status: 401 }));
-    await expect(admin.signIn('a@example.test', 'bad')).resolves.toEqual({ ok: false, msg: '이메일 또는 비밀번호가 틀렸어요.' });
-    fetchMock.mockResolvedValue(new Response('', { status: 429 }));
-    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' });
-    fetchMock.mockResolvedValue(new Response('', { status: 502 }));
-    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. (502)' });
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    await expect(admin.signIn('a@example.test', 'pw')).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' });
+    const assign = vi.fn();
+    const RETURN = `${window.location.origin}/admin/?google=sign-in`;
+    beforeEach(() => {
+      assign.mockReset();
+      sessionStorage.clear();
+      vi.stubGlobal('location', { origin: window.location.origin, assign });
+    });
+
+    it('관리자 인증 경로에 구글 로그인을 시작하고 받은 주소로 이동한다. 성공과 실패의 복귀 주소는 같다', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ url: 'https://accounts.example.test/auth', redirect: false }), { status: 200 }));
+      await expect(admin.signIn()).resolves.toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/admin/auth/sign-in/social',
+        post({ provider: 'google', callbackURL: RETURN, errorCallbackURL: RETURN, disableRedirect: true }));
+      expect(assign).toHaveBeenCalledWith('https://accounts.example.test/auth');
+    });
+
+    it('시작하지 못하면 이동하지 않고 안내 문구를 돌려준다', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '구글 인증 주소를 받지 못했어요.' });
+      fetchMock.mockResolvedValue(new Response('', { status: 429 }));
+      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '요청이 너무 잦아요.\n잠시 뒤 다시 시도해 주세요.' });
+      fetchMock.mockResolvedValue(new Response('', { status: 502 }));
+      await expect(admin.signIn()).resolves.toEqual({
+        ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n서버에서 502 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.',
+      });
+      fetchMock.mockResolvedValue(new Response('', { status: 500 }));
+      await expect(admin.signIn()).resolves.toEqual({
+        ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n서버에서 500 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.',
+      });
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n네트워크를 확인해 주세요.' });
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it('세션 저장소를 쓸 수 없으면 이동하지 않는다', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ url: 'https://accounts.example.test/auth' }), { status: 200 }));
+      const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
+      try {
+        await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '브라우저 저장소를 쓸 수 없어요.' });
+      } finally {
+        set.mockRestore();
+      }
+      expect(assign).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('관리자 구글 로그인 복귀', () => {
+    const land = (search: string) => window.history.replaceState(null, '', `/admin/${search}#/admin/overview`);
+    beforeEach(() => sessionStorage.clear());
+    afterEach(() => window.history.replaceState(null, '', '/'));
+
+    it('이 탭에서 시작한 흐름이면 서버가 붙인 결과 코드를 돌려주고 주소의 두 질의를 지운다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in&error=signup_disabled');
+      expect(admin.takeSignInReturn()).toEqual({ error: 'signup_disabled' });
+      expect(window.location.search).toBe('');
+      expect(window.location.hash).toBe('#/admin/overview');
+      expect(sessionStorage.getItem('pf-admin-google-flow')).toBeNull();
+    });
+
+    it('오류 없는 복귀는 error가 null이다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in');
+      expect(admin.takeSignInReturn()).toEqual({ error: null });
+    });
+
+    it('error가 비어 있으면 빈 코드로 돌려준다(오류 없음과 구분한다)', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in&error=');
+      expect(admin.takeSignInReturn()).toEqual({ error: '' });
+      expect(window.location.search).toBe('');
+    });
+
+    it('error_description도 함께 지우고 다른 질의와 해시는 보존한다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?tab=users&google=sign-in&error=access_denied&error_description=denied+by+user');
+      expect(admin.takeSignInReturn()).toEqual({ error: 'access_denied' });
+      expect(window.location.search).toBe('?tab=users');
+      expect(window.location.hash).toBe('#/admin/overview');
+    });
+
+    it('error_description만 붙은 복귀는 오류 없음이고 그 질의를 지운다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?google=sign-in&error_description=denied');
+      expect(admin.takeSignInReturn()).toEqual({ error: null });
+      expect(window.location.search).toBe('');
+    });
+
+    it('표지 질의 없이 열렸는데 이 탭의 세션 저장소 표지가 남아 있으면 표지를 지우고 무시한다', () => {
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      land('?tab=users');
+      expect(admin.takeSignInReturn()).toBeNull();
+      expect(sessionStorage.getItem('pf-admin-google-flow')).toBeNull();
+      expect(window.location.search).toBe('?tab=users');
+    });
+
+    it('세션 저장소를 읽거나 지우다 예외가 나도 안내 없이 무시한다', () => {
+      const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+      const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('denied'); });
+      try {
+        land('');
+        expect(admin.takeSignInReturn()).toBeNull();
+        land('?google=sign-in&error=signup_disabled');
+        expect(admin.takeSignInReturn()).toBeNull();
+        expect(window.location.search).toBe('');
+      } finally {
+        get.mockRestore();
+        remove.mockRestore();
+      }
+    });
+
+    it('이 탭에서 시작하지 않았거나 표지가 없으면 질의만 지우고 무시한다', () => {
+      land('?google=sign-in&error=signup_disabled');
+      expect(admin.takeSignInReturn()).toBeNull();
+      expect(window.location.search).toBe('');
+      land('');
+      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
+      expect(admin.takeSignInReturn()).toBeNull();
+    });
   });
 
   it('관리자 로그아웃은 관리자 인증 경로에만 보낸다', async () => {

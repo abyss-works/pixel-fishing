@@ -494,6 +494,9 @@ describe('관리자 조치', () => {
   beforeAll(async () => {
     await seedUser(env.client, { uid: TARGET, email: 'target@example.test', nickname: '대상', state: { gold: 5, fame: 1 } });
     await seedUser(env.client, { uid: NO_SAVE, email: 'nosave@example.test', nickname: '저장없음' });
+    // 재설정 링크는 비밀번호 수단이 있는 계정에만 만든다. NO_SAVE는 구글만 연결한 계정이다
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id, password) values ($1::uuid, $1::text, 'credential', 'hash')`, [TARGET]);
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1::uuid, 'no-save-google', 'google')`, [NO_SAVE]);
   });
 
   it('관리자가 아니면 403, 세션이 없으면 401이고 아무것도 바꾸지 않는다', async () => {
@@ -536,6 +539,12 @@ describe('관리자 조치', () => {
     expect(await post('resetLink', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
     expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [GUEST])).rows).toEqual([]);
     expect(await adminEvents(GUEST)).toEqual([]);
+  });
+
+  it('비밀번호 수단이 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
+    expect(await post('resetLink', { userId: NO_SAVE })).toMatchObject({ status: 409, body: { error: 'no-password' } });
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [NO_SAVE])).rows).toEqual([]);
+    expect(await adminEvents(NO_SAVE)).toEqual([]);
   });
 
   it('재설정 링크는 1시간 유효한 재설정 토큰으로 게임 착지 주소를 만들고, 그 토큰으로 비밀번호를 바꿀 수 있다', async () => {

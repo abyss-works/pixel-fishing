@@ -38,6 +38,7 @@ import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
 import GuildInviteDialog from '../overlays/guild/GuildInviteDialog';
 import AccountModal from '../overlays/account/AccountModal';
+import GoogleReturn from '../overlays/account/GoogleReturn';
 import { settleAction } from '../../../features/gameplay/service/useGame';
 import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
@@ -340,9 +341,9 @@ export default function GameView(props: GameViewProps) {
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
         )}
+        <GoogleReturn setToast={props.setToast} reopenAccount={() => setAccountOpen(true)} />
         {accountOpen && (
-          <AccountModal game={game} setToast={props.setToast} onAuthChanged={props.onAuthChanged}
-                        account={props.account} uid={props.uid} nickname={props.nickname} onRename={props.onRename}
+          <AccountModal setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account}
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
         )}
         {playersOpen && atSea && (

@@ -17,7 +17,7 @@ const featureSources = Object.entries(import.meta.glob('../../features/**/*.{ts,
 /** 게스트 판정을 기능 모델에서 받아 잠금으로 그리는 화면의 전수 목록. 새 잠금 화면은 이 목록에 더한다 */
 const GUEST_LOCK_SCREENS = [
   'views/game/base-menu/BaseMenu.tsx',     // 집 시설 카드(옷장, 부엌): MenuCard lock
-  'views/overlays/account/AccountModal.tsx', // 닉네임 입력
+  'views/overlays/account/MyInfoModal.tsx',  // 닉네임 입력
   'views/overlays/letter/LetterModal.tsx',   // 편지 입력 칸
   'views/overlays/live/ChatBar.tsx',         // 채팅 방 버튼과 입력 칸
   'views/overlays/live/PlayerInfo.tsx',      // 친구 요청과 차단

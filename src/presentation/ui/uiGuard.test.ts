@@ -182,7 +182,6 @@ const NESTED_SCROLL_EXCEPTIONS = new Set([
 ]);
 const PRIMARY_IN_BODY_EXCEPTIONS = new Set([
   'views/overlays/mailbox/MailboxModal.tsx', // 받기: 선택한 우편 상세 안의 동작이다. 창 전체의 확정이 아니다
-  'views/overlays/account/AccountModal.tsx', // 이메일로 계속: 로그인 폼의 제출 버튼이다. 본문 폼의 동작이다
 ]);
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */

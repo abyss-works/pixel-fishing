@@ -178,7 +178,7 @@ async function restrict({ withTransaction }: Database, raw: unknown, adminId: st
 
 /**
  * 비밀번호 재설정 링크 발급 — 가입 계정에 재설정 토큰을 만들고 게임의 재설정 착지 주소를 돌려준다. 메일은 보내지 않는다.
- * 게스트 계정은 비밀번호가 없어 409, 인증 계정이 없으면 404다.
+ * 게스트 계정은 비밀번호가 없어 409(anonymous-user), 구글 연결로 비밀번호 수단이 없어진 계정도 409(no-password)다. 인증 계정이 없으면 404다.
  */
 async function resetLink({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ url: string; expiresAt: string }> {
   const { userId } = (raw ?? {}) as { userId?: unknown };
@@ -190,12 +190,15 @@ async function resetLink({ withTransaction }: Database, raw: unknown, adminId: s
   const kind = await dbWrite(() => withTransaction(async tx => {
     const found = await accountKind(tx, userId);
     if (found !== 'member') return found;
+    // 비밀번호 수단이 없는 계정에는 토큰을 만들지 않는다
+    if (!await read.hasPasswordAccount(tx, userId)) return 'no-password' as const;
     await insertPasswordResetToken(tx, userId, token, expiresAt);
     await recordAdminAction(tx, userId, 'adminResetLink', adminId, { expiresAt });
     return found;
   }));
   if (kind === 'missing') throw new ApiError(404, 'no-user');
   if (kind === 'anonymous') throw new ApiError(409, 'anonymous-user');
+  if (kind === 'no-password') throw new ApiError(409, 'no-password');
   return { url: passwordResetLanding(baseURL, token), expiresAt };
 }
 

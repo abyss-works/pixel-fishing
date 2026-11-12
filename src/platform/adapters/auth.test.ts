@@ -3,7 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   isCloud, authClient, ensureSession,
-  currentAccount, signUpWithEmail, signInWithEmail, requestPasswordReset, applyNewPassword,
+  currentAccount, signInWithEmail, requestPasswordReset, applyNewPassword, startGoogleAuth, accountProviders,
+  googleReturnUrl, parseGoogleLanding,
 } from './auth';
 import { HttpGameGateway } from './httpGameGateway';
 
@@ -23,9 +24,35 @@ describe('클라우드 저장', () => {
 
   it('계정 함수도 오프라인 모드에서 무해 (v0.4.0)', async () => {
     expect(await currentAccount()).toBeNull();
-    expect((await signUpWithEmail('a@b.c', '123456')).ok).toBe(false);
+    expect((await startGoogleAuth('link', 'link-guest')).ok).toBe(false);
+    expect(await accountProviders()).toBeNull();
     expect((await signInWithEmail('a@b.c', '123456')).ok).toBe(false);
     expect((await requestPasswordReset('a@b.c')).ok).toBe(false);
     expect((await applyNewPassword('123456')).ok).toBe(false);
+  });
+});
+
+describe('구글 인증 복귀 주소', () => {
+  it('복귀 주소는 앱 루트에 구분 표지를 단 같은 출처 주소다', () => {
+    expect(googleReturnUrl('https://game.test', 'link-guest')).toBe('https://game.test/?google=link-guest');
+  });
+
+  it('표지만 있으면 오류 없는 복귀다', () => {
+    expect(parseGoogleLanding('?google=link-email')).toEqual({ tag: 'link-email', error: null, rest: '' });
+  });
+
+  it('오류 코드가 붙으면 코드를 돌려주고 두 질의를 지운 나머지를 남긴다', () => {
+    expect(parseGoogleLanding('?google=link-guest&error=email_account_exists&x=1'))
+      .toEqual({ tag: 'link-guest', error: 'email_account_exists', rest: '?x=1' });
+  });
+
+  it('표지가 없으면 구글 복귀가 아니다 (재설정 링크의 error 질의와 섞이지 않는다)', () => {
+    expect(parseGoogleLanding('')).toBeNull();
+    expect(parseGoogleLanding('?error=INVALID_TOKEN')).toBeNull();
+    expect(parseGoogleLanding('?token=abc')).toBeNull();
+  });
+
+  it('표지 값이 비어 있으면 복귀로 보지 않는다', () => {
+    expect(parseGoogleLanding('?google=')).toBeNull();
   });
 });

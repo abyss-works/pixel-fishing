@@ -1,9 +1,10 @@
-// 인증 모듈 — 익명 가입, 같은 id로의 승격, 옮겨 온 bcrypt 해시 로그인, 비밀번호 재설정, 게임과 분리된 관리자 세션을 실제 Postgres에서 확인한다.
+// 인증 모듈 — 익명 가입, 옮겨 온 bcrypt 해시 로그인, 비밀번호 재설정, 게임과 분리된 관리자 구글 세션을 실제 Postgres에서 확인한다.
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { startActionEnv } from '../_dbTest/actionHarness.js';
+import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
-import { sentMails } from '../_dbTest/serverShim.js';
+import { googleCode, sentMails } from '../_dbTest/serverShim.js';
 
 const ORIGIN = 'http://localhost:3000';
 
@@ -59,45 +60,6 @@ describe('익명 가입', () => {
   });
 });
 
-describe('게스트 승격', () => {
-  it('같은 사용자 id에 이메일과 비밀번호를 붙이고, 그 비밀번호로 로그인된다', async () => {
-    const { uid, cookie } = await anonymousSession();
-    const res = await post('/anonymous/upgrade', { email: 'Upgrade@Example.test', password: 'secret1' }, cookie);
-    expect(res.status).toBe(200);
-    expect(await userRow(uid)).toEqual({ email: 'upgrade@example.test', is_anonymous: false });
-    expect(await sessionOf({ cookie: res.cookie || cookie })).toEqual({ id: uid, email: 'upgrade@example.test' });
-
-    const login = await post('/sign-in/email', { email: 'upgrade@example.test', password: 'secret1' });
-    expect(login.status).toBe(200);
-    expect((login.body.user as { id: string }).id).toBe(uid);
-  });
-
-  it('이미 있는 이메일이면 USER_ALREADY_EXISTS이고 게스트로 남는다', async () => {
-    const first = await anonymousSession();
-    expect((await post('/anonymous/upgrade', { email: 'taken@example.test', password: 'secret1' }, first.cookie)).status).toBe(200);
-    const { uid, cookie } = await anonymousSession();
-    const res = await post('/anonymous/upgrade', { email: 'taken@example.test', password: 'secret2' }, cookie);
-    expect(res.status).toBe(422);
-    expect(res.body.code).toBe('USER_ALREADY_EXISTS');
-    expect((await userRow(uid)).is_anonymous).toBe(true);
-  });
-
-  it('비밀번호가 6자보다 짧으면 PASSWORD_TOO_SHORT다', async () => {
-    const { cookie } = await anonymousSession();
-    const res = await post('/anonymous/upgrade', { email: 'short@example.test', password: '12345' }, cookie);
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('PASSWORD_TOO_SHORT');
-  });
-
-  it('이미 영구 계정이면 거부한다', async () => {
-    const { cookie } = await anonymousSession();
-    const up = await post('/anonymous/upgrade', { email: 'twice-up@example.test', password: 'secret1' }, cookie);
-    const res = await post('/anonymous/upgrade', { email: 'other@example.test', password: 'secret1' }, up.cookie || cookie);
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('USER_IS_NOT_ANONYMOUS');
-  });
-});
-
 describe('옮겨 온 계정', () => {
   it('이전 인증 서버의 bcrypt 해시로 로그인된다', async () => {
     const uid = '00000000-0000-4000-8000-0000000000b1';
@@ -113,8 +75,8 @@ describe('옮겨 온 계정', () => {
 
 describe('비밀번호 재설정', () => {
   it('메일 링크의 토큰으로 비밀번호를 바꾸고 기존 세션을 끊는다', async () => {
-    const { uid, cookie } = await anonymousSession();
-    await post('/anonymous/upgrade', { email: 'reset@example.test', password: 'old-pass' }, cookie);
+    const uid = await seedPasswordAccount(env.client, 'reset@example.test', 'old-pass');
+    const { cookie } = await post('/sign-in/email', { email: 'reset@example.test', password: 'old-pass' });
     expect((await post('/request-password-reset', { email: 'reset@example.test', redirectTo: `${ORIGIN}/` })).status).toBe(200);
     expect(sentMails).toHaveLength(1);
     expect(sentMails[0].to).toEqual(['reset@example.test']);
@@ -135,44 +97,116 @@ describe('비밀번호 재설정', () => {
 });
 
 describe('관리자 세션', () => {
-  /** 게임에서 가입하고 그 계정의 게임 세션 쿠키를 돌려준다 */
-  async function member(email: string): Promise<{ uid: string; gameCookie: string }> {
-    const { uid, cookie } = await anonymousSession();
-    const up = await post('/anonymous/upgrade', { email, password: 'admin-pass' }, cookie);
-    expect(up.status).toBe(200);
-    return { uid, gameCookie: up.cookie || cookie };
+  const GOOGLE_ORIGIN = `${ORIGIN}/api/admin/auth`;
+  let seq = 0;
+
+  /** 구글을 연결한 계정을 인증 표에 만든다. 구글 계정의 식별자가 sub다 */
+  async function googleMember(email: string): Promise<{ uid: string; sub: string }> {
+    const uid = randomUUID();
+    const sub = `admin-sub-${seq++}`;
+    await env.client.query('insert into auth.users (id, email, is_anonymous, email_verified) values ($1, $2, false, true)', [uid, email]);
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, sub]);
+    return { uid, sub };
+  }
+
+  /** 관리자 구글 로그인. 콜백까지 돌아오는 흐름을 한 번에 돌리고 최종 리디렉션과 쿠키를 돌려준다 */
+  async function adminGoogle(who: { sub: string; email: string }, extra: Record<string, unknown> = {}): Promise<{ ok: boolean; error: string | null; cookie: string; authUrl: URL }> {
+    const code = googleCode(`admin-code-${seq++}`, who);
+    const begin = await post('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, errorCallbackURL: `${ORIGIN}/admin/?bad=1`, disableRedirect: true, ...extra }, undefined, true);
+    const authUrl = new URL(String(begin.body.url));
+    const res = await handleAdmin(new Request(`${GOOGLE_ORIGIN}/callback/google?code=${code}&state=${authUrl.searchParams.get('state')}`, {
+      redirect: 'manual', headers: { cookie: begin.cookie },
+    }));
+    const location = new URL(res.headers.get('location') ?? ORIGIN);
+    const cookies = res.headers.getSetCookie().map(c => c.split(';')[0]).filter(c => !c.endsWith('='));
+    return { ok: location.pathname === '/admin/' && !location.searchParams.has('error'), error: location.searchParams.get('error'), cookie: cookies.join('; '), authUrl };
   }
   const adminPost = (path: string, body: unknown, cookie?: string) => post(path, body, cookie, true);
 
-  it('같은 계정으로 로그인하면 관리자 쿠키 이름의 세션을 받고, 두 세션은 서로의 쿠키를 인정하지 않는다', async () => {
-    const { uid, gameCookie } = await member('admin-login@example.test');
-    expect((await adminPost('/sign-in/email', { email: 'admin-login@example.test', password: 'wrong-pass' })).status).toBe(401);
-    const login = await adminPost('/sign-in/email', { email: 'admin-login@example.test', password: 'admin-pass' });
-    expect(login.status).toBe(200);
-    expect(login.cookie).toMatch(/^pixel-fishing-admin\.session_token=/);
+  it('구글을 연결한 계정으로 로그인하면 관리자 쿠키 이름의 세션을 받고, 두 세션은 서로의 쿠키를 인정하지 않는다', async () => {
+    const { uid, sub } = await googleMember('admin-login@gmail.test');
+    const gameLogin = await anonymousSession();
+    const login = await adminGoogle({ sub, email: 'admin-login@gmail.test' });
+    expect(login.ok).toBe(true);
+    expect(login.authUrl.searchParams.get('scope')).toBe('openid email');
+    expect(login.authUrl.searchParams.get('prompt')).toBe('select_account');
+    expect(login.authUrl.searchParams.get('redirect_uri')).toBe(`${GOOGLE_ORIGIN}/callback/google`);
+    expect(login.cookie).toMatch(/pixel-fishing-admin\.session_token=/);
     expect(await adminSessionUid({ cookie: login.cookie })).toBe(uid);
     expect(await sessionOf({ cookie: login.cookie })).toBeNull();
-    expect(await adminSessionUid({ cookie: gameCookie })).toBeNull();
+    expect(await adminSessionUid({ cookie: gameLogin.cookie })).toBeNull();
     expect(await adminSessionUid({})).toBeNull();
   });
 
-  it('관리자 인증으로는 가입할 수 없다', async () => {
-    const res = await adminPost('/sign-up/email', { email: 'admin-signup@example.test', password: 'admin-pass', name: '' });
-    expect(res.status).toBe(400);
-    const { rows } = await env.client.query('select 1 from auth.users where email = $1', ['admin-signup@example.test']);
-    expect(rows).toHaveLength(0);
+  it('연결한 적 없는 구글 계정은 로그인하지 못하고 사용자를 만들지 않는다', async () => {
+    const login = await adminGoogle({ sub: 'admin-unknown', email: 'admin-unknown@gmail.test' });
+    expect(login.ok).toBe(false);
+    expect(login.error).toBe('signup_disabled');
+    expect(await adminSessionUid({ cookie: login.cookie })).toBeNull();
+    expect((await env.client.query(`select 1 from auth.users where email = 'admin-unknown@gmail.test'`)).rows).toHaveLength(0);
+  });
+
+  it('본문에 requestSignUp을 실어도 사용자를 만들지 않는다', async () => {
+    const login = await adminGoogle({ sub: 'admin-forced', email: 'admin-forced@gmail.test' }, { requestSignUp: true });
+    expect(login.ok).toBe(false);
+    expect(login.error).toBe('signup_disabled');
+    expect((await env.client.query(`select 1 from auth.users where email = 'admin-forced@gmail.test'`)).rows).toHaveLength(0);
+  });
+
+  it('범위를 넓히거나 인증 요청 매개변수를 덮어쓰는 본문은 거부한다', async () => {
+    for (const extra of [{ scopes: ['profile'] }, { additionalParams: { prompt: 'none' } }]) {
+      const res = await adminPost('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, disableRedirect: true, ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+  });
+
+  it('관리자 세션으로는 구글 계정을 연결하지 못한다', async () => {
+    const { uid, sub } = await googleMember('admin-nolink@gmail.test');
+    const login = await adminGoogle({ sub, email: 'admin-nolink@gmail.test' });
+    const code = googleCode(`admin-link-${seq++}`, { sub: 'admin-other-google', email: 'admin-other@gmail.test' });
+    const begin = await adminPost('/link-social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, errorCallbackURL: `${ORIGIN}/admin/?bad=1`, disableRedirect: true }, login.cookie);
+    const state = begin.body.url ? new URL(String(begin.body.url)).searchParams.get('state') : null;
+    if (state) {
+      await handleAdmin(new Request(`${GOOGLE_ORIGIN}/callback/google?code=${code}&state=${state}`, { redirect: 'manual', headers: { cookie: [login.cookie, begin.cookie].join('; ') } }));
+    }
+    expect((await env.client.query(`select account_id from auth.accounts where user_id = $1`, [uid])).rows).toEqual([{ account_id: sub }]);
+  });
+
+  it('이메일 주소만 같은 계정으로는 로그인하지 않는다', async () => {
+    await seedPasswordAccount(env.client, 'admin-pw@gmail.test', 'admin-pass');
+    const login = await adminGoogle({ sub: 'admin-same-address', email: 'admin-pw@gmail.test' });
+    expect(login.ok).toBe(false);
+    expect(await adminSessionUid({ cookie: login.cookie })).toBeNull();
+  });
+
+  it('이메일·비밀번호 로그인과 가입 경로는 없다', async () => {
+    await seedPasswordAccount(env.client, 'admin-email@example.test', 'admin-pass');
+    const login = await adminPost('/sign-in/email', { email: 'admin-email@example.test', password: 'admin-pass' });
+    expect(login.status).toBeGreaterThanOrEqual(400);
+    expect(login.cookie).toBe('');
+    const signUp = await adminPost('/sign-up/email', { email: 'admin-signup@example.test', password: 'admin-pass', name: '' });
+    expect(signUp.status).toBeGreaterThanOrEqual(400);
+    expect((await env.client.query('select 1 from auth.users where email = $1', ['admin-signup@example.test'])).rows).toHaveLength(0);
+  });
+
+  it('구글이 준 토큰을 저장하지 않는다', async () => {
+    const { uid, sub } = await googleMember('admin-tokens@gmail.test');
+    await adminGoogle({ sub, email: 'admin-tokens@gmail.test' });
+    const { rows } = await env.client.query('select access_token, refresh_token, id_token from auth.accounts where user_id = $1', [uid]);
+    expect(rows).toEqual([{ access_token: null, refresh_token: null, id_token: null }]);
   });
 
   it('관리자 로그아웃은 관리자 세션만, 게임 로그아웃은 게임 세션만 끝낸다', async () => {
-    const { uid, gameCookie } = await member('admin-logout@example.test');
-    const first = await adminPost('/sign-in/email', { email: 'admin-logout@example.test', password: 'admin-pass' });
+    const { uid, sub } = await googleMember('admin-logout@gmail.test');
+    const game = await anonymousSession();
+    const first = await adminGoogle({ sub, email: 'admin-logout@gmail.test' });
     expect((await adminPost('/sign-out', {}, first.cookie)).status).toBe(200);
     expect(await adminSessionUid({ cookie: first.cookie })).toBeNull();
-    expect(await sessionOf({ cookie: gameCookie })).toEqual({ id: uid, email: 'admin-logout@example.test' });
+    expect(await sessionOf({ cookie: game.cookie })).toEqual({ id: game.uid, email: null });
 
-    const second = await adminPost('/sign-in/email', { email: 'admin-logout@example.test', password: 'admin-pass' });
-    expect((await post('/sign-out', {}, gameCookie)).status).toBe(200);
-    expect(await sessionOf({ cookie: gameCookie })).toBeNull();
+    const second = await adminGoogle({ sub, email: 'admin-logout@gmail.test' });
+    expect((await post('/sign-out', {}, game.cookie)).status).toBe(200);
+    expect(await sessionOf({ cookie: game.cookie })).toBeNull();
     expect(await adminSessionUid({ cookie: second.cookie })).toBe(uid);
   });
 });
@@ -190,18 +224,24 @@ describe('세션의 접속 정보', () => {
   });
 
   it('계정 로그인 세션에도 저장하지 않는다', async () => {
-    const { uid, cookie } = await anonymousSession();
-    await post('/anonymous/upgrade', { email: 'no-ip@example.test', password: 'secret1' }, cookie);
+    const uid = await seedPasswordAccount(env.client, 'no-ip@example.test', 'secret1');
     await post('/sign-in/email', { email: 'no-ip@example.test', password: 'secret1' }, undefined, false, client);
     const rows = await sessionRows(uid);
-    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows.every(r => r.ip_address === null && r.user_agent === null)).toBe(true);
   });
 
   it('관리자 로그인 세션에도 저장하지 않는다', async () => {
-    const { uid, cookie } = await anonymousSession();
-    await post('/anonymous/upgrade', { email: 'no-ip-admin@example.test', password: 'secret1' }, cookie);
-    await post('/sign-in/email', { email: 'no-ip-admin@example.test', password: 'secret1' }, undefined, true, client);
+    const uid = randomUUID();
+    await env.client.query(`insert into auth.users (id, email, is_anonymous, email_verified) values ($1, 'no-ip-admin@gmail.test', false, true)`, [uid]);
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, 'no-ip-admin-sub', 'google')`, [uid]);
+    const code = googleCode('no-ip-admin-code', { sub: 'no-ip-admin-sub', email: 'no-ip-admin@gmail.test' });
+    const begin = await post('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/admin/`, disableRedirect: true }, undefined, true, client);
+    const state = new URL(String(begin.body.url)).searchParams.get('state');
+    await handleAdmin(new Request(`${ORIGIN}/api/admin/auth/callback/google?code=${code}&state=${state}`, {
+      redirect: 'manual', headers: { cookie: begin.cookie, ...client },
+    }));
+    expect((await sessionRows(uid)).length).toBeGreaterThanOrEqual(1);
     expect((await sessionRows(uid)).every(r => r.ip_address === null && r.user_agent === null)).toBe(true);
   });
 });
