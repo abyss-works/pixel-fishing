@@ -2,6 +2,7 @@
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
+import { SALE_BASES } from '../content/places';
 import { ZONES, topZoneOf, zoneById, zoneOfSpot, CLOSED_SEA_MSG } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
 import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
@@ -746,5 +747,13 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   });
   it('빈 공간은 null', () => {
     expect(furnitureAt('home', 160, 40)).toBeNull();
+  });
+});
+
+describe('판매 시설이 있는 거점 표', () => {
+  it('거점 데이터의 판매 가구와 같다', () => {
+    for (const pack of Object.values(BASE_PACKS)) {
+      expect(SALE_BASES[pack.id], pack.id).toBe(pack.furniture.some(f => f.id === 'sell'));
+    }
   });
 });

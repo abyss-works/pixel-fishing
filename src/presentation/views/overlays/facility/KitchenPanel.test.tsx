@@ -240,12 +240,12 @@ describe('기운 얻기 탭', () => {
     expect(screen.getByRole('button', { name: '기운 얻기 (0마리)' })).toBeDisabled();
   });
 
-  it('집 밖이면 확정이 막히고 게임 규칙의 거부 사유가 툴팁이다', () => {
+  it('판매 시설이 있는 거점 밖이면 확정이 막히고 게임 규칙의 거부 사유가 툴팁이다', () => {
     open(seed({ bag: bag(), location: { kind: 'region', id: 'village' } }));
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
   it('잠근 개체가 있으면 확정 영역에 안내가 보이고 되돌릴 수 없다는 안내는 늘 보인다', () => {

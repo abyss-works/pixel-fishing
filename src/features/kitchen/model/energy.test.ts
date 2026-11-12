@@ -128,17 +128,18 @@ describe('해역 칩', () => {
 });
 
 describe('확정 가능 판정', () => {
-  it('집 거점이고 요리가 열렸으면 가능하다', () => {
+  it('판매 시설이 있는 거점이고 요리가 열렸으면 가능하다', () => {
     expect(selectEnergyView(seed(), {}).allowed).toEqual({ ok: true });
+    expect(selectEnergyView(seed({ location: { kind: 'base', id: 'harbor' } }), {}).allowed).toEqual({ ok: true });
   });
 
-  it('집 밖이면 게임 규칙의 거부 사유를 그대로 전한다', () => {
+  it('판매 시설이 있는 거점 밖이면 게임 규칙의 거부 사유를 그대로 전한다', () => {
     const away = seed({ location: { kind: 'region', id: 'village' } });
-    expect(selectEnergyView(away, {}).allowed).toEqual({ ok: false, reason: 'not-at-home' });
+    expect(selectEnergyView(away, {}).allowed).toEqual({ ok: false, reason: 'not-at-sale-base' });
   });
 
   it('요리가 열리기 전이면 해금 거부 사유를 전한다', () => {
-    expect(selectEnergyView(seed({ boat: 4 }), {}).allowed).toEqual({ ok: false, reason: 'cooking-locked' });
+    expect(selectEnergyView(seed({ boat: 4 }), {}).allowed).toEqual({ ok: false, reason: 'energy-locked' });
   });
 });
 
