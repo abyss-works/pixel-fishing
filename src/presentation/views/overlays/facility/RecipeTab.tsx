@@ -8,6 +8,7 @@ import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
 import { GradeName } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
 import Inset from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
@@ -41,6 +42,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
                 selectedKey={picked.id} onSelect={id => { setPickedId(id); setQty(1); }}
                 renderItem={v => (
                   <>
+                    <ItemSprite kind={kind} id={v.recipe.id} preset="row" className="shrink-0" />
                     <span className="flex flex-col gap-0.5 min-w-0 flex-1">
                       <b className="truncate">{recipeLabel(v.recipe)}</b>
                       <span className="flex flex-wrap gap-x-2 text-2xs text-text-dim">
@@ -58,7 +60,8 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
 
   const detail = (
     <>
-      <HeroHeader title={recipeLabel(view.recipe)}
+      <HeroHeader sprite={<ItemSprite kind={kind} id={view.recipe.id} preset="hero" ariaLabel={recipeLabel(view.recipe)} />}
+                  title={recipeLabel(view.recipe)}
                   tags={[`보유 ${view.owned}개`, `지속 시간 ${fmtMinutes(view.slotMs / MIN_MS)}`]} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">효과</Tip>

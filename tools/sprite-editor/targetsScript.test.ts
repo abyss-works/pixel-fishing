@@ -25,7 +25,7 @@ describe('에디터용 대상 정의 스크립트', () => {
 
   it('격자가 미정인 대상은 layout이 null로 실린다', () => {
     const data = evalScript(targetsScript());
-    expect(data.targets.dish.layout).toBeNull();
+    expect(data.targets.artifact.layout).toBeNull();
   });
 
   it('저장소의 생성 파일이 정의와 같다', () => {

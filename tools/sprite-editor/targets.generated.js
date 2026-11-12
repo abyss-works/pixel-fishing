@@ -109,7 +109,26 @@ window.SPRITE_EDITOR_DATA = {
     },
     "dish": {
       "kind": "dish",
-      "layout": null,
+      "idLabel": "요리 id",
+      "layout": {
+        "grid": {
+          "w": 16,
+          "h": 16
+        },
+        "margin": 2,
+        "presets": {
+          "row": {
+            "w": 16,
+            "h": 16,
+            "scale": 1
+          },
+          "hero": {
+            "w": 48,
+            "h": 48,
+            "scale": 3
+          }
+        }
+      },
       "palette": "per-sprite",
       "states": [
         "default"
@@ -118,7 +137,26 @@ window.SPRITE_EDITOR_DATA = {
     },
     "bait": {
       "kind": "bait",
-      "layout": null,
+      "idLabel": "요리 id",
+      "layout": {
+        "grid": {
+          "w": 16,
+          "h": 16
+        },
+        "margin": 2,
+        "presets": {
+          "row": {
+            "w": 16,
+            "h": 16,
+            "scale": 1
+          },
+          "hero": {
+            "w": 48,
+            "h": 48,
+            "scale": 3
+          }
+        }
+      },
       "palette": "per-sprite",
       "states": [
         "default"
