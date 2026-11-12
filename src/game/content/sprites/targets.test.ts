@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { SPRITE_KINDS, SPRITE_TARGETS, definedLayout, presetScales } from './targets';
 
 describe('대상별 스프라이트 정의', () => {
-  it('모든 대상 종류가 자기 종류 이름으로 정의돼 있다', () => {
-    expect(SPRITE_KINDS).toEqual(['fish', 'boat', 'gear', 'dish', 'bait', 'artifact']);
+  it('대상 종류 목록은 정의의 키이고 각 정의는 자기 키를 종류로 갖는다', () => {
+    expect(SPRITE_KINDS).toEqual(Object.keys(SPRITE_TARGETS));
+    expect(SPRITE_KINDS).toEqual(expect.arrayContaining(['fish', 'boat', 'gear', 'dish', 'bait', 'artifact']));
     for (const kind of SPRITE_KINDS) expect(SPRITE_TARGETS[kind].kind).toBe(kind);
   });
 

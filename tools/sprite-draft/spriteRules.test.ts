@@ -10,10 +10,6 @@ import type { PixelSprite } from '../../src/game/content/sprites/types';
 import { checkRows } from './commonRules';
 import type { RuleName } from './commonRules';
 
-/**
- * 대상별로 코드에 들어 있는 모든 격자. 대상 종류를 더하면 이 표에 행을 더해야 컴파일된다.
- * 요리·미끼·유물은 격자가 미정이라 아직 격자가 없다.
- */
 /** 키에 접두어를 붙여 서로 다른 저장소의 키가 겹치지 않게 한다 */
 function tagged(prefix: string, sprites: Readonly<Record<string, PixelSprite | undefined>>): Record<string, PixelSprite> {
   const out: Record<string, PixelSprite> = {};
@@ -21,6 +17,10 @@ function tagged(prefix: string, sprites: Readonly<Record<string, PixelSprite | u
   return out;
 }
 
+/**
+ * 대상별로 코드에 들어 있는 모든 격자. 대상 종류를 더하면 이 표에 행을 더해야 컴파일된다.
+ * 요리·미끼·유물은 격자가 미정이라 아직 격자가 없다.
+ */
 const GRIDS: Record<SpriteKind, Record<string, PixelSprite>> = {
   fish: { ...tagged('', FISH_SPRITES_GENERATED), ...tagged('hand:', FISH_SPRITES), ...tagged('shape:', FISH_SHAPE_SPRITES) },
   boat: tagged('tier', BOAT_SPRITES),

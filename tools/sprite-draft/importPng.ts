@@ -5,15 +5,15 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from './pngDecode';
 import { definedLayout } from '../../src/game/content/sprites/targets';
-import type { SpriteKind, SpriteTarget } from '../../src/game/content/sprites/targets';
+import type { SpriteTarget } from '../../src/game/content/sprites/targets';
 import { INDEX_CHARS, TRANSPARENT } from '../../src/game/content/sprites/types';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** 대상의 원화 PNG 폴더 */
-export const pngDir = (kind: SpriteKind): string => resolve(here, 'png', kind);
+export const pngDir = (kind: string): string => resolve(here, 'png', kind);
 /** 대상의 생성 파일 */
-export const generatedPath = (kind: SpriteKind): string => resolve(here, '../../src/game/content/sprites', `${kind}Sprites.generated.ts`);
+export const generatedPath = (kind: string): string => resolve(here, '../../src/game/content/sprites', `${kind}Sprites.generated.ts`);
 
 const hex = (r: number, g: number, b: number) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 
@@ -45,14 +45,22 @@ function convert(file: string): Converted {
   return { key: basename(file, '.png'), w, h, palette, rows };
 }
 
+/** 생성 파일 머리 주석에서 id를 부르는 이름. 없으면 id */
+const ID_LABEL: Record<string, string> = { fish: '어종 id' };
+
 export interface ImportResult { source: string; count: number; maxColors: number }
 
-/** `dir`의 `<id>.png`(상태가 variant인 대상은 `<id>.variant.png`도)를 읽어 생성 파일 원문을 만든다. preview-*.png는 건너뛴다. */
+/** `dir`의 `<id>.png`(상태에 variant가 있는 대상은 `<id>.variant.png`도)를 읽어 생성 파일 원문을 만든다. preview-*.png는 건너뛴다.
+ *  variant 상태가 없는 대상에 `<id>.variant.png`가 있으면 거부한다. */
 export function importTarget(target: SpriteTarget, dir: string): ImportResult {
   const { grid } = definedLayout(target);
   if (target.palette !== 'per-sprite') throw new Error(`${target.kind}: 공용 팔레트를 쓰는 코드 생성 대상이라 PNG에서 가져오지 않습니다`);
   const files = readdirSync(dir).filter(f => f.endsWith('.png') && !f.startsWith('preview-')).sort();
   if (files.length === 0) throw new Error(`${dir}: PNG 원화가 없습니다`);
+  if (!target.states.includes('variant')) {
+    const stray = files.find(f => f.endsWith('.variant.png'));
+    if (stray) throw new Error(`${stray}: ${target.kind}에는 variant 상태가 없습니다`);
+  }
   const sprites = files.map(f => convert(join(dir, f)));
   for (const s of sprites) {
     if (s.w !== grid.w || s.h !== grid.h) throw new Error(`${s.key}.png: ${s.w}x${s.h}, ${target.kind} 정의는 ${grid.w}x${grid.h}`);
@@ -63,7 +71,8 @@ export function importTarget(target: SpriteTarget, dir: string): ImportResult {
     const rows = s.rows.map(r => `      '${r}',`).join('\n');
     return `  '${s.key}': {\n    w: ${s.w}, h: ${s.h},\n    palette: [${pal}],\n    frames: [[\n${rows}\n    ]],\n  },`;
   });
-  const keys = target.states.includes('variant') ? '키는 "<id>" 와 "<id>.variant".' : '키는 "<id>".';
+  const id = ID_LABEL[target.kind] ?? 'id';
+  const keys = target.states.includes('variant') ? `키는 "<${id}>" 와 "<${id}>.variant".` : `키는 "<${id}>".`;
   const source = `// 생성 파일 — 손으로 고치지 않는다. 원화 PNG에서 다시 만들려면:
 //   pnpm exec tsx tools/sprite-draft/import-png.ts ${target.kind}
 // ${keys} 팔레트는 원화 색 그대로(고정 hex)라 기준색을 쓰지 않는다.

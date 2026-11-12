@@ -3,6 +3,8 @@
 // 기준 id(--ref)와 후보 id(--ids)는 인자로 받는다. 격자 크기와 배율은 대상 정의에서 읽고,
 // 상태에 variant가 있는 대상은 일반 행 아래에 변이 행을 둔다. 칸마다 id를 아래에 적는다.
 // 렌더 규칙은 제품과 같다(어두운 남색 1칸 외곽선, 물색 배경).
+// 물고기 기준 id 예: --ref carp,clownfish,blueshark,butterflyfish,goldfish,skipjack,hammerhead,flyingfish
+// (소형어, 상어, 다랑어, 관상어, 날치 등 생물군을 고르게 둔 기준 원화)
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OUTLINE_DARK } from '../../src/game/content/sprites/common';

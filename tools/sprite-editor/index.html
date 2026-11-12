@@ -216,7 +216,7 @@ const previews = document.getElementById('previews');
 function buildPreviews() {
   previews.innerHTML = '';
   // 배율이 미정인 대상은 값을 지어내지 않고 1×만 보인다.
-  const presets = target.layout ? Object.entries(target.layout.presets).map(([name, p]) => [`${name} ${p.scale}×`, p.scale]) : [['배율 미정 1×', 1]];
+  const presets = target.layout ? Object.entries(target.layout.presets).sort((a, b) => a[1].scale - b[1].scale).map(([name, p]) => [`${name} ${p.scale}×`, p.scale]) : [['배율 미정 1×', 1]];
   for (const state of target.states) for (const [pname, scale] of presets) {
     const fig = document.createElement('figure'); const c = document.createElement('canvas');
     c.width = W * scale; c.height = H * scale; c.dataset.scale = scale; c.dataset.key = STATE_KEY[state] ?? '';

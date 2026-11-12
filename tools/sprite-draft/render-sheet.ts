@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FISH } from '../../src/game/content/fish';
 import { FISH_SHAPE_SPRITES, fishColors, fishRings, fishSprite } from '../../src/game/content/sprites';
-import { OUTLINE_DARK } from '../../src/game/content/sprites/common';
+import { OUTLINE_DARK, SILHOUETTE } from '../../src/game/content/sprites/common';
 import { definedLayout, presetScales } from '../../src/game/content/sprites/targets';
 import { cellIndex, outlineCells, paletteColors } from '../../src/game/content/sprites/types';
 import type { PixelSprite } from '../../src/game/content/sprites/types';
@@ -51,10 +51,20 @@ function fishRows(): { name: string; rows: Row[] } {
   return { name: `${fish.name} (${fish.shape})`, rows };
 }
 
+/** 상태별 원화: default·normal은 `<id>.png`, variant는 `<id>.variant.png`, hidden은 `<id>.png`를 실루엣 색으로 그린다. 그 밖의 상태는 거부한다 */
 function pngRows(): { name: string; rows: Row[] } {
   if (target.palette !== 'per-sprite') throw new Error(`${target.kind}: PNG 원화가 없는 코드 생성 대상입니다`);
-  const grid = gridFromPng(readFileSync(join(pngDir(target.kind), `${id}.png`)));
-  return { name: `${target.kind} ${id}`, rows: target.states.map(label => ({ label, grid, outline: OUTLINE_DARK })) };
+  const load = (suffix: string) => gridFromPng(readFileSync(join(pngDir(target.kind), `${id}${suffix}.png`)));
+  const rows = target.states.map((label): Row => {
+    if (label === 'default' || label === 'normal') return { label, grid: load(''), outline: OUTLINE_DARK };
+    if (label === 'variant') return { label, grid: load('.variant'), outline: OUTLINE_DARK };
+    if (label === 'hidden') {
+      const g = load('');
+      return { label, grid: { ...g, cells: g.cells.map(row => row.map(c => (c ? SILHOUETTE : null))) }, outline: null };
+    }
+    throw new Error(`${target.kind}: 시트가 지원하지 않는 상태입니다: ${label}`);
+  });
+  return { name: `${target.kind} ${id}`, rows };
 }
 
 const { name, rows } = target.kind === 'fish' ? fishRows() : pngRows();

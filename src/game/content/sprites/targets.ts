@@ -1,9 +1,6 @@
 // 대상별 스프라이트 정의 — 격자 크기·안전 여백·표시 프리셋·팔레트 방식·상태 행·움직임을 한 곳에 둔다.
-// 생성 도구(tools/sprite-draft), 검사, 검수 시트, 에디터, 화면 컴포넌트가 이 정의를 함께 읽는다.
-// 새 대상은 SPRITE_TARGETS에 한 행을 더하고 tools/sprite-draft/png/<대상>/ 에 원화 PNG를 두면 된다.
-
-export type SpriteKind = 'fish' | 'boat' | 'gear' | 'dish' | 'bait' | 'artifact';
-export const SPRITE_KINDS: readonly SpriteKind[] = ['fish', 'boat', 'gear', 'dish', 'bait', 'artifact'];
+// 생성 도구, 검사, 검수 시트, 에디터, 화면 컴포넌트가 이 정의를 함께 읽는다.
+// 새 대상은 SPRITE_TARGETS에 한 행을 더하고 원화 PNG 폴더를 두면 된다. 대상 종류 목록은 그 키에서 유도한다.
 
 export interface SpriteGrid { w: number; h: number }
 /** 표시 프리셋 — 캔버스 크기와 정수 배율 */
@@ -17,7 +14,8 @@ export interface SpriteLayout {
 }
 
 export interface SpriteTarget {
-  kind: SpriteKind;
+  /** SPRITE_TARGETS의 키와 같다 */
+  kind: string;
   /** 격자와 표시 배율. null이면 아직 정해지지 않은 대상이라 생성 도구가 거부한다 */
   layout: SpriteLayout | null;
   /** per-sprite: 원화마다 고유 팔레트(원화 PNG 색 그대로). shared: 대상 전체가 공용 팔레트를 쓰는 코드 생성 대상 */
@@ -75,7 +73,11 @@ export const SPRITE_TARGETS = {
   dish: { kind: 'dish', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
   bait: { kind: 'bait', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
   artifact: { kind: 'artifact', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
-} as const satisfies Record<SpriteKind, SpriteTarget>;
+} as const satisfies Record<string, SpriteTarget>;
+
+/** 정의된 대상 종류 — SPRITE_TARGETS의 키 */
+export type SpriteKind = keyof typeof SPRITE_TARGETS;
+export const SPRITE_KINDS = Object.keys(SPRITE_TARGETS) as SpriteKind[];
 
 /** 격자가 정해진 대상의 layout. 미정이면 던진다 */
 export function definedLayout(target: SpriteTarget): SpriteLayout {

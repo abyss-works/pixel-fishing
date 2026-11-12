@@ -1,6 +1,6 @@
 // 생성 파일 — 손으로 고치지 않는다. 원화 PNG에서 다시 만들려면:
 //   pnpm exec tsx tools/sprite-draft/import-png.ts fish
-// 키는 "<id>" 와 "<id>.variant". 팔레트는 원화 색 그대로(고정 hex)라 기준색을 쓰지 않는다.
+// 키는 "<어종 id>" 와 "<어종 id>.variant". 팔레트는 원화 색 그대로(고정 hex)라 기준색을 쓰지 않는다.
 import type { PixelSprite } from './types.js';
 
 export const FISH_SPRITES_GENERATED: Readonly<Record<string, PixelSprite>> = {
