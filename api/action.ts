@@ -497,7 +497,7 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 확정 — 낙관 락 갱신과, 그것이 성공했을 때만 쓰는 행(개체·도감·수배·편지)을 한 문장으로 쓴다.
   // 읽은 version이 그대로가 아니면 아무것도 쓰지 않고 409를 돌려준다. 클라이언트(HttpGameGateway)가
-  // 최신 상태 위에 1회 재시도한다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
+  // 최신 상태 위에 1회 재시도한다. 납품은 소비할 진행 행이 이미 없으면 409가 아니라 422다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
   const nowISO = new Date().toISOString();
   // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다.
   const eventNow = nowISO;

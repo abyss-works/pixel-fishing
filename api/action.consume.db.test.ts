@@ -2,6 +2,7 @@
 // 읽기와 확정 사이의 경합은 확정 함수 경계에서 대체한다. 호출 직전에 훅이 끼어들어 저장 버전을 올리거나
 // 다른 요청을 끝까지 실행한다.
 import { sql } from 'drizzle-orm';
+import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES } from '../src/game/content/bounties.js';
 import { callAction, captureRealClock, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -17,7 +18,7 @@ vi.mock('./_data/commit.js', async importOriginal => {
       const run = hook.beforeCommit;
       hook.beforeCommit = null;
       if (run) await run();
-      // 확정 문장이 실행 중에 오류로 끝나는 경우 — 소비 뒤에 확정이 던진다
+      // 확정 문장이 오류로 끝나는 경우 — 갱신문을 없는 표를 가리키는 문장으로 바꿔, 소비 뒤에 확정이 던지게 한다
       if (hook.failStatement && name === 'commitConsumingCode') {
         hook.failStatement = false;
         args = [args[0], args[1], sql`update public.no_such_table set x = 1 returning x`, args[3]];
@@ -203,6 +204,38 @@ describe('납품', () => {
     expect(await goldOf(uid)).toBe(quest.reward);
   });
 
+  it('확정 문장이 다른 요청의 커밋을 기다렸다가 진행 행이 이미 없어진 것을 만나면 409가 아니라 422다', async () => {
+    const uid = await seed();
+    await insertProgress(uid, quest.count);
+    const winner = new Client({ connectionString: env.db.url });
+    let finished: Promise<void> = Promise.resolve();
+    // 먼저 끝나는 요청이 행 잠금을 쥔 채 버전을 올리고 진행 행을 지운다. 이 요청의 확정 문장이
+    // 잠금 대기에 들어간 것을 확인한 뒤에만 커밋한다.
+    hook.beforeCommit = async () => {
+      await winner.connect();
+      await winner.query('begin');
+      await winner.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+      await winner.query('delete from public.bounty_progress where user_id = $1', [uid]);
+      finished = (async () => {
+        for (;;) {
+          const waiting = await env.client.query(
+            `select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query like '%saves_current%'`);
+          if (waiting.rowCount) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        await winner.query('commit');
+        await winner.end();
+      })();
+    };
+    const late = await deliver(uid);
+    await finished;
+    expect(late).toMatchObject({ status: 422, body: { error: 'quest-incomplete' } });
+    expect(await progressRows(uid)).toEqual([]);
+    expect(await clearRows(uid)).toEqual([]);
+    expect(await goldOf(uid)).toBe(0);
+    expect(await versionOf(uid)).toBe(3);
+  });
+
   it('진행이 덜 된 납품은 거부하고 진행 행과 다른 표를 바꾸지 않는다', async () => {
     const uid = await seed();
     await insertProgress(uid, 0);
@@ -217,5 +250,8 @@ describe('납품', () => {
     const uid = await seed();
     expect(await deliver(uid)).toMatchObject({ status: 422, body: { error: 'quest-incomplete' } });
     expect(await clearRows(uid)).toEqual([]);
+    expect(await progressRows(uid)).toEqual([]);
+    expect(await goldOf(uid)).toBe(0);
+    expect(await versionOf(uid)).toBe(2);
   });
 });

@@ -10,16 +10,16 @@ import type { Database, Executor } from '../_db/client.js';
 /** upd가 행을 바꿨는가 — 조각의 쓰기 조건 */
 export const COMMIT_GUARD: SQL = sql`exists (select 1 from upd)`;
 
-function commitStatement(versionUpdate: SQL, fragments: readonly (SQL | null)[], extraSelect: SQL): SQL {
+function commitStatement(versionUpdate: SQL, fragments: readonly (SQL | null)[]): SQL {
   const parts = fragments.filter((f): f is SQL => f !== null)
     .map((f, i) => sql`${sql.raw(`w${i}`)} as (${f})`);
   return sql`with upd as (${versionUpdate})${parts.length > 0 ? sql`, ${sql.join(parts, sql`, `)}` : sql``}
-    select count(*)::int as n${extraSelect} from upd`;
+    select count(*)::int as n from upd`;
 }
 
 /** 확정 문장을 실행하고 낙관 락을 얻었는가(경합이면 false)를 돌려준다 */
 export async function commitAction(db: Executor, versionUpdate: SQL, fragments: readonly (SQL | null)[]): Promise<boolean> {
-  const { rows } = await db.execute<{ n: number }>(commitStatement(versionUpdate, fragments, sql``));
+  const { rows } = await db.execute<{ n: number }>(commitStatement(versionUpdate, fragments));
   return rows[0].n > 0;
 }
 
@@ -27,14 +27,16 @@ export type CommitOutcome = 'committed' | 'conflict' | 'unavailable';
 
 /**
  * 선행 행(gate)이 있을 때만 확정하는 문장을 실행한다. versionUpdate의 조건에 gate가 들어 있어야 하고,
- * 소비하는 조각은 COMMIT_GUARD로 같은 문장에서 선행 행을 지운다. 행이 이미 없으면 아무것도 쓰지 않고 'unavailable',
- * 행은 있는데 낙관 락이 어긋나면 아무것도 쓰지 않고 'conflict'다. 두 판정은 문장이 읽은 같은 스냅샷으로 가른다.
+ * 소비하는 조각은 COMMIT_GUARD로 같은 문장에서 선행 행을 지운다. 확정되면 'committed'다.
+ * 아무것도 쓰이지 않았으면 선행 행을 문장 밖에서 다시 읽어 가른다. 행이 없으면 'unavailable', 있으면 낙관 락이
+ * 어긋난 'conflict'다. 문장은 잠금을 기다리는 동안 다른 요청이 지운 행을 자기 시작 시점의 스냅샷으로 계속 보므로,
+ * 문장 안의 판정이 아니라 이 다시 읽기의 결과를 쓴다. 다시 읽은 직후 행이 사라져도 'conflict'로 답하고,
+ * 클라이언트의 재시도가 'unavailable'을 받는다.
  */
 export async function commitGated(db: Executor, versionUpdate: SQL, fragments: readonly (SQL | null)[], gate: SQL): Promise<CommitOutcome> {
-  const { rows } = await db.execute<{ n: number; gated: boolean }>(
-    commitStatement(versionUpdate, fragments, sql`, exists (${gate}) as gated`));
-  if (rows[0].n > 0) return 'committed';
-  return rows[0].gated ? 'conflict' : 'unavailable';
+  if (await commitAction(db, versionUpdate, fragments)) return 'committed';
+  const { rows } = await db.execute<{ present: boolean }>(sql`select exists (${gate}) as present`);
+  return rows[0].present ? 'conflict' : 'unavailable';
 }
 
 /** 확정 실패 때 소비를 함께 되돌리려고 트랜잭션을 중단시키는 표지 */
