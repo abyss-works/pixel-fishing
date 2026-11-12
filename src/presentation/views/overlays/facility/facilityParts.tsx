@@ -92,7 +92,7 @@ export function FacilityTabBody({ list, detail, foot }: { list: ReactNode; detai
     <>
       <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-4 [&>*]:shrink-0`}>
         {list}
-        {detail !== null && <div className="flex flex-col gap-3 min-w-0">{detail}</div>}
+        <div className="flex flex-col gap-3 min-w-0">{detail}</div>
       </div>
       <div className="border-t border-line pt-2 flex flex-col gap-2 shrink-0">{foot}</div>
     </>

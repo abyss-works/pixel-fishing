@@ -8,9 +8,9 @@ import {
 import type { EnergyPicks } from '../../../../features/kitchen/model/energy';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import Button from '../../../ui/Button';
+import { fmtFishCount } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { GradeName } from '../../../ui/fish/RarityTag';
-import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import Popover from '../../../ui/Popover';
 import ToggleChip from '../../../ui/ToggleChip';
@@ -65,9 +65,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
   const resetTargets = () => act({ type: 'resetEnergyTargets' }, () =>
     setPicks(p => view.spots.filter(s => s.overridden).reduce((acc, s) => clearSpotPicks(acc, game.bag, s.id), p)));
 
-  const table = game.bag.length === 0 ? (
-    <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
-  ) : (
+  const table = (
     <FishPickTable rows={view.rows} expanded={collapsed} onToggleExpand={toggleSellRow}
                    onToggleRow={toggleRow} onToggleOne={toggleOne}
                    action="기운 얻기" heads={{ check: '선택', value: ENERGY_NAME }}
@@ -76,12 +74,12 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
 
   const confirm = (
     <Button variant="primary" full disabled={!view.allowed.ok || view.count === 0 || busy} onClick={extract}>
-      기운 얻기 ({view.count}마리)
+      기운 얻기 ({fmtFishCount(view.count)})
     </Button>
   );
 
   return (
-    <PickTab table={table}
+    <PickTab empty={game.bag.length === 0} table={table}
       compareHeads={['현재', '기운 얻기 후']}
       compareRows={view.compare.map(r => ({
         label: <span className="text-text"><GradeName name={ENERGY_NAME} grade={r.grade} /></span>,

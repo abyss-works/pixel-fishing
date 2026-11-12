@@ -311,7 +311,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     color: var(--c-text-dim);
     cursor: pointer;
   }
-  .pf-tabbar button:hover:not(:disabled) { color: var(--c-text); }
+  .pf-tabbar button:hover:not(:disabled, [aria-disabled='true']) { color: var(--c-text); }
   /* 도감(일반)/(돌연변이)처럼 두 줄 라벨 허용 — 라벨의 \n에서만 줄바꿈 */
   .pf-tabbar button span {
     white-space: pre-line;

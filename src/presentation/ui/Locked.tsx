@@ -13,6 +13,21 @@ export function LockIcon({ size = 12, className }: { size?: number; className?: 
   return <PixelIcon glyph="lock" size={size} className={className ? `text-text ${className}` : 'text-text'} />;
 }
 
+/** 잠금 툴팁 - 마우스를 올리거나 포커스하거나 누르면 잠금 줄이 열린다. 감싼 요소의 배치는 className으로 정한다 */
+export function LockTip({ lines, className, onlyIf, children }: {
+  lines: readonly string[];
+  className?: string;
+  onlyIf?: () => boolean;
+  children: ReactNode;
+}) {
+  return <Tip wraps pressOpens onlyIf={onlyIf} className={className} text={<LockLines lines={lines} />}>{children}</Tip>;
+}
+
+/** 잠금 줄을 보조 기술에 설명으로 알리는 숨은 글 - 잠긴 요소의 aria-describedby가 가리키는 id를 받는다 */
+export function LockReason({ id, lines }: { id: string; lines: readonly string[] }) {
+  return <span id={id} className="sr-only">{lines.join(' ')}</span>;
+}
+
 /** 자물쇠를 잠긴 요소의 오른쪽 위 모서리에 붙인다. 붙는 요소는 relative여야 한다.
  *  outside면 자물쇠 중심을 모서리에 두어 요소 안의 글자를 가리지 않는다(자리를 차지하지 않는다) */
 export function LockBadge({ size = 12, outside = false }: { size?: number; outside?: boolean }) {
@@ -50,14 +65,14 @@ export default function Locked({ lines, role = 'group', label, badge = true, hov
     return () => { for (const e of events) document.removeEventListener(e, arm, { capture: true }); };
   }, [hoverAfterMove]);
   return (
-    <Tip wraps pressOpens onlyIf={hoverAfterMove ? () => armed.current : undefined} className={className ?? 'block'} text={<LockLines lines={lines} />}>
+    <LockTip lines={lines} onlyIf={hoverAfterMove ? () => armed.current : undefined} className={className ?? 'block'}>
       <span role={role} tabIndex={0} aria-label={label} aria-disabled={role === 'menuitem' ? true : undefined}
             aria-describedby={reasonId}
             className="relative block w-full min-w-0 cursor-not-allowed focus-visible:outline-1 focus-visible:outline-gold">
         <span className="block w-full min-w-0 opacity-55 pointer-events-none">{children}</span>
         {badge && <LockBadge outside />}
-        <span id={reasonId} className="sr-only">{lines.join(' ')}</span>
+        <LockReason id={reasonId} lines={lines} />
       </span>
-    </Tip>
+    </LockTip>
   );
 }

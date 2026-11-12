@@ -2,6 +2,8 @@
 // 관리자 대시보드의 만/억 축약(fmtNum)과는 성격이 달라 따로 둔다.
 export const fmtNum = (n: number): string => n.toLocaleString('ko-KR');
 export const fmtGold = (n: number): string => `${fmtNum(n)}G`;
+/** 물고기 마릿수 - 천 단위 쉼표를 넣고 단위를 붙여 쓴다(1,500마리) */
+export const fmtFishCount = (n: number): string => `${fmtNum(n)}마리`;
 
 /** 물고기 크기(cm 값) — 1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리(99.9cm · 3.85m) */
 export function fmtSize(cm: number): string {

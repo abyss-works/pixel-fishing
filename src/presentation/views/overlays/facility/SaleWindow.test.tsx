@@ -82,6 +82,15 @@ describe('판매 탭', () => {
     expect(within(bag).getByText('1마리')).toBeInTheDocument();
   });
 
+  it('마릿수는 천 단위 쉼표로 보인다', () => {
+    const bag = Array.from({ length: 1500 }, (_, i) => inst(`f${i}`, crucian.id));
+    show(seed({ bag }));
+    const row = within(compareTable()).getByText('가방').closest('tr')!;
+    expect(within(row).getByText('1,500마리')).toBeInTheDocument();
+    expect(within(row).getByText('0마리')).toBeInTheDocument();
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('1,500마리');
+  });
+
   it('체크를 해제하면 비교 표와 요약과 확정 버튼의 값이 따라 바뀐다', () => {
     show(seed({ gold: 0, bag: [inst('a', crucian.id), inst('b', carp.id)] }));
     expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
@@ -195,6 +204,13 @@ describe('기운 얻기 탭', () => {
     expect(within(rowOf('sea')).getByText('+1')).toBeInTheDocument();
     expect(within(rowOf('indian')).getByText('0')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '기운 얻기 (3마리)' })).toBeEnabled();
+  });
+
+  it('확정 버튼의 마릿수는 천 단위 쉼표로 보인다', () => {
+    const bag = Array.from({ length: 1500 }, (_, i) => inSpot(`f${i}`, 'pond'));
+    show(seed({ bag }));
+    fireEvent.click(tab('기운 얻기'));
+    expect(screen.getByRole('button', { name: '기운 얻기 (1,500마리)' })).toBeInTheDocument();
   });
 
   it('확정 버튼은 고른 개체의 uid로 extractEnergy를 보내고 창은 그대로 열려 있다', () => {

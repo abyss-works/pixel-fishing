@@ -1,8 +1,7 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { cx } from './cx';
-import { LockIcon, LockLines } from './Locked';
-import Tip from './Tip';
+import { LockIcon, LockReason, LockTip } from './Locked';
 
 export interface TabDef<K extends string> {
   key: K;
@@ -44,12 +43,12 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
 function LockedTab({ tab, lines }: { tab: TabDef<string>; lines: readonly string[] }) {
   const reasonId = useId();
   return (
-    <Tip wraps pressOpens className="flex flex-1 min-w-0" text={<LockLines lines={lines} />}>
+    <LockTip lines={lines} className="flex flex-1 min-w-0">
       <button type="button" aria-disabled="true" aria-describedby={reasonId} className="opacity-55 cursor-not-allowed">
         {tab.icon}
         <span className="inline-flex items-center gap-1">{tab.label}<LockIcon size={10} /></span>
       </button>
-      <span id={reasonId} className="sr-only">{lines.join(' ')}</span>
-    </Tip>
+      <LockReason id={reasonId} lines={lines} />
+    </LockTip>
   );
 }
