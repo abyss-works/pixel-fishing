@@ -38,7 +38,7 @@ export default function NamedDetail({ quest, game, onClose }: {
                           ariaLabel={d.name ?? '미확인 네임드'} className="block" />
             </div>
             {d.lore
-              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{d.lore}</LoreParagraph>
+              ? <LoreParagraph emphasis className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{d.lore}</LoreParagraph>
               : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…수배서에만 그림자로 남은 존재다. 토벌하면 정체가 드러난다.</p>}
           </Inset>
         </TitledCell>
@@ -50,7 +50,7 @@ export default function NamedDetail({ quest, game, onClose }: {
               {d.chronicle ? (
                 <article className="mx-auto flex max-w-[60ch] flex-col gap-4 text-sm leading-[2] text-text">
                   {d.chronicle.map((p, idx) => (
-                    <LoreParagraph key={idx}>{p}</LoreParagraph>
+                    <LoreParagraph emphasis key={idx}>{p}</LoreParagraph>
                   ))}
                 </article>
               ) : (

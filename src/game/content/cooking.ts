@@ -93,6 +93,8 @@ const gradesFrom = (min: RarityId): readonly RarityId[] => RARITY_ORDER.slice(RA
 export interface Recipe {
   id: string;
   name: string;
+  /** 레시피 상세 머리에 이름 아래 보이는 로어 두 문장 */
+  description: string;
   kind: CookKind;
   /** 기운 요구 — 등급별 수량(1개를 만드는 데 드는 양). 사람이 읽는 화면 단위로 적고 소수 첫째 자리까지 허용한다 */
   cost: Readonly<Partial<Record<RarityId, number>>>;
@@ -101,27 +103,45 @@ export interface Recipe {
 
 export const RECIPES: readonly Recipe[] = [
   // 도시락 — 도시락 슬롯, 방치 캐치에 적용
-  { id: 'cook-lunch-bite', name: '가루디야', kind: 'lunch',
+  { id: 'cook-lunch-bite', name: '가루디야',
+    description: '소금물에 끓인 다랑어 국물에서 짠 김이 피어오른다. 그릇을 다 비우기도 전에 찌가 먼저 가라앉는다.',
+    kind: 'lunch',
     cost: { common: 600 }, effects: { biteWaitCut: 0.1 } },
-  { id: 'cook-lunch-rare', name: '민 몰리', kind: 'lunch',
+  { id: 'cook-lunch-rare', name: '민 몰리',
+    description: '코코넛 밀크와 강황으로 끓인 국물에 생선 살이 잠긴다. 귀한 생선을 넣을수록 맛이 깊어진다.',
+    kind: 'lunch',
     cost: { common: 100, rare: 20 }, effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.1 } } },
-  { id: 'cook-lunch-mutation', name: '생선 비리야니', kind: 'lunch',
+  { id: 'cook-lunch-mutation', name: '생선 비리야니',
+    description: '솥을 봉한 반죽을 뜯어내면 향신료 냄새가 한꺼번에 퍼진다. 밝은 빛으로 따로 물들인 밥이 생선과 켜를 이룬다.',
+    kind: 'lunch',
     cost: { rare: 20, epic: 4 }, effects: { mutationWeight: 0.5 } },
-  { id: 'cook-lunch-named', name: '암불 티얄', kind: 'lunch',
+  { id: 'cook-lunch-named', name: '암불 티얄',
+    description: '고라카 열매의 신맛이 바짝 졸인 다랑어 살 속까지 밴다. 콜롬보항 뱃사람들은 큰 그림자를 쫓아 오래 나가는 날 이 요리를 싣는다.',
+    kind: 'lunch',
     cost: { epic: 8 }, effects: { namedWeight: 0.5 } },
-  { id: 'cook-lunch-bundle', name: '생선 탈리', kind: 'lunch',
+  { id: 'cook-lunch-bundle', name: '생선 탈리',
+    description: '밥을 가운데 두고 생선 반찬을 작은 그릇에 나눠 둥근 쟁반에 차린 인도식 한 상이다. 그릇마다 양은 적어도 빠진 맛이 없다.',
+    kind: 'lunch',
     cost: { common: 50, rare: 5, epic: 1, legendary: 1 },
     effects: { biteWaitCut: 0.05, rarityWeight: { grades: gradesFrom('rare'), bonus: 0.05 } } },
   // 미끼 요리 — 미끼 슬롯, 수동 캐치에 적용
-  { id: 'cook-bait-mutation', name: '사프란 미끼', kind: 'bait',
+  { id: 'cook-bait-mutation', name: '사프란 미끼',
+    description: '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
+    kind: 'bait',
     cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1 } },
-  { id: 'cook-bait-rare', name: '롱페퍼 미끼', kind: 'bait',
+  { id: 'cook-bait-rare', name: '롱페퍼 미끼',
+    description: '롱페퍼 이삭을 말려 빻아 반죽에 섞은 미끼다. 후추보다 이 열매가 비싸게 팔리던 때가 있었다.',
+    kind: 'bait',
     cost: { common: 50, rare: 15 },
     effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.2 } } },
-  { id: 'cook-bait-epic', name: '큐베브 미끼', kind: 'bait',
+  { id: 'cook-bait-epic', name: '큐베브 미끼',
+    description: '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
+    kind: 'bait',
     cost: { common: 50, epic: 5 },
     effects: { rarityWeight: { grades: gradesFrom('epic'), bonus: 0.4 } } },
-  { id: 'cook-bait-legendary', name: '용연향 미끼', kind: 'bait',
+  { id: 'cook-bait-legendary', name: '용연향 미끼',
+    description: '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
+    kind: 'bait',
     cost: { common: 50, legendary: 3 },
     effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.6 } } },
 ];

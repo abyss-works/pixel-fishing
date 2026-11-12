@@ -3,6 +3,8 @@ import type { BasePack } from '../types';
 import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
 
+const SALE_TITLE = '어시장';
+
 export const MANILA_BASE: BasePack = {
   id: 'manila',
   name: '마닐라항',
@@ -22,7 +24,7 @@ export const MANILA_BASE: BasePack = {
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => ({ title: '조선소', sub: i.boatName }), labelDy: -3 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
-      label: () => ({ title: '어시장', sub: '판매' }), labelDy: -8 },
+      label: () => ({ title: SALE_TITLE, sub: '판매' }), windowTitle: SALE_TITLE, labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
       label: () => ({ title: '마을', sub: '집으로' }), labelDy: -2 },
     { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',

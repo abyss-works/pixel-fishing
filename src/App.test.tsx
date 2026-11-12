@@ -166,6 +166,18 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument();
   });
+
+  it('기운 얻기 확정은 가방의 물고기를 기운으로 바꾸고 창은 열린 채 결과가 메시지 창에 한 줄로 남는다', () => {
+    seed({ boat: 5, bag: [inst('carp'), inst('carp')] }); // 잉어: 마을 연못 어종, 배 5의 기본값은 켜짐
+    render(<App />);
+    clickFurniture('sell');
+    fireEvent.click(screen.getAllByRole('button', { name: '기운 얻기' }).find(b => b.closest('.pf-tabbar'))!);
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
+    expect(screen.getByRole('heading', { name: '궤짝' })).toBeInTheDocument();
+    expect(screen.getByRole('log')).toHaveTextContent('생명의 기운 2개를 얻었어요!');
+    expect(hud()).toContain('가방 0 /');
+    expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
+  });
 });
 
 describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
@@ -183,18 +195,6 @@ describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
     render(<App />);
     clickFurniture('kitchen');
     expect(screen.queryByRole('heading', { name: '부엌' })).not.toBeInTheDocument();
-  });
-
-  it('기운 얻기 확정은 가방의 물고기를 기운으로 바꾸고 창은 열린 채 결과가 메시지 창에 한 줄로 남는다', () => {
-    seed({ boat: 5, bag: [inst('carp'), inst('carp')] }); // 잉어: 마을 연못 어종, 배 5의 기본값은 켜짐
-    render(<App />);
-    clickFurniture('kitchen');
-    clickTab('기운 얻기');
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
-    expect(screen.getByRole('heading', { name: '부엌' })).toBeInTheDocument();
-    expect(screen.getByRole('log')).toHaveTextContent('생명의 기운 2개를 얻었어요!');
-    expect(hud()).toContain('가방 0 /');
-    expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
   });
 
   it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
@@ -1167,7 +1167,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell'); // 정비 모달 (stage 레이어)
     fireEvent.keyDown(document, { key: '3' });
-    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('지역');
+    // 판매 창의 탭 줄도 pf-tabbar라 활성 탭이 둘이다 — 창 안의 판매 탭을 빼면 앱 탭은 지역 그대로여야 한다
+    const active = [...document.querySelectorAll('.pf-tabbar button.active')].map(b => b.textContent);
+    expect(active.filter(t => t !== '판매')).toEqual([expect.stringContaining('지역')]);
   });
 
   it('입력 중에는 단축키가 안 먹는다 — 쿠폰/계정 폼 타이핑 보호', () => {

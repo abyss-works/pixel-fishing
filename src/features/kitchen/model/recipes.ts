@@ -3,8 +3,8 @@
 // 이 모듈은 그 판정을 화면용 값으로 옮기고, 규칙의 매개변수(수량, 대기, 지속, 효과 값)는 콘텐츠 표에서 읽는다.
 import { COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeCostStored } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
-import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
-import type { RarityId } from '../../../game/content/rarity';
+import { DISPLAY_GRADE, RARITY, RARITY_ORDER, displayGradeRank } from '../../../game/content/rarity';
+import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
 import { canCook, cookingProgress, cookStorageUsed, settleCooking } from '../../../game/rules/cooking';
 import { extraCookChance } from '../../../game/rules/artifactLevel';
 import type { GameState } from '../../../game/rules/logic';
@@ -13,18 +13,31 @@ import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
-/** 그 종류의 부엌 레시피 — 콘텐츠 순서대로 */
-export const recipesOfKind = (kind: CookKind): Recipe[] => RECIPES.filter(r => r.kind === kind);
-
-/** 등급 미끼의 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급. 미끼 요리 중 등급 가중이 없는 것과 도시락은 null이다 */
-export function recipeGrade(recipe: Recipe): RarityId | null {
-  return recipe.kind === 'bait' ? recipe.effects.rarityWeight?.grades[0] ?? null : null;
+/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 돌연변이 가중 미끼는 특수다. 도시락은 null이다 */
+export function recipeGrade(recipe: Recipe): DisplayGradeId | null {
+  if (recipe.kind !== 'bait') return null;
+  const weighted = recipe.effects.rarityWeight?.grades[0];
+  if (weighted !== undefined) return weighted;
+  return recipe.effects.mutationWeight !== undefined ? 'special' : null;
 }
 
-/** 화면에 쓰는 레시피 이름 — 등급 미끼는 이름 뒤에 등급을 괄호로 붙인다 */
+/** 그 종류의 부엌 레시피 — 등급이 있으면 등급순(특수는 뒤), 같은 등급과 등급이 없는 것은 콘텐츠 순서대로 */
+export function recipesOfKind(kind: CookKind): Recipe[] {
+  const rank = (r: Recipe): number => { const g = recipeGrade(r); return g === null ? -1 : displayGradeRank(g); };
+  return RECIPES.filter(r => r.kind === kind).sort((a, b) => rank(a) - rank(b));
+}
+
+/** 화면에 쓰는 레시피 이름을 이름과 표시 등급으로 나눈 값 — 괄호만 등급색으로 칠하는 화면이 쓴다. 등급이 없으면 grade는 null이다 */
+export interface RecipeTitle { name: string; grade: DisplayGradeId | null }
+
+export function recipeTitle(recipe: Recipe): RecipeTitle {
+  return { name: recipe.name, grade: recipeGrade(recipe) };
+}
+
+/** 화면에 쓰는 레시피 이름 문자열 — 등급이 있으면 이름 뒤에 등급을 괄호로 붙인다. 메시지 기록과 접근성 이름이 쓴다 */
 export function recipeLabel(recipe: Recipe): string {
-  const grade = recipeGrade(recipe);
-  return grade === null ? recipe.name : gradeName(recipe.name, RARITY[grade].name);
+  const { name, grade } = recipeTitle(recipe);
+  return grade === null ? name : gradeName(name, DISPLAY_GRADE[grade].name);
 }
 
 /** 그 종류의 효과가 걸리는 낚시 - 보너스 탭, 칩 툴팁, 부엌 창이 같은 표기를 쓴다 */
@@ -68,7 +81,9 @@ export interface RecipeUnitCost { grade: RarityId; per: number; short: boolean }
 
 export interface RecipeView {
   recipe: Recipe;
-  grade: RarityId | null;
+  grade: DisplayGradeId | null;
+  /** 이름과 표시 등급 - 괄호만 등급색으로 칠하는 화면용 */
+  title: RecipeTitle;
   /** 가진 완성품 수 */
   owned: number;
   effects: RecipeEffectLine[];
@@ -98,7 +113,7 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
   const needed = RARITY_ORDER.filter(g => recipeCostStored(recipe, g) > 0);
   const rules = COOK_KIND_RULES[recipe.kind];
   return {
-    recipe, grade: recipeGrade(recipe), owned: settled.items[recipe.id] ?? 0,
+    recipe, grade: recipeGrade(recipe), title: recipeTitle(recipe), owned: settled.items[recipe.id] ?? 0,
     effects: recipeEffectLines(recipe),
     unitCost: needed.map(grade => {
       const per = recipeCostStored(recipe, grade);

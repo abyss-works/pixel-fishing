@@ -40,8 +40,8 @@ function gridPresets<K extends string>(grid: SpriteGrid, scales: Record<K, numbe
 const GRID_32X16: SpriteGrid = { w: 32, h: 16 };
 const SHIP_PRESETS = gridPresets(GRID_32X16, { thumb: 1, row: 2, hero: 3 });
 const GRID_16X16: SpriteGrid = { w: 16, h: 16 };
-// 요리·미끼: 한 줄로 나열하는 자리는 row(1배), 부엌 창 상세 머리는 hero(3배, 같은 자리의 배·낚싯대 그림과 높이가 같다).
-const ITEM_LAYOUT = { grid: GRID_16X16, margin: 2, presets: gridPresets(GRID_16X16, { row: 1, hero: 3 }) } satisfies SpriteLayout;
+// 요리·미끼: 한 줄로 나열하는 자리는 row(1배), 부엌 창의 레시피 목록은 list(2배), 상세 머리는 hero(3배, 같은 자리의 배·낚싯대 그림과 높이가 같다).
+const ITEM_LAYOUT = { grid: GRID_16X16, margin: 2, presets: gridPresets(GRID_16X16, { row: 1, list: 2, hero: 3 }) } satisfies SpriteLayout;
 
 export const SPRITE_TARGETS = {
   fish: {

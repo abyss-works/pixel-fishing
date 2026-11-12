@@ -4,6 +4,7 @@ import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { ZONES } from '../../../game/content/zones';
 import type { GameAction } from '../../../game/rules/actions';
 import { cookingUnlocked } from '../../../game/rules/cooking';
+import { REJECT_TEXT } from '../../../game/rules/rules';
 import { guestActionVerdict } from '../../../game/rules/guest';
 import type { FurnitureId } from '../../../game/world';
 import { josa } from '../../../shared/lib/josa';
@@ -115,4 +116,17 @@ export function facilityGuestAllowed(id: FurnitureId): boolean {
 export function facilityProgress(id: FurnitureId, boat: number): { met: boolean; boat: number } | undefined {
   if (id === 'kitchen') return { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT };
   return undefined;
+}
+
+/** 판매 창의 기운 얻기 탭 잠금. 잠금 순서는 menuLock이 정하고(게스트 잠금이 먼저), 해금 전 첫 줄은 규칙의 거부 문구와 같은 문장이다.
+ *  판정은 게스트 규칙과 요리 해금 규칙이 하고 여기는 문안을 만든다 */
+export function energyTabLock(guest: boolean, boat: number): MenuLock {
+  const lock = menuLock({
+    guest,
+    guestAllowed: guestActionVerdict({ type: 'extractEnergy', uids: [] }) === 'ok',
+    feature: '기운 얻기',
+    progress: { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT },
+  });
+  if (lock.kind !== 'progress') return lock;
+  return { kind: 'progress', lines: [REJECT_TEXT['energy-locked'], ...lock.lines.slice(1)] };
 }

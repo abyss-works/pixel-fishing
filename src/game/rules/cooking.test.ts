@@ -9,9 +9,12 @@ import {
 } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, settleCooking, slotEffects, appliedSlots,
+  canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, settleCooking, slotEffects, appliedSlots,
 } from './cooking';
 import { effectiveBite } from './stats';
+import { BASE_REGION } from '../content/places';
+import type { BaseId } from '../content/places';
+import { REJECT_TEXT } from './rules';
 import { SPOTS } from '../content/spots';
 import type { PowerZone } from './stats';
 import { catchTooSoon } from './pacing';
@@ -106,15 +109,15 @@ describe('setEnergyTarget와 resetEnergyTargets', () => {
     const s = seed({ location: { kind: 'region', id: 'world' } });
     expect(ok(s, { type: 'setEnergyTarget', spot: 'indian', on: true }).state.energyTargets).toEqual({ indian: true });
   });
-  it('없는 해역, 형식 오류는 bad-request, 해금 전은 cooking-locked다', () => {
+  it('없는 해역, 형식 오류는 bad-request, 해금 전은 energy-locked다', () => {
     expect(rejected(seed(), { type: 'setEnergyTarget', spot: 'nowhere' as never, on: true })).toBe('bad-request');
     expect(rejected(seed(), { type: 'setEnergyTarget', spot: 'indian', on: 'yes' as never })).toBe('bad-request');
-    expect(rejected(seed({ boat: 4 }), { type: 'setEnergyTarget', spot: 'indian', on: true })).toBe('cooking-locked');
+    expect(rejected(seed({ boat: 4 }), { type: 'setEnergyTarget', spot: 'indian', on: true })).toBe('energy-locked');
   });
   it('기본값으로 되돌리면 덮어쓴 값을 모두 지운다', () => {
     const s = seed({ energyTargets: { indian: true, coron: false } });
     expect(ok(s, { type: 'resetEnergyTargets' }).state.energyTargets).toEqual({});
-    expect(rejected(seed({ boat: 4 }), { type: 'resetEnergyTargets' })).toBe('cooking-locked');
+    expect(rejected(seed({ boat: 4 }), { type: 'resetEnergyTargets' })).toBe('energy-locked');
   });
 });
 
@@ -161,13 +164,38 @@ describe('extractEnergy', () => {
     expect(out.state.items).toEqual({});
     expect(out.events).toEqual([]);
   });
-  it('집 밖, 해금 전, 형식 오류를 거부한다', () => {
-    expect(rejected(seed({ bag: bag(), location: { kind: 'base', id: 'harbor' } }),
-      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-home');
+  it('집과 판매 시설이 있는 모든 항구에서 허용한다', () => {
+    for (const id of Object.keys(BASE_REGION) as BaseId[]) {
+      expect(canExtractEnergy(seed({ location: { kind: 'base', id } }))).toEqual({ ok: true });
+    }
+    expect(ok(seed({ bag: bag(), location: { kind: 'base', id: 'harbor' } }), { type: 'extractEnergy', uids: ['a'] }).state.bag.map(i => i.uid))
+      .toEqual(['b', 'c']);
+  });
+  it('바다와 마을 필드에서는 not-at-sale-base로 거부한다', () => {
     expect(rejected(seed({ bag: bag(), location: { kind: 'region', id: 'world' } }),
-      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-home');
-    expect(rejected(seed({ bag: bag(), boat: 4 }), { type: 'extractEnergy', uids: ['a'] })).toBe('cooking-locked');
+      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
+    expect(rejected(seed({ bag: bag(), location: { kind: 'region', id: 'village' } }),
+      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
+  });
+  it('판매 시설이 없는 거점은 거부한다', () => {
+    expect(rejected(seed({ bag: bag(), location: { kind: 'base', id: 'nowhere' as never } }),
+      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
+  });
+  it('해금 전은 energy-locked로 거부한다. 장소가 어긋나면 장소 사유가 먼저다', () => {
+    expect(rejected(seed({ bag: bag(), boat: 4 }), { type: 'extractEnergy', uids: ['a'] })).toBe('energy-locked');
+    expect(rejected(seed({ bag: bag(), boat: 4, location: { kind: 'base', id: 'harbor' } }),
+      { type: 'extractEnergy', uids: ['a'] })).toBe('energy-locked');
+    expect(rejected(seed({ bag: bag(), boat: 4, location: { kind: 'region', id: 'world' } }),
+      { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
+  });
+  it('형식 오류는 bad-request다', () => {
     expect(rejected(seed({ bag: bag() }), { type: 'extractEnergy', uids: 'a' as never })).toBe('bad-request');
+  });
+  it('거부 문구는 기운 얻기용이 따로 있고 조리의 문구는 그대로다', () => {
+    expect(REJECT_TEXT['not-at-sale-base']).toBe('집이나 항구에서만 할 수 있어요.');
+    expect(REJECT_TEXT['not-at-home']).toBe('집에서만 할 수 있어요.');
+    expect(REJECT_TEXT['energy-locked']).toMatch(/ 항로가 열리면 기운 얻기를 할 수 있어요\.$/);
+    expect(REJECT_TEXT['cooking-locked']).toMatch(/ 항로가 열리면 부엌을 쓸 수 있어요\.$/);
   });
 });
 

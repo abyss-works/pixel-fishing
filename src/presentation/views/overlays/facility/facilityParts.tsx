@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import type { GameAction } from '../../../../game/rules/actions';
+import type { DispatchResult } from '../../../../features/gameplay/service/types';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -8,6 +10,9 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 목록형 시설(낚싯대 강화, 조선소, 상점)의 오른쪽 상세 열이 함께 쓰는 조각.
 
+/** 창이 확정 동작을 맡기는 함수 — 바쁜 동안은 받지 않고, 거부는 메시지 창에 알리며, 성공하면 onOk를 부른다 */
+export type FacilityAct = (action: GameAction, onOk?: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => void;
+
 export interface CompareRow {
   label: ReactNode;
   /** 현재 값. 비교할 현재 값이 없으면 비운다 */
@@ -16,6 +21,8 @@ export interface CompareRow {
   next?: ReactNode;
   /** 변화량(예: "+15", "-0.4초") */
   delta?: string;
+  /** 값이 바뀌지 않는 줄 — 자리는 그대로 두고 흐리게만 한다 */
+  dim?: boolean;
 }
 
 /** 현재와 확정 후 비교 표 — 이름, 현재, 확정 후 세 열. 열 머리와 이름에 규칙 설명 툴팁을 달 수 있다.
@@ -35,7 +42,7 @@ export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode,
         <thead><tr><th aria-label="항목" /><th>{heads[0]}</th>{showNext && <th>{heads[1]}</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} className={r.dim ? 'opacity-50' : undefined}>
               <td className="text-text-dim">{r.label}</td>
               <td className="pf-accent text-xs text-text-dim">{r.value}</td>
               {showNext && (
@@ -85,7 +92,7 @@ export function FacilityTabBody({ list, detail, foot }: { list: ReactNode; detai
     <>
       <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-4 [&>*]:shrink-0`}>
         {list}
-        {detail !== null && <div className="flex flex-col gap-3 min-w-0">{detail}</div>}
+        <div className="flex flex-col gap-3 min-w-0">{detail}</div>
       </div>
       <div className="border-t border-line pt-2 flex flex-col gap-2 shrink-0">{foot}</div>
     </>

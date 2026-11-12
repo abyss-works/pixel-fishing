@@ -8,6 +8,7 @@ import {
 import type { Recipe } from '../content/cooking.js';
 import { RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
+import { SALE_BASES } from '../content/places.js';
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { addItem, instanceFish, release } from './logic.js';
@@ -32,6 +33,10 @@ export function canUseCooking(state: Pick<GameState, 'boat'>): RuleCheck {
 
 const isAtHome = (state: Pick<GameState, 'location'>): boolean =>
   state.location.kind === 'base' && state.location.id === 'home';
+
+/** 판매 시설이 있는 거점(집, 항구)에 있는가 — 거점 데이터의 표로 판정한다. 모르는 거점은 아니다 */
+const isAtSaleBase = (state: Pick<GameState, 'location'>): boolean =>
+  state.location.kind === 'base' && Object.hasOwn(SALE_BASES, state.location.id) && SALE_BASES[state.location.id];
 
 // ---------- 기운 얻기 ----------
 
@@ -72,10 +77,15 @@ export function energyTargetRows(state: Pick<GameState, 'boat' | 'energyTargets'
   });
 }
 
-/** 기운 얻기 판정 — 집 거점에서, 해금된 뒤에만 한다 */
+/** 기운 얻기 계열(대상 고르기 포함)의 해금 판정 — 해금 거부 사유만 기운 얻기용이다 */
+export function canUseEnergy(state: Pick<GameState, 'boat'>): RuleCheck {
+  return cookingUnlocked(state.boat) ? OK : no('energy-locked');
+}
+
+/** 기운 얻기 판정 — 판매 시설이 있는 거점(집, 항구)에서, 해금된 뒤에만 한다 */
 export function canExtractEnergy(state: Pick<GameState, 'boat' | 'location'>): RuleCheck {
-  if (!isAtHome(state)) return no('not-at-home');
-  return canUseCooking(state);
+  if (!isAtSaleBase(state)) return no('not-at-sale-base');
+  return canUseEnergy(state);
 }
 
 export interface EnergyGain {

@@ -80,7 +80,6 @@ export interface SalePreview {
   rows: SaleRow[];
   soldUids: string[];
   total: Stat;
-  lockedCount: number;
 }
 
 /** 기본 판매액에 길드 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다. */
@@ -125,6 +124,5 @@ export function selectSalePreview(
     rows,
     soldUids,
     total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus),
-    lockedCount: bag.filter(instance => instance.locked).length,
   };
 }

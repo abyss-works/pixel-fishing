@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { SaleRow } from '../../../../features/inventory/model/catalog';
+import { LOCKED_PICK_TIP } from '../../../../features/inventory/model/saleWindow';
 import InstanceLine, { UnsizedLine } from '../../../ui/fish/InstanceLine';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import DataTable from '../../../ui/DataTable';
@@ -7,7 +8,7 @@ import IconButton from '../../../ui/IconButton';
 import PixelIcon from '../../../ui/PixelIcon';
 import Tip from '../../../ui/Tip';
 
-// 어종 선택 표 — 판매 창과 부엌 창의 기운 얻기 탭이 함께 쓰는 표다.
+// 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭이 함께 쓰는 표다.
 // 선택의 원자 단위는 개체(uid)다. 행 체크는 그 행 전부를 켜고 끄는 단축이고, 줄을 펼치면 개체 하나씩 고를 수 있다.
 // 잠근 개체는 개별로 선택할 수 없다(가방 탭에서 해제). 크기 미상 개체는 구별할 정보가 없어 묶음 단위로 고른다.
 // 무엇을 고르는지(판매, 기운 얻기)와 마지막 열의 값(소계, 얻는 기운)은 호출부가 정하고, 행 구성과 체크 동작은 이 표 하나가 맡는다.
@@ -44,7 +45,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
             <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
               <td>
                 {locked ? (
-                  <Tip plain text="잠금은 가방 탭에서 풀 수 있어요" className="text-text-dim">
+                  <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim">
                     <PixelIcon glyph="lock" size={13} />
                   </Tip>
                 ) : (
@@ -82,17 +83,18 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
                                     best={inst.size !== null && inst.size === maxByForm[inst.form]}
                                     checked={!inst.locked && on}
                                     onToggle={inst.locked ? undefined : () => onToggleOne(inst.uid)}>
-                        <PixelIcon size={11}
-                                   className={!inst.locked && on ? 'text-gold' : 'text-text-dim'}
-                                   glyph={inst.locked ? 'lock' : on ? 'checkOn' : 'checkOff'} />
+                        {inst.locked ? (
+                          <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
+                        ) : (
+                          <PixelIcon size={11} className={on ? 'text-gold' : 'text-text-dim'} glyph={on ? 'checkOn' : 'checkOff'} />
+                        )}
                       </InstanceLine>
                     );
                   })}
                   {/* 크기 미상은 묶음 단위로 고른다 — 구별할 정보가 없으니 개별 선택이 무의미하다 */}
                   {unsized.map(g => {
                     const gOn = g.selectedCount;
-                    const gGlyph = g.free.length === 0 ? 'lock'
-                      : gOn === 0 ? 'checkOff' : g.allSelected ? 'checkOn' : 'checkPartial';
+                    const gGlyph = gOn === 0 ? 'checkOff' : g.allSelected ? 'checkOn' : 'checkPartial';
                     return (
                       <UnsizedLine key={g.form} count={g.items.length} form={g.form}
                                    locked={g.free.length === 0}
@@ -100,8 +102,11 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
                                    onToggle={g.free.length === 0
                                      ? undefined
                                      : () => onToggleRow(g.free.map(i => i.uid), g.allSelected)}>
-                        <PixelIcon size={11} glyph={gGlyph}
-                                   className={gOn > 0 ? 'text-gold' : 'text-text-dim'} />
+                        {g.free.length === 0 ? (
+                          <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
+                        ) : (
+                          <PixelIcon size={11} glyph={gGlyph} className={gOn > 0 ? 'text-gold' : 'text-text-dim'} />
+                        )}
                       </UnsizedLine>
                     );
                   })}

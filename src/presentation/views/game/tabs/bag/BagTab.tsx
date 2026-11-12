@@ -169,8 +169,8 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
       if (r.status !== 'ok') return;
       setToast(locked
-        ? `${josa(label, '을/를')} 잠갔어요. 판매에서 제외돼요.`
-        : `${label}의 잠금을 풀었어요. 다시 판매할 수 있어요.`);
+        ? `${josa(label, '을/를')} 잠갔어요. 판매와 기운 얻기에서 빠져요.`
+        : `${label}의 잠금을 풀었어요. 다시 고를 수 있어요.`);
     });
 
   // 전시대 — 칸 선택은 freeExhibitSlot(가장 앞 빈 칸)이 대신한다. 다 찼으면 요청 없이 안내만.

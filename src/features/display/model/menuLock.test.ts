@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
-import { facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote } from './menuLock';
+import { REJECT_TEXT } from '../../../game/rules/rules';
+import { energyTabLock, facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote } from './menuLock';
 import type { GuestFeature } from './menuLock';
 import { POLICY } from '../../../core/errors';
 
@@ -123,5 +124,29 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
 
   it('잠금 문안에 만든 뒤 계열 표현이 없다', () => {
     for (const feature of closed) expect((guestLock(feature, true) ?? []).join(' '), feature).not.toMatch(/만든|만들/);
+  });
+});
+
+describe('판매 창의 기운 얻기 탭 잠금', () => {
+  it('게스트는 해금 여부와 상관없이 게스트 잠금이다', () => {
+    expect(energyTabLock(true, COOKING_UNLOCK_BOAT)).toEqual({ kind: 'guest', lines: [GUEST_LOCK_TEXT] });
+    expect(energyTabLock(true, COOKING_UNLOCK_BOAT - 1)).toEqual({ kind: 'guest', lines: [GUEST_LOCK_TEXT] });
+  });
+
+  it('계정이 해금 전이면 구역 항로를 먼저 쓰고 배 단계를 보충하는 진행 조건 잠금이다', () => {
+    expect(energyTabLock(false, COOKING_UNLOCK_BOAT - 1)).toEqual({
+      kind: 'progress',
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+  });
+
+  it('해금 전 첫 줄은 규칙의 기운 얻기 거부 문구와 같다', () => {
+    const lock = energyTabLock(false, COOKING_UNLOCK_BOAT - 1);
+    expect(lock.kind === 'progress' && lock.lines[0]).toBe(REJECT_TEXT['energy-locked']);
+  });
+
+  it('계정이 해금했으면 잠기지 않는다', () => {
+    expect(energyTabLock(false, COOKING_UNLOCK_BOAT)).toEqual({ kind: 'none' });
+    expect(energyTabLock(false, COOKING_UNLOCK_BOAT + 1)).toEqual({ kind: 'none' });
   });
 });

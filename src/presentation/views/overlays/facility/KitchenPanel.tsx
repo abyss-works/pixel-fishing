@@ -2,28 +2,24 @@ import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { recipeLabel, selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
-import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
 import ModalCard from '../../../ui/ModalCard';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import { fmtMinutes } from '../../../ui/format';
-import EnergyTab from './EnergyTab';
 import RecipeTab from './RecipeTab';
-import type { KitchenAct } from './kitchenParts';
+import type { FacilityAct } from './facilityParts';
 
-type KitchenTab = 'lunch' | 'bait' | 'energy';
+type KitchenTab = 'lunch' | 'bait';
 
 // 부엌 창 — 920 폭, 높이 고정. 제목 아래 고정 정보 줄(조리 중, 다음 완성, 보관함)은 어느 탭에서나 같은 자리에 두고,
-// 그 아래 탭 셋(도시락, 미끼, 기운 얻기)을 둔다. 도시락과 미끼 탭은 레시피를 골라 수량을 넣어 조리를 시작하고,
-// 기운 얻기 탭은 판매 창과 같은 표로 물고기를 생명의 기운으로 바꾼다.
-// 조리 가능 여부와 기운 얻기 기본 선택은 게임 규칙이 정하고, 이 창은 그 판정을 그린다.
-export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
+// 그 아래 탭 둘(도시락, 미끼)을 둔다. 두 탭은 레시피를 골라 수량을 넣어 조리를 시작한다.
+// 조리 가능 여부는 게임 규칙이 정하고, 이 창은 그 판정을 그린다.
+export default function KitchenPanel({ game, busy, act, onClose }: {
   game: GameState;
   busy: boolean;
-  act: KitchenAct;
-  setToast: Notify;
+  act: FacilityAct;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<KitchenTab>('lunch');
@@ -52,14 +48,11 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
         tabs={[
           { key: 'lunch' as KitchenTab, label: '도시락' },
           { key: 'bait' as KitchenTab, label: '미끼' },
-          { key: 'energy' as KitchenTab, label: '기운 얻기' },
         ]}
         activeKey={tab}
         onSelect={setTab}
       />
-      {tab === 'energy'
-        ? <EnergyTab game={game} busy={busy} act={act} setToast={setToast} />
-        : <RecipeTab key={tab} kind={tab} game={game} now={now} busy={busy} act={act} />}
+      <RecipeTab key={tab} kind={tab} game={game} now={now} busy={busy} act={act} />
     </ModalCard>
   );
 }

@@ -12,6 +12,19 @@ describe('VHelp 미끼', () => {
   });
 });
 
+describe('VHelp 요리', () => {
+  it('기운 얻기는 집 궤짝이나 항구 어시장의 기운 얻기 탭에서 한다고 안내한다', () => {
+    const { container } = render(<VHelp />);
+    expect(container.textContent).toContain('집 궤짝이나 항구 어시장의 기운 얻기 탭에서 가방의 물고기를 생명의 기운으로 바꿔요.');
+    expect(container.textContent).not.toContain('집 부엌의 기운 얻기 탭');
+  });
+
+  it('요리는 집 부엌의 도시락 탭과 미끼 탭에서 한다고 안내한다', () => {
+    const { container } = render(<VHelp />);
+    expect(container.textContent).toContain('집 부엌의 도시락 탭과 미끼 탭에서 기운으로 요리해요.');
+  });
+});
+
 describe('VHelp 바운티 헌팅', () => {
   const text = () => {
     const { container } = render(<VHelp />);

@@ -25,3 +25,24 @@ export const RARITY: Record<RarityId, Rarity> = DATA;
 export const RARITY_ORDER: RarityId[] =
   (Object.keys(DATA) as RarityId[]).sort((a, b) => DATA[a].order - DATA[b].order);
 export const rarityRank = (r: RarityId): number => RARITY[r].order;
+
+// ---------- 표시 등급 ----------
+// 화면에 등급 낱말로 적히는 등급 — 네 등급에 특수를 더한다. 특수는 네 단계의 높낮이에 들지 않는 성질을 가진 대상에 붙이는
+// 표시용 등급이라 가중치, 명성, 도감 같은 등급 정의(RARITY)에는 들어가지 않는다. 등급 정의를 전수로 쓰는 표가 깨지지 않게 따로 둔다.
+
+export type DisplayGradeId = RarityId | 'special';
+
+export interface DisplayGrade { name: string }
+
+export const DISPLAY_GRADE: Record<DisplayGradeId, DisplayGrade> = {
+  common: { name: RARITY.common.name },
+  rare: { name: RARITY.rare.name },
+  epic: { name: RARITY.epic.name },
+  legendary: { name: RARITY.legendary.name },
+  special: { name: '특수' },
+};
+
+/** 표시 등급 오름차순 — 네 등급 뒤에 특수. 등급순으로 늘어놓는 목록은 이 순서를 따른다 */
+export const DISPLAY_GRADE_ORDER: DisplayGradeId[] = [...RARITY_ORDER, 'special'];
+
+export const displayGradeRank = (g: DisplayGradeId): number => DISPLAY_GRADE_ORDER.indexOf(g);

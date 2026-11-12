@@ -1,6 +1,7 @@
-// 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
+// 판매 창의 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
 // 체크 기본값과 확정 가능 여부는 게임 규칙(energyTargetOf, canExtractEnergy)이 정하고, 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 // 개체를 직접 고른 값(EnergyPicks)은 해역 기본값 위에 얹힌다. 화면이 들고 있는 선택 상태의 형식과 갱신 규칙이 여기 있다.
+import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
@@ -33,6 +34,9 @@ export interface EnergySpotRow {
   overridden: boolean;
 }
 
+/** 비교 표 한 줄 — 그 등급 기운의 지금 보유와 기운을 얻은 뒤의 수(저장 단위) */
+export interface EnergyCompareRow { grade: RarityId; label: string; current: number; after: number }
+
 export interface EnergyView {
   /** 판매 창과 같은 어종 행 */
   rows: SaleRow[];
@@ -44,8 +48,8 @@ export interface EnergyView {
   energyTotal: number;
   /** 기운으로 바꿀 개체 수 */
   count: number;
-  /** 잠겨서 기운 얻기에서 빠지는 개체 수 */
-  lockedCount: number;
+  /** 등급 순서의 비교 표 — 고른 개체가 없어도 네 줄이 그대로 있다 */
+  compare: EnergyCompareRow[];
   /** 배로 갈 수 있는 해역, 가장 앞선 해역부터 */
   spots: EnergySpotRow[];
   /** 덮어쓴 해역이 하나라도 있는가 */
@@ -63,7 +67,7 @@ const isChecked = (game: GameState, picks: EnergyPicks, inst: FishInstance): boo
 
 export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyView {
   const excluded = new Set(game.bag.filter(i => !isChecked(game, picks, i)).map(i => i.uid));
-  const { rows, soldUids, lockedCount } = selectSalePreview(game.bag, excluded, 0);
+  const { rows, soldUids } = selectSalePreview(game.bag, excluded, 0);
   const gain = energyGain(game, soldUids);
   // 해역 목록과 켜짐, 기본값 여부는 게임 규칙(energyTargetRows)이 정한다. 가장 앞선 해역부터 보인다
   const spots = energyTargetRows(game).reverse().map((r): EnergySpotRow => ({
@@ -72,7 +76,11 @@ export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyVie
   }));
   return {
     rows, uids: gain.uids, byGrade: gain.byGrade,
-    energyTotal: energyTotal(gain.byGrade), count: gain.uids.length, lockedCount, spots,
+    compare: RARITY_ORDER.map((grade): EnergyCompareRow => {
+      const current = game.items[ENERGY_ITEM_IDS[grade]] ?? 0;
+      return { grade, label: energyLabel(grade), current, after: current + gain.byGrade[grade] };
+    }),
+    energyTotal: energyTotal(gain.byGrade), count: gain.uids.length, spots,
     hasOverride: spots.some(s => s.overridden),
     allowed: canExtractEnergy(game),
   };

@@ -4,7 +4,8 @@ import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cook
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
-import { planEat, selectItemSection } from './bagItems';
+import { ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
+import { recipesOfKind } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
@@ -36,6 +37,15 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
   });
 });
 
+describe('묶음 소제목 툴팁', () => {
+  it('생명의 기운 소제목은 기운 얻기를 집 궤짝이나 항구 어시장에서 할 수 있다고 알린다', () => {
+    expect(ITEM_GROUP_HINT.energy.split('\n')).toEqual([
+      '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.',
+      '기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
+    ]);
+  });
+});
+
 describe('아이템 섹션: 열린 뒤', () => {
   it('기운은 등급 순서로 네 칸이고 이름 뒤 괄호에 등급이 붙는다', () => {
     const game = seed({ items: { [ENERGY_ITEM_IDS.common]: 38, [ENERGY_ITEM_IDS.epic]: 2 } });
@@ -48,7 +58,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
-  it('도시락과 미끼 행은 가진 것만 콘텐츠 순서로, 동작 이름과 슬롯을 갖는다', () => {
+  it('도시락과 미끼 행은 가진 것만 부엌 목록 순서로, 동작 이름과 슬롯을 갖는다', () => {
     const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-epic': 3, 'cook-bait-rare': 4 } });
     const v = selectItemSection(game, T0, false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
@@ -57,6 +67,23 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
     expect(v.bait.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
       ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'], ['큐베브 미끼(영웅)', 3, '쓰기', 'bait'],
+    ]);
+  });
+
+  it('미끼 행은 부엌 미끼 탭과 같은 순서다. 등급순이고 특수는 뒤다', () => {
+    const game = seed({ items: { 'cook-bait-mutation': 1, 'cook-bait-legendary': 1, 'cook-bait-epic': 1, 'cook-bait-rare': 1 } });
+    const v = selectItemSection(game, T0, false);
+    if (v.state !== 'open') throw new Error('open이어야 해요');
+    expect(v.bait.map(r => r.recipe.id)).toEqual(recipesOfKind('bait').map(r => r.id));
+  });
+
+  it('행은 이름과 표시 등급을 나눠 갖는다. 괄호만 등급색으로 칠하는 화면이 쓴다', () => {
+    const game = seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-epic': 1, 'cook-bait-mutation': 1 } });
+    const v = selectItemSection(game, T0, false);
+    if (v.state !== 'open') throw new Error('open이어야 해요');
+    expect(v.lunch[0].title).toEqual({ name: '가루디야', grade: null });
+    expect(v.bait.map(r => r.title)).toEqual([
+      { name: '큐베브 미끼', grade: 'epic' }, { name: '사프란 미끼', grade: 'special' },
     ]);
   });
 

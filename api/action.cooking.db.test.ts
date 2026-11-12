@@ -149,15 +149,24 @@ describe('요리 액션', () => {
       expect(await eventsOf(uid)).toEqual([]);
     });
 
-    it('집 밖에서는 not-at-home, 해금 전에는 cooking-locked로 거부한다', async () => {
+    it('항구에서도 기운을 얻는다', async () => {
       const f = fish('crucian');
-      const away = await seed({ state: { boat: BOAT, location: HARBOR, bag: [f] } });
-      expect(await callAction(userToken(away), { type: 'extractEnergy', uids: [f.uid] }))
-        .toMatchObject({ status: 422, body: { error: 'not-at-home' } });
+      const uid = await seed({ state: { boat: BOAT, location: HARBOR, bag: [f] } });
+      const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [f.uid] });
+      expect(res.status).toBe(200);
+      expect(await bagUids(uid)).toEqual([]);
+      expect((await stored(uid)).data.items).toEqual({ [ENERGY.common]: 10 });
+    });
+
+    it('바다에서는 not-at-sale-base, 해금 전에는 energy-locked로 거부한다', async () => {
+      const f = fish('crucian');
+      const sea = await seed({ state: { boat: BOAT, location: { kind: 'region', id: 'world' }, bag: [f] } });
+      expect(await callAction(userToken(sea), { type: 'extractEnergy', uids: [f.uid] }))
+        .toMatchObject({ status: 422, body: { error: 'not-at-sale-base' } });
       const early = await seed({ state: { boat: BOAT - 1, location: HOME, bag: [fish('crucian')] } });
       expect(await callAction(userToken(early), { type: 'extractEnergy', uids: [f.uid] }))
-        .toMatchObject({ status: 422, body: { error: 'cooking-locked' } });
-      expect(await bagUids(away)).toEqual([f.uid]);
+        .toMatchObject({ status: 422, body: { error: 'energy-locked' } });
+      expect(await bagUids(sea)).toEqual([f.uid]);
     });
   });
 
@@ -181,7 +190,7 @@ describe('요리 액션', () => {
         .toMatchObject({ status: 422, body: { error: 'bad-request' } });
       const early = await seed({ state: { boat: BOAT - 1 } });
       expect(await callAction(userToken(early), { type: 'resetEnergyTargets' }))
-        .toMatchObject({ status: 422, body: { error: 'cooking-locked' } });
+        .toMatchObject({ status: 422, body: { error: 'energy-locked' } });
     });
   });
 
