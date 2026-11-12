@@ -41,8 +41,10 @@ export const isEnergyAmount = (x: unknown): x is number =>
 /** 화면 단위 수량 → 저장 단위 정수. 소수 연산의 오차는 반올림으로 걷어 낸다 */
 export const toStoredEnergy = (amount: number): number => Math.round(amount * ENERGY_UNIT);
 
-/** 저장 단위 기운 → 화면 문자열. 소수 첫째 자리가 0이면 정수, 아니면 소수 첫째 자리까지, 정수부는 천 단위 쉼표 */
-export function formatEnergy(stored: number): string {
+/** 저장 단위 기운 → 화면 문자열. 소수 첫째 자리가 0이면 정수, 아니면 소수 첫째 자리까지, 정수부는 천 단위 쉼표.
+ *  정수가 아닌 입력은 가장 가까운 저장 단위로 반올림하고, 유한하지 않은 수는 0으로 표시한다 */
+export function formatEnergy(input: number): string {
+  const stored = Number.isFinite(input) ? Math.round(input) : 0;
   const whole = Math.trunc(stored / ENERGY_UNIT);
   const tenth = Math.abs(stored % ENERGY_UNIT);
   return `${whole.toLocaleString('ko-KR')}${tenth === 0 ? '' : `.${tenth}`}`;

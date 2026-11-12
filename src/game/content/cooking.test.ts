@@ -183,4 +183,16 @@ describe('기운 단위', () => {
     expect(formatEnergy(12345)).toBe('1,234.5');
     expect(formatEnergy(10_000_000)).toBe('1,000,000');
   });
+
+  it('formatEnergy: 음수는 부호를 붙이고, 정수가 아닌 입력은 가장 가까운 저장 단위로 반올림하며, 유한하지 않은 수는 0이다', () => {
+    expect(formatEnergy(-15)).toBe('-1.5');
+    expect(formatEnergy(-5)).toBe('-0.5');
+    expect(formatEnergy(-12345)).toBe('-1,234.5');
+    expect(formatEnergy(15.5)).toBe('1.6');
+    expect(formatEnergy(15.4)).toBe('1.5');
+    expect(formatEnergy(9.6)).toBe('1');
+    expect(formatEnergy(Number.NaN)).toBe('0');
+    expect(formatEnergy(Number.POSITIVE_INFINITY)).toBe('0');
+    expect(formatEnergy(Number.NEGATIVE_INFINITY)).toBe('0');
+  });
 });
