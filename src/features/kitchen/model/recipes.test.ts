@@ -33,7 +33,6 @@ describe('종류별 레시피', () => {
     expect(recipeGrade(recipe('cook-bait-epic'))).toBe('epic');
     expect(recipeGrade(recipe('cook-bait-legendary'))).toBe('legendary');
     expect(recipeGrade(recipe('cook-bait-mutation'))).toBeNull();
-    expect(recipeGrade(recipe('cook-bait-mutation'))).toBeNull();
     expect(recipeGrade(recipe('cook-lunch-rare'))).toBeNull(); // 도시락은 등급 가중이어도 등급 이름이 붙지 않는다
   });
 });

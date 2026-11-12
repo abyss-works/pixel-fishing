@@ -49,7 +49,7 @@ describe('아이템 섹션: 열린 뒤', () => {
   });
 
   it('도시락과 미끼 행은 가진 것만 콘텐츠 순서로, 동작 이름과 슬롯을 갖는다', () => {
-    const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-rare': 4, 'cook-bait-epic': 3 } });
+    const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-epic': 3, 'cook-bait-rare': 4 } });
     const v = selectItemSection(game, T0, false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
