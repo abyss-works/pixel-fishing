@@ -122,6 +122,11 @@ window.SPRITE_EDITOR_DATA = {
             "h": 16,
             "scale": 1
           },
+          "list": {
+            "w": 32,
+            "h": 32,
+            "scale": 2
+          },
           "hero": {
             "w": 48,
             "h": 48,
@@ -149,6 +154,11 @@ window.SPRITE_EDITOR_DATA = {
             "w": 16,
             "h": 16,
             "scale": 1
+          },
+          "list": {
+            "w": 32,
+            "h": 32,
+            "scale": 2
           },
           "hero": {
             "w": 48,
