@@ -205,12 +205,16 @@ export interface MaterialLoss {
 }
 
 /** 한 해역, 한 레벨에서 레시피 재료를 그 해역 낚시로만 모을 때의 판매 손실과 모으는 시간.
- *  손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다 */
-export function materialLoss(recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis): MaterialLoss {
+ *  손실은 등급별 필요 개체 수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 시간은 필요한 등급 중 가장 느리게 모이는 등급이 정한다 */
+export const materialLoss = (recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis): MaterialLoss =>
+  materialLossFor(recipe, spot, level, axis, ENERGY_PER_FISH);
+
+/** 개체 하나가 내는 기운(화면 단위)을 받는 materialLoss. 레시피의 기운 요구를 이 값으로 나눠 필요한 개체 수를 구한다 */
+export function materialLossFor(recipe: Recipe, spot: SpotId, level: number, axis: FlowAxis, energyPerFish: number): MaterialLoss {
   const gather = effectRates(spot, level, axisOf(axis, spot, level), NO_EFFECT);
   let loss = 0, collect = 0, feasible = true;
   for (const g of RARITY_ORDER) {
-    const need = recipe.cost[g] ?? 0;
+    const need = (recipe.cost[g] ?? 0) / energyPerFish;
     if (need === 0) continue;
     const rows = gather.rows.filter(r => r.fish.rarity === g);
     const share = rows.reduce((a, r) => a + r.prob, 0);
@@ -229,7 +233,7 @@ export interface RecipeOptions {
 }
 
 /** 레시피 순손익 — 재료로 쓴 물고기의 판매 손실과 효과 지속 동안의 수입 증가를 견준다.
- *  손실은 등급별 필요 개수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 재료는 그 해역에서만 모은다. 가방 한도는 넣지 않는다 */
+ *  손실은 등급별 필요 개체 수 x 그 등급의 평균 판매가(돌연변이 기댓값 포함)이고, 재료는 그 해역에서만 모은다. 가방 한도는 넣지 않는다 */
 export function recipeRows(o: RecipeOptions): RecipeRow[] {
   const recipes = o.recipes ?? RECIPES;
   for (const r of recipes) checkEffect(r.effect);
