@@ -29,8 +29,8 @@ describe('MenuCard', () => {
   });
 
   it('설명이 없으면 제목만 이름이 되고 설명 줄을 그리지 않는다', () => {
-    const { container } = render(<MenuCard icon={null} title="옷장" subRole="omittable" />);
-    expect(screen.getByRole('button', { name: '옷장' })).toBeInTheDocument();
+    const { container } = render(<MenuCard icon={null} title="시험 시설" subRole="omittable" />);
+    expect(screen.getByRole('button', { name: '시험 시설' })).toBeInTheDocument();
     expect(container.querySelector('[data-omittable]')).toBeNull();
   });
 
