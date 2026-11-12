@@ -50,17 +50,31 @@ describe('레시피 기운 수량 덮어쓰기', () => {
     expect(() => withCostOverrides(RECIPES, { nope: { common: 1 } })).toThrow(/레시피/);
     expect(() => withCostOverrides(RECIPES, { [bait.id]: { mythic: 1 } as never })).toThrow(/등급/);
     expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: -1 } })).toThrow(/수량/);
-    expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: 1.5 } })).toThrow(/수량/);
+    expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: 0.25 } })).toThrow(/수량/);
+    expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: 1.05 } })).toThrow(/수량/);
+    expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: Number.NaN } })).toThrow(/수량/);
     expect(() => withCostOverrides(RECIPES, { [bait.id]: { common: 0 } })).toThrow(/수량/);
     expect(() => withCostOverrides(RECIPES, { [bait.id]: {} })).toThrow(/수량/);
   });
 
+  it('소수 첫째 자리까지의 수량을 덮어쓸 수 있고, 덮어쓴 요구로 만들 수 있는 개수를 센다', () => {
+    const [o] = withCostOverrides([bait], { [bait.id]: { common: 0.5, epic: 1.5 } });
+    expect(o.cost).toEqual({ common: 0.5, epic: 1.5 });
+    expect(recipesCovered({ common: 3, rare: 0, epic: 3, legendary: 0 }, o)).toBe(2);
+    expect(recipesCovered({ common: 3, rare: 0, epic: 30, legendary: 0 }, o)).toBe(6);
+  });
+
   it('명령줄 형식을 id와 등급별 수량으로 읽고 형식이 틀리면 오류다', () => {
     expect(parseCostSpec('cook-bait-epic=common:50,epic:4')).toEqual({ id: 'cook-bait-epic', cost: { common: 50, epic: 4 } });
-    for (const bad of ['', 'cook-bait-epic', 'cook-bait-epic=', 'cook-bait-epic=common', 'cook-bait-epic=common:x', 'cook-bait-epic=common:-1', 'cook-bait-epic=common:1.5', 'cook-bait-epic=common:1e1', '=common:1', 'cook-bait-epic=common:1,common:2']) {
+    for (const bad of ['', 'cook-bait-epic', 'cook-bait-epic=', 'cook-bait-epic=common', 'cook-bait-epic=common:x', 'cook-bait-epic=common:-1', 'cook-bait-epic=common:1.25', 'cook-bait-epic=common:.5', 'cook-bait-epic=common:1.', 'cook-bait-epic=common:1e1', '=common:1', 'cook-bait-epic=common:1,common:2']) {
       expect(() => parseCostSpec(bad), bad).toThrow(/--cost/);
     }
     expect(() => parseCostSpec('cook-bait-epic=mythic:1')).toThrow(/등급/);
+  });
+
+  it('명령줄의 수량은 소수 첫째 자리까지 읽는다', () => {
+    expect(parseCostSpec('cook-bait-epic=common:0.5,epic:1.5')).toEqual({ id: 'cook-bait-epic', cost: { common: 0.5, epic: 1.5 } });
+    expect(parseCostSpec('cook-bait-epic=common:2.0')).toEqual({ id: 'cook-bait-epic', cost: { common: 2 } });
   });
 });
 

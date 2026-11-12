@@ -129,7 +129,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
   --recipe <id>      recipes: 그 레시피만(${RECIPES.map(r => r.id).join(', ')}). effects, window: 그 레시피의 효과를 효과 옵션에 채운다
   --hours <N>        recipes: 가방을 비우고 판매 없이 낚는 시간(시간). 기본 ${LUNCH_HOURS}
-  --cost <id=등급:개수,...>  recipes, window: 레시피의 기운 수량을 덮어써 잰다(등급은 common, rare, epic, legendary. 적지 않은 등급은 0). 여러 번 줄 수 있고 레시피마다 한 번이다. 예: --cost cook-bait-epic=common:50,epic:4. window에서는 --recipe로 고른 레시피만 받고 재료 비용과 창의 순손익을 더한다
+  --cost <id=등급:수량,...>  recipes, window: 레시피의 기운 수량을 덮어써 잰다(수량은 소수 첫째 자리까지, 예: 0.5. 등급은 common, rare, epic, legendary. 적지 않은 등급은 0). 여러 번 줄 수 있고 레시피마다 한 번이다. 예: --cost cook-bait-epic=common:50,epic:4. window에서는 --recipe로 고른 레시피만 받고 재료 비용과 창의 순손익을 더한다
   --manual-share <0~1>  recipes: 집 기운 얻기 공급의 낚시 중 수동 낚시 비율. 나머지는 방치다. 생략하면 --axis 방식으로만 낚는다
   --visit-hours <N>  recipes: 집에 들러 가방을 기운으로 바꾸고 비우는 간격(시간). 한 구간이 가방 용량을 넘으면 개체를 놓아준다. 생략하면 --hours 전체에 한 번 들른다
   --rod-offset <N>   recipes: 집 기운 얻기 공급의 낚싯대 레벨(해역 진입 레벨 기준 -4 이상 정수). 생략하면 --margin을 따른다. 순손익 표는 --margin을 따른다
