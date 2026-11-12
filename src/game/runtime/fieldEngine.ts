@@ -10,6 +10,7 @@ import type { FishingPhase } from '../rules/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
 import { NO_COOK_EFFECTS, slotEffects } from '../rules/cooking';
 import { CAST_RANGE } from '../rules/balance';
+import { guestActionVerdict } from '../rules/guest';
 import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
@@ -52,13 +53,17 @@ export type FieldEvent =
   | { type: 'catch'; judgment: Judgment; result: CatchResult }
   | { type: 'zone-blocked'; message: string }
   | { type: 'zone-entered'; zone: ZoneId }
-  | { type: 'trigger-blocked'; message: string };
+  | { type: 'trigger-blocked'; message: string }
+  /** 게스트가 마을 밖으로 나가는 트리거에 닿아 장소를 바꾸지 못하고 되밀렸다 */
+  | { type: 'guest-blocked' };
 
 export interface FieldCallbacks {
   dispatch: (action: CatchAction) => MaybePromise<FieldDispatchResult>;
   onEvent: (event: FieldEvent) => void;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
+  /** 지금 계정이 게스트인가. 게스트는 규칙 판정이 허용하지 않는 장소로 가는 트리거에서 되밀린다 */
+  guest?: boolean;
 }
 
 /**
@@ -91,6 +96,8 @@ export class GameFieldEngine {
   private readonly tracker = new ZoneTracker();
   /** 직전 프레임이 구역 경계에 막혔고 안내를 이미 냈다 */
   private blockNotified = false;
+  /** 직전 프레임이 게스트 출항 트리거에서 되밀렸고 알림을 이미 냈다 */
+  private guestBlockNotified = false;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
@@ -347,6 +354,7 @@ export class GameFieldEngine {
     const focusZone = this.lastSpot ? zoneOfSpot(this.lastSpot) : null;
     setZone(focusZone ?? (zone ? topZoneOf(zone) : null));
 
+    let guestBlocked = false;
     for (const trigger of this.def.triggers) {
       if (!inTrigger(this.pos, trigger.rect)) continue;
       if (trigger.action === 'base') {
@@ -355,8 +363,19 @@ export class GameFieldEngine {
       }
       if (trigger.action === 'travel') {
         if (this.game.boat >= trigger.requiredBoat) {
+          const to: SceneRef = { kind: 'region', id: trigger.to };
+          if (this.callbacks.guest && guestActionVerdict({ type: 'travel', to }) !== 'ok') {
+            if (movedFrom) {
+              this.pos.x = movedFrom.x;
+              this.pos.y = movedFrom.y;
+            }
+            guestBlocked = true;
+            // 막힌 채 밀고 있는 동안은 프레임마다 반복하지 않고, 떨어졌다 다시 닿을 때 다시 알린다
+            if (!this.guestBlockNotified) this.callbacks.onEvent({ type: 'guest-blocked' });
+            continue;
+          }
           const entry = entryPoint(REGION_PACKS[trigger.to], trigger, this.pos);
-          this.callbacks.onScene({ kind: 'region', id: trigger.to }, trigger.msg, entry);
+          this.callbacks.onScene(to, trigger.msg, entry);
           return false;
         }
         if (movedFrom) {
@@ -366,6 +385,7 @@ export class GameFieldEngine {
         this.callbacks.onEvent({ type: 'trigger-blocked', message: trigger.blockedMsg });
       }
     }
+    this.guestBlockNotified = guestBlocked;
 
     return this.renderFrame(ctx, now);
   }

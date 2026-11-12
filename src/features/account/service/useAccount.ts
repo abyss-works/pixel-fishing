@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api, kstDay } from '../../../platform/api';
 import { identifyUser } from '../../../platform/observability';
 import type { GameState } from '../../../game/rules/logic';
+import type { AccountLookup } from '../../../platform/api';
 import { setSessionUid, useSession } from './session';
 import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
@@ -31,11 +32,18 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   const uid = api.auth.isConfigured ? session.uid : '00000000-0000-4000-8000-000000000000';
   const uidRef = useRef<string | null>(null); // 마지막으로 채택한 uid — 승격/교체 판별 기준
 
+  // 확인 결과 반영 — 확인에 실패하면 화면은 게스트처럼 두되 확인 완료로 올리지 않아 게스트로 확정하지 않는다.
+  // 다시 확인하는 경로는 계정 교체 뒤 onAuthChanged뿐이다.
+  const applyLookup = (lookup: AccountLookup) => {
+    setAccount(lookup.status === 'account' ? lookup.email : null);
+    setAccountChecked(lookup.status !== 'failed');
+  };
+
   // 세션이 서면(서버 상태 로드와 병렬로) 영구 계정 이메일 표시 — 게스트면 null 유지
   useEffect(() => {
     if (!session.ready || !session.uid || !api.auth.isConfigured) return;
     if (!uidRef.current) uidRef.current = session.uid;
-    api.auth.currentAccount().then(a => { setAccount(a); setAccountChecked(true); });
+    api.auth.currentAccount().then(applyLookup);
     identifyUser(session.uid); // uid만 — PII 미전송
   }, [session.ready, session.uid]);
 
@@ -44,7 +52,7 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   // uid가 그대로면(같은 계정의 표시 갱신) 서버 상태를 다시 읽지 않는다. 구글 연결과 구글 로그인은 인증 화면을 다녀오는 전체 페이지 이동이라
   // 이 함수를 거치지 않고, 돌아온 부팅이 새 세션으로 계정과 진행을 읽는다.
   const onAuthChanged = async () => {
-    setAccount(await api.auth.currentAccount());
+    applyLookup(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();
     setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
@@ -87,5 +95,5 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 
-  return { account, uid, onAuthChanged };
+  return { account, accountChecked, uid, onAuthChanged };
 }

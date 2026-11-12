@@ -21,12 +21,16 @@ export interface GameGateway {
   warmup?(): void;
 }
 
+/** 세션 확인의 결과. 확인 실패(네트워크 오류, 요청 과다, 서버 오류)는 게스트와 구분한다 */
+export type AccountLookup = { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
+
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
 export interface AuthApi {
   isConfigured: boolean;
   ensureSession(): Promise<string | null>;
-  currentAccount(): Promise<string | null>;
+  /** 로그인된 영구 계정을 확인한다. 게스트와 확인 실패를 구분해 돌려준다 */
+  currentAccount(): Promise<AccountLookup>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
   /** 비밀번호 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크를 쓸 수 없다. 부팅 때 한 번 읽는다 */
   takePasswordResetLanding(): 'ready' | 'invalid' | null;
@@ -316,7 +320,7 @@ export interface AdminApi {
   access(): Promise<AdminAccessResult>;
   /** 구글 인증 화면으로 이동해 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
   signIn(): Promise<AuthResult>;
-  /** 구글 로그인에서 돌아왔는가. 서버가 돌려준 결과 코드를 담고 오류가 없으면 error는 null이다. 이 탭에서 시작한 흐름이 아니면 null이다. 읽으면 주소에서 지운다 */
+  /** 구글 로그인에서 돌아왔는가. 서버가 돌려준 결과 코드를 담고 오류가 없으면 error는 null이다. 이 탭에서 시작한 흐름이 아니면 null이다. 빈 문자열 오류 코드도 오류 없음과 구분해 실패로 돌려준다. 읽으면 주소에서 지운다. 복귀 표지 질의 없이 읽어도 남은 세션 저장소 표지는 지우고 null을 돌려준다 */
   takeSignInReturn(): { error: string | null } | null;
   /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
   signOut(): Promise<void>;

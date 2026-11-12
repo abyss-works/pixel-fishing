@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   connectGoogle,
   deleteAccount,
@@ -8,8 +8,8 @@ import {
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
-import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
-import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
+import { emailSignInFailureLines, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
+import { MIN_PASSWORD_LENGTH, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
@@ -33,11 +33,15 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 // 이미 있는 이메일 계정의 로그인은 텍스트 링크가 같은 창 안에서 펼치는 폼으로 남기고, 이메일 계정은 구글 연결로 옮겨 간다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  setToast, onAuthChanged, onClose, account, syncLabel, syncState,
+  setToast, onAuthChanged, onClose, account, guestProgress, recheckGuestProgress, syncLabel, syncState,
 }: {
   setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null;
+  /** 이 기기의 게스트 진행. 버릴 진행이 없으면 이메일 계정 로그인 확인을 건너뛴다 */
+  guestProgress: GuestProgress;
+  /** 확인을 건너뛰기로 했을 때 로그인 요청 직전에 서버 저장 상태를 다시 읽어 판정한다. 읽기에 실패하면 진행 있음이다 */
+  recheckGuestProgress: () => Promise<GuestProgress>;
   /** 저장 상태 문구(클라우드 켜짐, 미설정 등). 계정과 한 묶음이라 여기서 보여 준다 */
   syncLabel?: string | null; syncState?: string;
 }) {
@@ -45,11 +49,20 @@ export default function AccountModal({
   const [pw, setPw] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 이메일 로그인 실패 안내. 문장마다 한 줄이며, 다시 시도하거나 폼을 접으면 지운다 */
+  const [signInError, setSignInError] = useState<readonly string[]>([]);
   const { confirm, input, dialogs } = useDialogs();
   const { method, failed, retry } = useLoginMethod(account);
   const guest = method === 'guest';
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 폼만 막는다.
   const offline = !isAccountConfigured();
+
+  // 다시 읽는 사이 창이 닫혔는지 — 닫힌 뒤에는 로그인을 요청하지 않는다
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -63,16 +76,20 @@ export default function AccountModal({
     if (!r.ok) { setToast(googleStartFailedText, 'warn'); setBusy(false); }
   };
 
-  // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 확인을 받은 뒤에만 로그인한다.
+  // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 버릴 진행이 있으면 확인을 받은 뒤에만 로그인한다.
   const emailSignIn = () => run(async () => {
+    setSignInError([]);
     if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`, 'warn'); return; }
-    if (!(await confirm({
+    // 건너뛰기로 판정했어도 이 탭의 상태는 낡았을 수 있어, 요청 직전에 서버 저장 상태로 한 번 더 판정한다
+    const saved = guestProgress === 'nothing' ? await recheckGuestProgress() : guestProgress;
+    if (!mounted.current) return;
+    if (saved !== 'nothing' && !(await confirm({
       title: '이메일 계정으로 로그인',
       body: '이 이메일 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
       confirmLabel: '로그인',
     }))) return;
     const r = await signInAccount(email.trim(), pw);
-    if (!r.ok) { setToast(`로그인하지 못했어요. ${r.msg}`, 'warn'); return; }
+    if (!r.ok) { setSignInError(emailSignInFailureLines(r.code)); return; }
     await onAuthChanged();
     onClose();
   });
@@ -129,7 +146,6 @@ export default function AccountModal({
 
   const emailForm = (
     <div className="flex flex-col gap-2 mt-2">
-      <Note className="my-0">이미 만든 이메일 계정으로만 로그인할 수 있어요.<br />이메일 계정이 없다면 구글 계정을 연결해 주세요.</Note>
       <Field label="이메일">
         <TextInput type="email" placeholder="이메일" value={email} autoComplete="email"
                    disabled={offline} onChange={e => setEmail(e.target.value)} />
@@ -142,6 +158,9 @@ export default function AccountModal({
       <Button full className="mt-1" onClick={emailSignIn} disabled={busy || offline}>로그인</Button>
       <div>
         <Button variant="ghost" size="sm" onClick={reset} disabled={busy || offline}>비밀번호 재설정</Button>
+      </div>
+      <div role="status" className={cx('flex flex-col', signInError.length > 0 && 'mt-1')}>
+        {signInError.map(line => <Note key={line} tone="warn" className="my-0">{line}</Note>)}
       </div>
     </div>
   );
@@ -167,7 +186,7 @@ export default function AccountModal({
           </Note>
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
           <div className="text-center">
-            <TextLinkButton open={formOpen} onClick={() => setFormOpen(o => !o)}>이메일 계정으로 로그인</TextLinkButton>
+            <TextLinkButton open={formOpen} disabled={busy} onClick={() => { setFormOpen(o => !o); setSignInError([]); }}>기존 이메일 계정으로 로그인</TextLinkButton>
           </div>
           {formOpen && emailForm}
         </>

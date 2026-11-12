@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from './accountRules';
+import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, guestProgress, passwordLongEnough, shouldNudgeAccount } from './accountRules';
+import { newState } from '../../../game/rules/logic';
 
 const base = { configured: true, accountChecked: true, signedIn: false, fame: ACCOUNT_NUDGE_FAME, lastNudgedDay: null, today: '2030-03-04' };
 
@@ -38,5 +39,31 @@ describe('비밀번호 길이', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(6);
     expect(passwordLongEnough('12345')).toBe(false);
     expect(passwordLongEnough('123456')).toBe(true);
+  });
+});
+
+describe('게스트 진행의 판정 (guestProgress)', () => {
+  const caught = { ...newState(), dex: { carp: { normal: { count: 2, maxSize: 10, first: '2030-03-04' } } } };
+  const idle = { loading: false, blocked: false };
+
+  it('세이브를 읽는 중에는 아직 모른다 (기본 상태의 낚은 수 0으로 판정하지 않는다)', () => {
+    expect(guestProgress({ sync: 'connecting', ...idle, loading: true, game: newState() })).toBe('reading');
+    expect(guestProgress({ sync: 'on', ...idle, loading: true, game: newState() })).toBe('reading');
+    expect(guestProgress({ sync: 'on', ...idle, blocked: true, game: newState() })).toBe('reading');
+  });
+
+  it('세이브를 읽지 못했으면 진행이 있는 것으로 본다', () => {
+    expect(guestProgress({ sync: 'error', ...idle, loading: true, game: newState() })).toBe('some');
+    expect(guestProgress({ sync: 'error', ...idle, game: newState() })).toBe('some');
+  });
+
+  it('읽기가 끝났는데 연결이 켜지지 않았으면 진행이 있는 것으로 본다 — 판정을 미루지 않는다', () => {
+    expect(guestProgress({ sync: 'connecting', ...idle, game: newState() })).toBe('some');
+    expect(guestProgress({ sync: 'connecting', ...idle, blocked: true, game: newState() })).toBe('some');
+  });
+
+  it('읽은 뒤에는 낚은 수가 0이면 진행 없음, 아니면 진행 있음이다', () => {
+    expect(guestProgress({ sync: 'on', ...idle, game: newState() })).toBe('nothing');
+    expect(guestProgress({ sync: 'on', ...idle, game: caught })).toBe('some');
   });
 });
