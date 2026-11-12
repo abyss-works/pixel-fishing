@@ -60,8 +60,7 @@ export type FieldEvent =
 export interface FieldCallbacks {
   dispatch: (action: CatchAction) => MaybePromise<FieldDispatchResult>;
   onEvent: (event: FieldEvent) => void;
-  /** leftFrom은 트리거에 닿기 직전의 자리다. 걸어서 닿은 이동에만 있다 */
-  onScene: (scene: SceneRef, message: string, entryPos?: Point, leftFrom?: Point) => void;
+  onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
   /** 지금 계정이 게스트인가. 게스트는 규칙 판정이 허용하지 않는 장소로 가는 트리거에서 되밀린다 */
   guest?: boolean;
@@ -376,7 +375,7 @@ export class GameFieldEngine {
             continue;
           }
           const entry = entryPoint(REGION_PACKS[trigger.to], trigger, this.pos);
-          this.callbacks.onScene(to, trigger.msg, entry, movedFrom ?? undefined);
+          this.callbacks.onScene(to, trigger.msg, entry);
           return false;
         }
         if (movedFrom) {

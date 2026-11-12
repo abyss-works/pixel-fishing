@@ -409,8 +409,6 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     frame(1000, 950);
     expect(onScene).toHaveBeenCalledTimes(1);
     expect(onScene.mock.calls[0][0]).toEqual({ kind: 'region', id: 'world' });
-    // 떠나기 직전의 자리를 함께 알려 거부되면 그 자리로 돌아올 수 있게 한다
-    expect(onScene.mock.calls[0][3]).toEqual(aboveHarbor);
     expect(events).toEqual([]);
   });
 
