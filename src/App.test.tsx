@@ -931,15 +931,14 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     expect(screen.getByRole('button', { name: '보내기' })).not.toHaveClass('primary');
   });
 
-  it('계정 관리 모달이 계정·닉네임·ID를 보여주고 복사 버튼을 단다', () => {
+  it('내 정보 창이 닉네임·ID를 보여주고 복사 버튼을 단다', () => {
     seed({});
     render(<App />);
     clickTab('설정');
-    fireEvent.click(screen.getByText('계정 관리'));
-    expect(screen.getByText('내 정보')).toBeInTheDocument();
-    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
-    // 설정 요약과 모달 두 곳에 뜬다 (로컬은 로그인 상태로 가정 — 실물은 이메일 또는 '게스트')
-    expect(screen.getAllByText('dev@localhost')).toHaveLength(2);
+    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 설정 탭 요약에 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
+    expect(screen.getByText('dev@localhost')).toBeInTheDocument();
+    fireEvent.click(openerButton('내 정보'));
+    expect(screen.getByRole('dialog', { name: '내 정보' })).toBeInTheDocument();
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
@@ -1539,11 +1538,11 @@ describe('아이템 — 가방 아이템 섹션', () => {
 });
 
 describe('닉네임 (게스트명 표시·변경)', () => {
-  it('계정 관리 모달에서 현재 닉네임이 보이고, 새 이름으로 바꿀 수 있다', async () => {
+  it('내 정보 창에서 현재 닉네임이 보이고, 새 이름으로 바꿀 수 있다', async () => {
     seed({});
     render(<App />);
     clickTab(/설정/);
-    fireEvent.click(screen.getByText('계정 관리'));
+    fireEvent.click(openerButton('내 정보'));
     const current = screen.getByLabelText('현재 닉네임');
     await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
     expect(current.textContent).toContain('_');
@@ -1556,7 +1555,7 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     seed({});
     render(<App />);
     clickTab(/설정/);
-    fireEvent.click(screen.getByText('계정 관리'));
+    fireEvent.click(openerButton('내 정보'));
     const current = screen.getByLabelText('현재 닉네임');
     await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
     const before = current.textContent;

@@ -123,7 +123,7 @@ export default function GameTabs(props: GameTabsProps) {
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
-        <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
+        <SettingsTab dispatch={props.dispatch} setToast={props.setToast}
                      syncLabel={props.syncLabel} syncState={props.syncState}
                      account={props.account} uid={props.uid}
                      nickname={props.nickname} onRename={props.onRename}
