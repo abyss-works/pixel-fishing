@@ -14,7 +14,7 @@ const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-
 describe('거점 카드 메뉴', () => {
   it('집은 게시판·작업대·목공소·판매 궤짝·옷장·부엌·문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장', '부엌', '문 마을로']);
+    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장 치장', '부엌 요리/미끼', '문 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
@@ -153,11 +153,6 @@ describe('거점 카드 메뉴', () => {
       expect(root.querySelector('.pf-vscroll, .pf-scroll-hud')).toBeNull();
       const content = screen.getByRole('heading', { name: '정보' }).closest('.items-center')!;
       expect(content.className).not.toContain('my-auto');
-    });
-
-    it('설명이 없는 시설은 설명 줄을 그리지 않는다', () => {
-      render(<BaseMenu base="home" game={newState()} />);
-      expect(document.querySelector('[data-facility="wardrobe"] [data-omittable]')).toBeNull();
     });
   });
 });
