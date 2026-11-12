@@ -4,7 +4,7 @@ import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cook
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
-import { planEat, selectItemSection } from './bagItems';
+import { ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
 
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
@@ -33,6 +33,15 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
       expect(v.empty).toEqual(['가진 아이템이 없어요.']);
       expect(v.lines).toEqual([GUEST_LOCK_TEXT]);
     }
+  });
+});
+
+describe('묶음 소제목 툴팁', () => {
+  it('생명의 기운 소제목은 기운 얻기를 집 궤짝이나 항구 어시장에서 할 수 있다고 알린다', () => {
+    expect(ITEM_GROUP_HINT.energy.split('\n')).toEqual([
+      '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.',
+      '기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
+    ]);
   });
 });
 

@@ -51,6 +51,20 @@ describe.skipIf(!EXHIBIT_UI_ENABLED)('BagTab — 전시대', () => {
   });
 });
 
+describe('BagTab - 잠금 안내', () => {
+  it('잠그면 판매와 기운 얻기에서 빠진다고 알린다', () => {
+    const { setToast } = show(game({ bag: [inst('a')] }));
+    fireEvent.click(screen.getByRole('button', { name: '잉어 전체 잠금' }));
+    expect(setToast).toHaveBeenCalledWith(expect.stringMatching(/ 잠갔어요\. 판매와 기운 얻기에서 빠져요\.$/));
+  });
+
+  it('잠금을 풀면 다시 고를 수 있다고 알린다', () => {
+    const { setToast } = show(game({ bag: [{ ...inst('a'), locked: true }] }));
+    fireEvent.click(screen.getByRole('button', { name: '잉어 전체 잠금 해제' }));
+    expect(setToast).toHaveBeenCalledWith(expect.stringMatching(/의 잠금을 풀었어요\. 다시 고를 수 있어요\.$/));
+  });
+});
+
 describe('BagTab - 판매 가능 금액', () => {
   const owned = (): GameState => game({ bag: [inst('a'), inst('b')] });
 
