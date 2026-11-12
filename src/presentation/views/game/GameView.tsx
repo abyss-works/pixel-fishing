@@ -31,6 +31,8 @@ import StatsModal from '../overlays/stats/StatsModal';
 import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
+import { hasOpenWindows } from '../../ui/openWindows';
+import { GUEST_VILLAGE_ONLY_TEXT } from '../../../features/gameplay/service/useGame';
 import { isGuest } from '../../../features/account/service/accountActions';
 import { guestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
@@ -83,7 +85,7 @@ interface GameViewProps {
   placeSeq: number;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  onScene: (scene: SceneRef, message: string, entryPos?: Point, leftFrom?: Point) => void;
   /** 서버에 알리지 않고 화면의 장소만 바꾼다 */
   onPlace: (scene: SceneRef, entryPos?: Point) => void;
   onWarmup: () => void;
@@ -180,11 +182,19 @@ export default function GameView(props: GameViewProps) {
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
 
+  // 게스트가 포구에서 되밀렸을 때 - 서버가 거부할 때와 같은 안내를 메시지 창에 남기고 계정 관리 창을 연다.
+  // 이미 창이 떠 있으면 안내도 창도 다시 띄우지 않는다
+  const onGuestBlocked = () => {
+    if (accountOpen || hasOpenWindows()) return;
+    props.setToast(GUEST_VILLAGE_ONLY_TEXT, 'warn');
+    setAccountOpen(true);
+  };
+
   const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
 
-  const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
+  const go = (nextScene: SceneRef, message: string, entryPos?: Point, leftFrom?: Point) => {
     resetPanels();
-    props.onScene(nextScene, message, entryPos);
+    props.onScene(nextScene, message, entryPos, leftFrom);
   };
 
   const { confirm, dialogs } = useDialogs();
@@ -283,7 +293,7 @@ export default function GameView(props: GameViewProps) {
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={guest} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
+                 onScene={go} onWarmup={props.onWarmup} guest={guest} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
                  locked={trip !== null} statusSlot={statusSlot} />
         )}

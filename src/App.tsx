@@ -64,10 +64,10 @@ ${min}자 이상이어야 해요.`,
     setPlaceSeq(seq => seq + 1);
   };
 
-  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다
-  const go = (nextScene: SceneRef, message: string, position?: Point) => {
+  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로, 걸어서 떠났으면 떠나기 직전의 자리로 되돌린다
+  const go = (nextScene: SceneRef, message: string, position?: Point, leftFrom?: Point) => {
     const from = { scene, entryPos };
-    const back = () => place(from.scene, from.entryPos ?? undefined);
+    const back = () => place(from.scene, leftFrom ?? from.entryPos ?? undefined);
     place(nextScene, position);
     setToast(message);
     void settleAction(() => dispatch({ type: 'travel', to: nextScene })).then(settled => {

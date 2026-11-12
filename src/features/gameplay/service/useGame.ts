@@ -28,6 +28,9 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
   error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
+/** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
+export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
+
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 
 /**

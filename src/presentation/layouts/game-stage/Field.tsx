@@ -41,8 +41,12 @@ interface Props {
   game: GameState;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  onScene: (scene: SceneRef, message: string, entryPos?: Point, leftFrom?: Point) => void;
   onWarmup?: () => void;
+  /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
+  guest?: boolean;
+  /** 게스트가 마을 밖으로 나가려다 되밀렸을 때 */
+  onGuestBlocked?: () => void;
   initialPos?: Point;
   /** 장소 지정 순번 — 마운트 뒤에 바뀌면 같은 지역 안에서 플레이어를 initialPos(없으면 지역 출발점)로 옮긴다 */
   placeSeq?: number;
@@ -106,7 +110,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, placeSeq, locked, paused, statusSlot,
+  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -157,12 +161,16 @@ export default function Field({
           ? { status: 'ok', result: result.result }
           : result);
       },
-      onEvent: event => presentEvent(event, setToast, game.boat),
+      onEvent: event => {
+        if (event.type === 'guest-blocked') onGuestBlocked?.();
+        else presentEvent(event, setToast, game.boat);
+      },
       onScene,
       onWarmup,
+      guest,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup]);
+  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 
