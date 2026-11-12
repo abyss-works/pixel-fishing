@@ -237,12 +237,12 @@ describe('요리 액션', () => {
 
     it('미끼 요리는 미끼 슬롯에 들어가고 이미 든 효과는 교체된다', async () => {
       const uid = await cooker({
-        items: { 'cook-bait-judge': 2 }, slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: '2030-03-04T05:30:00.000Z' } },
+        items: { 'cook-bait-epic': 2 }, slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: '2030-03-04T05:30:00.000Z' } },
       });
-      expect((await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-judge' })).status).toBe(200);
+      expect((await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-epic' })).status).toBe(200);
       const { data } = await stored(uid);
-      expect(data.items).toEqual({ 'cook-bait-judge': 1 });
-      expect(data.slots.bait).toEqual({ id: 'cook-bait-judge', endsAt: '2030-03-04T05:36:07.000Z' });
+      expect(data.items).toEqual({ 'cook-bait-epic': 1 });
+      expect(data.slots.bait).toEqual({ id: 'cook-bait-epic', endsAt: '2030-03-04T05:36:07.000Z' });
     });
 
     it('거부 사유를 코드로 돌려주고 상태를 바꾸지 않는다', async () => {

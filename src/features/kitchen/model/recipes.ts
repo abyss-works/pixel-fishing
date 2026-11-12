@@ -13,11 +13,8 @@ import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
-/**
- * 그 종류의 부엌 레시피 — 콘텐츠 순서대로. 판정 칸 폭 값이 정해지기 전(0)에는 효과가 없는 요리라 목록에서 숨긴다.
- */
-export const recipesOfKind = (kind: CookKind): Recipe[] =>
-  RECIPES.filter(r => r.kind === kind && r.effects.judgeWidth !== 0);
+/** 그 종류의 부엌 레시피 — 콘텐츠 순서대로 */
+export const recipesOfKind = (kind: CookKind): Recipe[] => RECIPES.filter(r => r.kind === kind);
 
 /** 등급 미끼의 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급. 미끼 요리 중 등급 가중이 없는 것과 도시락은 null이다 */
 export function recipeGrade(recipe: Recipe): RarityId | null {
@@ -61,9 +58,6 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 폼 가중치', value: `+${pct(e.mutationWeight)}%` }];
       case 'namedWeight':
         return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 가중치', value: `+${pct(e.namedWeight)}%` }];
-      case 'judgeWidth':
-        return e.judgeWidth === undefined ? [] : ['GOOD', 'PERFECT'].map(zone => (
-          { label: `${zone} 영역 폭`, value: `+${e.judgeWidth}%p` }));
     }
   });
 }

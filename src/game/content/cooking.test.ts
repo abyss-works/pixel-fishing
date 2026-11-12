@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS,
-  JUDGE_WIDTH_BONUS, LEGACY_BAIT_REFUND, RECIPES, recipeById,
+  LEGACY_BAIT_REFUND, RECIPES, recipeById,
 } from './cooking';
 import { ARTIFACTS } from './artifacts';
 import { RARITY_ORDER } from './rarity';
@@ -14,9 +14,9 @@ const byKind = (kind: 'lunch' | 'bait') => RECIPES.filter(r => r.kind === kind);
 const gradeBaits = RECIPES.filter(r => r.kind === 'bait' && r.effects.rarityWeight !== undefined);
 
 describe('레시피 표', () => {
-  it('도시락 5종과 미끼 요리 5종이다', () => {
+  it('도시락 5종과 미끼 요리 4종이다', () => {
     expect(byKind('lunch')).toHaveLength(5);
-    expect(byKind('bait')).toHaveLength(5);
+    expect(byKind('bait')).toHaveLength(4);
   });
 
   it('레시피 id는 고유하고 recipeById가 찾아 준다', () => {
@@ -59,7 +59,6 @@ describe('레시피 표', () => {
     expect(cost('cook-lunch-mutation')).toEqual({ rare: 20, epic: 4 });
     expect(cost('cook-lunch-named')).toEqual({ epic: 8 });
     expect(cost('cook-lunch-bundle')).toEqual({ common: 50, rare: 5, epic: 1, legendary: 1 });
-    expect(cost('cook-bait-judge')).toEqual({ common: 50, rare: 5 });
     expect(cost('cook-bait-mutation')).toEqual({ epic: 4, legendary: 1 });
     expect(cost('cook-bait-rare')).toEqual({ common: 50, rare: 15 });
     expect(cost('cook-bait-epic')).toEqual({ common: 50, epic: 5 });
@@ -75,15 +74,10 @@ describe('레시피 표', () => {
     expect(fx('cook-lunch-bundle')).toEqual({
       biteWaitCut: 0.05, rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.05 },
     });
-    expect(fx('cook-bait-judge')).toEqual({ judgeWidth: JUDGE_WIDTH_BONUS });
     expect(fx('cook-bait-mutation')).toEqual({ mutationWeight: 1 });
     expect(fx('cook-bait-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.2 } });
     expect(fx('cook-bait-epic')).toEqual({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.4 } });
     expect(fx('cook-bait-legendary')).toEqual({ rarityWeight: { grades: ['legendary'], bonus: 0.6 } });
-  });
-
-  it('판정 칸 값은 설정값이고 기본은 0이다', () => {
-    expect(JUDGE_WIDTH_BONUS).toBe(0);
   });
 });
 

@@ -25,10 +25,8 @@ const HOUR_MS = 3_600_000;
 /** 미끼 슬롯의 지속(분) — 시간 제한 효과 창의 기본 길이 */
 export const BAIT_WINDOW_MIN = COOK_KIND_RULES.bait.slotMs / 60_000;
 
-/** 게임이 합산한 슬롯 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다.
- *  판정 칸(영역 폭) 효과는 이 지표가 재지 않으므로 오류다 */
+/** 게임이 합산한 슬롯 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다 */
 export function effectOf(e: ActiveCookEffects): Effect {
-  if (e.judgeWidth !== 0) throw new Error('판정 칸 효과는 이 도구가 재지 않습니다');
   const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut, variant: e.mutationWeight, named: e.namedWeight };
   const grades = RARITY_ORDER.filter(g => e.rarityWeight[g] !== undefined);
   if (grades.length > 0) {
@@ -142,8 +140,8 @@ export const recipeOf = (r: CookRecipe): Recipe => ({
   hours: COOK_KIND_RULES[r.kind].slotMs / HOUR_MS, axis: r.kind === 'lunch' ? 'idle' : 'manual',
 });
 
-/** 요리 콘텐츠의 레시피 중 이 도구가 효과를 재는 것. 판정 칸(영역 폭) 효과 레시피는 재지 않아 뺀다 */
-export const RECIPES: readonly Recipe[] = COOK_RECIPES.filter(r => r.effects.judgeWidth === undefined).map(recipeOf);
+/** 요리 콘텐츠의 레시피 */
+export const RECIPES: readonly Recipe[] = COOK_RECIPES.map(recipeOf);
 
 /** 레시피 기운 수량 덮어쓰기 — 레시피 id별 등급별 개수. 덮어쓴 레시피의 요구를 통째로 바꾼다(적지 않은 등급은 0) */
 export type CostOverrides = Readonly<Record<string, Partial<Record<RarityId, number>>>>;

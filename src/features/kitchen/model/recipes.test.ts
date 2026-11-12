@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, JUDGE_WIDTH_BONUS, RECIPES, recipeById } from '../../../game/content/cooking';
+import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../../game/content/cooking';
 import {
   recipeEffectLines, recipeGrade, recipeLabel, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
@@ -24,17 +24,14 @@ describe('종류별 레시피', () => {
     expect(recipesOfKind('bait').every(r => r.kind === 'bait')).toBe(true);
   });
 
-  it('판정 칸 폭 값이 0인 동안 판정 칸 미끼는 목록에서 숨긴다', () => {
-    expect(JUDGE_WIDTH_BONUS).toBe(0);
-    expect(recipesOfKind('bait').map(r => r.id)).not.toContain('cook-bait-judge');
-    expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length - 1);
+  it('두 탭의 레시피를 합하면 모든 레시피다', () => {
+    expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length);
   });
 
   it('등급 미끼만 등급이 있고 그 등급은 효과가 가중하는 가장 낮은 등급이다', () => {
     expect(recipeGrade(recipe('cook-bait-rare'))).toBe('rare');
     expect(recipeGrade(recipe('cook-bait-epic'))).toBe('epic');
     expect(recipeGrade(recipe('cook-bait-legendary'))).toBe('legendary');
-    expect(recipeGrade(recipe('cook-bait-judge'))).toBeNull();
     expect(recipeGrade(recipe('cook-bait-mutation'))).toBeNull();
     expect(recipeGrade(recipe('cook-lunch-rare'))).toBeNull(); // 도시락은 등급 가중이어도 등급 이름이 붙지 않는다
   });
@@ -66,10 +63,6 @@ describe('효과 줄', () => {
     expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+100%' }]);
   });
 
-  it('판정 칸 미끼는 GOOD 영역과 PERFECT 영역 폭을 퍼센트포인트로 낸다', () => {
-    expect(recipeEffectLines(recipe('cook-bait-judge')).map(l => l.label)).toEqual(['GOOD 영역 폭', 'PERFECT 영역 폭']);
-    expect(recipeEffectLines(recipe('cook-bait-judge')).every(l => l.value.endsWith('%p'))).toBe(true);
-  });
 });
 
 describe('필요와 보유', () => {
@@ -156,7 +149,7 @@ describe('수량과 보관함', () => {
     const lunch = selectRecipeView(seed({ items: energy(2000) }), R, 2, T0);
     expect(lunch.waitMs).toBe(2 * 60 * MIN);
     expect(lunch.slotMs).toBe(9 * 60 * MIN);
-    const bait = selectRecipeView(seed({ items: energy(2000, 2000) }), recipe('cook-bait-judge'), 3, T0);
+    const bait = selectRecipeView(seed({ items: energy(2000, 2000) }), recipe('cook-bait-mutation'), 3, T0);
     expect(bait.waitMs).toBe(3 * 15 * MIN);
     expect(bait.slotMs).toBe(30 * MIN);
   });
@@ -213,6 +206,6 @@ describe('레시피의 화면 이름', () => {
 
   it('등급이 없는 도시락과 미끼 요리는 이름 그대로다', () => {
     expect(recipeLabel(recipeById('cook-lunch-bite')!)).toBe('가루디야');
-    expect(recipeLabel(recipeById('cook-bait-judge')!)).toBe('메이스 미끼');
+    expect(recipeLabel(recipeById('cook-bait-mutation')!)).toBe('사프란 미끼');
   });
 });

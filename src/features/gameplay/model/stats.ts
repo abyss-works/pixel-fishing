@@ -164,7 +164,7 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 
 /** 슬롯 효과의 갈래 - 네임드 조우는 결투, 나머지는 낚시 */
 const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
-  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel', judgeWidth: 'fish',
+  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel',
 };
 
 export type BonusSource =
@@ -217,7 +217,6 @@ export function selectActiveBonuses(
     const slot = activeSlot(game, key, now);
     if (slot === null) continue;
     for (const effectKey of COOK_EFFECT_KEYS) {
-      // 판정 칸(미끼)이 영역 폭을 넓히는 값이 0이면 효과가 없어 줄을 내지 않는다
       if (!slot.recipe.effects[effectKey]) continue;
       const lines = recipeEffectLines({ ...slot.recipe, effects: { [effectKey]: slot.recipe.effects[effectKey] } });
       for (const effect of lines) {

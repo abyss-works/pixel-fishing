@@ -55,15 +55,10 @@ export interface CookEffects {
   mutationWeight?: number;
   /** 네임드 조우 가중치 증가율 */
   namedWeight?: number;
-  /** GOOD, PERFECT 영역 폭을 넓히는 값 */
-  judgeWidth?: number;
 }
 
 export const COOK_EFFECT_KEYS: readonly (keyof CookEffects)[] =
-  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'namedWeight', 'judgeWidth'];
-
-/** 판정 칸(미끼)이 영역 폭을 넓히는 값 — 열린 항목이라 밸런스 도구로 잰 뒤 정한다. 기본 0(효과 없음) */
-export const JUDGE_WIDTH_BONUS = 0;
+  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'namedWeight'];
 
 /** 그 등급부터 전설까지 */
 const gradesFrom = (min: RarityId): readonly RarityId[] => RARITY_ORDER.slice(RARITY_ORDER.indexOf(min));
@@ -93,8 +88,6 @@ export const RECIPES: readonly Recipe[] = [
     cost: { common: 50, rare: 5, epic: 1, legendary: 1 },
     effects: { biteWaitCut: 0.05, rarityWeight: { grades: gradesFrom('rare'), bonus: 0.05 } } },
   // 미끼 요리 — 미끼 슬롯, 수동 캐치에 적용
-  { id: 'cook-bait-judge', name: '메이스 미끼', kind: 'bait',
-    cost: { common: 50, rare: 5 }, effects: { judgeWidth: JUDGE_WIDTH_BONUS } },
   { id: 'cook-bait-mutation', name: '사프란 미끼', kind: 'bait',
     cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1 } },
   { id: 'cook-bait-rare', name: '롱페퍼 미끼', kind: 'bait',

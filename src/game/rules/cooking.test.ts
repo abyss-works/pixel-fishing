@@ -9,7 +9,7 @@ import type { RarityId } from '../content/rarity';
 import {
   cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyTargetOf, settleCooking, slotEffects, appliedSlots,
 } from './cooking';
-import { effectiveBite, powerZones } from './stats';
+import { effectiveBite } from './stats';
 import { SPOTS } from '../content/spots';
 import type { PowerZone } from './stats';
 import { catchTooSoon } from './pacing';
@@ -206,7 +206,7 @@ describe('cook', () => {
   it('보관함 상한(완성품과 조리 중인 수량의 합)을 넘기는 수량은 storage-full이다', () => {
     const full = rich({ items: { ...energy(1000, 1000, 1000, 1000), [R.id]: COOK_STORAGE_CAP } });
     expect(rejected(full, { type: 'cook', recipe: R.id, count: 1 })).toBe('storage-full');
-    const nine = rich({ items: { ...energy(1000, 1000, 1000, 1000), [recipeById('cook-bait-judge')!.id]: 7 } });
+    const nine = rich({ items: { ...energy(1000, 1000, 1000, 1000), [recipeById('cook-bait-mutation')!.id]: 7 } });
     expect(rejected(nine, { type: 'cook', recipe: R.id, count: COOK_STORAGE_CAP - 7 + 1 })).toBe('storage-full');
     expect(ok(nine, { type: 'cook', recipe: R.id, count: COOK_STORAGE_CAP - 7 }).state.cooking!.count).toBe(3);
   });
@@ -227,7 +227,7 @@ describe('cook', () => {
 
 describe('조리 진행과 완성', () => {
   const lunch = recipeById('cook-lunch-bite')!;
-  const miniBait = recipeById('cook-bait-judge')!;
+  const miniBait = recipeById('cook-bait-mutation')!;
   const W = COOK_KIND_RULES.lunch.waitMs;
   const cooking = (count: number, bonus: boolean[], recipe = lunch.id) =>
     seed({ cooking: { recipe, count, bonus, startedAt: T0 } });
@@ -277,7 +277,7 @@ describe('조리 진행과 완성', () => {
 
 describe('eat', () => {
   const lunch = recipeById('cook-lunch-bite')!;
-  const bait = recipeById('cook-bait-judge')!;
+  const bait = recipeById('cook-bait-mutation')!;
   it('도시락은 도시락 슬롯에 9시간, 미끼 요리는 미끼 슬롯에 30분 들어가고 1개 줄어든다', () => {
     const s = seed({ items: { [lunch.id]: 2, [bait.id]: 1 } });
     const a = ok(s, { type: 'eat', item: lunch.id });
@@ -340,7 +340,7 @@ describe('slotEffects', () => {
 
   it('슬롯이 비어 있으면 효과가 없다', () => {
     expect(slotEffects(seed(), T0, 'auto')).toEqual({
-      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, judgeWidth: 0,
+      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0,
     });
   });
   it('도시락은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만 적용한다', () => {
@@ -383,7 +383,6 @@ describe('slotEffects', () => {
       expect(e.biteWaitCut, r.id).toBe(r.effects.biteWaitCut ?? 0);
       expect(e.mutationWeight, r.id).toBe(r.effects.mutationWeight ?? 0);
       expect(e.namedWeight, r.id).toBe(r.effects.namedWeight ?? 0);
-      expect(e.judgeWidth, r.id).toBe(r.effects.judgeWidth ?? 0);
     }
   });
 });
@@ -406,21 +405,6 @@ describe('효과 합산', () => {
       variant: MUTATION_WEIGHTS.variant * 2, normal: MUTATION_WEIGHTS.normal,
     });
     expect(mutationWeightsOf(seed(), 'pond', 0)).toEqual(mutationWeightsOf(seed(), 'pond'));
-  });
-  it('판정 칸 효과는 이미 열린 GOOD, PERFECT 영역의 폭만 넓히고 닫힌 영역은 열지 않는다', () => {
-    const wide = { biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, judgeWidth: 8 };
-    const base = powerZones(seed({ rod: 1 }), 'pond'); // 요구 파워와 같음: GOOD만 열림
-    expect(base.red).toBe(0);
-    const widened = powerZones(seed({ rod: 1 }), 'pond', wide);
-    expect(widened.yellow).toBe(base.yellow + 8);
-    expect(widened.red).toBe(0);
-    const strong = powerZones(seed({ rod: 20 }), 'pond');
-    expect(strong.red).toBeGreaterThan(0);
-    const strongWide = powerZones(seed({ rod: 20 }), 'pond', wide);
-    expect(strongWide.red).toBe(Math.min(strong.red + 8, strongWide.yellow));
-    const short = powerZones(seed({ rod: 1 }), 'sthelena', wide);
-    expect(short.yellow).toBe(0);
-    expect(short.red).toBe(0);
   });
 });
 
