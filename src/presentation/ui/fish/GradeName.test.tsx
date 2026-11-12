@@ -21,7 +21,7 @@ describe('이름(등급) 표기', () => {
     expect(screen.getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
   });
 
-  it('기본 굵기는 보통이다', () => {
+  it('기본 꼴은 이름과 등급에 굵기 클래스를 붙이지 않는다', () => {
     render(<GradeName name="생명의 기운" grade="epic" />);
     expect(screen.getByText('생명의 기운').className).not.toMatch(/font-(bold|semibold|medium)/);
     expect(screen.getByText('(영웅)').className).not.toMatch(/font-(bold|semibold|medium)/);

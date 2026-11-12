@@ -26,7 +26,7 @@ describe('HeroHeader', () => {
     expect(title.compareDocumentPosition(lore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('설명 자리는 두 줄 높이의 최소 높이이고 높이를 고정하지 않아 더 길면 늘어난다', () => {
+  it('설명 자리는 최소 높이 클래스를 갖고 고정 높이 클래스를 갖지 않는다', () => {
     render(<HeroHeader title="가루디야" description="짧다" />);
     const cls = screen.getByText('짧다').className;
     expect(cls).toMatch(/min-h-/);

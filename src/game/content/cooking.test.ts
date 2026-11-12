@@ -214,7 +214,7 @@ describe('요리 설명', () => {
     for (const r of RECIPES) expect(r.description.trim().length, r.id).toBeGreaterThan(0);
   });
 
-  it('채택한 문안과 같다', () => {
+  it('레시피 설명은 정해 둔 문장과 같다', () => {
     expect(Object.fromEntries(RECIPES.map(r => [r.id, r.description]))).toEqual(DESCRIPTIONS);
   });
 });
