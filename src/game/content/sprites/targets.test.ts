@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SPRITE_KINDS, SPRITE_TARGETS, definedLayout, maxScale } from './targets';
+import { SPRITE_KINDS, SPRITE_TARGETS, definedLayout, presetScales } from './targets';
 
 describe('대상별 스프라이트 정의', () => {
   it('모든 대상 종류가 자기 종류 이름으로 정의돼 있다', () => {
@@ -52,8 +52,8 @@ describe('대상별 스프라이트 정의', () => {
     }
   });
 
-  it('최대 배율은 프리셋 가운데 가장 큰 값이다', () => {
-    expect(maxScale(definedLayout(SPRITE_TARGETS.fish))).toBe(6);
-    expect(maxScale(definedLayout(SPRITE_TARGETS.boat))).toBe(3);
+  it('프리셋 배율은 작은 것부터 중복 없이 나온다', () => {
+    expect(presetScales(definedLayout(SPRITE_TARGETS.fish))).toEqual([1, 3, 4, 6]);
+    expect(presetScales(definedLayout(SPRITE_TARGETS.boat))).toEqual([1, 2, 3]);
   });
 });

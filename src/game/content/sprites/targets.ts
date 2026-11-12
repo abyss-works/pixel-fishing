@@ -83,6 +83,7 @@ export function definedLayout(target: SpriteTarget): SpriteLayout {
   return target.layout;
 }
 
-export function maxScale(layout: SpriteLayout): number {
-  return Math.max(...Object.values(layout.presets).map(p => p.scale));
+/** 프리셋이 쓰는 배율을 작은 것부터, 중복 없이 */
+export function presetScales(layout: SpriteLayout): number[] {
+  return [...new Set(Object.values(layout.presets).map(p => p.scale))].sort((a, b) => a - b);
 }

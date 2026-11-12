@@ -4,10 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  CANDIDATE_IDS, buildCriteria, gridFromRows, judgeSet, judgeSprite, measure, percentile, readSpriteDir,
+  buildCriteria, gridFromRows, judgeSet, judgeSprite, measure, percentile, readSpriteDir,
 } from './styleMetrics';
 
 const EYE = '#0b1322', GLINT = '#f8fcff';
+
+/** 화풍 검사 회귀용 후보 — 남대서양에서 새로 만든 어종. 기준 집합에서 빠지고 검사 대상이 된다. */
+const CANDIDATE_IDS = [
+  'capeanchovy', 'capejack', 'capehake', 'snoek', 'kingfish', 'sthwrasse', 'sthpuffer',
+  'apollodamsel', 'ascensionangel', 'wahoo', 'galapagosshark', 'nighthake', 'eolgedom', 'bigeye',
+  'adamastor',
+];
 
 describe('measure', () => {
   it('같은 색 4방향 연결 영역과 1픽셀 점(눈 색 제외)을 센다', () => {
