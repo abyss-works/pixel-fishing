@@ -16,6 +16,13 @@ export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
   return rows[0].admin;
 }
 
+/** 사용자에게 비밀번호 로그인 수단(자격 계정)이 남아 있는가. 구글 연결을 마친 계정은 없다 */
+export async function hasPasswordAccount(db: Executor, uid: string): Promise<boolean> {
+  const { rows } = await db.execute<{ found: boolean }>(
+    sql`select exists (select 1 from auth.accounts where user_id = ${uid}::uuid and provider_id = 'credential') as found`);
+  return rows[0].found;
+}
+
 /** 조회문의 행을 order 순서의 JSON 배열로 읽는다. 행이 없으면 빈 배열이다 */
 async function jsonRows(db: Executor, query: SQL, order: SQL): Promise<unknown[]> {
   const { rows } = await db.execute<{ rows: unknown[] }>(
