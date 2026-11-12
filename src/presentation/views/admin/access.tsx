@@ -10,12 +10,12 @@ import Button from '../../ui/Button';
 import GoogleButton from '../../ui/GoogleButton';
 import Inset from '../../ui/Inset';
 import Note from '../../ui/Note';
+import { GOOGLE_BUTTON_LABEL } from '../../../features/account/model/googleFlow';
 import { useAdminAccess } from '../../../features/admin/service/useAdminAccess';
 import { useAdminSession } from '../../../features/admin/service/useAdminSession';
 import { useAdminSignInReturn } from '../../../features/admin/service/useAdminSignInReturn';
 import { AdminAuthCtx, useAdminAuth } from '../../../features/admin/service/accessContext';
 
-const GOOGLE_LABEL = 'Google로 계속하기';
 const SIGN_IN_GUIDE = '게임에서 관리자 계정에 연결한 구글 계정으로 로그인해요.\n게임의 로그인 상태와는 따로 유지돼요.';
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
@@ -63,7 +63,7 @@ function AdminSignIn() {
       <Note size="xs" className="my-0 leading-relaxed">{SIGN_IN_GUIDE}</Note>
       {notice && <Note size="xs" tone={notice.tone} className="my-0 leading-relaxed">{notice.text}</Note>}
       <div className="flex justify-center [&>button]:w-auto">
-        <GoogleButton disabled={busy} onClick={() => void start()}>{GOOGLE_LABEL}</GoogleButton>
+        <GoogleButton disabled={busy} onClick={() => void start()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
       </div>
     </>
   );

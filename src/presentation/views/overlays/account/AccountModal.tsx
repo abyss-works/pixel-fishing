@@ -8,7 +8,7 @@ import {
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
-import { googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
+import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { MIN_PASSWORD_LENGTH, passwordLongEnough } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
@@ -27,9 +27,6 @@ import TextLinkButton from '../../../ui/TextLinkButton';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
-
-// 구글 공식 버튼의 문구
-const GOOGLE_LABEL = 'Google로 계속하기';
 
 // 계정 관리 창 - 계정 연결과 로그인 상태, 로그아웃, 계정 삭제, 약관과 처리방침 링크.
 // 새 계정의 로그인 수단은 구글 하나다: 게스트는 구글 계정을 연결해 같은 진행으로 영구 계정이 된다.
@@ -126,7 +123,7 @@ export default function AccountModal({
       <SectionTitle>구글 계정 연결</SectionTitle>
       <Note>구글 계정을 연결하면 다음부터는 구글 계정으로 로그인해요.</Note>
       <Note tone="warn">연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.</Note>
-      <GoogleButton disabled={placeholder || busy || offline} tabIndex={placeholder ? -1 : undefined} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
+      <GoogleButton disabled={placeholder || busy || offline} tabIndex={placeholder ? -1 : undefined} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
     </div>
   );
 
@@ -163,7 +160,7 @@ export default function AccountModal({
 
       {guest ? (
         <>
-          <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
+          <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
           <Note size="xs" className="text-center mt-2 mb-0">
             계속하면 만 14세 이상이며 <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>에 동의하고{' '}
             <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>을 확인한 것으로 봐요.
