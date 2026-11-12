@@ -40,12 +40,16 @@ export function guestActionVerdict(action: GameAction): GuestVerdict {
 
 /**
  * 버릴 진행이 없는 게스트인가. 기준은 누적 낚은 수(도감의 모든 종과 폼의 낚은 수 합) 0이다.
- * 합이 숫자로 읽히지 않으면 진행이 있는 것으로 본다.
+ * 낚은 수가 숫자로 읽히지 않는 행이 하나라도 있으면 진행이 있는 것으로 본다.
  */
 export function guestHasNoProgress(state: GameState): boolean {
   let caught = 0;
   for (const forms of Object.values(state.dex)) {
-    for (const record of Object.values(forms)) caught += record?.count ?? 0;
+    for (const record of Object.values(forms)) {
+      const count = record?.count;
+      if (typeof count !== 'number' || !Number.isFinite(count)) return false;
+      caught += count;
+    }
   }
   return caught === 0;
 }

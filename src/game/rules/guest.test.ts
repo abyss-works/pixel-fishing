@@ -117,4 +117,13 @@ describe('버릴 진행이 없는 게스트 (guestHasNoProgress)', () => {
     const odd = withDex({ carp: { normal: { count: Number.NaN, maxSize: null, first: null } } });
     expect(guestHasNoProgress(odd)).toBe(false);
   });
+
+  it('낚은 수가 없거나 숫자가 아닌 행이 하나라도 있으면 다른 행이 0이어도 진행이 있는 것으로 본다', () => {
+    const zero = { count: 0, maxSize: null, first: null };
+    const noCount = { maxSize: null, first: null } as unknown as GameState['dex'][string][keyof GameState['dex'][string]];
+    const text = { count: '0', maxSize: null, first: null } as unknown as typeof noCount;
+    expect(guestHasNoProgress(withDex({ carp: { normal: zero }, trout: { normal: noCount } }))).toBe(false);
+    expect(guestHasNoProgress(withDex({ carp: { normal: zero }, trout: { normal: text } }))).toBe(false);
+    expect(guestHasNoProgress(withDex({ carp: { normal: undefined } }))).toBe(false);
+  });
 });
