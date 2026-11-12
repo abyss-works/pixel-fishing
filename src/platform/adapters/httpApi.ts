@@ -153,10 +153,10 @@ class HttpAdmin implements AdminApi {
         provider: 'google', callbackURL: returnUrl, errorCallbackURL: returnUrl, disableRedirect: true,
       });
     } catch {
-      return { ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' };
+      return { ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n네트워크를 확인해 주세요.' };
     }
-    if (res.status === 429) return { ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' };
-    if (!res.ok) return { ok: false, msg: `로그인하지 못했어요. (${res.status})` };
+    if (res.status === 429) return { ok: false, msg: '요청이 너무 잦아요.\n잠시 뒤 다시 시도해 주세요.' };
+    if (!res.ok) return { ok: false, msg: `구글 계정 선택 화면을 열지 못했어요.\n서버에서 ${res.status} 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.` };
     const data = await res.json().catch(() => null) as { url?: string } | null;
     if (!data?.url) return { ok: false, msg: '구글 인증 주소를 받지 못했어요.' };
     // 세션 저장소를 쓸 수 없는 브라우저는 돌아왔을 때 이 탭의 흐름인지 알 수 없으므로 시작하지 않는다

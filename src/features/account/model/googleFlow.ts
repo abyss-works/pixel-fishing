@@ -51,14 +51,18 @@ export const googleStartFailedText = '구글 계정 선택 화면을 열지 못�
 /** 구글 로그인에서 계정을 고르지 않고 돌아왔을 때의 알림 */
 export const SIGN_IN_CANCELED_TEXT = '구글 계정으로 로그인하지 않았어요.';
 
-/** 원인을 모르는 구글 로그인 실패의 알림 */
-export const SIGN_IN_FAILED_TEXT = '구글 계정으로 로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+/** 원인을 모르는 구글 로그인 실패를 알리는 두 문장. 게임 토스트는 한 줄로, 관리자 로그인 화면은 문장마다 줄을 나눠 쓴다 */
+export const SIGN_IN_FAILED_SENTENCES = ['구글 계정으로 로그인하지 못했어요.', '잠시 뒤 다시 시도해 주세요.'] as const;
+export const SIGN_IN_FAILED_TEXT = SIGN_IN_FAILED_SENTENCES.join(' ');
+
+/** 구글 계정과 주소가 같은 이메일 계정이 있다는 사실의 안내 첫 문장. 게임 안내와 관리자 로그인 화면이 함께 쓴다 */
+export const EMAIL_ACCOUNT_EXISTS_LEAD = '이 구글 계정과 주소가 같은 이메일 계정이 있어요.';
 
 const FAIL_TITLE = '구글 계정 연결';
 
 const NOTICE_BODY = {
   linkedElsewhere: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
-  emailAccountExists: '이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.',
+  emailAccountExists: `${EMAIL_ACCOUNT_EXISTS_LEAD}\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.`,
   alreadyConnected: '고른 구글 계정은 연결하지 않았어요.\n이 계정에는 이미 다른 구글 계정이 연결돼 있어요.',
   signupDisabled: '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
   unableToLink: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',

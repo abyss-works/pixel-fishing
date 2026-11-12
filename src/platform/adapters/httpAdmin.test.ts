@@ -150,11 +150,17 @@ describe('HttpAdmin', () => {
       fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '구글 인증 주소를 받지 못했어요.' });
       fetchMock.mockResolvedValue(new Response('', { status: 429 }));
-      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' });
+      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '요청이 너무 잦아요.\n잠시 뒤 다시 시도해 주세요.' });
       fetchMock.mockResolvedValue(new Response('', { status: 502 }));
-      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. (502)' });
+      await expect(admin.signIn()).resolves.toEqual({
+        ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n서버에서 502 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.',
+      });
+      fetchMock.mockResolvedValue(new Response('', { status: 500 }));
+      await expect(admin.signIn()).resolves.toEqual({
+        ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n서버에서 500 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.',
+      });
       fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' });
+      await expect(admin.signIn()).resolves.toEqual({ ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n네트워크를 확인해 주세요.' });
       expect(assign).not.toHaveBeenCalled();
     });
 
