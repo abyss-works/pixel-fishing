@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState } from '../rules/logic';
 import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
+import { V_PORT } from '../world/regions/village';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
 
@@ -343,5 +344,82 @@ describe('GameFieldEngine 도시락 입질 단축', () => {
   });
   it('수동 캐치 뒤의 대기에는 도시락 입질 단축을 넣지 않는다', () => {
     expect(secondWaitMs(true, 'normal')).toBe(secondWaitMs(false, 'normal'));
+  });
+});
+
+describe('GameFieldEngine 게스트의 포구 출항', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  // 포구 트리거 바로 위 부두에서 시작한다
+  const aboveHarbor = { x: V_PORT.x + V_PORT.w / 2, y: V_PORT.y - 1 };
+
+  function village({ guest, boat }: { guest: boolean; boat: number }) {
+    const game = { ...newState(), boat };
+    const engine = new GameFieldEngine('village', game, [], aboveHarbor);
+    const onScene = vi.fn();
+    const events: FieldEvent[] = [];
+    engine.updateContext(game, false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: event => { events.push(event); },
+      onScene,
+      guest,
+    });
+    const frame = (now: number, last: number) =>
+      (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, now, last);
+    return { engine, onScene, events, frame };
+  }
+
+  it('배가 있는 게스트는 장소를 바꾸지 않고 포구 앞으로 되밀리며 막혔다고 알린다', () => {
+    const { engine, onScene, events, frame } = village({ guest: true, boat: 1 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    expect(onScene).not.toHaveBeenCalled();
+    expect(engine.getPosition()).toEqual(aboveHarbor);
+    expect(events).toEqual([{ type: 'guest-blocked' }]);
+  });
+
+  it('막힌 채 계속 밀어도 알림은 한 번이고, 한 번 떨어졌다 다시 닿으면 다시 알린다', () => {
+    const { engine, events, frame } = village({ guest: true, boat: 1 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    frame(1050, 1000);
+    frame(1100, 1050);
+    expect(events.filter(event => event.type === 'guest-blocked')).toHaveLength(1);
+    engine.releaseKey('ArrowDown');
+    engine.handleKeyDown('ArrowUp', noop);
+    frame(1150, 1100);
+    engine.releaseKey('ArrowUp');
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1200, 1150);
+    frame(1250, 1200);
+    expect(events.filter(event => event.type === 'guest-blocked')).toHaveLength(2);
+  });
+
+  it('배가 없는 게스트는 배 없음 안내만 받고 게스트 막힘은 알리지 않는다', () => {
+    const { engine, onScene, events, frame } = village({ guest: true, boat: 0 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    expect(onScene).not.toHaveBeenCalled();
+    expect(events).toEqual([{ type: 'trigger-blocked', message: expect.stringContaining('배가 필요해요') }]);
+  });
+
+  it('게스트가 아니면 막히지 않고 바다로 나간다', () => {
+    const { engine, onScene, events, frame } = village({ guest: false, boat: 1 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    expect(onScene).toHaveBeenCalledTimes(1);
+    expect(onScene.mock.calls[0][0]).toEqual({ kind: 'region', id: 'world' });
+    expect(events).toEqual([]);
+  });
+
+  it('게스트의 집 출입은 막지 않는다', () => {
+    const game = { ...newState(), boat: 1 };
+    const engine = new GameFieldEngine('village', game, [], { x: 130, y: 90 });
+    const onScene = vi.fn();
+    engine.updateContext(game, false, { dispatch: () => ({ status: 'rejected', error: 'bad-request' }), onEvent: noop, onScene, guest: true });
+    engine.handleKeyDown('ArrowUp', noop);
+    (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, 1000, 950);
+    expect(onScene).toHaveBeenCalledTimes(1);
+    expect(onScene.mock.calls[0][0]).toEqual({ kind: 'base', id: 'home' });
   });
 });

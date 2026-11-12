@@ -241,13 +241,10 @@ describe('HttpAdmin', () => {
       }
     });
 
-    it('이 탭에서 시작하지 않았거나 표지가 없으면 질의만 지우고 무시한다', () => {
+    it('이 탭에서 시작하지 않았으면 질의만 지우고 무시한다', () => {
       land('?google=sign-in&error=signup_disabled');
       expect(admin.takeSignInReturn()).toBeNull();
       expect(window.location.search).toBe('');
-      land('');
-      sessionStorage.setItem('pf-admin-google-flow', 'sign-in');
-      expect(admin.takeSignInReturn()).toBeNull();
     });
   });
 

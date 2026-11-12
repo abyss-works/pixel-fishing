@@ -5,14 +5,18 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 
-const state = vi.hoisted(() => ({ sessionUid: 'guest-uid', nextUid: 'guest-uid' }));
+const state = vi.hoisted(() => ({
+  sessionUid: 'guest-uid',
+  nextUid: 'guest-uid',
+  lookups: [] as Array<{ status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' }>,
+}));
 
 vi.mock('../../../platform/api', () => ({
   api: {
     auth: {
       isConfigured: true,
       ensureSession: async () => state.sessionUid,
-      currentAccount: async () => null,
+      currentAccount: async () => state.lookups.shift() ?? { status: 'guest' },
       getSession: async () => ({ uid: state.nextUid, email: null }),
       takePasswordResetLanding: () => null,
       accountNudgedDay: () => null,
@@ -25,6 +29,7 @@ vi.mock('../../../platform/observability', () => ({ identifyUser: () => {} }));
 
 import { useAccount } from './useAccount';
 import { useSession } from './session';
+import { isConfirmedGuest } from './accountActions';
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -44,6 +49,7 @@ describe('계정 교체', () => {
   beforeEach(() => {
     state.sessionUid = 'guest-uid';
     state.nextUid = 'guest-uid';
+    state.lookups = [];
   });
   afterEach(cleanup);
 
@@ -60,5 +66,55 @@ describe('계정 교체', () => {
     await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
     await act(() => hook.result.current.account.onAuthChanged());
     expect(props.adoptAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe('계정 확인 상태', () => {
+  beforeEach(() => {
+    state.sessionUid = 'guest-uid';
+    state.nextUid = 'guest-uid';
+    state.lookups = [];
+  });
+  afterEach(cleanup);
+
+  const confirmed = (h: ReturnType<typeof setup>['hook']) =>
+    isConfirmedGuest(h.result.current.account.account, h.result.current.account.accountChecked);
+
+  it('확인 전에는 게스트로 확정하지 않는다', () => {
+    const { hook } = setup();
+    expect(confirmed(hook)).toBe(false);
+  });
+
+  it('확인 결과가 게스트이면 게스트로 확정한다', async () => {
+    state.lookups = [{ status: 'guest' }];
+    const { hook } = setup();
+    await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));
+    expect(confirmed(hook)).toBe(true);
+  });
+
+  it('확인 결과가 계정이면 게스트로 확정하지 않는다', async () => {
+    state.lookups = [{ status: 'account', email: 'a@example.com' }];
+    const { hook } = setup();
+    await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));
+    expect(hook.result.current.account.account).toBe('a@example.com');
+    expect(confirmed(hook)).toBe(false);
+  });
+
+  it('확인에 실패하면 게스트로 확정하지 않는다', async () => {
+    state.lookups = [{ status: 'failed' }];
+    const { hook } = setup();
+    await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
+    await act(async () => {});
+    expect(hook.result.current.account.accountChecked).toBe(false);
+    expect(confirmed(hook)).toBe(false);
+  });
+
+  it('확인에 실패한 뒤 다시 확인해 게스트로 밝혀지면 확정한다', async () => {
+    state.lookups = [{ status: 'failed' }, { status: 'guest' }];
+    const { hook } = setup();
+    await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
+    await act(async () => {});
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(confirmed(hook)).toBe(true);
   });
 });

@@ -152,7 +152,7 @@ describe('AdminGate', () => {
 });
 
 describe('AdminAuthProvider', () => {
-  it('성공으로 돌아와 곧바로 관리자로 확인돼도 마운트 때 복귀를 한 번 읽어 주소를 정리한다', async () => {
+  it('성공으로 돌아와 곧바로 관리자로 확인돼도 마운트 때 복귀를 한 번 읽는다', async () => {
     const take = vi.spyOn(api.admin, 'takeSignInReturn').mockReturnValue({ error: null });
     vi.spyOn(api.admin, 'access').mockResolvedValue({ kind: 'granted', uid: UID });
     render(

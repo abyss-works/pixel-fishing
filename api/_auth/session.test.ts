@@ -1,8 +1,13 @@
 // 인증 인스턴스의 필수 환경 변수 검사 — 하나라도 없으면 기본값 없이 실패한다.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const REQUIRED = ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] as const;
 const saved: Record<string, string | undefined> = {};
+
+// 인증 라이브러리를 처음 불러오는 비용(수 초)을 테스트 시간 밖에서 치른다. 이후 테스트의 동적 import는 변환된 모듈과 외부 패키지가 캐시에 있어 짧다
+beforeAll(async () => {
+  await import('./session.js');
+});
 
 beforeEach(() => {
   vi.resetModules();

@@ -1,6 +1,6 @@
 // 구글 인증 복귀의 분기 — 어느 표지와 오류 코드에서 무엇을 보이고 어디로 이어지는가.
 import { describe, expect, it } from 'vitest';
-import { GOOGLE_TAG, OVERWRITE_COPY, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
+import { GOOGLE_TAG, OVERWRITE_COPY, emailSignInFailureLines, googleOutcome, loginMethodOf, overwriteCanceledText } from './googleFlow';
 
 const back = (tag: string, error: string | null = null) => googleOutcome({ tag, error });
 const bodyOf = (o: ReturnType<typeof back>) => (o as { body: string }).body;
@@ -51,7 +51,7 @@ describe('구글 연결 복귀', () => {
 
   it.each(['email_account_exists', 'account_not_linked'])('%s는 이메일 계정으로 로그인한 뒤 연결하라는 안내다', code => {
     expect(bodyOf(back(GOOGLE_TAG.linkGuest, code))).toBe(
-      '이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n계정 관리의 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.');
+      '이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n계정 관리의 기존 이메일 계정으로 로그인을 눌러 그 계정으로 로그인해 주세요.\n그다음 같은 창에서 구글 계정을 연결해 주세요.');
   });
 
   it('이미 구글을 연결한 계정이 다른 구글을 고르면 안내한다', () => {
@@ -115,5 +115,30 @@ describe('덮어쓰기 확인 창 문구', () => {
       confirm: '로그인',
       cancel: '되돌아가기',
     });
+  });
+});
+
+describe('이메일 로그인 실패 안내', () => {
+  it('인증 실패는 새 계정을 만들 수 없다는 사실과 구글 버튼 안내를 세 줄로 알린다', () => {
+    expect(emailSignInFailureLines('invalid_credentials')).toEqual(
+      ['로그인하지 못했어요.', '이메일로는 새 계정을 만들 수 없어요.', '이메일 계정이 없거나 이미 구글 계정을 연결했다면 Google로 계속하기를 눌러 주세요.']);
+  });
+
+  it('요청 과다는 잠시 뒤 다시 시도하라고 알린다', () => {
+    expect(emailSignInFailureLines('over_email_send_rate_limit'))
+      .toEqual(['로그인하지 못했어요.', '요청이 너무 잦아요.', '잠시 뒤 다시 시도해 주세요.']);
+  });
+
+  it('이메일 형식 오류는 두 줄이다', () => {
+    expect(emailSignInFailureLines('validation_failed')).toEqual(['로그인하지 못했어요.', '이메일 형식을 확인해 주세요.']);
+  });
+
+  it('서버에 닿지 못한 실패는 연결 실패를 알린다', () => {
+    expect(emailSignInFailureLines('network'))
+      .toEqual(['로그인하지 못했어요.', '서버에 연결하지 못했어요.', '잠시 뒤 다시 시도해 주세요.']);
+  });
+
+  it.each([undefined, '', 'unknown_code', 'weak_password'])('그 밖의 실패(%s)는 두 줄이다', code => {
+    expect(emailSignInFailureLines(code)).toEqual(['로그인하지 못했어요.', '잠시 뒤 다시 시도해 주세요.']);
   });
 });

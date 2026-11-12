@@ -62,9 +62,7 @@ function AdminSignIn() {
     <>
       <Note size="xs" className="my-0 leading-relaxed">{SIGN_IN_GUIDE}</Note>
       {notice && <Note size="xs" tone={notice.tone} className="my-0 leading-relaxed">{notice.text}</Note>}
-      <div className="flex justify-center [&>button]:w-auto">
-        <GoogleButton disabled={busy} onClick={() => void start()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
-      </div>
+      <GoogleButton disabled={busy} onClick={() => void start()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
     </>
   );
 }

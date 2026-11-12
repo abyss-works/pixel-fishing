@@ -31,7 +31,9 @@ import StatsModal from '../overlays/stats/StatsModal';
 import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
-import { isGuest } from '../../../features/account/service/accountActions';
+import { createGuestBlockedNotice } from './guestBlockedNotice';
+import { isConfirmedGuest, isGuest } from '../../../features/account/service/accountActions';
+import type { GuestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
@@ -89,7 +91,13 @@ interface GameViewProps {
   log: Msg[];
   syncLabel: string | null;
   syncState: string;
+  /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
+  guestProgress: GuestProgress;
+  /** 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽어 버려질 진행이 있는지 판정한다. 읽기에 실패하면 진행 있음이다 */
+  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
+  /** 계정 확인이 끝났는가 — 끝나기 전의 계정 없음은 게스트가 아니라 미확인이다 */
+  accountChecked: boolean;
   uid: string | null;
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
@@ -148,6 +156,7 @@ export default function GameView(props: GameViewProps) {
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
   const guest = isGuest(props.account);
+  const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
@@ -176,6 +185,8 @@ export default function GameView(props: GameViewProps) {
     const ids = new Set((guild?.members ?? []).filter(m => m.leftAt === null && m.uid !== chat.you).map(m => m.uid));
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
+
+  const onGuestBlocked = createGuestBlockedNotice({ accountOpen, openAccount: () => setAccountOpen(true), setToast: props.setToast });
 
   const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
 
@@ -280,7 +291,7 @@ export default function GameView(props: GameViewProps) {
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={guest} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onWarmup={props.onWarmup} paused={encounter !== null || props.blocker != null}
+                 onScene={go} onWarmup={props.onWarmup} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
                  locked={trip !== null} statusSlot={statusSlot} />
         )}
@@ -341,9 +352,9 @@ export default function GameView(props: GameViewProps) {
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
         )}
-        <GoogleReturn setToast={props.setToast} reopenAccount={() => setAccountOpen(true)} />
+        <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => setAccountOpen(true)} />
         {accountOpen && (
-          <AccountModal setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account}
+          <AccountModal setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
         )}
         {playersOpen && atSea && (
@@ -374,7 +385,7 @@ export default function GameView(props: GameViewProps) {
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} dispatch={props.dispatch} setToast={props.setToast}
-        syncLabel={props.syncLabel} syncState={props.syncState}
+        syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
         account={props.account} uid={props.uid} onAuthChanged={props.onAuthChanged}
         nickname={props.nickname} onRename={props.onRename}
       />

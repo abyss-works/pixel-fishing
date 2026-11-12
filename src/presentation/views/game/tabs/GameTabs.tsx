@@ -6,6 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
+import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
@@ -35,6 +36,8 @@ interface GameTabsProps {
   setToast: Notify;
   syncLabel: string | null;
   syncState: string;
+  guestProgress: GuestProgress;
+  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
@@ -124,7 +127,7 @@ export default function GameTabs(props: GameTabsProps) {
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab dispatch={props.dispatch} setToast={props.setToast}
-                     syncLabel={props.syncLabel} syncState={props.syncState}
+                     syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
                      account={props.account} uid={props.uid}
                      nickname={props.nickname} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
