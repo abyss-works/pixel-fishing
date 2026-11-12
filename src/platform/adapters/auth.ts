@@ -47,14 +47,12 @@ export async function sessionUid(): Promise<string | null> {
   }
 }
 
-// ---------- 계정 로그인 (v0.4.0) ----------
-// 게스트(익명)는 유지하고, 가입 = 익명 계정에 이메일 자격을 붙이는 "승격"이다 —
-// uid가 안 바뀌므로 세이브/DB 전부 무변경. 로그인은 다른 계정으로 갈아타는 것.
+// ---------- 계정 로그인 ----------
+// 새 계정의 로그인 수단은 구글 하나다. 게스트(익명)는 같은 uid에 구글 계정을 붙여(연결) 영구 계정이 된다.
+// 이메일과 비밀번호는 이미 있는 계정의 로그인에만 남아 있다.
 
-// 인증 서버 오류 코드 → 화면이 분기에 쓰는 코드. 통합 계정 폼(v0.4.2)이 email_exists 분기에 쓴다
+// 인증 서버 오류 코드 → 화면이 분기에 쓰는 코드
 const CODE: Record<string, string> = {
-  USER_ALREADY_EXISTS: 'email_exists',
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: 'email_exists',
   INVALID_EMAIL_OR_PASSWORD: 'invalid_credentials',
   PASSWORD_TOO_SHORT: 'weak_password',
   INVALID_EMAIL: 'validation_failed',
@@ -63,7 +61,6 @@ const CODE: Record<string, string> = {
 
 // 화면 코드 → 유저가 행동할 수 있는 한국어 안내 (코드 없으면 원문 노출)
 const AUTH_MSG: Record<string, string> = {
-  email_exists: '이미 가입된 이메일이에요.',
   weak_password: '비밀번호가 너무 짧아요. 6자 이상으로 입력해 주세요.',
   invalid_credentials: '이메일 또는 비밀번호가 틀렸어요.',
   validation_failed: '이메일 형식을 확인해 주세요.',
@@ -93,18 +90,70 @@ export async function currentAccount(): Promise<string | null> {
   return u && !u.isAnonymous && u.email ? u.email : null;
 }
 
-// 가입 = 익명 → 영구 승격. 서버의 승격 경로가 같은 uid에 이메일 자격을 붙인다
-export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
-  if (!authClient) return NOT_CLOUD;
-  const { error } = await authClient.$fetch('/anonymous/upgrade', { method: 'POST', body: { email, password } });
-  return error ? authErr(error) : { ok: true };
-}
-
-// 다른 계정으로 로그인 — 현재 기기의 게스트 진행은 버려진다 (호출 전 UI가 경고+백업)
+// 이미 있는 이메일 계정으로 로그인 — 현재 기기의 게스트 진행은 버려진다 (호출 전 UI가 확인을 받는다)
 export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
   if (!authClient) return NOT_CLOUD;
   const { error } = await authClient.signIn.email({ email, password });
   return error ? authErr(error) : { ok: true };
+}
+
+// ---------- 구글 연결과 로그인 ----------
+// 구글 인증 화면은 서버가 만든 주소로 전체 페이지를 이동해 거친다. 돌아올 때는 앱 루트에 표지 질의가 붙고,
+// 실패하면 서버가 같은 주소에 error=<코드>를 더한다. 표지 값은 호출한 쪽이 정하며 이 모듈은 뜻을 모른다.
+
+/** 구글 인증에서 돌아온 주소를 알아보는 질의 이름 */
+export const GOOGLE_RETURN_PARAM = 'google';
+const GOOGLE_ENDPOINT = { link: '/link-social', 'sign-in': '/sign-in/social' } as const;
+
+/** 연결(link) 또는 확인 뒤 로그인(sign-in). 표지(tag)는 돌아온 주소에 실려 돌아온다 */
+export type GoogleStart = keyof typeof GOOGLE_ENDPOINT;
+
+/** 구글 인증이 끝나고 돌아올 같은 출처 주소 */
+export function googleReturnUrl(origin: string, tag: string): string {
+  return `${origin}/?${GOOGLE_RETURN_PARAM}=${encodeURIComponent(tag)}`;
+}
+
+/** 돌아온 주소의 질의에서 표지와 오류 코드를 읽는다. rest는 두 질의를 지운 나머지다. 표지가 없으면 구글 복귀가 아니다 */
+export function parseGoogleLanding(search: string): { tag: string; error: string | null; rest: string } | null {
+  const params = new URLSearchParams(search);
+  const tag = params.get(GOOGLE_RETURN_PARAM);
+  if (!tag) return null;
+  const error = params.get('error');
+  params.delete(GOOGLE_RETURN_PARAM);
+  params.delete('error');
+  const rest = params.toString();
+  return { tag, error: error || null, rest: rest ? `?${rest}` : '' };
+}
+
+/** 구글 인증 화면으로 이동한다. 주소를 받지 못하면 이동하지 않고 실패로 알린다 */
+export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<AuthResult> {
+  if (!authClient) return NOT_CLOUD;
+  const returnUrl = googleReturnUrl(window.location.origin, tag);
+  const { data, error } = await authClient.$fetch<{ url?: string }>(GOOGLE_ENDPOINT[start], {
+    method: 'POST',
+    body: { provider: 'google', callbackURL: returnUrl, errorCallbackURL: returnUrl, disableRedirect: true },
+  });
+  if (error) return authErr(error);
+  if (!data?.url) return { ok: false, msg: '구글 인증 주소를 받지 못했어요.' };
+  window.location.assign(data.url);
+  return { ok: true };
+}
+
+/** 구글 인증에서 돌아왔는가. 부팅 때 한 번 읽고, 두 질의는 주소에서 바로 지운다(새로고침으로 다시 읽히지 않게) */
+export function takeGoogleLanding(): { tag: string; error: string | null } | null {
+  if (!authClient) return null;
+  const landing = parseGoogleLanding(window.location.search);
+  if (!landing) return null;
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${landing.rest}${window.location.hash}`);
+  return { tag: landing.tag, error: landing.error };
+}
+
+/** 이 계정에 붙은 로그인 수단의 공급자 이름(google, credential). 조회하지 못하면 null */
+export async function accountProviders(): Promise<string[] | null> {
+  if (!authClient) return null;
+  const { data, error } = await authClient.listAccounts();
+  if (error || !data) return null;
+  return data.map(a => a.providerId);
 }
 
 export async function signOutAccount(): Promise<void> {
@@ -126,6 +175,8 @@ let resetToken: string | null = null;
 export function takePasswordResetLanding(): 'ready' | 'invalid' | null {
   if (!authClient) return null;
   const url = new URL(window.location.href);
+  // 구글 인증에서 돌아온 주소의 error 질의는 재설정 링크의 오류가 아니다
+  if (url.searchParams.has(GOOGLE_RETURN_PARAM)) return null;
   const token = url.searchParams.get('token');
   const error = url.searchParams.get('error');
   if (!token && !error) return null;

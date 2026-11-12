@@ -7,8 +7,10 @@ import {
   sessionUid,
   ensureSession,
   currentAccount,
-  signUpWithEmail,
   signInWithEmail,
+  startGoogleAuth,
+  takeGoogleLanding,
+  accountProviders,
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
@@ -32,8 +34,14 @@ class HttpAuth implements AuthApi {
   takePasswordResetLanding(): 'ready' | 'invalid' | null {
     return takePasswordResetLanding();
   }
-  signUp(email: string, password: string): Promise<AuthResult> {
-    return signUpWithEmail(email, password);
+  startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
+    return startGoogleAuth(start, tag);
+  }
+  takeGoogleLanding(): { tag: string; error: string | null } | null {
+    return takeGoogleLanding();
+  }
+  accountProviders(): Promise<string[] | null> {
+    return accountProviders();
   }
   signIn(email: string, password: string): Promise<AuthResult> {
     return signInWithEmail(email, password);

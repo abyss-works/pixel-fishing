@@ -23,8 +23,14 @@ class LocalAuth implements AuthApi {
   takePasswordResetLanding(): 'ready' | 'invalid' | null {
     return null;
   }
-  async signUp(): Promise<AuthResult> {
+  async startGoogle(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
+  }
+  takeGoogleLanding(): { tag: string; error: string | null } | null {
+    return null;
+  }
+  async accountProviders(): Promise<string[] | null> {
+    return null;
   }
   async signIn(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
