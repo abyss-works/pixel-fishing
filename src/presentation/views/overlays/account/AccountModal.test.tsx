@@ -6,6 +6,8 @@ const actions = vi.hoisted(() => ({
   connectGoogle: vi.fn(),
   signInAccount: vi.fn(),
   method: 'guest' as 'guest' | 'email' | 'google' | null,
+  failed: false,
+  retry: vi.fn(),
 }));
 
 vi.mock('../../../../features/account/service/accountActions', async importOriginal => ({
@@ -15,7 +17,7 @@ vi.mock('../../../../features/account/service/accountActions', async importOrigi
   signInAccount: actions.signInAccount,
 }));
 vi.mock('../../../../features/account/service/useLoginMethod', () => ({
-  useLoginMethod: () => actions.method,
+  useLoginMethod: () => ({ method: actions.method, failed: actions.failed, retry: actions.retry }),
 }));
 
 import AccountModal from './AccountModal';
@@ -25,6 +27,8 @@ beforeEach(() => {
   actions.connectGoogle.mockResolvedValue({ ok: true });
   actions.signInAccount.mockReset();
   actions.signInAccount.mockResolvedValue({ ok: true });
+  actions.failed = false;
+  actions.retry.mockReset();
 });
 afterEach(cleanup);
 
@@ -49,7 +53,7 @@ describe('게스트의 구글 연결', () => {
     const { setToast } = open(null, 'guest');
     const button = screen.getByRole('button', { name: 'Google로 계속하기' });
     fireEvent.click(button);
-    await waitFor(() => expect(setToast).toHaveBeenCalledWith('구글 인증 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
   });
 
@@ -136,5 +140,18 @@ describe('로그인 방식별 구성', () => {
     open('old@example.com', null);
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+  });
+
+  it('읽는 중에는 실패 안내를 보이지 않는다', () => {
+    open('old@example.com', null);
+    expect(screen.queryByText(/불러오지 못했어요/)).toBeNull();
+  });
+
+  it('수단 조회가 실패하면 안내와 다시 시도 버튼을 보이고 누르면 다시 읽는다', () => {
+    actions.failed = true;
+    open('old@example.com', null);
+    expect(screen.getByText('로그인 방식을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(actions.retry).toHaveBeenCalledTimes(1);
   });
 });

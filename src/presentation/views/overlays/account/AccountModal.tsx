@@ -21,6 +21,7 @@ import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
+import Skeleton from '../../../ui/Skeleton';
 import TextInput from '../../../ui/TextInput';
 import TextLinkButton from '../../../ui/TextLinkButton';
 import { cx } from '../../../ui/cx';
@@ -48,7 +49,8 @@ export default function AccountModal({
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { confirm, input, dialogs } = useDialogs();
-  const method = useLoginMethod(account);
+  const { method, failed, retry } = useLoginMethod(account);
+  const guest = method === 'guest';
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 폼만 막는다.
   const offline = !isAccountConfigured();
 
@@ -60,7 +62,7 @@ export default function AccountModal({
   // 구글 인증 화면으로 이동한다. 이동하면 이 페이지는 떠나므로 성공 뒤에는 busy를 풀지 않는다.
   const connect = async () => {
     setBusy(true);
-    const r = await connectGoogle(account === null ? 'guest' : 'email');
+    const r = await connectGoogle(guest ? 'guest' : 'email');
     if (!r.ok) { setToast(googleStartFailedText, 'warn'); setBusy(false); }
   };
 
@@ -118,6 +120,15 @@ export default function AccountModal({
     </div>
   );
 
+  const connectSection = (
+    <div className="min-h-40">
+      <SectionTitle>구글 계정 연결</SectionTitle>
+      <Note>구글 계정을 연결하면 다음부터는 구글 계정으로 로그인해요.</Note>
+      <Note tone="warn">연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.</Note>
+      <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
+    </div>
+  );
+
   const emailForm = (
     <div className="flex flex-col gap-2 mt-2">
       <Note className="my-0">이미 만든 이메일 계정으로만 로그인할 수 있어요.<br />이메일 계정이 없다면 구글 계정을 연결해 주세요.</Note>
@@ -149,7 +160,7 @@ export default function AccountModal({
       </Inset>
       {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
 
-      {account === null ? (
+      {guest ? (
         <>
           <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
           <Note size="xs" className="text-center mt-2 mb-0">
@@ -165,13 +176,17 @@ export default function AccountModal({
       ) : (
         <>
           <Note className="mt-0">진행은 이 계정에 저장돼요.</Note>
-          {method === 'email' && (
-            <>
-              <SectionTitle>구글 계정 연결</SectionTitle>
-              <Note>구글 계정을 연결하면 다음부터는 구글 계정으로 로그인해요.</Note>
-              <Note tone="warn">연결하면 이메일과 비밀번호로는 더 이상 로그인할 수 없어요.</Note>
-              <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_LABEL}</GoogleButton>
-            </>
+          {/* 연결 구역은 로그인 수단을 읽기 전에도 같은 높이의 자리를 잡아 레이아웃이 흔들리지 않게 한다 */}
+          {method === 'email' && connectSection}
+          {method === null && (
+            <div className="min-h-40">
+              {failed ? (
+                <>
+                  <Note>로그인 방식을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</Note>
+                  <Button full onClick={retry}>다시 시도</Button>
+                </>
+              ) : <Skeleton className="h-40" />}
+            </div>
           )}
           <Button full className="mt-3" disabled={offline} onClick={signOut}>로그아웃</Button>
         </>
@@ -179,7 +194,7 @@ export default function AccountModal({
 
       <Divider className="mt-3 mb-2" />
       <div className="flex items-center gap-2 flex-wrap">
-        {account !== null && links}
+        {!guest && links}
         <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
       </div>
       {dialogs}
