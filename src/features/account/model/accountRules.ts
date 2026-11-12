@@ -1,6 +1,7 @@
 // 계정 규칙 — 계정 만들기 넛지와 비밀번호 길이, 게스트 진행의 판정.
 import { guestHasNoProgress } from '../../../game/rules/guest';
 import type { GameState } from '../../../game/rules/logic';
+import type { SyncState } from '../../gameplay/service/types';
 
 /** 넛지를 띄우는 명성 기준 — 진행이 이만큼 쌓인 게스트에게만 계정을 권한다 */
 export const ACCOUNT_NUDGE_FAME = 500;
@@ -33,7 +34,7 @@ export type GuestProgress = 'reading' | 'nothing' | 'some';
  * sync는 세이브 연결 상태, blocked는 불러오는 중이거나 진행을 막는 창이 떠 있는지다.
  * 읽지 못했으면 진행이 있는 것으로 보아 확인을 거친다.
  */
-export function guestProgress({ sync, blocked, game }: { sync: string; blocked: boolean; game: GameState }): GuestProgress {
+export function guestProgress({ sync, blocked, game }: { sync: SyncState; blocked: boolean; game: GameState }): GuestProgress {
   if (sync === 'connecting') return 'reading';
   if (sync !== 'on') return 'some';
   if (blocked) return 'reading';

@@ -69,6 +69,15 @@ describe('부트스트랩', () => {
     expect(hook.result.current.sync).toBe('on');
   });
 
+  it('게스트 진행은 불러오는 동안 아직 모르고, 접속이 끝난 뒤 낚은 수로 판정한다', async () => {
+    const hook = setup();
+    expect(hook.result.current.guestProgress).toBe('reading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(hook.result.current.guestProgress).toBe('reading');
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.guestProgress).toBe('nothing');
+  });
+
   it('계정 교체는 그 계정 상태를 읽고 boot 응답까지 불러오는 중이다', async () => {
     const hook = setup();
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());

@@ -34,7 +34,7 @@ import RankingModal from '../overlays/ranking/RankingModal';
 import { hasOpenWindows } from '../../ui/openWindows';
 import { GUEST_VILLAGE_ONLY_TEXT } from '../../../features/gameplay/service/useGame';
 import { isGuest } from '../../../features/account/service/accountActions';
-import { guestProgress } from '../../../features/account/model/accountRules';
+import type { GuestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
@@ -92,6 +92,8 @@ interface GameViewProps {
   log: Msg[];
   syncLabel: string | null;
   syncState: string;
+  /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
+  guestProgress: GuestProgress;
   account: string | null;
   uid: string | null;
   nickname: string | null;
@@ -151,8 +153,7 @@ export default function GameView(props: GameViewProps) {
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
   const guest = isGuest(props.account);
-  // 이 기기의 게스트 진행 - 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다
-  const progress = guestProgress({ sync: props.syncState, blocked: props.blocker != null, game });
+  const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;

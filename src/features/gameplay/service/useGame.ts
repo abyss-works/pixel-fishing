@@ -11,15 +11,15 @@ import type { BlockingModal } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
+import { guestProgress } from '../../account/model/accountRules';
 import { setSchoolDay } from './schoolDay';
+import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
 // 인프라 구현은 플랫폼 경계 안에 두고 이 훅은 구체 구현을 모른다.
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
-
-export type SyncState = 'off' | 'connecting' | 'on' | 'error';
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
   off: '클라우드가 설정되지 않았어요. 새로고침하면 진행이 사라져요. (개발 모드)',
@@ -155,6 +155,8 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
 
   return {
     game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
+    guestProgress: guestProgress({ sync, blocked: blocker !== null || loading, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
