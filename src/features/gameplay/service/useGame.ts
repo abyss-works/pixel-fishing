@@ -8,7 +8,7 @@ import { newState, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import type { BlockingModal } from '../../../core/errors';
-import { showFailureNotice } from './failureNotice';
+import { clearFailureNotice, showFailureNotice } from './failureNotice';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
@@ -77,18 +77,22 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
 
   // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 에러 처리의 정책 표가 내리고,
   // 이 훅은 그 결정을 화면에 반영만 한다.
-  useEffect(() => subscribeFailure((err: AppError) => {
-    const policy = POLICY[err.kind];
-    // 메시지 창에 한 줄 남기고, 접혀 있을 때는 오류 자리가 같은 문구를 보인다
-    if (policy.slot && showFailureNotice(policy.message)) setToast(policy.message, 'warn');
-    const modal = policy.modal;
-    if (!modal) return;
-    setBlocker(current => current ?? modal);
-    // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
-    if (modal === 'update') alertUpdate();
-    if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
+  useEffect(() => {
+    const off = subscribeFailure((err: AppError) => {
+      const policy = POLICY[err.kind];
+      // 메시지 창에 한 줄 남기고, 접혀 있을 때는 오류 자리가 같은 문구를 보인다
+      if (policy.slot && showFailureNotice(policy.message)) setToast(policy.message, 'warn');
+      const modal = policy.modal;
+      if (!modal) return;
+      setBlocker(current => current ?? modal);
+      // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
+      if (modal === 'update') alertUpdate();
+      if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
+    });
+    // 구독이 끝나면 오류 자리의 안내도 함께 지운다
+    return () => { off(); clearFailureNotice(); };
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독. setToast는 메시지 기록에 줄을 더할 뿐 상태를 읽지 않는다
-  }), []);
+  }, []);
 
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).

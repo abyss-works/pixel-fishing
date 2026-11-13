@@ -207,6 +207,14 @@ describe('실패 안내', () => {
     expect(toasts).toHaveLength(1);
   });
 
+  it('훅이 내려가면 오류 자리의 안내도 지워져 다음 화면이 같은 문구를 새로 알린다', async () => {
+    const first = await ready();
+    act(() => { fail(new AppError('bug', 'x')); });
+    expect(currentFailureNotice()).not.toBeNull();
+    first.hook.unmount();
+    expect(currentFailureNotice()).toBeNull();
+  });
+
   it('전체 모달로 알리는 실패는 메시지 창에 알리지 않는다', async () => {
     const { toasts } = await ready();
     act(() => { fail(new AppError('server', 'x')); });
