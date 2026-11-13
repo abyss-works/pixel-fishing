@@ -5,7 +5,7 @@ import { identifyUser } from '../../../platform/observability';
 import type { GameState } from '../../../game/rules/logic';
 import type { AccountLookup } from '../../../platform/api';
 import { setSessionUid, useSession } from './session';
-import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
+import { ACCOUNT_CHECK_FAILED_NOTICE, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
 // 계정 상태 - 표시 이메일 · 이메일 계정 로그인(계정 교체) 처리 ·
 // 비밀번호 재설정 착지 · 계정 연결 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
@@ -25,6 +25,8 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
   // 계정 여부 확인이 끝났는가 — 끝나기 전의 null은 게스트가 아니라 미확인이다
   const [accountChecked, setAccountChecked] = useState(!api.auth.isConfigured);
+  // 확인에 실패했는가 — 확인 전(미확인)과 게스트로 확인된 상태와 구분한다. 이때 account는 null이지만 게스트가 아니다
+  const [accountFailed, setAccountFailed] = useState(false);
   const client = useQueryClient();
   const session = useSession();
   // 화면에 띄울 uid — 문의가 들어왔을 때 그 사람 세이브를 DB에서 찾는 유일한 열쇠다.
@@ -32,11 +34,18 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   const uid = api.auth.isConfigured ? session.uid : '00000000-0000-4000-8000-000000000000';
   const uidRef = useRef<string | null>(null); // 마지막으로 채택한 uid — 승격/교체 판별 기준
 
-  // 확인 결과 반영 — 확인에 실패하면 화면은 게스트처럼 두되 확인 완료로 올리지 않아 게스트로 확정하지 않는다.
-  // 다시 확인하는 경로는 계정 교체 뒤 onAuthChanged뿐이다.
+  // 확인 결과 반영 — 확인에 실패하면 확인 완료로 올리지 않아 게스트로 확정하지 않고, 실패 상태로 구분해 메시지 창에 알린다.
+  // 다시 확인하는 경로는 recheckAccount(새로고침 없이)와 계정 교체 뒤 onAuthChanged다.
   const applyLookup = (lookup: AccountLookup) => {
     setAccount(lookup.status === 'account' ? lookup.email : null);
     setAccountChecked(lookup.status !== 'failed');
+    setAccountFailed(lookup.status === 'failed');
+    if (lookup.status === 'failed') setToast(ACCOUNT_CHECK_FAILED_NOTICE, 'warn');
+  };
+
+  /** 계정 확인을 새로고침 없이 다시 한다 */
+  const recheckAccount = async (): Promise<void> => {
+    applyLookup(await api.auth.currentAccount());
   };
 
   // 세션이 서면(서버 상태 로드와 병렬로) 영구 계정 이메일 표시 — 게스트면 null 유지
@@ -95,5 +104,5 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 
-  return { account, accountChecked, uid, onAuthChanged };
+  return { account, accountChecked, accountFailed, recheckAccount, uid, onAuthChanged };
 }

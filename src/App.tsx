@@ -34,7 +34,7 @@ function AppContent() {
   ]);
   const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
   const { input, dialogs } = useDialogs();
-  const { account, accountChecked, uid, onAuthChanged } = useAccount({
+  const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
     askNewPassword: min => input({
       title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
@@ -86,7 +86,7 @@ ${min}자 이상이어야 해요.`,
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
-        account={account} accountChecked={accountChecked} uid={uid} nickname={nickname}
+        account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />

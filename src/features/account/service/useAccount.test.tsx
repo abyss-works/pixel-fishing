@@ -28,6 +28,7 @@ vi.mock('../../../platform/api', () => ({
 vi.mock('../../../platform/observability', () => ({ identifyUser: () => {} }));
 
 import { useAccount } from './useAccount';
+import { ACCOUNT_CHECK_FAILED_NOTICE } from '../model/accountRules';
 import { useSession } from './session';
 import { isConfirmedGuest } from './accountActions';
 
@@ -116,5 +117,72 @@ describe('계정 확인 상태', () => {
     await act(async () => {});
     await act(() => hook.result.current.account.onAuthChanged());
     expect(confirmed(hook)).toBe(true);
+  });
+});
+
+describe('계정 확인 실패', () => {
+  beforeEach(() => {
+    state.sessionUid = 'guest-uid';
+    state.nextUid = 'guest-uid';
+    state.lookups = [];
+  });
+  afterEach(cleanup);
+
+  async function failedAtBoot() {
+    state.lookups = [{ status: 'failed' }];
+    const r = setup();
+    await waitFor(() => expect(r.hook.result.current.session.ready).toBe(true));
+    await act(async () => {});
+    return r;
+  }
+
+  it('확인 전과 확인된 상태는 실패로 보지 않는다', async () => {
+    state.lookups = [{ status: 'guest' }];
+    const { hook } = setup();
+    expect(hook.result.current.account.accountFailed).toBe(false);
+    await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));
+    expect(hook.result.current.account.accountFailed).toBe(false);
+  });
+
+  it('부팅 때 확인에 실패하면 게스트와 구분되는 실패 상태가 되고 메시지 창에 한 번 알린다', async () => {
+    const { hook, props } = await failedAtBoot();
+    expect(hook.result.current.account.accountFailed).toBe(true);
+    expect(hook.result.current.account.accountChecked).toBe(false);
+    expect(props.setToast).toHaveBeenCalledWith(ACCOUNT_CHECK_FAILED_NOTICE, 'warn');
+    expect(props.setToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('이메일 로그인 직후의 조회가 실패해도 게스트가 아니라 실패 상태다', async () => {
+    state.lookups = [{ status: 'guest' }, { status: 'failed' }];
+    const { hook } = setup();
+    await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(hook.result.current.account.accountFailed).toBe(true);
+    expect(hook.result.current.account.accountChecked).toBe(false);
+  });
+
+  it('새로고침 없이 다시 확인하면 게스트로 확정되고 실패가 풀린다', async () => {
+    const { hook } = await failedAtBoot();
+    state.lookups = [{ status: 'guest' }];
+    await act(() => hook.result.current.account.recheckAccount());
+    expect(hook.result.current.account.accountFailed).toBe(false);
+    expect(hook.result.current.account.accountChecked).toBe(true);
+    expect(hook.result.current.account.account).toBeNull();
+  });
+
+  it('다시 확인해 계정으로 밝혀지면 그 이메일을 보인다', async () => {
+    const { hook } = await failedAtBoot();
+    state.lookups = [{ status: 'account', email: 'a@example.com' }];
+    await act(() => hook.result.current.account.recheckAccount());
+    expect(hook.result.current.account.accountFailed).toBe(false);
+    expect(hook.result.current.account.account).toBe('a@example.com');
+  });
+
+  it('다시 확인도 실패하면 실패 상태로 남고 같은 안내를 다시 알린다', async () => {
+    const { hook, props } = await failedAtBoot();
+    state.lookups = [{ status: 'failed' }];
+    await act(() => hook.result.current.account.recheckAccount());
+    expect(hook.result.current.account.accountFailed).toBe(true);
+    expect(props.setToast).toHaveBeenCalledTimes(2);
   });
 });

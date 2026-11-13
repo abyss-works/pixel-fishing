@@ -39,6 +39,8 @@ interface GameTabsProps {
   guestProgress: GuestProgress;
   recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
+  /** 세션 확인에 실패했는가 */
+  accountFailed: boolean;
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
   uid: string | null;
@@ -128,7 +130,7 @@ export default function GameTabs(props: GameTabsProps) {
       {activeTab === 'settings' && (
         <SettingsTab dispatch={props.dispatch} setToast={props.setToast}
                      syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
-                     account={props.account} uid={props.uid}
+                     account={props.account} accountFailed={props.accountFailed} uid={props.uid}
                      nickname={props.nickname} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
       )}
