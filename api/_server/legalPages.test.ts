@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { LEGAL_PATHS } from '../../src/features/account/model/googleFlow.js';
 import { legalPages } from './legalPages.js';
 
 const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
@@ -46,6 +47,17 @@ describe('공개 문서 제공', () => {
 
   it('목록에 없는 주소는 넘긴다', async () => {
     expect((await fetch(`${base}/policy`)).status).toBe(404);
+  });
+
+  it.each(Object.values(LEGAL_PATHS))('게임 안 링크 상수의 주소 %s를 서버가 낸다', async (path) => {
+    expect((await fetch(base + path)).status).toBe(200);
+  });
+
+  it.each(['/about', '/terms', '/privacy'])('확장자 있는 %s.html은 확장자 없는 주소로 옮긴다', async (path) => {
+    const res = await fetch(`${base}${path}.html`, { redirect: 'manual' });
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(path);
+    expect(res.headers.has('set-cookie')).toBe(false);
   });
 
   it('HEAD 요청도 같은 머리를 낸다', async () => {

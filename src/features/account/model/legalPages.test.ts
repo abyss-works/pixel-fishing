@@ -9,6 +9,73 @@ const PUBLIC_DIR = 'public';
 const DOCUMENT_PATHS = ['/about', ...Object.values(LEGAL_PATHS)];
 const fileOf = (path: string) => `${PUBLIC_DIR}/${path.slice(1)}.html`;
 
+const EXTERNAL = /^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i;
+
+/** 따옴표 종류(큰따옴표, 홑따옴표, 없음)와 관계없이 태그의 속성을 이름과 값으로 읽는다 */
+function attributesOf(tag: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  for (const m of tag.matchAll(/([^\s"'<>/=]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/g)) {
+    attrs.set(m[1].toLowerCase(), m[2] ?? m[3] ?? m[4] ?? '');
+  }
+  return attrs;
+}
+
+/** CSS 안에서 불러오는 주소(url()과 @import) */
+function cssRefs(css: string): string[] {
+  const urls = [...css.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)/gi)].map(m => m[1] ?? m[2] ?? m[3]);
+  const imports = [...css.matchAll(/@import\s+(?:"([^"]*)"|'([^']*)')/gi)].map(m => m[1] ?? m[2]);
+  return [...urls, ...imports];
+}
+
+/**
+ * 문서가 자원으로 불러오는 주소를 모은다. src, srcset, data, poster 속성, link의 href,
+ * meta refresh의 주소, style 속성과 style 요소의 CSS 주소다. 사용자가 눌러야 가는 a의 href는 자원이 아니므로 뺀다.
+ */
+function loadedRefs(html: string): string[] {
+  const refs: string[] = [];
+  for (const tag of html.matchAll(/<([a-z][a-z0-9-]*)\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi)) {
+    const name = tag[1].toLowerCase();
+    const attrs = attributesOf(tag[2]);
+    for (const key of ['src', 'data', 'poster']) if (attrs.has(key)) refs.push(attrs.get(key)!);
+    if (attrs.has('srcset')) refs.push(...attrs.get('srcset')!.split(',').map(c => c.trim().split(/\s+/)[0]).filter(Boolean));
+    if (name === 'link' && attrs.has('href')) refs.push(attrs.get('href')!);
+    if (name === 'meta' && attrs.get('http-equiv')?.toLowerCase() === 'refresh') {
+      const target = /url\s*=\s*['"]?([^'"]+)/i.exec(attrs.get('content') ?? '')?.[1];
+      if (target) refs.push(target);
+    }
+    if (attrs.has('style')) refs.push(...cssRefs(attrs.get('style')!));
+  }
+  for (const block of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) refs.push(...cssRefs(block[1]));
+  return refs;
+}
+
+const externalRefs = (html: string) => loadedRefs(html).filter(ref => EXTERNAL.test(ref));
+
+describe('외부 자원 검사기', () => {
+  it.each([
+    ['큰따옴표 src', '<img src="https://x.test/a.png">'],
+    ['홑따옴표 src', "<script src='https://x.test/a.js'></script>"],
+    ['따옴표 없는 속성', '<link rel=stylesheet href=https://x.test/a.css>'],
+    ['프로토콜 상대 주소', '<link rel="stylesheet" href="//x.test/a.css">'],
+    ['srcset', '<img src="/a.png" srcset="/a.png 1x, https://x.test/b.png 2x">'],
+    ['meta refresh', '<meta http-equiv="refresh" content="0; url=https://x.test/">'],
+    ['style 속성의 url()', '<p style="background:url(\'https://x.test/a.png\')">x</p>'],
+    ['style 요소의 @import', '<style>@import url("https://x.test/a.css");</style>'],
+    ['style 요소의 따옴표 있는 @import', "<style>@import 'https://x.test/a.css';</style>"],
+    ['iframe', "<iframe src='//x.test/'></iframe>"],
+  ])('%s를 잡는다', (_name, html) => {
+    expect(externalRefs(html)).not.toEqual([]);
+  });
+
+  it.each([
+    ['같은 출처 자원', '<link rel="stylesheet" href="/legal.css"><img src="/a.png" srcset="/a.png 1x">'],
+    ['바깥으로 나가는 링크', '<a href="https://x.test/">밖으로</a><a href=\'//x.test/\'>밖으로</a>'],
+    ['같은 출처 style', '<p style="background:url(/a.png)">x</p>'],
+  ])('%s는 잡지 않는다', (_name, html) => {
+    expect(externalRefs(html)).toEqual([]);
+  });
+});
+
 describe('공개 문서 정적 파일', () => {
   it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 정적 문서가 있다', (_name, path) => {
     expect(existsSync(fileOf(path))).toBe(true);
@@ -26,14 +93,14 @@ describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
     expect(html).not.toMatch(/<script/i);
   });
 
-  it('스타일, 글꼴, 이미지 참조가 같은 출처의 주소다', () => {
-    const refs = [...html.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1]);
-    const external = refs.filter(ref => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(ref));
-    expect(external).toEqual([]);
+  it('불러오는 자원이 모두 같은 출처의 주소다', () => {
+    expect(externalRefs(html)).toEqual([]);
   });
 
-  it('스타일의 외부 주소 호출이 없다', () => {
-    expect(html).not.toMatch(/@import|url\(\s*["']?(?:https?:)?\/\//i);
+  it('위아래 nav의 접근성 이름이 서로 다르다', () => {
+    const labels = [...html.matchAll(/<nav\b[^>]*>/g)].map(m => attributesOf(m[0]).get('aria-label'));
+    expect(labels.every(Boolean)).toBe(true);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });
 
@@ -41,14 +108,16 @@ describe('공개 문서 스타일', () => {
   const css = readFileSync(`${PUBLIC_DIR}/legal.css`, 'utf-8');
 
   it('외부 글꼴과 @import, 외부 주소 호출이 없다', () => {
-    expect(css).not.toMatch(/@import|@font-face|https?:\/\//i);
+    expect(css).not.toMatch(/@font-face/i);
+    expect(cssRefs(css).filter(ref => EXTERNAL.test(ref))).toEqual([]);
+    expect(css).not.toMatch(/https?:\/\//i);
   });
 });
 
 describe('문서 사이 링크', () => {
   it.each(DOCUMENT_PATHS)('%s의 같은 출처 링크가 모두 문서나 게임으로 간다', (path) => {
     const html = readFileSync(fileOf(path), 'utf-8');
-    const links = [...html.matchAll(/<a href="([^"#]*)/g)].map(m => m[1]);
+    const links = [...html.matchAll(/<a\b[^>]*>/g)].map(m => attributesOf(m[0]).get('href') ?? '');
     for (const link of links) {
       expect(link === '/' || DOCUMENT_PATHS.includes(link), link).toBe(true);
     }
