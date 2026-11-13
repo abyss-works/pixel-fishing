@@ -67,7 +67,11 @@ describe('마크다운 본문 변환', () => {
   });
 
   it('인라인 코드, 굵게, 꺾쇠, 앰퍼샌드를 처리하고 사이트 밖 모양의 대괄호 글은 링크로 보지 않는다', () => {
-    expect(html).toContain('<p>이 약관은 [조직 이름](이하 "운영자")이 <code>/terms</code> 주소와 &lt;b&gt;꺾쇠&lt;/b&gt; &amp; 기호를 다루며 <strong>굵게</strong> 쓴다.</p>');
+    expect(html).toContain('<p>이 약관은 [조직 이름](이하 &quot;운영자&quot;)이 <code>/terms</code> 주소와 &lt;b&gt;꺾쇠&lt;/b&gt; &amp; 기호를 다루며 <strong>굵게</strong> 쓴다.</p>');
+  });
+
+  it('큰따옴표와 홑따옴표도 이스케이프한다', () => {
+    expect(markdownToDocument('## 제목\n\n"운영자"와 \'이용자\'\n', '/about')).toContain('<p>&quot;운영자&quot;와 &#39;이용자&#39;</p>');
   });
 
   it('작은 글씨 단락을 표시한다', () => {

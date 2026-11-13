@@ -8,7 +8,7 @@ import { LEGAL_PATHS } from '../../src/features/account/model/googleFlow.js';
 import { consentGate } from './consentGate.js';
 import { legalPages } from './legalPages.js';
 
-// 정적 폴더에는 문서 HTML이 없고 스타일 파일만 있다
+// 정적 폴더에는 문서 파일이 없고 스타일 파일만 있다
 const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
 
 let server: Server;
@@ -16,12 +16,12 @@ let base: string;
 const savedDate = process.env.CONSENT_EFFECTIVE_DATE;
 
 beforeAll(async () => {
-  // 시행일을 과거로 둬 약관 수락 게이트가 켜진 상태에서 확인한다. 게이트는 main.ts처럼 /api에만 마운트한다
+  // 시행일을 과거로 둬 약관 수락 게이트가 켜진 상태에서 확인한다. 게이트는 서버 진입점처럼 /api에만 마운트한다
   process.env.CONSENT_EFFECTIVE_DATE = '2020-01-01';
   const app = express();
   app.use('/api', consentGate());
   app.use(legalPages());
-  // main.ts와 같은 순서로 라우터 뒤에 정적 파일 제공을 둔다
+  // 서버 진입점과 같은 순서로 라우터 뒤에 정적 파일 제공을 둔다
   app.use(express.static(publicDir));
   app.use((_req, res) => { res.status(404).end(); });
   server = app.listen(0);
@@ -93,11 +93,11 @@ describe('공개 문서 제공', () => {
     expect(res.headers.has('set-cookie')).toBe(false);
   });
 
-  // 템플릿 원본은 정적 폴더 밖에 있어야 한다. 어떤 표기로 요청해도 토큰이 든 원본이 나가면 안 된다
+  // 문서 본문은 정적 폴더에 없어야 한다. 어떤 표기로 요청해도 판 토큰이 든 문서가 나가면 안 된다
   it.each([
     '/terms%2Ehtml', '/policy%2Ehtml', '/privacy%2ehtml', '//terms.html', '//about.html', '/TERMS.html', '/Policy.HTML',
     '/terms.html/', '/%74erms.html', '/./terms.html', '/x/../terms.html',
-  ])('정적 제공으로 템플릿 원본이 나가지 않는다: %s', async (path) => {
+  ])('정적 제공으로 판 토큰이 든 문서가 나가지 않는다: %s', async (path) => {
     const res = await fetch(base + path, { redirect: 'manual' });
     const body = await res.text();
     expect(body).not.toContain('{{');
@@ -108,6 +108,13 @@ describe('공개 문서 제공', () => {
     expect((await fetch(`${base}/TERMS`)).status).toBe(404);
   });
 
+  it.each(['/about', '/terms', '/privacy', '/policy'])('끝 슬래시가 붙은 %s/는 슬래시 없는 주소로 옮긴다', async (path) => {
+    const res = await fetch(`${base}${path}/`, { redirect: 'manual' });
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(path);
+    expect(res.headers.has('set-cookie')).toBe(false);
+  });
+
   it('HEAD 요청도 같은 머리를 낸다', async () => {
     const res = await fetch(`${base}/privacy`, { method: 'HEAD' });
     expect(res.status).toBe(200);
@@ -115,8 +122,8 @@ describe('공개 문서 제공', () => {
   });
 });
 
-// main.ts의 실제 조립은 서버를 띄우지 않고서는 실행할 수 없어 등록 문자열로 고정한다
-describe('main.ts의 등록 문자열', () => {
+// 서버 진입점의 실제 조립은 서버를 띄우지 않고서는 실행할 수 없어 등록 문자열로 고정한다
+describe('서버 진입점의 등록 문자열', () => {
   const main = readFileSync(new URL('./main.ts', import.meta.url), 'utf-8');
 
   it('약관 수락 게이트는 /api 경로에만 마운트한다', () => {

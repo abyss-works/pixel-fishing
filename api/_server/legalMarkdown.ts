@@ -14,7 +14,8 @@ export const DOC_LINKS: readonly { path: string; label: string }[] = [
   { path: LEGAL_PATHS.policy, label: '운영정책' },
 ];
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /** 사이트 안 링크(`/`로 시작하는 주소)만 링크로 본다. 본문의 `[이름](이하 ...)` 같은 글은 그대로 둔다 */
 const LINK = /\[([^\]]+)\]\((\/[^)\s]*)\)/g;

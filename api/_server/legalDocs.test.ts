@@ -13,7 +13,7 @@ const fileOf = (path: string) => `${DOCS_DIR}/${path.slice(1)}.md`;
 const sourceOf = (path: string) => readFileSync(fileOf(path), 'utf-8');
 const documentOf = (path: string) => markdownToDocument(sourceOf(path), path);
 
-const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
 /** 마크다운 본문을 마크업 없이 줄 단위로 푼 것. 표는 칸마다 한 줄이고 목록 번호와 링크 문법은 벗긴다 */
 function sourceLines(markdown: string): string[] {
@@ -103,7 +103,7 @@ describe('외부 자원 검사기', () => {
   });
 });
 
-describe('공개 문서 정적 파일', () => {
+describe('공개 문서 본문 파일', () => {
   it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 문서 본문이 있다', (_name, path) => {
     expect(existsSync(fileOf(path))).toBe(true);
   });
@@ -112,7 +112,7 @@ describe('공개 문서 정적 파일', () => {
     expect(existsSync(fileOf('/about'))).toBe(true);
   });
 
-  it('문서 원본은 정적 폴더에 없다. 정적 파일 제공으로 판 토큰이 든 원본이 나가지 않는다', () => {
+  it('문서 파일은 정적 폴더에 없다. 정적 파일 제공으로 판 토큰이 든 문서가 나가지 않는다', () => {
     for (const path of DOCUMENT_PATHS) expect(existsSync(`${PUBLIC_DIR}/${path.slice(1)}.html`)).toBe(false);
   });
 });
