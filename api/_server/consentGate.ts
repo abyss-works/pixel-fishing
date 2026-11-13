@@ -1,7 +1,7 @@
 // 수락 전 게임 요청 거부 — 확인이 필요한 계정(게스트가 아니고 현재 판의 수락 기록이 없고 시행일이 지난 계정)의 요청을 consent-required로 막는다.
 // 허용 목록 방식이다. 아래 경로가 아닌 /api 경로는 모두 게임 요청으로 보고 막는다.
 import type { RequestHandler } from 'express';
-import { consentPolicy } from '../_auth/consentPolicy.js';
+import { consentInEffect, consentPolicy } from '../_auth/consentPolicy.js';
 import { sessionOf } from '../_auth/session.js';
 import { consentRequiredFor } from '../_data/consent.js';
 import { database } from '../_db/client.js';
@@ -11,7 +11,7 @@ import { reportServerIssue } from '../observability.js';
 /**
  * 확인이 필요한 계정도 쓸 수 있는 경로(마디 단위 앞부분).
  * - 계정: 계정 정보 조회, 수락 요청, 탈퇴
- * - 인증: 로그인과 로그아웃
+ * - 인증: 인증 경로 전체. 게이트보다 먼저 등록돼 이 미들웨어를 거치지 않지만 목록에도 적어 둔다
  * - 관리자 대시보드: 게임 세션이 아니라 별도 관리자 세션으로 인증하는 경로
  * - 예약 작업: 서버 비밀값으로 인증하고 사용자 세션이 없는 경로
  * - 길드 초대 미리보기: 로그인 없이 열리는 읽기 경로. 가입 요청은 길드 가입 경로이므로 막힌다
@@ -36,7 +36,7 @@ export function consentGate(): RequestHandler {
       if (isConsentExempt(path)) return false;
       const policy = consentPolicy();
       const now = new Date();
-      if (now.getTime() < policy.effectiveAt.getTime()) return false;
+      if (!consentInEffect(policy, now)) return false;
       const session = await sessionOf(req.headers);
       if (!session) return false;
       return consentRequiredFor(database().db, { uid: session.id, guest: session.email === null }, policy, now);

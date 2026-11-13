@@ -32,7 +32,12 @@ export function consentPolicy(): ConsentPolicy {
   return parseConsentPolicy(process.env.CONSENT_EFFECTIVE_DATE);
 }
 
+/** 지금이 시행 시각 이후인가. 시행 경계(시행일 UTC 0시 포함)를 비교하는 유일한 곳이다 */
+export function consentInEffect(policy: ConsentPolicy, now: Date): boolean {
+  return now.getTime() >= policy.effectiveAt.getTime();
+}
+
 /** 확인이 필요한 계정인가: 게스트가 아니고, 현재 판의 수락 기록이 없고, 시행일이 됐다 */
 export function consentRequired(policy: ConsentPolicy, now: Date, who: { guest: boolean; accepted: boolean }): boolean {
-  return !who.guest && !who.accepted && now.getTime() >= policy.effectiveAt.getTime();
+  return !who.guest && !who.accepted && consentInEffect(policy, now);
 }

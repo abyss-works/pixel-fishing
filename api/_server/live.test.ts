@@ -127,6 +127,24 @@ describe('실시간 채널 서버', () => {
     expect(live.online().map(o => o.uid)).toEqual(['u1']);
   });
 
+  it('연결한 뒤 접속을 허용하지 않게 된 계정은 쓰기 메시지를 거부당하고 정책 위반 코드로 닫힌다', async () => {
+    let held = false;
+    const { url, live, chat } = await start({ admit: async () => !held });
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next();
+    await b.next();
+    a.ws.send(JSON.stringify({ t: 'chat', text: '첫 말' }));
+    expect((await b.next()).t).toBe('chat');
+    held = true;
+    a.ws.send(JSON.stringify({ t: 'chat', text: '막힌 말' }));
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 1, y: 2, dir: 0, line: false }));
+    expect(await a.closed).toBe(1008);
+    expect(chat.lines.map(l => l.text)).toEqual(['첫 말']);
+    expect(live.online().map(o => o.uid)).toEqual(['u2']);
+    expect(b.messages.filter(m => m.t === 'chat' || m.t === 'move' || m.t === 'join')).toEqual([]);
+  });
+
   it('클라이언트 빌드가 서버와 다르면 연결을 받지 않고 낡은 빌드 코드로 닫는다', async () => {
     const { urlFor, live, sessions } = await start();
     const ok = connect(urlFor(BUILD), 'u1');

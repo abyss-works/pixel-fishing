@@ -1,7 +1,7 @@
 // 확인이 필요한 계정의 게임 요청 거부 — 실제 Postgres에서 시행일 경계, 게스트, 허용 경로, 판 변경, 탈퇴를 검사한다.
 import express from 'express';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { seedUser, sessionHeaders, startActionEnv, userToken } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 import { recordConsent } from '../_data/consent.js';
@@ -17,6 +17,7 @@ afterAll(async () => {
   await env?.stop();
 });
 afterEach(() => {
+  vi.useRealTimers();
   process.env.CONSENT_EFFECTIVE_DATE = '2099-12-31';
 });
 
@@ -156,5 +157,28 @@ describe('Express에 붙였을 때', () => {
     } finally {
       await new Promise(resolve => server.close(resolve));
     }
+  });
+});
+
+describe('시행 시각을 넘기는 시계', () => {
+  it('시행 전에 열린 연결의 계정은 시행 시각이 지나면 다시 판정에서 걸리고, 수락하면 풀린다', async () => {
+    process.env.CONSENT_EFFECTIVE_DATE = '2031-05-02';
+    const uid = await member('clock-crossing');
+    vi.useFakeTimers({ now: new Date('2031-05-01T12:00:00.000Z'), toFake: ['Date'] });
+    expect(await liveConsentAdmit({ uid, guest: false })).toBe(true);
+    vi.setSystemTime(new Date('2031-05-01T23:59:59.999Z'));
+    expect(await liveConsentAdmit({ uid, guest: false })).toBe(true);
+    vi.setSystemTime(new Date('2031-05-02T00:00:00.000Z'));
+    expect(await liveConsentAdmit({ uid, guest: false })).toBe(false);
+    await recordConsent(database().db, uid, '2031-05-02', 'confirm-screen');
+    expect(await liveConsentAdmit({ uid, guest: false })).toBe(true);
+  });
+
+  it('게스트는 시행 시각이 지난 뒤에도 거부 게이트와 실시간 판정을 통과한다', async () => {
+    process.env.CONSENT_EFFECTIVE_DATE = '2031-05-02';
+    const uid = await guest();
+    vi.useFakeTimers({ now: new Date('2031-06-01T00:00:00.000Z'), toFake: ['Date'] });
+    expect(await through('/action', userToken(uid))).toEqual(PASSED);
+    expect(await liveConsentAdmit({ uid, guest: true })).toBe(true);
   });
 });

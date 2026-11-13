@@ -1,7 +1,7 @@
 // 약관과 개인정보 처리방침의 수락 기록 저장 모듈 — 계정, 문서, 판마다 한 행(consent_records)을 쓰고 읽는다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { CONSENT_DOCUMENTS, consentRequired } from '../_auth/consentPolicy.js';
+import { CONSENT_DOCUMENTS, consentInEffect, consentRequired } from '../_auth/consentPolicy.js';
 import type { ConsentChannel, ConsentPolicy } from '../_auth/consentPolicy.js';
 import type { SessionUser } from '../_auth/session.js';
 
@@ -37,13 +37,27 @@ export interface ConsentStatus {
   effectiveAt: string;
 }
 
+// 현재 판을 수락한 것이 확인된 계정. 수락은 되돌아가지 않으므로 한 번 확인되면 기록을 다시 읽지 않는다.
+// 계정 삭제는 세션도 지우므로 남은 항목이 다른 계정에 쓰이지 않는다. 가득 차면 비우고 다시 쌓는다.
+const ACCEPTED_CACHE_MAX = 50_000;
+const acceptedCache = new Set<string>();
+
 /**
  * 이 사용자가 확인이 필요한 계정인가. 게스트가 아니고, 시행일이 됐고, 현재 판의 수락 기록이 없을 때다.
- * 시행일 전과 게스트는 기록을 읽지 않고 판정한다.
+ * 게스트와 시행일 전은 기록을 읽지 않고 판정한다. 게이트와 실시간 채널이 모두 이 함수로 판정한다.
  */
 export async function consentRequiredFor(db: Executor, who: { uid: string; guest: boolean }, policy: ConsentPolicy, now: Date): Promise<boolean> {
-  if (who.guest || now.getTime() < policy.effectiveAt.getTime()) return false;
-  return consentRequired(policy, now, { guest: who.guest, accepted: await hasAcceptedVersion(db, who.uid, policy.version) });
+  if (who.guest || !consentInEffect(policy, now)) return false;
+  const key = `${policy.version}:${who.uid}`;
+  let accepted = acceptedCache.has(key);
+  if (!accepted) {
+    accepted = await hasAcceptedVersion(db, who.uid, policy.version);
+    if (accepted) {
+      if (acceptedCache.size >= ACCEPTED_CACHE_MAX) acceptedCache.clear();
+      acceptedCache.add(key);
+    }
+  }
+  return consentRequired(policy, now, { guest: who.guest, accepted });
 }
 
 /** 사용자의 약관 상태 */

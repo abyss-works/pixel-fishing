@@ -1,6 +1,6 @@
 // 약관과 처리방침의 현재 판과 시행일 — 설정에서 읽고, 확인이 필요한 계정을 판정한다.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { consentPolicy, consentRequired, parseConsentPolicy } from './consentPolicy.js';
+import { consentInEffect, consentPolicy, consentRequired, parseConsentPolicy } from './consentPolicy.js';
 
 describe('parseConsentPolicy', () => {
   it('판은 시행일 문자열이고 시행 시각은 그 날짜의 UTC 0시다', () => {
@@ -55,5 +55,13 @@ describe('consentRequired', () => {
 
   it('게스트는 시행일이 지나도 필요하지 않다', () => {
     expect(consentRequired(policy, day('2026-12-05T00:00:00Z'), { guest: true, accepted: false })).toBe(false);
+  });
+});
+
+describe('consentInEffect', () => {
+  const policy = parseConsentPolicy('2026-12-01');
+  it('시행일 UTC 0시 직전까지는 시행 전이고 0시부터 시행 중이다', () => {
+    expect(consentInEffect(policy, new Date('2026-11-30T23:59:59.999Z'))).toBe(false);
+    expect(consentInEffect(policy, new Date('2026-12-01T00:00:00.000Z'))).toBe(true);
   });
 });
