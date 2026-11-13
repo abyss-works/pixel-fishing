@@ -8,7 +8,7 @@ import { JUDGMENT_MULT } from './balance';
 import { idleDialsOf, relativeIdleBoost } from './power';
 
 describe('방치 배수 — 태평양 이후 해역', () => {
-  const req = 30; // 태평양
+  const req = powerReqOf('sea'); // 태평양
 
   it('레벨 차 0, 1, 2, 3, 4 이상에 5, 5, 4, 4, 3', () => {
     const at = (levels: number) => relativeIdleBoost(req + levels * 5, 'sea');

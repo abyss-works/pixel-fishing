@@ -1,7 +1,7 @@
 // 스탯 서비스 — 파생 내역({base, mods, value})과 단일 출구 계약을 검증한다.
 import { describe, expect, it } from 'vitest';
 import { BOATS, newState } from './logic';
-import { powerReqOf } from '../content/spots';
+import { SPOTS, powerReqOf } from '../content/spots';
 import { WALK_SPEED } from './balance';
 import { autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 
@@ -137,10 +137,20 @@ describe('도움말 문장 — 담백한 정보 제공형, 수치 금지', () =>
 });
 
 describe('해역 요구 파워', () => {
-  it('인도양 이후 해역은 정해진 레벨 간격으로 요구 파워가 오른다', () => {
-    expect(powerReqOf('indian')).toBe(80);       // Lv15
-    expect(powerReqOf('southindian')).toBe(95);  // Lv18
-    expect(powerReqOf('mozstrait')).toBe(105);   // Lv20
-    expect(powerReqOf('comorodeep')).toBe(120);  // Lv23
+  // 해역별 진입 레벨. 요구 파워 = 10 + (진입 레벨 - 1) x 5
+  const ENTRY_LEVEL = {
+    pond: 1, river: 3, sea: 6, deep: 10, dragonhole: 14, coron: 18, barrierreef: 22,
+    indian: 26, southindian: 31, mozstrait: 36, comorodeep: 41, benguela: 46, sthelena: 51,
+  } as const;
+
+  it('모든 해역의 요구 파워는 진입 레벨의 파워다', () => {
+    expect(SPOTS.map(s => s.id).sort()).toEqual(Object.keys(ENTRY_LEVEL).sort());
+    for (const [id, level] of Object.entries(ENTRY_LEVEL)) {
+      expect(powerReqOf(id as keyof typeof ENTRY_LEVEL), id).toBe(10 + (level - 1) * 5);
+    }
+  });
+  it('해역 진행 순서로 요구 파워가 오른다', () => {
+    const powers = SPOTS.map(s => powerReqOf(s.id));
+    for (let i = 1; i < powers.length; i++) expect(powers[i]).toBeGreaterThan(powers[i - 1]);
   });
 });

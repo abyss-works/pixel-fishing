@@ -57,10 +57,10 @@ describe('zones 데이터 계약', () => {
     expect(spotsOfRegion('world')).toHaveLength(11);
   });
 
-  it('남대서양: 최상위 존에는 스팟이 없고 용승대와 세인트헬레나가 하위 존이다 (배8, 요구 파워 130·140)', () => {
+  it('남대서양: 최상위 존에는 스팟이 없고 용승대와 세인트헬레나가 하위 존이다 (배8, 요구 파워 235·260)', () => {
     expect(zoneById('southatlantic')!.spots).toEqual([]);
     expect(zoneById('southatlantic')!.group).toBe('world');
-    for (const [id, power] of [['benguela', 130], ['sthelena', 140]] as const) {
+    for (const [id, power] of [['benguela', 235], ['sthelena', 260]] as const) {
       const z = zoneById(id)!;
       expect(z.parent, id).toBe('southatlantic');
       expect(z.spots, id).toEqual([id]);
