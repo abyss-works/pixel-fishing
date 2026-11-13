@@ -164,7 +164,7 @@ describe('계정 확인 실패', () => {
   it('새로고침 없이 다시 확인하면 게스트로 확정되고 실패가 풀린다', async () => {
     const { hook } = await failedAtBoot();
     state.lookups = [{ status: 'guest' }];
-    await act(() => hook.result.current.account.recheckAccount());
+    await act(() => hook.result.current.account.onAuthChanged());
     expect(hook.result.current.account.accountFailed).toBe(false);
     expect(hook.result.current.account.accountChecked).toBe(true);
     expect(hook.result.current.account.account).toBeNull();
@@ -173,7 +173,7 @@ describe('계정 확인 실패', () => {
   it('다시 확인해 계정으로 밝혀지면 그 이메일을 보인다', async () => {
     const { hook } = await failedAtBoot();
     state.lookups = [{ status: 'account', email: 'a@example.com' }];
-    await act(() => hook.result.current.account.recheckAccount());
+    await act(() => hook.result.current.account.onAuthChanged());
     expect(hook.result.current.account.accountFailed).toBe(false);
     expect(hook.result.current.account.account).toBe('a@example.com');
   });
@@ -181,8 +181,26 @@ describe('계정 확인 실패', () => {
   it('다시 확인도 실패하면 실패 상태로 남고 같은 안내를 다시 알린다', async () => {
     const { hook, props } = await failedAtBoot();
     state.lookups = [{ status: 'failed' }];
-    await act(() => hook.result.current.account.recheckAccount());
+    await act(() => hook.result.current.account.onAuthChanged());
     expect(hook.result.current.account.accountFailed).toBe(true);
     expect(props.setToast).toHaveBeenCalledTimes(2);
+  });
+
+  it('다시 확인의 세션 조회가 uid 없이 끝나도(조회 실패) 세션 게이트는 유지된다', async () => {
+    const { hook } = await failedAtBoot();
+    state.lookups = [{ status: 'failed' }];
+    state.nextUid = null as unknown as string;
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(hook.result.current.session.ready).toBe(true);
+    expect(hook.result.current.session.uid).toBe('guest-uid');
+    expect(hook.result.current.account.accountFailed).toBe(true);
+  });
+
+  it('다시 확인이 성공하면 세션 uid도 맞게 갱신된다', async () => {
+    const { hook } = await failedAtBoot();
+    state.lookups = [{ status: 'account', email: 'a@example.com' }];
+    state.nextUid = 'account-uid';
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(hook.result.current.session.uid).toBe('account-uid');
   });
 });

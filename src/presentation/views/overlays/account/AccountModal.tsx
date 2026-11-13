@@ -224,11 +224,15 @@ export default function AccountModal({
         </>
       )}
 
-      <Divider className="mt-3 mb-2" />
-      <div className="flex items-center gap-2 flex-wrap">
-        {!guest && links}
-        <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline || accountFailed} onClick={removeAccount}>계정 삭제</Button>
-      </div>
+      {!accountFailed && (
+        <>
+          <Divider className="mt-3 mb-2" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {!guest && links}
+            <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
+          </div>
+        </>
+      )}
       {dialogs}
     </Modal>
   );

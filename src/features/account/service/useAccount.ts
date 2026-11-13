@@ -35,7 +35,7 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   const uidRef = useRef<string | null>(null); // 마지막으로 채택한 uid — 승격/교체 판별 기준
 
   // 확인 결과 반영 — 확인에 실패하면 확인 완료로 올리지 않아 게스트로 확정하지 않고, 실패 상태로 구분해 메시지 창에 알린다.
-  // 다시 확인하는 경로는 recheckAccount(새로고침 없이)와 계정 교체 뒤 onAuthChanged다.
+  // 다시 확인하는 경로는 새로고침 없이 부르는 onAuthChanged다(로그인 직후와 계정 관리 창의 다시 확인).
   const applyLookup = (lookup: AccountLookup) => {
     setAccount(lookup.status === 'account' ? lookup.email : null);
     setAccountChecked(lookup.status !== 'failed');
@@ -43,10 +43,6 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     if (lookup.status === 'failed') setToast(ACCOUNT_CHECK_FAILED_NOTICE, 'warn');
   };
 
-  /** 계정 확인을 새로고침 없이 다시 한다 */
-  const recheckAccount = async (): Promise<void> => {
-    applyLookup(await api.auth.currentAccount());
-  };
 
   // 세션이 서면(서버 상태 로드와 병렬로) 영구 계정 이메일 표시 — 게스트면 null 유지
   useEffect(() => {
@@ -63,7 +59,8 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   const onAuthChanged = async () => {
     applyLookup(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();
-    setSessionUid(client, next);
+    // 세션 조회가 실패해 uid를 얻지 못했으면 게이트를 덮지 않는다 — 인증 장애 중의 재확인이 실시간 채널과 조회를 끄지 않게 한다
+    if (next) setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
       await adoptAccount();
@@ -104,5 +101,5 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 
-  return { account, accountChecked, accountFailed, recheckAccount, uid, onAuthChanged };
+  return { account, accountChecked, accountFailed, uid, onAuthChanged };
 }

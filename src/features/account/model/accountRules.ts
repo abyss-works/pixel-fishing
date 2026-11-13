@@ -11,13 +11,13 @@ export const MIN_PASSWORD_LENGTH = 6;
 
 export const passwordLongEnough = (password: string): boolean => password.length >= MIN_PASSWORD_LENGTH;
 
-/** 세션 확인에 실패했을 때 메시지 창에 남기는 안내 한 줄. 문안은 임시이며 writer가 확정한다 */
-export const ACCOUNT_CHECK_FAILED_NOTICE = '계정을 확인하지 못했어요. 설정의 계정 관리에서 다시 확인해 주세요.';
+/** 세션 확인에 실패했을 때 메시지 창에 남기는 안내 한 줄 */
+export const ACCOUNT_CHECK_FAILED_NOTICE = '계정을 확인하지 못했어요. 설정 탭의 계정 관리에서 다시 확인을 눌러 주세요.';
 
-/** 세션 확인 실패를 알리는 계정 관리 창과 설정 탭의 임시 문안. writer가 확정한다 */
+/** 세션 확인 실패를 알리는 계정 관리 창과 설정 탭의 문구 */
 export const ACCOUNT_CHECK_FAILED_COPY = {
   label: '확인하지 못함',
-  lines: ['계정을 확인하지 못했어요.', '잠시 뒤 다시 확인해 주세요.'],
+  lines: ['계정을 확인하지 못했어요.', '잠시 뒤 다시 확인을 눌러 주세요.'],
   retry: '다시 확인',
 } as const;
 

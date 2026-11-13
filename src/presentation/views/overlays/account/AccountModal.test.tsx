@@ -364,7 +364,9 @@ describe('계정 확인 실패', () => {
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '기존 이메일 계정으로 로그인' })).toBeNull();
     expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
-    expect(screen.getByRole('button', { name: '계정 삭제' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
+    expect(screen.queryByText('이용약관')).toBeNull();
+    expect(screen.queryByText('개인정보 처리방침')).toBeNull();
   });
 
   it('다시 확인을 누르면 계정 확인을 새로 요청한다', async () => {
