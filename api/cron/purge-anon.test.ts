@@ -2,7 +2,9 @@
 // 요약 응답, 실패 보고를 다룬다. 저장 모듈은 모킹하고, SQL 동작은 실제 Postgres 테스트가 맡는다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../_data/account.js', () => ({ selectPurgeTargets: vi.fn(), purgeAccount: vi.fn() }));
+vi.mock('../_data/account.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../_data/account.js')>(), selectPurgeTargets: vi.fn(), purgeAccount: vi.fn(),
+}));
 vi.mock('../_data/chat.js', () => ({ deleteExpiredChat: vi.fn() }));
 vi.mock('../_db/client.js', () => ({ database: vi.fn(() => ({ db: 'DB', withTransaction: 'TX' })) }));
 vi.mock('../observability.js', () => ({ reportServerIssue: vi.fn(async () => undefined) }));
@@ -13,6 +15,8 @@ import { reportServerIssue } from '../observability.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
 const CUTOFF = '2030-02-25T05:06:07.000Z';
+const STALE_CUTOFF = '2029-03-04T05:06:07.000Z';
+const CUTOFFS = { idle: CUTOFF, stale: STALE_CUTOFF };
 const id = (n: number) => `3f2a91bc-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ids = (count: number) => Array.from({ length: count }, (_, i) => id(i + 1));
 
@@ -32,8 +36,8 @@ async function call(authorization: string | null = 'Bearer test-secret', method 
   return res;
 }
 
-function targets(total: number, listed = total) {
-  vi.mocked(selectPurgeTargets).mockResolvedValue({ total, ids: ids(listed) });
+function targets(total: number, listed = total, stale = 0) {
+  vi.mocked(selectPurgeTargets).mockResolvedValue({ total, stale, ids: ids(listed) });
 }
 
 describe('api/cron/purge-anon 핸들러', () => {
@@ -79,14 +83,14 @@ describe('api/cron/purge-anon 핸들러', () => {
   });
 
   it('삭제 플래그가 없으면 dry-run이다. 선정만 하고 지우지 않으며 요약을 돌려준다', async () => {
-    targets(3);
+    targets(3, 3, 1);
     const res = await call();
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({
-      dryRun: true, cutoff: CUTOFF, targets: 3, batch: 3, deleted: 0, skipped: 0, failed: 0,
+      dryRun: true, cutoff: CUTOFF, staleCutoff: STALE_CUTOFF, targets: 3, staleTargets: 1, batch: 3, deleted: 0, skipped: 0, failed: 0,
       sample: ['3f2a91bc', '3f2a91bc', '3f2a91bc'], chat: { messages: 0, reports: 0 },
     });
-    expect(selectPurgeTargets).toHaveBeenCalledWith('DB', CUTOFF, 500);
+    expect(selectPurgeTargets).toHaveBeenCalledWith('DB', CUTOFFS, 500);
     expect(purgeAccount).not.toHaveBeenCalled();
   });
 
@@ -114,7 +118,7 @@ describe('api/cron/purge-anon 핸들러', () => {
     const res = await call();
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ dryRun: false, targets: 3, batch: 3, deleted: 3, skipped: 0, failed: 0 });
-    expect(vi.mocked(purgeAccount).mock.calls).toEqual(ids(3).map(uid => ['TX', uid, CUTOFF]));
+    expect(vi.mocked(purgeAccount).mock.calls).toEqual(ids(3).map(uid => ['TX', uid, CUTOFFS]));
     expect(reportServerIssue).not.toHaveBeenCalled();
   });
 
@@ -139,7 +143,7 @@ describe('api/cron/purge-anon 핸들러', () => {
     vi.stubEnv('PURGE_ANON_ENABLED', '1');
     targets(0);
     const res = await call();
-    expect(res.body).toEqual({ dryRun: false, cutoff: CUTOFF, targets: 0, batch: 0, deleted: 0, skipped: 0, failed: 0, sample: [], chat: { messages: 0, reports: 0 } });
+    expect(res.body).toEqual({ dryRun: false, cutoff: CUTOFF, staleCutoff: STALE_CUTOFF, targets: 0, staleTargets: 0, batch: 0, deleted: 0, skipped: 0, failed: 0, sample: [], chat: { messages: 0, reports: 0 } });
     expect(purgeAccount).not.toHaveBeenCalled();
   });
 

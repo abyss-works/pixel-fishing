@@ -131,6 +131,27 @@ describe('빈 익명 계정 정리 크론', () => {
     expect(await rowCounts(env.client, failing)).toEqual(seeded(true));
     expect(await rowCounts(env.client, passing)).toEqual(GONE);
   });
+  it('1년 동안 접속하지 않은 게스트는 진행이 있어도 지우고, 연결된 계정과 1년 안에 접속한 게스트는 남긴다', async () => {
+    const OLD = ago(400);
+    const before = (await run()).body as { targets: number; staleTargets: number };
+    const stale = await seedFullAccount(env.client, { save: { gold: 900, fame: 5, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD, nickname: '오래된진행' });
+    const recent = await seedFullAccount(env.client, { save: { gold: 900, updatedAt: OLD }, createdAt: OLD, lastSignInAt: ago(300), nickname: '최근진행' });
+    const linked = await seedFullAccount(env.client, { save: { gold: 900, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD, email: 'linked-cron@example.test', nickname: '연결' });
+
+    expect((await run()).body).toMatchObject({
+      dryRun: true, targets: before.targets + 1, staleTargets: before.staleTargets + 1, deleted: 0,
+    });
+    expect(await rowCounts(env.client, stale)).toEqual(seeded(true));
+
+    process.env.PURGE_ANON_ENABLED = '1';
+    expect((await run()).body).toMatchObject({ dryRun: false, staleTargets: before.staleTargets + 1, failed: 0 });
+    expect(await rowCounts(env.client, stale)).toEqual(GONE);
+    expect(await rowCounts(env.client, recent)).toEqual(seeded(true));
+    expect(await rowCounts(env.client, linked)).toEqual(seeded(true));
+
+    // 이미 지운 뒤의 재실행은 아무것도 지우지 않는다
+    expect((await run()).body).toMatchObject({ staleTargets: before.staleTargets, deleted: 0 });
+  });
   it('보관 기간이 지난 채팅(30일)과 신고(1년)를 dry-run에서도 지운다', async () => {
     const author = await seedUser(env.client, { email: 'chat@example.test' });
     const { rows } = await env.client.query<{ id: string }>(`insert into public.chat_messages (user_id, nick, text, created_at)

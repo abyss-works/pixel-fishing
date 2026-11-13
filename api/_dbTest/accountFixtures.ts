@@ -24,6 +24,8 @@ export interface AccountSpec {
   admin?: boolean;
   /** saves_current 없이 구 saves 행만 있는 계정 */
   legacySave?: boolean;
+  /** 구 saves 행의 저장 시각. 지정하지 않으면 가입 시각이다 */
+  legacySaveAt?: string;
   /** 개발자에게 보낸 편지가 있는 계정 */
   letter?: boolean;
 }
@@ -47,7 +49,8 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
   else await client.query('delete from auth.sessions where user_id = $1', [uid]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
   if (spec.legacySave) {
-    await client.query('insert into public.saves (user_id, data) values ($1, $2)', [uid, { v: 4, gold: 0 }]);
+    await client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)',
+      [uid, { v: 4, gold: 0 }, spec.legacySaveAt ?? spec.createdAt]);
   }
   return uid;
 }
@@ -88,7 +91,8 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);
     await client.query(`insert into public.records (user_id, fish_id, form, count) values ($1, 'crucian', 'normal', 1)`, [uid]);
-    await client.query(`insert into public.saves (user_id, data) values ($1, '{"v":8}')`, [uid]);
+    await client.query(`insert into public.saves (user_id, data, updated_at) values ($1, '{"v":8}', $2)`,
+      [uid, spec.legacySaveAt ?? spec.save.updatedAt]);
   }
   return uid;
 }
