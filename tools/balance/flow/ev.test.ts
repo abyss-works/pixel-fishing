@@ -115,3 +115,31 @@ describe('덮어쓰기 반영', () => {
     expect(evReport()).toEqual(base);
   });
 });
+
+describe('해역 사이 딱렙 방치 EV 증가율', () => {
+  it('옵션이 없으면 증가율 열을 담지 않는다', () => {
+    expect(evReport().growth).toBeUndefined();
+  });
+
+  it('인접한 해역마다 뒤 딱렙 EV ÷ 앞 딱렙 EV - 1과 요구 파워, 레벨 간격을 낸다', () => {
+    const r = evReport({ growth: true });
+    expect(r.growth!.length).toBe(SPOTS.length - 1);
+    r.growth!.forEach((g, i) => {
+      const a = r.spots[i], b = r.spots[i + 1];
+      expect(g.from).toBe(a.spot);
+      expect(g.to).toBe(b.spot);
+      expect(g.fromEv).toBe(a.entryEv);
+      expect(g.toEv).toBe(b.entryEv);
+      expect(g.growth).toBeCloseTo(b.entryEv / a.entryEv - 1, 12);
+      expect(g.powerGap).toBe((SPOTS[i + 1].powerReq ?? 0) - (SPOTS[i].powerReq ?? 0));
+      expect(g.levelGap).toBe(b.entryLevel - a.entryLevel);
+    });
+  });
+
+  it('가상 해역을 더하면 그 해역까지 증가율을 낸다', () => {
+    const restore = applyOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, growth: 0.45 }] });
+    try {
+      expect(evReport({ growth: true }).growth!.at(-1)!.growth).toBeCloseTo(0.45, 6);
+    } finally { restore(); }
+  });
+});
