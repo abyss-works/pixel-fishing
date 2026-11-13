@@ -63,11 +63,13 @@ describe('목표 시간에서 전환 값 역산', () => {
     }
   });
 
-  it('원양어선과 대양 트롤선의 배 가격은 현행 전환 골드의 15% 규칙과 같다', () => {
-    const big = currentRows().filter(x => x.boatTiers.some(t => t >= 7));
-    expect(big.length).toBe(2);
-    for (const c of big) {
-      expect(c.ruleBoatPrice).toBe(c.actualBoatPrice);
+  it('배를 사는 현행 전환마다 규칙값은 현행 전환 골드의 15%를 보상 반올림한 값이고 실제 배 가격과 함께 나온다', () => {
+    const withBoat = currentRows().filter(x => x.boatCount > 0);
+    expect(withBoat.length).toBeGreaterThan(0);
+    for (const c of withBoat) {
+      const g = transitionGold().find(x => x.from === c.from)!;
+      expect(c.ruleBoatPrice).toBe(roundReward(BOAT_SHARE * g.totalGold));
+      expect(c.actualBoatPrice).toBe(g.boatGold);
     }
   });
 

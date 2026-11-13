@@ -70,7 +70,8 @@ describe('업적 보상 지급', () => {
   it('명성 보상은 배 명성 대기를 줄인다', () => {
     const base = run();
     const r = run({ achievements: { reward: zone => (zone === 'indian' ? { gold: 0, fame: 1_000_000 } : null) } });
-    expect(r.arrivals.at(-1)!.hours).toBeLessThanOrEqual(base.arrivals.at(-1)!.hours);
+    const fameWait = (xs: typeof base.arrivals) => xs.reduce((sum, a) => sum + a.waitFame + a.waitBoth, 0);
+    expect(fameWait(r.arrivals)).toBeLessThanOrEqual(fameWait(base.arrivals));
   });
 });
 

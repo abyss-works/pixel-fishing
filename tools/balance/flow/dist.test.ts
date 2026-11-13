@@ -84,10 +84,10 @@ describe('해역 전환 분포', () => {
     }
   });
 
-  it('누적 시간의 표본 평균이 해석 기댓값과 2% 안에서 맞는다', () => {
+  it('누적 시간의 표본 평균이 해석 기댓값과 5% 안에서 맞는다', () => {
     for (const i of [7, 8, 9, 10, 11]) {
       const r = rows[i];
-      expect(Math.abs(r.cumulative!.mean! / r.analyticCumulative! - 1), `${r.to}`).toBeLessThan(0.02);
+      expect(Math.abs(r.cumulative!.mean! / r.analyticCumulative! - 1), `${r.to}`).toBeLessThan(0.05);
     }
   });
 

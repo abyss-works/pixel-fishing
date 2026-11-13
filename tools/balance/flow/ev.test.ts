@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTIES, BOUNTY_ZONES } from '../../../src/game/content/bounties';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
 import { SPEC_MARGIN, entryLevel, rates } from '../model';
 import { applyOverride } from './override';
 import { GENERAL_TARGET_HOURS, NAMED_TARGET_HOURS, evReport, roundReward } from './ev';
@@ -104,7 +104,7 @@ describe('보상의 EV 시간 환산', () => {
 describe('덮어쓰기 반영', () => {
   it('해역 요구 파워를 바꾸면 EV와 환산이 그 값으로 다시 계산된다', () => {
     const base = evReport();
-    const restore = applyOverride({ spots: { sthelena: { powerReq: 155 } } });
+    const restore = applyOverride({ spots: { sthelena: { powerReq: powerReqOf('sthelena') + 15 } } });
     let changed;
     try { changed = evReport(); } finally { restore(); }
     const pick = (r: ReturnType<typeof evReport>) => r.spots.find(s => s.spot === 'sthelena')!;
@@ -137,7 +137,7 @@ describe('해역 사이 딱렙 방치 EV 증가율', () => {
   });
 
   it('가상 해역을 더하면 그 해역까지 증가율을 낸다', () => {
-    const restore = applyOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, growth: 0.45 }] });
+    const restore = applyOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: powerReqOf('sthelena') + 20, growth: 0.45 }] });
     try {
       expect(evReport({ growth: true }).growth!.at(-1)!.growth).toBeCloseTo(0.45, 6);
     } finally { restore(); }
