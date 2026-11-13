@@ -92,6 +92,33 @@ describe('가상 해역을 넣은 명령', () => {
   });
 });
 
+describe('가상 해역과 분포, 보상, 미지원 명령', () => {
+  it('dist가 가상 해역을 넣어도 돌고 전환 수가 해역 수를 따른다', () => {
+    const r = runFlow(parseArgs(['dist', '--trials', '3', '--override', writeJson(NEXT)]));
+    expect(r.dist!.transition).toHaveLength(SPOTS.length);
+    expect(r.dist!.transition.at(-1)!.to).toBe('next');
+  });
+
+  it('dist 보상 분포가 가상 전환 기준과 함께 돈다', () => {
+    const file = writeJson(NEXT);
+    const r = runFlow(parseArgs(['dist', '--trials', '3', '--override', file, '--reward', '25', '--reward-split', '0.5', '--basis', 'southatlantic=sthelena:next']));
+    const row = r.dist!.reward!.rows.find(x => x.zone === 'southatlantic' && x.tier === 'basic')!;
+    expect(row.to).toBe('next');
+    expect(row.reward).not.toBeNull();
+  });
+
+  it('가상 해역을 지원하지 않는 명령은 명확한 오류로 거부한다', () => {
+    const file = writeJson(NEXT);
+    for (const c of ['travel', 'effects', 'recipes', 'window', 'opening', 'exception']) {
+      const r = runCli([c, '--override', file]);
+      expect(r.exitCode, c).toBe(1);
+      expect(r.stderr, c).toContain('addSpots는');
+    }
+    expect(runCli(['--override', file]).exitCode).toBe(1);
+    expect(HELP).toContain('쓸 수 없다');
+  });
+});
+
 describe('solve, upgrades, fame', () => {
   it('solve는 목표 행과 현행 환산을 낸다', () => {
     const r = runFlow(parseArgs(['solve', '--target', 'sthelena=24/30']));

@@ -4,14 +4,13 @@
 //   강화 골드 = 전환 골드 - 배 가격. 이 골드로 출발 해역 진입 레벨에서 몇 레벨을 올릴 수 있는지 아래와 위 두 후보로 낸다
 //   명성 요구치 = 출발 해역을 여는 배의 요구치 + 출발 해역 딱렙 방치 시간당 명성 x 명성 시간
 // 시간은 방치 낚시 기준의 실질 낚시 시간이다. 값은 계산만 하고 정하지 않는다.
-import { BOATS } from '../../../src/game/content/boats';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel, rates } from '../model';
 import { powerOfLevel } from '../rodRules';
 import { roundReward } from './ev';
-import { fameRows } from './tables';
+import { fameRows, heldFame } from './tables';
 import { transitionGold } from './transitions';
 
 /** 배 가격 ÷ 전환 골드의 기본 비중 */
@@ -39,8 +38,6 @@ export interface SolveOptions {
   /** 배 가격의 전환 골드 비중(0 이상 1 미만). 기본 BOAT_SHARE */
   boatShare?: number;
 }
-
-const heldFame = (spot: SpotId): number => BOATS.find(b => b.tier === SPOTS.find(s => s.id === spot)!.boatTier)?.fameReq ?? 0;
 
 function levelCandidates(from: SpotId, upgradeGold: number): { below: LevelCandidate; above: LevelCandidate } {
   const e = entryLevel(from);

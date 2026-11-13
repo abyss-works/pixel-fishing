@@ -81,8 +81,8 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   const base = { axis: o.axis, bounty: false, maxDays: o.maxDays };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
-  const hours: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
-  const cumulative: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
+  const hours: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
+  const cumulative: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
   for (let i = 0; i < o.trials; i++) {
     transitionTimings(simulate({ ...base, sampler: createSampler(stream) }).arrivals).forEach((t, k) => {
       hours[k].push(t.hours);
@@ -95,9 +95,6 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
     cumulative: summarize(cumulative[k], o.trials - cumulative[k].length), analyticCumulative: analytic[k]?.cumulativeHours ?? null,
   }));
 }
-
-/** 전환 수는 해역 수보다 하나 적다 */
-const TRANSITION_COUNT = SPOTS.length - 1;
 
 export interface RewardDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number;

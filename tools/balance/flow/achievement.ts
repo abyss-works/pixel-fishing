@@ -9,9 +9,9 @@ import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { BOATS } from '../../../src/game/content/boats';
 import { entryLevel, rates, spotsOfZone, zoneOf } from '../model';
 import { roundReward } from './ev';
+import { heldFame } from './tables';
 import { transitionGold } from './transitions';
 import type { AchievementOptions } from './progress';
 
@@ -38,8 +38,6 @@ export interface RewardBasis {
   /** 방식이나 기준 전환을 줬을 때 기준 값을 만든 원 값 */
   source?: { mode: RewardBasisMode; transitionGold: number; boatFameReq: number; fameIncrement: number };
 }
-
-const heldFame = (spot: SpotId): number => BOATS.find(b => b.tier === SPOTS.find(s => s.id === spot)!.boatTier)?.fameReq ?? 0;
 
 /** 인자 `구역=출발:도착`을 읽는다 */
 export function parseBasisSpec(raw: string): { zone: BountyZone } & BasisTransition {

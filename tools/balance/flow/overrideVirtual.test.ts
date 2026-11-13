@@ -6,7 +6,7 @@ import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel, rates, zoneOf } from '../model';
 import { simulate } from './progress';
 import { transitionGold, transitionReport } from './transitions';
-import { applyOverride, parseOverride } from './override';
+import { applyOverride, ladderPrice, parseOverride } from './override';
 
 describe('가상 해역과 지역 추가', () => {
   let restore: (() => void) | null = null;
@@ -86,6 +86,18 @@ describe('가상 해역과 지역 추가', () => {
     expect(t.timings.at(-1)!.hours).toBeGreaterThan(0);
   });
 
+  it('가상 배(제품 배 상한 위)도 골드와 명성 조건을 채워야 산다', () => {
+    const base = { id: 'next', like: 'sthelena', powerReq: 170, zone: 'z' };
+    restore = applyOverride(parseOverride({ addSpots: [{ ...base, boat: { price: 5000000, fameReq: 1e12 } }] }));
+    expect(simulate({ axis: 'idle', bounty: false, maxDays: 365 }).complete).toBe(false);
+    restore();
+    restore = applyOverride(parseOverride({ addSpots: [{ ...base, boat: { price: 1e15, fameReq: 400000 } }] }));
+    expect(simulate({ axis: 'idle', bounty: false, maxDays: 365 }).complete).toBe(false);
+    restore();
+    restore = applyOverride(parseOverride({ addSpots: [{ ...base, boat: { price: 5000000, fameReq: 400000 } }] }));
+    expect(simulate({ axis: 'idle', bounty: false, maxDays: 365 }).complete).toBe(true);
+  });
+
   it('가상 해역이 없으면 같은 조건의 결과가 변하지 않는다', () => {
     const before = JSON.stringify(transitionReport({ axis: 'idle', maxDays: 365 }));
     restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, growth: 0.45 }] }));
@@ -121,8 +133,11 @@ describe('해역별 등급별 가격 배율', () => {
     for (const f of sea) {
       const orig = before[sea.indexOf(f)];
       if (f.rarity === 'common') expect(f.price).toBe(Math.round(orig * 2));
-      else if (f.rarity === 'rare' || f.rarity === 'epic') expect(f.price).toBe(orig);
+      else if (f.rarity === 'legendary') expect(f.price).toBe(ladderPrice(orig * 0.5, 'legendary'));
+      else expect(f.price).toBe(orig);
     }
+    expect(sea.some(f => f.rarity === 'common')).toBe(true);
+    expect(sea.some(f => f.rarity === 'legendary')).toBe(true);
     expect(prices('deep')).toEqual(other);
     restore();
     restore = null;
@@ -132,7 +147,9 @@ describe('해역별 등급별 가격 배율', () => {
   it('priceMult와 함께 주면 두 배율을 곱한 뒤 한 번만 사다리로 맞춘다', () => {
     const before = FISH.filter(f => f.spot === 'sea').map(f => ({ id: f.id, price: f.price, rarity: f.rarity }));
     restore = applyOverride(parseOverride({ spots: { sea: { priceMult: 1.5, gradeMult: { common: 2 } } } }));
-    for (const b of before.filter(x => x.rarity === 'common')) expect(FISH.find(f => f.id === b.id)!.price).toBe(Math.round(b.price * 3));
+    const commons = before.filter(x => x.rarity === 'common');
+    expect(commons.length).toBeGreaterThan(0);
+    for (const b of commons) expect(FISH.find(f => f.id === b.id)!.price).toBe(Math.round(b.price * 3));
   });
 
   it('알 수 없는 등급과 0 이하 배율을 거부한다', () => {

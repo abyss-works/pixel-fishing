@@ -53,7 +53,9 @@ describe('목표 시간에서 전환 값 역산', () => {
   });
 
   it('현행 전환의 시간을 그대로 넣으면 현행 전환 골드와 명성 요구치가 나온다', () => {
-    for (const c of currentRows().filter(x => x.boatCount > 0)) {
+    const withBoat = currentRows().filter(x => x.boatCount > 0);
+    expect(withBoat.length).toBeGreaterThan(0);
+    for (const c of withBoat) {
       const [r] = solveTargets([{ from: c.from, goldHours: c.goldHours, fameHours: c.fameHours }]);
       const g = transitionGold().find(x => x.from === c.from)!;
       expect(r.totalGold).toBeCloseTo(g.totalGold, 4);
@@ -62,7 +64,9 @@ describe('목표 시간에서 전환 값 역산', () => {
   });
 
   it('원양어선과 대양 트롤선의 배 가격은 현행 전환 골드의 15% 규칙과 같다', () => {
-    for (const c of currentRows().filter(x => x.boatTiers.some(t => t >= 7))) {
+    const big = currentRows().filter(x => x.boatTiers.some(t => t >= 7));
+    expect(big.length).toBe(2);
+    for (const c of big) {
       expect(c.ruleBoatPrice).toBe(c.actualBoatPrice);
     }
   });

@@ -141,9 +141,9 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                       "addSpots":[{"id":"next","name":"다음 해역","like":"sthelena","ref":"sthelena","powerReq":170,"zone":"newregion","growth":0.45,
                                    "boat":{"price":5000000,"fameReq":400000}}]}
                      priceMult는 그 해역 어종 판매가에 곱하고 gradeMult는 등급별(common, rare, epic, legendary)로 곱한다. 곱한 값은 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
-                     rod: powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이다.
+                     rod: powerPerLevel를 바꿔도 파워 미달 페널티의 간격(레벨당 5파워 단위)은 제품 값 그대로다. powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이다.
                      idleBoost는 방치 배수 표(레벨 차 0, 1, 2, ...이고 마지막 값이 하한). basis가 level이면 요구 파워를 넘은 만큼을 레벨당 파워로 나눈 레벨 차로, power이면 unit(생략하면 제품의 레벨당 파워)으로 나눈 값으로 표를 고른다
-                     addSpots: 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
+                     addSpots(opening, exception, travel, effects, window, recipes에서는 쓸 수 없다): 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
                      zone을 주면 그 이름의 새 지역이고 생략하면 like의 지역이다. boat를 주면 그 해역을 여는 새 배를 더한다. 가상 어종은 구역 도감 조건에 세지 않는다
   --json             표 대신 JSON으로 낸다
   --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
@@ -434,8 +434,15 @@ export interface FlowResult {
 const legendCandidates = (legendAt: number | null): number[] =>
   legendAt !== null ? [legendAt] : [FIRST_CATCH_LEGEND_MIN, Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2), FIRST_CATCH_LEGEND_MAX];
 
+/** 가상 해역(addSpots)을 지원하지 않는 명령 — 해역 표나 지도 데이터를 해역 id로 직접 읽는다 */
+const NO_VIRTUAL_COMMANDS: readonly Command[] = ['opening', 'exception', 'travel', 'effects', 'window', 'recipes'];
+
 export function runFlow(o: FlowOptions): FlowResult {
   const override = o.override ? loadOverride(o.override) : null;
+  if (override?.addSpots) {
+    const bad = o.commands.filter(c => NO_VIRTUAL_COMMANDS.includes(c));
+    if (bad.length > 0) throw new Error(`addSpots는 ${bad.join(', ')} 명령에서 쓸 수 없습니다. 명령을 transition, days, ev, gates, dist, achievements, solve, upgrades, fame 중에서 지정하세요`);
+  }
   const restore = override ? applyOverride(override) : () => {};
   try {
     const planOn = PLAN_COMMANDS.some(c => o.commands.includes(c) && o.commands.length === 1) && (o.recipe !== null || (Object.keys(o.effect) as (keyof Effect)[]).some(k => o.effect[k] !== 0));
@@ -611,7 +618,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
       '시간은 방치 낚시 기준의 실질 낚시 시간이다. 골드 시간은 출발 해역 진입 레벨(딱렙)의 낮밤 혼합 방치 EV로, 명성 시간은 같은 조건의 시간당 명성으로 센다',
       '전환 골드 = 골드 시간 x 출발 해역 딱렙 방치 EV. 배 가격은 전환 골드의 일정 비중(--boat-share, 기본 15%)을 앞 두 자리 유효숫자의 둘째 자리가 0 또는 5가 되게 반올림한 값이고, 나머지가 강화 골드다',
       '강화 골드를 채우는 레벨 수는 출발 해역 진입 레벨부터 강화비 합이 강화 골드 이하인 가장 큰 간격(아래)과 그 다음 간격(위) 두 후보로 낸다. 레벨 간격은 정수라 어느 쪽도 강화 골드와 정확히 같지 않다',
-      '명성 요구치 = 출발 해역을 여는 배의 명성 요구치 + 시간당 명성 x 명성 시간이다. 반올림 열은 의뢰 보상과 같은 자릿수 반올림을 적용한 참고 값이고, 명성 요구치의 반올림 규칙은 정해진 것이 아니다',
+      '명성 요구치 = 출발 해역을 여는 배의 명성 요구치 + 시간당 명성 x 명성 시간이다. 반올림 열은 의뢰 보상과 같은 자릿수 반올림을 적용한 참고 값이다',
       '명성 시간 ÷ 골드 시간은 게이트의 배 명성 대기 ÷ 골드 대기와 다르다. 이 값은 명성을 모으는 데 드는 이론 시간(골드 수입과 병렬)이고 게이트 값은 시뮬레이션이 기다린 시간이다',
       '역산은 계산만 하고 해역의 요구 파워나 배 데이터를 바꾸지 않는다. 값을 넣어 재려면 --override로 가상 해역이나 배 덮어쓰기를 준다',
     );

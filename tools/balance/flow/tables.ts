@@ -76,6 +76,9 @@ export interface FameRow {
 
 const fameOfBoatTier = (tier: number): number => BOATS.find(b => b.tier === tier)?.fameReq ?? 0;
 
+/** 해역을 여는 배의 명성 요구치. 배가 필요 없는 해역은 0 */
+export const heldFame = (spot: SpotId): number => fameOfBoatTier(SPOTS.find(s => s.id === spot)!.boatTier);
+
 /** 누적 명성 곡선 — 전환마다 요구치와 증분, 증분을 방치로 모으는 시간 */
 export function fameRows(): FameRow[] {
   const gold = transitionGold();
