@@ -149,6 +149,42 @@ describe('GameFieldEngine 막힘 안내', () => {
     expect(blocked(events)).toHaveLength(1);
   });
 
+  /** 프레임 간격(ms)이 고르지 않은 입력을 흉내 낸다. 경계까지 남은 거리를 달리해 여러 번 시도한다 */
+  function jitteryAnnouncements(code: string, lon: number, lat: number, latStep: number) {
+    const counts: number[] = [];
+    for (let k = 0; k < 12; k++) {
+      const s = setup();
+      s.engine.placePlayer(at(lon, lat + (code === 'ArrowUp' ? -1 : 1) * latStep * k));
+      s.frame(1000, 950);
+      s.engine.handleKeyDown(code, noop);
+      let t = 1000;
+      for (let i = 0; i < 40; i++) {
+        for (const dt of [16.7, 16.7, 16.7, 6]) { s.frame(t + dt, t); t += dt; }
+      }
+      counts.push(blocked(s.events).length);
+    }
+    return counts;
+  }
+
+  it('프레임 간격이 고르지 않아도 구역 게이트에 막힌 채 누르는 동안 안내는 한 번이다', () => {
+    expect(jitteryAnnouncements('ArrowDown', 130, 19.25, 0.01)).toEqual(Array(12).fill(1));
+  });
+
+  it('프레임 간격이 고르지 않아도 열지 않은 바다에 막힌 채 누르는 동안 안내는 한 번이다', () => {
+    expect(jitteryAnnouncements('ArrowUp', -8, -0.4, 0.01)).toEqual(Array(12).fill(1));
+  });
+
+  it('경계에서 충분히 멀어졌다 다시 닿으면 키를 떼지 않아도 안내를 다시 한다', () => {
+    const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
+    engine.handleKeyDown('ArrowDown', noop);
+    engine.releaseKey('ArrowUp');
+    for (let i = 0; i < 20; i++) frame(3000 + i * 50, 2950 + i * 50);
+    engine.releaseKey('ArrowDown');
+    engine.handleKeyDown('ArrowUp', noop);
+    for (let i = 0; i < 40; i++) frame(5000 + i * 50, 4950 + i * 50);
+    expect(blocked(events)).toHaveLength(2);
+  });
+
   it('경계에서 떨어졌다 다시 닿으면 안내를 다시 한다', () => {
     const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
     engine.releaseKey('ArrowUp');
@@ -401,6 +437,26 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     frame(1000, 950);
     expect(onScene).not.toHaveBeenCalled();
     expect(events).toEqual([{ type: 'trigger-blocked', message: expect.stringContaining('배가 필요해요') }]);
+  });
+
+  it('배가 없어 포구에서 막힌 채 계속 밀어도 배 없음 안내는 한 번이다', () => {
+    const { engine, events, frame } = village({ guest: false, boat: 0 });
+    engine.handleKeyDown('ArrowDown', noop);
+    for (let i = 0; i < 30; i++) frame(1000 + i * 17, 983 + i * 17);
+    expect(events.filter(event => event.type === 'trigger-blocked')).toHaveLength(1);
+  });
+
+  it('배가 없는 채 키를 뗐다가 다시 밀면 배 없음 안내를 다시 한다', () => {
+    const { engine, events, frame } = village({ guest: false, boat: 0 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    frame(1050, 1000);
+    engine.releaseKey('ArrowDown');
+    frame(1100, 1050);
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1150, 1100);
+    frame(1200, 1150);
+    expect(events.filter(event => event.type === 'trigger-blocked')).toHaveLength(2);
   });
 
   it('게스트가 아니면 막히지 않고 바다로 나간다', () => {
