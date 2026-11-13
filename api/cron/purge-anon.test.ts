@@ -178,4 +178,34 @@ describe('api/cron/purge-anon 핸들러', () => {
     expect(reportServerIssue).toHaveBeenCalledWith('anon-purge', failure);
     expect(purgeAccount).not.toHaveBeenCalled();
   });
+  it('대상 선정이 실패하면 단계와 원인을 error로 남긴다', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(selectPurgeTargets).mockRejectedValue(new Error('select failed'));
+    await call();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse((spy.mock.calls[0] as [string, string])[1])).toMatchObject({ job: 'purge-anon', stage: 'select-targets', message: 'select failed' });
+    spy.mockRestore();
+  });
+
+  it('계정 삭제가 실패하면 첫 실패를 purge-account 단계로 한 번 남기고 계정 id는 앞 8자리만 쓴다', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.stubEnv('PURGE_ANON_ENABLED', '1');
+    targets(2);
+    vi.mocked(purgeAccount).mockRejectedValue(new Error('blocked'));
+    await call();
+    expect(spy).toHaveBeenCalledTimes(1);
+    const fields = JSON.parse((spy.mock.calls[0] as [string, string])[1]);
+    expect(fields).toMatchObject({ job: 'purge-anon', stage: 'purge-account', message: 'blocked', failedId: '3f2a91bc' });
+    expect(JSON.stringify(fields)).not.toContain(id(1));
+    spy.mockRestore();
+  });
+
+it('던져진 값을 문자열로 바꿀 수 없어도 Sentry 보고와 500 응답은 이어진다', async () => {    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);    const unprintable = Object.create(null);    vi.mocked(selectPurgeTargets).mockRejectedValue(unprintable);    const res = await call();    expect(res.statusCode).toBe(500);    expect(reportServerIssue).toHaveBeenCalledWith('anon-purge', unprintable);    spy.mockRestore();  });
+  it('채팅 보관 정리가 실패하면 expire-chat 단계로 남긴다', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(deleteExpiredChat).mockRejectedValue(new Error('chat failed'));
+    await call();
+    expect(JSON.parse((spy.mock.calls[0] as [string, string])[1])).toMatchObject({ stage: 'expire-chat' });
+    spy.mockRestore();
+  });
 });
