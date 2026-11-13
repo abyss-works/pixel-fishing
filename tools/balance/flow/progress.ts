@@ -12,8 +12,10 @@ import { upgradeCost } from '../../../src/game/rules/balance';
 import { axisAvailable, rates, rodSpec } from '../model';
 import type { Axis, Pool, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
-import { licenseHeld, licenseKey, planBounties } from './bounty';
+import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
+import { licenseFish, licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
+import type { Reward } from './achievement';
 import type { Sampler } from './sample';
 
 /** 일수 환산 기준 — 실질 낚시 시간을 이 값으로 나눈 것이 일수다. 환산 기준은 이 하나다 */
@@ -39,6 +41,21 @@ export interface RatePlan {
   costPerHour(spot: SpotId, level: number, axis: Axis, boat: number): number;
 }
 
+/** 진행 업적(구역 도감 완성) 기록과 보상 지급 */
+export interface AchievementOptions {
+  /** 달성한 업적에 지급할 골드와 명성. null이면 지급하지 않고 달성 시각만 기록한다 */
+  reward: (zone: BountyZone, tier: BountyTier) => Reward | null;
+}
+
+/** 달성한 진행 업적 — 구역의 일반 폼 도감 조건(기본은 전설 제외, 네임드는 전설 포함)을 채운 시점 */
+export interface Achieved {
+  zone: BountyZone; tier: BountyTier;
+  /** 달성까지 누적 실질 낚시 시간(시간)과 그때 낚던 해역 */
+  hours: number; spot: SpotId;
+  /** 지급한 보상. 지급하지 않았으면 null */
+  granted: Reward | null;
+}
+
 export interface SimOptions {
   axis: FlowAxis;
   /** 주면 이 계획으로 수입을 계산한다. 생략하면 효과 없는 측정 모델이다 */
@@ -51,6 +68,10 @@ export interface SimOptions {
   sampler?: Sampler;
   /** 마지막 해역에 닿은 뒤에도 이 레벨까지 강화를 이어 가며 레벨별 보유 라이선스를 기록한다. 생략하면 도착에서 멈춘다 */
   growTo?: number;
+  /** 주면 진행 업적 달성을 기록하고 보상을 지급한다. 기댓값 경로는 구역 도감 완성 확률이 라이선스 문턱을 넘은 시점, 표본 경로는 실제로 뽑은 일반 폼이 조건을 채운 시점이다 */
+  achievements?: AchievementOptions;
+  /** 주면 누적 캐치 수가 이 값들에 처음 닿은 시점(누적 실질 낚시 시간)을 기록한다. 한 걸음 안에서는 캐치가 고르게 쌓인다고 보고 보간한다 */
+  catchMarks?: readonly number[];
 }
 
 /** 마지막 해역에서 낚싯대가 이 레벨에 닿은 시점의 상태 */
@@ -78,6 +99,11 @@ export interface SimResult {
   bountyGold: number;
   /** growTo를 준 경우 마지막 해역 도착 이후 레벨별 기록 */
   marks: LevelMark[];
+  /** 달성한 진행 업적(achievements 옵션을 줬을 때). 달성 순서다 */
+  achieved: Achieved[];
+  /** 시뮬레이션이 끝날 때까지 누적 캐치 수와, catchMarks마다 닿은 시점(시간). 닿기 전에 끝났으면 null */
+  catches: number;
+  catchHours: (number | null)[];
 }
 
 const STEP_SEC = 60;
@@ -102,6 +128,28 @@ export function simulate(opts: SimOptions): SimResult {
   const dex: DexLog = new Map();
   const cache = new Map<string, Rates>();
   const normalShare = new Map<SpotId, number>();
+  const achieved: Achieved[] = [];
+  const catchMarks = opts.catchMarks ?? [];
+  const catchHours: (number | null)[] = catchMarks.map(() => null);
+  let catchTotal = 0;
+  const noteCatches = (step: number, sec: number) => {
+    const before = catchTotal;
+    catchTotal += step;
+    catchMarks.forEach((m, i) => {
+      if (catchHours[i] === null && catchTotal >= m) catchHours[i] = (fishSec + (step > 0 ? (m - before) / step : 0) * sec) / 3600;
+    });
+  };
+  /** 표본 경로에서 실제로 모은 일반 폼 */
+  const normalSeen = new Set<string>();
+  const needed = new Map<string, string[]>();
+  const neededOf = (zone: BountyZone, tier: BountyTier): string[] => {
+    const key = `${zone}:${tier}`;
+    let ids = needed.get(key);
+    if (!ids) { ids = licenseFish(zone, tier).map(f => f.id); needed.set(key, ids); }
+    return ids;
+  };
+  /** 도감을 기댓값 경로의 확률로 쌓는가 — 의뢰 수행(라이선스)이나 기댓값 경로의 업적 기록 */
+  const trackExpected = opts.bounty || (!!opts.achievements && !opts.sampler);
 
   const axisAt = (spot: SpotId, lv: number): Axis => axisOf(opts.axis, spot, lv);
   const rateAt = (spot: SpotId, axis: Axis = axisAt(spot, level)): Rates => {
@@ -113,7 +161,7 @@ export function simulate(opts: SimOptions): SimResult {
 
   /** 낚은 캐치의 도감 기록 — 일반 폼을 한 번도 못 잡을 확률의 로그를 쌓는다 */
   const track = (spot: SpotId, r: Rates, catches: number) => {
-    if (!opts.bounty) return;
+    if (!trackExpected) return;
     let share = normalShare.get(spot);
     if (share === undefined) { share = 1 - variantShare(mutationWeightsOf({ artifacts: [] }, spot)); normalShare.set(spot, share); }
     const vs = (r as { variantShare?: number }).variantShare;
@@ -127,20 +175,40 @@ export function simulate(opts: SimOptions): SimResult {
   /** 낚은 수입을 더한다. 낚은 물고기는 모두 판매 수입이다 */
   const accrue = (spots: SpotId[], axis: Axis | null, sec: number) => {
     const h = sec / 3600 / spots.length;
+    let stepCatches = 0;
     for (const spot of spots) {
       const useAxis = axis ?? axisAt(spot, level);
       const r = rateAt(spot, useAxis);
       if (opts.plan) gold -= opts.plan.costPerHour(spot, level, useAxis, boat) * h;
       if (opts.sampler) {
-        const v = opts.sampler.accrue(r, h * 3600);
+        const v = opts.sampler.accrue(r, h * 3600, opts.achievements ? c => { if (!c.variant) normalSeen.add(c.fish.id); } : undefined);
         gold += v.gold; fame += v.fame;
+        stepCatches += v.catches;
         track(spot, r, v.catches);
       } else {
         gold += r.goldPerHour * h; fame += r.famePerHour * h;
+        stepCatches += r.catchesPerHour * h;
         track(spot, r, r.catchesPerHour * h);
       }
     }
+    noteCatches(stepCatches, sec);
     fishSec += sec;
+  };
+
+  /** 새로 채운 진행 업적을 기록하고 보상을 지급한다. 의뢰 활동 중이면 at이 활동 해역이다 */
+  const settleAchievements = (at?: SpotId) => {
+    const a = opts.achievements;
+    if (!a) return;
+    for (const zone of BOUNTY_ZONES) {
+      for (const tier of ['basic', 'named'] as const) {
+        if (achieved.some(x => x.zone === zone && x.tier === tier)) continue;
+        const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : licenseHeld(dex, zone, tier);
+        if (!done) continue;
+        const granted = a.reward(zone, tier);
+        if (granted) { gold += granted.gold; fame += granted.fame; }
+        achieved.push({ zone, tier, hours: fishSec / 3600, spot: at ?? SPOTS[idx].id, granted });
+      }
+    }
   };
 
   const licensesNow = (): string[] => !opts.bounty ? [] : BOUNTY_ZONES.flatMap(zone =>
@@ -179,6 +247,7 @@ export function simulate(opts: SimOptions): SimResult {
     for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
       accrue(spots ?? [SPOTS[idx].id], axis, dt);
+      settleAchievements(spots?.[0]);
       left -= dt;
       settle(dt);
     }
@@ -203,5 +272,5 @@ export function simulate(opts: SimOptions): SimResult {
     }
     if (!finished()) fishFor(null, null, left);
   }
-  return { arrivals, complete: idx >= LAST, bountyGold, marks };
+  return { arrivals, complete: idx >= LAST, bountyGold, marks, achieved, catches: catchTotal, catchHours };
 }

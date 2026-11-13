@@ -19,9 +19,13 @@ export const LICENSE_PROB = 0.5;
 /** 어종 id → 일반 폼을 한 번도 못 잡을 확률의 로그(0 이하). 기록이 없는 어종은 확률 1(로그 0)이다 */
 export type DexLog = Map<string, number>;
 
+/** 라이선스 조건의 대상 어종 — 구역의 어종 중 그 단계의 등급에 드는 것 */
+export const licenseFish = (zone: BountyZone, tier: BountyTier) =>
+  FISH.filter(f => zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity));
+
 /** 구역 도감 완성 확률 — 어종이 서로 독립이라고 보고 곱한다. 해당 등급 어종이 없으면 0 */
 export function dexCompletion(dex: DexLog, zone: BountyZone, tier: BountyTier): number {
-  const fish = FISH.filter(f => zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity));
+  const fish = licenseFish(zone, tier);
   if (fish.length === 0) return 0;
   return fish.reduce((p, f) => p * (1 - Math.exp(dex.get(f.id) ?? 0)), 1);
 }
