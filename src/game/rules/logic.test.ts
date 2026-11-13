@@ -1,6 +1,7 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
 import { spotById } from '../content/spots';
+import { ZONES } from '../content/zones';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
@@ -45,8 +46,8 @@ describe('데이터 무결성', () => {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
     expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(MAX_BOAT).toBe(8);
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(MAX_BOAT).toBe(9);
   });
 
   it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
@@ -277,18 +278,29 @@ describe('R15: 강화/구매 비용', () => {
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
-    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000, 4000]);
   });
-  it('대양 트롤선(8단계): 가격 1,000,000 · 명성 200,000 · 속도 200 · 가방 4,000', () => {
-    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1000000, fameReq: 200000, speed: 200, bagCap: 4000 });
+  it('배 가격과 명성 하한은 확정 값이다', () => {
+    expect(BOATS.map(b => b.price)).toEqual([125, 200, 1250, 2600, 12500, 32000, 125000, 1250000, 12500000]);
+    expect(BOATS.map(b => b.fameReq)).toEqual([0, 250, 1500, 1800, 7500, 9000, 25000, 80000, 230000]);
+  });
+  it('대양 트롤선(8단계): 가격 1,250,000 · 명성 80,000 · 속도 200 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 });
+  });
+  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도와 가방은 대양 트롤선과 같고 여는 해역이 없다', () => {
+    expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: BOATS[7].speed, bagCap: BOATS[7].bagCap });
+    expect(SPOTS.some(s => s.boatTier === 9)).toBe(false);
+    expect(ZONES.some(z => z.entryBoat === 9)).toBe(false);
   });
   it('이동 속도(px/s): 배 없음 100, 조각배 110부터 대양 트롤선 200까지', () => {
     expect(WALK_SPEED).toBe(100);
-    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200]);
+    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200, 200]);
   });
-  it('배 가격은 단조 증가', () => {
+  it('배 가격과 명성 하한은 단조 증가, 속도와 가방은 줄지 않는다(가공 플랜트선은 대양 트롤선과 같다)', () => {
     for (let i = 1; i < BOATS.length; i++) {
-      if (BOATS[i].tier !== 4) expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price); // 범선은 정크선보다 싸다
+      expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);
+      expect(BOATS[i].fameReq).toBeGreaterThan(BOATS[i - 1].fameReq);
+      if (BOATS[i].tier === 9) continue;
       expect(BOATS[i].speed).toBeGreaterThan(BOATS[i - 1].speed);
       expect(BOATS[i].bagCap).toBeGreaterThan(BOATS[i - 1].bagCap); // 가방도 함께
     }
@@ -968,8 +980,8 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
     expect(redeemCoupon(newState(), `  ${CODE}  `).ok).toBe(true);
   });
 
-  it('첫 쿠폰은 조각배 값을 지급한다 (레벨디자인 개편 보상)', () => {
-    expect(COUPONS[CODE].gold).toBeGreaterThanOrEqual(BOATS[0].price);
+  it('첫 쿠폰은 조각배 값을 지급한다', () => {
+    expect(COUPONS[CODE].gold).toBe(BOATS[0].price);
   });
 });
 
