@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import FacilityModal from './FacilityModal';
 import { BOATS, MAX_BOAT, newState } from '../../../../game/rules/logic';
+import { AUTO_ENERGY_BOAT } from '../../../../game/content/cooking';
 import { fmtGold } from '../../../ui/format';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 
@@ -27,5 +28,21 @@ describe('조선소', () => {
     expect(screen.getByRole('button', { name: `구매 (-${fmtGold(last.price)})` })).toBeEnabled();
     const row = screen.getByText('새 해역').closest('tr')!;
     expect(row).toHaveTextContent('새 해역없음');
+  });
+
+  it('다음 배가 자동 기운 얻기 배일 때만 그 효과 설명이 나온다', () => {
+    const effect = /가방이 가득 차면 놓아줄 물고기 가운데/;
+    const open = (boat: number) => render(
+      <FacilityModal sellBonus={0} panel="boat" game={{ ...newState(), boat }} dispatch={vi.fn()} setToast={() => {}} onClose={() => {}} />);
+    open(AUTO_ENERGY_BOAT - 1);
+    expect(screen.getByText(effect)).toBeInTheDocument();
+    cleanup();
+    open(AUTO_ENERGY_BOAT - 2);
+    expect(screen.queryByText(effect)).toBeNull();
+  });
+
+  it('자동 기운 얻기 배를 이미 가졌으면 최고 배 안내에도 효과 설명이 나온다', () => {
+    render(<FacilityModal sellBonus={0} panel="boat" game={{ ...newState(), boat: MAX_BOAT }} dispatch={vi.fn()} setToast={() => {}} onClose={() => {}} />);
+    expect(screen.getByText(/가방이 가득 차면 놓아줄 물고기 가운데/)).toBeInTheDocument();
   });
 });
