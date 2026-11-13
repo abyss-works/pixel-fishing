@@ -72,6 +72,8 @@ export interface SimOptions {
   growTo?: number;
   /** 주면 진행 업적 달성을 기록하고 보상을 지급한다. 기댓값 경로는 구역 도감 완성 확률이 라이선스 문턱을 넘은 시점, 표본 경로는 실제로 뽑은 일반 폼이 조건을 채운 시점이다 */
   achievements?: AchievementOptions;
+  /** 주면 누적 캐치 수가 이 값들에 처음 닿은 시점(누적 실질 낚시 시간)을 기록한다. 한 걸음 안에서는 캐치가 고르게 쌓인다고 보고 보간한다 */
+  catchMarks?: readonly number[];
 }
 
 /** 마지막 해역에서 낚싯대가 이 레벨에 닿은 시점의 상태 */
@@ -101,6 +103,9 @@ export interface SimResult {
   marks: LevelMark[];
   /** 달성한 진행 업적(achievements 옵션을 줬을 때). 달성 순서다 */
   achieved: Achieved[];
+  /** 시뮬레이션이 끝날 때까지 누적 캐치 수와, catchMarks마다 닿은 시점(시간). 닿기 전에 끝났으면 null */
+  catches: number;
+  catchHours: (number | null)[];
 }
 
 const STEP_SEC = 60;
@@ -126,6 +131,16 @@ export function simulate(opts: SimOptions): SimResult {
   const cache = new Map<string, Rates>();
   const normalShare = new Map<SpotId, number>();
   const achieved: Achieved[] = [];
+  const catchMarks = opts.catchMarks ?? [];
+  const catchHours: (number | null)[] = catchMarks.map(() => null);
+  let catchTotal = 0;
+  const noteCatches = (step: number, sec: number) => {
+    const before = catchTotal;
+    catchTotal += step;
+    catchMarks.forEach((m, i) => {
+      if (catchHours[i] === null && catchTotal >= m) catchHours[i] = (fishSec + (step > 0 ? (m - before) / step : 0) * sec) / 3600;
+    });
+  };
   /** 표본 경로에서 실제로 모은 일반 폼 */
   const normalSeen = new Set<string>();
   const needed = new Map<string, string[]>();
@@ -162,6 +177,7 @@ export function simulate(opts: SimOptions): SimResult {
   /** 낚은 수입을 더한다. 낚은 물고기는 모두 판매 수입이다 */
   const accrue = (spots: SpotId[], axis: Axis | null, sec: number) => {
     const h = sec / 3600 / spots.length;
+    let stepCatches = 0;
     for (const spot of spots) {
       const useAxis = axis ?? axisAt(spot, level);
       const r = rateAt(spot, useAxis);
@@ -169,12 +185,15 @@ export function simulate(opts: SimOptions): SimResult {
       if (opts.sampler) {
         const v = opts.sampler.accrue(r, h * 3600, opts.achievements ? c => { if (!c.variant) normalSeen.add(c.fish.id); } : undefined);
         gold += v.gold; fame += v.fame;
+        stepCatches += v.catches;
         track(spot, r, v.catches);
       } else {
         gold += r.goldPerHour * h; fame += r.famePerHour * h;
+        stepCatches += r.catchesPerHour * h;
         track(spot, r, r.catchesPerHour * h);
       }
     }
+    noteCatches(stepCatches, sec);
     fishSec += sec;
   };
 
@@ -255,5 +274,5 @@ export function simulate(opts: SimOptions): SimResult {
     }
     if (!finished()) fishFor(null, null, left);
   }
-  return { arrivals, complete: idx >= LAST, bountyGold, marks, achieved };
+  return { arrivals, complete: idx >= LAST, bountyGold, marks, achieved, catches: catchTotal, catchHours };
 }

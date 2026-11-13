@@ -1,6 +1,8 @@
 // 밸런스 측정 CLI — 원칙 문서(밸런스)의 측정 지표를 제품 규칙 그대로 계산해 표로 찍는다.
 // 사용: pnpm balance [섹션 ...] [--runs N] [--seed N]
-//   섹션: ev rod income idle move perfect growth journey fame monotonic economy dex bounty live (생략하면 live 외 전부)
+//   섹션: ev rod income idle move perfect growth journey fame monotonic economy dex achievement bounty live (생략하면 live 외 전부)
+//   achievement(자기만족 업적 달성 시간)는 --big 5,10(월척 어종 수 단계, 정해지지 않은 값이라 주면 구역별로 낸다)과
+//   --catch-steps 100,1000,10000,100000(낚은 수 단계)을 받는다. 몬테카를로(--runs, --seed)다.
 //   live는 DATABASE_URL(운영·스테이징 DB 직접 연결)이 있을 때만 읽기 전용으로 조회한다.
 //   dex는 몬테카를로(기본 400회, 시드 고정이라 결과가 재현된다).
 // 모델 가정은 측정 모델 모듈의 머리 주석에 있다.
@@ -19,6 +21,8 @@ import {
 } from './balance/model';
 import type { Axis } from './balance/model';
 import { simulateJourney } from './balance/journey';
+import { selfTimes } from './balance/selfTimes';
+import type { TimeStat } from './balance/selfTimes';
 import { runLive } from './balance/live';
 
 // ── 인자 ──
@@ -27,10 +31,21 @@ const flag = (name: string, fallback: number) => {
   const i = args.indexOf(name);
   return i >= 0 ? Number(args[i + 1]) : fallback;
 };
-const SECTIONS = ['ev', 'rod', 'income', 'idle', 'move', 'perfect', 'growth', 'journey', 'fame', 'monotonic', 'economy', 'dex', 'bounty', 'live'] as const;
+const SECTIONS = ['ev', 'rod', 'income', 'idle', 'move', 'perfect', 'growth', 'journey', 'fame', 'monotonic', 'economy', 'dex', 'achievement', 'bounty', 'live'] as const;
 const picked = SECTIONS.filter(s => args.includes(s));
 const show = (s: typeof SECTIONS[number]) => (picked.length === 0 ? s !== 'live' : picked.includes(s));
 const RUNS = flag('--runs', 400);
+const listFlag = (name: string, fallback: number[]): number[] => {
+  const i = args.indexOf(name);
+  if (i < 0) return fallback;
+  const raw = args[i + 1];
+  if (raw === undefined || raw.startsWith('--')) throw new Error(`${name}에는 쉼표로 구분한 정수 목록이 필요합니다`);
+  const xs = raw.split(',').map(Number);
+  if (xs.some(x => !Number.isInteger(x) || x < 1)) throw new Error(`${name}에는 1 이상의 정수 목록이 필요합니다: ${raw}`);
+  return xs;
+};
+const BIG_STEPS = listFlag('--big', []);
+const CATCH_STEPS = listFlag('--catch-steps', [100, 1_000, 10_000, 100_000]);
 const SEED = flag('--seed', 20261016);
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
@@ -314,6 +329,22 @@ if (show('dex')) {
       console.log(`${PLAY_LABEL[p]}: 일반(전설 제외) ${stat(x.noLegend)} | 일반 전부 ${stat(x.all)} | 돌연변이 전부 ${stat(x.variant)}`
         + ` | 전설 첫 조우 ${x.legend.length ? stat(x.legend) : '전설 없음'}`);
     }
+  }
+}
+
+// ── 자기만족 업적 달성 시간 ──
+if (show('achievement')) {
+  console.log(`\n## 자기만족 업적 달성 시간 — 구역 해역을 번갈아 낚을 때(최소 스펙), 몬테카를로 ${RUNS}회, 시드 ${SEED}`);
+  console.log('여러 구역에 걸친 조건은 구역을 하나씩 차례로 채우는 시간의 합이고, 각 조건은 그 조건 하나만 목표로 잰다(같은 낚시로 다른 조건도 채워지는 것은 넣지 않는다)');
+  const statText = (s: TimeStat) => `평균 ${hrs(s.mean)} · p90 ${hrs(s.p90)}`;
+  for (const x of selfTimes({ runs: RUNS, seed: SEED, big: BIG_STEPS, catchSteps: CATCH_STEPS })) {
+    console.log(`\n### ${PLAY_LABEL[x.play]}`);
+    console.log(`등급별 일반 폼 전부(마을 포함 모든 구역): ${RARITY_ORDER.map(k => `${RARITY[k].name} ${statText(x.grades[k])}`).join(' | ')}`);
+    console.log(`밤 어종 전부(모든 구역): 일반 폼 ${statText(x.night.normal)} | 돌연변이 폼 ${statText(x.night.variant)}`);
+    console.log(`네임드 전부 토벌(유물 전부 교환 재료 포함, 라이선스·수주·하루 한도 제외): ${statText(x.named)}`);
+    for (const b of x.big) console.log(`월척 어종 ${b.n}종(구역별): ${b.zones.map(z => `${z.zone} ${z.time ? statText(z.time) : '어종 수 부족'}`).join(' | ')}`);
+    console.log(`월척 모든 어종(모든 구역): ${statText(x.bigAll)}`);
+    console.log(`낚은 수 단계(새 계정 진행, 이후는 마지막 해역 캐치 속도): ${x.catches.map(c => `${n0(c.n)}마리 ${hrs(c.hours)}`).join(' | ')}`);
   }
 }
 
