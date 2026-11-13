@@ -38,6 +38,7 @@ import { OFFSETS, earlyEntry, huntCost, incomeByOffset, returnTrips } from './ex
 import type { EarlyEntryRow, HuntRow, IncomeRow, ReturnTrip } from './exception';
 import { BOATS } from '../../../src/game/content/boats';
 import { writeFileSync } from 'node:fs';
+import { ROD } from '../../../src/game/rules/balance';
 import { DEFAULT_ANCHOR_SPOT, GRADE_IDS, addPerSpot, currentAnchor, designReport, parseAnchor, parseGrade, parseNight } from './design';
 import type { Anchor, DesignReport, GradeCurve, GradeId, PerSpot, SolveVar } from './design';
 import { RARITY, RARITY_ORDER } from '../../../src/game/content/rarity';
@@ -121,7 +122,7 @@ export interface DesignArgs {
   growth: number | null;
   gap: PerSpot;
   hours: PerSpot;
-  payback: number | null;
+  payback: PerSpot;
   paybackGrowth: number | null;
   /** 기준점. 주지 않고 none도 아니면 세인트헬레나의 현재 진입 EV */
   anchors: Anchor[];
@@ -193,13 +194,13 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --growth <r>       design: 강화비의 레벨당 증가율(0.15는 15%). --solve growth이면 생략
   --gap <k | 해역=k>  design: 해역 간격(구간 강화 횟수, 1 이상 정수). 값 하나는 모든 해역의 기본값이고 해역=k는 그 해역(다음 해역으로 가는 구간을 보내는 해역)만 바꾼다. 여러 번 줄 수 있다. --solve gap이면 생략
   --hours <H | 해역=H>  design: 구간의 전환 시간 목표(시간). 값 하나는 기본값, 해역=H는 해역별. 마지막 해역은 구간이 없어 받지 않는다. recipes에서는 아래 설명을 따른다
-  --payback <h>      design: 강화 한 번의 회수 시간 h(레벨 1, 시간). --hours와 함께 줄 수 없다. 해역 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨), 전환 시간은 구간 강화의 h 합(+ 배 시간)으로 함께 낸다
+  --payback <h | 해역=h>  design: 강화 한 번의 회수 시간 h(레벨 1, 시간). 값 하나는 전체 기본이고 해역=h는 그 해역의 구간을 그 값으로 덮어쓴다(여러 번 줄 수 있다). 전체 기본을 생략하면 기준점에서 푼다. --solve로 푸는 기준점 해역은 지정할 수 없다. --hours와 함께 줄 수 없다. 해역 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨), 전환 시간은 구간 강화의 h 합(+ 배 시간)으로 함께 낸다
   --payback-growth <g>  design: 레벨마다 h가 늘어나는 비율. 기본 0. h(lv) = h(1) x (1 + g)^(lv - 1)
   --anchor <해역=EV | none>  design: 설계 필요 EV를 맞출 기준점. 여러 번 줄 수 있다. 생략하면 세인트헬레나의 현재 진입 레벨 방치 EV. none은 기준점을 쓰지 않는다. 오차는 표로 낸다
   --solve <gap|growth|payback>  design(회수 시간 방식): 기준점에 맞도록 이 변수를 푼다. gap은 기준점 해역의 진입 레벨에 가장 가까운 레벨로 구간 합을 정하고 앞 해역에 균등 분배한다(남는 레벨은 뒤 해역부터). growth와 payback은 기준점 로그 오차 제곱합이 최소인 값이다. 나머지 입력은 그대로 쓴다. 풀린 변수의 입력은 함께 줄 수 없다
   --grade <등급=시작:배율>  design: 일반 최대가 대비 그 등급 낮 어종 최대가 비율 = 시작 x 배율^해역 순번(첫 해역 0). 등급은 희귀, 영웅, 전설(또는 rare, epic, legendary). 지정하지 않은 등급은 현재 가격 비율을 유지한다. EV 목표는 그대로이고 일반 가격이 차이를 흡수한다. 여러 번 줄 수 있다
   --night <등급=배율>  design: 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가. 지정하지 않으면 낮 어종과 같은 배율을 곱한다
-  --bite <alternate|both>  design: 입질 대기 감소 방식. alternate는 홀수 레벨에서 강화할 때 입질 최대치만, 짝수 레벨에서 강화할 때 최소치만 감쇠(기본 0.94)를 곱한다(레벨 L의 최대 = 기본 최대 x 감쇠^올림((L-1)/2), 최소 = 기본 최소 x 감쇠^내림((L-1)/2)). 기본 both(제품 규칙, 함께 곱함). 해역 EV 계산과 역전 검사에 반영하고 --emit-override의 rod.biteDecayMode로 쓴다. 효과 옵션 --bite <N>(%)과 구분한다
+  --bite <alternate|both>  design: 입질 대기 감소 방식. alternate는 홀수 레벨에서 강화할 때 입질 최대치만, 짝수 레벨에서 강화할 때 최소치만 감쇠(기본 ${ROD.biteDecay})를 곱한다(레벨 L의 최대 = 기본 최대 x 감쇠^올림((L-1)/2), 최소 = 기본 최소 x 감쇠^내림((L-1)/2)). 기본 both(제품 규칙, 함께 곱함). 해역 EV 계산과 역전 검사에 반영하고 --emit-override의 rod.biteDecayMode로 쓴다. 효과 옵션 --bite <N>(%)과 구분한다
   --emit-override <파일>  design: 결과를 --override로 쓸 수 있는 JSON(rod 곡선, 해역 요구 파워와 가격 배율과 등급 배율, 배 가격)으로 쓴다. transition, dist에 넣으면 골드 전환 시간이 목표와 맞는지 잴 수 있다. 명성은 계산하지 않으므로 모든 배의 fameReq를 0으로 쓴다. 등급 배율과 밤 배율을 지정하면 spots의 gradeMult와 nightMult로 나간다
   --growth           ev: 해역 사이 딱렙 방치 EV 증가율(뒤 ÷ 앞 - 1)과 요구 파워, 진입 레벨 간격 열을 더한다
   --target <해역=골드시간/명성시간>  solve: 출발 해역과 목표 시간(방치 기준 실질 낚시 시간). 여러 번 줄 수 있다. 예: --target sthelena=24/30
@@ -252,7 +253,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
     recipe: null, hours: LUNCH_HOURS, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
     rewards: [], rewardSplit: null, growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
-    design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: null, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, bite: 'both' },
+    design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, bite: 'both' },
   };
   const hoursRaw: string[] = [];
   const given: string[] = [];
@@ -348,8 +349,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         addPerSpot(o.design.gap, a, raw);
       } else if (a === '--payback') {
         given.push(a);
-        o.design.payback = numberOf(a, raw);
-        if (!(o.design.payback > 0)) throw new Error('--payback은 0보다 커야 합니다(시간)');
+        addPerSpot(o.design.payback, a, raw);
       } else if (a === '--payback-growth') {
         given.push(a);
         o.design.paybackGrowth = numberOf(a, raw);
@@ -535,7 +535,8 @@ const NO_VIRTUAL_COMMANDS: readonly Command[] = ['opening', 'exception', 'travel
 function runDesign(o: FlowOptions): DesignReport {
   const d = o.design;
   const hoursGiven = d.hours.all !== null || Object.keys(d.hours.by).length > 0;
-  const paybackMode = d.payback !== null || d.paybackGrowth !== null || d.solve === 'payback';
+  const paybackGiven = d.payback.all !== null || Object.keys(d.payback.by).length > 0;
+  const paybackMode = paybackGiven || d.paybackGrowth !== null || d.solve === 'payback';
   if (hoursGiven && paybackMode) throw new Error('--hours와 --payback(--payback-growth)은 함께 줄 수 없습니다');
   if (d.start === null) throw new Error('--start가 필요합니다');
   if (o.growth) throw new Error('--growth에는 값이 필요합니다(예: --growth 0.15)');
@@ -544,8 +545,10 @@ function runDesign(o: FlowOptions): DesignReport {
   return designReport({
     start: d.start, growth: d.growth, gap: d.gap,
     hours: paybackMode ? null : d.hours,
-    payback: paybackMode ? { base: d.payback, growth: d.paybackGrowth ?? 0 } : null,
-    boatShare: o.boatShare ?? 0, grades: d.grades, night: d.night, bite: d.bite, anchors, solve: d.solve, maxDays: o.maxDays,
+    payback: paybackMode ? { base: d.payback.all, growth: d.paybackGrowth ?? 0, by: d.payback.by } : null,
+    boatShare: o.boatShare ?? 0, grades: d.grades, night: d.night, bite: d.bite, anchors,
+    // 회수 시간 방식에서 전체 기본 h를 주지 않으면 기준점에서 푼다
+    solve: d.solve ?? (paybackMode && d.payback.all === null ? 'payback' : null), maxDays: o.maxDays,
   });
 }
 
@@ -694,7 +697,7 @@ function rewardAssumptions(): string[] {
   ];
 }
 
-function assumptionText(command: Command, o: FlowResult['options'], windowMaterial = false): string {
+function assumptionText(command: Command, o: FlowResult['options'], windowMaterial = false, design?: DesignReport): string {
   const lines: string[] = [BASIC_ASSUMPTION];
   if (command === 'transition') {
     lines.push('새 계정이 직전 해역에서 낚아 전환 골드를 모으고 배 명성 하한을 채운 시점에 바로 옮긴다', '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', o.bounty ? '의뢰와 토벌을 매일 수행하는 경우다' : '의뢰와 토벌은 하지 않는 경우다');
@@ -741,7 +744,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
       '시간 목표 방식(--hours)의 필요 진입 EV = (구간 강화비 합 + 배 가격) ÷ H. 회수 시간 방식(--payback)의 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨)이고 전환 시간 H = 구간 강화 k번의 h 합 + 배 가격 ÷ 진입 EV다',
       '배 가격은 전환 골드의 --boat-share 비중(기본 0)이고 그 구간에 새로 사는 배가 있을 때만 있다. 여러 척이면 현행 가격 비례로 나눈다. 명성은 계산하지 않는다. 내보낸 덮어쓰기는 배의 명성 요구치를 0으로 둔다(골드 전환 시간만 잰다)',
       '시간 목표 방식의 마지막 해역은 구간이 없어 필요 EV를 기준점 EV(기준점이 없으면 현재 EV)로 둔다. 이 값은 목표이므로 기준점 오차 표에는 넣지 않는다',
-      '필요 EV ÷ 현재 EV는 새 진입 레벨(요구 파워 적용)에서 현재 해역 가격으로 잰 방치 EV에 대한 배율이다. 입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다. 등급 비율을 바꾸면 EV 목표는 그대로 두고 일반 가격 배율이 차이를 흡수한다',
+      '필요 EV ÷ 현재 EV는 새 진입 레벨(요구 파워 적용)에서 현재 해역 가격으로 잰 방치 EV에 대한 배율이다. ' + (design?.input.bite === 'alternate' ? '입질 속도는 --bite alternate의 방식(홀수 레벨에서 강화할 때 입질 최대만, 짝수 레벨에서 강화할 때 최소만 감쇠를 곱한다)이고 방치 배수의 레벨 효과는 제품 규칙 그대로다' : '입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다') + '. 등급 비율을 바꾸면 EV 목표는 그대로 두고 일반 가격 배율이 차이를 흡수한다',
       '반영 EV는 덮어쓰기를 적용해 잰 진입 EV로, 어종 가격 사다리 반올림 때문에 필요 EV와 조금 다르다. 시뮬레이션 전환 시간은 같은 덮어쓰기로 transition을 돌려 골드를 기다린 시간이다. 시뮬레이션은 강화를 살 수 있을 때마다 사서 레벨이 오르는 만큼 EV도 오르므로 진입 EV로 계산한 시간보다 짧다',
     );
   } else if (command === 'upgrades') {
@@ -1274,6 +1277,7 @@ function designText(d: DesignReport): string[] {
   out.push([
     `강화비 시작값 ${n0(d.input.start)}, 레벨당 증가율 ${(r.growth * 100).toFixed(2)}%${r.solved === 'growth' ? '(기준점에 맞춰 푼 값)' : ''}`,
     hoursMode ? '전환 시간 목표 방식(--hours)' : `회수 시간 방식: h(1) = ${r.payback!.toFixed(4)}시간${r.solved === 'payback' ? '(기준점에 맞춰 푼 값)' : ''}, 레벨당 증가율 ${((d.input.payback!.growth) * 100).toFixed(2)}%`,
+    `입질 대기 감소 방식 ${d.input.bite === 'alternate' ? 'alternate(홀수 레벨 강화는 최대만, 짝수 레벨 강화는 최소만)' : 'both(제품 규칙)'}`,
     `배 가격 비중 ${pct1(d.input.boatShare)}`,
     r.solved === 'gap' ? '해역 간격: 기준점에 맞춰 푼 값(아래 진입 레벨 열)' : '',
   ].filter(Boolean).map(l => `- ${l}`).join('\n'));
@@ -1284,7 +1288,7 @@ function designText(d: DesignReport): string[] {
     d.rows.map(x => [
       nameOf(x.spot), x.level, x.power, x.gap ?? '—', x.upgradeSum === null ? '—' : n0(x.upgradeSum), x.boatPrice === null ? '—' : n0(x.boatPrice),
       x.hours === null ? '—' : h2(x.hours), ...(hoursMode ? [] : [x.payback === null ? '—' : h2(x.payback)]),
-      n0(x.requiredEv), x.evGrowth === null ? '—' : signPct(x.evGrowth), n0(x.currentEv), `${x.evRatio.toFixed(2)}배`, n0(x.achievedEv),
+      n0(x.requiredEv), x.evGrowth === null ? '—' : x.evIsTarget ? `${signPct(x.evGrowth)}(목표값 기준)` : signPct(x.evGrowth), n0(x.currentEv), `${x.evRatio.toFixed(2)}배`, n0(x.achievedEv),
       x.measuredHours === null ? '—' : h2(x.measuredHours),
     ]),
   ));
@@ -1507,7 +1511,7 @@ export function renderText(r: FlowResult): string {
   if (r.solve) lines.push(...solveText(r.solve), assumptionText('solve', o));
   if (r.upgrades) lines.push(...upgradesText(r.upgrades), assumptionText('upgrades', o));
   if (r.fame) lines.push(...fameText(r.fame), assumptionText('fame', o));
-  if (r.design) lines.push(...designText(r.design), assumptionText('design', o));
+  if (r.design) lines.push(...designText(r.design), assumptionText('design', o, false, r.design));
   return lines.join('\n');
 }
 

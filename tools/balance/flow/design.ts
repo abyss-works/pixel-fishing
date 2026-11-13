@@ -2,7 +2,7 @@
 // 해역 진입 EV, 그 EV를 내는 해역 가격 배율과 등급 가격 비율, 배 가격, 요구 파워를 거꾸로 낸다. 값은 정하지 않고 인자로 받는다.
 //   구간 = 그 해역의 진입 레벨부터 다음 해역 진입 직전 레벨까지(k번 강화). 간격 k와 목표 시간 H의 키는 구간을 보내는 해역이다.
 //   시간 목표 방식: 필요한 진입 EV = (구간 강화비 합 + 배 가격) ÷ H
-//   회수 시간 방식: 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨), h(lv) = payback x (1 + paybackGrowth)^(lv-1). 전환 시간 H = 구간 강화 k번의 h 합 + 배 가격 ÷ 진입 EV
+//   회수 시간 방식: 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨), h(lv) = payback x (1 + paybackGrowth)^(lv-1). 해역별로 h를 지정하면 그 해역의 구간은 그 값으로 덮어쓴다. 전환 시간 H = 구간 강화 k번의 h 합 + 배 가격 ÷ 진입 EV
 //   시간 목표 방식의 마지막 해역은 구간이 없어 필요 EV를 기준점 EV(기준점이 없으면 현재 EV)로 둔다. 이 값은 목표이므로 기준점 오차에 넣지 않는다
 //   배 가격 = 전환 골드(강화비 합 + 배 가격)의 boatShare 비중. 그 구간에 새로 사는 배가 있을 때만 있고, 여러 척이면 현행 가격 비례로 나눈다
 //   등급 가격: 일반 최대가 대비 그 등급 낮 어종 최대가 = base x step^n(n은 해역 순번, 첫 해역 0), 밤 어종 최대가 = 같은 등급 낮 어종 최대가 x 밤 배율.
@@ -43,7 +43,7 @@ export interface DesignInput {
   /** 시간 목표 방식이면 해역별 H, 회수 시간 방식이면 null */
   hours: PerSpot | null;
   /** 회수 시간 방식의 h(1)과 레벨당 증가율. 시간 목표 방식이면 null. base는 solve가 payback이면 null */
-  payback: { base: number | null; growth: number } | null;
+  payback: { base: number | null; growth: number; by: Partial<Record<SpotId, number>> } | null;
   boatShare: number;
   grades: Partial<Record<GradeId, GradeCurve>>;
   /** 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가 */
@@ -72,6 +72,8 @@ export interface DesignRow {
   /** 회수 시간 방식의 첫 강화 회수 시간 h(진입 레벨) */
   payback: number | null;
   requiredEv: number;
+  /** 필요 EV가 식에서 나오지 않고 목표값(기준점 EV 또는 현재 EV)으로 주어진 해역인가 */
+  evIsTarget: boolean;
   /** 앞 해역 필요 EV 대비 증가율 */
   evGrowth: number | null;
   /** 가격을 바꾸기 전, 새 진입 레벨에서의 현재 해역 EV */
@@ -139,6 +141,10 @@ const costSum = (from: number, count: number): number => {
 };
 
 const paybackAt = (base: number, growth: number, level: number): number => base * (1 + growth) ** (level - 1);
+
+/** 해역의 구간에서 쓰는 회수 시간 — 해역별 지정이 있으면 그 값, 없으면 곡선 */
+const paybackOf = (p: NonNullable<DesignInput['payback']>, base: number, spot: SpotId, level: number): number =>
+  p.by[spot] ?? paybackAt(base, p.growth, level);
 
 function entryLevelsOf(gaps: readonly (number | null)[]): number[] {
   const out = [1];
@@ -226,6 +232,13 @@ function resolve(input: DesignInput): Resolved {
   if (solve === 'payback' && input.payback?.base != null) throw new Error('--solve payback과 --payback은 함께 줄 수 없습니다');
   if (solve !== 'growth' && input.growth === null) throw new Error('--growth가 필요합니다');
   if (input.payback && input.payback.base === null && solve !== 'payback') throw new Error('--payback이 필요합니다');
+  if (input.payback) {
+    for (const [spot, v] of Object.entries(input.payback.by)) {
+      if (!(v > 0)) throw new Error(`회수 시간은 0보다 커야 합니다: ${spot}=${v}`);
+      if (solve && input.anchors.some(a => a.spot === spot)) throw new Error(`기준점 해역(${spot})의 회수 시간은 기준점에서 정해지므로 지정할 수 없습니다`);
+    }
+    if (input.payback.base !== null && !(input.payback.base > 0)) throw new Error('--payback은 0보다 커야 합니다(시간)');
+  }
   const pg = input.payback?.growth ?? 0;
   const anchors = input.anchors;
   let growth = input.growth ?? 0.1;
@@ -328,7 +341,6 @@ export function designReport(input: DesignInput): DesignReport {
   if (!(res.growth > 0)) throw new Error('--growth는 0보다 커야 합니다');
   const { gaps } = res;
   const levels = entryLevelsOf(gaps);
-  const pg = input.payback?.growth ?? 0;
   const powers = levels.map(powerOfLevel);
 
   // 구간별 강화비 합과 새로 사는 배
@@ -348,7 +360,7 @@ export function designReport(input: DesignInput): DesignReport {
   })();
 
   const requiredEv = SPOTS.map((s, i) => {
-    if (input.payback) return withCurve(input.start, res.growth, () => paybackEv(levels[i], res.payback!, pg));
+    if (input.payback) return withCurve(input.start, res.growth, () => upgradeCost(levels[i]) / paybackOf(input.payback!, res.payback!, s.id, levels[i]));
     const span = spans[i];
     const h = span ? perSpot(input.hours!, s.id) : null;
     if (span && h === null) throw new Error(`전환 시간 목표가 없습니다: ${s.id} (--hours 값 또는 --hours 해역=H)`);
@@ -437,19 +449,19 @@ export function designReport(input: DesignInput): DesignReport {
 
   const rows: DesignRow[] = SPOTS.map((s, i) => {
     const span = spans[i];
-    const pb = input.payback ? paybackAt(res.payback!, pg, levels[i]) : null;
+    const pb = input.payback ? paybackOf(input.payback, res.payback!, s.id, levels[i]) : null;
     let hours: number | null = null;
     if (span) {
       if (input.payback) {
         let t = 0;
-        for (let lv = levels[i]; lv < levels[i] + gaps[i]!; lv++) t += paybackAt(res.payback!, pg, lv);
+        for (let lv = levels[i]; lv < levels[i] + gaps[i]!; lv++) t += paybackOf(input.payback, res.payback!, s.id, lv);
         hours = t + span.boatPrice / requiredEv[i];
       } else hours = perSpot(input.hours!, s.id);
     }
     return {
       spot: s.id, index: i, level: levels[i], power: powers[i], gap: gaps[i],
       upgradeSum: span ? span.sum : null, boatPrice: span ? span.boatPrice : null, hours, payback: pb,
-      requiredEv: requiredEv[i], evGrowth: i > 0 ? requiredEv[i] / requiredEv[i - 1] - 1 : null,
+      requiredEv: requiredEv[i], evIsTarget: !input.payback && span === null, evGrowth: i > 0 ? requiredEv[i] / requiredEv[i - 1] - 1 : null,
       currentEv: current[i].ev, evRatio: requiredEv[i] / current[i].ev, priceMult: priceMult[i],
       grades: gradeCells[i], achievedEv: achieved[i], measuredHours: measured[i] ?? null,
     };

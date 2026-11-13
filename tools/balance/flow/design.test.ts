@@ -109,7 +109,7 @@ describe('design 계산', () => {
 
   it('계산을 마치면 제품 상수가 계산 전 값으로 돌아온다', () => {
     designReport(base({ gap: { all: 4, by: {} }, hours: { all: 2, by: {} }, grades: { rare: { base: 5, step: 1.02 } }, night: { epic: 1.4 }, boatShare: 0.1 }));
-    designReport(base({ hours: null, payback: { base: 0.5, growth: 0.01 }, solve: null }));
+    designReport(base({ hours: null, payback: { base: 0.5, growth: 0.01, by: {} }, solve: null }));
     expect(snapshot()).toBe(BEFORE_ANY_RUN);
   }, 60_000);
 });
@@ -170,7 +170,7 @@ describe('design 등급 가격 비율', () => {
 
 describe('design 기준점 풀이(회수 시간 방식)', () => {
   const anchor = [{ spot: 'sthelena' as const, ev: 942379 }];
-  const pb = { base: 0.5, growth: 0 };
+  const pb = { base: 0.5, growth: 0, by: {} };
 
   it('gap: 기준점 진입 레벨에 가장 가까운 레벨로 구간 합을 정하고 앞 해역에 균등 분배한다', () => {
     const r = designReport(base({ gap: empty, hours: null, payback: pb, anchors: anchor, solve: 'gap' }));
@@ -189,12 +189,12 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
   }, 60_000);
 
   it('payback: 회수 시간을 풀어 기준점 오차가 거의 없다', () => {
-    const r = designReport(base({ gap: { all: 6, by: {} }, hours: null, payback: { base: null, growth: 0 }, anchors: anchor, solve: 'payback' }));
+    const r = designReport(base({ gap: { all: 6, by: {} }, hours: null, payback: { base: null, growth: 0, by: {} }, anchors: anchor, solve: 'payback' }));
     expect(Math.abs(r.anchors[0].error)).toBeLessThan(1e-9);
   }, 60_000);
 
   it('회수 시간 방식은 진입 EV가 진입 레벨 강화비 ÷ h이고 전환 시간은 h의 합이다', () => {
-    const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0.02 } }));
+    const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0.02, by: {} } }));
     const x = r.rows[3];
     const h = (lv: number) => 0.5 * 1.02 ** (lv - 1);
     const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15, costPowerFrom: 1_000_000 } });
@@ -203,7 +203,7 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
   }, 60_000);
 
   it('회수 시간 방식 H에는 배 가격 ÷ 진입 EV가 들어간다', () => {
-    const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0 }, boatShare: 0.2 }));
+    const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0, by: {} }, boatShare: 0.2 }));
     const withBoat = r.rows.filter((_, i) => i < LAST && SPOTS[i + 1].boatTier > SPOTS[i].boatTier);
     expect(withBoat.length).toBeGreaterThan(0);
     for (const x of withBoat) {
@@ -217,12 +217,35 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
     expect(() => designReport(base({ gap: empty, hours: null, payback: pb, anchors: [...anchor, ...anchor], solve: 'gap' }))).toThrow(/두 번/);
   });
 
-  it('gap 풀이는 기준점 사이 해역마다 간격 1 이상을 남긴다', () => {
-    const r = designReport(base({ gap: empty, hours: null, payback: pb, anchors: [{ spot: 'river', ev: 1 }, { spot: 'sea', ev: 1 }], solve: 'gap' }));
-    const gaps = r.resolved.gaps.slice(0, 3) as number[];
+  it('gap 풀이는 멀리 떨어진 기준점 사이 해역마다 간격 1 이상을 남긴다', () => {
+    // 두 번째 기준점의 EV가 첫 기준점 레벨 바로 위 레벨을 가리켜도, 사이 해역 수만큼은 올라가야 한다
+    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15, costPowerFrom: 1_000_000 } });
+    const evAt = (lv: number) => upgradeCost(lv) / 0.5;
+    const anchors = [{ spot: 'sea' as const, ev: evAt(8) }, { spot: 'sthelena' as const, ev: evAt(5) }];
+    undo();
+    const r = designReport(base({ gap: empty, hours: null, payback: pb, anchors, solve: 'gap' }));
+    const gaps = r.resolved.gaps.slice(0, STH) as number[];
     expect(gaps.every(g => g >= 1)).toBe(true);
-    expect(r.rows[2].level).toBeGreaterThanOrEqual(3);
+    expect(r.rows[2].level).toBeGreaterThanOrEqual(8);
+    expect(r.rows[STH].level).toBeGreaterThanOrEqual(r.rows[2].level + (STH - 2));
   }, 60_000);
+
+  it('해역별 회수 시간은 그 해역의 구간을 덮어쓰고 나머지는 곡선을 따른다', () => {
+    const plain = designReport(base({ hours: null, payback: pb }));
+    const r = designReport(base({ hours: null, payback: { ...pb, by: { sea: 2 } } }));
+    const sea = r.rows[2], other = r.rows[3];
+    expect(sea.payback).toBe(2);
+    expect(sea.hours).toBeCloseTo(5 * 2, 9);
+    expect(sea.requiredEv).toBeCloseTo(plain.rows[2].requiredEv / 4, 9);
+    expect(other.requiredEv).toBeCloseTo(plain.rows[3].requiredEv, 9);
+    expect(other.payback).toBe(0.5);
+  }, 60_000);
+
+  it('풀이할 때 기준점 해역의 회수 시간은 지정할 수 없다', () => {
+    const solved = base({ gap: { all: 6, by: {} }, hours: null, payback: { base: null, growth: 0, by: { sthelena: 1 } }, anchors: anchor, solve: 'payback' });
+    expect(() => designReport(solved)).toThrow(/기준점/);
+    expect(() => designReport(base({ hours: null, payback: { ...pb, by: { sea: 0 } } }))).toThrow(/0보다/);
+  });
 
   it('풀 변수의 입력과 함께 주거나 기준점이 없거나 시간 목표 방식이면 거부한다', () => {
     expect(() => designReport(base({ hours: null, payback: pb, anchors: anchor, solve: 'gap' }))).toThrow(/함께/);
@@ -301,6 +324,40 @@ describe('design 입질 대기 감소 방식', () => {
     expect((JSON.parse(out.stdout) as { design: DesignReport }).design.override.rod!.biteDecayMode).toBe('alternate');
     expect(runCli([...args, '--bite', '5']).stderr).toMatch(/--bite/);
     expect(runCli(['transition', '--bite', 'alternate']).stderr).toMatch(/design/);
+  }, 60_000);
+});
+
+describe('design 출력 문구', () => {
+  const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
+
+  it('입질 대기 감소 방식이 입력 절과 가정 문구에 나온다', () => {
+    const alt = runCli([...args, '--bite', 'alternate']).stdout;
+    expect(alt).toContain('입질 대기 감소 방식 alternate');
+    expect(alt).toContain('--bite alternate의 방식');
+    expect(alt).not.toContain('입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다');
+    const both = runCli(args).stdout;
+    expect(both).toContain('입질 대기 감소 방식 both(제품 규칙)');
+    expect(both).toContain('입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다');
+  }, 60_000);
+
+  it('목표값으로 주어진 마지막 해역은 앞 해역 대비 열에 목표값 기준이라고 적는다', () => {
+    const rows = runCli(args).stdout.split('\n').filter(l => l.startsWith('| 세인트헬레나 | 61'));
+    expect(rows[0]).toContain('(목표값 기준)');
+    const pbRows = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--payback', '0.5']).stdout.split('\n').filter(l => l.startsWith('| 세인트헬레나 | 61'));
+    expect(pbRows[0]).not.toContain('(목표값 기준)');
+  }, 60_000);
+
+  it('전체 기본 회수 시간을 생략하면 기준점에서 풀고 해역별 값은 덮어쓴다', () => {
+    const gaps = ['pond=2', 'river=4', 'sea=4', 'deep=5', 'dragonhole=4', 'coron=4', 'barrierreef=5', 'indian=4', 'southindian=5', 'mozstrait=4', 'comorodeep=5', 'benguela=4']
+      .flatMap(g => ['--gap', g]);
+    const out = runCli(['design', '--start', '100', '--growth', '0.25', '--bite', 'alternate', ...gaps, '--payback-growth', '0.06', '--payback', 'sea=1', '--json']);
+    expect(out.stderr).toBe('');
+    const d = (JSON.parse(out.stdout) as { design: DesignReport }).design;
+    expect(d.rows.find(x => x.spot === 'benguela')!.level).toBe(47);
+    expect(d.rows[STH].level).toBe(51);
+    expect(d.rows[2].payback).toBe(1);
+    expect(d.resolved.solved).toBe('payback');
+    expect(Math.abs(d.anchors[0].error)).toBeLessThan(1e-9);
   }, 60_000);
 });
 
