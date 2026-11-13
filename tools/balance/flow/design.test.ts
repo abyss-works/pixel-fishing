@@ -27,7 +27,7 @@ const fishPrice = (id: string) => FISH.find(f => f.id === id)!.price;
 /** 제품 상수의 전체 스냅샷 — 계산이 끝나도 같은 값인지 견주는 데 쓴다. 어떤 계산보다 먼저 이 모듈을 읽을 때 잡는다 */
 const snapshot = () => JSON.stringify({
   cost: [1, 5, 20, 60].map(upgradeCost), spots: SPOTS.map(x => x.powerReq), fish: FISH.map(f => f.price),
-  boats: BOATS.map(b => [b.price, b.fameReq]), idle: [IDLE_BOOST_STEPS.village, IDLE_BOOST_STEPS.world],
+  boats: BOATS.map(b => [b.price, b.fameReq]), idle: IDLE_BOOST_STEPS,
 });
 const BEFORE_ANY_RUN = snapshot();
 
@@ -104,7 +104,7 @@ describe('design 계산', () => {
       expect(x.reversed).toBe(x.ev > x.nextEv);
     });
     const plateau = (steps: readonly number[]) => steps.indexOf(steps.at(-1)!);
-    expect(r.boostEnds).toEqual({ village: plateau(IDLE_BOOST_STEPS.village), world: plateau(IDLE_BOOST_STEPS.world) });
+    expect(r.boostEnd).toBe(plateau(IDLE_BOOST_STEPS));
   });
 
   it('방치 이득을 뺀 앞 해역 EV는 방치 배수를 앞 해역 진입 레벨의 값으로 고정해 잰다', () => {
@@ -213,7 +213,7 @@ describe('design 계산', () => {
       const col = head.indexOf('진입 레벨 방치 배수');
       expect(col).toBeGreaterThan(0);
       json.rows.forEach(r => expect(cellsOf(text, '표 1 —', name(r.spot))[col]).toBe(`${r.entryBoost}배`));
-      expect(new Set(json.rows.map(r => r.entryBoost)).size).toBeGreaterThan(1);
+      expect(new Set(json.rows.map(r => r.entryBoost))).toEqual(new Set([IDLE_BOOST_STEPS[0]]));
     }, 60_000);
 
     it('허용폭이 0보다 클 때만 가정 줄에 판정 기준을 적는다', () => {

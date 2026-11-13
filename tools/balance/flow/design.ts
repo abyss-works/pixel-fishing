@@ -149,8 +149,8 @@ export interface DesignReport {
   rows: DesignRow[];
   reversals: ReversalRow[];
   anchors: AnchorRow[];
-  /** 레벨 차 이득이 끝나는 레벨 차(마을 해역과 그 밖의 해역) */
-  boostEnds: { village: number; world: number };
+  /** 레벨 차 이득이 끝나는 레벨 차 */
+  boostEnd: number;
   upgrades: { levels: LevelRow[]; purchases: PurchaseRow[] };
   /** 현재 제품 가격의 등급 비율을 재현하는 계수 예 */
   example: GradeExample[];
@@ -557,7 +557,7 @@ export function designReport(raw: DesignInput): DesignReport {
 
   return {
     input: raw, resolved: formula ? { ...res, payback: formula.h0 } : res, rows, reversals, anchors,
-    boostEnds: { village: boostEnd(SPOTS[0].id), world: boostEnd(SPOTS.find(s => s.boatTier > 0)!.id) },
+    boostEnd: boostEnd(SPOTS[0].id),
     upgrades, example, override, complete,
   };
 }

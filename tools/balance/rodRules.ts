@@ -9,7 +9,6 @@ import { IDLE_BOOST_STEPS } from '../../src/game/rules/power';
 import { powerOfLevel as productPower } from '../../src/game/rules/stats';
 import { powerReqOf } from '../../src/game/content/spots';
 import type { SpotId } from '../../src/game/content/spots';
-import { topZoneOfSpot } from '../../src/game/content/zones';
 
 /** 제품의 레벨당 파워 — 레벨 1과 2의 파워 차다(상수를 복제하지 않고 제품 함수에서 읽는다) */
 const PRODUCT_PER_LEVEL = productPower(2) - productPower(1);
@@ -48,20 +47,16 @@ export const PRODUCT_POWER_PER_LEVEL = PRODUCT_PER_LEVEL;
 /** 현재 레벨당 파워 */
 export const powerPerLevel = (): number => perLevel;
 
-const stepsOf = (spot: SpotId): readonly number[] =>
-  topZoneOfSpot(spot) === 'village' ? IDLE_BOOST_STEPS.village : IDLE_BOOST_STEPS.world;
-
 /** 방치 배수 — 해역 요구 파워를 넘은 만큼을 단계로 세어 표에서 고른다. 단계는 레벨 차(현재 레벨당 파워로 나눔) 또는 파워 초과(주어진 단위로 나눔)다 */
 export function relativeIdleBoost(power: number, spot: SpotId): number {
-  const steps = stepsOf(spot);
+  const steps = IDLE_BOOST_STEPS;
   const unit = idleBasis === 'level' ? perLevel : idleUnit;
   const levels = Math.max(0, Math.floor((power - powerReqOf(spot)) / unit));
   return steps[Math.min(levels, steps.length - 1)];
 }
 
 export interface IdleBoostRules {
-  /** 마을 해역과 그 밖의 해역의 배수 표. 레벨 차 0, 1, 2, ...이고 마지막 값이 하한이다 */
-  village?: number[];
+  /** 모든 해역이 쓰는 배수 표. 레벨 차 0, 1, 2, ...이고 마지막 값이 하한이다 */
   world?: number[];
   /** level이면 레벨 차(요구 파워를 넘은 만큼 ÷ 레벨당 파워), power이면 파워 초과(÷ unit). 기본 level */
   basis?: 'level' | 'power';
@@ -79,7 +74,7 @@ export interface RodRules {
 }
 
 const NUMBER_KEYS = ['powerPerLevel', 'costBase', 'costGrowth', 'costPowerFrom', 'costPowerExp', 'biteDecay'] as const;
-const IDLE_KEYS = ['village', 'world', 'basis', 'unit'] as const;
+const IDLE_KEYS = ['world', 'basis', 'unit'] as const;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -125,7 +120,6 @@ export function parseRodRules(raw: unknown): RodRules {
     if (!isObject(b)) throw new Error('rod.idleBoost는 객체여야 합니다');
     checkKeys(b, IDLE_KEYS, 'rod.idleBoost');
     const idle: IdleBoostRules = {};
-    if (b.village !== undefined) idle.village = steps(b.village, 'rod.idleBoost.village');
     if (b.world !== undefined) idle.world = steps(b.world, 'rod.idleBoost.world');
     if (b.basis !== undefined) {
       if (b.basis !== 'level' && b.basis !== 'power') throw new Error('rod.idleBoost.basis는 level 또는 power여야 합니다');
@@ -146,7 +140,7 @@ export function applyRodRules(r: RodRules): () => void {
   const rod = ROD as unknown as Record<string, number>;
   const prevRod = { ...rod };
   const prevPer = perLevel, prevBasis = idleBasis, prevUnit = idleUnit, prevBite = biteMode;
-  const prevVillage = [...IDLE_BOOST_STEPS.village], prevWorld = [...IDLE_BOOST_STEPS.world];
+  const prevSteps = [...IDLE_BOOST_STEPS];
   for (const key of NUMBER_KEYS) {
     if (key === 'powerPerLevel' || r[key] === undefined) continue;
     rod[key] = r[key]!;
@@ -154,14 +148,12 @@ export function applyRodRules(r: RodRules): () => void {
   if (r.powerPerLevel !== undefined) perLevel = r.powerPerLevel;
   if (r.biteDecayMode !== undefined) biteMode = r.biteDecayMode;
   const replace = (target: readonly number[], next: number[]) => { (target as number[]).splice(0, target.length, ...next); };
-  if (r.idleBoost?.village) replace(IDLE_BOOST_STEPS.village, r.idleBoost.village);
-  if (r.idleBoost?.world) replace(IDLE_BOOST_STEPS.world, r.idleBoost.world);
+  if (r.idleBoost?.world) replace(IDLE_BOOST_STEPS, r.idleBoost.world);
   if (r.idleBoost?.basis) idleBasis = r.idleBoost.basis;
   if (r.idleBoost?.unit !== undefined) idleUnit = r.idleBoost.unit;
   return () => {
     Object.assign(rod, prevRod);
     perLevel = prevPer; idleBasis = prevBasis; idleUnit = prevUnit; biteMode = prevBite;
-    replace(IDLE_BOOST_STEPS.village, prevVillage);
-    replace(IDLE_BOOST_STEPS.world, prevWorld);
+    replace(IDLE_BOOST_STEPS, prevSteps);
   };
 }
