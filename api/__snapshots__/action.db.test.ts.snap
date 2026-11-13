@@ -5720,7 +5720,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
       {
         "created_at": "<now>",
         "payload": {
-          "region": "ocean",
+          "region": "world",
         },
         "type": "visit",
         "user_id": "<user>",
@@ -5757,7 +5757,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           "hats": [],
           "items": {},
           "location": {
-            "id": "ocean",
+            "id": "world",
             "kind": "region",
           },
           "look": {
@@ -5779,7 +5779,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           "tutorials": [],
           "v": 10,
           "visited": [
-            "ocean",
+            "world",
           ],
         },
         "fame": "0",
@@ -5809,7 +5809,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           "hats": [],
           "items": {},
           "location": {
-            "id": "ocean",
+            "id": "world",
             "kind": "region",
           },
           "look": {
@@ -5830,7 +5830,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
           },
           "tutorials": [],
           "visited": [
-            "ocean",
+            "world",
           ],
         },
         "version": 3,
