@@ -7,7 +7,8 @@ export type ListRowState = 'done' | 'current' | 'selected' | 'locked' | 'open';
 // 목록 행 — 목록형 시설(낚싯대 강화, 조선소, 상점)의 왼쪽 목록 한 줄. 앞 그림, 이름과 간단한 수치, 오른쪽 상태를 한 줄에 둔다.
 // 상태마다 모양이 다르다. 지난 것(done)은 흐리고, 지금 것(current)은 하늘색 테두리, 고른 것(selected)은 골드 테두리로
 // 눌려 있고, 아직 못 고르는 것(locked)은 오목하고 흐리다. 고를 수 있는 것(open)은 볼록한 기본 모양이다.
-// onSelect가 있으면 고르는 행(listbox의 option)이 되고, 없으면 보기만 하는 행이다. 행 높이는 상태와 무관하게 같다.
+// 이름과 값은 말줄임하지 않는다. 좁아서 모자라면 이름과 수치가 줄을 바꾸고(수치는 항목 단위로), 행 높이는 그만큼만 커진다. 오른쪽 상태(가격)는 한 줄이다.
+// onSelect가 있으면 고르는 행(listbox의 option)이 되고, 없으면 보기만 하는 행이다. 행 높이는 내용이 한 줄에 들어가는 한 상태와 무관하게 같다.
 const ROW: Record<ListRowState, string> = {
   open: 'bg-surface-2',
   done: 'bg-surface-2 opacity-50',
@@ -37,17 +38,17 @@ export default function ListRow({ state, leading, name, subs = [], trailing, onS
     <>
       {leading ? <span className="shrink-0 flex items-center">{leading}</span> : <span aria-hidden="true" />}
       <span className="min-w-0 flex flex-col gap-0.5">
-        <b className={cx('text-sm truncate', NAME[state])}>{name}</b>
+        <b className={cx('text-sm break-keep', NAME[state])}>{name}</b>
         {subs.length > 0 && (
-          <span className="flex gap-3 text-2xs text-text-dim whitespace-nowrap">
-            {subs.map((s, i) => <span key={i}>{s}</span>)}
+          <span className="flex flex-wrap gap-x-3 text-2xs text-text-dim">
+            {subs.map((s, i) => <span key={i} className="whitespace-nowrap">{s}</span>)}
           </span>
         )}
       </span>
       <span className="text-xs text-right whitespace-nowrap flex items-center justify-end gap-1.5">{trailing}</span>
     </>
   );
-  const className = cx('grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 h-12 px-2.5 w-full text-left', ROW[state]);
+  const className = cx('grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 min-h-12 py-1 px-2.5 w-full text-left', ROW[state]);
   if (onSelect) {
     return (
       <Frame as="button" type="button" role="option" aria-selected={state === 'selected'} aria-label={ariaLabel}

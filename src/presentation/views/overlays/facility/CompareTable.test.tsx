@@ -1,4 +1,4 @@
-// 비교 표 — 값 열 폭은 PC 레이아웃에서 고정 rem이고 줄을 바꾸지 않는다. 모바일 레이아웃은 내용에 맞추는 자동 배치이고 모든 칸이 줄을 바꾼다.
+// 비교 표 — PC 레이아웃은 줄을 바꾸지 않고 값 열이 최소 폭에서 시작해 내용에 맞게 넓어진다. 모바일 레이아웃은 내용에 맞추는 자동 배치이고 모든 칸이 줄을 바꾼다.
 // 실제 겹침과 넘침은 jsdom이 레이아웃을 계산하지 못해 증명하지 못한다. 여기서는 그것을 막는 구조(자동 배치, 줄 바꿈 허용, 줄 바꿈 자리)를 고정한다.
 // heads가 하나면 현재 열만 보인다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -48,12 +48,16 @@ describe('CompareTable', () => {
     expect(container.querySelector('wbr')).toBeNull();
   });
 
-  it('PC 레이아웃에서 값 열은 고정 폭이고 이름 칸의 줄 바꿈 규칙이 붙지 않는다', () => {
+  it('PC 레이아웃에서 값 열은 최소 폭에서 시작해 내용에 맞게 넓어지고 이름 칸의 줄 바꿈 규칙이 붙지 않는다', () => {
     stubMobile(false);
     const { container } = render(<CompareTable heads={['현재', '강화 후']} rows={rows} />);
-    expect(widths(container)).toEqual(['', '7rem', '9rem']);
-    expect(container.querySelector('table')?.className).toContain('table-fixed');
-    expect(container.querySelector('table')?.className).toContain('[&_td]:whitespace-nowrap');
+    const cls = container.querySelector('table')?.className ?? '';
+    expect(widths(container)).toEqual([]);
+    expect(cls).not.toContain('table-fixed');
+    expect(cls).toContain('[&_td]:whitespace-nowrap');
+    expect(cls).toContain('[&_td:nth-child(2)]:w-28');
+    expect(cls).toContain('[&_td:nth-child(3)]:w-36');
+    expect(cls).toContain('[&_td:first-child]:w-full');
     expect(container.querySelector('table')?.className).not.toContain('[&_td]:whitespace-normal');
     expect(container.querySelector('table')?.className).not.toContain('min-w-0!');
   });
@@ -61,7 +65,7 @@ describe('CompareTable', () => {
   it('heads가 하나면 현재 열만 보인다', () => {
     stubMobile(false);
     const { container } = render(<CompareTable heads={['현재']} rows={rows} />);
-    expect(widths(container)).toEqual(['', '7rem']);
+    expect(widths(container)).toEqual([]);
     expect(container.querySelectorAll('thead th')).toHaveLength(2);
     expect(container.querySelectorAll('tbody td')).toHaveLength(2);
     expect(container.textContent).not.toContain('+31.25%');
@@ -79,5 +83,13 @@ describe('CompareTable', () => {
     stubMobile(true);
     const { container } = render(<CompareTable heads={['현재', '강화 후']} rows={rows} />);
     expect(container.querySelector('wbr')).toBeNull();
+  });
+
+  it('PC 레이아웃에서는 줄 바꿈 자리를 두지 않는다 - 줄 바꿈을 막은 칸에서도 줄이 바뀌기 때문이다', () => {
+    stubMobile(false);
+    const { container } = render(<CompareTable heads={['현재', '판매 후']}
+      rows={[{ label: '골드', value: '20,000,000G', next: '20,000,308G', delta: '+308' }]} />);
+    expect(container.querySelector('wbr')).toBeNull();
+    expect(container.querySelector('tbody td:nth-child(2)')?.textContent).toBe('20,000,000G');
   });
 });

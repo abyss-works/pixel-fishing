@@ -4,6 +4,7 @@ import { fmtGold, fmtNum } from './format';
 
 // 잔액 줄 — 확정 전에 "보유 → 확정 후"를 이름 왼쪽, 값 오른쪽의 한 줄로 보인다. delta가 음수면 지출, 양수면 수입.
 // 재화가 골드가 아니면(교환 재료 등) label과 format으로 이름과 값 표기를 바꾼다.
+// 좁은 폭에서 한 줄에 다 안 들어가면 "→ 확정 후 값" 묶음이 아래 줄로 내려가고, 값은 잘리지 않는다.
 // 모자라면 확정 후 값을 위험색으로 칠한다(버튼 비활성과 같은 신호). 명성처럼 차감 없는
 // 조건은 requirement로 아래 줄에 `보유 / 필요`를 붙인다. 변화량은 확정 버튼이 보이므로 여기서 다시 쓰지 않는다.
 export default function CostLine({ have, delta, label = '골드', format = fmtGold, requirement, className }: {
@@ -23,11 +24,10 @@ export default function CostLine({ have, delta, label = '골드', format = fmtGo
   return (
     <div className={cx('text-sm flex flex-col gap-1', className)}>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-text-dim">{label}</span>
-        <span className="pf-accent text-xs flex items-baseline gap-1.5">
-          <span>{format(have)}</span>
-          <span className="text-text-dim">→</span>
-          <span className={cx(short && 'text-danger')}>{format(after)}</span>
+        <span className="text-text-dim shrink-0">{label}</span>
+        <span className="pf-accent text-xs min-w-0 flex flex-wrap items-baseline justify-end gap-x-1.5">
+          <span className="whitespace-nowrap">{format(have)}</span>
+          <span className="whitespace-nowrap"><span className="text-text-dim">→</span> <span className={cx(short && 'text-danger')}>{format(after)}</span></span>
         </span>
       </div>
       {requirement && (
