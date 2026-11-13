@@ -395,4 +395,39 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('이전 인증 표 삭제 (0035)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const exists = async (c: Client) => (await c.query<{ r: string | null }>(`select to_regclass('auth.supabase_users')::text as r`)).rows[0].r !== null;
+
+    it('번호 마이그레이션을 모두 적용한 데이터베이스에는 이전 인증 표가 없고 현재 인증 표는 그대로다', async () => {
+      expect(await exists(client)).toBe(false);
+      const { rows } = await client.query<{ name: string }>(
+        `select table_name as name from information_schema.tables where table_schema = 'auth' order by table_name`);
+      expect(rows.map(r => r.name)).toEqual(expect.arrayContaining(['accounts', 'sessions', 'users', 'verifications']));
+    });
+
+    it('이전 인증 표가 있으면 지우고, 다시 실행해도 실패하지 않으며 다른 표는 그대로다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query('create table auth.supabase_users (id uuid primary key, email text)');
+        await other.query(`insert into auth.supabase_users (id, email) values ($1, 'old@example.test')`, [randomUUID()]);
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+        const sql = migration('0035_drop_supabase_users.sql');
+
+        await other.query(sql);
+        expect(await exists(other)).toBe(false);
+        await other.query(sql);
+        expect(await exists(other)).toBe(false);
+        expect((await other.query('select id from auth.users where id = $1', [uid])).rows).toHaveLength(1);
+        await other.query('select 1 from public.v_admin_users');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
