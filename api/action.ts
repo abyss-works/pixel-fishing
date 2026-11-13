@@ -21,7 +21,7 @@ import {
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
-import { appliedSlots } from '../src/game/rules/cooking.js';
+import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -466,7 +466,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
@@ -478,6 +478,7 @@ async function route(req: Req, res: Res): Promise<void> {
       bounty,
       mail,
       guild: guildEffects,
+      guest: user.email === null,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -625,7 +626,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
-  guild: GuildEffects): Promise<ApplyOutcome> {
+  guild: GuildEffects, guest: boolean): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
@@ -651,8 +652,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
-  let released: ReleasedFish[] = [];
-  let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
+  let evictBag: FishInstance[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
     // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. 묶음 안 정렬(판매가, 크기, uid)의
@@ -667,32 +667,43 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     const pick = pickEvict(tops, inst);
     if (pick.evictUid) {
       removed = [pick.evictUid];
-      const gone = tops.find(t => t?.uid === pick.evictUid)!;
-      const f = instanceFish(gone);
-      released = [{ uid: gone.uid, name: f ? formName(f, gone.form) : gone.fishId }];
-      goneFish = [gone];
     } else if (pick.evictNew) {
-      added = []; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
-      released = [{ uid: inst.uid, name: formName(fish, inst.form) }];
-      goneFish = [inst];
+      added = []; // 새 놈이 가장 안 특별 — 그 자리에서 내보낸다
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
+    evictBag = [inst, ...tops.filter((t): t is FishInstance => t !== null)];
   }
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
+  // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
+  const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest);
+  const view = (uids: readonly string[]) => uids.map(uid => evictBag.find(i => i.uid === uid)!);
+  const toReleased = (i: FishInstance): ReleasedFish => {
+    const f = instanceFish(i);
+    return { uid: i.uid, name: f ? formName(f, i.form) : i.fishId };
+  };
+  const goneFish = view(plan.released);
+  const takenFish = view(plan.gain.uids);
+  const released = goneFish.map(toReleased);
+  const extracted = takenFish.map(toReleased);
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
-  if (overflow.length > 0) {
-    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+  if (goneFish.length > 0) {
+    events.push({ type: 'autoRelease', payload: { uids: plan.released, reason: 'bag-full',
       fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
+  }
+  if (takenFish.length > 0) {
+    events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
+      fish: takenFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
   return {
     ok: true,
-    state: { ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
-    result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
+    state: { ...applyEnergyGain({ ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+    result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
+      ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
     events,
     writes: {
       instancesAdded: added, instancesRemoved: removed,

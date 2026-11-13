@@ -48,12 +48,12 @@ export async function recordAdminAction(db: Executor, uid: string, type: AdminAc
     values (${uid}, ${type}, ${JSON.stringify({ adminId, ...detail })}::jsonb)`);
 }
 
-/** 방치 결과 보고 — 기간 안의 캐치·자동 방생 이벤트를 시각 순서로. 시각은 Postgres JSON 직렬화 문자열이다 */
+/** 방치 결과 보고 — 기간 안의 캐치·자동 방생·자동 기운 얻기 이벤트를 시각 순서로. 시각은 Postgres JSON 직렬화 문자열이다 */
 export async function awayEvents(db: Executor, uid: string, fromISO: string, toISO: string): Promise<AwayEvent[]> {
   const { rows } = await db.execute<{ events: AwayEvent[] }>(sql`select coalesce(json_agg(json_build_object(
       'type', e.type, 'payload', e.payload, 'at', e.created_at) order by e.created_at, e.id), '[]') as events
     from public.events e
-    where e.user_id = ${uid} and e.type in ('catch', 'autoRelease')
+    where e.user_id = ${uid} and e.type in ('catch', 'autoRelease', 'autoExtractEnergy')
       and e.created_at >= ${at(fromISO)} and e.created_at <= ${at(toISO)}`);
   return rows[0].events;
 }
