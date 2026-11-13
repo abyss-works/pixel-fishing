@@ -141,7 +141,8 @@ describe('실시간 채널 서버', () => {
     a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 1, y: 2, dir: 0, line: false }));
     expect(await a.closed).toBe(1008);
     expect(chat.lines.map(l => l.text)).toEqual(['첫 말']);
-    expect(live.online().map(o => o.uid)).toEqual(['u2']);
+    // 클라이언트의 닫힘 확인과 서버의 연결 정리는 순서가 정해져 있지 않다 — 정리가 끝나기를 기다린다
+    await vi.waitFor(() => expect(live.online().map(o => o.uid)).toEqual(['u2']));
     expect(b.messages.filter(m => m.t === 'chat' || m.t === 'move' || m.t === 'join')).toEqual([]);
   });
 
