@@ -403,6 +403,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         if (!(o.design.hStart > 0)) throw new Error('--h-start는 0보다 커야 합니다(시간)');
       } else if (a === '--special-region') {
         given.push(a);
+        if (o.design.specialRegions.includes(raw)) throw new Error(`--special-region에 같은 지역이 두 번 있습니다: ${raw}`);
         o.design.specialRegions.push(raw);
       } else if (a === '--reversal-tolerance') {
         given.push(a);
@@ -578,6 +579,7 @@ function runDesign(o: FlowOptions): DesignReport {
   if (d.start === null) throw new Error('--start가 필요합니다');
   if (o.growth) throw new Error('--growth에는 값이 필요합니다(예: --growth 0.15)');
   if (!hoursGiven && !paybackMode) throw new Error('--hours 또는 --payback이 필요합니다');
+  if (hMode && d.paybackGrowth !== null) throw new Error('--h-factor와 --payback-growth는 함께 줄 수 없습니다(해역 h는 해역 안에서 같은 값입니다)');
   // 연못 h를 직접 주면 기준점은 명시했을 때만 쓴다(오차 표용)
   const anchors = d.anchors.length > 0 ? d.anchors : d.anchorNone || (hMode && d.hStart !== null) ? [] : [currentAnchor(DEFAULT_ANCHOR_SPOT)];
   return designReport({

@@ -198,6 +198,10 @@ describe('design 계산', () => {
       }
     }, 120_000);
 
+    it('허용 상한은 두 자리로 줄이면 값이 달라질 때 원래 값으로 적는다', () => {
+      expect(run(0.035).text).toContain('1 초과 1.035 이하이면 허용');
+    }, 120_000);
+
     it('방치 이득 제외 칸은 허용폭과 관계없이 방치 이득이 든 칸과 다르다', () => {
       const { json } = run(0);
       expect(json.reversals.some(x => x.evNoBoost < x.ev)).toBe(true);
@@ -254,6 +258,8 @@ describe('design 계산', () => {
       const r = designReport(hbase({ anchors: [{ spot: 'sthelena', ev: 1_000_000 }] }));
       expect(r.anchors).toHaveLength(1);
       expect(Math.abs(r.anchors[0].error)).toBeGreaterThan(0);
+      expect(r.rows[0].payback).toBe(0.02);
+      expect(r.resolved.payback).toBe(0.02);
     }, 60_000);
 
     it('해역별 --payback 덮어쓰기는 공식 뒤에 적용하고 다음 해역 h는 공식 값에서 이어진다', () => {
@@ -267,10 +273,16 @@ describe('design 계산', () => {
 
     it('입력이 모순이거나 모자라면 거부한다', () => {
       expect(() => designReport(hbase({ hFormula: { ...f, start: null } }))).toThrow(/기준점/);
-      expect(() => designReport(hbase({ hFormula: { ...f, factors: { normalEntry: 1.5 } } }))).toThrow(/normalIn/);
+      expect(() => designReport(hbase({ hFormula: { ...f, factors: { normalEntry: 1.5 } } }))).toThrow(/normal-in/);
       expect(() => designReport(hbase({ hFormula: { ...f, special: ['nowhere'] } }))).toThrow(/지역/);
       expect(() => designReport(hbase({ hFormula: { ...f, scale: 0 } }))).toThrow(/h-scale/);
       expect(() => designReport(hbase({ payback: { base: 0.5, growth: 0, by: {} } }))).toThrow(/함께/);
+      expect(() => designReport(hbase({ payback: { base: null, growth: 0.1, by: {} } }))).toThrow(/payback-growth/);
+      const anchor = { spot: 'sthelena' as const, ev: 1_000_000 };
+      expect(() => designReport(hbase({ hFormula: { ...f, start: null }, anchors: [anchor], payback: { base: null, growth: 0, by: { sthelena: 5 } } }))).toThrow(/기준점/);
+      expect(designReport(hbase({ anchors: [anchor], payback: { base: null, growth: 0, by: { sthelena: 5 } } })).rows[LAST].payback).toBe(5);
+      expect(() => designReport(hbase({ hFormula: { ...f, factors: { normalEntry: 1.5 } } }))).toThrow(/--h-factor normal-in/);
+      expect(() => designReport(hbase({ hFormula: { ...f, factors: { ...f.factors, specialIn: 0 }, special: ['seasia'] } }))).toThrow(/special-in/);
     });
 
     it('CLI는 인자를 읽어 표 1에 h 배수 열을 낸다', () => {
@@ -286,6 +298,8 @@ describe('design 계산', () => {
       expect(runCli([...a, '--anchor', 'sthelena=1000000']).stdout).toContain('## 비용 기준 역산 — 기준점 오차');
       expect(runCli(a.filter(x => x !== '--h-start' && x !== '0.02').concat(['--anchor', 'none'])).exitCode).toBe(1);
       expect(runCli([...a, '--h-factor', 'normal-in=2']).exitCode).toBe(1);
+      expect(runCli([...a, '--special-region', 'seasia']).exitCode).toBe(1);
+      expect(runCli([...a, '--payback-growth', '0']).stderr).toMatch(/payback-growth/);
       expect(runCli([...a.slice(0, -2), '--h-factor', 'bogus=2']).exitCode).toBe(1);
       expect(runCli(['transition', '--h-start', '1']).exitCode).toBe(1);
     }, 120_000);

@@ -94,8 +94,8 @@ export interface DesignRow {
   hours: number | null;
   /** 회수 시간 방식의 첫 강화 회수 시간 h(진입 레벨) */
   payback: number | null;
-  /** 앞 해역 h 대비 이 해역 h의 배수(회수 시간 방식, 첫 해역은 null) */
-  hRatio: number | null;
+  /** 앞 해역 h 대비 이 해역 h의 배수(해역 배수 공식을 쓸 때만, 첫 해역은 null) */
+  hRatio?: number | null;
   requiredEv: number;
   /** 필요 EV가 식에서 나오지 않고 목표값(기준점 EV 또는 현재 EV)으로 주어진 해역인가 */
   evIsTarget: boolean;
@@ -364,8 +364,9 @@ function cumulativeFactors(f: HFormula): number[] {
   for (let i = 1; i < SPOTS.length; i++) {
     const kind: HFactorKey = `${f.special.includes(SPOTS[i].region) ? 'special' : 'normal'}${SPOTS[i].region !== SPOTS[i - 1].region ? 'Entry' : 'In'}`;
     const v = f.factors[kind];
-    if (v === undefined) throw new Error(`--h-factor ${kind}가 필요합니다`);
-    if (!(v > 0) || !Number.isFinite(v)) throw new Error(`--h-factor ${kind}는 0보다 큰 숫자여야 합니다`);
+    const cli = kind.replace('Entry', '-entry').replace('In', '-in');
+    if (v === undefined) throw new Error(`--h-factor ${cli}가 필요합니다`);
+    if (!(v > 0) || !Number.isFinite(v)) throw new Error(`--h-factor ${cli}는 0보다 큰 숫자여야 합니다`);
     out.push(out[i - 1] * v * f.scale);
   }
   return out;
@@ -378,11 +379,15 @@ function withHFormula(input: DesignInput): { input: DesignInput; h0: number } {
   if (input.payback.base !== null) throw new Error('--h-factor와 --payback 기본값은 함께 줄 수 없습니다(연못 h는 --h-start 또는 기준점)');
   if (input.hours) throw new Error('--h-factor와 --hours는 함께 줄 수 없습니다');
   if (input.solve) throw new Error('--h-factor와 --solve는 함께 줄 수 없습니다');
+  if (input.payback.growth !== 0) throw new Error('--h-factor와 --payback-growth는 함께 줄 수 없습니다(해역 h는 해역 안에서 같은 값입니다)');
   if (input.growth === null) throw new Error('--growth가 필요합니다');
   const cum = cumulativeFactors(f);
   let h0 = f.start;
   if (h0 === null) {
     if (input.anchors.length === 0) throw new Error('--h-start 또는 기준점(--anchor)이 필요합니다');
+    for (const a of input.anchors) {
+      if (input.payback.by[a.spot] !== undefined) throw new Error(`기준점 해역(${a.spot})의 회수 시간은 기준점에서 정해지므로 지정할 수 없습니다`);
+    }
     const levels = entryLevelsOf(gapsOf(input.gap));
     const logs = withCurve(input.start, input.growth, () => input.anchors.map(a => {
       const i = indexOfSpot(a.spot);
@@ -543,7 +548,7 @@ export function designReport(raw: DesignInput): DesignReport {
     return {
       spot: s.id, index: i, level: levels[i], power: powers[i], gap: gaps[i],
       upgradeSum: span ? span.sum : null, boatPrice: span ? span.boatPrice : null, hours, payback: pb,
-      hRatio: input.payback && i > 0 ? pb! / paybackOf(input.payback, res.payback!, SPOTS[i - 1].id, levels[i - 1]) : null,
+      ...(input.hFormula ? { hRatio: i > 0 ? pb! / paybackOf(input.payback!, res.payback!, SPOTS[i - 1].id, levels[i - 1]) : null } : {}),
       requiredEv: requiredEv[i], evIsTarget: !input.payback && span === null, evGrowth: i > 0 ? requiredEv[i] / requiredEv[i - 1] - 1 : null,
       currentEv: current[i].ev, evRatio: requiredEv[i] / current[i].ev, entryBoost: entryBoosts[i], priceMult: priceMult[i],
       grades: gradeCells[i], achievedEv: achieved[i], measuredHours: measured[i] ?? null,
