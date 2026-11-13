@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtDecimal2, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtDecimal2, fmtFishCount, fmtLevel, fmtPlusPoint, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -129,6 +129,14 @@ describe('fmtLevel — 레벨 표기', () => {
   });
 });
 
+describe('fmtPlusPoint - 확률에 더하는 값은 +N%p', () => {
+  it('앞에 +를 붙이고 둘째 자리까지만 보인다', () => {
+    expect(fmtPlusPoint(10)).toBe('+10%p');
+    expect(fmtPlusPoint(0.1125 * 100)).toBe('+11.25%p');
+    expect(fmtPlusPoint(12.345)).toBe('+12.35%p');
+  });
+});
+
 describe('fmtDecimal2 - 소수 둘째 자리까지, 끝의 0은 뺀다', () => {
   it('정수와 한 자리, 두 자리 값은 필요한 만큼만 보인다', () => {
     expect(fmtDecimal2(10)).toBe('10');
@@ -141,5 +149,13 @@ describe('fmtDecimal2 - 소수 둘째 자리까지, 끝의 0은 뺀다', () => {
     expect(fmtDecimal2(0.3 * 100)).toBe('30');
     expect(fmtDecimal2(12.345)).toBe('12.35');
     expect(fmtDecimal2(12.004)).toBe('12');
+  });
+});
+
+describe('fmtFishCount - 마릿수', () => {
+  it('숫자와 단위를 붙여 쓰고 천 단위 쉼표를 넣는다', () => {
+    expect(fmtFishCount(0)).toBe('0마리');
+    expect(fmtFishCount(999)).toBe('999마리');
+    expect(fmtFishCount(1500)).toBe('1,500마리');
   });
 });

@@ -14,6 +14,17 @@ export function stateRow(state: GameState) {
   return { gold, fame, boat, rod, data: rest };
 }
 
+/** 저장 blob의 버전이 없는 구 행이 가정하는 버전. 스칼라 열이 분리된 뒤부터 blob에는 항상 버전이 들어간다 */
+const UNVERSIONED_BLOB = 8;
+
+/**
+ * saves_current 행의 blob → migrate 입력. blob이 가진 버전을 그대로 따른다.
+ * 버전을 고정해 넣으면 이미 이관된 세이브가 이관 링크를 다시 지나 영수증과 조리 상태가 사라진다.
+ */
+export function blobInput(data: unknown): object {
+  return { v: UNVERSIONED_BLOB, ...(data as object) };
+}
+
 /** 개체 → DB 행 */
 export function instRow(uid: string, i: FishInstance, slot: number | null) {
   return {
@@ -66,14 +77,16 @@ export function goldDebit(uid: string, gold: number): SQL {
   return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid}`;
 }
 
-/** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다 */
-export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}): SQL {
+/** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.
+ *  gate가 있으면 그 질의가 행을 돌려줄 때만 바뀐다 */
+export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}, gate: SQL | null = null): SQL {
   const r = stateRow(state);
   const lastCatch = marks.lastCatchAt === undefined ? sql`` : sql`, last_catch_at = ${at(marks.lastCatchAt)}`;
   const client = marks.activeClient === undefined ? sql`` : sql`, active_client = ${marks.activeClient}`;
+  const required = gate ? sql` and exists (${gate})` : sql``;
   return sql`update public.saves_current set gold = ${r.gold}, fame = ${r.fame}, boat = ${r.boat}, rod = ${r.rod},
     data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}${lastCatch}${client}
-    where user_id = ${uid} and version = ${readVersion} returning user_id`;
+    where user_id = ${uid} and version = ${readVersion}${required} returning user_id`;
 }
 
 /**

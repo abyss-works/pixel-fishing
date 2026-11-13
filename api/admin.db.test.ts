@@ -421,6 +421,27 @@ describe('조회 결과', () => {
     const rows = (await callAdmin({ q: 'letters' }, userToken(ADMIN))).body as Row[];
     expect(rows.map(r => [r.user_id, r.text])).toEqual([[PLAYER, '바다가 좋아요'], [ADMIN, '안녕하세요'], [GUEST, '문의합니다']]);
   });
+
+  it('changelog: 관리자만 읽고 최신 버전부터 버전 안 순번 순서로 줄 모양을 camelCase로 준다', async () => {
+    expect((await callAdmin({ q: 'changelog' }, userToken(PLAYER))).status).toBe(403);
+    expect((await callAdmin({ q: 'changelog' })).status).toBe(401);
+    expect((await callAdmin({ q: 'changelog' }, userToken(ADMIN))).body).toEqual([]);
+    await env.client.query(`insert into public.changelog_entries (id, version, date, seq, tier, tag, text, withdrawn_at) values
+      ('0.9.0-01', '0.9.0', '2026-10-01', 1, 'public', '기능', '아홉 번째', null),
+      ('0.10.0-02', '0.10.0', '2026-10-20', 2, 'admin', '수정', '열 번째 관리자', null),
+      ('0.10.0-01', '0.10.0', '2026-10-20', 1, 'public', 'UI', '열 번째 공개', '2026-10-21T00:00:00Z')`);
+    const rows = (await callAdmin({ q: 'changelog' }, userToken(ADMIN))).body as Row[];
+    expect(rows).toEqual([
+      { id: '0.10.0-01', version: '0.10.0', date: '2026-10-20', seq: 1, tier: 'public', tag: 'UI', text: '열 번째 공개', withdrawnAt: '2026-10-21T00:00:00+00:00' },
+      { id: '0.10.0-02', version: '0.10.0', date: '2026-10-20', seq: 2, tier: 'admin', tag: '수정', text: '열 번째 관리자', withdrawnAt: null },
+      { id: '0.9.0-01', version: '0.9.0', date: '2026-10-01', seq: 1, tier: 'public', tag: '기능', text: '아홉 번째', withdrawnAt: null },
+    ]);
+  });
+
+  it('changelog: 등급은 public과 admin만 받는다', async () => {
+    await expect(env.client.query(`insert into public.changelog_entries (id, version, date, seq, tier, tag, text)
+      values ('0.8.0-01', '0.8.0', '2026-09-01', 1, 'internal', '기타', 'x')`)).rejects.toThrow();
+  });
 });
 
 describe('우편 보내기', () => {
@@ -473,6 +494,9 @@ describe('관리자 조치', () => {
   beforeAll(async () => {
     await seedUser(env.client, { uid: TARGET, email: 'target@example.test', nickname: '대상', state: { gold: 5, fame: 1 } });
     await seedUser(env.client, { uid: NO_SAVE, email: 'nosave@example.test', nickname: '저장없음' });
+    // 재설정 링크는 비밀번호 수단이 있는 계정에만 만든다. NO_SAVE는 구글만 연결한 계정이다
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id, password) values ($1::uuid, $1::text, 'credential', 'hash')`, [TARGET]);
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1::uuid, 'no-save-google', 'google')`, [NO_SAVE]);
   });
 
   it('관리자가 아니면 403, 세션이 없으면 401이고 아무것도 바꾸지 않는다', async () => {
@@ -515,6 +539,12 @@ describe('관리자 조치', () => {
     expect(await post('resetLink', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
     expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [GUEST])).rows).toEqual([]);
     expect(await adminEvents(GUEST)).toEqual([]);
+  });
+
+  it('비밀번호 수단이 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
+    expect(await post('resetLink', { userId: NO_SAVE })).toMatchObject({ status: 409, body: { error: 'no-password' } });
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [NO_SAVE])).rows).toEqual([]);
+    expect(await adminEvents(NO_SAVE)).toEqual([]);
   });
 
   it('재설정 링크는 1시간 유효한 재설정 토큰으로 게임 착지 주소를 만들고, 그 토큰으로 비밀번호를 바꿀 수 있다', async () => {

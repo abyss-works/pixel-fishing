@@ -6,6 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
+import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
@@ -22,6 +23,7 @@ import Sidebar from '../../../layouts/sidebar';
 import { pressSheetTab } from '../../../layouts/sidebar/sheet';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import { isGuest } from '../../../../features/account/service/accountActions';
 
 interface GameTabsProps {
   /** 길드 판매가 보너스 비율 */
@@ -34,6 +36,8 @@ interface GameTabsProps {
   setToast: Notify;
   syncLabel: string | null;
   syncState: string;
+  guestProgress: GuestProgress;
+  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
   nickname: string | null;
   onRename: (name: string) => Promise<null | RejectReason>;
@@ -118,12 +122,12 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} sellBonus={props.sellBonus} dispatch={props.dispatch} setToast={props.setToast} />}
+      {activeTab === 'bag' && <BagTab game={game} guest={isGuest(props.account)} sellBonus={props.sellBonus} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
-        <SettingsTab game={game} dispatch={props.dispatch} setToast={props.setToast}
-                     syncLabel={props.syncLabel} syncState={props.syncState}
+        <SettingsTab dispatch={props.dispatch} setToast={props.setToast}
+                     syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
                      account={props.account} uid={props.uid}
                      nickname={props.nickname} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />

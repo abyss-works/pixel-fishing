@@ -7,13 +7,9 @@ import type { Fish, FormId } from '../fish.js';
 import { FISH_SHAPE_SPRITES } from './fishShapes.generated.js';
 import { FISH_SPRITES_GENERATED } from './fishSprites.generated.js';
 import { FISH_SPRITES } from './fishSprites.js';
+import { OUTLINE_DARK, SILHOUETTE } from './common.js';
 import { paletteColors } from './types.js';
 import type { PixelSprite } from './types.js';
-
-/** 미발견 실루엣 색 — 몸 형태만 보여주고 색은 숨긴다 (도감 스포일러 규칙) */
-export const SILHOUETTE = '#22314a';
-/** 윤곽 — 어두운 수면·패널 위에서 몸을 떼어 놓는 가독성용. 순검정보다 한 단계 연한 남색 */
-export const OUTLINE_DARK = '#182540';
 
 export const spriteKey = (id: string, form: FormId): string => (form === 'variant' ? `${id}.variant` : id);
 

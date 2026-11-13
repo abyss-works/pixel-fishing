@@ -1,5 +1,5 @@
 // 인증 구성. Better Auth 인스턴스를 만든다.
-// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀과 메일 발송기만 넘겨 같은 구성으로 쓸 수 있다.
+// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀, 메일 발송기, 구글 클라이언트만 넘겨 같은 구성으로 쓸 수 있다.
 // 표는 auth 스키마의 users·sessions·accounts·verifications이고 열 이름은 snake_case다.
 import { betterAuth } from 'better-auth';
 import { anonymous } from 'better-auth/plugins';
@@ -8,7 +8,8 @@ import bcrypt from 'bcryptjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { MailSender } from './mail.js';
-import { anonymousUpgrade } from './upgrade.js';
+import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
+import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
 
 export interface AuthConfig {
   pool: Pool;
@@ -16,6 +17,9 @@ export interface AuthConfig {
   /** 앱의 공개 주소. 예: https://pixel-fishing.abyssworks.dev */
   baseURL: string;
   mail: MailSender;
+  google: GoogleConfig;
+  /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
+  recordLinkConsent: RecordLinkConsent;
 }
 
 export const MIN_PASSWORD_LENGTH = 6;
@@ -68,12 +72,19 @@ const accountTable = {
     ...timestamps,
   },
 };
+// 세션 행에는 접속 IP와 브라우저 정보를 저장하지 않고 비워 둔다. 요청 수 제한은 요청에서 IP를 직접 읽으므로 이 값과 무관하다.
+const sessionHooks = {
+  create: {
+    before: async (session: Record<string, unknown>) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
+  },
+};
 const verificationTable = {
   modelName: 'auth.verifications',
   fields: { expiresAt: 'expires_at', ...timestamps },
 };
 
 export function createAuth(config: AuthConfig) {
+  const finishLink = finishGoogleLink(config.recordLinkConsent);
   return betterAuth({
     database: config.pool,
     secret: config.secret,
@@ -84,18 +95,33 @@ export function createAuth(config: AuthConfig) {
       minPasswordLength: MIN_PASSWORD_LENGTH,
       maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: bcryptPassword,
-      sendResetPassword: ({ user, url }) => config.mail.sendPasswordReset(user.email, url),
+      disableSignUp: true,
+      // 비밀번호 수단이 남은 계정에만 보낸다.
+      sendResetPassword: async ({ user, url }) => {
+        const { rowCount } = await config.pool.query(
+          `select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [user.id]);
+        if (rowCount) await config.mail.sendPasswordReset(user.email, url);
+      },
       resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN,
       revokeSessionsOnPasswordReset: true,
     },
-    user: userTable,
+    user: { ...userTable, validateUserInfo: validateGoogleLink },
     session: {
       ...sessionTable,
       expiresIn: SESSION_EXPIRES_IN,
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
-    account: accountTable,
+    socialProviders: { google: googleProvider(config.google) },
+    account: { ...accountTable, accountLinking, updateAccountOnSignIn: false },
     verification: verificationTable,
+    databaseHooks: {
+      session: sessionHooks,
+      account: {
+        create: { before: dropOAuthTokens.create?.before, after: finishLink.create?.after },
+        update: { before: dropOAuthTokens.update?.before, after: finishLink.update?.after },
+      },
+    },
+    hooks: { before: guardAuthRequests },
     advanced: { database: { generateId: 'uuid' } },
     plugins: [
       anonymous({
@@ -104,7 +130,6 @@ export function createAuth(config: AuthConfig) {
         generateRandomEmail: () => `${randomUUID()}@${ANONYMOUS_EMAIL_DOMAIN}`,
         schema: { user: { fields: { isAnonymous: 'is_anonymous' } } },
       }),
-      anonymousUpgrade({ minPasswordLength: MIN_PASSWORD_LENGTH, maxPasswordLength: MAX_PASSWORD_LENGTH }),
     ],
   });
 }
@@ -120,20 +145,23 @@ export const adminSecret = (secret: string): string =>
   createHmac('sha256', secret).update('admin-session').digest('base64url');
 
 /**
- * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표에 이메일·비밀번호로 로그인하고 별도 쿠키의 세션을 받는다.
- * 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
+ * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표의 구글 계정으로 로그인하고 별도 쿠키의 세션을 받는다.
+ * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
  */
-export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
+export function createAdminAuth(config: Omit<AuthConfig, 'mail' | 'recordLinkConsent'>) {
   return betterAuth({
     database: config.pool,
     secret: adminSecret(config.secret),
     baseURL: config.baseURL,
     basePath: '/api/admin/auth',
-    emailAndPassword: { enabled: true, disableSignUp: true, password: bcryptPassword },
     user: userTable,
     session: sessionTable,
-    account: accountTable,
+    socialProviders: { google: googleProvider(config.google) },
+    // 관리자 인증은 로그인만 한다. 계정 연결은 게임 인증에서만 한다
+    account: { ...accountTable, accountLinking: { ...accountLinking, enabled: false }, updateAccountOnSignIn: false },
     verification: verificationTable,
+    databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
+    hooks: { before: guardAuthRequests },
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
   });
 }

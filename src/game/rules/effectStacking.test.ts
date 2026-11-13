@@ -1,6 +1,7 @@
 // 보너스 효과의 합산 — 같은 대상에 걸리는 효과는 먼저 더해 (1 ± 합)으로 한 번 적용하고, 기본 규칙 배수와 곱한다.
 import { describe, it, expect } from 'vitest';
 import { catchDrawOptions, commonWeightMultiplier, drawCatch, prepareCatchDraw } from './actions';
+import type { CatchDraw } from './actions';
 import { fishDrawShares, fishPool, mutationWeightsOf, newState } from './logic';
 import type { DrawOptions, GameState } from './logic';
 import { endedFirstCatch } from './firstCatch';
@@ -38,10 +39,15 @@ const close = (a: Record<RarityId, number>, b: Record<RarityId, number>) => {
   for (const r of RARITY_ORDER) expect(a[r], r).toBeCloseTo(b[r], 12);
 };
 
-/** 실제 캐치 경로 — 미끼는 prepareCatchDraw, 길드는 drawCatch가 얹는다. drawCatch가 쌓은 천장 값을 돌려준다 */
-const catchPath = (judgment: 'perfect' | 'auto' | 'normal', baitId: string | null, guildRare: number, pzMult = 1) => {
-  const s = seed(baitId ? { items: { [baitId]: 1 }, activeBait: baitId } : {});
-  const prep = prepareCatchDraw(s, judgment, DAY, pz({ mult: pzMult }));
+/** 실제 캐치 경로 — 다른 보너스 효과(등급 가중)는 추첨 옵션에 실어 넣고, 길드는 drawCatch가 얹는다.
+ *  drawCatch가 쌓은 천장 값을 돌려준다 */
+const catchPath = (
+  judgment: 'perfect' | 'auto' | 'normal', effects: Partial<Record<RarityId, number>>, guildRare: number, pzMult = 1,
+) => {
+  const s = seed();
+  const base = prepareCatchDraw(newState(), judgment, DAY, pz({ mult: pzMult }));
+  const prep: CatchDraw = Object.keys(effects).length > 0
+    ? { ...base, phaseOpts: { ...base.phaseOpts, weightEffects: effects } } : base;
   const d = drawCatch(
     { ...s, firstCatch: endedFirstCatch() }, SPOT, prep.judgment, 100, pzMult, () => 0.5, prep.phaseOpts, () => false,
     { ...NO_GUILD_EFFECTS, rare: guildRare },
@@ -65,35 +71,35 @@ describe('등급 가중치 — 효과를 등급별로 모아 (1 + 합)을 한 �
     close(gradeShare({ rareMult: 2 }), expected(manualDial, {}));
     close(gradeShare({}), expected(1, {}));
   });
-  it('(b) 미끼만 — 대상 등급 가중치 +100%', () => {
+  it('(b) 다른 보너스만 — 대상 등급 가중치 +100%', () => {
     for (const r of RARITY_ORDER) {
       close(gradeShare({ rareMult: 2, weightEffects: { [r]: 1 } }), expected(manualDial, { [r]: 1 }));
     }
   });
-  it('(b) 미끼 판정 경로는 대상 등급에 +1.00을 걸고, 방치에는 걸지 않는다', () => {
-    expect(catchPath('perfect', 'bait-rare', 0).prep.phaseOpts.weightEffects).toEqual({ rare: 1 });
-    expect(catchPath('auto', 'bait-rare', 0).prep.phaseOpts.weightEffects).toBeUndefined();
+  it('(b) 효과가 없는 캐치 경로는 추첨 옵션에 등급 효과를 걸지 않는다', () => {
+    expect(catchPath('perfect', {}, 0).prep.phaseOpts.weightEffects).toBeUndefined();
+    expect(catchPath('auto', {}, 0).prep.phaseOpts.weightEffects).toBeUndefined();
   });
   it('(c) 길드만 — 수동 PERFECT와 최대 방치 배수에서 일반 가중치에 (1 − 합)', () => {
     close(gradeShare({ rareMult: 2, weightEffects: { common: -GUILD } }), expected(manualDial, { common: -GUILD }));
     const idle = relativeIdleBoost(10_000, SPOT);
     close(gradeShare({ commonMult: idle, weightEffects: { common: -GUILD } }), expected(idle, { common: -GUILD }));
-    const { pity, caught } = catchPath('perfect', null, GUILD);
+    const { pity, caught } = catchPath('perfect', {}, GUILD);
     expectPityShares(pity, caught, { ...catchDrawOptions('perfect', 100, SPOT, 1, { phase: 'day' }), weightEffects: { common: -GUILD } });
   });
-  it('(d) 희귀 미끼 + 길드 — 대상이 달라 각자 적용한다(기존과 같다)', () => {
+  it('(d) 희귀 등급 보너스 + 길드 — 대상이 달라 각자 적용한다', () => {
     close(
       gradeShare({ rareMult: 2, weightEffects: { rare: 1, common: -GUILD } }),
       expected(manualDial, { rare: 1, common: -GUILD }),
     );
-    const { pity, caught } = catchPath('perfect', 'bait-rare', GUILD);
+    const { pity, caught } = catchPath('perfect', { rare: 1 }, GUILD);
     expectPityShares(pity, caught, {
       ...catchDrawOptions('perfect', 100, SPOT, 1, { phase: 'day' }), weightEffects: { rare: 1, common: -GUILD },
     });
   });
-  it('(e) 일반 미끼 + 길드 — 같은 대상이라 (1 + 1.00 − 합)이다', () => {
+  it('(e) 일반 등급 보너스 + 길드 — 같은 대상이라 (1 + 1.00 − 합)이다', () => {
     close(gradeShare({ rareMult: 2, weightEffects: { common: 1 - GUILD } }), expected(manualDial, { common: 1 - GUILD }));
-    const { pity, caught } = catchPath('perfect', 'bait-common', GUILD);
+    const { pity, caught } = catchPath('perfect', { common: 1 }, GUILD);
     expectPityShares(pity, caught, {
       ...catchDrawOptions('perfect', 100, SPOT, 1, { phase: 'day' }), weightEffects: { common: 1 - GUILD },
     });
@@ -105,7 +111,7 @@ describe('등급 가중치 — 효과를 등급별로 모아 (1 + 합)을 한 �
       gradeShare({ ...o, weightEffects: { common: 1 - GUILD } }),
       expected(penalty / JUDGMENT_MULT.good, { common: 1 - GUILD }),
     );
-    const { pity, caught } = catchPath('normal', 'bait-common', GUILD, penalty);
+    const { pity, caught } = catchPath('normal', { common: 1 }, GUILD, penalty);
     expectPityShares(pity, caught, {
       ...catchDrawOptions('normal', 100, SPOT, penalty, { phase: 'day' }), weightEffects: { common: 1 - GUILD },
     });

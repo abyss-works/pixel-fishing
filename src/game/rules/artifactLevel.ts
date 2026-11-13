@@ -37,7 +37,6 @@ export function artifactEffectsAt(art: Artifact, level: number): ArtifactEffects
   const out: ArtifactEffects = {};
   if (e.sail !== undefined) out.sail = clean(e.sail * k);
   if (e.duelSpeedupCut !== undefined) out.duelSpeedupCut = clean(e.duelSpeedupCut * k);
-  if (e.baitDiscount !== undefined) out.baitDiscount = clean(e.baitDiscount * k);
   if (e.biteWaitCut !== undefined) out.biteWaitCut = clean(e.biteWaitCut * k);
   if (e.mutationWeight !== undefined) {
     const boost = e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1;
@@ -46,6 +45,22 @@ export function artifactEffectsAt(art: Artifact, level: number): ArtifactEffects
     };
   }
   return out;
+}
+
+/** 그 레벨에서의 요리 추가 완성 확률 — Lv1 값에 레벨 계수를 곱한다. 요리 효과가 없는 유물은 0이다.
+ *  조리 시작 리듀서와 부엌 창 표시가 이 값을 함께 쓴다 */
+export function artifactExtraCookChanceAt(art: Artifact, level: number): number {
+  if (art.cook === undefined) return 0;
+  return clean(art.cook.extraCookChance * (artifactHasLevel(art) ? coefOf(level) : 1));
+}
+
+/** 보유 유물의 요리 추가 완성 확률 — 보유 유물의 확률을 더한 합이고 1을 넘지 않는다 */
+export function extraCookChance(state: ArtifactHolder): number {
+  const sum = ARTIFACTS.reduce((acc, a) => {
+    const level = artifactLevelOf(state, a.id);
+    return level === 0 ? acc : acc + artifactExtraCookChanceAt(a, level);
+  }, 0);
+  return Math.min(1, clean(sum));
 }
 
 /** 보유 유물의 효과 값을 모두 더한다 — 같은 종류의 효과는 합한 뒤 한 번 적용한다. pick은 레벨을 적용한 효과에서 값을 고른다 */

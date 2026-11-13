@@ -8,28 +8,30 @@
 // 왕복 순서: 상태 읽기 1회 → (캐치면 도감·가방 수 1회, 가방이 가득 차면 방생 후보 1회) → 확정 1회 → 응답.
 // 이벤트·주기 스냅샷·의뢰 진행도처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행한다.
 //
-// ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500 났던
-// 사고(2026-08-21) 재발 방지. default export = Node 시그니처.
+// ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500이 났던
+// 사고의 재발을 막기 위해서다. default export = Node 시그니처.
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
-import type { FishInstance, FormRecord, GameState } from '../src/game/rules/logic.js';
+import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
-  takeItem, matchBountyCatch,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
+  matchBountyCatch,
 } from '../src/game/rules/logic.js';
+import { appliedSlots } from '../src/game/rules/cooking.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
-import { applyAction, drawCatch, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
+import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
 import { isDebugTableCommand } from '../src/game/rules/debug.js';
+import { guestActionVerdict } from '../src/game/rules/guest.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
@@ -45,17 +47,17 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDelivery, debugFragment,
+  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDeliveryFragment, debugFragment, deliveryGate,
   expiredCleanup, ticketFragment,
 } from './_data/bounty.js';
-import { consumeRelief, findCoupon } from './_data/codes.js';
+import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
-import { COMMIT_GUARD, commitAction, runFollowUps } from './_data/commit.js';
+import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
-import { instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
+import { blobInput, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
@@ -69,7 +71,7 @@ const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 /** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
 function scalarState(row: StateRow): GameState {
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
 }
 import { reportServerIssue } from './observability.js';
@@ -159,7 +161,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
       { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
   }
   // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
-  return migrate({ ...(row.data as object), v: 8, gold: Number(row.gold), fame: Number(row.fame),
+  return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
     boat: row.boat, rod: row.rod, bag, exhibit, dex });
 }
 
@@ -193,6 +195,8 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
+ * 요리(cook·eat)는 아이템 수량·조리 상태·슬롯이 모두 blob이라 가방 개체를 쓰지 않고, 기운 대상 설정과 환불 안내 닫기는 blob 스칼라만 바꾼다.
+ * extractEnergy는 가방 개체를 소비하므로 스킵하지 않는다.
  * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
  * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
@@ -200,6 +204,7 @@ export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
+  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -281,6 +286,12 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(400, 'bad-action');
   }
   let action = parsed;
+
+  // 게스트(계정을 연결하지 않은 익명 계정)는 허용 목록의 액션만 받는다. 상태를 읽기 전에 거른다.
+  if (user.email === null) {
+    const verdict = guestActionVerdict(action);
+    if (verdict !== 'ok') throw new ApiError(403, verdict);
+  }
 
   // 현재 상태 로드 — 프로필·저장 상태와, 필요한 액션이면 개체·도감·수배 행까지 한 번에 읽는다.
   // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.
@@ -365,8 +376,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 쿠폰·지원코드 조회보다 **먼저** 검사해
-  // 거절된 요청으로 코드 행이 소비되는 일을 막는다. 시딩 행(v1)과 첫 액션은 제외.
+  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
+  // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
   const lastActionMs = Date.parse(String(row.updated_at ?? ''));
   if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
     const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
@@ -386,15 +397,21 @@ async function route(req: Req, res: Res): Promise<void> {
     dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
   }
 
-  // 지원 코드(reliefs 테이블) — **선소비 후적용**. active=true 조건부 UPDATE가 성공한 요청만
-  // 자산을 받는다(동시 수령 경합 원천 차단 — 코드당 1행이라 UPDATE 승자가 1개). 적용 직후
-  // 실패할 규칙이 없으므로 코드가 탈 일은 사실상 없다.
+  // 지원 코드 소비 — 다른 계정과 같은 행을 다투므로 읽기와 규칙 실행 뒤, 확정과 같은 트랜잭션에서 한다.
+  // 확정이 경합으로 실패하면 소비도 되돌려지고, 읽은 뒤 다른 요청이 먼저 소비했으면 확정하지 않고 거부한다.
+  let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
+
+  // 지원 코드(reliefs 테이블) — 여기서는 지급분을 읽기만 한다. 활성 코드를 조건부로 비활성화한 요청 하나만
+  // 확정되므로(코드당 1행) 동시 수령은 한 번만 지급된다.
   let relief: ActionDeps['relief'] = null;
   if (action.type === 'claimRelief' && typeof action.code === 'string') {
     const code = action.code.trim();
     if (code) {
-      const g = await step('db-write', { uid, action: action.type }, () => consumeRelief(db, code, uid));
-      if (g) relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+      const g = await step('db-read', { uid, action: action.type }, () => findRelief(db, code));
+      if (g) {
+        relief = { gold: g.gold, fame: g.fame, rod: g.rod, boat: g.boat, dex: g.dex as GameState['dex'] };
+        consumeCode = async tx => await consumeRelief(tx, code, uid) !== null;
+      }
     }
   }
 
@@ -421,6 +438,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 라이선스 소유·일일 카운트·진행도·도전권은 saves가 아니라 전용 테이블에 있다.
   // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
   let bounty: ActionDeps['bounty'] = null;
+  let deliveryRow: { gate: SQL; questId: string } | null = null; // 납품이 소비할 진행 행
   let expired: ReturnType<typeof expiredQuests> = []; // 이번 읽기에서 만료로 판정한 의뢰 — 응답 뒤에 정리한다
   if (wantsBounty) {
     const rows = loaded.bounty ?? { clears: [], progress: [], tickets: [] };
@@ -436,26 +454,25 @@ async function route(req: Req, res: Res): Promise<void> {
       }
     }
 
-    // 납품은 선소비(reliefs 선례) — 진행 행을 먼저 지운다. 동시 납품 경합은
-    // 지운 쪽만 성공하고, 나머지는 주입 complete가 비어 리듀서가 422로 거부한다.
+    // 납품 — 완료한 진행 행이 있어야 확정하고, 진행 행은 확정 문장 안에서 지운다.
     if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
-      const questId = action.questId;
-      const consumed = await step('db-write', { uid, action: action.type }, () => consumeDelivery(db, uid, questId));
-      if (!consumed) bounty = { ...bounty, complete: [] };
+      deliveryRow = { gate: deliveryGate(uid, action.questId), questId: action.questId };
     }
   }
 
+  // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
+  const now = new Date().toISOString();
   let out: ApplyOutcome;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, guildEffects);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
     out = applyAction(state, action, {
       rng: Math.random, today: todayKST(),
-      now: new Date().toISOString(), newUid: () => crypto.randomUUID(),
+      now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
       bounty,
@@ -469,8 +486,8 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
-    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, new Date().toISOString(),
-      Math.random, action.forceEncounter === true, guildEffects.named);
+    const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
+      Math.random, action.forceEncounter === true, namedWeightBonus(catchBase, action.judgment, now, guildEffects));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -480,9 +497,9 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 확정 — 낙관 락 갱신과, 그것이 성공했을 때만 쓰는 행(개체·도감·수배·편지)을 한 문장으로 쓴다.
   // 읽은 version이 그대로가 아니면 아무것도 쓰지 않고 409를 돌려준다. 클라이언트(HttpGameGateway)가
-  // 최신 상태 위에 1회 재시도한다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
+  // 최신 상태 위에 1회 재시도한다. 납품은 소비할 진행 행이 이미 없으면 409가 아니라 422다. 멀티탭 동시 수주도 이 락이 하나만 통과시킨다.
   const nowISO = new Date().toISOString();
-  // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다(Ruling 2026-10-07).
+  // 이벤트 시각 단일화 — letters와 events가 같은 created_at을 써야 복사 INSERT의 dedupe가 성립한다.
   const eventNow = nowISO;
   const guard = COMMIT_GUARD;
   const fragments: (SQL | null)[] = [...writeFragments(guard, uid, out.writes, nowISO)];
@@ -495,6 +512,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(clearFragment(guard, uid, quest, nowISO));
   }
+  if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
     if (e.type !== 'ticket') return [];
@@ -516,12 +534,27 @@ async function route(req: Req, res: Res): Promise<void> {
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
-  const committed = await step('db-write', { uid, action: action.type },
-    () => commitAction(db, versionUpdate(uid, out.state, readVersion, nowISO, {
-      ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
-      ...(action.type === 'boot' ? { activeClient: clientId } : {}),
-    }), fragments));
-  if (!committed) throw new ApiError(409, 'version-conflict');
+  const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
+    ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
+    ...(action.type === 'boot' ? { activeClient: clientId } : {}),
+  }, deliveryRow?.gate ?? null);
+  if (consumeCode) {
+    const consuming = consumeCode;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitConsumingCode(withTransaction, consuming, versionWrite, fragments));
+    if (result === 'unavailable') throw new ApiError(422, 'relief-invalid');
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else if (deliveryRow) {
+    const gate = deliveryRow.gate;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitGated(db, versionWrite, fragments, gate));
+    if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else {
+    const committed = await step('db-write', { uid, action: action.type },
+      () => commitAction(db, versionWrite, fragments));
+    if (!committed) throw new ApiError(409, 'version-conflict');
+  }
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.
@@ -591,21 +624,20 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Parameters<typeof prepareCatchDraw>[1],
+async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects): Promise<ApplyOutcome> {
-  const base = migrate({ ...(row.data as object), v: 8, gold: Number(row.gold),
+  const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
-  const now = new Date().toISOString();
-  const { judgment, bait, phaseOpts } = prepareCatchDraw(base, judgmentIn, now, pz);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild);
+  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
@@ -623,11 +655,11 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
-    // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. form 텍스트 정렬(normal < variant)이
-    // 비교자와 일치함은 FormId 2종 전제 — exhaustiveness 검증이 깨지면 이 분기를 확인한다.
+    // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. 묶음 안 정렬(판매가, 크기, uid)의
+    // 판매가는 게임 계층의 evictionPriceRows를 조인한 값이라 비교자(compareBlandness)와 같은 기준이다.
     // 조회 실패를 빈 칸으로 취급하면 엉뚱한 놈을 방생한다 — 조용히 넘기지 않는다
     const victims = await step('db-read', { uid, action: 'catch' }, () => evictionCandidates(db, uid,
-      FISH.map(f => f.id), RARITY_ORDER.map(r => FISH.filter(f => f.rarity === r).map(f => f.id))));
+      FISH.map(f => f.id), RARITY_ORDER.map(r => FISH.filter(f => f.rarity === r).map(f => f.id)), evictionPriceRows()));
     const tops: (FishInstance | null)[] = victims.map(t => t ? {
       uid: t.uid, fishId: t.fish_id, form: t.form as FishInstance['form'],
       size: t.size, caughtAt: null, spot: null, judgment: null, locked: false,
@@ -650,17 +682,16 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
-    ...(bait ? { bait: bait.id } : {}),
     ...(drawn.byCeiling ? { pity: true } : {}),
+    ...appliedSlots(base, now, judgmentIn),
   } }];
   if (overflow.length > 0) {
     events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
       fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
-  const scalars = takeItem(base, bait?.id ?? '');
   return {
     ok: true,
-    state: { ...scalars, fame: scalars.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
+    state: { ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
     events,
     writes: {

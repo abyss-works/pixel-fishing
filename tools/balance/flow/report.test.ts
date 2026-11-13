@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
@@ -28,8 +28,9 @@ describe('명령 인자', () => {
   it('인자가 없으면 네 명령 전부와 기본값이다', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
-      legendAt: null, axis: 'idle', maxDays: 365, help: false,
+      legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
     });
   });
 
@@ -321,5 +322,280 @@ describe('분포와 이동 명령', () => {
 
   it('해석 기댓값이 항상 같은 전환 분포 표에 누적 행이 있다', () => {
     expect(renderText(runFlow(small({ commands: ['dist'] })))).toContain('누적');
+  });
+});
+
+describe('effects 명령', () => {
+  it('효과 옵션을 퍼센트와 배수로 읽고 기본은 효과 없음이다', () => {
+    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 });
+    const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--epic', '50', '--legendary', '200', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
+    expect(o.commands).toEqual(['effects']);
+    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, epic: 0.5, legendary: 2, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
+    expect(o.margin).toBe(4);
+    expect(o.units).toEqual({ common: 1, rare: 2, epic: 3, legendary: 4 });
+  });
+
+  it('명령을 생략하면 내지 않는다', () => {
+    expect(parseArgs([]).commands).not.toContain('effects');
+  });
+
+  it('낚싯대 여유를 -4부터 받는다', () => {
+    expect(parseArgs(['effects', '--margin', '-4']).margin).toBe(-4);
+    expect(parseArgs(['effects', '--margin', '-1']).margin).toBe(-1);
+  });
+
+  it('음수 여유는 조기 진입 비교 표를 더하고 0 이상이면 내지 않는다', () => {
+    const t = runCli(['effects', '--margin', '-2', '--rare', '10', '--trials', '2']).stdout;
+    expect(t).toContain('## 조기 진입 비교');
+    expect(t).toContain('낚싯대는 해역 진입 레벨 -2');
+    expect(runCli(['effects', '--trials', '2']).stdout).not.toContain('## 조기 진입 비교');
+  });
+
+  it('효과 옵션은 effects 명령에서만 쓸 수 있고 범위를 벗어나면 오류다', () => {
+    expect(() => parseArgs(['--bite', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['dist', '--rare', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['ev', '--bite', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--bite', '100'])).toThrow(/입질/);
+    expect(() => parseArgs(['effects', '--variant', '-5'])).toThrow(/돌연변이/);
+    expect(() => parseArgs(['effects', '--epic', '-5'])).toThrow(/영웅/);
+    expect(() => parseArgs(['effects', '--legendary', '-5'])).toThrow(/전설/);
+    expect(() => parseArgs(['effects', '--margin', '1.5'])).toThrow(/정수/);
+    expect(() => parseArgs(['effects', '--margin', '-5'])).toThrow(/-4/);
+    expect(() => parseArgs(['effects', '--units', '1,5,25'])).toThrow(/등급 수/);
+    expect(() => parseArgs(['effects', '--bite', 'x'])).toThrow(/숫자/);
+  });
+
+  it('세 지표를 표로 내고 효과 없음이면 변화가 모두 0이다', () => {
+    const r = runCli(['effects', '--trials', '5']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음');
+    expect(r.stdout).toContain('## 효과를 넣은 수입');
+    expect(r.stdout).toContain('## 도감 완성 시간');
+    expect(r.stdout).toContain('## 재료 공급');
+    expect(r.stdout).not.toMatch(/\| [+-][1-9]\d*\.\d%/);
+  });
+
+  it('판매 왕복을 넣은 열은 항상 내고, 네임드 효과는 조우 열을 더한다', () => {
+    const t = runCli(['effects', '--move', '10', '--named', '10', '--trials', '3']).stdout;
+    expect(t).toContain('판매 왕복 포함 골드 변화');
+    expect(t).toContain('네임드 조우 기대');
+    expect(t).toContain('없음');
+    const plain = runCli(['effects', '--trials', '3']).stdout;
+    expect(plain).toContain('판매 왕복 포함 골드 변화');
+    expect(plain).not.toContain('네임드 조우 기대');
+  });
+
+  it('등급 가중은 영향받는 등급의 캐치 비율 열을 더하고 도감 표는 영웅, 전설 열을 항상 낸다', () => {
+    const t = runCli(['effects', '--epic', '50', '--trials', '3']).stdout;
+    expect(t).toContain('영웅 이상 가중 +50%');
+    expect(t).toContain('영웅 캐치 비율');
+    expect(t).toContain('전설 캐치 비율');
+    expect(t).not.toContain('희귀 캐치 비율');
+    expect(t).toContain('영웅 도감 전부');
+    expect(t).toContain('전설 도감 전부');
+    const l = runCli(['effects', '--legendary', '100', '--trials', '3']).stdout;
+    expect(l).toContain('전설 가중 +100%');
+    expect(l).not.toContain('영웅 캐치 비율');
+    const plain = runCli(['effects', '--trials', '3']).stdout;
+    expect(plain).not.toContain('캐치 비율');
+    expect(plain).toContain('영웅 도감 전부');
+  });
+
+  it('JSON은 효과와 세 지표를 담고 같은 시드는 같은 결과다', () => {
+    const a = runCli(['effects', '--bite', '10', '--trials', '5', '--json']).stdout;
+    expect(a).toBe(runCli(['effects', '--bite', '10', '--trials', '5', '--json']).stdout);
+    const j = JSON.parse(a);
+    expect(j.effects.effect.bite).toBe(0.1);
+    expect(j.effects.income.length).toBe(j.effects.dex.length);
+    expect(j.effects.supply.length).toBe(j.effects.dex.length);
+  });
+});
+
+describe('window 명령', () => {
+  it('수동 GOOD이 기본이고 창은 30분이다', () => {
+    const o = parseArgs(['window', '--rare', '20']);
+    expect(o.commands).toEqual(['window']);
+    expect(o.axis).toBe('manual');
+    expect(o.windowMinutes).toBe(30);
+    expect(parseArgs(['window', '--axis', 'idle']).axis).toBe('idle');
+    expect(parseArgs(['window', '--window', '45']).windowMinutes).toBe(45);
+  });
+
+  it('등급 미끼 이름이 효과 옵션을 채운다', () => {
+    expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
+    expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.4, 12);
+    expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.6, 12);
+    expect(() => parseArgs(['window', '--bait', 'common'])).toThrow(/미끼/);
+  });
+
+  it('--window는 window 명령에서만, 0보다 커야 한다', () => {
+    expect(() => parseArgs(['effects', '--window', '30'])).toThrow(/window 명령/);
+    expect(() => parseArgs(['window', '--window', '0'])).toThrow(/0보다/);
+  });
+
+  it('창 안 캐치 수와 도감 단축 표를 낸다', () => {
+    const r = runCli(['window', '--bait', 'epic', '--trials', '5']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('## 창 안 기대 캐치 수');
+    expect(r.stdout).toContain('## 창 하나가 도감 완성 시간을 줄이는 양');
+    expect(r.stdout).toContain('영웅 이상 가중 +40%');
+    expect(r.stdout).toContain('창 30분');
+  });
+
+  it('JSON은 같은 시드에서 같다', () => {
+    const a = runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout;
+    expect(a).toBe(runCli(['window', '--bait', 'legendary', '--trials', '4', '--json']).stdout);
+    expect(JSON.parse(a).window.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('recipes 명령', () => {
+  it('옵션을 읽고 효과 옵션은 받지 않는다', () => {
+    const o = parseArgs(['recipes', '--recipe', 'cook-lunch-bundle', '--hours', '6', '--margin', '-2', '--axis', 'manual']);
+    expect(o).toMatchObject({ commands: ['recipes'], recipe: 'cook-lunch-bundle', hours: 6, margin: -2, axis: 'manual' });
+    expect(() => parseArgs(['recipes', '--bite', '10'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['recipes', '--recipe', 'nope'])).toThrow(/레시피/);
+    expect(() => parseArgs(['recipes', '--hours', '0'])).toThrow(/0보다/);
+    expect(() => parseArgs(['effects', '--hours', '5'])).toThrow(/명령에서만/);
+  });
+
+  it('effects와 window에서는 레시피의 효과를 효과 옵션에 채운다', () => {
+    expect(parseArgs(['effects', '--recipe', 'cook-lunch-bite']).effect.bite).toBeCloseTo(0.1, 12);
+    expect(parseArgs(['window', '--recipe', 'cook-bait-mutation']).effect.variant).toBeCloseTo(1, 12);
+    expect(parseArgs(['effects', '--recipe', 'cook-lunch-bundle']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
+  });
+
+  it('레시피 순손익, 가방 공급, 만들 수 있는 개수 표를 낸다', () => {
+    const r = runCli(['recipes', '--recipe', 'cook-lunch-bite', '--trials', '3']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('## 가루디야(cook-lunch-bite)');
+    expect(r.stdout).toContain('## 집 기운 얻기 공급');
+    expect(r.stdout).toContain('## 집 기운으로 만들 수 있는 레시피 수');
+    expect(r.stdout).toContain('제외(가장 앞선 해역)');
+    expect(r.stdout).not.toContain('(cook-lunch-rare)');
+  });
+
+  it('JSON은 같은 시드에서 같다', () => {
+    const a = runCli(['recipes', '--trials', '2', '--json']).stdout;
+    expect(a).toBe(runCli(['recipes', '--trials', '2', '--json']).stdout);
+    expect(JSON.parse(a).recipes.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('효과를 넣은 transition, days, gates', () => {
+  it('효과 옵션과 새 옵션을 읽는다', () => {
+    const o = parseArgs(['transition', '--bite', '10', '--bounty', '--from-boat', '3', '--recipe', 'cook-lunch-bite', '--with-cost']);
+    expect(o).toMatchObject({ commands: ['transition'], bounty: true, fromBoat: 3, recipe: 'cook-lunch-bite', withCost: true });
+    expect(o.effect.bite).toBeCloseTo(0.1, 12);
+    expect(parseArgs(['gates', '--rare', '10']).commands).toEqual(['gates']);
+  });
+
+  it('옵션이 허용되지 않는 명령이나 값은 오류다', () => {
+    expect(() => parseArgs(['days', '--bounty'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--from-boat', '2'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['effects', '--with-cost', '--recipe', 'cook-lunch-bite'])).toThrow(/명령에서만/);
+    expect(() => parseArgs(['transition', '--with-cost'])).toThrow(/--recipe/);
+    expect(() => parseArgs(['transition', '--from-boat', '-1'])).toThrow(/0 이상/);
+    expect(() => parseArgs(['transition', '--from-boat', '1.5'])).toThrow(/정수/);
+  });
+
+  it('효과를 주지 않은 transition 출력은 효과 옵션이 생기기 전 출력과 글자까지 같다', () => {
+    const golden = readFileSync(join(__dirname, 'fixtures', 'transition-default.txt'), 'utf-8');
+    expect(runCli(['transition']).stdout + '\n').toBe(golden);
+  });
+
+  it('미끼 슬롯 효과는 수동 캐치에만 걸려 transition, days, gates에서 거부한다', () => {
+    for (const cmd of ['transition', 'days', 'gates']) {
+      expect(() => parseArgs([cmd, '--bait', 'rare']), cmd).toThrow(/미끼 슬롯/);
+      expect(() => parseArgs([cmd, '--recipe', 'cook-bait-mutation']), cmd).toThrow(/미끼 슬롯/);
+    }
+  });
+
+  it('도시락 효과는 방치 캐치에만 걸려 수동 축과 함께 쓰면 거부한다', () => {
+    expect(() => parseArgs(['transition', '--bite', '10', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['days', '--recipe', 'cook-lunch-bite', '--axis', 'manual'])).toThrow(/방치/);
+    expect(parseArgs(['transition', '--axis', 'manual']).axis).toBe('manual');
+    expect(parseArgs(['transition', '--bite', '10', '--axis', 'idle']).axis).toBe('idle');
+  });
+
+  it('effects와 window는 슬롯에 맞는 축을 기본으로 고르고 맞지 않는 축은 거부한다', () => {
+    expect(parseArgs(['effects', '--bait', 'rare']).axis).toBe('manual');
+    expect(parseArgs(['window', '--recipe', 'cook-lunch-bite']).axis).toBe('idle');
+    expect(parseArgs(['window', '--bait', 'rare']).axis).toBe('manual');
+    expect(() => parseArgs(['effects', '--bait', 'rare', '--axis', 'idle'])).toThrow(/수동/);
+    expect(() => parseArgs(['effects', '--recipe', 'cook-lunch-bite', '--axis', 'manual'])).toThrow(/방치/);
+    expect(() => parseArgs(['window', '--recipe', 'cook-bait-mutation', '--axis', 'idle'])).toThrow(/수동/);
+    expect(parseArgs(['effects', '--bait', 'epic', '--axis', 'perfect']).axis).toBe('perfect');
+  });
+
+  it('의뢰만 수행하는 transition과 gates는 그 조건을 출력에 밝히고 gates는 종료 코드에 반영하지 않는다', () => {
+    const t = runCli(['transition', '--bounty']).stdout;
+    expect(t).toContain('의뢰와 토벌 모두 수행, 관측용');
+    expect(t).toContain('의뢰와 토벌을 매일 수행하는 경우다');
+    expect(t).not.toContain('의뢰와 토벌은 하지 않는 경우다');
+    const g = runCli(['gates', '--bounty']);
+    expect(g.stdout).toContain('의뢰와 토벌 모두 수행, 관측용');
+    expect(g.exitCode).toBe(0);
+  });
+
+  it('효과를 주지 않으면 지금까지와 같은 출력이다(효과 없음 열이 없다)', () => {
+    const t = runCli(['transition']).stdout;
+    expect(t).not.toContain('효과 없음 전환 시간');
+    expect(t).toContain('의뢰와 토벌은 하지 않는 경우다');
+    expect(runCli(['transition', '--json']).stdout).toContain('"plan": null');
+  });
+
+  it('transition은 효과를 넣은 전환 시간과 효과 없음 값, 차이를 낸다', () => {
+    const r = runCli(['transition', '--bite', '10', '--from-boat', '0']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 입질 대기 -10%(관측용)');
+    expect(r.stdout).toContain('효과 없음 전환 시간');
+    expect(r.stdout).toContain('누적 차이');
+    expect(runCli(['transition', '--bite', '10', '--bounty']).stdout).toContain('의뢰와 토벌을 매일 수행하는 경우다');
+  });
+
+  it('days는 효과 없음 값과 차이를 낸다', () => {
+    const r = runCli(['days', '--rare', '10']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음');
+    expect(r.stdout).toContain('효과 없음 소요 시간');
+  });
+
+  it('gates는 효과를 넣으면 이동 직후 수입과 전환 시간만 내고 위반이 있어도 종료 코드는 0이다', () => {
+    const r = runCli(['gates', '--rare', '20', '--from-boat', '0']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('효과 없음 차이');
+    expect(r.stdout).toContain('효과 없음 전환 시간');
+    expect(r.stdout).not.toContain('PERFECT 이상치');
+    expect(r.stdout).not.toContain('최초 10분 도달');
+    expect(r.stdout).toContain('관측용');
+  });
+
+  it('gates를 효과 없이 내면 PERFECT 이상치와 최초 10분을 그대로 낸다', () => {
+    const r = runCli(['gates']);
+    expect(r.stdout).toContain('PERFECT 이상치');
+    expect(r.stdout).toContain('최초 10분 도달');
+  });
+
+  it('재료 비용을 넣으면 가정에 밝힌다', () => {
+    const r = runCli(['transition', '--recipe', 'cook-lunch-bite', '--with-cost']);
+    expect(r.stdout).toContain('재료 판매 손실을 하루 한 번 비용으로 넣음');
+  });
+});
+
+describe('--axis perfect', () => {
+  it('effects와 window에서만 받는다', () => {
+    expect(parseArgs(['effects', '--axis', 'perfect']).axis).toBe('perfect');
+    expect(parseArgs(['window', '--axis', 'perfect']).axis).toBe('perfect');
+    expect(() => parseArgs(['transition', '--axis', 'perfect'])).toThrow(/perfect/);
+    expect(() => parseArgs(['--axis', 'perfect'])).toThrow(/perfect/);
+    expect(() => parseArgs(['effects', '--axis', 'x'])).toThrow(/idle/);
+  });
+
+  it('PERFECT 축 effects는 방치 대비 비율 열을 낸다', () => {
+    const t = runCli(['effects', '--axis', 'perfect', '--bait', 'rare', '--trials', '2']).stdout;
+    expect(t).toContain('PERFECT 다이얼');
+    expect(t).toContain('방치 대비 골드(기본 → 효과)');
+    expect(runCli(['effects', '--axis', 'manual', '--trials', '2']).stdout).not.toContain('방치 대비 골드');
   });
 });

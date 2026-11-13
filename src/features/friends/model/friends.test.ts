@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FriendItem } from '../../../platform/api';
-import { friendRelation, friendPlaceText, groupFriends, friendAlertText } from './friends';
+import { FRIEND_ERROR_TEXT, friendRelation, friendPlaceText, groupFriends, friendAlertText } from './friends';
 import { zoneById } from '../../../game/content/zones';
 
 const f = (uid: string, state: FriendItem['state'], extra: Partial<FriendItem> = {}): FriendItem =>
@@ -47,5 +47,11 @@ describe('친구 알림 문구', () => {
     expect(friendAlertText({ kind: 'request', nick: '나루' })).toBe('나루 님이 친구 요청을 보냈어요.');
     expect(friendAlertText({ kind: 'accepted', nick: '나루' })).toBe('나루 님과 친구가 됐어요.');
     expect(friendAlertText({ kind: 'request', nick: null })).toBe('새 친구 요청이 왔어요.');
+  });
+});
+
+describe('FRIEND_ERROR_TEXT', () => {
+  it('게스트 거부 안내는 계정 연결을 알린다', () => {
+    expect(FRIEND_ERROR_TEXT['account-only']).toBe('친구는 계정을 연결하면 쓸 수 있어요.');
   });
 });

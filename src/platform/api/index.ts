@@ -43,12 +43,12 @@ export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
-  AuthResult, GameGateway, MaybePromise, DispatchResult,
+  AccountLookup, AuthResult, GameGateway, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState,
   AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
+  AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from './types';

@@ -10,7 +10,7 @@ import { canBuyBoat } from '../../../src/game/rules/rules';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { axisAvailable, rates, rodSpec } from '../model';
-import type { Axis, Rates } from '../model';
+import type { Axis, Pool, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
@@ -22,15 +22,27 @@ export const DAY_HOURS = 8;
 /** 실질 낚시 시간(시간)을 일수로 환산한다 */
 export const fishingDays = (hours: number): number => hours / DAY_HOURS;
 
-/** 낚시 방식 — 방치 또는 수동 */
-export type FlowAxis = 'idle' | 'manual';
+/** 낚시 방식 — 방치, 수동(GOOD), PERFECT. PERFECT는 효과 지표(effects, window)에서만 쓴다 */
+export type FlowAxis = 'idle' | 'manual' | 'perfect';
 
-/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다 */
-export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis =>
-  flow === 'idle' ? 'idle' : axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
+/** 낚는 방식 → 이 해역과 레벨에서 쓰는 축 — 수동은 GOOD 존이 있으면 GOOD, 없으면(파워 미달) 무판정이다. PERFECT는 빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한다(PERFECT 이상치 게이트와 같은 상한 측정) */
+export const axisOf = (flow: FlowAxis, spot: SpotId, level: number): Axis => {
+  if (flow === 'idle') return 'idle';
+  if (flow === 'perfect') return 'perfect';
+  return axisAvailable(rodSpec(spot, level), 'good') ? 'good' : 'normal';
+};
+
+/** 수입 계산의 계획 — 배 단계마다 다른 수입 계산(효과를 넣는 조건 등)과 시간당 비용을 준다 */
+export interface RatePlan {
+  rateFor(spot: SpotId, level: number, axis: Axis, boat: number, pool?: Pool): Rates;
+  /** 낚시 시간당 비용(골드). 낚는 동안 수입에서 뺀다 */
+  costPerHour(spot: SpotId, level: number, axis: Axis, boat: number): number;
+}
 
 export interface SimOptions {
   axis: FlowAxis;
+  /** 주면 이 계획으로 수입을 계산한다. 생략하면 효과 없는 측정 모델이다 */
+  plan?: RatePlan;
   /** 하루 의뢰와 네임드 토벌을 수행하는가 */
   bounty: boolean;
   /** 시뮬레이션 최대 일수(하루는 실질 낚시 DAY_HOURS시간) */
@@ -93,9 +105,9 @@ export function simulate(opts: SimOptions): SimResult {
 
   const axisAt = (spot: SpotId, lv: number): Axis => axisOf(opts.axis, spot, lv);
   const rateAt = (spot: SpotId, axis: Axis = axisAt(spot, level)): Rates => {
-    const key = `${spot}:${level}:${axis}`;
+    const key = `${spot}:${level}:${axis}:${opts.plan ? boat : ''}`;
     let r = cache.get(key);
-    if (!r) { r = rates(spot, level, axis); cache.set(key, r); }
+    if (!r) { r = opts.plan ? opts.plan.rateFor(spot, level, axis, boat) : rates(spot, level, axis); cache.set(key, r); }
     return r;
   };
 
@@ -104,6 +116,8 @@ export function simulate(opts: SimOptions): SimResult {
     if (!opts.bounty) return;
     let share = normalShare.get(spot);
     if (share === undefined) { share = 1 - variantShare(mutationWeightsOf({ artifacts: [] }, spot)); normalShare.set(spot, share); }
+    const vs = (r as { variantShare?: number }).variantShare;
+    if (vs !== undefined) share = 1 - vs;
     for (const row of r.rows) {
       const p = row.prob * share;
       if (p > 0) dex.set(row.fish.id, (dex.get(row.fish.id) ?? 0) + catches * Math.log1p(-p));
@@ -114,7 +128,9 @@ export function simulate(opts: SimOptions): SimResult {
   const accrue = (spots: SpotId[], axis: Axis | null, sec: number) => {
     const h = sec / 3600 / spots.length;
     for (const spot of spots) {
-      const r = rateAt(spot, axis ?? axisAt(spot, level));
+      const useAxis = axis ?? axisAt(spot, level);
+      const r = rateAt(spot, useAxis);
+      if (opts.plan) gold -= opts.plan.costPerHour(spot, level, useAxis, boat) * h;
       if (opts.sampler) {
         const v = opts.sampler.accrue(r, h * 3600);
         gold += v.gold; fame += v.fame;

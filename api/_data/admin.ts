@@ -16,6 +16,13 @@ export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
   return rows[0].admin;
 }
 
+/** 사용자에게 비밀번호 로그인 수단(자격 계정)이 남아 있는가. 구글 연결을 마친 계정은 없다 */
+export async function hasPasswordAccount(db: Executor, uid: string): Promise<boolean> {
+  const { rows } = await db.execute<{ found: boolean }>(
+    sql`select exists (select 1 from auth.accounts where user_id = ${uid}::uuid and provider_id = 'credential') as found`);
+  return rows[0].found;
+}
+
 /** 조회문의 행을 order 순서의 JSON 배열로 읽는다. 행이 없으면 빈 배열이다 */
 async function jsonRows(db: Executor, query: SQL, order: SQL): Promise<unknown[]> {
   const { rows } = await db.execute<{ rows: unknown[] }>(
@@ -116,7 +123,7 @@ export function retention(db: Executor): Promise<unknown[]> {
     group by f.cohort`, sql`t.cohort desc`);
 }
 
-/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장 */
+/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장. buyBait는 액션이 없어진 뒤로 새 이벤트가 없고 과거 이력만 센다 */
 export function economy(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*) filter (where type = 'sell')::int as sells,
@@ -146,12 +153,12 @@ export function bountyFunnel(db: Executor, days: number): Promise<unknown[]> {
     group by day`);
 }
 
-/** 캐치 품질 일계. 캐치 수, PERFECT 수, 미끼 사용 수, 평균 크기 */
+/** 캐치 품질 일계. 캐치 수, PERFECT 수, 이벤트 payload에 미끼 슬롯 또는 도시락 슬롯 요리 id가 실린 캐치 수, 평균 크기 */
 export function catchQuality(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*)::int as catches,
            count(*) filter (where payload->>'judgment' = 'perfect')::int as perfect,
-           count(*) filter (where payload->>'bait' is not null)::int as with_bait,
+           count(*) filter (where payload ? 'bait' or payload ? 'lunch')::int as with_bait,
            round(avg((payload->>'size')::numeric), 1) as avg_size
     from public.events
     where type = 'catch'
@@ -207,6 +214,12 @@ export function userEvents(db: Executor, userId: string, limit: number | null): 
 export function letters(db: Executor): Promise<unknown[]> {
   return jsonRows(db, sql`select l.id, l.user_id, l.text, l.created_at, l.handled_at
     from public.letters l`, sql`t.created_at desc, t.id desc`);
+}
+
+/** 변경 기록. 최신 버전부터, 버전 안에서는 순번 순서다. 철회된 항목도 withdrawnAt을 달아 함께 준다 */
+export function changelog(db: Executor): Promise<unknown[]> {
+  return jsonRows(db, sql`select c.id, c.version, c.date, c.seq, c.tier, c.tag, c.text, c.withdrawn_at as "withdrawnAt"
+    from public.changelog_entries c`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
 }
 
 /** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */

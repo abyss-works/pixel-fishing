@@ -12,7 +12,7 @@ const LAND = '#74c69d', LAND_HI = '#8fd6b0', SAND = '#e9c46a', SPECK = '#2d6a4f'
 const FAINT = 'rgba(242,247,251,0.5)';
 
 // 흑백 톤 — toneRect 밖(미개척 세계). 무채색이되 물/육지의 명도 차는 유지해 해안선이 읽히게.
-// 세계지도(atlas)가 구현 영역만 컬러로 비추는 "아직 가지 않은 바다" 연출용 (사용자 확정 2026-08-28).
+// 세계지도(atlas)가 구현 영역만 컬러로 비추는 "아직 가지 않은 바다" 연출용이다.
 const MONO_WATER_TOP: RGB = [86, 94, 102], MONO_WATER_BOT: RGB = [36, 41, 48];
 const MONO_LAND = '#7e8882', MONO_LAND_HI = '#949e98', MONO_SAND = '#a8b0ac', MONO_SPECK = '#4c554f';
 
@@ -177,7 +177,7 @@ function paintGrid(
   }
 
   // 3패스 — 이동 글린트 (탑다운 패럴랙스, t 있을 때만).
-  // 표류 구름 그림자(원 3겹)는 사용자 지시로 제거(2026-09-06) — 밤 연출과 겹쳐 지저분했다.
+  // 표류 구름 그림자(원 3겹)는 없앴다 — 밤 연출과 겹쳐 지저분했다.
   if (t !== undefined) {
     const W = map.cols * sw, H = map.rows * sh;
     for (let i = 0; i < 26; i++) {

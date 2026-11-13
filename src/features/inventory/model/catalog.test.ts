@@ -36,7 +36,6 @@ describe('가방 파생 데이터', () => {
     const preview = selectSalePreview(bag, new Set(['keep']), 0);
 
     expect(preview.soldUids).toEqual(['sell']);
-    expect(preview.lockedCount).toBe(1);
     expect(preview.total.value).toBeGreaterThan(0);
     expect(preview.rows.find(row => row.key === fish.id)).toMatchObject({
       selectedCount: 0, allSelected: false, selectedSubtotal: 0,

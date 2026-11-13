@@ -1,0 +1,110 @@
+// 판매 창의 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
+// 체크 기본값과 확정 가능 여부는 게임 규칙(energyTargetOf, canExtractEnergy)이 정하고, 이 모듈은 그 판정을 화면용 행으로 옮긴다.
+// 개체를 직접 고른 값(EnergyPicks)은 해역 기본값 위에 얹힌다. 화면이 들고 있는 선택 상태의 형식과 갱신 규칙이 여기 있다.
+import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
+import type { RarityId } from '../../../game/content/rarity';
+import { SPOTS } from '../../../game/content/spots';
+import type { SpotId } from '../../../game/content/spots';
+import { energyGain, energyTargetOf, energyTargetRows, energyYield, canExtractEnergy } from '../../../game/rules/cooking';
+import { instanceFish } from '../../../game/rules/logic';
+import type { FishInstance, GameState } from '../../../game/rules/logic';
+import type { RuleCheck } from '../../../game/rules/rules';
+import { gradeName } from '../../../shared/lib/gradeName';
+import { selectSalePreview } from '../../inventory/model/catalog';
+import type { SaleRow } from '../../inventory/model/catalog';
+
+/** 생명의 기운의 화면 이름 — 등급은 이름 뒤 괄호로 붙인다 */
+export const ENERGY_NAME = '생명의 기운';
+
+/** 그 등급 기운의 화면 이름 — 이름 뒤 괄호에 등급을 붙인다 */
+export const energyLabel = (grade: RarityId): string => gradeName(ENERGY_NAME, RARITY[grade].name);
+
+/** 개체를 직접 고른 값 — uid별 체크 여부. 없는 개체는 그 어종 해역의 기본값을 따른다 */
+export type EnergyPicks = Readonly<Record<string, boolean>>;
+
+/** 해역 칩 한 줄 */
+export interface EnergySpotRow {
+  id: SpotId;
+  name: string;
+  /** 지금 켜짐 여부 — 덮어쓴 값이 있으면 그 값, 없으면 기본값 */
+  on: boolean;
+  /** 덮어쓰지 않았을 때의 값 */
+  defaultOn: boolean;
+  overridden: boolean;
+}
+
+/** 비교 표 한 줄 — 그 등급 기운의 지금 보유와 기운을 얻은 뒤의 수(저장 단위) */
+export interface EnergyCompareRow { grade: RarityId; label: string; current: number; after: number }
+
+export interface EnergyView {
+  /** 판매 창과 같은 어종 행 */
+  rows: SaleRow[];
+  /** 기운으로 바꿀 개체 uid */
+  uids: string[];
+  /** 등급별로 얻는 기운(저장 단위) */
+  byGrade: Record<RarityId, number>;
+  /** 얻는 기운의 합(저장 단위) */
+  energyTotal: number;
+  /** 기운으로 바꿀 개체 수 */
+  count: number;
+  /** 등급 순서의 비교 표 — 고른 개체가 없어도 네 줄이 그대로 있다 */
+  compare: EnergyCompareRow[];
+  /** 배로 갈 수 있는 해역, 가장 앞선 해역부터 */
+  spots: EnergySpotRow[];
+  /** 덮어쓴 해역이 하나라도 있는가 */
+  hasOverride: boolean;
+  /** 확정 가능 여부 — 게임 규칙의 판정 그대로 */
+  allowed: RuleCheck;
+}
+
+const isChecked = (game: GameState, picks: EnergyPicks, inst: FishInstance): boolean => {
+  const picked = Object.hasOwn(picks, inst.uid) ? picks[inst.uid] : undefined;
+  if (picked !== undefined) return picked;
+  const fish = instanceFish(inst);
+  return fish !== undefined && energyTargetOf(game, fish.spot);
+};
+
+export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyView {
+  const excluded = new Set(game.bag.filter(i => !isChecked(game, picks, i)).map(i => i.uid));
+  const { rows, soldUids } = selectSalePreview(game.bag, excluded, 0);
+  const gain = energyGain(game, soldUids);
+  // 해역 목록과 켜짐, 기본값 여부는 게임 규칙(energyTargetRows)이 정한다. 가장 앞선 해역부터 보인다
+  const spots = energyTargetRows(game).reverse().map((r): EnergySpotRow => ({
+    id: r.spot, name: SPOTS.find(s => s.id === r.spot)!.name,
+    on: r.on, defaultOn: r.isDefault ? r.on : !r.on, overridden: r.overridden,
+  }));
+  return {
+    rows, uids: gain.uids, byGrade: gain.byGrade,
+    compare: RARITY_ORDER.map((grade): EnergyCompareRow => {
+      const current = game.items[ENERGY_ITEM_IDS[grade]] ?? 0;
+      return { grade, label: energyLabel(grade), current, after: current + gain.byGrade[grade] };
+    }),
+    energyTotal: energyTotal(gain.byGrade), count: gain.uids.length, spots,
+    hasOverride: spots.some(s => s.overridden),
+    allowed: canExtractEnergy(game),
+  };
+}
+
+/** 지정한 개체를 모두 같은 값으로 고른다 */
+export const pickEnergyUids = (picks: EnergyPicks, uids: readonly string[], on: boolean): EnergyPicks => ({
+  ...picks, ...Object.fromEntries(uids.map(uid => [uid, on])),
+});
+
+/** 그 해역 어종 개체의 직접 선택을 지운다 — 해역 켜짐 여부를 바꾸면 그 해역 행만 새 기본값을 따르고 다른 해역은 고른 대로 남는다 */
+export function clearSpotPicks(picks: EnergyPicks, bag: readonly FishInstance[], spot: SpotId): EnergyPicks {
+  const gone = new Set(bag.filter(i => instanceFish(i)?.spot === spot).map(i => i.uid));
+  return Object.fromEntries(Object.entries(picks).filter(([uid]) => !gone.has(uid)));
+}
+
+/** 등급별 기운(저장 단위)의 합 */
+export const energyTotal = (byGrade: Record<RarityId, number>): number =>
+  RARITY_ORDER.reduce((sum, g) => sum + byGrade[g], 0);
+
+/** 어종 행에서 고른 개체가 내는 기운(저장 단위) — 산출은 게임 규칙(energyYield)이 정한다 */
+export const energyRowValue = (row: SaleRow): number => energyYield(row.selectedCount);
+
+/** 결과 한 줄 — 얻은 등급만 등급 순서로. count는 저장 단위다 */
+export function energyResultRows(byGrade: Record<RarityId, number>): { grade: RarityId; count: number }[] {
+  return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
+}

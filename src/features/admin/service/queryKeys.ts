@@ -2,8 +2,10 @@
 // 같은 대상을 쓰는 탭(유저 명부 등)은 같은 키를 공유해 중복 조회를 합친다.
 export const adminKeys = {
   access: ['admin', 'access'] as const,
+  signInReturn: ['admin', 'signInReturn'] as const,
   users: ['admin', 'users'] as const,
   letters: ['admin', 'letters'] as const,
+  changelog: ['admin', 'changelog'] as const,
   chatReports: ['admin', 'chatReports'] as const,
   mails: ['admin', 'mails'] as const,
   antiAbuse: ['admin', 'antiabuse'] as const,

@@ -26,8 +26,15 @@ describe('debugTriggerAllowed', () => {
     }
   });
 
+  it('대소문자가 다르거나 앞뒤 공백이 붙은 값은 모르는 값으로 보아 거부한다', () => {
+    for (const deployEnv of ['Local', 'LOCAL', ' local', 'local ', 'Preview', 'PREVIEW', ' preview', 'preview ']) {
+      expect(debugTriggerAllowed({ deployEnv, owner: true })).toBe(false);
+      expect(debugTriggerAllowed({ deployEnv, owner: false })).toBe(false);
+    }
+  });
+
   it('강제 조우·개발 명령·이사 코드는 같은 판정 표를 쓴다', () => {
-    for (const deployEnv of [undefined, 'production', 'preview', 'local', 'development']) {
+    for (const deployEnv of [undefined, '', 'production', 'Production', 'preview', 'local', 'Local', ' local ', 'development']) {
       for (const owner of [true, false]) {
         expect(debugTriggerAllowed({ deployEnv, owner })).toBe(importVerdict({ deployEnv, owner }) === 'ok');
       }
@@ -73,7 +80,7 @@ describe('importVerdict', () => {
   });
 
   it('환경 값이 없거나 모르는 값이면 소유자도 거부한다', () => {
-    for (const deployEnv of [undefined, '', 'development', 'Production', 'staging']) {
+    for (const deployEnv of [undefined, '', 'development', 'Production', 'staging', 'Local', ' local ']) {
       expect(importVerdict({ deployEnv, owner: true })).toBe('import-disabled');
       expect(importVerdict({ deployEnv, owner: false })).toBe('import-disabled');
     }

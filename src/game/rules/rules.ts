@@ -14,7 +14,8 @@ import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
-import { zoneById } from '../content/zones.js';
+import { ZONES, zoneById } from '../content/zones.js';
+import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
 import type { BaseId } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
@@ -43,8 +44,6 @@ export type RejectReason =
   | 'coupon-used'
   | 'relief-invalid' // 지원 코드 — 없거나 이미 사용됐거나(서버가 구분 없이 한 사유로 답한다)
   | 'mail-unavailable' // 받을 수 없는 우편 — 없거나 남의 것이거나 이미 받았다(서버가 구분 없이 답한다)
-  | 'bait-not-owned' // 활성화하려는 미끼를 보유하지 않았다 (구매 전 활성 시도)
-  | 'shop-closed' // 미끼 상점은 콜롬보항에서만 이용 가능
   | 'nickname-taken' // 이미 다른 유저가 쓰는 닉네임
   | 'no-license' // 바운티 헌팅 라이선스 미보유 — 구역 라이선스 없이 수주 불가
   | 'daily-cleared' // 그 갈래의 하루 클리어 한도 소진 — 클리어(보상 수령)를 센다
@@ -58,6 +57,14 @@ export type RejectReason =
   | 'hat-not-owned' // 갖지 않은 모자를 쓰려 했다
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
+  | 'item-not-owned' // 먹으려는 요리가 가방에 없다
+  | 'not-at-home' // 집 거점에서만 하는 동작(조리)을 집 밖에서 요청했다
+  | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구)에서만 하는 동작(기운 얻기)을 그 밖에서 요청했다
+  | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
+  | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
+  | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
+  | 'cooking-busy' // 조리 중인 요리가 모두 완성되기 전에 새 조리를 시작하려 했다
+  | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
@@ -65,6 +72,13 @@ export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
 
 const OK: RuleCheck = { ok: true };
 const no = (reason: RejectReason): RuleCheck => ({ ok: false, reason });
+
+/** 요리가 열리는 구역의 짧은 이름 — 해금 배 단계로 구역 데이터에서 찾는다 */
+const COOKING_ZONE_NAME: string = (() => {
+  const zone = ZONES.find(z => !z.parent && z.entryBoat === COOKING_UNLOCK_BOAT);
+  if (!zone) throw new Error('요리 해금 배 단계로 들어서는 구역이 없어요.');
+  return zone.shortName;
+})();
 
 /** 유저에게 보일 문구의 단일 근원 — Record라 새 사유를 추가하면 누락이 컴파일 에러가 된다 */
 export const REJECT_TEXT: Record<RejectReason, string> = {
@@ -77,8 +91,6 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'coupon-used': '이미 사용한 쿠폰이에요.',
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
   'mail-unavailable': '이미 받았거나 받을 수 없는 우편이에요.',
-  'bait-not-owned': '가지고 있는 미끼가 없어요.',
-  'shop-closed': '미끼는 콜롬보항의 향료전에서만 살 수 있어요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
   'no-license': '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.',
   'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
@@ -92,6 +104,14 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'hat-not-owned': '아직 가지지 않은 모자예요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
+  'item-not-owned': '가방에 이 요리가 없어요.',
+  'not-at-home': '집에서만 할 수 있어요.',
+  'not-at-sale-base': '집이나 항구에서만 할 수 있어요.',
+  'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
+  'energy-locked': `${COOKING_ZONE_NAME} 항로가 열리면 기운 얻기를 할 수 있어요.`,
+  'not-enough-energy': '생명의 기운이 부족해요.',
+  'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
+  'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'bad-request': '처리할 수 없는 요청이에요.',
 };
@@ -201,7 +221,7 @@ export function canAcceptQuest(
   if (!isBountyPort(port)) return no('bad-request'); // 고향(home)에는 수배 창구가 없다
   // 의뢰는 그 구역 항구의 수배판에서만 수주한다
   if (zoneOfPort(port) !== q.zone) return no('bad-request');
-  // 주장 항구와 실제 위치가 다르면 변조다 — buyBait의 상점 위치 검증과 같은 판단
+  // 주장 항구와 실제 위치가 다르면 변조다
   if (state.location.kind !== 'base' || state.location.id !== port) return no('bad-request');
   // 라이선스 조건 직검 — 취득 절차 없이 조건 충족이면 열린다
   for (const c of licenseConditions(state, q.zone, LICENSE_TIER_OF[q.difficulty])) {
@@ -255,7 +275,7 @@ export function canResolveChallenge(
 }
 
 /** 유물 교환 — 재료 보유만 본다. 이미 가진 유물은 거부가 아니라 멱등 수용으로,
- *  리듀서가 상태 그대로·이벤트 없이 돌려준다 (setActiveBait null 선례). */
+ *  리듀서가 상태 그대로·이벤트 없이 돌려준다. */
 export function canExchangeArtifact(
   state: GameState, artifactId: string,
 ): RuleCheck {

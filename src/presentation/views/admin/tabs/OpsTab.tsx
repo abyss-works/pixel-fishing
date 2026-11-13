@@ -10,6 +10,7 @@ import { readAdminDeployHost } from '../../../../features/admin/service/queries'
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
+import ChangelogSection from './ChangelogSection';
 
 export default function OpsTab() {
   const { access } = useAdminAuth();
@@ -53,6 +54,8 @@ export default function OpsTab() {
             데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름·인자)는 그 안에서만 다뤄요.
           </Note>
         </Cell>
+
+        <ChangelogSection />
 
         <EventCatalog />
       </CellGrid>
@@ -98,8 +101,8 @@ function EventCatalog() {
       </div>
       {/* 리듀서에서 상태만 바꾸고 이벤트 없는 액션들 — "왜 로그에 없나"의 답 */}
       <Note size="2xs" className="my-0 px-3 pb-2">
-        setLocked, autoLock, travel, setActiveBait는 이벤트를 남기지 않아요.
-        travel은 첫 방문만 visit으로 남고, setActiveBait는 이미 활성인 미끼를 다시 고르면 기록하지 않아요.
+        setLocked, autoLock, travel, setEnergyTarget, resetEnergyTargets, dismissBaitRefund는 이벤트를 남기지 않아요.
+        travel은 첫 방문만 visit으로 남아요. buyBait, setActiveBait는 지금은 없는 액션이고 예전 기록만 남아 있어요.
       </Note>
     </Cell>
   );

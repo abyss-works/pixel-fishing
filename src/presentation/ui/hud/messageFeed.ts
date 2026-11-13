@@ -5,9 +5,16 @@
 export type MessageChannel = 'system' | 'chat' | 'guild';
 export type MessageTone = 'info' | 'gold' | 'warn';
 
+/** 글줄의 한 대목에 다는 툴팁 — target은 글줄 문구 안의 대목이고, rows는 이름 왼쪽 값 오른쪽 목록이다 */
+export interface MessageTip {
+  target: string;
+  rows: { label: string; value: string }[];
+}
+
 /** 메시지를 남기는 쪽이 받는 함수 — 톤은 부르는 쪽이 정한다(기본 info).
- *  보상 순간은 gold, 거부·실패는 warn을 넘긴다. 문구로 톤을 추정하지 않는다. */
-export type Notify = (text: string, tone?: MessageTone) => void;
+ *  보상 순간은 gold, 거부·실패는 warn을 넘긴다. 문구로 톤을 추정하지 않는다.
+ *  tip은 문구 한 대목에 목록 툴팁을 단다(결과를 등급별로 풀어 보일 때). */
+export type Notify = (text: string, tone?: MessageTone, tip?: MessageTip) => void;
 
 export interface Msg {
   id: number;
@@ -22,6 +29,8 @@ export interface Msg {
   at: number;
   /** 채팅 글줄의 원본 — 보낸 사람 id와 채팅 id(신고·차단 대상) */
   from?: { uid: string; chatId: number };
+  /** 문구의 한 대목에 단 툴팁 */
+  tip?: MessageTip;
 }
 
 /** 채널 표시 이름 — 글줄 앞 [채널] 머리표와 채널 토글 라벨 */
@@ -45,7 +54,7 @@ const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export function createMessage(id: number, text: string, opts: {
-  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from'];
+  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from']; tip?: MessageTip;
 } = {}): Msg {
   const now = opts.now ?? new Date();
   return {
@@ -54,6 +63,7 @@ export function createMessage(id: number, text: string, opts: {
     channel: opts.channel ?? 'system',
     ...(opts.author ? { author: opts.author } : {}),
     ...(opts.from ? { from: opts.from } : {}),
+    ...(opts.tip ? { tip: opts.tip } : {}),
   };
 }
 

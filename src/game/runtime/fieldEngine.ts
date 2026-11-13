@@ -8,7 +8,9 @@ import type { RejectReason } from '../rules/rules';
 import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
 import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
+import { NO_COOK_EFFECTS, slotEffects } from '../rules/cooking';
 import { CAST_RANGE } from '../rules/balance';
+import { guestActionVerdict } from '../rules/guest';
 import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
@@ -51,13 +53,17 @@ export type FieldEvent =
   | { type: 'catch'; judgment: Judgment; result: CatchResult }
   | { type: 'zone-blocked'; message: string }
   | { type: 'zone-entered'; zone: ZoneId }
-  | { type: 'trigger-blocked'; message: string };
+  | { type: 'trigger-blocked'; message: string }
+  /** 게스트가 마을 밖으로 나가는 트리거에 닿아 장소를 바꾸지 못하고 되밀렸다 */
+  | { type: 'guest-blocked' };
 
 export interface FieldCallbacks {
   dispatch: (action: CatchAction) => MaybePromise<FieldDispatchResult>;
   onEvent: (event: FieldEvent) => void;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
+  /** 지금 계정이 게스트인가. 게스트는 규칙 판정이 허용하지 않는 장소로 가는 트리거에서 되밀린다 */
+  guest?: boolean;
 }
 
 /**
@@ -90,12 +96,16 @@ export class GameFieldEngine {
   private readonly tracker = new ZoneTracker();
   /** 직전 프레임이 구역 경계에 막혔고 안내를 이미 냈다 */
   private blockNotified = false;
+  /** 직전 프레임이 게스트 출항 트리거에서 되밀렸고 알림을 이미 냈다 */
+  private guestBlockNotified = false;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
   /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
   private controlLocked = false;
   private biteStart = 0;
+  /** 이번 던짐에서 마지막으로 낸 캐치의 판정 — 입질 대기가 방치(auto) 사이클인지 가른다. 줄을 거두거나 새로 던지면 null */
+  private lastJudgment: Judgment | null = null;
   /**
    * 현재 단계가 시작된 기준 시각(Date.now). 타이머로 넘어온 단계는 발화 시각이 아니라 이전 단계의 목표 시각이다.
    * 획득 단계는 서버 결과가 도착한 시각이다
@@ -254,6 +264,7 @@ export class GameFieldEngine {
 
   cancelFishing(): void {
     this.school = null;
+    this.lastJudgment = null;
     this.transition('idle', null, null);
   }
 
@@ -343,6 +354,7 @@ export class GameFieldEngine {
     const focusZone = this.lastSpot ? zoneOfSpot(this.lastSpot) : null;
     setZone(focusZone ?? (zone ? topZoneOf(zone) : null));
 
+    let guestBlocked = false;
     for (const trigger of this.def.triggers) {
       if (!inTrigger(this.pos, trigger.rect)) continue;
       if (trigger.action === 'base') {
@@ -351,8 +363,19 @@ export class GameFieldEngine {
       }
       if (trigger.action === 'travel') {
         if (this.game.boat >= trigger.requiredBoat) {
+          const to: SceneRef = { kind: 'region', id: trigger.to };
+          if (this.callbacks.guest && guestActionVerdict({ type: 'travel', to }) !== 'ok') {
+            if (movedFrom) {
+              this.pos.x = movedFrom.x;
+              this.pos.y = movedFrom.y;
+            }
+            guestBlocked = true;
+            // 막힌 채 밀고 있는 동안은 프레임마다 반복하지 않고, 떨어졌다 다시 닿을 때 다시 알린다
+            if (!this.guestBlockNotified) this.callbacks.onEvent({ type: 'guest-blocked' });
+            continue;
+          }
           const entry = entryPoint(REGION_PACKS[trigger.to], trigger, this.pos);
-          this.callbacks.onScene({ kind: 'region', id: trigger.to }, trigger.msg, entry);
+          this.callbacks.onScene(to, trigger.msg, entry);
           return false;
         }
         if (movedFrom) {
@@ -362,6 +385,7 @@ export class GameFieldEngine {
         this.callbacks.onEvent({ type: 'trigger-blocked', message: trigger.blockedMsg });
       }
     }
+    this.guestBlockNotified = guestBlocked;
 
     return this.renderFrame(ctx, now);
   }
@@ -403,6 +427,7 @@ export class GameFieldEngine {
     }
 
     this.school = nearby;
+    this.lastJudgment = null;
     this.transition('wait', null, null);
     this.callbacks.onWarmup?.();
     if (!silent) this.callbacks.onEvent({ type: 'cast', spot: nearby.spot });
@@ -411,6 +436,7 @@ export class GameFieldEngine {
   private hookFish(judgment: Judgment): void {
     const school = this.school;
     if (!school || this.snapshot.phase !== 'bite') return;
+    this.lastJudgment = judgment;
     this.transition('catch');
     when(this.callbacks.dispatch({ type: 'catch', spot: school.spot, judgment }), result => {
       if (result.status === 'rejected') {
@@ -457,7 +483,10 @@ export class GameFieldEngine {
     const school = this.school;
     let ms: number;
     if (phase === 'wait' && school) {
-      const bite = effectiveBite(this.game, school.spot);
+      // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
+      const cook = this.lastJudgment === 'auto'
+        ? slotEffects(this.game, new Date(Date.now()).toISOString(), 'auto') : NO_COOK_EFFECTS;
+      const bite = effectiveBite(this.game, school.spot, cook);
       const random = Math.random();
       ms = (bite.min.value + random * (bite.max.value - bite.min.value)) * 1000;
     } else {

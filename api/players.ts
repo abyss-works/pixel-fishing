@@ -61,6 +61,7 @@ async function route(req: Req, res: Res): Promise<void> {
   } catch (e) {
     throw new ApiError(500, 'db-read', { uid }, { cause: e });
   }
-  if (!profile) throw new ApiError(404, 'not-found');
+  // 게스트의 프로필은 본인만 읽는다
+  if (!profile || (!profile.account && uid !== session.id)) throw new ApiError(404, 'not-found');
   res.status(200).json(profile);
 }

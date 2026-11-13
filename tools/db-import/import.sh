@@ -72,14 +72,11 @@ psql "$TARGET_URL" --single-transaction -v ON_ERROR_STOP=1 -q \
 fail=0
 while IFS="$TAB" read -r table expected; do
   grep -qxF "$table" "$WORK/tables" || continue
-  if [ "$table" = '"auth"."users"' ]; then tables='auth.supabase_users auth.users'; else tables=$table; fi
-  for t in $tables; do
-    actual=$(psql "$TARGET_URL" -tAc "select count(*) from $t")
-    if [ "$actual" != "$expected" ]; then
-      echo "$t: 덤프 ${expected}행, 옮긴 결과 ${actual}행" >&2
-      fail=1
-    fi
-  done
+  actual=$(psql "$TARGET_URL" -tAc "select count(*) from $table")
+  if [ "$actual" != "$expected" ]; then
+    echo "$table: 덤프 ${expected}행, 옮긴 결과 ${actual}행" >&2
+    fail=1
+  fi
 done < "$WORK/counts.tsv"
 [ "$fail" = 0 ] || exit 1
 if [ -z "$DUMP_DIR" ]; then echo "스키마를 만들었습니다(데이터 없음)."; else echo "옮기기 완료: 옮긴 표의 행 수가 덤프와 같습니다."; fi

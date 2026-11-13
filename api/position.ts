@@ -1,6 +1,6 @@
 // 마지막 위치 읽기 함수 — 로그인한 사용자가 바다 지역 안에서 마지막으로 있던 자리를 돌려준다 (Node 런타임)
 //   GET /api/me/position   { position: { region, x, y } | null }
-// 쓰기는 실시간 채널이 맡는다. 게스트도 바다에 나가므로 세션만 있으면 된다.
+// 쓰기는 실시간 채널이 맡는다. 게스트의 위치는 저장하지 않는다.
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다. default export = Node 시그니처.
 import type { IncomingMessage, ServerResponse } from 'node:http';

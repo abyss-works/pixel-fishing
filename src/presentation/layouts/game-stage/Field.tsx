@@ -28,11 +28,12 @@ import { SCALE } from '../../../game/rendering/pixel/common.js';
 import { FIELD_VIEW, mobileFieldView } from '../../../game/world/fieldView.js';
 import GameFrame from './GameFrame';
 import MovePad from './MovePad';
-import { statusText } from './statusText';
+import { statusParts } from './statusText';
 import { useMobileLayout } from '../useMobileLayout';
 import NightOverlay from '../../ui/hud/NightOverlay';
 import CatchCard from '../../ui/hud/CatchCard';
 import HudPanel from '../../ui/hud/HudPanel';
+import { HEADER_ROWS_OMIT_CLASS } from '../../ui/hud/headerTier';
 import type { Notify } from '../../ui/hud/messageFeed';
 
 interface Props {
@@ -42,6 +43,10 @@ interface Props {
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
   onWarmup?: () => void;
+  /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
+  guest?: boolean;
+  /** 게스트가 마을 밖으로 나가려다 되밀렸을 때 */
+  onGuestBlocked?: () => void;
   initialPos?: Point;
   /** 장소 지정 순번 — 마운트 뒤에 바뀌면 같은 지역 안에서 플레이어를 initialPos(없으면 지역 출발점)로 옮긴다 */
   placeSeq?: number;
@@ -105,7 +110,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, initialPos, placeSeq, locked, paused, statusSlot,
+  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -156,12 +161,16 @@ export default function Field({
           ? { status: 'ok', result: result.result }
           : result);
       },
-      onEvent: event => presentEvent(event, setToast, game.boat),
+      onEvent: event => {
+        if (event.type === 'guest-blocked') onGuestBlocked?.();
+        else presentEvent(event, setToast, game.boat);
+      },
       onScene,
       onWarmup,
+      guest,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup]);
+  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 
@@ -219,10 +228,13 @@ export default function Field({
   };
 
   const inSlot = mobile && statusSlot != null;
-  const statusBand = snapshot.phase === 'idle' ? null : (
+  const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
+  const statusBand = status && (
     <HudPanel className={cx('z-(--z-stage-hud) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
       inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
-      {statusText(snapshot.phase, mobile)}
+      {status.lead}
+      {/* 판정 영역 설명 줄은 입력을 받지 않는 띠의 생략 글자라 툴팁 없이 숨기기만 한다 */}
+      {status.judge && <span className={cx('block', HEADER_ROWS_OMIT_CLASS)}>{status.judge}</span>}
     </HudPanel>
   );
 

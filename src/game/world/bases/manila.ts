@@ -1,11 +1,14 @@
 // 거점: 마닐라항 (병합 바다 동남아) — 기존 항구 배치를 바탕으로 지역·문구만 조정했다.
 import type { BasePack } from '../types';
+import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
+
+const SALE_TITLE = '어시장';
 
 export const MANILA_BASE: BasePack = {
   id: 'manila',
   name: '마닐라항',
-  region: 'world',
+  region: BASE_REGION.manila,
   headline: '마닐라항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   // 접안했던 항구 앞에서 이어서 나간다 — 팩 spawn(고향 항구)으로 텔레포트하지 않는다
@@ -21,7 +24,7 @@ export const MANILA_BASE: BasePack = {
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => ({ title: '조선소', sub: i.boatName }), labelDy: -3 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
-      label: () => ({ title: '어시장', sub: '판매' }), labelDy: -8 },
+      label: () => ({ title: SALE_TITLE, sub: '판매' }), windowTitle: SALE_TITLE, labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
       label: () => ({ title: '마을', sub: '집으로' }), labelDy: -2 },
     { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',

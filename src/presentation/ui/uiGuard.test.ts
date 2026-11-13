@@ -144,8 +144,7 @@ const sizedWithFlexibleScroll = (src: string) =>
   openingTags(src, ANY_TAG).filter(tag => /\$\{SCROLL_Y\}/.test(tag) && HEIGHT_CLASS_RE.test(tag));
 /** 줄 수가 아니라 화면 높이 같은 여유 상한(max-h)만 두는 칸 — 내용이 낮으면 내용 높이로 커지므로 SCROLL_Y를 쓴다(줄이기만 한다) */
 const SAFETY_CAP_EXCEPTIONS = new Set([
-  'views/overlays/facility/FacilityModal.tsx',   // 판매 목록: 행 서른 개 상한
-  'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 화면 높이 42% 상한
+  'views/overlays/whats-new/NewsStep.tsx',       // 소식 목록: 버전 하나는 화면 높이 42%, 여러 버전은 56% 상한
 ]);
 
 /** 스크롤 칸으로 보는 태그: 공용 상수, TableBox, pf-vscroll */
@@ -182,7 +181,6 @@ const NESTED_SCROLL_EXCEPTIONS = new Set([
 ]);
 const PRIMARY_IN_BODY_EXCEPTIONS = new Set([
   'views/overlays/mailbox/MailboxModal.tsx', // 받기: 선택한 우편 상세 안의 동작이다. 창 전체의 확정이 아니다
-  'views/overlays/account/AccountModal.tsx', // 이메일로 계속: 로그인 폼의 제출 버튼이다. 본문 폼의 동작이다
 ]);
 
 /** 막대 클래스(보이는 막대 pf-scroll-panel, 호버 막대 pf-scroll-hud, 숨김 pf-scroll) 없이 pf-vscroll만 쓰는 줄 */
@@ -246,13 +244,20 @@ describe('UI 시스템 가드', () => {
   });
 
   it('로어 문단은 LoreParagraph로 그린다 - 첫 글자 강조(first-letter)는 그 컴포넌트만 정한다', () => {
-    const LORE_VIEWS = ['views/game/tabs/dex/DexDetail.tsx', 'views/game/tabs/dex/NamedDetail.tsx'];
+    const LORE_VIEWS = [
+      'views/game/tabs/dex/DexDetail.tsx', 'views/game/tabs/dex/NamedDetail.tsx', 'views/game/tabs/bag/ArtifactDetail.tsx',
+    ];
     const src = (path: string) => screens.find(f => f.path === path)?.src ?? '';
     for (const path of LORE_VIEWS) {
       expect(src(path), path).toMatch(/<LoreParagraph\b/);
       expect(src(path), path).not.toMatch(/<p\b[^>]*>\s*\{[^}]*(?:\.lore|chronicle)/);
     }
     expect(screens.filter(f => /first-letter:/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('로어 문단의 첫 글자 강조는 네임드 상세에서만 켠다', () => {
+    const on = screens.filter(f => /<LoreParagraph\b[^>]*\bemphasis\b/.test(f.src)).map(f => f.path);
+    expect(on).toEqual(['views/game/tabs/dex/NamedDetail.tsx']);
   });
   it('화면은 overflow-auto·scroll을 직접 지정하지 않는다 — 예외 목록의 자리만 쓴다', () => {
     const using = screenFiles.filter(f => OVERFLOW_DIRECT.test(f.src)).map(f => f.path);
@@ -275,14 +280,26 @@ describe('UI 시스템 가드', () => {
       const classes: string[] = [];
       for (const height of heights) {
         for (const width of widths) {
-          const props: ComponentProps<typeof Modal> = { layer: 'stage', height, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
-          render(createElement(Modal, props));
-          classes.push(screen.getByRole('dialog').className);
-          cleanup();
+          for (const mobileFixed of [false, true]) {
+            const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
+            render(createElement(Modal, props));
+            classes.push(screen.getByRole('dialog').className);
+            cleanup();
+          }
         }
       }
-      expect(classes).toHaveLength(heights.length * widths.length);
+      expect(classes).toHaveLength(heights.length * widths.length * 2);
       expect(classes.filter(c => SCROLL_CLASS.test(c))).toEqual([]);
+    });
+    it('모바일 고정 변형은 모바일 높이를 가용 높이로 정하고 내용 높이(mobile:h-auto)를 쓰지 않는다', () => {
+      for (const height of [480, 520, 560] as const) {
+        const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed: true, onClose: () => {}, children: createElement('p', null, '내용') };
+        render(createElement(Modal, props));
+        const cls = screen.getByRole('dialog').className;
+        cleanup();
+        expect(cls).toContain('mobile:h-[calc(100%-48px)]');
+        expect(cls).not.toContain('mobile:h-auto');
+      }
     });
     it('감지: 높이 상수에 스크롤 클래스가 섞이면 잡는다', () => {
       expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] overflow-y-auto')).toBe(true);
@@ -424,7 +441,7 @@ describe('UI 시스템 가드', () => {
     'views/game/tabs/dex/NamedDetail.tsx',
     'views/overlays/bounty/NamedCard.tsx',
     'views/overlays/bounty/QuestInfoCards.tsx',
-    'views/overlays/facility/FacilityModal.tsx',
+    'views/overlays/facility/SellTab.tsx',
     'views/game/tabs/bag/BagTab.tsx',
   ];
   /** 허용 줄 - 파일마다 허용하는 줄의 모양과 사유. 파일 단위가 아니라 줄 단위로 가리고, 쓰이지 않는 허용은 지운다 */
@@ -539,5 +556,60 @@ describe('UI 시스템 가드', () => {
     expect(adjustedInButtonWithoutFlag('<Frame><AdjustedAmount amount={a} /></Frame>')).toEqual([]);
     expect(adjustedInButtonWithoutFlag('<button><AdjustedAmount amount={a} inButton={false} /></button>')).toHaveLength(1);
     expect(adjustedInButtonWithoutFlag('<Note><AdjustedAmount amount={a} /></Note>')).toEqual([]);
+  });
+
+  // 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭은 같은 표를 쓴다. 한쪽만 고쳐져 갈라지는 길을 막는다
+  const FISH_PICK_SCREENS = ['views/overlays/facility/SellTab.tsx', 'views/overlays/facility/EnergyTab.tsx'];
+  it('판매 탭과 기운 얻기 탭은 어종 선택 표를 공용 FishPickTable로 그린다 - 행과 개체 줄을 직접 그리지 않는다', () => {
+    for (const path of FISH_PICK_SCREENS) {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      expect(src, path).toMatch(/<FishPickTable\b/);
+      expect(src, path).not.toMatch(/<InstanceLine\b|<UnsizedLine\b/);
+    }
+  });
+
+  // 팝오버 — 버튼에 붙어 뜨는 작은 칸은 공용 Popover 하나다. 바깥 누르기 리스너를 화면이 직접 걸면 닫는 방법이 갈라진다
+  const OUTSIDE_PRESS = /addEventListener\(\s*['"](?:pointerdown|mousedown|touchstart)['"]/;
+  const OUTSIDE_PRESS_EXCEPTIONS = new Set([
+    'views/overlays/menu/GameMenu.tsx', // 게임 메뉴 드롭다운 - 공용 Popover 이전 구현이다(줄이기만 한다)
+  ]);
+  it('화면은 바깥 누르기 닫기를 직접 구현하지 않고 Popover를 쓴다 - 예외 목록의 자리만', () => {
+    const using = screenFiles.filter(f => OUTSIDE_PRESS.test(f.src)).map(f => f.path);
+    expect(using.filter(p => !OUTSIDE_PRESS_EXCEPTIONS.has(p))).toEqual([]);
+    expect([...OUTSIDE_PRESS_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
+    expect(OUTSIDE_PRESS.test(`document.addEventListener('pointerdown', onDown)`)).toBe(true);
+  });
+  it('판매 창의 해역별 기운 대상은 Popover가 연다 - 창을 더 열지 않는다', () => {
+    const src = presentationFiles.find(f => f.path === 'views/overlays/facility/EnergyTab.tsx')?.src ?? '';
+    expect(src).toMatch(/<Popover\b/);
+    expect(src).not.toMatch(/<Modal\b|<ModalCard\b/);
+  });
+
+  // 등급 괄호 표기 — 등급이 있는 대상의 이름은 이름 뒤에 등급을 괄호로 붙이고, 그 조립은 공용 gradeName(shared) 하나가 한다.
+  // 표현 계층과 기능 계층 모두 같은 함수를 쓴다
+  const GRADE_IN_PARENS = /\(\$\{RARITY\[[^\]]+\]\.name\}\)/;
+  const featureFiles = Object.entries(import.meta.glob('../../features/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+    .map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }))
+    .filter(f => !isTestFile(f.path));
+  it('이름 뒤 괄호 등급 표기는 공용 gradeName으로만 만든다', () => {
+    const offenders = [...presentationFiles, ...featureFiles].filter(f => GRADE_IN_PARENS.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect([...presentationFiles, ...featureFiles].some(f => /shared\/lib\/gradeName'/.test(f.src))).toBe(true);
+    expect(GRADE_IN_PARENS.test('`${name}(${RARITY[grade].name})`')).toBe(true);
+  });
+  // 슬롯 화면 - 슬롯 효과의 시간, 지속, 교체 판정은 기능 모델이 정하고 화면은 그 결과만 그린다. 칩은 칩 자신만 포인터 이벤트를 받는다
+  const SLOT_SCREENS = ['ui/hud/SlotChips.tsx', 'views/game/tabs/bag/ItemSection.tsx'];
+  it('슬롯 화면은 슬롯의 끝나는 시각, 지속, 교체 판정을 다시 계산하지 않는다', () => {
+    for (const path of SLOT_SCREENS) {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      expect(src, path).not.toBe('');
+      expect(src, path).not.toMatch(/\bendsAt\b|\bslotMs\b|\bwaitMs\b|COOK_KIND_RULES|\.slots\b/);
+    }
+  });
+  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기가 칩 자신만 포인터 이벤트를 받게 한다', () => {
+    const chips = presentationFiles.find(f => f.path === 'ui/hud/SlotChips.tsx')!.src;
+    expect(chips).toMatch(/<HudChip\b/);
+    expect(chips).toMatch(/<Locked\b/);
+    expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
   });
 });

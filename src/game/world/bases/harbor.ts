@@ -1,11 +1,14 @@
 // 거점: 부산항 (고향 항구 — 병합 바다 태평양). 가구 배열의 순서가 거점 메뉴의 순서다.
 import type { BasePack } from '../types';
+import { BASE_REGION } from '../../content/places';
 import { HARBORS } from '../regions/world';
+
+const SALE_TITLE = '어시장';
 
 export const HARBOR_BASE: BasePack = {
   id: 'harbor',
   name: '부산항',
-  region: 'world',
+  region: BASE_REGION.harbor,
   headline: '부산항에서 시설을 눌러 정비해 보세요.',
   exitMsg: '출항했어요. 어군 위에서 스페이스를 눌러 찌를 던져 보세요.',
   exitAt: { ...HARBORS.harbor.departure }, // 고향 항구의 출항 자리 — 팩 spawn과 같은 자리
@@ -20,7 +23,7 @@ export const HARBOR_BASE: BasePack = {
     { id: 'boat',   x: 88,  y: 132, w: 48, h: 30, sprite: 'shipyard',
       label: i => ({ title: '조선소', sub: i.boatName }), labelDy: -3 },
     { id: 'sell',   x: 200, y: 94,  w: 44, h: 32, sprite: 'market',
-      label: () => ({ title: '어시장', sub: '판매' }), labelDy: -8 },
+      label: () => ({ title: SALE_TITLE, sub: '판매' }), windowTitle: SALE_TITLE, labelDy: -8 },
     { id: 'travel', x: 16,  y: 132, w: 56, h: 30, sprite: 'ferry',
       label: () => ({ title: '마을', sub: '집으로' }), labelDy: -2 },
     { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',

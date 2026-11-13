@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BAITS } from '../../../game/content/baits';
-import { BOATS, MAX_BOAT, WALK_BAG_CAP, baitCost, newState, rodStats } from '../../../game/rules/logic';
+import { BOATS, MAX_BOAT, WALK_BAG_CAP, newState, rodStats } from '../../../game/rules/logic';
 import { upgradeCost } from '../../../game/rules/balance';
 import { powerOfLevel } from '../../../game/rules/stats';
 import {
-  createBaitQuantities, normalizeBaitQuantity, selectBaitShopRows, selectBoatLadder,
-  selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
+  selectBoatLadder, selectBoatPurchasePreview, selectBoatPurchaseResult, selectRodLadder, selectRodUpgradePreview,
 } from './facility';
 
 describe('정비 화면 데이터', () => {
@@ -69,39 +67,5 @@ describe('정비 화면 데이터', () => {
     game.boat = 2;
     const sail = selectBoatPurchasePreview(game);
     expect(sail.kind === 'available' && sail.currentName).toBe(BOATS[1].name);
-  });
-
-  it('미끼 상점의 수량·보유량·총액·구매 가능 여부를 구성한다', () => {
-    const game = newState();
-    const quantities = createBaitQuantities();
-    const bait = BAITS[0];
-    quantities[bait.id] = 3;
-    game.items[bait.id] = 2;
-    game.gold = 100_000;
-
-    const row = selectBaitShopRows(game, quantities, false)[0];
-    expect(row).toMatchObject({ bait, count: 3, owned: 2, canAfford: true });
-    expect(row.total).toBeGreaterThan(bait.price);
-    expect(row).toMatchObject({ listTotal: bait.price * 3, unitPrice: bait.price, discountRate: 0 });
-  });
-
-  it('할인 유물이 있으면 정가와 할인가를 함께 준다 — 총액은 실제 차감액(baitCost)과 같다', () => {
-    const game = { ...newState(), gold: 100_000, artifacts: ['varuna-scale'] };
-    const quantities = createBaitQuantities();
-    const bait = BAITS[1];
-    quantities[bait.id] = 4;
-    const row = selectBaitShopRows(game, quantities, false)[1];
-    expect(row.discountRate).toBe(0.25);
-    expect(row.listTotal).toBe(bait.price * 4);
-    expect(row.total).toBe(baitCost(game, bait.price, 4));
-    expect(row.total).toBeLessThan(row.listTotal);
-    expect(row.unitPrice).toBe(baitCost(game, bait.price, 1));
-  });
-
-  it('미끼 수량 입력을 정수 1개 이상, 액션 상한 이하로 제한한다', () => {
-    expect(normalizeBaitQuantity(2.8)).toBe(2);
-    expect(normalizeBaitQuantity(0)).toBe(1);
-    expect(normalizeBaitQuantity(Number.NaN)).toBe(1);
-    expect(normalizeBaitQuantity(10_000)).toBe(50);
   });
 });

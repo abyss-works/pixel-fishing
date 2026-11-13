@@ -14,6 +14,8 @@ const gw = vi.hoisted(() => ({
   legacy: false,
   cloudEmpty: false,
   importError: null as unknown,
+  loadError: null as unknown,
+  loadDex: {} as Record<string, unknown>,
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -29,7 +31,7 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold }; },
+        load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
         getNickname: async () => 'nick',
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -54,7 +56,7 @@ function setup() {
 
 afterEach(() => {
   cleanup(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadDex = {};
 });
 
 describe('부트스트랩', () => {
@@ -67,6 +69,15 @@ describe('부트스트랩', () => {
     await act(async () => { gw.bootResolve!(); });
     expect(hook.result.current.loading).toBe(false);
     expect(hook.result.current.sync).toBe('on');
+  });
+
+  it('게스트 진행은 불러오는 동안 아직 모르고, 접속이 끝난 뒤 낚은 수로 판정한다', async () => {
+    const hook = setup();
+    expect(hook.result.current.guestProgress).toBe('reading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(hook.result.current.guestProgress).toBe('reading');
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.guestProgress).toBe('nothing');
   });
 
   it('계정 교체는 그 계정 상태를 읽고 boot 응답까지 불러오는 중이다', async () => {
@@ -83,6 +94,24 @@ describe('부트스트랩', () => {
     await act(async () => { gw.bootResolve!(); await adopted; });
     expect(hook.result.current.loading).toBe(false);
     expect(gw.actions).toEqual(['boot', 'boot']);
+  });
+});
+
+describe('게스트 진행 판정과 읽기 실패', () => {
+  // 안내 창 없이 끝나는 실패 종류(제재, 요청 과다, 오류)도 판정이 끝나야 한다
+  it.each(['restricted', 'rate-limited', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
+    gw.loadError = new AppError(kind, 'read failed');
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.blocker).toBeNull();
+    expect(hook.result.current.guestProgress).toBe('some');
+  });
+
+  it('저장 읽기가 안내 창을 띄우는 실패(network)로 끝나도 진행이 있는 것으로 판정한다', async () => {
+    gw.loadError = new AppError('network', 'offline');
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.guestProgress).toBe('some');
   });
 });
 
@@ -104,6 +133,40 @@ describe('레거시 로컬 세이브 브리지', () => {
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     expect(gw.actions).toEqual(['import']);
+  });
+});
+
+describe('게스트 진행 다시 읽기', () => {
+  async function booted() {
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    return hook;
+  }
+
+  it('서버 저장 상태를 다시 읽어 낚은 수가 0이면 진행 없음이다', async () => {
+    const hook = await booted();
+    const loads = gw.loads;
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
+    expect(gw.loads).toBe(loads + 1);
+  });
+
+  it('다시 읽은 상태에 낚은 기록이 있으면 이 탭이 들고 있던 상태가 비어 있어도 진행 있음이다', async () => {
+    const hook = await booted();
+    gw.loadDex = { carp: { normal: { count: 3, maxSize: 5, first: '2026-01-01' } } };
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
+  });
+
+  it('서버에 저장 상태가 없으면 진행 없음이다', async () => {
+    const hook = await booted();
+    gw.cloudEmpty = true;
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
+  });
+
+  it.each(['network', 'replaced', 'rate-limited', 'restricted'] as const)('다시 읽기가 %s로 실패하면 진행 있음이다', async kind => {
+    const hook = await booted();
+    gw.loadError = new AppError(kind, 'read failed');
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
   });
 });
 

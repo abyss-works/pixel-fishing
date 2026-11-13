@@ -1,4 +1,4 @@
-// 남대서양 신규 어종 원화 생성 CLI — 32×16 원화 PNG를 어종마다 일반·변이 한 쌍으로 만든다.
+// 남대서양 신규 어종 원화 생성 CLI — 물고기 격자 크기의 원화 PNG를 어종마다 일반·변이 한 쌍으로 만든다.
 // 사용: npx tsx tools/sprite-draft/draft-south-atlantic.ts [출력 폴더]
 // 기본 출력은 tools/sprite-draft/png/fish. 이어서 import-png.ts 로 원화 격자를 다시 만들고,
 // style-check.ts 로 기존 원화의 화풍 범위에 드는지 검사한다.
@@ -11,12 +11,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Bitmap } from './png';
 import { gridFromPng } from './styleMetrics';
+import { SPRITE_TARGETS, definedLayout } from '../../src/game/content/sprites/targets';
 
 type Role = '.' | 'd' | 'b' | 'l' | 'k' | 'a' | 'y' | 'e' | 'w';
 type Cells = Role[][];
 
-const W = 32, H = 16;
-const X_MIN = 2, X_MAX = 29, Y_MIN = 2, Y_MAX = 13;
+const { grid, margin } = definedLayout(SPRITE_TARGETS.fish);
+const W = grid.w, H = grid.h;
+const X_MIN = margin, X_MAX = W - 1 - margin, Y_MIN = margin, Y_MAX = H - 1 - margin;
 
 interface Tail {
   kind: 'fork' | 'lunate' | 'square' | 'round' | 'shark'; len: number; spread: number; role?: Role;
@@ -181,7 +183,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const FISH_DIR = resolve(here, 'png/fish');
 const EYE_HEX = '#0b1322', GLINT_HEX = '#f8fcff';
 
-/** 틀 원화 위에서 칸 단위로 고치는 도구. 좌표는 32×16 격자의 (x, y)다. */
+/** 틀 원화 위에서 칸 단위로 고치는 도구. 좌표는 물고기 격자의 (x, y)다. */
 class Editor {
   constructor(public g: Cells) {}
   get(x: number, y: number): Role { return x >= 0 && y >= 0 && x < W && y < H ? this.g[y][x] : '.'; }

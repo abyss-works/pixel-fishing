@@ -127,7 +127,7 @@ describe('ChatBar', () => {
   it('서버가 거부한 이유를 짧게 보인다', () => {
     live.error = 'chat-guest';
     render(<ChatBar />);
-    expect(screen.getByRole('status').textContent).toContain('계정을 만든 뒤');
+    expect(screen.getByRole('status').textContent).toBe('채팅은 계정을 연결하면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
   });
 
   it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {
@@ -154,13 +154,41 @@ describe('ChatBar', () => {
     expect(screen.getByText('길드에 들어가면 길드 채팅을 쓸 수 있어요.')).toBeInTheDocument();
   });
 
-  it('게스트는 입력 칸 대신 흐린 안내 칸을 보고, Enter로 입력 줄에 들어가지 않는다', () => {
-    render(<ChatBar guest />);
-    expect(screen.queryByLabelText('채팅 입력')).not.toBeInTheDocument();
-    expect(screen.getByText('채팅은 계정을 만든 뒤 쓸 수 있어요')).toBeInTheDocument();
-    expect((screen.getByRole('button', { name: '보낼 곳: 월드' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.keyDown(document.body, { key: 'Enter' });
-    expect(document.activeElement).toBe(document.body);
+  describe('게스트 잠금', () => {
+    it('방 버튼과 입력 칸이 자리 그대로 비활성이고 자물쇠가 붙으며 title이 없다', () => {
+      const { container } = render(<ChatBar guest />);
+      expect((screen.getByLabelText('채팅 입력') as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: '보낼 곳: 월드' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(container.querySelector('[data-glyph="lock"]')).not.toBeNull();
+      expect(container.querySelector('[title]')).toBeNull();
+    });
+
+    it('마우스를 올리거나 누르면 채팅 잠금 문안이 공용 툴팁으로 열린다', () => {
+      render(<ChatBar guest />);
+      const wrap = screen.getByRole('group', { name: '채팅' }).parentElement!;
+      // 나타난 자리가 커서 아래여도 마우스가 움직이기 전에는 열리지 않는다(펼칠 때 기록을 가리지 않는다)
+      fireEvent.mouseEnter(wrap);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      fireEvent.mouseMove(document.body);
+      fireEvent.mouseEnter(wrap);
+      const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
+      expect(lines).toEqual(['채팅은 계정을 연결하면 쓸 수 있어요.', '계정 관리에서 계정을 연결해 주세요.']);
+    });
+
+    it('누르거나 Enter를 눌러도 입력 줄에 들어가지 않고 아무것도 보내지 않는다', () => {
+      render(<ChatBar guest />);
+      fireEvent.click(screen.getByRole('group', { name: '채팅' }));
+      fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 월드' }));
+      fireEvent.keyDown(document.body, { key: 'Enter' });
+      expect(document.activeElement).toBe(document.body);
+      expect(live.sendChat).not.toHaveBeenCalled();
+    });
+
+    it('접힌 게스트는 펼치기 버튼만 남고 잠금 요소를 그리지 않는다', () => {
+      render(<ChatBar guest folded onUnfold={() => {}} />);
+      expect(screen.getByRole('button', { name: '메시지 창 펼치기' })).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: '채팅' })).toBeNull();
+    });
   });
 
 

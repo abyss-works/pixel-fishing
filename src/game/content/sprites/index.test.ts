@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   fishColors, fishRings, fishSprite, spriteKey,
-  FISH_SHAPE_SPRITES, FISH_SPRITES, FISH_SPRITES_GENERATED, OUTLINE_DARK, SILHOUETTE,
+  FISH_SHAPE_SPRITES, FISH_SPRITES, FISH_SPRITES_GENERATED,
 } from './index';
+import { OUTLINE_DARK, SILHOUETTE } from './common';
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
 import { FISH } from '../fish';
 import { NAMED } from '../named';

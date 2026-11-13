@@ -11,7 +11,10 @@ import type { BlockingModal } from '../../../core/errors';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
+import { guestProgress } from '../../account/model/accountRules';
+import { guestHasNoProgress } from '../../../game/rules/guest';
 import { setSchoolDay } from './schoolDay';
+import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
@@ -19,14 +22,15 @@ import { alertUpdate } from './updateAlert';
 // 인프라 구현은 플랫폼 경계 안에 두고 이 훅은 구체 구현을 모른다.
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
-export type SyncState = 'off' | 'connecting' | 'on' | 'error';
-
 const SYNC_LABEL: Record<SyncState, string | null> = {
   off: '클라우드가 설정되지 않았어요. 새로고침하면 진행이 사라져요. (개발 모드)',
   connecting: '클라우드 연결 중…',
   on: '클라우드 저장 켜짐',
   error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
+
+/** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
+export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
 
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 
@@ -150,8 +154,17 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
+  // 서버 저장 상태를 읽어 채택한다. 게이트웨이의 캐시와 버전도 읽은 상태로 맞춰진다. 저장 상태가 없으면 null이고 읽기 실패는 던진다
+  const readSave = async (): Promise<GameState | null> => {
+    const saved = await gameGatewayRef.current.load();
+    if (saved) setGame(saved);
+    return saved;
+  };
+
   return {
     game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
+    guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
@@ -181,8 +194,19 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
      * 새로 읽은 상태로 맞춰진다. 읽기에 실패하면 그대로 둔다 — 다음 액션의 응답이 버전 차이를 보고 다시 읽는다.
      */
     resync: async (): Promise<void> => {
-      const s = await Promise.resolve(gameGatewayRef.current.load()).catch(() => null);
-      if (s) setGame(s);
+      await readSave().catch(() => {});
+    },
+    /**
+     * 이 탭이 들고 있는 상태가 낡았을 수 있어, 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽고 버려질 진행이 있는지 판정한다.
+     * 저장 상태가 없으면 진행이 없는 것이고, 읽기에 실패하면 진행이 있는 것으로 본다.
+     */
+    recheckGuestProgress: async (): Promise<'nothing' | 'some'> => {
+      try {
+        const saved = await readSave();
+        return guestHasNoProgress(saved ?? newState()) ? 'nothing' : 'some';
+      } catch {
+        return 'some';
+      }
     },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),

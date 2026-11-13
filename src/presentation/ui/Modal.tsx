@@ -17,6 +17,15 @@ const HEIGHT_CLASS: Record<ModalHeight, string> = {
   560: 'h-[min(560px,calc(100%-32px))] mobile:h-auto',
 };
 
+// 탭마다 내용 높이가 달라 창이 흔들리는 탭 창은 모바일 레이아웃에서도 높이를 고정한다. 탭을 바꾸거나 내용이 비어도 창 크기와 자리가 그대로이도록
+// 가용 높이(스테이지 높이에서 위아래 24px을 뺀 값)를 모두 쓰고, 넘치는 내용은 탭 본문 안에서만 스크롤한다.
+const HEIGHT_FIXED_MOBILE: Record<ModalHeight, string> = {
+  400: HEIGHT_CLASS[400],
+  480: `${HEIGHT_CLASS[480].replace(' mobile:h-auto', '')} mobile:h-[calc(100%-48px)]`,
+  520: `${HEIGHT_CLASS[520].replace(' mobile:h-auto', '')} mobile:h-[calc(100%-48px)]`,
+  560: `${HEIGHT_CLASS[560].replace(' mobile:h-auto', '')} mobile:h-[calc(100%-48px)]`,
+};
+
 // 앱 모달의 본문 칸 — 박스가 넘치면 제목은 두고 이 칸만 스크롤한다. 오른쪽 음수 여백 14px은 막대 자리(6px)와 내용 사이 여백(8px)을
 // 박스의 안쪽 여백(16px) 쪽으로 내어 내용 폭을 그대로 두고 막대를 박스 안쪽 가장자리에 놓는다.
 // 본문 칸은 기본이 블록 흐름이라 자식 사이 margin 겹침이 예전 박스(전체 스크롤)와 같다.
@@ -44,8 +53,8 @@ interface ModalBase {
 // 스테이지 모달의 투명 래퍼는 배치만 맡는다. 그래서 스테이지는 className을 받지 않고(타입으로 막는다),
 // 필요한 높이만 height로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
 type ModalProps = ModalBase & (
-  | { layer: 'stage'; height?: ModalHeight; className?: never; header?: never; footer?: never; fill?: never; bare?: never }
-  | { layer?: 'app'; className?: string; height?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean }
+  | { layer: 'stage'; height?: ModalHeight; mobileFixed?: boolean; className?: never; header?: never; footer?: never; fill?: never; bare?: never }
+  | { layer?: 'app'; className?: string; height?: never; mobileFixed?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean }
 );
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
@@ -54,7 +63,7 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height, header, footer, fill, bare }: ModalProps) {
+export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height, mobileFixed, header, footer, fill, bare }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
@@ -74,7 +83,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
         'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
     : cx('max-h-[calc(100%-32px)] flex flex-col',
         xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
-        'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && HEIGHT_CLASS[height]);
+        'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && (mobileFixed ? HEIGHT_FIXED_MOBILE[height] : HEIGHT_CLASS[height]));
   // 앱 모달은 자기를 연 층 바로 위에 쌓인다. 창을 연 층이 정한 자리(useWindowHost)에 포털하므로 창마다 층 값을 따로 정하지 않는다.
   // 기본은 게임 화면의 창 층 자리(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)이고, 시트처럼 창 층 위에 따로 놓인 층 안에서 연 창은 그 층의 자리에 그려진다.
   const windowHost = useWindowHost();

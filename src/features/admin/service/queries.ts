@@ -5,7 +5,8 @@ import { lastNDays } from '../model/metrics';
 /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 판정 없이 골격을 보인다 */
 export const adminSignInRequired = api.admin.isConfigured;
 export const readAdminAccess = () => api.admin.access();
-export const signInAdmin = (email: string, password: string) => api.admin.signIn(email, password);
+export const signInAdmin = () => api.admin.signIn();
+export const takeAdminSignInReturn = () => api.admin.takeSignInReturn();
 export const signOutAdmin = () => api.admin.signOut();
 export const readAdminUsers = () => api.admin.users();
 export const readAdminDeployHost = () => api.admin.deployHost();
@@ -43,6 +44,9 @@ export const readAdminLetters = () => Promise.all([
   api.admin.letters(),
   api.admin.users(),
 ]);
+
+/** 변경 기록(최신 버전부터, 철회된 항목 포함) */
+export const readAdminChangelog = () => api.admin.changelog();
 
 export const readAdminChatReports = () => Promise.all([
   api.admin.chatReports(),

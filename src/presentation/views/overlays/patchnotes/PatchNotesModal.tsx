@@ -3,7 +3,6 @@ import Accordion from '../../../ui/Accordion';
 import Button from '../../../ui/Button';
 import Modal from '../../../ui/Modal';
 import NoteTag from '../../../ui/NoteTag';
-import { publicEntries } from '../../../../features/announcements/model/whatsNew';
 import { reopenWhatsNew } from '../../../../features/announcements/service/whatsNew';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 
@@ -17,7 +16,7 @@ export default function PatchNotesModal({ onClose }: { onClose: () => void }) {
         <Button size="sm" onClick={() => { onClose(); reopenWhatsNew(); }}>최근 소식 다시 보기</Button>
       </div>
       <div className={`${SCROLL_Y_ROWS} max-h-[312px] flex flex-col gap-2`}>
-        {publicEntries(PATCH_NOTES).map(p => (
+        {PATCH_NOTES.map(p => (
           <Accordion
             key={p.version}
             summary={

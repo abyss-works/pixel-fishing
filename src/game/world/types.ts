@@ -9,7 +9,7 @@ import type { ZoneId } from '../content/zones';
 // 전부 같은 타입을 쓴다 (구: world가 리터럴 유니온을 별도 정의해 3중 정의 + 캐스트가 필요했다)
 export type { RegionId };
 export type { BaseId } from '../content/places';
-export type FurnitureId = 'sell' | 'rod' | 'boat' | 'shop' | 'exit' | 'travel' | 'ferry' | 'bounty' | 'rank' | 'wardrobe';
+export type FurnitureId = 'sell' | 'rod' | 'boat' | 'exit' | 'travel' | 'ferry' | 'bounty' | 'rank' | 'wardrobe' | 'kitchen';
 
 /** 씬 참조 — 앱 셸의 장면 전환이 이 값으로 흐른다 (씬 그래프 = 팩 데이터에서 파생).
  *  저장 데이터에서도 사용하므로 의존 방향은 월드에서 게임 데이터로만 향한다.
@@ -19,7 +19,7 @@ export type SceneRef = LocationRef;
 /** 거점(집·항구 내부) 설계 좌표 — 배경·가구가 이 공간에 깔린다. 필드와 **별개 축**이다:
  *  거점은 1인칭 정지 화면이라 시야 확대의 대상이 아니다(확대 시 가구 재배치 필요). */
 export const VIEW_W = 320, VIEW_H = 180;
-/** 필드 카메라 시야 — 2026-08-28 사용자 지시로 1.4× 확대(320×180 → 448×252, 16:9 유지).
+/** 필드 카메라 시야 — 1.4× 확대(320×180 → 448×252, 16:9 유지).
  *  병합 바다 2배 확대와 짝을 이루는 체감 조정: 같은 화면에 더 넓은 세계가 들어온다.
  *  카메라 클램프·마스크 컬링·미니맵 crop이 이 값을 따른다. */
 export const FIELD_VIEW_W = 448, FIELD_VIEW_H = 252;
@@ -143,8 +143,8 @@ export interface RegionPack {
 // ---------- 거점 (집/항구) ----------
 
 export type FurnitureSpriteId =
-  | 'workbench' | 'chest' | 'wardrobe' | 'door'            // 집
-  | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'shop' | 'board'; // 항구
+  | 'workbench' | 'chest' | 'wardrobe' | 'kitchen' | 'door' // 집
+  | 'rodshop' | 'market' | 'shipyard' | 'boarding' | 'ferry' | 'board'; // 항구
 
 /** 시설 카드 라벨 — 제목과 선택 설명. 설명은 자리가 모자라면 생략될 수 있는 보조 정보다 */
 export interface FacilityLabel { title: string; sub?: string }
@@ -157,6 +157,8 @@ export interface Furniture extends Rect {
   id: FurnitureId;
   sprite: FurnitureSpriteId;
   label: (info: BaseInfo) => FacilityLabel;
+  /** 판매 시설이 여는 창의 제목 — 판매 시설(id 'sell')만 가지며 라벨의 제목과 같다 */
+  windowTitle?: string;
   labelDy: number; // 라벨 y 오프셋 (rect.y 기준)
 }
 

@@ -9,11 +9,14 @@ import type { BountyQuest } from '../../src/game/content/bounties.js';
 import { bountyKindOf } from '../../src/game/content/bounties.js';
 import { at, jsonParam, textArray } from './json.js';
 
-/** 납품 선소비 — 진행 행을 먼저 지운다. 지운 요청만 납품에 성공한다. 지운 행이 있었는가를 돌려준다 */
-export async function consumeDelivery(db: Executor, uid: string, questId: string): Promise<boolean> {
-  const { rows } = await db.execute(sql`delete from public.bounty_progress
-    where user_id = ${uid} and quest_id = ${questId} returning quest_id`);
-  return rows.length > 0;
+/** 납품할 진행 행을 찾는 질의 — 액션 확정의 선행 조건(gate)이다 */
+export function deliveryGate(uid: string, questId: string): SQL {
+  return sql`select 1 from public.bounty_progress where user_id = ${uid} and quest_id = ${questId}`;
+}
+
+/** 납품 소비 조각 — 액션 확정 문장 안에서 진행 행을 지운다. 낙관 락을 통과한 요청만 지우고, 확정이 어긋나면 행이 남는다 */
+export function consumeDeliveryFragment(guard: SQL, uid: string, questId: string): SQL {
+  return sql`delete from public.bounty_progress where user_id = ${uid} and quest_id = ${questId} and ${guard}`;
 }
 
 /** 수주 — 수주 기록 행, 진행 행, 같은 의뢰의 묵은 도전권 삭제. 모두 서버 시각으로 쓴다.

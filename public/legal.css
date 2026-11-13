@@ -1,0 +1,71 @@
+/* 공개 문서(소개, 이용약관, 개인정보 처리방침, 운영정책)의 스타일. 색은 게임의 색 토큰 값을 옮긴 것이다.
+   게임의 스타일은 해시가 붙은 번들 파일로 나가 정적 문서가 참조할 수 없으므로 값을 복사해 둔다. */
+:root {
+  color-scheme: dark;
+  --bg: #0a1526;
+  --surface: #14243d;
+  --line: #2b4568;
+  --text: #f2f7fb;
+  --dim: #93a8c4;
+  --gold: #ffd54f;
+  --accent: #4fc3f7;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px clamp(16px, 4vw, 40px);
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+main, nav.docs { max-width: 64rem; margin: 0 auto; }
+
+nav.docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 12px 0;
+  font-size: 14px;
+}
+
+nav.docs a[aria-current="page"] { color: var(--text); text-decoration: none; }
+
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+h1, h2 { color: var(--gold); line-height: 1.4; }
+h1 { margin: 16px 0 4px; font-size: 1.5rem; }
+h2 { margin: 2.5rem 0 0.5rem; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 1.2rem; }
+h3 { margin: 1.5rem 0 0.25rem; font-size: 1rem; }
+
+.edition { margin: 0 0 8px; color: var(--dim); }
+
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.4rem; }
+li + li { margin-top: 0.25rem; }
+
+code {
+  padding: 1px 5px;
+  background: var(--surface);
+  border-radius: 3px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* 표는 감싸는 칸 안에서만 가로로 넘긴다. 열이 많은 표는 최소 폭을 두어 열이 찌그러지지 않게 하고, 페이지 전체에는 가로 스크롤이 생기지 않는다 */
+.table-scroll { max-width: 100%; margin: 0.75rem 0; overflow-x: auto; }
+.table-scroll:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.table-scroll table { margin: 0; }
+table.wide { min-width: 48rem; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.5; }
+th, td { padding: 10px 14px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { background: var(--surface); color: var(--dim); font-weight: 600; }
+
+.fine-print { margin-top: 2rem; color: var(--dim); font-size: 13px; }

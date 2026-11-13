@@ -2,13 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
-import { newState, baitCost, baitDiscount, mutationWeightsOf, variantShare, migrate } from './logic';
+import { newState, mutationWeightsOf, variantShare, migrate } from './logic';
 import type { GameState } from './logic';
 import { moveSpeed, effectiveBite } from './stats';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
-  artifactEffectsAt, artifactLevelOf, duelSpeedupScale, scaleAfterCuts, sumArtifactEffect, variantBoostOf, namedDailyCap, namedRewardOf, namedRewardStat, dailyClearCap,
+  artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf, extraCookChance, duelSpeedupScale, scaleAfterCuts, sumArtifactEffect, variantBoostOf, namedDailyCap, namedRewardOf, namedRewardStat, dailyClearCap,
 } from './artifactLevel';
 import {
   ARTIFACTS, ARTIFACT_MAX_LEVEL, ARTIFACT_LEVEL_COEF, artifactLevelCost, artifactHasLevel, artifactById,
@@ -61,10 +61,17 @@ describe('레벨별 효과', () => {
     expect(cuts).toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
   });
 
-  it('침선의 나침반 항해 +10%에서 +20%, 진주 상인의 저울 미끼 할인 25%에서 50%', () => {
+  it('침선의 나침반 항해 +10%에서 +20%', () => {
     expect(artifactEffectsAt(art('wreck-compass'), 5).sail).toBeCloseTo(0.2, 10);
-    expect(artifactEffectsAt(art('varuna-scale'), 3).baitDiscount).toBeCloseTo(0.375, 10);
-    expect(artifactEffectsAt(art('varuna-scale'), 5).baitDiscount).toBeCloseTo(0.5, 10);
+  });
+
+  it('진주 상인의 저울 추가 완성 확률 10, 12.5, 15, 17.5, 20%', () => {
+    const chances = [1, 2, 3, 4, 5].map(l => artifactExtraCookChanceAt(art('varuna-scale'), l));
+    expect(chances).toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
+  });
+
+  it('요리 효과가 없는 유물은 추가 완성 확률이 0이다', () => {
+    expect(artifactExtraCookChanceAt(art('wreck-compass'), 5)).toBe(0);
   });
 
   it('코모로의 골판은 돌연변이 가중치를 25, 31.25, 37.5, 43.75, 50% 올린다', () => {
@@ -84,10 +91,6 @@ describe('레벨이 효과 함수에 반영된다', () => {
     expect(mutationWeightsOf(base, 'pond')).toEqual({ variant: 1.25, normal: 3 });
     const lv5 = mutationWeightsOf({ ...base, artifactLevels: { 'elder-scale': 5 } }, 'pond');
     expect(variantShare(lv5)).toBeCloseTo(1 / 3, 10);
-  });
-
-  it('baitCost: 저울 Lv5는 절반', () => {
-    expect(baitCost({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 5 } }, 200, 2)).toBe(200);
   });
 
   it('moveSpeed: 나침반 Lv5는 항해 +20%', () => {
@@ -180,7 +183,7 @@ describe('세이브', () => {
   it('레벨 필드가 없는 기존 세이브는 맵이 비고 보유 유물은 Lv1로 읽힌다(v 그대로)', () => {
     const raw = { ...newState(), artifacts: ['wreck-compass'], artifactLevels: undefined };
     const s = migrate(raw);
-    expect(s.v).toBe(8);
+    expect(s.v).toBe(10);
     expect(s.artifactLevels).toBeUndefined();
     expect(artifactLevelOf(s, 'wreck-compass')).toBe(1);
   });
@@ -306,13 +309,15 @@ describe('유물 효과 — 같은 종류는 합한 뒤 한 번 적용한다', (
   it('보유 유물의 효과를 모두 더한다', () => {
     const s = seed({ artifacts: ['wreck-compass', 'varuna-scale'] });
     expect(sumArtifactEffect(s, e => e.sail)).toBeCloseTo(0.1, 12);
-    expect(sumArtifactEffect(s, e => (e.sail ?? 0) + (e.baitDiscount ?? 0))).toBeCloseTo(0.35, 12);
+    expect(sumArtifactEffect(s, e => (e.sail ?? 0) + (e.biteWaitCut ?? 0))).toBeCloseTo(0.1, 12);
     expect(sumArtifactEffect(seed(), e => e.sail)).toBe(0);
   });
-  it('미끼 할인과 돌연변이 증가율은 유물이 하나라 값이 그대로다', () => {
-    expect(baitDiscount(seed({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 5 } }))).toBeCloseTo(0.5, 12);
+  it('추가 완성 확률과 돌연변이 증가율은 유물이 하나라 값이 그대로다', () => {
+    expect(extraCookChance(seed({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 5 } }))).toBeCloseTo(0.2, 12);
+    expect(extraCookChance(seed({ artifacts: ['varuna-scale'] }))).toBeCloseTo(0.1, 12);
     expect(variantBoostOf(seed({ artifacts: ['elder-scale'], artifactLevels: { 'elder-scale': 5 } }))).toBeCloseTo(0.5, 12);
-    expect(baitDiscount(seed())).toBe(0);
+    expect(extraCookChance(seed())).toBe(0);
+    expect(extraCookChance(seed({ artifacts: ['wreck-compass'] }))).toBe(0);
     expect(variantBoostOf(seed())).toBe(0);
   });
 });

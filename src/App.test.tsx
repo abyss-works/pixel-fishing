@@ -14,13 +14,14 @@ import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
 import { TUTORIAL_IDS } from './game/content/tutorials';
-import { markPromptsAnswered, resetAnnouncements, setDismissedVersion } from './platform/adapters/announcements';
+import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
 import { PATCH_NOTES } from './game/content/patchnotes';
 import { resetKeyScopes } from './presentation/ui/hotkeys';
 import { resetSpotState, setCurrentSpot, setPlayerPos } from './game/world/currentSpot';
-import { BAIT_WEIGHT_BONUS, BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
+import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/rules/balance';
 import { WALK_BAG_CAP } from './game/content/boats';
+import { ENERGY_ITEM_IDS } from './game/content/cooking';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
@@ -98,7 +99,7 @@ beforeEach(() => {
   resetWhatsNewSession();
   resetTutorialSession();
   resetAnnouncements();
-  setDismissedVersion(APP_VERSION);
+  setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();   // 키 스코프 스택도 모듈 전역
   resetSpotState();   // 현재 수역·좌표 스토어도 모듈 전역
@@ -165,6 +166,48 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument();
   });
+
+  it('기운 얻기 확정은 가방의 물고기를 기운으로 바꾸고 창은 열린 채 결과가 메시지 창에 한 줄로 남는다', () => {
+    seed({ boat: 5, bag: [inst('carp'), inst('carp')] }); // 잉어: 마을 연못 어종, 배 5의 기본값은 켜짐
+    render(<App />);
+    clickFurniture('sell');
+    fireEvent.click(screen.getAllByRole('button', { name: '기운 얻기' }).find(b => b.closest('.pf-tabbar'))!);
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
+    expect(screen.getByRole('heading', { name: '궤짝' })).toBeInTheDocument();
+    expect(screen.getByRole('log')).toHaveTextContent('생명의 기운 2개를 얻었어요!');
+    expect(hud()).toContain('가방 0 /');
+    expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
+  });
+});
+
+describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
+  it('부엌 카드를 누르면 부엌 창이 열리고 같은 카드를 다시 누르면 닫힌다', () => {
+    seed({ boat: 5 });
+    render(<App />);
+    clickFurniture('kitchen');
+    expect(screen.getByRole('heading', { name: '부엌' })).toBeInTheDocument();
+    clickFurniture('kitchen');
+    expect(screen.queryByRole('heading', { name: '부엌' })).not.toBeInTheDocument();
+  });
+
+  it('요리가 열리기 전에는 부엌 카드가 잠겨 창이 열리지 않는다', () => {
+    seed({ boat: 4 });
+    render(<App />);
+    clickFurniture('kitchen');
+    expect(screen.queryByRole('heading', { name: '부엌' })).not.toBeInTheDocument();
+  });
+
+  it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
+    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 9000 } });
+    render(<App />);
+    clickFurniture('kitchen');
+    fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
+    const line = screen.getByText('조리 중').closest('div')!;
+    expect(within(line).getByText('가루디야')).toBeInTheDocument();
+    expect(within(line).getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '조리 시작' })).toBeDisabled(); // 이미 조리 중
+    expect(screen.getByText('보관함').closest('div')).toHaveTextContent('1/10');
+  });
 });
 
 describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', () => {
@@ -176,7 +219,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 기본은 전부 선택 — 두 마리분
     expect(screen.getByRole('button', { name: '판매 (+60G)' })).toBeInTheDocument();
 
-    // 행이 기본 닫힘(2026-08-28) — 펼친 뒤 개체가 보인다
+    // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '이 형태 최대' })).toBeInTheDocument();
@@ -191,7 +234,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
-    // 가방 목록은 **기본 전부 닫힘**(사용자 지시) — 행을 펼쳐야 개체가 보인다
+    // 가방 목록은 **기본 전부 닫힘** — 행을 펼쳐야 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
     expect(screen.queryByText('12.0cm')).not.toBeInTheDocument();
@@ -801,7 +844,6 @@ describe('R22: 도움말 탭', () => {
     expect(help).toContain(`${BOATS[BOATS.length - 1].bagCap}마리`);
     expect(help).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);  // 월척 기준
     expect(help).toContain(`${VARIANT_PRICE_MULT}배 가격`);   // 변이 판매가
-    expect(help).toContain(`가중치가 ${BAIT_WEIGHT_BONUS * 100}% 늘어요`); // 미끼 효과 보너스
   });
 
   it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {
@@ -818,7 +860,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '띄우지 않기', '닉네임', '도움말 마지막 갱신']) {
+      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '도움말 마지막 갱신']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말
@@ -889,15 +931,14 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     expect(screen.getByRole('button', { name: '보내기' })).not.toHaveClass('primary');
   });
 
-  it('계정 관리 모달이 계정·닉네임·ID를 보여주고 복사 버튼을 단다', () => {
+  it('내 정보 창이 닉네임·ID를 보여주고 복사 버튼을 단다', () => {
     seed({});
     render(<App />);
     clickTab('설정');
-    fireEvent.click(screen.getByText('계정 관리'));
-    expect(screen.getByText('내 정보')).toBeInTheDocument();
-    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
-    // 설정 요약과 모달 두 곳에 뜬다 (로컬은 로그인 상태로 가정 — 실물은 이메일 또는 '게스트')
-    expect(screen.getAllByText('dev@localhost')).toHaveLength(2);
+    // 로컬은 로그인 상태로 가정하므로 가짜 계정이 설정 탭 요약에 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
+    expect(screen.getByText('dev@localhost')).toBeInTheDocument();
+    fireEvent.click(openerButton('내 정보'));
+    expect(screen.getByRole('dialog', { name: '내 정보' })).toBeInTheDocument();
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
@@ -954,7 +995,7 @@ describe('탭은 씬과 무관하게 5개 고정', () => {
 });
 
 describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
-  // 가방 목록은 기본 전부 닫힘(사용자 지시) — 개체 줄을 보려면 종 행을 펼쳐야 한다
+  // 가방 목록은 기본 전부 닫힘 — 개체 줄을 보려면 종 행을 펼쳐야 한다
   const openRow = (name: string) =>
     fireEvent.click(screen.getByLabelText(`${name} 개체 펼치기`));
 
@@ -1042,9 +1083,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(document.querySelector('button[aria-pressed]')).toBeNull();
   });
 
@@ -1056,7 +1097,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '2' }); // 유물
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
-    expect(screen.getByText('미끼값 −25%')).toBeInTheDocument();
+    expect(screen.getByText('요리 추가 완성 +10%p')).toBeInTheDocument();
     expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
   });
 
@@ -1126,7 +1167,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell'); // 정비 모달 (stage 레이어)
     fireEvent.keyDown(document, { key: '3' });
-    expect(document.querySelector('.pf-tabbar button.active')?.textContent).toContain('지역');
+    // 판매 창의 탭 줄도 pf-tabbar라 활성 탭이 둘이다 — 창 안의 판매 탭을 빼면 앱 탭은 지역 그대로여야 한다
+    const active = [...document.querySelectorAll('.pf-tabbar button.active')].map(b => b.textContent);
+    expect(active.filter(t => t !== '판매')).toEqual([expect.stringContaining('지역')]);
   });
 
   it('입력 중에는 단축키가 안 먹는다 — 쿠폰/계정 폼 타이핑 보호', () => {
@@ -1186,7 +1229,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
   });
 
   it('최대 배지는 폼별 — 변이 중 가장 큰 놈도 배지를 받는다', () => {
-    // 변이는 "종만 같고 다른 개체"(rarity-design 7절) — 도감도 최대 크기를 폼별로 센다.
+    // 변이는 "종만 같고 다른 개체" — 도감도 최대 크기를 폼별로 센다.
     // 종 단위로 재면 일반 42cm 때문에 변이 30cm가 배지를 못 받아, 남길 판단 기준과 어긋난다.
     seed({ bag: [
       inst('carp', 'normal', 42), inst('carp', 'normal', 8),
@@ -1266,7 +1309,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({ bag: [inst('carp', 'normal', 40)] });
     render(<App />);
     clickTab(/^가방/);
-    // 기본 닫힘 — 개체가 바로 보이지 않는다(사용자 지시: 대량 보유 스크롤 방지)
+    // 기본 닫힘 — 개체가 바로 보이지 않는다(대량 보유 시 스크롤 방지)
     expect(screen.queryByText('40.0cm')).not.toBeInTheDocument();
     openRow('잉어');
     expect(screen.getByText('40.0cm')).toBeInTheDocument();
@@ -1485,52 +1528,23 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   });
 });
 
-describe('아이템 · 미끼 — 가방 2섹션 + 필드 오버레이', () => {
-  const COMMON = 'bait-common';
-
-  it('가방 탭은 섹션(물고기/아이템)으로 분리되고, 미끼 활성 토글이 배타적으로 동작한다', async () => {
-    seed({ items: { [COMMON]: 2, 'bait-rare': 1 } });
-    render(<App />);
-    clickTab(/^가방/);
-    expect(screen.getByRole('heading', { name: /물고기 \(0\/60마리/ })).toBeInTheDocument(); // 맨발 기본 상한
-
-    // 아이템 섹션으로 전환해야 미끼가 보인다 (물고기와 한 스크롤을 쓰지 않는다) — 가방 탭 재클릭
-    clickTab(/가방\s*\(물고기\)/);
-    // 보유 없는 미끼는 애초에 누를 수 없다
-    expect(screen.getByLabelText('전설 미끼 활성화')).toBeDisabled();
-    // 일반 활성 → 사용 중 전환
-    fireEvent.click(screen.getByLabelText('일반 미끼 활성화'));
-    await waitFor(() => expect(screen.getByLabelText('일반 미끼 비활성화')).toBeInTheDocument());
-    // 다른 미끼로 교체하면 이전 것은 꺼진다 (4중 1)
-    fireEvent.click(screen.getByLabelText('희귀 미끼 활성화'));
-    await waitFor(() => expect(screen.getByLabelText('희귀 미끼 비활성화')).toBeInTheDocument());
-    expect(screen.getByLabelText('일반 미끼 활성화')).toBeInTheDocument();
-  });
-
-  it('스테이지 오버레이(GameView HUD 조합) — 활성 미끼와 남은 개수를 보여주고, 소진돼도 자리를 지킨다. 미활성이면 없다', () => {
-    seed({ items: { [COMMON]: 7 }, activeBait: COMMON });
-    render(<App />);
-    const overlay = screen.getByLabelText('활성 미끼');
-    expect(overlay).toHaveTextContent('7');
-    cleanup();
-
-    seed({ items: {}, activeBait: COMMON });
-    render(<App />);
-    expect(screen.getByLabelText('활성 미끼')).toHaveTextContent('0');
-    cleanup();
-
+describe('아이템 — 가방 아이템 섹션', () => {
+  it('가방 아이템 섹션은 빈 안내를 보이고, 필드에 활성 미끼 오버레이가 없다', () => {
     seed({});
     render(<App />);
+    fireEvent.keyDown(document, { key: '2' });
+    fireEvent.keyDown(document, { key: '2' }); // 아이템
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
   });
 });
 
 describe('닉네임 (게스트명 표시·변경)', () => {
-  it('계정 관리 모달에서 현재 닉네임이 보이고, 새 이름으로 바꿀 수 있다', async () => {
+  it('내 정보 창에서 현재 닉네임이 보이고, 새 이름으로 바꿀 수 있다', async () => {
     seed({});
     render(<App />);
     clickTab(/설정/);
-    fireEvent.click(screen.getByText('계정 관리'));
+    fireEvent.click(openerButton('내 정보'));
     const current = screen.getByLabelText('현재 닉네임');
     await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
     expect(current.textContent).toContain('_');
@@ -1543,7 +1557,7 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     seed({});
     render(<App />);
     clickTab(/설정/);
-    fireEvent.click(screen.getByText('계정 관리'));
+    fireEvent.click(openerButton('내 정보'));
     const current = screen.getByLabelText('현재 닉네임');
     await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
     const before = current.textContent;
@@ -1603,30 +1617,18 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
 
     fireEvent.click(screen.getByRole('button', { name: '완료' }));
     expect(screen.queryByRole('dialog', { name: '새 설정' })).not.toBeInTheDocument();
-    // 다시 보지 않기를 체크하지 않았으니 소식은 남고, 질문은 답했다
-    expect(stored()).toMatchObject({ dismissedVersion: null, answered: ['fish-art'] });
+    // 소식은 본 것으로 남고, 질문은 답했다
+    expect(stored()).toMatchObject({ lastSeenVersion: APP_VERSION, answered: ['fish-art'] });
   });
 
-  it('다시 보지 않기를 체크하지 않고 닫으면 다음 접속에 소식만 다시 뜬다', () => {
+  it('소식 창에는 다시 보지 않기 체크가 없고, 닫으면 다음 접속에는 뜨지 않는다', () => {
     unseen();
     seed({ fame: 120 });
     const { unmount } = render(<App />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('닫기'));
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
-    unmount();
-    resetWhatsNewSession();
-    render(<App />);
-    expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '확인' })).toBeInTheDocument(); // 새 설정 단계 없음
-  });
-
-  it('다시 보지 않기를 체크하고 닫으면 이번 소식은 더 뜨지 않는다', () => {
-    unseen();
-    seed({ fame: 120 });
-    const { unmount } = render(<App />);
-    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
-    fireEvent.click(screen.getByLabelText('닫기'));
-    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
+    expect(stored()).toMatchObject({ lastSeenVersion: APP_VERSION });
     unmount();
     resetWhatsNewSession();
     render(<App />);
@@ -1638,41 +1640,18 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     seed({});
     render(<App />);
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
-    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION, answered: ['fish-art'] });
+    expect(stored()).toMatchObject({ lastSeenVersion: APP_VERSION, answered: ['fish-art'] });
   });
 
-  it('설정 탭에서 최근 소식을 다시 볼 수 있다', () => {
+  it('설정 탭에서 최근 소식을 체크 없이 다시 볼 수 있다', () => {
     seed({ fame: 120 });
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('패치노트'));
     fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
-    // 이미 다시 보지 않기로 한 소식이라 체크된 채로 열리고, 해제하면 다음 접속에 다시 뜬다
-    const check = screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' });
-    expect(check).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(check);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    expect(stored()).toMatchObject({ dismissedVersion: null });
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
-  });
-
-  it('다시 보기로 연 소식의 체크를 해제했다 다시 체크하고 닫으면, 다시 열 때 체크된 채로 시작한다', () => {
-    seed({ fame: 120 });
-    render(<App />);
-    clickTab('설정');
-    fireEvent.click(openerButton('패치노트'));
-    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    expect(stored()).toMatchObject({ dismissedVersion: null });
-    fireEvent.click(openerButton('패치노트'));
-    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' }));
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    expect(stored()).toMatchObject({ dismissedVersion: APP_VERSION });
-    fireEvent.click(openerButton('패치노트'));
-    fireEvent.click(screen.getByRole('button', { name: '최근 소식 다시 보기' }));
-    expect(screen.getByRole('checkbox', { name: '접속할 때 이 소식 띄우지 않기' })).toHaveAttribute('aria-checked', 'true');
   });
 });

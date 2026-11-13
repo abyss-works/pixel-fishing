@@ -13,6 +13,7 @@ const s = vi.hoisted(() => ({
   report: vi.fn(async () => null),
 }));
 
+vi.mock('../../../../features/account/service/accountActions', () => ({ isGuest: (account: string | null) => account === null }));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
   usePlayerProfile: () => ({ profile: {
     nickname: '갈치', boat: 2, rod: 7, fame: 12345, dexFish: ['crucian', 'minnow'], artifacts: ['abyss-angler'], account: true,
@@ -68,14 +69,24 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('친구 요청을 보냈어요')).toBeTruthy();
   });
 
-  it('게스트에게는 친구 요청과 차단을 흐리게 두고 이유를 툴팁으로 보인다. 내 정보에는 동작이 없다', () => {
-    show({ account: null });
-    const buttons = screen.getAllByRole('button') as HTMLButtonElement[];
+  it('게스트에게는 친구 요청과 차단을 공용 잠금으로 두고 이유를 툴팁으로 보인다. 누르면 아무 일도 없다', () => {
+    const { container } = show({ account: null });
+    const buttons = screen.getAllByRole('button', { name: /^(친구 요청|차단)$/ }) as HTMLButtonElement[];
     expect(buttons.map(b => [b.textContent, b.disabled])).toEqual([['친구 요청', true], ['차단', true]]);
-    expect(screen.queryByText(/계정을 만든 뒤/)).toBeNull();
-    fireEvent.mouseEnter(buttons[0].parentElement!);
-    expect(screen.getByText('친구 요청과 차단은 계정을 만든 뒤 쓸 수 있어요.')).toBeTruthy();
-    cleanup();
+    expect(container.querySelectorAll('[data-glyph="lock"]')).toHaveLength(2);
+    expect(container.querySelector('[title]')).toBeNull();
+    const groups = screen.getAllByRole('group');
+    expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['친구 요청', '차단']);
+    fireEvent.mouseEnter(groups[0].parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    fireEvent.mouseLeave(groups[0].parentElement!);
+    groups.forEach(g => fireEvent.click(g));
+    buttons.forEach(b => fireEvent.click(b));
+    expect(s.act).not.toHaveBeenCalled();
+    expect(s.block).not.toHaveBeenCalled();
+  });
+
+  it('내 정보에는 동작이 없다', () => {
     show({ self: true });
     expect(screen.queryAllByRole('button')).toEqual([]);
   });

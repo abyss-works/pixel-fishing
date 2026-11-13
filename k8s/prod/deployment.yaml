@@ -23,7 +23,7 @@ spec:
       containers:
         - name: pixel-fishing
           image: ghcr.io/abyss-works/pixel-fishing
-          # 서버 비밀 환경 변수(BETTER_AUTH_SECRET, RESEND_API_KEY, MAIL_FROM, CRON_SECRET, R2, Sentry)는
+          # 서버 비밀 환경 변수(BETTER_AUTH_SECRET, RESEND_API_KEY, MAIL_FROM, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, CRON_SECRET, R2, Sentry)는
           # 저장소 밖에서 만든 Secret이 준다. DB 접속 주소는 CNPG가 만든 앱 사용자 Secret에서 읽는다.
           # ndots 1에서는 짧은 서비스 이름이 검색 도메인 없이 조회되므로 전체 도메인 주소(fqdn-uri)를 쓴다.
           envFrom:
@@ -39,6 +39,9 @@ spec:
               value: https://pixel-fishing.abyssworks.dev
             - name: DEPLOY_ENV
               value: production
+            # 약관과 처리방침의 판이자 시행일(YYYY-MM-DD). 시행 전에는 먼 미래 날짜를 둔다.
+            - name: CONSENT_EFFECTIVE_DATE
+              value: "2099-12-31"
           ports:
             - containerPort: 3000
           resources:

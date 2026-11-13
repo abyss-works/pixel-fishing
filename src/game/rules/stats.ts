@@ -3,7 +3,7 @@
 // { base, mods[], value }를 담는다 — 기여 내역 구조. `항해 속도 = 배 기본 ·
 // 밤 감속 · 유물 보너스`처럼 환경 요소는 mods 행으로 얹힌다(유물이 첫 환경 기여).
 //
-// 표시 원칙(사용자 확정 2026-08-24): 낚싯대는 **파워 한 축**이고 나머지 성능은 전부
+// 표시 원칙: 낚싯대는 **파워 한 축**이고 나머지 성능은 전부
 // 계산값이다. 시간 항목은 스탯창에 내지 않고, PERFECT 존·희귀 어드밴티지 등은 수역별로
 // 다르게 갈 예정이라 절대값 표를 만들지 않는다 — 파워의 도움말로만 보여준다.
 //
@@ -14,6 +14,8 @@ import type { GameState } from './logic.js';
 import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
 import { powerReqOf } from '../content/spots.js';
+import { NO_COOK_EFFECTS } from './cooking.js';
+import type { ActiveCookEffects } from './cooking.js';
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
@@ -33,8 +35,7 @@ const stat = (base: number, mods: StatMod[] = []): Stat => ({
 
 export type Movement = 'walk' | 'sail';
 
-/** 밤 이동 감속 비율 — 밤이면 항해 속도가 이 비율만큼 줄어든다 (time-and-artifacts 확정:
- *  "밤에는 항해 속도 약간 감소 — 페널티 허용"). 도보(마을)도 밤이면 같이 느리다.
+/** 밤 이동 감속 비율 — 밤이면 항해 속도가 이 비율만큼 줄어든다. 도보(마을)도 밤이면 같이 느리다.
  *  값은 "약간" 수준 — 어두우면 조심히 걷는 느낌만, 진행을 막지 않는다. */
 export const NIGHT_SPEED_FACTOR = 0.85;
 
@@ -78,9 +79,13 @@ export function rodAxes(state: GameState): RodAxes {
 }
 
 /** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
- *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소는 그 합계에 비율로 걸린다.
+ *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소와 요리(도시락)의 입질 대기 감소는
+ *  함께 더해져 그 합계에 비율로 걸린다. 요리 효과는 호출자가 slotEffects로 구해 넘긴다(방치 사이클에만 적용한다).
+ *  스탯창에 보일 출처 이름(label)은 호출자가 정한다.
  */
-export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; max: Stat } {
+export function effectiveBite(
+  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'biteWaitCut'> & { label?: string } = NO_COOK_EFFECTS,
+): { min: Stat; max: Stat } {
   const st = rodStats(state.rod);
   const pz = powerZones(state, spotId);
   const side = (base: number): Stat => {
@@ -92,6 +97,7 @@ export function effectiveBite(state: GameState, spotId: SpotId): { min: Stat; ma
       const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
       if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
     }
+    if (cook.biteWaitCut > 0) mods.push({ id: 'cook-lunch', label: cook.label ?? '', delta: -total * cook.biteWaitCut });
     return stat(base, mods);
   };
   return { min: side(st.biteMin), max: side(st.biteMax) };
@@ -103,7 +109,7 @@ export function rodPower(state: GameState): number {
   return powerOfLevel(state.rod);
 }
 
-// ---------- 해역 파워 게이트 (사용자 확정 2026-08-25 — 파워 기반 존, 낚싯대 zone 스탯 폐기) ----------
+// ---------- 해역 파워 게이트 (파워 기반 존, 낚싯대 zone 스탯 없음) ----------
 // 초과(파워 ≥ 요구량): 총 보너스 폭 = min(100, 초과+10)% — 기본 10%에 초과분을 더한다.
 //   빨간 존이 최대 20%p를 먼저 차지하고 나머지가 노란 존이다. 예: 초과 0 → 노란 10 /
 //   초과 50 → 빨간 20 + 노란 40 / 초과 100 → 20 + 80. 빨간 존은 초과 30%p부터 개방 —
@@ -160,10 +166,12 @@ export function zonesFor(power: number, req: number): Omit<PowerZone, 'power' | 
   };
 }
 
+/** 해역 파워 게이트의 존 */
 export function powerZones(state: GameState, spotId: SpotId): PowerZone {
   const power = rodPower(state);
   const req = powerReqOf(spotId);
-  return { power, req, ...zonesFor(power, req) };
+  const z = zonesFor(power, req);
+  return { power, req, ...z };
 }
 
 // 도움말 문장 — 스탯창 HelpHint가 띄운다. UI가 규칙 서술을 재작성하지 않게 서비스가 든다.

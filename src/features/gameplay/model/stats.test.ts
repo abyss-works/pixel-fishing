@@ -37,6 +37,31 @@ describe('플레이 스탯 화면 데이터', () => {
   });
 });
 
+describe('입질 대기의 요리 출처', () => {
+  const T0 = '2026-11-12T00:00:00.000Z';
+  const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
+  const cookMod = (g: GameState, now: string) =>
+    selectStatsModalData(g, 'sail', 0, now).effectiveBite.min.mods.find(m => m.id === 'cook-lunch');
+
+  it('효과가 든 입질 단축 도시락은 입질 대기 보정 줄에 요리 이름을 출처로 낸다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    expect(cookMod(g, T0)).toMatchObject({ label: '가루디야' });
+    expect(cookMod(g, T0)!.delta).toBeLessThan(0);
+  });
+
+  it('끝난 슬롯이나 빈 슬롯은 보정 줄이 없다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    expect(cookMod(g, at(3_600_000))).toBeUndefined();
+    expect(cookMod(game({ boat: 5 }), T0)).toBeUndefined();
+  });
+
+  it('해역 행 목록도 같은 시각 기준으로 보정을 싣는다', () => {
+    const g = game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+    const row = selectStatsSpotRows(g, 'sail', T0)[0];
+    expect(row.data.effectiveBite.min.mods.some(m => m.id === 'cook-lunch')).toBe(true);
+  });
+});
+
 describe('방치 낚시 배수 표시', () => {
   const idleOf = (g: GameState, id: string) => selectStatsModalData(g, 'sail', indexOf(id)).idle;
   const applied = (g: GameState, id: string) => {
@@ -130,6 +155,13 @@ describe('받는 보너스', () => {
       .toEqual([['duel', 'abyss-angler', 'duelSpeedupCut'], ['move', 'wreck-compass', 'sail']]);
   });
 
+  it('진주 상인의 저울은 요리 추가 완성 확률 줄을 낚시 갈래에 낸다', () => {
+    const g = game({ artifacts: ['varuna-scale'], artifactLevels: { 'varuna-scale': 2 } });
+    const rows = selectActiveBonuses(g).filter(b => b.source.kind === 'relic');
+    expect(rows.map(b => [b.category, b.source.kind === 'relic' && b.source.effect, b.source.kind === 'relic' && b.source.level]))
+      .toEqual([['fish', 'extraCookChance', 2]]);
+  });
+
   it('유물 보너스 줄에 보유 레벨이 붙는다 - 맵에 없으면 Lv1', () => {
     const g = game({ artifacts: ['abyss-angler', 'wreck-compass'], artifactLevels: { 'wreck-compass': 4 } });
     const levels = selectActiveBonuses(g).flatMap(b => b.source.kind === 'relic' ? [[b.source.artifact.id, b.source.level]] : []);
@@ -141,12 +173,6 @@ describe('받는 보너스', () => {
     expect(selectActiveBonuses(g).filter(b => b.source.kind === 'relic')).toEqual([]);
   });
 
-  it('켜 둔 미끼는 낚시 갈래의 직접 낚을 때만 효과다', () => {
-    const g = game({ activeBait: 'bait-rare' });
-    const bait = selectActiveBonuses(g).find(b => b.source.kind === 'bait');
-    expect(bait).toMatchObject({ category: 'fish', manualOnly: true });
-  });
-
   it('길드 보너스는 1단계 이상인 효과만 "길드 Lv.N" 출처로 갈래를 붙여 모은다', () => {
     const effects = { sell: 0.04, bag: 0.08, named: 0, rare: 0.02, mutation: 0.01 };
     const guild = selectActiveBonuses(game({}), { level: 5, effects }).filter(b => b.source.kind === 'guild');
@@ -154,6 +180,46 @@ describe('받는 보너스', () => {
       .toEqual([['shop', 'sell', 0.04], ['fish', 'bag', 0.08], ['fish', 'rare', 0.02], ['fish', 'mutation', 0.01]]);
     expect(guild[0].source).toMatchObject({ kind: 'guild', level: 5 });
     expect(guild.every(b => !b.manualOnly)).toBe(true);
+  });
+
+  describe('슬롯 효과', () => {
+    const T0 = '2026-11-12T00:00:00.000Z';
+    const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
+    const slotRows = (g: GameState, now = T0) => selectActiveBonuses(g, null, now).filter(b => b.source.kind === 'slot');
+    const text = (b: ReturnType<typeof slotRows>[number]) =>
+      b.source.kind === 'slot' ? `${b.source.effect.label} ${b.source.effect.value}` : '';
+
+    it('효과가 든 슬롯은 요리 이름을 출처로 효과마다 한 줄, 갈래를 붙여 모은다', () => {
+      const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
+      const rows = slotRows(g);
+      expect(rows.map(b => [b.category, text(b)])).toEqual([
+        ['fish', '입질 대기 −5%'], ['fish', '희귀 등급 가중치 +5%'], ['fish', '영웅 등급 가중치 +5%'], ['fish', '전설 등급 가중치 +5%'],
+      ]);
+      expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리')).toBe(true);
+    });
+
+    it('네임드 조우 가중은 결투 갈래다', () => {
+      const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 가중치 +50%']]);
+    });
+
+    it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
+      const g = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: { id: 'cook-bait-mutation', endsAt: at(60_000) } } });
+      const [lunch, bait] = slotRows(g);
+      expect([lunch.autoOnly, lunch.manualOnly]).toEqual([true, false]);
+      expect([bait.autoOnly, bait.manualOnly]).toEqual([false, true]);
+    });
+
+    it('끝났거나 빈 슬롯은 줄을 내지 않는다', () => {
+      expect(slotRows(game({}))).toEqual([]);
+      const ended = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(0) }, bait: null } });
+      expect(slotRows(ended)).toEqual([]);
+    });
+
+    it('유물과 길드 보너스 줄은 그대로고 슬롯 줄이 그 뒤에 온다', () => {
+      const g = game({ artifacts: ['wreck-compass'], slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: null } });
+      expect(selectActiveBonuses(g, null, T0).map(b => b.source.kind)).toEqual(['relic', 'slot']);
+    });
   });
 
   it('요약의 가방은 길드 가방 보너스를 반영한다', () => {

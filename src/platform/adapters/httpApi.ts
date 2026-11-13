@@ -2,13 +2,15 @@
 import { HttpGameGateway } from './httpGameGateway';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AuthApi, AuthResult } from '../api/types';
+import type { AccountLookup, AuthApi, AuthResult } from '../api/types';
 import {
   sessionUid,
   ensureSession,
   currentAccount,
-  signUpWithEmail,
   signInWithEmail,
+  startGoogleAuth,
+  takeGoogleLanding,
+  accountProviders,
   signOutAccount,
   requestPasswordReset,
   applyNewPassword,
@@ -22,18 +24,24 @@ class HttpAuth implements AuthApi {
   ensureSession(): Promise<string | null> {
     return ensureSession();
   }
-  currentAccount(): Promise<string | null> {
+  currentAccount(): Promise<AccountLookup> {
     return currentAccount();
   }
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
-    const [uid, email] = await Promise.all([sessionUid(), currentAccount()]);
-    return { uid, email };
+    const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
+    return { uid, email: lookup.status === 'account' ? lookup.email : null };
   }
   takePasswordResetLanding(): 'ready' | 'invalid' | null {
     return takePasswordResetLanding();
   }
-  signUp(email: string, password: string): Promise<AuthResult> {
-    return signUpWithEmail(email, password);
+  startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
+    return startGoogleAuth(start, tag);
+  }
+  takeGoogleLanding(): { tag: string; error: string | null } | null {
+    return takeGoogleLanding();
+  }
+  accountProviders(): Promise<string[] | null> {
+    return accountProviders();
   }
   signIn(email: string, password: string): Promise<AuthResult> {
     return signInWithEmail(email, password);
@@ -67,7 +75,7 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChatReportRow, BalanceLive,
+  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from '../api/types';
 
@@ -121,6 +129,12 @@ const postAdminAuth = (path: string, body: unknown): Promise<Response> => fetch(
   body: JSON.stringify(body),
 });
 
+/** 관리자 구글 로그인에서 돌아온 주소를 알아보는 질의 이름과 값 */
+const ADMIN_GOOGLE_PARAM = 'google';
+const ADMIN_GOOGLE_TAG = 'sign-in';
+/** 이 탭에서 관리자 구글 로그인을 시작했다는 표지를 담는 세션 저장소 키. 다른 곳에서 만든 복귀 주소를 처리하지 않기 위해서다 */
+const ADMIN_GOOGLE_FLOW_KEY = 'pf-admin-google-flow';
+
 class HttpAdmin implements AdminApi {
   isConfigured = true;
 
@@ -130,17 +144,54 @@ class HttpAdmin implements AdminApi {
     if (res.status === 401) return { kind: 'signedOut', uid: null };
     return adminBody(res, 'access');
   }
-  async signIn(email: string, password: string): Promise<AuthResult> {
+  /** 서버가 만든 구글 인증 주소로 이동한다. 성공과 실패 모두 같은 관리자 주소로 돌아오고, 실패는 서버가 error 질의를 더한다 */
+  async signIn(): Promise<AuthResult> {
+    const returnUrl = `${window.location.origin}/admin/?${ADMIN_GOOGLE_PARAM}=${ADMIN_GOOGLE_TAG}`;
     let res: Response;
     try {
-      res = await postAdminAuth('sign-in/email', { email, password });
+      res = await postAdminAuth('sign-in/social', {
+        provider: 'google', callbackURL: returnUrl, errorCallbackURL: returnUrl, disableRedirect: true,
+      });
     } catch {
-      return { ok: false, msg: '로그인하지 못했어요. 네트워크를 확인해 주세요.' };
+      return { ok: false, msg: '구글 계정 선택 화면을 열지 못했어요.\n네트워크를 확인해 주세요.' };
     }
-    if (res.ok) return { ok: true };
-    if (res.status === 401) return { ok: false, msg: '이메일 또는 비밀번호가 틀렸어요.' };
-    if (res.status === 429) return { ok: false, msg: '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.' };
-    return { ok: false, msg: `로그인하지 못했어요. (${res.status})` };
+    if (res.status === 429) return { ok: false, msg: '요청이 너무 잦아요.\n잠시 뒤 다시 시도해 주세요.' };
+    if (!res.ok) return { ok: false, msg: `구글 계정 선택 화면을 열지 못했어요.\n서버에서 ${res.status} 응답을 받았어요.\n잠시 뒤 다시 시도해 주세요.` };
+    const data = await res.json().catch(() => null) as { url?: string } | null;
+    if (!data?.url) return { ok: false, msg: '구글 인증 주소를 받지 못했어요.' };
+    // 세션 저장소를 쓸 수 없는 브라우저는 돌아왔을 때 이 탭의 흐름인지 알 수 없으므로 시작하지 않는다
+    try {
+      sessionStorage.setItem(ADMIN_GOOGLE_FLOW_KEY, ADMIN_GOOGLE_TAG);
+    } catch {
+      return { ok: false, msg: '브라우저 저장소를 쓸 수 없어요.' };
+    }
+    window.location.assign(data.url);
+    return { ok: true };
+  }
+  /**
+   * 돌아온 주소에서 표지와 오류 코드를 읽고 표지, 오류 코드, 오류 설명 질의를 주소에서 지운다.
+   * 이 탭에서 시작한 흐름이 아니면 null이다. 표지 질의 없이 열렸는데 이 탭의 세션 저장소 표지가 남아 있으면(구글 화면에서 뒤로 돌아온 경우) 표지만 지운다.
+   * error가 빈 문자열이면 빈 코드로 돌려준다.
+   */
+  takeSignInReturn(): { error: string | null } | null {
+    const params = new URLSearchParams(window.location.search);
+    const returned = params.get(ADMIN_GOOGLE_PARAM) === ADMIN_GOOGLE_TAG;
+    const error = params.get('error');
+    if (returned) {
+      params.delete(ADMIN_GOOGLE_PARAM);
+      params.delete('error');
+      params.delete('error_description');
+      const rest = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    }
+    let started = false;
+    try {
+      started = sessionStorage.getItem(ADMIN_GOOGLE_FLOW_KEY) === ADMIN_GOOGLE_TAG;
+      sessionStorage.removeItem(ADMIN_GOOGLE_FLOW_KEY);
+    } catch {
+      return null;
+    }
+    return returned && started ? { error } : null;
   }
   async signOut(): Promise<void> {
     await postAdminAuth('sign-out', {});
@@ -175,6 +226,9 @@ class HttpAdmin implements AdminApi {
   }
   letters(): Promise<AdminLetterRow[]> {
     return readAdmin('letters');
+  }
+  changelog(): Promise<AdminChangelogRow[]> {
+    return readAdmin('changelog');
   }
   chatReports(): Promise<AdminChatReportRow[]> {
     return readAdmin('chatReports');

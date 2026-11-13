@@ -1,5 +1,5 @@
 // 콜드 아카이브 코어 — Postgres → Cloudflare R2(S3 SigV4). 표 읽기·지우기는 표의 소유 저장 모듈이 한다.
-// 이식 원본: 운영 절차 (2026-09-10 일회성 실행으로 검증된 로직).
+// 일회성 운영 실행으로 검증된 로직을 옮겼다.
 // 삭제는 업로드 검증(HEAD 바이트, 실패 시 GET 해시)을 통과한 뒤에만 수행한다.
 // CLI 요소(argv·.env 로더·process.exit)를 제거하고 값을 인자로 받는다 — cron 핸들러가 유일 소비처.
 import { createHash, createHmac } from 'node:crypto';

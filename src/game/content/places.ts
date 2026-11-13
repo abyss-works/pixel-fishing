@@ -3,6 +3,17 @@
 // 거점 id도 같은 계층에 둔다.
 export type BaseId = 'home' | 'harbor' | 'manila' | 'colombo' | 'toamasina' | 'walvisbay';
 
+/** 거점이 속한 지역 — 거점의 지역은 여기가 정본이다. 서버의 게스트 판정(마을 안인가)도 이 표를 읽는다 */
+export const BASE_REGION: Record<BaseId, RegionId> = {
+  home: 'village', harbor: 'world', manila: 'world', colombo: 'world', toamasina: 'world', walvisbay: 'world',
+};
+
+/** 판매 시설(집의 궤짝, 항구의 어시장)이 있는 거점 — 판매 시설에서만 하는 동작(기운 얻기)의 장소 판정이 읽는다.
+ *  Record라 새 거점을 더하면 판매 시설 여부를 정해야 컴파일된다. 거점 가구와 어긋나지 않는지는 월드 테스트가 지킨다 */
+export const SALE_BASES: Record<BaseId, boolean> = {
+  home: true, harbor: true, manila: true, colombo: true, toamasina: true, walvisbay: true,
+};
+
 /** 씬 지역 id — 오픈월드에서 도달 가능한 지역은 마을과 병합 바다뿐이다.
  *  구세이브 location에 남은 구 지역 id(ocean/seasia/indian 등)는 **런타임 문자열**로만
  *  존재한다 — safeLocation이 무검증 통과시키고 App.sceneOf가 고향 항구로 접는다.

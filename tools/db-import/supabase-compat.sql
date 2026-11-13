@@ -1,7 +1,8 @@
 -- Supabase가 아닌 Postgres에 마이그레이션 0001~0020을 적용하기 전에 실행한다.
 -- 그 마이그레이션이 참조하는 Supabase 객체(API 역할 3개, auth.uid(), auth.users)를 같은 이름으로 만든다.
 -- auth.users는 Supabase 덤프의 데이터를 그대로 받을 수 있게 같은 열(생성 열 confirmed_at 제외)을 둔다.
--- 0021이 이 표를 auth.supabase_users로 바꾸고 Better Auth 표로 옮긴다.
+-- 덤프 데이터를 받는 이 표는 마이그레이션 0021이 읽어 Better Auth 표로 옮기므로 가져오기 순서에서 계속 필요하다.
+-- 0021이 이름을 바꿔 남긴 이전 표는 0035가 지운다.
 -- 역할 생성은 슈퍼유저 권한이 필요하다. 나머지는 앱 사용자로 실행해 앱 사용자가 소유하게 한다.
 
 create schema if not exists auth;

@@ -11,7 +11,7 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 1)).toBe('항해 속도 +10%');
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 5)).toBe('항해 속도 +20%');
     expect(artifactEffectLines(art('abyss-angler'), 5)).toEqual(['네임드 결투 가속 −20%']);
-    expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['미끼값 −50%']);
+    expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['요리 추가 완성 +20%p']);
   });
 
   it('전설 유물은 효과 줄이 없고 보너스와 페널티 줄이 따로 나온다', () => {
@@ -23,8 +23,10 @@ describe('유물 효과 문장', () => {
 
   it('효과 값은 소수 둘째 자리까지 보이고 끝의 0은 뺀다', () => {
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 2)).toBe('항해 속도 +12.5%');
-    expect(artifactEffectLine(art('varuna-scale'), 'baitDiscount', 2)).toBe('미끼값 −31.25%');
-    expect(artifactEffectValue(art('varuna-scale'), 'baitDiscount', 5)).toBe('−50%');
+    expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 2)).toBe('네임드 결투 가속 −12.5%');
+    expect(artifactEffectValue(art('abyss-angler'), 'duelSpeedupCut', 5)).toBe('−20%');
+    expect(artifactEffectLine(art('varuna-scale'), 'extraCookChance', 2)).toBe('요리 추가 완성 +12.5%p');
+    expect(artifactEffectValue(art('varuna-scale'), 'extraCookChance', 1)).toBe('+10%p');
   });
 
   it('코모로의 골판은 돌연변이 가중치 증가율로 쓰고 확률로 환산하지 않는다', () => {
@@ -34,9 +36,11 @@ describe('유물 효과 문장', () => {
   });
 
   it('효과가 없으면 값도 문장도 없다', () => {
-    expect(artifactEffectValue(art('wreck-compass'), 'baitDiscount', 1)).toBeNull();
+    expect(artifactEffectValue(art('wreck-compass'), 'duelSpeedupCut', 1)).toBeNull();
     expect(artifactEffectKeys(art('wreck-compass'))).toEqual(['sail']);
     expect(artifactEffectKeys(art('mami-wata-mirror'))).toEqual([]);
+    expect(artifactEffectValue(art('wreck-compass'), 'extraCookChance', 1)).toBeNull();
+    expect(artifactEffectKeys(art('varuna-scale'))).toEqual(['extraCookChance']);
   });
 
   it('효과 이름은 문장의 앞부분과 같다', () => {

@@ -51,9 +51,11 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -78,8 +80,12 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -98,10 +104,12 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -122,6 +130,10 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -150,10 +162,12 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
       "patch": {
         "baseVersion": 3,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -174,6 +188,10 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -239,9 +257,11 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -266,8 +286,12 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -286,10 +310,12 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -310,6 +336,10 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -388,9 +418,11 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -415,8 +447,12 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -435,10 +471,12 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 30,
           "hats": [],
@@ -459,6 +497,10 @@ exports[`가방 > 판매는 개체를 지우고 골드를 더한다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -508,7 +550,7 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000046",
+        "nickname": "user-00000045",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -639,9 +681,11 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -666,8 +710,12 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -686,10 +734,12 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -710,6 +760,10 @@ exports[`개발 명령 > 도감 채우기 명령은 도감 행을 쓴다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -874,7 +928,7 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000043",
+        "nickname": "user-00000042",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -887,9 +941,11 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -914,8 +970,12 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -934,10 +994,12 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 1000,
           "hats": [],
@@ -958,6 +1020,10 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -992,7 +1058,7 @@ exports[`개발 명령 > 스테이징에서 소유자가 아니면 거부한다 
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000044",
+        "nickname": "user-00000043",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -1005,9 +1071,11 @@ exports[`개발 명령 > 스테이징에서 소유자가 아니면 거부한다 
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -1032,8 +1100,12 @@ exports[`개발 명령 > 스테이징에서 소유자가 아니면 거부한다 
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -1069,7 +1141,7 @@ exports[`개발 명령 > 운영 배포는 거부한다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000045",
+        "nickname": "user-00000044",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -1082,9 +1154,11 @@ exports[`개발 명령 > 운영 배포는 거부한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -1109,8 +1183,12 @@ exports[`개발 명령 > 운영 배포는 거부한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -1181,7 +1259,7 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000048",
+        "nickname": "user-00000047",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -1194,9 +1272,11 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -1221,8 +1301,12 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -1241,10 +1325,12 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -1265,6 +1351,10 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -1313,7 +1403,7 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000047",
+        "nickname": "user-00000046",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -1326,9 +1416,11 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -1353,8 +1445,12 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -1373,10 +1469,12 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
       "patch": {
         "baseVersion": 4,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -1397,6 +1495,10 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -1420,10 +1522,12 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
       "patch": {
         "baseVersion": 3,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -1444,6 +1548,10 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -2249,9 +2357,11 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -2283,8 +2393,12 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
             "loach": 0.185,
             "minnow": 0.185,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -2303,10 +2417,12 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -2327,6 +2443,10 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -2396,7 +2516,7 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "payload": {
           "fish": [
             {
-              "fishId": "crucian",
+              "fishId": "minnow",
               "form": "normal",
               "uid": "<uuid>",
             },
@@ -2425,6 +2545,18 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
       },
     ],
     "fish_instances": [
+      {
+        "caught_at": "2026-01-01T00:00:00.000Z",
+        "fish_id": "crucian",
+        "form": "normal",
+        "judgment": "good",
+        "locked": false,
+        "size": 10,
+        "slot": null,
+        "spot": "pond",
+        "uid": "<uuid>",
+        "user_id": "<user>",
+      },
       {
         "caught_at": "2026-01-01T00:00:00.000Z",
         "fish_id": "crucian",
@@ -2768,18 +2900,6 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "judgment": "good",
         "locked": false,
         "size": 68,
-        "slot": null,
-        "spot": "pond",
-        "uid": "<uuid>",
-        "user_id": "<user>",
-      },
-      {
-        "caught_at": "2026-01-01T00:00:00.000Z",
-        "fish_id": "minnow",
-        "form": "normal",
-        "judgment": "good",
-        "locked": false,
-        "size": 11,
         "slot": null,
         "spot": "pond",
         "uid": "<uuid>",
@@ -3172,9 +3292,11 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -3206,8 +3328,12 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
             "loach": 0.185,
             "minnow": 0.185,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -3226,10 +3352,12 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -3250,6 +3378,10 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -3299,7 +3431,7 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         },
         "released": [
           {
-            "name": "붕어",
+            "name": "피라미",
             "uid": "<uuid>",
           },
         ],
@@ -3385,9 +3517,11 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -3420,8 +3554,12 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
             "tuna": 0.0030991735537190084,
             "yellowtail": 0.006198347107438017,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -3440,10 +3578,12 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -3464,6 +3604,10 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -3606,9 +3750,11 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -3641,8 +3787,12 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
             "tuna": 0.0030991735537190084,
             "yellowtail": 0.006198347107438017,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -3661,10 +3811,12 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -3685,6 +3837,10 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -3904,9 +4060,11 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -3938,8 +4096,12 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
             "loach": 0.16003460207612455,
             "minnow": 0.16003460207612455,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -3958,10 +4120,12 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -3982,6 +4146,10 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -4110,7 +4278,6 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
     "saves": [
       {
         "data": {
-          "activeBait": null,
           "artifacts": [],
           "bag": [
             {
@@ -4134,7 +4301,9 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
               "uid": "<uuid>",
             },
           ],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
           "dex": {
             "minnow": {
@@ -4145,6 +4314,7 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
               },
             },
           },
+          "energyTargets": {},
           "exhibit": [],
           "fame": 5,
           "firstCatch": {
@@ -4180,11 +4350,15 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
             "minnow": 0.16003460207612455,
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
-        "schema_version": 8,
+        "schema_version": 10,
         "updated_at": "<now>",
         "user_id": "<user>",
       },
@@ -4194,9 +4368,11 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4228,8 +4404,12 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
             "loach": 0.16003460207612455,
             "minnow": 0.16003460207612455,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -4248,10 +4428,12 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
       "patch": {
         "baseVersion": 49,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -4272,6 +4454,10 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -4353,9 +4539,11 @@ exports[`낚시 > 잠긴 수역은 거부한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4380,8 +4568,12 @@ exports[`낚시 > 잠긴 수역은 거부한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -4493,9 +4685,11 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4528,8 +4722,12 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
             "tuna": 0.0030991735537190084,
             "yellowtail": 0.006198347107438017,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -4548,10 +4746,12 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -4572,6 +4772,10 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -4691,9 +4895,11 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4725,8 +4931,12 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
             "loach": 0.16003460207612455,
             "minnow": 0.16003460207612455,
           },
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "5",
@@ -4745,10 +4955,12 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 5,
           "gold": 0,
           "hats": [],
@@ -4769,6 +4981,10 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -4837,7 +5053,7 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000030",
+        "nickname": "user-00000029",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -4850,9 +5066,11 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4877,8 +5095,12 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -4936,9 +5158,11 @@ exports[`닉네임 > 바꾸기 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -4963,8 +5187,12 @@ exports[`닉네임 > 바꾸기 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -4983,10 +5211,12 @@ exports[`닉네임 > 바꾸기 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -5007,6 +5237,10 @@ exports[`닉네임 > 바꾸기 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -5041,7 +5275,7 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000031",
+        "nickname": "user-00000030",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -5054,9 +5288,11 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5081,8 +5317,12 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5131,9 +5371,11 @@ exports[`상점·이동 > 골드가 모자란 강화는 거부한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5158,8 +5400,12 @@ exports[`상점·이동 > 골드가 모자란 강화는 거부한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5218,9 +5464,11 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5245,8 +5493,12 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5265,10 +5517,12 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 99950,
           "hats": [],
@@ -5289,200 +5543,14 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
             "wounds": {},
           },
           "rod": 2,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
         "version": 3,
-        "writes": {
-          "instancesAdded": [],
-          "instancesLocked": [],
-          "instancesMoved": [],
-          "instancesRemoved": [],
-          "records": [],
-        },
-      },
-      "result": {
-        "type": "none",
-      },
-    },
-    "status": 200,
-  },
-}
-`;
-
-exports[`상점·이동 > 미끼 구매와 장착 1`] = `
-{
-  "buy": {
-    "body": {
-      "patch": {
-        "baseVersion": 2,
-        "scalars": {
-          "activeBait": null,
-          "artifacts": [],
-          "boat": 0,
-          "coupons": [],
-          "fame": 0,
-          "gold": 9400,
-          "hats": [],
-          "items": {
-            "bait-rare": 3,
-          },
-          "location": {
-            "id": "colombo",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "rod": 1,
-          "tutorials": [],
-          "visited": [],
-        },
-        "version": 3,
-        "writes": {
-          "instancesAdded": [],
-          "instancesLocked": [],
-          "instancesMoved": [],
-          "instancesRemoved": [],
-          "records": [],
-        },
-      },
-      "result": {
-        "type": "none",
-      },
-    },
-    "status": 200,
-  },
-  "db": {
-    "bounty_accepts": [],
-    "bounty_clears": [],
-    "bounty_licenses": [],
-    "bounty_progress": [],
-    "bounty_tickets": [],
-    "events": [
-      {
-        "created_at": "2030-03-04T05:06:07.000Z",
-        "payload": {
-          "bait": "bait-rare",
-          "cost": 600,
-          "count": 3,
-        },
-        "type": "buyBait",
-        "user_id": "<user>",
-      },
-      {
-        "created_at": "<now>",
-        "payload": {
-          "bait": "bait-rare",
-        },
-        "type": "setActiveBait",
-        "user_id": "<user>",
-      },
-    ],
-    "fish_instances": [],
-    "letters": [],
-    "profiles": [
-      {
-        "nickname": "user-00000021",
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "records": [],
-    "reliefs": [],
-    "saves": [],
-    "saves_current": [
-      {
-        "active_client": null,
-        "boat": 0,
-        "data": {
-          "activeBait": "bait-rare",
-          "artifacts": [],
-          "coupons": [],
-          "firstCatch": {
-            "epic": true,
-            "legend": true,
-            "legendAt": 0,
-            "n": 0,
-          },
-          "hats": [],
-          "items": {
-            "bait-rare": 3,
-          },
-          "location": {
-            "id": "colombo",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "pity": {},
-          "tutorials": [],
-          "v": 8,
-          "visited": [],
-        },
-        "fame": "0",
-        "gold": "9400",
-        "last_catch_at": null,
-        "restricted": false,
-        "rod": 1,
-        "updated_at": "<now>",
-        "user_id": "<user>",
-        "version": "4",
-      },
-    ],
-  },
-  "res": {
-    "body": {
-      "patch": {
-        "baseVersion": 3,
-        "scalars": {
-          "activeBait": "bait-rare",
-          "artifacts": [],
-          "boat": 0,
-          "coupons": [],
-          "fame": 0,
-          "gold": 9400,
-          "hats": [],
-          "items": {
-            "bait-rare": 3,
-          },
-          "location": {
-            "id": "colombo",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "rod": 1,
-          "tutorials": [],
-          "visited": [],
-        },
-        "version": 4,
         "writes": {
           "instancesAdded": [],
           "instancesLocked": [],
@@ -5536,9 +5604,11 @@ exports[`상점·이동 > 배 구매 1`] = `
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5563,8 +5633,12 @@ exports[`상점·이동 > 배 구매 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5583,10 +5657,12 @@ exports[`상점·이동 > 배 구매 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -5607,6 +5683,10 @@ exports[`상점·이동 > 배 구매 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -5650,7 +5730,7 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000022",
+        "nickname": "user-00000021",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -5663,9 +5743,11 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5690,8 +5772,12 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [
             "ocean",
           ],
@@ -5712,10 +5798,12 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -5736,6 +5824,10 @@ exports[`상점·이동 > 첫 방문 이동은 방문 이벤트를 남긴다 1`]
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [
             "ocean",
@@ -5785,9 +5877,11 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5812,8 +5906,12 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5862,9 +5960,11 @@ exports[`요청 경계 > 직전 액션과 간격이 너무 짧으면 429다 1`] 
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5889,8 +5989,12 @@ exports[`요청 경계 > 직전 액션과 간격이 너무 짧으면 429다 1`] 
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -5939,9 +6043,11 @@ exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -5966,8 +6072,12 @@ exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6003,7 +6113,7 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000041",
+        "nickname": "user-00000040",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -6016,9 +6126,11 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6043,8 +6155,12 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6103,7 +6219,7 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000042",
+        "nickname": "user-00000041",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -6126,9 +6242,11 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6153,8 +6271,12 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "77",
@@ -6174,7 +6296,6 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
         "type": "none",
       },
       "state": {
-        "activeBait": null,
         "artifacts": [],
         "bag": [
           {
@@ -6188,7 +6309,9 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
             "uid": "<uuid>",
           },
         ],
+        "baitRefund": null,
         "boat": 0,
+        "cooking": null,
         "coupons": [],
         "dex": {
           "carp": {
@@ -6199,6 +6322,7 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
             },
           },
         },
+        "energyTargets": {},
         "exhibit": [],
         "fame": 77,
         "firstCatch": {
@@ -6227,8 +6351,12 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
         },
         "pity": {},
         "rod": 1,
+        "slots": {
+          "bait": null,
+          "lunch": null,
+        },
         "tutorials": [],
-        "v": 8,
+        "v": 10,
         "visited": [],
       },
       "version": 3,
@@ -6276,7 +6404,7 @@ exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제�
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000087",
+        "nickname": "user-00000086",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -6289,9 +6417,11 @@ exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6316,8 +6446,12 @@ exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제�
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6336,10 +6470,12 @@ exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -6360,6 +6496,10 @@ exports[`자동 잠금 > 자동 잠금은 요청 한 번으로 잠금과 해제�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -6512,9 +6652,11 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": false,
             "legend": false,
@@ -6539,8 +6681,12 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "20",
@@ -6559,10 +6705,12 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
       "patch": {
         "baseVersion": 1,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 20,
           "gold": 500,
           "hats": [],
@@ -6583,6 +6731,10 @@ exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩�
             "wounds": {},
           },
           "rod": 2,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -6640,9 +6792,11 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6667,8 +6821,12 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6687,10 +6845,12 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
       "patch": {
         "baseVersion": 1,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -6711,6 +6871,10 @@ exports[`첫 액션 > 프로필과 저장 상태가 없는 사용자의 boot는 
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -6756,7 +6920,7 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000024",
+        "nickname": "user-00000023",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -6769,11 +6933,13 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [
             "DYN-ON",
           ],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6798,8 +6964,12 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6818,12 +6988,14 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [
             "DYN-ON",
           ],
+          "energyTargets": {},
           "fame": 0,
           "gold": 777,
           "hats": [],
@@ -6844,6 +7016,10 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -6896,7 +7072,7 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000023",
+        "nickname": "user-00000022",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -6909,11 +7085,13 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [
             "출항준비",
           ],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -6938,8 +7116,12 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -6958,12 +7140,14 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [
             "출항준비",
           ],
+          "energyTargets": {},
           "fame": 0,
           "gold": 300,
           "hats": [],
@@ -6984,6 +7168,10 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -7030,7 +7218,7 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
       "letters": [],
       "profiles": [
         {
-          "nickname": "user-00000025",
+          "nickname": "user-00000024",
           "updated_at": "<db-now>",
           "user_id": "<user>",
         },
@@ -7073,9 +7261,11 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
           "active_client": null,
           "boat": 1,
           "data": {
-            "activeBait": null,
             "artifacts": [],
+            "baitRefund": null,
+            "cooking": null,
             "coupons": [],
+            "energyTargets": {},
             "firstCatch": {
               "epic": true,
               "legend": true,
@@ -7100,8 +7290,12 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
               "wounds": {},
             },
             "pity": {},
+            "slots": {
+              "bait": null,
+              "lunch": null,
+            },
             "tutorials": [],
-            "v": 8,
+            "v": 10,
             "visited": [],
           },
           "fame": "100",
@@ -7120,10 +7314,12 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
         "patch": {
           "baseVersion": 2,
           "scalars": {
-            "activeBait": null,
             "artifacts": [],
+            "baitRefund": null,
             "boat": 1,
+            "cooking": null,
             "coupons": [],
+            "energyTargets": {},
             "fame": 100,
             "gold": 5000,
             "hats": [],
@@ -7144,6 +7340,10 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
               "wounds": {},
             },
             "rod": 3,
+            "slots": {
+              "bait": null,
+              "lunch": null,
+            },
             "tutorials": [],
             "visited": [],
           },
@@ -7185,7 +7385,7 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
       "letters": [],
       "profiles": [
         {
-          "nickname": "user-00000026",
+          "nickname": "user-00000025",
           "updated_at": "<db-now>",
           "user_id": "<user>",
         },
@@ -7198,9 +7398,11 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
           "active_client": null,
           "boat": 0,
           "data": {
-            "activeBait": null,
             "artifacts": [],
+            "baitRefund": null,
+            "cooking": null,
             "coupons": [],
+            "energyTargets": {},
             "firstCatch": {
               "epic": true,
               "legend": true,
@@ -7225,8 +7427,12 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
               "wounds": {},
             },
             "pity": {},
+            "slots": {
+              "bait": null,
+              "lunch": null,
+            },
             "tutorials": [],
-            "v": 8,
+            "v": 10,
             "visited": [],
           },
           "fame": "0",
@@ -7279,7 +7485,7 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
     ],
     "profiles": [
       {
-        "nickname": "user-00000027",
+        "nickname": "user-00000026",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -7292,9 +7498,11 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -7319,8 +7527,12 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -7339,10 +7551,12 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -7363,6 +7577,10 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -7418,7 +7636,7 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000037",
+        "nickname": "user-00000036",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -7441,9 +7659,11 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -7468,8 +7688,12 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -7488,10 +7712,12 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -7512,6 +7738,10 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -7577,7 +7807,7 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000038",
+        "nickname": "user-00000037",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -7590,9 +7820,11 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -7619,8 +7851,12 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
             },
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -7639,10 +7875,12 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 1,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -7665,6 +7903,10 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
             },
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -7714,7 +7956,7 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000039",
+        "nickname": "user-00000038",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -7727,9 +7969,11 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
         "active_client": null,
         "boat": 1,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -7754,8 +7998,12 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -7783,6 +8031,417 @@ exports[`현상금 > 배정되지 않은 의뢰 수주는 거부한다 1`] = `
   "db": {
     "bounty_accepts": [],
     "bounty_clears": [],
+    "bounty_licenses": [],
+    "bounty_progress": [],
+    "bounty_tickets": [],
+    "events": [],
+    "fish_instances": [],
+    "letters": [],
+    "profiles": [
+      {
+        "nickname": "user-00000032",
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+    ],
+    "records": [
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "anglerfish",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "coelacanth",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "hairtail",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "mackerel",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "oarfish",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "seabream",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "squid",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "tuna",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "yellowtail",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+    ],
+    "reliefs": [],
+    "saves": [],
+    "saves_current": [
+      {
+        "active_client": null,
+        "boat": 0,
+        "data": {
+          "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
+          "coupons": [],
+          "energyTargets": {},
+          "firstCatch": {
+            "epic": true,
+            "legend": true,
+            "legendAt": 0,
+            "n": 0,
+          },
+          "hats": [],
+          "items": {},
+          "location": {
+            "id": "harbor",
+            "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
+          },
+          "namedPity": {
+            "day": "",
+            "fails": 0,
+            "misses": 0,
+            "wounds": {},
+          },
+          "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
+          "tutorials": [],
+          "v": 10,
+          "visited": [],
+        },
+        "fame": "0",
+        "gold": "0",
+        "last_catch_at": null,
+        "restricted": false,
+        "rod": 1,
+        "updated_at": "2026-01-01T00:00:00.000Z",
+        "user_id": "<user>",
+        "version": "2",
+      },
+    ],
+  },
+  "res": {
+    "body": {
+      "error": "bad-request",
+    },
+    "status": 422,
+  },
+}
+`;
+
+exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다 1`] = `
+{
+  "db": {
+    "bounty_accepts": [
+      {
+        "accepted_at": "<now>",
+        "port": "harbor",
+        "quest_id": "pacific-easy-rare",
+        "user_id": "<user>",
+        "zone": "pacific",
+      },
+    ],
+    "bounty_clears": [],
+    "bounty_licenses": [],
+    "bounty_progress": [
+      {
+        "progress": 0,
+        "quest_id": "pacific-easy-rare",
+        "started_at": "<now>",
+        "updated_at": "<now>",
+        "user_id": "<user>",
+        "zone": "pacific",
+      },
+    ],
+    "bounty_tickets": [],
+    "events": [
+      {
+        "created_at": "<now>",
+        "payload": {
+          "port": "harbor",
+          "questId": "pacific-easy-rare",
+        },
+        "type": "acceptQuest",
+        "user_id": "<user>",
+      },
+    ],
+    "fish_instances": [],
+    "letters": [],
+    "profiles": [
+      {
+        "nickname": "user-00000031",
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+    ],
+    "records": [
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "anglerfish",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "coelacanth",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "hairtail",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "mackerel",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "oarfish",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "seabream",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "squid",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "tuna",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+      {
+        "count": "1",
+        "first_caught": "2026-01-01T00:00:00.000Z",
+        "fish_id": "yellowtail",
+        "form": "normal",
+        "max_size": 30,
+        "updated_at": "<db-now>",
+        "user_id": "<user>",
+      },
+    ],
+    "reliefs": [],
+    "saves": [],
+    "saves_current": [
+      {
+        "active_client": null,
+        "boat": 0,
+        "data": {
+          "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
+          "coupons": [],
+          "energyTargets": {},
+          "firstCatch": {
+            "epic": true,
+            "legend": true,
+            "legendAt": 0,
+            "n": 0,
+          },
+          "hats": [],
+          "items": {},
+          "location": {
+            "id": "harbor",
+            "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
+          },
+          "namedPity": {
+            "day": "",
+            "fails": 0,
+            "misses": 0,
+            "wounds": {},
+          },
+          "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
+          "tutorials": [],
+          "v": 10,
+          "visited": [],
+        },
+        "fame": "0",
+        "gold": "0",
+        "last_catch_at": null,
+        "restricted": false,
+        "rod": 1,
+        "updated_at": "<now>",
+        "user_id": "<user>",
+        "version": "3",
+      },
+    ],
+  },
+  "res": {
+    "body": {
+      "patch": {
+        "baseVersion": 2,
+        "scalars": {
+          "artifacts": [],
+          "baitRefund": null,
+          "boat": 0,
+          "cooking": null,
+          "coupons": [],
+          "energyTargets": {},
+          "fame": 0,
+          "gold": 0,
+          "hats": [],
+          "items": {},
+          "location": {
+            "id": "harbor",
+            "kind": "base",
+          },
+          "look": {
+            "hat": null,
+            "pants": 0,
+            "shirt": 0,
+          },
+          "namedPity": {
+            "day": "",
+            "fails": 0,
+            "misses": 0,
+            "wounds": {},
+          },
+          "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
+          "tutorials": [],
+          "visited": [],
+        },
+        "version": 3,
+        "writes": {
+          "instancesAdded": [],
+          "instancesLocked": [],
+          "instancesMoved": [],
+          "instancesRemoved": [],
+          "records": [],
+        },
+      },
+      "result": {
+        "type": "none",
+      },
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`현상금 > 오늘 이미 클리어했으면 거부한다 1`] = `
+{
+  "db": {
+    "bounty_accepts": [],
+    "bounty_clears": [
+      {
+        "cleared_at": "<now>",
+        "kind": "general",
+        "quest_id": "pacific-easy-common",
+        "user_id": "<user>",
+      },
+    ],
     "bounty_licenses": [],
     "bounty_progress": [],
     "bounty_tickets": [],
@@ -7886,9 +8545,11 @@ exports[`현상금 > 배정되지 않은 의뢰 수주는 거부한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -7913,401 +8574,12 @@ exports[`현상금 > 배정되지 않은 의뢰 수주는 거부한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
-          "visited": [],
-        },
-        "fame": "0",
-        "gold": "0",
-        "last_catch_at": null,
-        "restricted": false,
-        "rod": 1,
-        "updated_at": "2026-01-01T00:00:00.000Z",
-        "user_id": "<user>",
-        "version": "2",
-      },
-    ],
-  },
-  "res": {
-    "body": {
-      "error": "bad-request",
-    },
-    "status": 422,
-  },
-}
-`;
-
-exports[`현상금 > 오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다 1`] = `
-{
-  "db": {
-    "bounty_accepts": [
-      {
-        "accepted_at": "<now>",
-        "port": "harbor",
-        "quest_id": "pacific-easy-rare",
-        "user_id": "<user>",
-        "zone": "pacific",
-      },
-    ],
-    "bounty_clears": [],
-    "bounty_licenses": [],
-    "bounty_progress": [
-      {
-        "progress": 0,
-        "quest_id": "pacific-easy-rare",
-        "started_at": "<now>",
-        "updated_at": "<now>",
-        "user_id": "<user>",
-        "zone": "pacific",
-      },
-    ],
-    "bounty_tickets": [],
-    "events": [
-      {
-        "created_at": "<now>",
-        "payload": {
-          "port": "harbor",
-          "questId": "pacific-easy-rare",
-        },
-        "type": "acceptQuest",
-        "user_id": "<user>",
-      },
-    ],
-    "fish_instances": [],
-    "letters": [],
-    "profiles": [
-      {
-        "nickname": "user-00000032",
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "records": [
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "anglerfish",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "coelacanth",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "hairtail",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "mackerel",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "oarfish",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "seabream",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "squid",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "tuna",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "yellowtail",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "reliefs": [],
-    "saves": [],
-    "saves_current": [
-      {
-        "active_client": null,
-        "boat": 0,
-        "data": {
-          "activeBait": null,
-          "artifacts": [],
-          "coupons": [],
-          "firstCatch": {
-            "epic": true,
-            "legend": true,
-            "legendAt": 0,
-            "n": 0,
-          },
-          "hats": [],
-          "items": {},
-          "location": {
-            "id": "harbor",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "pity": {},
-          "tutorials": [],
-          "v": 8,
-          "visited": [],
-        },
-        "fame": "0",
-        "gold": "0",
-        "last_catch_at": null,
-        "restricted": false,
-        "rod": 1,
-        "updated_at": "<now>",
-        "user_id": "<user>",
-        "version": "3",
-      },
-    ],
-  },
-  "res": {
-    "body": {
-      "patch": {
-        "baseVersion": 2,
-        "scalars": {
-          "activeBait": null,
-          "artifacts": [],
-          "boat": 0,
-          "coupons": [],
-          "fame": 0,
-          "gold": 0,
-          "hats": [],
-          "items": {},
-          "location": {
-            "id": "harbor",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "rod": 1,
-          "tutorials": [],
-          "visited": [],
-        },
-        "version": 3,
-        "writes": {
-          "instancesAdded": [],
-          "instancesLocked": [],
-          "instancesMoved": [],
-          "instancesRemoved": [],
-          "records": [],
-        },
-      },
-      "result": {
-        "type": "none",
-      },
-    },
-    "status": 200,
-  },
-}
-`;
-
-exports[`현상금 > 오늘 이미 클리어했으면 거부한다 1`] = `
-{
-  "db": {
-    "bounty_accepts": [],
-    "bounty_clears": [
-      {
-        "cleared_at": "<now>",
-        "kind": "general",
-        "quest_id": "pacific-easy-common",
-        "user_id": "<user>",
-      },
-    ],
-    "bounty_licenses": [],
-    "bounty_progress": [],
-    "bounty_tickets": [],
-    "events": [],
-    "fish_instances": [],
-    "letters": [],
-    "profiles": [
-      {
-        "nickname": "user-00000034",
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "records": [
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "anglerfish",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "coelacanth",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "hairtail",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "mackerel",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "oarfish",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "seabream",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "squid",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "tuna",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-      {
-        "count": "1",
-        "first_caught": "2026-01-01T00:00:00.000Z",
-        "fish_id": "yellowtail",
-        "form": "normal",
-        "max_size": 30,
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "reliefs": [],
-    "saves": [],
-    "saves_current": [
-      {
-        "active_client": null,
-        "boat": 0,
-        "data": {
-          "activeBait": null,
-          "artifacts": [],
-          "coupons": [],
-          "firstCatch": {
-            "epic": true,
-            "legend": true,
-            "legendAt": 0,
-            "n": 0,
-          },
-          "hats": [],
-          "items": {},
-          "location": {
-            "id": "harbor",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "pity": {},
-          "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -8352,7 +8624,7 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000036",
+        "nickname": "user-00000035",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -8365,9 +8637,11 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -8392,8 +8666,12 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -8446,7 +8724,7 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000035",
+        "nickname": "user-00000034",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -8459,9 +8737,11 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -8486,8 +8766,12 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -8506,10 +8790,12 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 20000,
           "hats": [],
@@ -8530,6 +8816,10 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },
@@ -8573,7 +8863,7 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
     "letters": [],
     "profiles": [
       {
-        "nickname": "user-00000040",
+        "nickname": "user-00000039",
         "updated_at": "<db-now>",
         "user_id": "<user>",
       },
@@ -8586,11 +8876,13 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
         "active_client": null,
         "boat": 0,
         "data": {
-          "activeBait": null,
           "artifacts": [
             "abyss-angler",
           ],
+          "baitRefund": null,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "firstCatch": {
             "epic": true,
             "legend": true,
@@ -8615,8 +8907,12 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
             "wounds": {},
           },
           "pity": {},
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
-          "v": 8,
+          "v": 10,
           "visited": [],
         },
         "fame": "0",
@@ -8635,12 +8931,14 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "activeBait": null,
           "artifacts": [
             "abyss-angler",
           ],
+          "baitRefund": null,
           "boat": 0,
+          "cooking": null,
           "coupons": [],
+          "energyTargets": {},
           "fame": 0,
           "gold": 0,
           "hats": [],
@@ -8661,6 +8959,10 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
             "wounds": {},
           },
           "rod": 1,
+          "slots": {
+            "bait": null,
+            "lunch": null,
+          },
           "tutorials": [],
           "visited": [],
         },

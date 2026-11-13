@@ -2,6 +2,7 @@
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
+import { SALE_BASES } from '../content/places';
 import { ZONES, topZoneOf, zoneById, zoneOfSpot, CLOSED_SEA_MSG } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
 import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
@@ -297,7 +298,7 @@ describe('대양(병합) 구역 경계 — zoneOf 좌표 판정', () => {
           // 존 계층화 — 셀의 zone이 유효한 존 id인지만 확인 (spot은 셀에 없음)
           expect(z, `(${c},${r}) 알 수 없는 zone ${def.zone}`).toBeDefined();
         }
-        // spot은 셀에 없음 — 어군 오브젝트로 분리됨 (zone-tree 모델)
+        // spot은 셀에 없음 — 어군 오브젝트로 분리됨
       }
     }
   });
@@ -726,14 +727,13 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   });
   it('시설 순서 — 집과 항구의 메뉴 구성', () => {
     const ids = (id: keyof typeof BASE_PACKS) => BASE_PACKS[id].furniture.map(f => f.id);
-    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'wardrobe', 'exit']);
+    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'wardrobe', 'kitchen', 'exit']);
     const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'ferry', 'exit'];
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);
     expect(ids('toamasina')).toEqual(port);
     expect(ids('walvisbay')).toEqual(port);
-    // 향료전(미끼)은 공방·조선소·어시장 다음에 둔다
-    expect(ids('colombo')).toEqual(['rank', 'bounty', 'rod', 'boat', 'sell', 'shop', 'travel', 'ferry', 'exit']);
+    expect(ids('colombo')).toEqual(port);
   });
   it('같은 거점 안의 시설 영역은 서로 겹치지 않는다', () => {
     for (const pack of Object.values(BASE_PACKS)) {
@@ -747,5 +747,13 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
   });
   it('빈 공간은 null', () => {
     expect(furnitureAt('home', 160, 40)).toBeNull();
+  });
+});
+
+describe('판매 시설이 있는 거점 표', () => {
+  it('거점 데이터의 판매 가구와 같다', () => {
+    for (const pack of Object.values(BASE_PACKS)) {
+      expect(SALE_BASES[pack.id], pack.id).toBe(pack.furniture.some(f => f.id === 'sell'));
+    }
   });
 });

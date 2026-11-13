@@ -18,6 +18,9 @@ export function useOpenWindow(close: (() => void) | undefined) {
   }, [closable]);
 }
 
+/** 닫을 수 있는 창이 하나라도 떠 있는가 */
+export const hasOpenWindows = (): boolean => open.size > 0;
+
 /** 탭 줄을 눌렀을 때 호출한다. 등록된 닫을 수 있는 창을 모두 닫는다 */
 export function closeOpenWindows(): void {
   for (const close of [...open]) close();

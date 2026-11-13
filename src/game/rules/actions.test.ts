@@ -2,14 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
-import { BAIT_BUY_MAX, upgradeCost } from './balance';
+import { upgradeCost } from './balance';
 import { BOATS, COUPONS, FISH, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
-import { baitById } from '../content/baits';
-
-/** items/activeBait 키 리터럴 — 미끼 데이터의 고정 신분증 */
-const BAIT_ID = { common: 'bait-common', rare: 'bait-rare', epic: 'bait-epic',
-                  legendary: 'bait-legendary' } as const;
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
@@ -350,7 +345,7 @@ describe('import', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(500);          // 기존 상태를 덮는다
     expect(out.state.rod).toBe(4);
-    expect(out.state.v).toBe(8);               // 마이그레이션 체인 통과
+    expect(out.state.v).toBe(10);              // 마이그레이션 체인 통과
     expect(out.state.fame).toBeGreaterThan(0); // v3→v4 명성 소급
     expect(out.events[0].type).toBe('import');
   });
@@ -567,112 +562,40 @@ describe('setNickname', () => {
   });
 });
 
-describe('buyBait / setActiveBait', () => {
-  const COMMON = BAIT_ID.common;
-  const RARE = BAIT_ID.rare;
+describe('dismissBaitRefund', () => {
+  const receipt = { gold: 1600, items: { 'bait-rare': 3, 'bait-epic': 1 } };
 
-  it('구매 — 골드 차감 + 스택 적립 + 이벤트', () => {
-    const price = baitById(COMMON)!.price;
-    const out = applyAction(
-      seed({ gold: price * 3, items: { [COMMON]: 1 }, location: { kind: 'base', id: 'colombo' } }),
-      { type: 'buyBait', bait: COMMON, count: 3 }, deps());
+  it('환불 영수증을 지운다 — 골드와 그 밖의 상태는 건드리지 않는다', () => {
+    const before = seed({ gold: 1610, items: { x: 5 }, baitRefund: receipt });
+    const out = applyAction(before, { type: 'dismissBaitRefund' }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(0);
-    expect(out.state.items[COMMON]).toBe(4); // 기존 1 + 3
-    expect(out.events[0]).toMatchObject({
-      type: 'buyBait', payload: { bait: COMMON, count: 3, cost: price * 3 },
-    });
+    expect(out.state).toEqual({ ...before, baitRefund: null });
+    expect(out.events).toEqual([]);
+    expect(out.result).toEqual({ type: 'none' });
   });
 
-  it('골드 부족은 거부된다 — 규칙 거부라 상태 불변', () => {
-    const out = applyAction(seed({ gold: 1, location: { kind: 'base', id: 'colombo' } }),
-      { type: 'buyBait', bait: RARE }, deps());
-    expect(out).toEqual({ ok: false, error: 'not-enough-gold' });
-  });
-
-  it('구매처는 콜롬보 항구로 제한된다 — 다른 위치의 직접 액션은 거부', () => {
-    const out = applyAction(seed({ gold: baitById(COMMON)!.price }),
-      { type: 'buyBait', bait: COMMON }, deps());
-    expect(out).toEqual({ ok: false, error: 'shop-closed' });
-  });
-
-  it('모르는 미끼 id · 유효하지 않은 count는 bad-request', () => {
-    expect(applyAction(seed(), { type: 'buyBait', bait: 'hax' }, deps()))
-      .toEqual({ ok: false, error: 'bad-request' });
-    expect(applyAction(seed({ gold: 9e9 }), { type: 'buyBait', bait: COMMON, count: 0 }, deps()))
-      .toEqual({ ok: false, error: 'bad-request' });
-    expect(applyAction(seed({ gold: 9e9 }), { type: 'buyBait', bait: COMMON, count: 1.5 }, deps()))
-      .toEqual({ ok: false, error: 'bad-request' });
-  });
-
-  it('count 클램프 — 초대수 요청은 BUY_MAX로 접는다 (요청 1회 폭주 상한일 뿐)', () => {
-    const out = applyAction(seed({ gold: 9e9, location: { kind: 'base', id: 'colombo' } }),
-      { type: 'buyBait', bait: COMMON, count: 999 }, deps());
+  it('영수증이 없으면 같은 상태를 그대로 돌려준다 (멱등)', () => {
+    const before = seed();
+    const out = applyAction(before, { type: 'dismissBaitRefund' }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.items[COMMON]).toBe(BAIT_BUY_MAX);
-    expect(out.events[0].payload).toMatchObject({ count: BAIT_BUY_MAX });
-  });
-
-  it('활성화 — 보유 없으면 거부(bait-not-owned), 있으면 설정된다. 활성화는 소모가 아니다', () => {
-    const none = applyAction(seed(), { type: 'setActiveBait', bait: RARE }, deps());
-    expect(none).toEqual({ ok: false, error: 'bait-not-owned' });
-
-    const own = applyAction(seed({ items: { [RARE]: 2 } }),
-      { type: 'setActiveBait', bait: RARE }, deps());
-    if (!own.ok) throw new Error(own.error);
-    expect(own.state.activeBait).toBe(RARE);
-    expect(own.events[0]).toMatchObject({ type: 'setActiveBait', payload: { bait: RARE } });
-    expect(own.state.items[RARE]).toBe(2);
-  });
-
-  it('활성은 4중 1 — 교체하면 이전 것은 끊긴다. null 비활성·멱등 재활성은 이벤트 없음', () => {
-    const first = applyAction(
-      seed({ items: { [COMMON]: 1, [RARE]: 1 }, activeBait: COMMON }),
-      { type: 'setActiveBait', bait: RARE }, deps());
+    expect(out.state).toBe(before);
+    const first = applyAction(seed({ baitRefund: receipt }), { type: 'dismissBaitRefund' }, deps());
     if (!first.ok) throw new Error(first.error);
-    expect(first.state.activeBait).toBe(RARE);
-
-    const again = applyAction(first.state, { type: 'setActiveBait', bait: RARE }, deps());
+    const again = applyAction(first.state, { type: 'dismissBaitRefund' }, deps());
     if (!again.ok) throw new Error(again.error);
-    expect(again.events).toEqual([]); // 멱등
-
-    const off = applyAction(again.state, { type: 'setActiveBait', bait: null }, deps());
-    if (!off.ok) throw new Error(off.error);
-    expect(off.state.activeBait).toBeNull();
-    expect(off.events).toEqual([]);
-
-    const offTwice = applyAction(off.state, { type: 'setActiveBait', bait: null }, deps());
-    if (!offTwice.ok) throw new Error(offTwice.error);
-    expect(offTwice.state).toBe(off.state); // 이미 null → 같은 참조 반환
+    expect(again.state).toBe(first.state);
   });
 });
 
-describe('catch × 미끼 (낚아올리는 순간 소모)', () => {
-  const COMMON = BAIT_ID.common;
-
-  it('수동 캐치는 활성 미끼를 정확히 1개 소모하고 이벤트에 남긴다', () => {
-    const s = seed({ items: { [COMMON]: 3 }, activeBait: COMMON });
-    const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
-    if (!out.ok) throw new Error(out.error);
-    expect(out.state.items[COMMON]).toBe(2);
-    expect(out.events[0].payload).toMatchObject({ fishId: 'crucian', bait: COMMON });
-  });
-
-  it('방치(auto)는 소모도 효과도 없다 — 미끼 판단은 낚아올리는 순간 확정', () => {
-    const s = seed({ items: { [COMMON]: 3 }, activeBait: COMMON });
-    const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
-    if (!out.ok) throw new Error(out.error);
-    expect(out.state.items[COMMON]).toBe(3);
-    expect('bait' in out.events[0].payload).toBe(false);
-  });
-
-  it('보유 0인 활성은 합법 상태 — 소모 없이 무음으로 통과한다(자동 해제 안 함)', () => {
-    const s = seed({ items: {}, activeBait: COMMON });
-    const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'perfect' }, deps());
-    if (!out.ok) throw new Error(out.error);
-    expect(out.state.items[COMMON]).toBeUndefined();
-    expect(out.state.activeBait).toBe(COMMON); // 유지 — 보충하면 그대로 재개
-    expect('bait' in out.events[0].payload).toBe(false);
+describe('catch × 아이템', () => {
+  it('캐치는 아이템을 소모하지 않는다 — 수동도 방치도 보유량이 그대로다', () => {
+    const items = { 'bait-rare': 3, x: 2 };
+    for (const judgment of ['normal', 'perfect', 'auto'] as const) {
+      const out = applyAction(seed({ items }), { type: 'catch', spot: 'pond', judgment }, deps());
+      if (!out.ok) throw new Error(out.error);
+      expect(out.state.items, judgment).toEqual(items);
+      expect('bait' in out.events[0].payload, judgment).toBe(false);
+    }
   });
 });
 
@@ -738,5 +661,32 @@ describe('옷장 액션', () => {
   it('wearHat: 갖지 않은 모자와 없는 id는 거부한다', () => {
     expect(applyAction(seed(), { type: 'wearHat', hat: 'cap-black' }, deps())).toEqual({ ok: false, error: 'hat-not-owned' });
     expect(applyAction(seed(), { type: 'wearHat', hat: 'nope' }, deps())).toEqual({ ok: false, error: 'bad-request' });
+  });
+});
+
+describe('catch — 슬롯 효과 기록', () => {
+  const now = '2026-08-22T03:00:00.000Z';
+  const later = '2026-08-22T04:00:00.000Z';
+  const slots = (endsAt: string): GameState['slots'] => ({
+    lunch: { id: 'cook-lunch-bite', endsAt }, bait: { id: 'cook-bait-mutation', endsAt },
+  });
+
+  it('방치 캐치 이벤트에는 도시락, 수동 캐치 이벤트에는 미끼 id를 남긴다', () => {
+    const auto = applyAction(seed({ boat: 5, slots: slots(later) }), { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
+    if (!auto.ok) throw new Error(auto.error);
+    expect(auto.events[0].payload).toMatchObject({ lunch: 'cook-lunch-bite' });
+    expect(auto.events[0].payload).not.toHaveProperty('bait');
+    const manual = applyAction(seed({ boat: 5, slots: slots(later) }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!manual.ok) throw new Error(manual.error);
+    expect(manual.events[0].payload).toMatchObject({ bait: 'cook-bait-mutation' });
+    expect(manual.events[0].payload).not.toHaveProperty('lunch');
+  });
+  it('슬롯이 비었거나 끝났으면 키를 넣지 않는다', () => {
+    for (const s of [seed(), seed({ slots: slots(now) })]) {
+      const out = applyAction(s, { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
+      if (!out.ok) throw new Error(out.error);
+      expect(out.events[0].payload).not.toHaveProperty('lunch');
+      expect(out.events[0].payload).not.toHaveProperty('bait');
+    }
   });
 });

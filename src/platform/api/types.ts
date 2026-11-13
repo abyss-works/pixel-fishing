@@ -21,17 +21,27 @@ export interface GameGateway {
   warmup?(): void;
 }
 
+/** 세션 확인의 결과. 확인 실패(네트워크 오류, 요청 과다, 서버 오류)는 게스트와 구분한다 */
+export type AccountLookup = { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
+
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
 export interface AuthApi {
   isConfigured: boolean;
   ensureSession(): Promise<string | null>;
-  currentAccount(): Promise<string | null>;
+  /** 로그인된 영구 계정을 확인한다. 게스트와 확인 실패를 구분해 돌려준다 */
+  currentAccount(): Promise<AccountLookup>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
   /** 비밀번호 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크를 쓸 수 없다. 부팅 때 한 번 읽는다 */
   takePasswordResetLanding(): 'ready' | 'invalid' | null;
-  signUp(email: string, password: string): Promise<AuthResult>;
+  /** 이미 있는 이메일 계정으로 로그인한다. 새로 가입하는 경로는 없다 */
   signIn(email: string, password: string): Promise<AuthResult>;
+  /** 구글 인증 화면으로 이동한다. 연결(link)은 지금 계정에 구글을 붙이고, 로그인(sign-in)은 이미 연결된 구글 계정으로 들어간다. 표지(tag)는 돌아온 주소에 실린다 */
+  startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult>;
+  /** 구글 인증에서 돌아왔는가. 표지와 오류 코드를 돌려준다. 부팅 때 한 번 읽는다 */
+  takeGoogleLanding(): { tag: string; error: string | null } | null;
+  /** 이 계정에 붙은 로그인 수단의 공급자 이름(google, credential). 조회하지 못하면 null */
+  accountProviders(): Promise<string[] | null>;
   signOut(): Promise<void>;
   requestPasswordReset(email: string): Promise<AuthResult>;
   applyNewPassword(password: string): Promise<AuthResult>;
@@ -227,6 +237,14 @@ export interface AdminLetterRow {
   /** 관리자가 처리 표시한 시각. 처리 전이면 null */
   handled_at: string | null;
 }
+/** 변경 기록 한 건. tier는 public(플레이어에게도 보이는 변경)과 admin(관리자만 보는 변경)이다 */
+export interface AdminChangelogRow {
+  id: string; version: string;
+  /** 그 버전을 올린 날(KST 날짜) */
+  date: string; seq: number; tier: 'public' | 'admin'; tag: string; text: string;
+  /** 체인지로그에서 사라지거나 다른 항목에 대체돼 철회로 표시된 시각. 평소 null */
+  withdrawnAt: string | null;
+}
 /** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
 export interface AdminChatReportRow {
   id: number; user_id: string; message_id: number; target_id: string;
@@ -300,8 +318,10 @@ export interface AdminApi {
   /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 false다 */
   isConfigured: boolean;
   access(): Promise<AdminAccessResult>;
-  /** 게임과 같은 계정으로 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
-  signIn(email: string, password: string): Promise<AuthResult>;
+  /** 구글 인증 화면으로 이동해 관리자 세션을 연다. 게임 세션과 쿠키가 따로다 */
+  signIn(): Promise<AuthResult>;
+  /** 구글 로그인에서 돌아왔는가. 서버가 돌려준 결과 코드를 담고 오류가 없으면 error는 null이다. 이 탭에서 시작한 흐름이 아니면 null이다. 빈 문자열 오류 코드도 오류 없음과 구분해 실패로 돌려준다. 읽으면 주소에서 지운다. 복귀 표지 질의 없이 읽어도 남은 세션 저장소 표지는 지우고 null을 돌려준다 */
+  takeSignInReturn(): { error: string | null } | null;
   /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
   signOut(): Promise<void>;
   users(): Promise<AdminUserRow[]>;
@@ -319,6 +339,8 @@ export interface AdminApi {
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
   letters(): Promise<AdminLetterRow[]>;
+  /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
+  changelog(): Promise<AdminChangelogRow[]>;
   /** 채팅 신고 목록(최근 순) */
   chatReports(): Promise<AdminChatReportRow[]>;
   /** 최근 보낸 우편 */

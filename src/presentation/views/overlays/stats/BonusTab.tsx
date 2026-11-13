@@ -7,30 +7,29 @@ import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLine } from '../../../ui/artifactEffects';
-import { baitEffectLine } from '../../../ui/baitEffects';
 import { bonusEffectText } from '../../../../features/guild/model/guild';
+import { SLOT_SCOPE } from '../../../../features/kitchen/model/recipes';
 
 const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '낚시', duel: '결투', shop: '상점' };
 const SOURCE_HELP = [
   '유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요.',
-  '미끼는 가방에서 켜고 끌 수 있어요.',
   '길드 보너스는 길드 창에서 기부로 올려요.',
 ];
 const HEAD = 'h-[30px] font-normal border-b border-line';
 
-/** 효과 문장 — 유물·미끼·길드 보너스의 기존 문장 함수에서 뽑는다 */
+/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯 효과 줄에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level) ?? '';
-    case 'bait': return baitEffectLine(row.source.bait);
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
+    case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
   }
 }
 function sourceText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return row.source.artifact.name;
-    case 'bait': return row.source.bait.name;
     case 'guild': return `길드 Lv.${row.source.level}`;
+    case 'slot': return row.source.label;
   }
 }
 
@@ -66,7 +65,8 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                   <tr key={`${sourceText(row)}-${effectText(row)}`}>
                     <td className={cx('h-[34px] border-t border-line/60', cell)}>
                       <span className="text-accent">{effectText(row)}</span>
-                      {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">직접 낚을 때만</span>}
+                      {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
+                      {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
                     </td>
                     <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
                   </tr>

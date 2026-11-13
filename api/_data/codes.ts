@@ -11,11 +11,23 @@ export async function findCoupon(db: Executor, code: string): Promise<{ gold: nu
 
 export interface ReliefGrant { gold: number; fame: number; rod: number; boat: number; dex: unknown }
 
-/** 지원 코드 선소비 — 활성 코드를 조건부로 비활성화한 요청만 지급분을 받는다(코드당 1행이라 승자가 하나다) */
+type ReliefRow = { gold: string | number; fame: string | number; rod: number; boat: number; dex: unknown };
+
+const toGrant = (g: ReliefRow | undefined): ReliefGrant | null =>
+  g ? { gold: Number(g.gold), fame: Number(g.fame), rod: Number(g.rod), boat: Number(g.boat), dex: g.dex } : null;
+
+/** 아직 쓰지 않은 지원 코드의 지급분 — 읽기만 하고 코드를 소비하지 않는다 */
+export async function findRelief(db: Executor, code: string): Promise<ReliefGrant | null> {
+  const { rows } = await db.execute<ReliefRow>(sql`select gold, fame, rod, boat, dex from public.reliefs
+    where code = ${code} and active`);
+  return toGrant(rows[0]);
+}
+
+/** 지원 코드 소비 — 활성 코드를 조건부로 비활성화한 요청만 지급분을 받는다(코드당 1행이라 승자가 하나다).
+ *  액션 확정과 같은 트랜잭션 안에서 부른다. 확정이 실패하면 함께 되돌려진다 */
 export async function consumeRelief(db: Executor, code: string, uid: string): Promise<ReliefGrant | null> {
-  const { rows } = await db.execute<{ gold: string | number; fame: string | number; rod: number; boat: number; dex: unknown }>(
+  const { rows } = await db.execute<ReliefRow>(
     sql`update public.reliefs set active = false, claimed_by = ${uid}
       where code = ${code} and active returning gold, fame, rod, boat, dex`);
-  const g = rows[0];
-  return g ? { gold: Number(g.gold), fame: Number(g.fame), rod: Number(g.rod), boat: Number(g.boat), dex: g.dex } : null;
+  return toGrant(rows[0]);
 }

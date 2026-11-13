@@ -7,7 +7,7 @@ spec:
   destination:
     namespace: pixel-fishing-prod
     server: https://kubernetes.default.svc
-  project: default
+  project: pixel-fishing
   source:
     path: k8s/prod
     repoURL: https://github.com/abyss-works/pixel-fishing

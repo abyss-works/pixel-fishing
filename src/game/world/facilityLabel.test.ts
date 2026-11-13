@@ -19,13 +19,15 @@ describe('거점 시설 라벨', () => {
     expect(rod.label({ rod: 7, boatName: '' })).toEqual({ title: '공방', sub: '낚싯대 Lv.7' });
   });
 
-  it('설명이 없는 라벨은 제목만 가진다', () => {
+  it('집의 옷장과 부엌은 설명을 가진다', () => {
     const wardrobe = BASE_PACKS.home.furniture.find(f => f.id === 'wardrobe')!;
-    expect(wardrobe.label({ rod: 1, boatName: '' })).toEqual({ title: '옷장' });
+    expect(wardrobe.label({ rod: 1, boatName: '' })).toEqual({ title: '옷장', sub: '치장' });
+    const kitchen = BASE_PACKS.home.furniture.find(f => f.id === 'kitchen')!;
+    expect(kitchen.label({ rod: 1, boatName: '' })).toEqual({ title: '부엌', sub: '요리/미끼' });
   });
 
   it('한 줄 문자열은 제목과 설명을 공백으로 잇고 구분 문자를 쓰지 않는다', () => {
     expect(facilityLabelText({ title: '공방', sub: '낚싯대 Lv.1' })).toBe('공방 낚싯대 Lv.1');
-    expect(facilityLabelText({ title: '옷장' })).toBe('옷장');
+    expect(facilityLabelText({ title: '시험 시설' })).toBe('시험 시설');
   });
 });

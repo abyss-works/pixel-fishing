@@ -2,17 +2,13 @@ import { useEffect, useRef } from 'react';
 import { fishArt } from '../../../game/rendering/pixel/fishArt';
 import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
 import type { Fish, FormId } from '../../../game/content/fish';
+import { SPRITE_TARGETS } from '../../../game/content/sprites/targets';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { cx } from '../cx';
 
 // 용도별 캔버스 크기·배율 프리셋 — 가방 썸네일/도감 카드/도감 상세 초상화/획득 카드.
-// 배율은 정수만(픽셀아트). 그림이 캔버스보다 크면 투명 여백만 잘린다.
-const PRESETS = {
-  thumb:    { w: 30,  h: 16,  scale: 1 },
-  icon:     { w: 84,  h: 44,  scale: 3 },
-  portrait: { w: 240, h: 140, scale: 6 },
-  card:     { w: 160, h: 90,  scale: 4 },
-} as const;
+// 정의는 대상별 스프라이트 정의가 갖는다. 그림이 캔버스보다 크면 투명 여백만 잘린다.
+const PRESETS = SPRITE_TARGETS.fish.layout.presets;
 
 interface FishSpriteProps {
   fish: Fish;

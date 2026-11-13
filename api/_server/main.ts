@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
 import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
+import accountConsents from '../consents.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import awayReport from '../awayReport.js';
@@ -34,6 +35,8 @@ import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
+import { consentGate, liveConsentAdmit } from './consentGate.js';
+import { legalPages } from './legalPages.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -49,6 +52,7 @@ const guilds = guildRoutes((uid, guild) => live.setGuild(uid, guild));
 
 const routes: Record<string, NodeHandler> = {
   '/api/account': account,
+  '/api/account/consents': accountConsents,
   '/api/action': action,
   '/api/admin': admin,
   '/api/admin/live': admin,
@@ -78,10 +82,13 @@ const app = express();
 app.disable('x-powered-by');
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
 app.all('/api/auth/*splat', toNodeHandler(appAuth()));
-// 관리자 인증은 로그인과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
-app.post(['/api/admin/auth/sign-in/email', '/api/admin/auth/sign-out'], toNodeHandler(adminAuth()));
+// 관리자 인증은 구글 로그인(시작과 콜백)과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
+app.post(['/api/admin/auth/sign-in/social', '/api/admin/auth/sign-out'], toNodeHandler(adminAuth()));
+app.get('/api/admin/auth/callback/google', toNodeHandler(adminAuth()));
 // import 액션은 게임 상태 전체를 싣는다.
 app.use('/api', express.json({ limit: '5mb' }));
+// 수락이 필요한 계정의 게임 요청을 막는다. 열어 두는 경로는 consentGate의 허용 목록이 정한다.
+app.use('/api', consentGate());
 for (const [path, handler] of Object.entries(routes)) {
   app.all(path, (req: Request, res: Response) => handler(req as never, res as never));
 }
@@ -97,6 +104,8 @@ app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
     res.type('html').send(withMeta(html, defaultMeta(origin)));
   }, next);
 });
+// 공개 문서(소개, 약관, 처리방침, 운영정책)는 로그인 없이 열리고 쿠키를 만들지 않는다
+app.use(legalPages());
 app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
@@ -106,6 +115,7 @@ applyKeepAlive(server);
 const live = attachLive(server, {
   origin,
   stale: staleClient,
+  admit: liveConsentAdmit,
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;

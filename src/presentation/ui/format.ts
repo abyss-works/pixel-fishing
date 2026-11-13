@@ -2,6 +2,8 @@
 // 관리자 대시보드의 만/억 축약(fmtNum)과는 성격이 달라 따로 둔다.
 export const fmtNum = (n: number): string => n.toLocaleString('ko-KR');
 export const fmtGold = (n: number): string => `${fmtNum(n)}G`;
+/** 물고기 마릿수 - 천 단위 쉼표를 넣고 단위를 붙여 쓴다(1,500마리) */
+export const fmtFishCount = (n: number): string => `${fmtNum(n)}마리`;
 
 /** 물고기 크기(cm 값) — 1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리(99.9cm · 3.85m) */
 export function fmtSize(cm: number): string {
@@ -61,6 +63,9 @@ export const fmtLevel = (n: number): string => `Lv.${n}`;
 
 /** 소수 둘째 자리까지 보이고 끝의 0은 뺀다(10, 12.5, 31.25). 효과 비율처럼 레벨마다 자리가 달라지는 값에 쓴다 */
 export const fmtDecimal2 = (n: number): string => String(Number(n.toFixed(2)));
+
+/** 확률에 직접 더하는 값 `+N%p` - 소수 둘째 자리까지, 끝의 0은 뺀다. 유물 효과와 부엌 창이 같은 표기를 쓴다 */
+export const fmtPlusPoint = (n: number): string => `+${fmtDecimal2(n)}%p`;
 
 /** 기본 규칙 배수 `N배` - 정수면 소수점 없이, 아니면 필요한 자리만 쓴다 */
 export const fmtMult = (n: number): string => `${fmtDecimal2(n)}배`;
