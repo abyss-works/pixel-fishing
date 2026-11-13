@@ -10,7 +10,7 @@ import { upgradeCost } from '../../../src/game/rules/balance';
 import { IDLE_BOOST_STEPS } from '../../../src/game/rules/power';
 import { entryLevel, rates, rodSpec } from '../model';
 import { applyOverride, parseOverride } from './override';
-import { addPerSpot, designReport, parseAnchor, parseGrade, parseNight } from './design';
+import { addPerSpot, designReport, judgeReversal, parseAnchor, parseGrade, parseNight } from './design';
 import type { DesignInput, DesignReport } from './design';
 import { biteRangeOf } from '../rodRules';
 import { runCli } from './report';
@@ -122,30 +122,181 @@ describe('design 계산', () => {
     expect(r.reversals.some(x => x.evNoBoost < x.ev)).toBe(true);
   });
 
-  it('역전 허용폭은 비율이 1 초과 1+허용폭 이하인 전환을 허용으로 가른다', () => {
-    const wide = designReport(base({ boatShare: 0.15, hours: { all: 3, by: { river: 2 } }, reversalTolerance: 0.2 }));
-    wide.reversals.forEach((x, i) => {
-      const q = x.ev / x.nextEv, qb = x.evNoBoost / x.nextEv;
-      expect(x.reversed).toBe(q > 1.2);
-      expect(x.tolerated).toBe(q > 1 && q <= 1.2);
-      expect(x.reversedNoBoost).toBe(qb > 1.2);
-      expect(x.toleratedNoBoost).toBe(qb > 1 && qb <= 1.2);
-      expect(x.reversedNoBoost === r.reversals[i].reversedNoBoost || qb > 1).toBe(true);
+  it('역전 판정은 경계에서 정상, 허용, 역전을 가른다', () => {
+    expect(judgeReversal(100, 100, 0)).toBe('normal');
+    expect(judgeReversal(100.0001, 100, 0)).toBe('reversed');
+    expect(judgeReversal(99, 100, 0.5)).toBe('normal');
+    expect(judgeReversal(100, 100, 0.5)).toBe('normal');
+    expect(judgeReversal(100.0001, 100, 0.5)).toBe('tolerated');
+    expect(judgeReversal(150, 100, 0.5)).toBe('tolerated');
+    expect(judgeReversal(150.0001, 100, 0.5)).toBe('reversed');
+  });
+
+  it('허용폭 0의 판정은 앞 해역 EV가 다음 해역 진입 EV보다 큰지와 같다', () => {
+    const same = designReport(base({ boatShare: 0.15, hours: { all: 3, by: { river: 2 } } }));
+    same.reversals.forEach(x => {
+      expect(x.reversed).toBe(x.ev > x.nextEv);
+      expect(x.reversedNoBoost).toBe(x.evNoBoost > x.nextEv);
+      expect(x.tolerated || x.toleratedNoBoost).toBe(false);
     });
-    r.reversals.forEach(x => { expect(x.tolerated).toBe(false); expect(x.toleratedNoBoost).toBe(false); });
+  }, 60_000);
+
+  it('허용폭을 주면 같은 설정의 허용폭 0 결과와 EV는 같고 판정만 갈린다', () => {
+    const input = { boatShare: 0.15, hours: { all: 3, by: { river: 2 } } };
+    const strict = designReport(base(input)), wide = designReport(base({ ...input, reversalTolerance: 0.2 }));
+    wide.reversals.forEach((x, i) => {
+      expect(x.ev).toBe(strict.reversals[i].ev);
+      expect(x.evNoBoost).toBe(strict.reversals[i].evNoBoost);
+      expect(x.reversed).toBe(x.ev > x.nextEv * 1.2);
+      expect(x.tolerated).toBe(x.ev > x.nextEv && x.ev <= x.nextEv * 1.2);
+      expect(x.reversedNoBoost).toBe(x.evNoBoost > x.nextEv * 1.2);
+      expect(x.toleratedNoBoost).toBe(x.evNoBoost > x.nextEv && x.evNoBoost <= x.nextEv * 1.2);
+    });
     expect(() => designReport(base({ reversalTolerance: -0.1 }))).toThrow(/허용폭/);
   }, 60_000);
 
-  it('--reversal-tolerance는 design 판정 문구를 정상, 허용, 역전으로 낸다', () => {
-    const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
-    const none = runCli(args).stdout;
-    expect(none).not.toContain('허용');
-    const big = runCli([...args, '--reversal-tolerance', '5']).stdout;
-    expect(big).toContain('허용');
-    expect(big).not.toMatch(/\| 역전 \|/);
-    expect(runCli([...args, '--reversal-tolerance', 'x']).exitCode).toBe(1);
+  describe('표 행 단위 출력', () => {
+    const GAPS = ['pond=2', 'river=3', 'sea=4', 'deep=3', 'dragonhole=3', 'coron=3', 'barrierreef=5', 'indian=5', 'southindian=5', 'mozstrait=5', 'comorodeep=6', 'benguela=6'];
+    const PAYBACKS = ['pond=0.016667', 'river=0.016667', 'sea=0.05', 'deep=0.1', 'dragonhole=0.166667', 'coron=0.233333', 'barrierreef=0.3', 'indian=0.5', 'southindian=0.7', 'mozstrait=1.25', 'comorodeep=1.666667', 'benguela=2.5'];
+    const args = ['design', '--start', '100', '--growth', '0.25', '--bite', 'alternate', '--max-days', '2', ...GAPS.flatMap(g => ['--gap', g]), ...PAYBACKS.flatMap(g => ['--payback', g])];
+    const run = (tol: number) => {
+      const a = tol > 0 ? [...args, '--reversal-tolerance', String(tol)] : args;
+      const text = runCli(a).stdout;
+      const json = JSON.parse(runCli([...a, '--json']).stdout).design as DesignReport;
+      return { text, json };
+    };
+    const cellsOf = (text: string, title: string, first: string) => {
+      const section = text.slice(text.indexOf(title));
+      const line = section.split('\n').find(l => l.startsWith(`| ${first} |`));
+      expect(line).toBeDefined();
+      return line!.split('|').slice(1, -1).map(c => c.trim());
+    };
+    const name = (id: string) => SPOTS.find(s => s.id === id)!.name;
+    const word = (v: string) => (v === 'reversed' ? '역전' : v === 'tolerated' ? '허용' : '정상');
+    const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
+    // 허용폭 0.2와 0.6에서 표 2 모든 행의 판정 칸과 방치 이득 제외 칸이 데이터에서 계산한 값과 같다
+    it.each([0, 0.2, 0.6])('허용폭 %s에서 표 2의 모든 칸이 계산 값과 같다', tol => {
+      const { text, json } = run(tol);
+      const seen = new Set<string>();
+      json.reversals.forEach(x => {
+        const c = cellsOf(text, '표 2 —', `${name(x.spot)} → ${name(x.next)}`);
+        const v = judgeReversal(x.ev, x.nextEv, tol), vb = judgeReversal(x.evNoBoost, x.nextEv, tol);
+        expect(c[3]).toBe((x.ev / x.nextEv).toFixed(2));
+        expect(c[4]).toBe(word(v));
+        expect(c[5]).toBe(n0(x.evNoBoost));
+        expect(c[6]).toBe((x.evNoBoost / x.nextEv).toFixed(2));
+        expect(c[7]).toBe(word(vb));
+        seen.add(`판정 ${c[4]}`); seen.add(`제외 ${c[7]}`);
+      });
+      if (tol === 0) { expect(seen.has('판정 허용') || seen.has('제외 허용')).toBe(false); return; }
+      expect(seen.has('판정 허용')).toBe(true);
+      expect(seen.has('판정 정상')).toBe(true);
+      expect(seen.has('제외 정상')).toBe(true);
+      if (tol === 0.6) {
+        expect(seen.has('판정 역전')).toBe(true);
+        expect(seen.has('제외 허용')).toBe(true);
+      }
+    }, 120_000);
+
+    it('방치 이득 제외 칸은 허용폭과 관계없이 방치 이득이 든 칸과 다르다', () => {
+      const { json } = run(0);
+      expect(json.reversals.some(x => x.evNoBoost < x.ev)).toBe(true);
+    }, 60_000);
+
+    it('표 1의 진입 레벨 방치 배수 칸은 해역 행의 값이다', () => {
+      const { text, json } = run(0);
+      const head = text.slice(text.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 해역 |'))!.split('|').slice(1, -1).map(c => c.trim());
+      const col = head.indexOf('진입 레벨 방치 배수');
+      expect(col).toBeGreaterThan(0);
+      json.rows.forEach(r => expect(cellsOf(text, '표 1 —', name(r.spot))[col]).toBe(`${r.entryBoost}배`));
+      expect(new Set(json.rows.map(r => r.entryBoost)).size).toBeGreaterThan(1);
+    }, 60_000);
+
+    it('허용폭이 0보다 클 때만 가정 줄에 판정 기준을 적는다', () => {
+      expect(run(0).text).not.toContain('허용폭');
+      expect(run(0.2).text).toContain('1 초과 1.20 이하이면 허용');
+    }, 120_000);
+  });
+
+  describe('해역 배수 공식', () => {
+    const f = { factors: { normalEntry: 1.75, normalIn: 1.2, specialEntry: 1.45, specialIn: 1.3 }, scale: 1, special: [] as string[], start: 0.02 };
+    const hbase = (o: Partial<DesignInput> = {}) => base({ hours: null, payback: { base: null, growth: 0, by: {} }, gap: { all: 3, by: {} }, anchors: [], hFormula: f, ...o });
+    const ratios = (r: DesignReport) => r.rows.map(x => x.hRatio);
+    it('지역 첫 해역은 진입 배수, 그 밖은 지역 안 배수이고 특수 지역은 특수 배수를 쓴다', () => {
+      const r = designReport(hbase({ hFormula: { ...f, scale: 1.25, special: ['seasia', 'southatlantic'] } }));
+      expect(r.rows[0].hRatio).toBeNull();
+      r.rows.forEach((x, i) => {
+        if (i === 0) return;
+        const entry = SPOTS[i].region !== SPOTS[i - 1].region, special = ['seasia', 'southatlantic'].includes(SPOTS[i].region);
+        const factor = special ? (entry ? 1.45 : 1.3) : entry ? 1.75 : 1.2;
+        expect(x.hRatio).toBeCloseTo(factor * 1.25, 9);
+        expect(x.payback).toBeCloseTo(r.rows[i - 1].payback! * factor * 1.25, 9);
+      });
+      expect(r.rows[0].payback).toBe(0.02);
+      expect(r.resolved.payback).toBe(0.02);
+    }, 60_000);
+
+    it('특수 지역을 주지 않으면 모두 일반 배수다', () => {
+      const r = designReport(hbase());
+      expect(ratios(r).slice(1).every(x => Math.abs(x! - 1.75) < 1e-9 || Math.abs(x! - 1.2) < 1e-9)).toBe(true);
+    }, 60_000);
+
+    it('연못 h를 생략하면 기준점 EV를 맞추도록 풀고 기준점 오차가 0이다', () => {
+      const probe = designReport(hbase());
+      const anchor = { spot: 'sthelena' as const, ev: probe.rows[LAST].requiredEv * 1.7 };
+      const r = designReport(hbase({ hFormula: { ...f, start: null }, anchors: [anchor] }));
+      expect(r.rows[LAST].requiredEv).toBeCloseTo(anchor.ev, 6);
+      expect(r.anchors[0].error).toBeCloseTo(0, 9);
+      expect(r.resolved.payback).toBeCloseTo(0.02 / 1.7, 9);
+    }, 60_000);
+
+    it('연못 h와 기준점을 함께 주면 기준점 오차를 낸다', () => {
+      const r = designReport(hbase({ anchors: [{ spot: 'sthelena', ev: 1_000_000 }] }));
+      expect(r.anchors).toHaveLength(1);
+      expect(Math.abs(r.anchors[0].error)).toBeGreaterThan(0);
+    }, 60_000);
+
+    it('해역별 --payback 덮어쓰기는 공식 뒤에 적용하고 다음 해역 h는 공식 값에서 이어진다', () => {
+      const plain = designReport(hbase());
+      const r = designReport(hbase({ payback: { base: null, growth: 0, by: { sea: 0.5 } } }));
+      const i = SPOTS.findIndex(s => s.id === 'sea');
+      expect(r.rows[i].payback).toBe(0.5);
+      expect(r.rows[i + 1].payback).toBeCloseTo(plain.rows[i + 1].payback!, 12);
+      expect(r.rows[i].hRatio).toBeCloseTo(0.5 / plain.rows[i - 1].payback!, 12);
+    }, 60_000);
+
+    it('입력이 모순이거나 모자라면 거부한다', () => {
+      expect(() => designReport(hbase({ hFormula: { ...f, start: null } }))).toThrow(/기준점/);
+      expect(() => designReport(hbase({ hFormula: { ...f, factors: { normalEntry: 1.5 } } }))).toThrow(/normalIn/);
+      expect(() => designReport(hbase({ hFormula: { ...f, special: ['nowhere'] } }))).toThrow(/지역/);
+      expect(() => designReport(hbase({ hFormula: { ...f, scale: 0 } }))).toThrow(/h-scale/);
+      expect(() => designReport(hbase({ payback: { base: 0.5, growth: 0, by: {} } }))).toThrow(/함께/);
+    });
+
+    it('CLI는 인자를 읽어 표 1에 h 배수 열을 낸다', () => {
+      const a = ['design', '--start', '100', '--growth', '0.25', '--max-days', '2', '--gap', '3', '--h-start', '0.02',
+        '--h-factor', 'normal-entry=1.75', '--h-factor', 'normal-in=1.2', '--h-factor', 'special-entry=1.45', '--h-factor', 'special-in=1.3',
+        '--special-region', 'seasia', '--h-scale', '1.25'];
+      const out = runCli(a);
+      expect(out.exitCode).toBe(0);
+      const sea = out.stdout.slice(out.stdout.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 태평양 |'))!;
+      expect(sea).toContain('2.188배');
+      expect(out.stdout).toContain('h 배수(앞 해역 대비)');
+      expect(out.stdout).not.toContain('## 비용 기준 역산 — 기준점 오차');
+      expect(runCli([...a, '--anchor', 'sthelena=1000000']).stdout).toContain('## 비용 기준 역산 — 기준점 오차');
+      expect(runCli(a.filter(x => x !== '--h-start' && x !== '0.02').concat(['--anchor', 'none'])).exitCode).toBe(1);
+      expect(runCli([...a, '--h-factor', 'normal-in=2']).exitCode).toBe(1);
+      expect(runCli([...a.slice(0, -2), '--h-factor', 'bogus=2']).exitCode).toBe(1);
+      expect(runCli(['transition', '--h-start', '1']).exitCode).toBe(1);
+    }, 120_000);
+  });
+
+  it('--reversal-tolerance는 design에서만 0 이상의 숫자를 받는다', () => {
+    const a = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
+    expect(runCli([...a, '--reversal-tolerance', 'x']).exitCode).toBe(1);
+    expect(runCli([...a, '--reversal-tolerance', '-1']).exitCode).toBe(1);
     expect(runCli(['transition', '--reversal-tolerance', '0.2']).stderr).toMatch(/design/);
-  }, 60_000);
+  });
 
   it('계산을 마치면 제품 상수가 계산 전 값으로 돌아온다', () => {
     designReport(base({ gap: { all: 4, by: {} }, hours: { all: 2, by: {} }, grades: { rare: { base: 5, step: 1.02 } }, night: { epic: 1.4 }, boatShare: 0.1 }));

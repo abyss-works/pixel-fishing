@@ -15,7 +15,7 @@ import type { RarityId } from '../../../src/game/content/rarity';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
-import { VARIANT_EV, entryLevel, rates, rodSpec } from '../model';
+import { VARIANT_EV, axisOptions, entryLevel, rates, rodSpec } from '../model';
 import { applyRodRules, powerOfLevel, relativeIdleBoost } from '../rodRules';
 import type { BiteDecayMode } from '../rodRules';
 import { applyOverride } from './override';
@@ -33,6 +33,25 @@ export const GRADE_IDS: readonly GradeId[] = RARITY_ORDER.filter((g): g is Grade
 export interface GradeCurve { base: number; step: number }
 
 export interface Anchor { spot: SpotId; ev: number }
+
+/** 해역 배수 공식 — 해역 i의 h = 앞 해역 h x 배수. 지역의 첫 해역이면 진입 배수, 아니면 지역 안 배수이고 특수 지역은 특수 배수를 쓴다. 모든 배수에 scale을 곱한다 */
+export type HFactorKey = 'normalEntry' | 'normalIn' | 'specialEntry' | 'specialIn';
+export interface HFormula {
+  factors: Partial<Record<HFactorKey, number>>;
+  scale: number;
+  /** 특수 지역으로 다루는 해역 지역 id. 비어 있으면 모두 일반 */
+  special: string[];
+  /** 연못의 h(시간). null이면 기준점에서 푼다 */
+  start: number | null;
+}
+export const H_FACTOR_KEYS: readonly HFactorKey[] = ['normalEntry', 'normalIn', 'specialEntry', 'specialIn'];
+
+/** 역전 판정 — 앞 해역 EV가 다음 해역 진입 EV 이하이면 정상, 1 + 허용폭배 이하이면 허용, 그보다 크면 역전 */
+export type ReversalVerdict = 'normal' | 'tolerated' | 'reversed';
+export function judgeReversal(ev: number, nextEv: number, tolerance: number): ReversalVerdict {
+  if (ev > nextEv * (1 + tolerance)) return 'reversed';
+  return ev > nextEv ? 'tolerated' : 'normal';
+}
 export type SolveVar = 'gap' | 'growth' | 'payback';
 
 export interface DesignInput {
@@ -49,6 +68,8 @@ export interface DesignInput {
   /** 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가 */
   night: Partial<Record<GradeId, number>>;
   anchors: Anchor[];
+  /** 해역 배수 공식으로 만든 h(회수 시간 방식). 주면 payback의 base는 null이어야 하고 payback.by는 공식 뒤에 덮어쓴다 */
+  hFormula?: HFormula;
   /** 입질 대기 감소 방식. alternate이면 해역 EV 계산에 반영하고 덮어쓰기에 쓴다 */
   bite: BiteDecayMode;
   solve: SolveVar | null;
@@ -73,6 +94,8 @@ export interface DesignRow {
   hours: number | null;
   /** 회수 시간 방식의 첫 강화 회수 시간 h(진입 레벨) */
   payback: number | null;
+  /** 앞 해역 h 대비 이 해역 h의 배수(회수 시간 방식, 첫 해역은 null) */
+  hRatio: number | null;
   requiredEv: number;
   /** 필요 EV가 식에서 나오지 않고 목표값(기준점 EV 또는 현재 EV)으로 주어진 해역인가 */
   evIsTarget: boolean;
@@ -332,7 +355,50 @@ function boostEnd(spot: SpotId): number {
   return d;
 }
 
-export function designReport(input: DesignInput): DesignReport {
+/** 해역별 h 배수 누적(연못 1). 배수 종류는 지역 첫 해역 여부와 특수 지역 여부로 정한다 */
+function cumulativeFactors(f: HFormula): number[] {
+  const regions = new Set<string>(SPOTS.map(s => s.region));
+  for (const r of f.special) if (!regions.has(r)) throw new Error(`--special-region의 지역이 올바르지 않습니다: ${r} (${[...regions].join(', ')} 중 하나)`);
+  if (!(f.scale > 0) || !Number.isFinite(f.scale)) throw new Error('--h-scale은 0보다 큰 숫자여야 합니다');
+  const out = [1];
+  for (let i = 1; i < SPOTS.length; i++) {
+    const kind: HFactorKey = `${f.special.includes(SPOTS[i].region) ? 'special' : 'normal'}${SPOTS[i].region !== SPOTS[i - 1].region ? 'Entry' : 'In'}`;
+    const v = f.factors[kind];
+    if (v === undefined) throw new Error(`--h-factor ${kind}가 필요합니다`);
+    if (!(v > 0) || !Number.isFinite(v)) throw new Error(`--h-factor ${kind}는 0보다 큰 숫자여야 합니다`);
+    out.push(out[i - 1] * v * f.scale);
+  }
+  return out;
+}
+
+/** 해역 배수 공식을 회수 시간 입력(해역별 h)으로 바꾼다. 연못 h는 주어진 값이거나 기준점 로그 오차 제곱합이 최소인 값이다. 해역별 덮어쓰기는 공식 뒤에 적용한다 */
+function withHFormula(input: DesignInput): { input: DesignInput; h0: number } {
+  const f = input.hFormula!;
+  if (!input.payback) throw new Error('--h-factor는 회수 시간 방식 입력이 필요합니다');
+  if (input.payback.base !== null) throw new Error('--h-factor와 --payback 기본값은 함께 줄 수 없습니다(연못 h는 --h-start 또는 기준점)');
+  if (input.hours) throw new Error('--h-factor와 --hours는 함께 줄 수 없습니다');
+  if (input.solve) throw new Error('--h-factor와 --solve는 함께 줄 수 없습니다');
+  if (input.growth === null) throw new Error('--growth가 필요합니다');
+  const cum = cumulativeFactors(f);
+  let h0 = f.start;
+  if (h0 === null) {
+    if (input.anchors.length === 0) throw new Error('--h-start 또는 기준점(--anchor)이 필요합니다');
+    const levels = entryLevelsOf(gapsOf(input.gap));
+    const logs = withCurve(input.start, input.growth, () => input.anchors.map(a => {
+      const i = indexOfSpot(a.spot);
+      return Math.log(upgradeCost(levels[i]) / (cum[i] * a.ev));
+    }));
+    h0 = Math.exp(logs.reduce((s, x) => s + x, 0) / logs.length);
+  } else if (!(h0 > 0)) throw new Error('--h-start는 0보다 커야 합니다(시간)');
+  const by: Partial<Record<SpotId, number>> = {};
+  SPOTS.forEach((s, i) => { by[s.id] = h0 * cum[i]; });
+  Object.assign(by, input.payback.by);
+  return { input: { ...input, payback: { base: h0, growth: 0, by } }, h0 };
+}
+
+export function designReport(raw: DesignInput): DesignReport {
+  const formula = raw.hFormula ? withHFormula(raw) : null;
+  const input = formula ? formula.input : raw;
   const n = SPOTS.length;
   for (const a of input.anchors) indexOfSpot(a.spot);
   const seen = new Set<string>();
@@ -448,8 +514,9 @@ export function designReport(input: DesignInput): DesignReport {
     reversals = SPOTS.slice(0, n - 1).map((s, i) => {
       const level = levels[i + 1] - 1;
       const ev = rates(s.id, level, 'idle').goldPerHour;
-      const evNoBoost = rates(s.id, level, 'idle', { commonMult: entryBoosts[i] * rodSpec(s.id, level).gateMult }).goldPerHour;
-      return { spot: s.id, next: SPOTS[i + 1].id, level, ev, nextEv: achieved[i + 1], reversed: ev / achieved[i + 1] > 1 + tol, tolerated: ev > achieved[i + 1] && ev / achieved[i + 1] <= 1 + tol, evNoBoost, reversedNoBoost: evNoBoost / achieved[i + 1] > 1 + tol, toleratedNoBoost: evNoBoost > achieved[i + 1] && evNoBoost / achieved[i + 1] <= 1 + tol };
+      const evNoBoost = rates(s.id, level, 'idle', axisOptions({ ...rodSpec(s.id, level), idleBoost: entryBoosts[i] }, 'idle')).goldPerHour;
+      const verdict = judgeReversal(ev, achieved[i + 1], tol), verdictNoBoost = judgeReversal(evNoBoost, achieved[i + 1], tol);
+      return { spot: s.id, next: SPOTS[i + 1].id, level, ev, nextEv: achieved[i + 1], reversed: verdict === 'reversed', tolerated: verdict === 'tolerated', evNoBoost, reversedNoBoost: verdictNoBoost === 'reversed', toleratedNoBoost: verdictNoBoost === 'tolerated' };
     });
     upgrades = { levels: levelRows(1, levels[n - 1]), purchases: purchaseRows() };
     const sim = transitionReport({ axis: 'idle', maxDays: input.maxDays });
@@ -476,6 +543,7 @@ export function designReport(input: DesignInput): DesignReport {
     return {
       spot: s.id, index: i, level: levels[i], power: powers[i], gap: gaps[i],
       upgradeSum: span ? span.sum : null, boatPrice: span ? span.boatPrice : null, hours, payback: pb,
+      hRatio: input.payback && i > 0 ? pb! / paybackOf(input.payback, res.payback!, SPOTS[i - 1].id, levels[i - 1]) : null,
       requiredEv: requiredEv[i], evIsTarget: !input.payback && span === null, evGrowth: i > 0 ? requiredEv[i] / requiredEv[i - 1] - 1 : null,
       currentEv: current[i].ev, evRatio: requiredEv[i] / current[i].ev, entryBoost: entryBoosts[i], priceMult: priceMult[i],
       grades: gradeCells[i], achievedEv: achieved[i], measuredHours: measured[i] ?? null,
@@ -483,7 +551,7 @@ export function designReport(input: DesignInput): DesignReport {
   });
 
   return {
-    input, resolved: res, rows, reversals, anchors,
+    input: raw, resolved: formula ? { ...res, payback: formula.h0 } : res, rows, reversals, anchors,
     boostEnds: { village: boostEnd(SPOTS[0].id), world: boostEnd(SPOTS.find(s => s.boatTier > 0)!.id) },
     upgrades, example, override, complete,
   };
