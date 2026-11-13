@@ -4,6 +4,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { recordConsent } from '../_data/consent.js';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
+import { reportServerIssue } from '../observability.js';
 import { createAdminAuth, createAuth } from './auth.js';
 import { consentPolicy } from './consentPolicy.js';
 import type { AdminAuth, Auth } from './auth.js';
@@ -33,7 +34,15 @@ export function appAuth(): Auth {
   appAuthInstance = createAuth({
     pool: database().pool, secret, baseURL, google,
     mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
-    recordLinkConsent: uid => recordConsent(database().db, uid, consentPolicy().version, 'google-link'),
+    // 연결은 이미 확정된 뒤라 기록이 실패해도 연결은 성공으로 답한다. 빠진 기록은 시행일 뒤 확인 화면이 채운다
+    recordLinkConsent: async uid => {
+      try {
+        await recordConsent(database().db, uid, consentPolicy().version, 'google-link');
+      } catch (e) {
+        console.error('약관 수락 기록에 실패했습니다', e);
+        await reportServerIssue('consent-record', e, { uid });
+      }
+    },
   });
   return appAuthInstance;
 }

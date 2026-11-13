@@ -1,7 +1,7 @@
 // 구글 연결 — 게스트와 이메일 계정의 연결, 충돌 판별, 로그인 전환, 비밀번호 수단 삭제를 실제 Postgres에서 확인한다.
 // 구글 토큰 교환은 서버 대역이 인가 코드별 신원으로 대신한다. 콜백 경로는 운영과 같다.
 import bcrypt from 'bcryptjs';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 import { googleCode, sentMails } from '../_dbTest/serverShim.js';
@@ -454,20 +454,26 @@ describe('구글 연결의 약관 수락 기록', () => {
     expect(await consentRows(uid)).toHaveLength(2);
   });
 
-  it('기록이 실패하면 연결 요청이 성공으로 끝나지 않고, 같은 구글을 다시 연결하면 기록이 남는다', async () => {
+  it('기록이 실패해도 연결은 성공으로 답하고 기록 없이 error 로그(스택 포함)를 남기며, 같은 구글을 다시 연결하면 기록이 남는다', async () => {
     const who = { sub: nextSub(), email: 'consent-retry@gmail.test' };
     const { uid, cookie } = await guest();
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args); });
     await env.client.query('alter table public.consent_records rename to consent_records_off');
-    let failed;
+    let done;
     try {
-      failed = await link(cookie, who);
+      done = await link(cookie, who);
     } finally {
       await env.client.query('alter table public.consent_records_off rename to consent_records');
+      spy.mockRestore();
     }
-    expect(failed.ok).toBe(false);
+    expect(done.ok).toBe(true);
+    expect(await userRow(uid)).toEqual({ email: 'consent-retry@gmail.test', email_verified: true, is_anonymous: false });
     expect(await consentRows(uid)).toEqual([]);
-    const retry = await link(failed.cookie, who);
-    expect(retry.ok).toBe(true);
+    const error = logged.flat().find((a): a is Error => a instanceof Error);
+    expect(error?.stack).toBeTruthy();
+    expect(logged.flat().some(a => typeof a === 'string' && a.includes('수락 기록'))).toBe(true);
+    expect((await link(done.cookie, who)).ok).toBe(true);
     expect(await consentRows(uid)).toHaveLength(2);
   });
 
