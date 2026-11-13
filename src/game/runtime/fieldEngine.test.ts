@@ -198,6 +198,28 @@ describe('GameFieldEngine 막힘 안내', () => {
     expect(jitteryAnnouncements('ArrowUp', -8, -0.4, 0.01)).toEqual(Array(12).fill(1));
   });
 
+  it('경계를 따라 비스듬히 미끄러지며 입력을 이어 가도 막힌 동안은 안내를 다시 하지 않는다', () => {
+    const s = setup();
+    s.engine.placePlayer(at(-8, -0.4));
+    s.frame(1000, 950);
+    s.engine.setMoveDirection({ x: 0.7071, y: -0.7071 });
+    const start = s.engine.getPosition();
+    for (let i = 0; i < 300; i++) s.frame(1050 + i * 50, 1000 + i * 50);
+    const end = s.engine.getPosition();
+    expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(100);
+    expect(blocked(s.events)).toHaveLength(1);
+  });
+
+  it('키를 누른 채 낚시를 던졌다가 접혀도 같은 경계의 안내를 다시 하지 않는다', () => {
+    const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
+    const raw = engine as unknown as { transition(p: string): void };
+    raw.transition('wait');
+    for (let i = 0; i < 5; i++) frame(3000 + i * 50, 2950 + i * 50);
+    engine.cancelFishing();
+    for (let i = 0; i < 10; i++) frame(4000 + i * 50, 3950 + i * 50);
+    expect(blocked(events)).toHaveLength(1);
+  });
+
   it('경계에서 충분히 멀어졌다 다시 닿으면 키를 떼지 않아도 안내를 다시 한다', () => {
     const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
     engine.handleKeyDown('ArrowDown', noop);

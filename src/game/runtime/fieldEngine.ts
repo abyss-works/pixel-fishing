@@ -363,7 +363,7 @@ export class GameFieldEngine {
 
     // 막힌 시도는 경계에 닿는 순간 한 번만 알린다 — 막힌 채 키를 누르고 있는 동안은 프레임 간격과 무관하게 반복하지 않고,
     // 입력이 끊겼다 다시 시작되거나 막힌 자리에서 충분히 떨어졌다 다시 닿을 때 다시 알린다.
-    if (!attempting) this.releaseNotices();
+    if (!dx && !dy && !pad) this.releaseNotices();
     const blockedMessage = closedMessage ?? (step.revert ? step.blocked : null);
     if (this.zoneNotice.step(blockedMessage !== null, this.pos) && blockedMessage) {
       this.callbacks.onEvent({ type: 'zone-blocked', message: blockedMessage });
