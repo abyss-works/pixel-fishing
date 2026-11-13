@@ -15,6 +15,9 @@ export const COOKING_UNLOCK_BOAT: number = (() => {
   return tier;
 })();
 
+/** 가방이 찰 때 내보낼 개체를 기운 대상이면 기운으로 바꾸는 배 단계 - 가공 플랜트선(마지막 배) */
+export const AUTO_ENERGY_BOAT = 9;
+
 // ---------- 기운 ----------
 
 /** 생명의 기운 아이템 id — 등급마다 하나. 표시 이름과 등급 표기는 화면이 정한다 */

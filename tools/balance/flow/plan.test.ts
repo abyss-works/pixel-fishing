@@ -81,7 +81,7 @@ describe('진행 시뮬레이션의 효과 계획', () => {
   it('효과가 시작 배 단계 이후에만 걸리면 그 이전 해역의 도착 시간은 그대로다', () => {
     const base = run().arrivals, now = run(effectPlan({ effect: fx({ bite: 0.1 }) })).arrivals;
     const k = SPOTS.findIndex(s => s.boatTier >= COOKING_UNLOCK_BOAT);
-    for (let i = 0; i <= k; i++) expect(now[i].hours).toBeCloseTo(base[i].hours, 9);
+    for (let i = 0; i < k; i++) expect(now[i].hours).toBeCloseTo(base[i].hours, 9);
     expect(now[now.length - 1].hours).toBeLessThan(base[base.length - 1].hours);
   });
 

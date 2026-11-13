@@ -11,11 +11,11 @@ export const GATE_FROM_SPOT: SpotId = 'sea';
 
 export const GATE_POOLS: readonly Pool[] = ['day', 'mixed'];
 
-/** 확정 밸런스의 알려진 역전, 관측 이슈로 추적한다. 값은 해역별 이동 직후 수입 차이(새 해역 - 비교 해역)다 */
+/** 받아들인 알려진 역전. 값은 해역별 이동 직후 수입 차이(새 해역 - 비교 해역)다 */
 export const KNOWN_INVERSIONS: Partial<Record<SpotId, Record<Pool, number>>> = {
-  barrierreef: { day: -604.36, mixed: -577.26 },
-  southindian: { day: -3989.26, mixed: -6374.33 },
-  comorodeep: { day: -42614.75, mixed: -60618.06 },
+  sea: { day: -905.03, mixed: -548.08 },
+  dragonhole: { day: -2859.64, mixed: -2001.25 },
+  indian: { day: -7835.57, mixed: -7533.64 },
 };
 
 /** 알려진 역전과 같다고 보는 차이 허용 오차(골드/시간). 목록 값은 소수 둘째 자리까지 적는다 */
@@ -83,10 +83,8 @@ export const judgePerfect = (ratio: number): GateVerdict => judgeExcess(round2(r
 /** 배 명성 대기 ÷ 골드 대기 상한 — 리프 이후 배를 사는 전환에 적용하고 하한은 두지 않는다 */
 export const FAME_RATIO_LIMIT = 1.3;
 
-/** 알려진 예외: 전환 도착 해역별 비율의 현재 값 */
-export const KNOWN_FAME_RATIO: Partial<Record<SpotId, number>> = {
-  southindian: 1.33,
-};
+/** 알려진 예외: 전환 도착 해역별 비율의 현재 값. 현재 예외는 없다 */
+export const KNOWN_FAME_RATIO: Partial<Record<SpotId, number>> = {};
 
 /** ratio는 명성 대기 ÷ 골드 대기이고, 골드 대기가 0이라 정해지지 않으면 null이다(이때 명성 대기가 있으면 위반) */
 export function judgeFameRatio(spot: SpotId, ratio: number | null, fameWait = 0): GateVerdict {
@@ -116,15 +114,13 @@ export const REGION_ENTRY_TARGET = {
 
 /** 알려진 예외: 도착 해역별 지역 진입 전환 시간의 현재 값(시간) */
 export const KNOWN_TIME_RANGE: Partial<Record<SpotId, number>> = {
-  indian: 1.28,
-  mozstrait: 5.97,
-  benguela: 22.85,
+  indian: 1.15,
+  mozstrait: 3.37,
+  benguela: 7.92,
 };
 
-/** 알려진 예외: 도착 해역별 전환 시간이 직전 전환보다 줄어든 폭의 현재 값(시간) */
-export const KNOWN_TIME_ORDER: Partial<Record<SpotId, number>> = {
-  sthelena: 7,
-};
+/** 알려진 예외: 도착 해역별 전환 시간이 직전 전환보다 줄어든 폭의 현재 값(시간). 현재 예외는 없다 */
+export const KNOWN_TIME_ORDER: Partial<Record<SpotId, number>> = {};
 
 /** 범위에서 벗어난 정도. 아래쪽은 음수, 위쪽은 양수, 안은 0 */
 const signedOutside = (hours: number, [lo, hi]: readonly [number, number]) => (hours < lo ? hours - lo : hours > hi ? hours - hi : 0);

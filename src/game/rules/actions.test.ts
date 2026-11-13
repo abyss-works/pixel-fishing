@@ -112,10 +112,11 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
     const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a'] }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(30);              // 한 마리만
+    const carp = FISH.find(f => f.id === 'carp')!.price;
+    expect(out.state.gold).toBe(carp);            // 한 마리만
     expect(out.state.bag.map(i => i.uid)).toEqual(['b']);
-    expect(out.result).toEqual({ type: 'sell', gold: 30 });
-    expect(out.events[0]).toMatchObject({ type: 'sell', payload: { gold: 30, uids: ['a'] } });
+    expect(out.result).toEqual({ type: 'sell', gold: carp });
+    expect(out.events[0]).toMatchObject({ type: 'sell', payload: { gold: carp, uids: ['a'] } });
   });
 
   it('catch — 가방이 가득 차면 가장 안 특별한 개체를 놓아주고 결과·이벤트·델타에 남긴다', () => {
@@ -175,7 +176,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const bag = [mkInst('a', 'carp', 'normal', true), mkInst('b', 'crucian')];
     const out = applyAction(seed({ bag }), { type: 'sell', uids: ['a', 'b'] }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(6);               // 붕어만
+    expect(out.state.gold).toBe(FISH.find(f => f.id === 'crucian')!.price); // 붕어만
     expect(out.state.bag.map(i => i.uid)).toEqual(['a']);
     expect(out.events[0]).toMatchObject({ payload: { uids: ['b'] } });
   });

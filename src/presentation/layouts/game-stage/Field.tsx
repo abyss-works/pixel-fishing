@@ -8,6 +8,7 @@ import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
+import { bagOverflowNotice } from '../../../features/gameplay/model/catchNotice';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
@@ -93,10 +94,8 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: numb
         : event.judgment === 'good' ? '[GOOD] '
         : event.judgment === 'auto' ? '[방치] ' : '';
       setToast(`${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, event.result.info.form)}] 획득!`, 'gold');
-      if (event.result.released.length > 0) {
-        const names = event.result.released.map(released => released.name).join(', ');
-        setToast(`가방이 가득 차 [${names}]을(를) 놓아줬어요. 명성은 그대로 남아요.`);
-      }
+      const overflow = bagOverflowNotice(event.result);
+      if (overflow) setToast(overflow);
       return;
     }
     case 'zone-blocked':

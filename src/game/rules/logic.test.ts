@@ -1,6 +1,7 @@
 // R11~R16 + 데이터 무결성 
 import { describe, it, expect } from 'vitest';
 import { spotById } from '../content/spots';
+import { ZONES } from '../content/zones';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
@@ -45,8 +46,8 @@ describe('데이터 무결성', () => {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
     expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
-    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(MAX_BOAT).toBe(8);
+    expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(MAX_BOAT).toBe(9);
   });
 
   it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
@@ -169,9 +170,9 @@ describe('2단 추첨 — 등급 축·개체 축 분리 (v0.6.6)', () => {
       .reduce((s, x) => s + x.fishPct / 100 * x.fish.price, 0);
     expect(goldEV('barrierreef')).toBeCloseTo(manual, 6);
     // 회귀 앵커: 중립, GOOD, 방치 대표값
-    expect(goldEV('pond')).toBeCloseTo(20.7, 0);
-    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(384.3, 0);
-    expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.0, 0);
+    expect(goldEV('pond')).toBeCloseTo(35.0, 0);
+    expect(goldEV('barrierreef', { rareMult: 1.6 })).toBeCloseTo(376.8, 0);
+    expect(goldEV('pond', { commonMult: 10 })).toBeCloseTo(7.5, 0);
   });
 
   it('같은 등급 내 개체는 균등 배분 — 연못 일반 3종 각 74/3%', () => {
@@ -238,54 +239,68 @@ describe('R6b: 타이밍 판정', () => {
   });
 });
 
-describe('R13: 낚싯대 스탯 (무한 강화, 입질 곱연산 단축)', () => {
+describe('R13: 낚싯대 스탯 (무한 강화, 입질 대기 번갈아 단축)', () => {
   it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관), 바 시간은 1.4초 고정', () => {
     expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1.4 });
   });
-  it('레벨마다 입질 최소·최대 대기가 직전의 94%가 된다 — 바 시간은 고정', () => {
+  it('강화마다 최소와 최대 중 한쪽만 직전의 94%가 된다 — 홀수 레벨에서는 최대, 짝수 레벨에서는 최소, 바 시간은 고정', () => {
     for (let l = 2; l <= 100; l++) {
-      expect(rodStats(l).biteMin / rodStats(l - 1).biteMin).toBeCloseTo(0.94, 10);
-      expect(rodStats(l).biteMax / rodStats(l - 1).biteMax).toBeCloseTo(0.94, 10);
+      const minRatio = rodStats(l).biteMin / rodStats(l - 1).biteMin;
+      const maxRatio = rodStats(l).biteMax / rodStats(l - 1).biteMax;
+      const [cut, kept] = (l - 1) % 2 === 1 ? [maxRatio, minRatio] : [minRatio, maxRatio];
+      expect(cut).toBeCloseTo(0.94, 10);
+      expect(kept).toBeCloseTo(1, 10);
       expect(rodStats(l).sweep).toBe(1.4);
     }
   });
-  it('입질 대기는 Lv1 값에 0.94^(Lv-1)을 곱한 값이다', () => {
-    expect(rodStats(11).biteMin).toBeCloseTo(4 * 0.94 ** 10, 10);
-    expect(rodStats(11).biteMax).toBeCloseTo(8 * 0.94 ** 10, 10);
+  it('입질 대기 최소는 4 x 0.94^내림((Lv-1)/2), 최대는 8 x 0.94^올림((Lv-1)/2)이다', () => {
+    for (let l = 1; l <= 60; l++) {
+      expect(rodStats(l).biteMin).toBeCloseTo(4 * 0.94 ** Math.floor((l - 1) / 2), 10);
+      expect(rodStats(l).biteMax).toBeCloseTo(8 * 0.94 ** Math.ceil((l - 1) / 2), 10);
+    }
+    expect(rodStats(2)).toMatchObject({ biteMin: 4 });
+    expect(rodStats(2).biteMax).toBeCloseTo(7.52, 10);
+    expect(rodStats(3).biteMin).toBeCloseTo(3.76, 10);
+    expect(rodStats(3).biteMax).toBeCloseTo(7.52, 10);
   });
 });
 
 describe('R15: 강화/구매 비용', () => {
-  it('낚싯대: Lv15까지 50 × 1.7^(레벨-1)', () => {
-    expect(upgradeCost(1)).toBe(50);
-    expect(upgradeCost(2)).toBe(85);
-    expect(upgradeCost(3)).toBe(144);
-    expect(upgradeCost(15)).toBe(84189);
+  it('낚싯대: 모든 레벨에서 round(100 x 1.25^(레벨-1))', () => {
+    expect(upgradeCost(1)).toBe(100);
+    expect(upgradeCost(2)).toBe(125);
+    for (let l = 1; l <= 60; l++) expect(upgradeCost(l)).toBe(Math.round(100 * 1.25 ** (l - 1)));
   });
-  it('낚싯대: Lv16부터 Lv15 비용 × (레벨/15)^8', () => {
-    expect(upgradeCost(16)).toBe(141086);
-    expect(upgradeCost(24)).toBe(3615886);
-    expect(upgradeCost(30)).toBe(21552362);
-  });
-  it('낚싯대: 비용은 계속 늘고, Lv16부터는 직전 대비 배율이 줄어든다', () => {
+  it('낚싯대: 비용은 계속 늘고 직전 대비 배율이 모든 레벨에서 같다', () => {
     for (let l = 2; l <= 60; l++) expect(upgradeCost(l)).toBeGreaterThan(upgradeCost(l - 1));
-    for (let l = 17; l <= 60; l++) {
-      expect(upgradeCost(l) / upgradeCost(l - 1)).toBeLessThan(upgradeCost(l - 1) / upgradeCost(l - 2));
+    for (let l = 40; l <= 60; l++) {
+      expect(upgradeCost(l) / upgradeCost(l - 1)).toBeCloseTo(1.25, 3);
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
-    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000]);
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000, 4000]);
   });
-  it('대양 트롤선(8단계): 가격 1,000,000 · 명성 200,000 · 속도 200 · 가방 4,000', () => {
-    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1000000, fameReq: 200000, speed: 200, bagCap: 4000 });
+  it('배 가격과 명성 하한은 확정 값이다', () => {
+    expect(BOATS.map(b => b.price)).toEqual([125, 200, 1250, 2600, 12500, 32000, 125000, 1250000, 12500000]);
+    expect(BOATS.map(b => b.fameReq)).toEqual([0, 250, 1500, 1800, 7500, 9000, 25000, 80000, 230000]);
+  });
+  it('대양 트롤선(8단계): 가격 1,250,000 · 명성 80,000 · 속도 200 · 가방 4,000', () => {
+    expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 });
+  });
+  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도와 가방은 대양 트롤선과 같고 여는 해역이 없다', () => {
+    expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: BOATS[7].speed, bagCap: BOATS[7].bagCap });
+    expect(SPOTS.some(s => s.boatTier === 9)).toBe(false);
+    expect(ZONES.some(z => z.entryBoat === 9)).toBe(false);
   });
   it('이동 속도(px/s): 배 없음 100, 조각배 110부터 대양 트롤선 200까지', () => {
     expect(WALK_SPEED).toBe(100);
-    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200]);
+    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200, 200]);
   });
-  it('배 가격은 단조 증가', () => {
+  it('배 가격과 명성 하한은 단조 증가, 속도와 가방은 줄지 않는다(가공 플랜트선은 대양 트롤선과 같다)', () => {
     for (let i = 1; i < BOATS.length; i++) {
-      if (BOATS[i].tier !== 4) expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price); // 범선은 정크선보다 싸다
+      expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);
+      expect(BOATS[i].fameReq).toBeGreaterThan(BOATS[i - 1].fameReq);
+      if (BOATS[i].tier === 9) continue;
       expect(BOATS[i].speed).toBeGreaterThan(BOATS[i - 1].speed);
       expect(BOATS[i].bagCap).toBeGreaterThan(BOATS[i - 1].bagCap); // 가방도 함께
     }
@@ -965,8 +980,8 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
     expect(redeemCoupon(newState(), `  ${CODE}  `).ok).toBe(true);
   });
 
-  it('첫 쿠폰은 조각배 값을 지급한다 (레벨디자인 개편 보상)', () => {
-    expect(COUPONS[CODE].gold).toBeGreaterThanOrEqual(BOATS[0].price);
+  it('첫 쿠폰은 조각배 값을 지급한다', () => {
+    expect(COUPONS[CODE].gold).toBe(BOATS[0].price);
   });
 });
 
@@ -1123,23 +1138,23 @@ describe('인도양 밸런스 (관리자 시뮬레이션 반영 — EV 앵커)',
   // 마카라 17,500·눈다랑어 3,400·고래상어 3,800 → 383.1/503.3.
   // 이전 확정 대비 인도양 common 164→328(×2) + 가격 재조정 반영 — 다음 재밸런스 시 앵커가 의도적 변경임을 강제.
   // 인도양 지역의 덮어쓰기를 지우고 안정화 프리셋(희귀 2000·영웅 500·전설 100)으로 정규화하면서
-  // 영웅·전설 가격을 다시 정했다 — 인도양 491.1 / 남인도양 694.7(이후 남인도양 어종 판매가를 ×0.85하고 가격 규칙으로 반올림해 586.5).
+  // 어종 가격을 확정 가격표로 다시 정했다 — 인도양 382.4 / 남인도양 742.5.
   const dials = {
     normal: {},
     perfect: { rareMult: 2 },
     idleEntry: { commonMult: 5 },
   } as const;
 
-  it('인도양 — normal 491.1 / perfect 762.8 / 방치 진입 ×5 145.3', () => {
-    expect(goldEV('indian', dials.normal)).toBeCloseTo(491.09, 1);
-    expect(goldEV('indian', dials.perfect)).toBeCloseTo(762.77, 1);
-    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(145.32, 1);
+  it('인도양 — normal 382.4 / perfect 601.1 / 방치 진입 ×5 104.0', () => {
+    expect(goldEV('indian', dials.normal)).toBeCloseTo(382.4, 1);
+    expect(goldEV('indian', dials.perfect)).toBeCloseTo(601.11, 1);
+    expect(goldEV('indian', dials.idleEntry)).toBeCloseTo(104.04, 1);
   });
 
-  it('남인도양 — normal 586.5 / perfect 915.9 / 방치 진입 ×5 167.3', () => {
-    expect(goldEV('southindian', dials.normal)).toBeCloseTo(586.49, 1);
-    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(915.87, 1);
-    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(167.29, 1);
+  it('남인도양 — normal 742.5 / perfect 1166.7 / 방치 진입 ×5 202.7', () => {
+    expect(goldEV('southindian', dials.normal)).toBeCloseTo(742.55, 1);
+    expect(goldEV('southindian', dials.perfect)).toBeCloseTo(1166.7, 1);
+    expect(goldEV('southindian', dials.idleEntry)).toBeCloseTo(202.71, 1);
   });
 
   it('개체 가중치 — 전갱이·꽁치만 ×2, drawRows 배분에 반영된다', () => {
@@ -1166,19 +1181,19 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 61%(1.50~1.65배), 세인트헬레나는 용승대 대비 약 53%(1.50~1.60배) 오른다', () => {
+  it('남대서양 첫 해역은 코모로 심해 대비 약 70%(1.65~1.75배), 세인트헬레나는 용승대 대비 약 2.3~2.4배 오른다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.61, 플래토 1.63이다
-      expect(r).toBeGreaterThanOrEqual(1.5);
-      expect(r).toBeLessThanOrEqual(1.65);
+      // 확정 밸런스의 실제 비율은 진입 1.72, 플래토 1.69다
+      expect(r).toBeGreaterThanOrEqual(1.65);
+      expect(r).toBeLessThanOrEqual(1.75);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.53, 플래토 1.54다
-      expect(r).toBeGreaterThanOrEqual(1.5);
-      expect(r).toBeLessThanOrEqual(1.6);
+      // 확정 밸런스의 실제 비율은 진입 2.33, 플래토 2.37이다
+      expect(r).toBeGreaterThanOrEqual(2.3);
+      expect(r).toBeLessThanOrEqual(2.4);
     }
   });
 });

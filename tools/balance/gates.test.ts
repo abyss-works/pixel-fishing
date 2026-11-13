@@ -31,18 +31,18 @@ describe('이동 직후 수입 게이트', () => {
   });
 
   it('판정: 목록에 있으면 알려진 값과 같으면 예외, 좋아지면 개선(0 이상 포함), 나빠지면 위반이다', () => {
-    const known = KNOWN_INVERSIONS.southindian!.day;
-    expect(judgeGate('southindian', 'day', known)).toBe('예외');
-    expect(judgeGate('southindian', 'day', known + 0.4)).toBe('예외');
-    expect(judgeGate('southindian', 'day', known + 1)).toBe('개선');
-    expect(judgeGate('southindian', 'day', 10)).toBe('개선');
-    expect(judgeGate('southindian', 'day', known - 1)).toBe('위반');
+    const known = KNOWN_INVERSIONS.indian!.day;
+    expect(judgeGate('indian', 'day', known)).toBe('예외');
+    expect(judgeGate('indian', 'day', known + 0.4)).toBe('예외');
+    expect(judgeGate('indian', 'day', known + 1)).toBe('개선');
+    expect(judgeGate('indian', 'day', 10)).toBe('개선');
+    expect(judgeGate('indian', 'day', known - 1)).toBe('위반');
   });
 
   it('예외 목록이 낡은 경우: 한 풀만 0 이상으로 바뀌어도 그 줄이 개선이다', () => {
-    const known = KNOWN_INVERSIONS.barrierreef!;
-    expect(judgeGate('barrierreef', 'day', 5)).toBe('개선');
-    expect(judgeGate('barrierreef', 'mixed', known.mixed)).toBe('예외');
+    const known = KNOWN_INVERSIONS.dragonhole!;
+    expect(judgeGate('dragonhole', 'day', 5)).toBe('개선');
+    expect(judgeGate('dragonhole', 'mixed', known.mixed)).toBe('예외');
   });
 
   it('예외 목록에 없는 해역의 어종 가격을 크게 낮추면 그 전환이 위반이다', () => {
@@ -51,10 +51,11 @@ describe('이동 직후 수입 게이트', () => {
     expect(gateRows().filter(r => r.spot === clean.spot).map(r => r.verdict)).toEqual(['위반', '위반']);
   });
 
-  it('반례: 예외 목록의 해역이 알려진 값보다 나빠지면 위반이다(남인도양, 코모로 심해 배율 0.3)', () => {
-    restore = applyOverride({ spots: { southindian: { priceMult: 0.3 }, comorodeep: { priceMult: 0.3 } } });
+  it('반례: 예외 목록의 해역이 알려진 값보다 나빠지면 위반이다(인도양, 드래곤 홀 배율 0.3)', () => {
+    restore = applyOverride({ spots: { indian: { priceMult: 0.3 }, dragonhole: { priceMult: 0.3 } } });
     const rows = gateRows();
-    expect(rows.find(r => r.spot === 'southindian' && r.pool === 'day')!.verdict).toBe('위반');
+    expect(rows.find(r => r.spot === 'indian' && r.pool === 'day')!.verdict).toBe('위반');
+    expect(rows.find(r => r.spot === 'dragonhole' && r.pool === 'day')!.verdict).toBe('위반');
   });
 });
 
@@ -68,6 +69,9 @@ describe('PERFECT 이상치 판정', () => {
 });
 
 describe('배 명성 대기 ÷ 골드 대기 판정', () => {
+  const cleanup: (() => void)[] = [];
+  afterEach(() => { cleanup.splice(0).forEach(f => f()); });
+
   it('1.3배 이하는 하한 없이 통과한다', () => {
     expect(FAME_RATIO_LIMIT).toBe(1.3);
     expect(judgeFameRatio('indian', 1.3)).toBe('통과');
@@ -80,7 +84,8 @@ describe('배 명성 대기 ÷ 골드 대기 판정', () => {
   });
 
   it('목록의 전환은 알려진 값과 같으면 예외, 좋아지면 개선, 나빠지면 위반이다', () => {
-    expect(KNOWN_FAME_RATIO.southindian).toBe(1.33);
+    KNOWN_FAME_RATIO.southindian = 1.33;
+    cleanup.push(() => { delete KNOWN_FAME_RATIO.southindian; });
     expect(judgeFameRatio('southindian', 1.33)).toBe('예외');
     expect(judgeFameRatio('southindian', 1.3)).toBe('개선');
     expect(judgeFameRatio('southindian', 1.12)).toBe('개선');
@@ -106,13 +111,14 @@ describe('전환 시간 범위 판정', () => {
     expect(judgeTimeRange('x' as never, [3, 4], 4.5)).toBe('위반');
   });
 
-  it('알려진 값 1.28시간(아래쪽): 2.50과 3.50은 개선, 1.00은 위반, 반대쪽 5.00도 위반이다', () => {
-    expect(KNOWN_TIME_RANGE.indian).toBe(1.28);
+  it('알려진 값(아래쪽): 범위에 가까운 2.50과 3.50은 개선, 더 먼 0.50은 위반, 반대쪽 5.00도 위반이다', () => {
+    const known = KNOWN_TIME_RANGE.indian!;
+    expect(known).toBeLessThan(3);
     expect(judgeTimeRange('indian', [3, 4], 2.5)).toBe('개선');
     expect(judgeTimeRange('indian', [3, 4], 3.5)).toBe('개선');
-    expect(judgeTimeRange('indian', [3, 4], 1.0)).toBe('위반');
+    expect(judgeTimeRange('indian', [3, 4], known - 0.5)).toBe('위반');
     expect(judgeTimeRange('indian', [3, 4], 5.0)).toBe('위반');
-    expect(judgeTimeRange('indian', [3, 4], 1.28)).toBe('예외');
+    expect(judgeTimeRange('indian', [3, 4], known)).toBe('예외');
   });
 
   it('목록의 전환은 알려진 값과 같으면 예외, 범위에 가까워지면 개선, 멀어지면 위반이다', () => {
@@ -126,6 +132,9 @@ describe('전환 시간 범위 판정', () => {
 });
 
 describe('전환 시간 순서 판정', () => {
+  const cleanup: (() => void)[] = [];
+  afterEach(() => { cleanup.splice(0).forEach(f => f()); });
+
   it('직전보다 줄지 않으면 통과하고 줄면 위반이다', () => {
     expect(judgeTimeOrder('x' as never, 16, 23)).toBe('위반');
     expect(judgeTimeOrder('x' as never, 23, 23)).toBe('통과');
@@ -133,12 +142,22 @@ describe('전환 시간 순서 판정', () => {
   });
 
   it('목록의 전환은 줄어든 폭이 알려진 값과 같으면 예외이고 폭이 작아지면 개선, 커지면 위반이다', () => {
-    const known = KNOWN_TIME_ORDER.sthelena!;
-    expect(known).toBeGreaterThan(0);
+    const known = 7;
+    KNOWN_TIME_ORDER.sthelena = known;
+    cleanup.push(() => { delete KNOWN_TIME_ORDER.sthelena; });
     expect(judgeTimeOrder('sthelena', 23 - known, 23)).toBe('예외');
     expect(judgeTimeOrder('sthelena', 23 - known + 1, 23)).toBe('개선');
     expect(judgeTimeOrder('sthelena', 23, 23)).toBe('개선');
     expect(judgeTimeOrder('sthelena', 23 - known - 1, 23)).toBe('위반');
+  });
+});
+
+describe('알려진 예외 목록', () => {
+  it('명성 비율과 순서 예외 목록은 비어 있고 목록에 없는 전환은 기준 그대로 판정한다', () => {
+    expect(KNOWN_FAME_RATIO).toEqual({});
+    expect(KNOWN_TIME_ORDER).toEqual({});
+    expect(judgeFameRatio('southindian', 1.33)).toBe('위반');
+    expect(judgeTimeOrder('sthelena', 16, 23)).toBe('위반');
   });
 });
 

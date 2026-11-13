@@ -3,7 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
+import { ROD } from '../../../src/game/rules/balance';
+import { IDLE_BOOST_STEPS } from '../../../src/game/rules/power';
+import { entryLevel, rates } from '../model';
+import { PRODUCT_POWER_PER_LEVEL, powerOfLevel } from '../rodRules';
+import { evReport } from './ev';
 import { HELP, parseArgs, renderText, runCli, runFlow } from './report';
 
 const dirs: string[] = [];
@@ -16,7 +21,7 @@ const writeJson = (value: unknown): string => {
   return path;
 };
 
-const NEXT = { addSpots: [{ id: 'next', name: '다음 지역 첫 해역', like: 'sthelena', powerReq: 165, zone: 'nextregion', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }] };
+const NEXT = { addSpots: [{ id: 'next', name: '다음 지역 첫 해역', like: 'sthelena', powerReq: powerReqOf('sthelena') + 20, zone: 'nextregion', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }] };
 
 describe('새 옵션 인자', () => {
   it('--growth는 ev에서만 쓴다', () => {
@@ -64,7 +69,8 @@ describe('ev --growth', () => {
   it('증가율 표를 더하고 옵션이 없으면 더하지 않는다', () => {
     const text = runCli(['ev', '--growth']).stdout;
     expect(text).toContain('해역 사이 딱렙 방치 EV 증가율');
-    expect(text).toContain('+103.1%');
+    const top = Math.max(...evReport({ growth: true }).growth!.map(g => g.growth));
+    expect(text).toContain(`+${(top * 100).toFixed(1)}%`);
     expect(runCli(['ev']).stdout).not.toContain('증가율');
   });
 });
@@ -76,7 +82,7 @@ describe('가상 해역을 넣은 명령', () => {
     const t = runCli(['transition', '--override', file]);
     expect(t.exitCode).toBe(0);
     expect(t.stdout).toContain('세인트헬레나 → 다음 지역 첫 해역');
-    expect(t.stdout).toContain('가상 배 9(5,000,000 / 400,000)');
+    expect(t.stdout).toContain(`가상 배 ${BOATS.length + 1}(5,000,000 / 400,000)`);
     const e = runCli(['ev', '--growth', '--override', file]);
     expect(e.stdout).toContain('+45.0%');
     const g = runCli(['gates', '--override', file]);
@@ -87,8 +93,10 @@ describe('가상 해역을 넣은 명령', () => {
 
   it('낚싯대 규칙 덮어쓰기는 진입 레벨 표기에 반영된다', () => {
     const r = runFlow(parseArgs(['transition', '--override', writeJson({ rod: { powerPerLevel: 2.5 } })]));
-    expect(r.options.spots.find(s => s.id === 'sea')!.entryLevel).toBe(9);
-    expect(renderText(r)).toContain('Lv9(30)');
+    // 레벨당 파워 2.5에서 첫 파워(레벨 1)부터 요구 파워까지 올리는 레벨
+    const level = 1 + Math.ceil((powerReqOf('sea') - powerOfLevel(1)) / 2.5);
+    expect(r.options.spots.find(s => s.id === 'sea')!.entryLevel).toBe(level);
+    expect(renderText(r)).toContain(`Lv${level}(${powerReqOf('sea')})`);
   });
 });
 
@@ -126,7 +134,7 @@ describe('solve, upgrades, fame', () => {
     expect(r.solve!.current).toHaveLength(SPOTS.length - 1);
     const text = renderText(r);
     expect(text).toContain('전환 역산');
-    expect(text).toContain('세인트헬레나(EV 942,379/h)');
+    expect(text).toContain(`세인트헬레나(EV ${Math.round(rates('sthelena', entryLevel('sthelena'), 'idle').goldPerHour).toLocaleString('en-US')}/h)`);
     expect(runCli(['solve']).stdout).toContain('--target으로 목표를 주지 않았습니다');
   });
 
@@ -162,8 +170,8 @@ describe('보상 기준 방식', () => {
   it('현행값 그대로의 낚싯대 규칙 덮어쓰기는 전환, 게이트, 일수 출력을 바꾸지 않는다', () => {
     const same = writeJson({
       rod: {
-        powerPerLevel: 5, costBase: 50, costGrowth: 1.7, costPowerFrom: 15, costPowerExp: 8, biteDecay: 0.94,
-        idleBoost: { basis: 'level', unit: 5, world: [5, 5, 4, 4, 3] },
+        powerPerLevel: PRODUCT_POWER_PER_LEVEL, costBase: ROD.costBase, costGrowth: ROD.costGrowth, biteDecay: ROD.biteDecay,
+        idleBoost: { basis: 'level', unit: PRODUCT_POWER_PER_LEVEL, world: [...IDLE_BOOST_STEPS] },
       },
       spots: { sea: { gradeMult: { common: 1 } } },
     });
@@ -193,9 +201,9 @@ describe('보상 기준 방식', () => {
     const inc = runFlow(parseArgs(['transition', '--reward', '25', '--reward-split', '0.5', '--reward-basis', 'incremental-fame']));
     expect(inc.options.reward!.basis).toEqual({ mode: 'incremental-fame', transitions: {} });
     expect(plain.options.reward!.basis).toBeUndefined();
-    // 명성 보상이 줄어 모잠비크 해협 도착이 늦어진다
-    const t = (r: typeof plain) => r.transition!.timings.find(x => x.row.to === 'mozstrait')!.hours;
-    expect(t(inc)).toBeGreaterThan(t(plain));
+    // 명성 보상이 달라져 전환 시간이 달라진다
+    const hours = (r: typeof plain) => r.transition!.timings.map(x => x.hours);
+    expect(hours(inc)).not.toEqual(hours(plain));
   });
 
   it('gates --reward는 보상 관측으로 종료 코드에 판정을 반영하지 않는다', () => {

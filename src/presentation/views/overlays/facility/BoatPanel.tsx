@@ -1,3 +1,4 @@
+import { AUTO_ENERGY_BOAT } from '../../../../game/content/cooking';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import { selectBoatLadder, selectBoatPurchasePreview } from '../../../../features/gameplay/model/facility';
@@ -14,6 +15,8 @@ import TwoColumn from '../../../ui/TwoColumn';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import FacilityCard from './FacilityCard';
 import { CompareTable, ConfirmButton } from './facilityParts';
+
+const AUTO_ENERGY_NOTE = '가방이 가득 차면 놓아줄 물고기 가운데 해역별 기운 대상으로 고른 해역의 물고기를 생명의 기운으로 바꿔요.';
 
 // 조선소 — 배 구매(골드 차감, 명성 하한 검증). 왼쪽은 배 목록(그림, 이름, 속도, 가방)이고 오른쪽 끝에
 // 탄 배는 체크, 지금 배는 "타는 중", 다음 배는 가격, 그 뒤 배는 잠금과 필요 명성을 둔다.
@@ -39,7 +42,10 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
       <ModalCard title="조선소" onClose={onClose}>
         <TwoColumn>
           {ladder}
-          <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요.<br />모든 해역에 나갈 수 있어요.</Note>
+          <div className="flex flex-col gap-3">
+            <Note className="my-0">이미 가장 좋은 배({preview.boatName})를 가지고 있어요.<br />모든 해역에 나갈 수 있어요.</Note>
+            {game.boat >= AUTO_ENERGY_BOAT && <Note size="xs" className="my-0">{AUTO_ENERGY_NOTE}</Note>}
+          </div>
         </TwoColumn>
       </ModalCard>
     );
@@ -80,6 +86,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
                 delta: `+${fmtNum(next.bagCap - currentBagCap)}` },
               { label: '새 해역', next: openedSpot ? openedSpot.name : next.tier === 1 ? '태평양' : '없음' },
             ]} />
+          {next.tier === AUTO_ENERGY_BOAT && <Note size="xs" className="my-0">{AUTO_ENERGY_NOTE}</Note>}
       </>} />
   );
 }

@@ -6,6 +6,12 @@ import { BOATS } from '../../../src/game/content/boats';
 import { HELP, parseArgs, renderText, runCli, runFlow } from './report';
 import type { FlowOptions } from './report';
 import { DEFAULT_SEED, DEFAULT_TRIALS } from './dist';
+import { DAY_HOURS, simulate } from './progress';
+import { powerReqOf } from '../../../src/game/content/spots';
+import type { SpotId } from '../../../src/game/content/spots';
+import { entryLevel } from '../model';
+
+const last = <T>(xs: T[]) => xs[xs.length - 1];
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -32,7 +38,7 @@ describe('명령 인자', () => {
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
       effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
       growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
-      design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [], bite: 'both' },
+      design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [] },
     });
   });
 
@@ -118,9 +124,9 @@ describe('실행과 출력', () => {
     writeFileSync(file, JSON.stringify({ spots: { sthelena: { powerReq: 165 } } }), 'utf-8');
     const text = renderText(runFlow(base({ commands: ['transition', 'exception'], override: file })));
     expect(text).toContain('Lv32(165)');
-    expect(text).not.toContain('Lv29(150)');
+    expect(text).not.toContain(`Lv${entryLevel('sthelena')}(${powerReqOf('sthelena')})`);
     expect(text).toContain('세인트헬레나(32)');
-    expect(text).not.toContain('세인트헬레나(29)');
+    expect(text).not.toContain(`세인트헬레나(${entryLevel('sthelena')})`);
   });
 
   it('각 명령 출력은 그 표가 기대는 가정을 가정: 으로 밝힌다', () => {
@@ -152,7 +158,7 @@ describe('실행과 출력', () => {
     const b = renderText(runFlow(base({ commands: ['ev'], override: file })));
     expect(b).not.toBe(a);
     expect(b).toMatch(/세인트헬레나 \| 32 \|/);
-    expect(a).toMatch(/세인트헬레나 \| 27 \|/);
+    expect(a).toContain(`세인트헬레나 | ${entryLevel('sthelena')} |`);
   });
 
   it('유형, 손실, 가방, 잠 가정 문구는 어느 명령의 출력에도 없다', () => {
@@ -223,13 +229,16 @@ describe('gates 명령', () => {
     const row = (to: string) => text.split(String.fromCharCode(10)).find(l => l.startsWith('| ') && l.includes(`→ ${to} |`) && l.includes('시간'))!;
     expect(row('인도양')).toMatch(/3~4시간.*예외/);
     expect(row('남인도양')).toContain('범위 없음');
-    expect(row('남인도양')).toMatch(/\| 15 \| 10 \|/);
+    const gap = (a: SpotId, b: SpotId) => powerReqOf(b) - powerReqOf(a);
+    expect(row('남인도양')).toContain(`| ${gap('indian', 'southindian')} | ${gap('barrierreef', 'indian')} |`);
     expect(row('마리아나 해구')).toContain('관측');
     expect(row('마리아나 해구')).not.toMatch(/통과|예외|위반/);
   });
 
   it('반례: 최대 일수 안에 끝나지 않으면 닿지 못한 전환을 위반으로 내고 종료 코드는 1이다', () => {
-    const r = runCli(['gates', '--max-days', '7']);
+    // 마지막 전환에 닿기 전에 끊는다
+    const cut = Math.floor(last(simulate({ axis: 'idle', bounty: false, maxDays: 365 }).arrivals).hours / DAY_HOURS);
+    const r = runCli(['gates', '--max-days', String(cut)]);
     expect(r.exitCode).toBe(1);
     expect(r.stdout).toContain('최대 일수 안에 닿지 못한 전환');
     expect(r.stdout).toMatch(/남대서양 용승대 → 세인트헬레나 \| 지역 안 \| 닿지 못함 .*위반/);
@@ -311,8 +320,10 @@ describe('분포와 이동 명령', () => {
   it('다른 명령의 출력에는 이동 시간 줄이 없고 시간은 이동을 넣지 않은 값이다', () => {
     const t = renderText(runFlow(base({ commands: ['transition'] })));
     expect(t).not.toContain('이동 시간');
-    expect(t).toContain('| 인도양 → 남인도양 | 4.93시간');
-    expect(t).toContain('| 남대서양 용승대 → 세인트헬레나 | 15.85시간');
+    const arrivals = simulate({ axis: 'idle', bounty: false, maxDays: 365 }).arrivals;
+    const hoursTo = (spot: SpotId) => { const i = arrivals.findIndex(a => a.spot === spot); return arrivals[i].hours - arrivals[i - 1].hours; };
+    expect(t).toContain(`| 인도양 → 남인도양 | ${hoursTo('southindian').toFixed(2)}시간`);
+    expect(t).toContain(`| 남대서양 용승대 → 세인트헬레나 | ${hoursTo('sthelena').toFixed(2)}시간`);
   });
 
   it('분포 명령은 최대 일수가 짧아 끝내지 못해도 죽지 않고 미도달을 밝힌다', () => {

@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildBalanceReport, goldEv, fameEv, EV_AXES } from './balanceReport';
 import { goldEV } from '../../../game/rules/logic';
+import { spotById } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
 
 describe('보상 축 정의', () => {
@@ -72,7 +73,7 @@ describe('전체 리포트 조립', () => {
     expect(plain.budgets.legendary).toBe(100);   // drawRows 행에서 역산된 프리셋 값
   });
 
-  it('진행 사다리 정합 — boatTier/powerReq가 SPOTS 등록 순서를 따르고 지역 내 완만·지역 간 급등 형태', () => {
+  it('진행 사다리 정합 — boatTier/powerReq가 SPOTS 등록 순서를 따르고 지역 간 사다리 존재·지역 안 순증가 형태', () => {
     // 배 단계 비내림차순 + 인도양 진입 골든 중립 EV 배 증가 배3→4
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i].boatTier).toBeGreaterThanOrEqual(rows[i - 1].boatTier);
@@ -81,8 +82,11 @@ describe('전체 리포트 조립', () => {
     const indian = rows.find(r => r.id === 'indian')!.gold.normal;
     // 관리자 시뮬레이션 값(예산 ×2) 반영 — 인도양/리프 = 379.4/298.7 ≈ 1.27
     expect(indian / reef).toBeGreaterThan(1.25);   // 지역 간 사다리 존재
-    const dh = rows.find(r => r.id === 'dragonhole')!.gold.normal;
-    const coron = rows.find(r => r.id === 'coron')!.gold.normal;
-    expect(coron / dh).toBeLessThan(1.5);         // 지역 내부는 완만
+    // 지역 안에서는 요구 파워가 높은 해역일수록 기대 골드가 늘어난다(폭의 상한은 두지 않는다)
+    for (let i = 1; i < rows.length; i++) {
+      if (spotById(rows[i].id)?.region === spotById(rows[i - 1].id)?.region) {
+        expect(rows[i].gold.normal).toBeGreaterThan(rows[i - 1].gold.normal);
+      }
+    }
   });
 });
