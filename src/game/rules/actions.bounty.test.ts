@@ -227,9 +227,9 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-easy-common' },
       deps({ bounty: ctx({ complete: ['pacific-easy-common'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(20100); // 100 + 보상 20000
+    expect(out.state.gold).toBe(15100); // 100 + 보상 15000
     expect(out.events).toEqual([{ type: 'deliverBounty',
-      payload: { questId: 'pacific-easy-common', reward: 20000 } }]);
+      payload: { questId: 'pacific-easy-common', reward: 15000 } }]);
   });
 
   it('네임드 토벌에는 교환 재료 1개가 따라온다', () => {
@@ -237,7 +237,7 @@ describe('deliverBounty', () => {
       { type: 'deliverBounty', questId: 'pacific-named-megalodon' },
       deps({ bounty: ctx({ complete: ['pacific-named-megalodon'] }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(150000);
+    expect(out.state.gold).toBe(100000);
     expect(out.state.items['mat-abyss-lantern']).toBe(1);
   });
 
