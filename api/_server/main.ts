@@ -34,6 +34,7 @@ import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
+import { legalPages } from './legalPages.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -98,6 +99,8 @@ app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
     res.type('html').send(withMeta(html, defaultMeta(origin)));
   }, next);
 });
+// 공개 문서(소개, 약관, 처리방침)는 로그인 없이 열리고 쿠키를 만들지 않는다
+app.use(legalPages(staticDir));
 app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);
