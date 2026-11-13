@@ -11,6 +11,22 @@ export const MIN_PASSWORD_LENGTH = 6;
 
 export const passwordLongEnough = (password: string): boolean => password.length >= MIN_PASSWORD_LENGTH;
 
+/** 세션 확인에 실패했을 때 메시지 창에 남기는 안내 한 줄 */
+export const ACCOUNT_CHECK_FAILED_NOTICE = '계정을 확인하지 못했어요. 설정 탭의 계정 관리에서 다시 확인을 눌러 주세요.';
+
+/** 세션 확인 실패를 알리는 계정 관리 창과 설정 탭의 문구 */
+export const ACCOUNT_CHECK_FAILED_COPY = {
+  label: '확인하지 못함',
+  lines: ['계정을 확인하지 못했어요.', '잠시 뒤 다시 확인을 눌러 주세요.'],
+  retry: '다시 확인',
+} as const;
+
+/** 계정 표시 이름. 확인에 실패했으면 게스트가 아니라 실패로 표기한다 */
+export function accountLabel(account: string | null, failed: boolean): string {
+  if (failed) return ACCOUNT_CHECK_FAILED_COPY.label;
+  return account ?? '게스트(이메일 없음)';
+}
+
 /** 계정 만들기 넛지 — 명성 기준을 넘은 게스트에게 하루(KST 날짜) 한 번, 그날 첫 접속에서 띄운다 */
 export function shouldNudgeAccount(s: {
   configured: boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, guestProgress, passwordLongEnough, shouldNudgeAccount } from './accountRules';
+import { ACCOUNT_CHECK_FAILED_COPY, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, accountLabel, guestProgress, passwordLongEnough, shouldNudgeAccount } from './accountRules';
 import { newState } from '../../../game/rules/logic';
 
 const base = { configured: true, accountChecked: true, signedIn: false, fame: ACCOUNT_NUDGE_FAME, lastNudgedDay: null, today: '2030-03-04' };
@@ -65,5 +65,17 @@ describe('게스트 진행의 판정 (guestProgress)', () => {
   it('읽은 뒤에는 낚은 수가 0이면 진행 없음, 아니면 진행 있음이다', () => {
     expect(guestProgress({ sync: 'on', ...idle, game: newState() })).toBe('nothing');
     expect(guestProgress({ sync: 'on', ...idle, game: caught })).toBe('some');
+  });
+});
+
+describe('계정 표시 이름', () => {
+  it('이메일이 있으면 이메일, 게스트로 확인됐으면 게스트 표기다', () => {
+    expect(accountLabel('a@example.com', false)).toBe('a@example.com');
+    expect(accountLabel(null, false)).toBe('게스트(이메일 없음)');
+  });
+
+  it('확인에 실패했으면 게스트 표기가 아니라 실패 표기다', () => {
+    expect(accountLabel(null, true)).toBe(ACCOUNT_CHECK_FAILED_COPY.label);
+    expect(ACCOUNT_CHECK_FAILED_COPY.label).not.toContain('게스트');
   });
 });

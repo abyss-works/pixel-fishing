@@ -23,7 +23,7 @@ vi.mock('../../../../features/account/service/useLoginMethod', () => ({
 }));
 
 import AccountModal from './AccountModal';
-import type { GuestProgress } from '../../../../features/account/model/accountRules';
+import { ACCOUNT_CHECK_FAILED_COPY, type GuestProgress } from '../../../../features/account/model/accountRules';
 
 beforeEach(() => {
   actions.connectGoogle.mockReset();
@@ -38,12 +38,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const open = (account: string | null, method: typeof actions.method, guestProgress: GuestProgress = 'some') => {
+const open = (account: string | null, method: typeof actions.method, guestProgress: GuestProgress = 'some', accountFailed = false) => {
   actions.method = method;
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  const view = render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account}
+  const view = render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed}
                                     guestProgress={guestProgress} recheckGuestProgress={actions.recheck} />);
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
@@ -352,5 +352,37 @@ describe('로그인 방식별 구성', () => {
     expect(screen.getByText(/로그인 방식을 불러오지 못했어요\./).innerHTML).toBe('로그인 방식을 불러오지 못했어요.<br>잠시 뒤 다시 시도해 주세요.');
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(actions.retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('계정 확인 실패', () => {
+  it('게스트 화면 대신 확인 실패 안내와 다시 확인 버튼만 보이고, 계정 변경 동작은 없다', () => {
+    open(null, 'guest', 'some', true);
+    expect(screen.getByText(ACCOUNT_CHECK_FAILED_COPY.label)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry })).toBeInTheDocument();
+    expect(screen.queryByText('게스트(이메일 없음)')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '기존 이메일 계정으로 로그인' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
+    expect(screen.queryByText('이용약관')).toBeNull();
+    expect(screen.queryByText('개인정보 처리방침')).toBeNull();
+  });
+
+  it('다시 확인을 누르면 계정 확인을 새로 요청한다', async () => {
+    const { onAuthChanged } = open(null, 'guest', 'some', true);
+    fireEvent.click(screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry }));
+    await waitFor(() => expect(onAuthChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it('다시 확인하는 동안에는 버튼이 눌리지 않는다', async () => {
+    let release = () => {};
+    const view = open(null, 'guest', 'some', true);
+    view.onAuthChanged.mockImplementation(() => new Promise<void>(r => { release = r; }));
+    const button = screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    release();
+    await waitFor(() => expect(button).not.toBeDisabled());
   });
 });

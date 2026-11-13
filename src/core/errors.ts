@@ -46,6 +46,8 @@ export interface FailureResponse {
   modal?: BlockingModal;
   /** 유저에게 보일 한 줄 */
   message: string;
+  /** 참이면 메시지 창에 문구를 남기고, 접혀 있으면 오류 자리에도 보인다. 전체 모달이 없는 종류 가운데 호출부가 따로 알리지 않는 종류다 */
+  slot?: true;
   /** Sentry 보고 수준 — outdated는 정상 동작이라 warning */
   level: 'warning' | 'error';
 }
@@ -71,7 +73,7 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
   },
   restricted: {
     // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 문의 유도.
-    level: 'warning',
+    level: 'warning', slot: true,
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
   },
   'guest-village-only': {
@@ -86,7 +88,7 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
   },
   'rate-limited': {
     // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
-    level: 'warning',
+    level: 'warning', slot: true,
     message: '너무 빠르게 연달아 시도하고 있어요. 잠시 후에 다시 해 주세요.',
   },
   server: {
@@ -95,8 +97,8 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
   },
   bug: {
     // 안내 창 없음: 서버 권위라 완료된 액션은 이미 저장돼 있다. 클라 버그로 잃을 진행이 없고,
-    // 렌더 예외면 ErrorBoundary 화면이 이미 떠 있어 경고창까지 겹치면 소음이다.
-    level: 'error',
+    // 렌더 예외면 ErrorBoundary 화면이 이미 떠 있어 경고창까지 겹치면 소음이다. 메시지 창 한 줄로만 알린다.
+    level: 'error', slot: true,
     message: '예상치 못한 문제가 생겼어요. 새로고침하면 이어서 플레이할 수 있어요.',
   },
 };

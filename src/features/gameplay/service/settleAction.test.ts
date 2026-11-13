@@ -13,4 +13,11 @@ describe('settleAction 게스트 거부', () => {
     const settled = await settleAction(() => { throw new AppError('account-only', 'guest rejected'); });
     expect(settled).toEqual({ ok: false, notice: '계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.' });
   });
+
+  it('메시지 창 오류 자리로 알리는 종류(restricted, rate-limited, bug)는 호출부에 따로 알릴 문구를 주지 않는다', async () => {
+    for (const kind of ['restricted', 'rate-limited', 'bug'] as const) {
+      const settled = await settleAction(() => { throw new AppError(kind, 'x'); });
+      expect(settled, kind).toEqual({ ok: false, notice: null });
+    }
+  });
 });

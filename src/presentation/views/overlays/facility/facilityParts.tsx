@@ -27,6 +27,7 @@ export interface CompareRow {
 
 /** 현재와 확정 후 비교 표 — 이름, 현재, 확정 후 세 열. 열 머리와 이름에 규칙 설명 툴팁을 달 수 있다.
  *  값 열 폭은 PC 레이아웃에서 7rem, 9rem으로 고정이고 모바일 레이아웃에서는 칸 폭의 비율이라 좁은 창에도 가로 스크롤 없이 들어간다(모바일은 표의 최소 폭을 풀어 비율이 담은 칸 폭만 따르고, 값 칸도 줄을 바꾼다).
+ *  확정 후 값과 변화량 사이는 줄 바꿈 자리(폭 없음)라서, 값 칸이 좁으면 변화량이 아래 줄로 내려가 칸 밖으로 넘치지 않는다. PC 레이아웃은 줄을 바꾸지 않아 그대로다.
  *  이름이 길면 이름 칸에서 줄을 바꾼다. heads가 하나면 확정 후 열 없이 현재 열만 보인다(더 바꿀 수 없는 최고 단계). */
 export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode, ReactNode]; rows: CompareRow[] }) {
   const showNext = heads.length > 1;
@@ -48,7 +49,7 @@ export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode,
               {showNext && (
                 <td className="pf-accent text-xs text-accent">
                   {r.next}
-                  {r.delta && <span className="ml-1.5 text-2xs">{r.delta}</span>}
+                  {r.delta && <><wbr /><span className="ml-1.5 text-2xs">{r.delta}</span></>}
                 </td>
               )}
             </tr>
