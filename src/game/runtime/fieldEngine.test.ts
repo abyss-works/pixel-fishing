@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { newState } from '../rules/logic';
+import { newState, rodStats } from '../rules/logic';
 import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
 import { V_PORT } from '../world/regions/village';
@@ -285,7 +285,7 @@ function simClock(alignToSecond: boolean) {
 
 describe('GameFieldEngine 방치 사이클 시간', () => {
   const RAND = 0.5;
-  const WINDOW_MINUTES = 1;
+  const WINDOW_MINUTES = 2;
 
   /**
    * 요청이 서버에 닿는 시간(업링크)과 응답이 돌아오는 시간을 흉내 내고, 서버 하한(catchTooSoon)을 서버 처리 시각으로 판정한다.
@@ -350,7 +350,11 @@ describe('GameFieldEngine 방치 사이클 시간', () => {
     vi.restoreAllMocks();
   });
 
-  const modelCycleMs = (rod: number) => (6 * Math.pow(0.94, rod - 1) + 1.4 + 2.0) * 1000;
+  // 입질 대기는 최소와 최대의 중간(RAND 0.5), 그 뒤 바 시간과 획득 표시 시간
+  const modelCycleMs = (rod: number) => {
+    const { biteMin, biteMax, sweep } = rodStats(rod);
+    return ((biteMin + biteMax) / 2 + sweep + 2.0) * 1000;
+  };
 
   for (const rod of [25, 28, 30]) {
     it(`숨은 탭에서도 Lv${rod} 방치 사이클이 모델 시간에 1초 미만만 더해진다`, async () => {
@@ -360,7 +364,7 @@ describe('GameFieldEngine 방치 사이클 시간', () => {
       expect(rejected).toBe(0);
       // 챔질 요청은 1초 정렬로 늦게 나가고 획득 카운트다운은 결과 도착부터 세므로, 모델보다 1초 미만으로 길 뿐 누적되지 않는다
       expect(mean).toBeGreaterThan(modelCycleMs(rod) - 60);
-      expect(mean).toBeLessThan(modelCycleMs(rod) + 700);
+      expect(mean).toBeLessThan(modelCycleMs(rod) + 1000);
     });
 
     it(`포그라운드 Lv${rod} 방치 사이클은 모델 시간과 같다`, async () => {

@@ -238,39 +238,42 @@ describe('R6b: 타이밍 판정', () => {
   });
 });
 
-describe('R13: 낚싯대 스탯 (무한 강화, 입질 곱연산 단축)', () => {
+describe('R13: 낚싯대 스탯 (무한 강화, 입질 대기 번갈아 단축)', () => {
   it('레벨 1 기준값 — 존 스탯은 폐기(존은 수역 파워 게이트 소관), 바 시간은 1.4초 고정', () => {
     expect(rodStats(1)).toEqual({ biteMin: 4, biteMax: 8, sweep: 1.4 });
   });
-  it('레벨마다 입질 최소·최대 대기가 직전의 94%가 된다 — 바 시간은 고정', () => {
+  it('강화마다 최소와 최대 중 한쪽만 직전의 94%가 된다 — 홀수 레벨에서는 최대, 짝수 레벨에서는 최소, 바 시간은 고정', () => {
     for (let l = 2; l <= 100; l++) {
-      expect(rodStats(l).biteMin / rodStats(l - 1).biteMin).toBeCloseTo(0.94, 10);
-      expect(rodStats(l).biteMax / rodStats(l - 1).biteMax).toBeCloseTo(0.94, 10);
+      const minRatio = rodStats(l).biteMin / rodStats(l - 1).biteMin;
+      const maxRatio = rodStats(l).biteMax / rodStats(l - 1).biteMax;
+      const [cut, kept] = (l - 1) % 2 === 1 ? [maxRatio, minRatio] : [minRatio, maxRatio];
+      expect(cut).toBeCloseTo(0.94, 10);
+      expect(kept).toBeCloseTo(1, 10);
       expect(rodStats(l).sweep).toBe(1.4);
     }
   });
-  it('입질 대기는 Lv1 값에 0.94^(Lv-1)을 곱한 값이다', () => {
-    expect(rodStats(11).biteMin).toBeCloseTo(4 * 0.94 ** 10, 10);
-    expect(rodStats(11).biteMax).toBeCloseTo(8 * 0.94 ** 10, 10);
+  it('입질 대기 최소는 4 x 0.94^내림((Lv-1)/2), 최대는 8 x 0.94^올림((Lv-1)/2)이다', () => {
+    for (let l = 1; l <= 60; l++) {
+      expect(rodStats(l).biteMin).toBeCloseTo(4 * 0.94 ** Math.floor((l - 1) / 2), 10);
+      expect(rodStats(l).biteMax).toBeCloseTo(8 * 0.94 ** Math.ceil((l - 1) / 2), 10);
+    }
+    expect(rodStats(2)).toMatchObject({ biteMin: 4 });
+    expect(rodStats(2).biteMax).toBeCloseTo(7.52, 10);
+    expect(rodStats(3).biteMin).toBeCloseTo(3.76, 10);
+    expect(rodStats(3).biteMax).toBeCloseTo(7.52, 10);
   });
 });
 
 describe('R15: 강화/구매 비용', () => {
-  it('낚싯대: Lv15까지 50 × 1.7^(레벨-1)', () => {
-    expect(upgradeCost(1)).toBe(50);
-    expect(upgradeCost(2)).toBe(85);
-    expect(upgradeCost(3)).toBe(144);
-    expect(upgradeCost(15)).toBe(84189);
+  it('낚싯대: 모든 레벨에서 round(100 x 1.25^(레벨-1))', () => {
+    expect(upgradeCost(1)).toBe(100);
+    expect(upgradeCost(2)).toBe(125);
+    for (let l = 1; l <= 60; l++) expect(upgradeCost(l)).toBe(Math.round(100 * 1.25 ** (l - 1)));
   });
-  it('낚싯대: Lv16부터 Lv15 비용 × (레벨/15)^8', () => {
-    expect(upgradeCost(16)).toBe(141086);
-    expect(upgradeCost(24)).toBe(3615886);
-    expect(upgradeCost(30)).toBe(21552362);
-  });
-  it('낚싯대: 비용은 계속 늘고, Lv16부터는 직전 대비 배율이 줄어든다', () => {
+  it('낚싯대: 비용은 계속 늘고 직전 대비 배율이 모든 레벨에서 같다', () => {
     for (let l = 2; l <= 60; l++) expect(upgradeCost(l)).toBeGreaterThan(upgradeCost(l - 1));
-    for (let l = 17; l <= 60; l++) {
-      expect(upgradeCost(l) / upgradeCost(l - 1)).toBeLessThan(upgradeCost(l - 1) / upgradeCost(l - 2));
+    for (let l = 40; l <= 60; l++) {
+      expect(upgradeCost(l) / upgradeCost(l - 1)).toBeCloseTo(1.25, 3);
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
