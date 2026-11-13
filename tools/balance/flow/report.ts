@@ -972,7 +972,7 @@ function achievementsText(a: NonNullable<FlowResult['achievements']>): string[] 
       ];
     }),
   ));
-  if (a.basis) {
+  if (a.basis && sourced) {
     out.push(`\n(${basisNote(a.basis)})`);
     out.push(table(
       ['구역', '보상 기준 전환', '전환 골드', '기준 전환의 배 명성 요구치', '증분 명성', '기준 골드', '기준 명성'],

@@ -128,6 +128,24 @@ describe('보상 기준 방식', () => {
     expect(runCli(['achievements']).stdout).not.toContain('증분 명성');
   });
 
+  it('total은 방식을 주지 않았을 때와 같은 출력이다', () => {
+    expect(runCli(['achievements', '--reward-basis', 'total']).stdout).toBe(runCli(['achievements']).stdout);
+  });
+
+  it('현행값 그대로의 낚싯대 규칙 덮어쓰기는 전환, 게이트, 일수 출력을 바꾸지 않는다', () => {
+    const same = writeJson({
+      rod: {
+        powerPerLevel: 5, costBase: 50, costGrowth: 1.7, costPowerFrom: 15, costPowerExp: 8, biteDecay: 0.94,
+        idleBoost: { basis: 'level', unit: 5, world: [5, 5, 4, 4, 3], village: [10, 9, 8, 7, 6, 5, 4] },
+      },
+      spots: { sea: { gradeMult: { common: 1 } } },
+    });
+    for (const command of ['transition', 'gates', 'days']) {
+      const body = (args: string[]) => runCli([command, ...args]).stdout.split('\n').filter((_, i) => i !== 1).join('\n');
+      expect(body(['--override', same]), command).toBe(body([]));
+    }
+  });
+
   it('incremental-fame은 명성 기준을 증분으로 바꿔 보여 준다', () => {
     const text = runCli(['achievements', '--reward-basis', 'incremental-fame']).stdout;
     expect(text).toContain('증분 명성');
