@@ -140,8 +140,8 @@ describe('해금, 조리 대기, 보관함, 슬롯', () => {
 
   it('명세 4.3, 5.1 표의 값과 같다', () => {
     const MIN = 60_000;
-    expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 60 * MIN, slotMs: 9 * 60 * MIN });
-    expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 15 * MIN, slotMs: 30 * MIN });
+    expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 15 * MIN, slotMs: 9 * 60 * MIN });
+    expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 1 * MIN, slotMs: 30 * MIN });
     expect(COOK_STORAGE_CAP).toBe(10);
   });
 });

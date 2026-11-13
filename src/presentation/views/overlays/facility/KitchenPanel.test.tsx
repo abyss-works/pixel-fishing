@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, toStoredEnergy } from '../../../../game/content/cooking';
+import { COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import FacilityModal from './FacilityModal';
@@ -30,6 +30,7 @@ function show(game: GameState, result: { type: string; [k: string]: unknown } = 
 const tab = (name: string) => screen.getByRole('button', { name });
 const optionNames = (list: string) =>
   within(screen.getByRole('listbox', { name: list })).getAllByRole('option').map(o => o.querySelector('.truncate')?.textContent);
+const LUNCH_WAIT_MIN = COOK_KIND_RULES.lunch.waitMs / 60_000;
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 describe('부엌 창 틀', () => {
@@ -47,11 +48,11 @@ describe('부엌 창 틀', () => {
   });
 
   it('조리 중이면 정보 줄에 레시피와 완성 수와 다음 완성까지 남은 시간이 보이고 탭을 옮겨도 그대로다', () => {
-    show(seed({ cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: minutesAgo(90) } }));
+    show(seed({ cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: minutesAgo(LUNCH_WAIT_MIN + 5) } }));
     const line = screen.getByText('조리 중').closest('div')!;
     expect(within(line).getByText('가루디야')).toBeInTheDocument();
     expect(within(line).getByText('1/3')).toBeInTheDocument();
-    expect(screen.getByText('30분')).toBeInTheDocument();
+    expect(screen.getByText(`${LUNCH_WAIT_MIN - 5}분`)).toBeInTheDocument();
     fireEvent.click(tab('미끼'));
     expect(screen.getByText('1/3')).toBeInTheDocument();
   });
@@ -178,9 +179,9 @@ describe('도시락 탭과 미끼 탭', () => {
     const effect = screen.getByText('도시락 효과').parentElement!;
     const lines = [...effect.children].slice(1).map(l => l.textContent);
     expect(lines).toEqual(['입질 대기−10%', '지속 시간9시간']);
-    expect(screen.getByText('1시간')).toBeInTheDocument(); // 조리 시간(1개)
+    expect(screen.getByText(`${LUNCH_WAIT_MIN}분`)).toBeInTheDocument(); // 조리 시간(1개)
     fireEvent.click(screen.getByRole('button', { name: '가루디야 수량 증가' }));
-    expect(screen.getByText('2시간')).toBeInTheDocument();
+    expect(screen.getByText(`${2 * LUNCH_WAIT_MIN}분`)).toBeInTheDocument();
   });
 
   it('조리 시작은 고른 레시피와 수량으로 cook 액션을 보낸다', () => {

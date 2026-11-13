@@ -1,6 +1,6 @@
 // 가방 아이템 섹션 모델 — 기운 격자, 도시락과 미끼 행(보관함 완성분 포함), 해금 전 잠금과 빈 상태, 먹기 계획과 교체 확인.
 import { describe, expect, it } from 'vitest';
-import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
@@ -10,6 +10,7 @@ import { recipesOfKind } from './recipes';
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
 const HOUR = 60 * MIN;
+const LUNCH_WAIT = COOK_KIND_RULES.lunch.waitMs;
 const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
@@ -99,15 +100,15 @@ describe('아이템 섹션: 열린 뒤', () => {
       items: { 'cook-lunch-bite': 1 },
       cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: T0 },
     });
-    // 도시락 대기 60분: 2시간 30분 뒤 2개가 완성되고 1개는 조리 중이다
-    const v = selectItemSection(game, at(2 * HOUR + 30 * MIN), false);
+    // 대기의 2.5배가 지나면 2개가 완성되고 1개는 조리 중이다
+    const v = selectItemSection(game, at(2.5 * LUNCH_WAIT), false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.recipe.id, r.count])).toEqual([['cook-lunch-bite', 3]]);
   });
 
   it('조리 중이고 아직 완성되지 않은 분은 행에 세지 않는다', () => {
     const game = seed({ cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, false], startedAt: T0 } });
-    const v = selectItemSection(game, at(30 * MIN), false);
+    const v = selectItemSection(game, at(LUNCH_WAIT / 2), false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch).toEqual([]);
   });

@@ -312,9 +312,9 @@ describe('조리 진행과 완성', () => {
     const idle = seed();
     expect(settleCooking(idle, T0)).toBe(idle);
   });
-  it('미끼 요리는 15분마다 완성된다', () => {
+  it('미끼 요리는 종류 규칙의 대기마다 완성된다', () => {
     const s = cooking(2, [false, false], miniBait.id);
-    expect(cookingProgress(s, at(T0, 15 * MIN))).toMatchObject({ completed: 1 });
+    expect(cookingProgress(s, at(T0, COOK_KIND_RULES.bait.waitMs))).toMatchObject({ completed: 1 });
   });
 });
 
