@@ -17,7 +17,6 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { VARIANT_EV, axisOptions, entryLevel, rates, rodSpec } from '../model';
 import { applyRodRules, powerOfLevel, relativeIdleBoost } from '../rodRules';
-import type { BiteDecayMode } from '../rodRules';
 import { applyOverride } from './override';
 import type { FlowOverride } from './override';
 import { levelRows, purchaseRows } from './tables';
@@ -70,8 +69,6 @@ export interface DesignInput {
   anchors: Anchor[];
   /** 해역 배수 공식으로 만든 h(회수 시간 방식). 주면 payback의 base는 null이어야 하고 payback.by는 공식 뒤에 덮어쓴다 */
   hFormula?: HFormula;
-  /** 입질 대기 감소 방식. alternate이면 해역 EV 계산에 반영하고 덮어쓰기에 쓴다 */
-  bite: BiteDecayMode;
   solve: SolveVar | null;
   /** 시뮬레이션으로 전환 시간을 재는 최대 일수 */
   maxDays: number;
@@ -158,13 +155,10 @@ export interface DesignReport {
   complete: boolean;
 }
 
-/** 단일 지수 곡선이 끝까지 지수로 가도록 하는 경계 레벨 */
-const NO_POWER_PHASE = 1_000_000;
-
 const perSpot = (p: PerSpot, spot: SpotId): number | null => p.by[spot] ?? p.all;
 
 function withCurve<T>(start: number, growth: number, fn: () => T): T {
-  const undo = applyRodRules({ costBase: start, costGrowth: 1 + growth, costPowerFrom: NO_POWER_PHASE });
+  const undo = applyRodRules({ costBase: start, costGrowth: 1 + growth });
   try { return fn(); } finally { undo(); }
 }
 
@@ -439,7 +433,7 @@ export function designReport(raw: DesignInput): DesignReport {
   // 현재 해역 EV: 새 진입 레벨과 요구 파워를 적용한 제품 규칙으로 잰다
   const spotPatch = Object.fromEntries(SPOTS.map((s, i) => [s.id, { powerReq: powers[i] }]));
   const current = (() => {
-    const undo = applyOverride({ spots: spotPatch, rod: { biteDecayMode: input.bite } });
+    const undo = applyOverride({ spots: spotPatch });
     try { return SPOTS.map((s, i) => breakdownAt(s.id, levels[i])); } finally { undo(); }
   })();
 
@@ -495,7 +489,7 @@ export function designReport(raw: DesignInput): DesignReport {
 
   // 덮어쓰기: 낚싯대 곡선, 요구 파워, 가격 배율, 등급 배율, 배 가격
   const override: FlowOverride = {
-    rod: { costBase: input.start, costGrowth: 1 + res.growth, costPowerFrom: NO_POWER_PHASE, ...(input.bite === 'alternate' ? { biteDecayMode: input.bite } : {}) },
+    rod: { costBase: input.start, costGrowth: 1 + res.growth },
     boats: {},
     spots: Object.fromEntries(SPOTS.map((s, i) => [s.id, {
       powerReq: powers[i], priceMult: priceMult[i],
