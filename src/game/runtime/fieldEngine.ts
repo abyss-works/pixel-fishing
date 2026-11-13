@@ -461,7 +461,13 @@ export class GameFieldEngine {
     const seq = this.hookSeq;
     this.transition('catch');
     when(this.callbacks.dispatch({ type: 'catch', spot: school.spot, judgment }), result => {
-      if (seq !== this.hookSeq) return;
+      // 낚시를 접은 뒤 도착한 응답은 낚시 단계에 적용하지 않는다. 포획이 확정된 응답의 획득 안내만 낸다
+      if (seq !== this.hookSeq) {
+        if (result.status === 'ok' && result.result.type === 'catch') {
+          this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
+        }
+        return;
+      }
       if (result.status === 'rejected') {
         this.cancelFishing();
         this.callbacks.onEvent({ type: 'catch-rejected', reason: result.error });

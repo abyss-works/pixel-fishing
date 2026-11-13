@@ -538,17 +538,18 @@ describe('GameFieldEngine 이전 던짐의 응답', () => {
     return { engine, events, resolvers };
   }
 
-  it('낚시를 접고 다시 던진 뒤 이전 요청의 응답이 와도 새 챔질에 적용하지 않는다', async () => {
+  it('낚시를 접고 다시 던진 뒤 이전 요청의 응답이 와도 새 챔질의 단계에 적용하지 않고 획득 안내만 낸다', async () => {
     const { engine, events, resolvers } = twoHooks();
     expect(resolvers).toHaveLength(2);
     resolvers[0](caught('old'));
     await Promise.resolve();
     expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: null });
-    expect(events.filter(event => event.type === 'catch')).toEqual([]);
+    const announced = () => events.flatMap(event => event.type === 'catch' ? [event.result.fishId] : []);
+    expect(announced()).toEqual(['old']);
     resolvers[1](caught('new'));
     await Promise.resolve();
     expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: 'new' });
-    expect(events.filter(event => event.type === 'catch')).toHaveLength(1);
+    expect(announced()).toEqual(['old', 'new']);
     engine.dispose();
   });
 
@@ -561,7 +562,7 @@ describe('GameFieldEngine 이전 던짐의 응답', () => {
     engine.dispose();
   });
 
-  it('이동으로 낚시를 접은 뒤 돌아온 응답은 아무것도 바꾸지 않는다', async () => {
+  it('이동으로 낚시를 접은 뒤 돌아온 응답은 단계를 바꾸지 않고 획득 안내만 낸다', async () => {
     const { engine, events, resolvers } = twoHooks();
     resolvers[1](caught('new'));
     await Promise.resolve();
@@ -569,7 +570,7 @@ describe('GameFieldEngine 이전 던짐의 응답', () => {
     resolvers[0](caught('old'));
     await Promise.resolve();
     expect(engine.getSnapshot()).toMatchObject({ phase: 'idle', fishId: null });
-    expect(events.filter(event => event.type === 'catch')).toHaveLength(1);
+    expect(events.filter(event => event.type === 'catch')).toHaveLength(2);
     engine.dispose();
   });
 });
