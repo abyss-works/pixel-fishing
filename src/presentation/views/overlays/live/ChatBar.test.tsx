@@ -133,7 +133,7 @@ describe('ChatBar', () => {
 
   it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {
     const { rerender } = render(<ChatBar />);
-    expect(screen.queryByText('요청 실패 안내')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     live.error = 'chat-rate';
     rerender(<ChatBar />);
     expect(screen.getByRole('status')).toHaveClass('absolute', 'bottom-full');
