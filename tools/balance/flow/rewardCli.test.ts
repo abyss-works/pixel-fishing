@@ -50,7 +50,7 @@ describe('보상을 넣은 관측 인자', () => {
   });
 
   it('다른 명령에서는 쓸 수 없다', () => {
-    expect(() => parseArgs(['gates', '--reward', '25'])).toThrow(/achievements/);
+    expect(() => parseArgs(['travel', '--reward', '25'])).toThrow(/achievements/);
     expect(() => parseArgs(['ev', '--reward-split', '0.5'])).toThrow(/achievements/);
   });
 });

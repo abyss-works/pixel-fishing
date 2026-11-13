@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
 import { entryLevel, rates } from '../model';
 import { parseBasisSpec, rewardBasis, rewardPlan, rewardRows } from './achievement';
+import type { RewardBasisOptions } from './achievement';
 import { applyOverride, parseOverride } from './override';
 import { roundReward } from './ev';
 import { transitionGold } from './transitions';
@@ -55,7 +56,7 @@ describe('보상 기준 방식', () => {
 
     it('가상 해역으로 가는 전환을 기준 전환으로 지정할 수 있다', () => {
       restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, zone: 'z', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }] }));
-      const o = { transitions: { southatlantic: { from: 'sthelena', to: 'next' } } } as const;
+      const o = { transitions: { southatlantic: { from: 'sthelena', to: 'next' } } } as unknown as RewardBasisOptions;
       const b = rewardBasis(o).find(x => x.zone === 'southatlantic')!;
       expect(b.to).toBe('next');
       const g = gold('sthelena');

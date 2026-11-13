@@ -31,6 +31,7 @@ describe('명령 인자', () => {
       legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
       effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
+      growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
     });
   });
 
