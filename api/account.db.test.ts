@@ -29,10 +29,10 @@ const ACTIVE = { email: 'me@example.com', save: { gold: 500, fame: 30, updatedAt
   createdAt: '2030-01-01T00:00:00Z', lastSignInAt: '2030-01-01T00:00:00Z' };
 
 describe('계정 함수', () => {
-  it('토큰이 없으면 401, POST 외 메서드는 405, 요청 본문이 탈퇴가 아니면 400이다', async () => {
+  it('토큰이 없으면 401, GET과 POST 외 메서드는 405, 요청 본문이 탈퇴가 아니면 400이다', async () => {
     const me = await seedFullAccount(env.client, { ...ACTIVE, email: 'guard@example.com', nickname: '경계' });
     expect(await callAccount('POST', null, { op: 'delete' })).toMatchObject({ status: 401 });
-    expect(await callAccount('GET', userToken(me))).toMatchObject({ status: 405 });
+    expect(await callAccount('PUT', userToken(me))).toMatchObject({ status: 405 });
     for (const bad of [undefined, null, {}, { op: 'remove' }, 'delete']) {
       expect(await callAccount('POST', userToken(me), bad)).toMatchObject({ status: 400, body: { error: 'bad-request' } });
     }

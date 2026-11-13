@@ -1,9 +1,12 @@
 // 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 게임과 관리자 대시보드의 인증 인스턴스를 환경 변수로 조립한다.
 import type { IncomingHttpHeaders } from 'node:http';
 import { fromNodeHeaders } from 'better-auth/node';
+import { recordConsent } from '../_data/consent.js';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
+import { reportServerIssue } from '../observability.js';
 import { createAdminAuth, createAuth } from './auth.js';
+import { consentPolicy } from './consentPolicy.js';
 import type { AdminAuth, Auth } from './auth.js';
 import type { GoogleConfig } from './googleLink.js';
 import { resendSender } from './mail.js';
@@ -17,7 +20,7 @@ function googleConfig(): GoogleConfig | null {
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
-/** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */
+/** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수(약관 시행일 포함)가 없으면 실패한다 */
 export function appAuth(): Auth {
   if (appAuthInstance) return appAuthInstance;
   const secret = process.env.BETTER_AUTH_SECRET;
@@ -26,9 +29,20 @@ export function appAuth(): Auth {
   const from = process.env.MAIL_FROM;
   const google = googleConfig();
   if (!secret || !baseURL || !apiKey || !from || !google) throw new ApiError(500, 'server-config');
+  // 약관 시행일이 없거나 날짜가 아니면 서버가 기동하지 않는다
+  consentPolicy();
   appAuthInstance = createAuth({
     pool: database().pool, secret, baseURL, google,
     mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
+    // 연결은 이미 확정된 뒤라 기록이 실패해도 연결은 성공으로 답한다. 빠진 기록은 시행일 뒤 확인 화면이 채운다
+    recordLinkConsent: async uid => {
+      try {
+        await recordConsent(database().db, uid, consentPolicy().version, 'google-link');
+      } catch (e) {
+        console.error('약관 수락 기록에 실패했습니다', e);
+        await reportServerIssue('consent-record', e, { uid });
+      }
+    },
   });
   return appAuthInstance;
 }
