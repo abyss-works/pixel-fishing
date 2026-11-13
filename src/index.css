@@ -6,8 +6,8 @@
 /* Silkscreen = 숫자·값(픽셀풍 강조) · Noto Sans KR = 한글 본문.
    Silkscreen에 한글 글리프가 없어 --font-pixel 스택에도 Noto Sans KR을 끼워 둔다 —
    "최대 40.0cm"처럼 섞인 칸에서 한글만 본문 폰트로 폴백해 두 폰트가 자연스럽게 붙는다.
-   Google Fonts는 unicode-range로 쪼개 보내므로 한글 전체를 받지 않는다. */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Silkscreen:wght@400;700&display=swap');
+   두 폰트 모두 같은 출처에서 내려 주며, 한글은 unicode-range 조각으로 나뉘어 있어 한글 전체를 받지 않는다. */
+@import "./presentation/ui/fonts/fonts.css";
 @import "tailwindcss";
 
 /* 레이아웃 판정 기준 - 모바일 레이아웃과 PC 레이아웃을 가르는 뷰포트 폭의 정본이다(768px = 48rem, Tailwind md와 같은 값).
