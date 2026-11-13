@@ -11,6 +11,7 @@ import { deleteUserProfile } from './profile.js';
 import { deleteUserActivity } from './activity.js';
 import { deleteUserPosition } from './position.js';
 import { deleteUserBlocks } from './blocks.js';
+import { deleteUserConsents } from './consent.js';
 import { deleteUserChat } from './chat.js';
 import { deleteUserFriends } from './friends.js';
 import { deleteUserGuild } from './guilds.js';
@@ -134,6 +135,7 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserGuild(tx, uid);
   await deleteUserActivity(tx, uid);
   await deleteUserPosition(tx, uid);
+  await deleteUserConsents(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }

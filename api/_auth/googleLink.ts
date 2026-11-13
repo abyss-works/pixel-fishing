@@ -101,39 +101,53 @@ export const validateGoogleLink: ValidateUserInfo = async ({ user, source }, ctx
 
 type AccountAfter = (account: { userId: string; providerId: string }, ctx: GenericEndpointContext | null) => Promise<void>;
 
+/** 연결이 끝난 계정의 약관과 처리방침 수락을 현재 판으로 기록하는 함수. 이미 같은 판의 기록이 있으면 새로 쓰지 않는다 */
+export type RecordLinkConsent = (userId: string) => Promise<void>;
+
 /** 같은 상태에서 몇 번을 돌려도 같은 결과가 되는 연결 마무리 */
-const finishLink: AccountAfter = async (account, ctx) => {
+const finishLink = (recordConsent: RecordLinkConsent): AccountAfter => async (account, ctx) => {
   if (!ctx || account.providerId !== 'google') return;
   const email = verifiedEmail.get(ctx);
   if (!email) return;
   const adapter = ctx.context.internalAdapter;
-  const current = await getSessionFromCtx(ctx, { disableCookieCache: true, disableRefresh: true });
   const user = await adapter.findUserById(account.userId) as (LinkedUser & { email: string; emailVerified: boolean }) | null;
+  if (!user) return;
   const passwords = (await adapter.findAccounts(account.userId)).filter(a => a.providerId === 'credential');
   // 마무리가 바꿀 것이 없으면 다른 세션을 끊지 않는다
-  if (!user || (!user.isAnonymous && user.email === email && user.emailVerified && passwords.length === 0)) return;
-  const updated = await adapter.updateUser(account.userId, { email, emailVerified: true, isAnonymous: false });
+  if (user.isAnonymous || user.email !== email || !user.emailVerified || passwords.length > 0) {
+    await finishUser(account.userId, email, passwords, ctx);
+  }
+  // 수락 기록은 마무리 끝에 쓴다. 기록이 실패하면 연결 요청이 실패하고, 다시 연결하면 마무리가 이어져 기록을 마저 남긴다
+  await recordConsent(account.userId);
+};
+
+/** 사용자 행의 이메일과 게스트 표시를 바꾸고, 비밀번호 수단·다른 세션·재설정 토큰을 정리한다 */
+async function finishUser(userId: string, email: string, passwords: { id: string }[], ctx: GenericEndpointContext): Promise<void> {
+  const adapter = ctx.context.internalAdapter;
+  const current = await getSessionFromCtx(ctx, { disableCookieCache: true, disableRefresh: true });
+  const updated = await adapter.updateUser(userId, { email, emailVerified: true, isAnonymous: false });
   for (const a of passwords) await adapter.deleteAccount(a.id);
-  for (const s of await adapter.listSessions(account.userId)) {
+  for (const s of await adapter.listSessions(userId)) {
     if (s.token !== current?.session.token) await adapter.deleteSession(s.token);
   }
   await ctx.context.adapter.deleteMany({
     model: 'verification',
-    where: [{ field: 'value', value: account.userId }, { field: 'identifier', operator: 'starts_with', value: 'reset-password:' }],
+    where: [{ field: 'value', value: userId }, { field: 'identifier', operator: 'starts_with', value: 'reset-password:' }],
   });
   // 쿠키 캐시에 남은 게스트 표시와 이전 이메일을 갱신한다
-  if (current && current.user.id === account.userId) await setSessionCookie(ctx, { session: current.session, user: updated });
-};
+  if (current && current.user.id === userId) await setSessionCookie(ctx, { session: current.session, user: updated });
+}
 
 /**
  * 구글 연결 뒤 사용자 행을 마무리한다. 이메일을 구글 주소로 바꾸고 게스트 표시를 내린다.
  * 비밀번호 수단이 있던 계정은 그것을 지우고, 연결한 세션만 남기고 다른 세션을 끊고, 아직 쓰지 않은 재설정 토큰을 지운다.
+ * 마지막에 현재 판의 약관과 처리방침 수락을 기록한다. 연결이 취소되거나 실패하면 이 마무리가 돌지 않아 기록도 없다.
  * 같은 구글을 다시 연결하는 요청(계정 갱신 경로)에서도 돌아, 마무리가 끝나지 않은 계정을 마저 마무리한다.
  */
-export const finishGoogleLink: NonNullable<Hooks['account']> = {
-  create: { after: finishLink },
-  update: { after: finishLink },
-};
+export const finishGoogleLink = (recordConsent: RecordLinkConsent): NonNullable<Hooks['account']> => ({
+  create: { after: finishLink(recordConsent) },
+  update: { after: finishLink(recordConsent) },
+});
 
 const OAUTH_START_PATHS = ['/link-social', '/sign-in/social'];
 

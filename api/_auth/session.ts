@@ -1,6 +1,7 @@
 // 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 게임과 관리자 대시보드의 인증 인스턴스를 환경 변수로 조립한다.
 import type { IncomingHttpHeaders } from 'node:http';
 import { fromNodeHeaders } from 'better-auth/node';
+import { recordConsent } from '../_data/consent.js';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
 import { createAdminAuth, createAuth } from './auth.js';
@@ -32,6 +33,7 @@ export function appAuth(): Auth {
   appAuthInstance = createAuth({
     pool: database().pool, secret, baseURL, google,
     mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
+    recordLinkConsent: uid => recordConsent(database().db, uid, consentPolicy().version, 'google-link'),
   });
   return appAuthInstance;
 }
