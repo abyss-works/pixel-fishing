@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BOAT_PALETTE, BOAT_SPRITES, BOAT_WATERLINE } from './boatSprites.generated';
 import { cellIndex, validateSprite, TRANSPARENT } from './types';
-import { BOATS as ALL_BOATS } from '../boats';
-
-// 스프라이트 생성기에 아직 단계가 없는 배(가공 플랜트선) — 생성 파일이 갱신되면 이 목록을 비운다
-const SPRITE_PENDING_TIERS: readonly number[] = [9];
-const BOATS = ALL_BOATS.filter(b => !SPRITE_PENDING_TIERS.includes(b.tier));
+import { BOATS } from '../boats';
 
 describe('배 스프라이트 (생성 파일)', () => {
   it('배 데이터의 모든 단계에 32×16 격자가 있고 무결성 오류가 없다', () => {
