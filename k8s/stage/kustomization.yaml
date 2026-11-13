@@ -42,6 +42,12 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/2/value
         value: preview
+      # 약관 시행일. 확인 화면이 생기기 전에는 수락하지 않은 기존 계정의 게임 요청이 거부되지 않도록 먼 미래 날짜를 둔다.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: CONSENT_EFFECTIVE_DATE
+          value: "2099-12-31"
   # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
   - target:
       kind: Deployment

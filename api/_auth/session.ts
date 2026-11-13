@@ -4,6 +4,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
 import { createAdminAuth, createAuth } from './auth.js';
+import { consentPolicy } from './consentPolicy.js';
 import type { AdminAuth, Auth } from './auth.js';
 import type { GoogleConfig } from './googleLink.js';
 import { resendSender } from './mail.js';
@@ -17,7 +18,7 @@ function googleConfig(): GoogleConfig | null {
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
-/** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */
+/** 앱의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수(약관 시행일 포함)가 없으면 실패한다 */
 export function appAuth(): Auth {
   if (appAuthInstance) return appAuthInstance;
   const secret = process.env.BETTER_AUTH_SECRET;
@@ -26,6 +27,8 @@ export function appAuth(): Auth {
   const from = process.env.MAIL_FROM;
   const google = googleConfig();
   if (!secret || !baseURL || !apiKey || !from || !google) throw new ApiError(500, 'server-config');
+  // 약관 시행일이 없거나 날짜가 아니면 서버가 기동하지 않는다
+  consentPolicy();
   appAuthInstance = createAuth({
     pool: database().pool, secret, baseURL, google,
     mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
