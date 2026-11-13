@@ -6,7 +6,7 @@ import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const EXTERNAL_FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
-const FONT_DIR = 'src/assets/fonts';
+const FONT_DIR = 'src/presentation/ui/fonts';
 
 const walk = (dir: string, accept: (path: string) => boolean): string[] =>
   readdirSync(dir).flatMap(name => {
