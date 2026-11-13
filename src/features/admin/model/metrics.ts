@@ -79,6 +79,7 @@ export const EVENT_LABELS: Record<string, string> = {
   boot: '접속',
   catch: '낚시',
   autoRelease: '자동 방생',
+  autoExtractEnergy: '자동 기운 얻기',
   sell: '판매',
   upgradeRod: '낚싯대 강화',
   buyBoat: '배 구매',
