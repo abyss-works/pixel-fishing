@@ -58,8 +58,8 @@ const MIN_MS = 60_000;
 
 /** 종류별 조리 대기(1개당)와 슬롯 지속. 도시락은 도시락 슬롯, 미끼 요리는 미끼 슬롯에 들어간다 */
 export const COOK_KIND_RULES: Readonly<Record<CookKind, { waitMs: number; slotMs: number }>> = {
-  lunch: { waitMs: 60 * MIN_MS, slotMs: 9 * 60 * MIN_MS },
-  bait: { waitMs: 15 * MIN_MS, slotMs: 30 * MIN_MS },
+  lunch: { waitMs: 15 * MIN_MS, slotMs: 9 * 60 * MIN_MS },
+  bait: { waitMs: 1 * MIN_MS, slotMs: 30 * MIN_MS },
 };
 
 /** 보관함 상한 — 완성품과 조리 중인 수량의 합 */

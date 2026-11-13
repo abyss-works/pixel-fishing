@@ -2,6 +2,14 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.19.1] - 2026-11-13
+
+요리 시간이 짧아졌어요
+
+### 밸런스
+
+- 미끼와 도시락을 더 빨리 요리할 수 있어요.
+
 ## [0.19.0] - 2026-11-13
 
 요리와 구글 로그인이 생겼어요
@@ -929,6 +937,7 @@
 - 이사 코드가 생겼어요. 이사 코드로 진행을 다른 브라우저나 기기로 옮길 수 있어요.
 - 쿠폰이 생겼어요.
 
+[0.19.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.1
 [0.19.0]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.0
 [0.18.5]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.18.5
 [0.18.4]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.18.4

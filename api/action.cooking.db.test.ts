@@ -1,7 +1,7 @@
 // 액션 경로의 요리 — 실제 Postgres에서 슬롯 효과가 캐치 경로(빠른 경로, 리듀서 경로)에 같게 걸리는지,
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
+import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -196,6 +196,7 @@ describe('요리 액션', () => {
 
   describe('조리와 먹기', () => {
     const LUNCH = 'cook-lunch-bite';
+    const LUNCH_WAIT = COOK_KIND_RULES.lunch.waitMs;
     const lunchRecipe = recipeById(LUNCH);
     if (!lunchRecipe) throw new Error('레시피를 찾을 수 없다');
     const lunchCost = (count: number) => Object.fromEntries(
@@ -229,19 +230,19 @@ describe('요리 액션', () => {
       await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 2 });
       // 완성 전에는 보관함에 없다
       await rewind(uid);
-      vi.setSystemTime(Date.parse(NOW) + 59 * 60_000);
+      vi.setSystemTime(Date.parse(NOW) + LUNCH_WAIT - 60_000);
       expect(await callAction(userToken(uid), { type: 'eat', item: LUNCH }))
         .toMatchObject({ status: 422, body: { error: 'item-not-owned' } });
       // 1개가 완성되면 추가 완성분과 함께 2개가 보관함에 들어간다. 조리는 남은 1개로 이어진다
       await rewind(uid);
-      const eatAt = Date.parse(NOW) + 61 * 60_000;
+      const eatAt = Date.parse(NOW) + LUNCH_WAIT + 60_000;
       vi.setSystemTime(eatAt);
       expect((await callAction(userToken(uid), { type: 'eat', item: LUNCH })).status).toBe(200);
       const { data } = await stored(uid);
       expect(data.items).toEqual({ [LUNCH]: 1 });
       expect(data.slots.lunch).toEqual({ id: LUNCH, endsAt: new Date(eatAt + 9 * 3_600_000).toISOString() });
       expect(data.cooking).toEqual({
-        recipe: LUNCH, count: 1, bonus: [true], startedAt: new Date(Date.parse(NOW) + 3_600_000).toISOString(),
+        recipe: LUNCH, count: 1, bonus: [true], startedAt: new Date(Date.parse(NOW) + LUNCH_WAIT).toISOString(),
       });
       expect((await eventsOf(uid)).map(e => e.type).sort()).toEqual(['cook', 'eat']);
     });

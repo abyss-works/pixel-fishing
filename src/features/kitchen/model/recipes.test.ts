@@ -4,13 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { DISPLAY_GRADE } from '../../../game/content/rarity';
-import { COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById, toStoredEnergy } from '../../../game/content/cooking';
+import { COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById, toStoredEnergy } from '../../../game/content/cooking';
 import {
   recipeEffectLines, recipeGrade, recipeLabel, recipeTitle, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
+const LUNCH_WAIT = COOK_KIND_RULES.lunch.waitMs;
+const BAIT_WAIT = COOK_KIND_RULES.bait.waitMs;
 const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const home = { kind: 'base', id: 'home' } as const;
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: 5, location: home, ...over });
@@ -173,11 +175,11 @@ describe('수량과 보관함', () => {
 
   it('조리 시간과 슬롯 지속은 종류 규칙에서 읽고 조리 시간은 수량을 곱한다', () => {
     const lunch = selectRecipeView(seed({ items: energy(2000) }), R, 2, T0);
-    expect(lunch.waitMs).toBe(2 * 60 * MIN);
-    expect(lunch.slotMs).toBe(9 * 60 * MIN);
+    expect(lunch.waitMs).toBe(2 * LUNCH_WAIT);
+    expect(lunch.slotMs).toBe(COOK_KIND_RULES.lunch.slotMs);
     const bait = selectRecipeView(seed({ items: energy(2000, 2000) }), recipe('cook-bait-mutation'), 3, T0);
-    expect(bait.waitMs).toBe(3 * 15 * MIN);
-    expect(bait.slotMs).toBe(30 * MIN);
+    expect(bait.waitMs).toBe(3 * BAIT_WAIT);
+    expect(bait.slotMs).toBe(COOK_KIND_RULES.bait.slotMs);
   });
 });
 
@@ -200,20 +202,20 @@ describe('조리 상태 줄', () => {
 
   it('조리 중이면 레시피와 완성 수, 다음 완성까지 남은 분을 낸다', () => {
     const game = seed({ cooking: { recipe: R.id, count: 3, bonus: [false, false, false], startedAt: T0 } });
-    const s = selectKitchenStatus(game, at(90 * MIN));
-    expect(s.cooking).toMatchObject({ recipe: R, completed: 1, count: 3, nextInMin: 30 });
+    const s = selectKitchenStatus(game, at(LUNCH_WAIT + 5 * MIN));
+    expect(s.cooking).toMatchObject({ recipe: R, completed: 1, count: 3, nextInMin: (LUNCH_WAIT - 5 * MIN) / MIN });
     expect(s.stored).toBe(3); // 완성 1개와 조리 중 2개
   });
 
   it('남은 시간은 올림해서 1분 미만으로 보이지 않게 한다', () => {
     const game = seed({ cooking: { recipe: R.id, count: 1, bonus: [false], startedAt: T0 } });
-    const s = selectKitchenStatus(game, at(60 * MIN - 5_000));
+    const s = selectKitchenStatus(game, at(LUNCH_WAIT - 5_000));
     expect(s.cooking?.nextInMin).toBe(1);
   });
 
   it('모두 완성되면 조리 중이 아니라 보관함에 든 것으로 센다', () => {
     const game = seed({ cooking: { recipe: R.id, count: 2, bonus: [true, false], startedAt: T0 } });
-    const s = selectKitchenStatus(game, at(5 * 60 * MIN));
+    const s = selectKitchenStatus(game, at(2 * LUNCH_WAIT));
     expect(s.cooking).toBeNull();
     expect(s.stored).toBe(3); // 넣은 2개와 저울 추가분 1개
   });
