@@ -64,7 +64,7 @@ describe('ev --growth', () => {
   it('증가율 표를 더하고 옵션이 없으면 더하지 않는다', () => {
     const text = runCli(['ev', '--growth']).stdout;
     expect(text).toContain('해역 사이 딱렙 방치 EV 증가율');
-    expect(text).toContain('+64.4%');
+    expect(text).toContain('+103.1%');
     expect(runCli(['ev']).stdout).not.toContain('증가율');
   });
 });
@@ -163,7 +163,7 @@ describe('보상 기준 방식', () => {
     const same = writeJson({
       rod: {
         powerPerLevel: 5, costBase: 50, costGrowth: 1.7, costPowerFrom: 15, costPowerExp: 8, biteDecay: 0.94,
-        idleBoost: { basis: 'level', unit: 5, world: [5, 5, 4, 4, 3], village: [10, 9, 8, 7, 6, 5, 4] },
+        idleBoost: { basis: 'level', unit: 5, world: [5, 5, 4, 4, 3] },
       },
       spots: { sea: { gradeMult: { common: 1 } } },
     });

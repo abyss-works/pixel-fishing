@@ -14,11 +14,11 @@ describe('보상 축 정의', () => {
     expect(byKey.normal('sea')).toEqual({});
     expect(byKey.good('sea').rareMult).toBe(1.6);
     expect(byKey.perfect('sea').rareMult).toBe(2.0);
-    // 방치 플래토(하한)와 방치 진입(레벨 차 0)의 배수 — 마을 해역은 현행 표, 그 밖은 새 표
+    // 방치 플래토(하한)와 방치 진입(레벨 차 0)의 배수 — 모든 해역이 같은 표를 쓴다
     expect(byKey.idleBest('sea').commonMult).toBe(3);
     expect(byKey.idleWorst('sea').commonMult).toBe(5);
-    expect(byKey.idleBest('pond').commonMult).toBe(4);
-    expect(byKey.idleWorst('pond').commonMult).toBe(10);
+    expect(byKey.idleBest('pond').commonMult).toBe(3);
+    expect(byKey.idleWorst('pond').commonMult).toBe(5);
   });
 });
 

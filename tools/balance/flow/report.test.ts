@@ -312,7 +312,7 @@ describe('분포와 이동 명령', () => {
     const t = renderText(runFlow(base({ commands: ['transition'] })));
     expect(t).not.toContain('이동 시간');
     expect(t).toContain('| 인도양 → 남인도양 | 4.93시간');
-    expect(t).toContain('| 남대서양 용승대 → 세인트헬레나 | 15.87시간');
+    expect(t).toContain('| 남대서양 용승대 → 세인트헬레나 | 15.85시간');
   });
 
   it('분포 명령은 최대 일수가 짧아 끝내지 못해도 죽지 않고 미도달을 밝힌다', () => {

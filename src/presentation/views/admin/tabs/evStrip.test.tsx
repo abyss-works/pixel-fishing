@@ -13,7 +13,7 @@ import { SPOTS, drawRows } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
 import { idleDialsOf } from '../../../../game/rules/power';
 
-// 방치 두 축의 배수는 해역마다 다르다(마을 해역은 현행 표, 그 밖은 새 표)
+// 방치 두 축의 배수는 모든 해역이 같다(power.idleDialsOf)
 const AXES = [
   { key: 'normal', mult: () => ({}) },
   { key: 'good', mult: () => ({ rareMult: 1.6 }) },

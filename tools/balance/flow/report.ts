@@ -170,12 +170,12 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워, 해역 어종 가격 배율, 낚싯대 규칙, 가상 해역을 덮어쓰는 JSON. 형식은
                      {"boats":{"2":{"price":2500,"fameReq":800}},"spots":{"sea":{"powerReq":35,"priceMult":0.85,"gradeMult":{"rare":1.1}}},
                       "rod":{"powerPerLevel":5,"costBase":50,"costGrowth":1.7,"costPowerFrom":15,"costPowerExp":8,"biteDecay":0.94,
-                             "idleBoost":{"world":[5,5,4,4,3],"village":[10,9,8,7,6,5,4],"basis":"level","unit":5}},
+                             "idleBoost":{"world":[5,5,4,4,3],"basis":"level","unit":5}},
                       "addSpots":[{"id":"next","name":"다음 해역","like":"sthelena","ref":"sthelena","powerReq":170,"zone":"newregion","growth":0.45,
                                    "boat":{"price":5000000,"fameReq":400000}}]}
                      priceMult는 그 해역 어종 판매가에 곱하고 gradeMult는 등급별(common, rare, epic, legendary)로, nightMult는 밤 어종에만 등급별로 더 곱한다. 곱한 값은 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
                      rod: powerPerLevel를 바꿔도 파워 미달 페널티의 간격(레벨당 5파워 단위)은 제품 값 그대로다. powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이고 biteDecayMode(both 또는 alternate, 기본 both)는 최소와 최대에 함께 곱할지 홀짝 레벨에서 번갈아 곱할지 정한다.
-                     idleBoost는 방치 배수 표(레벨 차 0, 1, 2, ...이고 마지막 값이 하한). basis가 level이면 요구 파워를 넘은 만큼을 레벨당 파워로 나눈 레벨 차로, power이면 unit(생략하면 제품의 레벨당 파워)으로 나눈 값으로 표를 고른다
+                     idleBoost는 모든 해역이 쓰는 방치 배수 표(레벨 차 0, 1, 2, ...이고 마지막 값이 하한). basis가 level이면 요구 파워를 넘은 만큼을 레벨당 파워로 나눈 레벨 차로, power이면 unit(생략하면 제품의 레벨당 파워)으로 나눈 값으로 표를 고른다
                      addSpots(opening, exception, travel, effects, window, recipes에서는 쓸 수 없다): 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
                      zone을 주면 그 이름의 새 지역이고 생략하면 like의 지역이다. boat를 주면 그 해역을 여는 새 배를 더한다. 가상 어종은 구역 도감 조건에 세지 않는다
   --json             표 대신 JSON으로 낸다
@@ -1362,7 +1362,7 @@ function designText(d: DesignReport): string[] {
     ['전환', '앞 해역 EV(진입 직전 Lv)', '다음 해역 진입 EV', '비', '판정', '방치 이득 제외 앞 해역 EV', '방치 이득 제외 비', '방치 이득 제외 판정'],
     d.reversals.map(x => [`${nameOf(x.spot)} → ${nameOf(x.next)}`, `${n0(x.ev)}(Lv${x.level})`, n0(x.nextEv), `${(x.ev / x.nextEv).toFixed(2)}`, verdict(x.reversed, x.tolerated), n0(x.evNoBoost), (x.evNoBoost / x.nextEv).toFixed(2), verdict(x.reversedNoBoost, x.toleratedNoBoost)]),
   ));
-  out.push(`\n레벨 차 이득(방치 배수 표)은 마을 해역은 ${d.boostEnds.village}레벨 차, 그 밖의 해역은 ${d.boostEnds.world}레벨 차에서 끝난다.`);
+  out.push(`\n레벨 차 이득(방치 배수 표)은 모든 해역에서 ${d.boostEnd}레벨 차에서 끝난다.`);
 
   if (d.anchors.length > 0) {
     out.push('\n## 비용 기준 역산 — 기준점 오차');

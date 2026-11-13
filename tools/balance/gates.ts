@@ -116,14 +116,14 @@ export const REGION_ENTRY_TARGET = {
 
 /** 알려진 예외: 도착 해역별 지역 진입 전환 시간의 현재 값(시간) */
 export const KNOWN_TIME_RANGE: Partial<Record<SpotId, number>> = {
-  indian: 1.27,
+  indian: 1.28,
   mozstrait: 5.97,
   benguela: 22.85,
 };
 
 /** 알려진 예외: 도착 해역별 전환 시간이 직전 전환보다 줄어든 폭의 현재 값(시간) */
 export const KNOWN_TIME_ORDER: Partial<Record<SpotId, number>> = {
-  sthelena: 6.98,
+  sthelena: 7,
 };
 
 /** 범위에서 벗어난 정도. 아래쪽은 음수, 위쪽은 양수, 안은 0 */

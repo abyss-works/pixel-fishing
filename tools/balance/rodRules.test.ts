@@ -97,7 +97,7 @@ describe('낚싯대 규칙 덮어쓰기', () => {
   });
 
   it('방치 배수 표를 바꾸고, 레벨 차 기준은 새 레벨당 파워로, 파워 초과 기준은 주어진 단위로 센다', () => {
-    const base = [...IDLE_BOOST_STEPS.world];
+    const base = [...IDLE_BOOST_STEPS];
     restore = applyRodRules({ powerPerLevel: 2.5, idleBoost: { world: [9, 8, 7, 6, 5], basis: 'level' } });
     // 레벨 차 기준: 파워 초과 5는 2레벨 차
     expect(relativeIdleBoost(105 + 5, 'mozstrait')).toBe(7);
@@ -107,7 +107,7 @@ describe('낚싯대 규칙 덮어쓰기', () => {
     expect(relativeIdleBoost(105 + 100, 'mozstrait')).toBe(5);
     restore();
     restore = null;
-    expect([...IDLE_BOOST_STEPS.world]).toEqual(base);
+    expect([...IDLE_BOOST_STEPS]).toEqual(base);
   });
 
   it('파워 초과 기준의 단위를 생략하면 제품의 레벨당 파워(덮어쓰기 전)다', () => {
@@ -124,7 +124,8 @@ describe('낚싯대 규칙 입력 검사', () => {
     expect(() => parseRodRules({ biteDecay: 1.2 })).toThrow('biteDecay');
     expect(() => parseRodRules({ idleBoost: { world: [] } })).toThrow('비어');
     expect(() => parseRodRules({ idleBoost: { basis: 'x' } })).toThrow('basis');
-    expect(() => parseRodRules({ idleBoost: { village: [1, 'a'] } })).toThrow('숫자');
+    expect(() => parseRodRules({ idleBoost: { world: [1, 'a'] } })).toThrow('숫자');
+    expect(() => parseRodRules({ idleBoost: { village: [1, 2] } })).toThrow('알 수 없는 키');
   });
 
   it('올바른 입력은 그대로 돌려준다', () => {
