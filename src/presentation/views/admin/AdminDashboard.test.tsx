@@ -1,6 +1,7 @@
 import { render, screen, cleanup, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { afterEach, describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
+import { powerReqOf } from '../../../game/content/spots';
 import { QueryProvider } from '../../../core/QueryProvider';
 import AdminApp from './AdminDashboard';
 
@@ -19,7 +20,7 @@ describe('관리자 대시보드 페이지', () => {
   it('어종 시뮬레이션 탭 — 수역별 표가 확정 데이터로 채워진다', () => {
     openFish();
     expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/요구 파워 40/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(new RegExp(`요구 파워 ${powerReqOf('deep')}`)).length).toBeGreaterThan(0);
   });
 
   it('기대값 띠가 어종 표 머리에 산다 — 축 5개와 Δ 열이 같은 프레임 안에', () => {
