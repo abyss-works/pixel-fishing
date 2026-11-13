@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { ReactNode } from 'react';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { DispatchResult } from '../../../../features/gameplay/service/types';
@@ -25,31 +26,39 @@ export interface CompareRow {
   dim?: boolean;
 }
 
+/** 문자열 값의 쉼표 뒤에 줄 바꿈 자리(폭 없음)를 둔다. 자릿수가 많은 값이 좁은 칸에서 천 단위 묶음 경계로 줄을 바꾸게 한다. 글자는 바뀌지 않는다. */
+function breakable(node: ReactNode): ReactNode {
+  if (typeof node !== 'string' || !node.includes(',')) return node;
+  const parts = node.split(/(?<=,)/);
+  return parts.map((part, i) => <Fragment key={i}>{i > 0 && <wbr />}{part}</Fragment>);
+}
+
 /** 현재와 확정 후 비교 표 — 이름, 현재, 확정 후 세 열. 열 머리와 이름에 규칙 설명 툴팁을 달 수 있다.
- *  값 열 폭은 PC 레이아웃에서 7rem, 9rem으로 고정이고 모바일 레이아웃에서는 칸 폭의 비율이라 좁은 창에도 가로 스크롤 없이 들어간다(모바일은 표의 최소 폭을 풀어 비율이 담은 칸 폭만 따르고, 값 칸도 줄을 바꾼다).
- *  확정 후 값과 변화량 사이는 줄 바꿈 자리(폭 없음)라서, 값 칸이 좁으면 변화량이 아래 줄로 내려가 칸 밖으로 넘치지 않는다. PC 레이아웃은 줄을 바꾸지 않아 그대로다.
+ *  PC 레이아웃은 값 열 폭을 7rem, 9rem으로 고정하고 줄을 바꾸지 않는다.
+ *  모바일 레이아웃은 열 폭을 내용에 맞추는 자동 배치라 값이 길어지면 그 열이 넓어지고, 모자라면 값 칸이 줄을 바꾼다. 가로 스크롤 없이 칸 폭에 들어가며 이웃 열과 겹치지 않는다.
+ *  값의 쉼표 뒤와 확정 후 값과 변화량 사이는 줄 바꿈 자리(폭 없음)라서, 천 단위 묶음 경계나 변화량 앞에서 줄이 바뀐다. 금액은 잘리거나 말줄임되지 않는다.
  *  이름이 길면 이름 칸에서 줄을 바꾼다. heads가 하나면 확정 후 열 없이 현재 열만 보인다(더 바꿀 수 없는 최고 단계). */
 export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode, ReactNode]; rows: CompareRow[] }) {
   const showNext = heads.length > 1;
   const mobile = useMobileLayout();
-  const cols = mobile ? [null, '30%', '40%'] : [null, '7rem', '9rem'];
+  const cols = mobile ? undefined : showNext ? [null, '7rem', '9rem'] : [null, '7rem'];
   return (
     <TableBox className="shrink-0 px-3 pt-1 pb-2">
-      <DataTable cols={showNext ? cols : cols.slice(0, 2)} nameMin={mobile ? '0px' : '6rem'}
+      <DataTable cols={cols} nameMin="6rem"
                  className={`pf-table [&_th]:h-[30px] [&_th]:text-2xs [&_th]:text-right [&_td]:h-7 [&_td]:text-right
-                            [&_td]:whitespace-nowrap [&_td]:border-b-0 [&_tbody_tr+tr_td]:border-t [&_tbody_tr+tr_td]:border-line/60
+                            [&_td]:border-b-0 [&_tbody_tr+tr_td]:border-t [&_tbody_tr+tr_td]:border-line/60
                             [&_th:first-child]:text-left [&_td:first-child]:text-left [&_th:first-child]:pl-0 [&_td:first-child]:pl-0
-                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 ${mobile ? 'min-w-0! [&_td]:whitespace-normal [&_td]:break-keep [&_th]:break-keep' : ''}`}>
+                            [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 ${mobile ? '[&_td]:whitespace-normal [&_td]:break-keep [&_td]:wrap-break-word [&_th]:break-keep' : '[&_td]:whitespace-nowrap'}`}>
         <thead><tr><th aria-label="항목" /><th>{heads[0]}</th>{showNext && <th>{heads[1]}</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className={r.dim ? 'opacity-50' : undefined}>
               <td className="text-text-dim">{r.label}</td>
-              <td className="pf-accent text-xs text-text-dim">{r.value}</td>
+              <td className="pf-accent text-xs text-text-dim">{breakable(r.value)}</td>
               {showNext && (
                 <td className="pf-accent text-xs text-accent">
-                  {r.next}
-                  {r.delta && <><wbr /><span className="ml-1.5 text-2xs">{r.delta}</span></>}
+                  {breakable(r.next)}
+                  {r.delta && <><wbr /><span className="ml-1.5 text-2xs">{breakable(r.delta)}</span></>}
                 </td>
               )}
             </tr>
