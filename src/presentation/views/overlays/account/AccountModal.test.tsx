@@ -70,6 +70,15 @@ describe('게스트의 구글 연결', () => {
     expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
   });
 
+  it('구글 계정 사용자의 문서 링크 줄에 이용약관, 개인정보 처리방침, 운영정책이 새 탭 링크로 있다', () => {
+    open('a@example.com', 'google');
+    for (const [name, href] of [['이용약관', '/terms'], ['개인정보 처리방침', '/privacy'], ['운영정책', '/policy']]) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+  });
+
   it('이메일 폼은 접혀 있다가 텍스트 링크를 누르면 같은 창 안에서 펼쳐진다', () => {
     open(null, 'guest');
     expect(screen.queryByLabelText('이메일')).toBeNull();

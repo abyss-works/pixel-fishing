@@ -131,6 +131,7 @@ export default function AccountModal({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
       <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>
       <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>
+      <ExternalLink href={LEGAL_PATHS.policy}>운영정책</ExternalLink>
     </div>
   );
 
