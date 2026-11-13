@@ -429,5 +429,44 @@ describe('테스트 데이터베이스', () => {
         await copy.drop();
       }
     });
+
+    it('지울 표를 참조하는 객체가 있으면 객체를 지우지 않고 실패한다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query('create table auth.supabase_users (id uuid primary key, email text)');
+        await other.query('create view public.legacy_user_emails as select id, email from auth.supabase_users');
+
+        await expect(other.query(migration('0035_drop_supabase_users.sql'))).rejects.toMatchObject({ code: '2BP01' });
+        expect(await exists(other)).toBe(true);
+        await other.query('select 1 from public.legacy_user_emails');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+
+    it('0035.down, 0021.down 순으로 내렸다가 0021, 0035를 다시 올리는 왕복이 된다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0035_drop_supabase_users.down.sql'));
+        expect(await exists(other)).toBe(true);
+        await other.query(migration('0021_better_auth.down.sql'));
+        const legacy = await other.query(`select to_regclass('auth.supabase_users')::text as r, to_regclass('auth.sessions')::text as s`);
+        expect(legacy.rows[0]).toEqual({ r: null, s: null });
+        await other.query(migration('0021_better_auth.sql'));
+        await other.query(migration('0035_drop_supabase_users.sql'));
+        expect(await exists(other)).toBe(false);
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+        await other.query('select 1 from public.v_admin_users');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
   });
 });
