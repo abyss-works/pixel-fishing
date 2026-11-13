@@ -32,7 +32,7 @@ afterAll(async () => {
 });
 
 describe('공개 문서 제공', () => {
-  it.each(['/about', '/terms', '/privacy'])('%s는 로그인 쿠키 없이 HTML로 나간다', async (path) => {
+  it.each(['/about', '/terms', '/privacy', '/policy'])('%s는 로그인 쿠키 없이 HTML로 나간다', async (path) => {
     const res = await fetch(base + path);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^text\/html/);
@@ -54,7 +54,7 @@ describe('공개 문서 제공', () => {
     expect(maxAge).toBeLessThanOrEqual(3600);
   });
 
-  it.each(['/terms', '/privacy'])('%s의 머리에 서버의 현재 판이 들어가고 토큰이 남지 않는다', async (path) => {
+  it.each(['/terms', '/privacy', '/policy'])('%s의 머리에 서버의 현재 판이 들어가고 토큰이 남지 않는다', async (path) => {
     const html = await (await fetch(base + path)).text();
     expect(html).toContain('<p class="edition">시행일(판): 2020-01-01</p>');
     expect(html).not.toContain('{{');
@@ -68,21 +68,21 @@ describe('공개 문서 제공', () => {
     expect(await (await fetch(`${base}/about`)).text()).not.toContain('2020-01-01');
   });
 
-  it.each(['/about', '/terms', '/privacy'])('시행일이 지난 뒤 수락하지 않은 계정의 세션 쿠키로도 %s가 200이고 쿠키를 만들지 않는다', async (path) => {
+  it.each(['/about', '/terms', '/privacy', '/policy'])('시행일이 지난 뒤 수락하지 않은 계정의 세션 쿠키로도 %s가 200이고 쿠키를 만들지 않는다', async (path) => {
     const res = await fetch(base + path, { headers: { cookie: 'better-auth.session_token=unaccepted-account' } });
     expect(res.status).toBe(200);
     expect(res.headers.has('set-cookie')).toBe(false);
   });
 
   it('목록에 없는 주소는 넘긴다', async () => {
-    expect((await fetch(`${base}/policy`)).status).toBe(404);
+    expect((await fetch(`${base}/support`)).status).toBe(404);
   });
 
   it.each(Object.values(LEGAL_PATHS))('게임 안 링크 상수의 주소 %s를 서버가 낸다', async (path) => {
     expect((await fetch(base + path)).status).toBe(200);
   });
 
-  it.each(['/about', '/terms', '/privacy'])('확장자 있는 %s.html은 확장자 없는 주소로 옮긴다', async (path) => {
+  it.each(['/about', '/terms', '/privacy', '/policy'])('확장자 있는 %s.html은 확장자 없는 주소로 옮긴다', async (path) => {
     const res = await fetch(`${base}${path}.html`, { redirect: 'manual' });
     expect(res.status).toBe(301);
     expect(res.headers.get('location')).toBe(path);

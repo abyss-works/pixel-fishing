@@ -11,8 +11,8 @@ export const GOOGLE_TAG = {
   signIn: 'sign-in',
 } as const;
 
-/** 이용약관과 개인정보 처리방침 페이지의 주소. 게임 주소 아래에 두고 로그인하지 않아도 볼 수 있다 */
-export const LEGAL_PATHS = { terms: '/terms', privacy: '/privacy' } as const;
+/** 이용약관, 개인정보 처리방침, 운영정책 페이지의 주소. 게임 주소 아래에 두고 로그인하지 않아도 볼 수 있다 */
+export const LEGAL_PATHS = { terms: '/terms', privacy: '/privacy', policy: '/policy' } as const;
 
 /** 지금 계정의 로그인 방식 */
 export type LoginMethod = 'guest' | 'email' | 'google';
