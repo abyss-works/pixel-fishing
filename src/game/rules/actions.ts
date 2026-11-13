@@ -19,7 +19,7 @@ import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
-  applyEnergyGain, canCook, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
+  applyEnergyGain, canCook, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
   appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
@@ -112,12 +112,16 @@ export interface ActionDeps {
   mail?: { id: number; gold: number } | null;
   /** 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
   guild?: GuildEffects | null;
+  /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
+  guest?: boolean;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
 export type ActionResult =
-  /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다 */
-  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; ticket?: string }
+  /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다.
+   *  extracted·energy = 가공 플랜트선이 넘친 개체를 기운으로 바꾼 개체들과 얻은 등급별 기운(저장 단위). 없으면 생략한다 */
+  | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
+      energy?: Record<RarityId, number>; ticket?: string }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; desc: string }
   | { type: 'mail'; gold: number }
@@ -409,11 +413,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
       const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag, guild.bag));
-      const gone = overflow.map(uid => caught.bag.find(b => b.uid === uid)!);
-      const released: ReleasedFish[] = gone.map(i => {
+      // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
+      const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
+      const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
+      const gone = view(plan.released);
+      const taken = view(plan.gain.uids);
+      const toReleased = (i: FishInstance): ReleasedFish => {
         const f = instanceFish(i);
         return { uid: i.uid, name: f ? formName(f, i.form) : i.fishId };
-      });
+      };
+      const released: ReleasedFish[] = gone.map(toReleased);
+      const extracted: ReleasedFish[] = taken.map(toReleased);
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
@@ -424,16 +434,21 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ...appliedSlots(state, deps.now, action.judgment),
       } }];
       // 방생도 스트림에 남긴다 — 개체가 사라진 이유가 판매인지 넘침인지 구분돼야 집계가 선다
-      if (overflow.length > 0) {
+      if (gone.length > 0) {
         // fish는 놓아준 개체의 어종·폼 — 놓친 가치를 셀 수 있게 uids 옆에 덧붙인다
-        events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+        events.push({ type: 'autoRelease', payload: { uids: plan.released, reason: 'bag-full',
           fish: gone.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
       }
-      const next = { ...release(caught, overflow), pity: drawn.pity, firstCatch: drawn.firstCatch, namedPity: named.pity };
+      if (taken.length > 0) {
+        events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
+          fish: taken.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
+      }
+      const next = { ...applyEnergyGain(release(caught, plan.released), plan.gain), pity: drawn.pity, firstCatch: drawn.firstCatch, namedPity: named.pity };
       return {
         ok: true,
         state: next,
-        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released, ...ticketResult },
+        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
+          ...(taken.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}), ...ticketResult },
         events: [...events, ...ticketEvents],
       };
     }

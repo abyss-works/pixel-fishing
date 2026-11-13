@@ -3,7 +3,7 @@
 // 호출부(리듀서, 서버, 화면)는 이 모듈이 돌려준 판정과 값을 쓴다 — 규칙을 다시 조립하지 않는다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import {
-  COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, recipeCostStored,
+  AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, recipeCostStored,
 } from '../content/cooking.js';
 import type { Recipe } from '../content/cooking.js';
 import { RARITY_ORDER } from '../content/rarity.js';
@@ -118,6 +118,32 @@ export function applyEnergyGain(state: GameState, gain: EnergyGain): GameState {
   let next = release(state, gain.uids);
   for (const r of RARITY_ORDER) next = addItem(next, ENERGY_ITEM_IDS[r], gain.byGrade[r]);
   return next;
+}
+
+export interface OverflowPlan {
+  /** 놓아줄 개체의 uid */
+  released: string[];
+  /** 기운으로 바꿀 개체와 얻는 기운 - 양은 기운 얻기(energyGain)와 같다 */
+  gain: EnergyGain;
+}
+
+/** 가방이 차서 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나눈다.
+ *  가공 플랜트선을 가진 계정(게스트 제외)은 개체의 서식 해역이 지금 기운 대상이면 기운을 얻고, 아니면 놓아준다.
+ *  내보낼 개체는 가방 상한 규칙이 이미 골랐으므로 여기서 다른 개체로 바꾸지 않는다.
+ *  state.bag에는 내보낼 개체가 들어 있어야 한다 */
+export function planOverflow(
+  state: Pick<GameState, 'boat' | 'energyTargets' | 'bag'>, uids: readonly string[], guest: boolean,
+): OverflowPlan {
+  if (guest || state.boat < AUTO_ENERGY_BOAT) return { released: [...uids], gain: energyGain(state, []) };
+  const bag = new Map(state.bag.map(i => [i.uid, i]));
+  const extractable = uids.filter(uid => {
+    const inst = bag.get(uid);
+    const fish = inst ? instanceFish(inst) : undefined;
+    return fish !== undefined && energyTargetOf(state, fish.spot);
+  });
+  const gain = energyGain(state, extractable);
+  const taken = new Set(gain.uids);
+  return { released: uids.filter(uid => !taken.has(uid)), gain };
 }
 
 // ---------- 조리 ----------
