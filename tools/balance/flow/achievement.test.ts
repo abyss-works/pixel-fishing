@@ -66,13 +66,27 @@ describe('보상 금액', () => {
 });
 
 describe('두 업적 나눔', () => {
-  it('원값을 비율로 나눠 각각 반올림한다', () => {
+  it('기본 업적은 반올림한 구역 크기 x 몫을 반올림한 값이고 네임드 업적이 나머지를 받는다', () => {
     const a = rewardAmounts(rewardBasis()[1], 0.25)!;
     const s = splitReward(a, 0.4);
-    expect(s.basic.gold).toBe(roundReward(a.rawGold * 0.4));
-    expect(s.named.gold).toBe(roundReward(a.rawGold * 0.6));
-    expect(s.basic.fame).toBe(roundReward(a.rawFame * 0.4));
-    expect(s.named.fame).toBe(roundReward(a.rawFame * 0.6));
+    expect(s.basic.gold).toBe(roundReward(a.gold * 0.4));
+    expect(s.basic.fame).toBe(roundReward(a.fame * 0.4));
+    expect(s.named.gold).toBe(a.gold - s.basic.gold);
+    expect(s.named.fame).toBe(a.fame - s.basic.fame);
+  });
+
+  it('두 업적의 합은 모든 구역, 비율, 몫에서 구역 크기와 같고 어느 쪽도 음수가 아니다', () => {
+    for (const b of rewardBasis().filter(x => x.next !== null)) {
+      for (const ratio of [0.2, 0.25, 0.3, 1]) {
+        const a = rewardAmounts(b, ratio)!;
+        for (const share of [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1]) {
+          const s = splitReward(a, share);
+          expect(s.basic.gold + s.named.gold).toBe(a.gold);
+          expect(s.basic.fame + s.named.fame).toBe(a.fame);
+          expect(Math.min(s.basic.gold, s.basic.fame, s.named.gold, s.named.fame)).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
   });
 
   it('몫이 0이거나 1이면 한쪽이 전부 받는다', () => {

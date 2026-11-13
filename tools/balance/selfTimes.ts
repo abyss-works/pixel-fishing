@@ -3,7 +3,7 @@
 //   - 구역 수집: 구역 안에서는 해역을 캐치마다 번갈아 낚고, 여러 구역에 걸친 조건은 구역을 하나씩 차례로 채우는 시간의 합이다.
 //     같은 구역에서 다른 조건도 함께 채워지지만, 각 조건의 시간은 그 조건 하나만 목표로 잰다.
 //   - 일반 폼은 일반 폼만, 돌연변이 폼은 돌연변이 폼만 센다. 밤 어종은 낮밤 혼합 확률로 나온다(밤에만 나오는 비율이 시간에 섞여 있다).
-//   - 월척은 캐치마다 크기 분포에서 상위 월척 기준 비율 안에 들 확률로 정하고 폼과 관계없이 센다.
+//   - 월척은 캐치마다 크기 분포에서 상위 월척 기준 비율 안에 들 확률로 정하고 폼과 관계없이 센다. 월척 어종 수는 구역 구분 없이 세며, 구역을 구역 순서대로 하나씩 채운다고 보고 앞 구역을 모두 채운 시간에 이어 센다.
 //   - 네임드는 어종마다 조우 확률과 천장(캐치 수)으로 조우까지 캐치 수를 뽑아 낚시 속도로 나눈 시간의 합이다. 라이선스 취득, 수주, 하루 한도, 결투는 넣지 않는다(결투는 이긴다).
 //   - 낚은 수 단계는 새 계정 진행 시뮬레이션이 센 누적 캐치 수다. 진행이 끝난 뒤(마지막 해역 도착 이후)는 마지막 해역 진입 레벨의 캐치 속도로 이어 센다.
 import { BOUNTIES } from '../../src/game/content/bounties';
@@ -57,6 +57,9 @@ export interface ZoneRun {
   big: (number | null)[];
   /** 구역의 모든 어종에서 월척을 낚은 시각 */
   bigAll: number;
+  /** 구역의 어종 수와, 월척 어종 수가 1, 2, ...에 처음 닿은 시각(시간). 못 닿은 단계는 곡선에 없다 */
+  species: number;
+  bigCurve: number[];
 }
 
 /** 구역 하나를 한 번 낚아 조건마다 채우는 시각을 잰다 — 한 번의 낚시로 모든 조건의 시각을 함께 기록한다 */
@@ -70,6 +73,7 @@ export function zoneRun(i: ZoneRunInput): ZoneRun {
   const night = { normal: nights.length === 0 ? null : Number.POSITIVE_INFINITY, variant: nights.length === 0 ? null : Number.POSITIVE_INFINITY } as ZoneRun['night'];
   const big: (number | null)[] = i.big.map(n => (n > fish.length ? null : Number.POSITIVE_INFINITY));
   let all = Number.POSITIVE_INFINITY, bigAll = Number.POSITIVE_INFINITY;
+  const bigCurve: number[] = [];
   const normalSeen = new Set<string>(), variantNight = new Set<string>(), bigSeen = new Set<string>();
   let normalLeft = fish.length, nightNormalLeft = nights.length, nightVariantLeft = nights.length;
   const bigPending = () => bigAll === Number.POSITIVE_INFINITY || big.some(t => t === Number.POSITIVE_INFINITY);
@@ -97,13 +101,14 @@ export function zoneRun(i: ZoneRunInput): ZoneRun {
       }
       if (i.rand() < BIG_PROB && !bigSeen.has(f.id)) {
         bigSeen.add(f.id);
+        bigCurve.push(hours);
         i.big.forEach((n, k) => { if (big[k] === Number.POSITIVE_INFINITY && bigSeen.size >= n) big[k] = hours; });
         if (bigSeen.size === fish.length) bigAll = hours;
       }
       break;
     }
   }
-  return { grade, night, all, big, bigAll };
+  return { grade, night, all, big, bigAll, species: fish.length, bigCurve };
 }
 
 export interface NamedTimes {
@@ -138,9 +143,22 @@ export function catchTimes(play: Play, steps: readonly number[]): CatchTime[] {
   return steps.map((n, k) => ({ n, hours: r.catchHours[k] ?? end + (n - r.catches) / cph }));
 }
 
+/** 구역을 순서대로 하나씩 채울 때 월척 어종 수가 n에 닿는 시각. 앞 구역은 월척 어종을 모두 모은 뒤 다음 구역으로 넘어간다. 전체 어종 수보다 큰 n은 null */
+export function bigTotal(zones: readonly Pick<ZoneRun, 'species' | 'bigCurve'>[], n: number): number | null {
+  let left = n, t = 0;
+  for (const z of zones) {
+    if (left <= z.species) return t + (z.bigCurve[left - 1] ?? Number.POSITIVE_INFINITY);
+    t += z.bigCurve[z.species - 1] ?? Number.POSITIVE_INFINITY;
+    left -= z.species;
+  }
+  return null;
+}
+
 export interface BigRow {
   n: number;
-  /** 구역마다 월척 어종 n종을 모으는 시간. 구역 어종 수를 넘는 단계는 null */
+  /** 구역 구분 없이 월척 어종 n종을 모으는 시간(구역 순서대로 하나씩 채움). 전체 어종 수를 넘는 단계는 null */
+  total: TimeStat | null;
+  /** 참고: 구역마다 그 구역 안에서만 월척 어종 n종을 모으는 시간. 구역 어종 수를 넘는 단계는 null */
   zones: { zone: string; time: TimeStat | null }[];
 }
 
@@ -160,7 +178,7 @@ export interface SelfTimes {
 
 export interface SelfTimesInput {
   runs: number; seed: number;
-  /** 월척 어종 수 단계(정해지지 않은 값이라 인자로 준다) */
+  /** 월척 어종 수 단계(호출부가 인자로 준다) */
   big: readonly number[];
   /** 낚은 수 단계 */
   catchSteps: readonly number[];
@@ -183,6 +201,8 @@ export function selfTimes(o: SelfTimesInput): SelfTimes[] {
       named: stat(named),
       big: o.big.map((n, k) => ({
         n,
+        total: bigTotal(ZONE_ORDER.map(z => byZone.get(z)![0]), n) === null ? null
+          : stat(Array.from({ length: o.runs }, (_, r) => bigTotal(ZONE_ORDER.map(z => byZone.get(z)![r]), n)!)),
         zones: ZONE_ORDER.map(zone => {
           const xs = byZone.get(zone)!.map(r => r.big[k]);
           return { zone, time: xs.some(x => x === null) ? null : stat(xs as number[]) };

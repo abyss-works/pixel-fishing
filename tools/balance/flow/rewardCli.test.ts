@@ -7,7 +7,7 @@ describe('achievements 명령 인자', () => {
     expect(parseArgs([]).commands).not.toContain('achievements');
   });
 
-  it('비율을 주지 않으면 명세의 후보 범위 20, 25, 30%를 낸다', () => {
+  it('비율을 주지 않으면 기본 비율 20, 25, 30%를 낸다', () => {
     expect(parseArgs(['achievements']).rewards).toEqual([0.2, 0.25, 0.3]);
   });
 

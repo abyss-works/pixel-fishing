@@ -1,7 +1,8 @@
 // 진행 업적 보상 산출 — 구역의 진행 업적 두 개(기본 라이선스 조건, 네임드 라이선스 조건)가 나눠 받는 보상의 크기.
 // 크기는 방치 EV가 아니라 보상 기준 전환(그 구역의 마지막 해역에서 다음 지역 첫 해역으로 넘어가는 전환)의 전환 골드와
 // 그 전환에서 사는 배의 가장 높은 명성 요구치에 같은 비율을 곱해 정한다. 반올림은 의뢰 보상과 같은 자릿수 반올림이다.
-// 비율과 두 업적의 나눔은 정해지지 않은 값이라 호출부가 인자로 준다. 이 모듈은 값을 정하지 않는다.
+// 비율과 두 업적의 나눔은 호출부가 인자로 준다. 이 모듈은 값을 정하지 않는다.
+// 두 업적에 나눌 때는 구역 크기를 먼저 반올림하고, 기본 업적은 구역 크기 x 몫을 반올림한 값, 네임드 업적은 나머지다. 그래서 두 업적의 합은 항상 구역 크기와 같다.
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { SPOTS } from '../../../src/game/content/spots';
@@ -58,13 +59,11 @@ export function rewardAmounts(b: RewardBasis, ratio: number): RewardAmount | nul
 
 export type SplitReward = Record<BountyTier, Reward>;
 
-/** 구역 보상을 두 업적에 나눈다. 기본 업적이 basicShare(0 이상 1 이하)를, 네임드 업적이 나머지를 받고 각각 반올림한다 */
+/** 구역 보상(반올림한 값)을 두 업적에 나눈다. 기본 업적은 구역 크기 x basicShare(0 이상 1 이하)를 반올림한 값이고 네임드 업적이 나머지를 받는다 */
 export function splitReward(a: RewardAmount, basicShare: number): SplitReward {
   if (!(basicShare >= 0 && basicShare <= 1)) throw new Error(`두 업적의 나눔은 0 이상 1 이하여야 합니다: ${basicShare}`);
-  return {
-    basic: { gold: roundReward(a.rawGold * basicShare), fame: roundReward(a.rawFame * basicShare) },
-    named: { gold: roundReward(a.rawGold * (1 - basicShare)), fame: roundReward(a.rawFame * (1 - basicShare)) },
-  };
+  const basic = { gold: Math.min(a.gold, roundReward(a.gold * basicShare)), fame: Math.min(a.fame, roundReward(a.fame * basicShare)) };
+  return { basic, named: { gold: a.gold - basic.gold, fame: a.fame - basic.fame } };
 }
 
 export interface RewardRow extends RewardBasis {

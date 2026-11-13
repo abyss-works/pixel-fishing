@@ -9,13 +9,11 @@ import { mutationWeightsOf, newState, variantShare } from '../../../src/game/rul
 import { canBuyBoat } from '../../../src/game/rules/rules';
 import { powerOfLevel } from '../../../src/game/rules/stats';
 import { upgradeCost } from '../../../src/game/rules/balance';
-import { axisAvailable, rates, rodSpec, zoneOf } from '../model';
+import { axisAvailable, rates, rodSpec } from '../model';
 import type { Axis, Pool, Rates } from '../model';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
-import { FISH } from '../../../src/game/content/fish';
-import { LICENSE_GRADES } from '../../../src/game/rules/logic';
-import { licenseHeld, licenseKey, planBounties } from './bounty';
+import { licenseFish, licenseHeld, licenseKey, planBounties } from './bounty';
 import type { Activity, DexLog } from './bounty';
 import type { Reward } from './achievement';
 import type { Sampler } from './sample';
@@ -147,7 +145,7 @@ export function simulate(opts: SimOptions): SimResult {
   const neededOf = (zone: BountyZone, tier: BountyTier): string[] => {
     const key = `${zone}:${tier}`;
     let ids = needed.get(key);
-    if (!ids) { ids = FISH.filter(f => zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity)).map(f => f.id); needed.set(key, ids); }
+    if (!ids) { ids = licenseFish(zone, tier).map(f => f.id); needed.set(key, ids); }
     return ids;
   };
   /** 도감을 기댓값 경로의 확률로 쌓는가 — 의뢰 수행(라이선스)이나 기댓값 경로의 업적 기록 */
@@ -197,8 +195,8 @@ export function simulate(opts: SimOptions): SimResult {
     fishSec += sec;
   };
 
-  /** 새로 채운 진행 업적을 기록하고 보상을 지급한다 */
-  const settleAchievements = () => {
+  /** 새로 채운 진행 업적을 기록하고 보상을 지급한다. 의뢰 활동 중이면 at이 활동 해역이다 */
+  const settleAchievements = (at?: SpotId) => {
     const a = opts.achievements;
     if (!a) return;
     for (const zone of BOUNTY_ZONES) {
@@ -208,7 +206,7 @@ export function simulate(opts: SimOptions): SimResult {
         if (!done) continue;
         const granted = a.reward(zone, tier);
         if (granted) { gold += granted.gold; fame += granted.fame; }
-        achieved.push({ zone, tier, hours: fishSec / 3600, spot: SPOTS[idx].id, granted });
+        achieved.push({ zone, tier, hours: fishSec / 3600, spot: at ?? SPOTS[idx].id, granted });
       }
     }
   };
@@ -249,7 +247,7 @@ export function simulate(opts: SimOptions): SimResult {
     for (let left = seconds; left > 1e-9 && !finished();) {
       const dt = Math.min(STEP_SEC, left);
       accrue(spots ?? [SPOTS[idx].id], axis, dt);
-      settleAchievements();
+      settleAchievements(spots?.[0]);
       left -= dt;
       settle(dt);
     }

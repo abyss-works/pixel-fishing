@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { FISH } from '../../../src/game/content/fish';
-import { LICENSE_GRADES } from '../../../src/game/rules/logic';
-import { rng, zoneOf } from '../model';
+import { rng } from '../model';
 import { simulate } from './progress';
 import { rewardPlan } from './achievement';
 import type { Reward } from './achievement';
 import { daysReport } from './days';
 import { transitionReport } from './transitions';
 import { createSampler } from './sample';
+import type { Sampler } from './sample';
 
 const run = (o: Partial<Parameters<typeof simulate>[0]> = {}) => simulate({ axis: 'idle', bounty: false, maxDays: 365, ...o });
 const none = () => null;
@@ -61,10 +62,9 @@ describe('업적 보상 지급', () => {
     const base = run({ achievements: { reward: none } });
     const r = run({ achievements: { reward: big } });
     const first = r.achieved.find(a => a.granted !== null);
-    if (first) {
-      const same = base.achieved.find(a => a.zone === first.zone && a.tier === first.tier)!;
-      expect(first.hours).toBe(same.hours);
-    }
+    expect(first).toBeDefined();
+    const same = base.achieved.find(a => a.zone === first!.zone && a.tier === first!.tier)!;
+    expect(first!.hours).toBe(same.hours);
   });
 
   it('명성 보상은 배 명성 대기를 줄인다', () => {
@@ -87,12 +87,26 @@ describe('표본 경로의 업적 달성', () => {
     expect(trial(7, none).arrivals).toEqual(base.arrivals);
   });
 
-  it('표본 경로에서는 실제로 뽑은 일반 폼으로 달성을 정한다', () => {
-    const r = trial(11, none);
-    for (const a of r.achieved) {
-      const needed = FISH.filter(f => zoneOf(f.spot) === a.zone && LICENSE_GRADES[a.tier].includes(f.rarity));
-      expect(needed.length).toBeGreaterThan(0);
-    }
+  /** 모든 어종을 한 번에 낚았다고 알리는 표본기 — variant가 참이면 돌연변이 폼만 낚은 것이다 */
+  const allFish = (variant: boolean): Sampler => ({
+    rng: () => 0.5,
+    cycleSec: () => 1,
+    catchOf: () => { throw new Error('사용하지 않는다'); },
+    valueOf: () => { throw new Error('사용하지 않는다'); },
+    accrue: (_r, _sec, onCatch) => {
+      for (const fish of FISH) onCatch?.({ fish, gold: 0, fame: 0, variant });
+      return { gold: 0, fame: 0, catches: FISH.length };
+    },
+  });
+
+  it('표본 경로에서는 일반 폼을 모두 모으면 모든 진행 업적을 달성한다', () => {
+    const r = run({ sampler: allFish(false), achievements: { reward: none }, maxDays: 1 });
+    expect(r.achieved.map(a => `${a.zone}:${a.tier}`).sort()).toEqual(BOUNTY_ZONES.flatMap(z => [`${z}:basic`, `${z}:named`]).sort());
+  });
+
+  it('표본 경로에서는 돌연변이 폼만 모아서는 진행 업적을 달성하지 못한다', () => {
+    const r = run({ sampler: allFish(true), achievements: { reward: none }, maxDays: 1 });
+    expect(r.achieved).toEqual([]);
   });
 
   it('시드가 다르면 달성 시각이 달라진다', () => {

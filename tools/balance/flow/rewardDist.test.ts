@@ -50,8 +50,10 @@ describe('업적 지급 시점 분포', () => {
   });
 
   it('보상 없는 도착은 보상을 넣은 도착과 같은 시도에서 짝지어 쓴다 — 보상 지급 전 구간은 같다', () => {
-    // 첫 구역(태평양)에는 보상 크기가 있어도 구역 안 달성이 없으면 이후 도착이 달라지지 않는다
-    const r = d.find(x => x.zone === 'pacific' && x.tier === 'basic')!;
-    if ((r.achieved?.n ?? 0) === 0) expect(r.arrivalWithReward).toEqual(r.arrival);
+    // 이 시드와 시도 수에서는 태평양 기본 업적을 구역 안에서 못 채운다. 첫 구역이라 앞선 지급도 없어 드래곤 홀 도착은 같다
+    const few = rewardDist({ ...opts, trials: 2, seed: 1 });
+    const r = few.find(x => x.zone === 'pacific' && x.tier === 'basic')!;
+    expect(r.achieved).toBeNull();
+    expect(r.arrivalWithReward).toEqual(r.arrival);
   });
 });

@@ -1,7 +1,7 @@
 // 밸런스 측정 CLI — 원칙 문서(밸런스)의 측정 지표를 제품 규칙 그대로 계산해 표로 찍는다.
 // 사용: pnpm balance [섹션 ...] [--runs N] [--seed N]
-//   섹션: ev rod income idle move perfect growth journey fame monotonic economy dex achievement bounty live (생략하면 live 외 전부)
-//   achievement(자기만족 업적 달성 시간)는 --big 5,10(월척 어종 수 단계, 정해지지 않은 값이라 주면 구역별로 낸다)과
+//   섹션: ev rod income idle move perfect growth journey fame monotonic economy dex achievement bounty live (생략하면 live와 achievement 외 전부)
+//   achievement(자기만족 업적 달성 시간, 이름을 줄 때만 실행)는 --big 5,10(월척 어종 수 단계)과
 //   --catch-steps 100,1000,10000,100000(낚은 수 단계)을 받는다. 몬테카를로(--runs, --seed)다.
 //   live는 DATABASE_URL(운영·스테이징 DB 직접 연결)이 있을 때만 읽기 전용으로 조회한다.
 //   dex는 몬테카를로(기본 400회, 시드 고정이라 결과가 재현된다).
@@ -33,7 +33,7 @@ const flag = (name: string, fallback: number) => {
 };
 const SECTIONS = ['ev', 'rod', 'income', 'idle', 'move', 'perfect', 'growth', 'journey', 'fame', 'monotonic', 'economy', 'dex', 'achievement', 'bounty', 'live'] as const;
 const picked = SECTIONS.filter(s => args.includes(s));
-const show = (s: typeof SECTIONS[number]) => (picked.length === 0 ? s !== 'live' : picked.includes(s));
+const show = (s: typeof SECTIONS[number]) => (picked.length === 0 ? s !== 'live' && s !== 'achievement' : picked.includes(s));
 const RUNS = flag('--runs', 400);
 const listFlag = (name: string, fallback: number[]): number[] => {
   const i = args.indexOf(name);
@@ -342,7 +342,10 @@ if (show('achievement')) {
     console.log(`등급별 일반 폼 전부(마을 포함 모든 구역): ${RARITY_ORDER.map(k => `${RARITY[k].name} ${statText(x.grades[k])}`).join(' | ')}`);
     console.log(`밤 어종 전부(모든 구역): 일반 폼 ${statText(x.night.normal)} | 돌연변이 폼 ${statText(x.night.variant)}`);
     console.log(`네임드 전부 토벌(유물 전부 교환 재료 포함, 라이선스·수주·하루 한도 제외): ${statText(x.named)}`);
-    for (const b of x.big) console.log(`월척 어종 ${b.n}종(구역별): ${b.zones.map(z => `${z.zone} ${z.time ? statText(z.time) : '어종 수 부족'}`).join(' | ')}`);
+    for (const b of x.big) {
+      console.log(`월척 어종 ${b.n}종(구역 구분 없음, 구역을 ${ZONE_ORDER.join(', ')} 순서로 하나씩 채움): ${b.total ? statText(b.total) : '어종 수 부족'}`);
+      console.log(`  참고, 구역 안에서만 ${b.n}종: ${b.zones.map(z => `${z.zone} ${z.time ? statText(z.time) : '어종 수 부족'}`).join(' | ')}`);
+    }
     console.log(`월척 모든 어종(모든 구역): ${statText(x.bigAll)}`);
     console.log(`낚은 수 단계(새 계정 진행, 이후는 마지막 해역 캐치 속도): ${x.catches.map(c => `${n0(c.n)}마리 ${hrs(c.hours)}`).join(' | ')}`);
   }

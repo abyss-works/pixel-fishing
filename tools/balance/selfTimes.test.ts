@@ -4,8 +4,8 @@ import { FISH } from '../../src/game/content/fish';
 import { RARITY_ORDER } from '../../src/game/content/rarity';
 import { BIG_CATCH_PERCENTILE } from '../../src/game/rules/balance';
 import { NAMED_PITY_CATCHES } from '../../src/game/rules/pity';
-import { ZONE_ORDER, rng, spotsOfZone } from './model';
-import { catchTimes, namedTimes, selfTimes, stat, zoneRun } from './selfTimes';
+import { ZONE_ORDER, entryLevel, rates, rng, spotsOfZone } from './model';
+import { bigTotal, catchTimes, namedTimes, selfTimes, stat, zoneRun } from './selfTimes';
 
 const N = 4;
 
@@ -60,6 +60,45 @@ describe('구역 수집 한 번', () => {
 
   it('수동은 같은 시드에서 방치와 시각이 다르다', () => {
     expect(zoneRun({ zone, play: 'manual', rand: rng(2), big: [] })).not.toEqual(run(2, []));
+  });
+});
+
+describe('구역 순서대로 센 월척 어종 수', () => {
+  const zones = [
+    { species: 3, bigCurve: [1, 2, 3] },
+    { species: 2, bigCurve: [10, 20] },
+  ];
+
+  it('첫 구역 안의 단계는 그 구역의 곡선이다', () => {
+    expect(bigTotal(zones, 1)).toBe(1);
+    expect(bigTotal(zones, 3)).toBe(3);
+  });
+
+  it('구역을 넘는 단계는 앞 구역을 모두 채운 시간에 이어 센다', () => {
+    expect(bigTotal(zones, 4)).toBe(13);
+    expect(bigTotal(zones, 5)).toBe(23);
+  });
+
+  it('전체 어종 수보다 큰 단계는 null이다', () => {
+    expect(bigTotal(zones, 6)).toBeNull();
+  });
+
+  it('곡선에 없는 단계는 무한대다', () => {
+    expect(bigTotal([{ species: 2, bigCurve: [1] }], 2)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('월척 표본', () => {
+  it('첫 월척은 캐치마다 월척 기준 비율로 나오므로 평균 캐치 수는 기준 비율의 역수다', () => {
+    const zone = 'seasia';
+    const spots = spotsOfZone(zone);
+    const meanSecPerCatch = spots.reduce((s, sp) => s + 3600 / rates(sp.id, entryLevel(sp.id), 'idle').catchesPerHour, 0) / spots.length;
+    const rand = rng(11);
+    const runs = Array.from({ length: 60 }, () => zoneRun({ zone, play: 'idle', rand, big: [] }).bigCurve[0]);
+    const mean = runs.reduce((a, b) => a + b, 0) / runs.length;
+    const expected = (meanSecPerCatch / 3600) / (BIG_CATCH_PERCENTILE / 100);
+    expect(mean).toBeGreaterThan(expected * 0.6);
+    expect(mean).toBeLessThan(expected * 1.6);
   });
 });
 
@@ -138,7 +177,21 @@ describe('자기만족 업적 달성 시간', () => {
     expect(() => selfTimes({ runs: 0, seed: 1, big: [], catchSteps: [] })).toThrow();
   });
 
-  it('월척 기준 비율은 제품 상수를 따른다', () => {
-    expect(BIG_CATCH_PERCENTILE).toBeGreaterThan(0);
+  it('월척 어종 수는 구역 구분 없이 센다 — 첫 구역에 들어가는 단계는 그 구역 안의 시간과 같고 구역을 넘는 단계는 더 늦다', () => {
+    const firstZone = FISH.filter(f => spotsOfZone(ZONE_ORDER[0]).some(s => s.id === f.spot)).length;
+    const e = selfTimes({ runs: 3, seed: 5, big: [2, firstZone + 1], catchSteps: [] });
+    for (const x of e) {
+      expect(x.big[0].total).toEqual(x.big[0].zones[0].time);
+      expect(x.big[1].total!.mean).toBeGreaterThan(x.big[0].total!.mean);
+    }
+  });
+
+  it('월척 어종 수가 전체 어종 수와 같은 단계는 모든 어종 월척 시간과 같고 넘으면 null이다', () => {
+    const all = FISH.length;
+    const e = selfTimes({ runs: 3, seed: 5, big: [all, all + 1], catchSteps: [] });
+    for (const x of e) {
+      expect(x.big[0].total).toEqual(x.bigAll);
+      expect(x.big[1].total).toBeNull();
+    }
   });
 });
