@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
 import { toNodeHandler } from 'better-auth/node';
 import account from '../account.js';
+import accountConsents from '../consents.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import awayReport from '../awayReport.js';
@@ -49,6 +50,7 @@ const guilds = guildRoutes((uid, guild) => live.setGuild(uid, guild));
 
 const routes: Record<string, NodeHandler> = {
   '/api/account': account,
+  '/api/account/consents': accountConsents,
   '/api/action': action,
   '/api/admin': admin,
   '/api/admin/live': admin,
