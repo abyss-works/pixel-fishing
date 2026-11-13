@@ -16,6 +16,14 @@ export interface PatchNote {
 // 이 영역은 생성 도구가 쓴다. 직접 고치지 않는다.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.19.1',
+    date: '2026-11-13',
+    summary: '요리 시간이 짧아졌어요',
+    notes: [
+      { tag: '밸런스', text: '미끼와 도시락을 더 빨리 요리할 수 있어요.' },
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-11-13',
     summary: '요리와 구글 로그인이 생겼어요',
