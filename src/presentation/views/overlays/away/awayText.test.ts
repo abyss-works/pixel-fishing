@@ -41,6 +41,18 @@ describe('가방이 찼을 때의 한 줄', () => {
   });
 });
 
+describe('extracted가 없는 옛 응답', () => {
+  const legacy = () => {
+    const { extracted: _omitted, ...rest } = summarizeAway([release(92)], W);
+    return rest as unknown as ReturnType<typeof summarizeAway>;
+  };
+
+  it('기운으로 바꾼 수 0으로 다뤄 놓아준 문구만 쓴다', () => {
+    expect(bagFullText(legacy())).toBe('1시간 32분 만에 가방이 차서 1마리를 놓아줬어요.');
+    expect(bagTimelineText(legacy())).toMatch(/1마리\(.+\)를 놓아줌$/);
+  });
+});
+
 describe('가방 타임라인 문구', () => {
   it('기운으로 바꾼 수는 이름표 기운으로 바꿈으로 적는다', () => {
     expect(bagTimelineText(summarizeAway([extract(92, ['a', 'b'])], W))).toContain('2마리를 기운으로 바꿈');
