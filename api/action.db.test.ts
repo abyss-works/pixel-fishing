@@ -221,7 +221,7 @@ describe('상점·이동', () => {
   });
 
   it('첫 방문 이동은 방문 이벤트를 남긴다', async () => {
-    expect(await run({ state: { boat: 1 } }, { type: 'travel', to: { kind: 'region', id: 'ocean' } })).toMatchSnapshot();
+    expect(await run({ state: { boat: 1 } }, { type: 'travel', to: { kind: 'region', id: 'world' } })).toMatchSnapshot();
   });
 });
 
@@ -1152,5 +1152,23 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
     const equip = await callAction(userToken(uid), { type: 'setActiveBait', bait: 'bait-rare' });
     expect([buy.status, equip.status]).toEqual([400, 400]);
     expect((await stored(uid)).gold).toBe(10_000);
+  });
+});
+
+describe('없는 이동 목적지', () => {
+  const rewind = (uid: string) =>
+    env.client.query(`update public.saves_current set updated_at = '2026-01-01T00:00:00Z' where user_id = $1`, [uid]);
+  const locationOf = async (uid: string) =>
+    (await env.client.query("select data -> 'location' as v from public.saves_current where user_id = $1", [uid])).rows[0].v as unknown;
+
+  it('콘텐츠에 없는 지역·거점 id는 422로 거부하고 위치를 그대로 둔다', async () => {
+    const uid = await seed({ state: { boat: 1 } });
+    const before = await locationOf(uid);
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'region', id: 'ocean' } }))
+      .toMatchObject({ status: 422, body: { error: 'bad-request' } });
+    await rewind(uid);
+    expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'nowhere' } }))
+      .toMatchObject({ status: 422, body: { error: 'bad-request' } });
+    expect(await locationOf(uid)).toEqual(before);
   });
 });
