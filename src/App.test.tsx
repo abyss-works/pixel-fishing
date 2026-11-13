@@ -140,7 +140,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * 2) })); // 기본 전부 체크
-    expect(hud()).toMatch(new RegExp(`골드 ${CARP * 2}(?![\d.,])`));
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP * 2}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
   });
@@ -152,7 +152,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
     expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매 \(/));
-    expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\d.,])`));
+    expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
   });
 
@@ -1269,7 +1269,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByRole('button', { name: sellLabel(CARP * (1 + VARIANT_PRICE_MULT)) })).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
     fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * VARIANT_PRICE_MULT) }));  // 변이만
-    expect(hud()).toMatch(new RegExp(`골드 ${CARP * VARIANT_PRICE_MULT}(?![\d.,])`));
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP * VARIANT_PRICE_MULT}(?![\\d.,])`));
   });
 
   it('카드뷰는 보유 마릿수만 보이고, 안 잡은 종은 도감처럼 ???', () => {
@@ -1332,7 +1332,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
     fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) })); // 작은 놈 1마리만
-    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\d.,])`));
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
   });
 
@@ -1343,7 +1343,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
     fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) }));
-    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\d.,])`));
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
   });
 
