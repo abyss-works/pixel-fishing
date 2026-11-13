@@ -7,7 +7,7 @@ export const USER_TABLES = [
   'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
-  'guild_bonus_donations', 'last_positions', 'guild_join_requests',
+  'guild_bonus_donations', 'last_positions', 'guild_join_requests', 'consent_records',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -24,6 +24,8 @@ export interface AccountSpec {
   admin?: boolean;
   /** saves_current 없이 구 saves 행만 있는 계정 */
   legacySave?: boolean;
+  /** 구 saves 행의 저장 시각. 지정하지 않으면 가입 시각이다 */
+  legacySaveAt?: string;
   /** 개발자에게 보낸 편지가 있는 계정 */
   letter?: boolean;
 }
@@ -47,7 +49,8 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
   else await client.query('delete from auth.sessions where user_id = $1', [uid]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
   if (spec.legacySave) {
-    await client.query('insert into public.saves (user_id, data) values ($1, $2)', [uid, { v: 4, gold: 0 }]);
+    await client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)',
+      [uid, { v: 4, gold: 0 }, spec.legacySaveAt ?? spec.createdAt]);
   }
   return uid;
 }
@@ -84,11 +87,13 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.play_sessions (user_id, started_at, ended_at, duration_sec) values ($1, now(), now(), 0)`, [uid]);
   await client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]);
   await client.query(`insert into public.last_positions (user_id, region, x, y) values ($1, 'world', 10, 20)`, [uid]);
+  await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'terms', '2030-01-01', true, 'google-link')`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);
     await client.query(`insert into public.records (user_id, fish_id, form, count) values ($1, 'crucian', 'normal', 1)`, [uid]);
-    await client.query(`insert into public.saves (user_id, data) values ($1, '{"v":8}')`, [uid]);
+    await client.query(`insert into public.saves (user_id, data, updated_at) values ($1, '{"v":8}', $2)`,
+      [uid, spec.legacySaveAt ?? spec.save.updatedAt]);
   }
   return uid;
 }

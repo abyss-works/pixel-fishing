@@ -9,7 +9,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { MailSender } from './mail.js';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
-import type { GoogleConfig } from './googleLink.js';
+import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
 
 export interface AuthConfig {
   pool: Pool;
@@ -18,6 +18,8 @@ export interface AuthConfig {
   baseURL: string;
   mail: MailSender;
   google: GoogleConfig;
+  /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
+  recordLinkConsent: RecordLinkConsent;
 }
 
 export const MIN_PASSWORD_LENGTH = 6;
@@ -82,6 +84,7 @@ const verificationTable = {
 };
 
 export function createAuth(config: AuthConfig) {
+  const finishLink = finishGoogleLink(config.recordLinkConsent);
   return betterAuth({
     database: config.pool,
     secret: config.secret,
@@ -114,8 +117,8 @@ export function createAuth(config: AuthConfig) {
     databaseHooks: {
       session: sessionHooks,
       account: {
-        create: { before: dropOAuthTokens.create?.before, after: finishGoogleLink.create?.after },
-        update: { before: dropOAuthTokens.update?.before, after: finishGoogleLink.update?.after },
+        create: { before: dropOAuthTokens.create?.before, after: finishLink.create?.after },
+        update: { before: dropOAuthTokens.update?.before, after: finishLink.update?.after },
       },
     },
     hooks: { before: guardAuthRequests },
@@ -145,7 +148,7 @@ export const adminSecret = (secret: string): string =>
  * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표의 구글 계정으로 로그인하고 별도 쿠키의 세션을 받는다.
  * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
  */
-export function createAdminAuth(config: Omit<AuthConfig, 'mail'>) {
+export function createAdminAuth(config: Omit<AuthConfig, 'mail' | 'recordLinkConsent'>) {
   return betterAuth({
     database: config.pool,
     secret: adminSecret(config.secret),

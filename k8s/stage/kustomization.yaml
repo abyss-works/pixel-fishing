@@ -42,6 +42,12 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/2/value
         value: preview
+      # 약관 시행일. 시행 전에는 수락 기록이 없는 계정의 거부가 일어나지 않도록 먼 미래 날짜를 둔다.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: CONSENT_EFFECTIVE_DATE
+          value: "2099-12-31"
   # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
   - target:
       kind: Deployment
@@ -68,6 +74,6 @@ patches:
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-f0a09e7
+    newTag: dev-f562e55
   - name: ghcr.io/abyss-works/pixel-fishing-admin
-    newTag: dev-f0a09e7
+    newTag: dev-f562e55

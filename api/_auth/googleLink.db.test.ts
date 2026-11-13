@@ -1,7 +1,7 @@
 // 구글 연결 — 게스트와 이메일 계정의 연결, 충돌 판별, 로그인 전환, 비밀번호 수단 삭제를 실제 Postgres에서 확인한다.
 // 구글 토큰 교환은 서버 대역이 인가 코드별 신원으로 대신한다. 콜백 경로는 운영과 같다.
 import bcrypt from 'bcryptjs';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 import { googleCode, sentMails } from '../_dbTest/serverShim.js';
@@ -363,5 +363,127 @@ describe('재설정 엔드포인트 가드', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('INVALID_TOKEN');
     expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
+  });
+});
+
+describe('구글 연결의 약관 수락 기록', () => {
+  const consentRows = async (uid: string) => (await env.client.query<{ document: string; version: string; age_confirmed: boolean; channel: string; accepted_at: Date }>(
+    'select document, version, age_confirmed, channel, accepted_at from public.consent_records where user_id = $1 order by version, document', [uid])).rows;
+  const version = () => process.env.CONSENT_EFFECTIVE_DATE as string;
+
+  it('게스트의 연결이 끝나면 현재 판의 약관과 처리방침 수락을 만 14세 확인과 함께 기록한다', async () => {
+    const { uid, cookie } = await guest();
+    expect(await consentRows(uid)).toEqual([]);
+    const before = Date.now();
+    expect((await link(cookie, { sub: nextSub(), email: 'consent-guest@gmail.test' })).ok).toBe(true);
+    const rows = await consentRows(uid);
+    expect(rows.map(r => [r.document, r.version, r.age_confirmed, r.channel])).toEqual([
+      ['privacy', version(), true, 'google-link'],
+      ['terms', version(), true, 'google-link'],
+    ]);
+    for (const r of rows) {
+      expect(r.accepted_at.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(r.accepted_at.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    }
+  });
+
+  it('이메일 계정의 연결도 같은 기록을 남긴다', async () => {
+    const uid = await seedPasswordAccount(env.client, 'consent-member@example.test', 'secret1');
+    const login = await call('POST', '/sign-in/email', { email: 'consent-member@example.test', password: 'secret1' });
+    expect((await link(login.cookie, { sub: nextSub(), email: 'consent-member@gmail.test' })).ok).toBe(true);
+    expect((await consentRows(uid)).map(r => `${r.document}/${r.channel}`)).toEqual(['privacy/google-link', 'terms/google-link']);
+  });
+
+  it('연결이 거부되면 기록하지 않는다', async () => {
+    await seedPasswordAccount(env.client, 'consent-taken@gmail.test', 'secret1');
+    const rejected = await guest();
+    expect((await link(rejected.cookie, { sub: nextSub(), email: 'consent-taken@gmail.test' })).error).toBe('email_account_exists');
+    expect(await consentRows(rejected.uid)).toEqual([]);
+
+    const unverified = await guest();
+    expect((await link(unverified.cookie, { sub: nextSub(), email: 'consent-unverified@gmail.test', verified: false })).error).toBe('unable_to_link_account');
+    expect(await consentRows(unverified.uid)).toEqual([]);
+
+    const first = await guest();
+    await link(first.cookie, { sub: nextSub(), email: 'consent-first@gmail.test' });
+    const second = await link(first.cookie, { sub: nextSub(), email: 'consent-second@gmail.test' });
+    expect(second.error).toBe('google_already_connected');
+    expect(await consentRows(first.uid)).toHaveLength(2);
+  });
+
+  it('구글 인증을 시작만 하고 돌아오지 않으면 기록하지 않는다', async () => {
+    const { uid, cookie } = await guest();
+    const begin = await call('POST', '/link-social', { provider: 'google', callbackURL: `${ORIGIN}/`, disableRedirect: true }, cookie);
+    expect(begin.status).toBe(200);
+    expect(await consentRows(uid)).toEqual([]);
+  });
+
+  it('같은 구글을 다시 연결해도 기록이 늘지 않고 처음 시각을 유지한다', async () => {
+    const who = { sub: nextSub(), email: 'consent-again@gmail.test' };
+    const { uid, cookie } = await guest();
+    const first = await link(cookie, who);
+    const recorded = await consentRows(uid);
+    await link(first.cookie, who);
+    expect(await consentRows(uid)).toEqual(recorded);
+  });
+
+  it('판이 바뀐 뒤 다시 연결하면 새 판의 기록이 더해지고 이전 판 기록은 그대로다', async () => {
+    const who = { sub: nextSub(), email: 'consent-newer@gmail.test' };
+    const { uid, cookie } = await guest();
+    const first = await link(cookie, who);
+    const old = await consentRows(uid);
+    const saved = process.env.CONSENT_EFFECTIVE_DATE;
+    process.env.CONSENT_EFFECTIVE_DATE = '2100-06-01';
+    try {
+      await link(first.cookie, who);
+    } finally {
+      process.env.CONSENT_EFFECTIVE_DATE = saved;
+    }
+    const rows = await consentRows(uid);
+    expect(rows).toHaveLength(4);
+    expect(rows.filter(r => r.version === old[0].version)).toEqual(old);
+    expect(rows.filter(r => r.version === '2100-06-01').map(r => r.document)).toEqual(['privacy', 'terms']);
+  });
+
+  it('마무리가 끝나지 않은 계정을 마저 마무리하는 재연결도 기록을 남긴다', async () => {
+    const who = { sub: nextSub(), email: 'consent-half@gmail.test' };
+    const { uid, cookie } = await guest();
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
+    expect(await consentRows(uid)).toEqual([]);
+    expect((await link(cookie, who)).ok).toBe(true);
+    expect(await consentRows(uid)).toHaveLength(2);
+  });
+
+  it('기록이 실패해도 연결은 성공으로 답하고 기록 없이 error 로그(스택 포함)를 남기며, 같은 구글을 다시 연결하면 기록이 남는다', async () => {
+    const who = { sub: nextSub(), email: 'consent-retry@gmail.test' };
+    const { uid, cookie } = await guest();
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args); });
+    await env.client.query('alter table public.consent_records rename to consent_records_off');
+    let done;
+    try {
+      done = await link(cookie, who);
+    } finally {
+      await env.client.query('alter table public.consent_records_off rename to consent_records');
+      spy.mockRestore();
+    }
+    expect(done.ok).toBe(true);
+    expect(await userRow(uid)).toEqual({ email: 'consent-retry@gmail.test', email_verified: true, is_anonymous: false });
+    expect(await consentRows(uid)).toEqual([]);
+    const error = logged.flat().find((a): a is Error => a instanceof Error);
+    expect(error?.stack).toBeTruthy();
+    expect(logged.flat().some(a => typeof a === 'string' && a.includes('수락 기록'))).toBe(true);
+    expect((await link(done.cookie, who)).ok).toBe(true);
+    expect(await consentRows(uid)).toHaveLength(2);
+  });
+
+  it('구글 로그인(연결이 아님)은 기록하지 않는다', async () => {
+    const who = { sub: nextSub(), email: 'consent-signin@gmail.test' };
+    const owner = await guest();
+    await link(owner.cookie, who);
+    await env.client.query('delete from public.consent_records where user_id = $1', [owner.uid]);
+    const r = await signIn((await guest()).cookie, who);
+    expect(r.ok).toBe(true);
+    expect(await consentRows(owner.uid)).toEqual([]);
   });
 });

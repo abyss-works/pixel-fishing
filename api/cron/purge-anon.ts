@@ -1,4 +1,4 @@
-// 예약 작업: 빈 익명 계정을 매일 한 번 정리한다. 같은 실행에서 보관 기간이 지난 채팅과 채팅 신고도 지운다.
+// 예약 작업: 미접속 익명 계정(진행이 없는 계정 7일, 진행이 있어도 1년)을 매일 한 번 정리한다. 같은 실행에서 보관 기간이 지난 채팅과 채팅 신고도 지운다.
 // 계정 정리의 기본은 dry-run이다. 대상을 세어 요약만 돌려주고, PURGE_ANON_ENABLED가 정확히 1일 때만 지운다.
 // 채팅 보관 기간 정리는 보관 정책이라 dry-run 설정과 무관하게 항상 지운다.
 // 인증: 예약 실행기가 CRON_SECRET을 Authorization: Bearer로 첨부한다. 불일치와 부재는 401.
@@ -13,8 +13,6 @@ import { reportServerIssue } from '../observability.js';
 type Req = IncomingMessage;
 type Res = ServerResponse & { status: (code: number) => Res; json: (b: unknown) => void };
 
-/** 마지막 활동이 이 일수보다 오래된 계정만 대상이다 */
-const IDLE_DAYS = 7;
 /** 한 번의 실행이 다루는 계정 수 상한. 넘는 대상은 다음 실행이 이어서 지운다 */
 const BATCH_LIMIT = 500;
 /** 응답에 싣는 대상 id 개수. 앞 8자리만 싣는다 */
@@ -22,10 +20,14 @@ const SAMPLE_SIZE = 5;
 
 interface PurgeSummary {
   dryRun: boolean;
-  /** 마지막 활동이 이 시각보다 이른 계정이 대상이다 */
+  /** 진행이 없는 계정은 마지막 접속이 이 시각보다 이르면 대상이다 */
   cutoff: string;
+  /** 진행과 관계없이 마지막 접속이 이 시각보다 이르면 대상이다 */
+  staleCutoff: string;
   /** 조건에 맞는 계정 전체 수 */
   targets: number;
+  /** targets 가운데 staleCutoff 규칙에 해당하는 수 */
+  staleTargets: number;
   /** 이번 실행이 다루는 계정 수. 상한이 적용되며, dry-run이면 삭제를 켰을 때 다룰 수다 */
   batch: number;
   deleted: number;
@@ -52,17 +54,17 @@ async function runPurge(
   { db, withTransaction }: Pick<Database, 'db' | 'withTransaction'>, enabled: boolean, now: Date,
 ): Promise<{ summary: PurgeSummary; firstFailure?: PurgeFailure }> {
   const chat = await deleteExpiredChat(db, now.toISOString());
-  const cutoff = new Date(now.getTime() - IDLE_DAYS * 86_400_000).toISOString();
-  const found = await selectPurgeTargets(db, cutoff, BATCH_LIMIT);
+  const found = await selectPurgeTargets(db, now, BATCH_LIMIT);
   const summary: PurgeSummary = {
-    dryRun: !enabled, cutoff, targets: found.total, batch: found.ids.length,
+    dryRun: !enabled, cutoff: found.cutoffs.idle, staleCutoff: found.cutoffs.stale, targets: found.total, staleTargets: found.stale,
+    batch: found.ids.length,
     deleted: 0, skipped: 0, failed: 0, sample: found.ids.slice(0, SAMPLE_SIZE).map(id => id.slice(0, 8)), chat,
   };
   let firstFailure: PurgeFailure | undefined;
   if (enabled) {
     for (const uid of found.ids) {
       try {
-        if (await purgeAccount(withTransaction, uid, cutoff)) summary.deleted += 1;
+        if (await purgeAccount(withTransaction, uid, now)) summary.deleted += 1;
         else summary.skipped += 1;
       } catch (error) {
         summary.failed += 1;

@@ -395,4 +395,147 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('이전 인증 표 삭제 (0035)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const exists = async (c: Client) => (await c.query<{ r: string | null }>(`select to_regclass('auth.supabase_users')::text as r`)).rows[0].r !== null;
+
+    it('번호 마이그레이션을 모두 적용한 데이터베이스에는 이전 인증 표가 없고 현재 인증 표는 그대로다', async () => {
+      expect(await exists(client)).toBe(false);
+      const { rows } = await client.query<{ name: string }>(
+        `select table_name as name from information_schema.tables where table_schema = 'auth' order by table_name`);
+      expect(rows.map(r => r.name)).toEqual(expect.arrayContaining(['accounts', 'sessions', 'users', 'verifications']));
+    });
+
+    it('이전 인증 표가 있으면 지우고, 다시 실행해도 실패하지 않으며 다른 표는 그대로다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query('create table auth.supabase_users (id uuid primary key, email text)');
+        await other.query(`insert into auth.supabase_users (id, email) values ($1, 'old@example.test')`, [randomUUID()]);
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+        const sql = migration('0035_drop_supabase_users.sql');
+
+        await other.query(sql);
+        expect(await exists(other)).toBe(false);
+        await other.query(sql);
+        expect(await exists(other)).toBe(false);
+        expect((await other.query('select id from auth.users where id = $1', [uid])).rows).toHaveLength(1);
+        await other.query('select 1 from public.v_admin_users');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+
+    it('지울 표를 참조하는 객체가 있으면 객체를 지우지 않고 실패한다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query('create table auth.supabase_users (id uuid primary key, email text)');
+        await other.query('create view public.legacy_user_emails as select id, email from auth.supabase_users');
+
+        await expect(other.query(migration('0035_drop_supabase_users.sql'))).rejects.toMatchObject({ code: '2BP01' });
+        expect(await exists(other)).toBe(true);
+        await other.query('select 1 from public.legacy_user_emails');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+
+    it('0035.down, 0021.down 순으로 내렸다가 0021, 0035를 다시 올리는 왕복이 된다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0035_drop_supabase_users.down.sql'));
+        expect(await exists(other)).toBe(true);
+        await other.query(migration('0021_better_auth.down.sql'));
+        const legacy = await other.query(`select to_regclass('auth.supabase_users')::text as r, to_regclass('auth.sessions')::text as s`);
+        expect(legacy.rows[0]).toEqual({ r: null, s: null });
+        await other.query(migration('0021_better_auth.sql'));
+        await other.query(migration('0035_drop_supabase_users.sql'));
+        expect(await exists(other)).toBe(false);
+        const uid = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+        await other.query('select 1 from public.v_admin_users');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('consent_records (0036)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const user = async (c: Client): Promise<string> => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      return uid;
+    };
+    const insert = (c: Client, uid: string, document: string, version: string, channel = 'google-link') => c.query(
+      `insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, $2, $3, true, $4)`, [uid, document, version, channel]);
+
+    it('같은 계정, 문서, 판은 한 행이고 문서와 경로와 판 형식은 정해진 값만 받는다', async () => {
+      const uid = await user(client);
+      await insert(client, uid, 'terms', '2030-01-01');
+      await expect(insert(client, uid, 'terms', '2030-01-01', 'confirm-screen')).rejects.toMatchObject({ code: '23505' });
+      await insert(client, uid, 'privacy', '2030-01-01');
+      await insert(client, uid, 'terms', '2030-02-01');
+      await expect(insert(client, uid, 'refund', '2030-01-01')).rejects.toMatchObject({ code: '23514' });
+      await expect(insert(client, uid, 'terms', '2030-03-01', 'email')).rejects.toMatchObject({ code: '23514' });
+      await expect(insert(client, uid, 'terms', '20300301')).rejects.toMatchObject({ code: '23514' });
+    });
+
+    it('수락 시각의 기본값은 현재 시각이고 인증 계정을 지우면 함께 지워진다', async () => {
+      const uid = await user(client);
+      await insert(client, uid, 'terms', '2030-01-01');
+      const { rows } = await client.query<{ fresh: boolean }>(
+        `select abs(extract(epoch from now() - accepted_at)) < 60 as fresh from public.consent_records where user_id = $1`, [uid]);
+      expect(rows).toEqual([{ fresh: true }]);
+      await client.query('delete from auth.users where id = $1', [uid]);
+      expect((await client.query('select 1 from public.consent_records where user_id = $1', [uid])).rows).toHaveLength(0);
+    });
+
+    it('인증 사용자는 본인 기록도 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      const a = await user(client);
+      await insert(client, a, 'terms', '2030-01-01');
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [a]);
+        const { rows } = await client.query('select user_id from public.consent_records');
+        expect(rows).toEqual([]);
+        await expect(insert(client, a, 'privacy', '2030-01-01')).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+
+    it('0036.down으로 내렸다가 0036을 다시 올리는 왕복이 되고 다른 표는 남는다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const uid = await user(other);
+        await insert(other, uid, 'terms', '2030-01-01');
+        await other.query(migration('0036_consent_records.down.sql'));
+        const gone = await other.query(`select to_regclass('public.consent_records')::text as t, to_regclass('public.last_positions')::text as p`);
+        expect(gone.rows[0]).toEqual({ t: null, p: 'last_positions' });
+        await other.query(migration('0036_consent_records.sql'));
+        expect((await other.query('select 1 from public.consent_records')).rows).toHaveLength(0);
+        await insert(other, uid, 'terms', '2030-01-01');
+        await other.query(migration('0036_consent_records.down.sql'));
+        // 되돌리기는 표가 이미 없어도 실패하지 않는다
+        await other.query(migration('0036_consent_records.down.sql'));
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

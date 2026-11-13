@@ -51,6 +51,8 @@ export async function startActionEnv(): Promise<ActionEnv> {
   process.env.MAIL_FROM = 'test <no-reply@example.test>';
   process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
   process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
+  // 약관 시행일은 멀리 둔다. 확인이 필요한 계정의 거부를 시험하는 테스트가 시행일을 직접 정한다
+  process.env.CONSENT_EFFECTIVE_DATE = '2099-12-31';
   process.env.DATABASE_URL = db.url;
   process.env.DEPLOY_ENV = 'local';
   delete process.env.SENTRY_DSN;
