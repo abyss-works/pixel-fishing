@@ -9,8 +9,9 @@ import { BOUNTIES, BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyDifficulty, BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { LICENSE_GRADES, namedEncounterCandidates, namedEncounterShare } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
-import { powerOfLevel } from '../../../src/game/rules/stats';
+import { powerOfLevel } from '../rodRules';
 import { zoneOf } from '../model';
+import { isVirtualFish } from '../virtualSpots';
 import type { Rates } from '../model';
 
 /** 구역 도감을 모두 모았을 확률이 이 값을 넘으면 라이선스를 쓴다 */
@@ -21,7 +22,7 @@ export type DexLog = Map<string, number>;
 
 /** 라이선스 조건의 대상 어종 — 구역의 어종 중 그 단계의 등급에 드는 것 */
 export const licenseFish = (zone: BountyZone, tier: BountyTier) =>
-  FISH.filter(f => zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity));
+  FISH.filter(f => !isVirtualFish(f.id) && zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity));
 
 /** 구역 도감 완성 확률 — 어종이 서로 독립이라고 보고 곱한다. 해당 등급 어종이 없으면 0 */
 export function dexCompletion(dex: DexLog, zone: BountyZone, tier: BountyTier): number {

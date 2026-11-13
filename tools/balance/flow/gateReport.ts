@@ -3,8 +3,7 @@
 // 전환 시간은 새 계정이 직전 해역에서 방치로 낚는 경우로 잰다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { topZoneOfSpot } from '../../../src/game/content/zones';
-import { SPEC_MARGIN, entryLevel, perfectOverIdle } from '../model';
+import { SPEC_MARGIN, entryLevel, perfectOverIdle, zoneOf } from '../model';
 import {
   REGION_ENTRY_TARGET, TIME_GATE_FROM_SPOT, gateRows, judgeFameRatio, judgeOpening, judgePerfect, judgeTimeOrder, judgeTimeRange,
 } from '../gates';
@@ -98,16 +97,16 @@ function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time:
   const start = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
   const gap = (from: SpotId, to: SpotId) => powerReq(to) - powerReq(from);
   const entryGapOf = (to: SpotId): number | null => {
-    const zone = topZoneOfSpot(to);
-    const i = SPOTS.findIndex(s => topZoneOfSpot(s.id) === zone);
+    const zone = zoneOf(to);
+    const i = SPOTS.findIndex(s => zoneOf(s.id) === zone);
     return i > 0 ? gap(SPOTS[i - 1].id, SPOTS[i].id) : null;
   };
   const time: TimeRow[] = [], fame: FameRow[] = [];
   rows.forEach(({ from, to, boats }, i) => {
     const t = timings[i] as (typeof timings)[number] | undefined;
     const judged = i >= start;
-    const entry = topZoneOfSpot(from) !== topZoneOfSpot(to);
-    const target = entry ? (REGION_ENTRY_TARGET as Record<string, readonly [number, number]>)[topZoneOfSpot(to) ?? ''] ?? null : null;
+    const entry = zoneOf(from) !== zoneOf(to);
+    const target = entry ? (REGION_ENTRY_TARGET as Record<string, readonly [number, number]>)[zoneOf(to) ?? ''] ?? null : null;
     const prev = judged && i > start ? timings[i - 1]?.hours ?? null : null;
     // 닿지 못한 전환은 판정에서 빼지 않고 위반으로 낸다
     const range = !judged || !target ? null : t ? judgeTimeRange(to, target, t.hours) : '위반';

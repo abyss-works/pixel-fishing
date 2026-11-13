@@ -6,7 +6,7 @@ import { BOUNTIES, BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyZone } from '../../../src/game/content/bounties';
 import { namedEncounterCandidates, namedEncounterShare } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
-import { powerOfLevel } from '../../../src/game/rules/stats';
+import { powerOfLevel } from '../rodRules';
 import { entryLevel, rates, SPEC_MARGIN } from '../model';
 import { accessibleSpots, expectedEncounterCatches } from './bounty';
 import { axisOf } from './progress';

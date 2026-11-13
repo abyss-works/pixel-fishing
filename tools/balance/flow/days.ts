@@ -4,7 +4,7 @@
 // 마지막 해역 레벨업은 그 레벨에 시뮬레이션이 닿은 시점에 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { MAX_BOAT } from '../../../src/game/content/boats';
+import { BOATS } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { SPEC_MARGIN, entryLevel, rates } from '../model';
 import type { Rates } from '../model';
@@ -69,21 +69,21 @@ export function steadyDaily(i: SteadyInput): { dailyGold: number; bountyShare: n
     let r = cache.get(spot);
     if (!r) {
       const axis = axisOf(i.axis, spot, i.level);
-      r = i.plan ? i.plan.rateFor(spot, i.level, axis, MAX_BOAT) : rates(spot, i.level, axis);
+      r = i.plan ? i.plan.rateFor(spot, i.level, axis, BOATS.length) : rates(spot, i.level, axis);
       cache.set(spot, r);
     }
     return r;
   };
   const day = DAY_HOURS * 3600;
   const plan = i.licensed
-    ? planBounties({ player: { boat: MAX_BOAT, level: i.level }, current: rateAt(last), rateAt, licensed: i.licensed, seconds: day })
+    ? planBounties({ player: { boat: BOATS.length, level: i.level }, current: rateAt(last), rateAt, licensed: i.licensed, seconds: day })
     : [];
   const mean = (spots: SpotId[], f: (r: Rates) => number) => spots.reduce((s, sp) => s + f(rateAt(sp)), 0) / spots.length;
   const actSec = plan.reduce((s, a) => s + a.seconds, 0);
   const lump = plan.reduce((s, a) => s + a.lump, 0);
   const fishGold = plan.reduce((s, a) => s + mean(a.spots, r => r.goldPerHour) * a.seconds / 3600, 0)
     + rateAt(last).goldPerHour * (day - actSec) / 3600;
-  const cost = i.plan ? i.plan.costPerHour(last, i.level, axisOf(i.axis, last, i.level), MAX_BOAT) * DAY_HOURS : 0;
+  const cost = i.plan ? i.plan.costPerHour(last, i.level, axisOf(i.axis, last, i.level), BOATS.length) * DAY_HOURS : 0;
   const dailyGold = fishGold + lump - cost;
   return { dailyGold, bountyShare: lump / (fishGold + lump) };
 }

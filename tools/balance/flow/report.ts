@@ -389,6 +389,7 @@ export function runFlow(o: FlowOptions): FlowResult {
       plan: planOn ? { label: effectLabel(o.effect), fromBoat, recipe: o.recipe, withCost: o.withCost, bounty: o.bounty } : null,
       reward: rewardOn ? { ratio: o.rewards[0], split: o.rewardSplit! } : null,
       spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
+    for (const sp of SPOTS) spotNames.set(sp.id, sp.name);
     const sim = { axis: o.axis, maxDays: o.maxDays };
     if (o.commands.includes('transition')) res.transition = transitionReport({ ...sim, bounty: o.bounty, plan, reward });
     if (o.commands.includes('days')) res.days = daysReport({ ...sim, plan, reward });
@@ -465,7 +466,9 @@ const hrs = (x: number) => (x < 1 / 60 ? '0분' : x < 1 ? `${Math.round(x * 60)}
 /** 실질 낚시 시간(시간)과 8시간 환산 일수 표기 */
 const h2 = (x: number) => `${x.toFixed(2)}시간`;
 const d1 = (x: number) => `${x.toFixed(1)}일`;
-const nameOf = (spot: SpotId) => SPOTS.find(s => s.id === spot)!.name;
+/** 해역 이름 — 가상 해역은 덮어쓰기를 되돌린 뒤에도 표에 이름이 나오게 계산할 때 담아 둔다 */
+const spotNames = new Map<string, string>();
+const nameOf = (spot: SpotId) => spotNames.get(spot) ?? SPOTS.find(s => s.id === spot)!.name;
 const AXIS_LABEL: Record<FlowAxis, string> = { idle: '방치', manual: '수동 GOOD(파워 미달 해역은 무판정)', perfect: 'PERFECT 다이얼(빨간 존이 열렸는지와 관계없이 적용한 상한)' };
 
 function table(headers: string[], rows: (string | number)[][]): string {
@@ -666,7 +669,7 @@ function daysText(d: NonNullable<FlowResult['days']>, o: FlowResult['options']):
   };
   out.push(table(
     ['해역', '의뢰·토벌 수행 안 함', '의뢰·토벌 모두 수행'],
-    SPOTS.map((s, i) => [s.name, ...d.arrival.map((r, k) => withBase(r, k, i))]),
+    o.spots.map((s, i) => [s.name, ...d.arrival.map((r, k) => withBase(r, k, i))]),
   ));
   for (const r of d.arrival) if (r.achieved) out.push(...grantedText(r.achieved, `진행 업적 지급 시점 (보상을 넣은 관측, 의뢰·토벌 ${r.bounty ? '모두 수행' : '수행 안 함'})`));
   const incomplete = d.arrival.filter(r => !r.complete).map(r => (r.bounty ? '모두 수행' : '수행 안 함'));
