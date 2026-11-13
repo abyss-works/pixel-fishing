@@ -4,11 +4,15 @@
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
+import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
+import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { rng } from '../model';
+import { rewardBasis, rewardPlan } from './achievement';
+import type { Reward } from './achievement';
 import { simulateOpening, OPENING_TARGET_SEC } from './opening';
 import type { Judgment } from './opening';
 import { simulate } from './progress';
-import type { FlowAxis } from './progress';
+import type { Arrival, FlowAxis } from './progress';
 import { createSampler, summarize } from './sample';
 import type { Dist } from './sample';
 import { transitionTimings } from './transitions';
@@ -94,3 +98,64 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
 
 /** 전환 수는 해역 수보다 하나 적다 */
 const TRANSITION_COUNT = SPOTS.length - 1;
+
+export interface RewardDistOptions {
+  trials: number; seed: number; axis: FlowAxis; maxDays: number;
+  /** 보상 비율(0 초과 1 이하)과 기본 업적이 받는 몫(0 이상 1 이하) */
+  ratio: number; basicShare: number;
+}
+
+export interface RewardDistRow {
+  zone: BountyZone; tier: BountyTier;
+  /** 이 업적에 지급하는 보상. 기준 전환이 없는 구역은 null */
+  reward: Reward | null;
+  /** 보상 없는 진행에서 이 업적을 채운 누적 실질 낚시 시간(시간)의 분포. 못 채운 시도는 missing이다 */
+  achieved: Dist | null;
+  /** 구역의 다음 지역 첫 해역과, 그 해역에 닿은 누적 시간의 분포(보상 없음, 보상 지급 포함). 다음 지역이 없으면 null */
+  to: SpotId | null;
+  arrival: Dist | null;
+  arrivalWithReward: Dist | null;
+  /** 같은 시도끼리 짝지은 도착 단축(보상 없는 도착 - 보상을 넣은 도착, 시간). 양수가 빨라진 쪽이다 */
+  shortened: Dist | null;
+}
+
+/** 시도마다 따로 시드를 파생한다 — 보상 없는 진행과 보상을 넣은 진행이 같은 난수 흐름에서 출발하게 해 짝지어 비교한다 */
+const trialRng = (seed: number, i: number) => rng((seed + Math.imul(i + 1, 0x9e3779b1)) >>> 0);
+
+/** 구역 도감 완성(진행 업적 달성) 시각과 다음 지역 첫 해역 도착 시각의 분포를 같은 진행 모델에서 재고, 보상을 넣었을 때의 도착을 같은 시드로 짝지어 비교한다 */
+export function rewardDist(o: RewardDistOptions): RewardDistRow[] {
+  checkTrials(o.trials);
+  const plan = rewardPlan(o.ratio, o.basicShare);
+  const basis = rewardBasis();
+  const sim = { axis: o.axis, bounty: false, maxDays: o.maxDays };
+  const keys = BOUNTY_ZONES.flatMap(zone => (['basic', 'named'] as const).map(tier => ({ zone, tier })));
+  const achieved = new Map<string, number[]>(keys.map(k => [`${k.zone}:${k.tier}`, []]));
+  const arrival = new Map<string, number[]>(basis.map(b => [b.zone, []]));
+  const withReward = new Map<string, number[]>(basis.map(b => [b.zone, []]));
+  const shortened = new Map<string, number[]>(basis.map(b => [b.zone, []]));
+  const arrivalAt = (arrivals: Arrival[], to: SpotId | null) => (to === null ? undefined : arrivals.find(a => a.spot === to)?.hours);
+  for (let i = 0; i < o.trials; i++) {
+    const plain = simulate({ ...sim, sampler: createSampler(trialRng(o.seed, i)), achievements: { reward: () => null } });
+    const paid = simulate({ ...sim, sampler: createSampler(trialRng(o.seed, i)), achievements: plan });
+    for (const a of plain.achieved) achieved.get(`${a.zone}:${a.tier}`)!.push(a.hours);
+    for (const b of basis) {
+      const h0 = arrivalAt(plain.arrivals, b.to), h1 = arrivalAt(paid.arrivals, b.to);
+      if (h0 !== undefined) arrival.get(b.zone)!.push(h0);
+      if (h1 !== undefined) withReward.get(b.zone)!.push(h1);
+      if (h0 !== undefined && h1 !== undefined) shortened.get(b.zone)!.push(h0 - h1);
+    }
+  }
+  return keys.map(({ zone, tier }) => {
+    const b = basis.find(x => x.zone === zone)!;
+    const a = achieved.get(`${zone}:${tier}`)!;
+    const arr = arrival.get(zone)!, pay = withReward.get(zone)!, gap = shortened.get(zone)!;
+    return {
+      zone, tier, reward: plan.reward(zone, tier),
+      achieved: summarize(a, o.trials - a.length),
+      to: b.to,
+      arrival: b.to === null ? null : summarize(arr, o.trials - arr.length),
+      arrivalWithReward: b.to === null ? null : summarize(pay, o.trials - pay.length),
+      shortened: b.to === null ? null : summarize(gap, o.trials - gap.length),
+    };
+  });
+}
