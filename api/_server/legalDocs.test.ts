@@ -134,6 +134,11 @@ describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
     expect(html.replaceAll(VERSION_TOKEN, '')).not.toMatch(/\{\{|\}\}/);
   });
 
+  it('채우지 않은 자리표시가 남지 않는다', () => {
+    const left = textLinesOf(html).flatMap(line => line.match(/\[[^\]]+\]/g) ?? []);
+    expect(left).toEqual([]);
+  });
+
   it('변환 결과의 본문이 마크다운 본문과 줄 단위로 같다', () => {
     expect(textLinesOf(html)).toEqual(sourceLines(sourceOf(path)));
   });
