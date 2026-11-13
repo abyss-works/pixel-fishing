@@ -50,10 +50,12 @@ describe('가방 파생 데이터', () => {
     const none = selectSalePreview(bag, new Set(), 0);
     expect(none.total).toEqual({ base: none.total.base, mods: [], value: none.total.base });
 
-    const bonus = 0.06;
+    const bonus = 0.5;
     const preview = selectSalePreview(bag, new Set(), bonus);
     expect(preview.total.base).toBe(none.total.base);
-    expect(preview.total.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(none.total.base, bonus) }]);
+    const delta = saleBonusOf(none.total.base, bonus);
+    expect(delta).toBeGreaterThan(0);
+    expect(preview.total.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta }]);
     expect(preview.total.value).toBe(sellSelected(state, preview.soldUids, bonus).gold);
     expect(preview.rows.reduce((sum, row) => sum + row.selectedSubtotal, 0)).toBe(preview.total.base);
   });

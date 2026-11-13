@@ -23,7 +23,7 @@ import { BIG_CATCH_PERCENTILE, VARIANT_PRICE_MULT, upgradeCost } from './game/ru
 import { WALK_BAG_CAP } from './game/content/boats';
 import { ENERGY_ITEM_IDS } from './game/content/cooking';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
-import { BOATS, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
+import { BOATS, FISH, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
@@ -33,6 +33,12 @@ import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
 
 // 업데이트 소식 창은 현재 버전의 패치노트 항목이 있다고 가정해 검증한다. 실제 노트의 현재 버전 항목에 의존하지 않는다.
+// 판매 금액은 어종 데이터에서 유도한다(값이 바뀌어도 기대가 같이 움직인다)
+const priceOf = (id: string) => FISH.find(f => f.id === id)!.price;
+const CARP = priceOf('carp');
+const CRUCIAN = priceOf('crucian');
+const sellLabel = (gold: number) => `판매 (+${gold}G)`;
+
 vi.mock('./game/content/patchnotes', async importActual => {
   const actual = await importActual<typeof import('./game/content/patchnotes')>();
   const { APP_VERSION: version } = await import('./version');
@@ -133,20 +139,20 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' })); // 기본 전부 체크
-    expect(hud()).toMatch(/골드 60(?![\d.,])/);
+    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * 2) })); // 기본 전부 체크
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP * 2}(?![\d.,])`));
     expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
   });
 
   it('체크 해제한 어종은 팔리지 않고 가방에 남는다', () => {
-    seed({ bag: [inst('carp'), inst('crucian')] }); // 잉어 30G + 붕어 6G
+    seed({ bag: [inst('carp'), inst('crucian')] }); // 잉어 + 붕어
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
-    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만
+    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만
     fireEvent.click(screen.getByText(/^판매 \(/));
-    expect(hud()).toMatch(/골드 6(?![\d.,])/);
+    expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\d.,])`));
     expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
   });
 
@@ -217,7 +223,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     clickFurniture('sell');
 
     // 기본은 전부 선택 — 두 마리분
-    expect(screen.getByRole('button', { name: '판매 (+60G)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: sellLabel(CARP * 2) })).toBeInTheDocument();
 
     // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
@@ -226,11 +232,11 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
-    expect(screen.getByRole('button', { name: '판매 (+30G)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: sellLabel(CARP) })).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
     fireEvent.click(screen.getByText(/^판매 \(/));
-    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
     clickTab(/^가방/);
@@ -1000,7 +1006,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText(`${name} 개체 펼치기`));
 
   it('가방 내역 표시, 행 머리 잠금 → 그 종 전 개체가 전부 판매에서 빠진다', () => {
-    seed({ bag: [inst('carp'), inst('carp'), inst('crucian')] }); // 잉어 30G×2 + 붕어 6G
+    seed({ bag: [inst('carp'), inst('carp'), inst('crucian')] }); // 잉어 ×2 + 붕어
     render(<App />);
     clickTab(/^가방/);
     expect(screen.getByText('잉어')).toBeInTheDocument();
@@ -1008,10 +1014,10 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
-    expect(screen.getByRole('button', { name: '판매 (+6G)' })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
+    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
     fireEvent.click(screen.getByText(/^판매 \(/));
-    expect(hud()).toMatch(/골드 6(?![\d.,])/);
+    expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 2 /'); // 잠긴 잉어 2마리는 가방에 남는다
   });
 
@@ -1242,7 +1248,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
   });
 
   it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
-    // 잉어 30G + 금빛 잉어 60G(변이 ×2) = 한 행, 소계 90G
+    // 잉어 + 금빛 잉어(변이 배수) = 한 행, 소계는 두 가격의 합
     seed({ bag: [inst('carp', 'normal', 20), inst('carp', 'variant', 35)] });
     render(<App />);
     clickTab(/^가방/);
@@ -1250,7 +1256,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
-    expect(screen.getAllByText('90G')).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
+    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
     expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
     expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });
@@ -1260,10 +1266,10 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    expect(screen.getByRole('button', { name: '판매 (+90G)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: sellLabel(CARP * (1 + VARIANT_PRICE_MULT)) })).toBeInTheDocument();
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
-    fireEvent.click(screen.getByRole('button', { name: '판매 (+60G)' }));                // 변이만
-    expect(hud()).toMatch(/골드 60(?![\d.,])/);
+    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * VARIANT_PRICE_MULT) }));  // 변이만
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP * VARIANT_PRICE_MULT}(?![\d.,])`));
   });
 
   it('카드뷰는 보유 마릿수만 보이고, 안 잡은 종은 도감처럼 ???', () => {
@@ -1325,8 +1331,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' })); // 작은 놈 1마리만
-    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) })); // 작은 놈 1마리만
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\d.,])`));
     expect(hud()).toContain('가방 1 /');
   });
 
@@ -1336,8 +1342,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: '판매 (+30G)' }));
-    expect(hud()).toMatch(/골드 30(?![\d.,])/);
+    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) }));
+    expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\d.,])`));
     expect(hud()).toContain('가방 0 /');
   });
 
