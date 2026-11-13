@@ -479,3 +479,73 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     expect(onScene.mock.calls[0][0]).toEqual({ kind: 'base', id: 'home' });
   });
 });
+
+describe('GameFieldEngine 이전 던짐의 응답', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  const caught = (fishId: string) => ({
+    status: 'ok', result: { type: 'catch', fishId, uid: fishId, info: { form: 'normal' }, released: [] },
+  }) as never;
+
+  /** 챔질 요청 A가 대기 중일 때 이동으로 낚시를 접고 다시 던져 챔질 B를 보낸 상태를 만든다 */
+  function twoHooks() {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const engine = new GameFieldEngine('world', game, []);
+    const events: FieldEvent[] = [];
+    const resolvers: Array<(value: unknown) => void> = [];
+    engine.updateContext(game, false, {
+      dispatch: () => new Promise(resolve => { resolvers.push(resolve as (value: unknown) => void); }) as never,
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+    const raw = engine as unknown as { school: unknown; transition(p: string): void };
+    const hook = () => {
+      raw.school = { id: 's', spot: 'pond', x: 0, y: 0 };
+      raw.transition('wait');
+      raw.transition('bite');
+      engine.action();
+    };
+    hook();
+    engine.handleKeyDown('ArrowUp', noop);
+    engine.releaseKey('ArrowUp');
+    hook();
+    return { engine, events, resolvers };
+  }
+
+  it('낚시를 접고 다시 던진 뒤 이전 요청의 응답이 와도 새 챔질에 적용하지 않는다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    expect(resolvers).toHaveLength(2);
+    resolvers[0](caught('old'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: null });
+    expect(events.filter(event => event.type === 'catch')).toEqual([]);
+    resolvers[1](caught('new'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: 'new' });
+    expect(events.filter(event => event.type === 'catch')).toHaveLength(1);
+    engine.dispose();
+  });
+
+  it('이전 요청의 거절은 새 챔질을 취소하지 않고 알리지도 않는다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    resolvers[0]({ status: 'rejected', error: 'too-fast' });
+    await Promise.resolve();
+    expect(engine.getSnapshot().phase).toBe('catch');
+    expect(events.filter(event => event.type === 'catch-rejected')).toEqual([]);
+    engine.dispose();
+  });
+
+  it('이동으로 낚시를 접은 뒤 돌아온 응답은 아무것도 바꾸지 않는다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    resolvers[1](caught('new'));
+    await Promise.resolve();
+    engine.cancelFishing();
+    resolvers[0](caught('old'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'idle', fishId: null });
+    expect(events.filter(event => event.type === 'catch')).toHaveLength(1);
+    engine.dispose();
+  });
+});

@@ -107,10 +107,13 @@ export class GameFieldEngine {
   /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
   private controlLocked = false;
   private biteStart = 0;
+  /** 챔질 요청의 세대 번호. 챔질을 보내거나 낚시를 접을 때마다 올라, 이전 요청의 응답이 지금 던짐에 적용되지 않게 한다 */
+  private hookSeq = 0;
   /** 이번 던짐에서 마지막으로 낸 캐치의 판정 — 입질 대기가 방치(auto) 사이클인지 가른다. 줄을 거두거나 새로 던지면 null */
   private lastJudgment: Judgment | null = null;
   /**
    * 현재 단계가 시작된 기준 시각(Date.now). 타이머로 넘어온 단계는 발화 시각이 아니라 이전 단계의 목표 시각이다.
+   * 단, 타이머가 늦게 깨어났으면 발화 시각에서 MAX_CATCH_UP_MS를 뺀 시각까지만 거슬러 올라간다.
    * 획득 단계는 서버 결과가 도착한 시각이다
    */
   private phaseStartAt = 0;
@@ -275,6 +278,7 @@ export class GameFieldEngine {
   }
 
   cancelFishing(): void {
+    this.hookSeq += 1;
     this.school = null;
     this.lastJudgment = null;
     this.transition('idle', null, null);
@@ -452,8 +456,11 @@ export class GameFieldEngine {
     const school = this.school;
     if (!school || this.snapshot.phase !== 'bite') return;
     this.lastJudgment = judgment;
+    this.hookSeq += 1;
+    const seq = this.hookSeq;
     this.transition('catch');
     when(this.callbacks.dispatch({ type: 'catch', spot: school.spot, judgment }), result => {
+      if (seq !== this.hookSeq) return;
       if (result.status === 'rejected') {
         this.cancelFishing();
         this.callbacks.onEvent({ type: 'catch-rejected', reason: result.error });
