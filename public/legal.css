@@ -68,4 +68,4 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.
 th, td { padding: 6px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { background: var(--surface); color: var(--dim); font-weight: 600; }
 
-.operator { margin-top: 2rem; color: var(--dim); font-size: 13px; }
+.fine-print { margin-top: 2rem; color: var(--dim); font-size: 13px; }

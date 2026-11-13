@@ -1,14 +1,35 @@
 /// <reference types="node" />
-// 공개 문서 가드 - 게임 안 링크가 가리키는 주소마다 정적 문서가 있고,
-// 문서가 외부 글꼴, 스크립트, 스타일을 부르지 않는지 본다.
+// 공개 문서 가드 - 게임 안 링크가 가리키는 주소마다 문서 본문이 있고, 변환 결과가 본문을 잃지 않으며,
+// 판 토큰 외의 자리 토큰이 남지 않고, 문서가 외부 글꼴, 스크립트, 스타일을 부르지 않는지 본다.
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { LEGAL_PATHS } from './googleFlow';
+import { LEGAL_PATHS } from '../../src/features/account/model/googleFlow.js';
+import { markdownToDocument, VERSION_TOKEN } from './legalMarkdown.js';
 
 const PUBLIC_DIR = 'public';
-const TEMPLATE_DIR = 'api/_server/legalDocs';
+const DOCS_DIR = 'api/_server/legalDocs';
 const DOCUMENT_PATHS = ['/about', ...Object.values(LEGAL_PATHS)];
-const fileOf = (path: string) => `${TEMPLATE_DIR}/${path.slice(1)}.html`;
+const fileOf = (path: string) => `${DOCS_DIR}/${path.slice(1)}.md`;
+const sourceOf = (path: string) => readFileSync(fileOf(path), 'utf-8');
+const documentOf = (path: string) => markdownToDocument(sourceOf(path), path);
+
+const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** 마크다운 본문을 마크업 없이 줄 단위로 푼 것. 표는 칸마다 한 줄이고 목록 번호와 링크 문법은 벗긴다 */
+function sourceLines(markdown: string): string[] {
+  return markdown.split('\n')
+    .filter(l => l.trim() !== '' && !/^\|[-| ]+\|$/.test(l))
+    .flatMap(l => (l.startsWith('|') ? l.replace(/^\||\|$/g, '').split('|').map(c => c.trim()) : [l]))
+    .map(l => (/^#+ /.test(l) ? l.replace(/^#+ /, '') : l.replace(/^-# /, '').replace(/^- /, '').replace(/^\d+\. /, ''))
+      .replace(/\[([^\]]+)\]\(\/[^)\s]*\)/g, '$1').replace(/\*\*/g, '').replace(/`/g, ''));
+}
+
+/** 변환 결과의 본문(main 요소)을 같은 모양으로 푼 것 */
+function textLinesOf(html: string): string[] {
+  const main = html.slice(html.indexOf('<main>') + '<main>'.length, html.indexOf('</main>'));
+  return main.replace(/<\/(p|li|h1|h2|h3|td|th)>/g, '\n').replace(/<[^>]+>/g, '').split('\n')
+    .map(l => unescape(l.trim())).filter(Boolean);
+}
 
 const EXTERNAL = /^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
@@ -83,7 +104,7 @@ describe('외부 자원 검사기', () => {
 });
 
 describe('공개 문서 정적 파일', () => {
-  it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 템플릿이 있다', (_name, path) => {
+  it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 문서 본문이 있다', (_name, path) => {
     expect(existsSync(fileOf(path))).toBe(true);
   });
 
@@ -97,7 +118,7 @@ describe('공개 문서 정적 파일', () => {
 });
 
 describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
-  const html = readFileSync(fileOf(path), 'utf-8');
+  const html = documentOf(path);
 
   it('스크립트를 싣지 않는다', () => {
     expect(html).not.toMatch(/<script/i);
@@ -105,6 +126,16 @@ describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
 
   it('불러오는 자원이 모두 같은 출처의 주소다', () => {
     expect(externalRefs(html)).toEqual([]);
+  });
+
+  it('판 토큰 외의 자리 토큰이 남지 않는다', () => {
+    const tokens = html.match(/\{\{[^}]*\}\}/g) ?? [];
+    expect(tokens.filter(t => t !== VERSION_TOKEN)).toEqual([]);
+    expect(html.replaceAll(VERSION_TOKEN, '')).not.toMatch(/\{\{|\}\}/);
+  });
+
+  it('변환 결과의 본문이 마크다운 본문과 줄 단위로 같다', () => {
+    expect(textLinesOf(html)).toEqual(sourceLines(sourceOf(path)));
   });
 
   it('위아래 nav의 접근성 이름이 서로 다르다', () => {
@@ -126,7 +157,7 @@ describe('공개 문서 스타일', () => {
 
 describe('문서 사이 링크', () => {
   it.each(DOCUMENT_PATHS)('%s의 같은 출처 링크가 모두 문서나 게임으로 간다', (path) => {
-    const html = readFileSync(fileOf(path), 'utf-8');
+    const html = documentOf(path);
     const links = [...html.matchAll(/<a\b[^>]*>/g)].map(m => attributesOf(m[0]).get('href') ?? '');
     for (const link of links) {
       expect(link === '/' || DOCUMENT_PATHS.includes(link), link).toBe(true);
