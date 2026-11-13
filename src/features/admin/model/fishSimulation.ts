@@ -14,7 +14,7 @@ export interface SimOverrides {
   price: Record<string, number>;
 }
 
-/** 축의 추첨 다이얼. 방치 두 축의 배수는 해역마다 다르다(power.idleDialsOf) */
+/** 축의 추첨 다이얼. 방치 두 축의 배수는 모든 해역이 같다(power.idleDialsOf) */
 export const SIM_AXES = [
   { key: 'normal', label: '무판정', mult: (): DrawOptions => ({}), group: 'manual' },
   { key: 'good', label: 'GOOD', mult: (): DrawOptions => ({ rareMult: 1.6 }), group: 'manual' },
