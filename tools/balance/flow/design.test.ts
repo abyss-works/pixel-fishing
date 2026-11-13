@@ -2,9 +2,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { BOATS } from '../../../src/game/content/boats';
 import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
+import { IDLE_BOOST_STEPS } from '../../../src/game/rules/power';
+import { entryLevel, rates } from '../model';
 import { applyOverride, parseOverride } from './override';
 import { addPerSpot, designReport, parseAnchor, parseGrade, parseNight } from './design';
 import type { DesignInput, DesignReport } from './design';
@@ -17,6 +20,14 @@ const base = (o: Partial<DesignInput> = {}): DesignInput => ({
   grades: {}, night: {}, anchors: [], solve: null, maxDays: 365, ...o,
 });
 const STH = SPOTS.findIndex(s => s.id === 'sthelena');
+const LAST = SPOTS.length - 1;
+const fishPrice = (id: string) => FISH.find(f => f.id === id)!.price;
+/** 제품 상수의 전체 스냅샷 — 계산이 끝나도 같은 값인지 견주는 데 쓴다. 어떤 계산보다 먼저 이 모듈을 읽을 때 잡는다 */
+const snapshot = () => JSON.stringify({
+  cost: [1, 5, 20, 60].map(upgradeCost), spots: SPOTS.map(x => x.powerReq), fish: FISH.map(f => f.price),
+  boats: BOATS.map(b => [b.price, b.fameReq]), idle: [IDLE_BOOST_STEPS.village, IDLE_BOOST_STEPS.world],
+});
+const BEFORE_ANY_RUN = snapshot();
 
 describe('design 입력 해석', () => {
   it('값 하나는 기본값이고 해역=값은 그 해역만 바꾼다', () => {
@@ -90,13 +101,14 @@ describe('design 계산', () => {
       expect(x.level).toBe(r.rows[i + 1].level - 1);
       expect(x.reversed).toBe(x.ev > x.nextEv);
     });
-    expect(r.boostEnds).toEqual({ village: 6, world: 4 });
+    const plateau = (steps: readonly number[]) => steps.indexOf(steps.at(-1)!);
+    expect(r.boostEnds).toEqual({ village: plateau(IDLE_BOOST_STEPS.village), world: plateau(IDLE_BOOST_STEPS.world) });
   });
 
-  it('계산을 마치면 제품 상수가 원래대로 돌아온다', () => {
-    const before = [upgradeCost(5), SPOTS[3].powerReq, FISH.find(f => f.id === 'apollodamsel')!.price];
-    designReport(base({ gap: { all: 4, by: {} }, hours: { all: 2, by: {} } }));
-    expect([upgradeCost(5), SPOTS[3].powerReq, FISH.find(f => f.id === 'apollodamsel')!.price]).toEqual(before);
+  it('계산을 마치면 제품 상수가 계산 전 값으로 돌아온다', () => {
+    designReport(base({ gap: { all: 4, by: {} }, hours: { all: 2, by: {} }, grades: { rare: { base: 5, step: 1.02 } }, night: { epic: 1.4 }, boatShare: 0.1 }));
+    designReport(base({ hours: null, payback: { base: 0.5, growth: 0.01 }, solve: null }));
+    expect(snapshot()).toBe(BEFORE_ANY_RUN);
   }, 60_000);
 });
 
@@ -113,6 +125,9 @@ describe('design 등급 가격 비율', () => {
       expect(Object.values(x.grades).reduce((s, c) => s + (c?.evShare ?? 0), 0)).toBeCloseTo(1, 9);
     });
     expect(r.rows[STH].priceMult).not.toBeCloseTo(plain.rows[STH].priceMult, 3);
+    expect(r.rows[STH].priceMult).toBeGreaterThan(0);
+    // 덮어쓰기를 적용해 잰 EV도 같은 목표에 가깝다(가격 사다리 반올림 범위)
+    expect(Math.abs(r.rows[STH].achievedEv / r.rows[STH].requiredEv - 1)).toBeLessThan(0.05);
   });
 
   it('일반 최대가 대비 낮 어종 최대가가 base x step^순번이고 밤 어종은 낮 어종 x 밤 배율이다', () => {
@@ -121,6 +136,17 @@ describe('design 등급 가격 비율', () => {
     expect(c.legendary!.ratio).toBeCloseTo(100 * 1.05 ** STH, 9);
     expect(c.legendary!.nightRatio! / c.legendary!.ratio!).toBeCloseTo(1.5, 9);
     expect(c.epic!.nightRatio! / c.epic!.ratio!).toBeCloseTo(1.4, 9);
+  });
+
+  it('등급 배율과 밤 배율을 함께 줘도 덮어쓰기를 적용한 뒤 밤 낮 비율이 지정값과 맞는다', () => {
+    const undo = applyOverride(r.override);
+    try {
+      const near = (x: number, y: number) => expect(Math.abs(x / y - 1)).toBeLessThan(0.06); // 가격 사다리 반올림 범위
+      near(fishPrice('bigeye') / fishPrice('galapagosshark'), 1.5);
+      near(fishPrice('eolgedom') / fishPrice('wahoo'), 1.4);
+      const commonMax = Math.max(...FISH.filter(f => f.spot === 'sthelena' && f.rarity === 'common').map(f => f.price));
+      near(fishPrice('galapagosshark') / commonMax, 100 * 1.05 ** STH);
+    } finally { undo(); }
   });
 
   it('덮어쓰기에 등급 배율과 밤 배율이 담기고 파서가 받아들인다', () => {
@@ -132,9 +158,11 @@ describe('design 등급 가격 비율', () => {
 
   it('현재 가격의 등급 계수 예가 마지막 해역 비율을 재현한다', () => {
     const rare = plain.example.find(x => x.grade === 'rare')!;
-    expect(rare.base * rare.step ** (SPOTS.length - 1)).toBeCloseTo(8700 / 66, 9);
-    expect(plain.example.find(x => x.grade === 'epic')!.night).toBeCloseTo(66000 / 39000, 9);
-    expect(plain.example.find(x => x.grade === 'legendary')!.night).toBeCloseTo(840000 / 520000, 9);
+    const commonMax = Math.max(...FISH.filter(f => f.spot === 'sthelena' && f.rarity === 'common').map(f => f.price));
+    const top = (rarity: string, night: boolean) => Math.max(...FISH.filter(f => f.spot === 'sthelena' && f.rarity === rarity && !!f.night === night).map(f => f.price));
+    expect(rare.base * rare.step ** LAST).toBeCloseTo(top('rare', false) / commonMax, 9);
+    expect(plain.example.find(x => x.grade === 'epic')!.night).toBeCloseTo(top('epic', true) / top('epic', false), 9);
+    expect(plain.example.find(x => x.grade === 'legendary')!.night).toBeCloseTo(top('legendary', true) / top('legendary', false), 9);
   });
 });
 
@@ -172,10 +200,45 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
     expect(x.hours).toBeCloseTo([0, 1, 2, 3, 4].reduce((s, k) => s + h(x.level + k), 0) + x.boatPrice! / x.requiredEv, 9);
   }, 60_000);
 
+  it('회수 시간 방식 H에는 배 가격 ÷ 진입 EV가 들어간다', () => {
+    const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0 }, boatShare: 0.2 }));
+    const withBoat = r.rows.filter((_, i) => i < LAST && SPOTS[i + 1].boatTier > SPOTS[i].boatTier);
+    expect(withBoat.length).toBeGreaterThan(0);
+    for (const x of withBoat) {
+      expect(x.boatPrice! / (x.boatPrice! + x.upgradeSum!)).toBeCloseTo(0.2, 9);
+      expect(x.hours).toBeCloseTo(5 * 0.5 + x.boatPrice! / x.requiredEv, 9);
+      expect(x.hours!).toBeGreaterThan(5 * 0.5);
+    }
+  }, 60_000);
+
+  it('기준점 해역을 두 번 주면 거부한다', () => {
+    expect(() => designReport(base({ gap: empty, hours: null, payback: pb, anchors: [...anchor, ...anchor], solve: 'gap' }))).toThrow(/두 번/);
+  });
+
+  it('gap 풀이는 기준점 사이 해역마다 간격 1 이상을 남긴다', () => {
+    const r = designReport(base({ gap: empty, hours: null, payback: pb, anchors: [{ spot: 'river', ev: 1 }, { spot: 'sea', ev: 1 }], solve: 'gap' }));
+    const gaps = r.resolved.gaps.slice(0, 3) as number[];
+    expect(gaps.every(g => g >= 1)).toBe(true);
+    expect(r.rows[2].level).toBeGreaterThanOrEqual(3);
+  }, 60_000);
+
   it('풀 변수의 입력과 함께 주거나 기준점이 없거나 시간 목표 방식이면 거부한다', () => {
     expect(() => designReport(base({ hours: null, payback: pb, anchors: anchor, solve: 'gap' }))).toThrow(/함께/);
     expect(() => designReport(base({ gap: empty, hours: null, payback: pb, anchors: [], solve: 'gap' }))).toThrow(/기준점/);
     expect(() => designReport(base({ gap: empty, solve: 'gap', anchors: anchor }))).toThrow(/회수 시간 방식/);
+  });
+});
+
+describe('design 시간 목표 방식의 마지막 해역', () => {
+  it('기준점이 있으면 마지막 해역의 필요 EV는 기준점 EV이고 기준점 오차 표에는 넣지 않는다', () => {
+    const r = designReport(base({ boatShare: 0.2, anchors: [{ spot: 'sthelena', ev: 942379 }] }));
+    expect(r.rows[LAST].requiredEv).toBe(942379);
+    expect(r.anchors).toEqual([]);
+  }, 60_000);
+
+  it('구간이 없는 마지막 해역의 간격과 시간은 받지 않는다', () => {
+    expect(() => designReport(base({ hours: { all: 3, by: { sthelena: 2 } } }))).toThrow(/마지막 해역/);
+    expect(() => designReport(base({ gap: { all: 5, by: { sthelena: 2 } } }))).toThrow(/마지막 해역/);
   });
 });
 
@@ -209,6 +272,8 @@ describe('design 덮어쓰기 내보내기와 전환 시간', () => {
     const out = runCli(['dist', '--override', file, '--trials', '4']);
     expect(out.stderr).toBe('');
     expect(out.exitCode).toBe(0);
+    expect(out.stdout).toContain('분포 — 해역 전환');
+    expect(out.stdout).toContain('"costGrowth":1.15');
   }, 60_000);
 });
 
@@ -229,11 +294,15 @@ describe('design 명령줄', () => {
   }, 60_000);
 
   it('기준점을 생략하면 세인트헬레나의 현재 진입 EV를 쓰고 다른 명령에서는 design 옵션을 받지 않는다', () => {
-    const out = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3', '--json']);
+    const out = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--payback', '0.5', '--json']);
     const d = (JSON.parse(out.stdout) as { design: DesignReport }).design;
     expect(d.anchors.map(a => a.spot)).toEqual(['sthelena']);
-    expect(d.anchors[0].anchorEv).toBeGreaterThan(900_000);
+    const hoursRun = JSON.parse(runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3', '--json']).stdout) as { design: DesignReport };
+    expect(hoursRun.design.rows.at(-1)!.requiredEv).toBeCloseTo(d.anchors[0].anchorEv, 6);
+    expect(d.anchors[0].anchorEv).toBeCloseTo(rates('sthelena', entryLevel('sthelena'), 'idle').goldPerHour, 6);
     expect(runCli(['transition', '--start', '25']).stderr).toMatch(/design/);
     expect(runCli(['ev', '--growth']).exitCode).toBe(0);
+    expect(runCli(['ev', '--growth', '0.15']).stderr).toMatch(/ev/);
+    expect(runCli(['design', '--start', '25', '--growth', '--gap', '5', '--hours', '3']).stderr).toMatch(/--growth/);
   }, 60_000);
 });

@@ -3,6 +3,7 @@
 //   구간 = 그 해역의 진입 레벨부터 다음 해역 진입 직전 레벨까지(k번 강화). 간격 k와 목표 시간 H의 키는 구간을 보내는 해역이다.
 //   시간 목표 방식: 필요한 진입 EV = (구간 강화비 합 + 배 가격) ÷ H
 //   회수 시간 방식: 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨), h(lv) = payback x (1 + paybackGrowth)^(lv-1). 전환 시간 H = 구간 강화 k번의 h 합 + 배 가격 ÷ 진입 EV
+//   시간 목표 방식의 마지막 해역은 구간이 없어 필요 EV를 기준점 EV(기준점이 없으면 현재 EV)로 둔다. 이 값은 목표이므로 기준점 오차에 넣지 않는다
 //   배 가격 = 전환 골드(강화비 합 + 배 가격)의 boatShare 비중. 그 구간에 새로 사는 배가 있을 때만 있고, 여러 척이면 현행 가격 비례로 나눈다
 //   등급 가격: 일반 최대가 대비 그 등급 낮 어종 최대가 = base x step^n(n은 해역 순번, 첫 해역 0), 밤 어종 최대가 = 같은 등급 낮 어종 최대가 x 밤 배율.
 //   EV 목표는 그대로 두고 일반 가격 배율이 차이를 흡수한다. 어종 사이의 상대 가격은 그 무리 안에서 유지한다
@@ -180,17 +181,17 @@ function solveGaps(anchors: readonly Anchor[], start: number, growth: number, ba
   const MAX_LEVEL = 600;
   const levels: number[] = [];
   withCurve(start, growth, () => {
-    let prev = 0;
+    let prev = 1, prevIdx = 0;
     for (const a of sorted) {
       const idx = indexOfSpot(a.spot);
       let best = -1, bestErr = Infinity;
-      for (let lv = Math.max(1 + idx, prev + 1); lv <= MAX_LEVEL; lv++) {
+      for (let lv = prev + (idx - prevIdx); lv <= MAX_LEVEL; lv++) {
         const err = Math.abs(lnErr(paybackEv(lv, base, pg), a.ev));
         if (err < bestErr) { bestErr = err; best = lv; }
       }
       if (idx === 0) best = 1;
       levels.push(best);
-      prev = best;
+      prev = best; prevIdx = idx;
     }
   });
   const gaps: (number | null)[] = SPOTS.map(() => null);
@@ -307,6 +308,15 @@ function boostEnd(spot: SpotId): number {
 export function designReport(input: DesignInput): DesignReport {
   const n = SPOTS.length;
   for (const a of input.anchors) indexOfSpot(a.spot);
+  const seen = new Set<string>();
+  for (const a of input.anchors) {
+    if (seen.has(a.spot)) throw new Error(`기준점 해역이 두 번 있습니다: ${a.spot}`);
+    seen.add(a.spot);
+  }
+  const lastId = SPOTS[n - 1].id;
+  if (input.gap.by[lastId] !== undefined || input.hours?.by[lastId] !== undefined) {
+    throw new Error(`마지막 해역(${lastId})은 구간이 없어 간격과 전환 시간을 받지 않습니다`);
+  }
   const share = input.boatShare;
   if (!(share >= 0 && share < 1)) throw new Error('배 비중은 0 이상 1 미만이어야 합니다');
   if (!(input.start > 0)) throw new Error('--start는 0보다 커야 합니다');
@@ -340,7 +350,8 @@ export function designReport(input: DesignInput): DesignReport {
     const h = span ? perSpot(input.hours!, s.id) : null;
     if (span && h === null) throw new Error(`전환 시간 목표가 없습니다: ${s.id} (--hours 값 또는 --hours 해역=H)`);
     if (h !== null && !(h > 0)) throw new Error(`전환 시간은 0보다 커야 합니다: ${s.id}=${h}`);
-    return span ? (span.sum + span.boatPrice) / h! : current[i].ev;
+    // 구간이 없는 마지막 해역: 기준점이 있으면 그 EV, 없으면 가격을 바꾸지 않은 현재 EV
+    return span ? (span.sum + span.boatPrice) / h! : input.anchors.find(a => a.spot === s.id)?.ev ?? current[i].ev;
   });
 
   const priceMult: number[] = [], gradeMult: Partial<Record<GradeId, number>>[] = [], nightMult: Partial<Record<GradeId, number>>[] = [];
@@ -416,7 +427,7 @@ export function designReport(input: DesignInput): DesignReport {
     measured = SPOTS.map((_, i) => (i < sim.timings.length ? sim.timings[i].goldWait : null));
   } finally { undo(); }
 
-  const anchors: AnchorRow[] = input.anchors.map(a => {
+  const anchors: AnchorRow[] = input.anchors.filter(a => input.payback || spans[indexOfSpot(a.spot)] !== null).map(a => {
     const i = indexOfSpot(a.spot);
     return { spot: a.spot, anchorEv: a.ev, designEv: requiredEv[i], error: requiredEv[i] / a.ev - 1, level: levels[i] };
   });

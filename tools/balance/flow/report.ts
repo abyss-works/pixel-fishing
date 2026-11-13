@@ -163,7 +163,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                              "idleBoost":{"world":[5,5,4,4,3],"village":[10,9,8,7,6,5,4],"basis":"level","unit":5}},
                       "addSpots":[{"id":"next","name":"다음 해역","like":"sthelena","ref":"sthelena","powerReq":170,"zone":"newregion","growth":0.45,
                                    "boat":{"price":5000000,"fameReq":400000}}]}
-                     priceMult는 그 해역 어종 판매가에 곱하고 gradeMult는 등급별(common, rare, epic, legendary)로 곱한다. 곱한 값은 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
+                     priceMult는 그 해역 어종 판매가에 곱하고 gradeMult는 등급별(common, rare, epic, legendary)로, nightMult는 밤 어종에만 등급별로 더 곱한다. 곱한 값은 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
                      rod: powerPerLevel를 바꿔도 파워 미달 페널티의 간격(레벨당 5파워 단위)은 제품 값 그대로다. powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이다.
                      idleBoost는 방치 배수 표(레벨 차 0, 1, 2, ...이고 마지막 값이 하한). basis가 level이면 요구 파워를 넘은 만큼을 레벨당 파워로 나눈 레벨 차로, power이면 unit(생략하면 제품의 레벨당 파워)으로 나눈 값으로 표를 고른다
                      addSpots(opening, exception, travel, effects, window, recipes에서는 쓸 수 없다): 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
@@ -197,7 +197,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --solve <gap|growth|payback>  design(회수 시간 방식): 기준점에 맞도록 이 변수를 푼다. gap은 기준점 해역의 진입 레벨에 가장 가까운 레벨로 구간 합을 정하고 앞 해역에 균등 분배한다(남는 레벨은 뒤 해역부터). growth와 payback은 기준점 로그 오차 제곱합이 최소인 값이다. 나머지 입력은 그대로 쓴다. 풀린 변수의 입력은 함께 줄 수 없다
   --grade <등급=시작:배율>  design: 일반 최대가 대비 그 등급 낮 어종 최대가 비율 = 시작 x 배율^해역 순번(첫 해역 0). 등급은 희귀, 영웅, 전설(또는 rare, epic, legendary). 지정하지 않은 등급은 현재 가격 비율을 유지한다. EV 목표는 그대로이고 일반 가격이 차이를 흡수한다. 여러 번 줄 수 있다
   --night <등급=배율>  design: 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가. 지정하지 않으면 낮 어종과 같은 배율을 곱한다
-  --emit-override <파일>  design: 결과를 --override로 쓸 수 있는 JSON(rod 곡선, 해역 요구 파워와 가격 배율과 등급 배율, 배 가격)으로 쓴다. transition, dist에 넣으면 골드 전환 시간이 목표와 맞는지 잴 수 있다
+  --emit-override <파일>  design: 결과를 --override로 쓸 수 있는 JSON(rod 곡선, 해역 요구 파워와 가격 배율과 등급 배율, 배 가격)으로 쓴다. transition, dist에 넣으면 골드 전환 시간이 목표와 맞는지 잴 수 있다. 명성은 계산하지 않으므로 모든 배의 fameReq를 0으로 쓴다. 등급 배율과 밤 배율을 지정하면 spots의 gradeMult와 nightMult로 나간다
   --growth           ev: 해역 사이 딱렙 방치 EV 증가율(뒤 ÷ 앞 - 1)과 요구 파워, 진입 레벨 간격 열을 더한다
   --target <해역=골드시간/명성시간>  solve: 출발 해역과 목표 시간(방치 기준 실질 낚시 시간). 여러 번 줄 수 있다. 예: --target sthelena=24/30
   --boat-share <0~1>  solve: 배 가격의 전환 골드 비중. 기본 ${BOAT_SHARE}. design: 기본 0
@@ -421,6 +421,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       if (!(o.hours > 0)) throw new Error('--hours는 0보다 커야 합니다(시간)');
     }
   }
+  if (command === 'ev' && o.design.growth !== null) throw new Error('--growth는 ev 명령에서 값을 받지 않습니다');
   for (const f of given) {
     const allowed = FLAG_COMMANDS[f];
     if (!(command && allowed.includes(command))) throw new Error(`${f}은 ${allowed.join(', ')} 명령에서만 쓸 수 있습니다`);
@@ -529,6 +530,7 @@ function runDesign(o: FlowOptions): DesignReport {
   const paybackMode = d.payback !== null || d.paybackGrowth !== null || d.solve === 'payback';
   if (hoursGiven && paybackMode) throw new Error('--hours와 --payback(--payback-growth)은 함께 줄 수 없습니다');
   if (d.start === null) throw new Error('--start가 필요합니다');
+  if (o.growth) throw new Error('--growth에는 값이 필요합니다(예: --growth 0.15)');
   if (!hoursGiven && !paybackMode) throw new Error('--hours 또는 --payback이 필요합니다');
   const anchors = d.anchors.length > 0 ? d.anchors : d.anchorNone ? [] : [currentAnchor(DEFAULT_ANCHOR_SPOT)];
   return designReport({
@@ -729,7 +731,8 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
     lines.push(
       '구간은 해역의 진입 레벨부터 다음 해역 진입 직전 레벨까지이고 간격 k는 그 구간의 강화 횟수다. 간격과 전환 시간의 해역 키는 구간을 보내는 해역이다. 마지막 해역은 구간이 없다',
       '시간 목표 방식(--hours)의 필요 진입 EV = (구간 강화비 합 + 배 가격) ÷ H. 회수 시간 방식(--payback)의 진입 EV = 진입 레벨 강화비 ÷ h(진입 레벨)이고 전환 시간 H = 구간 강화 k번의 h 합 + 배 가격 ÷ 진입 EV다',
-      '배 가격은 전환 골드의 --boat-share 비중(기본 0)이고 그 구간에 새로 사는 배가 있을 때만 있다. 여러 척이면 현행 가격 비례로 나눈다. 명성은 계산하지 않고 배의 명성 요구치는 제품 값 그대로다',
+      '배 가격은 전환 골드의 --boat-share 비중(기본 0)이고 그 구간에 새로 사는 배가 있을 때만 있다. 여러 척이면 현행 가격 비례로 나눈다. 명성은 계산하지 않는다. 내보낸 덮어쓰기는 배의 명성 요구치를 0으로 둔다(골드 전환 시간만 잰다)',
+      '시간 목표 방식의 마지막 해역은 구간이 없어 필요 EV를 기준점 EV(기준점이 없으면 현재 EV)로 둔다. 이 값은 목표이므로 기준점 오차 표에는 넣지 않는다',
       '필요 EV ÷ 현재 EV는 새 진입 레벨(요구 파워 적용)에서 현재 해역 가격으로 잰 방치 EV에 대한 배율이다. 입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다. 등급 비율을 바꾸면 EV 목표는 그대로 두고 일반 가격 배율이 차이를 흡수한다',
       '반영 EV는 덮어쓰기를 적용해 잰 진입 EV로, 어종 가격 사다리 반올림 때문에 필요 EV와 조금 다르다. 시뮬레이션 전환 시간은 같은 덮어쓰기로 transition을 돌려 골드를 기다린 시간이다. 시뮬레이션은 강화를 살 수 있을 때마다 사서 레벨이 오르는 만큼 EV도 오르므로 진입 EV로 계산한 시간보다 짧다',
     );
