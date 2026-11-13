@@ -117,7 +117,7 @@ const finishLink = (recordConsent: RecordLinkConsent): AccountAfter => async (ac
   if (user.isAnonymous || user.email !== email || !user.emailVerified || passwords.length > 0) {
     await finishUser(account.userId, email, passwords, ctx);
   }
-  // 수락 기록은 마무리 끝에 쓴다. 기록이 실패하면 연결 요청이 실패하고, 다시 연결하면 마무리가 이어져 기록을 마저 남긴다
+  // 수락 기록은 마무리 끝에 쓴다. 기록 함수는 실패를 삼키고 오류를 남기므로 기록이 실패해도 연결은 성공으로 답한다. 빠진 기록은 시행일 뒤 확인 화면이 채운다
   await recordConsent(account.userId);
 };
 
