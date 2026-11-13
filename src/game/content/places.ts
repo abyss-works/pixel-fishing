@@ -20,6 +20,16 @@ export const SALE_BASES: Record<BaseId, boolean> = {
  *  구 지역 이름은 관리자 화면에서 리터럴 미러로 표시한다. */
 export type RegionId = 'village' | 'world';
 
+/** 존재하는 지역 — Record라 새 지역을 더하면 여기도 채워야 컴파일된다 */
+const REGION_EXISTS: Record<RegionId, true> = { village: true, world: true };
+
+/** 이동 목적지가 실제로 있는 지역·거점인지 — 형태가 맞아도 콘텐츠에 없는 id는 거짓이다 */
+export function isKnownLocation(to: { kind: string; id: string }): boolean {
+  if (to.kind === 'base') return Object.hasOwn(BASE_REGION, to.id);
+  if (to.kind === 'region') return Object.hasOwn(REGION_EXISTS, to.id);
+  return false;
+}
+
 /** 플레이어가 있는 곳. 세이브에 저장돼 새로고침 후 그 자리에서 재개한다.
  *  **좌표는 담지 않는다** — 이동은 액션이 아니라 클라 연출이라 매 프레임 저장할 수 없다.
  *  지역만 기억하고 그 지역의 spawn에서 다시 시작한다. */

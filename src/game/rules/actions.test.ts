@@ -257,6 +257,19 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
       .toEqual({ ok: false, error: 'bad-request' });
   });
 
+  it('travel — 없는 지역·거점 id는 거부하고 상태를 바꾸지 않는다', () => {
+    const ids = ['nowhere', '', 'toString', '__proto__', 'constructor'];
+    for (const kind of ['region', 'base'] as const) {
+      for (const id of ids) {
+        expect(applyAction(seed(), { type: 'travel', to: { kind, id } } as never, deps()), `${kind}:${id}`)
+          .toEqual({ ok: false, error: 'bad-request' });
+      }
+    }
+    // 지역 id를 거점 자리에, 거점 id를 지역 자리에 쓰는 것도 없는 id다
+    expect(applyAction(seed(), { type: 'travel', to: { kind: 'base', id: 'world' } } as never, deps()).ok).toBe(false);
+    expect(applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'harbor' } } as never, deps()).ok).toBe(false);
+  });
+
   it('setLocked — 이벤트 없이 개체 잠금, 델타에는 잡힌다', () => {
     const bag = [mkInst('a', 'carp'), mkInst('b', 'carp')];
     const out = applyAction(seed({ bag }), { type: 'setLocked', uids: ['a'], locked: true }, deps());
