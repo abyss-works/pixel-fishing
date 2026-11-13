@@ -107,7 +107,31 @@ describe('GameFieldEngine 위치 재설정', () => {
     const { engine, onScene, frame } = setup();
     engine.placePlayer(dockCenter);
     expect(frame(1000, 950)).toBe(false);
-    expect(onScene).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' }, expect.any(String));
+    expect(onScene).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' }, expect.any(String), undefined, undefined);
+  });
+
+  it('접안 트리거에 닿으면 들어오기 직전 자리를 되돌아올 자리로 함께 알린다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer({ x: berth.x - 3, y: berth.y + berth.h / 2 });
+    frame(1000, 950);
+    engine.handleKeyDown('ArrowRight', noop);
+    const before: { x: number; y: number }[] = [];
+    for (let i = 0; i < 20 && onScene.mock.calls.length === 0; i++) {
+      before.push(engine.getPosition());
+      frame(1050 + i * 50, 1000 + i * 50);
+    }
+    expect(onScene).toHaveBeenCalledTimes(1);
+    const [, , entry, returnPos] = onScene.mock.calls[0];
+    expect(entry).toBeUndefined();
+    expect(returnPos).toEqual(before[before.length - 1]);
+    expect(returnPos.x).toBeLessThan(berth.x);
+  });
+
+  it('이동 없이 트리거 안에 놓인 경우에는 되돌아올 자리를 알리지 않는다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer(dockCenter);
+    frame(1000, 950);
+    expect(onScene.mock.calls[0][3]).toBeUndefined();
   });
 
   it('낚시 중이면 줄을 거두고 대기 상태로 돌아간다', () => {
