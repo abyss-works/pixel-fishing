@@ -72,7 +72,7 @@ export const bountyDailyCap = (kind: BountyKind): number =>
 // 네임드 조우 가중치(전역 기본) — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 뽑는다.
 // 확률 = named / (named + none). 해역 데이터(spots.namedWeight)가 있으면 그 해역은 그 값을 쓴다.
 // 명중하면 즉시 획득이 아니라 도전권을 발급한다.
-// Lv12 방치 약 6.4초/cycle 기준 기댓값 약 1.8시간 — 이게 진짜 게이트다.
+// Lv12 방치 약 7.6초/cycle 기준 기댓값 약 2.1시간(조우 확률 1/1000) — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_WEIGHTS = { named: 1, none: 999 } as const;
 
 // 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 5~마다가스카르 8)만큼 맞히면 성공, 3번째 실패에 탈락.
