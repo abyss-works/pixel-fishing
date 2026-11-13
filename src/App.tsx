@@ -64,9 +64,10 @@ ${min}자 이상이어야 해요.`,
     setPlaceSeq(seq => seq + 1);
   };
 
-  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다
-  const go = (nextScene: SceneRef, message: string, position?: Point) => {
-    const from = { scene, entryPos };
+  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다.
+  // 필드에서 떠났다면 returnPos(트리거에 닿기 직전의 자리)로, 아니면 그 장소의 진입 자리로 돌아온다
+  const go = (nextScene: SceneRef, message: string, position?: Point, returnPos?: Point) => {
+    const from = { scene, entryPos: returnPos ?? entryPos };
     const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
     setToast(message);

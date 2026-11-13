@@ -84,7 +84,7 @@ interface GameViewProps {
   placeSeq: number;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
   /** 서버에 알리지 않고 화면의 장소만 바꾼다 */
   onPlace: (scene: SceneRef, entryPos?: Point) => void;
   onWarmup: () => void;
@@ -190,9 +190,9 @@ export default function GameView(props: GameViewProps) {
 
   const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
 
-  const go = (nextScene: SceneRef, message: string, entryPos?: Point) => {
+  const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();
-    props.onScene(nextScene, message, entryPos);
+    props.onScene(nextScene, message, entryPos, returnPos);
   };
 
   const { confirm, dialogs } = useDialogs();

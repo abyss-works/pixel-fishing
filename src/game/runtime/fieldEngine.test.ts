@@ -107,7 +107,31 @@ describe('GameFieldEngine 위치 재설정', () => {
     const { engine, onScene, frame } = setup();
     engine.placePlayer(dockCenter);
     expect(frame(1000, 950)).toBe(false);
-    expect(onScene).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' }, expect.any(String));
+    expect(onScene).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' }, expect.any(String), undefined, undefined);
+  });
+
+  it('접안 트리거에 닿으면 들어오기 직전 자리를 되돌아올 자리로 함께 알린다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer({ x: berth.x - 3, y: berth.y + berth.h / 2 });
+    frame(1000, 950);
+    engine.handleKeyDown('ArrowRight', noop);
+    const before: { x: number; y: number }[] = [];
+    for (let i = 0; i < 20 && onScene.mock.calls.length === 0; i++) {
+      before.push(engine.getPosition());
+      frame(1050 + i * 50, 1000 + i * 50);
+    }
+    expect(onScene).toHaveBeenCalledTimes(1);
+    const [, , entry, returnPos] = onScene.mock.calls[0];
+    expect(entry).toBeUndefined();
+    expect(returnPos).toEqual(before[before.length - 1]);
+    expect(returnPos.x).toBeLessThan(berth.x);
+  });
+
+  it('이동 없이 트리거 안에 놓인 경우에는 되돌아올 자리를 알리지 않는다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer(dockCenter);
+    frame(1000, 950);
+    expect(onScene.mock.calls[0][3]).toBeUndefined();
   });
 
   it('낚시 중이면 줄을 거두고 대기 상태로 돌아간다', () => {
@@ -147,6 +171,64 @@ describe('GameFieldEngine 막힘 안내', () => {
   it('열지 않은 바다에 닿은 채 키를 눌러도 안내는 한 번이다', () => {
     const { events } = push('ArrowUp', -8, -0.4, 20);
     expect(blocked(events)).toHaveLength(1);
+  });
+
+  /** 프레임 간격(ms)이 고르지 않은 입력을 흉내 낸다. 경계까지 남은 거리를 달리해 여러 번 시도한다 */
+  function jitteryAnnouncements(code: string, lon: number, lat: number, latStep: number) {
+    const counts: number[] = [];
+    for (let k = 0; k < 12; k++) {
+      const s = setup();
+      s.engine.placePlayer(at(lon, lat + (code === 'ArrowUp' ? -1 : 1) * latStep * k));
+      s.frame(1000, 950);
+      s.engine.handleKeyDown(code, noop);
+      let t = 1000;
+      for (let i = 0; i < 40; i++) {
+        for (const dt of [16.7, 16.7, 16.7, 6]) { s.frame(t + dt, t); t += dt; }
+      }
+      counts.push(blocked(s.events).length);
+    }
+    return counts;
+  }
+
+  it('프레임 간격이 고르지 않아도 구역 게이트에 막힌 채 누르는 동안 안내는 한 번이다', () => {
+    expect(jitteryAnnouncements('ArrowDown', 130, 19.25, 0.01)).toEqual(Array(12).fill(1));
+  });
+
+  it('프레임 간격이 고르지 않아도 열지 않은 바다에 막힌 채 누르는 동안 안내는 한 번이다', () => {
+    expect(jitteryAnnouncements('ArrowUp', -8, -0.4, 0.01)).toEqual(Array(12).fill(1));
+  });
+
+  it('경계를 따라 비스듬히 미끄러지며 입력을 이어 가도 막힌 동안은 안내를 다시 하지 않는다', () => {
+    const s = setup();
+    s.engine.placePlayer(at(-8, -0.4));
+    s.frame(1000, 950);
+    s.engine.setMoveDirection({ x: 0.7071, y: -0.7071 });
+    const start = s.engine.getPosition();
+    for (let i = 0; i < 300; i++) s.frame(1050 + i * 50, 1000 + i * 50);
+    const end = s.engine.getPosition();
+    expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(100);
+    expect(blocked(s.events)).toHaveLength(1);
+  });
+
+  it('키를 누른 채 낚시를 던졌다가 접혀도 같은 경계의 안내를 다시 하지 않는다', () => {
+    const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
+    const raw = engine as unknown as { transition(p: string): void };
+    raw.transition('wait');
+    for (let i = 0; i < 5; i++) frame(3000 + i * 50, 2950 + i * 50);
+    engine.cancelFishing();
+    for (let i = 0; i < 10; i++) frame(4000 + i * 50, 3950 + i * 50);
+    expect(blocked(events)).toHaveLength(1);
+  });
+
+  it('경계에서 충분히 멀어졌다 다시 닿으면 키를 떼지 않아도 안내를 다시 한다', () => {
+    const { engine, events, frame } = push('ArrowUp', -8, -0.4, 10);
+    engine.handleKeyDown('ArrowDown', noop);
+    engine.releaseKey('ArrowUp');
+    for (let i = 0; i < 20; i++) frame(3000 + i * 50, 2950 + i * 50);
+    engine.releaseKey('ArrowDown');
+    engine.handleKeyDown('ArrowUp', noop);
+    for (let i = 0; i < 40; i++) frame(5000 + i * 50, 4950 + i * 50);
+    expect(blocked(events)).toHaveLength(2);
   });
 
   it('경계에서 떨어졌다 다시 닿으면 안내를 다시 한다', () => {
@@ -403,6 +485,26 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     expect(events).toEqual([{ type: 'trigger-blocked', message: expect.stringContaining('배가 필요해요') }]);
   });
 
+  it('배가 없어 포구에서 막힌 채 계속 밀어도 배 없음 안내는 한 번이다', () => {
+    const { engine, events, frame } = village({ guest: false, boat: 0 });
+    engine.handleKeyDown('ArrowDown', noop);
+    for (let i = 0; i < 30; i++) frame(1000 + i * 17, 983 + i * 17);
+    expect(events.filter(event => event.type === 'trigger-blocked')).toHaveLength(1);
+  });
+
+  it('배가 없는 채 키를 뗐다가 다시 밀면 배 없음 안내를 다시 한다', () => {
+    const { engine, events, frame } = village({ guest: false, boat: 0 });
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1000, 950);
+    frame(1050, 1000);
+    engine.releaseKey('ArrowDown');
+    frame(1100, 1050);
+    engine.handleKeyDown('ArrowDown', noop);
+    frame(1150, 1100);
+    frame(1200, 1150);
+    expect(events.filter(event => event.type === 'trigger-blocked')).toHaveLength(2);
+  });
+
   it('게스트가 아니면 막히지 않고 바다로 나간다', () => {
     const { engine, onScene, events, frame } = village({ guest: false, boat: 1 });
     engine.handleKeyDown('ArrowDown', noop);
@@ -421,5 +523,76 @@ describe('GameFieldEngine 게스트의 포구 출항', () => {
     (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, 1000, 950);
     expect(onScene).toHaveBeenCalledTimes(1);
     expect(onScene.mock.calls[0][0]).toEqual({ kind: 'base', id: 'home' });
+  });
+});
+
+describe('GameFieldEngine 이전 던짐의 응답', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  const caught = (fishId: string) => ({
+    status: 'ok', result: { type: 'catch', fishId, uid: fishId, info: { form: 'normal' }, released: [] },
+  }) as never;
+
+  /** 챔질 요청 A가 대기 중일 때 이동으로 낚시를 접고 다시 던져 챔질 B를 보낸 상태를 만든다 */
+  function twoHooks() {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const engine = new GameFieldEngine('world', game, []);
+    const events: FieldEvent[] = [];
+    const resolvers: Array<(value: unknown) => void> = [];
+    engine.updateContext(game, false, {
+      dispatch: () => new Promise(resolve => { resolvers.push(resolve as (value: unknown) => void); }) as never,
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+    const raw = engine as unknown as { school: unknown; transition(p: string): void };
+    const hook = () => {
+      raw.school = { id: 's', spot: 'pond', x: 0, y: 0 };
+      raw.transition('wait');
+      raw.transition('bite');
+      engine.action();
+    };
+    hook();
+    engine.handleKeyDown('ArrowUp', noop);
+    engine.releaseKey('ArrowUp');
+    hook();
+    return { engine, events, resolvers };
+  }
+
+  it('낚시를 접고 다시 던진 뒤 이전 요청의 응답이 와도 새 챔질의 단계에 적용하지 않고 획득 안내만 낸다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    expect(resolvers).toHaveLength(2);
+    resolvers[0](caught('old'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: null });
+    const announced = () => events.flatMap(event => event.type === 'catch' ? [event.result.fishId] : []);
+    expect(announced()).toEqual(['old']);
+    resolvers[1](caught('new'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'catch', fishId: 'new' });
+    expect(announced()).toEqual(['old', 'new']);
+    engine.dispose();
+  });
+
+  it('이전 요청의 거절은 새 챔질을 취소하지 않고 알리지도 않는다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    resolvers[0]({ status: 'rejected', error: 'too-fast' });
+    await Promise.resolve();
+    expect(engine.getSnapshot().phase).toBe('catch');
+    expect(events.filter(event => event.type === 'catch-rejected')).toEqual([]);
+    engine.dispose();
+  });
+
+  it('이동으로 낚시를 접은 뒤 돌아온 응답은 단계를 바꾸지 않고 획득 안내만 낸다', async () => {
+    const { engine, events, resolvers } = twoHooks();
+    resolvers[1](caught('new'));
+    await Promise.resolve();
+    engine.cancelFishing();
+    resolvers[0](caught('old'));
+    await Promise.resolve();
+    expect(engine.getSnapshot()).toMatchObject({ phase: 'idle', fishId: null });
+    expect(events.filter(event => event.type === 'catch')).toHaveLength(2);
+    engine.dispose();
   });
 });

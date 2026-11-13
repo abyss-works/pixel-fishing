@@ -41,7 +41,7 @@ interface Props {
   game: GameState;
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  onScene: (scene: SceneRef, message: string, entryPos?: Point) => void;
+  onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
   onWarmup?: () => void;
   /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
   guest?: boolean;
