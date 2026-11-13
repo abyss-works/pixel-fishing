@@ -130,6 +130,8 @@ export interface DesignArgs {
   grades: Partial<Record<GradeId, GradeCurve>>;
   night: Partial<Record<GradeId, number>>;
   emitOverride: string | null;
+  /** --bite alternate|both */
+  bite: 'both' | 'alternate';
 }
 
 export const HELP = `사용: pnpm balance:flow [transition|days|opening|exception|ev|gates|dist|travel|effects|window|recipes|achievements|solve|upgrades|fame|design] [옵션]
@@ -164,7 +166,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                       "addSpots":[{"id":"next","name":"다음 해역","like":"sthelena","ref":"sthelena","powerReq":170,"zone":"newregion","growth":0.45,
                                    "boat":{"price":5000000,"fameReq":400000}}]}
                      priceMult는 그 해역 어종 판매가에 곱하고 gradeMult는 등급별(common, rare, epic, legendary)로, nightMult는 밤 어종에만 등급별로 더 곱한다. 곱한 값은 가격 사다리(일반 정수, 희귀 이상 앞 두 자리)로 맞춘다
-                     rod: powerPerLevel를 바꿔도 파워 미달 페널티의 간격(레벨당 5파워 단위)은 제품 값 그대로다. powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이다.
+                     rod: powerPerLevel를 바꿔도 파워 미달 페널티의 간격(레벨당 5파워 단위)은 제품 값 그대로다. powerPerLevel는 레벨당 파워, cost*는 강화비 식(전환 레벨 이하 round(costBase x costGrowth^(lv-1)), 그 위 전환 레벨 비용 x (lv/전환 레벨)^costPowerExp), biteDecay는 레벨마다 입질 대기에 곱하는 값이고 biteDecayMode(both 또는 alternate, 기본 both)는 최소와 최대에 함께 곱할지 홀짝 레벨에서 번갈아 곱할지 정한다.
                      idleBoost는 방치 배수 표(레벨 차 0, 1, 2, ...이고 마지막 값이 하한). basis가 level이면 요구 파워를 넘은 만큼을 레벨당 파워로 나눈 레벨 차로, power이면 unit(생략하면 제품의 레벨당 파워)으로 나눈 값으로 표를 고른다
                      addSpots(opening, exception, travel, effects, window, recipes에서는 쓸 수 없다): 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
                      zone을 주면 그 이름의 새 지역이고 생략하면 like의 지역이다. boat를 주면 그 해역을 여는 새 배를 더한다. 가상 어종은 구역 도감 조건에 세지 않는다
@@ -197,6 +199,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --solve <gap|growth|payback>  design(회수 시간 방식): 기준점에 맞도록 이 변수를 푼다. gap은 기준점 해역의 진입 레벨에 가장 가까운 레벨로 구간 합을 정하고 앞 해역에 균등 분배한다(남는 레벨은 뒤 해역부터). growth와 payback은 기준점 로그 오차 제곱합이 최소인 값이다. 나머지 입력은 그대로 쓴다. 풀린 변수의 입력은 함께 줄 수 없다
   --grade <등급=시작:배율>  design: 일반 최대가 대비 그 등급 낮 어종 최대가 비율 = 시작 x 배율^해역 순번(첫 해역 0). 등급은 희귀, 영웅, 전설(또는 rare, epic, legendary). 지정하지 않은 등급은 현재 가격 비율을 유지한다. EV 목표는 그대로이고 일반 가격이 차이를 흡수한다. 여러 번 줄 수 있다
   --night <등급=배율>  design: 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가. 지정하지 않으면 낮 어종과 같은 배율을 곱한다
+  --bite <alternate|both>  design: 입질 대기 감소 방식. alternate는 홀수 레벨에서 강화할 때 입질 최대치만, 짝수 레벨에서 강화할 때 최소치만 감쇠(기본 0.94)를 곱한다(레벨 L의 최대 = 기본 최대 x 감쇠^올림((L-1)/2), 최소 = 기본 최소 x 감쇠^내림((L-1)/2)). 기본 both(제품 규칙, 함께 곱함). 해역 EV 계산과 역전 검사에 반영하고 --emit-override의 rod.biteDecayMode로 쓴다. 효과 옵션 --bite <N>(%)과 구분한다
   --emit-override <파일>  design: 결과를 --override로 쓸 수 있는 JSON(rod 곡선, 해역 요구 파워와 가격 배율과 등급 배율, 배 가격)으로 쓴다. transition, dist에 넣으면 골드 전환 시간이 목표와 맞는지 잴 수 있다. 명성은 계산하지 않으므로 모든 배의 fameReq를 0으로 쓴다. 등급 배율과 밤 배율을 지정하면 spots의 gradeMult와 nightMult로 나간다
   --growth           ev: 해역 사이 딱렙 방치 EV 증가율(뒤 ÷ 앞 - 1)과 요구 파워, 진입 레벨 간격 열을 더한다
   --target <해역=골드시간/명성시간>  solve: 출발 해역과 목표 시간(방치 기준 실질 낚시 시간). 여러 번 줄 수 있다. 예: --target sthelena=24/30
@@ -233,7 +236,7 @@ const FLAG_COMMANDS: Record<string, readonly Command[]> = {
   '--reward': ['achievements', ...REWARD_COMMANDS], '--reward-split': ['achievements', ...REWARD_COMMANDS],
   '--reward-basis': ['achievements', ...REWARD_COMMANDS], '--basis': ['achievements', ...REWARD_COMMANDS],
   '--growth': ['ev', 'design'], '--target': ['solve'], '--boat-share': ['solve', 'design'],
-  '--start': ['design'], '--gap': ['design'], '--payback': ['design'], '--payback-growth': ['design'], '--anchor': ['design'], '--solve': ['design'], '--grade': ['design'], '--night': ['design'], '--emit-override': ['design'], '--levels': ['upgrades'],
+  '--start': ['design'], '--gap': ['design'], '--payback': ['design'], '--payback-growth': ['design'], '--anchor': ['design'], '--solve': ['design'], '--grade': ['design'], '--night': ['design'], '--emit-override': ['design'], '--bite alternate': ['design'], '--bite both': ['design'], '--levels': ['upgrades'],
 };
 const BOOL_FLAGS = ['--json', '--help', '--bounty', '--with-cost', '--growth'] as const;
 
@@ -249,7 +252,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
     recipe: null, hours: LUNCH_HOURS, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
     rewards: [], rewardSplit: null, growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
-    design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: null, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null },
+    design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: null, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, bite: 'both' },
   };
   const hoursRaw: string[] = [];
   const given: string[] = [];
@@ -272,6 +275,11 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       if (!(VALUE_FLAGS as readonly string[]).includes(a)) throw new Error(`알 수 없는 옵션입니다: ${a} (--help 참고)`);
       const raw = argv[++i];
       if (raw === undefined || raw.startsWith('--')) throw new Error(`${a}에는 값이 필요합니다`);
+      if (a === '--bite' && (raw === 'alternate' || raw === 'both')) {
+        given.push(`--bite ${raw}`);
+        o.design.bite = raw;
+        continue;
+      }
       if ((EFFECT_FLAGS as readonly string[]).includes(a)) {
         given.push(a);
         if (a === '--bait') bait = raw;
@@ -537,7 +545,7 @@ function runDesign(o: FlowOptions): DesignReport {
     start: d.start, growth: d.growth, gap: d.gap,
     hours: paybackMode ? null : d.hours,
     payback: paybackMode ? { base: d.payback, growth: d.paybackGrowth ?? 0 } : null,
-    boatShare: o.boatShare ?? 0, grades: d.grades, night: d.night, anchors, solve: d.solve, maxDays: o.maxDays,
+    boatShare: o.boatShare ?? 0, grades: d.grades, night: d.night, bite: d.bite, anchors, solve: d.solve, maxDays: o.maxDays,
   });
 }
 

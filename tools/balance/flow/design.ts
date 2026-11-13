@@ -17,6 +17,7 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { VARIANT_EV, entryLevel, rates } from '../model';
 import { applyRodRules, powerOfLevel, relativeIdleBoost } from '../rodRules';
+import type { BiteDecayMode } from '../rodRules';
 import { applyOverride } from './override';
 import type { FlowOverride } from './override';
 import { levelRows, purchaseRows } from './tables';
@@ -48,6 +49,8 @@ export interface DesignInput {
   /** 밤 어종 최대가 ÷ 같은 등급 낮 어종 최대가 */
   night: Partial<Record<GradeId, number>>;
   anchors: Anchor[];
+  /** 입질 대기 감소 방식. alternate이면 해역 EV 계산에 반영하고 덮어쓰기에 쓴다 */
+  bite: BiteDecayMode;
   solve: SolveVar | null;
   /** 시뮬레이션으로 전환 시간을 재는 최대 일수 */
   maxDays: number;
@@ -340,7 +343,7 @@ export function designReport(input: DesignInput): DesignReport {
   // 현재 해역 EV: 새 진입 레벨과 요구 파워를 적용한 제품 규칙으로 잰다
   const spotPatch = Object.fromEntries(SPOTS.map((s, i) => [s.id, { powerReq: powers[i] }]));
   const current = (() => {
-    const undo = applyOverride({ spots: spotPatch });
+    const undo = applyOverride({ spots: spotPatch, rod: { biteDecayMode: input.bite } });
     try { return SPOTS.map((s, i) => breakdownAt(s.id, levels[i])); } finally { undo(); }
   })();
 
@@ -396,7 +399,7 @@ export function designReport(input: DesignInput): DesignReport {
 
   // 덮어쓰기: 낚싯대 곡선, 요구 파워, 가격 배율, 등급 배율, 배 가격
   const override: FlowOverride = {
-    rod: { costBase: input.start, costGrowth: 1 + res.growth, costPowerFrom: NO_POWER_PHASE },
+    rod: { costBase: input.start, costGrowth: 1 + res.growth, costPowerFrom: NO_POWER_PHASE, ...(input.bite === 'alternate' ? { biteDecayMode: input.bite } : {}) },
     boats: {},
     spots: Object.fromEntries(SPOTS.map((s, i) => [s.id, {
       powerReq: powers[i], priceMult: priceMult[i],

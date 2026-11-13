@@ -14,7 +14,7 @@ import { topZoneOfSpot } from '../../src/game/content/zones';
 import { drawRows, rodStats } from '../../src/game/rules/logic';
 import type { DrawOptions } from '../../src/game/rules/logic';
 import { zonesFor } from '../../src/game/rules/stats';
-import { minLevelOfPower, powerOfLevel, relativeIdleBoost } from './rodRules';
+import { biteRangeOf, minLevelOfPower, powerOfLevel, relativeIdleBoost } from './rodRules';
 import { virtualZoneOf } from './virtualSpots';
 import { CATCH_MS, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
 import { variantShare } from '../../src/game/rules/logic';
@@ -65,13 +65,13 @@ export interface RodSpec {
 /** 해역에서 이 레벨 낚싯대의 스펙 — 입질 대기는 낚싯대 레벨 곡선 그대로다(파워 초과로 줄지 않는다).
  *  파워가 해역 요구에 못 미치면 일반 가중치 배수와 입질 대기 추가 초가 붙는다 */
 export function rodSpec(spot: SpotId, level: number): RodSpec {
-  const st = rodStats(level);
+  const st = rodStats(level), bite = biteRangeOf(level);
   const power = powerOfLevel(level);
   const entry = spotOf(spot).powerReq ?? 0;
   const z = zonesFor(power, entry);
   return {
     level, power,
-    biteMin: st.biteMin, biteMax: st.biteMax, sweep: st.sweep,
+    biteMin: bite.biteMin, biteMax: bite.biteMax, sweep: st.sweep,
     yellow: z.yellow, red: z.red,
     idleBoost: relativeIdleBoost(power, spot),
     gateMult: z.mult, biteExtra: z.biteExtra,

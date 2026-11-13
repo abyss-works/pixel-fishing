@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BOATS } from '../../../src/game/content/boats';
 import { FISH } from '../../../src/game/content/fish';
+import { rodStats } from '../../../src/game/rules/logic';
 import { SPOTS } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { IDLE_BOOST_STEPS } from '../../../src/game/rules/power';
@@ -11,13 +12,14 @@ import { entryLevel, rates } from '../model';
 import { applyOverride, parseOverride } from './override';
 import { addPerSpot, designReport, parseAnchor, parseGrade, parseNight } from './design';
 import type { DesignInput, DesignReport } from './design';
+import { biteRangeOf } from '../rodRules';
 import { runCli } from './report';
 import { transitionReport } from './transitions';
 
 const empty = { all: null, by: {} } as const;
 const base = (o: Partial<DesignInput> = {}): DesignInput => ({
   start: 25, growth: 0.15, gap: { all: 5, by: {} }, hours: { all: 3, by: {} }, payback: null, boatShare: 0,
-  grades: {}, night: {}, anchors: [], solve: null, maxDays: 365, ...o,
+  grades: {}, night: {}, anchors: [], bite: 'both', solve: null, maxDays: 365, ...o,
 });
 const STH = SPOTS.findIndex(s => s.id === 'sthelena');
 const LAST = SPOTS.length - 1;
@@ -274,6 +276,31 @@ describe('design 덮어쓰기 내보내기와 전환 시간', () => {
     expect(out.exitCode).toBe(0);
     expect(out.stdout).toContain('분포 — 해역 전환');
     expect(out.stdout).toContain('"costGrowth":1.15');
+  }, 60_000);
+});
+
+describe('design 입질 대기 감소 방식', () => {
+  it('alternate는 해역 EV와 역전 검사에 반영되고 덮어쓰기에 쓰이며 계산 뒤 복원된다', () => {
+    const both = designReport(base());
+    const alt = designReport(base({ bite: 'alternate' }));
+    expect(alt.override.rod!.biteDecayMode).toBe('alternate');
+    expect(both.override.rod!.biteDecayMode).toBeUndefined();
+    // 진입 레벨 1은 두 방식이 같고, 레벨이 오를수록 alternate의 입질 대기가 길어 EV가 낮다(필요 EV가 같으므로 가격 배율이 커진다)
+    expect(alt.rows[0].currentEv).toBeCloseTo(both.rows[0].currentEv, 6);
+    expect(alt.rows[8].currentEv).toBeLessThan(both.rows[8].currentEv);
+    expect(alt.rows[8].priceMult).toBeGreaterThan(both.rows[8].priceMult);
+    // 입질 대기가 레벨당 덜 줄어 구간 안의 EV 상승이 작다
+    expect(alt.reversals[5].ev / alt.rows[5].achievedEv).toBeLessThan(both.reversals[5].ev / both.rows[5].achievedEv);
+    expect(biteRangeOf(7).biteMax).toBe(rodStats(7).biteMax);
+  }, 60_000);
+
+  it('명령줄 --bite alternate|both는 design에서만 받고 숫자 %는 받지 않는다', () => {
+    const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
+    const out = runCli([...args, '--bite', 'alternate', '--json']);
+    expect(out.stderr).toBe('');
+    expect((JSON.parse(out.stdout) as { design: DesignReport }).design.override.rod!.biteDecayMode).toBe('alternate');
+    expect(runCli([...args, '--bite', '5']).stderr).toMatch(/--bite/);
+    expect(runCli(['transition', '--bite', 'alternate']).stderr).toMatch(/design/);
   }, 60_000);
 });
 
