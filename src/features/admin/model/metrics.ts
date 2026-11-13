@@ -163,6 +163,12 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
       const uids = Array.isArray(pay.uids) ? pay.uids.length : 0;
       return `${uids}마리 놓아줌 (${s(pay.reason)})`;
     }
+    case 'autoExtractEnergy': {
+      const uids = Array.isArray(pay.uids) ? pay.uids.length : 0;
+      const energy = pay.energy !== null && typeof pay.energy === 'object' ? Object.values(pay.energy) : [];
+      const total = energy.reduce<number>((sum, n) => sum + (typeof n === 'number' ? n : 0), 0);
+      return `${uids}마리 기운 ${formatEnergy(total)}개 (${s(pay.reason)})`;
+    }
     default: return Object.keys(pay).length > 0 ? JSON.stringify(pay).slice(0, 60) : '';
   }
 }

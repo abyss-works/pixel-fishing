@@ -100,6 +100,9 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
       .toBe('2마리 기운 2.5개');
     expect(eventSummary('extractEnergy', { uids: Array(1500).fill('x'), energy: { common: 15000, rare: 5, epic: 0, legendary: 0 } }))
       .toBe('1500마리 기운 1,500.5개');
+    expect(eventSummary('autoExtractEnergy', { uids: ['a', 'b'], reason: 'bag-full', energy: { common: 15, rare: 10, epic: 0, legendary: 0 } }))
+      .toBe('2마리 기운 2.5개 (bag-full)');
+    expect(eventSummary('autoExtractEnergy', { uids: [] })).toBe('0마리 기운 0개 ()');
     expect(eventSummary('cook', { recipe: 'cook-lunch-bite', count: 3, bonus: 1 })).toBe('cook-lunch-bite ×3 (추가 완성 1)');
     expect(eventSummary('cook', { recipe: 'cook-lunch-bite', count: 3, bonus: 0 })).toBe('cook-lunch-bite ×3');
     expect(eventSummary('eat', { item: 'cook-lunch-bite', endsAt: '2026-11-12T09:00:00.000Z', replaced: null })).toBe('cook-lunch-bite');
