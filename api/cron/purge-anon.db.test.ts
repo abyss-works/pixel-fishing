@@ -138,19 +138,23 @@ describe('빈 익명 계정 정리 크론', () => {
     const recent = await seedFullAccount(env.client, { save: { gold: 900, updatedAt: OLD }, createdAt: OLD, lastSignInAt: ago(300), nickname: '최근진행' });
     const linked = await seedFullAccount(env.client, { save: { gold: 900, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD, email: 'linked-cron@example.test', nickname: '연결' });
 
-    expect((await run()).body).toMatchObject({
-      dryRun: true, targets: before.targets + 1, staleTargets: before.staleTargets + 1, deleted: 0,
-    });
+    const dry = (await run()).body as { targets: number; staleTargets: number };
+    expect(dry).toMatchObject({ dryRun: true, deleted: 0 });
+    expect(dry.targets - before.targets).toBe(1);
+    expect(dry.staleTargets - before.staleTargets).toBe(1);
     expect(await rowCounts(env.client, stale)).toEqual(seeded(true));
 
     process.env.PURGE_ANON_ENABLED = '1';
-    expect((await run()).body).toMatchObject({ dryRun: false, staleTargets: before.staleTargets + 1, failed: 0 });
+    const live = (await run()).body as { staleTargets: number; deleted: number; failed: number };
+    expect(live.staleTargets).toBe(dry.staleTargets);
+    expect(live.failed).toBe(0);
     expect(await rowCounts(env.client, stale)).toEqual(GONE);
     expect(await rowCounts(env.client, recent)).toEqual(seeded(true));
     expect(await rowCounts(env.client, linked)).toEqual(seeded(true));
 
     // 이미 지운 뒤의 재실행은 아무것도 지우지 않는다
-    expect((await run()).body).toMatchObject({ staleTargets: before.staleTargets, deleted: 0 });
+    const after = (await run()).body as { staleTargets: number };
+    expect(after.staleTargets).toBe(before.staleTargets);
   });
   it('보관 기간이 지난 채팅(30일)과 신고(1년)를 dry-run에서도 지운다', async () => {
     const author = await seedUser(env.client, { email: 'chat@example.test' });

@@ -4,7 +4,7 @@
 // 인증: 예약 실행기가 CRON_SECRET을 Authorization: Bearer로 첨부한다. 불일치와 부재는 401.
 // 주의: Node (req,res) 시그니처를 사용한다. Web 표준 시그니처로 배포하면 요청이 모두 500으로 실패한다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { purgeAccount, purgeCutoffs, selectPurgeTargets } from '../_data/account.js';
+import { purgeAccount, selectPurgeTargets } from '../_data/account.js';
 import { deleteExpiredChat } from '../_data/chat.js';
 import { database } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
@@ -54,10 +54,9 @@ async function runPurge(
   { db, withTransaction }: Pick<Database, 'db' | 'withTransaction'>, enabled: boolean, now: Date,
 ): Promise<{ summary: PurgeSummary; firstFailure?: PurgeFailure }> {
   const chat = await deleteExpiredChat(db, now.toISOString());
-  const cutoffs = purgeCutoffs(now);
-  const found = await selectPurgeTargets(db, cutoffs, BATCH_LIMIT);
+  const found = await selectPurgeTargets(db, now, BATCH_LIMIT);
   const summary: PurgeSummary = {
-    dryRun: !enabled, cutoff: cutoffs.idle, staleCutoff: cutoffs.stale, targets: found.total, staleTargets: found.stale,
+    dryRun: !enabled, cutoff: found.cutoffs.idle, staleCutoff: found.cutoffs.stale, targets: found.total, staleTargets: found.stale,
     batch: found.ids.length,
     deleted: 0, skipped: 0, failed: 0, sample: found.ids.slice(0, SAMPLE_SIZE).map(id => id.slice(0, 8)), chat,
   };
@@ -65,7 +64,7 @@ async function runPurge(
   if (enabled) {
     for (const uid of found.ids) {
       try {
-        if (await purgeAccount(withTransaction, uid, cutoffs)) summary.deleted += 1;
+        if (await purgeAccount(withTransaction, uid, now)) summary.deleted += 1;
         else summary.skipped += 1;
       } catch (error) {
         summary.failed += 1;

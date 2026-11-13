@@ -29,55 +29,59 @@ export interface PurgeCutoffs {
 }
 
 /** 기준 시각(UTC)에서 두 미접속 기간을 뺀 컷오프를 ISO 문자열로 돌려준다 */
-export function purgeCutoffs(now: Date): PurgeCutoffs {
+function purgeCutoffs(now: Date): PurgeCutoffs {
   const before = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
   return { idle: before(IDLE_DAYS), stale: before(STALE_DAYS) };
 }
 
 export interface PurgeTargets {
+  /** 이번 선정에 쓴 기준 시각 */
+  cutoffs: PurgeCutoffs;
   /** 조건에 맞는 계정 전체 수 */
   total: number;
-  /** 전체 가운데 마지막 접속이 stale보다 이른 계정 수 */
+  /** 전체 가운데 오래 접속하지 않은 규칙(stale)에 해당하는 계정 수 */
   stale: number;
   /** 상한까지, 마지막 활동이 오래된 계정부터의 id */
   ids: string[];
 }
 
 /**
- * 정리 대상 조건이다. 선정과 삭제 직전 재확인이 같은 정의를 쓴다.
+ * 정리 대상 조건이다. 선정과 삭제 직전 재확인이 같은 정의를 쓴다. 기준 시각은 now에서 이 모듈이 정한다.
  * 대상은 익명(게스트) 계정이다. 구글이나 이메일로 연결된 계정은 익명 표시가 풀려 대상이 아니다.
- * 마지막 접속은 저장 갱신(구 saves 행의 저장 시각 포함)·세션 사용·가입 가운데 가장 늦은 시각이다.
+ * 마지막 접속(seen.at)은 저장 갱신(구 saves 행의 저장 시각 포함)·세션 사용·가입 가운데 가장 늦은 시각이다.
  * 세션 사용 시각은 그 계정 세션의 갱신 시각 가운데 가장 늦은 값이다.
  * greatest는 null을 건너뛰고 가입 시각은 비지 않으므로 마지막 접속은 항상 정해진다.
- * 두 규칙 중 하나를 채우면 대상이다.
- *  - 진행이 없는 게스트: 저장 상태가 비었거나(골드·명성 0) 저장이 없고, 마지막 접속이 idle보다 이르다.
+ * 두 규칙 중 하나를 채우면 대상이다. 판정은 rule.by_stale, rule.by_idle 열 하나씩이고 선정 수 집계도 이 열을 쓴다.
+ *  - by_idle, 진행이 없는 게스트: 저장 상태가 비었거나(골드·명성 0) 저장이 없고, 마지막 접속이 idle보다 이르다.
  *    저장 상태가 없어도 구 saves 행이 있으면 정규화 이전 진행이 남아 있을 수 있어 이 규칙에서는 뺀다.
- *  - 오래 접속하지 않은 게스트: 진행과 관계없이 마지막 접속이 stale보다 이르다.
+ *  - by_stale, 오래 접속하지 않은 게스트: 진행과 관계없이 마지막 접속이 stale보다 이르다.
  * 두 규칙 모두 제재·관리자 계정과 개발자에게 편지를 보낸 계정은 뺀다.
  * 편지는 인증 계정에 연쇄 삭제로 묶여 있어 보존하려고 계정을 지우지 않는다.
  */
-const lastSeen = sql`greatest(c.updated_at, (select max(s.updated_at) from auth.sessions s where s.user_id = u.id),
-  (select max(v.updated_at) from public.saves v where v.user_id = u.id), u.created_at)`;
 const targetFrom = (cutoffs: PurgeCutoffs): SQL => sql`from auth.users u
   left join public.saves_current c on c.user_id = u.id
+  cross join lateral (select greatest(c.updated_at, (select max(s.updated_at) from auth.sessions s where s.user_id = u.id),
+    (select max(v.updated_at) from public.saves v where v.user_id = u.id), u.created_at) as at) seen
+  cross join lateral (select seen.at < ${at(cutoffs.stale)} as by_stale,
+    (seen.at < ${at(cutoffs.idle)}
+      and ((c.user_id is not null and c.gold = 0 and c.fame = 0)
+        or (c.user_id is null and not exists (select 1 from public.saves s where s.user_id = u.id)))) as by_idle) rule
   where u.is_anonymous
-    and (${lastSeen} < ${at(cutoffs.stale)}
-      or (${lastSeen} < ${at(cutoffs.idle)}
-        and ((c.user_id is not null and c.gold = 0 and c.fame = 0)
-          or (c.user_id is null and not exists (select 1 from public.saves s where s.user_id = u.id)))))
+    and (rule.by_stale or rule.by_idle)
     and not coalesce(c.restricted, false)
     and not exists (select 1 from public.admins a where a.user_id = u.id)
     and not exists (select 1 from public.letters l where l.user_id = u.id)`;
 
 /** 정리 대상을 마지막 활동이 오래된 순으로 상한까지 고른다. 지우지 않는다 */
-export async function selectPurgeTargets(db: Executor, cutoffs: PurgeCutoffs, limit: number): Promise<PurgeTargets> {
+export async function selectPurgeTargets(db: Executor, now: Date, limit: number): Promise<PurgeTargets> {
+  const cutoffs = purgeCutoffs(now);
   const { rows } = await db.execute<{ id: string; total: number; stale: number }>(sql`select u.id::text as id,
       count(*) over ()::int as total,
-      (count(*) filter (where ${lastSeen} < ${at(cutoffs.stale)}) over ())::int as stale
+      (count(*) filter (where rule.by_stale) over ())::int as stale
     ${targetFrom(cutoffs)}
-    order by ${lastSeen}, u.id
+    order by seen.at, u.id
     limit ${limit}`);
-  return { total: rows[0]?.total ?? 0, stale: rows[0]?.stale ?? 0, ids: rows.map(r => r.id) };
+  return { cutoffs, total: rows[0]?.total ?? 0, stale: rows[0]?.stale ?? 0, ids: rows.map(r => r.id) };
 }
 
 /**
@@ -85,12 +89,12 @@ export async function selectPurgeTargets(db: Executor, cutoffs: PurgeCutoffs, li
  * 선정 뒤에 대상 조건에서 벗어난 계정(접속·골드 획득·이미 삭제)은 아무것도 지우지 않고 false를 돌려준다.
  * 중간에 실패하면 던지고 그 계정은 그대로 남는다.
  */
-export async function purgeAccount(withTransaction: Database['withTransaction'], uid: string, cutoffs: PurgeCutoffs): Promise<boolean> {
+export async function purgeAccount(withTransaction: Database['withTransaction'], uid: string, now: Date): Promise<boolean> {
   return withTransaction(async tx => {
     // 저장 행을 먼저 잠가 확인한 상태가 커밋까지 바뀌지 않게 한다. 액션 확정은 이 행을 갱신하므로
     // 잠금이 풀린 뒤에는 행이 없어 낙관 락 경합으로 끝난다. 인증 계정 행도 잠가 계정 변경이 끼어들지 못하게 한다.
     await tx.execute(sql`select 1 from public.saves_current where user_id = ${uid} for update`);
-    const { rows } = await tx.execute(sql`select u.id ${targetFrom(cutoffs)} and u.id = ${uid} for update of u`);
+    const { rows } = await tx.execute(sql`select u.id ${targetFrom(purgeCutoffs(now))} and u.id = ${uid} for update of u`);
     if (rows.length === 0) return false;
     await deleteAccountRows(tx, uid);
     return true;

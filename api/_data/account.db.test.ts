@@ -9,13 +9,13 @@ import type { AccountSpec } from '../_dbTest/accountFixtures.js';
 import { testUid } from '../_dbTest/actionHarness.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
-import { purgeAccount, purgeCutoffs, selectPurgeTargets } from './account.js';
+import { purgeAccount, selectPurgeTargets } from './account.js';
 
 const NOW = Date.parse('2030-03-04T05:06:07.000Z');
 const DAY = 86_400_000;
 const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
 const CUTOFF = ago(7);
-const CUTOFFS = { idle: CUTOFF, stale: ago(365) };
+const NOW_DATE = new Date(NOW);
 
 interface Case { key: string; name: string; target: boolean; spec: AccountSpec }
 
@@ -63,7 +63,7 @@ describe('빈 익명 계정 대상 선정', () => {
     await client.connect();
     database = createDatabase({ connectionString: testDb.url, max: 2 });
     for (const c of CASES) uids.set(c.key, await seedAccount(client, c.spec));
-    selected = await selectPurgeTargets(database.db, CUTOFFS, 500);
+    selected = await selectPurgeTargets(database.db, NOW_DATE, 500);
   });
   afterAll(async () => {
     await database?.pool.end();
@@ -81,14 +81,14 @@ describe('빈 익명 계정 대상 선정', () => {
     expect(selected.stale).toBe(0);
     expect([...selected.ids].sort()).toEqual([...targets].sort());
 
-    const capped = await selectPurgeTargets(database.db, CUTOFFS, 2);
+    const capped = await selectPurgeTargets(database.db, NOW_DATE, 2);
     expect(capped.total).toBe(targets.length);
     // 마지막 활동은 noSave 20일 전, idle 10일 전, noSaveNoSignIn 9일 전, justOver 7일 전보다 1초 이전이다
     expect(capped.ids).toEqual([uids.get('noSave'), uids.get('idle')]);
   });
 
   it('대상이 없으면 0과 빈 목록이다', async () => {
-    expect(await selectPurgeTargets(database.db, { idle: ago(3650), stale: ago(3650) }, 500)).toEqual({ total: 0, stale: 0, ids: [] });
+    expect(await selectPurgeTargets(database.db, new Date(NOW - 3650 * DAY), 500)).toMatchObject({ total: 0, stale: 0, ids: [] });
   });
 });
 
@@ -130,7 +130,7 @@ describe.each([
     const other = await seedFullAccount(client, { ...IDLE, nickname: '남길계정' });
     expect(await rowCounts(client, target)).toEqual(seeded(true));
 
-    expect(await purgeAccount(database.withTransaction, target, CUTOFFS)).toBe(true);
+    expect(await purgeAccount(database.withTransaction, target, NOW_DATE)).toBe(true);
 
     expect(await rowCounts(client, target)).toEqual(GONE);
     expect(await rowCounts(client, other)).toEqual(seeded(true));
@@ -140,7 +140,7 @@ describe.each([
     const target = await seedFullAccount(client, { save: null, createdAt: ago(30), lastSignInAt: ago(20), nickname: '저장없음' });
     expect(await rowCounts(client, target)).toEqual(seeded(false));
 
-    expect(await purgeAccount(database.withTransaction, target, CUTOFFS)).toBe(true);
+    expect(await purgeAccount(database.withTransaction, target, NOW_DATE)).toBe(true);
 
     expect(await rowCounts(client, target)).toEqual(GONE);
   });
@@ -149,7 +149,7 @@ describe.each([
     const target = await seedFullAccount(client, { ...IDLE, nickname: '수령자' });
     await client.query(`insert into public.reliefs (code, claimed_by, active) values ('R-AUDIT', $1, false)`, [target]);
 
-    expect(await purgeAccount(database.withTransaction, target, CUTOFFS)).toBe(true);
+    expect(await purgeAccount(database.withTransaction, target, NOW_DATE)).toBe(true);
 
     const { rows } = await client.query('select claimed_by, active from public.reliefs where code = $1', ['R-AUDIT']);
     expect(rows).toEqual([{ claimed_by: target, active: false }]);
@@ -162,20 +162,20 @@ describe.each([
     const admin = await seedFullAccount(client, { ...IDLE, admin: true, nickname: '관리' });
 
     for (const uid of [withGold, active, email, admin]) {
-      expect(await purgeAccount(database.withTransaction, uid, CUTOFFS)).toBe(false);
+      expect(await purgeAccount(database.withTransaction, uid, NOW_DATE)).toBe(false);
       expect(await rowCounts(client, uid)).toEqual(seeded(true));
     }
   });
 
   it('편지를 보낸 계정은 대상이 아니고 지우지 않는다', async () => {
     const writer = await seedFullAccount(client, { ...IDLE, letter: true, nickname: '편지' });
-    expect((await selectPurgeTargets(database.db, CUTOFFS, 500)).ids).not.toContain(writer);
-    expect(await purgeAccount(database.withTransaction, writer, CUTOFFS)).toBe(false);
+    expect((await selectPurgeTargets(database.db, NOW_DATE, 500)).ids).not.toContain(writer);
+    expect(await purgeAccount(database.withTransaction, writer, NOW_DATE)).toBe(false);
     expect(await rowCounts(client, writer)).toEqual(seeded(true, true));
   });
 
   it('없는 계정은 false다', async () => {
-    expect(await purgeAccount(database.withTransaction, testUid(999_000), CUTOFFS)).toBe(false);
+    expect(await purgeAccount(database.withTransaction, testUid(999_000), NOW_DATE)).toBe(false);
   });
 });
 
@@ -208,7 +208,7 @@ describe('계정 단위 삭제의 원자성과 동시성', () => {
     await client.query(`create trigger test_block_delete before delete on public.saves_current
       for each row execute function public.test_block_delete()`);
     try {
-      await expect(purgeAccount(database.withTransaction, target, CUTOFFS)).rejects.toThrow();
+      await expect(purgeAccount(database.withTransaction, target, NOW_DATE)).rejects.toThrow();
     } finally {
       await client.query('drop trigger test_block_delete on public.saves_current');
       await client.query('drop function public.test_block_delete()');
@@ -224,7 +224,7 @@ describe('계정 단위 삭제의 원자성과 동시성', () => {
       [target, ago(0)]);
 
     let settled = false;
-    const purging = purgeAccount(database.withTransaction, target, CUTOFFS).finally(() => { settled = true; });
+    const purging = purgeAccount(database.withTransaction, target, NOW_DATE).finally(() => { settled = true; });
     // 정리 트랜잭션이 저장 행 잠금을 기다리는 상태가 될 때까지 기다린다
     for (let i = 0; i < 100; i++) {
       const { rows } = await client.query(
@@ -319,7 +319,7 @@ describe('1년 동안 접속하지 않은 게스트 대상 선정', () => {
     const writer = await seedAccount(client, { save: { gold: 10, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD });
     await client.query(`insert into public.letters (user_id, text) values ($1, '편지')`, [writer]);
     uids.set('letter', writer);
-    selected = await selectPurgeTargets(database.db, CUTOFFS, 500);
+    selected = await selectPurgeTargets(database.db, NOW_DATE, 500);
   });
   afterAll(async () => {
     await database?.pool.end();
@@ -343,14 +343,14 @@ describe('1년 동안 접속하지 않은 게스트 대상 선정', () => {
 
   it('7일 규칙 대상과 1년 규칙 대상을 구분해 센다', async () => {
     const idle = await seedAccount(client, { save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(12) });
-    const counts = await selectPurgeTargets(database.db, CUTOFFS, 500);
+    const counts = await selectPurgeTargets(database.db, NOW_DATE, 500);
     expect(counts.ids).toContain(idle);
     expect(counts.total).toBe(selected.total + 1);
     expect(counts.stale).toBe(selected.stale);
   });
 
   it('상한이 있으면 마지막 접속이 가장 오래된 계정부터 고른다', async () => {
-    const capped = await selectPurgeTargets(database.db, CUTOFFS, 1);
+    const capped = await selectPurgeTargets(database.db, NOW_DATE, 1);
     // 가입과 모든 접속 근거가 500일 전인 계정 가운데 id가 작은 쪽이 먼저다
     const oldest = ['onlySignUp', 'legacyOnly'].map(k => uids.get(k)!).sort()[0];
     expect(capped.ids).toEqual([oldest]);
@@ -380,12 +380,12 @@ describe('1년 동안 접속하지 않은 게스트 삭제', () => {
     const other = await seedFullAccount(client, { ...STALE_GUEST, email: 'linked-full@example.test', nickname: '연결계정' });
     expect(await rowCounts(client, target)).toEqual(seeded(true));
 
-    expect(await purgeAccount(database.withTransaction, target, CUTOFFS)).toBe(true);
+    expect(await purgeAccount(database.withTransaction, target, NOW_DATE)).toBe(true);
     expect(await rowCounts(client, target)).toEqual(GONE);
     expect(await rowCounts(client, other)).toEqual(seeded(true));
 
     // 이미 지운 계정을 다시 지우려 하면 아무 일도 없다
-    expect(await purgeAccount(database.withTransaction, target, CUTOFFS)).toBe(false);
+    expect(await purgeAccount(database.withTransaction, target, NOW_DATE)).toBe(false);
   });
 
   it('다른 플레이어가 있는 길드의 구성원이었다면 그 길드와 다른 구성원은 그대로 두고 길드장이면 넘긴다', async () => {
@@ -396,7 +396,7 @@ describe('1년 동안 접속하지 않은 게스트 삭제', () => {
     await client.query(`insert into public.guild_members (guild_id, user_id, role, joined_at)
       values ($1, $2, 'leader', now() - interval '2 days'), ($1, $3, 'member', now() - interval '1 day')`, [guild.id, guest, member]);
 
-    expect(await purgeAccount(database.withTransaction, guest, CUTOFFS)).toBe(true);
+    expect(await purgeAccount(database.withTransaction, guest, NOW_DATE)).toBe(true);
 
     const { rows } = await client.query('select user_id, role from public.guild_members where guild_id = $1', [guild.id]);
     expect(rows).toEqual([{ user_id: member, role: 'leader' }]);
@@ -406,24 +406,23 @@ describe('1년 동안 접속하지 않은 게스트 삭제', () => {
     const guest = await seedFullAccount(client, { ...STALE_GUEST, nickname: '돌아온게스트' });
     await client.query('update auth.sessions set updated_at = $2 where user_id = $1', [guest, ago(1)]);
 
-    expect(await purgeAccount(database.withTransaction, guest, CUTOFFS)).toBe(false);
+    expect(await purgeAccount(database.withTransaction, guest, NOW_DATE)).toBe(false);
     expect(await rowCounts(client, guest)).toEqual(seeded(true));
   });
 
   it('제재된 게스트와 편지를 보낸 게스트는 지우지 않는다', async () => {
     const restricted = await seedFullAccount(client, { ...STALE_GUEST, save: { gold: 5, updatedAt: OLD, restricted: true }, nickname: '제재' });
     const writer = await seedFullAccount(client, { ...STALE_GUEST, letter: true, nickname: '편지쓴이' });
-    expect(await purgeAccount(database.withTransaction, restricted, CUTOFFS)).toBe(false);
-    expect(await purgeAccount(database.withTransaction, writer, CUTOFFS)).toBe(false);
+    expect(await purgeAccount(database.withTransaction, restricted, NOW_DATE)).toBe(false);
+    expect(await purgeAccount(database.withTransaction, writer, NOW_DATE)).toBe(false);
     expect(await rowCounts(client, restricted)).toEqual(seeded(true));
     expect(await rowCounts(client, writer)).toEqual(seeded(true, true));
   });
 });
 
 describe('정리 기준 시각', () => {
-  it('7일 전과 365일 전을 UTC 기준 ISO 시각으로 돌려준다', () => {
-    expect(purgeCutoffs(new Date('2030-03-04T05:06:07.000Z'))).toEqual({
-      idle: '2030-02-25T05:06:07.000Z', stale: '2029-03-04T05:06:07.000Z',
-    });
+  it('기준 시각에서 7일 전과 365일 전을 UTC 기준 ISO 시각으로 정한다', async () => {
+    const result = await selectPurgeTargets({ execute: async () => ({ rows: [] }) } as never, new Date('2030-03-04T05:06:07.000Z'), 1);
+    expect(result.cutoffs).toEqual({ idle: '2030-02-25T05:06:07.000Z', stale: '2029-03-04T05:06:07.000Z' });
   });
 });
