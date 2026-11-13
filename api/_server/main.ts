@@ -35,6 +35,7 @@ import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
+import { consentGate, liveConsentAdmit } from './consentGate.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -85,6 +86,8 @@ app.post(['/api/admin/auth/sign-in/social', '/api/admin/auth/sign-out'], toNodeH
 app.get('/api/admin/auth/callback/google', toNodeHandler(adminAuth()));
 // import 액션은 게임 상태 전체를 싣는다.
 app.use('/api', express.json({ limit: '5mb' }));
+// 수락이 필요한 계정의 게임 요청을 막는다. 열어 두는 경로는 consentGate의 허용 목록이 정한다.
+app.use('/api', consentGate());
 for (const [path, handler] of Object.entries(routes)) {
   app.all(path, (req: Request, res: Response) => handler(req as never, res as never));
 }
@@ -109,6 +112,7 @@ applyKeepAlive(server);
 const live = attachLive(server, {
   origin,
   stale: staleClient,
+  admit: liveConsentAdmit,
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;

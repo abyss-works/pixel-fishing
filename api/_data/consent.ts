@@ -41,16 +41,15 @@ export interface ConsentStatus {
  * 이 사용자가 확인이 필요한 계정인가. 게스트가 아니고, 시행일이 됐고, 현재 판의 수락 기록이 없을 때다.
  * 시행일 전과 게스트는 기록을 읽지 않고 판정한다.
  */
-export async function consentRequiredFor(db: Executor, user: SessionUser, policy: ConsentPolicy, now: Date): Promise<boolean> {
-  const guest = user.email === null;
-  if (guest || now.getTime() < policy.effectiveAt.getTime()) return false;
-  return consentRequired(policy, now, { guest, accepted: await hasAcceptedVersion(db, user.id, policy.version) });
+export async function consentRequiredFor(db: Executor, who: { uid: string; guest: boolean }, policy: ConsentPolicy, now: Date): Promise<boolean> {
+  if (who.guest || now.getTime() < policy.effectiveAt.getTime()) return false;
+  return consentRequired(policy, now, { guest: who.guest, accepted: await hasAcceptedVersion(db, who.uid, policy.version) });
 }
 
 /** 사용자의 약관 상태 */
 export async function consentStatus(db: Executor, user: SessionUser, policy: ConsentPolicy, now: Date): Promise<ConsentStatus> {
   return {
-    required: await consentRequiredFor(db, user, policy, now),
+    required: await consentRequiredFor(db, { uid: user.id, guest: user.email === null }, policy, now),
     version: policy.version,
     effectiveAt: policy.effectiveAt.toISOString(),
   };

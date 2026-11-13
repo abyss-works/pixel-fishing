@@ -118,6 +118,15 @@ describe('실시간 채널 서버', () => {
     expect(await rejected(url, 'u1', 'https://evil.test')).toBe(403);
   });
 
+  it('접속을 허용하지 않는 계정은 403으로 거부하고 허용하는 계정은 받는다', async () => {
+    const { url, live } = await start({ admit: async (user) => user.uid !== 'held' });
+    expect(await rejected(url, 'held')).toBe(403);
+    expect(live.online()).toEqual([]);
+    const ok = connect(url, 'u1');
+    await ok.next();
+    expect(live.online().map(o => o.uid)).toEqual(['u1']);
+  });
+
   it('클라이언트 빌드가 서버와 다르면 연결을 받지 않고 낡은 빌드 코드로 닫는다', async () => {
     const { urlFor, live, sessions } = await start();
     const ok = connect(urlFor(BUILD), 'u1');

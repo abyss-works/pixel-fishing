@@ -32,6 +32,8 @@ export interface LiveChat {
 export interface LiveOptions {
   /** 업그레이드 요청의 로그인 사용자. 세션이 없으면 null을 돌려준다 */
   authenticate: (req: IncomingMessage) => Promise<LiveUser | null>;
+  /** 인증된 사용자의 접속을 받을지. 받지 않으면 403으로 거부한다. 없으면 모두 받는다 */
+  admit?: (user: LiveUser) => Promise<boolean>;
   /** 허용하는 `Origin` 헤더 값(서비스 주소의 origin) */
   origin: string;
   /** 클라이언트 빌드가 서버와 다른지. 연결 주소의 `build`와 `version` 값을 받는다(보내지 않았으면 undefined) */
@@ -190,6 +192,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     }
     opts.authenticate(req).then(async (user) => {
       if (!user) { reject(socket, 401); return; }
+      if (opts.admit && !await opts.admit(user)) { reject(socket, 403); return; }
       const [recentChat, blocked, guild] = await Promise.all([
         opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
       ]);
