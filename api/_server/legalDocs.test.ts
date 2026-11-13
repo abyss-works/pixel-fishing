@@ -13,9 +13,6 @@ const fileOf = (path: string) => `${DOCS_DIR}/${path.slice(1)}.md`;
 const sourceOf = (path: string) => readFileSync(fileOf(path), 'utf-8');
 const documentOf = (path: string) => markdownToDocument(sourceOf(path), path);
 
-/** 값이 정해지지 않아 아직 채우지 못한 자리표시. 값을 채우면 이 목록에서 지운다 */
-const PENDING_PLACEHOLDERS = ['[접속 기록 보관 기간]'];
-
 const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
 /** 마크다운 본문을 마크업 없이 줄 단위로 푼 것. 표는 칸마다 한 줄이고 목록 번호와 링크 문법은 벗긴다 */
@@ -139,7 +136,7 @@ describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
 
   it('채우지 않은 자리표시가 남지 않는다', () => {
     const left = textLinesOf(html).flatMap(line => line.match(/\[[^\]]+\]/g) ?? []);
-    expect(left.filter(p => !PENDING_PLACEHOLDERS.includes(p))).toEqual([]);
+    expect(left).toEqual([]);
   });
 
   it('변환 결과의 본문이 마크다운 본문과 줄 단위로 같다', () => {
@@ -150,13 +147,6 @@ describe.each(DOCUMENT_PATHS)('공개 문서 %s', (path) => {
     const labels = [...html.matchAll(/<nav\b[^>]*>/g)].map(m => attributesOf(m[0]).get('aria-label'));
     expect(labels.every(Boolean)).toBe(true);
     expect(new Set(labels).size).toBe(labels.length);
-  });
-});
-
-describe('아직 채우지 못한 자리표시 목록', () => {
-  it('목록의 자리표시는 모두 문서에 남아 있다. 채웠으면 목록에서 지운다', () => {
-    const all = DOCUMENT_PATHS.map(documentOf).join(' ');
-    for (const placeholder of PENDING_PLACEHOLDERS) expect(all).toContain(placeholder);
   });
 });
 
