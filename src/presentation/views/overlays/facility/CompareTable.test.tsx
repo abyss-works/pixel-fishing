@@ -39,4 +39,18 @@ describe('CompareTable', () => {
     expect(container.querySelectorAll('tbody td')).toHaveLength(2);
     expect(container.textContent).not.toContain('+31.25%');
   });
+
+  it('확정 후 값과 변화량 사이에 줄 바꿈 자리가 있어 좁은 값 칸에서 변화량이 아래 줄로 내려간다', () => {
+    stubMobile(true);
+    const { container } = render(<CompareTable heads={['현재', '강화 후']} rows={[{ label: '입질 대기', value: '2.9~5.9초', next: '2.5~5.5초', delta: '-0.4초' }]} />);
+    const cell = container.querySelector('tbody td:last-child') as HTMLElement;
+    expect(cell.innerHTML).toMatch(/2\.5~5\.5초<wbr>/);
+    expect(cell.querySelector('wbr')?.nextElementSibling?.textContent).toBe('-0.4초');
+  });
+
+  it('변화량이 없는 줄에는 줄 바꿈 자리를 두지 않는다', () => {
+    stubMobile(true);
+    const { container } = render(<CompareTable heads={['현재', '강화 후']} rows={rows} />);
+    expect(container.querySelector('wbr')).toBeNull();
+  });
 });
