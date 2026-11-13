@@ -12,14 +12,13 @@ import { entryLevel, rates, rodSpec } from '../model';
 import { applyOverride, parseOverride } from './override';
 import { addPerSpot, designReport, judgeReversal, parseAnchor, parseGrade, parseNight } from './design';
 import type { DesignInput, DesignReport } from './design';
-import { biteRangeOf } from '../rodRules';
 import { runCli } from './report';
 import { transitionReport } from './transitions';
 
 const empty = { all: null, by: {} } as const;
 const base = (o: Partial<DesignInput> = {}): DesignInput => ({
   start: 25, growth: 0.15, gap: { all: 5, by: {} }, hours: { all: 3, by: {} }, payback: null, boatShare: 0,
-  grades: {}, night: {}, anchors: [], bite: 'both', solve: null, maxDays: 365, ...o,
+  grades: {}, night: {}, anchors: [], solve: null, maxDays: 365, ...o,
 });
 const STH = SPOTS.findIndex(s => s.id === 'sthelena');
 const LAST = SPOTS.length - 1;
@@ -66,7 +65,7 @@ describe('design 계산', () => {
   });
 
   it('필요 진입 EV는 (구간 강화비 합 + 배 가격) ÷ H이고 구간 강화비는 단일 지수 곡선의 합이다', () => {
-    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15, costPowerFrom: 1_000_000 } });
+    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15 } });
     try {
       const expectSum = (from: number) => [0, 1, 2, 3, 4].reduce((s, k) => s + upgradeCost(from + k), 0);
       r.rows.slice(0, -1).forEach(x => {
@@ -158,7 +157,7 @@ describe('design 계산', () => {
   describe('표 행 단위 출력', () => {
     const GAPS = ['pond=2', 'river=3', 'sea=4', 'deep=3', 'dragonhole=3', 'coron=3', 'barrierreef=5', 'indian=5', 'southindian=5', 'mozstrait=5', 'comorodeep=6', 'benguela=6'];
     const PAYBACKS = ['pond=0.016667', 'river=0.016667', 'sea=0.05', 'deep=0.1', 'dragonhole=0.166667', 'coron=0.233333', 'barrierreef=0.3', 'indian=0.5', 'southindian=0.7', 'mozstrait=1.25', 'comorodeep=1.666667', 'benguela=2.5'];
-    const args = ['design', '--start', '100', '--growth', '0.25', '--bite', 'alternate', '--max-days', '2', ...GAPS.flatMap(g => ['--gap', g]), ...PAYBACKS.flatMap(g => ['--payback', g])];
+    const args = ['design', '--start', '100', '--growth', '0.25', '--max-days', '2', ...GAPS.flatMap(g => ['--gap', g]), ...PAYBACKS.flatMap(g => ['--payback', g])];
     const run = (tol: number) => {
       const a = tol > 0 ? [...args, '--reversal-tolerance', String(tol)] : args;
       const text = runCli(a).stdout;
@@ -174,8 +173,8 @@ describe('design 계산', () => {
     const name = (id: string) => SPOTS.find(s => s.id === id)!.name;
     const word = (v: string) => (v === 'reversed' ? '역전' : v === 'tolerated' ? '허용' : '정상');
     const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
-    // 허용폭 0.2와 0.6에서 표 2 모든 행의 판정 칸과 방치 이득 제외 칸이 데이터에서 계산한 값과 같다
-    it.each([0, 0.2, 0.6])('허용폭 %s에서 표 2의 모든 칸이 계산 값과 같다', tol => {
+    // 허용폭 0.2와 0.7에서 표 2 모든 행의 판정 칸과 방치 이득 제외 칸이 데이터에서 계산한 값과 같다
+    it.each([0, 0.2, 0.7])('허용폭 %s에서 표 2의 모든 칸이 계산 값과 같다', tol => {
       const { text, json } = run(tol);
       const seen = new Set<string>();
       json.reversals.forEach(x => {
@@ -192,7 +191,7 @@ describe('design 계산', () => {
       expect(seen.has('판정 허용')).toBe(true);
       expect(seen.has('판정 정상')).toBe(true);
       expect(seen.has('제외 정상')).toBe(true);
-      if (tol === 0.6) {
+      if (tol === 0.7) {
         expect(seen.has('판정 역전')).toBe(true);
         expect(seen.has('제외 허용')).toBe(true);
       }
@@ -402,7 +401,7 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
     const r = designReport(base({ hours: null, payback: { base: 0.5, growth: 0.02, by: {} } }));
     const x = r.rows[3];
     const h = (lv: number) => 0.5 * 1.02 ** (lv - 1);
-    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15, costPowerFrom: 1_000_000 } });
+    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15 } });
     try { expect(x.requiredEv).toBeCloseTo(upgradeCost(x.level) / h(x.level), 6); } finally { undo(); }
     expect(x.hours).toBeCloseTo([0, 1, 2, 3, 4].reduce((s, k) => s + h(x.level + k), 0) + x.boatPrice! / x.requiredEv, 9);
   }, 60_000);
@@ -424,7 +423,7 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
 
   it('gap 풀이는 멀리 떨어진 기준점 사이 해역마다 간격 1 이상을 남긴다', () => {
     // 두 번째 기준점의 EV가 첫 기준점 레벨 바로 위 레벨을 가리켜도, 사이 해역 수만큼은 올라가야 한다
-    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15, costPowerFrom: 1_000_000 } });
+    const undo = applyOverride({ rod: { costBase: 25, costGrowth: 1.15 } });
     const evAt = (lv: number) => upgradeCost(lv) / 0.5;
     const anchors = [{ spot: 'sea' as const, ev: evAt(8) }, { spot: 'sthelena' as const, ev: evAt(5) }];
     undo();
@@ -507,42 +506,32 @@ describe('design 덮어쓰기 내보내기와 전환 시간', () => {
   }, 60_000);
 });
 
-describe('design 입질 대기 감소 방식', () => {
-  it('alternate는 해역 EV와 역전 검사에 반영되고 덮어쓰기에 쓰이며 계산 뒤 복원된다', () => {
-    const both = designReport(base());
-    const alt = designReport(base({ bite: 'alternate' }));
-    expect(alt.override.rod!.biteDecayMode).toBe('alternate');
-    expect(both.override.rod!.biteDecayMode).toBeUndefined();
-    // 진입 레벨 1은 두 방식이 같고, 레벨이 오를수록 alternate의 입질 대기가 길어 EV가 낮다(필요 EV가 같으므로 가격 배율이 커진다)
-    expect(alt.rows[0].currentEv).toBeCloseTo(both.rows[0].currentEv, 6);
-    expect(alt.rows[8].currentEv).toBeLessThan(both.rows[8].currentEv);
-    expect(alt.rows[8].priceMult).toBeGreaterThan(both.rows[8].priceMult);
-    // 입질 대기가 레벨당 덜 줄어 구간 안의 EV 상승이 작다
-    expect(alt.reversals[5].ev / alt.rows[5].achievedEv).toBeLessThan(both.reversals[5].ev / both.rows[5].achievedEv);
-    expect(biteRangeOf(7).biteMax).toBe(rodStats(7).biteMax);
+describe('design 입질 대기 감소', () => {
+  const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
+
+  it('덮어쓰기에 입질 대기 감소 방식 키를 내지 않고 해역 EV는 제품의 입질 대기 규칙으로 잰다', () => {
+    const r = designReport(base());
+    expect(Object.keys(r.override.rod!)).toEqual(['costBase', 'costGrowth']);
+    const undo = applyOverride(r.override);
+    try {
+      r.rows.forEach(x => expect(rodSpec(x.spot, x.level).biteMax).toBe(rodStats(x.level).biteMax));
+    } finally { undo(); }
   }, 60_000);
 
-  it('명령줄 --bite alternate|both는 design에서만 받고 숫자 %는 받지 않는다', () => {
-    const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
-    const out = runCli([...args, '--bite', 'alternate', '--json']);
-    expect(out.stderr).toBe('');
-    expect((JSON.parse(out.stdout) as { design: DesignReport }).design.override.rod!.biteDecayMode).toBe('alternate');
+  it('--bite는 효과 옵션이라 design에서 받지 않는다', () => {
+    expect(runCli([...args, '--bite', 'alternate']).stderr).toMatch(/--bite/);
     expect(runCli([...args, '--bite', '5']).stderr).toMatch(/--bite/);
-    expect(runCli(['transition', '--bite', 'alternate']).stderr).toMatch(/design/);
+    expect(runCli(args).stderr).toBe('');
   }, 60_000);
 });
 
 describe('design 출력 문구', () => {
   const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
 
-  it('입질 대기 감소 방식이 입력 절과 가정 문구에 나온다', () => {
-    const alt = runCli([...args, '--bite', 'alternate']).stdout;
-    expect(alt).toContain('입질 대기 감소 방식 alternate');
-    expect(alt).toContain('--bite alternate의 방식');
-    expect(alt).not.toContain('입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다');
-    const both = runCli(args).stdout;
-    expect(both).toContain('입질 대기 감소 방식 both(제품 규칙)');
-    expect(both).toContain('입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다');
+  it('입질 속도와 방치 배수는 제품 규칙 그대로라고 가정 문구에 적고 입질 대기 감소 방식 줄은 없다', () => {
+    const text = runCli(args).stdout;
+    expect(text).toContain('입질 속도와 방치 배수의 레벨 효과는 제품 규칙 그대로다');
+    expect(text).not.toContain('입질 대기 감소 방식');
   }, 60_000);
 
   it('목표값으로 주어진 마지막 해역은 앞 해역 대비 열에 목표값 기준이라고 적는다', () => {
@@ -555,7 +544,7 @@ describe('design 출력 문구', () => {
   it('전체 기본 회수 시간을 생략하면 기준점에서 풀고 해역별 값은 덮어쓴다', () => {
     const gaps = ['pond=2', 'river=4', 'sea=4', 'deep=5', 'dragonhole=4', 'coron=4', 'barrierreef=5', 'indian=4', 'southindian=5', 'mozstrait=4', 'comorodeep=5', 'benguela=4']
       .flatMap(g => ['--gap', g]);
-    const out = runCli(['design', '--start', '100', '--growth', '0.25', '--bite', 'alternate', ...gaps, '--payback-growth', '0.06', '--payback', 'sea=1', '--json']);
+    const out = runCli(['design', '--start', '100', '--growth', '0.25', ...gaps, '--payback-growth', '0.06', '--payback', 'sea=1', '--json']);
     expect(out.stderr).toBe('');
     const d = (JSON.parse(out.stdout) as { design: DesignReport }).design;
     expect(d.rows.find(x => x.spot === 'benguela')!.level).toBe(47);

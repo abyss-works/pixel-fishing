@@ -3,7 +3,7 @@ import { FISH } from '../../../src/game/content/fish';
 import { BOUNTIES } from '../../../src/game/content/bounties';
 import { LICENSE_GRADES } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
-import { rates, zoneOf } from '../model';
+import { entryLevel, rates, zoneOf } from '../model';
 import type { Axis } from '../model';
 import type { SpotId } from '../../../src/game/content/spots';
 import {
@@ -60,15 +60,17 @@ describe('네임드 조우 기대 캐치 수', () => {
 
 describe('낚을 수 있는 구역 해역', () => {
   it('배와 파워가 모두 맞는 해역만 나온다', () => {
-    expect(accessibleSpots('pacific', { boat: 1, level: 5 })).toEqual(['sea']);
-    expect(accessibleSpots('pacific', { boat: 0, level: 30 })).toEqual([]);
-    expect(accessibleSpots('pacific', { boat: 1, level: 4 })).toEqual([]);
-    expect(accessibleSpots('pacific', { boat: 2, level: 7 })).toEqual(['sea', 'deep']);
+    const sea = entryLevel('sea'), deep = entryLevel('deep');
+    expect(accessibleSpots('pacific', { boat: 1, level: sea })).toEqual(['sea']);
+    expect(accessibleSpots('pacific', { boat: 0, level: deep + 20 })).toEqual([]);
+    expect(accessibleSpots('pacific', { boat: 1, level: sea - 1 })).toEqual([]);
+    expect(accessibleSpots('pacific', { boat: 2, level: deep })).toEqual(['sea', 'deep']);
+    expect(accessibleSpots('pacific', { boat: 2, level: deep - 1 })).toEqual(['sea']);
   });
 });
 
 describe('하루 의뢰 계획', () => {
-  const player = { boat: 8, level: 33 };
+  const player = { boat: 8, level: entryLevel('sthelena') };
   const rateAt = (spot: SpotId) => rates(spot, player.level, 'idle' as Axis);
   const base: PlanInput = { player, current: rateAt('sthelena'), rateAt, licensed: () => true, seconds: 4 * 3600 };
 
@@ -119,7 +121,7 @@ describe('하루 의뢰 계획', () => {
   });
 
   it('배가 모자라 낚을 수 있는 해역이 없는 구역은 건너뛴다', () => {
-    const plan = planBounties({ ...base, player: { boat: 0, level: 33 } });
+    const plan = planBounties({ ...base, player: { boat: 0, level: entryLevel('sthelena') } });
     expect(plan).toEqual([]);
   });
 });

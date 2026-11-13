@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
 import { FISH } from '../../../src/game/content/fish';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel, rates, zoneOf } from '../model';
 import { simulate } from './progress';
 import { transitionGold, transitionReport } from './transitions';
 import { applyOverride, ladderPrice, parseOverride } from './override';
+
+/** 마지막 해역보다 한 지역 높은 요구 파워(제품 값에서 유도) */
+const NEXT_REQ = powerReqOf('sthelena') + 20;
 
 describe('가상 해역과 지역 추가', () => {
   let restore: (() => void) | null = null;
@@ -18,13 +21,13 @@ describe('가상 해역과 지역 추가', () => {
   it('가상 해역을 끝에 더하고 새 배를 더하며, 복원하면 모두 사라진다', () => {
     const spots = SPOTS.length, boats = BOATS.length, fish = FISH.length;
     restore = applyOverride(parseOverride({
-      addSpots: [{ id: 'next', name: '다음 해역', like: 'sthelena', powerReq: 170, zone: 'newregion', priceMult: 1.5, boat: { price: 5000000, fameReq: 400000 } }],
+      addSpots: [{ id: 'next', name: '다음 해역', like: 'sthelena', powerReq: NEXT_REQ, zone: 'newregion', priceMult: 1.5, boat: { price: 5000000, fameReq: 400000 } }],
     }));
     expect(SPOTS.length).toBe(spots + 1);
     expect(BOATS.length).toBe(boats + 1);
     const last = SPOTS.at(-1)!, boat = BOATS.at(-1)!;
     expect(last.id).toBe('next');
-    expect(last.powerReq).toBe(170);
+    expect(last.powerReq).toBe(NEXT_REQ);
     expect(last.boatTier).toBe(boat.tier);
     expect(boat.price).toBe(5000000);
     expect(boat.fameReq).toBe(400000);
@@ -39,26 +42,26 @@ describe('가상 해역과 지역 추가', () => {
   });
 
   it('EV 배율은 기준 해역과 같은 어종 구성의 가격에 곱한다', () => {
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 140, priceMult: 1.4 }] }));
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: powerReqOf('sthelena'), priceMult: 1.4 }] }));
     // 같은 요구 파워이므로 같은 레벨에서 수입이 정확히 배율만큼 다르다
     expect(idle('next') / idle('sthelena')).toBeCloseTo(1.4, 10);
   });
 
   it('증가율 g는 기준 해역 딱렙 EV의 (1+g)배가 되도록 가격을 맞춘다', () => {
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', ref: 'sthelena', powerReq: 170, growth: 0.45 }] }));
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', ref: 'sthelena', powerReq: NEXT_REQ, growth: 0.45 }] }));
     expect(idle('next')).toBeCloseTo(idle('sthelena') * 1.45, 4);
   });
 
   it('기준 해역을 생략하면 증가율의 기준은 그때 마지막 해역이다', () => {
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, growth: 0.5 }] }));
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: NEXT_REQ, growth: 0.5 }] }));
     expect(idle('next')).toBeCloseTo(idle('sthelena') * 1.5, 4);
   });
 
   it('가상 해역이 여럿이면 앞에서 뒤로 더하고 뒤 해역은 앞 가상 해역을 기준으로 삼을 수 있다', () => {
     restore = applyOverride(parseOverride({
       addSpots: [
-        { id: 'a1', like: 'sthelena', powerReq: 170, growth: 0.4, boat: { price: 5000000, fameReq: 300000 } },
-        { id: 'a2', like: 'a1', powerReq: 185, growth: 0.3 },
+        { id: 'a1', like: 'sthelena', powerReq: NEXT_REQ, growth: 0.4, boat: { price: 5000000, fameReq: 300000 } },
+        { id: 'a2', like: 'a1', powerReq: NEXT_REQ + 15, growth: 0.3 },
       ],
     }));
     expect(SPOTS.slice(-2).map(s => s.id)).toEqual(['a1', 'a2']);
@@ -67,13 +70,16 @@ describe('가상 해역과 지역 추가', () => {
   });
 
   it('전환 골드와 진행 시뮬레이션이 가상 해역까지 이어진다', () => {
+    const lastTier = SPOTS.at(-1)!.boatTier;
+    const unopened = BOATS.filter(b => b.tier > lastTier).reduce((sum, b) => sum + b.price, 0);
     restore = applyOverride(parseOverride({
-      addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, zone: 'newregion', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }],
+      addSpots: [{ id: 'next', like: 'sthelena', powerReq: NEXT_REQ, zone: 'newregion', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }],
     }));
     const row = transitionGold().at(-1)!;
     expect(row.from).toBe('sthelena');
     expect(row.to).toBe('next');
-    expect(row.boatGold).toBe(5000000);
+    // 여는 해역이 없던 제품 배도 이 전환에서 함께 산다
+    expect(row.boatGold).toBe(5000000 + unopened);
     let up = 0;
     for (let lv = entryLevel('sthelena' as never); lv < entryLevel('next' as never); lv++) up += upgradeCost(lv);
     expect(row.upgradeGold).toBe(up);
@@ -87,7 +93,7 @@ describe('가상 해역과 지역 추가', () => {
   });
 
   it('가상 배(제품 배 상한 위)도 골드와 명성 조건을 채워야 산다', () => {
-    const base = { id: 'next', like: 'sthelena', powerReq: 170, zone: 'z' };
+    const base = { id: 'next', like: 'sthelena', powerReq: NEXT_REQ, zone: 'z' };
     restore = applyOverride(parseOverride({ addSpots: [{ ...base, boat: { price: 5000000, fameReq: 1e12 } }] }));
     expect(simulate({ axis: 'idle', bounty: false, maxDays: 365 }).complete).toBe(false);
     restore();
@@ -100,7 +106,7 @@ describe('가상 해역과 지역 추가', () => {
 
   it('가상 해역이 없으면 같은 조건의 결과가 변하지 않는다', () => {
     const before = JSON.stringify(transitionReport({ axis: 'idle', maxDays: 365 }));
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, growth: 0.45 }] }));
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: NEXT_REQ, growth: 0.45 }] }));
     restore();
     restore = null;
     expect(JSON.stringify(transitionReport({ axis: 'idle', maxDays: 365 }))).toBe(before);
@@ -108,16 +114,16 @@ describe('가상 해역과 지역 추가', () => {
 
   it('잘못된 입력을 거부한다', () => {
     const bad = (spot: object) => () => parseOverride({ addSpots: [spot] });
-    expect(bad({ like: 'sthelena', powerReq: 170 })).toThrow('id');
-    expect(bad({ id: 'sea', like: 'sthelena', powerReq: 170 })).toThrow('이미');
-    expect(bad({ id: 'x', like: 'nope', powerReq: 170 })).toThrow('없는 해역');
+    expect(bad({ like: 'sthelena', powerReq: NEXT_REQ })).toThrow('id');
+    expect(bad({ id: 'sea', like: 'sthelena', powerReq: NEXT_REQ })).toThrow('이미');
+    expect(bad({ id: 'x', like: 'nope', powerReq: NEXT_REQ })).toThrow('없는 해역');
     expect(bad({ id: 'x', like: 'sthelena' })).toThrow('powerReq');
-    expect(bad({ id: 'x', like: 'sthelena', powerReq: 170, priceMult: 1.2, growth: 0.1 })).toThrow('함께');
-    expect(bad({ id: 'x', like: 'sthelena', powerReq: 170, growth: -1 })).toThrow('growth');
-    expect(bad({ id: 'x', like: 'sthelena', powerReq: 170, priceMult: 0 })).toThrow('priceMult');
-    expect(bad({ id: 'x', like: 'sthelena', powerReq: 170, boat: { price: 1 } })).toThrow('fameReq');
-    expect(bad({ id: 'x', like: 'sthelena', powerReq: 170, nope: 1 })).toThrow('알 수 없는 키');
-    expect(() => parseOverride({ addSpots: [{ id: 'x', like: 'sthelena', powerReq: 170 }, { id: 'x', like: 'sthelena', powerReq: 180 }] })).toThrow('두 번');
+    expect(bad({ id: 'x', like: 'sthelena', powerReq: NEXT_REQ, priceMult: 1.2, growth: 0.1 })).toThrow('함께');
+    expect(bad({ id: 'x', like: 'sthelena', powerReq: NEXT_REQ, growth: -1 })).toThrow('growth');
+    expect(bad({ id: 'x', like: 'sthelena', powerReq: NEXT_REQ, priceMult: 0 })).toThrow('priceMult');
+    expect(bad({ id: 'x', like: 'sthelena', powerReq: NEXT_REQ, boat: { price: 1 } })).toThrow('fameReq');
+    expect(bad({ id: 'x', like: 'sthelena', powerReq: NEXT_REQ, nope: 1 })).toThrow('알 수 없는 키');
+    expect(() => parseOverride({ addSpots: [{ id: 'x', like: 'sthelena', powerReq: NEXT_REQ }, { id: 'x', like: 'sthelena', powerReq: NEXT_REQ + 10 }] })).toThrow('두 번');
   });
 });
 

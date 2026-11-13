@@ -32,7 +32,7 @@ describe('최장 값 상태', () => {
     const s = longestState(99_900);
     expect(s.gold).toBe(99_900);
     expect(s.fame).toBe(99_900);
-    expect(boatNameOf(s.boat)).toBe('대양 트롤선');
+    expect(boatNameOf(s.boat)).toBe('가공 플랜트선');
     expect(s.boat).toBe(MAX_BOAT);
     expect(s.rod).toBe(99);
     expect(s.bag).toHaveLength(capOfBoat(MAX_BOAT));

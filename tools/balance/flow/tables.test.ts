@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel, rates } from '../model';
 import { powerOfLevel } from '../rodRules';
@@ -22,12 +22,14 @@ describe('레벨별 강화 표', () => {
   });
 
   it('그 레벨에서 열린 가장 뒤 해역의 방치 EV와 다음 레벨 EV 변화, 강화비 ÷ EV를 낸다', () => {
-    const r = levelRows(18, 18)[0];
+    // 남인도양 진입 레벨에서 두 레벨 위는 다음 해역 진입 전이라 남인도양으로 잰다
+    const lv = entryLevel('southindian') + 2;
+    const r = levelRows(lv, lv)[0];
     expect(r.spot).toBe('southindian');
-    const ev = rates('southindian', 18, 'idle').goldPerHour;
+    const ev = rates('southindian', lv, 'idle').goldPerHour;
     expect(r.ev).toBe(ev);
-    expect(r.evGain).toBeCloseTo(rates('southindian', 19, 'idle').goldPerHour / ev - 1, 12);
-    expect(r.costHours).toBeCloseTo(upgradeCost(18) / ev, 12);
+    expect(r.evGain).toBeCloseTo(rates('southindian', lv + 1, 'idle').goldPerHour / ev - 1, 12);
+    expect(r.costHours).toBeCloseTo(upgradeCost(lv) / ev, 12);
   });
 
   it('첫 해역의 요구 파워 미만 레벨은 첫 해역으로 잰다', () => {
@@ -87,11 +89,12 @@ describe('누적 명성 곡선', () => {
   });
 
   it('가상 해역과 새 배를 더하면 그 전환까지 곡선이 이어진다', () => {
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: 170, zone: 'z', boat: { price: 5000000, fameReq: 400000 } }] }));
+    const previous = BOATS.find(b => b.tier === SPOTS.at(-1)!.boatTier)!.fameReq;
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: powerReqOf('sthelena') + 20, zone: 'z', boat: { price: 5000000, fameReq: 400000 } }] }));
     const last = fameRows().at(-1)!;
     expect(last.to).toBe('next');
     expect(last.cumulative).toBe(400000);
-    expect(last.previous).toBe(200000);
-    expect(last.increment).toBe(200000);
+    expect(last.previous).toBe(previous);
+    expect(last.increment).toBe(400000 - previous);
   });
 });

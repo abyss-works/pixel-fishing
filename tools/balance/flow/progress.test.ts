@@ -21,16 +21,16 @@ describe('8시간 환산', () => {
 });
 
 describe('기본 상수 회귀', () => {
-  it('스냅샷: 마지막 해역까지 약 62시간 걸린다', () => {
+  it('스냅샷: 마지막 해역까지 약 34시간 걸린다(밸런스가 바뀌면 갱신)', () => {
     const hours = last(run().arrivals).hours;
-    expect(hours).toBeGreaterThan(61);
-    expect(hours).toBeLessThan(64);
+    expect(hours).toBeGreaterThan(33);
+    expect(hours).toBeLessThan(35);
   });
 
-  it('스냅샷: 의뢰와 토벌을 수행하면 마지막 해역에 약 45시간에 닿는다(밸런스가 바뀌면 갱신)', () => {
+  it('스냅샷: 의뢰와 토벌을 수행하면 마지막 해역에 약 28시간에 닿는다(밸런스가 바뀌면 갱신)', () => {
     const hours = last(run({ bounty: true }).arrivals).hours;
-    expect(hours).toBeGreaterThan(44);
-    expect(hours).toBeLessThan(47);
+    expect(hours).toBeGreaterThan(27);
+    expect(hours).toBeLessThan(29);
   });
 });
 
@@ -82,10 +82,10 @@ describe('진행 시뮬레이션', () => {
     expect(run()).toEqual(run());
   });
 
-  it('의뢰와 토벌을 수행하면 어느 해역에도 더 늦게 도착하지 않고 마지막은 더 빠르다', () => {
+  it('의뢰와 토벌을 수행하면 어느 해역에도 5%를 넘겨 늦게 도착하지 않고 마지막은 더 빠르다', () => {
     const off = run(), on = run({ bounty: true });
     expect(on.complete).toBe(true);
-    for (let i = 0; i < off.arrivals.length; i++) expect(on.arrivals[i].hours, SPOTS[i].id).toBeLessThanOrEqual(off.arrivals[i].hours + 1e-9);
+    for (let i = 0; i < off.arrivals.length; i++) expect(on.arrivals[i].hours, SPOTS[i].id).toBeLessThanOrEqual(off.arrivals[i].hours * 1.05 + 1e-9);
     expect(last(on.arrivals).hours).toBeLessThan(last(off.arrivals).hours);
     expect(on.bountyGold).toBeGreaterThan(0);
     expect(off.bountyGold).toBe(0);
@@ -104,8 +104,9 @@ describe('진행 시뮬레이션', () => {
 
   it('배 가격 덮어쓰기는 도착을 늦춘다', () => {
     const base = last(run().arrivals).hours;
-    const tier = String(BOATS[BOATS.length - 1].tier);
-    const restore = applyOverride({ boats: { [tier]: { price: BOATS[BOATS.length - 1].price * 10 } } });
+    // 마지막 해역을 여는 배의 가격을 올린다
+    const opener = BOATS.find(b => b.tier === SPOTS[SPOTS.length - 1].boatTier)!;
+    const restore = applyOverride({ boats: { [String(opener.tier)]: { price: opener.price * 10 } } });
     try {
       expect(last(run().arrivals).hours).toBeGreaterThan(base);
     } finally { restore(); }

@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { BOATS } from '../../../src/game/content/boats';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
+import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
+import { entryLevel } from '../model';
 import { applyOverride } from './override';
 import { transitionGold, transitionReport, transitionTimings } from './transitions';
 import type { Arrival } from './progress';
 
 const row = (to: string) => transitionGold().find(r => r.to === to)!;
+/** 두 해역의 진입 레벨 사이를 강화하는 비용(제품 강화비 함수의 합) */
+const upgradeCostBetween = (from: SpotId, to: SpotId) => {
+  let sum = 0;
+  for (let lv = entryLevel(from); lv < entryLevel(to); lv++) sum += upgradeCost(lv);
+  return sum;
+};
 const price = (tier: number) => BOATS.find(b => b.tier === tier)!.price;
 
 describe('전환 골드', () => {
@@ -21,7 +29,7 @@ describe('전환 골드', () => {
     const r = row('river');
     expect(r.boats).toEqual([]);
     expect(r.boatGold).toBe(0);
-    expect(r.upgradeGold).toBe(upgradeCost(1) + upgradeCost(2));
+    expect(r.upgradeGold).toBe(upgradeCostBetween('pond', 'river'));
     expect(r.upgradeShare).toBe(1);
     expect(r.boatShare).toBe(0);
   });
@@ -30,7 +38,7 @@ describe('전환 골드', () => {
     const r = row('sea');
     expect(r.boats.map(b => b.tier)).toEqual([1]);
     expect(r.boatGold).toBe(price(1));
-    expect(r.upgradeGold).toBe(upgradeCost(3) + upgradeCost(4));
+    expect(r.upgradeGold).toBe(upgradeCostBetween('river', 'sea'));
     expect(r.totalGold).toBe(r.boatGold + r.upgradeGold);
     expect(r.boatShare + r.upgradeShare).toBeCloseTo(1, 12);
     expect(r.boatShare).toBeCloseTo(price(1) / r.totalGold, 12);
@@ -45,7 +53,7 @@ describe('전환 골드', () => {
 
   it('요구 파워를 올리는 덮어쓰기는 강화비를 늘린다', () => {
     const base = row('coron').upgradeGold;
-    const restore = applyOverride({ spots: { coron: { powerReq: 70 } } });
+    const restore = applyOverride({ spots: { coron: { powerReq: powerReqOf('coron') + 20 } } });
     try { expect(row('coron').upgradeGold).toBeGreaterThan(base); } finally { restore(); }
     expect(row('coron').upgradeGold).toBe(base);
   });

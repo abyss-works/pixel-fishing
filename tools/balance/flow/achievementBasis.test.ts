@@ -17,9 +17,10 @@ describe('보상 기준 방식', () => {
   it('incremental-fame은 명성 기준을 기준 전환의 증분(도착 배 요구치 - 출발 해역 배 요구치)으로 바꾼다', () => {
     const b = rewardBasis({ mode: 'incremental-fame' }).find(x => x.zone === 'indian')!;
     expect(b.next!.totalGold).toBe(gold('southindian').totalGold);
-    expect(b.next!.fameReq).toBe(BOATS.find(x => x.tier === 7)!.fameReq - BOATS.find(x => x.tier === 6)!.fameReq);
+    const increment = BOATS.find(x => x.tier === 7)!.fameReq - BOATS.find(x => x.tier === 6)!.fameReq;
+    expect(b.next!.fameReq).toBe(increment);
     const a = rewardRows({ ratios: [0.25], basis: { mode: 'incremental-fame' } }).find(r => r.zone === 'indian')!.amounts[0];
-    expect(a.rawFame).toBeCloseTo(25000 * 0.25, 9);
+    expect(a.rawFame).toBeCloseTo(increment * 0.25, 9);
     expect(a.rawGold).toBeCloseTo(gold('southindian').totalGold * 0.25, 9);
   });
 
