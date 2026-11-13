@@ -10,6 +10,7 @@ import {
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
 import { FISH } from '../content/fish.js';
+import { isKnownLocation } from '../content/places.js';
 import {
   accrueSpeciesPity, clearDuelWound, drawNamedEncounter, recordDuelFailure, resolveSpeciesPity, settleSpeciesPity, speciesPityCandidates,
 } from './pity.js';
@@ -473,7 +474,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'travel': {
       const to = action.to;
       if (!to || typeof to.id !== 'string'
-          || (to.kind !== 'region' && to.kind !== 'base')) return { ok: false, error: 'bad-request' };
+          || !isKnownLocation(to)) return { ok: false, error: 'bad-request' };
       if (to.kind === 'base') {
         const check = canEnterBase(state, to.id);
         if (!check.ok) return { ok: false, error: check.reason };
