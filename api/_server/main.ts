@@ -104,8 +104,8 @@ app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
     res.type('html').send(withMeta(html, defaultMeta(origin)));
   }, next);
 });
-// 공개 문서(소개, 약관, 처리방침)는 로그인 없이 열리고 쿠키를 만들지 않는다
-app.use(legalPages(staticDir));
+// 공개 문서(소개, 약관, 처리방침, 운영정책)는 로그인 없이 열리고 쿠키를 만들지 않는다
+app.use(legalPages());
 app.use(express.static(staticDir));
 
 const port = Number(process.env.PORT ?? 3000);

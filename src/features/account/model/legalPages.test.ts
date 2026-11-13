@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { LEGAL_PATHS } from './googleFlow';
 
 const PUBLIC_DIR = 'public';
+const TEMPLATE_DIR = 'api/_server/legalDocs';
 const DOCUMENT_PATHS = ['/about', ...Object.values(LEGAL_PATHS)];
-const fileOf = (path: string) => `${PUBLIC_DIR}/${path.slice(1)}.html`;
+const fileOf = (path: string) => `${TEMPLATE_DIR}/${path.slice(1)}.html`;
 
 const EXTERNAL = /^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
@@ -28,8 +29,8 @@ function cssRefs(css: string): string[] {
 }
 
 /**
- * 문서가 자원으로 불러오는 주소를 모은다. src, srcset, data, poster 속성, link의 href,
- * meta refresh의 주소, style 속성과 style 요소의 CSS 주소다. 사용자가 눌러야 가는 a의 href는 자원이 아니므로 뺀다.
+ * 문서가 자원으로 불러오는 주소를 모은다. src, srcset, data, poster 속성, a가 아닌 태그의 href(link, base, SVG의 use와 image),
+ * xlink:href, meta refresh의 주소, style 속성과 style 요소의 CSS 주소다. 사용자가 눌러야 가는 a의 href는 자원이 아니므로 뺀다.
  */
 function loadedRefs(html: string): string[] {
   const refs: string[] = [];
@@ -38,7 +39,8 @@ function loadedRefs(html: string): string[] {
     const attrs = attributesOf(tag[2]);
     for (const key of ['src', 'data', 'poster']) if (attrs.has(key)) refs.push(attrs.get(key)!);
     if (attrs.has('srcset')) refs.push(...attrs.get('srcset')!.split(',').map(c => c.trim().split(/\s+/)[0]).filter(Boolean));
-    if (name === 'link' && attrs.has('href')) refs.push(attrs.get('href')!);
+    if (name !== 'a' && attrs.has('href')) refs.push(attrs.get('href')!);
+    if (attrs.has('xlink:href')) refs.push(attrs.get('xlink:href')!);
     if (name === 'meta' && attrs.get('http-equiv')?.toLowerCase() === 'refresh') {
       const target = /url\s*=\s*['"]?([^'"]+)/i.exec(attrs.get('content') ?? '')?.[1];
       if (target) refs.push(target);
@@ -63,6 +65,9 @@ describe('외부 자원 검사기', () => {
     ['style 요소의 @import', '<style>@import url("https://x.test/a.css");</style>'],
     ['style 요소의 따옴표 있는 @import', "<style>@import 'https://x.test/a.css';</style>"],
     ['iframe', "<iframe src='//x.test/'></iframe>"],
+    ['base href', '<base href="https://x.test/">'],
+    ['SVG use href', '<svg><use href="https://x.test/s.svg#a"/></svg>'],
+    ['SVG image의 xlink:href', "<svg><image xlink:href='//x.test/a.png'/></svg>"],
   ])('%s를 잡는다', (_name, html) => {
     expect(externalRefs(html)).not.toEqual([]);
   });
@@ -70,6 +75,7 @@ describe('외부 자원 검사기', () => {
   it.each([
     ['같은 출처 자원', '<link rel="stylesheet" href="/legal.css"><img src="/a.png" srcset="/a.png 1x">'],
     ['바깥으로 나가는 링크', '<a href="https://x.test/">밖으로</a><a href=\'//x.test/\'>밖으로</a>'],
+    ['같은 출처 SVG', '<svg><use href="#a"/><image xlink:href="/a.png"/></svg><base href="/">'],
     ['같은 출처 style', '<p style="background:url(/a.png)">x</p>'],
   ])('%s는 잡지 않는다', (_name, html) => {
     expect(externalRefs(html)).toEqual([]);
@@ -77,12 +83,16 @@ describe('외부 자원 검사기', () => {
 });
 
 describe('공개 문서 정적 파일', () => {
-  it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 정적 문서가 있다', (_name, path) => {
+  it.each(Object.entries(LEGAL_PATHS))('게임 안 링크 %s의 주소(%s)에 템플릿이 있다', (_name, path) => {
     expect(existsSync(fileOf(path))).toBe(true);
   });
 
   it('소개 문서도 있다', () => {
     expect(existsSync(fileOf('/about'))).toBe(true);
+  });
+
+  it('문서 원본은 정적 폴더에 없다. 정적 파일 제공으로 판 토큰이 든 원본이 나가지 않는다', () => {
+    for (const path of DOCUMENT_PATHS) expect(existsSync(`${PUBLIC_DIR}/${path.slice(1)}.html`)).toBe(false);
   });
 });
 
