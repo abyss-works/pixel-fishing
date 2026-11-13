@@ -2,7 +2,7 @@
 // 제품 상수 행을 직접 바꾸고 복원 함수를 돌려준다. 규칙 함수가 같은 행을 읽으므로 측정 코드에 값이나 규칙의 복제가 없다.
 // 형식: { "boats": { "2": { "price": 2500, "fameReq": 800 } }, "spots": { "sea": { "powerReq": 35, "priceMult": 0.85, "gradeMult": { "rare": 1.1 } } },
 //         "rod": { "powerPerLevel": 5, "costGrowth": 1.7 }, "addSpots": [ { "id": "next", "like": "sthelena", "powerReq": 170, "growth": 0.45, "boat": { "price": 5000000, "fameReq": 400000 } } ] }
-// priceMult는 그 해역 어종의 판매가에 곱하는 배율이고, gradeMult는 등급별 배율이다. 곱한 값은 어종 가격 사다리(ladderPrice)로 맞춘다.
+// priceMult는 그 해역 어종의 판매가에 곱하는 배율이고, gradeMult는 등급별 배율, nightMult는 밤 어종에만 더 곱하는 등급별 배율이다. 곱한 값은 어종 가격 사다리(ladderPrice)로 맞춘다.
 // addSpots는 가상 해역을 진행 순서 끝에 더한다. 어종 구성은 like 해역(생략하면 그때 마지막 해역)을 복사하고, 가격은 priceMult를 곱하거나
 // growth(기준 해역 ref의 딱렙 방치 EV 대비 증가율)에 맞춘다. 가상 해역의 가격은 사다리로 맞추지 않는다(EV를 정확히 맞추기 위해서다).
 import { readFileSync } from 'node:fs';
@@ -21,7 +21,7 @@ import type { RodRules } from '../rodRules';
 import { registerVirtualFish, registerVirtualSpot, unregisterVirtualFish, unregisterVirtualSpot } from '../virtualSpots';
 
 export interface BoatOverride { price?: number; fameReq?: number }
-export interface SpotOverride { powerReq?: number; priceMult?: number; gradeMult?: Partial<Record<RarityId, number>> }
+export interface SpotOverride { powerReq?: number; priceMult?: number; gradeMult?: Partial<Record<RarityId, number>>; nightMult?: Partial<Record<RarityId, number>> }
 /** 가상 해역 — 진행 순서 끝에 더하는 해역. 새 배를 함께 더할 수 있다 */
 export interface AddSpot {
   id: string; name?: string;
@@ -48,7 +48,7 @@ export interface FlowOverride {
 }
 
 const BOAT_KEYS = ['price', 'fameReq'] as const;
-const SPOT_KEYS = ['powerReq', 'priceMult', 'gradeMult'] as const;
+const SPOT_KEYS = ['powerReq', 'priceMult', 'gradeMult', 'nightMult'] as const;
 const ADD_SPOT_KEYS = ['id', 'name', 'like', 'ref', 'powerReq', 'zone', 'priceMult', 'growth', 'gradeMult', 'boat'] as const;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -61,7 +61,7 @@ function checkKeys(obj: Record<string, unknown>, allowed: readonly string[], whe
 
 function checkNumbers(obj: Record<string, unknown>, where: string): void {
   for (const [key, value] of Object.entries(obj)) {
-    if (key === 'gradeMult') continue;
+    if (key === 'gradeMult' || key === 'nightMult') continue;
     if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${where}.${key}는 숫자여야 합니다`);
     if (value < 0) throw new Error(`${where}.${key}는 0 이상이어야 합니다`);
   }
@@ -142,8 +142,12 @@ export function parseOverride(raw: unknown): FlowOverride {
       checkKeys(row, SPOT_KEYS, `spots.${id}`);
       checkNumbers(row, `spots.${id}`);
       if (row.priceMult !== undefined && (row.priceMult as number) <= 0) throw new Error(`spots.${id}.priceMult는 0보다 커야 합니다`);
-      const { gradeMult, ...plain } = row;
-      out.spots[id] = { ...(plain as SpotOverride), ...(gradeMult === undefined ? {} : { gradeMult: parseGradeMult(gradeMult, `spots.${id}.gradeMult`) }) };
+      const { gradeMult, nightMult, ...plain } = row;
+      out.spots[id] = {
+        ...(plain as SpotOverride),
+        ...(gradeMult === undefined ? {} : { gradeMult: parseGradeMult(gradeMult, `spots.${id}.gradeMult`) }),
+        ...(nightMult === undefined ? {} : { nightMult: parseGradeMult(nightMult, `spots.${id}.nightMult`) }),
+      };
     }
   }
   if (raw.rod !== undefined) out.rod = parseRodRules(raw.rod);
@@ -193,13 +197,14 @@ export function applyOverride(o: FlowOverride): () => void {
     const prev = { has: 'powerReq' in row, value: row.powerReq };
     undo.push(() => { if (prev.has) row.powerReq = prev.value; else delete row.powerReq; });
     if (patch.powerReq !== undefined) row.powerReq = patch.powerReq;
-    if (patch.priceMult !== undefined || patch.gradeMult !== undefined) {
+    if (patch.priceMult !== undefined || patch.gradeMult !== undefined || patch.nightMult !== undefined) {
       for (const fish of FISH.filter(f => f.spot === id)) {
         const grade = patch.gradeMult?.[fish.rarity];
-        if (patch.priceMult === undefined && grade === undefined) continue;
+        const night = fish.night ? patch.nightMult?.[fish.rarity] : undefined;
+        if (patch.priceMult === undefined && grade === undefined && night === undefined) continue;
         const prevPrice = fish.price;
         undo.push(() => { fish.price = prevPrice; });
-        fish.price = ladderPrice(prevPrice * (patch.priceMult ?? 1) * (grade ?? 1), fish.rarity);
+        fish.price = ladderPrice(prevPrice * (patch.priceMult ?? 1) * (grade ?? 1) * (night ?? 1), fish.rarity);
       }
     }
   }

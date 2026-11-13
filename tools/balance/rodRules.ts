@@ -4,6 +4,7 @@
 // 레벨당 파워를 바꿔도 파워 미달 페널티의 간격(제품 규칙의 shortStep, 파워 단위)은 제품 값 그대로다.
 // 덮어쓰지 않았을 때는 제품 공개 함수와 결과가 같다(테스트가 모든 레벨·파워에서 대조한다).
 import { ROD } from '../../src/game/rules/balance';
+import { rodStats } from '../../src/game/rules/logic';
 import { IDLE_BOOST_STEPS } from '../../src/game/rules/power';
 import { powerOfLevel as productPower } from '../../src/game/rules/stats';
 import { powerReqOf } from '../../src/game/content/spots';
@@ -17,6 +18,22 @@ const BASE_POWER = productPower(1);
 let perLevel = PRODUCT_PER_LEVEL;
 let idleBasis: 'level' | 'power' = 'level';
 let idleUnit = PRODUCT_PER_LEVEL;
+let biteMode: BiteDecayMode = 'both';
+
+/** 입질 대기 감소 방식 — both는 레벨마다 최소와 최대를 함께 줄이고(제품 규칙), alternate는 홀수 레벨에서 강화할 때 최대만, 짝수 레벨에서 강화할 때 최소만 줄인다 */
+export type BiteDecayMode = 'both' | 'alternate';
+
+/** 레벨의 입질 대기 최소와 최대(초). both는 제품 함수를 그대로 부르고, alternate는 최대 = 기본 최대 x 감쇠^올림((L-1)/2), 최소 = 기본 최소 x 감쇠^내림((L-1)/2) */
+export function biteRangeOf(level: number): { biteMin: number; biteMax: number } {
+  if (biteMode === 'both') {
+    const st = rodStats(level);
+    return { biteMin: st.biteMin, biteMax: st.biteMax };
+  }
+  return {
+    biteMin: ROD.biteMin * ROD.biteDecay ** Math.floor((level - 1) / 2),
+    biteMax: ROD.biteMax * ROD.biteDecay ** Math.ceil((level - 1) / 2),
+  };
+}
 
 /** 레벨의 낚싯대 파워 — 레벨 1의 파워에 레벨당 파워를 더한다 */
 export const powerOfLevel = (level: number): number => BASE_POWER + (level - 1) * perLevel;
@@ -56,6 +73,8 @@ export interface RodRules {
   powerPerLevel?: number;
   costBase?: number; costGrowth?: number; costPowerFrom?: number; costPowerExp?: number;
   biteDecay?: number;
+  /** 입질 대기 감소 방식. 생략하면 both(제품 규칙) */
+  biteDecayMode?: BiteDecayMode;
   idleBoost?: IdleBoostRules;
 }
 
@@ -88,7 +107,7 @@ function steps(v: unknown, where: string): number[] {
 /** 입력을 검사해 낚싯대 규칙 형식으로 돌려준다 */
 export function parseRodRules(raw: unknown): RodRules {
   if (!isObject(raw)) throw new Error('rod는 객체여야 합니다');
-  checkKeys(raw, [...NUMBER_KEYS, 'idleBoost'], 'rod');
+  checkKeys(raw, [...NUMBER_KEYS, 'biteDecayMode', 'idleBoost'], 'rod');
   const out: RodRules = {};
   for (const key of NUMBER_KEYS) {
     if (raw[key] === undefined) continue;
@@ -96,6 +115,10 @@ export function parseRodRules(raw: unknown): RodRules {
     if (v <= 0) throw new Error(`rod.${key}는 0보다 커야 합니다`);
     if (key === 'biteDecay' && v > 1) throw new Error('rod.biteDecay는 1 이하여야 합니다');
     out[key] = v;
+  }
+  if (raw.biteDecayMode !== undefined) {
+    if (raw.biteDecayMode !== 'both' && raw.biteDecayMode !== 'alternate') throw new Error('rod.biteDecayMode는 both 또는 alternate여야 합니다');
+    out.biteDecayMode = raw.biteDecayMode;
   }
   if (raw.idleBoost !== undefined) {
     const b = raw.idleBoost;
@@ -122,13 +145,14 @@ export function parseRodRules(raw: unknown): RodRules {
 export function applyRodRules(r: RodRules): () => void {
   const rod = ROD as unknown as Record<string, number>;
   const prevRod = { ...rod };
-  const prevPer = perLevel, prevBasis = idleBasis, prevUnit = idleUnit;
+  const prevPer = perLevel, prevBasis = idleBasis, prevUnit = idleUnit, prevBite = biteMode;
   const prevVillage = [...IDLE_BOOST_STEPS.village], prevWorld = [...IDLE_BOOST_STEPS.world];
   for (const key of NUMBER_KEYS) {
     if (key === 'powerPerLevel' || r[key] === undefined) continue;
     rod[key] = r[key]!;
   }
   if (r.powerPerLevel !== undefined) perLevel = r.powerPerLevel;
+  if (r.biteDecayMode !== undefined) biteMode = r.biteDecayMode;
   const replace = (target: readonly number[], next: number[]) => { (target as number[]).splice(0, target.length, ...next); };
   if (r.idleBoost?.village) replace(IDLE_BOOST_STEPS.village, r.idleBoost.village);
   if (r.idleBoost?.world) replace(IDLE_BOOST_STEPS.world, r.idleBoost.world);
@@ -136,7 +160,7 @@ export function applyRodRules(r: RodRules): () => void {
   if (r.idleBoost?.unit !== undefined) idleUnit = r.idleBoost.unit;
   return () => {
     Object.assign(rod, prevRod);
-    perLevel = prevPer; idleBasis = prevBasis; idleUnit = prevUnit;
+    perLevel = prevPer; idleBasis = prevBasis; idleUnit = prevUnit; biteMode = prevBite;
     replace(IDLE_BOOST_STEPS.village, prevVillage);
     replace(IDLE_BOOST_STEPS.world, prevWorld);
   };

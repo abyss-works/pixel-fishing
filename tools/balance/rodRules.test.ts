@@ -4,7 +4,8 @@ import { IDLE_BOOST_STEPS, relativeIdleBoost as productIdleBoost } from '../../s
 import { minLevelOfPower as productMinLevel, powerOfLevel as productPower } from '../../src/game/rules/stats';
 import { SPOTS } from '../../src/game/content/spots';
 import { rodStats } from '../../src/game/rules/logic';
-import { applyRodRules, minLevelOfPower, parseRodRules, powerOfLevel, relativeIdleBoost } from './rodRules';
+import { applyRodRules, biteRangeOf, minLevelOfPower, parseRodRules, powerOfLevel, relativeIdleBoost } from './rodRules';
+import { rodSpec } from './model';
 
 describe('낚싯대 규칙 — 제품 공개 함수와 같은 결과', () => {
   it('기본값에서 레벨별 파워와 파워의 최소 레벨이 제품 함수와 같다', () => {
@@ -16,6 +17,54 @@ describe('낚싯대 규칙 — 제품 공개 함수와 같은 결과', () => {
     for (const s of SPOTS) {
       for (let p = 0; p <= 260; p += 1) expect(relativeIdleBoost(p, s.id)).toBe(productIdleBoost(p, s.id));
     }
+  });
+});
+
+describe('입질 대기 감소 방식', () => {
+  let restore: (() => void) | null = null;
+  afterEach(() => { restore?.(); restore = null; });
+
+  it('기본(both)은 모든 레벨에서 제품 함수와 같다', () => {
+    for (let lv = 1; lv <= 80; lv++) {
+      const st = rodStats(lv), r = biteRangeOf(lv);
+      expect(r.biteMin).toBe(st.biteMin);
+      expect(r.biteMax).toBe(st.biteMax);
+    }
+  });
+
+  it('alternate는 최대치만 올림 절반 횟수, 최소치만 내림 절반 횟수 감쇠를 곱한다(레벨 1에서 6)', () => {
+    restore = applyRodRules({ biteDecayMode: 'alternate' });
+    const d = ROD.biteDecay;
+    const expected = [
+      [ROD.biteMin, ROD.biteMax],
+      [ROD.biteMin, ROD.biteMax * d],
+      [ROD.biteMin * d, ROD.biteMax * d],
+      [ROD.biteMin * d, ROD.biteMax * d ** 2],
+      [ROD.biteMin * d ** 2, ROD.biteMax * d ** 2],
+      [ROD.biteMin * d ** 2, ROD.biteMax * d ** 3],
+    ];
+    expected.forEach(([min, max], i) => {
+      const r = biteRangeOf(i + 1);
+      expect(r.biteMin).toBeCloseTo(min, 12);
+      expect(r.biteMax).toBeCloseTo(max, 12);
+    });
+    // 측정 모델의 낚싯대 스펙도 같은 값을 쓴다
+    expect(rodSpec('sea', 4).biteMax).toBeCloseTo(ROD.biteMax * d ** 2, 12);
+    expect(rodSpec('sea', 4).biteMin).toBeCloseTo(ROD.biteMin * d, 12);
+  });
+
+  it('감쇠 값을 바꾸면 alternate에도 따라가고 복원하면 제품 값으로 돌아간다', () => {
+    restore = applyRodRules({ biteDecayMode: 'alternate', biteDecay: 0.9 });
+    expect(biteRangeOf(3).biteMax).toBeCloseTo(ROD.biteMax * 0.9, 12);
+    restore();
+    restore = null;
+    expect(biteRangeOf(3).biteMax).toBe(rodStats(3).biteMax);
+    expect(rodSpec('sea', 3).biteMax).toBe(rodStats(3).biteMax);
+  });
+
+  it('방식은 both 또는 alternate만 받는다', () => {
+    expect(parseRodRules({ biteDecayMode: 'alternate' })).toEqual({ biteDecayMode: 'alternate' });
+    expect(() => parseRodRules({ biteDecayMode: 'min' })).toThrow('biteDecayMode');
   });
 });
 
