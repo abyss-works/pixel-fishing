@@ -7,7 +7,8 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
 import { mutationWeightsOf, newState, variantShare } from '../../../src/game/rules/logic';
 import { canBuyBoat } from '../../../src/game/rules/rules';
-import { powerOfLevel } from '../../../src/game/rules/stats';
+import { MAX_BOAT } from '../../../src/game/content/boats';
+import { powerOfLevel } from '../rodRules';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { axisAvailable, rates, rodSpec } from '../model';
 import type { Axis, Pool, Rates } from '../model';
@@ -107,7 +108,6 @@ export interface SimResult {
 }
 
 const STEP_SEC = 60;
-const LAST = SPOTS.length - 1;
 
 /** 해역 열림 조건 — 배 단계와 낚싯대 파워 */
 const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
@@ -116,9 +116,14 @@ const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
 const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
 
 /** 배 구매 가능 여부 — 제품 규칙 함수의 판정 */
-const boatBuyable = (boat: number, gold: number, fame: number) => canBuyBoat({ ...newState(), boat, gold, fame }).ok;
+const boatBuyable = (boat: number, gold: number, fame: number) => {
+  // 제품 규칙은 배 상한을 불러올 때의 배 수로 굳혀 두어, 가상 배(상한 위)는 같은 조건(골드와 명성)을 직접 견준다
+  if (boat >= MAX_BOAT) { const next = nextBoat(boat); return !!next && fame >= next.fameReq && gold >= next.price; }
+  return canBuyBoat({ ...newState(), boat, gold, fame }).ok;
+};
 
 export function simulate(opts: SimOptions): SimResult {
+  const LAST = SPOTS.length - 1;
   let gold = 0, fame = 0, level = 1, boat = 0, idx = 0, fishSec = 0, bountyGold = 0;
   let waitGold = 0, waitFame = 0, waitBoth = 0;
   const marks: LevelMark[] = [];

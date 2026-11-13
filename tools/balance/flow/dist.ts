@@ -8,7 +8,7 @@ import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { rng } from '../model';
 import { rewardBasis, rewardPlan } from './achievement';
-import type { Reward } from './achievement';
+import type { Reward, RewardBasisOptions } from './achievement';
 import { simulateOpening, OPENING_TARGET_SEC } from './opening';
 import type { Judgment } from './opening';
 import { simulate } from './progress';
@@ -81,8 +81,8 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   const base = { axis: o.axis, bounty: false, maxDays: o.maxDays };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
-  const hours: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
-  const cumulative: number[][] = Array.from({ length: TRANSITION_COUNT }, () => []);
+  const hours: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
+  const cumulative: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
   for (let i = 0; i < o.trials; i++) {
     transitionTimings(simulate({ ...base, sampler: createSampler(stream) }).arrivals).forEach((t, k) => {
       hours[k].push(t.hours);
@@ -96,13 +96,12 @@ export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   }));
 }
 
-/** 전환 수는 해역 수보다 하나 적다 */
-const TRANSITION_COUNT = SPOTS.length - 1;
-
 export interface RewardDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number;
   /** 보상 비율(0 초과 1 이하)과 기본 업적이 받는 몫(0 이상 1 이하) */
   ratio: number; basicShare: number;
+  /** 보상 기준 값의 방식과 기준 전환. 생략하면 기본 */
+  basis?: RewardBasisOptions;
 }
 
 export interface RewardDistRow {
@@ -125,8 +124,8 @@ const trialRng = (seed: number, i: number) => rng((seed + Math.imul(i + 1, 0x9e3
 /** 구역 도감 완성(진행 업적 달성) 시각과 다음 지역 첫 해역 도착 시각의 분포를 같은 진행 모델에서 재고, 보상을 넣었을 때의 도착을 같은 시드로 짝지어 비교한다 */
 export function rewardDist(o: RewardDistOptions): RewardDistRow[] {
   checkTrials(o.trials);
-  const plan = rewardPlan(o.ratio, o.basicShare);
-  const basis = rewardBasis();
+  const plan = rewardPlan(o.ratio, o.basicShare, o.basis);
+  const basis = rewardBasis(o.basis);
   const sim = { axis: o.axis, bounty: false, maxDays: o.maxDays };
   const keys = BOUNTY_ZONES.flatMap(zone => (['basic', 'named'] as const).map(tier => ({ zone, tier })));
   const achieved = new Map<string, number[]>(keys.map(k => [`${k.zone}:${k.tier}`, []]));

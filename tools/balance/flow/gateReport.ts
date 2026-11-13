@@ -3,15 +3,14 @@
 // 전환 시간은 새 계정이 직전 해역에서 방치로 낚는 경우로 잰다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { topZoneOfSpot } from '../../../src/game/content/zones';
-import { SPEC_MARGIN, entryLevel, perfectOverIdle } from '../model';
+import { SPEC_MARGIN, entryLevel, perfectOverIdle, zoneOf } from '../model';
 import {
   REGION_ENTRY_TARGET, TIME_GATE_FROM_SPOT, gateRows, judgeFameRatio, judgeOpening, judgePerfect, judgeTimeOrder, judgeTimeRange,
 } from '../gates';
 import type { GateRow, GateVerdict } from '../gates';
 import { simulateOpening } from './opening';
 import type { Judgment } from './opening';
-import type { RatePlan } from './progress';
+import type { AchievementOptions, RatePlan } from './progress';
 import { transitionReport } from './transitions';
 
 export interface PerfectRow { spot: SpotId; margin: number; level: number; ratio: number; verdict: GateVerdict }
@@ -62,6 +61,8 @@ export interface GatesReport {
   time: TimeRow[];
   /** 효과 계획을 줬을 때 효과 없는 이동 직후 수입 */
   moveBase?: GateRow[];
+  /** 업적 보상을 넣어 전환 시간과 배 명성 대기를 잰 관측이다. 판정은 보상 없는 기준 플레이어에 맞춘 목록으로 낸다 */
+  reward?: true;
 }
 
 export interface GatesOptions {
@@ -72,6 +73,8 @@ export interface GatesOptions {
   bounty?: boolean;
   /** 주면 이동 직후 수입과 전환 시간을 이 계획으로 재고(관측용) 효과 없는 값을 함께 담는다. PERFECT 이상치와 최초 10분은 효과와 관계없어 내지 않는다 */
   plan?: RatePlan;
+  /** 주면 전환 시간과 배 명성 대기를 진행 업적 보상을 지급하는 시뮬레이션으로 재고(관측용) 보상 없는 전환 시간을 함께 담는다. 효과 계획과 함께 쓸 수 없다 */
+  reward?: AchievementOptions;
 }
 
 const powerReq = (id: SpotId) => SPOTS.find(s => s.id === id)!.powerReq ?? 0;
@@ -93,21 +96,21 @@ function openingRows(legendAts: number[]): OpeningGateRow[] {
   });
 }
 
-function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time: TimeRow[]; fame: FameRow[] } {
-  const { rows, timings, base } = transitionReport({ axis: 'idle', maxDays, bounty, plan });
+function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan, reward?: AchievementOptions): { time: TimeRow[]; fame: FameRow[] } {
+  const { rows, timings, base } = transitionReport({ axis: 'idle', maxDays, bounty, plan, reward });
   const start = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
   const gap = (from: SpotId, to: SpotId) => powerReq(to) - powerReq(from);
   const entryGapOf = (to: SpotId): number | null => {
-    const zone = topZoneOfSpot(to);
-    const i = SPOTS.findIndex(s => topZoneOfSpot(s.id) === zone);
+    const zone = zoneOf(to);
+    const i = SPOTS.findIndex(s => zoneOf(s.id) === zone);
     return i > 0 ? gap(SPOTS[i - 1].id, SPOTS[i].id) : null;
   };
   const time: TimeRow[] = [], fame: FameRow[] = [];
   rows.forEach(({ from, to, boats }, i) => {
     const t = timings[i] as (typeof timings)[number] | undefined;
     const judged = i >= start;
-    const entry = topZoneOfSpot(from) !== topZoneOfSpot(to);
-    const target = entry ? (REGION_ENTRY_TARGET as Record<string, readonly [number, number]>)[topZoneOfSpot(to) ?? ''] ?? null : null;
+    const entry = zoneOf(from) !== zoneOf(to);
+    const target = entry ? (REGION_ENTRY_TARGET as Record<string, readonly [number, number]>)[zoneOf(to) ?? ''] ?? null : null;
     const prev = judged && i > start ? timings[i - 1]?.hours ?? null : null;
     // 닿지 못한 전환은 판정에서 빼지 않고 위반으로 낸다
     const range = !judged || !target ? null : t ? judgeTimeRange(to, target, t.hours) : '위반';
@@ -128,12 +131,13 @@ function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time:
 }
 
 export function gatesReport(o: GatesOptions): GatesReport {
-  const { time, fame } = timeAndFame(o.maxDays, o.bounty ?? false, o.plan);
+  if (o.plan && o.reward) throw new Error('효과 계획과 업적 보상은 함께 쓸 수 없습니다');
+  const { time, fame } = timeAndFame(o.maxDays, o.bounty ?? false, o.plan, o.reward);
   if (o.plan) {
     const plan = o.plan;
     return { move: gateRows((spot, level, pool, boat) => plan.rateFor(spot, level, 'idle', boat, pool)), moveBase: gateRows(), perfect: [], fame, opening: [], time };
   }
-  return { move: gateRows(), perfect: perfectRows(), fame, opening: openingRows(o.legendAts), time };
+  return { move: gateRows(), perfect: perfectRows(), fame, opening: openingRows(o.legendAts), time, ...(o.reward ? { reward: true as const } : {}) };
 }
 
 /** 모든 게이트 줄의 판정 */

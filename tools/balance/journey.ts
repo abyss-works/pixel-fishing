@@ -5,7 +5,7 @@ import { SPOTS } from '../../src/game/content/spots';
 import type { SpotId } from '../../src/game/content/spots';
 import { BOATS } from '../../src/game/content/boats';
 import { FISH } from '../../src/game/content/fish';
-import { powerOfLevel } from '../../src/game/rules/stats';
+import { powerOfLevel } from './rodRules';
 import { upgradeCost } from '../../src/game/rules/balance';
 import { mutationWeightsOf, variantShare } from '../../src/game/rules/logic';
 import { rates } from './model';
