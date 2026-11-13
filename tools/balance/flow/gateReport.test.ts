@@ -4,6 +4,7 @@ import { SPEC_MARGIN } from '../model';
 import { REGION_ENTRY_TARGET, TIME_GATE_FROM_SPOT } from '../gates';
 import { applyOverride } from './override';
 import { gatesReport, verdictCounts } from './gateReport';
+import { rewardPlan } from './achievement';
 
 const opts = { maxDays: 365, legendAts: [10, 15, 20] };
 const reef = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
@@ -136,5 +137,37 @@ describe('게이트 보고', () => {
     const r = gatesReport(opts).time.find(x => x.to === 'indian')!;
     expect(r.hours!).toBeLessThan(1.27);
     expect(r.rangeVerdict).toBe('위반');
+  });
+});
+
+describe('보상 포함 관측', () => {
+  it('보상을 주지 않으면 기본 보고와 같고 보상 표식이 없다', () => {
+    const r = gatesReport(opts);
+    expect(r.reward).toBeUndefined();
+    expect(r.time.every(t => !('baseHours' in t))).toBe(true);
+  });
+
+  it('보상을 주면 지역 진입 전환 시간이 줄고 보상 없는 시간을 함께 담으며, 판정은 보상 포함 시간으로 낸다', () => {
+    const plain = gatesReport(opts);
+    const paid = gatesReport({ ...opts, reward: rewardPlan(0.25, 0.5) });
+    expect(paid.reward).toBe(true);
+    paid.time.forEach((t, i) => {
+      expect(t.baseHours).toBe(plain.time[i].hours);
+    });
+    const moz = paid.time.find(t => t.to === 'mozstrait')!;
+    expect(moz.hours!).toBeLessThan(moz.baseHours!);
+    expect(moz.rangeVerdict).toBe('위반');
+    expect(paid.move).toEqual(plain.move);
+    expect(paid.opening).toEqual(plain.opening);
+  });
+
+  it('보상 포함 시간으로 낸 판정은 기본 판정과 달라진다', () => {
+    const paid = gatesReport({ ...opts, reward: rewardPlan(0.25, 0.5) });
+    expect(verdictCounts(paid)).not.toEqual(verdictCounts(gatesReport(opts)));
+  });
+
+  it('효과 계획과 보상을 함께 주면 거부한다', () => {
+    const plan = { rateFor: () => { throw new Error('호출되지 않는다'); }, costPerHour: () => 0 };
+    expect(() => gatesReport({ ...opts, plan, reward: rewardPlan(0.25, 0.5) })).toThrow('함께');
   });
 });

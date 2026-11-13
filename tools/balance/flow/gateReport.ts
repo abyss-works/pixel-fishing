@@ -10,7 +10,7 @@ import {
 import type { GateRow, GateVerdict } from '../gates';
 import { simulateOpening } from './opening';
 import type { Judgment } from './opening';
-import type { RatePlan } from './progress';
+import type { AchievementOptions, RatePlan } from './progress';
 import { transitionReport } from './transitions';
 
 export interface PerfectRow { spot: SpotId; margin: number; level: number; ratio: number; verdict: GateVerdict }
@@ -61,6 +61,8 @@ export interface GatesReport {
   time: TimeRow[];
   /** 효과 계획을 줬을 때 효과 없는 이동 직후 수입 */
   moveBase?: GateRow[];
+  /** 업적 보상을 넣어 전환 시간과 배 명성 대기를 잰 관측이다. 판정은 보상 없는 기준 플레이어에 맞춘 목록으로 낸다 */
+  reward?: true;
 }
 
 export interface GatesOptions {
@@ -71,6 +73,8 @@ export interface GatesOptions {
   bounty?: boolean;
   /** 주면 이동 직후 수입과 전환 시간을 이 계획으로 재고(관측용) 효과 없는 값을 함께 담는다. PERFECT 이상치와 최초 10분은 효과와 관계없어 내지 않는다 */
   plan?: RatePlan;
+  /** 주면 전환 시간과 배 명성 대기를 진행 업적 보상을 지급하는 시뮬레이션으로 재고(관측용) 보상 없는 전환 시간을 함께 담는다. 효과 계획과 함께 쓸 수 없다 */
+  reward?: AchievementOptions;
 }
 
 const powerReq = (id: SpotId) => SPOTS.find(s => s.id === id)!.powerReq ?? 0;
@@ -92,8 +96,8 @@ function openingRows(legendAts: number[]): OpeningGateRow[] {
   });
 }
 
-function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time: TimeRow[]; fame: FameRow[] } {
-  const { rows, timings, base } = transitionReport({ axis: 'idle', maxDays, bounty, plan });
+function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan, reward?: AchievementOptions): { time: TimeRow[]; fame: FameRow[] } {
+  const { rows, timings, base } = transitionReport({ axis: 'idle', maxDays, bounty, plan, reward });
   const start = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
   const gap = (from: SpotId, to: SpotId) => powerReq(to) - powerReq(from);
   const entryGapOf = (to: SpotId): number | null => {
@@ -127,12 +131,13 @@ function timeAndFame(maxDays: number, bounty: boolean, plan?: RatePlan): { time:
 }
 
 export function gatesReport(o: GatesOptions): GatesReport {
-  const { time, fame } = timeAndFame(o.maxDays, o.bounty ?? false, o.plan);
+  if (o.plan && o.reward) throw new Error('효과 계획과 업적 보상은 함께 쓸 수 없습니다');
+  const { time, fame } = timeAndFame(o.maxDays, o.bounty ?? false, o.plan, o.reward);
   if (o.plan) {
     const plan = o.plan;
     return { move: gateRows((spot, level, pool, boat) => plan.rateFor(spot, level, 'idle', boat, pool)), moveBase: gateRows(), perfect: [], fame, opening: [], time };
   }
-  return { move: gateRows(), perfect: perfectRows(), fame, opening: openingRows(o.legendAts), time };
+  return { move: gateRows(), perfect: perfectRows(), fame, opening: openingRows(o.legendAts), time, ...(o.reward ? { reward: true as const } : {}) };
 }
 
 /** 모든 게이트 줄의 판정 */
