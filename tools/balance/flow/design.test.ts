@@ -8,7 +8,7 @@ import { rodStats } from '../../../src/game/rules/logic';
 import { SPOTS } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { IDLE_BOOST_STEPS } from '../../../src/game/rules/power';
-import { entryLevel, rates } from '../model';
+import { entryLevel, rates, rodSpec } from '../model';
 import { applyOverride, parseOverride } from './override';
 import { addPerSpot, designReport, parseAnchor, parseGrade, parseNight } from './design';
 import type { DesignInput, DesignReport } from './design';
@@ -106,6 +106,46 @@ describe('design 계산', () => {
     const plateau = (steps: readonly number[]) => steps.indexOf(steps.at(-1)!);
     expect(r.boostEnds).toEqual({ village: plateau(IDLE_BOOST_STEPS.village), world: plateau(IDLE_BOOST_STEPS.world) });
   });
+
+  it('방치 이득을 뺀 앞 해역 EV는 방치 배수를 앞 해역 진입 레벨의 값으로 고정해 잰다', () => {
+    const undo = applyOverride(r.override);
+    try {
+      r.reversals.forEach((x, i) => {
+        const boost = rodSpec(x.spot, r.rows[i].level).idleBoost;
+        expect(r.rows[i].entryBoost).toBe(boost);
+        expect(x.evNoBoost).toBeCloseTo(rates(x.spot, x.level, 'idle', { commonMult: boost }).goldPerHour, 9);
+        expect(x.evNoBoost).toBeLessThanOrEqual(x.ev + 1e-9);
+        expect(x.reversedNoBoost).toBe(x.evNoBoost > x.nextEv);
+      });
+      expect(r.rows[LAST].entryBoost).toBe(rodSpec(SPOTS[LAST].id, r.rows[LAST].level).idleBoost);
+    } finally { undo(); }
+    expect(r.reversals.some(x => x.evNoBoost < x.ev)).toBe(true);
+  });
+
+  it('역전 허용폭은 비율이 1 초과 1+허용폭 이하인 전환을 허용으로 가른다', () => {
+    const wide = designReport(base({ boatShare: 0.15, hours: { all: 3, by: { river: 2 } }, reversalTolerance: 0.2 }));
+    wide.reversals.forEach((x, i) => {
+      const q = x.ev / x.nextEv, qb = x.evNoBoost / x.nextEv;
+      expect(x.reversed).toBe(q > 1.2);
+      expect(x.tolerated).toBe(q > 1 && q <= 1.2);
+      expect(x.reversedNoBoost).toBe(qb > 1.2);
+      expect(x.toleratedNoBoost).toBe(qb > 1 && qb <= 1.2);
+      expect(x.reversedNoBoost === r.reversals[i].reversedNoBoost || qb > 1).toBe(true);
+    });
+    r.reversals.forEach(x => { expect(x.tolerated).toBe(false); expect(x.toleratedNoBoost).toBe(false); });
+    expect(() => designReport(base({ reversalTolerance: -0.1 }))).toThrow(/허용폭/);
+  }, 60_000);
+
+  it('--reversal-tolerance는 design 판정 문구를 정상, 허용, 역전으로 낸다', () => {
+    const args = ['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3'];
+    const none = runCli(args).stdout;
+    expect(none).not.toContain('허용');
+    const big = runCli([...args, '--reversal-tolerance', '5']).stdout;
+    expect(big).toContain('허용');
+    expect(big).not.toMatch(/\| 역전 \|/);
+    expect(runCli([...args, '--reversal-tolerance', 'x']).exitCode).toBe(1);
+    expect(runCli(['transition', '--reversal-tolerance', '0.2']).stderr).toMatch(/design/);
+  }, 60_000);
 
   it('계산을 마치면 제품 상수가 계산 전 값으로 돌아온다', () => {
     designReport(base({ gap: { all: 4, by: {} }, hours: { all: 2, by: {} }, grades: { rare: { base: 5, step: 1.02 } }, night: { epic: 1.4 }, boatShare: 0.1 }));

@@ -15,7 +15,7 @@ import type { RarityId } from '../../../src/game/content/rarity';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { upgradeCost } from '../../../src/game/rules/balance';
-import { VARIANT_EV, entryLevel, rates } from '../model';
+import { VARIANT_EV, entryLevel, rates, rodSpec } from '../model';
 import { applyRodRules, powerOfLevel, relativeIdleBoost } from '../rodRules';
 import type { BiteDecayMode } from '../rodRules';
 import { applyOverride } from './override';
@@ -54,6 +54,8 @@ export interface DesignInput {
   solve: SolveVar | null;
   /** 시뮬레이션으로 전환 시간을 재는 최대 일수 */
   maxDays: number;
+  /** 역전 허용폭. 앞 해역 EV ÷ 다음 해역 진입 EV가 1 초과 1 + 허용폭 이하이면 허용이다. 생략하면 0 */
+  reversalTolerance?: number;
 }
 
 /** ratio는 일반 최대가 대비 그 등급 낮 어종 최대가, nightRatio는 같은 기준의 밤 어종 최대가(없으면 null), evShare는 EV에서 그 등급(낮과 밤 합)의 몫 */
@@ -80,6 +82,8 @@ export interface DesignRow {
   currentEv: number;
   /** 필요 EV ÷ 현재 EV */
   evRatio: number;
+  /** 덮어쓰기를 적용한 진입 레벨의 방치 배수 */
+  entryBoost: number;
   /** 일반 가격 배율(등급 비율을 바꾸면 그 몫을 일반 가격이 흡수한다) */
   priceMult: number;
   /** 등급별 비율과 EV 기여 비중. 그 해역에 어종이 없는 등급은 null */
@@ -93,7 +97,14 @@ export interface ReversalRow {
   spot: SpotId; next: SpotId;
   /** 앞 해역에서 다음 해역 진입 직전 레벨까지 올렸을 때 EV(덮어쓰기 적용 후)와 다음 해역 진입 EV */
   level: number; ev: number; nextEv: number;
+  /** 비가 1 + 허용폭을 넘는 역전 */
   reversed: boolean;
+  /** 비가 1 초과 1 + 허용폭 이하인 허용 */
+  tolerated: boolean;
+  /** 방치 배수를 앞 해역 진입 레벨의 값으로 고정하고 입질 속도 효과만 반영한 앞 해역 EV와 그 판정 */
+  evNoBoost: number;
+  reversedNoBoost: boolean;
+  toleratedNoBoost: boolean;
 }
 
 export interface AnchorRow { spot: SpotId; anchorEv: number; designEv: number; error: number; level: number }
@@ -333,6 +344,8 @@ export function designReport(input: DesignInput): DesignReport {
   if (input.gap.by[lastId] !== undefined || input.hours?.by[lastId] !== undefined) {
     throw new Error(`마지막 해역(${lastId})은 구간이 없어 간격과 전환 시간을 받지 않습니다`);
   }
+  const tol = input.reversalTolerance ?? 0;
+  if (!(tol >= 0) || !Number.isFinite(tol)) throw new Error('역전 허용폭은 0 이상의 숫자여야 합니다');
   const share = input.boatShare;
   if (!(share >= 0 && share < 1)) throw new Error('배 비중은 0 이상 1 미만이어야 합니다');
   if (!(input.start > 0)) throw new Error('--start는 0보다 커야 합니다');
@@ -428,13 +441,15 @@ export function designReport(input: DesignInput): DesignReport {
 
   // 덮어쓰기를 적용해 달성 EV, 역전 검사, 새 곡선 표, 시뮬레이션 전환 시간을 잰다
   const undo = applyOverride(override);
-  let achieved: number[], reversals: ReversalRow[], upgrades: DesignReport['upgrades'], measured: (number | null)[], complete: boolean;
+  let achieved: number[], entryBoosts: number[], reversals: ReversalRow[], upgrades: DesignReport['upgrades'], measured: (number | null)[], complete: boolean;
   try {
     achieved = SPOTS.map((s, i) => rates(s.id, levels[i], 'idle').goldPerHour);
+    entryBoosts = SPOTS.map((s, i) => rodSpec(s.id, levels[i]).idleBoost);
     reversals = SPOTS.slice(0, n - 1).map((s, i) => {
       const level = levels[i + 1] - 1;
       const ev = rates(s.id, level, 'idle').goldPerHour;
-      return { spot: s.id, next: SPOTS[i + 1].id, level, ev, nextEv: achieved[i + 1], reversed: ev > achieved[i + 1] };
+      const evNoBoost = rates(s.id, level, 'idle', { commonMult: entryBoosts[i] * rodSpec(s.id, level).gateMult }).goldPerHour;
+      return { spot: s.id, next: SPOTS[i + 1].id, level, ev, nextEv: achieved[i + 1], reversed: ev / achieved[i + 1] > 1 + tol, tolerated: ev > achieved[i + 1] && ev / achieved[i + 1] <= 1 + tol, evNoBoost, reversedNoBoost: evNoBoost / achieved[i + 1] > 1 + tol, toleratedNoBoost: evNoBoost > achieved[i + 1] && evNoBoost / achieved[i + 1] <= 1 + tol };
     });
     upgrades = { levels: levelRows(1, levels[n - 1]), purchases: purchaseRows() };
     const sim = transitionReport({ axis: 'idle', maxDays: input.maxDays });
@@ -462,7 +477,7 @@ export function designReport(input: DesignInput): DesignReport {
       spot: s.id, index: i, level: levels[i], power: powers[i], gap: gaps[i],
       upgradeSum: span ? span.sum : null, boatPrice: span ? span.boatPrice : null, hours, payback: pb,
       requiredEv: requiredEv[i], evIsTarget: !input.payback && span === null, evGrowth: i > 0 ? requiredEv[i] / requiredEv[i - 1] - 1 : null,
-      currentEv: current[i].ev, evRatio: requiredEv[i] / current[i].ev, priceMult: priceMult[i],
+      currentEv: current[i].ev, evRatio: requiredEv[i] / current[i].ev, entryBoost: entryBoosts[i], priceMult: priceMult[i],
       grades: gradeCells[i], achievedEv: achieved[i], measuredHours: measured[i] ?? null,
     };
   });
