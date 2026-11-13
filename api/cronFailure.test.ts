@@ -67,6 +67,13 @@ describe('logCronFailure', () => {
     expect(String(fields.message)).toContain('Failed query: select 1');
   });
 
+  it('문자열로 바꿀 수 없는 값이 던져져도 던지지 않고 단계만 남긴다', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(() => logCronFailure('archive', Object.create(null), 'x')).not.toThrow();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0][0])).toContain('단계 x');
+  });
+
   it('Error가 아닌 값도 기록한다', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     logCronFailure('archive', 'plain text', 'x');

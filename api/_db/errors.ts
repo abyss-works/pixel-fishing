@@ -51,6 +51,11 @@ export function describeDbError(error: unknown): DbErrorSummary {
 // 쿼리 빌더 오류 메시지는 `Failed query: <SQL>\nparams: <인자 목록>` 형식이다.
 const QUERY_PARAMS = /\nparams: [\s\S]*$/;
 
+/** 스택에서 쿼리 인자 줄만 가린다. 스택 첫머리에 메시지가 그대로 들어가므로 뒤따르는 프레임은 남긴다. */
+export function redactStackParams(stack: string): string {
+  return stack.replace(/\nparams: [^\n]*/g, '\nparams: [redacted]');
+}
+
 /** 오류 메시지에서 쿼리 인자 목록을 가린다. SQL 문장은 남긴다. */
 export function redactQueryParams(message: string): string {
   return message.replace(QUERY_PARAMS, '\nparams: [redacted]');

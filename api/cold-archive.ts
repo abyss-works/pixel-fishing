@@ -144,11 +144,11 @@ async function openStager(tmpDir: string, key: string) {
 async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<TableResult> {
   const date = cutoff.slice(0, 10);
   const tmpKey = `${env.r2Prefix}/events/created_lt_${date}/_tmp_${stamp()}.jsonl.gz`;
+  const est = await inStage('events-scan', () => countEventsBefore(env.db, cutoff));
+  console.log(`events 대상 약 ${est} rows`);
   const st = await inStage('events-stage-file', () => openStager(env.tmpDir, tmpKey));
   let lastId = 0, minId: number | null = null, maxId = 0, n = 0;
   await inStage('events-scan', async () => {
-    const est = await countEventsBefore(env.db, cutoff);
-    console.log(`events 대상 약 ${est} rows`);
     for (;;) {
       const data = await eventsBefore(env.db, cutoff, lastId, BATCH);
       if (data.length === 0) break;

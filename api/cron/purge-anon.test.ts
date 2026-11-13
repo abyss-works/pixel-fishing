@@ -200,6 +200,7 @@ describe('api/cron/purge-anon 핸들러', () => {
     spy.mockRestore();
   });
 
+it('던져진 값을 문자열로 바꿀 수 없어도 Sentry 보고와 500 응답은 이어진다', async () => {    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);    const unprintable = Object.create(null);    vi.mocked(selectPurgeTargets).mockRejectedValue(unprintable);    const res = await call();    expect(res.statusCode).toBe(500);    expect(reportServerIssue).toHaveBeenCalledWith('anon-purge', unprintable);    spy.mockRestore();  });
   it('채팅 보관 정리가 실패하면 expire-chat 단계로 남긴다', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(deleteExpiredChat).mockRejectedValue(new Error('chat failed'));

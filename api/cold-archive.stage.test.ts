@@ -1,5 +1,5 @@
 // 콜드 아카이브가 실패할 때 실패한 단계가 오류에 표시되는지 검사한다. 저장 모듈과 R2 요청은 모킹한다.
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,6 +56,7 @@ describe('runArchive 실패 단계 표시', () => {
     vi.mocked(countEventsBefore).mockRejectedValue(new Error('db down'));
     expect(await stageOf(() => runArchive(envOf(), NOW))).toBe('events-scan');
   });
+it('events 행 수 조회가 실패하면 임시 파일을 만들지 않는다', async () => {    vi.mocked(countEventsBefore).mockRejectedValue(new Error('db down'));    await stageOf(() => runArchive(envOf(), NOW));    await new Promise(resolve => setTimeout(resolve, 50));    expect(readdirSync(tmpDir)).toEqual([]);  });
 
   it('events 업로드가 실패하면 events-upload이고 지우지 않는다', async () => {
     vi.mocked(countEventsBefore).mockResolvedValue(1);

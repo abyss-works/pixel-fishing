@@ -100,6 +100,16 @@ describe('api/cron/archive 핸들러', () => {
       expect(runArchive).not.toHaveBeenCalled();
     });
 
+    it('던져진 값을 문자열로 바꿀 수 없어도 500을 돌려준다', async () => {
+      stubFullEnv();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.mocked(refreshDailyStats).mockRejectedValue(Object.create(null));
+      const res = mkRes();
+      await handler(authorized, res as never);
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'archive-failed' });
+    });
+
     it('설정이 빠졌으면 setup 단계로 남긴다', async () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const res = mkRes();
