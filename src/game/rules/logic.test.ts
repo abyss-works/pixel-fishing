@@ -278,7 +278,7 @@ describe('R15: 강화/구매 비용', () => {
     }
   });
   it('배 가방: 정크선 500, 범선에서 두 배로 늘어난다', () => {
-    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000, 4000]);
+    expect(BOATS.map(b => b.bagCap)).toEqual([140, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000]);
   });
   it('배 가격과 명성 하한은 확정 값이다', () => {
     expect(BOATS.map(b => b.price)).toEqual([125, 200, 1250, 2600, 12500, 32000, 125000, 1250000, 12500000]);
@@ -287,20 +287,19 @@ describe('R15: 강화/구매 비용', () => {
   it('대양 트롤선(8단계): 가격 1,250,000 · 명성 80,000 · 속도 200 · 가방 4,000', () => {
     expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 });
   });
-  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도와 가방은 대양 트롤선과 같고 여는 해역이 없다', () => {
-    expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: BOATS[7].speed, bagCap: BOATS[7].bagCap });
+  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도 220 · 가방 5,000이고 여는 해역이 없다', () => {
+    expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: 220, bagCap: 5000 });
     expect(SPOTS.some(s => s.boatTier === 9)).toBe(false);
     expect(ZONES.some(z => z.entryBoat === 9)).toBe(false);
   });
-  it('이동 속도(px/s): 배 없음 100, 조각배 110부터 대양 트롤선 200까지', () => {
+  it('이동 속도(px/s): 배 없음 100, 조각배 110부터 가공 플랜트선 220까지', () => {
     expect(WALK_SPEED).toBe(100);
-    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200, 200]);
+    expect(BOATS.map(b => b.speed)).toEqual([110, 120, 130, 140, 150, 165, 180, 200, 220]);
   });
-  it('배 가격과 명성 하한은 단조 증가, 속도와 가방은 줄지 않는다(가공 플랜트선은 대양 트롤선과 같다)', () => {
+  it('배 가격과 명성 하한은 단조 증가, 속도와 가방은 늘어난다', () => {
     for (let i = 1; i < BOATS.length; i++) {
       expect(BOATS[i].price).toBeGreaterThan(BOATS[i - 1].price);
       expect(BOATS[i].fameReq).toBeGreaterThan(BOATS[i - 1].fameReq);
-      if (BOATS[i].tier === 9) continue;
       expect(BOATS[i].speed).toBeGreaterThan(BOATS[i - 1].speed);
       expect(BOATS[i].bagCap).toBeGreaterThan(BOATS[i - 1].bagCap); // 가방도 함께
     }
