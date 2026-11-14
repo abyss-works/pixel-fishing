@@ -28,16 +28,42 @@ export const LOOK_PRESETS: readonly { name: string; shirt: number; pants: number
   { name: '밤바다', shirt: 7, pants: 3 },
 ];
 
-export interface Hat { id: string; name: string; color: string; price: number }
+export type HatSource = 'gold' | 'achievement';
 
-/** 골드로 사는 모자 — 모두 같은 모양에 색만 다르다 */
+export interface Hat {
+  id: string;
+  name: string;
+  color: string;
+  accentColor?: string;
+  price: number;
+  source: HatSource;
+  achievementId?: string;
+}
+
+/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 14종을 둔다 */
 export const HATS: readonly Hat[] = [
-  { id: 'cap-red', name: '빨간 모자', color: '#c62828', price: 50_000 },
-  { id: 'cap-blue', name: '파란 모자', color: '#1565c0', price: 50_000 },
-  { id: 'cap-yellow', name: '노란 모자', color: '#f9a825', price: 100_000 },
-  { id: 'cap-green', name: '초록 모자', color: '#2e7d32', price: 200_000 },
-  { id: 'cap-black', name: '검은 모자', color: '#212121', price: 500_000 },
+  { id: 'cap-red', name: '빨간 모자', color: '#c62828', price: 50_000, source: 'gold' },
+  { id: 'cap-blue', name: '파란 모자', color: '#1565c0', price: 50_000, source: 'gold' },
+  { id: 'cap-yellow', name: '노란 모자', color: '#f9a825', price: 100_000, source: 'gold' },
+  { id: 'cap-green', name: '초록 모자', color: '#2e7d32', price: 200_000, source: 'gold' },
+  { id: 'cap-black', name: '검은 모자', color: '#212121', price: 500_000, source: 'gold' },
+  { id: 'straw-hat', name: '밀짚모자', color: '#d9b45a', price: 0, source: 'achievement', achievementId: 'variant-village' },
+  { id: 'sou-wester', name: '방수모', color: '#4f7a90', price: 0, source: 'achievement', achievementId: 'variant-pacific' },
+  { id: 'coral-bandana', name: '산호빛 두건', color: '#e0705a', price: 0, source: 'achievement', achievementId: 'variant-seasia' },
+  { id: 'saffron-turban', name: '사프란 터번', color: '#e08a1e', price: 0, source: 'achievement', achievementId: 'variant-indian' },
+  { id: 'worn-tricorn', name: '낡은 삼각모', color: '#5e4632', price: 0, source: 'achievement', achievementId: 'variant-madagascar' },
+  { id: 'fog-beanie', name: '안개빛 털모자', color: '#98a4aa', price: 0, source: 'achievement', achievementId: 'variant-southatlantic' },
+  { id: 'braid-captain-cap', name: '금몰 선장모', color: '#eceff1', accentColor: '#d4af37', price: 0, source: 'achievement', achievementId: 'variant-all' },
+  { id: 'anchor-beret', name: '닻핀 베레모', color: '#243b6b', accentColor: '#d4af37', price: 0, source: 'achievement', achievementId: 'grade-legendary' },
+  { id: 'watch-sailor-cap', name: '당직 선원모', color: '#23304f', price: 0, source: 'achievement', achievementId: 'night-normal' },
+  { id: 'earflap-cap', name: '귀덮개 모자', color: '#1c2430', price: 0, source: 'achievement', achievementId: 'night-variant' },
+  { id: 'lure-bucket-hat', name: '털바늘 낚시 모자', color: '#6b7a3a', accentColor: '#e0705a', price: 0, source: 'achievement', achievementId: 'big-50' },
+  { id: 'harpooner-pillbox', name: '작살잡이 가죽 모자', color: '#4e342e', price: 0, source: 'achievement', achievementId: 'named-all' },
+  { id: 'shipowner-bowler', name: '선주 중절모', color: '#44403a', accentColor: '#1f1d1a', price: 0, source: 'achievement', achievementId: 'artifact-all' },
+  { id: 'salt-fisher-cap', name: '소금 얼룩 어부 모자', color: '#3d5a73', accentColor: '#dfe6ea', price: 0, source: 'achievement', achievementId: 'catch-100000' },
 ];
+
+export const isAchievementHat = (hat: Hat): boolean => hat.source === 'achievement';
 
 export function hatById(id: unknown): Hat | undefined {
   return typeof id === 'string' ? HATS.find(h => h.id === id) : undefined;

@@ -29,13 +29,16 @@ import { isTutorialId } from '../content/tutorials.js';
 import type { TutorialId } from '../content/tutorials.js';
 import { DEFAULT_LOOK, hatById, safeLook } from '../content/wardrobe.js';
 import type { Look } from '../content/wardrobe.js';
+import { ACHIEVEMENT_COUNTER_KEYS } from '../content/achievements.js';
+import type { AchievementCounters, AchievementMap } from '../content/achievements.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
 import { endedFirstCatch, firstCatchOfLegacy, newFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 
-export { JUDGMENT_MULT };
+export { JUDGMENT_MULT, BIG_CATCH_PERCENTILE };
+export type { AchievementCounters, AchievementMap } from '../content/achievements.js';
 export { RARITY, RARITY_ORDER } from '../content/rarity.js';
 export type { Rarity, RarityId } from '../content/rarity.js';
 export { SPOTS, powerReqOf } from '../content/spots.js';
@@ -139,6 +142,12 @@ export interface GameState {
   look: Look;
   /** 가진 모자 id — 쓴 모자(look.hat)는 이 목록에 있다. 없으면 빈 목록 */
   hats: string[];
+  /** 업적 상태 — id에서 수령 가능·수령 완료로. 모르는 업적 id도 보존한다 */
+  achievements: AchievementMap;
+  /** 업적 카운터 — 런타임·패치 전달용 */
+  achievementCounters: AchievementCounters;
+  /** 토벌 완료한 네임드 의뢰 id 목록 — 런타임·패치 전달용 */
+  clearedNamed: string[];
 }
 
 export interface RodStats {
@@ -259,14 +268,19 @@ export function rollNamedEncounter(
   return cands[Math.floor(rng() * cands.length)];
 }
 
+export function zoneDexSpecies(
+  zone: BountyZone, grades: readonly RarityId[],
+): Fish[] {
+  return FISH.filter(f => topZoneOfSpot(f.spot) === zone && grades.includes(f.rarity));
+}
+
 // 해역 도감 미완성 목록 — 일반 폼만 본다 (돌연변이 제외).
 // 밤어종도 포함된다 — 밤 시간대에 잡아야 채워지는 시간 게이트다.
 export function zoneDexMissing(
   state: GameState, zone: BountyZone, grades: readonly RarityId[],
 ): string[] {
-  return FISH
-    .filter(f => topZoneOfSpot(f.spot) === zone && grades.includes(f.rarity)
-      && (state.dex[f.id]?.normal?.count ?? 0) === 0)
+  return zoneDexSpecies(zone, grades)
+    .filter(f => (state.dex[f.id]?.normal?.count ?? 0) === 0)
     .map(f => f.id);
 }
 
@@ -423,6 +437,9 @@ export function newState(): GameState {
     tutorials: [],
     look: DEFAULT_LOOK,
     hats: [],
+    achievements: {},
+    achievementCounters: {},
+    clearedNamed: [],
   };
 }
 
@@ -577,6 +594,9 @@ export interface CatchInfo extends CatchExtras {
   isBig: boolean;      // 상위 BIG_CATCH_PERCENTILE% 안 — "월척"
   isNew: boolean;      // 이번 캐치 전까지 도감에 없던 어종
 }
+
+export const isBigSize = (fish: Fish, size: number): boolean =>
+  sizePercentile(fish, size) <= BIG_CATCH_PERCENTILE;
 
 export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean): CatchInfo {
   const percentile = sizePercentile(fish, extras.size);
@@ -1034,7 +1054,36 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     tutorials: Array.isArray(s.tutorials) ? s.tutorials.filter(isTutorialId) : [],
     look: look.hat === null || hats.includes(look.hat) ? look : { ...look, hat: null },
     hats,
+    achievements: safeAchievements(s.achievements),
+    achievementCounters: safeAchievementCounters(s.achievementCounters),
+    clearedNamed: [...new Set(safeStrings(s.clearedNamed))],
   };
+}
+
+/** 업적 맵 위생 — 문자열 키와 'claimable' | 'claimed' 값이면 모르는 업적 id도 보존한다 */
+function safeAchievements(raw: unknown): AchievementMap {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const out: AchievementMap = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof k === 'string' && k.length > 0 && (v === 'claimable' || v === 'claimed')) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** 업적 카운터 위생 — 알려진 카운터 키의 유한 비음수 정수만 보존한다 */
+function safeAchievementCounters(raw: unknown): AchievementCounters {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const src = raw as Record<string, unknown>;
+  const out: AchievementCounters = {};
+  for (const k of ACHIEVEMENT_COUNTER_KEYS) {
+    const v = src[k];
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 0) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 /** 가진 모자 위생 — 있는 모자 id만 처음 나온 순서로 한 번씩 살린다 */

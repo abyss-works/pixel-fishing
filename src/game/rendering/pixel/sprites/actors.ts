@@ -1,17 +1,105 @@
 // 배우 스프라이트 — 플레이어(도보)/배(항해). 자기 좌표계만 알고 상태를 모른다 (계층: 단위 스프라이트)
 import { label, R, UI } from '../common.js';
 import type { Ctx } from '../common.js';
-import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById } from '../../../content/wardrobe.js';
-import type { Look } from '../../../content/wardrobe.js';
+import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../../../content/wardrobe.js';
+import type { Hat, Look } from '../../../content/wardrobe.js';
+
+function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
+  const c = hat.color;
+  const a = hat.accentColor ?? c;
+  switch (hat.id) {
+    case 'straw-hat':
+      R(ctx, x - 2, y - 20, 4, 1, c);
+      R(ctx, x - 3, y - 19, 6, 2, c);
+      R(ctx, x - 6, y - 17, 12, 1, c);
+      return;
+    case 'sou-wester':
+      R(ctx, x - 4, y - 19, 7, 3, c);
+      R(ctx, x - 6, y - 16, 4, 2, c);
+      R(ctx, x - 5, y - 17, 2, 1, c);
+      R(ctx, x + 2, y - 16, 3, 1, c);
+      return;
+    case 'coral-bandana':
+      R(ctx, x - 3, y - 19, 6, 1, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 6, y - 17, 2, 1, c);
+      R(ctx, x - 5, y - 15, 2, 1, c);
+      return;
+    case 'saffron-turban':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 19, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 2, c);
+      R(ctx, x + 4, y - 18, 1, 2, c);
+      return;
+    case 'worn-tricorn':
+      R(ctx, x - 1, y - 20, 2, 1, c);
+      R(ctx, x - 3, y - 19, 6, 3, c);
+      R(ctx, x - 5, y - 18, 2, 2, c);
+      R(ctx, x + 3, y - 18, 2, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      return;
+    case 'fog-beanie':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      return;
+    case 'braid-captain-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      return;
+    case 'anchor-beret':
+      R(ctx, x - 5, y - 19, 9, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x + 2, y - 18, 2, 1, a);
+      return;
+    case 'watch-sailor-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      return;
+    case 'earflap-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 2, 1, c);
+      R(ctx, x - 4, y - 16, 2, 2, c);
+      R(ctx, x + 2, y - 16, 2, 2, c);
+      return;
+    case 'lure-bucket-hat':
+      R(ctx, x - 3, y - 19, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 18, 2, 1, a);
+      return;
+    case 'harpooner-pillbox':
+      R(ctx, x - 5, y - 19, 10, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      return;
+    case 'shipowner-bowler':
+      R(ctx, x - 3, y - 20, 6, 3, c);
+      R(ctx, x - 3, y - 18, 6, 1, a);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
+    case 'salt-fisher-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 3, y - 18, 2, 1, a);
+      R(ctx, x + 1, y - 17, 1, 1, a);
+      return;
+    default:
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+  }
+}
 
 /** 사람 — (x, y)는 발 아래 가운데다. 모자가 없으면 머리카락을 그린다 */
 export function drawPerson(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
   R(ctx, x - 3, y - 16, 6, 6, '#ffcc99');
   const hat = hatById(look.hat);
   if (hat) {
-    // 단순한 모자 — 머리 위 덮개와 한쪽 챙, 한 가지 색
-    R(ctx, x - 4, y - 19, 8, 3, hat.color);
-    R(ctx, x + 3, y - 16, 3, 1, hat.color);
+    if (isAchievementHat(hat)) {
+      drawAchievementHat(ctx, x, y, hat);
+    } else {
+      // 단순한 모자 — 머리 위 덮개와 한쪽 챙, 한 가지 색
+      R(ctx, x - 4, y - 19, 8, 3, hat.color);
+      R(ctx, x + 3, y - 16, 3, 1, hat.color);
+    }
   } else {
     R(ctx, x - 4, y - 18, 8, 3, '#8d6e63');
     R(ctx, x - 2, y - 19, 4, 2, '#8d6e63');

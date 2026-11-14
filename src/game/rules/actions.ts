@@ -33,8 +33,11 @@ import { artifactLevelOf, extraCookChance, namedRewardOf } from './artifactLevel
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canBuyHat, canChangeClothes, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
+import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
+import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
+import type { AchievementCounterKey } from '../content/achievements.js';
+import { counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -81,6 +84,8 @@ export type GameAction =
   | { type: 'levelUpArtifact'; artifact: string } // 유물 레벨업 — 그 유물의 교환 재료를 레벨별 수만큼 쓰고 레벨을 하나 올린다
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
+  | { type: 'claimAchievement'; id: string }
+  | { type: 'claimAllAchievements' }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버와 공유하는 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -93,6 +98,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
+  claimAchievement: true, claimAllAchievements: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -275,7 +281,25 @@ function diffWrites(prev: GameState, next: GameState): StateWrites {
 
 export function applyAction(state: GameState, action: GameAction, deps: ActionDeps): ApplyOutcome {
   const out = reduce(state, action, deps);
-  return out.ok ? { ...out, writes: diffWrites(state, out.state) } : out;
+  if (!out.ok) return out;
+  const inc = counterIncrementsForEvents(out.events);
+  let nextState = out.state;
+  const incEntries = Object.entries(inc) as [AchievementCounterKey, number][];
+  if (incEntries.length > 0) {
+    const counters = { ...nextState.achievementCounters };
+    for (const [k, v] of incEntries) counters[k] = (counters[k] ?? 0) + v;
+    nextState = { ...nextState, achievementCounters: counters };
+  }
+  const evaluated = evaluateAchievements(nextState);
+  let events = out.events;
+  if (evaluated.newlyClaimable.length > 0) {
+    nextState = { ...nextState, achievements: evaluated.achievements };
+    events = [
+      ...out.events,
+      ...evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } })),
+    ];
+  }
+  return { ok: true, state: nextState, result: out.result, events, writes: diffWrites(state, nextState) };
 }
 
 type ReduceOutcome =
@@ -767,12 +791,64 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const target = quest.targetFish!;
       const prev = state.dex[target]?.normal;
       const rec = nextDexRec(prev, null, deps.today);
+      const clearedNamed = state.clearedNamed.includes(action.questId)
+        ? state.clearedNamed
+        : [...state.clearedNamed, action.questId];
       return {
         ok: true,
         state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } },
-          namedPity: clearDuelWound(state.namedPity, action.questId) },
+          namedPity: clearDuelWound(state.namedPity, action.questId),
+          clearedNamed },
         result: { type: 'none' },
         events: [{ type: 'resolveChallenge', payload }],
+      };
+    }
+    case 'claimAchievement': {
+      const check = canClaimAchievement(state, action.id, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const def = achievementById(action.id)!;
+      const achievements = { ...state.achievements, [def.id]: 'claimed' as const };
+      if (def.reward.kind === 'gold') {
+        return {
+          ok: true,
+          state: { ...state, gold: state.gold + def.reward.gold, achievements },
+          result: { type: 'none' },
+          events: [{ type: 'claimAchievement', payload: { id: def.id, gold: def.reward.gold } }],
+        };
+      }
+      const hatId = def.reward.hatId;
+      const hats = state.hats.includes(hatId) ? state.hats : [...state.hats, hatId];
+      return {
+        ok: true,
+        state: { ...state, hats, achievements },
+        result: { type: 'none' },
+        events: [{ type: 'claimAchievement', payload: { id: def.id, hat: hatId } }],
+      };
+    }
+    case 'claimAllAchievements': {
+      const check = canClaimAllAchievements(state, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const ids: string[] = [];
+      let gold = 0;
+      const rewardHats: string[] = [];
+      const nextHats = [...state.hats];
+      const nextAchievements = { ...state.achievements };
+      for (const a of ACHIEVEMENTS) {
+        if (nextAchievements[a.id] !== 'claimable') continue;
+        ids.push(a.id);
+        nextAchievements[a.id] = 'claimed';
+        if (a.reward.kind === 'gold') {
+          gold += a.reward.gold;
+        } else if (!nextHats.includes(a.reward.hatId)) {
+          nextHats.push(a.reward.hatId);
+          rewardHats.push(a.reward.hatId);
+        }
+      }
+      return {
+        ok: true,
+        state: { ...state, gold: state.gold + gold, hats: nextHats, achievements: nextAchievements },
+        result: { type: 'none' },
+        events: [{ type: 'claimAllAchievements', payload: { ids, gold, hats: rewardHats } }],
       };
     }
     case 'exhibit': {
