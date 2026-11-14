@@ -52,11 +52,11 @@ vi.mock('../../../platform/observability', () => ({ reportIssue: () => {} }));
 import { useGame } from './useGame';
 import { clearFailureNotice, currentFailureNotice } from './failureNotice';
 
-function setup(setToast: (m: string, tone?: 'warn') => void = () => {}) {
+function setup(setToast: (m: string, tone?: 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return renderHook(() => useGame({ setToast }), { wrapper });
+  return renderHook(() => useGame({ setToast }), { wrapper, reactStrictMode });
 }
 
 afterEach(() => {
@@ -284,6 +284,7 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(gw.loads).toBe(4);
     expect(hook.result.current.blocker).toBe('unsaved');
     expect(gw.actions).not.toContain('boot');
+    expect(hook.result.current.sync).toBe('error');
   });
 
   it('계정 교체의 세이브 읽기가 계속 429면 저장 실패 안내 창을 띄운다', async () => {
@@ -372,5 +373,15 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(gw.loads).toBe(3);
     await tick(10_000);
     expect(gw.loads).toBe(3);
+  });
+
+  it('중단된 부팅은 로딩을 풀지 않는다. 개발 빌드처럼 effect가 두 번 돌아도 boot 응답 전에는 불러오는 중이다', async () => {
+    const hook = setup(() => {}, true);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { await Promise.resolve(); });
+    expect(hook.result.current.loading).toBe(true);
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.blocker).toBeNull();
   });
 });

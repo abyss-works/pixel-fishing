@@ -185,7 +185,7 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
       adoptProfile(profile);
       setSync('on');
     })().catch(e => { if (!signal.aborted) fail(e); }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
-      .finally(() => setLoading(false));
+      .finally(() => { if (!signal.aborted) setLoading(false); });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
