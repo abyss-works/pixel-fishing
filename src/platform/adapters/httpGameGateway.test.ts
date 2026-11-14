@@ -24,6 +24,21 @@ describe('HttpGameGateway의 import 거부', () => {
   });
 });
 
+describe('HttpGameGateway의 요청 한도 응답', () => {
+  it('본문이 JSON이 아닌 429도 rate-limited 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response('Too Many Requests', { status: 429, headers: { 'retry-after': '1' } }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
+  it('JSON이 아닌 502는 server 실패로 남는다', async () => {
+    vi.stubGlobal('fetch', async () => new Response('Bad Gateway', { status: 502 }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect((err as AppError).kind).toBe('server');
+  });
+});
+
 describe('HttpGameGateway의 프로필 읽기', () => {
   it('닉네임과 개발 도구 판정을 서버 응답 그대로 돌려준다', async () => {
     me.value = { nickname: '나', devTools: true };

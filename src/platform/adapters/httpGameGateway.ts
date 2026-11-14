@@ -88,6 +88,11 @@ export class HttpGameGateway implements GameGateway {
     if (!isCloud) throw new AppError('network', 'cloud not configured');
     const res = await this.post(action);
 
+    // 429 = 매크로 페이싱 게이트 또는 인그레스의 요청 한도 — 액션은 적용되지 않았다. 인그레스의 429 본문은 JSON이 아니므로 JSON 검사보다 먼저 가른다. 정책 표가 문구를 정한다
+    if (res.status === 429) {
+      throw new AppError('rate-limited', 'request rate limited', { action: action.type });
+    }
+
     if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
       // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
       throw new AppError('server', 'non-json response', { status: res.status });
@@ -135,10 +140,6 @@ export class HttpGameGateway implements GameGateway {
         throw new AppError(body.error, `guest rejected (${body.error})`, { action: action.type });
       }
       throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
-    }
-    // 429 = 매크로 페이싱 게이트 — 액션은 적용되지 않았다. 정책 표가 문구를 정한다
-    if (res.status === 429) {
-      throw new AppError('rate-limited', 'action pacing rejected', { action: action.type });
     }
     // 423 = 다른 창이 활성 창이 됐다 — 액션은 적용되지 않았다. 정책 표가 이 창을 막는다
     if (res.status === 423) throw new AppError('replaced', 'another window took over the session', { action: action.type });
