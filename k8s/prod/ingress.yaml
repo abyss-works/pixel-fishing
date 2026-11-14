@@ -3,27 +3,102 @@ kind: Ingress
 metadata:
   name: pixel-fishing
   annotations:
-    # import 액션이 게임 상태 전체를 싣는다. 서버 본문 한도(5mb)와 맞춘다.
+    # 정적 파일과 화면 경로. import 액션이 게임 상태 전체를 싣는다. 서버 본문 한도(5mb)와 맞춘다. 요청 한도는 Ingress 단위라 경로별로 나눈다.
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
 spec:
   ingressClassName: nginx
   rules:
     - host: pixel-fishing.abyssworks.dev
       http:
         paths:
-          # 관리자 대시보드는 별도 이미지로 배포한다. 나머지 경로는 게임 서버가 받는다.
-          - path: /admin
-            pathType: Prefix
-            backend:
-              service:
-                name: pixel-fishing-admin
-                port:
-                  number: 80
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-fishing-api
+  annotations:
+    # 게임 서버 API(관리자 API 포함). 본문 한도와 요청 한도는 정적 경로와 같은 이유로 둔다.
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-fishing-live
+  annotations:
+    # 실시간 연결(WebSocket 업그레이드). 연결 시도 빈도를 낮게 묶는다.
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rps: "2"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "10"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /api/live
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-fishing-admin
+  annotations:
+    # 관리자 대시보드는 별도 이미지로 배포한다.
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing-admin
                 port:
                   number: 80
   tls:
