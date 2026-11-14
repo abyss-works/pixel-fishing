@@ -32,7 +32,7 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
   const { input, dialogs } = useDialogs();
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
@@ -79,7 +79,7 @@ ${min}자 이상이어야 해요.`,
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
-  // 개발 도구 패널(?admin + 로컬·소유자만). 둘 다 게임 화면 바깥의 오버레이이고,
+  // 개발 도구 패널(?admin + 로컬 또는 서버 판정이 참일 때만). 둘 다 게임 화면 바깥의 오버레이이고,
   // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
   return (
     <>
@@ -92,7 +92,7 @@ ${min}자 이상이어야 해요.`,
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools} />
       </DevEnvContext.Provider>
       {dialogs}
     </>

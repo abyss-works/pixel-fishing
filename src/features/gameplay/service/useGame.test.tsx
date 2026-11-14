@@ -16,6 +16,7 @@ const gw = vi.hoisted(() => ({
   importError: null as unknown,
   loadError: null as unknown,
   loadDex: {} as Record<string, unknown>,
+  devTools: false,
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -32,7 +33,7 @@ vi.mock('../../../platform/api', async () => {
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
         load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
-        getNickname: async () => 'nick',
+        getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
           if (action.type === 'import' && gw.importError) throw gw.importError;
@@ -57,7 +58,7 @@ function setup(setToast: (m: string, tone?: 'warn') => void = () => {}) {
 
 afterEach(() => {
   cleanup(); clearFailureNotice(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadDex = {};
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadDex = {}; gw.devTools = false;
 });
 
 describe('부트스트랩', () => {
@@ -95,6 +96,31 @@ describe('부트스트랩', () => {
     await act(async () => { gw.bootResolve!(); await adopted; });
     expect(hook.result.current.loading).toBe(false);
     expect(gw.actions).toEqual(['boot', 'boot']);
+  });
+});
+
+describe('개발 도구 판정', () => {
+  it('접속이 끝나면 서버가 내려 준 판정을 노출한다', async () => {
+    gw.devTools = true;
+    const hook = setup();
+    expect(hook.result.current.devTools).toBe(false);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.devTools).toBe(true);
+  });
+
+  it('계정을 교체하면 새 계정의 판정으로 바뀐다', async () => {
+    gw.devTools = true;
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    gw.bootResolve = null;
+    gw.devTools = false;
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(hook.result.current.devTools).toBe(false);
   });
 });
 

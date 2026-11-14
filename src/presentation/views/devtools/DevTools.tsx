@@ -53,19 +53,20 @@ const viewport = (): Size2 => ({ width: window.innerWidth, height: window.innerH
 
 // 개발 도구 — 게임 화면 위 플로팅 패널. 화면 구석 버튼이나 F9로 연다. 게임은 멈추지 않는다.
 // 머리줄을 끌어 옮기고, 옮긴 자리는 브라우저 설정으로 남는다.
-// 노출은 ?admin + (로컬 또는 소유자 계정)일 때만이고, 서버 명령의 허용 판정은 서버가 따로 한다
+// 노출은 ?admin + (로컬 또는 서버가 내려 준 사용 판정)일 때만이고, 서버 명령의 허용 판정은 서버가 따로 한다
 // (운영 서버는 개발 명령을 모두 거부한다). 명령·프리셋은 기능 계층의 목록을 그대로 그린다.
 // 운영 빌드(앱 최상위가 공급한 개발 환경이 restricted)에서는 조작을 모두 흐리게 막고
 // 정보 조회용 대시보드 이동만 남긴다.
 const RESTRICTED_NOTE = '운영 서버다 — 여기서는 대시보드 조회만 열 수 있다. 개발 도구는 스테이징·로컬에서 쓴다.';
 
-export default function DevTools({ game, dispatch, setToast, account }: {
+export default function DevTools({ game, dispatch, setToast, granted }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  account: string | null;
+  /** 서버가 내려 준 개발 도구 사용 판정 */
+  granted: boolean;
 }) {
-  const visible = canSeeDevTools(account);
+  const visible = canSeeDevTools(granted);
   const { restricted } = useDevEnv();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<Section>(restricted ? 'ops' : 'presets');

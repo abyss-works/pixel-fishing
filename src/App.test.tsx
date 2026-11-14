@@ -785,7 +785,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
-  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(소유자 전용)에 있다', () => {
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(관리자 명부 계정 전용)에 있다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     clickTab('설정');

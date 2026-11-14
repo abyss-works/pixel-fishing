@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, when } from '../../../platform/api';
-import type { GameGateway, DispatchResult, MaybePromise } from '../../../platform/api';
+import type { GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import { newState, REJECT_TEXT } from '../../../game/rules/logic';
@@ -62,6 +62,9 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   }
   const [game, setGame] = useState<GameState>(init.game);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
+  const [devTools, setDevTools] = useState(false);
+  const adoptProfile = (profile: GameProfile) => { setNickname(profile.nickname); setDevTools(profile.devTools); };
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
@@ -129,7 +132,7 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
-      void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
+      void Promise.resolve(gameGatewayRef.current.getProfile()).then(adoptProfile);
       // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
       void boot();
       return;
@@ -137,9 +140,9 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const [cloud, nick] = await Promise.all([
+      const [cloud, profile] = await Promise.all([
         gameGatewayRef.current.load(),
-        gameGatewayRef.current.getNickname(),
+        gameGatewayRef.current.getProfile(),
       ]);
       if (cloud) {
         setGame(cloud);
@@ -156,7 +159,7 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
       await boot();
-      setNickname(nick);
+      adoptProfile(profile);
       setSync('on');
     })().catch(fail) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
       .finally(() => setLoading(false));
@@ -171,14 +174,14 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   };
 
   return {
-    game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
       if (r.status === 'ok') {
-        setNickname(await gameGatewayRef.current.getNickname());
+        setNickname((await gameGatewayRef.current.getProfile()).nickname);
         return null;
       }
       return r.error;
@@ -190,9 +193,9 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
     adoptAccount: async (): Promise<void> => {
       setLoading(true);
       try {
-        const [cloud, nick] = await Promise.all([gameGatewayRef.current.load(), gameGatewayRef.current.getNickname()]);
+        const [cloud, profile] = await Promise.all([gameGatewayRef.current.load(), gameGatewayRef.current.getProfile()]);
         setGame(cloud ?? newState());
-        setNickname(nick);
+        adoptProfile(profile);
         await boot();
       } finally {
         setLoading(false);
