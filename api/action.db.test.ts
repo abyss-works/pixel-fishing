@@ -1,7 +1,7 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
 import { FISH } from '../src/game/content/fish.js';
@@ -16,7 +16,6 @@ import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
 const TODAY_KST = '2030-03-04';
-const OWNER = 'inley@naver.com';
 let env: ActionEnv;
 let nextUid = 1;
 
@@ -358,7 +357,7 @@ describe('이사 코드 가져오기', () => {
 
   it('소유자는 상태를 통째로 바꾸고 전체 상태를 돌려받는다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    expect(await run({ state: { bag: [fish('crucian')] }, email: OWNER }, { type: 'import', save })).toMatchSnapshot();
+    expect(await run({ state: { bag: [fish('crucian')] }, admin: true }, { type: 'import', save })).toMatchSnapshot();
   });
 });
 
@@ -934,53 +933,49 @@ describe('네임드가 둘인 구역의 수주', () => {
   });
 });
 
+/** 개발 도구 판정의 호출자 종류 — 명부 계정, 명부에 없는 계정, 게스트, 명부에 올라 있어도 게스트인 계정 */
+type Caller = 'admin' | 'member' | 'guest' | 'listed-guest';
+let callerSeq = 0;
+const seedCaller = (caller: Caller, state: object) => seed({
+  state, email: caller === 'guest' || caller === 'listed-guest' ? null : `caller-${caller}-${callerSeq++}@example.test`,
+  admin: caller === 'admin' || caller === 'listed-guest',
+});
+const CALLERS: Caller[] = ['admin', 'member', 'guest', 'listed-guest'];
+
 describe('이사 코드 가져오기 접근 판정', () => {
   const save = { ...newState(), gold: 4321 };
   const ORIGINS = [undefined, LOCAL_ORIGIN, 'http://127.0.0.1', 'https://evil.example'];
-  let seq = 0;
-  // 소유자 이메일은 서버 설정이다. 호출마다 새 계정이 필요하므로 소유자 이메일도 호출마다 바꾼다
-  const importAs = async (role: 'owner' | 'guest', origin?: string) => {
-    const email = `gate-${role}-${seq++}@example.com`;
-    process.env.IMPORT_OWNER_EMAIL = role === 'owner' ? email : 'gate-owner@example.com';
-    const uid = await seed({ state: {}, email });
-    return callAction(userToken(uid), { type: 'import', save }, { origin });
-  };
+  const importAs = async (caller: Caller, origin?: string) =>
+    callAction(userToken(await seedCaller(caller, {})), { type: 'import', save }, { origin });
   const verdict = (res: { status: number; body: unknown }) => [res.status, (res.body as { error?: string }).error ?? 'ok'];
-  afterEach(() => { delete process.env.IMPORT_OWNER_EMAIL; });
 
-  it('운영은 소유자도 비소유자도 Origin과 무관하게 거부한다', async () => {
+  it('운영은 명부 계정도 Origin과 무관하게 거부한다', async () => {
     process.env.DEPLOY_ENV = 'production';
-    for (const role of ['owner', 'guest'] as const) {
-      for (const origin of ORIGINS) expect(verdict(await importAs(role, origin))).toEqual([403, 'import-disabled']);
+    for (const caller of CALLERS) {
+      for (const origin of ORIGINS) expect(verdict(await importAs(caller, origin))).toEqual([403, 'import-disabled']);
     }
   });
 
-  it('스테이징은 소유자만 허용하고 Origin을 속여도 비소유자는 거부한다', async () => {
+  it('스테이징은 명부 계정만 허용하고 Origin을 속여도 나머지는 거부한다', async () => {
     process.env.DEPLOY_ENV = 'preview';
     for (const origin of ORIGINS) {
-      expect(verdict(await importAs('owner', origin))).toEqual([200, 'ok']);
-      expect(verdict(await importAs('guest', origin))).toEqual([403, 'import-owner-only']);
+      expect(verdict(await importAs('admin', origin))).toEqual([200, 'ok']);
+      for (const caller of ['member', 'guest', 'listed-guest'] as const) {
+        expect(verdict(await importAs(caller, origin))).toEqual([403, 'import-owner-only']);
+      }
     }
   });
 
   it('로컬 명시 값은 Origin과 무관하게 허용한다', async () => {
     process.env.DEPLOY_ENV = 'local';
-    for (const origin of ORIGINS) expect(verdict(await importAs('guest', origin))).toEqual([200, 'ok']);
-  });
-
-  it('소유자 이메일 설정이 비어 있어도 게스트는 소유자가 아니다', async () => {
-    process.env.DEPLOY_ENV = 'preview';
-    const uid = await seed({ state: {}, email: null });
-    process.env.IMPORT_OWNER_EMAIL = '';
-    const res = await callAction(userToken(uid), { type: 'import', save });
-    expect(verdict(res)).toEqual([403, 'import-owner-only']);
+    for (const origin of ORIGINS) expect(verdict(await importAs('member', origin))).toEqual([200, 'ok']);
   });
 
   it('환경 값이 없거나 모르는 값이면 거부한다', async () => {
     for (const env of [undefined, 'development']) {
       if (env === undefined) delete process.env.DEPLOY_ENV; else process.env.DEPLOY_ENV = env;
-      for (const role of ['owner', 'guest'] as const) {
-        expect(verdict(await importAs(role, LOCAL_ORIGIN))).toEqual([403, 'import-disabled']);
+      for (const caller of CALLERS) {
+        expect(verdict(await importAs(caller, LOCAL_ORIGIN))).toEqual([403, 'import-disabled']);
       }
     }
   });
@@ -988,21 +983,13 @@ describe('이사 코드 가져오기 접근 판정', () => {
 
 describe('개발 명령 허용 판정', () => {
   const debugVerdict = (res: { status: number; body: unknown }) => [res.status, (res.body as { error?: string }).error ?? 'ok'];
-  let seq = 0;
-  // 소유자 이메일은 서버 설정이다. 호출마다 새 계정이 필요하므로 소유자 이메일도 호출마다 바꾼다
-  const seedRole = async (role: 'owner' | 'guest', state: object) => {
-    const email = `debug-${role}-${seq++}@example.com`;
-    process.env.IMPORT_OWNER_EMAIL = role === 'owner' ? email : 'debug-owner@example.com';
-    return seed({ state, email });
-  };
-  afterEach(() => { delete process.env.IMPORT_OWNER_EMAIL; });
-  const debugAs = async (role: 'owner' | 'guest', origin?: string) => {
-    const uid = await seedRole(role, {});
+  const debugAs = async (caller: Caller, origin?: string) => {
+    const uid = await seedCaller(caller, {});
     return callAction(userToken(uid), { type: 'debug', command: 'stats.set', args: { gold: 1000 } }, { origin });
   };
   // 강제 조우가 받아들여지면 진행 중인 네임드의 도전권이 발급된다
-  const ticketsAfterForcedCatch = async (role: 'owner' | 'guest', origin?: string) => {
-    const uid = await seedRole(role, { boat: 1 });
+  const ticketsAfterForcedCatch = async (caller: Caller, origin?: string) => {
+    const uid = await seedCaller(caller, { boat: 1 });
     const named = offeredQuestsFor('pacific', 'named', uid, TODAY_KST)[0];
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
@@ -1013,20 +1000,22 @@ describe('개발 명령 허용 판정', () => {
   };
   const ORIGINS = [undefined, LOCAL_ORIGIN, 'http://127.0.0.1', 'https://evil.example'];
 
-  it('스테이징에서 Origin을 로컬로 속인 비소유자의 개발 명령은 거부한다', async () => {
+  it('스테이징에서 명부에 없는 계정과 게스트의 개발 명령은 Origin과 무관하게 거부한다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('guest', origin))).toEqual([422, 'debug-forbidden']);
+    for (const caller of ['member', 'guest', 'listed-guest'] as const) {
+      for (const origin of ORIGINS) expect(debugVerdict(await debugAs(caller, origin))).toEqual([422, 'debug-forbidden']);
+    }
   });
 
-  it('스테이징에서 소유자는 Origin과 무관하게 개발 명령을 쓴다', async () => {
+  it('스테이징에서 명부 계정은 Origin과 무관하게 개발 명령을 쓴다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('owner', origin))).toEqual([200, 'ok']);
+    for (const origin of ORIGINS) expect(debugVerdict(await debugAs('admin', origin))).toEqual([200, 'ok']);
   });
 
-  it('운영은 소유자도 Origin과 무관하게 개발 명령을 거부한다', async () => {
+  it('운영은 명부 계정도 Origin과 무관하게 개발 명령을 거부한다', async () => {
     process.env.DEPLOY_ENV = 'production';
-    for (const role of ['owner', 'guest'] as const) {
-      for (const origin of ORIGINS) expect(debugVerdict(await debugAs(role, origin))).toEqual([422, 'debug-forbidden']);
+    for (const caller of CALLERS) {
+      for (const origin of ORIGINS) expect(debugVerdict(await debugAs(caller, origin))).toEqual([422, 'debug-forbidden']);
     }
   });
 
@@ -1038,16 +1027,16 @@ describe('개발 명령 허용 판정', () => {
   it('환경 값이 없거나 모르는 값이면 로컬 Origin이어도 거부한다', async () => {
     for (const value of [undefined, 'development']) {
       if (value === undefined) delete process.env.DEPLOY_ENV; else process.env.DEPLOY_ENV = value;
-      for (const role of ['owner', 'guest'] as const) {
-        expect(debugVerdict(await debugAs(role, LOCAL_ORIGIN))).toEqual([422, 'debug-forbidden']);
+      for (const caller of CALLERS) {
+        expect(debugVerdict(await debugAs(caller, LOCAL_ORIGIN))).toEqual([422, 'debug-forbidden']);
       }
     }
   });
 
-  it('스테이징에서 Origin을 속인 비소유자의 강제 조우는 통상 캐치로 처리한다', async () => {
+  it('스테이징에서 명부 밖 호출자의 강제 조우는 통상 캐치로 처리한다', async () => {
     process.env.DEPLOY_ENV = 'preview';
-    for (const origin of ORIGINS) expect(await ticketsAfterForcedCatch('guest', origin)).toBe(0);
-    expect(await ticketsAfterForcedCatch('owner', undefined)).toBe(1);
+    for (const origin of ORIGINS) expect(await ticketsAfterForcedCatch('member', origin)).toBe(0);
+    expect(await ticketsAfterForcedCatch('admin', undefined)).toBe(1);
   });
 });
 

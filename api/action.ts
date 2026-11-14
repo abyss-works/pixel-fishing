@@ -76,49 +76,10 @@ function scalarState(row: StateRow): GameState {
 }
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
+import { debugTriggerAllowed, importVerdict, isListedAdmin } from './devAccess.js';
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
-
-// 소유자 계정 판정 — 이사 코드 불러오기와 소유자 전용 개발 명령이 쓴다.
-// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
-// 소유자 메일의 출처는 서버 env가 정본이고, 없거나 비어 있으면 폴백 상수를 쓴다.
-// 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
-// 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
-// 늘어나는 대가라 하지 않는다.
-export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
-export function importOwnerEmail(): string {
-  return process.env.IMPORT_OWNER_EMAIL || OWNER_EMAIL_FALLBACK;
-}
-/** 계정 이메일이 없거나 비어 있으면 소유자가 아니다 */
-export function isImportOwner(email: string | null | undefined, ownerEmail: string): boolean {
-  const mine = email?.toLowerCase();
-  return !!mine && mine === ownerEmail.toLowerCase();
-}
-
-// 개발 명령 계열(이사 코드 import, debug 명령, 강제 조우)의 허용 판정 — 요청 헤더를 읽지 않고
-// 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다. 정책 표(이 함수가 유일한 지점): production은 소유자도 거부,
-// preview는 소유자만, local은 모두 허용, 설정이 없거나 모르는 값은 거부한다.
-function devGateVerdict({ deployEnv, owner }: {
-  deployEnv: string | undefined; owner: boolean;
-}): 'ok' | 'owner-only' | 'disabled' {
-  if (deployEnv === 'local') return 'ok';
-  if (deployEnv === 'preview') return owner ? 'ok' : 'owner-only';
-  return 'disabled';
-}
-
-/** 이사 코드 import 허용 판정. 거부 사유는 응답 코드로 돌려준다 */
-export function importVerdict(args: {
-  deployEnv: string | undefined; owner: boolean;
-}): 'ok' | 'import-owner-only' | 'import-disabled' {
-  const verdict = devGateVerdict(args);
-  return verdict === 'ok' ? 'ok' : verdict === 'owner-only' ? 'import-owner-only' : 'import-disabled';
-}
-
-/** debug 명령과 강제 조우의 허용 판정 */
-export function debugTriggerAllowed(args: { deployEnv: string | undefined; owner: boolean }): boolean {
-  return devGateVerdict(args) === 'ok';
-}
 
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
 export type DebugTablePlan =
@@ -311,17 +272,19 @@ async function route(req: Req, res: Res): Promise<void> {
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
-  const isOwner = async (): Promise<boolean> => isImportOwner(user.email, importOwnerEmail());
+  // 관리자 명부는 개발 도구 계열 액션에서만 조회한다.
+  const isAdminCaller = (): Promise<boolean> =>
+    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV));
   const debugAllowed = async (): Promise<boolean> =>
-    debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
 
   // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있다.
   if (action.type === 'import') {
-    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
     if (verdict !== 'ok') throw new ApiError(403, verdict);
   }
 
-  // 개발 도구 명령 — 스테이징은 소유자만, 로컬은 모두, 그 밖은 거부한다.
+  // 개발 도구 명령 — 스테이징은 관리자 명부의 계정만, 로컬은 모두, 그 밖은 거부한다.
   // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
   if (action.type === 'debug' && !await debugAllowed()) {
     throw new ApiError(422, 'debug-forbidden');

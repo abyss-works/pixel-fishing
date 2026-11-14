@@ -1,5 +1,5 @@
 // 본인 읽기 함수 — 세션 사용자 자신의 저장 상태·수배·프로필만 돌려준다.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fish, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
@@ -8,6 +8,9 @@ const ME = testUid(1);
 const OTHER = testUid(2);
 const LEGACY = testUid(3);
 const BAG = [fish('crucian', { size: 31 })];
+const ADMIN = testUid(4);
+const MEMBER = testUid(5);
+const LISTED_GUEST = testUid(6);
 
 beforeAll(async () => {
   env = await startActionEnv();
@@ -15,6 +18,9 @@ beforeAll(async () => {
   await seedUser(env.client, { uid: OTHER, nickname: '남', state: { gold: 999 } });
   await seedUser(env.client, { uid: LEGACY, nickname: null });
   await env.client.query('insert into public.saves (user_id, data) values ($1, $2)', [LEGACY, { v: 4, gold: 77 }]);
+  await seedUser(env.client, { uid: ADMIN, nickname: '운영', email: 'admin@example.test', admin: true });
+  await seedUser(env.client, { uid: MEMBER, nickname: '회원', email: 'member@example.test' });
+  await seedUser(env.client, { uid: LISTED_GUEST, nickname: '손님', admin: true });
   await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values
     ($1, 'general', 'q-old', now() - interval '3 days'), ($1, 'general', 'q-today', now())`, [ME]);
   await env.client.query(`insert into public.bounty_tickets (user_id, quest_id) values ($1, 'q-ticket')`, [ME]);
@@ -22,6 +28,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await env?.stop();
 });
+afterEach(() => { delete process.env.DEPLOY_ENV; });
 
 async function callMe(q: string, token: string | null): Promise<{ status: number; body: unknown }> {
   const { default: handler } = await import('./me.js');
@@ -58,8 +65,40 @@ describe('본인 읽기', () => {
   });
 
   it('profile: 닉네임을 준다', async () => {
-    expect((await callMe('profile', userToken(ME))).body).toEqual({ nickname: '나' });
-    expect((await callMe('profile', userToken(LEGACY))).body).toEqual({ nickname: null });
+    expect(await callMe('profile', userToken(ME))).toMatchObject({ body: { nickname: '나' } });
+    expect(await callMe('profile', userToken(LEGACY))).toMatchObject({ body: { nickname: null } });
+  });
+
+  describe('profile: 개발 도구 판정(devTools)', () => {
+    const devTools = async (uid: string) => ((await callMe('profile', userToken(uid))).body as { devTools: boolean }).devTools;
+
+    it('스테이징에서는 관리자 명부에 있는 계정만 참이다', async () => {
+      process.env.DEPLOY_ENV = 'preview';
+      expect(await devTools(ADMIN)).toBe(true);
+      expect(await devTools(MEMBER)).toBe(false);
+    });
+
+    it('게스트는 명부에 올라 있어도 거짓이다', async () => {
+      process.env.DEPLOY_ENV = 'preview';
+      expect(await devTools(LISTED_GUEST)).toBe(false);
+      expect(await devTools(LEGACY)).toBe(false);
+    });
+
+    it('운영에서는 명부에 있어도 거짓이다', async () => {
+      process.env.DEPLOY_ENV = 'production';
+      expect(await devTools(ADMIN)).toBe(false);
+    });
+
+    it('로컬 명시 값에서는 모두 참이다', async () => {
+      process.env.DEPLOY_ENV = 'local';
+      expect(await devTools(MEMBER)).toBe(true);
+    });
+
+    it('환경 값이 없거나 모르는 값이면 거짓이다', async () => {
+      expect(await devTools(ADMIN)).toBe(false);
+      process.env.DEPLOY_ENV = 'development';
+      expect(await devTools(ADMIN)).toBe(false);
+    });
   });
 
   it('모르는 q는 400이다', async () => {

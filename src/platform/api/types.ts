@@ -13,11 +13,14 @@ export type DispatchResult =
   | { status: 'ok'; state: GameState; result: ActionResult }
   | { status: 'rejected'; error: RejectReason };
 
+/** 표시용 프로필 읽기 결과. 닉네임은 정하지 않았으면 null, devTools는 서버가 내려 준 개발 도구 사용 판정이다 */
+export interface GameProfile { nickname: string | null; devTools: boolean }
+
 /** 게임 상태의 읽기·액션 처리 경계. HTTP와 로컬 구현은 adapters/에 둔다. */
 export interface GameGateway {
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
-  getNickname(): MaybePromise<string | null>;
+  getProfile(): MaybePromise<GameProfile>;
   warmup?(): void;
 }
 

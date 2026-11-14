@@ -12,9 +12,8 @@ export const legacyAdminTarget = (search: string, hash: string): string | null =
 export const isLocalOrigin = (): boolean =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(window.location.origin);
 
-/** 서버 권한이 아닌 관리자 UI 노출을 위한 운영자 계정 표시값 */
-export const OWNER_EMAIL = 'inley@naver.com';
-
-/** 개발 도구 패널 노출 — ?admin + (로컬 오리진 또는 소유자 계정). 명령 허용은 서버가 따로 판정한다 */
-export const canSeeDevTools = (account: string | null): boolean =>
-  isAdminUrl() && (isLocalOrigin() || (account ?? '').toLowerCase() === OWNER_EMAIL);
+/** 개발 도구 패널 노출 — ?admin + (로컬 오리진 또는 서버가 내려 준 사용 판정). 판정이 없거나 거짓이면 닫힌다. 명령 허용은 서버가 따로 판정한다 */
+export const canSeeDevTools = (
+  granted: boolean | undefined,
+  where: { adminUrl: boolean; localOrigin: boolean } = { adminUrl: isAdminUrl(), localOrigin: isLocalOrigin() },
+): boolean => where.adminUrl && (where.localOrigin || granted === true);

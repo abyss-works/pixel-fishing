@@ -98,6 +98,8 @@ export interface SeedOptions {
   /** 고정 uid — 일일 의뢰 배정처럼 uid에 따라 결과가 갈리는 경로를 결정적으로 만든다 */
   uid?: string;
   email?: string | null;
+  /** 관리자 명부(admins)에 올린다 */
+  admin?: boolean;
   nickname?: string | null;
   /** 저장 상태. 없으면 saves_current 행을 만들지 않는다(첫 액션 시딩 경로) */
   state?: Partial<GameState>;
@@ -117,6 +119,7 @@ export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<
     [uid, opts.email ?? `${uid}@anonymous.invalid`, !opts.email]);
   await client.query(`insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')`,
     [uid, userToken(uid)]);
+  if (opts.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
   if (opts.nickname !== null) {
     await client.query('insert into public.profiles (user_id, nickname) values ($1, $2)',
       [uid, opts.nickname ?? `user-${uid.slice(-8)}`]);
