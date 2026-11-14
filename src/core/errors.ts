@@ -15,7 +15,7 @@ export type FailureKind =
   | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
   | 'guest-village-only' // 403 — 게스트가 마을 밖으로 나가려 함
   | 'account-only'  // 403 — 게스트에게 열리지 않은 기능
-  | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)
+  | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)나 인그레스의 요청 한도
   | 'server'        // 5xx
   | 'bug';          // 예상 못 한 예외
 
@@ -87,7 +87,8 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     message: '계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.',
   },
   'rate-limited': {
-    // 429 매크로 페이싱 — 액션은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
+    // 429(매크로 페이싱, 인그레스 요청 한도) — 요청은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.
+    // 부팅과 계정 교체의 세이브 읽기와 접속(boot)은 서비스 계층이 기다렸다 다시 시도하고, 끝내 실패하면 network로 바꿔 올린다.
     level: 'warning', slot: true,
     message: '너무 빠르게 연달아 시도하고 있어요. 잠시 후에 다시 해 주세요.',
   },

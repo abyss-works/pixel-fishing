@@ -7,6 +7,8 @@ import { isRateLimited, requestFailure } from './requestFailure';
 import { readMe } from './me';
 import { readFriends } from './friends';
 import { readRanking } from './ranking';
+import { friendAction } from './friends';
+import { guildAction } from './guild';
 
 const tooMany = () => new Response('Too Many Requests', { status: 429, headers: { 'retry-after': '1' } });
 
@@ -52,6 +54,36 @@ describe('읽기 어댑터의 텍스트 본문 429', () => {
   it('503은 network로 남는다', async () => {
     vi.stubGlobal('fetch', async () => new Response('x', { status: 503 }));
     const err = await readMe('state').catch(e => e);
+    expect((err as AppError).kind).toBe('network');
+  });
+});
+
+describe('쓰기 어댑터의 429', () => {
+  it('친구 액션: 코드 없는 텍스트 429는 rate-limited로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => tooMany());
+    const err = await friendAction({ op: 'accept', uid: 'u1' }).catch(e => e);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
+  it('친구 액션: 오류 코드를 실은 JSON 429는 거절 값으로 돌려준다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'rate-limited' }), { status: 429 }));
+    await expect(friendAction({ op: 'accept', uid: 'u1' })).resolves.toEqual({ ok: false, error: 'rate-limited' });
+  });
+
+  it('길드 액션: 코드 없는 텍스트 429는 rate-limited로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => tooMany());
+    const err = await guildAction({ op: 'join', code: 'ABCD2345' }).catch(e => e);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
+  it('길드 액션: 오류 코드를 실은 JSON 429는 거절 값으로 돌려준다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'rate-limited' }), { status: 429 }));
+    await expect(guildAction({ op: 'join', code: 'ABCD2345' })).resolves.toEqual({ ok: false, error: 'rate-limited' });
+  });
+
+  it('길드 액션: 503은 network로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response('x', { status: 503 }));
+    const err = await guildAction({ op: 'join', code: 'ABCD2345' }).catch(e => e);
     expect((err as AppError).kind).toBe('network');
   });
 });

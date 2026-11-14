@@ -17,6 +17,7 @@ import { guestHasNoProgress } from '../../../game/rules/guest';
 import { setSchoolDay } from './schoolDay';
 import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
+import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -121,12 +122,31 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
       return r;
     });
 
+  // 429 재시도의 대기를 끊는 신호 — 부팅과 계정 교체가 시작될 때마다 새로 만들어 앞선 대기를 버리고, 언마운트에서도 끊는다
+  const retryScopeRef = useRef<AbortController | null>(null);
+  const newRetryScope = (): AbortSignal => {
+    retryScopeRef.current?.abort();
+    retryScopeRef.current = new AbortController();
+    return retryScopeRef.current.signal;
+  };
+  useEffect(() => () => retryScopeRef.current?.abort(), []);
+
+  /** 서버 저장 상태 읽기 — 요청 속도 초과(429)면 기다렸다 다시 시도하고, 끝내 실패하면 network 실패로 던진다 */
+  const loadSave = (signal: AbortSignal) => retryOnRateLimit(() => gameGatewayRef.current.load(), signal);
+
   // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
   // 세션 시작과 계정 교체마다 보내고, 응답이 올 때까지 플레이를 열지 않는다.
-  // **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가 없고, fail()을 거치면
-  // 저장 실패 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
-  const boot = (): Promise<void> =>
-    Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).then(() => {}, () => { /* 무음 */ });
+  // 요청 속도 초과(429)는 기다렸다 다시 시도하고, 끝내 실패하면 던져 저장 실패 안내 창으로 알린다
+  // (접속하지 못한 창의 액션은 서버가 423으로 거부하기 때문이다). 그 밖의 실패는 조용히 삼킨다:
+  // 순단은 재시도 가치가 없고 fail()을 거치면 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  const boot = async (signal: AbortSignal): Promise<void> => {
+    try {
+      await retryOnRateLimit(async () => { await dispatch({ type: 'boot', buildId: BUILD_ID }); }, signal);
+    } catch (e) {
+      if (signal.aborted || !isRetryExhausted(e)) return;
+      throw e;
+    }
+  };
 
   // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
@@ -134,16 +154,18 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
     if (!api.auth.isConfigured) {
       void Promise.resolve(gameGatewayRef.current.getProfile()).then(adoptProfile);
       // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      void boot();
+      void boot(newRetryScope()).catch(fail);
       return;
     }
+    const signal = newRetryScope();
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
       const [cloud, profile] = await Promise.all([
-        gameGatewayRef.current.load(),
+        loadSave(signal),
         gameGatewayRef.current.getProfile(),
       ]);
+      if (signal.aborted) return;
       if (cloud) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔어요.');
@@ -158,10 +180,11 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
         }
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
-      await boot();
+      await boot(signal);
+      if (signal.aborted) return;
       adoptProfile(profile);
       setSync('on');
-    })().catch(fail) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+    })().catch(e => { if (!signal.aborted) fail(e); }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
       .finally(() => setLoading(false));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
@@ -191,14 +214,21 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
      * 끝날 때까지 불러오는 중이다. 상태 읽기 실패는 호출자에게 던진다.
      */
     adoptAccount: async (): Promise<void> => {
+      const signal = newRetryScope();
       setLoading(true);
       try {
-        const [cloud, profile] = await Promise.all([gameGatewayRef.current.load(), gameGatewayRef.current.getProfile()]);
+        const [cloud, profile] = await Promise.all([loadSave(signal), gameGatewayRef.current.getProfile()]);
+        if (signal.aborted) return;
         setGame(cloud ?? newState());
         adoptProfile(profile);
-        await boot();
+        await boot(signal);
+      } catch (e) {
+        // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
+        if (signal.aborted) return;
+        if (isRetryExhausted(e)) fail(e);
+        throw e;
       } finally {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     },
     /**

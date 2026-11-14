@@ -32,6 +32,14 @@ describe('HttpGameGateway의 요청 한도 응답', () => {
     expect((err as AppError).kind).toBe('rate-limited');
   });
 
+  it('앱 서버의 JSON 429(too-fast)도 rate-limited 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'too-fast' }), {
+      status: 429, headers: { 'content-type': 'application/json' },
+    }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
   it('JSON이 아닌 502는 server 실패로 남는다', async () => {
     vi.stubGlobal('fetch', async () => new Response('Bad Gateway', { status: 502 }));
     const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);

@@ -1,5 +1,5 @@
 // 본인 데이터 읽기 — 서버 읽기 함수(/api/me)가 세션 쿠키의 사용자 행만 돌려준다. 브라우저는 표를 직접 읽지 않는다.
-// 세션이 없으면 unauthorized, 그 밖의 실패는 network로 던진다(조회가 다시 시도한다).
+// 세션이 없으면 unauthorized, 429는 rate-limited, 그 밖의 실패는 network로 던진다(조회가 다시 시도한다).
 import { AppError } from '../../core/errors';
 import { requestFailure } from './requestFailure';
 

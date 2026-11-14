@@ -15,6 +15,8 @@ const gw = vi.hoisted(() => ({
   cloudEmpty: false,
   importError: null as unknown,
   loadError: null as unknown,
+  loadErrors: [] as unknown[],
+  bootErrors: [] as unknown[],
   loadDex: {} as Record<string, unknown>,
   devTools: false,
 }));
@@ -32,12 +34,13 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
         getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
           if (action.type === 'import' && gw.importError) throw gw.importError;
           if (action.type !== 'boot') return ok(action);
+          if (gw.bootErrors.length) return Promise.reject(gw.bootErrors.shift());
           return new Promise(resolve => { gw.bootResolve = () => resolve(ok(action)); });
         },
       }),
@@ -58,7 +61,7 @@ function setup(setToast: (m: string, tone?: 'warn') => void = () => {}) {
 
 afterEach(() => {
   cleanup(); clearFailureNotice(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadDex = {}; gw.devTools = false;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
 });
 
 describe('부트스트랩', () => {
@@ -125,8 +128,8 @@ describe('개발 도구 판정', () => {
 });
 
 describe('게스트 진행 판정과 읽기 실패', () => {
-  // 안내 창 없이 끝나는 실패 종류(제재, 요청 과다, 오류)도 판정이 끝나야 한다
-  it.each(['restricted', 'rate-limited', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
+  // 안내 창 없이 끝나는 실패 종류(제재, 오류)도 판정이 끝나야 한다
+  it.each(['restricted', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
     gw.loadError = new AppError(kind, 'read failed');
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
@@ -246,5 +249,128 @@ describe('실패 안내', () => {
     act(() => { fail(new AppError('server', 'x')); });
     expect(toasts).toEqual([]);
     expect(currentFailureNotice()).toBeNull();
+  });
+});
+
+describe('요청 속도 초과(429) 재시도', () => {
+  const limited = () => new AppError('rate-limited', 'limited', { status: 429 });
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('부팅 세이브 읽기가 429 한 번 뒤 성공하면 재시도로 정상 로드한다', async () => {
+    vi.useFakeTimers();
+    gw.loadErrors = [limited()]; gw.loadGold = 77;
+    const hook = setup();
+    await tick(0);
+    expect(gw.loads).toBe(1);
+    expect(hook.result.current.loading).toBe(true);
+    await tick(1000);
+    expect(gw.loads).toBe(2);
+    expect(hook.result.current.game.gold).toBe(77);
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.blocker).toBeNull();
+  });
+
+  it('부팅 세이브 읽기가 계속 429면 1초 2초 4초 뒤 저장 실패 안내 창을 띄우고 기본 상태로 열지 않는다', async () => {
+    vi.useFakeTimers();
+    gw.loadErrors = [limited(), limited(), limited(), limited()];
+    const hook = setup();
+    await tick(0);
+    await tick(1000); await tick(2000);
+    expect(hook.result.current.loading).toBe(true);
+    expect(hook.result.current.blocker).toBeNull();
+    await tick(4000);
+    expect(gw.loads).toBe(4);
+    expect(hook.result.current.blocker).toBe('unsaved');
+    expect(gw.actions).not.toContain('boot');
+  });
+
+  it('계정 교체의 세이브 읽기가 계속 429면 저장 실패 안내 창을 띄운다', async () => {
+    vi.useFakeTimers();
+    const hook = setup();
+    await tick(0);
+    await act(async () => { gw.bootResolve!(); });
+    gw.bootResolve = null;
+    gw.loadErrors = [limited(), limited(), limited(), limited()];
+    let result: unknown;
+    act(() => { void hook.result.current.adoptAccount().catch(e => { result = e; }); });
+    await tick(7000);
+    expect(result).toBeInstanceOf(AppError);
+    expect(hook.result.current.blocker).toBe('unsaved');
+    expect(hook.result.current.loading).toBe(false);
+  });
+
+  it('계정 교체의 세이브 읽기가 429 한 번 뒤 성공하면 이어서 접속한다', async () => {
+    vi.useFakeTimers();
+    const hook = setup();
+    await tick(0);
+    await act(async () => { gw.bootResolve!(); });
+    gw.bootResolve = null;
+    gw.loadErrors = [limited()];
+    act(() => { void hook.result.current.adoptAccount(); });
+    await tick(1000);
+    expect(gw.bootResolve).not.toBeNull();
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.blocker).toBeNull();
+  });
+
+  it('boot 액션이 429 한 번 뒤 성공하면 다시 보낸다', async () => {
+    vi.useFakeTimers();
+    gw.bootErrors = [limited()];
+    const hook = setup();
+    await tick(0);
+    expect(gw.actions).toEqual(['boot']);
+    await tick(1000);
+    expect(gw.actions).toEqual(['boot', 'boot']);
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.blocker).toBeNull();
+  });
+
+  it('boot 액션이 계속 429면 저장 실패 안내 창을 띄운다', async () => {
+    vi.useFakeTimers();
+    gw.bootErrors = [limited(), limited(), limited(), limited()];
+    const hook = setup();
+    await tick(0); await tick(1000); await tick(2000); await tick(4000);
+    expect(gw.actions).toEqual(['boot', 'boot', 'boot', 'boot']);
+    expect(hook.result.current.blocker).toBe('unsaved');
+  });
+
+  it('boot 액션의 429가 아닌 실패는 지금처럼 조용히 삼킨다', async () => {
+    gw.bootErrors = [new AppError('network', 'offline')];
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.blocker).toBeNull();
+    expect(gw.actions).toEqual(['boot']);
+  });
+
+  it('언마운트하면 대기 중인 재시도가 남지 않는다', async () => {
+    vi.useFakeTimers();
+    gw.loadErrors = [limited()];
+    const hook = setup();
+    await tick(0);
+    hook.unmount();
+    await tick(10_000);
+    expect(gw.loads).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('계정을 다시 교체하면 앞선 대기 중인 재시도는 버려진다', async () => {
+    vi.useFakeTimers();
+    const hook = setup();
+    await tick(0);
+    await act(async () => { gw.bootResolve!(); });
+    gw.bootResolve = null;
+    gw.loadErrors = [limited()];
+    act(() => { void hook.result.current.adoptAccount(); });
+    await tick(0);
+    expect(gw.loads).toBe(2);
+    act(() => { void hook.result.current.adoptAccount(); });
+    await tick(0);
+    expect(gw.loads).toBe(3);
+    await tick(10_000);
+    expect(gw.loads).toBe(3);
   });
 });

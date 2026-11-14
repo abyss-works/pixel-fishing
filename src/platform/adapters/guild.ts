@@ -55,8 +55,10 @@ function request(op: GuildOp): [string, RequestInit] {
 /** 길드 요청. 서버가 거절하면 오류 코드를 돌려주고, 연결 실패는 던진다. 들어오기는 들어갔는지 신청이 됐는지를 싣는다 */
 export async function guildAction(op: GuildOp): Promise<GuildOpResult> {
   const res = await fetch(...request(op));
-  if (res.status >= 500 || isRateLimited(res)) throw requestFailure(res, 'guild action failed');
+  if (res.status >= 500) throw requestFailure(res, 'guild action failed');
   const body = await res.json().catch(() => ({})) as { error?: string; result?: string };
+  // 앱 서버의 429는 오류 코드를 싣는다(아래에서 거절로 돌려준다). 코드가 없는 429는 인그레스의 요청 한도다
+  if (isRateLimited(res) && typeof body.error !== 'string') throw requestFailure(res, 'guild action failed');
   if (!res.ok) return { ok: false, error: body.error ?? 'unknown' };
   return body.result === 'joined' || body.result === 'requested' ? { ok: true, result: body.result } : { ok: true };
 }

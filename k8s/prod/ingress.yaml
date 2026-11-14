@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: pixel-fishing
   annotations:
-    # 정적 파일과 화면 경로. import 액션이 게임 상태 전체를 싣는다. 서버 본문 한도(5mb)와 맞춘다. 요청 한도는 Ingress 단위라 경로별로 나눈다.
+    # 정적 파일과 화면 경로. 본문 한도는 같은 호스트의 다른 경로와 같은 값으로 둔다. 요청 한도는 Ingress 단위라 경로별로 나눈다.
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
@@ -30,7 +30,7 @@ kind: Ingress
 metadata:
   name: pixel-fishing-api
   annotations:
-    # 게임 서버 API(관리자 API 포함). 본문 한도와 요청 한도는 정적 경로와 같은 이유로 둔다.
+    # 게임 서버 API(관리자 API 포함). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"

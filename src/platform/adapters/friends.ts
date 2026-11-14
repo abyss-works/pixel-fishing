@@ -23,7 +23,9 @@ export async function friendAction(body: FriendOp): Promise<FriendOpResult> {
       body: JSON.stringify({ nickname: body.nickname }),
     })
     : await fetch(`/api/friends/${encodeURIComponent(body.uid)}`, { method: body.op === 'accept' ? 'PUT' : 'DELETE' });
-  if (res.status >= 500 || isRateLimited(res)) throw requestFailure(res, 'friend action failed');
-  const json = await res.json() as { result?: string; error?: string };
+  if (res.status >= 500) throw requestFailure(res, 'friend action failed');
+  // 앱 서버의 429는 오류 코드를 싣는다(아래에서 거절로 돌려준다). 코드가 없는 429는 인그레스의 요청 한도다
+  const json = await (isRateLimited(res) ? res.json().catch(() => ({})) : res.json()) as { result?: string; error?: string };
+  if (isRateLimited(res) && typeof json.error !== 'string') throw requestFailure(res, 'friend action failed');
   return res.ok ? { ok: true, result: json.result ?? '' } : { ok: false, error: json.error ?? 'unknown' };
 }
