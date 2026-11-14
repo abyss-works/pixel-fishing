@@ -15,9 +15,9 @@ patches:
       - op: replace
         path: /metadata/name
         value: pixel-fishing-stage
+  # 경로별로 나눈 Ingress 전부에 적용한다.
   - target:
       kind: Ingress
-      name: pixel-fishing
     patch: |-
       - op: replace
         path: /spec/rules/0/host
