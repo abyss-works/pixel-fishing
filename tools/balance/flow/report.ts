@@ -4,7 +4,7 @@ import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { zoneById } from '../../../src/game/content/zones';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
-import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
+import type { BountyTier } from '../../../src/game/content/bounties';
 import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
 import { entryLevel } from '../model';
 import { FAME_RATIO_LIMIT, OPENING_LIMIT_SEC, PERFECT_LIMIT } from '../gates';
@@ -25,8 +25,8 @@ import { evReport } from './ev';
 import type { EvReport } from './ev';
 import { DEFAULT_SEED, DEFAULT_TRIALS, openingDist, rewardDist, transitionDist } from './dist';
 import type { OpeningDist, RewardDistRow, TransitionDist } from './dist';
-import { REWARD_BASIS_MODES, parseBasisSpec, rewardPlan, rewardRows } from './achievement';
-import type { RewardBasisMode, RewardBasisOptions, RewardRow } from './achievement';
+import { DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, rewardPlan, rewardRows } from './achievement';
+import type { RewardRow } from './achievement';
 import { BOAT_SHARE, currentRows, parseTarget, solveTargets } from './solve';
 import type { CurrentRow, SolveRow, SolveTarget } from './solve';
 import { fameRows, levelRows, purchaseRows } from './tables';
@@ -54,8 +54,8 @@ export const COMMANDS: readonly Command[] = ['transition', 'days', 'opening', 'e
 const NAMED_COMMANDS: readonly Command[] = [...COMMANDS, 'gates', 'dist', 'travel', 'effects', 'window', 'recipes', 'achievements', 'solve', 'upgrades', 'fame', 'design'];
 /** 진행 업적 보상을 넣은 관측을 내는 명령 */
 const REWARD_COMMANDS: readonly Command[] = ['transition', 'days', 'dist', 'gates'];
-/** achievements 명령이 보상 비율을 주지 않았을 때 내는 기본 비율(%) */
-export const DEFAULT_REWARD_PERCENTS: readonly number[] = [20, 25, 30];
+/** achievements 명령이 시간어치를 주지 않았을 때 내는 기본 시간 목록(시간) */
+export const DEFAULT_ACHIEVEMENT_HOURS_LIST: readonly number[] = [2, DEFAULT_ACHIEVEMENT_HOURS, 6];
 /** 효과 옵션을 받는 명령 */
 const EFFECT_COMMANDS: readonly Command[] = ['effects', 'window', 'transition', 'days', 'gates'];
 /** 효과를 넣은 진행 시뮬레이션(관측용)을 내는 명령 */
@@ -97,9 +97,9 @@ export interface FlowOptions {
   fromBoat: number | null;
   /** transition, days, gates: --recipe의 재료 판매 손실을 비용으로 넣는다 */
   withCost: boolean;
-  /** 진행 업적 보상 비율(0 초과 1 이하). achievements는 여러 개, transition, days, dist는 하나다. 비어 있으면 보상을 넣지 않는다 */
+  /** 진행 업적 보상 목표 시간어치(0 초과). achievements는 여러 개, transition, days, dist, gates는 하나다. 비어 있으면 보상을 넣지 않는다 */
   rewards: number[];
-  /** 기본 업적이 받는 몫(0 이상 1 이하). 나머지는 네임드 업적이 받는다. null이면 주지 않았다 */
+  /** 기본 업적이 받는 몫(0 이상 1 이하). 나머지는 도감 완결 업적이 받는다. null이면 주지 않았다 */
   rewardSplit: number | null;
   /** ev: 해역 사이 딱렙 방치 EV 증가율 열을 더한다 */
   growth: boolean;
@@ -108,9 +108,6 @@ export interface FlowOptions {
   boatShare: number | null;
   /** upgrades: 레벨 범위(시작, 끝). null이면 1부터 마지막 해역 진입 레벨까지 */
   levels: [number, number] | null;
-  /** 보상 기준 값의 방식(null이면 주지 않음)과 구역별 기준 전환 지정 */
-  rewardBasis: RewardBasisMode | null;
-  basis: Partial<Record<BountyZone, { from: SpotId; to: SpotId }>>;
   /** design: 비용 기준 역산 입력 */
   design: DesignArgs;
 }
@@ -153,7 +150,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   effects     요리 효과: 효과를 넣었을 때 해역별 수입(골드·명성 변화, 네임드 조우), 도감 완성 시간(몬테카를로), 낚시 1시간 분해 재료 공급을 효과 없음과 견준다. 효과는 아래 옵션으로 준다. 수동 낚시(미끼 슬롯)는 --axis manual로 잰다
   window      시간 제한 효과의 창: 등급 미끼 같은 미끼 슬롯 효과를 한 번 쓰는 창(기본 ${BAIT_WINDOW_MIN}분) 안의 등급별 기대 캐치 수와 골드, 명성 증가, 창 하나가 도감 완성 시간을 줄이는 양. 수동 GOOD이 기본이다
   recipes     레시피 순손익: 재료로 쓴 물고기의 판매 손실 대 효과 지속 동안의 수입 증가(해역별), 집 기운 얻기 공급(가장 앞선 해역보다 앞 해역에서 낚아 가방에 남은 개체를 해역 기본 선택대로 기운으로 바꾼 등급별 개수)과 그 기운으로 만들 수 있는 레시피 수. 재료는 --axis 방식(기본 방치)으로 그 해역에서만 모은다
-  achievements  진행 업적 보상: 구역마다 보상 기준 전환(그 구역의 마지막 해역에서 다음 지역 첫 해역으로 넘어가는 전환)의 전환 골드와 배 명성 요구치에 보상 비율을 곱하고 의뢰 보상과 같은 자릿수 반올림을 한 구역 보상 크기(진행 업적 두 개를 합친 값). --reward-split을 주면 두 업적이 나눈 금액도 낸다. 비율은 --reward(기본 ${DEFAULT_REWARD_PERCENTS.join(', ')})로 바꿔 잰다
+  achievements  진행 업적 보상: 구역마다 대표 방치 EV(구역 마지막 해역 진입 레벨의 시간당 방치 골드 수입) x 목표 시간어치를 의뢰 보상과 같은 자릿수 반올림한 구역 보상 합계와 기본·완결 분할 골드(명성 없음). 시간어치는 --reward(기본 ${DEFAULT_ACHIEVEMENT_HOURS_LIST.join(', ')})로 바꿔 잰다
   solve       전환 역산: --target 해역=골드시간/명성시간(여러 번)마다 전환 골드(골드 시간 x 출발 해역 딱렙 EV), 배 가격(전환 골드의 --boat-share 비중, 기본 ${BOAT_SHARE}), 강화 골드와 강화 레벨 간격 후보, 명성 요구치(출발 배 요구치 + 시간당 명성 x 명성 시간)를 낸다. 현행 전환의 같은 환산도 함께 낸다
   upgrades    낚싯대 강화 표: 레벨별 강화비, 누적 비용, 레벨당 EV 변화(--levels 시작-끝)와 전환당 구매 횟수(강화, 배)
   design      비용 기준 역산: 강화비 곡선(--start, --growth)과 해역 간격(--gap), 전환 시간 목표(--hours) 또는 강화 한 번의 회수 시간(--payback)에서 해역별 필요 진입 EV, 가격 배율, 등급 가격 비율, 배 가격, 요구 파워를 거꾸로 낸다. 해역 순서는 마을 연못부터 세인트헬레나까지이고 첫 해역의 진입 레벨은 1이다. 값은 계산만 하고 정하지 않는다
@@ -161,7 +158,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   gates       게이트 검사와 전환 시간 판정: 이동 직후 수입, PERFECT 이상치, 배 명성 대기 ÷ 골드 대기, 최초 10분 도달, 지역 진입 전환의 목표 범위와 리프 이후 전환의 순서 조건. 판정은 통과, 예외, 개선, 위반이다.
               같은 지역 안의 전환은 범위를 판정하지 않고 전환 시간과 요구 파워 간격을 함께 낸다. 위반이 하나라도 있으면 종료 코드 1. 전환 시간은 항상 방치 기준이다.
               효과 옵션을 주면 이동 직후 수입(낮 풀, 낮밤 혼합)과 전환 시간만 효과를 넣어 관측하고(효과 없음 값을 함께 낸다) 종료 코드는 판정에 따르지 않는다.
-              --reward와 --reward-split을 주면 배 명성 대기와 전환 시간을 진행 업적 보상을 넣어 관측하고(보상 없음 전환 시간을 함께 낸다) 판정은 참고이며 종료 코드에 반영하지 않는다
+              --reward를 주면 배 명성 대기와 전환 시간을 진행 업적 보상을 넣어 관측하고(보상 없음 전환 시간을 함께 낸다) 판정은 참고이며 종료 코드에 반영하지 않는다
 
 옵션
   --override <파일>  배 가격, 명성 요구치, 해역 요구 파워, 해역 어종 가격 배율, 낚싯대 규칙, 가상 해역을 덮어쓰는 JSON. 형식은
@@ -192,8 +189,8 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 명세에 등급 사이 환산 비율이 없어 재료 점수를 견주는 데만 쓰는 값이다
   --bait <rare|epic|legendary>  effects, window: 등급 미끼(기운으로 제작하는 미끼 요리) 효과를 효과 옵션에 채운다. 수동 캐치에만 걸린다(희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%. 요리 명세 값)
-  --reward <N>       achievements: 보상 비율 %(0 초과 100 이하). 쉼표로 여러 개를 줄 수 있다(기본 ${DEFAULT_REWARD_PERCENTS.join(',')}). transition, days, dist: 하나만 주면 진행 업적을 채울 때 보상(골드와 명성)을 한 번에 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 함께 낸다(--reward-split 필요, 효과 옵션과 함께 쓸 수 없다)
-  --reward-split <0~1>  achievements: 주면 기본 업적과 네임드 업적이 나눈 금액을 낸다. transition, days, dist: 기본 업적이 받는 몫(나머지는 네임드 업적). 직접 준다
+  --reward <시간>    achievements: 목표 시간어치(0 초과, 예: 4 또는 4h). 쉼표로 여러 개를 줄 수 있다(기본 ${DEFAULT_ACHIEVEMENT_HOURS_LIST.join(',')}). transition, days, dist, gates: 하나만 주면 진행 업적을 채울 때 골드 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 함께 낸다(효과 옵션과 함께 쓸 수 없다)
+  --reward-split <0~1>  기본 업적이 받는 몫(나머지는 도감 완결 업적). 기본 ${DEFAULT_BASIC_SHARE}
   --start <N>        design: 강화비 시작값(레벨 1 강화비). 강화비는 start x (1 + growth)^(lv - 1) 단일 지수다
   --growth <r>       design: 강화비의 레벨당 증가율(0.15는 15%). --solve growth이면 생략
   --gap <k | 해역=k>  design: 해역 간격(구간 강화 횟수, 1 이상 정수). 값 하나는 모든 해역의 기본값이고 해역=k는 그 해역(다음 해역으로 가는 구간을 보내는 해역)만 바꾼다. 여러 번 줄 수 있다. --solve gap이면 생략
@@ -214,8 +211,6 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --target <해역=골드시간/명성시간>  solve: 출발 해역과 목표 시간(방치 기준 실질 낚시 시간). 여러 번 줄 수 있다. 예: --target sthelena=24/30
   --boat-share <0~1>  solve: 배 가격의 전환 골드 비중. 기본 ${BOAT_SHARE}. design: 기본 0
   --levels <시작-끝>  upgrades: 강화 표의 레벨 범위. 기본 1부터 마지막 해역 진입 레벨까지
-  --reward-basis <total|incremental-fame|ev-hours>  achievements, transition, days, dist, gates(--reward와 함께): 보상 기준 값. 기본 total(기준 전환의 전환 골드와 배 명성 요구치 전체). incremental-fame은 명성을 기준 전환의 증분(도착 배 요구치 - 출발 해역을 여는 배 요구치)으로, ev-hours는 골드를 출발 해역 딱렙 EV 시간으로 바꿔 구역 대표 EV를 곱한 값으로(명성은 증분) 잰다
-  --basis <구역=출발:도착>  위와 같은 명령: 그 구역의 보상 기준 전환을 지정한다(인접한 두 해역, 가상 해역 포함). 구역마다 한 번 줄 수 있다. 예: --basis southatlantic=sthelena:next
   --bounty           transition, gates: 일반 의뢰와 네임드 토벌을 매일 수행하는 경우로 잰다(생략하면 수행하지 않는 경우). days는 두 경우를 모두 낸다
   --from-boat <N>    transition, days, gates: 효과가 걸리기 시작하는 배 단계(0 이상 정수). 기본은 인도양을 여는 배(증기선)
   --with-cost        transition, days, gates: --recipe의 재료로 쓴 물고기의 판매 손실을 하루(실질 낚시 8시간) 한 번의 비용으로 넣는다. 재료가 나오지 않는 해역은 만들 수 없어 효과도 비용도 없다
@@ -234,7 +229,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
 const MIN_MARGIN_ABS = 4;
 
 const EFFECT_FLAGS = ['--bite', '--rare', '--epic', '--legendary', '--variant', '--size', '--move', '--named', '--margin', '--units', '--bait'] as const;
-const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', '--recipe', '--hours', '--from-boat', '--cost', '--manual-share', '--visit-hours', '--rod-offset', '--reward', '--reward-split', '--target', '--boat-share', '--levels', '--reward-basis', '--basis', '--start', '--gap', '--payback', '--payback-growth', '--anchor', '--solve', '--grade', '--night', '--emit-override', '--reversal-tolerance', '--h-factor', '--h-scale', '--h-start', '--special-region', ...EFFECT_FLAGS] as const;
+const VALUE_FLAGS = ['--override', '--legend-at', '--axis', '--max-days', '--seed', '--trials', '--window', '--recipe', '--hours', '--from-boat', '--cost', '--manual-share', '--visit-hours', '--rod-offset', '--reward', '--reward-split', '--target', '--boat-share', '--levels', '--start', '--gap', '--payback', '--payback-growth', '--anchor', '--solve', '--grade', '--night', '--emit-override', '--reversal-tolerance', '--h-factor', '--h-scale', '--h-start', '--special-region', ...EFFECT_FLAGS] as const;
 
 /** 옵션을 받는 명령. 여기 없는 옵션은 모든 명령에서 쓸 수 있다 */
 const FLAG_COMMANDS: Record<string, readonly Command[]> = {
@@ -243,7 +238,6 @@ const FLAG_COMMANDS: Record<string, readonly Command[]> = {
   '--cost': ['recipes', 'window'], '--manual-share': ['recipes'], '--visit-hours': ['recipes'], '--rod-offset': ['recipes'], '--recipe': ['recipes', 'effects', 'window', ...PLAN_COMMANDS],
   '--bounty': ['transition', 'gates'], '--from-boat': PLAN_COMMANDS, '--with-cost': PLAN_COMMANDS,
   '--reward': ['achievements', ...REWARD_COMMANDS], '--reward-split': ['achievements', ...REWARD_COMMANDS],
-  '--reward-basis': ['achievements', ...REWARD_COMMANDS], '--basis': ['achievements', ...REWARD_COMMANDS],
   '--growth': ['ev', 'design'], '--target': ['solve'], '--boat-share': ['solve', 'design'],
   '--start': ['design'], '--gap': ['design'], '--payback': ['design'], '--payback-growth': ['design'], '--anchor': ['design'], '--solve': ['design'], '--grade': ['design'], '--night': ['design'], '--emit-override': ['design'], '--reversal-tolerance': ['design'], '--h-factor': ['design'], '--h-scale': ['design'], '--h-start': ['design'], '--special-region': ['design'], '--levels': ['upgrades'],
 };
@@ -255,12 +249,21 @@ function numberOf(flag: string, raw: string): number {
   return v;
 }
 
+function parseRewardHours(raw: string): number {
+  const trimmed = raw.trim();
+  const num = trimmed.endsWith('h') || trimmed.endsWith('H') ? trimmed.slice(0, -1) : trimmed;
+  const v = Number(num);
+  if (num === '' || !Number.isFinite(v)) throw new Error(`--reward에는 시간(예: 4 또는 4h)이 필요합니다: ${raw}`);
+  if (!(v > 0)) throw new Error(`--reward는 0보다 커야 합니다(시간): ${raw}`);
+  return v;
+}
+
 export function parseArgs(argv: readonly string[]): FlowOptions {
   const o: FlowOptions = {
     commands: [], override: null, json: false, legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
     seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, effect: { ...NO_EFFECT }, margin: 0, units: { ...DEFAULT_UNITS }, windowMinutes: BAIT_WINDOW_MIN,
     recipe: null, hours: LUNCH_HOURS, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false,
-    rewards: [], rewardSplit: null, growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
+    rewards: [], rewardSplit: null, growth: false, targets: [], boatShare: null, levels: null,
     design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [] },
   };
   const hoursRaw: string[] = [];
@@ -309,8 +312,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
       }
       if (a === '--reward') {
         given.push(a);
-        o.rewards = raw.split(',').map(x => numberOf(a, x) / 100);
-        if (o.rewards.some(x => !(x > 0 && x <= 1))) throw new Error('--reward는 0 초과 100 이하여야 합니다(%)');
+        o.rewards = raw.split(',').map(parseRewardHours);
       } else if (a === '--reward-split') {
         given.push(a);
         o.rewardSplit = numberOf(a, raw);
@@ -328,15 +330,6 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
         if (!m) throw new Error(`--levels 형식은 시작-끝(정수)입니다: ${raw}`);
         o.levels = [Number(m[1]), Number(m[2])];
         if (o.levels[0] < 1 || o.levels[1] < o.levels[0]) throw new Error('--levels는 1 이상이고 끝이 시작 이상이어야 합니다');
-      } else if (a === '--reward-basis') {
-        given.push(a);
-        if (!(REWARD_BASIS_MODES as readonly string[]).includes(raw)) throw new Error(`--reward-basis는 ${REWARD_BASIS_MODES.join(', ')} 중 하나여야 합니다`);
-        o.rewardBasis = raw as RewardBasisMode;
-      } else if (a === '--basis') {
-        given.push(a);
-        const { zone, from, to } = parseBasisSpec(raw);
-        if (Object.hasOwn(o.basis, zone)) throw new Error(`--basis에 같은 구역이 두 번 있습니다: ${zone}`);
-        o.basis[zone] = { from, to };
       } else if (a === '--window') {
         given.push(a);
         o.windowMinutes = numberOf(a, raw);
@@ -462,13 +455,12 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     const allowed = FLAG_COMMANDS[f];
     if (!(command && allowed.includes(command))) throw new Error(`${f}은 ${allowed.join(', ')} 명령에서만 쓸 수 있습니다`);
   }
-  const basisGiven = o.rewardBasis !== null || Object.keys(o.basis).length > 0;
-  if (basisGiven && command !== 'achievements' && o.rewards.length === 0) throw new Error('--reward-basis와 --basis는 --reward와 함께 써야 합니다');
   if (command === 'achievements') {
-    if (o.rewards.length === 0) o.rewards = DEFAULT_REWARD_PERCENTS.map(x => x / 100);
+    if (o.rewards.length === 0) o.rewards = [...DEFAULT_ACHIEVEMENT_HOURS_LIST];
+    if (o.rewardSplit === null) o.rewardSplit = DEFAULT_BASIC_SHARE;
   } else if (command !== null && REWARD_COMMANDS.includes(command)) {
     if (o.rewards.length > 1) throw new Error(`${command}에서 --reward는 하나만 줄 수 있습니다`);
-    if (o.rewards.length === 1 && o.rewardSplit === null) throw new Error('--reward에는 --reward-split이 필요합니다(기본 업적이 받는 몫, 0 이상 1 이하)');
+    if (o.rewards.length === 1 && o.rewardSplit === null) o.rewardSplit = DEFAULT_BASIC_SHARE;
     if (o.rewards.length === 0 && o.rewardSplit !== null) throw new Error('--reward-split은 --reward와 함께 써야 합니다');
     if (o.rewards.length === 1 && (o.recipe !== null || given.some(f => (EFFECT_FLAGS as readonly string[]).includes(f)))) {
       throw new Error('--reward는 효과 옵션(--recipe, --bait와 효과 값)과 함께 쓸 수 없습니다');
@@ -516,8 +508,8 @@ export interface FlowResult {
     bounty: boolean;
     /** 효과를 넣은 진행 시뮬레이션(transition, days, gates)일 때의 효과 설명 */
     plan: { label: string; fromBoat: number; recipe: string | null; withCost: boolean; bounty: boolean } | null;
-    /** 진행 업적 보상을 넣은 관측일 때의 보상 비율과 기본 업적의 몫 */
-    reward: { ratio: number; split: number; /** 방식이나 기준 전환을 지정했을 때만 */ basis?: { mode: RewardBasisMode; transitions: Partial<Record<BountyZone, { from: SpotId; to: SpotId }>> } } | null;
+    /** 진행 업적 보상을 넣은 관측일 때의 목표 시간어치와 기본 업적의 몫 */
+    reward: { hours: number; split: number } | null;
     /** 계산 당시의 해역 표시 값 — 덮어쓰기를 되돌린 뒤에도 표 라벨이 덮어쓴 값으로 나오게 담아 둔다 */
     spots: SpotInfo[];
   };
@@ -526,8 +518,8 @@ export interface FlowResult {
   opening?: OpeningResult[];
   ev?: EvReport;
   gates?: GatesReport;
-  dist?: { opening: OpeningDist[]; transition: TransitionDist[]; reward?: { ratio: number; split: number; rows: RewardDistRow[] } };
-  achievements?: { ratios: number[]; split: number | null; rows: RewardRow[]; basis?: { mode: RewardBasisMode; transitions: Partial<Record<BountyZone, { from: SpotId; to: SpotId }>> } };
+  dist?: { opening: OpeningDist[]; transition: TransitionDist[]; reward?: { hours: number; split: number; rows: RewardDistRow[] } };
+  achievements?: { hours: number[]; split: number; rows: RewardRow[] };
   solve?: { boatShare: number; rows: SolveRow[]; current: CurrentRow[] };
   upgrades?: { levels: LevelRow[]; purchases: PurchaseRow[] };
   fame?: FameRow[];
@@ -597,15 +589,12 @@ export function runFlow(o: FlowOptions): FlowResult {
     const recipe = o.recipe === null ? undefined : RECIPES.find(r => r.id === o.recipe);
     const plan: RatePlan | undefined = planOn ? effectPlan({ effect: o.effect, fromBoat, recipe: o.withCost ? recipe : undefined }) : undefined;
     const rewardOn = o.rewards.length === 1 && o.rewardSplit !== null && o.commands.length === 1 && REWARD_COMMANDS.some(c => o.commands.includes(c));
-    const basisOn = o.rewardBasis !== null || Object.keys(o.basis).length > 0;
-    const basisOpts: RewardBasisOptions | undefined = basisOn ? { mode: o.rewardBasis ?? 'total', transitions: o.basis } : undefined;
-    const basisNote = basisOpts ? { basis: { mode: basisOpts.mode!, transitions: o.basis } } : {};
-    const reward = rewardOn ? rewardPlan(o.rewards[0], o.rewardSplit!, basisOpts) : undefined;
+    const reward = rewardOn ? rewardPlan(o.rewards[0], o.rewardSplit!) : undefined;
     const res: FlowResult = { options: { axis: o.axis, legendAt: o.legendAt, maxDays: o.maxDays, override,
       seed: o.seed, trials: o.trials,
       bounty: o.bounty,
       plan: planOn ? { label: effectLabel(o.effect), fromBoat, recipe: o.recipe, withCost: o.withCost, bounty: o.bounty } : null,
-      reward: rewardOn ? { ratio: o.rewards[0], split: o.rewardSplit!, ...basisNote } : null,
+      reward: rewardOn ? { hours: o.rewards[0], split: o.rewardSplit! } : null,
       spots: SPOTS.map(sp => ({ id: sp.id, name: sp.name, powerReq: sp.powerReq ?? 0, entryLevel: entryLevel(sp.id) })) } };
     for (const sp of SPOTS) spotNames.set(sp.id, sp.name);
     const sim = { axis: o.axis, maxDays: o.maxDays };
@@ -619,14 +608,14 @@ export function runFlow(o: FlowOptions): FlowResult {
       res.dist = {
         opening: (['normal', 'good'] as const).map(judgment => openingDist({ judgment, trials: o.trials, seed: o.seed })),
         transition: transitionDist({ trials: o.trials, seed: o.seed, ...sim }),
-        ...(rewardOn ? { reward: { ratio: o.rewards[0], split: o.rewardSplit!, rows: rewardDist({ trials: o.trials, seed: o.seed, ratio: o.rewards[0], basicShare: o.rewardSplit!, basis: basisOpts, ...sim }) } } : {}),
+        ...(rewardOn ? { reward: { hours: o.rewards[0], split: o.rewardSplit!, rows: rewardDist({ trials: o.trials, seed: o.seed, hours: o.rewards[0], basicShare: o.rewardSplit!, ...sim }) } } : {}),
       };
     }
     if (o.commands.includes('achievements')) {
+      const split = o.rewardSplit ?? DEFAULT_BASIC_SHARE;
       res.achievements = {
-        ratios: o.rewards, split: o.rewardSplit,
-        rows: rewardRows({ ratios: o.rewards, ...(o.rewardSplit === null ? {} : { split: o.rewardSplit }), ...(basisOpts ? { basis: basisOpts } : {}) }),
-        ...basisNote,
+        hours: o.rewards, split,
+        rows: rewardRows({ hours: o.rewards, split }),
       };
     }
     if (o.commands.includes('travel')) res.travel = { rows: travelRows(), sampleDays: TRAVEL_SAMPLE_DAYS };
@@ -727,7 +716,7 @@ function rewardAssumptions(): string[] {
     '업적 보상을 넣은 값은 관측용이다. 보상 없이 잰 값이 메인 지표이고 전환 시간 목표와 게이트 판정은 보상 없는 값으로 한다',
     '진행 업적은 구역의 일반 폼 도감 조건이다(기본 라이선스 조건은 전설 제외, 네임드 라이선스 조건은 전설 포함, 일반 폼만 센다). 기댓값 경로는 구역 도감 완성 확률이 라이선스 문턱(0.5)을 넘은 시점에, 표본 경로(dist)는 실제로 뽑은 일반 폼이 조건을 채운 시점에 달성한다',
     '시뮬레이션은 열린 가장 뒤 해역에서만 낚고 지나온 해역으로 돌아가 도감을 채우지 않는다. 그래서 구역을 떠나기 전에 도감을 채우지 못하면 그 업적은 채워지지 않고 지급하지 않는다',
-    '보상은 달성한 시점에 골드와 명성을 한 번에 지급하고, 지급한 골드와 명성은 바로 구매에 쓴다. 구역 보상 크기와 두 업적의 나눔은 achievements 명령과 같은 값이다',
+    '보상은 달성한 시점에 골드를 한 번에 지급하고, 지급한 골드는 바로 구매에 쓴다. 구역 보상 크기와 두 업적의 나눔은 achievements 명령과 같은 값이다',
   ];
 }
 
@@ -757,11 +746,10 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
     );
   } else if (command === 'achievements') {
     lines.push(
-      '구역 보상 크기 = 보상 기준 전환의 전환 골드 x 보상 비율, 그 전환에서 사는 배 가운데 가장 높은 명성 요구치 x 보상 비율이다. 방치 EV에서 산출하지 않는다',
-      '보상 기준 전환은 구역의 마지막 해역에서 다음 지역의 첫 해역으로 넘어가는 전환이다. 다음 지역이 없는 구역은 기준 전환이 없어 미정으로 낸다',
+      '구역 보상 합계 = 구역 대표 방치 EV(구역 마지막 해역 진입 레벨의 시간당 방치 골드 수입) x 목표 시간어치를 의뢰 보상과 같은 자릿수 반올림한 골드다. 명성은 주지 않는다',
       '반올림은 의뢰 보상과 같은 자릿수 반올림이다(앞 두 자리가 5의 배수가 되게 맞춘다). 원값은 반올림 전이다',
-      '보상 비율과 두 업적의 나눔은 인자로 준다. 비율을 주지 않으면 기본 비율(20%, 25%, 30%)을 낸다',
-      '두 업적에 나눌 때는 반올림한 구역 보상 크기를 쓴다. 기본 업적은 구역 크기 x 몫을 반올림한 값이고 네임드 업적은 나머지라서 두 업적의 합은 구역 크기와 같다',
+      `목표 시간어치와 두 업적의 나눔은 인자로 준다. 생략하면 기본 ${DEFAULT_ACHIEVEMENT_HOURS_LIST.join(', ')}시간과 기본 분배 ${DEFAULT_BASIC_SHARE}를 낸다`,
+      '두 업적에 나눌 때는 반올림한 구역 보상 합계를 쓴다. 기본 도감 업적은 합계 x 몫을 같은 규칙으로 반올림한 값이고 도감 완결 업적은 나머지라서 두 업적의 합은 구역 합계와 같다',
     );
   } else if (command === 'solve') {
     lines.push(
@@ -865,23 +853,11 @@ function planNote(o: FlowResult['options']): string {
 /** 비교 기준 이름 — 업적 보상을 넣은 관측은 보상 없음, 효과를 넣은 관측은 효과 없음이다 */
 const baseName = (o: FlowResult['options']): string => (o.reward ? '보상 없음' : '효과 없음');
 
-const BASIS_MODE_NAME: Record<RewardBasisMode, string> = {
-  total: '전환 골드와 배 명성 요구치 전체',
-  'incremental-fame': '전환 골드 전체와 증분 명성',
-  'ev-hours': '전환 골드의 EV 시간(구역 대표 EV로 환산)과 증분 명성',
-};
-
-/** 보상 기준 방식과 지정한 기준 전환 한 줄 */
-function basisNote(b: NonNullable<NonNullable<FlowResult['options']['reward']>['basis']>): string {
-  const custom = Object.entries(b.transitions).map(([zone, t]) => `${ZONE_NAME[zone] ?? zone} ${nameOf(t!.from)} → ${nameOf(t!.to)}`);
-  return `보상 기준 값: ${BASIS_MODE_NAME[b.mode]}${custom.length ? `, 지정한 기준 전환 ${custom.join(', ')}` : ''}`;
-}
-
 /** 업적 보상을 넣은 진행 시뮬레이션의 조건 한 줄 */
 function rewardNote(o: FlowResult['options']): string {
   const r = o.reward;
   if (!r) return '';
-  return `진행 업적 보상 ${pct1(r.ratio)}(관측용), 기본 업적 몫 ${pct1(r.split)}, 네임드 업적 몫 ${pct1(1 - r.split)}${o.bounty ? ', 의뢰와 토벌 모두 수행' : ''}${r.basis ? `, ${basisNote(r.basis)}` : ''}`;
+  return `진행 업적 보상 ${r.hours}시간어치(관측용), 기본 업적 몫 ${pct1(r.split)}, 도감 완결 업적 몫 ${pct1(1 - r.split)}${o.bounty ? ', 의뢰와 토벌 모두 수행' : ''}`;
 }
 
 /** 효과 없음 대비 시간 차이 표기 — 음수가 빨라진 쪽이다 */
@@ -924,10 +900,10 @@ const TIER_NAME: Record<BountyTier, string> = { basic: '기본 라이선스 조�
 function grantedText(list: Achieved[], title: string): string[] {
   const out: string[] = [`\n## ${title}`];
   out.push(table(
-    ['구역', '업적', '달성 시점(누적 시간)', '그때 낚던 해역', '지급 골드', '지급 명성'],
-    list.map(a => [ZONE_NAME[a.zone], TIER_NAME[a.tier], h2(a.hours), nameOf(a.spot), a.granted ? n0(a.granted.gold) : '지급 없음', a.granted ? n0(a.granted.fame) : '지급 없음']),
+    ['구역', '업적', '달성 시점(누적 시간)', '그때 낚던 해역', '지급 골드'],
+    list.map(a => [ZONE_NAME[a.zone], TIER_NAME[a.tier], h2(a.hours), nameOf(a.spot), a.granted ? n0(a.granted.gold) : '지급 없음']),
   ));
-  const missing = BOUNTY_ZONES.flatMap(z => (['basic', 'named'] as const).filter(t => !list.some(a => a.zone === z && a.tier === t)).map(t => `${ZONE_NAME[z]} ${t === 'basic' ? '기본' : '네임드'}`));
+  const missing = BOUNTY_ZONES.flatMap(z => (['basic', 'named'] as const).filter(t => !list.some(a => a.zone === z && a.tier === t)).map(t => `${ZONE_NAME[z]} ${t === 'basic' ? '기본' : '완결'}`));
   if (missing.length) out.push(`(진행 중 못 채워 지급하지 않은 업적: ${missing.join(', ')})`);
   return out;
 }
@@ -1104,11 +1080,11 @@ function distText(d: NonNullable<FlowResult['dist']>): string[] {
 /** 진행 업적 지급 시점 분포 — 보상 없는 진행의 달성 시각과 다음 지역 첫 해역 도착, 보상을 넣었을 때의 도착과 짝지은 단축 */
 function rewardDistText(r: NonNullable<NonNullable<FlowResult['dist']>['reward']>, trials: number): string[] {
   const out: string[] = [];
-  out.push(`\n## 분포 — 진행 업적 달성 시각 (보상 없는 진행에서 구역 도감 조건을 채운 누적 실질 낚시 시간, 못 채운 시도는 구역을 떠날 때까지 못 채운 것). 보상 ${pct1(r.ratio)}, 기본 업적 몫 ${pct1(r.split)}`);
+  out.push(`\n## 분포 — 진행 업적 달성 시각 (보상 없는 진행에서 구역 도감 조건을 채운 누적 실질 낚시 시간, 못 채운 시도는 구역을 떠날 때까지 못 채운 것). 보상 ${r.hours}시간어치, 기본 업적 몫 ${pct1(r.split)}`);
   out.push(table(
-    ['구역', '업적', '지급(골드 / 명성)', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '채운 시도 비율', '못 채움(횟수)'],
+    ['구역', '업적', '지급 골드', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '채운 시도 비율', '못 채움(횟수)'],
     r.rows.map(x => [
-      ZONE_NAME[x.zone], x.tier === 'basic' ? '기본' : '네임드', x.reward ? `${n0(x.reward.gold)} / ${n0(x.reward.fame)}` : '기준 전환 없음',
+      ZONE_NAME[x.zone], x.tier === 'basic' ? '기본' : '완결', n0(x.reward.gold),
       ...distCells(x.achieved, hrs), x.achieved ? pct1(x.achieved.n / trials) : pct1(0), String(x.achieved ? x.achieved.missing : trials),
     ]),
   ));
@@ -1125,42 +1101,26 @@ function rewardDistText(r: NonNullable<NonNullable<FlowResult['dist']>['reward']
 /** 진행 업적 보상 크기 표 */
 function achievementsText(a: NonNullable<FlowResult['achievements']>): string[] {
   const out: string[] = [];
-  const sourced = a.rows.some(r => r.source);
   const cell = (raw: number, v: number) => `${n0(v)} (원값 ${n0(raw)})`;
-  out.push('\n## 진행 업적 보상 — 구역 보상 크기 (진행 업적 두 개를 합친 값. 반올림 값과 원값)');
+  out.push('\n## 진행 업적 보상 — 구역 보상 합계 (구역 대표 방치 EV x 목표 시간어치, 의뢰 보상과 같은 자릿수 반올림)');
   out.push(table(
-    ['구역', '보상 기준 전환', sourced ? '기준 골드' : '전환 골드', sourced ? '기준 명성' : '배 명성 요구치', ...a.ratios.map(x => `골드 ${pct0(x)}`), ...a.ratios.map(x => `명성 ${pct0(x)}`)],
-    a.rows.map(r => {
-      const by = (x: number) => r.amounts.find(m => m.ratio === x);
-      return [
-        ZONE_NAME[r.zone], r.to ? `${nameOf(r.from)} → ${nameOf(r.to)}` : '없음(다음 지역 없음)',
-        r.next ? n0(r.next.totalGold) : '미정', r.next ? n0(r.next.fameReq) : '미정',
-        ...a.ratios.map(x => { const m = by(x); return m ? cell(m.rawGold, m.gold) : '미정'; }),
-        ...a.ratios.map(x => { const m = by(x); return m ? cell(m.rawFame, m.fame) : '미정'; }),
-      ];
-    }),
+    ['구역', '대표 방치 EV(G/h)', ...a.hours.map(h => `${h}h 합계(골드)`)],
+    a.rows.map(r => [
+      ZONE_NAME[r.zone], n0(r.ev),
+      ...a.hours.map(h => {
+        const m = r.amounts.find(x => x.hours === h)!;
+        return cell(m.rawGold, m.gold);
+      }),
+    ]),
   ));
-  if (a.basis && sourced) {
-    out.push(`\n(${basisNote(a.basis)})`);
-    out.push(table(
-      ['구역', '보상 기준 전환', '전환 골드', '기준 전환의 배 명성 요구치', '증분 명성', '기준 골드', '기준 명성'],
-      a.rows.map(r => [
-        ZONE_NAME[r.zone], r.to ? `${nameOf(r.from)} → ${nameOf(r.to)}` : '없음(다음 지역 없음)',
-        r.source ? n0(r.source.transitionGold) : '미정', r.source ? n0(r.source.boatFameReq) : '미정', r.source ? n0(r.source.fameIncrement) : '미정',
-        r.next ? n0(r.next.totalGold) : '미정', r.next ? n0(r.next.fameReq) : '미정',
-      ]),
-    ));
-  }
-  if (a.split !== null) {
-    out.push(`\n## 진행 업적 보상 — 두 업적이 나눈 금액 (기본 업적 몫 ${pct1(a.split)}, 네임드 업적 몫 ${pct1(1 - a.split)}. 기본 업적은 구역 크기 x 몫을 반올림하고 네임드 업적은 나머지)`);
-    out.push(table(
-      ['구역', '비율', '기본 업적(골드 / 명성)', '네임드 업적(골드 / 명성)', '두 업적 합(골드 / 명성)', '구역 보상 크기(골드 / 명성)'],
-      a.rows.flatMap(r => r.amounts.flatMap(m => (m.split ? [[
-        ZONE_NAME[r.zone], pct0(m.ratio), `${n0(m.split.basic.gold)} / ${n0(m.split.basic.fame)}`, `${n0(m.split.named.gold)} / ${n0(m.split.named.fame)}`,
-        `${n0(m.split.basic.gold + m.split.named.gold)} / ${n0(m.split.basic.fame + m.split.named.fame)}`, `${n0(m.gold)} / ${n0(m.fame)}`,
-      ]] : []))),
-    ));
-  }
+  out.push(`\n## 진행 업적 보상 — 두 업적이 나눈 금액 (기본 업적 몫 ${pct1(a.split)}, 도감 완결 업적 몫 ${pct1(1 - a.split)}. 기본 도감은 구역 합계 x 몫을 반올림하고 도감 완결은 나머지)`);
+  out.push(table(
+    ['구역', '시간어치', '기본 도감(골드)', '도감 완결(골드)', '두 업적 합(골드)', '구역 합계(골드)'],
+    a.rows.flatMap(r => r.amounts.flatMap(m => (m.split ? [[
+      ZONE_NAME[r.zone], `${m.hours}h`, n0(m.split.basic.gold), n0(m.split.named.gold),
+      n0(m.split.basic.gold + m.split.named.gold), n0(m.gold),
+    ]] : []))),
+  ));
   return out;
 }
 

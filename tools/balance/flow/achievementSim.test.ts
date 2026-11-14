@@ -12,7 +12,7 @@ import type { Sampler } from './sample';
 
 const run = (o: Partial<Parameters<typeof simulate>[0]> = {}) => simulate({ axis: 'idle', bounty: false, maxDays: 365, ...o });
 const none = () => null;
-const big = (zone: string): Reward | null => (zone === 'indian' ? { gold: 1_000_000, fame: 0 } : null);
+const big = (zone: string): Reward | null => (zone === 'indian' ? { gold: 1_000_000 } : null);
 
 describe('업적 달성 기록', () => {
   it('옵션이 없으면 달성 기록이 비어 있다', () => {
@@ -49,7 +49,7 @@ describe('업적 보상 지급', () => {
     const r = run({ achievements: { reward: big } });
     const target = r.achieved.filter(a => a.zone === 'indian');
     expect(target.length).toBeGreaterThan(0);
-    for (const a of target) expect(a.granted).toEqual({ gold: 1_000_000, fame: 0 });
+    for (const a of target) expect(a.granted).toEqual({ gold: 1_000_000 });
     // 보상 시각 이후의 도착만 빨라질 수 있다
     const at = Math.min(...target.map(a => a.hours));
     for (let i = 0; i < r.arrivals.length; i++) {
@@ -65,13 +65,6 @@ describe('업적 보상 지급', () => {
     expect(first).toBeDefined();
     const same = base.achieved.find(a => a.zone === first!.zone && a.tier === first!.tier)!;
     expect(first!.hours).toBe(same.hours);
-  });
-
-  it('명성 보상은 배 명성 대기를 줄인다', () => {
-    const base = run();
-    const r = run({ achievements: { reward: zone => (zone === 'indian' ? { gold: 0, fame: 1_000_000 } : null) } });
-    const fameWait = (xs: typeof base.arrivals) => xs.reduce((sum, a) => sum + a.waitFame + a.waitBoth, 0);
-    expect(fameWait(r.arrivals)).toBeLessThanOrEqual(fameWait(base.arrivals));
   });
 });
 
@@ -117,7 +110,7 @@ describe('표본 경로의 업적 달성', () => {
 });
 
 describe('보상을 넣은 전환과 도달 보고서', () => {
-  const reward = rewardPlan(0.25, 0.5);
+  const reward = rewardPlan(4, 0.5);
 
   it('전환 보고서는 보상을 주면 보상 없는 값을 base로, 지급 내역을 achieved로 담는다', () => {
     const plain = transitionReport({ axis: 'idle', maxDays: 365 });

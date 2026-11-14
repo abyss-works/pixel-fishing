@@ -159,7 +159,7 @@ describe('보상 포함 관측', () => {
 
   it('보상을 주면 지역 진입 전환 시간이 줄고 보상 없는 시간을 함께 담으며, 판정은 보상 포함 시간으로 낸다', () => {
     const plain = gatesReport(opts);
-    const paid = gatesReport({ ...opts, reward: rewardPlan(0.25, 0.5) });
+    const paid = gatesReport({ ...opts, reward: rewardPlan(4, 0.5) });
     expect(paid.reward).toBe(true);
     paid.time.forEach((t, i) => {
       expect(t.baseHours).toBe(plain.time[i].hours);
@@ -172,7 +172,7 @@ describe('보상 포함 관측', () => {
   });
 
   it('보상 포함 시간으로 낸 판정은 기본 판정과 달라진다', () => {
-    const paid = gatesReport({ ...opts, reward: rewardPlan(0.25, 0.5) });
+    const paid = gatesReport({ ...opts, reward: rewardPlan(4, 0.5) });
     expect(verdictCounts(paid)).not.toEqual(verdictCounts(gatesReport(opts)));
   });
 
