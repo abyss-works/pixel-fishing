@@ -1,16 +1,16 @@
 // 자리 비움 — 창이 숨겨지거나 포커스를 잃은 순간을 떠남, 보이는 상태로 포커스가 돌아온 순간을 복귀로 본다.
 // 떠난 시각은 저장소에 남겨 새로고침·탭 폐기 뒤에도 쓴다. 결과 요약은 서버 읽기 함수(GET /api/away-report)가 준다.
 // 클라우드 미설정(로컬 dev·테스트)이면 행동 기록이 없어 null이다. 그 밖의 실패는 던진다.
-import { AppError } from '../../core/errors';
 import { isCloud } from './auth';
 import type { AwaySummary } from '../../game/rules/away';
+import { requestFailure } from './requestFailure';
 
 export const AWAY_LEFT_KEY = 'pf-away-left';
 
 export async function readAwayReport(awayMs: number): Promise<AwaySummary | null> {
   if (!isCloud) return null;
   const res = await fetch(`/api/away-report?awayMs=${Math.floor(awayMs)}`);
-  if (!res.ok) throw new AppError('network', 'away report read failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'away report read failed');
   return await res.json() as AwaySummary;
 }
 

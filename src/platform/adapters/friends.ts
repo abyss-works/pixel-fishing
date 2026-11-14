@@ -3,13 +3,14 @@
 import { AppError } from '../../core/errors';
 import { isCloud } from './auth';
 import type { FriendItem, FriendOp, FriendOpResult } from '../api/types';
+import { isRateLimited, requestFailure } from './requestFailure';
 
 /** 친구·받은 요청·보낸 요청 */
 export async function readFriends(): Promise<FriendItem[] | null> {
   if (!isCloud) return null;
   const res = await fetch('/api/friends');
   if (res.status === 401) throw new AppError('unauthorized', 'friends read before session');
-  if (!res.ok) throw new AppError('network', 'friends read failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'friends read failed');
   return (await res.json() as { friends: FriendItem[] }).friends;
 }
 
@@ -22,7 +23,7 @@ export async function friendAction(body: FriendOp): Promise<FriendOpResult> {
       body: JSON.stringify({ nickname: body.nickname }),
     })
     : await fetch(`/api/friends/${encodeURIComponent(body.uid)}`, { method: body.op === 'accept' ? 'PUT' : 'DELETE' });
-  if (res.status >= 500) throw new AppError('network', 'friend action failed', { status: res.status });
+  if (res.status >= 500 || isRateLimited(res)) throw requestFailure(res, 'friend action failed');
   const json = await res.json() as { result?: string; error?: string };
   return res.ok ? { ok: true, result: json.result ?? '' } : { ok: false, error: json.error ?? 'unknown' };
 }

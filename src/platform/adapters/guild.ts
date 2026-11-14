@@ -5,6 +5,7 @@ import { AppError } from '../../core/errors';
 import { GUILD_LINK_PREFIX, normalizeGuildCode } from '../../game/rules/guild';
 import { isCloud } from './auth';
 import type { GuildInvitePreview, GuildOp, GuildOpResult, GuildState } from '../api/types';
+import { isRateLimited, requestFailure } from './requestFailure';
 
 const NO_GUILD: GuildState = { guild: null, request: null };
 
@@ -13,7 +14,7 @@ export async function readGuild(): Promise<GuildState> {
   if (!isCloud) return NO_GUILD;
   const res = await fetch('/api/guilds/me');
   if (res.status === 401) throw new AppError('unauthorized', 'guild read before session');
-  if (!res.ok) throw new AppError('network', 'guild read failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'guild read failed');
   const body = await res.json() as Partial<GuildState>;
   return { guild: body.guild ?? null, request: body.request ?? null };
 }
@@ -23,7 +24,7 @@ export async function readGuildInvite(code: string): Promise<GuildInvitePreview 
   if (!isCloud) return null;
   const res = await fetch(`/api/guild-invites/${encodeURIComponent(code)}`);
   if (res.status === 404) return null;
-  if (!res.ok) throw new AppError('network', 'guild invite read failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'guild invite read failed');
   return (await res.json() as { invite: GuildInvitePreview }).invite;
 }
 
@@ -54,7 +55,7 @@ function request(op: GuildOp): [string, RequestInit] {
 /** 길드 요청. 서버가 거절하면 오류 코드를 돌려주고, 연결 실패는 던진다. 들어오기는 들어갔는지 신청이 됐는지를 싣는다 */
 export async function guildAction(op: GuildOp): Promise<GuildOpResult> {
   const res = await fetch(...request(op));
-  if (res.status >= 500) throw new AppError('network', 'guild action failed', { status: res.status });
+  if (res.status >= 500 || isRateLimited(res)) throw requestFailure(res, 'guild action failed');
   const body = await res.json().catch(() => ({})) as { error?: string; result?: string };
   if (!res.ok) return { ok: false, error: body.error ?? 'unknown' };
   return body.result === 'joined' || body.result === 'requested' ? { ok: true, result: body.result } : { ok: true };
