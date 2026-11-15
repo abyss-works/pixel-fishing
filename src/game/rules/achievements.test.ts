@@ -210,6 +210,12 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(out.state.achievements['zone-basic-pacific']).toBe('claimed');
     expect(out.state.achievements['variant-village']).toBe('claimed');
     expect(out.state.achievements['artifact-all']).toBe('claimed');
+    // 모두 받기 결과는 받은 골드 합계와 모자 목록을 싣는다 — 클라가 수령 문구를 만들 수 있게 한다
+    expect(out.result).toEqual({
+      type: 'claimAllAchievements',
+      gold: 25_000,
+      hats: ['shipowner-bowler'],
+    });
     expect(out.events).toContainEqual({
       type: 'claimAllAchievements',
       payload: {

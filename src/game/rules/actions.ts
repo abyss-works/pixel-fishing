@@ -135,6 +135,9 @@ export type ActionResult =
   | { type: 'extract'; energy: Record<RarityId, number> }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
+  /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
+   *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
+  | { type: 'claimAllAchievements'; gold: number; hats: string[] }
   | { type: 'none' };
 
 /** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
@@ -847,7 +850,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true,
         state: { ...state, gold: state.gold + gold, hats: nextHats, achievements: nextAchievements },
-        result: { type: 'none' },
+        result: { type: 'claimAllAchievements', gold, hats: rewardHats },
         events: [{ type: 'claimAllAchievements', payload: { ids, gold, hats: rewardHats } }],
       };
     }
