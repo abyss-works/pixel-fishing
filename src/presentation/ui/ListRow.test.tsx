@@ -17,10 +17,11 @@ describe('ListRow', () => {
     expect(row.className).not.toMatch(/(^|\s)h-12(\s|$)/);
   });
 
-  it('수치는 항목 단위로 줄을 바꾸고 항목 안에서는 줄을 바꾸지 않는다', () => {
+  it('수치는 항목 단위로 먼저 줄을 바꾸고, 열 폭보다 긴 항목은 그 항목 안에서 줄을 바꾼다', () => {
     render(<ListRow state="open" name="배" subs={['속도 200', '가방 4,000']} />);
     const sub = screen.getByText('가방 4,000');
-    expect(sub).toHaveClass('whitespace-nowrap');
+    expect(sub).not.toHaveClass('whitespace-nowrap');
+    expect(sub).toHaveClass('break-keep', 'break-words');
     expect(sub.parentElement?.className).toContain('flex-wrap');
   });
 
