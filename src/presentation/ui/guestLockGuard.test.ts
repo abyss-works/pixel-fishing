@@ -21,7 +21,7 @@ const GUEST_LOCK_SCREENS = [
   'views/overlays/letter/LetterModal.tsx',   // 편지 입력 칸
   'views/overlays/live/ChatBar.tsx',         // 채팅 방 버튼과 입력 칸
   'views/overlays/live/PlayerInfo.tsx',      // 친구 요청과 차단
-  'views/overlays/menu/GameMenu.tsx',        // 메뉴 줄 의뢰, 길드, 소셜, 우편함: MenuList lock
+  'views/overlays/menu/GameMenu.tsx',        // 메뉴 줄 의뢰, 업적, 길드, 소셜, 우편함: MenuList lock
 ];
 
 const SHARED_STRUCTURE = /<Locked\b|\block=\{|\block: /;
