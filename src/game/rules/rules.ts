@@ -19,7 +19,8 @@ import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
 import type { BaseId } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
-import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
+import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
+import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import {
   upgradeCost, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
@@ -55,6 +56,11 @@ export type RejectReason =
   | 'ticket-expired' // 도전권 기간 만료 — 다시 조우하면 받을 수 있다
   | 'hat-owned' // 이미 가진 모자를 다시 사려 했다
   | 'hat-not-owned' // 갖지 않은 모자를 쓰려 했다
+  | 'achievement-hat-only' // 업적 모자는 골드로 살 수 없다
+  | 'achievement-already-claimed' // 이미 받은 업적을 다시 받으려 했다
+  | 'achievement-not-claimable' // 아직 받을 수 없는 업적을 받으려 했다
+  | 'no-claimable-achievements' // 받을 수 있는 업적이 하나도 없다
+  | 'account-only' // 게스트에게 열리지 않은 기능
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
   | 'item-not-owned' // 먹으려는 요리가 가방에 없다
@@ -102,6 +108,11 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'ticket-expired': '흔적이 사라졌어요. 다시 조우하면 새로 남아요.',
   'hat-owned': '이미 가진 모자예요.',
   'hat-not-owned': '아직 가지지 않은 모자예요.',
+  'achievement-hat-only': '업적 모자는 업적을 달성해야 받을 수 있어요.',
+  'achievement-already-claimed': '이미 받은 업적이에요.',
+  'achievement-not-claimable': '아직 받을 수 없는 업적이에요.',
+  'no-claimable-achievements': '받을 수 있는 업적이 없어요.',
+  'account-only': '계정을 연결하면 쓸 수 있어요.',
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'item-not-owned': '가방에 이 요리가 없어요.',
@@ -135,12 +146,31 @@ export function canChangeClothes(shirt: unknown, pants: unknown): RuleCheck {
   return inRange(shirt, SHIRT_COLORS.length) && inRange(pants, PANTS_COLORS.length) ? OK : no('bad-request');
 }
 
-/** 모자 사기 — 있는 모자, 아직 없는 모자, 골드가 가격 이상 */
+/** 모자 사기 — 있는 모자, 골드로 사는 모자, 아직 없는 모자, 골드가 가격 이상 */
 export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
   const h = hatById(hat);
   if (!h) return no('bad-request');
+  if (isAchievementHat(h)) return no('achievement-hat-only');
   if (state.hats.includes(h.id)) return no('hat-owned');
   return state.gold >= h.price ? OK : no('not-enough-gold');
+}
+
+/** 업적 보상 받기 — 계정 사용자, 존재하는 업적, claimable 상태 */
+export function canClaimAchievement(state: GameState, id: unknown, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  const def = achievementById(id);
+  if (!def) return no('bad-request');
+  const status = state.achievements[def.id];
+  if (status === 'claimed') return no('achievement-already-claimed');
+  if (status !== 'claimable') return no('achievement-not-claimable');
+  return OK;
+}
+
+/** 업적 보상 모두 받기 — 계정 사용자, 받을 수 있는 알려진 업적이 하나 이상 */
+export function canClaimAllAchievements(state: GameState, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  const hasClaimable = ACHIEVEMENTS.some(a => state.achievements[a.id] === 'claimable');
+  return hasClaimable ? OK : no('no-claimable-achievements');
 }
 
 /** 모자 쓰기 — null은 벗기이며 언제나 된다. 아니면 가진 모자여야 한다 */

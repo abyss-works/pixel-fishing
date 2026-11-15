@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { HATS, isAchievementHat } from '../../../game/content/wardrobe';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { clothesChanged, hatCountText, hatDetail, outfitName } from './wardrobe';
@@ -27,8 +28,8 @@ describe('outfitName', () => {
 
 describe('hatCountText', () => {
   it('가진 수와 전체 수를 보인다', () => {
-    expect(hatCountText(seed())).toBe('0/5');
-    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe('2/5');
+    expect(hatCountText(seed())).toBe(`0/${HATS.length}`);
+    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe(`2/${HATS.length}`);
   });
 });
 
@@ -47,5 +48,21 @@ describe('hatDetail', () => {
     const d = hatDetail(seed({ gold: 49_999 }), 'cap-red');
     expect(d.action).toBe('buy');
     expect(d.buyBlock).toBe('골드가 부족해요.');
+  });
+  it('아직 없는 업적 모자는 사기 대신 업적 잠금 상태고 해금 업적과 진척을 돌려준다', () => {
+    const d = hatDetail(seed(), 'straw-hat');
+    expect(d.action).toBe('achievement');
+    expect(d.buyBlock).not.toBeNull();
+    expect(d.unlock).toMatchObject({ achievementName: expect.any(String), condition: expect.any(String) });
+    expect(d.unlock!.target).toBeGreaterThan(0);
+    expect(d.unlock!.current).toBe(0);
+  });
+  it('가진 업적 모자는 골드 모자처럼 쓰기 버튼이다', () => {
+    const game = seed({ hats: ['straw-hat'] });
+    expect(hatDetail(game, 'straw-hat')).toMatchObject({ owned: true, action: 'wear', buyBlock: null, unlock: null });
+  });
+  it('업적 모자가 아닌 모자는 업적 잠금 상태가 아니다', () => {
+    const hat = HATS.find(h => !isAchievementHat(h))!;
+    expect(hatDetail(seed(), hat.id).action).toBe('buy');
   });
 });

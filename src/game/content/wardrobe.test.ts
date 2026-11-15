@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, safeLook,
+  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, safeLook,
 } from './wardrobe';
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -29,12 +29,33 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('골드 모자는 다섯 개이고 id가 겹치지 않으며 가격이 양의 정수다', () => {
-    expect(HATS.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
-    expect(HATS.map(h => h.price)).toEqual([50_000, 50_000, 100_000, 200_000, 500_000]);
-    for (const h of HATS) {
+  it('모자는 골드 5종과 업적 14종으로 총 19종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(19);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(19);
+
+    const goldHats = HATS.slice(0, 5);
+    expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
+    expect(goldHats.map(h => h.price)).toEqual([50_000, 50_000, 100_000, 200_000, 500_000]);
+    for (const h of goldHats) {
+      expect(h.source).toBe('gold');
+      expect(isAchievementHat(h)).toBe(false);
       expect(h.color).toMatch(HEX);
       expect(Number.isInteger(h.price) && h.price > 0).toBe(true);
+    }
+
+    const achHats = HATS.slice(5);
+    expect(achHats.map(h => h.id)).toEqual([
+      'straw-hat', 'sou-wester', 'coral-bandana', 'saffron-turban', 'worn-tricorn', 'fog-beanie',
+      'braid-captain-cap', 'anchor-beret', 'watch-sailor-cap', 'earflap-cap',
+      'lure-bucket-hat', 'harpooner-pillbox', 'shipowner-bowler', 'salt-fisher-cap',
+    ]);
+    for (const h of achHats) {
+      expect(h.source).toBe('achievement');
+      expect(isAchievementHat(h)).toBe(true);
+      expect(h.achievementId).toBeTruthy();
+      expect(h.price).toBe(0);
+      expect(h.color).toMatch(HEX);
+      if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);
     }
   });
 

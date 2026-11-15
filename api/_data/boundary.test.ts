@@ -23,6 +23,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/activity.ts': ['play_sessions', 'user_active_days', 'daily_stats'],
   '_data/position.ts': ['last_positions'],
   '_data/consent.ts': ['consent_records'],
+  '_data/achievements.ts': ['achievement_counters'],
 };
 
 function sources(dir: string): string[] {

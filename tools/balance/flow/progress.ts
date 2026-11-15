@@ -44,7 +44,7 @@ export interface RatePlan {
 
 /** 진행 업적(구역 도감 완성) 기록과 보상 지급 */
 export interface AchievementOptions {
-  /** 달성한 업적에 지급할 골드와 명성. null이면 지급하지 않고 달성 시각만 기록한다 */
+  /** 달성한 업적에 지급할 골드. null이면 지급하지 않고 달성 시각만 기록한다 */
   reward: (zone: BountyZone, tier: BountyTier) => Reward | null;
 }
 
@@ -210,7 +210,7 @@ export function simulate(opts: SimOptions): SimResult {
         const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : licenseHeld(dex, zone, tier);
         if (!done) continue;
         const granted = a.reward(zone, tier);
-        if (granted) { gold += granted.gold; fame += granted.fame; }
+        if (granted) gold += granted.gold;
         achieved.push({ zone, tier, hours: fishSec / 3600, spot: at ?? SPOTS[idx].id, granted });
       }
     }

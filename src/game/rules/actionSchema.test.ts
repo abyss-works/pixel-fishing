@@ -85,4 +85,12 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'buyHat' })).toBeNull();
     expect(parseAction({ type: 'wearHat' })).toBeNull();
   });
+
+  it('업적 수령 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'claimAchievement', id: 'zone-basic-pacific' }))
+      .toEqual({ type: 'claimAchievement', id: 'zone-basic-pacific' });
+    expect(parseAction({ type: 'claimAchievement' })).toBeNull();
+    expect(parseAction({ type: 'claimAchievement', id: 1 })).toBeNull();
+    expect(parseAction({ type: 'claimAllAchievements' })).toEqual({ type: 'claimAllAchievements' });
+  });
 });

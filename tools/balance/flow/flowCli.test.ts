@@ -44,22 +44,14 @@ describe('새 옵션 인자', () => {
     expect(() => parseArgs(['upgrades', '--levels', 'a'])).toThrow(/형식/);
   });
 
-  it('--reward-basis와 --basis는 보상 명령에서만 쓰고, 보상 관측에서는 --reward와 함께 써야 한다', () => {
-    expect(parseArgs(['achievements', '--reward-basis', 'incremental-fame']).rewardBasis).toBe('incremental-fame');
-    expect(parseArgs(['achievements', '--basis', 'southatlantic=sthelena:next']).basis).toEqual({ southatlantic: { from: 'sthelena', to: 'next' } });
-    expect(() => parseArgs(['achievements', '--reward-basis', 'nope'])).toThrow(/total, incremental-fame, ev-hours/);
-    expect(() => parseArgs(['transition', '--reward-basis', 'ev-hours'])).toThrow(/--reward와/);
-    expect(() => parseArgs(['ev', '--reward-basis', 'ev-hours'])).toThrow(/achievements/);
-    expect(() => parseArgs(['achievements', '--basis', 'indian=a:b', '--basis', 'indian=c:d'])).toThrow(/두 번/);
-  });
-
-  it('gates도 --reward를 받지만 --reward-split이 있어야 한다', () => {
-    expect(() => parseArgs(['gates', '--reward', '25'])).toThrow(/--reward-split/);
-    expect(parseArgs(['gates', '--reward', '25', '--reward-split', '0.5']).rewards).toEqual([0.25]);
+  it('gates도 --reward를 받고 --reward-split이 없으면 기본 0.5를 쓴다', () => {
+    const o = parseArgs(['gates', '--reward', '4h']);
+    expect(o.rewards).toEqual([4]);
+    expect(o.rewardSplit).toBe(0.5);
   });
 
   it('사용법에 새 명령과 옵션이 있다', () => {
-    for (const word of ['solve', 'upgrades', 'fame', '--growth', '--target', '--boat-share', '--levels', '--reward-basis', '--basis', 'addSpots', 'gradeMult', 'powerPerLevel']) {
+    for (const word of ['solve', 'upgrades', 'fame', '--growth', '--target', '--boat-share', '--levels', 'addSpots', 'gradeMult', 'powerPerLevel']) {
       expect(HELP, word).toContain(word);
     }
   });
@@ -107,12 +99,12 @@ describe('가상 해역과 분포, 보상, 미지원 명령', () => {
     expect(r.dist!.transition.at(-1)!.to).toBe('next');
   });
 
-  it('dist 보상 분포가 가상 전환 기준과 함께 돈다', () => {
+  it('dist 보상 분포가 가상 해역 덮어쓰기와 함께 돈다', () => {
     const file = writeJson(NEXT);
-    const r = runFlow(parseArgs(['dist', '--trials', '3', '--override', file, '--reward', '25', '--reward-split', '0.5', '--basis', 'southatlantic=sthelena:next']));
+    const r = runFlow(parseArgs(['dist', '--trials', '3', '--override', file, '--reward', '4h', '--reward-split', '0.5']));
     const row = r.dist!.reward!.rows.find(x => x.zone === 'southatlantic' && x.tier === 'basic')!;
     expect(row.to).toBe('next');
-    expect(row.reward).not.toBeNull();
+    expect(row.reward.gold).toBeGreaterThan(0);
   });
 
   it('가상 해역을 지원하지 않는 명령은 명확한 오류로 거부한다', () => {
@@ -158,15 +150,7 @@ describe('solve, upgrades, fame', () => {
   });
 });
 
-describe('보상 기준 방식', () => {
-  it('achievements 기본 출력은 방식 표를 더하지 않는다', () => {
-    expect(runCli(['achievements']).stdout).not.toContain('증분 명성');
-  });
-
-  it('total은 방식을 주지 않았을 때와 같은 출력이다', () => {
-    expect(runCli(['achievements', '--reward-basis', 'total']).stdout).toBe(runCli(['achievements']).stdout);
-  });
-
+describe('보상 관측과 덮어쓰기', () => {
   it('현행값 그대로의 낚싯대 규칙 덮어쓰기는 전환, 게이트, 일수 출력을 바꾸지 않는다', () => {
     const same = writeJson({
       rod: {
@@ -181,35 +165,10 @@ describe('보상 기준 방식', () => {
     }
   });
 
-  it('incremental-fame은 명성 기준을 증분으로 바꿔 보여 준다', () => {
-    const text = runCli(['achievements', '--reward-basis', 'incremental-fame']).stdout;
-    expect(text).toContain('증분 명성');
-    expect(text).toContain('기준 명성');
-  });
-
-  it('가상 전환을 기준 전환으로 지정하면 남대서양 보상 크기가 나온다', () => {
-    const file = writeJson(NEXT);
-    const r = runFlow(parseArgs(['achievements', '--override', file, '--basis', 'southatlantic=sthelena:next']));
-    const row = r.achievements!.rows.find(x => x.zone === 'southatlantic')!;
-    expect(row.to).toBe('next');
-    expect(row.amounts).toHaveLength(3);
-    expect(renderText(r)).toContain('세인트헬레나 → 다음 지역 첫 해역');
-  });
-
-  it('transition 보상 관측에 기준 방식이 반영된다', () => {
-    const plain = runFlow(parseArgs(['transition', '--reward', '25', '--reward-split', '0.5']));
-    const inc = runFlow(parseArgs(['transition', '--reward', '25', '--reward-split', '0.5', '--reward-basis', 'incremental-fame']));
-    expect(inc.options.reward!.basis).toEqual({ mode: 'incremental-fame', transitions: {} });
-    expect(plain.options.reward!.basis).toBeUndefined();
-    // 명성 보상이 달라져 전환 시간이 달라진다
-    const hours = (r: typeof plain) => r.transition!.timings.map(x => x.hours);
-    expect(hours(inc)).not.toEqual(hours(plain));
-  });
-
   it('gates --reward는 보상 관측으로 종료 코드에 판정을 반영하지 않는다', () => {
-    const r = runCli(['gates', '--reward', '25', '--reward-split', '0.5']);
+    const r = runCli(['gates', '--reward', '4h', '--reward-split', '0.5']);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('보상 없음 전환 시간');
-    expect(r.stdout).toContain('진행 업적 보상 25.0%');
+    expect(r.stdout).toContain('진행 업적 보상 4시간어치');
   });
 });

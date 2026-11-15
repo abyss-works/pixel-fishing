@@ -61,6 +61,8 @@ const schemas = {
     type: z.literal('resolveChallenge'),
     questId: z.string(), success: z.boolean(), hits: z.number(), misses: z.number(),
   }),
+  claimAchievement: z.object({ type: z.literal('claimAchievement'), id: z.string() }),
+  claimAllAchievements: z.object({ type: z.literal('claimAllAchievements') }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -74,6 +76,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.extractEnergy, schemas.setEnergyTarget, schemas.resetEnergyTargets, schemas.cook, schemas.eat,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
+  schemas.claimAchievement, schemas.claimAllAchievements,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);
 

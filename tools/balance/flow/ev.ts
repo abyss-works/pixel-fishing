@@ -71,6 +71,14 @@ export interface EvOptions {
   growth?: boolean;
 }
 
+/** 구역 대표 방치 EV — 구역 마지막 해역의 딱렙 EV */
+export function zoneEvs(): ZoneEv[] {
+  return BOUNTY_ZONES.map(zone => {
+    const last = spotsOfZone(zone).at(-1)!;
+    return { zone, ev: idleEv(last.id, entryLevel(last.id)) };
+  });
+}
+
 export function evReport(o: EvOptions = {}): EvReport {
   const spots: SpotEv[] = SPOTS.map((s, i) => {
     const entry = entryLevel(s.id);
@@ -81,10 +89,7 @@ export function evReport(o: EvOptions = {}): EvReport {
       preNextLevel, preNextEv: idleEv(s.id, preNextLevel), preNextIsMargin: !next,
     };
   });
-  const zones: ZoneEv[] = BOUNTY_ZONES.map(zone => {
-    const last = spotsOfZone(zone).at(-1)!;
-    return { zone, ev: idleEv(last.id, entryLevel(last.id)) };
-  });
+  const zones = zoneEvs();
   const rewards: RewardRow[] = [];
   for (const z of zones) {
     for (const difficulty of ['easy', 'normal', 'hard', 'named'] as const) {

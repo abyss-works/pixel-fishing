@@ -14,6 +14,7 @@ import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service
 import { fetchSession } from '../../account/service/session';
 import { guestProgress } from '../../account/model/accountRules';
 import { guestHasNoProgress } from '../../../game/rules/guest';
+import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
 import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
@@ -61,7 +62,11 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   if (!gameGatewayRef.current) {
     gameGatewayRef.current = api.createGameGateway(init.game);
   }
-  const [game, setGame] = useState<GameState>(init.game);
+  const [game, setGameState] = useState<GameState>(init.game);
+  // 마지막으로 채택한 상태 — 새로 받을 수 있게 된 업적을 가리는 비교 기준이다.
+  // 렌더를 기다리지 않고 채택과 함께 바꿔, 연달아 온 확정과 로드 직후의 접속이 낡은 상태와 비교하지 않게 한다
+  const gameRef = useRef(game);
+  const setGame = (next: GameState) => { gameRef.current = next; setGameState(next); };
   const [nickname, setNickname] = useState<string | null>(null);
   // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
   const [devTools, setDevTools] = useState(false);
@@ -105,8 +110,14 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
     when(gameGatewayRef.current.dispatch(withForcedEncounter(action)), r => {
       if (r.status === 'ok') {
+        const prev = gameRef.current;
         setGame(r.state);
         settleForcedEncounter(r.result);
+        // 새로 받을 수 있게 된 업적은 메시지 창에 한 줄 남긴다 — 서버는 업적 이벤트를 결과에 싣지 않으므로
+        // 클라가 상태 비교로 알린다(첫 로드와 수령 확정에는 해당하지 않는다).
+        for (const name of newlyClaimable(prev, r.state)) {
+          setToast(`“${name}” 업적을 받을 수 있어요.`);
+        }
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
         if (api.auth.isConfigured) setSync('on');

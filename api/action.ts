@@ -27,6 +27,8 @@ import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
+import { counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
+import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
@@ -53,7 +55,8 @@ import {
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
-import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
+import { counterUpsertFragment } from './_data/achievements.js';
+import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRecords, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
@@ -102,8 +105,9 @@ export function debugTablePlan(command: DebugTableCommand, nowMs: number): Debug
 // 달력 날짜다. 바운티 헌팅의 하루(의뢰 배정·만료·클리어 한도)는 04:00 경계의 게임 날짜를 쓴다(gameDayOf).
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
-/** 3소스 → GameState 조립 */
-function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[]): GameState {
+/** 3소스 + 런타임 업적 근거 → GameState 조립. 카운터·토벌 기록은 표에 있고 저장 blob에는 넣지 않는다 */
+function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[],
+  counters: Record<string, number>, clearedNamed: string[]): GameState {
   const bag: FishInstance[] = [];
   const exhibit: FishInstance[] = [];
   for (const r of instances) {
@@ -121,10 +125,16 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
     (dex[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
       { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
   }
-  // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
+  // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리.
+  // 카운터·토벌 기록은 표에서 읽은 런타임 값으로 덮어 저장 blob과 무관하게 판정한다
   return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
-    boat: row.boat, rod: row.rod, bag, exhibit, dex });
+    boat: row.boat, rod: row.rod, bag, exhibit, dex,
+    achievementCounters: counters, clearedNamed });
 }
+
+/** 알려진 업적이 모두 확정(claimable·claimed)인가 — 미확정이 남아 있으면 도감을 읽어 재평가해야 한다 */
+const achievementsDecided = (map: GameState['achievements']): boolean =>
+  ACHIEVEMENTS.every(a => map[a.id] === 'claimable' || map[a.id] === 'claimed');
 
 /** 진행 행(DB 표기) → 판정 함수의 입력 */
 const questRows = (rows: BountyRows): QuestRow[] =>
@@ -305,6 +315,16 @@ async function route(req: Req, res: Res): Promise<void> {
   let instances: InstanceRow[] = loaded.instances ?? [];
   let records: RecordRow[] = loaded.records ?? [];
 
+  // 소급 업적 판정 — 개체·도감을 건너뛴 액션(catch 제외: fast path가 따로 판정한다)도 확정에서
+  // 평가되므로, 미확정 업적이 남은 계정은 도감을 한 번 더 읽어 합친다. 이미 모두 확정이면 읽지 않는다.
+  // blob의 achievements만 본다 — 런타임 주입값(카운터·토벌)은 조건에 영향이 없다.
+  if (skipDetail && action.type !== 'catch' && row) {
+    const storedAchievements = (row.data as { achievements?: GameState['achievements'] } | null)?.achievements ?? {};
+    if (!achievementsDecided(storedAchievements)) {
+      records = await step('db-read', { uid, action: action.type }, () => loadRecords(db, uid));
+    }
+  }
+
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
   if (!row) {
     const old = await step('db-read', { uid }, () => latestLegacySave(db, uid));
@@ -429,10 +449,16 @@ async function route(req: Req, res: Res): Promise<void> {
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
+      loaded.counters, loaded.clearedNamed);
     if (out.ok) catchBase = scalarState(row);
   } else {
-    const state = assemble(row, instances, records);
+    let state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
+    // 수령 액션은 저장된 achievements가 아니라 표 기준으로 서버가 다시 판정한다.
+    // 이미 채운 조건은 이 자리에서 claimable로 전이돼 claimable→claimed 멱등이 성립한다.
+    if (action.type === 'claimAchievement' || action.type === 'claimAllAchievements') {
+      state = { ...state, achievements: evaluateAchievements(state).achievements };
+    }
     out = applyAction(state, action, {
       rng: Math.random, today: todayKST(),
       now, newUid: () => crypto.randomUUID(),
@@ -487,6 +513,11 @@ async function route(req: Req, res: Res): Promise<void> {
   // 챌린지 결과 확정 — 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다.
   if (action.type === 'resolveChallenge' && typeof action.questId === 'string' && bountyById(action.questId)) {
     fragments.push(...challengeFragments(guard, uid, action.questId, action.success === true, nowISO));
+    // 네임드 토벌 성공은 클리어 행으로 남겨 clearedNamed의 정본이 된다(진행도 카운트와 같은 확정 문장)
+    const quest = bountyById(action.questId)!;
+    if (action.success === true && quest.difficulty === 'named') {
+      fragments.push(clearFragment(guard, uid, quest, nowISO));
+    }
   }
   // 개발 도구 테이블 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
   if (action.type === 'debug' && isDebugTableCommand(action.command)) {
@@ -494,6 +525,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
+  // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
+  fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
@@ -525,7 +558,10 @@ async function route(req: Req, res: Res): Promise<void> {
   // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
   // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
-  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow), activeDayUpsert(uid, eventNow)];
+  const followUps: (SQL | null)[] = [
+    eventsInsert(uid, out.events, eventNow, Object.keys(counterIncrementsForEvents(out.events)).length > 0),
+    activeDayUpsert(uid, eventNow),
+  ];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
   if (action.type === 'catch' && bounty) {
     followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));
@@ -589,9 +625,10 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
-  guild: GuildEffects, guest: boolean): Promise<ApplyOutcome> {
+  guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[]): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
-    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
+    achievementCounters: counters, clearedNamed });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
@@ -662,12 +699,36 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
       fish: takenFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
+  // 업적 판정 — 매 확정마다 이루어진다(명세 §6, 빠른 경로 포함). 도감이 없으니 판정 전에 읽어서,
+  // 방금 잡은 폼의 새 도감까지 합친 상태로 판정한다. 알려진 업적이 모두 확정(claimable·claimed)이면 읽지 않는다.
+  const allDecided = achievementsDecided(base.achievements);
+  const dex = allDecided ? {} : await step('db-read', { uid, action: 'catch' }, async () => {
+    const rows = await loadRecords(db, uid);
+    const d: GameState['dex'] = {};
+    for (const r of rows) {
+      (d[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
+        { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
+    }
+    return d;
+  });
+  const evalDex = allDecided ? undefined : { ...dex, [fish.id]: { ...dex[fish.id], [inst.form]: rec } };
+  let evalState = base;
+  if (evalDex) evalState = { ...base, dex: evalDex };
+  const evaluated = allDecided ? { achievements: base.achievements, newlyClaimable: [] as string[] }
+    : evaluateAchievements(evalState);
+  const inc = counterIncrementsForEvents(events);
+  const counters2 = { ...base.achievementCounters };
+  for (const [k, v] of Object.entries(inc)) counters2[k as keyof typeof counters2] = (counters2[k as keyof typeof counters2] ?? 0) + v;
+  const claimableEvents = evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } }));
   return {
     ok: true,
-    state: { ...applyEnergyGain({ ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+    state: { ...applyEnergyGain({ ...evalState,
+      achievements: evaluated.achievements,
+      achievementCounters: counters2,
+      fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
       ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
-    events,
+    events: [...events, ...claimableEvents],
     writes: {
       instancesAdded: added, instancesRemoved: removed,
       instancesMoved: [], instancesLocked: [],

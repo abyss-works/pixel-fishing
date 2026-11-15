@@ -1,10 +1,10 @@
 // 메뉴 줄 - 항목 순서와 의뢰 줄 배지의 단일 출처. 줄의 모양과 열 창은 표현 계층이 정한다.
 
-export type MenuKey = 'quests' | 'guild' | 'friends' | 'mailbox';
+export type MenuKey = 'quests' | 'achievements' | 'guild' | 'friends' | 'mailbox';
 
-/** 메뉴 줄에 오를 항목을 위에서부터 돌려준다. 의뢰는 늘 맨 위에 있고, 나머지는 열 수 있는 입구만 남는다 */
+/** 메뉴 줄에 오를 항목을 위에서부터 돌려준다. 의뢰와 업적은 늘 보이고, 나머지는 열 수 있는 입구만 남는다 */
 export function menuKeys(open: { guild: boolean; friends: boolean; mailbox: boolean }): MenuKey[] {
-  const keys: MenuKey[] = ['quests'];
+  const keys: MenuKey[] = ['quests', 'achievements'];
   if (open.guild) keys.push('guild');
   if (open.friends) keys.push('friends');
   if (open.mailbox) keys.push('mailbox');

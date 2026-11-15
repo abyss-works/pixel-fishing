@@ -32,6 +32,10 @@ export interface ActionContext {
   bounty: BountyRows | null;
   /** 지금 속한 길드와 그 길드의 누적 기여도, 저장된 보너스별 단계. 길드가 없거나 읽지 않았으면 null */
   guild: { id: string; total: number; ranks: Partial<Record<GuildBonusId, number>> } | null;
+  /** 업적 카운터 누적(키 → 누적값). 행이 없으면 빈 객체다 */
+  counters: Record<string, number>;
+  /** 토벌한 네임드 의뢰 id 목록(bounty_clears의 kind='named' 행) */
+  clearedNamed: string[];
 }
 
 const INSTANCE_COLS = sql`uid, fish_id, form, size, caught_at, spot, judgment, slot, locked`;
@@ -46,6 +50,12 @@ export const stateJson = (uid: string) =>
   sql`(select row_to_json(c) from (select data, version, gold, fame, boat, rod, restricted, updated_at,
        last_catch_at, active_client
        from public.saves_current where user_id = ${uid}) c)`;
+/** 업적 카운터 누적 — 사용자별, 키별 누적값. 행이 없으면 빈 객체 */
+export const countersJson = (uid: string) =>
+  sql`(select coalesce(json_object_agg(key, value), '{}') from public.achievement_counters where user_id = ${uid})`;
+/** 토벌한 네임드 의뢰 id — bounty_clears에서 kind='named'인 행 전부 */
+export const clearedNamedJson = (uid: string) =>
+  sql`(select coalesce(json_agg(quest_id), '[]') from public.bounty_clears where user_id = ${uid} and kind = 'named')`;
 
 /**
  * 프로필·저장 상태와, 필요하면 개체·도감·수배 행을 한 번에 읽는다.
@@ -61,7 +71,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
   const { rows } = await db.execute<{
     nickname: string | null; cur: StateRow | null; instances: InstanceRow[] | null; records: RecordRow[] | null;
     clears: BountyRows['clears'] | null; progress: BountyRows['progress'] | null; tickets: BountyRows['tickets'] | null;
-    guild: ActionContext['guild'];
+    guild: ActionContext['guild']; counters: ActionContext['counters']; clearedNamed: ActionContext['clearedNamed'];
   }>(sql`select
     (select nickname from public.profiles where user_id = ${uid}) as nickname,
     ${stateJson(uid)} as cur,
@@ -75,7 +85,9 @@ export async function loadContext(db: Executor, uid: string, opts: {
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets,
     case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'total', ${guildTotal(sql`m.guild_id`)},
       'ranks', ${guildRanksJson(sql`m.guild_id`)})
-      from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild`);
+      from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild,
+    ${countersJson(uid)} as counters,
+    ${clearedNamedJson(uid)} as "clearedNamed"`);
   const r = rows[0];
   return {
     nickname: r.nickname,
@@ -84,7 +96,15 @@ export async function loadContext(db: Executor, uid: string, opts: {
     records: r.records,
     bounty: day !== null ? { clears: r.clears ?? [], progress: r.progress ?? [], tickets: r.tickets ?? [] } : null,
     guild: r.guild ? { ...r.guild, total: Number(r.guild.total) } : null,
+    counters: r.counters,
+    clearedNamed: r.clearedNamed,
   };
+}
+
+/** 사용자의 도감 기록 행 전부 — 개체를 건너뛴 처리에서 업적 재판정에 쓸 때 따로 읽는다 */
+export async function loadRecords(db: Executor, uid: string): Promise<RecordRow[]> {
+  const { rows } = await db.execute<{ records: RecordRow[] }>(sql`select ${recordsJson(uid)} as records`);
+  return rows[0].records;
 }
 
 /** 정규화 이전 저장(구 saves)의 최신 본문 — 첫 액션 시딩의 원본 */
