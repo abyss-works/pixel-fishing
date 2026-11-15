@@ -10,7 +10,6 @@
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500이 났던
 // 사고의 재발을 막기 위해서다. default export = Node 시그니처.
-import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
@@ -57,7 +56,7 @@ import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import { counterUpsertFragment } from './_data/achievements.js';
-import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms, recordsJson } from './_data/load.js';
+import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRecords, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
@@ -322,11 +321,7 @@ async function route(req: Req, res: Res): Promise<void> {
   if (skipDetail && action.type !== 'catch' && row) {
     const storedAchievements = (row.data as { achievements?: GameState['achievements'] } | null)?.achievements ?? {};
     if (!achievementsDecided(storedAchievements)) {
-      records = await step('db-read', { uid, action: action.type }, async () => {
-        const { rows } = await db.execute<{ records: RecordRow[] }>(
-          sql`select ${recordsJson(uid)} as records`);
-        return rows[0].records;
-      });
+      records = await step('db-read', { uid, action: action.type }, () => loadRecords(db, uid));
     }
   }
 
@@ -708,9 +703,9 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   // 방금 잡은 폼의 새 도감까지 합친 상태로 판정한다. 알려진 업적이 모두 확정(claimable·claimed)이면 읽지 않는다.
   const allDecided = achievementsDecided(base.achievements);
   const dex = allDecided ? {} : await step('db-read', { uid, action: 'catch' }, async () => {
-    const { rows } = await db.execute<{ records: RecordRow[] }>(sql`select ${recordsJson(uid)} as records`);
+    const rows = await loadRecords(db, uid);
     const d: GameState['dex'] = {};
-    for (const r of rows[0].records) {
+    for (const r of rows) {
       (d[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
         { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
     }

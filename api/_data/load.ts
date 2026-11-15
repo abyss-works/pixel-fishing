@@ -101,6 +101,12 @@ export async function loadContext(db: Executor, uid: string, opts: {
   };
 }
 
+/** 사용자의 도감 기록 행 전부 — 개체를 건너뛴 처리에서 업적 재판정에 쓸 때 따로 읽는다 */
+export async function loadRecords(db: Executor, uid: string): Promise<RecordRow[]> {
+  const { rows } = await db.execute<{ records: RecordRow[] }>(sql`select ${recordsJson(uid)} as records`);
+  return rows[0].records;
+}
+
 /** 정규화 이전 저장(구 saves)의 최신 본문 — 첫 액션 시딩의 원본 */
 export async function latestLegacySave(db: Executor, uid: string): Promise<unknown> {
   const { rows } = await db.execute<{ data: unknown }>(sql`select data from public.saves
