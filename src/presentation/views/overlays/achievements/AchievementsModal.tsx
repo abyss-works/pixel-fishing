@@ -55,7 +55,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
       const reward = row.def.reward.kind === 'gold'
         ? `${fmtGold(row.def.reward.gold)}`
         : `${josa(hatById(row.def.reward.hatId)?.name ?? '모자', '을/를')}`;
-      setToast(`"${row.def.name}" 업적 보상으로 ${reward} 받았어요.`, 'gold');
+      setToast(`“${row.def.name}” 업적 보상으로 ${reward} 받았어요.`, 'gold');
     });
   };
 
