@@ -31,6 +31,18 @@ function show(game: GameState, id: string, over: { guest?: boolean; busy?: boole
 const focusables = (root: HTMLElement) =>
   [...root.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')];
 
+/** 강조 테두리 — 기본 틀 테두리 위에 덧쓰는 색 테두리 클래스(임의 색 또는 토큰 색) */
+const emphasizedBorder = (element: HTMLElement) =>
+  /\bborder-\[[^\]]+\]/.test(element.className)
+  || /\bborder-(?:accent|gold|gold-dark|legend|rare|epic|common|special|danger)\b/.test(element.className);
+
+/** 카드 뿌리와 그 세 블록(정보, 보상 칸, 상태 줄) */
+const cardParts = (container: HTMLElement) => {
+  const root = container.firstElementChild as HTMLElement;
+  const [info, reward, status] = [...root.children] as HTMLElement[];
+  return { root, info, reward, status };
+};
+
 describe('업적 카드', () => {
   it('받을 수 있는 카드는 받기 버튼만 두고 접근성 이름에 업적 이름을 붙인다', () => {
     const game = seed({ achievements: { 'zone-basic-pacific': 'claimable' } });
@@ -116,5 +128,76 @@ describe('업적 카드', () => {
     show(game, 'zone-basic-pacific', { row: { def: row.def, status: 'progress', progress: { current: 3, target: 0 } } });
     expect(screen.getByText('3/0')).toBeInTheDocument();
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('0%');
+  });
+
+  it('진척 막대의 값 범위는 목표가 0이어도 유효하다', () => {
+    const game = seed();
+    const { row } = show(game, 'zone-basic-pacific');
+    cleanup();
+    show(game, 'zone-basic-pacific', { row: { def: row.def, status: 'progress', progress: { current: 3, target: 0 } } });
+    const meter = screen.getByRole('meter');
+    const min = Number(meter.getAttribute('aria-valuemin'));
+    const max = Number(meter.getAttribute('aria-valuemax'));
+    const now = Number(meter.getAttribute('aria-valuenow'));
+    expect(max).toBeGreaterThan(min);
+    expect(now).toBeGreaterThanOrEqual(min);
+    expect(now).toBeLessThanOrEqual(max);
+  });
+
+  it('진척 막대의 접근성 이름에 업적 이름이 들어간다', () => {
+    const { row } = show(seed(), 'zone-basic-pacific');
+    expect(screen.getByRole('meter', { name: `진척, ${row.def.name}` })).toBeInTheDocument();
+  });
+
+  it('카드 자리는 이름표, 조건, 진척, 보상 칸, 상태 줄 순서다', () => {
+    const { container } = show(seed(), 'zone-basic-pacific');
+    const { root, info, reward, status } = cardParts(container);
+    expect(root.children).toHaveLength(3);
+    const name = info.querySelector('[data-achievement-name]') as HTMLElement;
+    const desc = info.querySelector('[data-achievement-desc]') as HTMLElement;
+    const meter = info.querySelector('[role="meter"]') as HTMLElement;
+    expect(info.children[0]).toBe(name);
+    expect(info.children[1]).toBe(desc);
+    expect(info.children[2]).toBe(meter.parentElement);
+    expect(reward.querySelector('[data-achievement-reward]')).not.toBeNull();
+    expect(status).toHaveTextContent('진행 중');
+    const order = [name, desc, meter, reward, status];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it('상태와 받기 줄은 상태가 달라도 같은 고정 높이를 쓴다', () => {
+    const progress = show(seed(), 'zone-basic-pacific');
+    const progressStatus = cardParts(progress.container).status;
+    cleanup();
+    const claimable = show(seed({ achievements: { 'zone-basic-pacific': 'claimable' } }), 'zone-basic-pacific');
+    const claimableStatus = cardParts(claimable.container).status;
+    const heightOf = (element: HTMLElement) => element.className.match(/(?:^|\s)(h-\S+)/)?.[1] ?? null;
+    expect(heightOf(progressStatus)).not.toBeNull();
+    expect(heightOf(claimableStatus)).toBe(heightOf(progressStatus));
+  });
+
+  it('보상 칸은 위 정보와 1px 선으로 나뉜다', () => {
+    const { container } = show(seed(), 'zone-basic-pacific');
+    expect(cardParts(container).reward).toHaveClass('border-t', 'border-line');
+  });
+
+  it('받은 카드는 전체가 흐려지고 보상 칸 값은 남는다', () => {
+    const game = seed({ achievements: { 'zone-basic-pacific': 'claimed' } });
+    const { container } = show(game, 'zone-basic-pacific');
+    const { root, reward } = cardParts(container);
+    const dim = root.className.match(/(?:^|\s)opacity-(\d+)/);
+    expect(dim).not.toBeNull();
+    expect(Number(dim?.[1])).toBeLessThan(100);
+    expect(reward.querySelector('[data-achievement-reward]')).toHaveTextContent('25,000G');
+  });
+
+  it('받을 수 있는 카드만 테두리를 강조한다', () => {
+    const claimable = show(seed({ achievements: { 'zone-basic-pacific': 'claimable' } }), 'zone-basic-pacific');
+    expect(emphasizedBorder(cardParts(claimable.container).root)).toBe(true);
+    cleanup();
+    const progress = show(seed(), 'zone-basic-pacific');
+    expect(emphasizedBorder(cardParts(progress.container).root)).toBe(false);
   });
 });

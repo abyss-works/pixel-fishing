@@ -38,7 +38,7 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
         <b data-achievement-name className="text-sm break-keep break-words">{def.name}</b>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{def.desc}</p>
         <div className="flex items-center gap-2">
-          <span role="meter" aria-label="진척" aria-valuemin={0} aria-valuemax={progress.target}
+          <span role="meter" aria-label={`진척, ${def.name}`} aria-valuemin={0} aria-valuemax={Math.max(progress.target, 1)}
                 aria-valuenow={Math.min(progress.current, progress.target)}
                 className="block h-2 flex-1 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
             <span data-achievement-gauge-fill
