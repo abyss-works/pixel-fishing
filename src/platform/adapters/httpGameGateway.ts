@@ -18,8 +18,9 @@ type Row = Record<string, never> | Record<string, unknown>;
 // 창 식별자 — 창(탭)마다 새로 만든다. 서버는 마지막으로 접속(boot)한 창의 액션만 받는다
 const CLIENT_ID = crypto.randomUUID();
 
-/** 세 소스에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
-function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
+/** 세 소스 + 런타임 업적 근거에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
+function assemble(cur: Row, instances: Row[], records: Row[],
+  counters: Record<string, number>, clearedNamed: string[]): GameState {
   const bag: unknown[] = [];
   const exhibit: unknown[] = [];
   for (const r of instances as Record<string, unknown>[]) {
@@ -39,7 +40,8 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
   }
   const c = cur as Record<string, unknown>;
   return migrate({ v: 8, ...(c.data as object), gold: Number(c.gold), fame: Number(c.fame),
-    boat: c.boat, rod: c.rod, bag, exhibit, dex });
+    boat: c.boat, rod: c.rod, bag, exhibit, dex,
+    achievementCounters: counters, clearedNamed });
 }
 
 export class HttpGameGateway implements GameGateway {
@@ -60,9 +62,10 @@ export class HttpGameGateway implements GameGateway {
   // 서버가 세 표의 본인 행을 한 번에 돌려주고, 여기서 GameState로 조립한다.
   async load(): Promise<GameState | null> {
     if (!isCloud) return null;
-    const me = await readMe<{ cur: Row | null; instances: Row[]; records: Row[]; legacy: unknown }>('state');
+    const me = await readMe<{ cur: Row | null; instances: Row[]; records: Row[];
+      counters: Record<string, number>; clearedNamed: string[]; legacy: unknown }>('state');
     if (me.cur) {
-      const s = assemble(me.cur, me.instances, me.records);
+      const s = assemble(me.cur, me.instances, me.records, me.counters, me.clearedNamed);
       this.lastState = s;
       const v = Number((me.cur as { version?: unknown }).version);
       this.lastVersion = Number.isFinite(v) ? v : null;

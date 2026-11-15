@@ -3,24 +3,35 @@ import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { at } from './json.js';
 import type { BountyRows, InstanceRow, RecordRow } from './load.js';
-import { instancesJson, latestLegacySave, recordsJson } from './load.js';
+import { clearedNamedJson, countersJson, instancesJson, latestLegacySave, recordsJson } from './load.js';
 
 export interface OwnState {
   cur: { data: unknown; gold: number; fame: number; boat: number; rod: number; version: number } | null;
   instances: InstanceRow[];
   records: RecordRow[];
+  /** 업적 카운터 누적(키 → 누적값). 행이 없으면 빈 객체다 */
+  counters: Record<string, number>;
+  /** 토벌한 네임드 의뢰 id 목록(bounty_clears의 kind='named' 행) */
+  clearedNamed: string[];
   /** 저장 상태가 없을 때만 구 저장의 최신 본문. 없으면 null */
   legacy: unknown;
 }
 
 export async function readOwnState(db: Executor, uid: string): Promise<OwnState> {
-  const { rows } = await db.execute<{ cur: OwnState['cur']; instances: InstanceRow[]; records: RecordRow[] }>(sql`select
+  const { rows } = await db.execute<{
+    cur: OwnState['cur']; instances: InstanceRow[]; records: RecordRow[];
+    counters: OwnState['counters']; clearedNamed: OwnState['clearedNamed'];
+  }>(sql`select
     (select row_to_json(c) from (select data, gold, fame, boat, rod, version
       from public.saves_current where user_id = ${uid}) c) as cur,
     ${instancesJson(uid)} as instances,
-    ${recordsJson(uid)} as records`);
+    ${recordsJson(uid)} as records,
+    ${countersJson(uid)} as counters,
+    ${clearedNamedJson(uid)} as "clearedNamed"`);
   const r = rows[0];
-  return { cur: r.cur, instances: r.instances, records: r.records, legacy: r.cur ? null : await latestLegacySave(db, uid) };
+  return { cur: r.cur, instances: r.instances, records: r.records,
+    counters: r.counters, clearedNamed: r.clearedNamed,
+    legacy: r.cur ? null : await latestLegacySave(db, uid) };
 }
 
 /** dayStart 이후의 클리어와 진행·도전권 전부. 날이 바뀌어 만료된 의뢰는 읽는 쪽이 거른다 */

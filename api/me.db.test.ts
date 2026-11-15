@@ -55,7 +55,7 @@ describe('본인 읽기', () => {
   });
 
   it('state: 저장 상태가 없으면 구 저장의 최신 본문을 준다', async () => {
-    expect((await callMe('state', userToken(LEGACY))).body).toEqual({ cur: null, instances: [], records: [], legacy: { v: 4, gold: 77 } });
+    expect((await callMe('state', userToken(LEGACY))).body).toEqual({ cur: null, instances: [], records: [], counters: {}, clearedNamed: [], legacy: { v: 4, gold: 77 } });
   });
 
   it('bounty: 오늘(게임 날짜)의 클리어와 도전권을 준다', async () => {
