@@ -12,11 +12,12 @@ const expectNoEllipsis = (element: HTMLElement) => {
 };
 
 describe('ListRow', () => {
-  it('이름은 말줄임하지 않고 줄을 바꾸며 행은 고정 높이가 아니라 최소 높이다', () => {
+  it('이름은 말줄임하거나 한 줄로 두지 않고 제 열 안에서 줄을 바꾸며 행은 고정 높이가 아니라 최소 높이다', () => {
     const { container } = render(<ListRow state="open" name="가공 플랜트선" subs={['속도 200', '가방 4,000']} trailing="12,500,000G" />);
     const name = screen.getByText('가공 플랜트선');
     expectNoEllipsis(name);
-    expect(name.className).toContain('break-keep');
+    expect(name).not.toHaveClass('whitespace-nowrap');
+    expect(name).toHaveClass('break-keep', 'break-words');
     const row = container.firstElementChild as HTMLElement;
     expect(row.className).toContain('min-h-12');
     expect(row.className).not.toMatch(/(^|\s)h-12(\s|$)/);

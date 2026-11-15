@@ -39,7 +39,7 @@ export default function ListRow({ state, leading, name, subs = [], trailing, onS
     <>
       {leading ? <span className="shrink-0 flex items-center">{leading}</span> : <span aria-hidden="true" />}
       <span className="min-w-0 flex flex-col gap-0.5">
-        <b className={cx('text-sm break-keep', NAME[state])}>{name}</b>
+        <b className={cx('text-sm break-keep break-words', NAME[state])}>{name}</b>
         {subs.length > 0 && (
           <span className="flex flex-wrap gap-x-3 text-2xs text-text-dim">
             {subs.map((s, i) => <span key={i} className="break-keep break-words">{s}</span>)}
