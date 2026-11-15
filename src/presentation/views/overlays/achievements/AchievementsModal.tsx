@@ -6,7 +6,7 @@ import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import {
-  ACHIEVEMENT_TABS, achievementRows, achievementSummary, canClaim,
+  ACHIEVEMENT_TABS, achievementRows, achievementSummary,
 } from '../../../../features/achievement/model/achievements';
 import type { AchievementRow } from '../../../../features/achievement/model/achievements';
 import { josa } from '../../../ui/format';
@@ -14,12 +14,12 @@ import { fmtGold } from '../../../ui/format';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
-import ListRow from '../../../ui/ListRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import TabBar from '../../../ui/TabBar';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { hatById } from '../../../../game/content/wardrobe';
+import AchievementCard from './AchievementCard';
 
 interface Props {
   game: GameState;
@@ -33,7 +33,8 @@ interface Props {
 // 업적 창 — 메뉴 줄의 업적을 눌러 여는 창. 진행, 수집, 네임드와 유물, 횟수 탭 넷으로 나누고
 // 탭 안에서는 받을 수 있는 업적을 맨 위에, 진행 중을 그 아래, 받은 업적을 마지막에 둔다.
 // 상단 요약 줄에는 받은 수와 받을 수 있는 골드·모자 합과 [모두 받기]를 고정해 둔다.
-// 행에는 이름표, 조건 문구, 진척(현재 / 목표), 보상, 상태 칸을 두고, 받기는 서버 판정의 결과만 쓴다.
+// 탭 본문은 카드 격자다. 열 수는 본문 폭과 카드 최소 폭으로 정하고, 좁으면 1열로 내려가며 가로 스크롤을 만들지 않는다.
+// 받기는 카드 안 버튼이 서버 판정의 결과만 쓴다.
 export default function AchievementsModal({ game, guest = false, dispatch, setToast, onClose }: Props) {
   const [tab, setTab] = useState<AchievementTab>('progress');
   const [busy, setBusy] = useState(false);
@@ -83,39 +84,15 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             </span>
           </Inset>
           <TabBar tabs={ACHIEVEMENT_TABS} activeKey={tab} onSelect={setTab} />
-          <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
-            {rows.map(row => <AchievementLine key={row.def.id} row={row} game={game} guest={guest} busy={busy} onClaim={() => claimOne(row)} />)}
+          <div className={`${SCROLL_Y} flex-1 min-h-0`}>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-2">
+              {rows.map(row => (
+                <AchievementCard key={row.def.id} row={row} game={game} guest={guest} busy={busy} onClaim={() => claimOne(row)} />
+              ))}
+            </div>
           </div>
         </div>
       </ModalCard>
     </Modal>
-  );
-}
-
-/** 보상 문구 — 골드는 금액, 모자는 모자 이름 */
-function rewardText(row: AchievementRow): string {
-  return row.def.reward.kind === 'gold'
-    ? fmtGold(row.def.reward.gold)
-    : `${hatById(row.def.reward.hatId)?.name ?? '모자'}`;
-}
-
-function AchievementLine({ row, game, guest, busy, onClaim }: {
-  row: AchievementRow; game: GameState; guest: boolean; busy: boolean; onClaim: () => void;
-}) {
-  const state = row.status === 'claimed' ? 'done' : row.status === 'claimable' ? 'current' : 'open';
-  const claimable = canClaim(game, row.def.id, guest);
-  const status = row.status === 'claimed'
-    ? '받음'
-    : row.status === 'claimable'
-      ? <Button variant="primary" size="sm" disabled={busy || !claimable} onClick={onClaim}>받기</Button>
-      : '진행 중';
-  return (
-    <ListRow
-      state={state}
-      name={row.def.name}
-      subs={[row.def.desc, `진척 ${row.progress.current}/${row.progress.target}`, `보상 ${rewardText(row)}`]}
-      trailing={status}
-      ariaLabel={`${row.def.name}, ${row.def.desc}, 진척 ${row.progress.current}/${row.progress.target}, 보상 ${rewardText(row)}, ${row.status === 'claimed' ? '받음' : row.status === 'claimable' ? '받을 수 있음' : '진행 중'}`}
-    />
   );
 }
