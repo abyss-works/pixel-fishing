@@ -23,6 +23,7 @@ export type GuestFeature = MenuKey | 'chat' | 'letter' | 'nickname' | 'player';
 // 게스트 규칙의 액션으로 판정되는 기능. 규칙 판정은 게스트 규칙 모듈이 하고 여기는 짝만 안다.
 const GUEST_FEATURE_ACTION: Partial<Record<GuestFeature, GameAction>> = {
   quests: { type: 'acceptQuest', questId: '', port: '' },
+  achievements: { type: 'claimAllAchievements' },
   mailbox: { type: 'claimMail', id: 0 },
   letter: { type: 'sendLetter', text: '' },
   nickname: { type: 'setNickname', nickname: '' },

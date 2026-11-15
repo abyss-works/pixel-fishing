@@ -28,6 +28,7 @@ import type { ActionPanel } from '../overlays/facility/FacilityModal';
 import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
+import AchievementsModal from '../overlays/achievements/AchievementsModal';
 import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
@@ -129,6 +130,7 @@ export default function GameView(props: GameViewProps) {
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -327,6 +329,7 @@ export default function GameView(props: GameViewProps) {
                    badge={props.badge} guest={guest}
                    menu={(
                      <GameMenu game={game} account={props.account} guest={guest} setToast={props.setToast} onQuests={openQuests}
+                               onAchievements={() => setAchievementsOpen(true)}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />
@@ -343,6 +346,10 @@ export default function GameView(props: GameViewProps) {
                       onClose={() => setStatsOpen(false)} />
         )}
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
+        {achievementsOpen && (
+          <AchievementsModal game={game} guest={guest} dispatch={props.dispatch}
+                             setToast={props.setToast} onClose={() => setAchievementsOpen(false)} />
+        )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
