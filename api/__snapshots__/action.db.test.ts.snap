@@ -4358,7 +4358,6 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
     "saves": [
       {
         "data": {
-          "achievementCounters": {},
           "achievements": {},
           "artifacts": [],
           "bag": [
@@ -4385,7 +4384,6 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
           ],
           "baitRefund": null,
           "boat": 0,
-          "clearedNamed": [],
           "cooking": null,
           "coupons": [],
           "dex": {
