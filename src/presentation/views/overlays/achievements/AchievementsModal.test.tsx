@@ -39,3 +39,27 @@ describe('업적 창 모두 받기', () => {
     expect(setToast).toHaveBeenCalledWith('업적 보상으로 모자 2개 받았어요.', 'gold');
   });
 });
+
+describe('업적 창 카드 격자', () => {
+  const open = () => render(
+    <AchievementsModal game={seed()} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />,
+  );
+
+  it('열 수는 카드 최소 폭으로 정하고 고정 열 수를 쓰지 않으며 가로 스크롤을 만들지 않는다', () => {
+    open();
+    const name = document.querySelector('[data-achievement-name]') as HTMLElement;
+    const grid = name.parentElement?.parentElement?.parentElement as HTMLElement;
+    expect(grid.className).toMatch(/\bgrid\b/);
+    expect(grid.className).toMatch(/grid-cols-\[repeat\((?:auto-fill|auto-fit),minmax\(/);
+    expect(grid.className).toMatch(/minmax\(min\(/);
+    expect(grid.className).not.toMatch(/(?:^|\s)grid-cols-\d/);
+    expect(grid.className).not.toMatch(/grid-cols-\[repeat\(\d/);
+  });
+
+  it('카드마다 진척 막대의 접근성 이름이 다르다', () => {
+    open();
+    const names = screen.getAllByRole('meter').map(meter => meter.getAttribute('aria-label'));
+    expect(names.length).toBeGreaterThan(1);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});

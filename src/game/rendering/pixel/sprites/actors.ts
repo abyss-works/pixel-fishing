@@ -88,22 +88,32 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
   }
 }
 
-/** 사람 — (x, y)는 발 아래 가운데다. 모자가 없으면 머리카락을 그린다 */
-export function drawPerson(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
-  R(ctx, x - 3, y - 16, 6, 6, '#ffcc99');
+/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
+export function drawHat(ctx: Ctx, x: number, y: number, hat: Hat) {
+  if (isAchievementHat(hat)) {
+    drawAchievementHat(ctx, x, y, hat);
+    return;
+  }
+  const c = hat.color;
+  R(ctx, x - 4, y - 19, 8, 3, c);
+  R(ctx, x + 3, y - 16, 3, 1, c);
+}
+
+/** 머리 — (x, y)는 머리 아래 가운데다. 모자를 함께 그리고, 모자가 없으면 머리카락을 그린다 */
+export function drawHead(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
+  R(ctx, x - 3, y - 6, 6, 6, '#ffcc99');
   const hat = hatById(look.hat);
   if (hat) {
-    if (isAchievementHat(hat)) {
-      drawAchievementHat(ctx, x, y, hat);
-    } else {
-      // 단순한 모자 — 머리 위 덮개와 한쪽 챙, 한 가지 색
-      R(ctx, x - 4, y - 19, 8, 3, hat.color);
-      R(ctx, x + 3, y - 16, 3, 1, hat.color);
-    }
+    drawHat(ctx, x, y + 10, hat);
   } else {
-    R(ctx, x - 4, y - 18, 8, 3, '#8d6e63');
-    R(ctx, x - 2, y - 19, 4, 2, '#8d6e63');
+    R(ctx, x - 4, y - 8, 8, 3, '#8d6e63');
+    R(ctx, x - 2, y - 9, 4, 2, '#8d6e63');
   }
+}
+
+/** 사람 — (x, y)는 발 아래 가운데다. 모자가 없으면 머리카락을 그린다 */
+export function drawPerson(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
+  drawHead(ctx, x, y - 10, look);
   R(ctx, x - 3, y - 10, 6, 7, SHIRT_COLORS[look.shirt]);
   R(ctx, x - 2, y - 3, 4, 3, PANTS_COLORS[look.pants]);
 }
