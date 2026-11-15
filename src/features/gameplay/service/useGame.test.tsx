@@ -18,6 +18,8 @@ const gw = vi.hoisted(() => ({
   loadErrors: [] as unknown[],
   bootErrors: [] as unknown[],
   loadDex: {} as Record<string, unknown>,
+  loadAchievements: {} as Record<string, string>,
+  dispatchAchievements: {} as Record<string, string>,
   devTools: false,
 }));
 
@@ -25,7 +27,8 @@ vi.mock('../../../platform/api', async () => {
   const { when } = await import('../../../shared/lib/when');
   const { newState: fresh } = await import('../../../game/rules/logic');
   const ok = (action: GameAction) => ({
-    status: 'ok' as const, state: fresh(),
+    status: 'ok' as const,
+    state: { ...fresh(), achievements: gw.dispatchAchievements },
     result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
   });
   return {
@@ -34,7 +37,7 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'] }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements }; },
         getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -62,6 +65,7 @@ function setup(setToast: (m: string, tone?: 'warn') => void = () => {}, reactStr
 afterEach(() => {
   cleanup(); clearFailureNotice(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
+  gw.loadAchievements = {}; gw.dispatchAchievements = {};
 });
 
 describe('부트스트랩', () => {
@@ -197,6 +201,68 @@ describe('게스트 진행 다시 읽기', () => {
     const hook = await booted();
     gw.loadError = new AppError(kind, 'read failed');
     await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
+  });
+});
+
+describe('새로 받을 수 있게 된 업적 알림', () => {
+  async function booted(toasts: [string, string | undefined][]) {
+    const hook = setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    toasts.length = 0;
+    return hook;
+  }
+
+  it('액션 확정으로 새로 claimable이 된 업적은 메시지 창에 한 줄 남는다', async () => {
+    const toasts: [string, string | undefined][] = [];
+    const hook = await booted(toasts);
+    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
+    expect(toasts).toEqual([['“태평양 도감” 업적을 받을 수 있어요.', undefined]]);
+  });
+
+  it('첫 로드 시 이미 claimable인 업적은 알리지 않는다', async () => {
+    gw.loadAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    const toasts: [string, string | undefined][] = [];
+    setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(toasts.map(t => t[0])).not.toContain('“태평양 도감” 업적을 받을 수 있어요.');
+  });
+
+  it('확정이 연달아 와도 같은 업적을 한 번만 알린다', async () => {
+    const toasts: [string, string | undefined][] = [];
+    const hook = await booted(toasts);
+    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    await act(async () => {
+      void hook.result.current.dispatch({ type: 'debug', command: 'noop' });
+      void hook.result.current.dispatch({ type: 'debug', command: 'noop' });
+    });
+    expect(toasts).toHaveLength(1);
+  });
+
+  it('계정을 교체하면 그 계정이 이미 받을 수 있던 업적은 알리지 않는다', async () => {
+    const toasts: [string, string | undefined][] = [];
+    const hook = await booted(toasts);
+    gw.bootResolve = null;
+    gw.loadAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(toasts).toEqual([]);
+  });
+
+  it('이미 claimable이던 업적과 받은 업적은 다시 알리지 않는다', async () => {
+    const toasts: [string, string | undefined][] = [];
+    const hook = await booted(toasts);
+    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
+    toasts.length = 0;
+    await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
+    expect(toasts).toEqual([]);
   });
 });
 

@@ -58,6 +58,16 @@ export function claimableCount(game: GameState): number {
   return ACHIEVEMENTS.filter(a => game.achievements[a.id] === 'claimable').length;
 }
 
+/**
+ * 액션 확정 뒤 새로 받을 수 있게 된 업적의 이름표 — 메시지 창 한 줄 알림의 재료다.
+ * 이전 상태에서 claimable이 아니었던 업적이 새 상태에서 claimable이면 뽑는다
+ * (이미 claimable이거나 받기로 바뀐 것은 새 업적이 아니다). 모르는 id는 이름표를 지어내지 않는다.
+ */
+export function newlyClaimable(before: GameState, after: GameState): string[] {
+  return ACHIEVEMENTS.filter(a => after.achievements[a.id] === 'claimable' && before.achievements[a.id] !== 'claimable')
+    .map(a => a.name);
+}
+
 /** 상단 요약 줄 — 받은 수, 받을 골드 합, 받을 모자 수, 모두 받기 가능 여부 */
 export function achievementSummary(game: GameState, guest = false): {
   claimed: number;

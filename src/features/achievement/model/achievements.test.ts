@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { ACHIEVEMENT_TABS, achievementRowById, achievementRows, achievementSummary, canClaim, claimableCount, rowStatusOf } from './achievements';
+import { ACHIEVEMENT_TABS, achievementRowById, achievementRows, achievementSummary, canClaim, claimableCount, newlyClaimable, rowStatusOf } from './achievements';
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -72,6 +72,31 @@ describe('요약 줄', () => {
   it('메뉴 배지 수와 요약 줄의 받을 수 있는 수는 같다', () => {
     const state = seed({ achievements: { 'zone-basic-pacific': 'claimable', 'variant-village': 'claimable' } });
     expect(claimableCount(state)).toBe(2);
+  });
+});
+
+describe('새로 받을 수 있게 된 업적 감지', () => {
+  it('이전에 없거나 진행 중이던 업적이 claimable이 되면 이름표를 뽑는다', () => {
+    const before = seed({ achievements: { 'variant-village': 'claimable', 'catch-100000': 'claimed' } });
+    const after = seed({
+      achievements: {
+        'variant-village': 'claimable',
+        'catch-100000': 'claimed',
+        'zone-basic-pacific': 'claimable',
+        'big-50': 'claimable',
+      },
+    });
+    expect(newlyClaimable(before, after)).toEqual(['태평양 도감', '월척 장부']);
+  });
+  it('이미 claimable이거나 받기로 바뀐 업적은 새 업적이 아니다', () => {
+    const before = seed({ achievements: { 'zone-basic-pacific': 'claimable' } });
+    const after = seed({ achievements: { 'zone-basic-pacific': 'claimed' } });
+    expect(newlyClaimable(before, after)).toEqual([]);
+  });
+  it('모르는 id가 새로 claimable이 돼도 이름표를 지어내지 않는다', () => {
+    const before = seed();
+    const after = seed({ achievements: { 'no-such': 'claimable' } });
+    expect(newlyClaimable(before, after)).toEqual([]);
   });
 });
 
