@@ -17,6 +17,7 @@ import { deleteUserFriends } from './friends.js';
 import { deleteUserGuild } from './guilds.js';
 import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
+import { deleteUserCounters } from './achievements.js';
 
 /** 진행이 없는 게스트를 지우는 미접속 일수 */
 const IDLE_DAYS = 7;
@@ -136,6 +137,7 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserActivity(tx, uid);
   await deleteUserPosition(tx, uid);
   await deleteUserConsents(tx, uid);
+  await deleteUserCounters(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }

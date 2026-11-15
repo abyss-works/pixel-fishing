@@ -10,7 +10,8 @@ import { at, jsonParam, uuidArray } from './json.js';
 
 /** GameState → saves_current 한 행. 스칼라는 열, 나머지만 blob */
 export function stateRow(state: GameState) {
-  const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod, ...rest } = state;
+  const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod,
+    achievementCounters: _ac, clearedNamed: _cn, ...rest } = state;
   return { gold, fame, boat, rod, data: rest };
 }
 
@@ -145,9 +146,10 @@ export async function seedState(withTransaction: Database['withTransaction'], ui
   });
 }
 
-/** 주기 스냅샷 — 응답 뒤 후속 쓰기다 */
+/** 주기 스냅샷 — 응답 뒤 후속 쓰기다. 런타임 주입 필드는 저장하지 않는다(stateRow와 같은 정본) */
 export function snapshotInsert(uid: string, state: GameState, nowISO: string): SQL {
-  return sql`insert into public.saves (user_id, data, updated_at) values (${uid}, ${JSON.stringify(state)}::jsonb, ${at(nowISO)})`;
+  const { achievementCounters: _ac, clearedNamed: _cn, ...rest } = state;
+  return sql`insert into public.saves (user_id, data, updated_at) values (${uid}, ${JSON.stringify(rest)}::jsonb, ${at(nowISO)})`;
 }
 
 /** 콜드 아카이브 — saves 메타 한 묶음. (user_id 오름차순, updated_at 내림차순) 순서 계약이다 */
