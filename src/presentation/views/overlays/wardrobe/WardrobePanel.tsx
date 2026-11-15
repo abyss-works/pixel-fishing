@@ -132,6 +132,24 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
 }) {
   const d = hatDetail(game, hatId);
   const state = d.worn ? '쓰고 있어요.' : d.owned ? '가지고 있어요.' : '아직 없어요.';
+  if (d.action === 'achievement') {
+    return (
+      <Inset className="flex items-center justify-between gap-3 h-[84px] px-3 shrink-0">
+        <div className="flex flex-col gap-1 min-w-0">
+          <b className="pf-accent text-base text-gold">{d.name}</b>
+          {d.unlock && (
+            <span className="text-xs text-text-dim truncate">해금 조건 {d.unlock.condition}</span>
+          )}
+          {d.unlock && (
+            <span className="text-xs text-text-dim">진척 <span className="pf-accent text-text">{d.unlock.current}/{d.unlock.target}</span></span>
+          )}
+        </div>
+        <Tip wraps text={d.buyBlock ?? ''} className="block">
+          <Button disabled>업적 모자</Button>
+        </Tip>
+      </Inset>
+    );
+  }
   const button = d.action === 'buy'
     ? <Button variant="primary" disabled={busy || d.buyBlock !== null} onClick={() => onBuy(hatId)}>사기 {fmtGold(d.price)}</Button>
     : d.action === 'wear'

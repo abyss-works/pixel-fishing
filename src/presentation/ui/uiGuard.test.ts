@@ -466,6 +466,9 @@ describe('UI 시스템 가드', () => {
     ['views/overlays/bounty/QuestInfoCards.tsx', [
       { line: /fmtGold\(info\.reward\)/, why: '일반 의뢰 카드는 보정이 없는 원본 보상이다' },
     ]],
+    ['views/overlays/achievements/AchievementsModal.tsx', [
+      { line: /fmtGold\(row\.def\.reward\.gold\)/, why: '업적 보상 골드는 보정이 없는 원본 보상이다' },
+    ]],
   ]);
   /** 판매 합계·판매 가능 금액 이름을 그대로 금액 표기에 넘기는 모양 */
   const SALE_TOTAL_IN_GOLD = /fmtGold\(\s*(?:preview\.)?(?:total|sellable|sellableValue)\s*\)/;
