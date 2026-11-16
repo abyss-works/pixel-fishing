@@ -24,9 +24,9 @@ const okAll = (gold: number, hats: string[]): DispatchResult => ({
 });
 
 describe('업적 창 모두 받기', () => {
-  it('받은 골드 합과 모자 수를 금색 안내로 알린다', () => {
+  it('받은 골드와 모자 이름을 금색 안내로 알린다', () => {
     const { setToast } = show(claimable, okAll(25_000, ['straw-hat']));
-    expect(setToast).toHaveBeenCalledWith('업적 보상으로 25,000G와 모자 1개 받았어요.', 'gold');
+    expect(setToast).toHaveBeenCalledWith('업적 보상으로 25,000G와 밀짚모자를 받았어요.', 'gold');
   });
 
   it('골드만 받으면 모자 문구를 넣지 않는다', () => {
@@ -34,9 +34,9 @@ describe('업적 창 모두 받기', () => {
     expect(setToast).toHaveBeenCalledWith('업적 보상으로 25,000G 받았어요.', 'gold');
   });
 
-  it('모자만 받으면 모자 수만 알린다', () => {
+  it('모자만 받으면 받은 모자 이름을 알린다', () => {
     const { setToast } = show(claimable, okAll(0, ['straw-hat', 'sou-wester']));
-    expect(setToast).toHaveBeenCalledWith('업적 보상으로 모자 2개 받았어요.', 'gold');
+    expect(setToast).toHaveBeenCalledWith('업적 보상으로 밀짚모자, 방수모를 받았어요.', 'gold');
   });
 });
 

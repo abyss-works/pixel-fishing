@@ -65,7 +65,8 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
       if (r.result.type === 'claimAllAchievements') {
         const parts: string[] = [];
         if (r.result.gold > 0) parts.push(fmtGold(r.result.gold));
-        if (r.result.hats.length > 0) parts.push(`모자 ${r.result.hats.length}개`);
+        const hatNames = r.result.hats.map(id => hatById(id)?.name ?? '모자');
+        if (hatNames.length > 0) parts.push(josa(hatNames.join(', '), '을/를'));
         setToast(`업적 보상으로 ${parts.join('와 ')} 받았어요.`, 'gold');
       }
     });
