@@ -6,7 +6,7 @@ import EncounterModal from './EncounterModal';
 import { selectEncounter } from '../../../../features/bounty/model/challenge';
 import { newState } from '../../../../game/rules/logic';
 import { resetKeyScopes } from '../../../ui/hotkeys';
-import { closeOpenWindows, resetOpenWindows } from '../../../ui/openWindows';
+import { resetOpenWindows } from '../../../ui/openWindows';
 
 beforeEach(() => { vi.useFakeTimers(); resetKeyScopes(); resetOpenWindows(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); resetKeyScopes(); resetOpenWindows(); });
@@ -105,42 +105,38 @@ describe('EncounterModal', () => {
       }
     };
 
-    it('들어가며에서는 닫을 수 있는 창 층이고 탭 줄을 누르면 닫는다', () => {
+    it('들어가며에서는 닫을 수 있는 창 층이고 바깥을 누르면 닫는다', () => {
       const { onClose } = show();
       expect(backdrop().className).toContain('z-(--z-stage-modal)');
-      closeOpenWindows();
+      fireEvent.click(backdrop());
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('승부가 시작되면 닫을 수 없는 창이라 탭 줄을 눌러도 닫히지 않는다', () => {
+    it('승부가 시작되면 닫을 수 없는 창이라 바깥을 눌러도 닫히지 않는다', () => {
       const { onClose } = show();
       enter();
       expect(backdrop().className).toContain('z-(--z-blocker)');
       expect(backdrop().className).not.toContain('z-(--z-stage-modal)');
-      closeOpenWindows();
       fireEvent.click(backdrop());
       expect(onClose).not.toHaveBeenCalled();
     });
 
-    it('놓쳐서 탈락하면 다시 닫을 수 있는 창 층이 되고 탭 줄과 바깥 누름이 닫는다', () => {
+    it('놓쳐서 탈락하면 다시 닫을 수 있는 창 층이 되고 바깥 누름이 닫는다', () => {
       const { onClose } = show();
       enter();
       act(() => { vi.advanceTimersByTime(8000); });
       expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
       expect(backdrop().className).toContain('z-(--z-stage-modal)');
       expect(backdrop().className).not.toContain('z-(--z-blocker)');
-      closeOpenWindows();
-      expect(onClose).toHaveBeenCalledTimes(1);
       fireEvent.click(backdrop());
-      expect(onClose).toHaveBeenCalledTimes(2);
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('이긴 뒤 토벌을 누르기 전에도 닫을 수 없는 창 층이고 탭 줄과 바깥 누름이 닫지 못한다', () => {
+    it('이긴 뒤 토벌을 누르기 전에도 닫을 수 없는 창 층이고 바깥 누름이 닫지 못한다', () => {
       const { onClose } = show();
       enter();
       win();
       expect(backdrop().className).toContain('z-(--z-blocker)');
-      closeOpenWindows();
       fireEvent.click(backdrop());
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -148,7 +144,7 @@ describe('EncounterModal', () => {
     it('승부 중에도 결투 창은 스테이지 창 자리(스테이지 안)에 남는다', () => {
       const { onClose } = show();
       enter();
-      closeOpenWindows();
+      expect(backdrop().className).toContain('absolute inset-0');
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(onClose).not.toHaveBeenCalled();
     });
