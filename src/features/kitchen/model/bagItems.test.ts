@@ -155,7 +155,7 @@ describe('먹기 계획과 교체 확인', () => {
     expect(plan.slot).toBe('bait');
     expect(plan.confirm).toMatchObject({
       title: '미끼 바꾸기', confirmLabel: '쓰기',
-      current: { label: '롱페퍼 미끼(희귀)', minutes: 24 }, next: { label: '큐베브 미끼(영웅)', minutes: 30 },
+      current: { label: '롱페퍼 미끼(희귀)', minutes: 24 }, next: { label: '큐베브 미끼(영웅)', minutes: 5 },
     });
   });
 

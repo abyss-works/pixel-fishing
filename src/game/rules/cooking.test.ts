@@ -312,23 +312,23 @@ describe('조리 진행과 완성', () => {
     const idle = seed();
     expect(settleCooking(idle, T0)).toBe(idle);
   });
-  it('미끼 요리는 종류 규칙의 대기마다 완성된다', () => {
+  it('미끼 요리는 시작과 동시에 전부 완성된다', () => {
     const s = cooking(2, [false, false], miniBait.id);
-    expect(cookingProgress(s, at(T0, COOK_KIND_RULES.bait.waitMs))).toMatchObject({ completed: 1 });
+    expect(cookingProgress(s, T0)).toMatchObject({ completed: 2, pending: 0, nextAt: null });
   });
 });
 
 describe('eat', () => {
   const lunch = recipeById('cook-lunch-bite')!;
   const bait = recipeById('cook-bait-mutation')!;
-  it('도시락은 도시락 슬롯에 9시간, 미끼 요리는 미끼 슬롯에 30분 들어가고 1개 줄어든다', () => {
+  it('도시락은 도시락 슬롯에 9시간, 미끼 요리는 미끼 슬롯에 5분 들어가고 1개 줄어든다', () => {
     const s = seed({ items: { [lunch.id]: 2, [bait.id]: 1 } });
     const a = ok(s, { type: 'eat', item: lunch.id });
     expect(a.state.slots.lunch).toEqual({ id: lunch.id, endsAt: at(T0, 9 * 60 * MIN) });
     expect(a.state.slots.bait).toBeNull();
     expect(a.state.items[lunch.id]).toBe(1);
     const b = ok(a.state, { type: 'eat', item: bait.id });
-    expect(b.state.slots.bait).toEqual({ id: bait.id, endsAt: at(T0, 30 * MIN) });
+    expect(b.state.slots.bait).toEqual({ id: bait.id, endsAt: at(T0, 5 * MIN) });
     expect(b.state.items[bait.id]).toBeUndefined();
     expect(a.events[0]).toMatchObject({ type: 'eat', payload: { item: lunch.id } });
   });
@@ -390,7 +390,7 @@ describe('slotEffects', () => {
     const s = seed({ slots: slots(lunchBite.id, baitMut.id) });
     expect(slotEffects(s, T0, 'auto')).toMatchObject({ biteWaitCut: 0.1, mutationWeight: 0 });
     for (const j of ['perfect', 'good', 'normal'] as const) {
-      expect(slotEffects(s, T0, j)).toMatchObject({ biteWaitCut: 0, mutationWeight: 1 });
+      expect(slotEffects(s, T0, j)).toMatchObject({ biteWaitCut: 0, mutationWeight: 1.5 });
     }
   });
   it('끝나는 시각 이후에는 적용하지 않는다(같은 시각 포함)', () => {
@@ -408,7 +408,7 @@ describe('slotEffects', () => {
     expect(slotEffects(seed({ slots: slots(lunchRare.id, null) }), T0, 'auto').rarityWeight)
       .toEqual({ rare: 0.1, epic: 0.1, legendary: 0.1 });
     expect(slotEffects(seed({ slots: slots(null, baitRare.id) }), T0, 'normal').rarityWeight)
-      .toEqual({ rare: 0.2, epic: 0.2, legendary: 0.2 });
+      .toEqual({ rare: 0.4, epic: 0.4, legendary: 0.4 });
   });
   it('묶음 도시락은 입질 단축과 희귀 이상 등급 가중을 함께 낸다', () => {
     expect(slotEffects(seed({ slots: slots(bundle.id, null) }), T0, 'auto')).toMatchObject({
@@ -467,13 +467,13 @@ describe('캐치에 적용', () => {
   });
   it('등급 미끼는 수동 캐치에만 걸리고 방치 캐치에는 걸리지 않는다', () => {
     const s = withSlots(null, 'cook-bait-epic');
-    expect(prepareCatchDraw(s, 'good', LATER, PZ).phaseOpts.weightEffects).toEqual({ epic: 0.4, legendary: 0.4 });
+    expect(prepareCatchDraw(s, 'good', LATER, PZ).phaseOpts.weightEffects).toEqual({ epic: 0.6, legendary: 0.6 });
     expect(prepareCatchDraw(s, 'auto', LATER, PZ).phaseOpts.weightEffects).toBeUndefined();
   });
   it('슬롯이 끝난 뒤에는 적용하지 않는다. 판정 시각은 서버 시각(now) 인자만 본다', () => {
     const s = withSlots(null, 'cook-bait-epic', at(T0, 30 * MIN));
     expect(prepareCatchDraw(s, 'good', at(T0, 30 * MIN), PZ).phaseOpts.weightEffects).toBeUndefined();
-    expect(prepareCatchDraw(s, 'good', at(T0, 29 * MIN), PZ).phaseOpts.weightEffects).toEqual({ epic: 0.4, legendary: 0.4 });
+    expect(prepareCatchDraw(s, 'good', at(T0, 29 * MIN), PZ).phaseOpts.weightEffects).toEqual({ epic: 0.6, legendary: 0.6 });
   });
   it('효과가 없으면 추첨 옵션은 시간대만 담는다', () => {
     expect(Object.keys(prepareCatchDraw(seed(), 'auto', LATER, PZ).phaseOpts)).toEqual(['phase']);
