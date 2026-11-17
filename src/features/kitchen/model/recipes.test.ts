@@ -59,7 +59,7 @@ describe('효과 줄', () => {
       { label: '영웅 등급 가중치', value: '+10%' },
       { label: '전설 등급 가중치', value: '+10%' },
     ]);
-    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 등급 가중치', value: '+60%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 등급 가중치', value: '+80%' }]);
   });
 
   it('묶음 도시락은 입질 대기와 등급 가중을 모두 낸다', () => {
@@ -71,7 +71,7 @@ describe('효과 줄', () => {
   it('돌연변이와 네임드 조우 가중치는 비율로 낸다', () => {
     expect(recipeEffectLines(recipe('cook-lunch-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+50%' }]);
     expect(recipeEffectLines(recipe('cook-lunch-named'))).toEqual([{ label: '네임드 조우 가중치', value: '+50%' }]);
-    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+100%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+150%' }]);
   });
 
 });
@@ -116,7 +116,7 @@ describe('필요와 보유', () => {
 
   it('지속 시간은 그 종류의 슬롯 지속(ms)이다', () => {
     expect(selectRecipeView(seed(), recipe('cook-lunch-bite'), 1, T0).slotMs).toBe(9 * 60 * MIN);
-    expect(selectRecipeView(seed(), recipe('cook-bait-rare'), 1, T0).slotMs).toBe(30 * MIN);
+    expect(selectRecipeView(seed(), recipe('cook-bait-rare'), 1, T0).slotMs).toBe(5 * MIN);
   });
 });
 

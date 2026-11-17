@@ -36,7 +36,7 @@ describe('명령 인자', () => {
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
       seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 30, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 5, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
       growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
       design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [] },
     });
@@ -425,19 +425,19 @@ describe('effects 명령', () => {
 });
 
 describe('window 명령', () => {
-  it('수동 GOOD이 기본이고 창은 30분이다', () => {
+  it('수동 GOOD이 기본이고 창은 5분이다', () => {
     const o = parseArgs(['window', '--rare', '20']);
     expect(o.commands).toEqual(['window']);
     expect(o.axis).toBe('manual');
-    expect(o.windowMinutes).toBe(30);
+    expect(o.windowMinutes).toBe(5);
     expect(parseArgs(['window', '--axis', 'idle']).axis).toBe('idle');
     expect(parseArgs(['window', '--window', '45']).windowMinutes).toBe(45);
   });
 
   it('등급 미끼 이름이 효과 옵션을 채운다', () => {
-    expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.2, 12);
-    expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.4, 12);
-    expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.6, 12);
+    expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.4, 12);
+    expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.6, 12);
+    expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.8, 12);
     expect(() => parseArgs(['window', '--bait', 'common'])).toThrow(/미끼/);
   });
 
@@ -451,8 +451,8 @@ describe('window 명령', () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('## 창 안 기대 캐치 수');
     expect(r.stdout).toContain('## 창 하나가 도감 완성 시간을 줄이는 양');
-    expect(r.stdout).toContain('영웅 이상 가중 +40%');
-    expect(r.stdout).toContain('창 30분');
+    expect(r.stdout).toContain('영웅 이상 가중 +60%');
+    expect(r.stdout).toContain('창 5분');
   });
 
   it('JSON은 같은 시드에서 같다', () => {
@@ -474,7 +474,7 @@ describe('recipes 명령', () => {
 
   it('effects와 window에서는 레시피의 효과를 효과 옵션에 채운다', () => {
     expect(parseArgs(['effects', '--recipe', 'cook-lunch-bite']).effect.bite).toBeCloseTo(0.1, 12);
-    expect(parseArgs(['window', '--recipe', 'cook-bait-mutation']).effect.variant).toBeCloseTo(1, 12);
+    expect(parseArgs(['window', '--recipe', 'cook-bait-mutation']).effect.variant).toBeCloseTo(1.5, 12);
     expect(parseArgs(['effects', '--recipe', 'cook-lunch-bundle']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
   });
 
