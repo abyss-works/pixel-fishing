@@ -184,6 +184,12 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(screen.getByText(`${2 * LUNCH_WAIT_MIN}분`)).toBeInTheDocument();
   });
 
+  it('미끼의 조리 시간은 0분 대신 즉시로 보인다', () => {
+    show(seed({ items: energy(1000) }));
+    fireEvent.click(tab('미끼'));
+    expect(screen.getByText('즉시')).toBeInTheDocument();
+  });
+
   it('조리 시작은 고른 레시피와 수량으로 cook 액션을 보낸다', () => {
     const { dispatch } = show(seed({ items: energy(2000) }));
     fireEvent.click(screen.getByRole('button', { name: '가루디야 수량 증가' }));

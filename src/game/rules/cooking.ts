@@ -174,7 +174,10 @@ export function cookingProgress(state: Pick<GameState, 'cooking'>, now: string):
   const waitMs = COOK_KIND_RULES[recipe.kind].waitMs;
   const start = Date.parse(c.startedAt);
   const elapsed = Math.max(0, Date.parse(now) - start);
-  const completed = Math.min(c.count, Number.isFinite(elapsed) ? Math.floor(elapsed / waitMs) : 0);
+  // 대기가 0인 조리(미끼)는 시작과 동시에 전부 완성이다. 0으로 나누지 않게 따로 처리한다.
+  const completed = waitMs === 0
+    ? c.count
+    : Math.min(c.count, Number.isFinite(elapsed) ? Math.floor(elapsed / waitMs) : 0);
   const extra = c.bonus.slice(0, completed).filter(Boolean).length;
   return {
     recipe, count: c.count, completed, ready: completed + extra, pending: c.count - completed,
