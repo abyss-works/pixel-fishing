@@ -1,16 +1,14 @@
 // 업적 규칙 — 순수 진척 판정, 달성 전이, 이벤트 기반 카운터 증분.
+// 측정 방식(metric)으로만 분기한다 — 업적 id 접두사 분기는 없다.
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
-import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
-import type { AchievementCounters, AchievementMap } from '../content/achievements.js';
-import { ARTIFACTS } from '../content/artifacts.js';
-import { BOUNTIES } from '../content/bounties.js';
-import type { BountyZone } from '../content/bounties.js';
-import { FISH } from '../content/fish.js';
-import { topZoneOfSpot } from '../content/zones.js';
-import type { GameEvent } from './actions.js';
 import {
-  LICENSE_GRADES, formDiscovered, isBigSize, variantDiscovered, zoneDexMissing, zoneDexSpecies,
-} from './logic.js';
+  ACHIEVEMENTS, achievementRuleById, selectorFish, selectorIds, selectorTargetCount,
+} from '../content/achievements.js';
+import type {
+  AchievementCounters, AchievementMap, AchievementMetric, AchievementRule,
+} from '../content/achievements.js';
+import type { GameEvent } from './actions.js';
+import { formDiscovered, isBigSize } from './logic.js';
 import type { GameState } from './logic.js';
 
 export interface AchievementProgress {
@@ -19,103 +17,60 @@ export interface AchievementProgress {
   met: boolean;
 }
 
-const NAMED_QUESTS = BOUNTIES.filter(q => q.difficulty === 'named');
-const CATCH_TARGET = 100_000;
-const BIG_TARGET = 50;
+/** 카운터 값 — 동적 키(규칙의 counterSet)도 읽을 수 있게 문자열 키로 본다 */
+const countersOf = (state: GameState): Partial<Record<string, number | undefined>> =>
+  state.achievementCounters;
+
+/** 목표 수 — 'all'이면 판정 시점의 선택자 대상 수 */
+const targetOf = (rule: AchievementRule, metric: AchievementMetric): number => {
+  if (rule.threshold !== 'all') return rule.threshold;
+  if (metric.kind === 'bigSpecies' || metric.kind === 'catchCount') {
+    return selectorFish(rule.selector).length;
+  }
+  return selectorTargetCount(rule.selector);
+};
+
+/** 진척 — 측정 방식마다 현재 값을 계산한다 */
+const currentOf = (state: GameState, rule: AchievementRule, metric: AchievementMetric): number => {
+  switch (metric.kind) {
+    case 'discover':
+      return selectorFish(rule.selector)
+        .filter(f => formDiscovered(state, f.id, metric.form)).length;
+    case 'set': {
+      const owned = metric.field === 'named' ? state.clearedNamed : state.artifacts;
+      return selectorIds(rule.selector).filter(id => owned.includes(id)).length;
+    }
+    case 'bigSpecies':
+      return selectorFish(rule.selector).filter(f => {
+        const rec = state.dex[f.id];
+        const nSize = rec?.normal?.maxSize;
+        const vSize = rec?.variant?.maxSize;
+        return (typeof nSize === 'number' && isBigSize(f, nSize))
+          || (typeof vSize === 'number' && isBigSize(f, vSize));
+      }).length;
+    case 'catchCount':
+      return selectorFish(rule.selector).reduce((n, f) => {
+        const rec = state.dex[f.id];
+        return n + (rec?.normal?.count ?? 0) + (rec?.variant?.count ?? 0);
+      }, 0);
+    case 'counter':
+      return countersOf(state)[metric.key] ?? 0;
+    case 'counterSet': {
+      const counters = countersOf(state);
+      return selectorIds(rule.selector)
+        .filter(id => (counters[metric.prefix + id] ?? 0) > 0).length;
+    }
+  }
+};
 
 /** 업적 하나의 현재 진척과 달성 여부를 판정 근거에서 순수하게 계산한다 */
 export function achievementProgress(state: GameState, id: string): AchievementProgress {
-  if (!achievementById(id)) return { current: 0, target: 0, met: false };
+  const rule = achievementRuleById(id);
+  if (!rule) return { current: 0, target: 0, met: false };
 
-  if (id.startsWith('zone-basic-')) {
-    const zone = id.slice('zone-basic-'.length) as BountyZone;
-    const grades = LICENSE_GRADES.basic;
-    const target = zoneDexSpecies(zone, grades).length;
-    const missing = zoneDexMissing(state, zone, grades).length;
-    const current = target - missing;
-    return { current, target, met: target > 0 && missing === 0 };
-  }
-
-  if (id.startsWith('zone-full-')) {
-    const zone = id.slice('zone-full-'.length) as BountyZone;
-    const grades = LICENSE_GRADES.named;
-    const target = zoneDexSpecies(zone, grades).length;
-    const missing = zoneDexMissing(state, zone, grades).length;
-    const current = target - missing;
-    return { current, target, met: target > 0 && missing === 0 };
-  }
-
-  if (id === 'variant-all') {
-    const target = FISH.length;
-    const current = FISH.filter(f => variantDiscovered(state, f.id)).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id.startsWith('variant-')) {
-    const zone = id.slice('variant-'.length);
-    const pool = FISH.filter(f => topZoneOfSpot(f.spot) === zone);
-    const target = pool.length;
-    const current = pool.filter(f => variantDiscovered(state, f.id)).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'grade-legendary') {
-    const pool = FISH.filter(f => f.rarity === 'legendary');
-    const target = pool.length;
-    const current = pool.filter(f => formDiscovered(state, f.id, 'normal')).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'night-normal') {
-    const pool = FISH.filter(f => f.night === true);
-    const target = pool.length;
-    const current = pool.filter(f => formDiscovered(state, f.id, 'normal')).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'night-variant') {
-    const pool = FISH.filter(f => f.night === true);
-    const target = pool.length;
-    const current = pool.filter(f => variantDiscovered(state, f.id)).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'big-50') {
-    let current = 0;
-    for (const f of FISH) {
-      const rec = state.dex[f.id];
-      const nSize = rec?.normal?.maxSize;
-      const vSize = rec?.variant?.maxSize;
-      if ((typeof nSize === 'number' && isBigSize(f, nSize))
-          || (typeof vSize === 'number' && isBigSize(f, vSize))) {
-        current++;
-      }
-    }
-    return { current, target: BIG_TARGET, met: current >= BIG_TARGET };
-  }
-
-  if (id === 'named-all') {
-    const target = NAMED_QUESTS.length;
-    const current = NAMED_QUESTS.filter(q => state.clearedNamed.includes(q.id)).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'artifact-all') {
-    const target = ARTIFACTS.length;
-    const current = ARTIFACTS.filter(a => state.artifacts.includes(a.id)).length;
-    return { current, target, met: target > 0 && current >= target };
-  }
-
-  if (id === 'catch-100000') {
-    let current = 0;
-    for (const f of FISH) {
-      const rec = state.dex[f.id];
-      current += (rec?.normal?.count ?? 0) + (rec?.variant?.count ?? 0);
-    }
-    return { current, target: CATCH_TARGET, met: current >= CATCH_TARGET };
-  }
-
-  return { current: 0, target: 0, met: false };
+  const current = currentOf(state, rule, rule.metric);
+  const target = targetOf(rule, rule.metric);
+  return { current, target, met: target > 0 && current >= target };
 }
 
 /** 아직 상태에 없는 알려진 업적 중 조건을 채운 것을 claimable로 전이시킨다 */
