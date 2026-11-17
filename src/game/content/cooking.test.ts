@@ -74,10 +74,10 @@ describe('레시피 표', () => {
     expect(fx('cook-lunch-bundle')).toEqual({
       biteWaitCut: 0.05, rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.05 },
     });
-    expect(fx('cook-bait-mutation')).toEqual({ mutationWeight: 1 });
-    expect(fx('cook-bait-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.2 } });
-    expect(fx('cook-bait-epic')).toEqual({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.4 } });
-    expect(fx('cook-bait-legendary')).toEqual({ rarityWeight: { grades: ['legendary'], bonus: 0.6 } });
+    expect(fx('cook-bait-mutation')).toEqual({ mutationWeight: 1.5 });
+    expect(fx('cook-bait-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.4 } });
+    expect(fx('cook-bait-epic')).toEqual({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.6 } });
+    expect(fx('cook-bait-legendary')).toEqual({ rarityWeight: { grades: ['legendary'], bonus: 0.8 } });
   });
 });
 
@@ -141,7 +141,7 @@ describe('해금, 조리 대기, 보관함, 슬롯', () => {
   it('명세 4.3, 5.1 표의 값과 같다', () => {
     const MIN = 60_000;
     expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 15 * MIN, slotMs: 9 * 60 * MIN });
-    expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 1 * MIN, slotMs: 30 * MIN });
+    expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 0, slotMs: 5 * MIN });
     expect(COOK_STORAGE_CAP).toBe(10);
   });
 });

@@ -1,4 +1,4 @@
-// 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 30분), 레시피 순손익, 집 기운 얻기 공급.
+// 요리 순환 지표 — 시간 제한 효과의 창(등급 미끼 5분), 레시피 순손익, 집 기운 얻기 공급.
 // 제품 규칙(등급 가중치 효과 합산, 돌연변이 폼 가중치, 가방 용량, 내보낼 개체의 순서, 배 단계로 갈 수 있는 해역)과
 // 요리 콘텐츠(레시피 표, 기운 수량, 효과 값, 슬롯 지속)는 불러 쓰고, 이 모듈은 값을 갖지 않는다.
 import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_PER_INDIVIDUAL, ENERGY_UNIT, RECIPES as COOK_RECIPES, isEnergyAmount } from '../../../src/game/content/cooking';

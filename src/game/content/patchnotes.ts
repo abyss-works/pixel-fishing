@@ -16,6 +16,15 @@ export interface PatchNote {
 // 이 영역은 생성 도구가 쓴다. 직접 고치지 않는다.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.19.3',
+    date: '2026-11-17',
+    summary: '미끼를 바로 조리하고 짧고 강하게 쓰도록 조정했어요.',
+    notes: [
+      { tag: 'UI', text: '미끼를 조리하면 기다리지 않고 바로 완성돼요.' },
+      { tag: '밸런스', text: '미끼의 지속 시간과 효과를 조정했어요.' },
+    ],
+  },
+  {
     version: '0.19.2',
     date: '2026-11-17',
     summary: '가공 플랜트선이 생기고, 낚싯대와 해역의 밸런스를 조정했어요',

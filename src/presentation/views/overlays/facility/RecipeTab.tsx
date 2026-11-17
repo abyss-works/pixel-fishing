@@ -98,7 +98,7 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-text-dim">조리 시간</span>
-            <span className="pf-accent">{fmtMinutes(view.waitMs / MIN_MS)}</span>
+            <span className="pf-accent">{view.waitMs === 0 ? '즉시' : fmtMinutes(view.waitMs / MIN_MS)}</span>
           </div>
         </div>
         {view.extraChance > 0 && (

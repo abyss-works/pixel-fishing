@@ -254,7 +254,7 @@ describe('요리 액션', () => {
       expect((await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-epic' })).status).toBe(200);
       const { data } = await stored(uid);
       expect(data.items).toEqual({ 'cook-bait-epic': 1 });
-      expect(data.slots.bait).toEqual({ id: 'cook-bait-epic', endsAt: '2030-03-04T05:36:07.000Z' });
+      expect(data.slots.bait).toEqual({ id: 'cook-bait-epic', endsAt: '2030-03-04T05:11:07.000Z' });
     });
 
     it('거부 사유를 코드로 돌려주고 상태를 바꾸지 않는다', async () => {

@@ -62,7 +62,7 @@ const MIN_MS = 60_000;
 /** 종류별 조리 대기(1개당)와 슬롯 지속. 도시락은 도시락 슬롯, 미끼 요리는 미끼 슬롯에 들어간다 */
 export const COOK_KIND_RULES: Readonly<Record<CookKind, { waitMs: number; slotMs: number }>> = {
   lunch: { waitMs: 15 * MIN_MS, slotMs: 9 * 60 * MIN_MS },
-  bait: { waitMs: 1 * MIN_MS, slotMs: 30 * MIN_MS },
+  bait: { waitMs: 0, slotMs: 5 * MIN_MS },
 };
 
 /** 보관함 상한 — 완성품과 조리 중인 수량의 합 */
@@ -131,22 +131,22 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'cook-bait-mutation', name: '사프란 미끼',
     description: '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
     kind: 'bait',
-    cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1 } },
+    cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1.5 } },
   { id: 'cook-bait-rare', name: '롱페퍼 미끼',
     description: '롱페퍼 이삭을 말려 빻아 반죽에 섞은 미끼다. 후추보다 이 열매가 비싸게 팔리던 때가 있었다.',
     kind: 'bait',
     cost: { common: 50, rare: 15 },
-    effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.2 } } },
+    effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.4 } } },
   { id: 'cook-bait-epic', name: '큐베브 미끼',
     description: '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
     kind: 'bait',
     cost: { common: 50, epic: 5 },
-    effects: { rarityWeight: { grades: gradesFrom('epic'), bonus: 0.4 } } },
+    effects: { rarityWeight: { grades: gradesFrom('epic'), bonus: 0.6 } } },
   { id: 'cook-bait-legendary', name: '용연향 미끼',
     description: '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
     kind: 'bait',
     cost: { common: 50, legendary: 3 },
-    effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.6 } } },
+    effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.8 } } },
 ];
 
 /** 그 레시피 1개의 등급별 기운 요구(저장 단위). 요구가 없는 등급은 0 */
