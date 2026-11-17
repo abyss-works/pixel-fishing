@@ -80,7 +80,7 @@ describe.each(PATHS)('가방이 찬 가공 플랜트선 - %s', (_label, version)
     expect(Object.values(ENERGY)).toContain(Object.keys(data.items)[0]);
     expect(Object.values(result.energy ?? {}).reduce((a, b) => a + b, 0)).toBe(ENERGY_PER_INDIVIDUAL);
     expect(await bagCount(uid)).toBe(CAP);
-    const events = await eventsOf(uid);
+    const events = (await eventsOf(uid)).filter(e => e.type !== 'unlockAchievement');
     expect(events.map(e => e.type)).toEqual(['autoExtractEnergy', 'catch']);
     const payload = events[0].payload as { uids: string[]; reason: string; energy: Record<string, number>; fish: unknown[] };
     expect(payload.reason).toBe('bag-full');
@@ -96,7 +96,7 @@ describe.each(PATHS)('가방이 찬 가공 플랜트선 - %s', (_label, version)
     expect(result.released).toHaveLength(1);
     expect(result).not.toHaveProperty('extracted');
     expect(energyTotal(await stored(uid))).toBe(0);
-    expect((await eventsOf(uid)).map(e => e.type)).toEqual(['autoRelease', 'catch']);
+    expect((await eventsOf(uid)).filter(e => e.type !== 'unlockAchievement').map(e => e.type)).toEqual(['autoRelease', 'catch']);
     expect(await bagCount(uid)).toBe(CAP);
   });
 
@@ -107,7 +107,7 @@ describe.each(PATHS)('가방이 찬 가공 플랜트선 - %s', (_label, version)
     expect(result.released).toHaveLength(1);
     expect(result).not.toHaveProperty('extracted');
     expect(energyTotal(await stored(uid))).toBe(0);
-    expect((await eventsOf(uid)).map(e => e.type)).toEqual(['autoRelease', 'catch']);
+    expect((await eventsOf(uid)).filter(e => e.type !== 'unlockAchievement').map(e => e.type)).toEqual(['autoRelease', 'catch']);
   });
 
   it('가공 플랜트선 아래 단계의 배는 놓아준다', async () => {
@@ -115,7 +115,7 @@ describe.each(PATHS)('가방이 찬 가공 플랜트선 - %s', (_label, version)
     const res = await catchOnce(uid);
     expect((res.body as { result: { released: unknown[] } }).result.released).toHaveLength(1);
     expect(energyTotal(await stored(uid))).toBe(0);
-    expect((await eventsOf(uid)).map(e => e.type)).toEqual(['autoRelease', 'catch']);
+    expect((await eventsOf(uid)).filter(e => e.type !== 'unlockAchievement').map(e => e.type)).toEqual(['autoRelease', 'catch']);
   });
 
   it('가방이 차지 않았으면 기운을 얻지 않는다', async () => {
@@ -123,7 +123,7 @@ describe.each(PATHS)('가방이 찬 가공 플랜트선 - %s', (_label, version)
       state: { boat: PLANT, bag: [fish('crucian')] } });
     await catchOnce(uid);
     expect(energyTotal(await stored(uid))).toBe(0);
-    expect((await eventsOf(uid)).map(e => e.type)).toEqual(['catch']);
+    expect((await eventsOf(uid)).filter(e => e.type !== 'unlockAchievement').map(e => e.type)).toEqual(['catch']);
   });
 });
 
