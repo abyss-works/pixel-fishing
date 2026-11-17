@@ -113,4 +113,17 @@ describe('어종 가격 배율 덮어쓰기', () => {
     const o = { spots: { sea: { powerReq: 30, priceMult: 0.9 } } };
     expect(parseOverride(o)).toEqual(o);
   });
+
+  it('nightMult는 밤 어종에만 더 곱하고 복원하면 원래 가격으로 돌아온다', () => {
+    const night = FISH.find(f => f.id === 'bigeye')!, day = FISH.find(f => f.id === 'galapagosshark')!;
+    const before = [night.price, day.price];
+    restore = applyOverride({ spots: { sthelena: { gradeMult: { legendary: 2 }, nightMult: { legendary: 1.5 } } } });
+    expect(day.price).toBe(ladderPrice(before[1] * 2, 'legendary'));
+    expect(night.price).toBe(ladderPrice(before[0] * 2 * 1.5, 'legendary'));
+    restore();
+    restore = null;
+    expect([night.price, day.price]).toEqual(before);
+    expect(parseOverride({ spots: { sthelena: { nightMult: { epic: 1.2 } } } })).toEqual({ spots: { sthelena: { nightMult: { epic: 1.2 } } } });
+    expect(() => parseOverride({ spots: { sthelena: { nightMult: { epic: 0 } } } })).toThrow(/0보다/);
+  });
 });

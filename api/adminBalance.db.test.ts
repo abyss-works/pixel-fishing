@@ -135,7 +135,7 @@ describe('지표 결과', () => {
   beforeAll(async () => {
     const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
     const players: { uid: string; email: string | null; gold: number; fame: number; boat: number; rod: number; updatedAt: string; restricted?: boolean }[] = [
-      { uid: ALICE, email: 'alice@example.test', gold: 300, fame: 50, boat: 1, rod: 6, updatedAt: hoursAgo(0) },
+      { uid: ALICE, email: 'alice@example.test', gold: 150, fame: 50, boat: 1, rod: 6, updatedAt: hoursAgo(0) },
       { uid: BOB, email: null, gold: tier(2).price, fame: tier(2).fameReq - 1, boat: 1, rod: 12, updatedAt: hoursAgo(9 * 24) },
       { uid: CAROL, email: 'carol@example.test', gold: tier(3).price, fame: tier(3).fameReq - 1, boat: 2, rod: 31, updatedAt: hoursAgo(10 * 24) },
       { uid: DAN, email: 'dan@example.test', gold: 0, fame: 0, boat: 0, rod: 1, updatedAt: hoursAgo(11 * 24) },
@@ -219,7 +219,7 @@ describe('지표 결과', () => {
     await event(GINA, 'sell', { gold: 1000000 }, 2, 2);
   });
 
-  const golds = [300, tier(2).price, tier(3).price, 0, 50, 0, tier(2).price, 1_000_000].sort((a, b) => a - b);
+  const golds = [150, tier(2).price, tier(3).price, 0, 50, 0, tier(2).price, 1_000_000].sort((a, b) => a - b);
   /** 이산 분위. 누적 비율이 p 이상이 되는 첫 값이다 */
   const discrete = (p: number) => golds[Math.ceil(p * golds.length) - 1];
 

@@ -7,7 +7,7 @@ import { localDate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 import { getTimeOverride } from './timeOverride';
 import { pickGuestName } from '../../game/rules/nickname';
-import type { GameGateway, DispatchResult } from '../api/types';
+import type { GameGateway, GameProfile, DispatchResult } from '../api/types';
 
 const LS_KEY = 'pixel-fishing-save';
 
@@ -31,9 +31,9 @@ export class LocalGameGateway implements GameGateway {
     return this.current;
   }
 
-  getNickname(): string | null {
+  getProfile(): GameProfile {
     if (!this.nickname) this.nickname = pickGuestName(Math.random);
-    return this.nickname;
+    return { nickname: this.nickname, devTools: false };
   }
 
   dispatch(action: GameAction): DispatchResult {

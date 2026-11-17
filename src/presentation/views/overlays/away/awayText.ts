@@ -15,20 +15,36 @@ export function awayLineText(s: AwaySummary): string {
   return `${awayDuration(s.awayMs)} 동안 ${fmtNum(s.catches)}마리를 잡았어요.${dex}`;
 }
 
+/** 기운으로 바꾼 수. 응답에 extracted가 없으면(배포 중 옛 응답) 0으로 본다 */
+const extractedCount = (s: AwaySummary): number => (s as Partial<AwaySummary>).extracted?.count ?? 0;
+
+/** 가방이 차서 일어난 일의 서술 — 기운으로 바꾼 수와 놓아준 수가 있는 만큼만 잇는다 */
+function bagOverflowOutcome(s: AwaySummary): string {
+  const extracted = `${fmtNum(extractedCount(s))}마리를 생명의 기운으로`;
+  const released = `${fmtNum(s.released.count)}마리를 놓아줬어요.`;
+  if (extractedCount(s) === 0) return released;
+  return s.released.count === 0 ? `${extracted} 바꿨어요.` : `${extracted} 바꾸고 ${released}`;
+}
+
 /** 가방이 찼을 때의 한 줄. 차지 않았으면 null */
 export function bagFullText(s: AwaySummary): string | null {
   if (s.bagFullAfterMs === null) return null;
-  const lost = `${fmtNum(s.released.count)}마리를 놓아줬어요.`;
+  const outcome = bagOverflowOutcome(s);
   return s.bagFullAfterMs < MINUTE
-    ? `가방이 이미 차 있어서 ${lost}`
-    : `${awayDuration(s.bagFullAfterMs)} 만에 가방이 차서 ${lost}`;
+    ? `가방이 이미 차 있어서 ${outcome}`
+    : `${awayDuration(s.bagFullAfterMs)} 만에 가방이 차서 ${outcome}`;
 }
 
 /** 가방 타임라인 가운데 문구 */
 export function bagTimelineText(s: AwaySummary): string {
   const full = s.bagFullAfterMs ?? 0;
   const head = full < MINUTE ? '떠날 때 이미 가득 참' : `${awayDuration(full)} 만에 가득 참`;
-  return `${head}. 이후 ${awayDuration(s.awayMs - full)} 동안 ${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)})를 놓아줌`;
+  const parts: string[] = [];
+  if (extractedCount(s) > 0) parts.push(`${fmtNum(extractedCount(s))}마리를 기운으로 바꿈`);
+  if (s.released.count > 0 || parts.length === 0) {
+    parts.push(`${fmtNum(s.released.count)}마리(${fmtGold(s.released.value)})를 놓아줌`);
+  }
+  return `${head}. 이후 ${awayDuration(s.awayMs - full)} 동안 ${parts.join(', ')}`;
 }
 
 /** "다음엔" 조언 한 줄 */

@@ -1,7 +1,7 @@
-// 배 스프라이트 생성 CLI — 8단계 배를 대상 정의의 격자로 칠해 생성 파일을 쓴다.
+// 배 스프라이트 생성 CLI — 9단계 배를 대상 정의의 격자로 칠해 생성 파일을 쓴다.
 // 사용: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts [sheet.png]
 // 뱃머리는 왼쪽(어종과 같은 방향). 흘수선은 13행, 그 아래 2행은 물에 잠긴 선체.
-// 팔레트는 8척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
+// 팔레트는 9척이 공유하는 고정 hex — 색 규칙: 나무 선체 3톤 · 돛 2톤 · 돛대 · 붉은 포인트 ·
 // 금속 2톤 · 연기 · 창 불빛. 윤곽은 렌더러가 덧그린다.
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -169,6 +169,34 @@ function oceanTrawler(g: Grid) {
   g.hline(21, 22, 10, C.metal);                          // 갑판 윈치 레일
 }
 
+function processor(g: Grid) {
+  // 가공 플랜트선 — 대양 트롤선과 같은 길이의 금속 선체에 선교와 길게 이어진 선상 가공동, 지붕 위 연돌, 선미의 대형 갠트리와 크레인
+  g.hline(1, 30, WL - 1, C.metal);
+  g.hline(1, 30, WL, C.metalD);
+  g.hline(2, 29, WL + 1, C.metalD);
+  g.hline(3, 28, WL + 2, C.metalD);
+  g.put(1, WL - 2, C.metal); g.put(1, WL - 3, C.metal); g.put(2, WL - 3, C.metal); g.put(2, WL - 4, C.metal); // 높이 들린 뱃머리
+  g.hline(3, 29, WL - 2, C.deck);
+  g.rect(4, 6, 7, 5, C.deck);                            // 선교 아래층
+  g.rect(5, 4, 5, 2, C.deck);                            // 선교 윗층
+  g.hline(2, 5, WL - 3, C.red);                          // 뱃머리 붉은 띠
+  for (const x of [5, 7, 9]) g.put(x, 8, C.win);
+  for (const x of [6, 8]) g.put(x, 5, C.win);
+  g.vline(7, 0, 3, C.mast); g.put(7, 0, C.red); g.hline(6, 8, 1, C.metal); // 레이더 마스트
+  g.rect(11, 7, 12, 4, C.deck);                          // 선상 가공동(길게 이어진 아래층)
+  g.rect(12, 5, 5, 2, C.deck);                           // 가공동 윗층
+  g.hline(11, 22, 6, C.metal);                           // 지붕 환기 띠
+  for (const x of [12, 14, 16, 18, 20]) g.put(x, 8, C.win);
+  for (const x of [13, 15]) g.put(x, 5, C.win);
+  g.rect(18, 2, 3, 4, C.metalD); g.hline(18, 20, 2, C.red);                    // 연돌
+  g.put(19, 1, C.smoke); g.put(20, 1, C.smoke); g.put(20, 0, C.smoke); g.put(21, 0, C.smoke);
+  g.vline(23, 5, WL - 3, C.metal); g.hline(23, 25, 5, C.metal);                // 갑판 크레인
+  g.vline(25, 4, WL - 3, C.metalD); g.vline(29, 4, WL - 3, C.metalD);          // 갠트리 기둥
+  g.hline(25, 29, 4, C.metalD); g.hline(25, 29, 7, C.metal);                   // 상단 보와 가로대
+  g.rect(26, 8, 3, 3, C.mast);                           // 그물 드럼
+  g.vline(30, 6, WL - 3, C.metal);                       // 선미 트롤 도어 기둥
+}
+
 const BOATS: { tier: number; name: string; paint: (g: Grid) => void }[] = [
   { tier: 1, name: '조각배', paint: rowboat },
   { tier: 2, name: '돛단배', paint: sailboat },
@@ -178,6 +206,7 @@ const BOATS: { tier: number; name: string; paint: (g: Grid) => void }[] = [
   { tier: 6, name: '대양선', paint: liner },
   { tier: 7, name: '원양어선', paint: trawler },
   { tier: 8, name: '대양 트롤선', paint: oceanTrawler },
+  { tier: 9, name: '가공 플랜트선', paint: processor },
 ];
 
 const grids = BOATS.map(b => { const g = new Grid(W, H); b.paint(g); return { ...b, rows: g.rows() }; });
@@ -191,7 +220,7 @@ ${b.rows.map(r => `      '${r}',`).join('\n')}
   },`);
 
 const src = `// 생성 파일 — 손으로 고치지 않는다. 다시 만들려면: pnpm exec tsx tools/sprite-draft/boats/generate-boats.ts
-// 배 8단계 스프라이트(${W}×${H}, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
+// 배 9단계 스프라이트(${W}×${H}, 뱃머리 왼쪽). 흘수선은 13행 — 필드에서는 그 행을 수면에 맞춘다.
 import type { PixelSprite } from './types.js';
 
 export const BOAT_PALETTE: readonly string[] = ${JSON.stringify(PALETTE)};

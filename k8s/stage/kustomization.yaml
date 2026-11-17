@@ -15,9 +15,9 @@ patches:
       - op: replace
         path: /metadata/name
         value: pixel-fishing-stage
+  # 경로별로 나눈 Ingress 전부에 적용한다.
   - target:
       kind: Ingress
-      name: pixel-fishing
     patch: |-
       - op: replace
         path: /spec/rules/0/host
@@ -72,6 +72,6 @@ patches:
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-b84598b
+    newTag: dev-a5cf92f
   - name: ghcr.io/abyss-works/pixel-fishing-admin
-    newTag: dev-b84598b
+    newTag: dev-a5cf92f

@@ -21,7 +21,7 @@ import {
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
-import { appliedSlots } from '../src/game/rules/cooking.js';
+import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -76,49 +76,10 @@ function scalarState(row: StateRow): GameState {
 }
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
+import { debugTriggerAllowed, importVerdict, isListedAdmin } from './devAccess.js';
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
-
-// 소유자 계정 판정 — 이사 코드 불러오기와 소유자 전용 개발 명령이 쓴다.
-// 무검증 수입이 변조 반입 통로로 실제 악용됐다(골드 999억·명성 10억 세이브).
-// 소유자 메일의 출처는 서버 env가 정본이고, 없거나 비어 있으면 폴백 상수를 쓴다.
-// 클라이언트의 OWNER_EMAIL은 관리자 UI 표시용 힌트일 뿐 진짜 경계가
-// 아니라서 수동 동기화로 둔다 — 빌드타임 주입은 env 분리(Preview/Production/로컬)가
-// 늘어나는 대가라 하지 않는다.
-export const OWNER_EMAIL_FALLBACK = 'inley@naver.com';
-export function importOwnerEmail(): string {
-  return process.env.IMPORT_OWNER_EMAIL || OWNER_EMAIL_FALLBACK;
-}
-/** 계정 이메일이 없거나 비어 있으면 소유자가 아니다 */
-export function isImportOwner(email: string | null | undefined, ownerEmail: string): boolean {
-  const mine = email?.toLowerCase();
-  return !!mine && mine === ownerEmail.toLowerCase();
-}
-
-// 개발 명령 계열(이사 코드 import, debug 명령, 강제 조우)의 허용 판정 — 요청 헤더를 읽지 않고
-// 서버 환경(DEPLOY_ENV)과 호출자 계정만 본다. 정책 표(이 함수가 유일한 지점): production은 소유자도 거부,
-// preview는 소유자만, local은 모두 허용, 설정이 없거나 모르는 값은 거부한다.
-function devGateVerdict({ deployEnv, owner }: {
-  deployEnv: string | undefined; owner: boolean;
-}): 'ok' | 'owner-only' | 'disabled' {
-  if (deployEnv === 'local') return 'ok';
-  if (deployEnv === 'preview') return owner ? 'ok' : 'owner-only';
-  return 'disabled';
-}
-
-/** 이사 코드 import 허용 판정. 거부 사유는 응답 코드로 돌려준다 */
-export function importVerdict(args: {
-  deployEnv: string | undefined; owner: boolean;
-}): 'ok' | 'import-owner-only' | 'import-disabled' {
-  const verdict = devGateVerdict(args);
-  return verdict === 'ok' ? 'ok' : verdict === 'owner-only' ? 'import-owner-only' : 'import-disabled';
-}
-
-/** debug 명령과 강제 조우의 허용 판정 */
-export function debugTriggerAllowed(args: { deployEnv: string | undefined; owner: boolean }): boolean {
-  return devGateVerdict(args) === 'ok';
-}
 
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
 export type DebugTablePlan =
@@ -311,17 +272,19 @@ async function route(req: Req, res: Res): Promise<void> {
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
-  const isOwner = async (): Promise<boolean> => isImportOwner(user.email, importOwnerEmail());
+  // 관리자 명부는 개발 도구 계열 액션에서만 조회한다.
+  const isAdminCaller = (): Promise<boolean> =>
+    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV));
   const debugAllowed = async (): Promise<boolean> =>
-    debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
 
   // 이사 코드 import — 무검증 수입이라 골드·명성·도감을 통째로 주입할 수 있다.
   if (action.type === 'import') {
-    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, owner: await isOwner() });
+    const verdict = importVerdict({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
     if (verdict !== 'ok') throw new ApiError(403, verdict);
   }
 
-  // 개발 도구 명령 — 스테이징은 소유자만, 로컬은 모두, 그 밖은 거부한다.
+  // 개발 도구 명령 — 스테이징은 관리자 명부의 계정만, 로컬은 모두, 그 밖은 거부한다.
   // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
   if (action.type === 'debug' && !await debugAllowed()) {
     throw new ApiError(422, 'debug-forbidden');
@@ -466,7 +429,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null);
     if (out.ok) catchBase = scalarState(row);
   } else {
     const state = assemble(row, instances, records);
@@ -478,6 +441,7 @@ async function route(req: Req, res: Res): Promise<void> {
       bounty,
       mail,
       guild: guildEffects,
+      guest: user.email === null,
     });
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -625,7 +589,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
-  guild: GuildEffects): Promise<ApplyOutcome> {
+  guild: GuildEffects, guest: boolean): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
   const gate = canFish(base, spot);
@@ -651,8 +615,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
-  let released: ReleasedFish[] = [];
-  let goneFish: Pick<FishInstance, 'uid' | 'fishId' | 'form'>[] = [];
+  let evictBag: FishInstance[] = [];
   if (over > 0) {
     // 등급별 top-1 — [삭제어종, 일반, 희귀, 영웅, 전설] 순 첫 비어있지 않은 칸이 풀가방 정렬의 선두와 같다.
     // 등급 목록은 FISH에서 뽑으니 신어종 자동 반영, 스키마 변경 없이 끝난다. 묶음 안 정렬(판매가, 크기, uid)의
@@ -667,32 +630,43 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     const pick = pickEvict(tops, inst);
     if (pick.evictUid) {
       removed = [pick.evictUid];
-      const gone = tops.find(t => t?.uid === pick.evictUid)!;
-      const f = instanceFish(gone);
-      released = [{ uid: gone.uid, name: f ? formName(f, gone.form) : gone.fishId }];
-      goneFish = [gone];
     } else if (pick.evictNew) {
-      added = []; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
-      released = [{ uid: inst.uid, name: formName(fish, inst.form) }];
-      goneFish = [inst];
+      added = []; // 새 놈이 가장 안 특별 — 그 자리에서 내보낸다
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
+    evictBag = [inst, ...tops.filter((t): t is FishInstance => t !== null)];
   }
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
+  // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
+  const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest);
+  const view = (uids: readonly string[]) => uids.map(uid => evictBag.find(i => i.uid === uid)!);
+  const toReleased = (i: FishInstance): ReleasedFish => {
+    const f = instanceFish(i);
+    return { uid: i.uid, name: f ? formName(f, i.form) : i.fishId };
+  };
+  const goneFish = view(plan.released);
+  const takenFish = view(plan.gain.uids);
+  const released = goneFish.map(toReleased);
+  const extracted = takenFish.map(toReleased);
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
-  if (overflow.length > 0) {
-    events.push({ type: 'autoRelease', payload: { uids: overflow, reason: 'bag-full',
+  if (goneFish.length > 0) {
+    events.push({ type: 'autoRelease', payload: { uids: plan.released, reason: 'bag-full',
       fish: goneFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
+  }
+  if (takenFish.length > 0) {
+    events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
+      fish: takenFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
   return {
     ok: true,
-    state: { ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch },
-    result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released },
+    state: { ...applyEnergyGain({ ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+    result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
+      ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
     events,
     writes: {
       instancesAdded: added, instancesRemoved: removed,

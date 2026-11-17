@@ -13,8 +13,9 @@ import { RARITY } from '../../src/game/content/rarity';
 import { topZoneOfSpot } from '../../src/game/content/zones';
 import { drawRows, rodStats } from '../../src/game/rules/logic';
 import type { DrawOptions } from '../../src/game/rules/logic';
-import { minLevelOfPower, powerOfLevel, zonesFor } from '../../src/game/rules/stats';
-import { relativeIdleBoost } from '../../src/game/rules/power';
+import { zonesFor } from '../../src/game/rules/stats';
+import { minLevelOfPower, powerOfLevel, relativeIdleBoost } from './rodRules';
+import { virtualZoneOf } from './virtualSpots';
 import { CATCH_MS, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
 import { variantShare } from '../../src/game/rules/logic';
 import { DAY_START_MIN, NIGHT_START_MIN } from '../../src/game/rules/time';
@@ -166,7 +167,7 @@ export function perfectOverIdle(spot: SpotId, level: number): number {
 }
 
 /** 해역의 상위 지역 — 도감·완화 판단의 묶음 단위 */
-export const zoneOf = (spot: SpotId): string => topZoneOfSpot(spot) ?? 'unknown';
+export const zoneOf = (spot: SpotId): string => topZoneOfSpot(spot) ?? virtualZoneOf(spot) ?? 'unknown';
 export const ZONE_ORDER: string[] = [...new Set(SPOTS.map(s => zoneOf(s.id)))];
 export const spotsOfZone = (zone: string) => SPOTS.filter(s => zoneOf(s.id) === zone);
 

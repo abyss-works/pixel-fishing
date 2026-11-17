@@ -9,6 +9,7 @@ import { deleteExpiredChat } from '../_data/chat.js';
 import { database } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
+import { inStage, logCronFailure } from '../cronFailure.js';
 
 type Req = IncomingMessage;
 type Res = ServerResponse & { status: (code: number) => Res; json: (b: unknown) => void };
@@ -53,8 +54,8 @@ interface PurgeFailure { id: string; error: unknown }
 async function runPurge(
   { db, withTransaction }: Pick<Database, 'db' | 'withTransaction'>, enabled: boolean, now: Date,
 ): Promise<{ summary: PurgeSummary; firstFailure?: PurgeFailure }> {
-  const chat = await deleteExpiredChat(db, now.toISOString());
-  const found = await selectPurgeTargets(db, now, BATCH_LIMIT);
+  const chat = await inStage('expire-chat', () => deleteExpiredChat(db, now.toISOString()));
+  const found = await inStage('select-targets', () => selectPurgeTargets(db, now, BATCH_LIMIT));
   const summary: PurgeSummary = {
     dryRun: !enabled, cutoff: found.cutoffs.idle, staleCutoff: found.cutoffs.stale, targets: found.total, staleTargets: found.stale,
     batch: found.ids.length,
@@ -86,6 +87,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const { summary, firstFailure } = await runPurge(database(), process.env.PURGE_ANON_ENABLED === '1', new Date());
     console.log('== anon purge ==', JSON.stringify(summary));
     if (firstFailure) {
+      logCronFailure('purge-anon', firstFailure.error, 'purge-account', { failedId: firstFailure.id, failed: summary.failed, deleted: summary.deleted });
       // 재시도가 없어 Sentry가 유일 알림이다. 실패 계정이 여럿이어도 첫 실패 하나만 보고한다
       await reportServerIssue('anon-purge', firstFailure.error, { ...summary, failedId: firstFailure.id });
       res.status(500).json({ error: 'anon-purge-failed', ...summary });
@@ -93,6 +95,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     }
     res.status(200).json(summary);
   } catch (e) {
+    logCronFailure('purge-anon', e, 'setup');
     await reportServerIssue('anon-purge', e);
     res.status(500).json({ error: 'anon-purge-failed' });
   }

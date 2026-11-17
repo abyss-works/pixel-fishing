@@ -157,6 +157,22 @@ describe('판매 탭', () => {
   });
 });
 
+describe('확정 영역 높이', () => {
+  // 확정 버튼 줄은 내용(보정 금액의 취소선 등)과 관계없이 같은 고정 높이 칸에 든다. 두 탭이 같은 칸을 쓰므로 확정 영역의 높이가 같다
+  const slotOf = (button: HTMLElement) => button.closest('[data-confirm-row]') as HTMLElement;
+
+  it('판매 탭과 기운 얻기 탭의 확정 버튼이 같은 고정 높이 칸에 있다', () => {
+    show(seed({ bag: [inSpot('b1', 'sea'), inSpot('c1', 'indian')] }));
+    const sell = slotOf(screen.getByRole('button', { name: /^판매 \(/ }));
+    fireEvent.click(tab('기운 얻기'));
+    const energy = slotOf(screen.getByRole('button', { name: /^기운 얻기 \(/ }));
+    expect(sell).not.toBeNull();
+    expect(energy).not.toBeNull();
+    expect(sell.className).toBe(energy.className);
+    expect(sell.className).toMatch(/\bh-\d+\b/);
+  });
+});
+
 describe('기운 얻기 탭', () => {
   // 배 5의 기본값: 가장 앞선 해역(인도양)만 꺼짐, 그 앞 해역은 켜짐
   const bag = () => [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea'), inSpot('c1', 'indian')];

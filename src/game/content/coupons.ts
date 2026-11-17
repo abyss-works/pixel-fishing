@@ -2,5 +2,5 @@
 // LocalGameGateway가 같은 리듀서를 실행한다. 동적 쿠폰은 DB의 coupons 표에 둔다.
 // 코드는 관리자 대시보드(/admin/)에서 확인해 공유한다.
 export const COUPONS: Record<string, { gold: number; desc: string }> = {
-  '출항준비': { gold: 300, desc: '조각배 한 척 값의 출항 지원금' },
+  '출항준비': { gold: 125, desc: '조각배 한 척 값의 출항 지원금' },
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   connectGoogle,
   deleteAccount,
@@ -9,7 +9,7 @@ import {
 } from '../../../../features/account/service/accountActions';
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
 import { emailSignInFailureLines, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
-import { MIN_PASSWORD_LENGTH, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
+import { ACCOUNT_CHECK_FAILED_COPY, MIN_PASSWORD_LENGTH, accountLabel, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
@@ -31,13 +31,16 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 // 계정 관리 창 - 계정 연결과 로그인 상태, 로그아웃, 계정 삭제, 약관과 처리방침 링크.
 // 새 계정의 로그인 수단은 구글 하나다: 게스트는 구글 계정을 연결해 같은 진행으로 영구 계정이 된다.
 // 이미 있는 이메일 계정의 로그인은 텍스트 링크가 같은 창 안에서 펼치는 폼으로 남기고, 이메일 계정은 구글 연결로 옮겨 간다.
+// 세션 확인에 실패했으면(accountFailed) 게스트로 보지 않고, 확인 실패 안내와 다시 확인 버튼만 둔다. 계정을 바꾸는 동작(구글 연결, 이메일 로그인, 로그아웃, 계정 삭제)은 확인이 끝날 때까지 열지 않는다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  setToast, onAuthChanged, onClose, account, guestProgress, recheckGuestProgress, syncLabel, syncState,
+  setToast, onAuthChanged, onClose, account, accountFailed, guestProgress, recheckGuestProgress, syncLabel, syncState,
 }: {
   setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null;
+  /** 세션 확인에 실패했는가 — 이때 account는 null이지만 게스트가 아니다 */
+  accountFailed: boolean;
   /** 이 기기의 게스트 진행. 버릴 진행이 없으면 이메일 계정 로그인 확인을 건너뛴다 */
   guestProgress: GuestProgress;
   /** 확인을 건너뛰기로 했을 때 로그인 요청 직전에 서버 저장 상태를 다시 읽어 판정한다. 읽기에 실패하면 진행 있음이다 */
@@ -53,7 +56,7 @@ export default function AccountModal({
   const [signInError, setSignInError] = useState<readonly string[]>([]);
   const { confirm, input, dialogs } = useDialogs();
   const { method, failed, retry } = useLoginMethod(account);
-  const guest = method === 'guest';
+  const guest = method === 'guest' && !accountFailed;
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 폼만 막는다.
   const offline = !isAccountConfigured();
 
@@ -122,7 +125,7 @@ export default function AccountModal({
   });
 
   const accountRow = (
-    <KeyValueRow label="계정" value={account ?? '게스트(이메일 없음)'}
+    <KeyValueRow label="계정" value={accountLabel(account, accountFailed)}
                  action={method === 'email' ? <span className="text-xs text-text-dim shrink-0">이메일 로그인</span>
                    : method === 'google' ? <GoogleLogo size={16} /> : undefined} />
   );
@@ -178,7 +181,14 @@ export default function AccountModal({
       </Inset>
       {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
 
-      {guest ? (
+      {accountFailed ? (
+        <>
+          <Note tone="warn" className="mt-0">
+            {ACCOUNT_CHECK_FAILED_COPY.lines.map((line, i) => <Fragment key={line}>{i > 0 && <br />}{line}</Fragment>)}
+          </Note>
+          <Button full disabled={busy || offline} onClick={() => void run(onAuthChanged)}>{ACCOUNT_CHECK_FAILED_COPY.retry}</Button>
+        </>
+      ) : guest ? (
         <>
           <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
           <Note size="xs" className="text-center mt-2 mb-0">
@@ -214,11 +224,15 @@ export default function AccountModal({
         </>
       )}
 
-      <Divider className="mt-3 mb-2" />
-      <div className="flex items-center gap-2 flex-wrap">
-        {!guest && links}
-        <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
-      </div>
+      {!accountFailed && (
+        <>
+          <Divider className="mt-3 mb-2" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {!guest && links}
+            <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
+          </div>
+        </>
+      )}
       {dialogs}
     </Modal>
   );

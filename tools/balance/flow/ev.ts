@@ -54,9 +54,24 @@ export interface RewardRow {
   change: number;
 }
 
-export interface EvReport { spots: SpotEv[]; zones: ZoneEv[]; rewards: RewardRow[] }
+/** 인접한 두 해역의 딱렙 방치 EV 증가율 */
+export interface GrowthRow {
+  from: SpotId; to: SpotId;
+  fromEv: number; toEv: number;
+  /** 뒤 딱렙 EV ÷ 앞 딱렙 EV - 1 */
+  growth: number;
+  /** 요구 파워 간격과 진입 레벨 간격 */
+  powerGap: number; levelGap: number;
+}
 
-export function evReport(): EvReport {
+export interface EvReport { spots: SpotEv[]; zones: ZoneEv[]; rewards: RewardRow[]; growth?: GrowthRow[] }
+
+export interface EvOptions {
+  /** 해역 사이 딱렙 방치 EV 증가율 열을 더한다 */
+  growth?: boolean;
+}
+
+export function evReport(o: EvOptions = {}): EvReport {
   const spots: SpotEv[] = SPOTS.map((s, i) => {
     const entry = entryLevel(s.id);
     const next = SPOTS[i + 1];
@@ -82,5 +97,13 @@ export function evReport(): EvReport {
       rewards.push({ zone: z.zone, difficulty, reward, hours, targetHours, gap: hours - targetHours, next, change: next / reward - 1 });
     }
   }
-  return { spots, zones, rewards };
+  if (!o.growth) return { spots, zones, rewards };
+  const growth: GrowthRow[] = spots.slice(1).map((b, i) => {
+    const a = spots[i];
+    return {
+      from: a.spot, to: b.spot, fromEv: a.entryEv, toEv: b.entryEv, growth: b.entryEv / a.entryEv - 1,
+      powerGap: (SPOTS[i + 1].powerReq ?? 0) - (SPOTS[i].powerReq ?? 0), levelGap: b.entryLevel - a.entryLevel,
+    };
+  });
+  return { spots, zones, rewards, growth };
 }

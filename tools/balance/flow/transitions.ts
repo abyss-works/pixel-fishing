@@ -7,7 +7,7 @@ import type { Boat } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel } from '../model';
 import { fishingDays, simulate } from './progress';
-import type { Arrival, FlowAxis, RatePlan } from './progress';
+import type { AchievementOptions, Achieved, Arrival, FlowAxis, RatePlan } from './progress';
 
 export interface TransitionRow {
   from: SpotId; to: SpotId;
@@ -75,8 +75,10 @@ export interface TransitionReport {
   rows: TransitionRow[];
   timings: TransitionTiming[];
   complete: boolean;
-  /** 효과 계획을 줬을 때 효과 없는 같은 조건의 전환 시간 */
+  /** 효과 계획이나 업적 보상을 줬을 때 그것이 없는 같은 조건의 전환 시간 */
   base?: TransitionTiming[];
+  /** 업적 보상을 줬을 때 달성한 진행 업적과 지급 내역 */
+  achieved?: Achieved[];
 }
 
 export interface TransitionOptions {
@@ -85,12 +87,16 @@ export interface TransitionOptions {
   bounty?: boolean;
   /** 주면 이 계획으로 수입을 계산하고 효과 없는 값을 base로 함께 담는다 */
   plan?: RatePlan;
+  /** 주면 진행 업적 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 base로 함께 담는다 */
+  reward?: AchievementOptions;
 }
 
 export function transitionReport(o: TransitionOptions): TransitionReport {
-  const run = (plan?: RatePlan) => simulate({ axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, plan });
-  const r = run(o.plan);
+  const run = (plan?: RatePlan, achievements?: AchievementOptions) =>
+    simulate({ axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, plan, achievements });
+  const r = run(o.plan, o.reward);
   const report: TransitionReport = { rows: transitionGold(), timings: transitionTimings(r.arrivals), complete: r.complete };
-  if (o.plan) report.base = transitionTimings(run().arrivals);
+  if (o.plan || o.reward) report.base = transitionTimings(run().arrivals);
+  if (o.reward) report.achieved = r.achieved;
   return report;
 }

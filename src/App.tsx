@@ -32,9 +32,9 @@ function AppContent() {
   const { log, setToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
   const { input, dialogs } = useDialogs();
-  const { account, accountChecked, uid, onAuthChanged } = useAccount({
+  const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
     askNewPassword: min => input({
       title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
@@ -64,9 +64,10 @@ ${min}자 이상이어야 해요.`,
     setPlaceSeq(seq => seq + 1);
   };
 
-  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다
-  const go = (nextScene: SceneRef, message: string, position?: Point) => {
-    const from = { scene, entryPos };
+  // 장소를 먼저 바꾸고 서버에 알린다. 거부나 실패가 오면 떠난 장소로 되돌린다.
+  // 필드에서 떠났다면 returnPos(트리거에 닿기 직전의 자리)로, 아니면 그 장소의 진입 자리로 돌아온다
+  const go = (nextScene: SceneRef, message: string, position?: Point, returnPos?: Point) => {
+    const from = { scene, entryPos: returnPos ?? entryPos };
     const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
     setToast(message);
@@ -78,7 +79,7 @@ ${min}자 이상이어야 해요.`,
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
-  // 개발 도구 패널(?admin + 로컬·소유자만). 둘 다 게임 화면 바깥의 오버레이이고,
+  // 개발 도구 패널(?admin + 로컬 또는 서버 판정이 참일 때만). 둘 다 게임 화면 바깥의 오버레이이고,
   // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
   return (
     <>
@@ -86,12 +87,12 @@ ${min}자 이상이어야 해요.`,
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
-        account={account} accountChecked={accountChecked} uid={uid} nickname={nickname}
+        account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} account={account} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools} />
       </DevEnvContext.Provider>
       {dialogs}
     </>

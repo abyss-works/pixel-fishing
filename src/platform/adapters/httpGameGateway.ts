@@ -6,7 +6,7 @@ import { migrate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 import type { GameAction, StatePatch } from '../../game/rules/actions';
 import { applyPatch } from '../../game/rules/actions';
-import type { GameGateway, DispatchResult } from '../api/types';
+import type { GameGateway, GameProfile, DispatchResult } from '../api/types';
 import { AppError } from '../../core/errors';
 import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
@@ -77,16 +77,21 @@ export class HttpGameGateway implements GameGateway {
   }
 
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (에러 처리 정책 소관)
-  // 표시용 닉네임 읽기 — 표시 전용이라 실패는 이름 없음(null)으로 둔다.
-  async getNickname(): Promise<string | null> {
-    if (!isCloud) return null;
-    const me = await readMe<{ nickname: unknown }>('profile').catch(() => null);
-    return typeof me?.nickname === 'string' ? me.nickname : null;
+  // 표시용 프로필 읽기 — 표시 전용이라 실패는 이름 없음(null)과 개발 도구 닫힘으로 둔다.
+  async getProfile(): Promise<GameProfile> {
+    if (!isCloud) return { nickname: null, devTools: false };
+    const me = await readMe<{ nickname: unknown; devTools: unknown }>('profile').catch(() => null);
+    return { nickname: typeof me?.nickname === 'string' ? me.nickname : null, devTools: me?.devTools === true };
   }
 
   async dispatch(action: GameAction, retried = false): Promise<DispatchResult> {
     if (!isCloud) throw new AppError('network', 'cloud not configured');
     const res = await this.post(action);
+
+    // 429 = 매크로 페이싱 게이트 또는 인그레스의 요청 한도 — 액션은 적용되지 않았다. 인그레스의 429 본문은 JSON이 아니므로 JSON 검사보다 먼저 가른다. 정책 표가 문구를 정한다
+    if (res.status === 429) {
+      throw new AppError('rate-limited', 'request rate limited', { action: action.type });
+    }
 
     if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
       // 함수 미존재/플랫폼 장애 — JSON이 아니면 우리 응답이 아니다
@@ -135,10 +140,6 @@ export class HttpGameGateway implements GameGateway {
         throw new AppError(body.error, `guest rejected (${body.error})`, { action: action.type });
       }
       throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
-    }
-    // 429 = 매크로 페이싱 게이트 — 액션은 적용되지 않았다. 정책 표가 문구를 정한다
-    if (res.status === 429) {
-      throw new AppError('rate-limited', 'action pacing rejected', { action: action.type });
     }
     // 423 = 다른 창이 활성 창이 됐다 — 액션은 적용되지 않았다. 정책 표가 이 창을 막는다
     if (res.status === 423) throw new AppError('replaced', 'another window took over the session', { action: action.type });

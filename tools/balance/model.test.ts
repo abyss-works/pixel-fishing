@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../src/game/content/spots';
 import { JUDGMENT_MULT } from '../../src/game/rules/balance';
 import { rodStats } from '../../src/game/rules/logic';
-import { topZoneOfSpot } from '../../src/game/content/zones';
 import {
   SPEC_MARGIN, axisAvailable, axisOptions, entryLevel, headroom, inversions, moveGap, perfectOverIdle, rates, rodSpec,
 } from './model';
@@ -46,9 +45,9 @@ describe('밸런스 측정 모델', () => {
     for (let i = 1; i < j.arrivals.length; i++) expect(j.arrivals[i].hours).toBeGreaterThanOrEqual(j.arrivals[i - 1].hours);
   });
 
-  it('여유 스펙은 진입 레벨 +4이고 태평양 이후 해역의 방치 배수는 진입 5, 플래토 3이다', () => {
+  it('여유 스펙은 진입 레벨 +4이고 모든 해역의 방치 배수는 진입 5, 플래토 3이다', () => {
     expect(SPEC_MARGIN).toBe(4);
-    for (const s of SPOTS.filter(s => topZoneOfSpot(s.id) !== 'village')) {
+    for (const s of SPOTS) {
       expect(rodSpec(s.id, entryLevel(s.id)).idleBoost, s.id).toBe(5);
       expect(rodSpec(s.id, entryLevel(s.id) + SPEC_MARGIN).idleBoost, s.id).toBe(3);
     }

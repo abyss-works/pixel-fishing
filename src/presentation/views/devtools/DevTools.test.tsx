@@ -13,7 +13,7 @@ const show = (env: string) => {
   const dispatch = vi.fn();
   render(
     <DevEnvContext.Provider value={devEnvOf(env)}>
-      <DevTools game={newState()} dispatch={dispatch} setToast={() => {}} account={null} />
+      <DevTools game={newState()} dispatch={dispatch} setToast={() => {}} granted={false} />
     </DevEnvContext.Provider>,
   );
   fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));

@@ -7,7 +7,7 @@ import { variantShare } from '../../../src/game/rules/logic';
 import { cycleSecAt } from '../model';
 import type { Rates } from '../model';
 
-export interface Catch { fish: Fish; gold: number; fame: number }
+export interface Catch { fish: Fish; gold: number; fame: number; /** 돌연변이 폼인가 */ variant: boolean }
 
 export interface Sampler {
   rng: () => number;
@@ -17,8 +17,8 @@ export interface Sampler {
   catchOf(r: Rates): Catch;
   /** 이미 정해진 어종의 판매가와 명성(첫 경험 보장 등) — 돌연변이 여부만 정한다 */
   valueOf(fish: Fish): Catch;
-  /** sec초 동안 낚은 수입. 끝나지 않은 캐치는 다음 구간으로 이어진다 */
-  accrue(r: Rates, sec: number): { gold: number; fame: number; catches: number };
+  /** sec초 동안 낚은 수입. 끝나지 않은 캐치는 다음 구간으로 이어진다. onCatch를 주면 낚은 캐치마다 부른다 */
+  accrue(r: Rates, sec: number, onCatch?: (c: Catch) => void): { gold: number; fame: number; catches: number };
 }
 
 export function createSampler(rng: () => number): Sampler {
@@ -26,9 +26,10 @@ export function createSampler(rng: () => number): Sampler {
   const cumulative = new WeakMap<Rates, number[]>();
   let next: number | null = null;
 
-  const valueOf = (fish: Fish): Catch => ({
-    fish, gold: fish.price * (rng() < share ? VARIANT_PRICE_MULT : 1), fame: RARITY[fish.rarity].fame,
-  });
+  const valueOf = (fish: Fish): Catch => {
+    const variant = rng() < share;
+    return { fish, gold: fish.price * (variant ? VARIANT_PRICE_MULT : 1), fame: RARITY[fish.rarity].fame, variant };
+  };
   const cycleSec = (r: Rates): number => cycleSecAt(r.cycle, rng());
   const catchOf = (r: Rates): Catch => {
     let cum = cumulative.get(r);
@@ -44,13 +45,14 @@ export function createSampler(rng: () => number): Sampler {
   };
   return {
     rng, cycleSec, catchOf, valueOf,
-    accrue(r, sec) {
+    accrue(r, sec, onCatch) {
       let left = sec, gold = 0, fame = 0, catches = 0;
       if (next === null) next = cycleSec(r);
       while (next <= left) {
         left -= next;
         const c = catchOf(r);
         gold += c.gold; fame += c.fame; catches += 1;
+        onCatch?.(c);
         next = cycleSec(r);
       }
       next -= left;

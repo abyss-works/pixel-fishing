@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTIES, BOUNTY_ZONES } from '../../../src/game/content/bounties';
-import { SPOTS } from '../../../src/game/content/spots';
+import { SPOTS, powerReqOf } from '../../../src/game/content/spots';
 import { SPEC_MARGIN, entryLevel, rates } from '../model';
 import { applyOverride } from './override';
 import { GENERAL_TARGET_HOURS, NAMED_TARGET_HOURS, evReport, roundReward } from './ev';
@@ -104,7 +104,7 @@ describe('보상의 EV 시간 환산', () => {
 describe('덮어쓰기 반영', () => {
   it('해역 요구 파워를 바꾸면 EV와 환산이 그 값으로 다시 계산된다', () => {
     const base = evReport();
-    const restore = applyOverride({ spots: { sthelena: { powerReq: 155 } } });
+    const restore = applyOverride({ spots: { sthelena: { powerReq: powerReqOf('sthelena') + 15 } } });
     let changed;
     try { changed = evReport(); } finally { restore(); }
     const pick = (r: ReturnType<typeof evReport>) => r.spots.find(s => s.spot === 'sthelena')!;
@@ -113,5 +113,33 @@ describe('덮어쓰기 반영', () => {
     const hours = (r: ReturnType<typeof evReport>) => r.rewards.find(x => x.zone === 'southatlantic' && x.difficulty === 'named')!.hours;
     expect(hours(changed)).not.toBe(hours(base));
     expect(evReport()).toEqual(base);
+  });
+});
+
+describe('해역 사이 딱렙 방치 EV 증가율', () => {
+  it('옵션이 없으면 증가율 열을 담지 않는다', () => {
+    expect(evReport().growth).toBeUndefined();
+  });
+
+  it('인접한 해역마다 뒤 딱렙 EV ÷ 앞 딱렙 EV - 1과 요구 파워, 레벨 간격을 낸다', () => {
+    const r = evReport({ growth: true });
+    expect(r.growth!.length).toBe(SPOTS.length - 1);
+    r.growth!.forEach((g, i) => {
+      const a = r.spots[i], b = r.spots[i + 1];
+      expect(g.from).toBe(a.spot);
+      expect(g.to).toBe(b.spot);
+      expect(g.fromEv).toBe(a.entryEv);
+      expect(g.toEv).toBe(b.entryEv);
+      expect(g.growth).toBeCloseTo(b.entryEv / a.entryEv - 1, 12);
+      expect(g.powerGap).toBe((SPOTS[i + 1].powerReq ?? 0) - (SPOTS[i].powerReq ?? 0));
+      expect(g.levelGap).toBe(b.entryLevel - a.entryLevel);
+    });
+  });
+
+  it('가상 해역을 더하면 그 해역까지 증가율을 낸다', () => {
+    const restore = applyOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: powerReqOf('sthelena') + 20, growth: 0.45 }] });
+    try {
+      expect(evReport({ growth: true }).growth!.at(-1)!.growth).toBeCloseTo(0.45, 6);
+    } finally { restore(); }
   });
 });

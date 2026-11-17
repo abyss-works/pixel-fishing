@@ -4,7 +4,8 @@
 // 입력 중에는 전역 키 관문이 텍스트 포커스를 보고 이동·낚시 키를 넘기지 않는다. 창이 떠 있거나 다른 입력에
 // 포커스가 있으면 같은 관문이 Enter를 이 줄에 넘기지 않는다.
 // 신고·차단은 채팅 이름을 눌러 여는 플레이어 정보 창이, 차단 해제는 소셜 창의 차단 탭이 맡는다.
-// 서버가 거부한 이유는 입력 줄 바로 위에 떠 있는 작은 노치 말풍선으로 보인다. 자리를 차지하지 않고, 다시 입력하면 사라진다.
+// 서버가 거부한 이유는 입력 줄 바로 위에 떠 있는 작은 노치 말풍선(오류 자리)으로 보인다. 자리를 차지하지 않고, 다시 입력하면 사라진다.
+// 메시지 창이 접혀 있으면 기록이 보이지 않으므로, 요청 실패 안내(failure notice)도 같은 오류 자리에 잠시 보인다.
 // 입력 줄 앞의 방 버튼이나 입력 중 Tab으로 보낼 곳(월드·길드)을 바꾼다. 길드 방이면 버튼 글자가 길드색이다.
 // 길드가 없으면 버튼은 흐리게 꺼지고 언제나 월드로 보낸다. 버튼의 설명과 꺼진 이유는 게임 툴팁으로 보인다.
 // 게스트는 채팅을 보낼 수 없어 방 버튼과 입력 칸을 공용 잠금 표시로 묶어 두고, 계정을 연결하는 곳을 툴팁으로 알린다.
@@ -16,6 +17,7 @@ import { useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
+import { useFailureNotice } from '../../../../features/gameplay/service/failureNotice';
 import type { ChatError, ChatRoom } from '../../../../features/live/model/live';
 import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf } from '../../../../features/live/model/chatInput';
 import { GUEST_CHAT_NOTICE, guestLock } from '../../../../features/display/model/menuLock';
@@ -84,7 +86,8 @@ export default function ChatBar({ inGuild = false, guest = false, folded = false
     }
     if (e.key === 'Escape') e.currentTarget.blur();
   };
-  const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : null;
+  const failureNotice = useFailureNotice();
+  const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : folded ? failureNotice : null;
   const lock = guestLock('chat', guest);
 
   const unfold = folded && onUnfold && (

@@ -28,30 +28,23 @@ export const JUDGMENT_MULT = {
 } as const;
 
 // 낚싯대 — 무한 강화.
-// 입질 대기: Lv1의 최소·최대 대기에 레벨마다 biteDecay를 곱한다(곱연산 단축, 레벨마다 체감).
+// 입질 대기: 강화마다 최소와 최대 중 한쪽에 biteDecay를 곱한다. 홀수 레벨에서 강화하면 최대, 짝수 레벨에서 강화하면 최소를 줄인다.
 // ⚠️ 구 zone(레벨당 PERFECT 존 확대)은 폐기 — 존은 수역 파워 게이트 초과 보너스로 이관(stats.powerZones)
 export const ROD = {
   biteMin: 4,                       // Lv1 입질 최소 대기(초)
   biteMax: 8,                       // Lv1 입질 최대 대기(초)
-  biteDecay: 0.94,                  // 레벨마다 입질 대기에 곱하는 값(6% 단축)
+  biteDecay: 0.94,                  // 강화마다 입질 대기의 한쪽에 곱하는 값(6% 단축)
   sweep: 1.4,                       // 타이밍 바 시간(초) — 레벨 무관 고정
-  // 강화 비용: costPowerFrom 레벨까지는 round(costBase × costGrowth^(lv-1)),
-  // 그 뒤로는 costPowerFrom 레벨 비용 × (lv / costPowerFrom)^costPowerExp.
-  // 경계는 Lv15다. Lv15까지는 지수로 가파르게 두고,
-  // 그 뒤로는 직전 대비 배율이 레벨마다 줄어 강화 간격이 완만하게 늘어난다.
-  costBase: 50,
-  costGrowth: 1.7,
-  costPowerFrom: 15,
-  costPowerExp: 8,
+  // 강화 비용: 모든 레벨에서 round(costBase × costGrowth^(lv-1)) — 직전 대비 배율이 레벨마다 같다.
+  costBase: 100,
+  costGrowth: 1.25,
 } as const;
 
 // 낚싯대 강화 비용 — level에서 level+1로 올리는 비용.
 // rules(구매 가능 판정)·logic(강화 실행)이 함께 쓰므로, 둘의 공통 하류인 여기에 둔다.
 // logic에 두면 rules → logic → rules 순환이 생긴다 (logic이 rules의 판정을 쓴다).
 export function upgradeCost(level: number): number {
-  const exp = (lv: number) => ROD.costBase * Math.pow(ROD.costGrowth, lv - 1);
-  if (level <= ROD.costPowerFrom) return Math.round(exp(level));
-  return Math.round(exp(ROD.costPowerFrom) * Math.pow(level / ROD.costPowerFrom, ROD.costPowerExp));
+  return Math.round(ROD.costBase * Math.pow(ROD.costGrowth, level - 1));
 }
 
 // 서버 스냅샷 주기 — saves_current version이 이 배수일 때 saves(아카이브)에 append (서버 액션 처리기).
@@ -79,7 +72,7 @@ export const bountyDailyCap = (kind: BountyKind): number =>
 // 네임드 조우 가중치(전역 기본) — 수주 중인 네임드 의뢰가 있으면 캐치마다 맨 먼저 뽑는다.
 // 확률 = named / (named + none). 해역 데이터(spots.namedWeight)가 있으면 그 해역은 그 값을 쓴다.
 // 명중하면 즉시 획득이 아니라 도전권을 발급한다.
-// Lv12 방치 약 6.4초/cycle 기준 기댓값 약 1.8시간 — 이게 진짜 게이트다.
+// Lv12 방치 약 7.6초/cycle 기준 기댓값 약 2.1시간(조우 확률 1/1000) — 이게 진짜 게이트다.
 export const NAMED_ENCOUNTER_WEIGHTS = { named: 1, none: 999 } as const;
 
 // 네임드 도전 — 네임드 체력(네임드 데이터, 태평양 5~마다가스카르 8)만큼 맞히면 성공, 3번째 실패에 탈락.

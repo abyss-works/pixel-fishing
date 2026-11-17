@@ -41,7 +41,7 @@ function renderView(account: string | null, accountChecked: boolean) {
       game={newState()} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
       dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
       log={[]} syncLabel={null} syncState="on" guestProgress="nothing" recheckGuestProgress={async () => 'nothing'}
-      account={account} accountChecked={accountChecked} uid={null} nickname={null}
+      account={account} accountChecked={accountChecked} accountFailed={false} uid={null} nickname={null}
       onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
     /></QueryClientProvider>,
   );

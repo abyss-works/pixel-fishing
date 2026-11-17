@@ -24,6 +24,48 @@ describe('HttpGameGateway의 import 거부', () => {
   });
 });
 
+describe('HttpGameGateway의 요청 한도 응답', () => {
+  it('본문이 JSON이 아닌 429도 rate-limited 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response('Too Many Requests', { status: 429, headers: { 'retry-after': '1' } }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
+  it('앱 서버의 JSON 429(too-fast)도 rate-limited 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'too-fast' }), {
+      status: 429, headers: { 'content-type': 'application/json' },
+    }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect((err as AppError).kind).toBe('rate-limited');
+  });
+
+  it('JSON이 아닌 502는 server 실패로 남는다', async () => {
+    vi.stubGlobal('fetch', async () => new Response('Bad Gateway', { status: 502 }));
+    const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
+    expect((err as AppError).kind).toBe('server');
+  });
+});
+
+describe('HttpGameGateway의 프로필 읽기', () => {
+  it('닉네임과 개발 도구 판정을 서버 응답 그대로 돌려준다', async () => {
+    me.value = { nickname: '나', devTools: true };
+    expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: '나', devTools: true });
+  });
+
+  it('판정 필드가 참이 아니면 닫힌 것으로 본다', async () => {
+    for (const devTools of [false, undefined, 'true', 1, null]) {
+      me.value = { nickname: '나', devTools };
+      expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: '나', devTools: false });
+    }
+  });
+
+  it('읽기에 실패하면 이름 없음과 닫힘이다', async () => {
+    me.value = null;
+    expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: null, devTools: false });
+  });
+});
+
 describe('HttpGameGateway의 게스트 거부', () => {
   it.each([['guest-village-only'], ['account-only']] as const)('403 %s는 같은 이름의 실패 종류로 던진다', async code => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: code }), {

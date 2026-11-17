@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { School } from '../../../game/world/types';
 import { SPOTS, powerReqOf } from '../../../game/content/spots';
 import { rarityRank } from '../../../game/content/rarity';
-import { newState } from '../../../game/rules/logic';
+import { MAX_BOAT, newState } from '../../../game/rules/logic';
+import { powerOfLevel } from '../../../game/rules/stats';
 import { rankNearbySpots, selectFishAtSpot, selectGradeLevel, selectRegionViewData, selectSpotStatus } from './regionView';
 
 describe('지역 탭 파생 데이터', () => {
@@ -47,9 +48,13 @@ describe('지역 탭 파생 데이터', () => {
   });
 
   it('배가 모자라면 배 부족, 파워가 모자라면 파워 부족, 둘 다 되면 낚시 가능이다', () => {
-    const junk = { ...newState(), boat: 3, rod: 9 }; // 파워 50
+    // 드래곤 홀 요구 파워를 처음 채우는 레벨. 코론 침선 지대 요구 파워에는 모자란다
+    const rod = Array.from({ length: 100 }, (_, i) => i + 1).find(level => powerOfLevel(level) >= powerReqOf('dragonhole'))!;
+    const power = powerOfLevel(rod);
+    expect(power).toBeLessThan(powerReqOf('coron'));
+    const junk = { ...newState(), boat: 3, rod };
     expect(selectSpotStatus({ ...junk, boat: 0 }, 'coron')).toEqual({ kind: 'boat', boatName: '정크선' });
-    expect(selectSpotStatus(junk, 'coron')).toEqual({ kind: 'power', power: 50, req: powerReqOf('coron') });
+    expect(selectSpotStatus(junk, 'coron')).toEqual({ kind: 'power', power, req: powerReqOf('coron') });
     expect(selectSpotStatus(junk, 'dragonhole')).toEqual({ kind: 'ok' });
   });
 
@@ -69,7 +74,8 @@ describe('지역 탭 파생 데이터', () => {
   it('다음 배는 지금 배의 바로 다음 단계이고, 마지막 배면 null이다', () => {
     const next = selectRegionViewData({ ...newState(), boat: 3 }, 'world', [], null, null, null).nextBoat;
     expect(next?.name).toBe('범선');
-    expect(selectRegionViewData({ ...newState(), boat: 8 }, 'world', [], null, null, null).nextBoat).toBeNull();
+    expect(selectRegionViewData({ ...newState(), boat: MAX_BOAT }, 'world', [], null, null, null).nextBoat).toBeNull();
+    expect(selectRegionViewData({ ...newState(), boat: MAX_BOAT - 1 }, 'world', [], null, null, null).nextBoat?.tier).toBe(MAX_BOAT);
   });
 
   it('가까운 어군마다 상태를 붙인다', () => {

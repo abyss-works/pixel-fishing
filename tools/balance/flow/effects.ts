@@ -21,7 +21,7 @@ import { MUTATION_WEIGHTS, VARIANT_PRICE_MULT } from '../../../src/game/rules/ba
 import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, namedWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import type { DrawOptions } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
-import { powerOfLevel } from '../../../src/game/rules/stats';
+import { powerOfLevel } from '../rodRules';
 import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng } from '../model';
 import type { Axis, Pool, Rates, Row } from '../model';
 import { expectedEncounterCatches } from './bounty';

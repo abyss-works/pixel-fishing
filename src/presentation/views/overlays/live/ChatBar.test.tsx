@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ChatBar from './ChatBar';
 import { resetKeyScopes, useKeyBlocker } from '../../../ui/hotkeys';
+import { clearFailureNotice, showFailureNotice } from '../../../../features/gameplay/service/failureNotice';
 
 function Blocker() {
   useKeyBlocker();
@@ -36,7 +37,7 @@ describe('ChatBar', () => {
     expect(live.typing.at(-1)).toBe(false);
   });
 
-  afterEach(() => { cleanup(); resetKeyScopes(); live.error = null; vi.clearAllMocks(); });
+  afterEach(() => { cleanup(); resetKeyScopes(); clearFailureNotice(); live.error = null; vi.clearAllMocks(); });
 
   it('Enter로 보내고 입력을 비운 뒤에도 입력 줄에 머문다. 빈 입력의 Enter는 보내지 않고 벗어난다', () => {
     render(<ChatBar />);
@@ -192,4 +193,28 @@ describe('ChatBar', () => {
   });
 
 
+});
+
+describe('요청 실패 안내의 오류 자리', () => {
+  afterEach(() => { cleanup(); resetKeyScopes(); clearFailureNotice(); live.error = null; });
+
+  it('메시지 창이 접혀 있으면 오류 자리에 보인다', () => {
+    showFailureNotice('요청 실패 안내');
+    render(<ChatBar folded />);
+    expect(screen.getByText('요청 실패 안내')).toBeInTheDocument();
+  });
+
+  it('메시지 창이 펼쳐져 있으면 오류 자리에 보이지 않는다', () => {
+    showFailureNotice('요청 실패 안내');
+    render(<ChatBar />);
+    expect(screen.queryByText('요청 실패 안내')).toBeNull();
+  });
+
+  it('채팅 거부 이유와 겹치면 채팅 거부 이유가 먼저다', () => {
+    showFailureNotice('요청 실패 안내');
+    live.error = 'chat-rate';
+    render(<ChatBar folded />);
+    expect(screen.getByText(/메시지를 너무 빨리 보내고 있어요/)).toBeInTheDocument();
+    expect(screen.queryByText('요청 실패 안내')).toBeNull();
+  });
 });

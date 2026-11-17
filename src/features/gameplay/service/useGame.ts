@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, when } from '../../../platform/api';
-import type { GameGateway, DispatchResult, MaybePromise } from '../../../platform/api';
+import type { GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import { newState, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import type { BlockingModal } from '../../../core/errors';
+import { clearFailureNotice, showFailureNotice } from './failureNotice';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { fetchSession } from '../../account/service/session';
@@ -16,6 +17,7 @@ import { guestHasNoProgress } from '../../../game/rules/guest';
 import { setSchoolDay } from './schoolDay';
 import type { SyncState } from './types';
 import { alertUpdate } from './updateAlert';
+import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -37,7 +39,7 @@ export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 /**
  * 행동 결과에 따라 화면을 되돌려야 하는 호출부용 — 성공이 아니면 ok false와 알릴 한 줄을 돌려준다.
  * 규칙 거부는 거부 문구를, 인프라 실패는 오류 정책(보고와 구독자 통지)을 거친 뒤 모달이 없는 종류의 정책 문구를 준다.
- * 정책이 전체 모달로 알리는 종류면 notice는 null이다. 던지지 않는다.
+ * 정책이 전체 모달이나 메시지 창 오류 자리로 알리는 종류면 notice는 null이다(알림은 useGame의 실패 구독이 맡는다). 던지지 않는다.
  * rejectText로 사유별 문구를 그 행동에 맞게 바꿀 수 있다(없는 사유는 공용 거부 문구).
  */
 export async function settleAction(
@@ -49,11 +51,11 @@ export async function settleAction(
     return { ok: false, notice: rejectText[result.error] ?? REJECT_TEXT[result.error] };
   } catch (e) {
     const policy = POLICY[fail(e).kind];
-    return { ok: false, notice: policy.modal ? null : policy.message };
+    return { ok: false, notice: policy.modal || policy.slot ? null : policy.message };
   }
 }
 
-export function useGame({ setToast }: { setToast: (m: string) => void }) {
+export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => void }) {
   const [init] = useState(() => api.storage.loadLegacy());
   const gameGatewayRef = useRef<GameGateway>(null!);
   if (!gameGatewayRef.current) {
@@ -61,6 +63,9 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   }
   const [game, setGame] = useState<GameState>(init.game);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
+  const [devTools, setDevTools] = useState(false);
+  const adoptProfile = (profile: GameProfile) => { setNickname(profile.nickname); setDevTools(profile.devTools); };
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
@@ -76,14 +81,22 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
 
   // 실패 대응은 여기 하나뿐이다  — 종류별 결정은 에러 처리의 정책 표가 내리고,
   // 이 훅은 그 결정을 화면에 반영만 한다.
-  useEffect(() => subscribeFailure((err: AppError) => {
-    const modal = POLICY[err.kind].modal;
-    if (!modal) return;
-    setBlocker(current => current ?? modal);
-    // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
-    if (modal === 'update') alertUpdate();
-    if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
-  }), []);
+  useEffect(() => {
+    const off = subscribeFailure((err: AppError) => {
+      const policy = POLICY[err.kind];
+      // 메시지 창에 한 줄 남기고, 접혀 있을 때는 오류 자리가 같은 문구를 보인다
+      if (policy.slot && showFailureNotice(policy.message)) setToast(policy.message, 'warn');
+      const modal = policy.modal;
+      if (!modal) return;
+      setBlocker(current => current ?? modal);
+      // 방치 중 배포를 알린다 — 실패마다 다시 들어와도 알림 태그와 제목 깜빡임이 하나로 합쳐진다
+      if (modal === 'update') alertUpdate();
+      if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
+    });
+    // 구독이 끝나면 오류 자리의 안내도 함께 지운다
+    return () => { off(); clearFailureNotice(); };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독. setToast는 메시지 기록에 줄을 더할 뿐 상태를 읽지 않는다
+  }, []);
 
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).
@@ -109,29 +122,50 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
       return r;
     });
 
+  // 429 재시도의 대기를 끊는 신호 — 부팅과 계정 교체가 시작될 때마다 새로 만들어 앞선 대기를 버리고, 언마운트에서도 끊는다
+  const retryScopeRef = useRef<AbortController | null>(null);
+  const newRetryScope = (): AbortSignal => {
+    retryScopeRef.current?.abort();
+    retryScopeRef.current = new AbortController();
+    return retryScopeRef.current.signal;
+  };
+  useEffect(() => () => retryScopeRef.current?.abort(), []);
+
+  /** 서버 저장 상태 읽기 — 요청 속도 초과(429)면 기다렸다 다시 시도하고, 끝내 실패하면 network 실패로 던진다 */
+  const loadSave = (signal: AbortSignal) => retryOnRateLimit(() => gameGatewayRef.current.load(), signal);
+
   // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
   // 세션 시작과 계정 교체마다 보내고, 응답이 올 때까지 플레이를 열지 않는다.
-  // **모든 실패를 조용히 삼킨다**: 429 페이싱·순단 모두 재시도 가치가 없고, fail()을 거치면
-  // 저장 실패 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
-  const boot = (): Promise<void> =>
-    Promise.resolve(dispatch({ type: 'boot', buildId: BUILD_ID })).then(() => {}, () => { /* 무음 */ });
+  // 요청 속도 초과(429)는 기다렸다 다시 시도하고, 끝내 실패하면 던져 저장 실패 안내 창으로 알린다
+  // (접속하지 못한 창의 액션은 서버가 423으로 거부하기 때문이다). 그 밖의 실패는 조용히 삼킨다:
+  // 순단은 재시도 가치가 없고 fail()을 거치면 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  const boot = async (signal: AbortSignal): Promise<void> => {
+    try {
+      await retryOnRateLimit(async () => { await dispatch({ type: 'boot', buildId: BUILD_ID }); }, signal);
+    } catch (e) {
+      if (signal.aborted || !isRetryExhausted(e)) return;
+      throw e;
+    }
+  };
 
   // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
-      void Promise.resolve(gameGatewayRef.current.getNickname()).then(setNickname);
+      void Promise.resolve(gameGatewayRef.current.getProfile()).then(adoptProfile);
       // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      void boot();
+      void boot(newRetryScope()).catch(fail);
       return;
     }
+    const signal = newRetryScope();
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const [cloud, nick] = await Promise.all([
-        gameGatewayRef.current.load(),
-        gameGatewayRef.current.getNickname(),
+      const [cloud, profile] = await Promise.all([
+        loadSave(signal),
+        gameGatewayRef.current.getProfile(),
       ]);
+      if (signal.aborted) return;
       if (cloud) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔어요.');
@@ -146,11 +180,12 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
         }
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
-      await boot();
-      setNickname(nick);
+      await boot(signal);
+      if (signal.aborted) return;
+      adoptProfile(profile);
       setSync('on');
-    })().catch(fail) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
-      .finally(() => setLoading(false));
+    })().catch(e => { if (!signal.aborted) fail(e); }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+      .finally(() => { if (!signal.aborted) setLoading(false); });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
@@ -162,14 +197,14 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
   };
 
   return {
-    game, dispatch, nickname, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
       if (r.status === 'ok') {
-        setNickname(await gameGatewayRef.current.getNickname());
+        setNickname((await gameGatewayRef.current.getProfile()).nickname);
         return null;
       }
       return r.error;
@@ -179,14 +214,21 @@ export function useGame({ setToast }: { setToast: (m: string) => void }) {
      * 끝날 때까지 불러오는 중이다. 상태 읽기 실패는 호출자에게 던진다.
      */
     adoptAccount: async (): Promise<void> => {
+      const signal = newRetryScope();
       setLoading(true);
       try {
-        const [cloud, nick] = await Promise.all([gameGatewayRef.current.load(), gameGatewayRef.current.getNickname()]);
+        const [cloud, profile] = await Promise.all([loadSave(signal), gameGatewayRef.current.getProfile()]);
+        if (signal.aborted) return;
         setGame(cloud ?? newState());
-        setNickname(nick);
-        await boot();
+        adoptProfile(profile);
+        await boot(signal);
+      } catch (e) {
+        // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
+        if (signal.aborted) return;
+        if (isRetryExhausted(e)) fail(e);
+        throw e;
       } finally {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     },
     /**

@@ -34,7 +34,9 @@ export interface AwaySummary extends AwayWindow {
   newFish: { fishId: string; form: FormId; rarity: RarityId; maxSize: number }[];
   /** 가방이 넘쳐 놓아준 수와 판매가 합(어종 정보가 없는 예전 기록은 가치 0) */
   released: { count: number; value: number };
-  /** 떠난 뒤 가방이 찬 시점(첫 자동 방생)까지의 시간. 차지 않았으면 null */
+  /** 가방이 넘쳐 기운으로 바꾼 수와 등급별로 얻은 기운(저장 단위) */
+  extracted: { count: number; energy: Record<RarityId, number> };
+  /** 떠난 뒤 가방이 찬 시점(첫 자동 방생과 첫 자동 기운 얻기 중 먼저 일어난 것)까지의 시간. 차지 않았으면 null */
   bagFullAfterMs: number | null;
   /** 가장 많이 잡은 수역 */
   spot: SpotId | null;
@@ -68,6 +70,8 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
   let catches = 0, value = 0, fame = 0, variants = 0;
   let released = 0, releasedValue = 0;
   let firstRelease: number | null = null;
+  let extracted = 0;
+  const energy = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
 
   for (const e of events) {
     const p = (e.payload ?? {}) as Record<string, unknown>;
@@ -94,6 +98,12 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
         const fish = fishOf(r?.fishId);
         if (fish) releasedValue += priceOf(fish, form(r.form));
       }
+    } else if (e.type === 'autoExtractEnergy') {
+      const t = Date.parse(e.at);
+      if (firstRelease === null || t < firstRelease) firstRelease = t;
+      extracted += Array.isArray(p.uids) ? p.uids.length : 0;
+      const by = (p.energy ?? {}) as Record<string, unknown>;
+      for (const r of RARITY_ORDER) if (typeof by[r] === 'number') energy[r] += by[r] as number;
     }
   }
 
@@ -111,6 +121,7 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
     variants: { count: variants, share: share(variants) },
     newFish: [...fresh].map(([key, n]) => ({ ...n, maxSize: biggest.get(key) ?? 0 })),
     released: { count: released, value: releasedValue },
+    extracted: { count: extracted, energy },
     bagFullAfterMs: firstRelease === null ? null : Math.max(0, firstRelease - Date.parse(window.from)),
     spot,
   };

@@ -32,4 +32,15 @@ describe('CostLine', () => {
     render(<CostLine have={0} delta={-1} label="재료" format={String} />);
     expect(screen.getByText('-1')).toHaveClass('text-danger');
   });
+
+  it('좁은 폭에서 값이 한 줄에 안 들어가면 "→ 확정 후 값" 묶음이 내려가도록 값 줄이 줄 바꿈을 허용하고 각 값은 한 줄로 둔다', () => {
+    render(<CostLine have={1_000_000_000} delta={-12_500_000} />);
+    const have = screen.getByText('1,000,000,000G');
+    const row = have.parentElement as HTMLElement;
+    expect(row.className).toContain('flex-wrap');
+    expect(row.className).toContain('min-w-0');
+    expect(have).toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('987,500,000G').parentElement).toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('골드')).toHaveClass('shrink-0');
+  });
 });

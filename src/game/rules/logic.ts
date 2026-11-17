@@ -150,12 +150,12 @@ export interface RodStats {
 // ⚠️ 구 zone 스탯(레벨당 PERFECT 존 확대)은 폐기됐다 — 존은 이제 전부 수역 파워 게이트의
 // 초과 보너스에서 온다(stats.powerZones). 낚싯대는 파워 하나로 존 간접 성장(파워 상승 → 초과 증가).
 
-// 낚싯대 = 무한 강화. 입질 대기는 레벨마다 같은 비율로 줄어든다(상한 없음).
+// 낚싯대 = 무한 강화. 입질 대기는 강화마다 최소와 최대 중 한쪽이 같은 비율로 줄어든다(상한 없음).
+// 레벨 L의 최소 = 기본 최소 × 감쇠^내림((L-1)/2), 최대 = 기본 최대 × 감쇠^올림((L-1)/2).
 export function rodStats(level: number): RodStats {
-  const decay = Math.pow(ROD.biteDecay, level - 1);
   return {
-    biteMin: ROD.biteMin * decay,
-    biteMax: ROD.biteMax * decay,
+    biteMin: ROD.biteMin * Math.pow(ROD.biteDecay, Math.floor((level - 1) / 2)),
+    biteMax: ROD.biteMax * Math.pow(ROD.biteDecay, Math.ceil((level - 1) / 2)),
     sweep: ROD.sweep,
   };
 }

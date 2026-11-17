@@ -7,6 +7,7 @@ import { runArchive } from '../cold-archive.js';
 import { refreshDailyStats } from '../_data/activity.js';
 import { database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
+import { inStage, logCronFailure } from '../cronFailure.js';
 
 type Req = IncomingMessage;
 type Res = ServerResponse & { status: (code: number) => Res; json: (b: unknown) => void };
@@ -27,7 +28,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     reqEnv('DATABASE_URL');
     const now = new Date();
     const { db } = database();
-    const days = await refreshDailyStats(db, now.toISOString());
+    const days = await inStage('daily-stats', () => refreshDailyStats(db, now.toISOString()));
     console.log('== daily stats ==', JSON.stringify({ days }));
     const summary = await runArchive({
       db,
@@ -41,6 +42,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     }, now);
     res.status(200).json(summary);
   } catch (e) {
+    logCronFailure('archive', e, 'setup');   // 단계 표시가 없는 실패는 설정과 연결 준비 단계다
     await reportServerIssue('cold-archive', e);   // 재시도가 없어 Sentry가 유일 알림 (스펙 3절)
     res.status(500).json({ error: 'archive-failed' });
   }

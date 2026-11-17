@@ -34,16 +34,14 @@ const ALLOWED_IMPORTS: Record<string, ReadonlySet<string>> = {
 // Cross-cutting failure policy stays in core; release metadata is a limited src-root dependency.
 const CROSS_LAYER_IMPORTS = new Set([
   'features/gameplay/service/useGame.ts -> core/errors',
+  'features/gameplay/service/rateLimitRetry.ts -> core/errors',
   'features/gameplay/service/useGame.ts -> buildId',
   'features/announcements/service/whatsNew.ts -> version',
   'platform/adapters/me.ts -> core/errors',
-  'platform/adapters/ranking.ts -> core/errors',
+  'platform/adapters/requestFailure.ts -> core/errors',
   'platform/adapters/mailbox.ts -> core/errors',
   'platform/adapters/friends.ts -> core/errors',
   'platform/adapters/guild.ts -> core/errors',
-  'platform/adapters/player.ts -> core/errors',
-  'platform/adapters/away.ts -> core/errors',
-  'platform/adapters/position.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> core/errors',
   'platform/adapters/httpGameGateway.ts -> buildId',
   'platform/adapters/httpGameGateway.ts -> version',

@@ -3,13 +3,14 @@
 import { AppError } from '../../core/errors';
 import { isCloud } from './auth';
 import type { MailItem } from '../api/types';
+import { requestFailure } from './requestFailure';
 
 /** 본인 우편 목록(최근 순) */
 export async function readMails(): Promise<MailItem[] | null> {
   if (!isCloud) return null;
   const res = await fetch('/api/mail');
   if (res.status === 401) throw new AppError('unauthorized', 'mail read before session');
-  if (!res.ok) throw new AppError('network', 'mail read failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'mail read failed');
   return (await res.json() as { mails: MailItem[] }).mails;
 }
 
@@ -22,5 +23,5 @@ export async function markMailRead(id: number): Promise<void> {
     body: JSON.stringify({ id }),
   });
   if (res.status === 401) throw new AppError('unauthorized', 'mail read mark before session');
-  if (!res.ok) throw new AppError('network', 'mail read mark failed', { status: res.status });
+  if (!res.ok) throw requestFailure(res, 'mail read mark failed');
 }

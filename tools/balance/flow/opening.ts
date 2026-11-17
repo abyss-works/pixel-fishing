@@ -10,7 +10,7 @@ import {
   FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN, endedFirstCatch, firstCatchTarget, newFirstCatch, settleFirstCatch,
 } from '../../../src/game/rules/firstCatch';
 import { fishPool } from '../../../src/game/rules/logic';
-import { powerOfLevel } from '../../../src/game/rules/stats';
+import { powerOfLevel } from '../rodRules';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { VARIANT_EV, axisAvailable, entryLevel, rates, rodSpec } from '../model';
 import type { Axis, Rates } from '../model';

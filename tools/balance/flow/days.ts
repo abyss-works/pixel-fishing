@@ -4,19 +4,21 @@
 // 마지막 해역 레벨업은 그 레벨에 시뮬레이션이 닿은 시점에 실제로 가진 라이선스로 계산한 정상 상태의 하루 수입으로 나눈다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { MAX_BOAT } from '../../../src/game/content/boats';
+import { BOATS } from '../../../src/game/content/boats';
 import { upgradeCost } from '../../../src/game/rules/balance';
 import { SPEC_MARGIN, entryLevel, rates } from '../model';
 import type { Rates } from '../model';
 import { licenseKey, planBounties } from './bounty';
 import type { PlanInput } from './bounty';
 import { DAY_HOURS, axisOf, fishingDays, simulate } from './progress';
-import type { FlowAxis, RatePlan } from './progress';
+import type { AchievementOptions, Achieved, FlowAxis, RatePlan } from './progress';
 
 export interface DaysOptions {
   axis: FlowAxis; maxDays: number;
   /** 주면 이 계획으로 수입을 계산하고 효과 없는 값을 base로 함께 담는다 */
   plan?: RatePlan;
+  /** 주면 진행 업적 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 base로 함께 담는다 */
+  reward?: AchievementOptions;
 }
 
 export interface ArrivalDays {
@@ -26,6 +28,8 @@ export interface ArrivalDays {
   /** 해역별 도착까지 누적 실질 낚시 시간(시간)과 8시간 환산 일수. 최대 일수 안에 못 닿았으면 null */
   spots: { spot: SpotId; hours: number | null; days: number | null }[];
   bountyGold: number;
+  /** 업적 보상을 줬을 때 달성한 진행 업적과 지급 내역 */
+  achieved?: Achieved[];
 }
 
 export interface LevelUp {
@@ -65,21 +69,21 @@ export function steadyDaily(i: SteadyInput): { dailyGold: number; bountyShare: n
     let r = cache.get(spot);
     if (!r) {
       const axis = axisOf(i.axis, spot, i.level);
-      r = i.plan ? i.plan.rateFor(spot, i.level, axis, MAX_BOAT) : rates(spot, i.level, axis);
+      r = i.plan ? i.plan.rateFor(spot, i.level, axis, BOATS.length) : rates(spot, i.level, axis);
       cache.set(spot, r);
     }
     return r;
   };
   const day = DAY_HOURS * 3600;
   const plan = i.licensed
-    ? planBounties({ player: { boat: MAX_BOAT, level: i.level }, current: rateAt(last), rateAt, licensed: i.licensed, seconds: day })
+    ? planBounties({ player: { boat: BOATS.length, level: i.level }, current: rateAt(last), rateAt, licensed: i.licensed, seconds: day })
     : [];
   const mean = (spots: SpotId[], f: (r: Rates) => number) => spots.reduce((s, sp) => s + f(rateAt(sp)), 0) / spots.length;
   const actSec = plan.reduce((s, a) => s + a.seconds, 0);
   const lump = plan.reduce((s, a) => s + a.lump, 0);
   const fishGold = plan.reduce((s, a) => s + mean(a.spots, r => r.goldPerHour) * a.seconds / 3600, 0)
     + rateAt(last).goldPerHour * (day - actSec) / 3600;
-  const cost = i.plan ? i.plan.costPerHour(last, i.level, axisOf(i.axis, last, i.level), MAX_BOAT) * DAY_HOURS : 0;
+  const cost = i.plan ? i.plan.costPerHour(last, i.level, axisOf(i.axis, last, i.level), BOATS.length) * DAY_HOURS : 0;
   const dailyGold = fishGold + lump - cost;
   return { dailyGold, bountyShare: lump / (fishGold + lump) };
 }
@@ -88,12 +92,12 @@ export function steadyDaily(i: SteadyInput): { dailyGold: number; bountyShare: n
 export function daysReport(o: DaysOptions): DaysReport {
   const last = SPOTS[SPOTS.length - 1].id;
   const levels = [entryLevel(last), entryLevel(last) + SPEC_MARGIN];
-  const build = (plan?: RatePlan): { arrival: ArrivalDays[]; levelUp: LevelUp[] } => {
+  const build = (plan?: RatePlan, achievements?: AchievementOptions): { arrival: ArrivalDays[]; levelUp: LevelUp[] } => {
     const arrival: ArrivalDays[] = [], levelUp: LevelUp[] = [];
     for (const bounty of [false, true]) {
-      const r = simulate({ axis: o.axis, bounty, maxDays: o.maxDays, growTo: bounty ? levels[1] : undefined, plan });
+      const r = simulate({ axis: o.axis, bounty, maxDays: o.maxDays, growTo: bounty ? levels[1] : undefined, plan, achievements });
       arrival.push({
-        bounty, complete: r.complete, bountyGold: r.bountyGold,
+        bounty, complete: r.complete, bountyGold: r.bountyGold, ...(achievements ? { achieved: r.achieved } : {}),
         spots: SPOTS.map((s, i) => {
           const hours = r.arrivals[i]?.hours ?? null;
           return { spot: s.id, hours, days: hours === null ? null : fishingDays(hours) };
@@ -117,7 +121,7 @@ export function daysReport(o: DaysOptions): DaysReport {
     }
     return { arrival, levelUp };
   };
-  const report: DaysReport = build(o.plan);
-  if (o.plan) report.base = build();
+  const report: DaysReport = build(o.plan, o.reward);
+  if (o.plan || o.reward) report.base = build();
   return report;
 }

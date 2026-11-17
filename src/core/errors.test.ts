@@ -33,6 +33,15 @@ describe('실패 분류', () => {
     expect(POLICY['account-only'].message).toBe('계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.');
   });
 
+  it('안내 창 없는 세 종류(restricted, rate-limited, bug)는 메시지 창 오류 자리에 정책 문구로 알린다', () => {
+    const slotKinds = Object.entries(POLICY).filter(([, p]) => p.slot).map(([k]) => k).sort();
+    expect(slotKinds).toEqual(['bug', 'rate-limited', 'restricted']);
+    // 전체 모달이 있는 종류와 겹치지 않는다 — 같은 실패를 두 번 알리지 않는다
+    for (const [kind, policy] of Object.entries(POLICY)) {
+      if (policy.slot) expect(policy.modal, kind).toBeUndefined();
+    }
+  });
+
   it('asAppError: 알 수 없는 예외는 bug로 정규화되고 원인이 보존된다', () => {
     const raw = new TypeError('boom');
     const err = asAppError(raw);

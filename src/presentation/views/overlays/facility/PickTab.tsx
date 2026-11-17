@@ -6,6 +6,7 @@ import type { CompareRow } from './facilityParts';
 
 // 판매 창의 두 탭(판매, 기운 얻기)이 함께 쓰는 탭 구성 — 왼쪽 칸은 어종 표이고, 오른쪽 칸은 위쪽 정렬의 비교 표와 아래 고정한 확정 영역이다.
 // 확정 영역은 요약 줄, 되돌릴 수 없다는 안내 두 줄, 동작 줄(확정 버튼) 순서이고 두 탭이 같은 줄 수라 탭을 바꿔도 높이가 같다.
+// 동작 줄은 버튼 내용(보정 금액의 취소선 등)과 관계없이 같은 고정 높이 칸에 담아, 탭을 바꿔도 확정 영역의 높이가 1px도 달라지지 않는다.
 // 고른 것이 없어도 비교 표와 확정 영역의 자리는 그대로 두고 값만 바뀐다. 값이 바뀌지 않는 줄은 흐리게만 한다.
 export default function PickTab({ empty, table, compareHeads, compareRows, summary, notes, actions }: {
   /** 가방이 비었는가 — 비었으면 왼쪽 칸에 어종 표 대신 안내를 보인다 */
@@ -31,7 +32,7 @@ export default function PickTab({ empty, table, compareHeads, compareRows, summa
             {summary.value}
           </div>
           <Note className="my-0">{notes[0]}<br />{notes[1]}</Note>
-          {actions}
+          <div data-confirm-row className="flex flex-col h-11 [&>*]:h-full">{actions}</div>
         </>
       )} />
   );
