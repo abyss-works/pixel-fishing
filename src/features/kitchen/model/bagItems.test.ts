@@ -72,7 +72,7 @@ describe('아이템 섹션: 열린 뒤', () => {
   });
 
   it('미끼 행은 부엌 미끼 탭과 같은 순서다. 등급순이고 특수는 뒤다', () => {
-    const game = seed({ items: { 'cook-bait-mutation': 1, 'cook-bait-legendary': 1, 'cook-bait-epic': 1, 'cook-bait-rare': 1 } });
+    const game = seed({ items: { 'cook-bait-night': 1, 'cook-bait-mutation': 1, 'cook-bait-legendary': 1, 'cook-bait-epic': 1, 'cook-bait-rare': 1 } });
     const v = selectItemSection(game, T0, false);
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.bait.map(r => r.recipe.id)).toEqual(recipesOfKind('bait').map(r => r.id));

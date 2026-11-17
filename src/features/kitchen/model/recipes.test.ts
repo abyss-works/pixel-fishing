@@ -31,7 +31,7 @@ describe('종류별 레시피', () => {
 
   it('미끼 탭은 등급순으로 두고 특수 등급 미끼를 맨 뒤에 둔다. 순서는 데이터 순서가 아니다', () => {
     expect(recipesOfKind('bait').map(r => r.id)).toEqual(
-      ['cook-bait-rare', 'cook-bait-epic', 'cook-bait-legendary', 'cook-bait-mutation']);
+      ['cook-bait-rare', 'cook-bait-epic', 'cook-bait-legendary', 'cook-bait-mutation', 'cook-bait-night']);
     expect(recipesOfKind('bait')[0].id).toBe('cook-bait-rare'); // 미끼 탭의 기본 선택은 첫째다
   });
 
@@ -39,11 +39,12 @@ describe('종류별 레시피', () => {
     expect(recipesOfKind('lunch').length + recipesOfKind('bait').length).toBe(RECIPES.length);
   });
 
-  it('등급 미끼는 효과가 가중하는 가장 낮은 등급을, 돌연변이 가중 미끼는 특수를 표시 등급으로 가진다', () => {
+  it('등급 미끼는 효과가 가중하는 가장 낮은 등급을, 등급 가중이 아닌 미끼는 특수를 표시 등급으로 가진다', () => {
     expect(recipeGrade(recipe('cook-bait-rare'))).toBe('rare');
     expect(recipeGrade(recipe('cook-bait-epic'))).toBe('epic');
     expect(recipeGrade(recipe('cook-bait-legendary'))).toBe('legendary');
     expect(recipeGrade(recipe('cook-bait-mutation'))).toBe('special');
+    expect(recipeGrade(recipe('cook-bait-night'))).toBe('special');
     expect(recipeGrade(recipe('cook-lunch-rare'))).toBeNull(); // 도시락은 등급 가중이어도 등급 이름이 붙지 않는다
   });
 });
@@ -74,6 +75,9 @@ describe('효과 줄', () => {
     expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+150%' }]);
   });
 
+  it('밤 어종 출현 미끼는 밤 전용 어종 합류 한 줄이다', () => {
+    expect(recipeEffectLines(recipe('cook-bait-night'))).toEqual([{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }]);
+  });
 });
 
 describe('필요와 보유', () => {
@@ -234,6 +238,7 @@ describe('레시피의 화면 이름', () => {
 
   it('특수 미끼는 이름 뒤에 특수를 괄호로 붙인다', () => {
     expect(recipeLabel(recipeById('cook-bait-mutation')!)).toBe('사프란 미끼(특수)');
+    expect(recipeLabel(recipeById('cook-bait-night')!)).toBe('달빛 미끼(특수)');
   });
 
   it('등급이 없는 도시락은 이름 그대로다', () => {

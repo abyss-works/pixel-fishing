@@ -250,10 +250,12 @@ export interface ActiveCookEffects {
   mutationWeight: number;
   /** 네임드 조우 가중치 증가율의 합 */
   namedWeight: number;
+  /** 낮의 추첨 풀에 밤 전용 어종을 합류시키는 효과 — 미끼 슬롯이 켜져 있는 동안 참 */
+  nightUnlock: boolean;
 }
 
 export const NO_COOK_EFFECTS: ActiveCookEffects = {
-  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0,
+  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
 };
 
 /** 그 캐치에 걸린 슬롯과 요리 id. 걸린 슬롯의 키만 둔다 */
@@ -283,6 +285,7 @@ export function slotEffects(state: Pick<GameState, 'slots'>, now: string, judgme
     out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0));
     out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0));
     out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0));
+    out.nightUnlock = out.nightUnlock || e.nightUnlock === true;
     if (e.rarityWeight) {
       for (const g of e.rarityWeight.grades) {
         out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus);

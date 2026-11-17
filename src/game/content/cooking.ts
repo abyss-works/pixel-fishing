@@ -83,10 +83,12 @@ export interface CookEffects {
   mutationWeight?: number;
   /** 네임드 조우 가중치 증가율 */
   namedWeight?: number;
+  /** 낮의 추첨 풀에 밤 전용 어종을 합류시키는가 — 밤에는 이미 풀에 있어 변화가 없다 */
+  nightUnlock?: boolean;
 }
 
 export const COOK_EFFECT_KEYS: readonly (keyof CookEffects)[] =
-  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'namedWeight'];
+  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'namedWeight', 'nightUnlock'];
 
 /** 그 등급부터 전설까지 */
 const gradesFrom = (min: RarityId): readonly RarityId[] => RARITY_ORDER.slice(RARITY_ORDER.indexOf(min));
@@ -147,6 +149,11 @@ export const RECIPES: readonly Recipe[] = [
     kind: 'bait',
     cost: { common: 50, legendary: 3 },
     effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.8 } } },
+  { id: 'cook-bait-night', name: '달빛 미끼',
+    description: '달빛이 스민 물고기의 비늘을 말려 반죽에 섞는다. 낮에 던진 미끼에서도 밤의 물결이 따라 올라온다.',
+    kind: 'bait',
+    cost: { rare: 10, epic: 3, legendary: 1 },
+    effects: { nightUnlock: true } },
 ];
 
 /** 그 레시피 1개의 등급별 기운 요구(저장 단위). 요구가 없는 등급은 0 */
