@@ -164,7 +164,7 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 
 /** 슬롯 효과의 갈래 - 네임드 조우는 결투, 나머지는 낚시 */
 const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
-  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel',
+  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
 };
 
 export type BonusSource =

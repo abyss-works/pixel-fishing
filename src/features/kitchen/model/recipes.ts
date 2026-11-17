@@ -13,12 +13,12 @@ import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
-/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 돌연변이 가중 미끼는 특수다. 도시락은 null이다 */
+/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 등급 가중이 아닌 효과의 미끼는 특수다. 도시락은 null이다 */
 export function recipeGrade(recipe: Recipe): DisplayGradeId | null {
   if (recipe.kind !== 'bait') return null;
   const weighted = recipe.effects.rarityWeight?.grades[0];
   if (weighted !== undefined) return weighted;
-  return recipe.effects.mutationWeight !== undefined ? 'special' : null;
+  return recipe.effects.mutationWeight !== undefined || recipe.effects.nightUnlock === true ? 'special' : null;
 }
 
 /** 그 종류의 부엌 레시피 — 등급이 있으면 등급순(특수는 뒤), 같은 등급과 등급이 없는 것은 콘텐츠 순서대로 */
@@ -71,6 +71,8 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 폼 가중치', value: `+${pct(e.mutationWeight)}%` }];
       case 'namedWeight':
         return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 가중치', value: `+${pct(e.namedWeight)}%` }];
+      case 'nightUnlock':
+        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }] : [];
     }
   });
 }

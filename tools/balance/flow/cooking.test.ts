@@ -20,13 +20,25 @@ const last = SPOTS[SPOTS.length - 1].id;
 const recipeBy = (id: string) => RECIPES.find(r => r.id === id)!;
 const bonusOf = (id: string) => COOK_RECIPES.find(r => r.id === id)!.effects.rarityWeight!.bonus;
 
-describe('등급 미끼 효과', () => {
-  it('요리 콘텐츠의 등급 미끼 레시피 값과 같고 창은 미끼 슬롯 지속이다', () => {
+describe('미끼 효과', () => {
+  it('요리 콘텐츠의 미끼 레시피 값과 같고 창은 미끼 슬롯 지속이다', () => {
     expect(BAIT_EFFECTS).toEqual({
       rare: fx({ rare: bonusOf('cook-bait-rare') }), epic: fx({ epic: bonusOf('cook-bait-epic') }), legendary: fx({ legendary: bonusOf('cook-bait-legendary') }),
+      night: fx({ night: 1 }),
     });
     expect(BAIT_WINDOW_MIN).toBe(COOK_KIND_RULES.bait.slotMs / 60_000);
     expect(baitEffect('epic')).toEqual(fx({ epic: bonusOf('cook-bait-epic') }));
+    expect(baitEffect('night')).toEqual(fx({ night: 1 }));
+  });
+
+  it('밤 어종 출현은 낮에도 밤 풀 전체로 낚고 효과 없음은 낮 풀만 쓴다', () => {
+    const nightRecipe = COOK_RECIPES.find(r => r.id === 'cook-bait-night')!;
+    expect(effectOfRecipe(nightRecipe).night).toBe(1);
+    const spot = 'indian', level = entryLevel(spot);
+    const base = effectRates(spot, level, 'good', NO_EFFECT, 'day');
+    const withNight = effectRates(spot, level, 'good', fx({ night: 1 }));
+    expect(base.rows.some(r => r.fish.night)).toBe(false);
+    expect(withNight.rows.some(r => r.fish.night)).toBe(true);
   });
 
   it('모르는 미끼 이름은 오류다', () => {
@@ -109,6 +121,15 @@ describe('시간 제한 효과 창', () => {
     }
   });
 
+  it('밤 어종 출현 창은 밤 어종이 있는 해역의 골드 증가를 낸다', () => {
+    const rows = windowRows({ ...opts, minutes: 5, effect: fx({ night: 1 }) });
+    const sea = rows.find(r => r.spot === 'sea')!;
+    expect(sea.goldGain).toBeGreaterThan(0);
+    expect(sea.goldGain).toBeCloseTo((effectRates('sea', sea.level, axisOf('manual', 'sea', sea.level), fx({ night: 1 })).goldPerHour
+      - effectRates('sea', sea.level, axisOf('manual', 'sea', sea.level), NO_EFFECT).goldPerHour) * (5 / 60), 6);
+    expect(rows.find(r => r.spot === 'pond')!.goldGain).toBe(0);
+  });
+
   it('창 길이와 시도 횟수가 잘못되면 오류다', () => {
     expect(() => windowRows({ ...opts, minutes: 0 })).toThrow(/분/);
     expect(() => windowRows({ ...opts, minutes: -5 })).toThrow(/분/);
@@ -144,6 +165,7 @@ describe('레시피 표', () => {
     expect(recipeBy('cook-lunch-mutation').effect.variant).toBe(COOK_RECIPES.find(x => x.id === 'cook-lunch-mutation')!.effects.mutationWeight);
     expect(recipeBy('cook-lunch-named').effect.named).toBe(COOK_RECIPES.find(x => x.id === 'cook-lunch-named')!.effects.namedWeight);
     expect(recipeBy('cook-lunch-bundle').effect.rare).toBe(bonusOf('cook-lunch-bundle'));
+    expect(recipeBy('cook-bait-night').effect).toEqual(fx({ night: 1 }));
   });
 
   it('도시락은 도시락 슬롯 지속의 방치, 미끼 요리는 미끼 슬롯 지속의 수동이다', () => {

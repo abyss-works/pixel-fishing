@@ -14,9 +14,9 @@ const byKind = (kind: 'lunch' | 'bait') => RECIPES.filter(r => r.kind === kind);
 const gradeBaits = RECIPES.filter(r => r.kind === 'bait' && r.effects.rarityWeight !== undefined);
 
 describe('레시피 표', () => {
-  it('도시락 5종과 미끼 요리 4종이다', () => {
+  it('도시락 5종과 미끼 요리 5종이다', () => {
     expect(byKind('lunch')).toHaveLength(5);
-    expect(byKind('bait')).toHaveLength(4);
+    expect(byKind('bait')).toHaveLength(5);
   });
 
   it('레시피 id는 고유하고 recipeById가 찾아 준다', () => {
@@ -63,6 +63,7 @@ describe('레시피 표', () => {
     expect(cost('cook-bait-rare')).toEqual({ common: 50, rare: 15 });
     expect(cost('cook-bait-epic')).toEqual({ common: 50, epic: 5 });
     expect(cost('cook-bait-legendary')).toEqual({ common: 50, legendary: 3 });
+    expect(cost('cook-bait-night')).toEqual({ rare: 10, epic: 3, legendary: 1 });
   });
 
   it('명세 5.2, 5.3 표의 효과 값과 같다', () => {
@@ -78,6 +79,7 @@ describe('레시피 표', () => {
     expect(fx('cook-bait-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.4 } });
     expect(fx('cook-bait-epic')).toEqual({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.6 } });
     expect(fx('cook-bait-legendary')).toEqual({ rarityWeight: { grades: ['legendary'], bonus: 0.8 } });
+    expect(fx('cook-bait-night')).toEqual({ nightUnlock: true });
   });
 });
 
@@ -208,6 +210,7 @@ describe('요리 설명', () => {
     'cook-bait-epic': '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
     'cook-bait-legendary': '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
     'cook-bait-mutation': '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
+    'cook-bait-night': '달빛이 스민 물고기의 비늘을 말려 반죽에 섞는다. 낮에 던진 미끼에서도 밤의 물결이 따라 올라온다.',
   };
 
   it('모든 레시피에 설명이 있다', () => {

@@ -188,7 +188,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
   --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다
   --units <a,b,c,d>  effects: 분해 재료의 등급별 단위(일반,희귀,영웅,전설). 기본 1,5,25,125. 명세에 등급 사이 환산 비율이 없어 재료 점수를 견주는 데만 쓰는 값이다
-  --bait <rare|epic|legendary>  effects, window: 등급 미끼(기운으로 제작하는 미끼 요리) 효과를 효과 옵션에 채운다. 수동 캐치에만 걸린다(희귀 이상 +20%, 영웅 이상 +40%, 전설 +60%. 요리 명세 값)
+  --bait <rare|epic|legendary|night>  effects, window: 미끼 요리 효과를 효과 옵션에 채운다. 수동 캐치에만 걸린다. rare, epic, legendary는 등급 미끼의 등급 가중이고(희귀 이상 +40%, 영웅 이상 +60%, 전설 +80%), night은 밤 어종 출현(낮에도 밤 풀 전체로 낚기)이다
   --reward <시간>    achievements: 목표 시간어치(0 초과, 예: 4 또는 4h). 쉼표로 여러 개를 줄 수 있다(기본 ${DEFAULT_ACHIEVEMENT_HOURS_LIST.join(',')}). transition, days, dist, gates: 하나만 주면 진행 업적을 채울 때 골드 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 함께 낸다(효과 옵션과 함께 쓸 수 없다)
   --reward-split <0~1>  기본 업적이 받는 몫(나머지는 도감 완결 업적). 기본 ${DEFAULT_BASIC_SHARE}
   --start <N>        design: 강화비 시작값(레벨 1 강화비). 강화비는 start x (1 + growth)^(lv - 1) 단일 지수다
@@ -503,6 +503,8 @@ export interface SpotInfo { id: SpotId; name: string; powerReq: number; entryLev
 
 export interface FlowResult {
   options: { axis: FlowAxis; legendAt: number | null; maxDays: number; override: FlowOverride | null;
+    /** 효과 옵션 — 가정 문단이 밤 어종 출현처럼 축 밖의 효과도 밝힌다 */
+    effect: Effect;
     seed: number; trials: number;
     /** transition, gates를 일반 의뢰와 네임드 토벌을 모두 수행하는 경우로 잰 결과인가 */
     bounty: boolean;
@@ -590,7 +592,7 @@ export function runFlow(o: FlowOptions): FlowResult {
     const plan: RatePlan | undefined = planOn ? effectPlan({ effect: o.effect, fromBoat, recipe: o.withCost ? recipe : undefined }) : undefined;
     const rewardOn = o.rewards.length === 1 && o.rewardSplit !== null && o.commands.length === 1 && REWARD_COMMANDS.some(c => o.commands.includes(c));
     const reward = rewardOn ? rewardPlan(o.rewards[0], o.rewardSplit!) : undefined;
-    const res: FlowResult = { options: { axis: o.axis, legendAt: o.legendAt, maxDays: o.maxDays, override,
+    const res: FlowResult = { options: { axis: o.axis, legendAt: o.legendAt, maxDays: o.maxDays, override, effect: o.effect,
       seed: o.seed, trials: o.trials,
       bounty: o.bounty,
       plan: planOn ? { label: effectLabel(o.effect), fromBoat, recipe: o.recipe, withCost: o.withCost, bounty: o.bounty } : null,
@@ -800,17 +802,19 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
     );
   } else if (command === 'effects') {
     lines.push(
-      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 돌연변이 가중치 증가는 유물과 같은 경로의 폼 가중치다. 네임드 조우는 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상, 영웅 이상, 전설 가중은 제품의 등급 가중치 효과 합산에 등급별로 더한다. 영웅, 전설 도감은 그 등급 어종의 일반 폼과 돌연변이 폼을 전부 모으는 시간이다`,
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 ${o.effect.night ? '밤 풀(낮 어종 + 밤 어종)' : '낮밤 혼합'} 기댓값이다. 돌연변이 가중치 증가는 유물과 같은 경로의 폼 가중치다. 네임드 조우는 그 구역에 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 입질 대기 단축은 대기 전체(파워 미달 가산 포함)에 곱한다. 희귀 이상, 영웅 이상, 전설 가중은 제품의 등급 가중치 효과 합산에 등급별로 더한다. 영웅, 전설 도감은 그 등급 어종의 일반 폼과 돌연변이 폼을 전부 모으는 시간이다`,
       '크기는 판매가와 도감 완성 조건에 쓰이지 않아 크기 배수는 이 지표에 영향이 없다. 도감에 최대 크기 기록은 있으나 제품 규칙 모듈에 완성 조건은 없다',
       '이동 속도는 실질 낚시 시간 밖이라 낚시 시간당 수입을 바꾸지 않는다. 판매 왕복을 넣은 변화는 이동 시간 관측(travel)의 가방 용량과 왕복 시간을 쓰고, 가방 채움 시간은 같은 낚싯대 레벨과 낚시 방식의 캐치 속도로 계산한다. 입질 대기 단축도 채움 시간을 줄여 이 값에 든다',
       '도감 완성은 한 해역에서만 낚을 때이고 캐치마다 어종과 폼을 뽑는 몬테카를로다. 일반 폼 전부(전설 제외), 일반 폼 전부, 돌연변이 폼 전부, 영웅 도감 전부, 전설 도감 전부 다섯 조건을 센다. 어종 천장은 넣지 않는다',
       '분해 재료는 물고기 한 마리가 그 등급 재료 한 개이고 돌연변이 구분은 없다. 등급별 단위는 명세에 환산 비율이 없어 재료 점수를 견주는 데만 쓰는 값이다. 판매 골드는 같은 시간 모두 팔 때의 방치 기댓값이다',
+      ...(o.effect.night ? ['밤 어종 출현은 미끼 슬롯 효과라 수동 캐치에만 걸린다. 낮에도 밤 풀 전체(낮 어종 + 밤 어종)로 낚는 것으로 보고, 밤 어종은 각자의 밤 가중치로 섞는다. 밤에는 이미 밤 풀이라 변화가 없다'] : []),
     );
   } else if (command === 'window') {
     lines.push(
-      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다. 창 안은 효과를 넣고 창 밖은 효과 없음이다. 효과는 제품의 등급 가중치 효과 합산과 폼 가중치 경로로 적용한다`,
+      `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 ${o.effect.night ? '창 밖은 낮밤 혼합, 창 안은 밤 풀(낮 어종 + 밤 어종)' : '낮밤 혼합'} 기댓값이다. 창 안은 효과를 넣고 창 밖은 효과 없음이다. 효과는 제품의 등급 가중치 효과 합산과 폼 가중치 경로로 적용한다`,
       '창 안의 기대 캐치 수는 그 조건의 캐치 속도 x 창 길이 x 등급 비율이고, 골드와 명성 증가는 효과 없음 대비 시간당 차이 x 창 길이다',
       '도감 단축은 한 해역에서만 낚을 때 창 하나를 먼저 쓰고 이후 효과 없이 낚는 평균 시간이 효과 없이 낚는 평균 시간보다 줄어든 양이다. 창 안의 캐치 수는 기대 캐치 수를 반올림하고, 같은 시드로 효과 없음과 짝지어 견준다. 어종 천장은 넣지 않는다',
+      ...(o.effect.night ? ['밤 어종 출현은 창 안에서 낮에도 밤 풀 전체(낮 어종 + 밤 어종)로 낚는 것으로 본다. 창 밖은 낮밤 혼합이다'] : []),
       ...(windowMaterial
         ? [
           '재료 비용 표는 --cost로 덮어쓴 기운 수량의 재료를 그 해역 낚시로만 모으는 경우다.',
@@ -1343,6 +1347,7 @@ function effectLabel(x: Effect): string {
     x.epic ? `영웅 이상 가중 +${(x.epic * 100).toFixed(0)}%` : '', x.legendary ? `전설 가중 +${(x.legendary * 100).toFixed(0)}%` : '',
     x.variant ? `돌연변이 가중치 +${(x.variant * 100).toFixed(0)}%` : '', x.size ? `크기 ${x.size > 0 ? '+' : ''}${(x.size * 100).toFixed(0)}%` : '',
     x.move ? `이동 속도 ${x.move > 0 ? '+' : ''}${(x.move * 100).toFixed(0)}%` : '', x.named ? `네임드 조우 +${(x.named * 100).toFixed(0)}%` : '',
+    x.night ? '밤 어종 출현' : '',
   ].filter(Boolean).join(', ') || '효과 없음';
 }
 

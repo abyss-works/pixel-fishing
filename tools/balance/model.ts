@@ -32,13 +32,13 @@ export const AXIS_LABEL: Record<Axis, string> = { normal: '무판정', good: 'GO
 
 export interface Row { fish: Fish; prob: number }
 
-/** 추첨 풀 — 낮 풀만 또는 하루 중 시간 비율로 섞은 낮밤 혼합 */
-export type Pool = 'day' | 'mixed';
+/** 추첨 풀 — 낮 풀만, 밤 풀만, 또는 하루 중 시간 비율로 섞은 낮밤 혼합 */
+export type Pool = 'day' | 'night' | 'mixed';
 
 /** 해역의 개체 확률 — 낮/밤 풀을 하루 중 시간 비율로 섞고 시간대마다 가중치 합으로 정규화한다 */
 export function mixedRows(spot: SpotId, o: DrawOptions = {}, pool: Pool = 'mixed'): Row[] {
   const p = new Map<string, number>();
-  const night = pool === 'day' ? 0 : NIGHT_SHARE;
+  const night = pool === 'day' ? 0 : pool === 'night' ? 1 : NIGHT_SHARE;
   for (const [phase, w] of [['day', 1 - night], ['night', night]] as const) {
     if (w === 0) continue;
     const rows = drawRows(spot, { ...o, phase });

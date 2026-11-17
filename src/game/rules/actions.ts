@@ -323,10 +323,11 @@ export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgm
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
-  const phase: DayPhase = isNight(now) ? 'night' : 'day';
   // 요리 슬롯 효과 — 서버 시각(now)으로 적용 여부를 정한다. 방치와 수동의 구분은 주장 판정으로 하며 강등으로 바뀌지 않는다.
   const cook = slotEffects(state, now, claimed);
+  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
+  // 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다. 미끼 슬롯 효과라 수동 캐치에만 걸리고 밤에는 이미 밤 풀이라 변화가 없다.
+  const phase: DayPhase = isNight(now) || cook.nightUnlock ? 'night' : 'day';
   let phaseOpts: DrawOptions & { phase: DayPhase } = { phase };
   for (const [grade, bonus] of Object.entries(cook.rarityWeight) as [RarityId, number][]) {
     phaseOpts = addGradeEffect(phaseOpts, grade, bonus);

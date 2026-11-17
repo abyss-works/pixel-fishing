@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, drawCatch, namedWeightBonus, prepareCatchDraw } from './actions';
 import type { ActionDeps, GameAction } from './actions';
-import { FISH, newState } from './logic';
+import { FISH, fishDrawShares, newState } from './logic';
 import type { FishInstance, GameState } from './logic';
 import {
   COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
@@ -383,7 +383,7 @@ describe('slotEffects', () => {
 
   it('슬롯이 비어 있으면 효과가 없다', () => {
     expect(slotEffects(seed(), T0, 'auto')).toEqual({
-      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0,
+      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
     });
   });
   it('도시락은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만 적용한다', () => {
@@ -419,6 +419,12 @@ describe('slotEffects', () => {
     expect(slotEffects(seed({ slots: slots('cook-lunch-named', null) }), T0, 'auto').namedWeight).toBe(0.5);
     expect(slotEffects(seed({ slots: slots('cook-lunch-mutation', null) }), T0, 'auto').mutationWeight).toBe(0.5);
   });
+  it('밤 어종 출현 미끼는 미끼 슬롯이 켜진 수동 판정에만 참이다', () => {
+    const s = seed({ slots: slots(null, 'cook-bait-night') });
+    for (const j of ['perfect', 'good', 'normal'] as const) expect(slotEffects(s, T0, j).nightUnlock).toBe(true);
+    expect(slotEffects(s, T0, 'auto').nightUnlock).toBe(false);
+    expect(slotEffects(seed({ slots: slots(null, 'cook-bait-night') }), 'garbage', 'normal').nightUnlock).toBe(false);
+  });
   it('모든 레시피 효과 키를 낸다', () => {
     for (const r of RECIPES) {
       const slot = r.kind === 'lunch' ? slots(r.id, null) : slots(null, r.id);
@@ -426,6 +432,7 @@ describe('slotEffects', () => {
       expect(e.biteWaitCut, r.id).toBe(r.effects.biteWaitCut ?? 0);
       expect(e.mutationWeight, r.id).toBe(r.effects.mutationWeight ?? 0);
       expect(e.namedWeight, r.id).toBe(r.effects.namedWeight ?? 0);
+      expect(e.nightUnlock, r.id).toBe(r.effects.nightUnlock === true);
     }
   });
 });
@@ -469,6 +476,18 @@ describe('캐치에 적용', () => {
     const s = withSlots(null, 'cook-bait-epic');
     expect(prepareCatchDraw(s, 'good', LATER, PZ).phaseOpts.weightEffects).toEqual({ epic: 0.6, legendary: 0.6 });
     expect(prepareCatchDraw(s, 'auto', LATER, PZ).phaseOpts.weightEffects).toBeUndefined();
+  });
+  it('밤 어종 출현 미끼는 낮 수동 캐치를 밤 풀로 돌리고 방치와 밤에는 그대로 둔다', () => {
+    const s = withSlots(null, 'cook-bait-night');
+    const withBait = prepareCatchDraw(s, 'normal', LATER, PZ);
+    const plain = prepareCatchDraw(seed(), 'normal', LATER, PZ);
+    expect(plain.phaseOpts.phase).toBe('day');
+    expect(withBait.phaseOpts.phase).toBe('night');
+    expect(fishDrawShares('indian', plain.phaseOpts).some(x => x.fish.night)).toBe(false);
+    expect(fishDrawShares('indian', withBait.phaseOpts).some(x => x.fish.night)).toBe(true);
+    // 미끼 슬롯 효과는 방치 캐치에 걸리지 않고, 밤에는 이미 밤 풀이다
+    expect(prepareCatchDraw(s, 'auto', LATER, PZ).phaseOpts.phase).toBe('day');
+    expect(prepareCatchDraw(s, 'normal', T0, PZ).phaseOpts.phase).toBe('night');
   });
   it('슬롯이 끝난 뒤에는 적용하지 않는다. 판정 시각은 서버 시각(now) 인자만 본다', () => {
     const s = withSlots(null, 'cook-bait-epic', at(T0, 30 * MIN));

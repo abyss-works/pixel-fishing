@@ -30,7 +30,7 @@ export const BAIT_WINDOW_MIN = COOK_KIND_RULES.bait.slotMs / 60_000;
 
 /** 게임이 합산한 슬롯 효과를 도구의 효과 매개변수로 옮긴다. 등급 가중은 그 등급부터 전설까지 거는 효과만 옮긴다 */
 export function effectOf(e: ActiveCookEffects): Effect {
-  const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut, variant: e.mutationWeight, named: e.namedWeight };
+  const out: Effect = { ...NO_EFFECT, bite: e.biteWaitCut, variant: e.mutationWeight, named: e.namedWeight, night: e.nightUnlock ? 1 : 0 };
   const grades = RARITY_ORDER.filter(g => e.rarityWeight[g] !== undefined);
   if (grades.length > 0) {
     const from = RARITY_ORDER.indexOf(grades[0]);
@@ -50,14 +50,14 @@ export function effectOfRecipe(r: CookRecipe): Effect {
   return effectOf(slotEffects({ slots }, now, r.kind === 'lunch' ? 'auto' : 'normal'));
 }
 
-/** 등급 미끼의 효과 — 요리 콘텐츠의 희귀, 영웅, 전설 등급 미끼 레시피에서 불러온다 */
-export const BAIT_EFFECTS: Readonly<Record<'rare' | 'epic' | 'legendary', Effect>> = Object.fromEntries(
-  (['rare', 'epic', 'legendary'] as const).map(g => {
-    const r = COOK_RECIPES.find(x => x.id === `cook-bait-${g}`);
-    if (!r) throw new Error(`등급 미끼 레시피가 없습니다: ${g}`);
-    return [g, effectOfRecipe(r)];
+/** 미끼 효과 — 요리 콘텐츠의 등급 미끼(희귀, 영웅, 전설)와 밤 어종 출현 미끼 레시피에서 불러온다 */
+export const BAIT_EFFECTS: Readonly<Record<'rare' | 'epic' | 'legendary' | 'night', Effect>> = Object.fromEntries(
+  (['rare', 'epic', 'legendary', 'night'] as const).map(name => {
+    const r = COOK_RECIPES.find(x => x.id === `cook-bait-${name}`);
+    if (!r) throw new Error(`미끼 레시피가 없습니다: ${name}`);
+    return [name, effectOfRecipe(r)];
   }),
-) as Record<'rare' | 'epic' | 'legendary', Effect>;
+) as Record<'rare' | 'epic' | 'legendary' | 'night', Effect>;
 
 export type BaitName = keyof typeof BAIT_EFFECTS;
 
