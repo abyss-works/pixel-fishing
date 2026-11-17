@@ -711,14 +711,15 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     }
     return d;
   });
+  const inc = counterIncrementsForEvents(events);
+  const counters2: Record<string, number> = {};
+  for (const [k, v] of Object.entries(base.achievementCounters)) if (typeof v === 'number') counters2[k] = v;
+  for (const [k, v] of Object.entries(inc)) if (v !== undefined) counters2[k] = (counters2[k] ?? 0) + v;
   const evalDex = allDecided ? undefined : { ...dex, [fish.id]: { ...dex[fish.id], [inst.form]: rec } };
-  let evalState = base;
-  if (evalDex) evalState = { ...base, dex: evalDex };
+  let evalState: GameState = { ...base, achievementCounters: counters2 };
+  if (evalDex) evalState = { ...evalState, dex: evalDex };
   const evaluated = allDecided ? { achievements: base.achievements, newlyClaimable: [] as string[] }
     : evaluateAchievements(evalState);
-  const inc = counterIncrementsForEvents(events);
-  const counters2 = { ...base.achievementCounters };
-  for (const [k, v] of Object.entries(inc)) counters2[k as keyof typeof counters2] = (counters2[k as keyof typeof counters2] ?? 0) + v;
   const claimableEvents = evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } }));
   return {
     ok: true,

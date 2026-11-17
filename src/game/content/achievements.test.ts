@@ -11,14 +11,15 @@ describe('업적 콘텐츠', () => {
     ]);
   });
 
-  it('업적 24종(진행 10개 + 모자 14개)이 중복 없는 id로 정의되어 있다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(24);
-    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(24);
+  it('업적 65종(진행 10개 + 모자 14개 + 횟수 41개)이 중복 없는 id로 정의되어 있다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(65);
+    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(65);
 
     const progress = ACHIEVEMENTS.filter(a => a.tab === 'progress');
     expect(progress).toHaveLength(10);
     const hatRewards = ACHIEVEMENTS.filter(a => a.reward.kind === 'hat');
     expect(hatRewards).toHaveLength(14);
+    expect(ACHIEVEMENTS.filter(a => a.tab === 'count')).toHaveLength(42);
   });
 
   it('진행 업적 골드 보상이 명세 표와 일치한다', () => {

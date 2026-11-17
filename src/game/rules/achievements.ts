@@ -7,6 +7,8 @@ import {
 import type {
   AchievementCounters, AchievementMap, AchievementMetric, AchievementRule,
 } from '../content/achievements.js';
+import { fishById } from '../content/fish.js';
+import { topZoneOfSpot } from '../content/zones.js';
 import type { GameEvent } from './actions.js';
 import { formDiscovered, isBigSize } from './logic.js';
 import type { GameState } from './logic.js';
@@ -93,10 +95,10 @@ export function evaluateAchievements(state: GameState): {
   return { achievements: next, newlyClaimable };
 }
 
-/** 확정된 이벤트 목록에서 업적 카운터 5종의 증분을 계산한다 */
+/** 확정된 이벤트 목록에서 업적 카운터 증분을 계산한다 — 기본 5종과 수동 집계 키를 함께 센다 */
 export function counterIncrementsForEvents(events: readonly GameEvent[]): AchievementCounters {
   const inc: AchievementCounters = {};
-  const add = (key: keyof AchievementCounters, amount: number) => {
+  const add = (key: string, amount: number) => {
     if (amount > 0) inc[key] = (inc[key] ?? 0) + amount;
   };
 
@@ -107,10 +109,25 @@ export function counterIncrementsForEvents(events: readonly GameEvent[]): Achiev
         add('sell.gold', gold);
       }
     } else if (ev.type === 'catch') {
-      if (ev.payload.judgment === 'perfect') add('catch.perfect', 1);
-      else if (ev.payload.judgment === 'auto') add('catch.auto', 1);
+      const judgment = ev.payload.judgment;
+      if (judgment === 'perfect') add('catch.perfect', 1);
+      else if (judgment === 'auto') add('catch.auto', 1);
       if (typeof ev.payload.bait === 'string' && ev.payload.bait.length > 0) {
         add('catch.bait', 1);
+      }
+      // 수동 집계는 방치가 아닌 캐치만 센다 — 대상 어종은 이벤트의 fishId에서 데이터로 찾는다
+      if (judgment !== 'auto') {
+        add('manual.total', 1);
+        const fish = fishById(ev.payload.fishId);
+        if (fish?.rarity === 'legendary') {
+          add('manual.legendary.total', 1);
+          add(`manual.legendary.${fish.id}`, 1);
+        }
+        if (ev.payload.form === 'variant') {
+          add('manual.variant.total', 1);
+          const zone = fish ? topZoneOfSpot(fish.spot) : undefined;
+          if (zone !== undefined) add(`manual.variant.${zone}`, 1);
+        }
       }
     } else if (ev.type === 'resolveChallenge') {
       if (ev.payload.success === true && ev.payload.misses === 0) {

@@ -1656,6 +1656,22 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
         "type": "catch",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-village",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -2417,7 +2433,10 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
         "active_client": null,
         "boat": 0,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -2478,8 +2497,15 @@ exports[`낚시 > 가방이 가득 차고 모두 잠겨 있으면 상한을 넘�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.total": 1,
+            "manual.variant.village": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 0,
@@ -2605,6 +2631,22 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
           "uid": "<uuid>",
         },
         "type": "catch",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-village",
+        },
+        "type": "unlockAchievement",
         "user_id": "<user>",
       },
     ],
@@ -3356,7 +3398,10 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
         "active_client": null,
         "boat": 0,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -3417,8 +3462,15 @@ exports[`낚시 > 가방이 가득 차면 가장 덜 특별한 개체를 방생�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.total": 1,
+            "manual.variant.village": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 0,
@@ -3544,6 +3596,22 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
         "type": "catch",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-pacific",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -3585,7 +3653,10 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
         "active_client": null,
         "boat": 1,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -3647,8 +3718,15 @@ exports[`낚시 > 강제 조우가 허용되지 않으면 통상 캐치로 처�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.pacific": 1,
+            "manual.variant.total": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 1,
@@ -3781,6 +3859,22 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
         "type": "ticket",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-pacific",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -3822,7 +3916,10 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
         "active_client": null,
         "boat": 1,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -3884,8 +3981,15 @@ exports[`낚시 > 강제 조우를 허용받은 캐치는 진행 중인 네임�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.pacific": 1,
+            "manual.variant.total": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 1,
@@ -3994,6 +4098,22 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
           "uid": "<uuid>",
         },
         "type": "catch",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-village",
+        },
+        "type": "unlockAchievement",
         "user_id": "<user>",
       },
     ],
@@ -4136,7 +4256,10 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
         "active_client": null,
         "boat": 0,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -4197,8 +4320,15 @@ exports[`낚시 > 도감 기록이 있는 어종은 횟수를 이어 센다 1`] 
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.total": 1,
+            "manual.variant.village": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 0,
@@ -4308,6 +4438,22 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
         "type": "catch",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-village",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -4358,7 +4504,10 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
     "saves": [
       {
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "bag": [
             {
@@ -4449,7 +4598,10 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
         "active_client": null,
         "boat": 0,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -4510,8 +4662,15 @@ exports[`낚시 > 스냅샷 경계 버전은 전체 경로로 처리하고 saves
       "patch": {
         "baseVersion": 49,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.total": 1,
+            "manual.variant.village": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 0,
@@ -4730,6 +4889,22 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
         "type": "catch",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-pacific",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -4771,7 +4946,10 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
         "active_client": null,
         "boat": 1,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -4833,8 +5011,15 @@ exports[`낚시 > 진행 중인 일반 의뢰가 캐치에 맞으면 진행도�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.pacific": 1,
+            "manual.variant.total": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-pacific": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 1,
@@ -4944,6 +5129,22 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
         "type": "catch",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "manual-variant-zone-village",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [
       {
@@ -4985,7 +5186,10 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
         "active_client": null,
         "boat": 0,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -5046,8 +5250,15 @@ exports[`낚시 > 통상 캐치는 개체와 도감을 쓰고 명성을 올린�
       "patch": {
         "baseVersion": 2,
         "scalars": {
-          "achievementCounters": {},
-          "achievements": {},
+          "achievementCounters": {
+            "manual.total": 1,
+            "manual.variant.total": 1,
+            "manual.variant.village": 1,
+          },
+          "achievements": {
+            "manual-variant-1": "claimable",
+            "manual-variant-zone-village": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 0,
@@ -7788,6 +7999,14 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
         "type": "resolveChallenge",
         "user_id": "<user>",
       },
+      {
+        "created_at": "<now>",
+        "payload": {
+          "id": "named-flawless-1",
+        },
+        "type": "unlockAchievement",
+        "user_id": "<user>",
+      },
     ],
     "fish_instances": [],
     "letters": [],
@@ -7816,7 +8035,9 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
         "active_client": null,
         "boat": 1,
         "data": {
-          "achievements": {},
+          "achievements": {
+            "named-flawless-1": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "cooking": null,
@@ -7873,7 +8094,9 @@ exports[`현상금 > 결투 승리는 진행도를 올리고 도전권을 지운
           "achievementCounters": {
             "named.flawless": 1,
           },
-          "achievements": {},
+          "achievements": {
+            "named-flawless-1": "claimable",
+          },
           "artifacts": [],
           "baitRefund": null,
           "boat": 1,

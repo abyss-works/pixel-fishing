@@ -497,8 +497,11 @@ describe('resolveChallenge', () => {
     const out = applyAction(ready(), act(), full());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.dex.megalodon?.normal?.count).toBe(1);
-    expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
+    expect(out.events).toEqual([
+      { type: 'resolveChallenge',
+        payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } },
+      { type: 'unlockAchievement', payload: { id: 'named-flawless-1' } },
+    ]);
   });
 
   it('실패는 감사 이벤트와 그날의 결투 실패 수·상처만 남긴다 — 티켓 소모는 서버 행 처리다', () => {
