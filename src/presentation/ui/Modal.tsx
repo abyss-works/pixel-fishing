@@ -69,9 +69,9 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
   useKeyBlocker(closable ? onClose : undefined);
-  // 탭 줄을 누르면 닫을 수 있는 창은 닫히고, 닫을 수 없는 창은 그대로 남는다
-  useOpenWindow(closable ? onClose : undefined);
-  // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 창이 떠 있어도 눌린다.
+  // 모달이 떠 있는 동안 아래 층(스테이지·사이드 메뉴)은 입력을 받지 않는다. 탭 줄은 모달을 닫는 출구가 아니다
+  useOpenWindow();
+  // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 보이지만, 창이 떠 있으면 불활성이다.
   // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)도 창 층이다. 같은 층 안에서 다른 창보다 위(blocker)이며 탭 줄 아래다.
   // 스테이지 창은 닫을 수 없는 동안에도 스테이지 안에 그린다.
   const backdrop = layer === 'app'

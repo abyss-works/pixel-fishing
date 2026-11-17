@@ -1,32 +1,34 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
-// 떠 있는 창의 등록부 - 닫을 수 있는 창(Modal)이 열려 있는 동안 등록하고, 탭 줄을 누를 때 모두 닫는다.
-// 닫을 수 없는 창(진행을 막는 안내, 결투의 진행 단계)은 등록하지 않으므로 그대로 남는다.
-// 탭 누름은 막지 않으므로 탭은 늘 열린다. 그래서 결과 전송 없이 창이 사라지는 경로가 없다.
-const open = new Set<() => void>();
+// 떠 있는 모달의 등록부 - Modal이 열려 있는 동안 등록하고, 모달이 하나라도 떠 있으면 그 아래 층(스테이지·사이드 메뉴)은
+// 입력을 받지 않는다(전역: 모달이 열린 동안 배경은 입력을 받지 않는다). 닫을 수 있는지(closable)와 무관하다.
+// 모달을 닫는 출구는 모달 자신(X·Esc·바깥 누름)이 갖는다. 탭 줄은 모달을 닫지 않고 입력도 받지 않는다.
+const open = new Set<object>();
+const listeners = new Set<() => void>();
+const emit = () => { listeners.forEach(l => l()); };
 
-/** 닫을 수 있는 창이 떠 있는 동안 등록한다. close가 없으면(닫을 수 없는 창) 등록하지 않는다 */
-export function useOpenWindow(close: (() => void) | undefined) {
-  const ref = useRef(close);
-  useEffect(() => { ref.current = close; });
-  const closable = close !== undefined;
+/** 모달이 떠 있는 동안 등록한다 */
+export function useOpenWindow() {
   useEffect(() => {
-    if (!closable) return;
-    const entry = () => ref.current?.();
-    open.add(entry);
-    return () => { open.delete(entry); };
-  }, [closable]);
+    const token = {};
+    open.add(token);
+    emit();
+    return () => { open.delete(token); emit(); };
+  }, []);
 }
 
-/** 닫을 수 있는 창이 하나라도 떠 있는가 */
+/** 모달이 하나라도 떠 있는가 */
 export const hasOpenWindows = (): boolean => open.size > 0;
 
-/** 탭 줄을 눌렀을 때 호출한다. 등록된 닫을 수 있는 창을 모두 닫는다 */
-export function closeOpenWindows(): void {
-  for (const close of [...open]) close();
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
+
+/** 모달이 하나라도 떠 있는가 - 등록·해제 때 다시 그린다(사이드 메뉴 불활성) */
+export function useAnyOpenWindow(): boolean {
+  return useSyncExternalStore(subscribe, hasOpenWindows, () => false);
 }
 
 /** 테스트 격리용 */
 export function resetOpenWindows() {
   open.clear();
+  emit();
 }

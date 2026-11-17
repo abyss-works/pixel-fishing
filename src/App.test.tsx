@@ -366,6 +366,7 @@ describe('시설 재클릭 시 패널 토글', () => {
 describe('쿠폰 입력 (설정 탭)', () => {
   // 정적 COUPONS에 없는 코드는 DB(coupons 테이블) 조회를 거치므로 비동기 — findBy로 대기.
   it('유효 코드 입력 시 골드 지급, 재사용 불가', async () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
@@ -380,6 +381,7 @@ describe('쿠폰 입력 (설정 탭)', () => {
   });
 
   it('없는 코드는 안내만', async () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
@@ -732,23 +734,29 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   });
 
   it('설정 탭은 창을 여는 줄 버튼 넷을 설정, 코드 입력, 개발자에게, 패치노트 순서로 둔다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     expect(openerButton('코드 입력').parentElement).toHaveTextContent(/^설정코드 입력개발자에게패치노트$/);
   });
 
   it('연 창이 떠 있는 동안 그 버튼은 눌린 모양이고, 닫으면 돌아온다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(openerButton('설정'));
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'true');
-    expect(openerButton('코드 입력')).toHaveAttribute('aria-pressed', 'false');
+    // 창이 떠 있는 동안 사이드바는 불활성이라 접근성 조회에서 빠진다 — 눈에 보이는 상태는 DOM에서 읽는다
+    const pressed = (name: string) =>
+      screen.getAllByRole('button', { name, hidden: true }).find(b => b.hasAttribute('aria-pressed'))!;
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(pressed('설정'));
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'true');
+    expect(pressed('코드 입력')).toHaveAttribute('aria-pressed', 'false');
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('알림을 지원하지 않는 브라우저에서는 두 알림 토글이 흐려져 켤 수 없다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
@@ -759,6 +767,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   it('알림 켜기는 브라우저 권한을 묻고, 허용되면 그 알림만 켜짐으로 바뀐다', async () => {
     const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
     vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    seed();
     try {
       render(<App />);
       clickTab('설정');
@@ -776,6 +785,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   });
 
   it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
@@ -798,6 +808,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   });
 
   it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     expect(screen.queryByText(/클라우드가 설정되지 않았어요/)).not.toBeInTheDocument(); // 설정 화면에는 없다
@@ -822,6 +833,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
 
 describe('R22: 도움말 탭', () => {
   it('일반 시스템 도움말만 — 어종명(도감 스포일러)·지역 한정 정보는 없다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     expect(screen.getByText('낚시와 타이밍')).toBeInTheDocument();
@@ -832,6 +844,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('첫 화면은 짧다 — 세부는 전부 접혀 있고 필요할 때 편다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const topics = [...document.querySelectorAll('details')];
@@ -843,6 +856,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('수치는 balance에서 읽어 자동으로 맞는다 — 손으로 적으면 밸런스 바꿀 때 갈라진다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -853,6 +867,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -862,6 +877,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('v0.6.7 이후 콘텐츠가 도움말에 있다 — 바다·낮밤·바운티 헌팅·설정, 마지막 갱신 표기', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -1378,6 +1394,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
 describe('패치노트 (설정 탭)', () => {
   it('설정 탭에 버전별 아코디언 패치노트 — 범주 뱃지 포함', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('패치노트'));
