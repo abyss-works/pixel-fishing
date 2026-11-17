@@ -22,16 +22,46 @@ const CURRENT_IDS = [
   'named-all', 'artifact-all', 'catch-100000',
 ] as const;
 
+const EXPANSION_IDS = [
+  'manual-10', 'manual-100', 'manual-1000', 'manual-10000',
+  'manual-legendary-1', 'manual-legendary-5', 'manual-legendary-10', 'manual-legendary-25',
+  'manual-variant-1', 'manual-variant-5', 'manual-variant-10', 'manual-variant-25',
+  'manual-legendary-zone-village', 'manual-variant-zone-village',
+  'manual-legendary-zone-pacific', 'manual-variant-zone-pacific',
+  'manual-legendary-zone-seasia', 'manual-variant-zone-seasia',
+  'manual-legendary-zone-indian', 'manual-variant-zone-indian',
+  'manual-legendary-zone-madagascar', 'manual-variant-zone-madagascar',
+  'manual-legendary-zone-southatlantic', 'manual-variant-zone-southatlantic',
+  'perfect-100', 'perfect-1000', 'perfect-10000',
+  'auto-1000', 'auto-10000', 'auto-100000',
+  'bait-10', 'bait-100', 'bait-1000',
+  'named-flawless-1', 'named-flawless-10', 'named-flawless-50',
+  'sell-1000000', 'sell-10000000', 'sell-100000000',
+  'big-100', 'big-200',
+] as const;
+
 const FISH_FORMS: readonly FormId[] = ['normal', 'variant'];
 const NAMED_QUESTS = BOUNTIES.filter(q => q.difficulty === 'named');
 
 const fishInZone = (zone: string) => FISH.filter(f => topZoneOfSpot(f.spot) === zone);
 
 describe('업적 카탈로그', () => {
-  it('현재 24개 id와 순서가 그대로다', () => {
-    expect(ACHIEVEMENTS.map(a => a.id)).toEqual([...CURRENT_IDS]);
-    expect(ACHIEVEMENT_RULES.map(r => r.id)).toEqual([...CURRENT_IDS]);
-    expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual([...CURRENT_IDS]);
+  it('기존 24개가 앞에 그대로 있고 확장 41개가 뒤에 붙어 모두 65개다', () => {
+    const allIds = [...CURRENT_IDS, ...EXPANSION_IDS];
+    expect(allIds).toHaveLength(65);
+    expect(ACHIEVEMENTS.map(a => a.id)).toEqual(allIds);
+    expect(ACHIEVEMENT_RULES.map(r => r.id)).toEqual(allIds);
+    expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual(allIds);
+  });
+
+  it('확장 41개는 모두 횟수 탭이고 골드 보상이다', () => {
+    for (const id of EXPANSION_IDS) {
+      const entry = ACHIEVEMENT_CATALOG.find(e => e.rule.id === id);
+      expect(entry, id).toBeDefined();
+      expect(entry!.rule.tab, id).toBe('count');
+      expect(entry!.rule.reward.kind, id).toBe('gold');
+    }
+    expect(ACHIEVEMENTS.filter(a => a.tab === 'count')).toHaveLength(42);
   });
 
   it('id가 중복되지 않는다', () => {
@@ -66,9 +96,29 @@ describe('업적 카탈로그', () => {
     expect(target('night-normal')).toBe(FISH.filter(f => f.night === true).length);
     expect(target('night-variant')).toBe(FISH.filter(f => f.night === true).length);
     expect(target('big-50')).toBe(50);
+    expect(target('big-100')).toBe(100);
+    expect(target('big-200')).toBe(200);
     expect(target('catch-100000')).toBe(100_000);
+    expect(target('manual-10')).toBe(10);
+    expect(target('manual-10000')).toBe(10_000);
+    expect(target('manual-legendary-25')).toBe(25);
+    expect(target('auto-100000')).toBe(100_000);
+    expect(target('sell-100000000')).toBe(100_000_000);
     expect(target('named-all')).toBe(NAMED_QUESTS.length);
     expect(target('artifact-all')).toBe(ARTIFACTS.length);
+  });
+
+  it('구역 전설·돌연변이 수동 목표 수가 데이터에서 나온다', () => {
+    const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
+    for (const zone of ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
+      const legendaries = fishInZone(zone).filter(f => f.rarity === 'legendary');
+      expect(target(`manual-legendary-zone-${zone}`)).toBe(legendaries.length);
+      expect(target(`manual-variant-zone-${zone}`)).toBe(1);
+    }
+    expect(
+      ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']
+        .map(z => target(`manual-legendary-zone-${z}`)),
+    ).toEqual([2, 4, 7, 4, 4, 4]);
   });
 
   it('모든 선택자가 알려진 갈래와 데이터 값을 쓴다', () => {
@@ -113,7 +163,7 @@ describe('업적 카탈로그', () => {
         expect(hat!.achievementId, rule.id).toBe(rule.id);
       }
     }
-    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(10);
+    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(51);
     expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(14);
   });
 

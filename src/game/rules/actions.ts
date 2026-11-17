@@ -36,7 +36,6 @@ import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
-import type { AchievementCounterKey } from '../content/achievements.js';
 import { counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
@@ -287,7 +286,7 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
   if (!out.ok) return out;
   const inc = counterIncrementsForEvents(out.events);
   let nextState = out.state;
-  const incEntries = Object.entries(inc) as [AchievementCounterKey, number][];
+  const incEntries = Object.entries(inc).filter(([, v]) => v !== undefined) as [string, number][];
   if (incEntries.length > 0) {
     const counters = { ...nextState.achievementCounters };
     for (const [k, v] of incEntries) counters[k] = (counters[k] ?? 0) + v;

@@ -29,7 +29,7 @@ import { isTutorialId } from '../content/tutorials.js';
 import type { TutorialId } from '../content/tutorials.js';
 import { DEFAULT_LOOK, hatById, safeLook } from '../content/wardrobe.js';
 import type { Look } from '../content/wardrobe.js';
-import { ACHIEVEMENT_COUNTER_KEYS } from '../content/achievements.js';
+import { isAchievementCounterKey } from '../content/achievements.js';
 import type { AchievementCounters, AchievementMap } from '../content/achievements.js';
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
@@ -1072,13 +1072,13 @@ function safeAchievements(raw: unknown): AchievementMap {
   return out;
 }
 
-/** 업적 카운터 위생 — 알려진 카운터 키의 유한 비음수 정수만 보존한다 */
+/** 업적 카운터 위생 — 기본 5종과 수동 집계(manual.*) 키의 유한 비음수 정수만 보존한다 */
 function safeAchievementCounters(raw: unknown): AchievementCounters {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   const src = raw as Record<string, unknown>;
   const out: AchievementCounters = {};
-  for (const k of ACHIEVEMENT_COUNTER_KEYS) {
-    const v = src[k];
+  for (const [k, v] of Object.entries(src)) {
+    if (!isAchievementCounterKey(k)) continue;
     if (typeof v === 'number' && Number.isInteger(v) && v >= 0) {
       out[k] = v;
     }

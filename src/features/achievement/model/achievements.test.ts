@@ -60,7 +60,7 @@ describe('요약 줄', () => {
         'zone-full-pacific': 'claimed',
       },
     });
-    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 24, gold: 25_000, hats: 1, canClaimAll: true });
+    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 65, gold: 25_000, hats: 1, canClaimAll: true });
   });
   it('받을 수 있는 업적이 없으면 모두 받기는 거짓이다', () => {
     expect(achievementSummary(seed())).toMatchObject({ gold: 0, hats: 0, canClaimAll: false });

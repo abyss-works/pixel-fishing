@@ -84,7 +84,7 @@ describe('catch - 가방이 가득 찬 가공 플랜트선', () => {
     expect(out.state.bag).toHaveLength(BOATS[8].bagCap);
     expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(ENERGY_PER_INDIVIDUAL);
     expect(out.writes.instancesRemoved).toEqual([result.extracted![0].uid]);
-    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoExtractEnergy']);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoExtractEnergy', 'unlockAchievement', 'unlockAchievement']);
     expect(out.events[1].payload).toMatchObject({
       uids: [result.extracted![0].uid], reason: 'bag-full',
       energy: { common: ENERGY_PER_INDIVIDUAL, rare: 0, epic: 0, legendary: 0 },
@@ -100,7 +100,7 @@ describe('catch - 가방이 가득 찬 가공 플랜트선', () => {
     expect(result.released).toHaveLength(1);
     expect(result.extracted ?? []).toEqual([]);
     expect(result.energy).toBeUndefined();
-    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease', 'unlockAchievement', 'unlockAchievement']);
     expect(out.state.items[ENERGY_ITEM_IDS.common]).toBeUndefined();
   });
 
@@ -116,13 +116,13 @@ describe('catch - 가방이 가득 찬 가공 플랜트선', () => {
     const { out, result } = catchPond(seed({ boat: 9, bag: fullBag(9) }), deps({ guest: true }));
     expect(result.released).toHaveLength(1);
     expect(result.extracted ?? []).toEqual([]);
-    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease', 'unlockAchievement', 'unlockAchievement']);
   });
 
   it('대양 트롤선(8단계)은 놓아준다', () => {
     const { out, result } = catchPond(seed({ boat: 8, bag: fullBag(8) }));
     expect(result.released).toHaveLength(1);
-    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease', 'unlockAchievement', 'unlockAchievement']);
   });
 
   it('방금 잡은 개체가 가장 안 특별해 그 자리에서 나가도 기운 대상이면 기운이 된다', () => {

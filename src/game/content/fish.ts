@@ -463,3 +463,9 @@ export const FISH: readonly Fish[] = [
     variant: { name: '심연의 큰눈홍치', color: '#6d2a24',
       lore: '불빛이 닿지 않는 깊이에서 올라온 개체. 건져 올린 뒤에도 눈이 한동안 어둠 쪽으로 돌아가 있다.' } },
 ];
+
+const FISH_BY_ID = new Map(FISH.map(f => [f.id, f] as const));
+
+/** id로 어종을 찾는다 — 이벤트 집계처럼 문자열 id만 받는 자리가 쓴다 */
+export const fishById = (id: unknown): Fish | undefined =>
+  typeof id === 'string' ? FISH_BY_ID.get(id) : undefined;
