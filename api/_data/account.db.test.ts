@@ -42,6 +42,8 @@ const CASES: Case[] = [
     spec: { save: null, createdAt: ago(2), lastSignInAt: null } },
   { key: 'email', name: '이메일 계정은 골드·명성이 0이고 오래돼도 대상이 아니다', target: false,
     spec: { email: 'player@example.test', save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(30) } },
+  { key: 'anonWithAccount', name: '익명 표시가 남아 있어도 auth.accounts 행이 연결된 빈 계정은 대상이 아니다', target: false,
+    spec: { anonymous: true, provider: 'google', save: { updatedAt: ago(10) }, createdAt: ago(30), lastSignInAt: ago(30) } },
   { key: 'restricted', name: '제재 계정은 대상이 아니다', target: false,
     spec: { save: { updatedAt: ago(10), restricted: true }, createdAt: ago(30), lastSignInAt: ago(30) } },
   { key: 'admin', name: '관리자는 대상이 아니다', target: false,
@@ -174,6 +176,14 @@ describe.each([
     expect(await rowCounts(client, writer)).toEqual(seeded(true, true));
   });
 
+  it('익명 표시가 남아 있어도 auth.accounts 행이 연결된 계정은 지우지 않는다', async () => {
+    const linkedAnon = await seedFullAccount(client, { ...IDLE, anonymous: true, provider: 'google', nickname: '익명연결' });
+    expect(await purgeAccount(database.withTransaction, linkedAnon, NOW_DATE)).toBe(false);
+    expect(await rowCounts(client, linkedAnon)).toEqual(seeded(true));
+    const { rows } = await client.query<{ n: number }>('select count(*)::int as n from auth.accounts where user_id = $1', [linkedAnon]);
+    expect(rows[0].n).toBe(1);
+  });
+
   it('없는 계정은 false다', async () => {
     expect(await purgeAccount(database.withTransaction, testUid(999_000), NOW_DATE)).toBe(false);
   });
@@ -295,6 +305,8 @@ const STALE_CASES: Case[] = [
     spec: { save: null, legacySave: true, legacySaveAt: OLD, createdAt: OLD, lastSignInAt: OLD } },
   { key: 'linked', name: '연결된 계정(익명이 아닌 계정)은 오래돼도 대상이 아니다', target: false,
     spec: { email: 'linked@example.test', save: { gold: 10, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD } },
+  { key: 'anonWithAccount', name: '익명 표시가 남아 있어도 auth.accounts 행이 연결된 계정은 오래돼도 대상이 아니다', target: false,
+    spec: { anonymous: true, email: 'anon-linked@example.test', provider: 'google', save: { gold: 10, updatedAt: OLD }, createdAt: OLD, lastSignInAt: OLD } },
   { key: 'restricted', name: '제재된 게스트는 대상이 아니다', target: false,
     spec: { save: { gold: 10, updatedAt: OLD, restricted: true }, createdAt: OLD, lastSignInAt: OLD } },
   { key: 'admin', name: '관리자는 대상이 아니다', target: false,
@@ -417,6 +429,14 @@ describe('1년 동안 접속하지 않은 게스트 삭제', () => {
     expect(await purgeAccount(database.withTransaction, writer, NOW_DATE)).toBe(false);
     expect(await rowCounts(client, restricted)).toEqual(seeded(true));
     expect(await rowCounts(client, writer)).toEqual(seeded(true, true));
+  });
+
+  it('익명 표시가 남아 있어도 auth.accounts 행이 연결된 계정은 오래돼도 지우지 않는다', async () => {
+    const linkedAnon = await seedFullAccount(client, { ...STALE_GUEST, anonymous: true, email: 'stale-anon-linked@example.test', provider: 'google', nickname: '오래된연결' });
+    expect(await purgeAccount(database.withTransaction, linkedAnon, NOW_DATE)).toBe(false);
+    expect(await rowCounts(client, linkedAnon)).toEqual(seeded(true));
+    const { rows } = await client.query<{ n: number }>('select count(*)::int as n from auth.accounts where user_id = $1', [linkedAnon]);
+    expect(rows[0].n).toBe(1);
   });
 });
 
