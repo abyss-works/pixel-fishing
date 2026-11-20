@@ -49,7 +49,8 @@ export interface PurgeTargets {
 
 /**
  * 정리 대상 조건이다. 선정과 삭제 직전 재확인이 같은 정의를 쓴다. 기준 시각은 now에서 이 모듈이 정한다.
- * 대상은 익명(게스트) 계정이다. 구글이나 이메일로 연결된 계정은 익명 표시가 풀려 대상이 아니다.
+ * 대상은 로그인 수단이 없는 익명(게스트) 계정이다. 익명 표시(is_anonymous)가 남아 있더라도
+ * 구글이나 이메일 로그인 수단(auth.accounts 행)이 연결된 계정은 대상이 아니다.
  * 마지막 접속(seen.at)은 저장 갱신(구 saves 행의 저장 시각 포함)·세션 사용·가입 가운데 가장 늦은 시각이다.
  * 세션 사용 시각은 그 계정 세션의 갱신 시각 가운데 가장 늦은 값이다.
  * greatest는 null을 건너뛰고 가입 시각은 비지 않으므로 마지막 접속은 항상 정해진다.
@@ -57,7 +58,7 @@ export interface PurgeTargets {
  *  - by_idle, 진행이 없는 게스트: 저장 상태가 비었거나(골드·명성 0) 저장이 없고, 마지막 접속이 idle보다 이르다.
  *    저장 상태가 없어도 구 saves 행이 있으면 정규화 이전 진행이 남아 있을 수 있어 이 규칙에서는 뺀다.
  *  - by_stale, 오래 접속하지 않은 게스트: 진행과 관계없이 마지막 접속이 stale보다 이르다.
- * 두 규칙 모두 제재·관리자 계정과 개발자에게 편지를 보낸 계정은 뺀다.
+ * 두 규칙 모두 제재·관리자 계정, 개발자에게 편지를 보낸 계정, 로그인 수단(auth.accounts 행)이 연결된 계정은 뺀다.
  * 편지는 인증 계정에 연쇄 삭제로 묶여 있어 보존하려고 계정을 지우지 않는다.
  */
 const targetFrom = (cutoffs: PurgeCutoffs): SQL => sql`from auth.users u
@@ -69,6 +70,7 @@ const targetFrom = (cutoffs: PurgeCutoffs): SQL => sql`from auth.users u
       and ((c.user_id is not null and c.gold = 0 and c.fame = 0)
         or (c.user_id is null and not exists (select 1 from public.saves s where s.user_id = u.id)))) as by_idle) rule
   where u.is_anonymous
+    and not exists (select 1 from auth.accounts acc where acc.user_id = u.id)
     and (rule.by_stale or rule.by_idle)
     and not coalesce(c.restricted, false)
     and not exists (select 1 from public.admins a where a.user_id = u.id)
