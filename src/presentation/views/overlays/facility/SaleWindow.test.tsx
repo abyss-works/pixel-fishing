@@ -332,8 +332,8 @@ describe('기운 얻기 탭의 잠금', () => {
   it('진행 조건 잠금 툴팁은 구역 항로와 배 단계 두 줄이다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }));
     const tip = lines(tab('기운 얻기'));
-    expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
-    expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
+ expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+ expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
   });
 
   it('게스트에게는 게스트 잠금이다', () => {
@@ -390,8 +390,8 @@ describe('해역별 기운 대상 팝오버', () => {
     open();
     fireEvent.click(gear());
     const chips = within(pop()).getAllByRole('button').filter(b => b.hasAttribute('aria-pressed'));
-    expect(chips.map(c => c.getAttribute('aria-label'))[0]).toBe('인도양 기운 대상');
-    expect(within(pop()).getByRole('button', { name: '인도양 기운 대상' })).toHaveTextContent('꺼짐');
+    expect(chips.map(c => c.getAttribute('aria-label'))[0]).toBe('인도양 연안 기운 대상');
+    expect(within(pop()).getByRole('button', { name: '인도양 연안 기운 대상' })).toHaveTextContent('꺼짐');
     expect(within(pop()).getByRole('button', { name: '마을 연못 기운 대상' })).toHaveTextContent('켜짐');
   });
 
@@ -423,7 +423,7 @@ describe('해역별 기운 대상 팝오버', () => {
     expect(dot).not.toBeNull();
     fireEvent.mouseEnter(dot.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('기본값은 켜짐이에요.');
-    expect(within(pop()).getByText('인도양').closest('div')!.querySelector('.bg-gold')).toBeNull();
+    expect(within(pop()).getByText('인도양 연안').closest('div')!.querySelector('.bg-gold')).toBeNull();
   });
 
   it('덮어쓴 해역이 있으면 톱니바퀴에 금색 점이 있고 툴팁이 한 줄 더한다', () => {

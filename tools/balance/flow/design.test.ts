@@ -290,7 +290,7 @@ describe('design 계산', () => {
         '--special-region', 'seasia', '--h-scale', '1.25'];
       const out = runCli(a);
       expect(out.exitCode).toBe(0);
-      const sea = out.stdout.slice(out.stdout.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 태평양 |'))!;
+      const sea = out.stdout.slice(out.stdout.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 태평양 연안 |'))!;
       expect(sea).toContain('2.188배');
       expect(out.stdout).toContain('h 배수(앞 해역 대비)');
       expect(out.stdout).not.toContain('## 비용 기준 역산 — 기준점 오차');

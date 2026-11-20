@@ -227,7 +227,7 @@ describe('gates 명령', () => {
     const all = runCli(['gates']).stdout;
     const text = all.slice(all.indexOf('## 전환 시간의 목표 판정'));
     const row = (to: string) => text.split(String.fromCharCode(10)).find(l => l.startsWith('| ') && l.includes(`→ ${to} |`) && l.includes('시간'))!;
-    expect(row('인도양')).toMatch(/3~4시간.*예외/);
+    expect(row('인도양 연안')).toMatch(/3~4시간.*예외/);
     expect(row('남인도양')).toContain('범위 없음');
     const gap = (a: SpotId, b: SpotId) => powerReqOf(b) - powerReqOf(a);
     expect(row('남인도양')).toContain(`| ${gap('indian', 'southindian')} | ${gap('barrierreef', 'indian')} |`);
@@ -322,7 +322,7 @@ describe('분포와 이동 명령', () => {
     expect(t).not.toContain('이동 시간');
     const arrivals = simulate({ axis: 'idle', bounty: false, maxDays: 365 }).arrivals;
     const hoursTo = (spot: SpotId) => { const i = arrivals.findIndex(a => a.spot === spot); return arrivals[i].hours - arrivals[i - 1].hours; };
-    expect(t).toContain(`| 인도양 → 남인도양 | ${hoursTo('southindian').toFixed(2)}시간`);
+    expect(t).toContain(`| 인도양 연안 → 남인도양 | ${hoursTo('southindian').toFixed(2)}시간`);
     expect(t).toContain(`| 남대서양 용승대 → 세인트헬레나 | ${hoursTo('sthelena').toFixed(2)}시간`);
   });
 
