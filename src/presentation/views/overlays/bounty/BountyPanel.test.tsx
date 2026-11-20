@@ -150,7 +150,7 @@ describe('BountyPanel', () => {
 
   it('조건 미충족이면 본문을 가리고 조건 리스트를 덮는다', async () => {
     show(game({}));
-    expect(await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) \(남은 \d+종\)$/)).toBeInTheDocument();
     // 본문은 blur+pointer-events-none으로 가려진다
     const blurred = document.querySelector('.blur-sm.pointer-events-none');
     expect(blurred).not.toBeNull();
@@ -159,7 +159,7 @@ describe('BountyPanel', () => {
 
   it('체크 방향 — 미달 조건은 빈박스로 보인다', async () => {
     show(game({})); // 도감 비어 있음
-    const dexLi = (await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) · 남은 \d+종$/)).closest('li')!;
+    const dexLi = (await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) \(남은 \d+종\)$/)).closest('li')!;
     expect(dexLi.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
     expect(dexLi.querySelector('[data-glyph="checkOn"]')).toBeNull();
   });

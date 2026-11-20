@@ -299,7 +299,7 @@ export function licenseConditions(
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
-  const left = missing > 0 ? ` · 남은 ${missing}종` : '';
+  const left = missing > 0 ? ` (남은 ${missing}종)` : '';
   return [
     { key: 'dex', label: (tier === 'named'
       ? `${area} 모든 어종 수집(밤 어종 포함)`
