@@ -83,4 +83,30 @@ describe('SettingsModal — 가방 설정(낚을 때 자동 잠금)', () => {
     fireEvent.click(screen.getByRole('button', { name: '낚을 때 자동 잠금' }));
     expect(setToast).toHaveBeenCalledWith(REJECT_TEXT['bad-request'], 'warn');
   });
+
+  it('dispatch Promise 거부 시 in-flight 가드를 해제해 토글을 다시 활성화하고 예외를 전파한다', async () => {
+    let reject!: (err: unknown) => void;
+    const dispatch = vi.fn(() => new Promise<DispatchResult>((_, rej) => { reject = rej; }));
+    open({ autoLockOnCatch: false, dispatch });
+
+    const toggle = screen.getByRole('button', { name: '낚을 때 자동 잠금' }) as HTMLButtonElement;
+    fireEvent.click(toggle);
+    expect(toggle.disabled).toBe(true);
+
+    const boom = new Error('rate-limited');
+    const caught = new Promise<unknown>(resolve => {
+      process.once('unhandledRejection', reason => { resolve(reason); });
+    });
+
+    await act(async () => {
+      reject(boom);
+      expect(await caught).toBe(boom);
+    });
+
+    expect(toggle.disabled).toBe(false);
+    // 가드 해제 후 다시 클릭하면 재요청이 나간다
+    dispatch.mockImplementationOnce(() => ({ status: 'ok' as const }) as never);
+    fireEvent.click(toggle);
+    expect(dispatch).toHaveBeenCalledTimes(2);
+  });
 });

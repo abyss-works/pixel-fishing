@@ -132,9 +132,9 @@ export async function catchLookup(
 }> {
   const validPrevUid = autoLock?.prevUid && UUID_RE.test(autoLock.prevUid) ? autoLock.prevUid : null;
   const maxLockedSql = autoLock
-    ? sql`(select max(coalesce(size, -1))::double precision from public.fish_instances
+    ? sql`(select max(coalesce(size, -1))::real from public.fish_instances
         where user_id = ${uid} and fish_id = ${fishId} and form = ${form} and slot is null and locked = true)`
-    : sql`null::double precision`;
+    : sql`null::real`;
   const prevAutoSql = validPrevUid
     ? sql`(select row_to_json(p) from (select uid, fish_id, form, size, locked from public.fish_instances
         where user_id = ${uid} and uid = ${validPrevUid}::uuid and fish_id = ${fishId} and form = ${form} and slot is null) p)`

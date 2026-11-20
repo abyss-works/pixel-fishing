@@ -8,6 +8,7 @@ import { WALK_BAG_CAP, autoLockKey, capOfBoat, newState } from '../src/game/rule
 import type { GameState } from '../src/game/rules/logic.js';
 import type { ActionResult, StatePatch } from '../src/game/rules/actions.js';
 import { database } from './_db/client.js';
+import { catchLookup } from './_data/load.js';
 import {
   callAction, captureRealClock, fish, seedUser, seededRandom,
   startActionEnv, testUid, userToken,
@@ -289,5 +290,84 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     const fullOff = await measure(false, true);
     const fullOn = await measure(true, true);
     expect(fullOn).toBe(fullOff);
+  });
+
+  it('fastCatch — 비이진 소수(10.45) 동률은 교체하지 않고 유지하며 catchLookup은 float4 최단 소수(number | null)를 돌려준다', async () => {
+    // minnow(price=3) 평균 크기 = 10 + 3 * 0.15 = 10.45 (float32 10.449999809265137 < 10.45).
+    // u1=1, u2=0 → z=0 → rollSize === 10.45 정확히 동률.
+    const lockedTie = fish('minnow', { form: 'normal', size: 10.45, locked: true });
+    const key = autoLockKey('minnow', 'normal');
+    const uid = await seed({
+      state: {
+        firstCatch: { n: 20, legendAt: 12, epic: false, legend: false },
+        autoLockOnCatch: true,
+        bag: [lockedTie],
+        autoLockedIds: { [key]: lockedTie.uid },
+      },
+    });
+
+    // catchLookup이 float4(real) 최단 소수 10.45를 number 타입으로 돌려주는지 직접 확인
+    const looked = await catchLookup(database().db, uid, 'minnow', 'normal', { prevUid: lockedTie.uid });
+    expect(typeof looked.maxLockedSize).toBe('number');
+    expect(looked.maxLockedSize).toBe(10.45);
+    expect(looked.prevAuto?.size).toBe(10.45);
+
+    // 없는 어종은 maxLockedSize === null
+    const emptyLookup = await catchLookup(database().db, uid, 'carp', 'normal', { prevUid: null });
+    expect(emptyLookup.maxLockedSize).toBeNull();
+
+    // rng 시퀀스: rarity(0→common), fish(0.5→minnow), rollSize u1=1 / u2=0 (→10.45), form(0.9→normal)
+    const seq = [0, 0.5, 1, 0, 0.9];
+    let idx = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => seq[idx++] ?? 0);
+
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect(res.status).toBe(200);
+    const body = res.body as ActionOkBody;
+    if (body.result.type !== 'catch') throw new Error('expected catch');
+    expect(body.result.fishId).toBe('minnow');
+    expect(body.result.info.form).toBe('normal');
+    expect(body.result.info.size).toBe(10.45);
+
+    // 동률이므로 새 개체는 잠기지 않고, 기존 잠금과 autoLockedIds가 그대로 유지된다
+    expect(body.patch.writes.instancesAdded[0].inst.locked).toBe(false);
+    expect(body.patch.writes.instancesLocked).toEqual([]);
+    expect(body.patch.scalars.autoLockedIds[key]).toBe(lockedTie.uid);
+    const rows = await readInstances(uid);
+    expect(rows.find(r => r.uid === lockedTie.uid)?.locked).toBe(true);
+    expect(rows.find(r => r.uid !== lockedTie.uid)?.locked).toBe(false);
+  });
+
+  it('fastCatch — 크기 미상(size: null) 잠김 개체가 있을 때 정상 크기가 잡히면 교체된다', async () => {
+    vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
+    const target = await probePondCatch();
+    const key = autoLockKey(target.fishId, target.form);
+
+    const unsized = fish(target.fishId, { form: target.form, size: null, locked: true });
+    const uid = await seed({
+      state: {
+        autoLockOnCatch: true,
+        bag: [unsized],
+        autoLockedIds: { [key]: unsized.uid },
+      },
+    });
+
+    const looked = await catchLookup(database().db, uid, target.fishId, target.form, { prevUid: unsized.uid });
+    expect(typeof looked.maxLockedSize).toBe('number');
+    expect(looked.maxLockedSize).toBe(-1);
+
+    vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect(res.status).toBe(200);
+    const body = res.body as ActionOkBody;
+    if (body.result.type !== 'catch') throw new Error('expected catch');
+    const newUid = body.result.uid;
+
+    expect(body.patch.writes.instancesAdded[0].inst.locked).toBe(true);
+    expect(body.patch.writes.instancesLocked).toEqual([{ uid: unsized.uid, locked: false }]);
+    expect(body.patch.scalars.autoLockedIds[key]).toBe(newUid);
+    const rows = await readInstances(uid);
+    expect(rows.find(r => r.uid === unsized.uid)?.locked).toBe(false);
+    expect(rows.find(r => r.uid === newUid)?.locked).toBe(true);
   });
 });
