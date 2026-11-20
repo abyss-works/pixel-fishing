@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { SPOTS } from '../../../src/game/content/spots';
 import { spotsOfZone, zoneOf } from '../model';
-import { rewardDist } from './dist';
+import { rewardDist, spotRewardDist } from './dist';
 
 const opts = { trials: 20, seed: 5, axis: 'idle', maxDays: 365, hours: 4, basicShare: 0.5 } as const;
 
@@ -68,5 +68,45 @@ describe('업적 지급 시점 분포', () => {
     const r = few.find(x => x.zone === 'pacific' && x.tier === 'basic')!;
     expect(r.achieved).toBeNull();
     expect(r.arrivalWithReward).toEqual(r.arrival);
+  });
+});
+
+describe('해역 단위(spot) 26종 업적 분포', () => {
+  const d = spotRewardDist(opts);
+
+  it('전체 13개 해역 × 기초·숙련 = 26종 행을 순서대로 낸다', () => {
+    expect(d).toHaveLength(SPOTS.length * 2);
+    expect(d.map(r => `${r.spot}:${r.tier}`)).toEqual(SPOTS.flatMap(s => [`${s.id}:basic`, `${s.id}:named`]));
+    for (const r of d) {
+      expect(r.tierName).toBe(r.tier === 'basic' ? '기초' : '숙련');
+      expect(r.reward.gold).toBeGreaterThan(0);
+    }
+  });
+
+  it('달성률은 0~1이고 달성 분포는 p10 <= 중앙값 <= p90 순이다', () => {
+    for (const r of d) {
+      expect(r.achievedRate).toBeGreaterThanOrEqual(0);
+      expect(r.achievedRate).toBeLessThanOrEqual(1);
+      if (r.achieved) {
+        expect(r.achievedRate).toBeCloseTo(r.achieved.n / opts.trials, 12);
+        expect(r.achieved.n + r.achieved.missing).toBe(opts.trials);
+        expect(r.achieved.p10).toBeLessThanOrEqual(r.achieved.p50);
+        expect(r.achieved.p50).toBeLessThanOrEqual(r.achieved.p90);
+      } else {
+        expect(r.achievedRate).toBe(0);
+      }
+    }
+  });
+
+  it('보상 지급 진행과 보상 없음 진행을 짝지어 도착 단축을 낸다', () => {
+    const mid = d.find(r => r.spot === 'indian' && r.tier === 'basic')!;
+    expect(mid.to).toBe('southindian');
+    expect(mid.shortened).not.toBeNull();
+    expect(d.find(r => r.spot === 'sthelena')!.to).toBeNull();
+  });
+
+  it('같은 시드와 인자는 같은 결과를 내고 시드가 다르면 달라진다', () => {
+    expect(spotRewardDist(opts)).toEqual(d);
+    expect(spotRewardDist({ ...opts, seed: 6 })).not.toEqual(d);
   });
 });

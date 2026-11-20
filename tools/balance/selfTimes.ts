@@ -18,17 +18,31 @@ import { ZONE_ORDER, axisAvailable, entryLevel, rates, rng, rodSpec, spotsOfZone
 import type { Axis } from './model';
 import { axisOf, simulate } from './flow/progress';
 import type { FlowAxis } from './flow/progress';
+import { percentile } from './flow/sample';
 
 export type Play = 'idle' | 'manual';
 export const PLAYS: readonly Play[] = ['idle', 'manual'];
 
 export interface TimeStat { mean: number; p90: number }
+export interface TimeDistStat extends TimeStat { p10: number; p50: number }
 
 /** 평균과 p90 — 수집 절의 통계와 같은 정의다(정렬한 뒤 90% 자리의 값) */
 export function stat(xs: readonly number[]): TimeStat {
   if (xs.length === 0) throw new Error('값이 하나 이상 필요합니다');
   const s = [...xs].sort((a, b) => a - b);
   return { mean: s.reduce((a, b) => a + b, 0) / s.length, p90: s[Math.floor(s.length * 0.9)] };
+}
+
+/** 평균, p10, 중앙값(p50), p90 통계 — 월척 종수별 분포 등 하위·중앙·상위 꼬리를 함께 낸다 */
+export function statDist(xs: readonly number[]): TimeDistStat {
+  if (xs.length === 0) throw new Error('값이 하나 이상 필요합니다');
+  const s = [...xs].sort((a, b) => a - b);
+  return {
+    mean: s.reduce((a, b) => a + b, 0) / s.length,
+    p10: percentile(s, 0.1),
+    p50: percentile(s, 0.5),
+    p90: s[Math.floor(s.length * 0.9)],
+  };
 }
 
 const CAP_CATCHES = 3_000_000;
@@ -157,22 +171,22 @@ export function bigTotal(zones: readonly Pick<ZoneRun, 'species' | 'bigCurve'>[]
 export interface BigRow {
   n: number;
   /** 구역 구분 없이 월척 어종 n종을 모으는 시간(구역 순서대로 하나씩 채움). 전체 어종 수를 넘는 단계는 null */
-  total: TimeStat | null;
+  total: TimeDistStat | null;
   /** 참고: 구역마다 그 구역 안에서만 월척 어종 n종을 모으는 시간. 구역 어종 수를 넘는 단계는 null */
-  zones: { zone: string; time: TimeStat | null }[];
+  zones: { zone: string; time: TimeDistStat | null }[];
 }
 
 export interface SelfTimes {
   play: Play;
   /** 모든 구역의 그 등급 일반 폼을 모두 모으는 시간(구역을 차례로 채운 합) */
-  grades: Record<RarityId, TimeStat>;
+  grades: Record<RarityId, TimeDistStat>;
   /** 밤 어종의 일반 폼, 돌연변이 폼을 모두 모으는 시간(구역 합) */
-  night: { normal: TimeStat; variant: TimeStat };
+  night: { normal: TimeDistStat; variant: TimeDistStat };
   /** 네임드를 모두 한 번씩 토벌하는 시간. 네임드 토벌마다 유물 교환 재료가 하나 나오므로 유물을 모두 처음 갖는 시간과 같다(교환 자체는 재료 하나다) */
-  named: TimeStat;
+  named: TimeDistStat;
   big: BigRow[];
   /** 모든 구역의 모든 어종에서 월척을 낚는 시간(구역 합) */
-  bigAll: TimeStat;
+  bigAll: TimeDistStat;
   catches: CatchTime[];
 }
 
@@ -191,21 +205,21 @@ export function selfTimes(o: SelfTimesInput): SelfTimes[] {
   return PLAYS.map(play => {
     const rand = rng(o.seed);
     const byZone = new Map(ZONE_ORDER.map(zone => [zone, Array.from({ length: o.runs }, () => zoneRun({ zone, play, rand, big: o.big }))]));
-    const total = (pick: (r: ZoneRun) => number | null): TimeStat =>
-      stat(Array.from({ length: o.runs }, (_, k) => sum(ZONE_ORDER.map(z => pick(byZone.get(z)![k])))));
+    const total = (pick: (r: ZoneRun) => number | null): TimeDistStat =>
+      statDist(Array.from({ length: o.runs }, (_, k) => sum(ZONE_ORDER.map(z => pick(byZone.get(z)![k])))));
     const named = Array.from({ length: o.runs }, () => namedTimes(play, rand).hours);
     return {
       play,
-      grades: Object.fromEntries(RARITY_ORDER.map(g => [g, total(r => r.grade[g])])) as Record<RarityId, TimeStat>,
+      grades: Object.fromEntries(RARITY_ORDER.map(g => [g, total(r => r.grade[g])])) as Record<RarityId, TimeDistStat>,
       night: { normal: total(r => r.night.normal), variant: total(r => r.night.variant) },
-      named: stat(named),
+      named: statDist(named),
       big: o.big.map((n, k) => ({
         n,
         total: bigTotal(ZONE_ORDER.map(z => byZone.get(z)![0]), n) === null ? null
-          : stat(Array.from({ length: o.runs }, (_, r) => bigTotal(ZONE_ORDER.map(z => byZone.get(z)![r]), n)!)),
+          : statDist(Array.from({ length: o.runs }, (_, r) => bigTotal(ZONE_ORDER.map(z => byZone.get(z)![r]), n)!)),
         zones: ZONE_ORDER.map(zone => {
           const xs = byZone.get(zone)!.map(r => r.big[k]);
-          return { zone, time: xs.some(x => x === null) ? null : stat(xs as number[]) };
+          return { zone, time: xs.some(x => x === null) ? null : statDist(xs as number[]) };
         }),
       })),
       bigAll: total(r => r.bigAll),

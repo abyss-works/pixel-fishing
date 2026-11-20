@@ -121,3 +121,55 @@ describe('보상 출력', () => {
     expect(runFlow(parseArgs(['dist', '--trials', '3'])).dist!.reward).toBeUndefined();
   });
 });
+
+describe('해역 단위 진행 업적 보상 (--reward-unit spot)', () => {
+  it('인자 파싱: 기본값은 zone이고 spot을 허용하며 허용 외 명령과 잘못된 값은 거부한다', () => {
+    expect(parseArgs(['achievements']).rewardUnit).toBe('zone');
+    expect(parseArgs(['achievements', '--reward-unit', 'spot']).rewardUnit).toBe('spot');
+    expect(parseArgs(['dist', '--reward-unit', 'spot']).rewardUnit).toBe('spot');
+    expect(parseArgs(['dist', '--reward-unit', 'spot']).rewards).toEqual([4]);
+    expect(parseArgs(['dist', '--reward-unit', 'spot']).rewardSplit).toBe(0.5);
+    expect(() => parseArgs(['achievements', '--reward-unit', 'other'])).toThrow(/zone 또는 spot/);
+    expect(() => parseArgs(['ev', '--reward-unit', 'spot'])).toThrow(/명령에서만/);
+  });
+
+  it('achievements --reward-unit spot은 13개 해역별 entryEV, 합산 골드, 기초/숙련 골드 표와 JSON을 낸다', () => {
+    const text = runCli(['achievements', '--reward-unit', 'spot']).stdout;
+    expect(text).toContain('entryEV');
+    expect(text).toContain('기초 도감');
+    expect(text).toContain('숙련 도감');
+    expect(text).toContain('마을 연못');
+    expect(text).toContain('세인트헬레나');
+
+    const r = runFlow(parseArgs(['achievements', '--reward-unit', 'spot', '--reward', '4h', '--reward-split', '0.5']));
+    expect(r.achievements!.unit).toBe('spot');
+    expect(r.achievements!.rows).toHaveLength(13);
+  });
+
+  it('transition, days, gates --reward-unit spot이 보상을 지급하고 보상 없음 비교를 낸다', () => {
+    const t = runFlow(parseArgs(['transition', '--reward-unit', 'spot']));
+    expect(t.options.reward).toEqual({ unit: 'spot', hours: 4, split: 0.5 });
+    expect(t.transition!.base).toBeDefined();
+    expect(t.transition!.achieved!.length).toBeGreaterThan(0);
+    expect(renderText(t)).toContain('보상 없음 전환 시간');
+    expect(renderText(t)).toContain('기초');
+
+    const d = runFlow(parseArgs(['days', '--reward-unit', 'spot', '--reward', '4h']));
+    expect(d.days!.base).toBeDefined();
+    expect(renderText(d)).toContain('진행 업적 지급 시점');
+
+    const g = runCli(['gates', '--reward-unit', 'spot']);
+    expect(g.exitCode).toBe(0);
+    expect(g.stdout).toContain('보상 없음 전환 시간');
+  });
+
+  it('dist --reward-unit spot은 26종 업적별 달성률과 달성 시각 분포(p10, 중앙값, p90, 평균)를 출력/JSON에 담는다', () => {
+    const r = runFlow(parseArgs(['dist', '--reward-unit', 'spot', '--trials', '8', '--seed', '3']));
+    expect(r.dist!.reward!.unit).toBe('spot');
+    expect(r.dist!.reward!.rows).toHaveLength(26);
+    const text = renderText(r);
+    expect(text).toContain('달성률');
+    expect(text).toContain('기초');
+    expect(text).toContain('숙련');
+  });
+});

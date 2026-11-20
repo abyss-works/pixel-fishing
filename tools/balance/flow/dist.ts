@@ -3,16 +3,19 @@
 // 느린 쪽(운이 나쁜 쪽)은 p90이다. 시간이 길수록 나쁘다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
+import { FISH } from '../../../src/game/content/fish';
 import { FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { spotsOfZone, zoneOf, rng } from '../model';
-import { rewardPlan } from './achievement';
+import { virtualZoneOf } from '../virtualSpots';
+import { rewardPlan, spotRewardPlan } from './achievement';
 import type { Reward } from './achievement';
 import { simulateOpening, OPENING_TARGET_SEC } from './opening';
 import type { Judgment } from './opening';
-import { simulate } from './progress';
+import { DAY_HOURS, simulate } from './progress';
 import type { Arrival, FlowAxis } from './progress';
+import type { CounterBonusConfig } from './counterBonus';
 import { createSampler, summarize } from './sample';
 import type { Dist } from './sample';
 import { transitionTimings } from './transitions';
@@ -63,6 +66,7 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
 
 export interface TransitionDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number;
+  counterBonus?: CounterBonusConfig;
 }
 
 export interface TransitionDist {
@@ -78,7 +82,7 @@ export interface TransitionDist {
 
 export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   checkTrials(o.trials);
-  const base = { axis: o.axis, bounty: false, maxDays: o.maxDays };
+  const base = { axis: o.axis, bounty: false, maxDays: o.maxDays, ...(o.counterBonus ? { counterBonus: o.counterBonus } : {}) };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
   const hours: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
@@ -162,4 +166,159 @@ export function rewardDist(o: RewardDistOptions): RewardDistRow[] {
       shortened: b.to === null ? null : summarize(gap, o.trials - gap.length),
     };
   });
+}
+
+export interface SpotRewardDistRow {
+  spot: SpotId;
+  zone: string;
+  tier: BountyTier;
+  tierName: '기초' | '숙련';
+  reward: Reward;
+  /** 달성률 (0~1) */
+  achievedRate: number;
+  /** 실제 보상 지급 진행에서 이 업적을 채운 누적 실질 낚시 시간(시간)의 분포. 못 채운 시도는 missing이다 */
+  achieved: Dist | null;
+  /** 이 해역 다음 해역과, 그 해역에 닿은 누적 시간의 분포(보상 없음, 보상 지급 포함). 마지막 해역이면 null */
+  to: SpotId | null;
+  arrival: Dist | null;
+  arrivalWithReward: Dist | null;
+  /** 같은 시도끼리 짝지은 도착 단축(보상 없는 도착 - 보상을 넣은 도착, 시간) */
+  shortened: Dist | null;
+}
+
+/** 해역 단위 26종 진행 업적(13개 해역 × 기초·숙련)의 달성률과 달성 시각 분포를 재고, 실제 완성 시점에 즉시 골드를 지급한 도착 단축을 짝지어 비교한다 */
+export function spotRewardDist(o: RewardDistOptions): SpotRewardDistRow[] {
+  checkTrials(o.trials);
+  const plan = spotRewardPlan(o.hours, o.basicShare);
+  const realSpots = SPOTS.filter(s => virtualZoneOf(s.id) === undefined);
+  const nextBySpot = new Map<SpotId, SpotId | null>(realSpots.map(s => {
+    const i = SPOTS.findIndex(x => x.id === s.id);
+    return [s.id, SPOTS[i + 1]?.id ?? null] as const;
+  }));
+  const sim = { axis: o.axis, bounty: false, maxDays: o.maxDays };
+  const keys = realSpots.flatMap(s => (['basic', 'named'] as const).map(tier => ({ spot: s.id, tier })));
+  const achieved = new Map<string, number[]>(keys.map(k => [`${k.spot}:${k.tier}`, []]));
+  const arrival = new Map<SpotId, number[]>(realSpots.map(s => [s.id, []]));
+  const withReward = new Map<SpotId, number[]>(realSpots.map(s => [s.id, []]));
+  const shortened = new Map<SpotId, number[]>(realSpots.map(s => [s.id, []]));
+  const arrivalAt = (arrivals: Arrival[], to: SpotId | null) => (to === null ? undefined : arrivals.find(a => a.spot === to)?.hours);
+  for (let i = 0; i < o.trials; i++) {
+    const plain = simulate({
+      ...sim, sampler: createSampler(trialRng(o.seed, i)),
+      achievements: { unit: 'spot', reward: () => null, spotReward: () => null },
+    });
+    const paid = simulate({
+      ...sim, sampler: createSampler(trialRng(o.seed, i)),
+      achievements: plan,
+    });
+    for (const a of paid.achieved) {
+      if (a.targetSpot) achieved.get(`${a.targetSpot}:${a.tier}`)!.push(a.hours);
+    }
+    for (const s of realSpots) {
+      const to = nextBySpot.get(s.id) ?? null;
+      const h0 = arrivalAt(plain.arrivals, to), h1 = arrivalAt(paid.arrivals, to);
+      if (h0 !== undefined) arrival.get(s.id)!.push(h0);
+      if (h1 !== undefined) withReward.get(s.id)!.push(h1);
+      if (h0 !== undefined && h1 !== undefined) shortened.get(s.id)!.push(h0 - h1);
+    }
+  }
+  return keys.map(({ spot, tier }) => {
+    const to = nextBySpot.get(spot) ?? null;
+    const a = achieved.get(`${spot}:${tier}`)!;
+    const arr = arrival.get(spot)!, pay = withReward.get(spot)!, gap = shortened.get(spot)!;
+    return {
+      spot,
+      zone: zoneOf(spot),
+      tier,
+      tierName: tier === 'basic' ? '기초' : '숙련',
+      reward: plan.spotReward!(spot, tier)!,
+      achievedRate: a.length / o.trials,
+      achieved: summarize(a, o.trials - a.length),
+      to,
+      arrival: to === null ? null : summarize(arr, o.trials - arr.length),
+      arrivalWithReward: to === null ? null : summarize(pay, o.trials - pay.length),
+      shortened: to === null ? null : summarize(gap, o.trials - gap.length),
+    };
+  });
+}
+
+export interface BigMarksDistOptions {
+  trials: number;
+  seed: number;
+  axis: FlowAxis;
+  bounty: boolean;
+  maxDays: number;
+  marks: readonly number[];
+  counterBonus?: CounterBonusConfig;
+}
+
+export interface BigMarksDistRow {
+  /** 목표 월척 어종 수 */
+  target: number;
+  /** 전체 어종 수 이하라 도달 가능한 목표인가 */
+  reachable: boolean;
+  /** 최대 일수 안에 도달한 시도 비율 (0~1) */
+  achievedRate: number;
+  /** 목표 달성 시각(누적 실질 낚시 시간, 시간)의 분포 */
+  hours: Dist | null;
+  /** 목표 달성 시각(÷ DAY_HOURS 환산 일수)의 분포 */
+  days: Dist | null;
+}
+
+export interface BigMarksDist {
+  trials: number;
+  seed: number;
+  axis: FlowAxis;
+  bounty: boolean;
+  maxDays: number;
+  totalSpecies: number;
+  rows: BigMarksDistRow[];
+}
+
+const scaleDist = (d: Dist, factor: number): Dist => ({
+  n: d.n,
+  missing: d.missing,
+  mean: d.mean === null ? null : d.mean * factor,
+  p10: d.p10 * factor,
+  p50: d.p50 * factor,
+  p90: d.p90 * factor,
+});
+
+/** 정상 진행 경로에서 월척 어종 수가 각 목표에 처음 닿는 시각의 분포를 몬테카를로로 잰다.
+ *  마지막 해역 도달 후에도 도달 가능한 최대 목표에 미달하면 미수집 월척 어종이 남은 해역을 순회해 목표를 채운다 */
+export function bigMarksDist(o: BigMarksDistOptions): BigMarksDist {
+  checkTrials(o.trials);
+  for (const m of o.marks) {
+    if (!Number.isInteger(m) || m < 1) throw new Error(`월척 목표는 1 이상의 정수여야 합니다: ${m}`);
+  }
+  const spotIds = new Set<SpotId>(SPOTS.map(s => s.id));
+  const totalSpecies = FISH.filter(f => spotIds.has(f.spot)).length;
+  const collected: number[][] = o.marks.map(() => []);
+  for (let i = 0; i < o.trials; i++) {
+    const r = simulate({
+      axis: o.axis,
+      bounty: o.bounty,
+      maxDays: o.maxDays,
+      sampler: createSampler(trialRng(o.seed, i)),
+      bigMarks: o.marks,
+      ...(o.counterBonus ? { counterBonus: o.counterBonus } : {}),
+    });
+    r.bigMarkHours.forEach((h, k) => {
+      if (h !== null) collected[k].push(h);
+    });
+  }
+  const rows: BigMarksDistRow[] = o.marks.map((target, k) => {
+    const reachable = target <= totalSpecies;
+    if (!reachable) return { target, reachable: false, achievedRate: 0, hours: null, days: null };
+    const vals = collected[k];
+    const hours = summarize(vals, o.trials - vals.length);
+    return {
+      target,
+      reachable: true,
+      achievedRate: vals.length / o.trials,
+      hours,
+      days: hours === null ? null : scaleDist(hours, 1 / DAY_HOURS),
+    };
+  });
+  return { trials: o.trials, seed: o.seed, axis: o.axis, bounty: o.bounty, maxDays: o.maxDays, totalSpecies, rows };
 }

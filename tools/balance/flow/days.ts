@@ -12,6 +12,7 @@ import { licenseKey, planBounties } from './bounty';
 import type { PlanInput } from './bounty';
 import { DAY_HOURS, axisOf, fishingDays, simulate } from './progress';
 import type { AchievementOptions, Achieved, FlowAxis, RatePlan } from './progress';
+import type { CounterBonusConfig, CounterUnlock } from './counterBonus';
 
 export interface DaysOptions {
   axis: FlowAxis; maxDays: number;
@@ -19,6 +20,8 @@ export interface DaysOptions {
   plan?: RatePlan;
   /** 주면 진행 업적 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 base로 함께 담는다 */
   reward?: AchievementOptions;
+  /** 주면 진행 중 카운터 누적 보너스를 동적으로 합산하고 보너스 없는 값을 base로 함께 담는다 */
+  counterBonus?: CounterBonusConfig;
 }
 
 export interface ArrivalDays {
@@ -30,6 +33,8 @@ export interface ArrivalDays {
   bountyGold: number;
   /** 업적 보상을 줬을 때 달성한 진행 업적과 지급 내역 */
   achieved?: Achieved[];
+  /** 카운터 보너스를 줬을 때 임계점을 넘어 해금된 단계 내역 */
+  counterUnlocks?: CounterUnlock[];
 }
 
 export interface LevelUp {
@@ -92,12 +97,15 @@ export function steadyDaily(i: SteadyInput): { dailyGold: number; bountyShare: n
 export function daysReport(o: DaysOptions): DaysReport {
   const last = SPOTS[SPOTS.length - 1].id;
   const levels = [entryLevel(last), entryLevel(last) + SPEC_MARGIN];
-  const build = (plan?: RatePlan, achievements?: AchievementOptions): { arrival: ArrivalDays[]; levelUp: LevelUp[] } => {
+  const build = (plan?: RatePlan, achievements?: AchievementOptions, counterBonus?: CounterBonusConfig): { arrival: ArrivalDays[]; levelUp: LevelUp[] } => {
     const arrival: ArrivalDays[] = [], levelUp: LevelUp[] = [];
     for (const bounty of [false, true]) {
-      const r = simulate({ axis: o.axis, bounty, maxDays: o.maxDays, growTo: bounty ? levels[1] : undefined, plan, achievements });
+      const growTo = bounty || counterBonus ? levels[1] : undefined;
+      const r = simulate({ axis: o.axis, bounty, maxDays: o.maxDays, growTo, plan, achievements, counterBonus });
       arrival.push({
-        bounty, complete: r.complete, bountyGold: r.bountyGold, ...(achievements ? { achieved: r.achieved } : {}),
+        bounty, complete: r.complete, bountyGold: r.bountyGold,
+        ...(achievements ? { achieved: r.achieved } : {}),
+        ...(counterBonus ? { counterUnlocks: r.counterUnlocks ?? [] } : {}),
         spots: SPOTS.map((s, i) => {
           const hours = r.arrivals[i]?.hours ?? null;
           return { spot: s.id, hours, days: hours === null ? null : fishingDays(hours) };
@@ -111,17 +119,18 @@ export function daysReport(o: DaysOptions): DaysReport {
           continue;
         }
         const held = new Set(mark?.licenses ?? []);
-        const s = steadyDaily({ level, axis: o.axis, licensed: bounty ? (zone, tier) => held.has(licenseKey(zone, tier)) : null, plan });
+        const steadyPlan = mark?.plan ?? plan;
+        const s = steadyDaily({ level, axis: o.axis, licensed: bounty ? (zone, tier) => held.has(licenseKey(zone, tier)) : null, plan: steadyPlan });
         const days = upgradeGold / s.dailyGold;
         levelUp.push({
-          bounty, level, upgradeGold, reachedHours: mark?.hours ?? null, licenses: mark?.licenses ?? [],
+          bounty, level, upgradeGold, reachedHours: bounty ? (mark?.hours ?? null) : null, licenses: bounty ? (mark?.licenses ?? []) : [],
           dailyGold: s.dailyGold, bountyShare: s.bountyShare, hours: days * DAY_HOURS, days,
         });
       }
     }
     return { arrival, levelUp };
   };
-  const report: DaysReport = build(o.plan, o.reward);
-  if (o.plan || o.reward) report.base = build();
+  const report: DaysReport = build(o.plan, o.reward, o.counterBonus);
+  if (o.plan || o.reward || o.counterBonus) report.base = build();
   return report;
 }
