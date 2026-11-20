@@ -155,7 +155,7 @@ export class HttpGameGateway implements GameGateway {
 
   /** 서버가 준 사유 문자열을 신뢰하지 않는다 — 아는 코드만 통과, 나머지는 일반 거부로 */
   private static reason(v: unknown): RejectReason {
-    return typeof v === 'string' && v in REJECT_TEXT ? v as RejectReason : 'bad-request';
+    return typeof v === 'string' && Object.hasOwn(REJECT_TEXT, v) ? v as RejectReason : 'bad-request';
   }
 
   private async post(action: GameAction): Promise<Response> {
