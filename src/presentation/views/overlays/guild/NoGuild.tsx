@@ -18,6 +18,9 @@ import type { GuildRun } from './guildProps';
 /** 코드로 들어오기 — 바로 들어갔는지 신청이 됐는지, 거부면 안내 문장 */
 export type GuildJoin = (code: string) => Promise<{ error: string | null; requested: boolean }>;
 
+/** 찾기와 만들기 버튼의 너비를 맞춘다 */
+const ACTION_WIDTH = 'w-16 shrink-0';
+
 // 길드가 없을 때 — 400 폭 한 열. 위는 길드 고유 코드(8자리)로 찾기와 찾은 길드의 요약, 가입 방식에 따른 확정 버튼(들어가기,
 // 가입 신청, 받지 않음)이고, 아래는 길드 만들기다. 넣어 둔 가입 신청이 있으면 맨 위에 그 길드와 남은 기간, 신청 취소를 둔다.
 // 새 길드를 찾아 신청하면 이전 신청은 그 신청으로 바뀌고, 길드를 만들면 신청은 사라진다.
@@ -77,7 +80,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0 uppercase pf-accent tracking-widest" value={input} maxLength={16}
                      onChange={e => setInput(e.target.value)} aria-label="길드 코드" placeholder="길드 코드" />
-          <Button type="submit" size="sm" disabled={busy}>찾기</Button>
+          <Button type="submit" size="sm" disabled={busy} className={ACTION_WIDTH}>찾기</Button>
         </div>
       </form>
       <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void onJoin(); }} />
@@ -92,7 +95,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0" value={name} maxLength={16}
                      onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
-          <Button type="submit" size="sm" variant="primary" disabled={busy}>만들기</Button>
+          <Button type="submit" size="sm" variant="primary" disabled={busy} className={ACTION_WIDTH}>만들기</Button>
         </div>
         {nameError && <Note tone="warn">{nameError}</Note>}
       </form>
