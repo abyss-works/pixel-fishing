@@ -44,6 +44,14 @@ function assemble(cur: Row, instances: Row[], records: Row[],
     achievementCounters: counters, clearedNamed });
 }
 
+/** 서버 버전 필드를 유한 숫자로 파싱한다. 누락·비정상 값은 null로 돌려 재동기화를 강제한다. */
+function parseVersion(raw: unknown): number | null {
+  const v = typeof raw === 'number' ? raw
+    : typeof raw === 'string' && raw.trim() !== '' ? Number(raw)
+    : NaN;
+  return Number.isFinite(v) ? v : null;
+}
+
 export class HttpGameGateway implements GameGateway {
   // 델타 캐시 — 서버는 초기 로드 이후 변경분(patch)만 보내므로, 직전 풀 상태를 들고
   // 있어야 복원할 수 있다. 생성자·load()에서 시드되고, dispatch 성공마다 갱신된다.
@@ -67,8 +75,7 @@ export class HttpGameGateway implements GameGateway {
     if (me.cur) {
       const s = assemble(me.cur, me.instances, me.records, me.counters, me.clearedNamed);
       this.lastState = s;
-      const v = Number((me.cur as { version?: unknown }).version);
-      this.lastVersion = Number.isFinite(v) ? v : null;
+      this.lastVersion = parseVersion((me.cur as { version?: unknown }).version);
       return s;
     }
 
@@ -120,14 +127,23 @@ export class HttpGameGateway implements GameGateway {
       }
     }
     if (res.ok && (body?.state || body?.patch)) {
-      // 풀 응답(import 등) — 그대로 채택. 캐시 없이 델타만 온 경우도 여기서 풀재동기한다
-      // (서버는 액션을 이미 적용했으므로 load()는 적용 후 상태다 + 서버 result를 함께 쓴다).
-      const s = body?.state ? migrate(body.state) : await this.load();
+      if (body.state) {
+        // 풀 응답(import 등) — 그대로 채택하되 버전이 없으면 lastVersion을 비워 다음 델타에서 재동기화한다.
+        const s = migrate(body.state);
+        this.lastState = s;
+        this.lastVersion = parseVersion(body.version);
+        return { status: 'ok', state: s, result: body.result as never };
+      }
+      // 델타 적용 불가(캐시 없음·baseVersion 불일치·적용 실패) — 재동기화 전에 기존 캐시를 비워
+      // load()가 실패해도 오래된 상태·버전이 남지 않게 한다.
+      this.lastState = null;
+      this.lastVersion = null;
+      const s = await this.load();
       if (s) {
         this.lastState = s;
-        const v = Number(body?.version);
-        if (Number.isFinite(v)) this.lastVersion = v;
-        return { status: 'ok', state: s, result: body?.result as never };
+        const v = parseVersion(body.version);
+        if (v !== null) this.lastVersion = v;
+        return { status: 'ok', state: s, result: body.result as never };
       }
     }
     // 409 = 낙관 락 충돌(다른 탭과 경합) — 풀재동기로 캐시를 최신화한 뒤 1회 재시도.
