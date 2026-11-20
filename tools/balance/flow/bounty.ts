@@ -24,9 +24,20 @@ export type DexLog = Map<string, number>;
 export const licenseFish = (zone: BountyZone, tier: BountyTier) =>
   FISH.filter(f => !isVirtualFish(f.id) && zoneOf(f.spot) === zone && LICENSE_GRADES[tier].includes(f.rarity));
 
+/** 해역 단위 진행 업적의 대상 어종 — 해역의 어종 중 그 단계의 등급에 드는 것 */
+export const spotLicenseFish = (spot: SpotId, tier: BountyTier) =>
+  FISH.filter(f => !isVirtualFish(f.id) && f.spot === spot && LICENSE_GRADES[tier].includes(f.rarity));
+
 /** 구역 도감 완성 확률 — 어종이 서로 독립이라고 보고 곱한다. 해당 등급 어종이 없으면 0 */
 export function dexCompletion(dex: DexLog, zone: BountyZone, tier: BountyTier): number {
   const fish = licenseFish(zone, tier);
+  if (fish.length === 0) return 0;
+  return fish.reduce((p, f) => p * (1 - Math.exp(dex.get(f.id) ?? 0)), 1);
+}
+
+/** 해역 단위 도감 완성 확률 — 어종이 서로 독립이라고 보고 곱한다. 해당 등급 어종이 없으면 0 */
+export function spotDexCompletion(dex: DexLog, spot: SpotId, tier: BountyTier): number {
+  const fish = spotLicenseFish(spot, tier);
   if (fish.length === 0) return 0;
   return fish.reduce((p, f) => p * (1 - Math.exp(dex.get(f.id) ?? 0)), 1);
 }
@@ -36,6 +47,9 @@ export const licenseKey = (zone: BountyZone, tier: BountyTier): string => `${zon
 
 export const licenseHeld = (dex: DexLog, zone: BountyZone, tier: BountyTier): boolean =>
   dexCompletion(dex, zone, tier) > LICENSE_PROB;
+
+export const spotLicenseHeld = (dex: DexLog, spot: SpotId, tier: BountyTier): boolean =>
+  spotDexCompletion(dex, spot, tier) > LICENSE_PROB;
 
 /** 매 캐치 확률 p로 조우하고 ceiling번째 캐치에서 확정될 때의 조우까지 기대 캐치 수 */
 export const expectedEncounterCatches = (p: number, ceiling: number): number => (1 - (1 - p) ** ceiling) / p;

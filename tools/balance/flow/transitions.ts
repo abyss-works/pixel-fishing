@@ -8,6 +8,7 @@ import { upgradeCost } from '../../../src/game/rules/balance';
 import { entryLevel } from '../model';
 import { fishingDays, simulate } from './progress';
 import type { AchievementOptions, Achieved, Arrival, FlowAxis, RatePlan } from './progress';
+import type { CounterBonusConfig, CounterUnlock } from './counterBonus';
 
 export interface TransitionRow {
   from: SpotId; to: SpotId;
@@ -75,10 +76,12 @@ export interface TransitionReport {
   rows: TransitionRow[];
   timings: TransitionTiming[];
   complete: boolean;
-  /** 효과 계획이나 업적 보상을 줬을 때 그것이 없는 같은 조건의 전환 시간 */
+  /** 효과 계획, 업적 보상, 또는 카운터 보너스를 줬을 때 그것이 없는 같은 조건의 전환 시간 */
   base?: TransitionTiming[];
   /** 업적 보상을 줬을 때 달성한 진행 업적과 지급 내역 */
   achieved?: Achieved[];
+  /** 카운터 보너스를 줬을 때 임계점을 넘어 해금된 단계 내역 */
+  counterUnlocks?: CounterUnlock[];
 }
 
 export interface TransitionOptions {
@@ -89,14 +92,17 @@ export interface TransitionOptions {
   plan?: RatePlan;
   /** 주면 진행 업적 보상을 지급하는 관측용 시뮬레이션을 더하고 보상 없는 값을 base로 함께 담는다 */
   reward?: AchievementOptions;
+  /** 주면 진행 중 카운터 누적에 따라 보너스를 동적으로 합산하고 보너스 없는 값을 base로 함께 담는다 */
+  counterBonus?: CounterBonusConfig;
 }
 
 export function transitionReport(o: TransitionOptions): TransitionReport {
-  const run = (plan?: RatePlan, achievements?: AchievementOptions) =>
-    simulate({ axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, plan, achievements });
-  const r = run(o.plan, o.reward);
+  const run = (plan?: RatePlan, achievements?: AchievementOptions, counterBonus?: CounterBonusConfig) =>
+    simulate({ axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, plan, achievements, counterBonus });
+  const r = run(o.plan, o.reward, o.counterBonus);
   const report: TransitionReport = { rows: transitionGold(), timings: transitionTimings(r.arrivals), complete: r.complete };
-  if (o.plan || o.reward) report.base = transitionTimings(run().arrivals);
+  if (o.plan || o.reward || o.counterBonus) report.base = transitionTimings(run().arrivals);
   if (o.reward) report.achieved = r.achieved;
+  if (o.counterBonus) report.counterUnlocks = r.counterUnlocks ?? [];
   return report;
 }

@@ -18,7 +18,7 @@ export interface Sampler {
   /** 이미 정해진 어종의 판매가와 명성(첫 경험 보장 등) — 돌연변이 여부만 정한다 */
   valueOf(fish: Fish): Catch;
   /** sec초 동안 낚은 수입. 끝나지 않은 캐치는 다음 구간으로 이어진다. onCatch를 주면 낚은 캐치마다 부른다 */
-  accrue(r: Rates, sec: number, onCatch?: (c: Catch) => void): { gold: number; fame: number; catches: number };
+  accrue(r: Rates, sec: number, onCatch?: (c: Catch, elapsedSec: number) => void): { gold: number; fame: number; catches: number };
 }
 
 export function createSampler(rng: () => number): Sampler {
@@ -26,9 +26,9 @@ export function createSampler(rng: () => number): Sampler {
   const cumulative = new WeakMap<Rates, number[]>();
   let next: number | null = null;
 
-  const valueOf = (fish: Fish): Catch => {
-    const variant = rng() < share;
-    return { fish, gold: fish.price * (variant ? VARIANT_PRICE_MULT : 1), fame: RARITY[fish.rarity].fame, variant };
+  const valueOf = (fish: Fish, customShare?: number, sellMult = 1): Catch => {
+    const variant = rng() < (customShare ?? share);
+    return { fish, gold: fish.price * (variant ? VARIANT_PRICE_MULT : 1) * sellMult, fame: RARITY[fish.rarity].fame, variant };
   };
   const cycleSec = (r: Rates): number => cycleSecAt(r.cycle, rng());
   const catchOf = (r: Rates): Catch => {
@@ -41,18 +41,20 @@ export function createSampler(rng: () => number): Sampler {
     const x = rng() * cum[cum.length - 1];
     let i = 0;
     while (i < cum.length - 1 && x >= cum[i]) i++;
-    return valueOf(r.rows[i].fish);
+    const extra = r as Rates & { variantShare?: number; sellMult?: number };
+    return valueOf(r.rows[i].fish, extra.variantShare, extra.sellMult ?? 1);
   };
   return {
     rng, cycleSec, catchOf, valueOf,
     accrue(r, sec, onCatch) {
-      let left = sec, gold = 0, fame = 0, catches = 0;
+      let left = sec, gold = 0, fame = 0, catches = 0, elapsed = 0;
       if (next === null) next = cycleSec(r);
       while (next <= left) {
         left -= next;
+        elapsed += next;
         const c = catchOf(r);
         gold += c.gold; fame += c.fame; catches += 1;
-        onCatch?.(c);
+        onCatch?.(c, elapsed);
         next = cycleSec(r);
       }
       next -= left;

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
+import { SPOTS } from '../../../src/game/content/spots';
+import { entryLevel, rates, zoneOf } from '../model';
 import {
   DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, rewardAmounts, rewardPlan, rewardRows, splitReward,
+  spotEvs, spotRewardPlan, spotRewardRows,
 } from './achievement';
 import { roundReward, zoneEvs } from './ev';
 
@@ -103,5 +106,36 @@ describe('진행에 넣는 보상 계획', () => {
     expect(plan.reward('seasia', 'basic')).toEqual(seasia.amounts[0].split!.basic);
     expect(plan.reward('seasia', 'named')).toEqual(seasia.amounts[0].split!.named);
     expect('fame' in plan.reward('seasia', 'basic')!).toBe(false);
+  });
+});
+
+describe('해역 단위(spot) 진행 업적 보상 산식', () => {
+  it('전체 13개 해역 각각에 대해 entryEV × 시간어치를 반올림한 뒤 기초·숙련에 나눈다', () => {
+    const evs = spotEvs();
+    expect(evs.map(e => e.spot)).toEqual(SPOTS.map(s => s.id));
+    for (const e of evs) {
+      expect(e.entryLevel).toBe(entryLevel(e.spot));
+      expect(e.ev).toBeCloseTo(rates(e.spot, entryLevel(e.spot), 'idle').goldPerHour, 9);
+      expect(e.zone).toBe(zoneOf(e.spot));
+    }
+    const rows = spotRewardRows({ hours: [4], split: 0.5 });
+    expect(rows).toHaveLength(13);
+    for (const r of rows) {
+      const a = r.amounts[0];
+      expect(a.rawGold).toBeCloseTo(r.ev * 4, 9);
+      expect(a.gold).toBe(roundReward(a.rawGold));
+      expect(a.split!.basic.gold + a.split!.named.gold).toBe(a.gold);
+      expect(Math.min(a.split!.basic.gold, a.split!.named.gold)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('spotRewardPlan은 unit이 spot이고 해역과 기초·숙련에 맞는 골드를 돌려준다', () => {
+    const plan = spotRewardPlan(4, 0.4);
+    expect(plan.unit).toBe('spot');
+    const rows = spotRewardRows({ hours: [4], split: 0.4 });
+    for (const r of rows) {
+      expect(plan.spotReward!(r.spot, 'basic')).toEqual(r.amounts[0].split!.basic);
+      expect(plan.spotReward!(r.spot, 'named')).toEqual(r.amounts[0].split!.named);
+    }
   });
 });

@@ -15,15 +15,20 @@
 //   어종 천장, 네임드 천장 외의 장치, 가방 한도, 유물은 넣지 않는다. 분해 재료의 등급별 단위는 설계 초안 값이고 바뀔 수 있어 옵션으로 받는다.
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
+import { ZONE_IDS } from '../../../src/game/content/zones';
+import type { ZoneId } from '../../../src/game/content/zones';
+import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../../src/game/content/artifacts';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { BOUNTIES } from '../../../src/game/content/bounties';
 import { MUTATION_WEIGHTS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
+import { extraCookChance, sumArtifactEffect, variantBoostOf } from '../../../src/game/rules/artifactLevel';
+import type { ArtifactHolder } from '../../../src/game/rules/artifactLevel';
 import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, namedWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import type { DrawOptions } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { powerOfLevel } from '../rodRules';
-import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng } from '../model';
+import { VARIANT_EV, entryLevel, meanCycleSec, rates, rng, zoneOf } from '../model';
 import type { Axis, Pool, Rates, Row } from '../model';
 import { expectedEncounterCatches } from './bounty';
 import { axisOf } from './progress';
@@ -35,9 +40,27 @@ export interface Effect {
   bite: number; rare: number; epic: number; legendary: number; variant: number; size: number; move: number; named: number;
   /** 밤 어종 출현 — 0 또는 1. 참이면 낮에도 밤 풀 전체(낮 어종 + 밤 어종)로 낚는다 */
   night: number;
+  /** 판매가 증가 비율(-1 초과, 예: 0.1 = +10%). 생략하면 0 */
+  sell?: number;
+  /** 대어/월척 확률 증가 비율(0 이상, 예: 0.1 = +10%). 생략하면 0 */
+  big?: number;
 }
 
 export const NO_EFFECT: Effect = { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 };
+
+/** 보유 유물 id → 레벨 맵 */
+export type ArtifactLevels = Record<string, number>;
+
+/** 유물 수치 효과 합산 요약 */
+export interface ArtifactBonusSummary {
+  bite: number;
+  variant: number;
+  sail: number;
+  duelSpeedupCut: number;
+  extraCookChance: number;
+}
+
+const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
 
 /** 효과 매개변수 검사 — 범위를 벗어나면 오류 */
 export function checkEffect(e: Effect): void {
@@ -51,6 +74,94 @@ export function checkEffect(e: Effect): void {
   if (!(e.move > -1)) bad('이동 속도 증가는 -100 초과(%)여야 합니다');
   if (!(e.named >= 0)) bad('네임드 조우 증가는 0 이상(%)이어야 합니다');
   if (e.night !== 0 && e.night !== 1) bad('밤 어종 출현은 0 또는 1이어야 합니다');
+  if (e.sell !== undefined && !(e.sell > -1)) bad('판매가 증가는 -100 초과(%)여야 합니다');
+  if (e.big !== undefined && !(e.big >= 0)) bad('대어 확률 증가는 0 이상(%)이어야 합니다');
+}
+
+/** 구역 id 또는 개별 해역 id를 대상 해역 목록으로 해석한다 */
+export function resolveZoneSpots(id: string): SpotId[] {
+  if ((ZONE_IDS as readonly string[]).includes(id)) {
+    const spots = SPOTS.filter(s => zoneOf(s.id) === (id as ZoneId)).map(s => s.id);
+    if (spots.length > 0) return spots;
+  }
+  const direct = SPOTS.find(s => s.id === id);
+  if (direct) return [direct.id];
+  throw new Error(`알 수 없는 구역 또는 해역입니다: ${id} (구역: ${ZONE_IDS.join(', ')}, 해역: ${SPOTS.map(s => s.id).join(', ')})`);
+}
+
+/** 유물 보유 사양 문자열(all, max, all:N, id[:N],...)을 유물별 레벨 맵으로 파싱한다 */
+export function parseArtifacts(raw: string): ArtifactLevels {
+  const trimmed = raw.trim();
+  if (trimmed === '') throw new Error('유물 목록이 비어 있습니다 (all, max, all:레벨 또는 유물id[:레벨] 쉼표 구분)');
+  if (trimmed === 'all') return Object.fromEntries(ARTIFACTS.map(a => [a.id, 1]));
+  if (trimmed === 'max') return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? ARTIFACT_MAX_LEVEL : 1]));
+  const allLv = /^all:(.+)$/.exec(trimmed);
+  if (allLv) {
+    if (!/^\d+$/.test(allLv[1])) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${allLv[1]}`);
+    const lv = Number(allLv[1]);
+    if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${lv}`);
+    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? lv : 1]));
+  }
+  const out: ArtifactLevels = {};
+  for (const token of trimmed.split(',')) {
+    const part = token.trim();
+    if (part === '') throw new Error(`유물 지정 형식이 올바르지 않습니다: ${raw}`);
+    const [id, lvRaw, ...rest] = part.split(':');
+    if (rest.length > 0 || !id) throw new Error(`유물 지정 형식이 올바르지 않습니다: ${part}`);
+    const art = artifactById(id);
+    if (!art) throw new Error(`알 수 없는 유물입니다: ${id} (${ARTIFACTS.map(a => a.id).join(', ')} 중 하나)`);
+    if (Object.hasOwn(out, id)) throw new Error(`같은 유물이 두 번 있습니다: ${id}`);
+    if (lvRaw === undefined) {
+      out[id] = 1;
+      continue;
+    }
+    if (!/^\d+$/.test(lvRaw)) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
+    const lv = Number(lvRaw);
+    if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
+    if (!artifactHasLevel(art) && lv > 1) throw new Error(`전설 유물은 레벨이 없습니다(Lv1 고정): ${id}`);
+    out[id] = lv;
+  }
+  return out;
+}
+
+/** 보유 유물 레벨 맵과 유물 효과 배율(0 이상, 예: 0.2 = +20%)에서 유물 수치 효과를 합산한다 */
+export function artifactSummaryOf(artifacts: ArtifactLevels, artifactBoost = 0): ArtifactBonusSummary {
+  if (!(artifactBoost >= 0) || !Number.isFinite(artifactBoost)) {
+    throw new Error('유물 효과 증가는 0 이상(%)이어야 합니다');
+  }
+  const ids = Object.keys(artifacts);
+  if (ids.length === 0) return { bite: 0, variant: 0, sail: 0, duelSpeedupCut: 0, extraCookChance: 0 };
+  const holder: ArtifactHolder = { artifacts: ids, artifactLevels: artifacts };
+  const scale = 1 + artifactBoost;
+  return {
+    bite: clean(sumArtifactEffect(holder, e => e.biteWaitCut) * scale),
+    variant: clean(variantBoostOf(holder) * scale),
+    sail: clean(sumArtifactEffect(holder, e => e.sail) * scale),
+    duelSpeedupCut: clean(sumArtifactEffect(holder, e => e.duelSpeedupCut) * scale),
+    extraCookChance: Math.min(1, clean(extraCookChance(holder) * scale)),
+  };
+}
+
+/** 특정 해역에 걸리는 최종 효과를 계산한다 — 구역 한정 효과와 보유 유물(배율 적용) 효과를 같은 대상끼리 합산(1±합 1회)한다 */
+export function effectForSpot(
+  spot: SpotId,
+  effect: Effect,
+  zone?: string,
+  artifacts?: ArtifactLevels,
+  artifactBoost = 0,
+): Effect {
+  const inZone = zone === undefined || resolveZoneSpots(zone).includes(spot);
+  const out: Effect = inZone ? { ...effect } : { ...NO_EFFECT };
+  if (artifacts && Object.keys(artifacts).length > 0) {
+    const art = artifactSummaryOf(artifacts, artifactBoost);
+    const spotData = SPOTS.find(s => s.id === spot);
+    const isOcean = (spotData?.boatTier ?? 0) >= 1;
+    out.bite = clean(out.bite + art.bite);
+    out.variant = clean(out.variant + art.variant);
+    if (isOcean && art.sail > 0) out.move = clean(out.move + art.sail);
+  }
+  checkEffect(out);
+  return out;
 }
 
 /** 분해 재료의 등급별 단위 — 설계 초안(일반 1, 희귀 5, 영웅 25, 전설 125) */
@@ -63,7 +174,7 @@ export function gradeBoostOf(e: Effect): Record<RarityId, number> {
 /** 도감 완성 시뮬레이션이 한 시도에서 낚는 최대 캐치 수 — 넘으면 끝내지 못한 시도로 센다 */
 export const DEX_CATCH_CAP = 2_000_000;
 
-export interface EffectRates extends Rates { variantShare: number }
+export interface EffectRates extends Rates { variantShare: number; sellMult: number }
 
 export const variantEv = (share: number): number => 1 + share * (VARIANT_PRICE_MULT - 1);
 
@@ -74,7 +185,7 @@ export function variantShareOf(spot: SpotId, boost: number): number {
   return variantShare(boost > 0 ? { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal } : weights);
 }
 
-/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 이상, 영웅 이상, 전설 가중은 등급별로 합산해 추첨 옵션에, 돌연변이 가중치 증가는 판매가 기댓값에 반영한다 */
+/** 효과를 넣은 수입 — 측정 모델의 수입을 바탕으로 입질 대기 단축은 캐치 주기에, 희귀 이상, 영웅 이상, 전설 가중은 등급별로 합산해 추첨 옵션에, 돌연변이 가중치와 판매가 증가는 판매가 기댓값에 반영한다 */
 export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, pool: Pool = 'mixed'): EffectRates {
   let extra: DrawOptions = {};
   const boost = gradeBoostOf(e);
@@ -89,9 +200,10 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, 
   const cph = 3600 / meanCycleSec(cycle);
   const share = variantShareOf(spot, e.variant);
   const scale = cph / base.catchesPerHour;
+  const sellMult = 1 + (e.sell ?? 0);
   return {
-    ...base, cycle, catchesPerHour: cph, variantShare: share,
-    goldPerHour: base.goldPerHour * scale * variantEv(share) / VARIANT_EV,
+    ...base, cycle, catchesPerHour: cph, variantShare: share, sellMult,
+    goldPerHour: base.goldPerHour * scale * (variantEv(share) / VARIANT_EV) * sellMult,
     famePerHour: base.famePerHour * scale,
   };
 }
@@ -102,6 +214,14 @@ const levelOf = (spot: SpotId, margin: number): number => entryLevel(spot) + mar
 /** 여유를 더한 레벨이 1 이상인 해역만 잰다 — 음수 여유에서 레벨이 없는 해역은 건너뛴다. 해역 순번은 전체 목록 기준이다 */
 export const spotsAt = (margin: number): { s: (typeof SPOTS)[number]; i: number }[] =>
   SPOTS.map((s, i) => ({ s, i })).filter(({ s }) => levelOf(s.id, margin) >= 1);
+
+/** 구역 한정 단면이 있으면 대상 해역만 거른다 */
+const spotsFor = (margin: number, zone?: string): { s: (typeof SPOTS)[number]; i: number }[] => {
+  const all = spotsAt(margin);
+  if (zone === undefined) return all;
+  const allowed = new Set<SpotId>(resolveZoneSpots(zone));
+  return all.filter(({ s }) => allowed.has(s.id));
+};
 
 // ── 1. 효과를 넣은 수입 ──
 
@@ -125,12 +245,20 @@ export interface IncomeRow {
   named: NamedRow | null;
   /** PERFECT 축일 때만 — 효과 없는 방치 시간당 골드 대비 PERFECT 시간당 골드(기본, 효과). 다른 축은 null */
   overIdle: { base: number; with: number } | null;
+  /** --artifacts와 --artifact-boost를 함께 줬을 때 유물 기본(배율 0) 대비 변화 */
+  vsArtifact?: { goldChange: number; fameChange: number; tripChange: number | null };
 }
 
 export interface IncomeOptions {
   axis: FlowAxis; effect: Effect; margin: number;
   /** 해역별 가방 용량과 왕복 시간 — 있으면 판매 왕복을 넣은 수입 변화를 함께 낸다 */
   trips?: ReadonlyMap<SpotId, TripTime>;
+  /** 특정 구역 또는 해역으로 효과를 한정하고 단면만 출력한다 */
+  zone?: string;
+  /** 보유 유물 레벨 맵 */
+  artifacts?: ArtifactLevels;
+  /** 유물 수치 효과 증가 비율 (0 이상) */
+  artifactBoost?: number;
 }
 
 /** 모든 네임드 의뢰를 수주했다고 보고 해역마다 조우 후보가 있는지 판정한다 */
@@ -138,19 +266,23 @@ const NAMED_QUEST_IDS = BOUNTIES.filter(q => q.difficulty === 'named').map(q => 
 
 const change = (base: number, now: number): number => (base === 0 ? 0 : now / base - 1);
 
+const tripKept = (fill: number, tripSec: number): number => fill / (fill + tripSec);
+
+const tripGoldOf = (r: EffectRates, move: number, trip: TripTime): number => {
+  const fill = trip.bagCap / r.catchesPerHour * 3600;
+  return r.goldPerHour * tripKept(fill, trip.tripSec / (1 + move));
+};
+
 export function incomeRows(o: IncomeOptions): IncomeRow[] {
   checkEffect(o.effect);
-  return spotsAt(o.margin).map(({ s }) => {
+  const boost = o.artifactBoost ?? 0;
+  const hasArtifactBoost = Boolean(o.artifacts && Object.keys(o.artifacts).length > 0 && boost > 0);
+  return spotsFor(o.margin, o.zone).map(({ s }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
-    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
+    const eff = effectForSpot(s.id, o.effect, o.zone, o.artifacts, boost);
+    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, eff);
     const trip = o.trips?.get(s.id);
-    let tripChange: number | null = null;
-    if (trip) {
-      const fillBase = trip.bagCap / base.catchesPerHour * 3600, fillWith = trip.bagCap / now.catchesPerHour * 3600;
-      const tripWith = trip.tripSec / (1 + o.effect.move);
-      const kept = (fill: number, t: number) => fill / (fill + t);
-      tripChange = change(base.goldPerHour * kept(fillBase, trip.tripSec), now.goldPerHour * kept(fillWith, tripWith));
-    }
+    const tripChange = trip ? change(tripGoldOf(base, 0, trip), tripGoldOf(now, eff.move, trip)) : null;
     const perHour = (r: EffectRates, bonus: number) => {
       const w = namedWeightsOf(s.id, bonus);
       const p = w.named / (w.named + w.none);
@@ -158,7 +290,17 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
     };
     const idleGold = o.axis === 'perfect' ? effectRates(s.id, level, 'idle', NO_EFFECT).goldPerHour : null;
     const encounters = namedEncounterCandidates(NAMED_QUEST_IDS, s.id).length > 0;
-    const nb = perHour(base, 0), nw = perHour(now, o.effect.named);
+    const nb = perHour(base, 0), nw = perHour(now, eff.named);
+    let vsArtifact: IncomeRow['vsArtifact'];
+    if (hasArtifactBoost) {
+      const artBaseEff = effectForSpot(s.id, o.effect, o.zone, o.artifacts, 0);
+      const artBase = effectRates(s.id, level, axis, artBaseEff);
+      vsArtifact = {
+        goldChange: change(artBase.goldPerHour, now.goldPerHour),
+        fameChange: change(artBase.famePerHour, now.famePerHour),
+        tripChange: trip ? change(tripGoldOf(artBase, artBaseEff.move, trip), tripGoldOf(now, eff.move, trip)) : null,
+      };
+    }
     return {
       spot: s.id, level,
       grade: Object.fromEntries(RARITY_ORDER.map(g => [g, { base: base.rarity[g] ?? 0, with: now.rarity[g] ?? 0 }])) as IncomeRow['grade'],
@@ -167,6 +309,7 @@ export function incomeRows(o: IncomeOptions): IncomeRow[] {
       tripChange,
       overIdle: idleGold === null ? null : { base: base.goldPerHour / idleGold, with: now.goldPerHour / idleGold },
       named: encounters ? { shareBase: nb.share, shareWith: nw.share, hoursBase: nb.hours, hoursWith: nw.hours } : null,
+      ...(vsArtifact ? { vsArtifact } : {}),
     };
   });
 }
@@ -190,6 +333,9 @@ export interface DexOptions {
   axis: FlowAxis; effect: Effect; margin: number; trials: number; seed: number;
   /** 주면 효과를 이 분 동안만 걸고 이후는 효과 없이 낚는다(시간 제한 효과). 생략하면 효과가 끝까지 이어진다 */
   windowMinutes?: number;
+  zone?: string;
+  artifacts?: ArtifactLevels;
+  artifactBoost?: number;
 }
 
 /** 효과가 있는 앞 구간 — 그 구간 동안만 이 확률과 속도로 낚고 이후는 기본 확률과 속도로 낚는다 */
@@ -256,9 +402,10 @@ export function dexRows(o: DexOptions): DexRow[] {
   checkEffect(o.effect);
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
   if (o.windowMinutes !== undefined && !(o.windowMinutes > 0)) throw new Error('효과 창 길이는 0보다 커야 합니다(분)');
-  return spotsAt(o.margin).map(({ s, i }) => {
+  return spotsFor(o.margin, o.zone).map(({ s, i }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
-    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
+    const eff = effectForSpot(s.id, o.effect, o.zone, o.artifacts, o.artifactBoost ?? 0);
+    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, eff);
     const run = (window?: DexWindow): DexTimes => dexTimes(base.rows, base.variantShare, base.catchesPerHour, o.trials, rng(o.seed + i), window);
     const rows = base.rows;
     return {
@@ -286,14 +433,18 @@ export interface SupplyRow {
 export interface SupplyOptions {
   axis: FlowAxis; effect: Effect; margin: number;
   units: Record<RarityId, number>;
+  zone?: string;
+  artifacts?: ArtifactLevels;
+  artifactBoost?: number;
 }
 
 export function supplyRows(o: SupplyOptions): SupplyRow[] {
   checkEffect(o.effect);
   const scoreOf = (r: EffectRates) => RARITY_ORDER.reduce((s, g) => s + (r.rarity[g] ?? 0) * r.catchesPerHour * o.units[g], 0);
-  return spotsAt(o.margin).map(({ s }) => {
+  return spotsFor(o.margin, o.zone).map(({ s }) => {
     const level = levelOf(s.id, o.margin), axis = axisOf(o.axis, s.id, level);
-    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, o.effect);
+    const eff = effectForSpot(s.id, o.effect, o.zone, o.artifacts, o.artifactBoost ?? 0);
+    const base = effectRates(s.id, level, axis, NO_EFFECT), now = effectRates(s.id, level, axis, eff);
     const counts = Object.fromEntries(RARITY_ORDER.map(g => [g, (base.rarity[g] ?? 0) * base.catchesPerHour])) as Record<RarityId, number>;
     return {
       spot: s.id, level, counts, score: scoreOf(base), gold: base.goldPerHour,
@@ -308,34 +459,40 @@ export interface EarlyRow {
   spot: SpotId; level: number;
   /** 효과 없음일 때 같은 레벨로 낚을 수 있는 가장 좋은 이전 해역, 그 해역 대비 비율 */
   alt: SpotId; ratioBase: number;
-  /** 효과를 넣었을 때의 가장 좋은 이전 해역과 그 해역 대비 비율(두 해역 모두 효과를 넣은 시간당 골드) */
+  /** 효과를 넣었을 때의 가장 좋은 이전 해역과 그 해역 대비 비율(두 해역 모두 각자의 해당 효과를 넣은 시간당 골드) */
   altWith: SpotId; ratioWith: number;
 }
 
-export interface EarlyOptions { axis: FlowAxis; effect: Effect; margin: number }
+export interface EarlyOptions {
+  axis: FlowAxis; effect: Effect; margin: number;
+  zone?: string;
+  artifacts?: ArtifactLevels;
+  artifactBoost?: number;
+}
 
 /** 조기 진입 — 진입 레벨에 못 미치는 낚싯대(여유가 음수)로 같은 배로 열리는 해역에 들어갈 때, 같은 레벨로 낚을 수 있는 이전 해역과 견준다.
- *  효과를 넣은 값은 두 해역 모두에 효과를 걸고 그 값 중 가장 좋은 이전 해역과 비교한다 */
+ *  효과를 넣은 값은 각 해역에 적용되는 효과(구역 한정 포함)를 걸고 그 값 중 가장 좋은 이전 해역과 비교한다 */
 export function earlyRows(o: EarlyOptions): EarlyRow[] {
   checkEffect(o.effect);
   if (o.margin >= 0) return [];
   const out: EarlyRow[] = [];
-  for (const { s, i } of spotsAt(o.margin)) {
+  for (const { s, i } of spotsFor(o.margin, o.zone)) {
     const level = levelOf(s.id, o.margin);
-    const gold = (spot: SpotId, e: Effect) => effectRates(spot, level, axisOf(o.axis, spot, level), e).goldPerHour;
-    const best = (e: Effect) => {
+    const goldBase = (spot: SpotId) => effectRates(spot, level, axisOf(o.axis, spot, level), NO_EFFECT).goldPerHour;
+    const goldWith = (spot: SpotId) => effectRates(spot, level, axisOf(o.axis, spot, level), effectForSpot(spot, o.effect, o.zone, o.artifacts, o.artifactBoost ?? 0)).goldPerHour;
+    const best = (goldFn: (spot: SpotId) => number) => {
       let alt: SpotId | undefined, g = 0;
       for (const prev of SPOTS.slice(0, i)) {
         if (prev.boatTier !== s.boatTier || (prev.powerReq ?? 0) > powerOfLevel(level)) continue;
-        const v = gold(prev.id, e);
+        const v = goldFn(prev.id);
         if (v > g) { alt = prev.id; g = v; }
       }
       return alt === undefined ? null : { alt, g };
     };
-    const base = best(NO_EFFECT), now = best(o.effect);
+    const base = best(goldBase), now = best(goldWith);
     if (!base || !now) continue;
     out.push({
-      spot: s.id, level, alt: base.alt, ratioBase: gold(s.id, NO_EFFECT) / base.g, altWith: now.alt, ratioWith: gold(s.id, o.effect) / now.g,
+      spot: s.id, level, alt: base.alt, ratioBase: goldBase(s.id) / base.g, altWith: now.alt, ratioWith: goldWith(s.id) / now.g,
     });
   }
   return out;
@@ -343,5 +500,10 @@ export function earlyRows(o: EarlyOptions): EarlyRow[] {
 
 export interface EffectsReport {
   effect: Effect; units: Record<RarityId, number>; margin: number; trials: number; seed: number;
+  zone?: string;
+  zoneSpots?: SpotId[];
+  artifacts?: ArtifactLevels;
+  artifactBoost?: number;
+  artifactSummary?: { base: ArtifactBonusSummary; boosted: ArtifactBonusSummary };
   income: IncomeRow[]; dex: DexRow[]; supply: SupplyRow[]; early: EarlyRow[];
 }

@@ -22,7 +22,7 @@ import {
 import type { Axis } from './balance/model';
 import { simulateJourney } from './balance/journey';
 import { selfTimes } from './balance/selfTimes';
-import type { TimeStat } from './balance/selfTimes';
+import type { TimeDistStat } from './balance/selfTimes';
 import { runLive } from './balance/live';
 
 // ── 인자 ──
@@ -47,6 +47,7 @@ const listFlag = (name: string, fallback: number[]): number[] => {
 const BIG_STEPS = listFlag('--big', []);
 const CATCH_STEPS = listFlag('--catch-steps', [100, 1_000, 10_000, 100_000]);
 const SEED = flag('--seed', 20261016);
+const JSON_OUT = args.includes('--json');
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
 const n1 = (x: number) => x.toFixed(1);
@@ -334,20 +335,25 @@ if (show('dex')) {
 
 // ── 자기만족 업적 달성 시간 ──
 if (show('achievement')) {
-  console.log(`\n## 자기만족 업적 달성 시간 — 구역 해역을 번갈아 낚을 때(최소 스펙), 몬테카를로 ${RUNS}회, 시드 ${SEED}`);
-  console.log('여러 구역에 걸친 조건은 구역을 하나씩 차례로 채우는 시간의 합이고, 각 조건은 그 조건 하나만 목표로 잰다(같은 낚시로 다른 조건도 채워지는 것은 넣지 않는다)');
-  const statText = (s: TimeStat) => `평균 ${hrs(s.mean)} · p90 ${hrs(s.p90)}`;
-  for (const x of selfTimes({ runs: RUNS, seed: SEED, big: BIG_STEPS, catchSteps: CATCH_STEPS })) {
-    console.log(`\n### ${PLAY_LABEL[x.play]}`);
-    console.log(`등급별 일반 폼 전부(마을 포함 모든 구역): ${RARITY_ORDER.map(k => `${RARITY[k].name} ${statText(x.grades[k])}`).join(' | ')}`);
-    console.log(`밤 어종 전부(모든 구역): 일반 폼 ${statText(x.night.normal)} | 돌연변이 폼 ${statText(x.night.variant)}`);
-    console.log(`네임드 전부 토벌(유물 전부 교환 재료 포함, 라이선스·수주·하루 한도 제외): ${statText(x.named)}`);
-    for (const b of x.big) {
-      console.log(`월척 어종 ${b.n}종(구역 구분 없음, 구역을 ${ZONE_ORDER.join(', ')} 순서로 하나씩 채움): ${b.total ? statText(b.total) : '어종 수 부족'}`);
-      console.log(`  참고, 구역 안에서만 ${b.n}종: ${b.zones.map(z => `${z.zone} ${z.time ? statText(z.time) : '어종 수 부족'}`).join(' | ')}`);
+  const results = selfTimes({ runs: RUNS, seed: SEED, big: BIG_STEPS, catchSteps: CATCH_STEPS });
+  if (JSON_OUT) {
+    console.log(JSON.stringify({ runs: RUNS, seed: SEED, big: BIG_STEPS, catchSteps: CATCH_STEPS, results }, null, 2));
+  } else {
+    console.log(`\n## 자기만족 업적 달성 시간 — 구역 해역을 번갈아 낚을 때(최소 스펙), 몬테카를로 ${RUNS}회, 시드 ${SEED}`);
+    console.log('여러 구역에 걸친 조건은 구역을 하나씩 차례로 채우는 시간의 합이고, 각 조건은 그 조건 하나만 목표로 잰다(같은 낚시로 다른 조건도 채워지는 것은 넣지 않는다)');
+    const statText = (s: TimeDistStat) => `평균 ${hrs(s.mean)} · p10 ${hrs(s.p10)} · 중앙값 ${hrs(s.p50)} · p90 ${hrs(s.p90)}`;
+    for (const x of results) {
+      console.log(`\n### ${PLAY_LABEL[x.play]}`);
+      console.log(`등급별 일반 폼 전부(마을 포함 모든 구역): ${RARITY_ORDER.map(k => `${RARITY[k].name} ${statText(x.grades[k])}`).join(' | ')}`);
+      console.log(`밤 어종 전부(모든 구역): 일반 폼 ${statText(x.night.normal)} | 돌연변이 폼 ${statText(x.night.variant)}`);
+      console.log(`네임드 전부 토벌(유물 전부 교환 재료 포함, 라이선스·수주·하루 한도 제외): ${statText(x.named)}`);
+      for (const b of x.big) {
+        console.log(`월척 어종 ${b.n}종(구역 구분 없음, 구역을 ${ZONE_ORDER.join(', ')} 순서로 하나씩 채움): ${b.total ? statText(b.total) : '어종 수 부족'}`);
+        console.log(`  참고, 구역 안에서만 ${b.n}종: ${b.zones.map(z => `${z.zone} ${z.time ? statText(z.time) : '어종 수 부족'}`).join(' | ')}`);
+      }
+      console.log(`월척 모든 어종(모든 구역): ${statText(x.bigAll)}`);
+      console.log(`낚은 수 단계(새 계정 진행, 이후는 마지막 해역 캐치 속도): ${x.catches.map(c => `${n0(c.n)}마리 ${hrs(c.hours)}`).join(' | ')}`);
     }
-    console.log(`월척 모든 어종(모든 구역): ${statText(x.bigAll)}`);
-    console.log(`낚은 수 단계(새 계정 진행, 이후는 마지막 해역 캐치 속도): ${x.catches.map(c => `${n0(c.n)}마리 ${hrs(c.hours)}`).join(' | ')}`);
   }
 }
 

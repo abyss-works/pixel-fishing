@@ -35,8 +35,9 @@ describe('명령 인자', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
-      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 5, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
+      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, bigMarks: [],
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
+      zone: null, artifacts: null, artifactBoost: 0, counterBonus: null, windowMinutes: 5, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null, rewardUnit: 'zone',
       growth: false, targets: [], boatShare: null, levels: null,
       design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [] },
     });
