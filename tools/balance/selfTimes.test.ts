@@ -5,7 +5,7 @@ import { RARITY_ORDER } from '../../src/game/content/rarity';
 import { BIG_CATCH_PERCENTILE } from '../../src/game/rules/balance';
 import { NAMED_PITY_CATCHES } from '../../src/game/rules/pity';
 import { ZONE_ORDER, entryLevel, rates, rng, spotsOfZone } from './model';
-import { bigTotal, catchTimes, namedTimes, selfTimes, stat, zoneRun } from './selfTimes';
+import { bigTotal, catchTimes, namedTimes, selfTimes, stat, statDist, zoneRun } from './selfTimes';
 
 const N = 4;
 
@@ -192,6 +192,36 @@ describe('자기만족 업적 달성 시간', () => {
     for (const x of e) {
       expect(x.big[0].total).toEqual(x.bigAll);
       expect(x.big[1].total).toBeNull();
+    }
+  });
+});
+
+describe('월척 종수별 p10·중앙값 분포 통계', () => {
+  it('statDist는 평균, p10, 중앙값(p50), p90을 낸다', () => {
+    const s = statDist([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(s.mean).toBe(5.5);
+    expect(s.p10).toBeCloseTo(1.9, 9);
+    expect(s.p50).toBeCloseTo(5.5, 9);
+    expect(s.p90).toBe(10);
+    expect(statDist([3])).toEqual({ mean: 3, p10: 3, p50: 3, p90: 3 });
+    expect(() => statDist([])).toThrow();
+  });
+
+  it('selfTimes의 월척 단계와 전체 통계에 p10 <= 중앙값 <= p90이 함께 담긴다', () => {
+    const d = selfTimes({ runs: 6, seed: 9, big: [3, 10], catchSteps: [] });
+    for (const x of d) {
+      for (const b of x.big) {
+        expect(b.total!.p10).toBeLessThanOrEqual(b.total!.p50);
+        expect(b.total!.p50).toBeLessThanOrEqual(b.total!.p90);
+        for (const z of b.zones) {
+          if (z.time) {
+            expect(z.time.p10).toBeLessThanOrEqual(z.time.p50);
+            expect(z.time.p50).toBeLessThanOrEqual(z.time.p90);
+          }
+        }
+      }
+      expect(x.bigAll.p10).toBeLessThanOrEqual(x.bigAll.p50);
+      expect(x.bigAll.p50).toBeLessThanOrEqual(x.bigAll.p90);
     }
   });
 });

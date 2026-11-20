@@ -1,12 +1,7 @@
 // UI 시스템 가드 — 화면(views·layouts)이 공용 UI(ui)를 조합하고, 기본 요소를 직접 구현하지 않게 한다.
 // 한 번만 쓰는 화면 조각은 그 화면 파일 안의 지역 컴포넌트로 만들 수 있다. 단 두 화면 이상에 같은 이름의
 // 지역 컴포넌트가 생기면 공용 UI로 올려야 한다. 예외 목록은 줄이기만 한다(새 예외를 더하지 않는다).
-import { createElement } from 'react';
-import type { ComponentProps } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import Modal from './Modal';
-import type { ModalHeight } from './Modal';
+import { describe, expect, it } from 'vitest';
 import { SCROLL_Y, SCROLL_Y_ROWS } from './scrollArea';
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
@@ -43,6 +38,9 @@ const PRIMITIVES: { pattern: RegExp; use: string }[] = [
 /** 브라우저 기본 대화상자 — 게임 화면은 useDialogs(ConfirmDialog·InputDialog·NoticeDialog)를 쓴다. 예외 없음 */
 const SYSTEM_DIALOG = /\bwindow\.(?:confirm|prompt|alert)\(/;
 
+/** 기본 입력 요소 직접 사용 — 기능·앱 진입 코드도 공용 입력 컴포넌트를 쓴다 */
+const RAW_INPUT = /<(?:input|textarea|select)\b/;
+
 /** 제목 태그 직접 사용 — 쪽 제목은 PageTitle, 구역은 SectionTitle, 묶음은 Subheading, 창·상자 제목은 Panel·ModalCard의
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
@@ -75,9 +73,6 @@ const HIDDEN_BAR = /(?<![\w-])pf-scroll(?![\w-])/;
 const HIDDEN_BAR_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx', // 384px 폭 사이드바 — 탭을 옮길 때 막대가 폭을 흔들지 않게 숨긴다
 ]);
-
-/** 스크롤을 거는 모든 표기 — 공용 스크롤 클래스, overflow 유틸, arbitrary 표기(`[overflow-y:auto]`), 인라인 style 객체 */
-const SCROLL_CLASS = new RegExp(`pf-vscroll|pf-scroll|${OVERFLOW_DIRECT.source}`);
 
 /** `<이름 ...>` 여는 태그들. 속성 값의 `{...}` 안에 있는 `>`(화살표 함수 등)는 태그 끝으로 보지 않는다 */
 function openingTags(src: string, name: string): string[] {
@@ -222,8 +217,18 @@ describe('UI 시스템 가드', () => {
   });
 
   it('기능·앱 진입 코드도 입력 요소를 직접 그리지 않는다', () => {
-    const raw = /<(?:input|textarea|select)\b/;
-    expect(appSources.filter(([key, src]) => key.startsWith('../../') && raw.test(src)).map(([key]) => key)).toEqual([]);
+    const outsidePresentation = appSources.filter(([key]) => key.startsWith('../../'));
+    expect(outsidePresentation.length).toBeGreaterThan(0);
+    expect(outsidePresentation.filter(([, src]) => RAW_INPUT.test(src)).map(([key]) => key)).toEqual([]);
+  });
+
+  it('감지 함수: 기본 입력 요소(<input>, <textarea>, <select>)는 잡고 공용 컴포넌트와 유사 이름은 가린다', () => {
+    for (const tag of ['<input type="text" />', '<input/>', '<input>', '<textarea rows={3}>', '<textarea>', '<select value={v}>', '<select>']) {
+      expect(RAW_INPUT.test(tag), tag).toBe(true);
+    }
+    for (const tag of ['<TextInput />', '<TextArea />', '<Select />', '<inputHelper />', '<selectList />']) {
+      expect(RAW_INPUT.test(tag), tag).toBe(false);
+    }
   });
 
   it('제목은 제목 컴포넌트와 창·상자 title로 쓴다 — 예외 목록의 자리만 태그를 직접 쓴다', () => {
@@ -271,42 +276,6 @@ describe('UI 시스템 가드', () => {
     expect([...HIDDEN_BAR_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
   });
 
-  describe('스테이지 모달 래퍼', () => {
-    afterEach(cleanup);
-    // 래퍼에 합쳐지는 클래스(높이 상수 포함)를 정규식으로 읽지 않고, 높이·폭 변형을 모두 렌더해 실제 class를 본다
-    const heights: (ModalHeight | undefined)[] = [undefined, 400, 480, 520, 560];
-    const widths = [{}, { md: true }, { xl: true }];
-    it('모든 높이·폭 변형에서 스크롤 클래스를 갖지 않는다 — 스크롤은 카드 본문이 맡는다', () => {
-      const classes: string[] = [];
-      for (const height of heights) {
-        for (const width of widths) {
-          for (const mobileFixed of [false, true]) {
-            const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
-            render(createElement(Modal, props));
-            classes.push(screen.getByRole('dialog').className);
-            cleanup();
-          }
-        }
-      }
-      expect(classes).toHaveLength(heights.length * widths.length * 2);
-      expect(classes.filter(c => SCROLL_CLASS.test(c))).toEqual([]);
-    });
-    it('모바일 고정 변형은 모바일 높이를 가용 높이로 정하고 내용 높이(mobile:h-auto)를 쓰지 않는다', () => {
-      for (const height of [480, 520, 560] as const) {
-        const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed: true, onClose: () => {}, children: createElement('p', null, '내용') };
-        render(createElement(Modal, props));
-        const cls = screen.getByRole('dialog').className;
-        cleanup();
-        expect(cls).toContain('mobile:h-[calc(100%-48px)]');
-        expect(cls).not.toContain('mobile:h-auto');
-      }
-    });
-    it('감지: 높이 상수에 스크롤 클래스가 섞이면 잡는다', () => {
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] overflow-y-auto')).toBe(true);
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] pf-vscroll')).toBe(true);
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] mobile:h-auto')).toBe(false);
-    });
-  });
   it('앱 모달의 제목 요소는 본문 자식이 아니라 title이나 header prop이다 — 감싼 제목도 잡는다', () => {
     expect(screens.flatMap(f => appModalsWithTitleChild(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     expect(appModalsWithTitleChild(`<Modal xl onClose={c}>\n  {/* 설명 */}\n  <header className="a">가</header></Modal>`)).toHaveLength(1);

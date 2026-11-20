@@ -435,5 +435,6 @@ export function effectPlan(o: PlanOptions): RatePlan {
     rateFor: (spot: SpotId, level: number, axis: Axis, boat: number, pool: Pool = 'mixed') =>
       active(spot, level, boat) ? effectRates(spot, level, axis, o.effect, pool) : rates(spot, level, axis, {}, pool),
     costPerHour: (spot, level, _axis, boat) => (o.recipe && active(spot, level, boat) ? loss(spot, level).loss / DAY_HOURS : 0),
+    effectAt: (spot: SpotId, level: number, boat: number) => (active(spot, level, boat) ? o.effect : null),
   };
 }
