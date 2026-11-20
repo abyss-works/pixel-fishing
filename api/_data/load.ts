@@ -114,15 +114,49 @@ export async function latestLegacySave(db: Executor, uid: string): Promise<unkno
   return rows[0]?.data ?? null;
 }
 
-/** 캐치 판정용 — 잡힌 어종·폼의 도감 행과 가방(전시 제외) 개체 수 */
-export async function catchLookup(db: Executor, uid: string, fishId: string, form: string): Promise<{
-  dex: { count: number; max_size: number | null; first_caught: string | null } | null; bagCount: number;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type PrevAutoRow = { uid: string; fish_id: string; form: string; size: number | null; locked: boolean | null };
+
+/** 캐치 판정용 — 잡힌 어종·폼의 도감 행과 가방(전시 제외) 개체 수.
+ *  autoLock이 주어지면 같은 왕복 안에서 (1) 같은 어종·폼의 잠긴 가방 개체 최대 크기(null 크기는 -1)와
+ *  (2) 직전 자동 잠금 개체(prevUid) 행을 함께 읽어 추가 DB 왕복 없이 토글식 자동 잠금을 판정한다 */
+export async function catchLookup(
+  db: Executor, uid: string, fishId: string, form: string,
+  autoLock?: { prevUid: string | null },
+): Promise<{
+  dex: { count: number; max_size: number | null; first_caught: string | null } | null;
+  bagCount: number;
+  maxLockedSize: number | null;
+  prevAuto: PrevAutoRow | null;
 }> {
-  const { rows } = await db.execute<{ dex: { count: number; max_size: number | null; first_caught: string | null } | null; bag: number }>(sql`select
+  const validPrevUid = autoLock?.prevUid && UUID_RE.test(autoLock.prevUid) ? autoLock.prevUid : null;
+  const maxLockedSql = autoLock
+    ? sql`(select max(coalesce(size, -1))::real from public.fish_instances
+        where user_id = ${uid} and fish_id = ${fishId} and form = ${form} and slot is null and locked = true)`
+    : sql`null::real`;
+  const prevAutoSql = validPrevUid
+    ? sql`(select row_to_json(p) from (select uid, fish_id, form, size, locked from public.fish_instances
+        where user_id = ${uid} and uid = ${validPrevUid}::uuid and fish_id = ${fishId} and form = ${form} and slot is null) p)`
+    : sql`null::json`;
+  const { rows } = await db.execute<{
+    dex: { count: number; max_size: number | null; first_caught: string | null } | null;
+    bag: number;
+    max_locked_size: number | null;
+    prev_auto: PrevAutoRow | null;
+  }>(sql`select
     (select row_to_json(d) from (select count, max_size, first_caught from public.records
       where user_id = ${uid} and fish_id = ${fishId} and form = ${form}) d) as dex,
-    (select count(*)::int from public.fish_instances where user_id = ${uid} and slot is null) as bag`);
-  return { dex: rows[0].dex, bagCount: rows[0].bag };
+    (select count(*)::int from public.fish_instances where user_id = ${uid} and slot is null) as bag,
+    ${maxLockedSql} as max_locked_size,
+    ${prevAutoSql} as prev_auto`);
+  const r = rows[0];
+  return {
+    dex: r.dex,
+    bagCount: r.bag,
+    maxLockedSize: r.max_locked_size === null || r.max_locked_size === undefined ? null : Number(r.max_locked_size),
+    prevAuto: r.prev_auto ?? null,
+  };
 }
 
 /** 어종 천장 후보 가운데 일반 폼을 이미 가진 어종 — 후보가 있을 때만 부른다 */

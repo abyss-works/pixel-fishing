@@ -4,7 +4,7 @@
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, tryBuyBoat, tryUpgrade,
+  redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
@@ -59,6 +59,7 @@ export type GameAction =
   | { type: 'buyBoat' }
   | { type: 'setLocked'; uids: string[]; locked: boolean }
   | { type: 'autoLock' }                        // 자동 잠금 — 계획은 서버가 현재 가방으로 계산한다
+  | { type: 'setAutoLockOnCatch'; on: boolean } // 토글식 자동 잠금 설정 — 다음 포획부터 적용한다
   | { type: 'travel'; to: LocationRef }
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
@@ -91,7 +92,7 @@ export type GameAction =
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
+  setLocked: true, autoLock: true, setAutoLockOnCatch: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, setNickname: true,
   dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, eat: true,
   boot: true, import: true,
@@ -432,10 +433,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
-      const inst = makeInstance(fish, extras, {
+      const rawInst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });
-      const caught = addCatch(state, inst, fish, deps.today);
+      // 토글식 자동 잠금은 가방 초과(방생·자동 기운 얻기)보다 먼저 적용한다 — 새 잠금 개체는 보호되고,
+      // 방금 잠금이 풀린 기존 자동 잠금 개체는 초과 후보에 들어간다.
+      const autoLocked = applyCatchAutoLock(state, rawInst);
+      const inst = autoLocked.inst;
+      const caught = addCatch(autoLocked.state, inst, fish, deps.today);
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
@@ -552,6 +557,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'autoLock':
       return { ok: true, state: applyAutoLock(state), result: { type: 'none' }, events: [] };
+    case 'setAutoLockOnCatch': {
+      if (typeof action.on !== 'boolean') return { ok: false, error: 'bad-request' };
+      // 설정 토글은 감사 가치가 없어 이벤트를 남기지 않는다. 켜도 기존 가방에는 즉시 적용하지 않는다
+      if (state.autoLockOnCatch === action.on) return { ok: true, state, result: { type: 'none' }, events: [] };
+      return { ok: true, state: { ...state, autoLockOnCatch: action.on }, result: { type: 'none' }, events: [] };
+    }
     case 'redeemCoupon': {
       if (typeof action.code !== 'string') return { ok: false, error: 'bad-request' };
       const code = action.code.trim();

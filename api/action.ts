@@ -17,8 +17,8 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
+  autoLockKey, buildCatchInfo, canFish, capOfBoat, decideCatchAutoLock, FISH, formName, instanceFish,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
@@ -26,7 +26,7 @@ import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pit
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
-import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
@@ -175,7 +175,7 @@ export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
-  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund',
+  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -641,13 +641,27 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
-  const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
+  // 토글식 자동 잠금이 켜져 있으면 같은 왕복에서 잠금 최대 크기와 직전 자동 잠금 개체도 함께 읽는다(추가 DB 왕복 0회)
+  const lockKey = autoLockKey(fish.id, extras.form);
+  const prevAutoUid = Object.hasOwn(base.autoLockedIds, lockKey) ? base.autoLockedIds[lockKey] : null;
+  const { dex: d, bagCount, maxLockedSize, prevAuto } = await step('db-read', { uid, action: 'catch' }, () =>
+    catchLookup(db, uid, fish.id, extras.form, base.autoLockOnCatch ? { prevUid: prevAutoUid } : undefined));
   const prev: FormRecord | undefined = d
     ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
     : undefined;
   const isNew = (prev?.count ?? 0) === 0;
   const info = buildCatchInfo(fish, extras, isNew);
-  const inst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
+  const rawInst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
+  const prevAutoInst: FishInstance | null = prevAuto
+    ? {
+      uid: prevAuto.uid, fishId: prevAuto.fish_id, form: prevAuto.form as FishInstance['form'],
+      size: prevAuto.size, caughtAt: null, spot: null, judgment: null, locked: prevAuto.locked === true,
+    }
+    : null;
+  // 토글식 자동 잠금은 가방 초과(방생·자동 기운 얻기) 판정보다 먼저 적용한다 — 리듀서(applyAction)와 동일한 결정 함수
+  const lockDecision = decideCatchAutoLock(base.autoLockOnCatch, base.autoLockedIds, rawInst, maxLockedSize, prevAutoInst);
+  const inst = lockDecision.inst;
+  const unlockedPrev = lockDecision.unlockedPrev;
   const rec = nextDexRec(prev, inst.size, today);
   const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
@@ -664,15 +678,24 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
       uid: t.uid, fishId: t.fish_id, form: t.form as FishInstance['form'],
       size: t.size, caughtAt: null, spot: null, judgment: null, locked: false,
     } : null);
-    const pick = pickEvict(tops, inst);
+    // 방금 해제된 기존 자동 잠금 개체는 DB에 아직 locked=true이므로 메모리에서 초과 후보에 합류시킨다(재조회 0회)
+    const pick = pickEvict(tops, inst, unlockedPrev);
     if (pick.evictUid) {
       removed = [pick.evictUid];
     } else if (pick.evictNew) {
       added = []; // 새 놈이 가장 안 특별 — 그 자리에서 내보낸다
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
-    evictBag = [inst, ...tops.filter((t): t is FishInstance => t !== null)];
+    evictBag = [inst, ...(unlockedPrev ? [unlockedPrev] : []), ...tops.filter((t): t is FishInstance => t !== null)];
   }
+  // 해제된 기존 개체가 초과로 제거(instancesRemoved)되면 instancesLocked에서 빼서 동일 행 중복 갱신을 막는다
+  const instancesLocked: StateWrites['instancesLocked'] =
+    unlockedPrev && !removed.includes(unlockedPrev.uid)
+      ? [{ uid: unlockedPrev.uid, locked: false }]
+      : [];
+  const nextAutoLockedIds = removed.length > 0
+    ? pruneAutoLockedIds(lockDecision.autoLockedIds, new Set(removed))
+    : lockDecision.autoLockedIds;
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
   // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
   const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest);
@@ -726,13 +749,14 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     state: { ...applyEnergyGain({ ...evalState,
       achievements: evaluated.achievements,
       achievementCounters: counters2,
+      autoLockedIds: nextAutoLockedIds,
       fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
       ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
     events: [...events, ...claimableEvents],
     writes: {
       instancesAdded: added, instancesRemoved: removed,
-      instancesMoved: [], instancesLocked: [],
+      instancesMoved: [], instancesLocked,
       records: [{ fishId: fish.id, form: inst.form, rec }],
     },
   };

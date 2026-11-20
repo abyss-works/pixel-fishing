@@ -9,7 +9,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockPlan, applyAutoLock, addItem, takeItem, rarityWeightOf,
+  autoLockPlan, applyAutoLock, autoLockKey, decideCatchAutoLock, applyCatchAutoLock, addItem, takeItem, rarityWeightOf,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
@@ -1307,5 +1307,176 @@ describe('세이브 v10 — 기운 수량을 10분의 1 단위로 옮기는 이�
     const before = { 'energy-common': 600, 'energy-rare': 20, 'energy-epic': 4, 'energy-legendary': 1 };
     const st = mig({ v: 9, items: before });
     for (const id of E) expect(st.items[id] / ENERGY_UNIT).toBe(before[id as keyof typeof before]);
+  });
+});
+
+describe('토글식 자동 잠금 — 스키마·위생·추적·판정', () => {
+  it('newState 기본값은 꺼짐(false)과 빈 추적 맵({})이며 v: 10을 유지한다', () => {
+    const st = newState();
+    expect(st.v).toBe(10);
+    expect(st.autoLockOnCatch).toBe(false);
+    expect(st.autoLockedIds).toEqual({});
+  });
+
+  it('migrate — 누락·깨진 autoLockOnCatch와 autoLockedIds를 위생 처리하고 유효 값은 보존한다', () => {
+    const missing = migrate({ v: 10 });
+    expect(missing.v).toBe(10);
+    expect(missing.autoLockOnCatch).toBe(false);
+    expect(missing.autoLockedIds).toEqual({});
+
+    const broken = migrate({
+      v: 10,
+      autoLockOnCatch: 'yes',
+      autoLockedIds: { 'carp|normal': 'u1', 'bad|empty': '', 'bad|num': 123, '': 'u2' },
+    });
+    expect(broken.autoLockOnCatch).toBe(false);
+    expect(broken.autoLockedIds).toEqual({ 'carp|normal': 'u1' });
+
+    // 가방이 빈 채로(fastCatch 경로) migrate해도 autoLockedIds를 보존한다
+    const valid = migrate({
+      v: 10,
+      bag: [],
+      autoLockOnCatch: true,
+      autoLockedIds: { 'carp|normal': 'u1', 'carp|variant': 'u2' },
+    });
+    expect(valid.autoLockOnCatch).toBe(true);
+    expect(valid.autoLockedIds).toEqual({ 'carp|normal': 'u1', 'carp|variant': 'u2' });
+  });
+
+  it('applyAutoLock — 어종×폼별 최대 개체를 autoLockedIds에 기록한다(기존 맵 교체, 멱등)', () => {
+    const oldTop = { ...mk('crucian', 'normal', 30), locked: true };
+    const newTop = mk('crucian', 'normal', 45);
+    const variant = mk('crucian', 'variant', 12);
+    const state = {
+      ...newState(),
+      bag: [oldTop, newTop, variant],
+      autoLockedIds: { 'stale|normal': 'ghost-uid', [autoLockKey('crucian', 'normal')]: oldTop.uid },
+    };
+    const once = applyAutoLock(state);
+    expect(once.autoLockedIds).toEqual({
+      [autoLockKey('crucian', 'normal')]: newTop.uid,
+      [autoLockKey('crucian', 'variant')]: variant.uid,
+    });
+    expect(applyAutoLock(once)).toEqual(once);
+  });
+
+  it('setLocked — 잠금 걸기(수동 승격)·풀기 모두 autoLockedIds에서 해당 uid를 제거한다', () => {
+    const a = { ...mk('carp', 'normal', 40), locked: true };
+    const b = { ...mk('crucian', 'normal', 20), locked: true };
+    const base = {
+      ...newState(),
+      bag: [a, b],
+      autoLockedIds: {
+        [autoLockKey('carp', 'normal')]: a.uid,
+        [autoLockKey('crucian', 'normal')]: b.uid,
+      },
+    };
+    const promoted = setLocked(base, [a.uid], true);
+    expect(promoted.bag.find(i => i.uid === a.uid)?.locked).toBe(true);
+    expect(promoted.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: b.uid });
+
+    const unlocked = setLocked(promoted, [b.uid], false);
+    expect(unlocked.bag.find(i => i.uid === b.uid)?.locked).toBe(false);
+    expect(unlocked.autoLockedIds).toEqual({});
+  });
+
+  it('sellSelected·release·moveExhibit — 가방에서 빠진 개체는 autoLockedIds에서 정리한다', () => {
+    const a = mk('carp', 'normal', 30);
+    const b = mk('crucian', 'normal', 20);
+    const c = { ...mk('minnow', 'normal', 10), locked: true };
+    const base = {
+      ...newState(),
+      bag: [a, b, c],
+      autoLockedIds: {
+        [autoLockKey('carp', 'normal')]: a.uid,
+        [autoLockKey('crucian', 'normal')]: b.uid,
+        [autoLockKey('minnow', 'normal')]: c.uid,
+      },
+    };
+    const sold = sellSelected(base, [a.uid]);
+    expect(sold.autoLockedIds).not.toHaveProperty(autoLockKey('carp', 'normal'));
+    const released = release(sold, [b.uid]);
+    expect(released.autoLockedIds).not.toHaveProperty(autoLockKey('crucian', 'normal'));
+    const exhibited = moveExhibit(released, c.uid, 0);
+    expect(exhibited.autoLockedIds).toEqual({});
+  });
+
+  it('applyCatchAutoLock — 꺼짐이면 잠그지 않고, 켜짐이면 첫 잠금·자동 교체·수동 보호·폼 분리 규칙을 따른다', () => {
+    const incoming = mk('crucian', 'normal', 25);
+    // 꺼짐: 무변경
+    const offRes = applyCatchAutoLock(newState(), incoming);
+    expect(offRes.inst.locked).toBe(false);
+    expect(offRes.unlockedPrev).toBeNull();
+    expect(offRes.state.autoLockedIds).toEqual({});
+
+    // 켜짐, 기존 잠김 없음: 자동 잠금
+    const onEmpty = { ...newState(), autoLockOnCatch: true };
+    const first = applyCatchAutoLock(onEmpty, incoming);
+    expect(first.inst.locked).toBe(true);
+    expect(first.unlockedPrev).toBeNull();
+    expect(first.state.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: incoming.uid });
+
+    // 동률·작은 개체는 교체하지 않는다
+    const withFirst = { ...first.state, bag: [first.inst] };
+    for (const sz of [20, 25]) {
+      const small = applyCatchAutoLock(withFirst, mk('crucian', 'normal', sz));
+      expect(small.inst.locked).toBe(false);
+      expect(small.unlockedPrev).toBeNull();
+      expect(small.state.bag[0].locked).toBe(true);
+    }
+
+    // 더 큰 개체: 새 개체 잠금 + 기존 자동 잠금만 해제
+    const bigger = mk('crucian', 'normal', 30);
+    const replaced = applyCatchAutoLock(withFirst, bigger);
+    expect(replaced.inst.locked).toBe(true);
+    expect(replaced.unlockedPrev?.uid).toBe(incoming.uid);
+    expect(replaced.unlockedPrev?.locked).toBe(false);
+    expect(replaced.state.bag[0].locked).toBe(false);
+    expect(replaced.state.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: bigger.uid });
+
+    // 다른 폼(변이)은 독립 추적
+    const variant = mk('crucian', 'variant', 5);
+    const withBigger = { ...replaced.state, bag: [replaced.inst] };
+    const varRes = applyCatchAutoLock(withBigger, variant);
+    expect(varRes.inst.locked).toBe(true);
+    expect(varRes.unlockedPrev).toBeNull();
+    expect(varRes.state.autoLockedIds).toEqual({
+      [autoLockKey('crucian', 'normal')]: bigger.uid,
+      [autoLockKey('crucian', 'variant')]: variant.uid,
+    });
+  });
+
+  it('applyCatchAutoLock — 수동 잠금 개체는 보호하고, 수동+자동 공존 시 전체 잠김 최대 크기 기준으로 판정한다', () => {
+    const manual = { ...mk('carp', 'normal', 50), locked: true };
+    const auto = { ...mk('carp', 'normal', 30), locked: true };
+    const state = {
+      ...newState(),
+      autoLockOnCatch: true,
+      bag: [manual, auto],
+      autoLockedIds: { [autoLockKey('carp', 'normal')]: auto.uid },
+    };
+    // 40cm는 자동 잠금(30)보다 크지만 수동 잠금(50)보다 작아 잠그지 않는다
+    const mid = applyCatchAutoLock(state, mk('carp', 'normal', 40));
+    expect(mid.inst.locked).toBe(false);
+    expect(mid.unlockedPrev).toBeNull();
+    expect(mid.state.bag.map(i => i.locked)).toEqual([true, true]);
+
+    // 60cm는 전체 잠김 최대(50)보다 크므로 새로 잠그고 기존 자동 잠금(30)만 푼다 — 수동(50)은 유지
+    const huge = mk('carp', 'normal', 60);
+    const top = applyCatchAutoLock(state, huge);
+    expect(top.inst.locked).toBe(true);
+    expect(top.unlockedPrev?.uid).toBe(auto.uid);
+    expect(top.state.bag.find(i => i.uid === manual.uid)?.locked).toBe(true);
+    expect(top.state.bag.find(i => i.uid === auto.uid)?.locked).toBe(false);
+    expect(top.state.autoLockedIds).toEqual({ [autoLockKey('carp', 'normal')]: huge.uid });
+  });
+
+  it('decideCatchAutoLock — 크기 미상(null) 잠김 개체는 최소(-1)로 취급한다', () => {
+    const unsized = { ...mk('carp', 'normal', null), locked: true };
+    const incoming = mk('carp', 'normal', 10);
+    const dec = decideCatchAutoLock(true, { [autoLockKey('carp', 'normal')]: unsized.uid }, incoming, -1, unsized);
+    expect(dec.inst.locked).toBe(true);
+    expect(dec.unlockedPrev?.uid).toBe(unsized.uid);
+    expect(dec.unlockedPrev?.locked).toBe(false);
   });
 });

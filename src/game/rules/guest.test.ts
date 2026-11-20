@@ -22,6 +22,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'seeTutorial', id: 'x' })).toBe('ok');
     expect(guestActionVerdict({ type: 'setLocked', uids: [], locked: true })).toBe('ok');
     expect(guestActionVerdict({ type: 'autoLock' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'setAutoLockOnCatch', on: true })).toBe('ok');
   });
 
   it('미끼 환불 안내 닫기는 게스트에게도 열려 있다 — 이관이 게스트의 골드에도 환불을 더한다', () => {
@@ -72,7 +73,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
 
   it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
     const open = [
-      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'dismissBaitRefund', 'debug', 'import',
+      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund', 'debug', 'import',
     ];
     const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {

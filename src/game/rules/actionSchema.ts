@@ -29,6 +29,7 @@ const schemas = {
   buyBoat: z.object({ type: z.literal('buyBoat') }),
   setLocked: z.object({ type: z.literal('setLocked'), uids: z.array(z.unknown()), locked: z.boolean() }),
   autoLock: z.object({ type: z.literal('autoLock') }),
+  setAutoLockOnCatch: z.object({ type: z.literal('setAutoLockOnCatch'), on: z.boolean() }),
   travel: z.object({ type: z.literal('travel'), to: LocationRef }),
   sendLetter: z.object({ type: z.literal('sendLetter'), text: z.string() }),
   redeemCoupon: z.object({ type: z.literal('redeemCoupon'), code: z.string() }),
@@ -71,7 +72,7 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
-  schemas.setLocked, schemas.autoLock, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
+  schemas.setLocked, schemas.autoLock, schemas.setAutoLockOnCatch, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
   schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.dismissBaitRefund,
   schemas.extractEnergy, schemas.setEnergyTarget, schemas.resetEnergyTargets, schemas.cook, schemas.eat,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
