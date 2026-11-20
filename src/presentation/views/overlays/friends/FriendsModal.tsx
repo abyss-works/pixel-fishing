@@ -20,7 +20,6 @@ import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
-import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
@@ -58,7 +57,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
     : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
-    // 탭이 있는 창의 높이: 요청 탭(입력과 세 줄 높이 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
+    // 탭이 있는 창의 높이: 요청 탭(입력과 받은·보낸 요청 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
     <Modal layer="stage" md height={480} onClose={onClose}>
       <ModalCard title="소셜" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -138,7 +137,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
   );
 }
 
-/** 요청 탭: 위에 닉네임 입력, 아래에 받은 요청과 보낸 요청 표(각 세 줄 높이, 넘치면 표 안에서 굴린다) */
+/** 요청 탭: 위에 닉네임 입력, 아래에 받은 요청과 보낸 요청 표(남은 높이를 나눠 갖고, 넘치면 표 안에서 굴린다) */
 function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   groups: FriendGroups | null;
   pending: ReactNode;
@@ -166,7 +165,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   };
 
   return (
-    <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
       {/* 후보와 오류는 입력 아래에 떠서 아래 표를 밀지 않는다 */}
       <form className="relative flex gap-2 shrink-0" onSubmit={e => { void onRequest(e); }}>
         <TextInput className="flex-1 min-w-0" value={nickname} maxLength={32}
@@ -200,16 +199,16 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
   );
 }
 
-/** 요청 표 하나: 이름표 줄(이름과 수), 표 머리 한 줄과 세 줄 높이의 칸 */
+/** 요청 표 하나: 이름표 줄(이름과 수)과 남은 높이를 채우는 표 칸(최소 한 줄 높이, 넘치면 표 안에서 굴린다) */
 function FriendRequestTable({ label, rows, pending, empty, actions }: {
   label: string; rows: FriendItem[] | null; pending: ReactNode; empty: string; actions: (f: FriendItem) => ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-1.5 shrink-0" aria-label={label}>
+    <section className="flex flex-col gap-1.5 flex-1 min-h-0" aria-label={label}>
       <span className="flex justify-between text-xs text-text-dim">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
       </span>
-      <TableBox className="h-[138px] px-3 py-1">
+      <TableBox className="flex-1 min-h-[48px] px-3 py-1">
         {rows && rows.length > 0 ? (
           <DataTable cols={[null, '132px']} nameMin="8rem">
             <tbody>

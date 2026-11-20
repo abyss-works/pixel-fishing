@@ -5,7 +5,7 @@ import { fmtGold } from './format';
 export default function PriceTag({ list, price, size = 'sm' }: { list: number; price: number; size?: 'sm' | 'lg' }) {
   const discounted = price < list;
   return (
-    <span className={cx('pf-accent whitespace-nowrap flex items-baseline gap-1.5', size === 'lg' ? 'text-base' : 'text-sm')}>
+    <span className={cx('pf-accent whitespace-nowrap inline-flex items-baseline gap-1.5', size === 'lg' ? 'text-base' : 'text-sm')}>
       {discounted && <s className="text-text-dim text-xs" aria-label={`정가 ${fmtGold(list)}`}>{fmtGold(list)}</s>}
       <span className={discounted ? 'text-gold' : undefined}>{fmtGold(price)}</span>
     </span>
