@@ -32,10 +32,16 @@ describe('정비 화면 데이터', () => {
     expect(selectBoatPurchaseResult(1).boatName).toBeTruthy();
   });
 
-  it('가방 상한보다 많이 든 상태면 현재 가방은 든 수(래칫)로 보인다', () => {
-    const game = { ...newState(), boat: 3, bag: Array.from({ length: 550 }, () => ({}) as never) };
-    const preview = selectBoatPurchasePreview(game);
-    expect(preview.kind === 'available' && preview.currentBagCap).toBe(550);
+  it('길드 보너스나 초과 보유로 배 기본 상한보다 많이 들고 있어도 현재 배의 기본 가방 상한을 반환한다', () => {
+    for (const count of [550, 1_200]) {
+      const game = { ...newState(), boat: 3, bag: Array.from({ length: count }, () => ({}) as never) };
+      const preview = selectBoatPurchasePreview(game);
+      expect(preview.kind).toBe('available');
+      if (preview.kind === 'available') {
+        expect(preview.currentBagCap).toBe(BOATS[2].bagCap);
+        expect(preview.next.bagCap - preview.currentBagCap).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('배 사다리 — 가진 배는 done, 현재는 current, 바로 다음은 next, 나머지는 locked', () => {

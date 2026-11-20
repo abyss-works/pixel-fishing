@@ -3,7 +3,7 @@ import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../.
 import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import { fmtGold, fmtSize, josa } from '../../../../ui/format';
+import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
@@ -234,8 +234,8 @@ export default function BagTab({ game, guest = false, sellBonus, bagBonus = 0, d
           {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>
-              물고기 (<span className={cx(bagFull && 'text-danger')}>{bagCount}</span>
-              <span className="text-text-dim">/{cap}</span>마리)
+              물고기 (<span className={cx(bagFull && 'text-danger')}>{fmtNum(bagCount)}</span>
+              <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
             {bagCount > 0 && (
               <Tip wraps text="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">

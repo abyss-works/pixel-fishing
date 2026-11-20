@@ -2,7 +2,7 @@ import { BOATS } from '../../../game/content/boats';
 import type { Boat } from '../../../game/content/boats';
 import { SPOTS } from '../../../game/content/spots';
 import type { Spot } from '../../../game/content/spots';
-import { MAX_BOAT, bagCapacity, canBuyBoat, canUpgradeRod, rodStats } from '../../../game/rules/logic';
+import { MAX_BOAT, canBuyBoat, canUpgradeRod, capOfBoat, rodStats } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { upgradeCost } from '../../../game/rules/balance';
 import { powerOfLevel } from '../../../game/rules/stats';
@@ -28,7 +28,7 @@ export type BoatPurchasePreview =
     /** 지금 탄 배 이름. 맨발이면 null */
     currentName: string | null;
     currentSpeed: number | null;
-    /** 현재 배(맨발이면 도보 상한)와 다음 배의 가방 상한 — 구매 비교 표의 두 번째 축 */
+    /** 현재 배(맨발이면 도보 상한)의 기본 가방 상한 — 구매 비교 표의 두 번째 축(래칫·길드 보너스 제외) */
     currentBagCap: number;
     check: ReturnType<typeof canBuyBoat>;
   };
@@ -45,7 +45,7 @@ export function selectBoatPurchasePreview(game: GameState): BoatPurchasePreview 
     openedSpot: SPOTS.find(spot => spot.boatTier === next.tier),
     currentName: game.boat === 0 ? null : BOATS[game.boat - 1].name,
     currentSpeed: game.boat === 0 ? null : BOATS[game.boat - 1].speed,
-    currentBagCap: bagCapacity(game.boat, game.bag),
+    currentBagCap: capOfBoat(game.boat),
     check: canBuyBoat(game),
   };
 }
