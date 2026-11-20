@@ -7,8 +7,10 @@ import { SPOTS } from '../../../src/game/content/spots';
 import { rng } from '../model';
 import { loadCounterBonus, parseCounterBonus } from './counterBonus';
 import type { CounterBonusConfig } from './counterBonus';
+import { effectPlan } from './cooking';
 import { daysReport } from './days';
 import { bigMarksDist, transitionDist } from './dist';
+import { NO_EFFECT } from './effects';
 import { gatesReport } from './gateReport';
 import { simulate } from './progress';
 import { parseArgs, runCli } from './report';
@@ -219,5 +221,36 @@ describe('--counter-bonus CLI 및 보고서 연동', () => {
     const distJson = JSON.parse(runCli(['dist', '--counter-bonus', file, '--big-marks', '20,50', '--trials', '3', '--seed', '7', '--json']).stdout);
     expect(distJson.options.counterBonus).toBeDefined();
     expect(distJson.dist.bigMarks.rows).toHaveLength(2);
+  });
+
+  it('plan과 카운터 보너스 합산 결과가 유효 범위를 벗어나면 오류로 거부한다', () => {
+    const overBitePlan = effectPlan({ effect: { ...NO_EFFECT, bite: 0.6 }, fromBoat: 0 });
+    const overBiteBonus = parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1], effects: [{ bite: 0.5 }] }],
+    });
+    expect(() => simulate({ axis: 'idle', bounty: false, maxDays: 5, plan: overBitePlan, counterBonus: overBiteBonus }))
+      .toThrow(/입질/);
+
+    const underSellPlan = effectPlan({ effect: { ...NO_EFFECT, sell: -0.6 }, fromBoat: 0 });
+    const underSellBonus = parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1], effects: [{ sell: -0.5 }] }],
+    });
+    expect(() => simulate({ axis: 'idle', bounty: false, maxDays: 5, plan: underSellPlan, counterBonus: underSellBonus }))
+      .toThrow(/판매가/);
+  });
+
+  it('daysReport에서 counterBonus 사용 시 최대 일수 내 미도달이면 bounty 여부와 관계없이 levelUp이 null이다', () => {
+    const cfg = loadCounterBonus(file);
+    const short = daysReport({ axis: 'idle', maxDays: 1, counterBonus: cfg });
+    const noBountyLevelUps = short.levelUp.filter(r => !r.bounty);
+    const withBountyLevelUps = short.levelUp.filter(r => r.bounty);
+    expect(noBountyLevelUps.length).toBeGreaterThan(0);
+    expect(withBountyLevelUps.length).toBeGreaterThan(0);
+    for (const row of [...noBountyLevelUps, ...withBountyLevelUps]) {
+      expect(row.dailyGold).toBeNull();
+      expect(row.bountyShare).toBeNull();
+      expect(row.hours).toBeNull();
+      expect(row.days).toBeNull();
+    }
   });
 });

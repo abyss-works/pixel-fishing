@@ -21,7 +21,7 @@ import type { Activity, DexLog } from './bounty';
 import type { Reward, RewardUnit } from './achievement';
 import { createCounterBonusTracker } from './counterBonus';
 import type { CounterBonusConfig, CounterUnlock } from './counterBonus';
-import { NO_EFFECT, effectRates } from './effects';
+import { NO_EFFECT, checkEffect, effectRates } from './effects';
 import type { Effect } from './effects';
 import type { Sampler } from './sample';
 
@@ -213,12 +213,14 @@ export function simulate(opts: SimOptions): SimResult {
   const mergeFx = (a: Effect, b: Effect): Effect => {
     const sell = (a.sell ?? 0) + (b.sell ?? 0);
     const big = (a.big ?? 0) + (b.big ?? 0);
-    return {
+    const merged: Effect = {
       bite: a.bite + b.bite, rare: a.rare + b.rare, epic: a.epic + b.epic, legendary: a.legendary + b.legendary,
       variant: a.variant + b.variant, size: a.size + b.size, move: a.move + b.move, named: a.named + b.named,
       night: a.night > 0 || b.night > 0 ? 1 : 0,
       ...(sell !== 0 ? { sell } : {}), ...(big !== 0 ? { big } : {}),
     };
+    checkEffect(merged);
+    return merged;
   };
   const rateAt = (spot: SpotId, axis: Axis = axisAt(spot, level)): Rates => {
     const key = `${spot}:${level}:${axis}:${opts.plan ? boat : ''}:${tracker ? tracker.version : ''}`;

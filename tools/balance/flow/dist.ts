@@ -66,6 +66,7 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
 
 export interface TransitionDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number;
+  bounty?: boolean;
   counterBonus?: CounterBonusConfig;
 }
 
@@ -82,7 +83,7 @@ export interface TransitionDist {
 
 export function transitionDist(o: TransitionDistOptions): TransitionDist[] {
   checkTrials(o.trials);
-  const base = { axis: o.axis, bounty: false, maxDays: o.maxDays, ...(o.counterBonus ? { counterBonus: o.counterBonus } : {}) };
+  const base = { axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays, ...(o.counterBonus ? { counterBonus: o.counterBonus } : {}) };
   const analytic = transitionTimings(simulate(base).arrivals);
   const stream = rng(o.seed);
   const hours: number[][] = Array.from({ length: SPOTS.length - 1 }, () => []);
@@ -104,6 +105,7 @@ export interface RewardDistOptions {
   trials: number; seed: number; axis: FlowAxis; maxDays: number;
   /** 목표 시간어치(0 초과)와 기본 업적이 받는 몫(0 이상 1 이하) */
   hours: number; basicShare: number;
+  bounty?: boolean;
 }
 
 export interface RewardDistRow {
@@ -135,7 +137,7 @@ export function rewardDist(o: RewardDistOptions): RewardDistRow[] {
   checkTrials(o.trials);
   const plan = rewardPlan(o.hours, o.basicShare);
   const nextByZone = BOUNTY_ZONES.map(zone => ({ zone, to: nextRegionSpot(zone) }));
-  const sim = { axis: o.axis, bounty: false, maxDays: o.maxDays };
+  const sim = { axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays };
   const keys = BOUNTY_ZONES.flatMap(zone => (['basic', 'named'] as const).map(tier => ({ zone, tier })));
   const achieved = new Map<string, number[]>(keys.map(k => [`${k.zone}:${k.tier}`, []]));
   const arrival = new Map<string, number[]>(nextByZone.map(b => [b.zone, []]));
@@ -195,7 +197,7 @@ export function spotRewardDist(o: RewardDistOptions): SpotRewardDistRow[] {
     const i = SPOTS.findIndex(x => x.id === s.id);
     return [s.id, SPOTS[i + 1]?.id ?? null] as const;
   }));
-  const sim = { axis: o.axis, bounty: false, maxDays: o.maxDays };
+  const sim = { axis: o.axis, bounty: o.bounty ?? false, maxDays: o.maxDays };
   const keys = realSpots.flatMap(s => (['basic', 'named'] as const).map(tier => ({ spot: s.id, tier })));
   const achieved = new Map<string, number[]>(keys.map(k => [`${k.spot}:${k.tier}`, []]));
   const arrival = new Map<SpotId, number[]>(realSpots.map(s => [s.id, []]));

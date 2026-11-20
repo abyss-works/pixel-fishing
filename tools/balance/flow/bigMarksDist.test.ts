@@ -3,7 +3,7 @@ import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
 import { BIG_CATCH_PERCENTILE } from '../../../src/game/rules/balance';
 import { rng } from '../model';
-import { bigMarksDist } from './dist';
+import { bigMarksDist, rewardDist, spotRewardDist, transitionDist } from './dist';
 import { DAY_HOURS, simulate } from './progress';
 import { parseArgs, renderText, runCli, runFlow } from './report';
 import { createSampler } from './sample';
@@ -122,5 +122,27 @@ describe('bigMarksDist 분포 및 출력', () => {
     expect(json.dist.bigMarks.rows).toHaveLength(2);
     expect(json.dist.bigMarks.rows[0].days.p50).toBeCloseTo(json.dist.bigMarks.rows[0].hours.p50 / DAY_HOURS, 12);
     expect(runFlow(parseArgs(['dist', '--trials', '3'])).dist!.bigMarks).toBeUndefined();
+  });
+
+  it('dist의 --bounty 옵션이 transitionDist, rewardDist, spotRewardDist에도 일관되게 반영된다', () => {
+    const tdOff = transitionDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, bounty: false });
+    const tdOn = transitionDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, bounty: true });
+    expect(tdOn.at(-1)!.analyticCumulative!).toBeLessThan(tdOff.at(-1)!.analyticCumulative!);
+    expect(tdOn.at(-1)!.cumulative!.mean!).toBeLessThan(tdOff.at(-1)!.cumulative!.mean!);
+
+    const rdOff = rewardDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, hours: 4, basicShare: 0.5, bounty: false });
+    const rdOn = rewardDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, hours: 4, basicShare: 0.5, bounty: true });
+    expect(rdOn.map(r => r.arrival?.mean)).not.toEqual(rdOff.map(r => r.arrival?.mean));
+
+    const srOff = spotRewardDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, hours: 4, basicShare: 0.5, bounty: false });
+    const srOn = spotRewardDist({ trials: 4, seed: 9, axis: 'idle', maxDays: 365, hours: 4, basicShare: 0.5, bounty: true });
+    const bOff = srOff.find(r => r.spot === 'benguela')!;
+    const bOn = srOn.find(r => r.spot === 'benguela')!;
+    expect(bOn.arrival!.mean!).toBeLessThan(bOff.arrival!.mean!);
+
+    const flowOff = runFlow(parseArgs(['dist', '--reward', '4', '--trials', '3', '--seed', '5']));
+    const flowOn = runFlow(parseArgs(['dist', '--bounty', '--reward', '4', '--trials', '3', '--seed', '5']));
+    expect(flowOn.dist!.transition.at(-1)!.analyticCumulative!).toBeLessThan(flowOff.dist!.transition.at(-1)!.analyticCumulative!);
+    expect(flowOn.dist!.reward!.rows.map(r => r.arrival?.mean)).not.toEqual(flowOff.dist!.reward!.rows.map(r => r.arrival?.mean));
   });
 });

@@ -235,7 +235,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --target <해역=골드시간/명성시간>  solve: 출발 해역과 목표 시간(방치 기준 실질 낚시 시간). 여러 번 줄 수 있다. 예: --target sthelena=24/30
   --boat-share <0~1>  solve: 배 가격의 전환 골드 비중. 기본 ${BOAT_SHARE}. design: 기본 0
   --levels <시작-끝>  upgrades: 강화 표의 레벨 범위. 기본 1부터 마지막 해역 진입 레벨까지
-  --bounty           transition, gates: 일반 의뢰와 네임드 토벌을 매일 수행하는 경우로 잰다(생략하면 수행하지 않는 경우). days는 두 경우를 모두 낸다
+  --bounty           transition, gates, dist: 일반 의뢰와 네임드 토벌을 매일 수행하는 경우로 잰다(생략하면 수행하지 않는 경우). days는 두 경우를 모두 낸다
   --from-boat <N>    transition, days, gates: 효과가 걸리기 시작하는 배 단계(0 이상 정수). 기본은 인도양을 여는 배(증기선)
   --with-cost        transition, days, gates: --recipe의 재료로 쓴 물고기의 판매 손실을 하루(실질 낚시 8시간) 한 번의 비용으로 넣는다. 재료가 나오지 않는 해역은 만들 수 없어 효과도 비용도 없다
   --window <분>      window: 효과 창 길이. 기본 ${BAIT_WINDOW_MIN}
@@ -689,12 +689,12 @@ export function runFlow(o: FlowOptions): FlowResult {
     if (o.commands.includes('dist')) {
       res.dist = {
         opening: (['normal', 'good'] as const).map(judgment => openingDist({ judgment, trials: o.trials, seed: o.seed })),
-        transition: transitionDist({ trials: o.trials, seed: o.seed, ...sim, counterBonus }),
+        transition: transitionDist({ trials: o.trials, seed: o.seed, bounty: o.bounty, ...sim, counterBonus }),
         ...(rewardOn
           ? {
             reward: o.rewardUnit === 'spot'
-              ? { unit: 'spot' as const, hours: o.rewards[0], split: o.rewardSplit!, rows: spotRewardDist({ trials: o.trials, seed: o.seed, hours: o.rewards[0], basicShare: o.rewardSplit!, ...sim }) }
-              : { hours: o.rewards[0], split: o.rewardSplit!, rows: rewardDist({ trials: o.trials, seed: o.seed, hours: o.rewards[0], basicShare: o.rewardSplit!, ...sim }) },
+              ? { unit: 'spot' as const, hours: o.rewards[0], split: o.rewardSplit!, rows: spotRewardDist({ trials: o.trials, seed: o.seed, hours: o.rewards[0], basicShare: o.rewardSplit!, bounty: o.bounty, ...sim }) }
+              : { hours: o.rewards[0], split: o.rewardSplit!, rows: rewardDist({ trials: o.trials, seed: o.seed, hours: o.rewards[0], basicShare: o.rewardSplit!, bounty: o.bounty, ...sim }) },
           }
           : {}),
         ...(o.bigMarks.length > 0

@@ -114,7 +114,7 @@ export function daysReport(o: DaysOptions): DaysReport {
       for (const level of levels) {
         const upgradeGold = upgradeCost(level);
         const mark = r.marks.find(m => m.level === level);
-        if (bounty && !mark) {
+        if ((bounty || counterBonus) && !mark) {
           levelUp.push({ bounty, level, upgradeGold, reachedHours: null, licenses: [], dailyGold: null, bountyShare: null, hours: null, days: null });
           continue;
         }
