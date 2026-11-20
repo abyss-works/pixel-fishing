@@ -84,3 +84,14 @@ describe('BagTab - 판매 가능 금액', () => {
     expect(within(screen.getByText(/판매 가능 금액은/)).getByText(`기본 금액 ${fmtGold(base)}, 판매가 보너스 +${fmtGold(bonus)}, 합계 ${fmtGold(base + bonus)}`)).toBeInTheDocument();
   });
 });
+
+describe('BagTab - 길드 가방 보너스', () => {
+  it('길드 가방 보너스가 없으면 기본 상한을, 있으면 보너스를 더한 상한을 보인다', () => {
+    const g = game({ boat: 0, bag: [inst('a'), inst('b')] });
+    render(<BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(/2\s*\/\s*60/);
+    cleanup();
+    render(<BagTab sellBonus={0} bagBonus={0.2} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(/2\s*\/\s*72/);
+  });
+});

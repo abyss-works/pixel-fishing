@@ -148,12 +148,14 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, guest = false, sellBonus, dispatch, setToast }: {
+export default function BagTab({ game, guest = false, sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
   /** 계정을 연결하지 않아 요리가 닫힌 게스트인가 - 아이템 섹션의 잠금 사유를 정한다 */
   guest?: boolean;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
+  /** 길드 가방 용량 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
+  bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
@@ -161,7 +163,7 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
   const {
     count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game, sellBonus);
+  } = selectBagOverview(game, sellBonus, bagBonus);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
