@@ -45,6 +45,10 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'setLocked', uids: [], locked: true })?.type).toBe('setLocked');
     expect(parseAction({ type: 'setLocked', uids: [] })).toBeNull();
     expect(parseAction({ type: 'autoLock' })?.type).toBe('autoLock');
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: true })).toEqual({ type: 'setAutoLockOnCatch', on: true });
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: false })).toEqual({ type: 'setAutoLockOnCatch', on: false });
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: 'yes' })).toBeNull();
+    expect(parseAction({ type: 'setAutoLockOnCatch' })).toBeNull();
     expect(parseAction({ type: 'sendLetter', text: 'hi' })?.type).toBe('sendLetter');
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
     expect(parseAction({ type: 'dismissBaitRefund' })).toEqual({ type: 'dismissBaitRefund' });

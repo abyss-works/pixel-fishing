@@ -148,6 +148,10 @@ export interface GameState {
   achievementCounters: AchievementCounters;
   /** 토벌 완료한 네임드 의뢰 id 목록 — 런타임·패치 전달용 */
   clearedNamed: string[];
+  /** 토글식 자동 잠금 설정(기본 false) — 켜 두면 포획 시 어종×폼별 더 큰 개체를 자동 잠금·교체한다 */
+  autoLockOnCatch: boolean;
+  /** 토글식·일괄 자동 잠금이 관리하는 `${fishId}|${form}` → 개체 uid 맵(기본 {}). 수동 잠금과 구분해 보호한다 */
+  autoLockedIds: Record<string, string>;
 }
 
 export interface RodStats {
@@ -440,6 +444,8 @@ export function newState(): GameState {
     achievements: {},
     achievementCounters: {},
     clearedNamed: [],
+    autoLockOnCatch: false,
+    autoLockedIds: {},
   };
 }
 
@@ -1057,7 +1063,23 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     achievements: safeAchievements(s.achievements),
     achievementCounters: safeAchievementCounters(s.achievementCounters),
     clearedNamed: [...new Set(safeStrings(s.clearedNamed))],
+    autoLockOnCatch: s.autoLockOnCatch === true,
+    autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
   };
+}
+
+/** 자동 잠금 추적 맵 위생 — 비어 있지 않은 문자열 키와 문자열 uid만 살린다.
+ *  fastCatch 등 가방 없이 조립하는 경로도 통과하므로 bag 존재 여부로 걸러내지 않는다 */
+function safeAutoLockedIds(raw: unknown): Record<string, string> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k.length > 0 && k !== '__proto__' && k !== 'constructor' && k !== 'prototype'
+      && typeof v === 'string' && v.length > 0) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 /** 업적 맵 위생 — 문자열 키와 'claimable' | 'claimed' 값이면 모르는 업적 id도 보존한다 */
@@ -1184,12 +1206,17 @@ export function compareBlandness(a: FishInstance, b: FishInstance): number {
 /** 등급 우선순위 피해자 선정 — 서버가 등급별 top-1행(삭제·일반·희귀·영웅·전설 순)만
  *  읽어와 이 함수에 넘긴다. 풀가방 정렬(overflowUids)과 같은 개체를 고른다:
  *  등급이 먼저 갈리고, 동급 내에서는 compareBlandness다.
+ *  unlockedPrev는 토글식 자동 잠금 교체로 방금 잠금이 풀린 기존 개체(DB에서는 아직 잠김) — 있으면 기존 후보에 합류한다.
  *  반환: evictUid(구 놈 방생) — 없으면 null. evictNew(새 놈 즉시 방생) 여부. */
 export function pickEvict(
-  tops: readonly (FishInstance | null)[], inst: FishInstance,
+  tops: readonly (FishInstance | null)[], inst: FishInstance, unlockedPrev: FishInstance | null = null,
 ): { evictUid: string | null; evictNew: boolean } {
-  const top = tops.find(t => t !== null) ?? null;
+  const dbTop = tops.find(t => t !== null) ?? null;
+  const top = dbTop && unlockedPrev
+    ? (compareBlandness(dbTop, unlockedPrev) <= 0 ? dbTop : unlockedPrev)
+    : (dbTop ?? unlockedPrev);
   if (!top) return { evictUid: null, evictNew: false }; // 전부 잠김 — 상한 초과 유지
+  if (inst.locked) return { evictUid: top.uid, evictNew: false }; // 새로 잠긴 개체는 초과 대상에서 보호한다
   return compareBlandness(top, inst) <= 0
     ? { evictUid: top.uid, evictNew: false }
     : { evictUid: null, evictNew: true }; // 새 놈이 가장 안 특별 — 그 자리에서 놓아준다
@@ -1225,11 +1252,32 @@ export function overflowUids(bag: readonly FishInstance[], capacity: number): st
   return candidates.slice(0, over).map(i => i.uid);
 }
 
+/** 자동 잠금 추적 키 — 어종×폼별 최대 1마리를 가리킨다 */
+export const autoLockKey = (fishId: string, form: FormId): string => `${fishId}|${form}`;
+
+/** autoLockedIds에서 지정된 uid 집합에 해당하는 항목을 뺀다. 변경이 없으면 원본 참조를 유지한다 */
+export function pruneAutoLockedIds(
+  map: Readonly<Record<string, string>>, uids: ReadonlySet<string>,
+): Record<string, string> {
+  if (uids.size === 0) return map as Record<string, string>;
+  let changed = false;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(map)) {
+    if (uids.has(v)) { changed = true; continue; }
+    out[k] = v;
+  }
+  return changed ? out : (map as Record<string, string>);
+}
+
 /** 방생 — 개체만 사라진다. 명성·도감은 잡는 순간 이미 확정됐으므로 건드리지 않는다 */
 export function release(state: GameState, uids: readonly string[]): GameState {
   if (uids.length === 0) return state;
   const gone = new Set(uids);
-  return { ...state, bag: state.bag.filter(i => !gone.has(i.uid)) };
+  return {
+    ...state,
+    bag: state.bag.filter(i => !gone.has(i.uid)),
+    autoLockedIds: pruneAutoLockedIds(state.autoLockedIds, gone),
+  };
 }
 
 export function bagValue(state: GameState): number {
@@ -1260,6 +1308,7 @@ export function sellSelected(state: GameState, uids: readonly string[], bonus = 
     ...state,
     gold: state.gold + base + saleBonusOf(base, bonus),
     bag: state.bag.filter(i => !soldUids.has(i.uid)),
+    autoLockedIds: pruneAutoLockedIds(state.autoLockedIds, soldUids),
   };
 }
 
@@ -1288,6 +1337,8 @@ export function setLocked(state: GameState, uids: readonly string[], locked: boo
   return {
     ...state,
     bag: state.bag.map(i => (want.has(i.uid) && i.locked !== locked ? { ...i, locked } : i)),
+    // 개별 잠금 걸기(수동 승격)와 풀기 모두 자동 잠금 추적에서 뺀다
+    autoLockedIds: pruneAutoLockedIds(state.autoLockedIds, want),
   };
 }
 
@@ -1306,7 +1357,12 @@ export function moveExhibit(state: GameState, uid: string, slot: number | null):
   if (!inst) return state;
   const exhibit = [...state.exhibit];
   exhibit[slot] = inst;
-  return { ...state, bag: state.bag.filter(i => i.uid !== uid), exhibit };
+  return {
+    ...state,
+    bag: state.bag.filter(i => i.uid !== uid),
+    exhibit,
+    autoLockedIds: pruneAutoLockedIds(state.autoLockedIds, new Set([uid])),
+  };
 }
 
 /** 가장 앞의 빈 전시 칸 — 다 찼으면 null. 진열 버튼이 칸을 고르지 않게 하는 단일 출처 */
@@ -1329,7 +1385,7 @@ export function autoLockPlan(bag: readonly FishInstance[]): { lock: string[]; un
   };
   const top = new Map<string, FishInstance>();
   for (const i of bag) {
-    const k = `${i.fishId}|${i.form}`;
+    const k = autoLockKey(i.fishId, i.form);
     const cur = top.get(k);
     if (!cur || bigger(i, cur)) top.set(k, i);
   }
@@ -1340,10 +1396,74 @@ export function autoLockPlan(bag: readonly FishInstance[]): { lock: string[]; un
   };
 }
 
-/** 자동 잠금 적용 — 현재 가방의 계획을 계산해 잠금과 해제를 한 번에 반영한다. */
+/** 자동 잠금 적용 — 현재 가방의 계획을 계산해 잠금과 해제를 한 번에 반영하고,
+ *  정리된 어종×폼별 최대 개체들을 autoLockedIds에 기록한다(기존 맵 교체). */
 export function applyAutoLock(state: GameState): GameState {
   const { lock, unlock } = autoLockPlan(state.bag);
-  return setLocked(setLocked(state, lock, true), unlock, false);
+  const next = setLocked(setLocked(state, lock, true), unlock, false);
+  const autoLockedIds: Record<string, string> = {};
+  for (const i of next.bag) {
+    if (i.locked) autoLockedIds[autoLockKey(i.fishId, i.form)] = i.uid;
+  }
+  return { ...next, autoLockedIds };
+}
+
+/** 토글식 자동 잠금 포획 판정 결과 — 풀 경로(applyAction)와 서버 fastCatch의 단일 진실원 */
+export interface CatchAutoLockDecision {
+  /** 잠금 여부가 반영된 새 개체 */
+  inst: FishInstance;
+  /** 갱신된 autoLockedIds 맵 */
+  autoLockedIds: Record<string, string>;
+  /** 자동 교체로 잠금이 풀린 기존 가방 개체(없으면 null). 가방 초과 후보에 합류한다 */
+  unlockedPrev: FishInstance | null;
+}
+
+/** 포획 시 토글식 자동 잠금 판정 — maxLockedSize는 같은 어종×폼의 현재 가방 잠김 개체(수동·자동 모두 포함) 중
+ *  size ?? -1의 최댓값(잠긴 개체가 없으면 null), prevAuto는 autoLockedIds[key]가 가리키는 현재 가방 개체다.
+ *  기존 잠긴 개체가 없거나 새 개체가 최대 크기보다 크면 새 개체를 잠그고, 기존 자동 잠금 개체만 해제한다(수동 보호). */
+export function decideCatchAutoLock(
+  autoLockOnCatch: boolean,
+  autoLockedIds: Readonly<Record<string, string>>,
+  inst: FishInstance,
+  maxLockedSize: number | null,
+  prevAuto: FishInstance | null,
+): CatchAutoLockDecision {
+  if (!autoLockOnCatch) return { inst, autoLockedIds: autoLockedIds as Record<string, string>, unlockedPrev: null };
+  const shouldLock = maxLockedSize === null || (inst.size ?? -1) > maxLockedSize;
+  if (!shouldLock) return { inst, autoLockedIds: autoLockedIds as Record<string, string>, unlockedPrev: null };
+  const key = autoLockKey(inst.fishId, inst.form);
+  const nextInst: FishInstance = { ...inst, locked: true };
+  const nextAutoLockedIds: Record<string, string> = { ...autoLockedIds, [key]: inst.uid };
+  const unlockedPrev = prevAuto && prevAuto.locked && prevAuto.fishId === inst.fishId && prevAuto.form === inst.form
+    ? { ...prevAuto, locked: false }
+    : null;
+  return { inst: nextInst, autoLockedIds: nextAutoLockedIds, unlockedPrev };
+}
+
+/** 풀 경로용 토글식 자동 잠금 적용 — 현재 가방에서 최대 잠금 크기와 기존 자동 잠금 개체를 읽어 decideCatchAutoLock에 넘긴다 */
+export function applyCatchAutoLock(
+  state: GameState, inst: FishInstance,
+): { state: GameState; inst: FishInstance; unlockedPrev: FishInstance | null } {
+  if (!state.autoLockOnCatch) return { state, inst, unlockedPrev: null };
+  const key = autoLockKey(inst.fishId, inst.form);
+  const prevUid = Object.hasOwn(state.autoLockedIds, key) ? state.autoLockedIds[key] : undefined;
+  let maxLockedSize: number | null = null;
+  let prevAuto: FishInstance | null = null;
+  for (const b of state.bag) {
+    if (b.fishId === inst.fishId && b.form === inst.form && b.locked) {
+      const sz = b.size ?? -1;
+      if (maxLockedSize === null || sz > maxLockedSize) maxLockedSize = sz;
+    }
+    if (prevUid !== undefined && b.uid === prevUid) prevAuto = b;
+  }
+  const decision = decideCatchAutoLock(state.autoLockOnCatch, state.autoLockedIds, inst, maxLockedSize, prevAuto);
+  const bag = decision.unlockedPrev
+    ? state.bag.map(b => (b.uid === decision.unlockedPrev!.uid ? { ...b, locked: false } : b))
+    : state.bag;
+  const nextState = decision.autoLockedIds === state.autoLockedIds && bag === state.bag
+    ? state
+    : { ...state, bag, autoLockedIds: decision.autoLockedIds };
+  return { state: nextState, inst: decision.inst, unlockedPrev: decision.unlockedPrev };
 }
 
 // 아래 세 판정은 공통 규칙 함수에 위임해 중복 구현을 막는다.
