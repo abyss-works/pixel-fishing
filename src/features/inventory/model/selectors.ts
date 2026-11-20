@@ -35,10 +35,10 @@ export interface BagOverview extends BagStatus {
   autoLock: { lock: string[]; unlock: string[] };
 }
 
-/** 가방 탭의 수량·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
-export function selectBagOverview(game: GameState, sellBonus: number): BagOverview {
+/** 가방 탭의 수량·상한(길드 보너스 포함)·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
+export function selectBagOverview(game: GameState, sellBonus: number, bagBonus = 0): BagOverview {
   return {
-    ...selectBagStatus(game),
+    ...selectBagStatus(game, bagBonus),
     sellable: saleProceeds(sellableValue(game), sellBonus),
     autoLock: autoLockPlan(game.bag),
   };

@@ -28,6 +28,8 @@ import { isGuest } from '../../../../features/account/service/accountActions';
 interface GameTabsProps {
   /** 길드 판매가 보너스 비율 */
   sellBonus: number;
+  /** 길드 가방 용량 보너스 비율 */
+  bagBonus: number;
   region: RegionId;
   activeTab: TabKey;
   setActiveTab: (tab: TabKey) => void;
@@ -124,7 +126,7 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} guest={isGuest(props.account)} sellBonus={props.sellBonus} dispatch={props.dispatch} setToast={props.setToast} />}
+      {activeTab === 'bag' && <BagTab game={game} guest={isGuest(props.account)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (

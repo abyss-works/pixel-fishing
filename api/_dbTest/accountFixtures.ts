@@ -29,6 +29,8 @@ export interface AccountSpec {
   legacySaveAt?: string;
   /** 개발자에게 보낸 편지가 있는 계정 */
   letter?: boolean;
+  /** auth.accounts 행으로 연결할 로그인 수단(예: 'google') */
+  provider?: string;
 }
 
 let seq = 100;
@@ -49,6 +51,12 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
   if (spec.lastSignInAt) await client.query('update auth.sessions set updated_at = $2 where user_id = $1', [uid, spec.lastSignInAt]);
   else await client.query('delete from auth.sessions where user_id = $1', [uid]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
+  if (spec.provider) {
+    await client.query(
+      'insert into auth.accounts (user_id, account_id, provider_id, created_at, updated_at) values ($1, $2, $3, $4, $4)',
+      [uid, `${spec.provider}-${uid}`, spec.provider, spec.createdAt],
+    );
+  }
   if (spec.legacySave) {
     await client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)',
       [uid, { v: 4, gold: 0 }, spec.legacySaveAt ?? spec.createdAt]);

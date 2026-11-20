@@ -1,11 +1,19 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
+import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
+import { BOATS } from '../src/game/content/boats.js';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
+import {
+  COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
+} from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
-import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { hatById } from '../src/game/content/wardrobe.js';
+import { upgradeCost } from '../src/game/rules/balance.js';
+import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
 import {
@@ -1159,5 +1167,408 @@ describe('없는 이동 목적지', () => {
     expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'nowhere' } }))
       .toMatchObject({ status: 422, body: { error: 'bad-request' } });
     expect(await locationOf(uid)).toEqual(before);
+  });
+});
+
+// 파일 끝에 둔다 — 위 스냅샷 테스트의 testUid 시드 순번을 밀지 않는다. 신규 스냅샷 없이 저장 행·버전·이벤트를 명시 단언한다.
+describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
+  interface SavedRow {
+    gold: string;
+    fame: string;
+    boat: number;
+    rod: number;
+    version: string;
+    data: {
+      items?: Record<string, number>;
+      cooking?: { recipe: string; count: number; bonus: boolean[]; startedAt: string } | null;
+      slots?: { lunch: { id: string; endsAt: string } | null; bait: { id: string; endsAt: string } | null };
+      artifacts?: string[];
+      artifactLevels?: Record<string, number>;
+      hats?: string[];
+    };
+  }
+
+  const readSave = async (uid: string): Promise<SavedRow> =>
+    (await env.client.query<SavedRow>(
+      'select gold, fame, boat, rod, version, data from public.saves_current where user_id = $1', [uid],
+    )).rows[0];
+
+  const readEvents = async (uid: string): Promise<{ type: string; payload: Record<string, unknown> }[]> =>
+    (await env.client.query<{ type: string; payload: Record<string, unknown> }>(
+      'select type, payload from public.events where user_id = $1 order by id', [uid],
+    )).rows;
+
+  const readFishUids = async (uid: string): Promise<string[]> =>
+    (await env.client.query<{ uid: string }>(
+      'select uid from public.fish_instances where user_id = $1 order by uid', [uid],
+    )).rows.map(r => r.uid);
+
+  const rewind = (uid: string) =>
+    env.client.query(`update public.saves_current set updated_at = '2026-01-01T00:00:00Z' where user_id = $1`, [uid]);
+
+  /** 다른 커넥션이 saves_current 행 잠금을 쥔 채 버전을 올려, 확정 문장 실행 직후 409 version-conflict가 나게 만든다 */
+  async function conflictDuringCommit(uid: string, action: unknown) {
+    const blocker = new Client({ connectionString: env.db.url });
+    await blocker.connect();
+    let committed = false;
+    let settled = false;
+    try {
+      await blocker.query('begin');
+      await blocker.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+      const actionPromise = callAction(userToken(uid), action);
+      void actionPromise.finally(() => { settled = true; });
+      const releaseBlocker = (async () => {
+        for (let i = 0; i < 300; i++) {
+          if (settled) break;
+          const waiting = await env.client.query(
+            `select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query like '%saves_current%'`,
+          );
+          if (waiting.rowCount) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        await blocker.query('commit');
+        committed = true;
+      })();
+      const [res] = await Promise.all([actionPromise, releaseBlocker]);
+      return res;
+    } finally {
+      if (!committed) await blocker.query('rollback').catch(() => undefined);
+      await blocker.end().catch(() => undefined);
+    }
+  }
+
+  describe('동일 사용자 동시 요청 경합', () => {
+    it('sell 동시 요청은 한 번만 확정되고 골드·개체 삭제·sell 이벤트가 이중 적용되지 않는다', async () => {
+      const sold = fish('carp', { size: 30 });
+      const kept = fish('crucian', { size: 20 });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'sell', uids: [sold.uid] }),
+        callAction(userToken(uid), { type: 'sell', uids: [sold.uid] }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(expectedGold);
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('sell');
+      expect(events[0].payload).toMatchObject({ gold: expectedGold - 100, count: 1, uids: [sold.uid] });
+    });
+
+    it('buyBoat 동시 요청은 1단계만 구매되고 골드·배 단계·buyBoat 이벤트가 한 번만 기록된다', async () => {
+      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+      const tier1Price = BOATS[0].price;
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'buyBoat' }),
+        callAction(userToken(uid), { type: 'buyBoat' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.boat).toBe(1);
+      expect(Number(save.gold)).toBe(500 - tier1Price);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'buyBoat', payload: { tier: 1, cost: tier1Price } });
+    });
+
+    it('upgradeRod 동시 요청은 1회만 강화되고 골드·강화 단계·upgradeRod 이벤트가 한 번만 기록된다', async () => {
+      const uid = await seed({ state: { rod: 1, gold: 1000 } });
+      const cost = upgradeCost(1);
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'upgradeRod' }),
+        callAction(userToken(uid), { type: 'upgradeRod' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.rod).toBe(2);
+      expect(Number(save.gold)).toBe(1000 - cost);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'upgradeRod', payload: { toLevel: 2, cost } });
+    });
+
+    it('cook 동시 요청은 기운을 한 번만 차감하고 조리 상태와 cook 이벤트를 한 번만 남긴다', async () => {
+      const recipe = recipeById('cook-bait-rare')!;
+      const commonCost = recipeCostStored(recipe, 'common');
+      const rareCost = recipeCostStored(recipe, 'rare');
+      const uid = await seed({
+        state: {
+          boat: COOKING_UNLOCK_BOAT,
+          location: at('home'),
+          items: { [ENERGY_ITEM_IDS.common]: commonCost * 2, [ENERGY_ITEM_IDS.rare]: rareCost * 2 },
+        },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'cook', recipe: recipe.id, count: 1 }),
+        callAction(userToken(uid), { type: 'cook', recipe: recipe.id, count: 1 }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
+      expect(save.data.cooking).toMatchObject({ recipe: recipe.id, count: 1, startedAt: NOW });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ type: 'cook', payload: { recipe: recipe.id, count: 1 } });
+    });
+
+    it('eat 동시 요청은 요리를 1개만 소모하고 슬롯과 eat 이벤트를 한 번만 기록한다', async () => {
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' }),
+        callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ 'cook-lunch-bite': 1 });
+      expect(save.data.slots?.lunch?.id).toBe('cook-lunch-bite');
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ type: 'eat', payload: { item: 'cook-lunch-bite' } });
+    });
+
+    it('extractEnergy 동시 요청은 개체를 한 번만 소비하고 기운·extractEnergy 이벤트를 한 번만 남긴다', async () => {
+      const target = fish('crucian');
+      const kept = fish('carp');
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, location: at('home'), bag: [target, kept] },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'extractEnergy', uids: [target.uid] }),
+        callAction(userToken(uid), { type: 'extractEnergy', uids: [target.uid] }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: ENERGY_PER_INDIVIDUAL });
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('extractEnergy');
+      expect(events[0].payload).toMatchObject({ uids: [target.uid] });
+    });
+
+    it('exchangeArtifact 동시 요청은 재료를 1개만 소모하고 유물과 exchangeArtifact 이벤트를 한 번만 기록한다', async () => {
+      const art = artifactById('abyss-angler')!;
+      const uid = await seed({ state: { items: { [art.materialId]: 2 } } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id }),
+        callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.artifacts).toEqual([art.id]);
+      expect(save.data.items).toEqual({ [art.materialId]: 1 });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'exchangeArtifact', payload: { artifact: art.id } });
+    });
+
+    it('levelUpArtifact 동시 요청은 레벨을 1만 올리고 재료와 levelUpArtifact 이벤트를 한 번만 기록한다', async () => {
+      const art = artifactById('wreck-compass')!;
+      const costLv2 = artifactLevelCost(2);
+      const initialMat = costLv2 + artifactLevelCost(3);
+      const uid = await seed({
+        state: { artifacts: [art.id], items: { [art.materialId]: initialMat } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'levelUpArtifact', artifact: art.id }),
+        callAction(userToken(uid), { type: 'levelUpArtifact', artifact: art.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.artifactLevels).toEqual({ [art.id]: 2 });
+      expect(save.data.items).toEqual({ [art.materialId]: initialMat - costLv2 });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'levelUpArtifact', payload: { artifact: art.id, level: 2 } });
+    });
+
+    it('buyHat 동시 요청은 골드를 한 번만 차감하고 모자와 buyHat 이벤트를 한 번만 기록한다', async () => {
+      const hat = hatById('cap-red')!;
+      const uid = await seed({ state: { gold: hat.price * 2 } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'buyHat', hat: hat.id }),
+        callAction(userToken(uid), { type: 'buyHat', hat: hat.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(hat.price);
+      expect(save.data.hats).toEqual([hat.id]);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'buyHat', payload: { hat: hat.id, cost: hat.price } });
+    });
+  });
+
+  describe('409 version-conflict 시 DB 미기록·이중 적용 없음', () => {
+    it('sell 중 버전 충돌이 나면 개체·골드·이벤트를 쓰지 않고, 재시도 시 한 번만 판매된다', async () => {
+      const sold = fish('carp', { size: 30 });
+      const kept = fish('crucian', { size: 20 });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
+
+      const conflict = await conflictDuringCommit(uid, { type: 'sell', uids: [sold.uid] });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      expect(Number((await readSave(uid)).gold)).toBe(100);
+      expect(Number((await readSave(uid)).version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([sold.uid, kept.uid].sort());
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
+      expect(retry.status).toBe(200);
+      expect(Number((await readSave(uid)).gold)).toBe(expectedGold);
+      expect(Number((await readSave(uid)).version)).toBe(4);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      expect(await readEvents(uid)).toHaveLength(1);
+      expect((await readEvents(uid))[0].type).toBe('sell');
+    });
+
+    it('buyBoat 중 버전 충돌이 나면 409를 반환하고 골드·배 단계·이벤트를 기록하지 않는다', async () => {
+      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'buyBoat' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.boat).toBe(0);
+      expect(Number(save.gold)).toBe(500);
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('cook 중 버전 충돌이 나면 409를 반환하고 기운 차감·조리 상태·이벤트를 기록하지 않는다', async () => {
+      const recipe = recipeById('cook-bait-rare')!;
+      const commonCost = recipeCostStored(recipe, 'common');
+      const rareCost = recipeCostStored(recipe, 'rare');
+      const uid = await seed({
+        state: {
+          boat: COOKING_UNLOCK_BOAT,
+          location: at('home'),
+          items: { [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost },
+        },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'cook', recipe: recipe.id, count: 1 });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
+      expect(save.data.cooking).toBeNull();
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('extractEnergy 중 버전 충돌이 나면 409를 반환하고 개체 삭제·기운 적립·이벤트를 기록하지 않는다', async () => {
+      const target = fish('crucian');
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, location: at('home'), bag: [target] },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'extractEnergy', uids: [target.uid] });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({});
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([target.uid]);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('exchangeArtifact 중 버전 충돌이 나면 409를 반환하고 재료·유물·이벤트를 기록하지 않으며, 재시도 시 한 번만 교환한다', async () => {
+      const art = artifactById('abyss-angler')!;
+      const uid = await seed({ state: { items: { [art.materialId]: 2 } } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'exchangeArtifact', artifact: art.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(afterConflict.data.artifacts).toEqual([]);
+      expect(afterConflict.data.items).toEqual({ [art.materialId]: 2 });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(afterRetry.data.artifacts).toEqual([art.id]);
+      expect(afterRetry.data.items).toEqual({ [art.materialId]: 1 });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'exchangeArtifact', payload: { artifact: art.id } }]);
+    });
+
+    it('levelUpArtifact 중 버전 충돌이 나면 409를 반환하고 재료·레벨·이벤트를 기록하지 않는다', async () => {
+      const art = artifactById('wreck-compass')!;
+      const costLv2 = artifactLevelCost(2);
+      const uid = await seed({
+        state: { artifacts: [art.id], items: { [art.materialId]: costLv2 } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'levelUpArtifact', artifact: art.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.artifactLevels).toBeUndefined();
+      expect(save.data.items).toEqual({ [art.materialId]: costLv2 });
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('buyHat 중 버전 충돌이 나면 409를 반환하고 골드·모자·이벤트를 기록하지 않는다', async () => {
+      const hat = hatById('cap-red')!;
+      const uid = await seed({ state: { gold: hat.price } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'buyHat', hat: hat.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(hat.price);
+      expect(save.data.hats).toEqual([]);
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
   });
 });

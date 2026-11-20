@@ -85,3 +85,15 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
   });
 });
+
+describe('selectBagOverview - 길드 가방 보너스', () => {
+  it('bagBonus를 전달하면 상한과 채움 상태에 길드 보너스를 반영하고, 생략하면 0으로 본다', () => {
+    const bag = Array.from({ length: 60 }, (_, i) => ({
+      uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
+      caughtAt: null, spot: null, judgment: null, locked: false,
+    }));
+    const game = seed({ boat: 0, bag });
+    expect(selectBagOverview(game, 0)).toMatchObject({ count: 60, cap: 60, full: true, percent: 100, level: 'danger' });
+    expect(selectBagOverview(game, 0, 0.2)).toMatchObject({ count: 60, cap: 72, full: false, percent: 83, level: 'warn' });
+  });
+});
