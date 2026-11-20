@@ -55,6 +55,6 @@ function renderBag(bagBonus: number, mobile = false) {
 describe('GameTabs - 가방 탭 길드 보너스 전달', () => {
   it.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('%s에서 가방 탭에 bagBonus를 전달해 상한을 표시한다', (_, mobile) => {
     renderBag(0.2, mobile);
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(/0\s*\/\s*72/);
+    expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/0\s*\/\s*72/);
   });
 });
