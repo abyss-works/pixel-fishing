@@ -55,7 +55,7 @@ interface Props {
   locked?: boolean;
   /** 조우 창처럼 바다 위에 승부 창이 떠 있는 동안 — 켜지는 순간 낚시를 접는다(이동과 같은 취급) */
   paused?: boolean;
-  /** 모바일에서 낚시 상태 띠를 넣을 HUD 자리 — 없으면 프레임 아래 가운데에 둔다 */
+  /** 낚시 상태 띠를 넣을 HUD 자리 */
   statusSlot?: HTMLElement | null;
 }
 
@@ -226,11 +226,9 @@ export default function Field({
     if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
   };
 
-  const inSlot = mobile && statusSlot != null;
   const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
   const statusBand = status && (
-    <HudPanel className={cx('z-(--z-stage-hud) px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in',
-      inSlot ? 'max-w-full' : 'absolute left-1/2 -translate-x-1/2 bottom-3 max-w-[min(480px,calc(100%-24px))]')}>
+    <HudPanel className="z-(--z-stage-hud) max-w-[min(480px,100%)] px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in">
       {status.lead}
       {/* 판정 영역 설명 줄은 입력을 받지 않는 띠의 생략 글자라 툴팁 없이 숨기기만 한다 */}
       {status.judge && <span className={cx('block', HEADER_ROWS_OMIT_CLASS)}>{status.judge}</span>}
@@ -252,13 +250,13 @@ export default function Field({
       )}
       <NightOverlay />
       {pad?.active && !locked && <MovePad pad={pad} />}
-      {/* 낚시 상태 — 게임 화면 아래 가운데의 반투명 노치 띠. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
+      {/* 낚시 상태 — HUD 배치 컨테이너가 정한 슬롯에 반투명 노치 띠를 꽂는다. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
           {snapshot.phase === 'catch' && fish ? (
             <CatchCard fish={fish} info={snapshot.catchInfo} />
           ) : (
-            inSlot ? createPortal(statusBand, statusSlot) : statusBand
+            statusSlot != null && statusBand ? createPortal(statusBand, statusSlot) : null
           )}
         </div>
       )}

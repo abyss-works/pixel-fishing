@@ -199,13 +199,11 @@ describe('메시지 창', () => {
     expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
   });
 
-  it('모바일 레이아웃에서는 격자 행을 차지하지 않고 채팅 묶음 안에서 폭 전체를 쓴다', () => {
+  it('하단 HUD 흐름 안에서 격자 행을 차지하지 않고 모바일 레이아웃에서는 폭 전체를 쓴다', () => {
     const { container } = render(<Filtered log={logOf(2)} />);
     const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain('mobile:relative');
-    // PC 레이아웃의 왼쪽과 아래 12px 오프셋이 모바일 레이아웃에서 풀려야 채팅 묶음의 8px 안쪽 여백에 맞는다
-    expect(root.className).toContain('mobile:left-auto');
-    expect(root.className).toContain('mobile:bottom-auto');
+    expect(root.className).toContain('relative');
+    expect(root.className).not.toContain('absolute');
     expect(root.className).toContain('mobile:w-full');
     // 채팅은 채팅과 헤더 층이다(PC 레이아웃과 모바일 레이아웃 모두)
     expect(root.className).toContain('z-(--z-chrome)');

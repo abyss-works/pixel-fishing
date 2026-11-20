@@ -92,7 +92,22 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
   });
 });
 
-describe('HudLayout 모바일 채팅 묶음 구조', () => {
+describe('HudLayout 하단 HUD 묶음 구조', () => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 같은 묶음에 이 순서로 둔다', mobile => {
+    layout.mobile = mobile;
+    setMinimapVisible(true);
+    let slot: HTMLDivElement | null = null;
+    render(<HudLayout {...props} game={newState()} scene={region} onStatusSlot={el => { slot = el; }} />);
+    const log = screen.getByTestId('log');
+    const bundle = log.parentElement!;
+    expect(slot).not.toBeNull();
+    expect(bundle.firstElementChild).toBe(slot);
+    expect(bundle.contains(screen.getByTestId('minimap'))).toBe(true);
+    expect(bundle.contains(screen.getByText('12:00'))).toBe(true);
+    expect(bundle.lastElementChild).toBe(log);
+    expect(bundle.className).not.toContain('z-(--z-');
+  });
+
   it('채팅이 칩 줄, 미니맵과 같은 묶음의 마지막 자식이다 - 채팅 높이가 늘면 칩 줄과 미니맵이 그 위에 쌓인 채 따라 올라간다', () => {
     layout.mobile = true;
     setMinimapVisible(true);
@@ -102,7 +117,7 @@ describe('HudLayout 모바일 채팅 묶음 구조', () => {
     expect(bundle.contains(screen.getByTestId('minimap'))).toBe(true);
     expect(bundle.contains(screen.getByText('12:00'))).toBe(true);
     expect(bundle.lastElementChild).toBe(log);
-    for (const cls of ['mobile:absolute', 'mobile:flex-col', 'mobile:inset-x-2', '--keyboard-h']) expect(bundle.className).toContain(cls);
+    for (const cls of ['absolute', 'mobile:flex-col', 'mobile:inset-x-2', '--keyboard-h']) expect(bundle.className).toContain(cls);
     expect(bundle.className).not.toContain('row-start-3');
     expect(bundle.className).not.toContain('z-(--z-');
   });
@@ -113,7 +128,7 @@ describe('HudLayout 모바일 채팅 묶음 구조', () => {
     render(<HudLayout {...props} game={newState()} scene={region} />);
     const stack = screen.getByTestId('minimap').parentElement!.parentElement!;
     expect(stack.className).toContain('z-(--z-stage-hud)');
-    expect(stack.className).toContain('mobile:relative');
+    expect(stack.className).toContain('relative');
   });
 
   it('PC와 모바일 모두 헤더가 채팅보다 먼저 그려져 탭 이동 순서가 헤더, 채팅이다', () => {
