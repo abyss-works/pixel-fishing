@@ -13,9 +13,9 @@ import type { FormId } from './fish.js';
 const DATA = [
   { id: 'pond',  name: '마을 연못',  boatTier: 0, region: 'village', powerReq: 10 }, // Lv1
   { id: 'river', name: '마을 강',    boatTier: 0, region: 'village', powerReq: 20 }, // Lv3
-  // 수역명 = 구역명 복귀(존 계층화): spot은 이제 "그 범위의 어군
-  // 오브젝트"라 구역 이름과 겹쳐도 한 엔티티다. 구 '태평양 연안' 개명 하필 제거.
-  { id: 'sea',   name: '태평양',        boatTier: 1, region: 'ocean', powerReq: 35 }, // Lv6
+  // 해역 표시명은 구역명과 분리한다. 같은 구역을 가리키는 두 이름이 섞이지 않게
+  // 일반 수역은 '연안' 접미어를 둔다.
+  { id: 'sea',   name: '태평양 연안',    boatTier: 1, region: 'ocean', powerReq: 35 }, // Lv6
   { id: 'deep',  name: '마리아나 해구', boatTier: 2, region: 'ocean', powerReq: 55 }, // Lv10
   // 동남아&오세아니아 — 일반 수역 없이 특화 3수역(어군은 특화에만 둔다)
   { id: 'dragonhole',  name: '드래곤 홀',         boatTier: 3, region: 'seasia', powerReq: 75 }, // Lv14
@@ -29,7 +29,7 @@ const DATA = [
   // tier5(증기선)가 필요하다. 즉 1-2의 말라카 트리거는 requiredBoat 4에서 5로 올라야 하고,
   // 인도양 연안은 tier5 소비 · 남인도양은 tier6 소비다("같은 배로 오래 머물러도 무방" —
   // 여러 해역을 한 번에 탐험하는 느낌).
-  { id: 'indian',      name: '인도양',       boatTier: 5, region: 'indian',
+  { id: 'indian',      name: '인도양 연안',   boatTier: 5, region: 'indian',
     powerReq: 135 }, // Lv26 환산 (10+(26-1)*5)
   { id: 'southindian', name: '남인도양',     boatTier: 6, region: 'indian',
     powerReq: 160 }, // Lv31 환산
