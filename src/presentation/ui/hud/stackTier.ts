@@ -4,14 +4,14 @@
 // 접두사 pc:는 모바일 레이아웃(뷰포트 768 미만)을 제외한다. 모바일 레이아웃은 같은 배치를 mobile: 변형으로 이미 갖고 있다.
 // @max-[Npx]는 폭이 N 미만일 때다. 값(여백 8px, 열 156px, 메시지 창 5줄)은 모바일 레이아웃과 같다.
 
-/** 줄기 - 오른쪽 아래 열과 메시지 창을 담아 스테이지 아래에 세로로 쌓는다(HudLayout) */
-export const STACK_TRUNK_CLASS = 'pc:@max-[464px]:absolute pc:@max-[464px]:inset-x-2 pc:@max-[464px]:bottom-2 pc:@max-[464px]:flex pc:@max-[464px]:flex-col pc:@max-[464px]:items-end pc:@max-[464px]:gap-2 pc:@max-[464px]:pointer-events-none';
+/** 줄기 - 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 스테이지 아래에 세로로 쌓는다(HudLayout) */
+export const STACK_TRUNK_CLASS = 'pc:@max-[464px]:inset-x-2 pc:@max-[464px]:bottom-2 pc:@max-[464px]:flex-col pc:@max-[464px]:flex-nowrap pc:@max-[464px]:items-end pc:@max-[464px]:gap-2';
 
-/** 오른쪽 아래 열 - 줄기 안 오른쪽 정렬의 첫 자식이 된다 */
-export const STACK_COLUMN_CLASS = 'pc:@max-[464px]:relative pc:@max-[464px]:right-auto pc:@max-[464px]:bottom-auto pc:@max-[464px]:w-[156px]';
+/** 오른쪽 아래 열 - 줄기 안 오른쪽 정렬의 둘째 자식이 된다 */
+export const STACK_COLUMN_CLASS = 'pc:@max-[464px]:order-none pc:@max-[464px]:w-[156px]';
 
 /** 메시지 창 - 줄기의 마지막 자식으로 폭 전체를 쓰고 기록 5줄을 보인다(--log-lines) */
-export const STACK_LOG_CLASS = 'pc:@max-[464px]:relative pc:@max-[464px]:left-auto pc:@max-[464px]:bottom-auto pc:@max-[464px]:w-full pc:@max-[464px]:[--log-lines:5]';
+export const STACK_LOG_CLASS = 'pc:@max-[464px]:w-full pc:@max-[464px]:[--log-lines:5]';
 
 /** 부가 줄 - 렌더링 역할이 생략인 글자. 숨기고 툴팁으로 넘긴다(useOmitted) */
 export const STACK_OMIT_CLASS = 'pc:@max-[464px]:hidden';
