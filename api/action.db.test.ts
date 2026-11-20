@@ -3,6 +3,7 @@
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { achievementById } from '../src/game/content/achievements.js';
 import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
 import { BOATS } from '../src/game/content/boats.js';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
@@ -1185,6 +1186,8 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       artifacts?: string[];
       artifactLevels?: Record<string, number>;
       hats?: string[];
+      coupons?: string[];
+      achievements?: Record<string, 'claimable' | 'claimed'>;
     };
   }
 
@@ -1216,7 +1219,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       await blocker.query('begin');
       await blocker.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
       const actionPromise = callAction(userToken(uid), action);
-      void actionPromise.finally(() => { settled = true; });
+      void actionPromise.then(() => { settled = true; }, () => { settled = true; });
       const releaseBlocker = (async () => {
         for (let i = 0; i < 300; i++) {
           if (settled) break;
@@ -1446,6 +1449,78 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toEqual({ type: 'buyHat', payload: { hat: hat.id, cost: hat.price } });
     });
+
+    it('redeemCoupon 동시 요청은 한 번만 적용되고 골드·사용 쿠폰·coupon 이벤트가 한 번만 기록된다', async () => {
+      await env.client.query(`insert into public.coupons (code, gold, description, active)
+        values ('DYN-CONC-1', 777, '동시 테스트', true)`);
+      const uid = await seed({ state: { gold: 100 } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONC-1' }),
+        callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONC-1' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(877);
+      expect(save.data.coupons).toEqual(['DYN-CONC-1']);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{ type: 'coupon', payload: { code: 'DYN-CONC-1', gold: 777 } }]);
+    });
+
+    it('claimAchievement 동시 요청은 보상을 한 번만 지급하고 업적 상태와 claimAchievement 이벤트를 한 번만 기록한다', async () => {
+      const def = achievementById('zone-basic-pacific')!;
+      expect(def.reward.kind).toBe('gold');
+      const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
+      const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'claimAchievement', id: def.id }),
+        callAction(userToken(uid), { type: 'claimAchievement', id: def.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(100 + rewardGold);
+      expect(save.data.achievements).toEqual({ [def.id]: 'claimed' });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{ type: 'claimAchievement', payload: { id: def.id, gold: rewardGold } }]);
+    });
+
+    it('claimAllAchievements 동시 요청은 보상을 한 번만 일괄 지급하고 claimAllAchievements 이벤트를 한 번만 기록한다', async () => {
+      const goldDef = achievementById('zone-basic-pacific')!;
+      const hatDef = achievementById('variant-village')!;
+      const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
+      const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';
+      const uid = await seed({
+        state: { gold: 100, achievements: { [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'claimAllAchievements' }),
+        callAction(userToken(uid), { type: 'claimAllAchievements' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(100 + rewardGold);
+      expect(save.data.hats).toEqual([rewardHat]);
+      expect(save.data.achievements).toEqual({ [goldDef.id]: 'claimed', [hatDef.id]: 'claimed' });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{
+        type: 'claimAllAchievements',
+        payload: { ids: [goldDef.id, hatDef.id], gold: rewardGold, hats: [rewardHat] },
+      }]);
+    });
   });
 
   describe('409 version-conflict 시 DB 미기록·이중 적용 없음', () => {
@@ -1569,6 +1644,127 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       expect(save.data.hats).toEqual([]);
       expect(Number(save.version)).toBe(3);
       expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('eat 중 버전 충돌이 나면 409를 반환하고 요리 소모·슬롯·이벤트를 기록하지 않는다', async () => {
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'eat', item: 'cook-lunch-bite' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ 'cook-lunch-bite': 2 });
+      expect(save.data.slots?.lunch).toBeNull();
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('claimMail 중 버전 충돌이 나면 409를 반환하고 골드·우편 수령 시각·이벤트를 기록하지 않으며, 재시도 시 한 번만 받는다', async () => {
+      const uid = await seed({ state: { gold: 1000 } });
+      const { rows } = await env.client.query<{ id: string }>(
+        `insert into public.mails (user_id, title, body, gold) values ($1, '충돌우편', '본문', 500) returning id`, [uid]);
+      const id = Number(rows[0].id);
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimMail', id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(1000);
+      expect(Number(afterConflict.version)).toBe(3);
+      const mailAfterConflict = await env.client.query<{ claimed_at: Date | null; read_at: Date | null }>(
+        'select claimed_at, read_at from public.mails where id = $1', [id]);
+      expect(mailAfterConflict.rows[0]).toEqual({ claimed_at: null, read_at: null });
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimMail', id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(1500);
+      expect(Number(afterRetry.version)).toBe(4);
+      const mailAfterRetry = await env.client.query<{ claimed_at: Date | null; read_at: Date | null }>(
+        'select claimed_at, read_at from public.mails where id = $1', [id]);
+      expect(mailAfterRetry.rows[0].claimed_at).not.toBeNull();
+      expect(mailAfterRetry.rows[0].read_at).not.toBeNull();
+      expect(await readEvents(uid)).toEqual([{ type: 'claimMail', payload: { mailId: id, gold: 500 } }]);
+    });
+
+    it('redeemCoupon 중 버전 충돌이 나면 409를 반환하고 골드·쿠폰 사용·이벤트를 기록하지 않으며, 재시도 시 한 번만 적용된다', async () => {
+      await env.client.query(`insert into public.coupons (code, gold, description, active)
+        values ('DYN-CONFLICT-1', 777, '충돌 테스트', true)`);
+      const uid = await seed({ state: { gold: 100 } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'redeemCoupon', code: 'DYN-CONFLICT-1' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.coupons).toEqual([]);
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONFLICT-1' });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(877);
+      expect(afterRetry.data.coupons).toEqual(['DYN-CONFLICT-1']);
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'coupon', payload: { code: 'DYN-CONFLICT-1', gold: 777 } }]);
+    });
+
+    it('claimAchievement 중 버전 충돌이 나면 409를 반환하고 골드·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
+      const def = achievementById('zone-basic-pacific')!;
+      const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
+      const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimAchievement', id: def.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.achievements).toEqual({ [def.id]: 'claimable' });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimAchievement', id: def.id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(100 + rewardGold);
+      expect(afterRetry.data.achievements).toEqual({ [def.id]: 'claimed' });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'claimAchievement', payload: { id: def.id, gold: rewardGold } }]);
+    });
+
+    it('claimAllAchievements 중 버전 충돌이 나면 409를 반환하고 보상·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
+      const goldDef = achievementById('zone-basic-pacific')!;
+      const hatDef = achievementById('variant-village')!;
+      const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
+      const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';
+      const uid = await seed({
+        state: { gold: 100, achievements: { [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimAllAchievements' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.hats).toEqual([]);
+      expect(afterConflict.data.achievements).toEqual({ [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimAllAchievements' });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(100 + rewardGold);
+      expect(afterRetry.data.hats).toEqual([rewardHat]);
+      expect(afterRetry.data.achievements).toEqual({ [goldDef.id]: 'claimed', [hatDef.id]: 'claimed' });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{
+        type: 'claimAllAchievements',
+        payload: { ids: [goldDef.id, hatDef.id], gold: rewardGold, hats: [rewardHat] },
+      }]);
     });
   });
 });

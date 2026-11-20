@@ -242,6 +242,69 @@ describe('HttpGameGateway의 델타 동기화와 캐시 복구', () => {
       expect(recovered.state.bag.map(f => f.uid)).toEqual(['clean-fish']);
     }
   });
+
+  it('전체 상태 응답에 version이 없으면 오래된 lastVersion을 초기화해 다음 델타에서 전체 재동기화한다', async () => {
+    me.value = serverSave({ version: 4, gold: 100, instances: [instRow('stale-fish')] });
+    const gw = new HttpGameGateway();
+    await gw.load();
+    expect(me.calls).toBe(1);
+
+    vi.stubGlobal('fetch', async () => json({ state: { ...newState(), gold: 300 }, result: { type: 'none' } }));
+    const fullRes = await gw.dispatch({ type: 'import', save: {} });
+    expect(fullRes.status).toBe('ok');
+    if (fullRes.status === 'ok') expect(fullRes.state.gold).toBe(300);
+    expect(me.calls).toBe(1);
+
+    me.value = serverSave({ version: 6, gold: 600, instances: [instRow('fresh-fish')] });
+    const staleBasePatch: StatePatch = {
+      version: 5, baseVersion: 4,
+      scalars: pickScalars({ ...newState(), gold: 999 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch: staleBasePatch, result: { type: 'none' } }));
+    const res = await gw.dispatch({ type: 'upgradeRod' });
+    expect(me.calls).toBe(2);
+    expect(res.status).toBe('ok');
+    if (res.status === 'ok') {
+      expect(res.state.gold).toBe(600);
+      expect(res.state.bag.map(f => f.uid)).toEqual(['fresh-fish']);
+    }
+  });
+
+  it('baseVersion 불일치 뒤 load() 재동기화가 실패하면 오래된 lastVersion과 캐시를 폐기해 다음 패치에 재사용하지 않는다', async () => {
+    me.value = serverSave({ version: 4, gold: 100, instances: [instRow('stale-fish')] });
+    const gw = new HttpGameGateway();
+    await gw.load();
+    expect(me.calls).toBe(1);
+
+    me.fn = async () => { throw new AppError('network', 'load failed'); };
+    const mismatchedPatch: StatePatch = {
+      version: 6, baseVersion: 5,
+      scalars: pickScalars({ ...newState(), gold: 999 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch: mismatchedPatch, result: { type: 'none' } }));
+    const err = await gw.dispatch({ type: 'upgradeRod' }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe('network');
+    expect(me.calls).toBe(2);
+
+    me.fn = null;
+    me.value = serverSave({ version: 5, gold: 450, instances: [instRow('clean-fish')] });
+    const staleBasePatch: StatePatch = {
+      version: 5, baseVersion: 4,
+      scalars: pickScalars({ ...newState(), gold: 999 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch: staleBasePatch, result: { type: 'none' } }));
+    const recovered = await gw.dispatch({ type: 'upgradeRod' });
+    expect(me.calls).toBe(3);
+    expect(recovered.status).toBe('ok');
+    if (recovered.status === 'ok') {
+      expect(recovered.state.gold).toBe(450);
+      expect(recovered.state.bag.map(f => f.uid)).toEqual(['clean-fish']);
+    }
+  });
 });
 
 describe('HttpGameGateway의 409 충돌 복구', () => {
@@ -373,6 +436,7 @@ describe('HttpGameGateway의 오류·거부 응답 처리', () => {
     { label: 'constructor', value: 'constructor' },
     { label: 'valueOf', value: 'valueOf' },
     { label: 'hasOwnProperty', value: 'hasOwnProperty' },
+    { label: '__proto__', value: '__proto__' },
   ])('422의 미등록·비문자열·프로토타입 사유($label)는 bad-request로 수렴한다', async ({ value }) => {
     vi.stubGlobal('fetch', async () => json(value === undefined ? {} : { error: value }, 422));
     const res = await new HttpGameGateway().dispatch({ type: 'buyBoat' });
