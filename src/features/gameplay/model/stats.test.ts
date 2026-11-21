@@ -28,6 +28,14 @@ describe('플레이 스탯 화면 데이터', () => {
     expect(selectInitialStatsSpotIndex('world', null)).toBe(selectInitialStatsSpotIndex('world'));
   });
 
+  it('바다에서 어군 사거리 밖이면 현재 구역의 해역 중 요구 파워가 가장 높은 곳부터 시작한다', () => {
+    expect(selectInitialStatsSpotIndex('world', null, 'indian')).toBe(indexOf('southindian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'southindian')).toBe(indexOf('southindian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar')).toBe(indexOf('comorodeep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific')).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'village')).toBe(selectInitialStatsSpotIndex('world', null, null));
+  });
+
   it('선택한 수역 기준 스탯과 파워 상태를 구성한다', () => {
     const data = selectStatsModalData(newState(), 'walk', 0);
 
