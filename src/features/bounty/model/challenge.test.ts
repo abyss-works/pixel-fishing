@@ -14,7 +14,8 @@ describe('selectEncounter', () => {
       seed({ artifacts: ['abyss-angler'], artifactLevels: { 'abyss-angler': level } }), QUEST, NOW)!.speedupScale;
     expect(scale(1)).toBeCloseTo(0.9, 10);
     expect(scale(3)).toBeCloseTo(0.85, 10);
-    expect(scale(5)).toBeCloseTo(0.8, 10);
+    // Lv5는 최고 레벨 유물 1개 업적 누적 보너스(+3%)가 자동 적용된다: 1 - 0.2 * 1.03 = 0.794
+    expect(scale(5)).toBeCloseTo(0.794, 10);
   });
 
   it('가속 배수는 유물이 없으면 1이다', () => {
