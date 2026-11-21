@@ -328,8 +328,8 @@ describe('현상금', () => {
     ]);
     expect(snap.db.events).toEqual([
       { user_id: '<user>', type: 'acceptQuest', payload: { questId: quest.id, port: 'harbor' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
     ]);
     const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
     expect(save.data.achievements).toEqual({ 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' });
@@ -463,11 +463,11 @@ describe('개발 명령', () => {
     expect(recordFishIds).toEqual(expectedIds);
     expect(snap.db.events).toEqual([
       { user_id: '<user>', type: 'debug', payload: { command: 'dex.completeZone', args: { zone: 'pacific' } }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'night-normal' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
     ]);
     const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
     expect(save.data.achievements).toEqual({
