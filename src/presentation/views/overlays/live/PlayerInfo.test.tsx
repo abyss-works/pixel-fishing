@@ -91,7 +91,10 @@ describe('PlayerInfo', () => {
     expect(screen.getByText(`2 / ${HATS.length}`)).toBeTruthy();
     expect(screen.getByText(`2 / ${ARTIFACTS.length}`)).toBeTruthy();
     expect(screen.getByLabelText('유물 해구의 이빨 Lv.3')).toBeTruthy();
-    expect(screen.getByLabelText('유물 마미 와타의 거울')).toBeTruthy();
+    const legendCard = screen.getByLabelText('유물 마미 와타의 거울');
+    expect(legendCard).toBeTruthy();
+    expect(legendCard.textContent).toBe('마미 와타의 거울');
+    expect(screen.queryByText('전설')).toBeNull();
     expect(screen.getAllByLabelText(/유물 없음$/)).toHaveLength(ARTIFACTS.length - 2);
     expect(screen.getByText(`2 / ${FISH.length}`)).toBeTruthy();
     expect(screen.getByText(`1 / ${FISH.length}`)).toBeTruthy();

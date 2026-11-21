@@ -90,7 +90,7 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
       if (z) return z.name;
     }
     if (profile.liveRegion === 'village') return '마을';
-    if (profile.liveRegion === 'world') return '대양';
+    if (profile.liveRegion === 'world') return '바다';
   }
   if (profile.location?.kind === 'base') {
     return BASE_NAMES[profile.location.id] ?? null;
@@ -100,7 +100,10 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
   }
   if (profile.lastPos?.region === 'world') {
     const z = zoneOf(WORLD, profile.lastPos.x, profile.lastPos.y);
-    return (z ? zoneById(z)?.name : undefined) ?? '대양';
+    return (z ? zoneById(z)?.name : undefined) ?? '바다';
+  }
+  if (profile.location?.kind === 'region' && profile.location.id === 'world') {
+    return '바다';
   }
   return null;
 }

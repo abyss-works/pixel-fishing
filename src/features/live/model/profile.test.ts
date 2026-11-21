@@ -78,8 +78,9 @@ describe('플레이어 정보 화면 데이터', () => {
     // 온라인 liveZone (하위 존 / 최상위 존)
     expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: 'deep' })).placeLabel).toBe('마리아나 해구');
     expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: 'pacific' })).placeLabel).toBe('태평양');
-    // 온라인 마을
+    // 온라인 마을 및 해역 미상 바다
     expect(selectProfileView(profile({ online: true, liveRegion: 'village', liveZone: null })).placeLabel).toBe('마을');
+    expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: null })).placeLabel).toBe('바다');
     // 오프라인 거점 (집, 항구)
     expect(selectProfileView(profile({ online: false, location: { kind: 'base', id: 'home' } })).placeLabel).toBe('집');
     expect(selectProfileView(profile({ online: false, location: { kind: 'base', id: 'harbor' } })).placeLabel).toBe('부산항');
@@ -96,11 +97,22 @@ describe('플레이어 정보 화면 데이터', () => {
       location: { kind: 'region', id: 'world' },
       lastPos: { region: 'world', x: WORLD_SPAWN.x, y: WORLD_SPAWN.y },
     })).placeLabel).toBe('태평양');
-    // 오프라인 바다 좌표가 구역 밖이면 대양
+    // 오프라인 바다 좌표가 구역 밖이면 바다
     expect(selectProfileView(profile({
       online: false,
       lastPos: { region: 'world', x: -99999, y: -99999 },
-    })).placeLabel).toBe('대양');
+    })).placeLabel).toBe('바다');
+    // 오프라인 world 지역이지만 lastPos가 없거나 다른 지역이면 바다
+    expect(selectProfileView(profile({
+      online: false,
+      location: { kind: 'region', id: 'world' },
+      lastPos: null,
+    })).placeLabel).toBe('바다');
+    expect(selectProfileView(profile({
+      online: false,
+      location: { kind: 'region', id: 'world' },
+      lastPos: { region: 'village', x: 10, y: 10 },
+    })).placeLabel).toBe('바다');
     // 위치 미상
     expect(selectProfileView(profile()).placeLabel).toBeNull();
   });

@@ -50,7 +50,7 @@ export default function PlayersModal({ region, account, setToast, onClose }: {
                 </div>
               </Inset>
             </section>
-            <PlayerInfo key={selected.uid} target={selected} self={false} account={account} setToast={setToast} layout="grid" />
+            <PlayerInfo key={selected.uid} target={selected} self={false} account={account} setToast={setToast} />
           </div>
         ) : (
           <Inset className="h-[120px] flex items-center justify-center">

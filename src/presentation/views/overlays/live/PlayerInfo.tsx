@@ -42,15 +42,13 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
 };
 const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
 
-export function PlayerInfo({ target, self, account, setToast, layout = 'grid' }: {
+export function PlayerInfo({ target, self, account, setToast }: {
   target: PlayerTarget;
   /** 내 정보인가 — 동작을 보이지 않는다 */
   self: boolean;
   /** 내 계정 이메일. 게스트면 null */
   account: string | null;
   setToast: Notify;
-  /** grid = 680 폭 2열 배치(모바일 1열), stack = 1열 쌓기 */
-  layout?: 'grid' | 'stack';
 }) {
   const { profile, loading, failed } = usePlayerProfile(target.uid);
   const member = account !== null && !self;
@@ -133,7 +131,7 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'grid' }:
   );
 
   return (
-    <ProfileCells name={name} view={selectProfileView(profile)} layout={layout} actions={actions} />
+    <ProfileCells name={name} view={selectProfileView(profile)} actions={actions} />
   );
 }
 
@@ -147,22 +145,20 @@ const GRADE_CLASS: Record<NonNullable<ProfileView['collectibles']['artifacts']['
 
 const pct = (value: number, total: number): number => (total > 0 ? Math.min(100, (value / total) * 100) : 0);
 
-/** 요약, 업적, 수집품, 해역별 도감 비교. grid면 PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭) */
-function ProfileCells({ name, view, layout, actions }: {
+/** 요약, 업적, 수집품, 해역별 도감 비교. PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭), 모바일 1열 쌓기 */
+function ProfileCells({ name, view, actions }: {
   name: string;
   view: ProfileView;
-  layout: 'grid' | 'stack';
   actions: ReactNode;
 }) {
   const { online, placeLabel, look, boat, rod, dex, achievements, collectibles } = view;
   const { hats, artifacts } = collectibles;
   const placeText = placeLabel ?? '위치 미상';
-  const grid = layout === 'grid';
 
   return (
-    <div className={grid ? 'grid grid-cols-[224px_minmax(0,1fr)] gap-3 mobile:grid-cols-1' : 'flex flex-col gap-3'}>
+    <div className="grid grid-cols-[224px_minmax(0,1fr)] gap-3 mobile:grid-cols-1">
       {/* 왼쪽 열: 헤더(외형·배, 접속 상태, 닉네임, 위치) + 요약 + 동작 */}
-      <Inset className={cx('px-3 py-2.5 flex flex-col gap-2.5 min-w-0', grid && 'row-span-2 mobile:row-span-1')}>
+      <Inset className="px-3 py-2.5 flex flex-col gap-2.5 min-w-0 row-span-2 mobile:row-span-1">
         <div className="flex items-center gap-2.5 min-w-0">
           {look ? (
             <div className="shrink-0 w-11 h-12 flex items-center justify-center border border-line bg-surface-2">
@@ -257,7 +253,7 @@ function ProfileCells({ name, view, layout, actions }: {
                 {s.name ? (
                   <>
                     <span className="truncate max-w-full">{s.name}</span>
-                    <span className="font-pixel text-2xs opacity-85">{s.level !== null ? `Lv.${s.level}` : '전설'}</span>
+                    {s.level !== null && <span className="font-pixel text-2xs opacity-85">Lv.{s.level}</span>}
                   </>
                 ) : (
                   <span className="truncate max-w-full">{s.zone}</span>
@@ -269,7 +265,7 @@ function ProfileCells({ name, view, layout, actions }: {
       </Inset>
 
       {/* 하단 전폭: 해역별 도감 (일반 + 돌연변이 나란히 비교) */}
-      <Inset className={cx('px-3 py-2.5 flex flex-col gap-1.5 min-w-0', grid && 'col-span-2 mobile:col-span-1')}>
+      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0 col-span-2 mobile:col-span-1">
         <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
           <span className="font-bold text-accent"><Tip text={DEX_HELP}>해역별 도감</Tip></span>
           <div className="flex items-center gap-3">
@@ -327,7 +323,7 @@ export default function PlayerModal({ onClose, ...props }: Parameters<typeof Pla
   return (
     <Modal layer="stage" md onClose={onClose}>
       <ModalCard title={props.self ? '내 정보' : '플레이어 정보'} onClose={onClose}>
-        <PlayerInfo {...props} layout="grid" />
+        <PlayerInfo {...props} />
       </ModalCard>
     </Modal>
   );

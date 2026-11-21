@@ -1,6 +1,6 @@
-// 공개 프로필 읽기 함수 — 다른 플레이어의 닉네임·배·낚싯대·명성·도감·유물을 읽는다 (Node 런타임)
-// 세션이 있으면 게스트도 읽는다. 순위·가방 같은 그 밖의 상태는 주지 않는다.
-//   GET /api/players/:uid   { nickname, boat, rod, fame, dexFish, artifacts, account }
+// 공개 프로필 읽기 함수 — 다른 플레이어의 공개 프로필과 실시간 접속 상태를 읽는다 (Node 런타임)
+// 세션이 있으면 게스트도 읽는다. 골드·가방·순위·천장·미수령 업적·원시 카운터는 주지 않는다.
+//   GET /api/players/:uid   { nickname, boat, rod, fame, dexFish, dexVariant, artifacts, artifactLevels, hats, look, achievements, location, lastPos, online, liveRegion, liveZone, account }
 //   오류: 세션 없음 401, 형식이 틀린 uid 400 bad-user, 없는 사용자 404 not-found
 //   GET /api/players?nickname=<앞부분>   { players: [{ uid, nickname }] } — 친구 요청 자동완성. 계정 유저만 쓴다
 //   오류: 세션 없음 401, 게스트 403 account-only, 빈 검색어·32자 초과 400 bad-nickname
