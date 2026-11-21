@@ -11,6 +11,7 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import { publicProfile } from './_data/profile.js';
 import { searchAccounts } from './_data/friends.js';
+import { presenceOf } from './_server/livePresence.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -63,5 +64,11 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   // 게스트의 프로필은 본인만 읽는다
   if (!profile || (!profile.account && uid !== session.id)) throw new ApiError(404, 'not-found');
-  res.status(200).json(profile);
+  const live = presenceOf(uid);
+  res.status(200).json({
+    ...profile,
+    online: live !== null,
+    liveRegion: live?.region ?? null,
+    liveZone: live?.zone ?? null,
+  });
 }
