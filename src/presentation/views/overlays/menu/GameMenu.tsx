@@ -9,6 +9,7 @@ import { menuKeys, questBadges, questMenuLabel } from '../../../../features/disp
 import { claimableCount } from '../../../../features/achievement/model/achievements';
 import type { MenuKey } from '../../../../features/display/model/menuEntries';
 import { guestLock } from '../../../../features/display/model/menuLock';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import CountBadge from '../../../ui/CountBadge';
 import { LockIcon } from '../../../ui/Locked';
@@ -43,12 +44,12 @@ interface Entry {
   onOpen: () => void;
 }
 
-export default function GameMenu({ game, account, guest, onQuests, onAchievements, onGuild, onFriends, onMailbox, setToast }: {
+export default function GameMenu({ game, account, accountState, onQuests, onAchievements, onGuild, onFriends, onMailbox, setToast }: {
   /** 남은 클리어 횟수의 한도와 업적 상태를 읽는 게임 상태 */
   game: ArtifactHolder & GameState;
   account: string | null;
-  /** 게스트 잠금을 적용하는가(isGuest) */
-  guest: boolean;
+  /** 잠금 판정에 쓰는 계정 상태 */
+  accountState: AccountLockState;
   onQuests: () => void;
   onAchievements: () => void;
   onGuild: () => void;
@@ -68,8 +69,8 @@ export default function GameMenu({ game, account, guest, onQuests, onAchievement
 
   // 접속한 계정의 첫 조회에서 받지 않은 우편이 있으면 한 번 안내만 띄운다(열어 보는 것은 플레이어가 한다)
   useEffect(() => {
-    if (!guest && takeLoginNotice()) setToast('받지 않은 우편이 있어요. 오른쪽 위 메뉴의 우편함에서 확인해 주세요.', 'gold');
-  }, [mails, takeLoginNotice, setToast, guest]);
+    if (accountState === 'account' && takeLoginNotice()) setToast('받지 않은 우편이 있어요. 오른쪽 위 메뉴의 우편함에서 확인해 주세요.', 'gold');
+  }, [mails, takeLoginNotice, setToast, accountState]);
 
   // 펼친 동안 메뉴 밖을 누르거나 Esc를 누르면 접는다
   useEffect(() => {
@@ -103,9 +104,11 @@ export default function GameMenu({ game, account, guest, onQuests, onAchievement
       badges: mailbox.pending > 0 ? [{ tone: 'danger', count: mailbox.pending }] : [], alerts: mailbox.pending, lock: null, onOpen: onMailbox },
   };
   const entries = menuKeys({
-    guild: guild.available || guest, friends: (account !== null && !friends.offline) || guest, mailbox: !mailbox.offline,
+    guild: guild.available || accountState !== 'account',
+    friends: (account !== null && !friends.offline) || accountState !== 'account',
+    mailbox: !mailbox.offline,
   }).map((key): Entry => {
-    const lock = guestLock(key, guest);
+    const lock = guestLock(key, accountState);
     // 잠긴 줄은 알릴 것이 없다. 접근성 이름도 배지 없이 라벨만 쓴다
     return lock ? { ...byKey[key], name: byKey[key].label, badges: [], alerts: 0, lock } : byKey[key];
   });

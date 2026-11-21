@@ -7,6 +7,7 @@ import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import { when } from '../../../../../shared/lib/when';
@@ -148,10 +149,10 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, guest = false, sellBonus, bagBonus = 0, dispatch, setToast }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
-  /** 계정을 연결하지 않아 요리가 닫힌 게스트인가 - 아이템 섹션의 잠금 사유를 정한다 */
-  guest?: boolean;
+  /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션의 잠금 사유를 정한다 */
+  accountState?: AccountLockState;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
   /** 길드 가방 용량 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
@@ -217,7 +218,7 @@ export default function BagTab({ game, guest = false, sellBonus, bagBonus = 0, d
   return (
     <div>
       {section === 'items' ? (
-        <ItemSection game={game} guest={guest} dispatch={dispatch} setToast={setToast} />
+        <ItemSection game={game} accountState={accountState} dispatch={dispatch} setToast={setToast} />
       ) : section === 'artifacts' ? (
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (

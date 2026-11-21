@@ -32,7 +32,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-const handlers = () => ({ game: newState(), guest: false, onQuests: vi.fn(), onAchievements: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
+const handlers = () => ({ game: newState(), accountState: 'account' as const, onQuests: vi.fn(), onAchievements: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
 afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
 
@@ -212,7 +212,7 @@ describe('게임 메뉴', () => {
   // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 다섯 줄이 모두 자리 그대로 잠긴다
   describe('게스트 잠금', () => {
     const guestMenu = async (h = handlers()) => {
-      wrap(<GameMenu account={null} {...h} guest />);
+      wrap(<GameMenu account={null} {...h} accountState="guest" />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       return h;
     };
@@ -242,11 +242,21 @@ describe('게임 메뉴', () => {
       expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
     });
 
+    it('확인 실패 상태에서는 다섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {
+      const h = handlers();
+      wrap(<GameMenu account={null} {...h} accountState="unverified" />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      const items = screen.getAllByRole('menuitem');
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '길드', '소셜', '우편함']);
+      fireEvent.mouseEnter(items[0].parentElement!);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
+    });
+
     it('잠긴 줄에는 배지와 알림 점이 없고 접속 안내도 띄우지 않는다', async () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       state.mails = [mail({ id: 1, gold: 100 })];
       const h = handlers();
-      wrap(<GameMenu account={null} {...h} guest />);
+      wrap(<GameMenu account={null} {...h} accountState="guest" />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
       fireEvent.click(button);
       expect(document.querySelector('[data-badge]')).toBeNull();

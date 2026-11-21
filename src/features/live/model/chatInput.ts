@@ -41,3 +41,8 @@ export function chatInputReducer(state: ChatInputState, event: ChatInputEvent): 
 export function chatRoomOf(state: ChatInputState, inGuild: boolean): ChatRoom {
   return inGuild ? state.room : 'world';
 }
+
+/** 채팅 입력 줄 위 오류·실패 안내 문구. 두 문장 이상이면 문장 끝마다 줄을 바꾼다 */
+export function formatStatusNotice(text: string): string {
+  return text.trim().replace(/([.!?])[^\S\n]+/g, '$1\n');
+}

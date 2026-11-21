@@ -3,6 +3,7 @@
 // 쓸 수 있으면 효과가 든 슬롯의 칩만 보이고, 칩은 아이콘과 남은 시간(큰 단위 하나, "8시간" 꼴)을 담는다. 효과가 없는 슬롯의 칩은 숨긴다.
 // 남은 시간은 게임 시계와 같은 주기로 갱신한다. 칩 자신만 포인터 이벤트를 받아 툴팁을 연다(HudChip).
 import type { GameState } from '../../../game/rules/logic';
+import type { AccountLockState } from '../../../features/display/model/menuLock';
 import { useNow } from '../../../features/gameplay/service/useGameTime';
 import { SLOT_NAME, selectSlotChips } from '../../../features/kitchen/model/slots';
 import type { ActiveSlot, SlotChip, SlotKey } from '../../../features/kitchen/model/slots';
@@ -37,9 +38,9 @@ function LockedChip({ slotKey, lines }: { slotKey: SlotKey; lines: readonly stri
   );
 }
 
-export default function SlotChips({ game, guest }: { game: GameState; guest: boolean }) {
+export default function SlotChips({ game, accountState }: { game: GameState; accountState: AccountLockState }) {
   const now = useNow();
-  const chips: SlotChip[] = selectSlotChips(game, now, guest);
+  const chips: SlotChip[] = selectSlotChips(game, now, accountState);
   return (
     <>
       {chips.map(chip => chip.state === 'locked'

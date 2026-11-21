@@ -9,6 +9,7 @@ import type { SpotId } from '../../../../game/content/spots';
 import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import FacilityModal from './FacilityModal';
 
 afterEach(() => { cleanup(); resetKeyScopes(); resetBagView(); });
@@ -22,11 +23,11 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { base?: BaseId; guest?: boolean; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} guest={opts.guest} sellBonus={0} game={game}
+  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }
@@ -337,20 +338,27 @@ describe('기운 얻기 탭의 잠금', () => {
   });
 
   it('게스트에게는 게스트 잠금이다', () => {
-    show(seed({ boat: COOKING_UNLOCK_BOAT }), { guest: true });
+    show(seed({ boat: COOKING_UNLOCK_BOAT }), { accountState: 'guest' });
     expect(tab('기운 얻기')).toHaveAttribute('aria-disabled', 'true');
     expect(lines(tab('기운 얻기'))).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
   });
 
   it('게스트이면서 해금 전이면 게스트 잠금이 먼저다', () => {
-    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { guest: true });
+    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'guest' });
     const tip = lines(tab('기운 얻기'));
     expect(tip).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
     expect(tip).not.toHaveTextContent('항로');
   });
 
+  it('확인 실패 상태에서는 확인 실패 잠금이다', () => {
+    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'unverified' });
+    const tip = lines(tab('기운 얻기'));
+    expect(tip).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
+    expect(tip).not.toHaveTextContent('항로');
+  });
+
   it('게스트도 판매 탭은 쓸 수 있다', () => {
-    show(seed({ bag: [inst('a', crucian.id)] }), { guest: true });
+    show(seed({ bag: [inst('a', crucian.id)] }), { accountState: 'guest' });
     expect(screen.getByRole('button', { name: /^판매 \(/ })).toBeEnabled();
   });
 

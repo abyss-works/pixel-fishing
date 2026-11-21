@@ -4,6 +4,7 @@ import type { SceneRef } from '../../../game/world';
 import { REGION_PACKS } from '../../../game/world';
 import type { Msg } from './useMessageLog';
 import type { FilterChannel, MessageFilter } from '../../../features/display/model/messageFilter';
+import type { AccountLockState } from '../../../features/display/model/menuLock';
 import { setMinimapVisible, useMinimapVisible } from '../../../features/display/service/minimapVisible';
 import { cx } from '../../ui/cx';
 import MessageLog from '../../ui/hud/MessageLog';
@@ -52,8 +53,8 @@ interface HudLayoutProps {
   onFold?: () => void;
   /** 헤더의 메뉴 버튼 */
   menu?: ReactNode;
-  /** 계정을 연결하지 않아 요리가 닫힌 게스트인가 - 슬롯 칩의 잠금 사유를 정한다 */
-  guest?: boolean;
+  /** 잠금 판정에 쓰는 계정 상태 - 슬롯 칩의 잠금 사유를 정한다 */
+  accountState?: AccountLockState;
   /** 낚시 상태 띠가 들어갈 자리를 알린다 */
   onStatusSlot?: (el: HTMLDivElement | null) => void;
 }
@@ -73,7 +74,7 @@ interface HudLayoutProps {
 // 헤더의 펼친 메뉴 줄이 메시지 창 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
 // 화면 키보드가 올라오면 줄기만 키보드 위로 올라가고(--keyboard-h, 탭 줄 높이 56px는 이미 비어 있다) 스테이지 크기는 그대로다.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu, guest = false }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu, accountState = 'account' }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const minimapVisible = useMinimapVisible();
   const hasMinimap = scene.kind === 'region';
@@ -92,7 +93,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
           <div className="flex pc:flex-wrap items-center justify-end gap-1.5 pointer-events-none">
             {chips}
-            <SlotChips game={game} guest={guest} />
+            <SlotChips game={game} accountState={accountState} />
             <TimeBadge />
             {hasMinimap && !minimapVisible && (
               <Tip wraps className="flex" text="미니맵 보이기">
