@@ -13,7 +13,11 @@ const s = vi.hoisted(() => ({
   report: vi.fn(async () => null),
 }));
 
-vi.mock('../../../../features/account/service/accountActions', () => ({ isGuest: (account: string | null) => account === null }));
+vi.mock('../../../../features/account/service/accountActions', () => ({
+  isGuest: (account: string | null) => account === null,
+  accountLockState: (account: string | null, accountFailed: boolean) =>
+    accountFailed ? 'unverified' : account === null ? 'guest' : 'account',
+}));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
   usePlayerProfile: () => ({ profile: {
     nickname: '갈치', boat: 2, rod: 7, fame: 12345, dexFish: ['crucian', 'minnow'], artifacts: ['abyss-angler'], account: true,
@@ -84,6 +88,13 @@ describe('PlayerInfo', () => {
     buttons.forEach(b => fireEvent.click(b));
     expect(s.act).not.toHaveBeenCalled();
     expect(s.block).not.toHaveBeenCalled();
+  });
+
+  it('확인 실패 상태에서는 친구 요청과 차단에 확인 실패 전용 잠금 툴팁을 보인다', () => {
+    show({ account: null, accountFailed: true });
+    const groups = screen.getAllByRole('group');
+    fireEvent.mouseEnter(groups[0].parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
   });
 
   it('내 정보에는 동작이 없다', () => {

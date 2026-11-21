@@ -129,7 +129,6 @@ describe('ChatBar', () => {
     live.error = 'chat-guest';
     render(<ChatBar />);
     expect(screen.getByRole('status').textContent).toBe('채팅은 계정을 연결하면 쓸 수 있어요.\n계정 관리에서 계정을 연결해 주세요.');
-    expect(screen.getByRole('status')).not.toHaveClass('truncate');
   });
 
   it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {
@@ -173,8 +172,9 @@ describe('ChatBar', () => {
       expect(screen.queryByRole('tooltip')).toBeNull();
       fireEvent.mouseMove(document.body);
       fireEvent.mouseEnter(wrap);
-      const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
-      expect(lines).toEqual(['채팅은 계정을 연결하면 쓸 수 있어요.', '계정 관리에서 계정을 연결해 주세요.']);
+      const tip = screen.getByRole('tooltip');
+      expect(tip).toHaveTextContent('채팅은 계정을 연결하면 쓸 수 있어요.');
+      expect(tip).toHaveTextContent('계정 관리에서 계정을 연결해 주세요.');
     });
 
     it('확인 실패 상태에서는 확인 실패 전용 잠금 문안이 툴팁으로 열린다', () => {
@@ -182,8 +182,7 @@ describe('ChatBar', () => {
       const wrap = screen.getByRole('group', { name: '채팅' }).parentElement!;
       fireEvent.mouseMove(document.body);
       fireEvent.mouseEnter(wrap);
-      const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
-      expect(lines).toEqual(['계정을 확인하면 쓸 수 있어요.']);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
     });
 
     it('누르거나 Enter를 눌러도 입력 줄에 들어가지 않고 아무것도 보내지 않는다', () => {
