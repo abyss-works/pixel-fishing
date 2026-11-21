@@ -34,8 +34,11 @@ import type { AchievementCounters, AchievementMap } from '../content/achievement
 import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
-import { endedFirstCatch, firstCatchOfLegacy, newFirstCatch } from './firstCatch.js';
-import type { FirstCatch } from './firstCatch.js';
+import {
+  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
+  endedFirstCatch, endedFirstCatchSpot, firstCatchOfLegacy, newFirstCatch, newFirstCatchSpot,
+} from './firstCatch.js';
+import type { FirstCatch, FirstCatchSpot } from './firstCatch.js';
 
 export { JUDGMENT_MULT, BIG_CATCH_PERCENTILE };
 export type { AchievementCounters, AchievementMap } from '../content/achievements.js';
@@ -878,14 +881,31 @@ function safeNamedPity(v: unknown): NamedPity {
   return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
-/** 첫 경험 보장 위생 — 필드가 없거나 형태가 틀리면 이전 세이브 규칙(캐치가 있었으면 끝남)을 따른다 */
+/** 첫 경험 보장 위생 — 새 해역별 구조는 보존, 구 단일 객체는 해역별로 이관, 없거나 손상되면 이전 세이브 규칙을 따른다 */
 function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstCatch {
   const r = safeRecord<unknown>(v);
   const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
+  const parseSpot = (raw: unknown): FirstCatchSpot | null => {
+    const o = safeRecord<unknown>(raw);
+    if (!int(o.n) || !int(o.legendAt) || typeof o.epic !== 'boolean' || typeof o.legend !== 'boolean') return null;
+    return o.epic || o.legend
+      ? { n: o.n as number, legendAt: o.legendAt as number, epic: o.epic, legend: o.legend }
+      : endedFirstCatchSpot();
+  };
+  const pond = parseSpot(r.pond);
+  const river = parseSpot(r.river);
+  if (pond && river) return { pond, river };
   if (int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean') {
-    return r.epic || r.legend
-      ? { n: r.n as number, legendAt: r.legendAt as number, epic: r.epic, legend: r.legend }
-      : endedFirstCatch();
+    if (!r.epic && !r.legend) return endedFirstCatch();
+    const rawLegendAt = r.legendAt as number;
+    const legendAt = rawLegendAt === 0 ? 0
+      : Math.min(FIRST_CATCH_LEGEND_MAX, Math.max(FIRST_CATCH_LEGEND_MIN, rawLegendAt));
+    const hasRiverCatch = FISH.some(f => f.spot === 'river'
+      && Object.values(dex[f.id] ?? {}).some(rec => (rec?.count ?? 0) > 0));
+    return {
+      pond: { n: r.n as number, legendAt, epic: r.epic, legend: r.legend },
+      river: hasRiverCatch ? endedFirstCatchSpot() : newFirstCatchSpot(),
+    };
   }
   const dexCatches = Object.values(dex).reduce((sum, forms) =>
     sum + Object.values(forms).reduce((s, rec) => s + (rec?.count ?? 0), 0), 0);

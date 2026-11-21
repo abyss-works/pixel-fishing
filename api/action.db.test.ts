@@ -14,6 +14,7 @@ import {
 import { FISH } from '../src/game/content/fish.js';
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
+import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
@@ -121,7 +122,18 @@ describe('첫 액션', () => {
 
 describe('낚시', () => {
   it('통상 캐치는 개체와 도감을 쓰고 명성을 올린다', async () => {
-    expect(await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchSnapshot();
+    const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.fish_instances).toHaveLength(1);
+    expect(out.db.records).toHaveLength(1);
+    const save = out.db.saves_current[0] as { version: string; fame: string; data: GameState };
+    expect(Number(save.version)).toBe(3);
+    expect(Number(save.fame)).toBeGreaterThan(0);
+    expect(save.data.firstCatch.pond.n).toBe(1);
+    expect(save.data.firstCatch.river).toEqual(newFirstCatch().river);
+    const catchEvent = (out.db.events as { type: string; payload: { spot: string; fishId: string } }[])
+      .find(e => e.type === 'catch');
+    expect(catchEvent?.payload).toMatchObject({ spot: 'pond', fishId: expect.any(String) });
   });
 
   it('도감 기록이 있는 어종은 횟수를 이어 센다', async () => {
@@ -132,31 +144,43 @@ describe('낚시', () => {
       dex[id] = { normal: rec, variant: rec };
     }
     const out = await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' });
-    const caught = (out.db.events[0] as { payload: { fishId: string; form: string; isNew: boolean } }).payload;
+    expect((out.res as { status: number }).status).toBe(200);
+    const caught = (out.db.events as { type: string; payload: { fishId: string; form: string; isNew: boolean } }[])
+      .find(e => e.type === 'catch')!.payload;
     const records = out.db.records as { fish_id: string; form: string; count: string }[];
     expect(caught.isNew).toBe(false);
     expect(records.find(r => r.fish_id === caught.fishId && r.form === caught.form)?.count).toBe('6');
-    expect(out).toMatchSnapshot();
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish(i % 2 ? 'minnow' : 'crucian', { size: 10 + i }));
     const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect((out.res as { status: number }).status).toBe(200);
     // 자동 방생 이벤트는 놓아준 개체의 어종과 폼을 함께 남긴다
     const release = (out.db.events as { type: string; payload: { uids: string[]; fish: unknown[] } }[])
       .find(e => e.type === 'autoRelease')!;
     expect(release.payload.fish).toEqual([{ uid: release.payload.uids[0], fishId: expect.any(String), form: expect.any(String) }]);
-    expect(out).toMatchSnapshot();
+    expect(out.db.fish_instances).toHaveLength(WALK_BAG_CAP);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('가방이 가득 차고 모두 잠겨 있으면 상한을 넘겨 보관한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish('crucian', { size: 10 + i, locked: true }));
-    expect(await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' })).toMatchSnapshot();
+    const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.fish_instances).toHaveLength(WALK_BAG_CAP + 1);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'autoRelease')).toBe(false);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('스냅샷 경계 버전은 전체 경로로 처리하고 saves에 아카이브를 남긴다', async () => {
-    expect(await run({ state: { bag: [fish('crucian')] }, version: 49 }, { type: 'catch', spot: 'pond', judgment: 'good' }))
-      .toMatchSnapshot();
+    const out = await run({ state: { bag: [fish('crucian')] }, version: 49 }, { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(50);
+    expect(out.db.saves).toHaveLength(1);
+    expect(out.db.fish_instances).toHaveLength(2);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'catch')).toBe(true);
   });
 
   it('잠긴 수역은 거부한다', async () => {
@@ -169,8 +193,11 @@ describe('낚시', () => {
       await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
         [uid, q.zone, q.id, NOW]);
     }
-    expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' })))
-      .toMatchSnapshot();
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' }));
+    expect((out.res as { status: number }).status).toBe(200);
+    const progressed = (out.db.bounty_progress as { progress: number }[]).filter(r => r.progress > 0);
+    expect(progressed.length).toBeGreaterThanOrEqual(1);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
   it('강제 조우를 허용받은 캐치는 진행 중인 네임드의 도전권을 발급한다', async () => {
@@ -179,7 +206,11 @@ describe('낚시', () => {
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    const out = await snapshotOf(uid, res);
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.bounty_tickets).toHaveLength(1);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'ticket')).toBe(true);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
   it('강제 조우가 허용되지 않으면 통상 캐치로 처리한다', async () => {
@@ -189,7 +220,11 @@ describe('낚시', () => {
       [uid, named.zone, named.id, NOW]);
     process.env.DEPLOY_ENV = 'preview';
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    const out = await snapshotOf(uid, res);
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.bounty_tickets).toHaveLength(0);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'ticket')).toBe(false);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 });
 
@@ -656,28 +691,49 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
 describe('첫 경험 보장', () => {
   const stateOf = (out: Awaited<ReturnType<typeof run>>) => (out.db.saves_current[0] as { data: GameState }).data;
 
-  it('5번째 캐치는 그 수역의 영웅 어종이고 보장 진척이 저장된다', async () => {
-    const out = await run({ state: { firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } } },
-      { type: 'catch', spot: 'pond', judgment: 'auto' });
+  it('마을 연못 5번째 캐치는 금붕어이고 연못 진척만 저장된다', async () => {
+    const out = await run({
+      state: { firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'epic', spot: 'pond' });
-    expect(stateOf(out).firstCatch).toMatchObject({ n: 5, legendAt: 12, epic: false, legend: true });
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'goldfish', rarity: 'epic', spot: 'pond' });
+    expect(stateOf(out).firstCatch.pond).toEqual({ n: 5, legendAt: 12, epic: false, legend: true });
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 서버가 전설 번호를 10~20 사이로 정해 저장한다', async () => {
+  it('첫 캐치에서 서버가 해당 마을 해역의 전설 번호를 10~15 사이로 정해 저장한다', async () => {
     const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const fc = stateOf(out).firstCatch;
-    expect(fc.n).toBe(1);
-    expect(fc.legendAt).toBeGreaterThanOrEqual(10);
-    expect(fc.legendAt).toBeLessThanOrEqual(20);
+    expect(fc.pond.n).toBe(1);
+    expect(fc.pond.legendAt).toBeGreaterThanOrEqual(10);
+    expect(fc.pond.legendAt).toBeLessThanOrEqual(15);
+    expect(fc.river).toEqual(newFirstCatch().river);
   });
 
-  it('정해진 번호의 캐치는 그 수역의 전설 어종이고 보장이 끝난다', async () => {
-    const out = await run({ state: { firstCatch: { n: 11, legendAt: 12, epic: false, legend: true } } },
-      { type: 'catch', spot: 'river', judgment: 'auto' });
+  it('마을 강 정해진 번호의 캐치는 강의 주인이고 강 보장만 끝난다', async () => {
+    const out = await run({
+      state: { firstCatch: { ...newFirstCatch(), river: { n: 11, legendAt: 12, epic: false, legend: true } } },
+    }, { type: 'catch', spot: 'river', judgment: 'auto' });
     const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'legendary', spot: 'river' });
-    expect(stateOf(out).firstCatch).toEqual({ n: 0, legendAt: 0, epic: false, legend: false });
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'riverlord', rarity: 'legendary', spot: 'river' });
+    expect(stateOf(out).firstCatch.river).toEqual(endedFirstCatch().river);
+    expect(stateOf(out).firstCatch.pond).toEqual(newFirstCatch().pond);
+  });
+
+  it('구 단일 firstCatch가 진행 중이고 강 도감이 있으면 catch가 풀 경로로 폴백해 강 보장을 중복 지급하지 않는다', async () => {
+    const dex: GameState['dex'] = { sweetfish: { normal: { count: 1, maxSize: 20, first: '2026-01-01' } } };
+    const uid = await seed({ state: { dex } });
+    // 구 단일 객체 형식을 saves_current.data.firstCatch에 직접 심는다
+    await env.client.query(
+      `update public.saves_current set data = jsonb_set(data, '{firstCatch}', $2::jsonb) where user_id = $1`,
+      [uid, JSON.stringify({ n: 6, legendAt: 18, epic: false, legend: true })],
+    );
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' }));
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(stateOf(out).firstCatch).toEqual({
+      pond: { n: 7, legendAt: 15, epic: false, legend: true },
+      river: endedFirstCatch().river,
+    });
   });
 });
 

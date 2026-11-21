@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL } from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { endedFirstCatch } from '../src/game/rules/firstCatch.js';
 import { WALK_BAG_CAP, autoLockKey, capOfBoat, newState } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import type { ActionResult, StatePatch } from '../src/game/rules/actions.js';
@@ -299,7 +300,7 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     const key = autoLockKey('minnow', 'normal');
     const uid = await seed({
       state: {
-        firstCatch: { n: 20, legendAt: 12, epic: false, legend: false },
+        firstCatch: endedFirstCatch(),
         autoLockOnCatch: true,
         bag: [lockedTie],
         autoLockedIds: { [key]: lockedTie.uid },
