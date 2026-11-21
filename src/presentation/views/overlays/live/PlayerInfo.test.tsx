@@ -1,13 +1,35 @@
-// 플레이어 정보: 공개 프로필(명성, 도감, 배, 낚싯대, 유물)과 계정 유저가 쓰는 친구 요청, 차단, 신고.
+// 플레이어 정보: 현재·마지막 위치, 요약, 업적, 수집품(모자·유물 레벨), 해역별 일반·돌연변이 도감 비교와 친구·차단·신고 동작.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ACHIEVEMENTS } from '../../../../game/content/achievements';
 import { ARTIFACTS } from '../../../../game/content/artifacts';
 import { FISH } from '../../../../game/content/fish';
+import { HATS } from '../../../../game/content/wardrobe';
+import type { PublicProfile } from '../../../../platform/api';
 import { PlayerInfo } from './PlayerInfo';
 
 const s = vi.hoisted(() => ({
   relation: null as null | 'friend' | 'incoming' | 'outgoing',
   blocked: false as boolean | null,
+  profile: {
+    nickname: '갈치',
+    boat: 2,
+    rod: 7,
+    fame: 12345,
+    dexFish: ['crucian', 'minnow'],
+    dexVariant: ['crucian'],
+    artifacts: ['abyss-angler', 'mami-wata-mirror'],
+    artifactLevels: { 'abyss-angler': 3 },
+    hats: ['cap-red', 'straw-hat'],
+    look: { shirt: 1, pants: 0, hat: 'straw-hat' },
+    achievements: ['variant-village', 'manual-10'],
+    location: { kind: 'base', id: 'harbor' },
+    lastPos: null,
+    online: true,
+    liveRegion: 'world',
+    liveZone: 'deep',
+    account: true,
+  } as PublicProfile,
   act: vi.fn(async () => ({ ok: true, result: 'requested' })),
   block: vi.fn(async () => null),
   report: vi.fn(async () => null),
@@ -15,9 +37,7 @@ const s = vi.hoisted(() => ({
 
 vi.mock('../../../../features/account/service/accountActions', () => ({ isGuest: (account: string | null) => account === null }));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
-  usePlayerProfile: () => ({ profile: {
-    nickname: '갈치', boat: 2, rod: 7, fame: 12345, dexFish: ['crucian', 'minnow'], artifacts: ['abyss-angler'], account: true,
-  }, loading: false, failed: false }),
+  usePlayerProfile: () => ({ profile: s.profile, loading: false, failed: false }),
 }));
 vi.mock('../../../../features/friends/service/useFriends', () => ({
   useFriends: () => ({ groups: { friends: [], incoming: [], outgoing: [] }, offline: false, act: s.act }),
@@ -35,15 +55,50 @@ const show = (over: Partial<Parameters<typeof PlayerInfo>[0]> = {}) =>
   render(<PlayerInfo target={target} self={false} account="me@example.com" setToast={vi.fn()} {...over} />);
 
 describe('PlayerInfo', () => {
-  afterEach(() => { cleanup(); s.relation = null; s.blocked = false; vi.clearAllMocks(); });
+  afterEach(() => {
+    cleanup();
+    s.relation = null;
+    s.blocked = false;
+    s.profile = {
+      nickname: '갈치',
+      boat: 2,
+      rod: 7,
+      fame: 12345,
+      dexFish: ['crucian', 'minnow'],
+      dexVariant: ['crucian'],
+      artifacts: ['abyss-angler', 'mami-wata-mirror'],
+      artifactLevels: { 'abyss-angler': 3 },
+      hats: ['cap-red', 'straw-hat'],
+      look: { shirt: 1, pants: 0, hat: 'straw-hat' },
+      achievements: ['variant-village', 'manual-10'],
+      location: { kind: 'base', id: 'harbor' },
+      lastPos: null,
+      online: true,
+      liveRegion: 'world',
+      liveZone: 'deep',
+      account: true,
+    };
+    vi.clearAllMocks();
+  });
 
-  it('명성·도감·낚싯대·가진 유물을 보이고, 친구 요청·차단·신고를 보낸다', async () => {
+  it('현재 위치, 명성, 업적, 수집품(모자·유물 레벨), 일반·돌연변이 도감을 보이고 친구 요청·차단·신고를 보낸다', async () => {
     show();
+    expect(screen.getByLabelText('접속 중')).toBeTruthy();
+    expect(screen.getByLabelText('현재 위치 마리아나 해구')).toBeTruthy();
     expect(screen.getByText('12,345')).toBeTruthy();
-    expect(screen.getByText('2 / ' + FISH.length)).toBeTruthy();
     expect(screen.getByText('Lv.7')).toBeTruthy();
-    expect(screen.getByLabelText('유물 해구의 이빨')).toBeTruthy();
-    expect(screen.getAllByLabelText(/유물 없음$/)).toHaveLength(ARTIFACTS.length - 1);
+    expect(screen.getByText(`2 / ${ACHIEVEMENTS.length}`)).toBeTruthy();
+    expect(screen.getByText(`2 / ${HATS.length}`)).toBeTruthy();
+    expect(screen.getByText(`2 / ${ARTIFACTS.length}`)).toBeTruthy();
+    expect(screen.getByLabelText('유물 해구의 이빨 Lv.3')).toBeTruthy();
+    const legendCard = screen.getByLabelText('유물 마미 와타의 거울');
+    expect(legendCard).toBeTruthy();
+    expect(legendCard.textContent).toBe('마미 와타의 거울');
+    expect(screen.queryByText('전설')).toBeNull();
+    expect(screen.getAllByLabelText(/유물 없음$/)).toHaveLength(ARTIFACTS.length - 2);
+    expect(screen.getByText(`2 / ${FISH.length}`)).toBeTruthy();
+    expect(screen.getByText(`1 / ${FISH.length}`)).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: '친구 요청' }));
     expect(s.act).toHaveBeenCalledWith({ op: 'request', nickname: '갈치' });
     const blockButton = screen.getByRole('button', { name: '차단' }) as HTMLButtonElement;
@@ -54,6 +109,13 @@ describe('PlayerInfo', () => {
     await waitFor(() => expect(blockButton.disabled).toBe(false));
     fireEvent.click(blockButton);
     expect(s.block).toHaveBeenCalledWith('u1');
+  });
+
+  it('비접속 상태에서는 접속 점 없이 마지막 위치를 표시한다', () => {
+    s.profile = { ...s.profile, online: false, liveRegion: null, liveZone: null, location: { kind: 'base', id: 'colombo' } };
+    show();
+    expect(screen.queryByLabelText('접속 중')).toBeNull();
+    expect(screen.getByLabelText('마지막 위치 콜롬보항')).toBeTruthy();
   });
 
   it('친구이거나 요청 중이면 요청 버튼 대신 상태를 보이고, 차단했으면 해제를 보인다', () => {
