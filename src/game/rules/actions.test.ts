@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
+import { endedFirstCatch, newFirstCatch } from './firstCatch';
 import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
@@ -22,20 +23,24 @@ const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = f
 
 describe('catch — 첫 경험 보장', () => {
   it('5번째 캐치는 그 수역의 영웅 어종이고 도감·명성은 일반 캐치와 같다', () => {
-    const out = applyAction(seed({ firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } }),
-      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
+    const out = applyAction(
+      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }),
+    );
     if (!out.ok) throw new Error('catch failed');
     const caught = FISH.find(f => f.id === (out.result as { fishId: string }).fishId)!;
     expect(caught).toMatchObject({ rarity: 'epic', spot: 'pond' });
     expect(out.state.fame).toBe(40);
-    expect(out.state.firstCatch).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.state.firstCatch.pond).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.state.firstCatch.river).toEqual(newFirstCatch().river);
   });
 
   it('첫 캐치에서 전설 번호를 정하고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
     const first = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
     if (!first.ok) throw new Error('catch failed');
-    expect(first.state.firstCatch).toMatchObject({ n: 1, legendAt: 15 });
-    const ended = { n: 0, legendAt: 0, epic: false, legend: false };
+    expect(first.state.firstCatch.pond).toMatchObject({ n: 1, legendAt: 13 });
+    expect(first.state.firstCatch.river).toEqual(newFirstCatch().river);
+    const ended = endedFirstCatch();
     const out = applyAction(seed({ firstCatch: ended }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error('catch failed');
     expect(out.state.firstCatch).toEqual(ended);

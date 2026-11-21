@@ -1,15 +1,32 @@
 // 공개 프로필 — 서버 읽기 함수(GET /api/players/:uid)를 부른다. 다른 사용자의 표를 브라우저에서 직접 읽지 않는다.
 // 클라우드 미설정(로컬 dev·테스트)이면 null이다. 그 밖의 실패는 던진다(조회가 다시 시도한다).
+import type { LocationRef } from '../../game/content/places';
+import type { Look } from '../../game/content/wardrobe';
 import { isCloud } from './auth';
 import { requestFailure } from './requestFailure';
 
 /**
- * 다른 플레이어에게 보이는 정보. dexFish는 일반 폼으로 한 번이라도 낚은 어종 id, artifacts는 가진 유물 id,
- * account는 게스트가 아닌 계정인가
+ * 다른 플레이어에게 보이는 정보. dexFish는 일반 폼, dexVariant는 돌연변이 폼으로 한 번이라도 낚은 어종 id,
+ * artifacts는 가진 유물 id, achievements는 보상 수령 완료(claimed) id, account는 게스트가 아닌 계정인가
  */
 export interface PublicProfile {
-  nickname: string | null; boat: number; rod: number; fame: number;
-  dexFish: string[]; artifacts: string[]; account: boolean;
+  nickname: string | null;
+  boat: number;
+  rod: number;
+  fame: number;
+  dexFish: string[];
+  dexVariant: string[];
+  artifacts: string[];
+  artifactLevels: Record<string, number>;
+  hats: string[];
+  look: Look | null;
+  achievements: string[];
+  location: LocationRef | null;
+  lastPos: { region: string; x: number; y: number } | null;
+  online: boolean;
+  liveRegion: string | null;
+  liveZone: string | null;
+  account: boolean;
 }
 
 export async function readPlayer(uid: string): Promise<PublicProfile | null> {

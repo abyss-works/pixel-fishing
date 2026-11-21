@@ -11,8 +11,8 @@ import { PlayerInfo } from './PlayerInfo';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 
 // 같은 바다 접속 목록. 680 폭에 탭이 없어 내용 높이를 따른다.
-// 위는 이 바다에 있는 다른 플레이어의 이름 칸 격자(3열, 세 줄 높이, 넘치면 칸 안에서 굴린다), 아래는 고른 사람의 정보 세 칸이다.
-// 목록에 있는 사람은 모두 접속 중이라 접속 표시를 따로 붙이지 않는다. 고른 사람이 바다를 떠나면 목록의 첫 사람을 보인다.
+// 위는 이 바다에 있는 다른 플레이어의 이름 칸 격자(3열, 세 줄 높이, 넘치면 칸 안에서 굴린다),
+// 아래는 고른 사람의 정보 2열 배치다. 고른 사람이 바다를 떠나면 목록의 첫 사람을 보인다.
 export default function PlayersModal({ region, account, accountFailed = false, setToast, onClose }: {
   region: string;
   account: string | null;
@@ -51,7 +51,7 @@ export default function PlayersModal({ region, account, accountFailed = false, s
                 </div>
               </Inset>
             </section>
-            <PlayerInfo key={selected.uid} target={selected} self={false} account={account} accountFailed={accountFailed} setToast={setToast} layout="grid" />
+            <PlayerInfo key={selected.uid} target={selected} self={false} account={account} accountFailed={accountFailed} setToast={setToast} />
           </div>
         ) : (
           <Inset className="h-[120px] flex items-center justify-center">

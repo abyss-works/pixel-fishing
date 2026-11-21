@@ -7,7 +7,6 @@ import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import { usePlayerProfile } from '../../../../features/live/service/usePlayerProfile';
-import { useOnline } from '../../../../features/live/service/useLive';
 import { selectProfileView } from '../../../../features/live/model/profile';
 import type { ProfileView } from '../../../../features/live/model/profile';
 import BoatSprite from '../../../ui/BoatSprite';
@@ -18,13 +17,13 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Locked from '../../../ui/Locked';
+import PersonSprite from '../../../ui/PersonSprite';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 
-// 플레이어 정보. 칸 셋으로 보인다. 요약 칸(배 그림과 닉네임, 명성, 도감, 배, 낚싯대, 파워, 맨 아래 동작 버튼),
-// 해역별 도감 칸, 유물 칸이다. 접속 목록(680 폭)에서는 요약 칸이 왼쪽 위아래를 쓰고 오른쪽에 도감과 유물이 위아래로 놓이며,
-// 채팅 이름에서 여는 400 폭 창에서는 같은 칸을 위아래로 쌓는다.
+// 플레이어 정보 — PC 680 폭 2열 배치(모바일 1열 쌓기)로 요약, 업적, 수집품, 해역별 도감 비교를 보인다.
+// 채팅 이름 클릭 창과 접속 목록 모두 같은 배치를 공유한다.
 // 동작(친구 요청, 차단, 채팅 글줄 신고)은 계정 유저만 쓴다. 게스트에게는 버튼을 흐리게 두고 이유를 툴팁으로 보인다. 내 정보에는 동작이 없다.
 // 채팅 글줄에서 열었을 때만 그 글줄을 신고할 수 있다.
 
@@ -41,9 +40,9 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
   missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
-const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종';
+const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
 
-export function PlayerInfo({ target, self, account, accountFailed = false, setToast, layout = 'stack' }: {
+export function PlayerInfo({ target, self, account, accountFailed = false, setToast }: {
   target: PlayerTarget;
   /** 내 정보인가 — 동작을 보이지 않는다 */
   self: boolean;
@@ -52,11 +51,8 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   /** 세션 확인에 실패했는가 */
   accountFailed?: boolean;
   setToast: Notify;
-  /** grid = 접속 목록의 세 칸 배치, stack = 400 폭 창의 위아래 쌓기 */
-  layout?: 'grid' | 'stack';
 }) {
   const { profile, loading, failed } = usePlayerProfile(target.uid);
-  const online = useOnline(target.uid);
   const member = account !== null && !self;
   const friends = useFriends(member);
   const moderation = useChatModeration(member);
@@ -137,76 +133,178 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   );
 
   return (
-    <ProfileCells name={name} online={layout === 'stack' && online && !self} view={selectProfileView(profile)}
-                  layout={layout} actions={actions} />
+    <ProfileCells name={name} view={selectProfileView(profile)} actions={actions} />
   );
 }
 
 // 등급색 — 가진 유물 칸의 테두리와 이름
-const GRADE_CLASS: Record<NonNullable<ProfileView['artifacts']['slots'][number]['grade']>, string> = {
+const GRADE_CLASS: Record<NonNullable<ProfileView['collectibles']['artifacts']['slots'][number]['grade']>, string> = {
   common: 'border-common text-common',
   rare: 'border-rare text-rare',
   epic: 'border-epic text-epic',
   legendary: 'border-legend text-legend',
 };
 
-/** 요약, 해역별 도감, 유물 세 칸. grid면 요약 칸이 왼쪽 두 줄을 잇는다 */
-function ProfileCells({ name, online, view, layout, actions }: {
+const pct = (value: number, total: number): number => (total > 0 ? Math.min(100, (value / total) * 100) : 0);
+
+/** 요약, 업적, 수집품, 해역별 도감 비교. PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭), 모바일 1열 쌓기 */
+function ProfileCells({ name, view, actions }: {
   name: string;
-  /** 이름 앞에 접속 점을 붙인다(채팅에서 연 창). 접속 목록은 모두 접속 중이라 붙이지 않는다 */
-  online: boolean;
   view: ProfileView;
-  layout: 'grid' | 'stack';
   actions: ReactNode;
 }) {
-  const { dex, boat, rod, artifacts } = view;
+  const { online, placeLabel, look, boat, rod, dex, achievements, collectibles } = view;
+  const { hats, artifacts } = collectibles;
+  const placeText = placeLabel ?? '위치 미상';
+
   return (
-    <div className={layout === 'grid' ? 'grid grid-cols-2 grid-rows-[auto_auto] gap-3 mobile:grid-cols-1' : 'flex flex-col gap-3'}>
-      <Inset className={cx('px-3 py-2.5 flex flex-col gap-2 min-w-0', layout === 'grid' && 'row-span-2 mobile:row-span-1')}>
-        <div className="flex items-center gap-2.5 min-h-8">
-          {boat.tier > 0 && <BoatSprite tier={boat.tier} preset="row" />}
-          {online && <span className="size-2 shrink-0 bg-accent" role="img" aria-label="접속 중" />}
-          <b className="text-sm truncate">{name}</b>
+    <div className="grid grid-cols-[224px_minmax(0,1fr)] gap-3 mobile:grid-cols-1">
+      {/* 왼쪽 열: 헤더(외형·배, 접속 상태, 닉네임, 위치) + 요약 + 동작 */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2.5 min-w-0 row-span-2 mobile:row-span-1">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {look ? (
+            <div className="shrink-0 w-11 h-12 flex items-center justify-center border border-line bg-surface-2">
+              <PersonSprite look={look} scale={2} />
+            </div>
+          ) : boat.tier > 0 ? (
+            <BoatSprite tier={boat.tier} preset="row" />
+          ) : null}
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {online && <span className="size-2 shrink-0 bg-accent" role="img" aria-label="접속 중" />}
+              <b className="text-sm truncate">{name}</b>
+            </div>
+            <span
+              className={cx(
+                'inline-flex items-center self-start max-w-full truncate px-1.5 py-0.5 text-2xs border bg-surface-2',
+                online ? 'border-accent text-accent' : 'border-line text-text-dim',
+              )}
+              aria-label={online ? `현재 위치 ${placeText}` : `마지막 위치 ${placeText}`}
+            >
+              {placeText}
+            </span>
+          </div>
         </div>
         <ul className="flex flex-col text-xs">
           <ProfileRow label="명성"><span className="pf-accent">{fmtNum(view.fame)}</span></ProfileRow>
-          <ProfileRow label={<Tip text={DEX_HELP}>도감</Tip>}><span className="pf-accent">{dex.found} / {dex.total}</span></ProfileRow>
           <ProfileRow label="배">
             {boat.tier > 0 ? <>{boat.name} <span className="text-text-dim">({boat.tier}단계)</span></> : '없음'}
           </ProfileRow>
           <ProfileRow label="낚싯대"><span className="pf-accent">Lv.{rod.level}</span></ProfileRow>
-          <ProfileRow label="파워"><span className="pf-accent">{rod.power}</span></ProfileRow>
+          <ProfileRow label="파워"><span className="pf-accent">{fmtNum(rod.power)}</span></ProfileRow>
         </ul>
         {actions && <div className="mt-auto pt-1">{actions}</div>}
       </Inset>
-      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0">
-        <span className="text-2xs text-text-dim">해역별 도감</span>
-        {dex.zones.map(z => (
-          <div key={z.zone} className="grid grid-cols-[8.5em_minmax(0,1fr)_4.6em] items-center gap-2 h-5 text-2xs whitespace-nowrap"
-               aria-label={`${z.name} 도감 ${z.found}/${z.total}`}>
-            <span className="truncate">{z.name}</span>
-            <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-              <span className={cx('block h-full', z.complete ? 'bg-gold' : 'bg-accent')}
-                    style={{ width: `${z.total ? (z.found / z.total) * 100 : 0}%` }} />
+
+      {/* 오른쪽 상단: 범주 1 업적 */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2 text-2xs">
+          <span className="font-bold text-gold">업적</span>
+          <span className="text-text-dim">
+            수령 완료 <span className="font-pixel text-gold">{achievements.claimed} / {achievements.total}</span>
+          </span>
+        </div>
+        <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]"
+              aria-label={`업적 달성 ${achievements.claimed}/${achievements.total}`}>
+          <span className="block h-full bg-gold" style={{ width: `${pct(achievements.claimed, achievements.total)}%` }} />
+        </span>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 mobile:grid-cols-1">
+          {achievements.tabs.map(t => (
+            <div key={t.tab} className="grid grid-cols-[5.2em_minmax(0,1fr)_3.6em] items-center gap-1.5 text-2xs whitespace-nowrap"
+                 aria-label={`${t.label} 업적 ${t.claimed}/${t.total}`}>
+              <span className="text-text-dim truncate">{t.label}</span>
+              <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                <span className="block h-full bg-gold" style={{ width: `${pct(t.claimed, t.total)}%` }} />
+              </span>
+              <span className="font-pixel text-gold text-right">{t.claimed}/{t.total}</span>
+            </div>
+          ))}
+        </div>
+      </Inset>
+
+      {/* 오른쪽 하단: 범주 2 수집품 (모자 + 유물) */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2 text-2xs">
+          <span className="font-bold text-accent">수집품</span>
+          <span className="pf-accent">{hats.owned + artifacts.owned} / {hats.total + artifacts.total}</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2 text-2xs">
+            <span className="text-text-dim truncate">
+              모자 (구매 {hats.goldOwned}/{hats.goldTotal} 업적 {hats.achievementOwned}/{hats.achievementTotal})
             </span>
-            <span className="pf-accent text-right">{z.found} / {z.total}</span>
+            <span className="pf-accent shrink-0">{hats.owned} / {hats.total}</span>
+          </div>
+          <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]"
+                aria-label={`모자 수집 ${hats.owned}/${hats.total}`}>
+            <span className={cx('block h-full', hats.owned === hats.total && hats.total > 0 ? 'bg-gold' : 'bg-accent')}
+                  style={{ width: `${pct(hats.owned, hats.total)}%` }} />
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5 border-t border-line/60 pt-2">
+          <div className="flex items-center justify-between gap-2 text-2xs text-text-dim">
+            <span>유물</span>
+            <span className="pf-accent">{artifacts.owned} / {artifacts.total}</span>
+          </div>
+          <ul className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
+            {artifacts.slots.map(s => (
+              <li key={s.id}
+                  className={cx('min-h-10 border-2 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                    s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
+                  aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
+                {s.name ? (
+                  <>
+                    <span className="truncate max-w-full">{s.name}</span>
+                    {s.level !== null && <span className="font-pixel text-2xs opacity-85">Lv.{s.level}</span>}
+                  </>
+                ) : (
+                  <span className="truncate max-w-full">{s.zone}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Inset>
+
+      {/* 하단 전폭: 해역별 도감 (일반 + 돌연변이 나란히 비교) */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0 col-span-2 mobile:col-span-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
+          <span className="font-bold text-accent"><Tip text={DEX_HELP}>해역별 도감</Tip></span>
+          <div className="flex items-center gap-3">
+            <span className="text-text-dim">일반 <span className="pf-accent">{dex.found} / {dex.total}</span></span>
+            <span className="text-text-dim">돌연변이 <span className="font-pixel text-guild">{dex.variantFound} / {dex.total}</span></span>
+          </div>
+        </div>
+        <div className="grid grid-cols-[7.5em_minmax(0,1fr)] gap-2.5 text-2xs text-text-dim border-b border-line/60 pb-1 mobile:hidden">
+          <span>구역</span>
+          <div className="grid grid-cols-2 gap-2.5">
+            <span>일반 도감</span>
+            <span>돌연변이 수집</span>
+          </div>
+        </div>
+        {dex.zones.map(z => (
+          <div key={z.zone} className="grid grid-cols-[7.5em_minmax(0,1fr)] items-center gap-2.5 text-2xs mobile:grid-cols-1 mobile:gap-1">
+            <span className="truncate">{z.name}</span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
+                   aria-label={`${z.name} 일반 도감 ${z.found}/${z.total}`}>
+                <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                  <span className={cx('block h-full', z.complete ? 'bg-gold' : 'bg-accent')}
+                        style={{ width: `${pct(z.found, z.total)}%` }} />
+                </span>
+                <span className={cx('text-right', z.complete ? 'font-pixel text-gold' : 'pf-accent')}>{z.found} / {z.total}</span>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
+                   aria-label={`${z.name} 돌연변이 도감 ${z.variantFound}/${z.total}`}>
+                <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                  <span className={cx('block h-full', z.variantComplete ? 'bg-gold' : 'bg-guild')}
+                        style={{ width: `${pct(z.variantFound, z.total)}%` }} />
+                </span>
+                <span className={cx('font-pixel text-right', z.variantComplete ? 'text-gold' : 'text-guild')}>{z.variantFound} / {z.total}</span>
+              </div>
+            </div>
           </div>
         ))}
-      </Inset>
-      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0">
-        <span className="flex justify-between text-2xs text-text-dim">
-          <span>유물</span><span className="pf-accent">{artifacts.owned} / {artifacts.slots.length}</span>
-        </span>
-        <ul className="grid grid-cols-4 gap-1.5">
-          {artifacts.slots.map(s => (
-            <li key={s.id}
-                className={cx('h-9 border-2 p-0.5 flex items-center justify-center text-center text-2xs leading-tight',
-                  s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
-                aria-label={s.name ? `유물 ${s.name}` : `${s.zone} 유물 없음`}>
-              {s.name ?? s.zone}
-            </li>
-          ))}
-        </ul>
       </Inset>
     </div>
   );
@@ -222,12 +320,12 @@ function ProfileRow({ label, children }: { label: ReactNode; children: ReactNode
   );
 }
 
-/** 채팅 이름에서 여는 플레이어 정보 창 */
+/** 채팅 이름에서 여는 플레이어 정보 창 — 접속 목록과 같은 680 폭 2열 배치를 쓴다 */
 export default function PlayerModal({ onClose, ...props }: Parameters<typeof PlayerInfo>[0] & { onClose: () => void }) {
   return (
-    <Modal layer="stage" onClose={onClose}>
+    <Modal layer="stage" md onClose={onClose}>
       <ModalCard title={props.self ? '내 정보' : '플레이어 정보'} onClose={onClose}>
-        <PlayerInfo {...props} layout="stack" />
+        <PlayerInfo {...props} />
       </ModalCard>
     </Modal>
   );
