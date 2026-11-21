@@ -17,19 +17,19 @@ describe('업적 콘텐츠', () => {
     ]);
   });
 
-  it('수령형 업적 67종(진행 26 + 치장 41)과 누적 보너스 23종(21계열)이 중복 없는 id로 정의되어 있다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(67);
-    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(67);
+  it('수령형 업적 71종(진행 30 + 치장 41)과 누적 보너스 25종(23계열)이 중복 없는 id로 정의되어 있다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(71);
+    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(71);
 
     const progress = ACHIEVEMENTS.filter(a => a.tab === 'progress');
-    expect(progress).toHaveLength(26);
+    expect(progress).toHaveLength(30);
     const cosmetic = ACHIEVEMENTS.filter(a => a.tab === 'cosmetic');
     expect(cosmetic).toHaveLength(41);
     expect(ACHIEVEMENTS.filter(a => a.reward.kind === 'hat')).toHaveLength(41);
 
-    expect(CUMULATIVE_BONUS_SERIES).toHaveLength(21);
-    expect(CUMULATIVE_BONUS_COUNT).toBe(23);
-    expect(new Set(CUMULATIVE_BONUS_SERIES.map(s => s.id)).size).toBe(21);
+    expect(CUMULATIVE_BONUS_SERIES).toHaveLength(23);
+    expect(CUMULATIVE_BONUS_COUNT).toBe(25);
+    expect(new Set(CUMULATIVE_BONUS_SERIES.map(s => s.id)).size).toBe(23);
   });
 
   it('폐지된 옛 업적 id는 재사용하지 않는다', () => {
@@ -72,6 +72,10 @@ describe('업적 콘텐츠', () => {
       'spot-full-benguela': 500_000,
       'spot-basic-sthelena': 1_500_000,
       'spot-full-sthelena': 1_500_000,
+      'spot-basic-azores': 3_000_000,
+      'spot-full-azores': 2_500_000,
+      'spot-basic-bermuda': 7_500_000,
+      'spot-full-bermuda': 7_500_000,
     };
     let total = 0;
     for (const [id, gold] of Object.entries(expected)) {
@@ -80,7 +84,7 @@ describe('업적 콘텐츠', () => {
       expect(a!.reward).toEqual({ kind: 'gold', gold });
       total += gold;
     }
-    expect(total).toBe(5_362_500);
+    expect(total).toBe(25_862_500);
   });
 
   it('모든 업적 모자 보상과 wardrobe.ts가 1:1로 대응한다', () => {

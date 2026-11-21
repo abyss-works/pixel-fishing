@@ -73,12 +73,12 @@ describe('가상 해역을 넣은 명령', () => {
     const file = writeJson(NEXT);
     const t = runCli(['transition', '--override', file]);
     expect(t.exitCode).toBe(0);
-    expect(t.stdout).toContain('세인트헬레나 → 다음 지역 첫 해역');
+    expect(t.stdout).toContain('버뮤다 삼각지대 → 다음 지역 첫 해역');
     expect(t.stdout).toContain(`가상 배 ${BOATS.length + 1}(5,000,000 / 400,000)`);
     const e = runCli(['ev', '--growth', '--override', file]);
     expect(e.stdout).toContain('+45.0%');
     const g = runCli(['gates', '--override', file]);
-    expect(g.stdout).toContain('세인트헬레나 → 다음 지역 첫 해역');
+    expect(g.stdout).toContain('버뮤다 삼각지대 → 다음 지역 첫 해역');
     expect(SPOTS.length).toBe(spots);
     expect(BOATS.length).toBe(boats);
   });
@@ -102,7 +102,7 @@ describe('가상 해역과 분포, 보상, 미지원 명령', () => {
   it('dist 보상 분포가 가상 해역 덮어쓰기와 함께 돈다', () => {
     const file = writeJson(NEXT);
     const r = runFlow(parseArgs(['dist', '--trials', '3', '--override', file, '--reward', '4h', '--reward-split', '0.5']));
-    const row = r.dist!.reward!.rows.find(x => x.zone === 'southatlantic' && x.tier === 'basic')!;
+    const row = r.dist!.reward!.rows.find(x => x.zone === 'northatlantic' && x.tier === 'basic')!;
     expect(row.to).toBe('next');
     expect(row.reward.gold).toBeGreaterThan(0);
   });

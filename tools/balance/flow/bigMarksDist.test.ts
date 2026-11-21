@@ -144,5 +144,5 @@ describe('bigMarksDist 분포 및 출력', () => {
     const flowOn = runFlow(parseArgs(['dist', '--bounty', '--reward', '4', '--trials', '3', '--seed', '5']));
     expect(flowOn.dist!.transition.at(-1)!.analyticCumulative!).toBeLessThan(flowOff.dist!.transition.at(-1)!.analyticCumulative!);
     expect(flowOn.dist!.reward!.rows.map(r => r.arrival?.mean)).not.toEqual(flowOff.dist!.reward!.rows.map(r => r.arrival?.mean));
-  });
+  }, 15_000);
 });

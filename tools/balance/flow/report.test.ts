@@ -242,7 +242,7 @@ describe('gates 명령', () => {
     const r = runCli(['gates', '--max-days', String(cut)]);
     expect(r.exitCode).toBe(1);
     expect(r.stdout).toContain('최대 일수 안에 닿지 못한 전환');
-    expect(r.stdout).toMatch(/남대서양 용승대 → 세인트헬레나 \| 지역 안 \| 닿지 못함 .*위반/);
+    expect(r.stdout).toMatch(/아조레스 해령 → 버뮤다 삼각지대 \| 지역 안 \| 닿지 못함 .*위반/);
     expect(r.stdout).toMatch(/위반 [1-9]/);
     expect(runCli(['gates']).exitCode).toBe(0);
   });

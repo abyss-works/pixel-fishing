@@ -29,6 +29,7 @@ import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
+import { bagCapBonusOf } from '../src/game/rules/artifactLevel.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
@@ -685,7 +686,8 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const inst = lockDecision.inst;
   const unlockedPrev = lockDecision.unlockedPrev;
   const rec = nextDexRec(prev, inst.size, today);
-  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
+  const totalBagBonus = guild.bag + bagCapBonusOf(base, achievementBonusesOf(base).artifactBoost);
+  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, totalBagBonus), bagCount);
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let evictBag: FishInstance[] = [];

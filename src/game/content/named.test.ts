@@ -24,7 +24,7 @@ describe('named 데이터 계약', () => {
     for (const n of NAMED) {
       expect(n.zones.length).toBeGreaterThan(0);
       for (const z of n.zones) {
-        expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']).toContain(z);
+        expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']).toContain(z);
       }
     }
   });
@@ -33,15 +33,22 @@ describe('named 데이터 계약', () => {
     const hpByZone: Record<string, number[]> = {};
     for (const n of NAMED) (hpByZone[n.zones[0]] ??= []).push(n.hp);
     expect(hpByZone).toEqual({
-      pacific: [5], seasia: [6], indian: [7], madagascar: [8], southatlantic: [9, 9],
+      pacific: [5], seasia: [6], indian: [7], madagascar: [8], southatlantic: [9, 9], northatlantic: [10, 10],
     });
   });
 
-  it('네임드는 6마리이고 아다마스토르는 용승대에서만 나온다', () => {
-    expect(NAMED).toHaveLength(6);
+  it('네임드는 8마리이고 아다마스토르는 용승대에서만 나온다', () => {
+    expect(NAMED).toHaveLength(8);
     const a = namedById('adamastor')!;
     expect(a.zones).toEqual(['southatlantic']);
     expect(a.spot).toBe('benguela');
+  });
+
+  it('북대서양 네임드 2종은 아조레스 해령과 버뮤다 삼각지대에 각 1종이고 결투 체력 10이다', () => {
+    const g = namedById('gloucester-serpent')!;
+    expect(g).toMatchObject({ name: '글로스터 바다뱀', zones: ['northatlantic'], spot: 'azores', shape: 'eel', hp: 10 });
+    const q = namedById('guabancex')!;
+    expect(q).toMatchObject({ name: '구아반세스', zones: ['northatlantic'], spot: 'bermuda', shape: 'flowing', hp: 10 });
   });
 
   it('야스코니우스는 세인트헬레나에서만 나오는 둥근형이고 결투 체력과 가속은 아다마스토르와 같다', () => {

@@ -20,7 +20,8 @@ const REWARDS: Record<string, Record<string, number>> = {
   seasia: { easy: 60000, normal: 100000, hard: 250000, named: 500000 },
   indian: { easy: 200000, normal: 350000, hard: 750000, named: 1500000 },
   madagascar: { easy: 700000, normal: 1500000, hard: 3000000, named: 5500000 },
-  southatlantic: { easy: 3000000, normal: 5500000, hard: 10000000, named: 25000000 },
+  southatlantic: { easy: 3000000, normal: 5500000, hard: 10000000, named: 20000000 },
+  northatlantic: { easy: 15000000, normal: 25000000, hard: 55000000, named: 100000000 },
 };
 
 describe('bounties 데이터 계약', () => {
@@ -78,13 +79,17 @@ describe('bounties 데이터 계약', () => {
   });
 });
 
-describe('남대서양 현상금', () => {
-  it('의뢰 구역 5개, 수배 창구는 월비스베이항, 네임드는 아다마스토르와 야스코니우스 둘이다', () => {
-    expect(new Set(BOUNTIES.map(q => q.zone)).size).toBe(5);
+describe('남대서양·북대서양 현상금', () => {
+  it('의뢰 구역 6개, 수배 창구는 월비스베이항·리스본항, 네임드는 각 2종이다', () => {
+    expect(new Set(BOUNTIES.map(q => q.zone)).size).toBe(6);
     expect(BOUNTY_PORT_ZONE.walvisbay).toBe('southatlantic');
-    const named = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
-    expect(named.map(q => q.targetFish)).toEqual(['adamastor', 'jasconius']);
-    expect(named.map(q => q.reward)).toEqual([25000000, 25000000]);
+    expect(BOUNTY_PORT_ZONE.lisbon).toBe('northatlantic');
+    const saNamed = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
+    expect(saNamed.map(q => q.targetFish)).toEqual(['adamastor', 'jasconius']);
+    expect(saNamed.map(q => q.reward)).toEqual([20000000, 20000000]);
+    const naNamed = BOUNTIES.filter(q => q.zone === 'northatlantic' && q.difficulty === 'named');
+    expect(naNamed.map(q => q.targetFish)).toEqual(['gloucester-serpent', 'guabancex']);
+    expect(naNamed.map(q => q.reward)).toEqual([100000000, 100000000]);
   });
 });
 

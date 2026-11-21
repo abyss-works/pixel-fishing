@@ -16,6 +16,8 @@ describe('항구 게이트 (canEnterBase)', () => {
     expect(canEnterBase(at(7), 'toamasina')).toEqual({ ok: true });
     expect(canEnterBase(at(7), 'walvisbay')).toEqual({ ok: false, reason: 'zone-locked' });
     expect(canEnterBase(at(8), 'walvisbay')).toEqual({ ok: true });
+    expect(canEnterBase(at(8), 'lisbon')).toEqual({ ok: false, reason: 'zone-locked' });
+    expect(canEnterBase(at(9), 'lisbon')).toEqual({ ok: true });
   });
 
   it('거부 문구가 있다', () => {
@@ -27,7 +29,7 @@ describe('빠른 이동 목적지 (fastTravelTargets)', () => {
   it('지금 있는 항구를 뺀 나머지 항구를 바다와 함께 돌려준다', () => {
     expect(fastTravelTargets(at(9), 'manila').map(t => [t.port, t.zone, t.locked]))
       .toEqual([['harbor', 'pacific', null], ['colombo', 'indian', null], ['toamasina', 'madagascar', null],
-        ['walvisbay', 'southatlantic', null]]);
+        ['walvisbay', 'southatlantic', null], ['lisbon', 'northatlantic', null]]);
   });
 
   it('배가 모자란 항구는 필요한 배를 사유로 잠근다', () => {
@@ -37,6 +39,7 @@ describe('빠른 이동 목적지 (fastTravelTargets)', () => {
       ['colombo', '증기선(5단계) 필요'],
       ['toamasina', expect.stringMatching(/\(7단계\) 필요$/)],
       ['walvisbay', expect.stringMatching(/\(8단계\) 필요$/)],
+      ['lisbon', expect.stringMatching(/\(9단계\) 필요$/)],
     ]);
   });
 

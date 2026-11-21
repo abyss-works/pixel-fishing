@@ -25,22 +25,23 @@ describe('zones 데이터 계약', () => {
     for (const s of SPOTS) expect(zoneOfSpot(s.id), s.id).toBeDefined();
   });
 
-  it('ZONE_IDS는 등록 순서(마을→태평양→동남아→인도양→마다가스카르→남대서양)의 단일 출처이다', () => {
-    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
+  it('ZONE_IDS는 등록 순서(마을→태평양→동남아→인도양→마다가스카르→남대서양→북대서양)의 단일 출처이다', () => {
+    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']);
     expect(ZONE_IDS.map(id => zoneById(id)!.id)).toEqual(ZONE_IDS);
   });
 
   it('진입 게이트는 바다 구역만 가지고 단조 증가한다 (진입 난이도 = 지리적 흐름)', () => {
     // 마을은 문/포구로만 드나든다 — 구역 게이트 대상이 아니다(Q7 거점=문 원칙).
     expect(zoneById('village')!.entryBoat).toBeUndefined();
-    const sea = (['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const).map(id => zoneById(id)!.entryBoat ?? 0);
+    const sea = (['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'] as const).map(id => zoneById(id)!.entryBoat ?? 0);
     expect(sea[0]).toBe(0);                    // 태평양 — 포구 게이트(requiredBoat 1)가 관문
     expect(sea[1]).toBeGreaterThanOrEqual(3);  // 동남아 — 구 O_EXIT(boat 3) 계승
     expect(sea[2]).toBeGreaterThanOrEqual(5);  // 인도양 — 구 말라카 게이트(boat 5) 계승
     expect(sea[2]).toBeGreaterThan(sea[1]);
     expect(sea[3]).toBe(7);                    // 마다가스카르 — 원양어선 한 척이 두 수역을 연다
     expect(sea[4]).toBe(8);                    // 남대서양 — 대양 트롤선 한 척이 두 해역을 연다
-    for (const id of ['seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
+    expect(sea[5]).toBe(9);                    // 북대서양 — 가공 플랜트선 한 척이 두 해역을 연다
+    for (const id of ['seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'] as const) {
       const z = zoneById(id)!;
       expect(z.gateMsg, `${id} 게이트 안내문`).toBeTruthy();
       // 막힌 경계가 보이지 않는 선이라 안내문에 구역 이름이 있어야 어디가 막혔는지 안다 (고도화 A-1)
@@ -52,9 +53,9 @@ describe('zones 데이터 계약', () => {
     for (const f of FISH) expect(zoneOfSpot(f.spot), `${f.id}(${f.spot})`).toBeDefined();
   });
 
-  it('씬 지역 소속 수역 집합 — 마을 2개, 병합 바다 11개', () => {
+  it('씬 지역 소속 수역 집합 — 마을 2개, 병합 바다 13개', () => {
     expect(spotsOfRegion('village').map(s => s.id)).toEqual(['pond', 'river']);
-    expect(spotsOfRegion('world')).toHaveLength(11);
+    expect(spotsOfRegion('world')).toHaveLength(13);
   });
 
   it('남대서양: 최상위 존에는 스팟이 없고 용승대와 세인트헬레나가 하위 존이다 (배8, 요구 파워 235·260)', () => {
@@ -66,6 +67,20 @@ describe('zones 데이터 계약', () => {
       expect(z.spots, id).toEqual([id]);
       const spot = SPOTS.find(s => s.id === id)!;
       expect(spot.boatTier, id).toBe(8);
+      expect(spot.powerReq, id).toBe(power);
+      expect(spot.rarityWeight, `${id} 등급 가중치 덮어쓰기 없음`).toBeUndefined();
+    }
+  });
+
+  it('북대서양: 최상위 존에는 스팟이 없고 아조레스 해령과 버뮤다 삼각지대가 하위 존이다 (배9, 요구 파워 285·315)', () => {
+    expect(zoneById('northatlantic')!.spots).toEqual([]);
+    expect(zoneById('northatlantic')!.group).toBe('world');
+    for (const [id, power] of [['azores', 285], ['bermuda', 315]] as const) {
+      const z = zoneById(id)!;
+      expect(z.parent, id).toBe('northatlantic');
+      expect(z.spots, id).toEqual([id]);
+      const spot = SPOTS.find(s => s.id === id)!;
+      expect(spot.boatTier, id).toBe(9);
       expect(spot.powerReq, id).toBe(power);
       expect(spot.rarityWeight, `${id} 등급 가중치 덮어쓰기 없음`).toBeUndefined();
     }

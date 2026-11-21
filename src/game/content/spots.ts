@@ -40,11 +40,17 @@ const DATA = [
   { id: 'comorodeep',  name: '코모로 심해',   boatTier: 7, region: 'madagascar',
     powerReq: 210 }, // Lv41 환산
   // 1-5 남대서양 — 특수 해역 둘(일반 연안 없음). 두 해역 모두 tier8 한 척으로 연다.
-  // 등급 가중치 덮어쓰기가 없어 최신 지역 프리셋을 따른다.
+  // 등급 가중치 덮어쓰기가 없어 한 단계 이전 프리셋을 따른다.
   { id: 'benguela',    name: '남대서양 용승대', boatTier: 8, region: 'southatlantic',
     powerReq: 235 }, // Lv46 환산
   { id: 'sthelena',    name: '세인트헬레나',     boatTier: 8, region: 'southatlantic',
     powerReq: 260 }, // Lv51 환산
+  // 1-6 북대서양 — 특수 해역 둘(일반 연안 없음). 두 해역 모두 tier9 한 척으로 연다.
+  // 등급 가중치 덮어쓰기가 없어 최신 지역 프리셋을 따른다.
+  { id: 'azores',      name: '아조레스 해령',   boatTier: 9, region: 'northatlantic',
+    powerReq: 285 }, // Lv56 환산
+  { id: 'bermuda',     name: '버뮤다 삼각지대', boatTier: 9, region: 'northatlantic',
+    powerReq: 315 }, // Lv62 환산
 ] as const;
 
 export type SpotId = (typeof DATA)[number]['id'];

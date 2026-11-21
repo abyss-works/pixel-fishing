@@ -4,13 +4,15 @@ import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import type { ArtifactEffectKey } from '../../features/gameplay/model/stats';
 import { fmtDecimal2, fmtPlusPoint } from './format';
 
-const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'extraCookChance'];
+const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'commonWeightCut', 'bagCap', 'extraCookChance'];
 
 const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
   mutationWeight: '돌연변이 가중치',
   biteWaitCut: '입질 대기',
+  commonWeightCut: '일반 등급 가중치',
+  bagCap: '가방 용량',
   extraCookChance: '요리 추가 완성',
 };
 
@@ -27,6 +29,8 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
     case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
     case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(e.duelSpeedupCut!) : null;
     case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
+    case 'commonWeightCut': return (e.commonWeightCut ?? 0) > 0 ? fmtCutPercent(e.commonWeightCut!) : null;
+    case 'bagCap': return (e.bagCap ?? 0) > 0 ? `+${fmtDecimal2(e.bagCap! * 100)}%` : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
       return chance > 0 ? fmtPlusPoint(chance * 100) : null; // 확률에 직접 더하는 효과는 %p

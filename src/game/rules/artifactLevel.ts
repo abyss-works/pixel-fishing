@@ -38,6 +38,8 @@ export function artifactEffectsAt(art: Artifact, level: number): ArtifactEffects
   if (e.sail !== undefined) out.sail = clean(e.sail * k);
   if (e.duelSpeedupCut !== undefined) out.duelSpeedupCut = clean(e.duelSpeedupCut * k);
   if (e.biteWaitCut !== undefined) out.biteWaitCut = clean(e.biteWaitCut * k);
+  if (e.commonWeightCut !== undefined) out.commonWeightCut = clean(e.commonWeightCut * k);
+  if (e.bagCap !== undefined) out.bagCap = clean(e.bagCap * k);
   if (e.mutationWeight !== undefined) {
     const boost = e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1;
     out.mutationWeight = {
@@ -74,6 +76,16 @@ export function sumArtifactEffect(state: ArtifactHolder, pick: (e: ArtifactEffec
 /** 돌연변이 가중치 증가율 — 보유한 골판의 현재 레벨 기준 증가율의 합. 없으면 0 */
 export function variantBoostOf(state: ArtifactHolder): number {
   return sumArtifactEffect(state, e => e.mutationWeight && e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1);
+}
+
+/** 일반 등급 가중치 감소율 합 — 보유 유물의 감소율 합에 유물 배율(1 + artifactBoost)을 곱한다 */
+export function commonWeightCutOf(state: ArtifactHolder, artifactBoost = 0): number {
+  return clean(sumArtifactEffect(state, e => e.commonWeightCut) * (1 + artifactBoost));
+}
+
+/** 가방 용량 증가율 합 — 보유 유물의 증가율 합에 유물 배율(1 + artifactBoost)을 곱한다 */
+export function bagCapBonusOf(state: ArtifactHolder, artifactBoost = 0): number {
+  return clean(sumArtifactEffect(state, e => e.bagCap) * (1 + artifactBoost));
 }
 
 /** 감소율의 합을 한 번 적용한 배수 (1 − 합). 합이 1 이상이어도 음수가 되지 않도록 0에서 멈춘다 */

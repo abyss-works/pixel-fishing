@@ -87,12 +87,14 @@ describe('지역 탭 파생 데이터', () => {
   });
 
   it('등급 분포는 해역의 등급 확률을 전역 확률과 비교한다 — 가중치 절대치가 아니다', () => {
-    expect(selectGradeLevel('mozstrait', 'epic')).toBe('low');      // 한 단계 이전 프리셋 4% < 5%
-    expect(selectGradeLevel('mozstrait', 'legendary')).toBe('low'); // 0.6% < 1%
+    expect(selectGradeLevel('benguela', 'epic')).toBe('low');       // 한 단계 이전 프리셋 4% < 5%
+    expect(selectGradeLevel('benguela', 'legendary')).toBe('low');  // 0.55% < 1%
+    expect(selectGradeLevel('azores', 'legendary')).toBe('low');    // 최신 프리셋 0.1% < 1%
+    expect(selectGradeLevel('mozstrait', 'legendary')).toBe('mid'); // 안정화 프리셋 1% = 1%
     expect(selectGradeLevel('indian', 'legendary')).toBe('mid');    // 안정화 프리셋 1% = 1%
-    expect(selectGradeLevel('coron', 'epic')).toBe('high');        // 9% > 5%
-    expect(selectGradeLevel('coron', 'rare')).toBe('mid');         // 20% = 20%
-    expect(selectGradeLevel('barrierreef', 'rare')).toBe('high');  // 23% > 20%
-    expect(selectGradeLevel('pond', 'rare')).toBe('mid');          // 프리셋을 쓰는 안정화 해역은 전역 확률과 같다
+    expect(selectGradeLevel('coron', 'epic')).toBe('high');         // 9% > 5%
+    expect(selectGradeLevel('coron', 'rare')).toBe('mid');          // 20% = 20%
+    expect(selectGradeLevel('barrierreef', 'rare')).toBe('high');   // 23% > 20%
+    expect(selectGradeLevel('pond', 'rare')).toBe('mid');           // 프리셋을 쓰는 안정화 해역은 전역 확률과 같다
   });
 });

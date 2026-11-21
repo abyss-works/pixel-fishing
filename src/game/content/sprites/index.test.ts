@@ -11,17 +11,33 @@ import { NAMED } from '../named';
 const NATIVE = [32, 16];
 
 // 원화 PNG가 아직 없어 몸 형태 기본 격자로 그려지는 어종
-// 원화 PNG 없이 손 수정 격자로만 두는 네임드
-const HAND_MADE = new Set(['jasconius']);
+// 원화 PNG 없이 손 수정 격자로만 두는 어종·네임드
+const HAND_MADE = new Set([
+  'jasconius', 'gloucester-serpent', 'guabancex',
+  'bluejack', 'atlanticbonito', 'europeanconger', 'johndory', 'atlanticblueshark', 'oceanmola', 'unreturning',
+  'nightalfonsino', 'sunkenecho',
+  'sargassumfish', 'americaneel', 'cobia', 'spottedeagleray', 'atlantictarpon', 'unraveledknot',
+  'nightporcupine', 'vanishingpoint',
+]);
 const SHAPE_ONLY = new Set(['orangeroughy', 'kianda', 'kalunga']);
 
 describe('원화 격자 (생성 파일)', () => {
   it('모든 어종에 일반·변이 격자가 있고 네임드에 일반 격자가 있다', () => {
     for (const f of FISH.filter(x => !SHAPE_ONLY.has(x.id))) {
-      expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'normal')], f.id).toBeDefined();
-      expect(FISH_SPRITES_GENERATED[spriteKey(f.id, 'variant')], f.id).toBeDefined();
+      const normalKey = spriteKey(f.id, 'normal');
+      const variantKey = spriteKey(f.id, 'variant');
+      if (HAND_MADE.has(f.id)) {
+        expect(FISH_SPRITES[normalKey], f.id).toBeDefined();
+        expect(FISH_SPRITES[variantKey], f.id).toBeDefined();
+      } else {
+        expect(FISH_SPRITES_GENERATED[normalKey], f.id).toBeDefined();
+        expect(FISH_SPRITES_GENERATED[variantKey], f.id).toBeDefined();
+      }
     }
-    for (const n of NAMED.filter(x => !HAND_MADE.has(x.id))) expect(FISH_SPRITES_GENERATED[n.id], n.id).toBeDefined();
+    for (const n of NAMED) {
+      if (HAND_MADE.has(n.id)) expect(FISH_SPRITES[n.id], n.id).toBeDefined();
+      else expect(FISH_SPRITES_GENERATED[n.id], n.id).toBeDefined();
+    }
   });
 
   it('격자는 전부 32×16이고 무결성 오류가 없으며 팔레트는 고정 hex다', () => {

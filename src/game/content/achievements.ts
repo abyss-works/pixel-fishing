@@ -203,6 +203,8 @@ const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
   comorodeep: { basic: 350_000, full: 350_000 },
   benguela: { basic: 500_000, full: 500_000 },
   sthelena: { basic: 1_500_000, full: 1_500_000 },
+  azores: { basic: 3_000_000, full: 2_500_000 },
+  bermuda: { basic: 7_500_000, full: 7_500_000 },
 };
 
 const SPOT_PROGRESS_RULES: AchievementRule[] = SPOTS.flatMap(spot => {

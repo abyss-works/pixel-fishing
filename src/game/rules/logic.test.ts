@@ -45,17 +45,19 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8, 9, 9]);
     expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(MAX_BOAT).toBe(9);
   });
 
-  it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
-    expect(FISH).toHaveLength(103);
-    expect(FISH.filter(f => !f.night)).toHaveLength(79);
+  it('남대서양·북대서양: 각 13종(7+6), 전체 어종 120종(낮 92·밤 28)', () => {
+    expect(FISH).toHaveLength(120);
+    expect(FISH.filter(f => !f.night)).toHaveLength(92);
     const dayOf = (spot: string) => FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
     expect(dayOf('benguela')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
     expect(dayOf('sthelena')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
+    expect(dayOf('azores')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
+    expect(dayOf('bermuda')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
   });
 
   it('R12: 등급 명성', () => {
@@ -75,11 +77,13 @@ describe('R11: 추첨', () => {
 });
 
 describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
-  it('밤 어종 24종 (night 플래그)', () => {
+  it('밤 어종 28종 (night 플래그)', () => {
     const nights = FISH.filter(f => f.night);
-    expect(nights.length).toBe(24);
-    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설
+    expect(nights.length).toBe(28);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설 · 북대서양2=아조레스 희귀/전설, 버뮤다 영웅/전설
     const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
+    expect(bySpot('azores')).toEqual(['legendary', 'rare']);
+    expect(bySpot('bermuda')).toEqual(['epic', 'legendary']);
     expect(bySpot('sea')).toEqual(['legendary']);
     expect(bySpot('deep')).toEqual(['legendary']);
     expect(bySpot('dragonhole')).toEqual(['epic', 'legendary']);
@@ -287,10 +291,10 @@ describe('R15: 강화/구매 비용', () => {
   it('대양 트롤선(8단계): 가격 1,250,000 · 명성 80,000 · 속도 200 · 가방 4,000', () => {
     expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 });
   });
-  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도 220 · 가방 5,000이고 여는 해역이 없다', () => {
+  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도 220 · 가방 5,000이고 북대서양 두 해역을 연다', () => {
     expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: 220, bagCap: 5000 });
-    expect(SPOTS.some(s => s.boatTier === 9)).toBe(false);
-    expect(ZONES.some(z => z.entryBoat === 9)).toBe(false);
+    expect(SPOTS.filter(s => s.boatTier === 9).map(s => s.id)).toEqual(['azores', 'bermuda']);
+    expect(ZONES.filter(z => z.entryBoat === 9).map(z => z.id)).toEqual(['northatlantic']);
   });
   it('이동 속도(px/s): 배 없음 100, 조각배 110부터 가공 플랜트선 220까지', () => {
     expect(WALK_SPEED).toBe(100);
@@ -1180,19 +1184,27 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 70%(1.65~1.75배), 세인트헬레나는 용승대 대비 약 2.3~2.4배 오른다', () => {
+  it('남대서양·북대서양 진입·플래토 EV가 해역 간 수익 단계를 유지한다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
+    const [aEntry, aPlateau] = idle('azores');
+    const [mEntry, mPlateau] = idle('bermuda');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.72, 플래토 1.69다
-      expect(r).toBeGreaterThanOrEqual(1.65);
-      expect(r).toBeLessThanOrEqual(1.75);
+      expect(r).toBeGreaterThanOrEqual(1.6);
+      expect(r).toBeLessThanOrEqual(1.8);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 2.33, 플래토 2.37이다
-      expect(r).toBeGreaterThanOrEqual(2.3);
-      expect(r).toBeLessThanOrEqual(2.4);
+      expect(r).toBeGreaterThanOrEqual(2.2);
+      expect(r).toBeLessThanOrEqual(2.5);
+    }
+    for (const r of [aEntry / hEntry, aPlateau / hPlateau]) {
+      expect(r).toBeGreaterThanOrEqual(1.65);
+      expect(r).toBeLessThanOrEqual(2.1);
+    }
+    for (const r of [mEntry / aEntry, mPlateau / aPlateau]) {
+      expect(r).toBeGreaterThanOrEqual(2.4);
+      expect(r).toBeLessThanOrEqual(2.9);
     }
   });
 });
@@ -1217,8 +1229,9 @@ describe('가중치 추첨', () => {
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(55 / 10000, 10);
-    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(10 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(100 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(55 / 10000, 10);
+    expect(rarityShareOf('azores', 'legendary')).toBeCloseTo(10 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });

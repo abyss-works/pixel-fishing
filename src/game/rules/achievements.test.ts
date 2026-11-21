@@ -440,6 +440,6 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(REJECT_TEXT['achievement-already-claimed']).toBe('이미 받은 업적이에요.');
     expect(REJECT_TEXT['achievement-not-claimable']).toBe('아직 받을 수 없는 업적이에요.');
     expect(REJECT_TEXT['no-claimable-achievements']).toBe('받을 수 있는 업적이 없어요.');
-    expect(ACHIEVEMENTS).toHaveLength(67);
+    expect(ACHIEVEMENTS).toHaveLength(71);
   });
 });

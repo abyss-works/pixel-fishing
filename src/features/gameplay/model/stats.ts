@@ -166,7 +166,7 @@ export type ArtifactEffectKey = keyof ArtifactEffects | 'extraCookChance';
 
 // 요리 추가 완성은 도시락과 미끼 요리가 낚시를 돕는 효과를 늘리므로 낚시 갈래에 둔다
 const EFFECT_CATEGORY: Record<ArtifactEffectKey, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', biteWaitCut: 'fish', extraCookChance: 'fish',
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', biteWaitCut: 'fish', commonWeightCut: 'fish', bagCap: 'fish', extraCookChance: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */

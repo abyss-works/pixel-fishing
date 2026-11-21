@@ -23,7 +23,7 @@ describe('진행 업적 구역 보상 산식', () => {
     expect(rows.map(r => ({ zone: r.zone, ev: r.ev }))).toEqual(evs);
   });
 
-  it('4시간어치, 기본 분배 0.5일 때 5개 구역 산출값이 명세 표와 일치한다', () => {
+  it('4시간어치, 기본 분배 0.5일 때 6개 구역 산출값이 명세 표와 일치한다', () => {
     const rows = rewardRows({ hours: [4], split: 0.5 });
     const table = rows.map(r => {
       const a = r.amounts[0];
@@ -35,15 +35,16 @@ describe('진행 업적 구역 보상 산식', () => {
       { zone: 'indian', zoneGold: 750_000, basic: 400_000, named: 350_000 },
       { zone: 'madagascar', zoneGold: 3_000_000, basic: 1_500_000, named: 1_500_000 },
       { zone: 'southatlantic', zoneGold: 10_000_000, basic: 5_000_000, named: 5_000_000 },
+      { zone: 'northatlantic', zoneGold: 55_000_000, basic: 30_000_000, named: 25_000_000 },
     ]);
   });
 
-  it('마지막 구역(southatlantic)도 뒷지역에 의존하지 않고 현재 구역 대표 방치 EV 기준으로 산출된다', () => {
+  it('마지막 구역(northatlantic)도 뒷지역에 의존하지 않고 현재 구역 대표 방치 EV 기준으로 산출된다', () => {
     const last = rewardRows({ hours: [4], split: 0.5 }).at(-1)!;
-    expect(last.zone).toBe('southatlantic');
-    expect(last.amounts[0].gold).toBe(10_000_000);
-    expect(rewardPlan(4, 0.5).reward('southatlantic', 'basic')).toEqual({ gold: 5_000_000 });
-    expect(rewardPlan(4, 0.5).reward('southatlantic', 'named')).toEqual({ gold: 5_000_000 });
+    expect(last.zone).toBe('northatlantic');
+    expect(last.amounts[0].gold).toBe(55_000_000);
+    expect(rewardPlan(4, 0.5).reward('northatlantic', 'basic')).toEqual({ gold: 30_000_000 });
+    expect(rewardPlan(4, 0.5).reward('northatlantic', 'named')).toEqual({ gold: 25_000_000 });
   });
 
   it('시간어치가 커지면 보상도 크거나 같다', () => {
@@ -112,7 +113,7 @@ describe('진행에 넣는 보상 계획', () => {
 });
 
 describe('해역 단위(spot) 진행 업적 보상 산식', () => {
-  it('전체 13개 해역 각각에 대해 min(entryEV × 시간어치, 다음 해역 전환 골드 × 0.30)을 반올림한 뒤 기초·숙련에 나눈다', () => {
+  it('전체 15개 해역 각각에 대해 min(entryEV × 시간어치, 다음 해역 전환 골드 × 0.30)을 반올림한 뒤 기초·숙련에 나눈다', () => {
     expect(DEFAULT_SPOT_ACHIEVEMENT_HOURS).toBe(1);
     expect(DEFAULT_SPOT_TRANSITION_CAP).toBe(0.3);
     const evs = spotEvs();
@@ -124,7 +125,7 @@ describe('해역 단위(spot) 진행 업적 보상 산식', () => {
     }
     const nextGold = new Map(transitionGold().map(t => [t.from, t.totalGold]));
     const rows = spotRewardRows({ hours: [1], split: 0.5 });
-    expect(rows).toHaveLength(13);
+    expect(rows).toHaveLength(15);
     for (const r of rows) {
       const a = r.amounts[0];
       const next = nextGold.get(r.spot);
@@ -135,7 +136,7 @@ describe('해역 단위(spot) 진행 업적 보상 산식', () => {
       expect(Math.min(a.split!.basic.gold, a.split!.named.gold)).toBeGreaterThanOrEqual(0);
     }
     const last = rows.at(-1)!;
-    expect(last.spot).toBe('sthelena');
+    expect(last.spot).toBe('bermuda');
     expect(last.amounts[0].rawGold).toBeCloseTo(last.ev, 9);
   });
 

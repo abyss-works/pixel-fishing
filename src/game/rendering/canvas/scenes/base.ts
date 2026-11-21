@@ -75,6 +75,18 @@ const BACKDROPS: Record<BaseId, (ctx: Ctx) => void> = {
     for (let i = 0; i < W; i += 26) R(ctx, i, 124, 1, 56, '#795548');
     R(ctx, 0, 124, W, 2, '#a1887f');
   },
+  // 리스본항 부두 — 같은 구조에 석양 기운이 감도는 맑은 대서양 하늘과 깊은 청록 물 톤을 입힌 판
+  lisbon: ctx => {
+    R(ctx, 0, 0, W, 96, '#9cb8cc');
+    R(ctx, 32, 20, 38, 4, 'rgba(255,248,236,0.75)'); R(ctx, 204, 14, 46, 5, 'rgba(255,248,236,0.65)');
+    R(ctx, 128, 34, 42, 4, 'rgba(255,248,236,0.45)');
+    R(ctx, 0, 96, W, 28, '#2d5870');
+    R(ctx, 0, 96, W, 1, 'rgba(255,255,255,0.45)');
+    for (let i = 0; i < 8; i++) R(ctx, 10 + i * 40, 104 + (i % 3) * 5, 12, 1, 'rgba(255,255,255,0.3)');
+    R(ctx, 0, 124, W, 56, '#8d6e63');
+    for (let i = 0; i < W; i += 26) R(ctx, i, 124, 1, 56, '#795548');
+    R(ctx, 0, 124, W, 2, '#a1887f');
+  },
 };
 
 /** 배경 그림의 맨 위 줄과 맨 아래 줄 색 — 세로 화면에서 그림 위아래 남는 자리를 같은 색으로 채운다.
@@ -86,6 +98,7 @@ export const BASE_EDGE_COLORS: Record<BaseId, { top: string; bottom: string }> =
   colombo: { top: '#a3c6d9', bottom: '#8d6e63' },
   toamasina: { top: '#9bb7c9', bottom: '#8d6e63' },
   walvisbay: { top: '#b4c1c9', bottom: '#8d6e63' },
+  lisbon: { top: '#9cb8cc', bottom: '#8d6e63' },
 };
 
 /** 거점 배경만 그린다 — 가구와 라벨 없이 배경 위에 다른 표현을 얹을 때 쓴다 */

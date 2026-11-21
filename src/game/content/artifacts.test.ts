@@ -15,23 +15,36 @@ describe('artifacts 데이터 계약', () => {
     expect([...named].sort()).toEqual(NAMED.map(n => n.id).sort());
     for (const a of ARTIFACTS) expect(namedById(a.namedId)!.zones, a.id).toContain(a.zone);
     for (const a of ARTIFACTS) {
-      expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']).toContain(a.zone);
+      expect(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']).toContain(a.zone);
     }
   });
 
-  it('등급 — 시스템 효과(고정 보너스·페널티)는 전설, 낚시·결투 결과를 바꾸는 유물(변이 확률·결투 가속)은 영웅, 나머지는 희귀', () => {
+  it('등급 — 시스템 효과(고정 보너스·페널티)는 전설, 낚시·결투 결과를 바꾸는 유물(변이 확률·결투 가속·일반 가중치 감소)은 영웅, 나머지는 희귀', () => {
     for (const a of ARTIFACTS) {
-      const decisive = a.effects.mutationWeight !== undefined || a.effects.duelSpeedupCut !== undefined;
+      const decisive = a.effects.mutationWeight !== undefined
+        || a.effects.duelSpeedupCut !== undefined
+        || a.effects.commonWeightCut !== undefined;
       expect(a.grade).toBe(a.system ? 'legendary' : decisive ? 'epic' : 'rare');
     }
   });
 
-  it('유물은 6개이고 아다마스토르의 유물은 효과가 고정인 전설 유물이다', () => {
-    expect(ARTIFACTS).toHaveLength(6);
+  it('유물은 8개이고 아다마스토르의 유물은 효과가 고정인 전설 유물이다', () => {
+    expect(ARTIFACTS).toHaveLength(8);
     const a = artifactOfNamed('adamastor')!;
     expect(a).toMatchObject({
       name: '마미 와타의 거울', grade: 'legendary', materialName: '흐려진 손거울',
       effects: {}, system: { namedCapBonus: 1, namedRewardCut: 0.3 },
+    });
+  });
+
+  it('북대서양 유물 2종은 영웅(일반 가중치 감소)과 희귀(가방 용량 증가)다', () => {
+    expect(artifactOfNamed('gloucester-serpent')).toMatchObject({
+      id: 'gloucester-vertebra', name: '글로스터의 등마디', grade: 'epic', zone: 'northatlantic',
+      materialName: '소금 절인 등마디', effects: { commonWeightCut: 0.1 },
+    });
+    expect(artifactOfNamed('guabancex')).toMatchObject({
+      id: 'sargasso-net', name: '사르가소의 그물망', grade: 'rare', zone: 'northatlantic',
+      materialName: '젖은 모자반 밧줄', effects: { bagCap: 0.1 },
     });
   });
 

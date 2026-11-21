@@ -12,6 +12,10 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLine(art('wreck-compass'), 'sail', 5)).toBe('항해 속도 +20%');
     expect(artifactEffectLines(art('abyss-angler'), 5)).toEqual(['네임드 결투 가속 −20%']);
     expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['요리 추가 완성 +20%p']);
+    expect(artifactEffectLines(art('gloucester-vertebra'), 1)).toEqual(['일반 등급 가중치 −10%']);
+    expect(artifactEffectLines(art('gloucester-vertebra'), 5)).toEqual(['일반 등급 가중치 −20%']);
+    expect(artifactEffectLines(art('sargasso-net'), 1)).toEqual(['가방 용량 +10%']);
+    expect(artifactEffectLines(art('sargasso-net'), 5)).toEqual(['가방 용량 +20%']);
   });
 
   it('전설 유물은 효과 줄이 없고 보너스와 페널티 줄이 따로 나온다', () => {

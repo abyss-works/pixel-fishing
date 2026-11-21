@@ -4,6 +4,8 @@
 // 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
 import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
+import { bagCapBonusOf } from '../../../game/rules/artifactLevel';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
 import { boatNameOf } from '../../../game/content/boats';
@@ -21,7 +23,8 @@ export interface BagStatus { count: number; cap: number; full: boolean; percent:
  *  bagBonus는 서버가 알려 준 길드 가방 용량 보너스다(표시용, 판정은 서버가 한다). */
 export function selectBagStatus(game: GameState, bagBonus = 0): BagStatus {
   const count = game.bag.length;
-  const cap = bagCapacity(game.boat, game.bag, bagBonus);
+  const totalBagBonus = bagBonus + bagCapBonusOf(game, achievementBonusesOf(game).artifactBoost);
+  const cap = bagCapacity(game.boat, game.bag, totalBagBonus);
   const percent = cap > 0 ? Math.floor(count / cap * 100) : 0;
   const level: BagLevel = percent >= BAG_DANGER_PERCENT ? 'danger'
     : percent >= BAG_WARN_PERCENT ? 'warn' : 'normal';

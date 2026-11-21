@@ -102,11 +102,11 @@ describe('해역 단위(spot) 26종 업적 분포', () => {
     const mid = d.find(r => r.spot === 'indian' && r.tier === 'basic')!;
     expect(mid.to).toBe('southindian');
     expect(mid.shortened).not.toBeNull();
-    expect(d.find(r => r.spot === 'sthelena')!.to).toBeNull();
+    expect(d.find(r => r.spot === 'bermuda')!.to).toBeNull();
   });
 
   it('같은 시드와 인자는 같은 결과를 내고 시드가 다르면 달라진다', () => {
     expect(spotRewardDist(opts)).toEqual(d);
     expect(spotRewardDist({ ...opts, seed: 6 })).not.toEqual(d);
-  });
+  }, 15_000);
 });

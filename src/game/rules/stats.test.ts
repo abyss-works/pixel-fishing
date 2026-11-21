@@ -141,6 +141,7 @@ describe('해역 요구 파워', () => {
   const ENTRY_LEVEL = {
     pond: 1, river: 3, sea: 6, deep: 10, dragonhole: 14, coron: 18, barrierreef: 22,
     indian: 26, southindian: 31, mozstrait: 36, comorodeep: 41, benguela: 46, sthelena: 51,
+    azores: 56, bermuda: 62,
   } as const;
 
   it('모든 해역의 요구 파워는 진입 레벨의 파워다', () => {
