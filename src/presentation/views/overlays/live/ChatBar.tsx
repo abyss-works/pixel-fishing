@@ -19,8 +19,9 @@ import { CHAT_MAX_LENGTH } from '../../../../game/rules/live';
 import { clearChatError, sendChat, useChat, useTypingSignal } from '../../../../features/live/service/useLive';
 import { useFailureNotice } from '../../../../features/gameplay/service/failureNotice';
 import type { ChatError, ChatRoom } from '../../../../features/live/model/live';
-import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf } from '../../../../features/live/model/chatInput';
+import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf, formatStatusNotice } from '../../../../features/live/model/chatInput';
 import { GUEST_CHAT_NOTICE, guestLock } from '../../../../features/display/model/menuLock';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import { cx } from '../../../ui/cx';
 import { NOTCH_SM } from '../../../ui/notch';
@@ -43,8 +44,8 @@ const ROOM_LABEL: Record<ChatRoom, string> = { world: '월드', guild: '길드' 
 const ROOM_TIP = 'Tab이나 이 버튼으로 보낼 곳을 월드와 길드 사이에서 바꿔요.';
 const NO_GUILD_TIP = '길드에 들어가면 길드 채팅을 쓸 수 있어요.';
 
-export default function ChatBar({ inGuild = false, guest = false, folded = false, unread = false, onUnfold, onTyping }: {
-  inGuild?: boolean; guest?: boolean;
+export default function ChatBar({ inGuild = false, accountState = 'account', folded = false, unread = false, onUnfold, onTyping }: {
+  inGuild?: boolean; accountState?: AccountLockState;
   /** 메시지 창이 접혀 있는가 */
   folded?: boolean;
   /** 접힌 동안 새 글이 왔다 */
@@ -58,13 +59,14 @@ export default function ChatBar({ inGuild = false, guest = false, folded = false
   const [text, setText] = useState('');
   const [input, dispatch] = useReducer(chatInputReducer, CHAT_INPUT_INITIAL);
   const room = chatRoomOf(input, inGuild);
+  const lock = guestLock('chat', accountState);
 
   const inputRef = useRef<HTMLInputElement>(null);
   // 입력 줄이 열려 있고 글이 있는 동안 다른 사람에게 입력 중 표시를 보인다
   useTypingSignal(input.mode === 'typing' && text.trim() !== '');
 
   useKeyScope(e => {
-    if (guest || e.key !== 'Enter' || e.repeat || e.isComposing || hasModifier(e)) return;
+    if (lock || e.key !== 'Enter' || e.repeat || e.isComposing || hasModifier(e)) return;
     e.preventDefault();
     inputRef.current?.focus();
     return true;
@@ -88,7 +90,6 @@ export default function ChatBar({ inGuild = false, guest = false, folded = false
   };
   const failureNotice = useFailureNotice();
   const status = chat.error ? CHAT_ERROR_TEXT[chat.error] : folded ? failureNotice : null;
-  const lock = guestLock('chat', guest);
 
   const unfold = folded && onUnfold && (
     <Tip wraps text="펼치기" className="flex">
@@ -102,9 +103,9 @@ export default function ChatBar({ inGuild = false, guest = false, folded = false
     <div className="relative text-xs">
       {status && (
         <p role="status"
-           className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 truncate text-danger',
+           className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 whitespace-pre-line break-keep leading-snug text-danger',
              'bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)] border border-[color-mix(in_srgb,var(--c-danger)_60%,transparent)]', NOTCH_SM)}>
-          {status}
+          {formatStatusNotice(status)}
         </p>
       )}
       <div className="flex items-center gap-1.5">

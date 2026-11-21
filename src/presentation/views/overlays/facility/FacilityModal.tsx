@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { selectBoatPurchaseResult } from '../../../../features/gameplay/model/facility';
 import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
@@ -30,8 +31,8 @@ interface Props {
   uid?: string | null;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
-  /** 게스트 여부 - 게스트에게는 판매 창의 기운 얻기 탭이 잠긴다 */
-  guest?: boolean;
+  /** 잠금 판정에 쓰는 계정 상태 - 게스트나 확인 실패 상태에서는 판매 창의 기운 얻기 탭이 잠긴다 */
+  accountState?: AccountLockState;
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
@@ -43,7 +44,7 @@ interface Props {
 // 목록형 시설(낚싯대 강화, 조선소)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다. 부엌과 판매 창은 탭이 있는 목록형 창이라 920 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus, guest = false }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus, accountState = 'account' }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk?: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -63,7 +64,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
            height={panel === 'bounty' ? 480 : panel === 'wardrobe' || panel === 'kitchen' || panel === 'sell' ? 560 : undefined}
            mobileFixed={panel === 'kitchen' || panel === 'sell'} onClose={onClose}>
       {panel === 'sell' && base !== undefined && (
-        <SaleWindow game={game} base={base} guest={guest} sellBonus={sellBonus} busy={busy} act={run} setToast={setToast} onClose={onClose}
+        <SaleWindow game={game} base={base} accountState={accountState} sellBonus={sellBonus} busy={busy} act={run} setToast={setToast} onClose={onClose}
           onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
             setToast(`물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었어요!`, 'gold');

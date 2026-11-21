@@ -8,6 +8,7 @@ import type { GameState } from '../../../../../game/rules/logic';
 const NOW = '2026-11-12T00:00:00.000Z';
 vi.mock('../../../../../features/gameplay/service/useGameTime', () => ({ useNow: () => NOW }));
 
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import ItemSection from './ItemSection';
 
 afterEach(cleanup);
@@ -16,10 +17,10 @@ const HOUR = 3_600_000;
 const at = (ms: number): string => new Date(Date.parse(NOW) + ms).toISOString();
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
-function show(g: GameState, guest = false, result: unknown = { status: 'ok', state: g, result: { type: 'none' } }) {
+function show(g: GameState, accountState: AccountLockState = 'account', result: unknown = { status: 'ok', state: g, result: { type: 'none' } }) {
   const dispatch = vi.fn(() => result as never);
   const setToast = vi.fn();
-  render(<ItemSection game={g} guest={guest} dispatch={dispatch} setToast={setToast} />);
+  render(<ItemSection game={g} accountState={accountState} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 
@@ -59,10 +60,10 @@ describe('묶음 순서', () => {
 
   it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운 순서로 같다', () => {
     const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
-    const opened = render(<ItemSection game={game({ items: own })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const opened = render(<ItemSection game={game({ items: own })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const openedOrder = order(opened.container);
     cleanup();
-    const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     // 잠금 상태의 빈 안내 문장에 도시락, 미끼 말이 앞서 나오므로 잠금 자리(그룹) 안에서만 센다
     const group = within(locked.container).getByRole('group', { name: '도시락, 미끼, 생명의 기운' });
     expect(order(group)).toEqual(['도시락', '미끼', '생명의 기운']);
@@ -113,7 +114,7 @@ describe('먹기와 쓰기', () => {
   });
 
   it('서버가 거부하면 거부 문구를 경고로 알린다', async () => {
-    const { setToast } = show(game({ items: own }), false, { status: 'rejected', error: 'item-not-owned' });
+    const { setToast } = show(game({ items: own }), 'account', { status: 'rejected', error: 'item-not-owned' });
     fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
@@ -133,7 +134,7 @@ describe('해금 전과 게스트', () => {
   });
 
   it('게스트는 한 줄 빈 상태이고 잠금 줄이 게스트 잠금이다', () => {
-    show(game(), true);
+    show(game(), 'guest');
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
     expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
   });

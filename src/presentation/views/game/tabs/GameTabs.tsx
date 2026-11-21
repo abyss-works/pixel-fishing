@@ -7,6 +7,7 @@ import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
 import type { GuestProgress } from '../../../../features/account/model/accountRules';
+import { accountLockState } from '../../../../features/account/service/accountActions';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
@@ -23,7 +24,6 @@ import Sidebar from '../../../layouts/sidebar';
 import { pressSheetTab } from '../../../layouts/sidebar/sheet';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import type { Notify } from '../../../ui/hud/messageFeed';
-import { isGuest } from '../../../../features/account/service/accountActions';
 
 interface GameTabsProps {
   /** 길드 판매가 보너스 비율 */
@@ -126,7 +126,7 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} guest={isGuest(props.account)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
+      {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (

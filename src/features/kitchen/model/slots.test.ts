@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import { activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectSlotChips } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -71,7 +71,7 @@ describe('슬롯의 지금 효과', () => {
 
 describe('슬롯 칩 표시 조건', () => {
   it('해금 전에는 두 슬롯 모두 잠금 칩이고 진행 조건 줄을 낸다', () => {
-    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, false);
+    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
     expect(chips.map(c => [c.key, c.state])).toEqual([['lunch', 'locked'], ['bait', 'locked']]);
     const lunch = chips[0];
     expect(lunch.state === 'locked' && lunch.lines).toEqual([
@@ -86,31 +86,36 @@ describe('슬롯 칩 표시 조건', () => {
   });
 
   it('게스트는 해금 전이어도 게스트 잠금이 먼저다', () => {
-    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, true);
+    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
     expect(chips.every(c => c.state === 'locked' && c.lines.join() === GUEST_LOCK_TEXT)).toBe(true);
+  });
+
+  it('확인 실패 상태는 해금 전이어도 확인 실패 잠금이 먼저다', () => {
+    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'unverified');
+    expect(chips.every(c => c.state === 'locked' && c.lines.join() === UNVERIFIED_LOCK_TEXT)).toBe(true);
   });
 
   it('해금 뒤에는 효과가 든 슬롯의 칩만 낸다. 순서는 도시락, 미끼다', () => {
     const both = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-mutation', endsAt: at(MIN) } } });
-    expect(selectSlotChips(both, T0, false).map(c => [c.key, c.state])).toEqual([['lunch', 'active'], ['bait', 'active']]);
+    expect(selectSlotChips(both, T0, 'account').map(c => [c.key, c.state])).toEqual([['lunch', 'active'], ['bait', 'active']]);
     const lunchOnly = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null } });
-    expect(selectSlotChips(lunchOnly, T0, false).map(c => c.key)).toEqual(['lunch']);
+    expect(selectSlotChips(lunchOnly, T0, 'account').map(c => c.key)).toEqual(['lunch']);
     const baitOnly = seed({ slots: { lunch: null, bait: { id: 'cook-bait-mutation', endsAt: at(HOUR) } } });
-    expect(selectSlotChips(baitOnly, T0, false).map(c => c.key)).toEqual(['bait']);
+    expect(selectSlotChips(baitOnly, T0, 'account').map(c => c.key)).toEqual(['bait']);
   });
 
   it('해금 뒤 두 슬롯이 모두 비면 칩이 없다', () => {
-    expect(selectSlotChips(seed(), T0, false)).toEqual([]);
+    expect(selectSlotChips(seed(), T0, 'account')).toEqual([]);
   });
 
   it('끝난 슬롯은 칩에서 사라진다', () => {
     const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null } });
-    expect(selectSlotChips(game, at(HOUR), false)).toEqual([]);
+    expect(selectSlotChips(game, at(HOUR), 'account')).toEqual([]);
   });
 
   it('지금 효과의 설명은 그 슬롯 종류의 적용 낚시와 지속 안내를 담는다', () => {
     const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-mutation', endsAt: at(HOUR) } } });
-    const [lunch, bait] = selectSlotChips(game, T0, false);
+    const [lunch, bait] = selectSlotChips(game, T0, 'account');
     expect(lunch.state === 'active' && lunch.note).toContain('방치로 낚을 때만 효과가 있어요.');
     expect(bait.state === 'active' && bait.note).toContain('챔질해서 낚을 때만 효과가 있어요.');
   });

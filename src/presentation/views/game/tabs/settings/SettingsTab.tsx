@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import type { RejectReason } from '../../../../../game/rules/rules';
-import { isGuest } from '../../../../../features/account/service/accountActions';
+import { accountLockState } from '../../../../../features/account/service/accountActions';
 import { accountLabel, type GuestProgress } from '../../../../../features/account/model/accountRules';
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
@@ -70,13 +70,13 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
                       syncLabel={syncLabel} syncState={syncState} onClose={close} />
       )}
       {open === 'myInfo' && (
-        <MyInfoModal setToast={setToast} account={account} uid={uid} nickname={nickname} onRename={onRename} onClose={close} />
+        <MyInfoModal setToast={setToast} account={account} accountFailed={accountFailed} uid={uid} nickname={nickname} onRename={onRename} onClose={close} />
       )}
       {open === 'settings' && (
         <SettingsModal autoLockOnCatch={autoLockOnCatch} dispatch={dispatch} setToast={setToast} onClose={close} />
       )}
       {open === 'codes' && <CodeModal dispatch={dispatch} setToast={setToast} onClose={close} />}
-      {open === 'letter' && <LetterModal dispatch={dispatch} setToast={setToast} guest={isGuest(account)} onClose={close} />}
+      {open === 'letter' && <LetterModal dispatch={dispatch} setToast={setToast} accountState={accountLockState(account, accountFailed)} onClose={close} />}
       {open === 'patch' && <PatchNotesModal onClose={close} />}
 
       {/* 버전(사람이 붙이는 이름)과 배포 식별자(커밋 SHA)를 같이 건다.

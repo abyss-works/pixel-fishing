@@ -9,6 +9,7 @@ import { canEat, settleCooking } from '../../../game/rules/cooking';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
+import type { AccountLockState } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
 import { recipeEffectLines, recipeEffectNote, recipeLabel, recipesOfKind, recipeTitle } from './recipes';
 import type { RecipeTitle } from './recipes';
@@ -60,9 +61,9 @@ export type ItemSectionView =
   | { state: 'locked'; empty: string[]; lines: string[] }
   | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; empty: boolean };
 
-export function selectItemSection(game: GameState, now: string, guest: boolean): ItemSectionView {
+export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
   const progress = facilityProgress('kitchen', game.boat);
-  const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
+  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
   if (lock.kind !== 'none') {
     const empty = lock.kind === 'progress'
       ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]

@@ -3,6 +3,7 @@ import { LETTER_MAX } from '../../../../game/rules/actions';
 import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
 import { guestLock } from '../../../../features/display/model/menuLock';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
@@ -18,21 +19,22 @@ import TextArea from '../../../ui/TextArea';
 // 보안 제한이 아니라 소통이 성립하는 조건이다. 게스트에게도 창은 열리고, 입력 칸은 공용 잠금 표시로 두고 이유를 툴팁으로 보인다.
 const LETTER_HINT = '건의, 버그 제보, 하고 싶은 말 아무거나 좋아요.\n답장은 계정 이메일로 드려요.';
 
-export default function LetterModal({ dispatch, setToast, guest, onClose }: {
+export default function LetterModal({ dispatch, setToast, accountState, onClose }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: (m: string) => void;
-  /** 게스트는 답장 받을 방법이 없어 쓸 수 없다. 창은 열리고 입력만 막는다 */
-  guest: boolean;
+  /** 잠금 판정에 쓰는 계정 상태. 게스트나 확인 실패 상태에서는 창은 열리고 입력만 막는다 */
+  accountState: AccountLockState;
   onClose: () => void;
 }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const body = text.trim();
   const over = body.length > LETTER_MAX;
-  const lock = guestLock('letter', guest);
+  const lock = guestLock('letter', accountState);
+  const locked = lock !== null;
 
   const send = () => {
-    if (guest || !body || over || busy) return;
+    if (locked || !body || over || busy) return;
     setBusy(true);
     when(dispatch({ type: 'sendLetter', text: body }), r => {
       setBusy(false);
@@ -48,9 +50,9 @@ export default function LetterModal({ dispatch, setToast, guest, onClose }: {
       placeholder="예) 가방 칸을 조금 늘려 주세요"
       value={text}
       maxLength={LETTER_MAX + 1} // +1이라 상한을 넘겨 봐야 경고를 볼 수 있다
-      disabled={guest}
+      disabled={locked}
       onChange={e => setText(e.target.value)}
-      autoFocus={!guest}
+      autoFocus={!locked}
     />
   );
 
@@ -66,7 +68,7 @@ export default function LetterModal({ dispatch, setToast, guest, onClose }: {
         <span className="ml-auto flex gap-2">
           {(() => {
             const sendButton = (
-              <Button size="sm" disabled={guest || !body || over || busy} onClick={send}>
+              <Button size="sm" disabled={locked || !body || over || busy} onClick={send}>
                 보내기
               </Button>
             );

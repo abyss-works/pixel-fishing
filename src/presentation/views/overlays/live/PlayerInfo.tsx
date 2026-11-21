@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { GUEST_LOCK_TEXT, guestLock } from '../../../../features/display/model/menuLock';
-import { isGuest } from '../../../../features/account/service/accountActions';
+import { accountLockState } from '../../../../features/account/service/accountActions';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
@@ -42,12 +42,14 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
 };
 const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
 
-export function PlayerInfo({ target, self, account, setToast }: {
+export function PlayerInfo({ target, self, account, accountFailed = false, setToast }: {
   target: PlayerTarget;
   /** 내 정보인가 — 동작을 보이지 않는다 */
   self: boolean;
   /** 내 계정 이메일. 게스트면 null */
   account: string | null;
+  /** 세션 확인에 실패했는가 */
+  accountFailed?: boolean;
   setToast: Notify;
 }) {
   const { profile, loading, failed } = usePlayerProfile(target.uid);
@@ -104,7 +106,7 @@ export function PlayerInfo({ target, self, account, setToast }: {
     : relation === 'incoming' ? <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('accept')}>친구 수락</Button>
     : friends.groups && <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('request')}>친구 요청</Button>
   );
-  const lock = guestLock('player', isGuest(account));
+  const lock = guestLock('player', accountLockState(account, accountFailed));
   const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
       <Locked lines={lock} label="친구 요청" className="flex-1 block">

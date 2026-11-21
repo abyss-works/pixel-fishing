@@ -122,20 +122,57 @@ async function openStager(tmpDir: string, key: string) {
   const out = createWriteStream(file);
   gz.pipe(out);
   let raw = 0;
+  let closed = false;
+  const files = new Set<string>([file]);
+  gz.on('error', () => {});
+  out.on('error', () => {});
+  const closeStreams = async () => {
+    if (closed) return;
+    closed = true;
+    if (!out.closed) {
+      await new Promise<void>(resolve => {
+        out.once('close', resolve);
+        gz.unpipe(out);
+        gz.destroy();
+        out.destroy();
+      });
+    } else if (!gz.destroyed) {
+      gz.destroy();
+    }
+  };
   return {
     file,
+    track(extraFile: string) {
+      files.add(extraFile);
+    },
     write(rows: unknown[]) {
       const buf = Buffer.from(toJsonl(rows));
       raw += buf.length;
       gz.write(buf);
     },
     async finish(): Promise<{ raw: number; gz: Buffer }> {
-      gz.end();
       await new Promise<void>((resolve, reject) => {
-        out.on('finish', () => resolve());
-        out.on('error', reject);
+        const cleanup = () => {
+          out.off('error', onErr);
+          gz.off('error', onErr);
+          out.off('close', onClose);
+        };
+        const onErr = (err: Error) => { cleanup(); reject(err); };
+        const onClose = () => { cleanup(); resolve(); };
+        out.once('error', onErr);
+        gz.once('error', onErr);
+        out.once('close', onClose);
+        gz.end();
       });
+      closed = true;
       return { raw, gz: await fs.readFile(file) };
+    },
+    async abort(): Promise<void> {
+      await closeStreams();
+      for (const f of files) {
+        await fs.rm(f, { force: true }).catch(() => {});
+      }
+      files.clear();
     },
   };
 }
@@ -147,40 +184,45 @@ async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<Table
   const est = await inStage('events-scan', () => countEventsBefore(env.db, cutoff));
   console.log(`events 대상 약 ${est} rows`);
   const st = await inStage('events-stage-file', () => openStager(env.tmpDir, tmpKey));
-  let lastId = 0, minId: number | null = null, maxId = 0, n = 0;
-  await inStage('events-scan', async () => {
-    for (;;) {
-      const data = await eventsBefore(env.db, cutoff, lastId, BATCH);
-      if (data.length === 0) break;
-      st.write(data);
-      minId ??= Number(data[0].id);
-      maxId = Number(data[data.length - 1].id);
-      lastId = maxId;
-      n += data.length;
+  try {
+    let lastId = 0, minId: number | null = null, maxId = 0, n = 0;
+    await inStage('events-scan', async () => {
+      for (;;) {
+        const data = await eventsBefore(env.db, cutoff, lastId, BATCH);
+        if (data.length === 0) break;
+        st.write(data);
+        minId ??= Number(data[0].id);
+        maxId = Number(data[data.length - 1].id);
+        lastId = maxId;
+        n += data.length;
+      }
+    });
+    if (n === 0) return { rows: 0, r2Key: null };
+    const key = `${env.r2Prefix}/events/created_lt_${date}/${stamp()}_ids_${minId}-${maxId}_n${n}.jsonl.gz`;
+    const { raw, gz } = await inStage('events-stage-file', async () => {
+      const staged = await st.finish();
+      const finalFile = path.join(env.tmpDir, key);
+      st.track(finalFile);
+      await fs.mkdir(path.dirname(finalFile), { recursive: true });
+      await fs.rename(st.file, finalFile);
+      return staged;
+    });
+    const manifest = {
+      table: 'events', cutoff, rows: n, idMin: minId, idMax: maxId,
+      bytesRaw: raw, bytesGzip: gz.length, sha256: sha256hex(gz), r2Key: key, at: new Date().toISOString(),
+    };
+    await inStage('events-upload', async () => {
+      await r2put(env, key, gz, 'application/gzip');
+      await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    });
+    const deleted = await inStage('events-delete', () => deleteEventsUpTo(env.db, maxId, cutoff));
+    if (deleted !== n) {
+      console.log(`events delete ${deleted} != archived ${n} — R2에 전량 있으므로 유실 없음`);
     }
-  });
-  if (n === 0) return { rows: 0, r2Key: null };
-  const key = `${env.r2Prefix}/events/created_lt_${date}/${stamp()}_ids_${minId}-${maxId}_n${n}.jsonl.gz`;
-  const { raw, gz } = await inStage('events-stage-file', async () => {
-    const staged = await st.finish();
-    const finalFile = path.join(env.tmpDir, key);
-    await fs.mkdir(path.dirname(finalFile), { recursive: true });
-    await fs.rename(st.file, finalFile);
-    return staged;
-  });
-  const manifest = {
-    table: 'events', cutoff, rows: n, idMin: minId, idMax: maxId,
-    bytesRaw: raw, bytesGzip: gz.length, sha256: sha256hex(gz), r2Key: key, at: new Date().toISOString(),
-  };
-  await inStage('events-upload', async () => {
-    await r2put(env, key, gz, 'application/gzip');
-    await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-  });
-  const deleted = await inStage('events-delete', () => deleteEventsUpTo(env.db, maxId, cutoff));
-  if (deleted !== n) {
-    console.log(`events delete ${deleted} != archived ${n} — R2에 전량 있으므로 유실 없음`);
+    return { rows: n, r2Key: key };
+  } finally {
+    await st.abort();
   }
-  return { rows: n, r2Key: key };
 }
 
 // ---------- saves: 메타 스캔 → 순위 선정 → 본문 청크 fetch → 업로드 검증 → id 청크 DELETE ----------
@@ -200,26 +242,30 @@ async function archiveSaves(env: ColdArchiveEnv, cutoff: string): Promise<TableR
   if (victims.length === 0) return { rows: 0, r2Key: null };
   const key = `${env.r2Prefix}/saves/updated_lt_${cutoff.slice(0, 10)}_keep${SAVES_KEEP}/${stamp()}_n${victims.length}.jsonl.gz`;
   const st = await inStage('saves-stage-file', () => openStager(env.tmpDir, key));
-  await inStage('saves-fetch', async () => {
-    for (let i = 0; i < victims.length; i += SAVES_FETCH_CHUNK) {
-      st.write(await withRetry(() => savesByIds(env.db, victims.slice(i, i + SAVES_FETCH_CHUNK))));
-    }
-  });
-  const { raw, gz } = await inStage('saves-stage-file', () => st.finish());
-  const manifest = {
-    table: 'saves', cutoff, keepPerUser: SAVES_KEEP, rows: victims.length,
-    bytesRaw: raw, bytesGzip: gz.length, sha256: sha256hex(gz), r2Key: key, at: new Date().toISOString(),
-  };
-  await inStage('saves-upload', async () => {
-    await r2put(env, key, gz, 'application/gzip');
-    await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-  });
-  await inStage('saves-delete', async () => {
-    for (let i = 0; i < victims.length; i += DEL_CHUNK) {
-      await deleteSavesByIds(env.db, victims.slice(i, i + DEL_CHUNK));
-    }
-  });
-  return { rows: victims.length, r2Key: key };
+  try {
+    await inStage('saves-fetch', async () => {
+      for (let i = 0; i < victims.length; i += SAVES_FETCH_CHUNK) {
+        st.write(await withRetry(() => savesByIds(env.db, victims.slice(i, i + SAVES_FETCH_CHUNK))));
+      }
+    });
+    const { raw, gz } = await inStage('saves-stage-file', () => st.finish());
+    const manifest = {
+      table: 'saves', cutoff, keepPerUser: SAVES_KEEP, rows: victims.length,
+      bytesRaw: raw, bytesGzip: gz.length, sha256: sha256hex(gz), r2Key: key, at: new Date().toISOString(),
+    };
+    await inStage('saves-upload', async () => {
+      await r2put(env, key, gz, 'application/gzip');
+      await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    });
+    await inStage('saves-delete', async () => {
+      for (let i = 0; i < victims.length; i += DEL_CHUNK) {
+        await deleteSavesByIds(env.db, victims.slice(i, i + DEL_CHUNK));
+      }
+    });
+    return { rows: victims.length, r2Key: key };
+  } finally {
+    await st.abort();
+  }
 }
 
 /** cron 진입점 — events → saves 순. 실패는 던진다(핸들러가 500+Sentry). */

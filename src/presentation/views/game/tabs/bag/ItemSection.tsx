@@ -4,6 +4,7 @@ import type { GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import { ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
 import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
@@ -77,14 +78,14 @@ function ItemRows({ title, hint, rows, busy, onEat }: {
  * 이미 효과가 든 슬롯에 넣으려면(같은 것도 같다) 교체 확인 창을 거친다. 요리를 쓸 수 없는 동안(해금 전, 게스트)은
  * 세 묶음 자리를 잠금으로 보이고 빈 상태 안내를 둔다. 판정과 문안은 기능 모델이 정한다.
  */
-export default function ItemSection({ game, guest, dispatch, setToast }: {
+export default function ItemSection({ game, accountState, dispatch, setToast }: {
   game: GameState;
-  guest: boolean;
+  accountState: AccountLockState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
   const now = useNow();
-  const view = selectItemSection(game, now, guest);
+  const view = selectItemSection(game, now, accountState);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingEat | null>(null);
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isGuest } from '../../../../features/account/service/accountActions';
+import { accountLockState } from '../../../../features/account/service/accountActions';
 import { guestLock } from '../../../../features/display/model/menuLock';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
@@ -18,17 +18,17 @@ import { maskUid } from './maskUid';
 const NICKNAME_RULE = '한글은 8자, 영문과 숫자는 16자까지 쓸 수 있어요.';
 
 // 내 정보 창 - 닉네임(현재, 변경)과 ID. 계정의 연결과 로그인 상태는 계정 관리 창이 맡는다.
-export default function MyInfoModal({ setToast, onClose, account, uid, nickname, onRename }: {
+export default function MyInfoModal({ setToast, onClose, account, accountFailed = false, uid, nickname, onRename }: {
   setToast: Notify; onClose: () => void;
-  account: string | null; uid: string | null;
+  account: string | null; accountFailed?: boolean; uid: string | null;
   nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
 }) {
   const [draft, setDraft] = useState('');
   const [nickBusy, setNickBusy] = useState(false);
   const { notice, dialogs } = useDialogs();
 
-  // 게스트는 닉네임을 바꿀 수 없다
-  const nickLock = guestLock('nickname', isGuest(account));
+  // 게스트나 확인 실패 상태에서는 닉네임을 바꿀 수 없다
+  const nickLock = guestLock('nickname', accountLockState(account, accountFailed));
   const submitNick = async () => {
     if (nickLock) return;
     if (!checkNickname(draft).ok) { setToast(NICKNAME_RULE, 'warn'); return; }

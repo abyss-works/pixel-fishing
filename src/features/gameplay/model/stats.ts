@@ -5,7 +5,7 @@ import { ARTIFACTS } from '../../../game/content/artifacts';
 import { COOK_EFFECT_KEYS } from '../../../game/content/cooking';
 import type { CookEffects } from '../../../game/content/cooking';
 import type { Artifact, ArtifactEffects } from '../../../game/content/artifacts';
-import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
+import { ZONE_IDS, topZoneOf, topZoneOfSpot, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
@@ -26,16 +26,25 @@ import type { RecipeEffectLine } from '../../kitchen/model/recipes';
 import { SLOT_ORDER, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
-/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 지역에서 요구 파워가 가장 높은 곳이다. */
-export function selectInitialStatsSpotIndex(region: RegionId, current: SpotId | null = null): number {
+/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
+export function selectInitialStatsSpotIndex(
+  region: RegionId,
+  current: SpotId | null = null,
+  currentZone: ZoneId | null = null,
+): number {
   const here = current ? SPOTS.findIndex(spot => spot.id === current) : -1;
   if (here >= 0) return here;
-  let best = 0;
+  const targetTopZone = region === 'world' && currentZone && zoneById(currentZone) && zoneGroup(currentZone) === 'world'
+    ? topZoneOf(currentZone)
+    : null;
+  let best = -1;
   SPOTS.forEach((spot, index) => {
-    const inRegion = region === 'world' ? spot.region !== 'village' : spot.region === region;
-    if (inRegion && (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0)) best = index;
+    const inScope = targetTopZone
+      ? topZoneOfSpot(spot.id) === targetTopZone
+      : region === 'world' ? spot.region !== 'village' : spot.region === region;
+    if (inScope && (best < 0 || (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0))) best = index;
   });
-  return best;
+  return best >= 0 ? best : 0;
 }
 
 /** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */

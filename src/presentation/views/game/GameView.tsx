@@ -33,7 +33,7 @@ import QuestInfoModal from '../overlays/bounty/QuestInfoModal';
 import { useDialogs } from '../../ui/useDialogs';
 import RankingModal from '../overlays/ranking/RankingModal';
 import { createGuestBlockedNotice } from './guestBlockedNotice';
-import { isConfirmedGuest, isGuest } from '../../../features/account/service/accountActions';
+import { accountLockState, isConfirmedGuest } from '../../../features/account/service/accountActions';
 import type { GuestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
@@ -159,7 +159,7 @@ export default function GameView(props: GameViewProps) {
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
-  const guest = isGuest(props.account);
+  const accountState = accountLockState(props.account, props.accountFailed);
   const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
@@ -292,7 +292,7 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} guest={guest} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} accountState={accountState} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
@@ -302,7 +302,7 @@ export default function GameView(props: GameViewProps) {
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
                    logFooter={chat.enabled ? (
-                     <ChatBar inGuild={guild !== null} guest={guest}
+                     <ChatBar inGuild={guild !== null} accountState={accountState}
                               folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping} />
                    ) : null}
                    filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
@@ -326,9 +326,9 @@ export default function GameView(props: GameViewProps) {
                      </div>
                    ) : null}
                    chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
-                   badge={props.badge} guest={guest}
+                   badge={props.badge} accountState={accountState}
                    menu={(
-                     <GameMenu game={game} account={props.account} guest={guest} setToast={props.setToast} onQuests={openQuests}
+                     <GameMenu game={game} account={props.account} accountState={accountState} setToast={props.setToast} onQuests={openQuests}
                                onAchievements={() => setAchievementsOpen(true)}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
@@ -347,7 +347,7 @@ export default function GameView(props: GameViewProps) {
         )}
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {achievementsOpen && (
-          <AchievementsModal game={game} guest={guest} dispatch={props.dispatch}
+          <AchievementsModal game={game} guest={accountState !== 'account'} dispatch={props.dispatch}
                              setToast={props.setToast} onClose={() => setAchievementsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
@@ -367,10 +367,10 @@ export default function GameView(props: GameViewProps) {
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
         )}
         {playersOpen && atSea && (
-          <PlayersModal region={region} account={props.account} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
+          <PlayersModal region={region} account={props.account} accountFailed={props.accountFailed} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
         )}
         {player && (
-          <PlayerModal target={player} self={player.uid === chat.you} account={props.account}
+          <PlayerModal target={player} self={player.uid === chat.you} account={props.account} accountFailed={props.accountFailed}
                        setToast={props.setToast} onClose={() => setPlayer(null)} />
         )}
         {mailboxOpen && (
@@ -384,7 +384,7 @@ export default function GameView(props: GameViewProps) {
         {actionPanel && (
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
-                         sellBonus={guildBonus?.effects.sell ?? 0} guest={guest}
+                         sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
       </GameStageLayout>

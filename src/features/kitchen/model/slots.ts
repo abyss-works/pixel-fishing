@@ -6,6 +6,7 @@ import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { appliedSlots, cookingUnlocked } from '../../../game/rules/cooking';
 import type { GameState } from '../../../game/rules/logic';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
+import type { AccountLockState } from '../../display/model/menuLock';
 import { recipeEffectLines, recipeEffectNote, recipeLabel } from './recipes';
 import type { RecipeEffectLine } from './recipes';
 
@@ -85,12 +86,12 @@ export type SlotChip =
  * 칩 줄의 슬롯 칩. 요리를 쓸 수 없는 동안(해금 전, 게스트)은 두 슬롯 모두 잠금 칩이고,
  * 쓸 수 있으면 효과가 든 슬롯의 칩만 도시락, 미끼 순으로 낸다.
  */
-export function selectSlotChips(game: GameState, now: string, guest: boolean): SlotChip[] {
+export function selectSlotChips(game: GameState, now: string, account: AccountLockState): SlotChip[] {
   const progress = facilityProgress('kitchen', game.boat);
-  const locked = !cookingUnlocked(game.boat) || (guest && !facilityGuestAllowed('kitchen'));
+  const locked = !cookingUnlocked(game.boat) || (account !== 'account' && !facilityGuestAllowed('kitchen'));
   if (locked) {
     return SLOT_ORDER.flatMap((key): SlotChip[] => {
-      const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed('kitchen'), feature: SLOT_NAME[key], progress });
+      const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: SLOT_NAME[key], progress });
       if (lock.kind === 'none') return [];
       const lines = lock.kind === 'progress' ? progressNote(COOKING_UNLOCK_BOAT, LOCK_PREDICATE[key]) : lock.lines;
       return [{ key, state: 'locked', lines }];

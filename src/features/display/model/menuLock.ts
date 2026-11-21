@@ -10,12 +10,17 @@ import type { FurnitureId } from '../../../game/world';
 import { josa } from '../../../shared/lib/josa';
 import type { MenuKey } from './menuEntries';
 
+/** 잠금 판정에 쓰는 계정 상태. 확인 실패(unverified)는 게스트가 아니며 확인 실패 전용 문안으로 잠근다 */
+export type AccountLockState = 'account' | 'guest' | 'unverified';
+
 export type MenuLock =
   | { kind: 'none' }
   | { kind: 'guest'; lines: string[] }
+  | { kind: 'unverified'; lines: string[] }
   | { kind: 'progress'; lines: string[] };
 
 export const GUEST_LOCK_TEXT = '계정을 연결하면 쓸 수 있어요.';
+export const UNVERIFIED_LOCK_TEXT = '계정을 확인하면 쓸 수 있어요.';
 
 /** 게스트에게 닫힌 화면 기능. 메뉴 줄 넷과 채팅, 편지, 닉네임 변경, 플레이어 정보의 친구 요청과 차단, 차단 목록이다 */
 export type GuestFeature = MenuKey | 'chat' | 'letter' | 'nickname' | 'player';
@@ -44,14 +49,16 @@ const GUEST_LOCK_LINES: Partial<Record<GuestFeature, readonly string[]>> = {
 export const GUEST_CHAT_NOTICE = GUEST_LOCK_LINES.chat!.join(' ');
 
 /**
- * 게스트에게 닫힌 화면 기능의 잠금 툴팁 줄. 게스트가 아니거나 그 기능이 게스트에게 열려 있으면 null이다.
- * 어떤 기능이 닫히는지는 게스트 규칙 판정과 계정 전용 목록이 정하고, 표현 계층은 이 결과만 쓴다.
+ * 계정 상태에 따라 닫힌 화면 기능의 잠금 툴팁 줄. 계정이 확인됐거나 그 기능이 계정 없이 열려 있으면 null이다.
+ * 확인 실패 상태에서는 확인 실패 전용 문안을, 게스트 상태에서는 게스트 잠금 문안을 돌려준다.
  */
-export function guestLock(feature: GuestFeature, guest: boolean): readonly string[] | null {
-  if (!guest) return null;
+export function guestLock(feature: GuestFeature, account: AccountLockState): readonly string[] | null {
+  if (account === 'account') return null;
   const action = GUEST_FEATURE_ACTION[feature];
   const closed = action ? guestActionVerdict(action) !== 'ok' : GUEST_CLOSED_FEATURES.has(feature);
-  return closed ? GUEST_LOCK_LINES[feature] ?? [GUEST_LOCK_TEXT] : null;
+  if (!closed) return null;
+  if (account === 'unverified') return [UNVERIFIED_LOCK_TEXT];
+  return GUEST_LOCK_LINES[feature] ?? [GUEST_LOCK_TEXT];
 }
 
 /** 진행 조건 문안 - 줄마다 따로 보인다. 구역에 들어서는 배 단계면 그 구역의 항로를 먼저 쓰고,
@@ -81,16 +88,20 @@ function progressSentences(boat: number, sentence: (condition: string) => string
 }
 
 /**
- * 잠금 사유를 고른다. 계정을 연결하지 않으면 진행 조건을 채워도 쓸 수 없으므로 게스트 잠금이 먼저다.
+ * 잠금 사유를 고른다. 계정을 연결하거나 확인하지 않으면 진행 조건을 채워도 쓸 수 없으므로 계정 상태 잠금(게스트 또는 확인 실패)이 먼저다.
  * progress.boat는 기능이 열리는 배 단계이고, 그 단계에 들어서는 구역 이름으로 문안을 만든다.
  */
 export function menuLock(input: {
-  guest: boolean;
+  account: AccountLockState;
   guestAllowed: boolean;
   feature: string;
   progress?: { met: boolean; boat: number };
 }): MenuLock {
-  if (input.guest && !input.guestAllowed) return { kind: 'guest', lines: [GUEST_LOCK_TEXT] };
+  if (input.account !== 'account' && !input.guestAllowed) {
+    return input.account === 'unverified'
+      ? { kind: 'unverified', lines: [UNVERIFIED_LOCK_TEXT] }
+      : { kind: 'guest', lines: [GUEST_LOCK_TEXT] };
+  }
   if (input.progress && !input.progress.met) {
     return { kind: 'progress', lines: progressLines(input.feature, input.progress.boat) };
   }
@@ -119,11 +130,11 @@ export function facilityProgress(id: FurnitureId, boat: number): { met: boolean;
   return undefined;
 }
 
-/** 판매 창의 기운 얻기 탭 잠금. 잠금 순서는 menuLock이 정하고(게스트 잠금이 먼저), 해금 전 첫 줄은 규칙의 거부 문구와 같은 문장이다.
+/** 판매 창의 기운 얻기 탭 잠금. 잠금 순서는 menuLock이 정하고(계정 상태 잠금이 먼저), 해금 전 첫 줄은 규칙의 거부 문구와 같은 문장이다.
  *  판정은 게스트 규칙과 요리 해금 규칙이 하고 여기는 문안을 만든다 */
-export function energyTabLock(guest: boolean, boat: number): MenuLock {
+export function energyTabLock(account: AccountLockState, boat: number): MenuLock {
   const lock = menuLock({
-    guest,
+    account,
     guestAllowed: guestActionVerdict({ type: 'extractEnergy', uids: [] }) === 'ok',
     feature: '기운 얻기',
     progress: { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT },

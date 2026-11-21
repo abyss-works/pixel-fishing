@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BaseId } from '../../../../game/content/places';
 import { energyTabLock } from '../../../../features/display/model/menuLock';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { SALE_TABS, saleWindowTitle } from '../../../../features/inventory/model/saleWindow';
 import type { SaleWindowTab } from '../../../../features/inventory/model/saleWindow';
 import type { EnergyPicks } from '../../../../features/kitchen/model/energy';
@@ -16,10 +17,10 @@ import type { FacilityAct } from './facilityParts';
 // 두 탭은 같은 어종 표와 같은 두 칸 구성(오른쪽에 비교 표와 확정 영역)을 쓴다. 고정 정보 줄은 두지 않는다.
 // 기운 얻기 탭은 증기선 전에는 잠긴 탭으로 보이고, 게스트에게는 게스트 잠금으로 보인다(게스트 잠금이 먼저다).
 // 두 탭의 선택 상태는 따로 두고, 창이 들고 있어 탭을 오가도 남는다.
-export default function SaleWindow({ game, base, guest, sellBonus, busy, act, onSell, setToast, onClose }: {
+export default function SaleWindow({ game, base, accountState, sellBonus, busy, act, onSell, setToast, onClose }: {
   game: GameState;
   base: BaseId;
-  guest: boolean;
+  accountState: AccountLockState;
   /** 길드 판매가 보너스 비율 */
   sellBonus: number;
   busy: boolean;
@@ -32,7 +33,7 @@ export default function SaleWindow({ game, base, guest, sellBonus, busy, act, on
   const [tab, setTab] = useState<SaleWindowTab>('sell');
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set()); // 판매 탭: 해제한 개체의 uid
   const [picks, setPicks] = useState<EnergyPicks>({}); // 기운 얻기 탭: 직접 고른 개체
-  const energyLock = energyTabLock(guest, game.boat);
+  const energyLock = energyTabLock(accountState, game.boat);
 
   return (
     <ModalCard title={saleWindowTitle(base)} onClose={onClose} fixed>
