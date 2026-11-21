@@ -39,8 +39,8 @@ interface Props {
 }
 
 // 업적 창 — 메뉴 줄의 업적을 눌러 여는 창. 진행, 누적 보너스, 치장 탭 셋으로 나눈다.
-// 상단 요약 줄에는 진행·치장 받은 수, 받을 골드, 받을 모자 수, [모두 받기]를 고정하고,
-// 그 아래 적용 중인 누적 보너스 칩 바를 두어 호버·탭 툴팁으로 출처별 세부 내역을 보인다.
+// 탭 위 고정 정보 줄에는 진행·치장 받은 수, 받을 골드, 받을 모자 수, [모두 받기]만 한 줄로 둔다.
+// 누적 보너스 탭은 상단에 적용 중인 누적 보너스 요약 칸을, 치장 탭은 상단에 필터 줄을 스크롤 밖에 고정한다.
 // 탭 본문은 카드 격자다. 열 수는 본문 폭과 카드 최소 폭으로 정하고, 좁으면 1열로 내려가며 가로 스크롤을 만들지 않는다.
 export default function AchievementsModal({ game, guest = false, dispatch, setToast, onClose }: Props) {
   const [tab, setTab] = useState<AchievementTab>('progress');
@@ -102,34 +102,45 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             </span>
           </Inset>
 
-          <Inset className="flex flex-col gap-1 px-3 py-1.5 shrink-0 text-2xs">
-            <div className="flex items-center justify-between gap-2 text-text-dim">
-              <span>적용 중인 누적 보너스</span>
-              {chips.length === 0 && <span>조건 단계에 닿으면 자동으로 적용돼요.</span>}
-            </div>
-            {chips.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {chips.map(chip => (
+          <TabBar tabs={tabs} activeKey={tab} onSelect={setTab} />
+
+          {tab === 'bonus' && (
+            <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-9 px-3 py-1.5 shrink-0 text-xs">
+              <span className="text-text-dim">
+                <Tip text="조건 단계에 닿으면 받기를 누르지 않아도 보너스가 바로 적용돼요.">적용 중인 누적 보너스</Tip>
+              </span>
+              {chips.length === 0 ? (
+                <span className="text-text-dim">없음</span>
+              ) : (
+                chips.map(chip => (
                   <Tip
                     key={chip.id}
-                    text={(
-                      <div className="flex flex-col gap-1">
-                        <TipList rows={chip.rows.map(([label, value]) => ({ label, value }))} />
-                        <span className="text-2xs text-text-dim">{chip.foot}</span>
-                      </div>
-                    )}
+                    text={<TipList rows={chip.rows.map(([label, value]) => ({ label, value }))} note={chip.foot} />}
                   >
-                    <span className="inline-flex items-center gap-1 border border-line bg-surface-2 px-1.5 py-0.5 text-2xs">
-                      <span>{chip.label}</span>
-                      <b className="text-ok">{chip.valueText}</b>
+                    <span className="inline-flex items-baseline gap-1">
+                      <span className="text-text-dim">{chip.label}</span>
+                      <b className="pf-accent text-accent">{chip.valueText}</b>
                     </span>
                   </Tip>
-                ))}
-              </div>
-            )}
-          </Inset>
+                ))
+              )}
+            </Inset>
+          )}
 
-          <TabBar tabs={tabs} activeKey={tab} onSelect={setTab} />
+          {tab === 'cosmetic' && (
+            <div className="flex flex-wrap gap-1 shrink-0">
+              {COSMETIC_FILTERS.map(f => (
+                <PillButton
+                  key={f.key}
+                  type="button"
+                  active={cosmeticFilter === f.key}
+                  onClick={() => setCosmeticFilter(f.key)}
+                >
+                  {f.label}
+                </PillButton>
+              ))}
+            </div>
+          )}
 
           <div className={`${SCROLL_Y} flex-1 min-h-0`}>
             {tab === 'progress' && (
@@ -141,53 +152,36 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             )}
 
             {tab === 'bonus' && (
-              <div className="flex flex-col gap-2">
-                <p className="text-2xs text-accent">조건 단계에 닿으면 받기를 누르지 않아도 보너스가 바로 적용돼요.</p>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-2">
-                  {bonusCards.map(card => (
-                    <CumulativeBonusCard key={card.series.id} card={card} />
-                  ))}
-                </div>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-2">
+                {bonusCards.map(card => (
+                  <CumulativeBonusCard key={card.series.id} card={card} />
+                ))}
               </div>
             )}
 
             {tab === 'cosmetic' && (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap gap-1">
-                  {COSMETIC_FILTERS.map(f => (
-                    <PillButton
-                      key={f.key}
-                      type="button"
-                      active={cosmeticFilter === f.key}
-                      onClick={() => setCosmeticFilter(f.key)}
-                    >
-                      {f.label}
-                    </PillButton>
-                  ))}
-                </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-2">
-                  {cosmeticItems.map(item => (
-                    item.kind === 'single' ? (
-                      <AchievementCard
-                        key={item.row.def.id}
-                        row={item.row}
-                        game={game}
-                        guest={guest}
-                        busy={busy}
-                        onClaim={() => claimOne(item.row)}
-                      />
-                    ) : (
-                      <NamedGroupCard
-                        key={item.groupId}
-                        card={item}
-                        game={game}
-                        guest={guest}
-                        busy={busy}
-                        onClaim={claimOne}
-                      />
-                    )
-                  ))}
-                </div>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-2">
+                {cosmeticItems.map(item => (
+                  item.kind === 'single' ? (
+                    <AchievementCard
+                      key={item.row.def.id}
+                      row={item.row}
+                      game={game}
+                      guest={guest}
+                      busy={busy}
+                      onClaim={() => claimOne(item.row)}
+                    />
+                  ) : (
+                    <NamedGroupCard
+                      key={item.groupId}
+                      card={item}
+                      game={game}
+                      guest={guest}
+                      busy={busy}
+                      onClaim={claimOne}
+                    />
+                  )
+                ))}
               </div>
             )}
           </div>

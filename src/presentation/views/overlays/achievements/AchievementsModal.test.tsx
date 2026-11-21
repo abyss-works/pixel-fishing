@@ -63,19 +63,24 @@ describe('업적 창 카드 격자', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('누적 보너스 탭은 받기 버튼 없이 자동 적용 카드를 보여 주고 상단 칩 바에 적용 보너스를 표시한다', () => {
+  it('누적 보너스 요약은 누적 보너스 탭에만 두고, 규칙 설명은 본문이 아니라 툴팁으로 보인다', () => {
     const boosted = seed({
       achievementCounters: { 'manual.total': 100, 'sell.gold': 1_000_000 },
     });
     render(<AchievementsModal game={boosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
     expect(screen.getByText('입질 대기')).toBeInTheDocument();
     expect(screen.getByText('−1%')).toBeInTheDocument();
     expect(screen.getByText('이동 속도')).toBeInTheDocument();
     expect(screen.getByText('+2%')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
     expect(screen.getByText('수동 손맛')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^받기,/ })).toBeNull();
+    expect(screen.queryByText(/조건 단계에 닿으면/)).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText('적용 중인 누적 보너스'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('조건 단계에 닿으면 받기를 누르지 않아도 보너스가 바로 적용돼요.');
   });
 
   it('치장 탭에서 미토벌 네임드 카드는 실명을 가린다', () => {

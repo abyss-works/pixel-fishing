@@ -606,4 +606,22 @@ describe('UI 시스템 가드', () => {
     expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
     expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
   });
+
+  // 초록(ok) 상태색 금지 — 초록은 특수 등급에만 쓰고 상태(성공, 활성, 접속)에는 쓰지 않는다
+  const OK_STATUS_COLOR = /\b(?:text|bg|border)-ok\b/;
+  it('업적과 라이브 오버레이 화면은 비특수 용도의 ok 색 토큰(text-ok·bg-ok·border-ok)을 쓰지 않는다', () => {
+    const targets = screenFiles.filter(f => /^views\/overlays\/(?:achievements|live)\//.test(f.path));
+    expect(targets.length).toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const { path, src } of targets) {
+      src.split('\n').forEach((line, i) => {
+        if (OK_STATUS_COLOR.test(line)) offenders.push(`${path}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+    expect(OK_STATUS_COLOR.test('text-ok')).toBe(true);
+    expect(OK_STATUS_COLOR.test('bg-ok/10')).toBe(true);
+    expect(OK_STATUS_COLOR.test('border-ok/70')).toBe(true);
+    expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
+  });
 });

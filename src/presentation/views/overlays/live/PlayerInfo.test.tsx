@@ -93,6 +93,12 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('Lv.7')).toBeTruthy();
     expect(screen.getByText(`2 / ${ACHIEVEMENTS.length}`)).toBeTruthy();
     expect(screen.getByText(`2 / ${HATS.length}`)).toBeTruthy();
+    expect(screen.queryByText(/모자 \(구매/)).toBeNull();
+    fireEvent.mouseEnter(screen.getByText('모자'));
+    const hatTip = screen.getByRole('tooltip');
+    expect(hatTip).toHaveTextContent('구매');
+    expect(hatTip).toHaveTextContent('업적');
+    fireEvent.mouseLeave(screen.getByText('모자'));
     expect(screen.getByText(`2 / ${ARTIFACTS.length}`)).toBeTruthy();
     expect(screen.getByLabelText('유물 해구의 이빨 Lv.3')).toBeTruthy();
     const legendCard = screen.getByLabelText('유물 마미 와타의 거울');

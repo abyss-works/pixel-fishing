@@ -13,6 +13,7 @@ import Button from '../../../ui/Button';
 import Frame from '../../../ui/Frame';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import Tip, { TipList } from '../../../ui/Tip';
 
 interface Props {
   row: AchievementRow;
@@ -67,16 +68,24 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
   );
 }
 
-/** 누적 보너스 다단계 카드 — 별도 받기 버튼 없이 현재 적용 효과와 단계 진행 알약을 보인다 */
+/** 누적 보너스 다단계 카드 — 현재 단계 진척과 적용 효과를 보이고, 전체 단계 목록은 보상 툴팁으로 제공한다 */
 export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }) {
   const target = Math.max(card.nextThreshold, 1);
   const ratio = Math.min(card.current, target) / target;
+  const doneCount = card.steps.filter(step => step.state === 'done').length;
   return (
-    <Frame className="flex min-w-0 flex-col bg-surface-2">
-      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
-        <div className="flex items-start justify-between gap-2">
+    <Frame
+      className={cx(
+        'flex min-w-0 flex-col bg-surface-2',
+        card.allDone && 'border-gold',
+      )}
+    >
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
+        <div className="flex items-baseline justify-between gap-2">
           <b data-achievement-name className="text-sm break-keep break-words">{card.series.name}</b>
-          <span className="shrink-0 border border-line px-1.5 py-0.5 text-2xs text-text-dim">{card.scopeLabel}</span>
+          {card.series.scope === 'zone' && (
+            <span className="shrink-0 text-2xs text-text-dim">{card.scopeLabel}</span>
+          )}
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.series.desc}</p>
         <div className="flex items-center gap-2">
@@ -84,41 +93,42 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
                 aria-valuenow={Math.min(card.current, target)}
                 className="block h-2 flex-1 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
             <span data-achievement-gauge-fill
-                  className="block h-full bg-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+                  className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', card.allDone ? 'bg-gold' : 'bg-accent')}
                   style={{ width: `${ratio * 100}%` }} />
           </span>
           <span className="pf-accent text-2xs whitespace-nowrap">{fmtNum(card.current)}/{fmtNum(card.nextThreshold)}</span>
         </div>
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {card.steps.map(step => (
-            <span
-              key={step.id}
-              className={cx(
-                'border px-1.5 py-0.5 text-2xs',
-                step.state === 'done' && 'border-ok/70 text-ok bg-ok/10',
-                step.state === 'now' && 'border-gold/70 text-gold bg-gold/10',
-                step.state === 'todo' && 'border-line text-text-dim bg-bg/50',
-              )}
-            >
-              {step.label} ({step.deltaText})
-            </span>
-          ))}
-        </div>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-line px-2.5 py-1.5">
-        <b data-achievement-reward className="text-xs text-ok break-keep break-words">{card.activeText}</b>
-        <span className="text-2xs text-text-dim whitespace-nowrap">{card.maxText}</span>
+      <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
+        <Tip
+          text={(
+            <TipList
+              rows={card.steps.map(step => ({ label: step.label, value: step.deltaText }))}
+              note={card.maxText}
+            />
+          )}
+        >
+          <b
+            data-achievement-reward
+            className={cx(
+              'text-xs break-keep break-words',
+              card.allDone ? 'text-gold' : doneCount > 0 ? 'text-accent' : 'text-text-dim',
+            )}
+          >
+            {card.activeText}
+          </b>
+        </Tip>
       </div>
       <div className="flex h-9 shrink-0 items-center justify-end px-2.5">
-        <span className={cx('text-xs', card.allDone ? 'text-ok' : 'text-text-dim')}>
-          {card.allDone ? '최대 단계 적용 중' : '자동 적용'}
+        <span className={cx('text-xs', card.allDone ? 'text-gold' : doneCount > 0 ? 'text-accent' : 'text-text-dim')}>
+          {card.allDone ? '최대 단계' : `${doneCount}/${card.steps.length} 단계`}
         </span>
       </div>
     </Frame>
   );
 }
 
-/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 규칙에 맞춰 실명을 가린다 */
+/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 규칙에 맞춰 실명을 가리고, 전체 단계는 보상 툴팁으로 제공한다 */
 export function NamedGroupCard({
   card, game, guest = false, busy, onClaim,
 }: {
@@ -129,6 +139,7 @@ export function NamedGroupCard({
   onClaim: (row: AchievementRow) => void;
 }) {
   const ratio = card.target > 0 ? Math.min(card.current, card.target) / card.target : 0;
+  const activeReward = card.activeRow.def.reward;
   return (
     <Frame
       className={cx(
@@ -137,11 +148,8 @@ export function NamedGroupCard({
         card.status === 'claimed' && 'opacity-50',
       )}
     >
-      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <b data-achievement-name className="text-sm break-keep break-words">{card.title}</b>
-          <span className="shrink-0 border border-line px-1.5 py-0.5 text-2xs text-text-dim">{card.scopeLabel}</span>
-        </div>
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
+        <b data-achievement-name className="text-sm break-keep break-words">{card.title}</b>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.desc}</p>
         <div className="flex items-center gap-2">
           <span role="meter" aria-label={`진척, ${card.title}`} aria-valuemin={0} aria-valuemax={Math.max(card.target, 1)}
@@ -153,24 +161,20 @@ export function NamedGroupCard({
           </span>
           <span className="pf-accent text-2xs whitespace-nowrap">{card.current}/{card.target}</span>
         </div>
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {card.steps.map(step => (
-            <span
-              key={step.id}
-              className={cx(
-                'border px-1.5 py-0.5 text-2xs',
-                step.status === 'claimed' && 'border-ok/70 text-ok bg-ok/10',
-                step.status === 'claimable' && 'border-accent text-accent bg-accent/10',
-                step.status === 'progress' && 'border-line text-text-dim bg-bg/50',
-              )}
-            >
-              {step.label}
-            </span>
-          ))}
-        </div>
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
-        <Reward reward={card.activeRow.def.reward} />
+        {activeReward.kind === 'hat' ? (
+          <>
+            <PersonSprite look={{ ...DEFAULT_LOOK, hat: activeReward.hatId }} scale={3} headOnly className="shrink-0" />
+            <Tip text={<TipList rows={card.steps.map(step => ({ label: step.label, value: step.hatName }))} />}>
+              <b data-achievement-reward className="text-2xs break-keep break-words">
+                {hatById(activeReward.hatId)?.name ?? '모자'}
+              </b>
+            </Tip>
+          </>
+        ) : (
+          <Reward reward={activeReward} />
+        )}
       </div>
       <div className="flex h-9 shrink-0 items-center justify-end px-2.5">
         {card.status === 'claimable' ? (
