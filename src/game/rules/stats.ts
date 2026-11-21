@@ -16,11 +16,20 @@ import type { SpotId } from '../content/spots.js';
 import { powerReqOf } from '../content/spots.js';
 import { NO_COOK_EFFECTS } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
+import type { GuildBonusId } from './guild.js';
+
+export type StatModSource =
+  | { kind: 'guild'; bonus: GuildBonusId }
+  | { kind: 'relic'; id: string }
+  | { kind: 'slot'; recipe: string }
+  | { kind: 'achievement'; id: string }
+  | { kind: 'rule'; id: 'night' | 'power' };
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
   label: string; // 스탯창 표시명
   delta: number; // value = base + Σ delta
+  source?: StatModSource;
 }
 
 export interface Stat {
