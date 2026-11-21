@@ -6,7 +6,7 @@ import { applyOverride } from './override';
 import { gatesReport, verdictCounts } from './gateReport';
 import { rewardPlan } from './achievement';
 
-const opts = { maxDays: 365, legendAts: [10, 15, 20] };
+const opts = { maxDays: 365, legendAts: [10, 13, 15] };
 const reef = SPOTS.findIndex(s => s.id === TIME_GATE_FROM_SPOT);
 
 /** 그 해역에 닿는 누적 시간(시간)의 정상 값. 최대 일수 상한을 도착 시간 사이에 놓는 데 쓴다 */

@@ -7,7 +7,8 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
 import { RARITY } from '../../../src/game/content/rarity';
 import {
-  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN, endedFirstCatch, firstCatchTarget, newFirstCatch, settleFirstCatch,
+  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
+  endedFirstCatch, firstCatchTarget, fixedFirstCatch, hasPendingFirstCatch, isFirstCatchSpot, newFirstCatch, settleFirstCatch,
 } from '../../../src/game/rules/firstCatch';
 import { fishPool } from '../../../src/game/rules/logic';
 import { powerOfLevel } from '../rodRules';
@@ -57,7 +58,7 @@ export function simulateOpening(o: OpeningOptions): OpeningResult {
   const boatToBuy = BOATS.find(b => b.tier === target.boatTier)!;
   const sampler = o.sampler;
   const noRng = () => 0;
-  let fc = o.legendAt === null ? endedFirstCatch() : o.legendAt === 'draw' ? newFirstCatch() : { ...newFirstCatch(), legendAt: o.legendAt };
+  let fc = o.legendAt === null ? endedFirstCatch() : o.legendAt === 'draw' ? newFirstCatch() : fixedFirstCatch(o.legendAt);
   let gold = 0, fame = 0, level = 1, boat = 0, sec = 0, n = 0;
   let spot = SPOTS[0];
   const steps: OpeningStep[] = [];
@@ -99,7 +100,7 @@ export function simulateOpening(o: OpeningOptions): OpeningResult {
       gold += r.goldPerHour / r.catchesPerHour;
       fame += r.famePerHour / r.catchesPerHour;
     }
-    fc = settleFirstCatch(fc, guaranteed, sampler?.rng ?? noRng);
+    fc = settleFirstCatch(fc, spot.id, guaranteed, sampler?.rng ?? noRng);
 
     while (level < targetLevel && gold >= upgradeCost(level)) {
       gold -= upgradeCost(level); level += 1;
@@ -116,8 +117,8 @@ export function simulateOpening(o: OpeningOptions): OpeningResult {
       log(best.id === target.id ? 'arrive' : 'move', best.id);
     }
     if (spot.id === target.id && !arrival) arrival = { catches: n, seconds: sec };
-    // 기댓값 경로는 도착하면 끝낸다. 표본 경로는 보장이 남았으면 그 해역에서 더 낚아 보장 캐치의 시각을 잰다
-    if (arrival && (!sampler || (!fc.epic && !fc.legend))) break;
+    // 기댓값 경로는 도착하면 끝낸다. 표본 경로는 도착 해역이 보장 대상이면서 보장이 남았을 때만 이어 낚는다
+    if (arrival && (!sampler || !isFirstCatchSpot(spot.id) || !hasPendingFirstCatch(fc))) break;
   }
   return { options: o, target: target.id, steps, arrival };
 }

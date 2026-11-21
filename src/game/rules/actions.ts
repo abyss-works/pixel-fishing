@@ -400,7 +400,7 @@ export function drawCatch(
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
-    firstCatch: settleFirstCatch(state.firstCatch, guaranteed, rng), byCeiling: pityFixed,
+    firstCatch: settleFirstCatch(state.firstCatch, spot, guaranteed, rng), byCeiling: pityFixed,
   };
 }
 
