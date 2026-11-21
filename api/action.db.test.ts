@@ -916,7 +916,16 @@ describe('자동 잠금', () => {
     const uid = await seed({ state: { bag: [small, big] } });
     const out = await callAction(userToken(uid), { type: 'autoLock' });
     expect(out.status).toBe(200);
-    expect(await snapshotOf(uid, out)).toMatchSnapshot();
+    const snap = await snapshotOf(uid, out);
+    const instances = snap.db.fish_instances as Array<{ size: number; locked: boolean }>;
+    expect(instances.map((r) => ({ size: r.size, locked: r.locked }))).toEqual([
+      { size: 10, locked: false },
+      { size: 30, locked: true },
+    ]);
+    const current = snap.db.saves_current[0] as { data: { autoLockedIds?: Record<string, string> } };
+    expect(current.data.autoLockedIds).toEqual({
+      'carp|normal': '<uuid>',
+    });
   });
 });
 
