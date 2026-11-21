@@ -4,9 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
-import { achievementRowById } from '../../../../features/achievement/model/achievements';
-import type { AchievementRow } from '../../../../features/achievement/model/achievements';
-import AchievementCard from './AchievementCard';
+import {
+  achievementRowById,
+  cosmeticCards,
+  cumulativeBonusCards,
+} from '../../../../features/achievement/model/achievements';
+import type { AchievementRow, NamedGroupCardModel } from '../../../../features/achievement/model/achievements';
+import AchievementCard, { CumulativeBonusCard, NamedGroupCard } from './AchievementCard';
 
 afterEach(cleanup);
 
@@ -199,5 +203,67 @@ describe('업적 카드', () => {
     cleanup();
     const progress = show(seed(), 'spot-basic-sea');
     expect(emphasizedBorder(cardParts(progress.container).root)).toBe(false);
+  });
+});
+
+describe('누적 보너스 카드', () => {
+  it('전역 카드는 범위 문구를 숨기고, 본문에 단계 목록 대신 현재 진척과 단계 수를 보인다', () => {
+    const game = seed({ achievementCounters: { 'manual.total': 100 } });
+    const card = cumulativeBonusCards(game).find(c => c.series.scope === 'global' && c.current === 100)!;
+    render(<CumulativeBonusCard card={card} />);
+    expect(screen.queryByText('전역')).toBeNull();
+    expect(screen.getByText(`${card.steps.filter(s => s.state === 'done').length}/${card.steps.length} 단계`)).toBeInTheDocument();
+    expect(screen.queryByText(`${card.steps[0].label} (${card.steps[0].deltaText})`)).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText(card.activeText));
+    const tooltip = screen.getByRole('tooltip');
+    for (const step of card.steps) {
+      expect(tooltip).toHaveTextContent(step.label);
+      expect(tooltip).toHaveTextContent(step.deltaText);
+    }
+    expect(tooltip).toHaveTextContent(card.maxText);
+  });
+
+  it('구역 한정 카드는 구역 이름을 보이고 최대 단계에 닿으면 최대 단계를 표시한다', () => {
+    const base = cumulativeBonusCards(seed()).find(c => c.series.scope === 'zone')!;
+    const maxCard = { ...base, allDone: true, steps: base.steps.map(s => ({ ...s, state: 'done' as const })) };
+    render(<CumulativeBonusCard card={maxCard} />);
+    expect(screen.getByText(maxCard.scopeLabel)).toBeInTheDocument();
+    expect(screen.getByText('최대 단계')).toBeInTheDocument();
+  });
+});
+
+describe('네임드 다회 토벌 카드', () => {
+  const pickGroup = (game: GameState): NamedGroupCardModel =>
+    cosmeticCards(game, 'named').find((item): item is NamedGroupCardModel => item.kind === 'namedGroup')!;
+
+  it('본문에 1·5·10회 알약을 늘어놓지 않고 보상 모자 툴팁으로 전체 단계를 보인다', () => {
+    const game = seed();
+    const card = pickGroup(game);
+    render(<NamedGroupCard card={card} game={game} busy={false} onClaim={vi.fn()} />);
+    expect(screen.queryByText('1회')).toBeNull();
+    expect(screen.queryByText('5회')).toBeNull();
+    expect(screen.queryByText('10회')).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText(card.steps[0].hatName));
+    const tooltip = screen.getByRole('tooltip');
+    for (const step of card.steps) {
+      expect(tooltip).toHaveTextContent(step.label);
+      expect(tooltip).toHaveTextContent(step.hatName);
+    }
+  });
+
+  it('받을 수 있는 단계가 있으면 받기 버튼으로 해당 단계를 수령한다', () => {
+    const base = pickGroup(seed());
+    const firstId = base.steps[0].id;
+    const game = seed({ achievements: { [firstId]: 'claimable' } });
+    const card = cosmeticCards(game, 'named').find(
+      (item): item is NamedGroupCardModel => item.kind === 'namedGroup' && item.groupId === base.groupId,
+    )!;
+    const onClaim = vi.fn();
+    render(<NamedGroupCard card={card} game={game} busy={false} onClaim={onClaim} />);
+    const button = screen.getByRole('button', { name: `받기, ${card.activeRow.def.name}` });
+    fireEvent.click(button);
+    expect(onClaim).toHaveBeenCalledWith(card.activeRow);
   });
 });

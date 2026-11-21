@@ -18,7 +18,8 @@ import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Locked from '../../../ui/Locked';
 import PersonSprite from '../../../ui/PersonSprite';
-import Tip from '../../../ui/Tip';
+import Subheading from '../../../ui/Subheading';
+import Tip, { TipList } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 
@@ -163,9 +164,9 @@ function ProfileCells({ name, view, actions }: {
       <Inset className="px-3 py-2.5 flex flex-col gap-2.5 min-w-0 row-span-2 mobile:row-span-1">
         <div className="flex items-center gap-2.5 min-w-0">
           {look ? (
-            <div className="shrink-0 w-11 h-12 flex items-center justify-center border border-line bg-surface-2">
+            <Inset tone="light" className="shrink-0 w-11 h-12 flex items-center justify-center">
               <PersonSprite look={look} scale={2} />
-            </div>
+            </Inset>
           ) : boat.tier > 0 ? (
             <BoatSprite tier={boat.tier} preset="row" />
           ) : null}
@@ -175,10 +176,7 @@ function ProfileCells({ name, view, actions }: {
               <b className="text-sm truncate">{name}</b>
             </div>
             <span
-              className={cx(
-                'inline-flex items-center self-start max-w-full truncate px-1.5 py-0.5 text-2xs border bg-surface-2',
-                online ? 'border-accent text-accent' : 'border-line text-text-dim',
-              )}
+              className={cx('text-xs truncate', online ? 'text-accent' : 'text-text-dim')}
               aria-label={online ? `현재 위치 ${placeText}` : `마지막 위치 ${placeText}`}
             >
               {placeText}
@@ -199,7 +197,7 @@ function ProfileCells({ name, view, actions }: {
       {/* 오른쪽 상단: 범주 1 업적 */}
       <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
         <div className="flex items-center justify-between gap-2 text-2xs">
-          <span className="font-bold text-gold">업적</span>
+          <Subheading className="mb-0">업적</Subheading>
           <span className="text-text-dim">
             수령 완료 <span className="font-pixel text-gold">{achievements.claimed} / {achievements.total}</span>
           </span>
@@ -225,13 +223,24 @@ function ProfileCells({ name, view, actions }: {
       {/* 오른쪽 하단: 범주 2 수집품 (모자 + 유물) */}
       <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
         <div className="flex items-center justify-between gap-2 text-2xs">
-          <span className="font-bold text-accent">수집품</span>
+          <Subheading className="mb-0">수집품</Subheading>
           <span className="pf-accent">{hats.owned + artifacts.owned} / {hats.total + artifacts.total}</span>
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2 text-2xs">
-            <span className="text-text-dim truncate">
-              모자 (구매 {hats.goldOwned}/{hats.goldTotal} 업적 {hats.achievementOwned}/{hats.achievementTotal})
+            <span className="text-text-dim">
+              <Tip
+                text={(
+                  <TipList
+                    rows={[
+                      { label: '구매', value: `${hats.goldOwned} / ${hats.goldTotal}` },
+                      { label: '업적', value: `${hats.achievementOwned} / ${hats.achievementTotal}` },
+                    ]}
+                  />
+                )}
+              >
+                모자
+              </Tip>
             </span>
             <span className="pf-accent shrink-0">{hats.owned} / {hats.total}</span>
           </div>
@@ -269,7 +278,7 @@ function ProfileCells({ name, view, actions }: {
       {/* 하단 전폭: 해역별 도감 (일반 + 돌연변이 나란히 비교) */}
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0 col-span-2 mobile:col-span-1">
         <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
-          <span className="font-bold text-accent"><Tip text={DEX_HELP}>해역별 도감</Tip></span>
+          <Subheading className="mb-0"><Tip text={DEX_HELP}>해역별 도감</Tip></Subheading>
           <div className="flex items-center gap-3">
             <span className="text-text-dim">일반 <span className="pf-accent">{dex.found} / {dex.total}</span></span>
             <span className="text-text-dim">돌연변이 <span className="font-pixel text-guild">{dex.variantFound} / {dex.total}</span></span>
