@@ -139,11 +139,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const releasedUid = out.result.released[0].uid;
     expect(releasedUid).toMatch(/^old-/);                   // 기존 일반 개체가 나간다
     expect(out.writes.instancesRemoved).toEqual([releasedUid]);
-    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease', 'unlockAchievement', 'unlockAchievement']);
-    expect(out.events.slice(2)).toEqual([
-      { type: 'unlockAchievement', payload: { id: 'manual-variant-1' } },
-      { type: 'unlockAchievement', payload: { id: 'manual-variant-zone-village' } },
-    ]);
+    expect(out.events.map(e => e.type)).toEqual(['catch', 'autoRelease']);
     expect(out.events[1].payload).toMatchObject({ uids: [releasedUid], reason: 'bag-full' });
     // 놓아준 개체의 어종과 폼을 함께 남긴다 — 방치 결과 보고가 놓친 가치를 센다
     expect(out.events[1].payload).toMatchObject({ fish: [{ uid: releasedUid, fishId: 'crucian', form: 'normal' }] });

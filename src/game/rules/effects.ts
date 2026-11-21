@@ -111,7 +111,7 @@ export function moveSpeedOf(ctx: PlayerContext, movement: Movement, night: boole
   if (ctx.achievements.moveSpeed > 0) {
     mods.push({
       id: 'achievement-moveSpeed',
-      label: '업적 이동 속도',
+      label: '업적 누적',
       delta: base * ctx.achievements.moveSpeed,
       source: { kind: 'achievement', id: 'moveSpeed' },
     });
@@ -159,7 +159,7 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
     if (ctx.achievements.biteWaitCut > 0) {
       mods.push({
         id: 'achievement-biteWaitCut',
-        label: '업적 입질 대기',
+        label: '업적 누적',
         delta: -total * ctx.achievements.biteWaitCut,
         source: { kind: 'achievement', id: 'biteWaitCut' },
       });

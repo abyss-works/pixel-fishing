@@ -18,7 +18,7 @@ function show(game: GameState, result: DispatchResult) {
   return { dispatch, setToast };
 }
 
-const claimable = seed({ achievements: { 'zone-basic-pacific': 'claimable', 'variant-village': 'claimable' } });
+const claimable = seed({ achievements: { 'spot-basic-sea': 'claimable', 'variant-village': 'claimable' } });
 const okAll = (gold: number, hats: string[]): DispatchResult => ({
   status: 'ok', state: claimable, result: { type: 'claimAllAchievements', gold, hats },
 });
@@ -61,5 +61,28 @@ describe('업적 창 카드 격자', () => {
     const names = screen.getAllByRole('meter').map(meter => meter.getAttribute('aria-label'));
     expect(names.length).toBeGreaterThan(1);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('누적 보너스 탭은 받기 버튼 없이 자동 적용 카드를 보여 주고 상단 칩 바에 적용 보너스를 표시한다', () => {
+    const boosted = seed({
+      achievementCounters: { 'manual.total': 100, 'sell.gold': 1_000_000 },
+    });
+    render(<AchievementsModal game={boosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    expect(screen.getByText('입질 대기')).toBeInTheDocument();
+    expect(screen.getByText('−1%')).toBeInTheDocument();
+    expect(screen.getByText('이동 속도')).toBeInTheDocument();
+    expect(screen.getByText('+2%')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
+    expect(screen.getByText('수동 손맛')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^받기,/ })).toBeNull();
+  });
+
+  it('치장 탭에서 미토벌 네임드 카드는 실명을 가린다', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: '치장' }));
+    fireEvent.click(screen.getByRole('button', { name: '네임드' }));
+    expect(screen.getByText('태평양 네임드 토벌')).toBeInTheDocument();
+    expect(screen.queryByText('메갈로돈 토벌')).toBeNull();
   });
 });

@@ -29,9 +29,7 @@ const BASE_NAMES: Record<BaseId, string> = {
 
 const ACHIEVEMENT_TABS: readonly { tab: AchievementTab; label: string }[] = [
   { tab: 'progress', label: '진행' },
-  { tab: 'collection', label: '수집' },
-  { tab: 'namedArtifact', label: '네임드 유물' },
-  { tab: 'count', label: '횟수' },
+  { tab: 'cosmetic', label: '치장' },
 ];
 
 export interface ProfileDexZone {

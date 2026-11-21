@@ -6,6 +6,7 @@ import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { DISPLAY_GRADE, RARITY, RARITY_ORDER, displayGradeRank } from '../../../game/content/rarity';
 import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
 import { canCook, cookingProgress, cookStorageUsed, settleCooking } from '../../../game/rules/cooking';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { extraCookChance } from '../../../game/rules/artifactLevel';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
@@ -129,7 +130,7 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
     // 수량 0(보관함 가득)도 이유는 보관함이라, 판정은 최소 1개로 묻는다
     check: canCook(game, recipe.id, Math.max(1, count), now),
     waitMs: rules.waitMs * count, slotMs: rules.slotMs,
-    extraChance: extraCookChance(game),
+    extraChance: extraCookChance(game, achievementBonusesOf(game).artifactBoost),
   };
 }
 

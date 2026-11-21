@@ -7,8 +7,10 @@ import type { ActionResult, GameAction } from '../rules/actions';
 import type { RejectReason } from '../rules/rules';
 import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
-import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
-import { NO_COOK_EFFECTS, slotEffects } from '../rules/cooking';
+import { rodAxes, powerZones, POWER_RULES } from '../rules/stats';
+import { achievementBonusesOf } from '../rules/achievements';
+import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../rules/effects';
+import { NO_GUILD_EFFECTS } from '../rules/guild';
 import { CAST_RANGE } from '../rules/balance';
 import { guestActionVerdict } from '../rules/guest';
 import { BLOCK_RENEW_DISTANCE, BlockNotice } from './blockNotice';
@@ -343,7 +345,16 @@ export class GameFieldEngine {
     const pad = this.padDir;
     const attempting = Boolean(dx || dy || pad) && this.snapshot.phase === 'idle';
     if (attempting) {
-      const speed = moveSpeed(this.game, this.def.movement, this.night).value;
+      const speed = moveSpeedOf(
+        createPlayerContext({
+          state: this.game,
+          guild: NO_GUILD_EFFECTS,
+          now: new Date().toISOString(),
+          achievements: achievementBonusesOf(this.game),
+        }),
+        this.def.movement,
+        this.night,
+      ).value;
       movedFrom = { ...this.pos };
       const dirX = pad ? pad.x : Math.sign(dx), dirY = pad ? pad.y : Math.sign(dy);
       closedMessage = closedSeaBlock(this.def, this.pos, dirX, dirY, dt, speed);
@@ -539,9 +550,16 @@ export class GameFieldEngine {
     let ms: number;
     if (phase === 'wait' && school) {
       // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
-      const cook = this.lastJudgment === 'auto'
-        ? slotEffects(this.game, new Date(Date.now()).toISOString(), 'auto') : NO_COOK_EFFECTS;
-      const bite = effectiveBite(this.game, school.spot, cook);
+      const bite = biteWaitOf(
+        createPlayerContext({
+          state: this.game,
+          guild: NO_GUILD_EFFECTS,
+          now: new Date(Date.now()).toISOString(),
+          achievements: achievementBonusesOf(this.game),
+        }),
+        school.spot,
+        this.lastJudgment === 'auto' ? 'idle' : 'manual',
+      );
       const random = Math.random();
       ms = (bite.min.value + random * (bite.max.value - bite.min.value)) * 1000;
     } else {

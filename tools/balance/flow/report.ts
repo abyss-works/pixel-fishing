@@ -28,7 +28,10 @@ import type { EvReport } from './ev';
 import { BIG_CATCH_PERCENTILE } from '../../../src/game/rules/balance';
 import { DEFAULT_SEED, DEFAULT_TRIALS, bigMarksDist, openingDist, rewardDist, spotRewardDist, transitionDist } from './dist';
 import type { BigMarksDist, OpeningDist, RewardDistRow, SpotRewardDistRow, TransitionDist } from './dist';
-import { DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, rewardPlan, rewardRows, spotRewardPlan, spotRewardRows } from './achievement';
+import {
+  DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, DEFAULT_SPOT_ACHIEVEMENT_HOURS,
+  rewardPlan, rewardRows, spotRewardPlan, spotRewardRows,
+} from './achievement';
 import type { RewardRow, RewardUnit, SpotRewardRow } from './achievement';
 import { BOAT_SHARE, currentRows, parseTarget, solveTargets } from './solve';
 import type { CurrentRow, SolveRow, SolveTarget } from './solve';
@@ -530,7 +533,7 @@ export function parseArgs(argv: readonly string[]): FlowOptions {
     if (o.rewardSplit === null) o.rewardSplit = DEFAULT_BASIC_SHARE;
   } else if (command !== null && REWARD_COMMANDS.includes(command)) {
     if (o.rewards.length > 1) throw new Error(`${command}에서 --reward는 하나만 줄 수 있습니다`);
-    if (o.rewardUnit === 'spot' && o.rewards.length === 0) o.rewards = [DEFAULT_ACHIEVEMENT_HOURS];
+    if (o.rewardUnit === 'spot' && o.rewards.length === 0) o.rewards = [DEFAULT_SPOT_ACHIEVEMENT_HOURS];
     if (o.rewards.length === 1 && o.rewardSplit === null) o.rewardSplit = DEFAULT_BASIC_SHARE;
     if (o.rewards.length === 0 && o.rewardSplit !== null) throw new Error('--reward-split은 --reward와 함께 써야 합니다');
     if (o.rewards.length === 1 && (o.recipe !== null || given.some(f => (EFFECT_FLAGS as readonly string[]).includes(f)))) {

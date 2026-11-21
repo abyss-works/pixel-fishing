@@ -82,6 +82,159 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x - 3, y - 18, 2, 1, a);
       R(ctx, x + 1, y - 17, 1, 1, a);
       return;
+    case 'crescent-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      R(ctx, x, y - 19, 1, 1, a);
+      return;
+    case 'ink-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'polar-beret':
+      R(ctx, x - 5, y - 19, 10, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x - 2, y - 18, 2, 1, a);
+      R(ctx, x - 1, y - 19, 1, 1, a);
+      return;
+    case 'polar-knit-cap':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 4, y - 16, 8, 1, a);
+      return;
+    case 'strait-night-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 5, 1, a);
+      R(ctx, x - 3, y - 18, 2, 1, a);
+      return;
+    case 'inkglass-beanie':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x - 4, y - 16, 8, 1, a);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      return;
+    case 'lookout-storm-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 6, y - 16, 3, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'pitch-lookout-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      R(ctx, x - 2, y - 18, 1, 1, a);
+      return;
+    case 'gold-hook-hat':
+      R(ctx, x - 3, y - 20, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      R(ctx, x + 2, y - 18, 1, 2, a);
+      return;
+    case 'megalodon-work-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 3, y - 20, 5, 1, c);
+      return;
+    case 'megalodon-fin-cap':
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 1, y - 20, 3, 2, a);
+      R(ctx, x, y - 20, 1, 1, c);
+      return;
+    case 'megalodon-silver-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 5, 1, a);
+      R(ctx, x - 3, y - 18, 6, 1, a);
+      return;
+    case 'leviathan-dive-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 4, c);
+      R(ctx, x + 4, y - 18, 1, 4, c);
+      return;
+    case 'leviathan-bell-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 1, y - 18, 2, 2, a);
+      return;
+    case 'leviathan-serpent-hat':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 3, y - 19, 2, 1, a);
+      R(ctx, x, y - 18, 2, 1, a);
+      R(ctx, x + 2, y - 19, 2, 1, a);
+      return;
+    case 'ananta-lantern-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 1, 3, c);
+      R(ctx, x + 4, y - 17, 1, 3, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      return;
+    case 'ananta-rope-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      R(ctx, x + 2, y - 16, 2, 1, a);
+      return;
+    case 'ananta-astrolabe-hat':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 1, y - 19, 2, 2, a);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
+    case 'dunkleos-trawl-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 5, y - 16, 2, 1, c);
+      return;
+    case 'dunkleos-rivet-leather':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 3, y - 18, 1, 1, a);
+      R(ctx, x, y - 18, 1, 1, a);
+      R(ctx, x + 2, y - 18, 1, 1, a);
+      return;
+    case 'dunkleos-jaw-helm':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 3, a);
+      R(ctx, x + 4, y - 18, 1, 3, a);
+      R(ctx, x - 2, y - 19, 4, 1, a);
+      return;
+    case 'adamastor-pier-cap':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
+    case 'adamastor-storm-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 3, y - 19, 6, 1, a);
+      return;
+    case 'adamastor-lantern-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x + 4, y - 20, 2, 2, a);
+      return;
+    case 'jasconius-island-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'jasconius-ember-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 2, y - 18, 2, 1, a);
+      R(ctx, x + 2, y - 17, 2, 1, a);
+      return;
+    case 'jasconius-rockback-hat':
+      R(ctx, x - 5, y - 18, 10, 2, c);
+      R(ctx, x - 3, y - 20, 6, 2, a);
+      R(ctx, x - 1, y - 20, 2, 1, c);
+      return;
     default:
       R(ctx, x - 4, y - 19, 8, 3, c);
       R(ctx, x + 3, y - 16, 3, 1, c);

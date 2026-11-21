@@ -136,7 +136,7 @@ describe('저장 상태 런타임 주입', () => {
 });
 
 describe('업적 수령', () => {
-  const progressId = 'zone-basic-pacific';
+  const progressId = 'spot-basic-sea';
   const goldReward = achievementById(progressId)!.reward;
   const hatAchievement = ACHIEVEMENTS.find(a => a.id === 'variant-village')!;
 
@@ -206,6 +206,6 @@ describe('소급 판정', () => {
     const res = await callAction(userToken(uid), { type: 'boot' });
     expect(res.status).toBe(200);
     const scalars = (res.body as { patch: { scalars: GameState } }).patch.scalars;
-    expect(scalars.achievements).toMatchObject({ 'zone-basic-pacific': 'claimable' });
+    expect(scalars.achievements).toMatchObject({ 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' });
   });
 });

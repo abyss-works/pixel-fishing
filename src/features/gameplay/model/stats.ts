@@ -8,15 +8,15 @@ import type { Artifact, ArtifactEffects } from '../../../game/content/artifacts'
 import { ZONE_IDS, topZoneOf, topZoneOfSpot, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
-import { slotEffects } from '../../../game/rules/cooking';
+import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../../../game/rules/effects';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
+import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
 import {
-  effectiveBite, minLevelOfPower,
-  moveSpeed, powerZones, rodAxes, rodPower,
+  minLevelOfPower, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
 import { selectBagStatus } from '../../inventory/model/selectors';
@@ -57,17 +57,20 @@ export function selectStatsModalData(
   const zones = powerZones(game, spot.id);
   // 방치 낚시 배수: 표시값(applied)은 추첨이 실제로 곱하는 값 그대로다. required는 요구 파워에서의 배수.
   const idleMult = commonWeightMultiplier('auto', currentPower, spot.id, zones.mult);
-  const lunch = activeSlot(game, 'lunch', now);
-  // 도시락은 방치 사이클의 입질 대기를 줄인다. 출처 이름은 지금 효과가 든 도시락의 이름이다
-  const cook = { ...slotEffects(game, now, 'auto'), label: lunch?.label };
+  const ctx = createPlayerContext({
+    state: game,
+    guild: NO_GUILD_EFFECTS,
+    now,
+    achievements: achievementBonusesOf(game),
+  });
   return {
-    speed: moveSpeed(game, movement),
+    speed: moveSpeedOf(ctx, movement, false),
     axes: rodAxes(game),
     boatName: boatNameOf(game.boat),
     spot,
     requirement,
     requirementLevel: minLevelOfPower(requirement),
-    effectiveBite: effectiveBite(game, spot.id, cook),
+    effectiveBite: biteWaitOf(ctx, spot.id, 'idle'),
     idle: {
       required: commonWeightMultiplier('auto', requirement, spot.id, 1).idle,
       current: idleMult.idle,
@@ -182,7 +185,9 @@ export type BonusSource =
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number }
   /** 슬롯 효과 - 효과가 든 슬롯의 요리 이름이 출처이고, 효과 줄은 부엌 창과 같은 문장이다 */
-  | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine };
+  | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine }
+  /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
+  | { kind: 'achievement'; label: string; value: string };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -235,6 +240,37 @@ export function selectActiveBonuses(
         });
       }
     }
+  }
+  const ach = achievementBonusesOf(game);
+  const fmtPct = (v: number, sign: '+' | '−') => {
+    const pct = Math.round(v * 1000) / 10;
+    return `${sign}${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+  };
+  if (ach.moveSpeed > 0) {
+    out.push({ category: 'move', source: { kind: 'achievement', label: '이동 속도', value: fmtPct(ach.moveSpeed, '+') }, manualOnly: false });
+  }
+  if (ach.biteWaitCut > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '입질 대기', value: fmtPct(ach.biteWaitCut, '−') }, manualOnly: false });
+  }
+  if (ach.mutationWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 가중치', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
+  }
+  for (const zone of ZONE_IDS) {
+    const zMut = ach.zoneMutation[zone] ?? 0;
+    const zLeg = ach.zoneLegendary[zone] ?? 0;
+    const zName = zoneById(zone)?.shortName ?? zone;
+    if (zMut > 0) {
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 가중치`, value: fmtPct(zMut, '+') }, manualOnly: false });
+    }
+    if (zLeg > 0) {
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
+    }
+  }
+  if (ach.artifactBoost > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '보유 유물 효과', value: fmtPct(ach.artifactBoost, '+') }, manualOnly: false });
+  }
+  if (ach.namedWeight > 0) {
+    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
   }
   return out;
 }

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  achievementProgress, evaluateAchievements, counterIncrementsForEvents,
+  achievementBonusesOf,
+  achievementBonusContributions,
+  achievementProgress,
+  counterIncrementsForEvents,
+  cumulativeBonusProgress,
+  evaluateAchievements,
+  maxArtifactCount,
 } from './achievements';
 import {
   applyAction, pickScalars, applyPatch,
@@ -13,13 +19,17 @@ import type { GameState } from './logic';
 import {
   canBuyHat, canClaimAchievement, canClaimAllAchievements, REJECT_TEXT,
 } from './rules';
-import { ACHIEVEMENTS } from '../content/achievements';
+import { ACHIEVEMENTS, CUMULATIVE_BONUS_SERIES } from '../content/achievements';
 import { FISH } from '../content/fish';
 import { topZoneOfSpot } from '../content/zones';
-import { ARTIFACTS } from '../content/artifacts';
+import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactHasLevel } from '../content/artifacts';
 import { BOUNTIES } from '../content/bounties';
 import { NAMED } from '../content/named';
 import { duelHpOf } from './challenge';
+import { catchTooSoon } from './pacing';
+import { biteWaitOf, createPlayerContext } from './effects';
+import { NO_GUILD_EFFECTS } from './guild';
+import { CATCH_MS } from './balance';
 
 const deps = (over: Partial<ActionDeps> = {}): ActionDeps => ({
   rng: () => 0.5,
@@ -38,19 +48,19 @@ function bigSizeFor(fish: (typeof FISH)[number]): number {
 }
 
 describe('업적 진척 판정 (achievementProgress)', () => {
-  it('진행 업적은 구역의 일반 폼 발견 수를 센다 (전설 제외/포함)', () => {
-    const pacificFish = FISH.filter(f => topZoneOfSpot(f.spot) === 'pacific');
-    const basicTargets = pacificFish.filter(f => f.rarity !== 'legendary');
+  it('진행 업적은 해역의 일반 폼 발견 수를 센다 (전설 제외/포함)', () => {
+    const seaFish = FISH.filter(f => f.spot === 'sea');
+    const basicTargets = seaFish.filter(f => f.rarity !== 'legendary');
     const dex: GameState['dex'] = {};
     for (const f of basicTargets) {
       dex[f.id] = { normal: { count: 1, maxSize: 10, first: '2026-11-15' } };
     }
     const s = seed({ dex });
-    expect(achievementProgress(s, 'zone-basic-pacific')).toEqual({
+    expect(achievementProgress(s, 'spot-basic-sea')).toEqual({
       current: basicTargets.length, target: basicTargets.length, met: true,
     });
-    expect(achievementProgress(s, 'zone-full-pacific')).toEqual({
-      current: basicTargets.length, target: pacificFish.length, met: false,
+    expect(achievementProgress(s, 'spot-full-sea')).toEqual({
+      current: basicTargets.length, target: seaFish.length, met: false,
     });
   });
 
@@ -92,32 +102,40 @@ describe('업적 진척 판정 (achievementProgress)', () => {
     });
   });
 
-  it('월척 장부(big-50)는 일반 또는 돌연변이 중 하나라도 월척 기준 이상이면 1종으로 센다', () => {
+  it('월척 장부(big-50)와 월척 백 종(big-100-hat)은 일반 또는 돌연변이 중 하나라도 월척 기준 이상이면 1종으로 센다', () => {
     expect(BIG_CATCH_PERCENTILE).toBe(20);
     const dex: GameState['dex'] = {};
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       const f = FISH[i];
       const form = i % 2 === 0 ? 'normal' : 'variant';
       dex[f.id] = { [form]: { count: 1, maxSize: bigSizeFor(f), first: '2026-11-15' } };
     }
     expect(achievementProgress(seed({ dex }), 'big-50')).toEqual({
-      current: 50, target: 50, met: true,
+      current: 100, target: 50, met: true,
+    });
+    expect(achievementProgress(seed({ dex }), 'big-100-hat')).toEqual({
+      current: 100, target: 100, met: true,
     });
   });
 
-  it('수배판 완결(named-all)은 전체 네임드 의뢰가 clearedNamed에 있으면 달성된다', () => {
+  it('수배판 완결(named-all)과 네임드 다회 토벌(1·5·10회)은 clearedNamed 기록 횟수를 정확히 센다', () => {
     const namedQuests = BOUNTIES.filter(q => q.difficulty === 'named');
-    const partial = seed({ clearedNamed: [namedQuests[0].id] });
-    expect(achievementProgress(partial, 'named-all')).toEqual({
+    const fiveMegalodon = Array.from({ length: 5 }, () => 'pacific-named-megalodon');
+    const s = seed({ clearedNamed: fiveMegalodon });
+    expect(achievementProgress(s, 'named-all')).toEqual({
       current: 1, target: namedQuests.length, met: false,
     });
+    expect(achievementProgress(s, 'named-megalodon-1')).toEqual({ current: 5, target: 1, met: true });
+    expect(achievementProgress(s, 'named-megalodon-5')).toEqual({ current: 5, target: 5, met: true });
+    expect(achievementProgress(s, 'named-megalodon-10')).toEqual({ current: 5, target: 10, met: false });
+
     const full = seed({ clearedNamed: namedQuests.map(q => q.id) });
     expect(achievementProgress(full, 'named-all')).toEqual({
       current: namedQuests.length, target: namedQuests.length, met: true,
     });
   });
 
-  it('전설 도감과 한밤 도감/돌연변이 도감, 구역별 돌연변이 도감을 판정한다', () => {
+  it('전설 도감, 구역별 한밤 도감/돌연변이 도감, 구역별 돌연변이 도감을 판정한다', () => {
     const dex: GameState['dex'] = {};
     for (const f of FISH) {
       dex[f.id] = {
@@ -129,7 +147,12 @@ describe('업적 진척 판정 (achievementProgress)', () => {
     for (const id of [
       'variant-village', 'variant-pacific', 'variant-seasia', 'variant-indian',
       'variant-madagascar', 'variant-southatlantic', 'variant-all',
-      'grade-legendary', 'night-normal', 'night-variant',
+      'grade-legendary',
+      'night-normal', 'night-variant',
+      'night-seasia-normal', 'night-seasia-variant',
+      'night-indian-normal', 'night-indian-variant',
+      'night-madagascar-normal', 'night-madagascar-variant',
+      'night-southatlantic-normal', 'night-southatlantic-variant',
     ]) {
       const p = achievementProgress(full, id);
       expect(p.target, id).toBeGreaterThan(0);
@@ -139,23 +162,113 @@ describe('업적 진척 판정 (achievementProgress)', () => {
   });
 });
 
+describe('누적 보너스 계산 (achievementBonusesOf)', () => {
+  it('maxArtifactCount는 Lv5 유물과 전설 유물(고정 레벨)을 모두 포함한다', () => {
+    const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
+    const legendary = ARTIFACTS.filter(a => !artifactHasLevel(a));
+    expect(legendary.length).toBeGreaterThan(0);
+
+    const partial = seed({
+      artifacts: [levelable[0].id, levelable[1].id, legendary[0].id],
+      artifactLevels: { [levelable[0].id]: ARTIFACT_MAX_LEVEL, [levelable[1].id]: 4 },
+    });
+    expect(maxArtifactCount(partial)).toBe(2);
+
+    const allMax = seed({
+      artifacts: ARTIFACTS.map(a => a.id),
+      artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
+    });
+    expect(maxArtifactCount(allMax)).toBe(ARTIFACTS.length);
+  });
+
+  it('모든 누적 보너스 단계가 최대일 때 단계별 최대 합산치와 정확히 일치한다', () => {
+    const pacificLegend = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary')!;
+    const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
+    const s = seed({
+      artifacts: ARTIFACTS.map(a => a.id),
+      artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
+      achievementCounters: {
+        'manual.total': 10_000,
+        'manual.legendary.total': 25,
+        'manual.variant.total': 25,
+        'catch.auto': 100_000,
+        'catch.perfect': 10_000,
+        'catch.bait': 1_000,
+        'named.flawless': 50,
+        'sell.gold': 100_000_000,
+        [`manual.legendary.${pacificLegend.id}`]: 5,
+        'manual.variant.pacific': 10,
+      },
+    });
+    const b = achievementBonusesOf(s);
+    expect(b.biteWaitCut).toBe(0.16);
+    expect(b.mutationWeight).toBe(0.08);
+    expect(b.namedWeight).toBe(0.10);
+    expect(b.moveSpeed).toBe(0.06);
+    expect(b.artifactBoost).toBe(0.15);
+    expect(b.zoneLegendary.pacific).toBe(0.06);
+    expect(b.zoneMutation.pacific).toBe(0.09);
+
+    const contribs = achievementBonusContributions(s);
+    expect(contribs.length).toBe(11);
+  });
+
+  it('cumulativeBonusProgress는 현재 단계와 다음 단계를 정확히 계산한다', () => {
+    const manualSeries = CUMULATIVE_BONUS_SERIES.find(s => s.id === 'bonus-manual-total')!;
+    const p = cumulativeBonusProgress(seed({ achievementCounters: { 'manual.total': 1_240 } }), manualSeries);
+    expect(p.current).toBe(1_240);
+    expect(p.completedSteps).toBe(3);
+    expect(p.activeDelta).toBe(0.02);
+    expect(p.maxDelta).toBe(0.04);
+    expect(p.nextStep?.threshold).toBe(10_000);
+  });
+
+  it('catchTooSoon은 누적 입질 대기 단축과 유물 배율을 반영해 정상 빠른 캐치를 429 오탐하지 않는다', () => {
+    const T0 = '2026-11-15T12:00:00.000Z';
+    const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
+    const boosted = seed({
+      rod: 10,
+      artifacts: ARTIFACTS.map(a => a.id),
+      artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
+      achievementCounters: {
+        'manual.total': 10_000,
+        'manual.legendary.total': 25,
+        'catch.auto': 100_000,
+        'catch.perfect': 10_000,
+        'catch.bait': 1_000,
+      },
+    });
+    const ctx = createPlayerContext({
+      state: boosted,
+      guild: NO_GUILD_EFFECTS,
+      now: T0,
+      achievements: achievementBonusesOf(boosted),
+    });
+    const cycleMs = CATCH_MS + biteWaitOf(ctx, 'pond', 'idle').min.value * 1000;
+    const atExact = new Date(Date.parse(T0) + Math.ceil(cycleMs)).toISOString();
+    expect(catchTooSoon(boosted, 'pond', T0, atExact)).toBe(false);
+    // 보너스가 없는 상태에서는 같은 간격이 너무 빠르다고 판정된다
+    expect(catchTooSoon(seed({ rod: 10 }), 'pond', T0, atExact)).toBe(true);
+  });
+});
+
 describe('세이브 이관과 전방 호환 (migrate)', () => {
-  it('모르는 미래 업적 ID가 든 세이브를 migrate해도 사라지지 않는다', () => {
+  it('모르는 미래 업적 ID와 폐지된 옛 ID, 중복 네임드 토벌 기록이 migrate 후에도 보존된다', () => {
     const saved = {
       ...newState(),
       achievements: { 'future-ach': 'claimed', 'zone-basic-pacific': 'claimable', bad: 'invalid' },
       achievementCounters: {
         'sell.gold': 123, 'catch.perfect': -1, unknown: 5,
-        'manual.total': 5, 'manual.legendary.goldcarp': 1,
+        'manual.total': 5, 'manual.total.village': 3, 'manual.legendary.goldcarp': 1,
       },
       clearedNamed: ['pacific-named-megalodon', 'pacific-named-megalodon', 42],
     };
     const m = migrate(saved);
     expect(m.achievements).toEqual({ 'future-ach': 'claimed', 'zone-basic-pacific': 'claimable' });
     expect(m.achievementCounters).toEqual({
-      'sell.gold': 123, 'manual.total': 5, 'manual.legendary.goldcarp': 1,
+      'sell.gold': 123, 'manual.total': 5, 'manual.total.village': 3, 'manual.legendary.goldcarp': 1,
     });
-    expect(m.clearedNamed).toEqual(['pacific-named-megalodon']);
+    expect(m.clearedNamed).toEqual(['pacific-named-megalodon', 'pacific-named-megalodon']);
   });
 });
 
@@ -178,7 +291,7 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(out.events).toContainEqual({ type: 'unlockAchievement', payload: { id: 'artifact-all' } });
   });
 
-  it('이미 claimed인 업적을 다시 claimAchievement하면 achievement-already-claimed로 거절된다', () => {
+  it('이미 claimable이었던 폐지 옛 업적도 기존 계정이 보상을 잃지 않고 수령할 수 있으며 재수령은 거절된다', () => {
     const s = seed({ gold: 0, achievements: { 'zone-basic-pacific': 'claimable' } });
     const first = applyAction(s, { type: 'claimAchievement', id: 'zone-basic-pacific' }, deps());
     expect(first.ok).toBe(true);
@@ -196,38 +309,31 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(second).toEqual({ ok: false, error: 'achievement-already-claimed' });
   });
 
-  it('claimAllAchievements는 claimable 업적의 골드와 모자를 순서대로 모두 지급한다', () => {
+  it('claimAllAchievements는 claimable 업적(옛 미수령 포함)의 골드와 모자를 순서대로 모두 지급한다', () => {
     const s = seed({
       gold: 100,
       hats: ['straw-hat'],
       achievements: {
-        'zone-basic-pacific': 'claimable',
+        'spot-basic-sea': 'claimable',
         'variant-village': 'claimable',
         'artifact-all': 'claimable',
-        'zone-full-pacific': 'claimed',
+        'zone-basic-pacific': 'claimable',
+        'spot-full-sea': 'claimed',
       },
     });
     const out = applyAction(s, { type: 'claimAllAchievements' }, deps());
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.state.gold).toBe(25_100);
+    expect(out.state.gold).toBe(100 + 300 + 25_000);
     expect(out.state.hats).toEqual(['straw-hat', 'shipowner-bowler']);
-    expect(out.state.achievements['zone-basic-pacific']).toBe('claimed');
+    expect(out.state.achievements['spot-basic-sea']).toBe('claimed');
     expect(out.state.achievements['variant-village']).toBe('claimed');
     expect(out.state.achievements['artifact-all']).toBe('claimed');
-    // 모두 받기 결과는 받은 골드 합계와 모자 목록을 싣는다 — 클라가 수령 문구를 만들 수 있게 한다
+    expect(out.state.achievements['zone-basic-pacific']).toBe('claimed');
     expect(out.result).toEqual({
       type: 'claimAllAchievements',
-      gold: 25_000,
+      gold: 25_300,
       hats: ['shipowner-bowler'],
-    });
-    expect(out.events).toContainEqual({
-      type: 'claimAllAchievements',
-      payload: {
-        ids: ['zone-basic-pacific', 'variant-village', 'artifact-all'],
-        gold: 25_000,
-        hats: ['shipowner-bowler'],
-      },
     });
     expect(canClaimAllAchievements(out.state)).toEqual({ ok: false, reason: 'no-claimable-achievements' });
   });
@@ -268,62 +374,34 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     });
   });
 
-  it('수동 총계·전설·돌연변이 카운터를 어종 데이터에서 증분한다', () => {
+  it('수동 총계·구역 총계·전설·돌연변이 카운터를 어종 데이터에서 증분한다', () => {
     const legendary = FISH.find(f => f.rarity === 'legendary')!;
     const ordinary = FISH.find(f => f.rarity === 'common')!;
+    const legZone = topZoneOfSpot(legendary.spot);
+    const ordZone = topZoneOfSpot(ordinary.spot);
     const inc = counterIncrementsForEvents([
       { type: 'catch', payload: { fishId: legendary.id, judgment: 'perfect', form: 'normal', spot: legendary.spot } },
       { type: 'catch', payload: { fishId: ordinary.id, judgment: 'good', form: 'variant', spot: ordinary.spot } },
       { type: 'catch', payload: { fishId: legendary.id, judgment: 'auto', form: 'variant', spot: legendary.spot } },
     ]);
+    const expectedZoneTotals: Record<string, number> = {};
+    expectedZoneTotals[`manual.total.${legZone}`] = (expectedZoneTotals[`manual.total.${legZone}`] ?? 0) + 1;
+    expectedZoneTotals[`manual.total.${ordZone}`] = (expectedZoneTotals[`manual.total.${ordZone}`] ?? 0) + 1;
+
     expect(inc).toEqual({
       'catch.perfect': 1,
       'catch.auto': 1,
       'manual.total': 2,
+      ...expectedZoneTotals,
       'manual.legendary.total': 1,
       [`manual.legendary.${legendary.id}`]: 1,
       'manual.variant.total': 1,
-      [`manual.variant.${topZoneOfSpot(ordinary.spot)}`]: 1,
-    });
-    // 방치 캐치는 수동 집계에 들어가지 않는다
-    expect(inc['manual.legendary.total']).toBe(1);
-    expect(inc['manual.variant.total']).toBe(1);
-  });
-
-  it('구역 전설 counterSet과 구역 돌연변이 counter가 판정을 채운다', () => {
-    const pacificLegendaries = FISH.filter(f =>
-      topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary');
-    const counters: Record<string, number> = Object.fromEntries(
-      pacificLegendaries.map(f => [`manual.legendary.${f.id}`, 1]),
-    );
-    const partial = seed({
-      achievementCounters: { [`manual.legendary.${pacificLegendaries[0].id}`]: 1 },
-    });
-    expect(achievementProgress(partial, 'manual-legendary-zone-pacific')).toEqual({
-      current: 1, target: pacificLegendaries.length, met: false,
-    });
-
-    counters['manual.variant.pacific'] = 1;
-    const full = seed({ achievementCounters: counters });
-    expect(achievementProgress(full, 'manual-legendary-zone-pacific')).toEqual({
-      current: pacificLegendaries.length, target: pacificLegendaries.length, met: true,
-    });
-    expect(achievementProgress(full, 'manual-variant-zone-pacific')).toEqual({
-      current: 1, target: 1, met: true,
+      [`manual.variant.${ordZone}`]: 1,
     });
   });
 
-  it('수동 총계 카운터는 임계값 단계를 순서대로 판정한다', () => {
-    const s = seed({ achievementCounters: { 'manual.total': 1_000 } });
-    expect(achievementProgress(s, 'manual-100').met).toBe(true);
-    expect(achievementProgress(s, 'manual-1000').met).toBe(true);
-    expect(achievementProgress(s, 'manual-10000')).toEqual({
-      current: 1_000, target: 10_000, met: false,
-    });
-  });
-
-  it('resolveChallenge 성공 시 clearedNamed에 questId가 추가되고 pickScalars에 새 필드가 포함된다', () => {
-    const s = seed({ gold: 0 });
+  it('resolveChallenge 성공 시 clearedNamed에 questId가 누적되고 pickScalars에 새 필드가 포함된다', () => {
+    const s = seed({ gold: 0, clearedNamed: ['pacific-named-megalodon'] });
     const hits = duelHpOf('pacific-named-megalodon', s.namedPity, '2026-11-15T12:00:00.000Z')!;
     const out = applyAction(s, {
       type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: true, hits, misses: 0,
@@ -337,14 +415,14 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     }));
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.state.clearedNamed).toEqual(['pacific-named-megalodon']);
+    expect(out.state.clearedNamed).toEqual(['pacific-named-megalodon', 'pacific-named-megalodon']);
     expect(out.state.achievementCounters['named.flawless']).toBe(1);
     const scalars = pickScalars(out.state);
-    expect(scalars.clearedNamed).toEqual(['pacific-named-megalodon']);
+    expect(scalars.clearedNamed).toEqual(['pacific-named-megalodon', 'pacific-named-megalodon']);
     expect(scalars.achievementCounters).toEqual({ 'named.flawless': 1 });
-    expect(scalars.achievements).toEqual({ 'named-flawless-1': 'claimable' });
+    expect(scalars.achievements).toEqual({ 'named-megalodon-1': 'claimable' });
     const patched = applyPatch(s, { version: 2, baseVersion: 1, scalars, writes: out.writes });
-    expect(patched.clearedNamed).toEqual(['pacific-named-megalodon']);
+    expect(patched.clearedNamed).toEqual(['pacific-named-megalodon', 'pacific-named-megalodon']);
   });
 
   it('evaluateAchievements는 이미 claimable/claimed인 항목과 모르는 키를 유지한다', () => {
@@ -362,6 +440,6 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(REJECT_TEXT['achievement-already-claimed']).toBe('이미 받은 업적이에요.');
     expect(REJECT_TEXT['achievement-not-claimable']).toBe('아직 받을 수 없는 업적이에요.');
     expect(REJECT_TEXT['no-claimable-achievements']).toBe('받을 수 있는 업적이 없어요.');
-    expect(ACHIEVEMENTS).toHaveLength(65);
+    expect(ACHIEVEMENTS).toHaveLength(67);
   });
 });

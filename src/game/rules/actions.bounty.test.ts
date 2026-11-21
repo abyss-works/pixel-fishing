@@ -119,8 +119,11 @@ describe('acceptQuest', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([
       { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
-      { type: 'unlockAchievement', payload: { id: 'zone-basic-pacific' } },
-      { type: 'unlockAchievement', payload: { id: 'zone-full-pacific' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
     ]);
     // 반대로 네임드를 클리어해도 일반 의뢰는 그대로 열려 있다
     const general = applyAction(seed({ ...ready }),
@@ -205,8 +208,11 @@ describe('acceptQuest', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([
       { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
-      { type: 'unlockAchievement', payload: { id: 'zone-basic-pacific' } },
-      { type: 'unlockAchievement', payload: { id: 'zone-full-pacific' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
     ]);
   });
 
@@ -218,11 +224,12 @@ describe('acceptQuest', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state).toEqual({
       ...st,
-      achievements: { 'zone-basic-pacific': 'claimable' },
+      achievements: { 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' },
     });
     expect(out.events).toEqual([
       { type: 'acceptQuest', payload: { questId: 'pacific-easy-common', port: 'harbor' } },
-      { type: 'unlockAchievement', payload: { id: 'zone-basic-pacific' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
     ]);
   });
 });
@@ -500,7 +507,7 @@ describe('resolveChallenge', () => {
     expect(out.events).toEqual([
       { type: 'resolveChallenge',
         payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } },
-      { type: 'unlockAchievement', payload: { id: 'named-flawless-1' } },
+      { type: 'unlockAchievement', payload: { id: 'named-megalodon-1' } },
     ]);
   });
 

@@ -216,25 +216,25 @@ describe('새로 받을 수 있게 된 업적 알림', () => {
   it('액션 확정으로 새로 claimable이 된 업적은 메시지 창에 한 줄 남는다', async () => {
     const toasts: [string, string | undefined][] = [];
     const hook = await booted(toasts);
-    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
-    expect(toasts).toEqual([['“태평양 도감” 업적을 받을 수 있어요.', undefined]]);
+    expect(toasts).toEqual([['“태평양 연안 기초” 업적을 받을 수 있어요.', undefined]]);
   });
 
   it('첫 로드 시 이미 claimable인 업적은 알리지 않는다', async () => {
-    gw.loadAchievements = { 'zone-basic-pacific': 'claimable' };
-    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     const toasts: [string, string | undefined][] = [];
     setup((m, tone) => { toasts.push([m, tone]); });
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());
     await act(async () => { gw.bootResolve!(); });
-    expect(toasts.map(t => t[0])).not.toContain('“태평양 도감” 업적을 받을 수 있어요.');
+    expect(toasts.map(t => t[0])).not.toContain('“태평양 연안 기초” 업적을 받을 수 있어요.');
   });
 
   it('확정이 연달아 와도 같은 업적을 한 번만 알린다', async () => {
     const toasts: [string, string | undefined][] = [];
     const hook = await booted(toasts);
-    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     await act(async () => {
       void hook.result.current.dispatch({ type: 'debug', command: 'noop' });
       void hook.result.current.dispatch({ type: 'debug', command: 'noop' });
@@ -246,8 +246,8 @@ describe('새로 받을 수 있게 된 업적 알림', () => {
     const toasts: [string, string | undefined][] = [];
     const hook = await booted(toasts);
     gw.bootResolve = null;
-    gw.loadAchievements = { 'zone-basic-pacific': 'claimable' };
-    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     let adopted: Promise<void> = Promise.resolve();
     act(() => { adopted = hook.result.current.adoptAccount(); });
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());
@@ -258,7 +258,7 @@ describe('새로 받을 수 있게 된 업적 알림', () => {
   it('이미 claimable이던 업적과 받은 업적은 다시 알리지 않는다', async () => {
     const toasts: [string, string | undefined][] = [];
     const hook = await booted(toasts);
-    gw.dispatchAchievements = { 'zone-basic-pacific': 'claimable' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
     toasts.length = 0;
     await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
