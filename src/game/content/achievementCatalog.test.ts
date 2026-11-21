@@ -7,61 +7,23 @@ import { BOUNTIES } from './bounties';
 import { FISH } from './fish';
 import type { FormId } from './fish';
 import { RARITY_ORDER } from './rarity';
+import { SPOTS } from './spots';
 import { HATS } from './wardrobe';
 import { ZONES, topZoneOfSpot } from './zones';
-
-const CURRENT_IDS = [
-  'zone-basic-pacific', 'zone-full-pacific',
-  'zone-basic-seasia', 'zone-full-seasia',
-  'zone-basic-indian', 'zone-full-indian',
-  'zone-basic-madagascar', 'zone-full-madagascar',
-  'zone-basic-southatlantic', 'zone-full-southatlantic',
-  'variant-village', 'variant-pacific', 'variant-seasia', 'variant-indian',
-  'variant-madagascar', 'variant-southatlantic', 'variant-all',
-  'grade-legendary', 'night-normal', 'night-variant', 'big-50',
-  'named-all', 'artifact-all', 'catch-100000',
-] as const;
-
-const EXPANSION_IDS = [
-  'manual-10', 'manual-100', 'manual-1000', 'manual-10000',
-  'manual-legendary-1', 'manual-legendary-5', 'manual-legendary-10', 'manual-legendary-25',
-  'manual-variant-1', 'manual-variant-5', 'manual-variant-10', 'manual-variant-25',
-  'manual-legendary-zone-village', 'manual-variant-zone-village',
-  'manual-legendary-zone-pacific', 'manual-variant-zone-pacific',
-  'manual-legendary-zone-seasia', 'manual-variant-zone-seasia',
-  'manual-legendary-zone-indian', 'manual-variant-zone-indian',
-  'manual-legendary-zone-madagascar', 'manual-variant-zone-madagascar',
-  'manual-legendary-zone-southatlantic', 'manual-variant-zone-southatlantic',
-  'perfect-100', 'perfect-1000', 'perfect-10000',
-  'auto-1000', 'auto-10000', 'auto-100000',
-  'bait-10', 'bait-100', 'bait-1000',
-  'named-flawless-1', 'named-flawless-10', 'named-flawless-50',
-  'sell-1000000', 'sell-10000000', 'sell-100000000',
-  'big-100', 'big-200',
-] as const;
 
 const FISH_FORMS: readonly FormId[] = ['normal', 'variant'];
 const NAMED_QUESTS = BOUNTIES.filter(q => q.difficulty === 'named');
 
 const fishInZone = (zone: string) => FISH.filter(f => topZoneOfSpot(f.spot) === zone);
+const fishInSpot = (spot: string) => FISH.filter(f => f.spot === spot);
 
 describe('업적 카탈로그', () => {
-  it('기존 24개가 앞에 그대로 있고 확장 41개가 뒤에 붙어 모두 65개다', () => {
-    const allIds = [...CURRENT_IDS, ...EXPANSION_IDS];
-    expect(allIds).toHaveLength(65);
-    expect(ACHIEVEMENTS.map(a => a.id)).toEqual(allIds);
-    expect(ACHIEVEMENT_RULES.map(r => r.id)).toEqual(allIds);
-    expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual(allIds);
-  });
-
-  it('확장 41개는 모두 횟수 탭이고 골드 보상이다', () => {
-    for (const id of EXPANSION_IDS) {
-      const entry = ACHIEVEMENT_CATALOG.find(e => e.rule.id === id);
-      expect(entry, id).toBeDefined();
-      expect(entry!.rule.tab, id).toBe('count');
-      expect(entry!.rule.reward.kind, id).toBe('gold');
-    }
-    expect(ACHIEVEMENTS.filter(a => a.tab === 'count')).toHaveLength(42);
+  it('진행 26종과 치장 41종 총 67종이 규칙·카탈로그·정의로 1:1 대응한다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(67);
+    expect(ACHIEVEMENT_RULES).toHaveLength(67);
+    expect(ACHIEVEMENT_CATALOG).toHaveLength(67);
+    expect(ACHIEVEMENTS.map(a => a.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
+    expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
   });
 
   it('id가 중복되지 않는다', () => {
@@ -76,58 +38,51 @@ describe('업적 카탈로그', () => {
     }
   });
 
-  it('구역 도감 목표 수는 그 구역의 일반 폼 어종 수다', () => {
-    for (const zone of ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
-      const all = fishInZone(zone);
+  it('해역 진행 업적 목표 수는 그 해역의 일반 폼 어종 수다', () => {
+    const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
+    for (const spot of SPOTS) {
+      const all = fishInSpot(spot.id);
       const basic = all.filter(f => f.rarity !== 'legendary');
-      const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
-      expect(target(`zone-basic-${zone}`)).toBe(basic.length);
-      expect(target(`zone-full-${zone}`)).toBe(all.length);
+      expect(target(`spot-basic-${spot.id}`), spot.id).toBe(basic.length);
+      expect(target(`spot-full-${spot.id}`), spot.id).toBe(all.length);
     }
   });
 
-  it('수집·네임드·유물·횟수 목표 수가 기존 정의와 같다', () => {
+  it('치장 업적 목표 수가 콘텐츠 데이터와 일치한다', () => {
     const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
     for (const zone of ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
       expect(target(`variant-${zone}`)).toBe(fishInZone(zone).length);
     }
     expect(target('variant-all')).toBe(FISH.length);
     expect(target('grade-legendary')).toBe(FISH.filter(f => f.rarity === 'legendary').length);
-    expect(target('night-normal')).toBe(FISH.filter(f => f.night === true).length);
-    expect(target('night-variant')).toBe(FISH.filter(f => f.night === true).length);
+    expect(target('night-normal')).toBe(fishInZone('pacific').filter(f => f.night === true).length);
+    expect(target('night-variant')).toBe(fishInZone('pacific').filter(f => f.night === true).length);
+    for (const zone of ['seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
+      const count = fishInZone(zone).filter(f => f.night === true).length;
+      expect(target(`night-${zone}-normal`), zone).toBe(count);
+      expect(target(`night-${zone}-variant`), zone).toBe(count);
+    }
     expect(target('big-50')).toBe(50);
-    expect(target('big-100')).toBe(100);
-    expect(target('big-200')).toBe(200);
+    expect(target('big-100-hat')).toBe(100);
     expect(target('catch-100000')).toBe(100_000);
-    expect(target('manual-10')).toBe(10);
-    expect(target('manual-10000')).toBe(10_000);
-    expect(target('manual-legendary-25')).toBe(25);
-    expect(target('auto-100000')).toBe(100_000);
-    expect(target('sell-100000000')).toBe(100_000_000);
     expect(target('named-all')).toBe(NAMED_QUESTS.length);
     expect(target('artifact-all')).toBe(ARTIFACTS.length);
-  });
-
-  it('구역 전설·돌연변이 수동 목표 수가 데이터에서 나온다', () => {
-    const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
-    for (const zone of ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
-      const legendaries = fishInZone(zone).filter(f => f.rarity === 'legendary');
-      expect(target(`manual-legendary-zone-${zone}`)).toBe(legendaries.length);
-      expect(target(`manual-variant-zone-${zone}`)).toBe(1);
+    for (const namedId of ['megalodon', 'leviathan', 'ananta', 'elder-sixgill', 'adamastor', 'jasconius']) {
+      expect(target(`named-${namedId}-1`)).toBe(1);
+      expect(target(`named-${namedId}-5`)).toBe(5);
+      expect(target(`named-${namedId}-10`)).toBe(10);
     }
-    expect(
-      ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']
-        .map(z => target(`manual-legendary-zone-${z}`)),
-    ).toEqual([2, 4, 7, 4, 4, 4]);
   });
 
   it('모든 선택자가 알려진 갈래와 데이터 값을 쓴다', () => {
     const zoneIds = new Set<string>(ZONES.map(z => z.id));
+    const spotIds = new Set<string>(SPOTS.map(s => s.id));
     const rarityIds = new Set<string>(RARITY_ORDER);
     for (const rule of ACHIEVEMENT_RULES) {
       const selector = rule.selector;
       expect(['fish', 'named', 'artifact', 'hat'], rule.id).toContain(selector.kind);
       if (selector.kind !== 'fish') continue;
+      if (selector.spot !== undefined) expect(spotIds.has(selector.spot), rule.id).toBe(true);
       if (selector.zone !== undefined) expect(zoneIds.has(selector.zone), rule.id).toBe(true);
       if (selector.night !== undefined) expect(typeof selector.night, rule.id).toBe('boolean');
       if (selector.form !== undefined) expect(FISH_FORMS, rule.id).toContain(selector.form);
@@ -141,16 +96,17 @@ describe('업적 카탈로그', () => {
   it('모든 측정 방식이 알려진 갈래이고 필드가 채워져 있다', () => {
     for (const rule of ACHIEVEMENT_RULES) {
       const metric = rule.metric;
-      expect(['discover', 'counterSet', 'counter', 'set', 'bigSpecies', 'catchCount'], rule.id)
+      expect(['discover', 'counterSet', 'counter', 'set', 'namedClearCount', 'bigSpecies', 'catchCount'], rule.id)
         .toContain(metric.kind);
       if (metric.kind === 'discover') expect(FISH_FORMS, rule.id).toContain(metric.form);
       if (metric.kind === 'counterSet') expect(metric.prefix.length, rule.id).toBeGreaterThan(0);
       if (metric.kind === 'counter') expect(metric.key.length, rule.id).toBeGreaterThan(0);
       if (metric.kind === 'set') expect(['named', 'artifact'], rule.id).toContain(metric.field);
+      if (metric.kind === 'namedClearCount') expect(metric.questId.length, rule.id).toBeGreaterThan(0);
     }
   });
 
-  it('모든 보상이 유효하다 — 골드는 양수, 모자는 옷장의 업적 모자와 1:1', () => {
+  it('모든 보상이 유효하다 — 골드는 양수(26종), 모자는 옷장의 업적 모자와 1:1(41종)', () => {
     for (const rule of ACHIEVEMENT_RULES) {
       const reward = rule.reward;
       if (reward.kind === 'gold') {
@@ -163,8 +119,8 @@ describe('업적 카탈로그', () => {
         expect(hat!.achievementId, rule.id).toBe(rule.id);
       }
     }
-    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(51);
-    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(14);
+    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(26);
+    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(41);
   });
 
   it('카탈로그 정의가 규칙의 표시 필드를 그대로 옮긴다', () => {

@@ -127,7 +127,7 @@ describe('해역 단위 진행 업적 보상 (--reward-unit spot)', () => {
     expect(parseArgs(['achievements']).rewardUnit).toBe('zone');
     expect(parseArgs(['achievements', '--reward-unit', 'spot']).rewardUnit).toBe('spot');
     expect(parseArgs(['dist', '--reward-unit', 'spot']).rewardUnit).toBe('spot');
-    expect(parseArgs(['dist', '--reward-unit', 'spot']).rewards).toEqual([4]);
+    expect(parseArgs(['dist', '--reward-unit', 'spot']).rewards).toEqual([1]);
     expect(parseArgs(['dist', '--reward-unit', 'spot']).rewardSplit).toBe(0.5);
     expect(() => parseArgs(['achievements', '--reward-unit', 'other'])).toThrow(/zone 또는 spot/);
     expect(() => parseArgs(['ev', '--reward-unit', 'spot'])).toThrow(/명령에서만/);
@@ -148,7 +148,7 @@ describe('해역 단위 진행 업적 보상 (--reward-unit spot)', () => {
 
   it('transition, days, gates --reward-unit spot이 보상을 지급하고 보상 없음 비교를 낸다', () => {
     const t = runFlow(parseArgs(['transition', '--reward-unit', 'spot']));
-    expect(t.options.reward).toEqual({ unit: 'spot', hours: 4, split: 0.5 });
+    expect(t.options.reward).toEqual({ unit: 'spot', hours: 1, split: 0.5 });
     expect(t.transition!.base).toBeDefined();
     expect(t.transition!.achieved!.length).toBeGreaterThan(0);
     expect(renderText(t)).toContain('보상 없음 전환 시간');

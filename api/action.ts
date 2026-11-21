@@ -28,7 +28,7 @@ import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
-import { counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
+import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
@@ -74,9 +74,10 @@ export type { BountyRows } from './_data/load.js';
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 /** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
-function scalarState(row: StateRow): GameState {
+function scalarState(row: StateRow, counters: Record<string, number> = {}, clearedNamed: string[] = []): GameState {
   return migrate({ ...blobInput(row.data), gold: Number(row.gold),
-    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
+    achievementCounters: counters, clearedNamed });
 }
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
@@ -381,7 +382,12 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
-  if (action.type === 'catch' && catchTooSoon(scalarState(row), action.spot, row.last_catch_at ?? null, new Date().toISOString())) {
+  if (action.type === 'catch' && catchTooSoon(
+    scalarState(row, loaded.counters, loaded.clearedNamed),
+    action.spot,
+    row.last_catch_at ?? null,
+    new Date().toISOString(),
+  )) {
     throw new ApiError(429, 'too-fast');
   }
 
@@ -463,7 +469,7 @@ async function route(req: Req, res: Res): Promise<void> {
   if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
       loaded.counters, loaded.clearedNamed);
-    if (out.ok) catchBase = scalarState(row);
+    if (out.ok) catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
   } else {
     let state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
     // 수령 액션은 저장된 achievements가 아니라 표 기준으로 서버가 다시 판정한다.
@@ -489,7 +495,8 @@ async function route(req: Req, res: Res): Promise<void> {
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
-      Math.random, action.forceEncounter === true, namedWeightBonus(catchBase, action.judgment, now, guildEffects));
+      Math.random, action.forceEncounter === true,
+      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -650,7 +657,10 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
+  const drawn = drawCatch(
+    base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts,
+    id => owned.has(id), guild, cook, achievementBonusesOf(base),
+  );
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
   // 토글식 자동 잠금이 켜져 있으면 같은 왕복에서 잠금 최대 크기와 직전 자동 잠금 개체도 함께 읽는다(추가 DB 왕복 0회)

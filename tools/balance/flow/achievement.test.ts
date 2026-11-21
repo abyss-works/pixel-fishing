@@ -3,10 +3,12 @@ import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { SPOTS } from '../../../src/game/content/spots';
 import { entryLevel, rates, zoneOf } from '../model';
 import {
-  DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, rewardAmounts, rewardPlan, rewardRows, splitReward,
+  DEFAULT_ACHIEVEMENT_HOURS, DEFAULT_BASIC_SHARE, DEFAULT_SPOT_ACHIEVEMENT_HOURS, DEFAULT_SPOT_TRANSITION_CAP,
+  rewardAmounts, rewardPlan, rewardRows, splitReward,
   spotEvs, spotRewardPlan, spotRewardRows,
 } from './achievement';
 import { roundReward, zoneEvs } from './ev';
+import { transitionGold } from './transitions';
 
 describe('진행 업적 구역 보상 산식', () => {
   it('기본 목표 시간은 4시간, 기본 분배 몫은 0.5다', () => {
@@ -110,7 +112,9 @@ describe('진행에 넣는 보상 계획', () => {
 });
 
 describe('해역 단위(spot) 진행 업적 보상 산식', () => {
-  it('전체 13개 해역 각각에 대해 entryEV × 시간어치를 반올림한 뒤 기초·숙련에 나눈다', () => {
+  it('전체 13개 해역 각각에 대해 min(entryEV × 시간어치, 다음 해역 전환 골드 × 0.30)을 반올림한 뒤 기초·숙련에 나눈다', () => {
+    expect(DEFAULT_SPOT_ACHIEVEMENT_HOURS).toBe(1);
+    expect(DEFAULT_SPOT_TRANSITION_CAP).toBe(0.3);
     const evs = spotEvs();
     expect(evs.map(e => e.spot)).toEqual(SPOTS.map(s => s.id));
     for (const e of evs) {
@@ -118,21 +122,27 @@ describe('해역 단위(spot) 진행 업적 보상 산식', () => {
       expect(e.ev).toBeCloseTo(rates(e.spot, entryLevel(e.spot), 'idle').goldPerHour, 9);
       expect(e.zone).toBe(zoneOf(e.spot));
     }
-    const rows = spotRewardRows({ hours: [4], split: 0.5 });
+    const nextGold = new Map(transitionGold().map(t => [t.from, t.totalGold]));
+    const rows = spotRewardRows({ hours: [1], split: 0.5 });
     expect(rows).toHaveLength(13);
     for (const r of rows) {
       const a = r.amounts[0];
-      expect(a.rawGold).toBeCloseTo(r.ev * 4, 9);
+      const next = nextGold.get(r.spot);
+      const expectedRaw = next !== undefined ? Math.min(r.ev, next * 0.3) : r.ev;
+      expect(a.rawGold).toBeCloseTo(expectedRaw, 9);
       expect(a.gold).toBe(roundReward(a.rawGold));
       expect(a.split!.basic.gold + a.split!.named.gold).toBe(a.gold);
       expect(Math.min(a.split!.basic.gold, a.split!.named.gold)).toBeGreaterThanOrEqual(0);
     }
+    const last = rows.at(-1)!;
+    expect(last.spot).toBe('sthelena');
+    expect(last.amounts[0].rawGold).toBeCloseTo(last.ev, 9);
   });
 
   it('spotRewardPlan은 unit이 spot이고 해역과 기초·숙련에 맞는 골드를 돌려준다', () => {
-    const plan = spotRewardPlan(4, 0.4);
+    const plan = spotRewardPlan(1, 0.4);
     expect(plan.unit).toBe('spot');
-    const rows = spotRewardRows({ hours: [4], split: 0.4 });
+    const rows = spotRewardRows({ hours: [1], split: 0.4 });
     for (const r of rows) {
       expect(plan.spotReward!(r.spot, 'basic')).toEqual(r.amounts[0].split!.basic);
       expect(plan.spotReward!(r.spot, 'named')).toEqual(r.amounts[0].split!.named);

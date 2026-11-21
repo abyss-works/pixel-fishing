@@ -1,6 +1,6 @@
 // 진행 업적 보상 산출 — 구역 또는 해역의 진행 업적 두 개(기본/기초, 완결/숙련)가 나눠 받는 골드 보상의 크기.
 // 구역 단위는 구역 대표 방치 EV(구역 마지막 해역 진입 레벨의 시간당 방치 골드 수입) x 목표 시간어치,
-// 해역 단위는 해역 진입 레벨(entryLevel)의 시간당 방치 골드 수입(entryEV) x 목표 시간어치를
+// 해역 단위는 min(해역 진입 레벨 1시간 방치 EV x 목표 시간어치, 다음 해역 전환 골드 x 0.30)(마지막 해역은 방치 EV 기준)을
 // 의뢰 보상과 같은 자릿수 반올림한 골드다. 명성은 주지 않는다.
 // 두 업적에 나눌 때는 반올림한 합계에 기본 몫을 곱해 같은 규칙으로 반올림하고, 나머지 한쪽이 차액을 받는다.
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
@@ -10,10 +10,13 @@ import { entryLevel, rates, zoneOf } from '../model';
 import { virtualZoneOf } from '../virtualSpots';
 import { roundReward, zoneEvs } from './ev';
 import type { AchievementOptions } from './progress';
+import { transitionGold } from './transitions';
 
 export type RewardUnit = 'zone' | 'spot';
 
 export const DEFAULT_ACHIEVEMENT_HOURS = 4;
+export const DEFAULT_SPOT_ACHIEVEMENT_HOURS = 1;
+export const DEFAULT_SPOT_TRANSITION_CAP = 0.3;
 export const DEFAULT_BASIC_SHARE = 0.5;
 
 export interface Reward { gold: number }
@@ -112,28 +115,52 @@ export interface SpotRewardRow {
   amounts: (RewardAmount & { split?: SplitReward })[];
 }
 
+/** 해역 진입 레벨 방치 EV와 다음 해역 전환 골드 상한으로 해역 보상 합계를 계산한다. 마지막 해역(nextTransitionGold === null)은 방치 EV 기준만 쓴다 */
+export function spotRewardAmounts(
+  ev: number,
+  hours: number,
+  nextTransitionGold: number | null,
+  cap = DEFAULT_SPOT_TRANSITION_CAP,
+): RewardAmount {
+  checkHours(hours);
+  const evGold = ev * hours;
+  const rawGold = nextTransitionGold !== null ? Math.min(evGold, nextTransitionGold * cap) : evGold;
+  return { hours, rawGold, gold: roundReward(rawGold) };
+}
+
+function nextTransitionGoldBySpot(): Map<SpotId, number> {
+  return new Map(transitionGold().map(t => [t.from, t.totalGold]));
+}
+
 export function spotRewardRows(o: RewardRowsOptions = {}): SpotRewardRow[] {
-  const hoursList = o.hours ?? [DEFAULT_ACHIEVEMENT_HOURS];
+  const hoursList = o.hours ?? [DEFAULT_SPOT_ACHIEVEMENT_HOURS];
   if (hoursList.length === 0) throw new Error('목표 시간이 하나 이상 필요합니다');
   for (const h of hoursList) checkHours(h);
   if (o.split !== undefined) checkShare(o.split);
+  const nextGold = nextTransitionGoldBySpot();
   return spotEvs().map(({ spot, zone, entryLevel: lv, ev }) => ({
     spot,
     zone,
     entryLevel: lv,
     ev,
     amounts: hoursList.map(h => {
-      const a = rewardAmounts(ev, h);
+      const a = spotRewardAmounts(ev, h, nextGold.get(spot) ?? null);
       return o.split === undefined ? a : { ...a, split: splitReward(a, o.split) };
     }),
   }));
 }
 
 /** 진행 시뮬레이션에 넣는 해역 단위 보상 — 13개 해역 각각에 기초·숙련 26종 진행 업적을 둔다 */
-export function spotRewardPlan(hours = DEFAULT_ACHIEVEMENT_HOURS, basicShare = DEFAULT_BASIC_SHARE): AchievementOptions {
+export function spotRewardPlan(hours = DEFAULT_SPOT_ACHIEVEMENT_HOURS, basicShare = DEFAULT_BASIC_SHARE): AchievementOptions {
   checkHours(hours);
   checkShare(basicShare);
-  const bySpot = new Map(spotEvs().map(({ spot, ev }) => [spot, splitReward(rewardAmounts(ev, hours), basicShare)] as const));
+  const nextGold = nextTransitionGoldBySpot();
+  const bySpot = new Map(
+    spotEvs().map(({ spot, ev }) => [
+      spot,
+      splitReward(spotRewardAmounts(ev, hours, nextGold.get(spot) ?? null), basicShare),
+    ] as const),
+  );
   return {
     unit: 'spot',
     reward: () => null,

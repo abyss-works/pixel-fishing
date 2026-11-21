@@ -543,10 +543,16 @@ export function withVariantPoints(weights: Record<FormId, number>, points: numbe
   return { variant, normal: 1 - variant };
 }
 
-/** 폼 가중치 — 보너스 효과(유물 + 요리 슬롯의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
- *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects)이다. 유물과 슬롯의 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
-export function mutationWeightsOf(state: ArtifactHolder, spot: SpotId, slotBoost = 0): Record<FormId, number> {
-  const boost = variantBoostOf(state) + slotBoost;
+/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
+ *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects)이고 achievementBoost는 업적 누적(전역 + 구역) 증가율이다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
+export function mutationWeightsOf(
+  state: ArtifactHolder,
+  spot: SpotId,
+  slotBoost = 0,
+  achievementBoost = 0,
+  relicScale = 1,
+): Record<FormId, number> {
+  const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost) * 1e9) / 1e9;
   if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
   return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
@@ -1082,7 +1088,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     hats,
     achievements: safeAchievements(s.achievements),
     achievementCounters: safeAchievementCounters(s.achievementCounters),
-    clearedNamed: [...new Set(safeStrings(s.clearedNamed))],
+    clearedNamed: safeStrings(s.clearedNamed),
     autoLockOnCatch: s.autoLockOnCatch === true,
     autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
   };

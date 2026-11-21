@@ -318,7 +318,21 @@ describe('현상금', () => {
     const uid = await seed({ state: pacificState() });
     const quest = dailyQuestFor('pacific', 'easy', uid, TODAY_KST)!;
     const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    expect(res.status).toBe(200);
+    const snap = await snapshotOf(uid, res);
+    expect(snap.db.bounty_accepts).toEqual([
+      { user_id: '<user>', zone: 'pacific', port: 'harbor', quest_id: quest.id, accepted_at: '<now>' },
+    ]);
+    expect(snap.db.bounty_progress).toEqual([
+      { user_id: '<user>', zone: 'pacific', quest_id: quest.id, progress: 0, started_at: '<now>', updated_at: '<now>' },
+    ]);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'acceptQuest', payload: { questId: quest.id, port: 'harbor' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({ 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' });
   });
 
   it('배정되지 않은 의뢰 수주는 거부한다', async () => {
@@ -369,7 +383,24 @@ describe('현상금', () => {
   it('결투 승리는 진행도를 올리고 도전권을 지운다', async () => {
     const { uid, named } = await namedSetup(60_000);
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    expect(res.status).toBe(200);
+    const snap = await snapshotOf(uid, res);
+    expect(snap.db.bounty_tickets).toEqual([]);
+    expect(snap.db.bounty_progress).toEqual([
+      { user_id: '<user>', zone: 'pacific', quest_id: named.id, progress: 1, started_at: '<now>', updated_at: '<now>' },
+    ]);
+    expect(snap.db.bounty_clears).toEqual([
+      { user_id: '<user>', kind: 'named', quest_id: named.id, cleared_at: '<now>' },
+    ]);
+    expect(snap.db.records).toEqual([
+      { user_id: '<user>', fish_id: named.targetFish, form: 'normal', count: '1', max_size: null, first_caught: '2030-03-04T00:00:00.000Z', updated_at: '<now>' },
+    ]);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'resolveChallenge', payload: { questId: named.id, success: true, hits: 99, misses: 0 }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'named-megalodon-1' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({ 'named-megalodon-1': 'claimable' });
   });
 
   it('결투 패배는 도전권만 지운다', async () => {
@@ -423,8 +454,29 @@ describe('개발 명령', () => {
   });
 
   it('도감 채우기 명령은 도감 행을 쓴다', async () => {
-    expect(await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } }))
-      .toMatchSnapshot();
+    const snap = await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } });
+    expect((snap.res as { status: number }).status).toBe(200);
+    const expectedIds = zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.named).sort();
+    const recordFishIds = (snap.db.records as { fish_id: string; form: string; count: string }[])
+      .map(r => r.fish_id)
+      .sort();
+    expect(recordFishIds).toEqual(expectedIds);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'debug', payload: { command: 'dex.completeZone', args: { zone: 'pacific' } }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'night-normal' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({
+      'spot-basic-sea': 'claimable',
+      'spot-full-sea': 'claimable',
+      'spot-basic-deep': 'claimable',
+      'spot-full-deep': 'claimable',
+      'night-normal': 'claimable',
+    });
   });
 
   it('표 명령은 본인 행만 바꾼다', async () => {
@@ -1537,7 +1589,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('claimAchievement 동시 요청은 보상을 한 번만 지급하고 업적 상태와 claimAchievement 이벤트를 한 번만 기록한다', async () => {
-      const def = achievementById('zone-basic-pacific')!;
+      const def = achievementById('spot-basic-sea')!;
       expect(def.reward.kind).toBe('gold');
       const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
       const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
@@ -1559,7 +1611,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('claimAllAchievements 동시 요청은 보상을 한 번만 일괄 지급하고 claimAllAchievements 이벤트를 한 번만 기록한다', async () => {
-      const goldDef = achievementById('zone-basic-pacific')!;
+      const goldDef = achievementById('spot-basic-sea')!;
       const hatDef = achievementById('variant-village')!;
       const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
       const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';
@@ -1778,7 +1830,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('claimAchievement 중 버전 충돌이 나면 409를 반환하고 골드·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
-      const def = achievementById('zone-basic-pacific')!;
+      const def = achievementById('spot-basic-sea')!;
       const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
       const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
 
@@ -1801,7 +1853,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('claimAllAchievements 중 버전 충돌이 나면 409를 반환하고 보상·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
-      const goldDef = achievementById('zone-basic-pacific')!;
+      const goldDef = achievementById('spot-basic-sea')!;
       const hatDef = achievementById('variant-village')!;
       const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
       const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';

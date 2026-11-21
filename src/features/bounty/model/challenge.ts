@@ -2,6 +2,7 @@ import { bountyById } from '../../../game/content/bounties';
 import type { BountyQuest } from '../../../game/content/bounties';
 import { namedById, namedFishOf } from '../../../game/content/named';
 import type { NamedFish } from '../../../game/content/named';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { duelSpeedupScale } from '../../../game/rules/artifactLevel';
 import { duelHpOf } from '../../../game/rules/challenge';
 import { formDiscovered } from '../../../game/rules/logic';
@@ -39,6 +40,6 @@ export function selectEncounter(game: GameState, questId: string, nowIso: string
     sweepMs: rodAxes(game).sweep.value * 1000,
     hp: duelHpOf(quest.id, game.namedPity, nowIso) ?? named.hp,
     maxHp: named.hp,
-    speedupScale: (named.duelSpeedup ?? 1) * duelSpeedupScale(game),
+    speedupScale: (named.duelSpeedup ?? 1) * duelSpeedupScale(game, achievementBonusesOf(game).artifactBoost),
   };
 }

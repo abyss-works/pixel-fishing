@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../game/content/spots';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { FISH, newState } from '../../../game/rules/logic';
@@ -241,5 +241,26 @@ describe('받는 보너스', () => {
 
   it('갈래 순서는 이동, 낚시, 결투, 상점이다', () => {
     expect(BONUS_CATEGORIES).toEqual(['move', 'fish', 'duel', 'shop']);
+  });
+
+  it('누적 보너스 업적이 활성화되면 selectActiveBonuses와 selectStatsModalData에 업적 누적이 반영된다', () => {
+    const g = game({
+      boat: 1,
+      rod: 10,
+      achievementCounters: {
+        'manual.total': 1_000,
+        'sell.gold': 10_000_000,
+        'named.flawless': 1,
+      },
+    });
+    const bonuses = selectActiveBonuses(g);
+    expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
+      { kind: 'achievement', label: '이동 속도', value: '+4%' },
+      { kind: 'achievement', label: '입질 대기', value: '−2%' },
+      { kind: 'achievement', label: '네임드 조우 가중치', value: '+3%' },
+    ]);
+    const data = selectStatsModalData(g, 'sail', 0);
+    expect(data.speed.mods.some(m => m.id === 'achievement-moveSpeed' && m.label === '업적 누적')).toBe(true);
+    expect(data.effectiveBite.min.mods.some(m => m.id === 'achievement-biteWaitCut' && m.label === '업적 누적')).toBe(true);
   });
 });

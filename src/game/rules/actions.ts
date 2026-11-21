@@ -35,8 +35,11 @@ import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
-import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
-import { counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
+import { ACHIEVEMENTS, LEGACY_ACHIEVEMENT_DEFS, achievementById, legacyAchievementById } from '../content/achievements.js';
+import { topZoneOfSpot } from '../content/zones.js';
+import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
+import { NO_ACHIEVEMENT_BONUSES } from './effects.js';
+import type { AchievementBonuses } from './effects.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -336,11 +339,15 @@ export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgm
   return { judgment, phaseOpts, cook };
 }
 
-/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스와 요리 슬롯(도시락)의 효과를 더한 값. 리듀서와 서버 fast path가 같이 쓴다 */
+/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
 export function namedWeightBonus(
-  state: Pick<GameState, 'slots'>, judgment: Judgment, now: string, guild: GuildEffects = NO_GUILD_EFFECTS,
+  state: Pick<GameState, 'slots'>,
+  judgment: Judgment,
+  now: string,
+  guild: GuildEffects = NO_GUILD_EFFECTS,
+  achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): number {
-  return guild.named + slotEffects(state, now, judgment).namedWeight;
+  return guild.named + slotEffects(state, now, judgment).namedWeight + achievements.namedWeight;
 }
 
 /** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
@@ -386,15 +393,23 @@ export function drawCatch(
   state: Pick<GameState, 'pity' | 'artifacts' | 'artifactLevels' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS, cook: ActiveCookEffects = NO_COOK_EFFECTS,
+  achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
-  const phaseOpts = guild.rare > 0 ? addGradeEffect(basePhaseOpts, 'common', -guild.rare) : basePhaseOpts;
+  const zone = topZoneOfSpot(spot);
+  let phaseOpts = guild.rare > 0 ? addGradeEffect(basePhaseOpts, 'common', -guild.rare) : basePhaseOpts;
+  const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
+  if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
-  const forms = withVariantPoints(mutationWeightsOf(state, spot, cook.mutationWeight), guild.mutation);
+  const achMut = achievements.mutationWeight + (zone ? (achievements.zoneMutation[zone] ?? 0) : 0);
+  const forms = withVariantPoints(
+    mutationWeightsOf(state, spot, cook.mutationWeight, achMut, 1 + achievements.artifactBoost),
+    guild.mutation,
+  );
   const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
@@ -415,11 +430,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
       const guild = deps.guild ?? NO_GUILD_EFFECTS;
+      const achBonuses = achievementBonusesOf(state);
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
       const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz);
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
-        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild));
+        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses));
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -428,7 +444,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
-        id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook);
+        id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
@@ -637,7 +653,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       let next = settleCooking(state, deps.now);
       for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], recipeCostStored(recipe, r) * action.count);
       // 추가 완성은 시작할 때 수량마다 추첨해 저장한다 — 추가분은 기운을 차감하지 않는다
-      const chance = extraCookChance(state);
+      const chance = extraCookChance(state, achievementBonusesOf(state).artifactBoost);
       const bonus = Array.from({ length: action.count }, () => deps.rng() < chance);
       return {
         ok: true,
@@ -805,9 +821,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const target = quest.targetFish!;
       const prev = state.dex[target]?.normal;
       const rec = nextDexRec(prev, null, deps.today);
-      const clearedNamed = state.clearedNamed.includes(action.questId)
-        ? state.clearedNamed
-        : [...state.clearedNamed, action.questId];
+      const clearedNamed = [...state.clearedNamed, action.questId];
       return {
         ok: true,
         state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } },
@@ -820,7 +834,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'claimAchievement': {
       const check = canClaimAchievement(state, action.id, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
-      const def = achievementById(action.id)!;
+      const def = achievementById(action.id) ?? legacyAchievementById(action.id)!;
       const achievements = { ...state.achievements, [def.id]: 'claimed' as const };
       if (def.reward.kind === 'gold') {
         return {
@@ -847,7 +861,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const rewardHats: string[] = [];
       const nextHats = [...state.hats];
       const nextAchievements = { ...state.achievements };
-      for (const a of ACHIEVEMENTS) {
+      for (const a of [...ACHIEVEMENTS, ...LEGACY_ACHIEVEMENT_DEFS]) {
         if (nextAchievements[a.id] !== 'claimable') continue;
         ids.push(a.id);
         nextAchievements[a.id] = 'claimed';

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  ACHIEVEMENT_COUNTER_KEYS, ACHIEVEMENTS, achievementById, achievementForHatId,
+  ABOLISHED_ACHIEVEMENT_IDS,
+  ACHIEVEMENT_COUNTER_KEYS,
+  ACHIEVEMENTS,
+  CUMULATIVE_BONUS_COUNT,
+  CUMULATIVE_BONUS_SERIES,
+  achievementById,
+  achievementForHatId,
 } from './achievements';
 import { hatById, HATS } from './wardrobe';
 
@@ -11,40 +17,75 @@ describe('업적 콘텐츠', () => {
     ]);
   });
 
-  it('업적 65종(진행 10개 + 모자 14개 + 횟수 41개)이 중복 없는 id로 정의되어 있다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(65);
-    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(65);
+  it('수령형 업적 67종(진행 26 + 치장 41)과 누적 보너스 23종(21계열)이 중복 없는 id로 정의되어 있다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(67);
+    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(67);
 
     const progress = ACHIEVEMENTS.filter(a => a.tab === 'progress');
-    expect(progress).toHaveLength(10);
-    const hatRewards = ACHIEVEMENTS.filter(a => a.reward.kind === 'hat');
-    expect(hatRewards).toHaveLength(14);
-    expect(ACHIEVEMENTS.filter(a => a.tab === 'count')).toHaveLength(42);
+    expect(progress).toHaveLength(26);
+    const cosmetic = ACHIEVEMENTS.filter(a => a.tab === 'cosmetic');
+    expect(cosmetic).toHaveLength(41);
+    expect(ACHIEVEMENTS.filter(a => a.reward.kind === 'hat')).toHaveLength(41);
+
+    expect(CUMULATIVE_BONUS_SERIES).toHaveLength(21);
+    expect(CUMULATIVE_BONUS_COUNT).toBe(23);
+    expect(new Set(CUMULATIVE_BONUS_SERIES.map(s => s.id)).size).toBe(21);
   });
 
-  it('진행 업적 골드 보상이 명세 표와 일치한다', () => {
+  it('폐지된 옛 업적 id는 재사용하지 않는다', () => {
+    for (const a of ACHIEVEMENTS) {
+      expect(ABOLISHED_ACHIEVEMENT_IDS.has(a.id), a.id).toBe(false);
+    }
+    for (const s of CUMULATIVE_BONUS_SERIES) {
+      expect(ABOLISHED_ACHIEVEMENT_IDS.has(s.id), s.id).toBe(false);
+      for (const step of s.steps) {
+        expect(ABOLISHED_ACHIEVEMENT_IDS.has(step.id), step.id).toBe(false);
+      }
+    }
+  });
+
+  it('진행 업적 골드 보상이 해역별 표와 일치하고 총합이 5,362,500G다', () => {
     const expected: Record<string, number> = {
-      'zone-basic-pacific': 25_000,
-      'zone-full-pacific': 25_000,
-      'zone-basic-seasia': 150_000,
-      'zone-full-seasia': 100_000,
-      'zone-basic-indian': 400_000,
-      'zone-full-indian': 350_000,
-      'zone-basic-madagascar': 1_500_000,
-      'zone-full-madagascar': 1_500_000,
-      'zone-basic-southatlantic': 5_000_000,
-      'zone-full-southatlantic': 5_000_000,
+      'spot-basic-pond': 50,
+      'spot-full-pond': 50,
+      'spot-basic-river': 100,
+      'spot-full-river': 100,
+      'spot-basic-sea': 300,
+      'spot-full-sea': 300,
+      'spot-basic-deep': 800,
+      'spot-full-deep': 800,
+      'spot-basic-dragonhole': 1_500,
+      'spot-full-dragonhole': 1_500,
+      'spot-basic-coron': 4_000,
+      'spot-full-coron': 4_000,
+      'spot-basic-barrierreef': 12_000,
+      'spot-full-barrierreef': 12_000,
+      'spot-basic-indian': 35_000,
+      'spot-full-indian': 40_000,
+      'spot-basic-southindian': 100_000,
+      'spot-full-southindian': 100_000,
+      'spot-basic-mozstrait': 200_000,
+      'spot-full-mozstrait': 150_000,
+      'spot-basic-comorodeep': 350_000,
+      'spot-full-comorodeep': 350_000,
+      'spot-basic-benguela': 500_000,
+      'spot-full-benguela': 500_000,
+      'spot-basic-sthelena': 1_500_000,
+      'spot-full-sthelena': 1_500_000,
     };
+    let total = 0;
     for (const [id, gold] of Object.entries(expected)) {
       const a = achievementById(id);
       expect(a, id).toBeDefined();
       expect(a!.reward).toEqual({ kind: 'gold', gold });
+      total += gold;
     }
+    expect(total).toBe(5_362_500);
   });
 
   it('모든 업적 모자 보상과 wardrobe.ts가 1:1로 대응한다', () => {
     const achHats = HATS.filter(h => h.source === 'achievement');
-    expect(achHats).toHaveLength(14);
+    expect(achHats).toHaveLength(41);
     for (const h of achHats) {
       const a = achievementForHatId(h.id);
       expect(a, h.id).toBeDefined();
@@ -62,6 +103,10 @@ describe('업적 콘텐츠', () => {
     for (const a of ACHIEVEMENTS) {
       expect(a.name).not.toMatch(/[·—–]/);
       expect(a.desc).not.toMatch(/[·—–]/);
+    }
+    for (const s of CUMULATIVE_BONUS_SERIES) {
+      expect(s.name).not.toMatch(/[·—–]/);
+      expect(s.desc).not.toMatch(/[·—–]/);
     }
   });
 });

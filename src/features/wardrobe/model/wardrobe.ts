@@ -1,6 +1,6 @@
 import { HATS, LOOK_PRESETS, hatById, isAchievementHat } from '../../../game/content/wardrobe';
 import type { Look } from '../../../game/content/wardrobe';
-import { achievementForHatId } from '../../../game/content/achievements';
+import { achievementForHatId, namedSpoilerPlace } from '../../../game/content/achievements';
 import { achievementProgress } from '../../../game/rules/achievements';
 import { REJECT_TEXT, canBuyHat } from '../../../game/rules/rules';
 import type { GameState } from '../../../game/rules/logic';
@@ -46,12 +46,23 @@ export function hatDetail(game: GameState, hatId: string): HatDetail {
     if (isAchievementHat(hat)) {
       const ach = achievementForHatId(hat.id);
       const p = ach ? achievementProgress(game, ach.id) : { current: 0, target: 0 };
+      let unlock: HatDetail['unlock'] = null;
+      if (ach) {
+        const hideNamed = Boolean(
+          ach.namedId && ach.namedQuestId && !game.clearedNamed.includes(ach.namedQuestId),
+        );
+        const place = hideNamed && ach.namedId ? namedSpoilerPlace(ach.namedId) : null;
+        unlock = {
+          achievementName: place ? `${place} 네임드 토벌 ${p.target}회` : ach.name,
+          condition: place ? `${place}의 네임드를 ${p.target}회 토벌해요.` : ach.desc,
+          current: p.current,
+          target: p.target,
+        };
+      }
       return {
         name: hat.name, price: hat.price, owned, worn, action: 'achievement',
         buyBlock: REJECT_TEXT['achievement-hat-only'],
-        unlock: ach
-          ? { achievementName: ach.name, condition: ach.desc, current: p.current, target: p.target }
-          : null,
+        unlock,
       };
     }
     const check = canBuyHat(game, hat.id);

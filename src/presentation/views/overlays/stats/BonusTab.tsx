@@ -14,15 +14,17 @@ const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '�
 const SOURCE_HELP = [
   '유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요.',
   '길드 보너스는 길드 창에서 기부로 올려요.',
+  '업적 누적 보너스는 업적 조건 단계에 닿으면 자동으로 적용돼요.',
 ];
 const HEAD = 'h-[30px] font-normal border-b border-line';
 
-/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯 효과 줄에서 뽑는다 */
+/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯·업적 누적 효과 줄에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level) ?? '';
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
     case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
+    case 'achievement': return `${row.source.label} ${row.source.value}`;
   }
 }
 function sourceText(row: BonusRow): string {
@@ -30,6 +32,7 @@ function sourceText(row: BonusRow): string {
     case 'relic': return row.source.artifact.name;
     case 'guild': return `길드 Lv.${row.source.level}`;
     case 'slot': return row.source.label;
+    case 'achievement': return '업적 누적';
   }
 }
 

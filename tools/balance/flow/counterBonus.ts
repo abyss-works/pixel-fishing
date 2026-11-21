@@ -258,13 +258,13 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   let analyticBig = false;
   let version = 0;
 
-  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물을 maxArtifact에 반영
+  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물과 전설 유물(고정 레벨)을 maxArtifact에 반영
   const baseArtifacts: ArtifactLevels = config.artifacts ? { ...config.artifacts } : {};
   const maxedArtifacts = new Set<string>(
     Object.entries(baseArtifacts)
       .filter(([id, lv]) => {
         const a = artifactById(id);
-        return a !== undefined && artifactHasLevel(a) && lv >= ARTIFACT_MAX_LEVEL;
+        return a !== undefined && (!artifactHasLevel(a) || lv >= ARTIFACT_MAX_LEVEL);
       })
       .map(([id]) => id),
   );
@@ -446,12 +446,13 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
     },
     recordNamedClear(zone: BountyZone) {
       add('named.flawless', 1);
-      const levelables = artifactsOfZone(zone).filter(a => artifactHasLevel(a));
-      for (const art of levelables) {
+      const zoneArts = artifactsOfZone(zone);
+      for (const art of zoneArts) {
         if (maxedArtifacts.has(art.id)) continue;
+        const needed = artifactHasLevel(art) ? MAX_ARTIFACT_MATERIALS : 1;
         const count = (namedMaterials.get(art.id) ?? 0) + 1;
         namedMaterials.set(art.id, count);
-        if (count >= MAX_ARTIFACT_MATERIALS) {
+        if (count >= needed) {
           maxedArtifacts.add(art.id);
           counters.set('maxArtifact', maxedArtifacts.size);
         }

@@ -65,4 +65,24 @@ describe('hatDetail', () => {
     const hat = HATS.find(h => !isAchievementHat(h))!;
     expect(hatDetail(seed(), hat.id).action).toBe('buy');
   });
+  it('미토벌 네임드 업적 모자는 상세의 업적 이름과 조건에서 네임드 실명을 가린다', () => {
+    const locked = hatDetail(seed(), 'megalodon-fin-cap');
+    expect(locked.action).toBe('achievement');
+    expect(locked.unlock).toEqual({
+      achievementName: '태평양 네임드 토벌 5회',
+      condition: '태평양의 네임드를 5회 토벌해요.',
+      current: 0,
+      target: 5,
+    });
+    expect(locked.unlock!.achievementName).not.toContain('메갈로돈');
+    expect(locked.unlock!.condition).not.toContain('메갈로돈');
+
+    const cleared = hatDetail(seed({ clearedNamed: ['pacific-named-megalodon'] }), 'megalodon-fin-cap');
+    expect(cleared.unlock).toEqual({
+      achievementName: '메갈로돈 토벌 5회',
+      condition: '메갈로돈 토벌을 5회 마쳐요.',
+      current: 1,
+      target: 5,
+    });
+  });
 });

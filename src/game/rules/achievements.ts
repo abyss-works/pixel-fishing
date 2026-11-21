@@ -1,15 +1,21 @@
-// 업적 규칙 — 순수 진척 판정, 달성 전이, 이벤트 기반 카운터 증분.
+// 업적 규칙 — 순수 진척 판정, 달성 전이, 이벤트 기반 카운터 증분, 누적 보너스 합산.
 // 측정 방식(metric)으로만 분기한다 — 업적 id 접두사 분기는 없다.
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import {
-  ACHIEVEMENTS, achievementRuleById, selectorFish, selectorIds, selectorTargetCount,
+  ACHIEVEMENTS, CUMULATIVE_BONUS_SERIES, achievementRuleById, selectorFish, selectorIds, selectorTargetCount,
 } from '../content/achievements.js';
 import type {
   AchievementCounters, AchievementMap, AchievementMetric, AchievementRule,
+  CumulativeBonusMetric, CumulativeBonusSeries, CumulativeBonusStep,
 } from '../content/achievements.js';
-import { fishById } from '../content/fish.js';
+import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
+import { FISH, fishById } from '../content/fish.js';
 import { topZoneOfSpot } from '../content/zones.js';
+import type { ZoneId } from '../content/zones.js';
 import type { GameEvent } from './actions.js';
+import { artifactLevelOf } from './artifactLevel.js';
+import type { ArtifactHolder } from './artifactLevel.js';
+import type { AchievementBonuses } from './effects.js';
 import { formDiscovered, isBigSize } from './logic.js';
 import type { GameState } from './logic.js';
 
@@ -19,9 +25,158 @@ export interface AchievementProgress {
   met: boolean;
 }
 
+export interface CumulativeBonusProgress {
+  current: number;
+  completedSteps: number;
+  activeDelta: number;
+  maxDelta: number;
+  nextStep: CumulativeBonusStep | null;
+}
+
+export interface CumulativeBonusContribution {
+  series: CumulativeBonusSeries;
+  current: number;
+  completedSteps: number;
+  activeDelta: number;
+}
+
+const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
+
 /** 카운터 값 — 동적 키(규칙의 counterSet)도 읽을 수 있게 문자열 키로 본다 */
 const countersOf = (state: GameState): Partial<Record<string, number | undefined>> =>
   state.achievementCounters;
+
+/** 최고 레벨 유물 수 — Lv5 유물과 고정 레벨 전설 유물을 모두 포함한다 */
+export function maxArtifactCount(state: ArtifactHolder): number {
+  let count = 0;
+  for (const id of state.artifacts) {
+    const art = artifactById(id);
+    if (!art) continue;
+    if (!artifactHasLevel(art) || artifactLevelOf(state, id) >= ARTIFACT_MAX_LEVEL) {
+      count++;
+    }
+  }
+  return count;
+}
+
+const LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
+for (const fish of FISH) {
+  if (fish.rarity !== 'legendary') continue;
+  const zone = topZoneOfSpot(fish.spot);
+  if (!zone) continue;
+  const list = LEGENDARY_IDS_BY_ZONE.get(zone) as string[] | undefined;
+  if (list) list.push(fish.id);
+  else LEGENDARY_IDS_BY_ZONE.set(zone, [fish.id]);
+}
+
+/** 누적 보너스 측정값 계산 */
+export function cumulativeBonusValueOf(state: GameState, metric: CumulativeBonusMetric): number {
+  switch (metric.kind) {
+    case 'counter':
+      return countersOf(state)[metric.key] ?? 0;
+    case 'zoneLegendarySum': {
+      const counters = countersOf(state);
+      const ids = LEGENDARY_IDS_BY_ZONE.get(metric.zone) ?? [];
+      let sum = 0;
+      for (const id of ids) sum += counters[`manual.legendary.${id}`] ?? 0;
+      return sum;
+    }
+    case 'maxArtifact':
+      return maxArtifactCount(state);
+  }
+}
+
+/** 누적 보너스 계열 하나의 현재 진척과 적용 보너스를 계산한다 */
+export function cumulativeBonusProgress(
+  state: GameState,
+  series: CumulativeBonusSeries,
+): CumulativeBonusProgress {
+  const current = cumulativeBonusValueOf(state, series.metric);
+  let completedSteps = 0;
+  let activeDelta = 0;
+  let maxDelta = 0;
+  let nextStep: CumulativeBonusStep | null = null;
+  for (const step of series.steps) {
+    maxDelta = clean(maxDelta + step.delta);
+    if (current >= step.threshold) {
+      completedSteps++;
+      activeDelta = clean(activeDelta + step.delta);
+    } else if (nextStep === null) {
+      nextStep = step;
+    }
+  }
+  return { current, completedSteps, activeDelta, maxDelta, nextStep };
+}
+
+/** 현재 적용 중인 누적 보너스 출처별 세부 내역 */
+export function achievementBonusContributions(state: GameState): CumulativeBonusContribution[] {
+  const out: CumulativeBonusContribution[] = [];
+  for (const series of CUMULATIVE_BONUS_SERIES) {
+    const p = cumulativeBonusProgress(state, series);
+    if (p.activeDelta > 0) {
+      out.push({
+        series,
+        current: p.current,
+        completedSteps: p.completedSteps,
+        activeDelta: p.activeDelta,
+      });
+    }
+  }
+  return out;
+}
+
+/** 업적 누적 보너스 합계 — 같은 종류의 보너스를 모두 더해 단일 효과 묶음에 넘긴다 */
+export function achievementBonusesOf(state: GameState): AchievementBonuses {
+  let biteWaitCut = 0;
+  let mutationWeight = 0;
+  let namedWeight = 0;
+  let moveSpeed = 0;
+  let artifactBoost = 0;
+  const zoneLegendary: Partial<Record<ZoneId, number>> = {};
+  const zoneMutation: Partial<Record<ZoneId, number>> = {};
+
+  for (const series of CUMULATIVE_BONUS_SERIES) {
+    const { activeDelta } = cumulativeBonusProgress(state, series);
+    if (activeDelta <= 0) continue;
+    switch (series.bonusKind) {
+      case 'biteWaitCut':
+        biteWaitCut = clean(biteWaitCut + activeDelta);
+        break;
+      case 'mutationWeight':
+        mutationWeight = clean(mutationWeight + activeDelta);
+        break;
+      case 'namedWeight':
+        namedWeight = clean(namedWeight + activeDelta);
+        break;
+      case 'moveSpeed':
+        moveSpeed = clean(moveSpeed + activeDelta);
+        break;
+      case 'artifactBoost':
+        artifactBoost = clean(artifactBoost + activeDelta);
+        break;
+      case 'zoneLegendary':
+        if (series.zone) {
+          zoneLegendary[series.zone] = clean((zoneLegendary[series.zone] ?? 0) + activeDelta);
+        }
+        break;
+      case 'zoneMutation':
+        if (series.zone) {
+          zoneMutation[series.zone] = clean((zoneMutation[series.zone] ?? 0) + activeDelta);
+        }
+        break;
+    }
+  }
+
+  return {
+    biteWaitCut,
+    mutationWeight,
+    namedWeight,
+    moveSpeed,
+    artifactBoost,
+    zoneLegendary,
+    zoneMutation,
+  };
+}
 
 /** 목표 수 — 'all'이면 판정 시점의 선택자 대상 수 */
 const targetOf = (rule: AchievementRule, metric: AchievementMetric): number => {
@@ -42,6 +197,8 @@ const currentOf = (state: GameState, rule: AchievementRule, metric: AchievementM
       const owned = metric.field === 'named' ? state.clearedNamed : state.artifacts;
       return selectorIds(rule.selector).filter(id => owned.includes(id)).length;
     }
+    case 'namedClearCount':
+      return state.clearedNamed.filter(id => id === metric.questId).length;
     case 'bigSpecies':
       return selectorFish(rule.selector).filter(f => {
         const rec = state.dex[f.id];
@@ -119,13 +276,14 @@ export function counterIncrementsForEvents(events: readonly GameEvent[]): Achiev
       if (judgment !== 'auto') {
         add('manual.total', 1);
         const fish = fishById(ev.payload.fishId);
+        const zone = fish ? topZoneOfSpot(fish.spot) : undefined;
+        if (zone !== undefined) add(`manual.total.${zone}`, 1);
         if (fish?.rarity === 'legendary') {
           add('manual.legendary.total', 1);
           add(`manual.legendary.${fish.id}`, 1);
         }
         if (ev.payload.form === 'variant') {
           add('manual.variant.total', 1);
-          const zone = fish ? topZoneOfSpot(fish.spot) : undefined;
           if (zone !== undefined) add(`manual.variant.${zone}`, 1);
         }
       }
