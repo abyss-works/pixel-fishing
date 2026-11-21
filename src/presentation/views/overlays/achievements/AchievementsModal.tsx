@@ -10,7 +10,6 @@ import {
   COSMETIC_FILTERS,
   achievementRows,
   achievementSummary,
-  activeBonusChips,
   cosmeticCards,
   cumulativeBonusCards,
   tabClaimableCount,
@@ -24,7 +23,6 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import PillButton from '../../../ui/PillButton';
 import TabBar from '../../../ui/TabBar';
-import Tip, { TipList } from '../../../ui/Tip';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { hatById } from '../../../../game/content/wardrobe';
 import AchievementCard, { CumulativeBonusCard, NamedGroupCard } from './AchievementCard';
@@ -40,7 +38,7 @@ interface Props {
 
 // 업적 창 — 메뉴 줄의 업적을 눌러 여는 창. 진행, 누적 보너스, 치장 탭 셋으로 나눈다.
 // 탭 위 고정 정보 줄에는 진행·치장 받은 수, 받을 골드, 받을 모자 수, [모두 받기]만 한 줄로 둔다.
-// 누적 보너스 탭은 상단에 적용 중인 누적 보너스 요약 칸을, 치장 탭은 상단에 필터 줄을 스크롤 밖에 고정한다.
+// 치장 탭은 상단에 필터 줄을 스크롤 밖에 고정하고, 누적 보너스 총합은 스탯 창 보너스 탭에서 보인다.
 // 탭 본문은 카드 격자다. 열 수는 본문 폭과 카드 최소 폭으로 정하고, 좁으면 1열로 내려가며 가로 스크롤을 만들지 않는다.
 export default function AchievementsModal({ game, guest = false, dispatch, setToast, onClose }: Props) {
   const [tab, setTab] = useState<AchievementTab>('progress');
@@ -48,7 +46,6 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
   const [busy, setBusy] = useState(false);
 
   const summary = achievementSummary(game, guest);
-  const chips = activeBonusChips(game);
   const tabs = ACHIEVEMENT_TABS.map(t => ({
     ...t,
     count: tabClaimableCount(game, t.key),
@@ -103,29 +100,6 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
           </Inset>
 
           <TabBar tabs={tabs} activeKey={tab} onSelect={setTab} />
-
-          {tab === 'bonus' && (
-            <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-9 px-3 py-1.5 shrink-0 text-xs">
-              <span className="text-text-dim">
-                <Tip text="조건 단계에 닿으면 받기를 누르지 않아도 보너스가 바로 적용돼요.">적용 중인 누적 보너스</Tip>
-              </span>
-              {chips.length === 0 ? (
-                <span className="text-text-dim">없음</span>
-              ) : (
-                chips.map(chip => (
-                  <Tip
-                    key={chip.id}
-                    text={<TipList rows={chip.rows.map(([label, value]) => ({ label, value }))} note={chip.foot} />}
-                  >
-                    <span className="inline-flex items-baseline gap-1">
-                      <span className="text-text-dim">{chip.label}</span>
-                      <b className="pf-accent text-accent">{chip.valueText}</b>
-                    </span>
-                  </Tip>
-                ))
-              )}
-            </Inset>
-          )}
 
           {tab === 'cosmetic' && (
             <div className="flex flex-wrap gap-1 shrink-0">
