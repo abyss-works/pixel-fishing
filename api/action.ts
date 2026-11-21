@@ -22,6 +22,7 @@ import {
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
+import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -311,9 +312,20 @@ async function route(req: Req, res: Res): Promise<void> {
   // COUNT+피해자1행+도감1행만 읽는다. sell/setLocked/claimRelief/import는 가방·도감을
   // 직접 다루어 풀 유지. 스냅샷 경계 버전은 전부 풀 조회로 복귀
   // (saves 아카이브는 풀 스냅샷이 계약).
-  const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
+  let skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
   let instances: InstanceRow[] = loaded.instances ?? [];
   let records: RecordRow[] = loaded.records ?? [];
+
+  // 구 단일 firstCatch가 진행 중인 계정은 마을 강 도감 유무로 이관해야 하므로 fastCatch를 쓰지 않고 풀 경로로 폴백한다.
+  if (skipDetail && action.type === 'catch' && row
+      && needsLegacyFirstCatchMigration((row.data as { firstCatch?: unknown } | null)?.firstCatch)) {
+    const full = await step('db-read', { uid, action: action.type }, () => loadContext(db, uid, {
+      skipDetailType: false, snapshotEvery: SNAPSHOT_EVERY, bountyDayStart: null,
+    }));
+    instances = full.instances ?? [];
+    records = full.records ?? [];
+    skipDetail = false;
+  }
 
   // 소급 업적 판정 — 개체·도감을 건너뛴 액션(catch 제외: fast path가 따로 판정한다)도 확정에서
   // 평가되므로, 미확정 업적이 남은 계정은 도감을 한 번 더 읽어 합친다. 이미 모두 확정이면 읽지 않는다.

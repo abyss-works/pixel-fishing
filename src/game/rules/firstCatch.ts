@@ -52,6 +52,16 @@ export const fixedFirstCatch = (legendAt: number): FirstCatch => ({
 export const firstCatchOfLegacy = (dexCatches: number, fame: number): FirstCatch =>
   dexCatches === 0 && fame === 0 ? newFirstCatch() : endedFirstCatch();
 
+/** 구 단일 객체 형식이면서 진행 중이라 전체 도감(마을 강 어획 여부)으로 이관 판정이 필요한가 */
+export function needsLegacyFirstCatchMigration(v: unknown): boolean {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (Object.hasOwn(r, 'pond') || Object.hasOwn(r, 'river')) return false;
+  const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
+  return int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean'
+    && (r.epic || r.legend);
+}
+
 /** 이번 캐치(해당 해역 n+1번째)가 보장 대상이면 그 마을 해역·시간대 풀에서 해당 등급 어종을 고른다.
  *  바다 등 비대상 해역이거나 풀에 그 등급 어종이 없으면 null.
  *  전설 번호가 지나도록 못 받았으면 번호를 넘긴 첫 가능한 캐치에서 받는다. 전설을 먼저 본다.
