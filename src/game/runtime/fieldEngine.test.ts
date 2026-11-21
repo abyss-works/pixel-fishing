@@ -134,6 +134,68 @@ describe('GameFieldEngine 위치 재설정', () => {
     expect(onScene.mock.calls[0][3]).toBeUndefined();
   });
 
+  it('거점 진입 거부로 되돌아온 뒤 이동 키를 유지한 동안에는 같은 거점 진입을 반복하지 않는다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer({ x: berth.x - 3, y: berth.y + berth.h / 2 });
+    frame(1000, 950);
+    engine.handleKeyDown('ArrowRight', noop);
+    let t = 1000;
+    for (let i = 0; i < 20 && onScene.mock.calls.length === 0; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    expect(onScene).toHaveBeenCalledTimes(1);
+    const returnPos = onScene.mock.calls[0][3];
+    expect(returnPos).toBeDefined();
+
+    // 거점 진입 거부 후 직전 자리로 복귀 — 이동 키는 계속 눌린 상태
+    engine.placePlayer(returnPos);
+    for (let i = 0; i < 10; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    expect(onScene).toHaveBeenCalledTimes(1);
+
+    // 이동 키를 뗐다가 다시 누르면 정상 재진입한다
+    engine.releaseKey('ArrowRight');
+    engine.handleKeyDown('ArrowRight', noop);
+    for (let i = 0; i < 20 && onScene.mock.calls.length < 2; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    expect(onScene).toHaveBeenCalledTimes(2);
+  });
+
+  it('거점 진입 거부 뒤 키를 떼지 않고 경계에서 충분히 벗어났다 돌아오면 다시 진입한다', () => {
+    const { engine, onScene, frame } = setup();
+    engine.placePlayer({ x: berth.x - 3, y: berth.y + berth.h / 2 });
+    frame(1000, 950);
+    engine.handleKeyDown('ArrowRight', noop);
+    let t = 1000;
+    for (let i = 0; i < 20 && onScene.mock.calls.length === 0; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    expect(onScene).toHaveBeenCalledTimes(1);
+    engine.placePlayer(onScene.mock.calls[0][3]);
+
+    // 반대 키를 먼저 눌러 모든 키를 떼지 않은 채 트리거에서 충분히 벗어난다
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowRight');
+    for (let i = 0; i < 30; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    // 다시 오른쪽으로 돌아온다
+    engine.handleKeyDown('ArrowRight', noop);
+    engine.releaseKey('ArrowLeft');
+    for (let i = 0; i < 40 && onScene.mock.calls.length < 2; i++) {
+      frame(t + 50, t);
+      t += 50;
+    }
+    expect(onScene).toHaveBeenCalledTimes(2);
+  });
+
   it('낚시 중이면 줄을 거두고 대기 상태로 돌아간다', () => {
     const { engine } = setup();
     engine.updateContext(newState(), false, {
