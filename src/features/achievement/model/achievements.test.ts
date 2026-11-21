@@ -6,7 +6,6 @@ import {
   achievementRowById,
   achievementRows,
   achievementSummary,
-  activeBonusChips,
   canClaim,
   claimableCount,
   cosmeticCards,
@@ -91,11 +90,47 @@ describe('요약 줄', () => {
     const state = seed({ achievements: { 'spot-basic-sea': 'claimable', 'variant-village': 'claimable' } });
     expect(claimableCount(state)).toBe(2);
   });
+
+  it('폐지된 옛 id와 미등록 id가 claimable이어도 배지·요약 줄·모두 받기는 화면에 보이는 현행 목록과 일치한다', () => {
+    const ghostOnly = seed({
+      achievements: {
+        'zone-basic-pacific': 'claimable',
+        'manual-variant-1': 'claimable',
+        'manual-10': 'claimable',
+        'no-such': 'claimable',
+      },
+    });
+    expect(claimableCount(ghostOnly)).toBe(0);
+    expect(achievementSummary(ghostOnly)).toMatchObject({ claimed: 0, gold: 0, hats: 0, canClaimAll: false });
+    expect(ACHIEVEMENT_TABS.reduce((n, t) => n + tabClaimableCount(ghostOnly, t.key), 0)).toBe(0);
+
+    const mixed = seed({
+      achievements: {
+        ...ghostOnly.achievements,
+        'spot-basic-sea': 'claimable',
+        'variant-village': 'claimable',
+        'named-megalodon-1': 'claimable',
+      },
+    });
+    const visibleProgressClaimable = achievementRows(mixed, 'progress').filter(r => r.status === 'claimable');
+    const visibleCosmeticClaimable = cosmeticCards(mixed, 'all').filter(c =>
+      c.kind === 'single' ? c.row.status === 'claimable' : c.status === 'claimable');
+    const visibleGold = visibleProgressClaimable.reduce(
+      (n, r) => n + (r.def.reward.kind === 'gold' ? r.def.reward.gold : 0), 0);
+    const visibleHats = visibleCosmeticClaimable.length;
+
+    expect(claimableCount(mixed)).toBe(ACHIEVEMENT_TABS.reduce((n, t) => n + tabClaimableCount(mixed, t.key), 0));
+    expect(claimableCount(mixed)).toBe(visibleProgressClaimable.length + visibleHats);
+    expect(achievementSummary(mixed)).toMatchObject({
+      gold: visibleGold,
+      hats: visibleHats,
+      canClaimAll: true,
+    });
+  });
 });
 
-describe('누적 보너스 카드와 상단 칩 바', () => {
-  it('21개 다단계 누적 보너스 카드를 생성하고 적용 중인 보너스만 칩 바로 묶는다', () => {
-    expect(activeBonusChips(seed())).toEqual([]);
+describe('누적 보너스 카드', () => {
+  it('21개 다단계 누적 보너스 카드를 생성한다', () => {
     const boosted = seed({
       achievementCounters: {
         'manual.total': 1_000,
@@ -108,13 +143,6 @@ describe('누적 보너스 카드와 상단 칩 바', () => {
     const manual = cards.find(c => c.series.id === 'bonus-manual-total')!;
     expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
     expect(manual.activeText).toBe('입질 대기 −2%');
-
-    const chips = activeBonusChips(boosted);
-    expect(chips.map(c => [c.id, c.valueText])).toEqual([
-      ['biteWaitCut', '−2%'],
-      ['namedWeight', '+3%'],
-      ['moveSpeed', '+4%'],
-    ]);
   });
 });
 

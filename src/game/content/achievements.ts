@@ -744,76 +744,61 @@ export const CUMULATIVE_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
 /** 누적 보너스 업적 총 수 (23) */
 export const CUMULATIVE_BONUS_COUNT = CUMULATIVE_BONUS_SERIES.reduce((sum, s) => sum + s.tierCount, 0);
 
-// ── 4. 폐지된 옛 업적 (재사용 금지, 이미 claimable인 기존 계정 수령 보호용) ──
+// ── 4. 폐지된 옛 업적 id (재사용·수령·노출 금지) ──
 
-export interface LegacyAchievementDef {
-  id: string;
-  name: string;
-  reward: { kind: 'gold'; gold: number };
-}
-
-export const LEGACY_ACHIEVEMENT_DEFS: readonly LegacyAchievementDef[] = [
-  { id: 'zone-basic-pacific', name: '태평양 도감', reward: { kind: 'gold', gold: 25_000 } },
-  { id: 'zone-full-pacific', name: '태평양 도감 완결', reward: { kind: 'gold', gold: 25_000 } },
-  { id: 'zone-basic-seasia', name: '동남아&오세아니아 도감', reward: { kind: 'gold', gold: 150_000 } },
-  { id: 'zone-full-seasia', name: '동남아&오세아니아 도감 완결', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'zone-basic-indian', name: '인도양 도감', reward: { kind: 'gold', gold: 400_000 } },
-  { id: 'zone-full-indian', name: '인도양 도감 완결', reward: { kind: 'gold', gold: 350_000 } },
-  { id: 'zone-basic-madagascar', name: '마다가스카르 도감', reward: { kind: 'gold', gold: 1_500_000 } },
-  { id: 'zone-full-madagascar', name: '마다가스카르 도감 완결', reward: { kind: 'gold', gold: 1_500_000 } },
-  { id: 'zone-basic-southatlantic', name: '남대서양 도감', reward: { kind: 'gold', gold: 5_000_000 } },
-  { id: 'zone-full-southatlantic', name: '남대서양 도감 완결', reward: { kind: 'gold', gold: 5_000_000 } },
-  { id: 'manual-10', name: '손맛 열 마리', reward: { kind: 'gold', gold: 1_000 } },
-  { id: 'manual-100', name: '손맛 백 마리', reward: { kind: 'gold', gold: 10_000 } },
-  { id: 'manual-1000', name: '손맛 천 마리', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'manual-10000', name: '손맛 만 마리', reward: { kind: 'gold', gold: 1_000_000 } },
-  { id: 'manual-legendary-1', name: '전설 손맛 첫 마리', reward: { kind: 'gold', gold: 50_000 } },
-  { id: 'manual-legendary-5', name: '전설 손맛 다섯 마리', reward: { kind: 'gold', gold: 250_000 } },
-  { id: 'manual-legendary-10', name: '전설 손맛 열 마리', reward: { kind: 'gold', gold: 500_000 } },
-  { id: 'manual-legendary-25', name: '전설 손맛 스물다섯 마리', reward: { kind: 'gold', gold: 2_000_000 } },
-  { id: 'manual-variant-1', name: '돌연변이 손맛 첫 마리', reward: { kind: 'gold', gold: 25_000 } },
-  { id: 'manual-variant-5', name: '돌연변이 손맛 다섯 마리', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'manual-variant-10', name: '돌연변이 손맛 열 마리', reward: { kind: 'gold', gold: 250_000 } },
-  { id: 'manual-variant-25', name: '돌연변이 손맛 스물다섯 마리', reward: { kind: 'gold', gold: 1_000_000 } },
-  { id: 'manual-legendary-zone-village', name: '마을 전설 손맛', reward: { kind: 'gold', gold: 30_000 } },
-  { id: 'manual-variant-zone-village', name: '마을 돌연변이 손맛', reward: { kind: 'gold', gold: 10_000 } },
-  { id: 'manual-legendary-zone-pacific', name: '태평양 전설 손맛', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'manual-variant-zone-pacific', name: '태평양 돌연변이 손맛', reward: { kind: 'gold', gold: 20_000 } },
-  { id: 'manual-legendary-zone-seasia', name: '동남아&오세아니아 전설 손맛', reward: { kind: 'gold', gold: 300_000 } },
-  { id: 'manual-variant-zone-seasia', name: '동남아&오세아니아 돌연변이 손맛', reward: { kind: 'gold', gold: 40_000 } },
-  { id: 'manual-legendary-zone-indian', name: '인도양 전설 손맛', reward: { kind: 'gold', gold: 200_000 } },
-  { id: 'manual-variant-zone-indian', name: '인도양 돌연변이 손맛', reward: { kind: 'gold', gold: 50_000 } },
-  { id: 'manual-legendary-zone-madagascar', name: '마다가스카르 전설 손맛', reward: { kind: 'gold', gold: 400_000 } },
-  { id: 'manual-variant-zone-madagascar', name: '마다가스카르 돌연변이 손맛', reward: { kind: 'gold', gold: 80_000 } },
-  { id: 'manual-legendary-zone-southatlantic', name: '남대서양 전설 손맛', reward: { kind: 'gold', gold: 800_000 } },
-  { id: 'manual-variant-zone-southatlantic', name: '남대서양 돌연변이 손맛', reward: { kind: 'gold', gold: 150_000 } },
-  { id: 'perfect-100', name: 'PERFECT 백 번', reward: { kind: 'gold', gold: 10_000 } },
-  { id: 'perfect-1000', name: 'PERFECT 천 번', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'perfect-10000', name: 'PERFECT 만 번', reward: { kind: 'gold', gold: 1_000_000 } },
-  { id: 'auto-1000', name: '방치 천 마리', reward: { kind: 'gold', gold: 20_000 } },
-  { id: 'auto-10000', name: '방치 만 마리', reward: { kind: 'gold', gold: 200_000 } },
-  { id: 'auto-100000', name: '방치 십만 마리', reward: { kind: 'gold', gold: 2_000_000 } },
-  { id: 'bait-10', name: '미끼 열 번', reward: { kind: 'gold', gold: 5_000 } },
-  { id: 'bait-100', name: '미끼 백 번', reward: { kind: 'gold', gold: 50_000 } },
-  { id: 'bait-1000', name: '미끼 천 번', reward: { kind: 'gold', gold: 500_000 } },
-  { id: 'named-flawless-1', name: '무결점 토벌', reward: { kind: 'gold', gold: 100_000 } },
-  { id: 'named-flawless-10', name: '무결점 토벌 열 번', reward: { kind: 'gold', gold: 500_000 } },
-  { id: 'named-flawless-50', name: '무결점 토벌 쉰 번', reward: { kind: 'gold', gold: 2_000_000 } },
-  { id: 'sell-1000000', name: '판매 백만 골드', reward: { kind: 'gold', gold: 30_000 } },
-  { id: 'sell-10000000', name: '판매 천만 골드', reward: { kind: 'gold', gold: 300_000 } },
-  { id: 'sell-100000000', name: '판매 억 골드', reward: { kind: 'gold', gold: 3_000_000 } },
-  { id: 'big-100', name: '월척 백 종', reward: { kind: 'gold', gold: 300_000 } },
-  { id: 'big-200', name: '월척 이백 종', reward: { kind: 'gold', gold: 1_500_000 } },
-];
-
-export const ABOLISHED_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set(
-  LEGACY_ACHIEVEMENT_DEFS.map(d => d.id),
-);
-
-const LEGACY_BY_ID = new Map(LEGACY_ACHIEVEMENT_DEFS.map(d => [d.id, d]));
-
-export const legacyAchievementById = (id: unknown): LegacyAchievementDef | undefined =>
-  typeof id === 'string' ? LEGACY_BY_ID.get(id) : undefined;
+export const ABOLISHED_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set([
+  'zone-basic-pacific',
+  'zone-full-pacific',
+  'zone-basic-seasia',
+  'zone-full-seasia',
+  'zone-basic-indian',
+  'zone-full-indian',
+  'zone-basic-madagascar',
+  'zone-full-madagascar',
+  'zone-basic-southatlantic',
+  'zone-full-southatlantic',
+  'manual-10',
+  'manual-100',
+  'manual-1000',
+  'manual-10000',
+  'manual-legendary-1',
+  'manual-legendary-5',
+  'manual-legendary-10',
+  'manual-legendary-25',
+  'manual-variant-1',
+  'manual-variant-5',
+  'manual-variant-10',
+  'manual-variant-25',
+  'manual-legendary-zone-village',
+  'manual-variant-zone-village',
+  'manual-legendary-zone-pacific',
+  'manual-variant-zone-pacific',
+  'manual-legendary-zone-seasia',
+  'manual-variant-zone-seasia',
+  'manual-legendary-zone-indian',
+  'manual-variant-zone-indian',
+  'manual-legendary-zone-madagascar',
+  'manual-variant-zone-madagascar',
+  'manual-legendary-zone-southatlantic',
+  'manual-variant-zone-southatlantic',
+  'perfect-100',
+  'perfect-1000',
+  'perfect-10000',
+  'auto-1000',
+  'auto-10000',
+  'auto-100000',
+  'bait-10',
+  'bait-100',
+  'bait-1000',
+  'named-flawless-1',
+  'named-flawless-10',
+  'named-flawless-50',
+  'sell-1000000',
+  'sell-10000000',
+  'sell-100000000',
+  'big-100',
+  'big-200',
+]);
 
 // ── 5. 수령형 업적 카탈로그 (진행 26종 + 치장 41종 = 67종) ──
 

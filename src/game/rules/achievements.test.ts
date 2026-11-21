@@ -291,25 +291,24 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(out.events).toContainEqual({ type: 'unlockAchievement', payload: { id: 'artifact-all' } });
   });
 
-  it('이미 claimable이었던 폐지 옛 업적도 기존 계정이 보상을 잃지 않고 수령할 수 있으며 재수령은 거절된다', () => {
-    const s = seed({ gold: 0, achievements: { 'zone-basic-pacific': 'claimable' } });
-    const first = applyAction(s, { type: 'claimAchievement', id: 'zone-basic-pacific' }, deps());
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-    expect(first.state.gold).toBe(25_000);
-    expect(first.state.achievements['zone-basic-pacific']).toBe('claimed');
-    expect(first.events).toContainEqual({
-      type: 'claimAchievement', payload: { id: 'zone-basic-pacific', gold: 25_000 },
+  it('폐지된 옛 업적 id는 수령이 거절되고 저장 키만 보존된다', () => {
+    const raw = migrate({ achievements: { 'zone-basic-pacific': 'claimable', 'manual-variant-1': 'claimable', 'no-such': 'claimed' } });
+    expect(raw.achievements).toEqual({
+      'zone-basic-pacific': 'claimable',
+      'manual-variant-1': 'claimable',
+      'no-such': 'claimed',
     });
 
-    expect(canClaimAchievement(first.state, 'zone-basic-pacific')).toEqual({
-      ok: false, reason: 'achievement-already-claimed',
-    });
-    const second = applyAction(first.state, { type: 'claimAchievement', id: 'zone-basic-pacific' }, deps());
-    expect(second).toEqual({ ok: false, error: 'achievement-already-claimed' });
+    expect(canClaimAchievement(raw, 'zone-basic-pacific')).toEqual({ ok: false, reason: 'bad-request' });
+    expect(canClaimAchievement(raw, 'manual-variant-1')).toEqual({ ok: false, reason: 'bad-request' });
+    expect(applyAction(raw, { type: 'claimAchievement', id: 'zone-basic-pacific' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(canClaimAllAchievements(raw)).toEqual({ ok: false, reason: 'no-claimable-achievements' });
+    expect(applyAction(raw, { type: 'claimAllAchievements' }, deps()))
+      .toEqual({ ok: false, error: 'no-claimable-achievements' });
   });
 
-  it('claimAllAchievements는 claimable 업적(옛 미수령 포함)의 골드와 모자를 순서대로 모두 지급한다', () => {
+  it('claimAllAchievements는 현행 claimable 업적의 골드와 모자만 지급하고 폐지된 옛 id는 건드리지 않는다', () => {
     const s = seed({
       gold: 100,
       hats: ['straw-hat'],
@@ -318,21 +317,23 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
         'variant-village': 'claimable',
         'artifact-all': 'claimable',
         'zone-basic-pacific': 'claimable',
+        'manual-variant-1': 'claimable',
         'spot-full-sea': 'claimed',
       },
     });
     const out = applyAction(s, { type: 'claimAllAchievements' }, deps());
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.state.gold).toBe(100 + 300 + 25_000);
+    expect(out.state.gold).toBe(100 + 300);
     expect(out.state.hats).toEqual(['straw-hat', 'shipowner-bowler']);
     expect(out.state.achievements['spot-basic-sea']).toBe('claimed');
     expect(out.state.achievements['variant-village']).toBe('claimed');
     expect(out.state.achievements['artifact-all']).toBe('claimed');
-    expect(out.state.achievements['zone-basic-pacific']).toBe('claimed');
+    expect(out.state.achievements['zone-basic-pacific']).toBe('claimable');
+    expect(out.state.achievements['manual-variant-1']).toBe('claimable');
     expect(out.result).toEqual({
       type: 'claimAllAchievements',
-      gold: 25_300,
+      gold: 300,
       hats: ['shipowner-bowler'],
     });
     expect(canClaimAllAchievements(out.state)).toEqual({ ok: false, reason: 'no-claimable-achievements' });

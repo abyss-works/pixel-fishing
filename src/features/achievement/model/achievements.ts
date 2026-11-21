@@ -1,9 +1,8 @@
 // 업적 창의 파생 모델 — 판정(진척, 수령 가능, 누적 보너스)은 게임 규칙의 순수 함수를 그대로 쓰고,
-// 여기서는 화면이 읽을 값(요약 줄, 칩 바, 3탭 목록, 다단계 압축 카드, 행 상태)으로 묶는다.
+// 여기서는 화면이 읽을 값(요약 줄, 3탭 목록, 다단계 압축 카드, 행 상태)으로 묶는다.
 import {
   ACHIEVEMENTS,
   CUMULATIVE_BONUS_SERIES,
-  LEGACY_ACHIEVEMENT_DEFS,
   achievementForHatId,
   namedSpoilerPlace,
 } from '../../../game/content/achievements';
@@ -18,8 +17,6 @@ import { namedById } from '../../../game/content/named';
 import { hatById } from '../../../game/content/wardrobe';
 import { zoneById } from '../../../game/content/zones';
 import {
-  achievementBonusContributions,
-  achievementBonusesOf,
   achievementProgress,
   cumulativeBonusProgress,
 } from '../../../game/rules/achievements';
@@ -71,15 +68,6 @@ export interface CumulativeBonusCardModel {
   activeText: string;
   maxText: string;
   steps: CumulativeBonusStepView[];
-}
-
-/** 상단 적용 중인 누적 보너스 칩 모델 */
-export interface ActiveBonusChip {
-  id: string;
-  label: string;
-  valueText: string;
-  rows: [string, string][];
-  foot: string;
 }
 
 /** 치장 탭 다단계 네임드 토벌 카드 모델 */
@@ -167,11 +155,9 @@ export function tabClaimableCount(game: GameState, tab: AchievementTab): number 
   return ACHIEVEMENTS.filter(a => a.tab === tab && game.achievements[a.id] === 'claimable').length;
 }
 
-/** 받을 수 있는 업적의 수 — 메뉴 줄 배지와 요약 줄이 같은 값을 쓴다(옛 미수령 업적 포함) */
+/** 받을 수 있는 업적의 수 — 메뉴 줄 배지와 요약 줄·탭 목록이 같은 카탈로그를 쓴다 */
 export function claimableCount(game: GameState): number {
-  const active = ACHIEVEMENTS.filter(a => game.achievements[a.id] === 'claimable').length;
-  const legacy = LEGACY_ACHIEVEMENT_DEFS.filter(a => game.achievements[a.id] === 'claimable').length;
-  return active + legacy;
+  return ACHIEVEMENTS.filter(a => game.achievements[a.id] === 'claimable').length;
 }
 
 /**
@@ -197,9 +183,6 @@ export function achievementSummary(game: GameState, guest = false): {
     if (game.achievements[a.id] !== 'claimable') continue;
     if (a.reward.kind === 'gold') gold += a.reward.gold;
     else hats += 1;
-  }
-  for (const legacy of LEGACY_ACHIEVEMENT_DEFS) {
-    if (game.achievements[legacy.id] === 'claimable') gold += legacy.reward.gold;
   }
   return {
     claimed: ACHIEVEMENTS.filter(a => game.achievements[a.id] === 'claimed').length,
@@ -257,96 +240,6 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
       steps,
     };
   });
-}
-
-/** 상단 적용 중인 누적 보너스 칩 바 */
-export function activeBonusChips(game: GameState): ActiveBonusChip[] {
-  const totals = achievementBonusesOf(game);
-  const contribs = achievementBonusContributions(game);
-  const chips: ActiveBonusChip[] = [];
-
-  if (totals.biteWaitCut > 0) {
-    chips.push({
-      id: 'biteWaitCut',
-      label: '입질 대기',
-      valueText: fmtPct(totals.biteWaitCut, '−'),
-      rows: contribs
-        .filter(c => c.series.bonusKind === 'biteWaitCut')
-        .map(c => [c.series.name, fmtPct(c.activeDelta, '−')]),
-      foot: '같은 종류의 보너스는 모두 더해 한 번만 적용돼요.',
-    });
-  }
-
-  const mutContribs = contribs.filter(c => c.series.bonusKind === 'mutationWeight' || c.series.bonusKind === 'zoneMutation');
-  if (mutContribs.length > 0) {
-    const maxZoneMut = Math.max(0, ...Object.values(totals.zoneMutation).filter((v): v is number => typeof v === 'number'));
-    const displaySum = Math.round((totals.mutationWeight + maxZoneMut) * 1e9) / 1e9;
-    chips.push({
-      id: 'mutationWeight',
-      label: '돌연변이 가중치',
-      valueText: fmtPct(displaySum, '+'),
-      rows: mutContribs.map(c => [
-        c.series.name,
-        c.series.scope === 'zone' && c.series.zone
-          ? `${zoneById(c.series.zone)?.shortName ?? c.series.zone} ${fmtPct(c.activeDelta, '+')}`
-          : fmtPct(c.activeDelta, '+'),
-      ]),
-      foot: '구역 보너스는 그 구역에서 낚시할 때만 적용돼요.',
-    });
-  }
-
-  const legContribs = contribs.filter(c => c.series.bonusKind === 'zoneLegendary');
-  if (legContribs.length > 0) {
-    const maxZoneLeg = Math.max(0, ...Object.values(totals.zoneLegendary).filter((v): v is number => typeof v === 'number'));
-    chips.push({
-      id: 'zoneLegendary',
-      label: '전설 가중치',
-      valueText: fmtPct(maxZoneLeg, '+'),
-      rows: legContribs.map(c => [
-        c.series.name,
-        `${zoneById(c.series.zone!)?.shortName ?? c.series.zone} ${fmtPct(c.activeDelta, '+')}`,
-      ]),
-      foot: '구역 보너스는 그 구역에서 낚시할 때만 적용돼요.',
-    });
-  }
-
-  if (totals.namedWeight > 0) {
-    chips.push({
-      id: 'namedWeight',
-      label: '네임드 조우',
-      valueText: fmtPct(totals.namedWeight, '+'),
-      rows: contribs
-        .filter(c => c.series.bonusKind === 'namedWeight')
-        .map(c => [c.series.name, fmtPct(c.activeDelta, '+')]),
-      foot: '같은 종류의 보너스는 모두 더해 한 번만 적용돼요.',
-    });
-  }
-
-  if (totals.moveSpeed > 0) {
-    chips.push({
-      id: 'moveSpeed',
-      label: '이동 속도',
-      valueText: fmtPct(totals.moveSpeed, '+'),
-      rows: contribs
-        .filter(c => c.series.bonusKind === 'moveSpeed')
-        .map(c => [c.series.name, fmtPct(c.activeDelta, '+')]),
-      foot: '달성한 단계마다 효과가 더해져 적용돼요.',
-    });
-  }
-
-  if (totals.artifactBoost > 0) {
-    chips.push({
-      id: 'artifactBoost',
-      label: '유물 효과',
-      valueText: fmtPct(totals.artifactBoost, '+'),
-      rows: contribs
-        .filter(c => c.series.bonusKind === 'artifactBoost')
-        .map(c => [c.series.name, fmtPct(c.activeDelta, '+')]),
-      foot: '보유 유물의 수치 효과에 배율이 더해져요.',
-    });
-  }
-
-  return chips;
 }
 
 const COSMETIC_SCOPE_LABEL: Record<CosmeticKind, string> = {
