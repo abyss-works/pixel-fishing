@@ -2,8 +2,8 @@
 // 게임 번들에는 관리자 화면이 들어가지 않는다.
 // 진입: /admin/#/admin/overview · 복귀: 헤더의 "게임으로" 링크.
 //
-// 탐색은 탭 일곱 개다. 개요 · 실시간 · 플레이어(명부·이상탐지) · 소통(편지·우편)
-// · 경제·진행(경제·진행·활동) · 밸런스 · 운영. 괄호 안은 탭 안의 구역이고 해시에 `#/admin/<탭>/<구역>`으로 담긴다.
+// 탐색은 탭 여덟 개다. 개요 · 실시간 · 플레이어(명부·이상탐지) · 소통(편지·우편)
+// · 경제·진행(경제·진행·활동) · 밸런스 · 콘텐츠 · 운영. 괄호 안은 탭 안의 구역이고 해시에 `#/admin/<탭>/<구역>`으로 담긴다.
 // 데이터 접근은 **기능 계층**(platform API 조회를 기능별로 조합) 하나로
 // 모인다. 쓰기는 우편 보내기, 편지 처리 표시, 사용자 상세의 관리 조치(제재·해제, 재설정 링크)뿐이다. 접근 판정은 AdminAuthProvider가 1회 해석.
 //
@@ -24,14 +24,15 @@ import type { AdminRoute, AdminTab } from './routes';
 import AnalysisTab from './tabs/AnalysisTab';
 import BalanceTab from './tabs/BalanceTab';
 import CommsTab from './tabs/CommsTab';
+import ContentTab from './tabs/ContentTab';
 import LiveTab from './tabs/LiveTab';
 import OpsTab from './tabs/OpsTab';
 import OverviewTab from './tabs/OverviewTab';
 import PlayersTab from './tabs/PlayersTab';
 
-/** 탭 아이콘 — 개요 나침반, 실시간 해, 플레이어 열쇠(계정), 소통 봉투, 경제·진행 동전, 밸런스 물고기, 운영 톱니 */
+/** 탭 아이콘 — 개요 나침반, 실시간 해, 플레이어 열쇠(계정), 소통 봉투, 경제·진행 동전, 밸런스 물고기, 콘텐츠 책, 운영 톱니 */
 const TAB_GLYPH: Record<AdminTab, GlyphId> = {
-  overview: 'compass', live: 'sun', players: 'key', comms: 'letter', analysis: 'coin', balance: 'fish', ops: 'gear',
+  overview: 'compass', live: 'sun', players: 'key', comms: 'letter', analysis: 'coin', balance: 'fish', content: 'book', ops: 'gear',
 };
 
 /** 주소의 해시를 정식 해시로 맞춘다 — 기록을 쌓지 않고 바꾼다(뒤로 가기가 옛 해시로 돌아오지 않게) */
@@ -125,6 +126,7 @@ function Dashboard() {
         {route.tab === 'analysis' &&
           <AnalysisTab section={route.section} onSection={section => go({ tab: 'analysis', section })} />}
         {route.tab === 'balance' && <BalanceTab />}
+        {route.tab === 'content' && <ContentTab />}
         {route.tab === 'ops' && <OpsTab />}
       </main>
     </div>
