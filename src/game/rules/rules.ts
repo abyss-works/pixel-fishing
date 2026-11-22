@@ -20,7 +20,7 @@ import type { BaseId } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
 import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
-import { ACHIEVEMENTS, LEGACY_ACHIEVEMENT_DEFS, achievementById, legacyAchievementById } from '../content/achievements.js';
+import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import {
   upgradeCost, CHALLENGE_MISS_LIMIT,
   EXHIBIT_SLOTS,
@@ -155,10 +155,10 @@ export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
   return state.gold >= h.price ? OK : no('not-enough-gold');
 }
 
-/** 업적 보상 받기 — 계정 사용자, 존재하는 업적(또는 이미 claimable인 옛 업적), claimable 상태 */
+/** 업적 보상 받기 — 계정 사용자, 현행 카탈로그에 존재하는 업적, claimable 상태 */
 export function canClaimAchievement(state: GameState, id: unknown, guest = false): RuleCheck {
   if (guest) return no('account-only');
-  const def = achievementById(id) ?? legacyAchievementById(id);
+  const def = achievementById(id);
   if (!def) return no('bad-request');
   const status = state.achievements[def.id];
   if (status === 'claimed') return no('achievement-already-claimed');
@@ -166,12 +166,10 @@ export function canClaimAchievement(state: GameState, id: unknown, guest = false
   return OK;
 }
 
-/** 업적 보상 모두 받기 — 계정 사용자, 받을 수 있는 업적이 하나 이상 */
+/** 업적 보상 모두 받기 — 계정 사용자, 현행 카탈로그 중 받을 수 있는 업적이 하나 이상 */
 export function canClaimAllAchievements(state: GameState, guest = false): RuleCheck {
   if (guest) return no('account-only');
-  const hasClaimable = ACHIEVEMENTS.some(a => state.achievements[a.id] === 'claimable')
-    || LEGACY_ACHIEVEMENT_DEFS.some(a => state.achievements[a.id] === 'claimable');
-  return hasClaimable ? OK : no('no-claimable-achievements');
+  return ACHIEVEMENTS.some(a => state.achievements[a.id] === 'claimable') ? OK : no('no-claimable-achievements');
 }
 
 /** 모자 쓰기 — null은 벗기이며 언제나 된다. 아니면 가진 모자여야 한다 */

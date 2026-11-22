@@ -35,7 +35,7 @@ import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
-import { ACHIEVEMENTS, LEGACY_ACHIEVEMENT_DEFS, achievementById, legacyAchievementById } from '../content/achievements.js';
+import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import { topZoneOfSpot } from '../content/zones.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
 import { NO_ACHIEVEMENT_BONUSES } from './effects.js';
@@ -836,7 +836,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'claimAchievement': {
       const check = canClaimAchievement(state, action.id, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
-      const def = achievementById(action.id) ?? legacyAchievementById(action.id)!;
+      const def = achievementById(action.id)!;
       const achievements = { ...state.achievements, [def.id]: 'claimed' as const };
       if (def.reward.kind === 'gold') {
         return {
@@ -863,7 +863,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const rewardHats: string[] = [];
       const nextHats = [...state.hats];
       const nextAchievements = { ...state.achievements };
-      for (const a of [...ACHIEVEMENTS, ...LEGACY_ACHIEVEMENT_DEFS]) {
+      for (const a of ACHIEVEMENTS) {
         if (nextAchievements[a.id] !== 'claimable') continue;
         ids.push(a.id);
         nextAchievements[a.id] = 'claimed';
