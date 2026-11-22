@@ -18,7 +18,7 @@ import { accountKind, insertPasswordResetToken } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
 import { setLetterHandled } from './_data/mail.js';
-import { deliverMail, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
+import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
 import { ApiError, toApiError } from './errors.js';
@@ -128,17 +128,14 @@ async function route(req: Req, res: Res): Promise<void> {
 function parse(name: string | undefined, req: Req): (db: Executor) => Promise<unknown> {
   switch (name) {
     case 'users': return read.users;
-    case 'retention': return read.retention;
     case 'spamFlags': return read.spamFlags;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
     case 'changelog': return read.changelog;
     case 'chatReports': return read.chatReports;
     case 'mails': return db => recentSentMails(db);
-    case 'dailyActive': { const days = daysOf(req); return db => read.dailyActive(db, days); }
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
-    case 'catchQuality': { const days = daysOf(req); return db => read.catchQuality(db, days); }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
       const user = param(req, 'user');
@@ -146,19 +143,34 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
       const limit = limitOf(req);
       return db => read.userEvents(db, user, limit);
     }
+    case 'userState': {
+      const uid = param(req, 'uid');
+      if (uid === undefined || !UUID.test(uid)) throw new ApiError(400, 'bad-user');
+      return db => read.userState(db, uid);
+    }
     default: throw new ApiError(400, 'bad-query');
   }
 }
 
 /** 우편 보내기 — op가 preview면 미리보기만, send면 보낸다. 같은 데이터 모듈을 운영 스크립트도 쓴다 */
 async function mail(db: Executor, raw: unknown): Promise<unknown> {
-  const op = (raw as { op?: unknown } | null)?.op;
-  const request = parseMailRequest((raw as { request?: unknown } | null)?.request);
+  const bodyObj = raw as { op?: unknown; request?: unknown; idempotencyKey?: unknown } | null;
+  const op = bodyObj?.op;
+  const request = parseMailRequest(bodyObj?.request);
+  const topKey = bodyObj?.idempotencyKey;
+  if (topKey !== undefined && (typeof topKey !== 'string' || topKey.trim().length === 0 || topKey.length > 128)) {
+    throw new ApiError(400, 'bad-mail');
+  }
   if ((op !== 'preview' && op !== 'send') || !request) throw new ApiError(400, 'bad-mail');
-  if (op === 'preview') return dbRead(() => planMail(db, request));
+  const merged = typeof topKey === 'string' && !request.idempotencyKey
+    ? { ...request, idempotencyKey: topKey.trim() }
+    : request;
+  if (op === 'preview') return dbRead(() => planMail(db, merged));
   try {
-    return await deliverMail(db, request, new Date().toISOString());
+    return await deliverMail(db, merged, new Date().toISOString());
   } catch (e) {
+    if (e instanceof DuplicateMailError) throw new ApiError(409, 'duplicate-mail');
+    if (e instanceof ApiError) throw e;
     throw new ApiError(500, 'db-write', {}, { cause: e });
   }
 }

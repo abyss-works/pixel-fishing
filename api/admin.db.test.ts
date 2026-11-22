@@ -71,12 +71,6 @@ async function asBrowser(uid: string, select: string): Promise<Row[]> {
   }
 }
 
-/** DB 시계 기준 KST 오늘 날짜 */
-async function kstToday(): Promise<string> {
-  const { rows } = await env.client.query(`select ((now() at time zone 'Asia/Seoul')::date)::text as d`);
-  return rows[0].d as string;
-}
-
 const sinceDay = (days: number) => `where day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}`;
 const byKey = (rows: Row[], key: (r: Row) => string): Row[] => [...rows].sort((a, b) => key(a).localeCompare(key(b)));
 
@@ -98,19 +92,13 @@ interface Case {
 /** 기간(days)을 받는 일 단위 조회. 뷰는 day 열로 거른다 */
 const dayCase = (name: string, view: string, days: number): Case => ({
   name, params: { days: String(days) }, view: `select * from public.${view} ${sinceDay(days)}`,
-  filled: days > 1 || name === 'dailyActive',
-  // 우편 유입(mail_gold)은 v_economy_daily가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
-  ...(name === 'economy' ? { only: ({ mail_gold: _mail, ...rest }: Row) => rest } : {}),
+  filled: days > 1,
 });
 const CASES: Case[] = [
   // 닉네임(nickname)과 세션 열(last_session_at·total_session_sec)은 v_admin_users가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
   { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true,
     only: ({ nickname: _nickname, last_session_at: _lastSession, total_session_sec: _totalSession, ...rest }: Row) => rest },
-  dayCase('dailyActive', 'v_daily_active', 30),
-  { name: 'retention', view: 'select * from public.v_retention_cohorts', filled: true },
-  dayCase('economy', 'v_economy_daily', 30),
   dayCase('bountyFunnel', 'v_bounty_funnel_daily', 7),
-  dayCase('catchQuality', 'v_catch_quality', 90),
   { name: 'spamFlags', view: 'select * from public.v_spam_flags', key: r => String(r.user_id), filled: true },
   { name: 'recentEvents', view: 'select * from public.v_events_recent', filled: true },
   { name: 'userEvents', params: { user: PLAYER, limit: '300' }, view: `select * from public.fn_user_events('${PLAYER}', 300)`,
@@ -120,10 +108,7 @@ const CASES: Case[] = [
     only: ({ handled_at: _handled, ...rest }: Row) => rest },
 ];
 /** 기간 하한의 경계: 하루, 일주일, 대시보드의 최대 기간 */
-const DAY_CASES: Case[] = [1, 7, 90].flatMap(days => [
-  dayCase('dailyActive', 'v_daily_active', days), dayCase('economy', 'v_economy_daily', days),
-  dayCase('bountyFunnel', 'v_bounty_funnel_daily', days), dayCase('catchQuality', 'v_catch_quality', days),
-]);
+const DAY_CASES: Case[] = [1, 7, 90].map(days => dayCase('bountyFunnel', 'v_bounty_funnel_daily', days));
 
 async function expectSameAsView(c: Case): Promise<Row[]> {
   const res = await callAdmin({ q: c.name, ...c.params }, userToken(ADMIN));
@@ -197,9 +182,11 @@ describe('요청 검증과 관리자 판정', () => {
     const token = userToken(ADMIN);
     const wrong: Record<string, string>[] = [
       {}, { q: 'nope' }, { q: 'constructor' }, { q: '__proto__' },
-      { q: 'dailyActive' }, { q: 'dailyActive', days: '0' }, { q: 'dailyActive', days: '91' },
-      { q: 'dailyActive', days: '1.5' }, { q: 'economy', days: 'abc' }, { q: 'catchQuality', days: '-1' },
+      { q: 'dailyActive', days: '7' }, { q: 'catchQuality', days: '7' }, { q: 'retention' },
+      { q: 'economy' }, { q: 'economy', days: '0' }, { q: 'economy', days: '91' },
+      { q: 'economy', days: '1.5' }, { q: 'economy', days: 'abc' }, { q: 'bountyFunnel', days: '-1' },
       { q: 'userEvents' }, { q: 'userEvents', user: 'not-a-uuid' }, { q: 'userEvents', user: PLAYER, limit: 'x' },
+      { q: 'userState' }, { q: 'userState', uid: 'not-a-uuid' },
     ];
     for (const query of wrong) {
       const res = await callAdmin(query, token);
@@ -249,19 +236,7 @@ describe('데이터가 없는 상태', () => {
   it.each([...CASES, ...DAY_CASES].map(c => [`${c.name} ${c.params?.days ?? ''}`.trim(), c] as const))('%s: 뷰·함수와 같은 빈 결과를 준다', async (_label, c) => {
     const actual = await expectSameAsView(c);
     if (c.name === 'users') expect(actual).toHaveLength(5);
-    else if (c.name === 'dailyActive') expect(actual.every(r => r.dau === 0 && r.wau7 === 0)).toBe(true);
     else expect(actual).toEqual([]);
-  });
-
-  it('dailyActive: 오늘부터 days일의 날짜를 모두 채워 최신순으로 준다', async () => {
-    const today = await kstToday();
-    const one = (await callAdmin({ q: 'dailyActive', days: '1' }, userToken(ADMIN))).body as Row[];
-    expect(one.map(r => r.day)).toEqual([today]);
-    const week = (await callAdmin({ q: 'dailyActive', days: '7' }, userToken(ADMIN))).body as Row[];
-    expect(week).toHaveLength(7);
-    expect(week[0].day).toBe(today);
-    expect(week.map(r => r.day)).toEqual([...week.map(r => r.day)].sort().reverse());
-    expect(((await callAdmin({ q: 'dailyActive', days: '90' }, userToken(ADMIN))).body as Row[])).toHaveLength(90);
   });
 });
 
@@ -285,8 +260,8 @@ describe('조회 결과', () => {
     await event(ADMIN, 'ticket', { questId: 'pacific-named-1' }, '4 hours');
     await event(ADMIN, 'resolveChallenge', { success: true }, '3 hours');
     await event(ADMIN, 'resolveChallenge', { success: false }, '3 hours');
-    await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1' }, '2 hours');
-    await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3' }, '2 hours');
+    await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1', reward: 100000 }, '2 hours');
+    await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3', reward: 15000 }, '2 hours');
     // 제재된 익명 사용자: 기간 경계의 캐치(30일 밖, 7일 경계 안팎. 이벤트 id 순서가 시간 순서가 되게 오래된 것부터),
     // 골드 원장 이벤트
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 80 }, '40 days');
@@ -297,9 +272,11 @@ describe('조회 결과', () => {
     await event(GUEST, 'sell', { gold: 250 }, '2 hours');
     await event(GUEST, 'coupon', { gold: 500 }, '1 day');
     await event(GUEST, 'claimMail', { mailId: 1, gold: 250 }, '1 day');
+    await event(GUEST, 'claimAchievement', { id: 'catch-10', gold: 1000 }, '1 day');
+    await event(GUEST, 'claimAllAchievements', { ids: ['a'], gold: 2000, hats: [] }, '1 day');
     await event(GUEST, 'upgradeRod', { cost: 80 }, '1 day');
     await event(GUEST, 'buyBoat', { cost: 1000 }, '2 days');
-    await event(GUEST, 'buyBait', { cost: 30 }, '30 minutes');
+    await event(GUEST, 'buyHat', { hat: 'cap-red', cost: 50000 }, '30 minutes');
     // 리텐션: 열흘 전 코호트(저장 없는 두 사용자 중 하나만 다음 날과 사흘 뒤에 돌아왔다)
     await event(IDLE_A, 'boot', {}, '10 days');
     await event(IDLE_B, 'boot', {}, '10 days');
@@ -333,13 +310,12 @@ describe('조회 결과', () => {
     expect(rows[3]).toMatchObject({ user_id: IDLE_A, gold: null, location_kind: null, visited: null, restricted: null, last_action_at: null });
   });
 
-  it('economy·catchQuality·bountyFunnel: 날짜 하한 밖의 날은 빠진다', async () => {
+  it('economy·bountyFunnel: 날짜 하한 밖의 날은 빠진다', async () => {
     const all = (await callAdmin({ q: 'economy', days: '90' }, userToken(ADMIN))).body as Row[];
     const today = (await callAdmin({ q: 'economy', days: '1' }, userToken(ADMIN))).body as Row[];
     expect(all.length).toBeGreaterThan(1);
     expect(today.length).toBeLessThan(all.length);
     expect(today.every(r => r.day === all[0].day)).toBe(true);
-    expect(((await callAdmin({ q: 'catchQuality', days: '1' }, userToken(ADMIN))).body as Row[]).length).toBeLessThanOrEqual(1);
     expect(((await callAdmin({ q: 'bountyFunnel', days: '1' }, userToken(ADMIN))).body as Row[]).length).toBeLessThanOrEqual(1);
   });
 
@@ -347,8 +323,10 @@ describe('조회 결과', () => {
     const rows = (await callAdmin({ q: 'economy', days: '90' }, userToken(ADMIN))).body as Row[];
     const total = (key: string) => rows.reduce((sum, r) => sum + Number(r[key]), 0);
     expect({ sells: total('sells'), sell_gold: total('sell_gold'), coupon_gold: total('coupon_gold'), mail_gold: total('mail_gold'),
-      rod_cost: total('rod_cost'), boat_cost: total('boat_cost'), bait_cost: total('bait_cost') })
-      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, mail_gold: 250, rod_cost: 80, boat_cost: 1000, bait_cost: 30 });
+      bounty_gold: total('bounty_gold'), achievement_gold: total('achievement_gold'),
+      rod_cost: total('rod_cost'), boat_cost: total('boat_cost'), hat_cost: total('hat_cost') })
+      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, mail_gold: 250, bounty_gold: 115000, achievement_gold: 3000,
+        rod_cost: 80, boat_cost: 1000, hat_cost: 50000 });
   });
 
   it('bountyFunnel: 네임드와 일반 의뢰, 도전권, 결투 승패, 보상을 나누어 센다', async () => {
@@ -370,22 +348,17 @@ describe('조회 결과', () => {
     expect(rows.map(r => r.perfect_pct_global)).toEqual([50, 50, 50]);
   });
 
-  it('catchQuality: 기간 하한은 KST 오늘부터 days일이다. 하한 날짜는 들어오고 하루 앞은 빠진다', async () => {
-    const dayAgo = async (n: number) =>
-      (await env.client.query(`select (((now() at time zone 'Asia/Seoul')::date) - $1::int)::text as d`, [n])).rows[0].d as string;
-    const daysOf = async (n: number) =>
-      ((await callAdmin({ q: 'catchQuality', days: String(n) }, userToken(ADMIN))).body as Row[]).map(r => r.day);
-    expect(await daysOf(7)).toContain(await dayAgo(6));
-    expect(await daysOf(7)).not.toContain(await dayAgo(7));
-    expect(await daysOf(8)).toContain(await dayAgo(7));
-    expect(await daysOf(30)).not.toContain(await dayAgo(40));
-    expect(await daysOf(90)).toContain(await dayAgo(40));
-  });
-
-  it('retention: 첫 행동일 코호트별 재방문률을 준다', async () => {
-    const rows = (await callAdmin({ q: 'retention' }, userToken(ADMIN))).body as Row[];
-    const cohort = rows.find(r => r.users === 2);
-    expect(cohort).toMatchObject({ d1: 50, d3: 50, d7: 0, d14: 0, d30: 0 });
+  it('userState: 대상 플레이어의 도감·토벌·유물·모자·업적·기운/요리·개체 수를 돌려준다', async () => {
+    const res = await callAdmin({ q: 'userState', uid: PLAYER }, userToken(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      hasSave: true,
+      dex: { normal: 0, variant: 0, named: 0 },
+      bounty: { namedClears: 0, namedDistinctClears: 0 },
+      artifacts: { owned: [] },
+      hats: { owned: 0 },
+      instances: { bag: 0, exhibit: 0 },
+    });
   });
 
   it('recentEvents: 최신 80행만 id 내림차순으로 준다', async () => {

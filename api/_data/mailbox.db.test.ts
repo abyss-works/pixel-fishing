@@ -8,8 +8,8 @@ import type { Database } from '../_db/client.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
-  allPlayerIds, claimMailFragment, claimableGold, deliverMail, draftProblems, listMails, markMailRead,
-  MAIL_LIST_LIMIT, parseMailRequest, planMail, previewMails, recentSentMails, sendMails,
+  allPlayerIds, claimMailFragment, claimableGold, clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError, listMails, markMailRead,
+  MAIL_LIST_LIMIT, MAX_MAIL_BATCH_TOTAL_GOLD, parseMailRequest, planMail, previewMails, recentSentMails, sendMails,
 } from './mailbox.js';
 
 let testDb: TestDatabase;
@@ -88,7 +88,14 @@ describe('보내기', () => {
     const ghost = randomUUID();
     const draft = { title: ' 환급 ', body: ' 차액을 돌려드려요. ', recipients: [{ userId: a, gold: 100 }, { userId: b, gold: 0 }, { userId: ghost, gold: 5 }] };
     const preview = await previewMails(database.db, draft);
-    expect(preview).toEqual({ count: 2, totalGold: 100, missing: [ghost] });
+    expect(preview).toEqual({
+      count: 2,
+      recipientCount: 2,
+      totalGold: 100,
+      capExceeded: false,
+      maxTotalGold: MAX_MAIL_BATCH_TOTAL_GOLD,
+      missing: [ghost],
+    });
     expect(await listMails(database.db, a)).toEqual([]);
 
     expect(await sendMails(database.db, draft, NOW)).toBe(2);
@@ -97,6 +104,33 @@ describe('보내기', () => {
     expect((await listMails(database.db, b))[0].gold).toBe(0);
     const sent = await recentSentMails(database.db);
     expect(sent.filter(m => [a, b].includes(m.userId))).toHaveLength(2);
+  });
+
+  it('중복 수신자·상한 초과·멱등 키·최근 동일 우편 중복을 차단한다', async () => {
+    clearMailIdempotencyCache();
+    const a = await user();
+    const dupPlan = await planMail(database.db, {
+      title: '중복', body: '확인', target: { kind: 'users', recipients: [{ userId: a, gold: 10 }, { userId: a.toUpperCase(), gold: 20 }] },
+    });
+    expect(dupPlan).toEqual({ problems: ['duplicate'], duplicates: [a.toLowerCase()], preview: null });
+
+    const capPlan = await planMail(database.db, {
+      title: '초과', body: '확인', target: { kind: 'users', recipients: [{ userId: a, gold: MAX_MAIL_BATCH_TOTAL_GOLD + 1 }] },
+    });
+    expect(capPlan.problems).toEqual(['totalGold']);
+    expect(capPlan.preview).toMatchObject({ recipientCount: 1, capExceeded: true, maxTotalGold: MAX_MAIL_BATCH_TOTAL_GOLD });
+    expect(await deliverMail(database.db, {
+      title: '초과', body: '확인', target: { kind: 'users', recipients: [{ userId: a, gold: MAX_MAIL_BATCH_TOTAL_GOLD + 1 }] },
+    }, NOW)).toMatchObject({ problems: ['totalGold'], sent: 0 });
+
+    const key = randomUUID();
+    const req = { title: '안전장치', body: '본문', target: { kind: 'users' as const, recipients: [{ userId: a, gold: 50 }] }, idempotencyKey: key };
+    const first = await deliverMail(database.db, req, NOW);
+    expect(first.sent).toBe(1);
+    const replay = await deliverMail(database.db, req, NOW);
+    expect(replay).toMatchObject({ sent: 0, idempotent: true });
+
+    await expect(deliverMail(database.db, { ...req, idempotencyKey: randomUUID() }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
   });
 
   it('전체 대상은 저장 상태가 있는 제재되지 않은 계정이다', async () => {

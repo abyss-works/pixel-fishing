@@ -1,7 +1,7 @@
 // 캐치 품질 집계의 슬롯 효과 열(with_bait) — 이벤트 payload에 미끼 슬롯 또는 도시락 슬롯 요리 id가 실린 캐치를 센다.
 // 뷰(v_catch_quality)와 읽기 함수가 같은 값을 준다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminSessionHeaders, seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { seedUser, startActionEnv, testUid } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 const ADMIN = testUid(1501);
@@ -52,19 +52,5 @@ async function viewRows(): Promise<Row[]> {
 describe('캐치 품질 슬롯 열', () => {
   it('뷰는 미끼 또는 도시락 슬롯 id가 payload에 있는 캐치를 센다', async () => {
     expect(await viewRows()).toEqual([expect.objectContaining({ catches: 6, perfect: 2, with_bait: 4 })]);
-  });
-
-  it('읽기 함수도 같은 값을 준다', async () => {
-    const { default: handler } = await import('./admin.js');
-    const out: { status: number; body: unknown } = { status: 0, body: undefined };
-    const res = {
-      status(code: number) { out.status = code; return res; },
-      json(b: unknown) { out.body = b; },
-      setHeader() {},
-    };
-    await handler({ method: 'GET', query: { q: 'catchQuality', days: '90' }, headers: adminSessionHeaders(userToken(ADMIN)) } as never, res as never);
-    expect(out.status).toBe(200);
-    const day = (await viewRows())[0].day;
-    expect((out.body as Row[]).find(r => r.day === day)).toMatchObject({ catches: 6, perfect: 2, with_bait: 4 });
   });
 });
