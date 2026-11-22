@@ -47,11 +47,11 @@ afterEach(() => {
 });
 
 describe('우편 요청 해석 및 중복/상한 검증', () => {
-  it('duplicateRecipientIds는 대소문자를 무시해 중복 uid를 정규화 목록으로 돌려준다', () => {
+  it('duplicateRecipientIds는 대소문자와 앞뒤 공백을 무시해 중복 uid를 정규화 목록으로 돌려준다', () => {
     expect(duplicateRecipientIds([
       { userId: A, gold: 10 },
       { userId: B, gold: 20 },
-      { userId: A.toUpperCase(), gold: 30 },
+      { userId: ` ${A.toUpperCase()} `, gold: 30 },
       { userId: A, gold: 40 },
     ])).toEqual([A]);
   });
@@ -127,5 +127,62 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
       target: { kind: 'users', recipients: [{ userId: A, gold: 100 }] },
       idempotencyKey: 'fresh-key',
     }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
+  });
+
+  it('존재하는 계정이 한 명도 없으면 recipients 문제로 발송을 거부한다', async () => {
+    const db = mockExecutor({ foundIds: [] });
+    const req = {
+      title: '보상', body: '본문',
+      target: { kind: 'users' as const, recipients: [{ userId: A, gold: 100 }] },
+      idempotencyKey: 'missing-only-key',
+    };
+    const plan = await planMail(db, req);
+    expect(plan).toMatchObject({ problems: ['recipients'], preview: { count: 0, missing: [A] } });
+
+    const sent = await deliverMail(db, req, NOW);
+    expect(sent).toMatchObject({ problems: ['recipients'], sent: 0 });
+  });
+
+  it('동시 요청(mailInFlight) 합류 시 본문이 다르면 DuplicateMailError, invalid 요청은 검증 결과, 동일 요청은 idempotent=true를 돌려준다', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const db = {
+      execute: vi.fn(async (query: unknown) => {
+        const text = JSON.stringify(query);
+        if (text.includes('join auth.users u') && !text.includes('insert into public.mails')) {
+          return { rows: [{ id: A }] };
+        }
+        if (text.includes('as found')) {
+          await gate;
+          return { rows: [{ found: false }] };
+        }
+        if (text.includes('insert into public.mails')) {
+          return { rows: [{ n: 1 }] };
+        }
+        return { rows: [] };
+      }),
+    } as unknown as Executor;
+
+    const req = {
+      title: '동시', body: '본문',
+      target: { kind: 'users' as const, recipients: [{ userId: A, gold: 50 }] },
+      idempotencyKey: 'inflight-key',
+    };
+
+    const p1 = deliverMail(db, req, NOW);
+    await Promise.resolve();
+
+    // invalid 요청은 합류·충돌 없이 각자 검증 문제를 받는다
+    await expect(deliverMail(db, { ...req, title: ' ' }, NOW)).resolves.toEqual({
+      problems: ['title'], preview: null, sent: 0,
+    });
+    // 본문이 다른 동시 요청은 409 충돌 오류를 받는다
+    await expect(deliverMail(db, { ...req, body: '다른 본문' }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
+    // 동일 요청 합류는 첫 요청이 끝난 뒤 idempotent=true를 받는다
+    const pSame = deliverMail(db, req, NOW);
+
+    release();
+    expect(await p1).toMatchObject({ problems: [], sent: 1 });
+    expect(await pSame).toMatchObject({ problems: [], sent: 0, idempotent: true });
   });
 });

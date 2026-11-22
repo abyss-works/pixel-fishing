@@ -133,6 +133,18 @@ describe('보내기', () => {
     await expect(deliverMail(database.db, { ...req, idempotencyKey: randomUUID() }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
   });
 
+  it('전체 대상 발송 뒤 대상 수가 늘어도 10분 창 안에서 같은 내용 중복 발송을 막는다', async () => {
+    clearMailIdempotencyCache();
+    await user();
+    const firstAll = { title: '전체공지', body: '중복차단확인', target: { kind: 'all' as const, gold: 15 }, idempotencyKey: randomUUID() };
+    const sent = await deliverMail(database.db, firstAll, NOW);
+    expect(sent.sent).toBeGreaterThan(0);
+
+    // 새 플레이어가 추가되어 전체 대상 수가 늘어도 기존 수신자 중복으로 10분 내 재발송을 차단한다
+    await user();
+    await expect(deliverMail(database.db, { ...firstAll, idempotencyKey: randomUUID() }, '2026-10-23T00:05:00.000Z')).rejects.toBeInstanceOf(DuplicateMailError);
+  });
+
   it('전체 대상은 저장 상태가 있는 제재되지 않은 계정이다', async () => {
     const live = await user();
     const banned = await user(true, true);

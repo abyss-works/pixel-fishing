@@ -93,7 +93,7 @@ export function duplicateRecipientIds(recipients: readonly MailRecipient[]): str
   const dupes: string[] = [];
   const added = new Set<string>();
   for (const r of recipients) {
-    const id = r.userId.toLowerCase();
+    const id = r.userId.trim().toLowerCase();
     if (seen.has(id)) {
       if (!added.has(id)) {
         added.add(id);
@@ -213,8 +213,13 @@ interface CachedMailSend {
   result: MailPlan & { sent: number };
 }
 
+interface InFlightMailSend {
+  fingerprint: string;
+  promise: Promise<MailPlan & { sent: number }>;
+}
+
 const mailIdempotencyCache = new Map<string, CachedMailSend>();
-const mailInFlight = new Map<string, Promise<MailPlan & { sent: number }>>();
+const mailInFlight = new Map<string, InFlightMailSend>();
 
 /** 테스트용 멱등 캐시 초기화 */
 export function clearMailIdempotencyCache(): void {
@@ -230,6 +235,24 @@ function pruneIdempotencyCache(nowMs: number): void {
 
 function mailFingerprint(req: MailRequest): string {
   return JSON.stringify({ title: req.title.trim(), body: req.body.trim(), target: req.target });
+}
+
+function quickRequestProblems(req: MailRequest): { problems: DraftProblem[]; duplicates?: string[] } | null {
+  if (req.target.kind === 'users') {
+    const draft: MailDraft = { title: req.title, body: req.body, recipients: req.target.recipients };
+    const problems = draftProblems(draft);
+    if (problems.length > 0) {
+      const duplicates = duplicateRecipientIds(draft.recipients);
+      return { problems, ...(duplicates.length > 0 ? { duplicates } : {}) };
+    }
+    return null;
+  }
+  const problems = draftProblems({
+    title: req.title,
+    body: req.body,
+    recipients: [{ userId: '00000000-0000-4000-8000-000000000000', gold: req.target.gold }],
+  });
+  return problems.length > 0 ? { problems } : null;
 }
 
 async function draftOf(db: Executor, req: MailRequest): Promise<MailDraft> {
@@ -251,11 +274,16 @@ export async function planMail(db: Executor, req: MailRequest): Promise<MailPlan
     return { problems, ...(duplicates.length > 0 ? { duplicates } : {}), preview: null };
   }
   const preview = await previewMails(db, draft);
-  return { problems: preview.capExceeded ? ['totalGold'] : [], preview };
+  if (preview.capExceeded) return { problems: ['totalGold'], preview };
+  if (preview.count === 0) return { problems: ['recipients'], preview };
+  return { problems: [], preview };
 }
 
 /** 보내기 — 형태 문제와 상한 초과·중복 발송이 없을 때만 넣는다. 넣은 수(sent)와 넣기 직전 미리보기를 돌려준다 */
 export async function deliverMail(db: Executor, req: MailRequest, nowISO: string): Promise<MailPlan & { sent: number }> {
+  const quick = quickRequestProblems(req);
+  if (quick) return { ...quick, preview: null, sent: 0 };
+
   const key = req.idempotencyKey;
   const nowMs = Date.now();
   const fingerprint = mailFingerprint(req);
@@ -269,8 +297,9 @@ export async function deliverMail(db: Executor, req: MailRequest, nowISO: string
     }
     const pending = mailInFlight.get(key);
     if (pending) {
-      const done = await pending;
-      return { ...done, sent: 0, idempotent: true };
+      if (pending.fingerprint !== fingerprint) throw new DuplicateMailError();
+      const done = await pending.promise;
+      return done.problems.length > 0 ? done : { ...done, sent: 0, idempotent: true };
     }
   }
 
@@ -283,6 +312,7 @@ export async function deliverMail(db: Executor, req: MailRequest, nowISO: string
     }
     const preview = await previewMails(db, draft);
     if (preview.capExceeded) return { problems: ['totalGold'], preview, sent: 0 };
+    if (preview.count === 0) return { problems: ['recipients'], preview, sent: 0 };
     if (await hasRecentDuplicateMail(db, draft, nowISO)) throw new DuplicateMailError();
     const sent = await sendMails(db, draft, nowISO);
     const result: MailPlan & { sent: number } = { problems: [], preview, sent };
@@ -299,7 +329,7 @@ export async function deliverMail(db: Executor, req: MailRequest, nowISO: string
   if (!key) return run();
 
   const promise = run();
-  mailInFlight.set(key, promise);
+  mailInFlight.set(key, { fingerprint, promise });
   try {
     return await promise;
   } finally {

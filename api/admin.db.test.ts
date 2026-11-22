@@ -2,6 +2,12 @@
 // 조회 결과는 관리자 뷰·함수의 결과와 같아야 한다. 같은 데이터를 authenticated 역할과 세션 클레임으로 읽은
 // 뷰·함수 결과(PostgREST의 읽기 방식)를 기댓값으로 쓴다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ARTIFACTS, artifactHasLevel } from '../src/game/content/artifacts.js';
+import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
+import { ENERGY_ITEM_IDS, RECIPES } from '../src/game/content/cooking.js';
+import { FISH } from '../src/game/content/fish.js';
+import { NAMED } from '../src/game/content/named.js';
+import { HATS } from '../src/game/content/wardrobe.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { appAuth } from './_auth/session.js';
@@ -349,14 +355,94 @@ describe('조회 결과', () => {
   });
 
   it('userState: 대상 플레이어의 도감·토벌·유물·모자·업적·기운/요리·개체 수를 돌려준다', async () => {
+    const leveledArt = ARTIFACTS.find(a => artifactHasLevel(a))!;
+    const fixedArt = ARTIFACTS.find(a => !artifactHasLevel(a))!;
+    const hat = HATS[0];
+    const [achClaimed, achClaimable] = ACHIEVEMENTS;
+    const lunchRecipe = RECIPES.find(r => r.kind === 'lunch')!;
+    const baitRecipe = RECIPES.find(r => r.kind === 'bait')!;
+    const normalFish = FISH[0];
+    const variantFish = FISH[1];
+    const namedFish = NAMED[0];
+
+    await env.client.query(`insert into public.records (user_id, fish_id, form, count) values
+      ($1, $2, 'normal', 2), ($1, $3, 'variant', 1), ($1, $4, 'normal', 1)`,
+    [PLAYER, normalFish.id, variantFish.id, namedFish.id]);
+    await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id) values
+      ($1, 'named', 'pacific-named-1'), ($1, 'named', 'pacific-named-1'), ($1, 'named', 'seasia-named-1')`,
+    [PLAYER]);
+    await env.client.query(`insert into public.fish_instances (uid, user_id, fish_id, form, slot) values
+      ($2, $1, $4, 'normal', null), ($3, $1, $4, 'variant', null), ($5, $1, $4, 'normal', 0)`,
+    [PLAYER, testUid(9901), testUid(9902), normalFish.id, testUid(9903)]);
+    await env.client.query(`insert into public.achievement_counters (user_id, key, value) values
+      ($1, 'catches', 12)`,
+    [PLAYER]);
+    await env.client.query(`update public.saves_current set data = data || $2::jsonb where user_id = $1`, [PLAYER, JSON.stringify({
+      artifacts: [leveledArt.id, fixedArt.id],
+      artifactLevels: { [leveledArt.id]: 3 },
+      hats: [hat.id],
+      achievements: { [achClaimed.id]: 'claimed', [achClaimable.id]: 'claimable' },
+      items: { [ENERGY_ITEM_IDS.common]: 20, [ENERGY_ITEM_IDS.rare]: 5, [lunchRecipe.id]: 2 },
+      cooking: { recipe: baitRecipe.id, count: 1, startedAt: '2026-10-18T09:50:00.000Z' },
+      slots: {
+        lunch: { id: lunchRecipe.id, endsAt: '2026-10-18T11:00:00.000Z' },
+        bait: { id: baitRecipe.id, endsAt: '2026-10-18T10:05:00.000Z' },
+      },
+    })]);
+
     const res = await callAdmin({ q: 'userState', uid: PLAYER }, userToken(ADMIN));
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
+    expect(res.body).toEqual({
       hasSave: true,
+      dex: {
+        normal: 1,
+        normalTotal: FISH.length,
+        variant: 1,
+        variantTotal: FISH.length,
+        named: 1,
+        namedTotal: NAMED.length,
+      },
+      bounty: { namedClears: 3, namedDistinctClears: 2, namedTotal: NAMED.length },
+      artifacts: {
+        owned: [
+          { id: leveledArt.id, name: leveledArt.name, grade: leveledArt.grade, level: 3 },
+          { id: fixedArt.id, name: fixedArt.name, grade: fixedArt.grade, level: null },
+        ],
+        total: ARTIFACTS.length,
+      },
+      hats: { owned: 1, total: HATS.length },
+      achievements: {
+        claimed: 1,
+        claimable: 1,
+        total: ACHIEVEMENTS.length,
+        counters: { catches: 12 },
+      },
+      cooking: {
+        energy: { common: 20, rare: 5, epic: 0, legendary: 0 },
+        cooked: [{ id: lunchRecipe.id, name: lunchRecipe.name, kind: lunchRecipe.kind, count: 2 }],
+        inProgress: {
+          recipe: baitRecipe.id,
+          name: baitRecipe.name,
+          count: 1,
+          startedAt: '2026-10-18T09:50:00.000Z',
+        },
+        slots: {
+          lunch: { id: lunchRecipe.id, name: lunchRecipe.name, endsAt: '2026-10-18T11:00:00.000Z' },
+          bait: { id: baitRecipe.id, name: baitRecipe.name, endsAt: '2026-10-18T10:05:00.000Z' },
+        },
+      },
+      instances: { bag: 2, exhibit: 1 },
+    });
+
+    const emptyRes = await callAdmin({ q: 'userState', uid: IDLE_A }, userToken(ADMIN));
+    expect(emptyRes.status).toBe(200);
+    expect(emptyRes.body).toMatchObject({
+      hasSave: false,
       dex: { normal: 0, variant: 0, named: 0 },
       bounty: { namedClears: 0, namedDistinctClears: 0 },
       artifacts: { owned: [] },
       hats: { owned: 0 },
+      achievements: { claimed: 0, claimable: 0, counters: {} },
       instances: { bag: 0, exhibit: 0 },
     });
   });
