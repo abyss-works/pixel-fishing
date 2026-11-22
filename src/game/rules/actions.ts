@@ -56,7 +56,7 @@ import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 
 export type GameAction =
-  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true } // forceEncounter: 테스트용 강제 조우(서버가 운영에서 떼어 낸다)
+  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
@@ -220,6 +220,12 @@ export function applyPatch(prev: GameState, patch: StatePatch): GameState {
     if (src) putExhibit(src, slot);
   }
   const dex: GameState['dex'] = { ...prev.dex };
+  for (const { fishId, form } of patch.writes.recordsRemoved ?? []) {
+    if (!dex[fishId]) continue;
+    const { [form]: _gone, ...rest } = dex[fishId];
+    if (Object.keys(rest).length === 0) delete dex[fishId];
+    else dex[fishId] = rest;
+  }
   for (const { fishId, form, rec } of patch.writes.records) {
     dex[fishId] = { ...dex[fishId], [form]: { ...rec } };
   }
@@ -242,6 +248,7 @@ export interface StateWrites {
   instancesMoved: { uid: string; slot: number | null }[];  // 가방 ↔ 전시
   instancesLocked: { uid: string; locked: boolean }[];      // 잠금 토글
   records: { fishId: string; form: FormId; rec: FormRecord }[];
+  recordsRemoved?: { fishId: string; form: FormId }[];
 }
 
 export type ApplyOutcome =
@@ -273,6 +280,17 @@ function diffWrites(prev: GameState, next: GameState): StateWrites {
   for (const uid of before.keys()) if (!after.has(uid)) w.instancesRemoved.push(uid);
 
   // 도감은 종×폼 단위로 바뀐 행만 — 절대값이라 실패해도 다음 캐치가 자가 치유한다
+  const recordsRemoved: { fishId: string; form: FormId }[] = [];
+  for (const [fishId, forms] of Object.entries(prev.dex)) {
+    for (const [form, old] of Object.entries(forms)) {
+      if (!old || old.count <= 0) continue;
+      const cur = next.dex[fishId]?.[form as FormId];
+      if (!cur || cur.count <= 0) {
+        recordsRemoved.push({ fishId, form: form as FormId });
+      }
+    }
+  }
+  if (recordsRemoved.length > 0) w.recordsRemoved = recordsRemoved;
   for (const [fishId, forms] of Object.entries(next.dex)) {
     for (const [form, rec] of Object.entries(forms)) {
       if (!rec) continue;
@@ -322,7 +340,10 @@ export interface CatchDraw {
   /** 이 캐치에 적용하는 요리 슬롯 효과 — 돌연변이 가중은 drawCatch가, 네임드 조우 가중은 namedWeightBonus가 쓴다 */
   cook: ActiveCookEffects;
 }
-export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone): CatchDraw {
+export function prepareCatchDraw(
+  state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone,
+  forcePhase?: DayPhase,
+): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
@@ -330,8 +351,9 @@ export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgm
   // 요리 슬롯 효과 — 서버 시각(now)으로 적용 여부를 정한다. 방치와 수동의 구분은 주장 판정으로 하며 강등으로 바뀌지 않는다.
   const cook = slotEffects(state, now, claimed);
   // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
-  // 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다. 미끼 슬롯 효과라 수동 캐치에만 걸리고 밤에는 이미 밤 풀이라 변화가 없다.
-  const phase: DayPhase = isNight(now) || cook.nightUnlock ? 'night' : 'day';
+  // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
+  const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
+  const phase: DayPhase = nightNow || cook.nightUnlock ? 'night' : 'day';
   let phaseOpts: DrawOptions & { phase: DayPhase } = { phase };
   for (const [grade, bonus] of Object.entries(cook.rarityWeight) as [RarityId, number][]) {
     phaseOpts = addGradeEffect(phaseOpts, grade, bonus);
@@ -434,7 +456,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const achBonuses = achievementBonusesOf(state);
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
-      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz);
+      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
         deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses));
       const namedHit = named.quest;
@@ -751,11 +773,19 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'debug': {
       // 개발 도구 명령 — 계산은 reduceDebug(기존 규칙 함수 조합), 허용 판정은 서버가 먼저 한다
       const args = action.args ?? {};
-      const next = reduceDebug(state, action.command, args, deps.today);
+      const next = reduceDebug(state, action.command, args, deps.today, deps.now, deps.newUid);
       if (!next) return { ok: false, error: 'bad-request' };
+      const payload = action.command === 'snapshot.restore'
+        ? {
+          command: action.command,
+          bagCount: next.bag.length,
+          exhibitCount: next.exhibit.filter(Boolean).length,
+          dexCount: Object.keys(next.dex).length,
+        }
+        : { command: action.command, args };
       return {
         ok: true, state: next, result: { type: 'none' },
-        events: [{ type: 'debug', payload: { command: action.command, args } }],
+        events: [{ type: 'debug', payload }],
       };
     }
     case 'import': {

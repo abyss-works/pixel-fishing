@@ -43,6 +43,30 @@ export function clearFragment(guard: SQL, uid: string, quest: BountyQuest, nowIS
     select ${uid}, ${bountyKindOf(quest)}, ${quest.id}, ${at(nowISO)} where ${guard}`;
 }
 
+/** 네임드 토벌 기록 일괄 추가 — 개발 도구 named.unlock용 */
+export function namedClearInsertFragment(guard: SQL, uid: string, questIds: readonly string[], nowISO: string): SQL | null {
+  if (questIds.length === 0) return null;
+  return sql`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
+    select ${uid}, 'named', q, ${at(nowISO)} from unnest(${textArray(questIds)}) as q where ${guard}`;
+}
+
+/** 네임드 토벌 기록 선택 삭제 — 개발 도구 named.reset·dex.reset용 */
+export function namedClearDeleteFragment(guard: SQL, uid: string, questIds: readonly string[]): SQL | null {
+  if (questIds.length === 0) return null;
+  return sql`delete from public.bounty_clears
+    where user_id = ${uid} and kind = 'named' and quest_id = any(${textArray(questIds)}) and ${guard}`;
+}
+
+/** 네임드 토벌 기록 원자적 복원 — 기존 kind='named' 행을 지우고 스냅샷 목록으로 채운다 */
+export function namedClearReplaceFragments(guard: SQL, uid: string, questIds: readonly string[], nowISO: string): SQL[] {
+  const out: SQL[] = [
+    sql`delete from public.bounty_clears where user_id = ${uid} and kind = 'named' and ${guard}`,
+  ];
+  const ins = namedClearInsertFragment(guard, uid, questIds, nowISO);
+  if (ins) out.push(ins);
+  return out;
+}
+
 /** 만료된 의뢰의 정리 — 진행 행과 도전권. 응답 뒤 후속 쓰기다(만료 판정은 읽을 때 끝나 있어 정리가 늦어도 판정은 같다).
  *  만료 조건을 SQL에도 그대로 걸어, 그 사이 새로 수주해 살아난 행은 지우지 않는다. */
 export function expiredCleanup(uid: string, quests: readonly { id: string; count: number }[], dayStartISO: string): SQL[] {

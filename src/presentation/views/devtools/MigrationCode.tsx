@@ -48,7 +48,7 @@ export default function MigrationCode({ game, dispatch, setToast }: {
   return (
     <div className="flex flex-col gap-2">
       <Note size="2xs" className="my-0">
-        소유자 전용. 유저가 보내 온 코드(저장 실패·계정 전환 시 자동 백업)를 불러와 이관한다.
+        관리자 전용. 유저가 보내 온 코드(저장 실패·계정 전환 시 자동 백업)를 불러와 이관한다.
       </Note>
       <div className="grid grid-cols-2 gap-2">
         <Button size="sm" onClick={exportSave}>이사 코드 내보내기</Button>

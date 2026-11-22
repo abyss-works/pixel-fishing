@@ -41,6 +41,7 @@ import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
 import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
+import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
@@ -52,12 +53,14 @@ import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
   acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDeliveryFragment, debugFragment, deliveryGate,
-  expiredCleanup, ticketFragment,
+  expiredCleanup, namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
-import { counterUpsertFragment } from './_data/achievements.js';
+import {
+  counterClearFragment, counterRestoreFragments, counterSetFragment, counterUpsertFragment,
+} from './_data/achievements.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRecords, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
@@ -303,8 +306,8 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(422, 'debug-forbidden');
   }
 
-  // 테스트용 강제 조우 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
-  if (action.type === 'catch' && action.forceEncounter && !await debugAllowed()) {
+  // 테스트용 강제 조우·낮/밤 전환 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
+  if (action.type === 'catch' && (action.forceEncounter || action.forcePhase) && !await debugAllowed()) {
     action = { type: 'catch', spot: action.spot, judgment: action.judgment };
   }
 
@@ -469,7 +472,7 @@ async function route(req: Req, res: Res): Promise<void> {
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
-      loaded.counters, loaded.clearedNamed);
+      loaded.counters, loaded.clearedNamed, action.forcePhase);
     if (out.ok) catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
   } else {
     let state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
@@ -539,9 +542,35 @@ async function route(req: Req, res: Res): Promise<void> {
       fragments.push(clearFragment(guard, uid, quest, nowISO));
     }
   }
-  // 개발 도구 테이블 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
+  // 개발 도구 테이블·정규화 표 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
   if (action.type === 'debug' && isDebugTableCommand(action.command)) {
     fragments.push(debugFragment(guard, uid, debugTablePlan(action.command, Date.now())));
+  }
+  if (action.type === 'debug') {
+    if (action.command === 'snapshot.restore') {
+      fragments.push(...namedClearReplaceFragments(guard, uid, out.state.clearedNamed, nowISO));
+      fragments.push(...counterRestoreFragments(guard, uid, out.state.achievementCounters));
+    } else if (action.command === 'named.unlock' || action.command === 'named.reset' || action.command === 'dex.reset') {
+      const prevSet = new Set(loaded.clearedNamed);
+      const nextSet = new Set(out.state.clearedNamed);
+      const added = out.state.clearedNamed.filter(id => !prevSet.has(id));
+      const removed = loaded.clearedNamed.filter(id => !nextSet.has(id));
+      fragments.push(namedClearInsertFragment(guard, uid, added, nowISO));
+      fragments.push(namedClearDeleteFragment(guard, uid, removed));
+    } else if (action.command === 'achievement.setCounter' || action.command === 'achievement.resetCounters') {
+      const nextCounters = out.state.achievementCounters;
+      if (action.command === 'achievement.resetCounters' && Object.keys(nextCounters).length === 0) {
+        fragments.push(counterClearFragment(guard, uid));
+      } else {
+        const changed: Record<string, number> = {};
+        for (const [k, v] of Object.entries(nextCounters)) {
+          if (typeof v === 'number' && loaded.counters[k] !== v) changed[k] = v;
+        }
+        const removedKeys = Object.keys(loaded.counters).filter(k => nextCounters[k] === undefined);
+        fragments.push(counterSetFragment(guard, uid, changed));
+        fragments.push(counterClearFragment(guard, uid, removedKeys));
+      }
+    }
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
@@ -645,14 +674,15 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
-  guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[]): Promise<ApplyOutcome> {
+  guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
+  forcePhase?: DayPhase): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
-  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);

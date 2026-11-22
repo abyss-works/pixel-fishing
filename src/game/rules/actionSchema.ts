@@ -23,6 +23,7 @@ const schemas = {
   catch: z.object({
     type: z.literal('catch'), spot: z.string(), judgment: Judgment,
     forceEncounter: z.literal(true).optional(),
+    forcePhase: z.enum(['day', 'night']).optional(),
   }),
   sell: z.object({ type: z.literal('sell'), uids: z.array(z.unknown()) }),
   upgradeRod: z.object({ type: z.literal('upgradeRod') }),

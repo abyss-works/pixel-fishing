@@ -107,6 +107,23 @@ describe('patch 동등성 — 전 액션', () => {
   it('debug dex.completeZone — 도감 행이 델타로 표현된다', () => {
     check(seed(), { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } });
   });
+  it('debug dex.reset / named.unlock / named.reset / snapshot.restore — 도감 삭제·카운터·토벌 델타가 일치한다', () => {
+    const rich = seed({
+      dex: {
+        carp: { normal: { count: 2, maxSize: 30, first: '2026-08-01' } },
+        megalodon: { normal: { count: 1, maxSize: null, first: '2026-08-01' } },
+      },
+      clearedNamed: ['pacific-named-megalodon'],
+      achievementCounters: { 'sell.gold': 500 },
+    });
+    check(rich, { type: 'debug', command: 'dex.reset', args: { zone: 'village', includeNamed: false } });
+    check(rich, { type: 'debug', command: 'named.reset', args: { namedId: 'megalodon' } });
+    check(seed(), { type: 'debug', command: 'named.unlock', args: { namedId: 'megalodon' } });
+    check(seed(), { type: 'debug', command: 'bag.spawn', args: { fishId: 'carp', form: 'variant', count: 2 } });
+    check(rich, { type: 'debug', command: 'achievement.setCounter', args: { key: 'sell.gold', value: 1200 } });
+    check(rich, { type: 'debug', command: 'achievement.resetCounters', args: { resetAchievements: true } });
+    check(rich, { type: 'debug', command: 'snapshot.restore', args: { snapshot: seed({ gold: 42 }) } });
+  });
   it('import — 통째 교체도 델타로 표현된다', () => {
     const prev = seed({ bag: [mkInst('a')], gold: 10 });
     const save = { ...newState(), gold: 777, fame: 888 };

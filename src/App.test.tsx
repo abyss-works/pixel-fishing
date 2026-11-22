@@ -795,13 +795,13 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
-  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(관리자 명부 계정 전용)에 있다', () => {
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음(관리자 명부 계정 전용)에 있다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     clickTab('설정');
     expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '운영' }));
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
@@ -1430,16 +1430,16 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '운영' }));
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
     window.history.replaceState({}, '', '/');
   });
 
-  it('상태 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
+  it('장비·아이템·업적 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '상태' }));
+    fireEvent.click(screen.getByRole('button', { name: '장비·아이템·업적' }));
     fireEvent.change(screen.getByLabelText('스탯 설정 골드'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: '스탯 설정' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('스탯 설정');
@@ -1462,19 +1462,21 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     fireEvent.pointerUp(handle, { clientX: 400, clientY: 130, pointerId: 1 });
     expect(parseFloat(box().top)).toBe(parseFloat(before.top) + 100);
     expect(JSON.parse(localStorage.getItem('pf-devtools-pos')!)).toMatchObject({ y: parseFloat(before.top) + 100 });
-    for (const name of ['상태', '수배', '시간·화면', '운영']) {
+    for (const name of ['이동·시간', '도감·네임드', '장비·아이템·업적', '수배', '계정·스냅샷']) {
       fireEvent.click(screen.getByRole('button', { name }));
       expect([box().w, box().h]).toEqual([before.w, before.h]);
     }
     window.history.replaceState({}, '', '/');
   });
 
-  it('네임드 직전 프리셋은 그 구역 항구 밖이면 멈추고 이유를 기록한다', async () => {
+  it('네임드 직전 프리셋은 항구 밖에서도 자동 이동한 뒤 수주를 시도한다 (오프라인은 수주 단계에서 멈춤)', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
-    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('태평양 항구 안에서 실행해야 한다');
+    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('거점 이동 (harbor)');
+    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('오프라인에서는 의뢰를 수주하거나 마칠 수 없어요');
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
   });
 });
