@@ -4,7 +4,7 @@
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
-import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
+import type { FishInstance, FormId, GameState } from '../../src/game/rules/logic.js';
 import type { StateWrites } from '../../src/game/rules/actions.js';
 import { at, jsonParam, uuidArray } from './json.js';
 
@@ -50,6 +50,17 @@ function replaceInstances(guard: SQL, uid: string, rows: ReturnType<typeof instR
       spot = x.spot, judgment = x.judgment, slot = x.slot, locked = coalesce(x.locked, false)
     from json_to_recordset(${jsonParam(rows)}) as x${INSTANCE_RECORDSET}
     where f.user_id = ${uid} and f.uid = x.uid and ${guard}`;
+}
+
+/** 도감 삭제 조각 — dex.reset·named.reset·import·snapshot.restore에서 사라진 도감 행을 지운다 */
+export function deleteRecordsFragment(
+  guard: SQL, uid: string, records: readonly { fishId: string; form: FormId }[],
+): SQL | null {
+  if (records.length === 0) return null;
+  const rows = records.map(r => ({ fish_id: r.fishId, form: r.form }));
+  return sql`delete from public.records r
+    using json_to_recordset(${jsonParam(rows)}) as x(fish_id text, form text)
+    where r.user_id = ${uid} and r.fish_id = x.fish_id and r.form = x.form and ${guard}`;
 }
 
 function upsertRecords(guard: SQL, uid: string, records: StateWrites['records'], nowISO: string): SQL {
@@ -118,6 +129,10 @@ export function writeFragments(guard: SQL, uid: string, w: StateWrites, nowISO: 
       out.push(sql`update public.fish_instances set locked = ${locked}
         where user_id = ${uid} and uid = any(${uuidArray(uids)}) and ${guard}`);
     }
+  }
+  if (w.recordsRemoved && w.recordsRemoved.length > 0) {
+    const del = deleteRecordsFragment(guard, uid, w.recordsRemoved);
+    if (del) out.push(del);
   }
   if (w.records.length > 0) out.push(upsertRecords(guard, uid, w.records, nowISO));
   return out;

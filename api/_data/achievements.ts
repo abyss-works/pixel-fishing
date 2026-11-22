@@ -1,11 +1,11 @@
 // 업적 카운터 표(achievement_counters) 쓰기·읽기 소유 모듈.
 // 액션 확정 문장 안에서 상태 변경과 원자적으로 함께 오르는 쓰기 조각과,
-// 초기 상태·액션 컨텍스트가 읽는 사용자별 카운터 누적을 둔다.
+// 개발 도구용 절대값 설정·초기화·복원 조각을 둔다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { AchievementCounters } from '../../src/game/content/achievements.js';
-import { jsonParam } from './json.js';
+import { jsonParam, textArray } from './json.js';
 
 /**
  * 카운터 증분을 확정 문장의 쓰기 조각으로 만든다. guard가 참(낙관 락 통과)일 때만 쓴다.
@@ -23,6 +23,47 @@ export function counterUpsertFragment(guard: SQL, uid: string, inc: AchievementC
     where ${guard}
     on conflict (user_id, key) do update
       set value = achievement_counters.value + excluded.value, updated_at = excluded.updated_at`;
+}
+
+/** 카운터 절대값 설정 조각 — 개발 도구 achievement.setCounter·snapshot.restore용 */
+export function counterSetFragment(guard: SQL, uid: string, values: AchievementCounters): SQL | null {
+  const rows = Object.entries(values)
+    .filter(([, v]) => typeof v === 'number' && Number.isInteger(v) && v >= 0)
+    .map(([key, value]) => ({ key, value }));
+  if (rows.length === 0) return null;
+  return sql`insert into public.achievement_counters (user_id, key, value, updated_at)
+    select ${uid}, key, value, now()
+    from json_to_recordset(${jsonParam(rows)}) as x(key text, value bigint)
+    where ${guard}
+    on conflict (user_id, key) do update
+      set value = excluded.value, updated_at = excluded.updated_at`;
+}
+
+/** 카운터 초기화 조각 — keys가 있으면 해당 키만, 없으면 사용자의 모든 카운터 행을 지운다 */
+export function counterClearFragment(guard: SQL, uid: string, keys?: readonly string[]): SQL | null {
+  if (keys !== undefined) {
+    if (keys.length === 0) return null;
+    return sql`delete from public.achievement_counters
+      where user_id = ${uid} and key = any(${textArray(keys)}) and ${guard}`;
+  }
+  return sql`delete from public.achievement_counters where user_id = ${uid} and ${guard}`;
+}
+
+/** 카운터 원자적 복원 조각 — 스냅샷에 없는 키는 삭제하고 남은 키는 절대값으로 덮는다(행 집합 분리) */
+export function counterRestoreFragments(guard: SQL, uid: string, counters: AchievementCounters): SQL[] {
+  const entries = Object.entries(counters)
+    .filter(([, v]) => typeof v === 'number' && Number.isInteger(v) && v >= 0);
+  const keys = entries.map(([k]) => k);
+  const out: SQL[] = [];
+  if (keys.length === 0) {
+    out.push(sql`delete from public.achievement_counters where user_id = ${uid} and ${guard}`);
+  } else {
+    out.push(sql`delete from public.achievement_counters
+      where user_id = ${uid} and key <> all(${textArray(keys)}) and ${guard}`);
+    const setSql = counterSetFragment(guard, uid, counters);
+    if (setSql) out.push(setSql);
+  }
+  return out;
 }
 
 /** 계정 정리에서 사용자의 카운터 행을 모두 지운다 */
