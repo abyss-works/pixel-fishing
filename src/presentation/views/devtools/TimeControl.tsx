@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { dayPhase, formatGameClock, DAY_START_MIN, NIGHT_START_MIN } from '../../../game/rules/time';
-import { setTimeOverride, useTimeOverride } from '../../../features/gameplay/service/timeOverride';
+import { TIME_CYCLE, timeClockOf, timePhaseOf } from '../../../features/devtools/model/time';
+import {
+  setPhaseOverride,
+  setTimeOverride,
+  usePhaseOverride,
+  useTimeOverride,
+} from '../../../features/gameplay/service/timeOverride';
+import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { cx } from '../../ui/cx';
 import PillButton from '../../ui/PillButton';
 import Note from '../../ui/Note';
@@ -8,19 +14,23 @@ import PixelIcon from '../../ui/PixelIcon';
 import Frame from '../../ui/Frame';
 import Slider from '../../ui/Slider';
 import Tip from '../../ui/Tip';
+import { useDevEnv } from './devEnv';
 
-// 게임 시각 고정 — 오프라인 개발 모드(로컬 게이트웨이) 전용. 서버는 자기 시각으로 판정한다.
+// 낮/밤 3단 스위치(실제/낮/밤)는 프리뷰·로컬 모두에서 요청 단위 forcePhase와 화면 연출을 동기화한다.
+// 분 단위 시각 슬라이더는 오프라인 개발 모드(로컬 게이트웨이) 전용이다.
 export default function TimeControl() {
+  const { env } = useDevEnv();
+  const isLocal = env === 'local';
   const override = useTimeOverride();
+  const phaseOverride = usePhaseOverride();
+  const gameTime = useGameTime();
   const [, setTick] = useState(0);
 
-  // 슬라이더 위치 = 주기 내 분(0~59, 0=자정). override가 없으면 실제 시계의 분을 표시한다.
-  const liveMinute = new Date().getMinutes();
-  const minute = override !== null ? new Date(override).getMinutes() : liveMinute;
-  const phase = dayPhase(override ?? new Date().toISOString());
-  const clockText = formatGameClock(override ?? new Date().toISOString());
+  const liveIso = new Date().toISOString();
+  const minute = override !== null ? new Date(override).getMinutes() : new Date().getMinutes();
+  const phase = phaseOverride ?? timePhaseOf(override ?? liveIso);
+  const clockText = override !== null ? timeClockOf(override) : gameTime.clock;
 
-  // ISO 분만 조작 — 분이 곧 주기 내 위치이므로 날짜·시 무관
   const atMinute = (m: number): string => {
     const d = new Date();
     d.setUTCMinutes(m, 0, 0);
@@ -37,39 +47,67 @@ export default function TimeControl() {
           <b className="pf-accent text-lg text-gold">{clockText}</b>
           <b className={cx('text-sm', phase === 'night' ? 'text-accent' : 'text-gold')}>
             {phase === 'night' ? '밤' : '낮'}
+            {phaseOverride ? ' (고정)' : ''}
           </b>
         </span>
-        <PillButton type="button"
-                onClick={() => { setTimeOverride(null); setTick(t => t + 1); }}
-                className="shrink-0 text-sm px-3 py-1.5">
-          실제 시각{override === null ? ' (적용 중)' : ''}
-        </PillButton>
-      </div>
-
-      {/* 슬라이더 — 주기 내 분(0~59, 0=자정). 드래그하면 낮/밤·어둠·해/달이 즉시 반영된다. */}
-      <Slider min={0} max={59} step={1}
-              value={minute}
-              aria-label="주기 내 시각 (분)"
-              onChange={e => {
-                const m = Number(e.target.value);
-                setTimeOverride(atMinute(m));
-                setTick(t => t + 1);
-              }} />
-
-      {/* 눈금 — 밤(게임 20시~4시)은 양끝, 낮(4시~20시)은 가운데 */}
-      <div className="flex items-center gap-2 text-xs text-text-dim">
-        <span className="shrink-0 w-10">자정</span>
-        <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-surface-2 border border-line">
-          <Tip plain text="밤 (게임 0~4시)" className="block h-full bg-accent/50" style={{ width: `${DAY_START_MIN}%` }}>{null}</Tip>
-          <Tip plain text="낮 (게임 4~20시)" className="block h-full bg-gold/30" style={{ width: `${NIGHT_START_MIN - DAY_START_MIN}%` }}>{null}</Tip>
-          <Tip plain text="밤 (게임 20~24시)" className="block h-full bg-accent/50" style={{ width: `${100 - NIGHT_START_MIN}%` }}>{null}</Tip>
+        <div className="flex items-center gap-1">
+          <PillButton type="button"
+                      active={phaseOverride === null && override === null}
+                      aria-pressed={phaseOverride === null}
+                      onClick={() => {
+                        setPhaseOverride(null);
+                        setTimeOverride(null);
+                        setTick(t => t + 1);
+                      }}
+                      className="text-xs px-2 py-1">
+            실제
+          </PillButton>
+          <PillButton type="button"
+                      active={phaseOverride === 'day'}
+                      aria-pressed={phaseOverride === 'day'}
+                      onClick={() => setPhaseOverride('day')}
+                      className="text-xs px-2 py-1">
+            낮 고정
+          </PillButton>
+          <PillButton type="button"
+                      active={phaseOverride === 'night'}
+                      aria-pressed={phaseOverride === 'night'}
+                      onClick={() => setPhaseOverride('night')}
+                      className="text-xs px-2 py-1">
+            밤 고정
+          </PillButton>
         </div>
-        <span className="shrink-0 w-10 text-right">다음 자정</span>
       </div>
+
+      {/* 분 단위 슬라이더 — 로컬 전용 */}
+      {isLocal && (
+        <>
+          <Slider min={0} max={59} step={1}
+                  value={minute}
+                  aria-label="주기 내 시각 (분)"
+                  onChange={e => {
+                    const m = Number(e.target.value);
+                    setPhaseOverride(null);
+                    setTimeOverride(atMinute(m));
+                    setTick(t => t + 1);
+                  }} />
+
+          {/* 눈금 — 밤(게임 20시~4시)은 양끝, 낮(4시~20시)은 가운데 */}
+          <div className="flex items-center gap-2 text-xs text-text-dim">
+            <span className="shrink-0 w-10">자정</span>
+            <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-surface-2 border border-line">
+              <Tip plain text="밤 (게임 0~4시)" className="block h-full bg-accent/50" style={{ width: `${TIME_CYCLE.dayStartMin}%` }}>{null}</Tip>
+              <Tip plain text="낮 (게임 4~20시)" className="block h-full bg-gold/30" style={{ width: `${TIME_CYCLE.nightStartMin - TIME_CYCLE.dayStartMin}%` }}>{null}</Tip>
+              <Tip plain text="밤 (게임 20~24시)" className="block h-full bg-accent/50" style={{ width: `${100 - TIME_CYCLE.nightStartMin}%` }}>{null}</Tip>
+            </div>
+            <span className="shrink-0 w-10 text-right">다음 자정</span>
+          </div>
+        </>
+      )}
+
       <Note size="xs" className="my-0">
-        낮 = 게임 04:00~20:00 · 밤 = 게임 20:00~다음 04:00.
-        밤 어종·어둠·이동 감속을 보려면 슬라이더를 0~9(새벽) 또는 50~59(저녁)로.
-        로컬 개발 전용 — 운영(클라우드)은 서버가 시각을 판정한다.
+        낮/밤 3단 스위치는 프리뷰·로컬 모두에서 수동·방치 캐치(forcePhase)와 화면 어둠에 즉시 반영된다.
+        {!isLocal && ' (분 단위 슬라이더는 로컬 개발 전용)'}
       </Note>
     </Frame>
   );

@@ -12,6 +12,7 @@ import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
 import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
+import { getPhaseOverride } from './timeOverride';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
@@ -175,6 +176,10 @@ export class HttpGameGateway implements GameGateway {
   }
 
   private async post(action: GameAction): Promise<Response> {
+    const phase = getPhaseOverride();
+    const payload = action.type === 'catch' && phase && !action.forcePhase
+      ? { ...action, forcePhase: phase }
+      : action;
     try {
       return await fetch('/api/action', {
         method: 'POST',
@@ -186,7 +191,7 @@ export class HttpGameGateway implements GameGateway {
           'x-client-version': APP_VERSION,
           'x-client-id': CLIENT_ID,
         },
-        body: JSON.stringify(action),
+        body: JSON.stringify(payload),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
         signal: AbortSignal.timeout(10_000),
       });

@@ -81,7 +81,6 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
   'presentation/views/admin/tabs/BalanceLiveSection.tsx': ['SPOTS', 'boatNameOf'],
   'presentation/views/admin/tabs/FishTab.tsx': ['FISH', 'RARITY', 'SPOTS'],
   'presentation/views/admin/tabs/UsersTab.tsx': ['boatNameOf'],
-  'presentation/views/devtools/TimeControl.tsx': ['DAY_START_MIN', 'NIGHT_START_MIN', 'dayPhase', 'formatGameClock'],
   'presentation/views/game/GameView.tsx': ['zoneById'],
   'presentation/views/game/base-menu/BaseMenu.tsx': ['boatNameOf'],
   'presentation/views/game/tabs/GameTabs.tsx': ['ZONE_IDS', 'defaultZoneOfRegion'],

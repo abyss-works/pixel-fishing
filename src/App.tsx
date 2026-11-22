@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { LIVE_REGIONS, resumePoint } from './game/world';
+import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, resumePoint, schoolsOf } from './game/world';
 import type { Point, SceneRef } from './game/world';
-import type { LocationRef } from './game/content/places';
+import type { BaseId, LocationRef } from './game/content/places';
+import { spotById } from './game/content/spots';
+import type { SpotId } from './game/content/spots';
+import { boatGateText } from './game/content/boats';
+import { topZoneOfSpot, zoneById } from './game/content/zones';
+import { minLevelOfPower } from './game/rules/stats';
+import { getSchoolDay } from './features/gameplay/service/schoolDay';
 import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
@@ -78,6 +84,56 @@ ${min}자 이상이어야 해요.`,
     });
   };
 
+  const teleportBase = async (base: BaseId): Promise<boolean> => {
+    const from = { scene, entryPos };
+    const nextScene: SceneRef = { kind: 'base', id: base };
+    place(nextScene);
+    const settled = await settleAction(() => dispatch({ type: 'travel', to: nextScene }));
+    if (settled.ok) {
+      setToast(`${BASE_PACKS[base].name}으로 순간이동했어요.`);
+      return true;
+    }
+    place(from.scene, from.entryPos ?? undefined);
+    if (settled.notice) setToast(settled.notice, 'warn');
+    return false;
+  };
+
+  const teleportSpot = async (spotId: SpotId): Promise<boolean> => {
+    const spot = spotById(spotId);
+    if (!spot) return false;
+    const zone = topZoneOfSpot(spotId);
+    const reqBoat = Math.max(spot.boatTier, (zone && zoneById(zone)?.entryBoat) ?? 0);
+    if (game.boat < reqBoat) {
+      setToast(`${spot.name} 해역에는 ${boatGateText(reqBoat)}이 필요해요.`, 'warn');
+      return false;
+    }
+    const region = spotId === 'pond' || spotId === 'river' ? 'village' : 'world';
+    let pos: Point;
+    if (spotId === 'pond') {
+      const s = V_SCHOOLS.find(v => v.spot === 'pond');
+      pos = { x: s?.x ?? V_POND.x + 20, y: V_POND.y - 3 };
+    } else if (spotId === 'river') {
+      const s = V_SCHOOLS.find(v => v.spot === 'river');
+      pos = { x: s?.x ?? 100, y: (s?.y ?? 222) - 26 };
+    } else {
+      const school = schoolsOf('world', getSchoolDay()).find(s => s.spot === spotId);
+      pos = school ? { x: school.x, y: school.y } : HARBORS.harbor.departure;
+    }
+    const from = { scene, entryPos };
+    const nextScene: SceneRef = { kind: 'region', id: region };
+    place(nextScene, pos);
+    const settled = await settleAction(() => dispatch({ type: 'travel', to: nextScene }));
+    if (settled.ok) {
+      const reqRod = minLevelOfPower(spot.powerReq ?? 0);
+      const rodHint = game.rod < reqRod ? ` (권장 낚싯대 Lv.${reqRod})` : '';
+      setToast(`${spot.name} 해역으로 순간이동했어요.${rodHint}`);
+      return true;
+    }
+    place(from.scene, from.entryPos ?? undefined);
+    if (settled.notice) setToast(settled.notice, 'warn');
+    return false;
+  };
+
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
   // 개발 도구 패널(?admin + 로컬 또는 서버 판정이 참일 때만). 둘 다 게임 화면 바깥의 오버레이이고,
   // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
@@ -92,7 +148,8 @@ ${min}자 이상이어야 해요.`,
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools}
+                  onTeleportBase={teleportBase} onTeleportSpot={teleportSpot} />
       </DevEnvContext.Provider>
       {dialogs}
     </>

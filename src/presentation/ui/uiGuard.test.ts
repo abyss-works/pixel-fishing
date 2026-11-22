@@ -45,7 +45,6 @@ const RAW_INPUT = /<(?:input|textarea|select)\b/;
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
 const RAW_HEADING_EXCEPTIONS = new Set([
-  'views/devtools/DevTools.tsx',      // 떠 있는 창 머리 — 끌기 손잡이를 겸한다
   'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
 ]);
 

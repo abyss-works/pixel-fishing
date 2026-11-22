@@ -1,8 +1,9 @@
 // 시간대 설정 스토어 — LocalGameGateway 캐치 판정에 실제로 반영되는지 (밤/낮 전환)
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalGameGateway } from './localGameGateway';
-import { setTimeOverride, resetTimeOverride } from './timeOverride';
+import { setPhaseOverride, setTimeOverride, resetTimeOverride } from './timeOverride';
 import { newState } from '../../game/rules/logic';
+import { fishById } from '../../game/content/fish';
 
 const clear = () => {
   try { localStorage.clear(); } catch { /* jsdom */ }
@@ -34,5 +35,21 @@ describe('시간대 설정 → LocalGameGateway', () => {
     const out = catchOne(gateway, 'pond');
     const inst = out.state.bag[out.state.bag.length - 1];
     expect(Math.abs(Date.parse(inst.caughtAt!) - Date.now())).toBeLessThan(5000);
+  });
+
+  it('낮/밤 강제 전환(phaseOverride)이 밤 어종 추첨에 반영된다', () => {
+    setTimeOverride('2026-09-06T00:25:00.000Z'); // 분 25 = 낮 시각
+    setPhaseOverride('night');
+    const gateway = new LocalGameGateway({ ...newState(), gold: 1e9, boat: 9, rod: 65 });
+    const orig = Math.random;
+    Math.random = () => 0.999999;
+    try {
+      const r = gateway.dispatch({ type: 'catch', spot: 'bermuda', judgment: 'auto' });
+      if (r.status !== 'ok') throw new Error(r.error);
+      const inst = r.state.bag[r.state.bag.length - 1];
+      expect(fishById(inst.fishId)?.night).toBe(true);
+    } finally {
+      Math.random = orig;
+    }
   });
 });

@@ -11,6 +11,7 @@ import type { BlockingModal } from '../../../core/errors';
 import { clearFailureNotice, showFailureNotice } from './failureNotice';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
+import { getPhaseOverride } from './timeOverride';
 import { fetchSession } from '../../account/service/session';
 import { guestProgress } from '../../account/model/accountRules';
 import { guestHasNoProgress } from '../../../game/rules/guest';
@@ -107,8 +108,15 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).
       결과에 따라 화면을 되돌려야 하는 호출부만 settleAction으로 감싸 쓴다 */
   const client = useQueryClient();
+  const withDevFlags = (action: GameAction): GameAction => {
+    const next = withForcedEncounter(action);
+    const phase = getPhaseOverride();
+    return next.type === 'catch' && phase && !next.forcePhase
+      ? { ...next, forcePhase: phase }
+      : next;
+  };
   const dispatch = (action: GameAction): MaybePromise<DispatchResult> =>
-    when(gameGatewayRef.current.dispatch(withForcedEncounter(action)), r => {
+    when(gameGatewayRef.current.dispatch(withDevFlags(action)), r => {
       if (r.status === 'ok') {
         const prev = gameRef.current;
         setGame(r.state);
