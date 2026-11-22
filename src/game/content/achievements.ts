@@ -147,7 +147,7 @@ export interface CumulativeBonusSeries {
   bonusKind: CumulativeBonusKind;
   unit: string;
   steps: readonly CumulativeBonusStep[];
-  /** 누적 보너스 업적 집계 가중치(기본 1계열 = 1건, 최고 레벨 유물은 3단계 각각 1건으로 총 23종) */
+  /** 누적 보너스 업적 집계 가중치(기본 1계열 = 1건, 최고 레벨 유물은 3단계 각각 1건으로 총 25종) */
   tierCount: number;
 }
 

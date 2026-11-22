@@ -4,6 +4,7 @@ import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
 import { endedFirstCatch, newFirstCatch } from './firstCatch';
+import { NO_GUILD_EFFECTS } from './guild';
 import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
@@ -491,16 +492,17 @@ describe('exhibit — 전시대 진열·회수', () => {
   });
 
   it('회수 — 길드·유물 가방 용량 보너스까지 허용하고 그 상한이 차면 거부한다', () => {
-    const boosted = seed({ boat: 0, artifacts: ['sargasso-net'], bag: Array.from({ length: 65 }, (_, i) => mkInst(`f${i}`, 'carp')) });
+    const guild = { ...NO_GUILD_EFFECTS, bag: 0.04 };
+    const boosted = seed({ boat: 0, artifacts: ['sargasso-net'], bag: Array.from({ length: 67 }, (_, i) => mkInst(`f${i}`, 'carp')) });
     boosted.exhibit[0] = c;
-    // 60 + 10%(6) = 66칸 -> 65마리일 때 회수 가능
-    const ok = applyAction(boosted, { type: 'exhibit', uid: 'c', slot: null }, deps());
+    // 60 + 14%(8) = 68칸 -> 67마리일 때 회수 가능
+    const ok = applyAction(boosted, { type: 'exhibit', uid: 'c', slot: null }, deps({ guild }));
     expect(ok.ok).toBe(true);
 
-    // 66마리가 차면 거부
+    // 68마리가 차면 거부
     if (!ok.ok) throw new Error(ok.error);
     const full = { ...ok.state, exhibit: [d] };
-    expect(applyAction(full, { type: 'exhibit', uid: 'd', slot: null }, deps()))
+    expect(applyAction(full, { type: 'exhibit', uid: 'd', slot: null }, deps({ guild })))
       .toEqual({ ok: false, error: 'bag-full' });
   });
 });
