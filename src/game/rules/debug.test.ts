@@ -1,19 +1,26 @@
-// 개발 도구 서버 명령 — debug 액션의 리듀서 몫. 상태 명령은 기존 규칙 함수로 계산하고,
-// 전용 테이블 명령은 상태를 바꾸지 않고 감사 이벤트만 남긴다(행은 서버가 쓴다).
+// 개발 도구 서버 명령 — debug 액션의 리듀서 몫과 forcePhase 캐치 판정 검증.
 import { describe, it, expect } from 'vitest';
-import { applyAction } from './actions';
+import { applyAction, prepareCatchDraw } from './actions';
 import type { ActionDeps } from './actions';
-import { licenseConditions, newState, zoneDexMissing } from './logic';
+import {
+  isBigSize, licenseConditions, newState, zoneDexMissing,
+} from './logic';
 import type { GameState } from './logic';
 import { DEBUG_COMMAND_IDS, DEBUG_TABLE_COMMANDS } from './debug';
 import { artifactById } from '../content/artifacts';
+import { FISH, fishById } from '../content/fish';
+import { NAMED } from '../content/named';
+import { HATS } from '../content/wardrobe';
+import { ENERGY_ITEM_IDS, toStoredEnergy } from '../content/cooking';
+import { achievementBonusesOf } from './achievements';
+import { powerZones } from './stats';
 
 const deps: ActionDeps = {
   rng: () => 0, today: '2026-10-16', now: '2026-10-16T03:00:00.000Z', newUid: () => 'uid-1',
 };
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
-const debug = (state: GameState, command: string, args?: Record<string, unknown>) =>
-  applyAction(state, { type: 'debug', command, args }, deps);
+const debug = (state: GameState, command: string, args?: Record<string, unknown>, over: Partial<ActionDeps> = {}) =>
+  applyAction(state, { type: 'debug', command, args }, { ...deps, ...over });
 
 describe('debug 액션 — 공통', () => {
   it('모르는 명령은 bad-request', () => {
@@ -44,7 +51,8 @@ describe('stats.set', () => {
     expect(out.state).toMatchObject({ gold: 1, fame: 300000, boat: 2 });
   });
 
-  it('음수·소수 낚싯대·범위 밖 배는 bad-request', () => {
+  it('빈 입력·음수·소수 낚싯대·범위 밖 배는 bad-request', () => {
+    expect(debug(seed(), 'stats.set', {})).toEqual({ ok: false, error: 'bad-request' });
     expect(debug(seed(), 'stats.set', { gold: -1 })).toEqual({ ok: false, error: 'bad-request' });
     expect(debug(seed(), 'stats.set', { rod: 1.5 })).toEqual({ ok: false, error: 'bad-request' });
     expect(debug(seed(), 'stats.set', { boat: 99 })).toEqual({ ok: false, error: 'bad-request' });
@@ -70,6 +78,163 @@ describe('dex.completeZone', () => {
 
   it('없는 구역은 bad-request', () => {
     expect(debug(seed(), 'dex.completeZone', { zone: 'atlantis' })).toEqual({ ok: false, error: 'bad-request' });
+  });
+});
+
+describe('dex.fill / dex.reset', () => {
+  it('마을 포함 구역과 전체 도감의 일반·돌연변이·대어 크기를 채운다', () => {
+    const village = debug(seed(), 'dex.fill', { zone: 'village', form: 'variant', big: true });
+    if (!village.ok) throw new Error(village.error);
+    const crucian = fishById('crucian')!;
+    expect(village.state.dex.crucian?.normal).toBeUndefined();
+    expect(village.state.dex.crucian?.variant?.count).toBe(1);
+    expect(isBigSize(crucian, village.state.dex.crucian!.variant!.maxSize!)).toBe(true);
+
+    const all = debug(seed(), 'dex.fill', { zone: 'all', form: 'both', big: true });
+    if (!all.ok) throw new Error(all.error);
+    for (const f of FISH) {
+      expect(all.state.dex[f.id]?.normal?.count).toBe(1);
+      expect(all.state.dex[f.id]?.variant?.count).toBe(1);
+      expect(isBigSize(f, all.state.dex[f.id]!.normal!.maxSize!)).toBe(true);
+    }
+  });
+
+  it('dex.reset은 지정 구역 도감을 비우고 writes.recordsRemoved를 생성한다', () => {
+    const filled = debug(seed({ clearedNamed: ['pacific-named-megalodon'], dex: { megalodon: { normal: { count: 1, maxSize: null, first: '2026-10-16' } } } }),
+      'dex.fill', { zone: 'pacific', form: 'both' });
+    if (!filled.ok) throw new Error(filled.error);
+
+    const resetOnlyFish = debug(filled.state, 'dex.reset', { zone: 'pacific', includeNamed: false });
+    if (!resetOnlyFish.ok) throw new Error(resetOnlyFish.error);
+    expect(resetOnlyFish.state.dex.mackerel).toBeUndefined();
+    expect(resetOnlyFish.state.dex.megalodon).toBeDefined();
+    expect(resetOnlyFish.state.clearedNamed).toEqual(['pacific-named-megalodon']);
+    expect(resetOnlyFish.writes.recordsRemoved?.some(r => r.fishId === 'mackerel')).toBe(true);
+
+    const resetAll = debug(filled.state, 'dex.reset', { zone: 'pacific', includeNamed: true });
+    if (!resetAll.ok) throw new Error(resetAll.error);
+    expect(resetAll.state.dex.megalodon).toBeUndefined();
+    expect(resetAll.state.clearedNamed).toEqual([]);
+  });
+});
+
+describe('named.unlock / named.reset', () => {
+  it('네임드 도감과 토벌 기록(clearedNamed)을 함께 열고 지운다', () => {
+    const unlocked = debug(seed(), 'named.unlock', { namedId: 'all' });
+    if (!unlocked.ok) throw new Error(unlocked.error);
+    for (const n of NAMED) {
+      expect(unlocked.state.dex[n.id]?.normal?.count).toBe(1);
+    }
+    expect(unlocked.state.clearedNamed).toHaveLength(NAMED.length);
+    expect(unlocked.state.achievements['named-all']).toBe('claimable');
+
+    const resetOne = debug(unlocked.state, 'named.reset', { namedId: 'guabancex' });
+    if (!resetOne.ok) throw new Error(resetOne.error);
+    expect(resetOne.state.dex.guabancex).toBeUndefined();
+    expect(resetOne.state.clearedNamed).not.toContain('northatlantic-named-guabancex');
+    expect(resetOne.writes.recordsRemoved).toEqual([{ fishId: 'guabancex', form: 'normal' }]);
+  });
+});
+
+describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
+  it('기운(화면 단위→저장 단위), 요리, 유물 재료를 지급한다', () => {
+    const e = debug(seed(), 'items.grant', { itemId: ENERGY_ITEM_IDS.common, count: 600 });
+    if (!e.ok) throw new Error(e.error);
+    expect(e.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(600));
+
+    const r = debug(e.state, 'items.grant', { itemId: 'cook-bait-night', count: 3 });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.state.items['cook-bait-night']).toBe(3);
+
+    expect(debug(seed(), 'items.grant', { itemId: 'nope', count: 1 })).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('cooking.finish는 진행 중인 조리를 즉시 완료해 보관함으로 옮긴다', () => {
+    const cookingState = seed({
+      cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [true, false], startedAt: '2026-10-16T03:00:00.000Z' },
+    });
+    const out = debug(cookingState, 'cooking.finish', {});
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.cooking).toBeNull();
+    expect(out.state.items['cook-lunch-bite']).toBe(3);
+  });
+
+  it('artifact.set은 보유·레벨(0=회수, 1..5=레벨)을 설정하고 전설 유물은 레벨 맵에 남기지 않는다', () => {
+    const all = debug(seed(), 'artifact.set', { artifact: 'all', level: 5 });
+    if (!all.ok) throw new Error(all.error);
+    expect(all.state.artifacts).toHaveLength(8);
+    expect(all.state.artifactLevels?.['wreck-compass']).toBe(5);
+    expect(all.state.artifactLevels?.['mami-wata-mirror']).toBeUndefined();
+
+    const removed = debug(all.state, 'artifact.set', { artifact: 'wreck-compass', level: 0 });
+    if (!removed.ok) throw new Error(removed.error);
+    expect(removed.state.artifacts).not.toContain('wreck-compass');
+    expect(removed.state.artifactLevels?.['wreck-compass']).toBeUndefined();
+  });
+
+  it('hat.set은 모자를 해금/회수하고 회수 시 착용 중인 모자도 벗긴다', () => {
+    const unlocked = debug(seed(), 'hat.set', { hat: 'all', owned: true });
+    if (!unlocked.ok) throw new Error(unlocked.error);
+    expect(unlocked.state.hats).toHaveLength(HATS.length);
+
+    const worn = { ...unlocked.state, look: { ...unlocked.state.look, hat: 'cap-red' } };
+    const removed = debug(worn, 'hat.set', { hat: 'cap-red', owned: false });
+    if (!removed.ok) throw new Error(removed.error);
+    expect(removed.state.hats).not.toContain('cap-red');
+    expect(removed.state.look.hat).toBeNull();
+  });
+});
+
+describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapshot.restore', () => {
+  it('카운터를 설정하면 누적 보너스가 즉시 반영되고 resetCounters로 초기화한다', () => {
+    const set = debug(seed({ achievements: { 'spot-basic-sea': 'claimable' } }), 'achievement.setCounter', { key: 'sell.gold', value: 1_000_000_000 });
+    if (!set.ok) throw new Error(set.error);
+    expect(set.state.achievementCounters['sell.gold']).toBe(1_000_000_000);
+    expect(achievementBonusesOf(set.state).moveSpeed).toBeGreaterThan(0);
+
+    const reset = debug(set.state, 'achievement.resetCounters', { resetAchievements: true });
+    if (!reset.ok) throw new Error(reset.error);
+    expect(reset.state.achievementCounters).toEqual({});
+    expect(reset.state.achievements).toEqual({});
+    expect(achievementBonusesOf(reset.state).moveSpeed).toBe(0);
+  });
+
+  it('achievement.evaluate로 특정 업적 상태 지정 및 재평가가 동작한다', () => {
+    const s = debug(seed(), 'achievement.evaluate', { id: 'spot-basic-sea', status: 'claimed' });
+    if (!s.ok) throw new Error(s.error);
+    expect(s.state.achievements['spot-basic-sea']).toBe('claimed');
+  });
+
+  it('bag.spawn은 지정 어종·폼·대어 크기 개체를 가방에 추가한다', () => {
+    let n = 0;
+    const out = debug(seed(), 'bag.spawn', { fishId: 'vanishingpoint', form: 'variant', big: true, count: 2 }, { newUid: () => `sp-${++n}` });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toHaveLength(2);
+    expect(out.state.bag[0]).toMatchObject({ uid: 'sp-1', fishId: 'vanishingpoint', form: 'variant' });
+    expect(isBigSize(fishById('vanishingpoint')!, out.state.bag[0].size!)).toBe(true);
+  });
+
+  it('snapshot.restore는 스냅샷으로 상태를 복원하고 빠진 도감을 recordsRemoved로 표시한다', () => {
+    const prev = seed({
+      gold: 999,
+      dex: { crucian: { normal: { count: 2, maxSize: 20, first: '2026-10-01' } } },
+      clearedNamed: ['pacific-named-megalodon'],
+      achievementCounters: { 'sell.gold': 500 },
+    });
+    const snap = seed({
+      gold: 10,
+      dex: { carp: { normal: { count: 1, maxSize: 30, first: '2026-10-02' } } },
+      clearedNamed: ['seasia-named-leviathan'],
+      achievementCounters: { 'catch.auto': 3 },
+    });
+    const out = debug(prev, 'snapshot.restore', { snapshot: snap });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(10);
+    expect(out.state.dex.crucian).toBeUndefined();
+    expect(out.state.dex.carp?.normal?.count).toBe(1);
+    expect(out.state.clearedNamed).toEqual(['seasia-named-leviathan']);
+    expect(out.state.achievementCounters).toEqual({ 'catch.auto': 3 });
+    expect(out.writes.recordsRemoved).toEqual([{ fishId: 'crucian', form: 'normal' }]);
   });
 });
 
@@ -100,5 +265,34 @@ describe('bounty.grantMaterial', () => {
   it('없는 유물이나 유물 인자가 없으면 bad-request', () => {
     expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'nope' })).toEqual({ ok: false, error: 'bad-request' });
     expect(debug(seed(), 'bounty.grantMaterial', { zone: 'indian' })).toEqual({ ok: false, error: 'bad-request' });
+  });
+});
+
+describe('catch forcePhase (요청 단위 낮/밤 강제 전환)', () => {
+  const dayISO = '2026-10-16T03:25:00.000Z';   // 분 25 = 낮
+  const nightISO = '2026-10-16T03:55:00.000Z'; // 분 55 = 밤
+
+  it('수동·방치(auto) 모두 forcePhase를 따라 시간대 풀을 전환한다', () => {
+    const s = seed({ boat: 9, rod: 65 });
+    const pz = powerZones(s, 'bermuda');
+    for (const j of ['normal', 'auto'] as const) {
+      expect(prepareCatchDraw(s, j, dayISO, pz, 'night').phaseOpts.phase).toBe('night');
+      expect(prepareCatchDraw(s, j, nightISO, pz, 'day').phaseOpts.phase).toBe('day');
+    }
+  });
+
+  it('낮 시각에 forcePhase=night로 방치 캐치 시 밤 전용 어종을 뽑을 수 있다', () => {
+    // 버뮤다 삼각지대(bermuda)의 밤 전용 어종 포함 추첨 확인 (rng=0.999로 풀 뒤쪽 밤 어종 유도)
+    const s = seed({ boat: 9, rod: 65 });
+    const out = applyAction(s, { type: 'catch', spot: 'bermuda', judgment: 'auto', forcePhase: 'night' }, {
+      ...deps,
+      now: dayISO,
+      rng: () => 0.999999,
+    });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.type).toBe('catch');
+    if (out.result.type === 'catch') {
+      expect(fishById(out.result.fishId)?.night).toBe(true);
+    }
   });
 });

@@ -19,16 +19,24 @@ describe('parseAction', () => {
     }
   });
 
-  it('catch의 강제 조우 표시는 true만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
+  it('catch의 강제 조우·시간대 표시는 유효 값만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true }))
       .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true });
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'night' }))
+      .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'night' });
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'normal', forcePhase: 'day' }))
+      .toEqual({ type: 'catch', spot: 'sea', judgment: 'normal', forcePhase: 'day' });
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: 'yes' })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'dawn' })).toBeNull();
   });
 
   it('debug는 목록에 있는 명령만 통과한다 — 인자 형태는 리듀서가 본다', () => {
     expect(parseAction({ type: 'debug', command: 'stats.set', args: { fame: 1 } }))
       .toEqual({ type: 'debug', command: 'stats.set', args: { fame: 1 } });
     expect(parseAction({ type: 'debug', command: 'bounty.clearTickets' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'dex.fill', args: { zone: 'village' } })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'snapshot.restore', args: { snapshot: {} } })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'bounty.ticketNearExpiry' })?.type).toBe('debug');
     expect(parseAction({ type: 'debug', command: 'gold.infinite' })).toBeNull();
     expect(parseAction({ type: 'adminSet', gold: 1 })).toBeNull();
   });
