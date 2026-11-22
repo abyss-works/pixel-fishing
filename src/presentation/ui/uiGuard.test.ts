@@ -53,18 +53,14 @@ const RAW_HEADING_EXCEPTIONS = new Set([
  *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
 const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|-y)?:(?:auto|scroll)\]|\boverflow(?:X|Y)?\s*:\s*['"`](?:auto|scroll)['"`]/;
 const OVERFLOW_EXCEPTIONS = new Set([
-  'views/admin/tabs/AntiAbuseTab.tsx',
   'views/admin/tabs/BountyFunnelSection.tsx',
   'views/admin/tabs/ChatReportsSection.tsx',
-  'views/admin/tabs/FishTab.tsx',
   'views/admin/tabs/LettersTab.tsx',
   'views/admin/tabs/LiveTab.tsx',
-  'views/admin/tabs/MailTab.tsx',
   'views/admin/tabs/MetricsTab.tsx',
   'views/admin/tabs/OpsTab.tsx',
   'views/admin/tabs/OverviewTab.tsx',
   'views/admin/tabs/ProgressionTab.tsx',
-  'views/admin/tabs/UsersTab.tsx',
   'views/game/tabs/region/VRegion.tsx',
 ]);
 

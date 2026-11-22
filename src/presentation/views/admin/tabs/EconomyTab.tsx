@@ -1,6 +1,6 @@
-// 경제 구역 — 골드 유입(sell·coupon)과 유출(upgradeRod·buyBoat·buyBait)의 일 원장 + 잔고 분포.
+// 경제 구역 — 골드 유입(sell·coupon·claimMail·deliverBounty·claimAchievement·claimAllAchievements)과
+// 유출(upgradeRod·buyBoat·buyHat)의 일 원장 + 잔고 분포.
 // 레이아웃: [잔고 백분위 지표 4] → 좌우 분할(유입 | 유출, xl) → 원장 대차대조(풀폭).
-// 유입합 − 유출합이 실제 보유 골드 합보다 크게 어긋나면 import 반입 경로를 의심한다
 import { useMemo } from 'react';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
@@ -51,16 +51,16 @@ export default function EconomyTab({ range }: { range: DayRange }) {
 
       {/* 유입·유출은 같은 날 축이라 짝지어 본다(xl 이상에서 좌우) */}
       <CellGrid>
-        <Cell title="유입 — 판매·쿠폰·우편">
-          <BarsChart values={series(r => r.sell_gold + r.coupon_gold + r.mail_gold)} labels={dayLabels} height={72}
-                     highlight="last" highlightName="금일" ariaLabel="골드 유입 일별 추이" />
-          <Note size="2xs" className="my-0">판매 골드에 쿠폰과 우편 지급이 더해진 일별 흐름이에요.</Note>
+        <Cell title="유입 — 판매·쿠폰·우편·현상금·업적">
+          <BarsChart values={series(r => r.sell_gold + r.coupon_gold + r.mail_gold + r.bounty_gold + r.achievement_gold)}
+                     labels={dayLabels} height={72} highlight="last" highlightName="금일" ariaLabel="골드 유입 일별 추이" />
+          <Note size="2xs" className="my-0">판매 골드에 쿠폰·우편·현상금·업적 지급이 더해진 일별 흐름이에요.</Note>
         </Cell>
 
-        <Cell title="유출 — 강화·배·미끼">
-          <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.bait_cost)} labels={dayLabels}
+        <Cell title="유출 — 강화·배·모자">
+          <BarsChart values={series(r => r.rod_cost + r.boat_cost + r.hat_cost)} labels={dayLabels}
                      height={72} highlight="last" highlightName="금일" ariaLabel="골드 유출 일별 추이" />
-          <Note size="2xs" className="my-0">강화·배 구매·미끼 지출의 일별 합계예요.</Note>
+          <Note size="2xs" className="my-0">강화·배 구매·모자 구매 지출의 일별 합계예요.</Note>
         </Cell>
       </CellGrid>
 
@@ -72,8 +72,8 @@ export default function EconomyTab({ range }: { range: DayRange }) {
         <KeyValueRow label="전체 잔고 합" value={`${fmtNum(goldSum)}G`} />
         <Note size="xs" className="my-0 px-3 py-2 leading-relaxed">
           전체 잔고 합이 순유입보다 크게 많으면, 그 차액은
-          <span className="pf-accent text-gold"> 이벤트 밖 경로(이사 코드 반입)</span>로 들어온 골드예요.
-          플레이어 탭의 이상탐지에서 반입 로그와 대조해 주세요.
+          <span className="pf-accent text-gold"> 이벤트 밖 경로(이사 코드 반입 등)</span>나
+          이벤트 보관 기간(7일) 이전 기록에서 온 골드예요.
         </Note>
       </Cell>
     </>

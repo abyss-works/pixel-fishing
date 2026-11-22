@@ -5,7 +5,7 @@ import { powerReqOf } from '../../../game/content/spots';
 import { QueryProvider } from '../../../core/QueryProvider';
 import AdminApp from './AdminDashboard';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); sessionStorage.clear(); });
 
 describe('관리자 대시보드 페이지', () => {
   const openFish = () => {
@@ -15,6 +15,7 @@ describe('관리자 대시보드 페이지', () => {
     expect(screen.queryByRole('button', { name: /^스탯$/ })).not.toBeInTheDocument();
     expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '밸런스' }));
+    fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
   };
 
   it('어종 시뮬레이션 탭 — 수역별 표가 확정 데이터로 채워진다', () => {
@@ -100,6 +101,8 @@ describe('관리자 대시보드 탐색', () => {
     expect(await screen.findByText('로컬 모드예요. 클라우드가 설정되어 있지 않아요.')).toBeInTheDocument();
     expect(screen.getByText('지금 접속')).toBeInTheDocument();
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
+    expect(screen.getByText('마지막 조회 —')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '현재 탭 새로고침' })).toBeDisabled();
   });
 
   it('밸런스 탭은 라이브 지표 구역을 따로 두고, 로컬 모드에서는 연결 안내를 보인다', () => {

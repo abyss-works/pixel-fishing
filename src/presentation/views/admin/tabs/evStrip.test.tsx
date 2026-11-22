@@ -6,12 +6,14 @@
 //   방치(플래토·진입)는 개별 Δ를 붙이지 않고 — 폭 하나만: (플래토 − 진입) / 진입 × 100
 //   [여유 확보 시 방치 소득 개선률 — 마지막 방치 행(진입)에 한 번 표기]
 //   각 축 Δ직전 = 위 해역 같은 축 대비 %                     [해역 사다리]
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { afterEach, describe, it, expect } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import FishTab from './FishTab';
 import { SPOTS, drawRows } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
 import { idleDialsOf } from '../../../../game/rules/power';
+
+afterEach(() => { cleanup(); sessionStorage.clear(); });
 
 // 방치 두 축의 배수는 모든 해역이 같다(power.idleDialsOf)
 const AXES = [
@@ -32,6 +34,7 @@ function evOf(id: SpotId, o: Record<string, unknown>): number {
 describe('기대값 띠 — 지역 내 Δ 공식 고정', () => {
   it('수동 사다리(GOOD/PERFECT)는 직전 축 대비 %, 방치는 폭 하나만 표기된다', () => {
     render(<FishTab />);
+    fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
     for (const spot of SPOTS) {
       const id = spot.id as SpotId;
       const e = Object.fromEntries(AXES.map(a =>
@@ -52,6 +55,7 @@ describe('기대값 띠 — 지역 내 Δ 공식 고정', () => {
 
   it('Δ직전은 모든 축에 렌더된다 — 무판정 축도 위 해역 대비 %를 가진다', () => {
     render(<FishTab />);
+    fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
     if (SPOTS.length < 2) return;
     const a = SPOTS[0], b = SPOTS[1];
     const ea = evOf(a.id as SpotId, {});

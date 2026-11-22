@@ -9,18 +9,20 @@ import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
+import TableBox from '../../../ui/TableBox';
 import TextInput from '../../../ui/TextInput';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
-import { fmtNum, fmtDT, eventSummary, EVENT_LABELS, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
+import { adminGradeName, fmtNum, fmtDT, eventSummary, EVENT_LABELS, formatAdminEnergy, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
 import { adminNumber, adminUserLabel, filterAdminUsers, selectAdminUserDetail, splitDormantGuests } from '../../../../features/admin/model/adminViews';
 import { fmtDuration } from '../../../../features/admin/model/dashboard';
-import { readAdminUserDetails, readAdminUsers } from '../../../../features/admin/service/queries';
+import { formatAdminLocation } from '../../../../features/admin/model/regions';
+import { readAdminUserDetails, readAdminUserState, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import { useAdminSessions } from '../../../../features/admin/service/useAdminStats';
-import type { AdminUserRow } from '../../../../features/admin/model/types';
+import type { AdminUserRow, AdminUserState } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
@@ -64,7 +66,7 @@ export default function UsersTab({ onCompose }: {
                        label={`휴면 게스트 보기 (${dormant.length}명)`} />
         </div>
 
-        <div className="pf-scroll-panel max-h-[640px] overflow-auto px-1 pb-1">
+        <TableBox className="max-h-[640px] px-1 pb-1">
           <DataTable>
             <thead>
               <tr>
@@ -87,7 +89,7 @@ export default function UsersTab({ onCompose }: {
                   <td className="whitespace-nowrap text-xs">{boatNameOf(u.boat ?? 0)}</td>
                   <td className="text-right text-xs">{u.rod ?? '—'}</td>
                   <td className="whitespace-nowrap text-xs text-text-dim">
-                    {u.location_kind ? `${u.location_kind}:${u.location_id}` : '—'}</td>
+                    {formatAdminLocation({ kind: u.location_kind, id: u.location_id })}</td>
                   <td className="whitespace-nowrap text-2xs text-text-dim">{fmtDT(u.last_action_at)}</td>
                   <td className="whitespace-nowrap text-2xs text-text-dim">{fmtDT(u.last_session_at)}</td>
                   <td className="whitespace-nowrap text-right text-xs">{fmtDuration(u.total_session_sec)}</td>
@@ -100,7 +102,7 @@ export default function UsersTab({ onCompose }: {
               )}
             </tbody>
           </DataTable>
-        </div>
+        </TableBox>
       </Cell>
 
       {/* 상세 모달은 칸 밖에 둔다 — 오목한 칸의 clip-path 안에서는 화면 전체를 덮는 모달이 잘린다 */}
@@ -121,6 +123,8 @@ function UserDetail({ user, onClose, onCompose }: {
   // 드릴다운은 uid별 키라 유저를 바꿔 열면 이전 조회와 섞이지 않는다
   const { data, loading, error } =
     useAdminQuery(adminKeys.userDetails(user.user_id), () => readAdminUserDetails(user.user_id), true);
+  const stateQuery =
+    useAdminQuery(adminKeys.userState(user.user_id), () => readAdminUserState(user.user_id), true);
   const [events, flags] = data ?? EMPTY_DETAIL;
 
   const { flag, byType, fastGaps } = useMemo(
@@ -152,6 +156,7 @@ function UserDetail({ user, onClose, onCompose }: {
 
           <Cell title="기본 정보" flush divided>
             <KeyValueRow label="계정 id" value={<span className="pf-accent text-xs select-text">{user.user_id}</span>} />
+            <KeyValueRow label="위치" value={formatAdminLocation({ kind: user.location_kind, id: user.location_id })} />
             <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
             <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />
             <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />
@@ -159,6 +164,9 @@ function UserDetail({ user, onClose, onCompose }: {
               <span className={cx(flag && flag.fast_gap_7d > 0 && 'text-danger')}>{flag?.fast_gap_7d ?? 0}건</span>
             } />
           </Cell>
+
+          <UserStateCell state={stateQuery.data} loading={stateQuery.loading} error={stateQuery.error}
+                         onRetry={stateQuery.refresh} />
 
           <Cell title="액션 유형 요약">
             <div className="flex flex-wrap gap-1">
@@ -213,6 +221,87 @@ function UserDetail({ user, onClose, onCompose }: {
 // 사용자 이벤트 조회 창. 조회가 요청하는 건수(userEvents의 limit)와 같은 값이어야 "N건" 문구가 거짓말이 아니게 된다
 const EVENT_WINDOW = 300;
 
+// ---------- 게임 상태 상세 ----------
+
+function UserStateCell({ state, loading, error, onRetry }: {
+  state: AdminUserState | null; loading: boolean; error: string | null; onRetry: () => void;
+}) {
+  const counterEntries = state ? Object.entries(state.achievements.counters) : [];
+  return (
+    <Cell title="게임 상태" flush divided>
+      {(loading || error) && !state ? (
+        <div className="px-3 py-2">
+          <TabState loading={loading} error={error} onRetry={onRetry} />
+        </div>
+      ) : state ? (
+        <>
+          {!state.hasSave && (
+            <Note size="2xs" className="my-0 px-3 py-2">저장 상태가 아직 없어요.</Note>
+          )}
+          <KeyValueRow
+            label="도감 현황"
+            value={`일반 ${state.dex.normal}/${state.dex.normalTotal} · 돌연변이 ${state.dex.variant}/${state.dex.variantTotal} · 네임드 ${state.dex.named}/${state.dex.namedTotal}`}
+          />
+          <KeyValueRow
+            label="네임드 토벌"
+            value={`${fmtNum(state.bounty.namedClears)}회 (${state.bounty.namedDistinctClears}/${state.bounty.namedTotal}종)`}
+          />
+          <KeyValueRow
+            label={`보유 유물 (${state.artifacts.owned.length}/${state.artifacts.total})`}
+            value={state.artifacts.owned.length === 0 ? '없음' : (
+              <span className="flex flex-wrap justify-end gap-1">
+                {state.artifacts.owned.map(a => (
+                  <span key={a.id} className="border border-line rounded-sm px-1.5 py-0.5 text-2xs">
+                    {a.name}
+                    <span className="text-text-dim ml-1">
+                      ({a.id}{a.grade ? ` · ${adminGradeName(a.grade)}` : ''}{a.level !== null ? ` Lv.${a.level}` : ''})
+                    </span>
+                  </span>
+                ))}
+              </span>
+            )}
+          />
+          <KeyValueRow label="보유 모자" value={`${state.hats.owned}/${state.hats.total}개`} />
+          <KeyValueRow
+            label="업적 수령"
+            value={`${state.achievements.claimed}/${state.achievements.total}개${state.achievements.claimable > 0 ? ` (수령 가능 ${state.achievements.claimable})` : ''}`}
+          />
+          <KeyValueRow
+            label="업적 카운터"
+            value={counterEntries.length === 0 ? '기록 없음' : (
+              <span className="flex flex-wrap justify-end gap-1">
+                {counterEntries.map(([k, v]) => (
+                  <span key={k} className="border border-line rounded-sm px-1.5 py-0.5 text-2xs">
+                    {k} {fmtNum(v)}
+                  </span>
+                ))}
+              </span>
+            )}
+          />
+          <KeyValueRow
+            label="기운 4종"
+            value={`일반 ${formatAdminEnergy(state.cooking.energy.common)} · 희귀 ${formatAdminEnergy(state.cooking.energy.rare)} · 영웅 ${formatAdminEnergy(state.cooking.energy.epic)} · 전설 ${formatAdminEnergy(state.cooking.energy.legendary)}`}
+          />
+          <KeyValueRow
+            label="보유 요리"
+            value={[
+              state.cooking.cooked.length > 0
+                ? state.cooking.cooked.map(c => `${c.name} ×${c.count}`).join(', ')
+                : '없음',
+              state.cooking.inProgress ? `조리 중: ${state.cooking.inProgress.name} ×${state.cooking.inProgress.count}` : null,
+            ].filter(Boolean).join(' · ')}
+          />
+          <KeyValueRow
+            label="활성 슬롯"
+            value={`도시락 ${state.cooking.slots.lunch ? `${state.cooking.slots.lunch.name} (${fmtDT(state.cooking.slots.lunch.endsAt)}까지)` : '비어 있음'} · 미끼 ${state.cooking.slots.bait ? `${state.cooking.slots.bait.name} (${fmtDT(state.cooking.slots.bait.endsAt)}까지)` : '비어 있음'}`}
+          />
+          <KeyValueRow label="가방 · 전시 개체" value={`가방 ${fmtNum(state.instances.bag)}마리 · 전시 ${fmtNum(state.instances.exhibit)}마리`} />
+        </>
+      ) : null}
+    </Cell>
+  );
+}
+
 // ---------- 세션 기록 ----------
 
 // 상세에 보이는 최근 세션 건수
@@ -231,7 +320,7 @@ function UserSessions({ user }: { user: AdminUserRow }) {
           <TabState loading={loading} error={error} empty={sessions.length === 0} emptyText="세션 기록이 없어요." />
         </div>
       ) : (
-        <div className="pf-scroll-panel max-h-[220px] overflow-y-auto px-1">
+        <TableBox className="max-h-[220px] px-1">
           <DataTable>
             <thead>
               <tr><th className="text-left">시작</th><th className="text-left">끝</th><th className="text-right">길이</th></tr>
@@ -247,7 +336,7 @@ function UserSessions({ user }: { user: AdminUserRow }) {
             </tbody>
           </DataTable>
           <Note size="2xs" className="my-0 px-2 pb-2">최근 {SESSION_WINDOW}건까지 보여요.</Note>
-        </div>
+        </TableBox>
       )}
     </Cell>
   );

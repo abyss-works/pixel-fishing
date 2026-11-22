@@ -10,10 +10,14 @@
 // 로그인은 게임과 따로다. 운영·스테이징에서는 AdminGate가 관리자 세션과 명부 등록을 확인한 뒤에만 대시보드를 그린다.
 // 로컬 모드는 빈 골격(지표 '—', 빈 표)과 로컬 안내를 그려 "무엇이 어디에 올 화면인가"를 보여 주고, 탭은 조회하지 않는다.
 import { useEffect, useState } from 'react';
+import Button from '../../ui/Button';
 import LinkButton from '../../ui/LinkButton';
 import PixelIcon from '../../ui/PixelIcon';
 import type { GlyphId } from '../../ui/PixelIcon';
 import TabBar from '../../ui/TabBar';
+import { fmtTimeKST } from '../../../features/admin/model/metrics';
+import { useAdminAuth } from '../../../features/admin/service/accessContext';
+import { useAdminRefresh } from '../../../features/admin/service/useAdminQuery';
 import { AdminAuthProvider, AdminGate, AdminGateBanner, AdminSignOutButton } from './access';
 import { ADMIN_TABS, adminHash, adminRouteOf, parseAdminHash } from './routes';
 import type { AdminRoute, AdminTab } from './routes';
@@ -47,6 +51,8 @@ export default function AdminApp() {
 }
 
 function Dashboard() {
+  const { access } = useAdminAuth();
+  const { refreshing, lastUpdatedAt, refresh } = useAdminRefresh(access === 'granted');
   const [route, setRoute] = useState<AdminRoute>(() => parseAdminHash(window.location.hash));
   // 우편 쓰기에 미리 넣을 받는 사람 — 명부·편지의 우편 보내기가 정하고, 다른 곳으로 옮기면 비운다
   const [mailTo, setMailTo] = useState<string | null>(null);
@@ -85,6 +91,14 @@ function Dashboard() {
         <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center justify-between gap-3 px-4 py-3">
           <span className="pf-accent text-lg text-gold">관리자 대시보드</span>
           <div className="flex items-center gap-2">
+            <span className="text-2xs text-text-dim whitespace-nowrap">
+              마지막 조회 {fmtTimeKST(lastUpdatedAt)}
+            </span>
+            <Button variant="ghost" size="sm" onClick={refresh}
+                    disabled={access !== 'granted' || refreshing}
+                    aria-label="현재 탭 새로고침">
+              {refreshing ? '새로고침 중…' : '↻ 새로고침'}
+            </Button>
             <AdminSignOutButton />
             <LinkButton href="/" aria-label="게임으로 돌아가기" variant="ghost" className="text-sm">
               <PixelIcon glyph="exit" size={12} /> 게임으로
