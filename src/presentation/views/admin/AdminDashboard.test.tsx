@@ -57,9 +57,9 @@ describe('관리자 대시보드 탐색', () => {
   const tabNames = () => within(screen.getByRole('navigation', { name: '대시보드 섹션' }))
     .getAllByRole('button').map(b => b.textContent?.trim());
 
-  it('탭은 일곱 개다 — 개요 · 실시간 · 플레이어 · 소통 · 경제·진행 · 밸런스 · 운영', () => {
+  it('탭은 여덟 개다 — 개요 · 실시간 · 플레이어 · 소통 · 경제·진행 · 밸런스 · 콘텐츠 · 운영', () => {
     open('#/admin/overview');
-    expect(tabNames()).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '운영']);
+    expect(tabNames()).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '콘텐츠', '운영']);
     expect(screen.getByRole('heading', { name: '개요' })).toBeInTheDocument();
   });
 
@@ -110,5 +110,20 @@ describe('관리자 대시보드 탐색', () => {
     expect(screen.getByRole('heading', { name: '라이브 지표 (최근 7일)' })).toBeInTheDocument();
     expect(screen.getByText('운영 DB에 연결하면 실측 지표가 채워져요.')).toBeInTheDocument();
     expect(screen.getAllByText('마리아나 해구').length).toBeGreaterThan(0);
+  });
+
+  it('콘텐츠 탭은 #/admin/content로 열리고 로컬 모드에서도 카탈로그를 보여 준다', async () => {
+    open('#/admin/content');
+    expect(await screen.findByText('로컬 모드예요. 클라우드가 설정되어 있지 않아요.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '콘텐츠 카탈로그' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: '콘텐츠 축' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/admin/content');
+  });
+
+  it('콘텐츠 탭 버튼을 누르면 #/admin/content로 이동하고 카탈로그를 연다', () => {
+    open('#/admin/overview');
+    fireEvent.click(screen.getByRole('button', { name: '콘텐츠' }));
+    expect(window.location.hash).toBe('#/admin/content');
+    expect(screen.getByRole('heading', { name: '콘텐츠 카탈로그' })).toBeInTheDocument();
   });
 });

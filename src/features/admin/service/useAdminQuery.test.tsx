@@ -38,4 +38,15 @@ describe('useAdminRefresh', () => {
     expect(readAccess).toHaveBeenCalledTimes(1);
     expect(readActive).toHaveBeenCalledTimes(2);
   });
+
+  it('활성 데이터 조회가 없어도 오류 없이 새로고침을 마친다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useAdminRefresh(true), { wrapper: wrapperWith(client) });
+
+    expect(result.current.lastUpdatedAt).toBe(0);
+    expect(result.current.refreshing).toBe(false);
+    act(() => result.current.refresh());
+    expect(result.current.refreshing).toBe(false);
+    expect(result.current.lastUpdatedAt).toBe(0);
+  });
 });
