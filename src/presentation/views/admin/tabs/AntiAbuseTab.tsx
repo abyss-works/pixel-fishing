@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
+import TableBox from '../../../ui/TableBox';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
 import { adminIdentityLookup, adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
@@ -57,10 +58,10 @@ export default function AntiAbuseTab() {
       <CellGrid>
         <Cell title="연타 (낚시 간격 2초 미만 · 최근 7일)">
           <Note size="2xs" className="my-0">
-            낚을 때마다 획득 카드가 2초 떠 있어서 사람은 이 간격을 만들 수 없어요.
-            서버에 레이트 리밋이 없어서 간격 분포가 유일한 방어 관측점이에요.
+            서버는 직전 액션과의 최소 간격(2단계 페이싱)과 낚시 한 사이클 기준(catchTooSoon)으로 과속 요청을 차단해요.
+            여기는 최근 7일 내 2초 미만 간격으로 기록된 캐치를 관측해요.
           </Note>
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr><th className="text-left">유저</th><th className="text-right">7일 낚시</th>
@@ -83,7 +84,7 @@ export default function AntiAbuseTab() {
                   </td></tr>}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
         </Cell>
 
         <Cell title="PERFECT 판정 비율 이상치 (7일)">
@@ -91,7 +92,7 @@ export default function AntiAbuseTab() {
             30일 전체 평균은 {(flags[0]?.perfect_pct_global ?? '—')}%예요.
             PERFECT ×2는 클라이언트의 주장을 따르는 의도된 구멍이라서, 비율 감시가 유일한 대응이에요(7일 20낚시 이상).
           </Note>
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr><th className="text-left">유저</th><th className="text-right">7일 PERFECT%</th>
@@ -112,7 +113,7 @@ export default function AntiAbuseTab() {
                   </td></tr>}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
         </Cell>
       </CellGrid>
 

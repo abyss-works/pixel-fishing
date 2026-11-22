@@ -105,7 +105,7 @@ describe('데이터가 없는 상태', () => {
       boats: [],
       rodBuckets: [],
       gold: { p25: null, p50: null, p75: null, p90: null, max: null },
-      goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
+      goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, bountyGold: 0, achievementGold: 0, rodCost: 0, boatCost: 0, hatCost: 0 },
       dau: [],
       churn: [],
       bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 0, generalAccepts: 0, delivered: 0 },
@@ -186,6 +186,8 @@ describe('지표 결과', () => {
     await event(ALICE, 'sell', { gold: 100 }, 5, 10);
     await event(ALICE, 'coupon', { code: 'WELCOME', gold: 300 }, 5, 11);
     await event(ALICE, 'claimMail', { mailId: 1, gold: 120 }, 5, 11);
+    await event(ALICE, 'claimAchievement', { id: 'catch-10', gold: 500 }, 5, 11);
+    await event(ALICE, 'claimAllAchievements', { ids: ['a'], gold: 200, hats: [] }, 5, 11);
     await event(ALICE, 'upgradeRod', { toLevel: 6, cost: 80 }, 5, 12);
     await event(CAROL, 'catch', catchOf(null, null), 5);
     await event(CAROL, 'acceptQuest', { questId: 'harbor-general-3' }, 5, 10);
@@ -199,7 +201,7 @@ describe('지표 결과', () => {
     await event(ALICE, 'acceptQuest', { questId: 'harbor-general-4' }, 2, 10);
     await event(ALICE, 'resolveChallenge', { questId: 'harbor-named-1', success: false, hits: 0, misses: 3 }, 2, 11);
     await event(ADMIN, 'sell', { gold: 10 }, 2);
-    await event(BOB, 'buyBait', { bait: 'worm', count: 3, cost: 30 }, 2);
+    await event(BOB, 'buyHat', { hat: 'cap-red', cost: 50000 }, 2);
     await event(NOSAVE, 'catch', catchOf('good', 'pond'), 2);
     await event(FRANK, 'boot', {}, 2);
     // 제외 대상의 이벤트. 집계에 들어가면 어느 지표든 값이 달라진다
@@ -208,7 +210,7 @@ describe('지표 결과', () => {
     await event(HANK, 'coupon', { code: 'WELCOME', gold: 7777 }, 2, 11);
     await event(HANK, 'upgradeRod', { toLevel: 40, cost: 5000 }, 2, 12);
     await event(HANK, 'buyBoat', { tier: 7, cost: 150000 }, 2, 13);
-    await event(HANK, 'buyBait', { bait: 'worm', count: 1, cost: 5 }, 2, 14);
+    await event(HANK, 'buyHat', { hat: 'cap-red', cost: 50000 }, 2, 14);
     for (let i = 0; i < 3; i++) await event(HANK, 'acceptQuest', { questId: 'pacific-named-1' }, 2, 20 + i);
     for (let i = 0; i < 2; i++) await event(HANK, 'ticket', { questId: 'pacific-named-1' }, 2, 30 + i);
     for (let i = 0; i < 4; i++) await event(HANK, 'deliverBounty', { questId: 'pacific-named-1', reward: 5000 }, 2, 40 + i);
@@ -247,7 +249,7 @@ describe('지표 결과', () => {
     ]);
   });
 
-  it('도감 진행: 일반 폼 발견 어종 수를 10종 구간으로 묶고 90종 이상은 한 구간이다', async () => {
+  it('도감 진행: 일반 폼 발견 어종 수를 10종 구간으로 묶고 120종 이상은 한 구간이다', async () => {
     expect((await live()).dexBuckets).toEqual([
       { fromSpecies: 0, users: 3 },
       { fromSpecies: 10, users: 2 },
@@ -264,7 +266,7 @@ describe('지표 결과', () => {
     ]);
   });
 
-  it('낚싯대 레벨 분포: 5레벨 구간이고 31레벨 이상은 한 구간이다', async () => {
+  it('낚싯대 레벨 분포: 5레벨 구간이고 66레벨 이상은 한 구간이다', async () => {
     expect((await live()).rodBuckets).toEqual([
       { fromLevel: 1, users: 2 },
       { fromLevel: 6, users: 2 },
@@ -283,7 +285,10 @@ describe('지표 결과', () => {
   });
 
   it('골드 흐름: 7일 안의 유입과 유출을 합산한다', async () => {
-    expect((await live()).goldFlow).toEqual({ sellGold: 1110, couponGold: 300, mailGold: 120, rodCost: 80, boatCost: 1000, baitCost: 30 });
+    expect((await live()).goldFlow).toEqual({
+      sellGold: 1110, couponGold: 300, mailGold: 120, bountyGold: 5800, achievementGold: 700,
+      rodCost: 80, boatCost: 1000, hatCost: 50000,
+    });
   });
 
   it('일일 활성: KST 날짜별로 이벤트가 있는 사용자 수를 날짜 오름차순으로 센다. 저장 행이 없는 계정도 센다', async () => {
@@ -370,7 +375,7 @@ describe('지표 결과', () => {
           { judgment: 'normal', catches: 1, pct: 50 },
         ],
         spots: [{ spot: 'pond', catches: 2, users: 2 }],
-        goldFlow: { sellGold: 10, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 30 },
+        goldFlow: { sellGold: 10, couponGold: 0, mailGold: 0, bountyGold: 0, achievementGold: 0, rodCost: 0, boatCost: 0, hatCost: 50000 },
         dau: [{ day: await dayAgo(2), dau: 5 }],
         bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 1, generalAccepts: 1, delivered: 0 },
         anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: 0 },
@@ -381,7 +386,7 @@ describe('지표 결과', () => {
       const one = await live({ days: '1' });
       expect(one).toMatchObject({
         judgment: [], spots: [], dau: [],
-        goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, rodCost: 0, boatCost: 0, baitCost: 0 },
+        goldFlow: { sellGold: 0, couponGold: 0, mailGold: 0, bountyGold: 0, achievementGold: 0, rodCost: 0, boatCost: 0, hatCost: 0 },
         bountyFunnel: { namedAccepts: 0, tickets: 0, duelsWon: 0, duelsLost: 0, generalAccepts: 0, delivered: 0 },
         anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null },
         boats: (await live()).boats,

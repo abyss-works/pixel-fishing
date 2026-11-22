@@ -19,7 +19,8 @@ vi.mock('../../../../platform/api', () => ({
       ]),
       economy: vi.fn(async () => [{
         day: todayKST(), sells: 2, sell_gold: 1000, coupon_gold: 200, mail_gold: 0,
-        rod_cost: 300, boat_cost: 0, bait_cost: 100,
+        bounty_gold: 0, achievement_gold: 0,
+        rod_cost: 300, boat_cost: 0, hat_cost: 100,
       }]),
       dailyStats: vi.fn(async () => [{
         day: todayKST(), dau: 5, newUsers: 2, newAccounts: 1, sessions: 7, sessionMinutes: 70,

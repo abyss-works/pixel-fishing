@@ -11,5 +11,6 @@ export type {
   AdminSessionRow,
   AdminSpamFlagRow,
   AdminUserRow,
+  AdminUserState,
   BalanceLive,
 } from '../../../platform/api';

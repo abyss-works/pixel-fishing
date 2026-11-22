@@ -62,7 +62,7 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
         select payload->>'spot' as spot, count(*)::int as catches, count(distinct user_id)::int as users
         from ev where type = 'catch' group by 1`, sql`t.catches desc, t.spot`)},
       'dexBuckets', ${list(sql`
-        select width_bucket(d.n, 0, 90, 9) * 10 - 10 as "fromSpecies", count(*)::int as users
+        select width_bucket(d.n, 0, 120, 12) * 10 - 10 as "fromSpecies", count(*)::int as users
         from (select r.user_id, count(*) as n
               from public.records r
               where r.form = 'normal' and r.count > 0
@@ -72,7 +72,7 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
       'boats', ${list(sql`
         select boat, count(*)::int as users from pop group by boat`, sql`t.boat`)},
       'rodBuckets', ${list(sql`
-        select width_bucket(rod, 1, 31, 6) * 5 - 4 as "fromLevel", count(*)::int as users
+        select width_bucket(rod, 1, 66, 13) * 5 - 4 as "fromLevel", count(*)::int as users
         from pop group by 1`, sql`t."fromLevel"`)},
       'gold', (select json_build_object('p25', g.q[1], 'p50', g.q[2], 'p75', g.q[3], 'p90', g.q[4], 'max', g.m)
                from (select percentile_disc(array[0.25, 0.5, 0.75, 0.9]) within group (order by gold) as q,
@@ -82,9 +82,11 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
           'sellGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'sell'), 0),
           'couponGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'coupon'), 0),
           'mailGold', coalesce(sum((payload->>'gold')::numeric) filter (where type = 'claimMail'), 0),
+          'bountyGold', coalesce(sum((payload->>'reward')::numeric) filter (where type = 'deliverBounty'), 0),
+          'achievementGold', coalesce(sum((payload->>'gold')::numeric) filter (where type in ('claimAchievement', 'claimAllAchievements')), 0),
           'rodCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'upgradeRod'), 0),
           'boatCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBoat'), 0),
-          'baitCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBait'), 0))
+          'hatCost', coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyHat'), 0))
         from ev),
       'dau', ${list(sql`
         select (created_at at time zone 'Asia/Seoul')::date as day, count(distinct user_id)::int as dau

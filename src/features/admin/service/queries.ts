@@ -75,6 +75,8 @@ export const readAdminUserDetails = (uid: string) => Promise.all([
   api.admin.spamFlags(),
 ]);
 
+export const readAdminUserState = (uid: string) => api.admin.userState(uid);
+
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */
 export const readAdminBountyFunnel = (days: number) => api.admin.bountyFunnel(days);
 

@@ -45,10 +45,10 @@ describe('MailTab', () => {
     expect(screen.getByText('읽음')).toBeTruthy();
   });
 
-  it('보내기는 미리보기 뒤에만 열리고, 확인하면 같은 요청으로 보낸다', async () => {
+  it('보내기는 미리보기 뒤에만 열리고, 확인하면 같은 멱등 키 요청으로 보낸다', async () => {
     mocks.mail.mockImplementation(async (op: string) => (op === 'preview'
-      ? { problems: [], preview: { count: 1, totalGold: 6309483, missing: [] } }
-      : { problems: [], preview: { count: 1, totalGold: 6309483, missing: [] }, sent: 1 }));
+      ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 6309483, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
+      : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 6309483, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
     show();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '강화비 차액' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '돌려드려요.' } });
@@ -58,13 +58,37 @@ describe('MailTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     expect(await screen.findByText(/대상 1명, 골드 합계 6,309,483G/)).toBeTruthy();
-    const request = { title: '강화비 차액', body: '돌려드려요.', target: { kind: 'users', recipients: [{ userId: USER, gold: 6309483 }] } };
+    const request = {
+      title: '강화비 차액', body: '돌려드려요.',
+      target: { kind: 'users', recipients: [{ userId: USER, gold: 6309483 }] },
+      idempotencyKey: expect.any(String),
+    };
     expect(mocks.mail).toHaveBeenLastCalledWith('preview', request);
+    const previewKey = mocks.mail.mock.calls[0][1].idempotencyKey;
 
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
     const dialogs = await screen.findAllByRole('button', { name: '보내기' });
     fireEvent.click(dialogs[dialogs.length - 1]);
-    await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('send', request));
+    await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('send', { ...request, idempotencyKey: previewKey }));
+  });
+
+  it('중복 수신자와 배치 골드 상한 초과는 경고와 함께 미리보기·보내기를 막는다', async () => {
+    show();
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '안내' } });
+    fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
+    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 10\n${USER.toUpperCase()} 20` } });
+    expect(screen.getByText(/중복된 계정 id/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '미리보기' })).toBeDisabled();
+
+    mocks.mail.mockResolvedValueOnce({
+      problems: ['totalGold'],
+      preview: { count: 1, recipientCount: 1, totalGold: 600_000_000, capExceeded: true, maxTotalGold: 500_000_000, missing: [] },
+    });
+    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 600000000` } });
+    expect(screen.getByText(/일괄 발송 상한.*초과해 발송할 수 없어요/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+    expect(await screen.findByText(/600,000,000G.*500,000,000G.*초과해 발송할 수 없어요/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
   });
 
   it('받는 사람 형식이 틀리면 줄 번호를 알려 주고 미리보기를 막는다', async () => {
@@ -75,7 +99,10 @@ describe('MailTab', () => {
   });
 
   it('이메일·닉네임으로 찾은 계정을 받는 사람 목록에 더하고, 계정 id로 보낸다', async () => {
-    mocks.mail.mockResolvedValue({ problems: [], preview: { count: 2, totalGold: 0, missing: [] } });
+    mocks.mail.mockResolvedValue({
+      problems: [],
+      preview: { count: 2, recipientCount: 2, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
+    });
     show();
     await screen.findByText('지난 우편');
     const search = screen.getByLabelText(/계정 찾기/);
@@ -96,6 +123,7 @@ describe('MailTab', () => {
     await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
       title: '안내', body: '본문',
       target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }, { userId: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', gold: 0 }] },
+      idempotencyKey: expect.any(String),
     }));
   });
 

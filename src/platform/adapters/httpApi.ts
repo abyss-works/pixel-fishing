@@ -74,7 +74,7 @@ class HttpAuth implements AuthApi {
 
 import type {
   AdminApi, AdminAccessResult,
-  AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminUserRow, AdminUserState, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from '../api/types';
@@ -250,6 +250,9 @@ class HttpAdmin implements AdminApi {
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
+  }
+  userState(uid: string): Promise<AdminUserState> {
+    return readAdmin('userState', { uid });
   }
   balanceLive(days?: number): Promise<BalanceLive> {
     return readAdmin('balanceLive', days === undefined ? {} : { days });
