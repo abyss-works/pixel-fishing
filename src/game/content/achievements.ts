@@ -187,7 +187,7 @@ export function selectorTargetCount(selector: AchievementSelector): number {
   return selectorIds(selector).length;
 }
 
-// ── 1. 진행 업적 26종 (13개 낚시 해역 × 기초/숙련, 총 5,362,500G) ──
+// ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 25,862,500G) ──
 
 const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
   pond: { basic: 50, full: 50 },
@@ -554,7 +554,7 @@ export function namedSpoilerPlace(namedId: string): string {
   return zoneById(named.zones[0])?.shortName ?? named.zones[0];
 }
 
-// ── 3. 누적 보너스 업적 23종 (전역 8계열 + 구역 6×2=12계열 + 최고 레벨 유물 3단계) ──
+// ── 3. 누적 보너스 업적 25종 (전역 8계열 + 구역 7×2=14계열 + 최고 레벨 유물 3단계) ──
 
 const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
   {
@@ -736,14 +736,14 @@ const MAX_ARTIFACT_BONUS_SERIES: CumulativeBonusSeries = {
   ],
 };
 
-/** 누적 보너스 업적 계열 21개(최고 레벨 유물 3단계 포함 총 23종) */
+/** 누적 보너스 업적 계열 23개(최고 레벨 유물 3단계 포함 총 25종) */
 export const CUMULATIVE_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
   ...GLOBAL_BONUS_SERIES,
   ...ZONE_BONUS_SERIES,
   MAX_ARTIFACT_BONUS_SERIES,
 ];
 
-/** 누적 보너스 업적 총 수 (23) */
+/** 누적 보너스 업적 총 수 (25) */
 export const CUMULATIVE_BONUS_COUNT = CUMULATIVE_BONUS_SERIES.reduce((sum, s) => sum + s.tierCount, 0);
 
 // ── 4. 폐지된 옛 업적 id (재사용·수령·노출 금지) ──
@@ -802,7 +802,7 @@ export const ABOLISHED_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set([
   'big-200',
 ]);
 
-// ── 5. 수령형 업적 카탈로그 (진행 26종 + 치장 41종 = 67종) ──
+// ── 5. 수령형 업적 카탈로그 (진행 30종 + 치장 41종 = 71종) ──
 
 export const ACHIEVEMENT_RULES: readonly AchievementRule[] = [
   ...SPOT_PROGRESS_RULES,

@@ -193,7 +193,7 @@ export function achievementSummary(game: GameState, guest = false): {
   };
 }
 
-/** 누적 보너스 탭의 다단계 카드 21장 */
+/** 누적 보너스 탭의 다단계 카드 23장 */
 export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[] {
   return CUMULATIVE_BONUS_SERIES.map(series => {
     const p = cumulativeBonusProgress(game, series);
