@@ -132,11 +132,11 @@ export interface SimResult {
   counterUnlocks?: CounterUnlock[];
 }
 
-const STEP_SEC = 60;
+export const STEP_SEC = 60;
 const BIG_PROB = BIG_CATCH_PERCENTILE / 100;
 
 /** 해역 열림 조건 — 배 단계와 낚싯대 파워 */
-const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
+export const opens = (spot: (typeof SPOTS)[number], boat: number, level: number) =>
   boat >= spot.boatTier && powerOfLevel(level) >= (spot.powerReq ?? 0);
 
 const nextBoat = (boat: number) => BOATS.find(b => b.tier === boat + 1);
@@ -147,6 +147,52 @@ const boatBuyable = (boat: number, gold: number, fame: number) => {
   if (boat >= MAX_BOAT) { const next = nextBoat(boat); return !!next && fame >= next.fameReq && gold >= next.price; }
   return canBuyBoat({ ...newState(), boat, gold, fame }).ok;
 };
+
+/** 진행 상태 중 다음 해역 구매·대기 판정에 쓰는 최소 필드 */
+export interface SpotProgress {
+  gold: number;
+  fame: number;
+  level: number;
+  boat: number;
+}
+
+export type WaitKind = 'gold' | 'fame' | 'both';
+
+/** 다음 해역에 필요한 배와 파워 강화를 살 수 있는 만큼 산다. 배를 샀는지 돌려준다 */
+export function buyForSpot(next: (typeof SPOTS)[number], state: SpotProgress): boolean {
+  let boughtBoat = false;
+  let bought = true;
+  while (bought) {
+    bought = false;
+    const need = next.boatTier > state.boat ? nextBoat(state.boat) : undefined;
+    if (need && boatBuyable(state.boat, state.gold, state.fame)) {
+      state.gold -= need.price;
+      state.boat = need.tier;
+      bought = true;
+      boughtBoat = true;
+    }
+    if (powerOfLevel(state.level) < (next.powerReq ?? 0) && state.gold >= upgradeCost(state.level)) {
+      state.gold -= upgradeCost(state.level);
+      state.level += 1;
+      bought = true;
+    }
+  }
+  return boughtBoat;
+}
+
+/** 다음 해역 진입에 무엇이 모자란지(골드·명성·둘 다) 판정한다 */
+export function missingForSpot(next: (typeof SPOTS)[number], state: SpotProgress): WaitKind {
+  const boatLeft = state.boat < next.boatTier ? nextBoat(state.boat) : undefined;
+  let goldNeed = boatLeft?.price ?? 0;
+  for (let lv = state.level; powerOfLevel(lv) < (next.powerReq ?? 0); lv++) goldNeed += upgradeCost(lv);
+  const goldShort = state.gold < goldNeed;
+  const fameShort = !!boatLeft && state.fame < boatLeft.fameReq;
+  return goldShort && fameShort ? 'both' : fameShort ? 'fame' : 'gold';
+}
+
+/** 아티팩트가 없을 때 해역의 일반 폼(비돌연변이) 비율 */
+export const normalFormShare = (spot: SpotId): number =>
+  1 - variantShare(mutationWeightsOf({ artifacts: [] }, spot));
 
 export function simulate(opts: SimOptions): SimResult {
   const LAST = SPOTS.length - 1;
@@ -248,7 +294,7 @@ export function simulate(opts: SimOptions): SimResult {
   const track = (spot: SpotId, r: Rates, catches: number) => {
     if (!trackExpected) return;
     let share = normalShare.get(spot);
-    if (share === undefined) { share = 1 - variantShare(mutationWeightsOf({ artifacts: [] }, spot)); normalShare.set(spot, share); }
+    if (share === undefined) { share = normalFormShare(spot); normalShare.set(spot, share); }
     const vs = (r as { variantShare?: number }).variantShare;
     if (vs !== undefined) share = 1 - vs;
     for (const row of r.rows) {
@@ -354,13 +400,9 @@ export function simulate(opts: SimOptions): SimResult {
   const settle = (dt: number) => {
     while (idx < LAST) {
       const next = SPOTS[idx + 1];
-      let bought = true;
-      while (bought) {
-        bought = false;
-        const need = next.boatTier > boat ? nextBoat(boat) : undefined;
-        if (need && boatBuyable(boat, gold, fame)) { gold -= need.price; boat = need.tier; bought = true; }
-        if (powerOfLevel(level) < (next.powerReq ?? 0) && gold >= upgradeCost(level)) { gold -= upgradeCost(level); level += 1; bought = true; }
-      }
+      const state: SpotProgress = { gold, fame, level, boat };
+      buyForSpot(next, state);
+      ({ gold, boat, level } = state);
       if (opens(next, boat, level)) {
         idx += 1;
         arrivals.push({ spot: next.id, hours: fishSec / 3600, waitGold: waitGold / 3600, waitFame: waitFame / 3600, waitBoth: waitBoth / 3600 });
@@ -368,11 +410,8 @@ export function simulate(opts: SimOptions): SimResult {
         if (idx >= LAST) mark();
         continue;
       }
-      const boatLeft = boat < next.boatTier ? nextBoat(boat) : undefined;
-      let goldNeed = boatLeft?.price ?? 0;
-      for (let lv = level; powerOfLevel(lv) < (next.powerReq ?? 0); lv++) goldNeed += upgradeCost(lv);
-      const goldShort = gold < goldNeed, fameShort = !!boatLeft && fame < boatLeft.fameReq;
-      if (goldShort && fameShort) waitBoth += dt; else if (fameShort) waitFame += dt; else waitGold += dt;
+      const wait = missingForSpot(next, state);
+      if (wait === 'both') waitBoth += dt; else if (wait === 'fame') waitFame += dt; else waitGold += dt;
       return;
     }
     while (level < growTo && gold >= upgradeCost(level)) { gold -= upgradeCost(level); level += 1; mark(); }
