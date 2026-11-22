@@ -1,4 +1,4 @@
-import { FISH, RARITY_ORDER, SPOTS, drawRows, rarityWeightOf } from '../../../game/rules/logic';
+import { FISH, RARITY, RARITY_ORDER, SPOTS, drawRows, rarityWeightOf } from '../../../game/rules/logic';
 import type { DrawOptions, DrawRow, RarityId } from '../../../game/rules/logic';
 import type { RarityPermyriad } from '../../../game/content/rarityWeights';
 import { RARITY_TOTAL } from '../../../game/content/rarityWeights';
@@ -63,21 +63,34 @@ export function selectFishForSpot(spot: SpotId, night: boolean): Fish[] {
     .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
 }
 
+export type SpotRarityFilter = 'all' | RarityId;
+
 /** 구역 필터 선택지 */
 export const SPOT_ZONE_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'all', label: '전체 구역' },
   ...ZONE_IDS.map(id => ({ id, label: zoneById(id)?.shortName ?? id })),
 ];
 
-/** 구역과 검색어(해역명·어종명·변이명·id)로 수역 목록을 걸러낸다 */
-export function filterSpots(spots: readonly Spot[], zone: string, query: string): Spot[] {
+/** 등급 필터 선택지 */
+export const SPOT_RARITY_OPTIONS: readonly { id: SpotRarityFilter; label: string }[] = [
+  { id: 'all', label: '전체 등급' },
+  ...RARITY_ORDER.map(id => ({ id, label: RARITY[id].name })),
+];
+
+/** 구역·등급·검색어(해역명·어종명·변이명·id)로 수역 목록을 걸러낸다 */
+export function filterSpots(
+  spots: readonly Spot[], zone: string, query: string, rarity: SpotRarityFilter = 'all',
+): Spot[] {
   const q = query.trim().toLowerCase();
   return spots.filter(spot => {
     if (zone !== 'all' && topZoneOfSpot(spot.id) !== zone) return false;
-    if (!q) return true;
-    if (spot.name.toLowerCase().includes(q) || spot.id.toLowerCase().includes(q)) return true;
+    const spotMatchesQuery = !q || spot.name.toLowerCase().includes(q) || spot.id.toLowerCase().includes(q);
     return FISH.some(f => f.spot === spot.id
-      && (f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q) || f.variant.name.toLowerCase().includes(q)));
+      && (rarity === 'all' || f.rarity === rarity)
+      && (spotMatchesQuery
+        || f.name.toLowerCase().includes(q)
+        || f.id.toLowerCase().includes(q)
+        || f.variant.name.toLowerCase().includes(q)));
   });
 }
 

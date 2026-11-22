@@ -1,7 +1,7 @@
 // 시뮬레이션 구역 — 수역 칸의 접기 토글과 오버라이드 초기화가 칸 제목 줄 안에서 동작하는지 확인한다.
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { SPOTS } from '../../../../game/rules/logic';
+import { FISH, SPOTS } from '../../../../game/rules/logic';
 import { selectFishForSpot } from '../../../../features/admin/model/fishSimulation';
 import FishTab from './FishTab';
 
@@ -43,7 +43,7 @@ describe('시뮬레이션 수역 칸', () => {
     expect(screen.queryByRole('button', { name: `${spot.name} 오버라이드 초기화` })).not.toBeInTheDocument();
   });
 
-  it('모두 펼치기/접기·구역·검색 필터와 밤 전용 어종 확률 표시가 동작한다', () => {
+  it('모두 펼치기/접기·구역·등급·검색 필터와 밤 전용 어종 확률 표시가 동작한다', () => {
     render(<FishTab />);
     fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
     expect(screen.getByRole('button', { name: '모두 접기' })).toBeInTheDocument();
@@ -53,6 +53,14 @@ describe('시뮬레이션 수역 칸', () => {
     expect(screen.getByText('2/15개 해역')).toBeInTheDocument();
     expect(screen.getByText('아조레스 해령')).toBeInTheDocument();
     expect(screen.getByText('버뮤다 삼각지대')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('등급 필터'), { target: { value: 'legendary' } });
+    const bermudaRegion = screen.getByRole('region', { name: '버뮤다 삼각지대' });
+    const nonLegendary = FISH.find(f => f.spot === 'bermuda' && f.rarity !== 'legendary')!;
+    const legendaryFish = FISH.find(f => f.spot === 'bermuda' && f.rarity === 'legendary')!;
+    expect(within(bermudaRegion).queryByText(nonLegendary.name)).not.toBeInTheDocument();
+    expect(within(bermudaRegion).getByText(legendaryFish.name)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('등급 필터'), { target: { value: 'all' } });
 
     fireEvent.change(screen.getByLabelText('어종·해역 검색'), { target: { value: '버뮤다' } });
     expect(screen.getByText('1/15개 해역')).toBeInTheDocument();

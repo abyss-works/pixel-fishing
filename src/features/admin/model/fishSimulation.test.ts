@@ -5,7 +5,7 @@ import { rarityWeightsOf } from '../../../game/content/rarityWeights';
 import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
   filterSpots, selectFishForSpot, selectSpotAxisEvs, selectSpotBudgets, selectSpotDraws,
-  selectSpotNightDraws, SPOT_ZONE_OPTIONS,
+  selectSpotNightDraws, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS,
 } from './fishSimulation';
 import type { SimOverrides } from './fishSimulation';
 
@@ -73,10 +73,14 @@ describe('어종 시뮬레이션 데이터', () => {
     }
   });
 
-  it('구역·검색 필터와 밤 풀 확률을 계산한다', () => {
+  it('구역·등급·검색 필터와 밤 풀 확률을 계산한다', () => {
     expect(SPOT_ZONE_OPTIONS.map(o => o.id)).toContain('northatlantic');
+    expect(SPOT_RARITY_OPTIONS.map(o => o.id)).toEqual(['all', 'common', 'rare', 'epic', 'legendary']);
     expect(filterSpots(SPOTS, 'northatlantic', '').map(s => s.id)).toEqual(['azores', 'bermuda']);
     expect(filterSpots(SPOTS, 'all', '버뮤다').map(s => s.id)).toEqual(['bermuda']);
+    expect(filterSpots(SPOTS, 'northatlantic', '', 'legendary').map(s => s.id))
+      .toEqual(SPOTS.filter(s => ['azores', 'bermuda'].includes(s.id) && FISH.some(f => f.spot === s.id && f.rarity === 'legendary')).map(s => s.id));
+    expect(filterSpots(SPOTS, 'all', '없는어종이름', 'common')).toEqual([]);
 
     const nightSpot = SPOTS.find(row => FISH.some(fish => fish.spot === row.id && fish.night))!;
     const nightFish = selectFishForSpot(nightSpot.id as SpotId, true)[0];

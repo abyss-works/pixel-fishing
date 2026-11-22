@@ -4,9 +4,9 @@ import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
   filterSpots, hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
   selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws, selectSpotNightDraws,
-  SIM_AXES, SPOT_ZONE_OPTIONS, stepPercent,
+  SIM_AXES, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS, stepPercent,
 } from '../../../../features/admin/model/fishSimulation';
-import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
+import type { AxisEvs, SimOverrides, SpotRarityFilter } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
@@ -51,6 +51,7 @@ export default function FishTab() {
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
   const [zoneFilter, setZoneFilter] = useState('all');
+  const [rarityFilter, setRarityFilter] = useState<SpotRarityFilter>('all');
   const [query, setQuery] = useState('');
   const [openSpots, setOpenSpots] = useState<Set<string>>(() => {
     try {
@@ -68,7 +69,7 @@ export default function FishTab() {
     SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
   const spotIndex = useMemo(() => new Map(SPOTS.map((spot, i) => [spot.id, i])), []);
-  const filteredSpots = useMemo(() => filterSpots(SPOTS, zoneFilter, query), [zoneFilter, query]);
+  const filteredSpots = useMemo(() => filterSpots(SPOTS, zoneFilter, query, rarityFilter), [zoneFilter, query, rarityFilter]);
 
   const persistOpen = (next: Set<string>) => {
     try { sessionStorage.setItem(SPOT_KEY, JSON.stringify([...next])); } catch { /* 무해 */ }
@@ -137,6 +138,11 @@ export default function FishTab() {
               <option key={opt.id} value={opt.id}>{opt.label}</option>
             ))}
           </Select>
+          <Select compact value={rarityFilter} onChange={e => setRarityFilter(e.target.value as SpotRarityFilter)} aria-label="등급 필터">
+            {SPOT_RARITY_OPTIONS.map(opt => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </Select>
           <TextInput compact value={query} onChange={e => setQuery(e.target.value)}
                      placeholder="해역 또는 어종 검색" className="w-[180px]" aria-label="어종·해역 검색" />
           <span className="text-2xs text-text-dim">{filteredSpots.length}/{SPOTS.length}개 해역</span>
@@ -164,6 +170,7 @@ export default function FishTab() {
         const idx = spotIndex.get(spot.id) ?? 0;
         return (
           <SpotDashboard key={spot.id} spot={spot}
+                         rarityFilter={rarityFilter}
                          open={openSpots.has(spot.id)}
                          onToggle={() => toggleSpot(spot.id)}
                          evs={evsBySpot.get(spot.id)!} prevEvs={idx > 0 ? evsBySpot.get(SPOTS[idx - 1].id)! : null}
@@ -180,8 +187,9 @@ export default function FishTab() {
 }
 
 /** 한 수역의 통합 대시보드 — [통계 띠]와 [편집 표]가 한 칸 안의 오목한 칸에 같이 산다 */
-function SpotDashboard({ spot, open, onToggle, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
+function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
   spot: (typeof SPOTS)[number];
+  rarityFilter: SpotRarityFilter;
   open: boolean;
   onToggle: () => void;
   evs: AxisEvs;
@@ -196,6 +204,14 @@ function SpotDashboard({ spot, open, onToggle, evs, prevEvs, sim, setBudgets, se
   // night를 안 담아 확률·등급 합계가 낮 시간대 기준으로 정직하게 나온다.
   const list = useMemo(() => selectFishForSpot(spot.id, false), [spot.id]);
   const nightList = useMemo(() => selectFishForSpot(spot.id, true), [spot.id]);
+  const visibleList = useMemo(
+    () => (rarityFilter === 'all' ? list : list.filter(f => f.rarity === rarityFilter)),
+    [list, rarityFilter],
+  );
+  const visibleNightList = useMemo(
+    () => (rarityFilter === 'all' ? nightList : nightList.filter(f => f.rarity === rarityFilter)),
+    [nightList, rarityFilter],
+  );
   const allSpotFish = useMemo(() => [...list, ...nightList], [list, nightList]);
   const draws = useMemo(
     () => selectSpotDraws(spot.id, sim),
@@ -313,9 +329,9 @@ function SpotDashboard({ spot, open, onToggle, evs, prevEvs, sim, setBudgets, se
                 </tr>
               </thead>
               <tbody>
-                {list.map((f, i) => {
+                {visibleList.map((f, i) => {
                   const d = draws.get(f.id)!;
-                  const firstOfGrade = i === 0 || list[i - 1].rarity !== f.rarity;
+                  const firstOfGrade = i === 0 || visibleList[i - 1].rarity !== f.rarity;
                   return (
                     <tr key={f.id}>
                       <td>
@@ -381,14 +397,14 @@ function SpotDashboard({ spot, open, onToggle, evs, prevEvs, sim, setBudgets, se
                     </tr>
                   );
                 })}
-                {nightList.length > 0 && (
+                {visibleNightList.length > 0 && (
                   <tr aria-hidden="true">
                     <td colSpan={7} className="bg-bg/80 text-2xs text-accent py-0.5 px-1 border-y border-line">
                       밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시 · 아래 확률은 밤 시간대 풀 기준)
                     </td>
                   </tr>
                 )}
-                {nightList.map(f => {
+                {visibleNightList.map(f => {
                   const nd = nightDraws.get(f.id);
                   return (
                     <tr key={f.id}>
