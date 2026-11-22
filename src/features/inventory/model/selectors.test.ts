@@ -27,8 +27,29 @@ describe('selectBagStatus', () => {
 });
 
 describe('selectBagStatus — 길드 가방 보너스', () => {
-  it('서버가 알려 준 가방 보너스만큼 늘어난 칸으로 상한을 보인다', () => {
-    expect(selectBagStatus(seed({ boat: 0 }), 0.2).cap).toBe(72); // 60 + 12
+  it('서버가 알려 준 가방 보너스만큼 늘어난 칸으로 상한을 보이고 capStat과 cap이 일치한다', () => {
+    const s = selectBagStatus(seed({ boat: 0 }), 0.2);
+    expect(s.cap).toBe(72); // 60 + 12
+    expect(s.capStat).toEqual({
+      base: 60,
+      mods: [{ id: 'guild-bag', label: '길드 가방 용량', delta: 12, source: { kind: 'guild', bonus: 'bag' } }],
+      value: 72,
+    });
+  });
+
+  it('유물(사르가소의 그물망)·업적 유물 배율·길드 보너스가 모두 capStat과 cap에 반영된다', () => {
+    const s = selectBagStatus(seed({
+      boat: 0,
+      artifacts: ['sargasso-net'],
+      artifactLevels: { 'sargasso-net': 5 }, // +20%
+      achievementCounters: { 'maxArtifact': 0 },
+    }), 0.04);
+    expect(s.capStat.value).toBe(s.cap);
+    expect(s.capStat.mods.map(m => m.source)).toEqual([
+      { kind: 'guild', bonus: 'bag' },
+      { kind: 'relic', id: 'sargasso-net' },
+    ]);
+    expect(s.capStat.mods.reduce((sum, m) => sum + m.delta, s.capStat.base)).toBe(s.cap);
   });
 });
 

@@ -489,6 +489,20 @@ describe('exhibit — 전시대 진열·회수', () => {
     expect(applyAction(seed({ bag: [d] }), { type: 'exhibit', uid: 'd', slot: null }, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
   });
+
+  it('회수 — 길드·유물 가방 용량 보너스까지 허용하고 그 상한이 차면 거부한다', () => {
+    const boosted = seed({ boat: 0, artifacts: ['sargasso-net'], bag: Array.from({ length: 65 }, (_, i) => mkInst(`f${i}`, 'carp')) });
+    boosted.exhibit[0] = c;
+    // 60 + 10%(6) = 66칸 -> 65마리일 때 회수 가능
+    const ok = applyAction(boosted, { type: 'exhibit', uid: 'c', slot: null }, deps());
+    expect(ok.ok).toBe(true);
+
+    // 66마리가 차면 거부
+    if (!ok.ok) throw new Error(ok.error);
+    const full = { ...ok.state, exhibit: [d] };
+    expect(applyAction(full, { type: 'exhibit', uid: 'd', slot: null }, deps()))
+      .toEqual({ ok: false, error: 'bag-full' });
+  });
 });
 
 describe('claimMail — 우편 골드 받기', () => {

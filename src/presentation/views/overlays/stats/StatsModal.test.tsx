@@ -45,6 +45,25 @@ describe('StatsModal(스탯창)', () => {
     expect(rows.some(row => row.textContent?.includes(`${boatNameOf(3)}(3단계)`))).toBe(true);
   });
 
+  it('배 탭의 가방 용량은 길드·유물 보너스와 래칫 초과 보유 내역을 툴팁으로 보인다', () => {
+    show(game({ boat: 0, artifacts: ['sargasso-net'] }));
+    fireEvent.click(screen.getByRole('button', { name: '배' }));
+    const capEl = screen.getByText('66마리');
+    fireEvent.mouseEnter(capEl);
+    expect(screen.getByRole('tooltip').textContent).toBe('기본 60마리 +6마리 (사르가소의 그물망) = 66마리');
+
+    cleanup();
+    const ratchetedBag = Array.from({ length: 80 }, (_, i) => ({
+      uid: `u${i}`, fishId: 'crucian', form: 'normal' as const, size: 10,
+      caughtAt: null, spot: null, judgment: null, locked: false,
+    }));
+    show(game({ boat: 0, artifacts: ['sargasso-net'], bag: ratchetedBag }));
+    fireEvent.click(screen.getByRole('button', { name: '배' }));
+    const ratchetEl = screen.getByText('80마리');
+    fireEvent.mouseEnter(ratchetEl);
+    expect(screen.getByRole('tooltip').textContent).toBe('기본 60마리 +6마리 (사르가소의 그물망) = 66마리 (초과 보유 80마리 유지)');
+  });
+
   it('낚싯대 탭에서 해역 행을 고르면 그 해역 기준의 수치를 보인다', () => {
     show(game({ boat: 9, rod: 7 }));
     fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
