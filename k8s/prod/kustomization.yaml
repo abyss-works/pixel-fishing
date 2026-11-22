@@ -16,6 +16,7 @@ resources:
   - cronjob-purge-anon.yaml
   - db.yaml
   - db-backup.yaml
+  - traefik-secret-reader.yaml
 # 태그는 package.json의 버전과 같아야 한다. 릴리즈 커밋에서 게임과 관리자 이미지를 함께 올린다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
