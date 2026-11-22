@@ -48,17 +48,17 @@ describe('게이트 보고', () => {
 
   it('배를 사는 전환만 명성 비율을 판정한다: 배가 없는 전환은 행이 없다', () => {
     const to = gatesReport(opts).fame.map(r => r.to);
-    expect(to).toEqual(['indian', 'southindian', 'mozstrait', 'benguela']);
-    for (const noBoat of ['comorodeep', 'sthelena', 'coron']) expect(to).not.toContain(noBoat);
+    expect(to).toEqual(['indian', 'southindian', 'mozstrait', 'benguela', 'azores']);
+    for (const noBoat of ['comorodeep', 'sthelena', 'bermuda', 'coron']) expect(to).not.toContain(noBoat);
   });
 
   describe('시뮬레이션이 끝나지 않을 때', () => {
-    const short = gatesReport({ ...opts, maxDays: daysBetween('benguela', 'sthelena') });
+    const short = gatesReport({ ...opts, maxDays: daysBetween('azores', 'bermuda') });
 
     it('닿지 못한 전환은 판정에서 빠지지 않고 위반이며 닿은 전환은 그대로다', () => {
       expect(short.time).toHaveLength(SPOTS.length - 1);
       const last = short.time.at(-1)!;
-      expect(last.to).toBe('sthelena');
+      expect(last.to).toBe('bermuda');
       expect(last.hours).toBeNull();
       expect(last.days).toBeNull();
       expect(last.orderVerdict).toBe('위반');
@@ -71,7 +71,7 @@ describe('게이트 보고', () => {
       expect(benguela.hours).toBeNull();
       expect(benguela.rangeVerdict).toBe('위반');
       expect(t.fame.find(r => r.to === 'benguela')).toMatchObject({ ratio: null, goldWait: null, verdict: '위반' });
-      expect(t.fame.map(r => r.to)).toEqual(['indian', 'southindian', 'mozstrait', 'benguela']);
+      expect(t.fame.map(r => r.to)).toEqual(['indian', 'southindian', 'mozstrait', 'benguela', 'azores']);
     });
 
     it('집계의 위반이 0보다 크다', () => {
@@ -111,7 +111,7 @@ describe('게이트 보고', () => {
 
     it('같은 지역 안의 전환은 범위를 판정하지 않고 요구 파워 간격 둘을 함께 낸다', () => {
       const inner = rows.filter(r => r.kind === 'inner');
-      expect(inner.map(r => r.to)).toEqual(['southindian', 'comorodeep', 'sthelena']);
+      expect(inner.map(r => r.to)).toEqual(['southindian', 'comorodeep', 'sthelena', 'bermuda']);
       const power = (id: string) => SPOTS.find(s => s.id === id)!.powerReq ?? 0;
       for (const r of inner) {
         expect(r.rangeVerdict).toBeNull();
@@ -122,6 +122,7 @@ describe('게이트 보고', () => {
       expect(inner[0].entryPowerGap).toBe(power('indian') - power('barrierreef'));
       expect(inner[1].entryPowerGap).toBe(power('mozstrait') - power('southindian'));
       expect(inner[2].entryPowerGap).toBe(power('benguela') - power('comorodeep'));
+      expect(inner[3].entryPowerGap).toBe(power('azores') - power('sthelena'));
     });
 
     it('순서 판정은 리프 이후의 두 번째 전환부터 있고 모두 통과다', () => {

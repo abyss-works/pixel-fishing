@@ -4,8 +4,8 @@
 // 네임드 8시간어치이며 5나 10 단위로 반올림한다. 값은 밸런스 도구로 산출한다.
 import type { RarityId } from './rarity.js';
 
-export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic';
-export const BOUNTY_ZONES: readonly BountyZone[] = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'];
+export type BountyZone = 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic' | 'northatlantic';
+export const BOUNTY_ZONES: readonly BountyZone[] = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'];
 export type BountyDifficulty = 'easy' | 'normal' | 'hard' | 'named';
 
 /** 라이선스 2단 — 난이도 3종과 네임드는 별개 축이다 */
@@ -95,7 +95,7 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('madagascar', 'hard', 'epic', null, 10, 3000000),
   Q('madagascar', 'hard', 'legendary', null, 2, 3000000),
   Q('madagascar', 'named', null, 'elder-sixgill', 1, 5500000),
-  // 1-5 남대서양 — 쉬움 3000000 · 보통 5500000 · 어려움 10000000 · 네임드 25000000
+  // 1-5 남대서양 — 쉬움 3000000 · 보통 5500000 · 어려움 10000000 · 네임드 20000000
   Q('southatlantic', 'easy', 'common', null, 250, 3000000),
   Q('southatlantic', 'easy', 'rare', null, 10, 3000000),
   Q('southatlantic', 'easy', 'epic', null, 2, 3000000),
@@ -107,8 +107,22 @@ export const BOUNTIES: readonly BountyQuest[] = [
   Q('southatlantic', 'hard', 'rare', null, 40, 10000000),
   Q('southatlantic', 'hard', 'epic', null, 10, 10000000),
   Q('southatlantic', 'hard', 'legendary', null, 2, 10000000),
-  Q('southatlantic', 'named', null, 'adamastor', 1, 25000000),
-  Q('southatlantic', 'named', null, 'jasconius', 1, 25000000),
+  Q('southatlantic', 'named', null, 'adamastor', 1, 20000000),
+  Q('southatlantic', 'named', null, 'jasconius', 1, 20000000),
+  // 1-6 북대서양 — 쉬움 15000000 · 보통 25000000 · 어려움 55000000 · 네임드 100000000
+  Q('northatlantic', 'easy', 'common', null, 250, 15000000),
+  Q('northatlantic', 'easy', 'rare', null, 10, 15000000),
+  Q('northatlantic', 'easy', 'epic', null, 2, 15000000),
+  Q('northatlantic', 'normal', 'common', null, 500, 25000000),
+  Q('northatlantic', 'normal', 'rare', null, 20, 25000000),
+  Q('northatlantic', 'normal', 'epic', null, 5, 25000000),
+  Q('northatlantic', 'normal', 'legendary', null, 1, 25000000),
+  Q('northatlantic', 'hard', 'common', null, 1000, 55000000),
+  Q('northatlantic', 'hard', 'rare', null, 40, 55000000),
+  Q('northatlantic', 'hard', 'epic', null, 10, 55000000),
+  Q('northatlantic', 'hard', 'legendary', null, 2, 55000000),
+  Q('northatlantic', 'named', null, 'gloucester-serpent', 1, 100000000),
+  Q('northatlantic', 'named', null, 'guabancex', 1, 100000000),
 ];
 
 /** 의뢰 → 갈래. 네임드만 따로이고 나머지 난이도는 일반 의뢰다 */
@@ -154,6 +168,7 @@ export const BOUNTY_PORT_ZONE = {
   colombo: 'indian',
   toamasina: 'madagascar',
   walvisbay: 'southatlantic',
+  lisbon: 'northatlantic',
 } as const satisfies Record<string, BountyZone>;
 
 export type BountyPort = keyof typeof BOUNTY_PORT_ZONE;

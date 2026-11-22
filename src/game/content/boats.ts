@@ -33,7 +33,7 @@ export const BOATS: readonly Boat[] = [
   { tier: 6, name: '대양선',   price: 32000,    fameReq: 9000,   speed: 165, bagCap: 2000 }, // 1-3 남인도양
   { tier: 7, name: '원양어선', price: 125000,   fameReq: 25000,  speed: 180, bagCap: 3000 }, // 1-4 마다가스카르(두 수역 공통)
   { tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 }, // 1-5 남대서양(두 해역 공통)
-  { tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: 220, bagCap: 5000 }, // 여는 해역 없음 — 가방 초과 때 자동 기운 얻기
+  { tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: 220, bagCap: 5000 }, // 1-6 북대서양(두 해역 공통) + 가방 초과 때 자동 기운 얻기
 ];
 // 배 ↔ 지역 매핑("몇 번째 지역의 몇 번째 배") — 지역당 2개 규칙 유지:
 //   1-1 = t1/t2 · 1-2 = t3/t4 · 1-3 = t5/t6(tier4 흡수로 한 칸 당김) ·

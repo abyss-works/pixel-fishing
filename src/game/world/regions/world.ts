@@ -29,6 +29,7 @@ export const WORLD_LEGEND: Record<string, MapCellDef> = {
   '3': { water: true, style: 'sea', zone: 'indian' },
   m: { water: true, style: 'sea', zone: 'madagascar' },
   a: { water: true, style: 'sea', zone: 'southatlantic' },       // 열린 바다 통행 전용 — 최상위 스팟 없음
+  p: { water: true, style: 'sea', zone: 'northatlantic' },       // 열린 바다 통행 전용 — 최상위 스팟 없음
   t: { water: true, style: 'deep', zone: 'deep', label: '마리아나 해구' },
   d: { water: true, style: 'deep', zone: 'dragonhole', label: '드래곤 홀' },
   w: { water: true, style: 'wreck', zone: 'coron', label: '코론 침선 지대' },
@@ -37,11 +38,14 @@ export const WORLD_LEGEND: Record<string, MapCellDef> = {
   c: { water: true, style: 'deep', zone: 'comorodeep', label: '코모로 심해' },
   b: { water: true, style: 'wreck', zone: 'benguela', label: '남대서양 용승대' },
   h: { water: true, style: 'coral', zone: 'sthelena', label: '세인트헬레나' },
+  e: { water: true, style: 'deep', zone: 'azores', label: '아조레스 해령' },
+  g: { water: true, style: 'wreck', zone: 'bermuda', label: '버뮤다 삼각지대' },
   '4': { water: true, style: 'sea', zone: 'pacific', label: '태평양' },
   '5': { water: true, style: 'sea', zone: 'seasia', label: '동남아&오세아니아' },
   '6': { water: true, style: 'sea', zone: 'indian', label: '인도양' },
   '7': { water: true, style: 'sea', zone: 'madagascar', label: '마다가스카르' },
   '8': { water: true, style: 'sea', zone: 'southatlantic', label: '남대서양' },
+  '9': { water: true, style: 'sea', zone: 'northatlantic', label: '북대서양' },
   N: { water: true, style: 'sea', closed: true },  // 아직 열지 않은 바다(적도 북쪽 대서양·지중해) — 통행 불가
   L: { land: true },
   '.': { water: true, style: 'sea' }, // 구역 밖 잉여 물(내륙해 등) — 통행만, 낚시·구역 아님
@@ -65,10 +69,11 @@ export const HARBORS = {
   colombo: harborAt('colombo'),     // 콜롬보항(스리랑카 서해안)
   toamasina: harborAt('toamasina'), // 투아마시나항(마다가스카르 동해안)
   walvisbay: harborAt('walvisbay'), // 월비스베이항(나미비아 서해안)
+  lisbon: harborAt('lisbon'),       // 리스본항(이베리아 서해안)
 } satisfies Partial<Record<BaseId, HarborPlacement>>;
 type HarborId = keyof typeof HARBORS;
 const HARBOR_NAMES: Record<HarborId, string> = {
-  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항',
+  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항', lisbon: '리스본항',
 };
 const HARBOR_IDS = Object.keys(HARBORS) as HarborId[];
 /** 고향 항구의 출항 자리가 새 게임과 되돌림의 기본 위치다 */

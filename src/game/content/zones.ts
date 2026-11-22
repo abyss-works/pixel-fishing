@@ -14,9 +14,9 @@ import type { RegionId } from './places.js';
 import { boatGateText } from './boats.js';
 
 export type ZoneId =
-  | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic'  // 최상위 존
+  | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic' | 'northatlantic'  // 최상위 존
   | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian' | 'comorodeep' // 하위 존 (id = 스팟 id)
-  | 'benguela' | 'sthelena';
+  | 'benguela' | 'sthelena' | 'azores' | 'bermuda';
 
 /** 씬 지역 — 최상위 존만 명시한다. 하위 존은 부모 체인으로 파생(zoneGroup). */
 type TopGroup = Extract<RegionId, 'village' | 'world'>;
@@ -215,6 +215,7 @@ const DATA: Zone[] = [
       '용승대와 세인트헬레나 모두 열려 있어요. 세인트헬레나는 요구 파워가 더 높아서 더 강한 낚싯대가 있어야 제대로 낚을 수 있어요.',
       '월비스베이항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
       '희망봉을 돌아 동쪽으로 가면 마다가스카르예요.',
+      `적도 너머 북쪽 바다(북대서양)는 ${boatGateText(9)}이 있어야 건널 수 있어요.`,
     ],
     controls: [
       '항해: 방향키 또는 WASD',
@@ -244,6 +245,47 @@ const DATA: Zone[] = [
     tagline: '바다 한가운데 떨어진 화산섬',
     lore: '대서양 중앙 해령에서 동쪽으로 한참 떨어진 화산섬이다. 한때 유배지였던 섬에는 사람이 심은 숲이 남아 있고, 둘레의 암초는 따뜻하고 맑다. 가까운 뭍이 멀어서 이 물의 물고기들은 오랫동안 다른 바다와 섞이지 않았다. 어부들은 섬이 보이기 전에 물빛이 먼저 달라지는 것을 안다.',
     spots: ['sthelena'],
+  },
+  {
+    id: 'northatlantic',
+    name: '북대서양',
+    shortName: '북대서양',
+    group: 'world',
+    tagline: '나침반이 어긋나기 시작하는 서쪽 대양',
+    lore: '적도를 넘어 북쪽으로 올라가면 안개와 해류가 얽힌 넓은 바다가 펼쳐진다. 동쪽 화산 해령에서 시작해 서쪽 모자반 숲까지, 뱃사람들은 항해일지에 적기 꺼리는 현상들을 하나씩 지나친다. 리스본항의 늙은 선원들은 이 바다를 건널 때 눈금보다 바람 냄새를 믿으라고 말한다. 무언가 어긋나고 있지만, 아직 누구도 그 끝을 보지 못했다.',
+    tips: [
+      '아조레스 해령과 버뮤다 삼각지대 모두 열려 있어요. 버뮤다 삼각지대는 요구 파워가 더 높아서 더 강한 낚싯대가 있어야 제대로 낚을 수 있어요.',
+      '리스본항에서 정비하고, 여객선으로 마을에 다녀올 수 있어요.',
+      '적도를 넘어 남쪽으로 내려가면 남대서양이에요.',
+    ],
+    controls: [
+      '항해: 방향키 또는 WASD',
+      '낚시: 어군 위에서 스페이스(또는 화면 누르기)',
+    ],
+    // 최상위 스팟 없음 — 열린 바다는 통행 전용이다.
+    spots: [],
+    entryBoat: 9,
+    get gateMsg(): string {
+      return `${boatGateText(9)}이 있어야 북대서양에 들어설 수 있어요.`;
+    },
+  },
+  {
+    id: 'azores',
+    parent: 'northatlantic',
+    name: '아조레스 해령',
+    shortName: '아조레스',
+    tagline: '안개와 해류가 교차하는 화산 해저산맥',
+    lore: '동중부 대서양 바닥에서 화산 산맥이 수면 가까이까지 솟아 있다. 따뜻한 해류와 찬 해류가 엇갈려 사철 짙은 안개가 가시지 않는다. 리스본항에서 떠난 배들은 이 해령을 지나며 나침반이 잠깐씩 떨리는 것을 겪는다. 산맥 너머 깊은 골짜기에는 아직 돌아오지 않은 것들이 머문다고 한다.',
+    spots: ['azores'],
+  },
+  {
+    id: 'bermuda',
+    parent: 'northatlantic',
+    name: '버뮤다 삼각지대',
+    shortName: '버뮤다',
+    tagline: '모자반 숲이 떠 있는 어긋난 바다',
+    lore: '서대서양의 해류가 둥글게 감아 도는 가운데에 끝없는 모자반 숲이 떠 있다. 물결은 잔잔한데 나침반 바늘이 제멋대로 돌아 뱃길을 잃기 쉽다. 뱃사람들은 이곳에서 소리가 멀리 퍼지지 않고 물속으로 빨려 들어간다고 말한다. 닻을 내린 자리가 아침이면 다른 곳에 가 있어도, 아무도 이유를 적지 못한다.',
+    spots: ['bermuda'],
   },
 ];
 

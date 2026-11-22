@@ -22,17 +22,21 @@ const CONFIRMED_PRICE: Record<string, number> = {
   // 남인도양 (southindian)
   deepsilence: 60000, varuna: 30000, aurorafish: 10000, whaleshark: 5000, sbft: 4500, frostnight: 2000, blueshark: 1000, neonsquid: 900, sardineS: 19, saury: 21,
   // 모잠비크 해협 (mozstrait)
-  nightmanta: 140000, mantaray: 70000, starcuttlefish: 25000, hammerhead: 12500, kingmackerel: 2000, moonflyingfish: 4000, flyingfish: 26, skipjack: 28, cuttlefish: 29,
+  nightmanta: 80000, mantaray: 40000, starcuttlefish: 20000, hammerhead: 10000, kingmackerel: 1900, moonflyingfish: 3800, flyingfish: 27, skipjack: 29, cuttlefish: 30,
   // 코모로 심해 (comorodeep)
-  darkmegamouth: 300000, megamouth: 150000, goblinshark: 27000, frilledshark: 24000, abyssglass: 54000, upperlantern: 7500, glassoctopus: 3750, deepeel: 43, lanternfish: 40,
+  darkmegamouth: 160000, megamouth: 80000, goblinshark: 21000, frilledshark: 19000, abyssglass: 42000, upperlantern: 7200, glassoctopus: 3600, deepeel: 44, lanternfish: 41,
   // 남대서양 용승대 (benguela)
-  kalunga: 800000, kianda: 400000, nighthake: 20000, snoek: 10000, orangeroughy: 65000, kingfish: 60000, capehake: 150, capejack: 135, capeanchovy: 120,
+  kalunga: 200000, kianda: 100000, nighthake: 18000, snoek: 9000, orangeroughy: 48000, kingfish: 43000, capehake: 155, capejack: 140, capeanchovy: 125,
   // 세인트헬레나 (sthelena)
-  bigeye: 1500000, galapagosshark: 750000, wahoo: 125000, eolgedom: 250000, ascensionangel: 30000, apollodamsel: 180, sthpuffer: 170, sthwrasse: 160,
+  bigeye: 360000, galapagosshark: 180000, wahoo: 90000, eolgedom: 180000, ascensionangel: 27000, apollodamsel: 195, sthpuffer: 185, sthwrasse: 175,
+  // 아조레스 해령 (azores)
+  sunkenecho: 3000000, unreturning: 1500000, oceanmola: 270000, atlanticblueshark: 250000, nightalfonsino: 86000, johndory: 43000, europeanconger: 390, atlanticbonito: 360, bluejack: 330,
+  // 버뮤다 삼각지대 (bermuda)
+  vanishingpoint: 7000000, unraveledknot: 3500000, nightporcupine: 1200000, atlantictarpon: 600000, spottedeagleray: 120000, cobia: 790, americaneel: 750, sargassumfish: 710,
 };
 
 // 반올림 규칙 밖에 두기로 확정한 가격(앞 세 자리가 유효한 값)
-const ROUNDING_EXCEPTIONS = new Set([12500, 3750, 125000]);
+const ROUNDING_EXCEPTIONS = new Set<number>([]);
 
 // 희귀 이상 가격: 두 자리 수는 5 단위, 세 자리 이상은 앞 두 자리 유효숫자
 function followsRoundingRule(price: number): boolean {

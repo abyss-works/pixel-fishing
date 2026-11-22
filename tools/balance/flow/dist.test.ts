@@ -78,7 +78,7 @@ describe('해역 전환 분포', () => {
   const rows = transitionDist(opts);
 
   it('전환마다 전환 시간 분포와 해석 기댓값을 낸다', () => {
-    expect(rows).toHaveLength(12);
+    expect(rows).toHaveLength(14);
     for (const r of rows) {
       expect(r.hours).not.toBeNull();
       expect(r.hours!.p10).toBeLessThanOrEqual(r.hours!.p90);
@@ -108,7 +108,7 @@ describe('해역 전환 분포', () => {
 
   it('최대 일수가 짧아 끝내지 못해도 전환 수만큼 행을 내고 해석 미도달은 null이다', () => {
     const short = transitionDist({ ...opts, trials: 40, maxDays: 1 });
-    expect(short).toHaveLength(12);
+    expect(short).toHaveLength(14);
     expect(short.some(r => r.analyticHours === null)).toBe(true);
     for (const r of short) {
       if (r.analyticHours === null) expect(r.analyticCumulative).toBeNull();

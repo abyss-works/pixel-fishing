@@ -29,7 +29,7 @@ import type { RarityId } from '../content/rarity.js';
 import { spotById } from '../content/spots.js';
 import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
-import { artifactLevelOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
+import { artifactLevelOf, bagCapBonusOf, commonWeightCutOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
@@ -396,7 +396,8 @@ export function drawCatch(
   achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
   const zone = topZoneOfSpot(spot);
-  let phaseOpts = guild.rare > 0 ? addGradeEffect(basePhaseOpts, 'common', -guild.rare) : basePhaseOpts;
+  const commonCut = guild.rare + commonWeightCutOf(state, achievements.artifactBoost);
+  let phaseOpts = commonCut > 0 ? addGradeEffect(basePhaseOpts, 'common', -commonCut) : basePhaseOpts;
   const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
   if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
@@ -460,7 +461,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
-      const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag, guild.bag));
+      const totalBagBonus = guild.bag + bagCapBonusOf(state, achBonuses.artifactBoost);
+      const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag, totalBagBonus));
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
       const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
@@ -887,7 +889,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
           || !(action.slot === null || typeof action.slot === 'number')) {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canExhibit(state, action.uid, action.slot, (deps.guild ?? NO_GUILD_EFFECTS).bag);
+      const totalBagBonus = (deps.guild ?? NO_GUILD_EFFECTS).bag + bagCapBonusOf(state, achievementBonusesOf(state).artifactBoost);
+      const check = canExhibit(state, action.uid, action.slot, totalBagBonus);
       if (!check.ok) return { ok: false, error: check.reason };
       return {
         ok: true, state: moveExhibit(state, action.uid, action.slot),

@@ -78,14 +78,26 @@ export function createPlayerContext(input: PlayerContext): PlayerContext {
   };
 }
 
-/** 가방 상한 — 배 기본 칸에 길드 가방 용량 보너스를 더하고, 이미 넘겨 든 개체 수(heldCount)로 래칫을 적용한다 */
+/** 가방 상한 — 배 기본 칸에 길드·유물 가방 용량 보너스를 더하고, 이미 넘겨 든 개체 수(heldCount)로 래칫을 적용한다 */
 export function bagCapacityOf(ctx: PlayerContext, heldCount: number): Stat {
   const base = ctx.state.boat < 1 ? WALK_BAG_CAP : boatAt(ctx.state.boat)!.bagCap;
-  const guildDelta = ctx.guild.bag > 0 ? Math.round(base * ctx.guild.bag) : 0;
-  const mods: StatMod[] = guildDelta > 0
-    ? [{ id: 'guild-bag', label: '길드 가방 용량', delta: guildDelta, source: { kind: 'guild', bonus: 'bag' } }]
-    : [];
-  const cap = base + guildDelta;
+  const mods: StatMod[] = [];
+  const relicScale = 1 + ctx.achievements.artifactBoost;
+  let bonusSum = ctx.guild.bag;
+  if (ctx.guild.bag > 0) {
+    mods.push({ id: 'guild-bag', label: '길드 가방 용량', delta: Math.round(base * ctx.guild.bag), source: { kind: 'guild', bonus: 'bag' } });
+  }
+  for (const a of ARTIFACTS) {
+    const level = artifactLevelOf(ctx.state, a.id);
+    if (level === 0) continue;
+    const rawBonus = artifactEffectsAt(a, level).bagCap ?? 0;
+    const bonus = clean(rawBonus * relicScale);
+    if (bonus > 0) {
+      bonusSum = clean(bonusSum + bonus);
+      mods.push({ id: `relic-${a.id}`, label: a.name, delta: Math.round(base * bonus), source: { kind: 'relic', id: a.id } });
+    }
+  }
+  const cap = base + Math.round(base * bonusSum);
   return { base, mods, value: Math.max(cap, heldCount) };
 }
 

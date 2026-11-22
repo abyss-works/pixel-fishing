@@ -28,19 +28,21 @@ describe('등급 가중치 프리셋', () => {
     expect(SPOTS.filter(s => s.rarityWeight).map(s => s.id)).toEqual(['coron', 'barrierreef']);
   });
 
-  it('인도양 지역은 안정화, 마다가스카르 지역은 한 단계 이전, 남대서양은 최신 프리셋을 쓴다', () => {
+  it('마다가스카르 지역은 안정화, 남대서양 지역은 한 단계 이전, 북대서양은 최신 프리셋을 쓴다', () => {
     const stable = { common: 7400, rare: 2000, epic: 500, legendary: 100 };
     const previous = { common: 7545, rare: 2000, epic: 400, legendary: 55 };
     expect(rarityWeightsOf('indian')).toEqual(stable);
     expect(rarityWeightsOf('southindian')).toEqual(stable);
-    expect(rarityWeightsOf('mozstrait')).toEqual(previous);
-    expect(rarityWeightsOf('comorodeep')).toEqual(previous);
+    expect(rarityWeightsOf('mozstrait')).toEqual(stable);
+    expect(rarityWeightsOf('comorodeep')).toEqual(stable);
+    expect(rarityWeightsOf('benguela')).toEqual(previous);
+    expect(rarityWeightsOf('sthelena')).toEqual(previous);
   });
 
-  it('남대서양 두 해역은 덮어쓰기 없이 최신 지역 프리셋을 쓴다', () => {
+  it('북대서양 두 해역은 덮어쓰기 없이 최신 지역 프리셋을 쓴다', () => {
     const latest = { common: 7690, rare: 2000, epic: 300, legendary: 10 };
-    expect(rarityWeightsOf('benguela')).toEqual(latest);
-    expect(rarityWeightsOf('sthelena')).toEqual(latest);
+    expect(rarityWeightsOf('azores')).toEqual(latest);
+    expect(rarityWeightsOf('bermuda')).toEqual(latest);
   });
 
   it('전역 기본 확률은 안정화 프리셋이다', () => {
@@ -70,7 +72,7 @@ describe('등급 가중치 프리셋', () => {
   });
 
   it('지역 순서는 지역 정의 순서다', () => {
-    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
+    expect(ZONE_IDS).toEqual(['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']);
     expect(topZoneOfSpot('pond')).toBe('village');
   });
 });

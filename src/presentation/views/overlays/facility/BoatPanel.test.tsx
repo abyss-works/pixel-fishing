@@ -19,7 +19,7 @@ describe('조선소', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'buyBoat' });
   });
 
-  it('마지막 배는 새 해역 없이 목록에 나오고 구매 조건을 보인다', () => {
+  it('마지막 배는 여는 해역과 함께 목록에 나오고 구매 조건을 보인다', () => {
     const last = BOATS[MAX_BOAT - 1];
     render(<FacilityModal sellBonus={0} panel="boat" game={{ ...newState(), boat: MAX_BOAT - 1, gold: last.price, fame: last.fameReq }}
                           dispatch={vi.fn()} setToast={() => {}} onClose={() => {}} />);
@@ -27,7 +27,7 @@ describe('조선소', () => {
     expect(within(ladder).getByText(last.name)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: `구매 (-${fmtGold(last.price)})` })).toBeEnabled();
     const row = screen.getByText('새 해역').closest('tr')!;
-    expect(row).toHaveTextContent('새 해역없음');
+    expect(row).toHaveTextContent('새 해역아조레스 해령');
   });
 
   it('다음 배가 자동 기운 얻기 배일 때만 그 효과 설명이 나온다', () => {

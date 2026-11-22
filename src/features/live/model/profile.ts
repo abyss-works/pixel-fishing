@@ -25,6 +25,7 @@ const BASE_NAMES: Record<BaseId, string> = {
   colombo: '콜롬보항',
   toamasina: '투아마시나항',
   walvisbay: '월비스베이항',
+  lisbon: '리스본항',
 };
 
 const ACHIEVEMENT_TABS: readonly { tab: AchievementTab; label: string }[] = [

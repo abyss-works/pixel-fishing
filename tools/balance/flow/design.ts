@@ -601,7 +601,7 @@ export function parseAnchor(raw: string): Anchor {
 }
 
 /** 기준점의 기본 해역 */
-export const DEFAULT_ANCHOR_SPOT: SpotId = 'sthelena';
+export const DEFAULT_ANCHOR_SPOT: SpotId = 'bermuda';
 
 /** 해역의 현재 진입 레벨 방치 EV를 기준점으로 만든다. 설계 덮어쓰기를 적용하기 전의 현재 값이다 */
 export function currentAnchor(spot: SpotId): Anchor {

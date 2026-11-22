@@ -74,10 +74,10 @@ describe('보상 출력', () => {
     const r = runFlow(parseArgs(['achievements', '--reward', '4h', '--reward-split', '0.5']));
     expect(r.achievements!.hours).toEqual([4]);
     expect(r.achievements!.split).toBe(0.5);
-    expect(r.achievements!.rows).toHaveLength(5);
+    expect(r.achievements!.rows).toHaveLength(6);
     const json = JSON.parse(JSON.stringify(r)).achievements;
     expect(json.rows.map((x: { amounts: { gold: number }[] }) => x.amounts[0].gold)).toEqual([
-      50_000, 250_000, 750_000, 3_000_000, 10_000_000,
+      50_000, 250_000, 750_000, 3_000_000, 10_000_000, 55_000_000,
     ]);
     expect('fame' in json.rows[0].amounts[0]).toBe(false);
   });
@@ -110,7 +110,7 @@ describe('보상 출력', () => {
 
   it('dist는 달성 시각과 도착 단축 분포를 더한다', () => {
     const r = runFlow(parseArgs(['dist', '--reward', '4h', '--trials', '8', '--seed', '3']));
-    expect(r.dist!.reward!.rows).toHaveLength(10);
+    expect(r.dist!.reward!.rows).toHaveLength(12);
     const text = renderText(r);
     expect(text).toContain('진행 업적 달성 시각');
     expect(text).toContain('단축');
@@ -133,17 +133,17 @@ describe('해역 단위 진행 업적 보상 (--reward-unit spot)', () => {
     expect(() => parseArgs(['ev', '--reward-unit', 'spot'])).toThrow(/명령에서만/);
   });
 
-  it('achievements --reward-unit spot은 13개 해역별 entryEV, 합산 골드, 기초/숙련 골드 표와 JSON을 낸다', () => {
+  it('achievements --reward-unit spot은 15개 해역별 entryEV, 합산 골드, 기초/숙련 골드 표와 JSON을 낸다', () => {
     const text = runCli(['achievements', '--reward-unit', 'spot']).stdout;
     expect(text).toContain('entryEV');
     expect(text).toContain('기초 도감');
     expect(text).toContain('숙련 도감');
     expect(text).toContain('마을 연못');
-    expect(text).toContain('세인트헬레나');
+    expect(text).toContain('버뮤다 삼각지대');
 
     const r = runFlow(parseArgs(['achievements', '--reward-unit', 'spot', '--reward', '4h', '--reward-split', '0.5']));
     expect(r.achievements!.unit).toBe('spot');
-    expect(r.achievements!.rows).toHaveLength(13);
+    expect(r.achievements!.rows).toHaveLength(15);
   });
 
   it('transition, days, gates --reward-unit spot이 보상을 지급하고 보상 없음 비교를 낸다', () => {
@@ -163,10 +163,10 @@ describe('해역 단위 진행 업적 보상 (--reward-unit spot)', () => {
     expect(g.stdout).toContain('보상 없음 전환 시간');
   });
 
-  it('dist --reward-unit spot은 26종 업적별 달성률과 달성 시각 분포(p10, 중앙값, p90, 평균)를 출력/JSON에 담는다', () => {
+  it('dist --reward-unit spot은 30종 업적별 달성률과 달성 시각 분포(p10, 중앙값, p90, 평균)를 출력/JSON에 담는다', () => {
     const r = runFlow(parseArgs(['dist', '--reward-unit', 'spot', '--trials', '8', '--seed', '3']));
     expect(r.dist!.reward!.unit).toBe('spot');
-    expect(r.dist!.reward!.rows).toHaveLength(26);
+    expect(r.dist!.reward!.rows).toHaveLength(30);
     const text = renderText(r);
     expect(text).toContain('달성률');
     expect(text).toContain('기초');

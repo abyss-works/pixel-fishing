@@ -59,9 +59,9 @@ describe('탭 목록 정렬', () => {
   });
   it('같은 상태 안에서는 정의 순서를 지킨다', () => {
     const rows = achievementRows(seed(), 'progress');
-    expect(rows).toHaveLength(26);
+    expect(rows).toHaveLength(30);
     expect(rows[0].def.id).toBe('spot-basic-pond');
-    expect(rows[rows.length - 1].def.id).toBe('spot-full-sthelena');
+    expect(rows[rows.length - 1].def.id).toBe('spot-full-bermuda');
   });
 });
 
@@ -74,7 +74,7 @@ describe('요약 줄', () => {
         'spot-full-sea': 'claimed',
       },
     });
-    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 67, gold: 300, hats: 1, canClaimAll: true });
+    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 71, gold: 300, hats: 1, canClaimAll: true });
     expect(tabClaimableCount(state, 'progress')).toBe(1);
     expect(tabClaimableCount(state, 'bonus')).toBe(0);
     expect(tabClaimableCount(state, 'cosmetic')).toBe(1);
@@ -130,7 +130,7 @@ describe('요약 줄', () => {
 });
 
 describe('누적 보너스 카드', () => {
-  it('21개 다단계 누적 보너스 카드를 생성한다', () => {
+  it('23개 다단계 누적 보너스 카드를 생성한다', () => {
     const boosted = seed({
       achievementCounters: {
         'manual.total': 1_000,
@@ -139,7 +139,7 @@ describe('누적 보너스 카드', () => {
       },
     });
     const cards = cumulativeBonusCards(boosted);
-    expect(cards).toHaveLength(21);
+    expect(cards).toHaveLength(23);
     const manual = cards.find(c => c.series.id === 'bonus-manual-total')!;
     expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
     expect(manual.activeText).toBe('입질 대기 −2%');
